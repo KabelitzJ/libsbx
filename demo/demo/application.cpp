@@ -690,7 +690,7 @@ auto application::_generate_irradiance(const std::uint32_t size) -> void {
   sbx::utility::logger<"application">::info("Generated 'irradiance' in {:.2f}ms", sbx::units::quantity_cast<sbx::units::millisecond>(timer.elapsed()).value());
 
 #if defined(DUMP_IMAGES) && (DUMP_IMAGES == 1)
-  _dump_cubemap_to_png(irradiance, "dump/irradiance");
+  _dump_cubemap_to_png(irradiance, "irradiance");
 #endif
 }
 
@@ -811,7 +811,7 @@ auto application::_generate_irradiance(const std::uint32_t size) -> void {
 //   sbx::utility::logger<"application">::info("Generated 'prefiltered' with {} mips in {:.2f}ms", prefiltered.mip_levels(), sbx::units::quantity_cast<sbx::units::millisecond>(timer.elapsed()).value());
 
 // #if defined(DUMP_IMAGES) && (DUMP_IMAGES == 1)
-//   _dump_cubemap_to_png(prefiltered, "dump/prefiltered");
+//   _dump_cubemap_to_png(prefiltered, "prefiltered");
 // #endif
 // }
 

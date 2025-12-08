@@ -201,7 +201,7 @@ application::application()
     auto angle = sbx::math::radian{2.0f * sbx::math::pi / static_cast<std::float_t>(light_count) * static_cast<std::float_t>(i)};
 
     const auto material_name = fmt::format("Light{}", i);
-    const auto color = sbx::math::random_color(0.5f);
+    const auto color = sbx::math::random_color(0.8f);
 
     auto& material = scene.add_material<sbx::models::material>(material_name);
     material.base_color = color;

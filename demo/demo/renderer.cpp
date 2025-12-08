@@ -54,21 +54,21 @@ renderer::renderer()
     editor
   ] = create_graph(
     [&](sbx::graphics::render_graph::context& context) -> sbx::graphics::render_graph::graphics_pass {
-      auto deferred_pass = context.graphics_pass("deferred");
+      auto pass = context.graphics_pass("deferred");
 
-      deferred_pass.produces("depth", sbx::graphics::attachment::type::depth);
-      deferred_pass.produces("albedo", sbx::graphics::attachment::type::image, _clear_color, sbx::graphics::format::r8g8b8a8_unorm);
-      deferred_pass.produces("position", sbx::graphics::attachment::type::image, _clear_color, sbx::graphics::format::r32g32b32a32_sfloat);
-      deferred_pass.produces("normal", sbx::graphics::attachment::type::image, _clear_color, sbx::graphics::format::r32g32b32a32_sfloat);
-      deferred_pass.produces("material", sbx::graphics::attachment::type::image, _clear_color, sbx::graphics::format::r8g8b8a8_unorm);
-      deferred_pass.produces("emissive", sbx::graphics::attachment::type::image, _clear_color, sbx::graphics::format::r32g32b32a32_sfloat);
-      deferred_pass.produces("object_id", sbx::graphics::attachment::type::image, sbx::math::color::black(), sbx::graphics::format::r32_uint);
-      deferred_pass.produces("normalized_depth", sbx::graphics::attachment::type::image, _clear_color, sbx::graphics::format::r32_sfloat);
+      pass.produces("depth", sbx::graphics::attachment::type::depth);
+      pass.produces("albedo", sbx::graphics::attachment::type::image, _clear_color, sbx::graphics::format::r8g8b8a8_unorm);
+      pass.produces("position", sbx::graphics::attachment::type::image, _clear_color, sbx::graphics::format::r32g32b32a32_sfloat);
+      pass.produces("normal", sbx::graphics::attachment::type::image, _clear_color, sbx::graphics::format::r32g32b32a32_sfloat);
+      pass.produces("material", sbx::graphics::attachment::type::image, _clear_color, sbx::graphics::format::r8g8b8a8_unorm);
+      pass.produces("emissive", sbx::graphics::attachment::type::image, _clear_color, sbx::graphics::format::r32g32b32a32_sfloat);
+      pass.produces("object_id", sbx::graphics::attachment::type::image, sbx::math::color::black(), sbx::graphics::format::r32_uint);
+      pass.produces("normalized_depth", sbx::graphics::attachment::type::image, _clear_color, sbx::graphics::format::r32_sfloat);
 
-      return deferred_pass;
+      return pass;
     },
     [&](sbx::graphics::render_graph::context& context) -> sbx::graphics::render_graph::graphics_pass {
-      auto transparency_pass = context.graphics_pass("transparency");
+      auto pass = context.graphics_pass("transparency");
 
       const auto accum_blend = sbx::graphics::blend_state{
         .color_source = sbx::graphics::blend_factor::one,
@@ -90,14 +90,14 @@ renderer::renderer()
         .color_write_mask = sbx::graphics::color_component::r
       };
 
-      transparency_pass.produces("depth", sbx::graphics::attachment::type::depth);
-      transparency_pass.produces("accum", sbx::graphics::attachment::type::image, sbx::math::color{0.0f, 0.0f, 0.0f, 0.0f}, sbx::graphics::format::r32g32b32a32_sfloat, accum_blend);
-      transparency_pass.produces("revealage", sbx::graphics::attachment::type::image, sbx::math::color{1.0f, 0.0f, 0.0f, 0.0f}, sbx::graphics::format::r32_sfloat, revealage_blend);
+      pass.produces("depth", sbx::graphics::attachment::type::depth);
+      pass.produces("accum", sbx::graphics::attachment::type::image, sbx::math::color{0.0f, 0.0f, 0.0f, 0.0f}, sbx::graphics::format::r32g32b32a32_sfloat, accum_blend);
+      pass.produces("revealage", sbx::graphics::attachment::type::image, sbx::math::color{1.0f, 0.0f, 0.0f, 0.0f}, sbx::graphics::format::r32_sfloat, revealage_blend);
 
-      return transparency_pass;
+      return pass;
     },
     [&](sbx::graphics::render_graph::context& context) -> sbx::graphics::render_graph::graphics_pass {
-      auto resolve_pass = context.graphics_pass("resolve");
+      auto pass = context.graphics_pass("resolve");
 
       const auto resolve_blend = sbx::graphics::blend_state{
         .color_source = sbx::graphics::blend_factor::source_alpha,
@@ -109,13 +109,13 @@ renderer::renderer()
         .color_write_mask = sbx::graphics::color_component::r | sbx::graphics::color_component::g | sbx::graphics::color_component::b | sbx::graphics::color_component::a
       };
 
-      resolve_pass.uses("albedo", "position", "normal", "material", "emissive", "object_id", "accum", "revealage");
+      pass.uses("albedo", "position", "normal", "material", "emissive", "object_id", "accum", "revealage");
 
-      resolve_pass.produces("depth", sbx::graphics::attachment::type::depth);
-      resolve_pass.produces("resolve", sbx::graphics::attachment::type::image, _clear_color, sbx::graphics::format::r32g32b32a32_sfloat, resolve_blend);
-      resolve_pass.produces("brightness", sbx::graphics::attachment::type::image, sbx::math::color::black(), sbx::graphics::format::r32g32b32a32_sfloat);
+      pass.produces("depth", sbx::graphics::attachment::type::depth);
+      pass.produces("resolve", sbx::graphics::attachment::type::image, _clear_color, sbx::graphics::format::r32g32b32a32_sfloat, resolve_blend);
+      pass.produces("brightness", sbx::graphics::attachment::type::image, sbx::math::color::black(), sbx::graphics::format::r32g32b32a32_sfloat);
 
-      return resolve_pass;
+      return pass;
     },
     [&](sbx::graphics::render_graph::context& context) -> sbx::graphics::render_graph::graphics_pass {
       auto pass = context.graphics_pass("downsample_1", sbx::graphics::viewport::window(sbx::math::vector2f{0.5f, 0.5f}));
@@ -164,38 +164,38 @@ renderer::renderer()
       return pass;
     },
     [&](sbx::graphics::render_graph::context& context) -> sbx::graphics::render_graph::graphics_pass {
-      auto tonemap_pass = context.graphics_pass("tonemap");
+      auto pass = context.graphics_pass("tonemap");
 
-      tonemap_pass.uses("resolve");
-      tonemap_pass.uses("upsample");
+      pass.uses("resolve");
+      pass.uses("upsample");
 
-      tonemap_pass.produces("tonemap", sbx::graphics::attachment::type::image, _clear_color, sbx::graphics::format::r8g8b8a8_unorm);
+      pass.produces("tonemap", sbx::graphics::attachment::type::image, _clear_color, sbx::graphics::format::r8g8b8a8_unorm);
 
-      return tonemap_pass;
+      return pass;
     },
     [&](sbx::graphics::render_graph::context& context) -> sbx::graphics::render_graph::graphics_pass {
-      auto fxaa_pass = context.graphics_pass("fxaa");
+      auto pass = context.graphics_pass("fxaa");
 
-      fxaa_pass.uses("tonemap");
-      fxaa_pass.produces("fxaa", sbx::graphics::attachment::type::image, _clear_color, sbx::graphics::format::r8g8b8a8_unorm);
+      pass.uses("tonemap");
+      pass.produces("fxaa", sbx::graphics::attachment::type::image, _clear_color, sbx::graphics::format::r8g8b8a8_unorm);
 
-      return fxaa_pass;
+      return pass;
     },
     [&](sbx::graphics::render_graph::context& context) -> sbx::graphics::render_graph::graphics_pass {
-      auto selection_pass = context.graphics_pass("selection");
+      auto pass = context.graphics_pass("selection");
 
-      selection_pass.uses("fxaa");
-      selection_pass.produces("selection", sbx::graphics::attachment::type::image, _clear_color, sbx::graphics::format::r8g8b8a8_unorm);
+      pass.uses("fxaa");
+      pass.produces("selection", sbx::graphics::attachment::type::image, _clear_color, sbx::graphics::format::r8g8b8a8_unorm);
 
-      return selection_pass;
+      return pass;
     },
     [&](sbx::graphics::render_graph::context& context) -> sbx::graphics::render_graph::graphics_pass {
-      auto editor_pass = context.graphics_pass("editor");
+      auto pass = context.graphics_pass("editor");
 
-      editor_pass.uses("selection");
-      editor_pass.produces("swapchain", sbx::graphics::attachment::type::swapchain, _clear_color, sbx::graphics::format::b8g8r8a8_srgb);
+      pass.uses("selection");
+      pass.produces("swapchain", sbx::graphics::attachment::type::swapchain, _clear_color, sbx::graphics::format::b8g8r8a8_srgb);
 
-      return editor_pass;
+      return pass;
     }
   );
 

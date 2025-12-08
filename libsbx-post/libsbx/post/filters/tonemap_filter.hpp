@@ -13,8 +13,8 @@
 namespace sbx::post {
 
 struct tonemap_config {
-  std::float_t exposure{0.0f};
-  std::float_t bloom_mix{0.1f};
+  std::float_t exposure{0.5f};
+  std::float_t bloom_mix{0.4f};
   std::float_t saturation{1.0f};
   std::float_t contrast{1.0f};
   std::float_t temperature{0.0f};

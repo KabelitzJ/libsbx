@@ -15,12 +15,12 @@
 namespace sbx::post {
 
 struct tonemap_config {
-  std::float_t exposure{1.0f};
-  std::float_t bloom_mix{0.4f};
-  std::float_t saturation{1.0f};
-  std::float_t contrast{1.0f};
-  std::float_t temperature{0.0f};
-  std::float_t tint{0.0f};
+  std::float_t exposure = 0.0f;
+  std::float_t bloom_mix = 0.1f;
+  std::float_t saturation = 1.0f;
+  std::float_t contrast = 1.0f;
+  std::float_t temperature = 0.0f;
+  std::float_t tint = 0.0f;
 }; // struct tonemap_config
 
 class tonemap_filter final : public filter {
@@ -30,6 +30,9 @@ class tonemap_filter final : public filter {
   inline static constexpr auto exposure_key = core::prototype::setting_key<std::float_t>{"render.exposure", core::prototype::setting_range<std::float_t>{-5.0f, 5.0f}};
   inline static constexpr auto bloom_mix_key = core::prototype::setting_key<std::float_t>{"render.bloom_mix", core::prototype::setting_range<std::float_t>{0.0f, 0.4f}};
   inline static constexpr auto saturation_key = core::prototype::setting_key<std::float_t>{"render.saturation", core::prototype::setting_range<std::float_t>{0.0f, 1.0f}};
+  inline static constexpr auto contrast_key = core::prototype::setting_key<std::float_t>{"render.contrast", core::prototype::setting_range<std::float_t>{0.0f, 1.0f}};
+  inline static constexpr auto temperature_key = core::prototype::setting_key<std::float_t>{"render.temperature", core::prototype::setting_range<std::float_t>{-1.0f, 1.0f}};
+  inline static constexpr auto tint_key = core::prototype::setting_key<std::float_t>{"render.tint", core::prototype::setting_range<std::float_t>{-1.0f, 1.0f}};
 
 public:
 
@@ -41,6 +44,9 @@ public:
     core::prototype::settings::set(exposure_key, _tonemap_config.exposure);
     core::prototype::settings::set(bloom_mix_key, _tonemap_config.bloom_mix);
     core::prototype::settings::set(saturation_key, _tonemap_config.saturation);
+    core::prototype::settings::set(contrast_key, _tonemap_config.contrast);
+    core::prototype::settings::set(temperature_key, _tonemap_config.temperature);
+    core::prototype::settings::set(tint_key, _tonemap_config.tint);
   }
 
   ~tonemap_filter() override = default;
@@ -53,12 +59,12 @@ public:
     
     pipeline.bind(command_buffer);
 
-    _push_handler.push("exposure", core::prototype::settings::get_or(exposure_key, 1.0f));
-    _push_handler.push("bloom_mix", core::prototype::settings::get_or(exposure_key, 0.4f));
+    _push_handler.push("exposure", core::prototype::settings::get_or(exposure_key, 0.0f));
+    _push_handler.push("bloom_mix", core::prototype::settings::get_or(bloom_mix_key, 0.2f));
     _push_handler.push("saturation", core::prototype::settings::get_or(saturation_key, 1.0f));
-    _push_handler.push("contrast", _tonemap_config.contrast);
-    _push_handler.push("temperature", _tonemap_config.temperature);
-    _push_handler.push("tint", _tonemap_config.tint);
+    _push_handler.push("contrast", core::prototype::settings::get_or(contrast_key, 1.0f));
+    _push_handler.push("temperature", core::prototype::settings::get_or(temperature_key, 0.0f));
+    _push_handler.push("tint", core::prototype::settings::get_or(tint_key, 0.0f));
 
     for (const auto& [name, attachment] : _attachment_names) {
       descriptor_handler.push(name, graphics_module.attachment(attachment));

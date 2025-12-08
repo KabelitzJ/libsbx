@@ -9,7 +9,7 @@ class separate_sampler : public descriptor {
 
 public:
 
-  separate_sampler(VkFilter filter = VK_FILTER_LINEAR, VkSamplerAddressMode address_mode = VK_SAMPLER_ADDRESS_MODE_REPEAT);
+  separate_sampler(VkFilter filter = VK_FILTER_LINEAR, VkSamplerAddressMode address_mode = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE);
 
   ~separate_sampler();
 

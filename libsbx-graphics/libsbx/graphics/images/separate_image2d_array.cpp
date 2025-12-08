@@ -34,6 +34,7 @@ auto separate_image2d_array::write_descriptor_set(std::uint32_t binding, VkDescr
     auto descriptor_image_info = VkDescriptorImageInfo{};
     descriptor_image_info.imageLayout = image.layout();
     descriptor_image_info.imageView = image.view();
+    descriptor_image_info.sampler = nullptr;
     
     descriptor_image_infos.push_back(descriptor_image_info);
   }

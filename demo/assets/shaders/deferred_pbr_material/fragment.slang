@@ -48,7 +48,7 @@ Texture2D<float4> images[sbx::common::max_image_array_size];
 float3x3 build_tbn(fs_in in) {
   float3 N = normalize(in.normal);
   float3 T = normalize(in.tangent.xyz);
-  T = normalize(T - N * dot(T, N));
+  // T = normalize(T - N * dot(T, N));
   float3 B = normalize(cross(N, T)) * in.tangent.w;
 
   return transpose(float3x3(T, B, N));

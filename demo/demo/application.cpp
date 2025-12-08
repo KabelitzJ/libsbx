@@ -32,7 +32,7 @@
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include <stb_image_write.h>
 
-#define DUMP_IMAGES 1
+#define DUMP_IMAGES 0
 
 namespace demo {
 
@@ -674,7 +674,7 @@ auto application::_generate_brdf(const std::uint32_t size) -> void {
   sbx::utility::logger<"application">::info("Generated 'brdf' in {:.2f}ms", sbx::units::quantity_cast<sbx::units::millisecond>(timer.elapsed()).value());
 
 #if defined(DUMP_IMAGES) && (DUMP_IMAGES == 1)
-  _dump_image2d(brdf, "dump/brdf.png");
+  _dump_image2d(brdf, "brdf.png");
 #endif
 }
 
@@ -1051,7 +1051,7 @@ auto application::_generate_prefiltered(uint32_t size) -> void
 
   // 9. Debug dump to PNG
 #if defined(DUMP_IMAGES) && (DUMP_IMAGES == 1)
-  _dump_cubemap_to_png(prefiltered, "dump/prefiltered");
+  _dump_cubemap_to_png(prefiltered, "prefiltered");
 #endif
 }
 

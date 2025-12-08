@@ -12,18 +12,26 @@
 
 namespace sbx::post {
 
+struct tonemap_config {
+  std::float_t exposure{0.0f};
+  std::float_t bloom_mix{0.1f};
+  std::float_t saturation{1.0f};
+  std::float_t contrast{1.0f};
+  std::float_t temperature{0.0f};
+  std::float_t tint{0.0f};
+}; // struct tonemap_config
+
 class tonemap_filter final : public filter {
 
   using base = filter;
 
 public:
 
-  tonemap_filter(const graphics::render_graph::graphics_pass& pass, const std::filesystem::path& path, std::vector<std::pair<std::string, std::string>>&& attachment_names, std::float_t exposure = 1.0f, std::float_t bloom_mix = 0.4f)
+  tonemap_filter(const graphics::render_graph::graphics_pass& pass, const std::filesystem::path& path, std::vector<std::pair<std::string, std::string>>&& attachment_names, const tonemap_config& tonemap_config = post::tonemap_config{})
   : base{pass, path, base::default_pipeline_definition},
     _push_handler{base::pipeline()},
     _attachment_names{std::move(attachment_names)},
-    _exposure{exposure},
-    _bloom_mix{bloom_mix} { }
+    _tonemap_config{tonemap_config} { }
 
   ~tonemap_filter() override = default;
 
@@ -35,8 +43,12 @@ public:
     
     pipeline.bind(command_buffer);
 
-    _push_handler.push("exposure", _exposure);
-    _push_handler.push("bloom_mix", _bloom_mix);
+    _push_handler.push("exposure", _tonemap_config.exposure);
+    _push_handler.push("bloom_mix", _tonemap_config.bloom_mix);
+    _push_handler.push("saturation", _tonemap_config.saturation);
+    _push_handler.push("contrast", _tonemap_config.contrast);
+    _push_handler.push("temperature", _tonemap_config.temperature);
+    _push_handler.push("tint", _tonemap_config.tint);
 
     for (const auto& [name, attachment] : _attachment_names) {
       descriptor_handler.push(name, graphics_module.attachment(attachment));
@@ -56,8 +68,7 @@ private:
 
   graphics::push_handler _push_handler;
   std::vector<std::pair<std::string, std::string>> _attachment_names;
-  std::float_t _exposure;
-  std::float_t _bloom_mix;
+  tonemap_config _tonemap_config;
 
 }; // class tonemap_filter
 

@@ -9,6 +9,10 @@ Sampler2D bloom_image;
 struct push_data {
   float exposure;
   float bloom_mix;
+  float saturation;
+  float contrast;
+  float temperature;
+  float tint;
 }; // struct push_data
 
 [[vk::push_constant]]
@@ -22,12 +26,23 @@ struct fs_out {
   float4 color : SV_Target0;
 }; // struct fs_out
 
-float3 aces_film(float3 x) {
-  float a = 2.51;
-  float b = 0.03;
-  float c = 2.43;
-  float d = 0.59;
-  float e = 0.14;
+float3 apply_white_balance(float3 c, float temperature, float tint) {
+  float t = temperature * 0.1;
+  float ti = tint * 0.1;
+  float3 w = float3(1.0 + t, 1.0, 1.0 - t);
+
+  w.g *= (1.0 - ti);
+  w.b *= (1.0 + ti);
+
+  return c * w;
+}
+
+float3 apply_tonemap(float3 x) {
+  const float a = 2.51;
+  const float b = 0.03;
+  const float c = 2.43;
+  const float d = 0.59;
+  const float e = 0.14;
 
   return saturate((x * (a * x + b)) / (x * (c * x + d) + e));
 }
@@ -36,14 +51,17 @@ float3 aces_film(float3 x) {
 fs_out main(fs_in in) {
   fs_out out;
 
-  const float gamma = 2.2;
-
   float3 color = resolve_image.Sample(in.uv).rgb;
   float3 bloom = bloom_image.Sample(in.uv).rgb;
 
-  float3 hdr = color + bloom * push.bloom_mix;
+  float3 hdr = color + pow(bloom, 1.2) * push.bloom_mix;
+  hdr = apply_white_balance(hdr, push.temperature, push.tint);
 
-  float3 mapped = aces_film(hdr * push.exposure);
+  float3 mapped = apply_tonemap(hdr * exp2(push.exposure));
+
+  float luminance = dot(mapped, float3(0.2126, 0.7152, 0.0722));
+  mapped = lerp(float3(luminance, luminance, luminance), mapped, push.saturation);
+  mapped = lerp(luminance.xxx, mapped, push.contrast);
 
   out.color = float4(mapped, 1.0);
 

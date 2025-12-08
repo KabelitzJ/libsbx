@@ -45,6 +45,15 @@ SamplerState images_sampler;
 [[vk::binding(2, 0)]]
 Texture2D<float4> images[sbx::common::max_image_array_size];
 
+float3x3 build_tbn(fs_in in) {
+  float3 N = normalize(in.normal);
+  float3 T = normalize(in.tangent.xyz);
+  T = normalize(T - N * dot(T, N));
+  float3 B = normalize(cross(N, T)) * in.tangent.w;
+
+  return transpose(float3x3(T, B, N));
+}
+
 float4 get_albedo<AlphaPolicy: alpha_policy>(float2 uv, material_data material_data) {
   uint index = material_data.albedo_index;
 
@@ -57,7 +66,7 @@ float4 get_albedo<AlphaPolicy: alpha_policy>(float2 uv, material_data material_d
   return AlphaPolicy::combine_colors(color, material_data.base_color);
 }
 
-float3 get_normal(float3 T, float3 B, float3 N, float2 uv, float3 normal, material_data material_data) {
+float3 get_normal(float3x3 TBN, float2 uv, float3 normal, material_data material_data) {
   uint index = material_data.normal_index;
 
   if (index >= sbx::common::max_image_array_size) {
@@ -69,7 +78,7 @@ float3 get_normal(float3 T, float3 B, float3 N, float2 uv, float3 normal, materi
   sampled_normal.xy *= material_data.normal_scale;
   sampled_normal = normalize(sampled_normal);
 
-  return normalize(T * sampled_normal.x + B * sampled_normal.y + N * sampled_normal.z);
+  return normalize(mul(TBN, sampled_normal));
 }
 
 float3 get_material(float2 uv, material_data material_data) {
@@ -97,14 +106,11 @@ float3 get_emissive(float2 uv, material_data material_data) {
 opaque_fs_out opaque_main(fs_in in, material_data material_data, uint object_id) {
   opaque_fs_out out;
 
-  float3 N = normalize(in.normal);
-  float3 T = normalize(in.tangent.xyz);
-  T = normalize(T - N * dot(T, N));
-  float3 B = normalize(cross(N, T)) * in.tangent.w;
+  float3x3 TBN = build_tbn(in);
 
   out.albedo = get_albedo<opaque_alpha_policy>(in.uv, material_data);
   out.position = float4(in.position, 1.0);
-  out.normal = float4(get_normal(T, B, N, in.uv, in.normal, material_data), 0.0);
+  out.normal = float4(get_normal(TBN, in.uv, in.normal, material_data), 0.0);
   out.material = float4(get_material(in.uv, material_data), 0.0);
   out.emissive = float4(get_emissive(in.uv, material_data), 0.0);
   out.object_id = object_id;
@@ -138,10 +144,7 @@ opaque_fs_out skinned_opaque_main(fs_in in) {
 opaque_fs_out mask_main(fs_in in, material_data material_data, uint object_id) {
   opaque_fs_out out;
 
-  float3 N = normalize(in.normal);
-  float3 T = normalize(in.tangent.xyz);
-  T = normalize(T - N * dot(T, N));
-  float3 B = normalize(cross(N, T)) * in.tangent.w;
+  float3x3 TBN = build_tbn(in);
 
   float4 albedo = get_albedo<mask_alpha_policy>(in.uv, material_data);
 
@@ -151,7 +154,7 @@ opaque_fs_out mask_main(fs_in in, material_data material_data, uint object_id) {
 
   out.albedo = albedo;
   out.position = float4(in.position, 1.0);
-  out.normal = float4(get_normal(T, B, N, in.uv, in.normal, material_data), 0.0);
+  out.normal = float4(get_normal(TBN, in.uv, in.normal, material_data), 0.0);
   out.material = float4(get_material(in.uv, material_data), 0.0);
   out.emissive = float4(get_emissive(in.uv, material_data), 0.0);
   out.object_id = object_id;

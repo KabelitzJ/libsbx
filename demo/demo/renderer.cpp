@@ -246,7 +246,7 @@ renderer::renderer()
     {"bloom_image", "upsample"}
   };
 
-  add_subrenderer<sbx::post::tonemap_filter>(tonemap, "res://shaders/tonemap", std::move(tonemap_attachment_names), 0.8f, 0.5f);
+  add_subrenderer<sbx::post::tonemap_filter>(tonemap, "res://shaders/tonemap", std::move(tonemap_attachment_names));
 
   add_subrenderer<sbx::post::fxaa_filter>(fxaa, "res://shaders/fxaa", "tonemap");
 

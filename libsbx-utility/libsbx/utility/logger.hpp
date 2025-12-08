@@ -51,7 +51,7 @@ public:
 protected:
 
   void sink_it_(const spdlog::details::log_msg& msg) override {
-    spdlog::memory_buf_t formatted;
+    auto formatted = spdlog::memory_buf_t{};
     base::formatter_->format(msg, formatted);
 
     auto lock = std::lock_guard<Mutex>{base::mutex_};
@@ -81,10 +81,10 @@ struct logger_instance {
   static auto create_logger() -> spdlog::logger {
     auto sinks = std::vector<std::shared_ptr<spdlog::sinks::sink>>{};
 
-    sinks.push_back(std::make_shared<spdlog::sinks::basic_file_sink_mt>("./demo/logs/sbx.log", true));
+    sinks.push_back(std::make_shared<spdlog::sinks::basic_file_sink_st>("./demo/logs/sbx.log", true));
 
     if constexpr (utility::build_configuration_v == utility::build_configuration::debug) {
-      sinks.push_back(std::make_shared<spdlog::sinks::stdout_color_sink_mt>());
+      sinks.push_back(std::make_shared<spdlog::sinks::stdout_color_sink_st>());
     }
 
     sink = std::make_shared<ring_buffer_sink_st>();
@@ -96,7 +96,7 @@ struct logger_instance {
     logger.set_pattern("[%Y-%m-%d %H:%M:%S] [%^%l%$] %v");
 
     if constexpr (build_configuration_v == build_configuration::debug) {
-      logger.set_level(spdlog::level::debug);
+      logger.set_level(spdlog::level::trace);
     } else {
       logger.set_level(spdlog::level::info);
     }
@@ -133,31 +133,22 @@ public:
 
   template<typename... Args>
   static auto trace(format_string_type<Args...> format, Args&&... args) -> void {
-    // [NOTE] KAJ 2023-03-20 : This should make trace and debug messages be no-ops in release builds.
-    if constexpr (utility::build_configuration_v == utility::build_configuration::debug) {
-      detail::instance().trace("[{}] : {}", Tag, fmt::format(format, std::forward<Args>(args)...));
-    }
+    detail::instance().trace("[{}] : {}", Tag, fmt::format(format, std::forward<Args>(args)...));
   }
 
   template<typename Type>
   static auto trace(const Type& value) -> void {
-    if constexpr (utility::build_configuration_v == utility::build_configuration::debug) {
-      detail::instance().trace("[{}] : {}", Tag, value);
-    }
+    detail::instance().trace("[{}] : {}", Tag, value);
   }
 
   template<typename... Args>
   static auto debug(format_string_type<Args...> format, Args&&... args) -> void {
-    if constexpr (utility::build_configuration_v == utility::build_configuration::debug) {
-      detail::instance().debug("[{}] : {}", Tag, fmt::format(format, std::forward<Args>(args)...));
-    }
+    detail::instance().debug("[{}] : {}", Tag, fmt::format(format, std::forward<Args>(args)...));
   }
 
   template<typename Type>
   static auto debug(const Type& value) -> void {
-    if constexpr (utility::build_configuration_v == utility::build_configuration::debug) {
-      detail::instance().debug("[{}] : {}", Tag, value);
-    }
+    detail::instance().debug("[{}] : {}", Tag, value);
   }
 
   template<typename... Args>

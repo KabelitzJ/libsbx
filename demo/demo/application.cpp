@@ -238,6 +238,31 @@ application::application()
 
   demo_script.invoke("SayHello");
 
+  // Tree
+
+  auto tree = scene.create_node("Tree");
+
+  auto& pine_tree_bark_material = scene.add_material<sbx::models::material>("pine_tree_bark");
+  pine_tree_bark_material.albedo = scene.get_image("pine_tree_bark_albedo");
+  pine_tree_bark_material.normal = scene.get_image("pine_tree_bark_normal");
+
+  auto& pine_tree_leaves_material = scene.add_material<sbx::models::material>("pine_tree_leaves");
+  pine_tree_leaves_material.albedo = scene.get_image("pine_tree_leaves_albedo");
+  pine_tree_leaves_material.normal = scene.get_image("pine_tree_leaves_normal");
+  pine_tree_leaves_material.alpha = sbx::models::alpha_mode::mask;
+  pine_tree_leaves_material.is_double_sided = true;
+
+  auto submeshes = std::vector<sbx::scenes::static_mesh::submesh>{
+    {0, scene.get_material("pine_tree_bark")}, 
+    {1, scene.get_material("pine_tree_leaves")}
+  };
+
+  scene.add_component<sbx::scenes::static_mesh>(tree, scene.get_mesh("pine_tree"), submeshes);
+
+  auto& tree_transform = scene.get_component<sbx::scenes::transform>(tree);
+  tree_transform.set_position(sbx::math::vector3{-6.0f, 6.0f, 0.0f});
+  tree_transform.set_scale(sbx::math::vector3{1.0f, 1.0f, 1.0f});
+
   // Cube
 
   auto cube = scene.create_node("Cube");

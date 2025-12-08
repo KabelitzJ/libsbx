@@ -45,70 +45,6 @@ SamplerState images_sampler;
 [[vk::binding(2, 0)]]
 Texture2D<float4> images[sbx::common::max_image_array_size];
 
-float3 world_to_tangent(float3 v, float3 T, float3 B, float3 N) {
-  return float3(dot(T, v), dot(B, v), dot(N, v));
-}
-
-float3 tangent_to_world(float3 v, float3 T, float3 B, float3 N) {
-  return v.x * T + v.y * B + v.z * N;
-}
-
-void build_tbn(float3 position, float3 normal, float4 tangent, out float3 T, out float3 B, out float3 N)
-{
-  N = normalize(normal);
-  T = normalize(tangent.xyz);
-
-  T = normalize(T - N * dot(T, N));
-
-  B = normalize(cross(N, T)) * tangent.w;
-}
-
-float2 parallax_mapping(float3 T, float3 B, float3 N, float2 uv, float3 position_ws, material_data material_data) {
-  uint index = material_data.height_index;
-
-  if (index >= sbx::common::max_image_array_size) {
-    return uv;
-  }
-
-  float3 view_dir_ws = normalize(scene.camera_position - position_ws);
-
-  float3 view_direction_ts = world_to_tangent(view_dir_ws, T, B, N);
-
-  view_direction_ts.z = max(view_direction_ts.z, 0.05);
-  view_direction_ts = normalize(view_direction_ts);
-
-  // Parallax occlusion parameters
-  float ndotv_ts = max(dot(float3(0.0, 0.0, 1.0), view_direction_ts), 0.0);
-  float layer_count = lerp(material_data.parallax_min_layers, material_data.parallax_max_layers, ndotv_ts);
-
-  float layer_depth = 1.0 / layer_count;
-  float current_layer_depth = 0.0;
-
-  float2 P = view_direction_ts.xy * material_data.height_scale;
-  float2 uv_delta = P / layer_count;
-
-  float2 current_uv = uv;
-  float current_depth_map_value = images[NonUniformResourceIndex(index)].Sample(images_sampler, current_uv).r;
-
-  [loop]
-  while (current_layer_depth < current_depth_map_value) {
-    current_uv -= uv_delta;
-    current_layer_depth += layer_depth;
-    current_depth_map_value = images[NonUniformResourceIndex(index)].Sample(images_sampler, current_uv).r;
-  }
-
-  float2 previous_uv = current_uv + uv_delta;
-
-  float after_depth  = current_depth_map_value - current_layer_depth;
-  float before_depth = images[NonUniformResourceIndex(index)].Sample(images_sampler, previous_uv).r - (current_layer_depth - layer_depth);
-
-  float weight = after_depth / (after_depth - before_depth);
-
-  float2 final_uv = previous_uv * weight + current_uv * (1.0 - weight);
-
-  return final_uv;
-}
-
 float4 get_albedo<AlphaPolicy: alpha_policy>(float2 uv, material_data material_data) {
   uint index = material_data.albedo_index;
 
@@ -121,11 +57,11 @@ float4 get_albedo<AlphaPolicy: alpha_policy>(float2 uv, material_data material_d
   return AlphaPolicy::combine_colors(color, material_data.base_color);
 }
 
-float3 get_normal(float3 T, float3 B, float3 N, float2 uv, float3 normal_ws, material_data material_data) {
+float3 get_normal(float3 T, float3 B, float3 N, float2 uv, float3 normal, material_data material_data) {
   uint index = material_data.normal_index;
 
   if (index >= sbx::common::max_image_array_size) {
-    return normalize(normal_ws);
+    return normalize(normal);
   }
 
   float3 sampled_normal = images[NonUniformResourceIndex(index)].Sample(images_sampler, uv).xyz;
@@ -133,7 +69,7 @@ float3 get_normal(float3 T, float3 B, float3 N, float2 uv, float3 normal_ws, mat
   sampled_normal.xy *= material_data.normal_scale;
   sampled_normal = normalize(sampled_normal);
 
-  return normalize(tangent_to_world(sampled_normal, T, B, N));
+  return normalize(T * sampled_normal.x + B * sampled_normal.y + N * sampled_normal.z);
 }
 
 float3 get_material(float2 uv, material_data material_data) {
@@ -161,16 +97,16 @@ float3 get_emissive(float2 uv, material_data material_data) {
 opaque_fs_out opaque_main(fs_in in, material_data material_data, uint object_id) {
   opaque_fs_out out;
 
-  float3 T, B, N;
-  build_tbn(in.position, in.normal, in.tangent, T, B, N);
+  float3 N = normalize(in.normal);
+  float3 T = normalize(in.tangent.xyz);
+  T = normalize(T - N * dot(T, N));
+  float3 B = normalize(cross(N, T)) * in.tangent.w;
 
-  float2 parallax_uv = parallax_mapping(T, B, N, in.uv, in.position, material_data);
-
-  out.albedo = get_albedo<opaque_alpha_policy>(parallax_uv, material_data);
+  out.albedo = get_albedo<opaque_alpha_policy>(in.uv, material_data);
   out.position = float4(in.position, 1.0);
-  out.normal = float4(get_normal(T, B, N, parallax_uv, in.normal, material_data), 0.0);
-  out.material = float4(get_material(parallax_uv, material_data), 0.0);
-  out.emissive = float4(get_emissive(parallax_uv, material_data), 0.0);
+  out.normal = float4(get_normal(T, B, N, in.uv, in.normal, material_data), 0.0);
+  out.material = float4(get_material(in.uv, material_data), 0.0);
+  out.emissive = float4(get_emissive(in.uv, material_data), 0.0);
   out.object_id = object_id;
   out.depth = sbx::common::linearize_depth(in.sv_position.z, scene.camera_near, scene.camera_far);
 
@@ -202,12 +138,12 @@ opaque_fs_out skinned_opaque_main(fs_in in) {
 opaque_fs_out mask_main(fs_in in, material_data material_data, uint object_id) {
   opaque_fs_out out;
 
-  float3 T, B, N;
-  build_tbn(in.position, in.normal, in.tangent, T, B, N);
+  float3 N = normalize(in.normal);
+  float3 T = normalize(in.tangent.xyz);
+  T = normalize(T - N * dot(T, N));
+  float3 B = normalize(cross(N, T)) * in.tangent.w;
 
-  float2 parallax_uv = parallax_mapping(T, B, N, in.uv, in.position, material_data);
-
-  float4 albedo = get_albedo<mask_alpha_policy>(parallax_uv, material_data);
+  float4 albedo = get_albedo<mask_alpha_policy>(in.uv, material_data);
 
   if (albedo.a < material_data.alpha_cutoff) {
     discard;
@@ -215,9 +151,9 @@ opaque_fs_out mask_main(fs_in in, material_data material_data, uint object_id) {
 
   out.albedo = albedo;
   out.position = float4(in.position, 1.0);
-  out.normal = float4(get_normal(T, B, N, parallax_uv, in.normal, material_data), 0.0);
-  out.material = float4(get_material(parallax_uv, material_data), 0.0);
-  out.emissive = float4(get_emissive(parallax_uv, material_data), 0.0);
+  out.normal = float4(get_normal(T, B, N, in.uv, in.normal, material_data), 0.0);
+  out.material = float4(get_material(in.uv, material_data), 0.0);
+  out.emissive = float4(get_emissive(in.uv, material_data), 0.0);
   out.object_id = object_id;
   out.depth = sbx::common::linearize_depth(in.sv_position.z, scene.camera_near, scene.camera_far);
 

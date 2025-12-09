@@ -7,29 +7,42 @@ struct transform_data {
 }; // struct transform_data
 
 struct material_data {
-  uint albedo_index;
-  uint normal_index;
-  uint mrao_index;
-  uint emissive_index;
+  uint albedo_image_index;
+  uint albedo_sampler_index;
+  uint normal_image_index;
+  uint normal_sampler_index;
 
-  uint height_index;
+  uint mrao_image_index;
+  uint mrao_sampler_index;
+  uint emissive_image_index;
+  uint emissive_sampler_index;
+
+  uint height_image_index;
+  uint height_sampler_index;
   float height_scale;
   float height_offset;
-  float parallax_min_layers;
 
+  float parallax_min_layers;
   float parallax_max_layers;
   float emissive_strength;
   float normal_scale;
+
+  float metallic;
+  float roughness;
+  float occlusion;
   float alpha_cutoff;
+
+  float2 uv_offset;
+  float2 uv_scale;
 
   float4 base_color;
 
   float4 emissive_factor;
 
-  float metallic;
-  float roughness;
-  float occlusion;
   uint flags;
+  uint _pad0;
+  uint _pad1;
+  uint _pad2;
 }; // struct material_data
 
 struct static_instance_data {

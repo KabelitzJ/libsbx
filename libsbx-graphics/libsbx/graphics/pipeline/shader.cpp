@@ -213,16 +213,22 @@ auto shader::_create_reflection(const spirv_cross::Compiler& compiler) -> void {
     }
   }
 
-  for (const auto& separate_sampler : resources.separate_samplers) {
-    const auto& name = separate_sampler.name;
-    const auto set = compiler.get_decoration(separate_sampler.id, spv::DecorationDescriptorSet);
-    const auto binding = compiler.get_decoration(separate_sampler.id, spv::DecorationBinding);
+  for (const auto& sampler_state : resources.separate_samplers) {
+    const auto& type = compiler.get_type(sampler_state.type_id);
+
+    const auto& name = sampler_state.name;
+    const auto set = compiler.get_decoration(sampler_state.id, spv::DecorationDescriptorSet);
+    const auto binding = compiler.get_decoration(sampler_state.id, spv::DecorationBinding);
 
     _set_uniforms.resize(std::max(_set_uniforms.size(), static_cast<std::size_t>(set + 1u)));
 
-    utility::logger<"graphics">::debug("separate sampler: '{}' binding: {}", name, binding);
-
-    _set_uniforms[set].emplace(name, uniform{set, binding, 0, 0, data_type::separate_sampler, false, false, _stage});
+    if (type.array.size() == 0u) {
+      utility::logger<"graphics">::debug("separate sampler_state: '{}' binding: {}", name, binding);
+      _set_uniforms[set].emplace(name, uniform{set, binding, 0, 0, data_type::sampler_state, false, false, _stage});
+    } else if (type.array.size() == 1u) {
+      utility::logger<"graphics">::debug("separate sampler_state[{}]: '{}' binding: {}", type.array[0], name, binding);
+      _set_uniforms[set].emplace(name, uniform{set, binding, 0, 32u, data_type::sampler_state_array, false, false, _stage});
+    }
   }
 
   // Reflection for storage images
@@ -370,7 +376,13 @@ auto shader::_get_data_type(const spirv_cross::SPIRType& type) -> data_type {
       return data_type::unknown;
     }
   } else if (type.basetype == spirv_cross::SPIRType::Sampler) {
-    return data_type::separate_sampler;
+    if (type.array.size() == 0u) {
+      return data_type::sampler_state;
+    } else if (type.array.size() == 1u) {
+      return data_type::sampler_state_array;
+    } else {
+      return data_type::unknown;
+    }
   } else if (type.basetype == spirv_cross::SPIRType::Struct) {
     return data_type::structure;
   }
@@ -405,7 +417,8 @@ auto shader::_data_type_to_string(data_type type) -> std::string {
     case data_type::sampler2d: return "sampler2d";
     case data_type::sampler2d_array: return "sampler2d_array";
     case data_type::sampler_cube: return "sampler_cube";
-    case data_type::separate_sampler: return "separate_sampler";
+    case data_type::sampler_state: return "sampler_state";
+    case data_type::sampler_state_array: return "sampler_state_array";
     case data_type::separate_image2d: return "separate_image2d";
     case data_type::separate_image2d_array: return "separate_image2d_array";
     case data_type::structure: return "structure";

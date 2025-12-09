@@ -191,7 +191,7 @@ auto image::create_image_sampler(VkSampler& sampler, VkFilter filter, VkSamplerA
   sampler_create_info.compareEnable = VK_FALSE;
   sampler_create_info.compareOp = VK_COMPARE_OP_ALWAYS;
   sampler_create_info.minLod = 0.0f;
-  sampler_create_info.maxLod = static_cast<float>(mip_levels);
+  sampler_create_info.maxLod = static_cast<std::float_t>(mip_levels);
   sampler_create_info.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
   sampler_create_info.unnormalizedCoordinates = false;
 
@@ -652,6 +652,7 @@ auto image::channels_from_format(VkFormat format) -> std::uint8_t {
     case VK_FORMAT_R8G8B8A8_SRGB:
     case VK_FORMAT_B8G8R8A8_SRGB:
     case VK_FORMAT_R16G16B16A16_SFLOAT:
+    case VK_FORMAT_A2B10G10R10_UNORM_PACK32:
     case VK_FORMAT_R32G32B32A32_SFLOAT: {
       return 4;
     }

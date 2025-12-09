@@ -11,8 +11,9 @@
 
 #include <libsbx/graphics/buffers/storage_buffer.hpp>
 #include <libsbx/graphics/images/image2d.hpp>
-#include <libsbx/graphics/images/separate_sampler.hpp>
+#include <libsbx/graphics/images/sampler_state.hpp>
 #include <libsbx/graphics/images/separate_image2d_array.hpp>
+#include <libsbx/graphics/images/separate_sampler_array.hpp>
 
 namespace sbx::graphics {
 
@@ -40,7 +41,7 @@ public:
 
   auto images() const noexcept -> const separate_image2d_array&;
 
-  auto sampler() const noexcept -> const separate_sampler&;
+  auto samplers() const noexcept -> const separate_sampler_array&;
 
   auto draw_ranges(const utility::hashed_string& name) const noexcept -> const draw_command_range_container&;
 
@@ -61,6 +62,8 @@ protected:
 
   auto add_image(const image2d_handle& handle) -> std::uint32_t;
 
+  auto add_sampler_state(const sampler_state_handle& handle) -> std::uint32_t;
+
   auto push_draw_command_range(const utility::hashed_string& name, const math::uuid& id, const draw_command_range& range) -> void;
 
   auto push_draw_command_range(const std::size_t hash, const math::uuid& id, const draw_command_range& range) -> void;
@@ -69,7 +72,7 @@ private:
 
   storage_buffer_container _buffers;
   separate_image2d_array _images;
-  separate_sampler _sampler;
+  separate_sampler_array _samplers;
   std::unordered_map<std::size_t, draw_command_range_container> _draw_ranges;
 
 }; // class draw_list

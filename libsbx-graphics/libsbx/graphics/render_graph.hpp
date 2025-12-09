@@ -30,25 +30,6 @@
 
 namespace sbx::graphics {
 
-enum class format : std::int32_t {
-  undefined = VK_FORMAT_UNDEFINED,
-  r16_sfloat = VK_FORMAT_R16_SFLOAT,
-  r32_sfloat = VK_FORMAT_R32_SFLOAT,
-  r32_uint = VK_FORMAT_R32_UINT,
-  r64_uint = VK_FORMAT_R64_UINT,
-  r32g32_sfloat = VK_FORMAT_R32G32_SFLOAT,
-  r32g32_uint = VK_FORMAT_R32G32_UINT,
-  r8g8b8a8_unorm = VK_FORMAT_R8G8B8A8_UNORM,
-  b8g8r8a8_srgb = VK_FORMAT_B8G8R8A8_SRGB,
-  r16g16b16a16_sfloat = VK_FORMAT_R16G16B16A16_SFLOAT,
-  r32g32b32a32_sfloat = VK_FORMAT_R32G32B32A32_SFLOAT
-}; // enum class format
-
-enum class address_mode : std::uint32_t {
-  repeat = VK_SAMPLER_ADDRESS_MODE_REPEAT,
-  clamp_to_edge = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE
-}; // enum class address_mode
-
 enum class blend_factor : std::uint32_t {
   zero = VK_BLEND_FACTOR_ZERO,
   one = VK_BLEND_FACTOR_ONE,

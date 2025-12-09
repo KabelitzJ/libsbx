@@ -365,7 +365,7 @@ auto graph_builder::_create_attachments(const viewport::type flags, const graphi
 
         const auto usage = VkImageUsageFlags{VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT};
 
-        const auto handle = graphics_module.add_resource<image2d>(extent, to_vk_enum<VkFormat>(attachment.format()), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, usage, filter, to_vk_enum<VkSamplerAddressMode>(attachment.address_mode()), VK_SAMPLE_COUNT_1_BIT);
+        const auto handle = graphics_module.add_resource<image2d>(extent, attachment.format(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, usage, filter, to_vk_enum<VkSamplerAddressMode>(attachment.address_mode()), VK_SAMPLE_COUNT_1_BIT);
         const auto& image = graphics_module.get_resource<image2d>(handle);
         
         _color_images.emplace(attachment.name(), handle);

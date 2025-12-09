@@ -58,10 +58,10 @@ renderer::renderer()
 
       pass.produces("depth", sbx::graphics::attachment::type::depth);
       pass.produces("albedo", sbx::graphics::attachment::type::image, _clear_color, sbx::graphics::format::r8g8b8a8_unorm);
-      pass.produces("position", sbx::graphics::attachment::type::image, _clear_color, sbx::graphics::format::r32g32b32a32_sfloat);
-      pass.produces("normal", sbx::graphics::attachment::type::image, _clear_color, sbx::graphics::format::r32g32b32a32_sfloat);
+      pass.produces("position", sbx::graphics::attachment::type::image, _clear_color, sbx::graphics::format::r16g16b16a16_sfloat);
+      pass.produces("normal", sbx::graphics::attachment::type::image, sbx::math::color{0.5f, 0.5f, 1.0f, 1.0f}, sbx::graphics::format::a2b10g10r10_unorm_pack32);
       pass.produces("material", sbx::graphics::attachment::type::image, _clear_color, sbx::graphics::format::r8g8b8a8_unorm);
-      pass.produces("emissive", sbx::graphics::attachment::type::image, _clear_color, sbx::graphics::format::r32g32b32a32_sfloat);
+      pass.produces("emissive", sbx::graphics::attachment::type::image, _clear_color, sbx::graphics::format::r16g16b16a16_sfloat);
       pass.produces("object_id", sbx::graphics::attachment::type::image, sbx::math::color::black(), sbx::graphics::format::r32_uint);
       pass.produces("normalized_depth", sbx::graphics::attachment::type::image, _clear_color, sbx::graphics::format::r32_sfloat);
 

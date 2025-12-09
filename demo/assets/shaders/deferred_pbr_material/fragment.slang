@@ -1,7 +1,6 @@
 #include <libsbx/common/depth.slang>
 #include <libsbx/common/image.slang>
 #include <libsbx/common/scene_data.slang>
-#include <libsbx/common/texture_sampler.slang>
 
 #include <common.slang>
 #include <alpha_policy.slang>
@@ -13,6 +12,7 @@ struct fs_in {
   [[vk::location(3)]] float2 uv : UV;
   [[vk::location(4)]] nointerpolation uint instance_index : INSTANCE_INDEX;
   float4 sv_position : SV_Position;
+  bool sv_is_front_face: SV_IsFrontFace;
 }; // struct fs_in
 
 struct opaque_fs_out {
@@ -40,67 +40,77 @@ ConstantBuffer<skinned_push_data> skinned_push;
 ConstantBuffer<sbx::common::scene_data> scene;
 
 [[vk::binding(1, 0)]]
-SamplerState images_sampler;
+SamplerState samplers[sbx::common::max_image_array_size];
 
 [[vk::binding(2, 0)]]
 Texture2D<float4> images[sbx::common::max_image_array_size];
 
 float3x3 build_tbn(fs_in in) {
-  float3 N = normalize(in.normal);
-  float3 T = normalize(in.tangent.xyz);
-  // T = normalize(T - N * dot(T, N));
-  float3 B = normalize(cross(N, T)) * in.tangent.w;
+  float sign = in.sv_is_front_face ? 1.0f : -1.0f;
 
-  return transpose(float3x3(T, B, N));
+  float3 N = normalize(in.normal * sign);
+  float3 T = normalize(in.tangent.xyz * sign);
+  // T = normalize(T - N * dot(T, N));
+  float3 B = normalize(cross(N, T)) * in.tangent.w * sign;
+
+  // return transpose(float3x3(T, B, N));
+  return float3x3(T, B, N);
 }
 
 float4 get_albedo<AlphaPolicy: alpha_policy>(float2 uv, material_data material_data) {
-  uint index = material_data.albedo_index;
+  uint image_index = material_data.albedo_image_index;
+  uint sampler_index = material_data.albedo_sampler_index;
 
-  if (index >= sbx::common::max_image_array_size) {
+  if (image_index >= sbx::common::max_image_array_size) {
     return material_data.base_color;
   }
 
-  float4 color = images[NonUniformResourceIndex(index)].Sample(images_sampler, uv);
+  float4 color = images[NonUniformResourceIndex(image_index)].Sample(samplers[NonUniformResourceIndex(sampler_index)], uv);
 
   return AlphaPolicy::combine_colors(color, material_data.base_color);
 }
 
 float3 get_normal(float3x3 TBN, float2 uv, float3 normal, material_data material_data) {
-  uint index = material_data.normal_index;
+  uint image_index = material_data.normal_image_index;
+  uint sampler_index = material_data.normal_sampler_index;
 
-  if (index >= sbx::common::max_image_array_size) {
+  if (image_index >= sbx::common::max_image_array_size) {
     return normalize(normal);
   }
 
-  float3 sampled_normal = images[NonUniformResourceIndex(index)].Sample(images_sampler, uv).xyz;
+  float3 sampled_normal = images[NonUniformResourceIndex(image_index)].Sample(samplers[NonUniformResourceIndex(sampler_index)], uv).xyz;
+
+  // encode from [0, 1] -> [-1, 1]
   sampled_normal = sampled_normal * 2.0 - 1.0;
+
   sampled_normal.xy *= material_data.normal_scale;
   sampled_normal = normalize(sampled_normal);
 
-  return normalize(mul(TBN, sampled_normal));
+  return normalize(mul(sampled_normal, TBN));
 }
 
 float3 get_material(float2 uv, material_data material_data) {
-  uint index = material_data.mrao_index;
+  uint image_index = material_data.mrao_image_index;
+  uint sampler_index = material_data.mrao_sampler_index;
 
-  if (index >= sbx::common::max_image_array_size) {
+  if (image_index >= sbx::common::max_image_array_size) {
     return float3(material_data.metallic, material_data.roughness, material_data.occlusion);
   }
 
-  return images[NonUniformResourceIndex(index)].Sample(images_sampler, uv).rgb;
+  return images[NonUniformResourceIndex(image_index)].Sample(samplers[NonUniformResourceIndex(sampler_index)], uv).rgb;
 }
 
 float3 get_emissive(float2 uv, material_data material_data) {
-  uint index = material_data.emissive_index;
+  uint image_index = material_data.emissive_image_index;
+  uint sampler_index = material_data.emissive_sampler_index;
 
   float3 emissive = material_data.emissive_factor.rgb * material_data.emissive_strength;
 
-  if (index >= sbx::common::max_image_array_size) {
+  if (image_index >= sbx::common::max_image_array_size) {
     return emissive;
   }
 
-  return emissive * images[NonUniformResourceIndex(index)].Sample(images_sampler, uv).rgb;
+  return emissive * images[NonUniformResourceIndex(image_index)].Sample(samplers[NonUniformResourceIndex(sampler_index)], uv).rgb;
 }
 
 opaque_fs_out opaque_main(fs_in in, material_data material_data, uint object_id) {
@@ -108,11 +118,14 @@ opaque_fs_out opaque_main(fs_in in, material_data material_data, uint object_id)
 
   float3x3 TBN = build_tbn(in);
 
-  out.albedo = get_albedo<opaque_alpha_policy>(in.uv, material_data);
+  float2 uv = in.uv * material_data.uv_scale + material_data.uv_offset;
+
+  out.albedo = get_albedo<opaque_alpha_policy>(uv, material_data);
   out.position = float4(in.position, 1.0);
-  out.normal = float4(get_normal(TBN, in.uv, in.normal, material_data), 0.0);
-  out.material = float4(get_material(in.uv, material_data), 0.0);
-  out.emissive = float4(get_emissive(in.uv, material_data), 0.0);
+  // encode from [-1, 1] -> [0, 1]
+  out.normal = float4(get_normal(TBN, uv, in.normal, material_data) * 0.5f + 0.5f, 0.0);
+  out.material = float4(get_material(uv, material_data), 0.0);
+  out.emissive = float4(get_emissive(uv, material_data), 0.0);
   out.object_id = object_id;
   out.depth = sbx::common::linearize_depth(in.sv_position.z, scene.camera_near, scene.camera_far);
 
@@ -146,7 +159,9 @@ opaque_fs_out mask_main(fs_in in, material_data material_data, uint object_id) {
 
   float3x3 TBN = build_tbn(in);
 
-  float4 albedo = get_albedo<mask_alpha_policy>(in.uv, material_data);
+  float2 uv = in.uv * material_data.uv_scale + material_data.uv_offset;
+
+  float4 albedo = get_albedo<mask_alpha_policy>(uv, material_data);
 
   if (albedo.a < material_data.alpha_cutoff) {
     discard;
@@ -154,9 +169,10 @@ opaque_fs_out mask_main(fs_in in, material_data material_data, uint object_id) {
 
   out.albedo = albedo;
   out.position = float4(in.position, 1.0);
-  out.normal = float4(get_normal(TBN, in.uv, in.normal, material_data), 0.0);
-  out.material = float4(get_material(in.uv, material_data), 0.0);
-  out.emissive = float4(get_emissive(in.uv, material_data), 0.0);
+  // encode from [-1, 1] -> [0, 1]
+  out.normal = float4(get_normal(TBN, uv, in.normal, material_data) * 0.5f + 0.5f, 0.0);
+  out.material = float4(get_material(uv, material_data), 0.0);
+  out.emissive = float4(get_emissive(uv, material_data), 0.0);
   out.object_id = object_id;
   out.depth = sbx::common::linearize_depth(in.sv_position.z, scene.camera_near, scene.camera_far);
 

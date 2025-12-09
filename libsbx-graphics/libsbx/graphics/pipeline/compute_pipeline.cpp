@@ -149,8 +149,8 @@ compute_pipeline::compute_pipeline(const std::filesystem::path& path)
           descriptor_set_layout_binding[uniform.binding()] = cube_image::create_descriptor_set_layout_binding(uniform.binding(), VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, uniform.stage_flags());
           break;
         }
-        case shader::data_type::separate_sampler: {
-          descriptor_set_layout_binding[uniform.binding()] = separate_sampler::create_descriptor_set_layout_binding(uniform.binding(), VK_DESCRIPTOR_TYPE_SAMPLER, uniform.stage_flags());
+        case shader::data_type::sampler_state: {
+          descriptor_set_layout_binding[uniform.binding()] = sampler_state::create_descriptor_set_layout_binding(uniform.binding(), VK_DESCRIPTOR_TYPE_SAMPLER, uniform.stage_flags());
           break;
         }
         case shader::data_type::storage_image: {

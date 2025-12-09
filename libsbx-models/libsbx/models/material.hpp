@@ -4,6 +4,8 @@
 #include <cinttypes>
 #include <cmath>
 
+#include <libsbx/utility/hash.hpp>
+
 #include <libsbx/math/uuid.hpp>
 #include <libsbx/math/vector3.hpp>
 #include <libsbx/math/matrix4x4.hpp>
@@ -32,29 +34,42 @@ enum class material_feature : std::uint8_t {
 }; // struct material_feature
 
 struct alignas(16) material_data {
-  std::uint32_t albedo_index;
-  std::uint32_t normal_index;
-  std::uint32_t mrao_index;
-  std::uint32_t emissive_index;
+  std::uint32_t albedo_image_index;
+  std::uint32_t albedo_sampler_index;
+  std::uint32_t normal_image_index;
+  std::uint32_t normal_sampler_index;
 
-  std::uint32_t height_index;
+  std::uint32_t mrao_image_index;
+  std::uint32_t mrao_sampler_index;
+  std::uint32_t emissive_image_index;
+  std::uint32_t emissive_sampler_index;
+
+  std::uint32_t height_image_index;
+  std::uint32_t height_sampler_index;
   std::float_t height_scale;
   std::float_t height_offset;
-  std::float_t parallax_min_layers;
 
+  std::float_t parallax_min_layers;
   std::float_t parallax_max_layers;
   std::float_t emissive_strength;
   std::float_t normal_scale;
+
+  std::float_t metallic;
+  std::float_t roughness;
+  std::float_t occlusion;
   std::float_t alpha_cutoff;
+
+  math::vector2 uv_offset;
+  math::vector2 uv_scale;
 
   math::color base_color;
 
   math::vector4 emissive_factor;
 
-  std::float_t metallic;
-  std::float_t roughness;
-  std::float_t occlusion;
   std::uint32_t flags;
+  std::uint32_t _pad0;
+  std::uint32_t _pad1;
+  std::uint32_t _pad2;
 }; // struct material_data
 
 static_assert(sizeof(material_data) <= 256u);
@@ -85,6 +100,21 @@ struct material_key_hash {
   }
 }; // struct material_key_hash
 
+struct texture_slot {
+  graphics::image2d_handle image{};
+
+  graphics::address_mode address_mode_u{graphics::address_mode::repeat};
+  graphics::address_mode address_mode_v{graphics::address_mode::repeat};
+
+  graphics::filter mag_filter{graphics::filter::linear};
+  graphics::filter min_filter{graphics::filter::linear};
+  std::float_t anisotropy{1.0f};
+}; // struct texture_slot
+
+struct texture_slot_hash {
+  auto operator()(const texture_slot& texture_slot) const noexcept -> std::size_t;
+}; // struct texture_slot_hash
+
 struct material {
 
   math::color base_color{math::color::white()};
@@ -98,18 +128,22 @@ struct material {
 
   std::float_t alpha_cutoff{0.9f};
 
-  graphics::image2d_handle albedo{};
-  graphics::image2d_handle normal{};
-  graphics::image2d_handle mrao{};
-  graphics::image2d_handle emissive{};
-  graphics::image2d_handle height{};
+  texture_slot albedo{};
+  texture_slot normal{};
+  texture_slot mrao{};
+  texture_slot emissive{};
+  texture_slot height{};
 
   std::float_t normal_scale{1.0f};
 
   std::float_t height_offset{0.0f};
   std::float_t height_scale{0.05f};
+
   std::float_t parallax_min_layers{8.0f};
   std::float_t parallax_max_layers{32.0f};
+
+  math::vector2 uv_scale{1.0f, 1.0f};
+  math::vector2 uv_offset{0.0f, 0.0f};
 
   alpha_mode alpha{alpha_mode::opaque};
   bool is_double_sided{false};

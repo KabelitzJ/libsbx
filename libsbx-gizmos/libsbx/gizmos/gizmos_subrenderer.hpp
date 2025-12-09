@@ -21,7 +21,7 @@
 #include <libsbx/graphics/buffers/storage_handler.hpp>
 #include <libsbx/graphics/images/image2d.hpp>
 #include <libsbx/graphics/images/separate_image2d_array.hpp>
-#include <libsbx/graphics/images/separate_sampler.hpp>
+#include <libsbx/graphics/images/sampler_state.hpp>
 
 #include <libsbx/assets/assets_module.hpp>
 

@@ -18,7 +18,7 @@
 #include <libsbx/graphics/graphics_module.hpp>
 
 #include <libsbx/graphics/images/image.hpp>
-#include <libsbx/graphics/images/separate_sampler.hpp>
+#include <libsbx/graphics/images/sampler_state.hpp>
 #include <libsbx/graphics/images/separate_image2d_array.hpp>
 #include <libsbx/graphics/images/depth_image.hpp>
 

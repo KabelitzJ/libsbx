@@ -40,7 +40,7 @@
 #include <libsbx/graphics/buffers/storage_handler.hpp>
 #include <libsbx/graphics/images/image2d.hpp>
 #include <libsbx/graphics/images/separate_image2d_array.hpp>
-#include <libsbx/graphics/images/separate_sampler.hpp>
+#include <libsbx/graphics/images/sampler_state.hpp>
 
 #include <libsbx/assets/assets_module.hpp>
 
@@ -170,7 +170,7 @@ public:
       pipeline.bind(command_buffer);
 
       pipeline_data.scene_descriptor_handler.push("scene", scene.uniform_handler());
-      pipeline_data.scene_descriptor_handler.push("images_sampler", draw_list.sampler());
+      pipeline_data.scene_descriptor_handler.push("samplers", draw_list.samplers());
       pipeline_data.scene_descriptor_handler.push("images", draw_list.images());
 
       if (!pipeline_data.scene_descriptor_handler.update(pipeline)) {

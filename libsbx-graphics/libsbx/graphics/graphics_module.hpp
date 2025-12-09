@@ -40,6 +40,8 @@
 
 #include <libsbx/graphics/images/image2d.hpp>
 #include <libsbx/graphics/images/cube_image.hpp>
+#include <libsbx/graphics/images/sampler_state.hpp>
+#include <libsbx/graphics/images/depth_image.hpp>
 
 #include <libsbx/graphics/renderer.hpp>
 
@@ -267,6 +269,8 @@ private:
       return _depth_images;
     } else if constexpr (std::is_same_v<Type, cube_image>) {
       return _cube_images;
+    } else if constexpr (std::is_same_v<Type, sampler_state>) {
+      return _sampler_states;
     }
 
     utility::assert_that(false, "Invalid resource type");
@@ -292,6 +296,8 @@ private:
       return _depth_images;
     } else if constexpr (std::is_same_v<Type, cube_image>) {
       return _cube_images;
+    } else if constexpr (std::is_same_v<Type, sampler_state>) {
+      return _sampler_states;
     }
 
     utility::assert_that(false, "Invalid resource type");
@@ -325,6 +331,7 @@ private:
   resource_storage<graphics::image2d> _images;
   resource_storage<graphics::depth_image> _depth_images;
   resource_storage<graphics::cube_image> _cube_images;
+  resource_storage<graphics::sampler_state> _sampler_states;
 
   graphics::allocator _allocator;
 

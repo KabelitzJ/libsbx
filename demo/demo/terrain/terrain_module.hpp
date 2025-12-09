@@ -60,7 +60,7 @@ public:
     transform.set_position(sbx::math::vector3{0, 0.5f, 0});
 
     auto& terrain_material = scene.add_material<sbx::models::material>("terrain");
-    terrain_material.albedo = scene.get_image("prototype");
+    terrain_material.albedo.image = scene.get_image("prototype");
 
     for (auto y = 0u; y < grid.y(); ++y) {
       for (auto x = 0u; x < grid.x(); ++x) {

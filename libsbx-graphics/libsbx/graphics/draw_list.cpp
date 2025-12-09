@@ -30,8 +30,8 @@ auto draw_list::images() const noexcept -> const separate_image2d_array& {
   return _images;
 }
 
-auto draw_list::sampler() const noexcept -> const separate_sampler& {
-  return _sampler;
+auto draw_list::samplers() const noexcept -> const separate_sampler_array& {
+  return _samplers;
 }
 
 auto draw_list::draw_ranges(const utility::hashed_string& name) const noexcept -> const draw_command_range_container& {
@@ -60,6 +60,7 @@ auto draw_list::clear() -> void {
   }
 
   _images.clear();
+  _samplers.clear();
 }
 
 auto draw_list::create_buffer(const utility::hashed_string& name, VkDeviceSize size, VkBufferUsageFlags additional_usage) -> void {
@@ -90,6 +91,10 @@ auto draw_list::get_buffer(const utility::hashed_string& name) const -> const st
 
 auto draw_list::add_image(const image2d_handle& handle) -> std::uint32_t {
   return _images.push_back(handle);
+}
+
+auto draw_list::add_sampler_state(const sampler_state_handle& handle) -> std::uint32_t {
+  return _samplers.push_back(handle);
 }
 
 auto draw_list::push_draw_command_range(const utility::hashed_string& name, const math::uuid& id, const draw_command_range& range) -> void {

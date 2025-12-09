@@ -19,6 +19,7 @@ static const float PI = 3.14159265358979323846f;
 static const uint samples = 32u;
 
 float3 cube_direction(float2 uv, uint side) {
+  // [0, 1] -> [-1, 1]
   float2 tex = uv * 2.0f - 1.0f;
 
   if (side == 0) return float3( 1.0f, -tex.y, -tex.x); // Front

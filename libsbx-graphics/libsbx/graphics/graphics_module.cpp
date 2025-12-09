@@ -142,6 +142,7 @@ graphics_module::~graphics_module() {
   _images.clear();
   _depth_images.clear();
   _cube_images.clear();
+  _sampler_states.clear();
 }
 
 auto graphics_module::update() -> void {

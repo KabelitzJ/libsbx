@@ -210,7 +210,8 @@ fs_out main(fs_in in) {
 
   float3 albedo = albedo_image.Sample(in.uv).rgb;
   float3 world_position = position_image.Sample(in.uv).xyz;
-  float3 normal = normalize(normal_image.Sample(in.uv).xyz);
+  // [0, 1] -> [-1, 1]
+  float3 normal = normalize(normal_image.Sample(in.uv).xyz * 2.0f - 1.0f);
   float3 mrao = material_image.Sample(in.uv).rgb;
   float3 emissive = emissive_image.Sample(in.uv).rgb;
 

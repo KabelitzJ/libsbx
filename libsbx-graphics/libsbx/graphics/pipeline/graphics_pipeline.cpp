@@ -26,7 +26,7 @@
 #include <libsbx/graphics/images/image2d.hpp>
 #include <libsbx/graphics/images/depth_image.hpp>
 #include <libsbx/graphics/images/cube_image.hpp>
-#include <libsbx/graphics/images/separate_sampler.hpp>
+#include <libsbx/graphics/images/sampler_state.hpp>
 #include <libsbx/graphics/images/separate_image2d_array.hpp>
 
 #include <libsbx/graphics/render_pass/swapchain.hpp>
@@ -230,13 +230,17 @@ auto graphics_pipeline::_initialize(const pipeline_definition& definition, const
           descriptor_set_layout_binding[uniform.binding()] = cube_image::create_descriptor_set_layout_binding(uniform.binding(), VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, uniform.stage_flags());
           break;
         }
-        case shader::data_type::separate_sampler: {
-          descriptor_set_layout_binding[uniform.binding()] = separate_sampler::create_descriptor_set_layout_binding(uniform.binding(), VK_DESCRIPTOR_TYPE_SAMPLER, uniform.stage_flags());
-          break;
-        }
         case shader::data_type::separate_image2d_array: {
           descriptor_set_layout_binding[uniform.binding()] = separate_image2d_array::create_descriptor_set_layout_binding(uniform.binding(), VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, uniform.stage_flags());
           _has_variable_descriptors = true;
+          break;
+        }
+        case shader::data_type::sampler_state: {
+          descriptor_set_layout_binding[uniform.binding()] = sampler_state::create_descriptor_set_layout_binding(uniform.binding(), VK_DESCRIPTOR_TYPE_SAMPLER, uniform.stage_flags());
+          break;
+        }
+        case shader::data_type::sampler_state_array: {
+          descriptor_set_layout_binding[uniform.binding()] = separate_sampler_array::create_descriptor_set_layout_binding(uniform.binding(), VK_DESCRIPTOR_TYPE_SAMPLER, uniform.stage_flags());
           break;
         }
         case shader::data_type::storage_image: {

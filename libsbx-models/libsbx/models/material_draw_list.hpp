@@ -171,8 +171,8 @@ private:
   }
 
   auto _get_or_create_pipeline_data(const material_key& key) -> pipeline_data& {
-    if (auto it = _pipeline_data.find(key); it != _pipeline_data.end()) {
-      return it->second;
+    if (auto entry = _pipeline_data.find(key); entry != _pipeline_data.end()) {
+      return entry->second;
     }
 
     auto [entry, inserted] = _pipeline_data.emplace(key, pipeline_data{});
@@ -180,14 +180,36 @@ private:
     return entry->second;
   }
 
+  auto _get_or_create_sampler(const texture_slot& texture_slot) -> graphics::sampler_state_handle {
+    auto key = texture_slot_hash{}(texture_slot);
+
+    if (auto entry = _samplers.find(key); entry != _samplers.end()) {
+      return entry->second;
+    }
+
+    auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
+
+    auto [entry, inserted] = _samplers.emplace(key, graphics_module.add_resource<graphics::sampler_state>(texture_slot.mag_filter, texture_slot.min_filter, texture_slot.address_mode_u, texture_slot.address_mode_v, texture_slot.anisotropy));
+
+    utility::logger<"models">::debug("New sampler created");
+
+    return entry->second;
+  }
+
   auto _push_material(const models::material& material) -> void {
     auto data = models::material_data{};
-    data.albedo_index = add_image(material.albedo);
-    data.normal_index = add_image(material.normal);
-    data.mrao_index = add_image(material.mrao);
-    data.emissive_index = add_image(material.emissive);
+    data.albedo_image_index = add_image(material.albedo.image);
+    data.normal_image_index = add_image(material.normal.image);
+    data.mrao_image_index = add_image(material.mrao.image);
+    data.emissive_image_index = add_image(material.emissive.image);
+    data.height_image_index = add_image(material.height.image);
 
-    data.height_index = add_image(material.height);
+    data.albedo_sampler_index = add_sampler_state(_get_or_create_sampler(material.albedo));
+    data.normal_sampler_index = add_sampler_state(_get_or_create_sampler(material.normal));
+    data.mrao_sampler_index = add_sampler_state(_get_or_create_sampler(material.mrao));
+    data.emissive_sampler_index = add_sampler_state(_get_or_create_sampler(material.emissive));
+    data.height_sampler_index = add_sampler_state(_get_or_create_sampler(material.height));
+
     data.height_scale = material.height_scale;
     data.height_offset = material.height_offset;
     data.parallax_min_layers = material.parallax_min_layers;
@@ -201,6 +223,9 @@ private:
     data.metallic = material.metallic;
     data.roughness = material.roughness;
     data.occlusion = material.occlusion;
+
+    data.uv_offset = material.uv_offset;
+    data.uv_scale = material.uv_scale;
 
     data.alpha_cutoff = material.alpha_cutoff;
     data.flags = material.features.underlying();
@@ -300,6 +325,8 @@ private:
   std::array<bucket_map, magic_enum::enum_count<bucket>()> _bucket_ranges;
 
   inline static auto _material_buckets = std::unordered_map<material_key, std::unordered_set<bucket>, material_key_hash>{};
+
+  inline static auto _samplers = std::unordered_map<std::size_t, graphics::sampler_state_handle>{};
 
 }; // class material_draw_list
 

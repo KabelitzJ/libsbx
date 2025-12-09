@@ -64,67 +64,29 @@ application::application()
 
   // Textures
 
-  scene.add_image("maple_tree_bark", "res://textures/maple_tree/bark.png");
-  scene.add_image("maple_tree_bark_normal", "res://textures/maple_tree/bark_normal.png");
-  scene.add_image("maple_tree_leaves", "res://textures/maple_tree/leaves.png");
-  
-  scene.add_image("rocks", "res://textures/rocks/rocks.png");
+  scene.add_image("fox_albedo", "res://textures/fox/albedo.png", sbx::graphics::format::r8g8b8a8_srgb);
 
-  scene.add_image("fox_albedo", "res://textures/fox/albedo.png");
+  scene.add_image("helmet_albedo", "res://textures/helmet/albedo.jpg", sbx::graphics::format::r8g8b8a8_srgb);
+  scene.add_image("helmet_normal", "res://textures/helmet/normal.jpg", sbx::graphics::format::r8g8b8a8_unorm);
+  scene.add_image("helmet_mrao", "res://textures/helmet/mrao2.jpg", sbx::graphics::format::r8g8b8a8_unorm);
+  scene.add_image("helmet_emissive", "res://textures/helmet/emissive.jpg", sbx::graphics::format::r8g8b8a8_srgb);
 
-  scene.add_image("women", "res://textures/women/albedo.png");
+  scene.add_image("grass3_albedo", "res://textures/grass3/albedo.png", sbx::graphics::format::r8g8b8a8_srgb);
+  scene.add_image("grass3_normal", "res://textures/grass3/normal.png", sbx::graphics::format::r8g8b8a8_unorm);
+  scene.add_image("grass3_mrao", "res://textures/grass3/mrao.png", sbx::graphics::format::r8g8b8a8_unorm);
 
-  scene.add_image("bmp_body1_albedo", "res://textures/bmp/body1_albedo.png");
-  scene.add_image("bmp_body1_normal", "res://textures/bmp/body1_normal.png");
-  scene.add_image("bmp_body2_albedo", "res://textures/bmp/body2_albedo.png");
-  scene.add_image("bmp_body2_normal", "res://textures/bmp/body2_normal.png");
-  scene.add_image("bmp_tracks_albedo", "res://textures/bmp/tracks_albedo.png");
-  scene.add_image("bmp_tracks_normal", "res://textures/bmp/tracks_normal.png");
+  scene.add_image("checkerboard", "res://textures/checkerboard.jpg", sbx::graphics::format::r8g8b8a8_srgb);
 
-  scene.add_image("helmet_albedo", "res://textures/helmet/albedo.jpg");
-  scene.add_image("helmet_normal", "res://textures/helmet/normal.jpg");
-  scene.add_image("helmet_mrao", "res://textures/helmet/mrao2.jpg");
-  scene.add_image("helmet_emissive", "res://textures/helmet/emissive.jpg");
+  scene.add_image("pine_tree_bark_albedo", "res://textures/pine_tree/bark_albedo.png", sbx::graphics::format::r8g8b8a8_srgb);
+  scene.add_image("pine_tree_bark_normal", "res://textures/pine_tree/bark_normal.png", sbx::graphics::format::r8g8b8a8_unorm);
+  scene.add_image("pine_tree_leaves_albedo", "res://textures/pine_tree/leaves_albedo.png", sbx::graphics::format::r8g8b8a8_srgb);
+  scene.add_image("pine_tree_leaves_normal", "res://textures/pine_tree/leaves_normal.png", sbx::graphics::format::r8g8b8a8_unorm);
 
-  scene.add_image("grass3_albedo", "res://textures/grass3/albedo.png");
-  scene.add_image("grass3_normal", "res://textures/grass3/normal.png");
-  scene.add_image("grass3_mrao", "res://textures/grass3/mrao.png");
+  scene.add_image("bricks2_albedo", "res://textures/bricks2/albedo.jpg", sbx::graphics::format::r8g8b8a8_srgb);
+  scene.add_image("bricks2_normal", "res://textures/bricks2/normal.jpg", sbx::graphics::format::r8g8b8a8_unorm);
+  scene.add_image("bricks2_height", "res://textures/bricks2/height.jpg", sbx::graphics::format::r16_sfloat);
 
-  scene.add_image("checkerboard", "res://textures/checkerboard.jpg");
-
-  scene.add_image("soldier_body_albedo", "res://textures/soldier/body_albedo.png");
-  scene.add_image("soldier_head_albedo", "res://textures/soldier/head_albedo.png");
-  scene.add_image("soldier_backpack_albedo", "res://textures/soldier/backpack_albedo.png");
-  scene.add_image("soldier_helmet_albedo", "res://textures/soldier/helmet_albedo.png");
-
-  scene.add_image("rust_albedo", "res://textures/rust/albedo.png");
-  scene.add_image("rust_normal", "res://textures/rust/normal.png");
-  scene.add_image("rust_mrao", "res://textures/rust/mrao.png");
-
-  scene.add_image("longhouse_albedo", "res://textures/longhouse/albedo.jpg");
-  scene.add_image("longhouse_normal", "res://textures/longhouse/normal.jpg");
-  scene.add_image("longhouse_mrao", "res://textures/longhouse/mrao.jpg");
-
-  scene.add_image("pine_tree_bark_albedo", "res://textures/pine_tree/bark_albedo.png");
-  scene.add_image("pine_tree_bark_normal", "res://textures/pine_tree/bark_normal.png");
-  scene.add_image("pine_tree_leaves_albedo", "res://textures/pine_tree/leaves_albedo.png");
-  scene.add_image("pine_tree_leaves_normal", "res://textures/pine_tree/leaves_normal.png");
-
-  scene.add_image("laval_rocks_albedo", "res://textures/laval_rocks/albedo.png");
-  scene.add_image("laval_rocks_normal", "res://textures/laval_rocks/normal.png");
-  scene.add_image("laval_rocks_mrao", "res://textures/laval_rocks/mrao.png");
-  scene.add_image("laval_rocks_height", "res://textures/laval_rocks/height.png");
-
-  scene.add_image("asphalt_albedo", "res://textures/asphalt/albedo.png");
-  scene.add_image("asphalt_normal", "res://textures/asphalt/normal.png");
-  scene.add_image("asphalt_mrao", "res://textures/asphalt/mrao.png");
-  scene.add_image("asphalt_height", "res://textures/asphalt/height.png");
-
-  scene.add_image("bricks2_albedo", "res://textures/bricks2/albedo.jpg");
-  scene.add_image("bricks2_normal", "res://textures/bricks2/normal.jpg");
-  scene.add_image("bricks2_height", "res://textures/bricks2/height.jpg");
-
-  scene.add_image("duck_albedo", "res://textures/duck/albedo.png");
+  scene.add_image("duck_albedo", "res://textures/duck/albedo.png", sbx::graphics::format::r8g8b8a8_srgb);
 
   scene.add_cube_image("skybox", "res://skyboxes/clouds2");
 
@@ -220,11 +182,11 @@ application::application()
   auto helmet = scene.create_node("Helmet");
 
   auto& helmet_material = scene.add_material<sbx::models::material>("helmet");
-  helmet_material.albedo = scene.get_image("helmet_albedo");
-  helmet_material.normal = scene.get_image("helmet_normal");
+  helmet_material.albedo.image = scene.get_image("helmet_albedo");
+  helmet_material.normal.image = scene.get_image("helmet_normal");
   helmet_material.normal_scale = 1.0f;
-  helmet_material.mrao = scene.get_image("helmet_mrao");
-  helmet_material.emissive = scene.get_image("helmet_emissive");
+  helmet_material.mrao.image = scene.get_image("helmet_mrao");
+  helmet_material.emissive.image = scene.get_image("helmet_emissive");
   helmet_material.emissive_factor = sbx::math::vector4{1, 1, 1, 0};
   helmet_material.emissive_strength = 10.0f;
 
@@ -243,12 +205,18 @@ application::application()
   auto tree = scene.create_node("Tree");
 
   auto& pine_tree_bark_material = scene.add_material<sbx::models::material>("pine_tree_bark");
-  pine_tree_bark_material.albedo = scene.get_image("pine_tree_bark_albedo");
-  pine_tree_bark_material.normal = scene.get_image("pine_tree_bark_normal");
-
+  pine_tree_bark_material.albedo.image = scene.get_image("pine_tree_bark_albedo");
+  pine_tree_bark_material.normal.image = scene.get_image("pine_tree_bark_normal");
+  
   auto& pine_tree_leaves_material = scene.add_material<sbx::models::material>("pine_tree_leaves");
-  pine_tree_leaves_material.albedo = scene.get_image("pine_tree_leaves_albedo");
-  pine_tree_leaves_material.normal = scene.get_image("pine_tree_leaves_normal");
+  pine_tree_leaves_material.albedo.image = scene.get_image("pine_tree_leaves_albedo");
+  pine_tree_leaves_material.albedo.address_mode_u = sbx::graphics::address_mode::clamp_to_edge;
+  pine_tree_leaves_material.albedo.address_mode_v = sbx::graphics::address_mode::clamp_to_edge;
+  pine_tree_leaves_material.normal.image = scene.get_image("pine_tree_leaves_normal");
+  pine_tree_leaves_material.normal.address_mode_u = sbx::graphics::address_mode::clamp_to_edge;
+  pine_tree_leaves_material.normal.address_mode_v = sbx::graphics::address_mode::clamp_to_edge;
+  pine_tree_leaves_material.metallic = 0.0f;
+  pine_tree_leaves_material.metallic = 1.0f;
   pine_tree_leaves_material.alpha = sbx::models::alpha_mode::mask;
   pine_tree_leaves_material.is_double_sided = true;
 
@@ -268,10 +236,10 @@ application::application()
   auto cube = scene.create_node("Cube");
 
   auto& cube_material = scene.add_material<sbx::models::material>("cube");
-  cube_material.albedo = scene.get_image("helmet_albedo");
-  cube_material.normal = scene.get_image("helmet_normal");
-  cube_material.mrao = scene.get_image("helmet_mrao");
-  cube_material.emissive = scene.get_image("helmet_emissive");
+  cube_material.albedo.image = scene.get_image("helmet_albedo");
+  cube_material.normal.image = scene.get_image("helmet_normal");
+  cube_material.mrao.image = scene.get_image("helmet_mrao");
+  cube_material.emissive.image = scene.get_image("helmet_emissive");
   cube_material.emissive_factor = sbx::math::vector4{1, 1, 1, 0};
 
   scene.add_component<sbx::scenes::static_mesh>(cube, scene.get_mesh("cube"), scene.get_material("cube"));
@@ -291,9 +259,9 @@ application::application()
   auto duck = scene.create_node("Duck");
 
   auto& duck_material = scene.add_material<sbx::models::material>("duck");
+  duck_material.albedo.image = scene.get_image("duck_albedo");
   duck_material.metallic = 1.0f;
   duck_material.roughness = 0.2f;
-  duck_material.albedo = scene.get_image("duck_albedo");
 
   scene.add_component<sbx::scenes::static_mesh>(duck, scene.get_mesh("duck"), std::vector<sbx::scenes::static_mesh::submesh>{{0u, scene.get_material("duck")}});
 
@@ -302,24 +270,20 @@ application::application()
   duck_transform.set_rotation(sbx::math::vector3::up, sbx::math::degree{-45});
   duck_transform.set_scale(sbx::math::vector3{4.0f, 4.0f, 4.0f});
 
-  // Orb
+  // Cube2
 
-  auto orb = scene.create_node("Orb");
+  auto cube2 = scene.create_node("Cube2");
 
-  auto& orb_material = scene.add_material<sbx::models::material>("orb");
-  orb_material.albedo = scene.get_image("asphalt_albedo");
-  orb_material.normal = scene.get_image("asphalt_normal");
-  orb_material.normal_scale = 1.0f;
-  orb_material.mrao = scene.get_image("asphalt_mrao");
-  // orb_material.height = scene.get_image("asphalt_height");
-  // orb_material.height_offset = 0.0f;
-  // orb_material.height_scale = 0.2f;
+  auto& cube2_material = scene.add_material<sbx::models::material>("cube2");
+  cube2_material.albedo.image = scene.get_image("bricks2_albedo");
+  cube2_material.normal.image = scene.get_image("bricks2_normal");
+  cube2_material.normal_scale = 1.0f;
 
-  scene.add_component<sbx::scenes::static_mesh>(orb, scene.get_mesh("cube"), scene.get_material("orb"));
+  scene.add_component<sbx::scenes::static_mesh>(cube2, scene.get_mesh("cube"), scene.get_material("cube2"));
 
-  auto& orb_transform = scene.get_component<sbx::scenes::transform>(orb);
-  orb_transform.set_position(sbx::math::vector3{-8.0f, 15.0f, 4.0f});
-  orb_transform.set_scale(sbx::math::vector3{5.0f, 5.0f, 5.0f});
+  auto& cube2_transform = scene.get_component<sbx::scenes::transform>(cube2);
+  cube2_transform.set_position(sbx::math::vector3{-8.0f, 15.0f, 4.0f});
+  cube2_transform.set_scale(sbx::math::vector3{5.0f, 5.0f, 5.0f});
   
   // Fox
 
@@ -330,7 +294,7 @@ application::application()
   // scripting_module.instantiate(fox1, "res://scripts/test.lua");
 
   auto& fox_material = scene.add_material<sbx::models::material>("fox");
-  fox_material.albedo = scene.get_image("fox_albedo");
+  fox_material.albedo.image = scene.get_image("fox_albedo");
   fox_material.roughness = 0.7f;
   fox_material.occlusion = 0.8f;
 
@@ -431,11 +395,11 @@ application::application()
 
       auto& material = scene.add_material<sbx::models::material>(material_name);
       material.base_color = sbx::math::color::white();
+      material.albedo.image = scene.get_image("checkerboard");
       material.alpha = sbx::models::alpha_mode::opaque;
       material.metallic = 0.2f * x;
       material.roughness = 0.2f * y;
       material.occlusion = 1.0f;
-      material.albedo = scene.get_image("checkerboard");
 
       scene.add_component<sbx::scenes::static_mesh>(sphere, scene.get_mesh("sphere"), scene.get_material(material_name));
 
@@ -645,7 +609,7 @@ auto application::_generate_brdf(const std::uint32_t size) -> void {
 
   auto& scene = scenes_module.scene();
 
-  _brdf = graphics_module.add_resource<sbx::graphics::image2d>(sbx::math::vector2u{size}, VK_FORMAT_R16G16_SFLOAT, VK_IMAGE_LAYOUT_GENERAL);
+  _brdf = graphics_module.add_resource<sbx::graphics::image2d>(sbx::math::vector2u{size}, sbx::graphics::format::r16g16_sfloat, VK_IMAGE_LAYOUT_GENERAL);
 
   auto timer = sbx::utility::timer{};
 

@@ -1,11 +1,11 @@
-#ifndef LIBSBX_GRAPHICS_SAMPLERS_SEPARATE_SAMPLER_ARRAY_HPP_
-#define LIBSBX_GRAPHICS_SAMPLERS_SEPARATE_SAMPLER_ARRAY_HPP_
+#ifndef LIBSBX_GRAPHICS_SAMPLERS_SAMPLER_STATE_ARRAY_HPP_
+#define LIBSBX_GRAPHICS_SAMPLERS_SAMPLER_STATE_ARRAY_HPP_
 
 #include <vector>
 #include <unordered_map>
 
-#include <libsbx/graphics/resource_storage.hpp>
 #include <libsbx/graphics/descriptor/descriptor.hpp>
+#include <libsbx/graphics/images/sampler_state.hpp>
 
 namespace sbx::graphics {
 
@@ -15,7 +15,7 @@ public:
 
   inline static constexpr auto max_size = std::uint32_t{32u};
 
-  using handle_type = sampler_handle;
+  using handle_type = sampler_state_handle;
 
   separate_sampler_array();
 
@@ -38,4 +38,4 @@ private:
 
 } // namespace sbx::graphics
 
-#endif // LIBSBX_GRAPHICS_SAMPLERS_SEPARATE_SAMPLER_ARRAY_HPP_
+#endif // LIBSBX_GRAPHICS_SAMPLERS_SAMPLER_STATE_ARRAY_HPP_

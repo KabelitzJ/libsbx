@@ -84,7 +84,7 @@ application::application()
 
   scene.add_image("bricks2_albedo", "res://textures/bricks2/albedo.jpg", sbx::graphics::format::r8g8b8a8_srgb);
   scene.add_image("bricks2_normal", "res://textures/bricks2/normal.jpg", sbx::graphics::format::r8g8b8a8_unorm);
-  scene.add_image("bricks2_height", "res://textures/bricks2/height.jpg", sbx::graphics::format::r16_sfloat);
+  scene.add_image("bricks2_height", "res://textures/bricks2/height.jpg", sbx::graphics::format::r8g8b8a8_srgb);
 
   scene.add_image("duck_albedo", "res://textures/duck/albedo.png", sbx::graphics::format::r8g8b8a8_srgb);
 
@@ -171,7 +171,7 @@ application::application()
 
     auto light = scene.create_child_node(_light_center, fmt::format("Light{}", i), sbx::scenes::transform{sbx::math::vector3{radius * sbx::math::cos(angle), 0.0f, radius * sbx::math::sin(angle)}});
 
-    scene.add_component<sbx::scenes::point_light>(light, color, 50.0f);
+    scene.add_component<sbx::scenes::point_light>(light, color, 100.0f);
 
     scene.add_component<sbx::scenes::static_mesh>(light, scene.get_mesh("sphere"), scene.get_material(material_name));
 
@@ -277,6 +277,9 @@ application::application()
   auto& cube2_material = scene.add_material<sbx::models::material>("cube2");
   cube2_material.albedo.image = scene.get_image("bricks2_albedo");
   cube2_material.normal.image = scene.get_image("bricks2_normal");
+  cube2_material.height.image = scene.get_image("bricks2_height");
+  cube2_material.metallic = 0.0f;
+  cube2_material.roughness = 1.0f;
   cube2_material.normal_scale = 1.0f;
 
   scene.add_component<sbx::scenes::static_mesh>(cube2, scene.get_mesh("cube"), scene.get_material("cube2"));

@@ -17,13 +17,13 @@ namespace Sbx.Core
 			Node = node;
 		}
 
-		protected virtual void OnCreate() { }
+		public virtual void OnCreate() { }
 
-		protected virtual void OnUpdate(float deltaTime) { }
+		public virtual void OnUpdate(float deltaTime) { }
 
-		protected virtual void OnFixedUpdate() { }
+		public virtual void OnFixedUpdate() { }
 
-		protected virtual void OnDestroy() { }
+		public virtual void OnDestroy() { }
 
 
 		public T? AddComponent<T>() where T : Component, new()

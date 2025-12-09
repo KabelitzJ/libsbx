@@ -1,8 +1,6 @@
-using System;
-using System.Reflection.Metadata.Ecma335;
 using System.Runtime.InteropServices;
 
-namespace Sbx.Core
+namespace Sbx.Math
 {
   [StructLayout(LayoutKind.Sequential, Pack = 4)]
   public struct Vector2
@@ -34,17 +32,17 @@ namespace Sbx.Core
 
     public float Length()
     {
-      return (float)Math.Sqrt(X * X + Y * Y);
+      return MathF.Sqrt(X * X + Y * Y);
     }
 
     public float Distance(Vector2 other)
     {
-      return (float)Math.Sqrt(Math.Pow(other.X - X, 2) + Math.Pow(other.Y - Y, 2));
+      return MathF.Sqrt(MathF.Pow(other.X - X, 2) + MathF.Pow(other.Y - Y, 2));
     }
 
     public static float Distance(Vector2 p1, Vector2 p2)
     {
-      return (float)Math.Sqrt(Math.Pow(p2.X - p1.X, 2) + Math.Pow(p2.Y - p1.Y, 2));
+      return MathF.Sqrt(MathF.Pow(p2.X - p1.X, 2) + MathF.Pow(p2.Y - p1.Y, 2));
     }
 
     //Lerps from p1 to p2
@@ -154,4 +152,4 @@ namespace Sbx.Core
     
   } // struct Vector2
   
-} // namespace Sbx.Core
+} // namespace Sbx.Math

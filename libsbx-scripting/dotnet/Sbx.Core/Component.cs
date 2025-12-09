@@ -1,6 +1,4 @@
-using System;
-using System.Runtime.InteropServices;
-using System.Runtime.CompilerServices;
+using Sbx.Math;
 
 namespace Sbx.Core
 {
@@ -36,28 +34,40 @@ namespace Sbx.Core
       set { unsafe { InternalCalls.Transform_SetPosition(Node, &value); } }
     }
 
-		public Vector3 Rotation;
-		public Vector3 Scale;
+    public Vector3 Right
+    {
+      get {
+        Vector3 right;
+        unsafe { InternalCalls.Transform_GetRight(Node, &right); }
+        return right;
+      }
+    }
+
+    public Vector3 Forward
+    {
+      get {
+        Vector3 forward;
+        unsafe { InternalCalls.Transform_GetForward(Node, &forward); }
+        return forward;
+      }
+    }
 
     public Vector3 Up
     {
-      get => new Quaternion(Rotation) * Vector3.Up;
-    }
-    
-		public Vector3 Right {
-      get => new Quaternion(Rotation) * Vector3.Right; 
-    }
-
-		public Vector3 Forward {
-      get => new Quaternion(Rotation) * Vector3.Forward; 
+      get {
+        Vector3 up;
+        unsafe { InternalCalls.Transform_GetUp(Node, &up); }
+        return up;
+      }
     }
 
-		// public Transform(Vector3 position, Vector3 rotation, Vector3 scale)
-		// {
-		// 	Position = position;
-		// 	Rotation = rotation;
-		// 	Scale = scale;
-		// }
+		public Vector3 Rotation;
+		public Vector3 Scale;
+
+    public void LookAt(Vector3 target)
+    {
+      unsafe { InternalCalls.Transform_LookAt(Node, &target); }
+    }
 
     public override bool Equals(object? obj) {
       return obj is Transform other && Equals(other);

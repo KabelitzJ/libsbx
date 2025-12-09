@@ -1,7 +1,8 @@
 using System;
 
-namespace Sbx.Core
+namespace Sbx.Attributes
 {
+
   [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
   public class ShowInEditorAttribute : Attribute
   {
@@ -15,4 +16,4 @@ namespace Sbx.Core
 
   } // class ShowInEditorAttribute
   
-} // namespace Sbx.Core
+} // namespace Sbx.Attributes

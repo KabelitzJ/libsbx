@@ -1,5 +1,5 @@
-﻿using System.Formats.Asn1;
-using Sbx.Core;
+﻿using Sbx.Core;
+using Sbx.Math;
 
 namespace Demo
 {
@@ -31,7 +31,7 @@ namespace Demo
       tag.Value = value;
     }
     
-    protected override void OnUpdate(float deltaTime)
+    public override void OnUpdate(float deltaTime)
     {
       if (Input.IsKeyPressed(KeyCode.Space))
       {
@@ -39,7 +39,7 @@ namespace Demo
       }
     }
 
-  } // class Demo
+  } // class Helmet
 
 } // namespace Demo
 

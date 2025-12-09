@@ -139,6 +139,74 @@ auto interop::transform_set_position(std::uint32_t node, math::vector3* position
   transform.set_position(*position);
 }
 
+auto interop::transform_get_right(std::uint32_t node, math::vector3* right) -> void {
+  auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
+  auto& scene = scenes_module.scene();
+
+  if (!scene.is_valid(static_cast<scenes::node>(node))) {
+    utility::logger<"scripting">::error("Attempting to set position of invalid node");
+
+    return;
+  }
+
+  auto& transform = scene.get_component<scenes::transform>(static_cast<scenes::node>(node));
+
+  *right = transform.right();
+}
+
+auto interop::transform_get_forward(std::uint32_t node, math::vector3* forward) -> void {
+  auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
+  auto& scene = scenes_module.scene();
+
+  if (!scene.is_valid(static_cast<scenes::node>(node))) {
+    utility::logger<"scripting">::error("Attempting to set position of invalid node");
+
+    return;
+  }
+
+  auto& transform = scene.get_component<scenes::transform>(static_cast<scenes::node>(node));
+
+  *forward = transform.forward();
+}
+
+auto interop::transform_get_up(std::uint32_t node, math::vector3* up) -> void {
+  auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
+  auto& scene = scenes_module.scene();
+
+  if (!scene.is_valid(static_cast<scenes::node>(node))) {
+    utility::logger<"scripting">::error("Attempting to set position of invalid node");
+
+    return;
+  }
+
+  auto& transform = scene.get_component<scenes::transform>(static_cast<scenes::node>(node));
+
+  *up = transform.up();
+}
+
+auto interop::transform_look_at(std::uint32_t node, math::vector3* target) -> void {
+  auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
+  auto& scene = scenes_module.scene();
+
+  if (!scene.is_valid(static_cast<scenes::node>(node))) {
+    utility::logger<"scripting">::error("Attempting to set position of invalid node");
+
+    return;
+  }
+
+  if (!target) {
+    auto& tag = scene.get_component<scenes::tag>(static_cast<scenes::node>(node));
+
+    utility::logger<"scripting">::error("Attempting to call LookAt with null target of node '{}'", tag);
+
+    return;
+  }
+
+  auto& transform = scene.get_component<scenes::transform>(static_cast<scenes::node>(node));
+
+  transform.look_at(*target);
+}
+
 auto interop::input_is_key_pressed(devices::key key) -> managed::bool32 { 
   return devices::input::is_key_pressed(key); 
 }
@@ -161,6 +229,14 @@ auto interop::input_is_mouse_button_down(devices::mouse_button mouse_button) -> 
 
 auto interop::input_is_mouse_button_released(devices::mouse_button mouse_button) -> managed::bool32 { 
   return devices::input::is_mouse_button_released(mouse_button); 
+}
+
+auto interop::input_mouse_position(math::vector2* position) -> void {
+  *position = devices::input::mouse_position();
+}
+
+auto interop::input_scroll_delta(math::vector2* scroll_delta) -> void {
+  *scroll_delta = devices::input::scroll_delta();
 }
 
 } // namespace sbx::scripting

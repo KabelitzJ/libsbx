@@ -18,9 +18,6 @@
 #include <libsbx/physics/physics.hpp>
 #include <libsbx/animations/animations.hpp>
 
-#include <demo/camera_controller.hpp>
-#include <demo/player_controller.hpp>
-
 #include <demo/terrain/mesh.hpp>
 
 namespace demo {
@@ -212,9 +209,6 @@ private:
   sbx::math::angle _rotation;
 
   sbx::scenes::node _player;
-
-  camera_controller _camera_controller;
-  // player_controller _player_controller;
 
   sbx::graphics::storage_buffer_handle _selection_buffer;
 

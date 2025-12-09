@@ -1,4 +1,4 @@
-using System;
+using Sbx.Math;
 
 namespace Sbx.Core
 {
@@ -181,5 +181,19 @@ namespace Sbx.Core
 		{
 			unsafe { return InternalCalls.Input_IsMouseButtonReleased(button); }
 		}
+
+    public static Vector2 MousePosition()
+    {
+      Vector2 position;
+      unsafe { InternalCalls.Input_MousePosition(&position); }
+      return position;
+    }
+
+    public static Vector2 ScrollDelta()
+    {
+      Vector2 scrollDelta;
+      unsafe { InternalCalls.Input_ScrollDelta(&scrollDelta); }
+      return scrollDelta;
+    }
   }
 }

@@ -1,5 +1,5 @@
-using System;
 using Sbx.Managed.Interop;
+using Sbx.Math;
 
 namespace Sbx.Core
 {
@@ -17,14 +17,19 @@ namespace Sbx.Core
 
     internal static delegate* unmanaged<uint, Vector3*, void> Transform_GetPosition;
     internal static delegate* unmanaged<uint, Vector3*, void> Transform_SetPosition;
+    internal static delegate* unmanaged<uint, Vector3*, void> Transform_GetRight;
+    internal static delegate* unmanaged<uint, Vector3*, void> Transform_GetForward;
+    internal static delegate* unmanaged<uint, Vector3*, void> Transform_GetUp;
+    internal static delegate* unmanaged<uint, Vector3*, void> Transform_LookAt;
 
     internal static delegate* unmanaged<KeyCode, Bool32> Input_IsKeyPressed;
 		internal static delegate* unmanaged<KeyCode, Bool32> Input_IsKeyDown;
     internal static delegate* unmanaged<KeyCode, Bool32> Input_IsKeyReleased;
-
 		internal static delegate* unmanaged<MouseButton, bool> Input_IsMouseButtonPressed;
 		internal static delegate* unmanaged<MouseButton, bool> Input_IsMouseButtonDown;
     internal static delegate* unmanaged<MouseButton, bool> Input_IsMouseButtonReleased;
+    internal static delegate* unmanaged<Vector2*, void> Input_MousePosition;
+    internal static delegate* unmanaged<Vector2*, void> Input_ScrollDelta;
 
   } // class InternalCalls
 

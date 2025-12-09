@@ -1,7 +1,8 @@
 using System;
 
-namespace Sbx.Core
+namespace Sbx.Attributes
 {
+
 	[AttributeUsage(AttributeTargets.Field)]
 	public class ClampValueAttribute : Attribute
 	{
@@ -16,4 +17,4 @@ namespace Sbx.Core
 
 	} // public class ClampValueAttribute
 
-} // namespace Sbx.Core
+} // namespace Sbx.Attributes

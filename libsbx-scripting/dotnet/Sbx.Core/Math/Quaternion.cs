@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Runtime.InteropServices;
 
-namespace Sbx.Core
+namespace Sbx.Math
 {
   [StructLayout(LayoutKind.Sequential, Pack = 4)]
   public struct Quaternion : IEquatable<Quaternion>
@@ -103,4 +103,4 @@ namespace Sbx.Core
     
   } // struct Quaternion
 
-} // namespace Sbx.Core
+} // namespace Sbx.Math

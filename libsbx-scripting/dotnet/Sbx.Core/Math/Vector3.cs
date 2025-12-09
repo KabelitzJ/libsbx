@@ -1,8 +1,6 @@
-﻿using System;
-using System.Numerics;
-using System.Runtime.InteropServices;
+﻿using System.Runtime.InteropServices;
 
-namespace Sbx.Core
+namespace Sbx.Math
 {
 
   [StructLayout(LayoutKind.Sequential, Pack = 4)]
@@ -122,10 +120,42 @@ namespace Sbx.Core
       return !(left == right);
     }
 
+    public float LengthSquared()
+    {
+      return X * X + Y * Y + Z * Z;
+    }
+
     public float Length()
     {
-      return (float)Math.Sqrt(X * X + Y * Y + Z * Z);
+      return MathF.Sqrt(LengthSquared());
     }
+
+    public Vector3 Normalized()
+		{
+			float length = Length();
+
+			return length > 0.0f ? Create(this, v => v / length) : new Vector3(X, Y, Z);
+		}
+
+		public void Normalize()
+		{
+			float length = Length();
+
+			if (length > 0.0f)
+      {
+				Apply(v => v / length);
+      }
+		}
+
+    public float Distance(Vector3 other)
+		{
+			return MathF.Sqrt(MathF.Pow(other.X - X, 2) + MathF.Pow(other.Y - Y, 2) + MathF.Pow(other.Z - Z, 2));
+		}
+
+		public static float Distance(Vector3 lhs, Vector3 rhs)
+		{
+			return MathF.Sqrt(MathF.Pow(rhs.X - lhs.X, 2) + MathF.Pow(rhs.Y - lhs.Y, 2) + MathF.Pow(rhs.Z - lhs.Z, 2));
+		}
 
     public static Vector3 Cross(Vector3 x, Vector3 y)
 		{
@@ -138,12 +168,12 @@ namespace Sbx.Core
 
     public static Vector3 Cos(Vector3 vector)
     {
-      return Create(vector, Math.Cos);
+      return Create(vector, MathF.Cos);
     }
 
     public static Vector3 Sin(Vector3 vector)
     {
-      return Create(vector, Math.Sin);
+      return Create(vector, MathF.Sin);
     }
 
     public override string ToString()
@@ -151,18 +181,18 @@ namespace Sbx.Core
       return string.Format("Vector3[{0}, {1}, {2}]", X, Y, Z);
     }
 
-    public void Apply(Func<double, double> function)
+    public void Apply(Func<float, float> function)
 		{
-			X = (float)function(X);
-			Y = (float)function(Y);
-			Z = (float)function(Z);
+			X = function(X);
+			Y = function(Y);
+			Z = function(Z);
 		}
 
-    public static Vector3 Create(Vector3 vector, Func<double, double> function)
+    public static Vector3 Create(Vector3 vector, Func<float, float> function)
     {
-      return new Vector3((float)function(vector.X), (float)function(vector.Y), (float)function(vector.Z));
+      return new Vector3(function(vector.X), function(vector.Y), function(vector.Z));
     }
 
   } // struct Vector3
 
-} // namespace Sbx.Core
+} // namespace Sbx.Math

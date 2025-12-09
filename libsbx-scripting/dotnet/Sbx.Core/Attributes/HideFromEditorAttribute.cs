@@ -1,11 +1,12 @@
 using System;
 
-namespace Sbx.Core
+namespace Sbx.Attributes
 {
+
   [AttributeUsage(AttributeTargets.Field)]
   public class HideFromEditorAttribute : Attribute
   {
 
   } // class HideFromEditorAttribute
   
-} // namespace Sbx.Core
+} // namespace Sbx.Attributes

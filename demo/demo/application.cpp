@@ -413,7 +413,8 @@ application::application()
   auto camera = scene.camera();
 
   scene.add_component<sbx::scenes::skybox>(camera, scene.get_cube_image("skybox"), _brdf, _irradiance, _prefiltered);
-  // scene.add_component<sbx::scenes::skybox>(camera, _irradiance);
+
+  auto camera_controller_script = scripting_module.instantiate(camera, "build/x86_64/gcc/debug/_dotnet/Demo.dll", "Demo.CameraController");
 
   if (auto hide_window = cli.argument<bool>("hide-window"); !hide_window) {
     window.show();
@@ -437,7 +438,7 @@ auto application::update() -> void  {
 
   _rotation += sbx::math::degree{45} * delta_time;
 
-  _camera_controller.update();
+  // _camera_controller.update();
 
   // static auto fox_speed = 0.0f;
   // static auto direction = 1;

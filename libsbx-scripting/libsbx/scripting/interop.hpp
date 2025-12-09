@@ -43,6 +43,14 @@ struct interop {
 
   static auto transform_set_position(std::uint32_t node, math::vector3* position) -> void;
 
+  static auto transform_get_right(std::uint32_t node, math::vector3* right) -> void;
+
+  static auto transform_get_forward(std::uint32_t node, math::vector3* forward) -> void;
+
+  static auto transform_get_up(std::uint32_t node, math::vector3* up) -> void;
+
+  static auto transform_look_at(std::uint32_t node, math::vector3* target) -> void;
+
   static auto input_is_key_pressed(devices::key key) -> managed::bool32;
 
   static auto input_is_key_down(devices::key key) -> managed::bool32;
@@ -54,6 +62,10 @@ struct interop {
   static auto input_is_mouse_button_down(devices::mouse_button mouse_button) -> managed::bool32;
 
   static auto input_is_mouse_button_released(devices::mouse_button mouse_button) -> managed::bool32;
+
+  static auto input_mouse_position(math::vector2* position) -> void;
+
+  static auto input_scroll_delta(math::vector2* scroll_delta) -> void;
 
   template<typename Type>
   static auto register_managed_component(std::string_view name, managed::assembly& core_assembly) -> void {

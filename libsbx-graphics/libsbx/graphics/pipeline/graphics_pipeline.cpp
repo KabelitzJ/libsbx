@@ -428,11 +428,7 @@ auto graphics_pipeline::_initialize(const pipeline_definition& definition, const
     auto binding_flags = std::vector<VkDescriptorBindingFlags>{};
 
     for (const auto& [id, binding] : descriptor_set_layout_binding) {
-      if (binding.descriptorCount > 1u) {
-        binding_flags.push_back(VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT | VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT);
-      } else {
-        binding_flags.push_back(0u);
-      }
+      binding_flags.push_back((binding.descriptorCount > 1u) ? (VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT | VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT) : 0u);
     }
 
     const auto bindings = utility::map_to<std::vector>(descriptor_set_layout_binding, [](const auto& entry) -> VkDescriptorSetLayoutBinding { return entry.second; });

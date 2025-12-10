@@ -49,14 +49,7 @@ fs_out main(fs_in in) {
 
   // blend pixels
   out.color = float4(average, 1.0f - revealage);
-  
-  float brightness = dot(out.color.rgb, float3(0.2126, 0.7152, 0.0722));
-
-  if (brightness > 1.0) {
-    out.brightness = float4(out.color.rgb, 1.0);
-  } else {
-    out.brightness = float4(0.0, 0.0, 0.0, 1.0);
-  }
+  out.brightness = float4(0.0, 0.0, 0.0, 1.0);
 
   return out;
 }

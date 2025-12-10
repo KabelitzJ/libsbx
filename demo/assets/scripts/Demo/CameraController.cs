@@ -148,10 +148,14 @@ namespace Demo
         return;
       }
 
-      const float baseSpeed = 2f;
-      const float influence = 0.2f;
-      float offset = baseSpeed * MathF.Pow(zoom.Target, influence) * scroll;
-      float newZoom = Math.Clamp(zoom.Target - offset, minZoom, maxZoom);
+      const float baseSpeed = 1.0f;
+      const float exponent = 0.25f;
+
+      float current = zoom.Target;
+      float step = baseSpeed * MathF.Pow(current, exponent);
+      float offset = scroll * step;
+
+      float newZoom = Math.Clamp(current - offset, minZoom, maxZoom);
       zoom.Set(newZoom);
     }
 

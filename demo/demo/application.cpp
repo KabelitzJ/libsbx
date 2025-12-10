@@ -82,9 +82,10 @@ application::application()
   scene.add_image("pine_tree_leaves_albedo", "res://textures/pine_tree/leaves_albedo.png", sbx::graphics::format::r8g8b8a8_srgb);
   scene.add_image("pine_tree_leaves_normal", "res://textures/pine_tree/leaves_normal.png", sbx::graphics::format::r8g8b8a8_unorm);
 
-  scene.add_image("bricks2_albedo", "res://textures/bricks2/albedo.jpg", sbx::graphics::format::r8g8b8a8_srgb);
-  scene.add_image("bricks2_normal", "res://textures/bricks2/normal.jpg", sbx::graphics::format::r8g8b8a8_unorm);
-  scene.add_image("bricks2_height", "res://textures/bricks2/height.jpg", sbx::graphics::format::r8g8b8a8_srgb);
+  scene.add_image("bricks_albedo", "res://textures/bricks1/albedo.png", sbx::graphics::format::r8g8b8a8_srgb);
+  scene.add_image("bricks_normal", "res://textures/bricks1/normal.png", sbx::graphics::format::r8g8b8a8_unorm);
+  scene.add_image("bricks_mrao", "res://textures/bricks1/mrao.png", sbx::graphics::format::r8g8b8a8_srgb);
+  scene.add_image("bricks_height", "res://textures/bricks1/height.png", sbx::graphics::format::r8g8b8a8_srgb);
 
   scene.add_image("duck_albedo", "res://textures/duck/albedo.png", sbx::graphics::format::r8g8b8a8_srgb);
 
@@ -275,11 +276,13 @@ application::application()
   auto cube2 = scene.create_node("Cube2");
 
   auto& cube2_material = scene.add_material<sbx::models::material>("cube2");
-  cube2_material.albedo.image = scene.get_image("bricks2_albedo");
-  cube2_material.normal.image = scene.get_image("bricks2_normal");
-  cube2_material.height.image = scene.get_image("bricks2_height");
-  cube2_material.metallic = 0.0f;
+  cube2_material.albedo.image = scene.get_image("bricks_albedo");
+  cube2_material.normal.image = scene.get_image("bricks_normal");
+  // cube2_material.mrao.image = scene.get_image("bricks_mrao");
+  cube2_material.metallic = 0.04f;
   cube2_material.roughness = 1.0f;
+  cube2_material.occlusion = 1.0f;
+  cube2_material.height.image = scene.get_image("bricks_height");
   cube2_material.normal_scale = 1.0f;
 
   scene.add_component<sbx::scenes::static_mesh>(cube2, scene.get_mesh("cube"), scene.get_material("cube2"));

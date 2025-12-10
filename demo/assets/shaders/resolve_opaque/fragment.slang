@@ -48,12 +48,15 @@ Sampler2D<float4> material_image;
 Sampler2D<float4> emissive_image;
 
 [[vk::binding(7, 0)]]
-Sampler2D<float2> brdf_image;
+Sampler2D<float> ssao_image;
 
 [[vk::binding(8, 0)]]
-SamplerCube<float4> irradiance_image;
+Sampler2D<float2> brdf_image;
 
 [[vk::binding(9, 0)]]
+SamplerCube<float4> irradiance_image;
+
+[[vk::binding(10, 0)]]
 SamplerCube<float4> prefiltered_image;
 
 // [[vk::binding(7, 0)]] Sampler2D<uint> object_id_image;
@@ -78,36 +81,6 @@ float3 fresnel_schlick_roughness(float cos_theta, float3 F0, float roughness) {
   return F0 + (max(float3(1.0 - roughness, 1.0 - roughness, 1.0 - roughness), F0) - F0) * pow(1.0 - cos_theta, 5.0);
 }
 
-// float distribution_ggx(float3 n, float3 h, float roughness) {
-//   float a  = roughness * roughness;
-//   float a2 = a * a;
-
-//   float ndh  = max(dot(n, h), 0.0);
-//   float ndh2 = ndh * ndh;
-
-//   float denom = ndh2 * (a2 - 1.0) + 1.0;
-
-//   return a2 / (sbx::math::pi * denom * denom);
-// }
-
-// float geometry_schlick_ggx(float ndv, float roughness) {
-//   float r = (roughness + 1.0);
-//   float k = (r * r) / 8.0;
-
-//   return ndv / (ndv * (1.0 - k) + k);
-// }
-
-// float geometry_smith(float3 n, float3 v, float3 l, float roughness) {
-//   float ndv = max(dot(n, v), 0.0);
-//   float ndl = max(dot(n, l), 0.0);
-
-//   float ggx1 = geometry_schlick_ggx(ndv, roughness);
-//   float ggx2 = geometry_schlick_ggx(ndl, roughness);
-
-//   return ggx1 * ggx2;
-// }
-
-// // Use alpha (α = roughness^2) consistently:
 float distribution_ggx(float3 n, float3 h, float alpha) {
   float a2 = alpha * alpha;
 
@@ -119,11 +92,8 @@ float distribution_ggx(float3 n, float3 h, float alpha) {
   return a2 / (sbx::math::pi * denom * denom);
 }
 
-// Schlick-GGX for DIRECT lighting: k = α / 2   (UE4 recommendation)
-// (for IBL, you'd use k = (α+1)^2 / 8)
 float geometry_schlick_ggx(float ndx, float alpha) {
-  float k = alpha * 0.5;
-
+  float k = (alpha + 1.0) * (alpha + 1.0) * 0.125;
   return ndx / (ndx * (1.0 - k) + k);
 }
 
@@ -214,9 +184,10 @@ fs_out main(fs_in in) {
   float3 normal = normalize(normal_image.Sample(in.uv).xyz * 2.0f - 1.0f);
   float3 mrao = material_image.Sample(in.uv).rgb;
   float3 emissive = emissive_image.Sample(in.uv).rgb;
+  float ssao = ssao_image.Sample(in.uv);
 
   float metallic = clamp(mrao.r, 0.0, 1.0);
-  float roughness = clamp(mrao.g, 0.05, 1.0);
+  float roughness = clamp(mrao.g, 0.04, 1.0);
   float ao = clamp(mrao.b, 0.0, 1.0);
 
   float3 view_dir = normalize(scene.camera_position - world_position);
@@ -309,7 +280,7 @@ fs_out main(fs_in in) {
 
   float3 specular_ibl = prefiltered_color * (F_ibl * brdf.x + brdf.y);
 
-  float3 ambient = (kD_ibl * diffuse_ibl + specular_ibl) * ao;
+  float3 ambient = (kD_ibl * diffuse_ibl + specular_ibl) * ao * ssao;
 
   float3 final_color = ambient + color + emissive;
 

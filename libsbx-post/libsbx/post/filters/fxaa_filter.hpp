@@ -18,6 +18,8 @@ public:
   ~fxaa_filter() override = default;
 
   auto render(graphics::command_buffer& command_buffer) -> void override {
+    SBX_PROFILE_SCOPE("fxaa_filter::render");
+
     auto& pipeline = base_type::pipeline();
     auto& descriptor_handler = base_type::descriptor_handler();
 

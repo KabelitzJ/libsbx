@@ -33,8 +33,8 @@ image2d::image2d(const std::filesystem::path& path, graphics::format format, VkF
   _load(assets_module.resolve_path(path));
 }
 
-image2d::image2d(const math::vector2u& extent, graphics::format format, memory::observer_ptr<const std::uint8_t> pixels)
-: image2d{extent, format} {
+image2d::image2d(const math::vector2u& extent, graphics::format format, VkFilter filter, memory::observer_ptr<const std::uint8_t> pixels)
+: image2d{extent, format, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, filter} {
   set_pixels(pixels);
 }
 

@@ -51,7 +51,7 @@ public:
 
   image2d(const std::filesystem::path& path, graphics::format format = graphics::format::r8g8b8a8_srgb, VkFilter filter = VK_FILTER_LINEAR, VkSamplerAddressMode address_mode = VK_SAMPLER_ADDRESS_MODE_REPEAT, bool anisotropic = false, bool mipmap = false);
 
-  image2d(const math::vector2u& extent, graphics::format format, memory::observer_ptr<const std::uint8_t> pixels);
+  image2d(const math::vector2u& extent, graphics::format format, VkFilter filter, memory::observer_ptr<const std::uint8_t> pixels);
 
   ~image2d() override = default;
 

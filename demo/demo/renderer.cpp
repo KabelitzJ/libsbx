@@ -24,6 +24,7 @@
 #include <libsbx/post/filters/bloom_filter.hpp>
 #include <libsbx/post/filters/downsample_filter.hpp>
 #include <libsbx/post/filters/upsample_filter.hpp>
+#include <libsbx/post/filters/ssao_filter.hpp>
 
 #include <libsbx/shadows/shadow_subrenderer.hpp>
 #include <libsbx/ui/ui_subrenderer.hpp>
@@ -40,7 +41,9 @@ renderer::renderer()
   auto& graphics_module = sbx::core::engine::get_module<sbx::graphics::graphics_module>();
 
   auto [
-    deferred, 
+    deferred,
+    ssao,
+    // ssao_blur,
     transparency, 
     resolve,
     downsample_1, 
@@ -63,10 +66,30 @@ renderer::renderer()
       pass.produces("material", sbx::graphics::attachment::type::image, _clear_color, sbx::graphics::format::r8g8b8a8_unorm);
       pass.produces("emissive", sbx::graphics::attachment::type::image, _clear_color, sbx::graphics::format::r16g16b16a16_sfloat);
       pass.produces("object_id", sbx::graphics::attachment::type::image, sbx::math::color::black(), sbx::graphics::format::r32_uint);
-      pass.produces("normalized_depth", sbx::graphics::attachment::type::image, _clear_color, sbx::graphics::format::r32_sfloat);
+      pass.produces("linear_depth", sbx::graphics::attachment::type::image, _clear_color, sbx::graphics::format::r32_sfloat);
 
       return pass;
     },
+    [&](sbx::graphics::render_graph::context& context) -> sbx::graphics::render_graph::graphics_pass {
+      auto pass = context.graphics_pass("ssao");
+
+      pass.uses("position");
+      pass.uses("normal");
+      // pass.uses("linear_depth");
+
+      pass.produces("ssao", sbx::graphics::attachment::type::image, sbx::math::color{1.0f, 1.0f, 1.0f, 1.0f}, sbx::graphics::format::r8_unorm);
+
+      return pass;
+    },
+    // [&](sbx::graphics::render_graph::context& context) -> sbx::graphics::render_graph::graphics_pass {
+    //   auto pass = context.graphics_pass("ssao_blur");
+
+    //   pass.uses("ssao");
+
+    //   pass.produces("ssao_blur", sbx::graphics::attachment::type::image, sbx::math::color{1.0f, 1.0f, 1.0f, 1.0f}, sbx::graphics::format::r8_unorm);
+
+    //   return pass;
+    // },
     [&](sbx::graphics::render_graph::context& context) -> sbx::graphics::render_graph::graphics_pass {
       auto pass = context.graphics_pass("transparency");
 
@@ -109,7 +132,7 @@ renderer::renderer()
         .color_write_mask = sbx::graphics::color_component::r | sbx::graphics::color_component::g | sbx::graphics::color_component::b | sbx::graphics::color_component::a
       };
 
-      pass.uses("albedo", "position", "normal", "material", "emissive", "object_id", "accum", "revealage");
+      pass.uses("albedo", "position", "normal", "material", "emissive", "object_id", "accum", "revealage", "ssao");
 
       pass.produces("depth", sbx::graphics::attachment::type::depth);
       pass.produces("resolve", sbx::graphics::attachment::type::image, _clear_color, sbx::graphics::format::r32g32b32a32_sfloat, resolve_blend);
@@ -185,6 +208,9 @@ renderer::renderer()
       auto pass = context.graphics_pass("selection");
 
       pass.uses("fxaa");
+      pass.uses("object_id");
+      pass.uses("linear_depth");
+
       pass.produces("selection", sbx::graphics::attachment::type::image, _clear_color, sbx::graphics::format::r8g8b8a8_unorm);
 
       return pass;
@@ -206,6 +232,15 @@ renderer::renderer()
   // deferred pass
   add_subrenderer<sbx::models::static_mesh_subrenderer>(deferred, "res://shaders/deferred_pbr_material", sbx::models::static_mesh_material_draw_list::bucket::opaque);
   add_subrenderer<sbx::animations::skinned_mesh_subrenderer>(deferred, "res://shaders/deferred_pbr_material", sbx::animations::skinned_mesh_material_draw_list::bucket::opaque);
+  
+  // SSAO
+  auto ssao_attachment_names = std::vector<std::pair<std::string, std::string>>{
+    {"position_image", "position"},
+    {"normal_image", "normal"},
+    // {"linear_depth_image", "linear_depth"}
+  };
+
+  add_subrenderer<sbx::post::ssao_filter>(ssao, "res://shaders/ssao", std::move(ssao_attachment_names));
 
   // transparency pass
   add_subrenderer<sbx::models::static_mesh_subrenderer>(transparency, "res://shaders/deferred_pbr_material", sbx::models::static_mesh_material_draw_list::bucket::transparent);
@@ -217,20 +252,21 @@ renderer::renderer()
     {"position_image", "position"},
     {"normal_image", "normal"},
     {"material_image", "material"},
-    {"emissive_image", "emissive"}
+    {"emissive_image", "emissive"},
+    {"ssao_image", "ssao"}
   };
 
   add_subrenderer<sbx::post::resolve_opaque_filter>(resolve, "res://shaders/resolve_opaque", std::move(resolve_opaque_attachment_names));
-  add_subrenderer<sbx::scenes::skybox_subrenderer>(resolve, "res://shaders/skybox");
-
+  
   auto resolve_transparent_attachment_names = std::vector<std::pair<std::string, std::string>>{
     {"accum_image", "accum"},
     {"revealage_image", "revealage"}
   };
-
+  
   add_subrenderer<sbx::post::resolve_transparent_filter>(resolve, "res://shaders/resolve_transparent", std::move(resolve_transparent_attachment_names));
-  add_subrenderer<sbx::scenes::grid_subrenderer>(resolve, "res://shaders/grid");
-  add_subrenderer<sbx::scenes::debug_subrenderer>(resolve, "res://shaders/debug");
+  add_subrenderer<sbx::scenes::skybox_subrenderer>(resolve, "res://shaders/skybox");
+  // add_subrenderer<sbx::scenes::grid_subrenderer>(resolve, "res://shaders/grid");
+  // add_subrenderer<sbx::scenes::debug_subrenderer>(resolve, "res://shaders/debug");
 
   // post-processing passes
   add_subrenderer<sbx::post::downsample_filter>(downsample_1, "res://shaders/downsample", "brightness");
@@ -253,7 +289,7 @@ renderer::renderer()
   auto selection_attachment_names = std::vector<std::pair<std::string, std::string>>{
     {"resolve_image", "fxaa"},
     {"object_id_image", "object_id"},
-    {"normalized_depth_image", "normalized_depth"},
+    {"linear_depth_image", "linear_depth"},
   };
 
   add_subrenderer<sbx::post::selection_filter>(selection, "res://shaders/selection", std::move(selection_attachment_names));

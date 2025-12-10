@@ -70,14 +70,14 @@ public:
     auto& assets_module = core::engine::get_module<assets::assets_module>();
 
     auto vertices = std::vector<vertex3d>{
-      vertex3d{math::vector3{-10.0f,  10.0f, -10.0f}}, // 0
-      vertex3d{math::vector3{-10.0f, -10.0f, -10.0f}}, // 1
-      vertex3d{math::vector3{ 10.0f, -10.0f, -10.0f}}, // 2
-      vertex3d{math::vector3{ 10.0f,  10.0f, -10.0f}}, // 3
-      vertex3d{math::vector3{-10.0f,  10.0f,  10.0f}}, // 4
-      vertex3d{math::vector3{-10.0f, -10.0f,  10.0f}}, // 5
-      vertex3d{math::vector3{ 10.0f, -10.0f,  10.0f}}, // 6
-      vertex3d{math::vector3{ 10.0f,  10.0f,  10.0f}}  // 7
+      vertex3d{math::vector3{-50.0f,  50.0f, -50.0f}}, // 0
+      vertex3d{math::vector3{-50.0f, -50.0f, -50.0f}}, // 1
+      vertex3d{math::vector3{ 50.0f, -50.0f, -50.0f}}, // 2
+      vertex3d{math::vector3{ 50.0f,  50.0f, -50.0f}}, // 3
+      vertex3d{math::vector3{-50.0f,  50.0f,  50.0f}}, // 4
+      vertex3d{math::vector3{-50.0f, -50.0f,  50.0f}}, // 5
+      vertex3d{math::vector3{ 50.0f, -50.0f,  50.0f}}, // 6
+      vertex3d{math::vector3{ 50.0f,  50.0f,  50.0f}}  // 7
     };
 
     auto indices = std::vector<std::uint32_t>{

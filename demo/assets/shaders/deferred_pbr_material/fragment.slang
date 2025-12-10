@@ -113,12 +113,85 @@ float3 get_emissive(float2 uv, material_data material_data) {
   return emissive * images[NonUniformResourceIndex(image_index)].Sample(samplers[NonUniformResourceIndex(sampler_index)], uv).rgb;
 }
 
+float get_height(float2 uv, material_data material_data) {
+  uint image_index = material_data.height_image_index;
+  uint sampler_index = material_data.height_sampler_index;
+
+  if (image_index >= sbx::common::max_image_array_size) {
+    return 0.0f;
+  }
+
+  float height = images[NonUniformResourceIndex(image_index)].Sample(samplers[NonUniformResourceIndex(sampler_index)], uv).r;
+
+  return height * material_data.height_scale + material_data.height_offset;
+}
+
+float2 parallax_occlusion_mapping(fs_in in, material_data material_data, float3x3 TBN) {
+  uint image_index = material_data.height_image_index;
+
+  float2 uv = in.uv * material_data.uv_scale + material_data.uv_offset;
+
+  if (image_index >= sbx::common::max_image_array_size) {
+    return uv;
+  }
+
+  float3 view_direction_world = normalize(scene.camera_position - in.position);
+  float3 view_direction_tangent = normalize(mul(view_direction_world, transpose(TBN)));
+
+  float ndotv = abs(view_direction_tangent.z);
+
+  float num_layers = lerp(material_data.parallax_max_layers, material_data.parallax_min_layers, ndotv);
+
+  num_layers = max(num_layers, 1.0f);
+
+  float layer_depth = 1.0f / num_layers;
+  float current_layer_depth = 0.0f;
+
+  float3 v = view_direction_tangent;
+  float vz = (abs(v.z) < 1e-4f) ? 1e-4f : v.z;
+
+  float2 delta_uv = v.xy * material_data.height_scale / (vz * num_layers);
+
+  float2 current_uv = uv;
+  float height = get_height(current_uv, material_data);
+
+  int step_count = (int)num_layers;
+
+  [loop]
+  for (int i = 0; i < step_count; ++i) {
+    current_layer_depth += layer_depth;
+    current_uv -= delta_uv;
+
+    height = get_height(current_uv, material_data);
+
+    if (height < current_layer_depth) {
+      break;
+    }
+  }
+
+  float2 previous_uv = current_uv + delta_uv;
+
+  float next_depth = height - current_layer_depth;
+
+  float previous_height = get_height(previous_uv, material_data);
+  float previous_depth = previous_height - (current_layer_depth - layer_depth);
+
+  float denom = next_depth - previous_depth;
+
+  denom = (abs(denom) < 1e-5f) ? 1e-5f : denom;
+
+  float weight = next_depth / denom;
+
+  return lerp(current_uv, previous_uv, weight);
+}
+
+
 opaque_fs_out opaque_main(fs_in in, material_data material_data, uint object_id) {
   opaque_fs_out out;
 
   float3x3 TBN = build_tbn(in);
 
-  float2 uv = in.uv * material_data.uv_scale + material_data.uv_offset;
+  float2 uv = parallax_occlusion_mapping(in, material_data, TBN);
 
   out.albedo = get_albedo<opaque_alpha_policy>(uv, material_data);
   out.position = float4(in.position, 1.0);
@@ -159,7 +232,7 @@ opaque_fs_out mask_main(fs_in in, material_data material_data, uint object_id) {
 
   float3x3 TBN = build_tbn(in);
 
-  float2 uv = in.uv * material_data.uv_scale + material_data.uv_offset;
+  float2 uv = parallax_occlusion_mapping(in, material_data, TBN);
 
   float4 albedo = get_albedo<mask_alpha_policy>(uv, material_data);
 

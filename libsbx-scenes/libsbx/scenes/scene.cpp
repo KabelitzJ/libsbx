@@ -159,7 +159,7 @@ auto scene::_ensure_world(const node_type node) -> const scenes::global_transfor
 
       world.model = parent_world * local.local_transform();
       world.normal = math::matrix4x4::transposed(math::matrix4x4::inverted(world.model));
-      world.local_seen  = local.version();
+      world.local_seen = local.version();
       world.parent_seen = parent_world_version;
 
       ++world.version;

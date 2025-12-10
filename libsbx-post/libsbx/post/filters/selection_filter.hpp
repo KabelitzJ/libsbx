@@ -41,7 +41,7 @@ public:
     descriptor_handler.push("scene", scene.uniform_handler());
     // descriptor_handler.push("resolve_image", graphics_module.attachment(_image));
     // descriptor_handler.push("object_id_image", graphics_module.attachment(_object_id_image));
-    // descriptor_handler.push("normalized_depth_image", graphics_module.attachment(_normalized_depth_image));
+    // descriptor_handler.push("linear_depth_image", graphics_module.attachment(_linear_depth_image));
 
     for (const auto& [name, attachment] : _attachment_names) {
       descriptor_handler.push(name, graphics_module.attachment(attachment));
@@ -65,7 +65,7 @@ private:
 
   std::string _image;
   std::string _object_id_image;
-  std::string _normalized_depth_image;
+  std::string _linear_depth_image;
 
 }; // class selection_filter
 

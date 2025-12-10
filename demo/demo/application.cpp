@@ -189,7 +189,7 @@ application::application()
   helmet_material.mrao.image = scene.get_image("helmet_mrao");
   helmet_material.emissive.image = scene.get_image("helmet_emissive");
   helmet_material.emissive_factor = sbx::math::vector4{1, 1, 1, 0};
-  helmet_material.emissive_strength = 10.0f;
+  helmet_material.emissive_strength = 16.0f;
 
   scene.add_component<sbx::scenes::static_mesh>(helmet, scene.get_mesh("helmet"), scene.get_material("helmet"));
 

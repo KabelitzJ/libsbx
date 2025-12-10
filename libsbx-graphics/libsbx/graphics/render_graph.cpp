@@ -378,7 +378,7 @@ auto graph_builder::_create_attachments(const viewport::type flags, const graphi
           .format = image.format(),
           .extent = VkExtent2D{extent.x(), extent.y()},
           .type = attachment::type::image,
-          .is_first_use = false
+          .is_first_use = true
         });
 
         _clear_values.insert_or_assign(attachment.name(), VkClearValue{
@@ -414,7 +414,7 @@ auto graph_builder::_create_attachments(const viewport::type flags, const graphi
           .format = image.format(),
           .extent = VkExtent2D{extent.x(), extent.y()},
           .type = attachment::type::depth,
-          .is_first_use = false
+          .is_first_use = true
         });
 
         _clear_values.insert_or_assign(attachment.name(), VkClearValue{
@@ -441,7 +441,7 @@ auto graph_builder::_create_attachments(const viewport::type flags, const graphi
           .format = VK_FORMAT_UNDEFINED,
           .extent = VkExtent2D{extent.x(), extent.y()},
           .type = attachment::type::swapchain,
-          .is_first_use = false
+          .is_first_use = true
         });
         
         _clear_values.emplace(attachment.name(), VkClearValue{

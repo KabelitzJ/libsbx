@@ -95,6 +95,7 @@ graphics_module::graphics_module()
   _logical_device{std::make_unique<graphics::logical_device>(*_physical_device)},
   _surface{std::make_unique<graphics::surface>(*_instance, *_physical_device, *_logical_device)},
   _allocator{*_instance, *_physical_device, *_logical_device},
+  _query_pool{*_logical_device, VK_QUERY_TYPE_TIMESTAMP, 1000},
   _is_framebuffer_resized{true},
   _is_viewport_resized{true} {
   auto& devices_module = core::engine::get_module<devices::devices_module>();
@@ -211,14 +212,18 @@ auto graphics_module::update() -> void {
   EASY_BLOCK("draw");
 
   auto& command_buffer = _graphics_command_buffers[_current_frame];
-  vkResetCommandBuffer(command_buffer, 0);
-
+  
+  command_buffer.reset();
   command_buffer.begin(VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT);
+
+  _query_pool.reset(command_buffer);
 
   // Needs to be acquired AFTER acquire_next_image!
   auto& image_data = _per_image_data[_swapchain->active_image_index()];
 
+  _query_pool.write_timestamp(command_buffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0);
   _renderer->render(command_buffer, *_swapchain);
+  _query_pool.write_timestamp(command_buffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 1);
 
   command_buffer.end();
 
@@ -227,6 +232,9 @@ auto graphics_module::update() -> void {
   // wait_semaphores.push_back({frame_data.compute_finished_semaphore, VK_PIPELINE_STAGE_VERTEX_INPUT_BIT});
 
   command_buffer.submit(wait_semaphores, image_data.render_finished_semaphore, frame_data.graphics_in_flight_fence);
+
+  auto duration = _query_pool.get_duration(0, 1);
+  // utility::logger<"graphics">::debug("Frame GPU time: {:.5f} ms", duration.value());
 
   // Present the image to the screen
   const auto result = _swapchain->present(image_data.render_finished_semaphore);

@@ -319,6 +319,19 @@ auto command_buffer::fill_buffer(const VkBuffer& buffer, VkDeviceSize offset, Vk
   vkCmdFillBuffer(_handle, buffer, offset, size, data);
 }
 
+auto command_buffer::begin_rendering(const VkRenderingInfo& rendering_info) -> void {
+  vkCmdBeginRendering(_handle, &rendering_info);
+}
+
+auto command_buffer::end_rendering() -> void {
+  vkCmdEndRendering(_handle);
+}
+
+auto command_buffer::reset(VkCommandBufferResetFlags flags) -> void {
+  validate(vkResetCommandBuffer(_handle, flags));
+  _is_running = false;
+}
+
 auto command_buffer::_queue() const -> const graphics::queue& {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 

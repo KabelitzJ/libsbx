@@ -25,11 +25,8 @@ float max3(float3 vector) {
 fs_out main(fs_in in) {
   fs_out out;
 
-  // fragment coordination
-  int2 coords = int2(in.sv_position.xy);
-
   // fragment revealage
-  float revealage = revealage_image.Load(int3(coords, 0)).r;
+  float revealage = revealage_image.Sample(in.uv).r;
 
   // save the blending and color texture fetch cost if there is not a transparent fragment
   if (is_approximately_equal(revealage, 1.0f)) {
@@ -37,7 +34,7 @@ fs_out main(fs_in in) {
   }
 
   // fragment color
-  float4 accumulation = accum_image.Load(int3(coords, 0));
+  float4 accumulation = accum_image.Sample(in.uv);
 
   // suppress overflow
   if (isinf(max3(abs(accumulation.rgb)))) {

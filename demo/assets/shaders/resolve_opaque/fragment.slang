@@ -47,16 +47,16 @@ Sampler2D<float4> material_image;
 [[vk::binding(6, 0)]]
 Sampler2D<float4> emissive_image;
 
+// [[vk::binding(7, 0)]]
+// Sampler2D<float> ssao_image;
+
 [[vk::binding(7, 0)]]
-Sampler2D<float> ssao_image;
-
-[[vk::binding(8, 0)]]
 Sampler2D<float2> brdf_image;
-
-[[vk::binding(9, 0)]]
+  
+[[vk::binding(8, 0)]]
 SamplerCube<float4> irradiance_image;
 
-[[vk::binding(10, 0)]]
+[[vk::binding(9, 0)]]
 SamplerCube<float4> prefiltered_image;
 
 // [[vk::binding(7, 0)]] Sampler2D<uint> object_id_image;
@@ -184,7 +184,7 @@ fs_out main(fs_in in) {
   float3 normal = normalize(normal_image.Sample(in.uv).xyz * 2.0f - 1.0f);
   float3 mrao = material_image.Sample(in.uv).rgb;
   float3 emissive = emissive_image.Sample(in.uv).rgb;
-  float ssao = ssao_image.Sample(in.uv);
+  // float ssao = ssao_image.Sample(in.uv);
 
   float metallic = clamp(mrao.r, 0.0, 1.0);
   float roughness = clamp(mrao.g, 0.04, 1.0);
@@ -280,7 +280,7 @@ fs_out main(fs_in in) {
 
   float3 specular_ibl = prefiltered_color * (F_ibl * brdf.x + brdf.y);
 
-  float3 ambient = (kD_ibl * diffuse_ibl + specular_ibl) * ao * ssao;
+  float3 ambient = (kD_ibl * diffuse_ibl + specular_ibl) * ao;
 
   float3 final_color = ambient + color + emissive;
 

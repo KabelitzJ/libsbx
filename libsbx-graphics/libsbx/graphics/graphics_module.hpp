@@ -23,6 +23,7 @@
 #include <libsbx/graphics/devices/logical_device.hpp>
 #include <libsbx/graphics/devices/allocator.hpp>
 #include <libsbx/graphics/devices/surface.hpp>
+#include <libsbx/graphics/devices/query_pool.hpp>
 
 #include <libsbx/graphics/commands/command_pool.hpp>
 #include <libsbx/graphics/commands/command_buffer.hpp>
@@ -334,6 +335,7 @@ private:
   resource_storage<graphics::sampler_state> _sampler_states;
 
   graphics::allocator _allocator;
+  graphics::query_pool _query_pool;
 
   graphics::compiler _compiler;
 

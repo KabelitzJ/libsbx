@@ -108,13 +108,11 @@ public:
 
   auto fill_buffer(const VkBuffer& buffer, VkDeviceSize offset, VkDeviceSize size, std::uint32_t data) -> void;
 
-  auto begin_rendering(const VkRenderingInfo& rendering_info) -> void {
-    vkCmdBeginRendering(_handle, &rendering_info);
-  }
+  auto begin_rendering(const VkRenderingInfo& rendering_info) -> void;
 
-  auto end_rendering() -> void {
-    vkCmdEndRendering(_handle);
-  }
+  auto end_rendering() -> void;
+
+  auto reset(VkCommandBufferResetFlags flags = 0) -> void;
 
 private:
 

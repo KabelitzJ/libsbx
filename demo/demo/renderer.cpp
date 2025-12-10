@@ -42,8 +42,6 @@ renderer::renderer()
 
   auto [
     deferred,
-    ssao,
-    // ssao_blur,
     transparency, 
     resolve,
     downsample_1, 
@@ -70,26 +68,6 @@ renderer::renderer()
 
       return pass;
     },
-    [&](sbx::graphics::render_graph::context& context) -> sbx::graphics::render_graph::graphics_pass {
-      auto pass = context.graphics_pass("ssao");
-
-      pass.uses("position");
-      pass.uses("normal");
-      // pass.uses("linear_depth");
-
-      pass.produces("ssao", sbx::graphics::attachment::type::image, sbx::math::color{1.0f, 1.0f, 1.0f, 1.0f}, sbx::graphics::format::r8_unorm);
-
-      return pass;
-    },
-    // [&](sbx::graphics::render_graph::context& context) -> sbx::graphics::render_graph::graphics_pass {
-    //   auto pass = context.graphics_pass("ssao_blur");
-
-    //   pass.uses("ssao");
-
-    //   pass.produces("ssao_blur", sbx::graphics::attachment::type::image, sbx::math::color{1.0f, 1.0f, 1.0f, 1.0f}, sbx::graphics::format::r8_unorm);
-
-    //   return pass;
-    // },
     [&](sbx::graphics::render_graph::context& context) -> sbx::graphics::render_graph::graphics_pass {
       auto pass = context.graphics_pass("transparency");
 
@@ -132,7 +110,7 @@ renderer::renderer()
         .color_write_mask = sbx::graphics::color_component::r | sbx::graphics::color_component::g | sbx::graphics::color_component::b | sbx::graphics::color_component::a
       };
 
-      pass.uses("albedo", "position", "normal", "material", "emissive", "object_id", "accum", "revealage", "ssao");
+      pass.uses("albedo", "position", "normal", "material", "emissive", "object_id", "accum", "revealage");
 
       pass.produces("depth", sbx::graphics::attachment::type::depth);
       pass.produces("resolve", sbx::graphics::attachment::type::image, _clear_color, sbx::graphics::format::r32g32b32a32_sfloat, resolve_blend);
@@ -240,8 +218,6 @@ renderer::renderer()
     // {"linear_depth_image", "linear_depth"}
   };
 
-  add_subrenderer<sbx::post::ssao_filter>(ssao, "res://shaders/ssao", std::move(ssao_attachment_names));
-
   // transparency pass
   add_subrenderer<sbx::models::static_mesh_subrenderer>(transparency, "res://shaders/deferred_pbr_material", sbx::models::static_mesh_material_draw_list::bucket::transparent);
   add_subrenderer<sbx::animations::skinned_mesh_subrenderer>(transparency, "res://shaders/deferred_pbr_material", sbx::animations::skinned_mesh_material_draw_list::bucket::transparent);
@@ -252,8 +228,7 @@ renderer::renderer()
     {"position_image", "position"},
     {"normal_image", "normal"},
     {"material_image", "material"},
-    {"emissive_image", "emissive"},
-    {"ssao_image", "ssao"}
+    {"emissive_image", "emissive"}
   };
 
   add_subrenderer<sbx::post::resolve_opaque_filter>(resolve, "res://shaders/resolve_opaque", std::move(resolve_opaque_attachment_names));

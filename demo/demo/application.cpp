@@ -168,7 +168,7 @@ application::application()
 
     auto& material = scene.add_material<sbx::models::material>(material_name);
     material.base_color = color;
-    material.alpha = sbx::models::alpha_mode::blend;
+    // material.alpha = sbx::models::alpha_mode::blend;
 
     auto light = scene.create_child_node(_light_center, fmt::format("Light{}", i), sbx::scenes::transform{sbx::math::vector3{radius * sbx::math::cos(angle), 0.0f, radius * sbx::math::sin(angle)}});
 
@@ -260,9 +260,11 @@ application::application()
   auto duck = scene.create_node("Duck");
 
   auto& duck_material = scene.add_material<sbx::models::material>("duck");
+  duck_material.base_color = sbx::math::color{1.0f, 1.0f, 1.0f, 0.5f};
   duck_material.albedo.image = scene.get_image("duck_albedo");
   duck_material.metallic = 1.0f;
   duck_material.roughness = 0.2f;
+  duck_material.alpha = sbx::models::alpha_mode::blend;
 
   scene.add_component<sbx::scenes::static_mesh>(duck, scene.get_mesh("duck"), std::vector<sbx::scenes::static_mesh::submesh>{{0u, scene.get_material("duck")}});
 

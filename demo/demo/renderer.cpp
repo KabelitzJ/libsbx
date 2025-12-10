@@ -210,13 +210,6 @@ renderer::renderer()
   // deferred pass
   add_subrenderer<sbx::models::static_mesh_subrenderer>(deferred, "res://shaders/deferred_pbr_material", sbx::models::static_mesh_material_draw_list::bucket::opaque);
   add_subrenderer<sbx::animations::skinned_mesh_subrenderer>(deferred, "res://shaders/deferred_pbr_material", sbx::animations::skinned_mesh_material_draw_list::bucket::opaque);
-  
-  // SSAO
-  auto ssao_attachment_names = std::vector<std::pair<std::string, std::string>>{
-    {"position_image", "position"},
-    {"normal_image", "normal"},
-    // {"linear_depth_image", "linear_depth"}
-  };
 
   // transparency pass
   add_subrenderer<sbx::models::static_mesh_subrenderer>(transparency, "res://shaders/deferred_pbr_material", sbx::models::static_mesh_material_draw_list::bucket::transparent);
@@ -259,7 +252,7 @@ renderer::renderer()
 
   add_subrenderer<sbx::post::tonemap_filter>(tonemap, "res://shaders/tonemap", std::move(tonemap_attachment_names));
 
-  add_subrenderer<sbx::post::fxaa_filter>(fxaa, "res://shaders/fxaa", "tonemap");
+  add_subrenderer<sbx::post::fxaa_filter>(fxaa, "res://shaders/fxaa", "resolve");
 
   auto selection_attachment_names = std::vector<std::pair<std::string, std::string>>{
     {"resolve_image", "fxaa"},

@@ -31,14 +31,14 @@ enum class format : std::int32_t {
   r32g32b32a32_sfloat = VK_FORMAT_R32G32B32A32_SFLOAT
 }; // enum class format
 
-enum class address_mode : std::uint8_t {
+enum class address_mode : std::int32_t {
   repeat = VK_SAMPLER_ADDRESS_MODE_REPEAT,
   mirror = VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT,
   clamp_to_edge = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
   clamp_to_border = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER
 }; // enum class address_mode
 
-enum class filter : std::uint8_t {
+enum class filter : std::int32_t {
   nearest = VK_SAMPLER_MIPMAP_MODE_NEAREST,
   linear = VK_SAMPLER_MIPMAP_MODE_LINEAR
 }; // enum class filter

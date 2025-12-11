@@ -7,6 +7,7 @@
 #include <libsbx/math/color.hpp>
 
 #include <libsbx/graphics/subrenderer.hpp>
+#include <libsbx/graphics/render_graph.hpp>
 #include <libsbx/graphics/pipeline/graphics_pipeline.hpp>
 #include <libsbx/graphics/buffers/push_handler.hpp>
 #include <libsbx/graphics/buffers/storage_handler.hpp>
@@ -35,8 +36,8 @@ class debug_subrenderer final : public sbx::graphics::subrenderer {
   
   public:
 
-    pipeline(const std::filesystem::path& path, const sbx::graphics::render_graph::graphics_pass& pass)
-    : base_type{path, pass, pipeline_definition} { }
+    pipeline(const std::filesystem::path& path, const std::vector<graphics::attachment_description>& attachments)
+    : base_type{path, attachments, pipeline_definition} { }
 
     ~pipeline() override = default;
   
@@ -44,9 +45,9 @@ class debug_subrenderer final : public sbx::graphics::subrenderer {
 
 public:
 
-  debug_subrenderer(const sbx::graphics::render_graph::graphics_pass& pass, const std::filesystem::path& path)
-  : sbx::graphics::subrenderer{pass},
-    _pipeline{path, pass},
+  debug_subrenderer(const std::vector<graphics::attachment_description>& attachments, const std::filesystem::path& path)
+  : sbx::graphics::subrenderer{},
+    _pipeline{path, attachments},
     _push_handler{_pipeline},
     _descriptor_handler{_pipeline, 0u} {
     auto& graphics_module = core::engine::get_module<graphics::graphics_module>();

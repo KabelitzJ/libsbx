@@ -6,6 +6,7 @@
 #include <libsbx/graphics/commands/command_buffer.hpp>
 
 #include <libsbx/graphics/pipeline/pipeline.hpp>
+#include <libsbx/graphics/render_graph.hpp>
 
 namespace sbx::graphics {
 
@@ -13,20 +14,11 @@ class subrenderer {
 
 public:
 
-  subrenderer(const render_graph::graphics_pass& pass)
-  : _pass{pass} { }
+  subrenderer() { }
 
   virtual ~subrenderer() = default;
 
   virtual auto render(command_buffer& command_buffer) -> void = 0;
-
-  auto pass() noexcept -> render_graph::graphics_pass& {
-    return _pass;
-  }
-
-private:
-
-  render_graph::graphics_pass _pass;
 
 }; // class subrenderer
 

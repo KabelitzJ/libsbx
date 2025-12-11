@@ -58,7 +58,7 @@ namespace sbx::graphics {
 auto validate(VkResult result) -> void;
 
 template<typename VkEnum, typename Enum>
-requires ((std::is_enum_v<VkEnum> || std::is_same_v<VkEnum, VkFlags>) && std::is_enum_v<Enum>)
+requires ((std::is_enum_v<VkEnum> || std::is_same_v<VkEnum, VkFlags>) && std::is_enum_v<Enum> && std::is_same_v<std::underlying_type_t<Enum>, std::int32_t>)
 constexpr auto to_vk_enum(Enum value) -> VkEnum {
   return static_cast<VkEnum>(value);
 }

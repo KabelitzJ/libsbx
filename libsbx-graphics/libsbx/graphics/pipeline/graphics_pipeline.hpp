@@ -35,20 +35,20 @@
 
 namespace sbx::graphics {
 
-enum class polygon_mode : std::uint8_t {
+enum class polygon_mode : std::int32_t {
   fill = VK_POLYGON_MODE_FILL,
   line = VK_POLYGON_MODE_LINE,
   point = VK_POLYGON_MODE_POINT
 }; // enum class polygon_mode
 
-enum class cull_mode : std::uint8_t {
+enum class cull_mode : std::int32_t {
   none = VK_CULL_MODE_NONE,
   front = VK_CULL_MODE_FRONT_BIT,
   back = VK_CULL_MODE_BACK_BIT,
   front_and_back = VK_CULL_MODE_FRONT_AND_BACK
 }; // enum class cull_mode
 
-enum class front_face : std::uint8_t {
+enum class front_face : std::int32_t {
   counter_clockwise = VK_FRONT_FACE_COUNTER_CLOCKWISE,
   clockwise = VK_FRONT_FACE_CLOCKWISE
 }; // enum class front_face
@@ -67,7 +67,7 @@ struct rasterization_state {
   std::optional<graphics::depth_bias> depth_bias{};
 }; // struct rasterization_state
 
-enum class primitive_topology : std::uint8_t {
+enum class primitive_topology : std::int32_t {
   point_list = VK_PRIMITIVE_TOPOLOGY_POINT_LIST,
   line_list = VK_PRIMITIVE_TOPOLOGY_LINE_LIST,
   line_strip = VK_PRIMITIVE_TOPOLOGY_LINE_STRIP,
@@ -81,13 +81,13 @@ enum class primitive_topology : std::uint8_t {
   patch_list = VK_PRIMITIVE_TOPOLOGY_PATCH_LIST,
 }; // enum class primitive_topology
 
-enum class depth : std::uint8_t {
+enum class depth : std::int32_t {
   disabled = 0,
   read_write = 1,
   read_only = 2
 }; // enum class depth_test
 
-enum class compare_operation : std::uint8_t {
+enum class compare_operation : std::int32_t {
   never = VK_COMPARE_OP_NEVER,
   less = VK_COMPARE_OP_LESS,
   equal = VK_COMPARE_OP_EQUAL,
@@ -125,9 +125,9 @@ public:
     std::unordered_map<SlangStage, std::vector<std::uint32_t>> shader_codes{};
   }; // struct compiled_shaders
 
-  graphics_pipeline(const std::filesystem::path& path, const render_graph::graphics_pass& pass, const pipeline_definition& default_definition = pipeline_definition{}, const VkSpecializationInfo* specialization_info = nullptr);
+  graphics_pipeline(const std::filesystem::path& path, const std::vector<attachment_description>& attachments, const pipeline_definition& default_definition = pipeline_definition{}, const VkSpecializationInfo* specialization_info = nullptr);
 
-  graphics_pipeline(const compiled_shaders& shaders, const render_graph::graphics_pass& pass, const pipeline_definition& default_definition = pipeline_definition{}, const VkSpecializationInfo* specialization_info = nullptr);
+  graphics_pipeline(const compiled_shaders& shaders, const std::vector<attachment_description>& attachments, const pipeline_definition& default_definition = pipeline_definition{}, const VkSpecializationInfo* specialization_info = nullptr);
 
   ~graphics_pipeline() override;
 
@@ -203,13 +203,11 @@ private:
     VkDescriptorSetLayout layout;
   }; // struct per_set_data
 
-  auto _initialize(const pipeline_definition& definition, const VkSpecializationInfo* specialization_info) -> void;
+  auto _initialize(const std::vector<attachment_description>& attachments, const pipeline_definition& definition, const VkSpecializationInfo* specialization_info) -> void;
 
   auto _update_definition(const std::filesystem::path& path, const pipeline_definition default_definition) -> pipeline_definition;
 
   auto _get_stage_from_name(const std::string& name) const noexcept -> VkShaderStageFlagBits;
-
-  render_graph::graphics_pass _pass;
 
   std::unordered_map<VkShaderStageFlagBits, std::unique_ptr<shader>> _shaders{};
 

@@ -45,9 +45,8 @@ static auto _get_stage_from_slang(SlangStage stage) -> VkShaderStageFlagBits {
   }
 }
 
-graphics_pipeline::graphics_pipeline(const std::filesystem::path& path, const render_graph::graphics_pass& pass, const pipeline_definition& default_definition, const VkSpecializationInfo* specialization_info)
+graphics_pipeline::graphics_pipeline(const std::filesystem::path& path, const std::vector<attachment_description>& attachments, const pipeline_definition& default_definition, const VkSpecializationInfo* specialization_info)
 : base{},
-  _pass{pass},
   _bind_point{VK_PIPELINE_BIND_POINT_GRAPHICS} {
   auto& assets_module = core::engine::get_module<assets::assets_module>();
 
@@ -93,12 +92,11 @@ graphics_pipeline::graphics_pipeline(const std::filesystem::path& path, const re
     throw std::runtime_error{"Required fragment shader not found"};
   }
 
-  _initialize(definition, specialization_info);
+  _initialize(attachments, definition, specialization_info);
 }
 
-graphics_pipeline::graphics_pipeline(const compiled_shaders& shaders, const render_graph::graphics_pass& pass, const pipeline_definition& default_definition, const VkSpecializationInfo* specialization_info)
+graphics_pipeline::graphics_pipeline(const compiled_shaders& shaders, const std::vector<attachment_description>& attachments, const pipeline_definition& default_definition, const VkSpecializationInfo* specialization_info)
 : base{},
-  _pass{pass},
   _bind_point{VK_PIPELINE_BIND_POINT_GRAPHICS} {
 
   _name = shaders.name;
@@ -125,10 +123,10 @@ graphics_pipeline::graphics_pipeline(const compiled_shaders& shaders, const rend
     throw std::runtime_error{"Required fragment shader not found"};
   }
 
-  _initialize(default_definition, specialization_info);
+  _initialize(attachments, default_definition, specialization_info);
 }
 
-auto graphics_pipeline::_initialize(const pipeline_definition& definition, const VkSpecializationInfo* specialization_info) -> void {
+auto graphics_pipeline::_initialize(const std::vector<attachment_description>& attachments, const pipeline_definition& definition, const VkSpecializationInfo* specialization_info) -> void {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 
   const auto& logical_device = graphics_module.logical_device();
@@ -314,25 +312,23 @@ auto graphics_pipeline::_initialize(const pipeline_definition& definition, const
   color_blend_attachment_disabled.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
   color_blend_attachment_disabled.alphaBlendOp = VK_BLEND_OP_ADD;
 
-  const auto& attachments = _pass.outputs();
-
   auto color_blend_attachments = std::vector<VkPipelineColorBlendAttachmentState>{};
   color_blend_attachments.reserve(attachments.size());
 
   if (!definition.uses_transparency) {
     const auto color_attachments = std::ranges::count_if(attachments, [](const auto& attachment) {
-      return attachment.image_type() != attachment::type::depth;
+      return attachment.image_type != attachment::type::depth;
     });
 
     std::fill_n(std::back_inserter(color_blend_attachments), color_attachments, color_blend_attachment_disabled);
   } else {
-    const auto filer = std::views::filter([](const auto& attachment) { return attachment.image_type() != attachment::type::depth; });
+    const auto filer = std::views::filter([](const auto& attachment) { return attachment.image_type != attachment::type::depth; });
 
     for (const auto& attachment : attachments | filer) {
-      if (attachment.format() == graphics::format::r32_uint || attachment.format() == graphics::format::r64_uint || attachment.format() == graphics::format::r32g32_uint) {
+      if (attachment.format == graphics::format::r32_uint || attachment.format == graphics::format::r64_uint || attachment.format == graphics::format::r32g32_uint) {
         color_blend_attachments.push_back(color_blend_attachment_disabled);
       } else {
-        const auto& blend_state = attachment.blend_state();
+        const auto& blend_state = attachment.blend_state;
 
         auto color_blend_attachment = VkPipelineColorBlendAttachmentState{};
         color_blend_attachment.blendEnable = true;
@@ -367,11 +363,11 @@ auto graphics_pipeline::_initialize(const pipeline_definition& definition, const
   _rendering_info.stencil_format = VK_FORMAT_UNDEFINED;
 
   for (const auto& attachment : attachments) {
-    if (attachment.image_type() == attachment::type::depth) {
+    if (attachment.image_type == attachment::type::depth) {
       _rendering_info.depth_format = depth_image::format();
       _rendering_info.stencil_format = depth_image::format();
     } else {
-      _rendering_info.color_formats.push_back(to_vk_enum<VkFormat>(attachment.format()));
+      _rendering_info.color_formats.push_back(to_vk_enum<VkFormat>(attachment.format));
     }
   }
 

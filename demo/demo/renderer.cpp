@@ -33,95 +33,113 @@ namespace demo {
 
 renderer::renderer()
 : _clear_color{sbx::math::color::white()} {
-  auto [
-    deferred,
-    transparency,
-    resolve,
-    post, 
-    editor
-  ] = create_graph(
-    [&](sbx::graphics::render_graph::context& context) -> sbx::graphics::render_graph::graphics_pass {
-      auto deferred_pass = context.graphics_pass("deferred");
 
-      deferred_pass.produces("depth", sbx::graphics::attachment::type::depth);
-      deferred_pass.produces("albedo", sbx::graphics::attachment::type::image, _clear_color, sbx::graphics::format::r8g8b8a8_unorm);
-      deferred_pass.produces("position", sbx::graphics::attachment::type::image, sbx::math::color::black(), sbx::graphics::format::r16g16b16a16_sfloat);
-      deferred_pass.produces("normal", sbx::graphics::attachment::type::image, sbx::math::color::black(), sbx::graphics::format::a2b10g10r10_unorm_pack32);
-      deferred_pass.produces("material", sbx::graphics::attachment::type::image, _clear_color, sbx::graphics::format::r8g8b8a8_unorm);
-      deferred_pass.produces("emissive", sbx::graphics::attachment::type::image, _clear_color, sbx::graphics::format::r8g8b8a8_unorm);
-      deferred_pass.produces("object_id", sbx::graphics::attachment::type::image, sbx::math::color::black(), sbx::graphics::format::r32_uint);
-      deferred_pass.produces("linear_depth", sbx::graphics::attachment::type::image, sbx::math::color::black(), sbx::graphics::format::r32_sfloat);
+  auto depth = create_attachment("depth", sbx::graphics::attachment::type::depth);
+  auto albedo = create_attachment("albedo", sbx::graphics::attachment::type::image, _clear_color, sbx::graphics::format::r8g8b8a8_unorm);
+  auto position = create_attachment("position", sbx::graphics::attachment::type::image, sbx::math::color::black(), sbx::graphics::format::r16g16b16a16_sfloat);
+  auto normal = create_attachment("denormalpth", sbx::graphics::attachment::type::image, sbx::math::color::black(), sbx::graphics::format::a2b10g10r10_unorm_pack32);
+  auto material = create_attachment("material", sbx::graphics::attachment::type::image, _clear_color, sbx::graphics::format::r8g8b8a8_unorm);
+  auto emissive = create_attachment("emissive", sbx::graphics::attachment::type::image, _clear_color, sbx::graphics::format::r8g8b8a8_unorm);
+  auto object_id = create_attachment("object_id", sbx::graphics::attachment::type::image, sbx::math::color::black(), sbx::graphics::format::r32_uint);
+  auto linear_depth = create_attachment("linear_depth", sbx::graphics::attachment::type::image, sbx::math::color::black(), sbx::graphics::format::r32_sfloat);
 
-      return deferred_pass;
-    },
-    [&](sbx::graphics::render_graph::context& context) -> sbx::graphics::render_graph::graphics_pass {
-      auto transparency_pass = context.graphics_pass("transparency");
+  const auto accum_blend = sbx::graphics::blend_state{
+    .color_source = sbx::graphics::blend_factor::one,
+    .color_destination = sbx::graphics::blend_factor::one,
+    .color_operation = sbx::graphics::blend_operation::add,
+    .alpha_source = sbx::graphics::blend_factor::one,
+    .alpha_destination = sbx::graphics::blend_factor::one,
+    .alpha_operation = sbx::graphics::blend_operation::add,
+    .color_write_mask = sbx::graphics::color_component::r | sbx::graphics::color_component::g | sbx::graphics::color_component::b | sbx::graphics::color_component::a
+  };
 
-      const auto accum_blend = sbx::graphics::blend_state{
-        .color_source = sbx::graphics::blend_factor::one,
-        .color_destination = sbx::graphics::blend_factor::one,
-        .color_operation = sbx::graphics::blend_operation::add,
-        .alpha_source = sbx::graphics::blend_factor::one,
-        .alpha_destination = sbx::graphics::blend_factor::one,
-        .alpha_operation = sbx::graphics::blend_operation::add,
-        .color_write_mask = sbx::graphics::color_component::r | sbx::graphics::color_component::g | sbx::graphics::color_component::b | sbx::graphics::color_component::a
-      };
+  const auto revealage_blend = sbx::graphics::blend_state{
+    .color_source = sbx::graphics::blend_factor::zero,
+    .color_destination = sbx::graphics::blend_factor::one_minus_source_color,
+    .color_operation = sbx::graphics::blend_operation::add,
+    .alpha_source = sbx::graphics::blend_factor::zero,
+    .alpha_destination = sbx::graphics::blend_factor::one_minus_source_alpha,
+    .alpha_operation = sbx::graphics::blend_operation::add,
+    .color_write_mask = sbx::graphics::color_component::r
+  };
 
-      const auto revealage_blend = sbx::graphics::blend_state{
-        .color_source = sbx::graphics::blend_factor::zero,
-        .color_destination = sbx::graphics::blend_factor::one_minus_source_color,
-        .color_operation = sbx::graphics::blend_operation::add,
-        .alpha_source = sbx::graphics::blend_factor::zero,
-        .alpha_destination = sbx::graphics::blend_factor::one_minus_source_alpha,
-        .alpha_operation = sbx::graphics::blend_operation::add,
-        .color_write_mask = sbx::graphics::color_component::r
-      };
+  auto accum = create_attachment("accum", sbx::graphics::attachment::type::image, sbx::math::color{0.0f, 0.0f, 0.0f, 0.0f}, sbx::graphics::format::r32g32b32a32_sfloat, accum_blend);
+  auto revealage = create_attachment("revealage", sbx::graphics::attachment::type::image, sbx::math::color{1.0f, 0.0f, 0.0f, 0.0f}, sbx::graphics::format::r32_sfloat, revealage_blend);
 
-      transparency_pass.produces("depth", sbx::graphics::attachment::type::depth);
-      transparency_pass.produces("accum", sbx::graphics::attachment::type::image, sbx::math::color{0.0f, 0.0f, 0.0f, 0.0f}, sbx::graphics::format::r32g32b32a32_sfloat, accum_blend);
-      transparency_pass.produces("revealage", sbx::graphics::attachment::type::image, sbx::math::color{1.0f, 0.0f, 0.0f, 0.0f}, sbx::graphics::format::r32_sfloat, revealage_blend);
+  const auto resolve_blend = sbx::graphics::blend_state{
+    .color_source = sbx::graphics::blend_factor::source_alpha,
+    .color_destination = sbx::graphics::blend_factor::one_minus_source_alpha,
+    .color_operation = sbx::graphics::blend_operation::add,
+    .alpha_source = sbx::graphics::blend_factor::source_alpha,
+    .alpha_destination = sbx::graphics::blend_factor::one_minus_source_alpha,
+    .alpha_operation = sbx::graphics::blend_operation::add,
+    .color_write_mask = sbx::graphics::color_component::r | sbx::graphics::color_component::g | sbx::graphics::color_component::b | sbx::graphics::color_component::a
+  };
 
-      return transparency_pass;
-    },
-    [&](sbx::graphics::render_graph::context& context) -> sbx::graphics::render_graph::graphics_pass {
-      auto resolve_pass = context.graphics_pass("resolve");
+  auto resolve = create_attachment("resolve", sbx::graphics::attachment::type::image, _clear_color, sbx::graphics::format::r32g32b32a32_sfloat, resolve_blend);
 
-      const auto resolve_blend = sbx::graphics::blend_state{
-        .color_source = sbx::graphics::blend_factor::source_alpha,
-        .color_destination = sbx::graphics::blend_factor::one_minus_source_alpha,
-        .color_operation = sbx::graphics::blend_operation::add,
-        .alpha_source = sbx::graphics::blend_factor::source_alpha,
-        .alpha_destination = sbx::graphics::blend_factor::one_minus_source_alpha,
-        .alpha_operation = sbx::graphics::blend_operation::add,
-        .color_write_mask = sbx::graphics::color_component::r | sbx::graphics::color_component::g | sbx::graphics::color_component::b | sbx::graphics::color_component::a
-      };
+  auto fxaa = create_attachment("fxaa", sbx::graphics::attachment::type::image, _clear_color, sbx::graphics::format::r8g8b8a8_unorm);
 
-      resolve_pass.uses("albedo", "position", "normal", "material", "emissive", "object_id", "accum", "revealage");
+  auto swapchain = create_attachment("swapchain", sbx::graphics::attachment::type::swapchain, _clear_color, sbx::graphics::format::b8g8r8a8_srgb);
 
-      resolve_pass.produces("depth", sbx::graphics::attachment::type::depth);
-      resolve_pass.produces("resolve", sbx::graphics::attachment::type::image, _clear_color, sbx::graphics::format::r32g32b32a32_sfloat, resolve_blend);
+  auto deferred = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
+    auto pass = context.graphics_pass("deferred");
 
-      return resolve_pass;
-    },
-    [&](sbx::graphics::render_graph::context& context) -> sbx::graphics::render_graph::graphics_pass {
-      auto post_pass = context.graphics_pass("post");
+    pass.writes(depth, sbx::graphics::attachment_load_operation::clear);
+    pass.writes(albedo, sbx::graphics::attachment_load_operation::clear);
+    pass.writes(position, sbx::graphics::attachment_load_operation::clear);
+    pass.writes(normal, sbx::graphics::attachment_load_operation::clear);
 
-      post_pass.uses("resolve");
+    return pass;
+  });
 
-      post_pass.produces("post", sbx::graphics::attachment::type::image, _clear_color, sbx::graphics::format::r8g8b8a8_unorm);
+  auto transparency = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
+    auto pass = context.graphics_pass("transparency");
 
-      return post_pass;
-    },
-    [&](sbx::graphics::render_graph::context& context) -> sbx::graphics::render_graph::graphics_pass {
-      auto editor_pass = context.graphics_pass("editor");
+    pass.depends_on(deferred);
 
-      editor_pass.uses("post");
+    pass.writes(depth, sbx::graphics::attachment_load_operation::load);
+    pass.writes(accum, sbx::graphics::attachment_load_operation::clear);
+    pass.writes(revealage, sbx::graphics::attachment_load_operation::clear);
 
-      editor_pass.produces("swapchain", sbx::graphics::attachment::type::swapchain, _clear_color, sbx::graphics::format::b8g8r8a8_srgb);
+    return pass;
+  });
 
-      return editor_pass;
-    }
-  );
+  auto resolve = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
+    auto pass = context.graphics_pass("deferred");
+
+    pass.depends_on(deferred, transparency);
+
+    pass.reads(albedo, position, normal, material, emissive, object_id, accum, revealage);
+
+    pass.writes(resolve, sbx::graphics::attachment_load_operation::clear);
+
+    return pass;
+  });
+
+  auto fxaa = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
+    auto pass = context.graphics_pass("fxaa");
+
+    pass.depends_on(resolve);
+
+    pass.reads(resolve);
+
+    pass.writes(fxaa, sbx::graphics::attachment_load_operation::clear);
+
+    return pass;
+  });
+
+  auto editor = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
+    auto pass = context.graphics_pass("editor");
+
+    pass.depends_on(fxaa);
+
+    pass.reads(fxaa);
+
+    pass.writes(swapchain, sbx::graphics::attachment_load_operation::clear);
+
+    return pass;
+  });
 
   // Draw lists
   add_draw_list<sbx::models::static_mesh_material_draw_list>("static_mesh_material");

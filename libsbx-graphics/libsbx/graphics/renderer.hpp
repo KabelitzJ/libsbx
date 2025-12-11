@@ -31,16 +31,14 @@ public:
 
   virtual ~renderer() = default;
 
-  // virtual auto initialize() -> void = 0;
-
   auto render(command_buffer& command_buffer, const swapchain& swapchain) -> void {
-    _graph.execute(command_buffer, swapchain, [this, &command_buffer](const auto& pass_name) {
-      if (auto entry = _subrenderers.find(pass_name); entry != _subrenderers.end()) {
-        for (auto& subrenderer : entry->second) {
-          subrenderer->render(command_buffer);
-        }
-      }
-    });
+    // _graph.execute(command_buffer, swapchain, [this, &command_buffer](const auto& pass_name) {
+    //   if (auto entry = _subrenderers.find(pass_name); entry != _subrenderers.end()) {
+    //     for (auto& subrenderer : entry->second) {
+    //       subrenderer->render(command_buffer);
+    //     }
+    //   }
+    // });
   }
 
   auto execute_tasks(command_buffer& command_buffer) -> void {
@@ -50,21 +48,31 @@ public:
   }
 
   auto resize(const viewport::type flags) -> void {
-    _graph.resize(flags);
+    // _graph.resize(flags);
   }
 
   auto attachment(const std::string& name) const -> const descriptor& {
-    return _graph.attachment(name);
+    return _graph.find_attachment(name);
+  }
+
+  template<typename Type>
+  requires (std::is_base_of_v<draw_list, Type>)
+  auto draw_list(const utility::hashed_string& name) -> Type& {
+    if (auto entry = _draw_lists.find(name); entry != _draw_lists.end()) {
+      return *static_cast<Type*>(entry->second.get());
+    }
+
+    throw utility::runtime_error{"Draw list with name '{}' not found", name.str()};
   }
 
 protected:
 
   template<typename Type, typename... Args>
-  requires (std::is_constructible_v<Type, const render_graph::graphics_pass&, Args...>)
-  auto add_subrenderer(const render_graph::graphics_pass& pass, Args&&... args) -> Type& {
-    auto& subrenderers = _subrenderers[pass.name()];
+  requires (std::is_constructible_v<Type, Args...>)
+  auto add_subrenderer(const pass_handle handle, Args&&... args) -> Type& {
+    auto& subrenderers = _subrenderers[handle.index];
 
-    subrenderers.emplace_back(std::make_unique<Type>(pass, std::forward<Args>(args)...));
+    subrenderers.emplace_back(std::make_unique<Type>(_graph.attachment_descriptions(handle), std::forward<Args>(args)...));
 
     return *static_cast<Type*>(subrenderers.back().get());
   }
@@ -72,32 +80,30 @@ protected:
   template<typename Type, typename... Args>
   requires (std::is_constructible_v<Type, Args...>)
   auto add_draw_list(const utility::hashed_string& name, Args&&... args) -> Type& {
-    return _graph.add_draw_list<Type>(name, std::forward<Args>(args)...);
+    auto result = _draw_lists.emplace(name, std::make_unique<Type>(std::forward<Args>(args)...));
+    return *static_cast<Type*>(result.first->second.get());
   }
 
-  template<typename... Callables>
-  requires (sizeof...(Callables) > 1u)
-  auto create_graph(Callables&&... callables) -> decltype(auto) {
-    auto passes = _graph.emplace(std::forward<Callables>(callables)...);
-
-    _graph.build();
-
-    return passes;
+  template<typename... Args>
+  auto create_attachment(Args&&... args) -> attachment_handle {
+    return _graph.create_attachment(std::forward<Args>(args)...);
   }
 
-  // template<typename Type, typename... Args>
-  // requires (std::is_constructible_v<Type, std::filesystem::path, Args...>)
-  // auto add_task(const std::filesystem::path& path, Args&&... args) -> Type& {
-  //   _tasks.push_back(std::make_unique<Type>(path, std::forward<Args>(args)...));
+  template<typename... Args>
+  auto create_pass(Args&&... args) -> pass_handle {
+    return _graph.create_pass(std::forward<Args>(args)...);
+  }
 
-  //   return *static_cast<Type*>(_tasks.back().get());
-  // }
+  auto attachment_descriptions(const pass_handle handle) const -> std::vector<attachment_description> {
+    return _graph.attachment_descriptions(handle);
+  }
 
 private:
 
   std::vector<std::unique_ptr<graphics::task>> _tasks;
 
-  std::unordered_map<utility::hashed_string, std::vector<std::unique_ptr<subrenderer>>> _subrenderers;
+  std::unordered_map<std::uint32_t, std::vector<std::unique_ptr<subrenderer>>> _subrenderers;
+  std::unordered_map<utility::hashed_string, std::unique_ptr<graphics::draw_list>> _draw_lists;
 
   render_graph _graph;
 

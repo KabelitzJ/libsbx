@@ -53,10 +53,10 @@ class gizmos_subrenderer final : public graphics::subrenderer {
 
 public:
 
-  gizmos_subrenderer(const graphics::render_graph::graphics_pass& pass, const std::filesystem::path& path, const std::string& depth_image)
-  : graphics::subrenderer{pass},
-    _depth_image{depth_image},
-    _pipeline{path, pass} { }
+  gizmos_subrenderer(const std::vector<graphics::attachment_description>& attachments, const std::filesystem::path& path, const std::string& depth_image)
+  : graphics::subrenderer{},
+    _pipeline{path, attachments},
+    _depth_image{depth_image} { }
 
   ~gizmos_subrenderer() override = default;
 
@@ -182,9 +182,9 @@ private:
     }
   }; // struct mesh_key_equal
 
-  std::string _depth_image;
-
   pipeline _pipeline;
+
+  std::string _depth_image;
 
   std::unordered_map<mesh_key, uniform_data, mesh_key_hash, mesh_key_equal> _uniform_data;
   std::unordered_set<mesh_key, mesh_key_hash, mesh_key_equal> _used_uniforms;

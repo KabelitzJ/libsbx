@@ -146,8 +146,9 @@ class skinned_mesh_subrenderer final : public graphics::subrenderer {
 
 public:
 
-  skinned_mesh_subrenderer(const graphics::render_graph::graphics_pass& pass, const std::filesystem::path& base_pipeline, const skinned_mesh_material_draw_list::bucket bucket) 
-  : graphics::subrenderer{pass}, 
+  skinned_mesh_subrenderer(const std::vector<graphics::attachment_description>& attachments, const std::filesystem::path& base_pipeline, const skinned_mesh_material_draw_list::bucket bucket) 
+  : graphics::subrenderer{},
+    _attachments{attachments},
     _base_pipeline{base_pipeline}, 
     _bucket{bucket} { }
 
@@ -157,14 +158,16 @@ public:
 
   auto render(graphics::command_buffer& command_buffer) -> void override {
     auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
+    auto& renderer = graphics_module.renderer();
+
     auto& assets_module = core::engine::get_module<assets::assets_module>();
     auto& scene = core::engine::get_module<scenes::scenes_module>().scene();
 
     // obtain the skinned draw list from the pass (name must match your render graph)
-    auto& draw_list = pass().template draw_list<skinned_mesh_material_draw_list>("skinned_mesh_material");
+    auto& draw_list = renderer.template draw_list<skinned_mesh_material_draw_list>("skinned_mesh_material");
 
     for (auto& [key, data] : draw_list.ranges(_bucket)) {
-      auto& pipeline_data = _get_or_create_pipeline(key, pass());
+      auto& pipeline_data = _get_or_create_pipeline(key);
       auto& pipeline = graphics_module.get_resource<graphics::graphics_pipeline>(pipeline_data.pipeline);
 
       pipeline.bind(command_buffer);
@@ -219,7 +222,7 @@ private:
 
   }; // struct pipeline_data
 
-  auto _get_or_create_pipeline(const models::material_key& key, const graphics::render_graph::graphics_pass& pass) -> pipeline_data& {
+  auto _get_or_create_pipeline(const models::material_key& key) -> pipeline_data& {
     auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 
     if (auto it = _pipeline_cache.find(key); it != _pipeline_cache.end()) {
@@ -244,7 +247,7 @@ private:
     const auto result = compiler.compile(request);
 
     auto compiled = graphics::graphics_pipeline::compiled_shaders{ _base_pipeline.filename().string(), result.code };
-    auto handle = graphics_module.add_resource<graphics::graphics_pipeline>(compiled, pass, definition);
+    auto handle = graphics_module.add_resource<graphics::graphics_pipeline>(compiled, _attachments, definition);
 
     auto [entry, inserted] = _pipeline_cache.emplace(key, handle);
 
@@ -258,6 +261,7 @@ private:
     "skinned_blend_main"    // alpha_mode::blend
   };
 
+  std::vector<graphics::attachment_description> _attachments;
   std::filesystem::path _base_pipeline;
   skinned_mesh_material_draw_list::bucket _bucket;
 

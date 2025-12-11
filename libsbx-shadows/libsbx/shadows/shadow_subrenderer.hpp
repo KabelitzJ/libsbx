@@ -62,8 +62,8 @@ class shadow_subrenderer : public graphics::subrenderer {
 
   public:
 
-    pipeline(const std::filesystem::path& path, const graphics::render_graph::graphics_pass& pass)
-    : base{path, pass, pipeline_definition} { }
+    pipeline(const std::filesystem::path& path, const std::vector<graphics::attachment_description>& attachments)
+    : base{path, attachments, pipeline_definition} { }
 
     ~pipeline() override = default;
 
@@ -71,9 +71,9 @@ class shadow_subrenderer : public graphics::subrenderer {
 
 public:
 
-  shadow_subrenderer(const graphics::render_graph::graphics_pass& pass, const std::filesystem::path& path)
-  : graphics::subrenderer{pass},
-    _pipeline{path, pass},
+  shadow_subrenderer(const std::vector<graphics::attachment_description>& attachments, const std::filesystem::path& path)
+  : graphics::subrenderer{},
+    _pipeline{path, attachments},
     _push_handler{_pipeline},
     _scene_descriptor_handler{_pipeline, 0u} { }
 

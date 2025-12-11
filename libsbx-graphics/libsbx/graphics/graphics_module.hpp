@@ -134,6 +134,10 @@ public:
     return _allocator;
   }
 
+  auto renderer() -> renderer& {
+    return *_renderer;
+  }
+
   template<queue::type Source, queue::type Destination, typename Type>
   requires (std::is_same_v<Type, graphics::buffer> || std::is_same_v<Type, graphics::storage_buffer>)
   auto transfer_ownership(const resource_handle<Type>& handle, const VkPipelineStageFlagBits2 stage = VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT) -> void {

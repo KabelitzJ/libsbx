@@ -24,8 +24,8 @@ class pipeline : public graphics::graphics_pipeline {
 
 public:
 
-  pipeline(const std::filesystem::path& path, const graphics::render_graph::graphics_pass& pass)
-  : base{path, pass, pipeline_definition} { }
+  pipeline(const std::filesystem::path& path, const std::vector<graphics::attachment_description>& attachments)
+  : base{path, attachments, pipeline_definition} { }
 
   ~pipeline() override = default;
 

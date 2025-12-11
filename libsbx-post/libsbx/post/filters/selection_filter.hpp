@@ -15,8 +15,8 @@ class selection_filter final : public filter {
 
 public:
 
-  selection_filter(const graphics::render_graph::graphics_pass& pass, const std::filesystem::path& path, std::vector<std::pair<std::string, std::string>>&& attachment_names)
-  : base{pass, path},
+  selection_filter(const std::vector<graphics::attachment_description>& attachments, const std::filesystem::path& path, std::vector<std::pair<std::string, std::string>>&& attachment_names)
+  : base{attachments, path},
     _push_handler{base::pipeline()},
     _attachment_names{std::move(attachment_names)} { }
 

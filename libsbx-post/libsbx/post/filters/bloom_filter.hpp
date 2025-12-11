@@ -16,8 +16,8 @@ class bloom_filter final : public filter {
 
 public:
 
-  bloom_filter(const graphics::render_graph::graphics_pass& pass, const std::filesystem::path& path, const std::string& attachment_name, std::float_t threshold, std::float_t intensity)
-  : base{pass, path, base::default_pipeline_definition},
+  bloom_filter(const std::vector<graphics::attachment_description>& attachments, const std::filesystem::path& path, const std::string& attachment_name, std::float_t threshold, std::float_t intensity)
+  : base{attachments, path, base::default_pipeline_definition},
     _push_handler{base::pipeline()},
     _attachment_name{attachment_name},
     _threshold{threshold},

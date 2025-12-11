@@ -13,7 +13,7 @@ class planet_generator_task final : public sbx::graphics::task {
 
 public:
 
-  planet_generator_task(const std::filesystem::path& path, const sbx::graphics::render_graph::compute_pass& pass)
+  planet_generator_task(const std::filesystem::path& path)
   : _pipeline{path},
     _output_vertex_storage_handler{VK_BUFFER_USAGE_VERTEX_BUFFER_BIT},
     _output_index_storage_handler{VK_BUFFER_USAGE_INDEX_BUFFER_BIT},

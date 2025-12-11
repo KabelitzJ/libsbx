@@ -68,7 +68,7 @@ public:
 protected:
 
   template<typename Type, typename... Args>
-  requires (std::is_constructible_v<Type, Args...>)
+  requires (std::is_constructible_v<Type, const std::vector<sbx::graphics::attachment_description>&, Args...>)
   auto add_subrenderer(const pass_handle handle, Args&&... args) -> Type& {
     auto& subrenderers = _subrenderers[handle.index];
 
@@ -81,6 +81,7 @@ protected:
   requires (std::is_constructible_v<Type, Args...>)
   auto add_draw_list(const utility::hashed_string& name, Args&&... args) -> Type& {
     auto result = _draw_lists.emplace(name, std::make_unique<Type>(std::forward<Args>(args)...));
+
     return *static_cast<Type*>(result.first->second.get());
   }
 
@@ -89,9 +90,9 @@ protected:
     return _graph.create_attachment(std::forward<Args>(args)...);
   }
 
-  template<typename... Args>
-  auto create_pass(Args&&... args) -> pass_handle {
-    return _graph.create_pass(std::forward<Args>(args)...);
+  template<typename Callable>
+  auto create_pass(Callable&& callable) -> pass_handle {
+    return _graph.create_pass(std::forward<Callable>(callable));
   }
 
   auto attachment_descriptions(const pass_handle handle) const -> std::vector<attachment_description> {

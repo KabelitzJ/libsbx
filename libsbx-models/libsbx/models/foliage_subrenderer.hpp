@@ -35,8 +35,8 @@ class foliage_subrenderer final : public sbx::graphics::subrenderer {
   
   public:
   
-    pipeline(const std::filesystem::path& path, const graphics::render_graph::graphics_pass& pass)
-    : base_type{path, pass, pipeline_definition} { }
+    pipeline(const std::filesystem::path& path, const std::vector<graphics::attachment_description>& attachments)
+    : base_type{path, attachments, pipeline_definition} { }
   
     ~pipeline() override = default;
   
@@ -44,9 +44,9 @@ class foliage_subrenderer final : public sbx::graphics::subrenderer {
 
 public:
 
-  foliage_subrenderer(const graphics::render_graph::graphics_pass& pass, const std::filesystem::path& path, const graphics::storage_buffer_handle& grass_buffer, const graphics::storage_buffer_handle& draw_command_buffer)
-  : sbx::graphics::subrenderer{pass},
-    _pipeline{path, pass},
+  foliage_subrenderer(const std::vector<graphics::attachment_description>& attachments, const std::filesystem::path& path, const graphics::storage_buffer_handle& grass_buffer, const graphics::storage_buffer_handle& draw_command_buffer)
+  : sbx::graphics::subrenderer{},
+    _pipeline{path, attachments},
     _push_handler{_pipeline},
     _grass_buffer{grass_buffer},
     _draw_command_buffer{draw_command_buffer} {

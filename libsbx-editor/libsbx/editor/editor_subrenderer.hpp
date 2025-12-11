@@ -51,10 +51,10 @@ class editor_subrenderer final : public sbx::graphics::subrenderer {
 
 public:
 
-  editor_subrenderer(const sbx::graphics::render_graph::graphics_pass& pass, const std::filesystem::path& path, const std::string& attachment_name)
-  : base{pass},
+  editor_subrenderer(const std::vector<sbx::graphics::attachment_description>& attachments, const std::filesystem::path& path, const std::string& attachment_name)
+  : base{},
     _attachment_name{attachment_name},
-    _pipeline{path, pass},
+    _pipeline{path, attachments},
     _descriptor_handler{_pipeline, 0u},
     _show_demo_window{false},
     _clear_color{sbx::math::color::black()},

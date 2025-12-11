@@ -26,8 +26,8 @@ class pipeline : public sbx::graphics::graphics_pipeline {
 
 public:
 
-  pipeline(const std::filesystem::path& path, const sbx::graphics::render_graph::graphics_pass& pass)
-  : base_type{path, pass, pipeline_definition} { }
+  pipeline(const std::filesystem::path& path, const std::vector<sbx::graphics::attachment_description>& attachments)
+  : base_type{path, attachments, pipeline_definition} { }
 
   ~pipeline() override = default;
 

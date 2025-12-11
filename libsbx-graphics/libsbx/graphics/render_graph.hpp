@@ -160,20 +160,28 @@ public:
   pass_node(const utility::hashed_string& name)
   : _name{name} { }
 
+  auto reads(const attachment_handle attachment) -> void {
+    _reads.emplace_back(attachment);
+  }
+
   template<typename... Attachments>
-  requires (std::is_same_v<Attachments, attachment_handle>, ...)
+  requires (sizeof...(Attachments) > 1u && (std::is_same_v<std::remove_cvref_t<Attachments>, attachment_handle> && ...))
   auto reads(Attachments&&... attachments) -> void {
-    (_reads.emplace_back(attachments), ...);
+    (reads(attachments), ...);
   }
 
   auto writes(const attachment_handle attachment, const attachment_load_operation load_operation = attachment_load_operation::clear) -> void {
     _writes.emplace_back(attachment, load_operation);
   }
 
+  auto depends_on(const pass_handle pass) -> void {
+    _dependencies.emplace_back(pass);
+  }
+
   template<typename... Passes>
-  requires (std::is_same_v<Passes, pass_handle>, ...)
+  requires (sizeof...(Passes) > 1u && (std::is_same_v<std::remove_cvref_t<Passes>, pass_handle> && ...))
   auto depends_on(Passes&&... passes) -> void {
-    (_dependencies.emplace_back(passes), ...);
+    (depends_on(passes), ...);
   }
 
 private:
@@ -184,17 +192,17 @@ private:
   std::vector<pass_handle> _dependencies;
 }; // struct pass_node
 
-struct context {
-
-  auto graphics_pass(const utility::hashed_string& name) const -> pass_node {
-    return pass_node{name};
-  }
-
-}; // struct context
-
 class render_graph {
 
 public:
+
+  struct context {
+
+    auto graphics_pass(const utility::hashed_string& name) const -> pass_node {
+      return pass_node{name};
+    }
+
+  }; // struct context
 
   render_graph() {
 
@@ -211,7 +219,7 @@ public:
   }
 
   template<typename Callable>
-  requires (std::is_invocable_r_v<pass_node, context&>)
+  requires (std::is_invocable_r_v<pass_node, Callable, context&>)
   auto create_pass(Callable&& callable) -> pass_handle {
     auto index = static_cast<std::uint32_t>(_passes.size());
 

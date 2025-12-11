@@ -22,9 +22,9 @@ class terrain_subrenderer final : public sbx::graphics::subrenderer {
 
 public:
 
-  terrain_subrenderer(const sbx::graphics::render_graph::graphics_pass& pass, const std::filesystem::path& path)
-  : base{pass},
-    _pipeline{path, pass},
+  terrain_subrenderer(const std::vector<sbx::graphics::attachment_description>& attachments, const std::filesystem::path& path)
+  : base{},
+    _pipeline{path, attachments},
     _push_handler{_pipeline},
     _descriptor_handler{_pipeline, 0u} { }
 

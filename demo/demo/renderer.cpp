@@ -82,7 +82,7 @@ renderer::renderer()
 
   auto swapchain = create_attachment("swapchain", sbx::graphics::attachment::type::swapchain, _clear_color, sbx::graphics::format::b8g8r8a8_srgb);
 
-  auto deferred = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
+  auto deferred_pass = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
     auto pass = context.graphics_pass("deferred");
 
     pass.writes(depth, sbx::graphics::attachment_load_operation::clear);
@@ -93,10 +93,10 @@ renderer::renderer()
     return pass;
   });
 
-  auto transparency = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
+  auto transparency_pass = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
     auto pass = context.graphics_pass("transparency");
 
-    pass.depends_on(deferred);
+    pass.depends_on(deferred_pass);
 
     pass.writes(depth, sbx::graphics::attachment_load_operation::load);
     pass.writes(accum, sbx::graphics::attachment_load_operation::clear);
@@ -105,10 +105,10 @@ renderer::renderer()
     return pass;
   });
 
-  auto resolve = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
-    auto pass = context.graphics_pass("deferred");
+  auto resolve_pass = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
+    auto pass = context.graphics_pass("resolve");
 
-    pass.depends_on(deferred, transparency);
+    pass.depends_on(deferred_pass, transparency_pass);
 
     pass.reads(albedo, position, normal, material, emissive, object_id, accum, revealage);
 
@@ -117,10 +117,10 @@ renderer::renderer()
     return pass;
   });
 
-  auto fxaa = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
+  auto fxaa_pass = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
     auto pass = context.graphics_pass("fxaa");
 
-    pass.depends_on(resolve);
+    pass.depends_on(resolve_pass);
 
     pass.reads(resolve);
 
@@ -129,10 +129,10 @@ renderer::renderer()
     return pass;
   });
 
-  auto editor = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
+  auto editor_pass = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
     auto pass = context.graphics_pass("editor");
 
-    pass.depends_on(fxaa);
+    pass.depends_on(fxaa_pass);
 
     pass.reads(fxaa);
 
@@ -149,12 +149,12 @@ renderer::renderer()
   // add_subrenderer<sbx::shadows::shadow_subrenderer>(shadow, "res://shaders/shadow");
 
   // Deferred pass
-  add_subrenderer<sbx::models::static_mesh_subrenderer>(deferred, "res://shaders/deferred_pbr_material", sbx::models::static_mesh_material_draw_list::bucket::opaque);
-  add_subrenderer<sbx::animations::skinned_mesh_subrenderer>(deferred, "res://shaders/deferred_pbr_material", sbx::animations::skinned_mesh_material_draw_list::bucket::opaque);
+  add_subrenderer<sbx::models::static_mesh_subrenderer>(deferred_pass, "res://shaders/deferred_pbr_material", sbx::models::static_mesh_material_draw_list::bucket::opaque);
+  add_subrenderer<sbx::animations::skinned_mesh_subrenderer>(deferred_pass, "res://shaders/deferred_pbr_material", sbx::animations::skinned_mesh_material_draw_list::bucket::opaque);
 
   // Transparency pass
-  add_subrenderer<sbx::models::static_mesh_subrenderer>(transparency, "res://shaders/deferred_pbr_material", sbx::models::static_mesh_material_draw_list::bucket::transparent);
-  add_subrenderer<sbx::animations::skinned_mesh_subrenderer>(transparency, "res://shaders/deferred_pbr_material", sbx::animations::skinned_mesh_material_draw_list::bucket::transparent);
+  add_subrenderer<sbx::models::static_mesh_subrenderer>(transparency_pass, "res://shaders/deferred_pbr_material", sbx::models::static_mesh_material_draw_list::bucket::transparent);
+  add_subrenderer<sbx::animations::skinned_mesh_subrenderer>(transparency_pass, "res://shaders/deferred_pbr_material", sbx::animations::skinned_mesh_material_draw_list::bucket::transparent);
 
   // Resolve pass
   auto resolve_opaque_attachment_names = std::vector<std::pair<std::string, std::string>>{
@@ -167,26 +167,26 @@ renderer::renderer()
     // {"object_id_image", "object_id"}
   };
 
-  add_subrenderer<sbx::post::resolve_opaque_filter>(resolve, "res://shaders/resolve_opaque", std::move(resolve_opaque_attachment_names));
+  add_subrenderer<sbx::post::resolve_opaque_filter>(resolve_pass, "res://shaders/resolve_opaque", std::move(resolve_opaque_attachment_names));
 
-  add_subrenderer<sbx::scenes::skybox_subrenderer>(resolve, "res://shaders/skybox");
+  add_subrenderer<sbx::scenes::skybox_subrenderer>(resolve_pass, "res://shaders/skybox");
 
   auto resolve_transparent_attachment_names = std::vector<std::pair<std::string, std::string>>{
     {"accum_image", "accum"},
     {"revealage_image", "revealage"}
   };
 
-  add_subrenderer<sbx::post::resolve_transparent_filter>(resolve, "res://shaders/resolve_transparent", std::move(resolve_transparent_attachment_names));
+  add_subrenderer<sbx::post::resolve_transparent_filter>(resolve_pass, "res://shaders/resolve_transparent", std::move(resolve_transparent_attachment_names));
 
-  add_subrenderer<sbx::scenes::grid_subrenderer>(resolve, "res://shaders/grid");
+  add_subrenderer<sbx::scenes::grid_subrenderer>(resolve_pass, "res://shaders/grid");
 
-  add_subrenderer<sbx::scenes::debug_subrenderer>(resolve, "res://shaders/debug");
+  add_subrenderer<sbx::scenes::debug_subrenderer>(resolve_pass, "res://shaders/debug");
 
   // Post-processing pass
-  add_subrenderer<sbx::post::fxaa_filter>(post, "res://shaders/fxaa", "resolve");
+  add_subrenderer<sbx::post::fxaa_filter>(fxaa_pass, "res://shaders/fxaa", "resolve");
 
   // Editor pass
-  add_subrenderer<sbx::editor::editor_subrenderer>(editor, "res://shaders/editor", "post");
+  add_subrenderer<sbx::editor::editor_subrenderer>(editor_pass, "res://shaders/editor", "post");
 }
 
 } // namespace demo

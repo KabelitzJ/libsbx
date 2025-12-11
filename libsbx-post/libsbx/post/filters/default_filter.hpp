@@ -16,8 +16,8 @@ class default_filter final : public filter {
 
 public:
 
-  default_filter(const graphics::render_graph::graphics_pass& pass, const std::filesystem::path& path, const std::string& attachment_name)
-  : base_type{pass, path},
+  default_filter(const std::vector<graphics::attachment_description>& attachments, const std::filesystem::path& path, const std::string& attachment_name)
+  : base_type{attachments, path},
     _attachment_name{attachment_name} { }
 
   ~default_filter() override = default;

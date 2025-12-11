@@ -37,7 +37,7 @@ class foliage_task final : public graphics::task {
 
 public:
 
-  foliage_task(const std::filesystem::path& path, const graphics::render_graph::compute_pass& pass)
+  foliage_task(const std::filesystem::path& path)
   : _pipeline{path},
     _push_handler{_pipeline},
     _blades{_generate_blades(math::vector3::zero, 20.0f, count)} {

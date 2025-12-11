@@ -134,8 +134,9 @@ class static_mesh_subrenderer final : public graphics::subrenderer {
 
 public:
 
-  static_mesh_subrenderer(const graphics::render_graph::graphics_pass& pass, const std::filesystem::path& base_pipeline, const static_mesh_material_draw_list::bucket bucket)
-  : graphics::subrenderer{pass},
+  static_mesh_subrenderer(const std::vector<graphics::attachment_description>& attachments, const std::filesystem::path& base_pipeline, const static_mesh_material_draw_list::bucket bucket)
+  : graphics::subrenderer{},
+    _attachments{attachments},
     _base_pipeline{base_pipeline},
     _bucket{bucket} { }
 
@@ -149,16 +150,17 @@ public:
     SBX_PROFILE_SCOPE("static_mesh_subrenderer::render");
 
     auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
+    auto& renderer = graphics_module.renderer();
 
     auto& assets_module = core::engine::get_module<assets::assets_module>();
 
     auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
     auto& scene = scenes_module.scene();
 
-    auto& draw_list = pass().draw_list<models::static_mesh_material_draw_list>("static_mesh_material");
+    auto& draw_list = renderer.draw_list<models::static_mesh_material_draw_list>("static_mesh_material");
 
     for (auto& [key, data] : draw_list.ranges(_bucket)) {
-      auto& pipeline_data = _get_or_create_pipeline(key, pass());
+      auto& pipeline_data = _get_or_create_pipeline(key);
 
       auto& pipeline = graphics_module.get_resource<graphics::graphics_pipeline>(pipeline_data.pipeline);
 
@@ -215,7 +217,7 @@ private:
 
   }; // struct pipeline_data
 
-  auto _get_or_create_pipeline(const material_key& key, const graphics::render_graph::graphics_pass& pass) -> pipeline_data& {
+  auto _get_or_create_pipeline(const material_key& key) -> pipeline_data& {
     auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 
     if (auto entry = _pipeline_cache.find(key); entry != _pipeline_cache.end()) {
@@ -241,7 +243,7 @@ private:
 
     auto compiled_shaders = graphics::graphics_pipeline::compiled_shaders{_base_pipeline.filename().string(), result.code};
 
-    auto pipeline = graphics_module.add_resource<graphics::graphics_pipeline>(compiled_shaders, pass, definition);
+    auto pipeline = graphics_module.add_resource<graphics::graphics_pipeline>(compiled_shaders, _attachments, definition);
 
     auto [entry, inserted] = _pipeline_cache.emplace(key, pipeline);
 
@@ -254,6 +256,7 @@ private:
     "static_blend_main"    // alpha_mode::blend
   };
 
+  std::vector<graphics::attachment_description> _attachments;
   std::filesystem::path _base_pipeline;
   static_mesh_material_draw_list::bucket _bucket;
 

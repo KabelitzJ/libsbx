@@ -41,7 +41,7 @@ message(STATUS "SBX_CONSTEXPR_ENABLED: ${SBX_CONSTEXPR_ENABLED}")
 
 set(_USE_PROFILER_DEFAULT OFF)
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-    set(_USE_PROFILER_DEFAULT ON)
+  set(_USE_PROFILER_DEFAULT ON)
 endif()
 
 option(SBX_USE_PROFILER "Use profiler" ${_USE_PROFILER_DEFAULT})
@@ -112,3 +112,32 @@ target_link_libraries(libsbx INTERFACE ${_libsbx_targets})
 if (${SBX_BUILD_DEMO})
   add_subdirectory(demo)
 endif()
+
+include(GNUInstallDirs)
+include(CMakePackageConfigHelpers)
+
+install(
+  EXPORT libsbxTargets
+  NAMESPACE libsbx::
+  DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/libsbx
+)
+
+write_basic_package_version_file(
+  libsbxConfigVersion.cmake
+  VERSION ${PROJECT_VERSION}
+  COMPATIBILITY SameMajorVersion
+)
+
+configure_package_config_file(
+  ${CMAKE_SOURCE_DIR}/cmake/config/libsbxConfig.cmake.in
+  ${CMAKE_BINARY_DIR}/libsbxConfig.cmake
+  INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/libsbx
+)
+
+install(
+  FILES
+    ${CMAKE_BINARY_DIR}/libsbxConfig.cmake
+    ${CMAKE_BINARY_DIR}/libsbxConfigVersion.cmake
+  DESTINATION 
+    ${CMAKE_INSTALL_LIBDIR}/cmake/libsbx
+)

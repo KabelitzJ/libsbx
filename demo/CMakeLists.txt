@@ -70,7 +70,8 @@ target_compile_definitions(
 target_include_directories(
   ${PROJECT_NAME}
   PUBLIC
-    ${PROJECT_SOURCE_DIR}
+    $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}>
+    $<INSTALL_INTERFACE:include>
 )
 
 target_link_libraries(

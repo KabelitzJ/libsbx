@@ -35,7 +35,8 @@ target_sources(
 target_include_directories(
   ${PROJECT_NAME}
   PUBLIC
-    ${PROJECT_SOURCE_DIR}
+    $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}>
+    $<INSTALL_INTERFACE:include>
 )
 
 target_link_libraries(
@@ -43,7 +44,7 @@ target_link_libraries(
   PUBLIC
     # External dependencies
     fmt::fmt
-    yaml-cpp
+    yaml-cpp::yaml-cpp
     tinyobjloader::tinyobjloader
     nlohmann_json::nlohmann_json
     aklomp::base64
@@ -104,7 +105,7 @@ install(
   TARGETS
     ${PROJECT_NAME}
   EXPORT
-    ${PROJECT_NAME}Targets
+    libsbxTargets
   LIBRARY 
     DESTINATION lib
   ARCHIVE 

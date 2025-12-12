@@ -36,7 +36,8 @@ target_sources(
 target_include_directories(
   ${PROJECT_NAME}
   PUBLIC
-    ${PROJECT_SOURCE_DIR}
+    $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}>
+    $<INSTALL_INTERFACE:include>
 )
 
 target_link_libraries(
@@ -44,7 +45,7 @@ target_link_libraries(
   PUBLIC
     # External dependencies
     fmt::fmt
-    yaml-cpp
+    yaml-cpp::yaml-cpp
     range-v3::range-v3
     # Internal dependencies
     libsbx::utility
@@ -100,7 +101,7 @@ install(
   TARGETS
     ${PROJECT_NAME}
   EXPORT
-    ${PROJECT_NAME}Targets
+    libsbxTargets
   LIBRARY 
     DESTINATION lib
   ARCHIVE 

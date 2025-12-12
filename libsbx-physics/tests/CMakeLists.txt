@@ -16,7 +16,8 @@ target_sources(
 target_include_directories(
   ${PROJECT_NAME}
   PUBLIC
-    ${PROJECT_SOURCE_DIR}
+    $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}>
+    $<INSTALL_INTERFACE:include>
 )
 
 target_link_libraries(
@@ -64,21 +65,6 @@ target_compile_options(
     -Wduplicated-branches
     -Wlogical-op
     -Wuseless-cast
-)
-
-install(
-  TARGETS
-    ${PROJECT_NAME}
-  EXPORT
-    ${PROJECT_NAME}Targets
-  LIBRARY 
-    DESTINATION lib
-  ARCHIVE 
-    DESTINATION lib
-  RUNTIME 
-    DESTINATION bin
-  FILE_SET 
-    HEADERS 
 )
 
 set(_LINK_OPTIONS)

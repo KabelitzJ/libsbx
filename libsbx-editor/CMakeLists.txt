@@ -40,6 +40,7 @@ target_sources(
       "${PROJECT_SOURCE_DIR}/${CMAKE_PROJECT_NAME}/${PROJECT_NAME}/bindings/1.91.8-docking/imgui_impl_vulkan.h"
       "${PROJECT_SOURCE_DIR}/${CMAKE_PROJECT_NAME}/${PROJECT_NAME}/bindings/1.91.8-docking/imgui_impl_glfw.h"
       "${PROJECT_SOURCE_DIR}/${CMAKE_PROJECT_NAME}/${PROJECT_NAME}/bindings/imgui.hpp"
+      "${PROJECT_SOURCE_DIR}/${CMAKE_PROJECT_NAME}/${PROJECT_NAME}/version.hpp"
       "${PROJECT_SOURCE_DIR}/${CMAKE_PROJECT_NAME}/${PROJECT_NAME}/editor.hpp"
       "${PROJECT_SOURCE_DIR}/${CMAKE_PROJECT_NAME}/${PROJECT_NAME}/pipeline.hpp"
       "${PROJECT_SOURCE_DIR}/${CMAKE_PROJECT_NAME}/${PROJECT_NAME}/editor_subrenderer.hpp"
@@ -54,7 +55,8 @@ target_compile_definitions(
 target_include_directories(
   ${PROJECT_NAME}
   PUBLIC
-    ${PROJECT_SOURCE_DIR}
+    $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}>
+    $<INSTALL_INTERFACE:include>
 )
 
 target_link_libraries(
@@ -62,7 +64,7 @@ target_link_libraries(
   PUBLIC
     # External dependencies
     fmt::fmt
-    yaml-cpp
+    yaml-cpp::yaml-cpp
     tinyobjloader::tinyobjloader
     nlohmann_json::nlohmann_json
     imgui::imgui
@@ -125,7 +127,7 @@ install(
   TARGETS
     ${PROJECT_NAME}
   EXPORT
-    ${PROJECT_NAME}Targets
+    libsbxTargets
   LIBRARY 
     DESTINATION lib
   ARCHIVE 

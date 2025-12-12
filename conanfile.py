@@ -1,6 +1,7 @@
 import os
 from conan import ConanFile
 from conan.tools.cmake import CMakeDeps, CMakeToolchain, CMake, cmake_layout
+from conan.tools.files import copy, mkdir
 from conan.tools.system.package_manager import Apt
 
 class libsbx_recipe(ConanFile):
@@ -39,7 +40,7 @@ class libsbx_recipe(ConanFile):
   # Source directories
   exports_sources = (
     "CMakeLists.txt",
-    "cmake/modules/**",
+    "cmake/**",
     "scripts/**",
     "libsbx-animations/**",
     "libsbx-bitmaps/**",
@@ -67,6 +68,10 @@ class libsbx_recipe(ConanFile):
     "demo/**",
     # "!demo/assets/**"
   )
+
+  conf_info = {
+    "libsbx:dotnet_dir": None,
+  }
 
   def config_options(self):
     if self.settings.os == "Windows":
@@ -129,7 +134,7 @@ class libsbx_recipe(ConanFile):
     self.requires("imnodes/0.5.0-docking")
     # self.requires("imguizmo/1.83-docking")
     # self.requires("portable-file-dialogs/0.1.0")
-    self.requires("easy_profiler/2.1.0")
+    self.requires("easy_profiler/2.1.0", transitive_headers=True)
     self.requires("tsl-robin-map/1.3.0")
     self.requires("lz4/1.10.0")
     self.requires("assimp/5.4.3")
@@ -161,53 +166,74 @@ class libsbx_recipe(ConanFile):
     cmake = CMake(self)
     cmake.install()
 
+    dotnet_build_dir = os.path.join(self.build_folder, "_dotnet")
+    dotnet_package_dir = os.path.join(self.package_folder, "bin", "dotnet")
+
+    if os.path.isdir(dotnet_build_dir):
+      mkdir(self, dotnet_package_dir)
+
+      copy(self,
+        pattern="*.dll",
+        src=dotnet_build_dir,
+        dst=dotnet_package_dir,
+        keep_path=False
+      )
+      copy(self,
+        pattern="*.deps.json",
+        src=dotnet_build_dir,
+        dst=dotnet_package_dir,
+        keep_path=False
+      )
+      copy(self,
+        pattern="*.runtimeconfig.json",
+        src=dotnet_build_dir,
+        dst=dotnet_package_dir,
+        keep_path=False
+      )
+      copy(self,
+        pattern="*.pdb",
+        src=dotnet_build_dir,
+        dst=dotnet_package_dir,
+        keep_path=False
+      )
+
   def package_info(self):
     self.cpp_info.set_property("cmake_file_name", "libsbx")
     self.cpp_info.set_property("cmake_target_name", "libsbx::libsbx")
+
+    self.cpp_info.bindirs.append("bin/dotnet")
     
-    utility = self.cpp_info.components["utility"]
-    utility.libs = ["utility"]
-    utility.requires = [
+    self.cpp_info.components["utility"].requires = [
       "fmt::fmt", 
       "spdlog::spdlog",
       "magic_enum::magic_enum",
       "lz4::lz4"
     ]
 
-    math = self.cpp_info.components["math"]
-    math.libs = ["math"]
-    math.requires = [
+    self.cpp_info.components["math"].requires = [
       "fmt::fmt",
       "yaml-cpp::yaml-cpp",
       "range-v3::range-v3",
       "gtest::gtest"
     ]
 
-    core = self.cpp_info.components["core"]
-    core.libs = ["core"]
-    core.requires = [
+    self.cpp_info.components["core"].requires = [
       "range-v3::range-v3",
       "easy_profiler::easy_profiler"
     ]
 
-    devices = self.cpp_info.components["devices"]
-    devices.libs = ["devices"]
-    devices.requires = [
+    self.cpp_info.components["devices"].requires = [
       "glfw::glfw"
     ]
 
-    graphics = self.cpp_info.components["graphics"]
-    graphics.libs = ["graphics"]
-    graphics.requires = [
+    self.cpp_info.components["graphics"].requires = [
       "vulkan-memory-allocator::vulkan-memory-allocator",
       "vulkan-headers::vulkan-headers",
       "stb::stb",
       "spirv-cross::spirv-cross"
     ]
 
-    models = self.cpp_info.components["models"]
-    models.libs = ["models"]
-    models.requires = [
+    self.cpp_info.components["models"].requires = [
       "tinyobjloader::tinyobjloader",
       "nlohmann_json::nlohmann_json",
       "base64::base64",
@@ -216,21 +242,15 @@ class libsbx_recipe(ConanFile):
       "meshoptimizer::meshoptimizer"
     ]
 
-    scripting = self.cpp_info.components["scripting"]
-    scripting.libs = ["scripting"]
-    scripting.requires = [
+    self.cpp_info.components["scripting"].requires = [
       "sol2::sol2"
     ]
 
-    ui = self.cpp_info.components["ui"]
-    ui.libs = ["ui"]
-    ui.requires = [
+    self.cpp_info.components["ui"].requires = [
       "freetype::freetype"
     ]
 
-    editor = self.cpp_info.components["editor"]
-    editor.libs = ["editor"]
-    editor.requires = [
+    self.cpp_info.components["editor"].requires = [
       "imgui::imgui",
       "implot::implot",
       "imnodes::imnodes"

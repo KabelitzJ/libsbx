@@ -68,26 +68,31 @@ set(SBX_COMPILE_TIMESTAMP "\"${COMPILE_TIMESTAMP}\"" CACHE STRING "Compile times
 add_compile_definitions(SBX_COMPILE_TIMESTAMP=${SBX_COMPILE_TIMESTAMP})
 
 # Get current commit hash
-execute_process(
-  COMMAND git rev-parse --short HEAD
-  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-  OUTPUT_VARIABLE SBX_COMMIT_HASH
-  OUTPUT_STRIP_TRAILING_WHITESPACE
+find_package(Git QUIET)
+
+if(GIT_FOUND AND EXISTS "${CMAKE_SOURCE_DIR}/.git")
+  execute_process(
+    COMMAND ${GIT_EXECUTABLE} rev-parse --short HEAD
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    OUTPUT_VARIABLE SBX_COMMIT_HASH
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+  )
+
+  execute_process(
+    COMMAND ${GIT_EXECUTABLE} rev-parse --abbrev-ref HEAD
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    OUTPUT_VARIABLE SBX_BRANCH
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+  )
+else()
+  set(SBX_COMMIT_HASH "unknown")
+  set(SBX_BRANCH "unknown")
+endif()
+
+add_compile_definitions(
+  SBX_COMMIT_HASH="${SBX_COMMIT_HASH}"
+  SBX_BRANCH="${SBX_BRANCH}"
 )
-
-set(SBX_COMMIT_HASH "\"${SBX_COMMIT_HASH}\"" CACHE STRING "Git commit hash" FORCE)
-add_compile_definitions(SBX_COMMIT_HASH=${SBX_COMMIT_HASH})
-
-# Get current branch name
-execute_process(
-  COMMAND git rev-parse --abbrev-ref HEAD
-  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-  OUTPUT_VARIABLE SBX_BRANCH
-  OUTPUT_STRIP_TRAILING_WHITESPACE
-)
-
-set(SBX_BRANCH "\"${SBX_BRANCH}\"" CACHE STRING "Git branch" FORCE)
-add_compile_definitions(SBX_BRANCH=${SBX_BRANCH})
 
 message(STATUS "Git branch: ${SBX_BRANCH}")
 message(STATUS "Git commit: ${SBX_COMMIT_HASH}")
@@ -107,7 +112,18 @@ endforeach()
 add_library(libsbx INTERFACE)
 add_library(libsbx::libsbx ALIAS libsbx)
 
-target_link_libraries(libsbx INTERFACE ${_libsbx_targets})
+target_include_directories(
+  libsbx
+  INTERFACE
+    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}>
+    $<INSTALL_INTERFACE:install/include>
+)
+
+target_link_libraries(
+  libsbx
+  INTERFACE 
+    ${_libsbx_targets}
+)
 
 if (${SBX_BUILD_DEMO})
   add_subdirectory(demo)
@@ -120,6 +136,11 @@ install(
   EXPORT libsbxTargets
   NAMESPACE libsbx::
   DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/libsbx
+)
+
+install(
+  TARGETS libsbx
+  EXPORT libsbxTargets
 )
 
 write_basic_package_version_file(

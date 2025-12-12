@@ -125,7 +125,7 @@ class libsbx_recipe(ConanFile):
     self.requires("stb/cci.20230920")
     self.requires("range-v3/0.12.0", transitive_headers=True)
     self.requires("freetype/2.14.1")
-    self.requires("gtest/1.17.0")
+    # self.requires("gtest/1.17.0")
     # self.requires("openal-soft/1.22.2")
     # self.requires("drwav/0.13.12")
     # self.requires("drmp3/0.6.34")
@@ -143,6 +143,9 @@ class libsbx_recipe(ConanFile):
     self.requires("sol2/3.5.0")
     self.requires("magic_enum/0.9.7")
 
+    if self.options.build_tests:
+      self.test_requires("gtest/1.17.0")
+
   def generate(self):
     deps = CMakeDeps(self)
     toolchain = CMakeToolchain(self)
@@ -153,13 +156,12 @@ class libsbx_recipe(ConanFile):
   def build(self):
     cmake = CMake(self)
 
-    variables = {
+    cmake.configure({
       "SBX_BUILD_DEMO": "On" if self.options.build_demo else "Off",
       "SBX_BUILD_SHARED": "On" if self.options.shared else "Off",
       "SBX_BUILD_TESTS": "On" if self.options.build_tests else "Off"
-    }
-
-    cmake.configure(variables)
+    })
+  
     cmake.build()
 
   def package(self):
@@ -213,9 +215,11 @@ class libsbx_recipe(ConanFile):
     self.cpp_info.components["math"].requires = [
       "fmt::fmt",
       "yaml-cpp::yaml-cpp",
-      "range-v3::range-v3",
-      "gtest::gtest"
+      "range-v3::range-v3"
     ]
+
+    if self.options.build_tests:
+      self.cpp_info.components["math"].requires.append("gtest::gtest")
 
     self.cpp_info.components["core"].requires = [
       "range-v3::range-v3",

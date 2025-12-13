@@ -95,6 +95,10 @@ protected:
     return _graph.create_pass(std::forward<Callable>(callable));
   }
 
+  auto build_render_graph() -> void {
+    _graph.compile();
+  }
+
   auto attachment_descriptions(const pass_handle handle) const -> std::vector<attachment_description> {
     return _graph.attachment_descriptions(handle);
   }

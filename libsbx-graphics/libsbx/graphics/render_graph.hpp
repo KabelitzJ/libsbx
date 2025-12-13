@@ -8,6 +8,7 @@
 #include <unordered_map>
 #include <optional>
 #include <functional>
+#include <queue>
 
 #include <vulkan/vulkan.h>
 
@@ -192,6 +193,8 @@ private:
   std::vector<pass_handle> _dependencies;
 }; // struct pass_node
 
+
+
 class render_graph {
 
 public:
@@ -207,6 +210,8 @@ public:
   render_graph() {
 
   }
+
+  ~render_graph();
 
   template<typename... Args>
   requires (std::is_constructible_v<attachment, Args...>)
@@ -254,7 +259,7 @@ private:
   std::vector<attachment> _attachments;
   std::vector<pass_node> _passes;
 
-  std::vector<image2d_handle> _images;
+  std::vector<image2d_handle> _color_images;
   std::vector<depth_image_handle> _depth_images;
 
   std::unordered_map<utility::hashed_string, std::uint32_t> _image_by_name;

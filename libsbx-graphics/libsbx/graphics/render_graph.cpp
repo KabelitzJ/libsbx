@@ -65,4 +65,16 @@ auto render_graph::find_attachment(const std::string& name) const -> const image
   return graphics_module.get_resource<image2d>(_images[entry->second]);
 }
 
+render_graph::~render_graph() {
+  auto& rendering_module = core::engine::get_module<graphics::graphics_module>();
+
+  for (auto& image_handle : _images) {
+    rendering_module.remove_resource<image2d>(image_handle);
+  }
+
+  for (auto& depth_image_handle : _depth_images) {
+    rendering_module.remove_resource<depth_image>(depth_image_handle);
+  }
+}
+
 } // namespace sbx::graphics

@@ -141,6 +141,8 @@ renderer::renderer()
     return pass;
   });
 
+  build_render_graph();
+
   // Draw lists
   add_draw_list<sbx::models::static_mesh_material_draw_list>("static_mesh_material");
   add_draw_list<sbx::animations::skinned_mesh_material_draw_list>("skinned_mesh_material");

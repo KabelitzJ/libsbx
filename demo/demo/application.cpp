@@ -251,12 +251,18 @@ application::application()
   auto& chess_pawn_white_material = scene.add_material<sbx::models::material>("chess_pawn_white");
   chess_pawn_white_material.albedo.image = scene.get_image("chess_pieces_white_albedo");
   chess_pawn_white_material.normal.image = scene.get_image("chess_pieces_white_normal");
-  chess_pawn_white_material.mrao.image = scene.get_image("chess_pieces_white_mrao");
+  // chess_pawn_white_material.mrao.image = scene.get_image("chess_pieces_white_mrao");
+  chess_pawn_white_material.metallic = 0.1f;
+  chess_pawn_white_material.roughness = 0.9f;
+  chess_pawn_white_material.occlusion = 1.0f;
 
   auto& chess_pawn_black_material = scene.add_material<sbx::models::material>("chess_pawn_black");
   chess_pawn_black_material.albedo.image = scene.get_image("chess_pieces_black_albedo");
   chess_pawn_black_material.normal.image = scene.get_image("chess_pieces_black_normal");
-  chess_pawn_black_material.mrao.image = scene.get_image("chess_pieces_black_mrao");
+  // chess_pawn_black_material.mrao.image = scene.get_image("chess_pieces_black_mrao");
+  chess_pawn_black_material.metallic = 0.1f;
+  chess_pawn_black_material.roughness = 0.9f;
+  chess_pawn_black_material.occlusion = 1.0f;
 
   // create a row of all white pieces and a row of all black pieces
 

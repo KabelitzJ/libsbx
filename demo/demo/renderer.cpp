@@ -20,6 +20,7 @@
 #include <libsbx/post/filters/resolve_filter.hpp>
 #include <libsbx/post/filters/blur_filter.hpp>
 #include <libsbx/post/filters/fxaa_filter.hpp>
+#include <libsbx/post/filters/tonemap_filter.hpp>
 
 #include <libsbx/shadows/shadow_subrenderer.hpp>
 #include <libsbx/ui/ui_subrenderer.hpp>
@@ -33,6 +34,8 @@ namespace demo {
 
 renderer::renderer()
 : _clear_color{sbx::math::color::white()} {
+  // Attachments
+  auto shadow = create_attachment("shadow", sbx::graphics::attachment::type::image, sbx::math::color::white(), sbx::graphics::format::r16g16_sfloat);
 
   auto depth = create_attachment("depth", sbx::graphics::attachment::type::depth);
   auto albedo = create_attachment("albedo", sbx::graphics::attachment::type::image, _clear_color, sbx::graphics::format::r8g8b8a8_unorm);
@@ -81,7 +84,18 @@ renderer::renderer()
 
   auto fxaa = create_attachment("fxaa", sbx::graphics::attachment::type::image, _clear_color, sbx::graphics::format::r8g8b8a8_unorm);
 
+  auto tonemap = create_attachment("tonemap", sbx::graphics::attachment::type::image, _clear_color, sbx::graphics::format::r8g8b8a8_unorm);
+
   auto swapchain = create_attachment("swapchain", sbx::graphics::attachment::type::swapchain, _clear_color, sbx::graphics::format::b8g8r8a8_srgb);
+
+  // Render passes
+  auto shadow_pass = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
+    auto pass = context.graphics_pass("shadow", sbx::graphics::viewport::fixed(2048, 2048));
+
+    pass.writes(shadow, sbx::graphics::attachment_load_operation::clear);
+
+    return pass;
+  });
 
   auto deferred_pass = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
     auto pass = context.graphics_pass("deferred");
@@ -113,9 +127,9 @@ renderer::renderer()
   auto resolve_pass = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
     auto pass = context.graphics_pass("resolve");
 
-    pass.depends_on(deferred_pass, transparency_pass);
+    pass.depends_on(deferred_pass, transparency_pass, shadow_pass);
 
-    pass.reads(albedo, position, normal, material, emissive, accum, revealage);
+    pass.reads(albedo, position, normal, material, emissive, accum, revealage, shadow);
 
     pass.writes(depth, sbx::graphics::attachment_load_operation::load);
     pass.writes(resolve, sbx::graphics::attachment_load_operation::clear);
@@ -124,12 +138,24 @@ renderer::renderer()
     return pass;
   });
 
-  auto fxaa_pass = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
-    auto pass = context.graphics_pass("fxaa");
+  auto tonemap_pass = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
+    auto pass = context.graphics_pass("tonemap");
 
     pass.depends_on(resolve_pass);
 
     pass.reads(resolve);
+
+    pass.writes(tonemap, sbx::graphics::attachment_load_operation::clear);
+
+    return pass;
+  });
+
+  auto fxaa_pass = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
+    auto pass = context.graphics_pass("fxaa");
+
+    pass.depends_on(tonemap_pass);
+
+    pass.reads(tonemap);
 
     pass.writes(fxaa, sbx::graphics::attachment_load_operation::clear);
 
@@ -192,7 +218,23 @@ renderer::renderer()
   add_subrenderer<sbx::scenes::debug_subrenderer>(resolve_pass, "res://shaders/debug");
 
   // Post-processing pass
-  add_subrenderer<sbx::post::fxaa_filter>(fxaa_pass, "res://shaders/fxaa", "resolve");
+  auto tonemap_attachment_names = std::vector<std::pair<std::string, std::string>>{
+    {"resolve_image", "resolve"},
+    // {"bloom_image", "brightness"}
+  };
+
+  auto tonemap_config = sbx::post::tonemap_config{
+    .exposure = 0.0f,
+    .bloom_mix = 0.1f,
+    .saturation = 1.0f,
+    .contrast = 1.0f,
+    .temperature = 0.0f,
+    .tint = 0.0f
+  };
+
+  add_subrenderer<sbx::post::tonemap_filter>(tonemap_pass, "res://shaders/tonemap", std::move(tonemap_attachment_names), tonemap_config);
+
+  add_subrenderer<sbx::post::fxaa_filter>(fxaa_pass, "res://shaders/fxaa", "tonemap");
 
   // Editor pass
   add_subrenderer<sbx::editor::editor_subrenderer>(editor_pass, "res://shaders/editor", "fxaa");

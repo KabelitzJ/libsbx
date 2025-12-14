@@ -71,23 +71,22 @@ application::application()
   scene.add_image("helmet_mrao", "res://textures/helmet/mrao2.jpg", sbx::graphics::format::r8g8b8a8_unorm);
   scene.add_image("helmet_emissive", "res://textures/helmet/emissive.jpg", sbx::graphics::format::r8g8b8a8_srgb);
 
-  scene.add_image("grass3_albedo", "res://textures/grass3/albedo.png", sbx::graphics::format::r8g8b8a8_srgb);
-  scene.add_image("grass3_normal", "res://textures/grass3/normal.png", sbx::graphics::format::r8g8b8a8_unorm);
-  scene.add_image("grass3_mrao", "res://textures/grass3/mrao.png", sbx::graphics::format::r8g8b8a8_unorm);
-
-  scene.add_image("checkerboard", "res://textures/checkerboard.jpg", sbx::graphics::format::r8g8b8a8_srgb);
-
-  scene.add_image("pine_tree_bark_albedo", "res://textures/pine_tree/bark_albedo.png", sbx::graphics::format::r8g8b8a8_srgb);
-  scene.add_image("pine_tree_bark_normal", "res://textures/pine_tree/bark_normal.png", sbx::graphics::format::r8g8b8a8_unorm);
-  scene.add_image("pine_tree_leaves_albedo", "res://textures/pine_tree/leaves_albedo.png", sbx::graphics::format::r8g8b8a8_srgb);
-  scene.add_image("pine_tree_leaves_normal", "res://textures/pine_tree/leaves_normal.png", sbx::graphics::format::r8g8b8a8_unorm);
-
   scene.add_image("bricks_albedo", "res://textures/bricks1/albedo.png", sbx::graphics::format::r8g8b8a8_srgb);
   scene.add_image("bricks_normal", "res://textures/bricks1/normal.png", sbx::graphics::format::r8g8b8a8_unorm);
   scene.add_image("bricks_mrao", "res://textures/bricks1/mrao.png", sbx::graphics::format::r8g8b8a8_srgb);
   scene.add_image("bricks_height", "res://textures/bricks1/height.png", sbx::graphics::format::r8g8b8a8_srgb);
 
   scene.add_image("duck_albedo", "res://textures/duck/albedo.png", sbx::graphics::format::r8g8b8a8_srgb);
+
+  scene.add_image("checkerboard", "res://textures/checkerboard.jpg", sbx::graphics::format::r8g8b8a8_srgb);
+
+  scene.add_image("chess_pieces_white_albedo", "res://textures/chess/pieces/white/albedo.jpg", sbx::graphics::format::r8g8b8a8_srgb);
+  scene.add_image("chess_pieces_white_normal", "res://textures/chess/pieces/white/normal.jpg", sbx::graphics::format::r8g8b8a8_unorm);
+  scene.add_image("chess_pieces_white_mrao", "res://textures/chess/pieces/white/mrao.jpg", sbx::graphics::format::r8g8b8a8_srgb);
+
+  scene.add_image("chess_pieces_black_albedo", "res://textures/chess/pieces/black/albedo.jpg", sbx::graphics::format::r8g8b8a8_srgb);
+  scene.add_image("chess_pieces_black_normal", "res://textures/chess/pieces/black/normal.jpg", sbx::graphics::format::r8g8b8a8_unorm);
+  scene.add_image("chess_pieces_black_mrao", "res://textures/chess/pieces/black/mrao.jpg", sbx::graphics::format::r8g8b8a8_srgb);
 
   scene.add_cube_image("skybox", "res://skyboxes/clouds2");
 
@@ -97,22 +96,7 @@ application::application()
 
   // Meshes
 
-  scene.add_mesh<sbx::models::mesh>("maple_tree_1", "res://meshes/maple_tree_1/maple_tree_1.gltf");
-  scene.add_mesh<sbx::models::mesh>("maple_tree_2", "res://meshes/maple_tree_2/maple_tree_2.gltf");
-  scene.add_mesh<sbx::models::mesh>("maple_tree_3", "res://meshes/maple_tree_3/maple_tree_3.gltf");
-  scene.add_mesh<sbx::models::mesh>("maple_tree_4", "res://meshes/maple_tree_4/maple_tree_4.gltf");
-
   scene.add_mesh<sbx::animations::mesh>("fox", "res://meshes/fox/fox.gltf");
-  scene.add_mesh<sbx::models::mesh>("fox_static", "res://meshes/fox/fox.gltf");
-
-  scene.add_mesh<sbx::animations::mesh>("women", "res://meshes/women/women.gltf");
-  scene.add_mesh<sbx::models::mesh>("women_static", "res://meshes/women/women.gltf");
-
-  scene.add_mesh<sbx::animations::mesh>("player", "res://meshes/player/player.gltf");
-  
-  scene.add_mesh<sbx::models::mesh>("man_static", "res://meshes/man/man.gltf");
-
-  scene.add_mesh<sbx::models::mesh>("bmp", "res://meshes/tank/bmp.gltf");
 
   scene.add_mesh<sbx::models::mesh>("helmet", "res://meshes/helmet/helmet.gltf");
 
@@ -121,22 +105,13 @@ application::application()
   scene.add_mesh<sbx::models::mesh>("cube", "res://meshes/cube/cube.gltf");
   scene.add_mesh<sbx::models::mesh>("sphere", "res://meshes/sphere/sphere.gltf");
 
-  scene.add_mesh<sbx::models::mesh>("longhouse", "res://meshes/longhouse/longhouse.gltf");
-
-  scene.add_mesh<sbx::models::mesh>("pine_tree", "res://meshes/pine_tree/pine_tree.gltf");
-
-  scene.add_mesh<sbx::animations::mesh>("soldier", "res://meshes/soldier/soldier.gltf");
-  scene.add_mesh<sbx::models::mesh>("soldier_static", "res://meshes/soldier/soldier.gltf");
+  scene.add_mesh<sbx::models::mesh>("chess_pieces", "res://meshes/chess/pieces.gltf");
 
   // Animations
 
   scene.add_animation<sbx::animations::animation>("Walk", "res://meshes/fox/fox.gltf", "Walk");
   scene.add_animation<sbx::animations::animation>("Survey", "res://meshes/fox/fox.gltf", "Survey");
   scene.add_animation<sbx::animations::animation>("Run", "res://meshes/fox/fox.gltf", "Run");
-
-  scene.add_animation<sbx::animations::animation>("Walking", "res://meshes/women/women.gltf", "Walking");
-  scene.add_animation<sbx::animations::animation>("IdleStanding", "res://meshes/soldier/soldier.gltf", "IdleStanding");
-  scene.add_animation<sbx::animations::animation>("ArmatureAction", "res://meshes/player/player.gltf", "ArmatureAction");
 
   // Window
 
@@ -168,11 +143,11 @@ application::application()
 
     auto& material = scene.add_material<sbx::models::material>(material_name);
     material.base_color = color;
-    // material.alpha = sbx::models::alpha_mode::blend;
+    material.alpha = sbx::models::alpha_mode::blend;
 
     auto light = scene.create_child_node(_light_center, fmt::format("Light{}", i), sbx::scenes::transform{sbx::math::vector3{radius * sbx::math::cos(angle), 0.0f, radius * sbx::math::sin(angle)}});
 
-    scene.add_component<sbx::scenes::point_light>(light, color, 100.0f);
+    scene.add_component<sbx::scenes::point_light>(light, color, 50.0f);
 
     scene.add_component<sbx::scenes::static_mesh>(light, scene.get_mesh("sphere"), scene.get_material(material_name));
 
@@ -200,37 +175,6 @@ application::application()
   auto demo_script = scripting_module.instantiate(helmet, "build/x86_64/gcc/debug/_dotnet/Demo.dll", "Demo.Helmet");
 
   demo_script.invoke("SayHello");
-
-  // Tree
-
-  auto tree = scene.create_node("Tree");
-
-  auto& pine_tree_bark_material = scene.add_material<sbx::models::material>("pine_tree_bark");
-  pine_tree_bark_material.albedo.image = scene.get_image("pine_tree_bark_albedo");
-  pine_tree_bark_material.normal.image = scene.get_image("pine_tree_bark_normal");
-  
-  auto& pine_tree_leaves_material = scene.add_material<sbx::models::material>("pine_tree_leaves");
-  pine_tree_leaves_material.albedo.image = scene.get_image("pine_tree_leaves_albedo");
-  pine_tree_leaves_material.albedo.address_mode_u = sbx::graphics::address_mode::clamp_to_edge;
-  pine_tree_leaves_material.albedo.address_mode_v = sbx::graphics::address_mode::clamp_to_edge;
-  pine_tree_leaves_material.normal.image = scene.get_image("pine_tree_leaves_normal");
-  pine_tree_leaves_material.normal.address_mode_u = sbx::graphics::address_mode::clamp_to_edge;
-  pine_tree_leaves_material.normal.address_mode_v = sbx::graphics::address_mode::clamp_to_edge;
-  pine_tree_leaves_material.metallic = 0.0f;
-  pine_tree_leaves_material.metallic = 1.0f;
-  pine_tree_leaves_material.alpha = sbx::models::alpha_mode::mask;
-  pine_tree_leaves_material.is_double_sided = true;
-
-  auto submeshes = std::vector<sbx::scenes::static_mesh::submesh>{
-    {0, scene.get_material("pine_tree_bark")}, 
-    {1, scene.get_material("pine_tree_leaves")}
-  };
-
-  scene.add_component<sbx::scenes::static_mesh>(tree, scene.get_mesh("pine_tree"), submeshes);
-
-  auto& tree_transform = scene.get_component<sbx::scenes::transform>(tree);
-  tree_transform.set_position(sbx::math::vector3{-6.0f, 6.0f, 0.0f});
-  tree_transform.set_scale(sbx::math::vector3{1.0f, 1.0f, 1.0f});
 
   // Cube
 
@@ -293,6 +237,49 @@ application::application()
   cube2_transform.set_position(sbx::math::vector3{-8.0f, 15.0f, 4.0f});
   cube2_transform.set_scale(sbx::math::vector3{5.0f, 5.0f, 5.0f});
   
+  // Chess
+
+  auto piece_names = std::array<std::string, 6>{
+    "Pawn",
+    "Rook",
+    "Knight",
+    "Bishop",
+    "Queen",
+    "King"
+  };
+
+  auto& chess_pawn_white_material = scene.add_material<sbx::models::material>("chess_pawn_white");
+  chess_pawn_white_material.albedo.image = scene.get_image("chess_pieces_white_albedo");
+  chess_pawn_white_material.normal.image = scene.get_image("chess_pieces_white_normal");
+  chess_pawn_white_material.mrao.image = scene.get_image("chess_pieces_white_mrao");
+
+  auto& chess_pawn_black_material = scene.add_material<sbx::models::material>("chess_pawn_black");
+  chess_pawn_black_material.albedo.image = scene.get_image("chess_pieces_black_albedo");
+  chess_pawn_black_material.normal.image = scene.get_image("chess_pieces_black_normal");
+  chess_pawn_black_material.mrao.image = scene.get_image("chess_pieces_black_mrao");
+
+  // create a row of all white pieces and a row of all black pieces
+
+  for (auto i = 0; i < static_cast<int>(piece_names.size()); ++i) {
+    const auto& piece_name = piece_names[i];
+
+    auto white_piece = scene.create_node(fmt::format("Chess_{}_White", piece_name));
+
+    scene.add_component<sbx::scenes::static_mesh>(white_piece, scene.get_mesh("chess_pieces"), std::vector<sbx::scenes::static_mesh::submesh>{{i, scene.get_material("chess_pawn_white")}});
+
+    auto& white_piece_transform = scene.get_component<sbx::scenes::transform>(white_piece);
+    white_piece_transform.set_position(sbx::math::vector3{static_cast<float>(i) * 2.0f - 5.0f, 0.7f, -10.0f});
+    white_piece_transform.set_scale(sbx::math::vector3{8.0f, 8.0f, 8.0f});
+
+    auto black_piece = scene.create_node(fmt::format("Chess_{}_Black", piece_name));
+
+    scene.add_component<sbx::scenes::static_mesh>(black_piece, scene.get_mesh("chess_pieces"), std::vector<sbx::scenes::static_mesh::submesh>{{i, scene.get_material("chess_pawn_black")}});
+
+    auto& black_piece_transform = scene.get_component<sbx::scenes::transform>(black_piece);
+    black_piece_transform.set_position(sbx::math::vector3{static_cast<float>(i) * 2.0f - 5.0f, 0.7f, -14.0f});
+    black_piece_transform.set_scale(sbx::math::vector3{8.0f, 8.0f, 8.0f});
+  }
+
   // Fox
 
   auto& animations_module = sbx::core::engine::get_module<sbx::animations::animations_module>();

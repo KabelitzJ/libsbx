@@ -158,8 +158,9 @@ class pass_node {
 
 public:
 
-  pass_node(const utility::hashed_string& name)
-  : _name{name} { }
+  pass_node(const utility::hashed_string& name, const viewport& viewport)
+  : _name{name},
+    _viewport{viewport} { }
 
   auto reads(const attachment_handle attachment) -> void {
     _reads.emplace_back(attachment);
@@ -191,70 +192,96 @@ private:
   std::vector<attachment_handle> _reads;
   std::vector<std::pair<attachment_handle, attachment_load_operation>> _writes;
   std::vector<pass_handle> _dependencies;
+  viewport _viewport;
+  render_area _render_area;
+
 }; // struct pass_node
 
+struct transition_instruction {
+  attachment_handle attachment;
+  VkImageLayout old_layout;
+  VkImageLayout new_layout;
+}; // struct transition_instruction
 
+struct pass_instruction {
+  pass_handle pass;
+  std::vector<std::pair<attachment_handle, attachment_load_operation>> attachments;
+}; // struct pass_instruction
+
+using instruction = std::variant<transition_instruction, pass_instruction>;
+
+template<typename... Callables>
+struct overload : Callables... {
+  using Callables::operator()...;
+};
+
+template<typename... Callables>
+overload(Callables...) -> overload<Callables...>;
+
+struct attachment_state {
+  VkImage image;
+  VkImageView view;
+  VkImageLayout current_layout = VK_IMAGE_LAYOUT_UNDEFINED;
+  VkFormat format;
+  VkExtent2D extent;
+  attachment::type type;
+}; // struct attachment_state
 
 class render_graph {
 
 public:
 
   struct context {
-
-    auto graphics_pass(const utility::hashed_string& name) const -> pass_node {
-      return pass_node{name};
-    }
-
+    auto graphics_pass(const utility::hashed_string& name, const viewport& viewport = viewport::window()) const -> pass_node;
   }; // struct context
 
-  render_graph() {
-
-  }
+  render_graph();
 
   ~render_graph();
 
   template<typename... Args>
   requires (std::is_constructible_v<attachment, Args...>)
-  auto create_attachment(Args&&... args) -> attachment_handle {
-    auto index = static_cast<std::uint32_t>(_attachments.size());
-
-    _attachments.emplace_back(std::forward<Args>(args)...);
-
-    return attachment_handle{index};
-  }
+  auto create_attachment(Args&&... args) -> attachment_handle;
 
   template<typename Callable>
   requires (std::is_invocable_r_v<pass_node, Callable, context&>)
-  auto create_pass(Callable&& callable) -> pass_handle {
-    auto index = static_cast<std::uint32_t>(_passes.size());
-
-    auto ctx = context{};
-
-    _passes.emplace_back(std::invoke(callable, ctx));
-
-    return pass_handle{index};
-  }
+  auto create_pass(Callable&& callable) -> pass_handle;
 
   auto find_attachment(const std::string& name) const -> const image2d&;
 
-  auto attachment_descriptions(const pass_handle handle) const -> std::vector<attachment_description> {
-    utility::assert_that(handle.is_valid() && handle.index < _passes.size(), "Invalid pass handle");
+  auto attachment_descriptions(const pass_handle handle) const -> std::vector<attachment_description>;
 
-    const auto& pass = _passes[handle.index]; 
+  auto build() -> void;
 
-    auto descriptions = std::vector<attachment_description>{};
-    descriptions.reserve(pass._writes.size());
+  auto resize(const viewport::type flags) -> void;
 
-    for (const auto& [attachment_handle, load_op] : pass._writes) {
-      auto& attachment = _attachments[attachment_handle.index];
-
-      descriptions.emplace_back(attachment.image_type(), attachment.format(), attachment.blend_state());
+  template<typename Callable>
+  requires (std::is_invocable_v<Callable, const pass_handle&>)
+  auto execute(command_buffer& command_buffer, const swapchain& swapchain, Callable&& callable) -> void {
+    for (const auto& instruction : _instructions) {
+      std::visit(overload{
+        [&](const pass_instruction& instruction) { _execute_pass_instruction(command_buffer, swapchain, instruction, std::forward<Callable>(callable)); },
+        [&](const transition_instruction& instruction) { _execute_transition_instruction(command_buffer, swapchain, instruction); }
+      }, instruction);
     }
-
-    return descriptions;
   }
 
 private:
+
+  auto _update_viewports() -> void;
+
+  auto _clear_attachments(const viewport::type flags) -> void;  
+
+  auto _create_attachments(const viewport::type flags, const pass_node& node) -> void;
+
+  auto _build_color_attachment_info(const attachment& attachment, const attachment_state& state, const swapchain& swapchain, const attachment_load_operation load_op) -> VkRenderingAttachmentInfo;
+
+  auto _build_depth_attachment_info(const attachment& attachment, const attachment_state& state, const attachment_load_operation load_op) -> VkRenderingAttachmentInfo;
+
+  template<typename Callable>
+  auto _execute_pass_instruction(command_buffer& command_buffer, const swapchain& swapchain, const pass_instruction& instruction, Callable&& callable) -> void;
+
+  auto _execute_transition_instruction(command_buffer& command_buffer, const swapchain& swapchain, const transition_instruction& instruction) -> void;
 
   std::vector<attachment> _attachments;
   std::vector<pass_node> _passes;
@@ -262,7 +289,11 @@ private:
   std::vector<image2d_handle> _color_images;
   std::vector<depth_image_handle> _depth_images;
 
+  std::vector<attachment_state> _attachment_states;
+
   std::unordered_map<utility::hashed_string, std::uint32_t> _image_by_name;
+
+  std::vector<instruction> _instructions;
 
 }; // class render_graph
 

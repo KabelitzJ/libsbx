@@ -22,7 +22,7 @@ struct opaque_fs_out {
   float4 material : SV_Target3;
   float4 emissive : SV_Target4;
   uint object_id: SV_Target5;
-  float depth : SV_Target6;
+  float linear_depth : SV_Target6;
 }; // struct opaque_fs_out
 
 struct blend_fs_out {
@@ -200,7 +200,7 @@ opaque_fs_out opaque_main(fs_in in, material_data material_data, uint object_id)
   out.material = float4(get_material(uv, material_data), 0.0);
   out.emissive = float4(get_emissive(uv, material_data), 0.0);
   out.object_id = object_id;
-  out.depth = sbx::common::linearize_depth(in.sv_position.z, scene.camera_near, scene.camera_far);
+  out.linear_depth = sbx::common::linearize_depth(in.sv_position.z, scene.camera_near, scene.camera_far);
 
   return out;
 }
@@ -247,7 +247,7 @@ opaque_fs_out mask_main(fs_in in, material_data material_data, uint object_id) {
   out.material = float4(get_material(uv, material_data), 0.0);
   out.emissive = float4(get_emissive(uv, material_data), 0.0);
   out.object_id = object_id;
-  out.depth = sbx::common::linearize_depth(in.sv_position.z, scene.camera_near, scene.camera_far);
+  out.linear_depth = sbx::common::linearize_depth(in.sv_position.z, scene.camera_near, scene.camera_far);
 
   return out;
 }

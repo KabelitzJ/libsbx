@@ -32,13 +32,16 @@ public:
   virtual ~renderer() = default;
 
   auto render(command_buffer& command_buffer, const swapchain& swapchain) -> void {
-    // _graph.execute(command_buffer, swapchain, [this, &command_buffer](const auto& pass_name) {
-    //   if (auto entry = _subrenderers.find(pass_name); entry != _subrenderers.end()) {
-    //     for (auto& subrenderer : entry->second) {
-    //       subrenderer->render(command_buffer);
-    //     }
-    //   }
-    // });
+    for (auto& [key, draw_list] : _draw_lists) {
+      draw_list->clear();
+      draw_list->update();
+    }
+
+    _graph.execute(command_buffer, swapchain, [this, &command_buffer](const pass_handle& pass) -> void {
+      for (const auto& subrenderer : _subrenderers[pass.index]) {
+        subrenderer->render(command_buffer);
+      }
+    });
   }
 
   auto execute_tasks(command_buffer& command_buffer) -> void {
@@ -48,7 +51,7 @@ public:
   }
 
   auto resize(const viewport::type flags) -> void {
-    // _graph.resize(flags);
+    _graph.resize(flags);
   }
 
   auto attachment(const std::string& name) const -> const descriptor& {
@@ -70,6 +73,8 @@ protected:
   template<typename Type, typename... Args>
   requires (std::is_constructible_v<Type, const std::vector<sbx::graphics::attachment_description>&, Args...>)
   auto add_subrenderer(const pass_handle handle, Args&&... args) -> Type& {
+    _subrenderers.resize(std::max(_subrenderers.size(), static_cast<std::size_t>(handle.index + 1)));
+
     auto& subrenderers = _subrenderers[handle.index];
 
     subrenderers.emplace_back(std::make_unique<Type>(_graph.attachment_descriptions(handle), std::forward<Args>(args)...));
@@ -96,7 +101,7 @@ protected:
   }
 
   auto build_render_graph() -> void {
-    _graph.compile();
+    _graph.build();
   }
 
   auto attachment_descriptions(const pass_handle handle) const -> std::vector<attachment_description> {
@@ -107,7 +112,8 @@ private:
 
   std::vector<std::unique_ptr<graphics::task>> _tasks;
 
-  std::unordered_map<std::uint32_t, std::vector<std::unique_ptr<subrenderer>>> _subrenderers;
+  std::vector<std::vector<std::unique_ptr<subrenderer>>> _subrenderers;
+
   std::unordered_map<utility::hashed_string, std::unique_ptr<graphics::draw_list>> _draw_lists;
 
   render_graph _graph;

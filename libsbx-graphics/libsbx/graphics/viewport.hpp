@@ -32,8 +32,8 @@ public:
     return viewport{type::window, scale, math::vector2i{0, 0}, std::nullopt};
   }
 
-  static auto dynamic() -> viewport {
-    return viewport{type::dynamic, math::vector2f{1.0f, 1.0f}, math::vector2i{0, 0}, std::nullopt};
+  static auto dynamic(const math::vector2f& scale = math::vector2f{1.0f, 1.0f}) -> viewport {
+    return viewport{type::dynamic, scale, math::vector2i{0, 0}, std::nullopt};
   }
 
   auto scale() const noexcept -> const math::vector2f& {

@@ -225,7 +225,7 @@ private:
     }
 
     auto definition = pipeline_definition;
-    definition.depth = graphics::depth::read_write;
+    definition.depth = (static_cast<alpha_mode>(key.alpha) == alpha_mode::blend) ? graphics::depth::read_only : graphics::depth::read_write;
     definition.rasterization_state.cull_mode = key.is_double_sided ? graphics::cull_mode::none : graphics::cull_mode::back;
     definition.uses_transparency = (static_cast<alpha_mode>(key.alpha) == alpha_mode::blend);
 

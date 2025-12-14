@@ -37,7 +37,7 @@ renderer::renderer()
   auto depth = create_attachment("depth", sbx::graphics::attachment::type::depth);
   auto albedo = create_attachment("albedo", sbx::graphics::attachment::type::image, _clear_color, sbx::graphics::format::r8g8b8a8_unorm);
   auto position = create_attachment("position", sbx::graphics::attachment::type::image, sbx::math::color::black(), sbx::graphics::format::r16g16b16a16_sfloat);
-  auto normal = create_attachment("denormalpth", sbx::graphics::attachment::type::image, sbx::math::color::black(), sbx::graphics::format::a2b10g10r10_unorm_pack32);
+  auto normal = create_attachment("normal", sbx::graphics::attachment::type::image, sbx::math::color::black(), sbx::graphics::format::a2b10g10r10_unorm_pack32);
   auto material = create_attachment("material", sbx::graphics::attachment::type::image, _clear_color, sbx::graphics::format::r8g8b8a8_unorm);
   auto emissive = create_attachment("emissive", sbx::graphics::attachment::type::image, _clear_color, sbx::graphics::format::r8g8b8a8_unorm);
   auto object_id = create_attachment("object_id", sbx::graphics::attachment::type::image, sbx::math::color::black(), sbx::graphics::format::r32_uint);
@@ -77,6 +77,7 @@ renderer::renderer()
   };
 
   auto resolve = create_attachment("resolve", sbx::graphics::attachment::type::image, _clear_color, sbx::graphics::format::r32g32b32a32_sfloat, resolve_blend);
+  auto brightness = create_attachment("brightness", sbx::graphics::attachment::type::image, sbx::math::color::black(), sbx::graphics::format::r16g16b16a16_sfloat);
 
   auto fxaa = create_attachment("fxaa", sbx::graphics::attachment::type::image, _clear_color, sbx::graphics::format::r8g8b8a8_unorm);
 
@@ -89,6 +90,10 @@ renderer::renderer()
     pass.writes(albedo, sbx::graphics::attachment_load_operation::clear);
     pass.writes(position, sbx::graphics::attachment_load_operation::clear);
     pass.writes(normal, sbx::graphics::attachment_load_operation::clear);
+    pass.writes(material, sbx::graphics::attachment_load_operation::clear);
+    pass.writes(emissive, sbx::graphics::attachment_load_operation::clear);
+    pass.writes(object_id, sbx::graphics::attachment_load_operation::clear);
+    pass.writes(linear_depth, sbx::graphics::attachment_load_operation::clear);
 
     return pass;
   });
@@ -110,9 +115,11 @@ renderer::renderer()
 
     pass.depends_on(deferred_pass, transparency_pass);
 
-    pass.reads(albedo, position, normal, material, emissive, object_id, accum, revealage);
+    pass.reads(albedo, position, normal, material, emissive, accum, revealage);
 
+    pass.writes(depth, sbx::graphics::attachment_load_operation::load);
     pass.writes(resolve, sbx::graphics::attachment_load_operation::clear);
+    pass.writes(brightness, sbx::graphics::attachment_load_operation::clear);
 
     return pass;
   });
@@ -188,7 +195,7 @@ renderer::renderer()
   add_subrenderer<sbx::post::fxaa_filter>(fxaa_pass, "res://shaders/fxaa", "resolve");
 
   // Editor pass
-  add_subrenderer<sbx::editor::editor_subrenderer>(editor_pass, "res://shaders/editor", "post");
+  add_subrenderer<sbx::editor::editor_subrenderer>(editor_pass, "res://shaders/editor", "fxaa");
 }
 
 } // namespace demo

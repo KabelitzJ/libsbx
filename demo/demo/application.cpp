@@ -264,26 +264,28 @@ application::application()
   chess_pawn_black_material.roughness = 0.9f;
   chess_pawn_black_material.occlusion = 1.0f;
 
-  // create a row of all white pieces and a row of all black pieces
+  // create a 4 rows of 2x white and 4 rows of 2x black pieces
 
-  for (auto i = 0; i < static_cast<int>(piece_names.size()); ++i) {
-    const auto& piece_name = piece_names[i];
+  for (auto row = 0; row < 4; ++row) {
+    for (auto i = 0; i < static_cast<int>(piece_names.size()); ++i) {
+      const auto& piece_name = piece_names[i];
 
-    auto white_piece = scene.create_node(fmt::format("Chess_{}_White", piece_name));
+      auto white_piece = scene.create_node(fmt::format("Chess_{}_White_{}", piece_name, row));
 
-    scene.add_component<sbx::scenes::static_mesh>(white_piece, scene.get_mesh("chess_pieces"), std::vector<sbx::scenes::static_mesh::submesh>{{i, scene.get_material("chess_pawn_white")}});
+      scene.add_component<sbx::scenes::static_mesh>(white_piece, scene.get_mesh("chess_pieces"), std::vector<sbx::scenes::static_mesh::submesh>{{i, scene.get_material("chess_pawn_white")}});
 
-    auto& white_piece_transform = scene.get_component<sbx::scenes::transform>(white_piece);
-    white_piece_transform.set_position(sbx::math::vector3{static_cast<float>(i) * 2.0f - 5.0f, 0.7f, -10.0f});
-    white_piece_transform.set_scale(sbx::math::vector3{8.0f, 8.0f, 8.0f});
+      auto& white_piece_transform = scene.get_component<sbx::scenes::transform>(white_piece);
+      white_piece_transform.set_position(sbx::math::vector3{static_cast<float>(i) * 2.0f - 5.0f, 0.7f, -10.0f - static_cast<float>(row) * 2.0f});
+      white_piece_transform.set_scale(sbx::math::vector3{8.0f, 8.0f, 8.0f});
 
-    auto black_piece = scene.create_node(fmt::format("Chess_{}_Black", piece_name));
+      auto black_piece = scene.create_node(fmt::format("Chess_{}_Black_{}", piece_name, row));
 
-    scene.add_component<sbx::scenes::static_mesh>(black_piece, scene.get_mesh("chess_pieces"), std::vector<sbx::scenes::static_mesh::submesh>{{i, scene.get_material("chess_pawn_black")}});
+      scene.add_component<sbx::scenes::static_mesh>(black_piece, scene.get_mesh("chess_pieces"), std::vector<sbx::scenes::static_mesh::submesh>{{i, scene.get_material("chess_pawn_black")}});
 
-    auto& black_piece_transform = scene.get_component<sbx::scenes::transform>(black_piece);
-    black_piece_transform.set_position(sbx::math::vector3{static_cast<float>(i) * 2.0f - 5.0f, 0.7f, -14.0f});
-    black_piece_transform.set_scale(sbx::math::vector3{8.0f, 8.0f, 8.0f});
+      auto& black_piece_transform = scene.get_component<sbx::scenes::transform>(black_piece);
+      black_piece_transform.set_position(sbx::math::vector3{static_cast<float>(i) * 2.0f - 5.0f, 0.7f, -14.0f - static_cast<float>(row) * 2.0f});
+      black_piece_transform.set_scale(sbx::math::vector3{8.0f, 8.0f, 8.0f});
+    }
   }
 
   // Fox

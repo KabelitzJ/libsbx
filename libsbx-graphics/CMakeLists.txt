@@ -21,7 +21,7 @@ find_package(range-v3 CONFIG REQUIRED)
 find_package(fmt CONFIG REQUIRED)
 find_package(VulkanMemoryAllocator CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
-find_package(slang CONFIG REQUIRED)
+find_package(slang REQUIRED)
 
 option(GLFW_BUILD_EXAMPLES "Build the GLFW example programs" OFF)
 option(GLFW_BUILD_TESTS "Build the GLFW test programs" OFF)

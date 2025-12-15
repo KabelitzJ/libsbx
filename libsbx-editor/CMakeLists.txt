@@ -16,14 +16,14 @@ endif()
 
 add_library(${CMAKE_PROJECT_NAME}::${PROJECT_NAME} ALIAS ${PROJECT_NAME})
 
-find_package(fmt REQUIRED)
-find_package(yaml-cpp REQUIRED)
-find_package(tinyobjloader REQUIRED)
-find_package(nlohmann_json REQUIRED)
-find_package(imgui REQUIRED)
-find_package(implot REQUIRED)
-find_package(imnodes REQUIRED)
-# find_package(imguizmo REQUIRED)
+find_package(fmt CONFIG REQUIRED)
+find_package(yaml-cpp CONFIG REQUIRED)
+find_package(tinyobjloader CONFIG REQUIRED)
+find_package(nlohmann_json CONFIG REQUIRED)
+find_package(imgui CONFIG REQUIRED)
+find_package(implot CONFIG REQUIRED)
+find_package(imnodes CONFIG REQUIRED)
+# find_package(imguizmo CONFIG REQUIRED)
 
 set(LIBSBX_IMGUI_TAG $<IF:$<BOOL:${LIBSBX_EDITOR_DOCKING}>,1.89.7-docking,1.89.7>)
 

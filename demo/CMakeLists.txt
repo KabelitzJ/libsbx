@@ -2,7 +2,7 @@ project(demo VERSION 0.1.0 LANGUAGES CXX)
 
 message(STATUS "Configuring ${PROJECT_NAME}...")
 
-find_package(easy_profiler REQUIRED)
+find_package(easy_profiler CONFIG REQUIRED)
 
 add_executable(${PROJECT_NAME})
 

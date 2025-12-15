@@ -14,10 +14,10 @@ endif()
 
 add_library(${CMAKE_PROJECT_NAME}::${PROJECT_NAME} ALIAS ${PROJECT_NAME})
 
-find_package(fmt REQUIRED)
-find_package(yaml-cpp REQUIRED)
-# find_package(glm REQUIRED)
-find_package(range-v3 REQUIRED)
+find_package(fmt CONFIG REQUIRED)
+find_package(yaml-cpp CONFIG REQUIRED)
+# find_package(glm CONFIG REQUIRED)
+find_package(range-v3 CONFIG REQUIRED)
 
 target_sources(
   ${PROJECT_NAME}

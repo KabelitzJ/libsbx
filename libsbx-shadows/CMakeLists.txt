@@ -14,7 +14,7 @@ endif()
 
 add_library(${CMAKE_PROJECT_NAME}::${PROJECT_NAME} ALIAS ${PROJECT_NAME})
 
-find_package(fmt REQUIRED)
+find_package(fmt CONFIG REQUIRED)
 
 target_sources(
   ${PROJECT_NAME}

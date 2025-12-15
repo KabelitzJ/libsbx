@@ -14,14 +14,14 @@ endif()
 
 add_library(${CMAKE_PROJECT_NAME}::${PROJECT_NAME} ALIAS ${PROJECT_NAME})
 
-find_package(fmt REQUIRED)
-find_package(yaml-cpp REQUIRED)
-find_package(tinyobjloader REQUIRED)
-find_package(nlohmann_json REQUIRED)
-find_package(base64 REQUIRED)
-find_package(tsl-robin-map REQUIRED)
-find_package(assimp REQUIRED)
-# find_package(glm REQUIRED)
+find_package(fmt CONFIG REQUIRED)
+find_package(yaml-cpp CONFIG REQUIRED)
+find_package(tinyobjloader CONFIG REQUIRED)
+find_package(nlohmann_json CONFIG REQUIRED)
+find_package(base64 CONFIG REQUIRED)
+find_package(tsl-robin-map CONFIG REQUIRED)
+find_package(assimp CONFIG REQUIRED)
+# find_package(glm CONFIG REQUIRED)
 
 target_sources(
   ${PROJECT_NAME}

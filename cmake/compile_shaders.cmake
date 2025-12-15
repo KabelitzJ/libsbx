@@ -1,5 +1,5 @@
 function(add_shaders TARGET SHADER_PATH)
-  find_package(Vulkan REQUIRED)
+  find_package(Vulkan CONFIG REQUIRED)
 
   set(SHADER_SOURCE_FILES ${ARGN}) # the rest of arguments to this function will be assigned as shader source files
   

@@ -4,8 +4,8 @@ message(STATUS "Configuring ${PROJECT_NAME}...")
 
 add_executable(${PROJECT_NAME})
 
-find_package(fmt REQUIRED)
-find_package(GTest REQUIRED)
+find_package(fmt CONFIG REQUIRED)
+find_package(GTest CONFIG REQUIRED)
 
 target_sources(
   ${PROJECT_NAME}
@@ -26,7 +26,7 @@ target_link_libraries(
   PUBLIC
     # External dependencies
     fmt::fmt
-    gtest::gtest
+    GTest::gtest
     # Internal dependencies
     libsbx::scenes
 )

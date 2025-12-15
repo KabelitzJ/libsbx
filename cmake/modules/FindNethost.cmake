@@ -1,6 +1,6 @@
 # FindNethost.cmake
 # Usage:
-#   find_package(Nethost REQUIRED)
+#   find_package(Nethost CONFIG REQUIRED)
 # Provides:
 #   Nethost::nethost  (IMPORTED target)
 #   NETHOST_INCLUDE_DIR

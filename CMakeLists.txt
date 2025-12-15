@@ -36,6 +36,10 @@ message(STATUS "SBX_BUILD_SHARED: ${SBX_BUILD_SHARED}")
 option(SBX_BUILD_TESTS "Build tests" On)
 message(STATUS "SBX_BUILD_TESTS: ${SBX_BUILD_TESTS}")
 
+if(${SBX_BUILD_TESTS})
+  enable_testing()
+endif()
+
 option(SBX_CONSTEXPR_ENABLED "Enable constexpr" On)
 message(STATUS "SBX_CONSTEXPR_ENABLED: ${SBX_CONSTEXPR_ENABLED}")
 

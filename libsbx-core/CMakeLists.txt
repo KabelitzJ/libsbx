@@ -17,10 +17,10 @@ endif()
 
 add_library(${CMAKE_PROJECT_NAME}::${PROJECT_NAME} ALIAS ${PROJECT_NAME})
 
-find_package(fmt REQUIRED)
-find_package(spdlog REQUIRED)
-find_package(range-v3 REQUIRED)
-find_package(easy_profiler REQUIRED)
+find_package(fmt CONFIG REQUIRED)
+find_package(spdlog CONFIG REQUIRED)
+find_package(range-v3 CONFIG REQUIRED)
+find_package(easy_profiler CONFIG REQUIRED)
 
 target_sources(
   ${PROJECT_NAME}

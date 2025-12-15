@@ -69,10 +69,6 @@ class libsbx_recipe(ConanFile):
     # "!demo/assets/**"
   )
 
-  conf_info = {
-    "libsbx:dotnet_dir": None,
-  }
-
   def config_options(self):
     if self.settings.os == "Windows":
       self.options.fPIC = False
@@ -105,6 +101,10 @@ class libsbx_recipe(ConanFile):
 
   def build_requirements(self):
     self.tool_requires("cmake/[>=3.20]")
+
+  def test_requirements(self):
+    if self.options.build_tests:
+      self.test_requires("gtest/1.17.0")
 
   def requirements(self):
     self.requires("fmt/11.2.0", transitive_headers=True)
@@ -143,8 +143,8 @@ class libsbx_recipe(ConanFile):
     self.requires("sol2/3.5.0")
     self.requires("magic_enum/0.9.7")
 
-    if self.options.build_tests:
-      self.test_requires("gtest/1.17.0")
+    # if self.options.build_tests:
+    #   self.test_requires("gtest/1.17.0")
 
   def generate(self):
     deps = CMakeDeps(self)
@@ -218,8 +218,8 @@ class libsbx_recipe(ConanFile):
       "range-v3::range-v3"
     ]
 
-    if self.options.build_tests:
-      self.cpp_info.components["math"].requires.append("gtest::gtest")
+    # if self.options.build_tests:
+    #   self.cpp_info.components["math"].requires.append("GTest::gtest")
 
     self.cpp_info.components["core"].requires = [
       "range-v3::range-v3",

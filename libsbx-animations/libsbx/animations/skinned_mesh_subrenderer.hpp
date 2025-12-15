@@ -15,6 +15,8 @@
 
 #include <libsbx/utility/logger.hpp>
 
+#include <libsbx/memory/monotonic_arena.hpp>
+
 #include <libsbx/containers/octree.hpp>
 
 #include <libsbx/math/color.hpp>

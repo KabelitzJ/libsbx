@@ -60,11 +60,5 @@ ConstantBuffer<push_data> push;
 [shader("compute")]
 [numthreads(16, 16, 1)]
 void main(cs_in input) {
-  uint width, height;
-  output.GetDimensions(width, height);
-
-  float2 uv = (float2(input.id.xy) + float2(0.5)) / float2(width, height);
-  float2 result = brdf(uv.x, 1.0 - uv.y);
-
-  output.Store(input.id.xy, result);
+  
 }

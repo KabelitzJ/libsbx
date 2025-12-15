@@ -1,5 +1,8 @@
 import os
+import shutil
+import subprocess
 from conan import ConanFile
+from conan.errors import ConanInvalidConfiguration
 from conan.tools.cmake import CMakeDeps, CMakeToolchain, CMake, cmake_layout
 from conan.tools.files import copy, mkdir
 from conan.tools.system.package_manager import Apt
@@ -69,6 +72,9 @@ class libsbx_recipe(ConanFile):
     # "!demo/assets/**"
   )
 
+  REQUIRED_VULKAN_VERSION = (1, 4, 321, 0)
+  REQUIRED_VULKAN_VERSION_STR = ".".join(map(str, REQUIRED_VULKAN_VERSION))
+
   def config_options(self):
     if self.settings.os == "Windows":
       self.options.fPIC = False
@@ -95,9 +101,78 @@ class libsbx_recipe(ConanFile):
     self.cpp.build.components["utility"].libdirs = [self.folders.build]
     self.cpp.build.components["editor"].libdirs = [self.folders.build]
 
+  def _ensure_dotnet(self):
+    if self.settings.os == "Linux":
+      apt = Apt(self)
+      apt.install(["dotnet-sdk-9.0"], update=True, check=True)
+    elif self.settings.os == "Windows": 
+      if not shutil.which("dotnet"):
+        raise ConanInvalidConfiguration(
+          "dotnet SDK 9.0 is required\n."
+          "Please install it from https://dotnet.microsoft.com/"
+        )
+      
+  def _normalize_version(self, version, length=4):
+    return version + (0,) * (length - len(version))
+      
+  def _get_vulkan_instance_version(self):
+    exe = shutil.which("vulkaninfo")
+    if not exe:
+      return None
+
+    try:
+      out = subprocess.check_output(
+        [exe, "--summary"],
+        stderr=subprocess.STDOUT,
+        text=True
+      )
+    except Exception:
+      return None
+
+    for line in out.splitlines():
+      if line.startswith("Vulkan Instance Version"):
+        version = line.split(":")[-1].strip()
+        return tuple(map(int, version.split(".")))
+
+    return None
+
+  def _endure_vulkan_sdk(self):
+    if self.settings.os == "Linux":
+      apt = Apt(self)
+
+      apt.install(["vulkan-tools"],update=True,check=True)
+
+      version = self._get_vulkan_instance_version()
+
+      if not version:
+        raise ConanInvalidConfiguration(
+          "Vulkan not found.\n"
+          f"Vulkan SDK {self.REQUIRED_VULKAN_VERSION} required.\n"
+          "Please install Vulkan SDK:\n"
+          "  https://vulkan.lunarg.com/sdk/home#linux"
+        )
+      
+      version = self._normalize_version(version)
+
+      if version < self.REQUIRED_VULKAN_VERSION:
+        raise ConanInvalidConfiguration(
+          f"Vulkan Instance >= {'.'.join(map(str, self.REQUIRED_VULKAN_VERSION))} required.\n"
+          f"Detected: {'.'.join(map(str, version))}"
+        )
+    elif self.settings.os == "Windows":
+      ok, version = self._check_vulkan_sdk_version()
+
+      if not ok:
+        raise ConanInvalidConfiguration(
+          "Vulkan not found.\n"
+          f"Vulkan SDK {self.REQUIRED_VULKAN_VERSION} required.\n"
+          "Please install Vulkan SDK:\n"
+          "  https://vulkan.lunarg.com/sdk/home#windows"
+        )
+
   def system_requirements(self):
-    apt = Apt(self)
-    apt.install(["dotnet-sdk-9.0"], update=True, check=True)
+    self._ensure_dotnet()
+    self._endure_vulkan_sdk()
 
   def build_requirements(self):
     self.tool_requires("cmake/[>=3.20]")
@@ -116,12 +191,12 @@ class libsbx_recipe(ConanFile):
     self.requires("glfw/3.3.8")
     # self.requires("sol2/3.3.1")
     self.requires("tinyobjloader/2.0.0-rc10")
-    self.requires("spirv-cross/1.4.321.0")
+    self.requires(f"spirv-cross/{self.REQUIRED_VULKAN_VERSION_STR}")
     # self.requires("spirv-headers/1.2.198.0")
     # self.requires("spirv-tools/1.4.309.0")
     # self.requires("slang/0.9")
     self.requires("vulkan-memory-allocator/3.3.0")
-    self.requires("vulkan-headers/1.4.321.0")
+    self.requires(f"vulkan-headers/{self.REQUIRED_VULKAN_VERSION_STR}")
     self.requires("stb/cci.20230920")
     self.requires("range-v3/0.12.0", transitive_headers=True)
     self.requires("freetype/2.14.1")

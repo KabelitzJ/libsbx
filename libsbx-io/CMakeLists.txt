@@ -110,10 +110,12 @@ install(
 )
 
 set(_LINK_OPTIONS)
+set(_COMPILE_OPTIONS)
 
-# if(NOT MINGW)
-#   list(APPEND _LINK_OPTIONS -fsanitize=address,undefined)
-# endif()
+if(${SBX_USE_ASAN} AND NOT MINGW)
+  list(APPEND _COMPILE_OPTIONS -fsanitize=address,undefined -fno-omit-frame-pointer)
+  list(APPEND _LINK_OPTIONS -fsanitize=address,undefined)
+endif()
 
 if(MINGW)
   list(APPEND _LINK_OPTIONS -Wl,--disable-dynamicbase,--default-image-base-low)
@@ -123,6 +125,12 @@ target_link_options(
   ${PROJECT_NAME}
   PUBLIC
     ${_LINK_OPTIONS}
+)
+
+target_compile_options(
+  ${PROJECT_NAME}
+  PRIVATE
+    ${_COMPILE_OPTIONS}
 )
 
 

@@ -24,4 +24,6 @@ dependencies/
 CMakeUserPresets.json
 dump.txt
 
+suppress.asan_*
+
 sandbox.sln

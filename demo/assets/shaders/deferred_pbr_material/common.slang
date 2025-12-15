@@ -55,8 +55,8 @@ struct static_instance_data {
 struct skinned_instance_data {
   uint transform_index;
   uint material_index;
-  uint bone_matrix_offset;
   uint object_id;
+  uint bone_matrix_offset;
 }; // struct instance_data
 
 struct static_vertex {

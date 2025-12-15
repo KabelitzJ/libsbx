@@ -122,6 +122,8 @@ private:
 
 }; // class compute_pipeline
 
+using compute_pipeline_handle = resource_handle<compute_pipeline>;
+
 } // namespace sbx::graphics
 
 #endif // LIBSBX_GRAPHICS_COMPUTE_PIPELINE_HPP_

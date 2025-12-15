@@ -120,7 +120,7 @@ struct skinned_mesh_traits {
       entry->second = math::random::next<std::uint32_t>(1u); 
     }
 
-    return models::instance_data{transform_index, material_index, payload.bone_offset, entry->second};
+    return models::instance_data{transform_index, material_index, entry->second, payload.bone_offset};
   }
 
 private:
@@ -190,10 +190,8 @@ public:
       auto& instance_data_buffer = graphics_module.get_resource<graphics::storage_buffer>(data.instance_data_buffer);
       pipeline_data.push_handler.push("instance_data_buffer", instance_data_buffer.address());
 
-      const auto hash = models::material_key_hash{}(key);
-
-      for (const auto& range_ref : data.ranges) {
-        auto& mesh = assets_module.get_asset<animations::mesh>(range_ref.mesh_id);
+      for (const auto& draw_range : data.ranges) {
+        auto& mesh = assets_module.get_asset<animations::mesh>(draw_range.mesh_id);
 
         mesh.bind(command_buffer);
 
@@ -202,7 +200,7 @@ public:
 
         auto& draw_commands_buffer = graphics_module.get_resource<graphics::storage_buffer>(data.draw_commands_buffer);
 
-        command_buffer.draw_indexed_indirect(draw_commands_buffer, range_ref.range.offset, range_ref.range.count);
+        command_buffer.draw_indexed_indirect(draw_commands_buffer, draw_range.range.offset, draw_range.range.count);
       }
     }
   }
@@ -214,6 +212,8 @@ private:
     graphics::graphics_pipeline_handle pipeline;
     graphics::push_handler push_handler;
     graphics::descriptor_handler scene_descriptor_handler;
+
+    graphics::compute_pipeline_handle skinning_pipeline;
 
     pipeline_data(const graphics::graphics_pipeline_handle& handle)
     : pipeline{handle},

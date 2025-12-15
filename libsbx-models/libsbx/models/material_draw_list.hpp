@@ -26,7 +26,7 @@ struct alignas(16) instance_data {
   std::uint32_t transform_index;
   std::uint32_t material_index;
   std::uint32_t object_id;
-  std::uint32_t _pad0;
+  std::uint32_t payload;
 }; // struct instance_data
 
 template<typename Traits>
@@ -86,6 +86,8 @@ public:
 
     for (auto& [key, pipeline_data] : _pipeline_data) {
       pipeline_data.submesh_instances.clear();
+      pipeline_data.allocator.reset();
+      pipeline_data.skinning_jobs.clear();
     }
 
     for (auto& buckets : _bucket_ranges) {
@@ -142,12 +144,41 @@ public:
 
 private:
 
+  struct vertex_allocator {
+    std::uint32_t next_vertex = 0;
+
+    void reset() {
+      next_vertex = 0;
+    }
+
+    auto allocate(std::uint32_t count) -> std::uint32_t {
+      auto base = next_vertex;
+      next_vertex += count;
+
+      return base;
+    }
+  }; // struct vertex_allocator
+
+  struct skinning_job {
+    math::uuid mesh_id;
+    uint32_t submesh_index;
+
+    std::int32_t instance_offset;
+    std::int32_t instance_count;
+
+    std::uint32_t base_vertex;
+    std::uint32_t vertex_count;
+  }; // struct skinning_job
+
   struct pipeline_data {
 
     std::unordered_map<math::uuid, std::vector<std::vector<instance_data>>> submesh_instances;
 
     graphics::storage_buffer_handle draw_commands_buffer;
     graphics::storage_buffer_handle instance_data_buffer;
+
+    vertex_allocator allocator;
+    std::vector<skinning_job> skinning_jobs;
 
     pipeline_data() {
       auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
@@ -264,14 +295,28 @@ private:
 
         const auto& submesh = mesh.submesh(submesh_index);
 
+        // const auto vertices_per_instance = submesh.vertex_count;
+        // const auto total_vertices = vertices_per_instance * static_cast<uint32_t>(instances.size());
+
+        // const auto base_vertex = pipeline.vertex_allocator.allocate(total_vertices);
+
         auto command = VkDrawIndexedIndirectCommand{};
-        command.indexCount    = submesh.index_count;
+        command.indexCount = submesh.index_count;
         command.instanceCount = static_cast<std::uint32_t>(instances.size());
-        command.firstIndex    = submesh.index_offset;
-        command.vertexOffset  = submesh.vertex_offset;
+        command.firstIndex = submesh.index_offset;
+        command.vertexOffset = submesh.vertex_offset;
         command.firstInstance = base_instance;
 
         draw_commands.push_back(command);
+
+        // pipeline.skinning_jobs.push_back({
+        //   .mesh_id         = mesh_id,
+        //   .submesh_index   = static_cast<uint32_t>(submesh_index),
+        //   .instance_offset = base_instance,
+        //   .instance_count  = command.instanceCount,
+        //   .base_vertex     = base_vertex,
+        //   .vertex_count    = vertices_per_instance
+        // });
 
         utility::append(instance_data, std::move(instances));
 

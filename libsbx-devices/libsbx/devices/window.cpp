@@ -12,9 +12,10 @@ window::window(const window_create_info& create_info)
 
   _width = create_info.width;
   _height = create_info.height;
+  _title = create_info.title;
 
-  if (utility::build_configuration_v == utility::build_configuration::debug) {
-    _title = fmt::format("{} [Debug] v" SBX_CORE_VERSION_STRING "+" SBX_COMPILE_TIMESTAMP, create_info.title);
+  if constexpr (utility::build_configuration_v == utility::build_configuration::debug) {
+    _title = fmt::format("{} [Debug] v" SBX_CORE_VERSION_STRING "+" SBX_COMPILE_TIMESTAMP, _title);
   }
 
   auto* monitor = glfwGetPrimaryMonitor();

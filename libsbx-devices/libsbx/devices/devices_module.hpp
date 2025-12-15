@@ -27,27 +27,32 @@ class devices_module final : public core::module<devices_module> {
 
   inline static const auto is_registered = register_module(stage::pre);
 
+  struct context {
+
+    context() {
+      if (!glfwInit()) {
+        throw std::runtime_error{"Could not initialize glfw"};
+      }
+
+      if (!glfwVulkanSupported()) {
+        throw std::runtime_error{"Glfw does not support vulkan"};
+      }
+    }
+
+    ~context() {
+      glfwTerminate();
+    }
+
+  }; // struct context
+
 public:
 
-  devices_module() {
-    if (!glfwInit()) {
-      throw std::runtime_error{"Could not initialize glfw"};
-    }
-
-    if (!glfwVulkanSupported()) {
-      throw std::runtime_error{"Glfw does not support vulkan"};
-    }
-
-    // _window = std::make_unique<devices::window>(window_create_info{"Demo", 1280, 720});
-    // std::construct_at(std::launder(reinterpret_cast<devices::window*>(&_window)), window_create_info{"Demo", 1280, 720});
-    // _window.construct(window_create_info{"Demo", 1280, 720});
-    _window = std::make_unique<devices::window>(window_create_info{"Demo", 1280, 720});
-  }
+  devices_module()
+  : _context{},
+    _window{window_create_info{"Demo", 1280, 720}} { }
 
   ~devices_module() override {
-    _window.reset();
 
-    glfwTerminate();
   }
 
   auto update() -> void override {
@@ -59,7 +64,7 @@ public:
   }
 
   auto window() -> devices::window& {
-    return *_window;
+    return _window;
   }
 
   auto required_instance_extensions() const -> std::vector<const char*> {
@@ -71,7 +76,8 @@ public:
 
 private:
 
-  std::unique_ptr<devices::window> _window;
+  context _context;
+  devices::window _window;
 
 }; // class devices_module
 

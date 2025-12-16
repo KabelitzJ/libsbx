@@ -86,8 +86,6 @@ public:
 
     for (auto& [key, pipeline_data] : _pipeline_data) {
       pipeline_data.submesh_instances.clear();
-      pipeline_data.allocator.reset();
-      pipeline_data.skinning_jobs.clear();
     }
 
     for (auto& buckets : _bucket_ranges) {
@@ -144,31 +142,12 @@ public:
 
 private:
 
-  struct vertex_allocator {
-    std::uint32_t next_vertex = 0;
-
-    void reset() {
-      next_vertex = 0;
-    }
-
-    auto allocate(std::uint32_t count) -> std::uint32_t {
-      auto base = next_vertex;
-      next_vertex += count;
-
-      return base;
-    }
-  }; // struct vertex_allocator
-
-  struct skinning_job {
-    math::uuid mesh_id;
-    uint32_t submesh_index;
-
-    std::int32_t instance_offset;
-    std::int32_t instance_count;
-
-    std::uint32_t base_vertex;
-    std::uint32_t vertex_count;
-  }; // struct skinning_job
+  template<typename EmitInstanced, typename EmitSingle>
+  struct draw_command_emitter {
+    std::uint32_t base_instance;
+    EmitInstanced emit_instanced;
+    EmitSingle emit_single;
+  }; // struct draw_command_emitter
 
   struct pipeline_data {
 
@@ -176,9 +155,6 @@ private:
 
     graphics::storage_buffer_handle draw_commands_buffer;
     graphics::storage_buffer_handle instance_data_buffer;
-
-    vertex_allocator allocator;
-    std::vector<skinning_job> skinning_jobs;
 
     pipeline_data() {
       auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
@@ -277,51 +253,35 @@ private:
 
     auto draw_commands = std::vector<VkDrawIndexedIndirectCommand>{};
     auto instance_data = std::vector<models::instance_data>{};
-    auto base_instance = std::uint32_t{0u};
+    // auto base_instance = std::uint32_t{0u};
+    auto range = graphics::draw_command_range{};
 
     const auto& buckets = _material_buckets.at(key);
+
+    auto emitter = draw_command_emitter{
+      .base_instance = std::uint32_t{0u},
+      .emit_instanced = [&](const VkDrawIndexedIndirectCommand& command, std::vector<models::instance_data>&& instances) -> void {
+        draw_commands.push_back(command);
+        utility::append(instance_data, std::move(instances));
+        range.count++;
+      },
+      .emit_single = [&](const VkDrawIndexedIndirectCommand& command, const models::instance_data& instance) -> void {
+        draw_commands.push_back(command);
+        instance_data.push_back(instance);
+        range.count++;
+      }
+    };
 
     for (auto& [mesh_id, submesh_vectors] : pipeline.submesh_instances) {
       auto& mesh = assets_module.get_asset<mesh_type>(mesh_id);
 
-      auto range = graphics::draw_command_range{};
       range.offset = static_cast<std::uint32_t>(draw_commands.size());
       range.count  = 0u;
 
       for (auto&& [submesh_index, instances] : ranges::views::enumerate(submesh_vectors)) {
-        if (instances.empty()) {
-          continue;
-        }
-
         const auto& submesh = mesh.submesh(submesh_index);
 
-        // const auto vertices_per_instance = submesh.vertex_count;
-        // const auto total_vertices = vertices_per_instance * static_cast<uint32_t>(instances.size());
-
-        // const auto base_vertex = pipeline.vertex_allocator.allocate(total_vertices);
-
-        auto command = VkDrawIndexedIndirectCommand{};
-        command.indexCount = submesh.index_count;
-        command.instanceCount = static_cast<std::uint32_t>(instances.size());
-        command.firstIndex = submesh.index_offset;
-        command.vertexOffset = submesh.vertex_offset;
-        command.firstInstance = base_instance;
-
-        draw_commands.push_back(command);
-
-        // pipeline.skinning_jobs.push_back({
-        //   .mesh_id         = mesh_id,
-        //   .submesh_index   = static_cast<uint32_t>(submesh_index),
-        //   .instance_offset = base_instance,
-        //   .instance_count  = command.instanceCount,
-        //   .base_vertex     = base_vertex,
-        //   .vertex_count    = vertices_per_instance
-        // });
-
-        utility::append(instance_data, std::move(instances));
-
-        base_instance += command.instanceCount;
-        range.count++;
+        emitter.base_instance += traits_type::build_draw_commands(submesh, std::move(instances), emitter);
       }
 
       if (range.count > 0) {

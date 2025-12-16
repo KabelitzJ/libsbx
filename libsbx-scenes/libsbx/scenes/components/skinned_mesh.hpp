@@ -32,22 +32,16 @@ public:
     math::uuid material;
   }; // struct submesh
 
-  skinned_mesh(const math::uuid mesh_id, const math::uuid animation_id, const std::vector<submesh>& submeshes)
+  skinned_mesh(const math::uuid mesh_id, const std::vector<submesh>& submeshes)
   : _mesh_id{mesh_id},
-    _animation_id{animation_id},
     _submeshes{submeshes} { }
 
-  skinned_mesh(const math::uuid mesh_id, const math::uuid animation_id, const math::uuid material)
+  skinned_mesh(const math::uuid mesh_id, const math::uuid material)
   : _mesh_id{mesh_id},
-    _animation_id{animation_id},
     _submeshes{{0, material}} { }
 
   auto mesh_id() const noexcept -> math::uuid {
     return _mesh_id;
-  }
-
-  auto animation_id() const noexcept -> math::uuid {
-    return _animation_id;
   }
 
   auto submeshes() const noexcept -> const std::vector<submesh>& {
@@ -58,8 +52,8 @@ public:
     return _submeshes;
   }
 
-  auto set_nodes(const std::vector<node>& nodes) -> void {
-    _nodes = nodes;
+  auto set_nodes(std::vector<node>&& nodes) -> void {
+    _nodes = std::move(nodes);
   }
 
   auto nodes() const -> const std::vector<node>& {
@@ -81,11 +75,9 @@ public:
 private:
 
   math::uuid _mesh_id;
-  math::uuid _animation_id;
   std::vector<submesh> _submeshes;
 
   std::vector<node> _nodes;
-
   std::vector<math::matrix4x4> _pose;
 
 }; // class skinned_mesh

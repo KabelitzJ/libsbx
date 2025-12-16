@@ -66,7 +66,15 @@ auto draw_list::clear() -> void {
 auto draw_list::create_buffer(const utility::hashed_string& name, VkDeviceSize size, VkBufferUsageFlags additional_usage) -> void {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
   
-  _buffers.emplace(name, graphics_module.add_resource<storage_buffer>(size, additional_usage));
+  _buffers.emplace(name, graphics_module.add_resource<graphics::storage_buffer>(size, additional_usage));
+}
+
+auto draw_list::destroy_buffer(const utility::hashed_string& name) -> void {
+  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
+  
+  graphics_module.remove_resource<graphics::storage_buffer>(_buffers.at(name));
+
+  _buffers.erase(name);
 }
 
 auto draw_list::get_buffer(const utility::hashed_string& name) -> storage_buffer& {

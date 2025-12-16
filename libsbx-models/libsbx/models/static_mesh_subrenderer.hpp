@@ -112,6 +112,24 @@ struct static_mesh_traits {
     return instance_data{transform_index, material_index, entry->second, 0u};
   }
 
+  template<typename Emitter>
+  static auto build_draw_commands(const graphics::submesh& submesh, std::vector<models::instance_data>&& instances, Emitter&& emitter) -> std::uint32_t {
+    if (instances.empty()) {
+      return 0;
+    }
+
+    auto command = VkDrawIndexedIndirectCommand{};
+    command.indexCount = submesh.index_count;
+    command.instanceCount = static_cast<std::uint32_t>(instances.size());
+    command.firstIndex = submesh.index_offset;
+    command.vertexOffset = submesh.vertex_offset;
+    command.firstInstance = emitter.base_instance;
+
+    emitter.emit_instanced(command, std::move(instances));
+
+    return command.instanceCount;
+  }
+
 private:
 
   inline static auto _selection_tags = std::unordered_map<scenes::selection_tag, std::uint32_t>{};

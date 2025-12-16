@@ -74,6 +74,11 @@ struct skinned_mesh_traits {
     std::uint32_t bone_offset;
   }; // struct instance_payload
 
+  struct range {
+    std::uint32_t first;
+    std::uint32_t last;
+  }; // struct range
+
   inline static const auto bone_matrices_buffer_name = utility::hashed_string{"bone_matrices"};
 
   template<typename DrawList>
@@ -83,13 +88,15 @@ struct skinned_mesh_traits {
 
   template<typename DrawList>
   static auto destroy_shared_buffers([[maybe_unused]] DrawList& draw_list) -> void {
-
+    draw_list.destroy_buffer(bone_matrices_buffer_name);
   }
 
   template<typename DrawList>
   static auto update_shared_buffers(DrawList& draw_list) -> void {
     draw_list.update_buffer(_bone_matrices, bone_matrices_buffer_name);
+
     _bone_matrices.clear();
+    _mesh_to_bone_matrix_range.clear();
   }
 
   template <typename Callable>
@@ -100,18 +107,23 @@ struct skinned_mesh_traits {
     for (auto&& [node, skinned_mesh, selection_tag, animator] : query.each()) {
       const auto transform = models::transform_data{scene.world_transform(node), scene.world_normal(node)};
 
-      const auto bone_offset = static_cast<std::uint32_t>(_bone_matrices.size());
       const auto& pose = skinned_mesh.pose();
+
+      const auto bone_offset = static_cast<std::uint32_t>(_bone_matrices.size());
+      const auto bone_count = static_cast<std::uint32_t>(pose.size());
 
       utility::append(_bone_matrices, pose);
 
+      const auto& mesh_id = skinned_mesh.mesh_id();
+
       for (const auto& submesh : skinned_mesh.submeshes()) {
-        const auto& mesh_id = skinned_mesh.mesh_id();
         const auto submesh_index = submesh.index;
         const auto& material_id = submesh.material;
 
         std::invoke(callable, skinned_mesh, mesh_id, submesh_index, material_id, transform, selection_tag, instance_payload{bone_offset});
       }
+
+      _mesh_to_bone_matrix_range[mesh_id].emplace_back(bone_offset, bone_count);
     }
   }
 
@@ -125,10 +137,46 @@ struct skinned_mesh_traits {
     return models::instance_data{transform_index, material_index, entry->second, payload.bone_offset};
   }
 
+  template<typename Emitter>
+  static auto build_draw_commands(const graphics::submesh& submesh, std::vector<models::instance_data>&& instances, Emitter&& emitter) -> std::uint32_t {
+    auto base_instance_offset = std::uint32_t{0};
+
+    for (const auto& instance : instances) {
+      auto command = VkDrawIndexedIndirectCommand{};
+      command.indexCount = submesh.index_count;
+      command.instanceCount = 1;
+      command.firstIndex = submesh.index_offset;
+      command.vertexOffset = submesh.vertex_offset;
+      command.firstInstance = emitter.base_instance + base_instance_offset;
+
+      emitter.emit_single(command, instance);
+
+      ++base_instance_offset;
+    }
+
+    return base_instance_offset;
+
+    // if (instances.empty()) {
+    //   return 0;
+    // }
+
+    // auto command = VkDrawIndexedIndirectCommand{};
+    // command.indexCount = submesh.index_count;
+    // command.instanceCount = static_cast<std::uint32_t>(instances.size());
+    // command.firstIndex = submesh.index_offset;
+    // command.vertexOffset = submesh.vertex_offset;
+    // command.firstInstance = emitter.base_instance;
+
+    // emitter.emit_instanced(command, std::move(instances));
+
+    // return command.instanceCount;
+  }
+
 private:
 
   inline static auto _bone_matrices = std::vector<math::matrix4x4>{};
   inline static auto _selection_tags = std::unordered_map<scenes::selection_tag, std::uint32_t>{};
+  inline static auto _mesh_to_bone_matrix_range = std::unordered_map<math::uuid, std::vector<range>>{};
 
 }; // struct skinned_mesh_traits
 

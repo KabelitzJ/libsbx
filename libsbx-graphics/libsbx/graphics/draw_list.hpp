@@ -50,6 +50,8 @@ public:
   auto clear() -> void;
 
   auto create_buffer(const utility::hashed_string& name, VkDeviceSize size, VkBufferUsageFlags additional_usage = 0) -> void;
+  
+  auto destroy_buffer(const utility::hashed_string& name) -> void;
 
   template<typename Type>
   auto update_buffer(const std::vector<Type>& buffer, const utility::hashed_string& name) -> void;

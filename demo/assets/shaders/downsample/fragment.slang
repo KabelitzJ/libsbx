@@ -12,22 +12,22 @@ struct fs_out {
 };
 
 [shader("fragment")]
-fs_out main(fs_in in) {
-  fs_out out;
+fs_out main(fs_in input) {
+  fs_out output;
 
   uint w, h;
   source_image.GetDimensions(w, h);
 
   float2 texel = float2(1.0 / float(w), 1.0 / float(h));
 
-  float3 color0 = source_image.Sample(in.uv + texel * float2(-0.5, -0.5)).rgb;
-  float3 color1 = source_image.Sample(in.uv + texel * float2( 0.5, -0.5)).rgb;
-  float3 color2 = source_image.Sample(in.uv + texel * float2(-0.5,  0.5)).rgb;
-  float3 color3 = source_image.Sample(in.uv + texel * float2( 0.5,  0.5)).rgb;
+  float3 color0 = source_image.Sample(input.uv + texel * float2(-0.5, -0.5)).rgb;
+  float3 color1 = source_image.Sample(input.uv + texel * float2( 0.5, -0.5)).rgb;
+  float3 color2 = source_image.Sample(input.uv + texel * float2(-0.5,  0.5)).rgb;
+  float3 color3 = source_image.Sample(input.uv + texel * float2( 0.5,  0.5)).rgb;
 
   float3 avg = (color0 + color1 + color2 + color3) * 0.25;
 
-  out.color = float4(avg, 1.0);
+  output.color = float4(avg, 1.0);
 
-  return out;
+  return output;
 }

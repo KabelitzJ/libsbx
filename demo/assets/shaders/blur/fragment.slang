@@ -79,8 +79,8 @@ float4 gaussian_blur_13(float2 uv, float2 resolution, float2 direction) {
 }
 
 [shader("fragment")]
-fs_out main(fs_in in) {
-  fs_out out;
+fs_out main(fs_in input) {
+  fs_out output;
 
   uint w, h;
   image.GetDimensions(w, h);
@@ -90,14 +90,14 @@ fs_out main(fs_in in) {
   float4 color = float4(1, 0, 1, 1);
 
   if (blur_type == BLUR_TYPE_GAUSSIAN_5) {
-    color = gaussian_blur_5(in.uv, resolution, push.direction);
+    color = gaussian_blur_5(input.uv, resolution, push.direction);
   } else if (blur_type == BLUR_TYPE_GAUSSIAN_9) {
-    color = gaussian_blur_9(in.uv, resolution, push.direction);
+    color = gaussian_blur_9(input.uv, resolution, push.direction);
   } else if (blur_type == BLUR_TYPE_GAUSSIAN_13) {
-    color = gaussian_blur_13(in.uv, resolution, push.direction);
+    color = gaussian_blur_13(input.uv, resolution, push.direction);
   }
 
-  out.color = color;
+  output.color = color;
 
-  return out;
+  return output;
 }

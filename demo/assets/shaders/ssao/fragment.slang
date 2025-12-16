@@ -41,13 +41,13 @@ float3x3 build_tbn(float3 normal) {
 }
 
 [shader("fragment")]
-fs_out main(fs_in in) {
-  fs_out out;
+fs_out main(fs_in input) {
+  fs_out output;
 
-  float3 normal_world = normalize(normal_image.Sample(in.uv).xyz * 2.0f - 1.0f);
+  float3 normal_world = normalize(normal_image.Sample(input.uv).xyz * 2.0f - 1.0f);
   float3 normal_view = normalize(mul(scene.view, float4(normal_world, 0.0f)).xyz);
 
-  float3 position_world = position_image.Sample(in.uv).xyz;
+  float3 position_world = position_image.Sample(input.uv).xyz;
   float3 position_view = mul(scene.view, float4(position_world, 1.0f)).xyz;
 
   float depth_view = -position_view.z;
@@ -60,7 +60,7 @@ fs_out main(fs_in in) {
   int2 noise_dim;
   noise_image.GetDimensions(noise_dim.x, noise_dim.y);
 
-  float2 noise_uv = float2(float(tex_dim.x) / float(noise_dim.x), float(tex_dim.y) / (noise_dim.y)) * in.uv;
+  float2 noise_uv = float2(float(tex_dim.x) / float(noise_dim.x), float(tex_dim.y) / (noise_dim.y)) * input.uv;
   float3 random = noise_image.Sample(noise_uv).xyz * 2.0 - 1.0;
 
   float3 tangent = normalize(random - normal_view * dot(random, normal_view));
@@ -93,7 +93,7 @@ fs_out main(fs_in in) {
     occlusion += (fetched_depth >= sample_pos.z + push.bias ? 1.0 : 0.0) * range_check;
   }
 
-  out.occlusion = occlusion / count;
+  output.occlusion = occlusion / count;
 
-  return out;
+  return output;
 }

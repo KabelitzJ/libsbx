@@ -30,6 +30,7 @@
 #include <libsbx/utility/iterator.hpp>
 
 #include <libsbx/core/engine.hpp>
+#include <libsbx/core/profiler.hpp>
 
 #include <libsbx/devices/input.hpp>
 
@@ -79,6 +80,13 @@ struct skinned_mesh_traits {
     std::uint32_t last;
   }; // struct range
 
+  struct skinning_job {
+    std::uint64_t skinned_vertices;
+    std::uint64_t static_vertices;
+    std::uint32_t vertex_count;
+    std::uint32_t bone_offset;
+  }; // struct skinning_job
+
   inline static const auto bone_matrices_buffer_name = utility::hashed_string{"bone_matrices"};
 
   template<typename DrawList>
@@ -99,7 +107,7 @@ struct skinned_mesh_traits {
     _mesh_to_bone_matrix_range.clear();
   }
 
-  template <typename Callable>
+  template<typename Callable>
   static auto for_each_submission(scenes::scene& scene, Callable&& callable) -> void {
     // pull id to optionally pack selection; animator is present but we only need the pose already stored in component
     const auto query = scene.query<const scenes::skinned_mesh, const scenes::selection_tag, animations::animator>();
@@ -137,9 +145,11 @@ struct skinned_mesh_traits {
     return models::instance_data{transform_index, material_index, entry->second, payload.bone_offset};
   }
 
-  template<typename Emitter>
-  static auto build_draw_commands(const graphics::submesh& submesh, std::vector<models::instance_data>&& instances, Emitter&& emitter) -> std::uint32_t {
+  template<typename Mesh, typename Emitter>
+  static auto build_draw_commands(const Mesh& mesh, std::uint32_t submesh_index, std::vector<models::instance_data>&& instances, Emitter&& emitter) -> std::uint32_t {
     auto base_instance_offset = std::uint32_t{0};
+
+    const auto& submesh = mesh.submesh(submesh_index);
 
     for (const auto& instance : instances) {
       auto command = VkDrawIndexedIndirectCommand{};
@@ -155,21 +165,6 @@ struct skinned_mesh_traits {
     }
 
     return base_instance_offset;
-
-    // if (instances.empty()) {
-    //   return 0;
-    // }
-
-    // auto command = VkDrawIndexedIndirectCommand{};
-    // command.indexCount = submesh.index_count;
-    // command.instanceCount = static_cast<std::uint32_t>(instances.size());
-    // command.firstIndex = submesh.index_offset;
-    // command.vertexOffset = submesh.vertex_offset;
-    // command.firstInstance = emitter.base_instance;
-
-    // emitter.emit_instanced(command, std::move(instances));
-
-    // return command.instanceCount;
   }
 
 private:
@@ -189,8 +184,8 @@ class skinned_mesh_subrenderer final : public graphics::subrenderer {
     .uses_transparency = false,
     .rasterization_state = graphics::rasterization_state{
       .polygon_mode = graphics::polygon_mode::fill,
-      .cull_mode    = graphics::cull_mode::back,
-      .front_face   = graphics::front_face::counter_clockwise
+      .cull_mode = graphics::cull_mode::back,
+      .front_face = graphics::front_face::counter_clockwise
     }
   };
 
@@ -207,6 +202,10 @@ public:
   }
 
   auto render(graphics::command_buffer& command_buffer) -> void override {
+    EASY_FUNCTION();
+
+    SBX_PROFILE_SCOPE("static_mesh_subrenderer::render");
+
     auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
     auto& renderer = graphics_module.renderer();
 
@@ -214,7 +213,9 @@ public:
     auto& scene = core::engine::get_module<scenes::scenes_module>().scene();
 
     // obtain the skinned draw list from the pass (name must match your render graph)
-    auto& draw_list = renderer.template draw_list<skinned_mesh_material_draw_list>("skinned_mesh_material");
+    auto& draw_list = renderer.draw_list<skinned_mesh_material_draw_list>("skinned_mesh_material");
+
+    _dispatch_skinning(command_buffer);
 
     for (auto& [key, data] : draw_list.ranges(_bucket)) {
       auto& pipeline_data = _get_or_create_pipeline(key);
@@ -302,6 +303,10 @@ private:
     auto [entry, inserted] = _pipeline_cache.emplace(key, handle);
 
     return entry->second;
+  }
+
+  auto _dispatch_skinning(graphics::command_buffer& command_buffer) -> void {
+
   }
 
   // per-alpha fragment entry points (same scheme as your static renderer)

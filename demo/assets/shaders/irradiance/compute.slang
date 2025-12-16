@@ -28,11 +28,11 @@ float3 cube_direction(float2 uv, uint side) {
 
 [shader("compute")]
 [numthreads(16, 16, 1)]
-void main(cs_in in) {
+void main(cs_in input) {
   uint width, height, layers;
   output.GetDimensions(width, height, layers);
 
-  float2 uv = (float2(in.id.xy) + float2(0.5)) / float2(width, height);
+  float2 uv = (float2(input.id.xy) + float2(0.5)) / float2(width, height);
 
   for (uint face = 0; face < 6; ++face) {
     float3 N = normalize(cube_direction(uv, face));
@@ -59,6 +59,6 @@ void main(cs_in in) {
 
     float3 final_output = sbx::math::pi * color / float(sample_count);
 
-    output.Store(int3(in.id.xy, face), float4(final_output, 1.0));
+    output.Store(int3(input.id.xy, face), float4(final_output, 1.0));
   }
 }

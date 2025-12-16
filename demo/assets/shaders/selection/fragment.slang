@@ -14,7 +14,7 @@ Sampler2D<float> linear_depth_image;
 
 struct push_data {
   float4 color;     // rgb = outline color, a = max intensity
-  float  thickness; // world-space thickness in scene units
+  float  thickness; // world-space thickness input scene units
 };
 
 [[vk::push_constant]]
@@ -31,17 +31,17 @@ struct fs_out {
 static const float GOLDEN_ANGLE = 2.39996323; // radians
 
 [shader("fragment")]
-fs_out main(fs_in in) {
-  fs_out out;
+fs_out main(fs_in input) {
+  fs_out output;
 
-  float4 base = resolve_image.Sample(in.uv);
-  uint center_id = object_id_image.Sample(in.uv);
-  float norm_depth = linear_depth_image.Sample(in.uv);
+  float4 base = resolve_image.Sample(input.uv);
+  uint center_id = object_id_image.Sample(input.uv);
+  float norm_depth = linear_depth_image.Sample(input.uv);
 
   if (center_id == 0u) {
-    out.color = base;
+    output.color = base;
 
-    return out;
+    return output;
   }
 
   // World space thickness to pixel thickness
@@ -69,7 +69,7 @@ fs_out main(fs_in in) {
     float a = i * GOLDEN_ANGLE;
     float2 dir = float2(cos(a), sin(a));
 
-    float2 uv2 = in.uv + dir * (r * texel);
+    float2 uv2 = input.uv + dir * (r * texel);
     uv2 = clamp(uv2, 0.0, 1.0);
 
     uint id2 = object_id_image.Sample(uv2);
@@ -80,9 +80,9 @@ fs_out main(fs_in in) {
   }
 
   if (min_dist > thickness_px) {
-    out.color = base;
+    output.color = base;
 
-    return out;
+    return output;
   }
 
   // Fade inward
@@ -97,7 +97,7 @@ fs_out main(fs_in in) {
   float alpha = strength * push.color.a;
 
   float3 final_rgb = lerp(base.rgb, push.color.rgb, alpha);
-  out.color = float4(final_rgb, base.a);
+  output.color = float4(final_rgb, base.a);
 
-  return out;
+  return output;
 }

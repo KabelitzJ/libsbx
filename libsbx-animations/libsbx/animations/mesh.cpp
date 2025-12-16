@@ -87,8 +87,6 @@ static auto _load_mesh(const aiMesh* mesh, mesh::mesh_data& data, bone_map& bone
   submesh.vertex_offset = static_cast<std::uint32_t>(data.vertices.size());
   submesh.index_offset = static_cast<std::uint32_t>(data.indices.size());
 
-  // const auto vertices_count = data.vertices.size();
-
   data.vertices.reserve(data.vertices.size() + mesh->mNumVertices);
   data.indices.reserve(data.indices.size() + mesh->mNumFaces * 3);
 
@@ -110,10 +108,8 @@ static auto _load_mesh(const aiMesh* mesh, mesh::mesh_data& data, bone_map& bone
     data.indices.push_back(mesh->mFaces[i].mIndices[2]);
   }
 
-  submesh.index_count = data.indices.size() - submesh.index_offset;
-
-  const auto submesh_index = data.submeshes.size();
-
+  submesh.index_count = static_cast<std::uint32_t>(data.indices.size()) - submesh.index_offset;
+  submesh.vertex_count = static_cast<std::uint32_t>(data.vertices.size()) - submesh.vertex_offset;
   submesh.bounds = math::volume{_convert_vec3(mesh->mAABB.mMin), _convert_vec3(mesh->mAABB.mMax)};
   submesh.local_transform = math::matrix4x4::identity;
   submesh.name = utility::hashed_string{mesh->mName.C_Str()};
@@ -126,6 +122,7 @@ static auto _load_mesh(const aiMesh* mesh, mesh::mesh_data& data, bone_map& bone
 
     if (bone_map.find(bone_name) == bone_map.end()) {
       auto bone_id = static_cast<std::uint32_t>(bone_offsets.size());
+
       bone_map.emplace(bone_name, bone_id);
       bone_offsets.push_back(_convert_mat4(bone->mOffsetMatrix));
     }

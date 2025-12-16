@@ -23,8 +23,8 @@ static const float kernel[49] = {
 };
 
 [shader("fragment")]
-fs_out main(fs_in in) {
-  fs_out out;
+fs_out main(fs_in input) {
+  fs_out output;
 
   uint w, h;
   image.GetDimensions(w, h);
@@ -37,11 +37,11 @@ fs_out main(fs_in in) {
   for (int y = -3; y <= 3; ++y) {
     for (int x = -3; x <= 3; ++x) {
       float2 offset = float2(x, y) * texel;
-      float3 sample = image.Sample(in.uv + offset).rgb;
+      float3 sample = image.Sample(input.uv + offset).rgb;
       sum += sample * kernel[idx++];
     }
   }
 
-  out.color = float4(sum, 1.0);
-  return out;
+  output.color = float4(sum, 1.0);
+  return output;
 }

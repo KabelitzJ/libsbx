@@ -89,7 +89,7 @@ struct static_mesh_traits {
 
   }
 
-  template<class Callable>
+  template<typename Callable>
   static void for_each_submission(scenes::scene& scene, Callable&& callable) {
     auto query = scene.query<const component_type, const scenes::selection_tag>();
 
@@ -112,11 +112,13 @@ struct static_mesh_traits {
     return instance_data{transform_index, material_index, entry->second, 0u};
   }
 
-  template<typename Emitter>
-  static auto build_draw_commands(const graphics::submesh& submesh, std::vector<models::instance_data>&& instances, Emitter&& emitter) -> std::uint32_t {
+  template<typename Mesh, typename Emitter>
+  static auto build_draw_commands(const Mesh& mesh, std::uint32_t submesh_index, std::vector<models::instance_data>&& instances, Emitter&& emitter) -> std::uint32_t {
     if (instances.empty()) {
       return 0;
     }
+
+    const auto& submesh = mesh.submesh(submesh_index);
 
     auto command = VkDrawIndexedIndirectCommand{};
     command.indexCount = submesh.index_count;

@@ -33,20 +33,20 @@ float3 position_from_vertex(vertex v) {
 }
 
 [shader("vertex")]
-vs_out main(vs_in in) {
-  vs_out out;
+vs_out main(vs_in input) {
+  vs_out output;
 
-  vertex vertex = push.vertices[in.vertex_id];
+  vertex vertex = push.vertices[input.vertex_id];
   float3 in_position = position_from_vertex(vertex);
 
   float3 view_rotation = mul((float3x3)scene.view, in_position);
 
   float4 clip = mul(scene.projection, float4(view_rotation, 1.0));
-  out.sv_position = float4(clip.x, clip.y, clip.w, clip.w);
+  output.sv_position = float4(clip.x, clip.y, clip.w, clip.w);
 
   // pass-through
-  out.uv = in_position;
-  out.color = scene.light_color;
+  output.uv = in_position;
+  output.color = scene.light_color;
 
-  return out;
+  return output;
 }

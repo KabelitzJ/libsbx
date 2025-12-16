@@ -13,8 +13,8 @@ static const float EDGE_THRESHOLD_MIN = 0.0312;
 static const float EDGE_THRESHOLD_MAX = 0.125;
 
 [shader("fragment")]
-fs_out main(fs_in in) {
-  fs_out out;
+fs_out main(fs_in input) {
+  fs_out output;
 
   uint w, h;
   image.GetDimensions(w, h);
@@ -22,11 +22,11 @@ fs_out main(fs_in in) {
   float2 resolution     = float2(w, h);
   float2 inv_resolution = 1.0 / resolution;
 
-  float3 rgb_nw = image.Sample(in.uv + float2(-1.0, -1.0) * inv_resolution).xyz;
-  float3 rgb_ne = image.Sample(in.uv + float2( 1.0, -1.0) * inv_resolution).xyz;
-  float3 rgb_sw = image.Sample(in.uv + float2(-1.0,  1.0) * inv_resolution).xyz;
-  float3 rgb_se = image.Sample(in.uv + float2( 1.0,  1.0) * inv_resolution).xyz;
-  float3 rgb_m  = image.Sample(in.uv).xyz;
+  float3 rgb_nw = image.Sample(input.uv + float2(-1.0, -1.0) * inv_resolution).xyz;
+  float3 rgb_ne = image.Sample(input.uv + float2( 1.0, -1.0) * inv_resolution).xyz;
+  float3 rgb_sw = image.Sample(input.uv + float2(-1.0,  1.0) * inv_resolution).xyz;
+  float3 rgb_se = image.Sample(input.uv + float2( 1.0,  1.0) * inv_resolution).xyz;
+  float3 rgb_m  = image.Sample(input.uv).xyz;
 
   float3 luma_w = float3(0.299, 0.587, 0.114);
 
@@ -41,8 +41,8 @@ fs_out main(fs_in in) {
   float luma_range = luma_max - luma_min;
 
   if (luma_range < max(EDGE_THRESHOLD_MIN, luma_max * EDGE_THRESHOLD_MAX)) {
-    out.color = float4(rgb_m, 1.0);
-    return out;
+    output.color = float4(rgb_m, 1.0);
+    return output;
   }
 
   float2 direction = float2(
@@ -55,13 +55,13 @@ fs_out main(fs_in in) {
 
   float2 min_direction = clamp(direction * rcp_direction_min, float2(-8.0, -8.0), float2( 8.0,  8.0)) * inv_resolution;
 
-  float3 rgb_a = 0.5 * (image.Sample(in.uv + min_direction * (1.0 / 3.0 - 0.5)).xyz + image.Sample(in.uv + min_direction * (2.0 / 3.0 - 0.5)).xyz);
+  float3 rgb_a = 0.5 * (image.Sample(input.uv + min_direction * (1.0 / 3.0 - 0.5)).xyz + image.Sample(input.uv + min_direction * (2.0 / 3.0 - 0.5)).xyz);
 
-  float3 rgb_b = rgb_a * 0.5 + 0.25 * (image.Sample(in.uv + min_direction * -0.5).xyz + image.Sample(in.uv + min_direction *  0.5).xyz);
+  float3 rgb_b = rgb_a * 0.5 + 0.25 * (image.Sample(input.uv + min_direction * -0.5).xyz + image.Sample(input.uv + min_direction *  0.5).xyz);
 
   float luma_b = dot(rgb_b, luma_w);
 
-  out.color = ((luma_b < luma_min) || (luma_b > luma_max)) ? float4(rgb_a, 1.0) : float4(rgb_b, 1.0);
+  output.color = ((luma_b < luma_min) || (luma_b > luma_max)) ? float4(rgb_a, 1.0) : float4(rgb_b, 1.0);
 
-  return out;
+  return output;
 }

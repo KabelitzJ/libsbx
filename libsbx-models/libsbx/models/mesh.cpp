@@ -65,11 +65,9 @@ static auto _load_mesh(const aiMesh* mesh, mesh::mesh_data& data, const math::ma
   }
 
   auto submesh = graphics::submesh{};
-  submesh.vertex_offset = data.vertices.size();
-  submesh.index_offset = data.indices.size();
-  submesh.index_count = mesh->mNumFaces * 3u;
-
-  const auto vertices_count = data.vertices.size();
+  submesh.vertex_offset = static_cast<std::uint32_t>(data.vertices.size());
+  submesh.index_offset = static_cast<std::uint32_t>(data.indices.size());
+  // submesh.index_count = mesh->mNumFaces * 3u;
 
   auto vertices = std::vector<models::vertex3d>{};
   vertices.reserve(mesh->mNumVertices);
@@ -125,6 +123,8 @@ static auto _load_mesh(const aiMesh* mesh, mesh::mesh_data& data, const math::ma
   utility::append(data.vertices, unique_vertices);
   utility::append(data.indices, remapped_indices);
 
+  submesh.index_count = static_cast<std::uint32_t>(data.indices.size()) - submesh.index_offset;
+  submesh.vertex_count = static_cast<std::uint32_t>(data.vertices.size()) - submesh.vertex_offset;
   submesh.bounds = math::volume{_convert_vec3(mesh->mAABB.mMin), _convert_vec3(mesh->mAABB.mMax)};
   submesh.local_transform = local_transform;
   submesh.name = utility::hashed_string{mesh->mName.C_Str()};

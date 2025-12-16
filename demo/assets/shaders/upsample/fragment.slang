@@ -22,15 +22,15 @@ struct fs_out {
 }; // struct fs_out
 
 [shader("fragment")]
-fs_out main(fs_in in) {
-  fs_out out;
+fs_out main(fs_in input) {
+  fs_out output;
 
-  float3 low = low_image.Sample(in.uv).rgb;
-  float3 base = base_image.Sample(in.uv).rgb;
+  float3 low = low_image.Sample(input.uv).rgb;
+  float3 base = base_image.Sample(input.uv).rgb;
 
   float3 result = base + low * push.intensity;
 
-  out.color = float4(result, 1.0);
+  output.color = float4(result, 1.0);
 
-  return out;
+  return output;
 }

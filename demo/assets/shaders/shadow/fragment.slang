@@ -9,10 +9,10 @@ struct fs_out {
 }; // struct fs_out
 
 [shader("fragment")]
-fs_out main(fs_in in) {
-  fs_out out;
+fs_out main(fs_in input) {
+  fs_out output;
 
-  out.color = float2(in.sv_position.z, 0.0);
+  output.color = float2(input.sv_position.z, 0.0);
 
-  return out;
+  return output;
 }

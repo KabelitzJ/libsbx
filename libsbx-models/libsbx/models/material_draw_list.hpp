@@ -273,15 +273,13 @@ private:
     };
 
     for (auto& [mesh_id, submesh_vectors] : pipeline.submesh_instances) {
-      auto& mesh = assets_module.get_asset<mesh_type>(mesh_id);
+      const auto& mesh = assets_module.get_asset<mesh_type>(mesh_id);
 
       range.offset = static_cast<std::uint32_t>(draw_commands.size());
       range.count  = 0u;
 
       for (auto&& [submesh_index, instances] : ranges::views::enumerate(submesh_vectors)) {
-        const auto& submesh = mesh.submesh(submesh_index);
-
-        emitter.base_instance += traits_type::build_draw_commands(submesh, std::move(instances), emitter);
+        emitter.base_instance += traits_type::build_draw_commands(mesh, submesh_index, std::move(instances), emitter);
       }
 
       if (range.count > 0) {
@@ -298,6 +296,8 @@ private:
         }
       }
     }
+
+    utility::assert_that(emitter.base_instance == instance_data.size(), "build_draw_commands is broken");
 
     if (!draw_commands.empty()) {
       _update_buffer(pipeline.draw_commands_buffer, draw_commands);

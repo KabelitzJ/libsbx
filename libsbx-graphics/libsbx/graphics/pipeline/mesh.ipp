@@ -6,7 +6,9 @@ namespace sbx::graphics {
 
 template<vertex Vertex>
 mesh<Vertex>::mesh(const std::vector<vertex_type>& vertices, const std::vector<index_type>& indices, const math::volume& bounds)
-: _bounds{bounds} {
+: _vertex_count{static_cast<std::uint32_t>(vertices.size())},
+  _index_count{static_cast<std::uint32_t>(indices.size())},
+  _bounds{bounds} {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 
   _vertex_buffer = graphics_module.add_resource<buffer>(
@@ -21,14 +23,16 @@ mesh<Vertex>::mesh(const std::vector<vertex_type>& vertices, const std::vector<i
     VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT
   );
 
-  _submeshes.push_back(graphics::submesh{static_cast<std::uint32_t>(indices.size()), 0, 0, bounds, math::matrix4x4::identity, utility::hashed_string{"mesh"}});
+  _submeshes.push_back(graphics::submesh{_index_count, 0, _vertex_count, 0, bounds, math::matrix4x4::identity, utility::hashed_string{"mesh"}});
 
   _upload_vertices(vertices, indices);
 }
 
 template<vertex Vertex>
 mesh<Vertex>::mesh(std::vector<vertex_type>&& vertices, std::vector<index_type>&& indices, const math::volume& bounds)
-: _bounds{bounds} {
+: _vertex_count{static_cast<std::uint32_t>(vertices.size())},
+  _index_count{static_cast<std::uint32_t>(indices.size())},
+  _bounds{bounds} {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 
   _vertex_buffer = graphics_module.add_resource<buffer>(
@@ -43,7 +47,7 @@ mesh<Vertex>::mesh(std::vector<vertex_type>&& vertices, std::vector<index_type>&
     VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT
   );
 
-  _submeshes.push_back(graphics::submesh{static_cast<std::uint32_t>(indices.size()), 0, 0, bounds, math::matrix4x4::identity, utility::hashed_string{"mesh"}});
+  _submeshes.push_back(graphics::submesh{_index_count, 0, _vertex_count, 0, bounds, math::matrix4x4::identity, utility::hashed_string{"mesh"}});
   
   _upload_vertices(std::move(vertices), std::move(indices));
 }
@@ -51,6 +55,8 @@ mesh<Vertex>::mesh(std::vector<vertex_type>&& vertices, std::vector<index_type>&
 template<vertex Vertex>
 mesh<Vertex>::mesh(mesh_data&& mesh_data)
 : _submeshes{std::move(mesh_data.submeshes)},
+  _vertex_count{static_cast<std::uint32_t>(mesh_data.vertices.size())},
+  _index_count{static_cast<std::uint32_t>(mesh_data.indices.size())},
   _bounds{_calculate_bounds_from_submeshes(std::move(mesh_data.bounds))} {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 

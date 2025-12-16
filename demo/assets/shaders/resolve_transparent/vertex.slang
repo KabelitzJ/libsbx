@@ -14,12 +14,12 @@ static const float2 positions[3] = {
 };
 
 [shader("vertex")]
-vs_out main(vs_in in) {
-  vs_out out;
+vs_out main(vs_in input) {
+  vs_out output;
 
-  float2 position = positions[in.vertex_id];
-  out.uv = (position + 1.0) * 0.5;
-  out.sv_position = float4(position, 0.0, 1.0);
+  float2 position = positions[input.vertex_id];
+  output.uv = (position + 1.0) * 0.5;
+  output.sv_position = float4(position, 0.0, 1.0);
 
-  return out;
+  return output;
 }

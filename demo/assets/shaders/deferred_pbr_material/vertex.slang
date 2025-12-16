@@ -37,6 +37,7 @@ float4x4 calculate_skinning_matrix(uint4 bone_indices, float4 bone_weights, floa
     0.0, 0.0, 0.0, 0.0
   );
 
+  [unroll]
   for (int i = 0; i < 4; ++i) {
     result += bone_weights[i] * bone_matrices_buffer[bone_indices[i] + bone_matrices_offset];
   }
@@ -45,11 +46,11 @@ float4x4 calculate_skinning_matrix(uint4 bone_indices, float4 bone_weights, floa
 }
 
 [shader("vertex")]
-vs_out static_main(vs_in in) {
-  vs_out out;
+vs_out static_main(vs_in input) {
+  vs_out output;
 
-  uint global_vertex = in.vertex_id + in.base_vertex;
-  uint global_instance = in.instance_id + in.base_instance;
+  uint global_vertex = input.vertex_id + input.base_vertex;
+  uint global_instance = input.instance_id + input.base_instance;
 
   static_vertex vertex = static_push.vertex_buffer[global_vertex];
 
@@ -65,22 +66,22 @@ vs_out static_main(vs_in in) {
 
   float3 world_position = mul(transform_data.model, float4(in_position, 1.0)).xyz;
 
-  out.position = world_position;
-  out.normal = normalize(mul(transform_data.normal, float4(in_normal, 0.0)).xyz);
-  out.tangent = float4(normalize(mul(transform_data.normal, float4(in_tangent.xyz, 0.0)).xyz), in_tangent.w);
-  out.uv = in_uv;
-  out.instance_index = global_instance;
-  out.sv_position = mul(scene.projection, mul(scene.view, float4(world_position, 1.0)));
+  output.position = world_position;
+  output.normal = normalize(mul(transform_data.normal, float4(in_normal, 0.0)).xyz);
+  output.tangent = float4(normalize(mul(transform_data.normal, float4(in_tangent.xyz, 0.0)).xyz), in_tangent.w);
+  output.uv = in_uv;
+  output.instance_index = global_instance;
+  output.sv_position = mul(scene.projection, mul(scene.view, float4(world_position, 1.0)));
 
-  return out;
+  return output;
 }
 
 [shader("vertex")]
-vs_out skinned_main(vs_in in) {
-  vs_out out;
+vs_out skinned_main(vs_in input) {
+  vs_out output;
 
-  uint global_vertex = in.vertex_id + in.base_vertex;
-  uint global_instance = in.instance_id + in.base_instance;
+  uint global_vertex = input.vertex_id + input.base_vertex;
+  uint global_instance = input.instance_id + input.base_instance;
 
   skinned_vertex vertex = skinned_push.vertex_buffer[global_vertex];
 
@@ -108,12 +109,12 @@ vs_out skinned_main(vs_in in) {
   float3 normal = normalize(mul(transform_data.normal, float4(skinned_normal, 0.0)).xyz);
   float4 tangent = float4(normalize(mul(transform_data.normal, float4(skinned_tangent, 0.0)).xyz), in_tangent.w);
 
-  out.position = world_position;
-  out.normal = normal;
-  out.tangent = tangent;
-  out.uv = in_uv;
-  out.instance_index = global_instance;
-  out.sv_position = mul(scene.projection, mul(scene.view, float4(world_position, 1.0)));
+  output.position = world_position;
+  output.normal = normal;
+  output.tangent = tangent;
+  output.uv = in_uv;
+  output.instance_index = global_instance;
+  output.sv_position = mul(scene.projection, mul(scene.view, float4(world_position, 1.0)));
 
-  return out;
+  return output;
 }

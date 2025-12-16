@@ -21,13 +21,13 @@ struct vs_out {
 }; // struct vs_out
 
 [shader("vertex")]
-vs_out main(vs_in in) {
-  vs_out out;
+vs_out main(vs_in input) {
+  vs_out output;
 
-  vertex vertex = push.vertices[in.vertex_id];
+  vertex vertex = push.vertices[input.vertex_id];
 
-  out.color = vertex.color;
-  out.position = mul(push.mvp, vertex.position);
+  output.color = vertex.color;
+  output.position = mul(push.mvp, vertex.position);
 
-  return out;
+  return output;
 }

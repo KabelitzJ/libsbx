@@ -175,16 +175,16 @@ float2x2 rotation_matrix(float angle) {
 }
 
 [shader("fragment")]
-fs_out main(fs_in in) {
-  fs_out out;
+fs_out main(fs_in input) {
+  fs_out output;
 
-  float3 albedo = albedo_image.Sample(in.uv).rgb;
-  float3 world_position = position_image.Sample(in.uv).xyz;
+  float3 albedo = albedo_image.Sample(input.uv).rgb;
+  float3 world_position = position_image.Sample(input.uv).xyz;
   // [0, 1] -> [-1, 1]
-  float3 normal = normalize(normal_image.Sample(in.uv).xyz * 2.0f - 1.0f);
-  float3 mrao = material_image.Sample(in.uv).rgb;
-  float3 emissive = emissive_image.Sample(in.uv).rgb;
-  // float ssao = ssao_image.Sample(in.uv);
+  float3 normal = normalize(normal_image.Sample(input.uv).xyz * 2.0f - 1.0f);
+  float3 mrao = material_image.Sample(input.uv).rgb;
+  float3 emissive = emissive_image.Sample(input.uv).rgb;
+  // float ssao = ssao_image.Sample(input.uv);
 
   float metallic = clamp(mrao.r, 0.0, 1.0);
   float roughness = clamp(mrao.g, 0.04, 1.0);
@@ -284,15 +284,15 @@ fs_out main(fs_in in) {
 
   float3 final_color = ambient + color + emissive;
 
-  out.color = float4(final_color, 1.0);
+  output.color = float4(final_color, 1.0);
 
-  float brightness = dot(out.color.rgb, float3(0.2126, 0.7152, 0.0722));
+  float brightness = dot(output.color.rgb, float3(0.2126, 0.7152, 0.0722));
 
   if (brightness > 1.0) {
-    out.brightness = float4(out.color.rgb, 1.0);
+    output.brightness = float4(output.color.rgb, 1.0);
   } else {
-    out.brightness = float4(0.0, 0.0, 0.0, 1.0);
+    output.brightness = float4(0.0, 0.0, 0.0, 1.0);
   }
 
-  return out;
+  return output;
 }

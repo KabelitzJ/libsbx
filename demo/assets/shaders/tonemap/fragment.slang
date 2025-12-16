@@ -48,11 +48,11 @@ float3 apply_tonemap(float3 x) {
 }
 
 [shader("fragment")]
-fs_out main(fs_in in) {
-  fs_out out;
+fs_out main(fs_in input) {
+  fs_out output;
 
-  float3 color = resolve_image.Sample(in.uv).rgb;
-  // float3 bloom = bloom_image.Sample(in.uv).rgb;
+  float3 color = resolve_image.Sample(input.uv).rgb;
+  // float3 bloom = bloom_image.Sample(input.uv).rgb;
 
   // float3 hdr = color + pow(bloom, 1.2) * push.bloom_mix;
   float3 hdr = color;
@@ -67,7 +67,7 @@ fs_out main(fs_in in) {
   float3 gray = luminance.xxx;
   mapped = gray + (mapped - gray) * push.contrast;
 
-  out.color = float4(mapped, 1.0);
+  output.color = float4(mapped, 1.0);
 
-  return out;
+  return output;
 }

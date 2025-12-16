@@ -22,11 +22,11 @@ float max3(float3 vector) {
 }
 
 [shader("fragment")]
-fs_out main(fs_in in) {
-  fs_out out;
+fs_out main(fs_in input) {
+  fs_out output;
 
   // fragment revealage
-  float revealage = revealage_image.Sample(in.uv).r;
+  float revealage = revealage_image.Sample(input.uv).r;
 
   // save the blending and color texture fetch cost if there is not a transparent fragment
   if (is_approximately_equal(revealage, 1.0f)) {
@@ -34,7 +34,7 @@ fs_out main(fs_in in) {
   }
 
   // fragment color
-  float4 accumulation = accum_image.Sample(in.uv);
+  float4 accumulation = accum_image.Sample(input.uv);
 
   // suppress overflow
   if (isinf(max3(abs(accumulation.rgb)))) {
@@ -45,8 +45,8 @@ fs_out main(fs_in in) {
   float3 average = accumulation.rgb / max(accumulation.a, sbx::math::epsilon);
 
   // blend pixels
-  out.color = float4(average, 1.0f - revealage);
-  out.brightness = float4(0.0, 0.0, 0.0, 1.0);
+  output.color = float4(average, 1.0f - revealage);
+  output.brightness = float4(0.0, 0.0, 0.0, 1.0);
 
-  return out;
+  return output;
 }

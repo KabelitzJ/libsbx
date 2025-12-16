@@ -29,10 +29,10 @@ static const float3 vertices[4] = {
 static const int indices[6] = { 0, 1, 2, 2, 3, 0 };
 
 [shader("vertex")]
-vs_out main(vs_in in) {
-  vs_out out;
+vs_out main(vs_in input) {
+  vs_out output;
 
-  int index = indices[in.vertex_id];
+  int index = indices[input.vertex_id];
 
   float3 position = vertices[index] * grid_size;
 
@@ -40,10 +40,10 @@ vs_out main(vs_in in) {
   position.z += push.camera_position.z;
   position += push.origin.xyz;
 
-  out.camera_position = push.camera_position.xz;
-  out.uv = position.xz;
+  output.camera_position = push.camera_position.xz;
+  output.uv = position.xz;
 
-  out.position = mul(push.mvp, float4(position, 1.0));
+  output.position = mul(push.mvp, float4(position, 1.0));
 
-  return out;
+  return output;
 }

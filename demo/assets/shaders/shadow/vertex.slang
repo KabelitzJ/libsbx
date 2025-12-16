@@ -68,11 +68,11 @@ struct vs_out {
 }; // struct vs_out
 
 [shader("vertex")]
-vs_out main(vs_in in) {
-  vs_out out;
+vs_out main(vs_in input) {
+  vs_out output;
 
-  uint global_vertex = in.vertex_id + in.base_vertex;
-  uint global_instance = in.instance_id + in.base_instance;
+  uint global_vertex = input.vertex_id + input.base_vertex;
+  uint global_instance = input.instance_id + input.base_instance;
 
   instance_data instance_data = push.instance_data_buffer[global_instance];
 
@@ -85,7 +85,7 @@ vs_out main(vs_in in) {
   float3 in_position = sbx::common::get_position(vertex);
   float3 world_position = mul(transform_data.model, float4(in_position, 1.0)).xyz;
 
-  out.sv_position = mul(scene.light_space, float4(world_position, 1.0));
+  output.sv_position = mul(scene.light_space, float4(world_position, 1.0));
 
-  return out;
+  return output;
 }

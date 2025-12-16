@@ -8,11 +8,11 @@ struct fs_out {
 }; // struct ps_out
 
 [shader("fragment")]
-fs_out main(fs_in in) {
-  fs_out out;
+fs_out main(fs_in input) {
+  fs_out output;
 
-  out.color = in.color;
-  out.brightness = float4(0.0, 0.0, 0.0, 1.0);
+  output.color = input.color;
+  output.brightness = float4(0.0, 0.0, 0.0, 1.0);
 
-  return out;
+  return output;
 }

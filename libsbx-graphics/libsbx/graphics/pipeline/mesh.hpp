@@ -32,7 +32,8 @@ namespace sbx::graphics {
 struct submesh {
   std::uint32_t index_count;
   std::uint32_t index_offset;
-  std::int32_t vertex_offset;
+  std::uint32_t vertex_count;
+  std::uint32_t vertex_offset;
   math::volume bounds;
   math::matrix4x4 local_transform;
   utility::hashed_string name;
@@ -128,6 +129,14 @@ public:
     return _bounds;
   }
 
+  auto vertex_count() const noexcept -> std::uint32_t {
+    return _vertex_count;
+  }
+
+  auto index_count() const noexcept -> std::uint32_t {
+    return _index_count;
+  }
+
 protected:
 
   mesh(mesh_data&& mesh_data);
@@ -144,6 +153,8 @@ protected:
   buffer_handle _index_buffer;
 
   std::vector<graphics::submesh> _submeshes;
+  std::uint32_t _vertex_count;
+  std::uint32_t _index_count;
   // std::vector<math::volume> _submesh_bounds;
   // std::vector<math::matrix4x4> _submesh_transforms;
   // std::unordered_map<utility::hashed_string, std::uint32_t> _submesh_names;

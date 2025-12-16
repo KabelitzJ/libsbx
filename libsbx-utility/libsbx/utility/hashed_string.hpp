@@ -49,6 +49,11 @@ public:
 
   constexpr auto operator=(basic_hashed_string&& other) noexcept -> basic_hashed_string& = default;
 
+  template<typename Format, typename... Args>
+  static auto format(Format&& format, Args&&... args) -> basic_hashed_string {
+    return basic_hashed_string{fmt::format(std::forward<Format>(format), std::forward<Args>(args)...)};
+  }
+
   constexpr auto operator==(const basic_hashed_string& other) const noexcept -> bool {
     return _hash == other._hash;
   }

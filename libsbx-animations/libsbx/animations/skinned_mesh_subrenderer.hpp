@@ -88,15 +88,18 @@ struct skinned_mesh_traits {
   }; // struct skinning_job
 
   inline static const auto bone_matrices_buffer_name = utility::hashed_string{"bone_matrices"};
+  inline static const auto static_vertices_buffer_name = utility::hashed_string{"static_vertices"};
 
   template<typename DrawList>
   static auto create_shared_buffers(DrawList& draw_list) -> void {
     draw_list.create_buffer(bone_matrices_buffer_name, graphics::storage_buffer::min_size, VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
+    draw_list.create_buffer(static_vertices_buffer_name, graphics::storage_buffer::min_size, VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
   }
 
   template<typename DrawList>
   static auto destroy_shared_buffers([[maybe_unused]] DrawList& draw_list) -> void {
     draw_list.destroy_buffer(bone_matrices_buffer_name);
+    draw_list.destroy_buffer(static_vertices_buffer_name);
   }
 
   template<typename DrawList>
@@ -105,10 +108,13 @@ struct skinned_mesh_traits {
 
     _bone_matrices.clear();
     _mesh_to_bone_matrix_range.clear();
+    _mesh_instances.clear();
   }
 
   template<typename Callable>
   static auto for_each_submission(scenes::scene& scene, Callable&& callable) -> void {
+    auto& assets_module = core::engine::get_module<assets::assets_module>();
+
     // pull id to optionally pack selection; animator is present but we only need the pose already stored in component
     const auto query = scene.query<const scenes::skinned_mesh, const scenes::selection_tag, animations::animator>();
 
@@ -124,11 +130,15 @@ struct skinned_mesh_traits {
 
       const auto& mesh_id = skinned_mesh.mesh_id();
 
+      auto& mesh = assets_module.get_asset<animations::mesh>(mesh_id);
+
       for (const auto& submesh : skinned_mesh.submeshes()) {
         const auto submesh_index = submesh.index;
         const auto& material_id = submesh.material;
 
         std::invoke(callable, skinned_mesh, mesh_id, submesh_index, material_id, transform, selection_tag, instance_payload{bone_offset});
+
+        _mesh_instances[mesh_id]++;
       }
 
       _mesh_to_bone_matrix_range[mesh_id].emplace_back(bone_offset, bone_count);
@@ -172,6 +182,7 @@ private:
   inline static auto _bone_matrices = std::vector<math::matrix4x4>{};
   inline static auto _selection_tags = std::unordered_map<scenes::selection_tag, std::uint32_t>{};
   inline static auto _mesh_to_bone_matrix_range = std::unordered_map<math::uuid, std::vector<range>>{};
+  inline static auto _mesh_instances = std::unordered_map<math::uuid, std::uint32_t>{};
 
 }; // struct skinned_mesh_traits
 

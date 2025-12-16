@@ -1,7 +1,11 @@
 #ifndef LIBSBX_MODELS_MATERIAL_DRAW_LIST_HPP_
 #define LIBSBX_MODELS_MATERIAL_DRAW_LIST_HPP_
 
+#include <memory_resource>
+
 #include <magic_enum/magic_enum.hpp>
+
+#include <libsbx/memory/local_containers.hpp>
 
 #include <libsbx/assets/assets_module.hpp>
 
@@ -97,8 +101,12 @@ public:
     auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
     auto& scene = scenes_module.scene();
 
+    // auto memory = std::array<std::uint8_t, 2048u>{};
+    // auto pool = std::pmr::monotonic_buffer_resource{memory.data(), memory.size(), std::pmr::null_memory_resource()};
 
-    auto material_indices = std::unordered_map<math::uuid, std::uint32_t>{};
+    // auto material_indices = std::pmr::unordered_map<math::uuid, std::uint32_t>{&pool};
+
+    auto material_indices = memory::local_unordered_map<math::uuid, std::uint32_t, 256u>{};
 
     traits_type::for_each_submission(scene, [&](const component_type& component, const math::uuid& mesh_id, std::uint32_t submesh_index, const math::uuid& material_id, const transform_data& transform, const scenes::selection_tag& selection_tag, const instance_payload& payload) {
       const auto transform_index = static_cast<std::uint32_t>(_transform_data.size());

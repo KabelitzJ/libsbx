@@ -43,6 +43,7 @@ class local_unordered_map final {
 
   using buffer_type = std::array<std::uint8_t, buffer_size>;
   using resource_type = std::pmr::monotonic_buffer_resource;
+  using allocator_type = typename underlying_type::allocator_type;
 
 public:
 
@@ -56,7 +57,7 @@ public:
   explicit local_unordered_map(std::pmr::memory_resource* upstream = std::pmr::null_memory_resource())
   : _buffer{},
     _resource{_buffer.data(), _buffer.size(), upstream},
-    _underlying{&_resource} {
+    _underlying{allocator_type{&_resource}} {
     _underlying.reserve(Capacity);
   }
 
@@ -103,6 +104,7 @@ class local_vector final {
 
   using buffer_type = std::array<std::uint8_t, buffer_size>;
   using resource_type = std::pmr::monotonic_buffer_resource;
+  using allocator_type = typename underlying_type::allocator_type;
 
 public:
 
@@ -121,7 +123,7 @@ public:
   explicit local_vector(std::pmr::memory_resource* upstream = std::pmr::null_memory_resource())
   : _buffer{},
     _resource{_buffer.data(), _buffer.size(), upstream},
-    _underlying{&_resource} {
+    _underlying{allocator_type{&_resource}} {
     _underlying.reserve(Capacity);
   }
 
@@ -220,6 +222,10 @@ public:
 
   auto back() const -> const_reference {
     return _underlying.back();
+  }
+
+  auto clear() -> void {
+    _underlying.clear();
   }
 
 private:

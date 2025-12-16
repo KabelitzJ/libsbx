@@ -37,8 +37,13 @@ swapchain::swapchain(const std::unique_ptr<swapchain>& old_swapchain)
   const auto& present_queue = logical_device.queue<queue::type::present>();
 
   _present_mode = _choose_present_mode();
+  
+  // Choose number of images in the swapchain - aim for 3, but respect min/max
+  auto desired_image_count = std::uint32_t{3};
 
-  auto desired_image_count = surface_capabilities.minImageCount + 3u;
+  if (surface_capabilities.minImageCount > desired_image_count) {
+    desired_image_count = surface_capabilities.minImageCount;
+  }
 
 	if (surface_capabilities.maxImageCount > 0 && desired_image_count > surface_capabilities.maxImageCount) {
 		desired_image_count = surface_capabilities.maxImageCount;
@@ -105,7 +110,7 @@ swapchain::swapchain(const std::unique_ptr<swapchain>& old_swapchain)
 
 	validate(vkCreateSwapchainKHR(logical_device, &swapchain_create_info, nullptr, &_handle));
 
-  utility::logger<"graphics">::debug("Created swapchain ({}x{})", _extent.width, _extent.height);
+  utility::logger<"graphics">::debug("Created swapchain ({}x{}) with {} images", _extent.width, _extent.height, desired_image_count);
 
 	validate(vkGetSwapchainImagesKHR(logical_device, _handle, &_image_count, nullptr));
 

@@ -16,6 +16,8 @@
 #include <libsbx/utility/hash.hpp>
 #include <libsbx/utility/concepts.hpp>
 
+#include <libsbx/memory/local_containers.hpp>
+
 #include <libsbx/signals/signal.hpp>
 
 #include <libsbx/graphics/devices/instance.hpp>
@@ -221,15 +223,15 @@ private:
 
   struct per_frame_data {
     // graphics
-    VkSemaphore image_available_semaphore{};
-    VkFence graphics_in_flight_fence{};
+    VkSemaphore image_available_semaphore{nullptr};
+    VkFence graphics_in_flight_fence{nullptr};
     // compute
-    VkSemaphore compute_finished_semaphore{};
-    VkFence compute_in_flight_fence{};
+    VkSemaphore compute_finished_semaphore{nullptr};
+    VkFence compute_in_flight_fence{nullptr};
   }; // struct per_frame_data
   
   struct per_image_data {
-    VkSemaphore render_finished_semaphore{};
+    VkSemaphore render_finished_semaphore{nullptr};
   }; // struct per_image_data
 
   struct command_pool_key {
@@ -320,10 +322,10 @@ private:
 
   std::unique_ptr<graphics::swapchain> _swapchain{};
 
-  std::vector<per_frame_data> _per_frame_data{};
+  std::array<per_frame_data, swapchain::max_frames_in_flight> _per_frame_data{};
   std::vector<per_image_data> _per_image_data{};
-  std::vector<graphics::command_buffer> _graphics_command_buffers{};
-  std::vector<graphics::command_buffer> _compute_command_buffers{};
+  memory::local_vector<graphics::command_buffer, swapchain::max_frames_in_flight> _graphics_command_buffers;
+  memory::local_vector<graphics::command_buffer, swapchain::max_frames_in_flight> _compute_command_buffers;
 
   std::unique_ptr<graphics::renderer> _renderer{};
 

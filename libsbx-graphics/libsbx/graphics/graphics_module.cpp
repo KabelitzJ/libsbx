@@ -130,8 +130,8 @@ graphics_module::~graphics_module() {
   }
 
   // [NOTE] KAJ 2023-02-19 : Command buffers must be freed before the command pools
-  _graphics_command_buffers.clear();
-  _compute_command_buffers.clear();
+  // _graphics_command_buffers.clear();
+  // _compute_command_buffers.clear();
   _command_pools.clear();
 
   _buffers.clear();
@@ -420,7 +420,7 @@ auto graphics_module::_recreate_per_frame_data() -> void {
     vkDestroySemaphore(*_logical_device, data.compute_finished_semaphore, nullptr);
   }
 
-  _per_frame_data.resize(swapchain::max_frames_in_flight);
+  // _per_frame_data.resize(swapchain::max_frames_in_flight);
 
   auto semaphore_create_info = VkSemaphoreCreateInfo{};
 	semaphore_create_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
@@ -453,18 +453,34 @@ auto graphics_module::_recreate_per_image_data() -> void {
 }
 
 auto graphics_module::_recreate_command_buffers() -> void {
-  _graphics_command_buffers.clear();
-  _graphics_command_buffers.reserve(swapchain::max_frames_in_flight);
+  // _graphics_command_buffers.clear();
+  // _graphics_command_buffers.reserve(swapchain::max_frames_in_flight);
 
-  for (auto i : std::views::iota(0u, swapchain::max_frames_in_flight)) {
+  // for (auto i : std::views::iota(0u, swapchain::max_frames_in_flight)) {
+  //   _graphics_command_buffers.emplace_back(false, VK_QUEUE_GRAPHICS_BIT);
+  // }
+
+  // _compute_command_buffers.clear();
+  // _compute_command_buffers.reserve(swapchain::max_frames_in_flight);
+
+  // for (auto i : std::views::iota(0u, swapchain::max_frames_in_flight)) {
+  //   _compute_command_buffers.emplace_back(false, VK_QUEUE_COMPUTE_BIT);
+  // }
+
+  for (auto i = _graphics_command_buffers.size(); i < swapchain::max_frames_in_flight; ++i) {
     _graphics_command_buffers.emplace_back(false, VK_QUEUE_GRAPHICS_BIT);
   }
 
-  _compute_command_buffers.clear();
-  _compute_command_buffers.reserve(swapchain::max_frames_in_flight);
+  for (auto& command_buffer : _graphics_command_buffers) {
+    command_buffer.reset();
+  }
 
-  for (auto i : std::views::iota(0u, swapchain::max_frames_in_flight)) {
+  for (auto i = _compute_command_buffers.size(); i < swapchain::max_frames_in_flight; ++i) {
     _compute_command_buffers.emplace_back(false, VK_QUEUE_COMPUTE_BIT);
+  }
+
+  for (auto& command_buffer : _compute_command_buffers) {
+    command_buffer.reset();
   }
 }
 

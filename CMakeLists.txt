@@ -33,8 +33,11 @@ message(STATUS "SBX_BUILD_DEMO: ${SBX_BUILD_DEMO}")
 option(SBX_BUILD_SHARED "Build shared library" OFF)
 message(STATUS "SBX_BUILD_SHARED: ${SBX_BUILD_SHARED}")
 
-option(SBX_BUILD_TESTS "Build tests" On)
+option(SBX_BUILD_TESTS "Build tests" ON)
 message(STATUS "SBX_BUILD_TESTS: ${SBX_BUILD_TESTS}")
+
+option(SBX_BUILD_BENCHMARKS "Build benchmarks" ON)
+message(STATUS "SBX_BUILD_BENCHMARKS: ${SBX_BUILD_BENCHMARKS}")
 
 if(${SBX_BUILD_TESTS})
   enable_testing()

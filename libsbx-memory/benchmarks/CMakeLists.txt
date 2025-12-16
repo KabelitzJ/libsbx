@@ -1,36 +1,17 @@
-project(units VERSION 0.1.0 LANGUAGES CXX)
+project(memory-benchmarks VERSION 0.1.0 LANGUAGES CXX)
 
 message(STATUS "Configuring ${PROJECT_NAME}...")
 
-string(TOUPPER ${PROJECT_NAME} PROJECT_NAME_UPPER)
-
-configure_file("${PROJECT_SOURCE_DIR}/${CMAKE_PROJECT_NAME}/${PROJECT_NAME}/version.hpp.in" "${PROJECT_SOURCE_DIR}/${CMAKE_PROJECT_NAME}/${PROJECT_NAME}/version.hpp" @ONLY)
-
-if(${SBX_BUILD_SHARED})
-  add_library(${PROJECT_NAME} SHARED)
-else()
-  add_library(${PROJECT_NAME} STATIC)
-endif()
-
-add_library(${CMAKE_PROJECT_NAME}::${PROJECT_NAME} ALIAS ${PROJECT_NAME})
+add_executable(${PROJECT_NAME})
 
 find_package(fmt CONFIG REQUIRED)
+find_package(benchmark CONFIG REQUIRED)
 
 target_sources(
   ${PROJECT_NAME}
   PRIVATE
-    "${PROJECT_SOURCE_DIR}/${CMAKE_PROJECT_NAME}/${PROJECT_NAME}/units.cpp"
+    "${PROJECT_SOURCE_DIR}/benchmarks.cpp"
   PUBLIC
-    FILE_SET HEADERS
-    BASE_DIRS ${PROJECT_SOURCE_DIR}
-    FILES
-      "${PROJECT_SOURCE_DIR}/${CMAKE_PROJECT_NAME}/${PROJECT_NAME}/bytes.hpp"
-      "${PROJECT_SOURCE_DIR}/${CMAKE_PROJECT_NAME}/${PROJECT_NAME}/distance.hpp"
-      "${PROJECT_SOURCE_DIR}/${CMAKE_PROJECT_NAME}/${PROJECT_NAME}/mass.hpp"
-      "${PROJECT_SOURCE_DIR}/${CMAKE_PROJECT_NAME}/${PROJECT_NAME}/quantity.hpp"
-      "${PROJECT_SOURCE_DIR}/${CMAKE_PROJECT_NAME}/${PROJECT_NAME}/time.hpp"
-      "${PROJECT_SOURCE_DIR}/${CMAKE_PROJECT_NAME}/${PROJECT_NAME}/units.hpp"
-      "${PROJECT_SOURCE_DIR}/${CMAKE_PROJECT_NAME}/${PROJECT_NAME}/version.hpp"
 )
 
 target_include_directories(
@@ -45,6 +26,9 @@ target_link_libraries(
   PUBLIC
     # External dependencies
     fmt::fmt
+    benchmark::benchmark
+    # Internal dependencies
+    libsbx::math
 )
 
 set_target_properties(
@@ -90,21 +74,6 @@ target_compile_options(
     -Wuseless-cast
 )
 
-install(
-  TARGETS
-    ${PROJECT_NAME}
-  EXPORT
-    libsbxTargets
-  LIBRARY 
-    DESTINATION lib
-  ARCHIVE 
-    DESTINATION lib
-  RUNTIME 
-    DESTINATION bin
-  FILE_SET 
-    HEADERS 
-)
-
 set(_LINK_OPTIONS)
 set(_COMPILE_OPTIONS)
 
@@ -129,10 +98,3 @@ target_compile_options(
     ${_COMPILE_OPTIONS}
 )
 
-if(${SBX_BUILD_TESTS} AND EXISTS "${PROJECT_SOURCE_DIR}/tests")
-  add_subdirectory(${PROJECT_SOURCE_DIR}/tests)
-endif()
-
-if(${SBX_BUILD_BENCHMARKS} AND EXISTS "${PROJECT_SOURCE_DIR}/benchmarks")
-  add_subdirectory(${PROJECT_SOURCE_DIR}/benchmarks)
-endif()

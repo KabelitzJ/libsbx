@@ -27,3 +27,5 @@ dump.txt
 suppress.asan_*
 
 sandbox.sln
+
+benchmark.json

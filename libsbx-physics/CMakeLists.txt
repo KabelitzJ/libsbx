@@ -136,6 +136,10 @@ target_compile_options(
     ${_COMPILE_OPTIONS}
 )
 
-if(${SBX_BUILD_TESTS})
-  add_subdirectory(tests)
-endif()         
+if(${SBX_BUILD_TESTS} AND EXISTS "${PROJECT_SOURCE_DIR}/tests")
+  add_subdirectory(${PROJECT_SOURCE_DIR}/tests)
+endif()
+
+if(${SBX_BUILD_BENCHMARKS} AND EXISTS "${PROJECT_SOURCE_DIR}/benchmarks")
+  add_subdirectory(${PROJECT_SOURCE_DIR}/benchmarks)
+endif()

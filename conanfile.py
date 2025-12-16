@@ -27,17 +27,21 @@ class libsbx_recipe(ConanFile):
     "build_type", 
     "arch"
   )
+
   options = {
     "shared": [True, False],
     "fPIC": [True, False],
     "build_demo": [True, False],
-    "build_tests": [True, False]
+    "build_tests": [True, False],
+    "build_benchmarks": [True, False]
   }
+
   default_options = {
     "shared": False,
     "fPIC": True,
     "build_demo": True,
-    "build_tests": True
+    "build_tests": True,
+    "build_benchmarks": True
   }
 
   # Source directories
@@ -160,9 +164,9 @@ class libsbx_recipe(ConanFile):
           f"Detected: {'.'.join(map(str, version))}"
         )
     elif self.settings.os == "Windows":
-      ok, version = self._check_vulkan_sdk_version()
+      version = self._get_vulkan_instance_version()
 
-      if not ok:
+      if not version:
         raise ConanInvalidConfiguration(
           "Vulkan not found.\n"
           f"Vulkan SDK {self.REQUIRED_VULKAN_VERSION} required.\n"
@@ -177,9 +181,12 @@ class libsbx_recipe(ConanFile):
   def build_requirements(self):
     self.tool_requires("cmake/[>=3.20]")
 
-  def test_requirements(self):
-    if self.options.build_tests:
-      self.test_requires("gtest/1.17.0")
+  # def test_requirements(self):
+  #   if self.options.build_tests:
+  #     self.test_requires("gtest/1.17.0")
+
+  #   if self.options.build_benchmarks:
+  #     self.test_requires("benchmark/1.9.4")
 
   def requirements(self):
     self.requires("fmt/11.2.0", transitive_headers=True)
@@ -218,8 +225,11 @@ class libsbx_recipe(ConanFile):
     self.requires("sol2/3.5.0")
     self.requires("magic_enum/0.9.7")
 
-    # if self.options.build_tests:
-    #   self.test_requires("gtest/1.17.0")
+    if self.options.build_tests:
+      self.test_requires("gtest/1.17.0")
+
+    if self.options.build_benchmarks:
+      self.test_requires("benchmark/1.9.4")
 
   def generate(self):
     deps = CMakeDeps(self)
@@ -232,9 +242,10 @@ class libsbx_recipe(ConanFile):
     cmake = CMake(self)
 
     cmake.configure({
-      "SBX_BUILD_DEMO": "On" if self.options.build_demo else "Off",
-      "SBX_BUILD_SHARED": "On" if self.options.shared else "Off",
-      "SBX_BUILD_TESTS": "On" if self.options.build_tests else "Off"
+      "SBX_BUILD_DEMO": "ON" if self.options.build_demo else "OFF",
+      "SBX_BUILD_SHARED": "ON" if self.options.shared else "OFF",
+      "SBX_BUILD_TESTS": "ON" if self.options.build_tests else "OFF",
+      "SBX_BUILD_BENCHMARKS": "ON" if self.options.build_benchmarks else "OFF"
     })
   
     cmake.build()

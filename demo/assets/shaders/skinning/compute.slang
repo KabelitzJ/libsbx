@@ -81,7 +81,7 @@ float4x4 calculate_skinning_matrix(uint4 bone_indices, float4 bone_weights, floa
   return result;
 }
 
-static const local_size_x = 64;
+static const uint local_size_x = 64;
 
 [shader("compute")]
 [numthreads(local_size_x, 1, 1)]

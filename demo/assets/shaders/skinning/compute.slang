@@ -81,8 +81,10 @@ float4x4 calculate_skinning_matrix(uint4 bone_indices, float4 bone_weights, floa
   return result;
 }
 
+static const local_size_x = 64;
+
 [shader("compute")]
-[numthreads(256, 1, 1)]
+[numthreads(local_size_x, 1, 1)]
 void main(cs_in input) {
   uint job_id = input.group_id.x;
   uint block = input.group_id.y;
@@ -90,7 +92,7 @@ void main(cs_in input) {
 
   skinning_job job = push.skinning_jobs[job_id];
 
-  uint vertex_index = block * 256 + local;
+  uint vertex_index = block * local_size_x + local;
 
   if (vertex_index >= job.vertex_count) {
     return;

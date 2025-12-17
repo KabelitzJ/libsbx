@@ -340,7 +340,7 @@ private:
   }
 
   auto _dispatch_skinning(graphics::command_buffer& command_buffer, graphics::buffer::address_type bone_matrices_buffer_address) -> void {
-    constexpr auto threads_per_group = std::uint32_t{256};
+    constexpr auto threads_per_group = std::uint32_t{64};
 
     auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 

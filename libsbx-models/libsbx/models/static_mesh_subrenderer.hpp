@@ -70,7 +70,6 @@ namespace sbx::models {
 
 struct static_mesh_traits {
 
-  using component_type = scenes::static_mesh;
   using mesh_type = models::mesh;
   struct instance_payload { };
 
@@ -91,13 +90,13 @@ struct static_mesh_traits {
 
   template<typename Callable>
   static void for_each_submission(scenes::scene& scene, Callable&& callable) {
-    auto query = scene.query<const component_type, const scenes::selection_tag>();
+    auto query = scene.query<const scenes::static_mesh, const scenes::selection_tag>();
 
-    for (auto&& [node, component, selection_tag] : query.each()) {
+    for (auto&& [node, static_mesh, selection_tag] : query.each()) {
       const auto transform_data = models::transform_data{ scene.world_transform(node), scene.world_normal(node) };
 
-      for (const auto& submesh : component.submeshes()) {
-        std::invoke(callable, component, component.mesh_id(), submesh.index, submesh.material, transform_data, selection_tag, instance_payload{});
+      for (const auto& submesh : static_mesh.submeshes()) {
+        std::invoke(callable, static_mesh.mesh_id(), submesh.index, submesh.material, transform_data, selection_tag, instance_payload{});
       }
     }
   }

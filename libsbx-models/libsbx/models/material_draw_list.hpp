@@ -40,7 +40,6 @@ class basic_material_draw_list final : public graphics::draw_list {
 
 public:
 
-  using component_type = typename traits_type::component_type;
   using mesh_type = typename traits_type::mesh_type;
   using instance_payload = typename traits_type::instance_payload;
 
@@ -108,7 +107,7 @@ public:
 
     auto material_indices = memory::local_unordered_map<math::uuid, std::uint32_t, 256u>{};
 
-    traits_type::for_each_submission(scene, [&](const component_type& component, const math::uuid& mesh_id, std::uint32_t submesh_index, const math::uuid& material_id, const transform_data& transform, const scenes::selection_tag& selection_tag, const instance_payload& payload) {
+    traits_type::for_each_submission(scene, [&](const math::uuid& mesh_id, std::uint32_t submesh_index, const math::uuid& material_id, const transform_data& transform, const scenes::selection_tag& selection_tag, const instance_payload& payload) {
       const auto transform_index = static_cast<std::uint32_t>(_transform_data.size());
       _transform_data.push_back(transform);
 

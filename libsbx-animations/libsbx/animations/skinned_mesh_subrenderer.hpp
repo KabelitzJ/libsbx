@@ -71,13 +71,8 @@ namespace sbx::animations {
 
 struct skinned_mesh_traits {
 
-  using component_type = scenes::skinned_mesh;
   using mesh_type = animations::mesh;
-
-  struct instance_payload {
-    std::uint32_t bone_offset;
-  }; // struct instance_payload
-
+  struct instance_payload { };
 
   struct skinning_job {
     graphics::buffer::address_type pre_vertices;
@@ -87,23 +82,22 @@ struct skinned_mesh_traits {
   }; // struct skinning_job
 
   inline static const auto bone_matrices_buffer_name = utility::hashed_string{"bone_matrices"};
-  inline static const auto skinned_vertices_buffer_name = utility::hashed_string{"skinned_vertices"};
 
   template<typename DrawList>
   static auto create_shared_buffers(DrawList& draw_list) -> void {
     draw_list.create_buffer(bone_matrices_buffer_name, graphics::storage_buffer::min_size, VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
-    draw_list.create_buffer(skinned_vertices_buffer_name, graphics::storage_buffer::min_size, VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
   }
 
   template<typename DrawList>
   static auto destroy_shared_buffers([[maybe_unused]] DrawList& draw_list) -> void {
     draw_list.destroy_buffer(bone_matrices_buffer_name);
-    draw_list.destroy_buffer(skinned_vertices_buffer_name);
   }
 
   template<typename DrawList>
   static auto update_shared_buffers(DrawList& draw_list) -> void {
     draw_list.update_buffer(_bone_matrices, bone_matrices_buffer_name);
+
+    _bone_matrices.clear();
   }
 
   template<typename Callable>
@@ -111,13 +105,12 @@ struct skinned_mesh_traits {
     auto& assets_module = core::engine::get_module<assets::assets_module>();
 
     _skinning_jobs.clear();
-    _bone_matrices.clear();
 
     // pull id to optionally pack selection; animator is present but we only need the pose already stored in component
     const auto query = scene.query<const scenes::skinned_mesh, const scenes::selection_tag, animations::animator>();
 
     for (auto&& [node, skinned_mesh, selection_tag, animator] : query.each()) {
-      const auto transform = models::transform_data{scene.world_transform(node), scene.world_normal(node)};
+      const auto transform_data = models::transform_data{scene.world_transform(node), scene.world_normal(node)};
 
       const auto& pose = skinned_mesh.pose();
 
@@ -138,10 +131,7 @@ struct skinned_mesh_traits {
       });
 
       for (const auto& submesh : skinned_mesh.submeshes()) {
-        const auto submesh_index = submesh.index;
-        const auto& material_id = submesh.material;
-
-        std::invoke(callable, skinned_mesh, mesh_id, submesh_index, material_id, transform, selection_tag, instance_payload{bone_offset});
+        std::invoke(callable, mesh_id, submesh.index, submesh.material, transform_data, selection_tag, instance_payload{});
       }
     }
   }
@@ -153,7 +143,7 @@ struct skinned_mesh_traits {
       entry->second = math::random::next<std::uint32_t>(1u); 
     }
 
-    return models::instance_data{transform_index, material_index, entry->second, payload.bone_offset};
+    return models::instance_data{transform_index, material_index, entry->second, 0u};
   }
 
   template<typename Mesh, typename Emitter>
@@ -350,7 +340,7 @@ private:
   }
 
   auto _dispatch_skinning(graphics::command_buffer& command_buffer, graphics::buffer::address_type bone_matrices_buffer_address) -> void {
-    constexpr auto threads_per_group = std::uint32_t{64};
+    constexpr auto threads_per_group = std::uint32_t{256};
 
     auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 

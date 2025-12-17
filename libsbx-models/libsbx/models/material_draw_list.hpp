@@ -283,7 +283,7 @@ private:
       const auto& mesh = assets_module.get_asset<mesh_type>(mesh_id);
 
       range.offset = static_cast<std::uint32_t>(draw_commands.size());
-      range.count  = 0u;
+      range.count = 0u;
 
       for (auto&& [submesh_index, instances] : ranges::views::enumerate(submesh_vectors)) {
         emitter.base_instance += traits_type::build_draw_commands(mesh, submesh_index, std::move(instances), emitter);

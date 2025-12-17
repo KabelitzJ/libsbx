@@ -114,6 +114,8 @@ public:
 
   auto reset(VkCommandBufferResetFlags flags = 0) -> void;
 
+  auto execute_commands(const std::vector<command_buffer>& commands) -> void;
+
 private:
 
   auto _queue() const -> const graphics::queue&;

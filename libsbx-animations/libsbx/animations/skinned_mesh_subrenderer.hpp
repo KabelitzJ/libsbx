@@ -6,6 +6,8 @@
 #include <ranges>
 #include <algorithm>
 #include <iterator>
+#include <ranges>
+#include <algorithm>
 
 #include <easy/profiler.h>
 
@@ -59,6 +61,7 @@
 #include <libsbx/scenes/components/global_transform.hpp>
 
 #include <libsbx/models/material_draw_list.hpp>
+#include <libsbx/models/vertex3d.hpp>
 
 #include <libsbx/animations/vertex3d.hpp>
 #include <libsbx/animations/mesh.hpp>
@@ -75,45 +78,40 @@ struct skinned_mesh_traits {
     std::uint32_t bone_offset;
   }; // struct instance_payload
 
-  struct range {
-    std::uint32_t first;
-    std::uint32_t last;
-  }; // struct range
 
   struct skinning_job {
-    std::uint64_t skinned_vertices;
-    std::uint64_t static_vertices;
+    graphics::buffer::address_type pre_vertices;
+    graphics::buffer::address_type post_vertices;
     std::uint32_t vertex_count;
     std::uint32_t bone_offset;
   }; // struct skinning_job
 
   inline static const auto bone_matrices_buffer_name = utility::hashed_string{"bone_matrices"};
-  inline static const auto static_vertices_buffer_name = utility::hashed_string{"static_vertices"};
+  inline static const auto skinned_vertices_buffer_name = utility::hashed_string{"skinned_vertices"};
 
   template<typename DrawList>
   static auto create_shared_buffers(DrawList& draw_list) -> void {
     draw_list.create_buffer(bone_matrices_buffer_name, graphics::storage_buffer::min_size, VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
-    draw_list.create_buffer(static_vertices_buffer_name, graphics::storage_buffer::min_size, VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
+    draw_list.create_buffer(skinned_vertices_buffer_name, graphics::storage_buffer::min_size, VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
   }
 
   template<typename DrawList>
   static auto destroy_shared_buffers([[maybe_unused]] DrawList& draw_list) -> void {
     draw_list.destroy_buffer(bone_matrices_buffer_name);
-    draw_list.destroy_buffer(static_vertices_buffer_name);
+    draw_list.destroy_buffer(skinned_vertices_buffer_name);
   }
 
   template<typename DrawList>
   static auto update_shared_buffers(DrawList& draw_list) -> void {
     draw_list.update_buffer(_bone_matrices, bone_matrices_buffer_name);
-
-    _bone_matrices.clear();
-    _mesh_to_bone_matrix_range.clear();
-    _mesh_instances.clear();
   }
 
   template<typename Callable>
   static auto for_each_submission(scenes::scene& scene, Callable&& callable) -> void {
     auto& assets_module = core::engine::get_module<assets::assets_module>();
+
+    _skinning_jobs.clear();
+    _bone_matrices.clear();
 
     // pull id to optionally pack selection; animator is present but we only need the pose already stored in component
     const auto query = scene.query<const scenes::skinned_mesh, const scenes::selection_tag, animations::animator>();
@@ -132,16 +130,19 @@ struct skinned_mesh_traits {
 
       auto& mesh = assets_module.get_asset<animations::mesh>(mesh_id);
 
+      _skinning_jobs.emplace_back(skinning_job{
+        .pre_vertices = mesh.address(),
+        .post_vertices = 0,
+        .vertex_count = mesh.vertex_count(),
+        .bone_offset = bone_offset
+      });
+
       for (const auto& submesh : skinned_mesh.submeshes()) {
         const auto submesh_index = submesh.index;
         const auto& material_id = submesh.material;
 
         std::invoke(callable, skinned_mesh, mesh_id, submesh_index, material_id, transform, selection_tag, instance_payload{bone_offset});
-
-        _mesh_instances[mesh_id]++;
       }
-
-      _mesh_to_bone_matrix_range[mesh_id].emplace_back(bone_offset, bone_count);
     }
   }
 
@@ -162,12 +163,14 @@ struct skinned_mesh_traits {
     const auto& submesh = mesh.submesh(submesh_index);
 
     for (const auto& instance : instances) {
+      const auto instance_index = emitter.base_instance + base_instance_offset;
+
       auto command = VkDrawIndexedIndirectCommand{};
       command.indexCount = submesh.index_count;
-      command.instanceCount = 1;
+      command.instanceCount = 1u;
       command.firstIndex = submesh.index_offset;
-      command.vertexOffset = submesh.vertex_offset;
-      command.firstInstance = emitter.base_instance + base_instance_offset;
+      command.vertexOffset = instance_index * mesh.vertex_count();
+      command.firstInstance = instance_index;
 
       emitter.emit_single(command, instance);
 
@@ -177,12 +180,15 @@ struct skinned_mesh_traits {
     return base_instance_offset;
   }
 
+  static auto skinning_jobs() -> std::vector<skinning_job>& {
+    return _skinning_jobs;
+  }
+
 private:
 
   inline static auto _bone_matrices = std::vector<math::matrix4x4>{};
+  inline static auto _skinning_jobs = std::vector<skinning_job>{};
   inline static auto _selection_tags = std::unordered_map<scenes::selection_tag, std::uint32_t>{};
-  inline static auto _mesh_to_bone_matrix_range = std::unordered_map<math::uuid, std::vector<range>>{};
-  inline static auto _mesh_instances = std::unordered_map<math::uuid, std::uint32_t>{};
 
 }; // struct skinned_mesh_traits
 
@@ -206,7 +212,14 @@ public:
   : graphics::subrenderer{},
     _attachments{attachments},
     _base_pipeline{base_pipeline}, 
-    _bucket{bucket} { }
+    _bucket{bucket},
+    _skinning_pipeline{"res://shaders/skinning"},
+    _skinning_pipeline_push_handler{_skinning_pipeline} {
+    auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
+    
+    _skinning_vertex_buffer = graphics_module.add_resource<graphics::storage_buffer>(graphics::storage_buffer::min_size, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
+    _skinning_jobs_buffer = graphics_module.add_resource<graphics::storage_buffer>(graphics::storage_buffer::min_size, VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
+  }
 
   ~skinned_mesh_subrenderer() override {
     _pipeline_cache.clear();
@@ -226,7 +239,9 @@ public:
     // obtain the skinned draw list from the pass (name must match your render graph)
     auto& draw_list = renderer.draw_list<skinned_mesh_material_draw_list>("skinned_mesh_material");
 
-    _dispatch_skinning(command_buffer);
+    const auto bone_matrices_buffer_address = draw_list.buffer(skinned_mesh_traits::bone_matrices_buffer_name).address();
+
+    _dispatch_skinning(command_buffer, bone_matrices_buffer_address);
 
     for (auto& [key, data] : draw_list.ranges(_bucket)) {
       auto& pipeline_data = _get_or_create_pipeline(key);
@@ -247,17 +262,17 @@ public:
       pipeline_data.push_handler.push("transform_data_buffer", draw_list.buffer(skinned_mesh_material_draw_list::transform_data_buffer_name).address());
       pipeline_data.push_handler.push("material_data_buffer", draw_list.buffer(skinned_mesh_material_draw_list::material_data_buffer_name).address());
 
-      pipeline_data.push_handler.push("bone_matrices_buffer", draw_list.buffer(skinned_mesh_traits::bone_matrices_buffer_name).address());
+      // pipeline_data.push_handler.push("bone_matrices_buffer", bone_matrices_buffer_address);
 
-      auto& instance_data_buffer = graphics_module.get_resource<graphics::storage_buffer>(data.instance_data_buffer);
-      pipeline_data.push_handler.push("instance_data_buffer", instance_data_buffer.address());
+      pipeline_data.push_handler.push("instance_data_buffer", graphics_module.get_resource<graphics::storage_buffer>(data.instance_data_buffer).address());
+
+      pipeline_data.push_handler.push("vertex_buffer", graphics_module.get_resource<graphics::storage_buffer>(_skinning_vertex_buffer).address());
 
       for (const auto& draw_range : data.ranges) {
         auto& mesh = assets_module.get_asset<animations::mesh>(draw_range.mesh_id);
 
         mesh.bind(command_buffer);
 
-        pipeline_data.push_handler.push("vertex_buffer", mesh.address());
         pipeline_data.push_handler.bind(command_buffer);
 
         auto& draw_commands_buffer = graphics_module.get_resource<graphics::storage_buffer>(data.draw_commands_buffer);
@@ -301,7 +316,7 @@ private:
     const auto request = graphics::compiler::compile_request{
       .path = _base_pipeline,
       .per_stage = {
-        {SLANG_STAGE_VERTEX, {.entry_point = "skinned_main"}},
+        {SLANG_STAGE_VERTEX, {.entry_point = "main"}},
         {SLANG_STAGE_FRAGMENT, {.entry_point = _fs_entry.at(key.alpha)}}
       }
     };
@@ -316,20 +331,101 @@ private:
     return entry->second;
   }
 
-  auto _dispatch_skinning(graphics::command_buffer& command_buffer) -> void {
+  template<typename Type>
+  static auto _resize_buffer(graphics::storage_buffer& buffer, std::uint32_t element_count) -> void {
+    const std::size_t required_size = static_cast<std::size_t>(element_count) * sizeof(Type);
 
+    if (buffer.size() < required_size) {
+      buffer.resize(required_size + required_size / 2);
+    }
+  }
+
+  template<typename Type>
+  static auto _update_buffer(graphics::storage_buffer& buffer, const std::vector<Type>& data) -> void {
+    _resize_buffer<Type>(buffer, static_cast<std::uint32_t>(data.size()));
+
+    if (!data.empty()) {
+      buffer.update(data.data(), data.size() * sizeof(Type));
+    }
+  }
+
+  auto _dispatch_skinning(graphics::command_buffer& command_buffer, graphics::buffer::address_type bone_matrices_buffer_address) -> void {
+    constexpr auto threads_per_group = std::uint32_t{64};
+
+    auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
+
+    auto& jobs = skinned_mesh_traits::skinning_jobs();
+    const auto job_count = static_cast<std::uint32_t>(jobs.size());
+
+    if (jobs.empty()) {
+      return;
+    }
+
+    auto total_vertices = std::uint32_t{0};
+    auto max_vertex_count = std::uint32_t{0};
+
+    for (const auto& job : jobs) {
+      total_vertices += job.vertex_count;
+      max_vertex_count = std::max(max_vertex_count, job.vertex_count);
+    }
+
+    auto& skinning_vertex_buffer = graphics_module.get_resource<graphics::storage_buffer>(_skinning_vertex_buffer);
+
+    _resize_buffer<models::vertex3d>(skinning_vertex_buffer, total_vertices);
+
+    auto address = skinning_vertex_buffer.address();
+
+    for (auto& job : jobs) {
+      job.post_vertices = address;
+      address += job.vertex_count * sizeof(models::vertex3d);
+    }
+
+    auto& skinning_jobs_buffer = graphics_module.get_resource<graphics::storage_buffer>(_skinning_jobs_buffer);
+
+    _update_buffer(skinning_jobs_buffer, jobs);
+
+    _skinning_pipeline.bind(command_buffer);
+
+    _skinning_pipeline_push_handler.push("skinning_jobs", skinning_jobs_buffer.address());
+    _skinning_pipeline_push_handler.push("bone_matrices_buffer", bone_matrices_buffer_address);
+
+    _skinning_pipeline_push_handler.bind(command_buffer);
+
+    const auto groups_per_job = (max_vertex_count + threads_per_group - 1) / threads_per_group;
+
+    _skinning_pipeline.dispatch(command_buffer, {job_count, groups_per_job, 1});
+
+    auto barrier_data = graphics::command_buffer::buffer_barrier_data{
+      .buffers = {
+        skinning_vertex_buffer
+      },
+      .src_stage_mask = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+      .dst_stage_mask = VK_PIPELINE_STAGE_VERTEX_INPUT_BIT,
+      .src_access_mask = VK_ACCESS_SHADER_WRITE_BIT,
+      .dst_access_mask = VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT,
+      .src_queue_family = VK_QUEUE_FAMILY_IGNORED,
+      .dst_queue_family = VK_QUEUE_FAMILY_IGNORED
+    };
+
+    command_buffer.buffer_barrier(barrier_data);
   }
 
   // per-alpha fragment entry points (same scheme as your static renderer)
   inline static const auto _fs_entry = std::array<std::string, 3u>{
-    "skinned_opaque_main",  // alpha_mode::opaque
-    "skinned_mask_main",    // alpha_mode::mask
-    "skinned_blend_main"    // alpha_mode::blend
+    "opaque_main",  // alpha_mode::opaque
+    "mask_main",    // alpha_mode::mask
+    "blend_main"    // alpha_mode::blend
   };
 
   std::vector<graphics::attachment_description> _attachments;
   std::filesystem::path _base_pipeline;
   skinned_mesh_material_draw_list::bucket _bucket;
+  
+  graphics::storage_buffer_handle _skinning_vertex_buffer;
+  graphics::storage_buffer_handle _skinning_jobs_buffer;
+
+  sbx::graphics::compute_pipeline _skinning_pipeline;
+  sbx::graphics::push_handler _skinning_pipeline_push_handler;
 
   inline static std::unordered_map<models::material_key, pipeline_data, models::material_key_hash> _pipeline_cache{};
   

@@ -254,7 +254,7 @@ private:
     const auto request = graphics::compiler::compile_request{
       .path = _base_pipeline,
       .per_stage = {
-        {SLANG_STAGE_VERTEX, { .entry_point = "static_main" }},
+        {SLANG_STAGE_VERTEX, { .entry_point = "main" }},
         {SLANG_STAGE_FRAGMENT, { .entry_point = _entry_point.at(key.alpha) }}
       }
     };
@@ -271,9 +271,9 @@ private:
   }
 
   inline static const auto _entry_point = std::array<std::string, 3u>{
-    "static_opaque_main",  // alpha_mode::opaque
-    "static_mask_main",    // alpha_mode::mask 
-    "static_blend_main"    // alpha_mode::blend
+    "opaque_main",  // alpha_mode::opaque
+    "mask_main",    // alpha_mode::mask 
+    "blend_main"    // alpha_mode::blend
   };
 
   std::vector<graphics::attachment_description> _attachments;

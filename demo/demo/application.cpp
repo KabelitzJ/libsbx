@@ -622,6 +622,8 @@ static inline auto _dump_cubemap_to_png(const sbx::graphics::cube_image& cube, c
 #endif // DUMP_IMAGES
 
 auto application::_generate_brdf(const std::uint32_t size) -> void {
+  constexpr auto threads_per_group = std::uint32_t{16};
+
   auto& graphics_module = sbx::core::engine::get_module<sbx::graphics::graphics_module>();
 
   auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
@@ -647,8 +649,8 @@ auto application::_generate_brdf(const std::uint32_t size) -> void {
   descriptor_handler.update(pipeline);
   descriptor_handler.bind_descriptors(command_buffer);
 
-  const auto group_count_x = static_cast<std::uint32_t>(std::ceil(static_cast<std::float_t>(brdf.size().x()) / static_cast<std::float_t>(16)));
-  const auto group_count_y = static_cast<std::uint32_t>(std::ceil(static_cast<std::float_t>(brdf.size().y()) / static_cast<std::float_t>(16)));
+  const uint32_t group_count_x = (brdf.size().x() + threads_per_group - 1) / threads_per_group;
+  const uint32_t group_count_y = (brdf.size().y() + threads_per_group - 1) / threads_per_group;
 
   pipeline.dispatch(command_buffer, sbx::math::vector3u{group_count_x, group_count_y, 1u});
 
@@ -662,6 +664,8 @@ auto application::_generate_brdf(const std::uint32_t size) -> void {
 }
 
 auto application::_generate_irradiance(const std::uint32_t size) -> void {
+  constexpr auto threads_per_group = std::uint32_t{16};
+
   auto& graphics_module = sbx::core::engine::get_module<sbx::graphics::graphics_module>();
 
   auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
@@ -688,8 +692,10 @@ auto application::_generate_irradiance(const std::uint32_t size) -> void {
   descriptor_handler.update(pipeline);
   descriptor_handler.bind_descriptors(command_buffer);
 
-  const auto group_count_x = static_cast<std::uint32_t>(std::ceil(static_cast<std::float_t>(irradiance.size().x()) / static_cast<std::float_t>(16)));
-  const auto group_count_y = static_cast<std::uint32_t>(std::ceil(static_cast<std::float_t>(irradiance.size().y()) / static_cast<std::float_t>(16)));
+  // const auto group_count_x = static_cast<std::uint32_t>(std::ceil(static_cast<std::float_t>(irradiance.size().x()) / static_cast<std::float_t>(threads_per_group)));
+  // const auto group_count_y = static_cast<std::uint32_t>(std::ceil(static_cast<std::float_t>(irradiance.size().y()) / static_cast<std::float_t>(threads_per_group)));
+  const uint32_t group_count_x = (irradiance.size().x() + threads_per_group - 1) / threads_per_group;
+  const uint32_t group_count_y = (irradiance.size().y() + threads_per_group - 1) / threads_per_group;
 
   pipeline.dispatch(command_buffer, sbx::math::vector3u{group_count_x, group_count_y, 1u});
 
@@ -824,8 +830,9 @@ auto application::_generate_irradiance(const std::uint32_t size) -> void {
 // }
 
 // [TODO] KAJ 2025-11-27 : Figure out how to fix descriptor handler for this use case
-auto application::_generate_prefiltered(uint32_t size) -> void
-{
+auto application::_generate_prefiltered(uint32_t size) -> void {
+  constexpr auto threads_per_group = std::uint32_t{16};
+
   auto& graphics_module = sbx::core::engine::get_module<sbx::graphics::graphics_module>();
   auto& scenes_module   = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
   auto& scene           = scenes_module.scene();
@@ -984,8 +991,8 @@ auto application::_generate_prefiltered(uint32_t size) -> void
     push_handler.bind(command_buffer);
 
     // 5.5 Dispatch compute for this mip
-    const uint32_t group_count_x = (mip_width  + 15u) / 16u;
-    const uint32_t group_count_y = (mip_height + 15u) / 16u;
+    const uint32_t group_count_x = (mip_width + threads_per_group - 1) / threads_per_group;
+    const uint32_t group_count_y = (mip_height + threads_per_group - 1) / threads_per_group;
 
     pipeline.dispatch(command_buffer, { group_count_x, group_count_y, 1u });
 

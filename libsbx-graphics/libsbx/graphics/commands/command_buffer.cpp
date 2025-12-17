@@ -42,21 +42,30 @@ command_buffer::command_buffer(command_buffer&& other) noexcept
   _is_running{std::exchange(other._is_running, false)} { }
 
 command_buffer::~command_buffer() {
-  if (_handle != nullptr) {
-    auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
-  
-    auto& logical_device = graphics_module.logical_device();
-    vkFreeCommandBuffers(logical_device, *_command_pool, 1, &_handle);
-  }
+  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
+
+  auto& logical_device = graphics_module.logical_device();
+  vkFreeCommandBuffers(logical_device, *_command_pool, 1, &_handle);
 }
 
 auto command_buffer::operator=(command_buffer&& other) noexcept -> command_buffer& {
-  if (this != &other) {
-    _command_pool = std::move(other._command_pool);
-    _handle = std::exchange(other._handle, nullptr);
-    _queue_type = other._queue_type;
-    _is_running = std::exchange(other._is_running, false);
+  if (this == &other) {
+    return *this;
   }
+
+  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
+  auto& logical_device = graphics_module.logical_device();
+
+  if (_is_running) {
+		end();
+  }
+
+  vkFreeCommandBuffers(logical_device, *_command_pool, 1, &_handle);
+
+  _command_pool = std::move(other._command_pool);
+  _handle = std::exchange(other._handle, nullptr);
+  _queue_type = other._queue_type;
+  _is_running = std::exchange(other._is_running, false);
 
   return *this;
 }
@@ -330,6 +339,17 @@ auto command_buffer::end_rendering() -> void {
 auto command_buffer::reset(VkCommandBufferResetFlags flags) -> void {
   validate(vkResetCommandBuffer(_handle, flags));
   _is_running = false;
+}
+
+auto command_buffer::execute_commands(const std::vector<command_buffer>& commands) -> void {
+  auto handles = std::vector<VkCommandBuffer>{};
+  handles.reserve(commands.size());
+
+  for (const auto& command : commands) {
+    handles.push_back(command);
+  }
+
+  vkCmdExecuteCommands(_handle, handles.size(), handles.data());
 }
 
 auto command_buffer::_queue() const -> const graphics::queue& {

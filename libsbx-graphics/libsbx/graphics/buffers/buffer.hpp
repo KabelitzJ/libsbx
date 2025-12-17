@@ -23,6 +23,7 @@ public:
 
   using handle_type = VkBuffer;
   using size_type = VkDeviceSize;
+  using address_type = VkDeviceAddress;
 
   buffer(size_type size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, memory::observer_ptr<const void> memory = nullptr);
 
@@ -32,7 +33,7 @@ public:
 
   operator handle_type() const noexcept;
 
-  auto address() const noexcept -> std::uint64_t;
+  auto address() const noexcept -> address_type;
 
   auto resize(const size_type new_size) -> void;
 
@@ -67,7 +68,7 @@ private:
 
   VkBuffer _handle;
   VmaAllocation _allocation;
-  std::uint64_t _address;
+  address_type _address;
 
 }; // class buffer
 

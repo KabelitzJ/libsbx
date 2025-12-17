@@ -21,6 +21,9 @@ struct alignas(alignof(std::float_t)) vertex3d {
   math::vector4 bone_weights;
 }; // struct vertex
 
+static_assert(sizeof(vertex3d) == 80, "Incorrect sbx::animations::vertex3d size");
+static_assert(alignof(vertex3d) == 4, "Incorrect sbx::animations::vertex3d alignment");
+
 constexpr auto operator==(const vertex3d& lhs, const vertex3d& rhs) noexcept -> bool {
   return lhs.position == rhs.position && lhs.normal == rhs.normal && lhs.tangent == rhs.tangent && lhs.uv == rhs.uv && lhs.bone_ids == rhs.bone_ids && lhs.bone_weights == rhs.bone_weights;
 }

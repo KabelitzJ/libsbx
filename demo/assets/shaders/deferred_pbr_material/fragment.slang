@@ -31,10 +31,7 @@ struct blend_fs_out {
 }; // struct blend_fs_out
 
 [[vk::push_constant]]
-ConstantBuffer<static_push_data> static_push;
-
-[[vk::push_constant]]
-ConstantBuffer<skinned_push_data> skinned_push;
+ConstantBuffer<push_data> push;
 
 [[vk::binding(0, 0)]]
 ConstantBuffer<sbx::common::scene_data> scene;
@@ -186,8 +183,15 @@ float2 parallax_occlusion_mapping(fs_in input, material_data material_data, floa
 }
 
 
-opaque_fs_out opaque_main(fs_in input, material_data material_data, uint object_id) {
+[earlydepthstencil]
+[shader("fragment")]
+opaque_fs_out opaque_main(fs_in input) {
   opaque_fs_out output;
+
+  uint global_instance = input.instance_index;
+
+  instance_data instance_data = push.instance_data_buffer[global_instance];
+  material_data material_data = push.material_data_buffer[instance_data.material_index];
 
   float3x3 TBN = build_tbn(input);
 
@@ -199,36 +203,20 @@ opaque_fs_out opaque_main(fs_in input, material_data material_data, uint object_
   output.normal = float4(get_normal(TBN, uv, input.normal, material_data) * 0.5f + 0.5f, 0.0);
   output.material = float4(get_material(uv, material_data), 0.0);
   output.emissive = float4(get_emissive(uv, material_data), 0.0);
-  output.object_id = object_id;
+  output.object_id = instance_data.object_id;
   output.linear_depth = sbx::common::linearize_depth(input.sv_position.z, scene.camera_near, scene.camera_far);
 
   return output;
 }
 
-[earlydepthstencil]
 [shader("fragment")]
-opaque_fs_out static_opaque_main(fs_in input) {
-  uint global_instance = input.instance_index;
-
-  static_instance_data instance_data = static_push.instance_data_buffer[global_instance];
-  material_data material_data = static_push.material_data_buffer[instance_data.material_index];
-
-  return opaque_main(input, material_data, instance_data.object_id);
-}
-
-[earlydepthstencil]
-[shader("fragment")]
-opaque_fs_out skinned_opaque_main(fs_in input) {
-  uint global_instance = input.instance_index;
-
-  skinned_instance_data instance_data = skinned_push.instance_data_buffer[global_instance];
-  material_data material_data = skinned_push.material_data_buffer[instance_data.material_index];
-
-  return opaque_main(input, material_data, instance_data.object_id);
-}
-
-opaque_fs_out mask_main(fs_in input, material_data material_data, uint object_id) {
+opaque_fs_out mask_main(fs_in input) {
   opaque_fs_out output;
+
+  uint global_instance = input.instance_index;
+
+  instance_data instance_data = push.instance_data_buffer[global_instance];
+  material_data material_data = push.material_data_buffer[instance_data.material_index];
 
   float3x3 TBN = build_tbn(input);
 
@@ -246,34 +234,20 @@ opaque_fs_out mask_main(fs_in input, material_data material_data, uint object_id
   output.normal = float4(get_normal(TBN, uv, input.normal, material_data) * 0.5f + 0.5f, 0.0);
   output.material = float4(get_material(uv, material_data), 0.0);
   output.emissive = float4(get_emissive(uv, material_data), 0.0);
-  output.object_id = object_id;
+  output.object_id = instance_data.object_id;
   output.linear_depth = sbx::common::linearize_depth(input.sv_position.z, scene.camera_near, scene.camera_far);
 
   return output;
 }
 
 [shader("fragment")]
-opaque_fs_out static_mask_main(fs_in input) {
-  uint global_instance = input.instance_index;
-
-  static_instance_data instance_data = static_push.instance_data_buffer[global_instance];
-  material_data material_data = static_push.material_data_buffer[instance_data.material_index];
-
-  return mask_main(input, material_data, instance_data.object_id);
-}
-
-[shader("fragment")]
-opaque_fs_out skinned_mask_main(fs_in input) {
-  uint global_instance = input.instance_index;
-
-  skinned_instance_data instance_data = skinned_push.instance_data_buffer[global_instance];
-  material_data material_data = skinned_push.material_data_buffer[instance_data.material_index];
-
-  return mask_main(input, material_data, instance_data.object_id);
-}
-
-blend_fs_out blend_main(fs_in input, material_data material_data, uint object_id) {
+blend_fs_out blend_main(fs_in input) {
   blend_fs_out output;
+
+  uint global_instance = input.instance_index;
+
+  instance_data instance_data = push.instance_data_buffer[global_instance];
+  material_data material_data = push.material_data_buffer[instance_data.material_index];
   
   float4 albedo = get_albedo<blend_alpha_policy>(input.uv, material_data);
 
@@ -291,22 +265,3 @@ blend_fs_out blend_main(fs_in input, material_data material_data, uint object_id
   return output;
 }
 
-[shader("fragment")]
-blend_fs_out static_blend_main(fs_in input) {
-  uint global_instance = input.instance_index;
-
-  static_instance_data instance_data = static_push.instance_data_buffer[global_instance];
-  material_data material_data = static_push.material_data_buffer[instance_data.material_index];
-
-  return blend_main(input, material_data, instance_data.object_id);
-}
-
-[shader("fragment")]
-blend_fs_out skinned_blend_main(fs_in input) {
-  uint global_instance = input.instance_index;
-
-  skinned_instance_data instance_data = skinned_push.instance_data_buffer[global_instance];
-  material_data material_data = skinned_push.material_data_buffer[instance_data.material_index];
-
-  return blend_main(input, material_data, instance_data.object_id);
-}

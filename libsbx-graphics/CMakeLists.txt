@@ -21,7 +21,7 @@ find_package(range-v3 CONFIG REQUIRED)
 find_package(fmt CONFIG REQUIRED)
 find_package(VulkanMemoryAllocator CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
-find_package(slang REQUIRED)
+find_package(slang CONFIG REQUIRED)
 
 option(GLFW_BUILD_EXAMPLES "Build the GLFW example programs" OFF)
 option(GLFW_BUILD_TESTS "Build the GLFW test programs" OFF)
@@ -256,11 +256,11 @@ endif()
 if(${SBX_BUILD_BENCHMARKS} AND EXISTS "${PROJECT_SOURCE_DIR}/benchmarks")
   add_subdirectory(${PROJECT_SOURCE_DIR}/benchmarks)
 endif()
-if(WIN32)
-  add_custom_command(
-    TARGET ${PROJECT_NAME} POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_PROPERTY:slang::slang,IMPORTED_LOCATION>" "$<TARGET_FILE_DIR:${PROJECT_NAME}>"
-  )
-endif()
+# if(WIN32)
+#   add_custom_command(
+#     TARGET ${PROJECT_NAME} POST_BUILD
+#     COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_PROPERTY:slang::slang,IMPORTED_LOCATION>" "$<TARGET_FILE_DIR:${PROJECT_NAME}>"
+#   )
+# endif()
 
 

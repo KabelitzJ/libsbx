@@ -51,7 +51,7 @@ private:
 
   static auto _read_file(const std::filesystem::path& path) -> std::string;
 
-  auto _create_session(const compile_request& compile_request) -> Slang::ComPtr<slang::ISession>;
+  auto _create_session(const compile_request& compile_request, SlangStage stage) -> Slang::ComPtr<slang::ISession>;
 
   Slang::ComPtr<slang::IGlobalSession> _global_session;
 

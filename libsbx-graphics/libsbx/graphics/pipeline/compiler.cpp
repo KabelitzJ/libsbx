@@ -11,24 +11,27 @@ namespace sbx::graphics {
 struct stage_info { 
   SlangStage stage; 
   const char* name; 
-  const char* file; 
+  const char* file;
+  const char* profile;
 }; // struct stage_info
 
-static constexpr auto stage_infos = std::array<stage_info, 14u>{
-  stage_info{ SLANG_STAGE_VERTEX,         "vertex",        "vertex.slang"        },
-  stage_info{ SLANG_STAGE_FRAGMENT,       "fragment",      "fragment.slang"      },
-  stage_info{ SLANG_STAGE_COMPUTE,        "compute",       "compute.slang"       },
-  stage_info{ SLANG_STAGE_GEOMETRY,       "geometry",      "geometry.slang"      },
-  stage_info{ SLANG_STAGE_HULL,           "hull",          "hull.slang"          },
-  stage_info{ SLANG_STAGE_DOMAIN,         "domain",        "domain.slang"        },
-  stage_info{ SLANG_STAGE_MESH,           "mesh",          "mesh.slang"          },
-  stage_info{ SLANG_STAGE_AMPLIFICATION,  "amplification", "amplification.slang" },
-  stage_info{ SLANG_STAGE_RAY_GENERATION, "raygen",        "raygen.slang"        },
-  stage_info{ SLANG_STAGE_ANY_HIT,        "anyhit",        "anyhit.slang"        },
-  stage_info{ SLANG_STAGE_CLOSEST_HIT,    "closesthit",    "closesthit.slang"    },
-  stage_info{ SLANG_STAGE_MISS,           "miss",          "miss.slang"          },
-  stage_info{ SLANG_STAGE_INTERSECTION,   "intersection",  "intersection.slang"  },
-  stage_info{ SLANG_STAGE_CALLABLE,       "callable",      "callable.slang"      }
+static constexpr auto stage_infos = std::array<stage_info, SLANG_STAGE_COUNT>{
+    stage_info{ SLANG_STAGE_NONE,           nullptr,         nullptr,               nullptr },
+    stage_info{ SLANG_STAGE_VERTEX,         "vertex",        "vertex.slang",        "vs_6_0" },
+    stage_info{ SLANG_STAGE_HULL,           "hull",          "hull.slang",          "hs_6_0" },
+    stage_info{ SLANG_STAGE_DOMAIN,         "domain",        "domain.slang",        "ds_6_0" },
+    stage_info{ SLANG_STAGE_GEOMETRY,       "geometry",      "geometry.slang",      "gs_6_0" },
+    stage_info{ SLANG_STAGE_FRAGMENT,       "fragment",      "fragment.slang",      "ps_6_0" },
+    stage_info{ SLANG_STAGE_COMPUTE,        "compute",       "compute.slang",       "cs_6_0" },
+    stage_info{ SLANG_STAGE_RAY_GENERATION, "raygen",        "raygen.slang",        "rgs_6_0" },
+    stage_info{ SLANG_STAGE_INTERSECTION,   "intersection",  "intersection.slang",  "is_6_0" },
+    stage_info{ SLANG_STAGE_ANY_HIT,        "anyhit",        "anyhit.slang",        "ahs_6_0" },
+    stage_info{ SLANG_STAGE_CLOSEST_HIT,    "closesthit",    "closesthit.slang",    "chs_6_0" },
+    stage_info{ SLANG_STAGE_MISS,           "miss",          "miss.slang",          "ms_6_0" },
+    stage_info{ SLANG_STAGE_CALLABLE,       "callable",      "callable.slang",      "cs_6_0" },
+    stage_info{ SLANG_STAGE_MESH,           "mesh",          "mesh.slang",          "ms_6_0" },
+    stage_info{ SLANG_STAGE_AMPLIFICATION,  "amplification", "amplification.slang", "as_6_0" },
+    stage_info{ SLANG_STAGE_DISPATCH,       "dispatch",      "dispatch.slang",      "ds_6_0" }
 };
 
 compiler::compiler() {
@@ -42,16 +45,20 @@ compiler::~compiler() {
 auto compiler::compile(const compile_request& compile_request) -> compile_result {
   auto& assets_module = core::engine::get_module<assets::assets_module>();
 
-  auto session = _create_session(compile_request);
-
   auto result = compile_result{};
 
-  for (const auto& [stage, name, file] : stage_infos) {
+  for (const auto& [stage, name, file, profile] : stage_infos) {
+    if (stage == SLANG_STAGE_NONE) {
+      continue;
+    }
+
     const auto file_path = assets_module.resolve_path(std::filesystem::path{compile_request.path}.append(file));
 
     if (!std::filesystem::exists(file_path)) {
       continue;
     }
+
+    auto session = _create_session(compile_request, stage);
 
     auto& per_stage = compile_request.per_stage.at(stage);
 
@@ -189,7 +196,7 @@ auto compiler::_read_file(const std::filesystem::path& path) -> std::string {
   return std::string{buffer.data(), size};
 }
 
-auto compiler::_create_session(const compile_request& compile_request) -> Slang::ComPtr<slang::ISession> {
+auto compiler::_create_session(const compile_request& compile_request, SlangStage stage) -> Slang::ComPtr<slang::ISession> {
   auto& assets_module = core::engine::get_module<assets::assets_module>();
 
   auto session = Slang::ComPtr<slang::ISession>{};
@@ -198,30 +205,30 @@ auto compiler::_create_session(const compile_request& compile_request) -> Slang:
 
   auto target_description = slang::TargetDesc{};
   target_description.format = SLANG_SPIRV;
-  target_description.profile = _global_session->findProfile("spirv_1_5");
+  target_description.profile = _global_session->findProfile(stage_infos[stage].profile);
 
   session_description.targets = &target_description;
   session_description.targetCount = 1u;
 
   auto compiler_options = std::array<slang::CompilerOptionEntry, 16u>{
-    slang::CompilerOptionEntry{slang::CompilerOptionName::Capability,         {slang::CompilerOptionValueKind::String, 0,                               0, "spirv_1_5",                           nullptr}},
+    // slang::CompilerOptionEntry{slang::CompilerOptionName::Capability,         {slang::CompilerOptionValueKind::String, 0,                               0, "spirv_1_5",                           nullptr}},
     slang::CompilerOptionEntry{slang::CompilerOptionName::Capability,         {slang::CompilerOptionValueKind::String, 0,                               0, "SPV_EXT_physical_storage_buffer",     nullptr}},
-    slang::CompilerOptionEntry{slang::CompilerOptionName::Capability,         {slang::CompilerOptionValueKind::String, 0,                               0, "SPV_EXT_demote_to_helper_invocation", nullptr}},
+    // slang::CompilerOptionEntry{slang::CompilerOptionName::Capability,         {slang::CompilerOptionValueKind::String, 0,                               0, "SPV_EXT_demote_to_helper_invocation", nullptr}},
     
-    slang::CompilerOptionEntry{slang::CompilerOptionName::Capability,         {slang::CompilerOptionValueKind::String, 0,                               0, "SPV_KHR_non_semantic_info",           nullptr}},
-    slang::CompilerOptionEntry{slang::CompilerOptionName::Capability,         {slang::CompilerOptionValueKind::String, 0,                               0, "SPV_GOOGLE_user_type",                nullptr}},
-    slang::CompilerOptionEntry{slang::CompilerOptionName::Capability,         {slang::CompilerOptionValueKind::String, 0,                               0, "spvDerivativeControl",                nullptr}},
-    slang::CompilerOptionEntry{slang::CompilerOptionName::Capability,         {slang::CompilerOptionValueKind::String, 0,                               0, "spvImageQuery",                       nullptr}},
-    slang::CompilerOptionEntry{slang::CompilerOptionName::Capability,         {slang::CompilerOptionValueKind::String, 0,                               0, "spvImageGatherExtended",              nullptr}},
-    slang::CompilerOptionEntry{slang::CompilerOptionName::Capability,         {slang::CompilerOptionValueKind::String, 0,                               0, "spvSparseResidency",                  nullptr}},
-    slang::CompilerOptionEntry{slang::CompilerOptionName::Capability,         {slang::CompilerOptionValueKind::String, 0,                               0, "spvMinLod",                           nullptr}},
-    slang::CompilerOptionEntry{slang::CompilerOptionName::Capability,         {slang::CompilerOptionValueKind::String, 0,                               0, "spvFragmentFullyCoveredEXT",          nullptr}},
-    slang::CompilerOptionEntry{slang::CompilerOptionName::Capability,         {slang::CompilerOptionValueKind::String, 0,                               0, "spvDemoteToHelperInvocation",         nullptr}},
+    // slang::CompilerOptionEntry{slang::CompilerOptionName::Capability,         {slang::CompilerOptionValueKind::String, 0,                               0, "SPV_KHR_non_semantic_info",           nullptr}},
+    // slang::CompilerOptionEntry{slang::CompilerOptionName::Capability,         {slang::CompilerOptionValueKind::String, 0,                               0, "SPV_GOOGLE_user_type",                nullptr}},
+    // slang::CompilerOptionEntry{slang::CompilerOptionName::Capability,         {slang::CompilerOptionValueKind::String, 0,                               0, "spvDerivativeControl",                nullptr}},
+    // slang::CompilerOptionEntry{slang::CompilerOptionName::Capability,         {slang::CompilerOptionValueKind::String, 0,                               0, "spvImageQuery",                       nullptr}},
+    // slang::CompilerOptionEntry{slang::CompilerOptionName::Capability,         {slang::CompilerOptionValueKind::String, 0,                               0, "spvImageGatherExtended",              nullptr}},
+    // slang::CompilerOptionEntry{slang::CompilerOptionName::Capability,         {slang::CompilerOptionValueKind::String, 0,                               0, "spvSparseResidency",                  nullptr}},
+    // slang::CompilerOptionEntry{slang::CompilerOptionName::Capability,         {slang::CompilerOptionValueKind::String, 0,                               0, "spvMinLod",                           nullptr}},
+    // slang::CompilerOptionEntry{slang::CompilerOptionName::Capability,         {slang::CompilerOptionValueKind::String, 0,                               0, "spvFragmentFullyCoveredEXT",          nullptr}},
+    // slang::CompilerOptionEntry{slang::CompilerOptionName::Capability,         {slang::CompilerOptionValueKind::String, 0,                               0, "spvDemoteToHelperInvocation",         nullptr}},
 
     slang::CompilerOptionEntry{slang::CompilerOptionName::MatrixLayoutColumn, {slang::CompilerOptionValueKind::Int,    1,                               0, "column_major",                        nullptr}},
-    slang::CompilerOptionEntry{slang::CompilerOptionName::DebugInformation,   {slang::CompilerOptionValueKind::Int,    SLANG_DEBUG_INFO_LEVEL_STANDARD, 0, nullptr,                               nullptr}},
-    slang::CompilerOptionEntry{slang::CompilerOptionName::Optimization,       {slang::CompilerOptionValueKind::Int,    SLANG_OPTIMIZATION_LEVEL_NONE,   0, nullptr,                               nullptr}},
-    slang::CompilerOptionEntry{slang::CompilerOptionName::EmitSpirvDirectly,  {slang::CompilerOptionValueKind::Int,    1,                               0, nullptr,                               nullptr}}
+    // slang::CompilerOptionEntry{slang::CompilerOptionName::DebugInformation,   {slang::CompilerOptionValueKind::Int,    SLANG_DEBUG_INFO_LEVEL_STANDARD, 0, nullptr,                               nullptr}},
+    // slang::CompilerOptionEntry{slang::CompilerOptionName::Optimization,       {slang::CompilerOptionValueKind::Int,    SLANG_OPTIMIZATION_LEVEL_NONE,   0, nullptr,                               nullptr}},
+    // slang::CompilerOptionEntry{slang::CompilerOptionName::EmitSpirvDirectly,  {slang::CompilerOptionValueKind::Int,    1,                               0, nullptr,                               nullptr}}
   };
 
   session_description.compilerOptionEntries = compiler_options.data();

@@ -194,6 +194,9 @@ compute_pipeline::compute_pipeline(const std::filesystem::path& path)
 
 
   auto descriptor_pool_sizes = std::vector<VkDescriptorPoolSize>{
+    VkDescriptorPoolSize{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 4096},
+    VkDescriptorPoolSize{VK_DESCRIPTOR_TYPE_SAMPLER, 2048},
+    VkDescriptorPoolSize{VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 2048},
     VkDescriptorPoolSize{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 2048},
     VkDescriptorPoolSize{VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 2048},
     VkDescriptorPoolSize{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 2048}

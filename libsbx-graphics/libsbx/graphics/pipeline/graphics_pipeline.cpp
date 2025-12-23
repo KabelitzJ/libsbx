@@ -457,7 +457,7 @@ auto graphics_pipeline::_initialize(const std::vector<attachment_description>& a
     VkDescriptorPoolSize{VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 2048},
     VkDescriptorPoolSize{VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, 2048},
     VkDescriptorPoolSize{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 2048},
-    VkDescriptorPoolSize{VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT , 2048}
+    VkDescriptorPoolSize{VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 2048}
   };
 
   auto descriptor_pool_create_info = VkDescriptorPoolCreateInfo{};

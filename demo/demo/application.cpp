@@ -38,6 +38,7 @@ namespace demo {
 
 static auto fox1 = sbx::scenes::node{};
 static auto fox2 = sbx::scenes::node{};
+static auto cube2 = sbx::scenes::node{};
 
 application::application()
 : sbx::core::application{},
@@ -220,7 +221,7 @@ application::application()
 
   // Cube2
 
-  auto cube2 = scene.create_node("Cube2");
+  cube2 = scene.create_node("Cube2");
 
   auto& cube2_material = scene.add_material<sbx::models::material>("cube2");
   cube2_material.albedo.image = scene.get_image("bricks_albedo");
@@ -237,6 +238,7 @@ application::application()
   auto& cube2_transform = scene.get_component<sbx::scenes::transform>(cube2);
   cube2_transform.set_position(sbx::math::vector3{-8.0f, 15.0f, 4.0f});
   cube2_transform.set_scale(sbx::math::vector3{5.0f, 5.0f, 5.0f});
+  cube2_transform.set_rotation(sbx::math::vector3{1.0f, 0.0f, 1.0f}, sbx::math::degree{30.0f});
   
   // Chess
 
@@ -265,13 +267,13 @@ application::application()
   chess_pawn_black_material.roughness = 0.9f;
   chess_pawn_black_material.occlusion = 1.0f;
 
-  // create a 4 rows of 2x white and 4 rows of 2x black pieces
+  auto chess = scene.create_node("Chess");
 
   for (auto row = 0; row < 4; ++row) {
     for (auto i = 0; i < static_cast<int>(piece_names.size()); ++i) {
       const auto& piece_name = piece_names[i];
 
-      auto white_piece = scene.create_node(fmt::format("Chess_{}_White_{}", piece_name, row));
+      auto white_piece = scene.create_child_node(chess, fmt::format("Chess_{}_White_{}", piece_name, row));
 
       scene.add_component<sbx::scenes::static_mesh>(white_piece, scene.get_mesh("chess_pieces"), std::vector<sbx::scenes::static_mesh::submesh>{{i, scene.get_material("chess_pawn_white")}});
 
@@ -279,7 +281,7 @@ application::application()
       white_piece_transform.set_position(sbx::math::vector3{static_cast<float>(i) * 2.0f - 5.0f, 0.7f, -10.0f - static_cast<float>(row) * 2.0f});
       white_piece_transform.set_scale(sbx::math::vector3{8.0f, 8.0f, 8.0f});
 
-      auto black_piece = scene.create_node(fmt::format("Chess_{}_Black_{}", piece_name, row));
+      auto black_piece = scene.create_child_node(chess, fmt::format("Chess_{}_Black_{}", piece_name, row));
 
       scene.add_component<sbx::scenes::static_mesh>(black_piece, scene.get_mesh("chess_pieces"), std::vector<sbx::scenes::static_mesh::submesh>{{i, scene.get_material("chess_pawn_black")}});
 
@@ -459,33 +461,13 @@ auto application::update() -> void  {
 
   _rotation += sbx::math::degree{45} * delta_time;
 
-  // scenes_module.add_debug_sphere(sbx::math::vector3{0.0f, 15.0f, 0.0f}, 5.0f, sbx::math::color::red());
-
-  // _camera_controller.update();
-
-  // static auto fox_speed = 0.0f;
-  // static auto direction = 1;
-
-  // fox_speed += direction * 0.2f * delta_time;
-
-  // if (fox_speed > 2.5f) {
-  //   fox_speed = 2.5f;
-  //   direction = -1;
-  // } else if (fox_speed < 0.0f) {
-  //   fox_speed = 0.0f;
-  //   direction = 1;
-  // }
-
-  // auto& fox2_animator = scene.get_component<sbx::animations::animator>(fox2);
-  // fox2_animator.set_float("speed", fox_speed);
-
-  // auto& fox_transform = scene.get_component<sbx::scenes::transform>(fox2);
-  // fox_transform.set_rotation(sbx::math::vector3::up, _rotation);
-
   if (scene.is_valid(_light_center)) {
     auto& light_center_transform = scene.get_component<sbx::scenes::transform>(_light_center);
     light_center_transform.set_rotation(sbx::math::vector3::up, _rotation);
   }
+
+  auto cube2_transform = scene.get_component<sbx::scenes::transform>(cube2);
+  cube2_transform.set_rotation(sbx::math::vector3{0.0f, 1.0f, 0.0f}, _rotation);
 }
 
 auto application::fixed_update() -> void {

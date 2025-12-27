@@ -23,25 +23,8 @@ struct vs_out {
 [[vk::push_constant]] 
 ConstantBuffer<push_data> push;
 
-
 [[vk::binding(0, 0)]]
 ConstantBuffer<sbx::common::scene_data> scene;
-
-float4x4 calculate_skinning_matrix(uint4 bone_indices, float4 bone_weights, float4x4* bone_matrices_buffer, uint bone_matrices_offset) {
-  float4x4 result = float4x4(
-    0.0, 0.0, 0.0, 0.0,
-    0.0, 0.0, 0.0, 0.0,
-    0.0, 0.0, 0.0, 0.0,
-    0.0, 0.0, 0.0, 0.0
-  );
-
-  [unroll]
-  for (int i = 0; i < 4; ++i) {
-    result += bone_weights[i] * bone_matrices_buffer[bone_indices[i] + bone_matrices_offset];
-  }
-
-  return result;
-}
 
 [shader("vertex")]
 vs_out main(vs_in input) {

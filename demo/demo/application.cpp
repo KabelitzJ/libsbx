@@ -207,9 +207,9 @@ application::application()
   auto& duck_material = scene.add_material<sbx::models::material>("duck");
   duck_material.base_color = sbx::math::color{1.0f, 1.0f, 1.0f, 0.5f};
   duck_material.albedo.image = scene.get_image("duck_albedo");
-  duck_material.metallic = 1.0f;
-  duck_material.roughness = 0.2f;
-  duck_material.alpha = sbx::models::alpha_mode::blend;
+  duck_material.metallic = 0.3f;
+  duck_material.roughness = 0.8f;
+  // duck_material.alpha = sbx::models::alpha_mode::blend;
 
   scene.add_component<sbx::scenes::static_mesh>(duck, scene.get_mesh("duck"), std::vector<sbx::scenes::static_mesh::submesh>{{0u, scene.get_material("duck")}});
 
@@ -454,7 +454,12 @@ auto application::update() -> void  {
   auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
   auto& scene = scenes_module.scene();
 
+  auto& devices_module = sbx::core::engine::get_module<sbx::devices::devices_module>();
+  auto& window = devices_module.window();
+
   _rotation += sbx::math::degree{45} * delta_time;
+
+  // scenes_module.add_debug_sphere(sbx::math::vector3{0.0f, 15.0f, 0.0f}, 5.0f, sbx::math::color::red());
 
   // _camera_controller.update();
 

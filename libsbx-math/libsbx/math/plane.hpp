@@ -45,6 +45,12 @@ public:
     return *this;
   }
 
+  static auto normalized(const basic_plane& plane) noexcept -> basic_plane {
+    const auto length = plane._normal.length();
+
+    return basic_plane{plane._normal / length, plane._distance / length};
+  }
+
 private:
 
   vector_type _normal;

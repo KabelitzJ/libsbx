@@ -1,6 +1,8 @@
 #ifndef LIBSBX_MATH_VOLUME_HPP_
 #define LIBSBX_MATH_VOLUME_HPP_
 
+#include <ranges>
+
 #include <libsbx/math/concepts.hpp>
 #include <libsbx/math/vector3.hpp>
 #include <libsbx/math/matrix4x4.hpp>
@@ -73,6 +75,42 @@ public:
 
   auto diagonal_length() const noexcept -> value_type {
     return (_max - _min).length();
+  }
+
+  auto is_empty() const noexcept -> bool {
+    return _min.x() >= _max.x() || _min.y() >= _max.y() || _min.z() >= _max.z();
+  }
+
+  auto include(const basic_volume& other) noexcept -> void {
+    _min = vector_type::min(_min, other.min());
+    _max = vector_type::max(_max, other.max());
+  }
+
+  template<std::ranges::input_range Range, typename Projection = std::identity>
+  requires (std::convertible_to<std::invoke_result_t<Projection, std::ranges::range_reference_t<Range>>, vector_type>)
+  static auto construct(Range&& range, Projection projection = {}) -> basic_volume {
+    auto iterator = std::ranges::begin(range);
+    const auto end = std::ranges::end(range);
+
+    if (iterator == end) {
+      return basic_volume{};
+    }
+
+    auto first_point = std::invoke(projection, *iterator);
+
+    auto min = first_point;
+    auto max = first_point;
+
+    ++iterator;
+
+    for (; iterator != end; ++iterator) {
+      const auto point = std::invoke(projection, *iterator);
+
+      min = vector_type::min(min, point);
+      max = vector_type::max(max, point);
+    }
+
+    return basic_volume{min, max};
   }
 
 private:

@@ -90,9 +90,28 @@ struct static_mesh_traits {
 
   template<typename Callable>
   static void for_each_submission(scenes::scene& scene, Callable&& callable) {
+    auto& assets_module = core::engine::get_module<assets::assets_module>();
+    auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
+
+    auto camera_node = scene.camera();
+    auto& camera = scene.get_component<scenes::camera>(camera_node);
+
+    const auto view = math::matrix4x4::inverted(scene.world_transform(camera_node));
+
+    auto frustum = camera.view_frustum(view);
+
     auto query = scene.query<const scenes::static_mesh, const scenes::selection_tag>();
 
     for (auto&& [node, static_mesh, selection_tag] : query.each()) {
+      auto mesh_id = static_mesh.mesh_id();
+      auto& mesh = assets_module.get_asset<models::mesh>(mesh_id);
+
+      scenes_module.add_debug_volume(scene.world_transform(node), mesh.bounds(), math::color::magenta());
+        
+      if (!frustum.intersects(mesh.bounds(), scene.world_transform(node))) {
+        continue;
+      }
+
       const auto transform_data = models::transform_data{ scene.world_transform(node), scene.world_normal(node) };
 
       for (const auto& submesh : static_mesh.submeshes()) {

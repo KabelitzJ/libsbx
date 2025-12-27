@@ -108,9 +108,19 @@ static auto _load_mesh(const aiMesh* mesh, mesh::mesh_data& data, bone_map& bone
     data.indices.push_back(mesh->mFaces[i].mIndices[2]);
   }
 
+  auto bounds = math::volume{_convert_vec3(mesh->mAABB.mMin), _convert_vec3(mesh->mAABB.mMax)};
+
+  if (bounds.min() == bounds.max()) {
+    const auto aabb = math::volume::construct(data.vertices, &vertex3d::position);
+
+    bounds = aabb;
+  }
+
+  data.bounds.include(bounds);
+
   submesh.index_count = static_cast<std::uint32_t>(data.indices.size()) - submesh.index_offset;
   submesh.vertex_count = static_cast<std::uint32_t>(data.vertices.size()) - submesh.vertex_offset;
-  submesh.bounds = math::volume{_convert_vec3(mesh->mAABB.mMin), _convert_vec3(mesh->mAABB.mMax)};
+  submesh.bounds = bounds;
   submesh.local_transform = math::matrix4x4::identity;
   submesh.name = utility::hashed_string{mesh->mName.C_Str()};
 

@@ -51,6 +51,23 @@ static auto _convert_mat4(const aiMatrix4x4& matrix) -> math::matrix4x4 {
   return result;
 }
 
+static auto _calculate_aabb(const std::vector<vertex3d>& vertices) -> math::volume {
+  if (vertices.empty()) {
+    utility::logger<"models">::warn("Calculating AABB for empty mesh, returning default volume");
+    return math::volume{sbx::math::vector3{0.0f, 0.0f, 0.0f}, sbx::math::vector3{0.0f, 0.0f, 0.0f}};
+  }
+
+  auto min = vertices.front().position;
+  auto max = vertices.front().position;
+
+  for (const auto& vertex : vertices | std::views::drop(1)) {
+    min = math::vector3::min(min, vertex.position);
+    max = math::vector3::max(max, vertex.position);
+  }
+
+  return math::volume{min, max};
+}
+
 static auto _load_mesh(const aiMesh* mesh, mesh::mesh_data& data, const math::matrix4x4& local_transform) -> void {
   if (!mesh->HasNormals()) {
     throw std::runtime_error{fmt::format("Mesh '{}' does not have normals", mesh->mName.C_Str())};
@@ -123,9 +140,19 @@ static auto _load_mesh(const aiMesh* mesh, mesh::mesh_data& data, const math::ma
   utility::append(data.vertices, unique_vertices);
   utility::append(data.indices, remapped_indices);
 
+  auto bounds = math::volume{_convert_vec3(mesh->mAABB.mMin), _convert_vec3(mesh->mAABB.mMax)};
+
+  if (bounds.min() == bounds.max()) {
+    const auto aabb = math::volume::construct(unique_vertices, &vertex3d::position);
+
+    bounds = aabb;
+  }
+
+  data.bounds.include(bounds);
+
   submesh.index_count = static_cast<std::uint32_t>(data.indices.size()) - submesh.index_offset;
   submesh.vertex_count = static_cast<std::uint32_t>(data.vertices.size()) - submesh.vertex_offset;
-  submesh.bounds = math::volume{_convert_vec3(mesh->mAABB.mMin), _convert_vec3(mesh->mAABB.mMax)};
+  submesh.bounds = bounds;
   submesh.local_transform = local_transform;
   submesh.name = utility::hashed_string{mesh->mName.C_Str()};
 
@@ -187,7 +214,7 @@ auto mesh::_load(const std::filesystem::path& path) -> mesh_data {
   _load_node(scene->mRootNode, scene, data, math::matrix4x4::identity);
 
   // [NOTE] KAJ 2024-03-20 : We need to calculate the bounds of the mesh from the submeshes.
-  data.bounds = math::volume{math::vector3::zero, math::vector3::zero};
+  // data.bounds = math::volume{math::vector3::zero, math::vector3::zero};
 
   const auto vertices_count = data.vertices.size();
   const auto indices_count = data.indices.size();
@@ -199,23 +226,6 @@ auto mesh::_load(const std::filesystem::path& path) -> mesh_data {
   utility::logger<"models">::debug("Loaded mesh: {}, vertices: {}, indices: {}, size: {} kb in {:.2f}ms", resolved_path.string(), vertices_count, indices_count, kb.value(), units::quantity_cast<units::millisecond>(timer.elapsed()).value());
 
   return data;
-}
-
-static auto calculate_aabb(const std::vector<vertex3d>& vertices) -> math::volume {
-  if (vertices.empty()) {
-    utility::logger<"models">::warn("Calculating AABB for empty mesh, returning default volume");
-    return math::volume{sbx::math::vector3{0.0f, 0.0f, 0.0f}, sbx::math::vector3{0.0f, 0.0f, 0.0f}};
-  }
-
-  auto min = vertices.front().position;
-  auto max = vertices.front().position;
-
-  for (const auto& vertex : vertices) {
-    min = math::vector3::min(min, vertex.position);
-    max = math::vector3::max(max, vertex.position);
-  }
-
-  return math::volume{min, max};
 }
 
 static auto calculate_sphere(const std::vector<vertex3d>& vertices) -> math::sphere {
@@ -266,7 +276,7 @@ auto mesh::_process(const std::filesystem::path& path, const mesh_data& data) ->
   output_file.write(reinterpret_cast<const char*>(data.vertices.data()), data.vertices.size() * sizeof(vertex3d));
   output_file.write(reinterpret_cast<const char*>(data.submeshes.data()), data.submeshes.size() * sizeof(graphics::submesh));
 
-  const auto aabb = calculate_aabb(data.vertices);
+  const auto aabb = _calculate_aabb(data.vertices);
   output_file.write(reinterpret_cast<const char*>(&aabb), sizeof(math::volume));
 
   const auto sphere = calculate_sphere(data.vertices);

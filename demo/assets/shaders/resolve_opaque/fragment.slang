@@ -280,6 +280,7 @@ fs_out main(fs_in input) {
 
   float3 specular_ibl = prefiltered_color * (F_ibl * brdf.x + brdf.y);
 
+  // float3 ambient = (kD_ibl * diffuse_ibl + specular_ibl) * ao * ssao;
   float3 ambient = (kD_ibl * diffuse_ibl + specular_ibl) * ao;
 
   float3 final_color = ambient + color + emissive;
@@ -288,11 +289,7 @@ fs_out main(fs_in input) {
 
   float brightness = dot(output.color.rgb, float3(0.2126, 0.7152, 0.0722));
 
-  if (brightness > 1.0) {
-    output.brightness = float4(output.color.rgb, 1.0);
-  } else {
-    output.brightness = float4(0.0, 0.0, 0.0, 1.0);
-  }
+  output.brightness = (brightness > 1.0) ? float4(output.color.rgb, 1.0) : float4(0.0, 0.0, 0.0, 1.0);
 
   return output;
 }

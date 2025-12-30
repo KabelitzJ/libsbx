@@ -59,12 +59,12 @@ public:
     
     pipeline.bind(command_buffer);
 
-    _push_handler.push("exposure", core::prototype::settings::get_or(exposure_key, 0.0f));
-    _push_handler.push("bloom_mix", core::prototype::settings::get_or(bloom_mix_key, 0.2f));
-    _push_handler.push("saturation", core::prototype::settings::get_or(saturation_key, 1.0f));
-    _push_handler.push("contrast", core::prototype::settings::get_or(contrast_key, 1.0f));
-    _push_handler.push("temperature", core::prototype::settings::get_or(temperature_key, 0.0f));
-    _push_handler.push("tint", core::prototype::settings::get_or(tint_key, 0.0f));
+    _push_handler.push("exposure", _tonemap_config.exposure);
+    _push_handler.push("bloom_mix", _tonemap_config.bloom_mix);
+    _push_handler.push("saturation", _tonemap_config.saturation);
+    _push_handler.push("contrast", _tonemap_config.contrast);
+    _push_handler.push("temperature", _tonemap_config.temperature);
+    _push_handler.push("tint", _tonemap_config.tint);
 
     for (const auto& [name, attachment] : _attachment_names) {
       descriptor_handler.push(name, graphics_module.attachment(attachment));

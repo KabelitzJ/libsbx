@@ -37,14 +37,14 @@ float3 apply_white_balance(float3 c, float temperature, float tint) {
   return c * w;
 }
 
-float3 apply_tonemap(float3 x) {
-  const float a = 2.51;
-  const float b = 0.03;
-  const float c = 2.43;
-  const float d = 0.59;
-  const float e = 0.14;
+float3 apply_tonemap(float3 value) {
+  static const float a = 2.51;
+  static const float b = 0.03;
+  static const float c = 2.43;
+  static const float d = 0.59;
+  static const float e = 0.14;
 
-  return saturate((x * (a * x + b)) / (x * (c * x + d) + e));
+  return saturate((value * (a * value + b)) / (value * (c * value + d) + e));
 }
 
 [shader("fragment")]
@@ -54,18 +54,18 @@ fs_out main(fs_in input) {
   float3 color = resolve_image.Sample(input.uv).rgb;
   // float3 bloom = bloom_image.Sample(input.uv).rgb;
 
-  // float3 hdr = color + pow(bloom, 1.2) * push.bloom_mix;
-  float3 hdr = color;
-  hdr = apply_white_balance(hdr, push.temperature, push.tint);
+  color = apply_white_balance(color, push.temperature, push.tint);
 
-  float3 mapped = apply_tonemap(hdr * exp2(push.exposure));
+  float3 exposed = color * exp2(push.exposure);
+
+  // exposed += pow(bloom, 1.2) * push.bloom_mix;
+
+  float3 mapped = apply_tonemap(exposed);
 
   float luminance = dot(mapped, float3(0.2126, 0.7152, 0.0722));
 
-  mapped = lerp(float3(luminance, luminance, luminance), mapped, push.saturation);
-  
-  float3 gray = luminance.xxx;
-  mapped = gray + (mapped - gray) * push.contrast;
+  mapped = lerp(luminance.xxx, mapped, push.saturation);
+  mapped = luminance.xxx + (mapped - luminance.xxx) * push.contrast;
 
   output.color = float4(mapped, 1.0);
 

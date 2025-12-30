@@ -103,14 +103,12 @@ struct static_mesh_traits {
     auto query = scene.query<const scenes::static_mesh, const scenes::selection_tag>();
 
     for (auto&& [node, static_mesh, selection_tag] : query.each()) {
-      auto mesh_id = static_mesh.mesh_id();
-      auto& mesh = assets_module.get_asset<models::mesh>(mesh_id);
+      // auto mesh_id = static_mesh.mesh_id();
+      // auto& mesh = assets_module.get_asset<models::mesh>(mesh_id);
 
-      scenes_module.add_debug_volume(scene.world_transform(node), mesh.bounds(), math::color::magenta());
-        
-      if (!frustum.intersects(mesh.bounds(), scene.world_transform(node))) {
-        continue;
-      }
+      // if (!frustum.intersects(mesh.bounds(), scene.world_transform(node))) {
+      //   continue;
+      // }
 
       const auto transform_data = models::transform_data{ scene.world_transform(node), scene.world_normal(node) };
 

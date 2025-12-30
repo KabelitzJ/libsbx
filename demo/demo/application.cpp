@@ -36,10 +36,6 @@
 
 namespace demo {
 
-static auto fox1 = sbx::scenes::node{};
-static auto fox2 = sbx::scenes::node{};
-static auto cube2 = sbx::scenes::node{};
-
 application::application()
 : sbx::core::application{},
   _rotation{sbx::math::degree{0}} { 
@@ -157,7 +153,7 @@ application::application()
   }
 
   // Helmet
-  auto helmet = scene.create_node("Helmet");
+  _helmet = scene.create_node("Helmet", sbx::scenes::transform{}, sbx::scenes::selection_tag{});
 
   auto& helmet_material = scene.add_material<sbx::models::material>("helmet");
   helmet_material.albedo.image = scene.get_image("helmet_albedo");
@@ -168,13 +164,13 @@ application::application()
   helmet_material.emissive_factor = sbx::math::vector4{1, 1, 1, 0};
   helmet_material.emissive_strength = 16.0f;
 
-  scene.add_component<sbx::scenes::static_mesh>(helmet, scene.get_mesh("helmet"), scene.get_material("helmet"));
+  scene.add_component<sbx::scenes::static_mesh>(_helmet, scene.get_mesh("helmet"), scene.get_material("helmet"));
 
-  auto& helmet_transform = scene.get_component<sbx::scenes::transform>(helmet);
+  auto& helmet_transform = scene.get_component<sbx::scenes::transform>(_helmet);
   helmet_transform.set_position(sbx::math::vector3{0.0f, 6.0f, 0.0f});
   helmet_transform.set_scale(sbx::math::vector3{4.0f, 4.0f, 4.0f});
 
-  auto demo_script = scripting_module.instantiate(helmet, "build/x86_64/gcc/debug/_dotnet/Demo.dll", "Demo.Helmet");
+  auto demo_script = scripting_module.instantiate(_helmet, "build/x86_64/gcc/debug/_dotnet/Demo.dll", "Demo.Helmet");
 
   demo_script.invoke("SayHello");
 
@@ -203,25 +199,27 @@ application::application()
 
   // Duck
 
-  auto duck = scene.create_node("Duck");
+  auto aaaa = scene.create_node("AAAA");
+
+  _duck = scene.create_child_node(aaaa, "Duck");
 
   auto& duck_material = scene.add_material<sbx::models::material>("duck");
   duck_material.base_color = sbx::math::color{1.0f, 1.0f, 1.0f, 0.5f};
   duck_material.albedo.image = scene.get_image("duck_albedo");
-  duck_material.metallic = 0.3f;
-  duck_material.roughness = 0.8f;
+  duck_material.metallic = 0.8f;
+  duck_material.roughness = 0.2f;
   // duck_material.alpha = sbx::models::alpha_mode::blend;
 
-  scene.add_component<sbx::scenes::static_mesh>(duck, scene.get_mesh("duck"), std::vector<sbx::scenes::static_mesh::submesh>{{0u, scene.get_material("duck")}});
+  scene.add_component<sbx::scenes::static_mesh>(_duck, scene.get_mesh("duck"), std::vector<sbx::scenes::static_mesh::submesh>{{0u, scene.get_material("duck")}});
 
-  auto& duck_transform = scene.get_component<sbx::scenes::transform>(duck);
+  auto& duck_transform = scene.get_component<sbx::scenes::transform>(_duck);
   duck_transform.set_position(sbx::math::vector3{-8.0f, 2.0f, 4.0f});
   duck_transform.set_rotation(sbx::math::vector3::up, sbx::math::degree{-45});
   duck_transform.set_scale(sbx::math::vector3{4.0f, 4.0f, 4.0f});
 
   // Cube2
 
-  cube2 = scene.create_node("Cube2");
+  _cube2 = scene.create_node("Cube2");
 
   auto& cube2_material = scene.add_material<sbx::models::material>("cube2");
   cube2_material.albedo.image = scene.get_image("bricks_albedo");
@@ -233,9 +231,9 @@ application::application()
   cube2_material.height.image = scene.get_image("bricks_height");
   cube2_material.normal_scale = 1.0f;
 
-  scene.add_component<sbx::scenes::static_mesh>(cube2, scene.get_mesh("cube"), scene.get_material("cube2"));
+  scene.add_component<sbx::scenes::static_mesh>(_cube2, scene.get_mesh("cube"), scene.get_material("cube2"));
 
-  auto& cube2_transform = scene.get_component<sbx::scenes::transform>(cube2);
+  auto& cube2_transform = scene.get_component<sbx::scenes::transform>(_cube2);
   cube2_transform.set_position(sbx::math::vector3{-8.0f, 15.0f, 4.0f});
   cube2_transform.set_scale(sbx::math::vector3{5.0f, 5.0f, 5.0f});
   cube2_transform.set_rotation(sbx::math::vector3{1.0f, 0.0f, 1.0f}, sbx::math::degree{30.0f});
@@ -300,28 +298,26 @@ application::application()
   fox_material.roughness = 0.7f;
   fox_material.occlusion = 0.8f;
 
-  fox1 = scene.create_node("Fox");
+  _fox1 = scene.create_node("Fox");
 
-  animations_module.add_animated_mesh(fox1, scene.get_mesh("fox"), scene.get_material("fox"));
+  animations_module.add_animated_mesh(_fox1, scene.get_mesh("fox"), scene.get_material("fox"));
 
-  auto& fox1_animator = scene.add_component<sbx::animations::animator>(fox1);
-
+  auto& fox1_animator = scene.add_component<sbx::animations::animator>(_fox1);
   fox1_animator.add_state({"Walk", scene.get_animation("Walk"), true, 1.5f});
 
   fox1_animator.play("Walk", true);
 
-  auto& fox1_transform = scene.get_component<sbx::scenes::transform>(fox1);
+  auto& fox1_transform = scene.get_component<sbx::scenes::transform>(_fox1);
   fox1_transform.set_position(sbx::math::vector3{15.0f, 0.0f, 0.0f});
   fox1_transform.set_scale(sbx::math::vector3{0.06f, 0.06f, 0.06f});
 
   // Fox2
 
-  fox2 = scene.create_node("Fox");
+  _fox2 = scene.create_node("Fox");
 
-  animations_module.add_animated_mesh(fox2, scene.get_mesh("fox"), scene.get_material("fox"));
+  animations_module.add_animated_mesh(_fox2, scene.get_mesh("fox"), scene.get_material("fox"));
 
-  auto fox_tail_node = animations_module.find_skeleton_node(fox2, "b_Tail03_014");
-
+  auto fox_tail_node = animations_module.find_skeleton_node(_fox2, "b_Tail03_014");
   if (fox_tail_node != sbx::scenes::node::null) {
     auto test = scene.create_child_node(fox_tail_node, "Test");
 
@@ -331,7 +327,7 @@ application::application()
     test_transform.set_scale(sbx::math::vector3{10.0f, 10.0f, 10.0f});
   }
 
-  auto& fox2_animator = scene.add_component<sbx::animations::animator>(fox2);
+  auto& fox2_animator = scene.add_component<sbx::animations::animator>(_fox2);
 
   fox2_animator.add_state({"Walk", scene.get_animation("Walk"), true, 0.5f});
   fox2_animator.add_state({"Survey", scene.get_animation("Survey"), true, 0.5f});
@@ -398,7 +394,7 @@ application::application()
 
   fox2_animator.play("Survey", true);
 
-  auto& fox2_transform = scene.get_component<sbx::scenes::transform>(fox2);
+  auto& fox2_transform = scene.get_component<sbx::scenes::transform>(_fox2);
   fox2_transform.set_position(sbx::math::vector3{12.0f, 0.0f, 0.0f});
   fox2_transform.set_scale(sbx::math::vector3{0.06f, 0.06f, 0.06f});
 
@@ -459,15 +455,19 @@ auto application::update() -> void  {
   auto& devices_module = sbx::core::engine::get_module<sbx::devices::devices_module>();
   auto& window = devices_module.window();
 
+  if (scene.is_valid(_cube2)) {
+    auto& cube2_transform = scene.get_component<sbx::scenes::transform>(_cube2);
+    const auto& current_rotation = cube2_transform.rotation();
+    const auto rotation = sbx::math::quaternion{sbx::math::vector3::up, sbx::math::angle{sbx::math::degree{30} * delta_time}};
+    cube2_transform.set_rotation(rotation * current_rotation);
+  }
+
   _rotation += sbx::math::degree{45} * delta_time;
 
   if (scene.is_valid(_light_center)) {
     auto& light_center_transform = scene.get_component<sbx::scenes::transform>(_light_center);
     light_center_transform.set_rotation(sbx::math::vector3::up, _rotation);
   }
-
-  auto cube2_transform = scene.get_component<sbx::scenes::transform>(cube2);
-  cube2_transform.set_rotation(sbx::math::vector3{0.0f, 1.0f, 0.0f}, _rotation);
 }
 
 auto application::fixed_update() -> void {

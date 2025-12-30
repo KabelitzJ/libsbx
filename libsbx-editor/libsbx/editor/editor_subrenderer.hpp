@@ -1024,10 +1024,10 @@ private:
           "ssao",
           "resolve",
           "brightness",
-          "bloom_full",
+          "bloom_blur_vertical",
+          "bloom_blur_horizontal",
           "tonemap",
-          "fxaa",
-          "selection"
+          "fxaa"
         };
 
         if (ImGui::BeginCombo("Render Target", targets[current_target].data())) {

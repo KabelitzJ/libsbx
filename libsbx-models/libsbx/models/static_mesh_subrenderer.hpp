@@ -113,13 +113,15 @@ struct static_mesh_traits {
       const auto transform_data = models::transform_data{ scene.world_transform(node), scene.world_normal(node) };
 
       for (const auto& submesh : static_mesh.submeshes()) {
-        std::invoke(callable, static_mesh.mesh_id(), submesh.index, submesh.material, transform_data, selection_tag, instance_payload{});
+        std::invoke(callable, node, static_mesh.mesh_id(), submesh.index, submesh.material, transform_data, selection_tag, instance_payload{});
       }
     }
   }
 
-  static auto make_instance_data(std::uint32_t transform_index, std::uint32_t material_index, const scenes::selection_tag& selection_tag, const instance_payload& payload) -> instance_data {
-    return instance_data{transform_index, material_index, selection_tag, 0u};
+  static auto make_instance_data(const scenes::node node, std::uint32_t transform_index, std::uint32_t material_index, const scenes::selection_tag& selection_tag, const instance_payload& payload) -> instance_data {
+    const auto object_id = (selection_tag != scenes::selection_tag::null()) ? static_cast<std::uint32_t>(node) : std::uint32_t{0u};
+
+    return models::instance_data{transform_index, material_index, object_id, 0u};
   }
 
   template<typename Mesh, typename Emitter>

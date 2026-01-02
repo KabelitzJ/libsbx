@@ -298,7 +298,7 @@ application::application()
   fox_material.roughness = 0.7f;
   fox_material.occlusion = 0.8f;
 
-  _fox1 = scene.create_node("Fox");
+  _fox1 = scene.create_node("Fox1");
 
   animations_module.add_animated_mesh(_fox1, scene.get_mesh("fox"), scene.get_material("fox"));
 
@@ -313,7 +313,7 @@ application::application()
 
   // Fox2
 
-  _fox2 = scene.create_node("Fox");
+  _fox2 = scene.create_node("Fox2");
 
   animations_module.add_animated_mesh(_fox2, scene.get_mesh("fox"), scene.get_material("fox"));
 

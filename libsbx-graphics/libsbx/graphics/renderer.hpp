@@ -44,11 +44,11 @@ public:
     });
   }
 
-  auto execute_tasks(command_buffer& command_buffer) -> void {
-    for (const auto& task : _tasks) {
-      task->execute(command_buffer);
-    }
-  }
+  // auto execute_tasks(command_buffer& command_buffer) -> void {
+  //   for (const auto& task : _tasks) {
+  //     task->execute(command_buffer);
+  //   }
+  // }
 
   auto resize(const viewport::type flags) -> void {
     _graph.resize(flags);
@@ -84,6 +84,18 @@ protected:
 
   template<typename Type, typename... Args>
   requires (std::is_constructible_v<Type, Args...>)
+  auto add_task(const pass_handle handle, Args&&... args) -> Type& {
+    _tasks.resize(std::max(_tasks.size(), static_cast<std::size_t>(handle.index + 1)));
+
+    auto& tasks = _tasks[handle.index];
+
+    tasks.emplace_back(std::make_unique<Type>(std::forward<Args>(args)...));
+
+    return *static_cast<Type*>(tasks.back().get());
+  }
+
+  template<typename Type, typename... Args>
+  requires (std::is_constructible_v<Type, Args...>)
   auto add_draw_list(const utility::hashed_string& name, Args&&... args) -> Type& {
     auto result = _draw_lists.emplace(name, std::make_unique<Type>(std::forward<Args>(args)...));
 
@@ -93,6 +105,11 @@ protected:
   template<typename... Args>
   auto create_attachment(Args&&... args) -> attachment_handle {
     return _graph.create_attachment(std::forward<Args>(args)...);
+  }
+
+  template<typename... Args>
+  auto create_buffer_resource(Args&&... args) -> buffer_resource_handle {
+    return _graph.create_buffer_resource(std::forward<Args>(args)...);
   }
 
   template<typename Callable>
@@ -110,7 +127,7 @@ protected:
 
 private:
 
-  std::vector<std::unique_ptr<graphics::task>> _tasks;
+  std::vector<std::vector<std::unique_ptr<graphics::task>>> _tasks;
 
   std::vector<std::vector<std::unique_ptr<subrenderer>>> _subrenderers;
 

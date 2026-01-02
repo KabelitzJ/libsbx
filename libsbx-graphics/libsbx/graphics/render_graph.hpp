@@ -142,6 +142,51 @@ struct attachment_handle {
 
 }; // struct attachment_handle
 
+class buffer_resource {
+
+public:
+
+  enum class type {
+    storage
+  }; // enum class type
+
+  buffer_resource(const utility::hashed_string& name, type type, VkDeviceSize size);
+
+  auto name() const noexcept -> const utility::hashed_string&;
+
+  auto buffer_type() const noexcept -> type;
+
+  auto size() const noexcept -> VkDeviceSize;
+
+private:
+
+  utility::hashed_string _name;
+  type _type;
+  VkDeviceSize _size;
+
+}; // class buffer_resource
+
+struct buffer_resource_handle {
+
+  std::uint32_t index{0xFFFFFFFF};
+
+  [[nodiscard]] auto is_valid() const noexcept -> bool { 
+    return index != 0xFFFFFFFF; 
+  }
+
+}; // struct buffer_resource
+
+enum class buffer_access {
+  read,
+  write,
+  read_write
+}; // enum class buffer_access
+
+struct buffer_usage {
+  buffer_resource_handle buffer;
+  buffer_access access;
+}; // struct buffer_usage
+
 struct pass_handle {
   
   std::uint32_t index{0xFFFFFFFF};
@@ -158,8 +203,14 @@ class pass_node {
 
 public:
 
-  pass_node(const utility::hashed_string& name, const viewport& viewport)
-  : _name{name},
+  enum class type : std::uint8_t {
+    graphics,
+    compute
+  }; // enum class type
+
+  pass_node(type type, const utility::hashed_string& name, const viewport& viewport)
+  : _type{type},
+    _name{name},
     _viewport{viewport} { }
 
   auto reads(const attachment_handle attachment) -> void {
@@ -169,6 +220,7 @@ public:
   template<typename... Attachments>
   requires (sizeof...(Attachments) > 1u && (std::is_same_v<std::remove_cvref_t<Attachments>, attachment_handle> && ...))
   auto reads(Attachments&&... attachments) -> void {
+    _reads.reserve(_reads.size() + sizeof...(Attachments));
     (reads(attachments), ...);
   }
 
@@ -183,14 +235,29 @@ public:
   template<typename... Passes>
   requires (sizeof...(Passes) > 1u && (std::is_same_v<std::remove_cvref_t<Passes>, pass_handle> && ...))
   auto depends_on(Passes&&... passes) -> void {
+    _dependencies.reserve(_dependencies.size() + sizeof...(Passes));
     (depends_on(passes), ...);
+  }
+
+  auto reads(const buffer_resource_handle buffer) -> void {
+    _buffer_usages.push_back({buffer, buffer_access::read});
+  }
+
+  auto writes(const buffer_resource_handle buffer) -> void {
+    _buffer_usages.push_back({buffer, buffer_access::write});
+  }
+
+  auto reads_writes(const buffer_resource_handle buffer) -> void {
+    _buffer_usages.push_back({buffer, buffer_access::read_write});
   }
 
 private:
 
+  type _type;
   utility::hashed_string _name;
   std::vector<attachment_handle> _reads;
   std::vector<std::pair<attachment_handle, attachment_load_operation>> _writes;
+  std::vector<buffer_usage> _buffer_usages;
   std::vector<pass_handle> _dependencies;
   viewport _viewport;
   render_area _render_area;
@@ -203,12 +270,24 @@ struct transition_instruction {
   VkImageLayout new_layout;
 }; // struct transition_instruction
 
-struct pass_instruction {
+struct buffer_barrier_instruction {
+  buffer_resource_handle buffer;
+  VkPipelineStageFlags source_stages;
+  VkPipelineStageFlags destination_stages;
+  VkAccessFlags source_access;
+  VkAccessFlags destination_access;
+}; // struct buffer_barrier_instruction
+
+struct graphics_pass_instruction {
   pass_handle pass;
   std::vector<std::pair<attachment_handle, attachment_load_operation>> attachments;
-}; // struct pass_instruction
+}; // struct graphics_pass_instruction
 
-using instruction = std::variant<transition_instruction, pass_instruction>;
+struct compute_pass_instruction {
+  pass_handle pass;
+}; // struct compute_pass_instruction
+
+using instruction = std::variant<transition_instruction, buffer_barrier_instruction, graphics_pass_instruction, compute_pass_instruction>;
 
 template<typename... Callables>
 struct overload : Callables... {
@@ -227,12 +306,19 @@ struct attachment_state {
   attachment::type type;
 }; // struct attachment_state
 
+struct buffer_state {
+  VkBuffer buffer;
+  bool has_writer{false};
+  bool last_access_was_read{false};
+}; // struct buffer_state
+
 class render_graph {
 
 public:
 
   struct context {
     auto graphics_pass(const utility::hashed_string& name, const viewport& viewport = viewport::window()) const -> pass_node;
+    auto compute_pass(const utility::hashed_string& name) const -> pass_node;
   }; // struct context
 
   render_graph();
@@ -242,6 +328,10 @@ public:
   template<typename... Args>
   requires (std::is_constructible_v<attachment, Args...>)
   auto create_attachment(Args&&... args) -> attachment_handle;
+
+  template<typename... Args>
+  requires (std::is_constructible_v<buffer_resource, Args...>)
+  auto create_buffer_resource(Args&&... args) -> buffer_resource_handle;
 
   template<typename Callable>
   requires (std::is_invocable_r_v<pass_node, Callable, context&>)
@@ -260,8 +350,10 @@ public:
   auto execute(command_buffer& command_buffer, const swapchain& swapchain, Callable&& callable) -> void {
     for (const auto& instruction : _instructions) {
       std::visit(overload{
-        [&](const pass_instruction& instruction) { _execute_pass_instruction(command_buffer, swapchain, instruction, std::forward<Callable>(callable)); },
-        [&](const transition_instruction& instruction) { _execute_transition_instruction(command_buffer, swapchain, instruction); }
+        [&](const transition_instruction& instruction) { _execute_transition_instruction(command_buffer, swapchain, instruction); },
+        [&](const compute_pass_instruction& instruction) { _execute_compute_pass_instruction(command_buffer, swapchain, instruction); },
+        [&](const buffer_barrier_instruction& instruction) { _execute_buffer_barrier_instruction(command_buffer, swapchain, instruction); },
+        [&](const graphics_pass_instruction& instruction) { _execute_graphics_pass_instruction(command_buffer, swapchain, instruction, std::forward<Callable>(callable)); }
       }, instruction);
     }
   }
@@ -279,17 +371,26 @@ private:
   auto _build_depth_attachment_info(const attachment& attachment, const attachment_state& state, const attachment_load_operation load_op) -> VkRenderingAttachmentInfo;
 
   template<typename Callable>
-  auto _execute_pass_instruction(command_buffer& command_buffer, const swapchain& swapchain, const pass_instruction& instruction, Callable&& callable) -> void;
+  auto _execute_graphics_pass_instruction(command_buffer& command_buffer, const swapchain& swapchain, const graphics_pass_instruction& instruction, Callable&& callable) -> void;
+
+  auto _execute_compute_pass_instruction(command_buffer& command_buffer, const swapchain& swapchain, const compute_pass_instruction& instruction) -> void;
 
   auto _execute_transition_instruction(command_buffer& command_buffer, const swapchain& swapchain, const transition_instruction& instruction) -> void;
 
-  std::vector<attachment> _attachments;
-  std::vector<pass_node> _passes;
+  auto _execute_buffer_barrier_instruction(command_buffer& command_buffer, const swapchain& swapchain, const buffer_barrier_instruction& instruction) -> void;
 
+  auto _buffer_access(const buffer_usage& usage) const -> std::pair<VkPipelineStageFlags, VkAccessFlags>;
+
+  std::vector<attachment> _attachments;
+  std::vector<attachment_state> _attachment_states;
   std::vector<image2d_handle> _color_images;
   std::vector<depth_image_handle> _depth_images;
 
-  std::vector<attachment_state> _attachment_states;
+  std::vector<buffer_resource> _buffer_resources;
+  std::vector<buffer_state> _buffer_states;
+  std::vector<storage_buffer_handle> _storage_buffers;
+
+  std::vector<pass_node> _passes;
 
   std::unordered_map<utility::hashed_string, std::uint32_t> _image_by_name;
 

@@ -15,6 +15,16 @@ auto render_graph::create_attachment(Args&&... args) -> attachment_handle {
   return attachment_handle{index};
 }
 
+template<typename... Args>
+requires (std::is_constructible_v<buffer_resource, Args...>)
+auto render_graph::create_buffer_resource(Args&&... args) -> buffer_resource_handle {
+  auto index = static_cast<std::uint32_t>(_buffer_resources.size());
+
+  _buffer_resources.emplace_back(std::forward<Args>(args)...);
+
+  return buffer_resource_handle{index};;
+}
+
 template<typename Callable>
 requires (std::is_invocable_r_v<pass_node, Callable, render_graph::context&>)
 auto render_graph::create_pass(Callable&& callable) -> pass_handle {
@@ -28,7 +38,7 @@ auto render_graph::create_pass(Callable&& callable) -> pass_handle {
 }
 
 template<typename Callable>
-auto render_graph::_execute_pass_instruction(command_buffer& command_buffer, const swapchain& swapchain, const pass_instruction& instruction, Callable&& callable) -> void {
+auto render_graph::_execute_graphics_pass_instruction(command_buffer& command_buffer, const swapchain& swapchain, const graphics_pass_instruction& instruction, Callable&& callable) -> void {
   const auto& pass = _passes[instruction.pass.index];
   const auto& area = pass._render_area;
 
@@ -68,9 +78,9 @@ auto render_graph::_execute_pass_instruction(command_buffer& command_buffer, con
   rendering_info.renderArea = render_area;
   rendering_info.layerCount = 1;
   rendering_info.colorAttachmentCount = static_cast<std::uint32_t>(color_attachments.size());
-  rendering_info.pColorAttachments = color_attachments.empty() ? nullptr : color_attachments.data();
-  rendering_info.pDepthAttachment = depth_attachment ? &*depth_attachment : nullptr;
-  rendering_info.pStencilAttachment = depth_attachment ? &*depth_attachment : nullptr;
+  rendering_info.pColorAttachments = color_attachments.data();
+  rendering_info.pDepthAttachment = depth_attachment.has_value() ? &depth_attachment.value() : nullptr;
+  rendering_info.pStencilAttachment = depth_attachment.has_value() ? &depth_attachment.value() : nullptr;
 
   command_buffer.begin_rendering(rendering_info);
 

@@ -167,6 +167,7 @@ auto graphics_module::update() -> void {
 
   // auto& compute_command_buffer = _compute_command_buffers[_current_frame];
 
+  // compute_command_buffer.reset();
   // compute_command_buffer.begin(VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT);
 
   // _renderer->execute_tasks(compute_command_buffer);
@@ -211,27 +212,30 @@ auto graphics_module::update() -> void {
 
   EASY_BLOCK("draw");
 
-  auto& command_buffer = _graphics_command_buffers[_current_frame];
+  auto& graphics_command_buffers = _graphics_command_buffers[_current_frame];
   
-  command_buffer.reset();
-  command_buffer.begin(VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT);
+  graphics_command_buffers.reset();
+  graphics_command_buffers.begin(VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT);
 
-  _query_pool.reset(command_buffer);
+  _query_pool.reset(graphics_command_buffers);
 
   // Needs to be acquired AFTER acquire_next_image!
   auto& image_data = _per_image_data[_swapchain->active_image_index()];
 
-  _query_pool.write_timestamp(command_buffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0);
-  _renderer->render(command_buffer, *_swapchain);
-  _query_pool.write_timestamp(command_buffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 1);
+  _query_pool.write_timestamp(graphics_command_buffers, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0);
 
-  command_buffer.end();
+  // graphics_command_buffers.acquire_ownership(_acquire_ownership_data);
+  _renderer->render(graphics_command_buffers, *_swapchain);
+  
+  _query_pool.write_timestamp(graphics_command_buffers, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 1);
+
+  graphics_command_buffers.end();
 
   auto wait_semaphores = std::vector<command_buffer::wait_data>{};
   wait_semaphores.push_back({frame_data.image_available_semaphore, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT});
   // wait_semaphores.push_back({frame_data.compute_finished_semaphore, VK_PIPELINE_STAGE_VERTEX_INPUT_BIT});
 
-  command_buffer.submit(wait_semaphores, image_data.render_finished_semaphore, frame_data.graphics_in_flight_fence);
+  graphics_command_buffers.submit(wait_semaphores, image_data.render_finished_semaphore, frame_data.graphics_in_flight_fence);
 
   auto duration = _query_pool.get_duration(0, 1);
   // utility::logger<"graphics">::debug("Frame GPU time: {:.5f} ms", duration.value());
@@ -246,8 +250,6 @@ auto graphics_module::update() -> void {
   }
 
   _current_frame = utility::fast_mod(_current_frame + 1, swapchain::max_frames_in_flight);
-
-  // command_buffer.acquire_ownership(_acquire_ownership_data);
 
   // for (const auto& render_stage : _renderer->render_stages()) {
   //   _start_render_pass(*render_stage, command_buffer);

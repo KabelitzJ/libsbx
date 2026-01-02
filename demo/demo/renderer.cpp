@@ -12,6 +12,7 @@
 #include <libsbx/models/foliage_task.hpp>
 #include <libsbx/models/foliage_subrenderer.hpp>
 #include <libsbx/models/static_mesh_subrenderer.hpp>
+#include <libsbx/models/object_selection_task.hpp>
 
 #include <libsbx/animations/skinned_mesh_subrenderer.hpp>
 
@@ -99,6 +100,9 @@ renderer::renderer()
 
   auto swapchain = create_attachment("swapchain", sbx::graphics::attachment::type::swapchain, _clear_color, sbx::graphics::format::b8g8r8a8_srgb);
 
+  // Buffer resources
+  auto selected_object_buffer = create_buffer_resource("selected_object_buffer", sbx::graphics::buffer_resource::type::storage, sizeof(std::uint32_t));
+
   // Render passes
   auto shadow_pass = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
     auto pass = context.graphics_pass("shadow", sbx::graphics::viewport::fixed(2048, 2048));
@@ -145,6 +149,18 @@ renderer::renderer()
 
   //   return pass;
   // });
+
+  auto object_selection_pass = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
+    auto pass = context.compute_pass("object_selection");
+
+    pass.depends_on(deferred_pass);
+
+    pass.reads(object_id);
+
+    pass.writes(selected_object_buffer);
+
+    return pass;
+  });
 
   auto resolve_pass = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
     auto pass = context.graphics_pass("resolve");
@@ -278,6 +294,8 @@ renderer::renderer()
   // };
 
   // add_subrenderer<sbx::post::ssao_filter>(ssao_pass, "res://shaders/ssao", std::move(ssao_attachment_names));
+
+  add_task<sbx::models::object_selection_task>(object_selection_pass, "res://shaders/object_selection");
 
   // Transparency pass
   add_subrenderer<sbx::models::static_mesh_subrenderer>(transparency_pass, "res://shaders/deferred_pbr_material", sbx::models::static_mesh_material_draw_list::bucket::transparent);

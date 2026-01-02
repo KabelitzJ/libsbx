@@ -131,13 +131,15 @@ struct skinned_mesh_traits {
       });
 
       for (const auto& submesh : skinned_mesh.submeshes()) {
-        std::invoke(callable, mesh_id, submesh.index, submesh.material, transform_data, selection_tag, instance_payload{});
+        std::invoke(callable, node, mesh_id, submesh.index, submesh.material, transform_data, selection_tag, instance_payload{});
       }
     }
   }
 
-  static auto make_instance_data(std::uint32_t transform_index, std::uint32_t material_index, const scenes::selection_tag& selection_tag, const instance_payload& payload) -> models::instance_data {
-    return models::instance_data{transform_index, material_index, selection_tag, 0u};
+  static auto make_instance_data(const scenes::node node, std::uint32_t transform_index, std::uint32_t material_index, const scenes::selection_tag& selection_tag, const instance_payload& payload) -> models::instance_data {
+    const auto object_id = (selection_tag != scenes::selection_tag::null()) ? static_cast<std::uint32_t>(node) : std::uint32_t{0u};
+
+    return models::instance_data{transform_index, material_index, object_id, 0u};
   }
 
   template<typename Mesh, typename Emitter>

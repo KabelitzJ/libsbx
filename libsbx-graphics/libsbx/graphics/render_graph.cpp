@@ -53,8 +53,29 @@ auto attachment::blend_state() const noexcept -> const graphics::blend_state& {
   return _blend_state;
 }
 
+buffer_resource::buffer_resource(const utility::hashed_string& name, type type, VkDeviceSize size)
+: _name{name},
+  _type{type},
+  _size{size} { }
+
+auto buffer_resource::name() const noexcept -> const utility::hashed_string& {
+  return _name;
+}
+
+auto buffer_resource::buffer_type() const noexcept -> type {
+  return _type;
+}
+
+auto buffer_resource::size() const noexcept -> VkDeviceSize {
+  return _size;
+}
+
 auto render_graph::context::graphics_pass(const utility::hashed_string& name, const viewport& viewport) const -> pass_node {
-  return pass_node{name, viewport};
+  return pass_node{pass_node::type::graphics, name, viewport};
+}
+
+auto render_graph::context::compute_pass(const utility::hashed_string& name) const -> pass_node {
+  return pass_node{pass_node::type::compute, name, viewport::window()};
 }
 
 render_graph::render_graph() {
@@ -111,9 +132,11 @@ auto render_graph::build() -> void {
 
   _instructions.clear();
   _attachment_states.clear();
+  _buffer_states.clear();
 
   const auto pass_count = static_cast<std::uint32_t>(_passes.size());
   const auto attachment_count = static_cast<std::uint32_t>(_attachments.size());
+  const auto buffer_count = static_cast<std::uint32_t>(_buffer_resources.size());
 
   utility::assert_that(pass_count > 0u, "Render graph must have at least one pass");
   utility::assert_that(attachment_count > 0u, "Render graph must have at least one attachment");
@@ -135,6 +158,11 @@ auto render_graph::build() -> void {
 
   for (auto i = 0u; i < pass_count; ++i) {
     const auto& pass = _passes[i];
+
+    // buffer-only compute pass do not contribute to image dependencies
+    if (pass._reads.empty() && pass._writes.empty()) {
+      continue; 
+    }
 
     for (const auto& dependency : pass._dependencies) {
       utility::assert_that(dependency.is_valid() && dependency.index < pass_count, "Invalid pass handle in depends_on()");
@@ -211,9 +239,20 @@ auto render_graph::build() -> void {
     state.type = attachment.image_type();
   }
 
+  _buffer_states.resize(buffer_count);
+
+  for (auto i = 0u; i < buffer_count; ++i) {
+    auto& state = _buffer_states[i];
+
+    state.buffer = nullptr;
+    state.has_writer = false;
+    state.last_access_was_read = false;
+  }
+
   for (auto pass_index : execution_order) {
     const auto& pass = _passes[pass_index];
 
+    // Image reads
     for (const auto& attachment : pass._reads) {
       auto& state = _attachment_states[attachment.index];
 
@@ -230,6 +269,7 @@ auto render_graph::build() -> void {
       }
     }
 
+    // Image writes
     auto written_attachments = std::vector<std::pair<attachment_handle, attachment_load_operation>>{};
     written_attachments.reserve(pass._writes.size());
 
@@ -251,12 +291,51 @@ auto render_graph::build() -> void {
       written_attachments.push_back({attachment, load_op});
     }
 
-    _instructions.emplace_back(pass_instruction{
-      .pass = pass_handle{pass_index},
-      .attachments = std::move(written_attachments)
-    });
+    for (auto usage : pass._buffer_usages) {
+      auto& state = _buffer_states[usage.buffer.index];
+
+      const auto buffer_resource = _buffer_resources[usage.buffer.index];
+
+      const auto is_write = (usage.access == buffer_access::write || usage.access == buffer_access::read_write);
+      const auto needs_barrier = (state.has_writer || (state.last_access_was_read && is_write));
+
+      if (needs_barrier) {
+        const auto source_usage = buffer_usage{usage.buffer, buffer_access::write};
+        
+        auto [source_stages, source_access] = _buffer_access(source_usage);
+        auto [destination_stages, destination_access] = _buffer_access(usage);
+
+        _instructions.emplace_back(buffer_barrier_instruction{
+          .buffer = usage.buffer,
+          .source_stages = source_stages,
+          .destination_stages = destination_stages,
+          .source_access = source_access,
+          .destination_access = destination_access
+        });
+      }
+
+      // Update state
+      if (is_write) {
+        state.has_writer = true;
+        state.last_access_was_read = false;
+      } else {
+        state.last_access_was_read = true;
+      }
+    }
+
+    if (pass._type == pass_node::type::graphics) {
+      _instructions.emplace_back(graphics_pass_instruction{
+        .pass = pass_handle{pass_index},
+        .attachments = std::move(written_attachments)
+      });
+    } else {
+      _instructions.emplace_back(compute_pass_instruction{
+        .pass = pass_handle{pass_index}
+      });
+    }
   }
 
+  // Final swapchain transition to present layout
   auto swapchain_attachment = std::optional<attachment_handle>{};
 
   for (auto i = 0u; i < attachment_count; ++i) {
@@ -450,6 +529,10 @@ auto render_graph::_build_depth_attachment_info(const attachment& attachment, co
   return info;
 }
 
+auto render_graph::_execute_compute_pass_instruction(command_buffer& command_buffer, const swapchain& swapchain, const compute_pass_instruction& instruction) -> void {
+  
+}
+
 auto render_graph::_execute_transition_instruction(command_buffer& command_buffer, const swapchain& swapchain, const transition_instruction& instruction) -> void {
   auto& state = _attachment_states[instruction.attachment.index];
 
@@ -460,6 +543,44 @@ auto render_graph::_execute_transition_instruction(command_buffer& command_buffe
 
     image::transition_image_layout(command_buffer, state.image, state.format, instruction.old_layout, instruction.new_layout, aspect, 1, 0, 1, 0);
   }
+}
+
+auto render_graph::_execute_buffer_barrier_instruction(command_buffer& command_buffer, const swapchain& swapchain, const buffer_barrier_instruction& instruction) -> void {
+  // auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
+
+  // auto& buffer_resource = _buffer_resources[instruction.buffer.index]; 
+
+  // const auto buffer_barrier_data = command_buffer::buffer_barrier_data{
+  //   .buffers = {
+      
+  //   },
+  //   .src_stage_mask = instruction.source_stages,
+  //   .dst_stage_mask = instruction.destination_stages,
+  //   .src_access_mask = instruction.source_access,
+  //   .dst_access_mask = instruction.destination_access
+  // };
+
+  // command_buffer.buffer_barrier(buffer_barrier_data);
+}
+
+auto render_graph::_buffer_access(const buffer_usage& usage) const -> std::pair<VkPipelineStageFlags, VkAccessFlags> {
+  auto stage = VkPipelineStageFlags{};
+  auto access = VkAccessFlags{};
+
+  const auto type = _buffer_resources[usage.buffer.index].buffer_type();
+
+  switch (type) {
+    case buffer_resource::type::storage: {
+      stage = (VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+      access = (usage.access == buffer_access::read) ? VK_ACCESS_SHADER_READ_BIT : VK_ACCESS_SHADER_WRITE_BIT;
+      break;
+    }
+    default: {
+      throw utility::runtime_error("Unsupported buffer resource type in access mapping");
+    }
+  }
+
+  return std::make_pair(stage, access);
 }
 
 } // namespace sbx::graphics

@@ -13,8 +13,8 @@ Sampler2D<uint> object_id_image;
 Sampler2D<float> linear_depth_image;
 
 struct push_data {
-  float4 color;     // rgb = outline color, a = max intensity
-  float  thickness; // world-space thickness input scene units
+  float4 color;
+  float thickness;
 };
 
 [[vk::push_constant]]

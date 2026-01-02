@@ -76,9 +76,9 @@ public:
 
   virtual ~scene() = default;
 
-  auto create_child_node(const node_type parent, const std::string& tag = "Node", const scenes::transform& transform = scenes::transform{}, const selection_tag& selection_tag = selection_tag::null) -> node_type;
+  auto create_child_node(const node_type parent, const std::string& tag = "Node", const scenes::transform& transform = scenes::transform{}, const selection_tag& selection_tag = selection_tag::null()) -> node_type;
 
-  auto create_node(const std::string& tag = "Node", const scenes::transform& transform = scenes::transform{}, const selection_tag& selection_tag = selection_tag::null) -> node_type;  
+  auto create_node(const std::string& tag = "Node", const scenes::transform& transform = scenes::transform{}, const selection_tag& selection_tag = selection_tag::null()) -> node_type;  
 
   auto destroy_node(const node_type node) -> void;
 

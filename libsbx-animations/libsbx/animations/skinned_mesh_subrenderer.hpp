@@ -137,13 +137,7 @@ struct skinned_mesh_traits {
   }
 
   static auto make_instance_data(std::uint32_t transform_index, std::uint32_t material_index, const scenes::selection_tag& selection_tag, const instance_payload& payload) -> models::instance_data {
-    auto [entry, created] = _selection_tags.try_emplace(selection_tag, 0u);
-
-    if (created && selection_tag != scenes::selection_tag::null) {
-      entry->second = math::random::next<std::uint32_t>(1u); 
-    }
-
-    return models::instance_data{transform_index, material_index, entry->second, 0u};
+    return models::instance_data{transform_index, material_index, selection_tag, 0u};
   }
 
   template<typename Mesh, typename Emitter>
@@ -178,7 +172,6 @@ private:
 
   inline static auto _bone_matrices = std::vector<math::matrix4x4>{};
   inline static auto _skinning_jobs = std::vector<skinning_job>{};
-  inline static auto _selection_tags = std::unordered_map<scenes::selection_tag, std::uint32_t>{};
 
 }; // struct skinned_mesh_traits
 
@@ -392,9 +385,7 @@ private:
       .src_stage_mask = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
       .dst_stage_mask = VK_PIPELINE_STAGE_VERTEX_INPUT_BIT,
       .src_access_mask = VK_ACCESS_SHADER_WRITE_BIT,
-      .dst_access_mask = VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT,
-      .src_queue_family = VK_QUEUE_FAMILY_IGNORED,
-      .dst_queue_family = VK_QUEUE_FAMILY_IGNORED
+      .dst_access_mask = VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT
     };
 
     command_buffer.buffer_barrier(barrier_data);

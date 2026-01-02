@@ -26,8 +26,8 @@ public:
     VkPipelineStageFlags dst_stage_mask;
     VkAccessFlags src_access_mask;
     VkAccessFlags dst_access_mask;
-    std::uint32_t src_queue_family;
-    std::uint32_t dst_queue_family;
+    std::uint32_t src_queue_family{VK_QUEUE_FAMILY_IGNORED};
+    std::uint32_t dst_queue_family{VK_QUEUE_FAMILY_IGNORED};
   }; // struct buffer_barrier
 
   struct release_ownership_data {

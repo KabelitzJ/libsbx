@@ -1,21 +1,40 @@
 #ifndef LIBSBX_SCENES_COMPONENTS_SELECTION_TAG_HPP_
 #define LIBSBX_SCENES_COMPONENTS_SELECTION_TAG_HPP_
 
-#include <libsbx/math/uuid.hpp>
+#include <libsbx/math/random.hpp>
 
 namespace sbx::scenes {
 
-class selection_tag final : public math::uuid {
-
-  using base = math::uuid;
+class selection_tag final {
 
 public:
 
-  inline static const auto null = base::null();
+  selection_tag()
+  : _value{_next_value()} { }
 
-  template<typename... Args>
-  selection_tag(Args&&... args)
-  : base{std::forward<Args>(args)...} { }
+  explicit selection_tag(std::uint32_t value)
+  : _value{value} { }
+
+  inline static const auto null() -> selection_tag {
+    return selection_tag{0u};
+  }
+
+  auto value() const noexcept -> std::uint32_t {
+    return _value;
+  }
+
+  operator std::uint32_t() const noexcept {
+    return _value;
+  }
+
+private: 
+
+  inline static auto _next_value() -> std::uint32_t {
+    static auto current_value = std::uint32_t{1u};
+    return current_value++;
+  }
+
+  std::uint32_t _value;
 
 }; // class selection_tag
 

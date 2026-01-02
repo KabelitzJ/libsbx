@@ -119,13 +119,7 @@ struct static_mesh_traits {
   }
 
   static auto make_instance_data(std::uint32_t transform_index, std::uint32_t material_index, const scenes::selection_tag& selection_tag, const instance_payload& payload) -> instance_data {
-    auto [entry, created] = _selection_tags.try_emplace(selection_tag, 0u);
-
-    if (created && selection_tag != scenes::selection_tag::null) {
-      entry->second = math::random::next<std::uint32_t>(1u); 
-    }
-
-    return instance_data{transform_index, material_index, entry->second, 0u};
+    return instance_data{transform_index, material_index, selection_tag, 0u};
   }
 
   template<typename Mesh, typename Emitter>
@@ -150,7 +144,7 @@ struct static_mesh_traits {
 
 private:
 
-  inline static auto _selection_tags = std::unordered_map<scenes::selection_tag, std::uint32_t>{};
+
 
 }; // static_mesh_traits
 

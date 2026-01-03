@@ -302,7 +302,7 @@ auto render_graph::_update_viewports() -> void {
   const auto& surface = graphics_module.surface();
   const auto surface_extent = math::vector2u{surface.current_extent().width, surface.current_extent().height};
 
-  const auto viewport_extent = graphics_module.dynamic_viewport();
+  const auto viewport_extent = graphics_module.viewport();
 
   for (auto& pass : _passes) {
     const auto& viewport = pass._viewport;

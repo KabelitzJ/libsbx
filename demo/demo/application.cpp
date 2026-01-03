@@ -153,7 +153,7 @@ application::application()
   }
 
   // Helmet
-  _helmet = scene.create_node("Helmet", sbx::scenes::transform{}, sbx::scenes::selection_tag{});
+  _helmet = scene.create_node("Helmet", sbx::scenes::transform{});
 
   auto& helmet_material = scene.add_material<sbx::models::material>("helmet");
   helmet_material.albedo.image = scene.get_image("helmet_albedo");

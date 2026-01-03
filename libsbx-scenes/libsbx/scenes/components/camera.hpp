@@ -105,9 +105,9 @@ public:
 
     auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 
-    graphics_module.on_viewport_changed() += [this](const math::vector2u& event) {
+    graphics_module.connect_on_viewport_changed([this](const math::vector2u& event) {
       set_aspect_ratio(static_cast<std::float_t>(event.x()) / static_cast<std::float_t>(event.y()));
-    };
+    });
   }
 
 

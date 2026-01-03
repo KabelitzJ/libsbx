@@ -106,7 +106,7 @@ graphics_module::graphics_module()
     _is_framebuffer_resized = true;
   };
 
-  _dynamic_size_callback = [this]() {
+  _dynamic_size_callback = [this]() -> sbx::math::vector2u {
     return math::vector2u{_surface->current_extent().width, _surface->current_extent().height};
   };
 }

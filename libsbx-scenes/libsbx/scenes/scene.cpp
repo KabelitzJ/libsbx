@@ -90,7 +90,7 @@ scene::scene(const std::filesystem::path& path)
   _load_nodes(scene["nodes"]);
 }
 
-auto scene::create_child_node(const node_type parent, const std::string& tag, const scenes::transform& transform, const selection_tag& selection_tag) -> node_type {
+auto scene::create_child_node(const node_type parent, const std::string& tag, const scenes::transform& transform) -> node_type {
   auto node = _registry.create();
 
   const auto& id = add_component<scenes::id>(node);
@@ -106,13 +106,11 @@ auto scene::create_child_node(const node_type parent, const std::string& tag, co
 
   add_component<scenes::tag>(node, !tag.empty() ? tag : scenes::tag{"Node"});
 
-  add_component<scenes::selection_tag>(node, selection_tag);
-
   return node;
 }
 
-auto scene::create_node(const std::string& tag, const scenes::transform& transform, const selection_tag& selection_tag) -> node_type {
-  return create_child_node(_root, tag, transform, selection_tag);
+auto scene::create_node(const std::string& tag, const scenes::transform& transform) -> node_type {
+  return create_child_node(_root, tag, transform);
 }
 
 auto scene::destroy_node(const node_type node) -> void {

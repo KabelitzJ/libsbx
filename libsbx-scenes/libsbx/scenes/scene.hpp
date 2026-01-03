@@ -44,7 +44,6 @@
 #include <libsbx/scenes/node.hpp>
 #include <libsbx/scenes/components/directional_light.hpp>
 #include <libsbx/scenes/components/id.hpp>
-#include <libsbx/scenes/components/selection_tag.hpp>
 #include <libsbx/scenes/components/tag.hpp>
 #include <libsbx/scenes/components/camera.hpp>
 #include <libsbx/scenes/components/transform.hpp>
@@ -76,9 +75,9 @@ public:
 
   virtual ~scene() = default;
 
-  auto create_child_node(const node_type parent, const std::string& tag = "Node", const scenes::transform& transform = scenes::transform{}, const selection_tag& selection_tag = selection_tag::null()) -> node_type;
+  auto create_child_node(const node_type parent, const std::string& tag = "Node", const scenes::transform& transform = scenes::transform{}) -> node_type;
 
-  auto create_node(const std::string& tag = "Node", const scenes::transform& transform = scenes::transform{}, const selection_tag& selection_tag = selection_tag::null()) -> node_type;  
+  auto create_node(const std::string& tag = "Node", const scenes::transform& transform = scenes::transform{}) -> node_type;  
 
   auto destroy_node(const node_type node) -> void;
 
@@ -341,9 +340,9 @@ public:
 
     _uniform_handler.push("view", view);
 
-    _uniform_handler.push("viewport", graphics_module.dynamic_viewport());
+    _uniform_handler.push("viewport", graphics_module.viewport());
 
-    // utility::logger<"scenes">::debug("viewport: {}", graphics_module.dynamic_viewport());
+    // utility::logger<"scenes">::debug("viewport: {}", graphics_module.viewport());
     // utility::logger<"scenes">::debug("camera_near: {}", camera.near_plane());
     // utility::logger<"scenes">::debug("camera_far: {}", camera.far_plane());
     // utility::logger<"scenes">::debug("camera_fov_radians: {}", camera.field_of_view().to_radians().value());

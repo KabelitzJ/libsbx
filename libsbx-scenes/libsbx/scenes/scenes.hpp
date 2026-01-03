@@ -20,6 +20,5 @@
 #include <libsbx/scenes/components/directional_light.hpp>
 #include <libsbx/scenes/components/gizmo.hpp>
 #include <libsbx/scenes/components/skybox.hpp>
-#include <libsbx/scenes/components/selection_tag.hpp>
 
 #endif // LIBSBX_SCENE_HPP_

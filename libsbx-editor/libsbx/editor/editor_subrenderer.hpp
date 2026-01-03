@@ -354,23 +354,25 @@ private:
       flag |= ImGuiTreeNodeFlags_Selected;
     }
 
-    ImGui::PushID(&node);
+    const auto& tag = scene.get_component<sbx::scenes::tag>(node);
+    const auto& id = scene.get_component<sbx::scenes::id>(node);
+    const auto* ptr_id = reinterpret_cast<const void*>(static_cast<std::intptr_t>(id.value()));
 
-    if (ImGui::TreeNodeEx(scene.get_component<sbx::scenes::tag>(node).c_str(), flag)) {
+    if (ImGui::TreeNodeEx(ptr_id, flag, "%s", tag.c_str())) {
       if (ImGui::IsItemClicked(ImGuiMouseButton_Right) || ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
-        if (_selected_node_id != scene.get_component<sbx::scenes::id>(scene.camera()) && _selected_node_id != sbx::math::uuid::null()) {
-          if (auto selected_node = scene.find_node(_selected_node_id); selected_node != scenes::node::null) {
-            scene.get_component<scenes::selection_tag>(selected_node) = scenes::selection_tag::null();
-          }
-        }
+        // if (_selected_node_id != scene.get_component<sbx::scenes::id>(scene.camera()) && _selected_node_id != sbx::math::uuid::null()) {
+        //   if (auto selected_node = scene.find_node(_selected_node_id); selected_node != scenes::node::null) {
+
+        //   }
+        // }
 
         _selected_node_id = scene.get_component<sbx::scenes::id>(node);
 
         utility::logger<"editor">::debug("Selected node id {}", _selected_node_id);
 
-        if (_selected_node_id != scene.get_component<sbx::scenes::id>(scene.camera())) {
-          scene.get_component<scenes::selection_tag>(node) = scenes::selection_tag{};
-        }
+        // if (_selected_node_id != scene.get_component<sbx::scenes::id>(scene.camera())) {
+
+        // }
       }
 
       _context_menu(node);
@@ -383,8 +385,6 @@ private:
 
       ImGui::TreePop();
     }
-
-    ImGui::PopID();
   }
 
   auto _build_node_preview() -> void {

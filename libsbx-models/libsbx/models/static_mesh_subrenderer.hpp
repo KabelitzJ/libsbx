@@ -59,7 +59,6 @@
 #include <libsbx/scenes/components/tag.hpp>
 #include <libsbx/scenes/components/point_light.hpp>
 #include <libsbx/scenes/components/global_transform.hpp>
-#include <libsbx/scenes/components/selection_tag.hpp>
 
 #include <libsbx/models/vertex3d.hpp>
 #include <libsbx/models/mesh.hpp>
@@ -100,9 +99,9 @@ struct static_mesh_traits {
 
     auto frustum = camera.view_frustum(view);
 
-    auto query = scene.query<const scenes::static_mesh, const scenes::selection_tag>();
+    auto query = scene.query<const scenes::static_mesh>();
 
-    for (auto&& [node, static_mesh, selection_tag] : query.each()) {
+    for (auto&& [node, static_mesh] : query.each()) {
       // auto mesh_id = static_mesh.mesh_id();
       // auto& mesh = assets_module.get_asset<models::mesh>(mesh_id);
 
@@ -110,16 +109,16 @@ struct static_mesh_traits {
       //   continue;
       // }
 
-      const auto transform_data = models::transform_data{ scene.world_transform(node), scene.world_normal(node) };
+      const auto transform_data = models::transform_data{scene.world_transform(node), scene.world_normal(node)};
 
       for (const auto& submesh : static_mesh.submeshes()) {
-        std::invoke(callable, static_mesh.mesh_id(), submesh.index, submesh.material, transform_data, selection_tag, instance_payload{});
+        std::invoke(callable, node, static_mesh.mesh_id(), submesh.index, submesh.material, transform_data, instance_payload{});
       }
     }
   }
 
-  static auto make_instance_data(std::uint32_t transform_index, std::uint32_t material_index, const scenes::selection_tag& selection_tag, const instance_payload& payload) -> instance_data {
-    return instance_data{transform_index, material_index, selection_tag, 0u};
+  static auto make_instance_data(const scenes::node node, const std::uint32_t transform_index, std::uint32_t material_index, const instance_payload& payload) -> instance_data {
+    return instance_data{transform_index, material_index, static_cast<std::uint32_t>(node), 0u};
   }
 
   template<typename Mesh, typename Emitter>

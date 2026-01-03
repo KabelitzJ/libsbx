@@ -168,12 +168,14 @@ public:
     _dynamic_size_callback = std::forward<Callable>(callback);
   }
 
-  auto dynamic_viewport() const -> const math::vector2u& {
+  auto viewport() const -> const math::vector2u& {
     return _viewport;
   }
 
-  auto on_viewport_changed() -> signals::signal<const math::vector2u&>& {
-    return _on_viewport_changed;
+  template<typename Callable>
+  requires (std::is_invocable_v<Callable, const math::vector2u&>)
+  auto connect_on_viewport_changed(Callable&& callable) -> void {
+    _on_viewport_changed.connect(std::forward<Callable>(callable));
   }
 
   auto compiler() -> graphics::compiler& {

@@ -107,9 +107,9 @@ struct skinned_mesh_traits {
     _skinning_jobs.clear();
 
     // pull id to optionally pack selection; animator is present but we only need the pose already stored in component
-    const auto query = scene.query<const scenes::skinned_mesh, const scenes::selection_tag, animations::animator>();
+    const auto query = scene.query<const scenes::skinned_mesh, animations::animator>();
 
-    for (auto&& [node, skinned_mesh, selection_tag, animator] : query.each()) {
+    for (auto&& [node, skinned_mesh, animator] : query.each()) {
       const auto transform_data = models::transform_data{scene.world_transform(node), scene.world_normal(node)};
 
       const auto& pose = skinned_mesh.pose();
@@ -131,13 +131,13 @@ struct skinned_mesh_traits {
       });
 
       for (const auto& submesh : skinned_mesh.submeshes()) {
-        std::invoke(callable, mesh_id, submesh.index, submesh.material, transform_data, selection_tag, instance_payload{});
+        std::invoke(callable, node, mesh_id, submesh.index, submesh.material, transform_data, instance_payload{});
       }
     }
   }
 
-  static auto make_instance_data(std::uint32_t transform_index, std::uint32_t material_index, const scenes::selection_tag& selection_tag, const instance_payload& payload) -> models::instance_data {
-    return models::instance_data{transform_index, material_index, selection_tag, 0u};
+  static auto make_instance_data(const scenes::node node, const std::uint32_t transform_index, std::uint32_t material_index, const instance_payload& payload) -> models::instance_data {
+    return models::instance_data{transform_index, material_index, static_cast<std::uint32_t>(node), 0u};
   }
 
   template<typename Mesh, typename Emitter>

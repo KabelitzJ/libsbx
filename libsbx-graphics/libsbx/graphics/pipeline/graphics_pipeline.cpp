@@ -278,6 +278,7 @@ auto graphics_pipeline::_initialize(const std::vector<attachment_description>& a
   rasterization_state.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
   rasterization_state.depthClampEnable = false;
   rasterization_state.rasterizerDiscardEnable = false;
+  rasterization_state.depthBiasEnable = false;
   rasterization_state.polygonMode = to_vk_enum<VkPolygonMode>(definition.rasterization_state.polygon_mode);
   rasterization_state.lineWidth = definition.rasterization_state.line_width;
   rasterization_state.cullMode = to_vk_enum<VkCullModeFlags>(definition.rasterization_state.cull_mode);

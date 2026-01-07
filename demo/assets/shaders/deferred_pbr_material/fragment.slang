@@ -43,14 +43,14 @@ SamplerState samplers[sbx::common::max_image_array_size];
 Texture2D<float4> images[sbx::common::max_image_array_size];
 
 float3x3 build_tbn(fs_in input) {
-  float sign = input.sv_is_front_face ? 1.0f : -1.0f;
+  float3 N = normalize(input.normal);
+  float3 T = normalize(input.tangent.xyz);
 
-  float3 N = normalize(input.normal * sign);
-  float3 T = normalize(input.tangent.xyz * sign);
-  // T = normalize(T - N * dot(T, N));
-  float3 B = normalize(cross(N, T)) * input.tangent.w * sign;
+  // Gram–Schmidt (important for stability)
+  T = normalize(T - N * dot(T, N));
 
-  // return transpose(float3x3(T, B, N));
+  float3 B = cross(N, T) * input.tangent.w;
+
   return float3x3(T, B, N);
 }
 
@@ -67,23 +67,29 @@ float4 get_albedo<AlphaPolicy: alpha_policy>(float2 uv, material_data material_d
   return AlphaPolicy::combine_colors(color, material_data.base_color);
 }
 
-float3 get_normal(float3x3 TBN, float2 uv, float3 normal, material_data material_data) {
+float3 get_normal(float3x3 TBN, float2 uv, float3 normal, bool is_front_face, material_data material_data) {
   uint image_index = material_data.normal_image_index;
   uint sampler_index = material_data.normal_sampler_index;
 
+  float3 result;
+
   if (image_index >= sbx::common::max_image_array_size) {
-    return normalize(normal);
+    result = normalize(normal);
+  } else {
+    float3 sampled_normal = images[NonUniformResourceIndex(image_index)].Sample(samplers[NonUniformResourceIndex(sampler_index)], uv).xyz;
+  
+    // encode from [0, 1] -> [-1, 1]
+    sampled_normal = sampled_normal * 2.0 - 1.0;
+  
+    sampled_normal.xy *= material_data.normal_scale;
+    sampled_normal = normalize(sampled_normal);
+
+    result = normalize(mul(sampled_normal, TBN));
   }
 
-  float3 sampled_normal = images[NonUniformResourceIndex(image_index)].Sample(samplers[NonUniformResourceIndex(sampler_index)], uv).xyz;
+  result *= (is_front_face) ? 1.0 : -1.0;
 
-  // encode from [0, 1] -> [-1, 1]
-  sampled_normal = sampled_normal * 2.0 - 1.0;
-
-  sampled_normal.xy *= material_data.normal_scale;
-  sampled_normal = normalize(sampled_normal);
-
-  return normalize(mul(sampled_normal, TBN));
+  return result;
 }
 
 float3 get_material(float2 uv, material_data material_data) {
@@ -200,7 +206,7 @@ opaque_fs_out opaque_main(fs_in input) {
   output.albedo = get_albedo<opaque_alpha_policy>(uv, material_data);
   output.position = float4(input.position, 1.0);
   // encode from [-1, 1] -> [0, 1]
-  output.normal = float4(get_normal(TBN, uv, input.normal, material_data) * 0.5f + 0.5f, 0.0);
+  output.normal = float4(get_normal(TBN, uv, input.normal, input.sv_is_front_face, material_data) * 0.5f + 0.5f, 0.0);
   output.material = float4(get_material(uv, material_data), 0.0);
   output.emissive = float4(get_emissive(uv, material_data), 0.0);
   output.object_id = instance_data.object_id;
@@ -231,7 +237,7 @@ opaque_fs_out mask_main(fs_in input) {
   output.albedo = albedo;
   output.position = float4(input.position, 1.0);
   // encode from [-1, 1] -> [0, 1]
-  output.normal = float4(get_normal(TBN, uv, input.normal, material_data) * 0.5f + 0.5f, 0.0);
+  output.normal = float4(get_normal(TBN, uv, input.normal, input.sv_is_front_face, material_data) * 0.5f + 0.5f, 0.0);
   output.material = float4(get_material(uv, material_data), 0.0);
   output.emissive = float4(get_emissive(uv, material_data), 0.0);
   output.object_id = instance_data.object_id;

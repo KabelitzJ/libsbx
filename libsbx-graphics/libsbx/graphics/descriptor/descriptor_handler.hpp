@@ -35,7 +35,15 @@ public:
 
   explicit descriptor_handler(const graphics_pipeline_handle& handle, std::uint32_t set);
 
+  descriptor_handler(const descriptor_handler& other) = delete;
+
+  descriptor_handler(descriptor_handler&&) noexcept = default;
+
   ~descriptor_handler();
+
+  auto operator=(const descriptor_handler& other) -> descriptor_handler& = delete;
+
+  auto operator=(descriptor_handler&& other) -> descriptor_handler& = default;
 
   template<typename Descriptor>
   requires (std::is_base_of_v<descriptor, Descriptor>)

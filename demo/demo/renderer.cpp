@@ -108,10 +108,20 @@ renderer::renderer()
     return pass;
   });
 
+  auto depthpre = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
+    auto pass = context.graphics_pass("depthpre");
+
+    pass.writes(depth, sbx::graphics::attachment_load_operation::clear);
+
+    return pass;
+  });
+
   auto deferred_pass = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
     auto pass = context.graphics_pass("deferred");
 
-    pass.writes(depth, sbx::graphics::attachment_load_operation::clear);
+    pass.depends_on(depthpre);
+
+    pass.writes(depth, sbx::graphics::attachment_load_operation::load);
     pass.writes(albedo, sbx::graphics::attachment_load_operation::clear);
     pass.writes(position, sbx::graphics::attachment_load_operation::clear);
     pass.writes(normal, sbx::graphics::attachment_load_operation::clear);
@@ -268,9 +278,13 @@ renderer::renderer()
   // Shadow pass
   // add_subrenderer<sbx::shadows::shadow_subrenderer>(shadow, "res://shaders/shadow");
 
+  // Depth pre
+  add_subrenderer<sbx::models::static_mesh_subrenderer<true>>(depthpre, "res://shaders/depthpre", sbx::models::static_mesh_material_draw_list::bucket::opaque);
+  add_subrenderer<sbx::animations::skinned_mesh_subrenderer<true>>(depthpre, "res://shaders/depthpre", sbx::animations::skinned_mesh_material_draw_list::bucket::opaque);
+
   // Deferred pass
-  add_subrenderer<sbx::models::static_mesh_subrenderer>(deferred_pass, "res://shaders/deferred_pbr_material", sbx::models::static_mesh_material_draw_list::bucket::opaque);
-  add_subrenderer<sbx::animations::skinned_mesh_subrenderer>(deferred_pass, "res://shaders/deferred_pbr_material", sbx::animations::skinned_mesh_material_draw_list::bucket::opaque);
+  add_subrenderer<sbx::models::static_mesh_subrenderer<false>>(deferred_pass, "res://shaders/deferred_pbr_material", sbx::models::static_mesh_material_draw_list::bucket::opaque);
+  add_subrenderer<sbx::animations::skinned_mesh_subrenderer<false>>(deferred_pass, "res://shaders/deferred_pbr_material", sbx::animations::skinned_mesh_material_draw_list::bucket::opaque);
 
   // auto ssao_attachment_names = std::vector<std::pair<std::string, std::string>>{
   //   {"position_image", "position"},
@@ -280,8 +294,8 @@ renderer::renderer()
   // add_subrenderer<sbx::post::ssao_filter>(ssao_pass, "res://shaders/ssao", std::move(ssao_attachment_names));
 
   // Transparency pass
-  add_subrenderer<sbx::models::static_mesh_subrenderer>(transparency_pass, "res://shaders/deferred_pbr_material", sbx::models::static_mesh_material_draw_list::bucket::transparent);
-  add_subrenderer<sbx::animations::skinned_mesh_subrenderer>(transparency_pass, "res://shaders/deferred_pbr_material", sbx::animations::skinned_mesh_material_draw_list::bucket::transparent);
+  add_subrenderer<sbx::models::static_mesh_subrenderer<false>>(transparency_pass, "res://shaders/deferred_pbr_material", sbx::models::static_mesh_material_draw_list::bucket::transparent);
+  add_subrenderer<sbx::animations::skinned_mesh_subrenderer<false>>(transparency_pass, "res://shaders/deferred_pbr_material", sbx::animations::skinned_mesh_material_draw_list::bucket::transparent);
 
   // Resolve pass
   auto resolve_opaque_attachment_names = std::vector<std::pair<std::string, std::string>>{

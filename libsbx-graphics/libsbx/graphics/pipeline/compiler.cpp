@@ -213,7 +213,7 @@ auto compiler::_create_session(const compile_request& compile_request, SlangStag
   auto compiler_options = std::array<slang::CompilerOptionEntry, 16u>{
     // slang::CompilerOptionEntry{slang::CompilerOptionName::Capability,         {slang::CompilerOptionValueKind::String, 0,                               0, "spirv_1_5",                           nullptr}},
     slang::CompilerOptionEntry{slang::CompilerOptionName::Capability,         {slang::CompilerOptionValueKind::String, 0,                               0, "SPV_EXT_physical_storage_buffer",     nullptr}},
-    // slang::CompilerOptionEntry{slang::CompilerOptionName::Capability,         {slang::CompilerOptionValueKind::String, 0,                               0, "SPV_EXT_demote_to_helper_invocation", nullptr}},
+    slang::CompilerOptionEntry{slang::CompilerOptionName::Capability,         {slang::CompilerOptionValueKind::String, 0,                               0, "SPV_EXT_demote_to_helper_invocation", nullptr}},
     
     // slang::CompilerOptionEntry{slang::CompilerOptionName::Capability,         {slang::CompilerOptionValueKind::String, 0,                               0, "SPV_KHR_non_semantic_info",           nullptr}},
     // slang::CompilerOptionEntry{slang::CompilerOptionName::Capability,         {slang::CompilerOptionValueKind::String, 0,                               0, "SPV_GOOGLE_user_type",                nullptr}},
@@ -226,9 +226,9 @@ auto compiler::_create_session(const compile_request& compile_request, SlangStag
     // slang::CompilerOptionEntry{slang::CompilerOptionName::Capability,         {slang::CompilerOptionValueKind::String, 0,                               0, "spvDemoteToHelperInvocation",         nullptr}},
 
     slang::CompilerOptionEntry{slang::CompilerOptionName::MatrixLayoutColumn, {slang::CompilerOptionValueKind::Int,    1,                               0, "column_major",                        nullptr}},
-    // slang::CompilerOptionEntry{slang::CompilerOptionName::DebugInformation,   {slang::CompilerOptionValueKind::Int,    SLANG_DEBUG_INFO_LEVEL_STANDARD, 0, nullptr,                               nullptr}},
-    // slang::CompilerOptionEntry{slang::CompilerOptionName::Optimization,       {slang::CompilerOptionValueKind::Int,    SLANG_OPTIMIZATION_LEVEL_NONE,   0, nullptr,                               nullptr}},
-    // slang::CompilerOptionEntry{slang::CompilerOptionName::EmitSpirvDirectly,  {slang::CompilerOptionValueKind::Int,    1,                               0, nullptr,                               nullptr}}
+    slang::CompilerOptionEntry{slang::CompilerOptionName::DebugInformation,   {slang::CompilerOptionValueKind::Int,    SLANG_DEBUG_INFO_LEVEL_STANDARD, 0, nullptr,                               nullptr}},
+    slang::CompilerOptionEntry{slang::CompilerOptionName::Optimization,       {slang::CompilerOptionValueKind::Int,    SLANG_OPTIMIZATION_LEVEL_NONE,   0, nullptr,                               nullptr}},
+    slang::CompilerOptionEntry{slang::CompilerOptionName::EmitSpirvDirectly,  {slang::CompilerOptionValueKind::Int,    1,                               0, nullptr,                               nullptr}}
   };
 
   session_description.compilerOptionEntries = compiler_options.data();

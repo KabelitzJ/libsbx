@@ -149,10 +149,12 @@ private:
 
 using static_mesh_material_draw_list = basic_material_draw_list<static_mesh_traits>;
 
+template<bool DepthOnly>
 class static_mesh_subrenderer final : public graphics::subrenderer {
 
   inline static const auto pipeline_definition = graphics::pipeline_definition{
-    .depth = graphics::depth::read_write,
+    .depth = DepthOnly ? graphics::depth::read_write : graphics::depth::read_only,
+    .compare_operation = DepthOnly ? graphics::compare_operation::less_or_equal : graphics::compare_operation::equal,
     .uses_transparency = false,
     .rasterization_state = graphics::rasterization_state{
       .polygon_mode = graphics::polygon_mode::fill,
@@ -254,7 +256,7 @@ private:
     }
 
     auto definition = pipeline_definition;
-    definition.depth = (static_cast<alpha_mode>(key.alpha) == alpha_mode::blend) ? graphics::depth::read_only : graphics::depth::read_write;
+    // definition.depth = (static_cast<alpha_mode>(key.alpha) == alpha_mode::blend) ? graphics::depth::read_only : graphics::depth::read_write;
     definition.rasterization_state.cull_mode = key.is_double_sided ? graphics::cull_mode::none : graphics::cull_mode::back;
     definition.uses_transparency = (static_cast<alpha_mode>(key.alpha) == alpha_mode::blend);
 

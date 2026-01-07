@@ -40,7 +40,7 @@ void main() {
 
   // save the blending and color texture fetch cost if there is not a transparent fragment
   if (is_approximately_equal(revealage, 1.0f)) {
-    discard;
+    clip(-1);
   }
 
   // fragment color

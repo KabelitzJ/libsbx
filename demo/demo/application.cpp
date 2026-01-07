@@ -86,6 +86,15 @@ application::application()
   scene.add_image("chess_pieces_black_normal", "res://textures/chess/pieces/black/normal.jpg", sbx::graphics::format::r8g8b8a8_unorm);
   scene.add_image("chess_pieces_black_mrao", "res://textures/chess/pieces/black/mrao.jpg", sbx::graphics::format::r8g8b8a8_srgb);
 
+  // scene.add_image("pine_tree_bark_albedo", "res://textures/pine_tree/bark_albedo.png", sbx::graphics::format::r8g8b8a8_srgb);
+  // scene.add_image("pine_tree_bark_normal", "res://textures/pine_tree/bark_normal.png", sbx::graphics::format::r8g8b8a8_unorm);
+  // scene.add_image("pine_tree_leaves_albedo", "res://textures/pine_tree/leaves_albedo.png", sbx::graphics::format::r8g8b8a8_srgb);
+  // scene.add_image("pine_tree_leaves_normal", "res://textures/pine_tree/leaves_normal.png", sbx::graphics::format::r8g8b8a8_unorm);
+
+  scene.add_image("tree_1_bark", "res://textures/tree_1/bark.jpg", sbx::graphics::format::r8g8b8a8_srgb);
+  scene.add_image("tree_1_leaves1", "res://textures/tree_1/leaves1.png", sbx::graphics::format::r8g8b8a8_srgb);
+  scene.add_image("tree_1_leaves2", "res://textures/tree_1/leaves2.png", sbx::graphics::format::r8g8b8a8_srgb);
+
   scene.add_cube_image("skybox", "res://skyboxes/clouds2");
 
   _generate_brdf(512);
@@ -104,6 +113,8 @@ application::application()
   scene.add_mesh<sbx::models::mesh>("sphere", "res://meshes/sphere/sphere.gltf");
 
   scene.add_mesh<sbx::models::mesh>("chess_pieces", "res://meshes/chess/pieces.gltf");
+
+  scene.add_mesh<sbx::models::mesh>("tree_1_1", "res://meshes/tree_1_3/tree_1_3.gltf");
 
   // Animations
 
@@ -237,6 +248,34 @@ application::application()
   cube2_transform.set_position(sbx::math::vector3{-8.0f, 15.0f, 4.0f});
   cube2_transform.set_scale(sbx::math::vector3{5.0f, 5.0f, 5.0f});
   cube2_transform.set_rotation(sbx::math::vector3{1.0f, 0.0f, 1.0f}, sbx::math::degree{30.0f});
+
+  // Tree
+
+  auto tree = scene.create_node("Tree");
+
+  auto& tree_bark_material = scene.add_material<sbx::models::material>("tree_1_bark");
+  tree_bark_material.albedo.image = scene.get_image("tree_1_bark");
+
+  auto& tree_leaves1_material = scene.add_material<sbx::models::material>("tree_1_leaves1");
+  tree_leaves1_material.albedo.image = scene.get_image("tree_1_leaves1");
+  tree_leaves1_material.alpha = sbx::models::alpha_mode::mask;
+  tree_leaves1_material.is_double_sided = true;
+
+  auto& tree_leaves2_material = scene.add_material<sbx::models::material>("tree_1_leaves2");
+  tree_leaves2_material.albedo.image = scene.get_image("tree_1_leaves2");
+  tree_leaves2_material.alpha = sbx::models::alpha_mode::mask;
+  tree_leaves2_material.is_double_sided = true;
+
+  auto tree_submeshes = std::vector<sbx::scenes::static_mesh::submesh>{
+    sbx::scenes::static_mesh::submesh{0, scene.get_material("tree_1_bark")}, 
+    sbx::scenes::static_mesh::submesh{1, scene.get_material("tree_1_leaves1")},
+    sbx::scenes::static_mesh::submesh{1, scene.get_material("tree_1_leaves2")}
+  };
+
+  scene.add_component<sbx::scenes::static_mesh>(tree, scene.get_mesh("tree_1_1"), tree_submeshes);
+
+  auto& tree_transform = scene.get_component<sbx::scenes::transform>(tree);
+  tree_transform.set_position(sbx::math::vector3{-20.0f, 0.0f, 4.0f});
   
   // Chess
 
@@ -249,21 +288,21 @@ application::application()
     "King"
   };
 
-  auto& chess_pawn_white_material = scene.add_material<sbx::models::material>("chess_pawn_white");
-  chess_pawn_white_material.albedo.image = scene.get_image("chess_pieces_white_albedo");
-  chess_pawn_white_material.normal.image = scene.get_image("chess_pieces_white_normal");
-  // chess_pawn_white_material.mrao.image = scene.get_image("chess_pieces_white_mrao");
-  chess_pawn_white_material.metallic = 0.1f;
-  chess_pawn_white_material.roughness = 0.9f;
-  chess_pawn_white_material.occlusion = 1.0f;
+  auto& chess_white_material = scene.add_material<sbx::models::material>("chess_white");
+  chess_white_material.albedo.image = scene.get_image("chess_pieces_white_albedo");
+  chess_white_material.normal.image = scene.get_image("chess_pieces_white_normal");
+  // chess_white_material.mrao.image = scene.get_image("chess_pieces_white_mrao");
+  chess_white_material.metallic = 0.1f;
+  chess_white_material.roughness = 0.9f;
+  chess_white_material.occlusion = 1.0f;
 
-  auto& chess_pawn_black_material = scene.add_material<sbx::models::material>("chess_pawn_black");
-  chess_pawn_black_material.albedo.image = scene.get_image("chess_pieces_black_albedo");
-  chess_pawn_black_material.normal.image = scene.get_image("chess_pieces_black_normal");
-  // chess_pawn_black_material.mrao.image = scene.get_image("chess_pieces_black_mrao");
-  chess_pawn_black_material.metallic = 0.1f;
-  chess_pawn_black_material.roughness = 0.9f;
-  chess_pawn_black_material.occlusion = 1.0f;
+  auto& chess_black_material = scene.add_material<sbx::models::material>("chess_black");
+  chess_black_material.albedo.image = scene.get_image("chess_pieces_black_albedo");
+  chess_black_material.normal.image = scene.get_image("chess_pieces_black_normal");
+  // chess_black_material.mrao.image = scene.get_image("chess_pieces_black_mrao");
+  chess_black_material.metallic = 0.1f;
+  chess_black_material.roughness = 0.9f;
+  chess_black_material.occlusion = 1.0f;
 
   auto chess = scene.create_node("Chess");
 
@@ -273,7 +312,7 @@ application::application()
 
       auto white_piece = scene.create_child_node(chess, fmt::format("Chess_{}_White_{}", piece_name, row));
 
-      scene.add_component<sbx::scenes::static_mesh>(white_piece, scene.get_mesh("chess_pieces"), std::vector<sbx::scenes::static_mesh::submesh>{{i, scene.get_material("chess_pawn_white")}});
+      scene.add_component<sbx::scenes::static_mesh>(white_piece, scene.get_mesh("chess_pieces"), std::vector<sbx::scenes::static_mesh::submesh>{{i, scene.get_material("chess_white")}});
 
       auto& white_piece_transform = scene.get_component<sbx::scenes::transform>(white_piece);
       white_piece_transform.set_position(sbx::math::vector3{static_cast<float>(i) * 2.0f - 5.0f, 0.7f, -10.0f - static_cast<float>(row) * 2.0f});
@@ -281,7 +320,7 @@ application::application()
 
       auto black_piece = scene.create_child_node(chess, fmt::format("Chess_{}_Black_{}", piece_name, row));
 
-      scene.add_component<sbx::scenes::static_mesh>(black_piece, scene.get_mesh("chess_pieces"), std::vector<sbx::scenes::static_mesh::submesh>{{i, scene.get_material("chess_pawn_black")}});
+      scene.add_component<sbx::scenes::static_mesh>(black_piece, scene.get_mesh("chess_pieces"), std::vector<sbx::scenes::static_mesh::submesh>{{i, scene.get_material("chess_black")}});
 
       auto& black_piece_transform = scene.get_component<sbx::scenes::transform>(black_piece);
       black_piece_transform.set_position(sbx::math::vector3{static_cast<float>(i) * 2.0f - 5.0f, 0.7f, -14.0f - static_cast<float>(row) * 2.0f});
@@ -412,7 +451,6 @@ application::application()
       auto& material = scene.add_material<sbx::models::material>(material_name);
       material.base_color = sbx::math::color::white();
       material.albedo.image = scene.get_image("checkerboard");
-      material.alpha = sbx::models::alpha_mode::opaque;
       material.metallic = 0.2f * x;
       material.roughness = 0.2f * y;
       material.occlusion = 1.0f;

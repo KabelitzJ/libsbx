@@ -1,0 +1,17 @@
+#ifndef FEATURES_SLANG_
+#define FEATURES_SLANG_
+
+#ifndef SBX_FEATURE_ALPHA
+#define SBX_FEATURE_ALPHA 0
+#endif
+#ifndef SBX_FEATURE_ALPHA_CLIP
+#define SBX_FEATURE_ALPHA_CLIP 0
+#endif
+#ifndef SBX_FEATURE_NORMAL_MAP
+#define SBX_FEATURE_NORMAL_MAP 1
+#endif
+#ifndef SBX_FEATURE_EMISSION
+#define SBX_FEATURE_EMISSION 1
+#endif
+
+#endif // FEATURES_SLANG_

@@ -300,7 +300,7 @@ auto mesh::_load(const std::filesystem::path& path) -> skinned_mesh_data {
 
   const auto kb = units::quantity_cast<units::kilobyte>(b);
 
-  utility::logger<"models">::debug("Loaded mesh: {}, vertices: {}, indices: {}, size: {} kb in {:.2f}ms", resolved_path.string(), vertices_count, indices_count, kb.value(), units::quantity_cast<units::millisecond>(timer.elapsed()).value());
+  utility::logger<"models">::debug("Loaded mesh: {}, vertices: {}, indices: {}, size: {} kb in {:.2f}ms", resolved_path.string(), vertices_count, indices_count, kb.value(), units::quantity_cast<units::millisecond>(timer.elapsed()));
 
   return skinned_mesh_data{std::move(mesh_data), std::move(skeleton)};
 }

@@ -169,16 +169,13 @@ constexpr auto quantity_cast(const quantity<typename TargetQuantity::dimension_t
 } // namespace sbx::units
 
 template<typename Dimension, sbx::units::representation Representation, sbx::units::ratio Ratio>
-struct fmt::formatter<sbx::units::quantity<Dimension, Representation, Ratio>> {
+struct fmt::formatter<sbx::units::quantity<Dimension, Representation, Ratio>> : fmt::formatter<Representation> {
 
-  template<typename ParseContext>
-  constexpr auto parse(ParseContext& context) -> decltype(context.begin()) {
-    return context.begin();
-  }
+  using base_type = fmt::formatter<Representation>;
 
   template<typename FormatContext>
   auto format(const sbx::units::quantity<Dimension, Representation, Ratio>& quantity, FormatContext& context) const -> decltype(context.out()) {
-    return fmt::format_to(context.out(), "{}", quantity.value());
+    return base_type::format(quantity.value(), context);
   }
 
 }; // fmt::formatter

@@ -133,7 +133,7 @@ animation::animation(const std::filesystem::path& path, const std::string& name)
     _track_map.emplace(bone_name, std::move(track));
   }
 
-  utility::logger<"animations">::debug("Loaded animation: {} '{}' in {:.2f}ms", resolved_path.string(), _name, units::quantity_cast<units::millisecond>(timer.elapsed()).value());
+  utility::logger<"animations">::debug("Loaded animation: {} '{}' in {:.2f}ms", resolved_path.string(), _name, units::quantity_cast<units::millisecond>(timer.elapsed()));
 }
 
 auto animation::track_map() const noexcept -> const std::unordered_map<utility::hashed_string, bone_track>& {

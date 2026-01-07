@@ -542,7 +542,7 @@ auto application::_generate_brdf(const std::uint32_t size) -> void {
 
   command_buffer.submit_idle();
 
-  sbx::utility::logger<"application">::info("Generated 'brdf' in {:.2f}ms", sbx::units::quantity_cast<sbx::units::millisecond>(timer.elapsed()).value());
+  sbx::utility::logger<"application">::info("Generated 'brdf' in {:.2f}ms", sbx::units::quantity_cast<sbx::units::millisecond>(timer.elapsed()));
 }
 
 auto application::_generate_irradiance(const std::uint32_t size) -> void {
@@ -583,7 +583,7 @@ auto application::_generate_irradiance(const std::uint32_t size) -> void {
 
   command_buffer.submit_idle();
 
-  sbx::utility::logger<"application">::info("Generated 'irradiance' in {:.2f}ms", sbx::units::quantity_cast<sbx::units::millisecond>(timer.elapsed()).value());
+  sbx::utility::logger<"application">::info("Generated 'irradiance' in {:.2f}ms", sbx::units::quantity_cast<sbx::units::millisecond>(timer.elapsed()));
 }
 
 auto application::_generate_prefiltered(uint32_t size) -> void {
@@ -711,7 +711,7 @@ auto application::_generate_prefiltered(uint32_t size) -> void {
     vkDestroyImageView(graphics_module.logical_device(), view, nullptr);
   }
 
-  sbx::utility::logger<"application">::info("Generated 'prefiltered' with {} mips in {:.2f}ms", prefiltered.mip_levels(), sbx::units::quantity_cast<sbx::units::millisecond>(timer.elapsed()).value());
+  sbx::utility::logger<"application">::info("Generated 'prefiltered' with {} mips in {:.2f}ms", prefiltered.mip_levels(), sbx::units::quantity_cast<sbx::units::millisecond>(timer.elapsed()));
 }
 
 

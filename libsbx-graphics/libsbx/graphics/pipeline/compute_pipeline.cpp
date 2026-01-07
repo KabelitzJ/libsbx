@@ -252,7 +252,7 @@ compute_pipeline::compute_pipeline(const std::filesystem::path& path)
 
   validate(vkCreateComputePipelines(logical_device, VK_NULL_HANDLE, 1, &pipeline_create_info, nullptr, &_handle));
 
-  utility::logger<"graphics">::debug("Pipeline '{}' created in {:.2f}ms", _name, units::quantity_cast<units::millisecond>(timer.elapsed()).value());
+  utility::logger<"graphics">::debug("Pipeline '{}' created in {:.2f}ms", _name, units::quantity_cast<units::millisecond>(timer.elapsed()));
 }
 
 compute_pipeline::~compute_pipeline() {

@@ -43,6 +43,10 @@ struct interop {
 
   static auto transform_set_position(std::uint32_t node, math::vector3* position) -> void;
 
+  static auto transform_get_rotation(std::uint32_t node, math::quaternion* rotation) -> void;
+
+  static auto transform_set_rotation(std::uint32_t node, math::quaternion* rotation) -> void;
+
   static auto transform_get_right(std::uint32_t node, math::vector3* right) -> void;
 
   static auto transform_get_forward(std::uint32_t node, math::vector3* forward) -> void;
@@ -66,6 +70,14 @@ struct interop {
   static auto input_mouse_position(math::vector2* position) -> void;
 
   static auto input_scroll_delta(math::vector2* scroll_delta) -> void;
+
+  static auto camera_screen_point_to_ray(math::ray* ray, math::vector2* position) -> void;
+
+  static auto camera_get_position(math::vector3* position) -> void;
+
+  static auto camera_set_position(math::vector3* position) -> void;
+
+  static auto time_delta_time(std::float_t* delta_time) -> void;
 
   template<typename Type>
   static auto register_managed_component(std::string_view name, managed::assembly& core_assembly) -> void {

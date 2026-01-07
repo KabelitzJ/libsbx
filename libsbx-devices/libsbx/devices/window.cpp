@@ -198,10 +198,11 @@ auto window::_set_callbacks() -> void {
       self._on_mouse_moved(mouse_moved_event{mouse_position.x(), mouse_position.y()});
     } else {
       self._on_mouse_moved(mouse_moved_event{mouse_position.x() - self._last_mouse_position.x(), mouse_position.y() - self._last_mouse_position.y()});
-      self._last_mouse_position = mouse_position;
     }
+    
+    self._last_mouse_position = mouse_position;
 
-    input::_update_mouse_position(mouse_position);
+    // input::_update_mouse_position(mouse_position);
   });
 
   glfwSetMouseButtonCallback(_handle, [](auto* window, auto button, auto action, auto mods){

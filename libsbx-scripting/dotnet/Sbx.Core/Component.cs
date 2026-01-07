@@ -34,6 +34,16 @@ namespace Sbx.Core
       set { unsafe { InternalCalls.Transform_SetPosition(Node, &value); } }
     }
 
+    public Quaternion Rotation
+    {
+      get {
+        Quaternion rotation;
+        unsafe { InternalCalls.Transform_GetRotation(Node, &rotation); }
+        return rotation;
+      }
+      set { unsafe { InternalCalls.Transform_SetRotation(Node, &value); } }
+    }
+
     public Vector3 Right
     {
       get {
@@ -61,7 +71,6 @@ namespace Sbx.Core
       }
     }
 
-		public Vector3 Rotation;
 		public Vector3 Scale;
 
     public void LookAt(Vector3 target)

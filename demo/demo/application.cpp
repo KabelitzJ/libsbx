@@ -459,11 +459,24 @@ application::application()
   }
 
   // Camera
-  auto camera = scene.camera();
+  auto camera_node = scene.camera();
 
-  scene.add_component<sbx::scenes::skybox>(camera, scene.get_cube_image("skybox"), _brdf, _irradiance, _prefiltered);
+  auto& camera = scene.get_component<sbx::scenes::camera>(camera_node);
+  auto& camera_transform = scene.get_component<sbx::scenes::transform>(camera_node);
 
-  auto camera_controller_script = scripting_module.instantiate(camera, "build/x86_64/gcc/debug/_dotnet/Demo.dll", "Demo.CameraController");
+  camera_transform.set_position(sbx::math::vector3{0, 50, 50});
+  camera_transform.look_at(sbx::math::vector3::zero);
+
+  auto camera_guide = scene.create_node();
+
+  scene.get_component<sbx::scenes::relationship>(scene.root()).remove_child(camera_node);
+
+  scene.get_component<sbx::scenes::relationship>(camera_node).set_parent(camera_guide);
+  scene.get_component<sbx::scenes::relationship>(camera_guide).add_child(camera_node);
+
+  scene.add_component<sbx::scenes::skybox>(camera_node, scene.get_cube_image("skybox"), _brdf, _irradiance, _prefiltered);
+
+  auto camera_controller_script = scripting_module.instantiate(camera_guide, "build/x86_64/gcc/debug/_dotnet/Demo.dll", "Demo.CameraController");
 
   if (auto hide_window = cli.argument<bool>("hide-window"); !hide_window) {
     window.show();

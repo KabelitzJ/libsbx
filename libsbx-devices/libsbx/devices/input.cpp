@@ -4,6 +4,7 @@
 
 namespace sbx::devices {
 
+core::delegate<math::vector2()> input::_mouse_position_callback;
 std::unordered_map<key, key_state> input::_key_states;
 std::unordered_map<mouse_button, key_state> input::_mouse_button_states;
 math::vector2 input::_mouse_position;
@@ -69,11 +70,11 @@ auto input::is_mouse_button_released(mouse_button button) -> bool {
   return true;
 }
 
-auto input::mouse_position() -> const math::vector2& {
-  return _mouse_position;
+auto input::mouse_position() -> math::vector2 {
+  return std::invoke(_mouse_position_callback);
 }
 
-auto input::scroll_delta() -> const math::vector2& {
+auto input::scroll_delta() -> math::vector2 {
   return _scroll_delta;
 }
 

@@ -31,6 +31,7 @@
 #include <libsbx/math/vector3.hpp>
 #include <libsbx/math/quaternion.hpp>
 #include <libsbx/math/matrix_cast.hpp>
+#include <libsbx/math/ray.hpp>
 
 #include <libsbx/core/engine.hpp>
 
@@ -358,6 +359,26 @@ public:
     _uniform_handler.push("light_color", _light.color());
 
     _uniform_handler.push("time", core::engine::time().value());
+  }
+
+  auto screen_point_to_ray(const math::vector2& position) -> math::ray {
+    const auto& camera_transform = get_component<scenes::transform>(_camera); 
+    const auto& camera = get_component<scenes::camera>(_camera);
+
+    const auto ndc = math::vector3{
+      position.x() * 2.0f - 1.0f,
+      1.0f - position.y() * 2.0f,
+      1.0f
+    };
+
+    const auto inv_projection = math::matrix4x4::inverted(camera.projection());
+    const auto view_dir4 = inv_projection * math::vector4{ndc.x(), ndc.y(), -1.0f, 1.0f};
+    const auto view_dir = math::vector3::normalized(math::vector3{view_dir4.x(), view_dir4.y(), view_dir4.z()});
+
+    const auto camera_matrix = world_transform(_camera);
+    const auto ray_direction = math::vector3::normalized(camera_matrix * math::vector4{view_dir.x(), view_dir.y(), view_dir.z(), 0.0f});
+
+    return math::ray{camera_transform.position(), ray_direction};
   }
 
 private:

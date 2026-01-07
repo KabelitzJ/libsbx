@@ -19,7 +19,7 @@ namespace Sbx.Core
 
 		public virtual void OnCreate() { }
 
-		public virtual void OnUpdate(float deltaTime) { }
+		public virtual void OnUpdate() { }
 
 		public virtual void OnFixedUpdate() { }
 

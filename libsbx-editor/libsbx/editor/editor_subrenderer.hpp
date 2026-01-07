@@ -20,6 +20,7 @@
 #include <libsbx/assets/assets_module.hpp>
 
 #include <libsbx/devices/devices_module.hpp>
+#include <libsbx/devices/input.hpp>
 
 #include <libsbx/scenes/scenes_module.hpp>
 #include <libsbx/scenes/components/id.hpp>
@@ -173,6 +174,10 @@ public:
 
     graphics_module.set_dynamic_size_callback([&]() -> sbx::math::vector2u {
       return _viewport_size;
+    });
+
+    devices::input::set_mouse_position_callback([&]() -> math::vector2 {
+      return _mouse_position;
     });
 
     // Connect ImGui to GLFW
@@ -1194,9 +1199,6 @@ private:
       ImGui::End();
     }
 
-    auto vMax = ImVec2{};
-    auto vMin = ImVec2{};
-
     {
       ImGui::Begin("Scene");
 
@@ -1213,44 +1215,37 @@ private:
       ImGui::Image(reinterpret_cast<ImTextureID>(_descriptor_handler.descriptor_set()), available_size);
       ImGui::PopStyleVar();
 
-      // auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
-
-      // auto& scene = scenes_module.scene();
-
-      // auto camera_node = scene.camera();
-
-      // auto& global_light = scene.light();
-
-      // auto direction = math::vector3::normalized(global_light.direction());
-
-      // const auto origin = math::vector3::zero;
-      // const auto up = math::vector3::up;
-
-      // auto light_matrix = math::matrix4x4::inverted(math::matrix4x4::look_at(origin, origin + direction, up));
-
-      // const auto& camera = scene.get_component<scenes::camera>(camera_node);
-      // const auto& camera_transform = scene.get_component<scenes::transform>(camera_node);
-
-      // const auto camera_view = math::matrix4x4::inverted(camera_transform.as_matrix());
-      // const auto camera_projection = camera.projection(0.1f, 100.0f);
-
-      // ImGuizmo::Manipulate(camera_view.data(), camera_projection.data(), ImGuizmo::ROTATE, ImGuizmo::WORLD, light_matrix.data());
-
-      // global_light.set_direction(-math::vector3{light_matrix[2]});
-
       if (ImGui::IsItemHovered()) {
         ImGuiIO& io = ImGui::GetIO();
         io.WantCaptureMouse = false; 
         io.WantCaptureKeyboard = false;
       }
 
-      vMin = ImGui::GetWindowContentRegionMin();
-      vMax = ImGui::GetWindowContentRegionMax();
+      auto scene_min = ImVec2{};
+      auto scene_max = ImVec2{};
 
-      vMin.x += ImGui::GetWindowPos().x;
-      vMin.y += ImGui::GetWindowPos().y;
-      vMax.x += ImGui::GetWindowPos().x;
-      vMax.y += ImGui::GetWindowPos().y;
+
+      scene_min = ImGui::GetWindowContentRegionMin();
+      scene_max = ImGui::GetWindowContentRegionMax();
+
+      scene_min.x += ImGui::GetWindowPos().x;
+      scene_min.y += ImGui::GetWindowPos().y;
+      scene_max.x += ImGui::GetWindowPos().x;
+      scene_max.y += ImGui::GetWindowPos().y;
+
+      auto width = scene_max.x - scene_min.x;
+      auto height = scene_max.y - scene_min.y;
+
+      _viewport_size = sbx::math::vector2u{static_cast<std::uint32_t>(width), static_cast<std::uint32_t>(height)};
+
+      auto mouse_scene = ImGui::GetMousePos();
+
+      _mouse_position = { mouse_scene.x - scene_min.x, mouse_scene.y - scene_min.y};
+
+      _mouse_position = math::vector2{
+        std::clamp(_mouse_position.x(), 0.0f, static_cast<std::float_t>(_viewport_size.x())), 
+        std::clamp(_mouse_position.y(), 0.0f, static_cast<std::float_t>(_viewport_size.y()))
+      };
 
       ImGui::End();
     }
@@ -1258,14 +1253,9 @@ private:
     {
       ImGui::Begin("Properties");
 
-      auto width = vMax.x - vMin.x;
-      auto height = vMax.y - vMin.y;
-
-      _viewport_size = sbx::math::vector2u{static_cast<std::uint32_t>(width), static_cast<std::uint32_t>(height)};
-
-      ImGui::Text("Width: %f", width);
-      ImGui::Text("Height: %f", height);
-      ImGui::Text("Aspect Ratio: %f", width / height);
+      ImGui::Text("Width: %d", _viewport_size.x());
+      ImGui::Text("Height: %d", _viewport_size.y());
+      ImGui::Text("Aspect Ratio: %f", static_cast<std::float_t>(_viewport_size.x()) / static_cast<std::float_t>(_viewport_size.y()));
 
       _build_node_preview();
 
@@ -1488,6 +1478,7 @@ private:
   math::uuid _selected_node_id;
 
   math::vector2u _viewport_size;
+  math::vector2 _mouse_position;
 
   std::vector<std::float_t> _deltas;
   std::vector<std::float_t> _time_stamps;

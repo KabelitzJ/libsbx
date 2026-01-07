@@ -10,6 +10,8 @@
 
 #include <libsbx/math/vector2.hpp>
 
+#include <libsbx/core/delegate.hpp>
+
 #include <libsbx/devices/key.hpp>
 #include <libsbx/devices/mouse_button.hpp>
 #include <libsbx/devices/input_action.hpp>
@@ -43,9 +45,15 @@ public:
 
   static auto is_mouse_button_released(mouse_button button) -> bool;
 
-  static auto mouse_position() -> const math::vector2&;
+  static auto mouse_position() -> math::vector2;
 
-  static auto scroll_delta() -> const math::vector2&;
+  static auto scroll_delta() -> math::vector2;
+
+  template<typename Callable>
+  requires (std::is_invocable_r_v<math::vector2, Callable>)
+  static auto set_mouse_position_callback(Callable&& callback) -> void {
+    _mouse_position_callback = std::forward<Callable>(callback);
+  }
 
 private:
 
@@ -62,6 +70,8 @@ private:
   static auto _update_mouse_position(const math::vector2& position) -> void;
 
   static auto _update_scroll_delta(const math::vector2& delta) -> void;
+
+  static core::delegate<math::vector2()> _mouse_position_callback;
 
   static std::unordered_map<key, key_state> _key_states;
   static std::unordered_map<mouse_button, key_state> _mouse_button_states;

@@ -5,26 +5,26 @@ namespace Demo
 {
   public class CameraController : Behavior
   {
-    public float moveSpeed = 10f;
-    public float fastMultiplier = 3f;
 
-    public float minTilt = 2f;
-    public float maxTilt = 89f;
+    public float normalSpeed = 0.5f;
+    public float fastSpeed = 3.0f;
+    private float _movementSpeed;
 
-    public float minZoom = 3f;
-    public float maxZoom = 100f;
+    public float movementTime = 5.0f;
 
-    public float orbitAngle = 90f;
+    private Vector3 _newPosition;
 
-    private LinearSmoothValue tilt;
-    private ProportionalSmoothValue zoom;
+    public float rotationAmount = 1.0f;
+    private Quaternion _newRotation;
 
-    private Vector3 target = Vector3.Zero;
-    public Vector3 mapCenter = Vector3.Zero;
-    public float maxDistance = 100.0f;
+    public Vector3 zoomAmount = new Vector3(0, -10.0f, 10.0f);
+    private Vector3 _newZoom;
 
-    private Vector2 lastMouse;
-    private bool dragging = false;
+    private Vector3 _dragStartPosition;
+    private Vector3 _dragCurrentPosition;
+
+    private Vector3 _rotateStartPosition;
+    private Vector3 _rotateCurrentPosition;
 
     private Transform transform;
 
@@ -32,147 +32,114 @@ namespace Demo
     {
       transform = GetComponent<Transform>();
 
-      tilt = new LinearSmoothValue(30f);
-      zoom = new ProportionalSmoothValue(30f);
+      _newPosition = transform.Position;
+      _newRotation = transform.Rotation;
+      _newZoom = Camera.Position;
     }
 
-    public override void OnUpdate(float dt)
+    public override void OnUpdate()
     {
-      HandleKeyboardMovement(dt);
-      HandleMouseOrbit(dt);
-      HandleKeyRotation(dt);
-      HandleZoom(dt);
-
-      tilt.Update(dt, 90f);
-      zoom.Update(dt, 10f);
-      target.Y = 2.0f;
-
-      UpdateCameraPosition();
+      HandleMouseInput();
+      HandleMovementInput();
     }
 
-    private void HandleKeyboardMovement(float dt)
+    void HandleMouseInput()
     {
-      Vector3 flatForward = Vector3.Cross(Vector3.Up, transform.Right).Normalized();
-      Vector3 flatRight = Vector3.Cross(Vector3.Up, transform.Forward).Normalized();
-      Vector3 movement = Vector3.Zero;
-
-      if (Input.IsKeyDown(KeyCode.W))
+      if (Input.ScrollDelta().Y != 0)
       {
-        movement += flatForward;
+        _newZoom += Input.ScrollDelta().Y * zoomAmount;
       }
 
-      if (Input.IsKeyDown(KeyCode.S))
+      if (Input.IsMouseButtonPressed(MouseButton.Left))
       {
-        movement -= flatForward;
-      }
+        Plane plane = new Plane(Vector3.Up, Vector3.Zero);
 
-      if (Input.IsKeyDown(KeyCode.A))
-      {
-        movement += flatRight;
-      }
+        Ray ray = Camera.ScreenPointToRay(Input.MousePosition());
 
-      if (Input.IsKeyDown(KeyCode.D))
-      {
-        movement -= flatRight;
-      }
-
-      float speed = moveSpeed;
-
-      if (Input.IsKeyDown(KeyCode.LeftShift))
-      {
-        speed = moveSpeed * fastMultiplier;
-      }
-
-      if (movement.LengthSquared() > 0f)
-      {
-        target += movement.Normalized() * speed * dt;
-
-        float dist = Vector3.Distance(target, mapCenter);
-
-        if (dist > maxDistance)
+        if (plane.Raycast(ray, out float entry))
         {
-          Vector3 dir = (target - mapCenter).Normalized();
-          target = mapCenter + dir * maxDistance;
+          _dragStartPosition = ray.GetPoint(entry);
         }
       }
-    }
 
-    private void HandleMouseOrbit(float dt)
-    {
+      if (Input.IsMouseButtonDown(MouseButton.Left))
+      {
+        Plane plane = new Plane(Vector3.Up, Vector3.Zero);
+
+        Ray ray = Camera.ScreenPointToRay(Input.MousePosition());
+
+        if (plane.Raycast(ray, out float entry))
+        {
+          _dragCurrentPosition = ray.GetPoint(entry);
+
+          _newPosition = transform.Position + _dragStartPosition - _dragCurrentPosition;
+        }
+      }
+
       if (Input.IsMouseButtonPressed(MouseButton.Middle))
       {
-        dragging = true;
-        lastMouse = Input.MousePosition();
+        _rotateStartPosition = new Vector3(Input.MousePosition());
       }
 
-      if (Input.IsMouseButtonReleased(MouseButton.Middle))
+      if (Input.IsMouseButtonDown(MouseButton.Middle))
       {
-        dragging = false;
+        _rotateCurrentPosition = new Vector3(Input.MousePosition());
+
+        Vector3 difference = _rotateStartPosition - _rotateCurrentPosition;
+
+        _rotateStartPosition = _rotateCurrentPosition;
+
+        _newRotation *= Quaternion.Euler(Vector3.Up * difference.X / 5f);
       }
-
-      if (dragging == false)
-      {
-        return;
-      }
-
-      Vector2 mousePos = Input.MousePosition();
-      Vector2 delta = mousePos - lastMouse;
-      lastMouse = mousePos;
-
-      orbitAngle += delta.X * 80f * dt;
-
-      float newTilt = tilt.Target + delta.Y * 80f * dt;
-      newTilt = Math.Clamp(newTilt, minTilt, maxTilt);
-      tilt.Set(newTilt);
     }
 
-    private void HandleKeyRotation(float dt)
+    void HandleMovementInput()
     {
-      if (Input.IsKeyDown(KeyCode.E))
+      _movementSpeed = Input.IsKeyDown(KeyCode.LeftShift) ? fastSpeed : normalSpeed;
+
+      if (Input.IsKeyDown(KeyCode.W) || Input.IsKeyDown(KeyCode.Up))
       {
-        orbitAngle -= 45f * dt;
+        _newPosition += transform.Forward * _movementSpeed;
+      }
+
+      if (Input.IsKeyDown(KeyCode.S) || Input.IsKeyDown(KeyCode.Down))
+      {
+        _newPosition -= transform.Forward * _movementSpeed;
+      }
+
+      if (Input.IsKeyDown(KeyCode.D) || Input.IsKeyDown(KeyCode.Right))
+      {
+        _newPosition += transform.Right * _movementSpeed;
+      }
+
+      if (Input.IsKeyDown(KeyCode.A) || Input.IsKeyDown(KeyCode.Left))
+      {
+        _newPosition -= transform.Right * _movementSpeed;
       }
 
       if (Input.IsKeyDown(KeyCode.Q))
       {
-        orbitAngle += 45f * dt;
+        _newRotation *= Quaternion.Euler(Vector3.Up * rotationAmount);
       }
-    }
 
-    private void HandleZoom(float dt)
-    {
-      float scroll = Input.ScrollDelta().Y;
-
-      if (MathF.Abs(scroll) < 0.001f)
+      if (Input.IsKeyDown(KeyCode.E))
       {
-        return;
+        _newRotation *= Quaternion.Euler(Vector3.Down * rotationAmount);
       }
 
-      const float baseSpeed = 1.0f;
-      const float exponent = 0.25f;
+      if (Input.IsKeyDown(KeyCode.R))
+      {
+        _newZoom += zoomAmount;
+      }
 
-      float current = zoom.Target;
-      float step = baseSpeed * MathF.Pow(current, exponent);
-      float offset = scroll * step;
+      if (Input.IsKeyDown(KeyCode.F))
+      {
+        _newZoom -= zoomAmount;
+      }
 
-      float newZoom = Math.Clamp(current - offset, minZoom, maxZoom);
-      zoom.Set(newZoom);
-    }
-
-    private void UpdateCameraPosition()
-    {
-      float tiltRad = Angle.ToRadians(tilt.Value());
-      float orbitRad = Angle.ToRadians(orbitAngle);
-
-      float radius = MathF.Cos(tiltRad) * zoom.Value();
-      float height = MathF.Sin(tiltRad) * zoom.Value();
-
-      float x = MathF.Cos(orbitRad) * radius;
-      float z = MathF.Sin(orbitRad) * radius;
-
-      Vector3 pos = target + new Vector3(x, height, z);
-      transform.Position = pos;
-      transform.LookAt(target);
+      transform.Position = Vector3.Lerp(transform.Position, _newPosition, Time.DeltaTime * movementTime);
+      transform.Rotation = Quaternion.Slerp(transform.Rotation, _newRotation, Time.DeltaTime * movementTime);
+      Camera.Position = Vector3.Lerp(Camera.Position, _newZoom, Time.DeltaTime * movementTime);
     }
 
   } // class CameraController

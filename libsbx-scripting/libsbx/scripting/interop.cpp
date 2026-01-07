@@ -106,7 +106,7 @@ auto interop::transform_get_position(std::uint32_t node, math::vector3* position
   auto& scene = scenes_module.scene();
 
   if (!scene.is_valid(static_cast<scenes::node>(node))) {
-    utility::logger<"scripting">::error("Attempting to set position of invalid node");
+    utility::logger<"scripting">::error("Attempting to get position of invalid node");
 
     return;
   }
@@ -137,6 +137,44 @@ auto interop::transform_set_position(std::uint32_t node, math::vector3* position
   auto& transform = scene.get_component<scenes::transform>(static_cast<scenes::node>(node));
 
   transform.set_position(*position);
+}
+
+auto interop::transform_get_rotation(std::uint32_t node, math::quaternion* rotation) -> void {
+  auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
+  auto& scene = scenes_module.scene();
+
+  if (!scene.is_valid(static_cast<scenes::node>(node))) {
+    utility::logger<"scripting">::error("Attempting to get rotation of invalid node");
+
+    return;
+  }
+
+  auto& transform = scene.get_component<scenes::transform>(static_cast<scenes::node>(node));
+
+  *rotation = transform.rotation();
+}
+
+auto interop::transform_set_rotation(std::uint32_t node, math::quaternion* rotation) -> void {
+  auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
+  auto& scene = scenes_module.scene();
+
+  if (!scene.is_valid(static_cast<scenes::node>(node))) {
+    utility::logger<"scripting">::error("Attempting to set rotation of invalid node");
+
+    return;
+  }
+
+  if (!rotation) {
+    auto& tag = scene.get_component<scenes::tag>(static_cast<scenes::node>(node));
+
+    utility::logger<"scripting">::error("Attempting to set null rotation of node '{}'", tag);
+
+    return;
+  }
+
+  auto& transform = scene.get_component<scenes::transform>(static_cast<scenes::node>(node));
+
+  transform.set_rotation(*rotation);
 }
 
 auto interop::transform_get_right(std::uint32_t node, math::vector3* right) -> void {
@@ -237,6 +275,63 @@ auto interop::input_mouse_position(math::vector2* position) -> void {
 
 auto interop::input_scroll_delta(math::vector2* scroll_delta) -> void {
   *scroll_delta = devices::input::scroll_delta();
+}
+
+auto interop::camera_screen_point_to_ray(math::ray* ray, math::vector2* position) -> void {
+  auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
+  auto& scene = scenes_module.scene();
+
+  auto camera_node = scene.camera();
+
+  if (!ray) {
+    auto& tag = scene.get_component<scenes::tag>(static_cast<scenes::node>(camera_node));
+
+    utility::logger<"scripting">::error("Attempting to call ScreenPointToRay with null ray of node '{}'", tag);
+
+    return;
+  }
+
+  *ray = scene.screen_point_to_ray(*position);
+}
+
+auto interop::camera_get_position(math::vector3* position) -> void {
+  auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
+  auto& scene = scenes_module.scene();
+
+  auto camera_node = scene.camera();
+
+  auto& transform = scene.get_component<scenes::transform>(static_cast<scenes::node>(camera_node));
+
+  *position = transform.position();
+}
+
+auto interop::camera_set_position(math::vector3* position) -> void {
+  auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
+  auto& scene = scenes_module.scene();
+
+  auto camera_node = scene.camera();
+
+  if (!position) {
+    auto& tag = scene.get_component<scenes::tag>(static_cast<scenes::node>(camera_node));
+
+    utility::logger<"scripting">::error("Attempting to set null position of camera node '{}'", tag);
+
+    return;
+  }
+
+  auto& transform = scene.get_component<scenes::transform>(static_cast<scenes::node>(camera_node));
+
+  transform.set_position(*position);
+}
+
+auto interop::time_delta_time(std::float_t* delta_time) -> void {
+  if (!delta_time) {
+    utility::logger<"scripting">::error("Attempting to set null delta_time");
+
+    return;
+  }
+
+  *delta_time = core::engine::delta_time().value();
 }
 
 } // namespace sbx::scripting

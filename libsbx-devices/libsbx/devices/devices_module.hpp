@@ -49,7 +49,11 @@ public:
 
   devices_module()
   : _context{},
-    _window{window_create_info{"Demo", 1280, 720}} { }
+    _window{window_create_info{"Demo", 1280, 720}} {
+    devices::input::set_mouse_position_callback([&]() -> math::vector2 {
+      return _window.mouse_position();
+    });
+  }
 
   ~devices_module() override {
 

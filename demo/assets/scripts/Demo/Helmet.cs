@@ -31,7 +31,7 @@ namespace Demo
       tag.Value = value;
     }
     
-    public override void OnUpdate(float deltaTime)
+    public override void OnUpdate()
     {
       if (Input.IsKeyPressed(KeyCode.Space))
       {

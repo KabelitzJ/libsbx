@@ -37,61 +37,61 @@ namespace Sbx.Math
     : this(x, yz.X, yz.Y)
     { }
 
-    public Vector3(Vector2 xy, float z)
+    public Vector3(Vector2 xy, float z = 0.0f)
     : this(xy.X, xy.Y, z)
     { }
 
-    public static Vector3 operator *(Vector3 left, float scalar)
+    public static Vector3 operator*(Vector3 left, float scalar)
     {
       return new Vector3(left.X * scalar, left.Y * scalar, left.Z * scalar);
     }
 
-    public static Vector3 operator *(float scalar, Vector3 right)
+    public static Vector3 operator*(float scalar, Vector3 right)
     {
       return new Vector3(scalar * right.X, scalar * right.Y, scalar * right.Z);
     }
 
-    public static Vector3 operator *(Vector3 left, Vector3 right)
+    public static Vector3 operator*(Vector3 left, Vector3 right)
     {
       return new Vector3(left.X * right.X, left.Y * right.Y, left.Z * right.Z);
     }
 
-		public static Vector3 operator /(Vector3 left, Vector3 right) 
+		public static Vector3 operator/(Vector3 left, Vector3 right) 
     {
       return new Vector3(left.X / right.X, left.Y / right.Y, left.Z / right.Z);
     }
     
-		public static Vector3 operator /(Vector3 left, float scalar) 
+		public static Vector3 operator/(Vector3 left, float scalar) 
     {
       return new Vector3(left.X / scalar, left.Y / scalar, left.Z / scalar);
     }
     
-		public static Vector3 operator /(float scalar, Vector3 right) 
+		public static Vector3 operator/(float scalar, Vector3 right) 
     {
       return new Vector3(scalar/ right.X, scalar/ right.Y, scalar/ right.Z);
     }
     
-		public static Vector3 operator +(Vector3 left, Vector3 right) 
+		public static Vector3 operator+(Vector3 left, Vector3 right) 
     {
       return new Vector3(left.X + right.X, left.Y + right.Y, left.Z + right.Z);
     }
     
-		public static Vector3 operator +(Vector3 left, float right) 
+		public static Vector3 operator+(Vector3 left, float right) 
     {
       return new Vector3(left.X + right, left.Y + right, left.Z + right);
     }
     
-		public static Vector3 operator -(Vector3 left, Vector3 right) 
+		public static Vector3 operator-(Vector3 left, Vector3 right) 
     {
       return new Vector3(left.X - right.X, left.Y - right.Y, left.Z - right.Z);
     }
     
-		public static Vector3 operator -(Vector3 left, float right) 
+		public static Vector3 operator-(Vector3 left, float right) 
     {
       return new Vector3(left.X - right, left.Y - right, left.Z - right);
     }
 
-    public static Vector3 operator -(Vector3 vector)
+    public static Vector3 operator-(Vector3 vector)
     {
       return new Vector3(-vector.X, -vector.Y, -vector.Z);
     }
@@ -110,12 +110,12 @@ namespace Sbx.Math
       return (X, Y, Z).GetHashCode();
     }
 
-    public static bool operator ==(Vector3 left, Vector3 right)
+    public static bool operator==(Vector3 left, Vector3 right)
     {
       return left.Equals(right);
     }
 
-    public static bool operator !=(Vector3 left, Vector3 right)
+    public static bool operator!=(Vector3 left, Vector3 right)
     {
       return !(left == right);
     }
@@ -157,12 +157,17 @@ namespace Sbx.Math
 			return MathF.Sqrt(MathF.Pow(rhs.X - lhs.X, 2) + MathF.Pow(rhs.Y - lhs.Y, 2) + MathF.Pow(rhs.Z - lhs.Z, 2));
 		}
 
-    public static Vector3 Cross(Vector3 x, Vector3 y)
+    public static float Dot(Vector3 a, Vector3 b)
+    {
+      return a.X * b.X + a.Y * b.Y + a.Z * b.Z;
+    }
+
+    public static Vector3 Cross(Vector3 a, Vector3 b)
 		{
 			return new Vector3(
-				x.Y * y.Z - y.Y * x.Z,
-				x.Z * y.X - y.Z * x.X,
-				x.X * y.Y - y.X * x.Y
+				a.Y * b.Z - b.Y * a.Z,
+				a.Z * b.X - b.Z * a.X,
+				a.X * b.Y - b.X * a.Y
 			);
 		}
 
@@ -174,6 +179,13 @@ namespace Sbx.Math
     public static Vector3 Sin(Vector3 vector)
     {
       return Create(vector, MathF.Sin);
+    }
+
+    public static Vector3 Lerp(Vector3 a, Vector3 b, float t)
+    {
+      t = t < 0.0f ? 0.0f : (t > 1.0f ? 1.0f : t);
+
+      return a + (b - a) * t;
     }
 
     public override string ToString()

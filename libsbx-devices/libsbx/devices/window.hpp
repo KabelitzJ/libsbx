@@ -88,6 +88,10 @@ public:
 
   auto on_mouse_moved() -> signals::signal<const mouse_moved_event&>&;
 
+  auto mouse_position() const -> const math::vector2& {
+    return _last_mouse_position;
+  }
+
 private:
 
   auto _set_callbacks() -> void;

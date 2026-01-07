@@ -7,6 +7,8 @@ namespace Sbx.Math
   public struct Quaternion : IEquatable<Quaternion>
   {
 
+    public static readonly Quaternion Identity = new Quaternion(0, 0, 0, 1);
+
     public float X;
     public float Y;
     public float Z;
@@ -55,7 +57,7 @@ namespace Sbx.Math
       W = cos.X * cos.Y * cos.Z + sin.X * sin.Y * sin.Z;
     }
 
-		public static Vector3 operator *(Quaternion q, Vector3 v)
+		public static Vector3 operator*(Quaternion q, Vector3 v)
 		{
 			Vector3 qv = new Vector3(q.X, q.Y, q.Z);
 			Vector3 uv = Vector3.Cross(qv, v);
@@ -64,7 +66,7 @@ namespace Sbx.Math
 			return v + ((uv * q.W) + uuv) * 2.0f;
 		}
 
-		public static Quaternion operator *(Quaternion a, Quaternion b)
+		public static Quaternion operator*(Quaternion a, Quaternion b)
 		{
 			Quaternion result = new Quaternion();
 
@@ -75,6 +77,130 @@ namespace Sbx.Math
 
 			return result;
 		}
+
+    public static float Dot(Quaternion a, Quaternion b)
+    {
+      return a.X * b.X + a.Y * b.Y + a.Z * b.Z + a.W * b.W;
+    }
+
+    public static Quaternion Lerp(Quaternion a, Quaternion b, float t)
+    {
+      t = t < 0.0f ? 0.0f : (t > 1.0f ? 1.0f : t);
+
+      // Shortest path
+      float dot = Dot(a, b);
+
+      if (dot < 0.0f)
+      {
+        b.X = -b.X;
+        b.Y = -b.Y;
+        b.Z = -b.Z;
+        b.W = -b.W;
+      }
+
+      Quaternion result = new Quaternion(
+        a.X + (b.X - a.X) * t,
+        a.Y + (b.Y - a.Y) * t,
+        a.Z + (b.Z - a.Z) * t,
+        a.W + (b.W - a.W) * t
+      );
+
+      result.Normalize();
+
+      return result;
+    }
+
+    public static Quaternion Slerp(Quaternion a, Quaternion b, float t)
+    {
+      t = System.Math.Clamp(t, 0.0f, 1.0f);
+
+      float dot = Dot(a, b);
+
+      if (dot < 0.0f)
+      {
+        b.X = -b.X;
+        b.Y = -b.Y;
+        b.Z = -b.Z;
+        b.W = -b.W;
+        dot = -dot;
+      }
+
+      // If very close, fallback to lerp
+      if (dot > 0.9995f)
+      {
+        return Lerp(a, b, t);
+      }
+
+      float theta0 = MathF.Acos(dot);
+      float theta = theta0 * t;
+
+      float sinTheta = MathF.Sin(theta);
+      float sinTheta0 = MathF.Sin(theta0);
+
+      float s0 = MathF.Cos(theta) - dot * sinTheta / sinTheta0;
+      float s1 = sinTheta / sinTheta0;
+
+      return new Quaternion(
+        (a.X * s0) + (b.X * s1),
+        (a.Y * s0) + (b.Y * s1),
+        (a.Z * s0) + (b.Z * s1),
+        (a.W * s0) + (b.W * s1)
+      );
+    }
+
+    public static Quaternion Euler(Vector3 euler)
+    {
+      return Euler(euler.X, euler.Y, euler.Z);
+    }
+
+    public static Quaternion Euler(float pitch, float yaw, float roll)
+    {
+      float p = Angle.ToRadians(pitch * 0.5f);
+      float y = Angle.ToRadians(yaw * 0.5f);
+      float r = Angle.ToRadians(roll * 0.5f);
+
+      float sinp = MathF.Sin(p);
+      float cosp = MathF.Cos(p);
+      float siny = MathF.Sin(y);
+      float cosy = MathF.Cos(y);
+      float sinr = MathF.Sin(r);
+      float cosr = MathF.Cos(r);
+
+      return new Quaternion(
+        cosy * sinp * cosr + siny * cosp * sinr,
+        siny * cosp * cosr - cosy * sinp * sinr,
+        cosy * cosp * sinr - siny * sinp * cosr,
+        cosy * cosp * cosr + siny * sinp * sinr
+      );
+    }
+
+    public static Quaternion FromAxisAngle(Vector3 axis, float angle)
+    {
+      axis = axis.Normalized();
+
+      float half = angle * 0.5f;
+      float sin = MathF.Sin(half);
+
+      return new Quaternion(
+        axis.X * sin,
+        axis.Y * sin,
+        axis.Z * sin,
+        MathF.Cos(half)
+      );
+    }
+
+    public void Normalize()
+    {
+      float mag = MathF.Sqrt(X * X + Y * Y + Z * Z + W * W);
+
+      if (mag > 0.0f)
+      {
+        X /= mag;
+        Y /= mag;
+        Z /= mag;
+        W /= mag;
+      }
+    }
 
     public override int GetHashCode()
     {
@@ -91,12 +217,12 @@ namespace Sbx.Math
       return X == right.X && Y == right.Y && Z == right.Z && W == right.W;
     }
 
-		public static bool operator ==(Quaternion left, Quaternion right) 
+		public static bool operator==(Quaternion left, Quaternion right) 
     {
       return left.Equals(right);
     }
     
-		public static bool operator !=(Quaternion left, Quaternion right) 
+		public static bool operator!=(Quaternion left, Quaternion right) 
     {
       return !(left == right);
     }

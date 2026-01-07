@@ -17,6 +17,8 @@ namespace Sbx.Core
 
     internal static delegate* unmanaged<uint, Vector3*, void> Transform_GetPosition;
     internal static delegate* unmanaged<uint, Vector3*, void> Transform_SetPosition;
+    internal static delegate* unmanaged<uint, Quaternion*, void> Transform_GetRotation;
+    internal static delegate* unmanaged<uint, Quaternion*, void> Transform_SetRotation;
     internal static delegate* unmanaged<uint, Vector3*, void> Transform_GetRight;
     internal static delegate* unmanaged<uint, Vector3*, void> Transform_GetForward;
     internal static delegate* unmanaged<uint, Vector3*, void> Transform_GetUp;
@@ -30,6 +32,12 @@ namespace Sbx.Core
     internal static delegate* unmanaged<MouseButton, bool> Input_IsMouseButtonReleased;
     internal static delegate* unmanaged<Vector2*, void> Input_MousePosition;
     internal static delegate* unmanaged<Vector2*, void> Input_ScrollDelta;
+
+    internal static delegate* unmanaged<Ray*, Vector2*, void> Camera_ScreenPointToRay;
+    internal static delegate* unmanaged<Vector3*, void> Camera_GetPosition;
+    internal static delegate* unmanaged<Vector3*, void> Camera_SetPosition;
+
+    internal static delegate* unmanaged<float*, void> Time_DeltaTime;
 
   } // class InternalCalls
 

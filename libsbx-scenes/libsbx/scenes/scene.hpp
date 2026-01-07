@@ -102,6 +102,8 @@ public:
 
   auto world_scale(const node_type node) -> math::vector3;
 
+  auto reparent(const node_type node, const node_type parent) -> void;
+
   auto is_valid(const node_type node) const -> bool {
     return _registry.is_valid(node);
   }

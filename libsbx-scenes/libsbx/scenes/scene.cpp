@@ -235,6 +235,29 @@ auto scene::world_scale(const node_type node) -> math::vector3 {
 }
 
 
+auto scene::reparent(const node_type node, const node_type parent) -> void {
+  if (node == parent) {
+    return;
+  }
+
+  auto& node_relationship = get_component<scenes::relationship>(node);
+
+  if (node_relationship.parent() == parent) {
+    return;
+  }
+
+  auto& new_parent_relationship = get_component<scenes::relationship>(parent);
+
+  if (node_relationship.parent() != node_type::null) {
+    auto& old_parent_relationship = get_component<scenes::relationship>(node_relationship.parent());
+
+    old_parent_relationship.remove_child(node);
+  }
+
+  node_relationship.set_parent(parent);
+  new_parent_relationship.add_child(node);
+}
+
 auto scene::save(const std::filesystem::path& path)-> void {
   auto& assets_module = core::engine::get_module<assets::assets_module>();
 

@@ -461,18 +461,15 @@ application::application()
   // Camera
   auto camera_node = scene.camera();
 
+  auto camera_guide = scene.create_node("CameraGuide");
+
   auto& camera = scene.get_component<sbx::scenes::camera>(camera_node);
   auto& camera_transform = scene.get_component<sbx::scenes::transform>(camera_node);
 
   camera_transform.set_position(sbx::math::vector3{0, 50, 50});
   camera_transform.look_at(sbx::math::vector3::zero);
 
-  auto camera_guide = scene.create_node();
-
-  scene.get_component<sbx::scenes::relationship>(scene.root()).remove_child(camera_node);
-
-  scene.get_component<sbx::scenes::relationship>(camera_node).set_parent(camera_guide);
-  scene.get_component<sbx::scenes::relationship>(camera_guide).add_child(camera_node);
+  scene.reparent(camera_node, camera_guide);
 
   scene.add_component<sbx::scenes::skybox>(camera_node, scene.get_cube_image("skybox"), _brdf, _irradiance, _prefiltered);
 

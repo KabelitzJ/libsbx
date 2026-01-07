@@ -1,3 +1,4 @@
+using System.Data.Common;
 using Sbx.Core;
 using Sbx.Math;
 
@@ -48,6 +49,7 @@ namespace Demo
       if (Input.ScrollDelta().Y != 0)
       {
         _newZoom += Input.ScrollDelta().Y * zoomAmount;
+        Logger.Info("{0}", _newZoom);
       }
 
       if (Input.IsMouseButtonPressed(MouseButton.Left))

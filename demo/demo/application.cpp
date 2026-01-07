@@ -461,19 +461,9 @@ application::application()
   // Camera
   auto camera_node = scene.camera();
 
-  auto camera_guide = scene.create_node("CameraGuide");
-
-  auto& camera = scene.get_component<sbx::scenes::camera>(camera_node);
-  auto& camera_transform = scene.get_component<sbx::scenes::transform>(camera_node);
-
-  camera_transform.set_position(sbx::math::vector3{0, 50, 50});
-  camera_transform.look_at(sbx::math::vector3::zero);
-
-  scene.reparent(camera_node, camera_guide);
-
   scene.add_component<sbx::scenes::skybox>(camera_node, scene.get_cube_image("skybox"), _brdf, _irradiance, _prefiltered);
 
-  auto camera_controller_script = scripting_module.instantiate(camera_guide, "build/x86_64/gcc/debug/_dotnet/Demo.dll", "Demo.CameraController");
+  auto camera_controller_script = scripting_module.instantiate(camera_node, "build/x86_64/gcc/debug/_dotnet/Demo.dll", "Demo.CameraController_OLD");
 
   if (auto hide_window = cli.argument<bool>("hide-window"); !hide_window) {
     window.show();

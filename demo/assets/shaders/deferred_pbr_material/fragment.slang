@@ -230,9 +230,7 @@ opaque_fs_out mask_main(fs_in input) {
 
   float4 albedo = get_albedo<mask_alpha_policy>(uv, material_data);
 
-  // if (albedo.a < material_data.alpha_cutoff) {
-  //   discard;
-  // }
+  clip(albedo.a - material_data.alpha_cutoff);
 
   output.albedo = albedo;
   output.position = float4(input.position, 1.0);

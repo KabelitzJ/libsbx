@@ -114,19 +114,36 @@ auto scene::create_node(const std::string& tag, const scenes::transform& transfo
 }
 
 auto scene::destroy_node(const node_type node) -> void {
-  // [TODO] KAJ 2025-05-10 : Fix this using heirarchy component and a stack
-  const auto& id = get_component<scenes::id>(node);
-  const auto& relationship = get_component<scenes::relationship>(node);
+  auto stack = std::vector<std::pair<node_type, bool>>{};
+  stack.reserve(32u);
 
-  for (auto& child : relationship.children()) {
-    if (child != node::null) {
-      destroy_node(child);
+  stack.emplace_back(node, false);
+
+  while (!stack.empty()) {
+    auto [current_node, visited] = stack.back();
+    stack.pop_back();
+
+    if (current_node == node_type::null) {
+      continue;
+    }
+
+    if (!visited) {
+      stack.emplace_back(current_node, true);
+
+      const auto& relationship = get_component<scenes::relationship>(current_node);
+
+      for (auto child : relationship.children()) {
+        if (child != node::null) {
+          stack.emplace_back(child, false);
+        }
+      }
+    } else {
+      const auto& id = get_component<scenes::id>(current_node);
+
+      _nodes.erase(id);
+      _registry.destroy(current_node);
     }
   }
-
-  _nodes.erase(id);
-
-  _registry.destroy(node);
 }
 
 auto scene::_ensure_world(const node_type node) -> const scenes::global_transform& {
@@ -234,23 +251,7 @@ auto scene::world_scale(const node_type node) -> math::vector3 {
 
 }
 
-auto _debug_scene(const sbx::scenes::node node) -> void {
-  auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
-  auto& scene = scenes_module.scene();
-
-  const auto& relationship = scene.get_component<sbx::scenes::relationship>(node);
-  const auto& tag = scene.get_component<sbx::scenes::tag>(node);
-
-  sbx::utility::logger<"demo">::info("Tag: {}", tag);
-
-  for (const auto child : relationship.children()) {
-    _debug_scene(child);
-  }
-}
-
 auto scene::make_child_of(const node_type node, const node_type parent) -> void {
-  _debug_scene(_root);
-
   if (node == parent) {
     return;
   }
@@ -271,8 +272,6 @@ auto scene::make_child_of(const node_type node, const node_type parent) -> void 
 
   node_relationship.set_parent(parent);
   new_parent_relationship.add_child(node);
-
-  _debug_scene(_root);
 }
 
 auto scene::save(const std::filesystem::path& path)-> void {

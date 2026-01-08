@@ -29,6 +29,8 @@
 #include <libsbx/animations/animation.hpp>
 #include <libsbx/animations/animator.hpp>
 
+#include <libsbx/sprites/sprite_subrenderer.hpp>
+
 namespace demo {
 
 application::application()
@@ -179,6 +181,17 @@ application::application()
   auto demo_script = scripting_module.instantiate(_helmet, "build/x86_64/gcc/debug/_dotnet/Demo.dll", "Demo.Helmet");
 
   demo_script.invoke("SayHello");
+
+  auto sprite = scene.create_node("Sprite");
+
+  auto& sprite_transform = scene.get_component<sbx::scenes::transform>(sprite);
+  sprite_transform.set_position(sbx::math::vector3{0, 0, 0});
+  sprite_transform.set_rotation(sbx::math::vector3::right, sbx::math::degree{90});
+
+  auto& sprite_sprite = scene.add_component<sbx::sprites::sprite>(sprite);
+  sprite_sprite.space = sbx::sprites::sprite_space::world;
+  sprite_sprite.image = scene.get_image("tree_1_leaves1");
+  sprite_sprite.color = sbx::math::color{1.0f, 1.0f, 1.0f, 1.0f};
 
   // Cube
 

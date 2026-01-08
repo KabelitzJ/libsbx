@@ -52,6 +52,7 @@ vs_out main(vs_in input) {
   output.tangent = float4(normalize(mul(transform_data.normal, float4(in_tangent.xyz, 0.0)).xyz), in_tangent.w);
   output.uv = in_uv;
   output.instance_index = global_instance;
+
   output.sv_position = mul(scene.projection, mul(scene.view, float4(world_position, 1.0)));
 
   return output;

@@ -62,7 +62,7 @@ scripting_module::scripting_module() {
 
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Camera_ScreenPointToRay", reinterpret_cast<void*>(&interop::camera_screen_point_to_ray));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Camera_GetPosition", reinterpret_cast<void*>(&interop::camera_get_position));
-  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Camera_SetPosition", reinterpret_cast<void*>(&interop::camera_get_position));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Camera_SetPosition", reinterpret_cast<void*>(&interop::camera_set_position));
 
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Time_DeltaTime", reinterpret_cast<void*>(&interop::time_delta_time));
 

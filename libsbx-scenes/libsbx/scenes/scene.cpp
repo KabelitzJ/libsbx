@@ -235,7 +235,7 @@ auto scene::world_scale(const node_type node) -> math::vector3 {
 }
 
 
-auto scene::reparent(const node_type node, const node_type parent) -> void {
+auto scene::make_child_of(const node_type node, const node_type parent) -> void {
   if (node == parent) {
     return;
   }

@@ -171,6 +171,20 @@ namespace Sbx.Math
 			);
 		}
 
+    public static Vector3 Abs(Vector3 vector)
+    {
+      return Create(vector, MathF.Abs);
+    }
+
+    public static Vector3 Clamp(Vector3 vector, Vector3 min, Vector3 max)
+    {
+      return new Vector3(
+        System.Math.Clamp(vector.X, min.X, max.X),
+        System.Math.Clamp(vector.Y, min.Y, max.Y),
+        System.Math.Clamp(vector.Z, min.Z, max.Z)
+      );
+    }
+
     public static Vector3 Cos(Vector3 vector)
     {
       return Create(vector, MathF.Cos);

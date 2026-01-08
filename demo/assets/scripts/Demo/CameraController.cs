@@ -8,17 +8,19 @@ namespace Demo
   {
 
     public float normalSpeed = 0.5f;
-    public float fastSpeed = 3.0f;
+    public float fastSpeed = 2.0f;
     private float _movementSpeed;
 
     public float movementTime = 5.0f;
 
     private Vector3 _newPosition;
 
-    public float rotationAmount = 1.0f;
+    public float rotationAmount = 0.8f;
     private Quaternion _newRotation;
 
-    public Vector3 zoomAmount = new Vector3(0, -10.0f, 10.0f);
+    public Vector3 zoomAmount = new Vector3(0, -10.0f, -10.0f);
+    public Vector3 minZoom = new Vector3(0, 10.0f, 10.0f);
+    public Vector3 maxZoom = new Vector3(0, 100.0f, 100.0f);
     private Vector3 _newZoom;
 
     private Vector3 _dragStartPosition;
@@ -49,7 +51,7 @@ namespace Demo
       if (Input.ScrollDelta().Y != 0)
       {
         _newZoom += Input.ScrollDelta().Y * zoomAmount;
-        Logger.Info("{0}", _newZoom);
+        _newZoom = Vector3.Clamp(_newZoom, minZoom, maxZoom);
       }
 
       if (Input.IsMouseButtonPressed(MouseButton.Left))
@@ -58,9 +60,14 @@ namespace Demo
 
         Ray ray = Camera.ScreenPointToRay(Input.MousePosition());
 
-        if (plane.Raycast(ray, out float entry))
+        bool result = plane.Raycast(ray, out float t);
+
+        Logger.Debug("Raycast result: {0} t={1}", result, t);
+
+        if (result)
         {
-          _dragStartPosition = ray.GetPoint(entry);
+          _dragStartPosition = ray.GetPoint(t);
+          Logger.Debug("Drag start position: {0}", _dragStartPosition);
         }
       }
 
@@ -75,6 +82,9 @@ namespace Demo
           _dragCurrentPosition = ray.GetPoint(entry);
 
           _newPosition = transform.Position + _dragStartPosition - _dragCurrentPosition;
+
+          Logger.Debug("Drag current position: {0}", _dragCurrentPosition);
+          Logger.Debug("New camera position: {0}", _newPosition);
         }
       }
 
@@ -127,16 +137,6 @@ namespace Demo
       if (Input.IsKeyDown(KeyCode.E))
       {
         _newRotation *= Quaternion.Euler(Vector3.Down * rotationAmount);
-      }
-
-      if (Input.IsKeyDown(KeyCode.R))
-      {
-        _newZoom += zoomAmount;
-      }
-
-      if (Input.IsKeyDown(KeyCode.F))
-      {
-        _newZoom -= zoomAmount;
       }
 
       transform.Position = Vector3.Lerp(transform.Position, _newPosition, Time.DeltaTime * movementTime);

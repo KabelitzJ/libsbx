@@ -185,8 +185,8 @@ application::application()
   auto sprite = scene.create_node("Sprite");
 
   auto& sprite_transform = scene.get_component<sbx::scenes::transform>(sprite);
-  sprite_transform.set_position(sbx::math::vector3{0, 0, 0});
-  sprite_transform.set_rotation(sbx::math::vector3::right, sbx::math::degree{90});
+  sprite_transform.set_position(sbx::math::vector3{0, 10, 0});
+  // sprite_transform.set_rotation(sbx::math::vector3::right, sbx::math::degree{90});
 
   auto& sprite_sprite = scene.add_component<sbx::sprites::sprite>(sprite);
   sprite_sprite.space = sbx::sprites::sprite_space::world;

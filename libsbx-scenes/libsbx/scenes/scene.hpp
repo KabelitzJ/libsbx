@@ -345,15 +345,12 @@ public:
 
     _uniform_handler.push("viewport", graphics_module.viewport());
 
-    // utility::logger<"scenes">::debug("viewport: {}", graphics_module.viewport());
-    // utility::logger<"scenes">::debug("camera_near: {}", camera.near_plane());
-    // utility::logger<"scenes">::debug("camera_far: {}", camera.far_plane());
-    // utility::logger<"scenes">::debug("camera_fov_radians: {}", camera.field_of_view().to_radians().value());
-
     _uniform_handler.push("camera_position", world_position(_camera));
     _uniform_handler.push("camera_near", camera.near_plane());
     _uniform_handler.push("camera_far", camera.far_plane());
     _uniform_handler.push("camera_fov_radians", camera.field_of_view().to_radians().value());
+    _uniform_handler.push("camera_right", camera_transform.right());
+    _uniform_handler.push("camera_up", camera_transform.up());
 
     _uniform_handler.push("light_space", light_space());
 

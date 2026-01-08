@@ -44,7 +44,7 @@
 
 namespace sbx::sprites {
 
-enum class sprite_space : std::uint8_t {
+enum class sprite_space : std::uint32_t {
   screen_overlay,
   screen_camera,
   world
@@ -119,7 +119,7 @@ public:
     auto sprite_query = scene.query<const sprites::sprite>();
 
     for (auto&& [node, sprite] : sprite_query.each()) {
-      sprites.emplace_back(scene.world_transform(node), sprite.color, math::vector2{10, 10}, _images.push_back(sprite.image));
+      sprites.emplace_back(scene.world_transform(node), sprite.color, math::vector2{10, 10}, utility::to_underlying(sprite.space), _images.push_back(sprite.image));
     }
 
     const auto required_size = static_cast<std::uint32_t>(sprites.size() * sizeof(sprite_subrenderer::sprite_data));
@@ -152,6 +152,7 @@ private:
     math::matrix4x4 model;
     math::color color;
     math::vector2 size;
+    std::uint32_t space;
     std::uint32_t image_index;
   }; // struct sprite_data
 

@@ -144,18 +144,18 @@ application::application()
   for (auto i = 0; i < light_count; ++i) {
     auto angle = sbx::math::radian{2.0f * sbx::math::pi / static_cast<std::float_t>(light_count) * static_cast<std::float_t>(i)};
 
-    const auto material_name = fmt::format("Light{}", i);
+    // const auto material_name = fmt::format("Light{}", i);
     const auto color = sbx::math::random_color(0.8f);
 
-    auto& material = scene.add_material<sbx::models::material>(material_name);
-    material.base_color = color;
-    material.alpha = sbx::models::alpha_mode::blend;
+    // auto& material = scene.add_material<sbx::models::material>(material_name);
+    // material.base_color = color;
+    // material.alpha = sbx::models::alpha_mode::blend;
 
     auto light = scene.create_child_node(_light_center, fmt::format("Light{}", i), sbx::scenes::transform{sbx::math::vector3{radius * sbx::math::cos(angle), 0.0f, radius * sbx::math::sin(angle)}});
 
     scene.add_component<sbx::scenes::point_light>(light, color, 50.0f);
 
-    scene.add_component<sbx::scenes::static_mesh>(light, scene.get_mesh("sphere"), scene.get_material(material_name));
+    // scene.add_component<sbx::scenes::static_mesh>(light, scene.get_mesh("sphere"), scene.get_material(material_name));
 
     auto& light_transform = scene.get_component<sbx::scenes::transform>(light);
   }
@@ -182,16 +182,17 @@ application::application()
 
   demo_script.invoke("SayHello");
 
-  auto sprite = scene.create_node("Sprite");
+  auto sprite = scene.create_child_node(_helmet, "Sprite");
 
   auto& sprite_transform = scene.get_component<sbx::scenes::transform>(sprite);
-  sprite_transform.set_position(sbx::math::vector3{0, 10, 0});
-  // sprite_transform.set_rotation(sbx::math::vector3::right, sbx::math::degree{90});
+  sprite_transform.set_position(sbx::math::vector3{0, 2, 0});
+  sprite_transform.set_scale(sbx::math::vector3{0.1f, 0.25f, 0.1f});
+  sprite_transform.set_rotation(sbx::math::vector3::right, sbx::math::degree{90});
 
   auto& sprite_sprite = scene.add_component<sbx::sprites::sprite>(sprite);
-  sprite_sprite.space = sbx::sprites::sprite_space::world;
-  sprite_sprite.image = scene.get_image("tree_1_leaves1");
-  sprite_sprite.color = sbx::math::color{1.0f, 1.0f, 1.0f, 1.0f};
+  sprite_sprite.space = sbx::sprites::sprite_space::screen_camera;
+  sprite_sprite.image = scene.get_image("helmet_albedo");
+  sprite_sprite.color = sbx::math::color::white();
 
   // Cube
 

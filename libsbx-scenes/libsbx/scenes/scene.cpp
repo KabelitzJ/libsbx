@@ -234,8 +234,23 @@ auto scene::world_scale(const node_type node) -> math::vector3 {
 
 }
 
+auto _debug_scene(const sbx::scenes::node node) -> void {
+  auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
+  auto& scene = scenes_module.scene();
+
+  const auto& relationship = scene.get_component<sbx::scenes::relationship>(node);
+  const auto& tag = scene.get_component<sbx::scenes::tag>(node);
+
+  sbx::utility::logger<"demo">::info("Tag: {}", tag);
+
+  for (const auto child : relationship.children()) {
+    _debug_scene(child);
+  }
+}
 
 auto scene::make_child_of(const node_type node, const node_type parent) -> void {
+  _debug_scene(_root);
+
   if (node == parent) {
     return;
   }
@@ -256,6 +271,8 @@ auto scene::make_child_of(const node_type node, const node_type parent) -> void 
 
   node_relationship.set_parent(parent);
   new_parent_relationship.add_child(node);
+
+  _debug_scene(_root);
 }
 
 auto scene::save(const std::filesystem::path& path)-> void {

@@ -364,23 +364,31 @@ public:
   }
 
   auto screen_point_to_ray(const math::vector2& position) -> math::ray {
+    auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
+
+    const auto& viewport = graphics_module.viewport();
+
     const auto& camera_transform = get_component<scenes::transform>(_camera); 
     const auto& camera = get_component<scenes::camera>(_camera);
 
-    const auto ndc = math::vector3{
-      position.x() * 2.0f - 1.0f,
-      1.0f - position.y() * 2.0f,
-      1.0f
-    };
-
+    const auto inv_view = world_transform(_camera);
     const auto inv_projection = math::matrix4x4::inverted(camera.projection());
-    const auto view_dir4 = inv_projection * math::vector4{ndc.x(), ndc.y(), -1.0f, 1.0f};
-    const auto view_dir = math::vector3::normalized(math::vector3{view_dir4.x(), view_dir4.y(), view_dir4.z()});
 
-    const auto camera_matrix = world_transform(_camera);
-    const auto ray_direction = math::vector3::normalized(camera_matrix * math::vector4{view_dir.x(), view_dir.y(), view_dir.z(), 0.0f});
+    const auto x = (2.0f * position.x()) / viewport.x() - 1.0f;
+    const auto y = 1.0f - (2.0f * position.y()) / viewport.y();
+    const auto z = 1.0f;
 
-    return math::ray{camera_transform.position(), ray_direction};
+    const auto ray_nds = math::vector3{x, y, z};
+
+    const auto ray_clip = math::vector4{ray_nds.x(), ray_nds.y(), -1.0f, 1.0f};
+
+    auto ray_eye = inv_projection * ray_clip;
+    ray_eye = math::vector4(ray_eye.x(), ray_eye.y(), -1.0f, 0.0f);
+
+    auto ray_world = math::vector3{inv_view * ray_eye};
+    ray_world = math::vector3::normalized(ray_world);
+
+    return math::ray{camera_transform.position(), ray_world};
   }
 
 private:

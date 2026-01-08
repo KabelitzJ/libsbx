@@ -62,12 +62,9 @@ namespace Demo
 
         bool result = plane.Raycast(ray, out float t);
 
-        Logger.Debug("Raycast result: {0} t={1}", result, t);
-
         if (result)
         {
           _dragStartPosition = ray.GetPoint(t);
-          Logger.Debug("Drag start position: {0}", _dragStartPosition);
         }
       }
 
@@ -82,9 +79,6 @@ namespace Demo
           _dragCurrentPosition = ray.GetPoint(entry);
 
           _newPosition = transform.Position + _dragStartPosition - _dragCurrentPosition;
-
-          Logger.Debug("Drag current position: {0}", _dragCurrentPosition);
-          Logger.Debug("New camera position: {0}", _newPosition);
         }
       }
 

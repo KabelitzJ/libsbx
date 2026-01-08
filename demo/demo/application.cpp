@@ -31,6 +31,20 @@
 
 namespace demo {
 
+auto _debug_scene(const sbx::scenes::node node) -> void {
+  auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
+  auto& scene = scenes_module.scene();
+
+  const auto& relationship = scene.get_component<sbx::scenes::relationship>(node);
+  const auto& tag = scene.get_component<sbx::scenes::tag>(node);
+
+  sbx::utility::logger<"demo">::info("Tag: {}", tag);
+
+  for (const auto child : relationship.children()) {
+    _debug_scene(child);
+  }
+}
+
 application::application()
 : sbx::core::application{},
   _rotation{sbx::math::degree{0}} { 
@@ -475,6 +489,8 @@ application::application()
   if (auto hide_window = cli.argument<bool>("hide-window"); !hide_window) {
     window.show();
   }
+
+  _debug_scene(scene.root());
 
   sbx::utility::logger<"demo">::info("string id: {}", sbx::utility::string_id<"foobar">());
 }

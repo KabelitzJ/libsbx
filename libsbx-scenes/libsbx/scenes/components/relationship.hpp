@@ -38,7 +38,7 @@ public:
   }
 
   auto remove_child(const node child) -> void {
-    std::ranges::remove(_children, child);
+    std::erase(_children, child);
   }
 
 private:

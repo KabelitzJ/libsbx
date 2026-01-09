@@ -85,12 +85,28 @@ private:
       const auto angular_acc = rigidbody.inverse_inertia_tensor_world() * rigidbody.torque();
       rigidbody.add_angular_velocity(angular_acc * dt);
 
-      // --- STABILIZATION: Damping ---
-      // Bleed out energy to prevent micro-jitters from accumulating
-      const float linear_damping = 0.98f;
-      const float angular_damping = 0.95f; 
+      const auto max_angular_velocity = 12.0f;
+      const auto angular_vel = rigidbody.angular_velocity();
+
+      if (angular_vel.length_squared() > max_angular_velocity * max_angular_velocity) {
+        rigidbody.set_angular_velocity(math::vector3::normalized(angular_vel) * max_angular_velocity);
+      }
+
+      const auto linear_damping = 0.98f;
+      const auto angular_damping = 0.95f; 
+
       rigidbody.set_velocity(rigidbody.velocity() * linear_damping);
       rigidbody.set_angular_velocity(rigidbody.angular_velocity() * angular_damping);
+
+      const auto sleep_threshold = 0.001f;
+
+      if (rigidbody.velocity().length_squared() < sleep_threshold) {
+        rigidbody.set_velocity(math::vector3::zero);
+      }
+
+      if (rigidbody.angular_velocity().length_squared() < sleep_threshold) {
+        rigidbody.set_angular_velocity(math::vector3::zero);
+      }
 
       rigidbody.clear_dynamic_forces();
       rigidbody.clear_torque();
@@ -201,7 +217,7 @@ private:
 
     const auto max_penetration_vel = 2.0f; 
     const auto slop = 0.01f;
-    const auto baumgarte = 0.15f; // Slightly lower for stability
+    const auto baumgarte = 0.15f;
 
     for (const auto& [nodes, manifold] : collisions) {
       auto& rb_a = scene.get_component<physics::rigidbody>(nodes.first);
@@ -251,7 +267,6 @@ private:
         const auto v_total_b = rb_b.velocity() + math::vector3::cross(rb_b.angular_velocity(), c.r_b);
         const auto rel_vel = v_total_b - v_total_a;
         
-        // --- NORMAL IMPULSE ---
         const float vn = math::vector3::dot(rel_vel, c.normal);
         float lambda_n = (-vn + c.bias) / c.effective_mass;
 
@@ -262,8 +277,6 @@ private:
         rb_a.apply_impulse_at(-c.normal * delta_n, c.r_a);
         rb_b.apply_impulse_at( c.normal * delta_n, c.r_b);
 
-        // --- FRICTION IMPULSE (Tangent) ---
-        // Recalculate velocity after normal impulse
         const auto v_post_a = rb_a.velocity() + math::vector3::cross(rb_a.angular_velocity(), c.r_a);
         const auto v_post_b = rb_b.velocity() + math::vector3::cross(rb_b.angular_velocity(), c.r_b);
         const auto rel_vel_f = v_post_b - v_post_a;
@@ -274,10 +287,8 @@ private:
           tangent = math::vector3::normalized(tangent);
           float vt = math::vector3::dot(rel_vel_f, tangent);
           
-          // Friction lambda (simple friction uses same effective mass or approximated)
           float lambda_t = -vt / c.effective_mass;
 
-          // Coulomb Friction: Friction <= Normal Force * mu
           const float mu = 0.4f; 
           float max_f = c.accumulated_impulse * mu;
           lambda_t = std::clamp(lambda_t, -max_f, max_f);

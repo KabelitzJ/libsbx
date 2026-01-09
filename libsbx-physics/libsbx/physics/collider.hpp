@@ -62,18 +62,19 @@ struct collision_manifold {
 auto gjk(const collider_data& first, const collider_data& second) -> std::optional<collision_manifold>;
 
 inline auto local_inverse_inertia(const units::kilogram& mass, const box& box) -> math::matrix3x3 {
-  const float m = std::max(mass.value(), 0.0001f);
-
+  const auto m = std::max(mass.value(), 0.0001f);
   const auto size = box.half_extents * 2.0f;
 
-  const float w = size.x();
-  const float h = size.y();
-  const float d = size.z();
+  const auto x2 = size.x() * size.x();
+  const auto y2 = size.y() * size.y();
+  const auto z2 = size.z() * size.z();
+
+  const auto inv_mass_12 = 12.0f / m;
 
   return math::matrix3x3{
-    12.0f / (m * (h * h + d * d)), 0.0f, 0.0f,
-    0.0f, 12.0f / (m * (w * w + d * d)), 0.0f,
-    0.0f, 0.0f, 12.0f / (m * (w * w + h * h))
+    inv_mass_12 / (y2 + z2), 0.0f, 0.0f,
+    0.0f, inv_mass_12 / (x2 + z2), 0.0f,
+    0.0f, 0.0f, inv_mass_12 / (x2 + y2)
   };
 }
 

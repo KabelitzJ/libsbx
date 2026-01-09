@@ -78,6 +78,23 @@ public:
     return basic_quaternion{-quaternion.complex(), quaternion.scalar()};
   }
 
+  [[nodiscard]] static constexpr auto inverted(const basic_quaternion& quaternion) noexcept -> basic_quaternion {
+    const auto length_squared = dot(quaternion, quaternion);
+
+    if (length_squared < math::epsilonf) {
+      return basic_quaternion::identity;
+    }
+    
+    const auto inverse_length_squared = 1.0f / length_squared;
+
+    return basic_quaternion{
+      -quaternion.x() * inverse_length_squared,
+      -quaternion.y() * inverse_length_squared,
+      -quaternion.z() * inverse_length_squared,
+       quaternion.w() * inverse_length_squared
+    };
+  }
+
   [[nodiscard]] static constexpr auto normalized(const basic_quaternion& quaternion) noexcept -> basic_quaternion {
     const auto length = quaternion.length();
 
@@ -144,6 +161,12 @@ public:
 
   template<floating_point Other = value_type>
   constexpr auto operator*=(Other value) noexcept -> basic_quaternion&;
+
+  constexpr auto operator*(const vector_type& vector) const noexcept -> vector_type {
+    const auto t = vector_type::cross(_complex, vector) * 2.0f;
+
+    return vector + (t * _scalar) + vector3::cross(_complex, t);
+  }
 
   template<floating_point Other = value_type>
   constexpr auto operator*=(const basic_quaternion<Other>& other) noexcept -> basic_quaternion&;

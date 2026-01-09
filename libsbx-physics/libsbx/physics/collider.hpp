@@ -39,9 +39,9 @@ using collider = std::variant<sphere, cylinder, capsule, box>;
 auto bounding_volume(const collider& collider, const math::vector3& position) -> math::volume;
 
 struct collider_data {
-  const math::vector3& position;
+  math::vector3 position;
   math::matrix4x4 rotation_scale;
-  const physics::collider& collider;
+  physics::collider collider;
 }; // struct collider_data
 
 auto find_furthest_point(const collider_data& collider, const math::vector3& direction) -> math::vector3;

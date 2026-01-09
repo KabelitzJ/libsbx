@@ -4,6 +4,9 @@
 #include <range/v3/all.hpp>
 
 #include <libsbx/utility/enum.hpp>
+#include <libsbx/utility/iterator.hpp>
+
+#include <libsbx/memory/concepts.hpp>
 
 #include <libsbx/math/vector2.hpp>
 #include <libsbx/math/vector3.hpp>
@@ -22,8 +25,10 @@ class octree {
   inline static constexpr auto depth = Depth;
 
   struct node {
-    
+
     using id = std::uint32_t;
+
+    inline static constexpr auto children_count = std::size_t{8u};
 
     struct value_type {
       Type value;
@@ -33,7 +38,8 @@ class octree {
     inline constexpr static auto null = static_cast<id>(-1);
 
     node()
-    : children{null, null, null, null, null, null, null, null} { }
+    : values{utility::make_reserved_vector<value_type>(threshold)},
+      children{null, null, null, null, null, null, null, null} { }
 
     auto is_leaf() const noexcept -> bool {
       return children[0u] == null;
@@ -113,30 +119,35 @@ class octree {
     }
 
     std::vector<value_type> values;
-    std::array<id, 8u> children;
+    std::array<id, children_count> children;
   
   }; // struct node
 
 public:
 
-  struct intersection {
-    Type first;
-    Type second;
-  }; // struct intersection
-
-  struct inside_result {
-    const Type& value;
-    const math::volume& bounds;
-  }; // struct inside_result
-
   using value_type = Type;
   using reference = value_type&;
   using const_reference = const value_type&;
 
-  octree(const math::volume& bounds) noexcept
+  struct intersection {
+    value_type first;
+    value_type second;
+  }; // struct intersection
+
+  struct inside_result {
+    value_type value;
+    const math::volume& bounds;
+  }; // struct inside_result
+
+  octree(const math::volume& bounds, const std::size_t estimated_elements) noexcept
   : _bounds{bounds},
     _root{0u} {
+    _nodes.reserve(estimated_elements / 2);
     _nodes.push_back(node{});
+  }
+
+  ~octree() {
+
   }
 
   auto insert(const value_type& value, const math::volume& bounds) noexcept -> void {
@@ -144,9 +155,11 @@ public:
   }
 
   auto intersections() -> std::vector<intersection> {
-    auto intersections = std::vector<intersection>{};
+    auto intersections = utility::make_reserved_vector<intersection>(_nodes.size());
 
     _intersections(_root, _bounds, intersections);
+
+    intersections.shrink_to_fit();
 
     return intersections;
   }
@@ -160,7 +173,10 @@ public:
   }
 
   auto clear() -> void {
-    _nodes.clear();
+    _nodes.resize(1); 
+
+    _nodes[0].values.clear();
+    _nodes[0].children.fill(node::null);
   }
 
   template<typename Fn>
@@ -195,28 +211,27 @@ private:
   }
 
   auto _split(node::id node_id, const math::volume& bounds) -> void {
-    const auto current_size = _nodes.size();
+    const auto first_child_id = static_cast<node::id>(_nodes.size());
+    
+    _nodes.resize(_nodes.size() + node::children_count);
 
-    for (auto&& [i, child] : ranges::views::enumerate(_nodes[node_id].children)) {
-      child = static_cast<node::id>(current_size + i);
+    for (auto i = 0u; i < node::children_count; ++i) {
+      _nodes[node_id].children[i] = first_child_id + i;
     }
 
-    _nodes.insert(_nodes.end(), _nodes[node_id].children.size(), node{});
+    auto current_node_values = std::move(_nodes[node_id].values);
 
-    auto new_values = std::vector<typename node::value_type>{};
+    _nodes[node_id].values.clear();
 
-    for (const auto& [value, child_bounds] : _nodes[node_id].values) {
-      const auto quadrant = node::find_volume(bounds, child_bounds);
+    for (auto&& value : current_node_values) {
+      const auto quadrant = node::find_volume(bounds, value.bounds);
 
       if (quadrant) {
-        const auto child_id = _nodes[node_id].child_at(*quadrant);
-        _nodes[child_id].values.push_back({value, child_bounds});
+        _nodes[first_child_id + *quadrant].values.push_back(std::move(value));
       } else {
-        new_values.push_back({value, child_bounds});
+        _nodes[node_id].values.push_back(std::move(value));
       }
     }
-
-    _nodes[node_id].values = std::move(new_values);
   }
 
   auto _intersections(node::id node_id, const math::volume& bounds, std::vector<intersection>& intersections) -> void {

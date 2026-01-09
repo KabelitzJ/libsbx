@@ -26,8 +26,9 @@ public:
   auto inverse_mass() const -> std::float_t;
   auto set_mass(const units::kilogram& mass) -> void;
   auto is_static() const -> bool;
+  auto make_static() -> void;
 
-  auto apply_acceleration(const math::vector3& acceleration) -> void;
+  auto add_acceleration(const math::vector3& acceleration) -> void;
   auto add_constant_acceleration(const math::vector3& acceleration) -> void;
   auto set_constant_acceleration(const math::vector3& acceleration) -> void;
   auto clear_constant_forces() -> void;

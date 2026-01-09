@@ -42,7 +42,11 @@ auto rigidbody::is_static() const -> bool {
   return _mass == units::kilogram{0.0f};
 }
 
-auto rigidbody::apply_acceleration(const math::vector3& acceleration) -> void {
+auto rigidbody::make_static() -> void {
+  set_mass(units::kilogram{0.0f});
+}
+
+auto rigidbody::add_acceleration(const math::vector3& acceleration) -> void {
   _dynamic_forces += acceleration * _mass;
 }
 

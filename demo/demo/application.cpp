@@ -196,26 +196,26 @@ application::application()
 
   // Cube
 
-  auto cube = scene.create_node("Cube");
+  // auto cube = scene.create_node("Cube");
 
-  auto& cube_material = scene.add_material<sbx::models::material>("cube");
-  cube_material.albedo.image = scene.get_image("helmet_albedo");
-  cube_material.normal.image = scene.get_image("helmet_normal");
-  cube_material.mrao.image = scene.get_image("helmet_mrao");
-  cube_material.emissive.image = scene.get_image("helmet_emissive");
-  cube_material.emissive_factor = sbx::math::vector4{1, 1, 1, 0};
+  // auto& cube_material = scene.add_material<sbx::models::material>("cube");
+  // cube_material.albedo.image = scene.get_image("helmet_albedo");
+  // cube_material.normal.image = scene.get_image("helmet_normal");
+  // cube_material.mrao.image = scene.get_image("helmet_mrao");
+  // cube_material.emissive.image = scene.get_image("helmet_emissive");
+  // cube_material.emissive_factor = sbx::math::vector4{1, 1, 1, 0};
 
-  scene.add_component<sbx::scenes::static_mesh>(cube, scene.get_mesh("cube"), scene.get_material("cube"));
+  // scene.add_component<sbx::scenes::static_mesh>(cube, scene.get_mesh("cube"), scene.get_material("cube"));
 
-  auto& cube_transform = scene.get_component<sbx::scenes::transform>(cube);
-  cube_transform.set_position(sbx::math::vector3{0.0f, 6.0f, 0.0f});
-  cube_transform.set_scale(sbx::math::vector3{2.0f, 2.0f, 2.0f});
+  // auto& cube_transform = scene.get_component<sbx::scenes::transform>(cube);
+  // cube_transform.set_position(sbx::math::vector3{8.0f, 16.0f, 8.0f});
+  // cube_transform.set_scale(sbx::math::vector3{2.0f, 2.0f, 2.0f});
 
-  auto& cube_collider = scene.add_component<sbx::physics::collider>(cube, sbx::physics::box{sbx::math::vector3{1, 1, 1}});
+  // auto& cube_collider = scene.add_component<sbx::physics::collider>(cube, sbx::physics::box{sbx::math::vector3{1, 1, 1}});
 
-  auto& cube_rigidbody = scene.add_component<sbx::physics::rigidbody>(cube, sbx::units::kilogram{2});
-  cube_rigidbody.set_inverse_inertia_tensor_local(local_inverse_inertia(cube_rigidbody.mass(), cube_collider));
-  cube_rigidbody.add_constant_acceleration(sbx::math::vector3{0, -9.81f, 0});
+  // auto& cube_rigidbody = scene.add_component<sbx::physics::rigidbody>(cube, sbx::units::kilogram{2});
+  // cube_rigidbody.set_inverse_inertia_tensor_local(local_inverse_inertia(cube_rigidbody.mass(), cube_collider));
+  // cube_rigidbody.add_constant_acceleration(sbx::math::vector3{0, -9.81f, 0});
 
   // Duck
 
@@ -521,6 +521,29 @@ auto application::update() -> void  {
   if (scene.is_valid(_light_center)) {
     auto& light_center_transform = scene.get_component<sbx::scenes::transform>(_light_center);
     light_center_transform.set_rotation(sbx::math::vector3::up, _rotation);
+  }
+
+  if (sbx::devices::input::is_key_pressed(sbx::devices::key::space)) {
+    auto cube = scene.create_node("Cube");
+
+    auto& cube_material = scene.add_material<sbx::models::material>("cube");
+    cube_material.albedo.image = scene.get_image("helmet_albedo");
+    cube_material.normal.image = scene.get_image("helmet_normal");
+    cube_material.mrao.image = scene.get_image("helmet_mrao");
+    cube_material.emissive.image = scene.get_image("helmet_emissive");
+    cube_material.emissive_factor = sbx::math::vector4{1, 1, 1, 0};
+
+    scene.add_component<sbx::scenes::static_mesh>(cube, scene.get_mesh("cube"), scene.get_material("cube"));
+
+    auto& cube_transform = scene.get_component<sbx::scenes::transform>(cube);
+    cube_transform.set_position(sbx::math::vector3{8.0f, 16.0f, 8.0f});
+    cube_transform.set_scale(sbx::math::vector3{2.0f, 2.0f, 2.0f});
+
+    auto& cube_collider = scene.add_component<sbx::physics::collider>(cube, sbx::physics::box{sbx::math::vector3{1, 1, 1}});
+
+    auto& cube_rigidbody = scene.add_component<sbx::physics::rigidbody>(cube, sbx::units::kilogram{2});
+    cube_rigidbody.set_inverse_inertia_tensor_local(local_inverse_inertia(cube_rigidbody.mass(), cube_collider));
+    cube_rigidbody.add_constant_acceleration(sbx::math::vector3{0, -9.81f, 0});
   }
 }
 

@@ -115,6 +115,11 @@ public:
     return quantity{-_value};
   }
 
+  template<typename Type>
+  constexpr auto operator/(const Type other) -> quantity {
+    return quantity{_value / other};
+  }
+
   constexpr auto value() const noexcept -> value_type {
     return _value;
   }

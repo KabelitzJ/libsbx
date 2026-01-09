@@ -430,7 +430,9 @@ static auto epa(const simplex& simplex, const collider_data& first, const collid
     result.contact_points.push_back(contact_point);
   }
 
-  if (result.contact_points.size() > 4) {
+  if (result.contact_points.empty()) {
+    result.contact_points.push_back(polytope[faces[min_face * 3]].point_a);
+  } else if (result.contact_points.size() > 4) {
     // Step 1: Find the deepest point (closest to origin along normal)
     auto compare_depth = [&](const auto& a, const auto& b) {
       return math::vector3::dot(a, result.normal) < math::vector3::dot(b, result.normal);

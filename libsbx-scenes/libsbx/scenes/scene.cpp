@@ -42,7 +42,7 @@ scene::scene(const std::filesystem::path& path)
   _root{_registry.create()},
   _camera{_registry.create()},
   _light{math::vector3{-1.0, -1.0, -1.0}, math::color{1.0f, 1.0f, 1.0f, 1.0f}},
-  _octtree{math::volume{math::vector3{-1000.0f, -1000.0f, -1000.0f}, math::vector3{1000.0f, 1000.0f, 1000.0f}}} {
+  _octtree{math::volume{math::vector3{-1000.0f, -1000.0f, -1000.0f}, math::vector3{1000.0f, 1000.0f, 1000.0f}}, 500u} {
   // [NOTE] KAJ 2023-10-17 : Initialize root node
   const auto& root_id = add_component<scenes::id>(_root);
   _nodes.insert({root_id, _root});
@@ -248,7 +248,13 @@ auto scene::world_rotation(const node_type node) -> math::quaternion {
 }
 
 auto scene::world_scale(const node_type node) -> math::vector3 {
+  const auto world = world_transform(node);
 
+  return math::vector3{
+    math::vector3{world[0]}.length(),
+    math::vector3{world[1]}.length(),
+    math::vector3{world[2]}.length()
+  };
 }
 
 auto scene::make_child_of(const node_type node, const node_type parent) -> void {

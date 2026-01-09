@@ -388,6 +388,10 @@ public:
     return math::ray{camera_transform.position(), ray_world};
   }
 
+  auto node_count() const -> std::size_t {
+    return _nodes.size();
+  }
+
 private:
 
   auto _save_assets(YAML::Emitter& emitter) -> void;

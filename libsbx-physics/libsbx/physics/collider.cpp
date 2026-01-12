@@ -87,63 +87,66 @@ auto support(const collider_data& first, const collider_data& second, const math
   return minkowski_vertex{p1 - p2, p1};
 }
 
-static auto bounding_volume(const sphere& sphere, const math::vector3& position) -> math::volume {
-  const auto offset = math::vector3{sphere.radius, sphere.radius, sphere.radius};
+static auto bounding_volume(const sphere& s, const math::matrix4x4& transform) -> math::volume {
+  const auto position = math::vector3{transform[3]};
+  
+  // Extract scale from the matrix columns to handle scaling correctly
+  const auto scale_x = math::vector3{transform[0]}.length();
+  const auto scale_y = math::vector3{transform[1]}.length();
+  const auto scale_z = math::vector3{transform[2]}.length();
+  const auto max_scale = std::max({scale_x, scale_y, scale_z});
+
+  const auto world_radius = s.radius * max_scale;
+  const auto offset = math::vector3{world_radius, world_radius, world_radius};
+  
   return math::volume{position - offset, position + offset};
 }
 
-static auto bounding_volume(const box& box, const math::vector3& position) -> math::volume {
-  return math::volume{position - box.half_extents, position + box.half_extents};
-}
-
-static auto bounding_volume(const cylinder& cylinder, const math::vector3& position) -> math::volume {
-  // Cylinder is aligned along the Y-axis.
-  // X and Z extents are the radius.
-  // Y extents are defined by base and cap.
+// 2. BOX (The important one!)
+static auto bounding_volume(const box& b, const math::matrix4x4& transform) -> math::volume {
+  const auto position = math::vector3{transform[3]};
   
-  const auto min_x_z = cylinder.radius;
-  const auto max_x_z = cylinder.radius;
+  // Extract the "basis vectors" (Rotation + Scale) from the matrix
+  // These represent the box's local X, Y, Z axes in world space
+  const auto right = math::vector3{transform[0]};   // Column 0
+  const auto up = math::vector3{transform[1]};      // Column 1
+  const auto forward = math::vector3{transform[2]}; // Column 2
 
-  // We construct the min and max vectors based on the shape's local bounds
-  const auto min = math::vector3{
-    position.x() - min_x_z, 
-    position.y() + cylinder.base, 
-    position.z() - min_x_z
-  };
+  // Calculate new world half-extents by projecting local axes
+  // NewX = |Right.x|*SizeX + |Up.x|*SizeY + |Forward.x|*SizeZ
+  const auto world_x = std::abs(right.x()) * b.half_extents.x() + std::abs(up.x()) * b.half_extents.y() + std::abs(forward.x()) * b.half_extents.z();
+  const auto world_y = std::abs(right.y()) * b.half_extents.x() + std::abs(up.y()) * b.half_extents.y() + std::abs(forward.y()) * b.half_extents.z();
+  const auto world_z = std::abs(right.z()) * b.half_extents.x() + std::abs(up.z()) * b.half_extents.y() + std::abs(forward.z()) * b.half_extents.z();
 
-  const auto max = math::vector3{
-    position.x() + max_x_z, 
-    position.y() + cylinder.cap, 
-    position.z() + max_x_z
-  };
+  const auto world_extents = math::vector3{world_x, world_y, world_z};
 
-  return math::volume{min, max};
+  return math::volume{position - world_extents, position + world_extents};
 }
 
-static auto bounding_volume(const capsule& capsule, const math::vector3& position) -> math::volume {
-  // Capsule is a segment along Y, expanded by radius.
-  // base/cap define the centers of the hemispheres.
-  // We must subtract radius from base and add radius to cap for total Y bounds.
+// 3. CAPSULE (Approximated as a Box for AABB)
+static auto bounding_volume(const capsule& c, const math::matrix4x4& transform) -> math::volume {
+  // Construct a local box that encompasses the capsule
+  const auto total_height = (c.cap - c.base) + (c.radius * 2.0f);
+  const auto half_height = total_height * 0.5f;
   
-  const auto xz_extent = capsule.radius;
-
-  const auto min = math::vector3{
-    position.x() - xz_extent,
-    position.y() + capsule.base - capsule.radius,
-    position.z() - xz_extent
-  };
-
-  const auto max = math::vector3{
-    position.x() + xz_extent,
-    position.y() + capsule.cap + capsule.radius,
-    position.z() + xz_extent
-  };
-
-  return math::volume{min, max};
+  // Capsule is usually Y-aligned
+  auto local_box = box{math::vector3{c.radius, half_height, c.radius}};
+  
+  // Re-use box logic
+  return bounding_volume(local_box, transform);
 }
 
-auto bounding_volume(const collider& collider, const math::vector3& position) -> math::volume {
-  return std::visit([&](const auto& shape) { return bounding_volume(shape, position); }, collider);
+// 4. CYLINDER (Approximated as a Box)
+static auto bounding_volume(const cylinder& c, const math::matrix4x4& transform) -> math::volume {
+  const auto total_height = std::abs(c.cap - c.base);
+  const auto half_height = total_height * 0.5f;
+
+  auto local_box = box{math::vector3{c.radius, half_height, c.radius}};
+  return bounding_volume(local_box, transform);
+}
+
+auto bounding_volume(const collider& collider, const math::matrix4x4& transform) -> math::volume {
+  return std::visit([&](const auto& shape) { return bounding_volume(shape, transform); }, collider);
 }
 
 // --- Simplex Logic ---

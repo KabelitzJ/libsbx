@@ -92,6 +92,8 @@ application::application()
   scene.add_image("tree_1_leaves1", "res://textures/tree_1/leaves1.png", sbx::graphics::format::r8g8b8a8_srgb);
   scene.add_image("tree_1_leaves2", "res://textures/tree_1/leaves2.png", sbx::graphics::format::r8g8b8a8_srgb);
 
+  scene.add_image("A", "res://textures/A.png", sbx::graphics::format::r8g8b8a8_srgb);
+
   scene.add_cube_image("skybox", "res://skyboxes/clouds2");
 
   _generate_brdf(512);
@@ -191,7 +193,7 @@ application::application()
 
   auto& sprite_sprite = scene.add_component<sbx::sprites::sprite>(sprite);
   sprite_sprite.space = sbx::sprites::sprite_space::screen_camera;
-  sprite_sprite.image = scene.get_image("helmet_albedo");
+  sprite_sprite.image = scene.get_image("A");
   sprite_sprite.color = sbx::math::color::white();
 
   // Cube
@@ -539,7 +541,7 @@ auto application::update() -> void  {
     cube_transform.set_position(sbx::math::vector3{8.0f, 16.0f, 8.0f});
     cube_transform.set_scale(sbx::math::vector3{2.0f, 2.0f, 2.0f});
 
-    auto& cube_collider = scene.add_component<sbx::physics::collider>(cube, sbx::physics::box{sbx::math::vector3{1, 1, 1}});
+    auto& cube_collider = scene.add_component<sbx::physics::collider>(cube, sbx::physics::box{sbx::math::vector3{0.5f, 0.5f, 0.5f}});
 
     auto& cube_rigidbody = scene.add_component<sbx::physics::rigidbody>(cube, sbx::units::kilogram{2});
     cube_rigidbody.set_inverse_inertia_tensor_local(local_inverse_inertia(cube_rigidbody.mass(), cube_collider));

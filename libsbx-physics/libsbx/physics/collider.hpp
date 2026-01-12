@@ -36,7 +36,7 @@ struct box {
 
 using collider = std::variant<sphere, cylinder, capsule, box>;
 
-auto bounding_volume(const collider& collider, const math::vector3& position) -> math::volume;
+auto bounding_volume(const collider& collider, const math::matrix4x4& transform) -> math::volume;
 
 struct collider_data {
   math::vector3 position;

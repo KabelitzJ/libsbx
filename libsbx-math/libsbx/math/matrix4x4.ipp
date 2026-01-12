@@ -13,14 +13,14 @@ inline constexpr basic_matrix4x4<Type>::basic_matrix4x4(const base_type& base) n
 : base_type{base} { }
 
 template<scalar Type>
-template<scalar Other>
-inline constexpr basic_matrix4x4<Type>::basic_matrix4x4(
-  const column_type_for<Other>& column0,
-  const column_type_for<Other>& column1,
-  const column_type_for<Other>& column2,
-  const column_type_for<Other>& column3
+template<typename Column0, typename Column1, typename Column2, typename Column3>
+constexpr basic_matrix4x4<Type>::basic_matrix4x4(
+  Column0&& column0,
+  Column1&& column1,
+  Column2&& column2,
+  Column3&& column3
 ) noexcept
-: base_type{column0, column1, column2, column3} { }
+: base_type{std::forward<Column0>(column0), std::forward<Column1>(column1), std::forward<Column2>(column2), std::forward<Column3>(column3)} { }
 
 template<scalar Type>
 template<scalar Other>

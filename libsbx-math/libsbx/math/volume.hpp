@@ -86,6 +86,13 @@ public:
     _max = vector_type::max(_max, other.max());
   }
 
+  static auto merge(const basic_volume& a, const basic_volume& b) -> basic_volume {
+    return basic_volume{
+      vector_type::min(a.min(), b.min()),
+      vector_type::max(a.max(), b.max())
+    };
+  }
+
   template<std::ranges::input_range Range, typename Projection = std::identity>
   requires (std::convertible_to<std::invoke_result_t<Projection, std::ranges::range_reference_t<Range>>, vector_type>)
   static auto construct(Range&& range, Projection projection = {}) -> basic_volume {

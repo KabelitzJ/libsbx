@@ -5,6 +5,7 @@
 #include <optional>
 #include <vector>
 #include <algorithm>
+#include <ranges>
 
 #include <libsbx/core/engine.hpp>
 #include <libsbx/core/module.hpp>
@@ -35,32 +36,60 @@ class physics_module : public core::module<physics_module> {
   inline static const auto is_registered = register_module(stage::fixed, dependencies<scenes::scenes_module>{});
 
   using octree_type = containers::octree<scenes::node, 16u, 8u>;
-
   using collision_pair_type = typename octree_type::intersection;
 
   struct collision {
     collision_pair_type nodes;
     collision_manifold manifold;
-  }; // struct collision
+  }; 
+
+  struct solver_constraint {
+    scenes::node node_a;
+    scenes::node node_b;
+    
+    math::vector3 r_a; // Vector from Center of Mass A to Contact Point
+    math::vector3 r_b; // Vector from Center of Mass B to Contact Point
+    
+    math::vector3 normal;
+    math::vector3 tangent1;
+    math::vector3 tangent2;
+
+    float penetration;
+    float normal_mass;    // Effective mass for normal impulse
+    float tangent_mass;   // Effective mass for friction impulse
+    
+    float friction;
+    float restitution;
+    float bias;           // Baumgarte stabilization term
+    
+    float accumulated_normal_impulse = 0.0f;
+    float accumulated_tangent_impulse_1 = 0.0f;
+    float accumulated_tangent_impulse_2 = 0.0f;
+  };
 
 public:
 
   physics_module() = default;
-
   ~physics_module() override = default;
 
   auto update() -> void override {
-    SBX_PROFILE_SCOPE("physics_module::update");
+    // SBX_PROFILE_SCOPE("physics_module::update");
 
     const auto dt = core::engine::fixed_delta_time().value();
 
+    // 1. Apply Gravity and Forces
     _integrate_velocities(dt);
 
+    // 2. Broad Phase (Find potential pairs)
     const auto intersections = _collision_broad_phase();
+
+    // 3. Narrow Phase (Generate Manifolds)
     const auto collisions = _collision_narrow_phase(intersections);
 
+    // 4. Solve Constraints (Resolve Overlaps and Velocity)
     _resolve_collisions(collisions, dt);
 
+    // 5. Update Positions (Apply Velocity)
     _integrate_positions(dt);
   }
 
@@ -76,35 +105,35 @@ private:
       }
 
       const auto total_forces = rigidbody.constant_forces() + rigidbody.dynamic_forces();
-
       const auto acceleration = total_forces * rigidbody.inverse_mass();
+      
       rigidbody.add_velocity(acceleration * dt);
 
-      rigidbody.update_inertia_tensor_world(math::matrix_cast<3, 3>(scene.world_rotation(node)));
+      // Update World Inertia Tensor based on current rotation
+      const auto rotation_matrix = math::matrix_cast<3, 3>(scene.world_rotation(node));
+      rigidbody.update_inertia_tensor_world(rotation_matrix);
 
       const auto angular_acc = rigidbody.inverse_inertia_tensor_world() * rigidbody.torque();
       rigidbody.add_angular_velocity(angular_acc * dt);
 
-      const auto max_angular_velocity = 12.0f;
+      // Cap angular velocity to prevent instability at high speeds
+      const auto max_angular_velocity = 15.0f;
       const auto angular_vel = rigidbody.angular_velocity();
-
       if (angular_vel.length_squared() > max_angular_velocity * max_angular_velocity) {
         rigidbody.set_angular_velocity(math::vector3::normalized(angular_vel) * max_angular_velocity);
       }
 
+      // Damping
       const auto linear_damping = 0.98f;
       const auto angular_damping = 0.95f; 
 
       rigidbody.set_velocity(rigidbody.velocity() * linear_damping);
       rigidbody.set_angular_velocity(rigidbody.angular_velocity() * angular_damping);
 
-      const auto sleep_threshold = 0.001f;
-
-      if (rigidbody.velocity().length_squared() < sleep_threshold) {
+      // Sleeping threshold
+      const auto sleep_threshold = 0.005f; 
+      if (rigidbody.velocity().length_squared() < sleep_threshold && rigidbody.angular_velocity().length_squared() < sleep_threshold) {
         rigidbody.set_velocity(math::vector3::zero);
-      }
-
-      if (rigidbody.angular_velocity().length_squared() < sleep_threshold) {
         rigidbody.set_angular_velocity(math::vector3::zero);
       }
 
@@ -125,11 +154,14 @@ private:
       const auto current_pos = scene.world_position(node);
       const auto current_rot = scene.world_rotation(node);
 
+      // Symplectic Euler: Use new velocity for position
       const auto next_pos = current_pos + rigidbody.velocity() * dt;
 
+      // Angular integration: q_new = q + 0.5 * w * q * dt
       const auto w_quat = math::quaternion{rigidbody.angular_velocity(), 0.0f};
       const auto next_rot = math::quaternion::normalized(current_rot + (w_quat * current_rot) * (0.5f * dt));
 
+      // Handle Parent/Child coordinate conversion
       const auto parent = scene.get_component<scenes::relationship>(node).parent();
 
       if (parent == scenes::node::null) {
@@ -151,7 +183,9 @@ private:
     auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
     auto& scene = scenes_module.scene();
 
-    auto tree = octree_type{math::volume{math::vector3{-1000.0f}, math::vector3{1000.0f}}, 100u};
+    // Rebuilding octree every frame is costly for complex scenes.
+    // Optimization TODO: Use a persistent dynamic AABB tree or Broadphase SAP.
+    auto tree = octree_type{math::volume{math::vector3{-500.0f}, math::vector3{500.0f}}, 64u};
 
     auto query = scene.query<const physics::collider, const physics::rigidbody>();
 
@@ -167,7 +201,8 @@ private:
     auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
     auto& scene = scenes_module.scene();
 
-    auto collisions = utility::make_reserved_vector<collision>(pairs.size());
+    auto collisions = std::vector<collision>{};
+    collisions.reserve(pairs.size());
 
     for (const auto& pair : pairs) {
       const auto [node_a, node_b] = pair;
@@ -180,14 +215,16 @@ private:
       }
 
       const auto& collider_a = scene.get_component<physics::collider>(node_a);
-      auto rot_scale_a = scene.world_transform(node_a);
-      rot_scale_a[3] = math::vector4{0.0f, 0.0f, 0.0f, 1.0f};
-      const auto data_a = collider_data{scene.world_position(node_a), rot_scale_a, collider_a};
-
       const auto& collider_b = scene.get_component<physics::collider>(node_b);
-      auto rot_scale_b = scene.world_transform(node_b);
-      rot_scale_b[3] = math::vector4{0.0f, 0.0f, 0.0f, 1.0f};
-      const auto data_b = collider_data{scene.world_position(node_b), rot_scale_b, collider_b};
+
+      // Prepare collider data (World Space)
+      auto transform_a = scene.world_transform(node_a);
+      transform_a[3] = math::vector4{0.0f, 0.0f, 0.0f, 1.0f}; // Remove translation for direction logic
+      const auto data_a = collider_data{scene.world_position(node_a), transform_a, collider_a};
+
+      auto transform_b = scene.world_transform(node_b);
+      transform_b[3] = math::vector4{0.0f, 0.0f, 0.0f, 1.0f};
+      const auto data_b = collider_data{scene.world_position(node_b), transform_b, collider_b};
 
       if (auto manifold = gjk(data_a, data_b); manifold) {
         collisions.push_back(collision{pair, *manifold});
@@ -198,103 +235,135 @@ private:
   }
 
   auto _resolve_collisions(const std::vector<collision>& collisions, std::float_t dt) -> void {
-    auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
-    auto& scene = scenes_module.scene();
+    if (collisions.empty()) return;
 
-    struct solver_constraint {
-      scenes::node node_a;
-      scenes::node node_b;
-      math::vector3 r_a;
-      math::vector3 r_b;
-      math::vector3 normal;
-      float bias;
-      float effective_mass;
-      float accumulated_impulse = 0.0f;
-    };
-
+    auto& scene = core::engine::get_module<scenes::scenes_module>().scene();
     std::vector<solver_constraint> constraints;
-    constraints.reserve(collisions.size() * 4);
+    
+    // 1. PRE-SOLVE: Generate Constraints
+    for (const auto& col : collisions) {
+      auto node_a = col.nodes.first;
+      auto node_b = col.nodes.second;
 
-    const auto max_penetration_vel = 2.0f; 
-    const auto slop = 0.01f;
-    const auto baumgarte = 0.15f;
+      auto& body_a = scene.get_component<physics::rigidbody>(node_a);
+      auto& body_b = scene.get_component<physics::rigidbody>(node_b);
 
-    for (const auto& [nodes, manifold] : collisions) {
-      auto& rb_a = scene.get_component<physics::rigidbody>(nodes.first);
-      auto& rb_b = scene.get_component<physics::rigidbody>(nodes.second);
+      // Default friction/restitution mixing
+      // You should ideally get this from the collider component or a physics material
+      float friction = 0.5f; 
+      float restitution = 0.2f; 
 
-      if (rb_a.inverse_mass() + rb_b.inverse_mass() <= 0.0f) continue;
+      for (const auto& contact_point : col.manifold.contact_points) {
+         solver_constraint c;
+         c.node_a = node_a;
+         c.node_b = node_b;
+         c.normal = col.manifold.normal;
+         c.penetration = col.manifold.depth;
+         c.friction = friction;
+         c.restitution = restitution;
 
-      const auto ab = scene.world_position(nodes.second) - scene.world_position(nodes.first);
-      const auto normal = (math::vector3::dot(ab, manifold.normal) < 0.0f) ? -manifold.normal : manifold.normal;
+         // Calculate r (vector from CoM to contact point)
+         const auto pos_a = scene.world_position(node_a);
+         const auto pos_b = scene.world_position(node_b);
+         c.r_a = contact_point - pos_a;
+         c.r_b = contact_point - pos_b;
 
-      for (const auto& point : manifold.contact_points) {
-        const auto r_a = point - scene.world_position(nodes.first);
-        const auto r_b = point - scene.world_position(nodes.second);
-        const auto rn_a = math::vector3::cross(r_a, normal);
-        const auto rn_b = math::vector3::cross(r_b, normal);
-        
-        const auto inv_mass_a = rb_a.inverse_mass();
-        const auto inv_mass_b = rb_b.inverse_mass();
-        const auto inertia_a = (inv_mass_a > 0.0f) ? math::vector3::dot(rb_a.inverse_inertia_tensor_world() * rn_a, rn_a) : 0.0f;
-        const auto inertia_b = (inv_mass_b > 0.0f) ? math::vector3::dot(rb_b.inverse_inertia_tensor_world() * rn_b, rn_b) : 0.0f;
-        const auto effective_mass = inv_mass_a + inv_mass_b + inertia_a + inertia_b;
+         // --- Calculate Effective Mass (K matrix) ---
+         // K = 1/ma + 1/mb + (r x n)^T * I_inv * (r x n)
+         const auto ra_xn = math::vector3::cross(c.r_a, c.normal);
+         const auto rb_xn = math::vector3::cross(c.r_b, c.normal);
+         
+         const float ang_a = math::vector3::dot(ra_xn, body_a.inverse_inertia_tensor_world() * ra_xn);
+         const float ang_b = math::vector3::dot(rb_xn, body_b.inverse_inertia_tensor_world() * rb_xn);
+         const float inv_mass_sum = body_a.inverse_mass() + body_b.inverse_mass();
 
-        if (effective_mass > 0.0f) {
-          auto& c = constraints.emplace_back();
-          c.node_a = nodes.first;
-          c.node_b = nodes.second;
-          c.r_a = r_a;
-          c.r_b = r_b;
-          c.normal = normal;
-          c.effective_mass = effective_mass;
-          
-          float penetration_depth = std::max(0.0f, manifold.depth - slop);
-          c.bias = (baumgarte / dt) * penetration_depth;
-          c.bias = std::min(c.bias, max_penetration_vel);
-        }
+         c.normal_mass = (inv_mass_sum + ang_a + ang_b > 0.0f) ? 1.0f / (inv_mass_sum + ang_a + ang_b) : 0.0f;
+
+         // --- Friction Tangents ---
+         // Helper to build a basis from normal
+         if (std::abs(c.normal.x()) >= 0.57735f) {
+            c.tangent1 = math::vector3{c.normal.y(), -c.normal.x(), 0.0f};
+         } else {
+            c.tangent1 = math::vector3{0.0f, c.normal.z(), -c.normal.y()};
+         }
+         c.tangent1 = math::vector3::normalized(c.tangent1);
+         c.tangent2 = math::vector3::cross(c.normal, c.tangent1);
+
+         // We compute a simplified tangent mass (using just one average tangent for stability)
+         const auto ra_xt = math::vector3::cross(c.r_a, c.tangent1);
+         const auto rb_xt = math::vector3::cross(c.r_b, c.tangent1);
+         const float ang_t_a = math::vector3::dot(ra_xt, body_a.inverse_inertia_tensor_world() * ra_xt);
+         const float ang_t_b = math::vector3::dot(rb_xt, body_b.inverse_inertia_tensor_world() * rb_xt);
+         c.tangent_mass = (inv_mass_sum + ang_t_a + ang_t_b > 0.0f) ? 1.0f / (inv_mass_sum + ang_t_a + ang_t_b) : 0.0f;
+
+         // --- Baumgarte Stabilization (Bias) ---
+         // Prevents sinking by adding a correction velocity based on depth
+         const float slop = 0.01f;
+         const float beta = 0.2f; // Correction factor
+         c.bias = -beta / dt * std::max(0.0f, c.penetration - slop);
+
+         // Add restitution (bounciness) to bias
+         // relative velocity along normal
+         const auto v_a = body_a.velocity() + math::vector3::cross(body_a.angular_velocity(), c.r_a);
+         const auto v_b = body_b.velocity() + math::vector3::cross(body_b.angular_velocity(), c.r_b);
+         const auto v_rel = math::vector3::dot(c.normal, v_b - v_a);
+         
+         if (v_rel < -1.0f) { // Only bounce if impact velocity is significant
+             c.bias += -c.restitution * v_rel;
+         }
+
+         constraints.push_back(c);
       }
     }
 
-    const int solver_iterations = 10; 
+    // 2. SOLVER ITERATIONS (Sequential Impulse)
+    // 10 iterations is a good balance for game physics
+    constexpr auto iterations = 10u;
 
-    for (int i = 0; i < solver_iterations; ++i) {
+    for (auto i = 0u; i < iterations; ++i) {
       for (auto& c : constraints) {
-        auto& rb_a = scene.get_component<physics::rigidbody>(c.node_a);
-        auto& rb_b = scene.get_component<physics::rigidbody>(c.node_b);
+        auto& body_a = scene.get_component<physics::rigidbody>(c.node_a);
+        auto& body_b = scene.get_component<physics::rigidbody>(c.node_b);
 
-        const auto v_total_a = rb_a.velocity() + math::vector3::cross(rb_a.angular_velocity(), c.r_a);
-        const auto v_total_b = rb_b.velocity() + math::vector3::cross(rb_b.angular_velocity(), c.r_b);
-        const auto rel_vel = v_total_b - v_total_a;
-        
-        const float vn = math::vector3::dot(rel_vel, c.normal);
-        float lambda_n = (-vn + c.bias) / c.effective_mass;
+        // --- Solve Normal Constraint ---
+        {
+          const auto v_a = body_a.velocity() + math::vector3::cross(body_a.angular_velocity(), c.r_a);
+          const auto v_b = body_b.velocity() + math::vector3::cross(body_b.angular_velocity(), c.r_b);
+          const auto v_rel = math::vector3::dot(c.normal, v_b - v_a);
 
-        float old_impulse_n = c.accumulated_impulse;
-        c.accumulated_impulse = std::max(0.0f, old_impulse_n + lambda_n);
-        float delta_n = c.accumulated_impulse - old_impulse_n;
+          // Lambda = -Jv / (JMJ^T)
+          float lambda = -(v_rel + c.bias) * c.normal_mass;
 
-        rb_a.apply_impulse_at(-c.normal * delta_n, c.r_a);
-        rb_b.apply_impulse_at( c.normal * delta_n, c.r_b);
+          // Clamp accumulation (Impulse must be pushing, not pulling)
+          const float old_acc = c.accumulated_normal_impulse;
+          c.accumulated_normal_impulse = std::max(0.0f, old_acc + lambda);
+          lambda = c.accumulated_normal_impulse - old_acc;
 
-        const auto v_post_a = rb_a.velocity() + math::vector3::cross(rb_a.angular_velocity(), c.r_a);
-        const auto v_post_b = rb_b.velocity() + math::vector3::cross(rb_b.angular_velocity(), c.r_b);
-        const auto rel_vel_f = v_post_b - v_post_a;
+          // Apply Normal Impulse
+          const auto impulse = c.normal * lambda;
+          body_a.apply_impulse_at(-impulse, c.r_a);
+          body_b.apply_impulse_at(impulse, c.r_b);
+        }
 
-        math::vector3 tangent = rel_vel_f - (c.normal * math::vector3::dot(rel_vel_f, c.normal));
-        
-        if (tangent.length_squared() > 1e-6f) {
-          tangent = math::vector3::normalized(tangent);
-          float vt = math::vector3::dot(rel_vel_f, tangent);
+        // --- Solve Friction Constraint ---
+        {
+          const auto v_a = body_a.velocity() + math::vector3::cross(body_a.angular_velocity(), c.r_a);
+          const auto v_b = body_b.velocity() + math::vector3::cross(body_b.angular_velocity(), c.r_b);
           
-          float lambda_t = -vt / c.effective_mass;
+          const auto dv = v_b - v_a;
+          const float vt = math::vector3::dot(dv, c.tangent1); // Velocity along tangent
 
-          const float mu = 0.4f; 
-          float max_f = c.accumulated_impulse * mu;
-          lambda_t = std::clamp(lambda_t, -max_f, max_f);
+          float lambda_t = -vt * c.tangent_mass;
 
-          rb_a.apply_impulse_at(-tangent * lambda_t, c.r_a);
-          rb_b.apply_impulse_at( tangent * lambda_t, c.r_b);
+          // Coulomb Friction Clamping: |Ft| <= u * |Fn|
+          const float max_friction = c.friction * c.accumulated_normal_impulse;
+          const float old_acc_t = c.accumulated_tangent_impulse_1;
+          c.accumulated_tangent_impulse_1 = std::clamp(old_acc_t + lambda_t, -max_friction, max_friction);
+          lambda_t = c.accumulated_tangent_impulse_1 - old_acc_t;
+
+          const auto impulse_t = c.tangent1 * lambda_t;
+          body_a.apply_impulse_at(-impulse_t, c.r_a);
+          body_b.apply_impulse_at(impulse_t, c.r_b);
         }
       }
     }

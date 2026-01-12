@@ -15,24 +15,24 @@
 namespace sbx::physics {
 
 struct sphere {
-  std::float_t radius;
-}; // struct sphere
+  std::float_t radius{0.5f};
+}; 
 
 struct cylinder {
-  std::float_t radius;
-  std::float_t base;
-  std::float_t cap;
-}; // struct cylinder
+  std::float_t radius{0.5f};
+  std::float_t base{-0.5f};
+  std::float_t cap{0.5f};
+};
 
 struct capsule {
-  std::float_t radius;
-  std::float_t base;
-  std::float_t cap;
-}; // struct capsule
+  std::float_t radius{0.5f};
+  std::float_t base{-0.5f};
+  std::float_t cap{0.5f};
+};
 
 struct box {
-  math::vector3 half_extents;
-}; // struct box
+  math::vector3 half_extents{0.5f, 0.5f, 0.5f};
+};
 
 using collider = std::variant<sphere, cylinder, capsule, box>;
 
@@ -79,15 +79,41 @@ inline auto local_inverse_inertia(const units::kilogram& mass, const box& box) -
 }
 
 inline auto local_inverse_inertia(const units::kilogram& mass, const cylinder& cylinder) -> math::matrix3x3 {
-  return math::matrix3x3::zero;
+  const auto m = std::max(mass.value(), 0.0001f);
+  const auto r2 = cylinder.radius * cylinder.radius;
+  const auto h2 = (cylinder.base + cylinder.cap) * (cylinder.base + cylinder.cap); // Assuming total height
+  
+  // Cylinder along Y-axis usually
+  const auto i_x_z = (1.0f / 12.0f) * m * (3 * r2 + h2);
+  const auto i_y = 0.5f * m * r2;
+
+  return math::matrix3x3{
+    1.0f / i_x_z, 0.0f, 0.0f,
+    0.0f, 1.0f / i_y, 0.0f,
+    0.0f, 0.0f, 1.0f / i_x_z
+  };
 }
 
 inline auto local_inverse_inertia(const units::kilogram& mass, const sphere& sphere) -> math::matrix3x3 {
-  return math::matrix3x3::zero;
+  const auto m = std::max(mass.value(), 0.0001f);
+  // Solid sphere inertia: (2/5) * m * r^2
+  const auto i = (2.0f / 5.0f) * m * sphere.radius * sphere.radius;
+  const auto inv_i = 1.0f / i;
+
+  return math::matrix3x3{
+    inv_i, 0.0f, 0.0f,
+    0.0f, inv_i, 0.0f,
+    0.0f, 0.0f, inv_i
+  };
 }
 
 inline auto local_inverse_inertia(const units::kilogram& mass, const capsule& capsule) -> math::matrix3x3 {
-  return math::matrix3x3::zero;
+  auto approx_cyl = cylinder{};
+  approx_cyl.radius = capsule.radius;
+  approx_cyl.base = capsule.base; 
+  approx_cyl.cap = capsule.cap;
+
+  return local_inverse_inertia(mass, approx_cyl);
 }
 
 inline auto local_inverse_inertia(const units::kilogram& mass, const collider& collider) -> math::matrix3x3 {

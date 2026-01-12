@@ -190,7 +190,8 @@ private:
     auto query = scene.query<const physics::collider, const physics::rigidbody>();
 
     for (auto&& [node, collider, rigidbody] : query.each()) {
-      const auto volume = bounding_volume(collider, scene.world_position(node));
+      const auto world_transform = scene.world_transform(node);
+      const auto volume = bounding_volume(collider, world_transform);
       tree.insert(node, volume);
     }
 

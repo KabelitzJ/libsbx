@@ -16,8 +16,6 @@
 #include <libsbx/utility/hash.hpp>
 #include <libsbx/utility/concepts.hpp>
 
-#include <libsbx/memory/local_containers.hpp>
-
 #include <libsbx/signals/signal.hpp>
 
 #include <libsbx/graphics/devices/instance.hpp>
@@ -326,8 +324,8 @@ private:
 
   std::array<per_frame_data, swapchain::max_frames_in_flight> _per_frame_data{};
   std::vector<per_image_data> _per_image_data{};
-  memory::local_vector<graphics::command_buffer, swapchain::max_frames_in_flight> _graphics_command_buffers;
-  memory::local_vector<graphics::command_buffer, swapchain::max_frames_in_flight> _compute_command_buffers;
+  std::vector<graphics::command_buffer> _graphics_command_buffers;
+  std::vector<graphics::command_buffer> _compute_command_buffers;
 
   std::unique_ptr<graphics::renderer> _renderer{};
 

@@ -5,8 +5,6 @@
 
 #include <magic_enum/magic_enum.hpp>
 
-#include <libsbx/memory/local_containers.hpp>
-
 #include <libsbx/assets/assets_module.hpp>
 
 #include <libsbx/graphics/graphics_module.hpp>
@@ -100,12 +98,10 @@ public:
     auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
     auto& scene = scenes_module.scene();
 
-    // auto memory = std::array<std::uint8_t, 2048u>{};
-    // auto pool = std::pmr::monotonic_buffer_resource{memory.data(), memory.size(), std::pmr::null_memory_resource()};
+    auto memory = std::array<std::uint8_t, 2048u>{};
+    auto pool = std::pmr::monotonic_buffer_resource{memory.data(), memory.size()};
 
-    // auto material_indices = std::pmr::unordered_map<math::uuid, std::uint32_t>{&pool};
-
-    auto material_indices = memory::local_unordered_map<math::uuid, std::uint32_t, 256u>{};
+    auto material_indices = std::pmr::unordered_map<math::uuid, std::uint32_t>{&pool};
 
     traits_type::for_each_submission(scene, [&](const scenes::node node, const math::uuid& mesh_id, std::uint32_t submesh_index, const math::uuid& material_id, const transform_data& transform, const instance_payload& payload) {
       const auto transform_index = static_cast<std::uint32_t>(_transform_data.size());

@@ -109,6 +109,9 @@ graphics_module::graphics_module()
   _dynamic_size_callback = [this]() -> sbx::math::vector2u {
     return math::vector2u{_surface->current_extent().width, _surface->current_extent().height};
   };
+
+  _graphics_command_buffers.reserve(swapchain::max_frames_in_flight);
+  _compute_command_buffers.reserve(swapchain::max_frames_in_flight);
 }
 
 graphics_module::~graphics_module() {

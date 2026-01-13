@@ -72,8 +72,8 @@ public:
         transform.set_position(sbx::math::vector3{x * chunk_size.x() - offset.x(), 0.0f, y * chunk_size.y() - offset.y()});
         transform.set_scale(sbx::math::vector3{25, 0.5, 25});
 
-        scene.add_component<sbx::physics::rigidbody>(chunk, sbx::units::kilogram{0});
-        scene.add_component<sbx::physics::collider>(chunk, sbx::physics::box{sbx::math::vector3{0.5f, 0.5f, 0.5f}});
+        // scene.add_component<sbx::physics::rigidbody>(chunk, sbx::units::kilogram{0});
+        // scene.add_component<sbx::physics::collider>(chunk, sbx::physics::box{sbx::math::vector3{0.5f, 0.5f, 0.5f}});
       }
     }
 

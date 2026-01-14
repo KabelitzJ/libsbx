@@ -18,6 +18,7 @@
 #include <libsbx/math/vector4.hpp>
 #include <libsbx/math/matrix.hpp>
 #include <libsbx/math/angle.hpp>
+#include <libsbx/math/traits.hpp>
 
 namespace sbx::math {
 
@@ -42,18 +43,17 @@ public:
   using column_type = column_type_for<value_type>;
 
   inline static constexpr basic_matrix3x3 identity{base_type::identity()};
-
   inline static constexpr basic_matrix3x3 zero{base_type{value_type{0}}};
 
   using base_type::base_type;
 
   constexpr basic_matrix3x3(const base_type& base) noexcept;
 
-  template<typename Column>
+  template<typename Column0, typename Column1, typename Column2>
   constexpr basic_matrix3x3(
-    Column&& column0,
-    Column&& column1,
-    Column&& column2
+    Column0&& column0,
+    Column1&& column1,
+    Column2&& column2
   ) noexcept;
 
   template<scalar Other>
@@ -66,7 +66,58 @@ public:
   template<scalar Other>
   constexpr basic_matrix3x3(const Other v00, const Other v11, const Other v22) noexcept;
 
-//   // -- Static member functions --
+  template<scalar Other>
+  constexpr basic_matrix3x3(const Other diagonal) noexcept;
+
+  // -- Static member functions --
+
+  [[nodiscard]] constexpr static auto inverted(const basic_matrix3x3& matrix) -> basic_matrix3x3 {
+    const auto m00 = matrix[0][0];
+    const auto m01 = matrix[0][1];
+    const auto m02 = matrix[0][2];
+
+    const auto m10 = matrix[1][0];
+    const auto m11 = matrix[1][1];
+    const auto m12 = matrix[1][2];
+
+    const auto m20 = matrix[2][0];
+    const auto m21 = matrix[2][1];
+    const auto m22 = matrix[2][2];
+
+    const auto determinant = m00 * (m11 * m22 - m21 * m12) - m10 * (m01 * m22 - m21 * m02) + m20 * (m01 * m12 - m11 * m02);
+
+    // if constexpr (std::is_floating_point_v<value_type>) {
+    //   if (std::abs(determinant) < std::numeric_limits<value_type>::epsilon()) {
+    //     return identity;
+    //     }
+    // } else {
+    //   if (determinant == value_type{0}) {
+    //     return identity;
+    //   }
+    // }
+
+    if (comparision_traits<value_type>::equal(determinant, 0)) {
+      return identity;
+    }
+
+    const auto inv_determinant = value_type{1} / determinant;
+
+    auto result = basic_matrix3x3{};
+    
+    result[0][0] = (m11 * m22 - m21 * m12) * inv_determinant;
+    result[0][1] = (m21 * m02 - m01 * m22) * inv_determinant;
+    result[0][2] = (m01 * m12 - m11 * m02) * inv_determinant;
+
+    result[1][0] = (m20 * m12 - m10 * m22) * inv_determinant;
+    result[1][1] = (m00 * m22 - m20 * m02) * inv_determinant;
+    result[1][2] = (m10 * m02 - m00 * m12) * inv_determinant;
+
+    result[2][0] = (m10 * m21 - m20 * m11) * inv_determinant;
+    result[2][1] = (m20 * m01 - m00 * m21) * inv_determinant;
+    result[2][2] = (m00 * m11 - m10 * m01) * inv_determinant;
+
+    return result;
+  }
 
   [[nodiscard]] constexpr static auto transposed(const basic_matrix3x3& matrix) noexcept -> basic_matrix3x3 {
     auto result = basic_matrix3x3<value_type>{};

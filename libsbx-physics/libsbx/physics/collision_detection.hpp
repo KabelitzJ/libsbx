@@ -9,12 +9,19 @@
 
 namespace sbx::physics {
 
+struct collider_data {
+  math::vector3 position;
+  math::matrix3x3 rotation_scale;
+  const physics::collider& collider;
+}; // struct collider_data
+
 struct collision_manifold {
   math::vector3 normal;
-  std::float_t depth;
+  float depth{0.0f};
+  std::vector<math::vector3> contact_points;
 }; // struct collision_manifold
 
-auto check_collision(const collider& c_a, const math::vector3& p_a, const math::matrix3x3& rs_a, const collider& c_b, const math::vector3& p_b, const math::matrix3x3& rs_b) -> std::optional<collision_manifold>;
+auto check_collision(const collider_data& first, const collider_data& second) -> std::optional<collision_manifold>;
 
 } // namespace sbx::physics
 

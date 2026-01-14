@@ -62,20 +62,31 @@ public:
     auto& terrain_material = scene.add_material<sbx::models::material>("terrain");
     terrain_material.albedo.image = scene.get_image("prototype");
 
-    for (auto y = 0u; y < grid.y(); ++y) {
-      for (auto x = 0u; x < grid.x(); ++x) {
-        auto chunk = scene.create_child_node(_node, fmt::format("Chunk{}{}", x, y));
+    auto chunk = scene.create_child_node(_node, fmt::format("Chunk"));
 
-        scene.add_component<sbx::scenes::static_mesh>(chunk, scene.get_mesh("cube"), scene.get_material("terrain"));
+    scene.add_component<sbx::scenes::static_mesh>(chunk, scene.get_mesh("cube"), scene.get_material("terrain"));
 
-        auto& transform = scene.get_component<sbx::scenes::transform>(chunk);
-        transform.set_position(sbx::math::vector3{x * chunk_size.x() - offset.x(), 0.0f, y * chunk_size.y() - offset.y()});
-        transform.set_scale(sbx::math::vector3{25, 0.5, 25});
+    auto& chunk_transform = scene.get_component<sbx::scenes::transform>(chunk);
+    chunk_transform.set_position(sbx::math::vector3::zero);
+    chunk_transform.set_scale(sbx::math::vector3{100, 0.5, 100});
 
-        // scene.add_component<sbx::physics::rigidbody>(chunk, sbx::units::kilogram{0});
-        // scene.add_component<sbx::physics::collider>(chunk, sbx::physics::box{sbx::math::vector3{0.5f, 0.5f, 0.5f}});
-      }
-    }
+    scene.add_component<sbx::physics::rigidbody>(chunk, 0.0f);
+    scene.add_component<sbx::physics::collider>(chunk, sbx::physics::box{sbx::math::vector3{0.5f, 0.5f, 0.5f}});
+
+    // for (auto y = 0u; y < grid.y(); ++y) {
+    //   for (auto x = 0u; x < grid.x(); ++x) {
+    //     auto chunk = scene.create_child_node(_node, fmt::format("Chunk{}{}", x, y));
+
+    //     scene.add_component<sbx::scenes::static_mesh>(chunk, scene.get_mesh("cube"), scene.get_material("terrain"));
+
+    //     auto& transform = scene.get_component<sbx::scenes::transform>(chunk);
+    //     transform.set_position(sbx::math::vector3{x * chunk_size.x() - offset.x(), 0.0f, y * chunk_size.y() - offset.y()});
+    //     transform.set_scale(sbx::math::vector3{25, 0.5, 25});
+
+    //     scene.add_component<sbx::physics::rigidbody>(chunk, 0.0f);
+    //     scene.add_component<sbx::physics::collider>(chunk, sbx::physics::box{sbx::math::vector3{0.5f, 0.5f, 0.5f}});
+    //   }
+    // }
 
     // auto icosphere_tile_mesh = demo::icosphere_tile_mesh{4u, 0.02f};
     // _planet_id = assets_module.add_asset<sbx::models::mesh>(std::make_unique<sbx::models::mesh>(icosphere_tile_mesh.get_vertices(), icosphere_tile_mesh.get_indices(), icosphere_tile_mesh.get_bounds()));

@@ -2,336 +2,267 @@
 
 namespace sbx::physics {
 
-auto get_local_support(const sphere& sphere, const math::vector3& direction) -> math::vector3 {
-  if (direction.length_squared() < std::numeric_limits<std::float_t>::epsilon()) {
-    return math::vector3::zero;
-  }
+static auto find_furthest_point(const math::vector3& direction, const box& box, const math::vector3& position, const math::matrix3x3& rotation_scale) -> math::vector3 {
+  const auto inverse = math::matrix3x3::inverted(rotation_scale);
 
-  const auto normalized = math::vector3::normalized(direction);
+  const auto local_direction = math::vector3{inverse * direction};
 
-  return normalized * sphere.radius;
+  auto result = math::vector3{};
+
+  result.x() = (local_direction.x() > 0.0f) ? box.half_extents.x() : -box.half_extents.x();
+  result.y() = (local_direction.y() > 0.0f) ? box.half_extents.y() : -box.half_extents.y();
+  result.z() = (local_direction.z() > 0.0f) ? box.half_extents.z() : -box.half_extents.z();
+
+  return math::vector3{rotation_scale * result} + position;
 }
 
-auto get_local_support(const box& box, const math::vector3& direction) -> math::vector3 {
-  return math::vector3{
-    (direction.x() > 0.0f) ? box.half_extents.x() : -box.half_extents.x(),
-    (direction.y() > 0.0f) ? box.half_extents.y() : -box.half_extents.y(),
-    (direction.z() > 0.0f) ? box.half_extents.z() : -box.half_extents.z()
-  };
+static auto find_furthest_point(const math::vector3& direction, const sphere& sphere, const math::vector3& position, const math::matrix3x3& rotation_scale) -> math::vector3 {
+  const auto inverse = math::matrix3x3::inverted(rotation_scale);
+
+  const auto local_direction = math::vector3{inverse * direction};
+
+  auto result = math::vector3::normalized(local_direction) * sphere.radius;
+
+  return math::vector3{rotation_scale * result} + position;
 }
 
-auto get_local_support(const cylinder& cylinder, const math::vector3& direction) -> math::vector3 {
-  const auto y = (direction.y() > 0.0f) ? cylinder.cap : cylinder.base;
-  const auto dir_xz = math::vector3{direction.x(), 0.0f, direction.z()};
-  const auto length_squared_xz = dir_xz.length_squared();
+static auto find_furthest_point(const math::vector3& direction, const cylinder& cylinder, const math::vector3& position, const math::matrix3x3& rotation_scale) -> math::vector3 {
+  const auto inverse = math::matrix3x3::inverted(rotation_scale);
 
-  if (length_squared_xz < std::numeric_limits<std::float_t>::epsilon()) {
-    return math::vector3{0.0f, y, 0.0f};
-  }
+  const auto local_direction = math::vector3{inverse * direction};
 
-  const auto scalar = cylinder.radius / std::sqrt(length_squared_xz);
+  const auto local_direction_xz = math::vector3{local_direction.x(), 0.0f, local_direction.z()};
 
-  return math::vector3{direction.x() * scalar, y, direction.z() * scalar};
+  auto result = math::vector3::normalized(local_direction_xz) * cylinder.radius;
+  result.y() = (local_direction.y() > 0.0f) ? cylinder.cap : cylinder.base;
+
+  return math::vector3{rotation_scale * result} + position;
 }
 
-auto get_local_support(const capsule& capsule, const math::vector3& direction) -> math::vector3 {
-  const auto y = (direction.y() > 0.0f) ? capsule.cap : capsule.base;
-  const auto line_endpoint = math::vector3{0.0f, y, 0.0f};
-  
-  if (direction.length_squared() < std::numeric_limits<std::float_t>::epsilon()) {
-    return line_endpoint;
-  }
+static auto find_furthest_point(const math::vector3& direction, const capsule& capsule, const math::vector3& position, const math::matrix3x3& rotation_scale) -> math::vector3 {
+  const auto inverse = math::matrix3x3::inverted(rotation_scale);
 
-  return line_endpoint + (math::vector3::normalized(direction) * capsule.radius);
+  const auto local_direction = math::vector3{inverse * direction};
+
+  auto result = math::vector3::normalized(local_direction) * capsule.radius;
+  result.y() = (local_direction.y() > 0.0f) ? capsule.cap : capsule.base;
+
+  return math::vector3{rotation_scale * result} + position;
 }
 
-auto get_support(const collider& collider, const math::matrix3x3& rotation_scale, const math::vector3& direction) -> math::vector3 {
-  const auto local_direction = math::matrix3x3::transposed(rotation_scale) * direction;
-
-  auto local_point = std::visit([&local_direction](const auto& shape) {
-    return get_local_support(shape, local_direction);
-  }, collider.shape);
-
-  local_point += collider.offset;
-
-  return rotation_scale * local_point;
+auto find_furthest_point(const collider_data& data, const math::vector3& direction) -> math::vector3 {
+  return std::visit([&](const auto& shape) { return find_furthest_point(direction, shape, data.position, data.rotation_scale); }, data.collider.shape);
 }
 
-auto get_minkowski_support(const collider& c_a, const math::vector3& p_a, const math::matrix3x3& rs_a, const collider& c_b, const math::vector3& p_b, const math::matrix3x3& rs_b, const math::vector3& direction) -> math::vector3 {
-  const auto support_a = get_support(c_a, rs_a, direction) + p_a;
-  const auto support_b = get_support(c_b, rs_b, -direction) + p_b;
+struct minkowski_vertex {
+  math::vector3 minkowski_point;
+  math::vector3 point_a;
+}; // struct minkowski_vertex
 
-  return support_a - support_b;
+auto support_point(const collider_data& first, const collider_data& second, const math::vector3& direction) -> minkowski_vertex {
+  const auto p1 = find_furthest_point(first, direction);
+  const auto p2 = find_furthest_point(second, -direction);
+
+  return minkowski_vertex{p1 - p2, p1};
 }
 
-struct simplex {
+class simplex {
 
-  std::array<math::vector3, 4> points;
-  std::size_t size{0};
+public:
 
-  auto push_front(const math::vector3& point) -> void {
-    points = {point, points[0], points[1], points[2]};
-    size = std::min(size + 1, std::size_t{4});
-  }
+  using value_type = minkowski_vertex;
+  using reference = value_type;
+  using const_iterator = const value_type*;
 
-  auto operator[](std::size_t i) const -> const math::vector3& { 
-    return points[i]; 
-  }
+  simplex()
+  : _size{0} { }
 
-  auto operator[](std::size_t i) -> math::vector3& { 
-    return points[i]; 
-  }
+	auto operator=(std::initializer_list<value_type> list) -> simplex& {
+		_size = 0u;
 
-}; // struct simplex
-
-auto handle_simplex(simplex& simplex, math::vector3& direction) -> bool {
-  const auto& a = simplex[0];
-  const auto& b = simplex[1];
-  const auto& c = simplex[2];
-  const auto& d = simplex[3];
-
-  const auto ao = -a;
-
-  // Line Case
-  if (simplex.size == 2u) {
-    const auto ab = b - a;
-    const auto ab_perp = math::vector3::cross(math::vector3::cross(ab, ao), ab);
-
-    direction = ab_perp;
-
-    return false;
-  }
-
-  // Triangle Case
-  if (simplex.size == 3u) {
-    const auto ab = b - a;
-    const auto ac = c - a;
-    const auto abc = math::vector3::cross(ab, ac);
-
-    if (math::vector3::dot(math::vector3::cross(abc, ac), ao) > 0.0f) {
-      if (math::vector3::dot(ac, ao) > 0) {
-        simplex = {a, c, {}, {}};
-        simplex.size = 2;
-        direction = math::vector3::cross(math::vector3::cross(ac, ao), ac);
-      } else {
-        simplex = {a, b, {}, {}};
-        simplex.size = 2;
-        direction = math::vector3::cross(math::vector3::cross(ab, ao), ab);
-      }
-    } else {
-      if (math::vector3::dot(math::vector3::cross(ab, abc), ao) > 0) {
-        simplex = {a, b, {}, {}};
-        simplex.size = 2;
-        direction = math::vector3::cross(math::vector3::cross(ab, ao), ab);
-      } else {
-        if (math::vector3::dot(abc, ao) > 0.0f) {
-          direction = abc;
-        } else {
-          simplex = {a, c, b, {}};
-          direction = -abc;
-        }
-      }
+		for (const auto& point : list) {
+			_points[_size++] = point;
     }
 
-    return false;
+		return *this;
+	}
+
+	auto push_front(const value_type& point) -> void {
+		_points = { point, _points[0], _points[1], _points[2] };
+		_size = std::min(_size + 1u, std::size_t{4});
+	}
+
+	auto operator[](const std::size_t index) -> reference { 
+    return _points[index]; 
   }
 
-  // Tetrahedron Case
-  if (simplex.size == 4) {
-    const auto ab = b - a;
-    const auto ac = c - a;
-    const auto ad = d - a;
-    
-    const auto abc = math::vector3::cross(ab, ac);
-    const auto acd = math::vector3::cross(ac, ad);
-    const auto adb = math::vector3::cross(ad, ab);
+	auto size() const noexcept -> std::size_t { 
+    return _size; 
+  }
 
-    if (math::vector3::dot(abc, ao) > 0.0f) {
-      simplex = {a, b, c, {}};
-      simplex.size = 3u;
-      direction = abc;
+	auto begin() const -> const_iterator { 
+    return _points.begin(); 
+  }
 
-      return false;
-    }
-    
-    if (math::vector3::dot(acd, ao) > 0.0f) {
-      simplex = {a, c, d, {}};
-      simplex.size = 3u;
-      direction = acd;
+	auto end() const -> const_iterator {
+    return _points.end() - (4u - _size); 
+  }
 
-      return false;
-    }
+private:
 
-    if (math::vector3::dot(adb, ao) > 0.0f) {
-      simplex = {a, d, b, {}};
-      simplex.size = 3u;
-      direction = adb;
+  std::array<minkowski_vertex, 4u> _points;
+  std::size_t _size;
 
-      return false;
-    }
+}; // class simplex
 
-    return true;
+static auto are_same_direction(const math::vector3& lhs, const math::vector3& rhs) -> bool {
+  return math::vector3::dot(lhs, rhs) > 0.0f;
+}
+
+static auto line(simplex& simplex, math::vector3& direction) -> bool {
+  auto a = simplex[0].minkowski_point;
+  auto b = simplex[1].minkowski_point;
+
+	auto ab = b - a;
+	auto ao = -a;
+ 
+	if (are_same_direction(ab, ao)) {
+		direction = math::vector3::cross(math::vector3::cross(ab, ao), ab);
+	} else {
+		simplex = { simplex[0] };
+		direction = ao;
+	}
+
+	return false;
+}
+
+static auto triangle(simplex& simplex, math::vector3& direction) -> bool {
+  auto a = simplex[0].minkowski_point;
+  auto b = simplex[1].minkowski_point;
+  auto c = simplex[2].minkowski_point;
+
+	auto ab = b - a;
+	auto ac = c - a;
+	auto ao =   - a;
+ 
+	auto abc = math::vector3::cross(ab, ac);
+ 
+	if (are_same_direction(math::vector3::cross(abc, ac), ao)) {
+		if (are_same_direction(ac, ao)) {
+			simplex = { simplex[0], simplex[2] };
+			direction = math::vector3::cross(math::vector3::cross(ac, ao), ac);
+		} else {
+			return line(simplex = { simplex[0], simplex[1] }, direction);
+		}
+	} else {
+		if (are_same_direction(math::vector3::cross(ab, abc), ao)) {
+			return line(simplex = { simplex[0], simplex[1] }, direction);
+		} else {
+			if (are_same_direction(abc, ao)) {
+				direction = abc;
+			} else {
+				simplex = { simplex[0], simplex[1], simplex[2] };
+				direction = -abc;
+			}
+		}
+	}
+
+	return false;
+}
+
+static auto tetrahedron(simplex& simplex, math::vector3& direction) -> bool {
+  auto a = simplex[0].minkowski_point;
+  auto b = simplex[1].minkowski_point;
+  auto c = simplex[2].minkowski_point;
+  auto d = simplex[3].minkowski_point;
+
+	auto ab = b - a;
+	auto ac = c - a;
+	auto ad = d - a;
+	auto ao =   - a;
+ 
+	auto abc = math::vector3::cross(ab, ac);
+	auto acd = math::vector3::cross(ac, ad);
+	auto adb = math::vector3::cross(ad, ab);
+ 
+	if (are_same_direction(abc, ao)) {
+		return triangle(simplex = { simplex[0], simplex[1], simplex[2] }, direction);
+	}
+		
+	if (are_same_direction(acd, ao)) {
+		return triangle(simplex = { simplex[0], simplex[2], simplex[3] }, direction);
+	}
+ 
+	if (are_same_direction(adb, ao)) {
+		return triangle(simplex = { simplex[0], simplex[1], simplex[3] }, direction);
+	}
+ 
+	return true;
+}
+
+static auto barycentric_coordinates(const math::vector3& p, const math::vector3& a, const math::vector3& b, const math::vector3& c) -> math::vector3 {
+  const auto v0 = b - a;
+  const auto v1 = c - a;
+  const auto v2 = p - a;
+
+  const float d00 = math::vector3::dot(v0, v0);
+  const float d01 = math::vector3::dot(v0, v1);
+  const float d11 = math::vector3::dot(v1, v1);
+  const float d20 = math::vector3::dot(v2, v0);
+  const float d21 = math::vector3::dot(v2, v1);
+
+  const float denom = d00 * d11 - d01 * d01;
+
+  if (std::abs(denom) < 1e-6f) {
+    return {1.0f, 0.0f, 0.0f};
+  }
+
+  const float v = (d11 * d20 - d01 * d21) / denom;
+  const float w = (d00 * d21 - d01 * d20) / denom;
+  const float u = 1.0f - v - w;
+
+  return {u, v, w};
+}
+
+static auto next_simplex(simplex& simplex, math::vector3& direction) -> bool {
+  switch (simplex.size()) {
+    case 2u: return line(simplex, direction);
+    case 3u: return triangle(simplex, direction);
+    case 4u: return tetrahedron(simplex, direction);
   }
 
   return false;
 }
 
-auto run_gjk(const collider& c_a, const math::vector3& p_a, const math::matrix3x3& rs_a, const collider& c_b, const math::vector3& p_b, const math::matrix3x3& rs_b) -> std::optional<simplex> {
-  auto simplex = physics::simplex{};
-  auto direction = p_b - p_a;
-  
-  if (direction.length_squared() < 1e-6f) {
-    direction = math::vector3::right;
-  }
+template<math::unsigned_integral Start, math::unsigned_integral End, math::unsigned_integral Step>
+static auto stepped_iota(const Start start, const End end, const Step step = Step{1u}) {
+  return std::ranges::views::iota(0u, (end - start + step - 1) / step) | std::ranges::views::transform([=](auto x) { return x * step + start; });
+}
 
-  auto support = get_minkowski_support(c_a, p_a, rs_a, c_b, p_b, rs_b, direction);
+auto check_collision(const collider_data& first, const collider_data& second) -> std::optional<collision_manifold> {
+  auto simplex = physics::simplex{};
+
+  auto support = support_point(first, second, math::vector3{1.0f, 0.0f, 0.0f});
 
   simplex.push_front(support);
-  direction = -support;
 
-  for (auto i = 0; i < 64; ++i) {
-    support = get_minkowski_support(c_a, p_a, rs_a, c_b, p_b, rs_b, direction);
+  auto direction = -support.minkowski_point;
 
-    if (math::vector3::dot(support, direction) < 0) {
+  for ([[maybe_unused]] auto iteration : std::views::iota(0u, 64u)) {
+    support = support_point(first, second, direction);
+
+    if (math::vector3::dot(support.minkowski_point, direction) <= 0.0f) {
       return std::nullopt;
     }
 
     simplex.push_front(support);
 
-    if (handle_simplex(simplex, direction)) {
-      return simplex;
+    if (next_simplex(simplex, direction)) {
+      return collision_manifold{};
     }
   }
 
   return std::nullopt;
-}
-
-struct epa_face {
-  math::vector3 normal;
-  std::float_t distance;
-  std::size_t a;
-  std::size_t b;
-  std::size_t c; 
-}; // struct epa_face
-
-struct epa_edge {
-
-  std::size_t a;
-  std::size_t b;
-
-  bool operator==(const epa_edge& other) const {
-    return (a == other.a && b == other.b) || (a == other.b && b == other.a);
-  }
-
-}; // struct epa_edge
-
-auto run_epa(const simplex& simplex, const collider& c_a, const math::vector3& p_a, const math::matrix3x3& rs_a,const collider& c_b, const math::vector3& p_b, const math::matrix3x3& rs_b) -> collision_manifold {
-    
-  auto polytope = std::vector<math::vector3>{simplex.points.begin(), simplex.points.end()};
-  auto faces = std::vector<epa_face>{};
-
-  auto add_face = [&](std::size_t a, std::size_t b, std::size_t c) -> void {
-    const auto& va = polytope[a];
-    const auto& vb = polytope[b];
-    const auto& vc = polytope[c];
-    
-    const auto ab = vb - va;
-    const auto ac = vc - va;
-    auto normal = math::vector3::normalized(math::vector3::cross(ab, ac));
-    auto distance = math::vector3::dot(normal, va);
-
-    if (distance < 0.0f) {
-      normal = -normal;
-      distance = -distance;
-      faces.push_back({normal, distance, a, c, b}); 
-    } else {
-      faces.push_back({normal, distance, a, b, c});
-    }
-  };
-
-  add_face(0, 1, 2);
-  add_face(0, 3, 1);
-  add_face(0, 2, 3);
-  add_face(1, 3, 2);
-
-  const auto tolerance = 1e-3f;
-
-  for (auto i = 0u; i < 64u; ++i) {
-    auto min_face_idx = 0u;
-    auto min_dist = std::numeric_limits<std::float_t>::max();
-
-    for (auto f = 0u; f < faces.size(); ++f) {
-      if (faces[f].distance < min_dist) {
-        min_dist = faces[f].distance;
-        min_face_idx = f;
-      }
-    }
-    
-    const auto closest_face = faces[min_face_idx];
-
-    auto support = get_minkowski_support(c_a, p_a, rs_a, c_b, p_b, rs_b, closest_face.normal);
-    const auto distance = math::vector3::dot(support, closest_face.normal);
-
-    if (distance - closest_face.distance < tolerance) {
-      return collision_manifold{closest_face.normal, distance};
-    }
-
-    auto unique_edges = std::vector<epa_edge>{};
-    
-    for (auto entry = faces.begin(); entry != faces.end();) {
-      if (math::vector3::dot(entry->normal, support) - entry->distance > 0.0f) {
-        const auto current_edges = std::array<epa_edge, 3u>{
-          epa_edge{entry->a, entry->b},
-          epa_edge{entry->b, entry->c},
-          epa_edge{entry->c, entry->a}
-        };
-
-        for (const auto& edge : current_edges) {
-          auto edge_it = std::find(unique_edges.begin(), unique_edges.end(), edge);
-          
-          if (edge_it != unique_edges.end()) {
-            *edge_it = unique_edges.back();
-            unique_edges.pop_back();
-          } else {
-            unique_edges.push_back(edge);
-          }
-        }
-
-        *entry = faces.back();
-        faces.pop_back();
-      } else {
-        ++entry;
-      }
-    }
-
-    const auto new_idx = polytope.size();
-    polytope.push_back(support);
-
-    for (const auto& edge : unique_edges) {
-      add_face(edge.a, edge.b, new_idx);
-    }
-  }
-
-  auto min_face_idx = 0u;
-  auto min_dist = std::numeric_limits<std::float_t>::max();
-
-  for (auto f = 0u; f < faces.size(); ++f) {
-    if (faces[f].distance < min_dist) {
-      min_dist = faces[f].distance;
-      min_face_idx = f;
-    }
-  }
-  return collision_manifold{faces[min_face_idx].normal, faces[min_face_idx].distance};
-}
-
-auto check_collision(const collider& c_a, const math::vector3& p_a, const math::matrix3x3& rs_a, const collider& c_b, const math::vector3& p_b, const math::matrix3x3& rs_b) -> std::optional<collision_manifold> {
-  auto simplex = run_gjk(c_a, p_a, rs_a, c_b, p_b, rs_b);
-  
-  if (!simplex) {
-    return std::nullopt;
-  }
-
-  return run_epa(*simplex, c_a, p_a, rs_a, c_b, p_b, rs_b);
 }
 
 } // namespace sbx::physics

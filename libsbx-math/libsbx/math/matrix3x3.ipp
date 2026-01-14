@@ -13,13 +13,13 @@ inline constexpr basic_matrix3x3<Type>::basic_matrix3x3(const base_type& base) n
 : base_type{base} { }
 
 template<scalar Type>
-template<typename Column>
+template<typename Column0, typename Column1, typename Column2>
 inline constexpr basic_matrix3x3<Type>::basic_matrix3x3(
-  Column&& column0,
-  Column&& column1,
-  Column&& column2
+  Column0&& column0,
+  Column1&& column1,
+  Column2&& column2
 ) noexcept
-: base_type{std::forward<Column>(column0), std::forward<Column>(column1), std::forward<Column>(column2)} { }
+: base_type{std::forward<Column0>(column0), std::forward<Column1>(column1), std::forward<Column2>(column2)} { }
 
 template<scalar Type>
 template<scalar Other>
@@ -38,6 +38,12 @@ inline constexpr basic_matrix3x3<Type>::basic_matrix3x3(const Other v00, const O
   column_type{value_type{0}, v11, value_type{0}},
   column_type{value_type{0}, value_type{0}, v22}
 } { }
+
+template<scalar Type>
+template<scalar Other>
+constexpr basic_matrix3x3<Type>::basic_matrix3x3(const Other diagonal) noexcept
+: basic_matrix3x3{diagonal, diagonal, diagonal} { }
+
 
 template<scalar Type>
 inline constexpr auto basic_matrix3x3<Type>::operator[](size_type index) const noexcept -> const column_type& {

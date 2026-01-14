@@ -39,6 +39,8 @@ using collider_shape = std::variant<sphere, cylinder, capsule, box>;
 struct collider {
   collider_shape shape;
   math::vector3 offset{math::vector3::zero};
+  std::float_t friction{0.5f};
+  std::float_t restitution{0.0f};
 }; // struct collider
 
 auto get_bounding_volume(const collider& collider, const math::matrix4x4& transform) -> math::volume;

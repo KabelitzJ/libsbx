@@ -379,21 +379,15 @@ static auto epa(const collider_data& first, const collider_data& second, const s
 static auto gjk(const collider_data& first, const collider_data& second) -> std::optional<simplex> {
   auto simplex = physics::simplex{};
 
-  auto direction = second.position - first.position;
-
-  if (direction.length_squared() < 1e-6f) {
-    direction = math::vector3{0.0f, 1.0f, 0.0f};
-  }
-
-  auto support = support_point(first, second, direction);
+  auto support = support_point(first, second, math::vector3{1.0f, 0.0f, 0.0f});
   simplex.push_front(support);
 
-  direction = -support.minkowski_point;
+  auto direction = -support.minkowski_point;
 
   for ([[maybe_unused]] auto i = 0u; i < 64u; ++i) {
     support = support_point(first, second, direction);
 
-    if (math::vector3::dot(support.minkowski_point, direction) <= 1e-6f) {
+    if (math::vector3::dot(support.minkowski_point, direction) <= 0.0f) {
       return std::nullopt;
     }
 
@@ -409,8 +403,16 @@ static auto gjk(const collider_data& first, const collider_data& second) -> std:
 
 auto check_collision(const collider_data& first, const collider_data& second) -> std::optional<collision_manifold> {
   return gjk(first, second)
-    .and_then([&](const auto& simplex) {
-      return epa(first, second, simplex);
+    .transform([](const simplex& s) {
+      utility::logger<"physics">::debug("gjk hit");
+      return s;
+    })
+    .and_then([&](const simplex& s) {
+      return epa(first, second, s);
+    })
+    .transform([](collision_manifold m) {
+      utility::logger<"physics">::debug("epa hit");
+      return m;
     });
 }
 

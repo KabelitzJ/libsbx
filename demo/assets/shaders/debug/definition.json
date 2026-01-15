@@ -1,5 +1,5 @@
 {
-  "depth": "read_only",
+  "depth": "disabled",
   "uses_transparency": true,
   "rasterization_state": {
     "polygon_mode": "fill",

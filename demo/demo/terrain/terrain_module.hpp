@@ -56,23 +56,18 @@ public:
 
     _node = scene.create_node("Terrain");
 
-    auto& transform = scene.get_component<sbx::scenes::transform>(_node);
-    transform.set_position(sbx::math::vector3{0, 0.5f, 0});
-
     auto& terrain_material = scene.add_material<sbx::models::material>("terrain");
     terrain_material.albedo.image = scene.get_image("prototype");
 
-    auto chunk = scene.create_child_node(_node, fmt::format("Chunk"));
+    scene.add_component<sbx::scenes::static_mesh>(_node, scene.get_mesh("cube"), scene.get_material("terrain"));
 
-    scene.add_component<sbx::scenes::static_mesh>(chunk, scene.get_mesh("cube"), scene.get_material("terrain"));
+    auto& transform = scene.get_component<sbx::scenes::transform>(_node);
+    transform.set_position(sbx::math::vector3::zero);
+    transform.set_scale(sbx::math::vector3{100.0f, 0.5f, 100.0f});
 
-    auto& chunk_transform = scene.get_component<sbx::scenes::transform>(chunk);
-    chunk_transform.set_position(sbx::math::vector3::zero);
-    chunk_transform.set_scale(sbx::math::vector3{100, 0.5, 100});
+    const auto& collider = scene.add_component<sbx::physics::collider>(_node, sbx::physics::box{sbx::math::vector3{50.0f, 0.25f, 50.0f}});
 
-    const auto& collider = scene.add_component<sbx::physics::collider>(chunk, sbx::physics::box{sbx::math::vector3{0.5f, 0.5f, 0.5f}});
-
-    auto& rigidbody = scene.add_component<sbx::physics::rigidbody>(chunk, 0.0f);
+    auto& rigidbody = scene.add_component<sbx::physics::rigidbody>(_node, 0.0f);
     rigidbody.set_inverse_inertia_tensor(sbx::physics::inverse_inertia_tensor(collider, rigidbody.mass()));
 
     // for (auto y = 0u; y < grid.y(); ++y) {

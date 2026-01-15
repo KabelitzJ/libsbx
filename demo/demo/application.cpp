@@ -540,8 +540,9 @@ auto application::update() -> void  {
     auto& cube_transform = scene.get_component<sbx::scenes::transform>(cube);
     cube_transform.set_position(sbx::math::vector3{8.0f, 16.0f, 8.0f});
     cube_transform.set_scale(sbx::math::vector3{2.0f, 2.0f, 2.0f});
+    cube_transform.set_rotation(sbx::math::vector3::forward, sbx::math::degree{20});
 
-    auto& cube_collider = scene.add_component<sbx::physics::collider>(cube, sbx::physics::box{sbx::math::vector3{0.5f, 0.5f, 0.5f}});
+    auto& cube_collider = scene.add_component<sbx::physics::collider>(cube, sbx::physics::box{sbx::math::vector3{1.0f, 1.0f, 1.0f}});
 
     auto& cube_rigidbody = scene.add_component<sbx::physics::rigidbody>(cube, 2.0f);
     cube_rigidbody.set_inverse_inertia_tensor(sbx::physics::inverse_inertia_tensor(cube_collider, cube_rigidbody.mass()));

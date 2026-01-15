@@ -170,8 +170,12 @@ private:
     auto query = scene.query<const physics::collider, const physics::rigidbody>();
 
     for (auto&& [node, collider, rigidbody] : query.each()) {
-      const auto& world_transform = scene.world_transform(node);
-      const auto volume = get_bounding_volume(collider, world_transform);
+      const auto translation = sbx::math::matrix4x4::translated(sbx::math::matrix4x4::identity, scene.world_position(node));
+      const auto rotation = sbx::math::matrix_cast<4, 4>(scene.world_rotation(node));
+
+      const auto volume = get_bounding_volume(collider, translation * rotation);
+
+      // scenes_module.add_debug_box(math::matrix4x4::identity, volume, sbx::math::color::red());
 
       tree.insert(node, volume);
     }
@@ -185,9 +189,9 @@ private:
     auto collisions = std::vector<collision>{};
     collisions.reserve(pairs.size());
 
-    for (auto [node_a, node_b] : pairs) {
-      node_a = std::min(node_a, node_b);
-      node_b = std::max(node_a, node_b);
+    for (auto [first, second] : pairs) {
+      const auto node_a = std::min(first, second);
+      const auto node_b = std::max(first, second);
 
       const auto& body_a = scene.get_component<physics::rigidbody>(node_a);
       const auto& body_b = scene.get_component<physics::rigidbody>(node_b);
@@ -199,13 +203,18 @@ private:
       const auto& collider_a = scene.get_component<physics::collider>(node_a);
       const auto& collider_b = scene.get_component<physics::collider>(node_b);
 
-      const auto data_a = collider_data{scene.world_position(node_a), math::matrix_cast<3, 3>(scene.world_transform(node_a)), collider_a};
-      const auto data_b = collider_data{scene.world_position(node_b), math::matrix_cast<3, 3>(scene.world_transform(node_b)), collider_b};
+      const auto data_a = collider_data{scene.world_position(node_a), scene.world_rotation(node_a), collider_a};
+      const auto data_b = collider_data{scene.world_position(node_b), scene.world_rotation(node_b), collider_b};
 
-      if (auto manifold = check_collision(data_a, data_b)) {
-        collisions.push_back({node_a, node_b, *manifold});
+      if (auto manifold = check_collision(data_a, data_b); manifold) {
+        utility::logger<"physics">::debug("Collision: {}x{} normal={} depth={}", 
+          scene.get_component<scenes::tag>(node_a), 
+          scene.get_component<scenes::tag>(node_b),
+          manifold->normal,
+          manifold->depth
+        );
 
-        utility::logger<"physics">::debug("Collision: {}x{}", scene.get_component<scenes::tag>(node_a), scene.get_component<scenes::tag>(node_b));
+        collisions.push_back({node_a, node_b, std::move(*manifold)});
       }
     }
   

@@ -6,6 +6,8 @@
 #include <libsbx/math/volume.hpp>
 #include <libsbx/math/quaternion.hpp>
 
+#include <libsbx/scenes/node.hpp>
+
 #include <libsbx/physics/collider.hpp>
 
 namespace sbx::physics {

@@ -83,7 +83,9 @@ private:
   };
 
   auto _integrate_velocities(std::float_t dt) -> void {
-    auto& scene = core::engine::get_module<scenes::scenes_module>().scene();
+    auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
+    auto& scene = scenes_module.scene();
+
     auto query = scene.query<physics::rigidbody>();
 
     for (auto&& [node, rigidbody] : query.each()) {
@@ -129,7 +131,9 @@ private:
   }
 
   auto _integrate_positions(std::float_t dt) -> void {
-    auto& scene = core::engine::get_module<scenes::scenes_module>().scene();
+    auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
+    auto& scene = scenes_module.scene();
+
     auto query = scene.query<scenes::transform, physics::rigidbody>();
 
     for (auto&& [node, transform, rigidbody] : query.each()) {
@@ -184,12 +188,14 @@ private:
   }
 
   auto _collision_narrow_phase(const std::vector<collision_pair_type>& pairs) -> std::vector<collision> {
-    auto& scene = core::engine::get_module<scenes::scenes_module>().scene();
+    auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
+    auto& scene = scenes_module.scene();
 
     auto collisions = std::vector<collision>{};
     collisions.reserve(pairs.size());
 
     for (auto [first, second] : pairs) {
+      // [NOTE] KAJ 2026-01-15 : Make sure to get consistent collision pairs
       const auto node_a = std::min(first, second);
       const auto node_b = std::max(first, second);
 
@@ -207,12 +213,19 @@ private:
       const auto data_b = collider_data{scene.world_position(node_b), scene.world_rotation(node_b), collider_b};
 
       if (auto manifold = check_collision(data_a, data_b); manifold) {
-        utility::logger<"physics">::debug("Collision: {}x{} normal={} depth={}", 
+        utility::logger<"physics">::debug("Collision: {}x{} normal={} depth={} contact_points={}", 
           scene.get_component<scenes::tag>(node_a), 
           scene.get_component<scenes::tag>(node_b),
           manifold->normal,
-          manifold->depth
+          manifold->depth,
+          manifold->contact_points.size()
         );
+
+        for (const auto& point : manifold->contact_points) {
+          utility::logger<"physics">::debug(" contact_point={}", point);
+
+          scenes_module.add_debug_sphere(point, 0.2f, math::color::red(), 16u);
+        }
 
         collisions.push_back({node_a, node_b, std::move(*manifold)});
       }

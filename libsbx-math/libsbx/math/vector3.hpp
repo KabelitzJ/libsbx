@@ -68,6 +68,10 @@ public:
 
   [[nodiscard]] static constexpr auto distance(const basic_vector3& lhs, const basic_vector3& rhs) noexcept -> value_type;
 
+  [[nodiscard]] static constexpr auto orthogonal(const basic_vector3& vector) noexcept -> basic_vector3 {
+    return std::abs(vector.x()) > std::abs(vector.z()) ? basic_vector3{-vector.y(), vector.x(), value_type{0}} : basic_vector3{value_type{0}, -vector.z(), vector.y()};
+  }
+
   [[nodiscard]] static constexpr auto splat_x(const basic_vector3& vector) noexcept -> basic_vector3 {
     return base_type::template splat<x_axis>(vector);
   }

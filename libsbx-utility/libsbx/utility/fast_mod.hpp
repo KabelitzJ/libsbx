@@ -9,17 +9,18 @@ namespace sbx::utility {
 /**
  * @brief Fast modulus operation. If the value is less than the modulus, the value can be returned directly.
  * 
- * @tparam Type The type of the value and modulus.
+ * @tparam Value The type of the value.
+ * @tparam Mod The type of the modulus.
  * 
  * @param value The value to be modded.
  * @param modulus The modulus to be used.
  * 
  * @return Type The result of the modulus operation.
  */
-template<std::unsigned_integral Type>
-constexpr auto fast_mod(const Type value, const Type modulus) noexcept -> Type {
+template<std::unsigned_integral Value, std::unsigned_integral Mod>
+constexpr auto fast_mod(const Value value, const Mod modulus) noexcept -> Value {
   // return value - (value / modulus) * modulus;
-  return value < modulus ? value : value % modulus;
+  return value < modulus ? value : value % static_cast<Value>(modulus);
 }
 
 template<std::floating_point Type>

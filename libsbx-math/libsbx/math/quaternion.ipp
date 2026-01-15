@@ -5,6 +5,7 @@
 #include <iostream>
 
 #include <libsbx/utility/hash.hpp>
+#include <libsbx/utility/assert.hpp>
 
 #include <libsbx/math/angle.hpp>
 
@@ -78,38 +79,44 @@ inline constexpr basic_quaternion<Type>::basic_quaternion(const basic_matrix4x4<
 
   switch (biggest_index) {
     case 0: {
-      *this = basic_quaternion<Type>{(matrix[1][2] - matrix[2][1]) * mult, (matrix[2][0] - matrix[0][2]) * mult, (matrix[0][1] - matrix[1][0]) * mult, biggest_val};
+      _complex = vector_type{(matrix[1][2] - matrix[2][1]) * mult, (matrix[2][0] - matrix[0][2]) * mult, (matrix[0][1] - matrix[1][0]) * mult};
+      _scalar = biggest_val;
       break;
     }
     case 1: {
-      *this = basic_quaternion<Type>{biggest_val, (matrix[0][1] + matrix[1][0]) * mult, (matrix[2][0] + matrix[0][2]) * mult, (matrix[1][2] - matrix[2][1]) * mult};
+      _complex = vector_type{biggest_val, (matrix[0][1] + matrix[1][0]) * mult, (matrix[2][0] + matrix[0][2]) * mult};
+      _scalar = (matrix[1][2] - matrix[2][1]) * mult;
       break;
     }
     case 2: {
-      *this = basic_quaternion<Type>{(matrix[0][1] + matrix[1][0]) * mult, biggest_val, (matrix[1][2] + matrix[2][1]) * mult, (matrix[2][0] - matrix[0][2]) * mult};
+      _complex = vector_type{(matrix[0][1] + matrix[1][0]) * mult, biggest_val, (matrix[1][2] + matrix[2][1]) * mult};
+      _scalar = (matrix[2][0] - matrix[0][2]) * mult;
       break;
     }
     case 3: {
-      *this = basic_quaternion<Type>{(matrix[2][0] + matrix[0][2]) * mult, (matrix[1][2] + matrix[2][1]) * mult, biggest_val, (matrix[0][1] - matrix[1][0]) * mult};
+      _complex = vector_type{(matrix[2][0] + matrix[0][2]) * mult, (matrix[1][2] + matrix[2][1]) * mult, biggest_val};
+      _scalar = (matrix[0][1] - matrix[1][0]) * mult;
       break;
     }
     default: {
-      assert(false);
+      utility::assert_that(false, "Failed to create quaternion from matrix4x4");
       *this = basic_quaternion<Type>::identity;
       break;
     }
   }
+
+  normalize();
 }
 
 template<floating_point Type>
 template<floating_point Other>
 constexpr basic_quaternion<Type>::basic_quaternion(const basic_matrix3x3<Other>& matrix) noexcept {
-  const float trace = matrix[0][0] + matrix[1][1] + matrix[2][2];
+  const auto trace = static_cast<value_type>(matrix[0][0]) + static_cast<value_type>(matrix[1][1]) + static_cast<value_type>(matrix[2][2]);
 
-  if (trace > 0.0f) {
-    const float s = std::sqrt(trace + 1.0f) * 2.0f;
+  if (trace > static_cast<value_type>(0)) {
+    const auto s = math::sqrt(trace + static_cast<value_type>(1)) * static_cast<value_type>(2);
 
-    _scalar = 0.25f * s;
+    _scalar = static_cast<value_type>(0.25) * s;
 
     const auto x = (matrix[2][1] - matrix[1][2]) / s;
     const auto y = (matrix[0][2] - matrix[2][0]) / s;
@@ -117,36 +124,38 @@ constexpr basic_quaternion<Type>::basic_quaternion(const basic_matrix3x3<Other>&
 
     _complex = vector_type{x, y, z};
   } else if (matrix[0][0] > matrix[1][1] && matrix[0][0] > matrix[2][2]) {
-    const float s = std::sqrt(1.0f + matrix[0][0] - matrix[1][1] - matrix[2][2]) * 2.0f;
+    const auto s = math::sqrt(static_cast<value_type>(1) + matrix[0][0] - matrix[1][1] - matrix[2][2]) * static_cast<value_type>(2);
 
     _scalar = (matrix[2][1] - matrix[1][2]) / s;
 
-    const auto x = 0.25f * s;
+    const auto x = static_cast<value_type>(0.25) * s;
     const auto y = (matrix[0][1] + matrix[1][0]) / s;
     const auto z = (matrix[0][2] + matrix[2][0]) / s;
 
     _complex = vector_type{x, y, z};
   } else if (matrix[1][1] > matrix[2][2]) {
-    const float s = std::sqrt(1.0f + matrix[1][1] - matrix[0][0] - matrix[2][2]) * 2.0f;
+    const auto s = math::sqrt(static_cast<value_type>(1) + matrix[1][1] - matrix[0][0] - matrix[2][2]) * static_cast<value_type>(2);
 
     _scalar = (matrix[0][2] - matrix[2][0]) / s;
 
     const auto x = (matrix[0][1] + matrix[1][0]) / s;
-    const auto y = 0.25f * s;
+    const auto y = static_cast<value_type>(0.25) * s;
     const auto z = (matrix[1][2] + matrix[2][1]) / s;
 
     _complex = vector_type{x, y, z};
   } else {
-    const float s = std::sqrt(1.0f + matrix[2][2] - matrix[0][0] - matrix[1][1]) * 2.0f;
+    const auto s = math::sqrt(static_cast<value_type>(1) + matrix[2][2] - matrix[0][0] - matrix[1][1]) * static_cast<value_type>(2);
 
     _scalar = (matrix[1][0] - matrix[0][1]) / s;
 
     const auto x = (matrix[0][2] + matrix[2][0]) / s;
     const auto y = (matrix[1][2] + matrix[2][1]) / s;
-    const auto z = 0.25f * s;
+    const auto z = static_cast<value_type>(0.25) * s;
 
     _complex = vector_type{x, y, z};
   }
+
+  normalize();
 }
 
 template<floating_point Type>

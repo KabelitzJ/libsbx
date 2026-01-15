@@ -20,14 +20,12 @@ struct sphere {
 
 struct cylinder {
   std::float_t radius{0.5f};
-  std::float_t base{-0.5f};
-  std::float_t cap{0.5f};
+  std::float_t half_height{0.5f};
 }; // struct cylinder
 
 struct capsule {
   std::float_t radius{0.5f};
-  std::float_t base{-0.5f};
-  std::float_t cap{0.5f};
+  std::float_t half_height{0.5f};
 }; // struct capsule
 
 struct box {
@@ -42,6 +40,8 @@ struct collider {
   std::float_t friction{0.5f};
   std::float_t restitution{0.0f};
 }; // struct collider
+
+auto inverse_inertia_tensor(const collider& collider, std::float_t mass) -> math::matrix3x3;
 
 auto get_bounding_volume(const collider& collider, const math::matrix4x4& transform) -> math::volume;
 

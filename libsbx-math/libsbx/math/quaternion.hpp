@@ -87,12 +87,10 @@ public:
     
     const auto inverse_length_squared = 1.0f / length_squared;
 
-    return basic_quaternion{
-      -quaternion.x() * inverse_length_squared,
-      -quaternion.y() * inverse_length_squared,
-      -quaternion.z() * inverse_length_squared,
-       quaternion.w() * inverse_length_squared
-    };
+    const auto complex = vector_type{quaternion.x() * inverse_length_squared, quaternion.y() * inverse_length_squared, quaternion.z() * inverse_length_squared};
+    const auto scalar = quaternion.w() * inverse_length_squared;
+
+    return basic_quaternion{-complex, scalar};
   }
 
   [[nodiscard]] static constexpr auto normalized(const basic_quaternion& quaternion) noexcept -> basic_quaternion {

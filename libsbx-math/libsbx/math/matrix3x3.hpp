@@ -86,16 +86,6 @@ public:
 
     const auto determinant = m00 * (m11 * m22 - m21 * m12) - m10 * (m01 * m22 - m21 * m02) + m20 * (m01 * m12 - m11 * m02);
 
-    // if constexpr (std::is_floating_point_v<value_type>) {
-    //   if (std::abs(determinant) < std::numeric_limits<value_type>::epsilon()) {
-    //     return identity;
-    //     }
-    // } else {
-    //   if (determinant == value_type{0}) {
-    //     return identity;
-    //   }
-    // }
-
     if (comparision_traits<value_type>::equal(determinant, 0)) {
       return identity;
     }
@@ -135,6 +125,40 @@ public:
     result[2][2] = matrix[2][2];
 
     return result;
+  }
+
+  [[nodiscard]] constexpr static auto ortho_normal(const basic_matrix3x3& matrix) -> basic_matrix3x3 {
+    auto x = basic_vector3<value_type>{matrix[x_axis]};
+    auto y = basic_vector3<value_type>{matrix[y_axis]};
+    auto z = basic_vector3<value_type>{matrix[z_axis]};
+
+    const auto x_length = x.length();
+    const auto y_length = y.length();
+    const auto z_length = z.length();
+
+    if (x_length < math::epsilon_v<value_type> || y_length < math::epsilon_v<value_type> || z_length < math::epsilon_v<value_type>) {
+      return basic_matrix3x3<value_type>::identity;
+    }
+
+    x /= x_length;
+    y /= y_length;
+    z /= z_length;
+
+    if (basic_vector3<value_type>::dot(basic_vector3<value_type>::cross(x, y), z) < value_type{0}) {
+      if (x_length >= y_length && x_length >= z_length) {
+        x = -x;
+      } else if (y_length >= z_length) {
+        y = -y;
+      } else {
+        z = -z;
+      }
+    }
+
+    x = math::vector3::normalized(x);
+    y = math::vector3::normalized(y - x * math::vector3::dot(x, y));
+    z = math::vector3::cross(x, y);
+
+    return basic_matrix3x3<value_type>{x, y, z};
   }
 
   [[nodiscard]] constexpr static auto abs(const basic_matrix3x3& matrix) noexcept -> basic_matrix3x3 {

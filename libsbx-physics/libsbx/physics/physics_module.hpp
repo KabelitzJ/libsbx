@@ -30,7 +30,6 @@
 #include <libsbx/physics/collider.hpp>
 #include <libsbx/physics/collision_detection.hpp>
 #include <libsbx/physics/rigidbody.hpp>
-#include <libsbx/physics/inertia.hpp>
 
 namespace sbx::physics {
 

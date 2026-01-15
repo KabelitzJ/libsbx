@@ -214,37 +214,7 @@ auto scene::world_position(const node_type node) -> math::vector3 {
 }
 
 auto scene::world_rotation(const node_type node) -> math::quaternion {
-  const auto world = world_transform(node);
-
-  auto x = math::vector3{world[0]};
-  auto y = math::vector3{world[1]};
-  auto z = math::vector3{world[2]};
-
-  const auto x_length = x.length();
-  const auto y_length = y.length();
-  const auto z_length = z.length();
-
-  if (x_length < math::epsilonf || y_length < math::epsilonf || z_length < math::epsilonf) {
-    return math::quaternion::identity;
-  }
-
-  x /= x_length;
-  y /= y_length;
-  z /= z_length;
-
-  if (math::vector3::dot(math::vector3::cross(x, y), z) < 0.0f) {
-    if (x_length >= y_length && x_length >= z_length) {
-      x = -x;
-    } else if (y_length >= z_length) {
-      y = -y;
-    } else {
-      z = -z;
-    }
-  }
-
-  auto matrix = math::matrix3x3{x, y, z};
-
-  return math::quaternion{matrix};
+  return math::quaternion{math::matrix4x4::rotation_basis(world_transform(node))};
 }
 
 auto scene::world_scale(const node_type node) -> math::vector3 {

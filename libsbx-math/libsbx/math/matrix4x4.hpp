@@ -104,6 +104,14 @@ public:
 
   [[nodiscard]] constexpr static auto rotation_from_euler_angles(const basic_vector3<value_type>& euler_angles) noexcept -> basic_matrix4x4;
 
+  [[nodiscard]] constexpr static auto rotation_basis(const basic_matrix4x4& matrix) noexcept -> basic_matrix3x3<value_type> {
+    auto x = basic_vector3<value_type>{matrix[x_axis]};
+    auto y = basic_vector3<value_type>{matrix[y_axis]};
+    auto z = basic_vector3<value_type>{matrix[z_axis]};
+
+    return basic_matrix3x3<value_type>::ortho_normal(basic_matrix3x3<value_type>{x, y, z});
+  }
+
   constexpr auto operator[](size_type index) const noexcept -> const column_type&;
 
   constexpr auto operator[](size_type index) noexcept -> column_type&;

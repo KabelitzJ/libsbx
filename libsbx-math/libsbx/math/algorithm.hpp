@@ -17,6 +17,25 @@ inline constexpr auto abs(const Type value) -> Type {
   return std::abs(value);
 }
 
+template<floating_point Type>
+inline constexpr auto sqrt(const Type value) -> Type {
+  if(std::signbit(value)) {
+    return std::numeric_limits<Type>::quiet_NaN();
+  }
+
+  if(value == std::numeric_limits<Type>::infinity()) {
+    return std::numeric_limits<Type>::quiet_NaN();
+  }
+
+  auto result = Type{value};
+
+  for(auto last = Type{0.0}; result != last; result = Type{0.5} * (result + value / result)) {
+    last = result;
+  }
+
+  return result;
+}
+
 } // namespace sbx::math
 
 #endif // LIBSBX_MATH_ALGORITHM_HPP_

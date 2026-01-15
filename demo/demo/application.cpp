@@ -544,7 +544,7 @@ auto application::update() -> void  {
     auto& cube_collider = scene.add_component<sbx::physics::collider>(cube, sbx::physics::box{sbx::math::vector3{0.5f, 0.5f, 0.5f}});
 
     auto& cube_rigidbody = scene.add_component<sbx::physics::rigidbody>(cube, 2.0f);
-    cube_rigidbody.set_inverse_inertia_tensor(sbx::physics::inertia::inverse_tensor(cube_collider, cube_rigidbody.mass()));
+    cube_rigidbody.set_inverse_inertia_tensor(sbx::physics::inverse_inertia_tensor(cube_collider, cube_rigidbody.mass()));
     cube_rigidbody.add_constant_acceleration(sbx::math::vector3{0, -9.81f, 0});
   }
 }

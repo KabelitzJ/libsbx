@@ -4,6 +4,7 @@
 #include <libsbx/math/vector3.hpp>
 #include <libsbx/math/matrix4x4.hpp>
 #include <libsbx/math/volume.hpp>
+#include <libsbx/math/quaternion.hpp>
 
 #include <libsbx/physics/collider.hpp>
 
@@ -11,7 +12,7 @@ namespace sbx::physics {
 
 struct collider_data {
   math::vector3 position;
-  math::matrix3x3 rotation_scale;
+  math::quaternion rotation;
   const physics::collider& collider;
 }; // struct collider_data
 

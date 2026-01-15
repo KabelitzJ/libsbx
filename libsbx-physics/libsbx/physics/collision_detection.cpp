@@ -2,10 +2,10 @@
 
 namespace sbx::physics {
 
-static auto find_furthest_point(const math::vector3& direction, const box& box, const math::vector3& position, const math::matrix3x3& rotation_scale) -> math::vector3 {
-  const auto inverse = math::matrix3x3::inverted(rotation_scale);
+static auto find_furthest_point(const box& box, const math::vector3& direction, const math::vector3& position, const math::quaternion& rotation) -> math::vector3 {
+  const auto inverse_rotation = math::quaternion::inverted(rotation);
 
-  const auto local_direction = math::vector3{inverse * direction};
+  const auto local_direction = math::vector3{inverse_rotation * direction};
 
   auto result = math::vector3{};
 
@@ -13,45 +13,60 @@ static auto find_furthest_point(const math::vector3& direction, const box& box, 
   result.y() = (local_direction.y() > 0.0f) ? box.half_extents.y() : -box.half_extents.y();
   result.z() = (local_direction.z() > 0.0f) ? box.half_extents.z() : -box.half_extents.z();
 
-  return math::vector3{rotation_scale * result} + position;
+  return math::vector3{rotation * result} + position;
 }
 
-static auto find_furthest_point(const math::vector3& direction, const sphere& sphere, const math::vector3& position, const math::matrix3x3& rotation_scale) -> math::vector3 {
-  const auto inverse = math::matrix3x3::inverted(rotation_scale);
+static auto find_furthest_point(const sphere& sphere, const math::vector3& direction, const math::vector3& position, const math::quaternion& rotation) -> math::vector3 {
+  const auto inverse_rotation = math::quaternion::inverted(rotation);
 
-  const auto local_direction = math::vector3{inverse * direction};
+  const auto local_direction = math::vector3{inverse_rotation * direction};
 
   auto result = math::vector3::normalized(local_direction) * sphere.radius;
 
-  return math::vector3{rotation_scale * result} + position;
+  return math::vector3{rotation * result} + position;
 }
 
-static auto find_furthest_point(const math::vector3& direction, const cylinder& cylinder, const math::vector3& position, const math::matrix3x3& rotation_scale) -> math::vector3 {
-  const auto inverse = math::matrix3x3::inverted(rotation_scale);
+static auto find_furthest_point(const cylinder& cylinder, const math::vector3& direction, const math::vector3& position, const math::quaternion& rotation) -> math::vector3 {
+  const auto inverse_rotation = math::quaternion::inverted(rotation);
 
-  const auto local_direction = math::vector3{inverse * direction};
+  const auto local_direction = math::vector3{inverse_rotation * direction};
 
-  const auto local_direction_xz = math::vector3{local_direction.x(), 0.0f, local_direction.z()};
+  auto result = math::vector3{0.0f, 0.0f, 0.0f};
 
-  auto result = math::vector3::normalized(local_direction_xz) * cylinder.radius;
-  result.y() = (local_direction.y() > 0.0f) ? cylinder.cap : cylinder.base;
+  result.y() = (local_direction.y() > 0.0f) ?  cylinder.half_height : -cylinder.half_height;
 
-  return math::vector3{rotation_scale * result} + position;
+  auto radial = math::vector3{local_direction.x(), 0.0f, local_direction.z()};
+
+  const auto length_squared = radial.length_squared();
+
+  if (length_squared > 1e-6f) {
+    radial *= (cylinder.radius / std::sqrt(length_squared));
+
+    result.x() = radial.x();
+    result.z() = radial.z();
+  }
+
+  return math::vector3{rotation * result} + position;
 }
 
-static auto find_furthest_point(const math::vector3& direction, const capsule& capsule, const math::vector3& position, const math::matrix3x3& rotation_scale) -> math::vector3 {
-  const auto inverse = math::matrix3x3::inverted(rotation_scale);
+static auto find_furthest_point(const capsule& capsule, const math::vector3& direction, const math::vector3& position, const math::quaternion& rotation) -> math::vector3 {
+  const auto inverse_rotation = math::quaternion::inverted(rotation);
 
-  const auto local_direction = math::vector3{inverse * direction};
+  const auto local_direction = math::vector3{inverse_rotation * direction};
 
-  auto result = math::vector3::normalized(local_direction) * capsule.radius;
-  result.y() = (local_direction.y() > 0.0f) ? capsule.cap : capsule.base;
+  auto result = math::vector3{0.0f, 0.0f, 0.0f};
 
-  return math::vector3{rotation_scale * result} + position;
+  result.y() = (local_direction.y() > 0.0f) ?  capsule.half_height : -capsule.half_height;
+
+  if (local_direction.length_squared() > 1e-6f) {
+    result += math::vector3::normalized(local_direction) * capsule.radius;
+  }
+
+  return math::vector3{rotation * result} + position;
 }
 
 auto find_furthest_point(const collider_data& data, const math::vector3& direction) -> math::vector3 {
-  return std::visit([&](const auto& shape) { return find_furthest_point(direction, shape, data.position, data.rotation_scale); }, data.collider.shape);
+  return std::visit([&](const auto& shape) { return find_furthest_point(shape, direction, data.position, data.rotation); }, data.collider.shape);
 }
 
 struct minkowski_vertex {

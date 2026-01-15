@@ -36,6 +36,7 @@ inline constexpr auto basic_vector3<Type>::normalized(const basic_vector3& vecto
 
   if (!comparision_traits<length_type>::equal(length_squared, static_cast<length_type>(0))) {
     const auto length = std::sqrt(length_squared);
+
     return vector / length;
   }
 

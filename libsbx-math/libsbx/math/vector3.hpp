@@ -69,7 +69,26 @@ public:
   [[nodiscard]] static constexpr auto distance(const basic_vector3& lhs, const basic_vector3& rhs) noexcept -> value_type;
 
   [[nodiscard]] static constexpr auto orthogonal(const basic_vector3& vector) noexcept -> basic_vector3 {
-    return std::abs(vector.x()) > std::abs(vector.z()) ? basic_vector3{-vector.y(), vector.x(), value_type{0}} : basic_vector3{value_type{0}, -vector.z(), vector.y()};
+    if (vector.length_squared() < 1e-12f) {
+      return {1.0f, 0.0f, 0.0f};
+    }
+
+    const auto ax = std::abs(vector.x());
+    const auto ay = std::abs(vector.y());
+    const auto az = std::abs(vector.z());
+
+    // choose the axis least aligned with vector
+    auto other = (ax < ay && ax < az) ? basic_vector3{1, 0, 0} : (ay < az) ? basic_vector3{0, 1, 0} : basic_vector3{0, 0, 1};
+
+    auto orthogonal = cross(vector, other);
+
+    // last resort (should almost never happen)
+    if (orthogonal.length_squared() < 1e-12f) {
+      other = basic_vector3{0, 1, 0};
+      orthogonal = cross(vector, other);
+    }
+
+    return normalized(orthogonal);
   }
 
   [[nodiscard]] static constexpr auto splat_x(const basic_vector3& vector) noexcept -> basic_vector3 {

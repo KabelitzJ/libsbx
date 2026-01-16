@@ -195,20 +195,20 @@ private:
       const auto& collider_a = scene.get_component<physics::collider>(node_a);
       const auto& collider_b = scene.get_component<physics::collider>(node_b);
 
-      const auto data_a = collider_data{scene.world_position(node_a), scene.world_rotation(node_a), collider_a};
-      const auto data_b = collider_data{scene.world_position(node_b), scene.world_rotation(node_b), collider_b};
+      const auto data_a = collider_data{scene.world_position(node_a), math::quaternion::normalized(scene.world_rotation(node_a)), collider_a};
+      const auto data_b = collider_data{scene.world_position(node_b), math::quaternion::normalized(scene.world_rotation(node_b)), collider_b};
 
       if (auto manifold = check_collision(data_a, data_b); manifold) {
-        utility::logger<"physics">::debug("Collision: {}x{} normal={} depth={} contact_points={}", 
-          scene.get_component<scenes::tag>(node_a), 
-          scene.get_component<scenes::tag>(node_b),
-          manifold->normal,
-          manifold->depth,
-          manifold->contact_points.size()
-        );
+        // utility::logger<"physics">::debug("Collision: {}x{} normal={} depth={} contact_points={}", 
+        //   scene.get_component<scenes::tag>(node_a), 
+        //   scene.get_component<scenes::tag>(node_b),
+        //   manifold->normal,
+        //   manifold->depth,
+        //   manifold->contact_points.size()
+        // );
 
         for (const auto& point : manifold->contact_points) {
-          utility::logger<"physics">::debug(" contact_point={}", point);
+          // utility::logger<"physics">::debug(" contact_point={}", point);
 
           scenes_module.add_debug_sphere(point, 0.2f, math::color::red(), 16u);
         }

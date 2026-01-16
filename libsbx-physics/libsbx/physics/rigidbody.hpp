@@ -209,8 +209,8 @@ private:
   
   math::vector3 _constant_forces{math::vector3::zero}; 
 
-  math::matrix3x3 _inverse_inertia_tensor{math::matrix3x3::identity};
-  math::matrix3x3 _inverse_inertia_tensor_world{math::matrix3x3::identity};
+  math::matrix3x3 _inverse_inertia_tensor{math::matrix3x3::zero};
+  math::matrix3x3 _inverse_inertia_tensor_world{math::matrix3x3::zero};
 
 }; // class rigidbody
 

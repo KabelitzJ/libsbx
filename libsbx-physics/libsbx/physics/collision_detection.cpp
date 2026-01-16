@@ -366,7 +366,7 @@ static auto epa(const collider_data& first, const collider_data& second, const s
       auto manifold = collision_manifold{};
 
       manifold.normal = closest_face.normal;
-      manifold.depth  = support_distance;
+      manifold.depth = closest_face.distance;
 
       return manifold;
     }
@@ -431,92 +431,6 @@ static auto gjk(const collider_data& first, const collider_data& second) -> std:
   return std::nullopt;
 }
 
-#if false
-
-static auto generate_contacts(const box& a, const collider_data& a_data, const box& b, const collider_data& b_data, collision_manifold& manifold) -> void {
-  auto normal = manifold.normal;
-
-  if (math::vector3::dot(normal, b_data.position - a_data.position) < 0.0f) {
-    normal = -normal;
-  }
-
-  const auto axes_a = std::array<math::vector3, 3u>{
-    a_data.rotation * math::vector3{1, 0, 0},
-    a_data.rotation * math::vector3{0, 1, 0},
-    a_data.rotation * math::vector3{0, 0, 1}
-  };
-
-  const auto axes_b = std::array<math::vector3, 3u>{
-    b_data.rotation * math::vector3{1, 0, 0},
-    b_data.rotation * math::vector3{0, 1, 0},
-    b_data.rotation * math::vector3{0, 0, 1}
-  };
-
-  auto best_dot_a = 0.0f;
-  auto best_dot_b = 0.0f;
-  auto axis_a = std::size_t{0};
-  auto axis_b = std::size_t{0};
-
-  for (auto i = 0u; i < 3u; ++i) {
-    const auto direction_a = std::abs(math::vector3::dot(normal, axes_a[i]));
-    const auto direction_b = std::abs(math::vector3::dot(normal, axes_b[i]));
-
-    if (direction_a > best_dot_a) {
-      best_dot_a = direction_a;
-      axis_a = i;
-    }
-
-    if (direction_b > best_dot_b) {
-      best_dot_b = direction_b;
-      axis_b = i;
-    }
-  }
-
-  const bool a_is_reference = (best_dot_a >= best_dot_b);
-
-  const auto& reference_box  = a_is_reference ? a : b;
-  const auto& reference_data = a_is_reference ? a_data : b_data;
-  const auto& reference_axes = a_is_reference ? axes_a : axes_b;
-
-  const auto& incident_box  = a_is_reference ? b : a;
-  const auto& incident_data = a_is_reference ? b_data : a_data;
-
-  const auto reference_axis_index = a_is_reference ? axis_a : axis_b;
-
-  auto reference_normal = reference_axes[reference_axis_index];
-
-  if (math::vector3::dot(reference_normal, normal) < 0.0f) {
-    reference_normal = -reference_normal;
-  }
-
-  const auto reference_extent = reference_box.half_extents[reference_axis_index];
-
-  const auto plane_normal = reference_normal;
-  const auto plane_point = reference_data.position + plane_normal * reference_extent;
-
-  for (auto x : {-1, 1}) {
-    for (auto y : {-1, 1}) {
-      for (auto z : {-1, 1}) {
-        const auto local = math::vector3{
-          x * incident_box.half_extents.x(),
-          y * incident_box.half_extents.y(),
-          z * incident_box.half_extents.z()
-        };
-
-        const auto world = incident_data.rotation * local + incident_data.position;
-
-        const auto separation = math::vector3::dot(world - plane_point, plane_normal);
-
-        if (separation <= 0.0f) {
-          manifold.contact_points.push_back(world);
-        }
-      }
-    }
-  }
-}
-
-#else
-
 struct clipping_plane {
   math::vector3 normal;
   math::vector3 point;
@@ -565,50 +479,65 @@ static auto clip_polygon_against_plane(std::array<math::vector3, 8u>& input_buff
 }
 
 static auto get_incident_face_vertices(const box& incident_box, const collider_data& incident_data, const math::vector3& reference_face_normal) -> std::array<math::vector3, 4u> {
-  const auto incident_axes = std::array<math::vector3, 3u>{
+
+  const auto axes = std::array<math::vector3, 3u>{
     incident_data.rotation * math::vector3{1,0,0},
     incident_data.rotation * math::vector3{0,1,0},
     incident_data.rotation * math::vector3{0,0,1}
   };
 
-  auto most_opposed_dot = std::numeric_limits<float>::max();
-  auto incident_axis_index = std::size_t{0};
+  // Pick axis MOST aligned with the reference normal (faces are +/- that axis)
+  auto best_abs = -1.0f;
+  auto axis_index = std::size_t{0};
 
   for (auto i = 0u; i < 3u; ++i) {
-    const auto dot_value = math::vector3::dot(incident_axes[i], reference_face_normal);
+    const auto d = math::vector3::dot(axes[i], reference_face_normal);
+    const auto a = std::abs(d);
 
-    if (dot_value < most_opposed_dot) {
-      most_opposed_dot = dot_value;
-      incident_axis_index = i;
+    if (a > best_abs) {
+      best_abs = a;
+      axis_index = i;
     }
   }
 
-  const auto face_sign = (math::vector3::dot(incident_axes[incident_axis_index], reference_face_normal) < 0.0f) ? 1.0f : -1.0f;
+  // Choose the incident face whose normal points opposite the reference normal
+  const auto d = math::vector3::dot(axes[axis_index], reference_face_normal);
+  const auto face_sign = (d > 0.0f) ? -1.0f : 1.0f;
 
-  auto face_vertices = std::array<math::vector3, 4u>{};
-  auto index = std::size_t{0};
+  const auto i1 = utility::fast_mod(axis_index + 1u, 3u);
+  const auto i2 = utility::fast_mod(axis_index + 2u, 3u);
 
-  for (const auto u : {-1.0f, 1.0f}) {
-    for (const auto v : {-1.0f, 1.0f}) {
-      auto local_vertex = incident_box.half_extents;
+  // Perimeter winding in the face plane:
+  // (-,-) -> (+,-) -> (+,+) -> (-,+)
+  constexpr std::array<std::pair<float, float>, 4u> winding = {{
+    { -1.0f, -1.0f },
+    {  1.0f, -1.0f },
+    {  1.0f,  1.0f },
+    { -1.0f,  1.0f }
+  }};
 
-      local_vertex[incident_axis_index] *= face_sign;
-      local_vertex[utility::fast_mod(incident_axis_index + 1u, 3u)] *= u;
-      local_vertex[utility::fast_mod(incident_axis_index + 2u, 3u)] *= v;
+  auto world = std::array<math::vector3, 4u>{};
 
-      face_vertices[index++] = incident_data.rotation * local_vertex + incident_data.position;
-    }
+  for (auto i = 0u; i < 4u; ++i) {
+    const auto [u, v] = winding[i];
+
+    auto local = incident_box.half_extents;
+
+    local[axis_index] *= face_sign;
+    local[i1] *= u;
+    local[i2] *= v;
+
+    world[i] = incident_data.rotation * local + incident_data.position;
   }
 
-  return face_vertices;
+  return world;
 }
 
 static auto generate_contacts(const box& box_a, const collider_data& box_a_data, const box& box_b, const collider_data& box_b_data, collision_manifold& manifold) -> void {
-  auto penetration_normal = manifold.normal;
+  manifold.contact_points.clear();
 
-  if (math::vector3::dot(penetration_normal, box_b_data.position - box_a_data.position) < 0.0f) {
-    penetration_normal = -penetration_normal;
-  }
+  // Ensure the normal points A -> B
+  const auto penetration_normal = (math::vector3::dot(manifold.normal, box_b_data.position - box_a_data.position) >= 0.0f) ? manifold.normal : -manifold.normal;
 
   const auto axes_a = std::array<math::vector3, 3u>{
     box_a_data.rotation * math::vector3::right,
@@ -622,6 +551,7 @@ static auto generate_contacts(const box& box_a, const collider_data& box_a_data,
     box_b_data.rotation * math::vector3::backward
   };
 
+  // Choose reference box by best axis alignment to collision normal
   auto best_alignment_a = 0.0f;
   auto best_alignment_b = 0.0f;
   auto reference_axis_a = std::size_t{0};
@@ -642,7 +572,7 @@ static auto generate_contacts(const box& box_a, const collider_data& box_a_data,
     }
   }
 
-  const bool box_a_is_reference = (best_alignment_a >= best_alignment_b);
+  const auto box_a_is_reference = (best_alignment_a >= best_alignment_b);
 
   const auto& reference_box  = box_a_is_reference ? box_a : box_b;
   const auto& reference_data = box_a_is_reference ? box_a_data : box_b_data;
@@ -653,6 +583,7 @@ static auto generate_contacts(const box& box_a, const collider_data& box_a_data,
 
   const auto reference_axis_index = box_a_is_reference ? reference_axis_a : reference_axis_b;
 
+  // Reference face normal (choose the face that points toward the other box)
   auto reference_face_normal = reference_axes[reference_axis_index];
 
   if (math::vector3::dot(reference_face_normal, penetration_normal) < 0.0f) {
@@ -661,10 +592,13 @@ static auto generate_contacts(const box& box_a, const collider_data& box_a_data,
 
   const auto reference_face_extent = reference_box.half_extents[reference_axis_index];
 
+  // Point on the reference face plane
   const auto reference_face_point = reference_data.position + reference_face_normal * reference_face_extent;
 
+  // Incident face polygon (must be in perimeter winding order)
   const auto incident_face_vertices = get_incident_face_vertices(incident_box, incident_data, reference_face_normal);
 
+  // Clip incident polygon against the side planes of the reference box
   auto polygon_buffer = std::array<math::vector3, 8u>{};
   auto polygon_vertex_count = std::size_t{4};
 
@@ -673,13 +607,14 @@ static auto generate_contacts(const box& box_a, const collider_data& box_a_data,
   }
 
   for (auto i = 0u; i < 3u; ++i) {
+    // don't clip against the reference face normal axis
     if (i == reference_axis_index) {
       continue;
     }
 
     for (const auto sign : { -1.0f, 1.0f }) {
       const auto plane_normal = reference_axes[i] * sign;
-      const auto plane_point = reference_data.position + plane_normal * reference_box.half_extents[i];
+      const auto plane_point  = reference_data.position + plane_normal * reference_box.half_extents[i];
 
       polygon_vertex_count = clip_polygon_against_plane(polygon_buffer, polygon_vertex_count, { plane_normal, plane_point });
 
@@ -689,16 +624,31 @@ static auto generate_contacts(const box& box_a, const collider_data& box_a_data,
     }
   }
 
-  for (auto i = 0u; i < polygon_vertex_count; ++i) {
-    const auto separation =math::vector3::dot(polygon_buffer[i] - reference_face_point,reference_face_normal);
+  // Keep points behind/on the reference plane, project onto plane, and compute depth from them
+  constexpr auto separation_epsilon = 1e-6f;
 
-    if (separation <= 0.0f) {
-      manifold.contact_points.push_back(polygon_buffer[i]);
+  auto max_penetration = 0.0f;
+
+  for (auto i = 0u; i < polygon_vertex_count; ++i) {
+    const auto separation = math::vector3::dot(polygon_buffer[i] - reference_face_point, reference_face_normal);
+
+    if (separation <= separation_epsilon) {
+      // Project contact point onto the reference face plane
+      const auto contact = polygon_buffer[i] - reference_face_normal * separation;
+
+      manifold.contact_points.push_back(contact);
+      max_penetration = std::max(max_penetration, -separation);
     }
   }
-}
 
-#endif
+  // If numerical issues removed all points, fall back to at least one reasonable contact
+  if (manifold.contact_points.empty()) {
+    manifold.contact_points.push_back(reference_face_point);
+    max_penetration = std::max(max_penetration, manifold.depth);
+  }
+
+  manifold.depth = max_penetration;
+}
 
 template<typename B>
 static auto generate_contacts(const sphere& a, const collider_data& a_data, [[maybe_unused]] const B& b, [[maybe_unused]] const collider_data& b_data, collision_manifold& manifold) -> void {

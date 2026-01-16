@@ -212,7 +212,9 @@ struct fmt::formatter<sbx::math::basic_uuid<Type>> {
 
   template<typename FormatContext>
   auto format(const sbx::math::basic_uuid<Type>& uuid, FormatContext& context) const -> decltype(context.out()) {
-    return fmt::format_to(context.out(), "{}", uuid.value());
+    static constexpr auto width = sizeof(Type) * 2;
+
+    return fmt::format_to(context.out(), "{:0{}x}", uuid.value(), width);
   }
 }; // struct fmt::formatter<sbx::math::uuid>
 

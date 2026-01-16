@@ -540,12 +540,17 @@ auto application::update() -> void  {
     auto& cube_transform = scene.get_component<sbx::scenes::transform>(cube);
     cube_transform.set_position(sbx::math::vector3{16.0f, 16.0f, 16.0f});
     cube_transform.set_scale(sbx::math::vector3{2.0f, 2.0f, 2.0f});
-    cube_transform.set_rotation(sbx::math::vector3::forward, sbx::math::degree{25});
+    // cube_transform.set_rotation(sbx::math::vector3::forward, sbx::math::degree{25});
 
     auto& cube_collider = scene.add_component<sbx::physics::collider>(cube, sbx::physics::box{sbx::math::vector3{1.0f, 1.0f, 1.0f}});
 
-    auto& cube_rigidbody = scene.add_component<sbx::physics::rigidbody>(cube, 2.0f);
-    cube_rigidbody.set_inverse_inertia_tensor(sbx::physics::inverse_inertia_tensor(cube_collider, cube_rigidbody.mass()));
+    auto& cube_rigidbody = scene.add_component<sbx::physics::rigidbody>(cube, 1.0f);
+    auto inverse_inertia_tensor = sbx::physics::inverse_inertia_tensor(cube_collider, cube_rigidbody.mass());
+
+    sbx::utility::logger<"demo">::debug("inverse_inertia_tensor={}", inverse_inertia_tensor);
+
+    cube_rigidbody.set_inverse_inertia_tensor(inverse_inertia_tensor);
+    cube_rigidbody.update_inertia_tensor_world(sbx::math::matrix_cast<3, 3>(scene.world_rotation(cube)));
     cube_rigidbody.add_constant_acceleration(sbx::math::vector3{0, -9.81f, 0});
   }
 }

@@ -64,8 +64,8 @@ template<scalar Lhs, scalar Rhs>
 inline constexpr auto operator*(basic_matrix3x3<Lhs> lhs, const basic_matrix3x3<Rhs>& rhs) noexcept -> basic_matrix3x3<Lhs> {
   auto result = basic_matrix3x3<Lhs>{};
 
-  for (auto column = 0; column < 3; ++column) {
-    for (auto row = 0; row < 3; ++row) {
+  for (auto column = 0u; column < 3u; ++column) {
+    for (auto row = 0u; row < 3u; ++row) {
       result[column][row] = lhs[0][row] * rhs[column][0] + lhs[1][row] * rhs[column][1] + lhs[2][row] * rhs[column][2];
     }
   }

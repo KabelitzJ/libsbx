@@ -6,39 +6,19 @@
 
 namespace sbx::physics {
 
-static constexpr auto collision_margin = 0.02f;
-
-static auto vlen(const math::vector3& v) -> float { return v.length(); }
-static auto vlen2(const math::vector3& v) -> float { return v.length_squared(); }
-
-// If your quaternion type has these:
-static auto qlen2(const math::quaternion& q) -> float { return q.length_squared(); }
+static constexpr auto collision_margin = 0.00f;
 
 static auto find_furthest_point(const box& box, const math::vector3& direction, const math::vector3& position, const math::quaternion& rotation) -> math::vector3 {
   const auto inverse_rotation = math::quaternion::inverted(rotation);
   const auto local_direction = math::vector3{ inverse_rotation * direction };
 
-  utility::logger<"physics">::debug(
-    "support(box): dir={} rot.len2={} local_dir={} |local_dir|={}",
-    direction, qlen2(rotation), local_direction, vlen(local_direction)
-  );
+  const auto inflated_extents = box.half_extents + math::vector3{ collision_margin };
 
-  const auto inflated_extents =
-    box.half_extents + math::vector3{ collision_margin };
-
-  math::vector3 local_support;
-
-  local_support.x() = (local_direction.x() > 0.0f)
-    ?  inflated_extents.x()
-    : -inflated_extents.x();
-
-  local_support.y() = (local_direction.y() > 0.0f)
-    ?  inflated_extents.y()
-    : -inflated_extents.y();
-
-  local_support.z() = (local_direction.z() > 0.0f)
-    ?  inflated_extents.z()
-    : -inflated_extents.z();
+  auto local_support = math::vector3{
+    (local_direction.x() > 0.0f) ?  inflated_extents.x() : -inflated_extents.x(),
+    (local_direction.y() > 0.0f) ?  inflated_extents.y() : -inflated_extents.y(),
+    (local_direction.z() > 0.0f) ?  inflated_extents.z() : -inflated_extents.z()
+  };
 
   return rotation * local_support + position;
 }
@@ -105,17 +85,7 @@ auto support_point(const collider_data& first, const collider_data& second, cons
   const auto p1 = find_furthest_point(first, direction);
   const auto p2 = find_furthest_point(second, -direction);
 
-  const auto mink = p1 - p2;
-
-  utility::logger<"physics">::debug(
-    "support(): dir={} |dir|={} p1={} |p1|={} p2={} |p2|={} mink={} |mink|={}",
-    direction, vlen(direction),
-    p1, vlen(p1),
-    p2, vlen(p2),
-    mink, vlen(mink)
-  );
-
-  return minkowski_vertex{mink, p1};
+  return minkowski_vertex{p1 - p2, p1};
 }
 
 class simplex {
@@ -191,15 +161,6 @@ static auto line(simplex& simplex, math::vector3& direction) -> bool {
 		direction = math::vector3::cross(math::vector3::cross(ab, ao), ab);
 
     if (direction.length_squared() < 1e-12f) {
-      utility::logger<"physics">::debug("line(): ab={} ao={} cross(ab, ao)={} direction={} orthogonal(ab)={}",
-        ab,
-        ao,
-        math::vector3::cross(ab, ao).length_squared(),
-        direction.length_squared(),
-        direction,
-        math::vector3::orthogonal(ab)
-      );
-
       direction = math::vector3::orthogonal(ab);
     }
 	} else {
@@ -228,15 +189,6 @@ static auto triangle(simplex& simplex, math::vector3& direction) -> bool {
 
       if (direction.length_squared() < 1e-12f) {
         direction = math::vector3::orthogonal(ac);
-
-        utility::logger<"physics">::debug("triangle(): ac={} ao={} cross(ac, ao)={} direction={} orthogonal(ac)={}",
-          ab,
-          ao,
-          math::vector3::cross(ab, ao).length_squared(),
-          direction.length_squared(),
-          direction,
-          math::vector3::orthogonal(ab)
-        );
       }
 		} else {
 			return line(simplex = { simplex[0], simplex[1] }, direction);
@@ -297,30 +249,6 @@ static auto next_simplex(simplex& simplex, math::vector3& direction) -> bool {
   return false;
 }
 
-static auto barycentric_coordinates(const math::vector3& p, const math::vector3& a, const math::vector3& b, const math::vector3& c) -> math::vector3 {
-  const auto v0 = b - a;
-  const auto v1 = c - a;
-  const auto v2 = p - a;
-
-  const auto d00 = math::vector3::dot(v0, v0);
-  const auto d01 = math::vector3::dot(v0, v1);
-  const auto d11 = math::vector3::dot(v1, v1);
-  const auto d20 = math::vector3::dot(v2, v0);
-  const auto d21 = math::vector3::dot(v2, v1);
-
-  const auto denom = d00 * d11 - d01 * d01;
-
-  if (std::abs(denom) < 1e-6f) {
-    return {1.0f, 0.0f, 0.0f};
-  }
-
-  const auto v = (d11 * d20 - d01 * d21) / denom;
-  const auto w = (d00 * d21 - d01 * d20) / denom;
-  const auto u = 1.0f - v - w;
-
-  return math::vector3{u, v, w};
-}
-
 struct epa_face {
   std::size_t a;
   std::size_t b;
@@ -339,16 +267,6 @@ static auto make_face(const std::vector<minkowski_vertex>& vertices, std::size_t
   const auto ac = pc - pa;
 
   auto normal = math::vector3::cross(ab, ac);
-
-  const auto crossv = math::vector3::cross(ab, ac);
-
-  utility::logger<"physics">::debug(
-    "make_face(): a={} b={} c={} pa={} pb={} pc={} ab={} ac={} cross={} |cross|={}",
-    a, b, c,
-    pa, pb, pc,
-    ab, ac,
-    crossv, vlen(crossv)
-  );
 
   // fallback: pick a stable normal
   if (normal.length_squared() < 1e-12f) {
@@ -420,17 +338,7 @@ static auto epa(const collider_data& first, const collider_data& second, const s
     const auto support_distance = math::vector3::dot(closest_face.normal,support.minkowski_point);
     const auto delta = support_distance - closest_face.distance;
 
-    utility::logger<"physics">::debug(
-      "epa[it={}]: closest_face idx={} n={} dist={} |n|={} support_dist={} delta={}",
-      iteration, closest_face_index,
-      closest_face.normal, closest_face.distance,
-      vlen(closest_face.normal),
-      support_distance, delta
-    );
-
     if (delta < epsilon) {
-      utility::logger<"physics">::debug("epa: CONVERGED normal={} depth={}", closest_face.normal, closest_face.distance);
-
       auto manifold = collision_manifold{};
 
       manifold.normal = closest_face.normal;
@@ -447,7 +355,7 @@ static auto epa(const collider_data& first, const collider_data& second, const s
     for (auto i = 0u; i < faces.size();) {
       const auto& face = faces[i];
 
-      if (math::vector3::dot(face.normal, support.minkowski_point) > 0.0f) {
+      if ((math::vector3::dot(face.normal, support.minkowski_point) - face.distance) > epsilon) {
         add_if_unique_edge(horizon_edges, face.a, face.b);
         add_if_unique_edge(horizon_edges, face.b, face.c);
         add_if_unique_edge(horizon_edges, face.c, face.a);
@@ -474,13 +382,6 @@ static auto gjk(const collider_data& first, const collider_data& second) -> std:
   auto direction = second.position - first.position;
 
   if (direction.length_squared() < 1e-6f) {
-    utility::logger<"physics">::debug("gjk(): first.position={} second.position={} direction={} direction.length_squared={}",
-      first.position,
-      second.position,
-      direction,
-      direction.length_squared()
-    );
-
     direction = math::vector3{1.0f, 0.0f, 0.0f};
   }
 
@@ -492,29 +393,13 @@ static auto gjk(const collider_data& first, const collider_data& second) -> std:
   for ([[maybe_unused]] auto i = 0u; i < 64u; ++i) {
     support = support_point(first, second, direction);
 
-    const auto d = math::vector3::dot(support.minkowski_point, direction);
-
-    utility::logger<"physics">::debug(
-      "gjk[it={}]: dir={} |dir|={} support.mink={} |mink|={} dot={}",
-      i, direction, vlen(direction),
-      support.minkowski_point, vlen(support.minkowski_point),
-      d
-    );
-
     if (math::vector3::dot(support.minkowski_point, direction) <= 1e-6f) {
-      utility::logger<"physics">::debug("gjk: miss (dot<=eps)");
       return std::nullopt;
     }
 
     simplex.push_front(support);
 
     if (next_simplex(simplex, direction)) {
-      utility::logger<"physics">::debug("gjk: HIT simplex.size={}", simplex.size());
-
-      for (auto k = 0u; k < simplex.size(); ++k) {
-        utility::logger<"physics">::debug("  simplex[{}].mink={}", k, simplex[k].minkowski_point);
-      }
-
       return simplex;
     }
   }
@@ -630,6 +515,8 @@ static auto generate_contacts(const box& box_a, const collider_data& box_a_data,
   // Ensure the normal points A -> B
   const auto penetration_normal = (math::vector3::dot(manifold.normal, box_b_data.position - box_a_data.position) >= 0.0f) ? manifold.normal : -manifold.normal;
 
+  manifold.normal = penetration_normal;
+
   const auto axes_a = std::array<math::vector3, 3u>{
     box_a_data.rotation * math::vector3::right,
     box_a_data.rotation * math::vector3::up,
@@ -641,18 +528,6 @@ static auto generate_contacts(const box& box_a, const collider_data& box_a_data,
     box_b_data.rotation * math::vector3::up,
     box_b_data.rotation * math::vector3::backward
   };
-
-  for (auto i = 0u; i < 3u; ++i) {
-    utility::logger<"physics">::debug(
-      "  align A axis{}={} dot={}",
-      i, axes_a[i], std::abs(math::vector3::dot(penetration_normal, axes_a[i]))
-    );
-
-    utility::logger<"physics">::debug(
-      "  align B axis{}={} dot={}",
-      i, axes_b[i], std::abs(math::vector3::dot(penetration_normal, axes_b[i]))
-    );
-  }
 
   // Choose reference box by best axis alignment to collision normal
   auto best_alignment_a = 0.0f;
@@ -685,12 +560,6 @@ static auto generate_contacts(const box& box_a, const collider_data& box_a_data,
   const auto& incident_data = box_a_is_reference ? box_b_data : box_a_data;
 
   const auto reference_axis_index = box_a_is_reference ? reference_axis_a : reference_axis_b;
-
-  utility::logger<"physics">::debug(
-    "  picked ref: box={} axis_index={}",
-    box_a_is_reference ? "A" : "B",
-    reference_axis_index
-  );
 
   // Reference face normal (choose the face that points toward the other box)
   auto reference_face_normal = reference_axes[reference_axis_index];
@@ -760,6 +629,13 @@ static auto generate_contacts(const box& box_a, const collider_data& box_a_data,
 }
 
 template<typename B>
+static auto generate_contacts(const box& a, const collider_data& a_data, [[maybe_unused]] const B& b, [[maybe_unused]] const collider_data& b_data, collision_manifold& manifold) -> void {
+  const auto contact = a_data.position - manifold.normal * math::vector3::max(a.half_extents);
+
+  manifold.contact_points.push_back(contact);
+}
+
+template<typename B>
 static auto generate_contacts(const sphere& a, const collider_data& a_data, [[maybe_unused]] const B& b, [[maybe_unused]] const collider_data& b_data, collision_manifold& manifold) -> void {
   const auto contact = a_data.position - manifold.normal * a.radius;
 
@@ -775,8 +651,6 @@ static auto generate_contacts(const capsule& a, const collider_data& a_data, [[m
 
 template<typename A, typename B>
 static auto generate_contacts([[maybe_unused]] const A& a, const collider_data& a_data, [[maybe_unused]] const B& b, [[maybe_unused]] const collider_data& b_data, collision_manifold& manifold) -> void {
-  utility::logger<"physics">::debug("using fallback generate_contacts");
-
   const auto contact = a_data.position + manifold.normal * (-manifold.depth * 0.5f);
 
   manifold.contact_points.push_back(contact);
@@ -797,17 +671,15 @@ static auto generate_contacts(const collider_data& a, const collider_data& b, co
 }
 
 auto check_collision(const collider_data& first, const collider_data& second) -> std::optional<collision_manifold> {
-  utility::logger<"physics">::debug(
-    "check_collision(): A pos={} rot.len2={} | B pos={} rot.len2={}",
-    first.position, qlen2(first.rotation),
-    second.position, qlen2(second.rotation)
-  );
-
   return gjk(first, second)
     .and_then([&](const auto& simplex){
       return epa(first, second, simplex);
     })
     .transform([&](auto manifold){
+      if (math::vector3::dot(second.position - first.position, manifold.normal) < 0.0f) {
+        manifold.normal = -manifold.normal;
+      }
+
       generate_contacts(first, second, manifold);
 
       return manifold;

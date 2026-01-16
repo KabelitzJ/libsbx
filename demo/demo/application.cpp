@@ -525,7 +525,7 @@ auto application::update() -> void  {
     light_center_transform.set_rotation(sbx::math::vector3::up, _rotation);
   }
 
-  if (sbx::devices::input::is_key_pressed(sbx::devices::key::space)) {
+  if (sbx::devices::input::is_key_pressed(sbx::devices::key::f)) {
     auto cube = scene.create_node("Cube");
 
     auto& cube_material = scene.add_material<sbx::models::material>("cube");
@@ -552,6 +552,53 @@ auto application::update() -> void  {
     cube_rigidbody.set_inverse_inertia_tensor(inverse_inertia_tensor);
     cube_rigidbody.update_inertia_tensor_world(sbx::math::matrix_cast<3, 3>(scene.world_rotation(cube)));
     cube_rigidbody.add_constant_acceleration(sbx::math::vector3{0, -9.81f, 0});
+  }
+
+  if (sbx::devices::input::is_mouse_button_pressed(sbx::devices::mouse_button::left)) {
+    auto camera_node = scene.camera();
+    auto& camera_transform = scene.get_component<sbx::scenes::transform>(camera_node);
+
+    auto direction = camera_transform.forward();
+
+    auto sphere = scene.create_node("Sphere");
+
+    auto& sphere_material = scene.add_material<sbx::models::material>("sphere_projectile");
+    sphere_material.base_color = sbx::math::color::red();
+
+    scene.add_component<sbx::scenes::static_mesh>(sphere, scene.get_mesh("sphere"), scene.get_material("sphere_projectile"));
+
+    auto& sphere_transform = scene.get_component<sbx::scenes::transform>(sphere);
+    sphere_transform.set_position(scene.world_position(camera_node) + direction * 2.0f);
+    sphere_transform.set_scale(sbx::math::vector3{0.5f, 0.5f, 0.5f});
+
+    auto& sphere_collider = scene.add_component<sbx::physics::collider>(sphere, sbx::physics::sphere{0.25f});
+    auto& sphere_rigidbody = scene.add_component<sbx::physics::rigidbody>(sphere, 0.5f);
+    auto inverse_inertia_tensor = sbx::physics::inverse_inertia_tensor(sphere_collider, sphere_rigidbody.mass());
+    sphere_rigidbody.set_inverse_inertia_tensor(inverse_inertia_tensor);
+    sphere_rigidbody.update_inertia_tensor_world(sbx::math::matrix_cast<3, 3>(scene.world_rotation(sphere)));
+    sphere_rigidbody.add_constant_acceleration(sbx::math::vector3{0, -9.81f, 0});
+    sphere_rigidbody.add_force(direction * 500.0f);
+
+    // sbx::utility::logger<"demo">::debug("inverse_inertia_tensor={}", inverse_inertia_tensor);
+  }
+
+  auto deletion_query = scene.query<const sbx::scenes::transform, const sbx::physics::rigidbody>();
+
+  for (auto [node, transform, rigidbody] : deletion_query.each()) {
+    if (transform.position().y() < -10.0f) {
+      scene.destroy_node(node);
+    }
+  }
+
+  auto collider_query = scene.query<const sbx::physics::collider, const sbx::physics::rigidbody>();
+
+  for (auto&& [node, collider, rigidbody] : collider_query.each()) {
+    const auto translation = sbx::math::matrix4x4::translated(sbx::math::matrix4x4::identity, scene.world_position(node));
+    const auto rotation = sbx::math::matrix_cast<4, 4>(scene.world_rotation(node));
+
+    const auto volume = sbx::physics::get_bounding_volume(collider, translation * rotation);
+
+    scenes_module.add_debug_box(sbx::math::matrix4x4::identity, volume, sbx::math::color::green());
   }
 }
 

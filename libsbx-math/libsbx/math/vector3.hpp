@@ -62,7 +62,7 @@ public:
 
   [[nodiscard]] static constexpr auto reflect(const basic_vector3& vector, const basic_vector3& normal) noexcept -> basic_vector3;
 
-  [[nodiscard]] static constexpr auto abs(const basic_vector3& vector) noexcept -> basic_vector3;
+  // [[nodiscard]] static constexpr auto abs(const basic_vector3& vector) noexcept -> basic_vector3;
 
   [[nodiscard]] static constexpr auto distance_squared(const basic_vector3& lhs, const basic_vector3& rhs) noexcept -> value_type;
 

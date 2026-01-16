@@ -49,12 +49,32 @@ public:
 
   auto operator=(basic_vector&& other) noexcept -> basic_vector& = default;
 
+  static constexpr auto min(const basic_vector& vector) noexcept -> value_type {
+    auto result = vector[0];
+
+    for (auto i : std::views::iota(1u, Size)) {
+      result = std::min(result, vector[i]);
+    }
+
+    return result;
+  }
+
   template<scalar Lhs = value_type, scalar Rhs = value_type>
   static constexpr auto min(const basic_vector<Size, Lhs>& lhs, const basic_vector<Size, Rhs>& rhs) noexcept -> basic_vector {
     auto result = lhs;
 
     for (auto i : std::views::iota(0u, Size)) {
       result[i] = std::min(lhs[i], rhs[i]);
+    }
+
+    return result;
+  }
+
+  static constexpr auto max(const basic_vector& vector) noexcept -> value_type {
+    auto result = vector[0];
+
+    for (auto i : std::views::iota(1u, Size)) {
+      result = std::max(result, vector[i]);
     }
 
     return result;

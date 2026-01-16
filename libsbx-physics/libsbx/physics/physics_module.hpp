@@ -165,8 +165,6 @@ private:
 
       const auto volume = get_bounding_volume(collider, translation * rotation);
 
-      // scenes_module.add_debug_box(math::matrix4x4::identity, volume, sbx::math::color::red());
-
       tree.insert(node, volume);
     }
 

@@ -48,10 +48,10 @@ inline constexpr auto basic_vector3<Type>::reflect(const basic_vector3& vector, 
   return vector - normal * (dot(vector, normal) * 2);
 }
 
-template<scalar Type>
-inline constexpr auto basic_vector3<Type>::abs(const basic_vector3& vector) noexcept -> basic_vector3 {
-  return basic_vector3{std::abs(vector.x()), std::abs(vector.y()), std::abs(vector.z())};
-}
+// template<scalar Type>
+// inline constexpr auto basic_vector3<Type>::abs(const basic_vector3& vector) noexcept -> basic_vector3 {
+//   return basic_vector3{std::abs(vector.x()), std::abs(vector.y()), std::abs(vector.z())};
+// }
 
 template<scalar Type>
 inline constexpr auto basic_vector3<Type>::distance_squared(const basic_vector3& lhs, const basic_vector3& rhs) noexcept -> value_type {

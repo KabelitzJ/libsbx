@@ -538,7 +538,7 @@ auto application::update() -> void  {
     scene.add_component<sbx::scenes::static_mesh>(cube, scene.get_mesh("cube"), scene.get_material("cube"));
 
     auto& cube_transform = scene.get_component<sbx::scenes::transform>(cube);
-    cube_transform.set_position(sbx::math::vector3{16.0f, 16.0f, 16.0f});
+    cube_transform.set_position(sbx::math::vector3{16.0f, 8.0f, 16.0f});
     cube_transform.set_scale(sbx::math::vector3{2.0f, 2.0f, 2.0f});
     // cube_transform.set_rotation(sbx::math::vector3::forward, sbx::math::degree{25});
 

@@ -46,15 +46,17 @@ public:
   auto update() -> void override {
     SBX_PROFILE_SCOPE("physics_module::update");
 
-    const auto dt = core::engine::fixed_delta_time(); 
+    const auto dt = core::engine::fixed_delta_time();
 
     _integrate_velocities(dt);
-    _integrate_positions(dt);
 
-    const auto pairs = _collision_broad_phase();
-    const auto collisions = _collision_narrow_phase(pairs);
+    const auto broad_phase_pairs = _collision_broad_phase();
+    const auto collisions = _collision_narrow_phase(broad_phase_pairs);
 
     _resolve_collisions(collisions, dt);
+
+    _integrate_positions(dt);
+
     _positional_correction(collisions);
   }
 
@@ -100,23 +102,26 @@ private:
         continue;
       }
 
-      // Linear
-      const auto acceleration = (rigidbody.dynamic_forces() + rigidbody.constant_forces()) * rigidbody.inverse_mass();
+      // make sure inverse inertia matches the CURRENT orientation
+      rigidbody.update_inertia_tensor_world(math::matrix_cast<3, 3>(transform.rotation()));
 
-      rigidbody.add_velocity(acceleration * dt);
+      // linear
+      const auto linear_acceleration =
+        (rigidbody.dynamic_forces() + rigidbody.constant_forces()) * rigidbody.inverse_mass();
+
+      rigidbody.add_velocity(linear_acceleration * dt);
       rigidbody.set_velocity(rigidbody.velocity() * std::pow(1.0f - rigidbody.linear_damping(), dt));
 
-      // Angular
-      const auto angular_acceleration = rigidbody.inverse_inertia_tensor_world() * rigidbody.torque();
+      // angular
+      const auto angular_acceleration =
+        rigidbody.inverse_inertia_tensor_world() * rigidbody.torque();
 
       rigidbody.add_angular_velocity(angular_acceleration * dt);
       rigidbody.set_angular_velocity(rigidbody.angular_velocity() * std::pow(1.0f - rigidbody.angular_damping(), dt));
 
-      // Clear per-step accumulators
+      // clear per-step accumulators
       rigidbody.clear_dynamic_forces();
       rigidbody.clear_torque();
-
-      rigidbody.update_inertia_tensor_world(math::matrix_cast<3, 3>(transform.rotation()));
     }
   }
 
@@ -133,13 +138,15 @@ private:
 
       transform.position() += rigidbody.velocity() * dt;
 
-      const auto w = rigidbody.angular_velocity();
+      const auto angular_velocity = rigidbody.angular_velocity();
 
-      if (w.length_squared() > 0.0f) {
-        const auto dq = math::quaternion{w, 0.0f} * transform.rotation();
-
-        transform.set_rotation(math::quaternion::normalized(transform.rotation() + dq * (0.5f * dt)));
+      if (angular_velocity.length_squared() > 0.0f) {
+        const auto delta_rotation = math::quaternion{angular_velocity, 0.0f} * transform.rotation();
+        transform.set_rotation(math::quaternion::normalized(transform.rotation() + delta_rotation * (0.5f * dt)));
       }
+
+      // inertia must match the NEW orientation now
+      rigidbody.update_inertia_tensor_world(math::matrix_cast<3, 3>(transform.rotation()));
 
       transform.bump_version();
     }
@@ -221,7 +228,7 @@ private:
     ++_solver_tick;
 
     // --- tuning ---------------------------------------------------------------
-    constexpr auto solver_iterations = 20;
+    constexpr auto solver_iterations = 32u;
 
     // penetration correction (Baumgarte)
     constexpr auto baumgarte_beta = std::float_t{0.2f};   // 0.1 - 0.3 typical
@@ -232,7 +239,7 @@ private:
     constexpr auto friction_mu = std::float_t{0.6f};
 
     // warm start scaling (helps if your cache key is unstable)
-    constexpr auto warm_start_scale = std::float_t{0.85f};  // set to 1.0f once contact caching is robust
+    constexpr auto warm_start_scale = std::float_t{1.0f};  // set to 1.0f once contact caching is robust
 
     // --- build solver constraints --------------------------------------------
     auto solver_contacts = std::vector<solver_contact>{};
@@ -251,6 +258,12 @@ private:
 
       const auto world_position_a = scene.world_position(node_a);
       const auto world_position_b = scene.world_position(node_b);
+
+      const auto rotation_matrix_a = math::matrix_cast<3, 3>(scene.world_rotation(node_a));
+      const auto rotation_matrix_b = math::matrix_cast<3, 3>(scene.world_rotation(node_b));
+
+      const auto inverse_rotation_matrix_a = math::matrix3x3::transposed(rotation_matrix_a);
+      const auto inverse_rotation_matrix_b = math::matrix3x3::transposed(rotation_matrix_b);
 
       // Ensure manifold normal points A -> B
       auto contact_normal = collision_entry.manifold.normal;
@@ -283,14 +296,15 @@ private:
         bias_velocity = std::clamp(baumgarte_beta * penetration_error / dt, 0.0f, max_bias_velocity);
       }
 
-      // Optional: very mild softening for multi-point manifolds (do NOT use 1/contact_count)
-      if (contact_count > 1u) {
-        bias_velocity *= 1.0f / std::sqrt(static_cast<std::float_t>(contact_count));
-      }
-
       // --- create one solver contact per contact point -----------------------
       for (auto contact_point_index = std::size_t{0u}; contact_point_index < contact_count; ++contact_point_index) {
         const auto contact_point_world = collision_entry.manifold.contact_points[contact_point_index];
+
+        const auto r_a_world = contact_point_world - world_position_a;
+        const auto r_b_world = contact_point_world - world_position_b;
+
+        const auto local_anchor_a = inverse_rotation_matrix_a * r_a_world;
+        const auto local_anchor_b = inverse_rotation_matrix_b * r_b_world;
 
         auto constraint = contact_constraint{};
         constraint.normal = contact_normal;
@@ -346,7 +360,7 @@ private:
         constraint.bias = bias_velocity;
 
         // --- warm start (cached impulses) ------------------------------------
-        const auto contact_key = _contact_key(node_a, node_b, contact_point_index);
+        const auto contact_key = _contact_key(node_a, node_b, local_anchor_a, local_anchor_b);
 
         if (auto cached_it = _contact_cache.find(contact_key); cached_it != _contact_cache.end()) {
           constraint.normal_impulse  = cached_it->second.normal_impulse  * warm_start_scale;
@@ -488,10 +502,24 @@ private:
     }
   }
 
-  static auto _contact_key(scenes::node a, scenes::node b, std::size_t contact_index) -> std::size_t {
+  static auto _quantize_scalar(std::float_t value, std::float_t grid) -> std::int32_t {
+    return static_cast<std::int32_t>(std::lround(value / grid));
+  }
+
+  static auto _quantize_vector3(const math::vector3& value, std::float_t grid) -> std::array<std::int32_t, 3u> {
+    return {_quantize_scalar(value.x(), grid), _quantize_scalar(value.y(), grid), _quantize_scalar(value.z(), grid)};
+  }
+
+  static auto _contact_key(scenes::node node_a, scenes::node node_b, const math::vector3& local_anchor_a, const math::vector3& local_anchor_b) -> std::size_t {
+    // 1 cm bins (tune 0.005f - 0.02f)
+    constexpr auto anchor_grid = std::float_t{0.01f};
+
+    const auto quant_a = _quantize_vector3(local_anchor_a, anchor_grid);
+    const auto quant_b = _quantize_vector3(local_anchor_b, anchor_grid);
+
     auto hash = std::size_t{0};
-    
-    utility::hash_combine(hash, a, b, contact_index);
+
+    utility::hash_combine(hash, node_a, node_b, quant_a[0], quant_a[1], quant_a[2], quant_b[0], quant_b[1], quant_b[2]);
 
     return hash;
   }

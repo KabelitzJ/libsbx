@@ -373,8 +373,11 @@ public:
 
     const auto inv_view_proj = math::matrix4x4::inverted(proj * view);
 
-    const auto x = (2.0f * position.x()) / viewport.x() - 1.0f;
-    const auto y = 1.0f - (2.0f * position.y()) / viewport.y();
+    const auto px = position.x() + 0.5f;
+    const auto py = position.y() + 0.5f;
+
+    const auto x = (2.0f * px) / viewport.x() - 1.0f;
+    const auto y = (2.0f * py) / viewport.y() - 1.0f;
 
     const auto near_clip = math::vector4{x, y, 0.0f, 1.0f};
     const auto far_clip  = math::vector4{x, y, 1.0f, 1.0f};

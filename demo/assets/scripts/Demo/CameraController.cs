@@ -11,16 +11,16 @@ namespace Demo
     public float fastSpeed = 2.0f;
     private float _movementSpeed;
 
-    public float movementTime = 5.0f;
+    public float movementTime = 10.0f;
 
     private Vector3 _newPosition;
 
-    public float rotationAmount = 0.8f;
+    public float rotationAmount = 1.2f;
     private Quaternion _newRotation;
 
-    public Vector3 zoomAmount = new Vector3(0, -10.0f, -10.0f);
-    public Vector3 minZoom = new Vector3(0, 10.0f, 10.0f);
-    public Vector3 maxZoom = new Vector3(0, 100.0f, 100.0f);
+    public Vector3 zoomAmount = new Vector3(0, -6.0f, -6.0f);
+    public Vector3 minZoom = new Vector3(0, 3.0f, 3.0f);
+    public Vector3 maxZoom = new Vector3(0, 60.0f, 60.0f);
     private Vector3 _newZoom;
 
     private Vector3 _dragStartPosition;

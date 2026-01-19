@@ -127,6 +127,8 @@ application::application()
 }
 
 auto application::update() -> void  {
+  SBX_PROFILE_SCOPE("application::update");
+
   const auto delta_time = sbx::core::engine::delta_time();
 
   if (sbx::devices::input::is_key_pressed(sbx::devices::key::escape)) {

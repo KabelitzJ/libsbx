@@ -18,7 +18,7 @@
 #include <libsbx/physics/physics.hpp>
 #include <libsbx/animations/animations.hpp>
 
-#include <demo/terrain/mesh.hpp>
+#include <demo/dual_grid.hpp>
 
 namespace demo {
 
@@ -60,6 +60,8 @@ private:
   sbx::graphics::image2d_handle _brdf;
   sbx::graphics::cube_image2d_handle _irradiance;
   sbx::graphics::cube_image2d_handle _prefiltered;
+
+  dual_grid _grid;
 
 }; // class application
 

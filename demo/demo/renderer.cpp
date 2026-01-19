@@ -31,9 +31,6 @@
 #include <libsbx/editor/editor_subrenderer.hpp>
 #include <libsbx/sprites/sprite_subrenderer.hpp>
 
-#include <demo/terrain/terrain_subrenderer.hpp>
-#include <demo/terrain/planet_generator_task.hpp>
-
 namespace demo {
 
 renderer::renderer()
@@ -306,9 +303,9 @@ renderer::renderer()
 
   add_subrenderer<sbx::post::resolve_transparent_filter>(resolve_pass, "res://shaders/resolve_transparent", std::move(resolve_transparent_attachment_names));
 
-  add_subrenderer<sbx::sprites::sprite_subrenderer>(resolve_pass, "res://shaders/sprites");
+  // add_subrenderer<sbx::sprites::sprite_subrenderer>(resolve_pass, "res://shaders/sprites");
 
-  add_subrenderer<sbx::scenes::grid_subrenderer>(resolve_pass, "res://shaders/grid");
+  // add_subrenderer<sbx::scenes::grid_subrenderer>(resolve_pass, "res://shaders/grid");
 
   add_subrenderer<sbx::scenes::debug_subrenderer>(resolve_pass, "res://shaders/debug");
 

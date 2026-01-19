@@ -53,6 +53,10 @@ public:
     return color{0.0f, 1.0f, 1.0f, 1.0f};
   }
 
+  static auto orange() noexcept -> color {
+    return color{1.0f, 0.5f, 0.0f, 1.0f};
+  }
+
   auto r() const noexcept -> const std::float_t&;
 
   auto r() noexcept -> std::float_t&;

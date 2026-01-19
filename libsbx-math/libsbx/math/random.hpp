@@ -47,6 +47,15 @@ private:
 
 }; // struct random
 
+template<std::ranges::random_access_range Range>
+auto shuffle_range(Range& range) -> void {
+  for (auto i = std::ranges::size(range); i > 1u; --i) {
+    const auto j = sbx::math::random::next<std::size_t>(0u, i - 1u);
+
+    std::swap(range[i - 1u], range[j]);
+  }
+}
+
 template<std::ranges::sized_range Range>
 auto random_element(const Range& range) -> std::ranges::range_value_t<Range> {
   const auto size = static_cast<std::ranges::range_difference_t<Range>>(std::ranges::size(range));

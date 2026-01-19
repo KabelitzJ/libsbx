@@ -8,10 +8,11 @@
 #include <vector>
 
 #include <libsbx/math/vector3.hpp>
+#include <libsbx/utility/assert.hpp>
 
 namespace demo {
 
-class dual_grid {
+class dual_grid_base {
 
 public:
 
@@ -63,9 +64,9 @@ public:
     bool build_dual = true;
   };
 
-  dual_grid() = default;
+  dual_grid_base() = default;
 
-  explicit dual_grid(const settings& s) {
+  explicit dual_grid_base(const settings& s) {
     rebuild(s);
   }
 
@@ -83,6 +84,15 @@ public:
 
   auto quads() const -> std::span<const quad> {
     return _quads;
+  }
+
+  auto quad_at(const std::size_t index) const -> const quad& {
+    return _quads[index];
+  }
+
+  // primal cell id == quad id
+  auto cell_count() const -> std::uint32_t {
+    return static_cast<std::uint32_t>(_quads.size());
   }
 
   // ----- dual ---------------------------------------------------------------
@@ -106,10 +116,12 @@ public:
   // Convention:
   // dual vertex id == quad id for 0..quads.size()-1
   auto quad_center(const std::uint32_t quad_id) const -> sbx::math::vector3 {
+    sbx::utility::assert_that(quad_id < _quads.size(), "quad_center(): invalid quad id");
+    sbx::utility::assert_that(quad_id < _dual_vertices.size(), "quad_center(): dual not built");
     return _dual_vertices[quad_id].position;
   }
 
-private:
+protected:
 
   std::vector<vertex> _vertices{};
   std::vector<quad> _quads{};
@@ -117,7 +129,109 @@ private:
   std::vector<dual_vertex> _dual_vertices{};
   std::vector<dual_edge> _dual_edges{};
   std::vector<std::vector<std::uint32_t>> _dual_cells_ccw{};
-};
+
+}; // class dual_grid_base
+
+template<typename Type>
+class dual_grid : public dual_grid_base {
+
+  using base_type = dual_grid_base;
+
+public:
+
+  using settings = base_type::settings;
+  using vertex = base_type::vertex;
+  using quad = base_type::quad;
+  using dual_vertex = base_type::dual_vertex;
+  using dual_edge = base_type::dual_edge;
+
+  using value_type = Type;
+
+  dual_grid() = default;
+
+  explicit dual_grid(const settings& s, const Type& default_value = Type{}) {
+    rebuild(s, default_value);
+  }
+
+  auto rebuild(const settings& s, const Type& default_value = Type{}) -> void {
+    base_type::rebuild(s);
+
+    const auto n = static_cast<std::uint32_t>(base_type::_quads.size());
+
+    _cell_to_data.resize(n);
+    _data.assign(n, default_value);
+
+    for (auto i = 0u; i < n; ++i) {
+      _cell_to_data[i] = i;
+    }
+  }
+
+  // ------------------- cell payload API -------------------------------------
+
+  auto data_pool() -> std::span<Type> {
+    return _data;
+  }
+
+  auto data_pool() const -> std::span<const Type> {
+    return _data;
+  }
+
+  auto data_index_of_cell(const std::uint32_t cell_id) const -> std::uint32_t {
+    sbx::utility::assert_that(cell_id < _cell_to_data.size(), "data_index_of_cell(): out of range");
+
+    return _cell_to_data[cell_id];
+  }
+
+  auto cell_data(const std::uint32_t cell_id) -> Type& {
+    sbx::utility::assert_that(cell_id < _cell_to_data.size(), "cell_data(): out of range");
+
+    const auto idx = _cell_to_data[cell_id];
+
+    sbx::utility::assert_that(idx < _data.size(), "cell_data(): bad mapping");
+
+    return _data[idx];
+  }
+
+  auto cell_data(const std::uint32_t cell_id) const -> const Type& {
+    sbx::utility::assert_that(cell_id < _cell_to_data.size(), "cell_data() const: out of range");
+
+    const auto idx = _cell_to_data[cell_id];
+
+    sbx::utility::assert_that(idx < _data.size(), "cell_data() const: bad mapping");
+
+    return _data[idx];
+  }
+
+  auto set_cell_data_index(const std::uint32_t cell_id, const std::uint32_t pool_index) -> void {
+    sbx::utility::assert_that(cell_id < _cell_to_data.size(), "set_cell_data_index(): out of range");
+    sbx::utility::assert_that(pool_index < _data.size(), "set_cell_data_index(): pool out of range");
+
+    _cell_to_data[cell_id] = pool_index;
+  }
+
+  auto allocate_data_slot(const Type& value = Type{}) -> std::uint32_t {
+    _data.push_back(value);
+
+    return static_cast<std::uint32_t>(_data.size() - 1u);
+  }
+
+  auto reset_cell_mapping_identity(const Type& default_value = Type{}) -> void {
+    const auto n = static_cast<std::uint32_t>(base_type::_quads.size());
+
+    _cell_to_data.resize(n);
+    _data.assign(n, default_value);
+
+    for (auto i = 0u; i < n; ++i) {
+      _cell_to_data[i] = i;
+    }
+  }
+
+private:
+
+  std::vector<Type> _data{};
+  std::vector<std::uint32_t> _cell_to_data{};
+
+}; // class dual_grid
 
 } // namespace demo
 

@@ -28,7 +28,23 @@
 
 namespace demo {
 
-static const auto settings = dual_grid::settings{
+static auto intersect_ray_plane(const sbx::math::ray& r, const sbx::math::plane& p) -> std::optional<sbx::math::vector3> {
+  const auto denom = sbx::math::vector3::dot(p.normal(), r.direction());
+
+  if (std::abs(denom) < 1e-6f) {
+    return std::nullopt;
+  }
+
+  const auto t = -p.distance_to_point(r.origin()) / denom;
+
+  if (t < 0.0f) {
+    return std::nullopt;
+  }
+
+  return r.point_at(t);
+}
+
+static const auto settings = dual_grid<grid_cell_data>::settings{
   .rings = 5u,
   .ring_distance = 25.0f,
   .seed = 1643u,
@@ -164,6 +180,24 @@ auto application::update() -> void  {
 
       scenes_module.add_debug_line(a, b, sbx::math::color::magenta());
     }
+  }
+
+  static auto point = std::optional<sbx::math::vector3>{};
+
+  if (sbx::devices::input::is_mouse_button_pressed(sbx::devices::mouse_button::left)) {
+    auto screen_position = sbx::devices::input::mouse_position();
+
+    auto ray = scene.screen_point_to_ray(screen_position);
+
+    const auto ground = sbx::math::plane{sbx::math::vector3::up, 0.0f};
+
+    if (const auto hit = intersect_ray_plane(ray, ground); hit) {
+      point = *hit;
+    }
+  }
+
+  if (point) {
+    scenes_module.add_debug_sphere(*point, 0.6f, sbx::math::color::red(), 16);
   }
 }
 

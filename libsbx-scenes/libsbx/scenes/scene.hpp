@@ -362,30 +362,44 @@ public:
 
   auto screen_point_to_ray(const math::vector2& position) -> math::ray {
     auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
-
     const auto& viewport = graphics_module.viewport();
 
-    const auto& camera_transform = get_component<scenes::transform>(_camera); 
+    const auto& camera_transform = get_component<scenes::transform>(_camera);
     const auto& camera = get_component<scenes::camera>(_camera);
 
-    const auto inv_view = world_transform(_camera);
-    const auto inv_projection = math::matrix4x4::inverted(camera.projection());
+    const auto world = world_transform(_camera);
+    const auto view = math::matrix4x4::inverted(world);
+    const auto proj = camera.projection();
+
+    const auto inv_view_proj = math::matrix4x4::inverted(proj * view);
 
     const auto x = (2.0f * position.x()) / viewport.x() - 1.0f;
     const auto y = 1.0f - (2.0f * position.y()) / viewport.y();
-    const auto z = 1.0f;
 
-    const auto ray_nds = math::vector3{x, y, z};
+    const auto near_clip = math::vector4{x, y, 0.0f, 1.0f};
+    const auto far_clip  = math::vector4{x, y, 1.0f, 1.0f};
 
-    const auto ray_clip = math::vector4{ray_nds.x(), ray_nds.y(), -1.0f, 1.0f};
+    auto near_world = inv_view_proj * near_clip;
+    near_world /= near_world.w();
 
-    auto ray_eye = inv_projection * ray_clip;
-    ray_eye = math::vector4(ray_eye.x(), ray_eye.y(), -1.0f, 0.0f);
+    auto far_world = inv_view_proj * far_clip;
+    far_world /= far_world.w();
 
-    auto ray_world = math::vector3{inv_view * ray_eye};
-    ray_world = math::vector3::normalized(ray_world);
+    const auto origin = math::vector3{
+      near_world.x(),
+      near_world.y(),
+      near_world.z()
+    };
 
-    return math::ray{camera_transform.position(), ray_world};
+    const auto direction = math::vector3::normalized(
+      math::vector3{
+        far_world.x(),
+        far_world.y(),
+        far_world.z()
+      } - origin
+    );
+
+    return math::ray{origin, direction};
   }
 
   auto node_count() const -> std::size_t {

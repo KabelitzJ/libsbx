@@ -22,6 +22,10 @@
 
 namespace demo {
 
+struct grid_cell_data {
+  std::uint32_t index;
+}; // grid_cell_data
+
 class application : public sbx::core::application {
 
 public:
@@ -61,7 +65,7 @@ private:
   sbx::graphics::cube_image2d_handle _irradiance;
   sbx::graphics::cube_image2d_handle _prefiltered;
 
-  dual_grid _grid;
+  dual_grid<grid_cell_data> _grid;
 
 }; // class application
 

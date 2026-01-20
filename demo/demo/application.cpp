@@ -187,18 +187,6 @@ auto application::update() -> void  {
     }
   }
 
-  for (const auto quad : _grid.dual_quads()) {
-    const auto& a = _grid.dual_vertex_at(quad.a).position;
-    const auto& b = _grid.dual_vertex_at(quad.b).position;
-    const auto& c = _grid.dual_vertex_at(quad.c).position;
-    const auto& d = _grid.dual_vertex_at(quad.d).position;
-
-    scenes_module.add_debug_line(a, b, sbx::math::color::white());
-    scenes_module.add_debug_line(b, c, sbx::math::color::white());
-    scenes_module.add_debug_line(c, d, sbx::math::color::white());
-    scenes_module.add_debug_line(d, a, sbx::math::color::white());
-  }
-
   for (const auto& e : _grid.main_edges()) {
     const auto& a = _grid.main_vertex_at(e.a).position;
     const auto& b = _grid.main_vertex_at(e.b).position;
@@ -209,9 +197,27 @@ auto application::update() -> void  {
   if (selected_cell != grid_type::invalid_id) {
     const auto poly = _grid.main_cell_ccw(selected_cell);
 
+    for (const auto id : poly) {
+      if (id >= _grid.dual_quad_count()) {
+        continue;
+      }
+
+      const auto& quad = _grid.dual_quad_at(id);
+
+      const auto& a = _grid.dual_vertex_at(quad.a).position;
+      const auto& b = _grid.dual_vertex_at(quad.b).position;
+      const auto& c = _grid.dual_vertex_at(quad.c).position;
+      const auto& d = _grid.dual_vertex_at(quad.d).position;
+
+      scenes_module.add_debug_line(a, b, sbx::math::color::red());
+      scenes_module.add_debug_line(b, c, sbx::math::color::red());
+      scenes_module.add_debug_line(c, d, sbx::math::color::red());
+      scenes_module.add_debug_line(d, a, sbx::math::color::red());
+    }
+
     for (auto i = std::size_t{0u}; i < poly.size(); ++i) {
       const auto a_id = poly[i];
-      const auto b_id = poly[(i + 1u) % poly.size()];
+      const auto b_id = poly[sbx::utility::fast_mod(i + 1u, poly.size())];
 
       const auto& a = _grid.main_vertex_at(a_id).position;
       const auto& b = _grid.main_vertex_at(b_id).position;

@@ -8,7 +8,7 @@
 #include <libsbx/scenes/scenes.hpp>
 
 #include <demo/dual_grid.hpp>
-#include <demo/grid_data.hpp>
+#include <demo/data.hpp>
 
 namespace demo {
 
@@ -73,7 +73,7 @@ public:
 
   auto render(sbx::graphics::command_buffer& command_buffer) -> void override;
 
-  // auto update_dual_grid_data(const dual_grid& grid) -> void;
+  auto update_dual_grid_data(const dual_grid<grid_cell_data>& grid) -> void;
 
 private:
 

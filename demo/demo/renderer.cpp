@@ -193,7 +193,7 @@ renderer::renderer()
   add_subrenderer<sbx::models::static_mesh_subrenderer>(deferred_pass, "res://shaders/deferred_pbr_material", sbx::models::static_mesh_material_draw_list::bucket::opaque);
   add_subrenderer<sbx::animations::skinned_mesh_subrenderer>(deferred_pass, "res://shaders/deferred_pbr_material", sbx::animations::skinned_mesh_material_draw_list::bucket::opaque);
 
-  // _terrain_subrenderer = sbx::memory::make_observer(add_subrenderer<terrain_subrenderer>(deferred_pass, "res://shaders/terrain"));
+  _terrain_subrenderer = sbx::memory::make_observer(add_subrenderer<terrain_subrenderer>(deferred_pass, "res://shaders/terrain"));
 
   // Transparency pass
   add_subrenderer<sbx::models::static_mesh_subrenderer>(transparency_pass, "res://shaders/deferred_pbr_material", sbx::models::static_mesh_material_draw_list::bucket::transparent);

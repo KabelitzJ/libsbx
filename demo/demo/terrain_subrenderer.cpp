@@ -26,8 +26,6 @@ terrain_subrenderer::terrain_subrenderer(const std::vector<sbx::graphics::attach
 auto terrain_subrenderer::render(sbx::graphics::command_buffer& command_buffer) -> void {
   SBX_PROFILE_SCOPE("terrain_subrenderer::render");
 
-  return;
-
   auto& application = sbx::core::engine::get_application<demo::application>();
 
   auto& graphics_module = sbx::core::engine::get_module<sbx::graphics::graphics_module>();
@@ -45,7 +43,7 @@ auto terrain_subrenderer::render(sbx::graphics::command_buffer& command_buffer) 
   auto instances_per_mesh = std::unordered_map<sbx::math::uuid, std::vector<instance_data>>{};
   auto transforms = std::vector<transform_data>{};
 
-  auto terrain_query = scene.query<const terrain>();
+  auto terrain_query = scene.query<const terrain_tag>();
 
   for (auto [node, terrain] : terrain_query.each()) {
     const auto& mesh_id = terrain.mesh_id;
@@ -95,29 +93,29 @@ auto terrain_subrenderer::render(sbx::graphics::command_buffer& command_buffer) 
   }
 }
 
-// auto terrain_subrenderer::update_dual_grid_data(const dual_grid& grid) -> void {
-//   auto& graphics_module = sbx::core::engine::get_module<sbx::graphics::graphics_module>();
+auto terrain_subrenderer::update_dual_grid_data(const dual_grid<grid_cell_data>& grid) -> void {
+  auto& graphics_module = sbx::core::engine::get_module<sbx::graphics::graphics_module>();
 
-//   auto& grid_vertex_buffer = graphics_module.get_resource<sbx::graphics::storage_buffer>(_grid_vertex_buffer);
-//   auto& grid_quad_buffer = graphics_module.get_resource<sbx::graphics::storage_buffer>(_grid_quad_buffer);
+  auto& grid_vertex_buffer = graphics_module.get_resource<sbx::graphics::storage_buffer>(_grid_vertex_buffer);
+  auto& grid_quad_buffer = graphics_module.get_resource<sbx::graphics::storage_buffer>(_grid_quad_buffer);
 
-//   auto grid_vertex_buffer_data = std::vector<grid_vertex_data>{};
-//   grid_vertex_buffer_data.reserve(grid.dual_vertices().size());
+  auto grid_vertex_buffer_data = std::vector<grid_vertex_data>{};
+  grid_vertex_buffer_data.reserve(grid.vertices().size());
 
-//   for (const auto& vertex : grid.dual_vertices()) {
-//     grid_vertex_buffer_data.push_back(grid_vertex_data{vertex.position, 0u});
-//   }
+  for (const auto& vertex : grid.vertices()) {
+    grid_vertex_buffer_data.push_back(grid_vertex_data{vertex.position, 0u});
+  }
 
-//   _update_buffer(grid_vertex_buffer, grid_vertex_buffer_data);
+  _update_buffer(grid_vertex_buffer, grid_vertex_buffer_data);
 
-//   auto grid_quad_buffer_data = std::vector<grid_quad_data>{};
-//   grid_quad_buffer_data.reserve(grid.dual_quads().size());
+  auto grid_quad_buffer_data = std::vector<grid_quad_data>{};
+  grid_quad_buffer_data.reserve(grid.quads().size());
 
-//   for (const auto& quad : grid.dual_quads()) {
-//     grid_quad_buffer_data.push_back({quad.a, quad.b, quad.c, quad.d});
-//   }
+  for (const auto& quad : grid.quads()) {
+    grid_quad_buffer_data.push_back({quad.a, quad.b, quad.c, quad.d});
+  }
 
-//   _update_buffer(grid_quad_buffer, grid_quad_buffer_data);
-// }
+  _update_buffer(grid_quad_buffer, grid_quad_buffer_data);
+}
 
 } // namespace demo

@@ -131,9 +131,9 @@ static auto pick_variant_from_mask(const std::uint8_t mask, const tile_meshes& m
 }
 
 static const auto settings = application::grid_type::settings{
-  .rings = 5u,
-  .ring_distance = 25.0f,
-  .seed = 1643u,
+  .rings = 8u,
+  .ring_distance = 20.0f,
+  .seed = 19517357u,
   .merge_probability = 0.5f,
   .split_quads_to_4 = true,
   .split_leftover_tris_to_3 = true,
@@ -162,7 +162,8 @@ application::application()
 
   auto& graphics_module = sbx::core::engine::get_module<sbx::graphics::graphics_module>();
 
-  graphics_module.set_renderer<renderer>();
+  auto& renderer = graphics_module.set_renderer<demo::renderer>();
+  renderer.update_dual_grid_data(_grid);
 
   auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
 
@@ -280,7 +281,7 @@ auto application::update() -> void  {
           terrain.grid_cell = selected_cell;
           terrain.height = 3.0f;
           terrain.color = sbx::math::random_color();
-          terrain.mesh_id = scene.get_mesh("corner");
+          terrain.mesh_id = scene.get_mesh("full");
         }
 
         _rebuild_terrain_tiles();

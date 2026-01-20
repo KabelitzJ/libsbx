@@ -60,8 +60,8 @@ struct instance_data {
 
   float green;
   float blue;
-  uint rotation_steps;
-  uint padding;
+  uint padding0;
+  uint padding1;
 }; // struct instance_data
 
 struct push_data {
@@ -119,35 +119,50 @@ vs_out main(vs_in input) {
   float3 in_normal = float3(vertex.normal_x, vertex.normal_y, vertex.normal_z);
   float2 in_uv = float2(vertex.uv_x, vertex.uv_y);
 
-  float2 uv = in_uv;
-  uint r = instance_data.rotation_steps & 3;
+  // ---------------------------------------------------------------------------
+  // Map cube local XZ -> quad param (s,t)
+  //
+  // Assumption: cube mesh XZ is in [-0.5, +0.5].
+  // If your cube is [-1,+1], change 0.5 to 1.0.
+  // ---------------------------------------------------------------------------
+  float s = saturate(in_position.x + 0.5);
+  float t = saturate(in_position.z + 0.5);
 
-  if (r != 0) {
-    // move to center
-    uv -= float2(0.5, 0.5);
+  // Base point on the quad (XZ warped)
+  float3 base = quad_bilerp(position_a, position_b, position_c, position_d, s, t);
 
-    if (r == 1)      uv = float2(-uv.y,  uv.x); // 90°
-    else if (r == 2) uv = float2(-uv.x, -uv.y); // 180°
-    else if (r == 3) uv = float2( uv.y, -uv.x); // 270°
+  // Extrude in Y using instance height.
+  // Assumption: cube Y is in [-0.5,+0.5] and we want bottom at y=0.
+  float y01 = saturate(in_position.y + 0.5);
+  float y = y01 * instance_data.height;
 
-    // move back
-    uv += float2(0.5, 0.5);
+  float3 world_position = base + float3(0.0, y, 0.0);
+
+  // ---------------------------------------------------------------------------
+  // Build a better normal for the warped prism
+  // ---------------------------------------------------------------------------
+  float3 ds, dt;
+  quad_tangents(position_a, position_b, position_c, position_d, s, t, ds, dt);
+
+  // Normal of the quad plane (ensure pointing "up-ish")
+  float3 face_normal = normalize(cross(ds, dt));
+
+  if (face_normal.y < 0.0) {
+    face_normal = -face_normal;
   }
 
-  float3 warped_position = quad_bilerp(position_a, position_b, position_c, position_d, uv.x, uv.y);
-  // warped_position.y += instance_data.height;
+  // Convert cube local normal into world using quad tangents
+  float3 ts = normalize(ds);
+  float3 tt = normalize(dt);
 
-  float3 ds, dt;
-  quad_tangents(position_a, position_b, position_c, position_d, uv.x, uv.y, ds, dt);
+  float3 world_normal = normalize(in_normal.x * ts + in_normal.z * tt + in_normal.y * face_normal);
 
-  float3 warped_normal = normalize(cross(dt, ds));
-
-  output.position = warped_position;
-  output.normal = warped_normal;
-  output.uv = uv;
+  output.position = world_position;
+  output.normal = world_normal;
+  output.uv = in_uv;
   output.color = float3(instance_data.red, instance_data.green, instance_data.blue);
 
-  output.sv_position = mul(scene.projection, mul(scene.view, float4(warped_position, 1.0)));
+  output.sv_position = mul(scene.projection, mul(scene.view, float4(world_position, 1.0)));
 
   return output;
 }

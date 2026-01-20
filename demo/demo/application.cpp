@@ -44,101 +44,15 @@ static auto intersect_ray_plane(const sbx::math::ray& ray, const sbx::math::plan
   return ray.point_at(t);
 }
 
-struct tile_variant {
-  sbx::math::uuid mesh{};
-  std::uint32_t rotation_steps = 0u; // 0..3 => yaw = steps * 90 deg
-  bool visible = false;
-}; // struct tile_variant
-
-static auto popcount4(const std::uint8_t m) -> std::uint32_t {
-  auto x = static_cast<std::uint32_t>(m & 0xFu);
-  x = x - ((x >> 1u) & 0x55555555u);
-  x = (x & 0x33333333u) + ((x >> 2u) & 0x33333333u);
-  return (((x + (x >> 4u)) & 0x0Fu));
-}
-
-static auto rotate_mask_ccw(const std::uint8_t m, const std::uint32_t steps) -> std::uint8_t {
-  const auto s = steps & 3u;
-  const auto mm = static_cast<std::uint8_t>(m & 0xFu);
-
-  if (s == 0u) {
-    return mm;
-  }
-
-  return static_cast<std::uint8_t>(((mm << s) | (mm >> (4u - s))) & 0xFu);
-}
-
-struct tile_meshes {
-  sbx::math::uuid corner{};
-  sbx::math::uuid diagonal{};
-  sbx::math::uuid full{};
-  sbx::math::uuid half{};
-  sbx::math::uuid three_corner{};
-}; // struct tile_meshes
-
-static auto pick_variant_from_mask(const std::uint8_t mask, const tile_meshes& meshes) -> tile_variant {
-  const auto m = static_cast<std::uint8_t>(mask & 0xFu);
-
-  if (m == 0u) {
-    return tile_variant{.visible = false};
-  }
-
-  if (m == 0xFu) {
-    return tile_variant{.mesh = meshes.full, .rotation_steps = 0u, .visible = true};
-  }
-
-  const auto bits = popcount4(m);
-
-  // 1 corner
-  if (bits == 1u) {
-    // base corner = 0001 (A only)
-    for (auto r = 0u; r < 4u; ++r) {
-      if (rotate_mask_ccw(0x1u, r) == m) {
-        return tile_variant{.mesh = meshes.corner, .rotation_steps = r, .visible = true};
-      }
-    }
-  }
-
-  // 3 corners
-  if (bits == 3u) {
-    // base three-corner = 1110 (missing A)
-    for (auto r = 0u; r < 4u; ++r) {
-      if (rotate_mask_ccw(0xEu, r) == m) {
-        return tile_variant{.mesh = meshes.three_corner, .rotation_steps = r, .visible = true};
-      }
-    }
-  }
-
-  // 2 corners
-  if (bits == 2u) {
-    // diagonal: 0101 / 1010
-    for (auto r = 0u; r < 4u; ++r) {
-      if (rotate_mask_ccw(0x5u, r) == m) {
-        return tile_variant{.mesh = meshes.diagonal, .rotation_steps = r, .visible = true};
-      }
-    }
-
-    // half adjacent: 0011 / 0110 / 1100 / 1001
-    for (auto r = 0u; r < 4u; ++r) {
-      if (rotate_mask_ccw(0x3u, r) == m) {
-        return tile_variant{.mesh = meshes.half, .rotation_steps = r, .visible = true};
-      }
-    }
-  }
-
-  // Fallback (shouldn't happen)
-  return tile_variant{.mesh = meshes.full, .rotation_steps = 0u, .visible = true};
-}
-
 static const auto settings = application::grid_type::settings{
-  .rings = 8u,
-  .ring_distance = 20.0f,
+  .rings = 10u,
+  .ring_distance = 10.0f,
   .seed = 19517357u,
-  .merge_probability = 0.5f,
+  .merge_probability = 0.4f,
   .split_quads_to_4 = true,
   .split_leftover_tris_to_3 = true,
   .relax = true,
-  .relax_iterations = 80u,
+  .relax_iterations = 40u,
   .relax_lambda = 0.45f,
   .relax_mu = -0.50f,
   .relax_add_diagonals = true,
@@ -281,7 +195,7 @@ auto application::update() -> void  {
           terrain.grid_cell = selected_cell;
           terrain.height = 3.0f;
           terrain.color = sbx::math::random_color();
-          terrain.mesh_id = scene.get_mesh("full");
+          terrain.mesh_id = scene.get_mesh("corner");
         }
 
         _rebuild_terrain_tiles();
@@ -312,13 +226,7 @@ auto application::_rebuild_terrain_tiles() -> void {
   auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
   auto& scene = scenes_module.scene();
 
-  auto meshes = tile_meshes{
-    .corner = scene.get_mesh("corner"),
-    .diagonal = scene.get_mesh("diagonal"),
-    .full = scene.get_mesh("full"),
-    .half = scene.get_mesh("half"),
-    .three_corner = scene.get_mesh("three_corner")
-  };
+
 }
 
 auto application::_generate_brdf(const std::uint32_t size) -> void {

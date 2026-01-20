@@ -88,6 +88,8 @@ public:
 
   auto dual_quad_center(const std::uint32_t dual_quad_id) const -> sbx::math::vector3;
 
+  auto pick_main_face_at(const sbx::math::vector3& point) const -> std::uint32_t;
+
 protected:
 
   std::vector<dual_vertex> _dual_vertices{};

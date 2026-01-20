@@ -957,4 +957,88 @@ auto dual_grid_base::dual_quad_center(const std::uint32_t dual_quad_id) const ->
   return _main_vertices[dual_quad_id].position;
 }
 
+static auto point_in_polygon_xz(const sbx::math::vector3& p, const std::span<const std::uint32_t> poly, const std::vector<dual_grid_base::main_vertex>& verts) -> bool {
+  auto is_inside = false;
+
+  const auto px = p.x();
+  const auto pz = p.z();
+
+  for (auto i = std::size_t{0u}, j = poly.size() - 1u; i < poly.size(); j = i, ++i) {
+    const auto& vi = verts[poly[i]].position;
+    const auto& vj = verts[poly[j]].position;
+
+    const auto xi = vi.x();
+    const auto zi = vi.z();
+    const auto xj = vj.x();
+    const auto zj = vj.z();
+
+    const auto zi_above = (zi > pz);
+    const auto zj_above = (zj > pz);
+
+    if (zi_above == zj_above) {
+      continue;
+    }
+
+    const auto denom = (zj - zi);
+
+    if (std::abs(denom) < 1e-7f) {
+      continue;
+    }
+
+    const auto x_intersect = xi + (xj - xi) * (pz - zi) / denom;
+
+    if (px < x_intersect) {
+      is_inside = !is_inside;
+    }
+  }
+
+  return is_inside;
+}
+
+static auto polygon_aabb_contains_xz(const sbx::math::vector3& p, const std::span<const std::uint32_t> poly, const std::vector<dual_grid_base::main_vertex>& verts) -> bool {
+  auto min_x = std::numeric_limits<std::float_t>::max();
+  auto max_x = std::numeric_limits<std::float_t>::lowest();
+  auto min_z = std::numeric_limits<std::float_t>::max();
+  auto max_z = std::numeric_limits<std::float_t>::lowest();
+
+  for (const auto id : poly) {
+    const auto& v = verts[id].position;
+
+    min_x = std::min(min_x, v.x());
+    max_x = std::max(max_x, v.x());
+    min_z = std::min(min_z, v.z());
+    max_z = std::max(max_z, v.z());
+  }
+
+  if (p.x() < min_x || p.x() > max_x || p.z() < min_z || p.z() > max_z) {
+    return false;
+  }
+
+  return true;
+}
+
+auto dual_grid_base::pick_main_face_at(const sbx::math::vector3& point) const -> std::uint32_t {
+  if (_main_cells_ccw.empty() || _main_vertices.empty() || _dual_vertices.empty()) {
+    return invalid_id;
+  }
+
+  for (auto dual_vid = std::uint32_t{0u}; dual_vid < static_cast<std::uint32_t>(_dual_vertices.size()); ++dual_vid) {
+    const auto poly = main_cell_ccw(dual_vid);
+
+    if (poly.size() < 3u) {
+      continue;
+    }
+
+    if (!polygon_aabb_contains_xz(point, poly, _main_vertices)) {
+      continue;
+    }
+
+    if (point_in_polygon_xz(point, poly, _main_vertices)) {
+      return dual_vid;
+    }
+  }
+
+  return invalid_id;
+}
+
 } // namespace demo

@@ -169,6 +169,8 @@ auto application::update() -> void  {
 
   _rotation += sbx::math::degree{45} * delta_time;
 
+  static auto selected_cell = grid_type::invalid_id;
+
   if (sbx::devices::input::is_mouse_button_pressed(sbx::devices::mouse_button::left)) {
     auto screen_position = sbx::devices::input::mouse_position();
 
@@ -177,39 +179,45 @@ auto application::update() -> void  {
     const auto ground = sbx::math::plane{sbx::math::vector3::up, 0.0f};
 
     if (const auto hit = intersect_ray_plane(ray, ground); hit) {
-      const auto selected_cell = _grid.pick_dual_quad_at(*hit);
+      selected_cell = _grid.pick_main_face_at(*hit);
 
       if (selected_cell != grid_type::invalid_id) {
-        auto& cell = _grid.get_or_create_cell_data(selected_cell, grid_data{});
-        cell.is_painted = !cell.is_painted;
-
-        if (cell.node == sbx::scenes::node::null) {
-          cell.node = scene.create_node("CellNode");
-
-          auto& terrain = scene.add_component<terrain_tag>(cell.node, terrain_tag{});
-          terrain.grid_cell = selected_cell;
-          terrain.height = 3.0f;
-          terrain.color = sbx::math::random_color();
-          terrain.mesh_id = scene.get_mesh("corner");
-        }
-
         _rebuild_terrain_tiles();
       }
     }
   }
 
-  for (auto qi = 0u; qi < _grid.dual_quads().size(); ++qi) {
-    const auto& q = _grid.dual_quads()[qi];
-
-    const auto& a = _grid.dual_vertex_at(q.a).position;
-    const auto& b = _grid.dual_vertex_at(q.b).position;
-    const auto& c = _grid.dual_vertex_at(q.c).position;
-    const auto& d = _grid.dual_vertex_at(q.d).position;
+  for (const auto quad : _grid.dual_quads()) {
+    const auto& a = _grid.dual_vertex_at(quad.a).position;
+    const auto& b = _grid.dual_vertex_at(quad.b).position;
+    const auto& c = _grid.dual_vertex_at(quad.c).position;
+    const auto& d = _grid.dual_vertex_at(quad.d).position;
 
     scenes_module.add_debug_line(a, b, sbx::math::color::white());
     scenes_module.add_debug_line(b, c, sbx::math::color::white());
     scenes_module.add_debug_line(c, d, sbx::math::color::white());
     scenes_module.add_debug_line(d, a, sbx::math::color::white());
+  }
+
+  for (const auto& e : _grid.main_edges()) {
+    const auto& a = _grid.main_vertex_at(e.a).position;
+    const auto& b = _grid.main_vertex_at(e.b).position;
+
+    scenes_module.add_debug_line(a, b, sbx::math::color::cyan());
+  }
+
+  if (selected_cell != grid_type::invalid_id) {
+    const auto poly = _grid.main_cell_ccw(selected_cell);
+
+    for (auto i = std::size_t{0u}; i < poly.size(); ++i) {
+      const auto a_id = poly[i];
+      const auto b_id = poly[(i + 1u) % poly.size()];
+
+      const auto& a = _grid.main_vertex_at(a_id).position;
+      const auto& b = _grid.main_vertex_at(b_id).position;
+
+      scenes_module.add_debug_line(a, b, sbx::math::color::yellow());
+    }
   }
 }
 

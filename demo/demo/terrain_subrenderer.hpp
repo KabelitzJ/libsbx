@@ -73,7 +73,7 @@ public:
 
   auto render(sbx::graphics::command_buffer& command_buffer) -> void override;
 
-  auto update_dual_grid_data(const dual_grid<grid_cell_data>& grid) -> void;
+  auto update_dual_grid_data(const dual_grid<grid_data>& grid) -> void;
 
 private:
 

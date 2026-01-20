@@ -7,8 +7,8 @@ namespace Demo
   public class CameraController : Behavior
   {
 
-    public float normalSpeed = 0.5f;
-    public float fastSpeed = 2.0f;
+    public float normalSpeed = 0.3f;
+    public float fastSpeed = 1.3f;
     private float _movementSpeed;
 
     public float movementTime = 10.0f;

@@ -45,18 +45,13 @@ static auto intersect_ray_plane(const sbx::math::ray& ray, const sbx::math::plan
 }
 
 static const auto settings = application::grid_type::settings{
-  .rings = 10u,
+  .rings = 15u,
   .ring_distance = 10.0f,
   .seed = 19517357u,
   .merge_probability = 0.4f,
-  .split_quads_to_4 = true,
-  .split_leftover_tris_to_3 = true,
-  .relax = true,
   .relax_iterations = 40u,
   .relax_lambda = 0.45f,
-  .relax_mu = -0.50f,
-  .relax_add_diagonals = true,
-  .build_dual = true
+  .relax_mu = -0.50f
 };
 
 application::application()
@@ -182,10 +177,10 @@ auto application::update() -> void  {
     const auto ground = sbx::math::plane{sbx::math::vector3::up, 0.0f};
 
     if (const auto hit = intersect_ray_plane(ray, ground); hit) {
-      const auto selected_cell = _grid.pick_primal_quad_at(*hit);
+      const auto selected_cell = _grid.pick_dual_quad_at(*hit);
 
       if (selected_cell != grid_type::invalid_id) {
-        auto& cell = _grid.get_or_create_cell_data(selected_cell, grid_cell_data{});
+        auto& cell = _grid.get_or_create_cell_data(selected_cell, grid_data{});
         cell.is_painted = !cell.is_painted;
 
         if (cell.node == sbx::scenes::node::null) {
@@ -203,13 +198,13 @@ auto application::update() -> void  {
     }
   }
 
-  for (auto qi = 0u; qi < _grid.quads().size(); ++qi) {
-    const auto& q = _grid.quads()[qi];
+  for (auto qi = 0u; qi < _grid.dual_quads().size(); ++qi) {
+    const auto& q = _grid.dual_quads()[qi];
 
-    const auto& a = _grid.vertex_at(q.a).position;
-    const auto& b = _grid.vertex_at(q.b).position;
-    const auto& c = _grid.vertex_at(q.c).position;
-    const auto& d = _grid.vertex_at(q.d).position;
+    const auto& a = _grid.dual_vertex_at(q.a).position;
+    const auto& b = _grid.dual_vertex_at(q.b).position;
+    const auto& c = _grid.dual_vertex_at(q.c).position;
+    const auto& d = _grid.dual_vertex_at(q.d).position;
 
     scenes_module.add_debug_line(a, b, sbx::math::color::white());
     scenes_module.add_debug_line(b, c, sbx::math::color::white());

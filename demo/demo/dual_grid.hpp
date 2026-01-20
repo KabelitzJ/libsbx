@@ -1,10 +1,13 @@
 #ifndef DEMO_DUAL_GRID_HPP_
 #define DEMO_DUAL_GRID_HPP_
 
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <limits>
 #include <span>
+#include <type_traits>
+#include <utility>
 #include <vector>
 
 #include <libsbx/math/vector3.hpp>
@@ -18,32 +21,32 @@ public:
 
   inline static constexpr auto invalid_id = std::numeric_limits<std::uint32_t>::max();
 
-  struct vertex {
+  struct dual_vertex {
     sbx::math::vector3 position{};
-    std::uint32_t is_fixed = false;
-  };
+    std::uint32_t is_fixed = 0u;
+  }; // struct dual_vertex
 
-  struct quad {
+  struct dual_quad {
     std::uint32_t a = 0u;
     std::uint32_t b = 0u;
     std::uint32_t c = 0u;
     std::uint32_t d = 0u;
-  };
+  }; // struct dual_quad
 
-  struct dual_vertex {
+  struct main_vertex {
     sbx::math::vector3 position{};
-    std::uint32_t is_boundary = false;
-  };
+    std::uint32_t is_boundary = 0u;
+  }; // struct main_vertex
 
-  struct dual_edge {
+  struct main_edge {
     std::uint32_t a = 0u;
     std::uint32_t b = 0u;
 
-    std::uint32_t primal_u = invalid_id;
-    std::uint32_t primal_v = invalid_id;
+    std::uint32_t dual_u = invalid_id;
+    std::uint32_t dual_v = invalid_id;
 
     bool is_boundary = false;
-  };
+  }; // struct main_edge
 
   struct settings {
     std::uint32_t rings = 6u;
@@ -52,103 +55,64 @@ public:
     std::uint32_t seed = 0u;
     std::float_t merge_probability = 0.5f;
 
-    bool split_quads_to_4 = true;
-    bool split_leftover_tris_to_3 = true;
-
-    bool relax = true;
     std::uint32_t relax_iterations = 80u;
     std::float_t relax_lambda = 0.45f;
     std::float_t relax_mu = -0.50f;
-    bool relax_add_diagonals = true;
-
-    bool build_dual = true;
-  };
+  }; // struct settings
 
   dual_grid_base() = default;
 
-  explicit dual_grid_base(const settings& settings) {
-    rebuild(settings);
-  }
+  explicit dual_grid_base(const settings& settings);
 
   auto rebuild(const settings& settings) -> void;
 
-  // ----- primal -------------------------------------------------------------
+  auto dual_vertices() const -> const std::vector<dual_vertex>&;
 
-  auto vertices() const -> const std::vector<vertex>& {
-    return _vertices;
-  }
+  auto dual_vertex_at(const std::size_t index) const -> const dual_vertex&;
 
-  auto vertex_at(const std::size_t index) const -> const vertex& {
-    return _vertices[index];
-  }
+  auto dual_quads() const -> const std::vector<dual_quad>&;
 
-  auto quads() const -> const std::vector<quad>& {
-    return _quads;
-  }
+  auto dual_quad_at(const std::size_t index) const -> const dual_quad&;
 
-  auto quad_at(const std::size_t index) const -> const quad& {
-    return _quads[index];
-  }
+  auto dual_quad_count() const -> std::uint32_t;
 
-  auto cell_count() const -> std::uint32_t {
-    return static_cast<std::uint32_t>(_quads.size());
-  }
+  auto pick_dual_quad_at(const sbx::math::vector3& point) const -> std::uint32_t;
 
-  auto pick_primal_quad_at(const sbx::math::vector3& point) const -> std::uint32_t;
+  auto main_vertices() const -> std::span<const main_vertex>;
 
-  // ----- dual ---------------------------------------------------------------
+  auto main_vertex_at(const std::size_t index) const -> const main_vertex&;
 
-  auto dual_vertices() const -> std::span<const dual_vertex> {
-    return _dual_vertices;
-  }
+  auto main_edges() const -> std::span<const main_edge>;
 
-  auto dual_vertex_at(const std::size_t index) const -> const dual_vertex& {
-    return _dual_vertices[index];
-  }
+  auto main_cell_ccw(const std::uint32_t dual_vertex_id) const -> std::span<const std::uint32_t>;
 
-  auto dual_edges() const -> std::span<const dual_edge> {
-    return _dual_edges;
-  }
-
-  auto dual_cell_ccw(const std::uint32_t primal_vertex_id) const -> std::span<const std::uint32_t> {
-    return _dual_cells_ccw[primal_vertex_id];
-  }
-
-  // Convention:
-  // dual vertex id == quad id for 0..quads.size()-1
-  auto quad_center(const std::uint32_t quad_id) const -> sbx::math::vector3 {
-    sbx::utility::assert_that(quad_id < _quads.size(), "quad_center(): invalid quad id");
-    sbx::utility::assert_that(quad_id < _dual_vertices.size(), "quad_center(): dual not built");
-
-    return _dual_vertices[quad_id].position;
-  }
+  auto dual_quad_center(const std::uint32_t dual_quad_id) const -> sbx::math::vector3;
 
 protected:
 
-  std::vector<vertex> _vertices{};
-  std::vector<quad> _quads{};
-
   std::vector<dual_vertex> _dual_vertices{};
-  std::vector<dual_edge> _dual_edges{};
-  std::vector<std::vector<std::uint32_t>> _dual_cells_ccw{};
+  std::vector<dual_quad> _dual_quads{};
+
+  std::vector<main_vertex> _main_vertices{};
+  std::vector<main_edge> _main_edges{};
+  std::vector<std::vector<std::uint32_t>> _main_cells_ccw{};
 
 }; // class dual_grid_base
 
 template<typename Type>
 class dual_grid : public dual_grid_base {
 
+public:
+
   using base_type = dual_grid_base;
 
   inline static constexpr auto invalid_data_index = std::numeric_limits<std::uint32_t>::max();
 
-public:
-
   using settings = base_type::settings;
-  using vertex = base_type::vertex;
-  using quad = base_type::quad;
   using dual_vertex = base_type::dual_vertex;
-  using dual_edge = base_type::dual_edge;
-
+  using dual_quad = base_type::dual_quad;
+  using main_vertex = base_type::main_vertex;
+  using main_edge = base_type::main_edge;
   using value_type = Type;
 
   dual_grid() = default;
@@ -160,13 +124,11 @@ public:
   auto rebuild(const settings& settings) -> void {
     base_type::rebuild(settings);
 
-    const auto n = static_cast<std::uint32_t>(base_type::_quads.size());
+    const auto n = static_cast<std::uint32_t>(base_type::_dual_quads.size());
 
     _cell_to_data.resize(n, invalid_data_index);
     _data.reserve(n);
   }
-
-  // ------------------- cell payload API -------------------------------------
 
   auto data_pool() -> std::span<Type> {
     return _data;
@@ -217,6 +179,7 @@ public:
 
     if (data_index == invalid_data_index) {
       data_index = static_cast<std::uint32_t>(_data.size());
+
       _data.emplace_back(std::forward<Args>(args)...);
     }
 

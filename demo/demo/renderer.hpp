@@ -25,7 +25,7 @@ public:
 
   ~renderer() override = default;
 
-  auto update_dual_grid_data(const dual_grid<grid_cell_data>& grid) -> void {
+  auto update_dual_grid_data(const dual_grid<grid_data>& grid) -> void {
     _terrain_subrenderer->update_dual_grid_data(grid);
   }
 

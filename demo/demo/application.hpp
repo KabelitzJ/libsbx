@@ -19,7 +19,7 @@ class application : public sbx::core::application {
 
 public:
 
-  using grid_type = dual_grid<grid_cell_data>;
+  using grid_type = dual_grid<grid_data>;
 
   application();
 

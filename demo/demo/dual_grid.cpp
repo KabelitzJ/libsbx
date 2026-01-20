@@ -8,12 +8,12 @@
 #include <unordered_set>
 #include <vector>
 
+#include <libsbx/math/algorithm.hpp>
+#include <libsbx/math/random.hpp>
+
 #include <libsbx/utility/assert.hpp>
 #include <libsbx/utility/hash.hpp>
 #include <libsbx/utility/iterator.hpp>
-
-#include <libsbx/math/algorithm.hpp>
-#include <libsbx/math/random.hpp>
 
 namespace demo {
 
@@ -21,12 +21,14 @@ struct triangle {
   std::uint32_t a{};
   std::uint32_t b{};
   std::uint32_t c{};
-};
+
+}; // struct triangle
 
 struct hex_triangle_grid {
-  std::vector<dual_grid_base::vertex> vertices{};
+  std::vector<dual_grid_base::dual_vertex> vertices{};
   std::vector<triangle> triangles{};
-};
+
+}; // struct hex_triangle_grid
 
 struct axial_key {
   int q{};
@@ -35,15 +37,18 @@ struct axial_key {
   auto operator==(const axial_key& other) const -> bool {
     return q == other.q && r == other.r;
   }
-};
+
+}; // struct axial_key
 
 struct axial_key_hash {
   auto operator()(const axial_key& k) const noexcept -> std::size_t {
     auto h = std::size_t{0};
     sbx::utility::hash_combine(h, k.q, k.r);
+
     return h;
   }
-};
+
+}; // struct axial_key_hash
 
 struct edge_key {
   std::uint32_t u{};
@@ -52,58 +57,72 @@ struct edge_key {
   auto operator==(const edge_key& other) const -> bool {
     return u == other.u && v == other.v;
   }
-};
+
+}; // struct edge_key
 
 struct edge_key_hash {
   auto operator()(const edge_key& e) const noexcept -> std::size_t {
     auto h = std::size_t{0};
     sbx::utility::hash_combine(h, e.u, e.v);
+
     return h;
   }
-};
+
+}; // struct edge_key_hash
 
 struct edge_tri_pair {
   std::uint32_t tri0 = std::numeric_limits<std::uint32_t>::max();
   std::uint32_t tri1 = std::numeric_limits<std::uint32_t>::max();
-};
 
-struct edge_quad_pair {
-  std::uint32_t q0 = std::numeric_limits<std::uint32_t>::max();
-  std::uint32_t q1 = std::numeric_limits<std::uint32_t>::max();
-};
+}; // struct edge_tri_pair
+
+struct edge_cell_pair {
+  std::uint32_t c0 = std::numeric_limits<std::uint32_t>::max();
+  std::uint32_t c1 = std::numeric_limits<std::uint32_t>::max();
+
+}; // struct edge_cell_pair
 
 struct quadify_result {
-  std::vector<dual_grid_base::quad> quads{};
+  std::vector<dual_grid_base::dual_quad> cells{};
   std::vector<triangle> leftover_tris{};
-};
+
+}; // struct quadify_result
 
 struct midpoint_cache {
   std::unordered_map<edge_key, std::uint32_t, edge_key_hash> index{};
-};
+
+}; // struct midpoint_cache
 
 static auto make_edge_key(const std::uint32_t a, const std::uint32_t b) -> edge_key {
-  return (a < b) ? edge_key{a, b} : edge_key{b, a};
+  if (a < b) {
+    return edge_key{a, b};
+  }
+
+  return edge_key{b, a};
 }
 
 static auto edge_midpoint(
   const std::uint32_t u,
   const std::uint32_t v,
-  const std::vector<dual_grid_base::vertex>& vertices
+  const std::vector<dual_grid_base::dual_vertex>& vertices
 ) -> sbx::math::vector3 {
   const auto pu = vertices[u].position;
   const auto pv = vertices[v].position;
+
   return (pu + pv) * 0.5f;
 }
 
 static auto get_or_create_midpoint(
-  std::vector<dual_grid_base::vertex>& vertices,
+  std::vector<dual_grid_base::dual_vertex>& vertices,
   midpoint_cache& cache,
   const std::uint32_t u,
   const std::uint32_t v
 ) -> std::uint32_t {
   const auto key = make_edge_key(u, v);
 
-  if (const auto it = cache.index.find(key); it != cache.index.end()) {
+  const auto it = cache.index.find(key);
+
+  if (it != cache.index.end()) {
     return it->second;
   }
 
@@ -112,7 +131,7 @@ static auto get_or_create_midpoint(
   const auto idx = static_cast<std::uint32_t>(vertices.size());
   const auto is_fixed = vertices[u].is_fixed && vertices[v].is_fixed;
 
-  vertices.push_back(dual_grid_base::vertex{pm, is_fixed});
+  vertices.push_back(dual_grid_base::dual_vertex{pm, is_fixed});
   cache.index.emplace(key, idx);
 
   return idx;
@@ -126,7 +145,7 @@ static auto generate_grid(const std::uint32_t rings, const std::float_t ring_dis
   const auto vertex_count = 1u + 3u * radius * (radius + 1u);
   const auto triangle_count = 6u * radius * radius;
 
-  result.vertices = sbx::utility::make_reserved_vector<dual_grid_base::vertex>(vertex_count);
+  result.vertices = sbx::utility::make_reserved_vector<dual_grid_base::dual_vertex>(vertex_count);
   result.triangles = sbx::utility::make_reserved_vector<triangle>(triangle_count);
 
   constexpr auto sqrt3_over_2 = 0.8660254037844386f;
@@ -134,6 +153,7 @@ static auto generate_grid(const std::uint32_t rings, const std::float_t ring_dis
   const auto axial_to_world = [&](const auto q, const auto r) -> sbx::math::vector3 {
     const auto x = ring_distance * (static_cast<std::float_t>(q) + 0.5f * static_cast<std::float_t>(r));
     const auto z = ring_distance * (sqrt3_over_2 * static_cast<std::float_t>(r));
+
     return sbx::math::vector3{x, 0.0f, z};
   };
 
@@ -150,7 +170,11 @@ static auto generate_grid(const std::uint32_t rings, const std::float_t ring_dis
         const auto settings = -q - r;
 
         const auto abs_i = [](const auto v) -> decltype(v) {
-          return (v < 0) ? -v : v;
+          if (v < 0) {
+            return -v;
+          }
+
+          return v;
         };
 
         const auto mq = abs_i(q);
@@ -158,6 +182,7 @@ static auto generate_grid(const std::uint32_t rings, const std::float_t ring_dis
         const auto ms = abs_i(settings);
 
         const auto m = std::max({mq, mr, ms});
+
         if (m > R) {
           continue;
         }
@@ -165,7 +190,7 @@ static auto generate_grid(const std::uint32_t rings, const std::float_t ring_dis
         const auto is_fixed = (m == R);
 
         index_of.emplace(axial_key{q, r}, idx);
-        result.vertices.push_back(dual_grid_base::vertex{axial_to_world(q, r), is_fixed});
+        result.vertices.push_back(dual_grid_base::dual_vertex{axial_to_world(q, r), is_fixed});
         ++idx;
       }
     }
@@ -174,9 +199,12 @@ static auto generate_grid(const std::uint32_t rings, const std::float_t ring_dis
   const auto invalid = std::numeric_limits<std::uint32_t>::max();
 
   const auto find_index = [&](const auto q, const auto r) -> std::uint32_t {
-    if (const auto it = index_of.find(axial_key{q, r}); it != index_of.end()) {
+    const auto it = index_of.find(axial_key{q, r});
+
+    if (it != index_of.end()) {
       return it->second;
     }
+
     return invalid;
   };
 
@@ -204,22 +232,38 @@ static auto generate_grid(const std::uint32_t rings, const std::float_t ring_dis
 }
 
 static auto third_vertex(const triangle& t, const std::uint32_t u, const std::uint32_t v) -> std::uint32_t {
-  if (t.a != u && t.a != v) return t.a;
-  if (t.b != u && t.b != v) return t.b;
-  if (t.c != u && t.c != v) return t.c;
+  if (t.a != u && t.a != v) {
+    return t.a;
+  }
+
+  if (t.b != u && t.b != v) {
+    return t.b;
+  }
+
+  if (t.c != u && t.c != v) {
+    return t.c;
+  }
+
   return std::numeric_limits<std::uint32_t>::max();
 }
 
-static auto signed_area_xz(const dual_grid_base::quad& q, const std::vector<dual_grid_base::vertex>& vertices) -> std::float_t {
-  const auto p0 = vertices[q.a].position;
-  const auto p1 = vertices[q.b].position;
-  const auto p2 = vertices[q.c].position;
-  const auto p3 = vertices[q.d].position;
+static auto signed_area_xz(
+  const dual_grid_base::dual_quad& c,
+  const std::vector<dual_grid_base::dual_vertex>& vertices
+) -> std::float_t {
+  const auto p0 = vertices[c.a].position;
+  const auto p1 = vertices[c.b].position;
+  const auto p2 = vertices[c.c].position;
+  const auto p3 = vertices[c.d].position;
 
-  const auto x0 = p0.x(); const auto z0 = p0.z();
-  const auto x1 = p1.x(); const auto z1 = p1.z();
-  const auto x2 = p2.x(); const auto z2 = p2.z();
-  const auto x3 = p3.x(); const auto z3 = p3.z();
+  const auto x0 = p0.x();
+  const auto z0 = p0.z();
+  const auto x1 = p1.x();
+  const auto z1 = p1.z();
+  const auto x2 = p2.x();
+  const auto z2 = p2.z();
+  const auto x3 = p3.x();
+  const auto z3 = p3.z();
 
   return 0.5f * (
     x0 * z1 - x1 * z0 +
@@ -229,29 +273,29 @@ static auto signed_area_xz(const dual_grid_base::quad& q, const std::vector<dual
   );
 }
 
-static auto make_merged_quad_ccw(
+static auto make_merged_cell_ccw(
   const triangle& t0,
   const triangle& t1,
   const edge_key& e,
-  const std::vector<dual_grid_base::vertex>& vertices
-) -> dual_grid_base::quad {
+  const std::vector<dual_grid_base::dual_vertex>& vertices
+) -> dual_grid_base::dual_quad {
   const auto u = e.u;
   const auto v = e.v;
 
   const auto w0 = third_vertex(t0, u, v);
   const auto w1 = third_vertex(t1, u, v);
 
-  auto q = dual_grid_base::quad{w0, u, w1, v};
+  auto c = dual_grid_base::dual_quad{w0, u, w1, v};
 
-  if (signed_area_xz(q, vertices) < 0.0f) {
-    q = dual_grid_base::quad{w0, v, w1, u};
+  if (signed_area_xz(c, vertices) < 0.0f) {
+    c = dual_grid_base::dual_quad{w0, v, w1, u};
   }
 
-  return q;
+  return c;
 }
 
-static auto merge_tris_to_quads_random(
-  const std::vector<dual_grid_base::vertex>& vertices,
+static auto merge_tris_to_cells_random(
+  const std::vector<dual_grid_base::dual_vertex>& vertices,
   const std::vector<triangle>& triangles,
   const std::float_t merge_probability
 ) -> quadify_result {
@@ -268,17 +312,20 @@ static auto merge_tris_to_quads_random(
 
     if (slot.tri0 == invalid) {
       slot.tri0 = tri_index;
+
       return;
     }
 
     if (slot.tri1 == invalid) {
       slot.tri1 = tri_index;
+
       return;
     }
   };
 
   for (auto ti = std::uint32_t{0u}; ti < static_cast<std::uint32_t>(triangles.size()); ++ti) {
     const auto& t = triangles[ti];
+
     add_edge(t.a, t.b, ti);
     add_edge(t.b, t.c, ti);
     add_edge(t.c, t.a, ti);
@@ -289,6 +336,7 @@ static auto merge_tris_to_quads_random(
 
   for (const auto& [e, pair] : edge_to_tris) {
     const auto has_two_tris = pair.tri0 != invalid && pair.tri1 != invalid;
+
     if (has_two_tris) {
       internal_edges.push_back(e);
     }
@@ -296,9 +344,10 @@ static auto merge_tris_to_quads_random(
 
   sbx::math::shuffle_range(internal_edges);
 
-  auto tri_used = std::vector<bool>(triangles.size(), false);
+  auto tri_used = std::vector<bool>{};
+  tri_used.resize(triangles.size());
 
-  result.quads = sbx::utility::make_reserved_vector<dual_grid_base::quad>(triangles.size() / 2u);
+  result.cells = sbx::utility::make_reserved_vector<dual_grid_base::dual_quad>(triangles.size() / 2u);
 
   for (const auto& e : internal_edges) {
     if (sbx::math::random::next<std::float_t>(0.0f, 1.0f) > merge_probability) {
@@ -306,6 +355,7 @@ static auto merge_tris_to_quads_random(
     }
 
     const auto it = edge_to_tris.find(e);
+
     if (it == edge_to_tris.end()) {
       continue;
     }
@@ -332,8 +382,8 @@ static auto merge_tris_to_quads_random(
       continue;
     }
 
-    const auto merged_quad = make_merged_quad_ccw(triangles[t0], triangles[t1], e, vertices);
-    result.quads.push_back(merged_quad);
+    const auto merged_cell = make_merged_cell_ccw(triangles[t0], triangles[t1], e, vertices);
+    result.cells.push_back(merged_cell);
 
     tri_used[t0] = true;
     tri_used[t1] = true;
@@ -350,14 +400,20 @@ static auto merge_tris_to_quads_random(
   return result;
 }
 
-static auto signed_area_xz_triangle(const triangle& t, const std::vector<dual_grid_base::vertex>& vertices) -> std::float_t {
+static auto signed_area_xz_triangle(
+  const triangle& t,
+  const std::vector<dual_grid_base::dual_vertex>& vertices
+) -> std::float_t {
   const auto p0 = vertices[t.a].position;
   const auto p1 = vertices[t.b].position;
   const auto p2 = vertices[t.c].position;
 
-  const auto x0 = p0.x(); const auto z0 = p0.z();
-  const auto x1 = p1.x(); const auto z1 = p1.z();
-  const auto x2 = p2.x(); const auto z2 = p2.z();
+  const auto x0 = p0.x();
+  const auto z0 = p0.z();
+  const auto x1 = p1.x();
+  const auto z1 = p1.z();
+  const auto x2 = p2.x();
+  const auto z2 = p2.z();
 
   return 0.5f * (
     x0 * (z1 - z2) +
@@ -366,12 +422,12 @@ static auto signed_area_xz_triangle(const triangle& t, const std::vector<dual_gr
   );
 }
 
-static auto split_leftover_tris_to_quads(
-  std::vector<dual_grid_base::vertex>& vertices,
+static auto split_leftover_tris_to_cells(
+  std::vector<dual_grid_base::dual_vertex>& vertices,
   const std::vector<triangle>& leftover_tris,
   midpoint_cache& cache
-) -> std::vector<dual_grid_base::quad> {
-  auto out = std::vector<dual_grid_base::quad>{};
+) -> std::vector<dual_grid_base::dual_quad> {
+  auto out = std::vector<dual_grid_base::dual_quad>{};
   out.reserve(leftover_tris.size() * 3u);
 
   vertices.reserve(vertices.size() + leftover_tris.size() * 4u);
@@ -393,95 +449,90 @@ static auto split_leftover_tris_to_quads(
 
     const auto center_pos = (pa + pb + pc) * (1.0f / 3.0f);
     const auto center = static_cast<std::uint32_t>(vertices.size());
-    vertices.push_back(dual_grid_base::vertex{center_pos, false});
+
+    vertices.push_back(dual_grid_base::dual_vertex{center_pos, 0u});
 
     const auto mab = get_or_create_midpoint(vertices, cache, a, b);
     const auto mbc = get_or_create_midpoint(vertices, cache, b, c);
     const auto mca = get_or_create_midpoint(vertices, cache, c, a);
 
-    out.push_back(dual_grid_base::quad{a, mab, center, mca});
-    out.push_back(dual_grid_base::quad{b, mbc, center, mab});
-    out.push_back(dual_grid_base::quad{c, mca, center, mbc});
+    out.push_back(dual_grid_base::dual_quad{a, mab, center, mca});
+    out.push_back(dual_grid_base::dual_quad{b, mbc, center, mab});
+    out.push_back(dual_grid_base::dual_quad{c, mca, center, mbc});
   }
 
   return out;
 }
 
-static auto split_quads_to_4(
-  std::vector<dual_grid_base::vertex>& vertices,
-  const std::vector<dual_grid_base::quad>& in_quads,
+static auto split_cells_to_4(
+  std::vector<dual_grid_base::dual_vertex>& vertices,
+  const std::vector<dual_grid_base::dual_quad>& in_cells,
   midpoint_cache& cache
-) -> std::vector<dual_grid_base::quad> {
-  auto out = std::vector<dual_grid_base::quad>{};
-  out.reserve(in_quads.size() * 4u);
+) -> std::vector<dual_grid_base::dual_quad> {
+  auto out = std::vector<dual_grid_base::dual_quad>{};
+  out.reserve(in_cells.size() * 4u);
 
-  vertices.reserve(vertices.size() + in_quads.size() * 5u);
+  vertices.reserve(vertices.size() + in_cells.size() * 5u);
 
-  for (const auto& q : in_quads) {
-    const auto a = q.a;
-    const auto b = q.b;
-    const auto c = q.c;
-    const auto d = q.d;
+  for (const auto& c : in_cells) {
+    const auto a = c.a;
+    const auto b = c.b;
+    const auto cc = c.c;
+    const auto d = c.d;
 
     const auto mab = get_or_create_midpoint(vertices, cache, a, b);
-    const auto mbc = get_or_create_midpoint(vertices, cache, b, c);
-    const auto mcd = get_or_create_midpoint(vertices, cache, c, d);
+    const auto mbc = get_or_create_midpoint(vertices, cache, b, cc);
+    const auto mcd = get_or_create_midpoint(vertices, cache, cc, d);
     const auto mda = get_or_create_midpoint(vertices, cache, d, a);
 
     const auto pa = vertices[a].position;
     const auto pb = vertices[b].position;
-    const auto pc = vertices[c].position;
+    const auto pc = vertices[cc].position;
     const auto pd = vertices[d].position;
 
     const auto center_pos = (pa + pb + pc + pd) * 0.25f;
     const auto center = static_cast<std::uint32_t>(vertices.size());
 
-    const auto center_fixed =
-      vertices[a].is_fixed &&
-      vertices[b].is_fixed &&
-      vertices[c].is_fixed &&
-      vertices[d].is_fixed;
+    const auto center_fixed = vertices[a].is_fixed && vertices[b].is_fixed && vertices[cc].is_fixed && vertices[d].is_fixed;
 
-    vertices.push_back(dual_grid_base::vertex{center_pos, center_fixed});
+    vertices.push_back(dual_grid_base::dual_vertex{center_pos, center_fixed});
 
-    out.push_back(dual_grid_base::quad{a, mab, center, mda});
-    out.push_back(dual_grid_base::quad{mab, b, mbc, center});
-    out.push_back(dual_grid_base::quad{center, mbc, c, mcd});
-    out.push_back(dual_grid_base::quad{mda, center, mcd, d});
+    out.push_back(dual_grid_base::dual_quad{a, mab, center, mda});
+    out.push_back(dual_grid_base::dual_quad{mab, b, mbc, center});
+    out.push_back(dual_grid_base::dual_quad{center, mbc, cc, mcd});
+    out.push_back(dual_grid_base::dual_quad{mda, center, mcd, d});
   }
 
   return out;
 }
 
-static auto relax_quads_taubin_keep_fixed(
-  std::vector<dual_grid_base::vertex>& vertices,
-  const std::vector<dual_grid_base::quad>& quads,
+static auto relax_cells_taubin_keep_fixed(
+  std::vector<dual_grid_base::dual_vertex>& vertices,
+  const std::vector<dual_grid_base::dual_quad>& cells,
   const std::uint32_t iterations,
   const std::float_t lambda,
-  const std::float_t mu,
-  const bool add_diagonals
+  const std::float_t mu
 ) -> void {
-  if (vertices.empty() || quads.empty() || iterations == 0u) {
+  if (vertices.empty() || cells.empty() || iterations == 0u) {
     return;
   }
 
-  auto adjacency = std::vector<std::vector<std::uint32_t>>(vertices.size());
+  auto adjacency = std::vector<std::vector<std::uint32_t>>{};
+  adjacency.resize(vertices.size());
 
   const auto add_edge = [&](const auto u, const auto v) {
     adjacency[u].push_back(v);
     adjacency[v].push_back(u);
   };
 
-  for (const auto& q : quads) {
-    add_edge(q.a, q.b);
-    add_edge(q.b, q.c);
-    add_edge(q.c, q.d);
-    add_edge(q.d, q.a);
+  for (const auto& c : cells) {
+    add_edge(c.a, c.b);
+    add_edge(c.b, c.c);
+    add_edge(c.c, c.d);
+    add_edge(c.d, c.a);
 
-    if (add_diagonals) {
-      add_edge(q.a, q.c);
-      add_edge(q.b, q.d);
-    }
+    add_edge(c.a, c.c);
+    add_edge(c.b, c.d);
   }
 
   for (auto& nbrs : adjacency) {
@@ -489,27 +540,32 @@ static auto relax_quads_taubin_keep_fixed(
     nbrs.erase(std::unique(nbrs.begin(), nbrs.end()), nbrs.end());
   }
 
-  auto tmp = std::vector<sbx::math::vector3>(vertices.size());
-  auto tmp2 = std::vector<sbx::math::vector3>(vertices.size());
+  auto tmp = std::vector<sbx::math::vector3>{};
+  auto tmp2 = std::vector<sbx::math::vector3>{};
 
-  const auto laplacian_step = [&](const std::vector<sbx::math::vector3>& src,
-                                  std::vector<sbx::math::vector3>& dst,
-                                  const std::float_t k) {
+  tmp.resize(vertices.size());
+  tmp2.resize(vertices.size());
+
+  const auto laplacian_step = [&](const std::vector<sbx::math::vector3>& src, std::vector<sbx::math::vector3>& dst, const std::float_t k) {
     for (auto i = std::size_t{0u}; i < vertices.size(); ++i) {
       auto p = src[i];
 
       if (vertices[i].is_fixed) {
         dst[i] = p;
+
         continue;
       }
 
       const auto& nbrs = adjacency[i];
+
       if (nbrs.empty()) {
         dst[i] = p;
+
         continue;
       }
 
       auto avg = sbx::math::vector3{0.0f, 0.0f, 0.0f};
+
       for (const auto nb : nbrs) {
         avg += src[nb];
       }
@@ -540,175 +596,184 @@ static auto relax_quads_taubin_keep_fixed(
   }
 }
 
-static auto compute_quad_center(const dual_grid_base::quad& q, const std::vector<dual_grid_base::vertex>& vertices) -> sbx::math::vector3 {
-  const auto pa = vertices[q.a].position;
-  const auto pb = vertices[q.b].position;
-  const auto pc = vertices[q.c].position;
-  const auto pd = vertices[q.d].position;
+static auto compute_dual_quad_center(
+  const dual_grid_base::dual_quad& c,
+  const std::vector<dual_grid_base::dual_vertex>& vertices
+) -> sbx::math::vector3 {
+  const auto pa = vertices[c.a].position;
+  const auto pb = vertices[c.b].position;
+  const auto pc = vertices[c.c].position;
+  const auto pd = vertices[c.d].position;
 
   return (pa + pb + pc + pd) * 0.25f;
 }
 
-static auto build_dual_mesh(
-  const std::vector<dual_grid_base::vertex>& primal_vertices,
-  const std::vector<dual_grid_base::quad>& primal_quads,
-  std::vector<dual_grid_base::dual_vertex>& out_dual_vertices,
-  std::vector<dual_grid_base::dual_edge>& out_dual_edges,
-  std::vector<std::vector<std::uint32_t>>& out_dual_cells_ccw
+static auto build_main_mesh(
+  const std::vector<dual_grid_base::dual_vertex>& dual_vertices,
+  const std::vector<dual_grid_base::dual_quad>& dual_quads,
+  std::vector<dual_grid_base::main_vertex>& out_main_vertices,
+  std::vector<dual_grid_base::main_edge>& out_main_edges,
+  std::vector<std::vector<std::uint32_t>>& out_main_cells_ccw
 ) -> void {
-  out_dual_vertices.clear();
-  out_dual_edges.clear();
-  out_dual_cells_ccw.clear();
+  out_main_vertices.clear();
+  out_main_edges.clear();
+  out_main_cells_ccw.clear();
 
-  if (primal_vertices.empty() || primal_quads.empty()) {
+  if (dual_vertices.empty() || dual_quads.empty()) {
     return;
   }
 
   const auto invalid = std::numeric_limits<std::uint32_t>::max();
 
-  // ----- 1) primal edge -> adjacent quads -----------------------------------
+  // ----- 1) dual edge -> adjacent dual cells --------------------------------
 
-  auto edge_to_quads = std::unordered_map<edge_key, edge_quad_pair, edge_key_hash>{};
-  edge_to_quads.reserve(primal_quads.size() * 4u);
+  auto edge_to_cells = std::unordered_map<edge_key, edge_cell_pair, edge_key_hash>{};
+  edge_to_cells.reserve(dual_quads.size() * 4u);
 
-  const auto add_primal_edge = [&](const auto u, const auto v, const auto qi) {
+  const auto add_dual_edge = [&](const auto u, const auto v, const auto ci) {
     const auto key = make_edge_key(u, v);
-    auto& slot = edge_to_quads[key];
+    auto& slot = edge_to_cells[key];
 
-    if (slot.q0 == invalid) {
-      slot.q0 = qi;
+    if (slot.c0 == invalid) {
+      slot.c0 = ci;
+
       return;
     }
 
-    if (slot.q1 == invalid) {
-      slot.q1 = qi;
+    if (slot.c1 == invalid) {
+      slot.c1 = ci;
+
       return;
     }
   };
 
-  for (auto qi = std::uint32_t{0u}; qi < static_cast<std::uint32_t>(primal_quads.size()); ++qi) {
-    const auto& q = primal_quads[qi];
-    add_primal_edge(q.a, q.b, qi);
-    add_primal_edge(q.b, q.c, qi);
-    add_primal_edge(q.c, q.d, qi);
-    add_primal_edge(q.d, q.a, qi);
+  for (auto ci = std::uint32_t{0u}; ci < static_cast<std::uint32_t>(dual_quads.size()); ++ci) {
+    const auto& c = dual_quads[ci];
+
+    add_dual_edge(c.a, c.b, ci);
+    add_dual_edge(c.b, c.c, ci);
+    add_dual_edge(c.c, c.d, ci);
+    add_dual_edge(c.d, c.a, ci);
   }
 
-  auto quad_is_boundary = std::vector<bool>(primal_quads.size(), false);
+  auto cell_is_boundary = std::vector<bool>{};
+  cell_is_boundary.resize(dual_quads.size());
 
-  for (const auto& [e, pair] : edge_to_quads) {
-    if (pair.q0 != invalid && pair.q1 == invalid) {
-      quad_is_boundary[pair.q0] = true;
+  for (const auto& [e, pair] : edge_to_cells) {
+    if (pair.c0 != invalid && pair.c1 == invalid) {
+      cell_is_boundary[pair.c0] = true;
     }
   }
 
-  // ----- 2) dual vertices = quad centers ------------------------------------
+  // ----- 2) main vertices = dual cell centers -------------------------------
 
-  out_dual_vertices.reserve(primal_quads.size());
+  out_main_vertices.reserve(dual_quads.size());
 
-  for (auto qi = std::uint32_t{0u}; qi < static_cast<std::uint32_t>(primal_quads.size()); ++qi) {
-    const auto c = compute_quad_center(primal_quads[qi], primal_vertices);
-    out_dual_vertices.push_back(dual_grid_base::dual_vertex{c, quad_is_boundary[qi]});
+  for (auto ci = std::uint32_t{0u}; ci < static_cast<std::uint32_t>(dual_quads.size()); ++ci) {
+    const auto center = compute_dual_quad_center(dual_quads[ci], dual_vertices);
+    out_main_vertices.push_back(dual_grid_base::main_vertex{center, cell_is_boundary[ci]});
   }
 
-  // ----- 3) boundary dual vertices (midpoints of boundary primal edges) ------
+  // ----- 3) boundary main vertices (midpoints of boundary dual edges) --------
 
-  auto boundary_dual_of_edge = std::unordered_map<edge_key, std::uint32_t, edge_key_hash>{};
-  boundary_dual_of_edge.reserve(edge_to_quads.size());
+  auto boundary_main_of_edge = std::unordered_map<edge_key, std::uint32_t, edge_key_hash>{};
+  boundary_main_of_edge.reserve(edge_to_cells.size());
 
-  auto boundary_duals_of_vertex = std::vector<std::vector<std::uint32_t>>(primal_vertices.size());
+  auto boundary_mains_of_dual_vertex = std::vector<std::vector<std::uint32_t>>{};
+  boundary_mains_of_dual_vertex.resize(dual_vertices.size());
 
-  for (const auto& [e, pair] : edge_to_quads) {
-    const auto is_boundary_edge = (pair.q0 != invalid) && (pair.q1 == invalid);
+  for (const auto& [e, pair] : edge_to_cells) {
+    const auto is_boundary_edge = (pair.c0 != invalid) && (pair.c1 == invalid);
+
     if (!is_boundary_edge) {
       continue;
     }
 
-    const auto mp = edge_midpoint(e.u, e.v, primal_vertices);
-    const auto did = static_cast<std::uint32_t>(out_dual_vertices.size());
+    const auto mp = edge_midpoint(e.u, e.v, dual_vertices);
+    const auto mid_id = static_cast<std::uint32_t>(out_main_vertices.size());
 
-    out_dual_vertices.push_back(dual_grid_base::dual_vertex{mp, true});
-    boundary_dual_of_edge.emplace(e, did);
+    out_main_vertices.push_back(dual_grid_base::main_vertex{mp, 1u});
+    boundary_main_of_edge.emplace(e, mid_id);
 
-    boundary_duals_of_vertex[e.u].push_back(did);
-    boundary_duals_of_vertex[e.v].push_back(did);
+    boundary_mains_of_dual_vertex[e.u].push_back(mid_id);
+    boundary_mains_of_dual_vertex[e.v].push_back(mid_id);
   }
 
-  // ----- 4) dual edges from primal edges ------------------------------------
+  // ----- 4) main edges from dual edges --------------------------------------
 
-  auto dual_edge_set = std::unordered_set<edge_key, edge_key_hash>{};
-  dual_edge_set.reserve(edge_to_quads.size() * 2u);
+  auto main_edge_set = std::unordered_set<edge_key, edge_key_hash>{};
+  main_edge_set.reserve(edge_to_cells.size() * 2u);
 
-  const auto add_dual_edge_unique = [&](const auto da, const auto db,
-                                       const auto pu, const auto pv,
-                                       const auto boundary) {
-    if (da == db) {
+  const auto add_main_edge_unique = [&](const auto ma, const auto mb, const auto du, const auto dv, const auto boundary) {
+    if (ma == mb) {
       return;
     }
 
-    const auto key = make_edge_key(da, db);
-    if (dual_edge_set.find(key) != dual_edge_set.end()) {
+    const auto key = make_edge_key(ma, mb);
+
+    if (main_edge_set.find(key) != main_edge_set.end()) {
       return;
     }
 
-    dual_edge_set.emplace(key);
+    main_edge_set.emplace(key);
 
-    auto e = dual_grid_base::dual_edge{};
+    auto e = dual_grid_base::main_edge{};
     e.a = key.u;
     e.b = key.v;
-    e.primal_u = pu;
-    e.primal_v = pv;
+    e.dual_u = du;
+    e.dual_v = dv;
     e.is_boundary = boundary;
 
-    out_dual_edges.push_back(e);
+    out_main_edges.push_back(e);
   };
 
-  for (const auto& [e, pair] : edge_to_quads) {
-    const auto q0 = pair.q0;
-    const auto q1 = pair.q1;
+  for (const auto& [e, pair] : edge_to_cells) {
+    const auto c0 = pair.c0;
+    const auto c1 = pair.c1;
 
-    if (q0 == invalid) {
+    if (c0 == invalid) {
       continue;
     }
 
-    if (q1 != invalid) {
-      // internal primal edge => connect quad centers
-      add_dual_edge_unique(q0, q1, e.u, e.v, false);
+    if (c1 != invalid) {
+      add_main_edge_unique(c0, c1, e.u, e.v, false);
+
       continue;
     }
 
-    // boundary primal edge => connect quad center to boundary midpoint dual vertex
-    if (const auto it = boundary_dual_of_edge.find(e); it != boundary_dual_of_edge.end()) {
-      const auto mid_dual = it->second;
-      add_dual_edge_unique(q0, mid_dual, e.u, e.v, true);
+    const auto it = boundary_main_of_edge.find(e);
+
+    if (it != boundary_main_of_edge.end()) {
+      const auto mid_main = it->second;
+      add_main_edge_unique(c0, mid_main, e.u, e.v, true);
     }
   }
 
-  // ----- 5) dual cells around each primal vertex -----------------------------
+  // ----- 5) main cells around each dual vertex -------------------------------
 
-  out_dual_cells_ccw = std::vector<std::vector<std::uint32_t>>(primal_vertices.size());
+  out_main_cells_ccw.resize(dual_vertices.size());
 
-  auto incident_quads = std::vector<std::vector<std::uint32_t>>(primal_vertices.size());
+  auto incident_cells = std::vector<std::vector<std::uint32_t>>{};
+  incident_cells.resize(dual_vertices.size());
 
-  for (auto qi = std::uint32_t{0u}; qi < static_cast<std::uint32_t>(primal_quads.size()); ++qi) {
-    const auto& q = primal_quads[qi];
-    incident_quads[q.a].push_back(qi);
-    incident_quads[q.b].push_back(qi);
-    incident_quads[q.c].push_back(qi);
-    incident_quads[q.d].push_back(qi);
+  for (auto ci = std::uint32_t{0u}; ci < static_cast<std::uint32_t>(dual_quads.size()); ++ci) {
+    const auto& c = dual_quads[ci];
+
+    incident_cells[c.a].push_back(ci);
+    incident_cells[c.b].push_back(ci);
+    incident_cells[c.c].push_back(ci);
+    incident_cells[c.d].push_back(ci);
   }
 
-  for (auto vid = std::uint32_t{0u}; vid < static_cast<std::uint32_t>(primal_vertices.size()); ++vid) {
+  for (auto vid = std::uint32_t{0u}; vid < static_cast<std::uint32_t>(dual_vertices.size()); ++vid) {
     auto poly = std::vector<std::uint32_t>{};
-    poly.reserve(incident_quads[vid].size() + boundary_duals_of_vertex[vid].size());
+    poly.reserve(incident_cells[vid].size() + boundary_mains_of_dual_vertex[vid].size());
 
-    // quad centers
-    for (const auto qi : incident_quads[vid]) {
-      poly.push_back(qi);
+    for (const auto ci : incident_cells[vid]) {
+      poly.push_back(ci);
     }
 
-    // boundary midpoints
-    for (const auto mid : boundary_duals_of_vertex[vid]) {
+    for (const auto mid : boundary_mains_of_dual_vertex[vid]) {
       poly.push_back(mid);
     }
 
@@ -716,11 +781,11 @@ static auto build_dual_mesh(
       continue;
     }
 
-    const auto p = primal_vertices[vid].position;
+    const auto p = dual_vertices[vid].position;
 
     std::sort(poly.begin(), poly.end(), [&](const auto lhs, const auto rhs) {
-      const auto pl = out_dual_vertices[lhs].position;
-      const auto pr = out_dual_vertices[rhs].position;
+      const auto pl = out_main_vertices[lhs].position;
+      const auto pr = out_main_vertices[rhs].position;
 
       const auto al = std::atan2(pl.z() - p.z(), pl.x() - p.x());
       const auto ar = std::atan2(pr.z() - p.z(), pr.x() - p.x());
@@ -728,18 +793,16 @@ static auto build_dual_mesh(
       return al < ar;
     });
 
-    // Optional: remove duplicates (shouldn't happen, but safe)
     poly.erase(std::unique(poly.begin(), poly.end()), poly.end());
 
-    out_dual_cells_ccw[vid] = std::move(poly);
+    out_main_cells_ccw[vid] = std::move(poly);
   }
 
-  // ----- 6) closure edges from dual cell polygons ----------------------------
-  // This ensures boundary cells close (adds midpoint-to-midpoint edges).
-  // For interior vertices it mostly duplicates existing edges (skipped by set).
+  // ----- 6) closure edges from main cell polygons ----------------------------
 
-  for (auto vid = std::uint32_t{0u}; vid < static_cast<std::uint32_t>(out_dual_cells_ccw.size()); ++vid) {
-    const auto& poly = out_dual_cells_ccw[vid];
+  for (auto vid = std::uint32_t{0u}; vid < static_cast<std::uint32_t>(out_main_cells_ccw.size()); ++vid) {
+    const auto& poly = out_main_cells_ccw[vid];
+
     if (poly.size() < 3u) {
       continue;
     }
@@ -748,13 +811,17 @@ static auto build_dual_mesh(
       const auto a = poly[i];
       const auto b = poly[(i + 1u) % static_cast<std::uint32_t>(poly.size())];
 
-      // closure edges do not necessarily correspond to a single primal edge
-      add_dual_edge_unique(a, b, invalid, invalid, true);
+      add_main_edge_unique(a, b, invalid, invalid, true);
     }
   }
 }
 
-static auto _point_in_triangle_xz(const sbx::math::vector3& p, const sbx::math::vector3& a, const sbx::math::vector3& b, const sbx::math::vector3& c) -> bool {
+static auto point_in_triangle_xz(
+  const sbx::math::vector3& p,
+  const sbx::math::vector3& a,
+  const sbx::math::vector3& b,
+  const sbx::math::vector3& c
+) -> bool {
   const auto sign = [](const auto& p0, const auto& p1, const auto& p2) -> std::float_t {
     return (p2.x() - p1.x()) * (p0.z() - p1.z()) - (p2.z() - p1.z()) * (p0.x() - p1.x());
   };
@@ -769,95 +836,125 @@ static auto _point_in_triangle_xz(const sbx::math::vector3& p, const sbx::math::
   return !(has_neg && has_pos);
 }
 
-static auto _point_in_quad_xz(const sbx::math::vector3& p, const sbx::math::vector3& a, const sbx::math::vector3& b, const sbx::math::vector3& c, const sbx::math::vector3& d) -> bool {
-  if (_point_in_triangle_xz(p, a, b, c)) {
+static auto point_in_cell_xz(
+  const sbx::math::vector3& p,
+  const sbx::math::vector3& a,
+  const sbx::math::vector3& b,
+  const sbx::math::vector3& c,
+  const sbx::math::vector3& d
+) -> bool {
+  if (point_in_triangle_xz(p, a, b, c)) {
     return true;
   }
 
-  if (_point_in_triangle_xz(p, a, c, d)) {
+  if (point_in_triangle_xz(p, a, c, d)) {
     return true;
   }
 
   return false;
 }
 
+dual_grid_base::dual_grid_base(const settings& settings) {
+  rebuild(settings);
+}
+
 auto dual_grid_base::rebuild(const settings& settings) -> void {
   sbx::math::random::seed(settings.seed);
 
   auto grid = generate_grid(settings.rings, settings.ring_distance);
-  auto merged = merge_tris_to_quads_random(grid.vertices, grid.triangles, settings.merge_probability);
+  auto merged = merge_tris_to_cells_random(grid.vertices, grid.triangles, settings.merge_probability);
 
   auto cache = midpoint_cache{};
-  cache.index.reserve(merged.quads.size() * 4u + merged.leftover_tris.size() * 3u);
+  cache.index.reserve(merged.cells.size() * 4u + merged.leftover_tris.size() * 3u);
 
-  auto final_quads = std::vector<quad>{};
-  final_quads.reserve(merged.quads.size() * 4u + merged.leftover_tris.size() * 3u);
+  auto final_cells = std::vector<dual_quad>{};
+  final_cells.reserve(merged.cells.size() * 4u + merged.leftover_tris.size() * 3u);
 
-  if (settings.split_quads_to_4) {
-    auto q4 = split_quads_to_4(grid.vertices, merged.quads, cache);
-    final_quads.insert(final_quads.end(), q4.begin(), q4.end());
-  } else {
-    final_quads.insert(final_quads.end(), merged.quads.begin(), merged.quads.end());
-  }
+  auto c4 = split_cells_to_4(grid.vertices, merged.cells, cache);
+  final_cells.insert(final_cells.end(), c4.begin(), c4.end());
 
-  if (settings.split_leftover_tris_to_3) {
-    auto qt = split_leftover_tris_to_quads(grid.vertices, merged.leftover_tris, cache);
-    final_quads.insert(final_quads.end(), qt.begin(), qt.end());
-  }
+  auto ct = split_leftover_tris_to_cells(grid.vertices, merged.leftover_tris, cache);
+  final_cells.insert(final_cells.end(), ct.begin(), ct.end());
 
-  if (settings.relax) {
-    relax_quads_taubin_keep_fixed(
-      grid.vertices,
-      final_quads,
-      settings.relax_iterations,
-      settings.relax_lambda,
-      settings.relax_mu,
-      settings.relax_add_diagonals
-    );
-  }
+  relax_cells_taubin_keep_fixed( grid.vertices, final_cells, settings.relax_iterations, settings.relax_lambda, settings.relax_mu);
 
-  _vertices = std::move(grid.vertices);
-  _quads = std::move(final_quads);
+  _dual_vertices = std::move(grid.vertices);
+  _dual_quads = std::move(final_cells);
 
-  // ----- build dual ----------------------------------------------------------
-
-  if (settings.build_dual) {
-    build_dual_mesh(_vertices, _quads, _dual_vertices, _dual_edges, _dual_cells_ccw);
-  } else {
-    _dual_vertices.clear();
-    _dual_edges.clear();
-    _dual_cells_ccw.clear();
-  }
+  build_main_mesh(_dual_vertices, _dual_quads, _main_vertices, _main_edges, _main_cells_ccw);
 }
 
-auto dual_grid_base::pick_primal_quad_at(const sbx::math::vector3& point) const -> std::uint32_t {
-  if (_quads.empty() || _vertices.empty()) {
+auto dual_grid_base::dual_vertices() const -> const std::vector<dual_vertex>& {
+  return _dual_vertices;
+}
+
+auto dual_grid_base::dual_vertex_at(const std::size_t index) const -> const dual_vertex& {
+  return _dual_vertices[index];
+}
+
+auto dual_grid_base::dual_quads() const -> const std::vector<dual_quad>& {
+  return _dual_quads;
+}
+
+auto dual_grid_base::dual_quad_at(const std::size_t index) const -> const dual_quad& {
+  return _dual_quads[index];
+}
+
+auto dual_grid_base::dual_quad_count() const -> std::uint32_t {
+  return static_cast<std::uint32_t>(_dual_quads.size());
+}
+
+auto dual_grid_base::pick_dual_quad_at(const sbx::math::vector3& point) const -> std::uint32_t {
+  if (_dual_quads.empty() || _dual_vertices.empty()) {
     return invalid_id;
   }
 
-  for (auto qi = 0u; qi < _quads.size(); ++qi) {
-    const auto& q = _quads[qi];
+  for (auto ci = std::size_t{0u}; ci < _dual_quads.size(); ++ci) {
+    const auto& c = _dual_quads[ci];
 
-    const auto a = _vertices[q.a].position;
-    const auto b = _vertices[q.b].position;
-    const auto c = _vertices[q.c].position;
-    const auto d = _vertices[q.d].position;
+    const auto a = _dual_vertices[c.a].position;
+    const auto b = _dual_vertices[c.b].position;
+    const auto cc = _dual_vertices[c.c].position;
+    const auto d = _dual_vertices[c.d].position;
 
-    const auto min_x = std::min({a.x(), b.x(), c.x(), d.x()});
-    const auto max_x = std::max({a.x(), b.x(), c.x(), d.x()});
-    const auto min_z = std::min({a.z(), b.z(), c.z(), d.z()});
-    const auto max_z = std::max({a.z(), b.z(), c.z(), d.z()});
+    const auto min_x = std::min({a.x(), b.x(), cc.x(), d.x()});
+    const auto max_x = std::max({a.x(), b.x(), cc.x(), d.x()});
+    const auto min_z = std::min({a.z(), b.z(), cc.z(), d.z()});
+    const auto max_z = std::max({a.z(), b.z(), cc.z(), d.z()});
 
     if (point.x() < min_x || point.x() > max_x || point.z() < min_z || point.z() > max_z) {
       continue;
     }
 
-    if (_point_in_quad_xz(point, a, b, c, d)) {
-      return qi;
+    if (point_in_cell_xz(point, a, b, cc, d)) {
+      return static_cast<std::uint32_t>(ci);
     }
   }
 
   return invalid_id;
+}
+
+auto dual_grid_base::main_vertices() const -> std::span<const main_vertex> {
+  return _main_vertices;
+}
+
+auto dual_grid_base::main_vertex_at(const std::size_t index) const -> const main_vertex& {
+  return _main_vertices[index];
+}
+
+auto dual_grid_base::main_edges() const -> std::span<const main_edge> {
+  return _main_edges;
+}
+
+auto dual_grid_base::main_cell_ccw(const std::uint32_t dual_vertex_id) const -> std::span<const std::uint32_t> {
+  return _main_cells_ccw[dual_vertex_id];
+}
+
+auto dual_grid_base::dual_quad_center(const std::uint32_t dual_quad_id) const -> sbx::math::vector3 {
+  sbx::utility::assert_that(dual_quad_id < _dual_quads.size(), "dual_quad_center(): invalid dual cell id");
+  sbx::utility::assert_that(dual_quad_id < _main_vertices.size(), "dual_quad_center(): main not built");
+
+  return _main_vertices[dual_quad_id].position;
 }
 
 } // namespace demo

@@ -3,7 +3,7 @@
 
 namespace demo {
 
-struct grid_cell_data {
+struct grid_data {
   bool is_painted = false;
   std::uint8_t last_mask = 0u;
 
@@ -12,7 +12,7 @@ struct grid_cell_data {
   // Optional: keep stable visuals per cell
   std::float_t height = 3.0f;
   sbx::math::color color = sbx::math::color::white();
-}; // struct grid_cell_data
+}; // struct grid_data
 
 struct terrain_tag {
   sbx::math::color color;

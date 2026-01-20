@@ -93,25 +93,25 @@ auto terrain_subrenderer::render(sbx::graphics::command_buffer& command_buffer) 
   }
 }
 
-auto terrain_subrenderer::update_dual_grid_data(const dual_grid<grid_cell_data>& grid) -> void {
+auto terrain_subrenderer::update_dual_grid_data(const dual_grid<grid_data>& grid) -> void {
   auto& graphics_module = sbx::core::engine::get_module<sbx::graphics::graphics_module>();
 
   auto& grid_vertex_buffer = graphics_module.get_resource<sbx::graphics::storage_buffer>(_grid_vertex_buffer);
   auto& grid_quad_buffer = graphics_module.get_resource<sbx::graphics::storage_buffer>(_grid_quad_buffer);
 
   auto grid_vertex_buffer_data = std::vector<grid_vertex_data>{};
-  grid_vertex_buffer_data.reserve(grid.vertices().size());
+  grid_vertex_buffer_data.reserve(grid.dual_vertices().size());
 
-  for (const auto& vertex : grid.vertices()) {
+  for (const auto& vertex : grid.dual_vertices()) {
     grid_vertex_buffer_data.push_back(grid_vertex_data{vertex.position, 0u});
   }
 
   _update_buffer(grid_vertex_buffer, grid_vertex_buffer_data);
 
   auto grid_quad_buffer_data = std::vector<grid_quad_data>{};
-  grid_quad_buffer_data.reserve(grid.quads().size());
+  grid_quad_buffer_data.reserve(grid.dual_quads().size());
 
-  for (const auto& quad : grid.quads()) {
+  for (const auto& quad : grid.dual_quads()) {
     grid_quad_buffer_data.push_back({quad.a, quad.b, quad.c, quad.d});
   }
 

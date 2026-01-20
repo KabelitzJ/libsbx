@@ -28,23 +28,109 @@
 
 namespace demo {
 
-static auto intersect_ray_plane(const sbx::math::ray& r, const sbx::math::plane& p) -> std::optional<sbx::math::vector3> {
-  const auto denom = sbx::math::vector3::dot(p.normal(), r.direction());
+static auto intersect_ray_plane(const sbx::math::ray& ray, const sbx::math::plane& plane) -> std::optional<sbx::math::vector3> {
+  const auto denominator = sbx::math::vector3::dot(plane.normal(), ray.direction());
 
-  if (std::abs(denom) < 1e-6f) {
+  if (sbx::math::comparision_traits<std::float_t>::equal(denominator, 0.0f)) {
     return std::nullopt;
   }
 
-  const auto t = -p.distance_to_point(r.origin()) / denom;
-
+  const auto t = -plane.distance_to_point(ray.origin()) / denominator;
+  
   if (t < 0.0f) {
     return std::nullopt;
   }
 
-  return r.point_at(t);
+  return ray.point_at(t);
 }
 
-static const auto settings = dual_grid<grid_cell_data>::settings{
+struct tile_variant {
+  sbx::math::uuid mesh{};
+  std::uint32_t rotation_steps = 0u; // 0..3 => yaw = steps * 90 deg
+  bool visible = false;
+}; // struct tile_variant
+
+static auto popcount4(const std::uint8_t m) -> std::uint32_t {
+  auto x = static_cast<std::uint32_t>(m & 0xFu);
+  x = x - ((x >> 1u) & 0x55555555u);
+  x = (x & 0x33333333u) + ((x >> 2u) & 0x33333333u);
+  return (((x + (x >> 4u)) & 0x0Fu));
+}
+
+static auto rotate_mask_ccw(const std::uint8_t m, const std::uint32_t steps) -> std::uint8_t {
+  const auto s = steps & 3u;
+  const auto mm = static_cast<std::uint8_t>(m & 0xFu);
+
+  if (s == 0u) {
+    return mm;
+  }
+
+  return static_cast<std::uint8_t>(((mm << s) | (mm >> (4u - s))) & 0xFu);
+}
+
+struct tile_meshes {
+  sbx::math::uuid corner{};
+  sbx::math::uuid diagonal{};
+  sbx::math::uuid full{};
+  sbx::math::uuid half{};
+  sbx::math::uuid three_corner{};
+}; // struct tile_meshes
+
+static auto pick_variant_from_mask(const std::uint8_t mask, const tile_meshes& meshes) -> tile_variant {
+  const auto m = static_cast<std::uint8_t>(mask & 0xFu);
+
+  if (m == 0u) {
+    return tile_variant{.visible = false};
+  }
+
+  if (m == 0xFu) {
+    return tile_variant{.mesh = meshes.full, .rotation_steps = 0u, .visible = true};
+  }
+
+  const auto bits = popcount4(m);
+
+  // 1 corner
+  if (bits == 1u) {
+    // base corner = 0001 (A only)
+    for (auto r = 0u; r < 4u; ++r) {
+      if (rotate_mask_ccw(0x1u, r) == m) {
+        return tile_variant{.mesh = meshes.corner, .rotation_steps = r, .visible = true};
+      }
+    }
+  }
+
+  // 3 corners
+  if (bits == 3u) {
+    // base three-corner = 1110 (missing A)
+    for (auto r = 0u; r < 4u; ++r) {
+      if (rotate_mask_ccw(0xEu, r) == m) {
+        return tile_variant{.mesh = meshes.three_corner, .rotation_steps = r, .visible = true};
+      }
+    }
+  }
+
+  // 2 corners
+  if (bits == 2u) {
+    // diagonal: 0101 / 1010
+    for (auto r = 0u; r < 4u; ++r) {
+      if (rotate_mask_ccw(0x5u, r) == m) {
+        return tile_variant{.mesh = meshes.diagonal, .rotation_steps = r, .visible = true};
+      }
+    }
+
+    // half adjacent: 0011 / 0110 / 1100 / 1001
+    for (auto r = 0u; r < 4u; ++r) {
+      if (rotate_mask_ccw(0x3u, r) == m) {
+        return tile_variant{.mesh = meshes.half, .rotation_steps = r, .visible = true};
+      }
+    }
+  }
+
+  // Fallback (shouldn't happen)
+  return tile_variant{.mesh = meshes.full, .rotation_steps = 0u, .visible = true};
+}
+
+static const auto settings = application::grid_type::settings{
   .rings = 5u,
   .ring_distance = 25.0f,
   .seed = 1643u,
@@ -85,6 +171,8 @@ application::application()
   auto& scripting_module = sbx::core::engine::get_module<sbx::scripting::scripting_module>();
 
   // Textures
+  scene.add_image("base", "res://textures/base.png");
+
   scene.add_cube_image("skybox", "res://skyboxes/clouds2");
 
   _generate_brdf(512);
@@ -92,6 +180,16 @@ application::application()
   _generate_prefiltered(512);
 
   // Meshes
+  scene.add_mesh<sbx::models::mesh>("corner", "res://meshes/terrain/corner/corner.gltf");
+  scene.add_mesh<sbx::models::mesh>("diagonal", "res://meshes/terrain/diagonal/diagonal.gltf");
+  scene.add_mesh<sbx::models::mesh>("full", "res://meshes/terrain/full/full.gltf");
+  scene.add_mesh<sbx::models::mesh>("half", "res://meshes/terrain/half/half.gltf");
+  scene.add_mesh<sbx::models::mesh>("three_corner", "res://meshes/terrain/three_corner/three_corner.gltf");
+
+  // Materials
+
+  auto& base_material = scene.add_material<sbx::models::material>("base");
+  base_material.albedo.image = scene.get_image("base");
 
   // Animations
 
@@ -104,6 +202,21 @@ application::application()
   window.on_window_closed_signal() += [this]([[maybe_unused]] const auto& event){
     sbx::core::engine::quit();
   };
+
+  auto corner = scene.create_node("Corner", sbx::scenes::transform{sbx::math::vector3{-10.0f, 10.0f, 0.0f}});
+  scene.add_component<sbx::scenes::static_mesh>(corner, sbx::scenes::static_mesh{scene.get_mesh("corner"), scene.get_material("base")});
+
+  auto diagonal = scene.create_node("Diagonal", sbx::scenes::transform{sbx::math::vector3{0.0f, 10.0f, 0.0f}});
+  scene.add_component<sbx::scenes::static_mesh>(diagonal, sbx::scenes::static_mesh{scene.get_mesh("diagonal"), scene.get_material("base")});
+
+  auto full = scene.create_node("Full", sbx::scenes::transform{sbx::math::vector3{10.0f, 10.0f, 0.0f}});
+  scene.add_component<sbx::scenes::static_mesh>(full, sbx::scenes::static_mesh{scene.get_mesh("full"), scene.get_material("base")});
+
+  auto half = scene.create_node("Half", sbx::scenes::transform{sbx::math::vector3{20.0f, 10.0f, 0.0f}});
+  scene.add_component<sbx::scenes::static_mesh>(half, sbx::scenes::static_mesh{scene.get_mesh("half"), scene.get_material("base")});
+
+  auto three_corner = scene.create_node("ThreeCorner", sbx::scenes::transform{sbx::math::vector3{30.0f, 10.0f, 0.0f}});
+  scene.add_component<sbx::scenes::static_mesh>(three_corner, sbx::scenes::static_mesh{scene.get_mesh("three_corner"), scene.get_material("base")});
 
   // Camera
   auto camera_node = scene.camera();
@@ -146,46 +259,6 @@ auto application::update() -> void  {
 
   _rotation += sbx::math::degree{45} * delta_time;
 
-  for (const auto& v : _grid.vertices()) {
-    scenes_module.add_debug_sphere(v.position, 0.25f, v.is_fixed ? sbx::math::color::yellow() : sbx::math::color::blue(), 12);
-  }
-
-  for (const auto& q : _grid.quads()) {
-    const auto& a = _grid.vertex_at(q.a).position;
-    const auto& b = _grid.vertex_at(q.b).position;
-    const auto& c = _grid.vertex_at(q.c).position;
-    const auto& d = _grid.vertex_at(q.d).position;
-
-    scenes_module.add_debug_line(a, b, sbx::math::color::green());
-    scenes_module.add_debug_line(b, c, sbx::math::color::green());
-    scenes_module.add_debug_line(c, d, sbx::math::color::green());
-    scenes_module.add_debug_line(d, a, sbx::math::color::green());
-  }
-
-  for (const auto& dv : _grid.dual_vertices()) {
-    scenes_module.add_debug_sphere(dv.position, 0.3f, dv.is_boundary ? sbx::math::color::red() : sbx::math::color::cyan(), 12);
-  }
-
-  for (const auto& de : _grid.dual_edges()) {
-    const auto& a = _grid.dual_vertex_at(de.a).position;
-    const auto& b = _grid.dual_vertex_at(de.b).position;
-
-    scenes_module.add_debug_line(a, b, de.is_boundary ? sbx::math::color::orange() : sbx::math::color::white());
-  }
-
-  for (auto vi = std::uint32_t{0u}; vi < _grid.vertices().size(); ++vi) {
-    const auto cell = _grid.dual_cell_ccw(vi);
-
-    for (auto i = std::size_t{0u}; i < cell.size(); ++i) {
-      const auto a = _grid.dual_vertex_at(cell[i]).position;
-      const auto b = _grid.dual_vertex_at(cell[(i + 1u) % cell.size()]).position;
-
-      scenes_module.add_debug_line(a, b, sbx::math::color::magenta());
-    }
-  }
-
-  static auto point = std::optional<sbx::math::vector3>{};
-
   if (sbx::devices::input::is_mouse_button_pressed(sbx::devices::mouse_button::left)) {
     auto screen_position = sbx::devices::input::mouse_position();
 
@@ -194,17 +267,57 @@ auto application::update() -> void  {
     const auto ground = sbx::math::plane{sbx::math::vector3::up, 0.0f};
 
     if (const auto hit = intersect_ray_plane(ray, ground); hit) {
-      point = *hit;
+      const auto selected_cell = _grid.pick_primal_quad_at(*hit);
+
+      if (selected_cell != grid_type::invalid_id) {
+        auto& cell = _grid.get_or_create_cell_data(selected_cell, grid_cell_data{});
+        cell.is_painted = !cell.is_painted;
+
+        if (cell.node == sbx::scenes::node::null) {
+          cell.node = scene.create_node("CellNode");
+
+          auto& terrain = scene.add_component<terrain_tag>(cell.node, terrain_tag{});
+          terrain.grid_cell = selected_cell;
+          terrain.height = 3.0f;
+          terrain.color = sbx::math::random_color();
+          terrain.mesh_id = scene.get_mesh("corner");
+        }
+
+        _rebuild_terrain_tiles();
+      }
     }
   }
 
-  if (point) {
-    scenes_module.add_debug_sphere(*point, 0.6f, sbx::math::color::red(), 16);
+  for (auto qi = 0u; qi < _grid.quads().size(); ++qi) {
+    const auto& q = _grid.quads()[qi];
+
+    const auto& a = _grid.vertex_at(q.a).position;
+    const auto& b = _grid.vertex_at(q.b).position;
+    const auto& c = _grid.vertex_at(q.c).position;
+    const auto& d = _grid.vertex_at(q.d).position;
+
+    scenes_module.add_debug_line(a, b, sbx::math::color::white());
+    scenes_module.add_debug_line(b, c, sbx::math::color::white());
+    scenes_module.add_debug_line(c, d, sbx::math::color::white());
+    scenes_module.add_debug_line(d, a, sbx::math::color::white());
   }
 }
 
 auto application::fixed_update() -> void {
 
+}
+
+auto application::_rebuild_terrain_tiles() -> void {
+  auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
+  auto& scene = scenes_module.scene();
+
+  auto meshes = tile_meshes{
+    .corner = scene.get_mesh("corner"),
+    .diagonal = scene.get_mesh("diagonal"),
+    .full = scene.get_mesh("full"),
+    .half = scene.get_mesh("half"),
+    .three_corner = scene.get_mesh("three_corner")
+  };
 }
 
 auto application::_generate_brdf(const std::uint32_t size) -> void {

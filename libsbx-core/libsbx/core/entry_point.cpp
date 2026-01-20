@@ -31,14 +31,12 @@ auto main(int argc, const char** argv) -> int {
   EASY_BLOCK("main");
 
   try {
-    auto engine = std::make_unique<sbx::core::engine>(args);
+    auto engine = std::make_unique<sbx::core::engine>(args, sbx::core::create_application);
 
-    auto application = sbx::core::create_application();
-
-    engine->run(std::move(application));
+    engine->run();
   } catch(const std::exception& exception) {
     sbx::utility::logger<"core">::error("{}", exception.what());
-    // sbx::utility::logger<"core">::error("{}\n{}", exception.what(), std::to_string(std::stacktrace::current()));
+
     return sbx::core::exit::failure; 
   }
 

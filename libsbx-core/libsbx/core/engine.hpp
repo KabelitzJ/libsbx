@@ -39,8 +39,11 @@ class engine : public utility::noncopyable {
 
 public:
 
-  engine(std::span<std::string_view> args)
-  : _cli{args} {
+  template<typename Callable>
+  requires (std::is_invocable_r_v<std::unique_ptr<application>, Callable>)
+  engine(std::span<std::string_view> args, Callable&& application_creator)
+  : _cli{args},
+    _application{nullptr} {
     utility::assert_that(_instance == nullptr, "Engine already exists.");
 
     _instance = this;
@@ -48,9 +51,14 @@ public:
     for (auto&& [type, factory] : module_manager::_factories() | ranges::views::filter([](const auto& entry) { return entry.has_value(); }) | ranges::views::enumerate) {
       _create_module(type, *factory);
     }
+
+    // [NOTE] KAJ 2026-01-19 : We delay application creation until after all modules are created
+    _application = std::invoke(std::forward<Callable>(application_creator));
   }
 
   ~engine() {
+    _application.reset();
+
     for (auto&& [type, entry] : _modules | ranges::views::enumerate | std::views::reverse) {
       _destroy_module(type);
     }
@@ -100,7 +108,13 @@ public:
     return *static_cast<Module*>(modules[type]);
   }
 
-  auto run(std::unique_ptr<application> application) -> void {
+  template<typename Application>
+  requires (std::is_base_of_v<core::application, Application>)
+  [[nodiscard]] static auto get_application() -> Application& {
+    return *static_cast<Application*>(_instance->_application.get());
+  }
+
+  auto run() -> void {
     if (_is_running) {
       return;
     }
@@ -129,7 +143,7 @@ public:
       EASY_END_BLOCK;
 
       EASY_BLOCK("application update");
-      application->update();
+      _application->update();
       EASY_END_BLOCK;
 
       EASY_BLOCK("stage normal");
@@ -146,7 +160,7 @@ public:
 
       while (fixed_accumulator >= fixed_delta_time()) {
         EASY_BLOCK("stage fixed");
-        application->fixed_update();
+        _application->fixed_update();
         _update_stage(stage::fixed);
         fixed_accumulator -= fixed_delta_time();
         EASY_END_BLOCK;
@@ -215,6 +229,8 @@ private:
   core::cli _cli;
   // core::profiler _profiler;
   core::settings _settings;
+
+  std::unique_ptr<application> _application;
 
   std::vector<module_base*> _modules{};
   std::map<stage, std::vector<std::uint32_t>> _module_by_stage{};

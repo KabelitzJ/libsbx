@@ -316,7 +316,7 @@ private:
 
   template<typename Type>
   static auto _resize_buffer(graphics::storage_buffer& buffer, std::uint32_t element_count) -> void {
-    const std::size_t required_size = static_cast<std::size_t>(element_count) * sizeof(Type);
+    const auto required_size = static_cast<std::size_t>(element_count) * sizeof(Type);
 
     if (buffer.size() < required_size) {
       buffer.resize(required_size + required_size / 2);

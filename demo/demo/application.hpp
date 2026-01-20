@@ -3,32 +3,40 @@
 
 #include <libsbx/units/units.hpp>
 #include <libsbx/utility/utility.hpp>
-#include <libsbx/io/io.hpp>
 #include <libsbx/math/math.hpp>
-#include <libsbx/memory/memory.hpp>
-#include <libsbx/signals/signals.hpp>
-#include <libsbx/ecs/ecs.hpp>
 #include <libsbx/core/core.hpp>
 #include <libsbx/devices/devices.hpp>
 #include <libsbx/graphics/graphics.hpp>
 #include <libsbx/models/models.hpp>
 #include <libsbx/scenes/scenes.hpp>
-#include <libsbx/assets/assets.hpp>
-#include <libsbx/ui/ui.hpp>
-#include <libsbx/physics/physics.hpp>
-#include <libsbx/animations/animations.hpp>
 
 #include <demo/dual_grid.hpp>
 
 namespace demo {
 
 struct grid_cell_data {
-  std::uint32_t index;
-}; // grid_cell_data
+  bool is_painted = false;
+  std::uint8_t last_mask = 0u;
+
+  sbx::scenes::node node{sbx::scenes::node::null};
+
+  // Optional: keep stable visuals per cell
+  std::float_t height = 3.0f;
+  sbx::math::color color = sbx::math::color::white();
+}; // struct grid_cell_data
+
+struct terrain_tag {
+  sbx::math::color color;
+  sbx::math::uuid mesh_id;
+  std::uint32_t grid_cell;
+  std::float_t height;
+}; // struct terrain_tag
 
 class application : public sbx::core::application {
 
 public:
+
+  using grid_type = dual_grid<grid_cell_data>;
 
   application();
 
@@ -38,7 +46,13 @@ public:
 
   auto fixed_update() -> void override;
 
+  auto grid() const -> const grid_type& {
+    return _grid;
+  }
+
 private:
+
+  auto _rebuild_terrain_tiles() -> void;
 
   auto _generate_brdf(const std::uint32_t size) -> void;
   auto _generate_irradiance(const std::uint32_t size) -> void;
@@ -65,7 +79,7 @@ private:
   sbx::graphics::cube_image2d_handle _irradiance;
   sbx::graphics::cube_image2d_handle _prefiltered;
 
-  dual_grid<grid_cell_data> _grid;
+  grid_type _grid;
 
 }; // class application
 

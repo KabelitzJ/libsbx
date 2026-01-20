@@ -147,7 +147,7 @@ static auto generate_grid(const std::uint32_t rings, const std::float_t ring_dis
 
     for (auto q = -R; q <= R; ++q) {
       for (auto r = -R; r <= R; ++r) {
-        const auto s = -q - r;
+        const auto settings = -q - r;
 
         const auto abs_i = [](const auto v) -> decltype(v) {
           return (v < 0) ? -v : v;
@@ -155,7 +155,7 @@ static auto generate_grid(const std::uint32_t rings, const std::float_t ring_dis
 
         const auto mq = abs_i(q);
         const auto mr = abs_i(r);
-        const auto ms = abs_i(s);
+        const auto ms = abs_i(settings);
 
         const auto m = std::max({mq, mr, ms});
         if (m > R) {
@@ -754,11 +754,38 @@ static auto build_dual_mesh(
   }
 }
 
-auto dual_grid_base::rebuild(const settings& s) -> void {
-  sbx::math::random::seed(s.seed);
+static auto _point_in_triangle_xz(const sbx::math::vector3& p, const sbx::math::vector3& a, const sbx::math::vector3& b, const sbx::math::vector3& c) -> bool {
+  const auto sign = [](const auto& p0, const auto& p1, const auto& p2) -> std::float_t {
+    return (p2.x() - p1.x()) * (p0.z() - p1.z()) - (p2.z() - p1.z()) * (p0.x() - p1.x());
+  };
 
-  auto grid = generate_grid(s.rings, s.ring_distance);
-  auto merged = merge_tris_to_quads_random(grid.vertices, grid.triangles, s.merge_probability);
+  const auto d1 = sign(p, a, b);
+  const auto d2 = sign(p, b, c);
+  const auto d3 = sign(p, c, a);
+
+  const auto has_neg = (d1 < 0.0f) || (d2 < 0.0f) || (d3 < 0.0f);
+  const auto has_pos = (d1 > 0.0f) || (d2 > 0.0f) || (d3 > 0.0f);
+
+  return !(has_neg && has_pos);
+}
+
+static auto _point_in_quad_xz(const sbx::math::vector3& p, const sbx::math::vector3& a, const sbx::math::vector3& b, const sbx::math::vector3& c, const sbx::math::vector3& d) -> bool {
+  if (_point_in_triangle_xz(p, a, b, c)) {
+    return true;
+  }
+
+  if (_point_in_triangle_xz(p, a, c, d)) {
+    return true;
+  }
+
+  return false;
+}
+
+auto dual_grid_base::rebuild(const settings& settings) -> void {
+  sbx::math::random::seed(settings.seed);
+
+  auto grid = generate_grid(settings.rings, settings.ring_distance);
+  auto merged = merge_tris_to_quads_random(grid.vertices, grid.triangles, settings.merge_probability);
 
   auto cache = midpoint_cache{};
   cache.index.reserve(merged.quads.size() * 4u + merged.leftover_tris.size() * 3u);
@@ -766,26 +793,26 @@ auto dual_grid_base::rebuild(const settings& s) -> void {
   auto final_quads = std::vector<quad>{};
   final_quads.reserve(merged.quads.size() * 4u + merged.leftover_tris.size() * 3u);
 
-  if (s.split_quads_to_4) {
+  if (settings.split_quads_to_4) {
     auto q4 = split_quads_to_4(grid.vertices, merged.quads, cache);
     final_quads.insert(final_quads.end(), q4.begin(), q4.end());
   } else {
     final_quads.insert(final_quads.end(), merged.quads.begin(), merged.quads.end());
   }
 
-  if (s.split_leftover_tris_to_3) {
+  if (settings.split_leftover_tris_to_3) {
     auto qt = split_leftover_tris_to_quads(grid.vertices, merged.leftover_tris, cache);
     final_quads.insert(final_quads.end(), qt.begin(), qt.end());
   }
 
-  if (s.relax) {
+  if (settings.relax) {
     relax_quads_taubin_keep_fixed(
       grid.vertices,
       final_quads,
-      s.relax_iterations,
-      s.relax_lambda,
-      s.relax_mu,
-      s.relax_add_diagonals
+      settings.relax_iterations,
+      settings.relax_lambda,
+      settings.relax_mu,
+      settings.relax_add_diagonals
     );
   }
 
@@ -794,13 +821,43 @@ auto dual_grid_base::rebuild(const settings& s) -> void {
 
   // ----- build dual ----------------------------------------------------------
 
-  if (s.build_dual) {
+  if (settings.build_dual) {
     build_dual_mesh(_vertices, _quads, _dual_vertices, _dual_edges, _dual_cells_ccw);
   } else {
     _dual_vertices.clear();
     _dual_edges.clear();
     _dual_cells_ccw.clear();
   }
+}
+
+auto dual_grid_base::pick_primal_quad_at(const sbx::math::vector3& point) const -> std::uint32_t {
+  if (_quads.empty() || _vertices.empty()) {
+    return invalid_id;
+  }
+
+  for (auto qi = 0u; qi < _quads.size(); ++qi) {
+    const auto& q = _quads[qi];
+
+    const auto a = _vertices[q.a].position;
+    const auto b = _vertices[q.b].position;
+    const auto c = _vertices[q.c].position;
+    const auto d = _vertices[q.d].position;
+
+    const auto min_x = std::min({a.x(), b.x(), c.x(), d.x()});
+    const auto max_x = std::max({a.x(), b.x(), c.x(), d.x()});
+    const auto min_z = std::min({a.z(), b.z(), c.z(), d.z()});
+    const auto max_z = std::max({a.z(), b.z(), c.z(), d.z()});
+
+    if (point.x() < min_x || point.x() > max_x || point.z() < min_z || point.z() > max_z) {
+      continue;
+    }
+
+    if (_point_in_quad_xz(point, a, b, c, d)) {
+      return qi;
+    }
+  }
+
+  return invalid_id;
 }
 
 } // namespace demo

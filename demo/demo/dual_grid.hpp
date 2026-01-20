@@ -20,7 +20,7 @@ public:
 
   struct vertex {
     sbx::math::vector3 position{};
-    bool is_fixed = false;
+    std::uint32_t is_fixed = false;
   };
 
   struct quad {
@@ -32,7 +32,7 @@ public:
 
   struct dual_vertex {
     sbx::math::vector3 position{};
-    bool is_boundary = false;
+    std::uint32_t is_boundary = false;
   };
 
   struct dual_edge {
@@ -66,15 +66,15 @@ public:
 
   dual_grid_base() = default;
 
-  explicit dual_grid_base(const settings& s) {
-    rebuild(s);
+  explicit dual_grid_base(const settings& settings) {
+    rebuild(settings);
   }
 
-  auto rebuild(const settings& s) -> void;
+  auto rebuild(const settings& settings) -> void;
 
   // ----- primal -------------------------------------------------------------
 
-  auto vertices() const -> std::span<const vertex> {
+  auto vertices() const -> const std::vector<vertex>& {
     return _vertices;
   }
 
@@ -82,7 +82,7 @@ public:
     return _vertices[index];
   }
 
-  auto quads() const -> std::span<const quad> {
+  auto quads() const -> const std::vector<quad>& {
     return _quads;
   }
 
@@ -90,10 +90,11 @@ public:
     return _quads[index];
   }
 
-  // primal cell id == quad id
   auto cell_count() const -> std::uint32_t {
     return static_cast<std::uint32_t>(_quads.size());
   }
+
+  auto pick_primal_quad_at(const sbx::math::vector3& point) const -> std::uint32_t;
 
   // ----- dual ---------------------------------------------------------------
 
@@ -118,6 +119,7 @@ public:
   auto quad_center(const std::uint32_t quad_id) const -> sbx::math::vector3 {
     sbx::utility::assert_that(quad_id < _quads.size(), "quad_center(): invalid quad id");
     sbx::utility::assert_that(quad_id < _dual_vertices.size(), "quad_center(): dual not built");
+
     return _dual_vertices[quad_id].position;
   }
 
@@ -137,6 +139,8 @@ class dual_grid : public dual_grid_base {
 
   using base_type = dual_grid_base;
 
+  inline static constexpr auto invalid_data_index = std::numeric_limits<std::uint32_t>::max();
+
 public:
 
   using settings = base_type::settings;
@@ -149,21 +153,17 @@ public:
 
   dual_grid() = default;
 
-  explicit dual_grid(const settings& s, const Type& default_value = Type{}) {
-    rebuild(s, default_value);
+  explicit dual_grid(const settings& settings) {
+    rebuild(settings);
   }
 
-  auto rebuild(const settings& s, const Type& default_value = Type{}) -> void {
-    base_type::rebuild(s);
+  auto rebuild(const settings& settings) -> void {
+    base_type::rebuild(settings);
 
     const auto n = static_cast<std::uint32_t>(base_type::_quads.size());
 
-    _cell_to_data.resize(n);
-    _data.assign(n, default_value);
-
-    for (auto i = 0u; i < n; ++i) {
-      _cell_to_data[i] = i;
-    }
+    _cell_to_data.resize(n, invalid_data_index);
+    _data.reserve(n);
   }
 
   // ------------------- cell payload API -------------------------------------
@@ -202,28 +202,27 @@ public:
     return _data[idx];
   }
 
-  auto set_cell_data_index(const std::uint32_t cell_id, const std::uint32_t pool_index) -> void {
-    sbx::utility::assert_that(cell_id < _cell_to_data.size(), "set_cell_data_index(): out of range");
-    sbx::utility::assert_that(pool_index < _data.size(), "set_cell_data_index(): pool out of range");
+  auto has_cell_data(const std::uint32_t cell_id) const -> bool {
+    sbx::utility::assert_that(cell_id < _cell_to_data.size(), "has_cell_data(): out of range");
 
-    _cell_to_data[cell_id] = pool_index;
+    return _cell_to_data[cell_id] != invalid_data_index;
   }
 
-  auto allocate_data_slot(const Type& value = Type{}) -> std::uint32_t {
-    _data.push_back(value);
+  template<typename... Args>
+  requires(std::is_constructible_v<Type, Args...>)
+  auto get_or_create_cell_data(const std::uint32_t cell_id, Args&&... args) -> Type& {
+    sbx::utility::assert_that(cell_id < _cell_to_data.size(), "get_or_create_cell_data(): out of range");
 
-    return static_cast<std::uint32_t>(_data.size() - 1u);
-  }
+    auto& data_index = _cell_to_data[cell_id];
 
-  auto reset_cell_mapping_identity(const Type& default_value = Type{}) -> void {
-    const auto n = static_cast<std::uint32_t>(base_type::_quads.size());
-
-    _cell_to_data.resize(n);
-    _data.assign(n, default_value);
-
-    for (auto i = 0u; i < n; ++i) {
-      _cell_to_data[i] = i;
+    if (data_index == invalid_data_index) {
+      data_index = static_cast<std::uint32_t>(_data.size());
+      _data.emplace_back(std::forward<Args>(args)...);
     }
+
+    sbx::utility::assert_that(data_index < _data.size(), "get_or_create_cell_data(): bad mapping");
+
+    return _data[data_index];
   }
 
 private:

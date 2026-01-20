@@ -56,13 +56,12 @@ public:
   }; // struct transform_data
 
   struct instance_data {
-    std::uint32_t transform_index;
-    std::uint32_t grid_quad_index;
-    std::float_t height;
     std::float_t red;
-  
     std::float_t green;
     std::float_t blue;
+    std::float_t height;
+    std::uint32_t transform_index;
+    std::uint32_t grid_quad_index;
     std::uint32_t rotation_steps;
     std::uint32_t padding0;
   }; // struct instance_data

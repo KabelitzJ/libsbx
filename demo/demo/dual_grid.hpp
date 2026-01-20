@@ -90,6 +90,8 @@ public:
 
   auto pick_main_face_at(const sbx::math::vector3& point) const -> std::uint32_t;
 
+  auto dual_quads_of_main_face(const std::uint32_t dual_vertex_id) const -> std::span<const std::uint32_t>;
+
 protected:
 
   std::vector<dual_vertex> _dual_vertices{};
@@ -98,6 +100,8 @@ protected:
   std::vector<main_vertex> _main_vertices{};
   std::vector<main_edge> _main_edges{};
   std::vector<std::vector<std::uint32_t>> _main_cells_ccw{};
+
+  std::vector<std::vector<std::uint32_t>> _dual_quads_of_main_face{};
 
 }; // class dual_grid_base
 
@@ -126,10 +130,13 @@ public:
   auto rebuild(const settings& settings) -> void {
     base_type::rebuild(settings);
 
-    const auto n = static_cast<std::uint32_t>(base_type::_dual_quads.size());
+    const auto n = static_cast<std::uint32_t>(base_type::_dual_vertices.size());
 
-    _cell_to_data.resize(n, invalid_data_index);
+    _data.clear();
     _data.reserve(n);
+
+    _cell_to_data.clear();
+    _cell_to_data.resize(n, invalid_data_index);
   }
 
   auto data_pool() -> std::span<Type> {

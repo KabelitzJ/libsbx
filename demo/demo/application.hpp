@@ -64,6 +64,11 @@ private:
 
   grid_type _grid;
 
+  std::uint32_t _selected_main_face = grid_type::invalid_id;
+
+  std::vector<std::uint32_t> _dirty_dual_quads{};
+  std::vector<dual_quad_tile_data> _dual_quad_tiles{};
+
 }; // class application
 
 } // namespace demo

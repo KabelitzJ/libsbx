@@ -19,7 +19,17 @@ struct terrain_tag {
   sbx::math::uuid mesh_id;
   std::uint32_t grid_cell;
   std::float_t height;
+  std::uint32_t rotation_steps = 0u;
+  bool is_visible = true;
 }; // struct terrain_tag
+
+struct dual_quad_tile_data {
+  sbx::scenes::node node = sbx::scenes::node::null;
+  std::uint8_t last_mask = 0u;
+  std::float_t height = 3.0f;
+  sbx::math::color color = sbx::math::color::white();
+  std::uint32_t rotation_steps = 0u;
+}; // struct dual_quad_tile_data
 
 } // namespace demo
 

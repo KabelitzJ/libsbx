@@ -74,6 +74,11 @@ application::application()
   auto& renderer = graphics_module.set_renderer<demo::renderer>();
   renderer.update_dual_grid_data(_grid);
 
+  _dirty_dual_quads.reserve(64u);
+
+  _dual_quad_tiles.clear();
+  _dual_quad_tiles.resize(_grid.dual_quad_count());
+
   auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
 
   auto& scene = scenes_module.load_scene("res://scenes/scene.yaml");
@@ -169,8 +174,6 @@ auto application::update() -> void  {
 
   _rotation += sbx::math::degree{45} * delta_time;
 
-  static auto selected_cell = grid_type::invalid_id;
-
   if (sbx::devices::input::is_mouse_button_pressed(sbx::devices::mouse_button::left)) {
     auto screen_position = sbx::devices::input::mouse_position();
 
@@ -179,9 +182,18 @@ auto application::update() -> void  {
     const auto ground = sbx::math::plane{sbx::math::vector3::up, 0.0f};
 
     if (const auto hit = intersect_ray_plane(ray, ground); hit) {
-      selected_cell = _grid.pick_main_face_at(*hit);
+      _selected_main_face = _grid.pick_main_face_at(*hit);
 
-      if (selected_cell != grid_type::invalid_id) {
+      if (_selected_main_face != grid_type::invalid_id) {
+        auto& face = _grid.get_or_create_cell_data(_selected_main_face, grid_data{});
+        face.is_painted = !face.is_painted;
+
+        _dirty_dual_quads.clear();
+
+        for (const auto quad_id : _grid.dual_quads_of_main_face(_selected_main_face)) {
+          _dirty_dual_quads.push_back(quad_id);
+        }
+
         _rebuild_terrain_tiles();
       }
     }
@@ -194,26 +206,8 @@ auto application::update() -> void  {
     scenes_module.add_debug_line(a, b, sbx::math::color::cyan());
   }
 
-  if (selected_cell != grid_type::invalid_id) {
-    const auto poly = _grid.main_cell_ccw(selected_cell);
-
-    for (const auto id : poly) {
-      if (id >= _grid.dual_quad_count()) {
-        continue;
-      }
-
-      const auto& quad = _grid.dual_quad_at(id);
-
-      const auto& a = _grid.dual_vertex_at(quad.a).position;
-      const auto& b = _grid.dual_vertex_at(quad.b).position;
-      const auto& c = _grid.dual_vertex_at(quad.c).position;
-      const auto& d = _grid.dual_vertex_at(quad.d).position;
-
-      scenes_module.add_debug_line(a, b, sbx::math::color::red());
-      scenes_module.add_debug_line(b, c, sbx::math::color::red());
-      scenes_module.add_debug_line(c, d, sbx::math::color::red());
-      scenes_module.add_debug_line(d, a, sbx::math::color::red());
-    }
+  if (_selected_main_face != grid_type::invalid_id) {
+    const auto poly = _grid.main_cell_ccw(_selected_main_face);
 
     for (auto i = std::size_t{0u}; i < poly.size(); ++i) {
       const auto a_id = poly[i];
@@ -231,11 +225,176 @@ auto application::fixed_update() -> void {
 
 }
 
+struct tile_choice {
+  sbx::utility::hashed_string mesh_name{};
+  std::uint32_t rotation_steps = 0u;
+  bool is_visible = false;
+}; // struct tile_choice
+
+static auto popcount4(const std::uint8_t mask) -> std::uint32_t {
+  auto c = std::uint32_t{0u};
+
+  c += (mask & 0x1u) ? 1u : 0u;
+  c += (mask & 0x2u) ? 1u : 0u;
+  c += (mask & 0x4u) ? 1u : 0u;
+  c += (mask & 0x8u) ? 1u : 0u;
+
+  return c;
+}
+
+static auto choose_tile_from_mask(const std::uint8_t mask) -> tile_choice {
+  if (mask == 0u) {
+    return tile_choice{{}, 0u, false};
+  }
+
+  if (mask == 0xFu) {
+    return tile_choice{"full", 0u, true};
+  }
+
+  const auto count = popcount4(mask);
+
+  if (count == 1u) {
+    if (mask == 0x1u) {
+      return tile_choice{"corner", 0u, true};
+    }
+
+    if (mask == 0x2u) {
+      return tile_choice{"corner", 1u, true};
+    }
+
+    if (mask == 0x4u) {
+      return tile_choice{"corner", 2u, true};
+    }
+
+    return tile_choice{"corner", 3u, true};
+  }
+
+  if (count == 3u) {
+    const auto missing = static_cast<std::uint8_t>(0xFu ^ mask);
+
+    if (missing == 0x8u) {
+      return tile_choice{"three_corner", 0u, true};
+    }
+
+    if (missing == 0x1u) {
+      return tile_choice{"three_corner", 1u, true};
+    }
+
+    if (missing == 0x2u) {
+      return tile_choice{"three_corner", 2u, true};
+    }
+
+    return tile_choice{"three_corner", 3u, true};
+  }
+
+  if (mask == 0x5u) {
+    return tile_choice{"diagonal", 0u, true};
+  }
+
+  if (mask == 0xAu) {
+    return tile_choice{"diagonal", 1u, true};
+  }
+
+  if (mask == 0x3u) {
+    return tile_choice{"half", 0u, true};
+  }
+
+  if (mask == 0x6u) {
+    return tile_choice{"half", 1u, true};
+  }
+
+  if (mask == 0xCu) {
+    return tile_choice{"half", 2u, true};
+  }
+
+  return tile_choice{"half", 3u, true};
+}
+
 auto application::_rebuild_terrain_tiles() -> void {
   auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
   auto& scene = scenes_module.scene();
 
+  if (_dual_quad_tiles.size() != _grid.dual_quad_count()) {
+    _dual_quad_tiles.clear();
+    _dual_quad_tiles.resize(_grid.dual_quad_count());
+  }
 
+  const auto main_face_is_painted = [&](const std::uint32_t dual_vertex_id) -> bool {
+    if (!_grid.has_cell_data(dual_vertex_id)) {
+      return false;
+    }
+
+    return _grid.cell_data(dual_vertex_id).is_painted;
+  };
+
+  for (const auto quad_id : _dirty_dual_quads) {
+    sbx::utility::assert_that(quad_id < _grid.dual_quad_count(), "_rebuild_terrain_tiles(): quad_id out of range");
+
+    const auto& q = _grid.dual_quad_at(quad_id);
+
+    auto mask = std::uint8_t{0u};
+
+    if (main_face_is_painted(q.a)) {
+      mask |= 0x1u;
+    }
+
+    if (main_face_is_painted(q.b)) {
+      mask |= 0x2u;
+    }
+
+    if (main_face_is_painted(q.c)) {
+      mask |= 0x4u;
+    }
+
+    if (main_face_is_painted(q.d)) {
+      mask |= 0x8u;
+    }
+
+    auto& tile = _dual_quad_tiles[quad_id];
+
+    if (tile.last_mask == mask) {
+      continue;
+    }
+
+    tile.last_mask = mask;
+
+    const auto choice = choose_tile_from_mask(mask);
+
+    if (!choice.is_visible) {
+      if (tile.node != sbx::scenes::node::null) {
+        auto& terrain = scene.get_component<terrain_tag>(tile.node);
+        terrain.is_visible = false;
+      }
+
+      continue;
+    }
+
+    if (tile.node == sbx::scenes::node::null) {
+      tile.node = scene.create_node("TileNode");
+
+      tile.height = 3.0f;
+      tile.color = sbx::math::random_color();
+
+      auto terrain = terrain_tag{};
+      terrain.grid_cell = quad_id;
+      terrain.height = tile.height;
+      terrain.color = tile.color;
+      terrain.mesh_id = scene.get_mesh(choice.mesh_name);
+      terrain.rotation_steps = choice.rotation_steps;
+      terrain.is_visible = true;
+
+      scene.add_component<terrain_tag>(tile.node, terrain);
+    } else {
+      auto& terrain = scene.get_component<terrain_tag>(tile.node);
+
+      terrain.grid_cell = quad_id;
+      terrain.height = tile.height;
+      terrain.color = tile.color;
+      terrain.mesh_id = scene.get_mesh(choice.mesh_name);
+      terrain.rotation_steps = choice.rotation_steps;
+      terrain.is_visible = true;
+    }
+  }
 }
 
 auto application::_generate_brdf(const std::uint32_t size) -> void {

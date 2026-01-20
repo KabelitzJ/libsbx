@@ -882,6 +882,18 @@ auto dual_grid_base::rebuild(const settings& settings) -> void {
   _dual_quads = std::move(final_cells);
 
   build_main_mesh(_dual_vertices, _dual_quads, _main_vertices, _main_edges, _main_cells_ccw);
+
+  _dual_quads_of_main_face.clear();
+  _dual_quads_of_main_face.resize(_dual_vertices.size());
+
+  for (auto qi = std::uint32_t{0u}; qi < dual_quad_count(); ++qi) {
+    const auto& q = _dual_quads[qi];
+
+    _dual_quads_of_main_face[q.a].push_back(qi);
+    _dual_quads_of_main_face[q.b].push_back(qi);
+    _dual_quads_of_main_face[q.c].push_back(qi);
+    _dual_quads_of_main_face[q.d].push_back(qi);
+  }
 }
 
 auto dual_grid_base::dual_vertices() const -> const std::vector<dual_vertex>& {
@@ -1039,6 +1051,12 @@ auto dual_grid_base::pick_main_face_at(const sbx::math::vector3& point) const ->
   }
 
   return invalid_id;
+}
+
+auto dual_grid_base::dual_quads_of_main_face(const std::uint32_t dual_vertex_id) const -> std::span<const std::uint32_t> {
+  sbx::utility::assert_that(dual_vertex_id < _dual_quads_of_main_face.size(), "dual_quads_of_main_face(): out of range");
+
+  return _dual_quads_of_main_face[dual_vertex_id];
 }
 
 } // namespace demo

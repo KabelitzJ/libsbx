@@ -20,8 +20,6 @@ public:
 
   ~renderer() override = default;
 
-  // auto initialize() -> void override;
-
 private:
 
   sbx::math::color _clear_color;

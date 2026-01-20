@@ -96,9 +96,11 @@ public:
 
   template<utility::implements<renderer> Renderer, typename... Args>
   requires (std::is_constructible_v<Renderer, Args...>)
-  auto set_renderer(Args&&... args) -> void {
+  auto set_renderer(Args&&... args) -> Renderer& {
     _renderer = std::make_unique<Renderer>(std::forward<Args>(args)...);
     _recreate_swapchain();
+
+    return *static_cast<Renderer*>(_renderer.get());
   }
 
   // auto render_stage(const pipeline::stage& stage) -> graphics::render_stage&;
@@ -134,8 +136,9 @@ public:
     return _allocator;
   }
 
-  auto renderer() -> renderer& {
-    return *_renderer;
+  template<typename Type = graphics::renderer>
+  auto renderer() -> Type& {
+    return *static_cast<Type*>(_renderer.get());
   }
 
   template<queue::type Source, queue::type Destination, typename Type>

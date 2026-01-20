@@ -21,12 +21,14 @@ target_sources(
   ${PROJECT_NAME}
   PUBLIC
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/renderer.hpp"
+    "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/terrain_subrenderer.hpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/dual_grid.hpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/application.hpp"
     # "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/terrain/voronoi.hpp"
   PRIVATE
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/renderer.cpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/application.cpp"
+    "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/terrain_subrenderer.cpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/dual_grid.cpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/demo.cpp"
 )

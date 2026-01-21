@@ -56,7 +56,6 @@
 #include <libsbx/core/module.hpp>
 #include <libsbx/core/delegate.hpp>
 #include <libsbx/core/exit.hpp>
-#include <libsbx/core/entry_point.hpp>
 #include <libsbx/core/cli.hpp>
 
 #endif // LIBSBX_CORE_HPP_

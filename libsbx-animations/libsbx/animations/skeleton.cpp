@@ -1,5 +1,7 @@
 #include <libsbx/animations/skeleton.hpp>
 
+#include <easy/profiler.h>
+
 namespace sbx::animations {
 
 auto skeleton::reserve(const std::size_t size) -> void {

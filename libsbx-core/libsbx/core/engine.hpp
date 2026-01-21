@@ -11,15 +11,12 @@
 #include <chrono>
 #include <ranges>
 
-#include <range/v3/all.hpp>
-
-#include <easy/profiler.h>
-
 #include <libsbx/utility/concepts.hpp>
 #include <libsbx/utility/noncopyable.hpp>
 #include <libsbx/utility/assert.hpp>
 #include <libsbx/utility/type_name.hpp>
 #include <libsbx/utility/timer.hpp>
+#include <libsbx/utility/logger.hpp>
 
 #include <libsbx/units/time.hpp>
 
@@ -39,60 +36,21 @@ class engine : public utility::noncopyable {
 
 public:
 
-  template<typename Callable>
-  requires (std::is_invocable_r_v<std::unique_ptr<application>, Callable>)
-  engine(std::span<std::string_view> args, Callable&& application_creator)
-  : _cli{args},
-    _application{nullptr} {
-    utility::assert_that(_instance == nullptr, "Engine already exists.");
+  engine(std::span<std::string_view> args);
 
-    _instance = this;
+  ~engine();
 
-    for (auto&& [type, factory] : module_manager::_factories() | ranges::views::filter([](const auto& entry) { return entry.has_value(); }) | ranges::views::enumerate) {
-      _create_module(type, *factory);
-    }
+  static auto delta_time() -> units::second;
 
-    // [NOTE] KAJ 2026-01-19 : We delay application creation until after all modules are created
-    _application = std::invoke(std::forward<Callable>(application_creator));
-  }
+  static auto fixed_delta_time() -> units::second;
 
-  ~engine() {
-    _application.reset();
+  static auto time() -> units::second;
 
-    for (auto&& [type, entry] : _modules | ranges::views::enumerate | std::views::reverse) {
-      _destroy_module(type);
-    }
+  static auto quit() -> void;
 
-    _instance = nullptr;
-  }
+  static auto cli() noexcept -> core::cli&;
 
-  static auto delta_time() -> units::second {
-    return _instance->_delta_time;
-  }
-
-  static auto fixed_delta_time() -> units::second {
-    return units::second{1.0f / 60.0f};
-  }
-
-  static auto time() -> units::second {
-    return _instance->_time;
-  }
-
-  static auto quit() -> void {
-    _instance->_is_running = false;
-  }
-
-  static auto cli() noexcept -> core::cli& {
-    return _instance->_cli;
-  }
-
-  // static auto profiler() noexcept -> core::profiler& {
-  //   return _instance->_profiler;
-  // }
-
-  static auto settings() noexcept -> core::settings& {
-    return _instance->_settings;
-  }
+  static auto settings() noexcept -> core::settings&;
 
   template<typename Module>
   requires (std::is_base_of_v<module_base, Module>)
@@ -111,113 +69,32 @@ public:
   template<typename Application>
   requires (std::is_base_of_v<core::application, Application>)
   [[nodiscard]] static auto get_application() -> Application& {
+    utility::assert_that(_instance != nullptr, "Engine instance does not exist");
+    utility::assert_that(_instance->_application != nullptr, "Engine has no application running");
+
     return *static_cast<Application*>(_instance->_application.get());
   }
 
-  auto run() -> void {
-    if (_is_running) {
-      return;
-    }
+  template<typename Application, typename... Args>
+  requires (std::is_base_of_v<core::application, Application> && std::is_constructible_v<Application, Args...>)
+  auto run(Args&&... args) -> void {
+    utility::assert_that(_instance != nullptr, "Engine instance does not exist");
+    utility::assert_that(!_is_running, "Engine instance is already running");
 
-    using clock_type = std::chrono::high_resolution_clock;
+    _application = std::make_unique<Application>(std::forward<Args>(args)...);
 
-    _is_running = true;
-
-    auto last = clock_type::now();
-
-    auto fixed_accumulator = units::second{};
-
-    while (_is_running) {
-      const auto now = clock_type::now();
-      const auto delta_time = std::chrono::duration_cast<std::chrono::duration<std::float_t>>(now - last).count();
-      last = now;
-
-
-      _instance->_delta_time = units::second{delta_time};
-      _instance->_time += _instance->_delta_time;
-
-      fixed_accumulator += _instance->_delta_time;
-
-      EASY_BLOCK("stage pre");
-      _update_stage(stage::pre);
-      EASY_END_BLOCK;
-
-      EASY_BLOCK("application update");
-      _application->update();
-      EASY_END_BLOCK;
-
-      EASY_BLOCK("stage normal");
-      _update_stage(stage::normal);
-      EASY_END_BLOCK;
-
-      EASY_BLOCK("stage post");
-      _update_stage(stage::post);
-      EASY_END_BLOCK;
-
-      EASY_BLOCK("stage pre_fixed");
-      _update_stage(stage::pre_fixed);
-      EASY_END_BLOCK;
-
-      while (fixed_accumulator >= fixed_delta_time()) {
-        EASY_BLOCK("stage fixed");
-        _application->fixed_update();
-        _update_stage(stage::fixed);
-        fixed_accumulator -= fixed_delta_time();
-        EASY_END_BLOCK;
-      }
-
-      EASY_BLOCK("stage post_fixed");
-      _update_stage(stage::post_fixed);
-      EASY_END_BLOCK;
-
-      EASY_BLOCK("stage rendering");
-      _update_stage(stage::rendering);
-      EASY_END_BLOCK;
-    }
+    _run_main_loop();
   }
 
 private:
 
-  auto _create_module(const std::uint32_t type, const module_factory& factory) -> void {
-    if (type < _modules.size() && _modules[type]) {
-      return;
-    }
+  auto _run_main_loop() -> void;
 
-    for (const auto& dependency : factory.dependencies) {
-      _create_module(dependency, *module_manager::_factories().at(dependency));
-    }
+  auto _create_module(const std::uint32_t type, const module_factory& factory) -> void;
 
-    if (type >= _modules.size()) {
-      _modules.resize(std::max(_modules.size(), static_cast<std::size_t>(type + 1u)));
-    }
+  auto _destroy_module(const std::uint32_t type) -> void;
 
-    _modules[type] = std::invoke(factory.create);
-    _module_by_stage[factory.stage].push_back(type);
-  }
-
-  auto _destroy_module(const std::uint32_t type) -> void {
-    if (type >= _modules.size() || !_modules.at(type)) {
-      return;
-    }
-
-    auto& factory = module_manager::_factories().at(type);
-
-    for (const auto& dependency : factory->dependencies) {
-      _destroy_module(dependency);
-    }
-
-    auto* module_instance = _modules.at(type);
-    std::invoke(factory->destroy, module_instance);
-    _modules.at(type) = nullptr;
-  }
-
-  auto _update_stage(stage stage) -> void {
-    if (auto entry = _module_by_stage.find(stage); entry != _module_by_stage.end()) {
-      for (const auto& type : entry->second) {
-        _modules.at(type)->update();
-      }
-    }
-  }
+  auto _update_stage(stage stage) -> void;
 
   static engine* _instance;
 

@@ -39,6 +39,8 @@ public:
 
 private:
 
+  auto _randomize_terrain() -> void;
+  auto _smooth_terrain() -> void;
   auto _rebuild_terrain_tiles() -> void;
 
   auto _generate_brdf(const std::uint32_t size) -> void;

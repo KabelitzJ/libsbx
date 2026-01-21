@@ -44,6 +44,78 @@ static auto intersect_ray_plane(const sbx::math::ray& ray, const sbx::math::plan
   return ray.point_at(t);
 }
 
+auto application::_randomize_terrain() -> void {
+  constexpr auto frequency = 0.05f;
+  constexpr auto octaves = 4u;
+
+  const auto face_count = static_cast<std::uint32_t>(_grid.dual_vertices().size());
+
+  for (auto face_id = std::uint32_t{0u}; face_id < face_count; ++face_id) {
+    const auto& position = _grid.dual_vertex_at(face_id).position;
+
+    constexpr auto cos_a = 0.8660254f;  // cos(30°)
+    constexpr auto sin_a = 0.5f;        // sin(30°)
+
+    const auto x = position.x();
+    const auto z = position.z();
+
+    const auto rx = (x * cos_a - z * sin_a) * frequency;
+    const auto rz = (x * sin_a + z * cos_a) * frequency;
+
+    const auto n = sbx::math::noise::fractal(rx, rz, octaves);
+
+    const auto jitter = sbx::math::noise::simplex(position.x() * 0.3f, position.z() * 0.3f) * 0.03f;
+
+    const auto density = (sbx::math::noise::fractal(rx, rz, octaves) * 0.5f) + 0.5f + jitter;
+
+    auto& cell = _grid.get_or_create_cell_data(face_id, grid_data{});
+
+    if (density > 0.40f) {
+      cell.is_painted = true;
+    } else if (density < 0.30f) {
+      cell.is_painted = false;
+    }
+  }
+}
+
+auto application::_smooth_terrain() -> void {
+  const auto face_count = static_cast<std::uint32_t>(_grid.dual_vertices().size());
+
+  auto next = std::vector<bool>{};
+  next.resize(face_count);
+
+  for (auto face_id = std::uint32_t{0u}; face_id < face_count; ++face_id) {
+    auto painted_neighbors = std::uint32_t{0u};
+
+    for (const auto& edge : _grid.main_edges()) {
+      if (edge.dual_u == face_id) {
+        if (edge.dual_v != grid_type::invalid_id && _grid.has_cell_data(edge.dual_v) && _grid.cell_data(edge.dual_v).is_painted) {
+          ++painted_neighbors;
+        }
+      } else if (edge.dual_v == face_id) {
+        if (edge.dual_u != grid_type::invalid_id && _grid.has_cell_data(edge.dual_u) && _grid.cell_data(edge.dual_u).is_painted) {
+          ++painted_neighbors;
+        }
+      }
+    }
+
+    const auto current = _grid.has_cell_data(face_id) && _grid.cell_data(face_id).is_painted;
+
+    if (painted_neighbors >= 3u) {
+      next[face_id] = true;
+    } else if (painted_neighbors <= 1u) {
+      next[face_id] = false;
+    } else {
+      next[face_id] = current;
+    }
+  }
+
+  for (auto face_id = std::uint32_t{0u}; face_id < face_count; ++face_id) {
+    auto& cell = _grid.get_or_create_cell_data(face_id, grid_data{});
+    cell.is_painted = next[face_id];
+  }
+}
+
 static const auto settings = application::grid_type::settings{
   .rings = 15u,
   .ring_distance = 10.0f,
@@ -71,17 +143,12 @@ application::application()
 
   auto& graphics_module = sbx::core::engine::get_module<sbx::graphics::graphics_module>();
 
-  auto& renderer = graphics_module.set_renderer<demo::renderer>();
-  renderer.update_dual_grid_data(_grid);
-
-  _dirty_dual_quads.reserve(_grid.dual_quad_count());
-
-  _dual_quad_tiles.clear();
-  _dual_quad_tiles.resize(_grid.dual_quad_count());
-
   auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
 
   auto& scene = scenes_module.load_scene("res://scenes/scene.yaml");
+
+  auto& renderer = graphics_module.set_renderer<demo::renderer>();
+  renderer.update_dual_grid_data(_grid);
 
   auto& scripting_module = sbx::core::engine::get_module<sbx::scripting::scripting_module>();
 
@@ -107,6 +174,19 @@ application::application()
   base_material.albedo.image = scene.get_image("base");
 
   // Animations
+
+  _randomize_terrain();
+  _smooth_terrain();
+  _smooth_terrain();
+
+  _dirty_dual_quads.resize(_grid.dual_quad_count());
+
+  std::iota(_dirty_dual_quads.begin(), _dirty_dual_quads.end(), std::uint32_t{0u});
+
+  _dual_quad_tiles.clear();
+  _dual_quad_tiles.resize(_grid.dual_quad_count());
+
+  _rebuild_terrain_tiles();
 
   // Window
 

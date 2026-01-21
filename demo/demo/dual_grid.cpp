@@ -101,6 +101,65 @@ static auto make_edge_key(const std::uint32_t a, const std::uint32_t b) -> edge_
   return edge_key{b, a};
 }
 
+static auto signed_area_xz_dual_quad(const dual_grid_base::dual_quad& q, const std::vector<dual_grid_base::dual_vertex>& vertices) -> std::float_t {
+  const auto p0 = vertices[q.a].position;
+  const auto p1 = vertices[q.b].position;
+  const auto p2 = vertices[q.c].position;
+  const auto p3 = vertices[q.d].position;
+
+  const auto x0 = p0.x();
+  const auto z0 = p0.z();
+  const auto x1 = p1.x();
+  const auto z1 = p1.z();
+  const auto x2 = p2.x();
+  const auto z2 = p2.z();
+  const auto x3 = p3.x();
+  const auto z3 = p3.z();
+
+  return 0.5f * (
+    x0 * z1 - x1 * z0 +
+    x1 * z2 - x2 * z1 +
+    x2 * z3 - x3 * z2 +
+    x3 * z0 - x0 * z3
+  );
+}
+
+static auto canonicalize_dual_quad(dual_grid_base::dual_quad& q, const std::vector<dual_grid_base::dual_vertex>& dual_vertices) -> void {
+  auto ids = std::array<std::uint32_t, 4u>{q.a, q.b, q.c, q.d};
+
+  if (ids[0] == ids[1] || ids[0] == ids[2] || ids[0] == ids[3] ||
+      ids[1] == ids[2] || ids[1] == ids[3] || ids[2] == ids[3]) {
+    return;
+  }
+
+  auto center = sbx::math::vector3{0.0f, 0.0f, 0.0f};
+
+  for (const auto id : ids) {
+    center += dual_vertices[id].position;
+  }
+
+  center *= 0.25f;
+
+  std::sort(ids.begin(), ids.end(), [&](const auto lhs, const auto rhs) {
+    const auto pl = dual_vertices[lhs].position;
+    const auto pr = dual_vertices[rhs].position;
+
+    const auto al = std::atan2(pl.z() - center.z(), pl.x() - center.x());
+    const auto ar = std::atan2(pr.z() - center.z(), pr.x() - center.x());
+
+    return al < ar;
+  });
+
+  q.a = ids[0];
+  q.b = ids[1];
+  q.c = ids[2];
+  q.d = ids[3];
+
+  if (signed_area_xz_dual_quad(q, dual_vertices) < 0.0f) {
+    std::swap(q.b, q.d);
+  }
+}
+
 static auto edge_midpoint(
   const std::uint32_t u,
   const std::uint32_t v,
@@ -880,6 +939,14 @@ auto dual_grid_base::rebuild(const settings& settings) -> void {
 
   _dual_vertices = std::move(grid.vertices);
   _dual_quads = std::move(final_cells);
+
+  for (auto& q : _dual_quads) {
+    canonicalize_dual_quad(q, _dual_vertices);
+  }
+
+  for (const auto& q : _dual_quads) {
+    sbx::utility::assert_that(signed_area_xz_dual_quad(q, _dual_vertices) > 0.0f, "dual quad winding is not CCW");
+  }
 
   build_main_mesh(_dual_vertices, _dual_quads, _main_vertices, _main_edges, _main_cells_ccw);
 

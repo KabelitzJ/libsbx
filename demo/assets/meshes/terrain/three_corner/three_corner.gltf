@@ -15,7 +15,7 @@
 	"nodes":[
 		{
 			"mesh":0,
-			"name":"Cube.003",
+			"name":"ThreeCorner",
 			"translation":[
 				0,
 				0,
@@ -25,7 +25,7 @@
 	],
 	"meshes":[
 		{
-			"name":"Cube.003",
+			"name":"ThreeCorner",
 			"primitives":[
 				{
 					"attributes":{
@@ -43,7 +43,7 @@
 		{
 			"bufferView":0,
 			"componentType":5126,
-			"count":56,
+			"count":42,
 			"max":[
 				0.5,
 				0.5,
@@ -59,63 +59,63 @@
 		{
 			"bufferView":1,
 			"componentType":5126,
-			"count":56,
+			"count":42,
 			"type":"VEC3"
 		},
 		{
 			"bufferView":2,
 			"componentType":5126,
-			"count":56,
+			"count":42,
 			"type":"VEC2"
 		},
 		{
 			"bufferView":3,
 			"componentType":5126,
-			"count":56,
+			"count":42,
 			"type":"VEC4"
 		},
 		{
 			"bufferView":4,
 			"componentType":5123,
-			"count":171,
+			"count":141,
 			"type":"SCALAR"
 		}
 	],
 	"bufferViews":[
 		{
 			"buffer":0,
-			"byteLength":672,
+			"byteLength":504,
 			"byteOffset":0,
 			"target":34962
 		},
 		{
 			"buffer":0,
-			"byteLength":672,
-			"byteOffset":672,
+			"byteLength":504,
+			"byteOffset":504,
 			"target":34962
 		},
 		{
 			"buffer":0,
-			"byteLength":448,
+			"byteLength":336,
+			"byteOffset":1008,
+			"target":34962
+		},
+		{
+			"buffer":0,
+			"byteLength":672,
 			"byteOffset":1344,
 			"target":34962
 		},
 		{
 			"buffer":0,
-			"byteLength":896,
-			"byteOffset":1792,
-			"target":34962
-		},
-		{
-			"buffer":0,
-			"byteLength":342,
-			"byteOffset":2688,
+			"byteLength":282,
+			"byteOffset":2016,
 			"target":34963
 		}
 	],
 	"buffers":[
 		{
-			"byteLength":3032,
+			"byteLength":2300,
 			"uri":"three_corner.bin"
 		}
 	]

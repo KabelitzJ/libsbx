@@ -242,72 +242,93 @@ static auto popcount4(const std::uint8_t mask) -> std::uint32_t {
   return c;
 }
 
+static auto mesh_rotation_bias(const sbx::utility::hashed_string mesh_name) -> std::uint32_t {
+  if (mesh_name == sbx::utility::hashed_string{"corner"}) {
+    return 0u;
+  }
+
+  if (mesh_name == sbx::utility::hashed_string{"half"}) {
+    return 3u;
+  }
+
+  if (mesh_name == sbx::utility::hashed_string{"diagonal"}) {
+    return 0u;
+  }
+
+  if (mesh_name == sbx::utility::hashed_string{"three_corner"}) {
+    return 1u;
+  }
+
+  if (mesh_name == sbx::utility::hashed_string{"full"}) {
+    return 0u;
+  }
+
+  return 0u;
+}
+
+static auto rotate_mask_for_steps(const std::uint8_t mask, const std::uint32_t steps) -> std::uint8_t {
+  auto m = static_cast<std::uint8_t>(mask & 0xFu);
+
+  for (auto i = std::uint32_t{0u}; i < (steps & 3u); ++i) {
+    const auto b3 = static_cast<std::uint8_t>((m >> 3u) & 0x1u);
+
+    m = static_cast<std::uint8_t>(((m << 1u) & 0xFu) | b3);
+  }
+
+  return m;
+}
+
+static auto rotation_steps_from_base_mask(const std::uint8_t desired_mask, const std::uint8_t base_mask) -> std::uint32_t {
+  const auto desired = static_cast<std::uint8_t>(desired_mask & 0xFu);
+  const auto base = static_cast<std::uint8_t>(base_mask & 0xFu);
+
+  for (auto r = std::uint32_t{0u}; r < 4u; ++r) {
+    if (rotate_mask_for_steps(base, r) == desired) {
+      return r;
+    }
+  }
+
+  return 0u;
+}
+
 static auto choose_tile_from_mask(const std::uint8_t mask) -> tile_choice {
-  if (mask == 0u) {
+  const auto m = static_cast<std::uint8_t>(mask & 0xFu);
+
+  if (m == 0u) {
     return tile_choice{{}, 0u, false};
   }
 
-  if (mask == 0xFu) {
+  if (m == 0xFu) {
     return tile_choice{"full", 0u, true};
   }
 
-  const auto count = popcount4(mask);
+  const auto count = popcount4(m);
 
   if (count == 1u) {
-    if (mask == 0x1u) {
-      return tile_choice{"corner", 0u, true};
-    }
+    const auto r = rotation_steps_from_base_mask(m, 0x1u);
 
-    if (mask == 0x2u) {
-      return tile_choice{"corner", 1u, true};
-    }
-
-    if (mask == 0x4u) {
-      return tile_choice{"corner", 2u, true};
-    }
-
-    return tile_choice{"corner", 3u, true};
+    return tile_choice{"corner", r, true};
   }
 
   if (count == 3u) {
-    const auto missing = static_cast<std::uint8_t>(0xFu ^ mask);
+    const auto r = rotation_steps_from_base_mask(m, 0x7u);
 
-    if (missing == 0x8u) {
-      return tile_choice{"three_corner", 0u, true};
+    return tile_choice{"three_corner", r, true};
+  }
+
+  if (count == 2u) {
+    if (m == 0x5u || m == 0xAu) {
+      const auto r = rotation_steps_from_base_mask(m, 0x5u);
+
+      return tile_choice{"diagonal", r, true};
     }
 
-    if (missing == 0x1u) {
-      return tile_choice{"three_corner", 1u, true};
-    }
+    const auto r = rotation_steps_from_base_mask(m, 0x3u);
 
-    if (missing == 0x2u) {
-      return tile_choice{"three_corner", 2u, true};
-    }
-
-    return tile_choice{"three_corner", 3u, true};
+    return tile_choice{"half", r, true};
   }
 
-  if (mask == 0x5u) {
-    return tile_choice{"diagonal", 0u, true};
-  }
-
-  if (mask == 0xAu) {
-    return tile_choice{"diagonal", 1u, true};
-  }
-
-  if (mask == 0x3u) {
-    return tile_choice{"half", 0u, true};
-  }
-
-  if (mask == 0x6u) {
-    return tile_choice{"half", 1u, true};
-  }
-
-  if (mask == 0xCu) {
-    return tile_choice{"half", 2u, true};
-  }
-
-  return tile_choice{"half", 3u, true};
+  return tile_choice{"half", 0u, true};
 }
 
 auto application::_rebuild_terrain_tiles() -> void {
@@ -360,6 +381,9 @@ auto application::_rebuild_terrain_tiles() -> void {
 
     const auto choice = choose_tile_from_mask(mask);
 
+    const auto bias = mesh_rotation_bias(choice.mesh_name);
+    const auto rotation_steps = (choice.rotation_steps + bias) & 3u;
+
     if (!choice.is_visible) {
       if (tile.node != sbx::scenes::node::null) {
         auto& terrain = scene.get_component<terrain_tag>(tile.node);
@@ -380,7 +404,7 @@ auto application::_rebuild_terrain_tiles() -> void {
       terrain.height = tile.height;
       terrain.color = tile.color;
       terrain.mesh_id = scene.get_mesh(choice.mesh_name);
-      terrain.rotation_steps = choice.rotation_steps;
+      terrain.rotation_steps = rotation_steps;
       terrain.is_visible = true;
 
       scene.add_component<terrain_tag>(tile.node, terrain);
@@ -391,7 +415,7 @@ auto application::_rebuild_terrain_tiles() -> void {
       terrain.height = tile.height;
       terrain.color = tile.color;
       terrain.mesh_id = scene.get_mesh(choice.mesh_name);
-      terrain.rotation_steps = choice.rotation_steps;
+      terrain.rotation_steps = rotation_steps;
       terrain.is_visible = true;
     }
   }

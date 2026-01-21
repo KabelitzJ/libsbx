@@ -15,7 +15,13 @@
 	"nodes":[
 		{
 			"mesh":0,
-			"name":"Cube.001",
+			"name":"Half",
+			"rotation":[
+				0,
+				1,
+				0,
+				1.6292068494294654e-07
+			],
 			"translation":[
 				0,
 				0,
@@ -25,7 +31,7 @@
 	],
 	"meshes":[
 		{
-			"name":"Cube.001",
+			"name":"Half",
 			"primitives":[
 				{
 					"attributes":{

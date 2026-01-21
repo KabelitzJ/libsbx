@@ -69,12 +69,7 @@ auto application::_randomize_terrain() -> void {
     const auto density = (sbx::math::noise::fractal(rx, rz, octaves) * 0.5f) + 0.5f + jitter;
 
     auto& cell = _grid.get_or_create_cell_data(face_id, grid_data{});
-
-    if (density > 0.40f) {
-      cell.is_painted = true;
-    } else if (density < 0.30f) {
-      cell.is_painted = false;
-    }
+    cell.is_painted = (density > 0.40f);
   }
 }
 

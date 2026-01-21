@@ -7,7 +7,6 @@ struct vs_in {
   uint instance_id : SV_InstanceID;
   uint base_vertex : SV_StartVertexLocation;
   uint base_instance : SV_StartInstanceLocation;
-
 }; // struct vs_in
 
 struct vs_out {
@@ -16,7 +15,6 @@ struct vs_out {
   [[vk::location(3)]] float2 uv : UV;
   [[vk::location(4)]] float3 color : COLOR;
   float4 sv_position : SV_Position;
-
 }; // struct vs_out
 
 struct vertex {
@@ -35,19 +33,11 @@ struct vertex {
   float tangent_y;
   float tangent_z;
   float tangent_w;
-
 }; // struct vertex
-
-struct transform_data {
-  float4x4 model;
-  float4x4 normal;
-
-}; // struct transform_data
 
 struct grid_vertex_data {
   float3 position;
   uint flags;
-
 }; // struct grid_vertex_data
 
 struct grid_quad_data {
@@ -55,7 +45,6 @@ struct grid_quad_data {
   uint b;
   uint c;
   uint d;
-
 }; // struct grid_quad_data
 
 // IMPORTANT: matches your CPU layout exactly
@@ -65,25 +54,19 @@ struct instance_data {
   float blue;
   float height;
 
-  uint transform_index;
   uint grid_quad_index;
   uint rotation_steps;
   uint padding0;
-
+  uint padding1;
 }; // struct instance_data
 
 struct push_data {
   vertex* vertex_buffer;
   grid_vertex_data* grid_vertex_data_buffer;
   grid_quad_data* grid_quad_data_buffer;
-  transform_data* transform_data_buffer;
   instance_data* instance_data_buffer;
-
-  // Local-space bounds for the currently drawn mesh (per draw-call).
-  // Use float4 to avoid alignment pitfalls in push constants.
   float4 mesh_bounds_min;
   float4 mesh_bounds_max;
-
 }; // struct push_data
 
 [[vk::push_constant]]
@@ -176,8 +159,6 @@ vs_out main(vs_in input) {
   vertex v = push.vertex_buffer[global_vertex];
   instance_data inst = push.instance_data_buffer[global_instance];
 
-  transform_data xf = push.transform_data_buffer[inst.transform_index];
-
   grid_quad_data quad = push.grid_quad_data_buffer[inst.grid_quad_index];
 
   float3 position_a = push.grid_vertex_data_buffer[quad.a].position;
@@ -246,15 +227,6 @@ vs_out main(vs_in input) {
     local_normal.z * tt +
     local_normal.y * face_normal
   );
-
-  // ------------------------------------------------------------
-  // Apply per-instance transform (optional but future-proof)
-  // ------------------------------------------------------------
-  float4 wp4 = mul(xf.model, float4(world_position, 1.0f));
-  world_position = wp4.xyz;
-
-  float3 wn = mul((float3x3)xf.normal, world_normal);
-  world_normal = normalize(wn);
 
   // Rotate UVs too so textures match the tile rotation.
   float2 out_uv = rotate_st(in_uv, inst.rotation_steps);

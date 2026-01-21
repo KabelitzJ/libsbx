@@ -50,20 +50,15 @@ public:
     std::uint32_t d;
   }; // struct grid_quad_data
 
-  struct transform_data {
-    sbx::math::matrix4x4 model;
-    sbx::math::matrix4x4 normal;
-  }; // struct transform_data
-
   struct instance_data {
     std::float_t red;
     std::float_t green;
     std::float_t blue;
     std::float_t height;
-    std::uint32_t transform_index;
     std::uint32_t grid_quad_index;
     std::uint32_t rotation_steps;
     std::uint32_t padding0;
+    std::uint32_t padding1;
   }; // struct instance_data
 
   terrain_subrenderer(const std::vector<sbx::graphics::attachment_description>& attachments, const std::filesystem::path& path);
@@ -94,7 +89,6 @@ private:
 
   sbx::graphics::storage_buffer_handle _grid_vertex_buffer;
   sbx::graphics::storage_buffer_handle _grid_quad_buffer;
-  sbx::graphics::storage_buffer_handle _transform_buffer;
   sbx::graphics::storage_buffer_handle _instance_buffer;
 
 }; // class terrain_subrenderer

@@ -74,7 +74,7 @@ application::application()
   auto& renderer = graphics_module.set_renderer<demo::renderer>();
   renderer.update_dual_grid_data(_grid);
 
-  _dirty_dual_quads.reserve(64u);
+  _dirty_dual_quads.reserve(_grid.dual_quad_count());
 
   _dual_quad_tiles.clear();
   _dual_quad_tiles.resize(_grid.dual_quad_count());
@@ -381,45 +381,25 @@ auto application::_rebuild_terrain_tiles() -> void {
 
     const auto choice = choose_tile_from_mask(mask);
 
-    const auto bias = mesh_rotation_bias(choice.mesh_name);
-    const auto rotation_steps = (choice.rotation_steps + bias) & 3u;
-
     if (!choice.is_visible) {
-      if (tile.node != sbx::scenes::node::null) {
-        auto& terrain = scene.get_component<terrain_tag>(tile.node);
-        terrain.is_visible = false;
-      }
-
+      tile.is_visible = false;
       continue;
     }
 
-    if (tile.node == sbx::scenes::node::null) {
-      tile.node = scene.create_node("TileNode");
+    const auto bias = mesh_rotation_bias(choice.mesh_name);
+    const auto rotation_steps = (choice.rotation_steps + bias) & 3u;
 
+    if (!tile.is_visible) {
       tile.height = 3.0f;
       tile.color = sbx::math::random_color();
-
-      auto terrain = terrain_tag{};
-      terrain.grid_cell = quad_id;
-      terrain.height = tile.height;
-      terrain.color = tile.color;
-      terrain.mesh_id = scene.get_mesh(choice.mesh_name);
-      terrain.rotation_steps = rotation_steps;
-      terrain.is_visible = true;
-
-      scene.add_component<terrain_tag>(tile.node, terrain);
-    } else {
-      auto& terrain = scene.get_component<terrain_tag>(tile.node);
-
-      terrain.grid_cell = quad_id;
-      terrain.height = tile.height;
-      terrain.color = tile.color;
-      terrain.mesh_id = scene.get_mesh(choice.mesh_name);
-      terrain.rotation_steps = rotation_steps;
-      terrain.is_visible = true;
     }
+
+    tile.mesh_id = scene.get_mesh(choice.mesh_name);
+    tile.rotation_steps = rotation_steps;
+    tile.is_visible = true;
   }
 }
+
 
 auto application::_generate_brdf(const std::uint32_t size) -> void {
   constexpr auto threads_per_group = std::uint32_t{16};

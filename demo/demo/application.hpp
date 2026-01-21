@@ -33,6 +33,10 @@ public:
     return _grid;
   }
 
+  auto tiles() const -> const std::vector<dual_quad_tile_data>& {
+    return _dual_quad_tiles;
+  }
+
 private:
 
   auto _rebuild_terrain_tiles() -> void;

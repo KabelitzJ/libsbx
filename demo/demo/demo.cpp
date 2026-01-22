@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #include <span>
 #include <ranges>
 #include <stacktrace>

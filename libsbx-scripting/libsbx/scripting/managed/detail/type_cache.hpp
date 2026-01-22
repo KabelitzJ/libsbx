@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #ifndef LIBSBX_SCRIPTING_TYPE_CACHE_HPP_
 #define LIBSBX_SCRIPTING_TYPE_CACHE_HPP_
 

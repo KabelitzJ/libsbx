@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #ifndef DEMO_TERRAIN_SUBRENDERER_HPP_
 #define DEMO_TERRAIN_SUBRENDERER_HPP_
 

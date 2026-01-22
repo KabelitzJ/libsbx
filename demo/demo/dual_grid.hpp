@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #ifndef DEMO_DUAL_GRID_HPP_
 #define DEMO_DUAL_GRID_HPP_
 

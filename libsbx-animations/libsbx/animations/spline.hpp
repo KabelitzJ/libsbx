@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #ifndef LIBSBX_ANIMATIONS_SPLINE_HPP_
 #define LIBSBX_ANIMATIONS_SPLINE_HPP_
 

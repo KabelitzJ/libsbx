@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #include <libsbx/scripting/managed/garbage_collection.hpp>
 
 #include <functional>

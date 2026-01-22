@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #include <libsbx/graphics/devices/debug_messenger.hpp>
 
 #include <libsbx/utility/target.hpp>

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #include <libsbx/devices/window.hpp>
 
 namespace sbx::devices {

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #include <demo/terrain_subrenderer.hpp>
 
 #include <libsbx/assets/assets_module.hpp>

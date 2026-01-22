@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #include <libsbx/graphics/draw_list.hpp>
 
 namespace sbx::graphics {

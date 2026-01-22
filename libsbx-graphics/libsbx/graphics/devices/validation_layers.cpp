@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #include <libsbx/graphics/devices/validation_layers.hpp>
 
 #include <libsbx/utility/iterator.hpp>

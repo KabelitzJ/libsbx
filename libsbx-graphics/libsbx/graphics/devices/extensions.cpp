@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #include <libsbx/graphics/devices/extensions.hpp>
 
 namespace sbx::graphics {

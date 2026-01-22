@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #ifndef LIBSBX_GRAPHICS_TASK_HPP_
 #define LIBSBX_GRAPHICS_TASK_HPP_
 

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #include <libsbx/scenes/scene.hpp>
 
 #include <unordered_map>

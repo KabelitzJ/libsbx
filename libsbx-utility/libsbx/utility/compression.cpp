@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #include <libsbx/utility/compression.hpp>
 
 #include <lz4.h>

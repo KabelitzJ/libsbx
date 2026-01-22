@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #include <demo/renderer.hpp>
 
 #include <libsbx/assets/assets_module.hpp>

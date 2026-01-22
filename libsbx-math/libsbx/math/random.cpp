@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #include <libsbx/math/random.hpp>
 
 namespace sbx::math {

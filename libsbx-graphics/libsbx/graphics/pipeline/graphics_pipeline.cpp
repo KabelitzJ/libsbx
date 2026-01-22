@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #include <libsbx/graphics/pipeline/graphics_pipeline.hpp>
 
 #include <unordered_set>

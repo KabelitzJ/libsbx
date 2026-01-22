@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #ifndef LIBSBX_UI_WIDGET_HPP_
 #define LIBSBX_UI_WIDGET_HPP_
 

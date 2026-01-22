@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #ifndef LIBSBX_GIZMOS_PIPELINE_HPP_
 #define LIBSBX_GIZMOS_PIPELINE_HPP_
 

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #include <demo/dual_grid.hpp>
 
 #include <algorithm>

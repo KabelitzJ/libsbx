@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #include <libsbx/graphics/devices/query_pool.hpp>
 
 #include <libsbx/graphics/graphics_module.hpp>

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #include <libsbx/graphics/buffers/uniform_buffer.hpp>
 
 #include <libsbx/graphics/graphics_module.hpp>

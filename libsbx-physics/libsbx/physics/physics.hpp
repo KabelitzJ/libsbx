@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #ifndef LIBSBX_PHYSICS_HPP_
 #define LIBSBX_PHYSICS_HPP_
 

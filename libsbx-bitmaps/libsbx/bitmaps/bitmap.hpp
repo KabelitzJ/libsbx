@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #ifndef LIBSBX_BITMAPS_BITMAP_HPP_
 #define LIBSBX_BITMAPS_BITMAP_HPP_
 

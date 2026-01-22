@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #include <libsbx/ui/atlas.hpp>
 
 #include <libsbx/core/engine.hpp>

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #ifndef LIBSBX_RANGE_HPP_
 #define LIBSBX_RANGE_HPP_
 

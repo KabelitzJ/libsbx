@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #include <libsbx/math/vector4.hpp>
 
 #include <cmath>

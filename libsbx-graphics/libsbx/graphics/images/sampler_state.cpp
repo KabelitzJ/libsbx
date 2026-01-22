@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #include <libsbx/graphics/images/sampler_state.hpp>
 
 #include <vulkan/vulkan.h>

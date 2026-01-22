@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #include <libsbx/graphics/draw_list.hpp>
 
 #include <libsbx/utility/exception.hpp>

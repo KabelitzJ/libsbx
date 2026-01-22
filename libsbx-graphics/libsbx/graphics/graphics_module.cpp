@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #include <libsbx/graphics/graphics_module.hpp>
 
 #include <ranges>

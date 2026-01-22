@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #include <libsbx/graphics/devices/logical_device.hpp>
 
 #include <libsbx/utility/target.hpp>

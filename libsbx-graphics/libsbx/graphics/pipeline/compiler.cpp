@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #include <libsbx/graphics/pipeline/compiler.hpp>
 
 #include <libsbx/core/engine.hpp>

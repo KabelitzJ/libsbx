@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #ifndef LIBSBX_MATH_IEEE_754_FLOAT_HPP_
 #define LIBSBX_MATH_IEEE_754_FLOAT_HPP_
 

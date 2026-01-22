@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #ifndef LIBSBX_UNITS_HPP_
 #define LIBSBX_UNITS_HPP_
 

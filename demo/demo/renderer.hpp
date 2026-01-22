@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #ifndef DEMO_RENDERER_HPP_
 #define DEMO_RENDERER_HPP_
 

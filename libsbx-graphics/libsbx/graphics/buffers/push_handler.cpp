@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #include <libsbx/graphics/buffers/push_handler.hpp>
 
 #include <libsbx/utility/logger.hpp>

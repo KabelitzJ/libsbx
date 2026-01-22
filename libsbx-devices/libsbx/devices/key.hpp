@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #ifndef LIBSBX_DEVICES_KEY_HPP_
 #define LIBSBX_DEVICES_KEY_HPP_
 

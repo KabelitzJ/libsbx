@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #include <libsbx/models/mesh.hpp>
 
 #include <filesystem>

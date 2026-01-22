@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #include <libsbx/physics/collider.hpp>
 
 #include <vector>

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #include <libsbx/math/matrix.hpp>
 
 #include <libsbx/utility/make_array.hpp>

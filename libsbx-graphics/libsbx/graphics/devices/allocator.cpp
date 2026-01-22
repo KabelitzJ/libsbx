@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #include <libsbx/graphics/devices/allocator.hpp>
 
 #include <vulkan/vulkan.h>

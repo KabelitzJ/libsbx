@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #include <libsbx/animations/skeleton.hpp>
 
 #include <easy/profiler.h>
@@ -82,7 +83,7 @@ auto skeleton::evaluate_pose(const animation& animation, std::float_t time) cons
       EASY_BLOCK("skeleton::calculate_local_transform");
 
       const auto translation_matrix = math::matrix4x4::translated(math::matrix4x4::identity, position);
-      const auto rotation_matrix = math::matrix_cast<4, 4>(rotation);
+      const auto rotation_matrix = math::matrix_cast<math::matrix4x4>(rotation);
       const auto scale_matrix = math::matrix4x4::scaled(math::matrix4x4::identity, scale);
 
       EASY_END_BLOCK;

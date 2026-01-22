@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #include <libsbx/io/read_file.hpp>
 
 #include <fstream>

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #include <libsbx/graphics/descriptor/descriptor_handler.hpp>
 
 #include <libsbx/graphics/graphics_module.hpp>

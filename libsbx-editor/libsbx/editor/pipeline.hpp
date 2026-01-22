@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #ifndef LIBSBX_EDITOR_PIPELINE_HPP_
 #define LIBSBX_EDITOR_PIPELINE_HPP_
 

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #include <libsbx/graphics/images/depth_image.hpp>
 
 #include <libsbx/utility/logger.hpp>

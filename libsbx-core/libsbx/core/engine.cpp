@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #include <libsbx/core/engine.hpp>
 
 #include <range/v3/all.hpp>

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #include <libsbx/math/quaternion.hpp>
 
 #include <cmath>

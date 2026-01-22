@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #include <libsbx/animations/skeleton.hpp>
 
 #include <easy/profiler.h>

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #include <libsbx/utility/timer.hpp>
 
 namespace sbx::utility {

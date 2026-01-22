@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #include <libsbx/physics/collision_detection.hpp>
 
 #include <libsbx/utility/fast_mod.hpp>

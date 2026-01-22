@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #include <libsbx/graphics/devices/physical_device.hpp>
 
 #include <vector>

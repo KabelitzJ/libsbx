@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #include <libsbx/scripting/managed/detail/type_cache.hpp>
 
 namespace sbx::scripting::managed::detail {

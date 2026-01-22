@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #include <libsbx/graphics/images/cube_image.hpp>
 
 #include <stb_image.h>

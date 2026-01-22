@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #ifndef LIBSBX_CORE_CLI_HPP_
 #define LIBSBX_CORE_CLI_HPP_
 

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #include <libsbx/animations/animation.hpp>
 
 #include <assimp/Importer.hpp>

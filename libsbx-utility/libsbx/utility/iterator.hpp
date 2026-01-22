@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #ifndef LIBSBX_UTILITY_ITERATOR_HPP_
 #define LIBSBX_UTILITY_ITERATOR_HPP_
 

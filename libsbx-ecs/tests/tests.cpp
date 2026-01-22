@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #include <gtest/gtest.h>
 
 #include <libsbx/ecs/registry.hpp>

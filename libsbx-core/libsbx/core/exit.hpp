@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #ifndef LIBSBX_CORE_EXIT_HPP_
 #define LIBSBX_CORE_EXIT_HPP_
 

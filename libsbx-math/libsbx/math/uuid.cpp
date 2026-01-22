@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #include <libsbx/math/uuid.hpp>
 
 namespace sbx::math {

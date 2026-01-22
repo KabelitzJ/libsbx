@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #ifndef LIBSBX_MATH_PLANE_HPP_
 #define LIBSBX_MATH_PLANE_HPP_
 

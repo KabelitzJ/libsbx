@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #include <libsbx/math/vector3.hpp>
 
 namespace sbx::math {

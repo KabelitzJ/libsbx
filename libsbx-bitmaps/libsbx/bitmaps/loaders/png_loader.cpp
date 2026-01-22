@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #include <libsbx/bitmaps/loaders/png_loader.hpp>
 
 #include <fmt/format.h>

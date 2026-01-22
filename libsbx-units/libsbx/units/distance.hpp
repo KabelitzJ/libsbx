@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #ifndef LIBSBX_UNITS_DISTANCE_HPP_
 #define LIBSBX_UNITS_DISTANCE_HPP_
 

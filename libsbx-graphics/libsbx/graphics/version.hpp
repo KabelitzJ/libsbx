@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #ifndef SBX_GRAPHICS_VERSION_HPP_
 #define SBX_GRAPHICS_VERSION_HPP_
 

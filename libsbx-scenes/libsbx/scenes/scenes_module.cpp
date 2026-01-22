@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #include <libsbx/scenes/scenes_module.hpp>
 
 #include <libsbx/assets/assets_module.hpp>

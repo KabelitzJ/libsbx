@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #ifndef LIBSBX_MATH_MATRIX4X4_HPP_
 #define LIBSBX_MATH_MATRIX4X4_HPP_
 

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #ifndef LIBSBX_UI_VERTEX2D_HPP_
 #define LIBSBX_UI_VERTEX2D_HPP_
 

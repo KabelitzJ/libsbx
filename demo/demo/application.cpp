@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #include <demo/application.hpp>
 
 #include <nlohmann/json.hpp>

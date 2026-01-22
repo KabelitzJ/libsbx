@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #ifndef LIBSBX_DEVICES_INPUT_ACTION_HPP_
 #define LIBSBX_DEVICES_INPUT_ACTION_HPP_
 

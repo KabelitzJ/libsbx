@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #include <libsbx/scenes/components/transform.hpp>
 
 #include <libsbx/math/matrix_cast.hpp>

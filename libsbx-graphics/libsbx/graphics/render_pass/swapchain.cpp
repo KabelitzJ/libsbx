@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #include <libsbx/graphics/render_pass/swapchain.hpp>
 
 #include <limits>

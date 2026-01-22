@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #include <libsbx/graphics/pipeline/mesh.hpp>
 
 #include <libsbx/graphics/graphics_module.hpp>

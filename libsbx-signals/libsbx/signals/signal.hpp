@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #ifndef LIBSBX_SIGNAL_SIGNAL_HPP_
 #define LIBSBX_SIGNAL_SIGNAL_HPP_
 

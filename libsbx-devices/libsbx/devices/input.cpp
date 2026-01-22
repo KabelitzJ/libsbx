@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #include <libsbx/devices/input.hpp>
 
 #include <libsbx/devices/devices_module.hpp>

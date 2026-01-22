@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #ifndef LIBSBX_CONTAINERS_DENSE_MAP_HPP_
 #define LIBSBX_CONTAINERS_DENSE_MAP_HPP_
 

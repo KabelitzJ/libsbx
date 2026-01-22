@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #include <libsbx/bitmaps/bitmap.hpp>
 
 #include <libsbx/units/bytes.hpp>

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #ifndef LIBSBX_MODELS_MATERIAL_HPP_
 #define LIBSBX_MODELS_MATERIAL_HPP_
 

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #ifndef DEMO_IMGUI_BINDINGS_IMGUI_HPP_
 #define DEMO_IMGUI_BINDINGS_IMGUI_HPP_
 

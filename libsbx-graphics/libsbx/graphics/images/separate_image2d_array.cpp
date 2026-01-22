@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #include <libsbx/graphics/images/separate_image2d_array.hpp>
 
 #include <libsbx/graphics/graphics_module.hpp>

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #include <libsbx/scripting/managed/field_info.hpp>
 
 #include <libsbx/scripting/managed/detail/backend.hpp>

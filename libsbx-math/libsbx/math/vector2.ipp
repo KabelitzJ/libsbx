@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #include <libsbx/math/vector2.hpp>
 
 #include <libsbx/utility/hash.hpp>

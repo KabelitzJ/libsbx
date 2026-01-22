@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #ifndef LIBSBX_SCENES_SCENE_HPP_
 #define LIBSBX_SCENES_SCENE_HPP_
 

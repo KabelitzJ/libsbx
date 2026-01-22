@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #ifndef LIBSBX_MATH_CONSTANTS_HPP_
 #define LIBSBX_MATH_CONSTANTS_HPP_
 

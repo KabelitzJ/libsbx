@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #include <libsbx/graphics/commands/command_buffer.hpp>
 
 #include <limits>

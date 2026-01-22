@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #ifndef LIBSBX_MEMORY_CONCEPTS_HPP_
 #define LIBSBX_MEMORY_CONCEPTS_HPP_
 

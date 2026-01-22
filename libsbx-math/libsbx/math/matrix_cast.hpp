@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #ifndef LIBSBX_MATH_MATRIX_CAST_HPP_
 #define LIBSBX_MATH_MATRIX_CAST_HPP_
 

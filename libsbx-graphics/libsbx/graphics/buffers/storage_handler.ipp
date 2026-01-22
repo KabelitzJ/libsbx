@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #include <libsbx/graphics/buffers/storage_handler.hpp>
 
 namespace sbx::graphics {

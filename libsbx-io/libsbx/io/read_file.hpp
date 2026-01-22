@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #ifndef LIBSBX_IO_READ_FILE_HPP_
 #define LIBSBX_IO_READ_FILE_HPP_
 

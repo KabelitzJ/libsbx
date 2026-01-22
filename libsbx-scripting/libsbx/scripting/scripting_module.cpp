@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #include <libsbx/scripting/scripting_module.hpp>
 
 #include <fmt/core.h>

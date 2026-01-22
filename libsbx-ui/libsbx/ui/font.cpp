@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #include <libsbx/ui/font.hpp>
 
 #include <cmath>

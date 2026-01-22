@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #include <libsbx/animations/animator.hpp>
 
 namespace sbx::animations {

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #include <libsbx/math/matrix3x3.hpp>
 
 #include <algorithm>

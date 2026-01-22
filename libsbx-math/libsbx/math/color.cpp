@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #include <libsbx/math/color.hpp>
 
 #include <libsbx/utility/enum.hpp>

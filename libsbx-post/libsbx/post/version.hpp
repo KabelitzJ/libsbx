@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #ifndef SBX_POST_VERSION_HPP_
 #define SBX_POST_VERSION_HPP_
 

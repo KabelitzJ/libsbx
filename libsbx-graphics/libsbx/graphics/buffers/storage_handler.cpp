@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #include <libsbx/graphics/buffers/storage_handler.hpp>
 
 #include <fmt/format.h>

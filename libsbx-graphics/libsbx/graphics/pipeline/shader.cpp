@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #include <libsbx/graphics/pipeline/shader.hpp>
 
 #include <fstream>

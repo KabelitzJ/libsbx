@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #include <libsbx/scripting/interop.hpp>
 
 #include <libsbx/utility/logger.hpp>

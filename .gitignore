@@ -6,6 +6,8 @@
 !.vscode/tasks.json
 !.vscode/c_cpp_properties.json
 
+**/version.hpp
+
 compile_commands.json
 
 .cache

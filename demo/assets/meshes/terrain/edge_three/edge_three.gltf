@@ -16,7 +16,7 @@
 	"nodes":[
 		{
 			"mesh":0,
-			"name":"DiagBot",
+			"name":"EdgeThreeBot",
 			"translation":[
 				0,
 				0,
@@ -25,7 +25,7 @@
 		},
 		{
 			"mesh":1,
-			"name":"DiagTop",
+			"name":"EdgeThreeTop",
 			"translation":[
 				0,
 				0,
@@ -65,7 +65,7 @@
 	],
 	"meshes":[
 		{
-			"name":"Cube.006",
+			"name":"Cube.002",
 			"primitives":[
 				{
 					"attributes":{
@@ -80,7 +80,7 @@
 			]
 		},
 		{
-			"name":"Cube.007",
+			"name":"Cube.003",
 			"primitives":[
 				{
 					"attributes":{
@@ -99,7 +99,7 @@
 		{
 			"bufferView":0,
 			"componentType":5126,
-			"count":125,
+			"count":106,
 			"max":[
 				0.5,
 				0.4000000059604645,
@@ -108,38 +108,38 @@
 			"min":[
 				-0.5,
 				-0.5,
-				-0.5
+				-0.500559389591217
 			],
 			"type":"VEC3"
 		},
 		{
 			"bufferView":1,
 			"componentType":5126,
-			"count":125,
+			"count":106,
 			"type":"VEC3"
 		},
 		{
 			"bufferView":2,
 			"componentType":5126,
-			"count":125,
+			"count":106,
 			"type":"VEC2"
 		},
 		{
 			"bufferView":3,
 			"componentType":5126,
-			"count":125,
+			"count":106,
 			"type":"VEC4"
 		},
 		{
 			"bufferView":4,
 			"componentType":5123,
-			"count":195,
+			"count":126,
 			"type":"SCALAR"
 		},
 		{
 			"bufferView":5,
 			"componentType":5126,
-			"count":98,
+			"count":42,
 			"max":[
 				0.5,
 				0.5,
@@ -147,7 +147,7 @@
 			],
 			"min":[
 				-0.5,
-				0.3999999463558197,
+				0.39999979734420776,
 				-0.5
 			],
 			"type":"VEC3"
@@ -155,94 +155,94 @@
 		{
 			"bufferView":6,
 			"componentType":5126,
-			"count":98,
+			"count":42,
 			"type":"VEC3"
 		},
 		{
 			"bufferView":7,
 			"componentType":5126,
-			"count":98,
+			"count":42,
 			"type":"VEC2"
 		},
 		{
 			"bufferView":8,
 			"componentType":5126,
-			"count":98,
+			"count":42,
 			"type":"VEC4"
 		},
 		{
 			"bufferView":9,
 			"componentType":5123,
-			"count":168,
+			"count":54,
 			"type":"SCALAR"
 		}
 	],
 	"bufferViews":[
 		{
 			"buffer":0,
-			"byteLength":1500,
+			"byteLength":1272,
 			"byteOffset":0,
 			"target":34962
 		},
 		{
 			"buffer":0,
-			"byteLength":1500,
-			"byteOffset":1500,
+			"byteLength":1272,
+			"byteOffset":1272,
 			"target":34962
 		},
 		{
 			"buffer":0,
-			"byteLength":1000,
-			"byteOffset":3000,
+			"byteLength":848,
+			"byteOffset":2544,
 			"target":34962
 		},
 		{
 			"buffer":0,
-			"byteLength":2000,
-			"byteOffset":4000,
+			"byteLength":1696,
+			"byteOffset":3392,
 			"target":34962
 		},
 		{
 			"buffer":0,
-			"byteLength":390,
-			"byteOffset":6000,
+			"byteLength":252,
+			"byteOffset":5088,
 			"target":34963
 		},
 		{
 			"buffer":0,
-			"byteLength":1176,
-			"byteOffset":6392,
+			"byteLength":504,
+			"byteOffset":5340,
 			"target":34962
 		},
 		{
 			"buffer":0,
-			"byteLength":1176,
-			"byteOffset":7568,
-			"target":34962
-		},
-		{
-			"buffer":0,
-			"byteLength":784,
-			"byteOffset":8744,
-			"target":34962
-		},
-		{
-			"buffer":0,
-			"byteLength":1568,
-			"byteOffset":9528,
+			"byteLength":504,
+			"byteOffset":5844,
 			"target":34962
 		},
 		{
 			"buffer":0,
 			"byteLength":336,
-			"byteOffset":11096,
+			"byteOffset":6348,
+			"target":34962
+		},
+		{
+			"buffer":0,
+			"byteLength":672,
+			"byteOffset":6684,
+			"target":34962
+		},
+		{
+			"buffer":0,
+			"byteLength":108,
+			"byteOffset":7356,
 			"target":34963
 		}
 	],
 	"buffers":[
 		{
-			"byteLength":11432,
-			"uri":"diagonal.bin"
+			"byteLength":7464,
+			"uri":"edge_three.bin"
 		}
 	]
 }

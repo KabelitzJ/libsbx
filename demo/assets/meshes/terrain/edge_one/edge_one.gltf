@@ -16,7 +16,13 @@
 	"nodes":[
 		{
 			"mesh":0,
-			"name":"DiagBot",
+			"name":"EdgeOneBot",
+			"rotation":[
+				0,
+				0.7071068286895752,
+				0,
+				0.7071068286895752
+			],
 			"translation":[
 				0,
 				0,
@@ -25,7 +31,13 @@
 		},
 		{
 			"mesh":1,
-			"name":"DiagTop",
+			"name":"EdgeOneTop",
+			"rotation":[
+				0,
+				0.7071068286895752,
+				0,
+				0.7071068286895752
+			],
 			"translation":[
 				0,
 				0,
@@ -65,7 +77,7 @@
 	],
 	"meshes":[
 		{
-			"name":"Cube.006",
+			"name":"Cube.008",
 			"primitives":[
 				{
 					"attributes":{
@@ -80,7 +92,7 @@
 			]
 		},
 		{
-			"name":"Cube.007",
+			"name":"Cube.009",
 			"primitives":[
 				{
 					"attributes":{
@@ -99,14 +111,14 @@
 		{
 			"bufferView":0,
 			"componentType":5126,
-			"count":125,
+			"count":17,
 			"max":[
 				0.5,
 				0.4000000059604645,
-				0.5
+				-0.15000000596046448
 			],
 			"min":[
-				-0.5,
+				0.15000000596046448,
 				-0.5,
 				-0.5
 			],
@@ -115,39 +127,39 @@
 		{
 			"bufferView":1,
 			"componentType":5126,
-			"count":125,
+			"count":17,
 			"type":"VEC3"
 		},
 		{
 			"bufferView":2,
 			"componentType":5126,
-			"count":125,
+			"count":17,
 			"type":"VEC2"
 		},
 		{
 			"bufferView":3,
 			"componentType":5126,
-			"count":125,
+			"count":17,
 			"type":"VEC4"
 		},
 		{
 			"bufferView":4,
 			"componentType":5123,
-			"count":195,
+			"count":27,
 			"type":"SCALAR"
 		},
 		{
 			"bufferView":5,
 			"componentType":5126,
-			"count":98,
+			"count":27,
 			"max":[
 				0.5,
 				0.5,
-				0.5
+				-0.19999998807907104
 			],
 			"min":[
-				-0.5,
-				0.3999999463558197,
+				0.1958795189857483,
+				0.3999999761581421,
 				-0.5
 			],
 			"type":"VEC3"
@@ -155,94 +167,94 @@
 		{
 			"bufferView":6,
 			"componentType":5126,
-			"count":98,
+			"count":27,
 			"type":"VEC3"
 		},
 		{
 			"bufferView":7,
 			"componentType":5126,
-			"count":98,
+			"count":27,
 			"type":"VEC2"
 		},
 		{
 			"bufferView":8,
 			"componentType":5126,
-			"count":98,
+			"count":27,
 			"type":"VEC4"
 		},
 		{
 			"bufferView":9,
 			"componentType":5123,
-			"count":168,
+			"count":45,
 			"type":"SCALAR"
 		}
 	],
 	"bufferViews":[
 		{
 			"buffer":0,
-			"byteLength":1500,
+			"byteLength":204,
 			"byteOffset":0,
 			"target":34962
 		},
 		{
 			"buffer":0,
-			"byteLength":1500,
-			"byteOffset":1500,
+			"byteLength":204,
+			"byteOffset":204,
 			"target":34962
 		},
 		{
 			"buffer":0,
-			"byteLength":1000,
-			"byteOffset":3000,
+			"byteLength":136,
+			"byteOffset":408,
 			"target":34962
 		},
 		{
 			"buffer":0,
-			"byteLength":2000,
-			"byteOffset":4000,
+			"byteLength":272,
+			"byteOffset":544,
 			"target":34962
 		},
 		{
 			"buffer":0,
-			"byteLength":390,
-			"byteOffset":6000,
+			"byteLength":54,
+			"byteOffset":816,
 			"target":34963
 		},
 		{
 			"buffer":0,
-			"byteLength":1176,
-			"byteOffset":6392,
+			"byteLength":324,
+			"byteOffset":872,
 			"target":34962
 		},
 		{
 			"buffer":0,
-			"byteLength":1176,
-			"byteOffset":7568,
+			"byteLength":324,
+			"byteOffset":1196,
 			"target":34962
 		},
 		{
 			"buffer":0,
-			"byteLength":784,
-			"byteOffset":8744,
+			"byteLength":216,
+			"byteOffset":1520,
 			"target":34962
 		},
 		{
 			"buffer":0,
-			"byteLength":1568,
-			"byteOffset":9528,
+			"byteLength":432,
+			"byteOffset":1736,
 			"target":34962
 		},
 		{
 			"buffer":0,
-			"byteLength":336,
-			"byteOffset":11096,
+			"byteLength":90,
+			"byteOffset":2168,
 			"target":34963
 		}
 	],
 	"buffers":[
 		{
-			"byteLength":11432,
-			"uri":"diagonal.bin"
+			"byteLength":2260,
+			"uri":"edge_one.bin"
 		}
 	]
 }

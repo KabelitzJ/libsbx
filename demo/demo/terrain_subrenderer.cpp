@@ -25,6 +25,7 @@ terrain_subrenderer::terrain_subrenderer(const std::vector<sbx::graphics::attach
 
 struct mesh_draw_range {
   sbx::math::uuid mesh_id{};
+  std::uint32_t submesh_index = 0u;
   std::uint32_t first_instance = 0u;
   std::uint32_t instance_count = 0u;
 }; // struct mesh_draw_range
@@ -45,7 +46,7 @@ auto terrain_subrenderer::render(sbx::graphics::command_buffer& command_buffer) 
   auto& grid_quad_buffer = graphics_module.get_resource<sbx::graphics::storage_buffer>(_grid_quad_buffer);
   auto& instance_buffer = graphics_module.get_resource<sbx::graphics::storage_buffer>(_instance_buffer);
 
-  auto instances_per_mesh = std::unordered_map<sbx::math::uuid, std::vector<instance_data>>{};
+  auto instances_per_mesh = std::unordered_map<sbx::math::uuid, std::vector<std::vector<instance_data>>>{};
 
   auto total_instances = std::uint32_t{0u};
 
@@ -58,26 +59,41 @@ auto terrain_subrenderer::render(sbx::graphics::command_buffer& command_buffer) 
       continue;
     }
 
-    auto& instances = instances_per_mesh[tile.mesh_id];
+    auto& submesh_instances = instances_per_mesh[tile.mesh_id];
 
-    instances.push_back(instance_data{tile.color.r(), tile.color.g(), tile.color.b(), tile.height, quad_id, tile.rotation_steps, 0u, 0u});
+    for (const auto& submesh : tile.submeshes) {
+      if (submesh.index >= submesh_instances.size()) {
+        submesh_instances.resize(submesh.index + 1);
+      }
 
-    ++total_instances;
+      submesh_instances[submesh.index].push_back(instance_data{submesh.color.r(), submesh.color.g(), submesh.color.b(), tile.height, quad_id, tile.rotation_steps, 0u, 0u});
+
+      ++total_instances;
+    }
   }
 
   auto draw_ranges = std::vector<mesh_draw_range>{};
-  draw_ranges.reserve(instances_per_mesh.size());
+  draw_ranges.reserve(total_instances);
 
   auto flat_instances = std::vector<instance_data>{};
   flat_instances.reserve(total_instances);
 
-  for (const auto& [mesh_id, instances] : instances_per_mesh) {
-    const auto first = static_cast<std::uint32_t>(flat_instances.size());
-    const auto count = static_cast<std::uint32_t>(instances.size());
+  for (const auto& [mesh_id, per_submesh] : instances_per_mesh) {
+    for (auto submesh_index = 0u; submesh_index < per_submesh.size(); ++submesh_index) {
+      const auto& submesh_instances = per_submesh[submesh_index];
 
-    flat_instances.insert(flat_instances.end(), instances.begin(), instances.end());
+      if (submesh_instances.empty()) {
+        continue;
+      }
 
-    draw_ranges.push_back(mesh_draw_range{mesh_id, first, count});
+      const auto first_instance = static_cast<std::uint32_t>(flat_instances.size());
+
+      const auto instance_count = static_cast<std::uint32_t>(submesh_instances.size());
+
+      draw_ranges.emplace_back(mesh_draw_range{mesh_id, submesh_index, first_instance, instance_count});
+
+      flat_instances.insert(flat_instances.end(), submesh_instances.begin(), submesh_instances.end());
+    }
   }
 
   _update_buffer(instance_buffer, flat_instances);
@@ -105,12 +121,18 @@ auto terrain_subrenderer::render(sbx::graphics::command_buffer& command_buffer) 
 
     auto& mesh = assets_module.get_asset<sbx::models::mesh>(range.mesh_id);
 
+    if (range.submesh_index >= mesh.submeshes().size()) {
+      continue;
+    }
+
+    const auto& submesh = mesh.submesh(range.submesh_index);
+
     mesh.bind(command_buffer);
 
     _push_handler.push("vertex_buffer", mesh.address());
     _push_handler.bind(command_buffer);
 
-    command_buffer.draw_indexed(mesh.index_count(), range.instance_count, 0u, 0u, range.first_instance);
+    command_buffer.draw_indexed(submesh.index_count, range.instance_count, submesh.index_offset, submesh.vertex_offset, range.first_instance);
   }
 }
 

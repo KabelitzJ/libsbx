@@ -8,9 +8,14 @@ struct grid_data {
   bool is_painted = false;
 }; // struct grid_data
 
+struct submesh {
+  std::uint32_t index;
+  sbx::math::color color{sbx::math::color::white()};
+}; // struct submesh
+
 struct dual_quad_tile_data {
   sbx::math::uuid mesh_id{};
-  sbx::math::color color{sbx::math::color::white()};
+  std::vector<submesh> submeshes{};
   std::float_t height{3.0f};
   std::uint32_t rotation_steps{0u};
   std::uint8_t last_mask{0u};

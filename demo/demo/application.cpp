@@ -70,7 +70,7 @@ auto application::_randomize_terrain() -> void {
     const auto density = (sbx::math::noise::fractal(rx, rz, octaves) * 0.5f) + 0.5f + jitter;
 
     auto& cell = _grid.get_or_create_cell_data(face_id, grid_data{});
-    cell.is_painted = (density > 0.50f);
+    cell.is_painted = (density > 0.45f);
   }
 }
 
@@ -113,7 +113,7 @@ auto application::_smooth_terrain() -> void {
 }
 
 static const auto settings = application::grid_type::settings{
-  .rings = 8u,
+  .rings = 16u,
   .ring_distance = 25.0f,
   .seed = 70943948u,
   .merge_probability = 0.6f,
@@ -158,11 +158,11 @@ application::application()
   _generate_prefiltered(512);
 
   // Meshes
-  scene.add_mesh<sbx::models::mesh>("corner", "res://meshes/terrain/corner/corner.gltf");
+  scene.add_mesh<sbx::models::mesh>("edge_one", "res://meshes/terrain/edge_one/edge_one.gltf");
+  scene.add_mesh<sbx::models::mesh>("edge_three", "res://meshes/terrain/edge_three/edge_three.gltf");
   scene.add_mesh<sbx::models::mesh>("diagonal", "res://meshes/terrain/diagonal/diagonal.gltf");
   scene.add_mesh<sbx::models::mesh>("full", "res://meshes/terrain/full/full.gltf");
   scene.add_mesh<sbx::models::mesh>("half", "res://meshes/terrain/half/half.gltf");
-  scene.add_mesh<sbx::models::mesh>("three_corner", "res://meshes/terrain/three_corner/three_corner.gltf");
 
   // Materials
 
@@ -194,8 +194,8 @@ application::application()
     sbx::core::engine::quit();
   };
 
-  // auto corner = scene.create_node("Corner", sbx::scenes::transform{sbx::math::vector3{-10.0f, 10.0f, 0.0f}});
-  // scene.add_component<sbx::scenes::static_mesh>(corner, sbx::scenes::static_mesh{scene.get_mesh("corner"), scene.get_material("base")});
+  // auto edge_one = scene.create_node("EdgeOne", sbx::scenes::transform{sbx::math::vector3{-10.0f, 10.0f, 0.0f}});
+  // scene.add_component<sbx::scenes::static_mesh>(edge_one, sbx::scenes::static_mesh{scene.get_mesh("edge_one"), scene.get_material("base")});
 
   // auto diagonal = scene.create_node("Diagonal", sbx::scenes::transform{sbx::math::vector3{0.0f, 10.0f, 0.0f}});
   // scene.add_component<sbx::scenes::static_mesh>(diagonal, sbx::scenes::static_mesh{scene.get_mesh("diagonal"), scene.get_material("base")});
@@ -206,8 +206,8 @@ application::application()
   // auto half = scene.create_node("Half", sbx::scenes::transform{sbx::math::vector3{20.0f, 10.0f, 0.0f}});
   // scene.add_component<sbx::scenes::static_mesh>(half, sbx::scenes::static_mesh{scene.get_mesh("half"), scene.get_material("base")});
 
-  // auto three_corner = scene.create_node("ThreeCorner", sbx::scenes::transform{sbx::math::vector3{30.0f, 10.0f, 0.0f}});
-  // scene.add_component<sbx::scenes::static_mesh>(three_corner, sbx::scenes::static_mesh{scene.get_mesh("three_corner"), scene.get_material("base")});
+  // auto edge_three = scene.create_node("EdgeThree", sbx::scenes::transform{sbx::math::vector3{30.0f, 10.0f, 0.0f}});
+  // scene.add_component<sbx::scenes::static_mesh>(edge_three, sbx::scenes::static_mesh{scene.get_mesh("edge_three"), scene.get_material("base")});
 
   // Camera
   auto camera_node = scene.camera();
@@ -275,26 +275,33 @@ auto application::update() -> void  {
     }
   }
 
-  // for (const auto& e : _grid.main_edges()) {
-  //   const auto& a = _grid.main_vertex_at(e.a).position;
-  //   const auto& b = _grid.main_vertex_at(e.b).position;
+  // for (auto i = 0; i < _grid.dual_vertices().size(); ++i) {
+  //   auto poly = _grid.main_cell_ccw(i);
 
-  //   scenes_module.add_debug_line(a, b, sbx::math::color::cyan());
+  //   for (auto j = 0; j < poly.size(); ++j) {
+  //     const auto a_id = poly[j];
+  //     const auto b_id = poly[(j + 1) % poly.size()];
+
+  //     const auto& a = _grid.main_vertex_at(a_id).position;
+  //     const auto& b = _grid.main_vertex_at(b_id).position;
+
+  //     scenes_module.add_debug_line(sbx::math::vector3{a.x(), 3.0f, a.z()}, sbx::math::vector3{b.x(), 3.0f, b.z()}, sbx::math::color::white());
+  //   }
   // }
 
-  if (_selected_main_face != grid_type::invalid_id) {
-    const auto poly = _grid.main_cell_ccw(_selected_main_face);
+  // if (_selected_main_face != grid_type::invalid_id) {
+  //   const auto poly = _grid.main_cell_ccw(_selected_main_face);
 
-    for (auto i = std::size_t{0u}; i < poly.size(); ++i) {
-      const auto a_id = poly[i];
-      const auto b_id = poly[sbx::utility::fast_mod(i + 1u, poly.size())];
+  //   for (auto i = std::size_t{0u}; i < poly.size(); ++i) {
+  //     const auto a_id = poly[i];
+  //     const auto b_id = poly[sbx::utility::fast_mod(i + 1u, poly.size())];
 
-      const auto& a = _grid.main_vertex_at(a_id).position;
-      const auto& b = _grid.main_vertex_at(b_id).position;
+  //     const auto& a = _grid.main_vertex_at(a_id).position;
+  //     const auto& b = _grid.main_vertex_at(b_id).position;
 
-      scenes_module.add_debug_line(sbx::math::vector3{a.x(), 3.0f, a.z()}, sbx::math::vector3{b.x(), 3.0f, b.z()}, sbx::math::color::yellow());
-    }
-  }
+  //     scenes_module.add_debug_line(sbx::math::vector3{a.x(), 3.0f, a.z()}, sbx::math::vector3{b.x(), 3.0f, b.z()}, sbx::math::color::yellow());
+  //   }
+  // }
 }
 
 auto application::fixed_update() -> void {
@@ -316,30 +323,6 @@ static auto popcount4(const std::uint8_t mask) -> std::uint32_t {
   c += (mask & 0x8u) ? 1u : 0u;
 
   return c;
-}
-
-static auto mesh_rotation_bias(const sbx::utility::hashed_string mesh_name) -> std::uint32_t {
-  if (mesh_name == sbx::utility::hashed_string{"corner"}) {
-    return 0u;
-  }
-
-  if (mesh_name == sbx::utility::hashed_string{"half"}) {
-    return 3u;
-  }
-
-  if (mesh_name == sbx::utility::hashed_string{"diagonal"}) {
-    return 0u;
-  }
-
-  if (mesh_name == sbx::utility::hashed_string{"three_corner"}) {
-    return 1u;
-  }
-
-  if (mesh_name == sbx::utility::hashed_string{"full"}) {
-    return 0u;
-  }
-
-  return 0u;
 }
 
 static auto rotate_mask_for_steps(const std::uint8_t mask, const std::uint32_t steps) -> std::uint8_t {
@@ -383,13 +366,13 @@ static auto choose_tile_from_mask(const std::uint8_t mask) -> tile_choice {
   if (count == 1u) {
     const auto r = rotation_steps_from_base_mask(m, 0x1u);
 
-    return tile_choice{"corner", r, true};
+    return tile_choice{"edge_one", r, true};
   }
 
   if (count == 3u) {
     const auto r = rotation_steps_from_base_mask(m, 0x7u);
 
-    return tile_choice{"three_corner", r, true};
+    return tile_choice{"edge_three", r, true};
   }
 
   if (count == 2u) {
@@ -405,6 +388,33 @@ static auto choose_tile_from_mask(const std::uint8_t mask) -> tile_choice {
   }
 
   return tile_choice{"half", 0u, true};
+}
+
+static auto _get_submeshes_for_choice(const tile_choice& choice) -> std::vector<submesh> {
+  const auto ground_color = sbx::math::color{0.715056f, 0.737588f, 0.810134f, 1.0f};
+  const auto grass_color = sbx::math::color{0.553777f, 0.800819f, 0.084514f, 1.0f};
+
+  auto submeshes = std::vector<submesh>{};
+
+  if (choice.mesh_name == sbx::utility::hashed_string{"edge_one"}) {
+    submeshes.push_back(submesh{0, ground_color});
+    submeshes.push_back(submesh{1, grass_color});
+  } else if (choice.mesh_name == sbx::utility::hashed_string{"edge_three"}) {
+    submeshes.push_back(submesh{0, ground_color});
+    submeshes.push_back(submesh{1, grass_color});
+  } else if (choice.mesh_name == sbx::utility::hashed_string{"diagonal"}) {
+    submeshes.push_back(submesh{0, ground_color});
+    submeshes.push_back(submesh{1, grass_color});
+  } else if (choice.mesh_name == sbx::utility::hashed_string{"full"}) {
+    submeshes.push_back(submesh{0, grass_color});
+  } else if (choice.mesh_name == sbx::utility::hashed_string{"half"}) {
+    submeshes.push_back(submesh{0, ground_color});
+    submeshes.push_back(submesh{1, grass_color});
+  } else {
+    sbx::utility::logger<"application">::warn("Unknown tile mesh name encountered when building submeshes");
+  }
+
+  return submeshes;
 }
 
 auto application::_rebuild_terrain_tiles() -> void {
@@ -462,13 +472,11 @@ auto application::_rebuild_terrain_tiles() -> void {
       continue;
     }
 
-    const auto bias = mesh_rotation_bias(choice.mesh_name);
-    const auto rotation_steps = (choice.rotation_steps + bias) & 3u;
+    const auto rotation_steps = choice.rotation_steps;
 
-    if (!tile.is_visible) {
-      tile.height = 3.0f;
-      // tile.color = sbx::math::color::green();
-      tile.color = sbx::math::random_color();
+    if (!tile.is_visible || tile.mesh_id != scene.get_mesh(choice.mesh_name)) {
+      tile.height = 6.0f;
+      tile.submeshes = _get_submeshes_for_choice(choice);
     }
 
     tile.mesh_id = scene.get_mesh(choice.mesh_name);

@@ -87,7 +87,7 @@ auto mesh<Vertex>::render(graphics::command_buffer& command_buffer, std::uint32_
 
   auto& index_buffer = graphics_module.get_resource<buffer>(_index_buffer); 
 
-  command_buffer.draw_indexed(static_cast<std::uint32_t>(index_buffer.size() / sizeof(index_type)), instance_count, 0, 0, 0);
+  command_buffer.draw_indexed(_index_count, instance_count, 0, 0, 0);
 }
 
 template<vertex Vertex>

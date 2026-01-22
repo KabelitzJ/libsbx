@@ -62,7 +62,7 @@ static auto sample_clip_locals(const skeleton& skeleton, const math::uuid& anima
 //     const auto& transform = local_transforms[bone_index];
 
 //     const auto translation_matrix = math::matrix4x4::translated(math::matrix4x4::identity, transform.position);
-//     const auto rotation_matrix = math::matrix_cast<4, 4>(transform.rotation);
+//     const auto rotation_matrix = math::matrix_cast<math::matrix4x4>(transform.rotation);
 //     const auto scale_matrix = math::matrix4x4::scaled(math::matrix4x4::identity, transform.scale);
 
 //     const auto local_matrix = translation_matrix * rotation_matrix * scale_matrix;
@@ -234,7 +234,7 @@ static auto locals_to_globals(const skeleton& skeleton, const std::vector<animat
     const auto& t = local_transforms[i];
 
     const auto T = math::matrix4x4::translated(math::matrix4x4::identity, t.position);
-    const auto R = math::matrix_cast<4, 4>(t.rotation);
+    const auto R = math::matrix_cast<math::matrix4x4>(t.rotation);
     const auto S = math::matrix4x4::scaled(math::matrix4x4::identity, t.scale);
 
     const auto local = T * R * S;

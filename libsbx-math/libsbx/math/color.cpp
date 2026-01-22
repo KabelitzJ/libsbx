@@ -5,11 +5,11 @@
 
 namespace sbx::math {
 
-auto extract(std::uint32_t rgba, std::uint8_t shift) noexcept -> std::uint8_t {
+static constexpr auto extract(std::uint32_t rgba, std::uint8_t shift) noexcept -> std::uint8_t {
   return static_cast<std::uint8_t>((rgba >> shift) & 0xFFu);
 }
 
-auto scale(std::uint8_t component) noexcept -> std::float_t {
+static constexpr  auto scale(std::uint8_t component) noexcept -> std::float_t {
   return static_cast<std::float_t>(component) / 255.0f;
 }
 
@@ -20,18 +20,11 @@ enum class component : std::uint8_t {
   alpha = 0u
 }; // enum class component
 
-// const color color::black(){0.0f, 0.0f, 0.0f, 1.0f};
-// const color color::white(){1.0f, 1.0f, 1.0f, 1.0f};
-// const color color::red{1.0f, 0.0f, 0.0f, 1.0f};
-// const color color::green{0.0f, 1.0f, 0.0f, 1.0f};
-// const color color::blue{0.0f, 0.0f, 1.0f, 1.0f};
-// const color color::transparent{0.0f, 0.0f, 0.0f, 0.0f};
-
-auto extract_component(std::uint32_t rgba, component component) noexcept -> std::float_t {
+static constexpr auto extract_component(std::uint32_t rgba, component component) noexcept -> std::float_t {
   return scale(extract(rgba, utility::to_underlying(component)));
 }
 
-color::color() noexcept 
+color::color() noexcept
 : _red{1.0f},
   _green{1.0f},
   _blue{1.0f},
@@ -48,6 +41,42 @@ color::color(std::float_t red, std::float_t green, std::float_t blue, std::float
   _green{green},
   _blue{blue},
   _alpha{alpha} { }
+
+auto color::black() noexcept -> color {
+  return color{0.0f, 0.0f, 0.0f, 1.0f};
+}
+
+auto color::white() noexcept -> color {
+  return color{1.0f, 1.0f, 1.0f, 1.0f};
+}
+
+auto color::red() noexcept -> color {
+  return color{1.0f, 0.0f, 0.0f, 1.0f};
+}
+
+auto color::green() noexcept -> color {
+  return color{0.0f, 1.0f, 0.0f, 1.0f};
+}
+
+auto color::blue() noexcept -> color {
+  return color{0.0f, 0.0f, 1.0f, 1.0f};
+}
+
+auto color::magenta() noexcept -> color {
+  return color{1.0f, 0.0f, 1.0f, 1.0f};
+}
+
+auto color::yellow() noexcept -> color {
+  return color{1.0f, 1.0f, 0.0f, 1.0f};
+}
+
+auto color::cyan() noexcept -> color {
+  return color{0.0f, 1.0f, 1.0f, 1.0f};
+}
+
+auto color::orange() noexcept -> color {
+  return color{1.0f, 0.5f, 0.0f, 1.0f};
+}
 
 auto color::r() const noexcept -> const std::float_t& {
   return _red;
@@ -123,6 +152,8 @@ auto operator<<(YAML::Emitter& out, const sbx::math::color& color) -> YAML::Emit
 
 auto std::hash<sbx::math::color>::operator()(const sbx::math::color& color) const noexcept -> std::size_t {
   auto hash = std::size_t{0};
+
   sbx::utility::hash_combine(hash, color.r(), color.g(), color.b(), color.a());
+
   return hash;
 }

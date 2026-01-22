@@ -104,7 +104,7 @@ private:
       }
 
       // make sure inverse inertia matches the CURRENT orientation
-      rigidbody.update_inertia_tensor_world(math::matrix_cast<3, 3>(transform.rotation()));
+      rigidbody.update_inertia_tensor_world(math::matrix_cast<math::matrix3x3>(transform.rotation()));
 
       // linear
       const auto linear_acceleration =
@@ -147,7 +147,7 @@ private:
       }
 
       // inertia must match the NEW orientation now
-      rigidbody.update_inertia_tensor_world(math::matrix_cast<3, 3>(transform.rotation()));
+      rigidbody.update_inertia_tensor_world(math::matrix_cast<math::matrix3x3>(transform.rotation()));
 
       transform.bump_version();
     }
@@ -161,8 +161,8 @@ private:
     auto query = scene.query<const physics::collider, const physics::rigidbody>();
 
     for (auto&& [node, collider, rigidbody] : query.each()) {
-      const auto translation = sbx::math::matrix4x4::translated(sbx::math::matrix4x4::identity, scene.world_position(node));
-      const auto rotation = sbx::math::matrix_cast<4, 4>(scene.world_rotation(node));
+      const auto translation = math::matrix4x4::translated(sbx::math::matrix4x4::identity, scene.world_position(node));
+      const auto rotation = math::matrix_cast<math::matrix4x4>(scene.world_rotation(node));
 
       const auto volume = get_bounding_volume(collider, translation * rotation);
 
@@ -258,8 +258,8 @@ private:
       const auto world_position_a = scene.world_position(node_a);
       const auto world_position_b = scene.world_position(node_b);
 
-      const auto rotation_matrix_a = math::matrix_cast<3, 3>(scene.world_rotation(node_a));
-      const auto rotation_matrix_b = math::matrix_cast<3, 3>(scene.world_rotation(node_b));
+      const auto rotation_matrix_a = math::matrix_cast<math::matrix3x3>(scene.world_rotation(node_a));
+      const auto rotation_matrix_b = math::matrix_cast<math::matrix3x3>(scene.world_rotation(node_b));
 
       const auto inverse_rotation_matrix_a = math::matrix3x3::transposed(rotation_matrix_a);
       const auto inverse_rotation_matrix_b = math::matrix3x3::transposed(rotation_matrix_b);

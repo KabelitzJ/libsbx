@@ -9,7 +9,7 @@ transform::transform(const math::vector3& position, const math::quaternion& rota
 : _position{position}, 
   _rotation{rotation}, 
   _scale{scale},
-  _rotation_matrix{math::matrix_cast<4, 4>(_rotation)},
+  _rotation_matrix{math::matrix_cast<math::matrix4x4>(_rotation)},
   _version{1u} { }
 
 auto transform::position() const noexcept -> const math::vector3& {
@@ -37,13 +37,13 @@ auto transform::rotation() const noexcept -> const math::quaternion& {
 
 auto transform::set_rotation(const math::quaternion& rotation) noexcept -> void {
   _rotation = rotation;
-  _rotation_matrix = math::matrix_cast<4, 4>(_rotation);
+  _rotation_matrix = math::matrix_cast<math::matrix4x4>(_rotation);
   bump_version();
 }
 
 auto transform::set_rotation(const math::vector3& axis, const math::angle& angle) noexcept -> void {
   _rotation = math::quaternion{axis, angle};
-  _rotation_matrix = math::matrix_cast<4, 4>(_rotation);
+  _rotation_matrix = math::matrix_cast<math::matrix4x4>(_rotation);
   bump_version();
 }
 
@@ -78,7 +78,7 @@ auto transform::look_at(const math::vector3& target) noexcept -> void {
   // [TODO] : Figure out how to directly construct the rotation_matrix
   auto result = math::matrix4x4::look_at(_position, target, math::vector3::up);
   _rotation = math::quaternion{math::matrix4x4::inverted(result)};
-  _rotation_matrix = math::matrix_cast<4, 4>(_rotation);
+  _rotation_matrix = math::matrix_cast<math::matrix4x4>(_rotation);
   bump_version();
 }
 

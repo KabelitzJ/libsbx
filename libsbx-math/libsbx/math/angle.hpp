@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 /**
- * @file angle.hpp
+ * @file libsbx/math/angle.hpp
  * 
  * @brief Angle types and utilities.
  *

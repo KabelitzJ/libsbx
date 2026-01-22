@@ -14,7 +14,6 @@
 #include <fmt/format.h>
 
 #include <libsbx/math/concepts.hpp>
-#include <libsbx/math/fwd.hpp>
 #include <libsbx/math/vector3.hpp>
 #include <libsbx/math/vector4.hpp>
 #include <libsbx/math/matrix.hpp>
@@ -205,11 +204,6 @@ template<scalar Lhs, scalar Rhs>
 
 // template<scalar Lhs, scalar Rhs>
 // [[nodiscard]] constexpr auto operator/(basic_matrix3x3<Lhs> lhs, Rhs scalar) noexcept -> basic_matrix3x3<Lhs>;
-
-template<scalar Type>
-struct concrete_matrix<3, 3, Type> {
-  using type = basic_matrix3x3<Type>;
-}; // struct concrete_matrix
 
 using matrix3x3f = basic_matrix3x3<std::float_t>;
 

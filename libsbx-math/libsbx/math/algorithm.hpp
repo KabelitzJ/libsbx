@@ -1,11 +1,21 @@
 // SPDX-License-Identifier: MIT
 /**
- * @file algorithm.hpp
- *
+ * @file libsbx/math/algorithm.hpp
+ * 
  * @brief Generic math algorithms and helpers.
  *
+ * @details
+ * 
  * This header provides small, constexpr-friendly utilities for common mathematical operations
  * on floating-point types. Implementations are provided in the accompanying .ipp file.
+ * 
+ * @author KAJ
+ *
+ * @copyright (C) 2026 Jonas Kabelitz
+ *
+ * @package libsbx::math
+ * @version 0.1.0
+ * @since 2025-07-14
  */
 
 #ifndef LIBSBX_MATH_ALGORITHM_HPP_

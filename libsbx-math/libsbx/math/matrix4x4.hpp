@@ -14,7 +14,6 @@
 #include <fmt/format.h>
 
 #include <libsbx/math/concepts.hpp>
-#include <libsbx/math/fwd.hpp>
 #include <libsbx/math/vector3.hpp>
 #include <libsbx/math/vector4.hpp>
 #include <libsbx/math/matrix.hpp>
@@ -136,30 +135,6 @@ template<scalar Lhs, scalar Rhs>
 
 template<scalar Lhs, scalar Rhs>
 [[nodiscard]] constexpr auto operator/(basic_matrix4x4<Lhs> lhs, Rhs scalar) noexcept -> basic_matrix4x4<Lhs>;
-
-// template<scalar Scalar>
-// [[nodiscard]] constexpr auto matrix_cast(const basic_matrix4x4<Scalar>& matrix) -> math::basic_matrix3x3<Scalar> {
-//   return math::basic_matrix3x3<Scalar>{
-//     matrix[0][0], matrix[1][0], matrix[2][0],
-//     matrix[0][1], matrix[1][1], matrix[2][1],
-//     matrix[0][2], matrix[1][2], matrix[2][2]
-//   };
-// }
-
-// template<scalar Scalar>
-// [[nodiscard]] constexpr auto matrix_cast(const basic_matrix3x3<Scalar>& matrix) -> math::basic_matrix4x4<Scalar> {
-//   return math::basic_matrix3x3<Scalar>{
-//     matrix[0][0], matrix[1][0], matrix[2][0], 0.0f,
-//     matrix[0][1], matrix[1][1], matrix[2][1], 0.0f,
-//     matrix[0][2], matrix[1][2], matrix[2][2], 0.0f,
-//     0.0f, 0.0f, 0.0f, 1.0f
-//   };
-// }
-
-template<scalar Type>
-struct concrete_matrix<4, 4, Type> {
-  using type = basic_matrix4x4<Type>;
-}; // struct concrete_matrix
 
 using matrix4x4f = basic_matrix4x4<std::float_t>;
 

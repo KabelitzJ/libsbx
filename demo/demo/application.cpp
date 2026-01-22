@@ -275,12 +275,12 @@ auto application::update() -> void  {
     }
   }
 
-  for (const auto& e : _grid.main_edges()) {
-    const auto& a = _grid.main_vertex_at(e.a).position;
-    const auto& b = _grid.main_vertex_at(e.b).position;
+  // for (const auto& e : _grid.main_edges()) {
+  //   const auto& a = _grid.main_vertex_at(e.a).position;
+  //   const auto& b = _grid.main_vertex_at(e.b).position;
 
-    scenes_module.add_debug_line(a, b, sbx::math::color::cyan());
-  }
+  //   scenes_module.add_debug_line(a, b, sbx::math::color::cyan());
+  // }
 
   if (_selected_main_face != grid_type::invalid_id) {
     const auto poly = _grid.main_cell_ccw(_selected_main_face);

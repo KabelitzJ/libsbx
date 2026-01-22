@@ -69,7 +69,7 @@ auto application::_randomize_terrain() -> void {
     const auto density = (sbx::math::noise::fractal(rx, rz, octaves) * 0.5f) + 0.5f + jitter;
 
     auto& cell = _grid.get_or_create_cell_data(face_id, grid_data{});
-    cell.is_painted = (density > 0.40f);
+    cell.is_painted = (density > 0.50f);
   }
 }
 
@@ -112,11 +112,11 @@ auto application::_smooth_terrain() -> void {
 }
 
 static const auto settings = application::grid_type::settings{
-  .rings = 15u,
-  .ring_distance = 10.0f,
-  .seed = 19517357u,
-  .merge_probability = 0.4f,
-  .relax_iterations = 40u,
+  .rings = 8u,
+  .ring_distance = 25.0f,
+  .seed = 70943948u,
+  .merge_probability = 0.6f,
+  .relax_iterations = 60u,
   .relax_lambda = 0.45f,
   .relax_mu = -0.50f
 };
@@ -291,7 +291,7 @@ auto application::update() -> void  {
       const auto& a = _grid.main_vertex_at(a_id).position;
       const auto& b = _grid.main_vertex_at(b_id).position;
 
-      scenes_module.add_debug_line(a, b, sbx::math::color::yellow());
+      scenes_module.add_debug_line(sbx::math::vector3{a.x(), 3.0f, a.z()}, sbx::math::vector3{b.x(), 3.0f, b.z()}, sbx::math::color::yellow());
     }
   }
 }
@@ -466,6 +466,7 @@ auto application::_rebuild_terrain_tiles() -> void {
 
     if (!tile.is_visible) {
       tile.height = 3.0f;
+      // tile.color = sbx::math::color::green();
       tile.color = sbx::math::random_color();
     }
 

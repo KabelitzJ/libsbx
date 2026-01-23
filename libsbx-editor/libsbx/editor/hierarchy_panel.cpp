@@ -87,6 +87,18 @@ auto hierarchy_panel::_context_menu() -> void {
   auto node = scene.find_node(_selected_node_id);
 
   if (node == scenes::node::null) {
+    if (ImGui::BeginPopupContextItem("Actions")) {
+      if (ImGui::BeginMenu("Add")) {
+        if (ImGui::MenuItem("New Node")) {
+          _open_popups.set(popup::new_node);
+        }
+
+        ImGui::EndMenu();
+      }
+
+      ImGui::EndPopup();
+    }
+
     return;
   }
 
@@ -161,7 +173,7 @@ auto hierarchy_panel::_new_node_popup() -> void {
       if (auto node = scene.find_node(_selected_node_id); node != scenes::node::null) {
         scene.create_child_node(node, name);
       } else {
-        utility::logger<"editor">::warn("No selected node");
+        scene.create_child_node(scene.root(), name);
       }
 
       _new_name_buffer.fill('\0');

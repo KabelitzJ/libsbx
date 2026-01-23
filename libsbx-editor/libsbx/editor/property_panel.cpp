@@ -19,74 +19,148 @@ property_panel::property_panel() {
 }
 
 auto property_panel::render(const math::uuid& selected_node_id) -> void {
-  auto& scene_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
+  ImGui::Begin("Inspector");
 
+  auto& scene_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
   auto& scene = scene_module.scene();
 
-  if (auto node = scene.find_node(selected_node_id); node != scenes::node::null) {
-    if (ImGui::TreeNodeEx("Tag", ImGuiTreeNodeFlags_DefaultOpen)) {
-      _name_buffer.fill('\0');
+  auto node = scene.find_node(selected_node_id);
 
-      auto& tag = scene.get_component<sbx::scenes::tag>(node);
+  if (node == scenes::node::null) {
+    ImGui::TextDisabled("No node selected.");
+    ImGui::End();
 
-      std::memcpy(_name_buffer.data(), tag.data(), std::min(tag.size(), _name_buffer.size()));
+    return;
+  }
 
-      if (ImGui::InputText("##label", _name_buffer.data(), _name_buffer.size())) {
-        tag = _name_buffer.data();
+  ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(6, 6));
+  ImGui::TextUnformatted("Selected Node");
+
+  ImGui::SameLine();
+
+  if (ImGui::Button("Add Component")) {
+    ImGui::OpenPopup("add_component_popup");
+  }
+
+  ImGui::PopStyleVar();
+
+  ImGui::Separator();
+
+  ImGui::BeginChild("inspector_body", ImVec2(0, 0), false, ImGuiWindowFlags_AlwaysVerticalScrollbar);
+
+  ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(8, 6));
+  ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(6, 4));
+
+  if (selected_node_id != _last_selected) {
+    _last_selected = selected_node_id;
+
+    _name_buffer.fill('\0');
+
+    auto& tag = scene.get_component<sbx::scenes::tag>(node);
+    std::memcpy(_name_buffer.data(), tag.data(), std::min(tag.size(), _name_buffer.size() - 1));
+  }
+
+  _draw_component_section<scenes::tag>("Tag", scene, node, [this](auto& tag){
+    ImGui::SetNextItemWidth(-1);
+
+    if (ImGui::InputText("##tag_value", _name_buffer.data(), _name_buffer.size())) {
+      tag = _name_buffer.data();
+    }
+  });
+
+  _draw_component_section<sbx::scenes::transform>("Transform", scene, node, [this](auto& transform) {
+    auto& position = transform.position();
+    auto& rotation = transform.rotation();
+    auto& scale = transform.scale();
+
+    _draw_vec3_control("Position", position, 0.0f, 0.1f);
+
+    auto euler = math::quaternion::euler_angles(rotation);
+
+    if (_draw_vec3_control("Rotation", euler, 0.0f, 0.5f)) {
+      transform.set_rotation(math::quaternion::normalized(math::quaternion{euler}));
+    }
+
+    _draw_vec3_control("Scale", scale, 1.0f, 0.1f);
+  });
+
+  ImGui::PopStyleVar(2);
+
+  ImGui::EndChild();
+  ImGui::End();
+}
+
+auto property_panel::_draw_vec3_control(const char* label, math::vector3& v, float reset_value, float speed) -> bool {
+  auto has_changed = false;
+
+  ImGui::PushID(label);
+
+  if (ImGui::BeginTable("##vec3", 2, ImGuiTableFlags_SizingStretchProp)) {
+    ImGui::TableSetupColumn("##label", ImGuiTableColumnFlags_WidthFixed, 90.0f);
+    ImGui::TableSetupColumn("##value", ImGuiTableColumnFlags_WidthStretch);
+
+    ImGui::TableNextRow();
+
+    ImGui::TableSetColumnIndex(0);
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextUnformatted(label);
+
+    ImGui::TableSetColumnIndex(1);
+
+    const auto button_w = 22.0f;
+    const auto spacing = ImGui::GetStyle().ItemSpacing.x;
+    const auto avail = ImGui::GetContentRegionAvail().x;
+    const auto item_w = (avail - button_w * 3.0f - spacing * 6.0f) / 3.0f;
+
+    auto tint = [](ImVec4 c, float m) {
+      c.x = (c.x * m > 1.0f) ? 1.0f : c.x * m;
+      c.y = (c.y * m > 1.0f) ? 1.0f : c.y * m;
+      c.z = (c.z * m > 1.0f) ? 1.0f : c.z * m;
+      return c;
+    };
+
+    auto axis_color = [](const char* axis_label) -> ImVec4 {
+      if (axis_label[0] == 'X') return ImVec4{0.85f, 0.25f, 0.25f, 1.0f};
+      if (axis_label[0] == 'Y') return ImVec4{0.25f, 0.80f, 0.35f, 1.0f};
+      return ImVec4{0.25f, 0.45f, 0.90f, 1.0f};
+    };
+
+    auto axis = [&](const char* axis_label, float& value) {
+      const auto base = axis_color(axis_label);
+
+      ImGui::PushStyleColor(ImGuiCol_Button, base);
+      ImGui::PushStyleColor(ImGuiCol_ButtonHovered, tint(base, 1.10f));
+      ImGui::PushStyleColor(ImGuiCol_ButtonActive, tint(base, 0.90f));
+      ImGui::PushStyleColor(ImGuiCol_Text, ImVec4{1, 1, 1, 1});
+
+      if (ImGui::Button(axis_label, ImVec2(button_w, 0))) {
+        value = reset_value;
+        has_changed = true;
       }
 
-      ImGui::TreePop();
-    }
+      ImGui::PopStyleColor(4);
 
-    if (ImGui::TreeNodeEx("Transform", ImGuiTreeNodeFlags_DefaultOpen)) {
-      auto& transform = scene.get_component<sbx::scenes::transform>(node);
-
-      ImGui::Text("Position");
-
-      auto& position = transform.position();
-
-      ImGui::Text("x");
       ImGui::SameLine();
-      ImGui::SetNextItemWidth(100); // Adjust slider width
-      ImGui::DragFloat("##XPosition", &position.x(), 0.1f);
-      ImGui::SameLine();
+      ImGui::SetNextItemWidth(item_w);
 
-      ImGui::Text("y");
-      ImGui::SameLine();
-      ImGui::SetNextItemWidth(100);
-      ImGui::DragFloat("##YPosition", &position.y(), 0.1f);
-      ImGui::SameLine();
+      auto lable = fmt::format("##{}", axis_label);
 
-      ImGui::Text("z");
-      ImGui::SameLine();
-      ImGui::SetNextItemWidth(100);
-      ImGui::DragFloat("##ZPosition", &position.z(), 0.1f);
+      has_changed |= ImGui::DragFloat(lable.c_str(), &value, speed);
+    };
 
-      ImGui::Text("Scale");
+    axis("X", v.x());
+    ImGui::SameLine();
+    axis("Y", v.y());
+    ImGui::SameLine();
+    axis("Z", v.z());
 
-      auto& scale = transform.scale();
-
-      ImGui::Text("x");
-      ImGui::SameLine();
-      ImGui::SetNextItemWidth(100);
-      ImGui::DragFloat("##XScale", &scale.x(), 0.1f, 0.1f, 10.0f);
-      ImGui::SameLine();
-
-      ImGui::Text("y");
-      ImGui::SameLine();
-      ImGui::SetNextItemWidth(100);
-      ImGui::DragFloat("##YScale", &scale.y(), 0.1f, 0.1f, 10.0f);
-      ImGui::SameLine();
-
-      ImGui::Text("z");
-      ImGui::SameLine();
-      ImGui::SetNextItemWidth(100);
-      ImGui::DragFloat("##ZScale", &scale.z(), 0.1f, 0.1f, 10.0f);
-      ImGui::SameLine();
-
-      ImGui::TreePop();
-    }
+    ImGui::EndTable();
   }
+
+  ImGui::PopID();
+
+  return has_changed;
 }
+
 
 } // namespace sbx::editor

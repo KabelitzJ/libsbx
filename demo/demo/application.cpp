@@ -192,20 +192,30 @@ application::application()
     sbx::core::engine::quit();
   };
 
-  // auto edge_one = scene.create_node("EdgeOne", sbx::scenes::transform{sbx::math::vector3{-10.0f, 10.0f, 0.0f}});
-  // scene.add_component<sbx::scenes::static_mesh>(edge_one, sbx::scenes::static_mesh{scene.get_mesh("edge_one"), scene.get_material("base")});
+  auto edge_one = scene.create_node("EdgeOne", sbx::scenes::transform{sbx::math::vector3{-10.0f, 10.0f, 0.0f}});
+  scene.add_component<sbx::scenes::static_mesh>(edge_one, sbx::scenes::static_mesh{scene.get_mesh("edge_one"), scene.get_material("base")});
+  auto& edge_one_transform = scene.get_component<sbx::scenes::transform>(edge_one);
+  edge_one_transform.set_scale(sbx::math::vector3{3, 3, 3});
 
-  // auto diagonal = scene.create_node("Diagonal", sbx::scenes::transform{sbx::math::vector3{0.0f, 10.0f, 0.0f}});
-  // scene.add_component<sbx::scenes::static_mesh>(diagonal, sbx::scenes::static_mesh{scene.get_mesh("diagonal"), scene.get_material("base")});
+  auto diagonal = scene.create_node("Diagonal", sbx::scenes::transform{sbx::math::vector3{0.0f, 10.0f, 0.0f}});
+  scene.add_component<sbx::scenes::static_mesh>(diagonal, sbx::scenes::static_mesh{scene.get_mesh("diagonal"), scene.get_material("base")});
+  auto& diagonal_transform = scene.get_component<sbx::scenes::transform>(diagonal);
+  diagonal_transform.set_scale(sbx::math::vector3{3, 3, 3});
 
-  // auto full = scene.create_node("Full", sbx::scenes::transform{sbx::math::vector3{10.0f, 10.0f, 0.0f}});
-  // scene.add_component<sbx::scenes::static_mesh>(full, sbx::scenes::static_mesh{scene.get_mesh("full"), scene.get_material("base")});
+  auto full = scene.create_node("Full", sbx::scenes::transform{sbx::math::vector3{10.0f, 10.0f, 0.0f}});
+  scene.add_component<sbx::scenes::static_mesh>(full, sbx::scenes::static_mesh{scene.get_mesh("full"), scene.get_material("base")});
+  auto& full_transform = scene.get_component<sbx::scenes::transform>(full);
+  full_transform.set_scale(sbx::math::vector3{3, 3, 3});
 
-  // auto half = scene.create_node("Half", sbx::scenes::transform{sbx::math::vector3{20.0f, 10.0f, 0.0f}});
-  // scene.add_component<sbx::scenes::static_mesh>(half, sbx::scenes::static_mesh{scene.get_mesh("half"), scene.get_material("base")});
+  auto half = scene.create_node("Half", sbx::scenes::transform{sbx::math::vector3{20.0f, 10.0f, 0.0f}});
+  scene.add_component<sbx::scenes::static_mesh>(half, sbx::scenes::static_mesh{scene.get_mesh("half"), scene.get_material("base")});
+  auto& half_transform = scene.get_component<sbx::scenes::transform>(half);
+  half_transform.set_scale(sbx::math::vector3{3, 3, 3});
 
-  // auto edge_three = scene.create_node("EdgeThree", sbx::scenes::transform{sbx::math::vector3{30.0f, 10.0f, 0.0f}});
-  // scene.add_component<sbx::scenes::static_mesh>(edge_three, sbx::scenes::static_mesh{scene.get_mesh("edge_three"), scene.get_material("base")});
+  auto edge_three = scene.create_node("EdgeThree", sbx::scenes::transform{sbx::math::vector3{30.0f, 10.0f, 0.0f}});
+  scene.add_component<sbx::scenes::static_mesh>(edge_three, sbx::scenes::static_mesh{scene.get_mesh("edge_three"), scene.get_material("base")});
+  auto& edge_three_transform = scene.get_component<sbx::scenes::transform>(edge_three);
+  edge_three_transform.set_scale(sbx::math::vector3{3, 3, 3});
 
   // Camera
   auto camera_node = scene.camera();

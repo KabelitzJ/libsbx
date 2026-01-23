@@ -27,7 +27,24 @@ inline constexpr basic_quaternion<Type>::basic_quaternion(const vector_type_for<
 template<floating_point Type>
 template<floating_point Other>
 inline constexpr basic_quaternion<Type>::basic_quaternion(const vector_type_for<Other>& euler_angles) noexcept {
-  // [TODO]: Need to implement
+  const auto roll = to_radians(degree{euler_angles.x()}).value();
+  const auto pitch = to_radians(degree{euler_angles.y()}).value();
+  const auto yaw = to_radians(degree{euler_angles.z()}).value();
+
+  const auto cy = std::cos(yaw * 0.5f);
+  const auto sy = std::sin(yaw * 0.5f);
+  const auto cp = std::cos(pitch * 0.5f);
+  const auto sp = std::sin(pitch * 0.5f);
+  const auto cr = std::cos(roll * 0.5f);
+  const auto sr = std::sin(roll * 0.5f);
+
+  const auto w = cr * cp * cy + sr * sp * sy;
+  const auto x = sr * cp * cy - cr * sp * sy;
+  const auto y = cr * sp * cy + sr * cp * sy;
+  const auto z = cr * cp * sy - sr * sp * cy;
+
+  _complex = vector_type{x, y, z};
+  _scalar = w;
 }
 
 template<floating_point Type>

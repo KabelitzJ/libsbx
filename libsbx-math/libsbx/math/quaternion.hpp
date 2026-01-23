@@ -102,6 +102,7 @@ public:
     }
 
 		const auto one_over_length = static_cast<value_type>(1) / length;
+
 		return basic_quaternion{quaternion.x() * one_over_length, quaternion.y() * one_over_length, quaternion.z() * one_over_length, quaternion.w() * one_over_length};
   }
 
@@ -150,6 +151,33 @@ public:
 			const auto angle = std::acos(cos_theta);
 			return (std::sin((static_cast<value_type>(1) - a) * angle) * x + std::sin(a * angle) * z) / std::sin(angle);
 		}
+  }
+
+  [[constexpr]] static constexpr auto euler_angles(const basic_quaternion& quaternion) -> vector_type {
+    const auto x = quaternion.x();
+    const auto y = quaternion.y();
+    const auto z = quaternion.z();
+    const auto w = quaternion.w();
+
+    const auto sinr_cosp = 2.0f * (w * x + y * z);
+    const auto cosr_cosp = 1.0f - 2.0f * (x * x + y * y);
+    auto roll = std::atan2(sinr_cosp, cosr_cosp);
+
+    const auto sinp = 2.0f * (w * y - z * x);
+    auto pitch = 0.0f;
+
+    if (std::abs(sinp) >= 1.0f) {
+      pitch = std::copysign(3.14159265358979323846f / 2.0f, sinp);
+    } else {
+      pitch = std::asin(sinp);
+    }
+
+    const auto siny_cosp = 2.0f * (w * z + x * y);
+    const auto cosy_cosp = 1.0f - 2.0f * (y * y + z * z);
+
+    auto yaw = std::atan2(siny_cosp, cosy_cosp);
+
+    return math::vector3{to_degrees(radian{roll}).value(), to_degrees(radian{pitch}).value(), to_degrees(radian{yaw}).value()};
   }
 
   template<floating_point Other = value_type>

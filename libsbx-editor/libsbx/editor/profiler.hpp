@@ -92,10 +92,9 @@ inline auto lerp_color(const ImVec4& a, const ImVec4& b, std::float_t t) {
 }
 
 inline auto get_color_for_time(const units::millisecond ms) -> ImVec4 {
-  static constexpr auto green  = ImVec4{0.40f, 0.85f, 0.40f, 1.0f};
+  static constexpr auto green = ImVec4{0.40f, 0.85f, 0.40f, 1.0f};
   static constexpr auto yellow = ImVec4{0.95f, 0.85f, 0.20f, 1.0f};
-  static constexpr auto orange = ImVec4{0.95f, 0.55f, 0.15f, 1.0f};
-  static constexpr auto red    = ImVec4{0.90f, 0.25f, 0.25f, 1.0f};
+  static constexpr auto red = ImVec4{0.90f, 0.25f, 0.25f, 1.0f};
 
   if (ms <= 10.0f) {
     return green;
@@ -188,7 +187,7 @@ inline void show_profiler() {
 
   populate_nodes(scope_infos, children_map, root_nodes);
 
-  for (auto i = 0; i < static_cast<core::scope_info::node_id>(scope_infos.size()); ++i) {
+  for (auto i = 0u; i < scope_infos.size(); ++i) {
     if (scope_infos[i].time.count() < 0) {
       continue;
     }

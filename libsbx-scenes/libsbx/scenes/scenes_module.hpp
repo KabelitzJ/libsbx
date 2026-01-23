@@ -60,7 +60,7 @@ public:
 
   auto add_debug_line(const sbx::math::vector3& start, const sbx::math::vector3& end, const sbx::math::color& color) -> void;
 
-  auto add_coordinate_arrows(const math::matrix4x4& transform, std::float_t length = 2.0f, std::float_t tip_size = 0.2f) -> void;
+  auto add_coordinate_arrows(const math::matrix4x4& transform, std::float_t length = 2.0f) -> void;
 
   auto add_debug_plane(const sbx::math::vector3& origin, const sbx::math::vector3& v1, const sbx::math::vector3& v2, std::uint32_t n1, std::uint32_t n2, std::float_t s1, std::float_t s2, const sbx::math::color& color, const sbx::math::color& outline) -> void;
 

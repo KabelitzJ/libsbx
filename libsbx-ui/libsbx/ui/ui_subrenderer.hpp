@@ -85,7 +85,6 @@ private:
 
   auto _render_widget(widget& widget, graphics::command_buffer& command_buffer) -> void {
     auto& assets_module = core::engine::get_module<assets::assets_module>();
-    auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 
     const auto& id = widget.id();
 

@@ -138,7 +138,6 @@ private:
     auto& scene = scenes_module.scene();
 
     const auto& gizmo = scene.get_component<scenes::gizmo>(node);
-    const auto mesh_id = gizmo.mesh_id();
 
     const auto key = mesh_key{gizmo.mesh_id(), gizmo.submesh_index(), gizmo.texture_id()};
 

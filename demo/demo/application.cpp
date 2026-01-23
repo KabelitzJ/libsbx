@@ -63,8 +63,6 @@ auto application::_randomize_terrain() -> void {
     const auto rx = (x * cos_a - z * sin_a) * frequency;
     const auto rz = (x * sin_a + z * cos_a) * frequency;
 
-    const auto n = sbx::math::noise::fractal(rx, rz, octaves);
-
     const auto jitter = sbx::math::noise::simplex(position.x() * 0.3f, position.z() * 0.3f) * 0.03f;
 
     const auto density = (sbx::math::noise::fractal(rx, rz, octaves) * 0.5f) + 0.5f + jitter;
@@ -221,7 +219,7 @@ application::application()
 
   scene.add_component<sbx::scenes::skybox>(camera_node, scene.get_cube_image("skybox"), _brdf, _irradiance, _prefiltered);
 
-  auto camera_controller_script = scripting_module.instantiate(camera_anchor, "build/x86_64/gcc/debug/_dotnet/Demo.dll", "Demo.CameraController");
+  scripting_module.instantiate(camera_anchor, "build/x86_64/gcc/debug/_dotnet/Demo.dll", "Demo.CameraController");
 
   if (auto hide_window = cli.argument<bool>("hide-window"); !hide_window) {
     window.show();
@@ -240,13 +238,8 @@ auto application::update() -> void  {
     return;
   }
 
-  auto& graphics_module = sbx::core::engine::get_module<sbx::graphics::graphics_module>();
-
   auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
   auto& scene = scenes_module.scene();
-
-  auto& devices_module = sbx::core::engine::get_module<sbx::devices::devices_module>();
-  auto& window = devices_module.window();
 
   _rotation += sbx::math::degree{45} * delta_time;
 
@@ -491,10 +484,6 @@ auto application::_generate_brdf(const std::uint32_t size) -> void {
 
   auto& graphics_module = sbx::core::engine::get_module<sbx::graphics::graphics_module>();
 
-  auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
-
-  auto& scene = scenes_module.scene();
-
   _brdf = graphics_module.add_resource<sbx::graphics::image2d>(sbx::math::vector2u{size}, sbx::graphics::format::r16g16_sfloat, VK_IMAGE_LAYOUT_GENERAL);
 
   auto timer = sbx::utility::timer{};
@@ -588,20 +577,20 @@ auto application::_generate_prefiltered(uint32_t size) -> void {
   auto descriptor_handlers = std::vector<sbx::graphics::descriptor_handler>{};
   descriptor_handlers.reserve(prefiltered.mip_levels());
 
-  for (auto mip = 0; mip < prefiltered.mip_levels(); ++mip) {
+  for (auto mip = 0u; mip < prefiltered.mip_levels(); ++mip) {
     descriptor_handlers.emplace_back(pipeline, 0u);
   }
 
   auto mip_views = std::vector<VkImageView>{};
   mip_views.resize(prefiltered.mip_levels());
 
-  for (auto mip = 0; mip < prefiltered.mip_levels(); ++mip) {
+  for (auto mip = 0u; mip < prefiltered.mip_levels(); ++mip) {
     sbx::graphics::image::create_image_view(prefiltered, mip_views[mip], VK_IMAGE_VIEW_TYPE_2D_ARRAY, prefiltered.format(), VK_IMAGE_ASPECT_COLOR_BIT, 1, mip, 6, 0);
   }
 
   auto& skybox = graphics_module.get_resource<sbx::graphics::cube_image>(scene.get_cube_image("skybox"));
 
-  for (auto mip = 0; mip < prefiltered.mip_levels(); ++mip) {
+  for (auto mip = 0u; mip < prefiltered.mip_levels(); ++mip) {
     auto barrier = VkImageMemoryBarrier2{};
     barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
     barrier.srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;

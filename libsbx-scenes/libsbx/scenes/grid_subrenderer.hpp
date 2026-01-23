@@ -60,8 +60,6 @@ public:
 
     const auto& projection = camera.projection();
 
-    const auto& camera_global_transform = scene.get_component<sbx::scenes::global_transform>(camera_node);
-
     const auto camera_position = scene.world_position(camera_node);
 
     const auto view = sbx::math::matrix4x4::inverted(scene.world_transform(camera_node));

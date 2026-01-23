@@ -10,9 +10,6 @@
 #include <libsbx/scenes/grid_subrenderer.hpp>
 
 #include <libsbx/models/models.hpp>
-#include <libsbx/models/frustum_culling_task.hpp>
-#include <libsbx/models/foliage_task.hpp>
-#include <libsbx/models/foliage_subrenderer.hpp>
 #include <libsbx/models/static_mesh_subrenderer.hpp>
 
 #include <libsbx/animations/skinned_mesh_subrenderer.hpp>

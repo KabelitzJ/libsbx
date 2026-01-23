@@ -132,7 +132,7 @@ auto terrain_subrenderer::render(sbx::graphics::command_buffer& command_buffer) 
     _push_handler.push("vertex_buffer", mesh.address());
     _push_handler.bind(command_buffer);
 
-    command_buffer.draw_indexed(submesh.index_count, range.instance_count, submesh.index_offset, submesh.vertex_offset, range.first_instance);
+    command_buffer.draw_indexed(submesh.index_count, range.instance_count, submesh.index_offset, static_cast<std::int32_t>(submesh.vertex_offset), range.first_instance);
   }
 }
 

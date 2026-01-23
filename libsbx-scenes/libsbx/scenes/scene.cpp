@@ -42,8 +42,7 @@ scene::scene(const std::filesystem::path& path)
 : _registry{}, 
   _root{_registry.create()},
   _camera{_registry.create()},
-  _light{math::vector3{-1.0, -1.0, -1.0}, math::color{1.0f, 1.0f, 1.0f, 1.0f}},
-  _octtree{math::volume{math::vector3{-1000.0f, -1000.0f, -1000.0f}, math::vector3{1000.0f, 1000.0f, 1000.0f}}, 500u} {
+  _light{math::vector3{-1.0, -1.0, -1.0}, math::color{1.0f, 1.0f, 1.0f, 1.0f}} {
   // [NOTE] KAJ 2023-10-17 : Initialize root node
   const auto& root_id = add_component<scenes::id>(_root);
   _nodes.insert({root_id, _root});
@@ -295,8 +294,8 @@ auto scene::save(const std::filesystem::path& path)-> void {
   stream.close();
 }
 
-auto scene::_load_assets(const YAML::Node& assets) -> void {
-  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
+auto scene::_load_assets([[maybe_unused]] const YAML::Node& assets) -> void {
+  // auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 
   // for (const auto& mesh : assets["meshes"]) {
   //   const auto& name = mesh["name"].as<std::string>();
@@ -311,7 +310,7 @@ auto scene::_load_assets(const YAML::Node& assets) -> void {
   // }
 }
 
-auto scene::_load_nodes(const YAML::Node& nodes) -> void {
+auto scene::_load_nodes([[maybe_unused]] const YAML::Node& nodes) -> void {
 
 }
 

@@ -60,9 +60,9 @@ public:
     _descriptor_handler{_pipeline, 0u},
     _show_demo_window{false},
     _clear_color{sbx::math::color::black()},
+    _has_auto_scroll{true},
     _selected_node_id{sbx::math::uuid::null()},
-    _editor_theme{},
-    _has_auto_scroll{true} {
+    _editor_theme{} {
     // Initialize ImGui
     IMGUI_CHECKVERSION();
 
@@ -302,7 +302,7 @@ private:
     ImGui::End();
   }
 
-  auto _context_menu(const sbx::scenes::node node) -> void {
+  auto _context_menu() -> void {
     auto& scene_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
 
     auto& scene = scene_module.scene();
@@ -381,7 +381,7 @@ private:
         // }
       }
 
-      _context_menu(node);
+      _context_menu();
 
       for (const auto& child : relationship.children()) {
         if (child != scenes::node::null) {
@@ -394,7 +394,6 @@ private:
   }
 
   auto _build_node_preview() -> void {
-    auto& assets_module = sbx::core::engine::get_module<sbx::assets::assets_module>();
     auto& scene_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
 
     auto& scene = scene_module.scene();
@@ -496,8 +495,6 @@ private:
   }
 
   auto _setup_windows() -> void {
-    auto& graphics_module = sbx::core::engine::get_module<sbx::graphics::graphics_module>();
-
     {
       const auto custom_backdrop_color = ImVec4{0.2f, 0.2f, 0.2f, 0.5f};
 
@@ -514,14 +511,8 @@ private:
         static const auto categories = std::array<std::string_view, 4u>{ "General", "Display", "Audio", "Controls" };
         static auto selected_category = std::uint32_t{0u};
 
-        // === Row: Sidebar + Content ===
         const auto sidebar_width = 150.0f;
-        const auto spacing = ImGui::GetStyle().ItemSpacing.x;
 
-        const auto content_start = ImGui::GetCursorScreenPos();
-        const auto total_content_width = ImGui::GetContentRegionAvail().x;
-
-        // Begin Sidebar
         if (ImGui::BeginChild("CategorySidebar", ImVec2(sidebar_width, 0), ImGuiChildFlags_Border)) {
           for (auto i = 0u; i < categories.size(); ++i) {
             if (ImGui::Selectable(categories[i].data(), selected_category == i)) {
@@ -531,15 +522,11 @@ private:
           ImGui::EndChild();
         }
 
-        // Sidebar and content on same line
         ImGui::SameLine();
-
-        // Begin Settings Content
-        const auto content_width = total_content_width - sidebar_width - spacing;
 
         if (ImGui::BeginChild("SettingsContent", ImVec2(0, 0), ImGuiChildFlags_None)) {
           switch (selected_category) {
-            case 0: { // General
+            case 0: {
               const auto available_fonts = _editor_font.get_fonts();
               const auto& active_font = _editor_font.get_active_font();
 
@@ -549,7 +536,6 @@ private:
                   const auto is_selected = (font == active_font);
 
                   if (ImGui::Selectable(font.c_str(), is_selected)) {
-                    // utility::logger<"editor">::debug("Changing font to {}", font);
                     _editor_font.set_active_font(font);
                   }
 
@@ -590,16 +576,12 @@ private:
           ImGui::EndChild();
         }
 
-        // === Now the buttons ===
-        // Add vertical spacing between children and footer buttons
         ImGui::Dummy(ImVec2(0.0f, 10.0f));
 
-        // Right-align buttons
         const auto button_width = 75.0f;
         const auto button_spacing = 10.0f;
         const auto total_button_width = (button_width * 2.0f) + button_spacing;
 
-        // Align cursor X to the right
         const auto button_x = ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x - total_button_width;
         ImGui::SetCursorPosX(button_x);
 
@@ -865,8 +847,6 @@ private:
 
       auto& scene = scenes_module.scene();
 
-      auto camera_node = scene.camera();
-
       auto& global_light = scene.light();
 
       if (ImGui::CollapsingHeader("Global Light", ImGuiTreeNodeFlags_DefaultOpen)) {
@@ -930,10 +910,6 @@ private:
     {
       ImGui::Begin("Stats");
 
-      auto& scene_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
-
-      auto& scene = scene_module.scene();
-
       const auto delta_time = sbx::core::engine::delta_time();
 
       _time += delta_time;
@@ -950,7 +926,7 @@ private:
         ImGui::Text("Delta time");
         ImGui::SameLine();
         ImGui::PushStyleColor(ImGuiCol_Text, _get_color_for_time(ms));
-        ImGui::Text("  %.3f [ms]", ms.value());
+        ImGui::Text("  %.3f [ms]", static_cast<std::double_t>(ms.value()));
         ImGui::PopStyleColor();
         // ImGui::SameLine();
         // ImGui::PushStyleColor(ImGuiCol_PlotHistogram, _get_color_for_time(ms));
@@ -1181,9 +1157,9 @@ private:
 
       ImNodes::EndNode();
 
-      for (auto i = 0; i < links.size(); ++i) {
+      for (auto i = 0u; i < links.size(); ++i) {
         const auto link = links[i];
-        ImNodes::Link(i, link.first, link.second);
+        ImNodes::Link(static_cast<std::int32_t>(i), link.first, link.second);
       }
 
       ImNodes::MiniMap(0.2f, ImNodesMiniMapLocation_BottomRight);
@@ -1256,7 +1232,7 @@ private:
 
       ImGui::Text("Width: %d", _viewport_size.x());
       ImGui::Text("Height: %d", _viewport_size.y());
-      ImGui::Text("Aspect Ratio: %f", static_cast<std::float_t>(_viewport_size.x()) / static_cast<std::float_t>(_viewport_size.y()));
+      ImGui::Text("Aspect Ratio: %f", static_cast<std::double_t>(_viewport_size.x()) / static_cast<std::double_t>(_viewport_size.y()));
 
       _build_node_preview();
 
@@ -1428,10 +1404,9 @@ private:
   }
 
   static auto _get_color_for_time(const units::millisecond ms) -> ImVec4 {
-    static constexpr auto green  = ImVec4{0.40f, 0.85f, 0.40f, 1.0f};
+    static constexpr auto green = ImVec4{0.40f, 0.85f, 0.40f, 1.0f};
     static constexpr auto yellow = ImVec4{0.95f, 0.85f, 0.20f, 1.0f};
-    static constexpr auto orange = ImVec4{0.95f, 0.55f, 0.15f, 1.0f};
-    static constexpr auto red    = ImVec4{0.90f, 0.25f, 0.25f, 1.0f};
+    static constexpr auto red = ImVec4{0.90f, 0.25f, 0.25f, 1.0f};
 
     if (ms <= 10.0f) {
       return green;

@@ -338,7 +338,6 @@ public:
     _uniform_handler.push("projection", projection);
 
     const auto& camera_transform = get_component<scenes::transform>(_camera);
-    const auto& camera_global_transform = get_component<scenes::global_transform>(_camera);
 
     const auto view = math::matrix4x4::inverted(world_transform(_camera));
 
@@ -365,7 +364,6 @@ public:
     auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
     const auto& viewport = graphics_module.viewport();
 
-    const auto& camera_transform = get_component<scenes::transform>(_camera);
     const auto& camera = get_component<scenes::camera>(_camera);
 
     const auto world = world_transform(_camera);
@@ -435,8 +433,6 @@ private:
   node_type _camera;
 
   std::string _name;
-
-  containers::octree<math::uuid> _octtree;
 
   directional_light _light;
 

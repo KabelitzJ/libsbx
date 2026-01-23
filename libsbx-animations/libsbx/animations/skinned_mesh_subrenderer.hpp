@@ -116,7 +116,6 @@ struct skinned_mesh_traits {
       const auto& pose = skinned_mesh.pose();
 
       const auto bone_offset = static_cast<std::uint32_t>(_bone_matrices.size());
-      const auto bone_count = static_cast<std::uint32_t>(pose.size());
 
       utility::append(_bone_matrices, pose);
 
@@ -137,7 +136,7 @@ struct skinned_mesh_traits {
     }
   }
 
-  static auto make_instance_data(const scenes::node node, const std::uint32_t transform_index, std::uint32_t material_index, const instance_payload& payload) -> models::instance_data {
+  static auto make_instance_data(const scenes::node node, const std::uint32_t transform_index, std::uint32_t material_index, [[maybe_unused]] const instance_payload& payload) -> models::instance_data {
     return models::instance_data{transform_index, material_index, static_cast<std::uint32_t>(node), 0u};
   }
 
@@ -154,7 +153,7 @@ struct skinned_mesh_traits {
       command.indexCount = submesh.index_count;
       command.instanceCount = 1u;
       command.firstIndex = submesh.index_offset;
-      command.vertexOffset = instance_index * mesh.vertex_count();
+      command.vertexOffset = static_cast<std::int32_t>(instance_index * mesh.vertex_count());
       command.firstInstance = instance_index;
 
       emitter.emit_single(command, instance);

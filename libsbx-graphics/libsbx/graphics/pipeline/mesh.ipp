@@ -83,10 +83,6 @@ mesh<Vertex>::~mesh() {
 
 template<vertex Vertex>
 auto mesh<Vertex>::render(graphics::command_buffer& command_buffer, std::uint32_t instance_count) const -> void {
-  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
-
-  auto& index_buffer = graphics_module.get_resource<buffer>(_index_buffer); 
-
   command_buffer.draw_indexed(_index_count, instance_count, 0, 0, 0);
 }
 

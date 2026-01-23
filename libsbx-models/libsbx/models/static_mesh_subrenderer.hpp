@@ -90,26 +90,9 @@ struct static_mesh_traits {
 
   template<typename Callable>
   static void for_each_submission(scenes::scene& scene, Callable&& callable) {
-    auto& assets_module = core::engine::get_module<assets::assets_module>();
-    auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
-
-    auto camera_node = scene.camera();
-    auto& camera = scene.get_component<scenes::camera>(camera_node);
-
-    const auto view = math::matrix4x4::inverted(scene.world_transform(camera_node));
-
-    auto frustum = camera.view_frustum(view);
-
     auto query = scene.query<const scenes::static_mesh>();
 
     for (auto&& [node, static_mesh] : query.each()) {
-      // auto mesh_id = static_mesh.mesh_id();
-      // auto& mesh = assets_module.get_asset<models::mesh>(mesh_id);
-
-      // if (!frustum.intersects(mesh.bounds(), scene.world_transform(node))) {
-      //   continue;
-      // }
-
       const auto transform_data = models::transform_data{scene.world_transform(node), scene.world_normal(node)};
 
       for (const auto& submesh : static_mesh.submeshes()) {
@@ -118,7 +101,7 @@ struct static_mesh_traits {
     }
   }
 
-  static auto make_instance_data(const scenes::node node, const std::uint32_t transform_index, std::uint32_t material_index, const instance_payload& payload) -> instance_data {
+  static auto make_instance_data(const scenes::node node, const std::uint32_t transform_index, std::uint32_t material_index, [[maybe_unused]] const instance_payload& payload) -> instance_data {
     return instance_data{transform_index, material_index, static_cast<std::uint32_t>(node), 0u};
   }
 
@@ -134,7 +117,7 @@ struct static_mesh_traits {
     command.indexCount = submesh.index_count;
     command.instanceCount = static_cast<std::uint32_t>(instances.size());
     command.firstIndex = submesh.index_offset;
-    command.vertexOffset = submesh.vertex_offset;
+    command.vertexOffset = static_cast<std::int32_t>(submesh.vertex_offset);
     command.firstInstance = emitter.base_instance;
 
     emitter.emit_instanced(command, std::move(instances));
@@ -213,8 +196,6 @@ public:
       auto& instance_data_buffer = graphics_module.get_resource<graphics::storage_buffer>(data.instance_data_buffer);
 
       pipeline_data.push_handler.push("instance_data_buffer", instance_data_buffer.address());
-
-      const auto hash = material_key_hash{}(key);
 
       for (const auto& [mesh_id, range] : data.ranges) {
         auto& mesh = assets_module.get_asset<models::mesh>(mesh_id);

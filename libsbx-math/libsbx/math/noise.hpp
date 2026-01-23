@@ -249,7 +249,7 @@ public:
       n0 = t0 * t0 * grad(gi0, x0, y0, z0);
     }
 
-    auto t1 = 0.6f - x1*x1 - y1*y1 - z1*z1;
+    auto t1 = 0.6f - x1 * x1 - y1 * y1 - z1 * z1;
 
     if (t1 < 0) {
       n1 = 0.0;
@@ -258,7 +258,7 @@ public:
       n1 = t1 * t1 * grad(gi1, x1, y1, z1);
     }
 
-    auto t2 = 0.6f - x2*x2 - y2*y2 - z2*z2;
+    auto t2 = 0.6f - x2 * x2 - y2 * y2 - z2 * z2;
 
     if (t2 < 0) {
       n2 = 0.0;
@@ -267,7 +267,7 @@ public:
       n2 = t2 * t2 * grad(gi2, x2, y2, z2);
     }
 
-    auto t3 = 0.6f - x3*x3 - y3*y3 - z3*z3;
+    auto t3 = 0.6f - x3 * x3 - y3 * y3 - z3 * z3;
 
     if (t3 < 0) {
       n3 = 0.0;
@@ -288,7 +288,8 @@ private:
     return (fp < i) ? (i - 1) : (i);
   }
 
-  static constexpr auto hash(std::int32_t i) -> std::uint8_t {
+  template<typename Type>
+  static constexpr auto hash(Type i) -> std::uint8_t {
     return permutation[static_cast<std::uint8_t>(i)];
   }
 

@@ -17,7 +17,7 @@ scenes_module::scenes_module()
 : _scene{std::nullopt} {
   _component_io_registry.register_component<scenes::transform>(
     "transform",
-    [](YAML::Emitter& emitter, scenes::scene& scene, const scenes::transform& transform) -> void {
+    [](YAML::Emitter& emitter, [[maybe_unused]] scenes::scene& scene, const scenes::transform& transform) -> void {
       emitter << YAML::Key << "position" << YAML::Value << transform.position();
       emitter << YAML::Key << "rotation" << YAML::Value << transform.rotation();
       emitter << YAML::Key << "scale" << YAML::Value << transform.scale();
@@ -42,7 +42,7 @@ scenes_module::scenes_module()
 
   _component_io_registry.register_component<scenes::point_light>(
     "point_light",
-    [](YAML::Emitter& emitter, scenes::scene& scene, const scenes::point_light& point_light) -> void {
+    [](YAML::Emitter& emitter, [[maybe_unused]] scenes::scene& scene, const scenes::point_light& point_light) -> void {
       emitter << YAML::Key << "color" << YAML::Value << point_light.color();
       emitter << YAML::Key << "radius" << YAML::Value << point_light.radius();
     },
@@ -70,7 +70,7 @@ scenes_module::scenes_module()
 
       emitter << YAML::EndSeq;
     },
-    [](const YAML::Node& node) -> scenes::static_mesh {
+    []([[maybe_unused]] const YAML::Node& node) -> scenes::static_mesh {
       return {math::uuid::null(), math::uuid::null()};
     }
   );
@@ -126,7 +126,7 @@ auto scenes_module::add_debug_line(const sbx::math::vector3& start, const sbx::m
   });
 }
 
-auto scenes_module::add_coordinate_arrows(const math::matrix4x4& transform, std::float_t length, std::float_t tip_size) -> void {
+auto scenes_module::add_coordinate_arrows(const math::matrix4x4& transform, std::float_t length) -> void {
   const auto origin = math::vector3{transform[3]};
 
   const auto x_axis = math::vector3::normalized(transform[0]);

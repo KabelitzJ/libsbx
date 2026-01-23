@@ -80,17 +80,16 @@ public:
 
   ~shadow_subrenderer() override = default;
 
-  auto render(graphics::command_buffer& command_buffer) -> void override {
+  auto render([[maybe_unused]] graphics::command_buffer& command_buffer) -> void override {
     SBX_PROFILE_SCOPE("shadow_subrenderer::render");
 
-    auto& assets_module = core::engine::get_module<assets::assets_module>();
-    auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
+    // auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
 
-    auto& scene = scenes_module.scene();
+    // auto& scene = scenes_module.scene();
 
-    _scene_uniform_handler.push("light_space", scene.light_space());
+    // _scene_uniform_handler.push("light_space", scene.light_space());
 
-    _scene_uniform_handler.push("time", std::fmod(core::engine::time().value() * 0.5f, 1.0f));
+    // _scene_uniform_handler.push("time", std::fmod(core::engine::time().value() * 0.5f, 1.0f));
 
     // auto& draw_list = pass().draw_list<models::static_mesh_draw_list>("static_mesh");
 

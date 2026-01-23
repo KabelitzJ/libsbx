@@ -23,7 +23,7 @@ struct menu {
   std::vector<menu_item> items;
 }; // struct menu
 
-auto add_menu_item(const menu_item& item) -> void {
+inline auto add_menu_item(const menu_item& item) -> void {
   if (ImGui::MenuItem(item.title.c_str(), !item.short_cut.empty() ? item.short_cut.c_str() : nullptr)) {
     std::invoke(item.on_click);
   }
@@ -33,7 +33,7 @@ auto add_menu_item(const menu_item& item) -> void {
   }
 }
 
-auto add_menu(const menu& menu) -> void {
+inline auto add_menu(const menu& menu) -> void {
   if (ImGui::BeginMenu(menu.title.c_str())) {
     for (const auto& submenu : menu.submenus) {
       add_menu(submenu);
@@ -51,7 +51,7 @@ auto add_menu(const menu& menu) -> void {
   }
 }
 
-auto add_menu_bar(const std::vector<menu>& menus) -> void {
+inline auto add_menu_bar(const std::vector<menu>& menus) -> void {
   if (ImGui::BeginMenuBar()) {
     for (const auto& menu : menus) {
       add_menu(menu);

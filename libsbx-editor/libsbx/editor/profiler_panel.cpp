@@ -157,25 +157,20 @@ auto profiler_panel::render() -> void {
     _frames = 0;
   }
 
-  if (ImGui::CollapsingHeader("Frame", ImGuiTreeNodeFlags_DefaultOpen)) {
-    const auto ms = units::quantity_cast<sbx::units::millisecond>(delta_time);
-    ImGui::Text("Delta time");
-    ImGui::SameLine();
-    ImGui::PushStyleColor(ImGuiCol_Text, _get_color_for_time(ms));
-    ImGui::Text("  %.3f [ms]", static_cast<std::double_t>(ms.value()));
-    ImGui::PopStyleColor();
-    // ImGui::SameLine();
-    // ImGui::PushStyleColor(ImGuiCol_PlotHistogram, _get_color_for_time(ms));
-    // ImGui::ProgressBar(ms.value() / 16.66, ImVec2(200, 15));
-    // ImGui::PopStyleColor();
+  const auto ms = units::quantity_cast<sbx::units::millisecond>(delta_time);
 
-    ImGui::Text("FPS          %d", _fps);
-  }
+  ImGui::Text("Delta time");
+  ImGui::SameLine();
+  ImGui::PushStyleColor(ImGuiCol_Text, _get_color_for_time(ms));
+  ImGui::Text("  %.3f [ms]", static_cast<std::double_t>(ms.value()));
+  ImGui::PopStyleColor();
+  ImGui::Text("FPS          %d", _fps);
 
   const auto scope_infos = core::scope_infos();
 
   if (scope_infos.empty()) {
     ImGui::Text("No profiling data captured for this thread.");
+    ImGui::End();
     return;
   }
 
@@ -195,47 +190,45 @@ auto profiler_panel::render() -> void {
     node_percent_samplers[i].record(_node_percentage(scope_infos, scope_infos[i]));
   }
 
-  if (!ImGui::BeginTable("ProfilerTreeView", 3, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable | ImGuiTableFlags_Sortable)) {
-    return;
-  }
+  if (ImGui::BeginTable("ProfilerTreeView", 3, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable | ImGuiTableFlags_Sortable)) {
+    ImGui::TableSetupColumn("Scope", ImGuiTableColumnFlags_WidthStretch | ImGuiTableColumnFlags_DefaultSort, 120.0f, columns::scope);
+    ImGui::TableSetupColumn("Time (ms)", ImGuiTableColumnFlags_WidthStretch, 120.0f, columns::time);
+    ImGui::TableSetupColumn("% of Parent", ImGuiTableColumnFlags_WidthStretch, 80.0f, columns::percent);
 
-  ImGui::TableSetupColumn("Scope", ImGuiTableColumnFlags_WidthStretch | ImGuiTableColumnFlags_DefaultSort, 120.0f, columns::scope);
-  ImGui::TableSetupColumn("Time (ms)", ImGuiTableColumnFlags_WidthStretch, 120.0f, columns::time);
-  ImGui::TableSetupColumn("% of Parent", ImGuiTableColumnFlags_WidthStretch, 80.0f, columns::percent);
+    ImGui::TableHeadersRow();
 
-  ImGui::TableHeadersRow();
+    if (auto* specs = ImGui::TableGetSortSpecs()) {
+      const auto node_comparer = [&](const core::scope_info::node_id a, const core::scope_info::node_id b) -> bool {
+        const auto& info_a = scope_infos[a];
+        const auto& info_b = scope_infos[b];
 
-  if (auto* specs = ImGui::TableGetSortSpecs()) {
-    const auto node_comparer = [&](const core::scope_info::node_id a, const core::scope_info::node_id b) -> bool {
-      const auto& info_a = scope_infos[a];
-      const auto& info_b = scope_infos[b];
+        for (int i = 0; i < specs->SpecsCount; ++i) {
+          const auto* sort_spec = &specs->Specs[i];
+          const int delta = _delta(node_time_samplers, node_percent_samplers, info_a, info_b, sort_spec->ColumnUserID);
 
-      for (int i = 0; i < specs->SpecsCount; ++i) {
-        const auto* sort_spec = &specs->Specs[i];
-        const int delta = _delta(node_time_samplers, node_percent_samplers, info_a, info_b, sort_spec->ColumnUserID);
+          if (delta == 0) {
+            continue;
+          }
 
-        if (delta == 0) {
-          continue;
+          return (sort_spec->SortDirection == ImGuiSortDirection_Ascending) ? (delta < 0) : (delta > 0);
         }
 
-        return (sort_spec->SortDirection == ImGuiSortDirection_Ascending) ? (delta < 0) : (delta > 0);
+        return false;
+      };
+
+      for (auto& entry : children_map) {
+        std::sort(entry.begin(), entry.end(), node_comparer);
       }
 
-      return false;
-    };
-
-    for (auto& entry : children_map) {
-      std::sort(entry.begin(), entry.end(), node_comparer);
+      std::sort(root_nodes.begin(), root_nodes.end(), node_comparer);
     }
 
-    std::sort(root_nodes.begin(), root_nodes.end(), node_comparer);
-  }
+    for (const auto id : root_nodes) {
+      _render_node(node_time_samplers, node_percent_samplers, id, scope_infos, children_map);
+    }
 
-  for (const auto id : root_nodes) {
-    _render_node(node_time_samplers, node_percent_samplers, id, scope_infos, children_map);
+    ImGui::EndTable();
   }
-
-  ImGui::EndTable();
 
   ImGui::End();
 }

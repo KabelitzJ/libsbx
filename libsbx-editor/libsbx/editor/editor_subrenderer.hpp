@@ -591,8 +591,7 @@ private:
       ImGui::Begin("Target");
 
       if (ImGui::CollapsingHeader("Target", ImGuiTreeNodeFlags_DefaultOpen)) {
-        static auto current_target = std::uint32_t{12};
-        const auto targets = std::vector<std::string_view>{
+        static const auto targets = std::array<std::string_view, 11u>{
           "albedo",
           "normal",
           "position",
@@ -605,6 +604,8 @@ private:
           "tonemap",
           "fxaa"
         };
+
+        static auto current_target = targets.size() - 1u;
 
         if (ImGui::BeginCombo("Render Target", targets[current_target].data())) {
           for (auto i = 0u; i < targets.size(); ++i) {

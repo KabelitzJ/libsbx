@@ -33,19 +33,6 @@ auto property_panel::render(const math::uuid& selected_node_id) -> void {
     return;
   }
 
-  ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(6, 6));
-  ImGui::TextUnformatted("Selected Node");
-
-  ImGui::SameLine();
-
-  if (ImGui::Button("Add Component")) {
-    ImGui::OpenPopup("add_component_popup");
-  }
-
-  ImGui::PopStyleVar();
-
-  ImGui::Separator();
-
   ImGui::BeginChild("inspector_body", ImVec2(0, 0), false, ImGuiWindowFlags_AlwaysVerticalScrollbar);
 
   ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(8, 6));
@@ -85,6 +72,19 @@ auto property_panel::render(const math::uuid& selected_node_id) -> void {
   });
 
   ImGui::PopStyleVar(2);
+
+  ImGui::Dummy(ImVec2(0.0f, 8.0f));
+  ImGui::Separator();
+  ImGui::Dummy(ImVec2(0.0f, 8.0f));
+
+  const auto button_w = 220.0f;
+
+  const auto avail = ImGui::GetContentRegionAvail().x;
+  ImGui::SetCursorPosX(ImGui::GetCursorPosX() + (avail - button_w) * 0.5f);
+
+  if (ImGui::Button("Add Component", ImVec2(button_w, 0.0f))) {
+    ImGui::OpenPopup("add_component_popup");
+  }
 
   ImGui::EndChild();
   ImGui::End();

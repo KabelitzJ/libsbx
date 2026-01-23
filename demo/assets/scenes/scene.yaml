@@ -13,10 +13,6 @@ assets:
       name: half
       path: res://meshes/terrain/half/half.gltf
       source: disk
-    - &diagonal
-      name: diagonal
-      path: res://meshes/terrain/diagonal/diagonal.gltf
-      source: disk
     - &full
       name: full
       path: res://meshes/terrain/full/full.gltf
@@ -24,6 +20,10 @@ assets:
     - &edge_three
       name: edge_three
       path: res://meshes/terrain/edge_three/edge_three.gltf
+      source: disk
+    - &diagonal
+      name: diagonal
+      path: res://meshes/terrain/diagonal/diagonal.gltf
       source: disk
     - &edge_one
       name: edge_one
@@ -35,15 +35,75 @@ assets:
       path: ""
 nodes:
   - tag: CameraAnchor
-    id: 12854456370023914863
+    id: 11069584808005611534
     components:
       - type: transform
         position: {x: 0, y: 0, z: 0}
         rotation: {x: 0, y: 0, z: 0, w: 1}
         scale: {x: 1, y: 1, z: 1}
+  - tag: EdgeThree
+    id: 14023644637332212201
+    components:
+      - type: transform
+        position: {x: 30, y: 10, z: 0}
+        rotation: {x: 0, y: 0, z: 0, w: 1}
+        scale: {x: 3, y: 3, z: 3}
+      - type: static_mesh
+        color: *edge_three
+        submeshes:
+          - index: 0
+            material: *base
+  - tag: Half
+    id: 2832124561186413144
+    components:
+      - type: transform
+        position: {x: 20, y: 10, z: 0}
+        rotation: {x: 0, y: 0, z: 0, w: 1}
+        scale: {x: 3, y: 3, z: 3}
+      - type: static_mesh
+        color: *half
+        submeshes:
+          - index: 0
+            material: *base
+  - tag: Full
+    id: 2700252767629735031
+    components:
+      - type: transform
+        position: {x: 10, y: 10, z: 0}
+        rotation: {x: 0, y: 0, z: 0, w: 1}
+        scale: {x: 3, y: 3, z: 3}
+      - type: static_mesh
+        color: *full
+        submeshes:
+          - index: 0
+            material: *base
+  - tag: Diagonal
+    id: 13517366939706455406
+    components:
+      - type: transform
+        position: {x: 0, y: 10, z: 0}
+        rotation: {x: 0, y: 0, z: 0, w: 1}
+        scale: {x: 3, y: 3, z: 3}
+      - type: static_mesh
+        color: *diagonal
+        submeshes:
+          - index: 0
+            material: *base
+  - tag: EdgeOne
+    id: 1094442563378877605
+    components:
+      - type: transform
+        position: {x: -10, y: 10, z: 0}
+        rotation: {x: 0, y: 0, z: 0, w: 1}
+        scale: {x: 3, y: 3, z: 3}
+      - type: static_mesh
+        color: *edge_one
+        submeshes:
+          - index: 0
+            material: *base
   - tag: CAMERA
     id: 758067372690401772
-    parent: 12854456370023914863
+    parent: 11069584808005611534
     components:
       - type: transform
         position: {x: 0, y: 50, z: 50}

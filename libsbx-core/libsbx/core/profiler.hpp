@@ -10,6 +10,8 @@
 
 #include <libsbx/units/time.hpp>
 
+#include <libsbx/utility/assert.hpp>
+
 #include <libsbx/utility/hashed_string.hpp>
 #include <libsbx/utility/iterator.hpp>
 #include <libsbx/utility/exception.hpp>

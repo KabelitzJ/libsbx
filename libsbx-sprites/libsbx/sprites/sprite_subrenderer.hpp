@@ -53,9 +53,11 @@ enum class sprite_space : std::uint32_t {
 
 struct sprite {
   sprite_space space;
-  graphics::image2d_handle image;
-  math::color color;
-  std::uint32_t sort_key{0};
+  math::color base_color;
+  graphics::image2d_handle albedo_image;
+  math::color emissive_factor;
+  float emissive_strength;
+  graphics::image2d_handle emissive_image;
   bool is_billboard{false};
 }; // struct sprite
 
@@ -64,7 +66,7 @@ class sprite_subrenderer : public graphics::subrenderer {
   class pipeline : public graphics::graphics_pipeline {
 
     inline static const auto pipeline_definition = graphics::pipeline_definition{
-      .depth = graphics::depth::read_write,
+      .depth = graphics::depth::read_only,
       .uses_transparency = true,
       .rasterization_state = graphics::rasterization_state{
         .polygon_mode = graphics::polygon_mode::fill,
@@ -120,7 +122,11 @@ public:
     auto sprite_query = scene.query<const sprites::sprite>();
 
     for (auto&& [node, sprite] : sprite_query.each()) {
-      sprites.emplace_back(scene.world_transform(node), sprite.color, math::vector2{10, 10}, utility::to_underlying(sprite.space), _images.push_back(sprite.image));
+      const auto& transform = scene.world_transform(node);
+      const auto albedo_image_index = _images.push_back(sprite.albedo_image);
+      const auto emissive_image_index = _images.push_back(sprite.emissive_image);
+
+      sprites.emplace_back(transform, sprite.base_color, math::vector2{10, 10}, albedo_image_index, emissive_image_index, sprite.emissive_factor, sprite.emissive_strength);
     }
 
     const auto required_size = static_cast<std::uint32_t>(sprites.size() * sizeof(sprite_subrenderer::sprite_data));
@@ -151,10 +157,15 @@ private:
 
   struct sprite_data {
     math::matrix4x4 model;
-    math::color color;
+    math::color base_color;
     math::vector2 size;
-    std::uint32_t space;
-    std::uint32_t image_index;
+    std::uint32_t albedo_image_index;
+    std::uint32_t emissive_image_index;
+    math::color emissive_factor;
+    float emissive_strength;
+    std::uint32_t padding0;
+    std::uint32_t padding1;
+    std::uint32_t padding2;
   }; // struct sprite_data
 
   pipeline _pipeline;

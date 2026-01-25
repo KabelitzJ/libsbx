@@ -7,8 +7,7 @@ struct vs_in {
 
 struct vs_out {
   [[vk::location(0)]] float2 uv : UV;
-  [[vk::location(1)]] float4 color : COLOR;
-  [[vk::location(2)]] nointerpolation uint image_index : IMAGE_INDEX;
+  [[vk::location(1)]] nointerpolation uint instance_id : INSTANCE_ID;
   float4 sv_position : SV_Position;
 }; // struct vs_out
 
@@ -20,10 +19,15 @@ enum sprite_space {
 
 struct sprite_data {
   float4x4 model;
-  float4 color;
+  float4 base_color;
   float2 size;
-  uint space;
-  uint image_index;
+  uint albedo_image_index;
+  uint emissive_image_index;
+  float4 emissive_factor;
+  float emissive_strength;
+  uint padding0;
+  uint padding1;
+  uint padding2;
 }; // struct sprite_data
 
 struct push_data {
@@ -73,12 +77,8 @@ vs_out main(vs_in input) {
   mv[2][1] = 0.0; 
   mv[2][2] = 1.0; 
 
-  // float3 world_position = mul(sprite.model, float4(position, 1.0)).xyz;
-
   output.uv = base_position.xy * 0.5 + 0.5;
-  output.color = sprite.color;
-  output.image_index = sprite.image_index;
-
+  output.instance_id = input.instance_id;
   output.sv_position = mul(scene.projection, mul(mv, float4(position, 1.0)));
 
   return output;

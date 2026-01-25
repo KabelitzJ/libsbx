@@ -1,0 +1,252 @@
+auto application::_randomize_terrain() -> void {
+  constexpr auto frequency = 0.05f;
+  constexpr auto octaves = 4u;
+
+  const auto face_count = static_cast<std::uint32_t>(_grid.dual_vertices().size());
+
+  for (auto face_id = std::uint32_t{0u}; face_id < face_count; ++face_id) {
+    const auto& position = _grid.dual_vertex_at(face_id).position;
+
+    constexpr auto cos_a = 0.8660254f;  // cos(30°)
+    constexpr auto sin_a = 0.5f;        // sin(30°)
+
+    const auto x = position.x();
+    const auto z = position.z();
+
+    const auto rx = (x * cos_a - z * sin_a) * frequency;
+    const auto rz = (x * sin_a + z * cos_a) * frequency;
+
+    const auto jitter = sbx::math::noise::simplex(position.x() * 0.3f, position.z() * 0.3f) * 0.03f;
+
+    const auto density = (sbx::math::noise::fractal(rx, rz, octaves) * 0.5f) + 0.5f + jitter;
+
+    auto& cell = _grid.get_or_create_cell_data(face_id, grid_data{});
+    cell.is_painted = (density > 0.45f);
+  }
+}
+
+auto application::_smooth_terrain() -> void {
+  const auto face_count = static_cast<std::uint32_t>(_grid.dual_vertices().size());
+
+  auto next = std::vector<bool>{};
+  next.resize(face_count);
+
+  for (auto face_id = std::uint32_t{0u}; face_id < face_count; ++face_id) {
+    auto painted_neighbors = std::uint32_t{0u};
+
+    for (const auto& edge : _grid.main_edges()) {
+      if (edge.dual_u == face_id) {
+        if (edge.dual_v != grid_type::invalid_id && _grid.has_cell_data(edge.dual_v) && _grid.cell_data(edge.dual_v).is_painted) {
+          ++painted_neighbors;
+        }
+      } else if (edge.dual_v == face_id) {
+        if (edge.dual_u != grid_type::invalid_id && _grid.has_cell_data(edge.dual_u) && _grid.cell_data(edge.dual_u).is_painted) {
+          ++painted_neighbors;
+        }
+      }
+    }
+
+    const auto current = _grid.has_cell_data(face_id) && _grid.cell_data(face_id).is_painted;
+
+    if (painted_neighbors >= 3u) {
+      next[face_id] = true;
+    } else if (painted_neighbors <= 1u) {
+      next[face_id] = false;
+    } else {
+      next[face_id] = current;
+    }
+  }
+
+  for (auto face_id = std::uint32_t{0u}; face_id < face_count; ++face_id) {
+    auto& cell = _grid.get_or_create_cell_data(face_id, grid_data{});
+    cell.is_painted = next[face_id];
+  }
+}
+
+static const auto settings = application::grid_type::settings{
+  .rings = 16u,
+  .ring_distance = 25.0f,
+  .seed = 70943948u,
+  .merge_probability = 0.6f,
+  .relax_iterations = 60u,
+  .relax_lambda = 0.45f,
+  .relax_mu = -0.50f
+};
+
+
+struct tile_choice {
+  sbx::utility::hashed_string mesh_name{};
+  std::uint32_t rotation_steps = 0u;
+  bool is_visible = false;
+}; // struct tile_choice
+
+static auto popcount4(const std::uint8_t mask) -> std::uint32_t {
+  auto c = std::uint32_t{0u};
+
+  c += (mask & 0x1u) ? 1u : 0u;
+  c += (mask & 0x2u) ? 1u : 0u;
+  c += (mask & 0x4u) ? 1u : 0u;
+  c += (mask & 0x8u) ? 1u : 0u;
+
+  return c;
+}
+
+static auto rotate_mask_for_steps(const std::uint8_t mask, const std::uint32_t steps) -> std::uint8_t {
+  auto m = static_cast<std::uint8_t>(mask & 0xFu);
+
+  for (auto i = std::uint32_t{0u}; i < (steps & 3u); ++i) {
+    const auto b3 = static_cast<std::uint8_t>((m >> 3u) & 0x1u);
+
+    m = static_cast<std::uint8_t>(((m << 1u) & 0xFu) | b3);
+  }
+
+  return m;
+}
+
+static auto rotation_steps_from_base_mask(const std::uint8_t desired_mask, const std::uint8_t base_mask) -> std::uint32_t {
+  const auto desired = static_cast<std::uint8_t>(desired_mask & 0xFu);
+  const auto base = static_cast<std::uint8_t>(base_mask & 0xFu);
+
+  for (auto r = std::uint32_t{0u}; r < 4u; ++r) {
+    if (rotate_mask_for_steps(base, r) == desired) {
+      return r;
+    }
+  }
+
+  return 0u;
+}
+
+static auto choose_tile_from_mask(const std::uint8_t mask) -> tile_choice {
+  const auto m = static_cast<std::uint8_t>(mask & 0xFu);
+
+  if (m == 0u) {
+    return tile_choice{{}, 0u, false};
+  }
+
+  if (m == 0xFu) {
+    return tile_choice{"full", 0u, true};
+  }
+
+  const auto count = popcount4(m);
+
+  if (count == 1u) {
+    const auto r = rotation_steps_from_base_mask(m, 0x1u);
+
+    return tile_choice{"edge_one", r, true};
+  }
+
+  if (count == 3u) {
+    const auto r = rotation_steps_from_base_mask(m, 0x7u);
+
+    return tile_choice{"edge_three", r, true};
+  }
+
+  if (count == 2u) {
+    if (m == 0x5u || m == 0xAu) {
+      const auto r = rotation_steps_from_base_mask(m, 0x5u);
+
+      return tile_choice{"diagonal", r, true};
+    }
+
+    const auto r = rotation_steps_from_base_mask(m, 0x3u);
+
+    return tile_choice{"half", r, true};
+  }
+
+  return tile_choice{"half", 0u, true};
+}
+
+static auto _get_submeshes_for_choice(const tile_choice& choice) -> std::vector<submesh> {
+  const auto ground_color = sbx::math::color{0.715056f, 0.737588f, 0.810134f, 1.0f};
+  const auto grass_color = sbx::math::color{0.553777f, 0.800819f, 0.084514f, 1.0f};
+
+  auto submeshes = std::vector<submesh>{};
+
+  if (choice.mesh_name == sbx::utility::hashed_string{"edge_one"}) {
+    submeshes.push_back(submesh{0, ground_color});
+    submeshes.push_back(submesh{1, grass_color});
+  } else if (choice.mesh_name == sbx::utility::hashed_string{"edge_three"}) {
+    submeshes.push_back(submesh{0, ground_color});
+    submeshes.push_back(submesh{1, grass_color});
+  } else if (choice.mesh_name == sbx::utility::hashed_string{"diagonal"}) {
+    submeshes.push_back(submesh{0, ground_color});
+    submeshes.push_back(submesh{1, grass_color});
+  } else if (choice.mesh_name == sbx::utility::hashed_string{"full"}) {
+    submeshes.push_back(submesh{0, grass_color});
+  } else if (choice.mesh_name == sbx::utility::hashed_string{"half"}) {
+    submeshes.push_back(submesh{0, ground_color});
+    submeshes.push_back(submesh{1, grass_color});
+  } else {
+    sbx::utility::logger<"application">::warn("Unknown tile mesh name encountered when building submeshes");
+  }
+
+  return submeshes;
+}
+
+auto application::_rebuild_terrain_tiles() -> void {
+  auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
+  auto& scene = scenes_module.scene();
+
+  if (_dual_quad_tiles.size() != _grid.dual_quad_count()) {
+    _dual_quad_tiles.clear();
+    _dual_quad_tiles.resize(_grid.dual_quad_count());
+  }
+
+  const auto main_face_is_painted = [&](const std::uint32_t dual_vertex_id) -> bool {
+    if (!_grid.has_cell_data(dual_vertex_id)) {
+      return false;
+    }
+
+    return _grid.cell_data(dual_vertex_id).is_painted;
+  };
+
+  for (const auto quad_id : _dirty_dual_quads) {
+    sbx::utility::assert_that(quad_id < _grid.dual_quad_count(), "_rebuild_terrain_tiles(): quad_id out of range");
+
+    const auto& q = _grid.dual_quad_at(quad_id);
+
+    auto mask = std::uint8_t{0u};
+
+    if (main_face_is_painted(q.a)) {
+      mask |= 0x1u;
+    }
+
+    if (main_face_is_painted(q.b)) {
+      mask |= 0x2u;
+    }
+
+    if (main_face_is_painted(q.c)) {
+      mask |= 0x4u;
+    }
+
+    if (main_face_is_painted(q.d)) {
+      mask |= 0x8u;
+    }
+
+    auto& tile = _dual_quad_tiles[quad_id];
+
+    if (tile.last_mask == mask) {
+      continue;
+    }
+
+    tile.last_mask = mask;
+
+    const auto choice = choose_tile_from_mask(mask);
+
+    if (!choice.is_visible) {
+      tile.is_visible = false;
+      continue;
+    }
+
+    const auto rotation_steps = choice.rotation_steps;
+
+    if (!tile.is_visible || tile.mesh_id != scene.get_mesh(choice.mesh_name)) {
+      tile.height = 6.0f;
+      tile.submeshes = _get_submeshes_for_choice(choice);
+    }
+
+    tile.mesh_id = scene.get_mesh(choice.mesh_name);
+    tile.rotation_steps = rotation_steps;
+    tile.is_visible = true;
+  }
+}

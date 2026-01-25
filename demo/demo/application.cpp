@@ -45,85 +45,9 @@ static auto intersect_ray_plane(const sbx::math::ray& ray, const sbx::math::plan
   return ray.point_at(t);
 }
 
-auto application::_randomize_terrain() -> void {
-  constexpr auto frequency = 0.05f;
-  constexpr auto octaves = 4u;
-
-  const auto face_count = static_cast<std::uint32_t>(_grid.dual_vertices().size());
-
-  for (auto face_id = std::uint32_t{0u}; face_id < face_count; ++face_id) {
-    const auto& position = _grid.dual_vertex_at(face_id).position;
-
-    constexpr auto cos_a = 0.8660254f;  // cos(30°)
-    constexpr auto sin_a = 0.5f;        // sin(30°)
-
-    const auto x = position.x();
-    const auto z = position.z();
-
-    const auto rx = (x * cos_a - z * sin_a) * frequency;
-    const auto rz = (x * sin_a + z * cos_a) * frequency;
-
-    const auto jitter = sbx::math::noise::simplex(position.x() * 0.3f, position.z() * 0.3f) * 0.03f;
-
-    const auto density = (sbx::math::noise::fractal(rx, rz, octaves) * 0.5f) + 0.5f + jitter;
-
-    auto& cell = _grid.get_or_create_cell_data(face_id, grid_data{});
-    cell.is_painted = (density > 0.45f);
-  }
-}
-
-auto application::_smooth_terrain() -> void {
-  const auto face_count = static_cast<std::uint32_t>(_grid.dual_vertices().size());
-
-  auto next = std::vector<bool>{};
-  next.resize(face_count);
-
-  for (auto face_id = std::uint32_t{0u}; face_id < face_count; ++face_id) {
-    auto painted_neighbors = std::uint32_t{0u};
-
-    for (const auto& edge : _grid.main_edges()) {
-      if (edge.dual_u == face_id) {
-        if (edge.dual_v != grid_type::invalid_id && _grid.has_cell_data(edge.dual_v) && _grid.cell_data(edge.dual_v).is_painted) {
-          ++painted_neighbors;
-        }
-      } else if (edge.dual_v == face_id) {
-        if (edge.dual_u != grid_type::invalid_id && _grid.has_cell_data(edge.dual_u) && _grid.cell_data(edge.dual_u).is_painted) {
-          ++painted_neighbors;
-        }
-      }
-    }
-
-    const auto current = _grid.has_cell_data(face_id) && _grid.cell_data(face_id).is_painted;
-
-    if (painted_neighbors >= 3u) {
-      next[face_id] = true;
-    } else if (painted_neighbors <= 1u) {
-      next[face_id] = false;
-    } else {
-      next[face_id] = current;
-    }
-  }
-
-  for (auto face_id = std::uint32_t{0u}; face_id < face_count; ++face_id) {
-    auto& cell = _grid.get_or_create_cell_data(face_id, grid_data{});
-    cell.is_painted = next[face_id];
-  }
-}
-
-static const auto settings = application::grid_type::settings{
-  .rings = 16u,
-  .ring_distance = 25.0f,
-  .seed = 70943948u,
-  .merge_probability = 0.6f,
-  .relax_iterations = 60u,
-  .relax_lambda = 0.45f,
-  .relax_mu = -0.50f
-};
-
 application::application()
 : sbx::core::application{},
-  _rotation{sbx::math::degree{0}},
-  _grid{settings} { 
+  _rotation{sbx::math::degree{0}} { 
   // Renderer
   const auto& cli = sbx::core::engine::cli();
 
@@ -136,18 +60,19 @@ application::application()
   }
 
   auto& graphics_module = sbx::core::engine::get_module<sbx::graphics::graphics_module>();
+  graphics_module.set_renderer<demo::renderer>();
 
   auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
 
   auto& scene = scenes_module.load_scene("res://scenes/scene.yaml");
 
-  auto& renderer = graphics_module.set_renderer<demo::renderer>();
-  renderer.update_dual_grid_data(_grid);
-
   auto& scripting_module = sbx::core::engine::get_module<sbx::scripting::scripting_module>();
 
   // Textures
-  scene.add_image("base", "res://textures/base.png");
+  scene.add_image("base", "res://textures/base.png", sbx::graphics::format::r8g8b8a8_unorm);
+
+  scene.add_image("rune_a_albedo", "res://textures/runes/a_albedo.png", sbx::graphics::format::r8g8b8a8_unorm);
+  scene.add_image("rune_a_emissive", "res://textures/runes/a_emissive.jpg", sbx::graphics::format::r8g8b8a8_unorm);
 
   scene.add_cube_image("skybox", "res://skyboxes/clouds2");
 
@@ -169,19 +94,6 @@ application::application()
 
   // Animations
 
-  _randomize_terrain();
-  _smooth_terrain();
-  _smooth_terrain();
-
-  _dirty_dual_quads.resize(_grid.dual_quad_count());
-
-  std::iota(_dirty_dual_quads.begin(), _dirty_dual_quads.end(), std::uint32_t{0u});
-
-  _dual_quad_tiles.clear();
-  _dual_quad_tiles.resize(_grid.dual_quad_count());
-
-  _rebuild_terrain_tiles();
-
   // Window
 
   auto& devices_module = sbx::core::engine::get_module<sbx::devices::devices_module>();
@@ -192,30 +104,16 @@ application::application()
     sbx::core::engine::quit();
   };
 
-  auto edge_one = scene.create_node("EdgeOne", sbx::scenes::transform{sbx::math::vector3{-10.0f, 10.0f, 0.0f}});
-  scene.add_component<sbx::scenes::static_mesh>(edge_one, sbx::scenes::static_mesh{scene.get_mesh("edge_one"), scene.get_material("base")});
-  auto& edge_one_transform = scene.get_component<sbx::scenes::transform>(edge_one);
-  edge_one_transform.set_scale(sbx::math::vector3{3, 3, 3});
-
-  auto diagonal = scene.create_node("Diagonal", sbx::scenes::transform{sbx::math::vector3{0.0f, 10.0f, 0.0f}});
-  scene.add_component<sbx::scenes::static_mesh>(diagonal, sbx::scenes::static_mesh{scene.get_mesh("diagonal"), scene.get_material("base")});
-  auto& diagonal_transform = scene.get_component<sbx::scenes::transform>(diagonal);
-  diagonal_transform.set_scale(sbx::math::vector3{3, 3, 3});
-
-  auto full = scene.create_node("Full", sbx::scenes::transform{sbx::math::vector3{10.0f, 10.0f, 0.0f}});
-  scene.add_component<sbx::scenes::static_mesh>(full, sbx::scenes::static_mesh{scene.get_mesh("full"), scene.get_material("base")});
-  auto& full_transform = scene.get_component<sbx::scenes::transform>(full);
-  full_transform.set_scale(sbx::math::vector3{3, 3, 3});
-
-  auto half = scene.create_node("Half", sbx::scenes::transform{sbx::math::vector3{20.0f, 10.0f, 0.0f}});
-  scene.add_component<sbx::scenes::static_mesh>(half, sbx::scenes::static_mesh{scene.get_mesh("half"), scene.get_material("base")});
-  auto& half_transform = scene.get_component<sbx::scenes::transform>(half);
-  half_transform.set_scale(sbx::math::vector3{3, 3, 3});
-
-  auto edge_three = scene.create_node("EdgeThree", sbx::scenes::transform{sbx::math::vector3{30.0f, 10.0f, 0.0f}});
-  scene.add_component<sbx::scenes::static_mesh>(edge_three, sbx::scenes::static_mesh{scene.get_mesh("edge_three"), scene.get_material("base")});
-  auto& edge_three_transform = scene.get_component<sbx::scenes::transform>(edge_three);
-  edge_three_transform.set_scale(sbx::math::vector3{3, 3, 3});
+  auto sprite = scene.create_node("SpriteNode");
+  scene.add_component<sbx::sprites::sprite>(sprite, sbx::sprites::sprite{
+    .space = sbx::sprites::sprite_space::world,
+    .base_color = sbx::math::color::white(),
+    .albedo_image = scene.get_image("rune_a_albedo"),
+    .emissive_factor = sbx::math::color{1, 0, 0, 1},
+    .emissive_strength = 5.0f,
+    .emissive_image = scene.get_image("rune_a_emissive"),
+    .is_billboard = true
+  });
 
   // Camera
   auto camera_node = scene.camera();
@@ -252,242 +150,11 @@ auto application::update() -> void  {
   auto& scene = scenes_module.scene();
 
   _rotation += sbx::math::degree{45} * delta_time;
-
-  if (sbx::devices::input::is_mouse_button_pressed(sbx::devices::mouse_button::left)) {
-    auto screen_position = sbx::devices::input::mouse_position();
-
-    auto ray = scene.screen_point_to_ray(screen_position);
-
-    const auto ground = sbx::math::plane{sbx::math::vector3::up, 0.0f};
-
-    if (const auto hit = intersect_ray_plane(ray, ground); hit) {
-      _selected_main_face = _grid.pick_main_face_at(*hit);
-
-      if (_selected_main_face != grid_type::invalid_id) {
-        auto& face = _grid.get_or_create_cell_data(_selected_main_face, grid_data{});
-        face.is_painted = !face.is_painted;
-
-        _dirty_dual_quads.clear();
-
-        for (const auto quad_id : _grid.dual_quads_of_main_face(_selected_main_face)) {
-          _dirty_dual_quads.push_back(quad_id);
-        }
-
-        _rebuild_terrain_tiles();
-      }
-    }
-  }
-
-  // for (auto i = 0; i < _grid.dual_vertices().size(); ++i) {
-  //   auto poly = _grid.main_cell_ccw(i);
-
-  //   for (auto j = 0; j < poly.size(); ++j) {
-  //     const auto a_id = poly[j];
-  //     const auto b_id = poly[(j + 1) % poly.size()];
-
-  //     const auto& a = _grid.main_vertex_at(a_id).position;
-  //     const auto& b = _grid.main_vertex_at(b_id).position;
-
-  //     scenes_module.add_debug_line(sbx::math::vector3{a.x(), 3.0f, a.z()}, sbx::math::vector3{b.x(), 3.0f, b.z()}, sbx::math::color::white());
-  //   }
-  // }
-
-  // if (_selected_main_face != grid_type::invalid_id) {
-  //   const auto poly = _grid.main_cell_ccw(_selected_main_face);
-
-  //   for (auto i = std::size_t{0u}; i < poly.size(); ++i) {
-  //     const auto a_id = poly[i];
-  //     const auto b_id = poly[sbx::utility::fast_mod(i + 1u, poly.size())];
-
-  //     const auto& a = _grid.main_vertex_at(a_id).position;
-  //     const auto& b = _grid.main_vertex_at(b_id).position;
-
-  //     scenes_module.add_debug_line(sbx::math::vector3{a.x(), 3.0f, a.z()}, sbx::math::vector3{b.x(), 3.0f, b.z()}, sbx::math::color::yellow());
-  //   }
-  // }
 }
 
 auto application::fixed_update() -> void {
 
 }
-
-struct tile_choice {
-  sbx::utility::hashed_string mesh_name{};
-  std::uint32_t rotation_steps = 0u;
-  bool is_visible = false;
-}; // struct tile_choice
-
-static auto popcount4(const std::uint8_t mask) -> std::uint32_t {
-  auto c = std::uint32_t{0u};
-
-  c += (mask & 0x1u) ? 1u : 0u;
-  c += (mask & 0x2u) ? 1u : 0u;
-  c += (mask & 0x4u) ? 1u : 0u;
-  c += (mask & 0x8u) ? 1u : 0u;
-
-  return c;
-}
-
-static auto rotate_mask_for_steps(const std::uint8_t mask, const std::uint32_t steps) -> std::uint8_t {
-  auto m = static_cast<std::uint8_t>(mask & 0xFu);
-
-  for (auto i = std::uint32_t{0u}; i < (steps & 3u); ++i) {
-    const auto b3 = static_cast<std::uint8_t>((m >> 3u) & 0x1u);
-
-    m = static_cast<std::uint8_t>(((m << 1u) & 0xFu) | b3);
-  }
-
-  return m;
-}
-
-static auto rotation_steps_from_base_mask(const std::uint8_t desired_mask, const std::uint8_t base_mask) -> std::uint32_t {
-  const auto desired = static_cast<std::uint8_t>(desired_mask & 0xFu);
-  const auto base = static_cast<std::uint8_t>(base_mask & 0xFu);
-
-  for (auto r = std::uint32_t{0u}; r < 4u; ++r) {
-    if (rotate_mask_for_steps(base, r) == desired) {
-      return r;
-    }
-  }
-
-  return 0u;
-}
-
-static auto choose_tile_from_mask(const std::uint8_t mask) -> tile_choice {
-  const auto m = static_cast<std::uint8_t>(mask & 0xFu);
-
-  if (m == 0u) {
-    return tile_choice{{}, 0u, false};
-  }
-
-  if (m == 0xFu) {
-    return tile_choice{"full", 0u, true};
-  }
-
-  const auto count = popcount4(m);
-
-  if (count == 1u) {
-    const auto r = rotation_steps_from_base_mask(m, 0x1u);
-
-    return tile_choice{"edge_one", r, true};
-  }
-
-  if (count == 3u) {
-    const auto r = rotation_steps_from_base_mask(m, 0x7u);
-
-    return tile_choice{"edge_three", r, true};
-  }
-
-  if (count == 2u) {
-    if (m == 0x5u || m == 0xAu) {
-      const auto r = rotation_steps_from_base_mask(m, 0x5u);
-
-      return tile_choice{"diagonal", r, true};
-    }
-
-    const auto r = rotation_steps_from_base_mask(m, 0x3u);
-
-    return tile_choice{"half", r, true};
-  }
-
-  return tile_choice{"half", 0u, true};
-}
-
-static auto _get_submeshes_for_choice(const tile_choice& choice) -> std::vector<submesh> {
-  const auto ground_color = sbx::math::color{0.715056f, 0.737588f, 0.810134f, 1.0f};
-  const auto grass_color = sbx::math::color{0.553777f, 0.800819f, 0.084514f, 1.0f};
-
-  auto submeshes = std::vector<submesh>{};
-
-  if (choice.mesh_name == sbx::utility::hashed_string{"edge_one"}) {
-    submeshes.push_back(submesh{0, ground_color});
-    submeshes.push_back(submesh{1, grass_color});
-  } else if (choice.mesh_name == sbx::utility::hashed_string{"edge_three"}) {
-    submeshes.push_back(submesh{0, ground_color});
-    submeshes.push_back(submesh{1, grass_color});
-  } else if (choice.mesh_name == sbx::utility::hashed_string{"diagonal"}) {
-    submeshes.push_back(submesh{0, ground_color});
-    submeshes.push_back(submesh{1, grass_color});
-  } else if (choice.mesh_name == sbx::utility::hashed_string{"full"}) {
-    submeshes.push_back(submesh{0, grass_color});
-  } else if (choice.mesh_name == sbx::utility::hashed_string{"half"}) {
-    submeshes.push_back(submesh{0, ground_color});
-    submeshes.push_back(submesh{1, grass_color});
-  } else {
-    sbx::utility::logger<"application">::warn("Unknown tile mesh name encountered when building submeshes");
-  }
-
-  return submeshes;
-}
-
-auto application::_rebuild_terrain_tiles() -> void {
-  auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
-  auto& scene = scenes_module.scene();
-
-  if (_dual_quad_tiles.size() != _grid.dual_quad_count()) {
-    _dual_quad_tiles.clear();
-    _dual_quad_tiles.resize(_grid.dual_quad_count());
-  }
-
-  const auto main_face_is_painted = [&](const std::uint32_t dual_vertex_id) -> bool {
-    if (!_grid.has_cell_data(dual_vertex_id)) {
-      return false;
-    }
-
-    return _grid.cell_data(dual_vertex_id).is_painted;
-  };
-
-  for (const auto quad_id : _dirty_dual_quads) {
-    sbx::utility::assert_that(quad_id < _grid.dual_quad_count(), "_rebuild_terrain_tiles(): quad_id out of range");
-
-    const auto& q = _grid.dual_quad_at(quad_id);
-
-    auto mask = std::uint8_t{0u};
-
-    if (main_face_is_painted(q.a)) {
-      mask |= 0x1u;
-    }
-
-    if (main_face_is_painted(q.b)) {
-      mask |= 0x2u;
-    }
-
-    if (main_face_is_painted(q.c)) {
-      mask |= 0x4u;
-    }
-
-    if (main_face_is_painted(q.d)) {
-      mask |= 0x8u;
-    }
-
-    auto& tile = _dual_quad_tiles[quad_id];
-
-    if (tile.last_mask == mask) {
-      continue;
-    }
-
-    tile.last_mask = mask;
-
-    const auto choice = choose_tile_from_mask(mask);
-
-    if (!choice.is_visible) {
-      tile.is_visible = false;
-      continue;
-    }
-
-    const auto rotation_steps = choice.rotation_steps;
-
-    if (!tile.is_visible || tile.mesh_id != scene.get_mesh(choice.mesh_name)) {
-      tile.height = 6.0f;
-      tile.submeshes = _get_submeshes_for_choice(choice);
-    }
-
-    tile.mesh_id = scene.get_mesh(choice.mesh_name);
-    tile.rotation_steps = rotation_steps;
-    tile.is_visible = true;
-  }
-}
-
 
 auto application::_generate_brdf(const std::uint32_t size) -> void {
   constexpr auto threads_per_group = std::uint32_t{16};

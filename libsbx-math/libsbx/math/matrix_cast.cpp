@@ -3,7 +3,7 @@
 
 namespace sbx::math {
 
-[[nodiscard]] constexpr auto decompose(const matrix4x4& matrix) noexcept -> decompose_result {
+auto decompose(const matrix4x4& matrix) noexcept -> decompose_result {
   auto result = decompose_result{};
 
   result.position = vector3{matrix[3][0], matrix[3][1], matrix[3][2]};

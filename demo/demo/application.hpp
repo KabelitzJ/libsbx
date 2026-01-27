@@ -30,6 +30,8 @@ public:
 
   auto fixed_update() -> void override;
 
+  auto is_paused() const -> bool override;
+
 private:
 
   auto _randomize_terrain() -> void;
@@ -39,6 +41,8 @@ private:
   auto _generate_brdf(const std::uint32_t size) -> void;
   auto _generate_irradiance(const std::uint32_t size) -> void;
   auto _generate_prefiltered(const std::uint32_t size) -> void;
+
+  bool _is_paused;
 
   sbx::math::angle _rotation;
 

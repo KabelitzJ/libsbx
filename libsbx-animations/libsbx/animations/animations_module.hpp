@@ -33,10 +33,17 @@ public:
   auto update() -> void override {
     SBX_PROFILE_SCOPE("animations_module::update");
 
+    auto& application = core::engine::get_application();
+
+    if (application.is_paused()) {
+      return;
+    }
+
     auto& assets_module = core::engine::get_module<assets::assets_module>();
 
     auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
     auto& scene = scenes_module.scene();
+
 
     const auto delta_time = core::engine::delta_time();
 
@@ -70,7 +77,7 @@ public:
   }
 
   template<typename... Args>
-  auto add_animated_mesh(scenes::node node, const math::uuid mesh_id, Args&&... args) -> scenes::skinned_mesh& {
+  auto add_animated_mesh(const scenes::node node, const math::uuid mesh_id, Args&&... args) -> scenes::skinned_mesh& {
     auto& assets_module = core::engine::get_module<assets::assets_module>();
     auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
 

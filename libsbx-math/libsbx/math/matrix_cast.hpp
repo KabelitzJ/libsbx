@@ -77,24 +77,16 @@ struct matrix_cast_impl;
  * @return Converted value.
  */
 template<typename To, typename From>
-requires (
-  dispatcher_for<
-    detail::matrix_cast_impl<To, std::remove_cvref_t<From>>,
-    To,
-    From
-  >
-)
+requires (dispatcher_for<detail::matrix_cast_impl<To, std::remove_cvref_t<From>>, To, From>)
 [[nodiscard]] constexpr auto matrix_cast(const From& from) -> To;
 
 /**
  * @brief Result of matrix decomposition.
  */
 struct decompose_result {
-
   vector3 position;
   quaternion rotation;
   vector3 scale;
-
 }; // struct decompose_result
 
 /**
@@ -104,7 +96,7 @@ struct decompose_result {
  *
  * @return Decomposed transformation components.
  */
-[[nodiscard]] constexpr auto decompose(const matrix4x4& matrix) noexcept -> decompose_result;
+[[nodiscard]] auto decompose(const matrix4x4& matrix) noexcept -> decompose_result;
 
 } // namespace sbx::math
 

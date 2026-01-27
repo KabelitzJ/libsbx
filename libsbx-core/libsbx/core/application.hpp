@@ -16,6 +16,8 @@ public:
 
   virtual auto fixed_update() -> void = 0;
 
+  virtual auto is_paused() const -> bool = 0;
+
 }; // class application
 
 } // namespace sbx::core

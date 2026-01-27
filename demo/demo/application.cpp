@@ -24,6 +24,7 @@
 #include <libsbx/animations/mesh.hpp>
 #include <libsbx/animations/animation.hpp>
 #include <libsbx/animations/animator.hpp>
+#include <libsbx/animations/animations_module.hpp>
 
 #include <libsbx/sprites/sprite_subrenderer.hpp>
 
@@ -47,6 +48,7 @@ static auto intersect_ray_plane(const sbx::math::ray& ray, const sbx::math::plan
 
 application::application()
 : sbx::core::application{},
+  _is_paused{false},
   _rotation{sbx::math::degree{0}} { 
   // Renderer
   const auto& cli = sbx::core::engine::cli();
@@ -74,6 +76,8 @@ application::application()
   scene.add_image("rune_a_albedo", "res://textures/runes/a_albedo.png", sbx::graphics::format::r8g8b8a8_unorm);
   scene.add_image("rune_a_emissive", "res://textures/runes/a_emissive.jpg", sbx::graphics::format::r8g8b8a8_unorm);
 
+  scene.add_image("fox_albedo", "res://textures/fox/albedo.png", sbx::graphics::format::r8g8b8a8_unorm);
+
   scene.add_cube_image("skybox", "res://skyboxes/clouds2");
 
   _generate_brdf(512);
@@ -87,12 +91,18 @@ application::application()
   scene.add_mesh<sbx::models::mesh>("full", "res://meshes/terrain/full/full.gltf");
   scene.add_mesh<sbx::models::mesh>("half", "res://meshes/terrain/half/half.gltf");
 
+  scene.add_mesh<sbx::animations::mesh>("fox", "res://meshes/fox/fox.gltf");
+
   // Materials
 
   auto& base_material = scene.add_material<sbx::models::material>("base");
   base_material.albedo.image = scene.get_image("base");
 
   // Animations
+
+  scene.add_animation<sbx::animations::animation>("Walk", "res://meshes/fox/fox.gltf", "Walk");
+  scene.add_animation<sbx::animations::animation>("Survey", "res://meshes/fox/fox.gltf", "Survey");
+  scene.add_animation<sbx::animations::animation>("Run", "res://meshes/fox/fox.gltf", "Run");
 
   // Window
 
@@ -114,6 +124,86 @@ application::application()
     .emissive_image = scene.get_image("rune_a_emissive"),
     .is_billboard = true
   });
+
+  // Fox
+  auto& animations_module = sbx::core::engine::get_module<sbx::animations::animations_module>();
+
+  auto fox1 = scene.create_node("Fox");
+
+  auto& fox_material = scene.add_material<sbx::models::material>("fox");
+  fox_material.albedo.image = scene.get_image("fox_albedo");
+
+  animations_module.add_animated_mesh(fox1, scene.get_mesh("fox"), scene.get_material("fox"));
+
+  auto& fox_animator = scene.add_component<sbx::animations::animator>(fox1);
+
+  fox_animator.add_state({"Walk", scene.get_animation("Walk"), true, 0.5f });
+  fox_animator.add_state({"Survey", scene.get_animation("Survey"), true, 0.5f });
+  fox_animator.add_state({"Run", scene.get_animation("Run"), true, 0.5f });
+
+  fox_animator.add_transition({
+    "Walk", "Survey", 0.20f,
+    [](const sbx::animations::animator& animator){
+      if (auto value = animator.float_parameter("speed"); value) {
+        return *value <= 0.05f;
+      }
+
+      return false;
+    }
+  });
+
+  fox_animator.add_transition({
+    "Run", "Survey", 0.25f,
+    [](const sbx::animations::animator& animator){
+      if (auto value = animator.float_parameter("speed"); value) {
+        return *value <= 0.05f;
+      }
+
+      return false;
+    }
+  });
+
+  // Walk ↔ Run thresholds
+  fox_animator.add_transition({
+    "Walk", "Run", 0.15f,
+    [](const sbx::animations::animator& animator){
+      if (auto value = animator.float_parameter("speed"); value) {
+        return *value >= 2.0f;
+      }
+
+      return false;
+    }
+  });
+
+  fox_animator.add_transition({
+    "Run", "Walk", 0.15f,
+    [](const sbx::animations::animator& animator){
+      if (auto value = animator.float_parameter("speed"); value) {
+        return *value < 2.0f && *value > 0.05f;
+      }
+
+      return false;
+    }
+  });
+
+  // Survey → Walk when starting to move
+  fox_animator.add_transition({
+    "Survey", "Walk", 0.20f,
+    [](const sbx::animations::animator& animator){
+      if (auto value = animator.float_parameter("speed"); value) {
+        return *value > 0.05f && *value < 2.0f;
+      }
+
+      return false;
+    }
+  });
+
+  fox_animator.play("Survey", true);
+  fox_animator.set_float("speed", 1.0f);
+
+  auto& fox1_transform = scene.get_component<sbx::scenes::transform>(fox1);
+  fox1_transform.set_position(sbx::math::vector3{12.0f, 0.0f, 0.0f});
+  fox1_transform.set_scale(sbx::math::vector3{0.06f, 0.06f, 0.06f});
 
   // Camera
   auto camera_node = scene.camera();
@@ -150,10 +240,18 @@ auto application::update() -> void  {
   auto& scene = scenes_module.scene();
 
   _rotation += sbx::math::degree{45} * delta_time;
+
+  if (sbx::devices::input::is_key_pressed(sbx::devices::key::space)) {
+    _is_paused = !_is_paused;
+  }
 }
 
 auto application::fixed_update() -> void {
 
+}
+
+auto application::is_paused() const -> bool {
+  return _is_paused;
 }
 
 auto application::_generate_brdf(const std::uint32_t size) -> void {

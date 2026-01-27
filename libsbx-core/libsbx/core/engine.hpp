@@ -67,8 +67,8 @@ public:
     return *static_cast<Module*>(modules[type]);
   }
 
-  template<typename Application>
-  requires (std::is_base_of_v<core::application, Application>)
+  template<typename Application = core::application>
+  requires (std::is_same_v<core::application, Application> || std::is_base_of_v<core::application, Application>)
   [[nodiscard]] static auto get_application() -> Application& {
     utility::assert_that(_instance != nullptr, "Engine instance does not exist");
     utility::assert_that(_instance->_application != nullptr, "Engine has no application running");

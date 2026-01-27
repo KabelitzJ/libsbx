@@ -114,8 +114,6 @@ application::application()
 
   auto fox1 = scene.create_node("Fox");
 
-  scene.add_component<test>(fox1);
-
   auto& fox_material = scene.add_material<sbx::models::material>("fox");
   fox_material.albedo.image = scene.get_image("fox_albedo");
 

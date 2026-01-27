@@ -57,16 +57,15 @@ fs_out main(fs_in input) {
 
   color = apply_white_balance(color, push.temperature, push.tint);
 
-  float3 exposed = color * exp2(push.exposure);
-
-  exposed += pow(bloom, 1.2) * push.bloom_mix;
+  float3 exposed = (color + bloom * push.bloom_mix) * exp2(push.exposure);
 
   float3 mapped = apply_tonemap(exposed);
 
   float luminance = dot(mapped, float3(0.2126, 0.7152, 0.0722));
 
   mapped = lerp(luminance.xxx, mapped, push.saturation);
-  mapped = luminance.xxx + (mapped - luminance.xxx) * push.contrast;
+  mapped = (mapped - 0.5) * push.contrast + 0.5;
+  mapped = saturate(mapped);
 
   output.color = float4(mapped, 1.0);
 

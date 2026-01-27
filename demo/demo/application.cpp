@@ -104,7 +104,7 @@ application::application()
     .base_color = sbx::math::color::white(),
     .albedo_image = scene.get_image("rune_a_albedo"),
     .emissive_factor = sbx::math::color{1, 0, 0, 1},
-    .emissive_strength = 5.0f,
+    .emissive_strength = 15.0f,
     .emissive_image = scene.get_image("rune_a_emissive"),
     .is_billboard = true
   });

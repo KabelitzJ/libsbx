@@ -30,22 +30,6 @@
 
 namespace demo {
 
-static auto intersect_ray_plane(const sbx::math::ray& ray, const sbx::math::plane& plane) -> std::optional<sbx::math::vector3> {
-  const auto denominator = sbx::math::vector3::dot(plane.normal(), ray.direction());
-
-  if (sbx::math::comparision_traits<std::float_t>::equal(denominator, 0.0f)) {
-    return std::nullopt;
-  }
-
-  const auto t = -plane.distance_to_point(ray.origin()) / denominator;
-  
-  if (t < 0.0f) {
-    return std::nullopt;
-  }
-
-  return ray.point_at(t);
-}
-
 application::application()
 : sbx::core::application{},
   _is_paused{false},

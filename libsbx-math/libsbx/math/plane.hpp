@@ -4,6 +4,7 @@
 
 #include <libsbx/math/concepts.hpp>
 #include <libsbx/math/vector3.hpp>
+#include <libsbx/math/ray.hpp>
 
 namespace sbx::math {
 
@@ -50,6 +51,22 @@ public:
     const auto length = plane._normal.length();
 
     return basic_plane{plane._normal / length, plane._distance / length};
+  }
+
+  auto ray_intersect(const sbx::math::ray& ray) -> std::optional<sbx::math::vector3> {
+    const auto denominator = sbx::math::vector3::dot(_normal, ray.direction());
+
+    if (sbx::math::comparision_traits<std::float_t>::equal(denominator, 0.0f)) {
+      return std::nullopt;
+    }
+
+    const auto t = -distance_to_point(ray.origin()) / denominator;
+    
+    if (t < 0.0f) {
+      return std::nullopt;
+    }
+
+    return ray.point_at(t);
   }
 
 private:

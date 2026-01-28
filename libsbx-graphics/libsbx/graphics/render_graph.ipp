@@ -64,7 +64,7 @@ auto render_graph::_execute_pass_instruction(command_buffer& command_buffer, con
     }
   }
 
-  VkRenderingInfo rendering_info{};
+  auto rendering_info = VkRenderingInfo{};
   rendering_info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
   rendering_info.renderArea = render_area;
   rendering_info.layerCount = 1;

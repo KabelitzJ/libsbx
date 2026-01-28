@@ -49,8 +49,6 @@ application::application()
 
   auto& audio_module = sbx::core::engine::get_module<sbx::audio::audio_module>();
 
-  audio_module.start();
-
   auto& graphics_module = sbx::core::engine::get_module<sbx::graphics::graphics_module>();
   graphics_module.set_renderer<demo::renderer>();
 

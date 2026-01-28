@@ -16,7 +16,7 @@ add_library(${CMAKE_PROJECT_NAME}::${PROJECT_NAME} ALIAS ${PROJECT_NAME})
 
 find_package(fmt CONFIG REQUIRED)
 find_package(drwav CONFIG REQUIRED)
-find_package(OpenAl CONFIG REQUIRED)
+find_package(OpenAL CONFIG REQUIRED)
 
 target_sources(
   ${PROJECT_NAME}

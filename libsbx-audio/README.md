@@ -1,0 +1,3 @@
+# libsbx-audio
+
+C++ library

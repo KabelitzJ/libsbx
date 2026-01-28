@@ -28,6 +28,8 @@
 
 #include <libsbx/sprites/sprite_subrenderer.hpp>
 
+#include <libsbx/audio/audio_module.hpp>
+
 namespace demo {
 
 application::application()
@@ -44,6 +46,10 @@ application::application()
   } else {
     assets_module.set_asset_root("demo/assets");
   }
+
+  auto& audio_module = sbx::core::engine::get_module<sbx::audio::audio_module>();
+
+  audio_module.start();
 
   auto& graphics_module = sbx::core::engine::get_module<sbx::graphics::graphics_module>();
   graphics_module.set_renderer<demo::renderer>();

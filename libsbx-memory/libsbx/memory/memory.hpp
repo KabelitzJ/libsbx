@@ -10,5 +10,6 @@
 #include <libsbx/memory/cache.hpp>
 #include <libsbx/memory/iterable_adaptor.hpp>
 #include <libsbx/memory/blob.hpp>
+#include <libsbx/memory/counting_resource.hpp>
 
 #endif // LIBSBX_MEMORY_HPP_

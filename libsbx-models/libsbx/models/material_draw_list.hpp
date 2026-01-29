@@ -170,15 +170,11 @@ private:
   }; // struct pipeline_data
 
   static auto _classify_bucket(const models::material& material) -> bucket {
-    if (material.alpha == models::alpha_mode::blend) {
-      return bucket::transparent;
-    }
-
-    return bucket::opaque;
+    return (material.alpha == models::alpha_mode::blend) ? bucket::transparent : bucket::opaque;
   }
 
   static auto _submits_to_shadow(const models::material& material) -> bool {
-    return material.features.has(models::material_feature::cast_shadow);
+    return !models::alpha_mode::blend && material.features.has(models::material_feature::cast_shadow);
   }
 
   auto _get_or_create_pipeline_data(const material_key& key) -> pipeline_data& {

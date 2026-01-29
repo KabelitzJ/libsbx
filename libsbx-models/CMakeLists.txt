@@ -22,6 +22,7 @@ find_package(base64 CONFIG REQUIRED)
 find_package(tsl-robin-map CONFIG REQUIRED)
 find_package(assimp CONFIG REQUIRED)
 find_package(meshoptimizer CONFIG REQUIRED)
+find_package(magic_enum CONFIG REQUIRED)
 
 target_sources(
   ${PROJECT_NAME}
@@ -60,6 +61,7 @@ target_link_libraries(
     aklomp::base64
     tsl::robin_map
     assimp::assimp
+    magic_enum::magic_enum
     meshoptimizer::meshoptimizer
     # Internal dependencies
     libsbx::utility

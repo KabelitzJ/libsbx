@@ -82,7 +82,7 @@ auto shadow_subrenderer::_get_or_create_pipeline(const models::material_key& key
     .path = _base_pipeline,
     .per_stage = {
       {SLANG_STAGE_VERTEX, {.entry_point = "main"}},
-      {SLANG_STAGE_FRAGMENT, {.entry_point = _fs_entry.at(key.alpha)}}
+      { SLANG_STAGE_FRAGMENT, {.entry_point = "opaque_main"}}
     }
   };
 

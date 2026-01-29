@@ -136,30 +136,10 @@ float2x2 rotation_matrix(float angle) {
 }
 
 float calculate_shadow(float3 world_position, float3 normal) {
-  float4 shadow_coord = mul(BIAS_MATRIX, mul(scene.light_space, float4(world_position, 1.0)));
+  float4 shadow_coord = mul(scene.light_space, float4(world_position, 1.0));
   float3 projected_coords = shadow_coord.xyz / shadow_coord.w;
 
-  if (projected_coords.z < 0.0) {
-    return 1.0;
-  }
-
-  if (projected_coords.z > 1.0) {
-    return 1.0;
-  }
-
-  if (projected_coords.x < 0.0) {
-    return 1.0;
-  }
-
-  if (projected_coords.x > 1.0) {
-    return 1.0;
-  }
-
-  if (projected_coords.y < 0.0) {
-    return 1.0;
-  }
-
-  if (projected_coords.y > 1.0) {
+  if (any(projected_coords < 0.0) || any(projected_coords > 1.0)) {
     return 1.0;
   }
 

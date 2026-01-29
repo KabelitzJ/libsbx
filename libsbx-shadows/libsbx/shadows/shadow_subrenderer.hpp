@@ -31,7 +31,7 @@ class shadow_subrenderer final : public graphics::subrenderer {
     .uses_transparency = false,
     .rasterization_state = graphics::rasterization_state{
       .polygon_mode = graphics::polygon_mode::fill,
-      .cull_mode = graphics::cull_mode::front,
+      .cull_mode = graphics::cull_mode::none,
       .front_face = graphics::front_face::counter_clockwise
     }
   };

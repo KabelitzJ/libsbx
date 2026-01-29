@@ -39,16 +39,27 @@ public:
     }
 
     _graph.execute(command_buffer, swapchain, [this, &command_buffer](const pass_handle& pass) -> void {
-      for (const auto& subrenderer : _subrenderers[pass.index]) {
-        subrenderer->render(command_buffer);
-      }
-    });
-  }
+      const auto kind = _graph.pass_kind(pass);
 
-  auto execute_tasks(command_buffer& command_buffer) -> void {
-    for (const auto& task : _tasks) {
-      task->execute(command_buffer);
-    }
+      if (kind == pass_node::kind::compute) {
+        if (pass.index >= _tasks.size()) {
+          return;
+        }
+
+        for (const auto& task : _tasks[pass.index]) {
+          task->execute(command_buffer);
+        }
+      } else {
+        if (pass.index >= _subrenderers.size()) {
+          return;
+        }
+  
+        for (const auto& subrenderer : _subrenderers[pass.index]) {
+          subrenderer->render(command_buffer);
+        }
+      }
+
+    });
   }
 
   auto resize(const viewport::type flags) -> void {
@@ -72,8 +83,14 @@ public:
 protected:
 
   template<typename Type, typename... Args>
-  requires (std::is_constructible_v<Type, const std::vector<sbx::graphics::attachment_description>&, Args...>)
+  requires (std::is_base_of_v<graphics::subrenderer, Type> && std::is_constructible_v<Type, const std::vector<sbx::graphics::attachment_description>&, Args...>)
   auto add_subrenderer(const pass_handle handle, Args&&... args) -> Type& {
+    utility::assert_that(handle.is_valid(), "Invalid pass handle in add_subrenderer()");
+
+    if (_graph.pass_kind(handle) != pass_node::kind::graphics) {
+      throw utility::runtime_error{"add_subrenderer() can only be used with graphics passes"};
+    }
+
     _subrenderers.resize(std::max(_subrenderers.size(), static_cast<std::size_t>(handle.index + 1)));
 
     auto& subrenderers = _subrenderers[handle.index];
@@ -81,6 +98,24 @@ protected:
     subrenderers.emplace_back(std::make_unique<Type>(_graph.attachment_descriptions(handle), std::forward<Args>(args)...));
 
     return *static_cast<Type*>(subrenderers.back().get());
+  }
+
+  template<typename Type, typename... Args>
+  requires (std::is_base_of_v<graphics::task, Type> && std::is_constructible_v<Type, Args...>)
+  auto add_task(const pass_handle handle, Args&&... args) -> Type& {
+    utility::assert_that(handle.is_valid(), "Invalid pass handle in add_compute_task()");
+
+    if (_graph.pass_kind(handle) != pass_node::kind::compute) {
+      throw utility::runtime_error{"add_compute_task() can only be used with compute passes"};
+    }
+
+    _tasks.resize(std::max(_tasks.size(), static_cast<std::size_t>(handle.index + 1)));
+
+    auto& tasks = _tasks[handle.index];
+
+    tasks.emplace_back(std::make_unique<Type>(std::forward<Args>(args)...));
+
+    return *static_cast<Type*>(tasks.back().get());
   }
 
   template<typename Type, typename... Args>
@@ -111,9 +146,8 @@ protected:
 
 private:
 
-  std::vector<std::unique_ptr<graphics::task>> _tasks;
-
-  std::vector<std::vector<std::unique_ptr<subrenderer>>> _subrenderers;
+  std::vector<std::vector<std::unique_ptr<graphics::subrenderer>>> _subrenderers;
+  std::vector<std::vector<std::unique_ptr<graphics::task>>> _tasks;
 
   std::unordered_map<utility::hashed_string, std::unique_ptr<graphics::draw_list>> _draw_lists;
 

@@ -159,59 +159,72 @@ public:
 
   auto light_space() -> math::matrix4x4 {
     const auto& camera = get_component<scenes::camera>(_camera);
-    const auto& camera_transform = get_component<scenes::transform>(_camera);
 
-    const auto camera_view = math::matrix4x4::inverted(camera_transform.local_transform());
+    const auto camera_view = math::matrix4x4::inverted(world_transform(_camera));
     const auto camera_projection = camera.projection(0.1f, 100.0f);
 
     const auto inverse_view_projection = math::matrix4x4::inverted(camera_projection * camera_view);
 
-    // auto frustum_corners_world = std::array<math::vector3, 8>{};
-
     static constexpr auto frustum_corners_clip = std::array<math::vector4, 8u>{
-      math::vector4{-1, -1, -1, 1},
-      math::vector4{ 1, -1, -1, 1},
-      math::vector4{ 1,  1, -1, 1},
-      math::vector4{-1,  1, -1, 1},
-      math::vector4{-1, -1,  1, 1},
-      math::vector4{ 1, -1,  1, 1},
-      math::vector4{ 1,  1,  1, 1},
-      math::vector4{-1,  1,  1, 1}
+      math::vector4{-1.0f, -1.0f, 0.0f, 1.0f},
+      math::vector4{ 1.0f, -1.0f, 0.0f, 1.0f},
+      math::vector4{ 1.0f,  1.0f, 0.0f, 1.0f},
+      math::vector4{-1.0f,  1.0f, 0.0f, 1.0f},
+      math::vector4{-1.0f, -1.0f, 1.0f, 1.0f},
+      math::vector4{ 1.0f, -1.0f, 1.0f, 1.0f},
+      math::vector4{ 1.0f,  1.0f, 1.0f, 1.0f},
+      math::vector4{-1.0f,  1.0f, 1.0f, 1.0f}
     };
 
-    const auto to_world_transform = [&inverse_view_projection](const auto& corner) {
-      const auto frustum_corner = inverse_view_projection * corner;
+    auto frustum_corners_world = std::array<math::vector3, 8u>{};
 
-      return math::vector3{frustum_corner} / frustum_corner.w();
-    };
+    for (auto i = 0u; i < 8u; i++) {
+      auto corner_world = inverse_view_projection * frustum_corners_clip[i];
 
-    const auto frustum_corners_world = frustum_corners_clip | ranges::views::transform(to_world_transform) | ranges::to<std::vector>();
+      corner_world /= corner_world.w();
 
-    const auto center = std::accumulate(frustum_corners_world.begin(), frustum_corners_world.end(), math::vector3::zero) / 8.0f;
+      frustum_corners_world[i] = math::vector3{corner_world};
+    }
 
-    const auto light_position = center - _light.direction() * 20.0f; // Move back along light dir
+    auto center = math::vector3::zero;
+
+    for (const auto& corner : frustum_corners_world) {
+      center += corner;
+    }
+
+    center /= 8.0f;
+
+    const auto light_position = center - _light.direction() * 10.0f;
     const auto light_view = math::matrix4x4::look_at(light_position, center, math::vector3::up);
 
-    const auto min_max_transform = [&light_view](const auto& bounds, const auto& corner) {
-      const auto corner_light_space = light_view * math::vector4(corner, 1.0f);
+    auto min_bounds = math::vector3{std::numeric_limits<std::float_t>::max()};
+    auto max_bounds = math::vector3{std::numeric_limits<std::float_t>::lowest()};
 
-      return std::pair{
-        math::vector3::min(bounds.first, math::vector3(corner_light_space)),
-        math::vector3::max(bounds.second, math::vector3(corner_light_space))
-      };
-    };
+    for (const auto& corner : frustum_corners_world) {
+      const auto corner_light_space = light_view * math::vector4{corner, 1.0f};
+      const auto p = math::vector3{corner_light_space};
 
-    const auto [min, max] = std::accumulate(frustum_corners_world.begin(), frustum_corners_world.end(), std::pair{math::vector3{std::numeric_limits<std::float_t>::max()}, math::vector3{std::numeric_limits<std::float_t>::lowest()}}, min_max_transform);
+      min_bounds = math::vector3::min(min_bounds, p);
+      max_bounds = math::vector3::max(max_bounds, p);
+    }
 
-    static constexpr float z_mult = 10.0f;
+    static constexpr auto z_mult = 10.0f;
 
-    const auto min_z = std::min(min.z() * z_mult, min.z() / z_mult);
-    const auto max_z = std::max(max.z() * z_mult, max.z() / z_mult);
+    const auto min_z = std::min(min_bounds.z() * z_mult, min_bounds.z() / z_mult);
+    const auto max_z = std::max(max_bounds.z() * z_mult, max_bounds.z() / z_mult);
 
-    auto light_projection = math::matrix4x4::orthographic(min.x() - 10.0f, max.x() + 10.0f, min.y() - 10.0f, max.y() + 10.0f, -max_z, -min_z);
+    auto near_plane = -max_z;
+    auto far_plane = -min_z;
+
+    if (near_plane > far_plane) {
+      std::swap(near_plane, far_plane);
+    }
+
+    const auto light_projection = math::matrix4x4::orthographic(min_bounds.x() - 10.0f, max_bounds.x() + 10.0f, min_bounds.y() - 10.0f, max_bounds.y() + 10.0f, near_plane, far_plane);
 
     return light_projection * light_view;
   }
+
 
   auto find_node(const scenes::id& id) -> node_type {
     if (auto entry = _nodes.find(id); entry != _nodes.end()) {

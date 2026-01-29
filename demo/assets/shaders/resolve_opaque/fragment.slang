@@ -60,7 +60,8 @@ SamplerCube<float4> irradiance_image;
 SamplerCube<float4> prefiltered_image;
 
 // [[vk::binding(7, 0)]] Sampler2D<uint> object_id_image;
-// [[vk::binding(7, 0)]] Sampler2D<float2> shadow_image;
+[[vk::binding(10, 0)]] 
+Sampler2D<float> shadow_image;
 
 static const float3 DEFAULT_F0 = float3(0.04, 0.04, 0.04);
 
@@ -134,41 +135,68 @@ float2x2 rotation_matrix(float angle) {
   return float2x2(c, -s, s, c);
 }
 
-// float calculate_shadow(float3 world_position, float3 normal) {
-//   float4 shadow_coord = mul(BIAS_MATRIX, mul(scene.light_space, float4(world_position, 1.0)));
-//   float3 projected_coords = shadow_coord.xyz / shadow_coord.w;
+float calculate_shadow(float3 world_position, float3 normal) {
+  float4 shadow_coord = mul(BIAS_MATRIX, mul(scene.light_space, float4(world_position, 1.0)));
+  float3 projected_coords = shadow_coord.xyz / shadow_coord.w;
 
-//   if (projected_coords.z > 1.0) {
-//     return 1.0;
-//   }
+  if (projected_coords.z < 0.0) {
+    return 1.0;
+  }
 
-//   float bias = max(0.0005 * (1.0 - dot(normal, normalize(scene.light_direction))), 0.0001);
+  if (projected_coords.z > 1.0) {
+    return 1.0;
+  }
 
-//   uint2 dimensions;
-//   shadow_image.GetDimensions(dimensions.x, dimensions.y);
+  if (projected_coords.x < 0.0) {
+    return 1.0;
+  }
 
-//   float2 texel_size = 1.0 / dimensions;
+  if (projected_coords.x > 1.0) {
+    return 1.0;
+  }
 
-//   float distance_to_camera = length(scene.camera_position - world_position);
-//   float radius = lerp(1.0, 4.0, clamp(distance_to_camera / 50.0, 0.0, 1.0));
+  if (projected_coords.y < 0.0) {
+    return 1.0;
+  }
 
-//   float angle = random2(projected_coords.xy) * sbx::math::two_pi;
-//   float2x2 rotation = rotation_matrix(angle);
+  if (projected_coords.y > 1.0) {
+    return 1.0;
+  }
 
-//   float shadow = 0.0;
+  float3 light_dir = normalize(-scene.light_direction);
 
-//   [unroll]
-//   for (int i = 0; i < 16; ++i) {
-//     float2 offset = mul(rotation, POISSON_DISK[i]);
-//     float2 sample_uv = projected_coords.xy + offset * texel_size * radius;
+  float bias = max(0.0005 * (1.0 - dot(normal, light_dir)), 0.0001);
 
-//     float sample_depth = shadow_image.Sample(sample_uv).r;
+  uint2 dimensions;
+  shadow_image.GetDimensions(dimensions.x, dimensions.y);
 
-//     shadow += (projected_coords.z - bias > sample_depth) ? 0.0 : 1.0;
-//   }
+  float2 texel_size = 1.0 / dimensions;
 
-//   return shadow / 16.0;
-// }
+  float distance_to_camera = length(scene.camera_position - world_position);
+  float radius = lerp(1.0, 4.0, clamp(distance_to_camera / 50.0, 0.0, 1.0));
+
+  float angle = random2(projected_coords.xy) * sbx::math::two_pi;
+  float2x2 rotation = rotation_matrix(angle);
+
+  float shadow = 0.0;
+
+  [unroll]
+  for (int i = 0; i < 16; ++i) {
+    float2 offset = mul(rotation, POISSON_DISK[i]);
+    float2 sample_uv = projected_coords.xy + offset * texel_size * radius;
+
+    float sample_depth = shadow_image.Sample(sample_uv);
+
+    if (projected_coords.z - bias > sample_depth) {
+      shadow += 0.0;
+    } else {
+      shadow += 1.0;
+    }
+  }
+
+  return shadow / 16.0;
+}
+
 
 [noinline] T keep<T>(T value) {
   return value;
@@ -215,9 +243,9 @@ fs_out main(fs_in input) {
   float3 k_d = (1.0 - k_s) * (1.0 - metallic);
 
   // float shadow = 1.0; 
-  // float shadow = calculate_shadow(world_position, normal);
+  float shadow = calculate_shadow(world_position, normal);
 
-  float3 irradiance = scene.light_color.rgb * ndl;
+  float3 irradiance = scene.light_color.rgb * ndl * shadow;
 
   color += (k_d * albedo / sbx::math::pi + specular) * irradiance;
 

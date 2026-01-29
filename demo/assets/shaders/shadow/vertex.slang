@@ -7,47 +7,34 @@ struct transform_data {
 }; // struct transform_data
 
 struct instance_data {
-  float4 tint;
-  float4 material;
-  uint4 payload;
-  uint4 selection;
+  uint transform_index;
+  uint material_index;
+  uint object_id; 
+  uint _pad0;
 }; // struct instance_data
 
-struct vertex : sbx::common::position<3>, sbx::common::normal<3>, sbx::common::tangent<4>, sbx::common::uv<2> {
+struct vertex {
   float position_x;
   float position_y;
   float position_z;
+
   float normal_x;
   float normal_y;
   float normal_z;
-  float tangent_x;
-  float tangent_y;
-  float tangent_z;
-  float tangent_w;
+
   float uv_x;
   float uv_y;
 
-  vector<float,3> get_position() {
-    return vector<float,3>(position_x, position_y, position_z);
-  }
-
-  vector<float,3> get_normal() {
-    return vector<float,3>(normal_x, normal_y, normal_z);
-  }
-
-  vector<float,4> get_tangent() {
-    return vector<float,4>(tangent_x, tangent_y, tangent_z, tangent_w);
-  }
-
-  vector<float,2> get_uv() {
-    return vector<float,2>(uv_x, uv_y);
-  }
+  float tangent_x;
+  float tangent_y;
+  float tangent_z;
+  float tangent_w; // sign of the tangent
 }; // struct vertex
 
 struct push_data {
-  Ptr<vertex> vertex_buffer;
-  Ptr<transform_data> transform_data_buffer;
-  Ptr<instance_data> instance_data_buffer;
+  vertex* vertex_buffer;
+  transform_data* transform_data_buffer;
+  instance_data* instance_data_buffer;
 }; // struct push_data
 
 [[vk::push_constant]]
@@ -76,13 +63,11 @@ vs_out main(vs_in input) {
 
   instance_data instance_data = push.instance_data_buffer[global_instance];
 
-  uint transform_data_index = uint(instance_data.payload.w);
-
-  transform_data transform_data = push.transform_data_buffer[transform_data_index];
+  transform_data transform_data = push.transform_data_buffer[instance_data.transform_index];
 
   vertex vertex = push.vertex_buffer[global_vertex];
 
-  float3 in_position = sbx::common::get_position(vertex);
+  float3 in_position = float3(vertex.position_x, vertex.position_y, vertex.position_z);
   float3 world_position = mul(transform_data.model, float4(in_position, 1.0)).xyz;
 
   output.sv_position = mul(scene.light_space, float4(world_position, 1.0));

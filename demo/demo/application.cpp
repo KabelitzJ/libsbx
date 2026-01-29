@@ -66,6 +66,11 @@ application::application()
 
   scene.add_image("fox_albedo", "res://textures/fox/albedo.png", sbx::graphics::format::r8g8b8a8_unorm);
 
+  scene.add_image("helmet_albedo", "res://textures/helmet/albedo.jpg", sbx::graphics::format::r8g8b8a8_srgb);
+  scene.add_image("helmet_normal", "res://textures/helmet/normal.jpg", sbx::graphics::format::r8g8b8a8_unorm);
+  scene.add_image("helmet_mrao", "res://textures/helmet/mrao2.jpg", sbx::graphics::format::r8g8b8a8_unorm);
+  scene.add_image("helmet_emissive", "res://textures/helmet/emissive.jpg", sbx::graphics::format::r8g8b8a8_srgb);
+
   scene.add_cube_image("skybox", "res://skyboxes/clouds2");
 
   _generate_brdf(512);
@@ -78,6 +83,10 @@ application::application()
   scene.add_mesh<sbx::models::mesh>("diagonal", "res://meshes/terrain/diagonal/diagonal.gltf");
   scene.add_mesh<sbx::models::mesh>("full", "res://meshes/terrain/full/full.gltf");
   scene.add_mesh<sbx::models::mesh>("half", "res://meshes/terrain/half/half.gltf");
+
+  scene.add_mesh<sbx::models::mesh>("cube", "res://meshes/cube/cube.gltf");
+
+  scene.add_mesh<sbx::models::mesh>("helmet", "res://meshes/helmet/helmet.gltf");
 
   scene.add_mesh<sbx::animations::mesh>("fox", "res://meshes/fox/fox.gltf");
 
@@ -102,6 +111,26 @@ application::application()
     sbx::core::engine::quit();
   };
 
+  // Helmet
+  auto helmet = scene.create_node("Helmet", sbx::scenes::transform{});
+
+  auto& helmet_material = scene.add_material<sbx::models::material>("helmet");
+  helmet_material.albedo.image = scene.get_image("helmet_albedo");
+  helmet_material.normal.image = scene.get_image("helmet_normal");
+  helmet_material.normal_scale = 1.0f;
+  helmet_material.mrao.image = scene.get_image("helmet_mrao");
+  helmet_material.emissive.image = scene.get_image("helmet_emissive");
+  helmet_material.emissive_factor = sbx::math::vector4{1, 1, 1, 0};
+  helmet_material.emissive_strength = 16.0f;
+  helmet_material.features.set(sbx::models::material_feature::cast_shadow);
+
+  scene.add_component<sbx::scenes::static_mesh>(helmet, scene.get_mesh("helmet"), scene.get_material("helmet"));
+
+  auto& helmet_transform = scene.get_component<sbx::scenes::transform>(helmet);
+  helmet_transform.set_position(sbx::math::vector3{0.0f, 6.0f, 0.0f});
+  helmet_transform.set_scale(sbx::math::vector3{4.0f, 4.0f, 4.0f});
+
+  // Sprite
   auto sprite = scene.create_node("SpriteNode");
   scene.add_component<sbx::sprites::sprite>(sprite, sbx::sprites::sprite{
     .space = sbx::sprites::sprite_space::world,
@@ -112,6 +141,18 @@ application::application()
     .emissive_image = scene.get_image("rune_a_emissive"),
     .is_billboard = true
   });
+
+  // Terrain
+  auto terrain = scene.create_node("Terrain");
+
+  auto& terrain_material = scene.add_material<sbx::models::material>("terrain");
+  terrain_material.albedo.image = scene.get_image("base");
+
+  scene.add_component<sbx::scenes::static_mesh>(terrain, scene.get_mesh("cube"), scene.get_material("terrain"));
+
+  auto& transform = scene.get_component<sbx::scenes::transform>(terrain);
+  transform.set_position(sbx::math::vector3::zero);
+  transform.set_scale(sbx::math::vector3{100.0f, 0.5f, 100.0f});
 
   // Fox
   auto& animations_module = sbx::core::engine::get_module<sbx::animations::animations_module>();

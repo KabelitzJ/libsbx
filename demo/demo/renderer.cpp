@@ -12,6 +12,7 @@
 #include <libsbx/models/models.hpp>
 #include <libsbx/models/static_mesh_subrenderer.hpp>
 
+#include <libsbx/animations/skinning_task.hpp>
 #include <libsbx/animations/skinned_mesh_subrenderer.hpp>
 
 #include <libsbx/graphics/pipeline/vertex_input_description.hpp>
@@ -38,7 +39,8 @@ namespace demo {
 renderer::renderer()
 : _clear_color{sbx::math::color::white()} {
   // Attachments
-  auto shadow = create_attachment("shadow", sbx::graphics::attachment::type::image, sbx::math::color::white(), sbx::graphics::format::r16g16_sfloat);
+  auto shadow = create_attachment("shadow", sbx::graphics::attachment::type::image, sbx::math::color::white(), sbx::graphics::format::r32_sfloat);
+  auto shadow_depth = create_attachment("shadow_depth", sbx::graphics::attachment::type::depth);
 
   auto depth = create_attachment("depth", sbx::graphics::attachment::type::depth);
   auto albedo = create_attachment("albedo", sbx::graphics::attachment::type::image, _clear_color, sbx::graphics::format::r8g8b8a8_unorm);
@@ -97,10 +99,18 @@ renderer::renderer()
 
   auto swapchain = create_attachment("swapchain", sbx::graphics::attachment::type::swapchain, _clear_color, sbx::graphics::format::b8g8r8a8_srgb);
 
+  auto skinning_pass = create_pass([&](sbx::graphics::render_graph::context& context) {
+    auto pass = context.compute_pass("skinning");
+    return pass;
+  });
+
   // Render passes
   auto shadow_pass = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
     auto pass = context.graphics_pass("shadow", sbx::graphics::viewport::fixed(2048, 2048));
 
+    pass.depends_on(skinning_pass);
+
+    pass.writes(shadow_depth, sbx::graphics::attachment_load_operation::clear);
     pass.writes(shadow, sbx::graphics::attachment_load_operation::clear);
 
     return pass;
@@ -108,6 +118,8 @@ renderer::renderer()
 
   auto deferred_pass = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
     auto pass = context.graphics_pass("deferred");
+
+    pass.depends_on(skinning_pass);
 
     pass.writes(depth, sbx::graphics::attachment_load_operation::clear);
     pass.writes(albedo, sbx::graphics::attachment_load_operation::clear);
@@ -247,21 +259,25 @@ renderer::renderer()
 
   build_render_graph();
 
+  
   // Draw lists
   add_draw_list<sbx::models::static_mesh_material_draw_list>("static_mesh_material");
   add_draw_list<sbx::animations::skinned_mesh_material_draw_list>("skinned_mesh_material");
+  
+  auto& skinning = add_task<sbx::animations::skinning_task>(skinning_pass, "res://shaders/skinning");
 
   // Shadow pass
+  add_subrenderer<sbx::shadows::shadow_subrenderer>(shadow_pass, "res://shaders/shadow");
 
   // Deferred pass
   add_subrenderer<sbx::models::static_mesh_subrenderer>(deferred_pass, "res://shaders/deferred_pbr_material", sbx::models::static_mesh_material_draw_list::bucket::opaque);
-  add_subrenderer<sbx::animations::skinned_mesh_subrenderer>(deferred_pass, "res://shaders/deferred_pbr_material", sbx::animations::skinned_mesh_material_draw_list::bucket::opaque);
+  add_subrenderer<sbx::animations::skinned_mesh_subrenderer>(deferred_pass, "res://shaders/deferred_pbr_material", sbx::animations::skinned_mesh_material_draw_list::bucket::opaque, skinning.vertex_buffer_handle());
 
   // _terrain_subrenderer = sbx::memory::make_observer(add_subrenderer<terrain_subrenderer>(deferred_pass, "res://shaders/terrain"));
 
   // Transparency pass
   add_subrenderer<sbx::models::static_mesh_subrenderer>(transparency_pass, "res://shaders/deferred_pbr_material", sbx::models::static_mesh_material_draw_list::bucket::transparent);
-  add_subrenderer<sbx::animations::skinned_mesh_subrenderer>(transparency_pass, "res://shaders/deferred_pbr_material", sbx::animations::skinned_mesh_material_draw_list::bucket::transparent);
+  add_subrenderer<sbx::animations::skinned_mesh_subrenderer>(transparency_pass, "res://shaders/deferred_pbr_material", sbx::animations::skinned_mesh_material_draw_list::bucket::transparent, skinning.vertex_buffer_handle());
 
   // Resolve pass
   auto resolve_opaque_attachment_names = std::vector<std::pair<std::string, std::string>>{
@@ -271,7 +287,7 @@ renderer::renderer()
     {"material_image", "material"},
     {"emissive_image", "emissive"},
     // {"ssao_image", "ssao"}.
-    // {"shadow_image", "shadow"},
+    {"shadow_image", "shadow"},
   };
 
   add_subrenderer<sbx::post::resolve_opaque_filter>(resolve_pass, "res://shaders/resolve_opaque", std::move(resolve_opaque_attachment_names));

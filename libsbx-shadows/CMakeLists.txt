@@ -19,6 +19,7 @@ find_package(fmt CONFIG REQUIRED)
 target_sources(
   ${PROJECT_NAME}
   PRIVATE
+    "${PROJECT_SOURCE_DIR}/${CMAKE_PROJECT_NAME}/${PROJECT_NAME}/shadow_subrenderer.cpp"
     "${PROJECT_SOURCE_DIR}/${CMAKE_PROJECT_NAME}/${PROJECT_NAME}/shadows.cpp"
   PUBLIC
     FILE_SET HEADERS

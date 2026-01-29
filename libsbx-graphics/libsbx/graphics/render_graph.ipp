@@ -80,4 +80,11 @@ auto render_graph::_execute_pass_instruction(command_buffer& command_buffer, con
   command_buffer.end_rendering();
 }
 
+template<typename Callable>
+auto render_graph::_execute_compute_instruction(command_buffer& command_buffer, const compute_instruction& instruction, Callable&& callable) -> void {
+  (void)command_buffer;
+
+  std::invoke(std::forward<Callable>(callable), instruction.pass);
+}
+
 } // namespace sbx::graphics

@@ -159,9 +159,15 @@ class pass_node {
 
 public:
 
-  pass_node(const utility::hashed_string& name, const viewport& viewport)
+  enum class kind : std::uint8_t {
+    graphics,
+    compute
+  }; // enum class kind
+
+  pass_node(const utility::hashed_string& name, const viewport& viewport, const kind kind)
   : _name{name},
-    _viewport{viewport} { }
+    _viewport{viewport},
+    _kind{kind} { }
 
   auto reads(const attachment_handle attachment) -> void {
     _reads.emplace_back(attachment);
@@ -195,6 +201,7 @@ private:
   std::vector<pass_handle> _dependencies;
   viewport _viewport;
   render_area _render_area;
+  kind _kind;
 
 }; // struct pass_node
 
@@ -209,12 +216,16 @@ struct pass_instruction {
   std::vector<std::pair<attachment_handle, attachment_load_operation>> attachments;
 }; // struct pass_instruction
 
-using instruction = std::variant<transition_instruction, pass_instruction>;
+struct compute_instruction {
+  pass_handle pass;
+}; // struct compute_instruction
+
+using instruction = std::variant<transition_instruction, pass_instruction, compute_instruction>;
 
 template<typename... Callables>
 struct overload : Callables... {
   using Callables::operator()...;
-};
+}; // struct overload
 
 template<typename... Callables>
 overload(Callables...) -> overload<Callables...>;
@@ -234,6 +245,7 @@ public:
 
   struct context {
     auto graphics_pass(const utility::hashed_string& name, const viewport& viewport = viewport::window()) const -> pass_node;
+    auto compute_pass(const utility::hashed_string& name) const -> pass_node;
   }; // struct context
 
   render_graph();
@@ -256,13 +268,20 @@ public:
 
   auto resize(const viewport::type flags) -> void;
 
+  auto pass_kind(const pass_handle handle) const -> pass_node::kind {
+    utility::assert_that(handle.is_valid() && handle.index < _passes.size(), "Invalid pass handle");
+
+    return _passes[handle.index]._kind;
+  }
+
   template<typename Callable>
   requires (std::is_invocable_v<Callable, const pass_handle&>)
   auto execute(command_buffer& command_buffer, const swapchain& swapchain, Callable&& callable) -> void {
     for (const auto& instruction : _instructions) {
       std::visit(overload{
+        [&](const transition_instruction& instruction) { _execute_transition_instruction(command_buffer, swapchain, instruction); },
         [&](const pass_instruction& instruction) { _execute_pass_instruction(command_buffer, swapchain, instruction, std::forward<Callable>(callable)); },
-        [&](const transition_instruction& instruction) { _execute_transition_instruction(command_buffer, swapchain, instruction); }
+        [&](const compute_instruction& instruction) { _execute_compute_instruction(command_buffer, instruction, std::forward<Callable>(callable)); },
       }, instruction);
     }
   }
@@ -281,6 +300,9 @@ private:
 
   template<typename Callable>
   auto _execute_pass_instruction(command_buffer& command_buffer, const swapchain& swapchain, const pass_instruction& instruction, Callable&& callable) -> void;
+
+  template<typename Callable>
+  auto _execute_compute_instruction(command_buffer& command_buffer, const compute_instruction& instruction, Callable&& callable) -> void;
 
   auto _execute_transition_instruction(command_buffer& command_buffer, const swapchain& swapchain, const transition_instruction& instruction) -> void;
 

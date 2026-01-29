@@ -55,7 +55,11 @@ auto attachment::blend_state() const noexcept -> const graphics::blend_state& {
 }
 
 auto render_graph::context::graphics_pass(const utility::hashed_string& name, const viewport& viewport) const -> pass_node {
-  return pass_node{name, viewport};
+  return pass_node{name, viewport, pass_node::kind::graphics};
+}
+
+auto render_graph::context::compute_pass(const utility::hashed_string& name) const -> pass_node {
+  return pass_node{name, viewport::window(), pass_node::kind::compute};
 }
 
 render_graph::render_graph() {
@@ -123,6 +127,7 @@ auto render_graph::build() -> void {
     for (auto read : pass._reads) {
       utility::assert_that(read.is_valid() && read.index < attachment_count, "Invalid attachment handle in reads()");
     }
+
     for (const auto& [write, _] : pass._writes) {
       utility::assert_that(write.is_valid() && write.index < attachment_count, "Invalid attachment handle in writes()");
     }
@@ -180,15 +185,17 @@ auto render_graph::build() -> void {
   execution_order.reserve(pass_count);
 
   while (!process_queue.empty()) {
-    uint32_t current = process_queue.front();
+    auto current = process_queue.front();
     process_queue.pop();
 
     execution_order.push_back(current);
 
-    for (uint32_t dependent : edges[current]) {
-      utility::assert_that(indegrees[dependent] > 0, "Invalid dependency state");
+    for (auto dependent : edges[current]) {
+      utility::assert_that(indegrees[dependent] > 0u, "Invalid dependency state");
 
-      if (--indegrees[dependent] == 0) {
+      indegrees[dependent]--;
+
+      if (indegrees[dependent] == 0u) {
         process_queue.push(dependent);
       }
     }
@@ -215,14 +222,14 @@ auto render_graph::build() -> void {
   for (auto pass_index : execution_order) {
     const auto& pass = _passes[pass_index];
 
-    for (const auto& attachment : pass._reads) {
-      auto& state = _attachment_states[attachment.index];
+    for (const auto& handle : pass._reads) {
+      auto& state = _attachment_states[handle.index];
 
       const auto required_layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
       if (state.current_layout != required_layout) {
         _instructions.emplace_back(transition_instruction{
-          .attachment = attachment,
+          .attachment = handle,
           .old_layout = state.current_layout,
           .new_layout = required_layout
         });
@@ -234,14 +241,32 @@ auto render_graph::build() -> void {
     auto written_attachments = std::vector<std::pair<attachment_handle, attachment_load_operation>>{};
     written_attachments.reserve(pass._writes.size());
 
-    for (const auto& [attachment, load_op] : pass._writes) {
-      auto& state = _attachment_states[attachment.index];
+    for (const auto& [handle, load_op] : pass._writes) {
+      auto& state = _attachment_states[handle.index];
 
-      auto target_layout = (state.type == attachment::type::depth) ? VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL : VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+      VkImageLayout target_layout = VK_IMAGE_LAYOUT_UNDEFINED;
+
+      if (pass._kind == pass_node::kind::graphics) {
+        if (state.type == attachment::type::depth) {
+          target_layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+        } else {
+          utility::assert_that(state.type == attachment::type::image || state.type == attachment::type::swapchain, "Graphics pass writes must be image/depth/swapchain");
+          target_layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        }
+
+        utility::assert_that(state.type != attachment::type::storage, "Graphics pass cannot write a storage attachment");
+      } else {
+        utility::assert_that(pass._kind == pass_node::kind::compute, "Invalid pass kind");
+
+        utility::assert_that(state.type != attachment::type::swapchain, "Compute pass cannot write the swapchain");
+        utility::assert_that(state.type != attachment::type::depth, "Compute pass cannot write a depth attachment");
+
+        target_layout = VK_IMAGE_LAYOUT_GENERAL;
+      }
 
       if (state.current_layout != target_layout) {
         _instructions.emplace_back(transition_instruction{
-          .attachment = attachment,
+          .attachment = handle,
           .old_layout = state.current_layout,
           .new_layout = target_layout
         });
@@ -249,20 +274,26 @@ auto render_graph::build() -> void {
         state.current_layout = target_layout;
       }
 
-      written_attachments.push_back({attachment, load_op});
+      written_attachments.push_back({handle, load_op});
     }
 
-    _instructions.emplace_back(pass_instruction{
-      .pass = pass_handle{pass_index},
-      .attachments = std::move(written_attachments)
-    });
+    if (pass._kind == pass_node::kind::graphics) {
+      _instructions.emplace_back(pass_instruction{
+        .pass = pass_handle{pass_index},
+        .attachments = std::move(written_attachments)
+      });
+    } else {
+      _instructions.emplace_back(compute_instruction{
+        .pass = pass_handle{pass_index}
+      });
+    }
   }
 
   auto swapchain_attachment = std::optional<attachment_handle>{};
 
   for (auto i = 0u; i < attachment_count; ++i) {
     const auto& attachment = _attachments[i];
-    
+
     if (attachment.image_type() == attachment::type::swapchain) {
       swapchain_attachment = attachment_handle{i};
       break;
@@ -341,6 +372,13 @@ auto render_graph::_clear_attachments(const viewport::type flags) -> void {
           }
           break;
         }
+        case attachment::type::storage: {
+          if (state.image != VK_NULL_HANDLE) {
+            graphics_module.remove_resource<image2d>(_color_images[attachment.index]);
+            _color_images[attachment.index] = {};
+          }
+          break;
+        }
         case attachment::type::depth: {
           if (state.image != VK_NULL_HANDLE) {
             graphics_module.remove_resource<depth_image>(_depth_images[attachment.index]);
@@ -383,9 +421,56 @@ auto render_graph::_create_attachments(const viewport::type flags, const pass_no
           filter = VK_FILTER_NEAREST;
         }
 
-        const auto usage = VkImageUsageFlags{VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT};
+        const auto usage = VkImageUsageFlags{
+          VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
+          VK_IMAGE_USAGE_STORAGE_BIT |
+          VK_IMAGE_USAGE_SAMPLED_BIT |
+          VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT
+        };
 
-        const auto image_handle = graphics_module.add_resource<image2d>(extent, attachment.format(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, usage, filter, to_vk_enum<VkSamplerAddressMode>(attachment.address_mode()), VK_SAMPLE_COUNT_1_BIT);
+        const auto image_handle = graphics_module.add_resource<image2d>(
+          extent,
+          attachment.format(),
+          VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+          usage,
+          filter,
+          to_vk_enum<VkSamplerAddressMode>(attachment.address_mode()),
+          VK_SAMPLE_COUNT_1_BIT
+        );
+
+        const auto& image = graphics_module.get_resource<image2d>(image_handle);
+
+        _color_images[handle.index] = image_handle;
+
+        state.image = image.handle();
+        state.view = image.view();
+        state.format = image.format();
+        state.extent = {extent.x(), extent.y()};
+
+        break;
+      }
+      case attachment::type::storage: {
+        VkFilter filter = VK_FILTER_LINEAR;
+
+        if (attachment.format() == format::r32_uint || attachment.format() == format::r64_uint || attachment.format() == format::r32g32_uint) {
+          filter = VK_FILTER_NEAREST;
+        }
+
+        const auto usage = VkImageUsageFlags{
+          VK_IMAGE_USAGE_STORAGE_BIT |
+          VK_IMAGE_USAGE_SAMPLED_BIT
+        };
+
+        const auto image_handle = graphics_module.add_resource<image2d>(
+          extent,
+          attachment.format(),
+          VK_IMAGE_LAYOUT_GENERAL,
+          usage,
+          filter,
+          to_vk_enum<VkSamplerAddressMode>(attachment.address_mode()),
+          VK_SAMPLE_COUNT_1_BIT
+        );
+
         const auto& image = graphics_module.get_resource<image2d>(image_handle);
 
         _color_images[handle.index] = image_handle;
@@ -407,6 +492,7 @@ auto render_graph::_create_attachments(const viewport::type flags, const pass_no
         state.view = image.view();
         state.format = image.format();
         state.extent = {extent.x(), extent.y()};
+
         break;
       }
       case attachment::type::swapchain: {
@@ -414,6 +500,7 @@ auto render_graph::_create_attachments(const viewport::type flags, const pass_no
         state.view = nullptr;
         state.format = VK_FORMAT_UNDEFINED;
         state.extent = {extent.x(), extent.y()};
+
         break;
       }
       default: {

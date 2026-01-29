@@ -167,7 +167,7 @@ def gather_jobs(shader_root_dir: Path, glslc_path: Optional[str], slangc_path: O
   jobs = []
 
   for shader_dir in sorted(p for p in shader_root_dir.iterdir() if p.is_dir()):
-    if shader_dir.name == "libsbx" or shader_dir.name == "deferred_pbr_material" or shader_dir.name == "depthpre":
+    if shader_dir.name == "libsbx" or shader_dir.name == "deferred_pbr_material" or shader_dir.name == "depthpre"  or shader_dir.name == "shadow":
       continue
 
     # Slang first (sorted for determinism when both pixel/fragment exist)

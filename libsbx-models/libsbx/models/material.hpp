@@ -23,16 +23,20 @@ enum class alpha_mode : std::uint8_t {
 }; // enum class alpha_mode
 
 enum class material_feature : std::uint8_t {
-  none           = 0,
-  emission       = utility::bit_v<0>,
-  normal_map     = utility::bit_v<1>, 
-  occlusion      = utility::bit_v<2>, 
-  height         = utility::bit_v<3>, 
-  clearcoat      = utility::bit_v<4>, 
-  anisotropy     = utility::bit_v<5>,
-  cast_shadow    = utility::bit_v<6>,
+  none = 0,
+  emission = utility::bit_v<0>,
+  normal_map = utility::bit_v<1>, 
+  occlusion = utility::bit_v<2>, 
+  height = utility::bit_v<3>, 
+  clearcoat = utility::bit_v<4>, 
+  anisotropy = utility::bit_v<5>,
+  cast_shadow = utility::bit_v<6>,
   receive_shadow = utility::bit_v<7>
 }; // struct material_feature
+
+inline constexpr auto operator|(const material_feature lhs, const material_feature rhs) -> material_feature {
+  return static_cast<material_feature>(static_cast<std::uint8_t>(lhs) | static_cast<std::uint8_t>(rhs));
+}
 
 struct alignas(16) material_data {
   std::uint32_t albedo_image_index;
@@ -149,7 +153,7 @@ struct material {
   alpha_mode alpha{alpha_mode::opaque};
   bool is_double_sided{false};
 
-  utility::bit_field<material_feature> features;
+  utility::bit_field<material_feature> features{material_feature::cast_shadow | material_feature::receive_shadow};
 
   operator material_key() const {
     auto key = material_key{};

@@ -14,7 +14,7 @@ atlas::atlas(std::uint32_t width, std::uint32_t height, const std::vector<std::u
   _height{height} {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 
-  _image_id = graphics_module.add_resource<graphics::image2d>(math::vector2u{_width, _height}, graphics::format::r8_unorm, VK_FILTER_LINEAR, data.data());
+  _image_id = graphics_module.add_resource<graphics::image2d>(math::vector2u{_width, _height}, graphics::format::r8_unorm, graphics::filter::linear, data.data());
 }
 
 auto atlas::width() const noexcept -> std::uint32_t {

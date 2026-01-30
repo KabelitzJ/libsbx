@@ -10,7 +10,8 @@
 #include <libsbx/scenes/grid_subrenderer.hpp>
 
 #include <libsbx/models/models.hpp>
-#include <libsbx/models/static_mesh_subrenderer.hpp>
+#include <libsbx/models/static_mesh_material_subrenderer.hpp>
+#include <libsbx/models/static_mesh_shadow_subrenderer.hpp>
 
 #include <libsbx/animations/skinning_task.hpp>
 #include <libsbx/animations/skinned_mesh_subrenderer.hpp>
@@ -25,7 +26,6 @@
 #include <libsbx/post/filters/upsample_filter.hpp>
 #include <libsbx/post/filters/ssao_filter.hpp>
 
-#include <libsbx/shadows/shadow_subrenderer.hpp>
 #include <libsbx/ui/ui_subrenderer.hpp>
 #include <libsbx/gizmos/gizmos_subrenderer.hpp>
 #include <libsbx/editor/editor_subrenderer.hpp>
@@ -39,7 +39,7 @@ namespace demo {
 renderer::renderer()
 : _clear_color{sbx::math::color::white()} {
   // Attachments
-  auto shadow = create_attachment("shadow", sbx::graphics::attachment::type::image, sbx::math::color::white(), sbx::graphics::format::r32_sfloat);
+  auto shadow = create_attachment("shadow", sbx::graphics::attachment::type::image, sbx::math::color::white(), sbx::graphics::format::r32_sfloat, sbx::graphics::filter::linear, sbx::graphics::address_mode::clamp_to_edge);
   auto shadow_depth = create_attachment("shadow_depth", sbx::graphics::attachment::type::depth);
 
   auto depth = create_attachment("depth", sbx::graphics::attachment::type::depth);
@@ -268,16 +268,16 @@ renderer::renderer()
   auto& skinning = add_task<sbx::animations::skinning_task>(skinning_pass, "res://shaders/skinning");
 
   // Shadow pass
-  add_subrenderer<sbx::shadows::shadow_subrenderer>(shadow_pass, "res://shaders/shadow");
+  add_subrenderer<sbx::models::static_mesh_shadow_subrenderer>(shadow_pass, "res://shaders/shadow");
 
   // Deferred pass
-  add_subrenderer<sbx::models::static_mesh_subrenderer>(deferred_pass, "res://shaders/deferred_pbr_material", sbx::models::static_mesh_material_draw_list::bucket::opaque);
+  add_subrenderer<sbx::models::static_mesh_material_subrenderer>(deferred_pass, "res://shaders/deferred_pbr_material", sbx::models::static_mesh_material_draw_list::bucket::opaque);
   add_subrenderer<sbx::animations::skinned_mesh_subrenderer>(deferred_pass, "res://shaders/deferred_pbr_material", sbx::animations::skinned_mesh_material_draw_list::bucket::opaque, skinning.vertex_buffer_handle());
 
   // _terrain_subrenderer = sbx::memory::make_observer(add_subrenderer<terrain_subrenderer>(deferred_pass, "res://shaders/terrain"));
 
   // Transparency pass
-  add_subrenderer<sbx::models::static_mesh_subrenderer>(transparency_pass, "res://shaders/deferred_pbr_material", sbx::models::static_mesh_material_draw_list::bucket::transparent);
+  add_subrenderer<sbx::models::static_mesh_material_subrenderer>(transparency_pass, "res://shaders/deferred_pbr_material", sbx::models::static_mesh_material_draw_list::bucket::transparent);
   add_subrenderer<sbx::animations::skinned_mesh_subrenderer>(transparency_pass, "res://shaders/deferred_pbr_material", sbx::animations::skinned_mesh_material_draw_list::bucket::transparent, skinning.vertex_buffer_handle());
 
   // Resolve pass

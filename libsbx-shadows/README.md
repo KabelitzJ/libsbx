@@ -1,3 +1,0 @@
-# libsbx-units
-
-C++ library

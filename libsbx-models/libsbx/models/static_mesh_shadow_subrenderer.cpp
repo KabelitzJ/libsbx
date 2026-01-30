@@ -1,20 +1,24 @@
 // SPDX-License-Identifier: MIT
-#include <libsbx/shadows/shadow_subrenderer.hpp>
+#include <libsbx/models/static_mesh_shadow_subrenderer.hpp>
 
-namespace sbx::shadows {
+namespace sbx::models {
 
-shadow_subrenderer::shadow_subrenderer(const std::vector<graphics::attachment_description>& attachments, const std::filesystem::path& base_pipeline)
+static_mesh_shadow_subrenderer::static_mesh_shadow_subrenderer(const std::vector<graphics::attachment_description>& attachments, const std::filesystem::path& base_pipeline)
 : graphics::subrenderer{},
   _attachments{attachments},
   _base_pipeline{base_pipeline} {
 
 }
 
-shadow_subrenderer::~shadow_subrenderer() {
+static_mesh_shadow_subrenderer::~static_mesh_shadow_subrenderer() {
   _pipeline_cache.clear();
 }
 
-auto shadow_subrenderer::render(graphics::command_buffer& command_buffer) -> void {
+auto static_mesh_shadow_subrenderer::render(graphics::command_buffer& command_buffer) -> void {
+  EASY_FUNCTION();
+
+  SBX_PROFILE_SCOPE("static_mesh_shadow_subrenderer::render");
+
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
   auto& renderer = graphics_module.renderer();
 
@@ -61,12 +65,12 @@ auto shadow_subrenderer::render(graphics::command_buffer& command_buffer) -> voi
   }
 }
 
-shadow_subrenderer::pipeline_data::pipeline_data(const graphics::graphics_pipeline_handle& handle)
+static_mesh_shadow_subrenderer::pipeline_data::pipeline_data(const graphics::graphics_pipeline_handle& handle)
 : pipeline{handle},
   push_handler{pipeline},
   scene_descriptor_handler{pipeline, 0u} { }
 
-auto shadow_subrenderer::_get_or_create_pipeline(const models::material_key& key) -> pipeline_data& {
+auto static_mesh_shadow_subrenderer::_get_or_create_pipeline(const models::material_key& key) -> pipeline_data& {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 
   if (auto it = _pipeline_cache.find(key); it != _pipeline_cache.end()) {
@@ -82,7 +86,7 @@ auto shadow_subrenderer::_get_or_create_pipeline(const models::material_key& key
     .path = _base_pipeline,
     .per_stage = {
       {SLANG_STAGE_VERTEX, {.entry_point = "main"}},
-      { SLANG_STAGE_FRAGMENT, {.entry_point = "opaque_main"}}
+      { SLANG_STAGE_FRAGMENT, {.entry_point = "main"}}
     }
   };
 
@@ -96,4 +100,4 @@ auto shadow_subrenderer::_get_or_create_pipeline(const models::material_key& key
   return entry->second;
 }
 
-} // namespace sbx::shadows
+} // namespace sbx::models

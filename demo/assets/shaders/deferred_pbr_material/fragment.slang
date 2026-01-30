@@ -207,7 +207,7 @@ opaque_fs_out opaque_main(fs_in input) {
   output.position = float4(input.position, 1.0);
   // encode from [-1, 1] -> [0, 1]
   output.normal = float4(get_normal(TBN, uv, input.normal, input.sv_is_front_face, material_data) * 0.5f + 0.5f, 0.0);
-  output.material = float4(get_material(uv, material_data), 0.0);
+  output.material = float4(get_material(uv, material_data), float(material_data.flags & 255) / 255.0);
   output.emissive = float4(get_emissive(uv, material_data), 0.0);
   output.object_id = instance_data.object_id;
   output.linear_depth = sbx::common::linearize_depth(input.sv_position.z, scene.camera_near, scene.camera_far);

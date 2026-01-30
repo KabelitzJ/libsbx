@@ -14,19 +14,21 @@
 
 namespace sbx::graphics {
 
-attachment::attachment(const utility::hashed_string& name, type type, const math::color& clear_color, const graphics::format format, const graphics::blend_state& blend_state, const graphics::address_mode address_mode) noexcept
-: _name{name}, 
+attachment::attachment(const utility::hashed_string& name, type type, const math::color& clear_color, const graphics::format format, const graphics::blend_state& blend_state, const graphics::filter filter, const graphics::address_mode address_mode) noexcept
+: _name{name},
   _type{type},
   _clear_color{clear_color},
-  _format{format}, 
+  _format{format},
+  _filter{filter},
   _address_mode{address_mode},
   _blend_state{blend_state} { }
 
-attachment::attachment(const utility::hashed_string& name, type type, const math::color& clear_color, const graphics::format format, const graphics::address_mode address_mode) noexcept
-: _name{name}, 
+attachment::attachment(const utility::hashed_string& name, type type, const math::color& clear_color, const graphics::format format, const graphics::filter filter, const graphics::address_mode address_mode) noexcept
+: _name{name},
   _type{type},
   _clear_color{clear_color},
-  _format{format}, 
+  _format{format},
+  _filter{filter},
   _address_mode{address_mode},
   _blend_state{} { }
 
@@ -415,11 +417,7 @@ auto render_graph::_create_attachments(const viewport::type flags, const pass_no
 
     switch (attachment.image_type()) {
       case attachment::type::image: {
-        VkFilter filter = VK_FILTER_LINEAR;
-
-        if (attachment.format() == format::r32_uint || attachment.format() == format::r64_uint || attachment.format() == format::r32g32_uint) {
-          filter = VK_FILTER_NEAREST;
-        }
+        const auto needs_nearest_filter = (attachment.format() == format::r32_uint || attachment.format() == format::r64_uint || attachment.format() == format::r32g32_uint);
 
         const auto usage = VkImageUsageFlags{
           VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
@@ -431,10 +429,10 @@ auto render_graph::_create_attachments(const viewport::type flags, const pass_no
         const auto image_handle = graphics_module.add_resource<image2d>(
           extent,
           attachment.format(),
+          needs_nearest_filter ? graphics::filter::nearest : graphics::filter::linear,
+          attachment.address_mode(),
           VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
           usage,
-          filter,
-          to_vk_enum<VkSamplerAddressMode>(attachment.address_mode()),
           VK_SAMPLE_COUNT_1_BIT
         );
 
@@ -450,11 +448,7 @@ auto render_graph::_create_attachments(const viewport::type flags, const pass_no
         break;
       }
       case attachment::type::storage: {
-        VkFilter filter = VK_FILTER_LINEAR;
-
-        if (attachment.format() == format::r32_uint || attachment.format() == format::r64_uint || attachment.format() == format::r32g32_uint) {
-          filter = VK_FILTER_NEAREST;
-        }
+        const auto needs_nearest_filter = (attachment.format() == format::r32_uint || attachment.format() == format::r64_uint || attachment.format() == format::r32g32_uint);
 
         const auto usage = VkImageUsageFlags{
           VK_IMAGE_USAGE_STORAGE_BIT |
@@ -464,10 +458,10 @@ auto render_graph::_create_attachments(const viewport::type flags, const pass_no
         const auto image_handle = graphics_module.add_resource<image2d>(
           extent,
           attachment.format(),
+          needs_nearest_filter ? graphics::filter::nearest : graphics::filter::linear,
+          attachment.address_mode(),
           VK_IMAGE_LAYOUT_GENERAL,
           usage,
-          filter,
-          to_vk_enum<VkSamplerAddressMode>(attachment.address_mode()),
           VK_SAMPLE_COUNT_1_BIT
         );
 

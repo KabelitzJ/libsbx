@@ -67,13 +67,6 @@ static const float3 DEFAULT_F0 = float3(0.04, 0.04, 0.04);
 
 static const float PREFILTERED_ENV_MAX_MIP = 9.0;
 
-static const float4x4 BIAS_MATRIX = float4x4(
-  0.5, 0.0, 0.0, 0.0,
-  0.0, 0.5, 0.0, 0.0,
-  0.0, 0.0, 0.5, 0.0,
-  0.5, 0.5, 0.5, 1.0
-);
-
 float3 fresnel_schlick(float cos_theta, float3 f0) {
   return f0 + (1.0 - f0) * pow(1.0 - cos_theta, 5.0);
 }
@@ -135,27 +128,45 @@ float2x2 rotation_matrix(float angle) {
   return float2x2(c, -s, s, c);
 }
 
-float calculate_shadow(float3 world_position, float3 normal) {
-  float4 shadow_coord = mul(scene.light_space, float4(world_position, 1.0));
-  float3 projected_coords = shadow_coord.xyz / shadow_coord.w;
+static const float2x2 NDC_TO_UV_SCALE = float2x2(
+  0.5, 0.0,
+  0.0, 0.5
+);
 
-  if (any(projected_coords < 0.0) || any(projected_coords > 1.0)) {
+static const float2 NDC_TO_UV_BIAS = float2(0.5, 0.5);
+
+float2 ndc_to_uv(float2 ndc_xy) {
+  return mul(NDC_TO_UV_SCALE, ndc_xy) + NDC_TO_UV_BIAS;
+}
+
+float calculate_shadow(float3 world_position, float3 normal) {
+  float4 clip = mul(scene.light_space, float4(world_position, 1.0));
+  float3 ndc = clip.xyz / clip.w;
+
+  float2 uv = ndc_to_uv(ndc.xy);
+
+  if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) {
+    return 1.0;
+  }
+
+  float depth = ndc.z;
+
+  if (depth < 0.0 || depth > 1.0) {
     return 1.0;
   }
 
   float3 light_dir = normalize(-scene.light_direction);
-
   float bias = max(0.0005 * (1.0 - dot(normal, light_dir)), 0.0001);
 
   uint2 dimensions;
   shadow_image.GetDimensions(dimensions.x, dimensions.y);
 
-  float2 texel_size = 1.0 / dimensions;
+  float2 texel_size = 1.0 / float2(dimensions);
 
   float distance_to_camera = length(scene.camera_position - world_position);
   float radius = lerp(1.0, 4.0, clamp(distance_to_camera / 50.0, 0.0, 1.0));
 
-  float angle = random2(projected_coords.xy) * sbx::math::two_pi;
+  float angle = random2(uv) * sbx::math::two_pi;
   float2x2 rotation = rotation_matrix(angle);
 
   float shadow = 0.0;
@@ -163,34 +174,56 @@ float calculate_shadow(float3 world_position, float3 normal) {
   [unroll]
   for (int i = 0; i < 16; ++i) {
     float2 offset = mul(rotation, POISSON_DISK[i]);
-    float2 sample_uv = projected_coords.xy + offset * texel_size * radius;
+    float2 sample_uv = uv + offset * texel_size * radius;
 
     float sample_depth = shadow_image.Sample(sample_uv);
 
-    if (projected_coords.z - bias > sample_depth) {
-      shadow += 0.0;
-    } else {
-      shadow += 1.0;
-    }
+    shadow += (depth - bias <= sample_depth) ? 1.0 : 0.0;
   }
 
   return shadow / 16.0;
 }
 
 
-[noinline] T keep<T>(T value) {
+[noinline] T maybe_unused<T>(T value) {
   return value;
 }
+
+enum material_feature : UINT {
+  none = 0,
+  emission = (1 << 0),
+  normal_map = (1 << 1), 
+  occlusion = (1 << 2), 
+  height = (1 << 3), 
+  clearcoat = (1 << 4), 
+  anisotropy = (1 << 5),
+  cast_shadow = (1 << 6),
+  receive_shadow = (1 << 7)
+}; // struct material_feature
 
 [shader("fragment")]
 fs_out main(fs_in input) {
   fs_out output;
 
+  maybe_unused(position_image);
+  maybe_unused(normal_image);
+  maybe_unused(albedo_image);
+  maybe_unused(material_image);
+  maybe_unused(emissive_image);
+  maybe_unused(irradiance_image);
+  maybe_unused(brdf_image);
+  maybe_unused(prefiltered_image);
+  maybe_unused(shadow_image);
+
   float3 albedo = albedo_image.Sample(input.uv).rgb;
   float3 world_position = position_image.Sample(input.uv).xyz;
   // [0, 1] -> [-1, 1]
   float3 normal = normalize(normal_image.Sample(input.uv).xyz * 2.0f - 1.0f);
-  float3 mrao = material_image.Sample(input.uv).rgb;
+
+  float4 material = material_image.Sample(input.uv).rgba;
+  float3 mrao = material.rgb;
+  uint material_flags = (uint)round(saturate(material.a) * 255.0);
+
   float3 emissive = emissive_image.Sample(input.uv).rgb;
   // float ssao = ssao_image.Sample(input.uv);
 
@@ -223,7 +256,9 @@ fs_out main(fs_in input) {
   float3 k_d = (1.0 - k_s) * (1.0 - metallic);
 
   // float shadow = 1.0; 
-  float shadow = calculate_shadow(world_position, normal);
+  bool receive_shadow = (material_flags & material_feature::receive_shadow) != 0;
+
+  float shadow = receive_shadow ? calculate_shadow(world_position, normal) : 1.0;
 
   float3 irradiance = scene.light_color.rgb * ndl * shadow;
 

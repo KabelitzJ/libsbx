@@ -122,7 +122,6 @@ application::application()
   helmet_material.emissive.image = scene.get_image("helmet_emissive");
   helmet_material.emissive_factor = sbx::math::vector4{1, 1, 1, 0};
   helmet_material.emissive_strength = 16.0f;
-  helmet_material.features.set(sbx::models::material_feature::cast_shadow);
 
   scene.add_component<sbx::scenes::static_mesh>(helmet, scene.get_mesh("helmet"), scene.get_material("helmet"));
 
@@ -288,7 +287,7 @@ auto application::_generate_brdf(const std::uint32_t size) -> void {
 
   auto& graphics_module = sbx::core::engine::get_module<sbx::graphics::graphics_module>();
 
-  _brdf = graphics_module.add_resource<sbx::graphics::image2d>(sbx::math::vector2u{size}, sbx::graphics::format::r16g16_sfloat, VK_IMAGE_LAYOUT_GENERAL);
+  _brdf = graphics_module.add_resource<sbx::graphics::image2d>(sbx::math::vector2u{size}, sbx::graphics::format::r16g16_sfloat, sbx::graphics::filter::linear, sbx::graphics::address_mode::repeat, VK_IMAGE_LAYOUT_GENERAL);
 
   auto timer = sbx::utility::timer{};
 

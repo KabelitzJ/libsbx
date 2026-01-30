@@ -18,8 +18,8 @@
 
 namespace sbx::graphics {
 
-image2d::image2d(const math::vector2u& extent, graphics::format format, VkImageLayout layout, VkImageUsageFlags usage, VkFilter filter, VkSamplerAddressMode address_mode, VkSampleCountFlagBits samples, bool anisotropic, bool mipmap)
-: image{VkExtent3D{extent.x(), extent.y(), 1}, filter, address_mode, samples, layout, (usage | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT), to_vk_enum<VkFormat>(format), 1, 1},
+image2d::image2d(const math::vector2u& extent, graphics::format format, graphics::filter filter, graphics::address_mode address_mode, VkImageLayout layout, VkImageUsageFlags usage, VkSampleCountFlagBits samples, bool anisotropic, bool mipmap)
+: image{VkExtent3D{extent.x(), extent.y(), 1}, to_vk_enum<VkFilter>(filter), to_vk_enum<VkSamplerAddressMode>(address_mode), samples, layout, (usage | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT), to_vk_enum<VkFormat>(format), 1, 1},
   _anisotropic{anisotropic},
   _mipmap{mipmap} {
   _load();
@@ -34,8 +34,8 @@ image2d::image2d(const std::filesystem::path& path, graphics::format format, VkF
   _load(assets_module.resolve_path(path));
 }
 
-image2d::image2d(const math::vector2u& extent, graphics::format format, VkFilter filter, memory::observer_ptr<const std::uint8_t> pixels)
-: image2d{extent, format, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, filter} {
+image2d::image2d(const math::vector2u& extent, graphics::format format, graphics::filter filter, memory::observer_ptr<const std::uint8_t> pixels)
+: image2d{extent, format, filter, graphics::address_mode::repeat, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL} {
   set_pixels(pixels);
 }
 

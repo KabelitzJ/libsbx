@@ -9,7 +9,7 @@ struct fs_out {
 }; // struct fs_out
 
 [shader("fragment")]
-fs_out opaque_main(fs_in input) {
+fs_out main(fs_in input) {
   fs_out output;
 
   output.color = float(input.sv_position.z);

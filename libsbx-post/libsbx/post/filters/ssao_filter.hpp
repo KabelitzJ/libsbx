@@ -67,7 +67,7 @@ public:
       noise[i] = math::vector4::normalized(n);
     }
 
-    _noise = graphics_module.add_resource<graphics::image2d>(math::vector2u{noise_dimension, noise_dimension}, graphics::format::r8g8b8a8_unorm, VK_FILTER_NEAREST, reinterpret_cast<const std::uint8_t*>(noise.data()));
+    _noise = graphics_module.add_resource<graphics::image2d>(math::vector2u{noise_dimension, noise_dimension}, graphics::format::r8g8b8a8_unorm, graphics::filter::nearest, reinterpret_cast<const std::uint8_t*>(noise.data()));
   }
 
   ~ssao_filter() override = default;

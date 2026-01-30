@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
-#ifndef LIBSBX_SHADOWS_SHADOW_SUBRENDERER_HPP_
-#define LIBSBX_SHADOWS_SHADOW_SUBRENDERER_HPP_
+#ifndef LIBSBX_MODELS_STATIC_MESH_SHADOW_SUBRENDERER_HPP_
+#define LIBSBX_MODELS_STATIC_MESH_SHADOW_SUBRENDERER_HPP_
 
 #include <filesystem>
 #include <unordered_map>
@@ -22,9 +22,9 @@
 #include <libsbx/models/models.hpp>
 #include <libsbx/models/material_draw_list.hpp>
 
-namespace sbx::shadows {
+namespace sbx::models {
 
-class shadow_subrenderer final : public graphics::subrenderer {
+class static_mesh_shadow_subrenderer final : public graphics::subrenderer {
 
   inline static const auto pipeline_definition = graphics::pipeline_definition{
     .depth = graphics::depth::read_write,
@@ -38,9 +38,9 @@ class shadow_subrenderer final : public graphics::subrenderer {
 
 public:
 
-  shadow_subrenderer(const std::vector<graphics::attachment_description>& attachments, const std::filesystem::path& base_pipeline);
+  static_mesh_shadow_subrenderer(const std::vector<graphics::attachment_description>& attachments, const std::filesystem::path& base_pipeline);
 
-  ~shadow_subrenderer() override;
+  ~static_mesh_shadow_subrenderer() override;
 
   auto render(graphics::command_buffer& command_buffer) -> void override;
 
@@ -58,12 +58,6 @@ private:
 
   auto _get_or_create_pipeline(const models::material_key& key) -> pipeline_data&;
 
-  inline static const auto _fs_entry = std::array<std::string, 3u>{
-    "opaque_main",
-    "mask_main",
-    "blend_main"
-  };
-
   std::vector<graphics::attachment_description> _attachments;
   std::filesystem::path _base_pipeline;
 
@@ -73,4 +67,4 @@ private:
 
 } // namespace sbx::shadows
 
-#endif // LIBSBX_SHADOWS_SHADOW_SUBRENDERER_HPP_
+#endif // LIBSBX_MODELS_STATIC_MESH_SHADOW_SUBRENDERER_HPP_

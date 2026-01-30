@@ -100,9 +100,9 @@ public:
     swapchain
   }; // enum class type
 
-  attachment(const utility::hashed_string& name, type type, const math::color& clear_color = math::color::black(), const format format = format::r8g8b8a8_unorm, const graphics::blend_state& blend_state = graphics::blend_state{}, const address_mode address_mode = address_mode::repeat) noexcept;
+  attachment(const utility::hashed_string& name, type type, const math::color& clear_color = math::color::black(), const format format = format::r8g8b8a8_unorm, const graphics::blend_state& blend_state = graphics::blend_state{}, const filter filter = filter::linear, const address_mode address_mode = address_mode::repeat) noexcept;
 
-  attachment(const utility::hashed_string& name, type type, const math::color& clear_color, const format format, const address_mode address_mode) noexcept;
+  attachment(const utility::hashed_string& name, type type, const math::color& clear_color, const format format, const filter filter, const address_mode address_mode) noexcept;
 
   auto name() const noexcept -> const utility::hashed_string&;
 
@@ -122,6 +122,7 @@ private:
   type _type;
   math::color _clear_color;
   graphics::format _format;
+  graphics::filter _filter;
   graphics::address_mode _address_mode;
   graphics::blend_state _blend_state;
 

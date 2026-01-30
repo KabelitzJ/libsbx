@@ -53,6 +53,8 @@ auto static_mesh_material_subrenderer::render(graphics::command_buffer& command_
 
     pipeline_data.push_handler.push("instance_data_buffer", instance_data_buffer.address());
 
+    auto& draw_commands_buffer = graphics_module.get_resource<graphics::storage_buffer>(data.draw_commands_buffer);
+
     for (const auto& [mesh_id, range] : data.ranges) {
       auto& mesh = assets_module.get_asset<models::mesh>(mesh_id);
       
@@ -61,8 +63,6 @@ auto static_mesh_material_subrenderer::render(graphics::command_buffer& command_
       pipeline_data.push_handler.push("vertex_buffer", mesh.address());
 
       pipeline_data.push_handler.bind(command_buffer);
-
-      auto& draw_commands_buffer = graphics_module.get_resource<graphics::storage_buffer>(data.draw_commands_buffer);
 
       command_buffer.draw_indexed_indirect(draw_commands_buffer, range.offset, range.count);
     }

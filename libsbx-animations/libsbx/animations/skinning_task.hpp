@@ -22,8 +22,6 @@
 
 #include <libsbx/models/vertex3d.hpp>
 
-#include <libsbx/animations/skinned_mesh_subrenderer.hpp>
-
 namespace sbx::animations {
 
 class skinning_task final : public graphics::task {

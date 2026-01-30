@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 #include <libsbx/animations/skinning_task.hpp>
 
+#include <libsbx/animations/skinned_mesh_material_subrenderer.hpp>
+
 namespace sbx::animations {
 
 skinning_task::skinning_task(const std::filesystem::path& path)

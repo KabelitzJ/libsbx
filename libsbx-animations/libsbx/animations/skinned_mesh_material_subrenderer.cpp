@@ -1,23 +1,23 @@
 // SPDX-License-Identifier: MIT
-#include <libsbx/animations/skinned_mesh_subrenderer.hpp>
+#include <libsbx/animations/skinned_mesh_material_subrenderer.hpp>
 
 namespace sbx::animations {
 
-skinned_mesh_subrenderer::skinned_mesh_subrenderer(const std::vector<graphics::attachment_description>& attachments, const std::filesystem::path& base_pipeline, const skinned_mesh_material_draw_list::bucket bucket, const graphics::storage_buffer_handle skinned_vertex_buffer)
+skinned_mesh_material_subrenderer::skinned_mesh_material_subrenderer(const std::vector<graphics::attachment_description>& attachments, const std::filesystem::path& base_pipeline, const skinned_mesh_material_draw_list::bucket bucket, const graphics::storage_buffer_handle skinned_vertex_buffer)
 : graphics::subrenderer{},
   _attachments{attachments},
   _base_pipeline{base_pipeline},
   _bucket{bucket},
   _skinned_vertex_buffer{skinned_vertex_buffer} { }
 
-skinned_mesh_subrenderer::~skinned_mesh_subrenderer() {
+skinned_mesh_material_subrenderer::~skinned_mesh_material_subrenderer() {
   _pipeline_cache.clear();
 }
 
-auto skinned_mesh_subrenderer::render(graphics::command_buffer& command_buffer) -> void {
+auto skinned_mesh_material_subrenderer::render(graphics::command_buffer& command_buffer) -> void {
   EASY_FUNCTION();
 
-  SBX_PROFILE_SCOPE("skinned_mesh_subrenderer::render");
+  SBX_PROFILE_SCOPE("skinned_mesh_material_subrenderer::render");
 
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
   auto& renderer = graphics_module.renderer();
@@ -49,6 +49,8 @@ auto skinned_mesh_subrenderer::render(graphics::command_buffer& command_buffer) 
     pipeline_data.push_handler.push("instance_data_buffer", graphics_module.get_resource<graphics::storage_buffer>(data.instance_data_buffer).address());
     pipeline_data.push_handler.push("vertex_buffer", graphics_module.get_resource<graphics::storage_buffer>(_skinned_vertex_buffer).address());
 
+    auto& draw_commands_buffer = graphics_module.get_resource<graphics::storage_buffer>(data.draw_commands_buffer);
+
     for (const auto& draw_range : data.ranges) {
       auto& mesh = assets_module.get_asset<animations::mesh>(draw_range.mesh_id);
 
@@ -56,19 +58,17 @@ auto skinned_mesh_subrenderer::render(graphics::command_buffer& command_buffer) 
 
       pipeline_data.push_handler.bind(command_buffer);
 
-      auto& draw_commands_buffer = graphics_module.get_resource<graphics::storage_buffer>(data.draw_commands_buffer);
-
       command_buffer.draw_indexed_indirect(draw_commands_buffer, draw_range.range.offset, draw_range.range.count);
     }
   }
 }
 
-skinned_mesh_subrenderer::pipeline_data::pipeline_data(const graphics::graphics_pipeline_handle& handle)
+skinned_mesh_material_subrenderer::pipeline_data::pipeline_data(const graphics::graphics_pipeline_handle& handle)
 : pipeline{handle},
   push_handler{pipeline},
   scene_descriptor_handler{pipeline, 0u} { }
 
-auto skinned_mesh_subrenderer::_get_or_create_pipeline(const models::material_key& key) -> pipeline_data& {
+auto skinned_mesh_material_subrenderer::_get_or_create_pipeline(const models::material_key& key) -> pipeline_data& {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 
   if (auto it = _pipeline_cache.find(key); it != _pipeline_cache.end()) {

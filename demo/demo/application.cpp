@@ -150,7 +150,7 @@ application::application()
   scene.add_component<sbx::scenes::static_mesh>(terrain, scene.get_mesh("cube"), scene.get_material("terrain"));
 
   auto& transform = scene.get_component<sbx::scenes::transform>(terrain);
-  transform.set_position(sbx::math::vector3::zero);
+  transform.set_position(sbx::math::vector3{-50.0f, 0.5f, -50.0f});
   transform.set_scale(sbx::math::vector3{100.0f, 0.5f, 100.0f});
 
   // Fox

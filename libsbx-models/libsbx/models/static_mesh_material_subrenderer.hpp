@@ -65,73 +65,9 @@
 #include <libsbx/models/mesh.hpp>
 #include <libsbx/models/material.hpp>
 #include <libsbx/models/material_draw_list.hpp>
+#include <libsbx/models/static_mesh_material_draw_list.hpp>
 
 namespace sbx::models {
-
-struct static_mesh_traits {
-
-  using mesh_type = models::mesh;
-  struct instance_payload { };
-
-  template<typename DarwList>
-  static auto create_shared_buffers([[maybe_unused]] DarwList& draw_list) -> void {
-
-  }
-
-  template<typename DarwList>
-  static auto destroy_shared_buffers([[maybe_unused]] DarwList& draw_list) -> void {
-
-  }
-
-  template<typename DarwList>
-  static auto update_shared_buffers([[maybe_unused]] DarwList& draw_list) -> void {
-
-  }
-
-  template<typename Callable>
-  static void for_each_submission(scenes::scene& scene, Callable&& callable) {
-    auto query = scene.query<const scenes::static_mesh>();
-
-    for (auto&& [node, static_mesh] : query.each()) {
-      const auto transform_data = models::transform_data{scene.world_transform(node), scene.world_normal(node)};
-
-      for (const auto& submesh : static_mesh.submeshes()) {
-        std::invoke(callable, node, static_mesh.mesh_id(), submesh.index, submesh.material, transform_data, instance_payload{});
-      }
-    }
-  }
-
-  static auto make_instance_data(const scenes::node node, const std::uint32_t transform_index, std::uint32_t material_index, [[maybe_unused]] const instance_payload& payload) -> instance_data {
-    return instance_data{transform_index, material_index, static_cast<std::uint32_t>(node), 0u};
-  }
-
-  template<typename Mesh, typename Emitter>
-  static auto build_draw_commands(const Mesh& mesh, std::uint32_t submesh_index, std::vector<models::instance_data>&& instances, Emitter&& emitter) -> std::uint32_t {
-    if (instances.empty()) {
-      return 0;
-    }
-
-    const auto& submesh = mesh.submesh(submesh_index);
-
-    auto command = VkDrawIndexedIndirectCommand{};
-    command.indexCount = submesh.index_count;
-    command.instanceCount = static_cast<std::uint32_t>(instances.size());
-    command.firstIndex = submesh.index_offset;
-    command.vertexOffset = static_cast<std::int32_t>(submesh.vertex_offset);
-    command.firstInstance = emitter.base_instance;
-
-    emitter.emit_instanced(command, std::move(instances));
-
-    return command.instanceCount;
-  }
-
-private:
-
-
-
-}; // static_mesh_traits
-
-using static_mesh_material_draw_list = basic_material_draw_list<static_mesh_traits>;
 
 class static_mesh_material_subrenderer final : public graphics::subrenderer {
 

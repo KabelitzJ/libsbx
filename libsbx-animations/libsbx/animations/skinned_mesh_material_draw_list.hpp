@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
-#ifndef LIBSBX_ANIMATIONS_SKINNED_MESH_SUBRENDERER_HPP_
-#define LIBSBX_ANIMATIONS_SKINNED_MESH_SUBRENDERER_HPP_
+#ifndef LIBSBX_ANIMATIONS_SKINNED_MESH_DRAW_LIST_HPP_
+#define LIBSBX_ANIMATIONS_SKINNED_MESH_DRAW_LIST_HPP_
 
 #include <filesystem>
 #include <unordered_set>
@@ -140,56 +140,6 @@ private:
 
 using skinned_mesh_material_draw_list = models::basic_material_draw_list<skinned_mesh_traits>;
 
-class skinned_mesh_subrenderer final : public graphics::subrenderer {
-
-  inline static const auto pipeline_definition = graphics::pipeline_definition{
-    .depth = graphics::depth::read_write,
-    .uses_transparency = false,
-    .rasterization_state = graphics::rasterization_state{
-      .polygon_mode = graphics::polygon_mode::fill,
-      .cull_mode = graphics::cull_mode::back,
-      .front_face = graphics::front_face::counter_clockwise
-    }
-  };
-
-public:
-
-  skinned_mesh_subrenderer(const std::vector<graphics::attachment_description>& attachments, const std::filesystem::path& base_pipeline, const skinned_mesh_material_draw_list::bucket bucket, const graphics::storage_buffer_handle skinned_vertex_buffer);
-
-  ~skinned_mesh_subrenderer() override;
-
-  auto render(graphics::command_buffer& command_buffer) -> void override;
-
-private:
-
-  struct pipeline_data {
-
-    graphics::graphics_pipeline_handle pipeline;
-    graphics::push_handler push_handler;
-    graphics::descriptor_handler scene_descriptor_handler;
-
-    pipeline_data(const graphics::graphics_pipeline_handle& handle);
-
-  }; // struct pipeline_data
-
-  auto _get_or_create_pipeline(const models::material_key& key) -> pipeline_data&;
-
-  inline static const auto _fs_entry = std::array<std::string, 3u>{
-    "opaque_main",
-    "mask_main",
-    "blend_main"
-  };
-
-  std::vector<graphics::attachment_description> _attachments;
-  std::filesystem::path _base_pipeline;
-  skinned_mesh_material_draw_list::bucket _bucket;
-
-  graphics::storage_buffer_handle _skinned_vertex_buffer;
-
-  inline static std::unordered_map<models::material_key, pipeline_data, models::material_key_hash> _pipeline_cache{};
-
-}; // class skinned_mesh_subrenderer
-
 } // namespace sbx::animations
 
-#endif // LIBSBX_ANIMATIONS_SKINNED_MESH_SUBRENDERER_HPP_
+#endif // LIBSBX_ANIMATIONS_SKINNED_MESH_DRAW_LIST_HPP_

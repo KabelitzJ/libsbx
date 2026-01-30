@@ -14,7 +14,8 @@
 #include <libsbx/models/static_mesh_shadow_subrenderer.hpp>
 
 #include <libsbx/animations/skinning_task.hpp>
-#include <libsbx/animations/skinned_mesh_subrenderer.hpp>
+#include <libsbx/animations/skinned_mesh_material_subrenderer.hpp>
+#include <libsbx/animations/skinned_mesh_shadow_subrenderer.hpp>
 
 #include <libsbx/graphics/pipeline/vertex_input_description.hpp>
 
@@ -269,16 +270,17 @@ renderer::renderer()
 
   // Shadow pass
   add_subrenderer<sbx::models::static_mesh_shadow_subrenderer>(shadow_pass, "res://shaders/shadow");
+  add_subrenderer<sbx::animations::skinned_mesh_shadow_subrenderer>(shadow_pass, "res://shaders/shadow", skinning.vertex_buffer_handle());
 
   // Deferred pass
   add_subrenderer<sbx::models::static_mesh_material_subrenderer>(deferred_pass, "res://shaders/deferred_pbr_material", sbx::models::static_mesh_material_draw_list::bucket::opaque);
-  add_subrenderer<sbx::animations::skinned_mesh_subrenderer>(deferred_pass, "res://shaders/deferred_pbr_material", sbx::animations::skinned_mesh_material_draw_list::bucket::opaque, skinning.vertex_buffer_handle());
+  add_subrenderer<sbx::animations::skinned_mesh_material_subrenderer>(deferred_pass, "res://shaders/deferred_pbr_material", sbx::animations::skinned_mesh_material_draw_list::bucket::opaque, skinning.vertex_buffer_handle());
 
   // _terrain_subrenderer = sbx::memory::make_observer(add_subrenderer<terrain_subrenderer>(deferred_pass, "res://shaders/terrain"));
 
   // Transparency pass
   add_subrenderer<sbx::models::static_mesh_material_subrenderer>(transparency_pass, "res://shaders/deferred_pbr_material", sbx::models::static_mesh_material_draw_list::bucket::transparent);
-  add_subrenderer<sbx::animations::skinned_mesh_subrenderer>(transparency_pass, "res://shaders/deferred_pbr_material", sbx::animations::skinned_mesh_material_draw_list::bucket::transparent, skinning.vertex_buffer_handle());
+  add_subrenderer<sbx::animations::skinned_mesh_material_subrenderer>(transparency_pass, "res://shaders/deferred_pbr_material", sbx::animations::skinned_mesh_material_draw_list::bucket::transparent, skinning.vertex_buffer_handle());
 
   // Resolve pass
   auto resolve_opaque_attachment_names = std::vector<std::pair<std::string, std::string>>{

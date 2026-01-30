@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
-#ifndef LIBSBX_MODELS_STATIC_MESH_SHADOW_SUBRENDERER_HPP_
-#define LIBSBX_MODELS_STATIC_MESH_SHADOW_SUBRENDERER_HPP_
+#ifndef LIBSBX_ANIMATIONS_SKINNED_MESH_SHADOW_SUBRENDERER_HPP_
+#define LIBSBX_ANIMATIONS_SKINNED_MESH_SHADOW_SUBRENDERER_HPP_
 
 #include <filesystem>
 #include <unordered_map>
@@ -21,11 +21,12 @@
 
 #include <libsbx/models/models.hpp>
 #include <libsbx/models/material_draw_list.hpp>
-#include <libsbx/models/static_mesh_material_draw_list.hpp>
 
-namespace sbx::models {
+#include <libsbx/animations/skinned_mesh_material_draw_list.hpp>
 
-class static_mesh_shadow_subrenderer final : public graphics::subrenderer {
+namespace sbx::animations {
+
+class skinned_mesh_shadow_subrenderer final : public graphics::subrenderer {
 
   inline static const auto pipeline_definition = graphics::pipeline_definition{
     .depth = graphics::depth::read_write,
@@ -39,9 +40,9 @@ class static_mesh_shadow_subrenderer final : public graphics::subrenderer {
 
 public:
 
-  static_mesh_shadow_subrenderer(const std::vector<graphics::attachment_description>& attachments, const std::filesystem::path& base_pipeline);
+  skinned_mesh_shadow_subrenderer(const std::vector<graphics::attachment_description>& attachments, const std::filesystem::path& base_pipeline, const graphics::storage_buffer_handle skinned_vertex_buffer);
 
-  ~static_mesh_shadow_subrenderer() override;
+  ~skinned_mesh_shadow_subrenderer() override;
 
   auto render(graphics::command_buffer& command_buffer) -> void override;
 
@@ -62,10 +63,12 @@ private:
   std::vector<graphics::attachment_description> _attachments;
   std::filesystem::path _base_pipeline;
 
+  graphics::storage_buffer_handle _skinned_vertex_buffer;
+
   inline static std::unordered_map<models::material_key, pipeline_data, models::material_key_hash> _pipeline_cache{};
 
 }; // class shadow_subrenderer
 
-} // namespace sbx::shadows
+} // namespace sbx::animations
 
-#endif // LIBSBX_MODELS_STATIC_MESH_SHADOW_SUBRENDERER_HPP_
+#endif // LIBSBX_ANIMATIONS_SKINNED_MESH_SHADOW_SUBRENDERER_HPP_

@@ -59,6 +59,13 @@ class scene {
 
   // friend class node;
 
+  static constexpr auto csm_cascade_count = std::uint32_t{4u};
+
+  struct csm_data {
+    std::array<math::matrix4x4, csm_cascade_count> light_spaces{};
+    math::vector4 cascade_splits{};
+  }; // struct csm_data
+
 public:
 
   using node_type = node;
@@ -350,8 +357,6 @@ public:
 
     _uniform_handler.push("projection", projection);
 
-    const auto& camera_transform = get_component<scenes::transform>(_camera);
-
     const auto view = math::matrix4x4::inverted(world_transform(_camera));
 
     _uniform_handler.push("view", view);
@@ -362,10 +367,16 @@ public:
     _uniform_handler.push("camera_near", camera.near_plane());
     _uniform_handler.push("camera_far", camera.far_plane());
     _uniform_handler.push("camera_fov_radians", camera.field_of_view().to_radians().value());
+
+    const auto& camera_transform = get_component<scenes::transform>(_camera);
+
     _uniform_handler.push("camera_right", camera_transform.right());
     _uniform_handler.push("camera_up", camera_transform.up());
 
-    _uniform_handler.push("light_space", light_space());
+    const auto csm = _build_csm();
+
+    _uniform_handler.push("light_spaces", csm.light_spaces);
+    _uniform_handler.push("cascade_splits", csm.cascade_splits);
 
     _uniform_handler.push("light_direction", sbx::math::vector3::normalized(_light.direction()));
     _uniform_handler.push("light_color", _light.color());
@@ -422,6 +433,136 @@ public:
   }
 
 private:
+
+  static auto _lerp_float(const std::float_t a, const std::float_t b, const std::float_t t) -> std::float_t {
+    return a + (b - a) * t;
+  }
+
+  static auto _compute_csm_splits(const std::float_t near_plane, const std::float_t far_plane, const std::float_t lambda) -> std::array<std::float_t, csm_cascade_count> {
+    auto splits = std::array<std::float_t, csm_cascade_count>{};
+
+    for (auto i = 0u; i < csm_cascade_count; ++i) {
+      const auto p = static_cast<std::float_t>(i + 1u) / static_cast<std::float_t>(csm_cascade_count);
+
+      const auto log_split = near_plane * std::pow(far_plane / near_plane, p);
+      const auto uni_split = near_plane + (far_plane - near_plane) * p;
+
+      splits[i] = _lerp_float(uni_split, log_split, lambda);
+    }
+
+    return splits;
+  }
+
+  static auto _build_light_space_for_slice(const scenes::camera& camera, const math::matrix4x4& camera_world, const math::vector3& light_direction, const std::float_t slice_near, const std::float_t slice_far, const std::uint32_t shadow_resolution) -> math::matrix4x4 {
+    const auto camera_view = math::matrix4x4::inverted(camera_world);
+    const auto camera_projection = camera.projection(slice_near, slice_far);
+
+    const auto inv_view_projection = math::matrix4x4::inverted(camera_projection * camera_view);
+
+    static constexpr auto frustum_corners_clip = std::array<math::vector4, 8u>{
+      math::vector4{-1.0f, -1.0f, 0.0f, 1.0f},
+      math::vector4{ 1.0f, -1.0f, 0.0f, 1.0f},
+      math::vector4{ 1.0f,  1.0f, 0.0f, 1.0f},
+      math::vector4{-1.0f,  1.0f, 0.0f, 1.0f},
+      math::vector4{-1.0f, -1.0f, 1.0f, 1.0f},
+      math::vector4{ 1.0f, -1.0f, 1.0f, 1.0f},
+      math::vector4{ 1.0f,  1.0f, 1.0f, 1.0f},
+      math::vector4{-1.0f,  1.0f, 1.0f, 1.0f}
+    };
+
+    auto corners_world = std::array<math::vector3, 8u>{};
+    auto center_world = math::vector3::zero;
+
+    for (auto i = 0u; i < 8u; ++i) {
+      auto corner_world = inv_view_projection * frustum_corners_clip[i];
+      corner_world /= corner_world.w();
+
+      corners_world[i] = math::vector3{corner_world};
+      center_world += corners_world[i];
+    }
+
+    center_world /= 8.0f;
+
+    const auto light_dir = math::vector3::normalized(light_direction);
+
+    const auto light_position = center_world - light_dir * 50.0f;
+    const auto light_view = math::matrix4x4::look_at(light_position, center_world, math::vector3::up);
+
+    auto min_bounds = math::vector3{std::numeric_limits<std::float_t>::max()};
+    auto max_bounds = math::vector3{std::numeric_limits<std::float_t>::lowest()};
+
+    for (const auto& corner : corners_world) {
+      const auto p4 = light_view * math::vector4{corner, 1.0f};
+      const auto p = math::vector3{p4};
+
+      min_bounds = math::vector3::min(min_bounds, p);
+      max_bounds = math::vector3::max(max_bounds, p);
+    }
+
+    const auto extent_x = max_bounds.x() - min_bounds.x();
+    const auto extent_y = max_bounds.y() - min_bounds.y();
+    const auto extent = std::max(extent_x, extent_y);
+
+    auto center_ls = (min_bounds + max_bounds) * 0.5f;
+
+    const auto texel_size = extent / static_cast<std::float_t>(shadow_resolution);
+
+    center_ls = math::vector3{
+      std::floor(center_ls.x() / texel_size) * texel_size,
+      std::floor(center_ls.y() / texel_size) * texel_size,
+      center_ls.z()
+    };
+
+    static constexpr auto xy_padding = 10.0f;
+
+    min_bounds = math::vector3{center_ls.x() - extent * 0.5f - xy_padding, center_ls.y() - extent * 0.5f - xy_padding, min_bounds.z()};
+    max_bounds = math::vector3{center_ls.x() + extent * 0.5f + xy_padding, center_ls.y() + extent * 0.5f + xy_padding, max_bounds.z()};
+
+    static constexpr auto z_mult = 10.0f;
+
+    const auto min_z = std::min(min_bounds.z() * z_mult, min_bounds.z() / z_mult);
+    const auto max_z = std::max(max_bounds.z() * z_mult, max_bounds.z() / z_mult);
+
+    auto near_plane = -max_z;
+    auto far_plane = -min_z;
+
+    if (near_plane > far_plane) {
+      std::swap(near_plane, far_plane);
+    }
+
+    const auto light_projection = math::matrix4x4::orthographic(min_bounds.x(), max_bounds.x(), min_bounds.y(), max_bounds.y(), near_plane, far_plane);
+
+    return light_projection * light_view;
+  }
+
+  auto _build_csm() -> csm_data {
+    const auto& camera = get_component<scenes::camera>(_camera);
+    const auto camera_world = world_transform(_camera);
+
+    const auto camera_near = camera.near_plane();
+    const auto camera_far = camera.far_plane();
+
+    static constexpr auto lambda = 0.65f;
+    static constexpr auto shadow_resolution = std::uint32_t{2048u};
+
+    const auto splits = _compute_csm_splits(camera_near, camera_far, lambda);
+
+    auto result = csm_data{};
+
+    auto slice_near = camera_near;
+
+    for (auto i = 0u; i < csm_cascade_count; ++i) {
+      const auto slice_far = splits[i];
+
+      result.light_spaces[i] = _build_light_space_for_slice(camera, camera_world, _light.direction(), slice_near, slice_far, shadow_resolution);
+
+      slice_near = slice_far;
+    }
+
+    result.cascade_splits = math::vector4{splits[0], splits[1], splits[2], camera_far};
+
+    return result;
+  }
 
   auto _save_assets(YAML::Emitter& emitter) -> void;
 

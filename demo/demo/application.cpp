@@ -141,6 +141,9 @@ application::application()
     .is_billboard = true
   });
 
+  auto& sprite_transform = scene.get_component<sbx::scenes::transform>(sprite);
+  sprite_transform.set_position(sbx::math::vector3{0.0f, 10.0f, 0.0f});
+
   // Terrain
   auto terrain = scene.create_node("Terrain");
 
@@ -150,8 +153,8 @@ application::application()
   scene.add_component<sbx::scenes::static_mesh>(terrain, scene.get_mesh("cube"), scene.get_material("terrain"));
 
   auto& transform = scene.get_component<sbx::scenes::transform>(terrain);
-  transform.set_position(sbx::math::vector3{-50.0f, 0.5f, -50.0f});
-  transform.set_scale(sbx::math::vector3{100.0f, 0.5f, 100.0f});
+  transform.set_position(sbx::math::vector3{100.0f, 0.5f, 100.0f});
+  transform.set_scale(sbx::math::vector3{400.0f, 0.5f, 400.0f});
 
   // Fox
   auto& animations_module = sbx::core::engine::get_module<sbx::animations::animations_module>();

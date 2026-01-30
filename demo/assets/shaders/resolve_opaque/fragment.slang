@@ -59,9 +59,17 @@ SamplerCube<float4> irradiance_image;
 [[vk::binding(9, 0)]]
 SamplerCube<float4> prefiltered_image;
 
-// [[vk::binding(7, 0)]] Sampler2D<uint> object_id_image;
 [[vk::binding(10, 0)]] 
-Sampler2D<float> shadow_image;
+Sampler2D<float> shadow0_image;
+
+[[vk::binding(11, 0)]] 
+Sampler2D<float> shadow1_image;
+
+[[vk::binding(12, 0)]] 
+Sampler2D<float> shadow2_image;
+
+[[vk::binding(13, 0)]] 
+Sampler2D<float> shadow3_image;
 
 static const float3 DEFAULT_F0 = float3(0.04, 0.04, 0.04);
 
@@ -139,8 +147,51 @@ float2 ndc_to_uv(float2 ndc_xy) {
   return mul(NDC_TO_UV_SCALE, ndc_xy) + NDC_TO_UV_BIAS;
 }
 
-float calculate_shadow(float3 world_position, float3 normal) {
-  float4 clip = mul(scene.light_space, float4(world_position, 1.0));
+uint select_cascade(float view_depth) {
+  if (view_depth < scene.cascade_splits.x) return 0;
+  if (view_depth < scene.cascade_splits.y) return 1;
+  if (view_depth < scene.cascade_splits.z) return 2;
+  return 3;
+}
+
+uint2 shadow_map_dimensions(uint cascade) {
+  uint2 dimensions;
+
+  switch (cascade) {
+    case 0: {
+      shadow0_image.GetDimensions(dimensions.x, dimensions.y);
+      break;
+    }
+    case 1: {
+      shadow1_image.GetDimensions(dimensions.x, dimensions.y);
+      break;
+    }
+    case 2: {
+      shadow2_image.GetDimensions(dimensions.x, dimensions.y);
+      break;
+    }
+    case 3:
+    default: {
+      shadow3_image.GetDimensions(dimensions.x, dimensions.y);
+      break;
+    }
+  }
+
+  return dimensions;
+}
+
+float sample_shadow_map(uint cascade, float2 uv) {
+  switch (cascade) {
+    case 0: return shadow0_image.Sample(uv);
+    case 1: return shadow1_image.Sample(uv);
+    case 2: return shadow2_image.Sample(uv);
+    case 3:
+    default: return shadow3_image.Sample(uv);
+  }
+}
+
+float calculate_shadow(uint cascade, float3 world_position, float3 normal) {
+  float4 clip = mul(scene.light_spaces[cascade], float4(world_position, 1.0));
   float3 ndc = clip.xyz / clip.w;
 
   float2 uv = ndc_to_uv(ndc.xy);
@@ -158,8 +209,7 @@ float calculate_shadow(float3 world_position, float3 normal) {
   float3 light_dir = normalize(-scene.light_direction);
   float bias = max(0.0005 * (1.0 - dot(normal, light_dir)), 0.0001);
 
-  uint2 dimensions;
-  shadow_image.GetDimensions(dimensions.x, dimensions.y);
+  uint2 dimensions = shadow_map_dimensions(cascade);
 
   float2 texel_size = 1.0 / float2(dimensions);
 
@@ -176,7 +226,7 @@ float calculate_shadow(float3 world_position, float3 normal) {
     float2 offset = mul(rotation, POISSON_DISK[i]);
     float2 sample_uv = uv + offset * texel_size * radius;
 
-    float sample_depth = shadow_image.Sample(sample_uv);
+    float sample_depth = sample_shadow_map(cascade, sample_uv);
 
     shadow += (depth - bias <= sample_depth) ? 1.0 : 0.0;
   }
@@ -213,7 +263,10 @@ fs_out main(fs_in input) {
   maybe_unused(irradiance_image);
   maybe_unused(brdf_image);
   maybe_unused(prefiltered_image);
-  maybe_unused(shadow_image);
+  maybe_unused(shadow0_image);
+  maybe_unused(shadow1_image);
+  maybe_unused(shadow2_image);
+  maybe_unused(shadow3_image);
 
   float3 albedo = albedo_image.Sample(input.uv).rgb;
   float3 world_position = position_image.Sample(input.uv).xyz;
@@ -233,6 +286,9 @@ fs_out main(fs_in input) {
 
   float3 view_dir = normalize(scene.camera_position - world_position);
   float3 f0 = lerp(DEFAULT_F0, albedo, metallic);
+
+  float view_depth = -mul(scene.view, float4(world_position, 1.0)).z;
+  uint cascade = select_cascade(view_depth);
 
   float3 color = float3(0.0, 0.0, 0.0);
 
@@ -258,7 +314,7 @@ fs_out main(fs_in input) {
   // float shadow = 1.0; 
   bool receive_shadow = (material_flags & material_feature::receive_shadow) != 0;
 
-  float shadow = receive_shadow ? calculate_shadow(world_position, normal) : 1.0;
+  float shadow = receive_shadow ? calculate_shadow(cascade, world_position, normal) : 1.0;
 
   float3 irradiance = scene.light_color.rgb * ndl * shadow;
 

@@ -40,7 +40,7 @@ class skinned_mesh_shadow_subrenderer final : public graphics::subrenderer {
 
 public:
 
-  skinned_mesh_shadow_subrenderer(const std::vector<graphics::attachment_description>& attachments, const std::filesystem::path& base_pipeline, const graphics::storage_buffer_handle skinned_vertex_buffer);
+  skinned_mesh_shadow_subrenderer(const std::vector<graphics::attachment_description>& attachments, const std::filesystem::path& base_pipeline, const std::uint32_t cascade, const graphics::storage_buffer_handle skinned_vertex_buffer);
 
   ~skinned_mesh_shadow_subrenderer() override;
 
@@ -62,6 +62,7 @@ private:
 
   std::vector<graphics::attachment_description> _attachments;
   std::filesystem::path _base_pipeline;
+  std::uint32_t _cascade;
 
   graphics::storage_buffer_handle _skinned_vertex_buffer;
 

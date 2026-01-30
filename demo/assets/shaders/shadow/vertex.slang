@@ -35,6 +35,7 @@ struct push_data {
   vertex* vertex_buffer;
   transform_data* transform_data_buffer;
   instance_data* instance_data_buffer;
+  uint cascade;
 }; // struct push_data
 
 [[vk::push_constant]]
@@ -70,7 +71,7 @@ vs_out main(vs_in input) {
   float3 in_position = float3(vertex.position_x, vertex.position_y, vertex.position_z);
   float3 world_position = mul(transform_data.model, float4(in_position, 1.0)).xyz;
 
-  output.sv_position = mul(scene.light_space, float4(world_position, 1.0));
+  output.sv_position = mul(scene.light_spaces[push.cascade], float4(world_position, 1.0));
 
   return output;
 }

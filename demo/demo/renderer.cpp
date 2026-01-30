@@ -40,8 +40,17 @@ namespace demo {
 renderer::renderer()
 : _clear_color{sbx::math::color::white()} {
   // Attachments
-  auto shadow = create_attachment("shadow", sbx::graphics::attachment::type::image, sbx::math::color::white(), sbx::graphics::format::r32_sfloat, sbx::graphics::filter::linear, sbx::graphics::address_mode::clamp_to_edge);
-  auto shadow_depth = create_attachment("shadow_depth", sbx::graphics::attachment::type::depth);
+  auto shadow0 = create_attachment("shadow0", sbx::graphics::attachment::type::image, sbx::math::color::white(), sbx::graphics::format::r32_sfloat, sbx::graphics::filter::linear, sbx::graphics::address_mode::clamp_to_edge);
+  auto shadow0_depth = create_attachment("shadow0_depth", sbx::graphics::attachment::type::depth);
+
+  auto shadow1 = create_attachment("shadow1", sbx::graphics::attachment::type::image, sbx::math::color::white(), sbx::graphics::format::r32_sfloat, sbx::graphics::filter::linear, sbx::graphics::address_mode::clamp_to_edge);
+  auto shadow1_depth = create_attachment("shadow_depth", sbx::graphics::attachment::type::depth);
+
+  auto shadow2 = create_attachment("shadow2", sbx::graphics::attachment::type::image, sbx::math::color::white(), sbx::graphics::format::r32_sfloat, sbx::graphics::filter::linear, sbx::graphics::address_mode::clamp_to_edge);
+  auto shadow2_depth = create_attachment("shadow_depth", sbx::graphics::attachment::type::depth);
+
+  auto shadow3 = create_attachment("shadow3", sbx::graphics::attachment::type::image, sbx::math::color::white(), sbx::graphics::format::r32_sfloat, sbx::graphics::filter::linear, sbx::graphics::address_mode::clamp_to_edge);
+  auto shadow3_depth = create_attachment("shadow3_depth", sbx::graphics::attachment::type::depth);
 
   auto depth = create_attachment("depth", sbx::graphics::attachment::type::depth);
   auto albedo = create_attachment("albedo", sbx::graphics::attachment::type::image, _clear_color, sbx::graphics::format::r8g8b8a8_unorm);
@@ -107,13 +116,46 @@ renderer::renderer()
   });
 
   // Render passes
-  auto shadow_pass = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
-    auto pass = context.graphics_pass("shadow", sbx::graphics::viewport::fixed(2048, 2048));
+  auto shadow0_pass = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
+    auto pass = context.graphics_pass("shadow0", sbx::graphics::viewport::fixed(2048, 2048));
 
     pass.depends_on(skinning_pass);
 
-    pass.writes(shadow_depth, sbx::graphics::attachment_load_operation::clear);
-    pass.writes(shadow, sbx::graphics::attachment_load_operation::clear);
+    pass.writes(shadow0_depth, sbx::graphics::attachment_load_operation::clear);
+    pass.writes(shadow0, sbx::graphics::attachment_load_operation::clear);
+
+    return pass;
+  });
+
+  auto shadow1_pass = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
+    auto pass = context.graphics_pass("shadow1", sbx::graphics::viewport::fixed(2048, 2048));
+
+    pass.depends_on(skinning_pass);
+
+    pass.writes(shadow1_depth, sbx::graphics::attachment_load_operation::clear);
+    pass.writes(shadow1, sbx::graphics::attachment_load_operation::clear);
+
+    return pass;
+  });
+
+  auto shadow2_pass = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
+    auto pass = context.graphics_pass("shadow2", sbx::graphics::viewport::fixed(2048, 2048));
+
+    pass.depends_on(skinning_pass);
+
+    pass.writes(shadow2_depth, sbx::graphics::attachment_load_operation::clear);
+    pass.writes(shadow2, sbx::graphics::attachment_load_operation::clear);
+
+    return pass;
+  });
+
+  auto shadow3_pass = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
+    auto pass = context.graphics_pass("shadow3", sbx::graphics::viewport::fixed(2048, 2048));
+
+    pass.depends_on(skinning_pass);
+
+    pass.writes(shadow3_depth, sbx::graphics::attachment_load_operation::clear);
+    pass.writes(shadow3, sbx::graphics::attachment_load_operation::clear);
 
     return pass;
   });
@@ -151,9 +193,9 @@ renderer::renderer()
   auto resolve_pass = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
     auto pass = context.graphics_pass("resolve");
 
-    pass.depends_on(deferred_pass, transparency_pass, shadow_pass);
+    pass.depends_on(deferred_pass, transparency_pass, shadow0_pass, shadow1_pass, shadow2_pass, shadow3_pass);
 
-    pass.reads(albedo, position, normal, material, emissive, accum, revealage, shadow);
+    pass.reads(albedo, position, normal, material, emissive, accum, revealage, shadow0, shadow1, shadow2, shadow3);
 
     pass.writes(depth, sbx::graphics::attachment_load_operation::load);
     pass.writes(resolve, sbx::graphics::attachment_load_operation::clear);
@@ -269,8 +311,17 @@ renderer::renderer()
   auto& skinning = add_task<sbx::animations::skinning_task>(skinning_pass, "res://shaders/skinning");
 
   // Shadow pass
-  add_subrenderer<sbx::models::static_mesh_shadow_subrenderer>(shadow_pass, "res://shaders/shadow");
-  add_subrenderer<sbx::animations::skinned_mesh_shadow_subrenderer>(shadow_pass, "res://shaders/shadow", skinning.vertex_buffer_handle());
+  add_subrenderer<sbx::models::static_mesh_shadow_subrenderer>(shadow0_pass, "res://shaders/shadow", 0u);
+  add_subrenderer<sbx::animations::skinned_mesh_shadow_subrenderer>(shadow0_pass, "res://shaders/shadow", 0u, skinning.vertex_buffer_handle());
+
+  add_subrenderer<sbx::models::static_mesh_shadow_subrenderer>(shadow1_pass, "res://shaders/shadow", 1u);
+  add_subrenderer<sbx::animations::skinned_mesh_shadow_subrenderer>(shadow1_pass, "res://shaders/shadow",2u, skinning.vertex_buffer_handle());
+
+  add_subrenderer<sbx::models::static_mesh_shadow_subrenderer>(shadow1_pass, "res://shaders/shadow", 2u);
+  add_subrenderer<sbx::animations::skinned_mesh_shadow_subrenderer>(shadow1_pass, "res://shaders/shadow", 2u, skinning.vertex_buffer_handle());
+
+  add_subrenderer<sbx::models::static_mesh_shadow_subrenderer>(shadow1_pass, "res://shaders/shadow", 3u);
+  add_subrenderer<sbx::animations::skinned_mesh_shadow_subrenderer>(shadow1_pass, "res://shaders/shadow", 3u, skinning.vertex_buffer_handle());
 
   // Deferred pass
   add_subrenderer<sbx::models::static_mesh_material_subrenderer>(deferred_pass, "res://shaders/deferred_pbr_material", sbx::models::static_mesh_material_draw_list::bucket::opaque);
@@ -290,7 +341,10 @@ renderer::renderer()
     {"material_image", "material"},
     {"emissive_image", "emissive"},
     // {"ssao_image", "ssao"}.
-    {"shadow_image", "shadow"},
+    {"shadow0_image", "shadow0"},
+    {"shadow1_image", "shadow1"},
+    {"shadow2_image", "shadow2"},
+    {"shadow3_image", "shadow3"},
   };
 
   add_subrenderer<sbx::post::resolve_opaque_filter>(resolve_pass, "res://shaders/resolve_opaque", std::move(resolve_opaque_attachment_names));

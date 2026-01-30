@@ -3,12 +3,11 @@
 
 namespace sbx::models {
 
-static_mesh_shadow_subrenderer::static_mesh_shadow_subrenderer(const std::vector<graphics::attachment_description>& attachments, const std::filesystem::path& base_pipeline)
+static_mesh_shadow_subrenderer::static_mesh_shadow_subrenderer(const std::vector<graphics::attachment_description>& attachments, const std::filesystem::path& base_pipeline, const std::uint32_t cascade)
 : graphics::subrenderer{},
   _attachments{attachments},
-  _base_pipeline{base_pipeline} {
-
-}
+  _base_pipeline{base_pipeline},
+  _cascade{cascade} { }
 
 static_mesh_shadow_subrenderer::~static_mesh_shadow_subrenderer() {
   _pipeline_cache.clear();
@@ -45,6 +44,7 @@ auto static_mesh_shadow_subrenderer::render(graphics::command_buffer& command_bu
 
     pipeline_data.push_handler.push("transform_data_buffer", draw_list.buffer(models::static_mesh_material_draw_list::transform_data_buffer_name).address());
     pipeline_data.push_handler.push("instance_data_buffer", graphics_module.get_resource<graphics::storage_buffer>(entry.instance_data_buffer).address());
+    pipeline_data.push_handler.push("cascade", _cascade);
 
     auto& draw_commands_buffer = graphics_module.get_resource<graphics::storage_buffer>(entry.draw_commands_buffer);
 

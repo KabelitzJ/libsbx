@@ -23,10 +23,14 @@ public:
     VkPhysicalDeviceVulkan11Features vulkan11{};
     VkPhysicalDeviceVulkan12Features vulkan12{};
     VkPhysicalDeviceVulkan13Features vulkan13{};
+    VkPhysicalDeviceComputeShaderDerivativesFeaturesKHR compute_shader_derivatives{};
 
     device_features() {
+      compute_shader_derivatives.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COMPUTE_SHADER_DERIVATIVES_FEATURES_KHR;
+      compute_shader_derivatives.pNext = nullptr;
+
       vulkan13.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
-      vulkan13.pNext = nullptr;
+      vulkan13.pNext = &compute_shader_derivatives;
 
       vulkan12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
       vulkan12.pNext = &vulkan13;

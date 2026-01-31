@@ -12,7 +12,7 @@ auto validation_layers::instance() -> std::vector<const char*> {
   if constexpr (utility::build_configuration_v == utility::build_configuration::debug) {
     // [NOTE] KAJ 2025-09-13 : Since I upgraded to VulkanSDK 1.4.321.0 the call to vkCreateInstance causes a segfault if I use this layer
     // I have no idea why, so for now I will disable it 
-    // required_layers.push_back("VK_LAYER_KHRONOS_validation");
+    required_layers.push_back("VK_LAYER_KHRONOS_validation");
 
     auto available_layer_count = std::uint32_t{0};
     vkEnumerateInstanceLayerProperties(&available_layer_count, nullptr);

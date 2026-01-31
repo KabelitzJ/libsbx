@@ -9,7 +9,8 @@ auto extensions::device() -> std::vector<const char*> {
     VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME,
     VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME,
     VK_KHR_SHADER_DRAW_PARAMETERS_EXTENSION_NAME,
-    VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME
+    VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME,
+    VK_KHR_COMPUTE_SHADER_DERIVATIVES_EXTENSION_NAME
   };
 
   return required_extensions;
@@ -24,6 +25,7 @@ auto extensions::instance() -> std::vector<const char*> {
 
   if constexpr (utility::build_configuration_v == utility::build_configuration::debug) {
     required_extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+    // required_extensions.push_back(VK_EXT_VALIDATION_FEATURES_EXTENSION_NAME);
   }
 
   auto available_extention_count = std::uint32_t{0};

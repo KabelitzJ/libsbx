@@ -58,7 +58,7 @@ public:
 
   static auto channels_from_format(VkFormat format) -> std::uint8_t;
 
-  auto write_descriptor_set(std::uint32_t binding, VkDescriptorType descriptor_type) const noexcept -> graphics::write_descriptor_set override;
+  virtual auto write_descriptor_set(std::uint32_t binding, VkDescriptorType descriptor_type) const noexcept -> graphics::write_descriptor_set override;
 
   auto extent() const noexcept -> const VkExtent3D&;
 

@@ -286,201 +286,167 @@ auto image::create_mipmaps(const VkImage& image, const VkExtent3D& extent, VkFor
 auto image::transition_image_layout(const VkImage& image, VkFormat format, VkImageLayout src_image_layout, VkImageLayout dst_image_layout, VkImageAspectFlags image_aspect, std::uint32_t mip_levels, std::uint32_t base_mip_level, std::uint32_t layer_count, std::uint32_t base_array_layer) -> void {
   auto command_buffer = graphics::command_buffer{};
 
-  auto barrier = VkImageMemoryBarrier{};
-  barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-	barrier.oldLayout = src_image_layout;
-	barrier.newLayout = dst_image_layout;
-	barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-	barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-	barrier.image = image;
-	barrier.subresourceRange.aspectMask = image_aspect;
-	barrier.subresourceRange.baseMipLevel = base_mip_level;
-	barrier.subresourceRange.levelCount = mip_levels;
-	barrier.subresourceRange.baseArrayLayer = base_array_layer;
-	barrier.subresourceRange.layerCount = layer_count;
-
-  switch (src_image_layout) {
-    case VK_IMAGE_LAYOUT_UNDEFINED: {
-      barrier.srcAccessMask = 0;
-      break;
-    }
-    case VK_IMAGE_LAYOUT_PRESENT_SRC_KHR: {
-      barrier.srcAccessMask = 0;  // No specific access mask required
-      break;
-    }
-    case VK_IMAGE_LAYOUT_GENERAL: {
-      // General can be written or read — safest is to assume both
-      barrier.srcAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
-      break;
-    }
-    case VK_IMAGE_LAYOUT_PREINITIALIZED: {
-      barrier.srcAccessMask = VK_ACCESS_HOST_WRITE_BIT;
-      break;
-    }
-    case VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL: {
-      barrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-      break;
-    }
-    case VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL: {
-      barrier.srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-      break;
-    }
-    case VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL: {
-      barrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-      break;
-    }
-    case VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL: {
-      barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-      break;
-    }
-    case VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL: {
-      barrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
-      break;
-    }
-    default: {
-      throw std::runtime_error{fmt::format("Unsupported image layout transition source: {}", src_image_layout)};
-    }
-	}
-
-  switch (dst_image_layout) {
-    case VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL: {
-      barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-      break;
-    }
-    case VK_IMAGE_LAYOUT_GENERAL: {
-      barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
-      break;
-    }
-    case VK_IMAGE_LAYOUT_PRESENT_SRC_KHR: {
-      barrier.dstAccessMask = 0;  // No specific access mask required
-      break;
-    }
-    case VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL: {
-      barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-      break;
-    }
-    case VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL: {
-      barrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-      break;
-    }
-    case VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL: {
-      barrier.dstAccessMask = barrier.dstAccessMask | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-      break;
-    }
-    case VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL: {
-      if (barrier.srcAccessMask == 0) {
-        barrier.srcAccessMask = VK_ACCESS_HOST_WRITE_BIT | VK_ACCESS_TRANSFER_WRITE_BIT;
-      }
-
-      barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-      break;
-    }
-    default: {
-      throw std::runtime_error{fmt::format("Unsupported image layout transition destination: {}", dst_image_layout)};
-    }
-	}
-
-  vkCmdPipelineBarrier(command_buffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 0, 0, nullptr, 0, nullptr, 1, &barrier);
+  transition_image_layout(
+    command_buffer,
+    image,
+    format,
+    src_image_layout,
+    dst_image_layout,
+    image_aspect,
+    mip_levels,
+    base_mip_level,
+    layer_count,
+    base_array_layer
+  );
 
   command_buffer.submit_idle();
 }
 
-auto image::transition_image_layout(command_buffer& command_buffer, const VkImage& image, VkFormat format, VkImageLayout src_image_layout, VkImageLayout dst_image_layout, VkImageAspectFlags image_aspect, std::uint32_t mip_levels, std::uint32_t base_mip_level, std::uint32_t layer_count, std::uint32_t base_array_layer) -> void {
+auto image::transition_image_layout(
+  command_buffer& command_buffer,
+  const VkImage& image,
+  VkFormat /*format*/,
+  VkImageLayout src_image_layout,
+  VkImageLayout dst_image_layout,
+  VkImageAspectFlags image_aspect,
+  std::uint32_t mip_levels,
+  std::uint32_t base_mip_level,
+  std::uint32_t layer_count,
+  std::uint32_t base_array_layer
+) -> void {
   auto barrier = VkImageMemoryBarrier{};
   barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-	barrier.oldLayout = src_image_layout;
-	barrier.newLayout = dst_image_layout;
-	barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-	barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-	barrier.image = image;
-	barrier.subresourceRange.aspectMask = image_aspect;
-	barrier.subresourceRange.baseMipLevel = base_mip_level;
-	barrier.subresourceRange.levelCount = mip_levels;
-	barrier.subresourceRange.baseArrayLayer = base_array_layer;
-	barrier.subresourceRange.layerCount = layer_count;
+  barrier.oldLayout = src_image_layout;
+  barrier.newLayout = dst_image_layout;
+  barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  barrier.image = image;
+  barrier.subresourceRange.aspectMask = image_aspect;
+  barrier.subresourceRange.baseMipLevel = base_mip_level;
+  barrier.subresourceRange.levelCount = mip_levels;
+  barrier.subresourceRange.baseArrayLayer = base_array_layer;
+  barrier.subresourceRange.layerCount = layer_count;
 
+  auto src_stage = VkPipelineStageFlags{};
+  auto dst_stage = VkPipelineStageFlags{};
+
+  // ---- source ----
   switch (src_image_layout) {
     case VK_IMAGE_LAYOUT_UNDEFINED: {
       barrier.srcAccessMask = 0;
+      src_stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
       break;
     }
+
     case VK_IMAGE_LAYOUT_GENERAL: {
-      // General can be written or read — safest is to assume both
       barrier.srcAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
+      src_stage = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
       break;
     }
-    case VK_IMAGE_LAYOUT_PRESENT_SRC_KHR: {
-      barrier.srcAccessMask = 0;  // No specific access mask required
-      break;
-    }
-    case VK_IMAGE_LAYOUT_PREINITIALIZED: {
-      barrier.srcAccessMask = VK_ACCESS_HOST_WRITE_BIT;
-      break;
-    }
+
     case VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL: {
       barrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+      src_stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
       break;
     }
+
     case VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL: {
       barrier.srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+      src_stage = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
       break;
     }
+
     case VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL: {
       barrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+      src_stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
       break;
     }
+
     case VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL: {
       barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+      src_stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
       break;
     }
+
     case VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL: {
       barrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
+      src_stage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
       break;
     }
-    default: {
-      throw std::runtime_error{fmt::format("Unsupported image layout transition source: {}", src_image_layout)};
-    }
-	}
 
+    case VK_IMAGE_LAYOUT_PRESENT_SRC_KHR: {
+      barrier.srcAccessMask = 0;
+      src_stage = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+      break;
+    }
+
+    default: {
+      throw std::runtime_error{
+        fmt::format("Unsupported image layout transition source: {}", src_image_layout)
+      };
+    }
+  }
+
+  // ---- destination ----
   switch (dst_image_layout) {
     case VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL: {
       barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+      dst_stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
       break;
     }
-    case VK_IMAGE_LAYOUT_GENERAL: {
-      barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
-      break;
-    }
-    case VK_IMAGE_LAYOUT_PRESENT_SRC_KHR: {
-      barrier.dstAccessMask = 0;  // No specific access mask required
-      break;
-    }
+
     case VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL: {
       barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+      dst_stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
       break;
     }
+
+    case VK_IMAGE_LAYOUT_GENERAL: {
+      barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
+      dst_stage = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+      break;
+    }
+
     case VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL: {
       barrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+      dst_stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
       break;
     }
+
     case VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL: {
-      barrier.dstAccessMask = barrier.dstAccessMask | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+      barrier.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+      dst_stage = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
       break;
     }
+
     case VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL: {
-      if (barrier.srcAccessMask == 0) {
-        barrier.srcAccessMask = VK_ACCESS_HOST_WRITE_BIT | VK_ACCESS_TRANSFER_WRITE_BIT;
-      }
-
       barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+      dst_stage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
       break;
     }
-    default: {
-      throw std::runtime_error{fmt::format("Unsupported image layout transition destination: {}", dst_image_layout)};
-    }
-	}
 
-  vkCmdPipelineBarrier(command_buffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 0, 0, nullptr, 0, nullptr, 1, &barrier);
+    case VK_IMAGE_LAYOUT_PRESENT_SRC_KHR: {
+      barrier.dstAccessMask = 0;
+      dst_stage = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+      break;
+    }
+
+    default: {
+      throw std::runtime_error{
+        fmt::format("Unsupported image layout transition destination: {}", dst_image_layout)
+      };
+    }
+  }
+
+  vkCmdPipelineBarrier(
+    command_buffer,
+    src_stage,
+    dst_stage,
+    0,
+    0, nullptr,
+    0, nullptr,
+    1, &barrier
+  );
 }
 
 auto image::insert_image_memory_barrier(command_buffer& command_buffer, const VkImage& image, VkAccessFlags src_access_mask, VkAccessFlags dst_access_mask, VkImageLayout old_image_layout, VkImageLayout new_image_layout, VkPipelineStageFlags src_stage_mask, VkPipelineStageFlags dst_stage_mask, VkImageAspectFlags image_aspect, uint32_t mip_levels, uint32_t base_mip_level, uint32_t layer_count, uint32_t base_array_layer) -> void {

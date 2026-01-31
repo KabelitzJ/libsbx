@@ -185,6 +185,7 @@ auto logical_device::_get_enabled_features(const physical_device& physical_devic
   auto& available_vulkan11_features = physical_device_features.vulkan11;
   auto& available_vulkan12_features = physical_device_features.vulkan12;
   auto& available_vulkan13_features = physical_device_features.vulkan13;
+  auto& available_compute_shader_derivatives_features = physical_device_features.compute_shader_derivatives;
   // auto& available_device_address_features = physical_device_features.device_address;
   // auto& available_descriptor_indexing_features = physical_device_features.descriptor_indexing;
 
@@ -194,6 +195,7 @@ auto logical_device::_get_enabled_features(const physical_device& physical_devic
   auto& enabled_vulkan11_features = enabled_features.vulkan11;
   auto& enabled_vulkan12_features = enabled_features.vulkan12;
   auto& enabled_vulkan13_features = enabled_features.vulkan13;
+  auto& enabled_compute_shader_derivatives_features = enabled_features.compute_shader_derivatives;
   // auto& enabled_device_address_features = enabled_features.device_address; 
   // auto& enabled_descriptor_indexing_features = enabled_features.descriptor_indexing; 
 
@@ -348,6 +350,12 @@ auto logical_device::_get_enabled_features(const physical_device& physical_devic
     enabled_vulkan13_features.shaderDemoteToHelperInvocation = true;
   } else {
     utility::logger<"graphics">::warn("Selected GPU does not support demote to helper invocation");
+  }
+
+  if (available_compute_shader_derivatives_features.computeDerivativeGroupQuads) {
+    enabled_compute_shader_derivatives_features.computeDerivativeGroupQuads = true;
+  } else {
+    utility::logger<"graphics">::warn("Selected GPU does not support compute shader derivatives");
   }
 
   return enabled_features;

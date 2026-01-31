@@ -76,7 +76,7 @@ class libsbx_recipe(ConanFile):
     # "!demo/assets/**"
   )
 
-  REQUIRED_VULKAN_VERSION = (1, 4, 321, 0)
+  REQUIRED_VULKAN_VERSION = (1, 4, 335, 0)
   REQUIRED_VULKAN_VERSION_STR = ".".join(map(str, REQUIRED_VULKAN_VERSION))
 
   def config_options(self):

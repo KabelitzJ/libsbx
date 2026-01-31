@@ -30,6 +30,27 @@ public:
     return "Cube Image";
   }
 
+  auto write_descriptor_set(std::uint32_t binding, VkDescriptorType descriptor_type) const noexcept -> graphics::write_descriptor_set override {
+    auto descriptor_image_infos = std::vector<VkDescriptorImageInfo>{};
+
+    auto descriptor_image_info = VkDescriptorImageInfo{};
+    descriptor_image_info.imageLayout = _layout;
+    descriptor_image_info.imageView = (descriptor_type == VK_DESCRIPTOR_TYPE_STORAGE_IMAGE) ? _array_view : _view;
+    descriptor_image_info.sampler = _sampler;
+
+    descriptor_image_infos.push_back(descriptor_image_info);
+
+    auto descriptor_write = VkWriteDescriptorSet{};
+    descriptor_write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    descriptor_write.dstSet = nullptr;
+    descriptor_write.dstBinding = binding;
+    descriptor_write.dstArrayElement = 0;
+    descriptor_write.descriptorCount = 1;
+    descriptor_write.descriptorType = descriptor_type;
+
+    return graphics::write_descriptor_set{descriptor_write, descriptor_image_infos};
+  }
+
 private:
 
   auto _load(const std::filesystem::path& path = {}, const std::string& suffix = {}) -> void;
@@ -39,6 +60,8 @@ private:
   bool _anisotropic;
   bool _mipmap;
   std::uint8_t _channels;
+
+  VkImageView _array_view;
 
 }; // class cube_image
 

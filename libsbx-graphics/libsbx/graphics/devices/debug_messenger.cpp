@@ -72,10 +72,6 @@ static auto message_type_to_string(const VkDebugUtilsMessageTypeFlagsEXT message
 
 VKAPI_ATTR auto VKAPI_CALL debug_messenger::_debug_callback(VkDebugUtilsMessageSeverityFlagBitsEXT message_severity, [[maybe_unused]] VkDebugUtilsMessageTypeFlagsEXT message_type, const VkDebugUtilsMessengerCallbackDataEXT* callback_data, [[maybe_unused]] void* user_data) -> VkBool32 {
   const auto message_type_str = message_type_to_string(message_type);
-
-  // if (message_severity == VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT) {
-  //   utility::logger<"graphics">::info("{}: {}", message_type_str, callback_data->pMessage);
-  // } else 
   
   if (message_severity == VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) {
     utility::logger<"graphics">::warn("{}: {}", message_type_str, callback_data->pMessage);

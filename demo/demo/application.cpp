@@ -77,6 +77,18 @@ application::application()
   _generate_irradiance(64);
   _generate_prefiltered(512);
 
+  auto& brdf = graphics_module.get_resource<sbx::graphics::image2d>(_brdf);
+  sbx::utility::logger<"application">::debug("Created brdf image: handle = {:#x}", reinterpret_cast<std::uintptr_t>(brdf.handle()));
+
+  auto& irradiance = graphics_module.get_resource<sbx::graphics::cube_image>(_irradiance);
+  sbx::utility::logger<"application">::debug("Created irradiance image: handle = {:#x}", reinterpret_cast<std::uintptr_t>(irradiance.handle()));
+
+  auto& prefiltered = graphics_module.get_resource<sbx::graphics::cube_image>(_prefiltered);
+  sbx::utility::logger<"application">::debug("Created prefiltered image: handle = {:#x}", reinterpret_cast<std::uintptr_t>(prefiltered.handle()));
+
+  auto& skybox = graphics_module.get_resource<sbx::graphics::cube_image>(scene.get_cube_image("skybox"));
+  sbx::utility::logger<"application">::debug("Skybox image: handle = {:#x}", reinterpret_cast<std::uintptr_t>(skybox.handle()));
+
   // Meshes
   scene.add_mesh<sbx::models::mesh>("edge_one", "res://meshes/terrain/edge_one/edge_one.gltf");
   scene.add_mesh<sbx::models::mesh>("edge_three", "res://meshes/terrain/edge_three/edge_three.gltf");
@@ -289,6 +301,10 @@ auto application::_generate_brdf(const std::uint32_t size) -> void {
   constexpr auto threads_per_group = std::uint32_t{16};
 
   auto& graphics_module = sbx::core::engine::get_module<sbx::graphics::graphics_module>();
+  const auto& logical_device = graphics_module.logical_device();
+
+  const auto& graphics_queue = logical_device.queue<sbx::graphics::queue::type::graphics>();
+  const auto& compute_queue = logical_device.queue<sbx::graphics::queue::type::compute>();
 
   _brdf = graphics_module.add_resource<sbx::graphics::image2d>(sbx::math::vector2u{size}, sbx::graphics::format::r16g16_sfloat, sbx::graphics::filter::linear, sbx::graphics::address_mode::repeat);
 
@@ -296,29 +312,105 @@ auto application::_generate_brdf(const std::uint32_t size) -> void {
 
   auto& brdf = graphics_module.get_resource<sbx::graphics::image2d>(_brdf);
 
-  sbx::graphics::image::transition_image_layout(brdf.handle(), VK_FORMAT_R16G16_SFLOAT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT, brdf.mip_levels(), 0, brdf.array_layers(), 0);
+  auto initial_command_buffer = sbx::graphics::command_buffer{true, VK_QUEUE_GRAPHICS_BIT};
 
-  auto command_buffer = sbx::graphics::command_buffer{true, VK_QUEUE_COMPUTE_BIT};
+  sbx::graphics::image::transition_image_layout(initial_command_buffer, brdf.handle(), VK_FORMAT_R16G16_SFLOAT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT, brdf.mip_levels(), 0, brdf.array_layers(), 0);
+
+  if (graphics_queue.family() != compute_queue.family()) {
+    auto brdf_release = sbx::graphics::command_buffer::image_release_data{
+      .image = brdf.handle(),
+      .mip_levels = brdf.mip_levels(),
+      .base_array_layer = 0,
+      .layer_count = brdf.array_layers(),
+      .src_stage_mask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+      .src_access_mask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+      .src_queue_family = graphics_queue.family(),
+      .dst_queue_family = compute_queue.family(),
+      .old_layout = VK_IMAGE_LAYOUT_GENERAL,
+      .new_layout = VK_IMAGE_LAYOUT_GENERAL
+    };
+
+    initial_command_buffer.release_image_ownership({brdf_release});
+  }
+
+  initial_command_buffer.submit_idle();
+
+  auto compute_command_buffer = sbx::graphics::command_buffer{true, VK_QUEUE_COMPUTE_BIT};
+
+  if (graphics_queue.family() != compute_queue.family()) {
+    auto brdf_acquire = sbx::graphics::command_buffer::image_acquire_data{
+      .image = brdf.handle(),
+      .mip_levels = brdf.mip_levels(),
+      .base_array_layer = 0,
+      .layer_count = brdf.array_layers(),
+      .dst_stage_mask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+      .dst_access_mask = VK_ACCESS_2_SHADER_WRITE_BIT,
+      .src_queue_family = graphics_queue.family(),
+      .dst_queue_family = compute_queue.family(),
+      .old_layout = VK_IMAGE_LAYOUT_GENERAL,
+      .new_layout = VK_IMAGE_LAYOUT_GENERAL
+    };
+
+    compute_command_buffer.acquire_image_ownership({brdf_acquire});
+  }
 
   auto pipeline = sbx::graphics::compute_pipeline{"res://shaders/brdf"};
 
-  pipeline.bind(command_buffer);
+  pipeline.bind(compute_command_buffer);
 
   auto descriptor_handler = sbx::graphics::descriptor_handler{pipeline, 0u};
 
   descriptor_handler.push("output", brdf);
 
   descriptor_handler.update(pipeline);
-  descriptor_handler.bind_descriptors(command_buffer);
+  descriptor_handler.bind_descriptors(compute_command_buffer);
 
-  const uint32_t group_count_x = (brdf.size().x() + threads_per_group - 1) / threads_per_group;
-  const uint32_t group_count_y = (brdf.size().y() + threads_per_group - 1) / threads_per_group;
+  const auto group_count_x = (brdf.size().x() + threads_per_group - 1) / threads_per_group;
+  const auto group_count_y = (brdf.size().y() + threads_per_group - 1) / threads_per_group;
 
-  pipeline.dispatch(command_buffer, sbx::math::vector3u{group_count_x, group_count_y, 1u});
+  pipeline.dispatch(compute_command_buffer, sbx::math::vector3u{group_count_x, group_count_y, 1u});
 
-  command_buffer.submit_idle();
+  if (graphics_queue.family() != compute_queue.family()) {
+    auto brdf_release = sbx::graphics::command_buffer::image_release_data{
+      .image = brdf.handle(),
+      .mip_levels = brdf.mip_levels(),
+      .base_array_layer = 0,
+      .layer_count = brdf.array_layers(),
+      .src_stage_mask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+      .src_access_mask = VK_ACCESS_2_SHADER_WRITE_BIT,
+      .src_queue_family = compute_queue.family(),
+      .dst_queue_family = graphics_queue.family(),
+      .old_layout = VK_IMAGE_LAYOUT_GENERAL,
+      .new_layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+    };
 
-  sbx::graphics::image::transition_image_layout(brdf.handle(), VK_FORMAT_R16G16_SFLOAT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_ASPECT_COLOR_BIT, brdf.mip_levels(), 0, brdf.array_layers(), 0);
+    compute_command_buffer.release_image_ownership({brdf_release});
+  } else {
+    sbx::graphics::image::transition_image_layout(compute_command_buffer, brdf.handle(), VK_FORMAT_R16G16_SFLOAT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_ASPECT_COLOR_BIT, brdf.mip_levels(), 0, brdf.array_layers(), 0);
+  }
+
+  compute_command_buffer.submit_idle();
+
+  if (graphics_queue.family() != compute_queue.family()) {
+    auto final_command_buffer = sbx::graphics::command_buffer{true, VK_QUEUE_GRAPHICS_BIT};
+
+    auto brdf_acquire = sbx::graphics::command_buffer::image_acquire_data{
+      .image = brdf.handle(),
+      .mip_levels = brdf.mip_levels(),
+      .base_array_layer = 0,
+      .layer_count = brdf.array_layers(),
+      .dst_stage_mask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+      .dst_access_mask = VK_ACCESS_2_SHADER_READ_BIT,
+      .src_queue_family = compute_queue.family(),
+      .dst_queue_family = graphics_queue.family(),
+      .old_layout = VK_IMAGE_LAYOUT_GENERAL,
+      .new_layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+    };
+
+    final_command_buffer.acquire_image_ownership({brdf_acquire});
+
+    final_command_buffer.submit_idle();
+  }
 
   sbx::utility::logger<"application">::info("Generated 'brdf' in {:.2f}ms", sbx::units::quantity_cast<sbx::units::millisecond>(timer.elapsed()));
 }
@@ -327,43 +419,172 @@ auto application::_generate_irradiance(const std::uint32_t size) -> void {
   constexpr auto threads_per_group = std::uint32_t{16};
 
   auto& graphics_module = sbx::core::engine::get_module<sbx::graphics::graphics_module>();
-
   auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
-
   auto& scene = scenes_module.scene();
+
+  const auto& logical_device = graphics_module.logical_device();
+  const auto& graphics_queue = logical_device.queue<sbx::graphics::queue::type::graphics>();
+  const auto& compute_queue = logical_device.queue<sbx::graphics::queue::type::compute>();
 
   _irradiance = graphics_module.add_resource<sbx::graphics::cube_image>(sbx::math::vector2u{size}, VK_FORMAT_R32G32B32A32_SFLOAT);
 
   auto timer = sbx::utility::timer{};
 
   auto& irradiance = graphics_module.get_resource<sbx::graphics::cube_image>(_irradiance);
+  auto& skybox = graphics_module.get_resource<sbx::graphics::cube_image>(scene.get_cube_image("skybox"));
 
-  sbx::graphics::image::transition_image_layout(irradiance.handle(), VK_FORMAT_R32G32B32A32_SFLOAT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT, irradiance.mip_levels(), 0, irradiance.array_layers(), 0);
+  auto initial_command_buffer = sbx::graphics::command_buffer{true, VK_QUEUE_GRAPHICS_BIT};
 
-  auto command_buffer = sbx::graphics::command_buffer{true, VK_QUEUE_COMPUTE_BIT};
+  sbx::graphics::image::transition_image_layout(initial_command_buffer, irradiance.handle(), VK_FORMAT_R32G32B32A32_SFLOAT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT, irradiance.mip_levels(), 0, irradiance.array_layers(), 0);
+
+  if (graphics_queue.family() != compute_queue.family()) {
+    auto irradiance_release = sbx::graphics::command_buffer::image_release_data{
+      .image = irradiance.handle(),
+      .mip_levels = irradiance.mip_levels(),
+      .base_array_layer = 0,
+      .layer_count = irradiance.array_layers(),
+      .src_stage_mask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+      .src_access_mask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+      .src_queue_family = graphics_queue.family(),
+      .dst_queue_family = compute_queue.family(),
+      .old_layout = VK_IMAGE_LAYOUT_GENERAL,
+      .new_layout = VK_IMAGE_LAYOUT_GENERAL
+    };
+
+    auto skybox_release = sbx::graphics::command_buffer::image_release_data{
+      .image = skybox.handle(),
+      .mip_levels = skybox.mip_levels(),
+      .base_array_layer = 0,
+      .layer_count = skybox.array_layers(),
+      .src_stage_mask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+      .src_access_mask = VK_ACCESS_2_SHADER_READ_BIT,
+      .src_queue_family = graphics_queue.family(),
+      .dst_queue_family = compute_queue.family(),
+      .old_layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+      .new_layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+    };
+
+    initial_command_buffer.release_image_ownership({irradiance_release, skybox_release});
+  }
+
+  initial_command_buffer.submit_idle();
+
+  auto compute_command_buffer = sbx::graphics::command_buffer{true, VK_QUEUE_COMPUTE_BIT};
+
+  if (graphics_queue.family() != compute_queue.family()) {
+    auto irradiance_acquire = sbx::graphics::command_buffer::image_acquire_data{
+      .image = irradiance.handle(),
+      .mip_levels = irradiance.mip_levels(),
+      .base_array_layer = 0,
+      .layer_count = irradiance.array_layers(),
+      .dst_stage_mask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+      .dst_access_mask = VK_ACCESS_2_SHADER_WRITE_BIT,
+      .src_queue_family = graphics_queue.family(),
+      .dst_queue_family = compute_queue.family(),
+      .old_layout = VK_IMAGE_LAYOUT_GENERAL,
+      .new_layout = VK_IMAGE_LAYOUT_GENERAL
+    };
+
+    auto skybox_acquire = sbx::graphics::command_buffer::image_acquire_data{
+      .image = skybox.handle(),
+      .mip_levels = skybox.mip_levels(),
+      .base_array_layer = 0,
+      .layer_count = skybox.array_layers(),
+      .dst_stage_mask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+      .dst_access_mask = VK_ACCESS_2_SHADER_READ_BIT,
+      .src_queue_family = graphics_queue.family(),
+      .dst_queue_family = compute_queue.family(),
+      .old_layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+      .new_layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+    };
+
+    compute_command_buffer.acquire_image_ownership({irradiance_acquire, skybox_acquire});
+  }
 
   auto pipeline = sbx::graphics::compute_pipeline{"res://shaders/irradiance"};
 
-  pipeline.bind(command_buffer);
+  pipeline.bind(compute_command_buffer);
 
   auto descriptor_handler = sbx::graphics::descriptor_handler{pipeline, 0u};
 
-  descriptor_handler.push("skybox", graphics_module.get_resource<sbx::graphics::cube_image>(scene.get_cube_image("skybox")));
+  descriptor_handler.push("skybox", skybox);
   descriptor_handler.push("output", irradiance);
 
   descriptor_handler.update(pipeline);
-  descriptor_handler.bind_descriptors(command_buffer);
+  descriptor_handler.bind_descriptors(compute_command_buffer);
 
-  // const auto group_count_x = static_cast<std::uint32_t>(std::ceil(static_cast<std::float_t>(irradiance.size().x()) / static_cast<std::float_t>(threads_per_group)));
-  // const auto group_count_y = static_cast<std::uint32_t>(std::ceil(static_cast<std::float_t>(irradiance.size().y()) / static_cast<std::float_t>(threads_per_group)));
-  const uint32_t group_count_x = (irradiance.size().x() + threads_per_group - 1) / threads_per_group;
-  const uint32_t group_count_y = (irradiance.size().y() + threads_per_group - 1) / threads_per_group;
+  const auto group_count_x = (irradiance.size().x() + threads_per_group - 1) / threads_per_group;
+  const auto group_count_y = (irradiance.size().y() + threads_per_group - 1) / threads_per_group;
 
-  pipeline.dispatch(command_buffer, sbx::math::vector3u{group_count_x, group_count_y, 1u});
+  pipeline.dispatch(compute_command_buffer, sbx::math::vector3u{group_count_x, group_count_y, 1u});
 
-  command_buffer.submit_idle();
+  if (graphics_queue.family() != compute_queue.family()) {
+    auto irradiance_release = sbx::graphics::command_buffer::image_release_data{
+      .image = irradiance.handle(),
+      .mip_levels = irradiance.mip_levels(),
+      .base_array_layer = 0,
+      .layer_count = irradiance.array_layers(),
+      .src_stage_mask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+      .src_access_mask = VK_ACCESS_2_SHADER_WRITE_BIT,
+      .src_queue_family = compute_queue.family(),
+      .dst_queue_family = graphics_queue.family(),
+      .old_layout = VK_IMAGE_LAYOUT_GENERAL,
+      .new_layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+    };
 
-  sbx::graphics::image::transition_image_layout(irradiance.handle(), VK_FORMAT_R32G32B32A32_SFLOAT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_ASPECT_COLOR_BIT, irradiance.mip_levels(), 0, irradiance.array_layers(), 0);
+    auto skybox_release = sbx::graphics::command_buffer::image_release_data{
+      .image = skybox.handle(),
+      .mip_levels = skybox.mip_levels(),
+      .base_array_layer = 0,
+      .layer_count = skybox.array_layers(),
+      .src_stage_mask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+      .src_access_mask = VK_ACCESS_2_SHADER_READ_BIT,
+      .src_queue_family = compute_queue.family(),
+      .dst_queue_family = graphics_queue.family(),
+      .old_layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+      .new_layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+    };
+
+    compute_command_buffer.release_image_ownership({irradiance_release, skybox_release});
+  } else {
+    sbx::graphics::image::transition_image_layout(compute_command_buffer, irradiance.handle(), VK_FORMAT_R32G32B32A32_SFLOAT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_ASPECT_COLOR_BIT, irradiance.mip_levels(), 0, irradiance.array_layers(), 0);
+  }
+
+  compute_command_buffer.submit_idle();
+
+  if (graphics_queue.family() != compute_queue.family()) {
+    auto final_command_buffer = sbx::graphics::command_buffer{true, VK_QUEUE_GRAPHICS_BIT};
+
+    auto irradiance_acquire = sbx::graphics::command_buffer::image_acquire_data{
+      .image = irradiance.handle(),
+      .mip_levels = irradiance.mip_levels(),
+      .base_array_layer = 0,
+      .layer_count = irradiance.array_layers(),
+      .dst_stage_mask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+      .dst_access_mask = VK_ACCESS_2_SHADER_READ_BIT,
+      .src_queue_family = compute_queue.family(),
+      .dst_queue_family = graphics_queue.family(),
+      .old_layout = VK_IMAGE_LAYOUT_GENERAL,
+      .new_layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+    };
+
+    auto skybox_acquire = sbx::graphics::command_buffer::image_acquire_data{
+      .image = skybox.handle(),
+      .mip_levels = skybox.mip_levels(),
+      .base_array_layer = 0,
+      .layer_count = skybox.array_layers(),
+      .dst_stage_mask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+      .dst_access_mask = VK_ACCESS_2_SHADER_READ_BIT,
+      .src_queue_family = compute_queue.family(),
+      .dst_queue_family = graphics_queue.family(),
+      .old_layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+      .new_layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+    };
+
+    final_command_buffer.acquire_image_ownership({irradiance_acquire, skybox_acquire});
+
+    final_command_buffer.submit_idle();
+  }
 
   sbx::utility::logger<"application">::info("Generated 'irradiance' in {:.2f}ms", sbx::units::quantity_cast<sbx::units::millisecond>(timer.elapsed()));
 }
@@ -375,20 +596,89 @@ auto application::_generate_prefiltered(uint32_t size) -> void {
   auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
   auto& scene = scenes_module.scene();
 
+  const auto& logical_device = graphics_module.logical_device();
+  const auto& graphics_queue = logical_device.queue<sbx::graphics::queue::type::graphics>();
+  const auto& compute_queue = logical_device.queue<sbx::graphics::queue::type::compute>();
+
   _prefiltered = graphics_module.add_resource<sbx::graphics::cube_image>(sbx::math::vector2u{size}, VK_FORMAT_R32G32B32A32_SFLOAT, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, VK_FILTER_LINEAR, VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE, VK_SAMPLE_COUNT_1_BIT, true, true);
 
   auto timer = sbx::utility::timer{};
 
   auto& prefiltered = graphics_module.get_resource<sbx::graphics::cube_image>(_prefiltered);
+  auto& skybox = graphics_module.get_resource<sbx::graphics::cube_image>(scene.get_cube_image("skybox"));
 
-  sbx::graphics::image::transition_image_layout(prefiltered.handle(), VK_FORMAT_R32G32B32A32_SFLOAT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT, prefiltered.mip_levels(), 0, prefiltered.array_layers(), 0);
+  auto initial_command_buffer = sbx::graphics::command_buffer{true, VK_QUEUE_GRAPHICS_BIT};
 
-  auto command_buffer = sbx::graphics::command_buffer{true, VK_QUEUE_COMPUTE_BIT};
+  sbx::graphics::image::transition_image_layout(initial_command_buffer, prefiltered.handle(), VK_FORMAT_R32G32B32A32_SFLOAT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT, prefiltered.mip_levels(), 0, prefiltered.array_layers(), 0);
+
+  if (graphics_queue.family() != compute_queue.family()) {
+    auto prefiltered_release = sbx::graphics::command_buffer::image_release_data{
+      .image = prefiltered.handle(),
+      .mip_levels = prefiltered.mip_levels(),
+      .base_array_layer = 0,
+      .layer_count = prefiltered.array_layers(),
+      .src_stage_mask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+      .src_access_mask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+      .src_queue_family = graphics_queue.family(),
+      .dst_queue_family = compute_queue.family(),
+      .old_layout = VK_IMAGE_LAYOUT_GENERAL,
+      .new_layout = VK_IMAGE_LAYOUT_GENERAL
+    };
+
+    auto skybox_release = sbx::graphics::command_buffer::image_release_data{
+      .image = skybox.handle(),
+      .mip_levels = skybox.mip_levels(),
+      .base_array_layer = 0,
+      .layer_count = skybox.array_layers(),
+      .src_stage_mask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+      .src_access_mask = VK_ACCESS_2_SHADER_READ_BIT,
+      .src_queue_family = graphics_queue.family(),
+      .dst_queue_family = compute_queue.family(),
+      .old_layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+      .new_layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+    };
+
+    initial_command_buffer.release_image_ownership({prefiltered_release, skybox_release});
+  }
+
+  initial_command_buffer.submit_idle();
+
+  auto compute_command_buffer = sbx::graphics::command_buffer{true, VK_QUEUE_COMPUTE_BIT};
+
+  if (graphics_queue.family() != compute_queue.family()) {
+    auto prefiltered_acquire = sbx::graphics::command_buffer::image_acquire_data{
+      .image = prefiltered.handle(),
+      .mip_levels = prefiltered.mip_levels(),
+      .base_array_layer = 0,
+      .layer_count = prefiltered.array_layers(),
+      .dst_stage_mask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+      .dst_access_mask = VK_ACCESS_2_SHADER_WRITE_BIT,
+      .src_queue_family = graphics_queue.family(),
+      .dst_queue_family = compute_queue.family(),
+      .old_layout = VK_IMAGE_LAYOUT_GENERAL,
+      .new_layout = VK_IMAGE_LAYOUT_GENERAL
+    };
+
+    auto skybox_acquire = sbx::graphics::command_buffer::image_acquire_data{
+      .image = skybox.handle(),
+      .mip_levels = skybox.mip_levels(),
+      .base_array_layer = 0,
+      .layer_count = skybox.array_layers(),
+      .dst_stage_mask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+      .dst_access_mask = VK_ACCESS_2_SHADER_READ_BIT,
+      .src_queue_family = graphics_queue.family(),
+      .dst_queue_family = compute_queue.family(),
+      .old_layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+      .new_layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+    };
+
+    compute_command_buffer.acquire_image_ownership({prefiltered_acquire, skybox_acquire});
+  }
 
   auto pipeline = sbx::graphics::compute_pipeline{"res://shaders/prefiltered"};
   auto push_handler = sbx::graphics::push_handler{pipeline};
 
-  pipeline.bind(command_buffer);
+  pipeline.bind(compute_command_buffer);
 
   auto descriptor_handlers = std::vector<sbx::graphics::descriptor_handler>{};
   descriptor_handlers.reserve(prefiltered.mip_levels());
@@ -402,9 +692,8 @@ auto application::_generate_prefiltered(uint32_t size) -> void {
 
   for (auto mip = 0u; mip < prefiltered.mip_levels(); ++mip) {
     sbx::graphics::image::create_image_view(prefiltered, mip_views[mip], VK_IMAGE_VIEW_TYPE_2D_ARRAY, prefiltered.format(), VK_IMAGE_ASPECT_COLOR_BIT, 1, mip, 6, 0);
+    sbx::utility::logger<"application">::debug("Created mip view {}: {:#x}", mip, reinterpret_cast<std::uintptr_t>(mip_views[mip]));
   }
-
-  auto& skybox = graphics_module.get_resource<sbx::graphics::cube_image>(scene.get_cube_image("skybox"));
 
   for (auto mip = 0u; mip < prefiltered.mip_levels(); ++mip) {
     auto barrier = VkImageMemoryBarrier2{};
@@ -415,6 +704,8 @@ auto application::_generate_prefiltered(uint32_t size) -> void {
     barrier.dstAccessMask = VK_ACCESS_2_SHADER_WRITE_BIT;
     barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
     barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+    barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
     barrier.image = prefiltered;
     barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
     barrier.subresourceRange.baseMipLevel = mip;
@@ -427,7 +718,7 @@ auto application::_generate_prefiltered(uint32_t size) -> void {
     dependency.imageMemoryBarrierCount = 1;
     dependency.pImageMemoryBarriers = &barrier;
 
-    vkCmdPipelineBarrier2(command_buffer, &dependency);
+    vkCmdPipelineBarrier2(compute_command_buffer, &dependency);
 
     auto& descriptor_handler = descriptor_handlers[mip];
 
@@ -435,7 +726,7 @@ auto application::_generate_prefiltered(uint32_t size) -> void {
     descriptor_image_info.reserve(1u);
 
     descriptor_image_info.push_back(VkDescriptorImageInfo{
-      .sampler = VK_NULL_HANDLE, // prefiltered.sampler(),
+      .sampler = VK_NULL_HANDLE,
       .imageView = mip_views[mip],
       .imageLayout = VK_IMAGE_LAYOUT_GENERAL
     });
@@ -453,43 +744,86 @@ auto application::_generate_prefiltered(uint32_t size) -> void {
     descriptor_handler.push("output", prefiltered, std::move(write_set));
 
     descriptor_handler.update(pipeline);
-    descriptor_handler.bind_descriptors(command_buffer);
+    descriptor_handler.bind_descriptors(compute_command_buffer);
 
     const auto roughness = static_cast<std::float_t>(mip) / static_cast<std::float_t>(prefiltered.mip_levels() - 1);
 
     push_handler.push("roughness", roughness);
-    // push_handler.push("num_samples", 32u);
-    push_handler.bind(command_buffer);
+    push_handler.bind(compute_command_buffer);
 
-    const uint32_t group_count_x = ((prefiltered.size().x() >> mip) + threads_per_group - 1) / threads_per_group;
-    const uint32_t group_count_y = ((prefiltered.size().y() >> mip) + threads_per_group - 1) / threads_per_group;
+    const auto group_count_x = ((prefiltered.size().x() >> mip) + threads_per_group - 1) / threads_per_group;
+    const auto group_count_y = ((prefiltered.size().y() >> mip) + threads_per_group - 1) / threads_per_group;
 
-    pipeline.dispatch(command_buffer, {group_count_x, group_count_y, 1});
+    pipeline.dispatch(compute_command_buffer, {group_count_x, group_count_y, 1});
   }
 
-  auto barrier = VkImageMemoryBarrier2{};
-  barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-  barrier.srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
-  barrier.srcAccessMask = VK_ACCESS_2_SHADER_WRITE_BIT;
-  barrier.dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
-  barrier.dstAccessMask = VK_ACCESS_2_MEMORY_READ_BIT;
-  barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
-  barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-  barrier.image = prefiltered;
-  barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-  barrier.subresourceRange.baseMipLevel = 0;
-  barrier.subresourceRange.levelCount = prefiltered.mip_levels();
-  barrier.subresourceRange.baseArrayLayer = 0;
-  barrier.subresourceRange.layerCount = 6;
+  if (graphics_queue.family() != compute_queue.family()) {
+    auto prefiltered_release = sbx::graphics::command_buffer::image_release_data{
+      .image = prefiltered.handle(),
+      .mip_levels = prefiltered.mip_levels(),
+      .base_array_layer = 0,
+      .layer_count = prefiltered.array_layers(),
+      .src_stage_mask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+      .src_access_mask = VK_ACCESS_2_SHADER_WRITE_BIT,
+      .src_queue_family = compute_queue.family(),
+      .dst_queue_family = graphics_queue.family(),
+      .old_layout = VK_IMAGE_LAYOUT_GENERAL,
+      .new_layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+    };
 
-  auto dependency = VkDependencyInfo{};
-  dependency.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-  dependency.imageMemoryBarrierCount = 1;
-  dependency.pImageMemoryBarriers = &barrier;
+    auto skybox_release = sbx::graphics::command_buffer::image_release_data{
+      .image = skybox.handle(),
+      .mip_levels = skybox.mip_levels(),
+      .base_array_layer = 0,
+      .layer_count = skybox.array_layers(),
+      .src_stage_mask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+      .src_access_mask = VK_ACCESS_2_SHADER_READ_BIT,
+      .src_queue_family = compute_queue.family(),
+      .dst_queue_family = graphics_queue.family(),
+      .old_layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+      .new_layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+    };
 
-  vkCmdPipelineBarrier2(command_buffer, &dependency);
+    compute_command_buffer.release_image_ownership({prefiltered_release, skybox_release});
+  } else {
+    sbx::graphics::image::transition_image_layout(compute_command_buffer, prefiltered.handle(), VK_FORMAT_R32G32B32A32_SFLOAT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_ASPECT_COLOR_BIT, prefiltered.mip_levels(), 0, prefiltered.array_layers(), 0);
+  }
 
-  command_buffer.submit_idle();
+  compute_command_buffer.submit_idle();
+
+  if (graphics_queue.family() != compute_queue.family()) {
+    auto final_command_buffer = sbx::graphics::command_buffer{true, VK_QUEUE_GRAPHICS_BIT};
+
+    auto prefiltered_acquire = sbx::graphics::command_buffer::image_acquire_data{
+      .image = prefiltered.handle(),
+      .mip_levels = prefiltered.mip_levels(),
+      .base_array_layer = 0,
+      .layer_count = prefiltered.array_layers(),
+      .dst_stage_mask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+      .dst_access_mask = VK_ACCESS_2_SHADER_READ_BIT,
+      .src_queue_family = compute_queue.family(),
+      .dst_queue_family = graphics_queue.family(),
+      .old_layout = VK_IMAGE_LAYOUT_GENERAL,
+      .new_layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+    };
+
+    auto skybox_acquire = sbx::graphics::command_buffer::image_acquire_data{
+      .image = skybox.handle(),
+      .mip_levels = skybox.mip_levels(),
+      .base_array_layer = 0,
+      .layer_count = skybox.array_layers(),
+      .dst_stage_mask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+      .dst_access_mask = VK_ACCESS_2_SHADER_READ_BIT,
+      .src_queue_family = compute_queue.family(),
+      .dst_queue_family = graphics_queue.family(),
+      .old_layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+      .new_layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+    };
+
+    final_command_buffer.acquire_image_ownership({prefiltered_acquire, skybox_acquire});
+
+    final_command_buffer.submit_idle();
+  }
 
   for (auto& view : mip_views) {
     vkDestroyImageView(graphics_module.logical_device(), view, nullptr);
@@ -497,6 +831,5 @@ auto application::_generate_prefiltered(uint32_t size) -> void {
 
   sbx::utility::logger<"application">::info("Generated 'prefiltered' with {} mips in {:.2f}ms", prefiltered.mip_levels(), sbx::units::quantity_cast<sbx::units::millisecond>(timer.elapsed()));
 }
-
 
 } // namespace demo

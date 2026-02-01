@@ -147,7 +147,7 @@ public:
   auto transfer_ownership(const resource_handle<Type>& handle, const VkPipelineStageFlagBits2 stage = VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT) -> void {
     auto& buffer = get_resource<Type>(handle);
 
-    _release_ownership_data.push_back(command_buffer::release_ownership_data{
+    _release_ownership_data.push_back(command_buffer::buffer_release_data{
       .src_stage_mask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
       .src_access_mask = VK_ACCESS_2_SHADER_WRITE_BIT,
       .src_queue_family = _logical_device->queue<Source>().family(),
@@ -155,7 +155,7 @@ public:
       .buffer = buffer
     });
 
-    _acquire_ownership_data.push_back(command_buffer::acquire_ownership_data{
+    _acquire_ownership_data.push_back(command_buffer::buffer_acquire_data{
       .dst_stage_mask = stage,
       .dst_access_mask = _access_mask_from_stage(stage),
       .src_queue_family = _logical_device->queue<Source>().family(),
@@ -349,8 +349,8 @@ private:
 
   graphics::compiler _compiler;
 
-  std::vector<command_buffer::acquire_ownership_data> _acquire_ownership_data;
-  std::vector<command_buffer::release_ownership_data> _release_ownership_data;
+  std::vector<command_buffer::buffer_acquire_data> _acquire_ownership_data;
+  std::vector<command_buffer::buffer_release_data> _release_ownership_data;
 
   std::uint32_t _current_frame{};
   bool _is_framebuffer_resized{};

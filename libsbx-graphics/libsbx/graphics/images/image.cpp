@@ -144,7 +144,7 @@ auto image::create_image(VkImage& image, VmaAllocation& allocation, const VkExte
 
   auto allocation_create_info = VmaAllocationCreateInfo{};
   allocation_create_info.usage = VMA_MEMORY_USAGE_AUTO;
-  allocation_create_info.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
+  allocation_create_info.flags = 0u;
   allocation_create_info.priority = 1.0f;
 
   validate(vmaCreateImage(allocator, &image_create_info, &allocation_create_info, &image, &allocation, nullptr));
@@ -495,8 +495,7 @@ auto image::copy_image(const VkImage& src_image, VkImage& dst_image, VmaAllocati
 		supports_blit = false;
 	}
 
-	create_image(dst_image, dst_allocation, extent, VK_FORMAT_R8G8B8A8_UNORM, VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_TILING_LINEAR,
-		VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, 1, 1, VK_IMAGE_TYPE_2D);
+	create_image(dst_image, dst_allocation, extent, VK_FORMAT_R8G8B8A8_UNORM, VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_TILING_LINEAR, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, 1, 1, VK_IMAGE_TYPE_2D);
 
 	// Do the actual blit from the swapchain image to our host visible destination image.
 	auto command_buffer = graphics::command_buffer{};

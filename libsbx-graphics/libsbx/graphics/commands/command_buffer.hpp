@@ -31,17 +31,7 @@ public:
     std::uint32_t dst_queue_family{VK_QUEUE_FAMILY_IGNORED};
   }; // struct buffer_barrier
 
-  struct release_ownership_data {
-    VkPipelineStageFlags2 src_stage_mask;
-    VkAccessFlags2 src_access_mask;
-    std::uint32_t src_queue_family;
-    std::uint32_t dst_queue_family;
-    VkBuffer buffer;
-    VkDeviceSize size{VK_WHOLE_SIZE};
-    VkDeviceSize offset{0};
-  }; // struct release_ownership_data
-
-  struct acquire_ownership_data {
+  struct buffer_acquire_data {
     VkPipelineStageFlags2 dst_stage_mask;
     VkAccessFlags2 dst_access_mask;
     std::uint32_t src_queue_family;
@@ -49,7 +39,43 @@ public:
     VkBuffer buffer;
     VkDeviceSize size{VK_WHOLE_SIZE};
     VkDeviceSize offset{0};
-  }; // struct acquire_ownership_data
+  }; // struct buffer_acquire_data
+
+  struct buffer_release_data {
+    VkPipelineStageFlags2 src_stage_mask;
+    VkAccessFlags2 src_access_mask;
+    std::uint32_t src_queue_family;
+    std::uint32_t dst_queue_family;
+    VkBuffer buffer;
+    VkDeviceSize size{VK_WHOLE_SIZE};
+    VkDeviceSize offset{0};
+  }; // struct buffer_release_data
+
+  struct image_release_data {
+    VkImage image;
+    std::uint32_t mip_levels;
+    std::uint32_t base_array_layer;
+    std::uint32_t layer_count;
+    VkPipelineStageFlags2 src_stage_mask;
+    VkAccessFlags2 src_access_mask;
+    std::uint32_t src_queue_family;
+    std::uint32_t dst_queue_family;
+    VkImageLayout old_layout;
+    VkImageLayout new_layout;
+  }; // struct image_release_data
+
+  struct image_acquire_data {
+    VkImage image;
+    std::uint32_t mip_levels;
+    std::uint32_t base_array_layer;
+    std::uint32_t layer_count;
+    VkPipelineStageFlags2 dst_stage_mask;
+    VkAccessFlags2 dst_access_mask;
+    std::uint32_t src_queue_family;
+    std::uint32_t dst_queue_family;
+    VkImageLayout old_layout;
+    VkImageLayout new_layout;
+  }; // struct image_acquire_data
 
   command_buffer(bool should_begin = true, VkQueueFlagBits queue_type = VK_QUEUE_GRAPHICS_BIT, VkCommandBufferLevel buffer_level = VK_COMMAND_BUFFER_LEVEL_PRIMARY);
 
@@ -83,9 +109,13 @@ public:
 
   auto memory_dependency(const VkMemoryBarrier2& memory_barrier) -> void;
 
-  auto release_ownership(const std::vector<release_ownership_data>& releases) -> void;
+  auto release_buffer_ownership(const std::vector<buffer_release_data>& releases) -> void;
 
-  auto acquire_ownership(const std::vector<acquire_ownership_data>& acquires) -> void;
+  auto acquire_buffer_ownership(const std::vector<buffer_acquire_data>& acquires) -> void;
+
+  auto acquire_image_ownership(const std::vector<image_acquire_data>& acquires) -> void;
+
+  auto release_image_ownership(const std::vector<image_release_data>& releases) -> void;
 
   auto set_viewport(const VkViewport& viewport) -> void;
 

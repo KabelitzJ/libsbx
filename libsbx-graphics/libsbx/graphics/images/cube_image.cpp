@@ -9,6 +9,8 @@
 
 #include <libsbx/assets/assets_module.hpp>
 
+#include <libsbx/graphics/graphics_module.hpp>
+
 namespace sbx::graphics {
 
 cube_image::cube_image(const std::filesystem::path& path, const std::string& suffix, VkFilter filter, VkSamplerAddressMode address_mode, bool anisotropic, bool mipmap)
@@ -30,7 +32,13 @@ cube_image::cube_image(const math::vector2u& extent, VkFormat format, VkImageUsa
 }
 
 cube_image::~cube_image() {
+  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 
+  auto& logical_device = graphics_module.logical_device();
+
+  logical_device.wait_idle();
+
+  vkDestroyImageView(logical_device, _array_view, nullptr);
 }
 
 auto cube_image::_load(const std::filesystem::path& path, const std::string& suffix) -> void {

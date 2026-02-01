@@ -209,6 +209,80 @@ auto command_buffer::buffer_barrier(const buffer_barrier_data& data) -> void {
   vkCmdPipelineBarrier(_handle, data.src_stage_mask, data.dst_stage_mask, 0, 0, nullptr, static_cast<std::uint32_t>(buffer_barrier_info.size()), buffer_barrier_info.data(), 0, nullptr);
 }
 
+auto command_buffer::acquire_image_ownership(const std::vector<image_acquire_data>& acquires) -> void {
+  if (acquires.empty()) {
+    return;
+  }
+
+  auto barriers = std::vector<VkImageMemoryBarrier2>{};
+  barriers.reserve(acquires.size());
+
+  for (const auto& data : acquires) {
+    auto image_barrier = VkImageMemoryBarrier2{};
+    image_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+    image_barrier.srcStageMask = VK_PIPELINE_STAGE_2_NONE_KHR;
+    image_barrier.srcAccessMask = 0;
+    image_barrier.dstStageMask = data.dst_stage_mask;
+    image_barrier.dstAccessMask = data.dst_access_mask;
+    image_barrier.oldLayout = data.old_layout;
+    image_barrier.newLayout = data.new_layout;
+    image_barrier.srcQueueFamilyIndex = data.src_queue_family;
+    image_barrier.dstQueueFamilyIndex = data.dst_queue_family;
+    image_barrier.image = data.image;
+    image_barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    image_barrier.subresourceRange.baseMipLevel = 0u;
+    image_barrier.subresourceRange.levelCount = data.mip_levels;
+    image_barrier.subresourceRange.baseArrayLayer = data.base_array_layer;
+    image_barrier.subresourceRange.layerCount = data.layer_count;
+
+    barriers.push_back(image_barrier);
+  }
+
+  auto dependency_info = VkDependencyInfo{};
+  dependency_info.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+  dependency_info.imageMemoryBarrierCount = static_cast<std::uint32_t>(barriers.size());
+  dependency_info.pImageMemoryBarriers = barriers.data();
+
+  vkCmdPipelineBarrier2(_handle, &dependency_info);
+}
+
+auto command_buffer::release_image_ownership(const std::vector<image_release_data>& releases) -> void {
+  if (releases.empty()) {
+    return;
+  }
+
+  auto barriers = std::vector<VkImageMemoryBarrier2>{};
+  barriers.reserve(releases.size());
+
+  for (const auto& data : releases) {
+    auto image_barrier = VkImageMemoryBarrier2{};
+    image_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+    image_barrier.srcStageMask = data.src_stage_mask;
+    image_barrier.srcAccessMask = data.src_access_mask;
+    image_barrier.dstStageMask = VK_PIPELINE_STAGE_2_NONE_KHR;
+    image_barrier.dstAccessMask = 0;
+    image_barrier.oldLayout = data.old_layout;
+    image_barrier.newLayout = data.new_layout;
+    image_barrier.srcQueueFamilyIndex = data.src_queue_family;
+    image_barrier.dstQueueFamilyIndex = data.dst_queue_family;
+    image_barrier.image = data.image;
+    image_barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    image_barrier.subresourceRange.baseMipLevel = 0u;
+    image_barrier.subresourceRange.levelCount = data.mip_levels;
+    image_barrier.subresourceRange.baseArrayLayer = data.base_array_layer;
+    image_barrier.subresourceRange.layerCount = data.layer_count;
+
+    barriers.push_back(image_barrier);
+  }
+
+  auto dependency_info = VkDependencyInfo{};
+  dependency_info.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+  dependency_info.imageMemoryBarrierCount = static_cast<std::uint32_t>(barriers.size());
+  dependency_info.pImageMemoryBarriers = barriers.data();
+
+  vkCmdPipelineBarrier2(_handle, &dependency_info);
+}
+
 auto command_buffer::memory_dependency(const VkMemoryBarrier2& memory_barrier) -> void {
   auto dependency_info = VkDependencyInfo{};
   dependency_info.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
@@ -218,7 +292,7 @@ auto command_buffer::memory_dependency(const VkMemoryBarrier2& memory_barrier) -
   vkCmdPipelineBarrier2(_handle, &dependency_info);
 }
 
-auto command_buffer::release_ownership(const std::vector<release_ownership_data>& releases) -> void {
+auto command_buffer::release_buffer_ownership(const std::vector<buffer_release_data>& releases) -> void {
   if (releases.empty()) {
     return;
   }
@@ -248,7 +322,7 @@ auto command_buffer::release_ownership(const std::vector<release_ownership_data>
   vkCmdPipelineBarrier2(_handle, &dependency_info);
 }
 
-auto command_buffer::acquire_ownership(const std::vector<acquire_ownership_data>& acquires) -> void {
+auto command_buffer::acquire_buffer_ownership(const std::vector<buffer_acquire_data>& acquires) -> void {
   if (acquires.empty()) {
     return;
   }

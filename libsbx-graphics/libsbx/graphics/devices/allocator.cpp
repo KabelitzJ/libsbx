@@ -20,6 +20,7 @@ allocator::allocator(const instance& instance, const physical_device& physical_d
   allocator_info.device = logical_device;
   allocator_info.instance = instance;
   allocator_info.pVulkanFunctions = &vulkan_functions;
+  allocator_info.vulkanApiVersion = VK_API_VERSION_1_4;
   allocator_info.flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
 
   vmaCreateAllocator(&allocator_info, &_handle);

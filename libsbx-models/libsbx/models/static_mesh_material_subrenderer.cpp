@@ -30,21 +30,29 @@ auto static_mesh_material_subrenderer::render(graphics::command_buffer& command_
 
   for (auto& [key, data] : draw_list.ranges(_bucket)) {
     auto& pipeline_data = _get_or_create_pipeline(key);
+    auto& descriptor_data = _get_or_create_descriptor_data(pipeline_data.pipeline);
 
     auto& pipeline = graphics_module.get_resource<graphics::graphics_pipeline>(pipeline_data.pipeline);
 
     pipeline.bind(command_buffer);
 
-    pipeline_data.scene_descriptor_handler.push("scene", scene.uniform_handler());
-    pipeline_data.scene_descriptor_handler.push("samplers", draw_list.samplers());
-    pipeline_data.scene_descriptor_handler.push("images", draw_list.images());
+    descriptor_data.scene_descriptor_handler.push("scene", scene.uniform_handler());
+    descriptor_data.sampler_descriptor_handler.push("samplers", draw_list.samplers());
+    descriptor_data.image_descriptor_handler.push("images", draw_list.images());
 
-    if (!pipeline_data.scene_descriptor_handler.update(pipeline)) {
+    auto update_successful = true;
+
+    update_successful &= descriptor_data.scene_descriptor_handler.update(pipeline);
+    update_successful &= descriptor_data.sampler_descriptor_handler.update(pipeline);
+    update_successful &= descriptor_data.image_descriptor_handler.update(pipeline);
+
+    if (!update_successful) {
       return;
     }
 
-    pipeline_data.scene_descriptor_handler.bind_descriptors(command_buffer);
-
+    descriptor_data.scene_descriptor_handler.bind_descriptors(command_buffer);
+    descriptor_data.sampler_descriptor_handler.bind_descriptors(command_buffer);
+    descriptor_data.image_descriptor_handler.bind_descriptors(command_buffer);
     
     pipeline_data.push_handler.push("transform_data_buffer", draw_list.buffer(static_mesh_material_draw_list::transform_data_buffer_name).address());
     pipeline_data.push_handler.push("material_data_buffer", draw_list.buffer(static_mesh_material_draw_list::material_data_buffer_name).address());
@@ -98,6 +106,16 @@ auto static_mesh_material_subrenderer::_get_or_create_pipeline(const material_ke
   auto pipeline = graphics_module.add_resource<graphics::graphics_pipeline>(compiled_shaders, _attachments, definition);
 
   auto [entry, inserted] = _pipeline_cache.emplace(key, pipeline);
+
+  return entry->second;
+}
+
+auto static_mesh_material_subrenderer::_get_or_create_descriptor_data(const graphics::graphics_pipeline_handle& handle) -> descriptor_data& {
+  if (auto it = _descriptor_cache.find(handle); it != _descriptor_cache.end()) {
+    return it->second;
+  }
+
+  auto [entry, inserted] = _descriptor_cache.emplace(handle, descriptor_data{handle});
 
   return entry->second;
 }

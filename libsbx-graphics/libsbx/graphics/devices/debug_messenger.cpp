@@ -4,7 +4,28 @@
 #include <libsbx/utility/target.hpp>
 #include <libsbx/utility/logger.hpp>
 
+#include <libsbx/graphics/graphics_module.hpp>
+
 namespace sbx::graphics {
+
+auto set_debug_name(const VkObjectType object_type, const std::uint64_t object_handle, const std::string& name) -> void {
+  if constexpr (utility::build_configuration_v == utility::build_configuration::debug) {
+    auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
+    auto& logical_device = graphics_module.logical_device();
+
+    auto* function = reinterpret_cast<PFN_vkSetDebugUtilsObjectNameEXT>(vkGetDeviceProcAddr(logical_device, "vkSetDebugUtilsObjectNameEXT"));
+
+    if (function) {
+      auto name_info = VkDebugUtilsObjectNameInfoEXT{};
+      name_info.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT;
+      name_info.objectType = object_type;
+      name_info.objectHandle = object_handle;
+      name_info.pObjectName = name.c_str();
+
+      function(logical_device, &name_info);
+    }
+  }
+}
 
 auto debug_messenger::create(const instance& target, const VkAllocationCallbacks* allocator) -> VkResult {
   if constexpr (utility::build_configuration_v == utility::build_configuration::debug) {

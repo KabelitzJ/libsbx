@@ -95,16 +95,29 @@ private:
 
     graphics::graphics_pipeline_handle pipeline;
     graphics::push_handler push_handler;
-    graphics::descriptor_handler scene_descriptor_handler;
 
     pipeline_data(const graphics::graphics_pipeline_handle& handle)
     : pipeline{handle},
-      push_handler{pipeline},
-      scene_descriptor_handler{pipeline, 0u} { }
+      push_handler{pipeline} { }
 
   }; // struct pipeline_data
 
+  struct descriptor_data {
+
+    graphics::descriptor_handler scene_descriptor_handler;
+    graphics::descriptor_handler sampler_descriptor_handler;
+    graphics::descriptor_handler image_descriptor_handler;
+
+    descriptor_data(const graphics::graphics_pipeline_handle& handle)
+    : scene_descriptor_handler{handle, 0u},
+      sampler_descriptor_handler{handle, 1u},
+      image_descriptor_handler{handle, 2u} { }
+
+  }; // struct descriptor_data
+
   auto _get_or_create_pipeline(const material_key& key) -> pipeline_data&;
+
+  auto _get_or_create_descriptor_data(const graphics::graphics_pipeline_handle& handle) -> descriptor_data&;
 
   inline static const auto _entry_point = std::array<std::string, 3u>{
     "opaque_main",  // alpha_mode::opaque
@@ -117,6 +130,8 @@ private:
   static_mesh_material_draw_list::bucket _bucket;
 
   inline static auto _pipeline_cache = std::unordered_map<material_key, pipeline_data, material_key_hash>{};
+
+  std::unordered_map<graphics::graphics_pipeline_handle, descriptor_data> _descriptor_cache{};
 
 }; // class static_mesh_subrenderer
 

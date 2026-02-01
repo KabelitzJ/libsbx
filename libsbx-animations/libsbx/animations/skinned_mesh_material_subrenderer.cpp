@@ -29,19 +29,29 @@ auto skinned_mesh_material_subrenderer::render(graphics::command_buffer& command
 
   for (auto& [key, data] : draw_list.ranges(_bucket)) {
     auto& pipeline_data = _get_or_create_pipeline(key);
+    auto& descriptor_data = _get_or_create_descriptor_data(pipeline_data.pipeline);
+
     auto& pipeline = graphics_module.get_resource<graphics::graphics_pipeline>(pipeline_data.pipeline);
 
     pipeline.bind(command_buffer);
 
-    pipeline_data.scene_descriptor_handler.push("scene", scene.uniform_handler());
-    pipeline_data.scene_descriptor_handler.push("samplers", draw_list.samplers());
-    pipeline_data.scene_descriptor_handler.push("images", draw_list.images());
+    descriptor_data.scene_descriptor_handler.push("scene", scene.uniform_handler());
+    descriptor_data.sampler_descriptor_handler.push("samplers", draw_list.samplers());
+    descriptor_data.image_descriptor_handler.push("images", draw_list.images());
 
-    if (!pipeline_data.scene_descriptor_handler.update(pipeline)) {
+    auto update_successful = true;
+
+    update_successful &= descriptor_data.scene_descriptor_handler.update(pipeline);
+    update_successful &= descriptor_data.sampler_descriptor_handler.update(pipeline);
+    update_successful &= descriptor_data.image_descriptor_handler.update(pipeline);
+
+    if (!update_successful) {
       return;
     }
 
-    pipeline_data.scene_descriptor_handler.bind_descriptors(command_buffer);
+    descriptor_data.scene_descriptor_handler.bind_descriptors(command_buffer);
+    descriptor_data.sampler_descriptor_handler.bind_descriptors(command_buffer);
+    descriptor_data.image_descriptor_handler.bind_descriptors(command_buffer);
 
     pipeline_data.push_handler.push("transform_data_buffer", draw_list.buffer(skinned_mesh_material_draw_list::transform_data_buffer_name).address());
     pipeline_data.push_handler.push("material_data_buffer", draw_list.buffer(skinned_mesh_material_draw_list::material_data_buffer_name).address());
@@ -65,8 +75,12 @@ auto skinned_mesh_material_subrenderer::render(graphics::command_buffer& command
 
 skinned_mesh_material_subrenderer::pipeline_data::pipeline_data(const graphics::graphics_pipeline_handle& handle)
 : pipeline{handle},
-  push_handler{pipeline},
-  scene_descriptor_handler{pipeline, 0u} { }
+  push_handler{pipeline} { }
+
+skinned_mesh_material_subrenderer::descriptor_data::descriptor_data(const graphics::graphics_pipeline_handle& handle)
+: scene_descriptor_handler{handle, 0u},
+  sampler_descriptor_handler{handle, 1u},
+  image_descriptor_handler{handle, 2u} { }
 
 auto skinned_mesh_material_subrenderer::_get_or_create_pipeline(const models::material_key& key) -> pipeline_data& {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
@@ -96,6 +110,18 @@ auto skinned_mesh_material_subrenderer::_get_or_create_pipeline(const models::ma
   auto handle = graphics_module.add_resource<graphics::graphics_pipeline>(compiled, _attachments, definition);
 
   auto [entry, inserted] = _pipeline_cache.emplace(key, handle);
+
+  return entry->second;
+}
+
+auto skinned_mesh_material_subrenderer::_get_or_create_descriptor_data(const graphics::graphics_pipeline_handle& handle) -> descriptor_data& {
+  if (auto it = _descriptor_cache.find(handle); it != _descriptor_cache.end()) {
+    return it->second;
+  }
+
+  auto descriptor = descriptor_data{handle};
+
+  auto [entry, inserted] = _descriptor_cache.emplace(handle, std::move(descriptor));
 
   return entry->second;
 }

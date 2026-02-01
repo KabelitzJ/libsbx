@@ -208,7 +208,6 @@ private:
 
 struct transition_instruction {
   attachment_handle attachment;
-  VkImageLayout old_layout;
   VkImageLayout new_layout;
 }; // struct transition_instruction
 
@@ -278,6 +277,13 @@ public:
   template<typename Callable>
   requires (std::is_invocable_v<Callable, const pass_handle&>)
   auto execute(command_buffer& command_buffer, const swapchain& swapchain, Callable&& callable) -> void {
+    for (auto& state : _attachment_states) {
+      if (state.type == attachment::type::swapchain) {
+        // Swapchain images start in UNDEFINED layout after acquisition
+        state.current_layout = VK_IMAGE_LAYOUT_UNDEFINED;
+      }
+    }
+
     for (const auto& instruction : _instructions) {
       std::visit(overload{
         [&](const transition_instruction& instruction) { _execute_transition_instruction(command_buffer, swapchain, instruction); },

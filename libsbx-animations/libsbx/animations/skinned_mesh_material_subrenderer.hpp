@@ -62,13 +62,24 @@ private:
 
     graphics::graphics_pipeline_handle pipeline;
     graphics::push_handler push_handler;
-    graphics::descriptor_handler scene_descriptor_handler;
 
     pipeline_data(const graphics::graphics_pipeline_handle& handle);
 
   }; // struct pipeline_data
 
+  struct descriptor_data {
+
+    graphics::descriptor_handler scene_descriptor_handler;
+    graphics::descriptor_handler sampler_descriptor_handler;
+    graphics::descriptor_handler image_descriptor_handler;
+
+    descriptor_data(const graphics::graphics_pipeline_handle& handle);
+
+  }; // struct descriptor_data
+
   auto _get_or_create_pipeline(const models::material_key& key) -> pipeline_data&;
+
+  auto _get_or_create_descriptor_data(const graphics::graphics_pipeline_handle& handle) -> descriptor_data&;
 
   inline static const auto _fs_entry = std::array<std::string, 3u>{
     "opaque_main",
@@ -83,6 +94,8 @@ private:
   graphics::storage_buffer_handle _skinned_vertex_buffer;
 
   inline static std::unordered_map<models::material_key, pipeline_data, models::material_key_hash> _pipeline_cache{};
+
+  std::unordered_map<graphics::graphics_pipeline_handle, descriptor_data> _descriptor_cache{};
 
 }; // class skinned_mesh_material_subrenderer
 

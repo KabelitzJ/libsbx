@@ -33,7 +33,7 @@ auto separate_image2d_array::write_descriptor_set(std::uint32_t binding, VkDescr
     auto& image = graphics_module.get_resource<graphics::image2d>(id);
 
     auto descriptor_image_info = VkDescriptorImageInfo{};
-    descriptor_image_info.imageLayout = image.layout();
+    descriptor_image_info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
     descriptor_image_info.imageView = image.view();
     descriptor_image_info.sampler = nullptr;
     

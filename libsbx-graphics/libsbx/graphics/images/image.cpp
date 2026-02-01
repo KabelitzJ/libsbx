@@ -37,12 +37,12 @@ static const auto stencil_formats = std::vector<VkFormat>{
 
 static constexpr auto anisotropy = 16.0f;
 
-image::image(const VkExtent3D extent, VkFilter filter, VkSamplerAddressMode address_mode, VkSampleCountFlagBits samples, VkImageLayout layout, VkImageUsageFlags usage, VkFormat format, std::uint32_t mip_levels, std::uint32_t array_layers)
+image::image(const VkExtent3D extent, VkFilter filter, VkSamplerAddressMode address_mode, VkSampleCountFlagBits samples, VkImageUsageFlags usage, VkFormat format, std::uint32_t mip_levels, std::uint32_t array_layers)
 : _extent{extent},
   _filter{filter},
   _address_mode{address_mode},
   _samples{samples},
-  _layout{layout},
+  // _layout{layout},
   _usage{usage},
   _format{format},
   _mip_levels{mip_levels},
@@ -200,6 +200,14 @@ auto image::create_image_sampler(VkSampler& sampler, VkFilter filter, VkSamplerA
 }
 
 auto image::create_mipmaps(const VkImage& image, const VkExtent3D& extent, VkFormat format, VkImageLayout dst_image_layout, std::uint32_t mip_levels, std::uint32_t base_array_layer, std::uint32_t layer_count) -> void {
+  auto command_buffer = graphics::command_buffer{true, VK_QUEUE_GRAPHICS_BIT};
+
+  create_mipmaps(command_buffer, image, extent, format, dst_image_layout, mip_levels, base_array_layer, layer_count);
+
+  command_buffer.submit_idle();
+}
+
+auto image::create_mipmaps(command_buffer& command_buffer, const VkImage& image, const VkExtent3D& extent, VkFormat format, VkImageLayout dst_image_layout, std::uint32_t mip_levels, std::uint32_t base_array_layer, std::uint32_t layer_count) -> void {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 
   auto& physical_device = graphics_module.physical_device();
@@ -210,8 +218,6 @@ auto image::create_mipmaps(const VkImage& image, const VkExtent3D& extent, VkFor
   if (!(format_properties.optimalTilingFeatures & VK_FORMAT_FEATURE_BLIT_SRC_BIT) || !(format_properties.optimalTilingFeatures & VK_FORMAT_FEATURE_BLIT_DST_BIT)) {
     throw std::runtime_error{"Texture image format does not support linear blitting"};
   }
-
-  auto command_buffer = graphics::command_buffer{};
 
   for (auto i : std::views::iota(1u, mip_levels)) {
     auto barrier0 = VkImageMemoryBarrier{};
@@ -279,47 +285,23 @@ auto image::create_mipmaps(const VkImage& image, const VkExtent3D& extent, VkFor
 	barrier.subresourceRange.layerCount = layer_count;
 
   vkCmdPipelineBarrier(command_buffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 1, &barrier);
-
-  command_buffer.submit_idle();
 }
 
 auto image::transition_image_layout(const VkImage& image, VkFormat format, VkImageLayout src_image_layout, VkImageLayout dst_image_layout, VkImageAspectFlags image_aspect, std::uint32_t mip_levels, std::uint32_t base_mip_level, std::uint32_t layer_count, std::uint32_t base_array_layer) -> void {
   auto command_buffer = graphics::command_buffer{};
 
-  transition_image_layout(
-    command_buffer,
-    image,
-    format,
-    src_image_layout,
-    dst_image_layout,
-    image_aspect,
-    mip_levels,
-    base_mip_level,
-    layer_count,
-    base_array_layer
-  );
+  transition_image_layout(command_buffer, image, format, src_image_layout, dst_image_layout, image_aspect, mip_levels, base_mip_level, layer_count, base_array_layer);
 
   command_buffer.submit_idle();
 }
 
-auto image::transition_image_layout(
-  command_buffer& command_buffer,
-  const VkImage& image,
-  VkFormat /*format*/,
-  VkImageLayout src_image_layout,
-  VkImageLayout dst_image_layout,
-  VkImageAspectFlags image_aspect,
-  std::uint32_t mip_levels,
-  std::uint32_t base_mip_level,
-  std::uint32_t layer_count,
-  std::uint32_t base_array_layer
-) -> void {
-  auto barrier = VkImageMemoryBarrier{};
-  barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-  barrier.oldLayout = src_image_layout;
-  barrier.newLayout = dst_image_layout;
+auto image::transition_image_layout(command_buffer& command_buffer, const VkImage& image, VkFormat /*format*/, VkImageLayout src_image_layout, VkImageLayout dst_image_layout, VkImageAspectFlags image_aspect, std::uint32_t mip_levels, std::uint32_t base_mip_level, std::uint32_t layer_count, std::uint32_t base_array_layer) -> void {
+  auto barrier = VkImageMemoryBarrier2{};
+  barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
   barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
   barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  barrier.oldLayout = src_image_layout;
+  barrier.newLayout = dst_image_layout;
   barrier.image = image;
   barrier.subresourceRange.aspectMask = image_aspect;
   barrier.subresourceRange.baseMipLevel = base_mip_level;
@@ -327,126 +309,101 @@ auto image::transition_image_layout(
   barrier.subresourceRange.baseArrayLayer = base_array_layer;
   barrier.subresourceRange.layerCount = layer_count;
 
-  auto src_stage = VkPipelineStageFlags{};
-  auto dst_stage = VkPipelineStageFlags{};
-
   // ---- source ----
   switch (src_image_layout) {
     case VK_IMAGE_LAYOUT_UNDEFINED: {
+      barrier.srcStageMask = VK_PIPELINE_STAGE_2_NONE;
       barrier.srcAccessMask = 0;
-      src_stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
       break;
     }
-
     case VK_IMAGE_LAYOUT_GENERAL: {
-      barrier.srcAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
-      src_stage = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+      barrier.srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
+      barrier.srcAccessMask = VK_ACCESS_2_SHADER_READ_BIT | VK_ACCESS_2_SHADER_WRITE_BIT;
       break;
     }
-
     case VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL: {
-      barrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-      src_stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+      barrier.srcStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
+      barrier.srcAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
       break;
     }
-
     case VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL: {
-      barrier.srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-      src_stage = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+      barrier.srcStageMask = VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT;
+      barrier.srcAccessMask = VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
       break;
     }
-
-    case VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL: {
-      barrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-      src_stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
-      break;
-    }
-
     case VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL: {
-      barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-      src_stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+      barrier.srcStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
+      barrier.srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
       break;
     }
-
+    case VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL: {
+      barrier.srcStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
+      barrier.srcAccessMask = VK_ACCESS_2_TRANSFER_READ_BIT;
+      break;
+    }
     case VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL: {
-      barrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
-      src_stage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+      barrier.srcStageMask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+      barrier.srcAccessMask = VK_ACCESS_2_SHADER_READ_BIT;
       break;
     }
-
     case VK_IMAGE_LAYOUT_PRESENT_SRC_KHR: {
+      barrier.srcStageMask = VK_PIPELINE_STAGE_2_NONE;
       barrier.srcAccessMask = 0;
-      src_stage = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
       break;
     }
-
     default: {
-      throw std::runtime_error{
-        fmt::format("Unsupported image layout transition source: {}", src_image_layout)
-      };
+      throw std::runtime_error{"Unsupported source image layout"};
     }
   }
 
   // ---- destination ----
   switch (dst_image_layout) {
-    case VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL: {
-      barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-      dst_stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
-      break;
-    }
-
-    case VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL: {
-      barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-      dst_stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
-      break;
-    }
-
     case VK_IMAGE_LAYOUT_GENERAL: {
-      barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
-      dst_stage = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+      barrier.dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
+      barrier.dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT | VK_ACCESS_2_SHADER_WRITE_BIT;
       break;
     }
-
     case VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL: {
-      barrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-      dst_stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+      barrier.dstStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
+      barrier.dstAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
       break;
     }
-
     case VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL: {
-      barrier.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-      dst_stage = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+      barrier.dstStageMask = VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT;
+      barrier.dstAccessMask = VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
       break;
     }
-
+    case VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL: {
+      barrier.dstStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
+      barrier.dstAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
+      break;
+    }
+    case VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL: {
+      barrier.dstStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
+      barrier.dstAccessMask = VK_ACCESS_2_TRANSFER_READ_BIT;
+      break;
+    }
     case VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL: {
-      barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-      dst_stage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+      barrier.dstStageMask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+      barrier.dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT;
       break;
     }
-
     case VK_IMAGE_LAYOUT_PRESENT_SRC_KHR: {
+      barrier.dstStageMask = VK_PIPELINE_STAGE_2_NONE;
       barrier.dstAccessMask = 0;
-      dst_stage = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
       break;
     }
-
     default: {
-      throw std::runtime_error{
-        fmt::format("Unsupported image layout transition destination: {}", dst_image_layout)
-      };
+      throw std::runtime_error{"Unsupported destination image layout"};
     }
   }
 
-  vkCmdPipelineBarrier(
-    command_buffer,
-    src_stage,
-    dst_stage,
-    0,
-    0, nullptr,
-    0, nullptr,
-    1, &barrier
-  );
+  auto dependency = VkDependencyInfo{};
+  dependency.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+  dependency.imageMemoryBarrierCount = 1;
+  dependency.pImageMemoryBarriers = &barrier;
+
+  vkCmdPipelineBarrier2(command_buffer, &dependency);
 }
 
 auto image::insert_image_memory_barrier(command_buffer& command_buffer, const VkImage& image, VkAccessFlags src_access_mask, VkAccessFlags dst_access_mask, VkImageLayout old_image_layout, VkImageLayout new_image_layout, VkPipelineStageFlags src_stage_mask, VkPipelineStageFlags dst_stage_mask, VkImageAspectFlags image_aspect, uint32_t mip_levels, uint32_t base_mip_level, uint32_t layer_count, uint32_t base_array_layer) -> void {
@@ -471,6 +428,12 @@ auto image::insert_image_memory_barrier(command_buffer& command_buffer, const Vk
 auto image::copy_buffer_to_image(const VkBuffer& buffer, const VkImage& image, const VkExtent3D& extent, std::uint32_t layer_count, std::uint32_t base_array_layer) -> void {
   auto command_buffer = graphics::command_buffer{};
 
+  copy_buffer_to_image(command_buffer, buffer, image, extent, layer_count, base_array_layer);
+
+	command_buffer.submit_idle();
+}
+
+auto image::copy_buffer_to_image(graphics::command_buffer& command_buffer, const VkBuffer& buffer, const VkImage& image, const VkExtent3D& extent, std::uint32_t layer_count, std::uint32_t base_array_layer) -> void {
 	auto region = VkBufferImageCopy{};
 	region.bufferOffset = 0;
 	region.bufferRowLength = 0;
@@ -483,8 +446,6 @@ auto image::copy_buffer_to_image(const VkBuffer& buffer, const VkImage& image, c
 	region.imageExtent = extent;
 
 	vkCmdCopyBufferToImage(command_buffer, buffer, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
-
-	command_buffer.submit_idle();
 }
 
 auto image::copy_image_to_buffer(const VkImage& image, VkFormat format, const VkBuffer& buffer, const VkOffset3D& offset, const VkExtent3D& extent, std::uint32_t mip_level, std::uint32_t layer_count, std::uint32_t base_array_layer) -> void {
@@ -633,9 +594,22 @@ auto image::write_descriptor_set(std::uint32_t binding, VkDescriptorType descrip
   auto descriptor_image_infos = std::vector<VkDescriptorImageInfo>{};
 
   auto descriptor_image_info = VkDescriptorImageInfo{};
-  descriptor_image_info.imageLayout = _layout;
   descriptor_image_info.imageView = _view;
   descriptor_image_info.sampler = _sampler;
+
+  switch (descriptor_type) {
+    case VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER:
+    case VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE:
+    case VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT: {
+      descriptor_image_info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+      break;
+    }
+    case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE:
+    default: {
+      descriptor_image_info.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+      break;
+    }
+  }
 
   descriptor_image_infos.push_back(descriptor_image_info);
 
@@ -686,9 +660,9 @@ auto image::address_mode() const noexcept -> VkSamplerAddressMode {
   return _address_mode;
 }
 
-auto image::layout() const noexcept -> VkImageLayout {
-  return _layout;
-}
+// auto image::layout() const noexcept -> VkImageLayout {
+//   return _layout;
+// }
 
 auto image::handle() const noexcept -> VkImage {
   return _handle;

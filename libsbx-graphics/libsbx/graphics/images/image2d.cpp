@@ -18,8 +18,8 @@
 
 namespace sbx::graphics {
 
-image2d::image2d(const math::vector2u& extent, graphics::format format, graphics::filter filter, graphics::address_mode address_mode, VkImageLayout layout, VkImageUsageFlags usage, VkSampleCountFlagBits samples, bool anisotropic, bool mipmap)
-: image{VkExtent3D{extent.x(), extent.y(), 1}, to_vk_enum<VkFilter>(filter), to_vk_enum<VkSamplerAddressMode>(address_mode), samples, layout, (usage | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT), to_vk_enum<VkFormat>(format), 1, 1},
+image2d::image2d(const math::vector2u& extent, graphics::format format, graphics::filter filter, graphics::address_mode address_mode, VkImageUsageFlags usage, VkSampleCountFlagBits samples, bool anisotropic, bool mipmap)
+: image{VkExtent3D{extent.x(), extent.y(), 1}, to_vk_enum<VkFilter>(filter), to_vk_enum<VkSamplerAddressMode>(address_mode), samples, (usage | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT), to_vk_enum<VkFormat>(format), 1, 1},
   _anisotropic{anisotropic},
   _mipmap{mipmap} {
   _load();
@@ -27,7 +27,7 @@ image2d::image2d(const math::vector2u& extent, graphics::format format, graphics
 
 // [TODO] KAJ 2023-07-28 : We use VK_FORMAT_R8G8B8A8_SRGB here because it best matches the STBI_rgb_alpha format that we load the image with.
 image2d::image2d(const std::filesystem::path& path, graphics::format format, VkFilter filter, VkSamplerAddressMode address_mode, bool anisotropic, bool mipmap)
-: image{VkExtent3D{0, 0, 1}, filter, address_mode, VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, (VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT), to_vk_enum<VkFormat>(format), 1, 1},
+: image{VkExtent3D{0, 0, 1}, filter, address_mode, VK_SAMPLE_COUNT_1_BIT, (VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT), to_vk_enum<VkFormat>(format), 1, 1},
   _anisotropic{anisotropic},
   _mipmap{mipmap} {
   auto& assets_module = core::engine::get_module<assets::assets_module>();
@@ -35,7 +35,7 @@ image2d::image2d(const std::filesystem::path& path, graphics::format format, VkF
 }
 
 image2d::image2d(const math::vector2u& extent, graphics::format format, graphics::filter filter, memory::observer_ptr<const std::uint8_t> pixels)
-: image2d{extent, format, filter, graphics::address_mode::repeat, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL} {
+: image2d{extent, format, filter, graphics::address_mode::repeat} {
   set_pixels(pixels);
 }
 
@@ -74,14 +74,14 @@ auto image2d::set_pixels(memory::observer_ptr<const std::uint8_t> pixels) -> voi
   auto buffer_size = _extent.width * _extent.height * _channels * bytes_per_channel(_format);
   auto staging_buffer = graphics::staging_buffer{std::span{pixels.get(), buffer_size}};
 
-  transition_image_layout(_handle, _format, _layout, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_ASPECT_COLOR_BIT, _mip_levels, 0, _array_layers, 0);
+  transition_image_layout(_handle, _format, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_ASPECT_COLOR_BIT, _mip_levels, 0, _array_layers, 0);
 
   copy_buffer_to_image(staging_buffer, _handle, _extent, _array_layers, 0);
 
   if (_mipmap) {
-    create_mipmaps(_handle, _extent, _format, _layout, _mip_levels, 0, _array_layers);
+    create_mipmaps(_handle, _extent, _format, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, _mip_levels, 0, _array_layers);
   } else {
-    transition_image_layout(_handle, _format, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, _layout, VK_IMAGE_ASPECT_COLOR_BIT, _mip_levels, 0, _array_layers, 0);
+    transition_image_layout(_handle, _format, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_ASPECT_COLOR_BIT, _mip_levels, 0, _array_layers, 0);
   }
 }
 
@@ -106,8 +106,12 @@ auto image2d::_load(const std::filesystem::path& path) -> void {
 
   auto data = image_data{};
 
+  auto from_file = false;
+
   if (!path.empty()) {
     auto timer = utility::timer{};
+
+    from_file = true;
 
     stbi_set_flip_vertically_on_load(true);
 
@@ -134,28 +138,34 @@ auto image2d::_load(const std::filesystem::path& path) -> void {
   create_image_sampler(_sampler, _filter, _address_mode, _anisotropic, _mip_levels);
   create_image_view(_handle, _view, VK_IMAGE_VIEW_TYPE_2D, _format, VK_IMAGE_ASPECT_COLOR_BIT, _mip_levels, 0, _array_layers, 0);
 
-  if (data.pixels || _mipmap) {
-    transition_image_layout(_handle, _format, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_ASPECT_COLOR_BIT, _mip_levels, 0, _array_layers, 0);
+  auto command_buffer = graphics::command_buffer{true, VK_QUEUE_GRAPHICS_BIT};
+
+  if (from_file || _mipmap) {
+    transition_image_layout(command_buffer, _handle, _format, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_ASPECT_COLOR_BIT, _mip_levels, 0, _array_layers, 0);
   }
 
-  if (data.pixels) {
-    // [NOTE] KAJ 2023-07-28 : Since we loaded the image with STBI_rgb_alpha, we need to multiply the buffer size by 4.
-    const auto buffer_size = _extent.width * _extent.height * 4u;
-    auto staging_buffer = graphics::staging_buffer{std::span{data.pixels, buffer_size}};
+  auto staging_buffer = std::optional<graphics::staging_buffer>{};
 
-    copy_buffer_to_image(staging_buffer, _handle, _extent, _array_layers, 0);
+  if (from_file) {
+    const auto buffer_size = _extent.width * _extent.height * 4u;
+    staging_buffer.emplace(std::span{data.pixels, buffer_size});
+
+    copy_buffer_to_image(command_buffer, *staging_buffer, _handle, _extent, _array_layers, 0);
 
     stbi_image_free(data.pixels);
   }
 
   if (_mipmap) {
-    create_mipmaps(_handle, _extent, _format, _layout, _mip_levels, 0, _array_layers);
-  } else if (data.pixels) {
-    transition_image_layout(_handle, _format, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, _layout, VK_IMAGE_ASPECT_COLOR_BIT, _mip_levels, 0, _array_layers, 0);
+    create_mipmaps(command_buffer, _handle, _extent, _format, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, _mip_levels, 0, _array_layers);
+  } else if (from_file) {
+    transition_image_layout(command_buffer, _handle, _format, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_ASPECT_COLOR_BIT, _mip_levels, 0, _array_layers, 0);
   } else {
-    transition_image_layout(_handle, _format, VK_IMAGE_LAYOUT_UNDEFINED, _layout, VK_IMAGE_ASPECT_COLOR_BIT, _mip_levels, 0, _array_layers, 0);
+    // For empty images (no data loaded), transition to GENERAL layout
+    // SHADER_READ_ONLY_OPTIMAL is inappropriate for images with undefined/discarded contents
+    transition_image_layout(command_buffer, _handle, _format, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT, _mip_levels, 0, _array_layers, 0);
   }
+
+  command_buffer.submit_idle();
 }
 
 } // namespace sbx::graphics
-

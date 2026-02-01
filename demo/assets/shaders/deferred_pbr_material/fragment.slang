@@ -36,10 +36,10 @@ ConstantBuffer<push_data> push;
 [[vk::binding(0, 0)]]
 ConstantBuffer<sbx::common::scene_data> scene;
 
-[[vk::binding(1, 0)]]
-SamplerState samplers[sbx::common::max_image_array_size];
+[[vk::binding(0, 1)]]
+SamplerState samplers[sbx::common::max_sampler_array_size];
 
-[[vk::binding(2, 0)]]
+[[vk::binding(0, 2)]]
 Texture2D<float4> images[sbx::common::max_image_array_size];
 
 float3x3 build_tbn(fs_in input) {

@@ -163,26 +163,6 @@ auto graphics_module::update() -> void {
 
   const auto& frame_data = _per_frame_data[_current_frame];
 
-  // [NOTE] KAJ 2023-02-19 : Compute happens here
-
-  // validate(vkWaitForFences(_logical_device->handle(), 1, &frame_data.compute_in_flight_fence, true, std::numeric_limits<std::uint64_t>::max()));
-
-  // EASY_BLOCK("compute");
-
-  // auto& compute_command_buffer = _compute_command_buffers[_current_frame];
-
-  // compute_command_buffer.begin(VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT);
-
-  // _renderer->execute_tasks(compute_command_buffer);
-
-  // compute_command_buffer.release_ownership(_release_ownership_data);
-
-  // compute_command_buffer.end();
-
-  // compute_command_buffer.submit({}, frame_data.compute_finished_semaphore, frame_data.compute_in_flight_fence);
-
-  // EASY_END_BLOCK;
-
   if (_is_framebuffer_resized || _swapchain->is_outdated(_surface->current_extent())) {
     _recreate_swapchain();
     return;
@@ -211,8 +191,6 @@ auto graphics_module::update() -> void {
     }
   }
 
-  // [NOTE] KAJ 2023-02-19 : Drawing happens here
-
   EASY_BLOCK("draw");
 
   auto& command_buffer = _graphics_command_buffers[_current_frame];
@@ -222,7 +200,6 @@ auto graphics_module::update() -> void {
 
   _query_pool.reset(command_buffer);
 
-  // Needs to be acquired AFTER acquire_next_image!
   auto& image_data = _per_image_data[_swapchain->active_image_index()];
 
   _query_pool.write_timestamp(command_buffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0);
@@ -232,13 +209,11 @@ auto graphics_module::update() -> void {
   command_buffer.end();
 
   auto wait_semaphores = std::vector<command_buffer::wait_data>{};
-  wait_semaphores.push_back({frame_data.image_available_semaphore, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT});
-  // wait_semaphores.push_back({frame_data.compute_finished_semaphore, VK_PIPELINE_STAGE_VERTEX_INPUT_BIT});
+  wait_semaphores.push_back({frame_data.image_available_semaphore, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT});
 
   command_buffer.submit(wait_semaphores, image_data.render_finished_semaphore, frame_data.graphics_in_flight_fence);
 
   auto duration = _query_pool.get_duration(0, 1);
-  // utility::logger<"graphics">::debug("Frame GPU time: {:.5f} ms", duration.value());
 
   // Present the image to the screen
   const auto result = _swapchain->present(image_data.render_finished_semaphore);
@@ -250,28 +225,6 @@ auto graphics_module::update() -> void {
   }
 
   _current_frame = utility::fast_mod(_current_frame + 1, swapchain::max_frames_in_flight);
-
-  // command_buffer.acquire_ownership(_acquire_ownership_data);
-
-  // for (const auto& render_stage : _renderer->render_stages()) {
-  //   _start_render_pass(*render_stage, command_buffer);
-
-  //   const auto& subpasses = render_stage->subpasses();
-
-  //   for (const auto& subpass : subpasses) {
-  //     stage.subpass = subpass.binding();
-
-  //     _renderer->render(stage, command_buffer);
-
-  //     if (subpass.binding() != subpasses.back().binding()) {
-  //       vkCmdNextSubpass(command_buffer, VK_SUBPASS_CONTENTS_INLINE);
-  //     }
-  //   }
-
-  //   _end_render_pass(*render_stage, command_buffer);
-
-  //   stage.renderpass++;
-  // }
 
   EASY_END_BLOCK;
 }
@@ -313,81 +266,6 @@ auto graphics_module::attachment(const std::string& name) const -> const descrip
 
   return _renderer->attachment(name);
 }
-
-// auto graphics_module::_start_render_pass(const utility::hashed_string& pass, graphics::command_buffer& command_buffer) -> void {
-//   if (!command_buffer.is_running()) {
-//     command_buffer.begin(VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT);
-//   }
-
-//   const auto& area = render_stage.render_area();
-
-//   const auto& offset = area.offset();
-//   const auto& extent = area.extent();
-
-//   auto render_area = VkRect2D{};
-//   render_area.offset = VkOffset2D{offset.x(), offset.y()};
-//   render_area.extent = VkExtent2D{extent.x(), extent.y()};
-
-//   auto viewport = VkViewport{};
-// 	viewport.x = 0.0f;
-// 	viewport.y = 0.0f;
-// 	viewport.width = static_cast<std::float_t>(render_area.extent.width);
-// 	viewport.height = static_cast<std::float_t>(render_area.extent.height);
-// 	viewport.minDepth = 0.0f;
-// 	viewport.maxDepth = 1.0f;
-
-// 	command_buffer.set_viewport(viewport);
-
-// 	auto scissor = VkRect2D{};
-// 	scissor.offset = render_area.offset;
-// 	scissor.extent = render_area.extent;
-  
-//   command_buffer.set_scissor(scissor);
-
-//   const auto& clear_values = render_stage.clear_values();
-
-//   auto render_pass_begin_info = VkRenderPassBeginInfo{};
-// 	render_pass_begin_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-// 	render_pass_begin_info.renderPass = render_stage.render_pass();
-// 	render_pass_begin_info.framebuffer = render_stage.framebuffer(_swapchain->active_image_index());
-// 	render_pass_begin_info.renderArea = render_area;
-// 	render_pass_begin_info.clearValueCount = static_cast<std::uint32_t>(clear_values.size());
-// 	render_pass_begin_info.pClearValues = clear_values.data();
-
-//   command_buffer.begin_render_pass(render_pass_begin_info, VK_SUBPASS_CONTENTS_INLINE);
-// }
-
-// auto graphics_module::_end_render_pass(const utility::hashed_string& pass, graphics::command_buffer& command_buffer) -> void {
-//   auto& frame_data = _per_frame_data[_current_frame];
-//   auto& image_data = _per_image_data[_swapchain->active_image_index()];
-
-//   command_buffer.end_render_pass();
-
-//   if (!render_stage.has_swapchain_attachment()) {
-//     return;
-//   }
-
-//   // Submit the command buffer to the graphics queue and draw the on the image
-//   command_buffer.end();
-
-//   auto wait_semaphores = std::vector<command_buffer::wait_data>{};
-//   wait_semaphores.push_back({frame_data.image_available_semaphore, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT});
-//   wait_semaphores.push_back({frame_data.compute_finished_semaphore, VK_PIPELINE_STAGE_VERTEX_INPUT_BIT});
-
-//   command_buffer.submit(wait_semaphores, image_data.render_finished_semaphore, frame_data.graphics_in_flight_fence);
-
-//   // Present the image to the screen
-//   const auto result = _swapchain->present(image_data.render_finished_semaphore);
-
-//   if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || _is_framebuffer_resized) {
-//     // _is_framebuffer_resized = false;
-//     _recreate_swapchain();
-//   } else if (result != VK_SUCCESS) {
-//     throw std::runtime_error{"Failed to present swapchain image"};
-//   }
-
-//   _current_frame = utility::fast_mod(_current_frame + 1, swapchain::max_frames_in_flight);
-// }
 
 auto graphics_module::_recreate_viewport() -> void {
   _logical_device->wait_idle();
@@ -457,20 +335,6 @@ auto graphics_module::_recreate_per_image_data() -> void {
 }
 
 auto graphics_module::_recreate_command_buffers() -> void {
-  // _graphics_command_buffers.clear();
-  // _graphics_command_buffers.reserve(swapchain::max_frames_in_flight);
-
-  // for (auto i : std::views::iota(0u, swapchain::max_frames_in_flight)) {
-  //   _graphics_command_buffers.emplace_back(false, VK_QUEUE_GRAPHICS_BIT);
-  // }
-
-  // _compute_command_buffers.clear();
-  // _compute_command_buffers.reserve(swapchain::max_frames_in_flight);
-
-  // for (auto i : std::views::iota(0u, swapchain::max_frames_in_flight)) {
-  //   _compute_command_buffers.emplace_back(false, VK_QUEUE_COMPUTE_BIT);
-  // }
-
   for (auto i = _graphics_command_buffers.size(); i < swapchain::max_frames_in_flight; ++i) {
     _graphics_command_buffers.emplace_back(false, VK_QUEUE_GRAPHICS_BIT);
   }
@@ -490,11 +354,6 @@ auto graphics_module::_recreate_command_buffers() -> void {
 
 auto graphics_module::_recreate_attachments() -> void {
   _attachments.clear();
-
-  // for (const auto& render_stage : _renderer->render_stages()) {
-  //   const auto& descriptors = render_stage->descriptors();
-  //   _attachments.insert(descriptors.begin(), descriptors.end());
-  // }
 }
 
 } // namespace sbx::graphics

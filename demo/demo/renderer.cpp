@@ -44,10 +44,10 @@ renderer::renderer()
   auto shadow0_depth = create_attachment("shadow0_depth", sbx::graphics::attachment::type::depth);
 
   auto shadow1 = create_attachment("shadow1", sbx::graphics::attachment::type::image, sbx::math::color::white(), sbx::graphics::format::r32_sfloat, sbx::graphics::filter::linear, sbx::graphics::address_mode::clamp_to_edge);
-  auto shadow1_depth = create_attachment("shadow_depth", sbx::graphics::attachment::type::depth);
+  auto shadow1_depth = create_attachment("shadow1_depth", sbx::graphics::attachment::type::depth);
 
   auto shadow2 = create_attachment("shadow2", sbx::graphics::attachment::type::image, sbx::math::color::white(), sbx::graphics::format::r32_sfloat, sbx::graphics::filter::linear, sbx::graphics::address_mode::clamp_to_edge);
-  auto shadow2_depth = create_attachment("shadow_depth", sbx::graphics::attachment::type::depth);
+  auto shadow2_depth = create_attachment("shadow2_depth", sbx::graphics::attachment::type::depth);
 
   auto shadow3 = create_attachment("shadow3", sbx::graphics::attachment::type::image, sbx::math::color::white(), sbx::graphics::format::r32_sfloat, sbx::graphics::filter::linear, sbx::graphics::address_mode::clamp_to_edge);
   auto shadow3_depth = create_attachment("shadow3_depth", sbx::graphics::attachment::type::depth);
@@ -271,6 +271,7 @@ renderer::renderer()
     pass.depends_on(resolve_pass);
 
     pass.reads(resolve);
+    pass.reads(bloom_upsample);
 
     pass.writes(tonemap, sbx::graphics::attachment_load_operation::clear);
 

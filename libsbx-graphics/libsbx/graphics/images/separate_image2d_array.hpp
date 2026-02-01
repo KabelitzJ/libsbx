@@ -17,7 +17,7 @@ class separate_image2d_array : public descriptor {
 
 public:
 
-  inline static constexpr auto max_size = std::uint32_t{128u};
+  inline static constexpr auto max_size = std::uint32_t{64u};
 
   using handle_type = image2d_handle;
 

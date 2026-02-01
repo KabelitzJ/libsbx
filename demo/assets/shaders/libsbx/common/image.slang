@@ -4,6 +4,7 @@
 namespace sbx::common {
 
 static const uint max_image_array_size = 64;
+static const uint max_sampler_array_size = 16;
 
 } // namespace sbx::common
 

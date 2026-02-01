@@ -14,7 +14,7 @@ class separate_sampler_array : public descriptor {
 
 public:
 
-  inline static constexpr auto max_size = std::uint32_t{32u};
+  inline static constexpr auto max_size = std::uint32_t{16u};
 
   using handle_type = sampler_state_handle;
 

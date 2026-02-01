@@ -12,6 +12,8 @@
 
 #include <libsbx/graphics/descriptor/descriptor.hpp>
 
+#include <libsbx/graphics/devices/debug_messenger.hpp>
+
 namespace sbx::graphics {
 
 attachment::attachment(const utility::hashed_string& name, type type, const math::color& clear_color, const graphics::format format, const graphics::blend_state& blend_state, const graphics::filter filter, const graphics::address_mode address_mode) noexcept
@@ -209,16 +211,21 @@ auto render_graph::build() -> void {
 
   _attachment_states.resize(attachment_count);
 
+  auto planned_layouts = std::vector<VkImageLayout>{};
+  planned_layouts.resize(attachment_count, VK_IMAGE_LAYOUT_UNDEFINED);
+
   for (auto i = 0u; i < attachment_count; ++i) {
     const auto& attachment = _attachments[i];
     auto& state = _attachment_states[i];
 
     state.image = nullptr;
     state.view = nullptr;
-    state.current_layout = VK_IMAGE_LAYOUT_UNDEFINED;
+    state.current_layout = attachment.image_type() == attachment::type::swapchain ? VK_IMAGE_LAYOUT_PRESENT_SRC_KHR : VK_IMAGE_LAYOUT_UNDEFINED;
     state.format = VK_FORMAT_UNDEFINED;
     state.extent = VkExtent2D{0, 0};
     state.type = attachment.image_type();
+
+    planned_layouts[i] = state.current_layout;
   }
 
   for (auto pass_index : execution_order) {
@@ -227,16 +234,21 @@ auto render_graph::build() -> void {
     for (const auto& handle : pass._reads) {
       auto& state = _attachment_states[handle.index];
 
-      const auto required_layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+      auto& planned_layout = planned_layouts[handle.index];
 
-      if (state.current_layout != required_layout) {
+      if (state.type == attachment::type::depth) {
+        continue;
+      }
+
+      const auto required_layout = state.type == attachment::type::storage ? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+      if (planned_layout != required_layout) {
         _instructions.emplace_back(transition_instruction{
           .attachment = handle,
-          .old_layout = state.current_layout,
           .new_layout = required_layout
         });
 
-        state.current_layout = required_layout;
+        planned_layout = required_layout;
       }
     }
 
@@ -246,17 +258,31 @@ auto render_graph::build() -> void {
     for (const auto& [handle, load_op] : pass._writes) {
       auto& state = _attachment_states[handle.index];
 
-      VkImageLayout target_layout = VK_IMAGE_LAYOUT_UNDEFINED;
+      auto& planned_layout = planned_layouts[handle.index];
+
+      if (state.type == attachment::type::depth) {
+        const auto target_layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+
+        if (planned_layout != target_layout) {
+          _instructions.emplace_back(transition_instruction{
+            .attachment = handle,
+            .new_layout = target_layout
+          });
+
+          planned_layout = target_layout;
+        }
+        written_attachments.push_back({handle, load_op});
+
+        continue; 
+      }
+
+      auto target_layout = VkImageLayout{VK_IMAGE_LAYOUT_UNDEFINED};
 
       if (pass._kind == pass_node::kind::graphics) {
-        if (state.type == attachment::type::depth) {
-          target_layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-        } else {
-          utility::assert_that(state.type == attachment::type::image || state.type == attachment::type::swapchain, "Graphics pass writes must be image/depth/swapchain");
-          target_layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-        }
-
         utility::assert_that(state.type != attachment::type::storage, "Graphics pass cannot write a storage attachment");
+        utility::assert_that(state.type == attachment::type::image || state.type == attachment::type::swapchain, "Graphics pass writes must be image/depth/swapchain");
+
+        target_layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
       } else {
         utility::assert_that(pass._kind == pass_node::kind::compute, "Invalid pass kind");
 
@@ -266,14 +292,13 @@ auto render_graph::build() -> void {
         target_layout = VK_IMAGE_LAYOUT_GENERAL;
       }
 
-      if (state.current_layout != target_layout) {
+      if (planned_layout != target_layout) {
         _instructions.emplace_back(transition_instruction{
           .attachment = handle,
-          .old_layout = state.current_layout,
           .new_layout = target_layout
         });
 
-        state.current_layout = target_layout;
+        planned_layout = target_layout;
       }
 
       written_attachments.push_back({handle, load_op});
@@ -288,6 +313,14 @@ auto render_graph::build() -> void {
       _instructions.emplace_back(compute_instruction{
         .pass = pass_handle{pass_index}
       });
+    }
+  }
+
+  for (auto i = 0u; i < attachment_count; ++i) {
+    const auto& state = _attachment_states[i];
+
+    if (state.type == attachment::type::depth) {
+      utility::assert_that(planned_layouts[i] == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, "Depth attachment layout mutated after initialization");
     }
   }
 
@@ -306,15 +339,16 @@ auto render_graph::build() -> void {
     throw utility::runtime_error("Render graph must have a swapchain attachment");
   }
 
-  auto& state = _attachment_states[swapchain_attachment->index];
+  auto& planned_layout = planned_layouts[swapchain_attachment->index];
 
-  _instructions.emplace_back(transition_instruction{
-    .attachment = *swapchain_attachment,
-    .old_layout = state.current_layout,
-    .new_layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
-  });
+  if (planned_layout != VK_IMAGE_LAYOUT_PRESENT_SRC_KHR) {
+    _instructions.emplace_back(transition_instruction{
+      .attachment = *swapchain_attachment,
+      .new_layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
+    });
 
-  state.current_layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+    planned_layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+  }
 }
 
 auto render_graph::resize(const viewport::type flags) -> void {
@@ -398,6 +432,7 @@ auto render_graph::_clear_attachments(const viewport::type flags) -> void {
 
       state.image = nullptr;
       state.view = nullptr;
+      state.current_layout = (state.type == attachment::type::swapchain) ? VK_IMAGE_LAYOUT_PRESENT_SRC_KHR : VK_IMAGE_LAYOUT_UNDEFINED;
     }
   }
 }
@@ -431,7 +466,6 @@ auto render_graph::_create_attachments(const viewport::type flags, const pass_no
           attachment.format(),
           needs_nearest_filter ? graphics::filter::nearest : graphics::filter::linear,
           attachment.address_mode(),
-          VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
           usage,
           VK_SAMPLE_COUNT_1_BIT
         );
@@ -444,6 +478,11 @@ auto render_graph::_create_attachments(const viewport::type flags, const pass_no
         state.view = image.view();
         state.format = image.format();
         state.extent = {extent.x(), extent.y()};
+        state.current_layout = VK_IMAGE_LAYOUT_UNDEFINED;
+
+        const auto name = fmt::format("Render Graph Color Attachment '{}'", attachment.name().str());
+
+        graphics::set_debug_name(VK_OBJECT_TYPE_IMAGE, reinterpret_cast<std::uint64_t>(state.image), name);
 
         break;
       }
@@ -460,7 +499,6 @@ auto render_graph::_create_attachments(const viewport::type flags, const pass_no
           attachment.format(),
           needs_nearest_filter ? graphics::filter::nearest : graphics::filter::linear,
           attachment.address_mode(),
-          VK_IMAGE_LAYOUT_GENERAL,
           usage,
           VK_SAMPLE_COUNT_1_BIT
         );
@@ -473,6 +511,11 @@ auto render_graph::_create_attachments(const viewport::type flags, const pass_no
         state.view = image.view();
         state.format = image.format();
         state.extent = {extent.x(), extent.y()};
+        state.current_layout = VK_IMAGE_LAYOUT_UNDEFINED;
+
+        const auto name = fmt::format("Render Graph Storage Attachment '{}'", attachment.name().str());
+
+        graphics::set_debug_name(VK_OBJECT_TYPE_IMAGE, reinterpret_cast<std::uint64_t>(state.image), name);
 
         break;
       }
@@ -486,6 +529,7 @@ auto render_graph::_create_attachments(const viewport::type flags, const pass_no
         state.view = image.view();
         state.format = image.format();
         state.extent = {extent.x(), extent.y()};
+        state.current_layout = VK_IMAGE_LAYOUT_UNDEFINED;
 
         break;
       }
@@ -494,6 +538,7 @@ auto render_graph::_create_attachments(const viewport::type flags, const pass_no
         state.view = nullptr;
         state.format = VK_FORMAT_UNDEFINED;
         state.extent = {extent.x(), extent.y()};
+        state.current_layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 
         break;
       }
@@ -535,13 +580,31 @@ auto render_graph::_build_depth_attachment_info(const attachment& attachment, co
 auto render_graph::_execute_transition_instruction(command_buffer& command_buffer, const swapchain& swapchain, const transition_instruction& instruction) -> void {
   auto& state = _attachment_states[instruction.attachment.index];
 
-  if (state.type == attachment::type::swapchain) {
-    image::transition_image_layout(command_buffer, swapchain.image(swapchain.active_image_index()), swapchain.format(), instruction.old_layout, instruction.new_layout, VK_IMAGE_ASPECT_COLOR_BIT, 1, 0, 1, 0);
-  } else {
-    const auto aspect = (state.type == attachment::type::depth) ? (VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT) : VK_IMAGE_ASPECT_COLOR_BIT;
+  const auto old_layout = state.current_layout;
+  const auto new_layout = instruction.new_layout;
 
-    image::transition_image_layout(command_buffer, state.image, state.format, instruction.old_layout, instruction.new_layout, aspect, 1, 0, 1, 0);
+  if (old_layout == new_layout) {
+    return;
   }
+
+  if (state.type == attachment::type::swapchain) {
+    image::transition_image_layout(command_buffer, swapchain.image(swapchain.active_image_index()), swapchain.format(), old_layout, new_layout, VK_IMAGE_ASPECT_COLOR_BIT, 1, 0, 1, 0);
+  } else {
+    auto aspect = VkImageAspectFlags{0};
+
+    if (state.type == attachment::type::depth) {
+      aspect |= VK_IMAGE_ASPECT_DEPTH_BIT;
+      if (image::has_stencil_component(state.format)) {
+        aspect |= VK_IMAGE_ASPECT_STENCIL_BIT;
+      }
+    } else {
+      aspect = VK_IMAGE_ASPECT_COLOR_BIT;
+    }
+
+    image::transition_image_layout(command_buffer, state.image, state.format, old_layout, new_layout, aspect, 1, 0, 1, 0);
+  }
+
+  state.current_layout = new_layout;
 }
 
 } // namespace sbx::graphics

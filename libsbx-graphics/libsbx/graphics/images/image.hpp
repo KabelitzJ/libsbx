@@ -22,7 +22,7 @@ class image : public utility::noncopyable, public descriptor {
 
 public:
 
-  image(const VkExtent3D extent, VkFilter filter, VkSamplerAddressMode address_mode, VkSampleCountFlagBits samples, VkImageLayout layout, VkImageUsageFlags usage, VkFormat format, std::uint32_t mip_levels, std::uint32_t array_layers);
+  image(const VkExtent3D extent, VkFilter filter, VkSamplerAddressMode address_mode, VkSampleCountFlagBits samples, VkImageUsageFlags usage, VkFormat format, std::uint32_t mip_levels, std::uint32_t array_layers);
 
   virtual ~image();
 
@@ -44,6 +44,8 @@ public:
 
   static auto create_mipmaps(const VkImage& image, const VkExtent3D& extent, VkFormat format, VkImageLayout dst_image_layout, std::uint32_t mip_levels, std::uint32_t base_array_layer, std::uint32_t layer_count) -> void;
 
+  static auto create_mipmaps(command_buffer& command_buffer, const VkImage& image, const VkExtent3D& extent, VkFormat format, VkImageLayout dst_image_layout, std::uint32_t mip_levels, std::uint32_t base_array_layer, std::uint32_t layer_count) -> void;
+
   static auto transition_image_layout(const VkImage& image, VkFormat format, VkImageLayout src_image_layout, VkImageLayout dst_image_layout, VkImageAspectFlags image_aspect, std::uint32_t mip_levels, std::uint32_t base_mip_level, std::uint32_t layer_count, std::uint32_t base_array_layer) -> void;
 
   static auto transition_image_layout(command_buffer& command_buffer, const VkImage& image, VkFormat format, VkImageLayout src_image_layout, VkImageLayout dst_image_layout, VkImageAspectFlags image_aspect, std::uint32_t mip_levels, std::uint32_t base_mip_level, std::uint32_t layer_count, std::uint32_t base_array_layer) -> void;
@@ -51,6 +53,8 @@ public:
   static auto insert_image_memory_barrier(command_buffer& command_buffer, const VkImage& image, VkAccessFlags src_access_mask, VkAccessFlags dst_access_mask, VkImageLayout old_image_layout, VkImageLayout new_image_layout, VkPipelineStageFlags src_stage_mask, VkPipelineStageFlags dst_stage_mask, VkImageAspectFlags image_aspect, uint32_t mip_levels, uint32_t base_mip_level, uint32_t layer_count, uint32_t base_array_layer) -> void;
 
   static auto copy_buffer_to_image(const VkBuffer& buffer, const VkImage& image, const VkExtent3D& extent, std::uint32_t layer_count, std::uint32_t base_array_layer) -> void;
+
+  static auto copy_buffer_to_image(command_buffer& command_buffer, const VkBuffer& buffer, const VkImage& image, const VkExtent3D& extent, std::uint32_t layer_count, std::uint32_t base_array_layer) -> void;
 
   static auto copy_image_to_buffer(const VkImage& image, VkFormat format, const VkBuffer& buffer, const VkOffset3D& offset, const VkExtent3D& extent, std::uint32_t mip_level, std::uint32_t layer_count, std::uint32_t base_array_layer) -> void;
 
@@ -78,7 +82,7 @@ public:
 
   auto address_mode() const noexcept -> VkSamplerAddressMode;
 
-  auto layout() const noexcept -> VkImageLayout;
+  // auto layout() const noexcept -> VkImageLayout;
 
   auto handle() const noexcept -> VkImage;
 
@@ -102,7 +106,7 @@ protected:
   VkSamplerAddressMode _address_mode;
 
   VkSampleCountFlagBits _samples;
-  VkImageLayout _layout;
+  // VkImageLayout _layout;
   VkImageUsageFlags _usage;
   VkFormat _format;
   std::uint32_t _mip_levels;

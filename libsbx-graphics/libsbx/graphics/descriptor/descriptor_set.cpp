@@ -28,22 +28,40 @@ descriptor_set::descriptor_set(const pipeline& pipeline, std::uint32_t set) noex
 
   const auto& descriptor_counts = pipeline.descriptor_counts(_set);
 
-  const auto has_variable_descriptors = ranges::any_of(descriptor_counts, [](const auto& counts){ return counts > 1u; });
-
-  auto counts = std::array<std::uint32_t, 1u>{};
-  counts[0] = 32u;
-
-  auto descriptor_set_variable_descriptor_count_allocate_info = VkDescriptorSetVariableDescriptorCountAllocateInfo{};
-  descriptor_set_variable_descriptor_count_allocate_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO;
-  descriptor_set_variable_descriptor_count_allocate_info.descriptorSetCount = static_cast<std::uint32_t>(counts.size());
-  descriptor_set_variable_descriptor_count_allocate_info.pDescriptorCounts = counts.data();
-
   auto descriptor_set_allocate_info = VkDescriptorSetAllocateInfo{};
   descriptor_set_allocate_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-  descriptor_set_allocate_info.pNext = has_variable_descriptors ? &descriptor_set_variable_descriptor_count_allocate_info : nullptr;
+  descriptor_set_allocate_info.pNext = nullptr;
   descriptor_set_allocate_info.descriptorPool = _descriptor_pool;
   descriptor_set_allocate_info.descriptorSetCount = static_cast<std::uint32_t>(descriptor_set_layouts.size());
   descriptor_set_allocate_info.pSetLayouts = descriptor_set_layouts.data();
+
+  auto variable_descriptor_index = std::int32_t{-1};
+
+  for (auto i = 0; i < descriptor_counts.size(); ++i) {
+    if (descriptor_counts[i] > 1u) {
+      if constexpr (sbx::utility::is_build_configuration_debug_v) {
+        if (variable_descriptor_index != -1) {
+          throw std::runtime_error{"Descriptor set has more than one variable descriptor count."};
+        }
+      }
+
+      variable_descriptor_index = static_cast<std::int32_t>(i);
+    }
+  }
+
+  if (variable_descriptor_index >= 0) {
+    const auto type = pipeline.find_descriptor_type_at_binding(_set, variable_descriptor_index);
+
+    auto counts = std::array<std::uint32_t, 1u>{};
+    counts[0] = descriptor_counts[variable_descriptor_index];
+
+    auto descriptor_set_variable_descriptor_count_allocate_info = VkDescriptorSetVariableDescriptorCountAllocateInfo{};
+    descriptor_set_variable_descriptor_count_allocate_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO;
+    descriptor_set_variable_descriptor_count_allocate_info.descriptorSetCount = static_cast<std::uint32_t>(counts.size());
+    descriptor_set_variable_descriptor_count_allocate_info.pDescriptorCounts = counts.data();
+
+    descriptor_set_allocate_info.pNext = &descriptor_set_variable_descriptor_count_allocate_info;
+  }
 
   validate(vkAllocateDescriptorSets(logical_device, &descriptor_set_allocate_info, &_descriptor_set));
 }

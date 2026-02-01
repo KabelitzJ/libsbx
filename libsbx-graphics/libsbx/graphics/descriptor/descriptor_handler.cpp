@@ -3,6 +3,8 @@
 
 #include <libsbx/graphics/graphics_module.hpp>
 
+#include <libsbx/graphics/devices/debug_messenger.hpp>
+
 namespace sbx::graphics {
 
 descriptor_handler::descriptor_handler(std::uint32_t set)

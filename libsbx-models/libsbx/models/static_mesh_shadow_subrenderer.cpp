@@ -30,17 +30,19 @@ auto static_mesh_shadow_subrenderer::render(graphics::command_buffer& command_bu
 
   for (auto& [key, entry] : ranges) {
     auto& pipeline_data = _get_or_create_pipeline(key);
+    auto& descriptor_data = _get_or_create_descriptor_data(pipeline_data.pipeline);
+
     auto& pipeline = graphics_module.get_resource<graphics::graphics_pipeline>(pipeline_data.pipeline);
 
     pipeline.bind(command_buffer);
 
-    pipeline_data.scene_descriptor_handler.push("scene", scene.uniform_handler());
+    descriptor_data.scene_descriptor_handler.push("scene", scene.uniform_handler());
 
-    if (!pipeline_data.scene_descriptor_handler.update(pipeline)) {
+    if (!descriptor_data.scene_descriptor_handler.update(pipeline)) {
       return;
     }
 
-    pipeline_data.scene_descriptor_handler.bind_descriptors(command_buffer);
+    descriptor_data.scene_descriptor_handler.bind_descriptors(command_buffer);
 
     pipeline_data.push_handler.push("transform_data_buffer", draw_list.buffer(models::static_mesh_material_draw_list::transform_data_buffer_name).address());
     pipeline_data.push_handler.push("instance_data_buffer", graphics_module.get_resource<graphics::storage_buffer>(entry.instance_data_buffer).address());
@@ -64,8 +66,10 @@ auto static_mesh_shadow_subrenderer::render(graphics::command_buffer& command_bu
 
 static_mesh_shadow_subrenderer::pipeline_data::pipeline_data(const graphics::graphics_pipeline_handle& handle)
 : pipeline{handle},
-  push_handler{pipeline},
-  scene_descriptor_handler{pipeline, 0u} { }
+  push_handler{pipeline} { }
+
+static_mesh_shadow_subrenderer::descriptor_data::descriptor_data(const graphics::graphics_pipeline_handle& handle)
+: scene_descriptor_handler{handle, 0u} { }
 
 auto static_mesh_shadow_subrenderer::_get_or_create_pipeline(const models::material_key& key) -> pipeline_data& {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
@@ -93,6 +97,16 @@ auto static_mesh_shadow_subrenderer::_get_or_create_pipeline(const models::mater
   auto handle = graphics_module.add_resource<graphics::graphics_pipeline>(compiled, _attachments, definition);
 
   auto [entry, inserted] = _pipeline_cache.emplace(key, handle);
+
+  return entry->second;
+}
+
+auto static_mesh_shadow_subrenderer::_get_or_create_descriptor_data(const graphics::graphics_pipeline_handle& handle) -> descriptor_data& {
+  if (auto it = _descriptor_cache.find(handle); it != _descriptor_cache.end()) {
+    return it->second;
+  }
+
+  auto [entry, inserted] = _descriptor_cache.emplace(handle, descriptor_data{handle});
 
   return entry->second;
 }

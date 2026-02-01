@@ -8,6 +8,8 @@
 
 namespace sbx::graphics {
 
+auto set_debug_name(const VkObjectType object_type, const std::uint64_t object_handle, const std::string& name) -> void;
+
 class debug_messenger {
 
 public:

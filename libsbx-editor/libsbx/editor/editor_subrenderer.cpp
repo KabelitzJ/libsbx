@@ -424,8 +424,11 @@ auto editor_subrenderer::_setup_windows() -> void {
     ImGui::Begin("Target");
 
     if (ImGui::CollapsingHeader("Target", ImGuiTreeNodeFlags_DefaultOpen)) {
-      static const auto targets = std::array<std::string_view, 12u>{
-        "shadow",
+      static const auto targets = std::array<std::string_view,15u>{
+        "shadow0",
+        "shadow1",
+        "shadow2",
+        "shadow3",
         "albedo",
         "normal",
         "position",

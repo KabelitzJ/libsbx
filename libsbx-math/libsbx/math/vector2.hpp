@@ -50,6 +50,9 @@ public:
   template<scalar Other>
   constexpr basic_vector2(Other x, Other y) noexcept;
 
+  template<scalar Other>
+  constexpr basic_vector2(Other value) noexcept;
+
   [[nodiscard]] static constexpr auto dot(const basic_vector2& lhs, const basic_vector2& rhs) noexcept -> length_type;
 
   [[nodiscard]] static constexpr auto normalized(const basic_vector2& vector) noexcept -> basic_vector2;

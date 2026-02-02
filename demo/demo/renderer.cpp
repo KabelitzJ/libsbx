@@ -116,8 +116,10 @@ renderer::renderer()
   });
 
   // Render passes
+  static constexpr auto shadow_resolutions = std::array<std::uint32_t, 4u>{2048, 2048, 1024, 512};
+
   auto shadow0_pass = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
-    auto pass = context.graphics_pass("shadow0", sbx::graphics::viewport::fixed(2048, 2048));
+    auto pass = context.graphics_pass("shadow0", sbx::graphics::viewport::fixed(shadow_resolutions[0]));
 
     pass.depends_on(skinning_pass);
 
@@ -128,7 +130,7 @@ renderer::renderer()
   });
 
   auto shadow1_pass = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
-    auto pass = context.graphics_pass("shadow1", sbx::graphics::viewport::fixed(2048, 2048));
+    auto pass = context.graphics_pass("shadow1", sbx::graphics::viewport::fixed(shadow_resolutions[1]));
 
     pass.depends_on(skinning_pass);
 
@@ -139,7 +141,7 @@ renderer::renderer()
   });
 
   auto shadow2_pass = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
-    auto pass = context.graphics_pass("shadow2", sbx::graphics::viewport::fixed(2048, 2048));
+    auto pass = context.graphics_pass("shadow2", sbx::graphics::viewport::fixed(shadow_resolutions[2]));
 
     pass.depends_on(skinning_pass);
 
@@ -150,7 +152,7 @@ renderer::renderer()
   });
 
   auto shadow3_pass = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
-    auto pass = context.graphics_pass("shadow3", sbx::graphics::viewport::fixed(2048, 2048));
+    auto pass = context.graphics_pass("shadow3", sbx::graphics::viewport::fixed(shadow_resolutions[3]));
 
     pass.depends_on(skinning_pass);
 
@@ -318,11 +320,11 @@ renderer::renderer()
   add_subrenderer<sbx::models::static_mesh_shadow_subrenderer>(shadow1_pass, "res://shaders/shadow", 1u);
   add_subrenderer<sbx::animations::skinned_mesh_shadow_subrenderer>(shadow1_pass, "res://shaders/shadow",1u, skinning.vertex_buffer_handle());
 
-  add_subrenderer<sbx::models::static_mesh_shadow_subrenderer>(shadow1_pass, "res://shaders/shadow", 2u);
-  add_subrenderer<sbx::animations::skinned_mesh_shadow_subrenderer>(shadow1_pass, "res://shaders/shadow", 2u, skinning.vertex_buffer_handle());
+  add_subrenderer<sbx::models::static_mesh_shadow_subrenderer>(shadow2_pass, "res://shaders/shadow", 2u);
+  add_subrenderer<sbx::animations::skinned_mesh_shadow_subrenderer>(shadow3_pass, "res://shaders/shadow", 2u, skinning.vertex_buffer_handle());
 
-  add_subrenderer<sbx::models::static_mesh_shadow_subrenderer>(shadow1_pass, "res://shaders/shadow", 3u);
-  add_subrenderer<sbx::animations::skinned_mesh_shadow_subrenderer>(shadow1_pass, "res://shaders/shadow", 3u, skinning.vertex_buffer_handle());
+  add_subrenderer<sbx::models::static_mesh_shadow_subrenderer>(shadow3_pass, "res://shaders/shadow", 3u);
+  add_subrenderer<sbx::animations::skinned_mesh_shadow_subrenderer>(shadow3_pass, "res://shaders/shadow", 3u, skinning.vertex_buffer_handle());
 
   // Deferred pass
   add_subrenderer<sbx::models::static_mesh_material_subrenderer>(deferred_pass, "res://shaders/deferred_pbr_material", sbx::models::static_mesh_material_draw_list::bucket::opaque);

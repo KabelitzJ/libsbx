@@ -15,6 +15,11 @@ inline constexpr basic_vector2<Type>::basic_vector2(Other x, Other y) noexcept
 : base_type{x, y} { }
 
 template<scalar Type>
+template<scalar Other>
+inline constexpr basic_vector2<Type>::basic_vector2(Other value) noexcept
+: base_type{value, value} { }
+
+template<scalar Type>
 inline constexpr auto basic_vector2<Type>::dot(const basic_vector2& lhs, const basic_vector2& rhs) noexcept -> length_type {
   return lhs.x() * rhs.x() + lhs.y() * rhs.y();
 }

@@ -147,11 +147,39 @@ float2 ndc_to_uv(float2 ndc_xy) {
   return mul(NDC_TO_UV_SCALE, ndc_xy) + NDC_TO_UV_BIAS;
 }
 
-uint select_cascade(float view_depth) {
-  if (view_depth < scene.cascade_splits.x) return 0;
-  if (view_depth < scene.cascade_splits.y) return 1;
-  if (view_depth < scene.cascade_splits.z) return 2;
-  return 3;
+struct cascade_select {
+  uint cascade;
+  float blend_factor;
+  uint next_cascade;
+}; // struct cascade_select
+
+cascade_select select_cascade_with_blend(float view_depth) {
+  cascade_select result;
+  
+  const float blend_threshold = 0.9;
+  
+  if (view_depth < scene.cascade_splits.x) {
+    result.cascade = 0;
+    result.next_cascade = 1;
+    float blend_start = scene.cascade_splits.x * blend_threshold;
+    result.blend_factor = saturate((view_depth - blend_start) / (scene.cascade_splits.x - blend_start));
+  } else if (view_depth < scene.cascade_splits.y) {
+    result.cascade = 1;
+    result.next_cascade = 2;
+    float blend_start = scene.cascade_splits.y * blend_threshold;
+    result.blend_factor = saturate((view_depth - blend_start) / (scene.cascade_splits.y - blend_start));
+  } else if (view_depth < scene.cascade_splits.z) {
+    result.cascade = 2;
+    result.next_cascade = 3;
+    float blend_start = scene.cascade_splits.z * blend_threshold;
+    result.blend_factor = saturate((view_depth - blend_start) / (scene.cascade_splits.z - blend_start));
+  } else {
+    result.cascade = 3;
+    result.next_cascade = 3;
+    result.blend_factor = 0.0;
+  }
+  
+  return result;
 }
 
 uint2 shadow_map_dimensions(uint cascade) {
@@ -213,8 +241,9 @@ float calculate_shadow(uint cascade, float3 world_position, float3 normal) {
 
   float2 texel_size = 1.0 / float2(dimensions);
 
-  float distance_to_camera = length(scene.camera_position - world_position);
-  float radius = lerp(1.0, 4.0, clamp(distance_to_camera / 50.0, 0.0, 1.0));
+  float resolution_scale = float(dimensions.x) / 2048.0;
+  float base_radius = 1.5 / resolution_scale;
+  float radius = base_radius * (1.0 + cascade * 0.3);
 
   float angle = random2(uv) * sbx::math::two_pi;
   float2x2 rotation = rotation_matrix(angle);
@@ -287,9 +316,6 @@ fs_out main(fs_in input) {
   float3 view_dir = normalize(scene.camera_position - world_position);
   float3 f0 = lerp(DEFAULT_F0, albedo, metallic);
 
-  float view_depth = -mul(scene.view, float4(world_position, 1.0)).z;
-  uint cascade = select_cascade(view_depth);
-
   float3 color = float3(0.0, 0.0, 0.0);
 
   // Global directional light
@@ -311,10 +337,23 @@ fs_out main(fs_in input) {
   float3 k_s = F;
   float3 k_d = (1.0 - k_s) * (1.0 - metallic);
 
-  // float shadow = 1.0; 
   bool receive_shadow = (material_flags & material_feature::receive_shadow) != 0;
 
-  float shadow = receive_shadow ? calculate_shadow(cascade, world_position, normal) : 1.0;
+  float shadow = 1.0;
+
+  if (receive_shadow) {
+    float view_depth = -mul(scene.view, float4(world_position, 1.0)).z;
+    cascade_select cascade_info = select_cascade_with_blend(view_depth);
+  
+    float shadow_current = calculate_shadow(cascade_info.cascade, world_position, normal);
+    
+    if (cascade_info.blend_factor > 0.0 && cascade_info.cascade < 3) {
+      float shadow_next = calculate_shadow(cascade_info.next_cascade, world_position, normal);
+      shadow = lerp(shadow_current, shadow_next, cascade_info.blend_factor);
+    } else {
+      shadow = shadow_current;
+    }
+  }
 
   float3 irradiance = scene.light_color.rgb * ndl * shadow;
 

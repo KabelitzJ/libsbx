@@ -99,9 +99,6 @@ struct image_data {
 }; // struct image_data
 
 auto image2d::_load(const std::filesystem::path& path) -> void {
-  // [TODO] KAJ 2025-05-26 : This code is absolutely terrible, it should be refactored to use a more robust image loading system.
-  // const auto needs_processing = !std::filesystem::exists(std::filesystem::path{path}.replace_extension(".sbximg"));
-
   _channels = channels_from_format(_format);
 
   auto data = image_data{};

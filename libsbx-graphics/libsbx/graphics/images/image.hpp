@@ -82,15 +82,11 @@ public:
 
   auto address_mode() const noexcept -> VkSamplerAddressMode;
 
-  // auto layout() const noexcept -> VkImageLayout;
-
   auto handle() const noexcept -> VkImage;
 
   operator VkImage() const noexcept;
 
   auto view() const noexcept -> VkImageView;
-
-  // auto memory() const noexcept -> const VkDeviceMemory&;
 
   auto sampler() const noexcept -> VkSampler;
 
@@ -106,7 +102,6 @@ protected:
   VkSamplerAddressMode _address_mode;
 
   VkSampleCountFlagBits _samples;
-  // VkImageLayout _layout;
   VkImageUsageFlags _usage;
   VkFormat _format;
   std::uint32_t _mip_levels;
@@ -114,7 +109,6 @@ protected:
 
   VkImage _handle;
   VmaAllocation _allocation;
-  // VkDeviceMemory _memory;
   VkImageView _view;
   VkSampler _sampler;
 

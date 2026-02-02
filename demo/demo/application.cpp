@@ -267,9 +267,6 @@ auto application::update() -> void  {
     return;
   }
 
-  auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
-  auto& scene = scenes_module.scene();
-
   _rotation += sbx::math::degree{45} * delta_time;
 
   if (sbx::devices::input::is_key_pressed(sbx::devices::key::space)) {

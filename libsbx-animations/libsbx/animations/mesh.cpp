@@ -210,7 +210,7 @@ static auto _apply_weights(const aiScene* scene, mesh::mesh_data& data, const bo
         const auto& weight = bone->mWeights[k];
         auto& vertex = data.vertices[weight.mVertexId + submesh.vertex_offset];
 
-        for (int l = 0; l < 4; ++l) {
+        for (auto l = 0u; l < 4u; ++l) {
           if (vertex.bone_weights[l] == 0.0f) {
             vertex.bone_ids[l] = id;
             vertex.bone_weights[l]  = weight.mWeight;

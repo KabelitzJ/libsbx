@@ -128,27 +128,24 @@ auto image::create_image(VkImage& image, VmaAllocation& allocation, const VkExte
   image_create_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
   image_create_info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 
-  // validate(vkCreateImage(logical_device, &image_create_info, nullptr, &image));
-
-  // auto memory_requirements = VkMemoryRequirements{};
-  // vkGetImageMemoryRequirements(logical_device, image, &memory_requirements);
-
-  // auto memory_allocate_info = VkMemoryAllocateInfo{};
-  // memory_allocate_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-  // memory_allocate_info.allocationSize = memory_requirements.size;
-  // memory_allocate_info.memoryTypeIndex = physical_device.find_memory_type(memory_requirements.memoryTypeBits, properties);
-
-  // validate(vkAllocateMemory(logical_device, &memory_allocate_info, nullptr, &memory));
-
-  // vkBindImageMemory(logical_device, image, memory, 0);
-
   auto allocation_create_info = VmaAllocationCreateInfo{};
   allocation_create_info.usage = VMA_MEMORY_USAGE_AUTO;
   allocation_create_info.flags = 0u;
   allocation_create_info.priority = 1.0f;
 
+  static constexpr auto image_dedicated_threshold = VkDeviceSize{1024 * 1024};
+  
+  // Estimate image size: width * height * depth * array_layers * bytes_per_pixel * mip_levels_factor
+  // Using a conservative estimate for bytes per pixel (4 bytes for most formats)
+  const auto estimated_size = static_cast<VkDeviceSize>(extent.width) * static_cast<VkDeviceSize>(extent.height) * static_cast<VkDeviceSize>(extent.depth) * static_cast<VkDeviceSize>(array_layers) * 4u;
+  
+  if (estimated_size >= image_dedicated_threshold) {
+    allocation_create_info.flags |= VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
+  }
+
   validate(vmaCreateImage(allocator, &image_create_info, &allocation_create_info, &image, &allocation, nullptr));
 
+  // Optional: Set allocation name for debugging
   // vmaSetAllocationName(allocator, allocation, name().c_str());
 }
 

@@ -77,18 +77,6 @@ application::application()
   _generate_irradiance(64);
   _generate_prefiltered(512);
 
-  auto& brdf = graphics_module.get_resource<sbx::graphics::image2d>(_brdf);
-  sbx::utility::logger<"application">::debug("Created brdf image: handle = {:#x}", reinterpret_cast<std::uintptr_t>(brdf.handle()));
-
-  auto& irradiance = graphics_module.get_resource<sbx::graphics::cube_image>(_irradiance);
-  sbx::utility::logger<"application">::debug("Created irradiance image: handle = {:#x}", reinterpret_cast<std::uintptr_t>(irradiance.handle()));
-
-  auto& prefiltered = graphics_module.get_resource<sbx::graphics::cube_image>(_prefiltered);
-  sbx::utility::logger<"application">::debug("Created prefiltered image: handle = {:#x}", reinterpret_cast<std::uintptr_t>(prefiltered.handle()));
-
-  auto& skybox = graphics_module.get_resource<sbx::graphics::cube_image>(scene.get_cube_image("skybox"));
-  sbx::utility::logger<"application">::debug("Skybox image: handle = {:#x}", reinterpret_cast<std::uintptr_t>(skybox.handle()));
-
   // Meshes
   scene.add_mesh<sbx::models::mesh>("edge_one", "res://meshes/terrain/edge_one/edge_one.gltf");
   scene.add_mesh<sbx::models::mesh>("edge_three", "res://meshes/terrain/edge_three/edge_three.gltf");
@@ -692,7 +680,6 @@ auto application::_generate_prefiltered(uint32_t size) -> void {
 
   for (auto mip = 0u; mip < prefiltered.mip_levels(); ++mip) {
     sbx::graphics::image::create_image_view(prefiltered, mip_views[mip], VK_IMAGE_VIEW_TYPE_2D_ARRAY, prefiltered.format(), VK_IMAGE_ASPECT_COLOR_BIT, 1, mip, 6, 0);
-    sbx::utility::logger<"application">::debug("Created mip view {}: {:#x}", mip, reinterpret_cast<std::uintptr_t>(mip_views[mip]));
   }
 
   for (auto mip = 0u; mip < prefiltered.mip_levels(); ++mip) {

@@ -97,6 +97,12 @@ auto buffer::resize(const size_type new_size) -> void {
     allocation_create_info.requiredFlags |= VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
   }
 
+  static constexpr auto dedicated_allocation_threshold = size_type{1024 * 1024};
+  
+  if (_size >= dedicated_allocation_threshold) {
+    allocation_create_info.flags |= VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
+  }
+
   validate(vmaCreateBuffer(allocator, &buffer_create_info, &allocation_create_info, &_handle, &_allocation, nullptr));
 
   vmaSetAllocationName(allocator, _allocation, name().c_str());

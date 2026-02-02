@@ -8,9 +8,13 @@
 
 #include <fmt/format.h>
 
+#include <libsbx/units/bytes.hpp>
+
 namespace sbx::graphics {
 
 allocator::allocator(const instance& instance, const physical_device& physical_device, const logical_device& logical_device) {
+  using namespace sbx::units::literals;
+
   auto vulkan_functions = VmaVulkanFunctions{};
   vulkan_functions.vkGetInstanceProcAddr = vkGetInstanceProcAddr;
   vulkan_functions.vkGetDeviceProcAddr = vkGetDeviceProcAddr;
@@ -18,6 +22,8 @@ allocator::allocator(const instance& instance, const physical_device& physical_d
   auto allocator_info = VmaAllocatorCreateInfo{};
   allocator_info.physicalDevice = physical_device;
   allocator_info.device = logical_device;
+  // allocator_info.preferredLargeHeapBlockSize = 512 * 1024 * 1024;
+  allocator_info.preferredLargeHeapBlockSize = 512_mib;
   allocator_info.instance = instance;
   allocator_info.pVulkanFunctions = &vulkan_functions;
   allocator_info.vulkanApiVersion = VK_API_VERSION_1_4;

@@ -3,8 +3,8 @@
 [[vk::binding(0, 0)]]
 Sampler2D resolve_image;
 
-[[vk::binding(1, 0)]]
-Sampler2D bloom_image;
+// [[vk::binding(1, 0)]]
+// Sampler2D bloom_image;
 
 struct push_data {
   float exposure;
@@ -53,7 +53,8 @@ fs_out main(fs_in input) {
   fs_out output;
 
   float3 color = resolve_image.Sample(input.uv).rgb;
-  float3 bloom = bloom_image.Sample(input.uv).rgb;
+  float3 bloom = float3(0.0, 0.0, 0.0);
+  // float3 bloom = bloom_image.Sample(input.uv).rgb;
 
   color = apply_white_balance(color, push.temperature, push.tint);
 

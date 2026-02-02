@@ -125,12 +125,12 @@ namespace Demo
 
       if (Input.IsKeyDown(KeyCode.Q))
       {
-        _newRotation *= Quaternion.Euler(Vector3.Up * rotationAmount);
+        _newRotation *= Quaternion.Euler(Vector3.Down * rotationAmount);
       }
 
       if (Input.IsKeyDown(KeyCode.E))
       {
-        _newRotation *= Quaternion.Euler(Vector3.Down * rotationAmount);
+        _newRotation *= Quaternion.Euler(Vector3.Up * rotationAmount);
       }
 
       transform.Position = Vector3.Lerp(transform.Position, _newPosition, Time.DeltaTime * movementTime);

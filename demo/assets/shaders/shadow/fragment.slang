@@ -1,5 +1,3 @@
-#define MAX_IMAGE_ARRAY_SIZE 64
-
 struct fs_in {
   float4 sv_position : SV_Position;
 }; // struct fs_in

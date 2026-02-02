@@ -2,8 +2,8 @@
 #include <libsbx/common/image.slang>
 #include <libsbx/common/scene_data.slang>
 
-#include <common.slang>
-#include <alpha_policy.slang>
+#include <deferred_pbr_material/common.slang>
+#include <deferred_pbr_material/alpha_policy.slang>
 
 struct fs_in {
   [[vk::location(0)]] float3 position : POSITION;

@@ -163,11 +163,13 @@ def execute_job(job) -> bool:
 # Discovery & Orchestration
 # ----------------------
 
+skip_shaders = {"libsbx", "deferred_pbr_material", "depthpre", "shadow", "sprites"}
+
 def gather_jobs(shader_root_dir: Path, glslc_path: Optional[str], slangc_path: Optional[str]) -> List[tuple]:
   jobs = []
 
   for shader_dir in sorted(p for p in shader_root_dir.iterdir() if p.is_dir()):
-    if shader_dir.name == "libsbx" or shader_dir.name == "deferred_pbr_material" or shader_dir.name == "depthpre"  or shader_dir.name == "shadow":
+    if shader_dir.name in skip_shaders:
       continue
 
     # Slang first (sorted for determinism when both pixel/fragment exist)

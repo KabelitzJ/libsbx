@@ -1,28 +1,17 @@
 #include <libsbx/common/scene_data.slang>
 #include <libsbx/common/image.slang>
 
+#include <sprites/common.slang>
+
 struct fs_in {
   [[vk::location(0)]] float2 uv : UV;
   [[vk::location(1)]] nointerpolation uint instance_id : INSTANCE_ID;
-};
+}; // struct fs_in
 
 struct fs_out {
-  float4 color      : SV_Target0; // HDR scene color
+  float4 color : SV_Target0; // HDR scene color
   float4 brightness : SV_Target1; // bloom source
-};
-
-struct sprite_data {
-  float4x4 model;
-  float4 base_color;
-  float2 size;
-  uint albedo_image_index;
-  uint emissive_image_index;
-  float4 emissive_factor;
-  float emissive_strength;
-  uint padding0;
-  uint padding1;
-  uint padding2;
-}; // struct sprite_data
+}; // struct fs_out
 
 struct push_data {
   Ptr<sprite_data> sprites;
@@ -73,13 +62,16 @@ fs_out main(fs_in input) {
   sprite_data sprite = push.sprites[input.instance_id];
 
   float4 albedo = get_albedo(input, sprite);
+
+  clip(albedo.a - 0.9f);
+
   float3 emissive = get_emissive(input, sprite);
 
   output.color = float4(albedo.rgb + emissive, albedo.a);
   
   float brightness = dot(output.color.rgb, float3(0.2126, 0.7152, 0.0722));
 
-  output.brightness = (brightness > 1.0) ? float4(output.color.rgb, 1.0) : float4(0.0, 0.0, 0.0, 1.0);
+  output.brightness = (brightness > bloom_threshold) ? float4(output.color.rgb, 1.0) : float4(0.0, 0.0, 0.0, 1.0);
 
   return output;
 }

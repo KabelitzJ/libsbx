@@ -2,7 +2,7 @@
 #include <libsbx/common/convert_to.slang>
 #include <libsbx/common/scene_data.slang>
 
-#include <common.slang>
+#include <deferred_pbr_material/common.slang>
 
 struct vs_in {
   uint vertex_id : SV_VertexID;

@@ -17,6 +17,7 @@
 #include <libsbx/utility/exception.hpp>
 #include <libsbx/utility/hashed_string.hpp>
 #include <libsbx/utility/logger.hpp>
+#include <libsbx/utility/overload.hpp>
 
 #include <libsbx/math/color.hpp>
 
@@ -222,14 +223,6 @@ struct compute_instruction {
 
 using instruction = std::variant<transition_instruction, pass_instruction, compute_instruction>;
 
-template<typename... Callables>
-struct overload : Callables... {
-  using Callables::operator()...;
-}; // struct overload
-
-template<typename... Callables>
-overload(Callables...) -> overload<Callables...>;
-
 struct attachment_state {
   VkImage image;
   VkImageView view;
@@ -285,7 +278,7 @@ public:
     }
 
     for (const auto& instruction : _instructions) {
-      std::visit(overload{
+      std::visit(utility::overload{
         [&](const transition_instruction& instruction) { _execute_transition_instruction(command_buffer, swapchain, instruction); },
         [&](const pass_instruction& instruction) { _execute_pass_instruction(command_buffer, swapchain, instruction, std::forward<Callable>(callable)); },
         [&](const compute_instruction& instruction) { _execute_compute_instruction(command_buffer, instruction, std::forward<Callable>(callable)); },

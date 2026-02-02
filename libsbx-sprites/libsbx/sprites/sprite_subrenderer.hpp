@@ -10,6 +10,7 @@
 
 #include <libsbx/utility/fast_mod.hpp>
 #include <libsbx/utility/enum.hpp>
+#include <libsbx/utility/overload.hpp>
 
 #include <libsbx/core/engine.hpp>
 
@@ -57,22 +58,53 @@ enum class sprite_space : std::uint32_t {
   world = 2            // Full 3D world-space sprites (billboards, etc.)
 }; // enum class sprite_space
 
-struct sprite {
-  sprite_space space{sprite_space::world};
+struct screen_overlay_sprite {
   math::color base_color{1.0f, 1.0f, 1.0f, 1.0f};
   graphics::image2d_handle albedo_image{};
   math::color emissive_factor{0.0f, 0.0f, 0.0f, 1.0f};
   float emissive_strength{0.0f};
   graphics::image2d_handle emissive_image{};
-  math::vector2 size{1.0f, 1.0f};
-  math::vector2 pivot{0.5f, 0.5f};  // Normalized pivot point (0.5, 0.5 = center)
-  std::int32_t sort_order{0};       // For overlay/camera space sorting
-  bool is_billboard{false};         // For world space - always face camera
-}; // struct sprite
+  math::vector2 size{100.0f, 100.0f};        // pixels
+  math::vector2 pivot{0.5f, 0.5f};
+  math::vector2 position{0.0f, 0.0f};        // screen pixels from center
+  std::int32_t sort_order{0};
+}; // struct screen_overlay_sprite
+
+struct screen_camera_sprite {
+  math::color base_color{1.0f, 1.0f, 1.0f, 1.0f};
+  graphics::image2d_handle albedo_image{};
+  math::color emissive_factor{0.0f, 0.0f, 0.0f, 1.0f};
+  float emissive_strength{0.0f};
+  graphics::image2d_handle emissive_image{};
+  math::vector2 size{100.0f, 100.0f};        // pixels
+  math::vector2 pivot{0.5f, 0.5f};
+  math::vector2 position{0.0f, 0.0f};        // screen pixels from center
+  float depth{0.0f};                          // world units for occlusion
+  std::int32_t sort_order{0};
+}; // struct screen_camera_sprite
+
+struct world_sprite {
+  math::color base_color{1.0f, 1.0f, 1.0f, 1.0f};
+  graphics::image2d_handle albedo_image{};
+  math::color emissive_factor{0.0f, 0.0f, 0.0f, 1.0f};
+  float emissive_strength{0.0f};
+  graphics::image2d_handle emissive_image{};
+  math::vector2 size{1.0f, 1.0f};            // world units
+  math::vector2 pivot{0.5f, 0.5f};
+  bool is_billboard{false};
+}; // struct world_sprite
+
+using sprite = std::variant<screen_overlay_sprite, screen_camera_sprite, world_sprite>;
+
+[[nodiscard]] inline auto get_sprite_space(const sprite& sprite) -> sprite_space {
+  return static_cast<sprite_space>(sprite.index());
+}
 
 class sprite_batch {
 
 public:
+
+  inline static constexpr auto flag_is_billboard = 0x00000001u;
 
   struct sprite_instance {
     math::matrix4x4 model;
@@ -208,32 +240,70 @@ private:
     auto sprite_query = scene.query<const sprites::sprite>();
 
     for (auto&& [node, sprite] : sprite_query.each()) {
-      const auto& transform = scene.world_transform(node);
-      
-      const auto albedo_index = _images.push_back(sprite.albedo_image);
-      const auto emissive_index = _images.push_back(sprite.emissive_image);
+      std::visit(utility::overload{
+        [&](const screen_overlay_sprite& sprite){
+          const auto albedo_index = _images.push_back(sprite.albedo_image);
+          const auto emissive_index = _images.push_back(sprite.emissive_image);
 
-      const auto mode_index = static_cast<std::size_t>(sprite.space);
-      
-      auto flags = std::uint32_t{0u};
+          _batches[0].add(sprite_batch::sprite_instance{
+            .model = math::matrix4x4::translated(math::matrix4x4::identity, math::vector3{sprite.position.x(), sprite.position.y(), 0.0f}),
+            .base_color = sprite.base_color,
+            .emissive_factor = sprite.emissive_factor,
+            .size = sprite.size,
+            .pivot = sprite.pivot,
+            .emissive_strength = sprite.emissive_strength,
+            .albedo_image_index = albedo_index,
+            .emissive_image_index = emissive_index,
+            .sort_order = sprite.sort_order,
+            .flags = 0u,
+            .padding0 = 0u
+          });
+        },
+        [&](const screen_camera_sprite& sprite){
+          const auto albedo_index = _images.push_back(sprite.albedo_image);
+          const auto emissive_index = _images.push_back(sprite.emissive_image);
 
-      if (sprite.is_billboard) {
-        flags |= 0x01;
-      }
+          _batches[1].add(sprite_batch::sprite_instance{
+            .model = math::matrix4x4::translated(math::matrix4x4::identity, math::vector3{sprite.position.x(), sprite.position.y(), sprite.depth}),
+            .base_color = sprite.base_color,
+            .emissive_factor = sprite.emissive_factor,
+            .size = sprite.size,
+            .pivot = sprite.pivot,
+            .emissive_strength = sprite.emissive_strength,
+            .albedo_image_index = albedo_index,
+            .emissive_image_index = emissive_index,
+            .sort_order = sprite.sort_order,
+            .flags = 0u,
+            .padding0 = 0u
+          });
+        },
+        [&](const world_sprite& sprite){
+          const auto albedo_index = _images.push_back(sprite.albedo_image);
+          const auto emissive_index = _images.push_back(sprite.emissive_image);
 
-      _batches[mode_index].add(sprite_batch::sprite_instance{
-        .model = transform,
-        .base_color = sprite.base_color,
-        .emissive_factor = sprite.emissive_factor,
-        .size = sprite.size,
-        .pivot = sprite.pivot,
-        .emissive_strength = sprite.emissive_strength,
-        .albedo_image_index = albedo_index,
-        .emissive_image_index = emissive_index,
-        .sort_order = sprite.sort_order,
-        .flags = flags,
-        .padding0 = 0u
-      });
+          const auto& transform = scene.world_transform(node);
+
+          auto flags = std::uint32_t{0u};
+
+          if (sprite.is_billboard) {
+            flags |= sprite_batch::flag_is_billboard;
+          }
+
+          _batches[2].add(sprite_batch::sprite_instance{
+            .model = transform,
+            .base_color = sprite.base_color,
+            .emissive_factor = sprite.emissive_factor,
+            .size = sprite.size,
+            .pivot = sprite.pivot,
+            .emissive_strength = sprite.emissive_strength,
+            .albedo_image_index = albedo_index,
+            .emissive_image_index = emissive_index,
+            .sort_order = 0,
+            .flags = flags,
+            .padding0 = 0u
+          });
+        }
+      }, sprite);
     }
   }
 

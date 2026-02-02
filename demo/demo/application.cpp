@@ -131,18 +131,18 @@ application::application()
 
   // Sprite
   auto sprite = scene.create_node("SpriteNode");
-  scene.add_component<sbx::sprites::sprite>(sprite, sbx::sprites::sprite{
-    .space = sbx::sprites::sprite_space::screen_overlay,
+  scene.add_component<sbx::sprites::sprite>(sprite, sbx::sprites::screen_overlay_sprite{
     .base_color = sbx::math::color::white(),
     .albedo_image = scene.get_image("rune_a_albedo"),
     .emissive_factor = sbx::math::color{1, 0, 0, 1},
     .emissive_strength = 15.0f,
     .emissive_image = scene.get_image("rune_a_emissive"),
-    .size = sbx::math::vector2{64.0f, 64.0f}
+    .size = sbx::math::vector2{64.0f, 64.0f},
+    .position = sbx::math::vector2{100.0f, 100.0f}
   });
 
-  auto& sprite_transform = scene.get_component<sbx::scenes::transform>(sprite);
-  sprite_transform.set_position(sbx::math::vector3{-400.0f, 150.0f, 0.0f});
+  // auto& sprite_transform = scene.get_component<sbx::scenes::transform>(sprite);
+  // sprite_transform.set_position(sbx::math::vector3{-100.0f, -100.0f, 0.0f});
 
   // Terrain
   auto terrain = scene.create_node("Terrain");

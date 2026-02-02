@@ -363,6 +363,8 @@ public:
 
     _uniform_handler.push("viewport", graphics_module.viewport());
 
+    utility::logger<"scenes">::debug("viewport: {}", graphics_module.viewport());
+
     _uniform_handler.push("camera_position", world_position(_camera));
     _uniform_handler.push("camera_near", camera.near_plane());
     _uniform_handler.push("camera_far", camera.far_plane());

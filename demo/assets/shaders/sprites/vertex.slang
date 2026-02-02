@@ -38,40 +38,36 @@ interface render_mode {
 
 struct screen_overlay_mode : render_mode {
   static float4 compute_position(float3 local_position, sprite_data sprite) {
-    float2 screen_pos = sprite.model[3].xy;
-    
+    float2 screen_position = float2(sprite.model[0][3], sprite.model[1][3]);
+
     float2 pivot_offset = (sprite.pivot - 0.5) * 2.0;
     float2 position_2d = local_position.xy - pivot_offset;
-    
-    position_2d.x *= sprite.size.x * 0.5;
-    position_2d.y *= sprite.size.y * 0.5;
-    
-    position_2d += screen_pos;
-    
+
+    position_2d *= sprite.size * 0.5;
+    position_2d += screen_position;
+
     float2 ndc = position_2d / (scene.viewport * 0.5);
-    ndc.y = -ndc.y; // Flip Y for screen coordinates
-    
+    ndc.y = -ndc.y;
+
     return float4(ndc, 0.0, 1.0);
   }
 }; // struct screen_overlay_mode
 
 struct screen_camera_mode : render_mode {
   static float4 compute_position(float3 local_position, sprite_data sprite) {
-    float3 sprite_pos = sprite.model[3].xyz;
-    
+    float3 sprite_position = float3(sprite.model[0][3], sprite.model[1][3], sprite.model[2][3]);
+
     float2 pivot_offset = (sprite.pivot - 0.5) * 2.0;
     float2 position_2d = local_position.xy - pivot_offset;
-    
-    position_2d.x *= sprite.size.x * 0.5;
-    position_2d.y *= sprite.size.y * 0.5;
-    
-    position_2d += sprite_pos.xy;
-    
+
+    position_2d *= sprite.size * 0.5;
+    position_2d += sprite_position.xy;
+
     float2 ndc = position_2d / (scene.viewport * 0.5);
     ndc.y = -ndc.y;
-    
-    float depth = saturate((sprite_pos.z - scene.camera_near) / (scene.camera_far - scene.camera_near));
-    
+
+    float depth = saturate((sprite_position.z - scene.camera_near) / (scene.camera_far - scene.camera_near));
+
     return float4(ndc, depth, 1.0);
   }
 }; // struct screen_camera_mode

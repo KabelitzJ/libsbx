@@ -63,7 +63,7 @@ fs_out main(fs_in input) {
 
   float4 albedo = get_albedo(input, sprite);
 
-  clip(albedo.a - 0.9f);
+  clip(albedo.a - 0.9);
 
   float3 emissive = get_emissive(input, sprite);
 

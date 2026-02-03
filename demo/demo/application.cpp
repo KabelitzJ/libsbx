@@ -27,6 +27,7 @@
 #include <libsbx/animations/animations_module.hpp>
 
 #include <libsbx/sprites/sprite_subrenderer.hpp>
+#include <libsbx/particles/particle_emitter.hpp>
 
 #include <libsbx/audio/audio_module.hpp>
 
@@ -140,6 +141,26 @@ application::application()
   auto& transform = scene.get_component<sbx::scenes::transform>(terrain);
   transform.set_position(sbx::math::vector3{100.0f, 0.5f, 100.0f});
   transform.set_scale(sbx::math::vector3{400.0f, 0.5f, 400.0f});
+
+  auto fire = scene.create_node("Fire");
+
+  auto& fire_emitter = scene.add_component<sbx::particles::particle_emitter>(fire);
+  fire_emitter.max_particles = 1000;
+  fire_emitter.emission_rate = 50.0f;
+  fire_emitter.emission_shape_min = sbx::math::vector3{-0.2f, 0.0f, -0.2f};
+  fire_emitter.emission_shape_max = sbx::math::vector3{0.2f, 0.0f, 0.2f};
+  fire_emitter.initial_speed = sbx::math::vector2{1.0f, 3.0f};
+  fire_emitter.initial_lifetime = sbx::math::vector2{0.5f, 1.5f};
+  fire_emitter.initial_size = sbx::math::vector2{0.1f, 0.3f};
+  fire_emitter.initial_color = sbx::math::color{1.0f, 0.5f, 0.0f, 1.0f};
+  fire_emitter.gravity = sbx::math::vector3{0.0f, 2.0f, 0.0f};
+  fire_emitter.drag = 0.5f;
+  fire_emitter.end_color = sbx::math::color{1.0f, 0.0f, 0.0f, 0.0f};
+  fire_emitter.end_size_scale = 0.0f;
+  fire_emitter.texture = scene.get_image("helmet_albedo");
+
+  auto& fire_transform = scene.get_component<sbx::scenes::transform>(fire);
+  fire_transform.set_position(sbx::math::vector3{0.0f, 15.0f, 0.0f});
 
   // Fox
   auto& animations_module = sbx::core::engine::get_module<sbx::animations::animations_module>();

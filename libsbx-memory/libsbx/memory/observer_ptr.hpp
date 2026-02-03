@@ -181,7 +181,7 @@ constexpr auto make_observer(Pointer& value) noexcept -> observer_ptr<Type> {
 template<typename Type>
 struct std::hash<sbx::memory::observer_ptr<Type>> {
   constexpr auto operator()(const sbx::memory::observer_ptr<Type>& value) const noexcept -> std::size_t {
-    return std::hash<Type*>{}(value.get());
+    return std::hash<std::uintptr_t>{}(reinterpret_cast<std::uintptr_t>(value.get()));
   }
 };
 

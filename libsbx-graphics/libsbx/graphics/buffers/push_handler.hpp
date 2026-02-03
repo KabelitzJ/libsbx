@@ -29,6 +29,11 @@ public:
 	auto push(const Type& object, std::size_t size, std::size_t offset) -> void;
 
   template<typename Type>
+	auto push(const Type& object) -> void {
+    push(object, sizeof(Type), 0u);
+  }
+
+  template<typename Type>
 	auto push(const std::string& uniform_name, const Type& object, std::size_t size = 0) -> void;
 
   // auto update(const std::optional<shader::uniform_block>& uniform_block) -> bool;

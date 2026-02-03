@@ -14,6 +14,8 @@
 
 #include <libsbx/core/engine.hpp>
 
+#include <libsbx/memory/observer_ptr.hpp>
+
 #include <libsbx/graphics/graphics_module.hpp>
 #include <libsbx/graphics/subrenderer.hpp>
 #include <libsbx/graphics/pipeline/pipeline.hpp>
@@ -33,6 +35,7 @@
 #include <libsbx/animations/animator.hpp>
 
 #include <libsbx/animations/skinned_mesh_material_draw_list.hpp>
+#include <libsbx/animations/skinning_task.hpp>
 
 namespace sbx::animations {
 
@@ -50,7 +53,7 @@ class skinned_mesh_material_subrenderer final : public graphics::subrenderer {
 
 public:
 
-  skinned_mesh_material_subrenderer(const std::vector<graphics::attachment_description>& attachments, const std::filesystem::path& base_pipeline, const skinned_mesh_material_draw_list::bucket bucket, const graphics::storage_buffer_handle skinned_vertex_buffer);
+  skinned_mesh_material_subrenderer(const std::vector<graphics::attachment_description>& attachments, const std::filesystem::path& base_pipeline, const skinned_mesh_material_draw_list::bucket bucket, memory::observer_ptr<const skinning_task> skinning_task);
 
   ~skinned_mesh_material_subrenderer() override;
 
@@ -91,7 +94,7 @@ private:
   std::filesystem::path _base_pipeline;
   skinned_mesh_material_draw_list::bucket _bucket;
 
-  graphics::storage_buffer_handle _skinned_vertex_buffer;
+  memory::observer_ptr<const skinning_task> _skinning_task;
 
   inline static std::unordered_map<models::material_key, pipeline_data, models::material_key_hash> _pipeline_cache{};
 

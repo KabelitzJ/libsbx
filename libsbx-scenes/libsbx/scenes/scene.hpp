@@ -370,8 +370,15 @@ public:
 
     const auto& camera_transform = get_component<scenes::transform>(_camera);
 
-    _uniform_handler.push("camera_right", camera_transform.right());
-    _uniform_handler.push("camera_up", camera_transform.up());
+    const auto camera_rotation = math::matrix_cast<math::matrix4x4>(world_rotation(_camera));
+    const auto camera_right = math::vector3{camera_rotation[0]};
+    const auto camera_up = math::vector3{camera_rotation[1]};
+
+    _uniform_handler.push("camera_right", camera_right);
+    _uniform_handler.push("camera_up", camera_up);
+
+    utility::logger<"scenes">::debug("camera right: {}", camera_right);
+    utility::logger<"scenes">::debug("camera up: {}", camera_up);
 
     const auto csm = _build_csm();
 

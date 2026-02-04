@@ -123,6 +123,7 @@ application::application()
   helmet_material.emissive.image = scene.get_image("helmet_emissive");
   helmet_material.emissive_factor = sbx::math::vector4{1, 1, 1, 0};
   helmet_material.emissive_strength = 16.0f;
+  helmet_material.alpha = sbx::models::alpha_mode::blend;
 
   scene.add_component<sbx::scenes::static_mesh>(helmet, scene.get_mesh("helmet"), scene.get_material("helmet"));
 
@@ -146,7 +147,7 @@ application::application()
 
   auto& fire_emitter = scene.add_component<sbx::particles::particle_emitter>(fire);
   fire_emitter.max_particles = 1000;
-  fire_emitter.emission_rate = 50.0f;
+  fire_emitter.emission_rate = 10.0f;
   fire_emitter.emission_shape_min = sbx::math::vector3{-0.2f, 0.0f, -0.2f};
   fire_emitter.emission_shape_max = sbx::math::vector3{0.2f, 0.0f, 0.2f};
   fire_emitter.initial_speed = sbx::math::vector2{1.0f, 3.0f};

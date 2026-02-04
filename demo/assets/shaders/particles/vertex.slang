@@ -34,62 +34,37 @@ static const float3 vertices[4] = {
 
 static const int indices[6] = { 0, 1, 2, 2, 3, 0 };
 
-float2 rotate(float2 position, float rotation) {
-  float c = cos(rotation);
-  float s = sin(rotation);
-
-  return float2(
-    position.x * c - position.y * s,
-    position.x * s + position.y * c
-  );
-}
-
-// [shader("vertex")]
-// vs_out main(vs_in input) {
-//   vs_out output;
-
-//   uint particle_index = alive_list[input.instance_id];
-//   particle particle = particles[particle_index];
-
-//   float t = particle.age / particle.lifetime;
-
-//   float4 color = lerp(particle.color, params.end_color, t);
-//   float size = particle.size.x * lerp(1.0, params.end_size_scale, t);
-
-//   int index = indices[input.vertex_id];
-//   float3 local_position = vertices[index];
-
-//   // Rotation
-//   float c = cos(particle.rotation);
-//   float s = sin(particle.rotation);
-
-//   float2 rotated = rotate(local_position.xy, particle.rotation);
-
-//   float3 world_position = particle.position + scene.camera_right * rotated.x * size + scene.camera_up * rotated.y * size;
-
-//   output.sv_position = mul(scene.projection, mul(scene.view, float4(world_position, 1.0)));
-//   output.uv = local_position.xy * 0.5 + 0.5;
-//   output.color = color;
-
-//   return output;
-// }
-
 [shader("vertex")]
 vs_out main(vs_in input) {
   vs_out output;
 
-  // Keep resources "used" so the set/binding layout stays identical.
-  uint pi = alive_list[0];
-  float keep0 = particles[pi].age * 1e-6;
-  float keep1 = scene.view[0][0] * 1e-6;
-  float keep2 = params.end_size_scale * 1e-6;
+  uint particle_index = alive_list[input.instance_id];
+  particle p = particles[particle_index];
 
-  int idx = indices[input.vertex_id];
-  float2 p = vertices[idx].xy * 0.25; // centered quad in NDC
+  float t = p.age / p.lifetime;
 
-  output.sv_position = float4(p.x + keep0 + keep1 + keep2, p.y, 0.0, 1.0);
-  output.uv = float2(0.0, 0.0);
-  output.color = float4(1.0, 0.0, 1.0, 1.0); // magenta, fully opaque
+  float4 color = lerp(p.color, params.end_color, t);
+  float size = p.size.x * lerp(1.0, params.end_size_scale, t);
+
+  int index = indices[input.vertex_id];
+  float3 local_position = vertices[index];
+
+  // Rotation
+  float c = cos(p.rotation);
+  float s = sin(p.rotation);
+  float2 rotated = float2(
+    local_position.x * c - local_position.y * s,
+    local_position.x * s + local_position.y * c
+  );
+
+  // Billboard
+  float3 world_position = p.position 
+    + scene.camera_right * rotated.x * size 
+    + scene.camera_up * rotated.y * size;
+
+  output.sv_position = mul(scene.projection, mul(scene.view, float4(world_position, 1.0)));
+  output.uv = local_position.xy * 0.5 + 0.5;
+  output.color = color;
 
   return output;
 }

@@ -76,8 +76,7 @@ auto particle_subrenderer::render(graphics::command_buffer& command_buffer) -> v
     descriptor_handler.bind_descriptors(command_buffer);
     _push_handler.bind(command_buffer);
 
-    // command_buffer.draw_indirect(indirect, 0u, 1u);
-    vkCmdDraw(command_buffer, 6, 1, 0, 0);
+    command_buffer.draw_indirect(indirect, 0u, 1u);
   }
 }
 

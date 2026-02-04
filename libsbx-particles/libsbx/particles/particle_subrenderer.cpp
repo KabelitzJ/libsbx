@@ -29,28 +29,25 @@ auto particle_subrenderer::render(graphics::command_buffer& command_buffer) -> v
   auto emitter_query = scene.query<const particle_emitter>();
 
   for (auto&& [node, emitter] : emitter_query.each()) {
-    auto particle_buf = _particle_task->particle_buffer(node);
-    auto alive_list_buf = _particle_task->alive_list_buffer(node);
-    auto indirect_buf = _particle_task->indirect_buffer(node);
+    auto particle_buffer = _particle_task->particle_buffer(node);
+    auto alive_list_buffer = _particle_task->alive_list_buffer(node);
+    auto indirect_buffer = _particle_task->indirect_buffer(node);
 
-    if (!particle_buf || !alive_list_buf || !indirect_buf) {
-      utility::logger<"particles">::debug("particle_subrenderer::render: Invalid buffers");
-      continue;
-    }
+    utility::assert_that(particle_buffer.is_valid() && alive_list_buffer.is_valid() && indirect_buffer.is_valid(), "Invalid buffer handles");
 
-    auto& particles = graphics_module.get_resource<graphics::storage_buffer>(particle_buf);
-    auto& alive_list = graphics_module.get_resource<graphics::storage_buffer>(alive_list_buf);
-    auto& indirect = graphics_module.get_resource<graphics::storage_buffer>(indirect_buf);
+    auto& particles = graphics_module.get_resource<graphics::storage_buffer>(particle_buffer);
+    auto& alive_list = graphics_module.get_resource<graphics::storage_buffer>(alive_list_buffer);
+    auto& indirect = graphics_module.get_resource<graphics::storage_buffer>(indirect_buffer);
 
-    // Get or create descriptor handler for this emitter
-    auto it = _descriptor_handlers.find(node);
+    auto entry = _descriptor_handlers.find(node);
 
-    if (it == _descriptor_handlers.end()) {
+    if (entry == _descriptor_handlers.end()) {
       auto [inserted, success] = _descriptor_handlers.emplace(node, graphics::descriptor_handler{_pipeline, 0u});
-      it = inserted;
+
+      entry = inserted;
     }
 
-    auto& descriptor_handler = it->second;
+    auto& descriptor_handler = entry->second;
 
     _pipeline.bind(command_buffer);
 
@@ -59,7 +56,7 @@ auto particle_subrenderer::render(graphics::command_buffer& command_buffer) -> v
     descriptor_handler.push("alive_list", alive_list);
 
     if (!emitter.texture.is_valid()) {
-      throw "shit";
+      throw utility::runtime_error{"Emitter node '{}' has invalid texture", scene.get_component<scenes::tag>(node)};
     }
 
     auto& texture = graphics_module.get_resource<graphics::image2d>(emitter.texture);

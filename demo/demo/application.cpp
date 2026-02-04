@@ -148,11 +148,10 @@ application::application()
 
   auto& fire_emitter = scene.add_component<sbx::particles::particle_emitter>(_fire);
   fire_emitter.max_particles = 2000;
-  fire_emitter.emission_rate = 150.0f;
-  fire_emitter.emission_shape_min = sbx::math::vector3{-0.3f, 0.0f, -0.3f};
-  fire_emitter.emission_shape_max = sbx::math::vector3{0.3f, 0.0f, 0.3f};
-  fire_emitter.initial_speed = sbx::math::vector2{2.0f, 4.0f};
-  fire_emitter.initial_lifetime = sbx::math::vector2{0.3f, 0.8f};
+  fire_emitter.emission_rate = 100.0f;
+  fire_emitter.emission_shape = sbx::math::volume{{-0.3f, 0.0f, -0.3f}, {0.3f, 0.0f, 0.3f}};
+  fire_emitter.initial_speed = sbx::math::vector2{1.0f, 4.0f};
+  fire_emitter.initial_lifetime = sbx::math::vector2{0.5f, 1.2f};
   fire_emitter.initial_size = sbx::math::vector2{0.3f, 0.6f};
   fire_emitter.initial_color = sbx::math::color{1.0f, 0.6f, 0.1f, 1.0f};
   fire_emitter.gravity = sbx::math::vector3{0.0f, 3.0f, 0.0f};

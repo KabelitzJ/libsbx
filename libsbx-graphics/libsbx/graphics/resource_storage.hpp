@@ -40,8 +40,6 @@ public:
   }
 
   constexpr auto operator==(const resource_handle& other) const noexcept -> bool {
-    // return _handle == other._handle && _generation == other._generation;
-
     return std::memcmp(this, &other, sizeof(std::uint32_t)) == 0; 
   }
 

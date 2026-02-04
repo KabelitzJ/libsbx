@@ -7,6 +7,7 @@
 #include <libsbx/math/vector2.hpp>
 #include <libsbx/math/vector3.hpp>
 #include <libsbx/math/color.hpp>
+#include <libsbx/math/volume.hpp>
 
 #include <libsbx/graphics/images/image2d.hpp>
 
@@ -28,8 +29,7 @@ struct particle_emitter {
 
   std::uint32_t max_particles{10000};
   std::float_t emission_rate{100.0f};
-  math::vector3 emission_shape_min{-1.0f, 0.0f, -1.0f};
-  math::vector3 emission_shape_max{1.0f, 0.0f, 1.0f};
+  math::volume emission_shape{{-1.0f, 0.0f, -1.0f}, {1.0f, 0.0f, 1.0f}};
   math::vector2 initial_speed{5.0f, 10.0f};
   math::vector2 initial_lifetime{1.0f, 3.0f};
   math::vector2 initial_size{0.1f, 0.5f};

@@ -7,8 +7,8 @@ namespace Demo
   public class CameraController : Behavior
   {
 
-    public float normalSpeed = 0.3f;
-    public float fastSpeed = 1.3f;
+    public float normalSpeed = 0.1f;
+    public float fastSpeed = 0.4f;
     private float _movementSpeed;
 
     public float movementTime = 10.0f;
@@ -18,7 +18,7 @@ namespace Demo
     public float rotationAmount = 1.2f;
     private Quaternion _newRotation;
 
-    public Vector3 zoomAmount = new Vector3(0, -6.0f, -6.0f);
+    public Vector3 zoomAmount = new Vector3(0, -2.0f, -2.0f);
     public Vector3 minZoom = new Vector3(0, 3.0f, 3.0f);
     public Vector3 maxZoom = new Vector3(0, 60.0f, 60.0f);
     private Vector3 _newZoom;

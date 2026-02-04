@@ -181,6 +181,32 @@ application::application()
 
   animations_module.add_animated_mesh(fox1, scene.get_mesh("fox"), scene.get_material("fox"));
 
+  auto tail = animations_module.find_skeleton_node(fox1, "b_Tail03_014");
+
+  if (tail != sbx::scenes::node::null) {
+    auto tail_emitter = scene.create_child_node(tail, "TailEmitter");
+
+    auto& tail_particle_emitter = scene.add_component<sbx::particles::particle_emitter>(tail_emitter);
+    tail_particle_emitter.max_particles = 1000;
+    tail_particle_emitter.emission_rate = 100.0f;
+    tail_particle_emitter.emission_shape = sbx::math::volume{{-0.1f, 0.0f, -0.1f}, {0.1f, 0.0f, 0.1f}};
+    tail_particle_emitter.initial_speed = sbx::math::vector2{1.0f, 2.0f};
+    tail_particle_emitter.initial_lifetime = sbx::math::vector2{0.5f, 1.0f};
+    tail_particle_emitter.initial_size = sbx::math::vector2{0.2f, 0.4f};
+    tail_particle_emitter.initial_rotation = sbx::math::vector2{0.0f, 0.0f};
+    tail_particle_emitter.initial_color = sbx::math::color{255u, 140u, 0u, 250u};
+    tail_particle_emitter.gravity = sbx::math::vector3{0.0f, 1.0f, 0.0f};
+    tail_particle_emitter.drag = 0.5f;
+    tail_particle_emitter.end_color = sbx::math::color{255u, 69u, 0u, 0u};
+    tail_particle_emitter.end_size_scale = 0.1f;
+    tail_particle_emitter.images = {
+      scene.get_image("fire")
+    };
+
+    auto & tail_emitter_transform = scene.get_component<sbx::scenes::transform>(tail_emitter);
+    tail_emitter_transform.set_position(sbx::math::vector3{0.0f, 0.0f, 0.0f});
+  }
+
   auto& fox_animator = scene.add_component<sbx::animations::animator>(fox1);
 
   fox_animator.add_state({"Walk", scene.get_animation("Walk"), true, 0.5f });

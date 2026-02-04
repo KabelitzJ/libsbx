@@ -42,13 +42,6 @@ color::color(std::uint8_t red, std::uint8_t green, std::uint8_t blue, std::uint8
   _blue{static_cast<std::float_t>(blue) / 255.0f},
   _alpha{static_cast<std::float_t>(alpha) / 255.0f} { }
 
-template<std::floating_point Type>
-color::color(Type red, Type green, Type blue, Type alpha) noexcept
-: _red{static_cast<std::float_t>(red)},
-  _green{static_cast<std::float_t>(green)},
-  _blue{static_cast<std::float_t>(blue)},
-  _alpha{static_cast<std::float_t>(alpha)} { }
-
 auto color::black() noexcept -> color {
   return color{0.0f, 0.0f, 0.0f, 1.0f};
 }

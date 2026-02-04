@@ -222,6 +222,13 @@ auto operator==(const color& lhs, const color& rhs) noexcept -> bool;
  */
 auto operator*(color lhs, const std::float_t value) -> color;
 
+template<std::floating_point Type>
+color::color(Type red, Type green, Type blue, Type alpha) noexcept
+: _red{static_cast<std::float_t>(red)},
+  _green{static_cast<std::float_t>(green)},
+  _blue{static_cast<std::float_t>(blue)},
+  _alpha{static_cast<std::float_t>(alpha)} { }
+
 } // namespace sbx::math
 
 /**

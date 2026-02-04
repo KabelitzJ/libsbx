@@ -150,7 +150,7 @@ application::application()
 
   auto& rune0_emitter = scene.add_component<sbx::particles::particle_emitter>(_rune0_emitter);
   rune0_emitter.max_particles = 2000;
-  rune0_emitter.emission_rate = 15.0f;
+  rune0_emitter.emission_rate = 50.0f;
   rune0_emitter.emission_shape = sbx::math::volume{{-2.3f, 0.0f, -2.3f}, {2.3f, 0.0f, 2.3f}};
   rune0_emitter.initial_speed = sbx::math::vector2{0.5f, 1.0f};
   rune0_emitter.initial_lifetime = sbx::math::vector2{1.5f, 3.2f};

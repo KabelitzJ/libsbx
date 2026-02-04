@@ -46,6 +46,8 @@ private:
 
   sbx::math::angle _rotation;
 
+  sbx::scenes::node _fire;
+
   sbx::graphics::image2d_handle _brdf;
   sbx::graphics::cube_image2d_handle _irradiance;
   sbx::graphics::cube_image2d_handle _prefiltered;

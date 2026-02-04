@@ -6,11 +6,12 @@
 struct fs_in {
   [[vk::location(0)]] float2 uv : UV;
   [[vk::location(1)]] float4 color : COLOR;
+  float4 sv_position : SV_Position;
 }; // struct fs_in
 
 struct fs_out {
-  float4 color : SV_Target0;
-  float4 brightness : SV_Target1;
+  float4 accum : SV_Target0;
+  float revealage : SV_Target1;
 }; // struct fs_out
 
 [[vk::binding(0, 0)]]
@@ -22,25 +23,26 @@ Sampler2D<float4> image;
 [[vk::push_constant]]
 ConstantBuffer<render_params> params;
 
-static const float bloom_threshold = 1.0;
-
 [shader("fragment")]
 fs_out main(fs_in input) {
   fs_out output;
 
-  float4 sampled_color = float4(0, 0, 0, 1);
+  float4 sampled = image.Sample(input.uv);
+  float4 albedo = sampled * input.color;
 
-  sampled_color = image.Sample(input.uv);
+  if (albedo.a <= 0.001) {
+    discard;
+  }
 
-  float4 color = sampled_color * input.color;
+  float alpha = clamp(albedo.a, 0.01, 0.99);
 
-  // clip(color.a - 0.9);
+  float w_alpha = pow(min(1.0, alpha * 10.0) + 0.01, 3.0);
+  float w_depth = pow(1.0 - input.sv_position.z * 0.9, 3.0);
 
-  output.color = color;
+  float weight = clamp(w_alpha * 1e8 * w_depth, 1e-2, 3e3);
 
-  float brightness = dot(output.color.rgb, float3(0.2126, 0.7152, 0.0722));
-
-  output.brightness = (brightness > bloom_threshold) ? float4(output.color.rgb, 1.0) : float4(0.0, 0.0, 0.0, 1.0);
+  output.accum = float4(albedo.rgb * albedo.a, albedo.a) * weight;
+  output.revealage = albedo.a;
 
   return output;
 }

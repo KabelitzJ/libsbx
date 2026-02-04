@@ -172,7 +172,6 @@ renderer::renderer()
     auto pass = context.graphics_pass("deferred");
 
     pass.depends_on(skinning_pass);
-    // pass.depends_on(particles_pass);
 
     pass.writes(depth, sbx::graphics::attachment_load_operation::clear);
     pass.writes(albedo, sbx::graphics::attachment_load_operation::clear);
@@ -189,8 +188,7 @@ renderer::renderer()
   auto transparency_pass = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
     auto pass = context.graphics_pass("transparency");
 
-    pass.depends_on(deferred_pass);
-    // pass.depends_on(particles_pass);
+    pass.depends_on(deferred_pass, skinning_pass, particles_pass);
 
     pass.writes(depth, sbx::graphics::attachment_load_operation::load);
     pass.writes(accum, sbx::graphics::attachment_load_operation::clear);
@@ -204,7 +202,6 @@ renderer::renderer()
     auto pass = context.graphics_pass("resolve");
 
     pass.depends_on(deferred_pass, transparency_pass, shadow0_pass, shadow1_pass, shadow2_pass, shadow3_pass);
-    pass.depends_on(particles_pass);
 
     pass.reads(albedo, position, normal, material, emissive, accum, revealage, shadow0, shadow1, shadow2, shadow3);
 
@@ -345,6 +342,7 @@ renderer::renderer()
   // Transparency pass
   add_subrenderer<sbx::models::static_mesh_material_subrenderer>(transparency_pass, "res://shaders/deferred_pbr_material", sbx::models::static_mesh_material_draw_list::bucket::transparent);
   add_subrenderer<sbx::animations::skinned_mesh_material_subrenderer>(transparency_pass, "res://shaders/deferred_pbr_material", sbx::animations::skinned_mesh_material_draw_list::bucket::transparent, sbx::memory::make_observer(skinning_task));
+  add_subrenderer<sbx::particles::particle_subrenderer>(transparency_pass, "res://shaders/particles", sbx::memory::make_observer(particle_task));
 
   // Resolve pass
   auto resolve_opaque_attachment_names = std::vector<std::pair<std::string, std::string>>{
@@ -376,8 +374,6 @@ renderer::renderer()
   add_subrenderer<sbx::scenes::grid_subrenderer>(resolve_pass, "res://shaders/grid");
 
   add_subrenderer<sbx::scenes::debug_subrenderer>(resolve_pass, "res://shaders/debug");
-
-  add_subrenderer<sbx::particles::particle_subrenderer>(resolve_pass, "res://shaders/particles", sbx::memory::make_observer(particle_task));
 
   // Post-processing pass
   // add_subrenderer<sbx::post::downsample_filter>(bloom_downsample1_pass, "res://shaders/downsample", "brightness");

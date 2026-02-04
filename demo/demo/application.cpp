@@ -51,6 +51,7 @@ application::application()
   auto& audio_module = sbx::core::engine::get_module<sbx::audio::audio_module>();
 
   auto& graphics_module = sbx::core::engine::get_module<sbx::graphics::graphics_module>();
+
   graphics_module.set_renderer<demo::renderer>();
 
   auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
@@ -61,6 +62,7 @@ application::application()
 
   // Textures
   scene.add_image("base", "res://textures/base.png", sbx::graphics::format::r8g8b8a8_unorm);
+  scene.add_image("fire", "res://textures/fire/fire.png", sbx::graphics::format::r8g8b8a8_unorm);
 
   scene.add_image("rune_a_albedo", "res://textures/runes/a_albedo.png", sbx::graphics::format::r8g8b8a8_unorm);
   scene.add_image("rune_a_emissive", "res://textures/runes/a_emissive.jpg", sbx::graphics::format::r8g8b8a8_unorm);
@@ -142,24 +144,24 @@ application::application()
   transform.set_position(sbx::math::vector3{100.0f, 0.5f, 100.0f});
   transform.set_scale(sbx::math::vector3{400.0f, 0.5f, 400.0f});
 
-  auto fire = scene.create_node("Fire");
+  _fire = scene.create_node("Fire");
 
-  auto& fire_emitter = scene.add_component<sbx::particles::particle_emitter>(fire);
-  fire_emitter.max_particles = 1000;
-  fire_emitter.emission_rate = 10.0f;
-  fire_emitter.emission_shape_min = sbx::math::vector3{-0.2f, 0.0f, -0.2f};
-  fire_emitter.emission_shape_max = sbx::math::vector3{0.2f, 0.0f, 0.2f};
-  fire_emitter.initial_speed = sbx::math::vector2{5.0f, 6.0f};
-  fire_emitter.initial_lifetime = sbx::math::vector2{1.0f, 1.5f};
-  fire_emitter.initial_size = sbx::math::vector2{1.0f, 2.0f};
-  fire_emitter.initial_color = sbx::math::color{1.0f, 0.5f, 0.0f, 1.0f};
-  fire_emitter.gravity = sbx::math::vector3{0.0f, 2.0f, 0.0f};
-  fire_emitter.drag = 0.5f;
-  fire_emitter.end_color = sbx::math::color{1.0f, 0.0f, 0.0f, 0.0f};
-  fire_emitter.end_size_scale = 0.0f;
-  fire_emitter.texture = scene.get_image("helmet_albedo");
+  auto& fire_emitter = scene.add_component<sbx::particles::particle_emitter>(_fire);
+  fire_emitter.max_particles = 2000;
+  fire_emitter.emission_rate = 150.0f;
+  fire_emitter.emission_shape_min = sbx::math::vector3{-0.3f, 0.0f, -0.3f};
+  fire_emitter.emission_shape_max = sbx::math::vector3{0.3f, 0.0f, 0.3f};
+  fire_emitter.initial_speed = sbx::math::vector2{2.0f, 4.0f};
+  fire_emitter.initial_lifetime = sbx::math::vector2{0.3f, 0.8f};
+  fire_emitter.initial_size = sbx::math::vector2{0.3f, 0.6f};
+  fire_emitter.initial_color = sbx::math::color{1.0f, 0.6f, 0.1f, 1.0f};
+  fire_emitter.gravity = sbx::math::vector3{0.0f, 3.0f, 0.0f};
+  fire_emitter.drag = 1.0f;
+  fire_emitter.end_color = sbx::math::color{0.8f, 0.2f, 0.0f, 0.0f};
+  fire_emitter.end_size_scale = 0.2f;
+  fire_emitter.texture = scene.get_image("fire");
 
-  auto& fire_transform = scene.get_component<sbx::scenes::transform>(fire);
+  auto& fire_transform = scene.get_component<sbx::scenes::transform>(_fire);
   fire_transform.set_position(sbx::math::vector3{0.0f, 15.0f, 0.0f});
 
   // Fox
@@ -266,6 +268,10 @@ application::application()
 auto application::update() -> void  {
   SBX_PROFILE_SCOPE("application::update");
 
+  auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
+
+  auto& scene = scenes_module.scene();
+
   const auto delta_time = sbx::core::engine::delta_time();
 
   if (sbx::devices::input::is_key_pressed(sbx::devices::key::escape)) {
@@ -277,6 +283,16 @@ auto application::update() -> void  {
 
   if (sbx::devices::input::is_key_pressed(sbx::devices::key::space)) {
     _is_paused = !_is_paused;
+  }
+
+  if (sbx::devices::input::is_key_pressed(sbx::devices::key::j)) {
+    auto& fire_emitter = scene.get_component<sbx::particles::particle_emitter>(_fire);
+
+    if (fire_emitter.is_playing()) {
+      fire_emitter.pause();
+    } else {
+      fire_emitter.play();
+    }
   }
 }
 

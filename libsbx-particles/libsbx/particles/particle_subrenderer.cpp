@@ -20,6 +20,12 @@ auto particle_subrenderer::render(graphics::command_buffer& command_buffer) -> v
   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
   auto& scene = scenes_module.scene();
 
+  std::erase_if(_descriptor_handlers, [&](const auto& entry) {
+    const auto& [node, handler] = entry;
+
+    return !scene.is_valid(node) || !scene.has_component<particle_emitter>(node);
+  });
+
   auto emitter_query = scene.query<const particle_emitter>();
 
   for (auto&& [node, emitter] : emitter_query.each()) {

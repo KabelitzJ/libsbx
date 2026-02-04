@@ -55,6 +55,15 @@
 
 namespace sbx::scenes {
 
+struct node_destroyed_event {
+  scenes::node node;
+}; // struct node_destroyed_event
+
+template<typename Component>
+struct component_removed_event {
+  scenes::node node;
+}; // struct component_removed_event
+
 class scene {
 
   // friend class node;
@@ -595,6 +604,8 @@ private:
   directional_light _light;
 
   graphics::uniform_handler _uniform_handler;
+
+
 
   std::unordered_map<utility::hashed_string, graphics::image2d_handle> _image_ids;
   std::unordered_map<utility::hashed_string, graphics::cube_image2d_handle> _cube_image_ids;

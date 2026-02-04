@@ -17,8 +17,25 @@ particle_task::particle_task(const std::filesystem::path& path)
   _simulate_push_handler{_simulate_pipeline} { }
 
 auto particle_task::execute(graphics::command_buffer& command_buffer) -> void {
+  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
+
   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
   auto& scene = scenes_module.scene();
+
+  std::erase_if(_emitter_gpu_data, [&](const auto& entry) {
+    const auto& [node, gpu_data] = entry;
+
+    if (!scene.is_valid(node) || !scene.has_component<particle_emitter>(node)) {
+      graphics_module.remove_resource<graphics::storage_buffer>(gpu_data.particle_buffer);
+      graphics_module.remove_resource<graphics::storage_buffer>(gpu_data.counter_buffer);
+      graphics_module.remove_resource<graphics::storage_buffer>(gpu_data.alive_list_buffer);
+      graphics_module.remove_resource<graphics::storage_buffer>(gpu_data.indirect_buffer);
+
+      return true;
+    }
+  
+    return false;
+  });
 
   const auto delta_time = core::engine::delta_time().value();
 

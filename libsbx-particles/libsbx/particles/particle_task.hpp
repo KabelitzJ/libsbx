@@ -89,11 +89,7 @@ private:
     // State
     bool reset_requested{true};
 
-    emitter_gpu_data(graphics::compute_pipeline& reset_pipeline,
-                     graphics::compute_pipeline& clear_pipeline,
-                     graphics::compute_pipeline& emit_pipeline,
-                     graphics::compute_pipeline& simulate_pipeline,
-                     graphics::compute_pipeline& prepare_indirect_pipeline)
+    emitter_gpu_data(graphics::compute_pipeline& reset_pipeline, graphics::compute_pipeline& clear_pipeline, graphics::compute_pipeline& emit_pipeline, graphics::compute_pipeline& simulate_pipeline, graphics::compute_pipeline& prepare_indirect_pipeline)
     : reset_descriptor{reset_pipeline, 0u},
       clear_descriptor{clear_pipeline, 0u},
       emit_descriptor{emit_pipeline, 0u},
@@ -106,28 +102,17 @@ private:
 
   auto _initialize_buffers(emitter_gpu_data& gpu_data, const particle_emitter& emitter) -> void;
 
-  auto _build_emitter_params(const particle_emitter& emitter,
-                             const math::vector3& position,
-                             std::uint32_t emit_count,
-                             std::float_t delta_time) -> emitter_params;
+  auto _build_emitter_params(const particle_emitter& emitter, const math::vector3& position, std::uint32_t emit_count, std::float_t delta_time) -> emitter_params;
 
-  auto _dispatch_reset(graphics::command_buffer& command_buffer,
-                       emitter_gpu_data& gpu_data) -> void;
+  auto _dispatch_reset(graphics::command_buffer& command_buffer, emitter_gpu_data& gpu_data) -> void;
 
-  auto _dispatch_clear(graphics::command_buffer& command_buffer,
-                       emitter_gpu_data& gpu_data,
-                       const emitter_params& params) -> void;
+  auto _dispatch_clear(graphics::command_buffer& command_buffer, emitter_gpu_data& gpu_data, const emitter_params& params) -> void;
 
-  auto _dispatch_emit(graphics::command_buffer& command_buffer,
-                      emitter_gpu_data& gpu_data,
-                      const emitter_params& params) -> void;
+  auto _dispatch_emit(graphics::command_buffer& command_buffer, emitter_gpu_data& gpu_data, const emitter_params& params) -> void;
 
-  auto _dispatch_simulate(graphics::command_buffer& command_buffer,
-                          emitter_gpu_data& gpu_data,
-                          const emitter_params& params) -> void;
+  auto _dispatch_simulate(graphics::command_buffer& command_buffer, emitter_gpu_data& gpu_data, const emitter_params& params) -> void;
 
-  auto _dispatch_prepare_indirect(graphics::command_buffer& command_buffer,
-                                  emitter_gpu_data& gpu_data) -> void;
+  auto _dispatch_prepare_indirect(graphics::command_buffer& command_buffer, emitter_gpu_data& gpu_data) -> void;
 
   static auto _barrier_compute_to_compute(graphics::command_buffer& command_buffer) -> void;
 

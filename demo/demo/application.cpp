@@ -149,9 +149,9 @@ application::application()
   fire_emitter.emission_rate = 10.0f;
   fire_emitter.emission_shape_min = sbx::math::vector3{-0.2f, 0.0f, -0.2f};
   fire_emitter.emission_shape_max = sbx::math::vector3{0.2f, 0.0f, 0.2f};
-  fire_emitter.initial_speed = sbx::math::vector2{1.0f, 3.0f};
-  fire_emitter.initial_lifetime = sbx::math::vector2{0.5f, 1.5f};
-  fire_emitter.initial_size = sbx::math::vector2{0.1f, 0.3f};
+  fire_emitter.initial_speed = sbx::math::vector2{5.0f, 6.0f};
+  fire_emitter.initial_lifetime = sbx::math::vector2{1.0f, 1.5f};
+  fire_emitter.initial_size = sbx::math::vector2{1.0f, 2.0f};
   fire_emitter.initial_color = sbx::math::color{1.0f, 0.5f, 0.0f, 1.0f};
   fire_emitter.gravity = sbx::math::vector3{0.0f, 2.0f, 0.0f};
   fire_emitter.drag = 0.5f;

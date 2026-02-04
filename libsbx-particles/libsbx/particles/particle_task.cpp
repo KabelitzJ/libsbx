@@ -28,7 +28,6 @@ auto particle_task::execute(graphics::command_buffer& command_buffer) -> void {
     auto& gpu_data = _get_or_create_gpu_data(node, emitter);
     const auto position = scene.world_position(node);
 
-    // Handle reset request
     if (gpu_data.reset_requested) {
       auto params = _build_emitter_params(emitter, position, 0, delta_time);
       _dispatch_clear(command_buffer, gpu_data, params);
@@ -36,12 +35,10 @@ auto particle_task::execute(graphics::command_buffer& command_buffer) -> void {
       gpu_data.reset_requested = false;
     }
 
-    // 1. Reset counters
     _dispatch_reset(command_buffer, gpu_data);
     _barrier_compute_to_compute(command_buffer);
 
-    // Calculate emit count
-    std::uint32_t emit_count = 0;
+    auto emit_count = std::uint32_t{0};
 
     if (emitter.is_playing()) {
       emitter.elapsed += delta_time;
@@ -55,7 +52,6 @@ auto particle_task::execute(graphics::command_buffer& command_buffer) -> void {
       }
     }
 
-    // Add burst
     if (emitter.burst_count > 0) {
       emit_count += emitter.burst_count;
       emitter.burst_count = 0;
@@ -63,17 +59,14 @@ auto particle_task::execute(graphics::command_buffer& command_buffer) -> void {
 
     auto params = _build_emitter_params(emitter, position, emit_count, delta_time);
 
-    // 2. Emit new particles
     if (emit_count > 0) {
       _dispatch_emit(command_buffer, gpu_data, params);
       _barrier_compute_to_compute(command_buffer);
     }
 
-    // 3. Simulate existing particles
     _dispatch_simulate(command_buffer, gpu_data, params);
     _barrier_compute_to_compute(command_buffer);
 
-    // 4. Prepare indirect draw args
     _dispatch_prepare_indirect(command_buffer, gpu_data);
     _barrier_compute_to_draw(command_buffer);
   }
@@ -120,17 +113,7 @@ auto particle_task::_get_or_create_gpu_data(scenes::node node, const particle_em
     return it->second;
   }
 
-  auto [inserted, success] = _emitter_gpu_data.emplace(
-    std::piecewise_construct,
-    std::forward_as_tuple(node),
-    std::forward_as_tuple(
-      _reset_pipeline,
-      _clear_pipeline,
-      _emit_pipeline,
-      _simulate_pipeline,
-      _prepare_indirect_pipeline
-    )
-  );
+  auto [inserted, success] = _emitter_gpu_data.emplace(std::piecewise_construct, std::forward_as_tuple(node), std::forward_as_tuple( _reset_pipeline, _clear_pipeline, _emit_pipeline, _simulate_pipeline, _prepare_indirect_pipeline));
 
   _initialize_buffers(inserted->second, emitter);
 
@@ -143,33 +126,18 @@ auto particle_task::_initialize_buffers(emitter_gpu_data& gpu_data, const partic
   constexpr auto particle_size = 64u;
   const auto particle_buffer_size = emitter.max_particles * particle_size;
 
-  gpu_data.particle_buffer = graphics_module.add_resource<graphics::storage_buffer>(
-    particle_buffer_size,
-    VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
-  );
+  gpu_data.particle_buffer = graphics_module.add_resource<graphics::storage_buffer>(particle_buffer_size, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
 
-  gpu_data.counter_buffer = graphics_module.add_resource<graphics::storage_buffer>(
-    16u,
-    VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
-  );
+  gpu_data.counter_buffer = graphics_module.add_resource<graphics::storage_buffer>(16u, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
 
-  gpu_data.alive_list_buffer = graphics_module.add_resource<graphics::storage_buffer>(
-    emitter.max_particles * sizeof(std::uint32_t),
-    VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
-  );
+  gpu_data.alive_list_buffer = graphics_module.add_resource<graphics::storage_buffer>(emitter.max_particles * sizeof(std::uint32_t), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
 
-  gpu_data.indirect_buffer = graphics_module.add_resource<graphics::storage_buffer>(
-    16u,
-    VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT
-  );
+  gpu_data.indirect_buffer = graphics_module.add_resource<graphics::storage_buffer>(16u, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT);
 
   gpu_data.reset_requested = true;
 }
 
-auto particle_task::_build_emitter_params(const particle_emitter& emitter,
-                                          const math::vector3& position,
-                                          std::uint32_t emit_count,
-                                          float delta_time) -> emitter_params {
+auto particle_task::_build_emitter_params(const particle_emitter& emitter, const math::vector3& position, std::uint32_t emit_count, float delta_time) -> emitter_params {
   return emitter_params{
     .initial_color = emitter.initial_color,
     .end_color = emitter.end_color,
@@ -192,8 +160,7 @@ auto particle_task::_build_emitter_params(const particle_emitter& emitter,
   };
 }
 
-auto particle_task::_dispatch_reset(graphics::command_buffer& command_buffer,
-                                    emitter_gpu_data& gpu_data) -> void {
+auto particle_task::_dispatch_reset(graphics::command_buffer& command_buffer, emitter_gpu_data& gpu_data) -> void {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 
   auto& counters = graphics_module.get_resource<graphics::storage_buffer>(gpu_data.counter_buffer);
@@ -208,9 +175,7 @@ auto particle_task::_dispatch_reset(graphics::command_buffer& command_buffer,
   _reset_pipeline.dispatch(command_buffer, math::vector3u{1, 1, 1});
 }
 
-auto particle_task::_dispatch_clear(graphics::command_buffer& command_buffer,
-                                    emitter_gpu_data& gpu_data,
-                                    const emitter_params& params) -> void {
+auto particle_task::_dispatch_clear(graphics::command_buffer& command_buffer, emitter_gpu_data& gpu_data, const emitter_params& params) -> void {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 
   auto& particles = graphics_module.get_resource<graphics::storage_buffer>(gpu_data.particle_buffer);
@@ -226,12 +191,11 @@ auto particle_task::_dispatch_clear(graphics::command_buffer& command_buffer,
   _clear_push_handler.bind(command_buffer);
 
   const auto group_count = (params.max_particles + 255) / 256;
+
   _clear_pipeline.dispatch(command_buffer, math::vector3u{group_count, 1, 1});
 }
 
-auto particle_task::_dispatch_emit(graphics::command_buffer& command_buffer,
-                                   emitter_gpu_data& gpu_data,
-                                   const emitter_params& params) -> void {
+auto particle_task::_dispatch_emit(graphics::command_buffer& command_buffer, emitter_gpu_data& gpu_data, const emitter_params& params) -> void {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 
   auto& particles = graphics_module.get_resource<graphics::storage_buffer>(gpu_data.particle_buffer);
@@ -247,12 +211,11 @@ auto particle_task::_dispatch_emit(graphics::command_buffer& command_buffer,
   _emit_push_handler.bind(command_buffer);
 
   const auto group_count = (params.emit_count + 255) / 256;
+
   _emit_pipeline.dispatch(command_buffer, math::vector3u{group_count, 1, 1});
 }
 
-auto particle_task::_dispatch_simulate(graphics::command_buffer& command_buffer,
-                                       emitter_gpu_data& gpu_data,
-                                       const emitter_params& params) -> void {
+auto particle_task::_dispatch_simulate(graphics::command_buffer& command_buffer, emitter_gpu_data& gpu_data, const emitter_params& params) -> void {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 
   auto& particles = graphics_module.get_resource<graphics::storage_buffer>(gpu_data.particle_buffer);
@@ -272,11 +235,11 @@ auto particle_task::_dispatch_simulate(graphics::command_buffer& command_buffer,
   _simulate_push_handler.bind(command_buffer);
 
   const auto group_count = (params.max_particles + 255) / 256;
+
   _simulate_pipeline.dispatch(command_buffer, math::vector3u{group_count, 1, 1});
 }
 
-auto particle_task::_dispatch_prepare_indirect(graphics::command_buffer& command_buffer,
-                                               emitter_gpu_data& gpu_data) -> void {
+auto particle_task::_dispatch_prepare_indirect(graphics::command_buffer& command_buffer, emitter_gpu_data& gpu_data) -> void {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 
   auto& counters = graphics_module.get_resource<graphics::storage_buffer>(gpu_data.counter_buffer);

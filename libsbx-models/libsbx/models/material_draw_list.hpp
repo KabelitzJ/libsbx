@@ -3,6 +3,7 @@
 #define LIBSBX_MODELS_MATERIAL_DRAW_LIST_HPP_
 
 #include <memory_resource>
+#include <execution>
 
 #include <magic_enum/magic_enum.hpp>
 
@@ -129,11 +130,33 @@ public:
     update_buffer(_transform_data, transform_data_buffer_name);
     update_buffer(_material_data, material_data_buffer_name);
 
+    auto camer_node = scene.camera();
+    const auto camera_position = scene.world_position(camer_node);
+
     traits_type::update_shared_buffers(*this);
 
     for (auto& [key, pipeline_data] : _pipeline_data) {
       if (pipeline_data.submesh_instances.empty()) {
         continue;
+      }
+
+      for (auto& [mesh_id, submesh_vectors] : pipeline_data.submesh_instances) {
+        for (auto& instances : submesh_vectors) {
+          auto sort_function = [&](const instance_data& a, const instance_data& b) {
+            const auto& transform_a = _transform_data[a.transform_index];
+            const auto& transform_b = _transform_data[b.transform_index];
+
+            const auto position_a = math::vector3(transform_a.model[3]); 
+            const auto position_b = math::vector3(transform_b.model[3]);
+
+            const auto distance_sq_a = math::vector3::distance_squared(camera_position, position_a);
+            const auto distance_sq_b = math::vector3::distance_squared(camera_position, position_b);
+
+            return distance_sq_a < distance_sq_b;
+          };
+
+          std::sort(std::execution::par_unseq, instances.begin(), instances.end(), sort_function);
+        }
       }
 
       _build_draw_commands(key, pipeline_data);

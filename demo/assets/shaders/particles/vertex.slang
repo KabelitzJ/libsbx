@@ -25,42 +25,51 @@ StructuredBuffer<uint> alive_list;
 [[vk::push_constant]]
 ConstantBuffer<render_params> params;
 
-static const float3 vertices[4] = {
-  float3(-1.0, -1.0, 0.0),
-  float3( 1.0, -1.0, 0.0),
-  float3( 1.0,  1.0, 0.0),
-  float3(-1.0,  1.0, 0.0)
+static const float2 vertices[4] = {
+  float2(-1.0, -1.0),
+  float2( 1.0, -1.0),
+  float2( 1.0,  1.0),
+  float2(-1.0,  1.0)
 };
 
 static const int indices[6] = { 0, 1, 2, 2, 3, 0 };
+
+float2 rotate(float2 position, float rotation) {
+  float c = cos(rotation);
+  float s = sin(rotation);
+  
+  return float2(
+    position.x * c - position.y * s, 
+    position.x * s + position.y * c
+  );
+}
 
 [shader("vertex")]
 vs_out main(vs_in input) {
   vs_out output;
 
   uint particle_index = alive_list[input.instance_id];
-  particle p = particles[particle_index];
+  particle particle = particles[particle_index];
 
-  float t = p.age / p.lifetime;
+  float t = particle.age / particle.lifetime;
 
-  float4 color = lerp(p.color, params.end_color, t);
-  float size = p.size.x * lerp(1.0, params.end_size_scale, t);
+  float4 color = lerp(particle.color, params.end_color, t);
+  float size = particle.size.x * lerp(1.0, params.end_size_scale, t);
 
   int index = indices[input.vertex_id];
-  float3 local_position = vertices[index];
+  float2 local_position = vertices[index];
+
+  float3x3 inverse_view = transpose((float3x3)scene.view);
+
+  float3 camera_right = normalize(mul(inverse_view, float3(1.0, 0.0, 0.0)));
+  float3 camera_up = normalize(mul(inverse_view, float3(0.0, 1.0, 0.0)));
 
   // Rotation
-  float c = cos(p.rotation);
-  float s = sin(p.rotation);
-  float2 rotated = float2(
-    local_position.x * c - local_position.y * s,
-    local_position.x * s + local_position.y * c
-  );
+  float2 rotated = rotate(local_position, particle.rotation);
 
   // Billboard
-  float3 world_position = p.position 
-    + scene.camera_right * rotated.x * size 
-    + scene.camera_up * rotated.y * size;
+  float3 offset = camera_right * rotated.x * size + camera_up * rotated.y * size;
+  float3 world_position = particle.position + offset;
 
   output.sv_position = mul(scene.projection, mul(scene.view, float4(world_position, 1.0)));
   output.uv = local_position.xy * 0.5 + 0.5;

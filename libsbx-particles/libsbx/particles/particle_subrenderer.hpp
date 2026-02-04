@@ -21,8 +21,8 @@ namespace sbx::particles {
 class particle_subrenderer final : public graphics::subrenderer {
 
   inline static const auto definition = graphics::pipeline_definition{
-    .depth = graphics::depth::disabled,
-    .uses_transparency = false,
+    .depth = graphics::depth::read_only,
+    .uses_transparency = true,
     .rasterization_state = graphics::rasterization_state{
       .polygon_mode = graphics::polygon_mode::fill,
       .cull_mode = graphics::cull_mode::none,
@@ -32,9 +32,7 @@ class particle_subrenderer final : public graphics::subrenderer {
 
 public:
 
-  particle_subrenderer(const std::vector<graphics::attachment_description>& attachments,
-                       const std::filesystem::path& path,
-                       memory::observer_ptr<const particle_task> particle_task);
+  particle_subrenderer(const std::vector<graphics::attachment_description>& attachments, const std::filesystem::path& path, memory::observer_ptr<const particle_task> particle_task);
 
   ~particle_subrenderer() override = default;
 

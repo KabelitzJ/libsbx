@@ -269,3 +269,17 @@ blend_fs_out blend_main(fs_in input) {
   return output;
 }
 
+[shader("fragment")]
+void depth_prepass_main(fs_in input) {
+  uint global_instance = input.instance_index;
+
+  instance_data instance_data = push.instance_data_buffer[global_instance];
+  material_data material_data = push.material_data_buffer[instance_data.material_index];
+
+  float3x3 TBN = build_tbn(input);
+  float2 uv = parallax_occlusion_mapping(input, material_data, TBN);
+
+  float4 albedo = get_albedo<mask_alpha_policy>(uv, material_data);
+
+  clip(albedo.a - material_data.alpha_cutoff);
+}

@@ -377,9 +377,6 @@ public:
     _uniform_handler.push("camera_right", camera_right);
     _uniform_handler.push("camera_up", camera_up);
 
-    utility::logger<"scenes">::debug("camera right: {}", camera_right);
-    utility::logger<"scenes">::debug("camera up: {}", camera_up);
-
     const auto csm = _build_csm();
 
     _uniform_handler.push("light_spaces", csm.light_spaces);

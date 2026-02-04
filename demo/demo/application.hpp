@@ -46,7 +46,10 @@ private:
 
   sbx::math::angle _rotation;
 
-  sbx::scenes::node _fire;
+  sbx::scenes::node _rune0_emitter;
+  sbx::scenes::node _rune1_emitter;
+  sbx::scenes::node _rune2_emitter;
+  sbx::scenes::node _rune3_emitter;
 
   sbx::graphics::image2d_handle _brdf;
   sbx::graphics::cube_image2d_handle _irradiance;

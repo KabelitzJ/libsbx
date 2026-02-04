@@ -8,6 +8,7 @@
 #include <libsbx/math/vector3.hpp>
 #include <libsbx/math/color.hpp>
 #include <libsbx/math/volume.hpp>
+#include <libsbx/math/constants.hpp>
 
 #include <libsbx/graphics/images/image2d.hpp>
 
@@ -33,6 +34,7 @@ struct particle_emitter {
   math::vector2 initial_speed{5.0f, 10.0f};
   math::vector2 initial_lifetime{1.0f, 3.0f};
   math::vector2 initial_size{0.1f, 0.5f};
+  math::vector2 initial_rotation{0.0f, math::two_pi};
   math::color initial_color{1.0f, 1.0f, 1.0f, 1.0f};
 
   math::vector3 gravity{0.0f, -9.81f, 0.0f};

@@ -16,6 +16,10 @@ particle_subrenderer::particle_subrenderer(const std::vector<graphics::attachmen
   _particle_task{particle_task} { }
 
 auto particle_subrenderer::render(graphics::command_buffer& command_buffer) -> void {
+  EASY_FUNCTION();
+
+  SBX_PROFILE_SCOPE("particle_subrenderer::render");
+
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
   auto& scene = scenes_module.scene();

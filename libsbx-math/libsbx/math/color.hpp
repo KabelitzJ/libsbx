@@ -61,6 +61,8 @@ public:
    */
   color(std::uint32_t rgba) noexcept;
 
+  color(std::uint8_t red, std::uint8_t green, std::uint8_t blue, std::uint8_t alpha = 255u) noexcept;
+
   /**
    * @brief Constructs a color from individual components.
    *
@@ -69,12 +71,8 @@ public:
    * @param blue  Blue component.
    * @param alpha Alpha component.
    */
-  color(
-    std::float_t red,
-    std::float_t green,
-    std::float_t blue,
-    std::float_t alpha = 1.0f
-  ) noexcept;
+  template<std::floating_point Type>
+  color(Type red, Type green, Type blue, Type alpha = Type{1}) noexcept;
 
   /**
    * @brief Returns a black color.

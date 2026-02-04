@@ -61,12 +61,11 @@ private:
     math::vector2 initial_speed;
     math::vector2 initial_lifetime;
     math::vector2 initial_size;
+    math::vector2 initial_rotation;
     std::float_t end_size_scale;
     std::uint32_t max_particles;
     std::uint32_t emit_count;
     std::uint32_t random_seed;
-    std::uint32_t _pad0;
-    std::uint32_t _pad1;
   }; // struct emitter_params
 
   static_assert(alignof(emitter_params) == 16);

@@ -35,12 +35,11 @@ struct emitter_params {
   float2 initial_speed;
   float2 initial_lifetime;
   float2 initial_size;
+  float2 initial_rotation;
   float end_size_scale;
   uint max_particles;
   uint emit_count;
   uint random_seed;  
-  uint _pad0;
-  uint _pad1;
 }; // struct emitter_params
 
 struct render_params {

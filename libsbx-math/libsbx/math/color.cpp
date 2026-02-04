@@ -36,11 +36,18 @@ color::color(std::uint32_t rgba) noexcept
   _blue{extract_component(rgba, component::blue)},
   _alpha{extract_component(rgba, component::alpha)} { }
 
-color::color(std::float_t red, std::float_t green, std::float_t blue, std::float_t alpha) noexcept
-: _red{red},
-  _green{green},
-  _blue{blue},
-  _alpha{alpha} { }
+color::color(std::uint8_t red, std::uint8_t green, std::uint8_t blue, std::uint8_t alpha) noexcept
+: _red{static_cast<std::float_t>(red) / 255.0f},
+  _green{static_cast<std::float_t>(green) / 255.0f},
+  _blue{static_cast<std::float_t>(blue) / 255.0f},
+  _alpha{static_cast<std::float_t>(alpha) / 255.0f} { }
+
+template<std::floating_point Type>
+color::color(Type red, Type green, Type blue, Type alpha) noexcept
+: _red{static_cast<std::float_t>(red)},
+  _green{static_cast<std::float_t>(green)},
+  _blue{static_cast<std::float_t>(blue)},
+  _alpha{static_cast<std::float_t>(alpha)} { }
 
 auto color::black() noexcept -> color {
   return color{0.0f, 0.0f, 0.0f, 1.0f};

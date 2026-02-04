@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 #include <libsbx/particles/particle_task.hpp>
 
+#include <libsbx/math/random.hpp>
+
 #include <libsbx/scenes/scenes_module.hpp>
 
 namespace sbx::particles {
@@ -14,9 +16,14 @@ particle_task::particle_task(const std::filesystem::path& path)
   _prepare_indirect_pipeline{path / "prepare_indirect"},
   _clear_push_handler{_clear_pipeline},
   _emit_push_handler{_emit_pipeline},
-  _simulate_push_handler{_simulate_pipeline} { }
+  _simulate_push_handler{_simulate_pipeline},
+  _frame_seed{math::random::next<std::uint32_t>()} { }
 
 auto particle_task::execute(graphics::command_buffer& command_buffer) -> void {
+  EASY_FUNCTION();
+
+  SBX_PROFILE_SCOPE("particle_task::execute");
+
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 
   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
@@ -172,8 +179,7 @@ auto particle_task::_build_emitter_params(const particle_emitter& emitter, const
     .end_size_scale = emitter.end_size_scale,
     .max_particles = emitter.max_particles,
     .emit_count = emit_count,
-    .random_seed = _frame_seed++,
-    ._pad0 = 0
+    .random_seed = _frame_seed++
   };
 }
 

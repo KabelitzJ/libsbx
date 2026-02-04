@@ -8,6 +8,7 @@
 #include <range/v3/all.hpp>
 
 #include <libsbx/utility/target.hpp>
+#include <libsbx/utility/memory_tracker.hpp>
 
 #include <libsbx/core/core.hpp>
 #include <libsbx/core/engine.hpp>
@@ -25,6 +26,15 @@ auto main(int argc, const char** argv) -> int {
 
   EASY_BLOCK("main");
 
+  sbx::utility::memory_tracker::instance().initialize({
+    .track_allocations = true,
+    .track_deallocations = true,
+    .capture_callstacks = false,
+    .budget_warning_threshold = 0
+  });
+
+  SBX_MEMORY_TRACKER_SCOPE("demo", "main");
+
   try {
     auto engine = std::make_unique<sbx::core::engine>(args);
 
@@ -40,6 +50,8 @@ auto main(int argc, const char** argv) -> int {
   profiler::stopListen();
 
   profiler::dumpBlocksToFile("libsbx.profile");
+
+  sbx::utility::memory_tracker::instance().shutdown();
 
   return sbx::core::exit::success;
 }

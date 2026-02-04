@@ -7,6 +7,8 @@
 #include <utility>
 #include <filesystem>
 
+#include <libsbx/utility/memory_tracker.hpp>
+
 #include <libsbx/math/vector4.hpp>
 #include <libsbx/math/color.hpp>
 
@@ -75,6 +77,8 @@ public:
   auto add_debug_frustum(const math::matrix4x4& view, const math::matrix4x4& projection, const sbx::math::color& color) -> void;
 
 private:
+
+  utility::tracker_scope _memory_tracker_scope{"scenes", "scenes_module"};
 
   std::optional<scenes::scene> _scene;
 

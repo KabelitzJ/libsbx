@@ -1,7 +1,62 @@
 // SPDX-License-Identifier: MIT
 #include <libsbx/editor/editor_subrenderer.hpp>
 
+#include <libsbx/utility/memory_tracker.hpp>
+
 namespace sbx::editor {
+
+static const char* format_bytes(size_t bytes) {
+  static char buffer[32];
+  if (bytes >= 1024 * 1024 * 1024)
+    snprintf(buffer, sizeof(buffer), "%.2f GB", bytes / (1024.0 * 1024.0 * 1024.0));
+  else if (bytes >= 1024 * 1024)
+    snprintf(buffer, sizeof(buffer), "%.2f MB", bytes / (1024.0 * 1024.0));
+  else if (bytes >= 1024)
+    snprintf(buffer, sizeof(buffer), "%.2f KB", bytes / 1024.0);
+  else
+    snprintf(buffer, sizeof(buffer), "%zu B", bytes);
+  return buffer;
+}
+
+static ImVec4 get_usage_color(float ratio) {
+  if (ratio > 0.9f) return ImVec4(1.0f, 0.2f, 0.2f, 1.0f); // Red
+  if (ratio > 0.7f) return ImVec4(1.0f, 0.8f, 0.2f, 1.0f); // Yellow
+  return ImVec4(0.2f, 0.8f, 0.2f, 1.0f); // Green
+}
+
+static void render_global_stats(const utility::memory_tracker::statistics& global) {
+  size_t current = global.current_bytes.load();
+  size_t peak = global.peak_bytes.load();
+  size_t activeAllocs = global.active_allocations.load();
+  size_t totalAllocs = global.total_allocations.load();
+  
+  // Big numbers at top
+  ImGui::BeginGroup();
+  ImGui::Text("Current Usage:");
+  ImGui::SameLine(150);
+  ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "%s", format_bytes(current));
+  
+  ImGui::Text("Peak Usage:");
+  ImGui::SameLine(150);
+  ImGui::TextColored(ImVec4(1.0f, 0.6f, 0.2f, 1.0f), "%s", format_bytes(peak));
+  
+  ImGui::Text("Active Allocations:");
+  ImGui::SameLine(150);
+  ImGui::Text("%zu", activeAllocs);
+  
+  ImGui::Text("Total Allocations:");
+  ImGui::SameLine(150);
+  ImGui::Text("%zu", totalAllocs);
+  ImGui::EndGroup();
+  
+  // Progress bar
+  if (peak > 0) {
+    float ratio = static_cast<float>(current) / static_cast<float>(peak);
+    ImGui::PushStyleColor(ImGuiCol_PlotHistogram, get_usage_color(ratio));
+    ImGui::ProgressBar(ratio, ImVec2(-1, 0), format_bytes(current));
+    ImGui::PopStyleColor();
+  }
+}
 
 editor_subrenderer::editor_subrenderer(const std::vector<sbx::graphics::attachment_description>& attachments, const std::filesystem::path& path, const std::string& attachment_name)
 : base{},
@@ -172,6 +227,13 @@ editor_subrenderer::~editor_subrenderer() {
 
 auto editor_subrenderer::render(sbx::graphics::command_buffer& command_buffer) -> void {
   SBX_PROFILE_SCOPE("editor_subrenderer::render");
+
+  auto& tracker = utility::memory_tracker::instance();
+  const auto& global = tracker.get_global_statistics();
+        
+  historyIndex = (historyIndex + 1) % HISTORY_SIZE;
+  memoryHistory[historyIndex] = static_cast<float>(global.current_bytes.load());
+  peakHistory[historyIndex] = static_cast<float>(global.peak_bytes.load());
   
   auto& graphics_module = sbx::core::engine::get_module<sbx::graphics::graphics_module>();
 
@@ -508,6 +570,35 @@ auto editor_subrenderer::_setup_windows() -> void {
 
     ImGui::End();
   }
+
+  {
+    ImGui::Begin("Memory Usage");
+
+    auto& memory_tracker = utility::memory_tracker::instance();
+    const auto& global_stats = memory_tracker.get_global_statistics();
+
+    render_global_stats(global_stats);
+        
+    ImGui::Separator();
+    
+    if (ImGui::BeginTabBar("MemoryTabs")) {
+      if (ImGui::BeginTabItem("By Module")) {
+        _render_module_view();
+        ImGui::EndTabItem();
+      }
+      if (ImGui::BeginTabItem("All Components")) {
+        _render_component_view();
+        ImGui::EndTabItem();
+      }
+      if (ImGui::BeginTabItem("History")) {
+        _render_history_view();
+        ImGui::EndTabItem();
+      }
+      ImGui::EndTabBar();
+    }
+    
+    ImGui::End();
+  }
 }
 
 auto editor_subrenderer::_save() -> void {
@@ -521,5 +612,178 @@ auto editor_subrenderer::_load() -> void {
 auto editor_subrenderer::_undo() -> void {
   // [TODO] KAJ 2024-12-02 : Implement undo
 }
+
+auto editor_subrenderer::_render_module_view() -> void {
+  auto& memory_tracker = utility::memory_tracker::instance();
+  auto modules = memory_tracker.get_module_snapshot();
+
+  std::sort(modules.begin(), modules.end(),
+    [this](const auto& a, const auto& b) {
+      int cmp = 0;
+      switch (sortColumn) {
+        case 0: cmp = strcmp(a.first.data(), b.first.data()); break;
+        case 1: cmp = static_cast<int>(a.second.current_bytes) - static_cast<int>(b.second.current_bytes); break;
+        case 2: cmp = static_cast<int>(a.second.peak_bytes) - static_cast<int>(b.second.peak_bytes); break;
+        case 3: cmp = static_cast<int>(a.second.active_allocations) - static_cast<int>(b.second.active_allocations); break;
+      }
+      return sortAscending ? (cmp < 0) : (cmp > 0);
+    });
+  
+  if (ImGui::BeginTable("ModuleTable", 5,
+      ImGuiTableFlags_Sortable | ImGuiTableFlags_RowBg | 
+      ImGuiTableFlags_BordersOuter | ImGuiTableFlags_BordersV |
+      ImGuiTableFlags_Resizable)) {
+      
+      ImGui::TableSetupColumn("Module", ImGuiTableColumnFlags_DefaultSort);
+      ImGui::TableSetupColumn("Current", ImGuiTableColumnFlags_PreferSortDescending);
+      ImGui::TableSetupColumn("Peak", ImGuiTableColumnFlags_PreferSortDescending);
+      ImGui::TableSetupColumn("Allocs", ImGuiTableColumnFlags_PreferSortDescending);
+      ImGui::TableSetupColumn("Usage", ImGuiTableColumnFlags_NoSort);
+      ImGui::TableHeadersRow();
+      
+      // Handle sorting
+      if (ImGuiTableSortSpecs* specs = ImGui::TableGetSortSpecs()) {
+        if (specs->SpecsDirty) {
+          sortColumn = specs->Specs[0].ColumnIndex;
+          sortAscending = (specs->Specs[0].SortDirection == ImGuiSortDirection_Ascending);
+          specs->SpecsDirty = false;
+        }
+      }
+      
+      size_t maxBytes = 1;
+      for (const auto& [name, stats] : modules) {
+        maxBytes = std::max(maxBytes, stats.current_bytes);
+      }
+      
+      for (const auto& [name, stats] : modules) {
+        ImGui::TableNextRow();
+        
+        ImGui::TableNextColumn();
+        // Tree node for components
+        bool open = ImGui::TreeNodeEx(name.data(), ImGuiTreeNodeFlags_SpanFullWidth);
+        
+        ImGui::TableNextColumn();
+        ImGui::Text("%s", format_bytes(stats.current_bytes));
+        
+        ImGui::TableNextColumn();
+        ImGui::Text("%s", format_bytes(stats.peak_bytes));
+        
+        ImGui::TableNextColumn();
+        ImGui::Text("%zu", stats.active_allocations);
+        
+        ImGui::TableNextColumn();
+        float ratio = static_cast<float>(stats.current_bytes) / static_cast<float>(maxBytes);
+        ImGui::PushStyleColor(ImGuiCol_PlotHistogram, get_usage_color(ratio));
+        ImGui::ProgressBar(ratio, ImVec2(-1, 14), "");
+        ImGui::PopStyleColor();
+        
+        if (open) {
+          // Show components under this module
+          auto components = memory_tracker.get_components_for_module(name);
+
+          for (const auto& [compName, compStats] : components) {
+            ImGui::TableNextRow();
+            
+            ImGui::TableNextColumn();
+            ImGui::TreeNodeEx(compName.data(),
+                ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen |
+                ImGuiTreeNodeFlags_SpanFullWidth);
+            
+            ImGui::TableNextColumn();
+            ImGui::TextDisabled("%s", format_bytes(compStats.current_bytes));
+            
+            ImGui::TableNextColumn();
+            ImGui::TextDisabled("%s", format_bytes(compStats.peak_bytes));
+            
+            ImGui::TableNextColumn();
+            ImGui::TextDisabled("%zu", compStats.active_allocations);
+            
+            ImGui::TableNextColumn();
+          }
+          ImGui::TreePop();
+        }
+    }
+    
+    ImGui::EndTable();
+  }
+}
+
+auto editor_subrenderer::_render_component_view() -> void {
+  auto& memory_tracker = utility::memory_tracker::instance();
+  auto components = memory_tracker.get_component_snapshot();
+
+  ImGui::InputText("Filter", filterBuffer, sizeof(filterBuffer));
+        
+  if (ImGui::BeginTable("ComponentTable", 4,
+    ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersOuter |
+    ImGuiTableFlags_BordersV | ImGuiTableFlags_ScrollY,
+    ImVec2(0, 300))) {
+    
+    ImGui::TableSetupColumn("Component");
+    ImGui::TableSetupColumn("Current");
+    ImGui::TableSetupColumn("Peak");
+    ImGui::TableSetupColumn("Allocs");
+    ImGui::TableSetupScrollFreeze(0, 1);
+    ImGui::TableHeadersRow();
+    
+    for (const auto& [name, stats] : components) {
+      if (filterBuffer[0] != '\0' &&
+        name.find(filterBuffer) == std::string::npos)
+        continue;
+      
+      if (stats.active_allocations == 0 && !showEmpty)
+        continue;
+      
+      ImGui::TableNextRow();
+      
+      ImGui::TableNextColumn();
+      ImGui::Text("%s", name.data());
+      
+      ImGui::TableNextColumn();
+      ImGui::Text("%s", format_bytes(stats.current_bytes));
+      
+      ImGui::TableNextColumn();
+      ImGui::Text("%s", format_bytes(stats.peak_bytes));
+      
+      ImGui::TableNextColumn();
+      ImGui::Text("%zu", stats.active_allocations);
+    }
+    
+    ImGui::EndTable();
+  }
+  
+  ImGui::Checkbox("Show Empty", &showEmpty);
+}
+
+auto editor_subrenderer::_render_history_view() -> void {
+  auto& memory_tracker = utility::memory_tracker::instance();
+  const auto& global_stats = memory_tracker.get_global_statistics();
+
+  float orderedHistory[HISTORY_SIZE];
+  float orderedPeak[HISTORY_SIZE];
+  float maxVal = 1.0f;
+  
+  for (size_t i = 0; i < HISTORY_SIZE; ++i) {
+    size_t idx = (historyIndex + 1 + i) % HISTORY_SIZE;
+    orderedHistory[i] = memoryHistory[idx];
+    orderedPeak[i] = peakHistory[idx];
+    maxVal = std::max(maxVal, orderedHistory[i]);
+  }
+  
+  ImGui::Text("Memory Usage Over Time");
+  ImGui::PlotLines("##history", orderedHistory, HISTORY_SIZE, 0, format_bytes(static_cast<size_t>(orderedHistory[HISTORY_SIZE - 1])), 0.0f, maxVal * 1.1f, ImVec2(-1, 150));
+  
+  // Simple stats
+  float avg = 0;
+  for (size_t i = 0; i < HISTORY_SIZE; ++i) avg += orderedHistory[i];
+  avg /= HISTORY_SIZE;
+  
+  ImGui::Text("Average: %s", format_bytes(static_cast<size_t>(avg)));
+  ImGui::SameLine(200);
+  ImGui::Text("Current: %s", format_bytes(global_stats.current_bytes.load()));
+  ImGui::SameLine(400);
+  ImGui::Text("Peak: %s", format_bytes(global_stats.peak_bytes.load()));
+}
+
 
 } // namespace sbx::editor

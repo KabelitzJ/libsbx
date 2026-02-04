@@ -16,6 +16,7 @@
 
 #include <libsbx/utility/hash.hpp>
 #include <libsbx/utility/concepts.hpp>
+#include <libsbx/utility/memory_tracker.hpp>
 
 #include <libsbx/signals/signal.hpp>
 
@@ -313,6 +314,8 @@ private:
 
     utility::assert_that(false, "Invalid resource type");
   }
+
+  utility::tracker_scope _memory_tracker_scope{"graphics", "graphics_module"};
 
   std::unique_ptr<graphics::instance> _instance{};
   std::unique_ptr<graphics::physical_device> _physical_device{};

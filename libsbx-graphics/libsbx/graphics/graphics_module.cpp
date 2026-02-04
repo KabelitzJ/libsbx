@@ -8,6 +8,7 @@
 #include <libsbx/utility/fast_mod.hpp>
 #include <libsbx/utility/logger.hpp>
 #include <libsbx/utility/exception.hpp>
+#include <libsbx/utility/memory_tracker.hpp>
 
 #include <libsbx/core/engine.hpp>
 

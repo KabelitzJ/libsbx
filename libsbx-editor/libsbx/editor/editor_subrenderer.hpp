@@ -84,6 +84,12 @@ private:
 
   auto _undo() -> void;
 
+  auto _render_module_view() -> void;
+
+  auto _render_component_view() -> void;
+
+  auto _render_history_view() -> void;
+
   std::string _attachment_name;
 
   pipeline _pipeline;
@@ -104,6 +110,17 @@ private:
 
   editor::themes _editor_theme;
   editor::fonts _editor_font;
+
+  static constexpr size_t HISTORY_SIZE = 256;
+  float memoryHistory[HISTORY_SIZE] = {};
+  float peakHistory[HISTORY_SIZE] = {};
+  size_t historyIndex = 0;
+
+  int sortColumn = 1;
+  bool sortAscending = false;
+
+  char filterBuffer[64] = {};
+  bool showEmpty = false;
 
 }; // class editor_subrenderer
 

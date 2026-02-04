@@ -165,8 +165,7 @@ application::application()
     scene.get_image("rune0"),
     scene.get_image("rune1"),
     scene.get_image("rune2"),
-    scene.get_image("rune3"),
-    sbx::graphics::image2d_handle{}
+    scene.get_image("rune3")
   };
 
   auto& rune0_emitter_transform = scene.get_component<sbx::scenes::transform>(_rune0_emitter);

@@ -26,12 +26,12 @@ void main(cs_in input) {
   for (uint i = 0; i < params.max_particles; ++i) {
     slot = (start + i) % params.max_particles;
 
-    if ((particles[slot].flags & flag_alive) == 0) {
+    if (!is_alive(particles[slot].flags)) {
       break;
     }
   }
 
-  if ((particles[slot].flags & flag_alive) != 0) {
+  if (is_alive(particles[slot].flags)) {
     return;
   }
 
@@ -49,7 +49,10 @@ void main(cs_in input) {
   particle.color = params.initial_color;
   particle.size = float2(random_range(seed, params.initial_size.x, params.initial_size.y));
   particle.rotation = random_range(seed, params.initial_rotation.x, params.initial_rotation.y);
-  particle.flags = flag_alive;
+  
+  uint texture_index = (params.texture_count > 0) ? (pcg_hash(seed) % params.texture_count) : 0;
+
+  particle.flags = flag_alive | (texture_index << image_index_shift);
 
   particles[slot] = particle;
 }

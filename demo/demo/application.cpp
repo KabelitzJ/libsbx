@@ -150,7 +150,7 @@ application::application()
 
   auto& rune0_emitter = scene.add_component<sbx::particles::particle_emitter>(_rune0_emitter);
   rune0_emitter.max_particles = 2000;
-  rune0_emitter.emission_rate = 10.0f;
+  rune0_emitter.emission_rate = 15.0f;
   rune0_emitter.emission_shape = sbx::math::volume{{-2.3f, 0.0f, -2.3f}, {2.3f, 0.0f, 2.3f}};
   rune0_emitter.initial_speed = sbx::math::vector2{0.5f, 1.0f};
   rune0_emitter.initial_lifetime = sbx::math::vector2{1.5f, 3.2f};
@@ -161,70 +161,16 @@ application::application()
   rune0_emitter.drag = 1.0f;
   rune0_emitter.end_color = sbx::math::color{8u, 145u, 195u, 0u};
   rune0_emitter.end_size_scale = 0.2f;
-  rune0_emitter.texture = scene.get_image("rune0");
+  rune0_emitter.images = {
+    scene.get_image("rune0"),
+    scene.get_image("rune1"),
+    scene.get_image("rune2"),
+    scene.get_image("rune3"),
+    sbx::graphics::image2d_handle{}
+  };
 
   auto& rune0_emitter_transform = scene.get_component<sbx::scenes::transform>(_rune0_emitter);
   rune0_emitter_transform.set_position(sbx::math::vector3{0.0f, 15.0f, 0.0f});
-
-  _rune1_emitter = scene.create_node("Rune1Emitter");
-
-  auto& rune1_emitter = scene.add_component<sbx::particles::particle_emitter>(_rune1_emitter);
-  rune1_emitter.max_particles = 2000;
-  rune1_emitter.emission_rate = 10.0f;
-  rune1_emitter.emission_shape = sbx::math::volume{{-2.3f, 0.0f, -2.3f}, {2.3f, 0.0f, 2.3f}};
-  rune1_emitter.initial_speed = sbx::math::vector2{0.5f, 1.0f};
-  rune1_emitter.initial_lifetime = sbx::math::vector2{1.5f, 3.2f};
-  rune1_emitter.initial_size = sbx::math::vector2{0.3f, 0.6f};
-  rune1_emitter.initial_rotation = sbx::math::vector2{0.0f, 0.0f};
-  rune1_emitter.initial_color = sbx::math::color{101u, 213u, 253u, 250u};
-  rune1_emitter.gravity = sbx::math::vector3{0.0f, 3.0f, 0.0f};
-  rune1_emitter.drag = 1.0f;
-  rune1_emitter.end_color = sbx::math::color{8u, 145u, 195u, 0u};
-  rune1_emitter.end_size_scale = 0.2f;
-  rune1_emitter.texture = scene.get_image("rune1");
-
-  auto& rune1_emitter_transform = scene.get_component<sbx::scenes::transform>(_rune1_emitter);
-  rune1_emitter_transform.set_position(sbx::math::vector3{0.0f, 15.0f, 0.0f});
-
-  _rune2_emitter = scene.create_node("Rune2Emitter");
-
-  auto& rune2_emitter = scene.add_component<sbx::particles::particle_emitter>(_rune2_emitter);
-  rune2_emitter.max_particles = 2000;
-  rune2_emitter.emission_rate = 10.0f;
-  rune2_emitter.emission_shape = sbx::math::volume{{-2.3f, 0.0f, -2.3f}, {2.3f, 0.0f, 2.3f}};
-  rune2_emitter.initial_speed = sbx::math::vector2{0.5f, 1.0f};
-  rune2_emitter.initial_lifetime = sbx::math::vector2{1.5f, 3.2f};
-  rune2_emitter.initial_size = sbx::math::vector2{0.3f, 0.6f};
-  rune2_emitter.initial_rotation = sbx::math::vector2{0.0f, 0.0f};
-  rune2_emitter.initial_color = sbx::math::color{101u, 213u, 253u, 250u};
-  rune2_emitter.gravity = sbx::math::vector3{0.0f, 3.0f, 0.0f};
-  rune2_emitter.drag = 1.0f;
-  rune2_emitter.end_color = sbx::math::color{8u, 145u, 195u, 0u};
-  rune2_emitter.end_size_scale = 0.2f;
-  rune2_emitter.texture = scene.get_image("rune2");
-
-  auto& rune2_emitter_transform = scene.get_component<sbx::scenes::transform>(_rune2_emitter);
-  rune2_emitter_transform.set_position(sbx::math::vector3{0.0f, 15.0f, 0.0f});
-
-  _rune3_emitter = scene.create_node("Rune3Emitter");
-
-  auto& rune3_emitter = scene.add_component<sbx::particles::particle_emitter>(_rune3_emitter);
-  rune3_emitter.max_particles = 2000;
-  rune3_emitter.emission_rate = 10.0f;
-  rune3_emitter.emission_shape = sbx::math::volume{{-2.3f, 0.0f, -2.3f}, {2.3f, 0.0f, 2.3f}};
-  rune3_emitter.initial_speed = sbx::math::vector2{0.5f, 1.0f};
-  rune3_emitter.initial_lifetime = sbx::math::vector2{1.5f, 3.2f};
-  rune3_emitter.initial_size = sbx::math::vector2{0.3f, 0.6f};
-  rune3_emitter.initial_rotation = sbx::math::vector2{0.0f, 0.0f};
-  rune3_emitter.initial_color = sbx::math::color{101u, 213u, 253u, 250u};
-  rune3_emitter.gravity = sbx::math::vector3{0.0f, 3.0f, 0.0f};
-  rune3_emitter.drag = 1.0f;
-  rune3_emitter.end_color = sbx::math::color{8u, 145u, 195u, 0u};
-  rune3_emitter.end_size_scale = 0.2f;
-  rune3_emitter.texture = scene.get_image("rune3");
-
-  auto& rune3_emitter_transform = scene.get_component<sbx::scenes::transform>(_rune3_emitter);
-  rune3_emitter_transform.set_position(sbx::math::vector3{0.0f, 15.0f, 0.0f});
 
   // Fox
   auto& animations_module = sbx::core::engine::get_module<sbx::animations::animations_module>();

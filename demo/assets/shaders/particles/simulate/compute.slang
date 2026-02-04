@@ -27,14 +27,14 @@ void main(cs_in input) {
 
   particle particle = particles[index];
 
-  if ((particle.flags & flag_alive) == 0) {
+  if (!is_alive(particle.flags)) {
     return;
   }
 
   particle.age += params.delta_time;
 
   if (particle.age >= particle.lifetime) {
-    particle.flags &= ~flag_alive;
+    particle.flags = set_alive(particle.flags, false);
     particles[index] = particle;
     InterlockedAdd(counter[0].dead_count, 1);
 

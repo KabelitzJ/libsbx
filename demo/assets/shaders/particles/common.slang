@@ -1,7 +1,10 @@
 #ifndef PARTICLES_COMMON_SLANG_
 #define PARTICLES_COMMON_SLANG_
 
-static const uint flag_alive = 0x01;
+static const uint flag_alive = 0x00000001;
+
+static const uint image_index_shift = 1;
+static const uint image_index_mask = 0xFFFFFFFE;
 
 struct particle {
   float4 color;
@@ -11,8 +14,24 @@ struct particle {
   float age;
   float2 size;
   float rotation;
-  uint flags;
+  uint flags; // bit 0: alive, bits 1-31: texture_index
 }; // struct particle
+
+uint get_image_index(uint flags) {
+  return flags >> image_index_shift;
+}
+
+uint set_image_index(uint flags, uint texture_index) {
+  return (flags & flag_alive) | (texture_index << image_index_shift);
+}
+
+bool is_alive(uint flags) {
+  return (flags & flag_alive) != 0;
+}
+
+uint set_alive(uint flags, bool alive) {
+  return alive ? (flags | flag_alive) : (flags & ~flag_alive);
+}
 
 struct counters {
   uint alive_count;
@@ -39,15 +58,19 @@ struct emitter_params {
   float end_size_scale;
   uint max_particles;
   uint emit_count;
-  uint random_seed;  
+  uint random_seed;
+  uint texture_count;
+  uint _pad0;
+  uint _pad1;
+  uint _pad2;
 }; // struct emitter_params
 
 struct render_params {
   float4 end_color; 
   float end_size_scale;
-  uint image_index;
   uint _pad0;
   uint _pad1;
+  uint _pad2;
 }; // struct render_params
 
 

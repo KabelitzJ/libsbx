@@ -10,6 +10,7 @@ struct vs_in {
 struct vs_out {
   [[vk::location(0)]] float2 uv : UV;
   [[vk::location(1)]] float4 color : COLOR;
+  [[vk::location(2)]] nointerpolation uint image_index : IMAGE_INDEX;
   float4 sv_position : SV_Position;
 }; // struct vs_out
 
@@ -74,6 +75,7 @@ vs_out main(vs_in input) {
   output.sv_position = mul(scene.projection, mul(scene.view, float4(world_position, 1.0)));
   output.uv = local_position.xy * 0.5 + 0.5;
   output.color = color;
+  output.image_index = get_image_index(particle.flags);
 
   return output;
 }

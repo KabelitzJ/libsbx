@@ -49,6 +49,9 @@ auto particle_task::execute(graphics::command_buffer& command_buffer) -> void {
   auto emitter_query = scene.query<particle_emitter, const scenes::transform>();
 
   for (auto&& [node, emitter, transform] : emitter_query.each()) {
+    utility::assert_that(emitter.images.size() > 0u, "Invalid particle_emitter with 0 images");
+    utility::assert_that(emitter.images, [](const auto& handle) -> bool { return handle.is_valid(); }, "Invalid image handle in particle_emitter");
+
     auto& gpu_data = _get_or_create_gpu_data(node, emitter);
     const auto position = scene.world_position(node);
 
@@ -179,7 +182,11 @@ auto particle_task::_build_emitter_params(const particle_emitter& emitter, const
     .end_size_scale = emitter.end_size_scale,
     .max_particles = emitter.max_particles,
     .emit_count = emit_count,
-    .random_seed = _frame_seed++
+    .random_seed = _frame_seed++,
+    .texture_count = static_cast<std::uint32_t>(emitter.images.size()),
+    ._pad0 = 0,
+    ._pad1 = 0,
+    ._pad2 = 0
   };
 }
 

@@ -43,7 +43,8 @@ struct particle_emitter {
   math::color end_color{1.0f, 1.0f, 1.0f, 0.0f};
   std::float_t end_size_scale{0.0f};
 
-  graphics::image2d_handle texture{};
+  // graphics::image2d_handle texture{};
+  std::vector<graphics::image2d_handle> images{};
 
   std::uint32_t burst_count{0};
 

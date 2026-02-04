@@ -66,10 +66,14 @@ private:
     std::uint32_t max_particles;
     std::uint32_t emit_count;
     std::uint32_t random_seed;
+    std::uint32_t texture_count;
+    std::uint32_t _pad0;
+    std::uint32_t _pad1;
+    std::uint32_t _pad2;
   }; // struct emitter_params
 
-  static_assert(alignof(emitter_params) == 16);
-  static_assert(sizeof(emitter_params) % 16 == 0);
+  static_assert(alignof(emitter_params) == 16u);
+  static_assert(sizeof(emitter_params) % 16u == 0u);
 
   struct emitter_gpu_data {
     // Buffers

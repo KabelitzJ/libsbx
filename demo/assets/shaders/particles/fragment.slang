@@ -6,6 +6,7 @@
 struct fs_in {
   [[vk::location(0)]] float2 uv : UV;
   [[vk::location(1)]] float4 color : COLOR;
+  [[vk::location(2)]] nointerpolation uint texture_index : TEXTURE_INDEX;
   float4 sv_position : SV_Position;
 }; // struct fs_in
 
@@ -18,7 +19,10 @@ struct fs_out {
 ConstantBuffer<sbx::common::scene_data> scene;
 
 [[vk::binding(3, 0)]]
-Sampler2D<float4> image;
+SamplerState sampler;
+
+[[vk::binding(4, 0)]]
+Texture2D<float4> images[16];
 
 [[vk::push_constant]]
 ConstantBuffer<render_params> params;
@@ -27,7 +31,7 @@ ConstantBuffer<render_params> params;
 fs_out main(fs_in input) {
   fs_out output;
 
-  float4 sampled = image.Sample(input.uv);
+  float4 sampled = images[NonUniformResourceIndex(input.texture_index)].Sample(sampler, input.uv);
   float4 albedo = sampled * input.color;
 
   if (albedo.a <= 0.001) {

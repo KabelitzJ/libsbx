@@ -24,7 +24,7 @@ auto particle_subrenderer::render(graphics::command_buffer& command_buffer) -> v
   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
   auto& scene = scenes_module.scene();
 
-  std::erase_if(_descriptor_handlers, [&](const auto& entry) {
+  std::erase_if(_descriptor_data, [&](const auto& entry) {
     const auto& [node, handler] = entry;
 
     return !scene.is_valid(node) || !scene.has_component<particle_emitter>(node);
@@ -33,6 +33,9 @@ auto particle_subrenderer::render(graphics::command_buffer& command_buffer) -> v
   auto emitter_query = scene.query<const particle_emitter>();
 
   for (auto&& [node, emitter] : emitter_query.each()) {
+    utility::assert_that(emitter.images.size() > 0u, "Invalid particle_emitter with 0 images");
+    utility::assert_that(emitter.images, [](const auto& handle) -> bool { return handle.is_valid(); }, "Invalid image handle in particle_emitter");
+
     auto particle_buffer = _particle_task->particle_buffer(node);
     auto alive_list_buffer = _particle_task->alive_list_buffer(node);
     auto indirect_buffer = _particle_task->indirect_buffer(node);
@@ -43,15 +46,16 @@ auto particle_subrenderer::render(graphics::command_buffer& command_buffer) -> v
     auto& alive_list = graphics_module.get_resource<graphics::storage_buffer>(alive_list_buffer);
     auto& indirect = graphics_module.get_resource<graphics::storage_buffer>(indirect_buffer);
 
-    auto entry = _descriptor_handlers.find(node);
+    auto entry = _descriptor_data.find(node);
 
-    if (entry == _descriptor_handlers.end()) {
-      auto [inserted, success] = _descriptor_handlers.emplace(node, graphics::descriptor_handler{_pipeline, 0u});
+    if (entry == _descriptor_data.end()) {
+      auto [inserted, success] = _descriptor_data.emplace(node, graphics::descriptor_handler{_pipeline, 0u});
 
       entry = inserted;
     }
 
-    auto& descriptor_handler = entry->second;
+    auto& [descriptor_handler, images, sampler] = entry->second;
+    images.clear();
 
     _pipeline.bind(command_buffer);
 
@@ -59,19 +63,19 @@ auto particle_subrenderer::render(graphics::command_buffer& command_buffer) -> v
     descriptor_handler.push("particles", particles);
     descriptor_handler.push("alive_list", alive_list);
 
-    if (!emitter.texture.is_valid()) {
-      throw utility::runtime_error{"Emitter node '{}' has invalid texture", scene.get_component<scenes::tag>(node)};
+    for (const auto& handle : emitter.images) {
+      images.push_back(handle);
     }
 
-    auto& texture = graphics_module.get_resource<graphics::image2d>(emitter.texture);
-    descriptor_handler.push("image", texture);
+    descriptor_handler.push("images", images);
+    descriptor_handler.push("sampler", sampler);
 
     auto params = render_params{
       .end_color = emitter.end_color,
       .end_size_scale = emitter.end_size_scale,
-      .image_index = emitter.texture.is_valid() ? 1u : 0u,
       ._pad0 = 0,
-      ._pad1 = 0
+      ._pad1 = 0,
+      ._pad2 = 0
     };
 
     _push_handler.push(params);

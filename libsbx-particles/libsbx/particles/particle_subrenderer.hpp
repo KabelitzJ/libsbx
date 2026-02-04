@@ -40,20 +40,29 @@ public:
 
 private:
 
-  struct render_params {
+  struct alignas(16) render_params {
     math::color end_color;
     float end_size_scale;
-    std::uint32_t image_index;
     std::uint32_t _pad0;
     std::uint32_t _pad1;
+    std::uint32_t _pad2;
   }; // struct render_params
+
+  struct descriptor_data {
+    graphics::descriptor_handler descriptor_handler;
+    graphics::separate_image2d_array images;
+    graphics::sampler_state sampler;
+  }; // struct descriptor_data
+
+  static_assert(alignof(render_params) == 16u);
+  static_assert(sizeof(render_params) % 16u == 0u);
 
   memory::observer_ptr<const particle_task> _particle_task;
 
   graphics::graphics_pipeline _pipeline;
   graphics::push_handler _push_handler;
 
-  std::unordered_map<scenes::node, graphics::descriptor_handler> _descriptor_handlers;
+  std::unordered_map<scenes::node, descriptor_data> _descriptor_data;
 
 }; // class particle_subrenderer
 

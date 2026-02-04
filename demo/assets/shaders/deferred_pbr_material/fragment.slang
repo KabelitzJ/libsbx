@@ -256,7 +256,7 @@ blend_fs_out blend_main(fs_in input) {
   float4 albedo = get_albedo<blend_alpha_policy>(input.uv, material_data);
 
   // Equivalent to: clamp(pow(min(1, a*10)+0.01, 3)*1e8 * pow(1 - z*0.9, 3), 1e-2, 3e3)
-  float alpha = albedo.a;
+  float alpha = clamp(albedo.a, 0.01, 0.99);
 
   float w_alpha = pow(min(1.0, alpha * 10.0) + 0.01, 3.0);
   float w_depth = pow(1.0 - input.sv_position.z * 0.9, 3.0);

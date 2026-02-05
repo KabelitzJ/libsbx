@@ -23,6 +23,18 @@
 
 namespace sbx::memory {
 
+struct is_memory_tracking_enabled {
+
+#if defined(SBX_MEMORY_TRACKING)
+  inline static constexpr auto value = (SBX_MEMORY_TRACKING != 0);
+#else
+  inline static constexpr auto value = utility::is_build_configuration_debug_v;
+#endif
+
+}; // struct is_memory_tracking_enabled
+
+inline constexpr auto is_memory_tracking_enabled_v = is_memory_tracking_enabled::value;
+
 enum class allocation_category : std::uint8_t {
   general,
   container,
@@ -340,7 +352,7 @@ using general_tracking_allocator = tracking_allocator<Type, allocation_category:
 namespace detail {
 
 template<typename Type, allocation_category Category = allocation_category::container>
-using allocator_type = std::conditional_t<utility::is_build_configuration_debug_v, tracking_allocator<Type, Category>, std::allocator<Type>>;
+using allocator_type = std::conditional_t<is_memory_tracking_enabled_v, tracking_allocator<Type, Category>, std::allocator<Type>>;
 
 [[nodiscard]] inline auto header_from_user_ptr(void* ptr) noexcept -> allocation_header* {
   if (!ptr) {
@@ -406,7 +418,7 @@ struct tracked_delete<Type[], Category> {
 }; // struct tracked_delete
 
 template<typename Type>
-using deleter_type = std::conditional_t<utility::is_build_configuration_debug_v, tracked_delete<Type>, std::default_delete<Type>>;
+using deleter_type = std::conditional_t<is_memory_tracking_enabled_v, tracked_delete<Type>, std::default_delete<Type>>;
 
 }; // namespace detail
 
@@ -429,7 +441,7 @@ using unique_ptr = std::unique_ptr<Type, detail::deleter_type<Type>>;
 
 template<typename Type, allocation_category Category = allocation_category::general, typename... Args>
 [[nodiscard]] auto make_unique(Args&&... args) -> unique_ptr<Type> {
-  if constexpr (utility::is_build_configuration_debug_v) {
+  if constexpr (is_memory_tracking_enabled_v) {
     auto allocator = tracking_allocator<Type, Category>{};
     auto* ptr = allocator.allocate(1u);
 

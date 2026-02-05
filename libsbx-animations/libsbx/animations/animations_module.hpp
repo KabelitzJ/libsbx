@@ -45,7 +45,7 @@ public:
 
     const auto& bones = skeleton.bones();
 
-    auto nodes = std::vector<scenes::node>{};
+    auto nodes = memory::vector<scenes::node>{};
     nodes.reserve(bones.size());
 
     for (auto i = 0u; i < bones.size(); ++i) {

@@ -7,6 +7,8 @@
 #include <utility>
 #include <filesystem>
 
+#include <libsbx/memory/tracking_allocator.hpp>
+
 #include <libsbx/math/vector4.hpp>
 #include <libsbx/math/color.hpp>
 
@@ -54,7 +56,7 @@ public:
 
   auto has_component_io(const std::uint32_t id) -> bool;
 
-  auto debug_lines() const -> const std::vector<line>&;
+  auto debug_lines() const -> const memory::vector<line>&;
 
   auto clear_debug_lines() -> void;
 
@@ -80,7 +82,7 @@ private:
 
   component_io_registry _component_io_registry;
 
-  std::vector<line> _debug_lines{};
+  memory::vector<line> _debug_lines{};
 
 }; // class scene_modules
 

@@ -255,7 +255,7 @@ public:
 
   auto find_attachment(const std::string& name) const -> const image2d&;
 
-  auto attachment_descriptions(const pass_handle handle) const -> std::vector<attachment_description>;
+  auto attachment_descriptions(const pass_handle handle) const -> memory::vector<attachment_description>;
 
   auto build() -> void;
 

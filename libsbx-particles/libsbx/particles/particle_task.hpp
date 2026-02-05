@@ -8,6 +8,8 @@
 
 #include <vulkan/vulkan.h>
 
+#include <libsbx/memory/tracking_allocator.hpp>
+
 #include <libsbx/core/engine.hpp>
 
 #include <libsbx/graphics/task.hpp>
@@ -134,7 +136,7 @@ private:
   graphics::push_handler _simulate_push_handler;
 
   // Per-emitter GPU data
-  std::unordered_map<scenes::node, emitter_gpu_data> _emitter_gpu_data;
+  memory::unordered_map<scenes::node, emitter_gpu_data> _emitter_gpu_data;
 
   std::uint32_t _frame_seed{0};
 

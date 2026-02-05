@@ -83,7 +83,7 @@ public:
 protected:
 
   template<typename Type, typename... Args>
-  requires (std::is_base_of_v<graphics::subrenderer, Type> && std::is_constructible_v<Type, const std::vector<sbx::graphics::attachment_description>&, Args...>)
+  requires (std::is_base_of_v<graphics::subrenderer, Type> && std::is_constructible_v<Type, const sbx::memory::vector<sbx::graphics::attachment_description>&, Args...>)
   auto add_subrenderer(const pass_handle handle, Args&&... args) -> Type& {
     utility::assert_that(handle.is_valid(), "Invalid pass handle in add_subrenderer()");
 
@@ -140,7 +140,7 @@ protected:
     _graph.build();
   }
 
-  auto attachment_descriptions(const pass_handle handle) const -> std::vector<attachment_description> {
+  auto attachment_descriptions(const pass_handle handle) const -> memory::vector<attachment_description> {
     return _graph.attachment_descriptions(handle);
   }
 

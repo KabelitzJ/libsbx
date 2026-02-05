@@ -106,7 +106,7 @@ struct static_mesh_traits {
   }
 
   template<typename Mesh, typename Emitter>
-  static auto build_draw_commands(const Mesh& mesh, std::uint32_t submesh_index, std::vector<models::instance_data>&& instances, Emitter&& emitter) -> std::uint32_t {
+  static auto build_draw_commands(const Mesh& mesh, std::uint32_t submesh_index, memory::vector<models::instance_data>&& instances, Emitter&& emitter) -> std::uint32_t {
     if (instances.empty()) {
       return 0;
     }

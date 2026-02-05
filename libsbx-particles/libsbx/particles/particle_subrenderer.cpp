@@ -9,7 +9,7 @@
 
 namespace sbx::particles {
 
-particle_subrenderer::particle_subrenderer(const std::vector<graphics::attachment_description>& attachments, const std::filesystem::path& path, memory::observer_ptr<const particle_task> particle_task)
+particle_subrenderer::particle_subrenderer(const memory::vector<graphics::attachment_description>& attachments, const std::filesystem::path& path, memory::observer_ptr<const particle_task> particle_task)
 : graphics::subrenderer{},
   _pipeline{path, attachments, definition},
   _push_handler{_pipeline},

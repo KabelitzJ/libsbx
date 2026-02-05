@@ -54,7 +54,7 @@ class gizmos_subrenderer final : public graphics::subrenderer {
 
 public:
 
-  gizmos_subrenderer(const std::vector<graphics::attachment_description>& attachments, const std::filesystem::path& path, const std::string& depth_image)
+  gizmos_subrenderer(const memory::vector<graphics::attachment_description>& attachments, const std::filesystem::path& path, const std::string& depth_image)
   : graphics::subrenderer{},
     _pipeline{path, attachments},
     _depth_image{depth_image} { }

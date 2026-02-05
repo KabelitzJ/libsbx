@@ -3,7 +3,7 @@
 
 namespace sbx::models {
 
-static_mesh_material_subrenderer::static_mesh_material_subrenderer(const std::vector<graphics::attachment_description>& attachments, const std::filesystem::path& base_pipeline, const static_mesh_material_draw_list::bucket bucket)
+static_mesh_material_subrenderer::static_mesh_material_subrenderer(const memory::vector<graphics::attachment_description>& attachments, const std::filesystem::path& base_pipeline, const static_mesh_material_draw_list::bucket bucket)
 : graphics::subrenderer{},
   _attachments{attachments},
   _base_pipeline{base_pipeline},

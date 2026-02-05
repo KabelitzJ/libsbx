@@ -11,7 +11,7 @@
 
 namespace demo {
 
-terrain_subrenderer::terrain_subrenderer(const std::vector<sbx::graphics::attachment_description>& attachments, const std::filesystem::path& path)
+terrain_subrenderer::terrain_subrenderer(const sbx::memory::vector<sbx::graphics::attachment_description>& attachments, const std::filesystem::path& path)
 : sbx::graphics::subrenderer{},
   _pipeline{path, attachments},
   _push_handler{_pipeline},

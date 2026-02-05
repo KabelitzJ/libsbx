@@ -3,6 +3,7 @@
 #define LIBSBX_PARTICLES_PARTICLE_SUBRENDERER_HPP_
 
 #include <libsbx/memory/observer_ptr.hpp>
+#include <libsbx/memory/tracking_allocator.hpp>
 
 #include <libsbx/graphics/subrenderer.hpp>
 
@@ -32,7 +33,7 @@ class particle_subrenderer final : public graphics::subrenderer {
 
 public:
 
-  particle_subrenderer(const std::vector<graphics::attachment_description>& attachments, const std::filesystem::path& path, memory::observer_ptr<const particle_task> particle_task);
+  particle_subrenderer(const memory::vector<graphics::attachment_description>& attachments, const std::filesystem::path& path, memory::observer_ptr<const particle_task> particle_task);
 
   ~particle_subrenderer() override = default;
 
@@ -62,7 +63,7 @@ private:
   graphics::graphics_pipeline _pipeline;
   graphics::push_handler _push_handler;
 
-  std::unordered_map<scenes::node, descriptor_data> _descriptor_data;
+  memory::unordered_map<scenes::node, descriptor_data> _descriptor_data;
 
 }; // class particle_subrenderer
 

@@ -14,7 +14,7 @@ class downsample_filter final : public filter {
 
 public:
 
-  downsample_filter(const std::vector<graphics::attachment_description>& attachments, const std::filesystem::path& path, const std::string& source_attachment)
+  downsample_filter(const memory::vector<graphics::attachment_description>& attachments, const std::filesystem::path& path, const std::string& source_attachment)
   : base{attachments, path, base::default_pipeline_definition},
     _source_attachment{source_attachment} { }
 

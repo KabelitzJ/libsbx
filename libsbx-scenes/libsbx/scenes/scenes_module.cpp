@@ -106,7 +106,7 @@ auto scenes_module::has_component_io(const std::uint32_t id) -> bool {
   return _component_io_registry.has(id);
 }
 
-auto scenes_module::debug_lines() const -> const std::vector<line>& {
+auto scenes_module::debug_lines() const -> const memory::vector<line>& {
   return _debug_lines;
 }
 

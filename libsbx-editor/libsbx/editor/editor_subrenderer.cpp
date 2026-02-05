@@ -117,7 +117,7 @@ static auto plot_ring_scaled(const char* label, const std::double_t* xs, const s
   ImPlot::PlotLineG(label, ring_getter, &view, static_cast<int>(count));
 }
 
-editor_subrenderer::editor_subrenderer(const std::vector<sbx::graphics::attachment_description>& attachments, const std::filesystem::path& path, const std::string& attachment_name)
+editor_subrenderer::editor_subrenderer(const memory::vector<sbx::graphics::attachment_description>& attachments, const std::filesystem::path& path, const std::string& attachment_name)
 : base{},
   _attachment_name{attachment_name},
   _pipeline{path, attachments},

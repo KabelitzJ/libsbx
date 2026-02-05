@@ -30,7 +30,7 @@ class terrain_subrenderer : public sbx::graphics::subrenderer {
     using base = sbx::graphics::graphics_pipeline;
   public:
 
-    pipeline(const std::filesystem::path& path, const std::vector<sbx::graphics::attachment_description>& attachments)
+    pipeline(const std::filesystem::path& path, const sbx::memory::vector<sbx::graphics::attachment_description>& attachments)
     : base{path, attachments, pipeline_definition} { }
 
     ~pipeline() override = default;
@@ -62,7 +62,7 @@ public:
     std::uint32_t padding1;
   }; // struct instance_data
 
-  terrain_subrenderer(const std::vector<sbx::graphics::attachment_description>& attachments, const std::filesystem::path& path);
+  terrain_subrenderer(const sbx::memory::vector<sbx::graphics::attachment_description>& attachments, const std::filesystem::path& path);
 
   ~terrain_subrenderer() override = default;
 

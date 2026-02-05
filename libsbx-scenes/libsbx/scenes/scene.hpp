@@ -23,6 +23,8 @@
 #include <libsbx/utility/hashed_string.hpp>
 #include <libsbx/utility/iterator.hpp>
 
+#include <libsbx/memory/tracking_allocator.hpp>
+
 #include <libsbx/containers/octree.hpp>
 
 #include <libsbx/ecs/registry.hpp>
@@ -593,7 +595,7 @@ private:
 
   auto _ensure_world(const node_type node) -> const scenes::global_transform&;
 
-  std::unordered_map<math::uuid, node_type> _nodes;
+  memory::unordered_map<math::uuid, node_type> _nodes;
 
   registry_type _registry;
   node_type _root;
@@ -607,16 +609,16 @@ private:
 
 
 
-  std::unordered_map<utility::hashed_string, graphics::image2d_handle> _image_ids;
-  std::unordered_map<utility::hashed_string, graphics::cube_image2d_handle> _cube_image_ids;
-  std::unordered_map<utility::hashed_string, math::uuid> _mesh_ids;
-  std::unordered_map<utility::hashed_string, math::uuid> _animation_ids;
-  std::unordered_map<utility::hashed_string, math::uuid> _materials_ids;
+  memory::unordered_map<utility::hashed_string, graphics::image2d_handle> _image_ids;
+  memory::unordered_map<utility::hashed_string, graphics::cube_image2d_handle> _cube_image_ids;
+  memory::unordered_map<utility::hashed_string, math::uuid> _mesh_ids;
+  memory::unordered_map<utility::hashed_string, math::uuid> _animation_ids;
+  memory::unordered_map<utility::hashed_string, math::uuid> _materials_ids;
 
-  std::unordered_map<graphics::image2d_handle, assets::asset_metadata> _image_metadata;
-  std::unordered_map<graphics::cube_image2d_handle, assets::asset_metadata> _cube_image_metadata;
-  std::unordered_map<math::uuid, assets::asset_metadata> _mesh_metadata;
-  std::unordered_map<math::uuid, assets::asset_metadata> _material_metadata;
+  memory::unordered_map<graphics::image2d_handle, assets::asset_metadata> _image_metadata;
+  memory::unordered_map<graphics::cube_image2d_handle, assets::asset_metadata> _cube_image_metadata;
+  memory::unordered_map<math::uuid, assets::asset_metadata> _mesh_metadata;
+  memory::unordered_map<math::uuid, assets::asset_metadata> _material_metadata;
 
 }; // class scene
 

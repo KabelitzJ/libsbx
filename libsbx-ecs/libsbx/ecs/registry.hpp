@@ -21,6 +21,7 @@
 
 #include <libsbx/memory/concepts.hpp>
 #include <libsbx/memory/observer_ptr.hpp>
+#include <libsbx/memory/tracking_allocator.hpp>
 
 #include <libsbx/containers/dense_map.hpp>
 
@@ -334,7 +335,7 @@ private:
 
 }; // class basic_registry
 
-using registry = basic_registry<entity>;
+using registry = basic_registry<entity, memory::allocator_type<entity>>;
 
 } // namespace sbx::ecs
 

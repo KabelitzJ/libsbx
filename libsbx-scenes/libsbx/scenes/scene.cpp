@@ -47,7 +47,7 @@ scene::scene(const std::filesystem::path& path)
   const auto& root_id = add_component<scenes::id>(_root);
   _nodes.insert({root_id, _root});
 
-  add_component<scenes::relationship>(_root, node_type::null);
+  add_component<scenes::relationship>(_root, scenes::node::null);
   add_component<scenes::transform>(_root);
   add_component<scenes::tag>(_root, "ROOT");
   add_component<scenes::global_transform>(_root);
@@ -90,7 +90,7 @@ scene::scene(const std::filesystem::path& path)
   _load_nodes(scene["nodes"]);
 }
 
-auto scene::create_child_node(const node_type parent, const std::string& tag, const scenes::transform& transform) -> node_type {
+auto scene::create_child_node(const scenes::node parent, const std::string& tag, const scenes::transform& transform) -> scenes::node {
   auto node = _registry.create();
 
   const auto& id = add_component<scenes::id>(node);
@@ -109,12 +109,12 @@ auto scene::create_child_node(const node_type parent, const std::string& tag, co
   return node;
 }
 
-auto scene::create_node(const std::string& tag, const scenes::transform& transform) -> node_type {
+auto scene::create_node(const std::string& tag, const scenes::transform& transform) -> scenes::node {
   return create_child_node(_root, tag, transform);
 }
 
-auto scene::destroy_node(const node_type node) -> void {
-  auto stack = std::vector<std::pair<node_type, bool>>{};
+auto scene::destroy_node(const scenes::node node) -> void {
+  auto stack = std::vector<std::pair<scenes::node, bool>>{};
   stack.reserve(32u);
 
   stack.emplace_back(node, false);
@@ -123,7 +123,7 @@ auto scene::destroy_node(const node_type node) -> void {
     auto [current_node, visited] = stack.back();
     stack.pop_back();
 
-    if (current_node == node_type::null) {
+    if (current_node == scenes::node::null) {
       continue;
     }
 
@@ -146,13 +146,13 @@ auto scene::destroy_node(const node_type node) -> void {
   }
 }
 
-auto scene::_ensure_world(const node_type node) -> const scenes::global_transform& {
+auto scene::_ensure_world(const scenes::node node) -> const scenes::global_transform& {
   EASY_FUNCTION();
 
-  auto chain = utility::make_array<node_type, 32u>(node_type::null);
+  auto chain = utility::make_array<scenes::node, 32u>(scenes::node::null);
   auto chain_size = std::uint32_t{0};
 
-  for (auto current = node; current != node_type::null;) {
+  for (auto current = node; current != scenes::node::null;) {
     chain[chain_size++] = current;
 
     const auto& relationship = get_component<scenes::relationship>(current);
@@ -189,35 +189,35 @@ auto scene::_ensure_world(const node_type node) -> const scenes::global_transfor
   return get_component<scenes::global_transform>(node);
 }
 
-auto scene::world_transform(const node_type node) -> math::matrix4x4 {
+auto scene::world_transform(const scenes::node node) -> math::matrix4x4 {
   EASY_FUNCTION();
 
   return _ensure_world(node).model;
 }
 
-auto scene::world_normal(const node_type node) -> math::matrix4x4 {
+auto scene::world_normal(const scenes::node node) -> math::matrix4x4 {
   EASY_FUNCTION();
 
   return _ensure_world(node).normal;
 }
 
-auto scene::parent_transform(const node_type node) -> math::matrix4x4 {
+auto scene::parent_transform(const scenes::node node) -> math::matrix4x4 {
   EASY_FUNCTION();
 
   const auto& relationship = get_component<scenes::relationship>(node);
 
-  return (relationship.parent() != node_type::null) ? world_transform(relationship.parent()) : math::matrix4x4::identity;
+  return (relationship.parent() != scenes::node::null) ? world_transform(relationship.parent()) : math::matrix4x4::identity;
 }
 
-auto scene::world_position(const node_type node) -> math::vector3 {
+auto scene::world_position(const scenes::node node) -> math::vector3 {
   return math::vector3{world_transform(node)[3]};
 }
 
-auto scene::world_rotation(const node_type node) -> math::quaternion {
+auto scene::world_rotation(const scenes::node node) -> math::quaternion {
   return math::quaternion{math::matrix4x4::rotation_basis(world_transform(node))};
 }
 
-auto scene::world_scale(const node_type node) -> math::vector3 {
+auto scene::world_scale(const scenes::node node) -> math::vector3 {
   const auto world = world_transform(node);
 
   return math::vector3{
@@ -227,7 +227,7 @@ auto scene::world_scale(const node_type node) -> math::vector3 {
   };
 }
 
-auto scene::make_child_of(const node_type node, const node_type parent) -> void {
+auto scene::make_child_of(const scenes::node node, const scenes::node parent) -> void {
   if (node == parent) {
     return;
   }
@@ -240,7 +240,7 @@ auto scene::make_child_of(const node_type node, const node_type parent) -> void 
 
   auto& new_parent_relationship = get_component<scenes::relationship>(parent);
 
-  if (node_relationship.parent() != node_type::null) {
+  if (node_relationship.parent() != scenes::node::null) {
     auto& old_parent_relationship = get_component<scenes::relationship>(node_relationship.parent());
 
     old_parent_relationship.remove_child(node);
@@ -278,7 +278,7 @@ auto scene::save(const std::filesystem::path& path)-> void {
   emitter << YAML::Key << "nodes";
   emitter << YAML::Value << YAML::BeginSeq;
 
-  for (const auto node : _registry.view<const node_type>()) {
+  for (const auto node : _registry.view<const scenes::node>()) {
     _save_node(emitter, node);
   }
 
@@ -409,7 +409,7 @@ auto scene::scene::_save_textures(YAML::Emitter& emitter) -> void {
   emitter << YAML::EndMap;
 }
 
-auto scene::_save_node(YAML::Emitter& emitter, const node_type node) -> void {
+auto scene::_save_node(YAML::Emitter& emitter, const scenes::node node) -> void {
   if (node == _root) {
     return;
   }
@@ -443,7 +443,7 @@ auto scene::_save_node(YAML::Emitter& emitter, const node_type node) -> void {
   emitter << YAML::EndMap;
 }
 
-auto scene::_save_components(YAML::Emitter& emitter, const node_type node) -> void {
+auto scene::_save_components(YAML::Emitter& emitter, const scenes::node node) -> void {
   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
 
   
@@ -487,7 +487,7 @@ auto scene::_save_components(YAML::Emitter& emitter, const node_type node) -> vo
 
   // // We maybe dont need to store children as we can resolve dependencies by the parent alone
   // emitter << YAML::Key << "type" << YAML::Value << "hierarchy";
-  // emitter << YAML::Key << "parent" << YAML::Value << ((node != _root && relationship.parent() != node_type::null) ? get_component<scenes::id>(relationship.parent()).value() : math::uuid::null().value());
+  // emitter << YAML::Key << "parent" << YAML::Value << ((node != _root && relationship.parent() != scenes::node::null) ? get_component<scenes::id>(relationship.parent()).value() : math::uuid::null().value());
 
   // emitter << YAML::EndMap;
 

@@ -989,7 +989,9 @@ auto editor_subrenderer::_setup_windows() -> void {
         ImGui::Separator();
 
         if (selected_valid) {
-          ImGui::Text("Selected category: %s", memory::to_string(selected_category).data());
+          auto name = memory::to_string(selected_category);
+
+          ImGui::Text("Selected category: %s", name.data());
         } else {
           ImGui::Text("Selected category: None");
         }

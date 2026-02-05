@@ -349,10 +349,11 @@ template<typename LhsType, allocation_category LhsCategory, typename RhsType, al
 template<typename Type>
 using general_tracking_allocator = tracking_allocator<Type, allocation_category::general>;
 
-namespace detail {
-
 template<typename Type, allocation_category Category = allocation_category::container>
 using allocator_type = std::conditional_t<is_memory_tracking_enabled_v, tracking_allocator<Type, Category>, std::allocator<Type>>;
+
+namespace detail {
+
 
 [[nodiscard]] inline auto header_from_user_ptr(void* ptr) noexcept -> allocation_header* {
   if (!ptr) {
@@ -423,18 +424,18 @@ using deleter_type = std::conditional_t<is_memory_tracking_enabled_v, tracked_de
 }; // namespace detail
 
 template<typename Type>
-using vector = std::vector<Type, detail::allocator_type<Type>>;
+using vector = std::vector<Type, allocator_type<Type>>;
 
 template<typename Type>
-using list = std::list<Type, detail::allocator_type<Type>>;
+using list = std::list<Type, allocator_type<Type>>;
 
 template<typename Key, typename Value, typename Compare = std::less<Key>>
-using map = std::map<Key, Value, Compare, detail::allocator_type<std::pair<const Key, Value>>>;
+using map = std::map<Key, Value, Compare, allocator_type<std::pair<const Key, Value>>>;
 
 template<typename Key, typename Value, typename Hash = std::hash<Key>, typename KeyEqual = std::equal_to<Key>>
-using unordered_map = std::unordered_map<Key, Value, Hash, KeyEqual, detail::allocator_type<std::pair<const Key, Value>>>;
+using unordered_map = std::unordered_map<Key, Value, Hash, KeyEqual, allocator_type<std::pair<const Key, Value>>>;
 
-using string = std::basic_string<char, std::char_traits<char>, detail::allocator_type<char, allocation_category::string>>;
+using string = std::basic_string<char, std::char_traits<char>, allocator_type<char, allocation_category::string>>;
 
 template<typename Type>
 using unique_ptr = std::unique_ptr<Type, detail::deleter_type<Type>>;

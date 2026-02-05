@@ -79,8 +79,7 @@ class scene {
 
 public:
 
-  using node_type = node;
-  using registry_type = ecs::basic_registry<node_type>;
+  using registry_type = ecs::basic_registry<scenes::node, memory::allocator_type<scenes::node>>;
 
   // template<typename... Get, typename... Exclude>
   // using query_result = ecs::basic_view
@@ -95,35 +94,35 @@ public:
 
   virtual ~scene() = default;
 
-  auto create_child_node(const node_type parent, const std::string& tag = "Node", const scenes::transform& transform = scenes::transform{}) -> node_type;
+  auto create_child_node(const scenes::node parent, const std::string& tag = "Node", const scenes::transform& transform = scenes::transform{}) -> scenes::node;
 
-  auto create_node(const std::string& tag = "Node", const scenes::transform& transform = scenes::transform{}) -> node_type;  
+  auto create_node(const std::string& tag = "Node", const scenes::transform& transform = scenes::transform{}) -> scenes::node;  
 
-  auto destroy_node(const node_type node) -> void;
+  auto destroy_node(const scenes::node node) -> void;
 
-  auto camera() -> node_type {
+  auto camera() -> scenes::node {
     return _camera;
   }
 
-  auto set_active_camera(const node_type camera) -> void {
+  auto set_active_camera(const scenes::node camera) -> void {
     _camera = camera;
   }
 
-  auto world_transform(const node_type node) -> math::matrix4x4;
+  auto world_transform(const scenes::node node) -> math::matrix4x4;
 
-  auto world_normal(const node_type node) -> math::matrix4x4;
+  auto world_normal(const scenes::node node) -> math::matrix4x4;
 
-  auto parent_transform(const node_type node) -> math::matrix4x4;
+  auto parent_transform(const scenes::node node) -> math::matrix4x4;
 
-  auto world_position(const node_type node) -> math::vector3;
+  auto world_position(const scenes::node node) -> math::vector3;
 
-  auto world_rotation(const node_type node) -> math::quaternion;
+  auto world_rotation(const scenes::node node) -> math::quaternion;
 
-  auto world_scale(const node_type node) -> math::vector3;
+  auto world_scale(const scenes::node node) -> math::vector3;
 
-  auto make_child_of(const node_type node, const node_type parent) -> void;
+  auto make_child_of(const scenes::node node, const scenes::node parent) -> void;
 
-  auto is_valid(const node_type node) const -> bool {
+  auto is_valid(const scenes::node node) const -> bool {
     return _registry.is_valid(node);
   }
 
@@ -143,27 +142,27 @@ public:
   }
 
   template<typename Component>
-  auto has_component(const node_type node) const -> bool {
+  auto has_component(const scenes::node node) const -> bool {
     return _registry.all_of<Component>(node);
   }
 
   template<typename Component, typename... Args>
-  auto add_component(const node_type node, Args&&... args) -> decltype(auto) {
+  auto add_component(const scenes::node node, Args&&... args) -> decltype(auto) {
     return _registry.emplace<Component>(node, std::forward<Args>(args)...);
   }
 
   template<typename Component>
-  auto get_component(const node_type node) const -> const Component& {
+  auto get_component(const scenes::node node) const -> const Component& {
     return _registry.get<Component>(node);
   }
 
   template<typename Component>
-  auto get_component(const node_type node) -> Component& {
+  auto get_component(const scenes::node node) -> Component& {
     return _registry.get<Component>(node);
   }
 
   template<typename Component, typename... Args>
-  auto get_or_add_component(const node_type node, Args&&... args) -> Component& {
+  auto get_or_add_component(const scenes::node node, Args&&... args) -> Component& {
     return _registry.get_or_emplace<Component>(node, std::forward<Args>(args)...);
   }
 
@@ -171,7 +170,7 @@ public:
     return _light;
   }
 
-  auto root() -> node_type {
+  auto root() -> scenes::node {
     return _root;
   }
 
@@ -244,12 +243,12 @@ public:
   }
 
 
-  auto find_node(const scenes::id& id) -> node_type {
+  auto find_node(const scenes::id& id) -> scenes::node {
     if (auto entry = _nodes.find(id); entry != _nodes.end()) {
       return entry->second;
     } 
       
-    return node_type::null;
+    return scenes::node::null;
   }
 
   auto save(const std::filesystem::path& path)-> void;
@@ -585,21 +584,21 @@ private:
 
   auto _save_textures(YAML::Emitter& emitter) -> void;
 
-  auto _save_node(YAML::Emitter& emitter, const node_type node) -> void;
+  auto _save_node(YAML::Emitter& emitter, const scenes::node node) -> void;
   
-  auto _save_components(YAML::Emitter& emitter, const node_type node) -> void;
+  auto _save_components(YAML::Emitter& emitter, const scenes::node node) -> void;
 
   auto _load_assets(const YAML::Node& assets) -> void;
 
   auto _load_nodes(const YAML::Node& nodes) -> void;
 
-  auto _ensure_world(const node_type node) -> const scenes::global_transform&;
+  auto _ensure_world(const scenes::node node) -> const scenes::global_transform&;
 
-  memory::unordered_map<math::uuid, node_type> _nodes;
+  memory::unordered_map<math::uuid, scenes::node> _nodes;
 
   registry_type _registry;
-  node_type _root;
-  node_type _camera;
+  scenes::node _root;
+  scenes::node _camera;
 
   std::string _name;
 

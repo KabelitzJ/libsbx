@@ -18,7 +18,7 @@ public:
 
   static constexpr auto max_frames_in_flight = std::uint32_t{2};
 
-  swapchain(const memory::unique_ptr<swapchain>& old_swapchain = nullptr);
+  swapchain(const std::unique_ptr<swapchain>& old_swapchain = nullptr);
 
   ~swapchain();
 

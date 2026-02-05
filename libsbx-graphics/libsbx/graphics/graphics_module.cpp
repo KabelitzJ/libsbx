@@ -91,10 +91,10 @@ auto validate(VkResult result) -> void {
 }
 
 graphics_module::graphics_module()
-: _instance{memory::make_unique<graphics::instance>()},
-  _physical_device{memory::make_unique<graphics::physical_device>(*_instance)},
-  _logical_device{memory::make_unique<graphics::logical_device>(*_physical_device)},
-  _surface{memory::make_unique<graphics::surface>(*_instance, *_physical_device, *_logical_device)},
+: _instance{std::make_unique<graphics::instance>()},
+  _physical_device{std::make_unique<graphics::physical_device>(*_instance)},
+  _logical_device{std::make_unique<graphics::logical_device>(*_physical_device)},
+  _surface{std::make_unique<graphics::surface>(*_instance, *_physical_device, *_logical_device)},
   _allocator{*_instance, *_physical_device, *_logical_device},
   _query_pool{*_logical_device, VK_QUERY_TYPE_TIMESTAMP, 1000},
   _is_framebuffer_resized{true},
@@ -277,7 +277,7 @@ auto graphics_module::_recreate_viewport() -> void {
 auto graphics_module::_recreate_swapchain() -> void {
   _logical_device->wait_idle();
 
-  _swapchain = memory::make_unique<graphics::swapchain>(_swapchain);
+  _swapchain = std::make_unique<graphics::swapchain>(_swapchain);
 
   _recreate_per_frame_data();
   _recreate_per_image_data();

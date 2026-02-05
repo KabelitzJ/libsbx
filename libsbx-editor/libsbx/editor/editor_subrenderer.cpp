@@ -33,6 +33,90 @@ auto _get_dense_memory_flags(VkMemoryPropertyFlags flags) -> std::string {
   return result;
 }
 
+struct byte_unit {
+  std::double_t divisor_bytes;
+  const char* name;
+}; // struct byte_unit
+
+static auto choose_byte_unit(std::double_t peak_bytes) -> byte_unit {
+  static constexpr auto kib = 1024.0;
+  static constexpr auto mib = kib * kib;
+  static constexpr auto gib = mib * kib;
+  static constexpr auto tib = gib * kib;
+
+  if (peak_bytes >= tib) {
+    return byte_unit{tib, "TiB"};
+  }
+
+  if (peak_bytes >= gib) {
+    return byte_unit{gib, "GiB"};
+  }
+
+  if (peak_bytes >= mib) {
+    return byte_unit{mib, "MiB"};
+  }
+
+  if (peak_bytes >= kib) {
+    return byte_unit{kib, "KiB"};
+  }
+
+  return byte_unit{1.0, "B"};
+}
+
+static auto ring_start(std::uint32_t head, std::uint32_t count, std::uint32_t cap) -> std::uint32_t {
+  return (head + cap - count) % cap;
+}
+
+static auto ring_peak_in_window(const std::double_t* xs, const std::double_t* ys, std::uint32_t cap, std::uint32_t head, std::uint32_t count, std::double_t x_min) -> std::double_t {
+  if (count == 0u) {
+    return 0.0;
+  }
+
+  auto start = ring_start(head, count, cap);
+
+  auto peak = 0.0;
+  for (auto i = 0u; i < count; ++i) {
+    auto idx = (start + i) % cap;
+
+    if (xs[idx] >= x_min) {
+      peak = std::max(peak, std::abs(ys[idx]));
+    }
+  }
+
+  return peak;
+}
+
+struct ring_view {
+  const std::double_t* xs = nullptr;
+  const std::double_t* ys = nullptr;
+  std::uint32_t cap = 0u;
+  std::uint32_t start = 0u;
+  std::double_t y_mul = 1.0;
+}; // struct ring_view
+
+static auto ring_getter(int idx, void* data) -> ImPlotPoint {
+  const auto* v = static_cast<const ring_view*>(data);
+
+  auto i = (v->start + static_cast<std::uint32_t>(idx)) % v->cap;
+
+  return ImPlotPoint{v->xs[i], v->ys[i] * v->y_mul};
+}
+
+static auto plot_ring_scaled(const char* label, const std::double_t* xs, const std::double_t* ys, std::uint32_t cap, std::uint32_t head, std::uint32_t count, std::double_t y_mul) -> void {
+  if (count == 0u) {
+    return;
+  }
+
+  auto view = ring_view{};
+  view.xs = xs;
+  view.ys = ys;
+  view.cap = cap;
+  view.start = ring_start(head, count, cap);
+  view.y_mul = y_mul;
+
+  ImPlot::PlotLineG(label, ring_getter, &view, static_cast<int>(count));
+}
+
 editor_subrenderer::editor_subrenderer(const std::vector<sbx::graphics::attachment_description>& attachments, const std::filesystem::path& path, const std::string& attachment_name)
 : base{},
   _attachment_name{attachment_name},
@@ -665,23 +749,23 @@ auto editor_subrenderer::_setup_windows() -> void {
 
         struct ui_state {
           std::array<memory::allocation_statistics_snapshot, category_count> prev{};
-          std::array<float, category_count> ema_alloc_bytes_per_s{};
-          std::array<float, category_count> ema_allocs_per_s{};
+          std::array<std::float_t, category_count> ema_alloc_bytes_per_s{};
+          std::array<std::float_t, category_count> ema_allocs_per_s{};
           bool initialized{false};
 
           memory::allocation_statistics_snapshot prev_total{};
-          float ema_total_alloc_bytes_per_s{0.0f};
+          std::float_t ema_total_alloc_bytes_per_s{0.0f};
           bool total_initialized{false};
 
-          std::array<double, plot_capacity> t_s{};
-          std::array<double, plot_capacity> total_live_mib{};
-          std::array<double, plot_capacity> total_alloc_mib_s{};
-          std::array<double, plot_capacity> selected_live_mib{};
-          std::array<double, plot_capacity> selected_alloc_mib_s{};
+          std::array<std::double_t, plot_capacity> t_s{};
+          std::array<std::double_t, plot_capacity> total_live_mib{};
+          std::array<std::double_t, plot_capacity> total_alloc_mib_s{};
+          std::array<std::double_t, plot_capacity> selected_live_mib{};
+          std::array<std::double_t, plot_capacity> selected_alloc_mib_s{};
 
           std::size_t plot_head{0};
           std::size_t plot_count{0};
-          double time_s{0.0};
+          std::double_t time_s{0.0};
         }; // struct ui_state
 
         static auto state = ui_state{};
@@ -699,27 +783,29 @@ auto editor_subrenderer::_setup_windows() -> void {
           std::size_t delta_alloc_bytes{0};
           std::size_t delta_free_bytes{0};
 
-          float alloc_bytes_per_s{0.0f};
-          float allocs_per_s{0.0f};
+          std::float_t alloc_bytes_per_s{0.0f};
+          std::float_t allocs_per_s{0.0f};
         }; // struct row
 
-        auto dt = static_cast<float>(ImGui::GetIO().DeltaTime);
+        auto dt = static_cast<std::float_t>(ImGui::GetIO().DeltaTime);
+
         if (dt < 0.000001f) {
           dt = 0.000001f;
         }
 
         auto alpha = 0.0f;
+
         {
           auto tau = 0.25f;
           alpha = 1.0f - std::exp(-dt / tau);
         }
 
-        auto to_mib = [&](std::size_t bytes) -> double {
-          return static_cast<double>(bytes) / (1024.0 * 1024.0);
+        auto to_mib = [&](std::size_t bytes) -> std::double_t {
+          return static_cast<std::double_t>(bytes) / (1024.0 * 1024.0);
         };
 
-        auto to_mib_s = [&](float bytes_per_s) -> double {
-          return static_cast<double>(bytes_per_s) / (1024.0 * 1024.0);
+        auto to_mib_s = [&](std::float_t bytes_per_s) -> std::double_t {
+          return static_cast<std::double_t>(bytes_per_s) / (1024.0 * 1024.0);
         };
 
         auto format_signed_bytes = [&](std::ptrdiff_t v) -> std::string {
@@ -774,8 +860,8 @@ auto editor_subrenderer::_setup_windows() -> void {
 
             r.delta_live_bytes = static_cast<std::ptrdiff_t>(snap.current_bytes()) - static_cast<std::ptrdiff_t>(prev.current_bytes());
 
-            auto alloc_bytes_per_s = static_cast<float>(r.delta_alloc_bytes) / dt;
-            auto allocs_per_s = static_cast<float>(snap.allocation_count - prev.allocation_count) / dt;
+            auto alloc_bytes_per_s = static_cast<std::float_t>(r.delta_alloc_bytes) / dt;
+            auto allocs_per_s = static_cast<std::float_t>(snap.allocation_count - prev.allocation_count) / dt;
 
             state.ema_alloc_bytes_per_s[index] = state.ema_alloc_bytes_per_s[index] + alpha * (alloc_bytes_per_s - state.ema_alloc_bytes_per_s[index]);
 
@@ -902,13 +988,27 @@ auto editor_subrenderer::_setup_windows() -> void {
 
         ImGui::Separator();
 
+        if (selected_valid) {
+          ImGui::Text("Selected category: %s", memory::to_string(selected_category).data());
+        } else {
+          ImGui::Text("Selected category: None");
+        }
+
+        ImGui::SameLine();
+
+        if (ImGui::Button("Clear selection")) {
+          selected_valid = false;
+        }
+
+        ImGui::Separator();
+
         state.initialized = true;
 
         auto total_alloc_bytes_per_s = 0.0f;
 
         if (state.total_initialized) {
           auto delta_total_alloc = total.bytes_allocated - state.prev_total.bytes_allocated;
-          total_alloc_bytes_per_s = static_cast<float>(delta_total_alloc) / dt;
+          total_alloc_bytes_per_s = static_cast<std::float_t>(delta_total_alloc) / dt;
 
           state.ema_total_alloc_bytes_per_s = state.ema_total_alloc_bytes_per_s + alpha * (total_alloc_bytes_per_s - state.ema_total_alloc_bytes_per_s);
         } else {
@@ -918,7 +1018,7 @@ auto editor_subrenderer::_setup_windows() -> void {
 
         state.prev_total = total;
 
-        state.time_s += static_cast<double>(dt);
+        state.time_s += static_cast<std::double_t>(dt);
 
         auto head = state.plot_head;
 
@@ -940,27 +1040,8 @@ auto editor_subrenderer::_setup_windows() -> void {
           state.plot_count += 1u;
         }
 
-        auto plot_ring = [&](const char* label, const double* xs, const double* ys) -> void {
-          auto count = state.plot_count;
-          if (count == 0u) {
-            return;
-          }
-
-          auto cap = plot_capacity;
-          auto head_now = state.plot_head;
-
-          auto start = (head_now + cap - count) % cap;
-
-          if (start + count <= cap) {
-            ImPlot::PlotLine(label, xs + start, ys + start, static_cast<int>(count));
-          } else {
-            auto first = cap - start;
-            auto second = count - first;
-
-            ImPlot::PlotLine(label, xs + start, ys + start, static_cast<int>(first));
-            ImPlot::PlotLine(label, xs, ys, static_cast<int>(second));
-          }
-        };
+        static constexpr auto kib = 1024.0;
+        static constexpr auto mib = kib * kib;
 
         auto window_s = 30.0;
         auto now_s = state.time_s;
@@ -970,41 +1051,60 @@ auto editor_subrenderer::_setup_windows() -> void {
           min_s = 0.0;
         }
 
-        if (ImPlot::BeginPlot("Live Bytes (MiB)##cpu_mem_live", ImVec2(-1.0f, 140.0f))) {
-          ImPlot::SetupAxes(nullptr, "MiB", ImPlotAxisFlags_NoHighlight, ImPlotAxisFlags_AutoFit);
+        auto peak_live_mib = ring_peak_in_window(state.t_s.data(), state.total_live_mib.data(), plot_capacity, state.plot_head, state.plot_count, min_s);
+
+        if (have_selected_series) {
+          auto peak_sel = ring_peak_in_window(state.t_s.data(), state.selected_live_mib.data(), plot_capacity, state.plot_head, state.plot_count, min_s);
+
+          peak_live_mib = std::max(peak_live_mib, peak_sel);
+        }
+
+        auto peak_live_bytes = peak_live_mib * mib;
+        auto live_unit = choose_byte_unit(peak_live_bytes);
+        auto live_y_mul = mib / live_unit.divisor_bytes;
+
+        auto live_ylabel = std::array<char, 32>{};
+        std::snprintf(live_ylabel.data(), live_ylabel.size(), "%s", live_unit.name);
+
+        if (ImPlot::BeginPlot("Live Bytes##cpu_mem_live", ImVec2(-1.0f, 140.0f))) {
+          ImPlot::SetupAxes(nullptr, live_ylabel.data(), ImPlotAxisFlags_NoHighlight, ImPlotAxisFlags_AutoFit);
           ImPlot::SetupAxisLimits(ImAxis_X1, min_s, now_s, ImGuiCond_Always);
 
-          plot_ring("Total", state.t_s.data(), state.total_live_mib.data());
+          plot_ring_scaled("Total", state.t_s.data(), state.total_live_mib.data(), plot_capacity, state.plot_head, state.plot_count, live_y_mul);
 
           if (have_selected_series) {
-            plot_ring("Selected", state.t_s.data(), state.selected_live_mib.data());
+            plot_ring_scaled("Selected", state.t_s.data(), state.selected_live_mib.data(), plot_capacity, state.plot_head, state.plot_count, live_y_mul);
           }
 
           ImPlot::EndPlot();
         }
 
-        if (ImPlot::BeginPlot("Allocation Rate (MiB/s)##cpu_mem_rate", ImVec2(-1.0f, 120.0f))) {
-          ImPlot::SetupAxes(nullptr, "MiB/s", ImPlotAxisFlags_NoHighlight, ImPlotAxisFlags_AutoFit);
+        auto peak_rate_mib_s = ring_peak_in_window(state.t_s.data(), state.total_alloc_mib_s.data(), plot_capacity, state.plot_head, state.plot_count, min_s);
+
+        if (have_selected_series) {
+          auto peak_sel = ring_peak_in_window(state.t_s.data(), state.selected_alloc_mib_s.data(), plot_capacity, state.plot_head, state.plot_count, min_s);
+
+          peak_rate_mib_s = std::max(peak_rate_mib_s, peak_sel);
+        }
+
+        auto peak_rate_bytes_s = peak_rate_mib_s * mib;
+        auto rate_unit = choose_byte_unit(peak_rate_bytes_s);
+        auto rate_y_mul = mib / rate_unit.divisor_bytes;
+
+        auto rate_ylabel = std::array<char, 32>{};
+        std::snprintf(rate_ylabel.data(), rate_ylabel.size(), "%s/s", rate_unit.name);
+
+        if (ImPlot::BeginPlot("Allocation Rate##cpu_mem_rate", ImVec2(-1.0f, 120.0f))) {
+          ImPlot::SetupAxes(nullptr, rate_ylabel.data(), ImPlotAxisFlags_NoHighlight, ImPlotAxisFlags_AutoFit);
           ImPlot::SetupAxisLimits(ImAxis_X1, min_s, now_s, ImGuiCond_Always);
 
-          plot_ring("Total", state.t_s.data(), state.total_alloc_mib_s.data());
+          plot_ring_scaled("Total", state.t_s.data(), state.total_alloc_mib_s.data(), plot_capacity, state.plot_head, state.plot_count, rate_y_mul);
 
           if (have_selected_series) {
-            plot_ring("Selected", state.t_s.data(), state.selected_alloc_mib_s.data());
+            plot_ring_scaled("Selected", state.t_s.data(), state.selected_alloc_mib_s.data(), plot_capacity, state.plot_head, state.plot_count, rate_y_mul);
           }
 
           ImPlot::EndPlot();
-        }
-
-        if (selected_valid) {
-          ImGui::Separator();
-
-          ImGui::Text("Selected category: %s", to_string(selected_category).data());
-          ImGui::SameLine();
-
-          if (ImGui::Button("Clear selection")) {
-            selected_valid = false;
-          }
         }
       }
 

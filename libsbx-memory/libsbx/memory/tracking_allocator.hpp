@@ -216,7 +216,7 @@ private:
   memory_tracker(const memory_tracker&) = delete;
 
   ~memory_tracker() {
-    report_leaks();
+    // report_leaks();
   }
 
   auto operator=(const memory_tracker&) -> memory_tracker& = delete;

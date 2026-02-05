@@ -15,6 +15,7 @@ endif()
 add_library(${CMAKE_PROJECT_NAME}::${PROJECT_NAME} ALIAS ${PROJECT_NAME})
 
 find_package(fmt CONFIG REQUIRED)
+find_package(magic_enum CONFIG REQUIRED)
 
 target_sources(
   ${PROJECT_NAME}
@@ -46,6 +47,7 @@ target_link_libraries(
   PUBLIC
     # External dependencies
     fmt::fmt
+    magic_enum::magic_enum
     # Internal dependencies
     libsbx::utility
 )

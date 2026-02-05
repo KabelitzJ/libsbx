@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: MIT
 #include <libsbx/editor/editor_subrenderer.hpp>
 
+#include <libsbx/memory/tracking_allocator.hpp>
+
 namespace sbx::editor {
 
-auto _format_bytes(VkDeviceSize bytes) -> std::string {
+auto _format_bytes(std::size_t bytes) -> std::string {
   const char* units[] = {"B", "KB", "MB", "GB", "TB"};
 
   auto unit_index = std::int32_t{0};
@@ -541,14 +543,14 @@ auto editor_subrenderer::_setup_windows() -> void {
   }
 
   {
-    auto statistics = VmaTotalStatistics{};
-    vmaCalculateStatistics(allocator, &statistics);
+    if (ImGui::Begin("Memory Statistics")) {
+      if (ImGui::CollapsingHeader("GPU", ImGuiTreeNodeFlags_DefaultOpen)) {
+        auto statistics = VmaTotalStatistics{};
+        vmaCalculateStatistics(allocator, &statistics);
 
-    const VkPhysicalDeviceMemoryProperties* memory_properties = nullptr;
-    vmaGetMemoryProperties(allocator, &memory_properties);
+        const VkPhysicalDeviceMemoryProperties* memory_properties = nullptr;
+        vmaGetMemoryProperties(allocator, &memory_properties);
 
-    if (ImGui::Begin("VMA Statistics")) {
-      if (ImGui::CollapsingHeader("Global Summary", ImGuiTreeNodeFlags_DefaultOpen)) {
         if (ImGui::BeginTable("##global_summary_table", 2, ImGuiTableFlags_None)) {
           ImGui::TableSetupColumn("Label", ImGuiTableColumnFlags_WidthFixed, 150.0f);
           ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthStretch);
@@ -568,80 +570,135 @@ auto editor_subrenderer::_setup_windows() -> void {
 
           ImGui::EndTable();
         }
+
+        ImGui::Spacing();
+
+        constexpr auto table_flags = ImGuiTableFlags_Resizable | ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_RowBg;
+
+        if (ImGui::BeginTable("VmaAllocTable", 5, table_flags)) {
+          ImGui::TableSetupColumn("Idx", ImGuiTableColumnFlags_WidthFixed, 30.0f);
+          ImGui::TableSetupColumn("Flags", ImGuiTableColumnFlags_WidthFixed, 80.0f);
+          ImGui::TableSetupColumn("Allocations");
+          ImGui::TableSetupColumn("Size");
+          ImGui::TableSetupColumn("Frag %");
+          ImGui::TableHeadersRow();
+
+          for (auto i = 0u; i < memory_properties->memoryTypeCount; ++i) {
+            auto& type_stats = statistics.memoryType[i].statistics;
+
+            if (type_stats.blockCount == 0) {
+              continue;
+            }
+
+            auto property_flags = memory_properties->memoryTypes[i].propertyFlags;
+
+            ImGui::TableNextRow();
+
+            // 1. Index
+            ImGui::TableSetColumnIndex(0);
+            ImGui::Text("%u", i);
+
+            // 2. Dense Symbols
+            ImGui::TableSetColumnIndex(1);
+            
+            auto render_symbol = [](bool condition, const char* symbol) -> void {
+              ImGui::Text("%s", condition ? symbol : "-");
+              ImGui::SameLine(0.0f, 0.0f);
+            };
+
+            ImGui::BeginGroup();
+            render_symbol((property_flags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT), "D"); 
+            render_symbol((property_flags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT), "V"); 
+            render_symbol((property_flags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT), "C"); 
+            render_symbol((property_flags & VK_MEMORY_PROPERTY_HOST_CACHED_BIT), "H"); 
+            render_symbol((property_flags & VK_MEMORY_PROPERTY_LAZILY_ALLOCATED_BIT), "L"); 
+            render_symbol((property_flags & VK_MEMORY_PROPERTY_PROTECTED_BIT), "P"); 
+            ImGui::EndGroup();
+
+            if (ImGui::IsItemHovered()) {
+              ImGui::SetTooltip("D: Device Local\nV: Host Visible\nC: Host Coherent\nH: Host Cached\nL: Lazily Allocated\nP: Protected");
+            }
+
+            // 3. Allocations
+            ImGui::TableSetColumnIndex(2);
+            ImGui::Text("%u", type_stats.allocationCount);
+
+            // 4. Size
+            ImGui::TableSetColumnIndex(3);
+            ImGui::TextUnformatted(_format_bytes(type_stats.allocationBytes).c_str());
+
+            // 5. Fragmentation
+            ImGui::TableSetColumnIndex(4);
+        
+            const auto total_free = type_stats.blockBytes - type_stats.allocationBytes;
+            
+            if (total_free > 0 && type_stats.allocationCount > 1) {
+              const auto frag_score = 1.0f - (static_cast<std::float_t>(type_stats.allocationBytes) / static_cast<std::float_t>(type_stats.blockBytes));
+              const auto color = (frag_score <= 0.5f) ? ImVec4{1.0f, 1.0f, 1.0f, 1.0f} : ImVec4{1.0f, 0.4f, 0.4f, 1.0f};
+
+              ImGui::TextColored(color, "%.1f%%", frag_score * 100.0f);
+            } else {
+              ImGui::TextDisabled("0.0%%");
+            }
+          }
+
+          ImGui::EndTable();
+        }
       }
 
-      ImGui::Spacing();
+      if (ImGui::CollapsingHeader("CPU", ImGuiTreeNodeFlags_DefaultOpen)) {
+        auto& tracker = memory::memory_tracker::instance();
+        auto total = tracker.total_statistics();
 
-      constexpr auto table_flags = ImGuiTableFlags_Resizable | ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_RowBg;
+        ImGui::Text("Live allocations: %zu", total.current_allocations());
+        ImGui::Text("Live bytes: %s", _format_bytes(total.current_bytes()).c_str());
+        ImGui::Text("Peak bytes (max category): %s", _format_bytes(total.peak_bytes).c_str());
 
-      if (ImGui::BeginTable("VmaAllocTable", 5, table_flags)) {
-        ImGui::TableSetupColumn("Idx", ImGuiTableColumnFlags_WidthFixed, 30.0f);
-        ImGui::TableSetupColumn("Flags", ImGuiTableColumnFlags_WidthFixed, 80.0f);
-        ImGui::TableSetupColumn("Allocations");
-        ImGui::TableSetupColumn("Size");
-        ImGui::TableSetupColumn("Frag %");
-        ImGui::TableHeadersRow();
+        ImGui::Separator();
 
-        for (auto i = 0u; i < memory_properties->memoryTypeCount; ++i) {
-          auto& type_stats = statistics.memoryType[i].statistics;
+        if (ImGui::BeginTable("memory_stats", 8, ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders | ImGuiTableFlags_Resizable)) {
+          ImGui::TableSetupColumn("Category");
+          ImGui::TableSetupColumn("Allocs");
+          ImGui::TableSetupColumn("Frees");
+          ImGui::TableSetupColumn("Live");
+          ImGui::TableSetupColumn("Allocated");
+          ImGui::TableSetupColumn("Freed");
+          ImGui::TableSetupColumn("Live Bytes");
+          ImGui::TableSetupColumn("Peak Bytes");
+          ImGui::TableHeadersRow();
 
-          if (type_stats.blockCount == 0) {
-            continue;
+          for (const auto category : magic_enum::enum_values<memory::allocation_category>()) {
+            auto snap = tracker.statistics(category);
+
+            ImGui::TableNextRow();
+
+            ImGui::TableSetColumnIndex(0);
+            ImGui::TextUnformatted(to_string(category).data());
+
+            ImGui::TableSetColumnIndex(1);
+            ImGui::Text("%zu", snap.allocation_count);
+
+            ImGui::TableSetColumnIndex(2);
+            ImGui::Text("%zu", snap.deallocation_count);
+
+            ImGui::TableSetColumnIndex(3);
+            ImGui::Text("%zu", snap.current_allocations());
+
+            ImGui::TableSetColumnIndex(4);
+            ImGui::TextUnformatted(_format_bytes(snap.bytes_allocated).c_str());
+
+            ImGui::TableSetColumnIndex(5);
+            ImGui::TextUnformatted(_format_bytes(snap.bytes_freed).c_str());
+
+            ImGui::TableSetColumnIndex(6);
+            ImGui::TextUnformatted(_format_bytes(snap.current_bytes()).c_str());
+
+            ImGui::TableSetColumnIndex(7);
+            ImGui::TextUnformatted(_format_bytes(snap.peak_bytes).c_str());
           }
 
-          auto property_flags = memory_properties->memoryTypes[i].propertyFlags;
-
-          ImGui::TableNextRow();
-
-          // 1. Index
-          ImGui::TableSetColumnIndex(0);
-          ImGui::Text("%u", i);
-
-          // 2. Dense Symbols
-          ImGui::TableSetColumnIndex(1);
-          
-          auto render_symbol = [](bool condition, const char* symbol) -> void {
-            ImGui::Text("%s", condition ? symbol : "-");
-            ImGui::SameLine(0.0f, 0.0f);
-          };
-
-          ImGui::BeginGroup();
-          render_symbol((property_flags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT), "D"); 
-          render_symbol((property_flags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT), "V"); 
-          render_symbol((property_flags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT), "C"); 
-          render_symbol((property_flags & VK_MEMORY_PROPERTY_HOST_CACHED_BIT), "H"); 
-          render_symbol((property_flags & VK_MEMORY_PROPERTY_LAZILY_ALLOCATED_BIT), "L"); 
-          render_symbol((property_flags & VK_MEMORY_PROPERTY_PROTECTED_BIT), "P"); 
-          ImGui::EndGroup();
-
-          if (ImGui::IsItemHovered()) {
-            ImGui::SetTooltip("D: Device Local\nV: Host Visible\nC: Host Coherent\nH: Host Cached\nL: Lazily Allocated\nP: Protected");
-          }
-
-          // 3. Allocations
-          ImGui::TableSetColumnIndex(2);
-          ImGui::Text("%u", type_stats.allocationCount);
-
-          // 4. Size
-          ImGui::TableSetColumnIndex(3);
-          ImGui::TextUnformatted(_format_bytes(type_stats.allocationBytes).c_str());
-
-          // 5. Fragmentation
-          ImGui::TableSetColumnIndex(4);
-      
-          const auto total_free = type_stats.blockBytes - type_stats.allocationBytes;
-          
-          if (total_free > 0 && type_stats.allocationCount > 1) {
-            const auto frag_score = 1.0f - (static_cast<std::float_t>(type_stats.allocationBytes) / static_cast<std::float_t>(type_stats.blockBytes));
-            const auto color = (frag_score <= 0.5f) ? ImVec4{1.0f, 1.0f, 1.0f, 1.0f} : ImVec4{1.0f, 0.4f, 0.4f, 1.0f};
-
-            ImGui::TextColored(color, "%.1f%%", frag_score * 100.0f);
-          } else {
-            ImGui::TextDisabled("0.0%%");
-          }
+          ImGui::EndTable();
         }
-
-        ImGui::EndTable();
       }
     }
 

@@ -19,6 +19,7 @@
 
 #include <libsbx/utility/logger.hpp>
 #include <libsbx/utility/enum.hpp>
+#include <libsbx/utility/target.hpp>
 
 namespace sbx::memory {
 
@@ -238,7 +239,7 @@ namespace detail {
 
   auto* base_bytes = static_cast<std::byte*>(base);
 
-  auto* header = ::new (static_cast<void*>(base_bytes)) allocation_header{};
+  auto* header = std::construct_at(reinterpret_cast<allocation_header*>(base_bytes));
   header->size = size;
   header->alignment = effective_alignment;
   header->category = category;
@@ -334,19 +335,26 @@ template<typename LhsType, allocation_category LhsCategory, typename RhsType, al
 }
 
 template<typename Type>
-using tracking_allocator_t = tracking_allocator<Type, allocation_category::general>;
+using general_tracking_allocator = tracking_allocator<Type, allocation_category::general>;
+
+namespace detail {
 
 template<typename Type>
-using vector = std::vector<Type, tracking_allocator<Type, allocation_category::container>>;
+using container_allocator_type = std::conditional_t<utility::is_build_configuration_debug_v, tracking_allocator<Type, allocation_category::container>, std::allocator<Type>>;
+
+}; // namespace detail
 
 template<typename Type>
-using list = std::list<Type, tracking_allocator<Type, allocation_category::container>>;
+using vector = std::vector<Type, detail::container_allocator_type<Type>>;
+
+template<typename Type>
+using list = std::list<Type, detail::container_allocator_type<Type>>;
 
 template<typename Key, typename Value, typename Compare = std::less<Key>>
-using map = std::map<Key, Value, Compare,  tracking_allocator<std::pair<const Key, Value>, allocation_category::container>>;
+using map = std::map<Key, Value, Compare, detail::container_allocator_type<std::pair<const Key, Value>>>;
 
 template<typename Key, typename Value, typename Hash = std::hash<Key>, typename KeyEqual = std::equal_to<Key>>
-using unordered_map = std::unordered_map<Key, Value, Hash, KeyEqual, tracking_allocator<std::pair<const Key, Value>, allocation_category::container>>;
+using unordered_map = std::unordered_map<Key, Value, Hash, KeyEqual, detail::container_allocator_type<std::pair<const Key, Value>>>;
 
 template<typename Type, allocation_category Category = allocation_category::general, typename... Args>
 [[nodiscard]] auto make_tracked(Args&&... args) -> std::unique_ptr<Type, void(*)(Type*)> {

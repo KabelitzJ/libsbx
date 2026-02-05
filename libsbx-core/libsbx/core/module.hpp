@@ -119,7 +119,7 @@ protected:
       .stage = stage,
       .dependencies = dependencies.get(),
       .create = []() -> module_base* {
-        auto allocator = memory::tracking_allocator<Derived, memory::allocation_category::general>{};
+        auto allocator = memory::general_tracking_allocator<Derived>{};
         auto* instance = allocator.allocate(1u);
 
         if (!instance) {
@@ -144,7 +144,7 @@ protected:
 
         std::destroy_at(derived);
 
-        auto allocator = memory::tracking_allocator<Derived, memory::allocation_category::general>{};
+        auto allocator = memory::general_tracking_allocator<Derived>{};
         allocator.deallocate(derived, 1u);
       }
     };

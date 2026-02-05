@@ -650,56 +650,364 @@ auto editor_subrenderer::_setup_windows() -> void {
         auto& tracker = memory::memory_tracker::instance();
         auto total = tracker.total_statistics();
 
+        static constexpr auto category_count = magic_enum::enum_count<memory::allocation_category>();
+
+        static auto selected_valid = false;
+        static auto selected_category = magic_enum::enum_value<memory::allocation_category>(0);
+
         ImGui::Text("Live allocations: %zu", total.current_allocations());
         ImGui::Text("Live bytes: %s", _format_bytes(total.current_bytes()).c_str());
         ImGui::Text("Peak bytes (max category): %s", _format_bytes(total.peak_bytes).c_str());
 
         ImGui::Separator();
 
-        if (ImGui::BeginTable("memory_stats", 8, ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders | ImGuiTableFlags_Resizable)) {
+        static constexpr auto plot_capacity = 600;
+
+        struct ui_state {
+          std::array<memory::allocation_statistics_snapshot, category_count> prev{};
+          std::array<float, category_count> ema_alloc_bytes_per_s{};
+          std::array<float, category_count> ema_allocs_per_s{};
+          bool initialized{false};
+
+          memory::allocation_statistics_snapshot prev_total{};
+          float ema_total_alloc_bytes_per_s{0.0f};
+          bool total_initialized{false};
+
+          std::array<double, plot_capacity> t_s{};
+          std::array<double, plot_capacity> total_live_mib{};
+          std::array<double, plot_capacity> total_alloc_mib_s{};
+          std::array<double, plot_capacity> selected_live_mib{};
+          std::array<double, plot_capacity> selected_alloc_mib_s{};
+
+          std::size_t plot_head{0};
+          std::size_t plot_count{0};
+          double time_s{0.0};
+        }; // struct ui_state
+
+        static auto state = ui_state{};
+
+        struct row {
+          memory::allocation_category category{};
+          memory::allocation_statistics_snapshot snap{};
+
+          std::size_t live_bytes{0};
+          std::size_t live_allocs{0};
+          std::size_t peak_bytes{0};
+          std::size_t avg_alloc_size{0};
+
+          std::ptrdiff_t delta_live_bytes{0};
+          std::size_t delta_alloc_bytes{0};
+          std::size_t delta_free_bytes{0};
+
+          float alloc_bytes_per_s{0.0f};
+          float allocs_per_s{0.0f};
+        }; // struct row
+
+        auto dt = static_cast<float>(ImGui::GetIO().DeltaTime);
+        if (dt < 0.000001f) {
+          dt = 0.000001f;
+        }
+
+        auto alpha = 0.0f;
+        {
+          auto tau = 0.25f;
+          alpha = 1.0f - std::exp(-dt / tau);
+        }
+
+        auto to_mib = [&](std::size_t bytes) -> double {
+          return static_cast<double>(bytes) / (1024.0 * 1024.0);
+        };
+
+        auto to_mib_s = [&](float bytes_per_s) -> double {
+          return static_cast<double>(bytes_per_s) / (1024.0 * 1024.0);
+        };
+
+        auto format_signed_bytes = [&](std::ptrdiff_t v) -> std::string {
+          if (v == 0) {
+            return "0";
+          }
+
+          if (v > 0) {
+            return "+" + _format_bytes(static_cast<std::size_t>(v));
+          }
+
+          return "-" + _format_bytes(static_cast<std::size_t>(-v));
+        };
+
+        auto column_count = 5;
+
+        auto selected_live_mib = 0.0;
+        auto selected_alloc_mib_s = 0.0;
+        auto have_selected_series = false;
+
+        auto rows = std::vector<row>{};
+        rows.reserve(category_count);
+
+        for (const auto category : magic_enum::enum_values<memory::allocation_category>()) {
+          auto snap = tracker.statistics(category);
+
+          auto r = row{};
+          r.category = category;
+          r.snap = snap;
+
+          r.live_bytes = snap.current_bytes();
+          r.live_allocs = snap.current_allocations();
+          r.peak_bytes = snap.peak_bytes;
+
+          if (r.live_allocs != 0u) {
+            r.avg_alloc_size = r.live_bytes / r.live_allocs;
+          }
+
+          auto index_opt = magic_enum::enum_index(category);
+          if (!index_opt) {
+            rows.push_back(r);
+            continue;
+          }
+
+          auto index = static_cast<std::size_t>(*index_opt);
+
+          if (state.initialized) {
+            const auto& prev = state.prev[index];
+
+            r.delta_alloc_bytes = snap.bytes_allocated - prev.bytes_allocated;
+            r.delta_free_bytes = snap.bytes_freed - prev.bytes_freed;
+
+            r.delta_live_bytes = static_cast<std::ptrdiff_t>(snap.current_bytes()) - static_cast<std::ptrdiff_t>(prev.current_bytes());
+
+            auto alloc_bytes_per_s = static_cast<float>(r.delta_alloc_bytes) / dt;
+            auto allocs_per_s = static_cast<float>(snap.allocation_count - prev.allocation_count) / dt;
+
+            state.ema_alloc_bytes_per_s[index] = state.ema_alloc_bytes_per_s[index] + alpha * (alloc_bytes_per_s - state.ema_alloc_bytes_per_s[index]);
+
+            state.ema_allocs_per_s[index] = state.ema_allocs_per_s[index] + alpha * (allocs_per_s - state.ema_allocs_per_s[index]);
+
+            r.alloc_bytes_per_s = state.ema_alloc_bytes_per_s[index];
+            r.allocs_per_s = state.ema_allocs_per_s[index];
+          }
+
+          state.prev[index] = snap;
+
+          if (selected_valid) {
+            if (category == selected_category) {
+              selected_live_mib = to_mib(r.live_bytes);
+              selected_alloc_mib_s = to_mib_s(r.alloc_bytes_per_s);
+              have_selected_series = true;
+            }
+          }
+
+          rows.push_back(r);
+        }
+
+        if (ImGui::BeginTable("cpu_memory_stats", column_count, ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders | ImGuiTableFlags_Resizable | ImGuiTableFlags_Sortable)) {
           ImGui::TableSetupColumn("Category");
-          ImGui::TableSetupColumn("Allocs");
-          ImGui::TableSetupColumn("Frees");
-          ImGui::TableSetupColumn("Live");
-          ImGui::TableSetupColumn("Allocated");
-          ImGui::TableSetupColumn("Freed");
-          ImGui::TableSetupColumn("Live Bytes");
+          ImGui::TableSetupColumn("Live Bytes", ImGuiTableColumnFlags_DefaultSort);
+          ImGui::TableSetupColumn("Live Allocs");
           ImGui::TableSetupColumn("Peak Bytes");
+          ImGui::TableSetupColumn("Avg Size");
+
           ImGui::TableHeadersRow();
 
-          for (const auto category : magic_enum::enum_values<memory::allocation_category>()) {
-            auto snap = tracker.statistics(category);
+          if (auto* sort_specs = ImGui::TableGetSortSpecs(); sort_specs && sort_specs->SpecsDirty && sort_specs->SpecsCount > 0) {
+            const auto spec = sort_specs->Specs[0];
+            const auto asc = spec.SortDirection == ImGuiSortDirection_Ascending;
+            const auto col = spec.ColumnIndex;
 
+            auto less = [&](const row& a, const row& b) -> bool {
+              auto cmp = [&](auto lhs, auto rhs) -> bool {
+                if (asc) {
+                  return lhs < rhs;
+                }
+
+                return lhs > rhs;
+              };
+
+              if (col == 0) {
+                return cmp(static_cast<int>(a.category), static_cast<int>(b.category));
+              }
+
+              if (col == 1) {
+                return cmp(a.live_bytes, b.live_bytes);
+              }
+
+              if (col == 2) {
+                return cmp(a.live_allocs, b.live_allocs);
+              }
+
+              if (col == 3) {
+                return cmp(a.peak_bytes, b.peak_bytes);
+              }
+
+              if (col == 4) {
+                return cmp(a.avg_alloc_size, b.avg_alloc_size);
+              }
+
+              return cmp(a.live_bytes, b.live_bytes);
+            };
+
+            std::sort(rows.begin(), rows.end(), less);
+            sort_specs->SpecsDirty = false;
+          }
+
+          for (const auto& r : rows) {
             ImGui::TableNextRow();
 
             ImGui::TableSetColumnIndex(0);
-            ImGui::TextUnformatted(to_string(category).data());
+            ImGui::PushID(static_cast<int>(r.category));
+
+            auto is_selected = selected_valid && (r.category == selected_category);
+            if (ImGui::Selectable(to_string(r.category).data(), is_selected, ImGuiSelectableFlags_SpanAllColumns)) {
+              selected_valid = true;
+              selected_category = r.category;
+            }
+
+            ImGui::PopID();
 
             ImGui::TableSetColumnIndex(1);
-            ImGui::Text("%zu", snap.allocation_count);
+            ImGui::TextUnformatted(_format_bytes(r.live_bytes).c_str());
 
             ImGui::TableSetColumnIndex(2);
-            ImGui::Text("%zu", snap.deallocation_count);
+            ImGui::Text("%zu", r.live_allocs);
 
             ImGui::TableSetColumnIndex(3);
-            ImGui::Text("%zu", snap.current_allocations());
+            ImGui::TextUnformatted(_format_bytes(r.peak_bytes).c_str());
 
             ImGui::TableSetColumnIndex(4);
-            ImGui::TextUnformatted(_format_bytes(snap.bytes_allocated).c_str());
+            ImGui::TextUnformatted(_format_bytes(r.avg_alloc_size).c_str());
 
-            ImGui::TableSetColumnIndex(5);
-            ImGui::TextUnformatted(_format_bytes(snap.bytes_freed).c_str());
+            if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
+              ImGui::BeginTooltip();
 
-            ImGui::TableSetColumnIndex(6);
-            ImGui::TextUnformatted(_format_bytes(snap.current_bytes()).c_str());
+              ImGui::TextUnformatted("This frame:");
+              ImGui::Separator();
+              ImGui::Text("Delta Live: %s", format_signed_bytes(r.delta_live_bytes).c_str());
+              ImGui::Text("Alloc: %s", _format_bytes(r.delta_alloc_bytes).c_str());
+              ImGui::Text("Free:  %s", _format_bytes(r.delta_free_bytes).c_str());
+              ImGui::Text("Alloc rate (EMA): %s/s", _format_bytes(static_cast<std::size_t>(r.alloc_bytes_per_s)).c_str());
 
-            ImGui::TableSetColumnIndex(7);
-            ImGui::TextUnformatted(_format_bytes(snap.peak_bytes).c_str());
+              ImGui::Separator();
+
+              ImGui::TextUnformatted("Totals (since start):");
+              ImGui::Separator();
+              ImGui::Text("Allocs: %zu", r.snap.allocation_count);
+              ImGui::Text("Frees:  %zu", r.snap.deallocation_count);
+              ImGui::Text("Alloc bytes: %s", _format_bytes(r.snap.bytes_allocated).c_str());
+              ImGui::Text("Freed bytes:  %s", _format_bytes(r.snap.bytes_freed).c_str());
+
+              ImGui::EndTooltip();
+            }
           }
 
           ImGui::EndTable();
         }
+
+        ImGui::Separator();
+
+        state.initialized = true;
+
+        auto total_alloc_bytes_per_s = 0.0f;
+
+        if (state.total_initialized) {
+          auto delta_total_alloc = total.bytes_allocated - state.prev_total.bytes_allocated;
+          total_alloc_bytes_per_s = static_cast<float>(delta_total_alloc) / dt;
+
+          state.ema_total_alloc_bytes_per_s = state.ema_total_alloc_bytes_per_s + alpha * (total_alloc_bytes_per_s - state.ema_total_alloc_bytes_per_s);
+        } else {
+          state.total_initialized = true;
+          state.ema_total_alloc_bytes_per_s = 0.0f;
+        }
+
+        state.prev_total = total;
+
+        state.time_s += static_cast<double>(dt);
+
+        auto head = state.plot_head;
+
+        state.t_s[head] = state.time_s;
+        state.total_live_mib[head] = to_mib(total.current_bytes());
+        state.total_alloc_mib_s[head] = to_mib_s(state.ema_total_alloc_bytes_per_s);
+
+        if (have_selected_series) {
+          state.selected_live_mib[head] = selected_live_mib;
+          state.selected_alloc_mib_s[head] = selected_alloc_mib_s;
+        } else {
+          state.selected_live_mib[head] = 0.0;
+          state.selected_alloc_mib_s[head] = 0.0;
+        }
+
+        state.plot_head = (state.plot_head + 1u) % plot_capacity;
+
+        if (state.plot_count < plot_capacity) {
+          state.plot_count += 1u;
+        }
+
+        auto plot_ring = [&](const char* label, const double* xs, const double* ys) -> void {
+          auto count = state.plot_count;
+          if (count == 0u) {
+            return;
+          }
+
+          auto cap = plot_capacity;
+          auto head_now = state.plot_head;
+
+          auto start = (head_now + cap - count) % cap;
+
+          if (start + count <= cap) {
+            ImPlot::PlotLine(label, xs + start, ys + start, static_cast<int>(count));
+          } else {
+            auto first = cap - start;
+            auto second = count - first;
+
+            ImPlot::PlotLine(label, xs + start, ys + start, static_cast<int>(first));
+            ImPlot::PlotLine(label, xs, ys, static_cast<int>(second));
+          }
+        };
+
+        auto window_s = 30.0;
+        auto now_s = state.time_s;
+        auto min_s = now_s - window_s;
+
+        if (min_s < 0.0) {
+          min_s = 0.0;
+        }
+
+        if (ImPlot::BeginPlot("Live Bytes (MiB)##cpu_mem_live", ImVec2(-1.0f, 140.0f))) {
+          ImPlot::SetupAxes(nullptr, "MiB", ImPlotAxisFlags_NoHighlight, ImPlotAxisFlags_AutoFit);
+          ImPlot::SetupAxisLimits(ImAxis_X1, min_s, now_s, ImGuiCond_Always);
+
+          plot_ring("Total", state.t_s.data(), state.total_live_mib.data());
+
+          if (have_selected_series) {
+            plot_ring("Selected", state.t_s.data(), state.selected_live_mib.data());
+          }
+
+          ImPlot::EndPlot();
+        }
+
+        if (ImPlot::BeginPlot("Allocation Rate (MiB/s)##cpu_mem_rate", ImVec2(-1.0f, 120.0f))) {
+          ImPlot::SetupAxes(nullptr, "MiB/s", ImPlotAxisFlags_NoHighlight, ImPlotAxisFlags_AutoFit);
+          ImPlot::SetupAxisLimits(ImAxis_X1, min_s, now_s, ImGuiCond_Always);
+
+          plot_ring("Total", state.t_s.data(), state.total_alloc_mib_s.data());
+
+          if (have_selected_series) {
+            plot_ring("Selected", state.t_s.data(), state.selected_alloc_mib_s.data());
+          }
+
+          ImPlot::EndPlot();
+        }
+
+        if (selected_valid) {
+          ImGui::Separator();
+
+          ImGui::Text("Selected category: %s", to_string(selected_category).data());
+          ImGui::SameLine();
+
+          if (ImGui::Button("Clear selection")) {
+            selected_valid = false;
+          }
+        }
       }
+
     }
 
     ImGui::End();

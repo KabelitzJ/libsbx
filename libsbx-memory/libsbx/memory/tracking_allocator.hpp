@@ -340,50 +340,110 @@ using general_tracking_allocator = tracking_allocator<Type, allocation_category:
 namespace detail {
 
 template<typename Type>
-using container_allocator_type = std::conditional_t<utility::is_build_configuration_debug_v, tracking_allocator<Type, allocation_category::container>, std::allocator<Type>>;
+using allocator_type = std::conditional_t<utility::is_build_configuration_debug_v, tracking_allocator<Type, allocation_category::container>, std::allocator<Type>>;
+
+[[nodiscard]] inline auto header_from_user_ptr(void* ptr) noexcept -> allocation_header* {
+  if (!ptr) {
+    return nullptr;
+  }
+
+  auto* user_bytes = static_cast<std::byte*>(ptr);
+  auto* header_slot = reinterpret_cast<allocation_header**>(user_bytes - sizeof(allocation_header*));
+
+  return *header_slot;
+}
+
+template<typename Type>
+[[nodiscard]] inline auto element_count_from_header(const allocation_header* header) noexcept -> std::size_t {
+  if (!header) {
+    return 0u;
+  }
+
+  if (header->size == 0u) {
+    return 0u;
+  }
+
+  return header->size / sizeof(Type);
+}
+
+template<typename Type, allocation_category Category = allocation_category::general>
+struct tracked_delete {
+
+  auto operator()(Type* ptr) const noexcept -> void {
+    if (!ptr) {
+      return;
+    }
+
+    if constexpr (!std::is_trivially_destructible_v<Type>) {
+      std::destroy_at(ptr);
+    }
+
+    detail::aligned_deallocate(static_cast<void*>(ptr));
+  }
+
+}; // struct tracked_delete
+
+template<typename Type, allocation_category Category>
+struct tracked_delete<Type[], Category> {
+
+  auto operator()(Type* ptr) const noexcept -> void {
+    if (!ptr) {
+      return;
+    }
+
+    auto* header = detail::header_from_user_ptr(static_cast<void*>(ptr));
+    auto count = detail::element_count_from_header<Type>(header);
+
+    if constexpr (!std::is_trivially_destructible_v<Type>) {
+      if (count != 0u) {
+        std::destroy_n(ptr, count);
+      }
+    }
+
+    detail::aligned_deallocate(static_cast<void*>(ptr));
+  }
+
+}; // struct tracked_delete
+
+template<typename Type>
+using deleter_type = std::conditional_t<utility::is_build_configuration_debug_v, tracked_delete<Type>, std::default_delete<Type>>;
 
 }; // namespace detail
 
 template<typename Type>
-using vector = std::vector<Type, detail::container_allocator_type<Type>>;
+using vector = std::vector<Type, detail::allocator_type<Type>>;
 
 template<typename Type>
-using list = std::list<Type, detail::container_allocator_type<Type>>;
+using list = std::list<Type, detail::allocator_type<Type>>;
 
 template<typename Key, typename Value, typename Compare = std::less<Key>>
-using map = std::map<Key, Value, Compare, detail::container_allocator_type<std::pair<const Key, Value>>>;
+using map = std::map<Key, Value, Compare, detail::allocator_type<std::pair<const Key, Value>>>;
 
 template<typename Key, typename Value, typename Hash = std::hash<Key>, typename KeyEqual = std::equal_to<Key>>
-using unordered_map = std::unordered_map<Key, Value, Hash, KeyEqual, detail::container_allocator_type<std::pair<const Key, Value>>>;
+using unordered_map = std::unordered_map<Key, Value, Hash, KeyEqual, detail::allocator_type<std::pair<const Key, Value>>>;
+
+using string = std::basic_string<char, std::char_traits<char>, detail::allocator_type<char>>;
+
+template<typename Type>
+using unique_ptr = std::unique_ptr<Type, detail::deleter_type<Type>>;
 
 template<typename Type, allocation_category Category = allocation_category::general, typename... Args>
-[[nodiscard]] auto make_tracked(Args&&... args) -> std::unique_ptr<Type, void(*)(Type*)> {
-  auto allocator = tracking_allocator<Type, Category>{};
-  auto* ptr = allocator.allocate(1u);
+[[nodiscard]] auto make_unique(Args&&... args) -> unique_ptr<Type> {
+  if constexpr (utility::is_build_configuration_debug_v) {
+    auto allocator = tracking_allocator<Type, Category>{};
+    auto* ptr = allocator.allocate(1u);
 
-  if (ptr) {
-    throw std::bad_alloc{};
-  }
-  
-  try {
-    std::construct_at(ptr, std::forward<Args>(args)...);
-  } catch (...) {
-    allocator.deallocate(ptr, 1u);
-    throw;
-  }
-
-  auto deleter = [](Type* p) {
-    if (!p) {
-      return;
+    try {
+      std::construct_at(ptr, std::forward<Args>(args)...);
+    } catch (...) {
+      allocator.deallocate(ptr, 1u);
+      throw;
     }
 
-    std::destroy_at(p);
-
-    auto allocator = tracking_allocator<Type, Category>{};
-    allocator.deallocate(p, 1u);
-  };
-
-  return {ptr, deleter};
+    return unique_ptr<Type>{ptr};
+  } else {
+    return std::make_unique<Type>(std::forward<Args>(args)...);
+  }
 }
 
 } // namespace sbx::memory

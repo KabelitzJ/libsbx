@@ -10,6 +10,8 @@
 
 #include <libsbx/math/uuid.hpp>
 
+#include <libsbx/memory/tracking_allocator.hpp>
+
 #include <libsbx/graphics/buffers/storage_buffer.hpp>
 #include <libsbx/graphics/images/image2d.hpp>
 #include <libsbx/graphics/images/sampler_state.hpp>
@@ -27,8 +29,8 @@ class draw_list {
 
 public:
 
-  using storage_buffer_container = std::unordered_map<std::size_t, storage_buffer_handle>;
-  using draw_command_range_container = std::unordered_map<math::uuid, draw_command_range>;
+  using storage_buffer_container = memory::unordered_map<std::size_t, storage_buffer_handle>;
+  using draw_command_range_container = memory::unordered_map<math::uuid, draw_command_range>;
 
   draw_list() = default;
 
@@ -76,7 +78,7 @@ private:
   storage_buffer_container _buffers;
   separate_image2d_array _images;
   separate_sampler_array _samplers;
-  std::unordered_map<std::size_t, draw_command_range_container> _draw_ranges;
+  memory::unordered_map<std::size_t, draw_command_range_container> _draw_ranges;
 
 }; // class draw_list
 

@@ -12,6 +12,8 @@
 
 #include <libsbx/math/uuid.hpp>
 
+#include <libsbx/memory/tracking_allocator.hpp>
+
 #include <libsbx/devices/devices_module.hpp>
 
 #include <libsbx/utility/hash.hpp>
@@ -314,22 +316,22 @@ private:
     utility::assert_that(false, "Invalid resource type");
   }
 
-  std::unique_ptr<graphics::instance> _instance{};
-  std::unique_ptr<graphics::physical_device> _physical_device{};
-  std::unique_ptr<graphics::logical_device> _logical_device{};
+  memory::unique_ptr<graphics::instance> _instance{};
+  memory::unique_ptr<graphics::physical_device> _physical_device{};
+  memory::unique_ptr<graphics::logical_device> _logical_device{};
 
-  std::unordered_map<command_pool_key, std::shared_ptr<graphics::command_pool>, command_pool_key_hash, command_pool_key_equality> _command_pools{};
+  memory::unordered_map<command_pool_key, std::shared_ptr<graphics::command_pool>, command_pool_key_hash, command_pool_key_equality> _command_pools{};
 
-  std::map<std::string, memory::observer_ptr<const descriptor>> _attachments{};
+  memory::map<std::string, memory::observer_ptr<const descriptor>> _attachments{};
 
-  std::unique_ptr<graphics::surface> _surface{};
+  memory::unique_ptr<graphics::surface> _surface{};
 
-  std::unique_ptr<graphics::swapchain> _swapchain{};
+  memory::unique_ptr<graphics::swapchain> _swapchain{};
 
   std::array<per_frame_data, swapchain::max_frames_in_flight> _per_frame_data{};
-  std::vector<per_image_data> _per_image_data{};
-  std::vector<graphics::command_buffer> _graphics_command_buffers;
-  std::vector<graphics::command_buffer> _compute_command_buffers;
+  memory::vector<per_image_data> _per_image_data{};
+  memory::vector<graphics::command_buffer> _graphics_command_buffers;
+  memory::vector<graphics::command_buffer> _compute_command_buffers;
 
   std::unique_ptr<graphics::renderer> _renderer{};
 
@@ -349,8 +351,8 @@ private:
 
   graphics::compiler _compiler;
 
-  std::vector<command_buffer::buffer_acquire_data> _acquire_ownership_data;
-  std::vector<command_buffer::buffer_release_data> _release_ownership_data;
+  memory::vector<command_buffer::buffer_acquire_data> _acquire_ownership_data;
+  memory::vector<command_buffer::buffer_release_data> _release_ownership_data;
 
   std::uint32_t _current_frame{};
   bool _is_framebuffer_resized{};

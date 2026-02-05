@@ -546,7 +546,7 @@ private:
     }
   }
 
-  std::unordered_map<std::size_t, contact_constraint> _contact_cache{};
+  memory::unordered_map<std::size_t, contact_constraint> _contact_cache{};
   std::uint64_t _solver_tick{0};
 
 }; // class physics_module

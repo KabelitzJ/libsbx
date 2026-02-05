@@ -39,18 +39,18 @@ auto skeleton::set_inverse_root_transform(const math::matrix4x4& inverse_root_tr
   _root_transform = math::matrix4x4::inverted(_inverse_root_transform);
 }
 
-auto skeleton::bones() const -> const std::vector<bone>& {
+auto skeleton::bones() const -> const memory::vector<bone>& {
   return _bones;
 }
 
-auto skeleton::evaluate_pose(const animation& animation, std::float_t time) const -> std::vector<math::matrix4x4> {
+auto skeleton::evaluate_pose(const animation& animation, std::float_t time) const -> memory::vector<math::matrix4x4> {
   EASY_FUNCTION();
   SBX_PROFILE_SCOPE("skeleton::evaluate_pose");
 
-  auto final_bones = std::vector<math::matrix4x4>{};
+  auto final_bones = memory::vector<math::matrix4x4>{};
   final_bones.resize(_bones.size(), math::matrix4x4::identity);
 
-  auto global_transforms = std::vector<math::matrix4x4>{};
+  auto global_transforms = memory::vector<math::matrix4x4>{};
   global_transforms.resize(_bones.size(), math::matrix4x4::identity);
 
   for (std::uint32_t bone_id = 0; bone_id < _bones.size(); ++bone_id) {

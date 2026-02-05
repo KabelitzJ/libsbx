@@ -12,7 +12,7 @@ class fxaa_filter final : public filter {
 
 public:
 
-  fxaa_filter(const std::vector<graphics::attachment_description>& attachments, const std::filesystem::path& path, const std::string& in_image)
+  fxaa_filter(const memory::vector<graphics::attachment_description>& attachments, const std::filesystem::path& path, const std::string& in_image)
   : base_type{attachments, path},
     _in_image{in_image} { }
 

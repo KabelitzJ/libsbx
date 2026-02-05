@@ -27,7 +27,7 @@ public:
   inline static constexpr auto kernel_radius = std::float_t{0.5f};
   inline static constexpr auto noise_dimension = std::uint32_t{8u};
 
-  ssao_filter(const std::vector<graphics::attachment_description>& attachments, const std::filesystem::path& path, std::vector<std::pair<std::string, std::string>>&& attachment_names)
+  ssao_filter(const memory::vector<graphics::attachment_description>& attachments, const std::filesystem::path& path, std::vector<std::pair<std::string, std::string>>&& attachment_names)
   : base{attachments, path, base::default_pipeline_definition},
     _push_handler{base::pipeline()},
     _attachment_names{attachment_names} {

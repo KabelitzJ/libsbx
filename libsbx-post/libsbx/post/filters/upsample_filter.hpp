@@ -20,7 +20,7 @@ class upsample_filter final : public filter {
 
 public:
 
-  upsample_filter(const std::vector<graphics::attachment_description>& attachments, const std::filesystem::path& path, std::string low_attachment, std::string base_attachment, std::float_t intensity = 1.0f)
+  upsample_filter(const memory::vector<graphics::attachment_description>& attachments, const std::filesystem::path& path, std::string low_attachment, std::string base_attachment, std::float_t intensity = 1.0f)
   : base{attachments, path, base::default_pipeline_definition},
     _push_handler{base::pipeline()},
     _low_attachment{std::move(low_attachment)},

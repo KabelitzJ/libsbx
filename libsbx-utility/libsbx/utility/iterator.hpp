@@ -37,6 +37,15 @@ auto map_to(Range&& range, Fn&& fn) -> To<std::invoke_result_t<Fn, const ranges:
   return std::forward<Range>(range) | ranges::views::transform(std::forward<Fn>(fn)) | ranges::to<To>();
 }
 
+template<typename Range>
+concept move_appendable = std::movable<typename Range::value_type> && requires(Range& destination, Range& source, std::size_t n) {
+  source.size();
+  source.clear();
+  destination.size();
+  destination.reserve(n);
+  destination.insert(destination.end(), std::make_move_iterator(source.begin()), std::make_move_iterator(source.end()));
+}; // concept move_appendable
+
 /**
  * @brief Appends elements from a source vector to a destination vector by moving them.
  *
@@ -47,12 +56,20 @@ auto map_to(Range&& range, Fn&& fn) -> To<std::invoke_result_t<Fn, const ranges:
  *
  * @note The source vector will be left empty after this call.
  */
-template<std::movable Type>
-auto append(std::vector<Type>& destination, std::vector<Type>&& source) -> void {
+template<move_appendable Range>
+auto append(Range& destination, Range&& source) -> void {
   destination.reserve(destination.size() + source.size());
   std::move(std::make_move_iterator(source.begin()), std::make_move_iterator(source.end()), std::back_inserter(destination));
   source.clear();
 }
+
+template<typename Range>
+concept copy_appendable = std::copyable<typename Range::value_type> && requires(Range& destination, const Range& source, std::size_t n) {
+  source.size();
+  destination.size();
+  destination.reserve(n);
+  destination.insert(destination.end(), source.begin(), source.end());
+}; // concept copy_appendable
 
 /**
  * @brief Appends elements from a source vector to a destination vector by copying them.
@@ -62,8 +79,8 @@ auto append(std::vector<Type>& destination, std::vector<Type>&& source) -> void 
  * @param destination The vector to which elements will be appended.
  * @param source The vector from which elements will be copied. It remains unchanged.
  */
-template<std::copyable Type>
-auto append(std::vector<Type>& destination, const std::vector<Type>& source) -> void {
+template<copy_appendable Range>
+auto append(Range& destination, const Range& source) -> void {
   destination.reserve(destination.size() + source.size());
   std::copy(source.begin(), source.end(), std::back_inserter(destination));
 }

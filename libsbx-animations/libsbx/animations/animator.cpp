@@ -11,12 +11,13 @@ static auto lerp_bone_transform(const animator::bone_transform& a, const animato
   };
 }
 
-static auto sample_clip_locals(const skeleton& skeleton, const math::uuid& animation_id, const std::float_t time) -> std::vector<animator::bone_transform> {
+static auto sample_clip_locals(const skeleton& skeleton, const math::uuid& animation_id, const std::float_t time) -> memory::vector<animator::bone_transform> {
   auto& assets_module = core::engine::get_module<assets::assets_module>();
 
   auto& animation = assets_module.get_asset<animations::animation>(animation_id);
 
-  auto locals = utility::make_vector<animator::bone_transform>(skeleton.bone_count());
+  auto locals = memory::vector<animator::bone_transform>{};
+  locals.resize(skeleton.bone_count());
 
   const auto& bones = skeleton.bones();
   const auto& tracks = animation.track_map();
@@ -194,9 +195,11 @@ void animator::update(const std::float_t delta_time) {
   }
 }
 
-auto animator::evaluate_locals(const skeleton& skeleton) -> std::vector<bone_transform> {
+auto animator::evaluate_locals(const skeleton& skeleton) -> memory::vector<bone_transform> {
   if (!_has_valid_clip(_current_state)) {
-    auto locals = utility::make_vector<bone_transform>(skeleton.bone_count());
+    auto locals = memory::vector<bone_transform>{};
+    locals.resize(skeleton.bone_count());
+
     const auto& bones = skeleton.bones();
 
     for (auto i = 0; i < skeleton.bone_count(); ++i) {
@@ -212,7 +215,8 @@ auto animator::evaluate_locals(const skeleton& skeleton) -> std::vector<bone_tra
     auto a = sample_clip_locals(skeleton, _current_state.animation_id, _current_state_time);
     auto b = sample_clip_locals(skeleton, _next_state.animation_id, _next_state_time);
 
-    auto out = utility::make_vector<bone_transform>(a.size());
+    auto out = memory::vector<bone_transform>(a.size());
+    out.resize(a.size());
 
     for (size_t i = 0; i < out.size(); ++i) {
       out[i] = lerp_bone_transform(a[i], b[i], blend);
@@ -224,11 +228,12 @@ auto animator::evaluate_locals(const skeleton& skeleton) -> std::vector<bone_tra
   return sample_clip_locals(skeleton, _current_state.animation_id, _current_state_time);
 }
 
-static auto locals_to_globals(const skeleton& skeleton, const std::vector<animator::bone_transform>& local_transforms) -> std::vector<math::matrix4x4> {
+static auto locals_to_globals(const skeleton& skeleton, const memory::vector<animator::bone_transform>& local_transforms) -> memory::vector<math::matrix4x4> {
   const auto bone_count = skeleton.bone_count();
   const auto& bones = skeleton.bones();
 
-  auto global = utility::make_vector<math::matrix4x4>(bone_count, math::matrix4x4::identity);
+  auto global = memory::vector<math::matrix4x4>{};
+  global.resize(bone_count, math::matrix4x4::identity);
 
   for (auto i = 0; i < bone_count; ++i) {
     const auto& t = local_transforms[i];
@@ -245,11 +250,12 @@ static auto locals_to_globals(const skeleton& skeleton, const std::vector<animat
   return global;
 }
 
-static auto globals_to_skin(const skeleton& skeleton, const std::vector<math::matrix4x4>& globals) -> std::vector<math::matrix4x4> {
+static auto globals_to_skin(const skeleton& skeleton, const memory::vector<math::matrix4x4>& globals) -> memory::vector<math::matrix4x4> {
   const auto bone_count = skeleton.bone_count();
   const auto& bones = skeleton.bones();
 
-  auto skin = utility::make_vector<math::matrix4x4>(bone_count, math::matrix4x4::identity);
+  auto skin = memory::vector<math::matrix4x4>{};
+  skin.resize(bone_count, math::matrix4x4::identity);
 
   for (auto i = 0; i < bone_count; ++i) {
     skin[i] = skeleton.inverse_root_transform() * globals[i] * bones[i].inverse_bind_matrix;
@@ -258,11 +264,15 @@ static auto globals_to_skin(const skeleton& skeleton, const std::vector<math::ma
   return skin;
 }
 
-auto animator::evaluate_pose(const skeleton& skeleton, const std::vector<bone_transform>& locals) -> std::vector<math::matrix4x4> {
+auto animator::evaluate_pose(const skeleton& skeleton, const memory::vector<bone_transform>& locals) -> memory::vector<math::matrix4x4> {
   utility::assert_that(skeleton.bone_count() == locals.size(), "Skeleton missmatch");
 
   if (!_has_valid_clip(_current_state)) {
-    return utility::make_vector<math::matrix4x4>(skeleton.bone_count(), math::matrix4x4::identity);
+    auto result = memory::vector<math::matrix4x4>{};
+    
+    result.resize(skeleton.bone_count(), math::matrix4x4::identity);
+
+    return result;
   }
 
   auto globals = locals_to_globals(skeleton, locals);

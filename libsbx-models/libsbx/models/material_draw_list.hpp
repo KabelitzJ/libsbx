@@ -9,6 +9,8 @@
 
 #include <libsbx/assets/assets_module.hpp>
 
+#include <libsbx/memory/tracking_allocator.hpp>
+
 #include <libsbx/graphics/graphics_module.hpp>
 #include <libsbx/graphics/draw_list.hpp>
 
@@ -57,10 +59,10 @@ public:
   struct bucket_entry {
     graphics::storage_buffer_handle draw_commands_buffer{};
     graphics::storage_buffer_handle instance_data_buffer{};
-    std::vector<range_reference> ranges;
+    memory::vector<range_reference> ranges;
   }; // struct bucket_entry
 
-  using bucket_map = std::unordered_map<material_key, bucket_entry, material_key_hash>;
+  using bucket_map = memory::unordered_map<material_key, bucket_entry, material_key_hash>;
 
   inline static const auto transform_data_buffer_name = utility::hashed_string{"transform_data"};
   inline static const auto material_data_buffer_name = utility::hashed_string{"material_data"};
@@ -178,7 +180,7 @@ private:
 
   struct pipeline_data {
 
-    std::unordered_map<math::uuid, std::vector<std::vector<instance_data>>> submesh_instances;
+    memory::unordered_map<math::uuid, memory::vector<memory::vector<instance_data>>> submesh_instances;
 
     graphics::storage_buffer_handle draw_commands_buffer;
     graphics::storage_buffer_handle instance_data_buffer;
@@ -274,8 +276,8 @@ private:
   auto _build_draw_commands(const material_key& key, pipeline_data& pipeline) -> void {
     auto& assets_module = core::engine::get_module<assets::assets_module>();
 
-    auto draw_commands = std::vector<VkDrawIndexedIndirectCommand>{};
-    auto instance_data = std::vector<models::instance_data>{};
+    auto draw_commands = memory::vector<VkDrawIndexedIndirectCommand>{};
+    auto instance_data = memory::vector<models::instance_data>{};
     // auto base_instance = std::uint32_t{0u};
     auto range = graphics::draw_command_range{};
 
@@ -283,7 +285,7 @@ private:
 
     auto emitter = draw_command_emitter{
       .base_instance = std::uint32_t{0u},
-      .emit_instanced = [&](const VkDrawIndexedIndirectCommand& command, std::vector<models::instance_data>&& instances) -> void {
+      .emit_instanced = [&](const VkDrawIndexedIndirectCommand& command, memory::vector<models::instance_data>&& instances) -> void {
         draw_commands.push_back(command);
         utility::append(instance_data, std::move(instances));
         range.count++;
@@ -330,7 +332,7 @@ private:
 
 
   template <typename Type>
-  static auto _update_buffer(graphics::storage_buffer_handle handle, const std::vector<Type>& data) -> void {
+  static auto _update_buffer(graphics::storage_buffer_handle handle, const memory::vector<Type>& data) -> void {
     auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
     auto& buffer = graphics_module.get_resource<graphics::storage_buffer>(handle);
 
@@ -345,16 +347,16 @@ private:
     }
   }
 
-  std::vector<transform_data> _transform_data;
-  std::vector<material_data> _material_data;
+  memory::vector<transform_data> _transform_data;
+  memory::vector<material_data> _material_data;
 
-  std::unordered_map<material_key, pipeline_data, material_key_hash> _pipeline_data;
+  memory::unordered_map<material_key, pipeline_data, material_key_hash> _pipeline_data;
 
   std::array<bucket_map, magic_enum::enum_count<bucket>()> _bucket_ranges;
 
-  inline static auto _material_buckets = std::unordered_map<material_key, std::unordered_set<bucket>, material_key_hash>{};
+  inline static auto _material_buckets = memory::unordered_map<material_key, std::unordered_set<bucket>, material_key_hash>{};
 
-  inline static auto _samplers = std::unordered_map<std::size_t, graphics::sampler_state_handle>{};
+  inline static auto _samplers = memory::unordered_map<std::size_t, graphics::sampler_state_handle>{};
 
 }; // class material_draw_list
 

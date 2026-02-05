@@ -37,7 +37,7 @@ class debug_subrenderer final : public sbx::graphics::subrenderer {
   
   public:
 
-    pipeline(const std::filesystem::path& path, const std::vector<graphics::attachment_description>& attachments)
+    pipeline(const std::filesystem::path& path, const memory::vector<graphics::attachment_description>& attachments)
     : base_type{path, attachments, pipeline_definition} { }
 
     ~pipeline() override = default;
@@ -46,7 +46,7 @@ class debug_subrenderer final : public sbx::graphics::subrenderer {
 
 public:
 
-  debug_subrenderer(const std::vector<graphics::attachment_description>& attachments, const std::filesystem::path& path)
+  debug_subrenderer(const memory::vector<graphics::attachment_description>& attachments, const std::filesystem::path& path)
   : sbx::graphics::subrenderer{},
     _pipeline{path, attachments},
     _push_handler{_pipeline},

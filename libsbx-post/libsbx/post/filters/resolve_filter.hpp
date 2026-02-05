@@ -51,7 +51,7 @@ class resolve_filter final : public filter {
 
 public:
 
-  resolve_filter(const std::vector<graphics::attachment_description>& attachments, const std::filesystem::path& path, std::vector<std::pair<std::string, std::string>>&& attachment_names)
+  resolve_filter(const memory::vector<graphics::attachment_description>& attachments, const std::filesystem::path& path, std::vector<std::pair<std::string, std::string>>&& attachment_names)
   : base{attachments, path, pipeline_definition},
     _push_handler{base::pipeline()},
     _point_lights_storage_handler{},

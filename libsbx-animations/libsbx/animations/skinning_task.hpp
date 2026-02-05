@@ -48,7 +48,7 @@ private:
   }
 
   template<typename Type>
-  static auto _update_buffer(graphics::storage_buffer& buffer, const std::vector<Type>& data) -> void {
+  static auto _update_buffer(graphics::storage_buffer& buffer, const memory::vector<Type>& data) -> void {
     _resize_buffer<Type>(buffer, static_cast<std::uint32_t>(data.size()));
 
     if (!data.empty()) {

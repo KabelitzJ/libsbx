@@ -46,9 +46,9 @@ public:
   
   auto set_inverse_root_transform(const math::matrix4x4& inverse_root_transform) -> void;
 
-  auto bones() const -> const std::vector<bone>&;
+  auto bones() const -> const memory::vector<bone>&;
 
-  auto evaluate_pose(const animation& animation, std::float_t time) const -> std::vector<math::matrix4x4>;
+  auto evaluate_pose(const animation& animation, std::float_t time) const -> memory::vector<math::matrix4x4>;
 
   auto bone_count() const -> std::uint32_t;
 
@@ -58,9 +58,9 @@ public:
 
 private:
 
-  std::vector<bone> _bones;
-  std::vector<utility::hashed_string> _bone_names_by_id;
-  std::unordered_map<utility::hashed_string, std::uint32_t> _bone_id_by_name;
+  memory::vector<bone> _bones;
+  memory::vector<utility::hashed_string> _bone_names_by_id;
+  memory::unordered_map<utility::hashed_string, std::uint32_t> _bone_id_by_name;
   
   math::matrix4x4 _inverse_root_transform;
   math::matrix4x4 _root_transform;

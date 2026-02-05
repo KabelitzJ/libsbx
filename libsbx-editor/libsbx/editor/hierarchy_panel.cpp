@@ -271,11 +271,7 @@ auto hierarchy_panel::_build_tree(const sbx::scenes::node node) -> void {
 
   const auto& relationship = scene.get_component<sbx::scenes::relationship>(node);
 
-  auto flag = ImGuiTreeNodeFlags{ImGuiTreeNodeFlags_OpenOnArrow};
-
-  if (relationship.parent() == sbx::scenes::node::null) {
-    flag |= ImGuiTreeNodeFlags_DefaultOpen;
-  }
+  auto flag = ImGuiTreeNodeFlags{ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_DefaultOpen};
 
   if (relationship.children().empty()) {
     flag |= ImGuiTreeNodeFlags_Leaf;
@@ -288,6 +284,9 @@ auto hierarchy_panel::_build_tree(const sbx::scenes::node node) -> void {
   const auto& tag = scene.get_component<sbx::scenes::tag>(node);
   const auto& id = scene.get_component<sbx::scenes::id>(node);
   const auto* ptr_id = reinterpret_cast<const void*>(static_cast<std::intptr_t>(id.value()));
+
+  ImGui::PushStyleVar(ImGuiStyleVar_IndentSpacing, 12.0f);
+  ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2{2.0f, 2.0f});
 
   if (ImGui::TreeNodeEx(ptr_id, flag, "%s", tag.c_str())) {
     if (ImGui::IsItemClicked(ImGuiMouseButton_Right) || ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
@@ -306,6 +305,8 @@ auto hierarchy_panel::_build_tree(const sbx::scenes::node node) -> void {
 
     ImGui::TreePop();
   }
+
+  ImGui::PopStyleVar(2);
 }
 
 } // namespace sbx::editor

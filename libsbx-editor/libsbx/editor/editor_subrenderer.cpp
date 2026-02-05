@@ -3,6 +3,34 @@
 
 namespace sbx::editor {
 
+auto _format_bytes(VkDeviceSize bytes) -> std::string {
+  const char* units[] = {"B", "KB", "MB", "GB", "TB"};
+
+  auto unit_index = std::int32_t{0};
+
+  auto size = static_cast<std::double_t>(bytes);
+
+  while (size >= 1024u && unit_index < 4u) {
+    size /= 1024u;
+    unit_index++;
+  }
+
+  return fmt::format("{:.2f} {} ({})", size, units[unit_index], bytes);
+}
+
+auto _get_dense_memory_flags(VkMemoryPropertyFlags flags) -> std::string {
+  auto result = std::string{};
+
+  result += (flags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) ? "D" : "-";
+  result += (flags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) ? "V" : "-";
+  result += (flags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) ? "C" : "-";
+  result += (flags & VK_MEMORY_PROPERTY_HOST_CACHED_BIT) ? "H" : "-";
+  result += (flags & VK_MEMORY_PROPERTY_LAZILY_ALLOCATED_BIT) ? "L" : "-";
+  result += (flags & VK_MEMORY_PROPERTY_PROTECTED_BIT) ? "P" : "-";
+  
+  return result;
+}
+
 editor_subrenderer::editor_subrenderer(const std::vector<sbx::graphics::attachment_description>& attachments, const std::filesystem::path& path, const std::string& attachment_name)
 : base{},
   _attachment_name{attachment_name},
@@ -233,6 +261,9 @@ auto editor_subrenderer::_setup_dockspace() -> void {
 }
 
 auto editor_subrenderer::_setup_windows() -> void {
+  auto& graphics_module = sbx::core::engine::get_module<sbx::graphics::graphics_module>();
+  auto& allocator = graphics_module.allocator();
+
   {
     const auto custom_backdrop_color = ImVec4{0.2f, 0.2f, 0.2f, 0.5f};
 
@@ -505,6 +536,114 @@ auto editor_subrenderer::_setup_windows() -> void {
       std::clamp(_mouse_position.x(), 0.0f, static_cast<std::float_t>(_viewport_size.x())), 
       std::clamp(_mouse_position.y(), 0.0f, static_cast<std::float_t>(_viewport_size.y()))
     };
+
+    ImGui::End();
+  }
+
+  {
+    auto statistics = VmaTotalStatistics{};
+    vmaCalculateStatistics(allocator, &statistics);
+
+    const VkPhysicalDeviceMemoryProperties* memory_properties = nullptr;
+    vmaGetMemoryProperties(allocator, &memory_properties);
+
+    if (ImGui::Begin("VMA Statistics")) {
+      if (ImGui::CollapsingHeader("Global Summary", ImGuiTreeNodeFlags_DefaultOpen)) {
+        if (ImGui::BeginTable("##global_summary_table", 2, ImGuiTableFlags_None)) {
+          ImGui::TableSetupColumn("Label", ImGuiTableColumnFlags_WidthFixed, 150.0f);
+          ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthStretch);
+
+          auto render_summary_row = [&](const char* label, const std::string& value) -> void {
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
+            ImGui::Text("%s:", label);
+            ImGui::TableSetColumnIndex(1);
+            ImGui::TextUnformatted(value.c_str());
+          };
+
+          render_summary_row("Total Allocated", _format_bytes(statistics.total.statistics.allocationBytes));
+          render_summary_row("Total Block Bytes", _format_bytes(statistics.total.statistics.blockBytes));
+          render_summary_row("Allocation Count", std::to_string(statistics.total.statistics.allocationCount));
+          render_summary_row("Block Count", std::to_string(statistics.total.statistics.blockCount));
+
+          ImGui::EndTable();
+        }
+      }
+
+      ImGui::Spacing();
+
+      constexpr auto table_flags = ImGuiTableFlags_Resizable | ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_RowBg;
+
+      if (ImGui::BeginTable("VmaAllocTable", 5, table_flags)) {
+        ImGui::TableSetupColumn("Idx", ImGuiTableColumnFlags_WidthFixed, 30.0f);
+        ImGui::TableSetupColumn("Flags", ImGuiTableColumnFlags_WidthFixed, 80.0f);
+        ImGui::TableSetupColumn("Allocations");
+        ImGui::TableSetupColumn("Size");
+        ImGui::TableSetupColumn("Frag %");
+        ImGui::TableHeadersRow();
+
+        for (auto i = 0u; i < memory_properties->memoryTypeCount; ++i) {
+          auto& type_stats = statistics.memoryType[i].statistics;
+
+          if (type_stats.blockCount == 0) {
+            continue;
+          }
+
+          auto property_flags = memory_properties->memoryTypes[i].propertyFlags;
+
+          ImGui::TableNextRow();
+
+          // 1. Index
+          ImGui::TableSetColumnIndex(0);
+          ImGui::Text("%u", i);
+
+          // 2. Dense Symbols
+          ImGui::TableSetColumnIndex(1);
+          
+          auto render_symbol = [](bool condition, const char* symbol) -> void {
+            ImGui::Text("%s", condition ? symbol : "-");
+            ImGui::SameLine(0.0f, 0.0f);
+          };
+
+          ImGui::BeginGroup();
+          render_symbol((property_flags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT), "D"); 
+          render_symbol((property_flags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT), "V"); 
+          render_symbol((property_flags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT), "C"); 
+          render_symbol((property_flags & VK_MEMORY_PROPERTY_HOST_CACHED_BIT), "H"); 
+          render_symbol((property_flags & VK_MEMORY_PROPERTY_LAZILY_ALLOCATED_BIT), "L"); 
+          render_symbol((property_flags & VK_MEMORY_PROPERTY_PROTECTED_BIT), "P"); 
+          ImGui::EndGroup();
+
+          if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("D: Device Local\nV: Host Visible\nC: Host Coherent\nH: Host Cached\nL: Lazily Allocated\nP: Protected");
+          }
+
+          // 3. Allocations
+          ImGui::TableSetColumnIndex(2);
+          ImGui::Text("%u", type_stats.allocationCount);
+
+          // 4. Size
+          ImGui::TableSetColumnIndex(3);
+          ImGui::TextUnformatted(_format_bytes(type_stats.allocationBytes).c_str());
+
+          // 5. Fragmentation
+          ImGui::TableSetColumnIndex(4);
+      
+          const auto total_free = type_stats.blockBytes - type_stats.allocationBytes;
+          
+          if (total_free > 0 && type_stats.allocationCount > 1) {
+            const auto frag_score = 1.0f - (static_cast<std::float_t>(type_stats.allocationBytes) / static_cast<std::float_t>(type_stats.blockBytes));
+            const auto color = (frag_score <= 0.5f) ? ImVec4{1.0f, 1.0f, 1.0f, 1.0f} : ImVec4{1.0f, 0.4f, 0.4f, 1.0f};
+
+            ImGui::TextColored(color, "%.1f%%", frag_score * 100.0f);
+          } else {
+            ImGui::TextDisabled("0.0%%");
+          }
+        }
+
+        ImGui::EndTable();
+      }
+    }
 
     ImGui::End();
   }

@@ -745,7 +745,7 @@ auto editor_subrenderer::_setup_windows() -> void {
 
         ImGui::Separator();
 
-        static constexpr auto plot_capacity = 600;
+        static constexpr auto plot_capacity = 12000u;
 
         struct ui_state {
           std::array<memory::allocation_statistics_snapshot, category_count> prev{};
@@ -1045,7 +1045,7 @@ auto editor_subrenderer::_setup_windows() -> void {
         static constexpr auto kib = 1024.0;
         static constexpr auto mib = kib * kib;
 
-        auto window_s = 30.0;
+        auto window_s = 15.0;
         auto now_s = state.time_s;
         auto min_s = now_s - window_s;
 

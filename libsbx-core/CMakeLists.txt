@@ -78,7 +78,7 @@ set_target_properties(
 target_compile_definitions(
   ${PROJECT_NAME}
   PUBLIC
-    SBX_CONSTEXPR_ENABLED=${SBX_CONSTEXPR_ENABLED}
+    SBX_CONSTEXPR_ENABLED=$<IF:$<BOOL:${SBX_CONSTEXPR_ENABLED}>,1,0>
     BUILD_WITH_EASY_PROFILER
 )
 

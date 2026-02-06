@@ -100,7 +100,7 @@ set_target_properties(
 target_compile_definitions(
   ${PROJECT_NAME}
   PRIVATE
-    SBX_CONSTEXPR_ENABLED=${SBX_CONSTEXPR_ENABLED}
+    SBX_CONSTEXPR_ENABLED=$<IF:$<BOOL:${SBX_CONSTEXPR_ENABLED}>,1,0>
 )
 
 target_compile_features(

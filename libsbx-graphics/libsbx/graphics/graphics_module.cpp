@@ -96,7 +96,7 @@ graphics_module::graphics_module()
   _logical_device{std::make_unique<graphics::logical_device>(*_physical_device)},
   _surface{std::make_unique<graphics::surface>(*_instance, *_physical_device, *_logical_device)},
   _allocator{*_instance, *_physical_device, *_logical_device},
-  _query_pool{*_logical_device, VK_QUERY_TYPE_TIMESTAMP, 1000},
+  _query_pool{*_logical_device, VK_QUERY_TYPE_TIMESTAMP, swapchain::max_frames_in_flight * max_queries_per_frame},
   _is_framebuffer_resized{true},
   _is_viewport_resized{true} {
   auto& devices_module = core::engine::get_module<devices::devices_module>();
@@ -161,7 +161,7 @@ auto graphics_module::update() -> void {
     return;
   }
 
-  const auto& frame_data = _per_frame_data[_current_frame];
+  auto& frame_data = _per_frame_data[_current_frame];
 
   if (_is_framebuffer_resized || _swapchain->is_outdated(_surface->current_extent())) {
     _recreate_swapchain();
@@ -193,18 +193,33 @@ auto graphics_module::update() -> void {
 
   EASY_BLOCK("draw");
 
+  for (const auto& name : frame_data.active_scopes) {
+    auto frame_base = _current_frame * max_queries_per_frame;
+    auto scope_index = _scope_registry[name];
+    
+    auto start_query = frame_base + (scope_index * 2);
+    auto end_query = frame_base + (scope_index * 2) + 1;
+
+    _gpu_timings[name] = _query_pool.get_duration(start_query, end_query);
+  }
+
+  frame_data.active_scopes.clear();
+
+  
   auto& command_buffer = _graphics_command_buffers[_current_frame];
   
   command_buffer.reset();
   command_buffer.begin(VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT);
 
-  _query_pool.reset(command_buffer);
+  _query_pool.reset(command_buffer, _current_frame * max_queries_per_frame, max_queries_per_frame);
 
   auto& image_data = _per_image_data[_swapchain->active_image_index()];
 
-  _query_pool.write_timestamp(command_buffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0);
+  profile_begin(command_buffer, "graphics_module::update");
+
   _renderer->render(command_buffer, *_swapchain);
-  _query_pool.write_timestamp(command_buffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 1);
+
+  profile_end(command_buffer, "graphics_module::update");
 
   command_buffer.end();
 
@@ -212,8 +227,6 @@ auto graphics_module::update() -> void {
   wait_semaphores.push_back({frame_data.image_available_semaphore, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT});
 
   command_buffer.submit(wait_semaphores, image_data.render_finished_semaphore, frame_data.graphics_in_flight_fence);
-
-  auto duration = _query_pool.get_duration(0, 1);
 
   // Present the image to the screen
   const auto result = _swapchain->present(image_data.render_finished_semaphore);
@@ -354,6 +367,20 @@ auto graphics_module::_recreate_command_buffers() -> void {
 
 auto graphics_module::_recreate_attachments() -> void {
   _attachments.clear();
+}
+
+scoped_gpu_timer::scoped_gpu_timer(command_buffer& command_buffer, std::string name)
+: _command_buffer{command_buffer},
+  _name{std::move(name)} {
+  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
+
+  graphics_module.profile_begin(_command_buffer, _name);
+}
+
+scoped_gpu_timer::~scoped_gpu_timer() {
+  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
+
+  graphics_module.profile_end(_command_buffer, _name);
 }
 
 } // namespace sbx::graphics

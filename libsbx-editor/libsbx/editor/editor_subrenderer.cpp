@@ -129,8 +129,8 @@ static auto show_gpu_memory_statistics() -> void {
     vmaGetMemoryProperties(allocator, &memory_properties);
 
     if (ImGui::BeginTable("##global_summary_table", 2, ImGuiTableFlags_None)) {
-      ImGui::TableSetupColumn("Label", ImGuiTableColumnFlags_WidthFixed, 150.0f);
-      ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthStretch);
+      ImGui::TableSetupColumn(nullptr, ImGuiTableColumnFlags_WidthFixed, 150.0f);
+      ImGui::TableSetupColumn(nullptr, ImGuiTableColumnFlags_WidthStretch);
 
       auto render_summary_row = [&](const char* label, const std::string& value) -> void {
         ImGui::TableNextRow();

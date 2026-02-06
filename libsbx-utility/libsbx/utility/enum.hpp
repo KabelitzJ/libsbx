@@ -162,7 +162,7 @@ concept mapped_enum = requires() {
 }; // concept mapped_enum
 
 template<mapped_enum Enum>
-constexpr auto to_string(const Enum value) -> std::string {
+constexpr auto to_string(const Enum value) -> std::string_view {
   auto entry = std::ranges::find_if(enum_mapping<Enum>::values, [&value](const auto& entry){ return entry.value == value; });
 
   if (entry == std::ranges::end(enum_mapping<Enum>::values)) {
@@ -173,7 +173,7 @@ constexpr auto to_string(const Enum value) -> std::string {
 }
 
 template<mapped_enum Enum>
-constexpr auto from_string(const std::string& name) -> std::optional<Enum> {
+constexpr auto from_string(const std::string_view name) -> std::optional<Enum> {
   auto entry = std::ranges::find_if(enum_mapping<Enum>::values, [&name](const auto& entry){ return entry.name == name; });
 
   if (entry == std::ranges::end(enum_mapping<Enum>::values)) {

@@ -35,6 +35,12 @@ struct alignas(16) instance_data {
   std::uint32_t payload;
 }; // struct instance_data
 
+enum class bucket : std::uint8_t {
+  opaque,
+  transparent,
+  shadow
+}; // enum class bucket
+
 template<typename Traits>
 class basic_material_draw_list final : public graphics::draw_list {
 
@@ -45,11 +51,7 @@ public:
   using mesh_type = typename traits_type::mesh_type;
   using instance_payload = typename traits_type::instance_payload;
 
-  enum class bucket : std::uint8_t {
-    opaque,
-    transparent,
-    shadow
-  }; // enum class bucket
+  using bucket = models::bucket;
 
   struct range_reference {
     math::uuid mesh_id;
@@ -361,5 +363,18 @@ private:
 }; // class material_draw_list
 
 } // namespace sbx::models
+
+template<>
+struct sbx::utility::enum_mapping<sbx::models::bucket> {
+
+  using entry_type = sbx::utility::entry<sbx::models::bucket>;
+
+  static constexpr auto values = std::array<entry_type, 3u>{
+    entry_type{sbx::models::bucket::opaque, "opaque"},
+    entry_type{sbx::models::bucket::transparent, "transparent"},
+    entry_type{sbx::models::bucket::shadow, "shadow"}
+  };
+
+}; // struct sbx::utility::enum_mapping
 
 #endif // LIBSBX_MODELS_MATERIAL_DRAW_LIST_HPP_

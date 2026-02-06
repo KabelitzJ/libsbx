@@ -29,7 +29,7 @@ public:
 
   operator handle_type() const;
 
-  auto reset(command_buffer& command_buffer) const -> void;
+  auto reset(command_buffer& command_buffer, std::uint32_t first_query = 0u, std::uint32_t count = 0u) const -> void;
 
   auto write_timestamp(command_buffer& command_buffer, const VkPipelineStageFlagBits stage, const std::uint32_t query_index) const -> void;
 

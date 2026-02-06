@@ -5,6 +5,8 @@
 
 #include <libsbx/core/engine.hpp>
 
+#include <libsbx/graphics/graphics_module.hpp>
+
 namespace sbx::editor {
 
 auto profiler_panel::_populate_nodes(std::span<const core::scope_info> infos, child_map& children_map, std::vector<core::scope_info::node_id>& root_nodes) -> void {
@@ -144,6 +146,8 @@ profiler_panel::profiler_panel() {
 }
 
 auto profiler_panel::render() -> void {
+  auto& graphics_module = sbx::core::engine::get_module<graphics::graphics_module>();
+
   ImGui::Begin("Profiler");
 
   const auto delta_time = core::engine::delta_time();
@@ -157,14 +161,45 @@ auto profiler_panel::render() -> void {
     _frames = 0;
   }
 
-  const auto ms = units::quantity_cast<sbx::units::millisecond>(delta_time);
+  const auto dt_cpu = units::quantity_cast<sbx::units::millisecond>(delta_time);
+  // const auto dt_gpu = graphics_module.gpu_frame_time();
 
-  ImGui::Text("Delta time");
-  ImGui::SameLine();
-  ImGui::PushStyleColor(ImGuiCol_Text, _get_color_for_time(ms));
-  ImGui::Text("  %.3f [ms]", static_cast<std::double_t>(ms.value()));
-  ImGui::PopStyleColor();
-  ImGui::Text("FPS          %d", _fps);
+  if (ImGui::BeginTable("timings_table", 2, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable)) {
+    ImGui::TableSetupColumn(nullptr, ImGuiTableColumnFlags_WidthStretch, 150.0f);
+    ImGui::TableSetupColumn(nullptr, ImGuiTableColumnFlags_WidthStretch);
+
+    ImGui::TableNextRow();
+
+    ImGui::TableSetColumnIndex(0);
+    ImGui::Text("FPS");
+
+    ImGui::TableSetColumnIndex(1); 
+    ImGui::Text("%d", _fps);
+
+    ImGui::TableNextRow();
+    
+    ImGui::TableSetColumnIndex(0); 
+    ImGui::Text("Delta time [CPU]");
+    
+    ImGui::TableSetColumnIndex(1);
+    ImGui::PushStyleColor(ImGuiCol_Text, _get_color_for_time(dt_cpu));
+    ImGui::Text("%.3f [ms]", static_cast<std::double_t>(dt_cpu.value()));
+    ImGui::PopStyleColor();
+
+    for (const auto& [scope, timing] : graphics_module.gpu_timings()) {
+      ImGui::TableNextRow();
+    
+      ImGui::TableSetColumnIndex(0); 
+      ImGui::Text("%s", scope.data());
+
+      ImGui::TableSetColumnIndex(1);
+      ImGui::PushStyleColor(ImGuiCol_Text, _get_color_for_time(timing));
+      ImGui::Text("%.3f [ms]", static_cast<std::double_t>(timing.value()));
+      ImGui::PopStyleColor();
+    }
+
+    ImGui::EndTable();
+  }
 
   const auto scope_infos = core::scope_infos();
 

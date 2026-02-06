@@ -186,6 +186,26 @@ public:
     return _compiler;
   }
 
+  auto gpu_timings() const -> const std::map<std::string, units::millisecond>& {
+    return _gpu_timings;
+  }
+
+  auto profile_begin(graphics::command_buffer& cmd, const std::string& name) -> void {
+    auto frame_base = _current_frame * max_queries_per_frame;
+    auto scope_index = _get_scope_index(name);
+  
+    _query_pool.write_timestamp(cmd, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, frame_base + (scope_index * 2));
+  }
+
+  auto profile_end(graphics::command_buffer& cmd, const std::string& name) -> void {
+    auto frame_base = _current_frame * max_queries_per_frame;
+    auto scope_index = _get_scope_index(name);
+
+    _query_pool.write_timestamp(cmd, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, frame_base + (scope_index * 2) + 1);
+
+    _per_frame_data[_current_frame].active_scopes.push_back(name);
+  }
+
 private:
 
   static constexpr auto _access_mask_from_stage(VkPipelineStageFlagBits2 stage) -> VkAccessFlagBits2 {
@@ -209,10 +229,6 @@ private:
     }
   }
 
-  // auto _start_render_pass(const utility::hashed_string& pass, graphics::command_buffer& command_buffer) -> void;
-
-  // auto _end_render_pass(const utility::hashed_string& pass, graphics::command_buffer& command_buffer) -> void;
-
   auto _reset_render_stages() -> void;
 
   auto _recreate_viewport() -> void;
@@ -234,6 +250,9 @@ private:
     // compute
     VkSemaphore compute_finished_semaphore{nullptr};
     VkFence compute_in_flight_fence{nullptr};
+
+    // general
+    std::vector<std::string> active_scopes;
   }; // struct per_frame_data
   
   struct per_image_data {
@@ -316,6 +335,22 @@ private:
     utility::assert_that(false, "Invalid resource type");
   }
 
+  auto _get_scope_index(const std::string& name) -> std::uint32_t {
+    if (auto it = _scope_registry.find(name); it != _scope_registry.end()) {
+      return it->second;
+    }
+
+    auto index = static_cast<std::uint32_t>(_scope_registry.size());
+
+    if (index >= max_scopes) {
+      throw std::runtime_error("Exceeded max GPU profiling scopes");
+    }
+
+    _scope_registry[name] = index;
+
+    return index;
+  }
+
   std::unique_ptr<graphics::instance> _instance{};
   std::unique_ptr<graphics::physical_device> _physical_device{};
   std::unique_ptr<graphics::logical_device> _logical_device{};
@@ -364,7 +399,32 @@ private:
 
   core::delegate<math::vector2u()> _dynamic_size_callback;
 
+  static constexpr auto max_queries_per_frame = 256u;
+  static constexpr auto max_scopes = max_queries_per_frame / 2;
+
+  std::map<std::string, std::uint32_t> _scope_registry;
+  std::map<std::string, units::millisecond> _gpu_timings;
+
 }; // class graphics_module
+
+class scoped_gpu_timer {
+
+public:
+
+  scoped_gpu_timer(command_buffer& command_buffer, std::string name);
+
+  scoped_gpu_timer(const scoped_gpu_timer&) = delete;
+
+  ~scoped_gpu_timer();
+
+  auto operator=(const scoped_gpu_timer&) -> scoped_gpu_timer& = delete;
+
+private:
+
+  command_buffer& _command_buffer;
+  std::string _name;
+
+}; // class scoped_gpu_timer
 
 } // namespace sbx::graphics
 

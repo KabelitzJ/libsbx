@@ -31,8 +31,9 @@ query_pool::operator handle_type() const {
   return _handle;
 }
 
-auto query_pool::reset(command_buffer& command_buffer) const -> void {
-  vkCmdResetQueryPool(command_buffer, _handle, 0, _query_count);
+auto query_pool::reset(command_buffer& command_buffer, std::uint32_t first_query, std::uint32_t count) const -> void {
+  utility::assert_that(first_query + count <= _query_count, "Invalid reset range");
+  vkCmdResetQueryPool(command_buffer, _handle, first_query, (count != 0u) ? count : _query_count);
 }
 
 auto query_pool::write_timestamp(command_buffer& command_buffer, const VkPipelineStageFlagBits stage, const std::uint32_t query_index) const -> void {

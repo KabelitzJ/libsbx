@@ -7,6 +7,7 @@
 #include <string>
 
 #include <libsbx/utility/hash.hpp>
+#include <libsbx/utility/target.hpp>
 
 #include <fmt/format.h>
 
@@ -29,16 +30,16 @@ public:
 
   constexpr basic_hashed_string(const char_type* string, const size_type length)
   : _string{string, length},
-    _hash{HashFunction{}(_string)} {}
+    _hash{HashFunction{}(string)} {}
 
   template<std::size_t Size>
   constexpr basic_hashed_string(const char_type (&string)[Size])
   : _string{string, Size - 1},
-    _hash{HashFunction{}(_string)} {}
+    _hash{HashFunction{}(string)} {}
 
   constexpr basic_hashed_string(const std::basic_string<char_type>& string)
   : _string{string},
-    _hash{HashFunction{}(_string)} {}
+    _hash{HashFunction{}(string)} {}
 
   constexpr basic_hashed_string(const basic_hashed_string& other) = default;
 
@@ -80,7 +81,11 @@ public:
   }
 
   constexpr auto str() const noexcept -> const std::basic_string<char_type>& {
-    return _string;
+    if constexpr (is_build_configuration_debug_v) {
+      return _string;
+    } else {
+      return _string.str();
+    }
   }
 
   constexpr auto rfind(std::basic_string_view<char_type> string) const noexcept -> size_type {
@@ -97,7 +102,54 @@ public:
 
 private:
 
-  std::basic_string<char_type> _string{};
+  static constexpr auto _empty_cstr() noexcept -> const char_type* {
+    static constexpr auto null_char = char_type{0};
+    return &null_char;
+  }
+
+  struct empty_string {
+
+    template<typename... Args>
+    empty_string([[maybe_unused]] Args&&... args) {
+
+    }
+
+     constexpr auto data() const noexcept -> const char_type* {
+      return _empty_cstr();
+    }
+
+    constexpr auto size() const noexcept -> size_type {
+      return 0u;
+    }
+
+    constexpr auto c_str() const noexcept -> const char_type* {
+      return _empty_cstr();
+    }
+
+    constexpr auto empty() const noexcept -> bool {
+      return true;
+    }
+
+    constexpr auto str() const noexcept -> const std::basic_string<char_type>& {
+      static const auto empty = std::basic_string<char_type>{};
+
+      return empty;
+    }
+
+    constexpr auto rfind([[maybe_unused]] std::basic_string_view<char_type> string) const noexcept -> size_type {
+      return npos;
+    }
+
+
+    constexpr auto substr([[maybe_unused]] const size_type position, [[maybe_unused]] const size_type count) const -> std::basic_string<char_type> {
+      return {};
+    }
+
+  }; // struct empty_string
+
+  using string_type = std::conditional_t<is_build_configuration_debug_v, std::basic_string<char_type>, empty_string>;
+
+  [[no_unique_address]] string_type _string{};
   hash_type _hash{};
 
 }; // class basic_hashed_string

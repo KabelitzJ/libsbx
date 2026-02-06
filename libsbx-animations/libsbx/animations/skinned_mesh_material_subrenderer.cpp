@@ -19,6 +19,8 @@ auto skinned_mesh_material_subrenderer::render(graphics::command_buffer& command
 
   SBX_PROFILE_SCOPE("skinned_mesh_material_subrenderer::render");
 
+  auto timer = graphics::scoped_gpu_timer{command_buffer, fmt::format("skinned material bucket: {}", utility::to_string(_bucket))};
+
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
   auto& renderer = graphics_module.renderer();
 
@@ -36,7 +38,7 @@ auto skinned_mesh_material_subrenderer::render(graphics::command_buffer& command
     pipeline.bind(command_buffer);
 
     descriptor_data.scene_descriptor_handler.push("scene", scene.uniform_handler());
-    descriptor_data.sampler_descriptor_handler.push("samplers", draw_list.samplers());
+    descriptor_data.sampler_descriptor_handler.push("samplers", draw_list.samplers());  
     descriptor_data.image_descriptor_handler.push("images", draw_list.images());
 
     auto update_successful = true;

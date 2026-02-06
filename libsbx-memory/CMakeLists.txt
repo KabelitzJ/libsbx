@@ -63,8 +63,10 @@ set_target_properties(
 
 target_compile_definitions(
   ${PROJECT_NAME}
+  PUBLIC
+    SBX_MEMORY_TRACKING=$<IF:$<BOOL:${SBX_MEMORY_TRACKING}>,1,0>
   PRIVATE
-    SBX_CONSTEXPR_ENABLED=${SBX_CONSTEXPR_ENABLED}
+    SBX_CONSTEXPR_ENABLED=$<IF:$<BOOL:${SBX_CONSTEXPR_ENABLED}>,1,0>
 )
 
 target_compile_features(

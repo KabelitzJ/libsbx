@@ -179,8 +179,12 @@ auto graphics_module::update() -> void {
 
   SBX_PROFILE_BLOCK("graphics_module::acquire_next_image") {
     // Get the next image in the swapchain (back/front buffer)
+    SBX_PROFILE_SCOPE("static_mesh_shadow_subrenderer::render");
+
     EASY_BLOCK("wait for image");
+
     const auto result = _swapchain->acquire_next_image(frame_data.image_available_semaphore, frame_data.graphics_in_flight_fence);
+
     EASY_END_BLOCK;
     
     if (result == VK_ERROR_OUT_OF_DATE_KHR) {

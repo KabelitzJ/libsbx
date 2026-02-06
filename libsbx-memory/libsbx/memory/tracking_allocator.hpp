@@ -35,12 +35,6 @@ struct is_memory_tracking_enabled {
 
 inline constexpr auto is_memory_tracking_enabled_v = is_memory_tracking_enabled::value;
 
-#if defined(SBX_MEMORY_TRACKING)
-static_assert(SBX_MEMORY_TRACKING == 0, "SBX_MEMORY_TRACKING is not 0 in this TU");
-#else
-static_assert(false, "SBX_MEMORY_TRACKING is NOT defined in this TU");
-#endif
-
 enum class allocation_category : std::uint8_t {
   general,
   container,

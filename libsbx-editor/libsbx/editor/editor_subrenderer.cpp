@@ -224,7 +224,7 @@ static auto show_gpu_memory_statistics() -> void {
   }
 }
 
-static constexpr auto plot_capacity = 1200;
+static constexpr auto plot_capacity = 25600;
 static constexpr auto category_count = magic_enum::enum_count<memory::allocation_category>();
 
 struct ui_state {

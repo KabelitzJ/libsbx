@@ -4,7 +4,7 @@
 namespace sbx::graphics {
 
 template<typename Type>
-auto draw_list::update_buffer(const memory::vector<Type>& buffer, const utility::hashed_string& name) -> void {
+auto draw_list::update_buffer(const std::vector<Type>& buffer, const utility::hashed_string& name) -> void {
   auto& storage_buffer = get_buffer(name);
 
   const auto required_size = static_cast<std::uint32_t>(buffer.size() * sizeof(Type));

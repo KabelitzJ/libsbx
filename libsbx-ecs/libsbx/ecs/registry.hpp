@@ -335,7 +335,7 @@ private:
 
 }; // class basic_registry
 
-using registry = basic_registry<entity, memory::allocator_type<entity>>;
+using registry = basic_registry<entity>;
 
 } // namespace sbx::ecs
 

@@ -192,7 +192,7 @@ class sprite_subrenderer : public graphics::subrenderer {
 
 public:
 
-  sprite_subrenderer(const memory::vector<graphics::attachment_description>& attachments, const std::filesystem::path& path)
+  sprite_subrenderer(const std::vector<graphics::attachment_description>& attachments, const std::filesystem::path& path)
   : graphics::subrenderer{},
     _attachments{attachments},
     _shader_path{path},
@@ -421,10 +421,10 @@ private:
   };
 
 
-  memory::vector<graphics::attachment_description> _attachments;
+  std::vector<graphics::attachment_description> _attachments;
   std::filesystem::path _shader_path;
 
-  memory::unordered_map<pipeline_key, pipeline_data, pipeline_key_hash> _pipeline_cache;
+  std::unordered_map<pipeline_key, pipeline_data, pipeline_key_hash> _pipeline_cache;
 
   std::array<graphics::storage_buffer_handle, mode_count> _sprite_buffers;
   std::array<sprite_batch, mode_count> _batches;

@@ -46,7 +46,7 @@ static auto _get_stage_from_slang(SlangStage stage) -> VkShaderStageFlagBits {
   }
 }
 
-graphics_pipeline::graphics_pipeline(const std::filesystem::path& path, const memory::vector<attachment_description>& attachments, const pipeline_definition& default_definition, const VkSpecializationInfo* specialization_info)
+graphics_pipeline::graphics_pipeline(const std::filesystem::path& path, const std::vector<attachment_description>& attachments, const pipeline_definition& default_definition, const VkSpecializationInfo* specialization_info)
 : base{},
   _bind_point{VK_PIPELINE_BIND_POINT_GRAPHICS} {
   auto& assets_module = core::engine::get_module<assets::assets_module>();
@@ -96,7 +96,7 @@ graphics_pipeline::graphics_pipeline(const std::filesystem::path& path, const me
   _initialize(attachments, definition, specialization_info);
 }
 
-graphics_pipeline::graphics_pipeline(const compiled_shaders& shaders, const memory::vector<attachment_description>& attachments, const pipeline_definition& default_definition, const VkSpecializationInfo* specialization_info)
+graphics_pipeline::graphics_pipeline(const compiled_shaders& shaders, const std::vector<attachment_description>& attachments, const pipeline_definition& default_definition, const VkSpecializationInfo* specialization_info)
 : base{},
   _bind_point{VK_PIPELINE_BIND_POINT_GRAPHICS} {
 
@@ -127,7 +127,7 @@ graphics_pipeline::graphics_pipeline(const compiled_shaders& shaders, const memo
   _initialize(attachments, default_definition, specialization_info);
 }
 
-auto graphics_pipeline::_initialize(const memory::vector<attachment_description>& attachments, const pipeline_definition& definition, const VkSpecializationInfo* specialization_info) -> void {
+auto graphics_pipeline::_initialize(const std::vector<attachment_description>& attachments, const pipeline_definition& definition, const VkSpecializationInfo* specialization_info) -> void {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 
   const auto& logical_device = graphics_module.logical_device();

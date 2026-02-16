@@ -53,11 +53,11 @@ public:
     return _submeshes;
   }
 
-  auto set_nodes(memory::vector<node>&& nodes) -> void {
+  auto set_nodes(std::vector<node>&& nodes) -> void {
     _nodes = std::move(nodes);
   }
 
-  auto nodes() const -> const memory::vector<node>& {
+  auto nodes() const -> const std::vector<node>& {
     return _nodes;
   }
 
@@ -65,11 +65,11 @@ public:
     return _nodes.at(index);
   }
 
-  auto set_pose(memory::vector<math::matrix4x4>&& pose) -> void {
+  auto set_pose(std::vector<math::matrix4x4>&& pose) -> void {
     _pose = std::move(pose);
   }
 
-  auto pose() const -> const memory::vector<math::matrix4x4>& {
+  auto pose() const -> const std::vector<math::matrix4x4>& {
     return _pose;
   }
 
@@ -78,8 +78,8 @@ private:
   math::uuid _mesh_id;
   std::vector<submesh> _submeshes;
 
-  memory::vector<node> _nodes;
-  memory::vector<math::matrix4x4> _pose;
+  std::vector<node> _nodes;
+  std::vector<math::matrix4x4> _pose;
 
 }; // class skinned_mesh
 

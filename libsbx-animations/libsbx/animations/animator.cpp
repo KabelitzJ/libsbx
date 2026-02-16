@@ -11,12 +11,12 @@ static auto lerp_bone_transform(const animator::bone_transform& a, const animato
   };
 }
 
-static auto sample_clip_locals(const skeleton& skeleton, const math::uuid& animation_id, const std::float_t time) -> memory::vector<animator::bone_transform> {
+static auto sample_clip_locals(const skeleton& skeleton, const math::uuid& animation_id, const std::float_t time) -> std::vector<animator::bone_transform> {
   auto& assets_module = core::engine::get_module<assets::assets_module>();
 
   auto& animation = assets_module.get_asset<animations::animation>(animation_id);
 
-  auto locals = memory::vector<animator::bone_transform>{};
+  auto locals = std::vector<animator::bone_transform>{};
   locals.resize(skeleton.bone_count());
 
   const auto& bones = skeleton.bones();
@@ -195,9 +195,9 @@ void animator::update(const std::float_t delta_time) {
   }
 }
 
-auto animator::evaluate_locals(const skeleton& skeleton) -> memory::vector<bone_transform> {
+auto animator::evaluate_locals(const skeleton& skeleton) -> std::vector<bone_transform> {
   if (!_has_valid_clip(_current_state)) {
-    auto locals = memory::vector<bone_transform>{};
+    auto locals = std::vector<bone_transform>{};
     locals.resize(skeleton.bone_count());
 
     const auto& bones = skeleton.bones();
@@ -215,7 +215,7 @@ auto animator::evaluate_locals(const skeleton& skeleton) -> memory::vector<bone_
     auto a = sample_clip_locals(skeleton, _current_state.animation_id, _current_state_time);
     auto b = sample_clip_locals(skeleton, _next_state.animation_id, _next_state_time);
 
-    auto out = memory::vector<bone_transform>(a.size());
+    auto out = std::vector<bone_transform>(a.size());
     out.resize(a.size());
 
     for (size_t i = 0; i < out.size(); ++i) {
@@ -228,11 +228,11 @@ auto animator::evaluate_locals(const skeleton& skeleton) -> memory::vector<bone_
   return sample_clip_locals(skeleton, _current_state.animation_id, _current_state_time);
 }
 
-static auto locals_to_globals(const skeleton& skeleton, const memory::vector<animator::bone_transform>& local_transforms) -> memory::vector<math::matrix4x4> {
+static auto locals_to_globals(const skeleton& skeleton, const std::vector<animator::bone_transform>& local_transforms) -> std::vector<math::matrix4x4> {
   const auto bone_count = skeleton.bone_count();
   const auto& bones = skeleton.bones();
 
-  auto global = memory::vector<math::matrix4x4>{};
+  auto global = std::vector<math::matrix4x4>{};
   global.resize(bone_count, math::matrix4x4::identity);
 
   for (auto i = 0; i < bone_count; ++i) {
@@ -250,11 +250,11 @@ static auto locals_to_globals(const skeleton& skeleton, const memory::vector<ani
   return global;
 }
 
-static auto globals_to_skin(const skeleton& skeleton, const memory::vector<math::matrix4x4>& globals) -> memory::vector<math::matrix4x4> {
+static auto globals_to_skin(const skeleton& skeleton, const std::vector<math::matrix4x4>& globals) -> std::vector<math::matrix4x4> {
   const auto bone_count = skeleton.bone_count();
   const auto& bones = skeleton.bones();
 
-  auto skin = memory::vector<math::matrix4x4>{};
+  auto skin = std::vector<math::matrix4x4>{};
   skin.resize(bone_count, math::matrix4x4::identity);
 
   for (auto i = 0; i < bone_count; ++i) {
@@ -264,11 +264,11 @@ static auto globals_to_skin(const skeleton& skeleton, const memory::vector<math:
   return skin;
 }
 
-auto animator::evaluate_pose(const skeleton& skeleton, const memory::vector<bone_transform>& locals) -> memory::vector<math::matrix4x4> {
+auto animator::evaluate_pose(const skeleton& skeleton, const std::vector<bone_transform>& locals) -> std::vector<math::matrix4x4> {
   utility::assert_that(skeleton.bone_count() == locals.size(), "Skeleton missmatch");
 
   if (!_has_valid_clip(_current_state)) {
-    auto result = memory::vector<math::matrix4x4>{};
+    auto result = std::vector<math::matrix4x4>{};
     
     result.resize(skeleton.bone_count(), math::matrix4x4::identity);
 

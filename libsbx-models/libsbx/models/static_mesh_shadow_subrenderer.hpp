@@ -41,7 +41,7 @@ class static_mesh_shadow_subrenderer final : public graphics::subrenderer {
 
 public:
 
-  static_mesh_shadow_subrenderer(const memory::vector<graphics::attachment_description>& attachments, const std::filesystem::path& base_pipeline, const std::uint32_t cascade);
+  static_mesh_shadow_subrenderer(const std::vector<graphics::attachment_description>& attachments, const std::filesystem::path& base_pipeline, const std::uint32_t cascade);
 
   ~static_mesh_shadow_subrenderer() override;
 
@@ -70,13 +70,13 @@ private:
 
   auto _get_or_create_descriptor_data(const graphics::graphics_pipeline_handle& handle) -> descriptor_data&;
 
-  memory::vector<graphics::attachment_description> _attachments;
+  std::vector<graphics::attachment_description> _attachments;
   std::filesystem::path _base_pipeline;
   std::uint32_t _cascade;
 
-  inline static memory::unordered_map<models::material_key, pipeline_data, models::material_key_hash> _pipeline_cache{};
+  inline static std::unordered_map<models::material_key, pipeline_data, models::material_key_hash> _pipeline_cache{};
 
-  memory::unordered_map<graphics::graphics_pipeline_handle, descriptor_data> _descriptor_cache{};
+  std::unordered_map<graphics::graphics_pipeline_handle, descriptor_data> _descriptor_cache{};
 
 }; // class shadow_subrenderer
 

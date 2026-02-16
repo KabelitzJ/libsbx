@@ -104,7 +104,7 @@ struct skinned_mesh_traits {
   }
 
   template<typename Mesh, typename Emitter>
-  static auto build_draw_commands(const Mesh& mesh, std::uint32_t submesh_index, memory::vector<models::instance_data>&& instances, Emitter&& emitter) -> std::uint32_t {
+  static auto build_draw_commands(const Mesh& mesh, std::uint32_t submesh_index, std::vector<models::instance_data>&& instances, Emitter&& emitter) -> std::uint32_t {
     auto base_instance_offset = std::uint32_t{0};
 
     const auto& submesh = mesh.submesh(submesh_index);
@@ -127,14 +127,14 @@ struct skinned_mesh_traits {
     return base_instance_offset;
   }
 
-  static auto skinning_jobs() -> memory::vector<skinning_job>& {
+  static auto skinning_jobs() -> std::vector<skinning_job>& {
     return _skinning_jobs;
   }
 
 private:
 
-  inline static auto _bone_matrices = memory::vector<math::matrix4x4>{};
-  inline static auto _skinning_jobs = memory::vector<skinning_job>{};
+  inline static auto _bone_matrices = std::vector<math::matrix4x4>{};
+  inline static auto _skinning_jobs = std::vector<skinning_job>{};
 
 }; // struct skinned_mesh_traits
 

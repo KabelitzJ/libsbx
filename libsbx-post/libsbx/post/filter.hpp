@@ -22,7 +22,7 @@ public:
 
   using pipeline_type = graphics::graphics_pipeline;
 
-  filter(const memory::vector<graphics::attachment_description>& attachments, const std::filesystem::path& path, const graphics::pipeline_definition& pipeline_definition = default_pipeline_definition, const VkSpecializationInfo* specialization_info = nullptr)
+  filter(const std::vector<graphics::attachment_description>& attachments, const std::filesystem::path& path, const graphics::pipeline_definition& pipeline_definition = default_pipeline_definition, const VkSpecializationInfo* specialization_info = nullptr)
   : graphics::subrenderer{},
     _pipeline{path, attachments, pipeline_definition, specialization_info},
     _descriptor_handler{_pipeline, 0u} { }

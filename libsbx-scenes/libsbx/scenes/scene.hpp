@@ -79,7 +79,7 @@ class scene {
 
 public:
 
-  using registry_type = ecs::basic_registry<scenes::node, memory::allocator_type<scenes::node>>;
+  using registry_type = ecs::basic_registry<scenes::node>;
 
   // template<typename... Get, typename... Exclude>
   // using query_result = ecs::basic_view
@@ -594,7 +594,7 @@ private:
 
   auto _ensure_world(const scenes::node node) -> const scenes::global_transform&;
 
-  memory::unordered_map<math::uuid, scenes::node> _nodes;
+  std::unordered_map<math::uuid, scenes::node> _nodes;
 
   registry_type _registry;
   scenes::node _root;
@@ -608,16 +608,16 @@ private:
 
 
 
-  memory::unordered_map<utility::hashed_string, graphics::image2d_handle> _image_ids;
-  memory::unordered_map<utility::hashed_string, graphics::cube_image2d_handle> _cube_image_ids;
-  memory::unordered_map<utility::hashed_string, math::uuid> _mesh_ids;
-  memory::unordered_map<utility::hashed_string, math::uuid> _animation_ids;
-  memory::unordered_map<utility::hashed_string, math::uuid> _materials_ids;
+  std::unordered_map<utility::hashed_string, graphics::image2d_handle> _image_ids;
+  std::unordered_map<utility::hashed_string, graphics::cube_image2d_handle> _cube_image_ids;
+  std::unordered_map<utility::hashed_string, math::uuid> _mesh_ids;
+  std::unordered_map<utility::hashed_string, math::uuid> _animation_ids;
+  std::unordered_map<utility::hashed_string, math::uuid> _materials_ids;
 
-  memory::unordered_map<graphics::image2d_handle, assets::asset_metadata> _image_metadata;
-  memory::unordered_map<graphics::cube_image2d_handle, assets::asset_metadata> _cube_image_metadata;
-  memory::unordered_map<math::uuid, assets::asset_metadata> _mesh_metadata;
-  memory::unordered_map<math::uuid, assets::asset_metadata> _material_metadata;
+  std::unordered_map<graphics::image2d_handle, assets::asset_metadata> _image_metadata;
+  std::unordered_map<graphics::cube_image2d_handle, assets::asset_metadata> _cube_image_metadata;
+  std::unordered_map<math::uuid, assets::asset_metadata> _mesh_metadata;
+  std::unordered_map<math::uuid, assets::asset_metadata> _material_metadata;
 
 }; // class scene
 

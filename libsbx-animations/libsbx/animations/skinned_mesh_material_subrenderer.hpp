@@ -53,7 +53,7 @@ class skinned_mesh_material_subrenderer final : public graphics::subrenderer {
 
 public:
 
-  skinned_mesh_material_subrenderer(const memory::vector<graphics::attachment_description>& attachments, const std::filesystem::path& base_pipeline, const skinned_mesh_material_draw_list::bucket bucket, memory::observer_ptr<const skinning_task> skinning_task);
+  skinned_mesh_material_subrenderer(const std::vector<graphics::attachment_description>& attachments, const std::filesystem::path& base_pipeline, const skinned_mesh_material_draw_list::bucket bucket, memory::observer_ptr<const skinning_task> skinning_task);
 
   ~skinned_mesh_material_subrenderer() override;
 
@@ -90,7 +90,7 @@ private:
     "blend_main"
   };
 
-  memory::vector<graphics::attachment_description> _attachments;
+  std::vector<graphics::attachment_description> _attachments;
   std::filesystem::path _base_pipeline;
   skinned_mesh_material_draw_list::bucket _bucket;
 

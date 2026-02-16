@@ -17,7 +17,7 @@ class default_filter final : public filter {
 
 public:
 
-  default_filter(const memory::vector<graphics::attachment_description>& attachments, const std::filesystem::path& path, const std::string& attachment_name)
+  default_filter(const std::vector<graphics::attachment_description>& attachments, const std::filesystem::path& path, const std::string& attachment_name)
   : base_type{attachments, path},
     _attachment_name{attachment_name} { }
 

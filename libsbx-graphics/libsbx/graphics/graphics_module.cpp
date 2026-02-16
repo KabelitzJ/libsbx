@@ -152,6 +152,7 @@ graphics_module::~graphics_module() {
 
 auto graphics_module::update() -> void {
   SBX_PROFILE_SCOPE("graphics_module::update");
+  SBX_MEMORY_SCOPE(memory::allocation_category::graphics);
 
   auto& devices_module = core::engine::get_module<devices::devices_module>();
 

@@ -136,7 +136,7 @@ private:
   graphics::push_handler _simulate_push_handler;
 
   // Per-emitter GPU data
-  memory::unordered_map<scenes::node, emitter_gpu_data> _emitter_gpu_data;
+  std::unordered_map<scenes::node, emitter_gpu_data> _emitter_gpu_data;
 
   std::uint32_t _frame_seed{0};
 

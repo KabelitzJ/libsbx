@@ -98,12 +98,12 @@ auto render_graph::find_attachment(const std::string& name) const -> const image
   return graphics_module.get_resource<image2d>(_color_images[entry->second]);
 }
 
-auto render_graph::attachment_descriptions(const pass_handle handle) const -> memory::vector<attachment_description> {
+auto render_graph::attachment_descriptions(const pass_handle handle) const -> std::vector<attachment_description> {
   utility::assert_that(handle.is_valid() && handle.index < _passes.size(), "Invalid pass handle");
 
   const auto& pass = _passes[handle.index]; 
 
-  auto descriptions = memory::vector<attachment_description>{};
+  auto descriptions = std::vector<attachment_description>{};
   descriptions.reserve(pass._writes.size());
 
   for (const auto& [attachment_handle, load_op] : pass._writes) {

@@ -128,9 +128,9 @@ public:
     std::unordered_map<SlangStage, std::vector<std::uint32_t>> shader_codes{};
   }; // struct compiled_shaders
 
-  graphics_pipeline(const std::filesystem::path& path, const memory::vector<attachment_description>& attachments, const pipeline_definition& default_definition = pipeline_definition{}, const VkSpecializationInfo* specialization_info = nullptr);
+  graphics_pipeline(const std::filesystem::path& path, const std::vector<attachment_description>& attachments, const pipeline_definition& default_definition = pipeline_definition{}, const VkSpecializationInfo* specialization_info = nullptr);
 
-  graphics_pipeline(const compiled_shaders& shaders, const memory::vector<attachment_description>& attachments, const pipeline_definition& default_definition = pipeline_definition{}, const VkSpecializationInfo* specialization_info = nullptr);
+  graphics_pipeline(const compiled_shaders& shaders, const std::vector<attachment_description>& attachments, const pipeline_definition& default_definition = pipeline_definition{}, const VkSpecializationInfo* specialization_info = nullptr);
 
   ~graphics_pipeline() override;
 
@@ -206,15 +206,15 @@ private:
     VkDescriptorSetLayout layout;
   }; // struct per_set_data
 
-  auto _initialize(const memory::vector<attachment_description>& attachments, const pipeline_definition& definition, const VkSpecializationInfo* specialization_info) -> void;
+  auto _initialize(const std::vector<attachment_description>& attachments, const pipeline_definition& definition, const VkSpecializationInfo* specialization_info) -> void;
 
   auto _update_definition(const std::filesystem::path& path, const pipeline_definition default_definition) -> pipeline_definition;
 
   auto _get_stage_from_name(const std::string& name) const noexcept -> VkShaderStageFlagBits;
 
-  memory::unordered_map<VkShaderStageFlagBits, std::unique_ptr<shader>> _shaders{};
+  std::unordered_map<VkShaderStageFlagBits, std::unique_ptr<shader>> _shaders{};
 
-  memory::vector<per_set_data> _set_data;
+  std::vector<per_set_data> _set_data;
   std::optional<shader::uniform_block> _push_constant;
 
   std::string _name{};

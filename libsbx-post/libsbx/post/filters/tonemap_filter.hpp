@@ -37,7 +37,7 @@ class tonemap_filter final : public filter {
 
 public:
 
-  tonemap_filter(const memory::vector<graphics::attachment_description>& attachments, const std::filesystem::path& path, std::vector<std::pair<std::string, std::string>>&& attachment_names, const tonemap_config& tonemap_config = post::tonemap_config{})
+  tonemap_filter(const std::vector<graphics::attachment_description>& attachments, const std::filesystem::path& path, std::vector<std::pair<std::string, std::string>>&& attachment_names, const tonemap_config& tonemap_config = post::tonemap_config{})
   : base{attachments, path, base::default_pipeline_definition},
     _push_handler{base::pipeline()},
     _attachment_names{std::move(attachment_names)},

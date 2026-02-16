@@ -57,7 +57,7 @@ public:
   auto destroy_buffer(const utility::hashed_string& name) -> void;
 
   template<typename Type>
-  auto update_buffer(const memory::vector<Type>& buffer, const utility::hashed_string& name) -> void;
+  auto update_buffer(const std::vector<Type>& buffer, const utility::hashed_string& name) -> void;
 
 protected:
 

@@ -74,6 +74,8 @@ auto engine::_run_main_loop() -> void {
   auto fixed_accumulator = units::second{};
 
   while (_is_running) {
+    SBX_MEMORY_SCOPE(memory::allocation_category::engine);
+
     const auto now = clock_type::now();
     const auto delta_time = std::chrono::duration_cast<std::chrono::duration<std::float_t>>(now - last).count();
     last = now;

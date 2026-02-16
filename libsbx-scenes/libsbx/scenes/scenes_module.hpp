@@ -56,7 +56,7 @@ public:
 
   auto has_component_io(const std::uint32_t id) -> bool;
 
-  auto debug_lines() const -> const memory::vector<line>&;
+  auto debug_lines() const -> const std::vector<line>&;
 
   auto clear_debug_lines() -> void;
 
@@ -82,7 +82,7 @@ private:
 
   component_io_registry _component_io_registry;
 
-  memory::vector<line> _debug_lines{};
+  std::vector<line> _debug_lines{};
 
 }; // class scene_modules
 

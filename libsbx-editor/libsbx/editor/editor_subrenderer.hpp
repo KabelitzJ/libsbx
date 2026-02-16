@@ -58,7 +58,7 @@ class editor_subrenderer final : public sbx::graphics::subrenderer {
 
 public:
 
-  editor_subrenderer(const memory::vector<sbx::graphics::attachment_description>& attachments, const std::filesystem::path& path, const std::string& attachment_name);
+  editor_subrenderer(const std::vector<sbx::graphics::attachment_description>& attachments, const std::filesystem::path& path, const std::string& attachment_name);
 
   ~editor_subrenderer() override;
 

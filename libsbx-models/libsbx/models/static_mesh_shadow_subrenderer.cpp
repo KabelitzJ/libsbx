@@ -3,7 +3,7 @@
 
 namespace sbx::models {
 
-static_mesh_shadow_subrenderer::static_mesh_shadow_subrenderer(const memory::vector<graphics::attachment_description>& attachments, const std::filesystem::path& base_pipeline, const std::uint32_t cascade)
+static_mesh_shadow_subrenderer::static_mesh_shadow_subrenderer(const std::vector<graphics::attachment_description>& attachments, const std::filesystem::path& base_pipeline, const std::uint32_t cascade)
 : graphics::subrenderer{},
   _attachments{attachments},
   _base_pipeline{base_pipeline},

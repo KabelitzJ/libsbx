@@ -42,7 +42,7 @@ public:
 
   inline static constexpr auto type = Type;
 
-  blur_filter(const memory::vector<graphics::attachment_description>& attachments, const std::filesystem::path& path, const std::string& attachment_name, const math::vector2& direction)
+  blur_filter(const std::vector<graphics::attachment_description>& attachments, const std::filesystem::path& path, const std::string& attachment_name, const math::vector2& direction)
   : base{attachments, path, base::default_pipeline_definition, _specialization_info(0u, utility::to_underlying(Type))},
     _push_handler{base::pipeline()},
     _attachment_name{attachment_name},

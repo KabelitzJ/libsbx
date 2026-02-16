@@ -31,7 +31,7 @@ class ui_subrenderer : public graphics::subrenderer {
 
 public:
 
-  ui_subrenderer(const memory::vector<graphics::attachment_description>& attachments, const std::filesystem::path& path)
+  ui_subrenderer(const std::vector<graphics::attachment_description>& attachments, const std::filesystem::path& path)
   : graphics::subrenderer{},
     _pipeline{path, attachments} {
     auto& assets_module = core::engine::get_module<assets::assets_module>();

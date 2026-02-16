@@ -85,7 +85,7 @@ class static_mesh_material_subrenderer final : public graphics::subrenderer {
 
 public:
 
-  static_mesh_material_subrenderer(const memory::vector<graphics::attachment_description>& attachments, const std::filesystem::path& base_pipeline, const static_mesh_material_draw_list::bucket bucket);
+  static_mesh_material_subrenderer(const std::vector<graphics::attachment_description>& attachments, const std::filesystem::path& base_pipeline, const static_mesh_material_draw_list::bucket bucket);
 
   ~static_mesh_material_subrenderer() override;
 
@@ -127,13 +127,13 @@ private:
     "blend_main"    // alpha_mode::blend
   };
 
-  memory::vector<graphics::attachment_description> _attachments;
+  std::vector<graphics::attachment_description> _attachments;
   std::filesystem::path _base_pipeline;
   static_mesh_material_draw_list::bucket _bucket;
 
-  inline static auto _pipeline_cache = memory::unordered_map<material_key, pipeline_data, material_key_hash>{};
+  inline static auto _pipeline_cache = std::unordered_map<material_key, pipeline_data, material_key_hash>{};
 
-  memory::unordered_map<graphics::graphics_pipeline_handle, descriptor_data> _descriptor_cache{};
+  std::unordered_map<graphics::graphics_pipeline_handle, descriptor_data> _descriptor_cache{};
 
 }; // class static_mesh_subrenderer
 

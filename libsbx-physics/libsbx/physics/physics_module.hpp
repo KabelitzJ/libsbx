@@ -46,6 +46,7 @@ public:
 
   auto update() -> void override {
     SBX_PROFILE_SCOPE("physics_module::update");
+    SBX_MEMORY_SCOPE(memory::allocation_category::physics);
 
     const auto dt = core::engine::fixed_delta_time();
 
@@ -546,7 +547,7 @@ private:
     }
   }
 
-  memory::unordered_map<std::size_t, contact_constraint> _contact_cache{};
+  std::unordered_map<std::size_t, contact_constraint> _contact_cache{};
   std::uint64_t _solver_tick{0};
 
 }; // class physics_module

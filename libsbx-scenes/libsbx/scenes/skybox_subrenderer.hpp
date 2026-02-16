@@ -55,7 +55,7 @@ class skybox_subrenderer : public sbx::graphics::subrenderer {
   
   public:
   
-    pipeline(const std::filesystem::path& path, const memory::vector<graphics::attachment_description>& attachments)
+    pipeline(const std::filesystem::path& path, const std::vector<graphics::attachment_description>& attachments)
     : base_type{path, attachments, pipeline_definition} { }
   
     ~pipeline() override = default;
@@ -64,7 +64,7 @@ class skybox_subrenderer : public sbx::graphics::subrenderer {
 
 public:
 
-  skybox_subrenderer(const memory::vector<graphics::attachment_description>& attachments, const std::filesystem::path& path)
+  skybox_subrenderer(const std::vector<graphics::attachment_description>& attachments, const std::filesystem::path& path)
   : graphics::subrenderer{},
     _pipeline{path, attachments},
     _descriptor_handler{_pipeline, 0u},

@@ -617,7 +617,7 @@ static auto show_memory_statistics() -> void {
   ImGui::End();
 }
 
-editor_subrenderer::editor_subrenderer(const memory::vector<sbx::graphics::attachment_description>& attachments, const std::filesystem::path& path, const std::string& attachment_name)
+editor_subrenderer::editor_subrenderer(const std::vector<sbx::graphics::attachment_description>& attachments, const std::filesystem::path& path, const std::string& attachment_name)
 : base{},
   _attachment_name{attachment_name},
   _pipeline{path, attachments},

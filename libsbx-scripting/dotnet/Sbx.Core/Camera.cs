@@ -4,17 +4,19 @@ using Sbx.Math;
 namespace Sbx.Core
 {
 
-  public static class Camera
+  public class Camera
   {
 
-    public static Ray ScreenPointToRay(Vector2 position)
+    public static Camera Main = new Camera();
+
+    public Ray ScreenPointToRay(Vector2 position)
     {
       Ray ray;
       unsafe { InternalCalls.Camera_ScreenPointToRay(&ray, &position); }
       return ray;
     }
 
-    public static Vector3 Position
+    public Vector3 Position
     {
       get {
         Vector3 position;
@@ -23,6 +25,45 @@ namespace Sbx.Core
       }
       set { unsafe { InternalCalls.Camera_SetPosition(&value); } }
     }
+
+    public Vector3 Forward
+    {
+      get {
+        Vector3 forward;
+        unsafe { InternalCalls.Camera_GetForward(&forward); }
+        return forward;
+      }
+    }
+
+    public Vector3 FlatForward
+    {
+      get
+      {
+        var forward = Forward;
+        forward.Y = 0.0f;
+        return forward.Normalized();
+      }
+    }
+
+    public Vector3 Right
+    {
+      get {
+        Vector3 forward;
+        unsafe { InternalCalls.Camera_GetRight(&forward); }
+        return forward;
+      }
+    }
+
+    public Vector3 FlatRight
+    {
+      get
+      {
+        var right = Right;
+        right.Y = 0.0f;
+        return right.Normalized();
+      }
+    }
+
   } // class Camera
 
 } // namespace Sbx.Core

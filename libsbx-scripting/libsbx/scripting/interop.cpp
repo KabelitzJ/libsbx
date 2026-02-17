@@ -140,6 +140,19 @@ auto interop::transform_set_position(std::uint32_t node, math::vector3* position
   transform.set_position(*position);
 }
 
+auto interop::transform_get_world_position(std::uint32_t node, math::vector3* position) -> void {
+  auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
+  auto& scene = scenes_module.scene();
+
+  if (!scene.is_valid(static_cast<scenes::node>(node))) {
+    utility::logger<"scripting">::error("Attempting to get position of invalid node");
+
+    return;
+  }
+
+  *position = scene.world_position(static_cast<scenes::node>(node));
+}
+
 auto interop::transform_get_rotation(std::uint32_t node, math::quaternion* rotation) -> void {
   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
   auto& scene = scenes_module.scene();
@@ -246,6 +259,111 @@ auto interop::transform_look_at(std::uint32_t node, math::vector3* target) -> vo
   transform.look_at(*target);
 }
 
+auto interop::character_controller_get_height(std::uint32_t node, std::float_t* height) -> void {
+  auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
+  auto& scene = scenes_module.scene();
+
+  if (!scene.is_valid(static_cast<scenes::node>(node))) {
+    utility::logger<"scripting">::error("Attempting to get height of invalid node");
+
+    return;
+  }
+
+  auto& character_controller = scene.get_component<physics::character_controller>(static_cast<scenes::node>(node));
+
+  *height = character_controller.height;
+}
+
+auto interop::character_controller_get_radius(std::uint32_t node, std::float_t* radius) -> void {
+  auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
+  auto& scene = scenes_module.scene();
+
+  if (!scene.is_valid(static_cast<scenes::node>(node))) {
+    utility::logger<"scripting">::error("Attempting to get radius of invalid node");
+
+    return;
+  }
+
+  auto& character_controller = scene.get_component<physics::character_controller>(static_cast<scenes::node>(node));
+
+  *radius = character_controller.radius;
+}
+
+auto interop::character_controller_get_slope_limit(std::uint32_t node, std::float_t* slope_limit) -> void {
+  auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
+  auto& scene = scenes_module.scene();
+
+  if (!scene.is_valid(static_cast<scenes::node>(node))) {
+    utility::logger<"scripting">::error("Attempting to get slope_limit of invalid node");
+
+    return;
+  }
+
+  auto& character_controller = scene.get_component<physics::character_controller>(static_cast<scenes::node>(node));
+
+  *slope_limit = character_controller.slope_limit;
+}
+
+auto interop::character_controller_get_step_offset(std::uint32_t node, std::float_t* step_offset) -> void {
+  auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
+  auto& scene = scenes_module.scene();
+
+  if (!scene.is_valid(static_cast<scenes::node>(node))) {
+    utility::logger<"scripting">::error("Attempting to get step_offset of invalid node");
+
+    return;
+  }
+
+  auto& character_controller = scene.get_component<physics::character_controller>(static_cast<scenes::node>(node));
+
+  *step_offset = character_controller.step_offset;
+}
+
+auto interop::character_controller_get_is_grounded(std::uint32_t node) -> managed::bool32 {
+  auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
+  auto& scene = scenes_module.scene();
+
+  if (!scene.is_valid(static_cast<scenes::node>(node))) {
+    utility::logger<"scripting">::error("Attempting to get step_offset of invalid node");
+
+    return false;
+  }
+
+  auto& character_controller = scene.get_component<physics::character_controller>(static_cast<scenes::node>(node));
+
+  return character_controller.is_grounded;
+}
+
+auto interop::character_controller_get_flags(std::uint32_t node, std::uint8_t* flags) -> void {
+  auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
+  auto& scene = scenes_module.scene();
+
+  if (!scene.is_valid(static_cast<scenes::node>(node))) {
+    utility::logger<"scripting">::error("Attempting to get step_offset of invalid node");
+
+    return;
+  }
+
+  auto& character_controller = scene.get_component<physics::character_controller>(static_cast<scenes::node>(node));
+
+  *flags = utility::to_underlying(character_controller.flags);
+}
+
+auto interop::character_controller_move(std::uint32_t node, math::vector3* displacement) -> void {
+  auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
+  auto& scene = scenes_module.scene();
+
+  if (!scene.is_valid(static_cast<scenes::node>(node))) {
+    utility::logger<"scripting">::error("Attempting to get position of invalid node");
+
+    return;
+  }
+
+  auto& character_controller = scene.get_component<physics::character_controller>(static_cast<scenes::node>(node));
+
+  character_controller.displacement += *displacement;
+}
+
 auto interop::input_is_key_pressed(devices::key key) -> managed::bool32 { 
   return devices::input::is_key_pressed(key); 
 }
@@ -323,6 +441,28 @@ auto interop::camera_set_position(math::vector3* position) -> void {
   auto& transform = scene.get_component<scenes::transform>(static_cast<scenes::node>(camera_node));
 
   transform.set_position(*position);
+}
+
+auto interop::camera_get_forward(math::vector3* forward) -> void {
+  auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
+  auto& scene = scenes_module.scene();
+
+  auto camera_node = scene.camera();
+
+  auto& transform = scene.get_component<scenes::transform>(static_cast<scenes::node>(camera_node));
+
+  *forward = transform.forward();
+}
+
+auto interop::camera_get_right(math::vector3* right) -> void {
+  auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
+  auto& scene = scenes_module.scene();
+
+  auto camera_node = scene.camera();
+
+  auto& transform = scene.get_component<scenes::transform>(static_cast<scenes::node>(camera_node));
+
+  *right = transform.right();
 }
 
 auto interop::time_delta_time(std::float_t* delta_time) -> void {

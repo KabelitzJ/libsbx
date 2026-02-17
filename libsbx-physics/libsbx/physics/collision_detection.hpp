@@ -9,14 +9,15 @@
 
 #include <libsbx/scenes/node.hpp>
 
-#include <libsbx/physics/collider.hpp>
+#include <libsbx/physics/shape_collider.hpp>
+#include <libsbx/physics/mesh_collider.hpp>
 
 namespace sbx::physics {
 
 struct collider_data {
   math::vector3 position;
   math::quaternion rotation;
-  const physics::collider& collider;
+  const physics::shape_collider& collider;
 }; // struct collider_data
 
 struct collision_manifold {
@@ -26,6 +27,8 @@ struct collision_manifold {
 }; // struct collision_manifold
 
 auto check_collision(const collider_data& first, const collider_data& second) -> std::optional<collision_manifold>;
+
+auto check_collision(const collider_data& convex, const mesh_collider& mesh, const math::vector3& mesh_position, const math::quaternion& mesh_rotation) -> std::optional<collision_manifold>;
 
 } // namespace sbx::physics
 

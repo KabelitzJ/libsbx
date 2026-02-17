@@ -86,6 +86,7 @@ target_link_libraries(
     libsbx::utility
     libsbx::core
     libsbx::scenes
+    libsbx::physics
 )
 
 set_target_properties(

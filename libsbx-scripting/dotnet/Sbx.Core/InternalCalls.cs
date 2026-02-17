@@ -17,12 +17,21 @@ namespace Sbx.Core
 
     internal static delegate* unmanaged<uint, Vector3*, void> Transform_GetPosition;
     internal static delegate* unmanaged<uint, Vector3*, void> Transform_SetPosition;
+    internal static delegate* unmanaged<uint, Vector3*, void> Transform_GetWorldPosition;
     internal static delegate* unmanaged<uint, Quaternion*, void> Transform_GetRotation;
     internal static delegate* unmanaged<uint, Quaternion*, void> Transform_SetRotation;
     internal static delegate* unmanaged<uint, Vector3*, void> Transform_GetRight;
     internal static delegate* unmanaged<uint, Vector3*, void> Transform_GetForward;
     internal static delegate* unmanaged<uint, Vector3*, void> Transform_GetUp;
     internal static delegate* unmanaged<uint, Vector3*, void> Transform_LookAt;
+
+    internal static delegate* unmanaged<uint, float*, void> CharacterController_GetHeight;
+    internal static delegate* unmanaged<uint, float*, void> CharacterController_GetRadius;
+    internal static delegate* unmanaged<uint, float*, void> CharacterController_GetSlopeLimit;
+    internal static delegate* unmanaged<uint, float*, void> CharacterController_GetStepOffset;
+    internal static delegate* unmanaged<uint, bool> CharacterController_GetIsGrounded;
+    internal static delegate* unmanaged<uint, byte*, void> CharacterController_GetFlags;
+    internal static delegate* unmanaged<uint, Vector3*, void> CharacterController_Move;
 
     internal static delegate* unmanaged<KeyCode, Bool32> Input_IsKeyPressed;
 		internal static delegate* unmanaged<KeyCode, Bool32> Input_IsKeyDown;
@@ -36,6 +45,8 @@ namespace Sbx.Core
     internal static delegate* unmanaged<Ray*, Vector2*, void> Camera_ScreenPointToRay;
     internal static delegate* unmanaged<Vector3*, void> Camera_GetPosition;
     internal static delegate* unmanaged<Vector3*, void> Camera_SetPosition;
+    internal static delegate* unmanaged<Vector3*, void> Camera_GetForward;
+    internal static delegate* unmanaged<Vector3*, void> Camera_GetRight;
 
     internal static delegate* unmanaged<float*, void> Time_DeltaTime;
 

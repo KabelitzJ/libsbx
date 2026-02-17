@@ -30,9 +30,28 @@ namespace Sbx.Math
     : this(vector.X, vector.Y) 
     { }
 
+    public float LengthSquared()
+    {
+      return X * X + Y * Y;
+    }
+
     public float Length()
     {
-      return MathF.Sqrt(X * X + Y * Y);
+      return MathF.Sqrt(LengthSquared());
+    }
+
+    public Vector2 Normalized()
+    {
+      float lenSq = LengthSquared();
+
+      if (lenSq < 1e-6f)
+      {
+        return new Vector2(X, Y);
+      }
+
+      float invLen = 1.0f / MathF.Sqrt(lenSq);
+
+      return new Vector2(X * invLen, Y * invLen);
     }
 
     public float Distance(Vector2 other)

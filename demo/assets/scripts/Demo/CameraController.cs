@@ -37,7 +37,7 @@ namespace Demo
 
       _newPosition = transform.Position;
       _newRotation = transform.Rotation;
-      _newZoom = Camera.Position;
+      _newZoom = Camera.Main.Position;
     }
 
     public override void OnUpdate()
@@ -58,7 +58,7 @@ namespace Demo
       {
         Plane plane = new Plane(Vector3.Up, Vector3.Zero);
 
-        Ray ray = Camera.ScreenPointToRay(Input.MousePosition());
+        Ray ray = Camera.Main.ScreenPointToRay(Input.MousePosition());
 
         bool result = plane.Raycast(ray, out float t);
 
@@ -72,7 +72,7 @@ namespace Demo
       {
         Plane plane = new Plane(Vector3.Up, Vector3.Zero);
 
-        Ray ray = Camera.ScreenPointToRay(Input.MousePosition());
+        Ray ray = Camera.Main.ScreenPointToRay(Input.MousePosition());
 
         if (plane.Raycast(ray, out float entry))
         {
@@ -135,7 +135,7 @@ namespace Demo
 
       transform.Position = Vector3.Lerp(transform.Position, _newPosition, Time.DeltaTime * movementTime);
       transform.Rotation = Quaternion.Slerp(transform.Rotation, _newRotation, Time.DeltaTime * movementTime);
-      Camera.Position = Vector3.Lerp(Camera.Position, _newZoom, Time.DeltaTime * movementTime);
+      Camera.Main.Position = Vector3.Lerp(Camera.Main.Position, _newZoom, Time.DeltaTime * movementTime);
     }
 
   } // class CameraController

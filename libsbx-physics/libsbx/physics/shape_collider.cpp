@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-#include <libsbx/physics/collider.hpp>
+#include <libsbx/physics/mesh_collider.hpp>
 
 #include <vector>
 #include <array>
@@ -64,6 +64,10 @@ auto inverse_inertia_tensor(const cylinder& c, std::float_t mass) -> math::matri
   };
 }
 
+auto inverse_inertia_tensor(const triangle& t, std::float_t mass) -> math::matrix3x3 {
+  return math::matrix3x3::zero;
+}
+
 auto inverse_inertia_tensor(const capsule& c, std::float_t mass) -> math::matrix3x3 {
   const auto height = (2.0f * c.half_height) + (2.0f * c.radius);
 
@@ -84,7 +88,7 @@ auto inverse_inertia_tensor(const capsule& c, std::float_t mass) -> math::matrix
   };
 }
 
-auto inverse_inertia_tensor(const collider& collider, std::float_t mass) -> math::matrix3x3 {
+auto inverse_inertia_tensor(const shape_collider& collider, std::float_t mass) -> math::matrix3x3 {
   return std::visit([mass](const auto& shape){
     return inverse_inertia_tensor(shape, mass);
   }, collider.shape);
@@ -118,7 +122,23 @@ auto get_local_bounding_volume(const capsule& capsule, const math::vector3& offs
   return math::volume{min + offset, max + offset};
 }
 
-auto get_bounding_volume(const collider& collider, const math::matrix4x4& transform) -> math::volume {
+auto get_local_bounding_volume(const triangle& triangle, const math::vector3& offset) -> math::volume {
+  const auto min = math::vector3{
+    std::min({triangle.v0.x(), triangle.v1.x(), triangle.v2.x()}),
+    std::min({triangle.v0.y(), triangle.v1.y(), triangle.v2.y()}),
+    std::min({triangle.v0.z(), triangle.v1.z(), triangle.v2.z()})
+  };
+
+  const auto max = math::vector3{
+    std::max({triangle.v0.x(), triangle.v1.x(), triangle.v2.x()}),
+    std::max({triangle.v0.y(), triangle.v1.y(), triangle.v2.y()}),
+    std::max({triangle.v0.z(), triangle.v1.z(), triangle.v2.z()})
+  };
+
+  return math::volume{min + offset, max + offset};
+}
+
+auto get_bounding_volume(const shape_collider& collider, const math::matrix4x4& transform) -> math::volume {
   const auto local_volume = std::visit([&](const auto& shape) {
     return get_local_bounding_volume(shape, collider.offset);
   }, collider.shape);

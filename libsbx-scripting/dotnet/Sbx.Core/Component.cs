@@ -5,48 +5,78 @@ namespace Sbx.Core
 
   public abstract class Component
   {
+
     public uint Node { get; internal set; }
+
   }
 
   public class Tag : Component
   {
+
     public string? Value
     {
-      get { unsafe { return InternalCalls.Tag_GetTag(Node); } }
-      set { unsafe { InternalCalls.Tag_SetTag(Node, value); } }
+      get 
+      { 
+        unsafe { return InternalCalls.Tag_GetTag(Node); } 
+      }
+      set 
+      { 
+        unsafe { InternalCalls.Tag_SetTag(Node, value); } 
+      }
     }
 
     public override string ToString()
     {
       return Value ?? "[Unknown]";
     }
+
   } // public class Tag
 
 	public class Transform : Component
 	{
+
     public Vector3 Position
     {
-      get {
+      get 
+      {
         Vector3 position;
         unsafe { InternalCalls.Transform_GetPosition(Node, &position); }
         return position;
       }
-      set { unsafe { InternalCalls.Transform_SetPosition(Node, &value); } }
+      set 
+      { 
+        unsafe { InternalCalls.Transform_SetPosition(Node, &value); } 
+      }
+    }
+
+    public Vector3 WorldPosition
+    {
+      get 
+      {
+        Vector3 position;
+        unsafe { InternalCalls.Transform_GetWorldPosition(Node, &position); }
+        return position;
+      }
     }
 
     public Quaternion Rotation
     {
-      get {
+      get 
+      {
         Quaternion rotation;
         unsafe { InternalCalls.Transform_GetRotation(Node, &rotation); }
         return rotation;
       }
-      set { unsafe { InternalCalls.Transform_SetRotation(Node, &value); } }
+      set 
+      { 
+        unsafe { InternalCalls.Transform_SetRotation(Node, &value); } 
+      }
     }
 
     public Vector3 Right
     {
-      get {
+      get 
+      {
         Vector3 right;
         unsafe { InternalCalls.Transform_GetRight(Node, &right); }
         return right;
@@ -55,7 +85,8 @@ namespace Sbx.Core
 
     public Vector3 Forward
     {
-      get {
+      get 
+      {
         Vector3 forward;
         unsafe { InternalCalls.Transform_GetForward(Node, &forward); }
         return forward;
@@ -64,7 +95,8 @@ namespace Sbx.Core
 
     public Vector3 Up
     {
-      get {
+      get 
+      {
         Vector3 up;
         unsafe { InternalCalls.Transform_GetUp(Node, &up); }
         return up;
@@ -97,8 +129,82 @@ namespace Sbx.Core
 		public static bool operator !=(Transform left, Transform right)     {
       return !(left == right);
     }
-    
 
-	} // struct Transform
+	} // class Transform
+
+  [Flags]
+  public enum CollisionFlags : byte
+  {
+    None  = 0,
+    Below = 1 << 0,
+    Above = 1 << 1,
+    Sides = 1 << 2
+  } // enum CollisionFlags
+
+  public class CharacterController : Component
+  {
+    public float Height 
+    { 
+      get
+      {
+        float height;
+        unsafe { InternalCalls.CharacterController_GetHeight(Node, &height); }
+        return height;
+      } 
+    }
+
+    public float Radius
+    { 
+      get
+      {
+        float radius;
+        unsafe { InternalCalls.CharacterController_GetRadius(Node, &radius); }
+        return radius;
+      } 
+    }
+
+    public float SlopeLimit
+    { 
+      get
+      {
+        float slopeLimit;
+        unsafe { InternalCalls.CharacterController_GetSlopeLimit(Node, &slopeLimit); }
+        return slopeLimit;
+      } 
+    }
+
+    public float StepOffset
+    { 
+      get
+      {
+        float stepOffset;
+        unsafe { InternalCalls.CharacterController_GetStepOffset(Node, &stepOffset); }
+        return stepOffset;
+      } 
+    }
+
+    public bool IsGrounded
+    { 
+      get
+      {
+        unsafe { return InternalCalls.CharacterController_GetIsGrounded(Node); }
+      } 
+    }
+
+    public CollisionFlags Flags
+    { 
+      get
+      {
+        CollisionFlags flags;
+        unsafe { InternalCalls.CharacterController_GetFlags(Node, (byte*)&flags); }
+        return flags;
+      } 
+    }
+
+    public void Move(Vector3 displacement)
+    {
+      unsafe { InternalCalls.CharacterController_Move(Node, &displacement); }
+    }
+  }
 
 } // namespace Sbx.Core

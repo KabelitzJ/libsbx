@@ -27,7 +27,13 @@
 #include <libsbx/animations/animations_module.hpp>
 
 #include <libsbx/sprites/sprite_subrenderer.hpp>
+
 #include <libsbx/particles/particle_emitter.hpp>
+
+#include <libsbx/physics/mesh_collider.hpp>
+#include <libsbx/physics/shape_collider.hpp>
+#include <libsbx/physics/rigidbody.hpp>
+#include <libsbx/physics/physics_module.hpp>
 
 #include <libsbx/audio/audio_module.hpp>
 
@@ -134,6 +140,8 @@ application::application()
   helmet_transform.set_position(sbx::math::vector3{0.0f, 6.0f, 0.0f});
   helmet_transform.set_scale(sbx::math::vector3{4.0f, 4.0f, 4.0f});
 
+  auto& helmet_collider = scene.add_component<sbx::physics::mesh_collider>(helmet, "res://meshes/helmet/helmet.gltf");
+
   // Terrain
   auto terrain = scene.create_node("Terrain");
 
@@ -145,6 +153,9 @@ application::application()
   auto& transform = scene.get_component<sbx::scenes::transform>(terrain);
   transform.set_position(sbx::math::vector3{100.0f, 0.5f, 100.0f});
   transform.set_scale(sbx::math::vector3{400.0f, 0.5f, 400.0f});
+
+  scene.add_component<sbx::physics::shape_collider>(terrain, sbx::physics::box{sbx::math::vector3{200.0f, 0.25f, 200.0f}});
+  scene.add_component<sbx::physics::rigidbody>(terrain, 0.0f);
 
   _rune0_emitter = scene.create_node("Rune0Emitter");
 
@@ -315,7 +326,23 @@ auto application::update() -> void  {
   _rotation += sbx::math::degree{45} * delta_time;
 
   if (sbx::devices::input::is_key_pressed(sbx::devices::key::space)) {
-    _is_paused = !_is_paused;
+    // _is_paused = !_is_paused;
+
+    auto cube = scene.create_node("Cube");
+
+    auto& terrain_material = scene.add_material<sbx::models::material>("cube");
+    terrain_material.albedo.image = scene.get_image("base");
+
+    scene.add_component<sbx::scenes::static_mesh>(cube, scene.get_mesh("cube"), scene.get_material("cube"));
+
+    auto& transform = scene.get_component<sbx::scenes::transform>(cube);
+    transform.set_position(sbx::math::vector3{-6.0f, 12.0f, 0.0f});
+    transform.set_scale(sbx::math::vector3{2.0f, 2.0f, 2.0f});
+
+    scene.add_component<sbx::physics::shape_collider>(cube, sbx::physics::box{sbx::math::vector3{0.5f, 0.5f, 0.5f}});
+
+    auto& rigidbody = scene.add_component<sbx::physics::rigidbody>(cube, 1.0f);
+    rigidbody.add_constant_acceleration(sbx::math::vector3{0.0f, -9.81f, 0.0f});
   }
 
   if (sbx::devices::input::is_key_pressed(sbx::devices::key::j)) {

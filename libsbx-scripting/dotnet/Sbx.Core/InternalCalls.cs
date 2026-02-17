@@ -36,6 +36,8 @@ namespace Sbx.Core
     internal static delegate* unmanaged<Ray*, Vector2*, void> Camera_ScreenPointToRay;
     internal static delegate* unmanaged<Vector3*, void> Camera_GetPosition;
     internal static delegate* unmanaged<Vector3*, void> Camera_SetPosition;
+    internal static delegate* unmanaged<Vector3*, void> Camera_GetForward;
+    internal static delegate* unmanaged<Vector3*, void> Camera_GetRight;
 
     internal static delegate* unmanaged<float*, void> Time_DeltaTime;
 

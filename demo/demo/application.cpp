@@ -27,7 +27,10 @@
 #include <libsbx/animations/animations_module.hpp>
 
 #include <libsbx/sprites/sprite_subrenderer.hpp>
+
 #include <libsbx/particles/particle_emitter.hpp>
+
+#include <libsbx/physics/mesh_collider.hpp>
 
 #include <libsbx/audio/audio_module.hpp>
 
@@ -133,6 +136,8 @@ application::application()
   auto& helmet_transform = scene.get_component<sbx::scenes::transform>(helmet);
   helmet_transform.set_position(sbx::math::vector3{0.0f, 6.0f, 0.0f});
   helmet_transform.set_scale(sbx::math::vector3{4.0f, 4.0f, 4.0f});
+
+  auto& helmet_collider = scene.add_component<sbx::physics::mesh_collider>(helmet, "res://meshes/helmet/helmet.gltf");
 
   // Terrain
   auto terrain = scene.create_node("Terrain");

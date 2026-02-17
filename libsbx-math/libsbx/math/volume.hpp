@@ -74,8 +74,12 @@ public:
     return _min.x() <= other.max().x() && _max.x() >= other.min().x() && _min.y() <= other.max().y() && _max.y() >= other.min().y() && _min.z() <= other.max().z() && _max.z() >= other.min().z();
   }
 
+  auto extend() const noexcept -> math::vector3 {
+    return _max - _min;
+  }
+
   auto diagonal_length() const noexcept -> value_type {
-    return (_max - _min).length();
+    return extend().length();
   }
 
   auto is_empty() const noexcept -> bool {
@@ -92,6 +96,10 @@ public:
       vector_type::min(a.min(), b.min()),
       vector_type::max(a.max(), b.max())
     };
+  }
+
+  static auto are_overlapping(const basic_volume& a, const basic_volume& b) -> bool {
+    return (a.min().x() <= b.max().x() && a.max().x() >= b.min().x()) && (a.min().y() <= b.max().y() && a.max().y() >= b.min().y()) && (a.min().z() <= b.max().z() && a.max().z() >= b.min().z());
   }
 
   template<std::ranges::input_range Range, typename Projection = std::identity>

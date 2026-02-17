@@ -28,7 +28,7 @@
 #include <libsbx/scenes/components/tag.hpp>
 #include <libsbx/scenes/components/relationship.hpp>
 
-#include <libsbx/physics/collider.hpp>
+#include <libsbx/physics/shape_collider.hpp>
 #include <libsbx/physics/collision_detection.hpp>
 #include <libsbx/physics/rigidbody.hpp>
 

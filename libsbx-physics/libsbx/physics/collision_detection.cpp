@@ -73,6 +73,26 @@ static auto find_furthest_point(const capsule& capsule, const math::vector3& dir
   return math::vector3{rotation * result} + position;
 }
 
+static auto find_furthest_point(const triangle& triangle, const math::vector3& direction, const math::vector3& position, const math::quaternion& rotation) -> math::vector3 {
+  const auto w0 = math::vector3{rotation * triangle.v0} + position;
+  const auto w1 = math::vector3{rotation * triangle.v1} + position;
+  const auto w2 = math::vector3{rotation * triangle.v2} + position;
+
+  const auto d0 = math::vector3::dot(w0, direction);
+  const auto d1 = math::vector3::dot(w1, direction);
+  const auto d2 = math::vector3::dot(w2, direction);
+
+  if (d0 >= d1 && d0 >= d2) {
+    return w0;
+  }
+
+  if (d1 >= d2) {
+    return w1;
+  }
+
+  return w2;
+}
+
 auto find_furthest_point(const collider_data& data, const math::vector3& direction) -> math::vector3 {
   return std::visit([&](const auto& shape) { return find_furthest_point(shape, direction, data.position, data.rotation); }, data.collider.shape);
 }
@@ -685,6 +705,98 @@ auto check_collision(const collider_data& first, const collider_data& second) ->
 
       return manifold;
     });
+}
+
+static auto aabb_overlap(const math::vector3& a_min, const math::vector3& a_max, const math::vector3& b_min, const math::vector3& b_max) -> bool {
+  return (a_min.x() <= b_max.x() && a_max.x() >= b_min.x()) && (a_min.y() <= b_max.y() && a_max.y() >= b_min.y()) && (a_min.z() <= b_max.z() && a_max.z() >= b_min.z());
+}
+
+static auto aabb_union(const math::vector3& a_min, const math::vector3& a_max, const math::vector3& b_min, const math::vector3& b_max) -> std::pair<math::vector3, math::vector3> {
+  return {
+    math::vector3{std::min(a_min.x(), b_min.x()), std::min(a_min.y(), b_min.y()), std::min(a_min.z(), b_min.z())},
+    math::vector3{std::max(a_max.x(), b_max.x()), std::max(a_max.y(), b_max.y()), std::max(a_max.z(), b_max.z())}
+  };
+}
+
+static auto compute_convex_aabb(const collider_data& data) -> math::volume{
+  auto result_min = math::vector3{};
+  auto result_max = math::vector3{};
+
+  for (auto axis = 0u; axis < 3u; ++axis) {
+    auto positive_direction = math::vector3::zero;
+    auto negative_direction = math::vector3::zero;
+
+    positive_direction[axis] =  1.0f;
+    negative_direction[axis] = -1.0f;
+
+    result_max[axis] = find_furthest_point(data, positive_direction)[axis];
+    result_min[axis] = find_furthest_point(data, negative_direction)[axis];
+  }
+
+  return {result_min, result_max};
+}
+
+auto check_collision(const collider_data& convex, const mesh_collider& mesh, const math::vector3& mesh_position, const math::quaternion& mesh_rotation) -> std::optional<collision_manifold> {
+  const auto world_volume = compute_convex_aabb(convex);
+
+  const auto inverse_rotation = math::quaternion::inverted(mesh_rotation);
+
+  auto local_min = math::vector3{std::numeric_limits<std::float_t>::max(), std::numeric_limits<std::float_t>::max(), std::numeric_limits<std::float_t>::max()};
+  auto local_max = math::vector3{-std::numeric_limits<std::float_t>::max(), -std::numeric_limits<std::float_t>::max(), -std::numeric_limits<std::float_t>::max()};
+
+  for (auto i = 0u; i < 8u; ++i) {
+    const auto corner = math::vector3{
+      (i & 1u) ? world_volume.max().x() : world_volume.min().x(),
+      (i & 2u) ? world_volume.max().y() : world_volume.min().y(),
+      (i & 4u) ? world_volume.max().z() : world_volume.min().z()
+    };
+
+    const auto local_corner = math::vector3{inverse_rotation * (corner - mesh_position)};
+
+    local_min = math::vector3{std::min(local_min.x(), local_corner.x()), std::min(local_min.y(), local_corner.y()), std::min(local_min.z(), local_corner.z())};
+    local_max = math::vector3{std::max(local_max.x(), local_corner.x()), std::max(local_max.y(), local_corner.y()), std::max(local_max.z(), local_corner.z())};
+  }
+
+  const auto candidates = mesh.query_bvh({local_min, local_max});
+
+  if (candidates.empty()) {
+    return std::nullopt;
+  }
+
+  auto best = std::optional<collision_manifold>{};
+
+  for (const auto triangle_index : candidates) {
+    const auto triangle = mesh.get_triangle(triangle_index);
+
+    const auto local_edge1 = triangle.v1 - triangle.v0;
+    const auto local_edge2 = triangle.v2 - triangle.v0;
+    const auto local_normal = math::vector3::cross(local_edge1, local_edge2);
+
+    if (local_normal.length_squared() < 1e-12f) {
+      continue;
+    }
+
+    const auto face_normal = math::vector3::normalized(math::vector3{mesh_rotation * local_normal});
+
+    const auto triangle_shape = shape_collider{triangle, math::vector3::zero, 0.0f, 0.0f};
+    const auto triangle_data = collider_data{mesh_position, mesh_rotation, triangle_shape};
+
+    auto result = check_collision(convex, triangle_data);
+
+    if (!result) {
+      continue;
+    }
+
+    if (math::vector3::dot(result->normal, face_normal) < 0.0f) {
+      continue;
+    }
+
+    if (!best || result->depth > best->depth) {
+      best = std::move(result);
+    }
+  }
+
+  return best;
 }
 
 } // namespace sbx::physics

@@ -78,6 +78,10 @@ struct interop {
 
   static auto camera_set_position(math::vector3* position) -> void;
 
+  static auto camera_get_forward(math::vector3* forward) -> void;
+
+  static auto camera_get_right(math::vector3* right) -> void;
+
   static auto time_delta_time(std::float_t* delta_time) -> void;
 
   template<typename Type>

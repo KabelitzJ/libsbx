@@ -192,17 +192,17 @@ auto mesh::_load(const std::filesystem::path& path) -> mesh_data {
   auto data = mesh::mesh_data{};
 
   static const auto import_flags =
-    aiProcess_CalcTangentSpace |        // Create binormals/tangents just in case
-    aiProcess_Triangulate |             // Make sure we're triangles
-    aiProcess_SortByPType |             // Split meshes by primitive type
-    aiProcess_GenNormals |              // Make sure we have legit normals
-    aiProcess_GenUVCoords |             // Convert UVs if required
-    aiProcess_OptimizeMeshes |          // Batch draws where possible
+    aiProcess_CalcTangentSpace |
+    aiProcess_Triangulate |
+    aiProcess_SortByPType |
+    aiProcess_GenNormals |
+    aiProcess_GenUVCoords |
+    aiProcess_OptimizeMeshes |
     aiProcess_JoinIdenticalVertices |
-    aiProcess_LimitBoneWeights |        // If more than N (=4) bone weights, discard least influencing bones and renormalise sum to 1
-    aiProcess_GlobalScale |             // e.g. convert cm to m for fbx import (and other formats where cm is native)
-    aiProcess_ValidateDataStructure |   // Validation
-    aiProcess_ImproveCacheLocality;     // Improve cache locality
+    aiProcess_LimitBoneWeights |
+    aiProcess_GlobalScale |
+    aiProcess_ValidateDataStructure |
+    aiProcess_ImproveCacheLocality;
 
   auto importer = Assimp::Importer{};
 
@@ -213,9 +213,6 @@ auto mesh::_load(const std::filesystem::path& path) -> mesh_data {
   }
 
   _load_node(scene->mRootNode, scene, data, math::matrix4x4::identity);
-
-  // [NOTE] KAJ 2024-03-20 : We need to calculate the bounds of the mesh from the submeshes.
-  // data.bounds = math::volume{math::vector3::zero, math::vector3::zero};
 
   const auto vertices_count = data.vertices.size();
   const auto indices_count = data.indices.size();

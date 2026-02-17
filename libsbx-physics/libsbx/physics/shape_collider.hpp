@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
-#ifndef LIBSBX_PHYSICS_COLLIDER_HPP_
-#define LIBSBX_PHYSICS_COLLIDER_HPP_
+#ifndef LIBSBX_PHYSICS_SHAPE_COLLIDER_HPP_
+#define LIBSBX_PHYSICS_SHAPE_COLLIDER_HPP_
 
 #include <variant>
 #include <algorithm>
@@ -33,7 +33,13 @@ struct box {
   math::vector3 half_extents{0.5f, 0.5f, 0.5f};
 }; // struct box
 
-using convex_shape = std::variant<sphere, cylinder, capsule, box>;
+struct triangle {
+  math::vector3 v0;
+  math::vector3 v1;
+  math::vector3 v2;
+}; // struct triangle
+
+using convex_shape = std::variant<sphere, cylinder, capsule, box, triangle>;
 
 struct shape_collider {
   convex_shape shape;
@@ -48,5 +54,5 @@ auto get_bounding_volume(const shape_collider& collider, const math::matrix4x4& 
 
 } // namespace sbx::physics
 
-#endif // LIBSBX_PHYSICS_COLLIDER_HPP_
+#endif // LIBSBX_PHYSICS_SHAPE_COLLIDER_HPP_
 

@@ -151,7 +151,6 @@ application::application()
   scene.add_component<sbx::scenes::static_mesh>(terrain, scene.get_mesh("cube"), scene.get_material("terrain"));
 
   auto& transform = scene.get_component<sbx::scenes::transform>(terrain);
-  transform.set_position(sbx::math::vector3{100.0f, 0.5f, 100.0f});
   transform.set_scale(sbx::math::vector3{400.0f, 0.5f, 400.0f});
 
   scene.add_component<sbx::physics::shape_collider>(terrain, sbx::physics::box{sbx::math::vector3{200.0f, 0.25f, 200.0f}});
@@ -337,12 +336,13 @@ auto application::update() -> void  {
 
     auto& transform = scene.get_component<sbx::scenes::transform>(cube);
     transform.set_position(sbx::math::vector3{-6.0f, 12.0f, 0.0f});
-    transform.set_scale(sbx::math::vector3{2.0f, 2.0f, 2.0f});
+    transform.set_rotation(sbx::math::vector3::right, sbx::math::degree{35});
 
-    scene.add_component<sbx::physics::shape_collider>(cube, sbx::physics::box{sbx::math::vector3{0.5f, 0.5f, 0.5f}});
+    auto& collider = scene.add_component<sbx::physics::shape_collider>(cube, sbx::physics::box{sbx::math::vector3{0.5f, 0.5f, 0.5f}});
 
     auto& rigidbody = scene.add_component<sbx::physics::rigidbody>(cube, 1.0f);
     rigidbody.add_constant_acceleration(sbx::math::vector3{0.0f, -9.81f, 0.0f});
+    rigidbody.set_inverse_inertia_tensor(sbx::physics::inverse_inertia_tensor(collider, rigidbody.mass()));
   }
 
   if (sbx::devices::input::is_key_pressed(sbx::devices::key::j)) {

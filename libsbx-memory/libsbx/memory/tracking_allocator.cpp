@@ -10,63 +10,63 @@ inline thread_local auto is_inside_allocation = false;
 } // namespace sbx::memory
 
 
-auto operator new(std::size_t size) -> void* {
-  if (!sbx::memory::is_memory_tracking_enabled_v || sbx::memory::is_inside_allocation) {
-    if (auto* ptr = std::malloc(size)) {
-      return ptr;
-    }
+// auto operator new(std::size_t size) -> void* {
+//   if (!sbx::memory::is_memory_tracking_enabled_v || sbx::memory::is_inside_allocation) {
+//     if (auto* ptr = std::malloc(size)) {
+//       return ptr;
+//     }
 
-    throw std::bad_alloc{};
-  }
+//     throw std::bad_alloc{};
+//   }
 
-  sbx::memory::is_inside_allocation = true;
+//   sbx::memory::is_inside_allocation = true;
 
-  const auto& context = sbx::memory::allocation_scope::current();
+//   const auto& context = sbx::memory::allocation_scope::current();
 
-  try {
-    auto* ptr = sbx::memory::detail::aligned_allocate( size, alignof(std::max_align_t), context.category, context.file_name, context.line);
+//   try {
+//     auto* ptr = sbx::memory::detail::aligned_allocate( size, alignof(std::max_align_t), context.category, context.file_name, context.line);
 
-    sbx::memory::is_inside_allocation = false;
+//     sbx::memory::is_inside_allocation = false;
 
-    return ptr;
-  } catch (...) {
-    sbx::memory::is_inside_allocation = false;
+//     return ptr;
+//   } catch (...) {
+//     sbx::memory::is_inside_allocation = false;
 
-    throw;
-  }
-}
+//     throw;
+//   }
+// }
 
-auto operator new[](std::size_t size) -> void* {
-  return ::operator new(size);
-}
+// auto operator new[](std::size_t size) -> void* {
+//   return ::operator new(size);
+// }
 
 
-auto operator new(std::size_t size, std::align_val_t align) -> void* {
-  return ::operator new(size);
-}
+// auto operator new(std::size_t size, std::align_val_t align) -> void* {
+//   return ::operator new(size);
+// }
 
-auto operator delete(void* ptr) noexcept -> void {
-  if (!ptr) {
-    return;
-  }
+// auto operator delete(void* ptr) noexcept -> void {
+//   if (!ptr) {
+//     return;
+//   }
 
-  if (!sbx::memory::is_memory_tracking_enabled_v || sbx::memory::is_inside_allocation) {
-    std::free(ptr);
+//   if (!sbx::memory::is_memory_tracking_enabled_v || sbx::memory::is_inside_allocation) {
+//     std::free(ptr);
 
-    return;
-  }
+//     return;
+//   }
 
-  sbx::memory::is_inside_allocation = true;
+//   sbx::memory::is_inside_allocation = true;
 
-  sbx::memory::detail::aligned_deallocate(ptr);
+//   sbx::memory::detail::aligned_deallocate(ptr);
 
-  sbx::memory::is_inside_allocation = false;
-}
+//   sbx::memory::is_inside_allocation = false;
+// }
 
-auto operator delete[](void* ptr) noexcept -> void {
-  ::operator delete(ptr);
-}
+// auto operator delete[](void* ptr) noexcept -> void {
+//   ::operator delete(ptr);
+// }
 
-auto operator delete(void* ptr, std::align_val_t align) noexcept -> void {
-  ::operator delete(ptr);
-}
+// auto operator delete(void* ptr, std::align_val_t align) noexcept -> void {
+//   ::operator delete(ptr);
+// }

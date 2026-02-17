@@ -369,7 +369,7 @@ renderer::renderer()
 
   add_subrenderer<sbx::sprites::sprite_subrenderer>(resolve_pass, "res://shaders/sprites");
 
-  add_subrenderer<sbx::scenes::grid_subrenderer>(resolve_pass, "res://shaders/grid");
+  // add_subrenderer<sbx::scenes::grid_subrenderer>(resolve_pass, "res://shaders/grid");
 
   add_subrenderer<sbx::scenes::debug_subrenderer>(resolve_pass, "res://shaders/debug");
 

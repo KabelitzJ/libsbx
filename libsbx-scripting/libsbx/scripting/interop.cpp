@@ -140,6 +140,19 @@ auto interop::transform_set_position(std::uint32_t node, math::vector3* position
   transform.set_position(*position);
 }
 
+auto interop::transform_get_world_position(std::uint32_t node, math::vector3* position) -> void {
+  auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
+  auto& scene = scenes_module.scene();
+
+  if (!scene.is_valid(static_cast<scenes::node>(node))) {
+    utility::logger<"scripting">::error("Attempting to get position of invalid node");
+
+    return;
+  }
+
+  *position = scene.world_position(static_cast<scenes::node>(node));
+}
+
 auto interop::transform_get_rotation(std::uint32_t node, math::quaternion* rotation) -> void {
   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
   auto& scene = scenes_module.scene();
@@ -244,6 +257,70 @@ auto interop::transform_look_at(std::uint32_t node, math::vector3* target) -> vo
   auto& transform = scene.get_component<scenes::transform>(static_cast<scenes::node>(node));
 
   transform.look_at(*target);
+}
+
+auto interop::character_controller_get_height(std::uint32_t node, std::float_t* height) -> void {
+  auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
+  auto& scene = scenes_module.scene();
+
+  if (!scene.is_valid(static_cast<scenes::node>(node))) {
+    utility::logger<"scripting">::error("Attempting to get position of invalid node");
+
+    return;
+  }
+
+  auto& character_controller = scene.get_component<physics::character_controller>(static_cast<scenes::node>(node));
+
+  *height = character_controller.height;
+}
+
+auto interop::character_controller_get_radius(std::uint32_t node, std::float_t* radius) -> void {
+  auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
+  auto& scene = scenes_module.scene();
+
+  if (!scene.is_valid(static_cast<scenes::node>(node))) {
+    utility::logger<"scripting">::error("Attempting to get position of invalid node");
+
+    return;
+  }
+
+  auto& character_controller = scene.get_component<physics::character_controller>(static_cast<scenes::node>(node));
+
+  *radius = character_controller.radius;
+}
+
+auto interop::character_controller_get_slope_limit(std::uint32_t node, std::float_t* slope_limit) -> void {
+  auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
+  auto& scene = scenes_module.scene();
+
+  if (!scene.is_valid(static_cast<scenes::node>(node))) {
+    utility::logger<"scripting">::error("Attempting to get position of invalid node");
+
+    return;
+  }
+
+  auto& character_controller = scene.get_component<physics::character_controller>(static_cast<scenes::node>(node));
+
+  *slope_limit = character_controller.slope_limit;
+}
+
+auto interop::character_controller_get_step_offset(std::uint32_t node, std::float_t* step_offset) -> void {
+  auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
+  auto& scene = scenes_module.scene();
+
+  if (!scene.is_valid(static_cast<scenes::node>(node))) {
+    utility::logger<"scripting">::error("Attempting to get position of invalid node");
+
+    return;
+  }
+
+  auto& character_controller = scene.get_component<physics::character_controller>(static_cast<scenes::node>(node));
+
+  *step_offset = character_controller.step_offset;
+}
+
+auto interop::character_controller_move(std::uint32_t node, math::vector3* position, math::vector3* displacement, physics::move_result* result) -> void {
+
 }
 
 auto interop::input_is_key_pressed(devices::key key) -> managed::bool32 { 

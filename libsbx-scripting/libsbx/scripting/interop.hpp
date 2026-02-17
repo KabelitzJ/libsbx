@@ -12,6 +12,8 @@
 #include <libsbx/scenes/node.hpp>
 #include <libsbx/scenes/scenes_module.hpp>
 
+#include <libsbx/physics/character_controller.hpp>
+
 #include <libsbx/scripting/managed/string.hpp>
 #include <libsbx/scripting/managed/type.hpp>
 
@@ -44,6 +46,8 @@ struct interop {
 
   static auto transform_set_position(std::uint32_t node, math::vector3* position) -> void;
 
+  static auto transform_get_world_position(std::uint32_t node, math::vector3* position) -> void;
+
   static auto transform_get_rotation(std::uint32_t node, math::quaternion* rotation) -> void;
 
   static auto transform_set_rotation(std::uint32_t node, math::quaternion* rotation) -> void;
@@ -55,6 +59,16 @@ struct interop {
   static auto transform_get_up(std::uint32_t node, math::vector3* up) -> void;
 
   static auto transform_look_at(std::uint32_t node, math::vector3* target) -> void;
+
+  static auto character_controller_get_height(std::uint32_t node, std::float_t* height) -> void;
+
+  static auto character_controller_get_radius(std::uint32_t node, std::float_t* radius) -> void;
+
+  static auto character_controller_get_slope_limit(std::uint32_t node, std::float_t* slope_limit) -> void;
+
+  static auto character_controller_get_step_offset(std::uint32_t node, std::float_t* step_offset) -> void;
+
+  static auto character_controller_move(std::uint32_t node, math::vector3* position, math::vector3* displacement, physics::move_result* result) -> void;
 
   static auto input_is_key_pressed(devices::key key) -> managed::bool32;
 

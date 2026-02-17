@@ -104,24 +104,18 @@ private:
         continue;
       }
 
-      // make sure inverse inertia matches the CURRENT orientation
       rigidbody.update_inertia_tensor_world(math::matrix_cast<math::matrix3x3>(transform.rotation()));
 
-      // linear
-      const auto linear_acceleration =
-        (rigidbody.dynamic_forces() + rigidbody.constant_forces()) * rigidbody.inverse_mass();
+      const auto linear_acceleration = (rigidbody.dynamic_forces() + rigidbody.constant_forces()) * rigidbody.inverse_mass();
 
       rigidbody.add_velocity(linear_acceleration * dt);
       rigidbody.set_velocity(rigidbody.velocity() * std::pow(1.0f - rigidbody.linear_damping(), dt));
 
-      // angular
-      const auto angular_acceleration =
-        rigidbody.inverse_inertia_tensor_world() * rigidbody.torque();
+      const auto angular_acceleration = rigidbody.inverse_inertia_tensor_world() * rigidbody.torque();
 
       rigidbody.add_angular_velocity(angular_acceleration * dt);
       rigidbody.set_angular_velocity(rigidbody.angular_velocity() * std::pow(1.0f - rigidbody.angular_damping(), dt));
 
-      // clear per-step accumulators
       rigidbody.clear_dynamic_forces();
       rigidbody.clear_torque();
     }
@@ -147,7 +141,6 @@ private:
         transform.set_rotation(math::quaternion::normalized(transform.rotation() + delta_rotation * (0.5f * dt)));
       }
 
-      // inertia must match the NEW orientation now
       rigidbody.update_inertia_tensor_world(math::matrix_cast<math::matrix3x3>(transform.rotation()));
 
       transform.bump_version();
@@ -181,7 +174,6 @@ private:
     collisions.reserve(pairs.size());
 
     for (auto [first, second] : pairs) {
-      // [NOTE] KAJ 2026-01-15 : Make sure to get consistent collision pairs
       const auto node_a = std::min(first, second);
       const auto node_b = std::max(first, second);
 
@@ -199,17 +191,7 @@ private:
       const auto data_b = collider_data{scene.world_position(node_b), math::quaternion::normalized(scene.world_rotation(node_b)), collider_b};
 
       if (auto manifold = check_collision(data_a, data_b); manifold) {
-        // utility::logger<"physics">::debug("Collision: {}x{} normal={} depth={} contact_points={}", 
-        //   scene.get_component<scenes::tag>(node_a), 
-        //   scene.get_component<scenes::tag>(node_b),
-        //   manifold->normal,
-        //   manifold->depth,
-        //   manifold->contact_points.size()
-        // );
-
         for (const auto& point : manifold->contact_points) {
-          // utility::logger<"physics">::debug(" contact_point={}", point);
-
           scenes_module.add_debug_sphere(point, 0.2f, math::color::red(), 16u);
         }
 
@@ -227,21 +209,17 @@ private:
 
     ++_solver_tick;
 
-    // --- tuning ---------------------------------------------------------------
     constexpr auto solver_iterations = 32u;
 
-    // penetration correction (Baumgarte)
-    constexpr auto baumgarte_beta = std::float_t{0.2f};   // 0.1 - 0.3 typical
-    constexpr auto penetration_slop = std::float_t{0.003f}; // match positional correction slop
-    constexpr auto max_bias_velocity = std::float_t{2.0f};   // meters/second
+    constexpr auto baumgarte_beta = 0.2f;       // 0.1 - 0.3 typical
+    constexpr auto penetration_slop = 0.003f;   // match positional correction slop
+    constexpr auto max_bias_velocity = 2.0f;    // meters/second
 
-    // friction (placeholder constant; plug in material mixing later)
-    constexpr auto friction_mu = std::float_t{0.6f};
+    constexpr auto friction_mu = 0.6f; // friction (placeholder constant; plug in material mixing later)
 
-    // warm start scaling (helps if your cache key is unstable)
-    constexpr auto warm_start_scale = std::float_t{1.0f};  // set to 1.0f once contact caching is robust
+    constexpr auto warm_start_scale = 1.0f;
 
-    // --- build solver constraints --------------------------------------------
+    // build solver constraints
     auto solver_contacts = std::vector<solver_contact>{};
     solver_contacts.reserve(collisions.size() * 4u);
 
@@ -286,7 +264,7 @@ private:
       const auto inverse_inertia_tensor_world_a = rigidbody_a.inverse_inertia_tensor_world();
       const auto inverse_inertia_tensor_world_b = rigidbody_b.inverse_inertia_tensor_world();
 
-      // --- bias velocity (same per manifold) ---------------------------------
+      // bias velocity (same per manifold)
       const auto penetration_depth = collision_entry.manifold.depth;
       const auto penetration_error = std::max(penetration_depth - penetration_slop, 0.0f);
 
@@ -296,7 +274,7 @@ private:
         bias_velocity = std::clamp(baumgarte_beta * penetration_error / dt, 0.0f, max_bias_velocity);
       }
 
-      // --- create one solver contact per contact point -----------------------
+      // create one solver contact per contact point
       for (auto contact_point_index = std::size_t{0u}; contact_point_index < contact_count; ++contact_point_index) {
         const auto contact_point_world = collision_entry.manifold.contact_points[contact_point_index];
 
@@ -330,7 +308,7 @@ private:
 
         constraint.tangent = contact_tangent;
 
-        // --- effective mass (normal) -----------------------------------------
+        // effective mass (normal)
         {
           const auto r_a_cross_n = math::vector3::cross(constraint.r_a, contact_normal);
           const auto r_b_cross_n = math::vector3::cross(constraint.r_b, contact_normal);
@@ -343,7 +321,7 @@ private:
           constraint.normal_mass = (effective_mass > 1e-12f) ? (1.0f / effective_mass) : 0.0f;
         }
 
-        // --- effective mass (tangent) ----------------------------------------
+        // effective mass (tangent)
         {
           const auto r_a_cross_t = math::vector3::cross(constraint.r_a, contact_tangent);
           const auto r_b_cross_t = math::vector3::cross(constraint.r_b, contact_tangent);
@@ -356,10 +334,10 @@ private:
           constraint.tangent_mass = (effective_mass > 1e-12f) ? (1.0f / effective_mass) : 0.0f;
         }
 
-        // --- bias -------------------------------------------------------------
+        // bias
         constraint.bias = bias_velocity;
 
-        // --- warm start (cached impulses) ------------------------------------
+        // warm start (cached impulses)
         const auto contact_key = _contact_key(node_a, node_b, local_anchor_a, local_anchor_b);
 
         if (auto cached_it = _contact_cache.find(contact_key); cached_it != _contact_cache.end()) {
@@ -373,7 +351,7 @@ private:
       }
     }
 
-    // --- warm start (apply cached impulses once before iterations) -----------
+    // warm start (apply cached impulses once before iterations)
     for (auto& solver_contact_entry : solver_contacts) {
       auto& rigidbody_a = scene.get_component<physics::rigidbody>(solver_contact_entry.node_a);
       auto& rigidbody_b = scene.get_component<physics::rigidbody>(solver_contact_entry.node_b);
@@ -383,7 +361,7 @@ private:
       _apply_impulse(rigidbody_a, rigidbody_b, warm_start_impulse, solver_contact_entry.constraint.r_a, solver_contact_entry.constraint.r_b);
     }
 
-    // --- sequential impulse solver ------------------------------------------
+    // sequential impulse solver
     for (auto iteration_index = 0; iteration_index < solver_iterations; ++iteration_index) {
       for (auto& solver_contact_entry : solver_contacts) {
         auto& rigidbody_a = scene.get_component<physics::rigidbody>(solver_contact_entry.node_a);
@@ -395,7 +373,7 @@ private:
 
         const auto relative_velocity = velocity_at_contact_b - velocity_at_contact_a;
 
-        // --- normal impulse ---------------------------------------------------
+        // normal impulse
         const auto normal_relative_speed = math::vector3::dot(relative_velocity, solver_contact_entry.constraint.normal);
 
         auto normal_lambda = solver_contact_entry.constraint.normal_mass * (-(normal_relative_speed) + solver_contact_entry.constraint.bias);
@@ -412,7 +390,7 @@ private:
           _apply_impulse(rigidbody_a, rigidbody_b, normal_impulse, solver_contact_entry.constraint.r_a, solver_contact_entry.constraint.r_b);
         }
 
-        // --- friction impulse -------------------------------------------------
+        // friction impulse
         const auto tangent_relative_speed = math::vector3::dot(relative_velocity, solver_contact_entry.constraint.tangent);
 
         auto tangent_lambda = solver_contact_entry.constraint.tangent_mass * (-(tangent_relative_speed));
@@ -433,7 +411,7 @@ private:
       }
     }
 
-    // --- write back cache + prune stale constraints --------------------------
+    // write back cache + prune stale constraints
     _update_cache(solver_contacts);
   }
 

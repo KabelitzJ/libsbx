@@ -16,7 +16,7 @@ namespace sbx::physics {
 struct collider_data {
   math::vector3 position;
   math::quaternion rotation;
-  const physics::collider& collider;
+  const physics::shape_collider& collider;
 }; // struct collider_data
 
 struct collision_manifold {

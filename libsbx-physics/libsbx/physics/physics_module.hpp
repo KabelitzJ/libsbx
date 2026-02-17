@@ -159,7 +159,7 @@ private:
     auto& scene = scenes_module.scene();
 
     auto tree = octree_type{math::volume{math::vector3{-500.0f}, math::vector3{500.0f}}, 64u};
-    auto query = scene.query<const physics::collider, const physics::rigidbody>();
+    auto query = scene.query<const physics::shape_collider, const physics::rigidbody>();
 
     for (auto&& [node, collider, rigidbody] : query.each()) {
       const auto translation = math::matrix4x4::translated(sbx::math::matrix4x4::identity, scene.world_position(node));
@@ -192,8 +192,8 @@ private:
         continue;
       }
 
-      const auto& collider_a = scene.get_component<physics::collider>(node_a);
-      const auto& collider_b = scene.get_component<physics::collider>(node_b);
+      const auto& collider_a = scene.get_component<physics::shape_collider>(node_a);
+      const auto& collider_b = scene.get_component<physics::shape_collider>(node_b);
 
       const auto data_a = collider_data{scene.world_position(node_a), math::quaternion::normalized(scene.world_rotation(node_a)), collider_a};
       const auto data_b = collider_data{scene.world_position(node_b), math::quaternion::normalized(scene.world_rotation(node_b)), collider_b};

@@ -84,7 +84,7 @@ auto inverse_inertia_tensor(const capsule& c, std::float_t mass) -> math::matrix
   };
 }
 
-auto inverse_inertia_tensor(const collider& collider, std::float_t mass) -> math::matrix3x3 {
+auto inverse_inertia_tensor(const shape_collider& collider, std::float_t mass) -> math::matrix3x3 {
   return std::visit([mass](const auto& shape){
     return inverse_inertia_tensor(shape, mass);
   }, collider.shape);
@@ -118,7 +118,7 @@ auto get_local_bounding_volume(const capsule& capsule, const math::vector3& offs
   return math::volume{min + offset, max + offset};
 }
 
-auto get_bounding_volume(const collider& collider, const math::matrix4x4& transform) -> math::volume {
+auto get_bounding_volume(const shape_collider& collider, const math::matrix4x4& transform) -> math::volume {
   const auto local_volume = std::visit([&](const auto& shape) {
     return get_local_bounding_volume(shape, collider.offset);
   }, collider.shape);

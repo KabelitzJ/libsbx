@@ -60,6 +60,8 @@ public:
     _integrate_positions(dt);
 
     _positional_correction(collisions);
+
+    _update_character_controllers();
   }
 
 private:
@@ -415,6 +417,15 @@ private:
     _update_cache(solver_contacts);
   }
 
+  auto _update_character_controllers() -> void {
+    SBX_PROFILE_SCOPE("physics_module::_update_character_controllers");
+
+    auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
+    auto& scene = scenes_module.scene();
+
+
+  }
+
   auto _update_cache(const std::vector<solver_contact>& solver_contacts) -> void {
     // prune old cached constraints after some frames
     constexpr auto cache_ttl = std::uint64_t{60};
@@ -433,9 +444,9 @@ private:
   auto _positional_correction(const std::vector<collision>& collisions) -> void {
     auto& scene = core::engine::get_module<scenes::scenes_module>().scene();
 
-    constexpr auto correction_percent = std::float_t{0.8f};
-    constexpr auto penetration_slop = std::float_t{0.003f};
-    constexpr auto max_correction = std::float_t{0.05f};
+    constexpr auto correction_percent = 0.8f;
+    constexpr auto penetration_slop = 0.003f;
+    constexpr auto max_correction = 0.05f;
 
     for (const auto& collision_pair : collisions) {
       auto& rigidbody_a = scene.get_component<physics::rigidbody>(collision_pair.node_a);
@@ -511,16 +522,16 @@ private:
   }
 
   static auto _apply_impulse(physics::rigidbody& a, physics::rigidbody& b, const math::vector3& impulse, const math::vector3& r_a, const math::vector3& r_b) -> void {
-    const auto inv_mass_a = a.inverse_mass();
-    const auto inv_mass_b = b.inverse_mass();
+    const auto inverse_mass_a = a.inverse_mass();
+    const auto inverse_mass_b = b.inverse_mass();
 
-    if (inv_mass_a > 0.0f) {
-      a.add_velocity(-impulse * inv_mass_a);
+    if (inverse_mass_a > 0.0f) {
+      a.add_velocity(-impulse * inverse_mass_a);
       a.add_angular_velocity(-(a.inverse_inertia_tensor_world() * math::vector3::cross(r_a, impulse)));
     }
 
-    if (inv_mass_b > 0.0f) {
-      b.add_velocity(impulse * inv_mass_b);
+    if (inverse_mass_b > 0.0f) {
+      b.add_velocity(impulse * inverse_mass_b);
       b.add_angular_velocity( (b.inverse_inertia_tensor_world() * math::vector3::cross(r_b, impulse)));
     }
   }

@@ -19,13 +19,11 @@ namespace Demo
 
     private IInputProvider _input;
     private CharacterController _controller;
-    private Transform _transform;
 
     public override void OnCreate()
     {
       _input = new KeyboardMouseInputProvider();
       _controller = GetComponent<CharacterController>();
-      _transform = GetComponent<Transform>();
     }
 
     public override void OnUpdate()
@@ -37,7 +35,8 @@ namespace Demo
 
     private void UpdateMotor(PlayerInputState state)
     {
-      // UpdateGroundedState();
+      // Read last frame's collision results first
+      ReadCollisionResults();
 
       var moveDir = GetCameraRelativeMove(state);
 
@@ -49,6 +48,23 @@ namespace Demo
       MoveAndCollide();
     }
 
+    private void ReadCollisionResults()
+    {
+      _isGrounded = _controller.IsGrounded;
+
+      var flags = _controller.Flags;
+
+      if (flags.HasFlag(CollisionFlags.Below) && _velocity.Y < 0f)
+      {
+        _velocity.Y = 0f;
+      }
+
+      if (flags.HasFlag(CollisionFlags.Above) && _velocity.Y > 0f)
+      {
+        _velocity.Y = 0f;
+      }
+    }
+
     private Vector3 GetCameraRelativeMove(PlayerInputState state)
     {
       var forward = Camera.Main.FlatForward;
@@ -56,7 +72,10 @@ namespace Demo
 
       var move = forward * state.Move.Y + right * state.Move.X;
 
-      move = move.Normalized();
+      if (move.LengthSquared() > 0.001f)
+      {
+        move = move.Normalized();
+      }
 
       return move;
     }
@@ -67,7 +86,7 @@ namespace Demo
 
       _velocity += desiredDir * accel * Time.DeltaTime;
 
-      var horizontal = new Vector3(_velocity.X, 0.0f, _velocity.Z);
+      var horizontal = new Vector3(_velocity.X, 0f, _velocity.Z);
 
       if (horizontal.Length() > MaxSpeed)
       {
@@ -89,18 +108,18 @@ namespace Demo
         return;
       }
 
-      var horizontal = new Vector3(_velocity.X, 0.0f, _velocity.Z);
+      var horizontal = new Vector3(_velocity.X, 0f, _velocity.Z);
 
       float speed = horizontal.Length();
 
-      if (speed <= 0.0f)
+      if (speed <= 0f)
       {
         return;
       }
 
       float drop = speed * GroundFriction * Time.DeltaTime;
 
-      float newSpeed = MathF.Max(speed - drop, 0.0f);
+      float newSpeed = MathF.Max(speed - drop, 0f);
 
       horizontal *= newSpeed / speed;
 
@@ -123,27 +142,9 @@ namespace Demo
 
     private void MoveAndCollide()
     {
-      var displacement = _velocity * Time.DeltaTime;
-      _controller.Move(displacement);
-
-      _isGrounded = _controller.IsGrounded;
-
-      var flags = _controller.Flags;
-
-      // Hit ground — stop falling
-      if (flags.HasFlag(CollisionFlags.Below) && _velocity.Y < 0f)
-      {
-        _velocity.Y = 0f;
-      }
-
-      // Hit ceiling — stop rising
-      if (flags.HasFlag(CollisionFlags.Above) && _velocity.Y > 0f)
-      {
-        _velocity.Y = 0f;
-      }
+      _controller.Move(_velocity * Time.DeltaTime);
     }
 
-
-  } // class CharacterMotor
+  } // class CharacterMovement
 
 } // namespace Demo

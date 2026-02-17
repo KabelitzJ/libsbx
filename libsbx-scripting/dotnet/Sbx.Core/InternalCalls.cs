@@ -29,7 +29,9 @@ namespace Sbx.Core
     internal static delegate* unmanaged<uint, float*, void> CharacterController_GetRadius;
     internal static delegate* unmanaged<uint, float*, void> CharacterController_GetSlopeLimit;
     internal static delegate* unmanaged<uint, float*, void> CharacterController_GetStepOffset;
-    internal static delegate* unmanaged<uint, Vector3*, Vector3*, MoveResult*, void> CharacterController_Move;
+    internal static delegate* unmanaged<uint, bool> CharacterController_GetIsGrounded;
+    internal static delegate* unmanaged<uint, byte*, void> CharacterController_GetFlags;
+    internal static delegate* unmanaged<uint, Vector3*, void> CharacterController_Move;
 
     internal static delegate* unmanaged<KeyCode, Bool32> Input_IsKeyPressed;
 		internal static delegate* unmanaged<KeyCode, Bool32> Input_IsKeyDown;

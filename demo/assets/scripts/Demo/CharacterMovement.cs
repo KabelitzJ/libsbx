@@ -124,23 +124,25 @@ namespace Demo
     private void MoveAndCollide()
     {
       var displacement = _velocity * Time.DeltaTime;
+      _controller.Move(displacement);
 
-      var result = _controller.Move(_transform.WorldPosition, displacement);
+      _isGrounded = _controller.IsGrounded;
 
-      _transform.Position = result.Position;
+      var flags = _controller.Flags;
 
-      _isGrounded = result.Grounded;
-
-      if (result.Grounded && _velocity.Y < 0.0f)
+      // Hit ground — stop falling
+      if (flags.HasFlag(CollisionFlags.Below) && _velocity.Y < 0f)
       {
-        _velocity.Y = 0.0f;
+        _velocity.Y = 0f;
       }
 
-      if (result.Flags.HasFlag(CollisionFlags.Above) && _velocity.Y > 0.0f)
+      // Hit ceiling — stop rising
+      if (flags.HasFlag(CollisionFlags.Above) && _velocity.Y > 0f)
       {
-        _velocity.Y = 0.0f;
+        _velocity.Y = 0f;
       }
     }
+
 
   } // class CharacterMotor
 

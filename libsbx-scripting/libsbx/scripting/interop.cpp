@@ -264,7 +264,7 @@ auto interop::character_controller_get_height(std::uint32_t node, std::float_t* 
   auto& scene = scenes_module.scene();
 
   if (!scene.is_valid(static_cast<scenes::node>(node))) {
-    utility::logger<"scripting">::error("Attempting to get position of invalid node");
+    utility::logger<"scripting">::error("Attempting to get height of invalid node");
 
     return;
   }
@@ -279,7 +279,7 @@ auto interop::character_controller_get_radius(std::uint32_t node, std::float_t* 
   auto& scene = scenes_module.scene();
 
   if (!scene.is_valid(static_cast<scenes::node>(node))) {
-    utility::logger<"scripting">::error("Attempting to get position of invalid node");
+    utility::logger<"scripting">::error("Attempting to get radius of invalid node");
 
     return;
   }
@@ -294,7 +294,7 @@ auto interop::character_controller_get_slope_limit(std::uint32_t node, std::floa
   auto& scene = scenes_module.scene();
 
   if (!scene.is_valid(static_cast<scenes::node>(node))) {
-    utility::logger<"scripting">::error("Attempting to get position of invalid node");
+    utility::logger<"scripting">::error("Attempting to get slope_limit of invalid node");
 
     return;
   }
@@ -309,7 +309,7 @@ auto interop::character_controller_get_step_offset(std::uint32_t node, std::floa
   auto& scene = scenes_module.scene();
 
   if (!scene.is_valid(static_cast<scenes::node>(node))) {
-    utility::logger<"scripting">::error("Attempting to get position of invalid node");
+    utility::logger<"scripting">::error("Attempting to get step_offset of invalid node");
 
     return;
   }
@@ -319,8 +319,49 @@ auto interop::character_controller_get_step_offset(std::uint32_t node, std::floa
   *step_offset = character_controller.step_offset;
 }
 
-auto interop::character_controller_move(std::uint32_t node, math::vector3* position, math::vector3* displacement, physics::move_result* result) -> void {
+auto interop::character_controller_get_is_grounded(std::uint32_t node) -> managed::bool32 {
+  auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
+  auto& scene = scenes_module.scene();
 
+  if (!scene.is_valid(static_cast<scenes::node>(node))) {
+    utility::logger<"scripting">::error("Attempting to get step_offset of invalid node");
+
+    return false;
+  }
+
+  auto& character_controller = scene.get_component<physics::character_controller>(static_cast<scenes::node>(node));
+
+  return character_controller.is_grounded;
+}
+
+auto interop::character_controller_get_flags(std::uint32_t node, std::uint8_t* flags) -> void {
+  auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
+  auto& scene = scenes_module.scene();
+
+  if (!scene.is_valid(static_cast<scenes::node>(node))) {
+    utility::logger<"scripting">::error("Attempting to get step_offset of invalid node");
+
+    return;
+  }
+
+  auto& character_controller = scene.get_component<physics::character_controller>(static_cast<scenes::node>(node));
+
+  *flags = utility::to_underlying(character_controller.flags);
+}
+
+auto interop::character_controller_move(std::uint32_t node, math::vector3* displacement) -> void {
+  auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
+  auto& scene = scenes_module.scene();
+
+  if (!scene.is_valid(static_cast<scenes::node>(node))) {
+    utility::logger<"scripting">::error("Attempting to get position of invalid node");
+
+    return;
+  }
+
+  auto& character_controller = scene.get_component<physics::character_controller>(static_cast<scenes::node>(node));
+
+  character_controller.displacement += *displacement;
 }
 
 auto interop::input_is_key_pressed(devices::key key) -> managed::bool32 { 

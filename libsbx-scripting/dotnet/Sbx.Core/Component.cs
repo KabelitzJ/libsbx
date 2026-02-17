@@ -141,14 +141,6 @@ namespace Sbx.Core
     Sides = 1 << 2
   } // enum CollisionFlags
 
-  public struct MoveResult
-  {
-    public Vector3 Position;
-    public CollisionFlags Flags;
-    public Vector3 GroundNormal;
-    public bool Grounded;
-  } // struct MoveResult
-
   public class CharacterController : Component
   {
     public float Height 
@@ -191,12 +183,27 @@ namespace Sbx.Core
       } 
     }
 
+    public bool IsGrounded
+    { 
+      get
+      {
+        unsafe { return InternalCalls.CharacterController_GetIsGrounded(Node); }
+      } 
+    }
 
-    public MoveResult Move(Vector3 position, Vector3 displacement)
+    public CollisionFlags Flags
+    { 
+      get
+      {
+        CollisionFlags flags;
+        unsafe { InternalCalls.CharacterController_GetFlags(Node, (byte*)&flags); }
+        return flags;
+      } 
+    }
+
+    public void Move(Vector3 displacement)
     {
-      MoveResult result;
-      unsafe { InternalCalls.CharacterController_Move(Node, &position, &displacement, &result); }
-      return result;
+      unsafe { InternalCalls.CharacterController_Move(Node, &displacement); }
     }
   }
 

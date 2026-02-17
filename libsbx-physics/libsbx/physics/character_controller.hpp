@@ -20,20 +20,6 @@ enum class collision_flags : std::uint8_t {
   sides = utility::bit_v<2>
 }; // enum class collision_flags
 
-constexpr auto operator|(collision_flags lhs, collision_flags rhs) -> collision_flags {
-  return static_cast<collision_flags>(static_cast<std::uint8_t>(lhs) | static_cast<std::uint8_t>(rhs));
-}
-
-constexpr auto operator&(collision_flags lhs, collision_flags rhs) -> collision_flags {
-  return static_cast<collision_flags>(static_cast<std::uint8_t>(lhs) & static_cast<std::uint8_t>(rhs));
-}
-
-constexpr auto operator|=(collision_flags& lhs, collision_flags rhs) -> collision_flags& {
-  lhs = lhs | rhs;
-
-  return lhs;
-}
-
 struct move_result {
   math::vector3 position;
   collision_flags flags{collision_flags::none};
@@ -48,9 +34,19 @@ struct character_controller {
   std::float_t step_offset{0.3f};
   std::float_t skin_width{0.01f};
   std::float_t ground_snap_distance{0.2f};
+
+  math::vector3 displacement{math::vector3::zero};
+
+  collision_flags flags{collision_flags::none};
+  math::vector3 ground_normal{math::vector3::up};
+  bool is_grounded{false};
+
   bool was_grounded{false};
 }; // struct character_controller
 
 } // namespace sbx::physics
+
+template<>
+struct sbx::utility::is_bit_field<sbx::physics::collision_flags> : std::true_type { };
 
 #endif // LIBSBX_PHYSICS_CHARACTER_CONTROLLER_HPP_

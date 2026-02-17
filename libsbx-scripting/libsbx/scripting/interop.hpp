@@ -68,7 +68,11 @@ struct interop {
 
   static auto character_controller_get_step_offset(std::uint32_t node, std::float_t* step_offset) -> void;
 
-  static auto character_controller_move(std::uint32_t node, math::vector3* position, math::vector3* displacement, physics::move_result* result) -> void;
+  static auto character_controller_get_is_grounded(std::uint32_t node) -> managed::bool32;
+
+  static auto character_controller_get_flags(std::uint32_t node, std::uint8_t* flags) -> void;
+
+  static auto character_controller_move(std::uint32_t node, math::vector3* displacement) -> void;
 
   static auto input_is_key_pressed(devices::key key) -> managed::bool32;
 

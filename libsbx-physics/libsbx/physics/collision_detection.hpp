@@ -20,10 +20,15 @@ struct collider_data {
   const physics::shape_collider& collider;
 }; // struct collider_data
 
+struct contact_point {
+  math::vector3 position;
+  std::float_t depth{0.0f};
+}; // struct contact_point
+
 struct collision_manifold {
   math::vector3 normal;
   float depth{0.0f};
-  std::vector<math::vector3> contact_points;
+  std::vector<contact_point> contact_points;
 }; // struct collision_manifold
 
 auto check_collision(const collider_data& first, const collider_data& second) -> std::optional<collision_manifold>;

@@ -77,14 +77,17 @@ private:
 
   struct contact_constraint {
     math::vector3 normal;
-    math::vector3 tangent;
+    math::vector3 tangent1;
+    math::vector3 tangent2;
     math::vector3 r_a;
     math::vector3 r_b;
     std::float_t normal_mass{0.0f};
-    std::float_t tangent_mass{0.0f};
+    std::float_t tangent1_mass{0.0f};
+    std::float_t tangent2_mass{0.0f};
     std::float_t bias{0.0f};
     std::float_t normal_impulse{0.0f};
-    std::float_t tangent_impulse{0.0f};
+    std::float_t tangent1_impulse{0.0f};
+    std::float_t tangent2_impulse{0.0f};
     std::uint64_t last_seen{0};
   }; // struct contact_constraint
 
@@ -194,7 +197,7 @@ private:
 
       if (auto manifold = check_collision(data_a, data_b); manifold) {
         for (const auto& point : manifold->contact_points) {
-          scenes_module.add_debug_sphere(point, 0.2f, math::color::red(), 16u);
+          scenes_module.add_debug_sphere(point.position, 0.2f, math::color::red(), 16u);
         }
 
         collisions.push_back({node_a, node_b, std::move(*manifold)});
@@ -278,7 +281,8 @@ private:
 
       // create one solver contact per contact point
       for (auto contact_point_index = std::size_t{0u}; contact_point_index < contact_count; ++contact_point_index) {
-        const auto contact_point_world = collision_entry.manifold.contact_points[contact_point_index];
+        const auto& contact = collision_entry.manifold.contact_points[contact_point_index];
+        const auto contact_point_world = contact.position;
 
         const auto r_a_world = contact_point_world - world_position_a;
         const auto r_b_world = contact_point_world - world_position_b;
@@ -300,17 +304,20 @@ private:
         const auto relative_velocity = velocity_at_contact_b - velocity_at_contact_a;
 
         // Tangent (opposes tangential motion)
-        auto contact_tangent = relative_velocity - contact_normal * math::vector3::dot(relative_velocity, contact_normal);
+        auto tangent1 = relative_velocity - contact_normal * math::vector3::dot(relative_velocity, contact_normal);
 
-        if (contact_tangent.length_squared() > 1e-12f) {
-          contact_tangent = contact_tangent / std::sqrt(contact_tangent.length_squared());
+        if (tangent1.length_squared() > 1e-12f) {
+          tangent1 = math::vector3::normalized(tangent1);
         } else {
-          contact_tangent = _any_perpendicular(contact_normal);
+          tangent1 = _any_perpendicular(contact_normal);
         }
 
-        constraint.tangent = contact_tangent;
+        auto tangent2 = math::vector3::cross(contact_normal, tangent1);
 
-        // effective mass (normal)
+        constraint.tangent1 = tangent1;
+        constraint.tangent2 = tangent2;
+
+        // normal effective mass
         {
           const auto r_a_cross_n = math::vector3::cross(constraint.r_a, contact_normal);
           const auto r_b_cross_n = math::vector3::cross(constraint.r_b, contact_normal);
@@ -323,28 +330,43 @@ private:
           constraint.normal_mass = (effective_mass > 1e-12f) ? (1.0f / effective_mass) : 0.0f;
         }
 
-        // effective mass (tangent)
+        // tangent1 effective mass
         {
-          const auto r_a_cross_t = math::vector3::cross(constraint.r_a, contact_tangent);
-          const auto r_b_cross_t = math::vector3::cross(constraint.r_b, contact_tangent);
+          const auto r_a_cross_t = math::vector3::cross(constraint.r_a, tangent1);
+          const auto r_b_cross_t = math::vector3::cross(constraint.r_b, tangent1);
 
-          const auto angular_term_a = math::vector3::dot(contact_tangent, math::vector3::cross(inverse_inertia_tensor_world_a * r_a_cross_t, constraint.r_a));
-          const auto angular_term_b = math::vector3::dot(contact_tangent, math::vector3::cross(inverse_inertia_tensor_world_b * r_b_cross_t, constraint.r_b));
+          const auto angular_term_a = math::vector3::dot(tangent1, math::vector3::cross(inverse_inertia_tensor_world_a * r_a_cross_t, constraint.r_a));
+          const auto angular_term_b = math::vector3::dot(tangent1, math::vector3::cross(inverse_inertia_tensor_world_b * r_b_cross_t, constraint.r_b));
 
           const auto effective_mass = inverse_mass_a + inverse_mass_b + angular_term_a + angular_term_b;
-
-          constraint.tangent_mass = (effective_mass > 1e-12f) ? (1.0f / effective_mass) : 0.0f;
+          constraint.tangent1_mass = (effective_mass > 1e-12f) ? (1.0f / effective_mass) : 0.0f;
         }
 
-        // bias
-        constraint.bias = bias_velocity;
+        // tangent2 effective mass
+        {
+          const auto r_a_cross_t = math::vector3::cross(constraint.r_a, tangent2);
+          const auto r_b_cross_t = math::vector3::cross(constraint.r_b, tangent2);
+
+          const auto angular_term_a = math::vector3::dot(tangent2, math::vector3::cross(inverse_inertia_tensor_world_a * r_a_cross_t, constraint.r_a));
+          const auto angular_term_b = math::vector3::dot(tangent2, math::vector3::cross(inverse_inertia_tensor_world_b * r_b_cross_t, constraint.r_b));
+
+          const auto effective_mass = inverse_mass_a + inverse_mass_b + angular_term_a + angular_term_b;
+          constraint.tangent2_mass = (effective_mass > 1e-12f) ? (1.0f / effective_mass) : 0.0f;
+        }
+
+        // per-contact bias
+        {
+          const auto per_contact_error = std::max(contact.depth - penetration_slop, 0.0f);
+          constraint.bias = (dt > 0.0f) ? std::clamp(baumgarte_beta * per_contact_error / dt, 0.0f, max_bias_velocity) : 0.0f;
+        }
 
         // warm start (cached impulses)
         const auto contact_key = _contact_key(node_a, node_b, local_anchor_a, local_anchor_b);
 
         if (auto cached_it = _contact_cache.find(contact_key); cached_it != _contact_cache.end()) {
-          constraint.normal_impulse  = cached_it->second.normal_impulse  * warm_start_scale;
-          constraint.tangent_impulse = cached_it->second.tangent_impulse * warm_start_scale;
+          constraint.normal_impulse = cached_it->second.normal_impulse * warm_start_scale;
+          constraint.tangent1_impulse = cached_it->second.tangent1_impulse * warm_start_scale;
+          constraint.tangent2_impulse = cached_it->second.tangent2_impulse * warm_start_scale;
         }
 
         constraint.last_seen = _solver_tick;
@@ -358,7 +380,11 @@ private:
       auto& rigidbody_a = scene.get_component<physics::rigidbody>(solver_contact_entry.node_a);
       auto& rigidbody_b = scene.get_component<physics::rigidbody>(solver_contact_entry.node_b);
 
-      const auto warm_start_impulse = solver_contact_entry.constraint.normal  * solver_contact_entry.constraint.normal_impulse + solver_contact_entry.constraint.tangent * solver_contact_entry.constraint.tangent_impulse;
+      const auto normal_impulse = solver_contact_entry.constraint.normal * solver_contact_entry.constraint.normal_impulse;
+      const auto tangent1_impulse = solver_contact_entry.constraint.tangent1 * solver_contact_entry.constraint.tangent1_impulse;
+      const auto tangent2_impulse = solver_contact_entry.constraint.tangent2 * solver_contact_entry.constraint.tangent2_impulse;
+
+      const auto warm_start_impulse = normal_impulse + tangent1_impulse + tangent2_impulse;
 
       _apply_impulse(rigidbody_a, rigidbody_b, warm_start_impulse, solver_contact_entry.constraint.r_a, solver_contact_entry.constraint.r_b);
     }
@@ -392,23 +418,34 @@ private:
           _apply_impulse(rigidbody_a, rigidbody_b, normal_impulse, solver_contact_entry.constraint.r_a, solver_contact_entry.constraint.r_b);
         }
 
-        // friction impulse
-        const auto tangent_relative_speed = math::vector3::dot(relative_velocity, solver_contact_entry.constraint.tangent);
+        // friction impulse — tangent1
+        {
+          const auto speed = math::vector3::dot(relative_velocity, solver_contact_entry.constraint.tangent1);
+          auto lambda = solver_contact_entry.constraint.tangent1_mass * (-speed);
 
-        auto tangent_lambda = solver_contact_entry.constraint.tangent_mass * (-(tangent_relative_speed));
+          const auto max_f = friction_mu * solver_contact_entry.constraint.normal_impulse;
+          const auto prev = solver_contact_entry.constraint.tangent1_impulse;
+          solver_contact_entry.constraint.tangent1_impulse = std::clamp(prev + lambda, -max_f, max_f);
+          lambda = solver_contact_entry.constraint.tangent1_impulse - prev;
 
-        const auto max_friction_impulse = friction_mu * solver_contact_entry.constraint.normal_impulse;
+          if (lambda != 0.0f) {
+            _apply_impulse(rigidbody_a, rigidbody_b, solver_contact_entry.constraint.tangent1 * lambda, solver_contact_entry.constraint.r_a, solver_contact_entry.constraint.r_b);
+          }
+        }
 
-        const auto previous_tangent_impulse = solver_contact_entry.constraint.tangent_impulse;
+        // friction impulse — tangent2
+        {
+          const auto speed = math::vector3::dot(relative_velocity, solver_contact_entry.constraint.tangent2);
+          auto lambda = solver_contact_entry.constraint.tangent2_mass * (-speed);
 
-        solver_contact_entry.constraint.tangent_impulse = std::clamp(previous_tangent_impulse + tangent_lambda, -max_friction_impulse, max_friction_impulse);
+          const auto max_f = friction_mu * solver_contact_entry.constraint.normal_impulse;
+          const auto prev = solver_contact_entry.constraint.tangent2_impulse;
+          solver_contact_entry.constraint.tangent2_impulse = std::clamp(prev + lambda, -max_f, max_f);
+          lambda = solver_contact_entry.constraint.tangent2_impulse - prev;
 
-        tangent_lambda = solver_contact_entry.constraint.tangent_impulse - previous_tangent_impulse;
-
-        if (tangent_lambda != 0.0f) {
-          const auto tangent_impulse = solver_contact_entry.constraint.tangent * tangent_lambda;
-
-          _apply_impulse(rigidbody_a, rigidbody_b, tangent_impulse, solver_contact_entry.constraint.r_a, solver_contact_entry.constraint.r_b);
+          if (lambda != 0.0f) {
+            _apply_impulse(rigidbody_a, rigidbody_b, solver_contact_entry.constraint.tangent2 * lambda, solver_contact_entry.constraint.r_a, solver_contact_entry.constraint.r_b);
+          }
         }
       }
     }

@@ -635,14 +635,14 @@ static auto generate_contacts(const box& box_a, const collider_data& box_a_data,
       // Project contact point onto the reference face plane
       const auto contact = polygon_buffer[i] - reference_face_normal * separation;
 
-      manifold.contact_points.push_back(contact);
+      manifold.contact_points.push_back({contact, -separation});
       max_penetration = std::max(max_penetration, -separation);
     }
   }
 
   // If numerical issues removed all points, fall back to at least one reasonable contact
   if (manifold.contact_points.empty()) {
-    manifold.contact_points.push_back(reference_face_point);
+    manifold.contact_points.push_back({reference_face_point, manifold.depth});
     max_penetration = std::max(max_penetration, manifold.depth);
   }
 
@@ -653,28 +653,28 @@ template<typename B>
 static auto generate_contacts(const box& a, const collider_data& a_data, [[maybe_unused]] const B& b, [[maybe_unused]] const collider_data& b_data, collision_manifold& manifold) -> void {
   const auto contact = a_data.position - manifold.normal * math::vector3::max(a.half_extents);
 
-  manifold.contact_points.push_back(contact);
+  manifold.contact_points.push_back({contact, manifold.depth});
 }
 
 template<typename B>
 static auto generate_contacts(const sphere& a, const collider_data& a_data, [[maybe_unused]] const B& b, [[maybe_unused]] const collider_data& b_data, collision_manifold& manifold) -> void {
   const auto contact = a_data.position - manifold.normal * a.radius;
 
-  manifold.contact_points.push_back(contact);
+  manifold.contact_points.push_back({contact, manifold.depth});
 }
 
 template<typename B>
 static auto generate_contacts(const capsule& a, const collider_data& a_data, [[maybe_unused]] const B& b, [[maybe_unused]] const collider_data& b_data, collision_manifold& manifold) -> void {
   const auto contact = a_data.position - manifold.normal * a.radius;
 
-  manifold.contact_points.push_back(contact);
+  manifold.contact_points.push_back({contact, manifold.depth});
 }
 
 template<typename A, typename B>
 static auto generate_contacts([[maybe_unused]] const A& a, const collider_data& a_data, [[maybe_unused]] const B& b, [[maybe_unused]] const collider_data& b_data, collision_manifold& manifold) -> void {
   const auto contact = a_data.position + manifold.normal * (-manifold.depth * 0.5f);
 
-  manifold.contact_points.push_back(contact);
+  manifold.contact_points.push_back({contact, manifold.depth});
 }
 
 static auto generate_contacts(const collider_data& a, const collider_data& b, collision_manifold& manifold) -> void {
@@ -687,7 +687,7 @@ static auto generate_contacts(const collider_data& a, const collider_data& b, co
   if (manifold.contact_points.empty()) {
     const auto contact = a.position + manifold.normal * (-manifold.depth * 0.5f);
 
-    manifold.contact_points.push_back(contact);
+    manifold.contact_points.push_back({contact, manifold.depth});
   }
 }
 

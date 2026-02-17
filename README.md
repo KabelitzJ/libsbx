@@ -1,277 +1,349 @@
-# Sandbox Game Engine
+<p align="center">
+  <img src="images/logo.png" alt="Sandbox Engine Logo" width="400"/>
+</p>
 
-[![Static Badge](https://img.shields.io/badge/Language-C%2B%2B-blue?logo=c%2B%2B&logoColor=blue)](https://isocpp.org/)
-[![Version: 0.2.0](https://img.shields.io/badge/Version-0.2.0-red?logo=git)](https://github.com/KabelitzJ/sandbox/releases/tag/v0.2.0)
-[![Static Badge](https://img.shields.io/badge/License-MIT-green?logo=opensourceinitiative&logoColor=green)](https://opensource.org/licenses/MIT)
-[![GitHub Workflow Status (with event)](https://img.shields.io/github/actions/workflow/status/KabelitzJ/sandbox/gh_pages.yml?logo=github&label=Deploy%20docs)](https://kabelitzj.github.io/sandbox/)
+<h1 align="center">Sandbox Game Engine</h1>
 
-![logo](./images/logo.png)
+<p align="center">
+  A modular, Vulkan-based game engine built with modern C++20
+</p>
 
-This is a game engine project that is currently under heavy development and is mainly for educational purposes.
+<p align="center">
+  <img src="https://img.shields.io/badge/Language-C%2B%2B20-blue?logo=c%2B%2B&logoColor=blue" alt="C++20"/>
+  <img src="https://img.shields.io/badge/Version-0.2.0-red?logo=git" alt="Version 0.2.0"/>
+  <img src="https://img.shields.io/badge/License-MIT-green?logo=opensourceinitiative&logoColor=green" alt="MIT License"/>
+  <img src="https://img.shields.io/github/actions/workflow/status/KabelitzJ/sandbox/gh_pages.yml?logo=github&label=Deploy%20docs" alt="Docs Build"/>
+</p>
 
-It is written in `C++20` and tries to use modern C++ features and best practices wherever possible.
+---
 
-## 📑 Table of Contents
+Sandbox is a game engine written from the ground up in **C++20**, designed as both a learning tool and a practical framework for real-time 3D applications. It features a Vulkan-based deferred PBR rendering pipeline, a render graph architecture, and a modular design built around an Entity-Component-System core.
 
-- [🚀 Features](#-features)
-- [🛠️ Getting Started](#️-getting-started)
-  - [📋 Prerequisites](#-prerequisites)
-  - [📥 Cloning the repository](#-cloning-the-repository)
-  - [📦 Installing dependencies](#-installing-dependencies)
-  - [🔨 Building](#-building)
-  - [🚀 Running](#-running)
-- [📝 Examples](#-examples)
-  - [🌱 Create a new application](#-create-a-new-application)
-  - [🎨 Create a new renderer](#-create-a-new-renderer)
-  - [🎬 Define render passes and subrenderers](#-define-render-passes-and-subrenderers)
-- [📷 Screenshots](#-screenshots)
-- [🤝 Contributing and bug reports](#-contributing-and-bug-reports)
-- [🔒 License](#-license)
-- [📧 Contact](#-contact)
+> **Note:** Active development happens on the [`development`](https://github.com/KabelitzJ/sandbox/tree/development) branch.
 
-## 🚀 Features
+<p align="center">
+  <img src="images/screenshot.png" alt="Engine Screenshot" width="720"/>
+</p>
 
-Here are the features that are ready or under development:
+## Features
 
-- [x] Entity-Component-System architecture
-- [x] 3D rendering
-- [x] Scripting support 
-- [x] Audio engine
-- [x] Scene management
-- [ ] Lighting system 🔜
-- [ ] Post-processing effects 🔜
-- [ ] 2D / UI rendering 🔜
-- [ ] Physics engine 🔜
-- [ ] Networking support 🔜
-- [ ] AI system 🔜
+**Rendering**
 
-## 🛠️ Getting Started
+- Vulkan-based deferred PBR shading pipeline
+- Image-Based Lighting (IBL) — compute-generated BRDF LUT, irradiance, and prefiltered environment maps
+- Cascaded Shadow Maps (4 cascades at varying resolutions)
+- Weighted Blended Order-Independent Transparency (WBOIT)
+- Skybox rendering with HDR cube maps
+- Post-processing chain: tonemapping, FXAA, bloom (WIP)
+- Render graph with automatic dependency resolution and pass ordering
+- GPU compute passes for skinning and particle simulation
 
-### 📋 Prerequisites
+**Engine**
 
-To build the project, you need the following tools:
+- Entity-Component-System architecture
+- Scene graph with YAML-based scene loading
+- Skeletal animation system with state machines and blend transitions
+- GPU-driven particle system with configurable emitters
+- C# scripting via .NET integration
+- Audio engine
+- Editor and gizmo tools
+- Debug rendering and grid overlay
+- Profiling support (easy_profiler)
 
-- [CMake](https://cmake.org/)
-- [Conan](https://conan.io/)
-- [MinGW](https://www.mingw-w64.org/) (or any other C++ compiler), I recommend using [MSYS2](https://www.msys2.org/) to install MinGW
+**In progress:** SSAO, bloom, physics engine, networking, AI systems
 
-To get started with the project, follow these steps:
+## Architecture
 
-_Note: The project is configured so that all commands are run from the root directory of the project_
+The engine is split into independent modules, each prefixed with `libsbx-`:
 
-### 📥 Cloning the repository
+| Module | Purpose |
+|---|---|
+| `core` | Engine lifecycle, application base class, CLI, module system |
+| `ecs` | Entity-Component-System framework |
+| `graphics` | Vulkan rendering, pipelines, render graph, compute passes |
+| `models` | Static mesh loading, materials, draw lists |
+| `animations` | Skeletal animation, GPU skinning, state machines |
+| `particles` | GPU particle simulation and rendering |
+| `scenes` | Scene graph, transforms, skybox, debug/grid rendering |
+| `physics` | Physics simulation |
+| `audio` | Audio playback |
+| `scripting` | C# scripting via .NET |
+| `devices` | Window management and input handling |
+| `ui` | User interface rendering |
+| `editor` | In-engine editor tools |
+| `gizmos` | Debug visualization |
+| `post` | Post-processing filters (tonemap, FXAA, blur, SSAO, bloom) |
+| `signals` | Event / signal system |
+| `math` | Vectors, matrices, transforms, noise, colors |
+| `memory` | Custom allocators, observer pointers |
+| `io` | File I/O and resource loading |
+| `assets` | Asset pipeline and management |
+| `bitmaps` | Image loading and manipulation |
+| `sprites` | 2D sprite rendering |
+| `containers` | Custom container types |
+| `units` | Type-safe unit system |
+| `utility` | Logging, timers, string IDs, general utilities |
 
-To clone the repository, run the following command:
+## Getting Started
+
+### Prerequisites
+
+- A **C++20** compatible compiler (MinGW via [MSYS2](https://www.msys2.org/) recommended on Windows)
+- [CMake](https://cmake.org/) 3.x+
+- [Conan](https://conan.io/) (C++ package manager)
+- [Vulkan SDK](https://vulkan.lunarg.com/)
+- [.NET SDK](https://dotnet.microsoft.com/) (for C# scripting)
+
+### Clone
 
 ```bash
-git clone https://github.com/KabelitzJ/sandbox.git
+git clone -b development https://github.com/KabelitzJ/sandbox.git
+cd sandbox
 ```
 
-### 📦 Installing dependencies 
-
-The dependencies for this project are managed using `Conan`. To install the dependencies, run the following command:
+### Install Dependencies
 
 ```bash
 conan install . --profile=default --build=missing
 ```
 
-### 🔨 Building
-
-The project uses `CMake` as the build tool. To build the project, run the following commands:
+### Build
 
 ```bash
-cmake . -B "build/debug/" -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Debug
+cmake . -B build/debug -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Debug
+cmake --build build/debug
 ```
 
-Adjust the generator and build type according to your needs.
+> Adjust the generator (`-G`) and build type to match your toolchain.
 
-After that, run the following command to build the project:
-
-```bash
-cmake --build "build/debug/"
-```
-### 🚀 Running
-
-To run the demo executable, run the following command:
+### Run the Demo
 
 ```bash
 ./build/debug/bin/demo.exe
 ```
 
-## 📝 Examples
+## Usage Examples
 
-The project comes with a demo executable that showcases the features of the engine. To run the demo, follow the steps in the [Running](#🚀-running) section.
+The project includes a full demo application in [`demo/demo/`](https://github.com/KabelitzJ/sandbox/tree/development/demo/demo) that showcases the engine's capabilities.
 
-### 🌱 Create a new application 
+### Creating an Application
 
-The demo creates a new class that derives from the `sbx::core::application` class. The application class is used to configure the game and to create the scene.
-It then is passed to the engine via the `auto sbx::core::create_application() -> std::unique_ptr<sbx::core::application>` function.
+Derive from `sbx::core::application` to set up modules, load assets, and build your scene:
 
 ```cpp
+// demo/demo/application.hpp
+
 #include <libsbx/core/core.hpp>
-#include <libsbx/assets/assets.hpp>
 #include <libsbx/devices/devices.hpp>
+#include <libsbx/graphics/graphics.hpp>
+#include <libsbx/scenes/scenes.hpp>
+#include <libsbx/animations/animations_module.hpp>
+#include <libsbx/particles/particle_emitter.hpp>
 
-class demo_application : public sbx::core::application {
+namespace demo {
+
+class application : public sbx::core::application {
 
 public:
 
-  demo_application() {
-    // Configure the game
+  application();
+  ~application() override = default;
 
-    // Get a reference to the devices module
-    auto& devices_module = sbx::core::engine::get_module<sbx::devices::devices_module>();
+  auto update() -> void override;
+  auto fixed_update() -> void override;
+  auto is_paused() const -> bool override;
 
-    // Get a reference to the window
-    auto& window = devices_module.window();
+private:
 
-    // Register a callback for when the window is closed
-    window.on_window_closed_signal() += [](const sbx::devices::window_closed_event& event){
-      sbx::core::engine::quit();
-    };
+  auto _generate_brdf(const std::uint32_t size) -> void;
+  auto _generate_irradiance(const std::uint32_t size) -> void;
+  auto _generate_prefiltered(const std::uint32_t size) -> void;
 
-    // Get a reference to the assets module
-    auto& assets_module = sbx::core::engine::get_module<sbx::assets::assets_module>();
+  bool _is_paused;
+  sbx::math::angle _rotation;
 
-    // Set the asset directory
-    assets_module.set_asset_directory("./demo/assets");
+  sbx::graphics::image2d_handle _brdf;
+  sbx::graphics::cube_image2d_handle _irradiance;
+  sbx::graphics::cube_image2d_handle _prefiltered;
 
-    // Load a texture
-    auto prototype_black_id = assets_module.load_asset<sbx::graphics::image2d>("res://textures/prototype_black.png");
-  }
+}; // class application
 
-  ~demo_application() override {
-    // Cleanup any resources
-  }
+} // namespace demo
+```
 
-  auto update() -> void  {
-    // Update the game
+The constructor sets up the full scene — loading meshes, textures, and materials; generating IBL maps via compute shaders; configuring skeletal animations with state machine transitions; spawning particle emitters; and instantiating C# scripts on scene nodes:
 
-    if (sbx::devices::input::is_key_pressed(sbx::devices::key::escape)) {
-      // When the escape key is pressed, quit the game
-      sbx::core::engine::quit();
-    }
-  }
+```cpp
+application::application() {
+  // ...
 
-}; // class demo_application
+  // Set up the renderer
+  auto& graphics_module = sbx::core::engine::get_module<sbx::graphics::graphics_module>();
 
-auto sbx::core::create_application() -> std::unique_ptr<sbx::core::application> {
-  return std::make_unique<demo_application>();
+  graphics_module.set_renderer<demo::renderer>();
+
+  // Load the scene from YAML
+  auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
+
+  auto& scene = scenes_module.load_scene("res://scenes/scene.yaml");
+
+  // Load PBR textures
+  scene.add_image("helmet_albedo", "res://textures/helmet/albedo.jpg", sbx::graphics::format::r8g8b8a8_srgb);
+  scene.add_image("helmet_normal", "res://textures/helmet/normal.jpg", sbx::graphics::format::r8g8b8a8_unorm);
+  scene.add_image("helmet_mrao", "res://textures/helmet/mrao2.jpg", sbx::graphics::format::r8g8b8a8_unorm);
+  scene.add_image("helmet_emissive", "res://textures/helmet/emissive.jpg", sbx::graphics::format::r8g8b8a8_srgb);
+
+  // Generate IBL maps on the GPU
+  _generate_brdf(512);
+  _generate_irradiance(64);
+  _generate_prefiltered(512);
+
+  // Configure a PBR material
+  auto& helmet_material = scene.add_material<sbx::models::material>("helmet");
+  helmet_material.albedo.image = scene.get_image("helmet_albedo");
+  helmet_material.normal.image = scene.get_image("helmet_normal");
+  helmet_material.mrao.image = scene.get_image("helmet_mrao");
+  helmet_material.emissive.image = scene.get_image("helmet_emissive");
+  helmet_material.emissive_strength = 16.0f;
+
+  // Set up skeletal animation with state transitions
+  auto& fox_animator = scene.add_component<sbx::animations::animator>(fox);
+  fox_animator.add_state({"Walk", scene.get_animation("Walk"), true, 0.5f});
+  fox_animator.add_state({"Survey", scene.get_animation("Survey"), true, 0.5f});
+  fox_animator.add_state({"Run", scene.get_animation("Run"), true, 0.5f});
+
+  fox_animator.add_transition({"Walk", "Run", 0.15f, [](const auto& a) {
+    if (auto v = a.float_parameter("speed"); v) return *v >= 2.0f;
+    return false;
+  }});
+
+  // Attach a particle emitter to the fox's tail bone
+  auto tail = animations_module.find_skeleton_node(fox, "b_Tail03_014");
+
+  auto tail_emitter = scene.create_child_node(tail, "TailEmitter");
+
+  auto& particles = scene.add_component<sbx::particles::particle_emitter>(tail_emitter);
+  particles.max_particles = 1000;
+  particles.emission_rate = 100.0f;
+  particles.initial_color = sbx::math::color{255u, 140u, 0u, 250u};
+  particles.end_color = sbx::math::color{255u, 69u, 0u, 0u};
+
+  // Create a skybox
+  auto camera_node = scene.camera();
+
+  scene.add_component<sbx::scenes::skybox>(camera_node, scene.get_cube_image("skybox"), _brdf, _irradiance, _prefiltered);
+
+  // Attach a C# script to the camera
+  auto& scripting_module = sbx::core::engine::get_module<sbx::scripting::scripting_module>();
+
+  scripting_module.instantiate(camera_anchor, "build/.../Demo.dll", "Demo.CameraController");
+
+  // ...
 }
-
 ```
 
-### 🎨 Create a new renderer
+### Setting Up the Renderer
 
-To render anything to the screen, you need to create a class that derives from the `sbx::graphics::renderer` class. The renderer class is used to render everything from scenes over UI elements to
-post-processing effects. It is passed to the engine via the `auto sbx::graphics::create_renderer() -> std::unique_ptr<sbx::graphics::renderer>` function.
+The renderer defines the full render graph — shadow passes, deferred G-buffer, transparency, resolve, and post-processing:
+
+```cpp
+renderer::renderer() {
+  // G-buffer attachments
+  auto depth    = create_attachment("depth", attachment::type::depth);
+  auto albedo   = create_attachment("albedo", attachment::type::image, ...);
+  auto position = create_attachment("position", attachment::type::image, ...);
+  auto normal   = create_attachment("normal", attachment::type::image, ...);
+  auto material = create_attachment("material", attachment::type::image, ...);
+  auto emissive = create_attachment("emissive", attachment::type::image, ...);
+
+  // 4-cascade shadow maps
+  auto shadow0 = create_attachment("shadow0", ...);
+  // ...
+
+  // Compute passes
+  auto skinning_pass  = create_pass([&](auto& ctx) { return ctx.compute_pass("skinning"); });
+  auto particles_pass = create_pass([&](auto& ctx) { return ctx.compute_pass("particles"); });
+
+  // Graphics passes with explicit dependencies
+  auto deferred_pass = create_pass([&](auto& ctx) {
+    auto pass = ctx.graphics_pass("deferred");
+    pass.depends_on(skinning_pass);
+    pass.writes(depth, albedo, position, normal, material, emissive, ...);
+    return pass;
+  });
+
+  // ... shadow passes, transparency pass, resolve pass ...
+
+  build_render_graph();
+
+  // Bind subrenderers to passes
+  add_subrenderer<static_mesh_material_subrenderer>(deferred_pass, ...);
+  add_subrenderer<skinned_mesh_material_subrenderer>(deferred_pass, ...);
+  add_subrenderer<particle_subrenderer>(transparency_pass, ...);
+  add_subrenderer<resolve_opaque_filter>(resolve_pass, ...);
+  add_subrenderer<skybox_subrenderer>(resolve_pass, ...);
+  add_subrenderer<tonemap_filter>(tonemap_pass, ...);
+  add_subrenderer<fxaa_filter>(fxaa_pass, ...);
+  add_subrenderer<editor_subrenderer>(editor_pass, ...);
+}
+```
+
+### Entry Point
+
+The engine is bootstrapped from a simple `main` that creates the engine instance and runs the application:
 
 ```cpp
 #include <libsbx/core/core.hpp>
-#include <libsbx/graphics/graphics.hpp>
+#include <libsbx/core/engine.hpp>
 
-class demo_renderer : public sbx::graphics::renderer {
+#include <demo/application.hpp>
 
-public:
+auto main(int argc, const char** argv) -> int {
+  auto args = std::vector<std::string_view>{argv, argv + argc};
 
-  demo_renderer() {
-    // Configure the renderer
+  try {
+    auto engine = std::make_unique<sbx::core::engine>(args);
+
+    engine->run<demo::application>();
+  } catch(const std::exception& exception) {
+    sbx::utility::logger<"demo">::error("{}", exception.what());
+
+    return sbx::core::exit::failure; 
   }
 
-  ~demo_renderer() override {
-    // Cleanup any resources
-  }
-
-  auto initialize() -> void override {
-    // Initialize the renderer
-  };
-
-}; // class demo_renderer
-
-class demo_application : public sbx::core::application {
-
-public:
-
-  demo_application() {
-    // [...]
-
-    // Get a reference to the graphics module
-    auto& graphics_module = sbx::core::engine::get_module<sbx::graphics::graphics_module>();
-
-    // Set the renderer
-    graphics_module.set_renderer<demo_renderer>();
-  }
-
-}; // class demo_application
-
+  return sbx::core::exit::success;
+}
 ```
 
-### 🎬 Define render passes and subrenderers
+## Gallery
 
-To render anything to the screen, you need to define a render pass and a subrenderer. The render pass is used to define the order in which the subrenderers are executed. The subrenderer is used to render things like meshes or UI elements.
+<p align="center">
+  <img src="images/dynamic_lighting.gif" alt="Dynamic Lighting" width="720"/><br/>
+  <em>Real-time dynamic lighting</em>
+</p>
 
-```cpp
-#include <libsbx/core/core.hpp>
-#include <libsbx/graphics/graphics.hpp>
-#include <libsbx/models/models.hpp>
-#include <libsbx/ui/ui.hpp>
+<p align="center">
+  <img src="images/shadow.png" alt="Shadow Mapping" width="720"/><br/>
+  <em>Shadow mapping</em>
+</p>
 
-class demo_renderer : public sbx::graphics::renderer {
+## Contributing
 
-public:
-
-  demo_renderer() {
-    // Create all render attachments for the render stages
-    auto attachments = std::vector<sbx::graphics::attachment>{
-      sbx::graphics::attachment{0, "swapchain", sbx::graphics::attachment::type::swapchain},
-      sbx::graphics::attachment{1, "depth", sbx::graphics::attachment::type::depth}
-    };
-
-    // Create all subpass bindings that associate subpasses with render attachments
-    auto subpass_bindings = std::vector<sbx::graphics::subpass_binding>{
-      sbx::graphics::subpass_binding{0, {0, 1}},
-      sbx::graphics::subpass_binding{1, {0}}
-    };
-
-    // Add the render stage
-    add_render_stage(std::move(attachments), std::move(subpass_bindings));
-  }
-
-  ~demo_renderer() override = default;
-
-  auto initialize() -> void override {
-    // Add subrenderers to render meshes and UI elements
-    add_subrenderer<sbx::models::mesh_subrenderer>("res://shaders/cell_shading", sbx::graphics::pipeline::stage{0, 0});
-    add_subrenderer<sbx::ui::ui_subrenderer>("res://shaders/ui", sbx::graphics::pipeline::stage{0, 1});
-  }
-
-}; // class demo_renderer
-
-```
-
-## 📷 Screenshots
-
-![screenshot](./images/screenshot.png)
-![dynamic_lighting](./images/dynamic_lighting.gif)
-![dynamic_lighting](./images/shadow.png)
-
-## 🤝 Contributing and bug reports
-
-Contributions to the project are welcome. To contribute, follow these steps:
+Contributions are welcome! To get involved:
 
 1. Fork the repository
-2. Create a new branch
+2. Create a feature branch off `development`
 3. Make your changes
-4. Submit a pull request
+4. Open a pull request
 
-If you find any bugs or have any suggestions, feel free to open an issue.
+Found a bug or have a suggestion? [Open an issue](https://github.com/KabelitzJ/sandbox/issues).
 
-## 🔒 License
+## License
 
-This project is licensed under the MIT License. See the [LICENSE](./LICENSE) file for details.
+This project is licensed under the [MIT License](LICENSE).
 
-Feel free to use this project for your own purposes. If you do you may send me a message, I would love to see what you have created with this project.
+Feel free to use this project for your own purposes. If you do, send me a message — I'd love to see what you've built with it.
 
-## 📧 Contact
+## Contact
 
 GitHub: [KabelitzJ](https://github.com/KabelitzJ)

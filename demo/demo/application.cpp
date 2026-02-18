@@ -126,12 +126,12 @@ application::application()
 
   // Sponza
 
-  // auto sponza = scene.create_node("Sponza");
+  auto sponza = scene.create_node("Sponza");
 
-  // scene.add_component<sbx::scenes::static_mesh>(sponza, scene.get_mesh("sponza"), sbx::models::load_materials("res://meshes/sponza/sponza.gltf"));
+  scene.add_component<sbx::scenes::static_mesh>(sponza, scene.get_mesh("sponza"), sbx::models::load_materials("res://meshes/sponza/sponza.gltf"));
 
-  // auto& sponza_transform = scene.get_component<sbx::scenes::transform>(sponza);
-  // sponza_transform.set_scale(sbx::math::vector3{2.0f, 2.0f, 2.0f});
+  auto& sponza_transform = scene.get_component<sbx::scenes::transform>(sponza);
+  sponza_transform.set_scale(sbx::math::vector3{2.0f, 2.0f, 2.0f});
 
 
   // // Helmet

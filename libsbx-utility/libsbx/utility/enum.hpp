@@ -101,8 +101,14 @@ public:
   explicit constexpr bit_field(const underlying_type value) noexcept
   : _value{value} { }
 
-  constexpr auto set(const value_type value) noexcept -> void {
+  constexpr auto set(const value_type value) noexcept -> bit_field& {
+    return *this |= value;
+  }
+
+  constexpr auto operator|=(const value_type value) noexcept -> bit_field& {
     _value |= static_cast<underlying_type>(value);
+
+    return *this;
   }
 
   constexpr auto clear(const value_type value) noexcept -> void {

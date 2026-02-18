@@ -67,22 +67,22 @@ application::application()
   auto& scripting_module = sbx::core::engine::get_module<sbx::scripting::scripting_module>();
 
   // Textures
-  scene.add_image("base", "res://textures/base.png", sbx::graphics::format::r8g8b8a8_unorm);
-  scene.add_image("fire", "res://textures/fire/fire.png", sbx::graphics::format::r8g8b8a8_unorm);
+  scene.add_image("base", "res://textures/base.png", sbx::graphics::format::r8g8b8a8_srgb);
+  scene.add_image("fire", "res://textures/fire/fire.png", sbx::graphics::format::r8g8b8a8_srgb);
 
-  scene.add_image("rune0", "res://textures/runes/rune0.png", sbx::graphics::format::r8g8b8a8_unorm);
-  scene.add_image("rune1", "res://textures/runes/rune1.png", sbx::graphics::format::r8g8b8a8_unorm);
-  scene.add_image("rune2", "res://textures/runes/rune2.png", sbx::graphics::format::r8g8b8a8_unorm);
-  scene.add_image("rune3", "res://textures/runes/rune3.png", sbx::graphics::format::r8g8b8a8_unorm);
+  scene.add_image("rune0", "res://textures/runes/rune0.png", sbx::graphics::format::r8g8b8a8_srgb);
+  scene.add_image("rune1", "res://textures/runes/rune1.png", sbx::graphics::format::r8g8b8a8_srgb);
+  scene.add_image("rune2", "res://textures/runes/rune2.png", sbx::graphics::format::r8g8b8a8_srgb);
+  scene.add_image("rune3", "res://textures/runes/rune3.png", sbx::graphics::format::r8g8b8a8_srgb);
 
-  scene.add_image("fox_albedo", "res://textures/fox/albedo.png", sbx::graphics::format::r8g8b8a8_unorm);
+  scene.add_image("fox_albedo", "res://textures/fox/albedo.png", sbx::graphics::format::r8g8b8a8_srgb);
 
   scene.add_image("helmet_albedo", "res://textures/helmet/albedo.jpg", sbx::graphics::format::r8g8b8a8_srgb);
   scene.add_image("helmet_normal", "res://textures/helmet/normal.jpg", sbx::graphics::format::r8g8b8a8_unorm);
   scene.add_image("helmet_mrao", "res://textures/helmet/mrao2.jpg", sbx::graphics::format::r8g8b8a8_unorm);
   scene.add_image("helmet_emissive", "res://textures/helmet/emissive.jpg", sbx::graphics::format::r8g8b8a8_srgb);
 
-  scene.add_cube_image("skybox", "res://skyboxes/clouds2");
+  scene.add_cube_image("skybox", "res://skyboxes/clouds2", ".png", sbx::graphics::format::r8g8b8a8_srgb);
 
   _generate_brdf(512);
   _generate_irradiance(64);
@@ -96,6 +96,8 @@ application::application()
   scene.add_mesh<sbx::models::mesh>("half", "res://meshes/terrain/half/half.gltf");
 
   scene.add_mesh<sbx::models::mesh>("cube", "res://meshes/cube/cube.gltf");
+
+  scene.add_mesh<sbx::models::mesh>("sponza", "res://meshes/sponza/sponza.gltf");
 
   scene.add_mesh<sbx::models::mesh>("helmet", "res://meshes/helmet/helmet.gltf");
 
@@ -122,7 +124,17 @@ application::application()
     sbx::core::engine::quit();
   };
 
-  // Helmet
+  // Sponza
+
+  // auto sponza = scene.create_node("Sponza");
+
+  // scene.add_component<sbx::scenes::static_mesh>(sponza, scene.get_mesh("sponza"), sbx::models::load_materials("res://meshes/sponza/sponza.gltf"));
+
+  // auto& sponza_transform = scene.get_component<sbx::scenes::transform>(sponza);
+  // sponza_transform.set_scale(sbx::math::vector3{2.0f, 2.0f, 2.0f});
+
+
+  // // Helmet
   auto helmet = scene.create_node("Helmet", sbx::scenes::transform{});
 
   auto& helmet_material = scene.add_material<sbx::models::material>("helmet");
@@ -142,150 +154,150 @@ application::application()
 
   auto& helmet_collider = scene.add_component<sbx::physics::mesh_collider>(helmet, "res://meshes/helmet/helmet.gltf");
 
-  // Terrain
-  auto terrain = scene.create_node("Terrain");
+  // // Terrain
+  // auto terrain = scene.create_node("Terrain");
 
-  auto& terrain_material = scene.add_material<sbx::models::material>("terrain");
-  terrain_material.albedo.image = scene.get_image("base");
+  // auto& terrain_material = scene.add_material<sbx::models::material>("terrain");
+  // terrain_material.albedo.image = scene.get_image("base");
 
-  scene.add_component<sbx::scenes::static_mesh>(terrain, scene.get_mesh("cube"), scene.get_material("terrain"));
+  // scene.add_component<sbx::scenes::static_mesh>(terrain, scene.get_mesh("cube"), scene.get_material("terrain"));
 
-  auto& transform = scene.get_component<sbx::scenes::transform>(terrain);
-  transform.set_scale(sbx::math::vector3{400.0f, 0.5f, 400.0f});
+  // auto& transform = scene.get_component<sbx::scenes::transform>(terrain);
+  // transform.set_scale(sbx::math::vector3{400.0f, 0.5f, 400.0f});
 
-  scene.add_component<sbx::physics::shape_collider>(terrain, sbx::physics::box{sbx::math::vector3{200.0f, 0.25f, 200.0f}});
-  scene.add_component<sbx::physics::rigidbody>(terrain, 0.0f);
+  // scene.add_component<sbx::physics::shape_collider>(terrain, sbx::physics::box{sbx::math::vector3{200.0f, 0.25f, 200.0f}});
+  // scene.add_component<sbx::physics::rigidbody>(terrain, 0.0f);
 
-  _rune0_emitter = scene.create_node("Rune0Emitter");
+  // _rune0_emitter = scene.create_node("Rune0Emitter");
 
-  auto& rune0_emitter = scene.add_component<sbx::particles::particle_emitter>(_rune0_emitter);
-  rune0_emitter.max_particles = 2000;
-  rune0_emitter.emission_rate = 50.0f;
-  rune0_emitter.emission_shape = sbx::math::volume{{-2.3f, 0.0f, -2.3f}, {2.3f, 0.0f, 2.3f}};
-  rune0_emitter.initial_speed = sbx::math::vector2{0.5f, 1.0f};
-  rune0_emitter.initial_lifetime = sbx::math::vector2{1.5f, 3.2f};
-  rune0_emitter.initial_size = sbx::math::vector2{0.3f, 0.6f};
-  rune0_emitter.initial_rotation = sbx::math::vector2{0.0f, 0.0f};
-  rune0_emitter.initial_color = sbx::math::color{101u, 213u, 253u, 250u};
-  rune0_emitter.gravity = sbx::math::vector3{0.0f, 3.0f, 0.0f};
-  rune0_emitter.drag = 1.0f;
-  rune0_emitter.end_color = sbx::math::color{8u, 145u, 195u, 0u};
-  rune0_emitter.end_size_scale = 0.2f;
-  rune0_emitter.images = {
-    scene.get_image("rune0"),
-    scene.get_image("rune1"),
-    scene.get_image("rune2"),
-    scene.get_image("rune3")
-  };
+  // auto& rune0_emitter = scene.add_component<sbx::particles::particle_emitter>(_rune0_emitter);
+  // rune0_emitter.max_particles = 2000;
+  // rune0_emitter.emission_rate = 50.0f;
+  // rune0_emitter.emission_shape = sbx::math::volume{{-2.3f, 0.0f, -2.3f}, {2.3f, 0.0f, 2.3f}};
+  // rune0_emitter.initial_speed = sbx::math::vector2{0.5f, 1.0f};
+  // rune0_emitter.initial_lifetime = sbx::math::vector2{1.5f, 3.2f};
+  // rune0_emitter.initial_size = sbx::math::vector2{0.3f, 0.6f};
+  // rune0_emitter.initial_rotation = sbx::math::vector2{0.0f, 0.0f};
+  // rune0_emitter.initial_color = sbx::math::color{101u, 213u, 253u, 250u};
+  // rune0_emitter.gravity = sbx::math::vector3{0.0f, 3.0f, 0.0f};
+  // rune0_emitter.drag = 1.0f;
+  // rune0_emitter.end_color = sbx::math::color{8u, 145u, 195u, 0u};
+  // rune0_emitter.end_size_scale = 0.2f;
+  // rune0_emitter.images = {
+  //   scene.get_image("rune0"),
+  //   scene.get_image("rune1"),
+  //   scene.get_image("rune2"),
+  //   scene.get_image("rune3")
+  // };
 
-  auto& rune0_emitter_transform = scene.get_component<sbx::scenes::transform>(_rune0_emitter);
-  rune0_emitter_transform.set_position(sbx::math::vector3{0.0f, 15.0f, 0.0f});
+  // auto& rune0_emitter_transform = scene.get_component<sbx::scenes::transform>(_rune0_emitter);
+  // rune0_emitter_transform.set_position(sbx::math::vector3{0.0f, 15.0f, 0.0f});
 
-  // Fox
-  auto& animations_module = sbx::core::engine::get_module<sbx::animations::animations_module>();
+  // // Fox
+  // auto& animations_module = sbx::core::engine::get_module<sbx::animations::animations_module>();
 
-  auto fox1 = scene.create_node("Fox");
+  // auto fox1 = scene.create_node("Fox");
 
-  auto& fox_material = scene.add_material<sbx::models::material>("fox");
-  fox_material.albedo.image = scene.get_image("fox_albedo");
+  // auto& fox_material = scene.add_material<sbx::models::material>("fox");
+  // fox_material.albedo.image = scene.get_image("fox_albedo");
 
-  animations_module.add_animated_mesh(fox1, scene.get_mesh("fox"), scene.get_material("fox"));
+  // animations_module.add_animated_mesh(fox1, scene.get_mesh("fox"), scene.get_material("fox"));
 
-  auto tail = animations_module.find_skeleton_node(fox1, "b_Tail03_014");
+  // auto tail = animations_module.find_skeleton_node(fox1, "b_Tail03_014");
 
-  if (tail != sbx::scenes::node::null) {
-    auto tail_emitter = scene.create_child_node(tail, "TailEmitter");
+  // if (tail != sbx::scenes::node::null) {
+  //   auto tail_emitter = scene.create_child_node(tail, "TailEmitter");
 
-    auto& tail_particle_emitter = scene.add_component<sbx::particles::particle_emitter>(tail_emitter);
-    tail_particle_emitter.max_particles = 1000;
-    tail_particle_emitter.emission_rate = 100.0f;
-    tail_particle_emitter.emission_shape = sbx::math::volume{{-0.1f, 0.0f, -0.1f}, {0.1f, 0.0f, 0.1f}};
-    tail_particle_emitter.initial_speed = sbx::math::vector2{1.0f, 2.0f};
-    tail_particle_emitter.initial_lifetime = sbx::math::vector2{0.5f, 1.0f};
-    tail_particle_emitter.initial_size = sbx::math::vector2{0.2f, 0.4f};
-    tail_particle_emitter.initial_rotation = sbx::math::vector2{0.0f, 0.0f};
-    tail_particle_emitter.initial_color = sbx::math::color{255u, 140u, 0u, 250u};
-    tail_particle_emitter.gravity = sbx::math::vector3{0.0f, 1.0f, 0.0f};
-    tail_particle_emitter.drag = 0.5f;
-    tail_particle_emitter.end_color = sbx::math::color{255u, 69u, 0u, 0u};
-    tail_particle_emitter.end_size_scale = 0.1f;
-    tail_particle_emitter.images = {
-      scene.get_image("fire")
-    };
+  //   auto& tail_particle_emitter = scene.add_component<sbx::particles::particle_emitter>(tail_emitter);
+  //   tail_particle_emitter.max_particles = 1000;
+  //   tail_particle_emitter.emission_rate = 100.0f;
+  //   tail_particle_emitter.emission_shape = sbx::math::volume{{-0.1f, 0.0f, -0.1f}, {0.1f, 0.0f, 0.1f}};
+  //   tail_particle_emitter.initial_speed = sbx::math::vector2{1.0f, 2.0f};
+  //   tail_particle_emitter.initial_lifetime = sbx::math::vector2{0.5f, 1.0f};
+  //   tail_particle_emitter.initial_size = sbx::math::vector2{0.2f, 0.4f};
+  //   tail_particle_emitter.initial_rotation = sbx::math::vector2{0.0f, 0.0f};
+  //   tail_particle_emitter.initial_color = sbx::math::color{255u, 140u, 0u, 250u};
+  //   tail_particle_emitter.gravity = sbx::math::vector3{0.0f, 1.0f, 0.0f};
+  //   tail_particle_emitter.drag = 0.5f;
+  //   tail_particle_emitter.end_color = sbx::math::color{255u, 69u, 0u, 0u};
+  //   tail_particle_emitter.end_size_scale = 0.1f;
+  //   tail_particle_emitter.images = {
+  //     scene.get_image("fire")
+  //   };
 
-    auto & tail_emitter_transform = scene.get_component<sbx::scenes::transform>(tail_emitter);
-    tail_emitter_transform.set_position(sbx::math::vector3{0.0f, 0.0f, 0.0f});
-  }
+  //   auto & tail_emitter_transform = scene.get_component<sbx::scenes::transform>(tail_emitter);
+  //   tail_emitter_transform.set_position(sbx::math::vector3{0.0f, 0.0f, 0.0f});
+  // }
 
-  auto& fox_animator = scene.add_component<sbx::animations::animator>(fox1);
+  // auto& fox_animator = scene.add_component<sbx::animations::animator>(fox1);
 
-  fox_animator.add_state({"Walk", scene.get_animation("Walk"), true, 0.5f });
-  fox_animator.add_state({"Survey", scene.get_animation("Survey"), true, 0.5f });
-  fox_animator.add_state({"Run", scene.get_animation("Run"), true, 0.5f });
+  // fox_animator.add_state({"Walk", scene.get_animation("Walk"), true, 0.5f });
+  // fox_animator.add_state({"Survey", scene.get_animation("Survey"), true, 0.5f });
+  // fox_animator.add_state({"Run", scene.get_animation("Run"), true, 0.5f });
 
-  fox_animator.add_transition({
-    "Walk", "Survey", 0.20f,
-    [](const sbx::animations::animator& animator){
-      if (auto value = animator.float_parameter("speed"); value) {
-        return *value <= 0.05f;
-      }
+  // fox_animator.add_transition({
+  //   "Walk", "Survey", 0.20f,
+  //   [](const sbx::animations::animator& animator){
+  //     if (auto value = animator.float_parameter("speed"); value) {
+  //       return *value <= 0.05f;
+  //     }
 
-      return false;
-    }
-  });
+  //     return false;
+  //   }
+  // });
 
-  fox_animator.add_transition({
-    "Run", "Survey", 0.25f,
-    [](const sbx::animations::animator& animator){
-      if (auto value = animator.float_parameter("speed"); value) {
-        return *value <= 0.05f;
-      }
+  // fox_animator.add_transition({
+  //   "Run", "Survey", 0.25f,
+  //   [](const sbx::animations::animator& animator){
+  //     if (auto value = animator.float_parameter("speed"); value) {
+  //       return *value <= 0.05f;
+  //     }
 
-      return false;
-    }
-  });
+  //     return false;
+  //   }
+  // });
 
-  // Walk ↔ Run thresholds
-  fox_animator.add_transition({
-    "Walk", "Run", 0.15f,
-    [](const sbx::animations::animator& animator){
-      if (auto value = animator.float_parameter("speed"); value) {
-        return *value >= 2.0f;
-      }
+  // // Walk ↔ Run thresholds
+  // fox_animator.add_transition({
+  //   "Walk", "Run", 0.15f,
+  //   [](const sbx::animations::animator& animator){
+  //     if (auto value = animator.float_parameter("speed"); value) {
+  //       return *value >= 2.0f;
+  //     }
 
-      return false;
-    }
-  });
+  //     return false;
+  //   }
+  // });
 
-  fox_animator.add_transition({
-    "Run", "Walk", 0.15f,
-    [](const sbx::animations::animator& animator){
-      if (auto value = animator.float_parameter("speed"); value) {
-        return *value < 2.0f && *value > 0.05f;
-      }
+  // fox_animator.add_transition({
+  //   "Run", "Walk", 0.15f,
+  //   [](const sbx::animations::animator& animator){
+  //     if (auto value = animator.float_parameter("speed"); value) {
+  //       return *value < 2.0f && *value > 0.05f;
+  //     }
 
-      return false;
-    }
-  });
+  //     return false;
+  //   }
+  // });
 
-  // Survey → Walk when starting to move
-  fox_animator.add_transition({
-    "Survey", "Walk", 0.20f,
-    [](const sbx::animations::animator& animator){
-      if (auto value = animator.float_parameter("speed"); value) {
-        return *value > 0.05f && *value < 2.0f;
-      }
+  // // Survey → Walk when starting to move
+  // fox_animator.add_transition({
+  //   "Survey", "Walk", 0.20f,
+  //   [](const sbx::animations::animator& animator){
+  //     if (auto value = animator.float_parameter("speed"); value) {
+  //       return *value > 0.05f && *value < 2.0f;
+  //     }
 
-      return false;
-    }
-  });
+  //     return false;
+  //   }
+  // });
 
-  fox_animator.play("Survey", true);
-  fox_animator.set_float("speed", 1.0f);
+  // fox_animator.play("Survey", true);
+  // fox_animator.set_float("speed", 1.0f);
 
-  auto& fox1_transform = scene.get_component<sbx::scenes::transform>(fox1);
-  fox1_transform.set_position(sbx::math::vector3{12.0f, 0.0f, 0.0f});
-  fox1_transform.set_scale(sbx::math::vector3{0.06f, 0.06f, 0.06f});
+  // auto& fox1_transform = scene.get_component<sbx::scenes::transform>(fox1);
+  // fox1_transform.set_position(sbx::math::vector3{12.0f, 0.0f, 0.0f});
+  // fox1_transform.set_scale(sbx::math::vector3{0.06f, 0.06f, 0.06f});
 
   // Camera
   auto camera_node = scene.camera();
@@ -293,11 +305,14 @@ application::application()
 
   scene.make_child_of(camera_node, camera_anchor);
 
+  auto& camera_anchor_transform = scene.get_component<sbx::scenes::transform>(camera_anchor);
+  camera_anchor_transform.set_position(sbx::math::vector3{-9.0f, 0.0f, -4.0f});
+
   auto& camera_transform = scene.get_component<sbx::scenes::transform>(camera_node);
   camera_transform.set_position(sbx::math::vector3{0.0f, 50.0f, 50.0f});
   camera_transform.look_at(sbx::math::vector3::zero);
 
-  scene.add_component<sbx::scenes::skybox>(camera_node, scene.get_cube_image("skybox"), _brdf, _irradiance, _prefiltered);
+  scene.add_component<sbx::scenes::skybox>(camera_node, scene.get_cube_image("skybox"), _brdf, _irradiance, _prefiltered, sbx::math::color::white());
 
   scripting_module.instantiate(camera_anchor, "build/x86_64/gcc/debug/_dotnet/Demo.dll", "Demo.CameraController");
 
@@ -324,36 +339,36 @@ auto application::update() -> void  {
 
   _rotation += sbx::math::degree{45} * delta_time;
 
-  if (sbx::devices::input::is_key_pressed(sbx::devices::key::space)) {
-    // _is_paused = !_is_paused;
+  // if (sbx::devices::input::is_key_pressed(sbx::devices::key::space)) {
+  //   // _is_paused = !_is_paused;
 
-    auto cube = scene.create_node("Cube");
+  //   auto cube = scene.create_node("Cube");
 
-    auto& terrain_material = scene.add_material<sbx::models::material>("cube");
-    terrain_material.albedo.image = scene.get_image("base");
+  //   auto& terrain_material = scene.add_material<sbx::models::material>("cube");
+  //   terrain_material.albedo.image = scene.get_image("base");
 
-    scene.add_component<sbx::scenes::static_mesh>(cube, scene.get_mesh("cube"), scene.get_material("cube"));
+  //   scene.add_component<sbx::scenes::static_mesh>(cube, scene.get_mesh("cube"), scene.get_material("cube"));
 
-    auto& transform = scene.get_component<sbx::scenes::transform>(cube);
-    transform.set_position(sbx::math::vector3{-6.0f, 12.0f, 0.0f});
-    transform.set_rotation(sbx::math::vector3::right, sbx::math::degree{35});
+  //   auto& transform = scene.get_component<sbx::scenes::transform>(cube);
+  //   transform.set_position(sbx::math::vector3{-6.0f, 12.0f, 0.0f});
+  //   transform.set_rotation(sbx::math::vector3::right, sbx::math::degree{35});
 
-    auto& collider = scene.add_component<sbx::physics::shape_collider>(cube, sbx::physics::box{sbx::math::vector3{0.5f, 0.5f, 0.5f}});
+  //   auto& collider = scene.add_component<sbx::physics::shape_collider>(cube, sbx::physics::box{sbx::math::vector3{0.5f, 0.5f, 0.5f}});
 
-    auto& rigidbody = scene.add_component<sbx::physics::rigidbody>(cube, 1.0f);
-    rigidbody.add_constant_acceleration(sbx::math::vector3{0.0f, -9.81f, 0.0f});
-    rigidbody.set_inverse_inertia_tensor(sbx::physics::inverse_inertia_tensor(collider, rigidbody.mass()));
-  }
+  //   auto& rigidbody = scene.add_component<sbx::physics::rigidbody>(cube, 1.0f);
+  //   rigidbody.add_constant_acceleration(sbx::math::vector3{0.0f, -9.81f, 0.0f});
+  //   rigidbody.set_inverse_inertia_tensor(sbx::physics::inverse_inertia_tensor(collider, rigidbody.mass()));
+  // }
 
-  if (sbx::devices::input::is_key_pressed(sbx::devices::key::j)) {
-    auto& fire_emitter = scene.get_component<sbx::particles::particle_emitter>(_rune0_emitter);
+  // if (sbx::devices::input::is_key_pressed(sbx::devices::key::j)) {
+  //   auto& fire_emitter = scene.get_component<sbx::particles::particle_emitter>(_rune0_emitter);
 
-    if (fire_emitter.is_playing()) {
-      fire_emitter.pause();
-    } else {
-      fire_emitter.play();
-    }
-  }
+  //   if (fire_emitter.is_playing()) {
+  //     fire_emitter.pause();
+  //   } else {
+  //     fire_emitter.play();
+  //   }
+  // }
 }
 
 auto application::fixed_update() -> void {

@@ -134,7 +134,7 @@ renderer::renderer()
   });
 
   auto shadow1_pass = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
-    auto pass = context.graphics_pass("shadow1", sbx::graphics::viewport::fixed(2048u, 2048u));
+    auto pass = context.graphics_pass("shadow1", sbx::graphics::viewport::fixed(1024u, 1024u));
 
     pass.depends_on(skinning_pass);
 
@@ -145,7 +145,7 @@ renderer::renderer()
   });
 
   auto shadow2_pass = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
-    auto pass = context.graphics_pass("shadow2", sbx::graphics::viewport::fixed(1024u, 1024u));
+    auto pass = context.graphics_pass("shadow2", sbx::graphics::viewport::fixed(512u, 512u));
 
     pass.depends_on(skinning_pass);
 
@@ -156,7 +156,7 @@ renderer::renderer()
   });
 
   auto shadow3_pass = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
-    auto pass = context.graphics_pass("shadow3", sbx::graphics::viewport::fixed(512u, 512u));
+    auto pass = context.graphics_pass("shadow3", sbx::graphics::viewport::fixed(256u, 256u));
 
     pass.depends_on(skinning_pass);
 

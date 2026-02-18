@@ -6,6 +6,8 @@ namespace sbx::common {
 struct scene_data {
   float4x4 view;
   float4x4 projection;
+  float4x4 inverse_view;
+  float4x4 inverse_projection;
   float3 camera_position;
   float camera_near;
   float camera_far;

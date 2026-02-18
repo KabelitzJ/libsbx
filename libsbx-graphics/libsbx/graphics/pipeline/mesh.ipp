@@ -48,7 +48,7 @@ mesh<Vertex>::mesh(std::vector<vertex_type>&& vertices, std::vector<index_type>&
     VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT
   );
 
-  _submeshes.push_back(graphics::submesh{_index_count, 0, _vertex_count, 0, bounds, math::matrix4x4::identity, utility::hashed_string{"mesh"}});
+  _submeshes.push_back(graphics::submesh{_index_count, 0, _vertex_count, 0, bounds, math::matrix4x4::identity, utility::hashed_string{"mesh"}, 0u});
   
   _upload_vertices(std::move(vertices), std::move(indices));
 }

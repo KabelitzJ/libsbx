@@ -263,6 +263,10 @@ public:
     _image_metadata.emplace(id, assets::asset_metadata{path, name.str(), "image", "disk"});
   }
 
+  auto has_image(const utility::hashed_string& name) const -> bool {
+    return _image_ids.find(name) != _image_ids.end();
+  }
+
   auto get_image(const utility::hashed_string& name) -> graphics::image2d_handle {
     if (auto entry = _image_ids.find(name); entry != _image_ids.end()) {
       return entry->second;
@@ -345,6 +349,10 @@ public:
 
     return assets_module.get_asset<Material>(id);
   }
+  
+  auto has_material(const utility::hashed_string& name) const -> bool {
+    return _materials_ids.find(name) != _materials_ids.end(); 
+  }
 
   auto get_material(const utility::hashed_string& name) -> math::uuid {
     return _materials_ids.at(name);
@@ -366,10 +374,16 @@ public:
     const auto& projection = camera.projection();
 
     _uniform_handler.push("projection", projection);
+    _uniform_handler.push("inverse_projection", math::matrix4x4::inverted(projection));
 
-    const auto view = math::matrix4x4::inverted(world_transform(_camera));
+    auto inverse_view = world_transform(_camera);
+
+    const auto view = math::matrix4x4::inverted(inverse_view);
+
+    inverse_view[3] = math::vector4{0.0f, 0.0f, 0.0f, 1.0f};
 
     _uniform_handler.push("view", view);
+    _uniform_handler.push("inverse_view", inverse_view);
 
     _uniform_handler.push("viewport", graphics_module.viewport());
 

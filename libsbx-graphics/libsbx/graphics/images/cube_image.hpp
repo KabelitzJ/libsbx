@@ -14,13 +14,15 @@
 
 #include <libsbx/graphics/resource_storage.hpp>
 
+#include <libsbx/graphics/images/image2d.hpp>
+
 namespace sbx::graphics {
 
 class cube_image : public image {
 
 public:
 
-  cube_image(const std::filesystem::path& path, const std::string& suffix = ".png", VkFilter filter = VK_FILTER_LINEAR, VkSamplerAddressMode address_mode = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE, bool anisotropic = true, bool mipmap = true);
+  cube_image(const std::filesystem::path& path, const std::string& suffix = ".png", graphics::format format = graphics::format::r8g8b8a8_srgb, VkFilter filter = VK_FILTER_LINEAR, VkSamplerAddressMode address_mode = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE, bool anisotropic = true, bool mipmap = true);
 
   cube_image(const math::vector2u& extent, VkFormat format = VK_FORMAT_R8G8B8A8_UNORM, VkImageUsageFlags usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_STORAGE_BIT, VkFilter filter = VK_FILTER_LINEAR, VkSamplerAddressMode address_mode = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE, VkSampleCountFlagBits samples = VK_SAMPLE_COUNT_1_BIT, bool anisotropic = false, bool mipmap = false);
 

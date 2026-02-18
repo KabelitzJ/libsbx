@@ -443,6 +443,36 @@ auto interop::camera_set_position(math::vector3* position) -> void {
   transform.set_position(*position);
 }
 
+auto interop::camera_get_rotation(math::quaternion* rotation) -> void {
+  auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
+  auto& scene = scenes_module.scene();
+
+  auto camera_node = scene.camera();
+
+  auto& transform = scene.get_component<scenes::transform>(static_cast<scenes::node>(camera_node));
+
+  *rotation = transform.rotation();
+}
+
+auto interop::camera_set_rotation(math::quaternion* rotation) -> void {
+  auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
+  auto& scene = scenes_module.scene();
+
+  auto camera_node = scene.camera();
+
+  if (!rotation) {
+    auto& tag = scene.get_component<scenes::tag>(static_cast<scenes::node>(camera_node));
+
+    utility::logger<"scripting">::error("Attempting to set null rotation of camera node '{}'", tag);
+
+    return;
+  }
+
+  auto& transform = scene.get_component<scenes::transform>(static_cast<scenes::node>(camera_node));
+
+  transform.set_rotation(*rotation);
+}
+
 auto interop::camera_get_forward(math::vector3* forward) -> void {
   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
   auto& scene = scenes_module.scene();

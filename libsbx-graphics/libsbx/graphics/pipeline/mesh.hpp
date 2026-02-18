@@ -32,6 +32,7 @@ struct submesh {
   math::volume bounds;
   math::matrix4x4 local_transform;
   utility::hashed_string name;
+  std::uint32_t material_index;
 }; // struct submesh
 
 template<vertex Vertex>

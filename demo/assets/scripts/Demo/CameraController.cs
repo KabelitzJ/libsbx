@@ -1,4 +1,3 @@
-using System.Data.Common;
 using Sbx.Core;
 using Sbx.Math;
 
@@ -22,6 +21,12 @@ namespace Demo
     public Vector3 minZoom = new Vector3(0, 3.0f, 3.0f);
     public Vector3 maxZoom = new Vector3(0, 60.0f, 60.0f);
     private Vector3 _newZoom;
+
+    public float lookSensitivity = 0.2f;
+    private float _pitch = 0.0f;
+    private float _yaw = 0.0f;
+    private bool _isLooking = false;
+    private Vector3 _lookStartPosition;
 
     private Vector3 _dragStartPosition;
     private Vector3 _dragCurrentPosition;
@@ -54,15 +59,13 @@ namespace Demo
         _newZoom = Vector3.Clamp(_newZoom, minZoom, maxZoom);
       }
 
+      // Pan
       if (Input.IsMouseButtonPressed(MouseButton.Left))
       {
         Plane plane = new Plane(Vector3.Up, Vector3.Zero);
-
         Ray ray = Camera.Main.ScreenPointToRay(Input.MousePosition());
 
-        bool result = plane.Raycast(ray, out float t);
-
-        if (result)
+        if (plane.Raycast(ray, out float t))
         {
           _dragStartPosition = ray.GetPoint(t);
         }
@@ -71,17 +74,16 @@ namespace Demo
       if (Input.IsMouseButtonDown(MouseButton.Left))
       {
         Plane plane = new Plane(Vector3.Up, Vector3.Zero);
-
         Ray ray = Camera.Main.ScreenPointToRay(Input.MousePosition());
 
         if (plane.Raycast(ray, out float entry))
         {
           _dragCurrentPosition = ray.GetPoint(entry);
-
           _newPosition = transform.Position + _dragStartPosition - _dragCurrentPosition;
         }
       }
 
+      // Yaw (horizontal orbit)
       if (Input.IsMouseButtonPressed(MouseButton.Middle))
       {
         _rotateStartPosition = new Vector3(Input.MousePosition());
@@ -92,10 +94,35 @@ namespace Demo
         _rotateCurrentPosition = new Vector3(Input.MousePosition());
 
         Vector3 difference = _rotateStartPosition - _rotateCurrentPosition;
-
         _rotateStartPosition = _rotateCurrentPosition;
 
-        _newRotation *= Quaternion.Euler(Vector3.Up * difference.X / 5f);
+        _yaw += difference.X / 5.0f;
+        _newRotation = Quaternion.Euler(Vector3.Up * _yaw);
+      }
+
+      // Free look (pitch + yaw) on right mouse button
+      if (Input.IsMouseButtonPressed(MouseButton.Right))
+      {
+        _lookStartPosition = new Vector3(Input.MousePosition());
+        _isLooking = true;
+      }
+
+      if (Input.IsMouseButtonDown(MouseButton.Right))
+      {
+        Vector3 currentPosition = new Vector3(Input.MousePosition());
+        Vector3 delta = _lookStartPosition - currentPosition;
+        _lookStartPosition = currentPosition;
+
+        _yaw   += delta.X * lookSensitivity;
+        _pitch  = System.Math.Clamp(_pitch + delta.Y * lookSensitivity, -89.0f, 89.0f);
+
+        _newRotation = Quaternion.Euler(Vector3.Up * _yaw);
+        Camera.Main.Rotation = Quaternion.Euler(Vector3.Right * _pitch);
+      }
+
+      if (!Input.IsMouseButtonDown(MouseButton.Right))
+      {
+        _isLooking = false;
       }
     }
 
@@ -125,12 +152,14 @@ namespace Demo
 
       if (Input.IsKeyDown(KeyCode.Q))
       {
-        _newRotation *= Quaternion.Euler(Vector3.Down * rotationAmount);
+        _yaw -= rotationAmount;
+        _newRotation = Quaternion.Euler(Vector3.Up * _yaw);
       }
 
       if (Input.IsKeyDown(KeyCode.E))
       {
-        _newRotation *= Quaternion.Euler(Vector3.Up * rotationAmount);
+        _yaw += rotationAmount;
+        _newRotation = Quaternion.Euler(Vector3.Up * _yaw);
       }
 
       transform.Position = Vector3.Lerp(transform.Position, _newPosition, Time.DeltaTime * movementTime);

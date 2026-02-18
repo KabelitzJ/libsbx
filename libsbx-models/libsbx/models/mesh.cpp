@@ -93,12 +93,20 @@ static auto _load_mesh(const aiMesh* mesh, mesh::mesh_data& data, const math::ma
   auto indices = std::vector<std::uint32_t>{};
   indices.reserve(mesh->mNumFaces * 3u);
 
+  const auto normal_matrix = math::matrix4x4::transposed(math::matrix4x4::inverted(local_transform));
+
   for (auto i = 0u; i < mesh->mNumVertices; ++i) {
+    const auto T = _convert_vec3(mesh->mTangents[i]);
+    const auto B = _convert_vec3(mesh->mBitangents[i]);
+    const auto N = _convert_vec3(mesh->mNormals[i]);
+
+    const auto handedness = (math::vector3::dot(math::vector3::cross(N, T), B) < 0.0f) ? -1.0f : 1.0f;
+
     auto vertex = models::vertex3d{};
     vertex.position = local_transform * _convert_vec4(mesh->mVertices[i], 1.0f);
-    vertex.normal = local_transform * _convert_vec4(mesh->mNormals[i], 0.0f);
+    vertex.normal = math::vector3::normalized(normal_matrix * math::vector4{N, 0.0f});
     vertex.uv = _convert_vec3(mesh->mTextureCoords[0][i]);
-    vertex.tangent = local_transform * _convert_vec4(mesh->mTangents[i], 0.0f);
+    vertex.tangent = math::vector4{math::vector3::normalized(normal_matrix * math::vector4{T, 0.0f}), handedness};
 
     vertices.push_back(vertex);
   }
@@ -156,6 +164,7 @@ static auto _load_mesh(const aiMesh* mesh, mesh::mesh_data& data, const math::ma
   submesh.bounds = bounds;
   submesh.local_transform = local_transform;
   submesh.name = utility::hashed_string{mesh->mName.C_Str()};
+  submesh.material_index = mesh->mMaterialIndex;
 
   data.submeshes.push_back(submesh);
 }

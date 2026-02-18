@@ -8,7 +8,6 @@ struct vertex {
 }; // struct vertex
 
 struct push_data {
-  vertex* vertices;
   float4 tint;
 }; // struct push_data
 
@@ -28,25 +27,24 @@ struct vs_out {
   float4 sv_position : SV_Position;
 }; // struct vs_out
 
-float3 position_from_vertex(vertex v) {
-  return float3(v.position_x, v.position_y, v.position_z);
-}
+static const float2 positions[3] = {
+  float2(-1.0, -1.0),
+  float2( 3.0, -1.0),
+  float2(-1.0,  3.0)
+};
 
 [shader("vertex")]
 vs_out main(vs_in input) {
   vs_out output;
 
-  vertex vertex = push.vertices[input.vertex_id];
-  float3 in_position = position_from_vertex(vertex);
+  float2 position = positions[input.vertex_id];
 
-  float3 view_rotation = mul((float3x3)scene.view, in_position);
+  float4 view_space = mul(scene.inverse_projection, float4(position, 1.0, 1.0));
+  float3 view_dir   = view_space.xyz / view_space.w;
 
-  float4 clip = mul(scene.projection, float4(view_rotation, 1.0));
-  output.sv_position = float4(clip.x, clip.y, clip.w, clip.w);
-
-  // pass-through
-  output.uv = in_position;
-  output.color = scene.light_color;
+  output.uv = mul((float3x3)scene.inverse_view, view_dir);
+  output.color = scene.light_color * push.tint;
+  output.sv_position = float4(position, 1.0, 1.0);
 
   return output;
 }

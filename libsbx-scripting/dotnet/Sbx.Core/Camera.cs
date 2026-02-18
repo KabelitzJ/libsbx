@@ -26,6 +26,16 @@ namespace Sbx.Core
       set { unsafe { InternalCalls.Camera_SetPosition(&value); } }
     }
 
+    public Quaternion Rotation
+    {
+      get {
+        Quaternion rotation;
+        unsafe { InternalCalls.Camera_GetRotation(&rotation); }
+        return rotation;
+      }
+      set { unsafe { InternalCalls.Camera_SetRotation(&value); } }
+    }
+
     public Vector3 Forward
     {
       get {

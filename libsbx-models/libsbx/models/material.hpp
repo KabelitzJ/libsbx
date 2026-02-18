@@ -14,6 +14,8 @@
 
 #include <libsbx/graphics/images/image2d.hpp>
 
+#include <libsbx/scenes/components/static_mesh.hpp>
+
 namespace sbx::models {
 
 enum class alpha_mode : std::uint8_t { 
@@ -167,12 +169,7 @@ struct material {
 
 }; // struct material
 
-struct load_material_result {
-  models::material material;
-  std::string name;
-}; // struct load_material_result
-
-auto load_material(const std::filesystem::path& path) -> load_material_result;
+auto load_materials(const std::filesystem::path& path) -> std::vector<scenes::static_mesh::submesh>;
   
 } // namespace sbx::models
 

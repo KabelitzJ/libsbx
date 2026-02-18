@@ -343,12 +343,14 @@ fs_out main(fs_in input) {
 
   if (receive_shadow) {
     float view_depth = -mul(scene.view, float4(world_position, 1.0)).z;
+
     cascade_select cascade_info = select_cascade_with_blend(view_depth);
   
     float shadow_current = calculate_shadow(cascade_info.cascade, world_position, normal);
     
     if (cascade_info.blend_factor > 0.0 && cascade_info.cascade < 3) {
       float shadow_next = calculate_shadow(cascade_info.next_cascade, world_position, normal);
+
       shadow = lerp(shadow_current, shadow_next, cascade_info.blend_factor);
     } else {
       shadow = shadow_current;

@@ -297,7 +297,7 @@ application::application()
   auto camera_node = scene.camera();
 
   auto& camera_transform = scene.get_component<sbx::scenes::transform>(camera_node);
-  camera_transform.set_position(sbx::math::vector3{0.0f, 10.0f, -20.0f});
+  camera_transform.set_position(sbx::math::vector3{0.0f, 10.0f, 20.0f});
   camera_transform.look_at(sbx::math::vector3::zero);
 
   scene.add_component<sbx::scenes::skybox>(camera_node, scene.get_cube_image("skybox"), _brdf, _irradiance, _prefiltered, sbx::math::color::white());

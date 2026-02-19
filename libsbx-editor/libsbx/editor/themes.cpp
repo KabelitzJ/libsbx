@@ -23,6 +23,7 @@ themes::themes() {
   _themes["Foo"] = [this]() { set_foo_colors(); };
   _themes["Bar"] = [this]() { set_bar_colors(); };
   _themes["NVPro"] = [this]() { set_nvpro(); };
+  _themes["Hazel"] = [this]() { set_hazel(); };
  }
 
 auto themes::apply_theme(const std::string& theme) -> void {
@@ -870,6 +871,114 @@ auto themes::set_nvpro() -> void {
   //Colors_ext[ImGuiColExt_Warning] = ImVec4 (1.0f, 0.43f, 0.35f, 1.0f);
 
   ImGui::SetColorEditOptions(ImGuiColorEditFlags_Float | ImGuiColorEditFlags_PickerHueWheel);
+}
+
+auto themes::set_hazel() -> void {
+  constexpr auto accent               = IM_COL32(236, 158, 36, 255);
+  constexpr auto highlight            = IM_COL32(39, 185, 242, 255);
+  constexpr auto niceBlue             = IM_COL32(83, 232, 254, 255);
+  constexpr auto compliment           = IM_COL32(78, 151, 166, 255);
+  constexpr auto background           = IM_COL32(36, 36, 36, 255);
+  constexpr auto backgroundDark       = IM_COL32(26, 26, 26, 255);
+  constexpr auto titlebar             = IM_COL32(21, 21, 21, 255);
+  constexpr auto titlebarOrange       = IM_COL32(186, 66, 30, 255);
+  constexpr auto titlebarGreen        = IM_COL32(18, 88, 30, 255);
+  constexpr auto titlebarRed          = IM_COL32(185, 30, 30, 255);
+  constexpr auto propertyField        = IM_COL32(15, 15, 15, 255);
+  constexpr auto text                 = IM_COL32(192, 192, 192, 255);
+  constexpr auto textBrighter         = IM_COL32(210, 210, 210, 255);
+  constexpr auto textDarker           = IM_COL32(128, 128, 128, 255);
+  constexpr auto textError            = IM_COL32(230, 51, 51, 255);
+  constexpr auto muted                = IM_COL32(77, 77, 77, 255);
+  constexpr auto groupHeader          = IM_COL32(47, 47, 47, 255);
+  constexpr auto selection            = IM_COL32(237, 192, 119, 255);
+  constexpr auto selectionMuted       = IM_COL32(237, 201, 142, 23);
+  constexpr auto backgroundPopup      = IM_COL32(50, 50, 50, 255);
+  constexpr auto validPrefab          = IM_COL32(82, 179, 222, 255);
+  constexpr auto invalidPrefab        = IM_COL32(222, 43, 43, 255);
+  constexpr auto missingMesh          = IM_COL32(230, 102, 76, 255);
+  constexpr auto meshNotSet           = IM_COL32(250, 101, 23, 255);
+
+  auto& style = ImGui::GetStyle();
+  auto& colors = ImGui::GetStyle().Colors;
+
+  //========================================================
+  /// Colours
+
+  // Headers
+  colors[ImGuiCol_Header]				= ImGui::ColorConvertU32ToFloat4(groupHeader);
+  colors[ImGuiCol_HeaderHovered]		= ImGui::ColorConvertU32ToFloat4(groupHeader);
+  colors[ImGuiCol_HeaderActive]		= ImGui::ColorConvertU32ToFloat4(groupHeader);
+
+  // Buttons
+  colors[ImGuiCol_Button]				= ImColor(56, 56, 56, 200);
+  colors[ImGuiCol_ButtonHovered]		= ImColor(70, 70, 70, 255);
+  colors[ImGuiCol_ButtonActive]		= ImColor(56, 56, 56, 150);
+
+  // Frame BG
+  colors[ImGuiCol_FrameBg]			= ImGui::ColorConvertU32ToFloat4(propertyField);
+  colors[ImGuiCol_FrameBgHovered]		= ImGui::ColorConvertU32ToFloat4(propertyField);
+  colors[ImGuiCol_FrameBgActive]		= ImGui::ColorConvertU32ToFloat4(propertyField);
+
+  // Tabs
+  colors[ImGuiCol_Tab]				= ImGui::ColorConvertU32ToFloat4(titlebar);
+  colors[ImGuiCol_TabHovered]			= ImColor(39, 185, 242, 30);
+  colors[ImGuiCol_TabActive]			= ImColor(39, 185, 242, 60);
+  colors[ImGuiCol_TabUnfocused]		= ImGui::ColorConvertU32ToFloat4(titlebar);
+  colors[ImGuiCol_TabUnfocusedActive] = colors[ImGuiCol_TabHovered];
+
+  // Title
+  colors[ImGuiCol_TitleBg]			= ImGui::ColorConvertU32ToFloat4(titlebar);
+  colors[ImGuiCol_TitleBgActive]		= ImGui::ColorConvertU32ToFloat4(titlebar);
+  colors[ImGuiCol_TitleBgCollapsed]	= ImVec4{ 0.15f, 0.1505f, 0.151f, 1.0f };
+
+  // Resize Grip
+  colors[ImGuiCol_ResizeGrip]			= ImVec4(0.91f, 0.91f, 0.91f, 0.25f);
+  colors[ImGuiCol_ResizeGripHovered]	= ImVec4(0.81f, 0.81f, 0.81f, 0.67f);
+  colors[ImGuiCol_ResizeGripActive]	= ImVec4(0.46f, 0.46f, 0.46f, 0.95f);
+
+  // Scrollbar
+  colors[ImGuiCol_ScrollbarBg]		= ImVec4(0.02f, 0.02f, 0.02f, 0.53f);
+  colors[ImGuiCol_ScrollbarGrab]		= ImVec4(0.31f, 0.31f, 0.31f, 1.0f);
+  colors[ImGuiCol_ScrollbarGrabHovered] = ImVec4(0.41f, 0.41f, 0.41f, 1.0f);
+  colors[ImGuiCol_ScrollbarGrabActive] = ImVec4(0.51f, 0.51f, 0.51f, 1.0f);
+
+  // Check Mark
+  colors[ImGuiCol_CheckMark]			= ImColor(200, 200, 200, 255);
+
+  // Slider
+  colors[ImGuiCol_SliderGrab]			= ImVec4(0.51f, 0.51f, 0.51f, 0.7f);
+  colors[ImGuiCol_SliderGrabActive]	= ImVec4(0.66f, 0.66f, 0.66f, 1.0f);
+
+  // Text
+  colors[ImGuiCol_Text]				= ImGui::ColorConvertU32ToFloat4(text);
+
+  // Checkbox
+  colors[ImGuiCol_CheckMark]			= ImGui::ColorConvertU32ToFloat4(text);
+
+  // Separator
+  colors[ImGuiCol_Separator]			= ImGui::ColorConvertU32ToFloat4(backgroundDark);
+  colors[ImGuiCol_SeparatorActive]	= ImGui::ColorConvertU32ToFloat4(highlight);
+  colors[ImGuiCol_SeparatorHovered]	= ImColor(39, 185, 242, 150);
+
+  // Window Background
+  colors[ImGuiCol_WindowBg]			= ImGui::ColorConvertU32ToFloat4(titlebar);
+  colors[ImGuiCol_ChildBg]			= ImGui::ColorConvertU32ToFloat4(background);
+  colors[ImGuiCol_PopupBg]			= ImGui::ColorConvertU32ToFloat4(backgroundPopup);
+  colors[ImGuiCol_Border]				= ImGui::ColorConvertU32ToFloat4(backgroundDark);
+
+  // Tables
+  colors[ImGuiCol_TableHeaderBg]		= ImGui::ColorConvertU32ToFloat4(groupHeader);
+  colors[ImGuiCol_TableBorderLight]	= ImGui::ColorConvertU32ToFloat4(backgroundDark);
+
+  // Menubar
+  colors[ImGuiCol_MenuBarBg]			= ImVec4{ 0.0f, 0.0f, 0.0f, 0.0f };
+
+  //========================================================
+  /// Style
+  style.FrameRounding = 2.5f;
+  style.FrameBorderSize = 1.0f;
+  style.IndentSpacing = 11.0f;
 }
 
 auto themes::apply_color_correction() -> void {

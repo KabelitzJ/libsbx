@@ -96,7 +96,7 @@ auto property_panel::_draw_vec3_control(const char* label, math::vector3& v, flo
   ImGui::PushID(label);
 
   if (ImGui::BeginTable("##vec3", 2, ImGuiTableFlags_SizingStretchProp)) {
-    ImGui::TableSetupColumn("##label", ImGuiTableColumnFlags_WidthFixed, 90.0f);
+    ImGui::TableSetupColumn("##label", ImGuiTableColumnFlags_WidthFixed, 60.0f);
     ImGui::TableSetupColumn("##value", ImGuiTableColumnFlags_WidthStretch);
 
     ImGui::TableNextRow();
@@ -107,7 +107,7 @@ auto property_panel::_draw_vec3_control(const char* label, math::vector3& v, flo
 
     ImGui::TableSetColumnIndex(1);
 
-    const auto button_w = 22.0f;
+    const auto button_w = 25.0f;
     const auto spacing = ImGui::GetStyle().ItemSpacing.x;
     const auto avail = ImGui::GetContentRegionAvail().x;
     const auto item_w = (avail - button_w * 3.0f - spacing * 6.0f) / 3.0f;
@@ -119,18 +119,37 @@ auto property_panel::_draw_vec3_control(const char* label, math::vector3& v, flo
       return c;
     };
 
-    auto axis_color = [](const char* axis_label) -> ImVec4 {
-      if (axis_label[0] == 'X') return ImVec4{0.85f, 0.25f, 0.25f, 1.0f};
-      if (axis_label[0] == 'Y') return ImVec4{0.25f, 0.80f, 0.35f, 1.0f};
-      return ImVec4{0.25f, 0.45f, 0.90f, 1.0f};
+    auto axis_color = [](const char* axis_label) -> std::array<std::pair<ImGuiCol, ImVec4>, 3u> {
+      if (axis_label[0] == 'X') {
+        return {{
+          std::make_pair(ImGuiCol_Button, ImVec4{ 0.8f, 0.1f, 0.15f, 1.0f }),
+          std::make_pair(ImGuiCol_ButtonHovered, ImVec4{ 0.9f, 0.2f, 0.2f,  1.0f }),
+          std::make_pair(ImGuiCol_ButtonActive, ImVec4{ 0.8f, 0.1f, 0.15f, 1.0f })
+        }};
+      }
+
+      if (axis_label[0] == 'Y') {
+        return {{
+          std::make_pair(ImGuiCol_Button, ImVec4{ 0.2f, 0.7f, 0.2f, 1.0f }),
+          std::make_pair(ImGuiCol_ButtonHovered, ImVec4{ 0.3f, 0.8f, 0.3f, 1.0f }),
+          std::make_pair(ImGuiCol_ButtonActive, ImVec4{ 0.2f, 0.7f, 0.2f, 1.0f })
+        }};
+      }
+
+      return {{
+        std::make_pair(ImGuiCol_Button, ImVec4{ 0.1f, 0.25f, 0.8f, 1.0f }),
+        std::make_pair(ImGuiCol_ButtonHovered, ImVec4{ 0.2f, 0.35f, 0.9f, 1.0f }),
+        std::make_pair(ImGuiCol_ButtonActive, ImVec4{ 0.1f, 0.25f, 0.8f, 1.0f })
+      }};
     };
 
     auto axis = [&](const char* axis_label, float& value) {
-      const auto base = axis_color(axis_label);
+      const auto colors = axis_color(axis_label);
 
-      ImGui::PushStyleColor(ImGuiCol_Button, base);
-      ImGui::PushStyleColor(ImGuiCol_ButtonHovered, tint(base, 1.10f));
-      ImGui::PushStyleColor(ImGuiCol_ButtonActive, tint(base, 0.90f));
+      for (const auto& [id, color] : colors) {
+        ImGui::PushStyleColor(id, color);
+      }
+
       ImGui::PushStyleColor(ImGuiCol_Text, ImVec4{1, 1, 1, 1});
 
       if (ImGui::Button(axis_label, ImVec2(button_w, 0))) {

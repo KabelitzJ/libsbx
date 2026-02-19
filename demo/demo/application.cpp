@@ -295,20 +295,14 @@ application::application()
 
   // Camera
   auto camera_node = scene.camera();
-  auto camera_anchor = scene.create_node("CameraAnchor");
-
-  scene.make_child_of(camera_node, camera_anchor);
-
-  auto& camera_anchor_transform = scene.get_component<sbx::scenes::transform>(camera_anchor);
-  camera_anchor_transform.set_position(sbx::math::vector3{-9.0f, 0.0f, -4.0f});
 
   auto& camera_transform = scene.get_component<sbx::scenes::transform>(camera_node);
-  camera_transform.set_position(sbx::math::vector3{0.0f, 50.0f, 50.0f});
+  camera_transform.set_position(sbx::math::vector3{0.0f, 10.0f, -20.0f});
   camera_transform.look_at(sbx::math::vector3::zero);
 
   scene.add_component<sbx::scenes::skybox>(camera_node, scene.get_cube_image("skybox"), _brdf, _irradiance, _prefiltered, sbx::math::color::white());
 
-  scripting_module.instantiate(camera_anchor, "build/x86_64/gcc/debug/_dotnet/Demo.dll", "Demo.CameraController");
+  scripting_module.instantiate(camera_node, "build/x86_64/gcc/debug/_dotnet/Demo.dll", "Demo.EditorCameraController");
 
   if (auto hide_window = cli.argument<bool>("hide-window"); !hide_window) {
     window.show();

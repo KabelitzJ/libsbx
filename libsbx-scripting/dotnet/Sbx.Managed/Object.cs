@@ -67,7 +67,7 @@ namespace Sbx.Managed
 
       public override int GetHashCode()
       {
-        // NOTE(Peter): Josh Bloch's Hash (from https://stackoverflow.com/questions/263400/what-is-the-best-algorithm-for-overriding-gethashcode)
+        // NOTE: Josh Bloch's Hash (from https://stackoverflow.com/questions/263400/what-is-the-best-algorithm-for-overriding-gethashcode)
         unchecked
         {
           int hash = 17;

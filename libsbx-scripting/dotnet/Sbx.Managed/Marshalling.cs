@@ -217,7 +217,7 @@ namespace Sbx.Managed
       if (InType.IsPointer || InType == typeof(IntPtr))
         return InValue;
 
-      // NOTE(Peter): Marshal.PtrToStructure<bool> doesn't seem to work
+      // NOTE: Marshal.PtrToStructure<bool> doesn't seem to work
       //				instead we have to read it as a single byte and check the raw value
       if (InType == typeof(bool))
         return Marshal.PtrToStructure<byte>(InValue) > 0;

@@ -97,7 +97,7 @@ namespace Demo
         _rotateStartPosition = _rotateCurrentPosition;
 
         _yaw += difference.X / 5.0f;
-        _newRotation = Quaternion.Euler(Vector3.Up * _yaw);
+        _newRotation = Quaternion.FromEulerAngles(Vector3.Up * _yaw);
       }
 
       // Free look (pitch + yaw) on right mouse button
@@ -116,8 +116,9 @@ namespace Demo
         _yaw   += delta.X * lookSensitivity;
         _pitch  = System.Math.Clamp(_pitch + delta.Y * lookSensitivity, -89.0f, 89.0f);
 
-        _newRotation = Quaternion.Euler(Vector3.Up * _yaw);
-        Camera.Main.Rotation = Quaternion.Euler(Vector3.Right * _pitch);
+        _newRotation = Quaternion.FromEulerAngles(Vector3.Up * _yaw);
+
+        Camera.Main.Rotation = Quaternion.FromEulerAngles(Vector3.Right * _pitch);
       }
 
       if (!Input.IsMouseButtonDown(MouseButton.Right))
@@ -153,13 +154,13 @@ namespace Demo
       if (Input.IsKeyDown(KeyCode.Q))
       {
         _yaw -= rotationAmount;
-        _newRotation = Quaternion.Euler(Vector3.Up * _yaw);
+        _newRotation = Quaternion.FromEulerAngles(Vector3.Up * _yaw);
       }
 
       if (Input.IsKeyDown(KeyCode.E))
       {
         _yaw += rotationAmount;
-        _newRotation = Quaternion.Euler(Vector3.Up * _yaw);
+        _newRotation = Quaternion.FromEulerAngles(Vector3.Up * _yaw);
       }
 
       transform.Position = Vector3.Lerp(transform.Position, _newPosition, Time.DeltaTime * movementTime);

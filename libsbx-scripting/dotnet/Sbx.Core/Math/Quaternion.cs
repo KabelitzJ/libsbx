@@ -148,12 +148,12 @@ namespace Sbx.Math
       );
     }
 
-    public static Quaternion Euler(Vector3 euler)
+    public static Quaternion FromEulerAngles(Vector3 euler)
     {
-      return Euler(euler.X, euler.Y, euler.Z);
+      return FromEulerAngles(euler.X, euler.Y, euler.Z);
     }
 
-    public static Quaternion Euler(float pitch, float yaw, float roll)
+    public static Quaternion FromEulerAngles(float pitch, float yaw, float roll)
     {
       float p = Angle.ToRadians(pitch * 0.5f);
       float y = Angle.ToRadians(yaw * 0.5f);
@@ -172,6 +172,32 @@ namespace Sbx.Math
         cosy * cosp * sinr - siny * sinp * cosr,
         cosy * cosp * cosr + siny * sinp * sinr
       );
+    }
+
+    public Vector3 EulerAngles()
+    {
+      Vector3 angles;
+
+      float sinp = 2.0f * (W * X - Y * Z);
+
+      if (MathF.Abs(sinp) >= 1.0f)
+      {
+        angles.X = MathF.CopySign(90.0f, sinp);
+      } 
+      else
+      {
+        angles.X = Angle.ToDegrees(MathF.Asin(sinp));
+      }
+
+      float siny = 2.0f * (W * Y + Z * X);
+      float cosy = 1.0f - 2.0f * (X * X + Y * Y);
+      angles.Y = Angle.ToDegrees(MathF.Atan2(siny, cosy));
+
+      float sinr = 2.0f * (W * Z + X * Y);
+      float cosr = 1.0f - 2.0f * (Z * Z + X * X);
+      angles.Z = Angle.ToDegrees(MathF.Atan2(sinr, cosr));
+
+      return angles;
     }
 
     public static Quaternion FromAxisAngle(Vector3 axis, float angle)

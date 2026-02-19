@@ -49,6 +49,7 @@ namespace Sbx.Core
     internal static delegate* unmanaged<Quaternion*, void> Camera_SetRotation;
     internal static delegate* unmanaged<Vector3*, void> Camera_GetForward;
     internal static delegate* unmanaged<Vector3*, void> Camera_GetRight;
+    internal static delegate* unmanaged<Vector3*, void> Camera_GetUp;
 
     internal static delegate* unmanaged<float*, void> Time_DeltaTime;
 

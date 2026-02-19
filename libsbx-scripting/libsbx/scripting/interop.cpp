@@ -495,6 +495,17 @@ auto interop::camera_get_right(math::vector3* right) -> void {
   *right = transform.right();
 }
 
+auto interop::camera_get_up(math::vector3* up) -> void {
+  auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
+  auto& scene = scenes_module.scene();
+
+  auto camera_node = scene.camera();
+
+  auto& transform = scene.get_component<scenes::transform>(static_cast<scenes::node>(camera_node));
+
+  *up = transform.up();
+}
+
 auto interop::time_delta_time(std::float_t* delta_time) -> void {
   if (!delta_time) {
     utility::logger<"scripting">::error("Attempting to set null delta_time");

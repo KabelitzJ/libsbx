@@ -74,6 +74,15 @@ namespace Sbx.Core
       }
     }
 
+    public Vector3 Up
+    {
+      get {
+        Vector3 up;
+        unsafe { InternalCalls.Camera_GetUp(&up); }
+        return up;
+      }
+    }
+
   } // class Camera
 
 } // namespace Sbx.Core

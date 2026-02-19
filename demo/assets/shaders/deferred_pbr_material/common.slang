@@ -12,25 +12,30 @@ struct material_data {
   uint normal_image_index;
   uint normal_sampler_index;
 
-  uint mrao_image_index;
-  uint mrao_sampler_index;
+  uint metallic_roughness_image_index;
+  uint metallic_roughness_sampler_index;
+  uint occlusion_image_index;
+  uint occlusion_sampler_index;
+
   uint emissive_image_index;
   uint emissive_sampler_index;
-
   uint height_image_index;
   uint height_sampler_index;
+
   float height_scale;
   float height_offset;
-
   float parallax_min_layers;
   float parallax_max_layers;
+
   float emissive_strength;
   float normal_scale;
+  float metallic_factor;
+  float roughness_factor;
 
-  float metallic;
-  float roughness;
-  float occlusion;
+  float occlusion_strength;
   float alpha_cutoff;
+  uint flags;
+  uint _pad0;
 
   float2 uv_offset;
   float2 uv_scale;
@@ -38,11 +43,6 @@ struct material_data {
   float4 base_color;
 
   float4 emissive_factor;
-
-  uint flags;
-  uint _pad0;
-  uint _pad1;
-  uint _pad2;
 }; // struct material_data
 
 struct instance_data {

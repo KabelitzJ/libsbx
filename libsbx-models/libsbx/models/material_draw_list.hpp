@@ -232,32 +232,39 @@ private:
 
   auto _push_material(const models::material& material) -> void {
     auto data = models::material_data{};
+
+    // Images
     data.albedo_image_index = add_image(material.albedo.image);
     data.normal_image_index = add_image(material.normal.image);
-    data.mrao_image_index = add_image(material.mrao.image);
+    data.metallic_roughness_image_index = add_image(material.metallic_roughness.image);
+    data.occlusion_image_index = add_image(material.occlusion.image);
     data.emissive_image_index = add_image(material.emissive.image);
     data.height_image_index = add_image(material.height.image);
 
+    // Samplers
     data.albedo_sampler_index = add_sampler_state(_get_or_create_sampler(material.albedo));
     data.normal_sampler_index = add_sampler_state(_get_or_create_sampler(material.normal));
-    data.mrao_sampler_index = add_sampler_state(_get_or_create_sampler(material.mrao));
+    data.metallic_roughness_sampler_index = add_sampler_state(_get_or_create_sampler(material.metallic_roughness));
+    data.occlusion_sampler_index = add_sampler_state(_get_or_create_sampler(material.occlusion));
     data.emissive_sampler_index = add_sampler_state(_get_or_create_sampler(material.emissive));
     data.height_sampler_index = add_sampler_state(_get_or_create_sampler(material.height));
 
+    // Factors
+    data.metallic_factor = material.metallic_factor;
+    data.roughness_factor = material.roughness_factor;
+    data.occlusion_strength = material.occlusion_strength;
+    data.normal_scale = material.normal_scale;
+    data.emissive_strength = material.emissive_strength;
+    data.emissive_factor = material.emissive_factor;
+    data.base_color = material.base_color;
+
+    // Parallax
     data.height_scale = material.height_scale;
     data.height_offset = material.height_offset;
     data.parallax_min_layers = material.parallax_min_layers;
     data.parallax_max_layers = material.parallax_max_layers;
-    data.normal_scale = material.normal_scale;
-    data.emissive_factor = material.emissive_factor;
 
-    data.base_color = material.base_color;
-    data.emissive_strength = material.emissive_strength;
-
-    data.metallic = material.metallic;
-    data.roughness = material.roughness;
-    data.occlusion = material.occlusion;
-
+    // UV
     data.uv_offset = material.uv_offset;
     data.uv_scale = material.uv_scale;
 
@@ -266,7 +273,9 @@ private:
 
     _material_data.push_back(data);
 
-    auto& buckets = _material_buckets[material];
+    const auto key = static_cast<material_key>(material);
+    auto& buckets = _material_buckets[key];
+
     buckets.insert(_classify_bucket(material));
 
     if (_submits_to_shadow(material)) {

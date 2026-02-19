@@ -46,25 +46,30 @@ struct alignas(16) material_data {
   std::uint32_t normal_image_index;
   std::uint32_t normal_sampler_index;
 
-  std::uint32_t mrao_image_index;
-  std::uint32_t mrao_sampler_index;
+  std::uint32_t metallic_roughness_image_index;
+  std::uint32_t metallic_roughness_sampler_index;
+  std::uint32_t occlusion_image_index;
+  std::uint32_t occlusion_sampler_index;
+
   std::uint32_t emissive_image_index;
   std::uint32_t emissive_sampler_index;
-
   std::uint32_t height_image_index;
   std::uint32_t height_sampler_index;
+
   std::float_t height_scale;
   std::float_t height_offset;
-
   std::float_t parallax_min_layers;
   std::float_t parallax_max_layers;
+
   std::float_t emissive_strength;
   std::float_t normal_scale;
+  std::float_t metallic_factor;
+  std::float_t roughness_factor;
 
-  std::float_t metallic;
-  std::float_t roughness;
-  std::float_t occlusion;
+  std::float_t occlusion_strength;
   std::float_t alpha_cutoff;
+  std::uint32_t flags;
+  std::uint32_t _pad0;
 
   math::vector2 uv_offset;
   math::vector2 uv_scale;
@@ -72,11 +77,6 @@ struct alignas(16) material_data {
   math::color base_color;
 
   math::vector4 emissive_factor;
-
-  std::uint32_t flags;
-  std::uint32_t _pad0;
-  std::uint32_t _pad1;
-  std::uint32_t _pad2;
 }; // struct material_data
 
 static_assert(sizeof(material_data) <= 256u);
@@ -126,9 +126,9 @@ struct material {
 
   math::color base_color{math::color::white()};
 
-  std::float_t metallic{0.0f};
-  std::float_t roughness{0.5f};
-  std::float_t occlusion{1.0f};
+  std::float_t metallic_factor{1.0f};
+  std::float_t roughness_factor{1.0f};
+  std::float_t occlusion_strength{1.0f};
 
   math::vector4 emissive_factor{0, 0, 0, 1};
   std::float_t emissive_strength{1.0f};
@@ -137,7 +137,8 @@ struct material {
 
   texture_slot albedo{};
   texture_slot normal{};
-  texture_slot mrao{};
+  texture_slot metallic_roughness{};
+  texture_slot occlusion{};
   texture_slot emissive{};
   texture_slot height{};
 

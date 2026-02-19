@@ -41,7 +41,7 @@ void main(cs_in input) {
     up = cross(N, right);
 
     float3 color = float3(0.0, 0.0, 0.0);
-    uint sample_count = 0;
+    float weight_sum = 0.0;
 
     for (float phi = 0.0; phi < sbx::math::two_pi; phi += delta_phi) {
       for (float theta = 0.0; theta < sbx::math::half_pi; theta += delta_theta) {
@@ -53,11 +53,11 @@ void main(cs_in input) {
         float3 sampled = skybox.Sample(uav).rgb;
 
         color += sampled * weight;
-        sample_count++;
+        weight_sum += weight;
       }
     }
 
-    float3 final_output = sbx::math::pi * color / float(sample_count);
+    float3 final_output = sbx::math::pi * color / weight_sum;
 
     output.Store(int3(input.id.xy, face), float4(final_output, 1.0));
   }

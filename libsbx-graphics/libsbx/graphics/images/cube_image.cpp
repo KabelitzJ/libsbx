@@ -71,6 +71,9 @@ auto cube_image::_load(const std::filesystem::path& path, const std::string& suf
       auto channels = std::int32_t{0};
 
       if (is_hdr) {
+        utility::assert_that(stbi_is_hdr(sub_path.string().c_str()), "Cube image was determained to be HDR but face is not");
+        utility::assert_that(_channels == 4u, "HDR Cube image requires 4 color channels");
+
         stbi_set_flip_vertically_on_load(false);
 
         auto* image_data = stbi_loadf(sub_path.string().c_str(), &width, &height, &channels, STBI_rgb_alpha);
@@ -95,7 +98,7 @@ auto cube_image::_load(const std::filesystem::path& path, const std::string& suf
           throw std::runtime_error{fmt::format("Failed to load image: {}", sub_path.string())};
         }
 
-        const auto size = width * height * _channels;
+        const auto size = width * height * _channels * sizeof(std::uint8_t);
 
         buffer.resize(buffer.size() + size);
         std::memcpy(buffer.data() + offset, image_data, size);

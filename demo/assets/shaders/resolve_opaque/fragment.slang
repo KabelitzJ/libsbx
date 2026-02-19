@@ -1,5 +1,3 @@
-// #include <libsbx/common/lighting.slang>
-// #include <libsbx/common/shadow.slang>
 #include <libsbx/common/scene_data.slang>
 #include <libsbx/common/depth.slang>
 #include <libsbx/math/constants.slang>

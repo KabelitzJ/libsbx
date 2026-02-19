@@ -77,8 +77,8 @@ auto resolve_material(scenes::scene& scene, const aiScene* ai_scene, const std::
     }
 
     // Metallic / roughness
-    ai_material->Get(AI_MATKEY_METALLIC_FACTOR,  material.metallic);
-    ai_material->Get(AI_MATKEY_ROUGHNESS_FACTOR, material.roughness);
+    ai_material->Get(AI_MATKEY_METALLIC_FACTOR, material.metallic_factor);
+    ai_material->Get(AI_MATKEY_ROUGHNESS_FACTOR, material.roughness_factor);
 
     // Emissive
     auto emissive = aiColor3D{};
@@ -112,12 +112,13 @@ auto resolve_material(scenes::scene& scene, const aiScene* ai_scene, const std::
     // Textures
     material.albedo.image = resolve_texture(scene, ai_material, aiTextureType_BASE_COLOR, root_directory);
     material.normal.image = resolve_texture(scene, ai_material, aiTextureType_NORMALS, root_directory);
-    material.mrao.image = resolve_texture(scene, ai_material, aiTextureType_DIFFUSE_ROUGHNESS, root_directory);
+    material.metallic_roughness.image = resolve_texture(scene, ai_material, aiTextureType_DIFFUSE_ROUGHNESS, root_directory);
+    material.occlusion.image = resolve_texture(scene, ai_material, aiTextureType_LIGHTMAP, root_directory);
     material.emissive.image = resolve_texture(scene, ai_material, aiTextureType_EMISSIVE, root_directory);
     material.height.image = resolve_texture(scene, ai_material, aiTextureType_HEIGHT, root_directory);
 
     // Feature flags
-    if (material.normal.image)   { 
+    if (material.normal.image) { 
       material.features.set(models::material_feature::normal_map); 
     }
 
@@ -125,8 +126,12 @@ auto resolve_material(scenes::scene& scene, const aiScene* ai_scene, const std::
       material.features.set(models::material_feature::emission);   
     }
 
-    if (material.height.image)   { 
+    if (material.height.image) { 
       material.features.set(models::material_feature::height);     
+    }
+
+    if (material.occlusion.image) { 
+      material.features.set(models::material_feature::occlusion);  
     }
 
     scene.add_material<models::material>(key, std::move(material));

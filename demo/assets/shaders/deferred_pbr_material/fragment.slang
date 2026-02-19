@@ -93,14 +93,31 @@ float3 get_normal(float3x3 TBN, float2 uv, float3 normal, bool is_front_face, ma
 }
 
 float3 get_material(float2 uv, material_data material_data) {
-  uint image_index = material_data.mrao_image_index;
-  uint sampler_index = material_data.mrao_sampler_index;
+  uint metallic_roughness_image_index = material_data.metallic_roughness_image_index;
+  uint metallic_roughness_sampler_index = material_data.metallic_roughness_sampler_index;
 
-  if (image_index >= sbx::common::max_image_array_size) {
-    return float3(material_data.metallic, material_data.roughness, material_data.occlusion);
+  float metallic = material_data.metallic_factor;
+  float roughness = material_data.roughness_factor;
+
+  if (metallic_roughness_image_index < sbx::common::max_image_array_size) {
+    float4 mr = images[NonUniformResourceIndex(metallic_roughness_image_index)].Sample(samplers[NonUniformResourceIndex(metallic_roughness_sampler_index)], uv);
+
+    metallic *= mr.b;
+    roughness *= mr.g;
   }
 
-  return images[NonUniformResourceIndex(image_index)].Sample(samplers[NonUniformResourceIndex(sampler_index)], uv).rgb;
+  uint occ_image_index   = material_data.occlusion_image_index;
+  uint occ_sampler_index = material_data.occlusion_sampler_index;
+
+  float ao = 1.0;
+
+  if (occ_image_index < sbx::common::max_image_array_size) {
+    float sampled_ao = images[NonUniformResourceIndex(occ_image_index)].Sample(samplers[NonUniformResourceIndex(occ_sampler_index)], uv).r;
+
+    ao = 1.0 + material_data.occlusion_strength * (sampled_ao - 1.0);
+  }
+
+  return float3(metallic, roughness, ao);
 }
 
 float3 get_emissive(float2 uv, material_data material_data) {

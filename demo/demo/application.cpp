@@ -77,12 +77,14 @@ application::application()
 
   scene.add_image("fox_albedo", "res://textures/fox/albedo.png", sbx::graphics::format::r8g8b8a8_srgb);
 
-  scene.add_image("helmet_albedo", "res://textures/helmet/albedo.jpg", sbx::graphics::format::r8g8b8a8_srgb);
-  scene.add_image("helmet_normal", "res://textures/helmet/normal.jpg", sbx::graphics::format::r8g8b8a8_unorm);
-  scene.add_image("helmet_mrao", "res://textures/helmet/mrao2.jpg", sbx::graphics::format::r8g8b8a8_unorm);
-  scene.add_image("helmet_emissive", "res://textures/helmet/emissive.jpg", sbx::graphics::format::r8g8b8a8_srgb);
+  scene.add_image("helmet_albedo", "res://meshes/helmet/textures/albedo.jpg", sbx::graphics::format::r8g8b8a8_srgb);
+  scene.add_image("helmet_normal", "res://meshes/helmet/textures/normal.jpg", sbx::graphics::format::r8g8b8a8_unorm);
+  scene.add_image("helmet_mr", "res://meshes/helmet/textures/mr.jpg", sbx::graphics::format::r8g8b8a8_unorm);
+  scene.add_image("helmet_ao", "res://meshes/helmet/textures/ao.jpg", sbx::graphics::format::r8g8b8a8_unorm);
+  scene.add_image("helmet_emissive", "res://meshes/helmet/textures/emissive.jpg", sbx::graphics::format::r8g8b8a8_srgb);
 
-  scene.add_cube_image("skybox", "res://skyboxes/clouds2", ".png", sbx::graphics::format::r8g8b8a8_srgb);
+  // scene.add_cube_image("skybox", "res://skyboxes/clouds3", ".hdr", sbx::graphics::format::r32g32b32a32_sfloat);
+  scene.add_cube_image("skybox", "res://skyboxes/clouds2", ".png", sbx::graphics::format::r8g8b8a8_unorm);
 
   _generate_brdf(512);
   _generate_irradiance(64);
@@ -126,27 +128,18 @@ application::application()
 
   // Sponza
 
-  auto sponza = scene.create_node("Sponza");
+  // auto sponza = scene.create_node("Sponza");
 
-  scene.add_component<sbx::scenes::static_mesh>(sponza, scene.get_mesh("sponza"), sbx::models::load_materials("res://meshes/sponza/sponza.gltf"));
+  // scene.add_component<sbx::scenes::static_mesh>(sponza, scene.get_mesh("sponza"), sbx::models::load_materials("res://meshes/sponza/sponza.gltf"));
 
-  auto& sponza_transform = scene.get_component<sbx::scenes::transform>(sponza);
-  sponza_transform.set_scale(sbx::math::vector3{2.0f, 2.0f, 2.0f});
+  // auto& sponza_transform = scene.get_component<sbx::scenes::transform>(sponza);
+  // sponza_transform.set_scale(sbx::math::vector3{4.0f, 4.0f, 4.0f});
 
+  // Helmet
 
-  // // Helmet
   auto helmet = scene.create_node("Helmet", sbx::scenes::transform{});
 
-  auto& helmet_material = scene.add_material<sbx::models::material>("helmet");
-  helmet_material.albedo.image = scene.get_image("helmet_albedo");
-  helmet_material.normal.image = scene.get_image("helmet_normal");
-  helmet_material.normal_scale = 1.0f;
-  helmet_material.mrao.image = scene.get_image("helmet_mrao");
-  helmet_material.emissive.image = scene.get_image("helmet_emissive");
-  helmet_material.emissive_factor = sbx::math::vector4{1, 1, 1, 0};
-  helmet_material.emissive_strength = 16.0f;
-
-  scene.add_component<sbx::scenes::static_mesh>(helmet, scene.get_mesh("helmet"), scene.get_material("helmet"));
+  scene.add_component<sbx::scenes::static_mesh>(helmet, scene.get_mesh("helmet"), sbx::models::load_materials("res://meshes/helmet/helmet.gltf"));
 
   auto& helmet_transform = scene.get_component<sbx::scenes::transform>(helmet);
   helmet_transform.set_position(sbx::math::vector3{0.0f, 6.0f, 0.0f});
@@ -154,19 +147,20 @@ application::application()
 
   auto& helmet_collider = scene.add_component<sbx::physics::mesh_collider>(helmet, "res://meshes/helmet/helmet.gltf");
 
-  // // Terrain
-  // auto terrain = scene.create_node("Terrain");
+  // Terrain
 
-  // auto& terrain_material = scene.add_material<sbx::models::material>("terrain");
-  // terrain_material.albedo.image = scene.get_image("base");
+  auto terrain = scene.create_node("Terrain");
 
-  // scene.add_component<sbx::scenes::static_mesh>(terrain, scene.get_mesh("cube"), scene.get_material("terrain"));
+  auto& terrain_material = scene.add_material<sbx::models::material>("terrain");
+  terrain_material.albedo.image = scene.get_image("base");
 
-  // auto& transform = scene.get_component<sbx::scenes::transform>(terrain);
-  // transform.set_scale(sbx::math::vector3{400.0f, 0.5f, 400.0f});
+  scene.add_component<sbx::scenes::static_mesh>(terrain, scene.get_mesh("cube"), scene.get_material("terrain"));
 
-  // scene.add_component<sbx::physics::shape_collider>(terrain, sbx::physics::box{sbx::math::vector3{200.0f, 0.25f, 200.0f}});
-  // scene.add_component<sbx::physics::rigidbody>(terrain, 0.0f);
+  auto& transform = scene.get_component<sbx::scenes::transform>(terrain);
+  transform.set_scale(sbx::math::vector3{400.0f, 0.5f, 400.0f});
+
+  scene.add_component<sbx::physics::shape_collider>(terrain, sbx::physics::box{sbx::math::vector3{200.0f, 0.25f, 200.0f}});
+  scene.add_component<sbx::physics::rigidbody>(terrain, 0.0f);
 
   // _rune0_emitter = scene.create_node("Rune0Emitter");
 
@@ -436,7 +430,7 @@ auto application::_generate_brdf(const std::uint32_t size) -> void {
     compute_command_buffer.acquire_image_ownership({brdf_acquire});
   }
 
-  auto pipeline = sbx::graphics::compute_pipeline{"res://shaders/brdf"};
+  auto pipeline = sbx::graphics::compute_pipeline{"res://shaders/ibl/brdf"};
 
   pipeline.bind(compute_command_buffer);
 
@@ -583,7 +577,7 @@ auto application::_generate_irradiance(const std::uint32_t size) -> void {
     compute_command_buffer.acquire_image_ownership({irradiance_acquire, skybox_acquire});
   }
 
-  auto pipeline = sbx::graphics::compute_pipeline{"res://shaders/irradiance"};
+  auto pipeline = sbx::graphics::compute_pipeline{"res://shaders/ibl/irradiance"};
 
   pipeline.bind(compute_command_buffer);
 
@@ -757,7 +751,7 @@ auto application::_generate_prefiltered(uint32_t size) -> void {
     compute_command_buffer.acquire_image_ownership({prefiltered_acquire, skybox_acquire});
   }
 
-  auto pipeline = sbx::graphics::compute_pipeline{"res://shaders/prefiltered"};
+  auto pipeline = sbx::graphics::compute_pipeline{"res://shaders/ibl/prefiltered"};
   auto push_handler = sbx::graphics::push_handler{pipeline};
 
   pipeline.bind(compute_command_buffer);

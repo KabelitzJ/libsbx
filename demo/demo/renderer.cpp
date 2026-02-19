@@ -134,7 +134,7 @@ renderer::renderer()
   });
 
   auto shadow1_pass = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
-    auto pass = context.graphics_pass("shadow1", sbx::graphics::viewport::fixed(1024u, 1024u));
+    auto pass = context.graphics_pass("shadow1", sbx::graphics::viewport::fixed(2048u, 2048u));
 
     pass.depends_on(skinning_pass);
 
@@ -145,7 +145,7 @@ renderer::renderer()
   });
 
   auto shadow2_pass = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
-    auto pass = context.graphics_pass("shadow2", sbx::graphics::viewport::fixed(512u, 512u));
+    auto pass = context.graphics_pass("shadow2", sbx::graphics::viewport::fixed(1024u, 1024u));
 
     pass.depends_on(skinning_pass);
 
@@ -156,7 +156,7 @@ renderer::renderer()
   });
 
   auto shadow3_pass = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
-    auto pass = context.graphics_pass("shadow3", sbx::graphics::viewport::fixed(256u, 256u));
+    auto pass = context.graphics_pass("shadow3", sbx::graphics::viewport::fixed(512u, 512u));
 
     pass.depends_on(skinning_pass);
 
@@ -194,7 +194,6 @@ renderer::renderer()
 
     return pass;
   });
-
 
   auto resolve_pass = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
     auto pass = context.graphics_pass("resolve");
@@ -335,12 +334,18 @@ renderer::renderer()
   add_subrenderer<sbx::models::static_mesh_material_subrenderer>(deferred_pass, "res://shaders/deferred_pbr_material", sbx::models::static_mesh_material_draw_list::bucket::opaque);
   add_subrenderer<sbx::animations::skinned_mesh_material_subrenderer>(deferred_pass, "res://shaders/deferred_pbr_material", sbx::animations::skinned_mesh_material_draw_list::bucket::opaque, sbx::memory::make_observer(skinning_task));
 
-  // _terrain_subrenderer = sbx::memory::make_observer(add_subrenderer<terrain_subrenderer>(deferred_pass, "res://shaders/terrain"));
-
   // Transparency pass
   add_subrenderer<sbx::models::static_mesh_material_subrenderer>(transparency_pass, "res://shaders/deferred_pbr_material", sbx::models::static_mesh_material_draw_list::bucket::transparent);
   add_subrenderer<sbx::animations::skinned_mesh_material_subrenderer>(transparency_pass, "res://shaders/deferred_pbr_material", sbx::animations::skinned_mesh_material_draw_list::bucket::transparent, sbx::memory::make_observer(skinning_task));
   add_subrenderer<sbx::particles::particle_subrenderer>(transparency_pass, "res://shaders/particles", sbx::memory::make_observer(particle_task));
+
+  // SSAO pass
+  // auto ssao_attachment_names = std::vector<std::pair<std::string, std::string>>{
+  //   {"position_image", "position"},
+  //   {"normal_image", "normal"}
+  // };
+
+  // add_subrenderer<sbx::post::ssao_filter>(ssao_pass, "res://shaders/ssao", std::move(ssao_attachment_names));
 
   // Resolve pass
   auto resolve_opaque_attachment_names = std::vector<std::pair<std::string, std::string>>{
@@ -349,7 +354,7 @@ renderer::renderer()
     {"normal_image", "normal"},
     {"material_image", "material"},
     {"emissive_image", "emissive"},
-    // {"ssao_image", "ssao"}.
+    // {"ssao_image", "ssao"},
     {"shadow0_image", "shadow0"},
     {"shadow1_image", "shadow1"},
     {"shadow2_image", "shadow2"},

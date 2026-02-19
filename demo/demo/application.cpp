@@ -133,7 +133,7 @@ application::application()
   // scene.add_component<sbx::scenes::static_mesh>(sponza, scene.get_mesh("sponza"), sbx::models::load_materials("res://meshes/sponza/sponza.gltf"));
 
   // auto& sponza_transform = scene.get_component<sbx::scenes::transform>(sponza);
-  // sponza_transform.set_scale(sbx::math::vector3{4.0f, 4.0f, 4.0f});
+  // sponza_transform.set_scale(sbx::math::vector3{1.0f, 1.0f, 1.0f});
 
   // Helmet
 
@@ -142,8 +142,8 @@ application::application()
   scene.add_component<sbx::scenes::static_mesh>(helmet, scene.get_mesh("helmet"), sbx::models::load_materials("res://meshes/helmet/helmet.gltf"));
 
   auto& helmet_transform = scene.get_component<sbx::scenes::transform>(helmet);
-  helmet_transform.set_position(sbx::math::vector3{0.0f, 6.0f, 0.0f});
-  helmet_transform.set_scale(sbx::math::vector3{4.0f, 4.0f, 4.0f});
+  helmet_transform.set_position(sbx::math::vector3{0.0f, 3.0f, 0.0f});
+  helmet_transform.set_scale(sbx::math::vector3{1.0f, 1.0f, 1.0f});
 
   auto& helmet_collider = scene.add_component<sbx::physics::mesh_collider>(helmet, "res://meshes/helmet/helmet.gltf");
 
@@ -187,111 +187,113 @@ application::application()
   // auto& rune0_emitter_transform = scene.get_component<sbx::scenes::transform>(_rune0_emitter);
   // rune0_emitter_transform.set_position(sbx::math::vector3{0.0f, 15.0f, 0.0f});
 
-  // // Fox
-  // auto& animations_module = sbx::core::engine::get_module<sbx::animations::animations_module>();
+  // Fox
+  auto& animations_module = sbx::core::engine::get_module<sbx::animations::animations_module>();
 
-  // auto fox1 = scene.create_node("Fox");
+  auto fox1 = scene.create_node("Fox");
 
-  // auto& fox_material = scene.add_material<sbx::models::material>("fox");
-  // fox_material.albedo.image = scene.get_image("fox_albedo");
+  auto& fox_material = scene.add_material<sbx::models::material>("fox");
+  fox_material.albedo.image = scene.get_image("fox_albedo");
+  fox_material.metallic_factor = 0.0f;
+  fox_material.roughness_factor = 1.0f;
 
-  // animations_module.add_animated_mesh(fox1, scene.get_mesh("fox"), scene.get_material("fox"));
+  animations_module.add_animated_mesh(fox1, scene.get_mesh("fox"), scene.get_material("fox"));
 
-  // auto tail = animations_module.find_skeleton_node(fox1, "b_Tail03_014");
+  auto tail = animations_module.find_skeleton_node(fox1, "b_Tail03_014");
 
-  // if (tail != sbx::scenes::node::null) {
-  //   auto tail_emitter = scene.create_child_node(tail, "TailEmitter");
+  if (tail != sbx::scenes::node::null) {
+    auto tail_emitter = scene.create_child_node(tail, "TailEmitter");
 
-  //   auto& tail_particle_emitter = scene.add_component<sbx::particles::particle_emitter>(tail_emitter);
-  //   tail_particle_emitter.max_particles = 1000;
-  //   tail_particle_emitter.emission_rate = 100.0f;
-  //   tail_particle_emitter.emission_shape = sbx::math::volume{{-0.1f, 0.0f, -0.1f}, {0.1f, 0.0f, 0.1f}};
-  //   tail_particle_emitter.initial_speed = sbx::math::vector2{1.0f, 2.0f};
-  //   tail_particle_emitter.initial_lifetime = sbx::math::vector2{0.5f, 1.0f};
-  //   tail_particle_emitter.initial_size = sbx::math::vector2{0.2f, 0.4f};
-  //   tail_particle_emitter.initial_rotation = sbx::math::vector2{0.0f, 0.0f};
-  //   tail_particle_emitter.initial_color = sbx::math::color{255u, 140u, 0u, 250u};
-  //   tail_particle_emitter.gravity = sbx::math::vector3{0.0f, 1.0f, 0.0f};
-  //   tail_particle_emitter.drag = 0.5f;
-  //   tail_particle_emitter.end_color = sbx::math::color{255u, 69u, 0u, 0u};
-  //   tail_particle_emitter.end_size_scale = 0.1f;
-  //   tail_particle_emitter.images = {
-  //     scene.get_image("fire")
-  //   };
+    auto& tail_particle_emitter = scene.add_component<sbx::particles::particle_emitter>(tail_emitter);
+    tail_particle_emitter.max_particles = 1000;
+    tail_particle_emitter.emission_rate = 100.0f;
+    tail_particle_emitter.emission_shape = sbx::math::volume{{-0.1f, 0.0f, -0.1f}, {0.1f, 0.0f, 0.1f}};
+    tail_particle_emitter.initial_speed = sbx::math::vector2{1.0f, 2.0f};
+    tail_particle_emitter.initial_lifetime = sbx::math::vector2{0.5f, 1.0f};
+    tail_particle_emitter.initial_size = sbx::math::vector2{0.2f, 0.4f};
+    tail_particle_emitter.initial_rotation = sbx::math::vector2{0.0f, 0.0f};
+    tail_particle_emitter.initial_color = sbx::math::color{255u, 140u, 0u, 250u};
+    tail_particle_emitter.gravity = sbx::math::vector3{0.0f, 1.0f, 0.0f};
+    tail_particle_emitter.drag = 0.5f;
+    tail_particle_emitter.end_color = sbx::math::color{255u, 69u, 0u, 0u};
+    tail_particle_emitter.end_size_scale = 0.1f;
+    tail_particle_emitter.images = {
+      scene.get_image("fire")
+    };
 
-  //   auto & tail_emitter_transform = scene.get_component<sbx::scenes::transform>(tail_emitter);
-  //   tail_emitter_transform.set_position(sbx::math::vector3{0.0f, 0.0f, 0.0f});
-  // }
+    auto & tail_emitter_transform = scene.get_component<sbx::scenes::transform>(tail_emitter);
+    tail_emitter_transform.set_position(sbx::math::vector3{0.0f, 0.0f, 0.0f});
+  }
 
-  // auto& fox_animator = scene.add_component<sbx::animations::animator>(fox1);
+  auto& fox_animator = scene.add_component<sbx::animations::animator>(fox1);
 
-  // fox_animator.add_state({"Walk", scene.get_animation("Walk"), true, 0.5f });
-  // fox_animator.add_state({"Survey", scene.get_animation("Survey"), true, 0.5f });
-  // fox_animator.add_state({"Run", scene.get_animation("Run"), true, 0.5f });
+  fox_animator.add_state({"Walk", scene.get_animation("Walk"), true, 0.5f });
+  fox_animator.add_state({"Survey", scene.get_animation("Survey"), true, 0.5f });
+  fox_animator.add_state({"Run", scene.get_animation("Run"), true, 0.5f });
 
-  // fox_animator.add_transition({
-  //   "Walk", "Survey", 0.20f,
-  //   [](const sbx::animations::animator& animator){
-  //     if (auto value = animator.float_parameter("speed"); value) {
-  //       return *value <= 0.05f;
-  //     }
+  fox_animator.add_transition({
+    "Walk", "Survey", 0.20f,
+    [](const sbx::animations::animator& animator){
+      if (auto value = animator.float_parameter("speed"); value) {
+        return *value <= 0.05f;
+      }
 
-  //     return false;
-  //   }
-  // });
+      return false;
+    }
+  });
 
-  // fox_animator.add_transition({
-  //   "Run", "Survey", 0.25f,
-  //   [](const sbx::animations::animator& animator){
-  //     if (auto value = animator.float_parameter("speed"); value) {
-  //       return *value <= 0.05f;
-  //     }
+  fox_animator.add_transition({
+    "Run", "Survey", 0.25f,
+    [](const sbx::animations::animator& animator){
+      if (auto value = animator.float_parameter("speed"); value) {
+        return *value <= 0.05f;
+      }
 
-  //     return false;
-  //   }
-  // });
+      return false;
+    }
+  });
 
-  // // Walk ↔ Run thresholds
-  // fox_animator.add_transition({
-  //   "Walk", "Run", 0.15f,
-  //   [](const sbx::animations::animator& animator){
-  //     if (auto value = animator.float_parameter("speed"); value) {
-  //       return *value >= 2.0f;
-  //     }
+  // Walk ↔ Run thresholds
+  fox_animator.add_transition({
+    "Walk", "Run", 0.15f,
+    [](const sbx::animations::animator& animator){
+      if (auto value = animator.float_parameter("speed"); value) {
+        return *value >= 2.0f;
+      }
 
-  //     return false;
-  //   }
-  // });
+      return false;
+    }
+  });
 
-  // fox_animator.add_transition({
-  //   "Run", "Walk", 0.15f,
-  //   [](const sbx::animations::animator& animator){
-  //     if (auto value = animator.float_parameter("speed"); value) {
-  //       return *value < 2.0f && *value > 0.05f;
-  //     }
+  fox_animator.add_transition({
+    "Run", "Walk", 0.15f,
+    [](const sbx::animations::animator& animator){
+      if (auto value = animator.float_parameter("speed"); value) {
+        return *value < 2.0f && *value > 0.05f;
+      }
 
-  //     return false;
-  //   }
-  // });
+      return false;
+    }
+  });
 
-  // // Survey → Walk when starting to move
-  // fox_animator.add_transition({
-  //   "Survey", "Walk", 0.20f,
-  //   [](const sbx::animations::animator& animator){
-  //     if (auto value = animator.float_parameter("speed"); value) {
-  //       return *value > 0.05f && *value < 2.0f;
-  //     }
+  // Survey → Walk when starting to move
+  fox_animator.add_transition({
+    "Survey", "Walk", 0.20f,
+    [](const sbx::animations::animator& animator){
+      if (auto value = animator.float_parameter("speed"); value) {
+        return *value > 0.05f && *value < 2.0f;
+      }
 
-  //     return false;
-  //   }
-  // });
+      return false;
+    }
+  });
 
-  // fox_animator.play("Survey", true);
-  // fox_animator.set_float("speed", 1.0f);
+  fox_animator.play("Survey", true);
+  fox_animator.set_float("speed", 1.0f);
 
-  // auto& fox1_transform = scene.get_component<sbx::scenes::transform>(fox1);
-  // fox1_transform.set_position(sbx::math::vector3{12.0f, 0.0f, 0.0f});
-  // fox1_transform.set_scale(sbx::math::vector3{0.06f, 0.06f, 0.06f});
+  auto& fox1_transform = scene.get_component<sbx::scenes::transform>(fox1);
+  fox1_transform.set_position(sbx::math::vector3{12.0f, 0.0f, 0.0f});
+  fox1_transform.set_scale(sbx::math::vector3{0.06f, 0.06f, 0.06f});
 
   // Camera
   auto camera_node = scene.camera();

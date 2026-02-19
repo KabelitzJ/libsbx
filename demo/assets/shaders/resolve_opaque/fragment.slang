@@ -305,7 +305,9 @@ fs_out main(fs_in input) {
   uint material_flags = (uint)round(saturate(material.a) * 255.0);
 
   float3 emissive = emissive_image.Sample(input.uv).rgb;
+
   // float ssao = ssao_image.Sample(input.uv);
+  float ssao = 1.0;
 
   float metallic = clamp(mrao.r, 0.0, 1.0);
   float roughness = clamp(mrao.g, 0.04, 1.0);
@@ -418,8 +420,8 @@ fs_out main(fs_in input) {
 
   float3 specular_ibl = prefiltered_color * (F_ibl * brdf.x + brdf.y);
 
-  // float3 ambient = (kD_ibl * diffuse_ibl + specular_ibl) * ao * ssao;
-  float3 ambient = (kD_ibl * diffuse_ibl + specular_ibl) * ao;
+  float ambient_shadow = lerp(shadow, 1.0, 0.5); // softer shadow on ambient
+  float3 ambient = (kD_ibl * diffuse_ibl + specular_ibl) * ao * ssao * ambient_shadow;
 
   float3 final_color = ambient + color + emissive;
 

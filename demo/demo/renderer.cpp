@@ -325,7 +325,7 @@ renderer::renderer()
   add_subrenderer<sbx::animations::skinned_mesh_shadow_subrenderer>(shadow1_pass, "res://shaders/shadow", 1u, sbx::memory::make_observer(skinning_task));
 
   add_subrenderer<sbx::models::static_mesh_shadow_subrenderer>(shadow2_pass, "res://shaders/shadow", 2u);
-  add_subrenderer<sbx::animations::skinned_mesh_shadow_subrenderer>(shadow3_pass, "res://shaders/shadow", 2u, sbx::memory::make_observer(skinning_task));
+  add_subrenderer<sbx::animations::skinned_mesh_shadow_subrenderer>(shadow2_pass, "res://shaders/shadow", 2u, sbx::memory::make_observer(skinning_task));
 
   add_subrenderer<sbx::models::static_mesh_shadow_subrenderer>(shadow3_pass, "res://shaders/shadow", 3u);
   add_subrenderer<sbx::animations::skinned_mesh_shadow_subrenderer>(shadow3_pass, "res://shaders/shadow", 3u, sbx::memory::make_observer(skinning_task));

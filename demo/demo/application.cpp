@@ -83,8 +83,8 @@ application::application()
   scene.add_image("helmet_ao", "res://meshes/helmet/textures/ao.jpg", sbx::graphics::format::r8g8b8a8_unorm);
   scene.add_image("helmet_emissive", "res://meshes/helmet/textures/emissive.jpg", sbx::graphics::format::r8g8b8a8_srgb);
 
-  // scene.add_cube_image("skybox", "res://skyboxes/clouds3", ".hdr", sbx::graphics::format::r32g32b32a32_sfloat);
-  scene.add_cube_image("skybox", "res://skyboxes/clouds2", ".png", sbx::graphics::format::r8g8b8a8_unorm);
+  scene.add_cube_image("skybox", "res://skyboxes/clouds3", ".hdr", sbx::graphics::format::r32g32b32a32_sfloat);
+  // scene.add_cube_image("skybox", "res://skyboxes/clouds2", ".png", sbx::graphics::format::r8g8b8a8_unorm);
 
   _generate_brdf(512);
   _generate_irradiance(64);
@@ -128,12 +128,12 @@ application::application()
 
   // Sponza
 
-  // auto sponza = scene.create_node("Sponza");
+  auto sponza = scene.create_node("Sponza");
 
-  // scene.add_component<sbx::scenes::static_mesh>(sponza, scene.get_mesh("sponza"), sbx::models::load_materials("res://meshes/sponza/sponza.gltf"));
+  scene.add_component<sbx::scenes::static_mesh>(sponza, scene.get_mesh("sponza"), sbx::models::load_materials("res://meshes/sponza/sponza.gltf"));
 
-  // auto& sponza_transform = scene.get_component<sbx::scenes::transform>(sponza);
-  // sponza_transform.set_scale(sbx::math::vector3{1.0f, 1.0f, 1.0f});
+  auto& sponza_transform = scene.get_component<sbx::scenes::transform>(sponza);
+  sponza_transform.set_scale(sbx::math::vector3{1.0f, 1.0f, 1.0f});
 
   // Helmet
 
@@ -157,6 +157,7 @@ application::application()
   scene.add_component<sbx::scenes::static_mesh>(terrain, scene.get_mesh("cube"), scene.get_material("terrain"));
 
   auto& transform = scene.get_component<sbx::scenes::transform>(terrain);
+  transform.set_position(sbx::math::vector3{0.0f, -1.5f, 0.0f});
   transform.set_scale(sbx::math::vector3{400.0f, 0.5f, 400.0f});
 
   scene.add_component<sbx::physics::shape_collider>(terrain, sbx::physics::box{sbx::math::vector3{200.0f, 0.25f, 200.0f}});
@@ -292,7 +293,7 @@ application::application()
   fox_animator.set_float("speed", 1.0f);
 
   auto& fox1_transform = scene.get_component<sbx::scenes::transform>(fox1);
-  fox1_transform.set_position(sbx::math::vector3{12.0f, 0.0f, 0.0f});
+  fox1_transform.set_position(sbx::math::vector3{0.0f, 0.0f, 18.0f});
   fox1_transform.set_scale(sbx::math::vector3{0.06f, 0.06f, 0.06f});
 
   // Camera

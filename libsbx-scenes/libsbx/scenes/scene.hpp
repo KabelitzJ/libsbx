@@ -3,6 +3,7 @@
 #define LIBSBX_SCENES_SCENE_HPP_
 
 #include <algorithm>
+#include <cmath>
 #include <filesystem>
 #include <functional>
 #include <memory>
@@ -420,9 +421,9 @@ public:
 
     const auto world = world_transform(_camera);
     const auto view = math::matrix4x4::inverted(world);
-    const auto proj = camera.projection();
+    const auto projection = camera.projection();
 
-    const auto inv_view_proj = math::matrix4x4::inverted(proj * view);
+    const auto inverse_view_projection = math::matrix4x4::inverted(projection * view);
 
     const auto px = position.x() + 0.5f;
     const auto py = position.y() + 0.5f;
@@ -433,25 +434,14 @@ public:
     const auto near_clip = math::vector4{x, y, 0.0f, 1.0f};
     const auto far_clip  = math::vector4{x, y, 1.0f, 1.0f};
 
-    auto near_world = inv_view_proj * near_clip;
+    auto near_world = inverse_view_projection * near_clip;
     near_world /= near_world.w();
 
-    auto far_world = inv_view_proj * far_clip;
+    auto far_world = inverse_view_projection * far_clip;
     far_world /= far_world.w();
 
-    const auto origin = math::vector3{
-      near_world.x(),
-      near_world.y(),
-      near_world.z()
-    };
-
-    const auto direction = math::vector3::normalized(
-      math::vector3{
-        far_world.x(),
-        far_world.y(),
-        far_world.z()
-      } - origin
-    );
+    const auto origin = math::vector3{near_world.x(), near_world.y(), near_world.z()};
+    const auto direction = math::vector3::normalized(math::vector3{far_world.x(), far_world.y(), far_world.z()} - origin);
 
     return math::ray{origin, direction};
   }
@@ -514,7 +504,14 @@ private:
     const auto light_dir = math::vector3::normalized(light_direction);
 
     const auto light_position = center_world - light_dir * 50.0f;
-    const auto light_view = math::matrix4x4::look_at(light_position, center_world, math::vector3::up);
+
+    auto up = math::vector3::up;
+
+    if (std::abs(math::vector3::dot(light_dir, up)) > 0.99f) {
+      up = math::vector3{1.0f, 0.0f, 0.0f};
+    }
+
+    const auto light_view = math::matrix4x4::look_at(light_position, center_world, up);
 
     auto min_bounds = math::vector3{std::numeric_limits<std::float_t>::max()};
     auto max_bounds = math::vector3{std::numeric_limits<std::float_t>::lowest()};
@@ -529,22 +526,25 @@ private:
 
     const auto extent_x = max_bounds.x() - min_bounds.x();
     const auto extent_y = max_bounds.y() - min_bounds.y();
-    const auto extent = std::max(extent_x, extent_y);
 
-    auto center_ls = (min_bounds + max_bounds) * 0.5f;
+    static constexpr auto xy_padding = 10.0f;
+    const auto extent = std::max(extent_x, extent_y) + 2.0f * xy_padding;
 
     const auto texel_size = extent / static_cast<std::float_t>(shadow_resolution);
 
-    center_ls = math::vector3{
-      std::floor(center_ls.x() / texel_size) * texel_size,
-      std::floor(center_ls.y() / texel_size) * texel_size,
-      center_ls.z()
-    };
+    const auto center_ls = (min_bounds + max_bounds) * 0.5f;
 
-    static constexpr auto xy_padding = 10.0f;
+    auto min_x = center_ls.x() - extent * 0.5f;
+    auto min_y = center_ls.y() - extent * 0.5f;
 
-    min_bounds = math::vector3{center_ls.x() - extent * 0.5f - xy_padding, center_ls.y() - extent * 0.5f - xy_padding, min_bounds.z()};
-    max_bounds = math::vector3{center_ls.x() + extent * 0.5f + xy_padding, center_ls.y() + extent * 0.5f + xy_padding, max_bounds.z()};
+    min_x = std::floor(min_x / texel_size) * texel_size;
+    min_y = std::floor(min_y / texel_size) * texel_size;
+
+    const auto max_x = min_x + texel_size * static_cast<std::float_t>(shadow_resolution);
+    const auto max_y = min_y + texel_size * static_cast<std::float_t>(shadow_resolution);
+
+    min_bounds = math::vector3{min_x, min_y, min_bounds.z()};
+    max_bounds = math::vector3{max_x, max_y, max_bounds.z()};
 
     static constexpr auto z_mult = 10.0f;
 

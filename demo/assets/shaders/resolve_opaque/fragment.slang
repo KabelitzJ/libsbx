@@ -240,7 +240,7 @@ float calculate_shadow(uint cascade, float3 world_position, float3 normal) {
   float2 texel_size = 1.0 / float2(dimensions);
 
   float resolution_scale = float(dimensions.x) / 2048.0;
-  float base_radius = 1.5 / resolution_scale;
+  float base_radius = 1.0 / resolution_scale;
   float radius = base_radius * (1.0 + cascade * 0.3);
 
   float angle = random2(uv) * sbx::math::two_pi;

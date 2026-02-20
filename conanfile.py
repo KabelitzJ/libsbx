@@ -223,6 +223,7 @@ class libsbx_recipe(ConanFile):
     self.requires("meshoptimizer/0.25")
     self.requires("sol2/3.5.0")
     self.requires("magic_enum/0.9.7")
+    self.requires("zstd/1.5.7")
 
     if self.options.build_tests:
       self.test_requires("gtest/1.17.0")

@@ -92,6 +92,18 @@ inline constexpr auto basic_matrix<Columns, Rows, Type>::row(const size_type row
 
 template<std::size_t Columns, std::size_t Rows, scalar Type>
 requires (Columns > 1u && Rows > 1u)
+inline constexpr auto basic_matrix<Columns, Rows, Type>::data() noexcept -> value_type* {
+  return _columns[0].data();
+}
+
+template<std::size_t Columns, std::size_t Rows, scalar Type>
+requires (Columns > 1u && Rows > 1u)
+inline constexpr auto basic_matrix<Columns, Rows, Type>::data() const noexcept -> const value_type* {
+  return _columns[0].data();
+}
+
+template<std::size_t Columns, std::size_t Rows, scalar Type>
+requires (Columns > 1u && Rows > 1u)
 template<typename... Args>
 inline constexpr basic_matrix<Columns, Rows, Type>::basic_matrix(Args&&... args) noexcept
 : _columns{utility::make_array<column_type, Columns>(std::forward<Args>(args)...)} { }

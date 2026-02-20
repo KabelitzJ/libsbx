@@ -192,6 +192,17 @@ auto mesh::_load(const std::filesystem::path& path) -> mesh_data {
   auto& assets_module = core::engine::get_module<assets::assets_module>();
   const auto resolved_path = assets_module.resolve_path(path);
 
+  const auto binary_path = std::filesystem::path{resolved_path}.replace_extension(binary_file_extention);
+
+  if (std::filesystem::exists(binary_path)) {
+    const auto source_time = std::filesystem::last_write_time(resolved_path);
+    const auto binary_time = std::filesystem::last_write_time(binary_path);
+
+    if (binary_time > source_time) {
+      return _load_binary(binary_path);
+    }
+  }
+
   if (!std::filesystem::exists(resolved_path)) {
     throw std::runtime_error{"Mesh file not found: " + resolved_path.string()};
   }
@@ -227,10 +238,210 @@ auto mesh::_load(const std::filesystem::path& path) -> mesh_data {
   const auto indices_count = data.indices.size();
 
   const auto b = units::byte{vertices_count * sizeof(vertex3d)};
-
   const auto kb = units::quantity_cast<units::kilobyte>(b);
 
   utility::logger<"models">::debug("Loaded mesh: {}, vertices: {}, indices: {}, size: {} kb in {:.2f}ms", resolved_path.string(), vertices_count, indices_count, kb.value(), units::quantity_cast<units::millisecond>(timer.elapsed()));
+
+  _process(resolved_path, data);
+
+  return data;
+}
+
+static auto encode_octahedral(const math::vector3& vector) -> std::array<std::int16_t, 2> {
+  const auto inverted_l1_norm = 1.0f / (std::abs(vector.x()) + std::abs(vector.y()) + std::abs(vector.z()));
+
+  auto x = vector.x() * inverted_l1_norm;
+  auto y = vector.y() * inverted_l1_norm;
+
+  if (vector.z() < 0.0f) {
+    const auto temp = x;
+
+    x = (1.0f - std::abs(y)) * (x >= 0.0f ? 1.0f : -1.0f);
+    y = (1.0f - std::abs(temp)) * (y >= 0.0f ? 1.0f : -1.0f);
+  }
+
+  return {
+    static_cast<std::int16_t>(std::round(x * 32767.0f)),
+    static_cast<std::int16_t>(std::round(y * 32767.0f))
+  };
+}
+
+static auto decode_octahedral(const std::array<std::int16_t, 2>& encoded) -> math::vector3 {
+  const auto x = static_cast<std::float_t>(encoded[0]) / 32767.0f;
+  const auto y = static_cast<std::float_t>(encoded[1]) / 32767.0f;
+
+  auto normal = math::vector3{x, y, 1.0f - std::abs(x) - std::abs(y)};
+
+  if (normal.z() < 0.0f) {
+    const auto temp = normal.x();
+
+    normal.x() = (1.0f - std::abs(normal.y())) * (temp >= 0.0f ? 1.0f : -1.0f);
+    normal.y() = (1.0f - std::abs(temp)) * (normal.y() >= 0.0f ? 1.0f : -1.0f);
+  }
+
+  return math::vector3::normalized(normal);
+}
+
+static auto encode_position(const math::vector3& position, const math::volume& bounds) -> std::array<std::int16_t, 3> {
+  const auto range = bounds.max() - bounds.min();
+
+  const auto x = (range.x() > 0.0f) ? ((position.x() - bounds.min().x()) / range.x()) * 2.0f - 1.0f : 0.0f;
+  const auto y = (range.y() > 0.0f) ? ((position.y() - bounds.min().y()) / range.y()) * 2.0f - 1.0f : 0.0f;
+  const auto z = (range.z() > 0.0f) ? ((position.z() - bounds.min().z()) / range.z()) * 2.0f - 1.0f : 0.0f;
+
+  return {
+    static_cast<std::int16_t>(std::round(x * 32767.0f)),
+    static_cast<std::int16_t>(std::round(y * 32767.0f)),
+    static_cast<std::int16_t>(std::round(z * 32767.0f))
+  };
+}
+
+static auto decode_position(const std::array<std::int16_t, 3>& encoded, const math::volume& bounds) -> math::vector3 {
+  const auto x = static_cast<std::float_t>(encoded[0]) / 32767.0f;
+  const auto y = static_cast<std::float_t>(encoded[1]) / 32767.0f;
+  const auto z = static_cast<std::float_t>(encoded[2]) / 32767.0f;
+
+  const auto range = bounds.max() - bounds.min();
+
+  return math::vector3{
+    (x * 0.5f + 0.5f) * range.x() + bounds.min().x(),
+    (y * 0.5f + 0.5f) * range.y() + bounds.min().y(),
+    (z * 0.5f + 0.5f) * range.z() + bounds.min().z()
+  };
+}
+
+static auto encode_uv(const math::vector2& uv) -> std::array<std::int16_t, 2> {
+  return {
+    static_cast<std::int16_t>(std::round(uv.x() * 32767.0f)),
+    static_cast<std::int16_t>(std::round(uv.y() * 32767.0f))
+  };
+}
+
+static auto decode_uv(const std::array<std::int16_t, 2>& encoded) -> math::vector2 {
+  return math::vector2{
+    static_cast<std::float_t>(encoded[0]) / 32767.0f,
+    static_cast<std::float_t>(encoded[1]) / 32767.0f
+  };
+}
+
+auto mesh::_load_binary(const std::filesystem::path& path) -> mesh_data {
+  auto timer = utility::timer{};
+
+  auto file = std::ifstream{path, std::ios::binary | std::ios::ate};
+
+  if (!file.is_open()) {
+    throw std::runtime_error{fmt::format("Failed to open mesh file: {}", path.string())};
+  }
+
+  const auto file_size = static_cast<std::size_t>(file.tellg());
+  file.seekg(0);
+
+  if (file_size < sizeof(file_header) + sizeof(file_bounds) + sizeof(std::uint32_t)) {
+    throw std::runtime_error{fmt::format("Mesh file too small: {}", path.string())};
+  }
+
+  auto buffer = std::vector<std::uint8_t>(file_size);
+  file.read(reinterpret_cast<char*>(buffer.data()), static_cast<std::streamsize>(file_size));
+  file.close();
+
+  const auto stored_checksum = *reinterpret_cast<const std::uint32_t*>(buffer.data() + file_size - sizeof(std::uint32_t));
+  const auto computed_checksum = utility::crc32(std::span{buffer.data(), file_size - sizeof(std::uint32_t)});
+
+  if (stored_checksum != computed_checksum) {
+    throw std::runtime_error{fmt::format("Mesh file checksum mismatch: '{}' (got {:08X}, expected {:08X})", path.string(), computed_checksum, stored_checksum)};
+  }
+
+  auto cursor = std::size_t{0};
+
+  const auto read = [&]<typename T>(T& dest) {
+    std::memcpy(&dest, buffer.data() + cursor, sizeof(T));
+    cursor += sizeof(T);
+  };
+
+  auto header = file_header{};
+  read(header);
+
+  if (header.magic != file_magic) {
+    throw std::runtime_error{fmt::format("Invalid mesh magic in '{}' (got {:08X})", path.string(), header.magic)};
+  }
+
+  if (header.version != file_version) {
+    throw std::runtime_error{fmt::format("Unsupported mesh version {} in '{}'", header.version, path.string())};
+  }
+
+  const auto is_compressed = (header.flags & static_cast<std::uint16_t>(file_flags::compressed)) != 0u;
+  const auto is_quantized = (header.flags & static_cast<std::uint16_t>(file_flags::quantized)) != 0u;
+
+  auto fb = file_bounds{};
+  read(fb);
+
+  const auto global_aabb = math::volume{
+    math::vector3{fb.aabb_min[0], fb.aabb_min[1], fb.aabb_min[2]},
+    math::vector3{fb.aabb_max[0], fb.aabb_max[1], fb.aabb_max[2]}
+  };
+
+  auto data = mesh_data{};
+
+  data.submeshes.reserve(header.submesh_count);
+
+  for (auto i = 0u; i < header.submesh_count; ++i) {
+    auto fs = file_submesh{};
+    read(fs);
+
+    auto submesh = graphics::submesh{};
+    submesh.name = utility::hashed_string{fs.name};
+    submesh.material_index = fs.material_index;
+    submesh.vertex_offset = fs.vertex_offset;
+    submesh.vertex_count = fs.vertex_count;
+    submesh.index_offset = fs.index_offset;
+    submesh.index_count = fs.index_count;
+    submesh.bounds = math::volume{math::vector3{fs.aabb_min[0], fs.aabb_min[1], fs.aabb_min[2]}, math::vector3{fs.aabb_max[0], fs.aabb_max[1], fs.aabb_max[2]}};
+
+    std::memcpy(submesh.local_transform.data(), fs.local_transform, sizeof(fs.local_transform));
+
+    data.submeshes.push_back(submesh);
+  }
+
+  const auto indices_size = header.index_count * sizeof(std::uint32_t);
+  const auto file_vertices_size = header.vertex_count * (is_quantized ? sizeof(file_vertex) : sizeof(vertex3d));
+
+  data.indices.resize(header.index_count);
+  data.vertices.resize(header.vertex_count);
+
+  const auto decode_vertices = [&](const std::uint8_t* vertex_source) {
+    if (is_quantized) {
+      for (auto i = 0u; i < header.vertex_count; ++i) {
+        auto file_vert = file_vertex{};
+        std::memcpy(&file_vert, vertex_source + i * sizeof(file_vertex), sizeof(file_vertex));
+
+        auto& vertex = data.vertices[i];
+        vertex.position = decode_position({file_vert.position[0], file_vert.position[1], file_vert.position[2]}, global_aabb);
+        vertex.normal = decode_octahedral({file_vert.normal[0], file_vert.normal[1]});
+
+        const auto decoded_uv = decode_uv({file_vert.uv[0], file_vert.uv[1]});
+        vertex.uv = math::vector3{decoded_uv.x(), decoded_uv.y(), 0.0f};
+
+        const auto decoded_tangent = decode_octahedral({file_vert.tangent[0], file_vert.tangent[1]});
+        vertex.tangent = math::vector4{decoded_tangent.x(), decoded_tangent.y(), decoded_tangent.z(), static_cast<std::float_t>(file_vert.tangent_w)};
+      }
+    } else {
+      std::memcpy(data.vertices.data(), vertex_source, file_vertices_size);
+    }
+  };
+
+  if (is_compressed) {
+    const auto payload = utility::decompress<std::uint8_t, utility::compression_type::zstd>(std::span{reinterpret_cast<const char*>(buffer.data() + cursor), header.compressed_size}, header.uncompressed_size);
+
+    std::memcpy(data.indices.data(), payload.data(), indices_size);
+    decode_vertices(payload.data() + indices_size);
+  } else {
+    std::memcpy(data.indices.data(), buffer.data() + cursor, indices_size);
+    decode_vertices(buffer.data() + cursor + indices_size);
+  }
+
+  data.bounds = global_aabb;
+
+  utility::logger<"models">::debug("Loaded '{}': {} vertices, {} indices, {} submeshes in {:.2f}ms", path.string(), data.vertices.size(), data.indices.size(), data.submeshes.size(), units::quantity_cast<units::millisecond>(timer.elapsed()));
 
   return data;
 }
@@ -247,7 +458,7 @@ static auto calculate_sphere(const std::vector<vertex3d>& vertices) -> math::sph
     center += vertex.position;
   }
 
-  center /= static_cast<float>(vertices.size());
+  center /= static_cast<std::float_t>(vertices.size());
 
   auto radius = 0.0f;
 
@@ -260,39 +471,128 @@ static auto calculate_sphere(const std::vector<vertex3d>& vertices) -> math::sph
 }
 
 auto mesh::_process(const std::filesystem::path& path, const mesh_data& data) -> void {
-  const auto output_path = std::filesystem::path{path}.replace_extension(".sbxmsh");
+  const auto output_path = std::filesystem::path{path}.replace_extension(binary_file_extention);
 
-  auto output_file = std::ofstream{output_path, std::ios::binary};
+  const auto submeshes_size = data.submeshes.size() * sizeof(file_submesh);
+  const auto indices_size = data.indices.size() * sizeof(std::uint32_t);
+  const auto vertices_size = data.vertices.size() * sizeof(file_vertex);
 
-  if (!output_file.is_open()) {
+  const auto append_to = [](auto& buffer, const auto* source, const std::size_t size) {
+    const auto* bytes = reinterpret_cast<const std::uint8_t*>(source);
+    buffer.insert(buffer.end(), bytes, bytes + size);
+  };
+
+  const auto aabb = _calculate_aabb(data.vertices);
+  const auto sphere = calculate_sphere(data.vertices);
+
+  auto encoded_vertices = std::vector<file_vertex>{};
+  encoded_vertices.reserve(data.vertices.size());
+
+  for (const auto& vertex : data.vertices) {
+    auto file_vert = file_vertex{};
+
+    const auto encoded_position = encode_position(vertex.position, aabb);
+    file_vert.position[0] = encoded_position[0];
+    file_vert.position[1] = encoded_position[1];
+    file_vert.position[2] = encoded_position[2];
+
+    const auto encoded_normal = encode_octahedral(vertex.normal);
+    file_vert.normal[0] = encoded_normal[0];
+    file_vert.normal[1] = encoded_normal[1];
+
+    const auto encoded_uv = encode_uv(math::vector2{vertex.uv.x(), vertex.uv.y()});
+    file_vert.uv[0] = encoded_uv[0];
+    file_vert.uv[1] = encoded_uv[1];
+
+    const auto encoded_tangent = encode_octahedral(math::vector3{vertex.tangent.x(), vertex.tangent.y(), vertex.tangent.z()});
+    file_vert.tangent[0] = encoded_tangent[0];
+    file_vert.tangent[1] = encoded_tangent[1];
+
+    file_vert.tangent_w = static_cast<std::int8_t>(vertex.tangent.w() >= 0.0f ? 1 : -1);
+    file_vert._pad = 0u;
+
+    encoded_vertices.push_back(file_vert);
+  }
+
+  auto payload = std::vector<std::uint8_t>{};
+  payload.reserve(indices_size + vertices_size);
+
+  append_to(payload, data.indices.data(), indices_size);
+  append_to(payload, encoded_vertices.data(), vertices_size);
+
+  const auto compressed = utility::compress<std::uint8_t, utility::compression_type::zstd>(std::span{payload});
+
+  auto header = file_header{};
+  header.magic = file_magic;
+  header.version = file_version;
+  header.flags = static_cast<std::uint16_t>(file_flags::compressed) | static_cast<std::uint16_t>(file_flags::quantized);
+  header.vertex_count = static_cast<std::uint32_t>(data.vertices.size());
+  header.index_count = static_cast<std::uint32_t>(data.indices.size());
+  header.submesh_count = static_cast<std::uint32_t>(data.submeshes.size());
+  header.vertex_stride = static_cast<std::uint32_t>(sizeof(file_vertex));
+  header.index_stride = static_cast<std::uint32_t>(sizeof(std::uint32_t));
+  header.uncompressed_size = static_cast<std::uint32_t>(payload.size());
+  header.compressed_size = static_cast<std::uint32_t>(compressed.size());
+
+  const auto total_bytes = sizeof(file_header) + sizeof(file_bounds) + submeshes_size + compressed.size() + sizeof(std::uint32_t);
+
+  auto buffer = std::vector<std::uint8_t>{};
+  buffer.reserve(total_bytes);
+
+  append_to(buffer, &header, sizeof(header));
+
+  auto bounds = file_bounds{};
+  bounds.aabb_min[0] = aabb.min().x();
+  bounds.aabb_min[1] = aabb.min().y();
+  bounds.aabb_min[2] = aabb.min().z();
+  bounds.aabb_max[0] = aabb.max().x();
+  bounds.aabb_max[1] = aabb.max().y();
+  bounds.aabb_max[2] = aabb.max().z();
+  bounds.sphere_center[0] = sphere.center().x();
+  bounds.sphere_center[1] = sphere.center().y();
+  bounds.sphere_center[2] = sphere.center().z();
+  bounds.sphere_radius = sphere.radius();
+
+  append_to(buffer, &bounds, sizeof(bounds));
+
+  for (const auto& submesh : data.submeshes) {
+    auto entry = file_submesh{};
+
+    std::strncpy(entry.name, submesh.name.c_str(), sizeof(entry.name) - 1u);
+    entry.name[sizeof(entry.name) - 1u] = '\0';
+
+    entry.material_index = submesh.material_index;
+    entry.vertex_offset = submesh.vertex_offset;
+    entry.vertex_count = submesh.vertex_count;
+    entry.index_offset = submesh.index_offset;
+    entry.index_count = submesh.index_count;
+    entry.aabb_min[0] = submesh.bounds.min().x();
+    entry.aabb_min[1] = submesh.bounds.min().y();
+    entry.aabb_min[2] = submesh.bounds.min().z();
+    entry.aabb_max[0] = submesh.bounds.max().x();
+    entry.aabb_max[1] = submesh.bounds.max().y();
+    entry.aabb_max[2] = submesh.bounds.max().z();
+
+    std::memcpy(entry.local_transform, submesh.local_transform.data(), sizeof(entry.local_transform));
+
+    append_to(buffer, &entry, sizeof(entry));
+  }
+
+  append_to(buffer, compressed.data(), compressed.size());
+
+  const auto checksum = utility::crc32(buffer);
+
+  append_to(buffer, &checksum, sizeof(checksum));
+
+  auto file = std::ofstream{output_path, std::ios::binary};
+
+  if (!file.is_open()) {
     throw std::runtime_error{fmt::format("Failed to open output file: {}", output_path.string())};
   }
 
-  auto header = file_header{};
-  header.magic = 69u;
-  header.version = 1u;
-  header.index_type_size = sizeof(std::uint32_t);
-  header.index_count = static_cast<std::uint32_t>(data.indices.size());
-  header.vertex_type_size = sizeof(vertex3d);
-  header.vertex_count = static_cast<std::uint32_t>(data.vertices.size());
-  header.submesh_count = static_cast<std::uint32_t>(data.submeshes.size());
+  file.write(reinterpret_cast<const char*>(buffer.data()), static_cast<std::streamsize>(buffer.size()));
 
-  output_file.write(reinterpret_cast<const char*>(&header), sizeof(file_header));
-
-  output_file.write(reinterpret_cast<const char*>(data.indices.data()), data.indices.size() * sizeof(std::uint32_t));
-  output_file.write(reinterpret_cast<const char*>(data.vertices.data()), data.vertices.size() * sizeof(vertex3d));
-  output_file.write(reinterpret_cast<const char*>(data.submeshes.data()), data.submeshes.size() * sizeof(graphics::submesh));
-
-  const auto aabb = _calculate_aabb(data.vertices);
-  output_file.write(reinterpret_cast<const char*>(&aabb), sizeof(math::volume));
-
-  const auto sphere = calculate_sphere(data.vertices);
-  output_file.write(reinterpret_cast<const char*>(&sphere), sizeof(math::sphere));
-
-  utility::logger<"models">::debug("Processed mesh file '{}' to .sbxmsh format", output_path.string());
-
-  output_file.flush();
-  output_file.close();
+  utility::logger<"models">::debug("Wrote '{}': {} vertices, {} indices, {} submeshes — {} bytes (compressed from {} bytes)", output_path.string(), data.vertices.size(), data.indices.size(), data.submeshes.size(), buffer.size(), payload.size());
 }
 
 } // namespace sbx::models

@@ -4,6 +4,9 @@
 
 #include <filesystem>
 
+#include <libsbx/utility/crc32.hpp>
+#include <libsbx/utility/enum.hpp>
+
 #include <libsbx/memory/observer_ptr.hpp>
 
 #include <libsbx/math/vector2.hpp>
@@ -64,7 +67,35 @@ public:
 
 private:
 
+  enum class file_flags : std::uint16_t {
+    none = 0,
+    compressed = utility::bit_v<0>
+  }; // enum class file_flags
+
+  struct file_header {
+    std::uint64_t magic;
+    std::uint16_t version;
+    std::uint16_t flags;
+    std::uint32_t width;
+    std::uint32_t height;
+    std::uint32_t channels;
+    std::uint32_t uncompressed_size;
+    std::uint32_t compressed_size;
+  }; // struct file_header
+
+  static_assert(sizeof(file_header) == 32u, "file_header layout changed");
+
+  static constexpr auto file_magic = utility::make_magic<std::uint64_t>("SBXTEXTR");
+  static constexpr auto file_version = std::uint16_t{1u};
+  static constexpr auto binary_file_extension = std::string_view{".sbxtex"};
+
+  auto _upload_pixels(const std::uint8_t* pixels, std::size_t size) -> void;
+
   auto _load(const std::filesystem::path& path = {}) -> void;
+
+  auto _load_binary(const std::filesystem::path& path) -> void;
+
+  static auto _process(const std::filesystem::path& path, std::uint32_t width, std::uint32_t height, std::uint32_t channels, const std::uint8_t* pixels) -> void;
 
   bool _anisotropic;
 	bool _mipmap;

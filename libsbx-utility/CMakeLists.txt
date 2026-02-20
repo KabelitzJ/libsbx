@@ -19,6 +19,7 @@ find_package(spdlog CONFIG REQUIRED)
 find_package(easy_profiler CONFIG REQUIRED)
 find_package(range-v3 CONFIG REQUIRED)
 find_package(lz4 CONFIG REQUIRED)
+find_package(zstd CONFIG REQUIRED)
 find_package(magic_enum CONFIG REQUIRED)
 
 target_sources(
@@ -26,6 +27,7 @@ target_sources(
   PRIVATE
     "${PROJECT_SOURCE_DIR}/${CMAKE_PROJECT_NAME}/${PROJECT_NAME}/compression.cpp"
     "${PROJECT_SOURCE_DIR}/${CMAKE_PROJECT_NAME}/${PROJECT_NAME}/timer.cpp"
+    "${PROJECT_SOURCE_DIR}/${CMAKE_PROJECT_NAME}/${PROJECT_NAME}/crc32.cpp"
     "${PROJECT_SOURCE_DIR}/${CMAKE_PROJECT_NAME}/${PROJECT_NAME}/utility.cpp"
   PUBLIC
     FILE_SET HEADERS
@@ -33,6 +35,7 @@ target_sources(
     FILES
       "${PROJECT_SOURCE_DIR}/${CMAKE_PROJECT_NAME}/${PROJECT_NAME}/algorithm.hpp"
       "${PROJECT_SOURCE_DIR}/${CMAKE_PROJECT_NAME}/${PROJECT_NAME}/assert.hpp"
+      "${PROJECT_SOURCE_DIR}/${CMAKE_PROJECT_NAME}/${PROJECT_NAME}/crc32.hpp"
       "${PROJECT_SOURCE_DIR}/${CMAKE_PROJECT_NAME}/${PROJECT_NAME}/bitmask.hpp"
       "${PROJECT_SOURCE_DIR}/${CMAKE_PROJECT_NAME}/${PROJECT_NAME}/cast.hpp"
       "${PROJECT_SOURCE_DIR}/${CMAKE_PROJECT_NAME}/${PROJECT_NAME}/compression.hpp"
@@ -80,6 +83,7 @@ target_link_libraries(
     range-v3::range-v3
     easy_profiler
     lz4::lz4
+    zstd::libzstd
     magic_enum::magic_enum
     # Internal dependencies
     libsbx::units

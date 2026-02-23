@@ -111,6 +111,11 @@ renderer::renderer()
   auto swapchain = create_attachment("swapchain", sbx::graphics::attachment::type::swapchain, _clear_color, sbx::graphics::format::b8g8r8a8_srgb);
 
   // Compute passes
+  auto culling_pass = create_pass([&](sbx::graphics::render_graph::context& context) {
+    auto pass = context.compute_pass("culling");
+    return pass;
+  });
+
   auto skinning_pass = create_pass([&](sbx::graphics::render_graph::context& context) {
     auto pass = context.compute_pass("skinning");
     return pass;

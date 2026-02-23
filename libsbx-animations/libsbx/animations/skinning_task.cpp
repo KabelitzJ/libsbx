@@ -7,37 +7,30 @@ namespace sbx::animations {
 
 skinning_task::skinning_task(const std::filesystem::path& path)
 : graphics::task{},
-  _skinning_pipeline{path},
-  _skinning_pipeline_push_handler{_skinning_pipeline} {
+  _pipeline{path},
+  _push_handler{_pipeline} {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 
-  _skinning_vertex_buffer = graphics_module.add_resource<graphics::storage_buffer>(
-    graphics::storage_buffer::min_size,
-    VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
-  );
-
-  _skinning_jobs_buffer = graphics_module.add_resource<graphics::storage_buffer>(
-    graphics::storage_buffer::min_size,
-    VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
-  );
+  _vertex_buffer = graphics_module.add_resource<graphics::storage_buffer>(graphics::storage_buffer::min_size, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
+  _jobs_buffer = graphics_module.add_resource<graphics::storage_buffer>(graphics::storage_buffer::min_size, VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
 }
 
 skinning_task::~skinning_task() {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 
-  if (_skinning_vertex_buffer.is_valid()) {
-    graphics_module.remove_resource<graphics::storage_buffer>(_skinning_vertex_buffer);
-    _skinning_vertex_buffer = {};
+  if (_vertex_buffer.is_valid()) {
+    graphics_module.remove_resource<graphics::storage_buffer>(_vertex_buffer);
+    _vertex_buffer = {};
   }
 
-  if (_skinning_jobs_buffer.is_valid()) {
-    graphics_module.remove_resource<graphics::storage_buffer>(_skinning_jobs_buffer);
-    _skinning_jobs_buffer = {};
+  if (_jobs_buffer.is_valid()) {
+    graphics_module.remove_resource<graphics::storage_buffer>(_jobs_buffer);
+    _jobs_buffer = {};
   }
 }
 
 auto skinning_task::vertex_buffer_handle() const -> graphics::storage_buffer_handle {
-  return _skinning_vertex_buffer;
+  return _vertex_buffer;
 }
 
 auto skinning_task::execute(graphics::command_buffer& command_buffer) -> void {
@@ -71,7 +64,7 @@ auto skinning_task::_dispatch_skinning(graphics::command_buffer& command_buffer,
     max_vertex_count = std::max(max_vertex_count, job.vertex_count);
   }
 
-  auto& skinning_vertex_buffer = graphics_module.get_resource<graphics::storage_buffer>(_skinning_vertex_buffer);
+  auto& skinning_vertex_buffer = graphics_module.get_resource<graphics::storage_buffer>(_vertex_buffer);
 
   _resize_buffer<models::vertex3d>(skinning_vertex_buffer, total_vertices);
 
@@ -82,20 +75,20 @@ auto skinning_task::_dispatch_skinning(graphics::command_buffer& command_buffer,
     address += job.vertex_count * sizeof(models::vertex3d);
   }
 
-  auto& skinning_jobs_buffer = graphics_module.get_resource<graphics::storage_buffer>(_skinning_jobs_buffer);
+  auto& skinning_jobs_buffer = graphics_module.get_resource<graphics::storage_buffer>(_jobs_buffer);
 
   _update_buffer(skinning_jobs_buffer, jobs);
 
-  _skinning_pipeline.bind(command_buffer);
+  _pipeline.bind(command_buffer);
 
-  _skinning_pipeline_push_handler.push("skinning_jobs", skinning_jobs_buffer.address());
-  _skinning_pipeline_push_handler.push("bone_matrices_buffer", bone_matrices_buffer_address);
+  _push_handler.push("skinning_jobs", skinning_jobs_buffer.address());
+  _push_handler.push("bone_matrices_buffer", bone_matrices_buffer_address);
 
-  _skinning_pipeline_push_handler.bind(command_buffer);
+  _push_handler.bind(command_buffer);
 
   const auto groups_per_job = (max_vertex_count + threads_per_group - 1) / threads_per_group;
 
-  _skinning_pipeline.dispatch(command_buffer, {job_count, groups_per_job, 1});
+  _pipeline.dispatch(command_buffer, {job_count, groups_per_job, 1});
 
   auto barrier_data = graphics::command_buffer::buffer_barrier_data{
     .buffers = {

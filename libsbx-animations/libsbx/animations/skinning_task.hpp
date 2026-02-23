@@ -58,11 +58,11 @@ private:
 
   auto _dispatch_skinning(graphics::command_buffer& command_buffer, graphics::buffer::address_type bone_matrices_buffer_address) -> void;
 
-  graphics::storage_buffer_handle _skinning_vertex_buffer{};
-  graphics::storage_buffer_handle _skinning_jobs_buffer{};
+  graphics::storage_buffer_handle _vertex_buffer{};
+  graphics::storage_buffer_handle _jobs_buffer{};
 
-  graphics::compute_pipeline _skinning_pipeline;
-  graphics::push_handler _skinning_pipeline_push_handler;
+  graphics::compute_pipeline _pipeline;
+  graphics::push_handler _push_handler;
 
 }; // class skinning_task
 

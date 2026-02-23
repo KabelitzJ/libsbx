@@ -133,6 +133,8 @@ public:
 
   auto draw_indexed_indirect(VkBuffer buffer, std::uint32_t offset, std::uint32_t count) -> void;
 
+  auto draw_indexed_indirect_count(VkBuffer buffer, std::uint32_t offset, VkBuffer count_buffer, std::uint32_t count_buffer_offset, std::uint32_t max_draw_count) -> void;
+
   auto begin_render_pass(const VkRenderPassBeginInfo& renderpass_begin_info, VkSubpassContents subpass_contents) -> void;
 
   auto end_render_pass() -> void;

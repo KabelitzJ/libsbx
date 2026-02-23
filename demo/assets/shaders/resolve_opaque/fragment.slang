@@ -233,7 +233,8 @@ float calculate_shadow(uint cascade, float3 world_position, float3 normal) {
   }
 
   float3 light_dir = normalize(-scene.light_direction);
-  float bias = max(0.0005 * (1.0 - dot(normal, light_dir)), 0.0001);
+  float base_bias = max(0.005 * (1.0 - dot(normal, light_dir)), 0.001);
+  float bias = base_bias * (1.0 + cascade * 1.5);
 
   uint2 dimensions = shadow_map_dimensions(cascade);
 

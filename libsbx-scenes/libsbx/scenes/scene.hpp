@@ -200,7 +200,6 @@ public:
       auto corner_world = inverse_view_projection * frustum_corners_clip[i];
 
       corner_world /= corner_world.w();
-
       frustum_corners_world[i] = math::vector3{corner_world};
     }
 
@@ -212,8 +211,35 @@ public:
 
     center /= 8.0f;
 
-    const auto light_position = center - _light.direction() * 10.0f;
-    const auto light_view = math::matrix4x4::look_at(light_position, center, math::vector3::up);
+    const auto light_dir = math::vector3::normalized(_light.direction());
+
+    // Stable up vector when light is near-vertical
+    auto up = math::vector3::up;
+
+    if (std::abs(math::vector3::dot(light_dir, up)) > 0.99f) {
+      up = math::vector3{1.0f, 0.0f, 0.0f};
+    }
+
+    // First pass: place light at center to measure Z extent
+    const auto light_view_initial = math::matrix4x4::look_at(center, center + light_dir, up);
+
+    auto min_z = std::numeric_limits<std::float_t>::max();
+    auto max_z = std::numeric_limits<std::float_t>::lowest();
+
+    for (const auto& corner : frustum_corners_world) {
+      const auto p = light_view_initial * math::vector4{corner, 1.0f};
+      min_z = std::min(min_z, p.z());
+      max_z = std::max(max_z, p.z());
+    }
+
+    // Pull the light back far enough to capture all casters
+    static constexpr auto z_caster_padding = 50.0f;
+    const auto pull_back = std::abs(min_z) + z_caster_padding;
+
+    const auto light_position = center - light_dir * pull_back;
+
+    // Second pass: real light view from computed position
+    const auto light_view = math::matrix4x4::look_at(light_position, center, up);
 
     auto min_bounds = math::vector3{std::numeric_limits<std::float_t>::max()};
     auto max_bounds = math::vector3{std::numeric_limits<std::float_t>::lowest()};
@@ -226,19 +252,25 @@ public:
       max_bounds = math::vector3::max(max_bounds, p);
     }
 
-    static constexpr auto z_mult = 10.0f;
+    // Z bounds with padding for off-screen shadow casters
+    const auto z_range = max_bounds.z() - min_bounds.z();
+    const auto z_padding = std::max(z_range * 2.0f, 50.0f);
 
-    const auto min_z = std::min(min_bounds.z() * z_mult, min_bounds.z() / z_mult);
-    const auto max_z = std::max(max_bounds.z() * z_mult, max_bounds.z() / z_mult);
-
-    auto near_plane = -max_z;
-    auto far_plane = -min_z;
+    auto near_plane = -(max_bounds.z() + z_padding);
+    auto far_plane  = -(min_bounds.z() - z_padding);
 
     if (near_plane > far_plane) {
       std::swap(near_plane, far_plane);
     }
 
-    const auto light_projection = math::matrix4x4::orthographic(min_bounds.x() - 10.0f, max_bounds.x() + 10.0f, min_bounds.y() - 10.0f, max_bounds.y() + 10.0f, near_plane, far_plane);
+    // XY padding for edge stability
+    static constexpr auto xy_padding = 10.0f;
+
+    const auto light_projection = math::matrix4x4::orthographic(
+      min_bounds.x() - xy_padding, max_bounds.x() + xy_padding,
+      min_bounds.y() - xy_padding, max_bounds.y() + xy_padding,
+      near_plane, far_plane
+    );
 
     return light_projection * light_view;
   }
@@ -503,16 +535,32 @@ private:
 
     const auto light_dir = math::vector3::normalized(light_direction);
 
-    const auto light_position = center_world - light_dir * 50.0f;
-
     auto up = math::vector3::up;
 
     if (std::abs(math::vector3::dot(light_dir, up)) > 0.99f) {
       up = math::vector3{1.0f, 0.0f, 0.0f};
     }
 
+    // First pass: measure Z extent from the center
+    const auto light_view_initial = math::matrix4x4::look_at(center_world, center_world + light_dir, up);
+
+    auto min_z = std::numeric_limits<std::float_t>::max();
+    auto max_z = std::numeric_limits<std::float_t>::lowest();
+
+    for (const auto& corner : corners_world) {
+      const auto p = light_view_initial * math::vector4{corner, 1.0f};
+      min_z = std::min(min_z, p.z());
+      max_z = std::max(max_z, p.z());
+    }
+
+    // Pull back light to capture all shadow casters
+    static constexpr auto z_caster_padding = 50.0f;
+    const auto pull_back = std::abs(min_z) + z_caster_padding;
+
+    const auto light_position = center_world - light_dir * pull_back;
     const auto light_view = math::matrix4x4::look_at(light_position, center_world, up);
 
+    // Find XY and Z bounds in final light space
     auto min_bounds = math::vector3{std::numeric_limits<std::float_t>::max()};
     auto max_bounds = math::vector3{std::numeric_limits<std::float_t>::lowest()};
 
@@ -524,10 +572,10 @@ private:
       max_bounds = math::vector3::max(max_bounds, p);
     }
 
+    // Square the XY extent and snap to texel grid to prevent shimmer
+    static constexpr auto xy_padding = 10.0f;
     const auto extent_x = max_bounds.x() - min_bounds.x();
     const auto extent_y = max_bounds.y() - min_bounds.y();
-
-    static constexpr auto xy_padding = 10.0f;
     const auto extent = std::max(extent_x, extent_y) + 2.0f * xy_padding;
 
     const auto texel_size = extent / static_cast<std::float_t>(shadow_resolution);
@@ -543,22 +591,22 @@ private:
     const auto max_x = min_x + texel_size * static_cast<std::float_t>(shadow_resolution);
     const auto max_y = min_y + texel_size * static_cast<std::float_t>(shadow_resolution);
 
-    min_bounds = math::vector3{min_x, min_y, min_bounds.z()};
-    max_bounds = math::vector3{max_x, max_y, max_bounds.z()};
+    // Z bounds with padding
+    const auto z_range = max_bounds.z() - min_bounds.z();
+    const auto z_padding = std::max(z_range * 2.0f, 50.0f);
 
-    static constexpr auto z_mult = 10.0f;
-
-    const auto min_z = std::min(min_bounds.z() * z_mult, min_bounds.z() / z_mult);
-    const auto max_z = std::max(max_bounds.z() * z_mult, max_bounds.z() / z_mult);
-
-    auto near_plane = -max_z;
-    auto far_plane = -min_z;
+    auto near_plane = -(max_bounds.z() + z_padding);
+    auto far_plane  = -(min_bounds.z() - z_padding);
 
     if (near_plane > far_plane) {
       std::swap(near_plane, far_plane);
     }
 
-    const auto light_projection = math::matrix4x4::orthographic(min_bounds.x(), max_bounds.x(), min_bounds.y(), max_bounds.y(), near_plane, far_plane);
+    const auto light_projection = math::matrix4x4::orthographic(
+      min_x, max_x,
+      min_y, max_y,
+      near_plane, far_plane
+    );
 
     return light_projection * light_view;
   }

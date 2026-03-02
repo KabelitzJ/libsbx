@@ -25,7 +25,7 @@ SamplerState sampler;
 Texture2D<float4> images[16];
 
 [[vk::push_constant]]
-ConstantBuffer<render_params> params;
+ConstantBuffer<push_data> push;
 
 [shader("fragment")]
 fs_out main(fs_in input) {

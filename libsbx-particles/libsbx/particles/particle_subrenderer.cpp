@@ -70,15 +70,8 @@ auto particle_subrenderer::render(graphics::command_buffer& command_buffer) -> v
     descriptor_handler.push("images", images);
     descriptor_handler.push("sampler", sampler);
 
-    auto params = render_params{
-      .end_color = emitter.end_color,
-      .end_size_scale = emitter.end_size_scale,
-      ._pad0 = 0,
-      ._pad1 = 0,
-      ._pad2 = 0
-    };
-
-    _push_handler.push(params);
+    _push_handler.push("end_color", emitter.end_color);
+    _push_handler.push("end_size_scale", emitter.end_size_scale);
 
     descriptor_handler.update(_pipeline);
     descriptor_handler.bind_descriptors(command_buffer);

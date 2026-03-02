@@ -65,13 +65,10 @@ struct emitter_params {
   uint _pad2;
 }; // struct emitter_params
 
-struct render_params {
+struct push_data {
   float4 end_color; 
   float end_size_scale;
-  uint _pad0;
-  uint _pad1;
-  uint _pad2;
-}; // struct render_params
+}; // struct push_data
 
 
 uint pcg_hash(uint input) {

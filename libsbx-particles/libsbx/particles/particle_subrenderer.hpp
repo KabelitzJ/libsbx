@@ -41,22 +41,11 @@ public:
 
 private:
 
-  struct alignas(16) render_params {
-    math::color end_color;
-    float end_size_scale;
-    std::uint32_t _pad0;
-    std::uint32_t _pad1;
-    std::uint32_t _pad2;
-  }; // struct render_params
-
   struct descriptor_data {
     graphics::descriptor_handler descriptor_handler;
     graphics::separate_image2d_array images;
     graphics::sampler_state sampler;
   }; // struct descriptor_data
-
-  static_assert(alignof(render_params) == 16u);
-  static_assert(sizeof(render_params) % 16u == 0u);
 
   memory::observer_ptr<const particle_task> _particle_task;
 

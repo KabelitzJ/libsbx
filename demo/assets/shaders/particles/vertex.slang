@@ -24,7 +24,7 @@ StructuredBuffer<particle> particles;
 StructuredBuffer<uint> alive_list;
 
 [[vk::push_constant]]
-ConstantBuffer<render_params> params;
+ConstantBuffer<push_data> push;
 
 static const float2 vertices[4] = {
   float2(-1.0, -1.0),
@@ -54,8 +54,8 @@ vs_out main(vs_in input) {
 
   float t = particle.age / particle.lifetime;
 
-  float4 color = lerp(particle.color, params.end_color, t);
-  float size = particle.size.x * lerp(1.0, params.end_size_scale, t);
+  float4 color = lerp(particle.color, push.end_color, t);
+  float size = particle.size.x * lerp(1.0, push.end_size_scale, t);
 
   int index = indices[input.vertex_id];
   float2 local_position = vertices[index];

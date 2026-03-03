@@ -133,7 +133,7 @@ auto mesh<Vertex>::submeshes() const noexcept -> const std::vector<graphics::sub
 
 template<vertex Vertex>
 auto mesh<Vertex>::_upload_vertices(const std::vector<vertex_type>& vertices, const std::vector<index_type>& indices) -> void {
-
+  utility::assert_that(false, "Method not implemented");
 }
 
 template<vertex Vertex>

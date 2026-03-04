@@ -68,6 +68,7 @@
 #include <libsbx/models/material.hpp>
 #include <libsbx/models/material_draw_list.hpp>
 #include <libsbx/models/static_mesh_material_draw_list.hpp>
+#include <libsbx/models/frustum_culling_task.hpp>
 
 namespace sbx::models {
 
@@ -85,7 +86,7 @@ class static_mesh_material_subrenderer final : public graphics::subrenderer {
 
 public:
 
-  static_mesh_material_subrenderer(const std::vector<graphics::attachment_description>& attachments, const std::filesystem::path& base_pipeline, const static_mesh_material_draw_list::bucket bucket);
+  static_mesh_material_subrenderer(const std::vector<graphics::attachment_description>& attachments, const std::filesystem::path& base_pipeline, const static_mesh_material_draw_list::bucket bucket, memory::observer_ptr<const frustum_culling_task> cull_task);
 
   ~static_mesh_material_subrenderer() override;
 
@@ -130,6 +131,7 @@ private:
   std::vector<graphics::attachment_description> _attachments;
   std::filesystem::path _base_pipeline;
   static_mesh_material_draw_list::bucket _bucket;
+  memory::observer_ptr<const frustum_culling_task> _cull_task;
 
   inline static auto _pipeline_cache = std::unordered_map<material_key, pipeline_data, material_key_hash>{};
 

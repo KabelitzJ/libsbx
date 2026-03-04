@@ -267,12 +267,11 @@ public:
     return _passes[handle.index]._kind;
   }
 
-  template<typename Callable>
-  requires (std::is_invocable_v<Callable, const pass_handle&>)
-  auto execute(command_buffer& command_buffer, const swapchain& swapchain, Callable&& callable) -> void {
+  template<typename PassCallback, typename ComputeCallback>
+  requires (std::is_invocable_v<PassCallback, const pass_handle&> && std::is_invocable_v<ComputeCallback, const pass_handle&>)
+  auto execute(command_buffer& command_buffer, const swapchain& swapchain, PassCallback&& pass_callback, ComputeCallback&& compute_callback) -> void {
     for (auto& state : _attachment_states) {
       if (state.type == attachment::type::swapchain) {
-        // Swapchain images start in UNDEFINED layout after acquisition
         state.current_layout = VK_IMAGE_LAYOUT_UNDEFINED;
       }
     }
@@ -280,8 +279,8 @@ public:
     for (const auto& instruction : _instructions) {
       std::visit(utility::overload{
         [&](const transition_instruction& instruction) { _execute_transition_instruction(command_buffer, swapchain, instruction); },
-        [&](const pass_instruction& instruction) { _execute_pass_instruction(command_buffer, swapchain, instruction, std::forward<Callable>(callable)); },
-        [&](const compute_instruction& instruction) { _execute_compute_instruction(command_buffer, instruction, std::forward<Callable>(callable)); },
+        [&](const pass_instruction& instruction) { _execute_pass_instruction(command_buffer, swapchain, instruction, std::forward<PassCallback>(pass_callback)); },
+        [&](const compute_instruction& instruction) { _execute_compute_instruction(command_buffer, instruction, std::forward<ComputeCallback>(compute_callback)); },
       }, instruction);
     }
   }

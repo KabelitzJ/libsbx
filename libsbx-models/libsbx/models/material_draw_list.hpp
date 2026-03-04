@@ -61,6 +61,7 @@ public:
   struct bucket_entry {
     graphics::storage_buffer_handle draw_commands_buffer{};
     graphics::storage_buffer_handle instance_data_buffer{};
+    std::vector<std::uint32_t> command_instance_counts;
     std::vector<range_reference> ranges;
   }; // struct bucket_entry
 
@@ -190,7 +191,7 @@ private:
     pipeline_data() {
       auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
       
-      draw_commands_buffer = graphics_module.add_resource<graphics::storage_buffer>(graphics::storage_buffer::min_size, VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT);
+      draw_commands_buffer = graphics_module.add_resource<graphics::storage_buffer>(graphics::storage_buffer::min_size, VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT);
       instance_data_buffer = graphics_module.add_resource<graphics::storage_buffer>(graphics::storage_buffer::min_size, VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
     }
 
@@ -290,6 +291,7 @@ private:
     auto draw_commands = std::vector<VkDrawIndexedIndirectCommand>{};
     auto instance_data = std::vector<models::instance_data>{};
     // auto base_instance = std::uint32_t{0u};
+    auto command_instance_counts = std::vector<std::uint32_t>{};
     auto range = graphics::draw_command_range{};
 
     const auto& buckets = _material_buckets.at(key);
@@ -298,11 +300,13 @@ private:
       .base_instance = std::uint32_t{0u},
       .emit_instanced = [&](const VkDrawIndexedIndirectCommand& command, std::vector<models::instance_data>&& instances) -> void {
         draw_commands.push_back(command);
+        command_instance_counts.push_back(command.instanceCount);
         utility::append(instance_data, std::move(instances));
         range.count++;
       },
       .emit_single = [&](const VkDrawIndexedIndirectCommand& command, const models::instance_data& instance) -> void {
         draw_commands.push_back(command);
+        command_instance_counts.push_back(command.instanceCount);
         instance_data.push_back(instance);
         range.count++;
       }
@@ -338,6 +342,12 @@ private:
     if (!draw_commands.empty()) {
       _update_buffer(pipeline.draw_commands_buffer, draw_commands);
       _update_buffer(pipeline.instance_data_buffer, instance_data);
+
+      for (auto& bucket_ranges : _bucket_ranges) {
+        if (auto entry = bucket_ranges.find(key); entry != bucket_ranges.end()) {
+          entry->second.command_instance_counts = command_instance_counts;
+        }
+      }
     }
   }
 

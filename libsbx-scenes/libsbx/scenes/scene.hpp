@@ -434,15 +434,23 @@ public:
     _uniform_handler.push("camera_right", camera_right);
     _uniform_handler.push("camera_up", camera_up);
 
-    const auto csm = _build_csm();
+    _cached_csm = _build_csm();
 
-    _uniform_handler.push("light_spaces", csm.light_spaces);
-    _uniform_handler.push("cascade_splits", csm.cascade_splits);
+    _uniform_handler.push("light_spaces", _cached_csm.light_spaces);
+    _uniform_handler.push("cascade_splits", _cached_csm.cascade_splits);
 
     _uniform_handler.push("light_direction", sbx::math::vector3::normalized(_light.direction()));
     _uniform_handler.push("light_color", _light.color());
 
     _uniform_handler.push("time", core::engine::time().value());
+  }
+
+  auto cascade_light_spaces() const -> const std::array<math::matrix4x4, csm_cascade_count>& {
+    return _cached_csm.light_spaces;
+  }
+
+  static constexpr auto cascade_count() -> std::uint32_t {
+    return csm_cascade_count;
   }
 
   auto screen_point_to_ray(const math::vector2& position) -> math::ray {
@@ -668,7 +676,7 @@ private:
 
   graphics::uniform_handler _uniform_handler;
 
-
+  csm_data _cached_csm;
 
   std::unordered_map<utility::hashed_string, graphics::image2d_handle> _image_ids;
   std::unordered_map<utility::hashed_string, graphics::cube_image2d_handle> _cube_image_ids;

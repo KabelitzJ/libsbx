@@ -38,28 +38,27 @@ public:
       draw_list->update();
     }
 
-    _graph.execute(command_buffer, swapchain, [this, &command_buffer](const pass_handle& pass) -> void {
-      const auto kind = _graph.pass_kind(pass);
-
-      if (kind == pass_node::kind::compute) {
-        if (pass.index >= _tasks.size()) {
-          return;
-        }
-
-        for (const auto& task : _tasks[pass.index]) {
-          task->execute(command_buffer);
-        }
-      } else {
-        if (pass.index >= _subrenderers.size()) {
-          return;
-        }
-  
-        for (const auto& subrenderer : _subrenderers[pass.index]) {
-          subrenderer->render(command_buffer);
-        }
+    auto compute_callback = [this, &command_buffer](const pass_handle& pass) -> void {
+      if (pass.index >= _tasks.size()) {
+        return;
       }
 
-    });
+      for (const auto& task : _tasks[pass.index]) {
+        task->execute(command_buffer);
+      }
+    };
+
+    auto pass_callback = [this, &command_buffer](const pass_handle& pass) -> void {
+      if (pass.index >= _subrenderers.size()) {
+        return;
+      }
+
+      for (const auto& subrenderer : _subrenderers[pass.index]) {
+        subrenderer->render(command_buffer);
+      }
+    };
+
+    _graph.execute(command_buffer, swapchain, pass_callback, compute_callback);
   }
 
   auto resize(const viewport::type flags) -> void {

@@ -140,7 +140,7 @@ auto particle_task::_get_or_create_gpu_data(scenes::node node, const particle_em
     return it->second;
   }
 
-  auto [inserted, success] = _emitter_gpu_data.emplace(std::piecewise_construct, std::forward_as_tuple(node), std::forward_as_tuple( _reset_pipeline, _clear_pipeline, _emit_pipeline, _simulate_pipeline, _prepare_indirect_pipeline));
+  auto [inserted, success] = _emitter_gpu_data.emplace(std::piecewise_construct, std::forward_as_tuple(node), std::forward_as_tuple(_reset_pipeline, _clear_pipeline, _emit_pipeline, _simulate_pipeline, _prepare_indirect_pipeline));
 
   _initialize_buffers(inserted->second, emitter);
 

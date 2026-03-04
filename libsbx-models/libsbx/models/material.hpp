@@ -174,4 +174,11 @@ auto load_materials(const std::filesystem::path& path) -> std::vector<scenes::st
   
 } // namespace sbx::models
 
+template<>
+struct std::hash<sbx::models::material_key> {
+  auto operator()(const sbx::models::material_key& key) const noexcept -> std::size_t {
+    return sbx::models::material_key_hash{}(key);
+  }
+}; // struct std::hash
+
 #endif // LIBSBX_MODELS_MATERIAL_HPP_

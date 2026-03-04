@@ -149,10 +149,12 @@ struct cascade_select {
   uint cascade;
   float blend_factor;
   uint next_cascade;
+  bool fade_out;
 }; // struct cascade_select
 
 cascade_select select_cascade_with_blend(float view_depth) {
   cascade_select result;
+  result.fade_out = false;
   
   const float blend_threshold = 0.9;
   
@@ -174,7 +176,10 @@ cascade_select select_cascade_with_blend(float view_depth) {
   } else {
     result.cascade = 3;
     result.next_cascade = 3;
-    result.blend_factor = 0.0;
+    result.fade_out = true;
+    float cascade3_far = scene.cascade_splits.w;
+    float fade_start = cascade3_far * blend_threshold;
+    result.blend_factor = saturate((view_depth - fade_start) / (cascade3_far - fade_start));
   }
   
   return result;
@@ -233,8 +238,8 @@ float calculate_shadow(uint cascade, float3 world_position, float3 normal) {
   }
 
   float3 light_dir = normalize(-scene.light_direction);
-  float base_bias = max(0.005 * (1.0 - dot(normal, light_dir)), 0.001);
-  float bias = base_bias * (1.0 + cascade * 1.5);
+  float base_bias = max(0.002 * (1.0 - dot(normal, light_dir)), 0.0005);
+  float bias = base_bias * (1.0 + cascade * 0.5);
 
   uint2 dimensions = shadow_map_dimensions(cascade);
 
@@ -349,7 +354,9 @@ fs_out main(fs_in input) {
   
     float shadow_current = calculate_shadow(cascade_info.cascade, world_position, normal);
     
-    if (cascade_info.blend_factor > 0.0 && cascade_info.cascade < 3) {
+    if (cascade_info.fade_out) {
+      shadow = lerp(shadow_current, 1.0, cascade_info.blend_factor);
+    } else if (cascade_info.blend_factor > 0.0 && cascade_info.cascade < 3) {
       float shadow_next = calculate_shadow(cascade_info.next_cascade, world_position, normal);
 
       shadow = lerp(shadow_current, shadow_next, cascade_info.blend_factor);
@@ -421,7 +428,7 @@ fs_out main(fs_in input) {
 
   float3 specular_ibl = prefiltered_color * (F_ibl * brdf.x + brdf.y);
 
-  float ambient_shadow = lerp(shadow, 1.0, 0.5); // softer shadow on ambient
+  float ambient_shadow = lerp(shadow, 1.0, 0.5);
   float3 ambient = (kD_ibl * diffuse_ibl + specular_ibl) * ao * ssao * ambient_shadow;
 
   float3 final_color = ambient + color + emissive;

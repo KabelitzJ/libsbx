@@ -93,9 +93,9 @@ public:
     std::uint32_t emissive_image_index;
     std::int32_t sort_order;
     std::uint32_t flags;
+    std::float_t sdf_px_range;
     std::uint32_t padding0;
     std::uint32_t padding1;
-    std::uint32_t padding2;
   }; // struct sprite_instance
 
   sprite_batch() = default;
@@ -213,9 +213,9 @@ private:
             .emissive_image_index = emissive_index,
             .sort_order = sprite.sort_order,
             .flags = 0u,
+            .sdf_px_range = 0.0f,
             .padding0 = 0u,
-            .padding1 = 0u,
-            .padding2 = 0u
+            .padding1 = 0u
           });
         },
         [&](const screen_camera_sprite& sprite) {
@@ -235,9 +235,9 @@ private:
             .emissive_image_index = emissive_index,
             .sort_order = sprite.sort_order,
             .flags = 0u,
+            .sdf_px_range = 0.0f,
             .padding0 = 0u,
-            .padding1 = 0u,
-            .padding2 = 0u
+            .padding1 = 0u
           });
         },
         [&](const world_sprite& sprite) {
@@ -265,9 +265,9 @@ private:
             .emissive_image_index = emissive_index,
             .sort_order = 0,
             .flags = flags,
+            .sdf_px_range = 0.0f,
             .padding0 = 0u,
-            .padding1 = 0u,
-            .padding2 = 0u
+            .padding1 = 0u
           });
         }
       }, sprite);

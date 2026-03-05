@@ -168,44 +168,55 @@ application::application()
   _font = sbx::ui::load_font(scene.get_image("roboto_atlas"), "demo/assets/fonts/roboto_atlas.json");
 
   auto ui_node = scene.create_node("HUD");
-
   auto& canvas = scene.add_component<sbx::ui::canvas>(ui_node);
 
-  auto health_bg_id = canvas.create_element();
-
-  auto& health_bg = canvas.get(health_bg_id);
+  auto& health_bg = canvas.create<sbx::ui::image>();
+  health_bg.source = scene.get_image("base");
   health_bg.anchor_min = {0.0f, 1.0f};
   health_bg.anchor_max = {0.0f, 1.0f};
   health_bg.offset_min = {10.0f, -40.0f};
   health_bg.offset_max = {210.0f, -10.0f};
   health_bg.pivot = {0.0f, 0.0f};
-  health_bg.image = scene.get_image("base");
   health_bg.sort_order = 100;
 
-  auto health_fill_id = canvas.create_element(health_bg_id);
-
-  auto& health_fill = canvas.get(health_fill_id);
+  auto& health_fill = canvas.create<sbx::ui::panel>(health_bg);
+  health_fill.color = {0.2f, 0.8f, 0.2f, 1.0f};
   health_fill.anchor_min = {0.0f, 0.0f};
   health_fill.anchor_max = {0.75f, 1.0f};
   health_fill.offset_min = {2.0f, 2.0f};
   health_fill.offset_max = {-2.0f, -2.0f};
-  health_fill.color = {0.2f, 0.8f, 0.2f, 1.0f};
   health_fill.sort_order = 101;
 
-  auto label_id = canvas.create_element(health_bg_id);
-
-  auto& label = canvas.get(label_id);
+  auto& label = canvas.create<sbx::ui::label>(health_bg);
+  label.set_text("Hello World!");
+  label.set_font(_font);
+  label.set_font_size(24.0f);
+  label.color = {0.0f, 0.0f, 0.0f, 1.0f};
   label.anchor_min = {0.0f, 0.0f};
   label.anchor_max = {1.0f, 1.0f};
-  label.offset_min = {4.0f, 2.0f};
-  label.color = {0.0f, 0.0f, 0.0f, 1.0f};
+  label.offset_min = {4.0f, 0.0f};
   label.sort_order = 102;
-  label.is_visible = false;
-  label.data = sbx::ui::text_data{
-    .text = "75%",
-    .font_size = 14.0f,
-    .font_ref = &_font
+
+  auto& btn = canvas.create<sbx::ui::button>();
+  btn.anchor_min = {0.5f, 0.5f};
+  btn.anchor_max = {0.5f, 0.5f};
+  btn.offset_min = {-60.0f, -20.0f};
+  btn.offset_max = {60.0f, 20.0f};
+  btn.normal_color = {0.3f, 0.3f, 0.3f, 1.0f};
+  btn.hovered_color = {0.4f, 0.4f, 0.4f, 1.0f};
+  btn.pressed_color = {0.2f, 0.2f, 0.2f, 1.0f};
+  btn.sort_order = 200;
+  btn.on_click = [] {
+    sbx::utility::logger<"demo">::info("Clicked!");
   };
+
+  auto& btn_label = canvas.create<sbx::ui::label>(btn);
+  btn_label.set_text("Play");
+  btn_label.set_font(_font);
+  btn_label.set_font_size(18.0f);
+  btn_label.anchor_min = {0.0f, 0.0f};
+  btn_label.anchor_max = {1.0f, 1.0f};
+  btn_label.sort_order = 201;
 
   // Terrain
 

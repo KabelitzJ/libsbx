@@ -17,9 +17,9 @@ struct sprite_data {
   uint emissive_image_index;
   int sort_order;
   uint flags;
+  float sdf_px_range;
   uint padding0;
   uint padding1;
-  uint padding2;
 }; // struct sprite_data
 
 #endif // SPRITES_COMMON_SLANG_

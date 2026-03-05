@@ -46,12 +46,12 @@ float4 get_albedo(fs_in input, sprite_data data) {
     float3 msdf = images[NonUniformResourceIndex(image_index)].Sample(sampler, input.uv).rgb;
     float sd = median(msdf.r, msdf.g, msdf.b);
 
-    float2 uv_size = data.uv_max - data.uv_min;
     uint2 tex_size;
     images[NonUniformResourceIndex(image_index)].GetDimensions(tex_size.x, tex_size.y);
-    float2 glyph_size_px = uv_size * float2(tex_size);
-    float screen_px_range = max(data.size.x / glyph_size_px.x, data.size.y / glyph_size_px.y) * 2.0;
-    screen_px_range = max(screen_px_range, 1.0);
+
+    float2 unit_range = data.sdf_px_range / float2(tex_size);
+    float2 screen_tex_size = unit_range / fwidth(input.uv);
+    float screen_px_range = max(0.5 * dot(screen_tex_size, float2(1.0, 1.0)), 1.0);
 
     float screen_px_distance = screen_px_range * (sd - 0.5);
     float opacity = clamp(screen_px_distance + 0.5, 0.0, 1.0);
@@ -60,6 +60,7 @@ float4 get_albedo(fs_in input, sprite_data data) {
   }
 
   float4 color = images[NonUniformResourceIndex(image_index)].Sample(sampler, input.uv);
+
   return color * data.base_color;
 }
 
@@ -82,6 +83,12 @@ fs_out main(fs_in input) {
   sprite_data sprite = push.sprites[input.instance_id];
 
   float4 albedo = get_albedo(input, sprite);
+
+  if ((sprite.flags & flag_msdf_text) != 0) {
+    clip(albedo.a - 0.01);
+  } else {
+    clip(albedo.a - 0.9);
+  }
 
   float3 emissive = get_emissive(input, sprite);
 

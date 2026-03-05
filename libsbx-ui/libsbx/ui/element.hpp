@@ -2,26 +2,26 @@
 #ifndef LIBSBX_UI_ELEMENT_HPP_
 #define LIBSBX_UI_ELEMENT_HPP_
 
-#include <string>
 #include <vector>
-#include <variant>
-#include <cstdint>
-#include <limits>
+#include <memory>
+#include <algorithm>
 
 #include <libsbx/math/vector2.hpp>
+#include <libsbx/math/vector3.hpp>
+#include <libsbx/math/matrix4x4.hpp>
 #include <libsbx/math/color.hpp>
 
 #include <libsbx/graphics/images/image.hpp>
 
-#include <libsbx/ui/font.hpp>
+#include <libsbx/sprites/sprites_module.hpp>
 
 namespace sbx::ui {
 
 struct rect {
-  float x{0.0f};
-  float y{0.0f};
-  float width{0.0f};
-  float height{0.0f};
+  std::float_t x{0.0f};
+  std::float_t y{0.0f};
+  std::float_t width{0.0f};
+  std::float_t height{0.0f};
 
   [[nodiscard]] auto contains(const math::vector2& point) const -> bool {
     return point.x() >= x 
@@ -31,99 +31,133 @@ struct rect {
   }
 }; // struct rect
 
-struct element_id {
-  std::uint32_t value{null_value};
+class element {
 
-  inline static constexpr auto null_value = std::numeric_limits<std::uint32_t>::max();
+public:
 
-  [[nodiscard]] auto is_valid() const -> bool {
-    return value != null_value;
-  }
-
-  auto operator==(const element_id& other) const -> bool = default;
-}; // struct element_id
-
-inline constexpr auto null_element = element_id{};
-
-struct text_quad {
-  math::vector2 position;
-  math::vector2 size;
-  math::vector2 uv_min;
-  math::vector2 uv_max;
-}; // struct text_quad
-
-struct text_data {
-  std::string text{};
-  float font_size{16.0f};
-  const font* font_ref{nullptr};
-
-  std::vector<text_quad> cached_quads;
-  std::string cached_text{};
-  float cached_font_size{0.0f};
-
-  auto ensure_layout() -> void {
-    if (text == cached_text && font_size == cached_font_size) {
-      return;
-    }
-
-    cached_quads.clear();
-
-    if (!font_ref) {
-      return;
-    }
-
-    auto cursor_x = 0.0f;
-
-    for (const auto ch : text) {
-      const auto* g = font_ref->find_glyph(static_cast<std::uint32_t>(ch));
-
-      if (!g) {
-        continue;
-      }
-
-      const auto x = (cursor_x + g->plane_left) * font_size;
-      const auto y = g->plane_bottom * font_size;
-      const auto w = (g->plane_right - g->plane_left) * font_size;
-      const auto h = (g->plane_top - g->plane_bottom) * font_size;
-
-      cached_quads.push_back(text_quad{
-        .position = {x, y},
-        .size = {w, h},
-        .uv_min = {g->uv_left, g->uv_bottom},
-        .uv_max = {g->uv_right, g->uv_top}
-      });
-
-      cursor_x += g->advance;
-    }
-
-    cached_text = text;
-    cached_font_size = font_size;
-  }
-}; // struct text_data
-
-struct element {
   math::vector2 anchor_min{0.0f, 0.0f};
   math::vector2 anchor_max{0.0f, 0.0f};
   math::vector2 offset_min{0.0f, 0.0f};
   math::vector2 offset_max{0.0f, 0.0f};
   math::vector2 pivot{0.5f, 0.5f};
 
-  graphics::image2d_handle image{};
   math::color color{1.0f, 1.0f, 1.0f, 1.0f};
   std::int32_t sort_order{0};
   bool is_enabled{true};
-  bool is_visible{true};
   bool is_interactive{false};
 
-  element_id parent{};
-  element_id first_child{};
-  element_id next_sibling{};
+  element() = default;
 
-  std::variant<std::monostate, text_data> data{};
+  virtual ~element() = default;
 
-  rect computed_rect{};
-  bool is_alive{false};
-}; // struct element
+  auto add_child(std::unique_ptr<element> child) -> element& {
+    child->_parent = this;
+    auto& ref = *child;
+    _children.push_back(std::move(child));
+    return ref;
+  }
+
+  auto remove_child(element& child) -> void {
+    auto it = std::find_if(_children.begin(), _children.end(), [&child](const auto& ptr) {
+      return ptr.get() == &child;
+    });
+
+    if (it != _children.end()) {
+      (*it)->_parent = nullptr;
+      _children.erase(it);
+    }
+  }
+
+  [[nodiscard]] auto children() const -> const std::vector<std::unique_ptr<element>>& {
+    return _children;
+  }
+
+  [[nodiscard]] auto computed_rect() const -> const rect& {
+    return _computed_rect;
+  }
+
+  auto resolve_layout(const rect& parent_rect) -> void {
+    const auto anchor_left = parent_rect.x + anchor_min.x() * parent_rect.width;
+    const auto anchor_right = parent_rect.x + anchor_max.x() * parent_rect.width;
+    const auto anchor_bottom = parent_rect.y + anchor_min.y() * parent_rect.height;
+    const auto anchor_top = parent_rect.y + anchor_max.y() * parent_rect.height;
+
+    const auto left = anchor_left + offset_min.x();
+    const auto right = anchor_right + offset_max.x();
+    const auto bottom = anchor_bottom + offset_min.y();
+    const auto top = anchor_top + offset_max.y();
+
+    _computed_rect = rect{left, bottom, right - left, top - bottom};
+
+    for (auto& child : _children) {
+      child->resolve_layout(_computed_rect);
+    }
+  }
+
+  auto submit_tree(sprites::sprites_module& sprites, const math::vector2& screen_size) -> void {
+    if (!is_enabled) {
+      return;
+    }
+
+    submit(sprites, screen_size);
+
+    for (auto& child : _children) {
+      child->submit_tree(sprites, screen_size);
+    }
+  }
+
+  auto process_input_tree(const math::vector2& mouse_position, bool is_down, bool was_down) -> bool {
+    if (!is_enabled) {
+      return false;
+    }
+
+    for (auto it = _children.rbegin(); it != _children.rend(); ++it) {
+      if ((*it)->process_input_tree(mouse_position, is_down, was_down)) {
+        return true;
+      }
+    }
+
+    return process_input(mouse_position, is_down, was_down);
+  }
+
+protected:
+
+  virtual auto submit(sprites::sprites_module& sprites, const math::vector2& screen_size) -> void { }
+
+  virtual auto process_input(const math::vector2& mouse_position, bool is_down, bool was_down) -> bool { return false; }
+
+  auto submit_quad(sprites::sprites_module& sprites, const math::vector2& screen_size, const math::vector2& quad_position, const math::vector2& quad_size, const math::vector2& quad_pivot, const math::color& quad_color, std::uint32_t albedo_index, std::int32_t quad_sort_order, const math::vector2& uv_min, const math::vector2& uv_max, std::uint32_t flags, std::float_t sdf_px_range = 0.0f) -> void {
+    const auto position = math::vector2{
+      quad_position.x() - screen_size.x() * 0.5f,
+      quad_position.y() - screen_size.y() * 0.5f
+    };
+
+    sprites.submit(sprites::sprite_space::screen_overlay, sprites::sprite_batch::sprite_instance{
+      .model = math::matrix4x4::translated(math::matrix4x4::identity, math::vector3{position.x(), position.y(), 0.0f}),
+      .base_color = quad_color,
+      .emissive_factor = {0.0f, 0.0f, 0.0f, 1.0f},
+      .size = quad_size,
+      .pivot = quad_pivot,
+      .uv_min = uv_min,
+      .uv_max = uv_max,
+      .emissive_strength = 0.0f,
+      .albedo_image_index = albedo_index,
+      .emissive_image_index = 0u,
+      .sort_order = quad_sort_order,
+      .flags = flags,
+      .sdf_px_range = sdf_px_range,
+      .padding0 = 0u,
+      .padding1 = 0u
+    });
+  }
+
+private:
+
+  element* _parent{nullptr};
+  std::vector<std::unique_ptr<element>> _children;
+  rect _computed_rect{};
+
+}; // class element
 
 } // namespace sbx::ui
 

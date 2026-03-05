@@ -35,6 +35,8 @@
 #include <libsbx/physics/rigidbody.hpp>
 #include <libsbx/physics/physics_module.hpp>
 
+#include <libsbx/ui/ui_module.hpp>
+
 #include <libsbx/audio/audio_module.hpp>
 
 namespace demo {
@@ -85,6 +87,8 @@ application::application()
 
   // scene.add_cube_image("skybox", "res://skyboxes/clouds3", ".hdr", sbx::graphics::format::r32g32b32a32_sfloat);
   scene.add_cube_image("skybox", "res://skyboxes/clouds2", ".png", sbx::graphics::format::r8g8b8a8_srgb);
+
+  scene.add_image("roboto_atlas", "res://fonts/roboto_atlas.png", sbx::graphics::format::r8g8b8a8_srgb);
 
   _generate_brdf(512);
   _generate_irradiance(64);
@@ -146,6 +150,62 @@ application::application()
   helmet_transform.set_scale(sbx::math::vector3{1.0f, 1.0f, 1.0f});
 
   auto& helmet_collider = scene.add_component<sbx::physics::mesh_collider>(helmet, "res://meshes/helmet/helmet.gltf");
+
+  // World Sprite
+
+  auto sprite_node = scene.create_node("WorldSprite");
+
+  scene.add_component<sbx::sprites::sprite>(sprite_node, sbx::sprites::world_sprite{
+    .base_color = sbx::math::color::white(),
+    .albedo_image = scene.get_image("base"),
+    .size = {2.0f, 2.0f},
+    .pivot = {0.5f, 0.5f},
+    .is_billboard = true
+  });
+
+  // UI
+
+  _font = sbx::ui::load_font(scene.get_image("roboto_atlas"), "demo/assets/fonts/roboto_atlas.json");
+
+  auto ui_node = scene.create_node("HUD");
+
+  auto& canvas = scene.add_component<sbx::ui::canvas>(ui_node);
+
+  auto health_bg_id = canvas.create_element();
+
+  auto& health_bg = canvas.get(health_bg_id);
+  health_bg.anchor_min = {0.0f, 1.0f};
+  health_bg.anchor_max = {0.0f, 1.0f};
+  health_bg.offset_min = {10.0f, -40.0f};
+  health_bg.offset_max = {210.0f, -10.0f};
+  health_bg.pivot = {0.0f, 0.0f};
+  health_bg.image = scene.get_image("base");
+  health_bg.sort_order = 100;
+
+  auto health_fill_id = canvas.create_element(health_bg_id);
+
+  auto& health_fill = canvas.get(health_fill_id);
+  health_fill.anchor_min = {0.0f, 0.0f};
+  health_fill.anchor_max = {0.75f, 1.0f};
+  health_fill.offset_min = {2.0f, 2.0f};
+  health_fill.offset_max = {-2.0f, -2.0f};
+  health_fill.color = {0.2f, 0.8f, 0.2f, 1.0f};
+  health_fill.sort_order = 101;
+
+  auto label_id = canvas.create_element(health_bg_id);
+
+  auto& label = canvas.get(label_id);
+  label.anchor_min = {0.0f, 0.0f};
+  label.anchor_max = {1.0f, 1.0f};
+  label.offset_min = {2.0f, 2.0f};
+  label.color = {0.0f, 0.0f, 0.0f, 1.0f};
+  label.sort_order = 102;
+  label.is_visible = false;
+  label.data = sbx::ui::text_data{
+    .text = "75%",
+    .font_size = 14.0f,
+    .font_ref = &_font
+  };
 
   // Terrain
 

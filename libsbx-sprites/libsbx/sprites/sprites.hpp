@@ -4,6 +4,7 @@
 
 #include <libsbx/sprites/version.hpp>
 
+#include <libsbx/sprites/sprites_module.hpp>
 #include <libsbx/sprites/sprite_subrenderer.hpp>
 
 #endif // LIBSBX_SPRITES_HPP_

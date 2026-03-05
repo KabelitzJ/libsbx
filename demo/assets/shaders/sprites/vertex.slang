@@ -116,7 +116,10 @@ vs_out main<Mode : render_mode>(vs_in input) {
   float3 base_position = vertices[index];
 
   output.sv_position = Mode::compute_position(base_position, sprite);
-  output.uv = base_position.xy * 0.5 + 0.5;
+
+  float2 base_uv = base_position.xy * 0.5 + 0.5;
+  output.uv = lerp(sprite.uv_min, sprite.uv_max, base_uv);
+
   output.instance_id = input.instance_id;
 
   return output;

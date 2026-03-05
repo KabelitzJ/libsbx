@@ -9,6 +9,7 @@
 #include <libsbx/devices/devices.hpp>
 #include <libsbx/graphics/graphics.hpp>
 #include <libsbx/models/models.hpp>
+#include <libsbx/ui/ui.hpp>
 #include <libsbx/scenes/scenes.hpp>
 
 #include <demo/dual_grid.hpp>
@@ -54,6 +55,8 @@ private:
   sbx::graphics::image2d_handle _brdf;
   sbx::graphics::cube_image2d_handle _irradiance;
   sbx::graphics::cube_image2d_handle _prefiltered;
+
+  sbx::ui::font _font;
 
 }; // class application
 

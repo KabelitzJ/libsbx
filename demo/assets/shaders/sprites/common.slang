@@ -1,7 +1,8 @@
 #ifndef SPRITES_COMMON_SLANG_
 #define SPRITES_COMMON_SLANG_
 
-static const uint flag_billboard = 0x00000001;
+static const uint flag_billboard = 0x00000001u;
+static const uint flag_msdf_text = 0x00000002u;
 
 struct sprite_data {
   float4x4 model;
@@ -9,12 +10,16 @@ struct sprite_data {
   float4 emissive_factor;
   float2 size;
   float2 pivot;
+  float2 uv_min;
+  float2 uv_max;
   float emissive_strength;
   uint albedo_image_index;
   uint emissive_image_index;
   int sort_order;
   uint flags;
   uint padding0;
+  uint padding1;
+  uint padding2;
 }; // struct sprite_data
 
 #endif // SPRITES_COMMON_SLANG_

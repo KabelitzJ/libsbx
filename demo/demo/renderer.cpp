@@ -28,7 +28,6 @@
 #include <libsbx/post/filters/upsample_filter.hpp>
 #include <libsbx/post/filters/ssao_filter.hpp>
 
-#include <libsbx/ui/ui_subrenderer.hpp>
 #include <libsbx/gizmos/gizmos_subrenderer.hpp>
 #include <libsbx/editor/editor_subrenderer.hpp>
 #include <libsbx/sprites/sprite_subrenderer.hpp>

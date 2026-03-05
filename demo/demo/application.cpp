@@ -197,7 +197,7 @@ application::application()
   auto& label = canvas.get(label_id);
   label.anchor_min = {0.0f, 0.0f};
   label.anchor_max = {1.0f, 1.0f};
-  label.offset_min = {2.0f, 2.0f};
+  label.offset_min = {4.0f, 2.0f};
   label.color = {0.0f, 0.0f, 0.0f, 1.0f};
   label.sort_order = 102;
   label.is_visible = false;

@@ -60,7 +60,6 @@ float4 get_albedo(fs_in input, sprite_data data) {
   }
 
   float4 color = images[NonUniformResourceIndex(image_index)].Sample(sampler, input.uv);
-
   return color * data.base_color;
 }
 
@@ -83,12 +82,6 @@ fs_out main(fs_in input) {
   sprite_data sprite = push.sprites[input.instance_id];
 
   float4 albedo = get_albedo(input, sprite);
-
-  if ((sprite.flags & flag_msdf_text) != 0) {
-    clip(albedo.a - 0.01);
-  } else {
-    clip(albedo.a - 0.9);
-  }
 
   float3 emissive = get_emissive(input, sprite);
 

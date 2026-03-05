@@ -17,19 +17,18 @@
 
 namespace sbx::ui {
 
-struct rect {
+struct rectangle {
+
   std::float_t x{0.0f};
   std::float_t y{0.0f};
   std::float_t width{0.0f};
   std::float_t height{0.0f};
 
   [[nodiscard]] auto contains(const math::vector2& point) const -> bool {
-    return point.x() >= x 
-        && point.x() <= x + width 
-        && point.y() >= y 
-        && point.y() <= y + height;
+    return point.x() >= x && point.x() <= x + width && point.y() >= y && point.y() <= y + height;
   }
-}; // struct rect
+
+}; // struct rectangle
 
 class element {
 
@@ -52,9 +51,11 @@ public:
 
   auto add_child(std::unique_ptr<element> child) -> element& {
     child->_parent = this;
-    auto& ref = *child;
+    auto& reference = *child;
+
     _children.push_back(std::move(child));
-    return ref;
+
+    return reference;
   }
 
   auto remove_child(element& child) -> void {
@@ -72,37 +73,37 @@ public:
     return _children;
   }
 
-  [[nodiscard]] auto computed_rect() const -> const rect& {
-    return _computed_rect;
+  [[nodiscard]] auto computed_rectangle() const -> const rectangle& {
+    return _computed_rectangle;
   }
 
-  auto resolve_layout(const rect& parent_rect) -> void {
-    const auto anchor_left = parent_rect.x + anchor_min.x() * parent_rect.width;
-    const auto anchor_right = parent_rect.x + anchor_max.x() * parent_rect.width;
-    const auto anchor_bottom = parent_rect.y + anchor_min.y() * parent_rect.height;
-    const auto anchor_top = parent_rect.y + anchor_max.y() * parent_rect.height;
+  auto resolve_layout(const rectangle& parent_rectangle) -> void {
+    const auto anchor_left = parent_rectangle.x + anchor_min.x() * parent_rectangle.width;
+    const auto anchor_right = parent_rectangle.x + anchor_max.x() * parent_rectangle.width;
+    const auto anchor_bottom = parent_rectangle.y + anchor_min.y() * parent_rectangle.height;
+    const auto anchor_top = parent_rectangle.y + anchor_max.y() * parent_rectangle.height;
 
     const auto left = anchor_left + offset_min.x();
     const auto right = anchor_right + offset_max.x();
     const auto bottom = anchor_bottom + offset_min.y();
     const auto top = anchor_top + offset_max.y();
 
-    _computed_rect = rect{left, bottom, right - left, top - bottom};
+    _computed_rectangle = rectangle{left, bottom, right - left, top - bottom};
 
     for (auto& child : _children) {
-      child->resolve_layout(_computed_rect);
+      child->resolve_layout(_computed_rectangle);
     }
   }
 
-  auto submit_tree(sprites::sprites_module& sprites, const math::vector2& screen_size) -> void {
+  auto submit_tree(const math::vector2& screen_size) -> void {
     if (!is_enabled) {
       return;
     }
 
-    submit(sprites, screen_size);
+    submit(screen_size);
 
     for (auto& child : _children) {
-      child->submit_tree(sprites, screen_size);
+      child->submit_tree(screen_size);
     }
   }
 
@@ -122,17 +123,19 @@ public:
 
 protected:
 
-  virtual auto submit(sprites::sprites_module& sprites, const math::vector2& screen_size) -> void { }
+  virtual auto submit(const math::vector2& screen_size) -> void { }
 
   virtual auto process_input(const math::vector2& mouse_position, bool is_down, bool was_down) -> bool { return false; }
 
-  auto submit_quad(sprites::sprites_module& sprites, const math::vector2& screen_size, const math::vector2& quad_position, const math::vector2& quad_size, const math::vector2& quad_pivot, const math::color& quad_color, std::uint32_t albedo_index, std::int32_t quad_sort_order, const math::vector2& uv_min, const math::vector2& uv_max, std::uint32_t flags, std::float_t sdf_px_range = 0.0f) -> void {
+  auto submit_quad(const math::vector2& screen_size, const math::vector2& quad_position, const math::vector2& quad_size, const math::vector2& quad_pivot, const math::color& quad_color, std::uint32_t albedo_index, std::int32_t quad_sort_order, const math::vector2& uv_min, const math::vector2& uv_max, std::uint32_t flags, std::float_t sdf_px_range = 0.0f) -> void {
+    auto& sprites_module = core::engine::get_module<sprites::sprites_module>();
+
     const auto position = math::vector2{
       quad_position.x() - screen_size.x() * 0.5f,
       quad_position.y() - screen_size.y() * 0.5f
     };
 
-    sprites.submit(sprites::sprite_space::screen_overlay, sprites::sprite_batch::sprite_instance{
+    sprites_module.submit(sprites::sprite_space::screen_overlay, sprites::sprite_batch::sprite_instance{
       .model = math::matrix4x4::translated(math::matrix4x4::identity, math::vector3{position.x(), position.y(), 0.0f}),
       .base_color = quad_color,
       .emissive_factor = {0.0f, 0.0f, 0.0f, 1.0f},
@@ -155,7 +158,7 @@ private:
 
   element* _parent{nullptr};
   std::vector<std::unique_ptr<element>> _children;
-  rect _computed_rect{};
+  rectangle _computed_rectangle{};
 
 }; // class element
 

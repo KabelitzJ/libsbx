@@ -30,7 +30,7 @@ public:
 protected:
 
   auto process_input(const math::vector2& mouse_position, bool is_down, bool was_down) -> bool override {
-    const auto hit = computed_rect().contains(mouse_position);
+    const auto hit = computed_rectangle().contains(mouse_position);
 
     if (hit) {
       if (is_down) {

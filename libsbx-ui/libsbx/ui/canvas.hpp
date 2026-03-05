@@ -55,9 +55,9 @@ public:
   auto update(const math::vector2& screen_size) -> void {
     _screen_size = screen_size;
 
-    const auto root_rect = rect{0.0f, 0.0f, screen_size.x(), screen_size.y()};
+    const auto root_rectangle = rectangle{0.0f, 0.0f, screen_size.x(), screen_size.y()};
 
-    _root->resolve_layout(root_rect);
+    _root->resolve_layout(root_rectangle);
   }
 
   auto process_input(const math::vector2& mouse_position, bool is_down, bool was_down) -> void {
@@ -68,12 +68,12 @@ public:
     _root->process_input_tree(mouse_position, is_down, was_down);
   }
 
-  auto submit(sprites::sprites_module& sprites) -> void {
+  auto submit() -> void {
     if (!is_enabled) {
       return;
     }
 
-    _root->submit_tree(sprites, _screen_size);
+    _root->submit_tree(_screen_size);
   }
 
 private:

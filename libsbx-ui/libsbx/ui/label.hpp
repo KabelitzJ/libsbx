@@ -32,7 +32,7 @@ public:
   }
 
   auto set_font(const font& value) -> void {
-    _font_ref = &value;
+    _font = &value;
     _is_dirty = true;
   }
 
@@ -45,8 +45,10 @@ public:
 
 protected:
 
-  auto submit(sprites::sprites_module& sprites, const math::vector2& screen_size) -> void override {
-    if (!_font_ref) {
+  auto submit(const math::vector2& screen_size) -> void override {
+    auto& sprites_module = core::engine::get_module<sprites::sprites_module>();
+
+    if (!_font) {
       return;
     }
 
@@ -56,9 +58,9 @@ protected:
       return;
     }
 
-    const auto atlas_index = sprites.register_image(_font_ref->atlas);
+    const auto atlas_index = sprites_module.register_image(_font->atlas);
 
-    const auto& r = computed_rect();
+    const auto& r = computed_rectangle();
 
     const auto origin_x = r.x;
     const auto origin_y = r.y + r.height * 0.5f - _font_size * 0.5f;
@@ -67,7 +69,7 @@ protected:
       const auto glyph_x = origin_x + quad.position.x();
       const auto glyph_y = origin_y + quad.position.y();
 
-      submit_quad(sprites, screen_size, {glyph_x, glyph_y}, quad.size, {0.0f, 0.0f}, color, atlas_index, sort_order, quad.uv_min, quad.uv_max, sprites::sprite_batch::flag_msdf_text, _font_ref->sdf_px_range);
+      submit_quad(screen_size, {glyph_x, glyph_y}, quad.size, {0.0f, 0.0f}, color, atlas_index, sort_order, quad.uv_min, quad.uv_max, sprites::sprite_batch::flag_msdf_text, _font->sdf_px_range);
     }
   }
 
@@ -87,7 +89,7 @@ private:
 
     _cached_quads.clear();
 
-    if (!_font_ref) {
+    if (!_font) {
       _is_dirty = false;
       return;
     }
@@ -95,7 +97,7 @@ private:
     auto cursor_x = 0.0f;
 
     for (const auto ch : _text) {
-      const auto* g = _font_ref->find_glyph(static_cast<std::uint32_t>(ch));
+      const auto* g = _font->find_glyph(static_cast<std::uint32_t>(ch));
 
       if (!g) {
         continue;
@@ -121,7 +123,7 @@ private:
     _is_dirty = false;
   }
 
-  const font* _font_ref{nullptr};
+  const font* _font{nullptr};
   std::string _text{};
   std::float_t _font_size{16.0f};
   std::vector<text_quad> _cached_quads;

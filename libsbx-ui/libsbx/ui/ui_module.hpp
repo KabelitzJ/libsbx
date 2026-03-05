@@ -34,7 +34,6 @@ public:
   auto update() -> void override {
     auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
     auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
-    auto& sprites_module = core::engine::get_module<sprites::sprites_module>();
 
     const auto screen_size = graphics_module.viewport();
 
@@ -49,7 +48,7 @@ public:
     for (auto&& [node, canvas] : canvas_query.each()) {
       canvas.update(screen_size);
       canvas.process_input(mouse_position, is_down, was_down);
-      canvas.submit(sprites_module);
+      canvas.submit();
     }
 
     _was_mouse_down = is_down;

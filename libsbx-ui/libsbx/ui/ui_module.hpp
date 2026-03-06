@@ -19,11 +19,7 @@ namespace sbx::ui {
 
 class ui_module : public core::module<ui_module> {
 
-  inline static const auto is_registered = register_module(stage::normal, dependencies<
-    graphics::graphics_module,
-    sprites::sprites_module,
-    devices::devices_module
-  >{});
+  inline static const auto is_registered = register_module(stage::normal, dependencies<graphics::graphics_module, sprites::sprites_module, devices::devices_module>{});
 
 public:
 
@@ -31,30 +27,7 @@ public:
 
   ~ui_module() override = default;
 
-  auto update() -> void override {
-    auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
-    auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
-
-    const auto screen_size = graphics_module.viewport();
-
-    const auto mouse_position = devices::input::mouse_position();
-    const auto flipped_mouse = math::vector2{mouse_position.x(), screen_size.y() - mouse_position.y()};
-
-    const auto is_down = devices::input::is_mouse_button_down(devices::mouse_button::left);
-    const auto was_down = _was_mouse_down;
-
-    auto& scene = scenes_module.scene();
-
-    auto canvas_query = scene.query<ui::canvas>();
-
-    for (auto&& [node, canvas] : canvas_query.each()) {
-      canvas.update(screen_size);
-      canvas.process_input(flipped_mouse, is_down, was_down);
-      canvas.submit();
-    }
-
-    _was_mouse_down = is_down;
-  }
+  auto update() -> void override;
 
 private:
 

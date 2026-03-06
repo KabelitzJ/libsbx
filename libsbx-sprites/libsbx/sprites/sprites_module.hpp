@@ -100,39 +100,21 @@ public:
 
   sprite_batch() = default;
 
-  auto clear() -> void {
-    _instances.clear();
-  }
+  auto clear() -> void;
 
-  auto add(const sprite_instance& instance) -> void {
-    _instances.push_back(instance);
-  }
+  auto add(const sprite_instance& instance) -> void;
 
-  auto sort() -> void {
-    std::sort(_instances.begin(), _instances.end(), [](const sprite_instance& a, const sprite_instance& b) {
-      return a.sort_order < b.sort_order;
-    });
-  }
+  auto sort() -> void;
 
-  [[nodiscard]] auto instances() const -> const std::vector<sprite_instance>& {
-    return _instances;
-  }
+  [[nodiscard]] auto instances() const -> const std::vector<sprite_instance>&;
 
-  [[nodiscard]] auto size() const -> std::size_t {
-    return _instances.size();
-  }
+  [[nodiscard]] auto size() const -> std::size_t;
 
-  [[nodiscard]] auto is_empty() const -> bool {
-    return _instances.empty();
-  }
+  [[nodiscard]] auto is_empty() const -> bool;
 
-  [[nodiscard]] auto data() const -> const sprite_instance* {
-    return _instances.data();
-  }
+  [[nodiscard]] auto data() const -> const sprite_instance*;
 
-  [[nodiscard]] auto byte_size() const -> std::size_t {
-    return _instances.size() * sizeof(sprite_instance);
-  }
+  [[nodiscard]] auto byte_size() const -> std::size_t;
 
 private:
 
@@ -152,131 +134,25 @@ public:
 
   ~sprites_module() override = default;
 
-  auto update() -> void override {
-    for (auto& batch : _batches) {
-      batch.clear();
-    }
+  auto update() -> void override;
 
-    _images.clear();
+  auto submit(sprite_space space, const sprite_batch::sprite_instance& instance) -> void;
 
-    _collect_sprites();
-  }
+  [[nodiscard]] auto register_image(graphics::image2d_handle image) -> std::uint32_t;
 
-  auto submit(sprite_space space, const sprite_batch::sprite_instance& instance) -> void {
-    _batches[utility::to_underlying(space)].add(instance);
-  }
+  [[nodiscard]] auto register_image(const std::string& attachment) -> std::uint32_t;
 
-  [[nodiscard]] auto register_image(graphics::image2d_handle image) -> std::uint32_t {
-    return _images.push_back(image);
-  }
+  [[nodiscard]] auto batch(sprite_space space) -> sprite_batch&;
 
-  [[nodiscard]] auto register_image(const std::string& attachment) -> std::uint32_t {
-    return _images.push_back(attachment);
-  }
+  [[nodiscard]] auto batch(sprite_space space) const -> const sprite_batch&;
 
-  [[nodiscard]] auto batch(sprite_space space) -> sprite_batch& {
-    return _batches[utility::to_underlying(space)];
-  }
+  [[nodiscard]] auto images() -> graphics::separate_image2d_array&;
 
-  [[nodiscard]] auto batch(sprite_space space) const -> const sprite_batch& {
-    return _batches[utility::to_underlying(space)];
-  }
-
-  [[nodiscard]] auto images() -> graphics::separate_image2d_array& {
-    return _images;
-  }
-
-  [[nodiscard]] auto images() const -> const graphics::separate_image2d_array& {
-    return _images;
-  }
+  [[nodiscard]] auto images() const -> const graphics::separate_image2d_array&;
 
 private:
 
-  auto _collect_sprites() -> void {
-    auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
-    auto& scene = scenes_module.scene();
-
-    auto sprite_query = scene.query<const sprites::sprite>();
-
-    for (auto&& [node, sprite] : sprite_query.each()) {
-      std::visit(utility::overload{
-        [&](const screen_overlay_sprite& sprite) {
-          const auto albedo_index = _images.push_back(sprite.albedo_image);
-          const auto emissive_index = _images.push_back(sprite.emissive_image);
-
-          _batches[utility::to_underlying(sprite_space::screen_overlay)].add(sprite_batch::sprite_instance{
-            .model = math::matrix4x4::translated(math::matrix4x4::identity, math::vector3{sprite.position.x(), sprite.position.y(), 0.0f}),
-            .base_color = sprite.base_color,
-            .emissive_factor = sprite.emissive_factor,
-            .size = sprite.size,
-            .pivot = sprite.pivot,
-            .uv_min = {0.0f, 0.0f},
-            .uv_max = {1.0f, 1.0f},
-            .emissive_strength = sprite.emissive_strength,
-            .albedo_image_index = albedo_index,
-            .emissive_image_index = emissive_index,
-            .sort_order = sprite.sort_order,
-            .flags = 0u,
-            .sdf_px_range = 0.0f,
-            .padding0 = 0u,
-            .padding1 = 0u
-          });
-        },
-        [&](const screen_camera_sprite& sprite) {
-          const auto albedo_index = _images.push_back(sprite.albedo_image);
-          const auto emissive_index = _images.push_back(sprite.emissive_image);
-
-          _batches[utility::to_underlying(sprite_space::screen_camera)].add(sprite_batch::sprite_instance{
-            .model = math::matrix4x4::translated(math::matrix4x4::identity, math::vector3{sprite.position.x(), sprite.position.y(), sprite.depth}),
-            .base_color = sprite.base_color,
-            .emissive_factor = sprite.emissive_factor,
-            .size = sprite.size,
-            .pivot = sprite.pivot,
-            .uv_min = {0.0f, 0.0f},
-            .uv_max = {1.0f, 1.0f},
-            .emissive_strength = sprite.emissive_strength,
-            .albedo_image_index = albedo_index,
-            .emissive_image_index = emissive_index,
-            .sort_order = sprite.sort_order,
-            .flags = 0u,
-            .sdf_px_range = 0.0f,
-            .padding0 = 0u,
-            .padding1 = 0u
-          });
-        },
-        [&](const world_sprite& sprite) {
-          const auto albedo_index = _images.push_back(sprite.albedo_image);
-          const auto emissive_index = _images.push_back(sprite.emissive_image);
-
-          const auto& transform = scene.world_transform(node);
-
-          auto flags = std::uint32_t{0u};
-
-          if (sprite.is_billboard) {
-            flags |= sprite_batch::flag_is_billboard;
-          }
-
-          _batches[utility::to_underlying(sprite_space::world)].add(sprite_batch::sprite_instance{
-            .model = transform,
-            .base_color = sprite.base_color,
-            .emissive_factor = sprite.emissive_factor,
-            .size = sprite.size,
-            .pivot = sprite.pivot,
-            .uv_min = {0.0f, 0.0f},
-            .uv_max = {1.0f, 1.0f},
-            .emissive_strength = sprite.emissive_strength,
-            .albedo_image_index = albedo_index,
-            .emissive_image_index = emissive_index,
-            .sort_order = 0,
-            .flags = flags,
-            .sdf_px_range = 0.0f,
-            .padding0 = 0u,
-            .padding1 = 0u
-          });
-        }
-      }, sprite);
-    }
-  }
+  auto _collect_sprites() -> void;
 
   std::array<sprite_batch, mode_count> _batches;
   graphics::separate_image2d_array _images;

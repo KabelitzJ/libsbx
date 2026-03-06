@@ -322,12 +322,21 @@ application::application()
 
   // FPS label right-aligned
   auto& fps_label = canvas.create<sbx::ui::label>(topbar);
-  fps_label.set_text("60 FPS");
+  fps_label.set_text("FPS: 60");
   fps_label.set_font(_font);
   fps_label.set_font_size(14.0f);
   fps_label.color = {0.6f, 0.6f, 0.6f, 1.0f};
   fps_label.sizing.preferred = {80.0f, 0.0f};
   fps_label.sort_order = 101;
+
+  // Delta label right-aligned
+  auto& dt_label = canvas.create<sbx::ui::label>(topbar);
+  dt_label.set_text("Delta: 0.33 [ms]");
+  dt_label.set_font(_font);
+  dt_label.set_font_size(14.0f);
+  dt_label.color = {0.6f, 0.6f, 0.6f, 1.0f};
+  dt_label.sizing.preferred = {80.0f, 0.0f};
+  dt_label.sort_order = 101;
 
   // Bottom right - inventory grid
   auto& inventory = canvas.create<sbx::ui::panel>();

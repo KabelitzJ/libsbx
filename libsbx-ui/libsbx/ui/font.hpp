@@ -9,9 +9,11 @@
 
 #include <nlohmann/json.hpp>
 
+#include <libsbx/memory/observer_ptr.hpp>
+
 #include <libsbx/math/vector2.hpp>
 
-#include <libsbx/graphics/images/image.hpp>
+#include <libsbx/graphics/images/image2d.hpp>
 
 namespace sbx::ui {
 
@@ -37,59 +39,11 @@ struct font {
   std::float_t sdf_px_range{2.0f};
   std::unordered_map<std::uint32_t, glyph> glyphs;
 
-  [[nodiscard]] auto find_glyph(std::uint32_t codepoint) const -> const glyph* {
-    auto it = glyphs.find(codepoint);
+  [[nodiscard]] auto find_glyph(std::uint32_t codepoint) const -> memory::observer_ptr<const glyph>;
 
-    if (it == glyphs.end()) {
-      return nullptr;
-    }
-
-    return &it->second;
-  }
 }; // struct font
 
-[[nodiscard]] inline auto load_font(graphics::image2d_handle atlas, const std::filesystem::path& json_path) -> font {
-  auto file = std::ifstream{json_path};
-  auto json = nlohmann::json::parse(file);
-
-  auto result = font{};
-  result.atlas = atlas;
-
-  const auto& atlas_info = json["atlas"];
-  result.atlas_width = atlas_info["width"].get<std::float_t>();
-  result.atlas_height = atlas_info["height"].get<std::float_t>();
-  result.sdf_px_range = atlas_info["distanceRange"].get<std::float_t>();
-
-  const auto& metrics = json["metrics"];
-  result.line_height = metrics["lineHeight"].get<std::float_t>();
-
-  for (const auto& g : json["glyphs"]) {
-    auto glyph_data = glyph{};
-
-    glyph_data.advance = g["advance"].get<std::float_t>();
-
-    if (g.contains("planeBounds")) {
-      const auto& pb = g["planeBounds"];
-      glyph_data.plane_left = pb["left"].get<std::float_t>();
-      glyph_data.plane_bottom = pb["bottom"].get<std::float_t>();
-      glyph_data.plane_right = pb["right"].get<std::float_t>();
-      glyph_data.plane_top = pb["top"].get<std::float_t>();
-    }
-
-    if (g.contains("atlasBounds")) {
-      const auto& ab = g["atlasBounds"];
-      glyph_data.uv_left = ab["left"].get<std::float_t>() / result.atlas_width;
-      glyph_data.uv_bottom = ab["bottom"].get<std::float_t>() / result.atlas_height;
-      glyph_data.uv_right = ab["right"].get<std::float_t>() / result.atlas_width;
-      glyph_data.uv_top = ab["top"].get<std::float_t>() / result.atlas_height;
-    }
-
-    const auto codepoint = g["unicode"].get<std::uint32_t>();
-    result.glyphs[codepoint] = glyph_data;
-  }
-
-  return result;
-}
+[[nodiscard]] auto load_font(graphics::image2d_handle atlas, const std::filesystem::path& json_path) -> font;
 
 } // namespace sbx::ui
 

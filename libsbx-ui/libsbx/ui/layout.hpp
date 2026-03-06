@@ -18,12 +18,8 @@ struct rectangle {
   std::float_t width{0.0f};
   std::float_t height{0.0f};
 
-  [[nodiscard]] auto contains(const math::vector2& point) const -> bool {
-    return point.x() >= x 
-        && point.x() <= x + width 
-        && point.y() >= y 
-        && point.y() <= y + height;
-  }
+  [[nodiscard]] auto contains(const math::vector2& point) const -> bool;
+
 }; // struct rectangle
 
 struct padding {
@@ -54,14 +50,7 @@ public:
 
 protected:
 
-  [[nodiscard]] auto content_rect(const rectangle& bounds) const -> rectangle {
-    return rectangle{
-      bounds.x + padding.left,
-      bounds.y + padding.bottom,
-      bounds.width - padding.left - padding.right,
-      bounds.height - padding.bottom - padding.top
-    };
-  }
+  [[nodiscard]] auto content_rectangle(const rectangle& bounds) const -> rectangle;
 
 }; // class layout
 

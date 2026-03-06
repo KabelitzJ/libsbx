@@ -19,11 +19,7 @@ public:
 
   bool is_enabled{true};
 
-  canvas()
-  : _root{std::make_unique<element>()} {
-    _root->anchor_min = {0.0f, 0.0f};
-    _root->anchor_max = {1.0f, 1.0f};
-  }
+  canvas();
 
   ~canvas() = default;
 
@@ -31,13 +27,9 @@ public:
 
   auto operator=(canvas&&) -> canvas& = default;
 
-  [[nodiscard]] auto root() -> element& {
-    return *_root;
-  }
+  [[nodiscard]] auto root() -> element&;
 
-  [[nodiscard]] auto root() const -> const element& {
-    return *_root;
-  }
+  [[nodiscard]] auto root() const -> const element&;
 
   template<typename Type>
   requires (std::is_base_of_v<ui::element, Type>)
@@ -63,29 +55,11 @@ public:
     return reference;
   }
 
-  auto update(const math::vector2& screen_size) -> void {
-    _screen_size = screen_size;
+  auto update(const math::vector2& screen_size) -> void;
 
-    const auto root_rectangle = rectangle{0.0f, 0.0f, screen_size.x(), screen_size.y()};
+  auto process_input(const math::vector2& mouse_position, bool is_down, bool was_down) -> void;
 
-    _root->resolve_layout(root_rectangle);
-  }
-
-  auto process_input(const math::vector2& mouse_position, bool is_down, bool was_down) -> void {
-    if (!is_enabled) {
-      return;
-    }
-
-    _root->process_input_tree(mouse_position, is_down, was_down);
-  }
-
-  auto submit() -> void {
-    if (!is_enabled) {
-      return;
-    }
-
-    _root->submit_tree(_screen_size);
-  }
+  auto submit() -> void;
 
 private:
 

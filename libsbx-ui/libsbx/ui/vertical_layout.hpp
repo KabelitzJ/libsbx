@@ -23,7 +23,7 @@ public:
   ~vertical_layout() override = default;
 
   auto arrange(const rectangle& bounds, std::vector<std::unique_ptr<element>>& children) -> void override {
-    const auto content = content_rect(bounds);
+    const auto content = content_rectangle(bounds);
 
     if (children.empty()) {
       return;

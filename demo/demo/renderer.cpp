@@ -37,7 +37,7 @@
 
 namespace demo {
 
-renderer::renderer()
+renderer::renderer(bool is_editor)
 : _clear_color{sbx::math::color::white()} {
   // Attachments
   auto shadow0 = create_attachment("shadow0", sbx::graphics::attachment::type::image, sbx::math::color::white(), sbx::graphics::format::r32_sfloat, sbx::graphics::filter::linear, sbx::graphics::address_mode::clamp_to_edge);
@@ -294,19 +294,25 @@ renderer::renderer()
 
     pass.reads(tonemap);
 
-    pass.writes(fxaa, sbx::graphics::attachment_load_operation::clear);
+    if (is_editor) {
+      pass.writes(fxaa, sbx::graphics::attachment_load_operation::clear);
+    } else {
+      pass.writes(swapchain, sbx::graphics::attachment_load_operation::clear);
+    }
 
     return pass;
   });
 
   auto editor_pass = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
     auto pass = context.graphics_pass("editor");
+    
+    if (is_editor) {
+      pass.depends_on(fxaa_pass);
 
-    pass.depends_on(fxaa_pass);
+      pass.reads(fxaa);
 
-    pass.reads(fxaa);
-
-    pass.writes(swapchain, sbx::graphics::attachment_load_operation::clear);
+      pass.writes(swapchain, sbx::graphics::attachment_load_operation::clear);
+    }
 
     return pass;
   });
@@ -412,7 +418,10 @@ renderer::renderer()
   add_subrenderer<sbx::post::fxaa_filter>(fxaa_pass, "res://shaders/fxaa", "tonemap");
 
   // Editor pass
-  add_subrenderer<sbx::editor::editor_subrenderer>(editor_pass, "res://shaders/editor", "fxaa");
+
+  if (is_editor) {
+    add_subrenderer<sbx::editor::editor_subrenderer>(editor_pass, "res://shaders/editor", "fxaa");
+  }
 }
 
 } // namespace demo

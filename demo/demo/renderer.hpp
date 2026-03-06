@@ -22,7 +22,7 @@ class renderer : public sbx::graphics::renderer {
 
 public:
 
-  renderer();
+  renderer(bool is_editor);
 
   ~renderer() override = default;
 

@@ -12,5 +12,9 @@
 #include <libsbx/ui/label.hpp>
 #include <libsbx/ui/image.hpp>
 #include <libsbx/ui/button.hpp>
+#include <libsbx/ui/layout.hpp>
+#include <libsbx/ui/vertical_layout.hpp>
+#include <libsbx/ui/horizontal_layout.hpp>
+#include <libsbx/ui/grid_layout.hpp>
 
 #endif // LIBSBX_UI_HPP_

@@ -25,16 +25,12 @@ auto separate_image2d_array::create_descriptor_set_layout_binding(std::uint32_t 
 }
 
 auto separate_image2d_array::write_descriptor_set(std::uint32_t binding, VkDescriptorType descriptor_type) const noexcept -> graphics::write_descriptor_set {
-  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
-    
   auto descriptor_image_infos = std::vector<VkDescriptorImageInfo>{};
 
-  for (const auto id : _image_ids) {
-    auto& image = graphics_module.get_resource<graphics::image2d>(id);
-
+  for (const auto view : _image_views) {
     auto descriptor_image_info = VkDescriptorImageInfo{};
     descriptor_image_info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    descriptor_image_info.imageView = image.view();
+    descriptor_image_info.imageView = view;
     descriptor_image_info.sampler = nullptr;
     
     descriptor_image_infos.push_back(descriptor_image_info);
@@ -52,7 +48,9 @@ auto separate_image2d_array::write_descriptor_set(std::uint32_t binding, VkDescr
 }
 
 auto separate_image2d_array::push_back(const handle_type& handle) -> std::uint32_t {
-  if (_image_ids.size() > max_size) {
+  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
+
+  if (_image_views.size() > max_size) {
     throw std::runtime_error{"separate_image2d_array::push_back: max_size exceeded"};
   }
 
@@ -60,21 +58,46 @@ auto separate_image2d_array::push_back(const handle_type& handle) -> std::uint32
     return max_size;
   }
 
-  if (const auto entry = _id_to_indices.find(handle); entry != _id_to_indices.cend()) {
+  auto& image = graphics_module.get_resource<graphics::image2d>(handle);
+  auto view = image.view();
+
+  if (const auto entry = _view_to_indices.find(view); entry != _view_to_indices.cend()) {
     return entry->second;
   }
 
-  const auto index = static_cast<std::uint32_t>(_image_ids.size());
+  const auto index = static_cast<std::uint32_t>(_image_views.size());
 
-  _image_ids.push_back(handle);
-  _id_to_indices.emplace(handle, index);
+  _image_views.push_back(view);
+  _view_to_indices.emplace(view, index);
+
+  return index;
+}
+
+auto separate_image2d_array::push_back(const std::string& attachment) -> std::uint32_t {
+  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
+
+  if (_image_views.size() > max_size) {
+    throw std::runtime_error{"separate_image2d_array::push_back: max_size exceeded"};
+  }
+
+  const auto& image = static_cast<const image2d&>(graphics_module.attachment(attachment));
+  auto view = image.view();
+
+  if (const auto entry = _view_to_indices.find(view); entry != _view_to_indices.cend()) {
+    return entry->second;
+  }
+
+  const auto index = static_cast<std::uint32_t>(_image_views.size());
+
+  _image_views.push_back(view);
+  _view_to_indices.emplace(view, index);
 
   return index;
 }
 
 auto separate_image2d_array::clear() -> void {
-  _image_ids.clear();
-  _id_to_indices.clear();
+  _image_views.clear();
+  _view_to_indices.clear();
 }
 
 } // namespace sbx::graphics

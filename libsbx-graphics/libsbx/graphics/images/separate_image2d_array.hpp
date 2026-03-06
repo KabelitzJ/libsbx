@@ -31,12 +31,14 @@ public:
 
   auto push_back(const handle_type& handle) -> std::uint32_t;
 
+  auto push_back(const std::string& attachment) -> std::uint32_t;
+
   auto clear() -> void;
 
 private:
 
-  std::vector<handle_type> _image_ids;
-  std::unordered_map<handle_type, std::uint32_t> _id_to_indices;
+  std::vector<VkImageView> _image_views;
+  std::unordered_map<VkImageView, std::uint32_t> _view_to_indices;
 
 }; // class separate_image2d_array
 

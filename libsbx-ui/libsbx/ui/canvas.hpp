@@ -40,16 +40,27 @@ public:
   }
 
   template<typename Type>
-  requires (std::is_base_of_v<element, Type>)
+  requires (std::is_base_of_v<ui::element, Type>)
   auto create(element& parent) -> Type& {
     auto child = std::make_unique<Type>();
     return static_cast<Type&>(parent.add_child(std::move(child)));
   }
 
   template<typename Type>
-  requires (std::is_base_of_v<element, Type>)
+  requires (std::is_base_of_v<ui::element, Type>)
   auto create() -> Type& {
     return create<Type>(*_root);
+  }
+
+  template<typename Type, typename... Args>
+  requires (std::is_base_of_v<ui::layout, Type>)
+  auto set_layout(Args&&... args) -> Type& {
+    auto layout = std::make_unique<Type>(std::forward<Args>(args)...);
+    auto& reference = *layout;
+
+    _root->_layout = std::move(layout);
+
+    return reference;
   }
 
   auto update(const math::vector2& screen_size) -> void {

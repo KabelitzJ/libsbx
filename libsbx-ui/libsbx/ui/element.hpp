@@ -15,20 +15,9 @@
 
 #include <libsbx/sprites/sprites_module.hpp>
 
+#include <libsbx/ui/layout.hpp>
+
 namespace sbx::ui {
-
-struct rectangle {
-
-  std::float_t x{0.0f};
-  std::float_t y{0.0f};
-  std::float_t width{0.0f};
-  std::float_t height{0.0f};
-
-  [[nodiscard]] auto contains(const math::vector2& point) const -> bool {
-    return point.x() >= x && point.x() <= x + width && point.y() >= y && point.y() <= y + height;
-  }
-
-}; // struct rectangle
 
 class element {
 
@@ -45,17 +34,17 @@ public:
   bool is_enabled{true};
   bool is_interactive{false};
 
+  size_hints sizing{};
+
   element() = default;
 
   virtual ~element() = default;
 
   auto add_child(std::unique_ptr<element> child) -> element& {
     child->_parent = this;
-    auto& reference = *child;
-
+    auto& ref = *child;
     _children.push_back(std::move(child));
-
-    return reference;
+    return ref;
   }
 
   auto remove_child(element& child) -> void {
@@ -73,25 +62,54 @@ public:
     return _children;
   }
 
+  [[nodiscard]] auto children() -> std::vector<std::unique_ptr<element>>& {
+    return _children;
+  }
+
   [[nodiscard]] auto computed_rectangle() const -> const rectangle& {
     return _computed_rectangle;
   }
 
+  template<typename Type, typename... Args>
+  requires (std::is_base_of_v<ui::layout, Type>)
+  auto set_layout(Args&&... args) -> Type& {
+    auto layout = std::make_unique<Type>(std::forward<Args>(args)...);
+    auto& reference = *layout;
+
+    _layout = std::move(layout);
+
+    return reference;
+  }
+
+  auto clear_layout() -> void {
+    _layout.reset();
+  }
+
+  [[nodiscard]] auto has_layout() const -> bool {
+    return _layout != nullptr;
+  }
+
   auto resolve_layout(const rectangle& parent_rectangle) -> void {
-    const auto anchor_left = parent_rectangle.x + anchor_min.x() * parent_rectangle.width;
-    const auto anchor_right = parent_rectangle.x + anchor_max.x() * parent_rectangle.width;
-    const auto anchor_bottom = parent_rectangle.y + anchor_min.y() * parent_rectangle.height;
-    const auto anchor_top = parent_rectangle.y + anchor_max.y() * parent_rectangle.height;
+    _resolve_self(parent_rectangle);
 
-    const auto left = anchor_left + offset_min.x();
-    const auto right = anchor_right + offset_max.x();
-    const auto bottom = anchor_bottom + offset_min.y();
-    const auto top = anchor_top + offset_max.y();
+    if (_layout) {
+      _layout->arrange(_computed_rectangle, _children);
+    } else {
+      for (auto& child : _children) {
+        child->resolve_layout(_computed_rectangle);
+      }
+    }
+  }
 
-    _computed_rectangle = rectangle{left, bottom, right - left, top - bottom};
+  auto resolve_as_arranged(const rectangle& arranged_rect) -> void {
+    _computed_rectangle = arranged_rect;
 
-    for (auto& child : _children) {
-      child->resolve_layout(_computed_rectangle);
+    if (_layout) {
+      _layout->arrange(_computed_rectangle, _children);
+    } else {
+      for (auto& child : _children) {
+        child->resolve_layout(_computed_rectangle);
+      }
     }
   }
 
@@ -156,9 +174,24 @@ protected:
 
 private:
 
+  auto _resolve_self(const rectangle& parent_rectangle) -> void {
+    const auto anchor_left = parent_rectangle.x + anchor_min.x() * parent_rectangle.width;
+    const auto anchor_right = parent_rectangle.x + anchor_max.x() * parent_rectangle.width;
+    const auto anchor_bottom = parent_rectangle.y + anchor_min.y() * parent_rectangle.height;
+    const auto anchor_top = parent_rectangle.y + anchor_max.y() * parent_rectangle.height;
+
+    const auto left = anchor_left + offset_min.x();
+    const auto right = anchor_right + offset_max.x();
+    const auto bottom = anchor_bottom + offset_min.y();
+    const auto top = anchor_top + offset_max.y();
+
+    _computed_rectangle = rectangle{left, bottom, right - left, top - bottom};
+  }
+
   element* _parent{nullptr};
   std::vector<std::unique_ptr<element>> _children;
   rectangle _computed_rectangle{};
+  std::unique_ptr<ui::layout> _layout{};
 
 }; // class element
 

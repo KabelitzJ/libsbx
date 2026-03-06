@@ -170,6 +170,10 @@ public:
     return _images.push_back(image);
   }
 
+  [[nodiscard]] auto register_image(const std::string& attachment) -> std::uint32_t {
+    return _images.push_back(attachment);
+  }
+
   [[nodiscard]] auto batch(sprite_space space) -> sprite_batch& {
     return _batches[utility::to_underlying(space)];
   }

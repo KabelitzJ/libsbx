@@ -38,6 +38,8 @@ public:
     const auto screen_size = graphics_module.viewport();
 
     const auto mouse_position = devices::input::mouse_position();
+    const auto flipped_mouse = math::vector2{mouse_position.x(), screen_size.y() - mouse_position.y()};
+
     const auto is_down = devices::input::is_mouse_button_down(devices::mouse_button::left);
     const auto was_down = _was_mouse_down;
 
@@ -47,7 +49,7 @@ public:
 
     for (auto&& [node, canvas] : canvas_query.each()) {
       canvas.update(screen_size);
-      canvas.process_input(mouse_position, is_down, was_down);
+      canvas.process_input(flipped_mouse, is_down, was_down);
       canvas.submit();
     }
 

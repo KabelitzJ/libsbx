@@ -1,164 +1,165 @@
 // SPDX-License-Identifier: MIT
 #include <demo/terrain_subrenderer.hpp>
 
-#include <libsbx/assets/assets_module.hpp>
-
 #include <libsbx/scenes/scenes.hpp>
 
 #include <libsbx/graphics/graphics.hpp>
 
-#include <demo/application.hpp>
-
 namespace demo {
 
-terrain_subrenderer::terrain_subrenderer(const std::vector<sbx::graphics::attachment_description>& attachments, const std::filesystem::path& path)
+terrain_subrenderer::terrain_subrenderer(
+  const std::vector<sbx::graphics::attachment_description>& attachments,
+  const std::filesystem::path& path,
+  const terrain& terrain
+)
 : sbx::graphics::subrenderer{},
   _pipeline{path, attachments},
   _push_handler{_pipeline},
-  _descriptor_handler{_pipeline, 0u} {
+  _descriptor_handler{_pipeline, 0u},
+  _verts_w{terrain.verts_w()},
+  _verts_h{terrain.verts_h()} {
+
   auto& graphics_module = sbx::core::engine::get_module<sbx::graphics::graphics_module>();
 
-  _grid_vertex_buffer = graphics_module.add_resource<sbx::graphics::storage_buffer>(sbx::graphics::storage_buffer::min_size, VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
-  _grid_quad_buffer = graphics_module.add_resource<sbx::graphics::storage_buffer>(sbx::graphics::storage_buffer::min_size, VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
-  _instance_buffer = graphics_module.add_resource<sbx::graphics::storage_buffer>(sbx::graphics::storage_buffer::min_size, VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
+  auto height_buffer_size = static_cast<VkDeviceSize>(_verts_w * _verts_h * sizeof(std::float_t));
+
+  _height_buffer = graphics_module.add_resource<sbx::graphics::storage_buffer>(
+    std::max(height_buffer_size, static_cast<VkDeviceSize>(sbx::graphics::storage_buffer::min_size)),
+    VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
+  );
+
+  auto indices = _generate_indices();
+  _index_count = static_cast<std::uint32_t>(indices.size());
+
+  auto index_buffer_size = static_cast<VkDeviceSize>(indices.size() * sizeof(std::uint32_t));
+
+  _index_buffer = graphics_module.add_resource<sbx::graphics::storage_buffer>(
+    std::max(index_buffer_size, static_cast<VkDeviceSize>(sbx::graphics::storage_buffer::min_size)),
+    VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT
+  );
+
+  auto& height_buf = graphics_module.get_resource<sbx::graphics::storage_buffer>(_height_buffer);
+
+  auto initial_heights = std::vector<std::float_t>(_verts_w * _verts_h, 0.0f);
+
+  _update_buffer(height_buf, initial_heights);
+
+  auto& index_buf = graphics_module.get_resource<sbx::graphics::storage_buffer>(_index_buffer);
+
+  _update_buffer(index_buf, indices);
 }
 
-struct mesh_draw_range {
-  sbx::math::uuid mesh_id{};
-  std::uint32_t submesh_index = 0u;
-  std::uint32_t first_instance = 0u;
-  std::uint32_t instance_count = 0u;
-}; // struct mesh_draw_range
+auto terrain_subrenderer::_generate_indices() -> std::vector<std::uint32_t> {
+  auto indices = std::vector<std::uint32_t>{};
+  indices.reserve((_verts_w - 1) * (_verts_h - 1) * 6);
 
-auto terrain_subrenderer::render(sbx::graphics::command_buffer& command_buffer) -> void {
+  for (auto y = 0u; y < _verts_h - 1; ++y) {
+    for (auto x = 0u; x < _verts_w - 1; ++x) {
+      auto tl = y * _verts_w + x;
+      auto tr = tl + 1;
+      auto bl = (y + 1) * _verts_w + x;
+      auto br = bl + 1;
+
+      indices.push_back(tl);
+      indices.push_back(bl);
+      indices.push_back(tr);
+
+      indices.push_back(tr);
+      indices.push_back(bl);
+      indices.push_back(br);
+    }
+  }
+
+  return indices;
+}
+
+auto terrain_subrenderer::render(
+  sbx::graphics::command_buffer& command_buffer
+) -> void {
   SBX_PROFILE_SCOPE("terrain_subrenderer::render");
 
-  // auto& application = sbx::core::engine::get_application<demo::application>();
-
-  // auto& graphics_module = sbx::core::engine::get_module<sbx::graphics::graphics_module>();
-
-  // auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
-  // auto& scene = scenes_module.scene();
-
-  // auto& assets_module = sbx::core::engine::get_module<sbx::assets::assets_module>();
-
-  // auto& grid_vertex_buffer = graphics_module.get_resource<sbx::graphics::storage_buffer>(_grid_vertex_buffer);
-  // auto& grid_quad_buffer = graphics_module.get_resource<sbx::graphics::storage_buffer>(_grid_quad_buffer);
-  // auto& instance_buffer = graphics_module.get_resource<sbx::graphics::storage_buffer>(_instance_buffer);
-
-  // auto instances_per_mesh = std::unordered_map<sbx::math::uuid, std::vector<std::vector<instance_data>>>{};
-
-  // auto total_instances = std::uint32_t{0u};
-
-  // const auto& tiles = application.tiles();
-
-  // for (auto quad_id = 0u; quad_id < tiles.size(); ++quad_id) {
-  //   const auto& tile = tiles[quad_id];
-
-  //   if (!tile.is_visible) {
-  //     continue;
-  //   }
-
-  //   auto& submesh_instances = instances_per_mesh[tile.mesh_id];
-
-  //   for (const auto& submesh : tile.submeshes) {
-  //     if (submesh.index >= submesh_instances.size()) {
-  //       submesh_instances.resize(submesh.index + 1);
-  //     }
-
-  //     submesh_instances[submesh.index].push_back(instance_data{submesh.color.r(), submesh.color.g(), submesh.color.b(), tile.height, quad_id, tile.rotation_steps, 0u, 0u});
-
-  //     ++total_instances;
-  //   }
-  // }
-
-  // auto draw_ranges = std::vector<mesh_draw_range>{};
-  // draw_ranges.reserve(total_instances);
-
-  // auto flat_instances = std::vector<instance_data>{};
-  // flat_instances.reserve(total_instances);
-
-  // for (const auto& [mesh_id, per_submesh] : instances_per_mesh) {
-  //   for (auto submesh_index = 0u; submesh_index < per_submesh.size(); ++submesh_index) {
-  //     const auto& submesh_instances = per_submesh[submesh_index];
-
-  //     if (submesh_instances.empty()) {
-  //       continue;
-  //     }
-
-  //     const auto first_instance = static_cast<std::uint32_t>(flat_instances.size());
-
-  //     const auto instance_count = static_cast<std::uint32_t>(submesh_instances.size());
-
-  //     draw_ranges.emplace_back(mesh_draw_range{mesh_id, submesh_index, first_instance, instance_count});
-
-  //     flat_instances.insert(flat_instances.end(), submesh_instances.begin(), submesh_instances.end());
-  //   }
-  // }
-
-  // _update_buffer(instance_buffer, flat_instances);
-
-  // _pipeline.bind(command_buffer);
-
-  // _descriptor_handler.push("scene", scene.uniform_handler());
-
-  // _push_handler.push("grid_vertex_data_buffer", grid_vertex_buffer.address());
-  // _push_handler.push("grid_quad_data_buffer", grid_quad_buffer.address());
-  // _push_handler.push("instance_data_buffer", instance_buffer.address());
-  // _push_handler.push("mesh_bounds_min", sbx::math::vector4{-0.5f, 0.0f, -0.5f, 0.0f});
-  // _push_handler.push("mesh_bounds_max", sbx::math::vector4{0.5f, 1.0f, 0.5f, 0.0f});
-
-  // if (!_descriptor_handler.update(_pipeline)) {
-  //   return;
-  // }
-
-  // _descriptor_handler.bind_descriptors(command_buffer);
-
-  // for (const auto& range : draw_ranges) {
-  //   if (range.instance_count == 0u) {
-  //     continue;
-  //   }
-
-  //   auto& mesh = assets_module.get_asset<sbx::models::mesh>(range.mesh_id);
-
-  //   if (range.submesh_index >= mesh.submeshes().size()) {
-  //     continue;
-  //   }
-
-  //   const auto& submesh = mesh.submesh(range.submesh_index);
-
-  //   mesh.bind(command_buffer);
-
-  //   _push_handler.push("vertex_buffer", mesh.address());
-  //   _push_handler.bind(command_buffer);
-
-  //   command_buffer.draw_indexed(submesh.index_count, range.instance_count, submesh.index_offset, static_cast<std::int32_t>(submesh.vertex_offset), range.first_instance);
-  // }
-}
-
-auto terrain_subrenderer::update_dual_grid_data(const dual_grid<grid_data>& grid) -> void {
   auto& graphics_module = sbx::core::engine::get_module<sbx::graphics::graphics_module>();
 
-  auto& grid_vertex_buffer = graphics_module.get_resource<sbx::graphics::storage_buffer>(_grid_vertex_buffer);
-  auto& grid_quad_buffer = graphics_module.get_resource<sbx::graphics::storage_buffer>(_grid_quad_buffer);
+  auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
 
-  auto grid_vertex_buffer_data = std::vector<grid_vertex_data>{};
-  grid_vertex_buffer_data.reserve(grid.dual_vertices().size());
+  auto& scene = scenes_module.scene();
 
-  for (const auto& vertex : grid.dual_vertices()) {
-    grid_vertex_buffer_data.push_back(grid_vertex_data{vertex.position, 0u});
+  auto& height_buf = graphics_module.get_resource<sbx::graphics::storage_buffer>(_height_buffer);
+
+  auto& index_buf = graphics_module.get_resource<sbx::graphics::storage_buffer>(_index_buffer);
+
+  _pipeline.bind(command_buffer);
+
+  _descriptor_handler.push("scene", scene.uniform_handler());
+
+  auto offset_x = static_cast<float>(_verts_w - 1) * grid::cell_size * 0.5f;
+  auto offset_z = static_cast<float>(_verts_h - 1) * grid::cell_size * 0.5f;
+
+  _push_handler.push("height_data_buffer", height_buf.address());
+  _push_handler.push("verts_w", _verts_w);
+  _push_handler.push("verts_h", _verts_h);
+  _push_handler.push("inv_verts_w", 1.0f / static_cast<float>(_verts_w));
+  _push_handler.push("cell_size", grid::cell_size);
+  _push_handler.push("offset_x", offset_x);
+  _push_handler.push("offset_z", offset_z);
+
+  if (!_descriptor_handler.update(_pipeline)) {
+    return;
   }
 
-  _update_buffer(grid_vertex_buffer, grid_vertex_buffer_data);
+  _descriptor_handler.bind_descriptors(command_buffer);
+  _push_handler.bind(command_buffer);
 
-  auto grid_quad_buffer_data = std::vector<grid_quad_data>{};
-  grid_quad_buffer_data.reserve(grid.dual_quads().size());
+  command_buffer.bind_index_buffer(index_buf.handle(), 0, VK_INDEX_TYPE_UINT32);
 
-  for (const auto& quad : grid.dual_quads()) {
-    grid_quad_buffer_data.push_back({quad.a, quad.b, quad.c, quad.d});
+  command_buffer.draw_indexed(_index_count, 1, 0, 0, 0);
+}
+
+auto terrain_subrenderer::update_heights(
+  const terrain& terrain
+) -> void {
+  auto& graphics_module = sbx::core::engine::get_module<sbx::graphics::graphics_module>();
+
+  auto& height_buf = graphics_module.get_resource<sbx::graphics::storage_buffer>(_height_buffer);
+
+  auto heights = std::vector<std::float_t>{};
+  heights.reserve(_verts_w * _verts_h);
+
+  for (auto y = 0u; y < _verts_h; ++y) {
+    for (auto x = 0u; x < _verts_w; ++x) {
+      heights.push_back(terrain.get_height(x, y));
+    }
   }
 
-  _update_buffer(grid_quad_buffer, grid_quad_buffer_data);
+  _update_buffer(height_buf, heights);
+}
+
+auto terrain_subrenderer::update_heights_region(
+  const terrain& terrain,
+  std::uint32_t min_x, std::uint32_t min_y,
+  std::uint32_t max_x, std::uint32_t max_y
+) -> void {
+  auto& graphics_module = sbx::core::engine::get_module<sbx::graphics::graphics_module>();
+
+  auto& height_buf = graphics_module.get_resource<sbx::graphics::storage_buffer>(_height_buffer);
+
+  // Expand by 1 for correct normals at edges
+  auto safe_min_x = (min_x > 0u) ? min_x - 1u : 0u;
+  auto safe_min_y = (min_y > 0u) ? min_y - 1u : 0u;
+  auto safe_max_x = std::min(max_x + 1u, _verts_w - 1u);
+  auto safe_max_y = std::min(max_y + 1u, _verts_h - 1u);
+
+  // Full region update (simple approach for now)
+  auto heights = std::vector<std::float_t>{};
+  heights.reserve(_verts_w * _verts_h);
+
+  for (auto y = 0u; y < _verts_h; ++y) {
+    for (auto x = 0u; x < _verts_w; ++x) {
+      heights.push_back(terrain.get_height(x, y));
+    }
+  }
+
+  _update_buffer(height_buf, heights);
 }
 
 } // namespace demo

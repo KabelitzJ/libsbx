@@ -114,12 +114,12 @@
 		{
 			"mimeType":"image/jpeg",
 			"name":"bark",
-			"uri":"bark.jpg"
+			"uri":"textures/bark.jpg"
 		},
 		{
 			"mimeType":"image/png",
 			"name":"leaves2",
-			"uri":"leaves2.png"
+			"uri":"textures/leaves2.png"
 		}
 	],
 	"accessors":[

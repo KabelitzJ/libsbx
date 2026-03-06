@@ -271,7 +271,7 @@ auto hierarchy_panel::_build_tree(const sbx::scenes::node node) -> void {
 
   const auto& relationship = scene.get_component<sbx::scenes::relationship>(node);
 
-  auto flag = ImGuiTreeNodeFlags{ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_DefaultOpen};
+  auto flag = ImGuiTreeNodeFlags{ImGuiTreeNodeFlags_OpenOnArrow};
 
   if (relationship.children().empty()) {
     flag |= ImGuiTreeNodeFlags_Leaf;

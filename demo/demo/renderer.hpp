@@ -11,7 +11,7 @@
 
 #include <libsbx/scenes/scenes.hpp>
 
-#include <demo/data.hpp>
+#include <demo/terrain.hpp>
 #include <demo/terrain_subrenderer.hpp>
 
 namespace demo {
@@ -22,12 +22,12 @@ class renderer : public sbx::graphics::renderer {
 
 public:
 
-  renderer(bool is_editor);
+  renderer(bool is_editor, const terrain& terrain);
 
   ~renderer() override = default;
 
-  auto update_dual_grid_data(const dual_grid<grid_data>& grid) -> void {
-    _terrain_subrenderer->update_dual_grid_data(grid);
+  auto terrain_renderer() -> terrain_subrenderer& {
+    return *_terrain_subrenderer;
   }
 
 private:

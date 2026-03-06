@@ -12,16 +12,13 @@
 #include <libsbx/ui/ui.hpp>
 #include <libsbx/scenes/scenes.hpp>
 
-#include <demo/dual_grid.hpp>
-#include <demo/data.hpp>
+#include <demo/world.hpp>
 
 namespace demo {
 
 class application : public sbx::core::application {
 
 public:
-
-  using grid_type = dual_grid<grid_data>;
 
   application();
 
@@ -35,28 +32,24 @@ public:
 
 private:
 
-  auto _randomize_terrain() -> void;
-  auto _smooth_terrain() -> void;
-  auto _rebuild_terrain_tiles() -> void;
-
   auto _generate_brdf(const std::uint32_t size) -> void;
   auto _generate_irradiance(const std::uint32_t size) -> void;
   auto _generate_prefiltered(const std::uint32_t size) -> void;
 
+  auto _build_ui() -> void;
+
   bool _is_paused;
 
   sbx::math::angle _rotation;
-
-  sbx::scenes::node _rune0_emitter;
-  sbx::scenes::node _rune1_emitter;
-  sbx::scenes::node _rune2_emitter;
-  sbx::scenes::node _rune3_emitter;
 
   sbx::graphics::image2d_handle _brdf;
   sbx::graphics::cube_image2d_handle _irradiance;
   sbx::graphics::cube_image2d_handle _prefiltered;
 
   sbx::ui::font _font;
+
+  world _world;
+  std::vector<sbx::scenes::node> _tree_nodes;
 
 }; // class application
 

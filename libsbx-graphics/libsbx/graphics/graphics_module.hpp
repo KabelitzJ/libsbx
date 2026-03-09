@@ -101,6 +101,7 @@ public:
   requires (std::is_constructible_v<Renderer, Args...>)
   auto set_renderer(Args&&... args) -> Renderer& {
     _renderer = std::make_unique<Renderer>(std::forward<Args>(args)...);
+
     _recreate_swapchain();
 
     return *static_cast<Renderer*>(_renderer.get());

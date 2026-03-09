@@ -64,7 +64,7 @@ private:
   struct dependencies {
     auto get() const noexcept -> std::unordered_set<std::uint32_t> {
       auto types = std::unordered_set<std::uint32_t>{};
-      (types.insert(utility::type_id<Types>::value()), ...);
+      (types.insert(type_id<Types>::value()), ...);
       return types;
     }
   }; // struct dependencies

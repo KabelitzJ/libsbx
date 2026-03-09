@@ -41,7 +41,7 @@ class static_mesh_shadow_subrenderer final : public graphics::subrenderer {
 
 public:
 
-  static_mesh_shadow_subrenderer(const std::vector<graphics::attachment_description>& attachments, const std::filesystem::path& base_pipeline, const std::uint32_t cascade, memory::observer_ptr<const frustum_culling_task> cull_task);
+  static_mesh_shadow_subrenderer(const std::vector<graphics::attachment_description>& attachments, const std::filesystem::path& base_pipeline, const std::uint32_t cascade);
 
   ~static_mesh_shadow_subrenderer() override;
 
@@ -61,6 +61,8 @@ private:
   struct descriptor_data {
 
     graphics::descriptor_handler scene_descriptor_handler;
+    graphics::descriptor_handler sampler_descriptor_handler;
+    graphics::descriptor_handler image_descriptor_handler;
 
     descriptor_data(const graphics::graphics_pipeline_handle& handle);
 
@@ -70,10 +72,15 @@ private:
 
   auto _get_or_create_descriptor_data(const graphics::graphics_pipeline_handle& handle) -> descriptor_data&;
 
+  inline static const auto _entry_point = std::array<std::string, 3u>{
+    "opaque_main",  // alpha_mode::opaque
+    "mask_main",    // alpha_mode::mask 
+    "blend_main"    // alpha_mode::blend
+  };
+
   std::vector<graphics::attachment_description> _attachments;
   std::filesystem::path _base_pipeline;
   std::uint32_t _cascade;
-  memory::observer_ptr<const frustum_culling_task> _cull_task;
 
   inline static std::unordered_map<models::material_key, pipeline_data, models::material_key_hash> _pipeline_cache{};
 

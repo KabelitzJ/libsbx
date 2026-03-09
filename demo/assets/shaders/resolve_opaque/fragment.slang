@@ -1,5 +1,6 @@
 #include <libsbx/common/scene_data.slang>
 #include <libsbx/common/depth.slang>
+
 #include <libsbx/math/constants.slang>
 
 struct fs_in {
@@ -272,16 +273,11 @@ float calculate_shadow(uint cascade, float3 world_position, float3 normal) {
   return value;
 }
 
-enum material_feature : UINT {
+enum material_feature : uint {
   none = 0,
-  emission = (1 << 0),
-  normal_map = (1 << 1), 
-  occlusion = (1 << 2), 
-  height = (1 << 3), 
-  clearcoat = (1 << 4), 
-  anisotropy = (1 << 5),
-  cast_shadow = (1 << 6),
-  receive_shadow = (1 << 7)
+  cast_shadow = (1 << 1),
+  receive_shadow = (1 << 2),
+  invert_backface_normals = (1 << 3),
 }; // struct material_feature
 
 [shader("fragment")]

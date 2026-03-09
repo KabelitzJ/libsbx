@@ -3,12 +3,11 @@
 
 namespace sbx::animations {
 
-skinned_mesh_material_subrenderer::skinned_mesh_material_subrenderer(const std::vector<graphics::attachment_description>& attachments, const std::filesystem::path& base_pipeline, const skinned_mesh_material_draw_list::bucket bucket, memory::observer_ptr<const skinning_task> skinning_task)
+skinned_mesh_material_subrenderer::skinned_mesh_material_subrenderer(const std::vector<graphics::attachment_description>& attachments, const std::filesystem::path& base_pipeline, const skinned_mesh_material_draw_list::bucket bucket)
 : graphics::subrenderer{},
   _attachments{attachments},
   _base_pipeline{base_pipeline},
-  _bucket{bucket},
-  _skinning_task{skinning_task} { }
+  _bucket{bucket} { }
 
 skinned_mesh_material_subrenderer::~skinned_mesh_material_subrenderer() {
   _pipeline_cache.clear();
@@ -57,9 +56,8 @@ auto skinned_mesh_material_subrenderer::render(graphics::command_buffer& command
 
     pipeline_data.push_handler.push("transform_data_buffer", draw_list.buffer(skinned_mesh_material_draw_list::transform_data_buffer_name).address());
     pipeline_data.push_handler.push("material_data_buffer", draw_list.buffer(skinned_mesh_material_draw_list::material_data_buffer_name).address());
-
     pipeline_data.push_handler.push("instance_data_buffer", graphics_module.get_resource<graphics::storage_buffer>(data.instance_data_buffer).address());
-    pipeline_data.push_handler.push("vertex_buffer", graphics_module.get_resource<graphics::storage_buffer>(_skinning_task->vertex_buffer_handle()).address());
+    pipeline_data.push_handler.push("vertex_buffer", graphics_module.get_resource<graphics::storage_buffer>(renderer.task<skinning_task>().vertex_buffer_handle()).address());
 
     auto& draw_commands_buffer = graphics_module.get_resource<graphics::storage_buffer>(data.draw_commands_buffer);
 

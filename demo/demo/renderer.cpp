@@ -261,25 +261,25 @@ renderer::renderer(bool is_editor)
   const auto& particle_task = add_task<sbx::particles::particle_task>(particles_pass, "res://shaders/particles");
 
   // Shadow pass
-  add_subrenderer<sbx::models::static_mesh_shadow_subrenderer>(shadow0_pass, "res://shaders/shadow", 0u, nullptr);
-  add_subrenderer<sbx::animations::skinned_mesh_shadow_subrenderer>(shadow0_pass, "res://shaders/shadow", 0u, sbx::memory::make_observer(skinning_task));
+  add_subrenderer<sbx::models::static_mesh_shadow_subrenderer>(shadow0_pass, "res://shaders/shadow", 0u);
+  add_subrenderer<sbx::animations::skinned_mesh_shadow_subrenderer>(shadow0_pass, "res://shaders/shadow", 0u);
 
-  add_subrenderer<sbx::models::static_mesh_shadow_subrenderer>(shadow1_pass, "res://shaders/shadow", 1u, nullptr);
-  add_subrenderer<sbx::animations::skinned_mesh_shadow_subrenderer>(shadow1_pass, "res://shaders/shadow", 1u, sbx::memory::make_observer(skinning_task));
+  add_subrenderer<sbx::models::static_mesh_shadow_subrenderer>(shadow1_pass, "res://shaders/shadow", 1u);
+  add_subrenderer<sbx::animations::skinned_mesh_shadow_subrenderer>(shadow1_pass, "res://shaders/shadow", 1u);
 
-  add_subrenderer<sbx::models::static_mesh_shadow_subrenderer>(shadow2_pass, "res://shaders/shadow", 2u, nullptr);
-  add_subrenderer<sbx::animations::skinned_mesh_shadow_subrenderer>(shadow2_pass, "res://shaders/shadow", 2u, sbx::memory::make_observer(skinning_task));
+  add_subrenderer<sbx::models::static_mesh_shadow_subrenderer>(shadow2_pass, "res://shaders/shadow", 2u);
+  add_subrenderer<sbx::animations::skinned_mesh_shadow_subrenderer>(shadow2_pass, "res://shaders/shadow", 2u);
 
-  add_subrenderer<sbx::models::static_mesh_shadow_subrenderer>(shadow3_pass, "res://shaders/shadow", 3u, nullptr);
-  add_subrenderer<sbx::animations::skinned_mesh_shadow_subrenderer>(shadow3_pass, "res://shaders/shadow", 3u, sbx::memory::make_observer(skinning_task));
+  add_subrenderer<sbx::models::static_mesh_shadow_subrenderer>(shadow3_pass, "res://shaders/shadow", 3u);
+  add_subrenderer<sbx::animations::skinned_mesh_shadow_subrenderer>(shadow3_pass, "res://shaders/shadow", 3u);
 
   // Deferred pass
-  add_subrenderer<sbx::models::static_mesh_material_subrenderer>(deferred_pass, "res://shaders/deferred_pbr_material", sbx::models::static_mesh_material_draw_list::bucket::opaque, nullptr);
-  add_subrenderer<sbx::animations::skinned_mesh_material_subrenderer>(deferred_pass, "res://shaders/deferred_pbr_material", sbx::animations::skinned_mesh_material_draw_list::bucket::opaque, sbx::memory::make_observer(skinning_task));
+  add_subrenderer<sbx::models::static_mesh_material_subrenderer>(deferred_pass, "res://shaders/deferred_pbr_material", sbx::models::static_mesh_material_draw_list::bucket::opaque);
+  add_subrenderer<sbx::animations::skinned_mesh_material_subrenderer>(deferred_pass, "res://shaders/deferred_pbr_material", sbx::animations::skinned_mesh_material_draw_list::bucket::opaque);
 
   // Transparency pass
-  add_subrenderer<sbx::models::static_mesh_material_subrenderer>(transparency_pass, "res://shaders/deferred_pbr_material", sbx::models::static_mesh_material_draw_list::bucket::transparent, nullptr);
-  add_subrenderer<sbx::animations::skinned_mesh_material_subrenderer>(transparency_pass, "res://shaders/deferred_pbr_material", sbx::animations::skinned_mesh_material_draw_list::bucket::transparent, sbx::memory::make_observer(skinning_task));
+  add_subrenderer<sbx::models::static_mesh_material_subrenderer>(transparency_pass, "res://shaders/deferred_pbr_material", sbx::models::static_mesh_material_draw_list::bucket::transparent);
+  add_subrenderer<sbx::animations::skinned_mesh_material_subrenderer>(transparency_pass, "res://shaders/deferred_pbr_material", sbx::animations::skinned_mesh_material_draw_list::bucket::transparent);
   add_subrenderer<sbx::particles::particle_subrenderer>(transparency_pass, "res://shaders/particles", sbx::memory::make_observer(particle_task));
 
   // Resolve pass

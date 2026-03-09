@@ -117,23 +117,6 @@ auto resolve_material(scenes::scene& scene, const aiScene* ai_scene, const std::
     material.emissive.image = resolve_texture(scene, ai_material, aiTextureType_EMISSIVE, root_directory);
     material.height.image = resolve_texture(scene, ai_material, aiTextureType_HEIGHT, root_directory);
 
-    // Feature flags
-    if (material.normal.image) { 
-      material.features.set(models::material_feature::normal_map); 
-    }
-
-    if (material.emissive.image) { 
-      material.features.set(models::material_feature::emission);   
-    }
-
-    if (material.height.image) { 
-      material.features.set(models::material_feature::height);     
-    }
-
-    if (material.occlusion.image) { 
-      material.features.set(models::material_feature::occlusion);  
-    }
-
     scene.add_material<models::material>(key, std::move(material));
   }
 

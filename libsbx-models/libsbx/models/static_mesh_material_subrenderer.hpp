@@ -86,7 +86,7 @@ class static_mesh_material_subrenderer final : public graphics::subrenderer {
 
 public:
 
-  static_mesh_material_subrenderer(const std::vector<graphics::attachment_description>& attachments, const std::filesystem::path& base_pipeline, const static_mesh_material_draw_list::bucket bucket, memory::observer_ptr<const frustum_culling_task> cull_task);
+  static_mesh_material_subrenderer(const std::vector<graphics::attachment_description>& attachments, const std::filesystem::path& base_pipeline, const static_mesh_material_draw_list::bucket bucket);
 
   ~static_mesh_material_subrenderer() override;
 
@@ -131,7 +131,6 @@ private:
   std::vector<graphics::attachment_description> _attachments;
   std::filesystem::path _base_pipeline;
   static_mesh_material_draw_list::bucket _bucket;
-  memory::observer_ptr<const frustum_culling_task> _cull_task;
 
   inline static auto _pipeline_cache = std::unordered_map<material_key, pipeline_data, material_key_hash>{};
 
@@ -146,13 +145,10 @@ struct sbx::utility::enum_mapping<sbx::models::material_feature> {
 
   using entry_type = sbx::utility::entry<sbx::models::material_feature>;
 
-  static constexpr auto values = std::array<entry_type, 6u>{
-    entry_type{sbx::models::material_feature::emission, "emission"},
-    entry_type{sbx::models::material_feature::normal_map, "normal_map"},
-    entry_type{sbx::models::material_feature::occlusion, "occlusion"},
-    entry_type{sbx::models::material_feature::height, "height"},
-    entry_type{sbx::models::material_feature::clearcoat, "clearcoat"},
-    entry_type{sbx::models::material_feature::anisotropy, "anisotropy"},
+  static constexpr auto values = std::array<entry_type, 3u>{
+    entry_type{sbx::models::material_feature::cast_shadow, "cast_shadow"},
+    entry_type{sbx::models::material_feature::receive_shadow, "receive_shadow"},
+    entry_type{sbx::models::material_feature::invert_backface_normals, "invert_backface_normals"},
   };
 
 }; // struct sbx::utility::enum_mapping

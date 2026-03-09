@@ -1,48 +1,7 @@
 #include <libsbx/common/vertex.slang>
 #include <libsbx/common/scene_data.slang>
 
-struct transform_data {
-  float4x4 model;
-  float4x4 normal;
-}; // struct transform_data
-
-struct instance_data {
-  uint transform_index;
-  uint material_index;
-  uint object_id; 
-  uint _pad0;
-}; // struct instance_data
-
-struct vertex {
-  float position_x;
-  float position_y;
-  float position_z;
-
-  float normal_x;
-  float normal_y;
-  float normal_z;
-
-  float uv_x;
-  float uv_y;
-
-  float tangent_x;
-  float tangent_y;
-  float tangent_z;
-  float tangent_w; // sign of the tangent
-}; // struct vertex
-
-struct push_data {
-  vertex* vertex_buffer;
-  transform_data* transform_data_buffer;
-  instance_data* instance_data_buffer;
-  uint cascade;
-}; // struct push_data
-
-[[vk::push_constant]]
-ConstantBuffer<push_data> push;
-
-[[vk::binding(0, 0)]]
-ConstantBuffer<sbx::common::scene_data> scene;
+#include <shadow/common.slang>
 
 struct vs_in {
   uint vertex_id : SV_VertexID;
@@ -52,8 +11,16 @@ struct vs_in {
 }; // struct vs_in
 
 struct vs_out {
+  [[vk::location(0)]] float2 uv : UV;
+  [[vk::location(1)]] nointerpolation uint instance_index : INSTANCE_INDEX;
   float4 sv_position : SV_Position;
 }; // struct vs_out
+
+[[vk::push_constant]]
+ConstantBuffer<push_data> push;
+
+[[vk::binding(0, 0)]]
+ConstantBuffer<sbx::common::scene_data> scene;
 
 [shader("vertex")]
 vs_out main(vs_in input) {
@@ -69,7 +36,12 @@ vs_out main(vs_in input) {
   vertex vertex = push.vertex_buffer[global_vertex];
 
   float3 in_position = float3(vertex.position_x, vertex.position_y, vertex.position_z);
+  float2 in_uv = float2(vertex.uv_x, vertex.uv_y);
+
   float3 world_position = mul(transform_data.model, float4(in_position, 1.0)).xyz;
+
+  output.uv = in_uv;
+  output.instance_index = global_instance;
 
   output.sv_position = mul(scene.light_spaces[push.cascade], float4(world_position, 1.0));
 

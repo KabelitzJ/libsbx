@@ -3,12 +3,11 @@
 
 namespace sbx::models {
 
-static_mesh_shadow_subrenderer::static_mesh_shadow_subrenderer(const std::vector<graphics::attachment_description>& attachments, const std::filesystem::path& base_pipeline, const std::uint32_t cascade, memory::observer_ptr<const frustum_culling_task> cull_task)
+static_mesh_shadow_subrenderer::static_mesh_shadow_subrenderer(const std::vector<graphics::attachment_description>& attachments, const std::filesystem::path& base_pipeline, const std::uint32_t cascade)
 : graphics::subrenderer{},
   _attachments{attachments},
   _base_pipeline{base_pipeline},
-  _cascade{cascade},
-  _cull_task{cull_task} { }
+  _cascade{cascade} { }
 
 static_mesh_shadow_subrenderer::~static_mesh_shadow_subrenderer() {
   _pipeline_cache.clear();
@@ -31,7 +30,7 @@ auto static_mesh_shadow_subrenderer::render(graphics::command_buffer& command_bu
 
   const auto& ranges = draw_list.ranges(models::static_mesh_material_draw_list::bucket::shadow);
 
-  for (auto& [key, entry] : ranges) {
+  for (auto& [key, data] : ranges) {
     auto& pipeline_data = _get_or_create_pipeline(key);
     auto& descriptor_data = _get_or_create_descriptor_data(pipeline_data.pipeline);
 
@@ -40,29 +39,41 @@ auto static_mesh_shadow_subrenderer::render(graphics::command_buffer& command_bu
     pipeline.bind(command_buffer);
 
     descriptor_data.scene_descriptor_handler.push("scene", scene.uniform_handler());
+    descriptor_data.sampler_descriptor_handler.push("samplers", draw_list.samplers());
+    descriptor_data.image_descriptor_handler.push("images", draw_list.images());
 
-    if (!descriptor_data.scene_descriptor_handler.update(pipeline)) {
+    auto update_successful = true;
+
+    update_successful &= descriptor_data.scene_descriptor_handler.update(pipeline);
+    update_successful &= descriptor_data.sampler_descriptor_handler.update(pipeline);
+    update_successful &= descriptor_data.image_descriptor_handler.update(pipeline);
+
+    if (!update_successful) {
       return;
     }
 
     descriptor_data.scene_descriptor_handler.bind_descriptors(command_buffer);
+    descriptor_data.sampler_descriptor_handler.bind_descriptors(command_buffer);
+    descriptor_data.image_descriptor_handler.bind_descriptors(command_buffer);
 
-    pipeline_data.push_handler.push("transform_data_buffer", draw_list.buffer(models::static_mesh_material_draw_list::transform_data_buffer_name).address());
-
-    const auto* culled = _cull_task ? _cull_task->culled(models::bucket::shadow, key, _cascade) : nullptr;
-
-    auto& instance_data_buffer = culled
-      ? graphics_module.get_resource<graphics::storage_buffer>(culled->instances_buffer)
-      : graphics_module.get_resource<graphics::storage_buffer>(entry.instance_data_buffer);
-
-    auto& draw_commands_buffer = culled
-      ? graphics_module.get_resource<graphics::storage_buffer>(culled->commands_buffer)
-      : graphics_module.get_resource<graphics::storage_buffer>(entry.draw_commands_buffer);
-
-    pipeline_data.push_handler.push("instance_data_buffer", instance_data_buffer.address());
+    pipeline_data.push_handler.push("transform_data_buffer", draw_list.buffer(static_mesh_material_draw_list::transform_data_buffer_name).address());
+    pipeline_data.push_handler.push("material_data_buffer", draw_list.buffer(static_mesh_material_draw_list::material_data_buffer_name).address());
+    pipeline_data.push_handler.push("instance_data_buffer", graphics_module.get_resource<graphics::storage_buffer>(data.instance_data_buffer).address());
     pipeline_data.push_handler.push("cascade", _cascade);
 
-    for (const auto& range_ref : entry.ranges) {
+    auto& draw_commands_buffer = graphics_module.get_resource<graphics::storage_buffer>(data.draw_commands_buffer);
+
+    // const auto* culled = _cull_task ? _cull_task->culled(models::bucket::shadow, key, _cascade) : nullptr;
+
+    // auto& instance_data_buffer = culled
+    //   ? graphics_module.get_resource<graphics::storage_buffer>(culled->instances_buffer)
+    //   : graphics_module.get_resource<graphics::storage_buffer>(entry.instance_data_buffer);
+
+    // auto& draw_commands_buffer = culled
+    //   ? graphics_module.get_resource<graphics::storage_buffer>(culled->commands_buffer)
+    //   : graphics_module.get_resource<graphics::storage_buffer>(entry.draw_commands_buffer);
+
+    for (const auto& range_ref : data.ranges) {
       auto& mesh = assets_module.get_asset<models::mesh>(range_ref.mesh_id);
 
       mesh.bind(command_buffer);
@@ -81,7 +92,9 @@ static_mesh_shadow_subrenderer::pipeline_data::pipeline_data(const graphics::gra
   push_handler{pipeline} { }
 
 static_mesh_shadow_subrenderer::descriptor_data::descriptor_data(const graphics::graphics_pipeline_handle& handle)
-: scene_descriptor_handler{handle, 0u} { }
+: scene_descriptor_handler{handle, 0u},
+  sampler_descriptor_handler{handle, 1u},
+  image_descriptor_handler{handle, 2u} { }
 
 auto static_mesh_shadow_subrenderer::_get_or_create_pipeline(const models::material_key& key) -> pipeline_data& {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
@@ -98,8 +111,8 @@ auto static_mesh_shadow_subrenderer::_get_or_create_pipeline(const models::mater
   const auto request = graphics::compiler::compile_request{
     .path = _base_pipeline,
     .per_stage = {
-      {SLANG_STAGE_VERTEX, {.entry_point = "main"}},
-      { SLANG_STAGE_FRAGMENT, {.entry_point = "main"}}
+      {SLANG_STAGE_VERTEX, { .entry_point = "main" }},
+      { SLANG_STAGE_FRAGMENT, { .entry_point = _entry_point.at(key.alpha) }}
     }
   };
 

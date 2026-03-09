@@ -3,14 +3,11 @@
 
 namespace sbx::animations {
 
-skinned_mesh_shadow_subrenderer::skinned_mesh_shadow_subrenderer(const std::vector<graphics::attachment_description>& attachments, const std::filesystem::path& base_pipeline, const std::uint32_t cascade, memory::observer_ptr<const skinning_task> skinning_task)
+skinned_mesh_shadow_subrenderer::skinned_mesh_shadow_subrenderer(const std::vector<graphics::attachment_description>& attachments, const std::filesystem::path& base_pipeline, const std::uint32_t cascade)
 : graphics::subrenderer{},
   _attachments{attachments},
   _base_pipeline{base_pipeline},
-  _cascade{cascade},
-  _skinning_task{skinning_task} {
-
-}
+  _cascade{cascade} { }
 
 skinned_mesh_shadow_subrenderer::~skinned_mesh_shadow_subrenderer() {
   _pipeline_cache.clear();
@@ -42,16 +39,29 @@ auto skinned_mesh_shadow_subrenderer::render(graphics::command_buffer& command_b
     pipeline.bind(command_buffer);
 
     descriptor_data.scene_descriptor_handler.push("scene", scene.uniform_handler());
+    descriptor_data.sampler_descriptor_handler.push("samplers", draw_list.samplers());
+    descriptor_data.image_descriptor_handler.push("images", draw_list.images());
 
-    if (!descriptor_data.scene_descriptor_handler.update(pipeline)) {
+    auto update_successful = true;
+
+    update_successful &= descriptor_data.scene_descriptor_handler.update(pipeline);
+    update_successful &= descriptor_data.sampler_descriptor_handler.update(pipeline);
+    update_successful &= descriptor_data.image_descriptor_handler.update(pipeline);
+
+    if (!update_successful) {
       return;
     }
 
     descriptor_data.scene_descriptor_handler.bind_descriptors(command_buffer);
+    descriptor_data.sampler_descriptor_handler.bind_descriptors(command_buffer);
+    descriptor_data.image_descriptor_handler.bind_descriptors(command_buffer);
 
-    pipeline_data.push_handler.push("transform_data_buffer", draw_list.buffer(models::static_mesh_material_draw_list::transform_data_buffer_name).address());
+    auto& skinning_task = renderer.task<animations::skinning_task>();
+
+    pipeline_data.push_handler.push("transform_data_buffer", draw_list.buffer(skinned_mesh_material_draw_list::transform_data_buffer_name).address());
+    pipeline_data.push_handler.push("material_data_buffer", draw_list.buffer(skinned_mesh_material_draw_list::material_data_buffer_name).address());
     pipeline_data.push_handler.push("instance_data_buffer", graphics_module.get_resource<graphics::storage_buffer>(data.instance_data_buffer).address());
-    pipeline_data.push_handler.push("vertex_buffer", graphics_module.get_resource<graphics::storage_buffer>(_skinning_task->vertex_buffer_handle()).address());
+    pipeline_data.push_handler.push("vertex_buffer", graphics_module.get_resource<graphics::storage_buffer>(skinning_task.vertex_buffer_handle()).address());
     pipeline_data.push_handler.push("cascade", _cascade);
 
     auto& draw_commands_buffer = graphics_module.get_resource<graphics::storage_buffer>(data.draw_commands_buffer);
@@ -73,7 +83,9 @@ skinned_mesh_shadow_subrenderer::pipeline_data::pipeline_data(const graphics::gr
   push_handler{pipeline} { }
 
 skinned_mesh_shadow_subrenderer::descriptor_data::descriptor_data(const graphics::graphics_pipeline_handle& handle)
-: scene_descriptor_handler{handle, 0u} { }
+: scene_descriptor_handler{handle, 0u},
+  sampler_descriptor_handler{handle, 1u},
+  image_descriptor_handler{handle, 2u} { }
 
 auto skinned_mesh_shadow_subrenderer::_get_or_create_pipeline(const models::material_key& key) -> pipeline_data& {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
@@ -90,8 +102,8 @@ auto skinned_mesh_shadow_subrenderer::_get_or_create_pipeline(const models::mate
   const auto request = graphics::compiler::compile_request{
     .path = _base_pipeline,
     .per_stage = {
-      {SLANG_STAGE_VERTEX, {.entry_point = "main"}},
-      { SLANG_STAGE_FRAGMENT, {.entry_point = "main"}}
+      {SLANG_STAGE_VERTEX, { .entry_point = "main" }},
+      { SLANG_STAGE_FRAGMENT, { .entry_point = _entry_point.at(key.alpha) }}
     }
   };
 

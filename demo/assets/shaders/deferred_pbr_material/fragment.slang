@@ -30,6 +30,13 @@ struct blend_fs_out {
   float revealage : SV_Target1;
 }; // struct blend_fs_out
 
+enum material_feature : uint {
+  none = 0,
+  cast_shadow = (1 << 1),
+  receive_shadow = (1 << 2),
+  invert_backface_normals = (1 << 3),
+}; // struct material_feature
+
 [[vk::push_constant]]
 ConstantBuffer<push_data> push;
 
@@ -42,9 +49,13 @@ SamplerState samplers[sbx::common::max_sampler_array_size];
 [[vk::binding(0, 2)]]
 Texture2D<float4> images[sbx::common::max_image_array_size];
 
-float3x3 build_tbn(fs_in input) {
-  float3 N = normalize(input.normal);
-  float3 T = normalize(input.tangent.xyz);
+float3x3 build_tbn(fs_in input, material_data material_data) {
+  bool invert_backface_normals = (material_data.flags & material_feature::invert_backface_normals) != 0;
+
+  float sign = (invert_backface_normals && !input.sv_is_front_face) ? -1.0 : 1.0;
+
+  float3 N = normalize(input.normal) * sign;
+  float3 T = normalize(input.tangent.xyz) * sign;
 
   // Gram–Schmidt (important for stability)
   T = normalize(T - N * dot(T, N));
@@ -216,9 +227,10 @@ opaque_fs_out opaque_main(fs_in input) {
   instance_data instance_data = push.instance_data_buffer[global_instance];
   material_data material_data = push.material_data_buffer[instance_data.material_index];
 
-  float3x3 TBN = build_tbn(input);
+  float3x3 TBN = build_tbn(input, material_data);
 
-  float2 uv = parallax_occlusion_mapping(input, material_data, TBN);
+  // float2 uv = parallax_occlusion_mapping(input, material_data, TBN);
+  float2 uv = input.uv * material_data.uv_scale + material_data.uv_offset;
 
   output.albedo = get_albedo<opaque_alpha_policy>(uv, material_data);
   output.position = float4(input.position, 1.0);
@@ -241,9 +253,10 @@ opaque_fs_out mask_main(fs_in input) {
   instance_data instance_data = push.instance_data_buffer[global_instance];
   material_data material_data = push.material_data_buffer[instance_data.material_index];
 
-  float3x3 TBN = build_tbn(input);
+  float3x3 TBN = build_tbn(input, material_data);
 
-  float2 uv = parallax_occlusion_mapping(input, material_data, TBN);
+  // float2 uv = parallax_occlusion_mapping(input, material_data, TBN);
+  float2 uv = input.uv * material_data.uv_scale + material_data.uv_offset;
 
   float4 albedo = get_albedo<mask_alpha_policy>(uv, material_data);
 
@@ -293,8 +306,10 @@ void depth_prepass_main(fs_in input) {
   instance_data instance_data = push.instance_data_buffer[global_instance];
   material_data material_data = push.material_data_buffer[instance_data.material_index];
 
-  float3x3 TBN = build_tbn(input);
-  float2 uv = parallax_occlusion_mapping(input, material_data, TBN);
+  float3x3 TBN = build_tbn(input, material_data);
+
+  // float2 uv = parallax_occlusion_mapping(input, material_data, TBN);
+  float2 uv = input.uv * material_data.uv_scale + material_data.uv_offset;
 
   float4 albedo = get_albedo<mask_alpha_policy>(uv, material_data);
 

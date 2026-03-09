@@ -130,11 +130,15 @@ application::application()
 
   auto& tree_trunk_material = scene.add_material<sbx::models::material>("tree_trunk");
   tree_trunk_material.albedo.image = scene.get_image("trunk_albedo");
+  tree_trunk_material.metallic_factor = 0.0f;
+  tree_trunk_material.roughness_factor = 0.8f;
 
   auto& tree_branch_material = scene.add_material<sbx::models::material>("tree_branch");
   tree_branch_material.albedo.image = scene.get_image("branch_albedo");
-  // tree_branch_material.alpha = sbx::models::alpha_mode::mask;
+  tree_branch_material.alpha = sbx::models::alpha_mode::mask;
   tree_branch_material.is_double_sided = true;
+  tree_branch_material.metallic_factor = 0.0f;
+  tree_branch_material.roughness_factor = 0.8f;
 
   auto tree_submeshes = std::vector<sbx::scenes::static_mesh::submesh>{
     sbx::scenes::static_mesh::submesh{0, scene.get_material("tree_trunk")},
@@ -181,6 +185,7 @@ application::application()
   auto ui_node = scene.create_node("HUD");
 
   auto& canvas = scene.add_component<sbx::ui::canvas>(ui_node);
+  canvas.is_enabled = false;
 
   // Left sidebar - vertical layout
   auto& sidebar = canvas.create<sbx::ui::panel>();
@@ -371,8 +376,8 @@ application::application()
   scene.add_component<sbx::scenes::static_mesh>(terrain, scene.get_mesh("cube"), scene.get_material("terrain"));
 
   auto& transform = scene.get_component<sbx::scenes::transform>(terrain);
-  transform.set_position(sbx::math::vector3{0.0f, -1.5f, 0.0f});
-  transform.set_scale(sbx::math::vector3{400.0f, 0.5f, 400.0f});
+  transform.set_position(sbx::math::vector3{0.0f, 0.0f, 0.0f});
+  transform.set_scale(sbx::math::vector3{100.0f, 0.1f, 100.0f});
 
   scene.add_component<sbx::physics::shape_collider>(terrain, sbx::physics::box{sbx::math::vector3{200.0f, 0.25f, 200.0f}});
   scene.add_component<sbx::physics::rigidbody>(terrain, 0.0f);

@@ -12,16 +12,11 @@
 #include <libsbx/ui/ui.hpp>
 #include <libsbx/scenes/scenes.hpp>
 
-#include <demo/dual_grid.hpp>
-#include <demo/data.hpp>
-
 namespace demo {
 
 class application : public sbx::core::application {
 
 public:
-
-  using grid_type = dual_grid<grid_data>;
 
   application();
 
@@ -34,10 +29,6 @@ public:
   auto is_paused() const -> bool override;
 
 private:
-
-  auto _randomize_terrain() -> void;
-  auto _smooth_terrain() -> void;
-  auto _rebuild_terrain_tiles() -> void;
 
   auto _generate_brdf(const std::uint32_t size) -> void;
   auto _generate_irradiance(const std::uint32_t size) -> void;

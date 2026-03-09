@@ -11,9 +11,6 @@
 
 #include <libsbx/scenes/scenes.hpp>
 
-#include <demo/data.hpp>
-#include <demo/terrain_subrenderer.hpp>
-
 namespace demo {
 
 class renderer : public sbx::graphics::renderer {
@@ -26,14 +23,9 @@ public:
 
   ~renderer() override = default;
 
-  auto update_dual_grid_data(const dual_grid<grid_data>& grid) -> void {
-    _terrain_subrenderer->update_dual_grid_data(grid);
-  }
-
 private:
 
   sbx::math::color _clear_color;
-  sbx::memory::observer_ptr<terrain_subrenderer> _terrain_subrenderer;
 
 }; // class renderer
 

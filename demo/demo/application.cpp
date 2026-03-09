@@ -76,20 +76,16 @@ application::application()
 
   // Textures
   scene.add_image("base", "res://textures/base.png", sbx::graphics::format::r8g8b8a8_srgb);
-  scene.add_image("fire", "res://textures/fire/fire.png", sbx::graphics::format::r8g8b8a8_srgb);
-
-  scene.add_image("rune0", "res://textures/runes/rune0.png", sbx::graphics::format::r8g8b8a8_srgb);
-  scene.add_image("rune1", "res://textures/runes/rune1.png", sbx::graphics::format::r8g8b8a8_srgb);
-  scene.add_image("rune2", "res://textures/runes/rune2.png", sbx::graphics::format::r8g8b8a8_srgb);
-  scene.add_image("rune3", "res://textures/runes/rune3.png", sbx::graphics::format::r8g8b8a8_srgb);
-
-  scene.add_image("fox_albedo", "res://textures/fox/albedo.png", sbx::graphics::format::r8g8b8a8_srgb);
 
   scene.add_image("helmet_albedo", "res://meshes/helmet/textures/albedo.jpg", sbx::graphics::format::r8g8b8a8_srgb);
   scene.add_image("helmet_normal", "res://meshes/helmet/textures/normal.jpg", sbx::graphics::format::r8g8b8a8_unorm);
   scene.add_image("helmet_mr", "res://meshes/helmet/textures/mr.jpg", sbx::graphics::format::r8g8b8a8_unorm);
   scene.add_image("helmet_ao", "res://meshes/helmet/textures/ao.jpg", sbx::graphics::format::r8g8b8a8_unorm);
   scene.add_image("helmet_emissive", "res://meshes/helmet/textures/emissive.jpg", sbx::graphics::format::r8g8b8a8_srgb);
+
+  
+  scene.add_image("trunk_albedo", "res://meshes/trees/tree_1/textures/trunk_albedo.jpg", sbx::graphics::format::r8g8b8a8_srgb);
+  scene.add_image("branch_albedo", "res://meshes/trees/tree_1/textures/branch_albedo.png", sbx::graphics::format::r8g8b8a8_srgb);
 
   // scene.add_cube_image("skybox", "res://skyboxes/clouds3", ".hdr", sbx::graphics::format::r32g32b32a32_sfloat);
   scene.add_cube_image("skybox", "res://skyboxes/clouds2", ".png", sbx::graphics::format::r8g8b8a8_srgb);
@@ -101,19 +97,11 @@ application::application()
   _generate_prefiltered(512);
 
   // Meshes
-  scene.add_mesh<sbx::models::mesh>("edge_one", "res://meshes/terrain/edge_one/edge_one.gltf");
-  scene.add_mesh<sbx::models::mesh>("edge_three", "res://meshes/terrain/edge_three/edge_three.gltf");
-  scene.add_mesh<sbx::models::mesh>("diagonal", "res://meshes/terrain/diagonal/diagonal.gltf");
-  scene.add_mesh<sbx::models::mesh>("full", "res://meshes/terrain/full/full.gltf");
-  scene.add_mesh<sbx::models::mesh>("half", "res://meshes/terrain/half/half.gltf");
-
   scene.add_mesh<sbx::models::mesh>("cube", "res://meshes/cube/cube.gltf");
-
-  scene.add_mesh<sbx::models::mesh>("sponza", "res://meshes/sponza/sponza.gltf");
 
   scene.add_mesh<sbx::models::mesh>("helmet", "res://meshes/helmet/helmet.gltf");
 
-  scene.add_mesh<sbx::animations::mesh>("fox", "res://meshes/fox/fox.gltf");
+  scene.add_mesh<sbx::models::mesh>("tree_1", "res://meshes/trees/tree_1/tree_1.gltf");
 
   // Materials
 
@@ -136,18 +124,32 @@ application::application()
     sbx::core::engine::quit();
   };
 
-  // Sponza
+  // Tree
 
-  // auto sponza = scene.create_node("Sponza");
+  auto tree = scene.create_node("Tree");
 
-  // scene.add_component<sbx::scenes::static_mesh>(sponza, scene.get_mesh("sponza"), sbx::models::load_materials("res://meshes/sponza/sponza.gltf"));
+  auto& tree_trunk_material = scene.add_material<sbx::models::material>("tree_trunk");
+  tree_trunk_material.albedo.image = scene.get_image("trunk_albedo");
 
-  // auto& sponza_transform = scene.get_component<sbx::scenes::transform>(sponza);
-  // sponza_transform.set_scale(sbx::math::vector3{1.0f, 1.0f, 1.0f});
+  auto& tree_branch_material = scene.add_material<sbx::models::material>("tree_branch");
+  tree_branch_material.albedo.image = scene.get_image("branch_albedo");
+  // tree_branch_material.alpha = sbx::models::alpha_mode::mask;
+  tree_branch_material.is_double_sided = true;
+
+  auto tree_submeshes = std::vector<sbx::scenes::static_mesh::submesh>{
+    sbx::scenes::static_mesh::submesh{0, scene.get_material("tree_trunk")},
+    sbx::scenes::static_mesh::submesh{1, scene.get_material("tree_branch")}
+  };
+
+  scene.add_component<sbx::scenes::static_mesh>(tree, scene.get_mesh("tree_1"), tree_submeshes);
+
+  auto& tree_transform = scene.get_component<sbx::scenes::transform>(tree);
+  tree_transform.set_position(sbx::math::vector3{5.0f, 0.0f, -5.0f});
+  tree_transform.set_scale(sbx::math::vector3{1.0f, 1.0f, 1.0f});
 
   // Helmet
 
-  auto helmet = scene.create_node("Helmet", sbx::scenes::transform{});
+  auto helmet = scene.create_node("Helmet");
 
   scene.add_component<sbx::scenes::static_mesh>(helmet, scene.get_mesh("helmet"), sbx::models::load_materials("res://meshes/helmet/helmet.gltf"));
 
@@ -159,15 +161,18 @@ application::application()
 
   // World Sprite
 
-  auto sprite_node = scene.create_node("WorldSprite");
+  auto sprite = scene.create_node("WorldSprite");
 
-  scene.add_component<sbx::sprites::sprite>(sprite_node, sbx::sprites::world_sprite{
+  scene.add_component<sbx::sprites::sprite>(sprite, sbx::sprites::world_sprite{
     .base_color = sbx::math::color::white(),
     .albedo_image = scene.get_image("base"),
     .size = {2.0f, 2.0f},
     .pivot = {0.5f, 0.5f},
     .is_billboard = true
   });
+
+  auto& sprite_transform = scene.get_component<sbx::scenes::transform>(sprite);
+  sprite_transform.set_position(sbx::math::vector3{5.0f, 5.0f, 5.0f});
 
   // UI
 
@@ -372,139 +377,6 @@ application::application()
   scene.add_component<sbx::physics::shape_collider>(terrain, sbx::physics::box{sbx::math::vector3{200.0f, 0.25f, 200.0f}});
   scene.add_component<sbx::physics::rigidbody>(terrain, 0.0f);
 
-  // _rune0_emitter = scene.create_node("Rune0Emitter");
-
-  // auto& rune0_emitter = scene.add_component<sbx::particles::particle_emitter>(_rune0_emitter);
-  // rune0_emitter.max_particles = 2000;
-  // rune0_emitter.emission_rate = 50.0f;
-  // rune0_emitter.emission_shape = sbx::math::volume{{-2.3f, 0.0f, -2.3f}, {2.3f, 0.0f, 2.3f}};
-  // rune0_emitter.initial_speed = sbx::math::vector2{0.5f, 1.0f};
-  // rune0_emitter.initial_lifetime = sbx::math::vector2{1.5f, 3.2f};
-  // rune0_emitter.initial_size = sbx::math::vector2{0.3f, 0.6f};
-  // rune0_emitter.initial_rotation = sbx::math::vector2{0.0f, 0.0f};
-  // rune0_emitter.initial_color = sbx::math::color{101u, 213u, 253u, 250u};
-  // rune0_emitter.gravity = sbx::math::vector3{0.0f, 3.0f, 0.0f};
-  // rune0_emitter.drag = 1.0f;
-  // rune0_emitter.end_color = sbx::math::color{8u, 145u, 195u, 0u};
-  // rune0_emitter.end_size_scale = 0.2f;
-  // rune0_emitter.images = {
-  //   scene.get_image("rune0"),
-  //   scene.get_image("rune1"),
-  //   scene.get_image("rune2"),
-  //   scene.get_image("rune3")
-  // };
-
-  // auto& rune0_emitter_transform = scene.get_component<sbx::scenes::transform>(_rune0_emitter);
-  // rune0_emitter_transform.set_position(sbx::math::vector3{0.0f, 15.0f, 0.0f});
-
-  // Fox
-  auto& animations_module = sbx::core::engine::get_module<sbx::animations::animations_module>();
-
-  auto fox1 = scene.create_node("Fox");
-
-  auto& fox_material = scene.add_material<sbx::models::material>("fox");
-  fox_material.albedo.image = scene.get_image("fox_albedo");
-  fox_material.metallic_factor = 0.0f;
-  fox_material.roughness_factor = 1.0f;
-
-  animations_module.add_animated_mesh(fox1, scene.get_mesh("fox"), scene.get_material("fox"));
-
-  auto tail = animations_module.find_skeleton_node(fox1, "b_Tail03_014");
-
-  if (tail != sbx::scenes::node::null) {
-    auto tail_emitter = scene.create_child_node(tail, "TailEmitter");
-
-    auto& tail_particle_emitter = scene.add_component<sbx::particles::particle_emitter>(tail_emitter);
-    tail_particle_emitter.max_particles = 1000;
-    tail_particle_emitter.emission_rate = 100.0f;
-    tail_particle_emitter.emission_shape = sbx::math::volume{{-0.1f, 0.0f, -0.1f}, {0.1f, 0.0f, 0.1f}};
-    tail_particle_emitter.initial_speed = sbx::math::vector2{1.0f, 2.0f};
-    tail_particle_emitter.initial_lifetime = sbx::math::vector2{0.5f, 1.0f};
-    tail_particle_emitter.initial_size = sbx::math::vector2{0.2f, 0.4f};
-    tail_particle_emitter.initial_rotation = sbx::math::vector2{0.0f, 0.0f};
-    tail_particle_emitter.initial_color = sbx::math::color{255u, 140u, 0u, 250u};
-    tail_particle_emitter.gravity = sbx::math::vector3{0.0f, 1.0f, 0.0f};
-    tail_particle_emitter.drag = 0.5f;
-    tail_particle_emitter.end_color = sbx::math::color{255u, 69u, 0u, 0u};
-    tail_particle_emitter.end_size_scale = 0.1f;
-    tail_particle_emitter.images = {
-      scene.get_image("fire")
-    };
-
-    auto & tail_emitter_transform = scene.get_component<sbx::scenes::transform>(tail_emitter);
-    tail_emitter_transform.set_position(sbx::math::vector3{0.0f, 0.0f, 0.0f});
-  }
-
-  auto& fox_animator = scene.add_component<sbx::animations::animator>(fox1);
-
-  fox_animator.add_state({"Walk", scene.get_animation("Walk"), true, 0.5f });
-  fox_animator.add_state({"Survey", scene.get_animation("Survey"), true, 0.5f });
-  fox_animator.add_state({"Run", scene.get_animation("Run"), true, 0.5f });
-
-  fox_animator.add_transition({
-    "Walk", "Survey", 0.20f,
-    [](const sbx::animations::animator& animator){
-      if (auto value = animator.float_parameter("speed"); value) {
-        return *value <= 0.05f;
-      }
-
-      return false;
-    }
-  });
-
-  fox_animator.add_transition({
-    "Run", "Survey", 0.25f,
-    [](const sbx::animations::animator& animator){
-      if (auto value = animator.float_parameter("speed"); value) {
-        return *value <= 0.05f;
-      }
-
-      return false;
-    }
-  });
-
-  // Walk ↔ Run thresholds
-  fox_animator.add_transition({
-    "Walk", "Run", 0.15f,
-    [](const sbx::animations::animator& animator){
-      if (auto value = animator.float_parameter("speed"); value) {
-        return *value >= 2.0f;
-      }
-
-      return false;
-    }
-  });
-
-  fox_animator.add_transition({
-    "Run", "Walk", 0.15f,
-    [](const sbx::animations::animator& animator){
-      if (auto value = animator.float_parameter("speed"); value) {
-        return *value < 2.0f && *value > 0.05f;
-      }
-
-      return false;
-    }
-  });
-
-  // Survey → Walk when starting to move
-  fox_animator.add_transition({
-    "Survey", "Walk", 0.20f,
-    [](const sbx::animations::animator& animator){
-      if (auto value = animator.float_parameter("speed"); value) {
-        return *value > 0.05f && *value < 2.0f;
-      }
-
-      return false;
-    }
-  });
-
-  fox_animator.play("Survey", true);
-  fox_animator.set_float("speed", 1.0f);
-
-  auto& fox1_transform = scene.get_component<sbx::scenes::transform>(fox1);
-  fox1_transform.set_position(sbx::math::vector3{0.0f, 0.0f, 18.0f});
-  fox1_transform.set_scale(sbx::math::vector3{0.06f, 0.06f, 0.06f});
-
   // Camera
   auto camera_node = scene.camera();
 
@@ -538,37 +410,6 @@ auto application::update() -> void  {
   }
 
   _rotation += sbx::math::degree{45} * delta_time;
-
-  // if (sbx::devices::input::is_key_pressed(sbx::devices::key::space)) {
-  //   // _is_paused = !_is_paused;
-
-  //   auto cube = scene.create_node("Cube");
-
-  //   auto& terrain_material = scene.add_material<sbx::models::material>("cube");
-  //   terrain_material.albedo.image = scene.get_image("base");
-
-  //   scene.add_component<sbx::scenes::static_mesh>(cube, scene.get_mesh("cube"), scene.get_material("cube"));
-
-  //   auto& transform = scene.get_component<sbx::scenes::transform>(cube);
-  //   transform.set_position(sbx::math::vector3{-6.0f, 12.0f, 0.0f});
-  //   transform.set_rotation(sbx::math::vector3::right, sbx::math::degree{35});
-
-  //   auto& collider = scene.add_component<sbx::physics::shape_collider>(cube, sbx::physics::box{sbx::math::vector3{0.5f, 0.5f, 0.5f}});
-
-  //   auto& rigidbody = scene.add_component<sbx::physics::rigidbody>(cube, 1.0f);
-  //   rigidbody.add_constant_acceleration(sbx::math::vector3{0.0f, -9.81f, 0.0f});
-  //   rigidbody.set_inverse_inertia_tensor(sbx::physics::inverse_inertia_tensor(collider, rigidbody.mass()));
-  // }
-
-  // if (sbx::devices::input::is_key_pressed(sbx::devices::key::j)) {
-  //   auto& fire_emitter = scene.get_component<sbx::particles::particle_emitter>(_rune0_emitter);
-
-  //   if (fire_emitter.is_playing()) {
-  //     fire_emitter.pause();
-  //   } else {
-  //     fire_emitter.play();
-  //   }
-  // }
 }
 
 auto application::fixed_update() -> void {

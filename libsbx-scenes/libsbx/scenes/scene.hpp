@@ -449,7 +449,7 @@ public:
 
     _uniform_handler.push("time", core::engine::time().value());
     _uniform_handler.push("wind_direction", sbx::math::vector2{1.0f, 0.0f});
-    _uniform_handler.push("wind_strength", std::float_t{1.0f});
+    _uniform_handler.push("wind_strength", std::float_t{0.5f});
   }
 
   auto cascade_light_spaces() const -> const std::array<math::matrix4x4, csm_cascade_count>& {

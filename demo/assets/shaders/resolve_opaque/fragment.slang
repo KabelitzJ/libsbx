@@ -361,7 +361,7 @@ fs_out main(fs_in input) {
 
   float3 irradiance = scene.light_color.rgb * ndl * shadow;
 
-  color += (k_d * albedo / sbx::math::pi + specular) * irradiance;
+  color += (k_d * albedo / sbx::math::pi + specular * specular_strength) * irradiance;
 
   // Point lights
 
@@ -379,7 +379,6 @@ fs_out main(fs_in input) {
     float3 h = normalize(view_dir + l_dir);
     float ndl_p = max(dot(normal, l_dir), 0.0);
 
-    // KHR_lights_punctual: smooth inverse-square with range cutoff
     float d_over_r = distance / light_radius;
     float d_over_r_4 = d_over_r * d_over_r * d_over_r * d_over_r;
     float clamped = saturate(1.0 - d_over_r_4);
@@ -395,7 +394,7 @@ fs_out main(fs_in input) {
 
     float3 kd_p = (1.0 - Fp) * (1.0 - metallic);
 
-    color += (kd_p * albedo / sbx::math::pi + spec_p) * radiance * ndl_p;
+    color += (kd_p * albedo / sbx::math::pi + spec_p * specular_strength) * radiance * ndl_p;
   }
 
   // Image based lighting

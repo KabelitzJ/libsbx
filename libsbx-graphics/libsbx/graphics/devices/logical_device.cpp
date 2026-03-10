@@ -304,6 +304,12 @@ auto logical_device::_get_enabled_features(const physical_device& physical_devic
     utility::logger<"graphics">::warn("Selected GPU does not support draw indirect first instance");
   }
 
+  if (available_core_features.shaderInt16) {
+    enabled_core_features.shaderInt16 = true;
+  } else {
+    utility::logger<"graphics">::warn("Selected GPU does not support shader int16");
+  }
+
   if (available_vulkan11_features.shaderDrawParameters) {
     enabled_vulkan11_features.shaderDrawParameters = true;
   } else {
@@ -338,6 +344,12 @@ auto logical_device::_get_enabled_features(const physical_device& physical_devic
     enabled_vulkan12_features.descriptorBindingPartiallyBound = true;
   } else {
     utility::logger<"graphics">::warn("Selected GPU does not support descriptor binding partially bound");
+  }
+
+  if (available_vulkan12_features.shaderFloat16) {
+    enabled_vulkan12_features.shaderFloat16 = true;
+  } else {
+    utility::logger<"graphics">::warn("Selected GPU does not support shader float16");
   }
 
   if (available_vulkan13_features.synchronization2) {

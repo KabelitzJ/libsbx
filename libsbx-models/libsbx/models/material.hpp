@@ -72,6 +72,11 @@ struct alignas(16) material_data {
   math::color base_color;
 
   math::vector4 emissive_factor;
+
+  std::float_t sway_speed_strength;
+  std::float_t scrumble_speed_strength;
+  std::float_t falloff_exponents;
+  std::uint32_t _pad0;
 }; // struct material_data
 
 static_assert(sizeof(material_data) <= 256u);
@@ -129,7 +134,9 @@ struct material {
   math::vector4 emissive_factor{0, 0, 0, 1};
   std::float_t emissive_strength{1.0f};
 
+  alpha_mode alpha{alpha_mode::opaque};
   std::float_t alpha_cutoff{0.9f};
+  bool is_double_sided{false};
 
   texture_slot albedo{};
   texture_slot normal{};
@@ -146,11 +153,16 @@ struct material {
   std::float_t parallax_min_layers{8.0f};
   std::float_t parallax_max_layers{32.0f};
 
+  std::float_t sway_speed{0.0f};
+  std::float_t sway_strength{0.0f};
+  std::float_t sway_falloff_exponent{3.0f};
+
+  std::float_t scrumble_speed{0.0f};
+  std::float_t scrumble_strength{0.0f};
+  std::float_t scrumble_falloff_exponent{2.0f};
+
   math::vector2 uv_scale{1.0f, 1.0f};
   math::vector2 uv_offset{0.0f, 0.0f};
-
-  alpha_mode alpha{alpha_mode::opaque};
-  bool is_double_sided{false};
 
   utility::bit_field<material_feature> features{material_feature::cast_shadow | material_feature::receive_shadow | material_feature::invert_backface_normals};
 

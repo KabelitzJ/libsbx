@@ -20,6 +20,8 @@ struct scene_data {
   float4x4 light_spaces[4];
   float4 cascade_splits;
   float time;
+  float2 wind_direction;
+  float wind_strength;
 }; // struct scene_data
 
 } // namespace sbx::common

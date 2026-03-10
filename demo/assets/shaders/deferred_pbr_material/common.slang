@@ -43,13 +43,18 @@ struct material_data {
   float4 base_color;
 
   float4 emissive_factor;
+
+  float sway_speed_strength;
+  float scrumble_speed_strength;
+  float falloff_exponents;
+  uint _pad0;
 }; // struct material_data
 
 struct instance_data {
   uint transform_index;
   uint material_index;
   uint object_id; 
-  uint _pad0;
+  uint payload;
 }; // struct instance_data
 
 struct vertex {

@@ -132,6 +132,9 @@ application::application()
   tree_trunk_material.albedo.image = scene.get_image("trunk_albedo");
   tree_trunk_material.metallic_factor = 0.0f;
   tree_trunk_material.roughness_factor = 0.8f;
+  tree_trunk_material.sway_speed = 0.8f;
+  tree_trunk_material.sway_strength = 0.3f;
+  tree_trunk_material.sway_falloff_exponent = 3.0f;
 
   auto& tree_branch_material = scene.add_material<sbx::models::material>("tree_branch");
   tree_branch_material.albedo.image = scene.get_image("branch_albedo");
@@ -140,6 +143,12 @@ application::application()
   tree_branch_material.metallic_factor = 0.0f;
   tree_branch_material.roughness_factor = 0.8f;
   tree_branch_material.specular_factor = 0.25f;
+  tree_branch_material.sway_speed = 1.0f;
+  tree_branch_material.sway_strength = 0.4f;
+  tree_branch_material.sway_falloff_exponent = 2.0f;
+  tree_branch_material.scrumble_speed = 3.0f;
+  tree_branch_material.scrumble_strength = 0.15f;
+  tree_branch_material.scrumble_falloff_exponent = 1.5f;
 
   auto tree_submeshes = std::vector<sbx::scenes::static_mesh::submesh>{
     sbx::scenes::static_mesh::submesh{0, scene.get_material("tree_trunk")},

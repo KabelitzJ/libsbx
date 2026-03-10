@@ -7,6 +7,8 @@
 
 #include <magic_enum/magic_enum.hpp>
 
+#include <libsbx/math/half.hpp>
+
 #include <libsbx/assets/assets_module.hpp>
 
 #include <libsbx/memory/tracking_allocator.hpp>
@@ -231,6 +233,13 @@ private:
     return entry->second;
   }
 
+  static auto _pack_half2(std::float_t a, std::float_t b) -> std::float_t {
+    auto ha = math::float_to_half(a);
+    auto hb = math::float_to_half(b);
+
+    return std::bit_cast<std::float_t>(static_cast<std::uint32_t>(ha) | (static_cast<std::uint32_t>(hb) << 16));
+  }
+
   auto _push_material(const models::material& material) -> void {
     auto data = models::material_data{};
 
@@ -259,6 +268,8 @@ private:
     data.emissive_strength = material.emissive_strength;
     data.emissive_factor = material.emissive_factor;
     data.specular_factor = material.specular_factor;
+    data.alpha_cutoff = material.alpha_cutoff;
+    data.flags = material.features.underlying();
 
     // Parallax
     data.height_scale = material.height_scale;
@@ -270,8 +281,9 @@ private:
     data.uv_offset = material.uv_offset;
     data.uv_scale = material.uv_scale;
 
-    data.alpha_cutoff = material.alpha_cutoff;
-    data.flags = material.features.underlying();
+    data.sway_speed_strength = _pack_half2(material.sway_speed, material.sway_strength);
+    data.scrumble_speed_strength = _pack_half2(material.scrumble_speed, material.scrumble_strength);
+    data.falloff_exponents = _pack_half2(material.sway_falloff_exponent, material.scrumble_falloff_exponent);
 
     _material_data.push_back(data);
 

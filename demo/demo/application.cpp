@@ -102,6 +102,7 @@ application::application()
   scene.add_mesh<sbx::models::mesh>("helmet", "res://meshes/helmet/helmet.gltf");
 
   scene.add_mesh<sbx::models::mesh>("tree_1", "res://meshes/trees/tree_1/tree_1.gltf");
+  scene.add_mesh<sbx::models::mesh>("tree_2", "res://meshes/trees/tree_2/tree_2.gltf");
 
   // Materials
 
@@ -124,9 +125,9 @@ application::application()
     sbx::core::engine::quit();
   };
 
-  // Tree
+  // Tree 1
 
-  auto tree = scene.create_node("Tree");
+  auto tree1 = scene.create_node("Tree1");
 
   auto& tree_trunk_material = scene.add_material<sbx::models::material>("tree_trunk");
   tree_trunk_material.albedo.image = scene.get_image("trunk_albedo");
@@ -155,11 +156,21 @@ application::application()
     sbx::scenes::static_mesh::submesh{1, scene.get_material("tree_branch")}
   };
 
-  scene.add_component<sbx::scenes::static_mesh>(tree, scene.get_mesh("tree_1"), tree_submeshes);
+  scene.add_component<sbx::scenes::static_mesh>(tree1, scene.get_mesh("tree_1"), tree_submeshes);
 
-  auto& tree_transform = scene.get_component<sbx::scenes::transform>(tree);
+  auto& tree_transform = scene.get_component<sbx::scenes::transform>(tree1);
   tree_transform.set_position(sbx::math::vector3{5.0f, 0.0f, -5.0f});
   tree_transform.set_scale(sbx::math::vector3{1.0f, 1.0f, 1.0f});
+
+  // Tree 2
+
+  auto tree2 = scene.create_node("Tree2");
+
+  scene.add_component<sbx::scenes::static_mesh>(tree2, scene.get_mesh("tree_2"), tree_submeshes);
+
+  auto& tree2_transform = scene.get_component<sbx::scenes::transform>(tree2);
+  tree2_transform.set_position(sbx::math::vector3{-5.0f, 0.0f, -5.0f});
+  tree2_transform.set_scale(sbx::math::vector3{1.0f, 1.0f, 1.0f});
 
   // Helmet
 
@@ -382,6 +393,9 @@ application::application()
 
   auto& terrain_material = scene.add_material<sbx::models::material>("terrain");
   terrain_material.albedo.image = scene.get_image("base");
+  terrain_material.metallic_factor = 0.0f;
+  terrain_material.roughness_factor = 1.0f;
+  terrain_material.specular_factor = 0.0f;
 
   scene.add_component<sbx::scenes::static_mesh>(terrain, scene.get_mesh("cube"), scene.get_material("terrain"));
 

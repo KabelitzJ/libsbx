@@ -139,6 +139,7 @@ application::application()
   tree_branch_material.is_double_sided = true;
   tree_branch_material.metallic_factor = 0.0f;
   tree_branch_material.roughness_factor = 0.8f;
+  tree_branch_material.specular_factor = 0.25f;
 
   auto tree_submeshes = std::vector<sbx::scenes::static_mesh::submesh>{
     sbx::scenes::static_mesh::submesh{0, scene.get_material("tree_trunk")},

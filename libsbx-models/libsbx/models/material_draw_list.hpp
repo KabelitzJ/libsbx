@@ -251,13 +251,14 @@ private:
     data.height_sampler_index = add_sampler_state(_get_or_create_sampler(material.height));
 
     // Factors
+    data.base_color = material.base_color;
     data.metallic_factor = material.metallic_factor;
     data.roughness_factor = material.roughness_factor;
     data.occlusion_strength = material.occlusion_strength;
     data.normal_scale = material.normal_scale;
     data.emissive_strength = material.emissive_strength;
     data.emissive_factor = material.emissive_factor;
-    data.base_color = material.base_color;
+    data.specular_factor = material.specular_factor;
 
     // Parallax
     data.height_scale = material.height_scale;

@@ -33,9 +33,9 @@ struct material_data {
   float roughness_factor;
 
   float occlusion_strength;
+  float specular_factor;
   float alpha_cutoff;
   uint flags;
-  uint _pad0;
 
   float2 uv_offset;
   float2 uv_scale;

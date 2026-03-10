@@ -62,9 +62,9 @@ struct alignas(16) material_data {
   std::float_t roughness_factor;
 
   std::float_t occlusion_strength;
+  std::float_t specular_factor;
   std::float_t alpha_cutoff;
   std::uint32_t flags;
-  std::uint32_t _pad0;
 
   math::vector2 uv_offset;
   math::vector2 uv_scale;
@@ -124,6 +124,7 @@ struct material {
   std::float_t metallic_factor{1.0f};
   std::float_t roughness_factor{1.0f};
   std::float_t occlusion_strength{1.0f};
+  std::float_t specular_factor{1.0f};
 
   math::vector4 emissive_factor{0, 0, 0, 1};
   std::float_t emissive_strength{1.0f};

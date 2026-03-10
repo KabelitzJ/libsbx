@@ -74,12 +74,13 @@ static const float3 DEFAULT_F0 = float3(0.04, 0.04, 0.04);
 
 static const float PREFILTERED_ENV_MAX_MIP = 9.0;
 
-float3 fresnel_schlick(float cos_theta, float3 f0) {
-  return f0 + (1.0 - f0) * pow(1.0 - cos_theta, 5.0);
+float3 fresnel_schlick(float cos_theta, float3 f0, float specular_factor) {
+  return f0 + (specular_factor - f0) * pow(1.0 - cos_theta, 5.0);
 }
 
-float3 fresnel_schlick_roughness(float cos_theta, float3 F0, float roughness) {
-  return F0 + (max(float3(1.0 - roughness, 1.0 - roughness, 1.0 - roughness), F0) - F0) * pow(1.0 - cos_theta, 5.0);
+float3 fresnel_schlick_roughness(float cos_theta, float3 f0, float specular_factor, float roughness) {
+  float3 f_max = max(float3(1.0 - roughness, 1.0 - roughness, 1.0 - roughness), f0);
+  return f0 + (min(f_max, float3(specular_factor, specular_factor, specular_factor)) - f0) * pow(1.0 - cos_theta, 5.0);
 }
 
 float distribution_ggx(float3 n, float3 h, float alpha) {
@@ -93,16 +94,12 @@ float distribution_ggx(float3 n, float3 h, float alpha) {
   return a2 / (sbx::math::pi * denom * denom);
 }
 
-float geometry_schlick_ggx(float ndx, float alpha) {
-  float k = (alpha + 1.0) * (alpha + 1.0) * 0.125;
-  return ndx / (ndx * (1.0 - k) + k);
-}
+float V_smith_ggx_correlated(float ndv, float ndl, float alpha) {
+  float a2 = alpha * alpha;
+  float ggx_v = ndl * sqrt(ndv * ndv * (1.0 - a2) + a2);
+  float ggx_l = ndv * sqrt(ndl * ndl * (1.0 - a2) + a2);
 
-float geometry_smith(float3 n, float3 v, float3 l, float alpha) {
-  float ndv = max(dot(n, v), 0.0);
-  float ndl = max(dot(n, l), 0.0);
-
-  return geometry_schlick_ggx(ndv, alpha) * geometry_schlick_ggx(ndl, alpha);
+  return 0.5 / max(ggx_v + ggx_l, 1e-5);
 }
 
 static const float2 POISSON_DISK[16] = {
@@ -306,16 +303,19 @@ fs_out main(fs_in input) {
   float3 mrao = material.rgb;
   uint material_flags = (uint)round(saturate(material.a) * 255.0);
 
-  float3 emissive = emissive_image.Sample(input.uv).rgb;
+  float4 emissive = emissive_image.Sample(input.uv);
+  float3 emissive_color = emissive.rgb;
+  float specular_strength = emissive.a;
 
   // float ssao = ssao_image.Sample(input.uv);
   float ssao = 1.0;
 
   float metallic = clamp(mrao.r, 0.0, 1.0);
-  float roughness = clamp(mrao.g, 0.04, 1.0);
+  float roughness = clamp(mrao.g, 0.045, 1.0);
   float ao = clamp(mrao.b, 0.0, 1.0);
 
   float3 view_dir = normalize(scene.camera_position - world_position);
+  float ndv = max(dot(normal, view_dir), 0.0);
   float3 f0 = lerp(DEFAULT_F0, albedo, metallic);
 
   float3 color = float3(0.0, 0.0, 0.0);
@@ -329,12 +329,10 @@ fs_out main(fs_in input) {
   float alpha = roughness * roughness;
 
   float D = distribution_ggx(normal, halfway_dir, alpha);
-  float G = geometry_smith(normal, view_dir, light_dir, alpha);
-  float3 F = fresnel_schlick(max(dot(halfway_dir, view_dir), 0.0), f0);
+  float V = V_smith_ggx_correlated(ndv, ndl, alpha);
+  float3 F = fresnel_schlick(max(dot(halfway_dir, view_dir), 0.0), f0, specular_strength);
 
-  float3 numerator = D * G * F;
-  float denominator = 4.0 * max(dot(normal, view_dir), 0.0) * ndl + 0.001;
-  float3 specular = numerator / denominator;
+  float3 specular = D * V * F;
 
   float3 k_s = F;
   float3 k_d = (1.0 - k_s) * (1.0 - metallic);
@@ -380,19 +378,20 @@ fs_out main(fs_in input) {
 
     float3 h = normalize(view_dir + l_dir);
     float ndl_p = max(dot(normal, l_dir), 0.0);
-    float attenuation = clamp(1.0 - distance / light_radius, 0.0, 1.0);
 
-    attenuation *= attenuation;
+    // KHR_lights_punctual: smooth inverse-square with range cutoff
+    float d_over_r = distance / light_radius;
+    float d_over_r_4 = d_over_r * d_over_r * d_over_r * d_over_r;
+    float clamped = saturate(1.0 - d_over_r_4);
+    float attenuation = (clamped * clamped) / max(distance * distance, 1e-4);
 
     float3 radiance = light.color.rgb * light.color.a * attenuation;
 
     float Dp = distribution_ggx(normal, h, alpha);
-    float Gp = geometry_smith(normal, view_dir, l_dir, alpha);
-    float3 Fp = fresnel_schlick(max(dot(h, view_dir), 0.0), f0);
+    float Vp = V_smith_ggx_correlated(ndv, ndl_p, alpha);
+    float3 Fp = fresnel_schlick(max(dot(h, view_dir), 0.0), f0, specular_strength);
 
-    float3 numerator_p = Dp * Gp * Fp;
-    float denom_p = 4.0 * max(dot(normal, view_dir), 0.0) * ndl_p + 0.001;
-    float3 spec_p = numerator_p / denom_p;
+    float3 spec_p = Dp * Vp * Fp;
 
     float3 kd_p = (1.0 - Fp) * (1.0 - metallic);
 
@@ -401,33 +400,28 @@ fs_out main(fs_in input) {
 
   // Image based lighting
 
-  float ndv = max(dot(normal, view_dir), 0.0);
-
   float3 r = normalize(reflect(-view_dir, normal));
-
-  float rough = clamp(roughness, 0.04, 1.0);
 
   float3 diffuse_irradiance = irradiance_image.Sample(normal).rgb;
   float3 diffuse_ibl = diffuse_irradiance * albedo;
 
-  float lod = rough * PREFILTERED_ENV_MAX_MIP;
+  float lod = roughness * PREFILTERED_ENV_MAX_MIP;
   lod = clamp(lod, 0.0, PREFILTERED_ENV_MAX_MIP);
 
   float3 prefiltered_color = prefiltered_image.SampleLevel(r, lod).rgb;
 
-  float3 F_ibl = fresnel_schlick_roughness(ndv, f0, rough);
+  float3 F_ibl = fresnel_schlick_roughness(ndv, f0, specular_strength, roughness);
 
   float3 kS_ibl = F_ibl;
   float3 kD_ibl = (1.0 - kS_ibl) * (1.0 - metallic);
 
-  float2 brdf = brdf_image.Sample(float2(ndv, rough)).rg;
+  float2 brdf = brdf_image.Sample(float2(ndv, roughness)).rg;
 
-  float3 specular_ibl = prefiltered_color * (F_ibl * brdf.x + brdf.y);
+  float3 specular_ibl = prefiltered_color * (F_ibl * brdf.x + brdf.y) * specular_strength;
 
-  float ambient_shadow = lerp(shadow, 1.0, 0.5);
-  float3 ambient = (kD_ibl * diffuse_ibl + specular_ibl) * ao * ssao * ambient_shadow;
+  float3 ambient = (kD_ibl * diffuse_ibl + specular_ibl) * ao * ssao;
 
-  float3 final_color = ambient + color + emissive;
+  float3 final_color = ambient + color + emissive_color;
 
   output.color = float4(final_color, 1.0);
 

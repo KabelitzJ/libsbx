@@ -117,13 +117,13 @@ float3 get_material(float2 uv, material_data material_data) {
     roughness *= mr.g;
   }
 
-  uint occ_image_index   = material_data.occlusion_image_index;
-  uint occ_sampler_index = material_data.occlusion_sampler_index;
+  uint occlusion_image_index   = material_data.occlusion_image_index;
+  uint occlusion_sampler_index = material_data.occlusion_sampler_index;
 
   float ao = 1.0;
 
-  if (occ_image_index < sbx::common::max_image_array_size) {
-    float sampled_ao = images[NonUniformResourceIndex(occ_image_index)].Sample(samplers[NonUniformResourceIndex(occ_sampler_index)], uv).r;
+  if (occlusion_image_index < sbx::common::max_image_array_size) {
+    float sampled_ao = images[NonUniformResourceIndex(occlusion_image_index)].Sample(samplers[NonUniformResourceIndex(occlusion_sampler_index)], uv).r;
 
     ao = 1.0 + material_data.occlusion_strength * (sampled_ao - 1.0);
   }
@@ -232,12 +232,14 @@ opaque_fs_out opaque_main(fs_in input) {
   // float2 uv = parallax_occlusion_mapping(input, material_data, TBN);
   float2 uv = input.uv * material_data.uv_scale + material_data.uv_offset;
 
+  float material_flags = float(material_data.flags & 255) / 255.0;
+
   output.albedo = get_albedo<opaque_alpha_policy>(uv, material_data);
   output.position = float4(input.position, 1.0);
   // encode from [-1, 1] -> [0, 1]
   output.normal = float4(get_normal(TBN, uv, input.normal, input.sv_is_front_face, material_data) * 0.5f + 0.5f, 0.0);
-  output.material = float4(get_material(uv, material_data), float(material_data.flags & 255) / 255.0);
-  output.emissive = float4(get_emissive(uv, material_data), 0.0);
+  output.material = float4(get_material(uv, material_data), material_flags);
+  output.emissive = float4(get_emissive(uv, material_data), material_data.specular_factor);
   output.object_id = instance_data.object_id;
   output.linear_depth = sbx::common::linearize_depth(input.sv_position.z, scene.camera_near, scene.camera_far);
 
@@ -262,12 +264,14 @@ opaque_fs_out mask_main(fs_in input) {
 
   clip(albedo.a - material_data.alpha_cutoff);
 
+  float material_flags = float(material_data.flags & 255) / 255.0;
+
   output.albedo = albedo;
   output.position = float4(input.position, 1.0);
   // encode from [-1, 1] -> [0, 1]
   output.normal = float4(get_normal(TBN, uv, input.normal, input.sv_is_front_face, material_data) * 0.5f + 0.5f, 0.0);
-  output.material = float4(get_material(uv, material_data), float(material_data.flags & 255) / 255.0);
-  output.emissive = float4(get_emissive(uv, material_data), 0.0);
+  output.material = float4(get_material(uv, material_data), material_flags);
+  output.emissive = float4(get_emissive(uv, material_data), material_data.specular_factor);
   output.object_id = instance_data.object_id;
   output.linear_depth = sbx::common::linearize_depth(input.sv_position.z, scene.camera_near, scene.camera_far);
 

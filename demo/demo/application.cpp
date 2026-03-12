@@ -76,6 +76,7 @@ application::application()
   auto& environment = scene.environment();
 
   auto& scripting_module = sbx::core::engine::get_module<sbx::scripting::scripting_module>();
+  scripting_module.set_assembly_path("build/x86_64/gcc/debug/_dotnet/Demo.dll");
 
   // Textures
 
@@ -123,7 +124,7 @@ application::application()
   skybox.irradiance_image = _irradiance;
   skybox.prefiltered_image = _prefiltered;
 
-  scripting_module.instantiate(camera_node, "build/x86_64/gcc/debug/_dotnet/Demo.dll", "Demo.EditorCameraController");
+  scripting_module.instantiate(camera_node, "Demo.EditorCameraController");
 
   if (auto hide_window = cli.argument<bool>("hide-window"); !hide_window) {
     window.show();

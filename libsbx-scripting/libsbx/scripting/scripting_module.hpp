@@ -35,13 +35,17 @@ public:
 
   auto update() -> void override;
 
-  auto instantiate(const scenes::node node, const std::filesystem::path& assembly_path, std::string_view class_name) -> managed::object;
+  auto set_assembly_path(const std::filesystem::path& assembly_path) -> void;
+
+  auto instantiate(const scenes::node node, std::string_view class_name) -> managed::object;
 
 private:
 
   static auto _exception_callback(std::string_view message) -> void {
     utility::logger<"scripting">::error("{}", message);
   }
+
+  std::filesystem::path _assembly_path;
 
   scripting::managed::runtime _runtime;
   scripting::managed::assembly_load_context _context;

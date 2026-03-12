@@ -113,7 +113,15 @@ auto scripting_module::update() -> void {
   }
 }
 
-auto scripting_module::instantiate(const scenes::node node, const std::filesystem::path& assembly_path, std::string_view class_name) -> managed::object {
+auto scripting_module::set_assembly_path(const std::filesystem::path& assembly_path) -> void {
+  // auto& assets_module = core::engine::get_module<assets::assets_module>();
+
+  // auto path = assets_module.resolve_path(assembly_path);
+
+  _assembly_path = assembly_path;
+}
+
+auto scripting_module::instantiate(const scenes::node node, std::string_view class_name) -> managed::object {
   auto& assets_module = core::engine::get_module<assets::assets_module>();
 
   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
@@ -122,7 +130,7 @@ auto scripting_module::instantiate(const scenes::node node, const std::filesyste
   auto& environment = scene.environment();
   auto& graph = scene.graph();
 
-  auto& assembly = _context.get_or_load_assembly(assembly_path.string());
+  auto& assembly = _context.get_or_load_assembly(_assembly_path.string());
 
   auto type = assembly.get_type(class_name);
 

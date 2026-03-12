@@ -1,0 +1,24 @@
+name: tree_branch
+
+albedo:
+  image: res://meshes/trees/tree_1/textures/branch_albedo.png
+  format: r8g8b8a8_srgb
+
+base_color: [1.0, 1.0, 1.0, 1.0]
+metallic_factor: 0.0
+roughness_factor: 0.8
+specular_factor: 0.25
+
+alpha_mode: mask
+alpha_cutoff: 0.5
+double_sided: true
+
+sway:
+  speed: 1.0
+  strength: 0.06
+  falloff_exponent: 2.0
+
+scrumble:
+  speed: 3.0
+  strength: 0.02
+  falloff_exponent: 1.5

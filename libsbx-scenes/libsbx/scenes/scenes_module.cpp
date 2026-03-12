@@ -17,6 +17,32 @@ namespace sbx::scenes {
 
 scenes_module::scenes_module()
 : _scene{std::nullopt} {
+
+  // --- Asset loaders ---
+
+  _asset_io_registry.register_loader("images", [](scene_asset_table& assets, const utility::hashed_string& name, const YAML::Node& node) -> void {
+    assets.add_image(name, node["path"].as<std::string>());
+  });
+
+  _asset_io_registry.register_loader("cube_images", [](scene_asset_table& assets, const utility::hashed_string& name, const YAML::Node& node) -> void {
+    assets.add_cube_image(name, node["path"].as<std::string>());
+  });
+
+  // @note: Register mesh and material loaders from your game code via get_asset_io_registry().
+  //
+  // Example:
+  //   scenes_module.get_asset_io_registry().register_loader("static_meshes",
+  //     [](scene_asset_table& assets, const utility::hashed_string& name, const YAML::Node& node) -> void {
+  //       assets.add_mesh<your_mesh_type>(name, node["path"].as<std::string>());
+  //     });
+  //
+  //   scenes_module.get_asset_io_registry().register_loader("materials",
+  //     [](scene_asset_table& assets, const utility::hashed_string& name, const YAML::Node& node) -> void {
+  //       assets.add_material<your_material_type>(name);
+  //     });
+
+  // --- Component loaders ---
+
   _component_io_registry.register_component<scenes::transform>(
     "transform",
     [](YAML::Emitter& emitter, [[maybe_unused]] scene_graph& graph, [[maybe_unused]] scene_asset_table& assets, const scenes::transform& transform) -> void {
@@ -37,8 +63,12 @@ scenes_module::scenes_module()
       emitter << YAML::Key << "cube_image" << YAML::Value << YAML::Alias(image_metadata.name);
       emitter << YAML::Key << "tint" << YAML::Value << skybox.tint;
     },
-    [](const YAML::Node& node, [[maybe_unused]] scene_graph& graph, [[maybe_unused]] scene_asset_table& assets) -> scenes::skybox {
-      return scenes::skybox{graphics::cube_image2d_handle{}, graphics::image2d_handle{}, graphics::cube_image2d_handle{}, graphics::cube_image2d_handle{}, node["tint"].as<math::color>()};
+    [](const YAML::Node& node, [[maybe_unused]] scene_graph& graph, scene_asset_table& assets) -> scenes::skybox {
+      // YAML alias resolves to the anchored map: {name: ..., path: ...}
+      const auto cube_image_name = node["cube_image"]["name"].as<std::string>();
+      const auto cube_image_handle = assets.get_cube_image(utility::hashed_string{cube_image_name});
+
+      return scenes::skybox{cube_image_handle, graphics::image2d_handle{}, graphics::cube_image2d_handle{}, graphics::cube_image2d_handle{}, node["tint"].as<math::color>()};
     }
   );
 
@@ -72,8 +102,23 @@ scenes_module::scenes_module()
 
       emitter << YAML::EndSeq;
     },
-    []([[maybe_unused]] const YAML::Node& node, [[maybe_unused]] scene_graph& graph, [[maybe_unused]] scene_asset_table& assets) -> scenes::static_mesh {
-      return {math::uuid::null(), math::uuid::null()};
+    [](const YAML::Node& node, [[maybe_unused]] scene_graph& graph, scene_asset_table& assets) -> scenes::static_mesh {
+      // YAML aliases resolve to the anchored map: {name: ..., path: ..., source: ...}
+      const auto mesh_name = node["mesh"]["name"].as<std::string>();
+      const auto mesh_id = assets.get_mesh(utility::hashed_string{mesh_name});
+
+      auto submeshes = std::vector<scenes::static_mesh::submesh>{};
+
+      if (node["submeshes"] && node["submeshes"].IsSequence()) {
+        for (const auto& sub : node["submeshes"]) {
+          const auto material_name = sub["material"]["name"].as<std::string>();
+          const auto material_id = assets.get_material(utility::hashed_string{material_name});
+
+          submeshes.push_back({sub["index"].as<std::uint32_t>(), material_id});
+        }
+      }
+
+      return scenes::static_mesh{mesh_id, std::move(submeshes)};
     }
   );
 }
@@ -91,7 +136,7 @@ auto scenes_module::update() -> void {
 auto scenes_module::load_scene(const std::filesystem::path& path) -> scenes::scene& {
   auto& assets_module = core::engine::get_module<assets::assets_module>();
 
-  _scene.emplace(assets_module.resolve_path(path), _component_io_registry);
+  _scene.emplace(assets_module.resolve_path(path), _component_io_registry, _asset_io_registry);
 
   return *_scene;
 }

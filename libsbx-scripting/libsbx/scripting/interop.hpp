@@ -16,6 +16,7 @@
 
 #include <libsbx/scripting/managed/string.hpp>
 #include <libsbx/scripting/managed/type.hpp>
+#include <libsbx/scripting/managed/assembly.hpp>
 
 namespace sbx::scripting {
 

@@ -40,7 +40,7 @@ public:
         std::invoke(s, emitter, graph, assets, component);
       },
       .load = [l = std::forward<Load>(load)](const YAML::Node& yaml, scene_graph& graph, scene_asset_table& assets, const node node) -> void {
-        graph.add_component<Type>(node, std::invoke(l, yaml, graph, assets));
+        graph.add_or_update_component<Type>(node, std::invoke(l, yaml, graph, assets));
       }
     };
   }
@@ -49,12 +49,16 @@ public:
     return _by_id.at(id);
   }
 
+  auto get(const std::string& name) -> component_io& {
+    return _by_id.at(_by_name.at(name));
+  }
+
   auto has(const std::uint32_t id) const -> bool {
     return _by_id.contains(id);
   }
 
-  auto get(const std::string& name) -> component_io& {
-    return _by_id.at(_by_name.at(name));
+  auto has(const std::string& name) const -> bool {
+    return _by_name.contains(name) && _by_id.contains(_by_name.at(name));
   }
 
 private:

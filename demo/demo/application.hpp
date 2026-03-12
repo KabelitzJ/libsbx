@@ -30,6 +30,8 @@ public:
 
 private:
 
+  auto _build_ui() -> void;
+
   auto _generate_brdf(const std::uint32_t size) -> void;
   auto _generate_irradiance(const std::uint32_t size) -> void;
   auto _generate_prefiltered(const std::uint32_t size) -> void;

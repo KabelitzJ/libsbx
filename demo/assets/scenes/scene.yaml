@@ -1,113 +1,121 @@
-name: Scene
+metadata:
+  name: Scene
+  camera: 5534890790884635642
 assets:
   images:
-    - &base
-      name: base
-      path: res://textures/base.png
+    - &roboto_atlas
+      name: roboto_atlas
+      path: res://fonts/roboto_atlas.png
   cube_images:
     - &skybox
       name: skybox
       path: res://skyboxes/clouds2
   static_meshes:
-    - &half
-      name: half
-      path: res://meshes/terrain/half/half.gltf
+    - &cube
+      name: cube
+      path: res://meshes/cube/cube.gltf
       source: disk
-    - &full
-      name: full
-      path: res://meshes/terrain/full/full.gltf
+    - &helmet
+      name: helmet
+      path: res://meshes/helmet/helmet.gltf
       source: disk
-    - &edge_three
-      name: edge_three
-      path: res://meshes/terrain/edge_three/edge_three.gltf
+    - &tree_1
+      name: tree_1
+      path: res://meshes/trees/tree_1/tree_1.gltf
       source: disk
-    - &diagonal
-      name: diagonal
-      path: res://meshes/terrain/diagonal/diagonal.gltf
-      source: disk
-    - &edge_one
-      name: edge_one
-      path: res://meshes/terrain/edge_one/edge_one.gltf
+    - &tree_2
+      name: tree_2
+      path: res://meshes/trees/tree_2/tree_2.gltf
       source: disk
   materials:
+    - &terrain
+      name: terrain
+      path: res://materials/terrain.material.yaml
     - &base
       name: base
-      path: ""
+      path: res://materials/base.material.yaml
+    - &helmet
+      name: helmet
+      path: res://meshes/helmet/materials/helmet.material.yaml
+    - &tree_trunk
+      name: tree_trunk
+      path: res://meshes/trees/materials/tree_trunk.material.yaml
+    - &tree_branch
+      name: tree_branch
+      path: res://meshes/trees/materials/tree_branch.material.yaml
 nodes:
-  - tag: CameraAnchor
-    id: 11069584808005611534
+  - tag: Terrain
+    id: 13314578943253424941
+    components:
+      - type: transform
+        position: {x: 0, y: 0, z: 0}
+        rotation: {x: 0, y: 0, z: 0, w: 1}
+        scale: {x: 100, y: 0.100000001, z: 100}
+      - type: static_mesh
+        mesh: *cube
+        submeshes:
+          - index: 0
+            material: *terrain
+  - tag: HUD
+    id: 7653120522685457571
     components:
       - type: transform
         position: {x: 0, y: 0, z: 0}
         rotation: {x: 0, y: 0, z: 0, w: 1}
         scale: {x: 1, y: 1, z: 1}
-  - tag: EdgeThree
-    id: 14023644637332212201
+  - tag: WorldSprite
+    id: 17022480189743828688
     components:
       - type: transform
-        position: {x: 30, y: 10, z: 0}
+        position: {x: 5, y: 5, z: 5}
         rotation: {x: 0, y: 0, z: 0, w: 1}
-        scale: {x: 3, y: 3, z: 3}
-      - type: static_mesh
-        color: *edge_three
-        submeshes:
-          - index: 0
-            material: *base
-  - tag: Half
-    id: 2832124561186413144
+        scale: {x: 1, y: 1, z: 1}
+  - tag: Helmet
+    id: 738302446102942238
     components:
       - type: transform
-        position: {x: 20, y: 10, z: 0}
+        position: {x: 0, y: 3, z: 0}
         rotation: {x: 0, y: 0, z: 0, w: 1}
-        scale: {x: 3, y: 3, z: 3}
+        scale: {x: 1, y: 1, z: 1}
       - type: static_mesh
-        color: *half
+        mesh: *helmet
         submeshes:
           - index: 0
-            material: *base
-  - tag: Full
-    id: 2700252767629735031
+            material: *helmet
+  - tag: Tree1
+    id: 3472763237278276803
     components:
       - type: transform
-        position: {x: 10, y: 10, z: 0}
+        position: {x: 5, y: 0, z: -5}
         rotation: {x: 0, y: 0, z: 0, w: 1}
-        scale: {x: 3, y: 3, z: 3}
+        scale: {x: 1, y: 1, z: 1}
       - type: static_mesh
-        color: *full
+        mesh: *tree_1
         submeshes:
           - index: 0
-            material: *base
-  - tag: Diagonal
-    id: 13517366939706455406
+            material: *tree_trunk
+          - index: 1
+            material: *tree_branch
+  - tag: Tree2
+    id: 17380286538492845946
     components:
       - type: transform
-        position: {x: 0, y: 10, z: 0}
+        position: {x: -5, y: 0, z: -5}
         rotation: {x: 0, y: 0, z: 0, w: 1}
-        scale: {x: 3, y: 3, z: 3}
+        scale: {x: 1, y: 1, z: 1}
       - type: static_mesh
-        color: *diagonal
+        mesh: *tree_2
         submeshes:
           - index: 0
-            material: *base
-  - tag: EdgeOne
-    id: 1094442563378877605
-    components:
-      - type: transform
-        position: {x: -10, y: 10, z: 0}
-        rotation: {x: 0, y: 0, z: 0, w: 1}
-        scale: {x: 3, y: 3, z: 3}
-      - type: static_mesh
-        color: *edge_one
-        submeshes:
-          - index: 0
-            material: *base
+            material: *tree_trunk
+          - index: 1
+            material: *tree_branch
   - tag: CAMERA
-    id: 758067372690401772
-    parent: 11069584808005611534
+    id: 5534890790884635642
     components:
       - type: transform
-        position: {x: 0, y: 50, z: 50}
-        rotation: {x: -0.382683456, y: 0, z: 0, w: 0.923879564}
+        position: {x: 0, y: 10, z: 20}
+        rotation: {x: -0.229752958, y: 0, z: 0, w: 0.973249018}
         scale: {x: 1, y: 1, z: 1}
       - type: skybox
         cube_image: *skybox

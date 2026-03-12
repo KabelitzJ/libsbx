@@ -154,6 +154,15 @@ public:
     return _assure<Type>().emplace(entity, std::forward<Args>(args)...);
   }
 
+  template<typename Type, typename... Args>
+  auto emplace_or_replace(const entity_type entity, Args&&... args) -> decltype(auto) {
+    auto& pool = _assure<Type>();
+
+    utility::assert_that(is_valid(entity), "Invalid entity");
+
+    return pool.contains(entity) ? pool.patch(entity, [&args...](auto&... current) { ((current = Type{std::forward<Args>(args)...}), ...); }) : pool.emplace(entity, std::forward<Args>(args)...);
+  }
+
   template<typename Type, typename... Other>
   auto remove(const entity_type entity) -> size_type {
     return (_assure<Type>().remove(entity) + ... + _assure<Other>().remove(entity));

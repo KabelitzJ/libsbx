@@ -128,83 +128,68 @@ application::application()
     sbx::core::engine::quit();
   };
 
-  // Tree 1
+  // // UI
 
-  auto tree1 = graph.create_node("Tree1");
+  // _font = sbx::ui::load_font(assets.get_image("roboto_atlas"), "demo/assets/fonts/roboto_atlas.json");
 
-  auto& tree_trunk_material = assets.add_material<sbx::models::material>("tree_trunk");
-  tree_trunk_material.albedo.image = assets.get_image("trunk_albedo");
-  tree_trunk_material.metallic_factor = 0.0f;
-  tree_trunk_material.roughness_factor = 0.8f;
-  tree_trunk_material.sway_speed = 0.8f;
-  tree_trunk_material.sway_strength = 0.04f;
-  tree_trunk_material.sway_falloff_exponent = 3.0f;
+  // _build_ui();
+  
 
-  auto& tree_branch_material = assets.add_material<sbx::models::material>("tree_branch");
-  tree_branch_material.albedo.image = assets.get_image("branch_albedo");
-  tree_branch_material.alpha = sbx::models::alpha_mode::mask;
-  tree_branch_material.is_double_sided = true;
-  tree_branch_material.metallic_factor = 0.0f;
-  tree_branch_material.roughness_factor = 0.8f;
-  tree_branch_material.specular_factor = 0.25f;
-  tree_branch_material.sway_speed = 1.0f;
-  tree_branch_material.sway_strength = 0.06f;
-  tree_branch_material.sway_falloff_exponent = 2.0f;
-  tree_branch_material.scrumble_speed = 3.0f;
-  tree_branch_material.scrumble_strength = 0.02f;
-  tree_branch_material.scrumble_falloff_exponent = 1.5f;
+  // Camera
+  auto camera_node = environment.camera();
 
-  auto tree_submeshes = std::vector<sbx::scenes::static_mesh::submesh>{
-    sbx::scenes::static_mesh::submesh{0, assets.get_material("tree_trunk")},
-    sbx::scenes::static_mesh::submesh{1, assets.get_material("tree_branch")}
-  };
+  auto& camera_transform = graph.get_component<sbx::scenes::transform>(camera_node);
+  camera_transform.set_position(sbx::math::vector3{0.0f, 10.0f, 20.0f});
+  camera_transform.look_at(sbx::math::vector3::zero);
 
-  graph.add_component<sbx::scenes::static_mesh>(tree1, assets.get_mesh("tree_1"), tree_submeshes);
+  // graph.add_component<sbx::scenes::skybox>(camera_node, assets.get_cube_image("skybox"), _brdf, _irradiance, _prefiltered, sbx::math::color::white());
 
-  auto& tree_transform = graph.get_component<sbx::scenes::transform>(tree1);
-  tree_transform.set_position(sbx::math::vector3{5.0f, 0.0f, -5.0f});
-  tree_transform.set_scale(sbx::math::vector3{1.0f, 1.0f, 1.0f});
+  auto& skybox = graph.get_component<sbx::scenes::skybox>(camera_node);
+  skybox.brdf_image = _brdf;
+  skybox.irradiance_image = _irradiance;
+  skybox.prefiltered_image = _prefiltered;
 
-  // Tree 2
+  scripting_module.instantiate(camera_node, "build/x86_64/gcc/debug/_dotnet/Demo.dll", "Demo.EditorCameraController");
 
-  auto tree2 = graph.create_node("Tree2");
+  if (auto hide_window = cli.argument<bool>("hide-window"); !hide_window) {
+    window.show();
+  }
 
-  graph.add_component<sbx::scenes::static_mesh>(tree2, assets.get_mesh("tree_2"), tree_submeshes);
+  sbx::utility::logger<"demo">::info("string id: {}", sbx::utility::string_id<"foobar">());
+}
 
-  auto& tree2_transform = graph.get_component<sbx::scenes::transform>(tree2);
-  tree2_transform.set_position(sbx::math::vector3{-5.0f, 0.0f, -5.0f});
-  tree2_transform.set_scale(sbx::math::vector3{1.0f, 1.0f, 1.0f});
+auto application::update() -> void  {
+  SBX_PROFILE_SCOPE("application::update");
 
-  // Helmet
+  auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
 
-  auto helmet = graph.create_node("Helmet");
+  auto& scene = scenes_module.scene();
+  auto& environment = scene.environment();
+  auto& graph = scene.graph();
 
-  graph.add_component<sbx::scenes::static_mesh>(helmet, assets.get_mesh("helmet"), sbx::models::load_materials("res://meshes/helmet/helmet.gltf"));
+  const auto delta_time = sbx::core::engine::delta_time();
 
-  auto& helmet_transform = graph.get_component<sbx::scenes::transform>(helmet);
-  helmet_transform.set_position(sbx::math::vector3{0.0f, 3.0f, 0.0f});
-  helmet_transform.set_scale(sbx::math::vector3{1.0f, 1.0f, 1.0f});
+  if (sbx::devices::input::is_key_pressed(sbx::devices::key::escape)) {
+    sbx::core::engine::quit();
+    return;
+  }
 
-  auto& helmet_collider = graph.add_component<sbx::physics::mesh_collider>(helmet, "res://meshes/helmet/helmet.gltf");
+  _rotation += sbx::math::degree{45} * delta_time;
+}
 
-  // World Sprite
+auto application::fixed_update() -> void {
 
-  auto sprite = graph.create_node("WorldSprite");
+}
 
-  graph.add_component<sbx::sprites::sprite>(sprite, sbx::sprites::world_sprite{
-    .base_color = sbx::math::color::white(),
-    .albedo_image = assets.get_image("base"),
-    .size = {2.0f, 2.0f},
-    .pivot = {0.5f, 0.5f},
-    .is_billboard = true
-  });
+auto application::is_paused() const -> bool {
+  return _is_paused;
+}
 
-  auto& sprite_transform = graph.get_component<sbx::scenes::transform>(sprite);
-  sprite_transform.set_position(sbx::math::vector3{5.0f, 5.0f, 5.0f});
+auto application::_build_ui() -> void {
+  auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
 
-  // UI
-
-  _font = sbx::ui::load_font(assets.get_image("roboto_atlas"), "demo/assets/fonts/roboto_atlas.json");
+  auto& scene = scenes_module.scene();
+  auto& graph = scene.graph();
 
   auto ui_node = graph.create_node("HUD");
 
@@ -389,69 +374,6 @@ application::application()
     slot.color = {0.2f, 0.2f, 0.25f, 1.0f};
     slot.sort_order = 101;
   }
-
-  // Terrain
-
-  auto terrain = graph.create_node("Terrain");
-
-  auto& terrain_material = assets.add_material<sbx::models::material>("terrain");
-  terrain_material.albedo.image = assets.get_image("base");
-  terrain_material.metallic_factor = 0.0f;
-  terrain_material.roughness_factor = 1.0f;
-  terrain_material.specular_factor = 0.0f;
-
-  graph.add_component<sbx::scenes::static_mesh>(terrain, assets.get_mesh("cube"), assets.get_material("terrain"));
-
-  auto& transform = graph.get_component<sbx::scenes::transform>(terrain);
-  transform.set_position(sbx::math::vector3{0.0f, 0.0f, 0.0f});
-  transform.set_scale(sbx::math::vector3{100.0f, 0.1f, 100.0f});
-
-  graph.add_component<sbx::physics::shape_collider>(terrain, sbx::physics::box{sbx::math::vector3{200.0f, 0.25f, 200.0f}});
-  graph.add_component<sbx::physics::rigidbody>(terrain, 0.0f);
-
-  // Camera
-  auto camera_node = environment.camera();
-
-  auto& camera_transform = graph.get_component<sbx::scenes::transform>(camera_node);
-  camera_transform.set_position(sbx::math::vector3{0.0f, 10.0f, 20.0f});
-  camera_transform.look_at(sbx::math::vector3::zero);
-
-  graph.add_component<sbx::scenes::skybox>(camera_node, assets.get_cube_image("skybox"), _brdf, _irradiance, _prefiltered, sbx::math::color::white());
-
-  scripting_module.instantiate(camera_node, "build/x86_64/gcc/debug/_dotnet/Demo.dll", "Demo.EditorCameraController");
-
-  if (auto hide_window = cli.argument<bool>("hide-window"); !hide_window) {
-    window.show();
-  }
-
-  sbx::utility::logger<"demo">::info("string id: {}", sbx::utility::string_id<"foobar">());
-}
-
-auto application::update() -> void  {
-  SBX_PROFILE_SCOPE("application::update");
-
-  auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
-
-  auto& scene = scenes_module.scene();
-  auto& environment = scene.environment();
-  auto& graph = scene.graph();
-
-  const auto delta_time = sbx::core::engine::delta_time();
-
-  if (sbx::devices::input::is_key_pressed(sbx::devices::key::escape)) {
-    sbx::core::engine::quit();
-    return;
-  }
-
-  _rotation += sbx::math::degree{45} * delta_time;
-}
-
-auto application::fixed_update() -> void {
-
-}
-
-auto application::is_paused() const -> bool {
-  return _is_paused;
 }
 
 auto application::_generate_brdf(const std::uint32_t size) -> void {

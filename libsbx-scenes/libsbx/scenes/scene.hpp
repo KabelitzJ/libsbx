@@ -29,7 +29,7 @@ class scene {
 
 public:
 
-  scene(const std::filesystem::path& path, component_io_registry& component_io);
+  scene(const std::filesystem::path& path, component_io_registry& component_io, asset_io_registry& asset_io);
 
   virtual ~scene() = default;
 

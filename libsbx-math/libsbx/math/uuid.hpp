@@ -219,6 +219,29 @@ struct fmt::formatter<sbx::math::basic_uuid<Type>> {
   }
 }; // struct fmt::formatter<sbx::math::uuid>
 
+template<std::unsigned_integral Type>
+struct YAML::convert<sbx::math::basic_uuid<Type>> {
+
+  static auto encode(const sbx::math::basic_uuid<Type>& rhs) -> YAML::Node {
+    return Node{rhs.value()};
+  }
+
+  static auto decode(const YAML::Node& node, sbx::math::basic_uuid<Type>& rhs) -> bool {
+    if (!node.IsScalar()) {
+      return false;
+    }
+
+    rhs = sbx::math::basic_uuid<Type>::from_value(node.as<Type>());
+
+    return true;
+  }
+
+}; // struct YAML::convert<sbx::math::basic_vector3<Type>>
+
+template<std::unsigned_integral Type>
+auto operator<<(YAML::Emitter& out, const sbx::math::basic_uuid<Type>& vector) -> YAML::Emitter& {
+  return out << YAML::convert<sbx::math::basic_uuid<Type>>::encode(vector);
+}
 
 template<std::unsigned_integral Type>
 struct std::hash<sbx::math::basic_uuid<Type>> {

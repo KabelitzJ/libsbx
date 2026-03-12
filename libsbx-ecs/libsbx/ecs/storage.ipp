@@ -359,7 +359,7 @@ template<typename Type, typename Entity, memory::allocator_for<Type> Allocator>
 requires (component_traits<Type, Entity>::page_size == 0u)
 template<typename Function>
 requires (std::is_invocable_v<Function>)
-void basic_storage<Type, Entity, Allocator>::patch([[maybe_unused]] const entity_type entity, Function&& function) {
+auto basic_storage<Type, Entity, Allocator>::patch([[maybe_unused]] const entity_type entity, Function&& function) -> void {
   utility::assert_that(base_type::contains(entity), "Invalid entity");
   std::invoke(std::forward<Function>(function));
 }
@@ -428,6 +428,14 @@ auto basic_storage<Entity, Entity, Allocator>::generate(const entity_type hint) 
   }
 
   return generate();
+}
+
+template<typename Entity, memory::allocator_for<Entity> Allocator>
+template<typename Function>
+requires (std::is_invocable_v<Function>)
+auto basic_storage<Entity, Entity, Allocator>::patch([[maybe_unused]] const entity_type entity, Function&& function) -> void {
+  utility::assert_that(base_type::index(entity) < base_type::free_list(), "The requested entity is not valid");
+  std::invoke(std::forward<Function>(function));
 }
 
 template<typename Entity, memory::allocator_for<Entity> Allocator>

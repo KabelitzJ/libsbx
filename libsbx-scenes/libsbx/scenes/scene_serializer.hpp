@@ -7,23 +7,32 @@
 
 #include <yaml-cpp/yaml.h>
 
+#include <libsbx/math/uuid.hpp>
+
 #include <libsbx/scenes/node.hpp>
 #include <libsbx/scenes/scene_graph.hpp>
 #include <libsbx/scenes/scene_asset_table.hpp>
 #include <libsbx/scenes/component_io.hpp>
+#include <libsbx/scenes/asset_io.hpp>
 
 namespace sbx::scenes {
+
+struct scene_data {
+  std::string name;
+  math::uuid camera_id;
+}; // struct scene_data
 
 class scene_serializer {
 
 public:
 
-  explicit scene_serializer(component_io_registry& component_io)
-  : _component_io{component_io} { }
+  scene_serializer(component_io_registry& component_io, asset_io_registry& asset_io)
+  : _component_io{component_io},
+    _asset_io{asset_io} { }
 
-  auto save(const std::filesystem::path& path, const std::string& name, scene_graph& graph, scene_asset_table& assets) -> void;
+  auto save(const std::filesystem::path& path, const std::string& name, scene_graph& graph, scene_asset_table& assets, const scenes::node camera) -> void;
 
-  auto load(const std::filesystem::path& path, scene_graph& graph, scene_asset_table& assets) -> std::string;
+  auto load(const std::filesystem::path& path, scene_graph& graph, scene_asset_table& assets) -> scene_data;
 
 private:
 
@@ -33,11 +42,14 @@ private:
 
   auto _save_components(YAML::Emitter& emitter, scene_graph& graph, scene_asset_table& assets, const scenes::node node) -> void;
 
-  auto _load_assets(const YAML::Node& assets, scene_asset_table& table) -> void;
+  auto _load_assets(const YAML::Node& assets_node, scene_asset_table& assets) -> void;
 
-  auto _load_nodes(const YAML::Node& nodes, scene_graph& graph, scene_asset_table& assets) -> void;
+  auto _load_asset_category(const std::string& category, const YAML::Node& entries, scene_asset_table& assets) -> void;
+
+  auto _load_nodes(const YAML::Node& nodes_node, scene_graph& graph, scene_asset_table& assets) -> void;
 
   component_io_registry& _component_io;
+  asset_io_registry& _asset_io;
 
 }; // class scene_serializer
 

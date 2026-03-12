@@ -1,0 +1,19 @@
+name: tree_trunk
+
+albedo:
+  image: res://meshes/trees/tree_1/textures/trunk_albedo.jpg
+  format: r8g8b8a8_srgb
+
+base_color: [1.0, 1.0, 1.0, 1.0]
+metallic_factor: 0.0
+roughness_factor: 0.8
+specular_factor: 1.0
+
+alpha_mode: opaque
+alpha_cutoff: 0.5
+double_sided: false
+
+sway:
+  speed: 0.8
+  strength: 0.04
+  falloff_exponent: 3.0

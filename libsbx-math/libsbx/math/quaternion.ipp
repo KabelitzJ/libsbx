@@ -354,21 +354,21 @@ inline auto std::hash<sbx::math::basic_quaternion<Type>>::operator()(const sbx::
   sbx::utility::hash_combine(seed, quat.x());
   sbx::utility::hash_combine(seed, quat.y());
   sbx::utility::hash_combine(seed, quat.z());
-  sbx::utility::hash_combine(seed, quat.w);
+  sbx::utility::hash_combine(seed, quat.w());
 
   return seed;
 }
 
 template<sbx::math::floating_point Type>
 auto YAML::convert<sbx::math::basic_quaternion<Type>>::decode(const Node& node, sbx::math::basic_quaternion<Type>& quat) -> bool {
-  if (!node.IsSequence() || node.size() != 4) {
+  if (!node.IsMap()) {
     return false;
   }
 
-  quat.x() = node[0].as<Type>();
-  quat.y() = node[1].as<Type>();
-  quat.z() = node[2].as<Type>();
-  quat.w() = node[3].as<Type>();
+  quat.x() = node["x"].as<Type>();
+  quat.y() = node["y"].as<Type>();
+  quat.z() = node["z"].as<Type>();
+  quat.w() = node["w"].as<Type>();
 
   return true;
 }

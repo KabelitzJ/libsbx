@@ -146,6 +146,12 @@ public:
     new_parent_relationship.add_child(node);
   }
 
+  auto reassign_node_id(const scenes::node node, const math::uuid new_id) -> void {
+    _nodes.erase(_registry.get<scenes::id>(node));
+    _registry.get<scenes::id>(node) = scenes::id{new_id};
+    _nodes.insert({new_id, node});
+  }
+
   template<typename Type, typename... Other, typename... Exclude>
   auto query(ecs::exclude_t<Exclude...> = ecs::exclude_t{}) -> decltype(auto) {
     return _registry.view<Type, Other...>(ecs::exclude<Exclude...>);
@@ -169,6 +175,11 @@ public:
   template<typename Component, typename... Args>
   auto add_component(const scenes::node node, Args&&... args) -> decltype(auto) {
     return _registry.emplace<Component>(node, std::forward<Args>(args)...);
+  }
+
+  template<typename Component, typename... Args>
+  auto add_or_update_component(const scenes::node node, Args&&... args) -> decltype(auto) {
+    return _registry.emplace_or_replace<Component>(node, std::forward<Args>(args)...);
   }
 
   template<typename Component>

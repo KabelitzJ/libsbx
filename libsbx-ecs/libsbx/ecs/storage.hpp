@@ -196,7 +196,7 @@ public:
 
   template<typename Function>
   requires (std::is_invocable_v<Function>)
-  void patch([[maybe_unused]] const entity_type entity, Function&& function);
+  auto patch([[maybe_unused]] const entity_type entity, Function&& function) -> void;
 
   [[nodiscard]] auto each() noexcept -> iterable;
 
@@ -246,6 +246,10 @@ public:
   auto generate() -> entity_type;
 
   auto generate(const entity_type hint) -> entity_type;
+
+  template<typename Function>
+  requires (std::is_invocable_v<Function>)
+  auto patch([[maybe_unused]] const entity_type entity, Function&& function) -> void;
 
   [[nodiscard]] auto each() noexcept -> iterable;
 

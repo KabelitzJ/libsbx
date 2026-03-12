@@ -15,6 +15,7 @@
 #include <libsbx/core/module.hpp>
 
 #include <libsbx/scenes/component_io.hpp>
+#include <libsbx/scenes/asset_io.hpp>
 #include <libsbx/scenes/scene.hpp>
 
 namespace sbx::scenes {
@@ -50,6 +51,10 @@ public:
     return _component_io_registry;
   }
 
+  auto get_asset_io_registry() -> asset_io_registry& {
+    return _asset_io_registry;
+  }
+
   auto get_component_io(const std::uint32_t id) -> scenes::component_io& {
     return _component_io_registry.get(id);
   }
@@ -83,6 +88,7 @@ private:
   std::optional<scenes::scene> _scene;
 
   component_io_registry _component_io_registry;
+  asset_io_registry _asset_io_registry;
 
   std::vector<line> _debug_lines{};
 

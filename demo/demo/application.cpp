@@ -78,20 +78,6 @@ application::application()
   auto& scripting_module = sbx::core::engine::get_module<sbx::scripting::scripting_module>();
 
   // Textures
-  assets.add_image("base", "res://textures/base.png", sbx::graphics::format::r8g8b8a8_srgb);
-
-  assets.add_image("helmet_albedo", "res://meshes/helmet/textures/albedo.jpg", sbx::graphics::format::r8g8b8a8_srgb);
-  assets.add_image("helmet_normal", "res://meshes/helmet/textures/normal.jpg", sbx::graphics::format::r8g8b8a8_unorm);
-  assets.add_image("helmet_mr", "res://meshes/helmet/textures/mr.jpg", sbx::graphics::format::r8g8b8a8_unorm);
-  assets.add_image("helmet_ao", "res://meshes/helmet/textures/ao.jpg", sbx::graphics::format::r8g8b8a8_unorm);
-  assets.add_image("helmet_emissive", "res://meshes/helmet/textures/emissive.jpg", sbx::graphics::format::r8g8b8a8_srgb);
-
-  
-  assets.add_image("trunk_albedo", "res://meshes/trees/tree_1/textures/trunk_albedo.jpg", sbx::graphics::format::r8g8b8a8_srgb);
-  assets.add_image("branch_albedo", "res://meshes/trees/tree_1/textures/branch_albedo.png", sbx::graphics::format::r8g8b8a8_srgb);
-
-  // assets.add_cube_image("skybox", "res://skyboxes/clouds3", ".hdr", sbx::graphics::format::r32g32b32a32_sfloat);
-  assets.add_cube_image("skybox", "res://skyboxes/clouds2", ".png", sbx::graphics::format::r8g8b8a8_srgb);
 
   assets.add_image("roboto_atlas", "res://fonts/roboto_atlas.png", sbx::graphics::format::r8g8b8a8_srgb);
 
@@ -100,23 +86,11 @@ application::application()
   _generate_prefiltered(512);
 
   // Meshes
-  assets.add_mesh<sbx::models::mesh>("cube", "res://meshes/cube/cube.gltf");
 
-  assets.add_mesh<sbx::models::mesh>("helmet", "res://meshes/helmet/helmet.gltf");
-
-  assets.add_mesh<sbx::models::mesh>("tree_1", "res://meshes/trees/tree_1/tree_1.gltf");
-  assets.add_mesh<sbx::models::mesh>("tree_2", "res://meshes/trees/tree_2/tree_2.gltf");
 
   // Materials
 
-  auto& base_material = assets.add_material<sbx::models::material>("base");
-  base_material.albedo.image = assets.get_image("base");
-
   // Animations
-
-  assets.add_animation<sbx::animations::animation>("Walk", "res://meshes/fox/fox.gltf", "Walk");
-  assets.add_animation<sbx::animations::animation>("Survey", "res://meshes/fox/fox.gltf", "Survey");
-  assets.add_animation<sbx::animations::animation>("Run", "res://meshes/fox/fox.gltf", "Run");
 
   // Window
 

@@ -24,7 +24,10 @@ auto skinned_mesh_material_subrenderer::render(graphics::command_buffer& command
   auto& renderer = graphics_module.renderer();
 
   auto& assets_module = core::engine::get_module<assets::assets_module>();
-  auto& scene = core::engine::get_module<scenes::scenes_module>().scene();
+
+  auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
+  auto& scene = scenes_module.scene();
+  auto& environment = scene.environment();
 
   auto& draw_list = renderer.draw_list<skinned_mesh_material_draw_list>("skinned_mesh_material");
 
@@ -36,7 +39,7 @@ auto skinned_mesh_material_subrenderer::render(graphics::command_buffer& command
 
     pipeline.bind(command_buffer);
 
-    descriptor_data.scene_descriptor_handler.push("scene", scene.uniform_handler());
+    descriptor_data.scene_descriptor_handler.push("scene", environment.uniform_handler());
     descriptor_data.sampler_descriptor_handler.push("samplers", draw_list.samplers());  
     descriptor_data.image_descriptor_handler.push("images", draw_list.images());
 

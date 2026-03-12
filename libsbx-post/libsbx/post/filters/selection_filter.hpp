@@ -28,6 +28,8 @@ public:
 
     auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
     auto& scene = scenes_module.scene();
+  auto& environment = scene.environment();
+  auto& graph = scene.graph();
 
     auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 
@@ -39,7 +41,7 @@ public:
     _push_handler.push("color", sbx::math::color{1.0, 0.86, 0.49, 1.0});
     _push_handler.push("thickness", 0.5f);
 
-    descriptor_handler.push("scene", scene.uniform_handler());
+    descriptor_handler.push("scene", environment.uniform_handler());
     // descriptor_handler.push("resolve_image", graphics_module.attachment(_image));
     // descriptor_handler.push("object_id_image", graphics_module.attachment(_object_id_image));
     // descriptor_handler.push("linear_depth_image", graphics_module.attachment(_linear_depth_image));

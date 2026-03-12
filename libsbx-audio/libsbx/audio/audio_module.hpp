@@ -144,16 +144,18 @@ public:
     auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
 
     auto& scene = scenes_module.scene();
+  auto& environment = scene.environment();
+  auto& graph = scene.graph();
 
-    auto camera_node = scene.camera();
+    auto camera_node = environment.camera();
 
-    const auto& camera_transform = scene.get_component<scenes::transform>(camera_node);
+    const auto& camera_transform = graph.get_component<scenes::transform>(camera_node);
 
     alListener3f(AL_POSITION, camera_transform.position().x(), camera_transform.position().y(), camera_transform.position().z());
     alListener3f(AL_VELOCITY, 0.0f, 0.0f, 0.0f);
 
-    if (scene.has_component<audio::sound_listener>(camera_node)) {
-      const auto& listener = scene.get_component<audio::sound_listener>(camera_node);
+    if (graph.has_component<audio::sound_listener>(camera_node)) {
+      const auto& listener = graph.get_component<audio::sound_listener>(camera_node);
 
       alListenerf(AL_GAIN, listener.gain);
     }

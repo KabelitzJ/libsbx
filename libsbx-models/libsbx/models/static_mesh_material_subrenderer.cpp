@@ -26,7 +26,10 @@ auto static_mesh_material_subrenderer::render(graphics::command_buffer& command_
   auto& assets_module = core::engine::get_module<assets::assets_module>();
 
   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
+
   auto& scene = scenes_module.scene();
+  auto& environment = scene.environment();
+  auto& graph = scene.graph();
 
   auto& draw_list = renderer.draw_list<models::static_mesh_material_draw_list>("static_mesh_material");
 
@@ -38,7 +41,7 @@ auto static_mesh_material_subrenderer::render(graphics::command_buffer& command_
 
     pipeline.bind(command_buffer);
 
-    descriptor_data.scene_descriptor_handler.push("scene", scene.uniform_handler());
+    descriptor_data.scene_descriptor_handler.push("scene", environment.uniform_handler());
     descriptor_data.sampler_descriptor_handler.push("samplers", draw_list.samplers());
     descriptor_data.image_descriptor_handler.push("images", draw_list.images());
 

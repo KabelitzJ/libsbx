@@ -77,9 +77,12 @@ auto sprites_module::submit(sprite_space space, const sprite_batch::sprite_insta
 
 auto sprites_module::_collect_sprites() -> void {
   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
-  auto& scene = scenes_module.scene();
 
-  auto sprite_query = scene.query<const sprites::sprite>();
+  auto& scene = scenes_module.scene();
+  auto& environment = scene.environment();
+  auto& graph = scene.graph();
+
+  auto sprite_query = graph.query<const sprites::sprite>();
 
   for (auto&& [node, sprite] : sprite_query.each()) {
     std::visit(utility::overload{
@@ -131,7 +134,7 @@ auto sprites_module::_collect_sprites() -> void {
         const auto albedo_index = _images.push_back(sprite.albedo_image);
         const auto emissive_index = _images.push_back(sprite.emissive_image);
 
-        const auto& transform = scene.world_transform(node);
+        const auto& transform = graph.world_transform(node);
 
         auto flags = std::uint32_t{0u};
 

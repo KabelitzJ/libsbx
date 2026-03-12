@@ -16,8 +16,10 @@ auto ui_module::update() -> void {
   const auto was_down = _was_mouse_down;
 
   auto& scene = scenes_module.scene();
+  auto& environment = scene.environment();
+  auto& graph = scene.graph();
 
-  auto canvas_query = scene.query<ui::canvas>();
+  auto canvas_query = graph.query<ui::canvas>();
 
   for (auto&& [node, canvas] : canvas_query.each()) {
     canvas.update(screen_size);

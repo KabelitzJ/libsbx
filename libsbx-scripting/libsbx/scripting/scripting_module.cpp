@@ -94,41 +94,17 @@ scripting_module::~scripting_module() {
 
 }
 
-// auto scripting_module::test() -> void {
-//   auto demo_assembly_path = std::filesystem::path{"build/x86_64/gcc/debug/_dotnet/Demo.dll"};
-// 	auto& demo_assembly = _context.load_assembly(demo_assembly_path.string());
-
-//   auto demo_type = demo_assembly.get_type("Demo.Demo");
-
-//   demo_instance = demo_type.create_instance();
-
-//   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
-//   auto& scene = scenes_module.scene();
-
-//   const auto demo_node = scene.create_node("SCRIPT_TEST");
-
-//   demo_instance.set_field_value("Node", static_cast<std::uint32_t>(demo_node));
-
-//   auto& transform = scene.get_component<scenes::transform>(demo_node);
-//   transform.set_position(math::vector3{1, 2, 3});
-
-//   demo_instance.invoke("SayHello");
-
-//   demo_instance.invoke("SetTag", managed::string::create("TEST_TAG"));
-  
-//   demo_instance.invoke("SayHello");
-
-//   demo_instance.invoke("OnCreate");
-// }
-
 auto scripting_module::update() -> void {
   SBX_PROFILE_SCOPE("scripting_module::update");
   SBX_MEMORY_SCOPE(memory::allocation_category::scripting);
 
   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
-  auto& scene = scenes_module.scene();
 
-  auto scripts_query = scene.query<scripting::scripts>();
+  auto& scene = scenes_module.scene();
+  auto& environment = scene.environment();
+  auto& graph = scene.graph();
+
+  auto scripts_query = graph.query<scripting::scripts>();
 
   for (auto&& [node, scripts] : scripts_query.each()) {
     for (auto& instance : scripts.instances) {
@@ -141,7 +117,10 @@ auto scripting_module::instantiate(const scenes::node node, const std::filesyste
   auto& assets_module = core::engine::get_module<assets::assets_module>();
 
   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
+
   auto& scene = scenes_module.scene();
+  auto& environment = scene.environment();
+  auto& graph = scene.graph();
 
   auto& assembly = _context.get_or_load_assembly(assembly_path.string());
 
@@ -153,7 +132,7 @@ auto scripting_module::instantiate(const scenes::node node, const std::filesyste
 
   instance.invoke("OnCreate");
 
-  auto& scripts = scene.get_or_add_component<scripting::scripts>(node);
+  auto& scripts = graph.get_or_add_component<scripting::scripts>(node);
 
   scripts.instances.push_back(instance);
 

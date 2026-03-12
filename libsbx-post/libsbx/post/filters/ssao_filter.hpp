@@ -79,6 +79,8 @@ public:
 
     auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
     auto& scene = scenes_module.scene();
+  auto& environment = scene.environment();
+  auto& graph = scene.graph();
 
     auto& pipeline = base::pipeline();
     auto& descriptor_handler = base::descriptor_handler();
@@ -98,7 +100,7 @@ public:
     }
 
     descriptor_handler.push("noise_image", noise);
-    descriptor_handler.push("scene", scene.uniform_handler());
+    descriptor_handler.push("scene", environment.uniform_handler());
 
     if (!descriptor_handler.update(pipeline)) {
       return;

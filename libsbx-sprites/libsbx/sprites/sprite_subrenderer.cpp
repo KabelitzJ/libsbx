@@ -119,7 +119,10 @@ auto sprite_subrenderer::_render_batch(graphics::command_buffer& command_buffer,
   auto& sprites_module = core::engine::get_module<sprites::sprites_module>();
 
   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
+
   auto& scene = scenes_module.scene();
+  auto& environment = scene.environment();
+  auto& graph = scene.graph();
 
   if (sprites_module.batch(space).is_empty()) {
     return;
@@ -133,7 +136,7 @@ auto sprite_subrenderer::_render_batch(graphics::command_buffer& command_buffer,
 
   pipeline.bind(command_buffer);
 
-  pipeline_data.descriptor_handler.push("scene", scene.uniform_handler());
+  pipeline_data.descriptor_handler.push("scene", environment.uniform_handler());
   pipeline_data.descriptor_handler.push("images", sprites_module.images());
   pipeline_data.descriptor_handler.push("sampler", _sampler);
 

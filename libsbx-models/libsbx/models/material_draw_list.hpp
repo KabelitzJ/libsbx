@@ -106,6 +106,8 @@ public:
 
     auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
     auto& scene = scenes_module.scene();
+  auto& environment = scene.environment();
+  auto& graph = scene.graph();
 
     auto memory = std::array<std::uint8_t, 2048u>{};
     auto pool = std::pmr::monotonic_buffer_resource{memory.data(), memory.size()};
@@ -137,8 +139,8 @@ public:
     update_buffer(_transform_data, transform_data_buffer_name);
     update_buffer(_material_data, material_data_buffer_name);
 
-    auto camer_node = scene.camera();
-    const auto camera_position = scene.world_position(camer_node);
+    auto camer_node = environment.camera();
+    const auto camera_position = graph.world_position(camer_node);
 
     traits_type::update_shared_buffers(*this);
 

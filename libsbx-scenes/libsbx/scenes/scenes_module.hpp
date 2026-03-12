@@ -14,13 +14,12 @@
 
 #include <libsbx/core/module.hpp>
 
+#include <libsbx/scenes/component_io.hpp>
 #include <libsbx/scenes/scene.hpp>
 
 namespace sbx::scenes {
 
 class scenes_module final : public core::module<scenes_module> {
-
-  friend class scene;
 
   inline static const auto is_registered = register_module(stage::normal);
 
@@ -47,14 +46,17 @@ public:
     }
   }
 
-  template<typename Type, std::invocable<YAML::Node&, const Type&> Save, std::invocable<YAML::Node&> Load>
-  auto register_component(const std::string& name, Save&& save, Load&& load) -> void {
-    _component_io_registry.register_component<Type>(name, std::forward<Save>(save), std::forward<Load>(load));
+  auto get_component_io_registry() -> component_io_registry& {
+    return _component_io_registry;
   }
 
-  auto component_io(const std::uint32_t id) -> component_io&;
+  auto get_component_io(const std::uint32_t id) -> scenes::component_io& {
+    return _component_io_registry.get(id);
+  }
 
-  auto has_component_io(const std::uint32_t id) -> bool;
+  auto has_component_io(const std::uint32_t id) const -> bool {
+    return _component_io_registry.has(id);
+  }
 
   auto debug_lines() const -> const std::vector<line>&;
 
@@ -84,7 +86,7 @@ private:
 
   std::vector<line> _debug_lines{};
 
-}; // class scene_modules
+}; // class scenes_module
 
 } // namespace sbx::scenes
 

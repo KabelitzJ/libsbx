@@ -188,10 +188,10 @@ application::application() {
   auto& scene = scenes_module.load_scene("res://scenes/scene.yaml");
 
   // Load PBR textures
-  scene.add_image("helmet_albedo", "res://textures/helmet/albedo.jpg", sbx::graphics::format::r8g8b8a8_srgb);
-  scene.add_image("helmet_normal", "res://textures/helmet/normal.jpg", sbx::graphics::format::r8g8b8a8_unorm);
-  scene.add_image("helmet_mrao", "res://textures/helmet/mrao2.jpg", sbx::graphics::format::r8g8b8a8_unorm);
-  scene.add_image("helmet_emissive", "res://textures/helmet/emissive.jpg", sbx::graphics::format::r8g8b8a8_srgb);
+  assets.add_image("helmet_albedo", "res://textures/helmet/albedo.jpg", sbx::graphics::format::r8g8b8a8_srgb);
+  assets.add_image("helmet_normal", "res://textures/helmet/normal.jpg", sbx::graphics::format::r8g8b8a8_unorm);
+  assets.add_image("helmet_mrao", "res://textures/helmet/mrao2.jpg", sbx::graphics::format::r8g8b8a8_unorm);
+  assets.add_image("helmet_emissive", "res://textures/helmet/emissive.jpg", sbx::graphics::format::r8g8b8a8_srgb);
 
   // Generate IBL maps on the GPU
   _generate_brdf(512);
@@ -199,18 +199,18 @@ application::application() {
   _generate_prefiltered(512);
 
   // Configure a PBR material
-  auto& helmet_material = scene.add_material<sbx::models::material>("helmet");
-  helmet_material.albedo.image = scene.get_image("helmet_albedo");
-  helmet_material.normal.image = scene.get_image("helmet_normal");
-  helmet_material.mrao.image = scene.get_image("helmet_mrao");
-  helmet_material.emissive.image = scene.get_image("helmet_emissive");
+  auto& helmet_material = assets.add_material<sbx::models::material>("helmet");
+  helmet_material.albedo.image = assets.get_image("helmet_albedo");
+  helmet_material.normal.image = assets.get_image("helmet_normal");
+  helmet_material.mrao.image = assets.get_image("helmet_mrao");
+  helmet_material.emissive.image = assets.get_image("helmet_emissive");
   helmet_material.emissive_strength = 16.0f;
 
   // Set up skeletal animation with state transitions
-  auto& fox_animator = scene.add_component<sbx::animations::animator>(fox);
-  fox_animator.add_state({"Walk", scene.get_animation("Walk"), true, 0.5f});
-  fox_animator.add_state({"Survey", scene.get_animation("Survey"), true, 0.5f});
-  fox_animator.add_state({"Run", scene.get_animation("Run"), true, 0.5f});
+  auto& fox_animator = graph.add_component<sbx::animations::animator>(fox);
+  fox_animator.add_state({"Walk", assets.get_animation("Walk"), true, 0.5f});
+  fox_animator.add_state({"Survey", assets.get_animation("Survey"), true, 0.5f});
+  fox_animator.add_state({"Run", assets.get_animation("Run"), true, 0.5f});
 
   fox_animator.add_transition({"Walk", "Run", 0.15f, [](const auto& a) {
     if (auto v = a.float_parameter("speed"); v) return *v >= 2.0f;
@@ -220,18 +220,18 @@ application::application() {
   // Attach a particle emitter to the fox's tail bone
   auto tail = animations_module.find_skeleton_node(fox, "b_Tail03_014");
 
-  auto tail_emitter = scene.create_child_node(tail, "TailEmitter");
+  auto tail_emitter = graph.create_child_node(tail, "TailEmitter");
 
-  auto& particles = scene.add_component<sbx::particles::particle_emitter>(tail_emitter);
+  auto& particles = graph.add_component<sbx::particles::particle_emitter>(tail_emitter);
   particles.max_particles = 1000;
   particles.emission_rate = 100.0f;
   particles.initial_color = sbx::math::color{255u, 140u, 0u, 250u};
   particles.end_color = sbx::math::color{255u, 69u, 0u, 0u};
 
   // Create a skybox
-  auto camera_node = scene.camera();
+  auto camera_node = environment.camera();
 
-  scene.add_component<sbx::scenes::skybox>(camera_node, scene.get_cube_image("skybox"), _brdf, _irradiance, _prefiltered);
+  graph.add_component<sbx::scenes::skybox>(camera_node, assets.get_cube_image("skybox"), _brdf, _irradiance, _prefiltered);
 
   // Attach a C# script to the camera
   auto& scripting_module = sbx::core::engine::get_module<sbx::scripting::scripting_module>();

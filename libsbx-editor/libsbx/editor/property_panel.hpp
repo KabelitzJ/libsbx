@@ -28,7 +28,9 @@ private:
   template<typename Component, typename Callable>
   requires (std::is_invocable_v<Callable, Component&>)
   static auto _draw_component_section(const char* title, sbx::scenes::scene& scene, sbx::scenes::node node, Callable&& callable) -> void {
-    if (!scene.has_component<Component>(node)) {
+    auto& graph = scene.graph();
+
+    if (!graph.has_component<Component>(node)) {
       return;
     }
 
@@ -66,7 +68,7 @@ private:
 
     if (ImGui::BeginPopup("##component_settings")) {
       if (ImGui::MenuItem("Reset")) {
-        // scene.get_component<Component>(node) = Component{};
+        // graph.get_component<Component>(node) = Component{};
       }
 
       if (ImGui::MenuItem("Remove")) {
@@ -79,7 +81,7 @@ private:
     if (is_open) {
       ImGui::Spacing();
 
-      auto& component = scene.get_component<Component>(node);
+      auto& component = graph.get_component<Component>(node);
       std::invoke(std::forward<Callable>(callable), component);
 
       ImGui::Spacing();

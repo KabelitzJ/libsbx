@@ -23,8 +23,9 @@ auto property_panel::render(const math::uuid& selected_node_id) -> void {
 
   auto& scene_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
   auto& scene = scene_module.scene();
+  auto& graph = scene.graph();
 
-  auto node = scene.find_node(selected_node_id);
+  auto node = graph.find_node(selected_node_id);
 
   if (node == scenes::node::null) {
     ImGui::TextDisabled("No node selected.");
@@ -43,7 +44,7 @@ auto property_panel::render(const math::uuid& selected_node_id) -> void {
 
     _name_buffer.fill('\0');
 
-    auto& tag = scene.get_component<sbx::scenes::tag>(node);
+    auto& tag = graph.get_component<sbx::scenes::tag>(node);
     std::memcpy(_name_buffer.data(), tag.data(), std::min(tag.size(), _name_buffer.size() - 1));
   }
 

@@ -4,6 +4,8 @@
 #include <libsbx/assets/assets_module.hpp>
 
 #include <libsbx/scenes/scene.hpp>
+#include <libsbx/scenes/scene_graph.hpp>
+#include <libsbx/scenes/scene_asset_table.hpp>
 
 #include <libsbx/scenes/components/transform.hpp>
 #include <libsbx/scenes/components/skybox.hpp>
@@ -17,50 +19,50 @@ scenes_module::scenes_module()
 : _scene{std::nullopt} {
   _component_io_registry.register_component<scenes::transform>(
     "transform",
-    [](YAML::Emitter& emitter, [[maybe_unused]] scenes::scene& scene, const scenes::transform& transform) -> void {
+    [](YAML::Emitter& emitter, [[maybe_unused]] scene_graph& graph, [[maybe_unused]] scene_asset_table& assets, const scenes::transform& transform) -> void {
       emitter << YAML::Key << "position" << YAML::Value << transform.position();
       emitter << YAML::Key << "rotation" << YAML::Value << transform.rotation();
       emitter << YAML::Key << "scale" << YAML::Value << transform.scale();
     },
-    [](const YAML::Node& node) -> scenes::transform {
+    [](const YAML::Node& node, [[maybe_unused]] scene_graph& graph, [[maybe_unused]] scene_asset_table& assets) -> scenes::transform {
       return {node["position"].as<math::vector3>(), node["rotation"].as<math::quaternion>(), node["scale"].as<math::vector3>()};
     }
   );
 
   _component_io_registry.register_component<scenes::skybox>(
     "skybox",
-    [](YAML::Emitter& emitter, scenes::scene& scene, const scenes::skybox& skybox) -> void {
-      const auto& image_metadata = scene.cube_image_metadata(skybox.cube_image);
+    [](YAML::Emitter& emitter, [[maybe_unused]] scene_graph& graph, scene_asset_table& assets, const scenes::skybox& skybox) -> void {
+      const auto& image_metadata = assets.cube_image_metadata(skybox.cube_image);
 
       emitter << YAML::Key << "cube_image" << YAML::Value << YAML::Alias(image_metadata.name);
       emitter << YAML::Key << "tint" << YAML::Value << skybox.tint;
     },
-    [](const YAML::Node& node) -> scenes::skybox {
+    [](const YAML::Node& node, [[maybe_unused]] scene_graph& graph, [[maybe_unused]] scene_asset_table& assets) -> scenes::skybox {
       return scenes::skybox{graphics::cube_image2d_handle{}, graphics::image2d_handle{}, graphics::cube_image2d_handle{}, graphics::cube_image2d_handle{}, node["tint"].as<math::color>()};
     }
   );
 
   _component_io_registry.register_component<scenes::point_light>(
     "point_light",
-    [](YAML::Emitter& emitter, [[maybe_unused]] scenes::scene& scene, const scenes::point_light& point_light) -> void {
+    [](YAML::Emitter& emitter, [[maybe_unused]] scene_graph& graph, [[maybe_unused]] scene_asset_table& assets, const scenes::point_light& point_light) -> void {
       emitter << YAML::Key << "color" << YAML::Value << point_light.color();
       emitter << YAML::Key << "radius" << YAML::Value << point_light.radius();
     },
-    [](const YAML::Node& node) -> scenes::point_light {
+    [](const YAML::Node& node, [[maybe_unused]] scene_graph& graph, [[maybe_unused]] scene_asset_table& assets) -> scenes::point_light {
       return {node["color"].as<math::color>(), node["radius"].as<std::float_t>()};
     }
   );
 
   _component_io_registry.register_component<scenes::static_mesh>(
     "static_mesh",
-    [](YAML::Emitter& emitter, scenes::scene& scene, const scenes::static_mesh& static_mesh) -> void {
-      const auto& mesh_metadata = scene.mesh_metadata(static_mesh.mesh_id());
+    [](YAML::Emitter& emitter, [[maybe_unused]] scene_graph& graph, scene_asset_table& assets, const scenes::static_mesh& static_mesh) -> void {
+      const auto& mesh_metadata = assets.mesh_metadata(static_mesh.mesh_id());
 
-      emitter << YAML::Key << "color" << YAML::Value << YAML::Alias(mesh_metadata.name);
+      emitter << YAML::Key << "mesh" << YAML::Value << YAML::Alias(mesh_metadata.name);
       emitter << YAML::Key << "submeshes" << YAML::Value << YAML::BeginSeq;
 
       for (const auto& submesh : static_mesh.submeshes()) {
-        const auto& material_metadata = scene.material_metadata(submesh.material);
+        const auto& material_metadata = assets.material_metadata(submesh.material);
 
         emitter << YAML::BeginMap;
         emitter << YAML::Key << "index" << YAML::Value << submesh.index;
@@ -70,7 +72,7 @@ scenes_module::scenes_module()
 
       emitter << YAML::EndSeq;
     },
-    []([[maybe_unused]] const YAML::Node& node) -> scenes::static_mesh {
+    []([[maybe_unused]] const YAML::Node& node, [[maybe_unused]] scene_graph& graph, [[maybe_unused]] scene_asset_table& assets) -> scenes::static_mesh {
       return {math::uuid::null(), math::uuid::null()};
     }
   );
@@ -82,28 +84,20 @@ scenes_module::~scenes_module() {
 
 auto scenes_module::update() -> void {
   if (_scene) {
-    _scene->update_uniform_handler();
+    _scene->environment().update_uniforms();
   }
 }
 
 auto scenes_module::load_scene(const std::filesystem::path& path) -> scenes::scene& {
   auto& assets_module = core::engine::get_module<assets::assets_module>();
 
-  _scene.emplace(assets_module.resolve_path(path));
+  _scene.emplace(assets_module.resolve_path(path), _component_io_registry);
 
   return *_scene;
 }
 
 auto scenes_module::scene() -> scenes::scene& {
   return *_scene;
-}
-
-auto scenes_module::component_io(const std::uint32_t id) -> scenes::component_io& {
-  return _component_io_registry.get(id);
-}
-
-auto scenes_module::has_component_io(const std::uint32_t id) -> bool {
-  return _component_io_registry.has(id);
 }
 
 auto scenes_module::debug_lines() const -> const std::vector<line>& {
@@ -145,14 +139,14 @@ auto scenes_module::add_debug_plane(const sbx::math::vector3& origin, const sbx:
   add_debug_line(origin - s1 / 2.0f * v1 - s2 / 2.0f * v2, origin + s1 / 2.0f * v1 - s2 / 2.0f * v2, outline);
 
   for (auto i = 1u; i < n1; i++) {
-    const auto t = (static_cast<std::float_t>(i) - static_cast<std::float_t>(n1) / 2.0f) * s1/static_cast<std::float_t>(n1);
+    const auto t = (static_cast<std::float_t>(i) - static_cast<std::float_t>(n1) / 2.0f) * s1 / static_cast<std::float_t>(n1);
     const auto o1 = origin + t * v1;
 
     add_debug_line(o1 - s2 / 2.0f * v2, o1 + s2 / 2.0f * v2, color);
   }
 
   for (auto i = 1u; i < n2; i++) {
-    const auto t = (static_cast<std::float_t>(i) - static_cast<std::float_t>(n2) / 2.0f) * s2/static_cast<std::float_t>(n2);
+    const auto t = (static_cast<std::float_t>(i) - static_cast<std::float_t>(n2) / 2.0f) * s2 / static_cast<std::float_t>(n2);
     const auto o2 = origin + t * v2;
 
     add_debug_line(o2 - s1 / 2.0f * v1, o2 + s1 / 2.0f * v1, color);
@@ -201,14 +195,13 @@ auto scenes_module::add_debug_box(const math::matrix4x4& matrix, const math::vol
 }
 
 auto scenes_module::add_debug_circle(const math::vector3& center, const std::float_t radius, const math::vector3& normal, const math::color& color, const std::uint32_t segments) -> void {
-  // Orthonormal basis: find two perpendicular vectors to the normal
   const auto up = std::abs(math::vector3::dot(normal, math::vector3::up)) < 0.99f ? math::vector3::up : math::vector3::right;
   const auto tangent = math::vector3::normalized(math::vector3::cross(normal, up));
   const auto bitangent = math::vector3::normalized(math::vector3::cross(normal, tangent));
-  
+
   for (auto i = 0u; i < segments; ++i) {
-    float theta0 = (2.0f * math::two_pi) * (static_cast<float>(i) / segments);
-    float theta1 = (2.0f * math::two_pi) * (static_cast<float>(i + 1) / segments);
+    auto theta0 = (2.0f * math::two_pi) * (static_cast<float>(i) / segments);
+    auto theta1 = (2.0f * math::two_pi) * (static_cast<float>(i + 1) / segments);
 
     const auto point0 = center + (tangent * std::cos(theta0) + bitangent * std::sin(theta0)) * radius;
     const auto point1 = center + (tangent * std::cos(theta1) + bitangent * std::sin(theta1)) * radius;
@@ -218,16 +211,13 @@ auto scenes_module::add_debug_circle(const math::vector3& center, const std::flo
 }
 
 auto scenes_module::add_debug_sphere(const math::vector3& center, const std::float_t radius, const math::color& color, const std::uint32_t segments) -> void {
-  // XY Plane
   add_debug_circle(center, radius, math::vector3::backward, color, segments);
-  // YZ Plane
   add_debug_circle(center, radius, math::vector3::right, color, segments);
-  // XZ Plane
   add_debug_circle(center, radius, math::vector3::up, color, segments);
 }
 
 auto scenes_module::add_debug_frustum(const math::matrix4x4& view, const math::matrix4x4& projection, const sbx::math::color& color) -> void {
-  const auto corners = std::array<sbx::math::vector3, 8u>{ 
+  const auto corners = std::array<sbx::math::vector3, 8u>{
     math::vector3(-1, -1, -1),
     math::vector3(+1, -1, -1),
     math::vector3(+1, +1, -1),
@@ -265,44 +255,44 @@ auto scenes_module::add_debug_frustum(const math::matrix4x4& view, const math::m
   add_debug_line(points[5], points[7], color);
 
   const auto grid_color = color * 0.7f;
-  const int grid_lines = 100;
+  const auto grid_lines = 100;
 
   auto p1 = points[0];
   auto p2 = points[1];
-  auto s1 = (points[4]-points[0]) / static_cast<std::float_t>(grid_lines);
-  auto s2 = (points[5]-points[1]) / static_cast<std::float_t>(grid_lines);
+  auto s1 = (points[4] - points[0]) / static_cast<std::float_t>(grid_lines);
+  auto s2 = (points[5] - points[1]) / static_cast<std::float_t>(grid_lines);
 
-  for (int i = 0; i != grid_lines; i++, p1 += s1, p2 += s2) {
+  for (auto i = 0; i != grid_lines; i++, p1 += s1, p2 += s2) {
     add_debug_line(p1, p2, grid_color);
   }
 
   p1 = points[2];
   p2 = points[3];
 
-  s1 = (points[6]-points[2]) / static_cast<std::float_t>(grid_lines);
-  s2 = (points[7]-points[3]) / static_cast<std::float_t>(grid_lines);
+  s1 = (points[6] - points[2]) / static_cast<std::float_t>(grid_lines);
+  s2 = (points[7] - points[3]) / static_cast<std::float_t>(grid_lines);
 
-  for (int i = 0; i != grid_lines; i++, p1 += s1, p2 += s2) {
+  for (auto i = 0; i != grid_lines; i++, p1 += s1, p2 += s2) {
     add_debug_line(p1, p2, grid_color);
   }
 
   p1 = points[0];
   p2 = points[3];
 
-  s1 = (points[4]-points[0]) / static_cast<std::float_t>(grid_lines);
-  s2 = (points[7]-points[3]) / static_cast<std::float_t>(grid_lines);
+  s1 = (points[4] - points[0]) / static_cast<std::float_t>(grid_lines);
+  s2 = (points[7] - points[3]) / static_cast<std::float_t>(grid_lines);
 
-  for (int i = 0; i != grid_lines; i++, p1 += s1, p2 += s2) {
+  for (auto i = 0; i != grid_lines; i++, p1 += s1, p2 += s2) {
     add_debug_line(p1, p2, grid_color);
   }
 
   p1 = points[1];
   p2 = points[2];
 
-  s1 = (points[5]-points[1]) / static_cast<std::float_t>(grid_lines);
-  s2 = (points[6]-points[2]) / static_cast<std::float_t>(grid_lines);
+  s1 = (points[5] - points[1]) / static_cast<std::float_t>(grid_lines);
+  s2 = (points[6] - points[2]) / static_cast<std::float_t>(grid_lines);
 
-  for (int i = 0; i != grid_lines; i++, p1 += s1, p2 += s2) {
+  for (auto i = 0; i != grid_lines; i++, p1 += s1, p2 += s2) {
     add_debug_line(p1, p2, grid_color);
   }
 }

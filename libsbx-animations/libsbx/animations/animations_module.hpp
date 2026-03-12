@@ -36,8 +36,10 @@ public:
     auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
 
     auto& scene = scenes_module.scene();
+  auto& environment = scene.environment();
+  auto& graph = scene.graph();
 
-    auto& skinned_mesh = scene.add_component<sbx::scenes::skinned_mesh>(node, mesh_id, std::forward<Args>(args)...);
+    auto& skinned_mesh = graph.add_component<sbx::scenes::skinned_mesh>(node, mesh_id, std::forward<Args>(args)...);
 
     const auto& mesh = assets_module.get_asset<animations::mesh>(mesh_id);
 
@@ -54,7 +56,7 @@ public:
 
       const auto [position, rotation, scale] = math::decompose(bones[i].local_bind_matrix);
 
-      nodes.push_back(scene.create_child_node(parent, skeleton.name_for_bone(i).str(), scenes::transform{position, rotation, scale}));
+      nodes.push_back(graph.create_child_node(parent, skeleton.name_for_bone(i).str(), scenes::transform{position, rotation, scale}));
     }
 
     skinned_mesh.set_nodes(std::move(nodes));

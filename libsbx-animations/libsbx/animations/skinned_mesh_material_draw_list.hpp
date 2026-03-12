@@ -69,12 +69,14 @@ struct skinned_mesh_traits {
   static auto for_each_submission(scenes::scene& scene, Callable&& callable) -> void {
     auto& assets_module = core::engine::get_module<assets::assets_module>();
 
+    auto& graph = scene.graph();
+
     _skinning_jobs.clear();
 
-    const auto query = scene.query<const scenes::skinned_mesh, animations::animator>();
+    const auto query = graph.query<const scenes::skinned_mesh, animations::animator>();
 
     for (auto&& [node, skinned_mesh, animator] : query.each()) {
-      const auto transform_data = models::transform_data{scene.world_transform(node), scene.world_normal(node)};
+      const auto transform_data = models::transform_data{graph.world_transform(node), graph.world_normal(node)};
 
       const auto& pose = skinned_mesh.pose();
 

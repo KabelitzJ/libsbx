@@ -120,18 +120,22 @@ struct interop {
       _add_component_functions[type.get_type_id()] = [&scenes_module](scenes::node node) -> void { 
         auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
         auto& scene = scenes_module.scene();
+        auto& graph = scene.graph();
   
-        scene.add_component<Type>(node);
+        graph.add_component<Type>(node);
       };
       _has_component_functions[type.get_type_id()] = [&scenes_module](scenes::node node) -> bool {
         auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
         auto& scene = scenes_module.scene();
+        auto& graph = scene.graph();
   
-        return scene.has_component<Type>(node);
+        return graph.has_component<Type>(node);
       };
       // _remove_component_functions[type.get_type_id()] = [&scenes_module](scenes::node node) { 
       //   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
       //   auto& scene = scenes_module.scene();
+      //   auto& environment = scene.environment();
+      //   auto& graph = scene.graph();
   
       //   scene.remove_component<Type>(node);
       // };

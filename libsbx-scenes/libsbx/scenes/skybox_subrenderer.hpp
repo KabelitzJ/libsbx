@@ -76,20 +76,23 @@ public:
     auto& assets_module = core::engine::get_module<assets::assets_module>();
     auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
     auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
-    auto& scene = scenes_module.scene();
 
-    const auto camera_node = scene.camera();
+    auto& scene = scenes_module.scene();
+  auto& environment = scene.environment();
+  auto& graph = scene.graph();
+
+    const auto camera_node = environment.camera();
     
-    if (!scene.has_component<scenes::skybox>(camera_node)) {
+    if (!graph.has_component<scenes::skybox>(camera_node)) {
       utility::logger<"scenes">::warn("Skybox subrenderer: No camera node with skybox component found");
       return;
     }
 
-    const auto& skybox = scene.get_component<scenes::skybox>(camera_node);
+    const auto& skybox = graph.get_component<scenes::skybox>(camera_node);
 
     _pipeline.bind(command_buffer);
 
-    _descriptor_handler.push("scene", scene.uniform_handler());
+    _descriptor_handler.push("scene", environment.uniform_handler());
     _descriptor_handler.push("skybox", graphics_module.get_resource<graphics::cube_image>(skybox.cube_image));
 
     _push_handler.push("tint", skybox.tint);

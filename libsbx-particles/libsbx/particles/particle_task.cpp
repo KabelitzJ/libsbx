@@ -27,12 +27,15 @@ auto particle_task::execute(graphics::command_buffer& command_buffer) -> void {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 
   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
+
   auto& scene = scenes_module.scene();
+  auto& environment = scene.environment();
+  auto& graph = scene.graph();
 
   std::erase_if(_emitter_gpu_data, [&](const auto& entry) {
     const auto& [node, gpu_data] = entry;
 
-    if (!scene.is_valid(node) || !scene.has_component<particle_emitter>(node)) {
+    if (!graph.is_valid(node) || !graph.has_component<particle_emitter>(node)) {
       graphics_module.remove_resource<graphics::storage_buffer>(gpu_data.particle_buffer);
       graphics_module.remove_resource<graphics::storage_buffer>(gpu_data.counter_buffer);
       graphics_module.remove_resource<graphics::storage_buffer>(gpu_data.alive_list_buffer);
@@ -46,14 +49,14 @@ auto particle_task::execute(graphics::command_buffer& command_buffer) -> void {
 
   const auto delta_time = core::engine::delta_time().value();
 
-  auto emitter_query = scene.query<particle_emitter, const scenes::transform>();
+  auto emitter_query = graph.query<particle_emitter, const scenes::transform>();
 
   for (auto&& [node, emitter, transform] : emitter_query.each()) {
     utility::assert_that(emitter.images.size() > 0u, "Invalid particle_emitter with 0 images");
     utility::assert_that(emitter.images, [](const auto& handle) -> bool { return handle.is_valid(); }, "Invalid image handle in particle_emitter");
 
     auto& gpu_data = _get_or_create_gpu_data(node, emitter);
-    const auto position = scene.world_position(node);
+    const auto position = graph.world_position(node);
 
     if (gpu_data.reset_requested) {
       auto params = _build_emitter_params(emitter, position, 0, delta_time);

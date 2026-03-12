@@ -90,10 +90,12 @@ struct static_mesh_traits {
 
   template<typename Callable>
   static void for_each_submission(scenes::scene& scene, Callable&& callable) {
-    auto query = scene.query<const scenes::static_mesh>();
+    auto& graph = scene.graph();
+
+    auto query = graph.query<const scenes::static_mesh>();
 
     for (auto&& [node, static_mesh] : query.each()) {
-      const auto transform_data = models::transform_data{scene.world_transform(node), scene.world_normal(node)};
+      const auto transform_data = models::transform_data{graph.world_transform(node), graph.world_normal(node)};
 
       for (const auto& submesh : static_mesh.submeshes()) {
         std::invoke(callable, node, static_mesh.mesh_id(), submesh.index, submesh.material, transform_data, instance_payload{});

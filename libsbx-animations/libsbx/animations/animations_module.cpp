@@ -23,17 +23,20 @@ auto animations_module::update() -> void {
   auto& assets_module = core::engine::get_module<assets::assets_module>();
 
   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
+
   auto& scene = scenes_module.scene();
+  auto& environment = scene.environment();
+  auto& graph = scene.graph();
 
 
   const auto delta_time = core::engine::delta_time();
 
-  auto animator_query = scene.query<animator>();
+  auto animator_query = graph.query<animator>();
 
   for (auto&& [node, animator] : animator_query.each()) {
     animator.update(delta_time);
 
-    auto& skinned_mesh = scene.get_component<scenes::skinned_mesh>(node);
+    auto& skinned_mesh = graph.get_component<scenes::skinned_mesh>(node);
 
     const auto& mesh = assets_module.get_asset<animations::mesh>(skinned_mesh.mesh_id());
 
@@ -44,7 +47,7 @@ auto animations_module::update() -> void {
     const auto& nodes = skinned_mesh.nodes();
 
     for (auto i = 0u; i < nodes.size(); ++i) {
-      auto& transform = scene.get_component<scenes::transform>(nodes[i]);
+      auto& transform = graph.get_component<scenes::transform>(nodes[i]);
 
       const auto& local = locals[i];
 
@@ -62,8 +65,10 @@ auto animations_module::find_skeleton_node(const scenes::node node, const utilit
   auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
 
   auto& scene = scenes_module.scene();
+  auto& environment = scene.environment();
+  auto& graph = scene.graph();
 
-  auto& skinned_mesh = scene.get_component<sbx::scenes::skinned_mesh>(node);
+  auto& skinned_mesh = graph.get_component<sbx::scenes::skinned_mesh>(node);
 
   const auto& mesh = assets_module.get_asset<animations::mesh>(skinned_mesh.mesh_id());
 

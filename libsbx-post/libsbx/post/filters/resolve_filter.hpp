@@ -63,22 +63,24 @@ public:
     auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
     auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
     auto& scene = scenes_module.scene();
+  auto& environment = scene.environment();
+  auto& graph = scene.graph();
 
     auto& pipeline = base::pipeline();
     auto& descriptor_handler = base::descriptor_handler();
 
     pipeline.bind(command_buffer);
 
-    auto point_light_nodes = scene.query<scenes::point_light>();
+    auto point_light_nodes = graph.query<scenes::point_light>();
 
     auto point_lights = std::vector<point_light_data>{};
     point_lights.reserve(max_point_lights);
     auto point_light_count = std::uint32_t{0};
 
     for (const auto& node : point_light_nodes) {
-      const auto model = scene.world_transform(node);
+      const auto model = graph.world_transform(node);
 
-      const auto& light = scene.get_component<scenes::point_light>(node);
+      const auto& light = graph.get_component<scenes::point_light>(node);
 
       const auto position = math::vector3{model[3]};
 
@@ -95,7 +97,7 @@ public:
       _point_lights_storage_handler.push(std::span<const point_light_data>{point_lights.data(), point_light_count});
       _push_handler.push("point_light_count", point_light_count);
 
-      descriptor_handler.push("scene", scene.uniform_handler());
+      descriptor_handler.push("scene", environment.uniform_handler());
       descriptor_handler.push("buffer_point_lights", _point_lights_storage_handler);
     }
 
@@ -104,9 +106,9 @@ public:
     }
 
     if constexpr (!Transparent) {
-      auto camera_node = scene.camera();
+      auto camera_node = environment.camera();
 
-      const auto& skybox = scene.get_component<scenes::skybox>(camera_node);
+      const auto& skybox = graph.get_component<scenes::skybox>(camera_node);
 
       descriptor_handler.push("brdf_image", graphics_module.get_resource<graphics::image2d>(skybox.brdf_image));
       descriptor_handler.push("irradiance_image", graphics_module.get_resource<graphics::cube_image>(skybox.irradiance_image));

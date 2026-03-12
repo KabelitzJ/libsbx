@@ -71,49 +71,52 @@ application::application()
   auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
 
   auto& scene = scenes_module.load_scene("res://scenes/scene.yaml");
+  auto& graph = scene.graph();
+  auto& assets = scene.assets();
+  auto& environment = scene.environment();
 
   auto& scripting_module = sbx::core::engine::get_module<sbx::scripting::scripting_module>();
 
   // Textures
-  scene.add_image("base", "res://textures/base.png", sbx::graphics::format::r8g8b8a8_srgb);
+  assets.add_image("base", "res://textures/base.png", sbx::graphics::format::r8g8b8a8_srgb);
 
-  scene.add_image("helmet_albedo", "res://meshes/helmet/textures/albedo.jpg", sbx::graphics::format::r8g8b8a8_srgb);
-  scene.add_image("helmet_normal", "res://meshes/helmet/textures/normal.jpg", sbx::graphics::format::r8g8b8a8_unorm);
-  scene.add_image("helmet_mr", "res://meshes/helmet/textures/mr.jpg", sbx::graphics::format::r8g8b8a8_unorm);
-  scene.add_image("helmet_ao", "res://meshes/helmet/textures/ao.jpg", sbx::graphics::format::r8g8b8a8_unorm);
-  scene.add_image("helmet_emissive", "res://meshes/helmet/textures/emissive.jpg", sbx::graphics::format::r8g8b8a8_srgb);
+  assets.add_image("helmet_albedo", "res://meshes/helmet/textures/albedo.jpg", sbx::graphics::format::r8g8b8a8_srgb);
+  assets.add_image("helmet_normal", "res://meshes/helmet/textures/normal.jpg", sbx::graphics::format::r8g8b8a8_unorm);
+  assets.add_image("helmet_mr", "res://meshes/helmet/textures/mr.jpg", sbx::graphics::format::r8g8b8a8_unorm);
+  assets.add_image("helmet_ao", "res://meshes/helmet/textures/ao.jpg", sbx::graphics::format::r8g8b8a8_unorm);
+  assets.add_image("helmet_emissive", "res://meshes/helmet/textures/emissive.jpg", sbx::graphics::format::r8g8b8a8_srgb);
 
   
-  scene.add_image("trunk_albedo", "res://meshes/trees/tree_1/textures/trunk_albedo.jpg", sbx::graphics::format::r8g8b8a8_srgb);
-  scene.add_image("branch_albedo", "res://meshes/trees/tree_1/textures/branch_albedo.png", sbx::graphics::format::r8g8b8a8_srgb);
+  assets.add_image("trunk_albedo", "res://meshes/trees/tree_1/textures/trunk_albedo.jpg", sbx::graphics::format::r8g8b8a8_srgb);
+  assets.add_image("branch_albedo", "res://meshes/trees/tree_1/textures/branch_albedo.png", sbx::graphics::format::r8g8b8a8_srgb);
 
-  // scene.add_cube_image("skybox", "res://skyboxes/clouds3", ".hdr", sbx::graphics::format::r32g32b32a32_sfloat);
-  scene.add_cube_image("skybox", "res://skyboxes/clouds2", ".png", sbx::graphics::format::r8g8b8a8_srgb);
+  // assets.add_cube_image("skybox", "res://skyboxes/clouds3", ".hdr", sbx::graphics::format::r32g32b32a32_sfloat);
+  assets.add_cube_image("skybox", "res://skyboxes/clouds2", ".png", sbx::graphics::format::r8g8b8a8_srgb);
 
-  scene.add_image("roboto_atlas", "res://fonts/roboto_atlas.png", sbx::graphics::format::r8g8b8a8_srgb);
+  assets.add_image("roboto_atlas", "res://fonts/roboto_atlas.png", sbx::graphics::format::r8g8b8a8_srgb);
 
   _generate_brdf(512);
   _generate_irradiance(64);
   _generate_prefiltered(512);
 
   // Meshes
-  scene.add_mesh<sbx::models::mesh>("cube", "res://meshes/cube/cube.gltf");
+  assets.add_mesh<sbx::models::mesh>("cube", "res://meshes/cube/cube.gltf");
 
-  scene.add_mesh<sbx::models::mesh>("helmet", "res://meshes/helmet/helmet.gltf");
+  assets.add_mesh<sbx::models::mesh>("helmet", "res://meshes/helmet/helmet.gltf");
 
-  scene.add_mesh<sbx::models::mesh>("tree_1", "res://meshes/trees/tree_1/tree_1.gltf");
-  scene.add_mesh<sbx::models::mesh>("tree_2", "res://meshes/trees/tree_2/tree_2.gltf");
+  assets.add_mesh<sbx::models::mesh>("tree_1", "res://meshes/trees/tree_1/tree_1.gltf");
+  assets.add_mesh<sbx::models::mesh>("tree_2", "res://meshes/trees/tree_2/tree_2.gltf");
 
   // Materials
 
-  auto& base_material = scene.add_material<sbx::models::material>("base");
-  base_material.albedo.image = scene.get_image("base");
+  auto& base_material = assets.add_material<sbx::models::material>("base");
+  base_material.albedo.image = assets.get_image("base");
 
   // Animations
 
-  scene.add_animation<sbx::animations::animation>("Walk", "res://meshes/fox/fox.gltf", "Walk");
-  scene.add_animation<sbx::animations::animation>("Survey", "res://meshes/fox/fox.gltf", "Survey");
-  scene.add_animation<sbx::animations::animation>("Run", "res://meshes/fox/fox.gltf", "Run");
+  assets.add_animation<sbx::animations::animation>("Walk", "res://meshes/fox/fox.gltf", "Walk");
+  assets.add_animation<sbx::animations::animation>("Survey", "res://meshes/fox/fox.gltf", "Survey");
+  assets.add_animation<sbx::animations::animation>("Run", "res://meshes/fox/fox.gltf", "Run");
 
   // Window
 
@@ -127,18 +130,18 @@ application::application()
 
   // Tree 1
 
-  auto tree1 = scene.create_node("Tree1");
+  auto tree1 = graph.create_node("Tree1");
 
-  auto& tree_trunk_material = scene.add_material<sbx::models::material>("tree_trunk");
-  tree_trunk_material.albedo.image = scene.get_image("trunk_albedo");
+  auto& tree_trunk_material = assets.add_material<sbx::models::material>("tree_trunk");
+  tree_trunk_material.albedo.image = assets.get_image("trunk_albedo");
   tree_trunk_material.metallic_factor = 0.0f;
   tree_trunk_material.roughness_factor = 0.8f;
   tree_trunk_material.sway_speed = 0.8f;
   tree_trunk_material.sway_strength = 0.04f;
   tree_trunk_material.sway_falloff_exponent = 3.0f;
 
-  auto& tree_branch_material = scene.add_material<sbx::models::material>("tree_branch");
-  tree_branch_material.albedo.image = scene.get_image("branch_albedo");
+  auto& tree_branch_material = assets.add_material<sbx::models::material>("tree_branch");
+  tree_branch_material.albedo.image = assets.get_image("branch_albedo");
   tree_branch_material.alpha = sbx::models::alpha_mode::mask;
   tree_branch_material.is_double_sided = true;
   tree_branch_material.metallic_factor = 0.0f;
@@ -152,60 +155,60 @@ application::application()
   tree_branch_material.scrumble_falloff_exponent = 1.5f;
 
   auto tree_submeshes = std::vector<sbx::scenes::static_mesh::submesh>{
-    sbx::scenes::static_mesh::submesh{0, scene.get_material("tree_trunk")},
-    sbx::scenes::static_mesh::submesh{1, scene.get_material("tree_branch")}
+    sbx::scenes::static_mesh::submesh{0, assets.get_material("tree_trunk")},
+    sbx::scenes::static_mesh::submesh{1, assets.get_material("tree_branch")}
   };
 
-  scene.add_component<sbx::scenes::static_mesh>(tree1, scene.get_mesh("tree_1"), tree_submeshes);
+  graph.add_component<sbx::scenes::static_mesh>(tree1, assets.get_mesh("tree_1"), tree_submeshes);
 
-  auto& tree_transform = scene.get_component<sbx::scenes::transform>(tree1);
+  auto& tree_transform = graph.get_component<sbx::scenes::transform>(tree1);
   tree_transform.set_position(sbx::math::vector3{5.0f, 0.0f, -5.0f});
   tree_transform.set_scale(sbx::math::vector3{1.0f, 1.0f, 1.0f});
 
   // Tree 2
 
-  auto tree2 = scene.create_node("Tree2");
+  auto tree2 = graph.create_node("Tree2");
 
-  scene.add_component<sbx::scenes::static_mesh>(tree2, scene.get_mesh("tree_2"), tree_submeshes);
+  graph.add_component<sbx::scenes::static_mesh>(tree2, assets.get_mesh("tree_2"), tree_submeshes);
 
-  auto& tree2_transform = scene.get_component<sbx::scenes::transform>(tree2);
+  auto& tree2_transform = graph.get_component<sbx::scenes::transform>(tree2);
   tree2_transform.set_position(sbx::math::vector3{-5.0f, 0.0f, -5.0f});
   tree2_transform.set_scale(sbx::math::vector3{1.0f, 1.0f, 1.0f});
 
   // Helmet
 
-  auto helmet = scene.create_node("Helmet");
+  auto helmet = graph.create_node("Helmet");
 
-  scene.add_component<sbx::scenes::static_mesh>(helmet, scene.get_mesh("helmet"), sbx::models::load_materials("res://meshes/helmet/helmet.gltf"));
+  graph.add_component<sbx::scenes::static_mesh>(helmet, assets.get_mesh("helmet"), sbx::models::load_materials("res://meshes/helmet/helmet.gltf"));
 
-  auto& helmet_transform = scene.get_component<sbx::scenes::transform>(helmet);
+  auto& helmet_transform = graph.get_component<sbx::scenes::transform>(helmet);
   helmet_transform.set_position(sbx::math::vector3{0.0f, 3.0f, 0.0f});
   helmet_transform.set_scale(sbx::math::vector3{1.0f, 1.0f, 1.0f});
 
-  auto& helmet_collider = scene.add_component<sbx::physics::mesh_collider>(helmet, "res://meshes/helmet/helmet.gltf");
+  auto& helmet_collider = graph.add_component<sbx::physics::mesh_collider>(helmet, "res://meshes/helmet/helmet.gltf");
 
   // World Sprite
 
-  auto sprite = scene.create_node("WorldSprite");
+  auto sprite = graph.create_node("WorldSprite");
 
-  scene.add_component<sbx::sprites::sprite>(sprite, sbx::sprites::world_sprite{
+  graph.add_component<sbx::sprites::sprite>(sprite, sbx::sprites::world_sprite{
     .base_color = sbx::math::color::white(),
-    .albedo_image = scene.get_image("base"),
+    .albedo_image = assets.get_image("base"),
     .size = {2.0f, 2.0f},
     .pivot = {0.5f, 0.5f},
     .is_billboard = true
   });
 
-  auto& sprite_transform = scene.get_component<sbx::scenes::transform>(sprite);
+  auto& sprite_transform = graph.get_component<sbx::scenes::transform>(sprite);
   sprite_transform.set_position(sbx::math::vector3{5.0f, 5.0f, 5.0f});
 
   // UI
 
-  _font = sbx::ui::load_font(scene.get_image("roboto_atlas"), "demo/assets/fonts/roboto_atlas.json");
+  _font = sbx::ui::load_font(assets.get_image("roboto_atlas"), "demo/assets/fonts/roboto_atlas.json");
 
-  auto ui_node = scene.create_node("HUD");
+  auto ui_node = graph.create_node("HUD");
 
-  auto& canvas = scene.add_component<sbx::ui::canvas>(ui_node);
+  auto& canvas = graph.add_component<sbx::ui::canvas>(ui_node);
   canvas.is_enabled = false;
 
   // Left sidebar - vertical layout
@@ -389,31 +392,31 @@ application::application()
 
   // Terrain
 
-  auto terrain = scene.create_node("Terrain");
+  auto terrain = graph.create_node("Terrain");
 
-  auto& terrain_material = scene.add_material<sbx::models::material>("terrain");
-  terrain_material.albedo.image = scene.get_image("base");
+  auto& terrain_material = assets.add_material<sbx::models::material>("terrain");
+  terrain_material.albedo.image = assets.get_image("base");
   terrain_material.metallic_factor = 0.0f;
   terrain_material.roughness_factor = 1.0f;
   terrain_material.specular_factor = 0.0f;
 
-  scene.add_component<sbx::scenes::static_mesh>(terrain, scene.get_mesh("cube"), scene.get_material("terrain"));
+  graph.add_component<sbx::scenes::static_mesh>(terrain, assets.get_mesh("cube"), assets.get_material("terrain"));
 
-  auto& transform = scene.get_component<sbx::scenes::transform>(terrain);
+  auto& transform = graph.get_component<sbx::scenes::transform>(terrain);
   transform.set_position(sbx::math::vector3{0.0f, 0.0f, 0.0f});
   transform.set_scale(sbx::math::vector3{100.0f, 0.1f, 100.0f});
 
-  scene.add_component<sbx::physics::shape_collider>(terrain, sbx::physics::box{sbx::math::vector3{200.0f, 0.25f, 200.0f}});
-  scene.add_component<sbx::physics::rigidbody>(terrain, 0.0f);
+  graph.add_component<sbx::physics::shape_collider>(terrain, sbx::physics::box{sbx::math::vector3{200.0f, 0.25f, 200.0f}});
+  graph.add_component<sbx::physics::rigidbody>(terrain, 0.0f);
 
   // Camera
-  auto camera_node = scene.camera();
+  auto camera_node = environment.camera();
 
-  auto& camera_transform = scene.get_component<sbx::scenes::transform>(camera_node);
+  auto& camera_transform = graph.get_component<sbx::scenes::transform>(camera_node);
   camera_transform.set_position(sbx::math::vector3{0.0f, 10.0f, 20.0f});
   camera_transform.look_at(sbx::math::vector3::zero);
 
-  scene.add_component<sbx::scenes::skybox>(camera_node, scene.get_cube_image("skybox"), _brdf, _irradiance, _prefiltered, sbx::math::color::white());
+  graph.add_component<sbx::scenes::skybox>(camera_node, assets.get_cube_image("skybox"), _brdf, _irradiance, _prefiltered, sbx::math::color::white());
 
   scripting_module.instantiate(camera_node, "build/x86_64/gcc/debug/_dotnet/Demo.dll", "Demo.EditorCameraController");
 
@@ -430,6 +433,8 @@ auto application::update() -> void  {
   auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
 
   auto& scene = scenes_module.scene();
+  auto& environment = scene.environment();
+  auto& graph = scene.graph();
 
   const auto delta_time = sbx::core::engine::delta_time();
 
@@ -573,6 +578,9 @@ auto application::_generate_irradiance(const std::uint32_t size) -> void {
   auto& graphics_module = sbx::core::engine::get_module<sbx::graphics::graphics_module>();
   auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
   auto& scene = scenes_module.scene();
+  auto& environment = scene.environment();
+  auto& graph = scene.graph();
+  auto& assets = scene.assets();
 
   const auto& logical_device = graphics_module.logical_device();
   const auto& graphics_queue = logical_device.queue<sbx::graphics::queue::type::graphics>();
@@ -583,7 +591,7 @@ auto application::_generate_irradiance(const std::uint32_t size) -> void {
   auto timer = sbx::utility::timer{};
 
   auto& irradiance = graphics_module.get_resource<sbx::graphics::cube_image>(_irradiance);
-  auto& skybox = graphics_module.get_resource<sbx::graphics::cube_image>(scene.get_cube_image("skybox"));
+  auto& skybox = graphics_module.get_resource<sbx::graphics::cube_image>(assets.get_cube_image("skybox"));
 
   auto initial_command_buffer = sbx::graphics::command_buffer{true, VK_QUEUE_GRAPHICS_BIT};
 
@@ -746,7 +754,11 @@ auto application::_generate_prefiltered(uint32_t size) -> void {
 
   auto& graphics_module = sbx::core::engine::get_module<sbx::graphics::graphics_module>();
   auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
+
   auto& scene = scenes_module.scene();
+  auto& environment = scene.environment();
+  auto& graph = scene.graph();
+  auto& assets = scene.assets();
 
   const auto& logical_device = graphics_module.logical_device();
   const auto& graphics_queue = logical_device.queue<sbx::graphics::queue::type::graphics>();
@@ -757,7 +769,7 @@ auto application::_generate_prefiltered(uint32_t size) -> void {
   auto timer = sbx::utility::timer{};
 
   auto& prefiltered = graphics_module.get_resource<sbx::graphics::cube_image>(_prefiltered);
-  auto& skybox = graphics_module.get_resource<sbx::graphics::cube_image>(scene.get_cube_image("skybox"));
+  auto& skybox = graphics_module.get_resource<sbx::graphics::cube_image>(assets.get_cube_image("skybox"));
 
   auto initial_command_buffer = sbx::graphics::command_buffer{true, VK_QUEUE_GRAPHICS_BIT};
 

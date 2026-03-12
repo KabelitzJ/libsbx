@@ -101,8 +101,10 @@ private:
   auto _integrate_velocities(std::float_t dt) -> void {
     auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
     auto& scene = scenes_module.scene();
+  auto& environment = scene.environment();
+  auto& graph = scene.graph();
 
-    auto query = scene.query<scenes::transform, physics::rigidbody>();
+    auto query = graph.query<scenes::transform, physics::rigidbody>();
 
     for (auto&& [node, transform, rigidbody] : query.each()) {
       if (rigidbody.is_static()) {
@@ -129,8 +131,10 @@ private:
   auto _integrate_positions(std::float_t dt) -> void {
     auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
     auto& scene = scenes_module.scene();
+  auto& environment = scene.environment();
+  auto& graph = scene.graph();
 
-    auto query = scene.query<scenes::transform, physics::rigidbody>();
+    auto query = graph.query<scenes::transform, physics::rigidbody>();
 
     for (auto&& [node, transform, rigidbody] : query.each()) {
       if (rigidbody.is_static()) {
@@ -155,13 +159,15 @@ private:
   auto _collision_broad_phase() -> std::vector<collision_pair_type> {
     auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
     auto& scene = scenes_module.scene();
+  auto& environment = scene.environment();
+  auto& graph = scene.graph();
 
     auto tree = octree_type{math::volume{math::vector3{-500.0f}, math::vector3{500.0f}}, 64u};
-    auto query = scene.query<const physics::shape_collider, const physics::rigidbody>();
+    auto query = graph.query<const physics::shape_collider, const physics::rigidbody>();
 
     for (auto&& [node, collider, rigidbody] : query.each()) {
-      const auto translation = math::matrix4x4::translated(sbx::math::matrix4x4::identity, scene.world_position(node));
-      const auto rotation = math::matrix_cast<math::matrix4x4>(scene.world_rotation(node));
+      const auto translation = math::matrix4x4::translated(sbx::math::matrix4x4::identity, graph.world_position(node));
+      const auto rotation = math::matrix_cast<math::matrix4x4>(graph.world_rotation(node));
 
       const auto volume = get_bounding_volume(collider, translation * rotation);
 
@@ -174,6 +180,8 @@ private:
   auto _collision_narrow_phase(const std::vector<collision_pair_type>& pairs) -> std::vector<collision> {
     auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
     auto& scene = scenes_module.scene();
+  auto& environment = scene.environment();
+  auto& graph = scene.graph();
 
     auto collisions = std::vector<collision>{};
     collisions.reserve(pairs.size());
@@ -182,18 +190,18 @@ private:
       const auto node_a = std::min(first, second);
       const auto node_b = std::max(first, second);
 
-      const auto& body_a = scene.get_component<physics::rigidbody>(node_a);
-      const auto& body_b = scene.get_component<physics::rigidbody>(node_b);
+      const auto& body_a = graph.get_component<physics::rigidbody>(node_a);
+      const auto& body_b = graph.get_component<physics::rigidbody>(node_b);
 
       if (body_a.is_static() && body_b.is_static()) {
         continue;
       }
 
-      const auto& collider_a = scene.get_component<physics::shape_collider>(node_a);
-      const auto& collider_b = scene.get_component<physics::shape_collider>(node_b);
+      const auto& collider_a = graph.get_component<physics::shape_collider>(node_a);
+      const auto& collider_b = graph.get_component<physics::shape_collider>(node_b);
 
-      const auto data_a = collider_data{scene.world_position(node_a), math::quaternion::normalized(scene.world_rotation(node_a)), collider_a};
-      const auto data_b = collider_data{scene.world_position(node_b), math::quaternion::normalized(scene.world_rotation(node_b)), collider_b};
+      const auto data_a = collider_data{graph.world_position(node_a), math::quaternion::normalized(graph.world_rotation(node_a)), collider_a};
+      const auto data_b = collider_data{graph.world_position(node_b), math::quaternion::normalized(graph.world_rotation(node_b)), collider_b};
 
       if (auto manifold = check_collision(data_a, data_b); manifold) {
         for (const auto& point : manifold->contact_points) {
@@ -210,7 +218,9 @@ private:
   auto _resolve_collisions(const std::vector<collision>& collisions, std::float_t dt) -> void {
     SBX_PROFILE_SCOPE("physics_module::_resolve_collisions");
 
-    auto& scene = core::engine::get_module<scenes::scenes_module>().scene();
+    auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
+    auto& scene = scenes_module.scene();
+    auto& graph = scene.graph();
 
     ++_solver_tick;
 
@@ -232,18 +242,18 @@ private:
       const auto node_a = collision_entry.node_a;
       const auto node_b = collision_entry.node_b;
 
-      auto& rigidbody_a = scene.get_component<physics::rigidbody>(node_a);
-      auto& rigidbody_b = scene.get_component<physics::rigidbody>(node_b);
+      auto& rigidbody_a = graph.get_component<physics::rigidbody>(node_a);
+      auto& rigidbody_b = graph.get_component<physics::rigidbody>(node_b);
 
       if (rigidbody_a.is_static() && rigidbody_b.is_static()) {
         continue;
       }
 
-      const auto world_position_a = scene.world_position(node_a);
-      const auto world_position_b = scene.world_position(node_b);
+      const auto world_position_a = graph.world_position(node_a);
+      const auto world_position_b = graph.world_position(node_b);
 
-      const auto rotation_matrix_a = math::matrix_cast<math::matrix3x3>(scene.world_rotation(node_a));
-      const auto rotation_matrix_b = math::matrix_cast<math::matrix3x3>(scene.world_rotation(node_b));
+      const auto rotation_matrix_a = math::matrix_cast<math::matrix3x3>(graph.world_rotation(node_a));
+      const auto rotation_matrix_b = math::matrix_cast<math::matrix3x3>(graph.world_rotation(node_b));
 
       const auto inverse_rotation_matrix_a = math::matrix3x3::transposed(rotation_matrix_a);
       const auto inverse_rotation_matrix_b = math::matrix3x3::transposed(rotation_matrix_b);
@@ -377,8 +387,8 @@ private:
 
     // warm start (apply cached impulses once before iterations)
     for (auto& solver_contact_entry : solver_contacts) {
-      auto& rigidbody_a = scene.get_component<physics::rigidbody>(solver_contact_entry.node_a);
-      auto& rigidbody_b = scene.get_component<physics::rigidbody>(solver_contact_entry.node_b);
+      auto& rigidbody_a = graph.get_component<physics::rigidbody>(solver_contact_entry.node_a);
+      auto& rigidbody_b = graph.get_component<physics::rigidbody>(solver_contact_entry.node_b);
 
       const auto normal_impulse = solver_contact_entry.constraint.normal * solver_contact_entry.constraint.normal_impulse;
       const auto tangent1_impulse = solver_contact_entry.constraint.tangent1 * solver_contact_entry.constraint.tangent1_impulse;
@@ -392,8 +402,8 @@ private:
     // sequential impulse solver
     for (auto iteration_index = 0; iteration_index < solver_iterations; ++iteration_index) {
       for (auto& solver_contact_entry : solver_contacts) {
-        auto& rigidbody_a = scene.get_component<physics::rigidbody>(solver_contact_entry.node_a);
-        auto& rigidbody_b = scene.get_component<physics::rigidbody>(solver_contact_entry.node_b);
+        auto& rigidbody_a = graph.get_component<physics::rigidbody>(solver_contact_entry.node_a);
+        auto& rigidbody_b = graph.get_component<physics::rigidbody>(solver_contact_entry.node_b);
 
         // Recompute relative velocity at the contact
         const auto velocity_at_contact_a = rigidbody_a.velocity() + math::vector3::cross(rigidbody_a.angular_velocity(), solver_contact_entry.constraint.r_a);
@@ -459,6 +469,8 @@ private:
 
     auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
     auto& scene = scenes_module.scene();
+  auto& environment = scene.environment();
+  auto& graph = scene.graph();
 
 
   }
@@ -479,27 +491,29 @@ private:
   }
 
   auto _positional_correction(const std::vector<collision>& collisions) -> void {
-    auto& scene = core::engine::get_module<scenes::scenes_module>().scene();
+    auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
+    auto& scene = scenes_module.scene();
+    auto& graph = scene.graph();
 
     constexpr auto correction_percent = 0.8f;
     constexpr auto penetration_slop = 0.003f;
     constexpr auto max_correction = 0.05f;
 
     for (const auto& collision_pair : collisions) {
-      auto& rigidbody_a = scene.get_component<physics::rigidbody>(collision_pair.node_a);
-      auto& rigidbody_b = scene.get_component<physics::rigidbody>(collision_pair.node_b);
+      auto& rigidbody_a = graph.get_component<physics::rigidbody>(collision_pair.node_a);
+      auto& rigidbody_b = graph.get_component<physics::rigidbody>(collision_pair.node_b);
 
       if (rigidbody_a.is_static() && rigidbody_b.is_static()) {
         continue;
       }
 
-      auto& transform_a = scene.get_component<scenes::transform>(collision_pair.node_a);
-      auto& transform_b = scene.get_component<scenes::transform>(collision_pair.node_b);
+      auto& transform_a = graph.get_component<scenes::transform>(collision_pair.node_a);
+      auto& transform_b = graph.get_component<scenes::transform>(collision_pair.node_b);
 
       auto contact_normal = collision_pair.manifold.normal;
 
-      const auto world_position_a = scene.world_position(collision_pair.node_a);
-      const auto world_position_b = scene.world_position(collision_pair.node_b);
+      const auto world_position_a = graph.world_position(collision_pair.node_a);
+      const auto world_position_b = graph.world_position(collision_pair.node_b);
       const auto delta_ab = world_position_b - world_position_a;
 
       if (math::vector3::dot(delta_ab, contact_normal) < 0.0f) {

@@ -27,10 +27,11 @@ auto hierarchy_panel::render() -> void {
   auto& scene_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
 
   auto& scene = scene_module.scene();
+  auto& graph = scene.graph();
 
-  auto root = scene.root();
+  auto root = graph.root();
 
-  auto& relationship = scene.get_component<scenes::relationship>(root);
+  auto& relationship = graph.get_component<scenes::relationship>(root);
 
   for (const auto& child : relationship.children()) {
     if (child != scenes::node::null) {
@@ -63,12 +64,13 @@ static auto _node_or_any_child_has_camera(const scenes::node node) -> bool {
   auto& scene_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
 
   auto& scene = scene_module.scene();
+  auto& graph = scene.graph();
 
-  if (scene.has_component<scenes::camera>(node)) {
+  if (graph.has_component<scenes::camera>(node)) {
     return true;
   }
 
-  const auto& relationship = scene.get_component<sbx::scenes::relationship>(node);
+  const auto& relationship = graph.get_component<sbx::scenes::relationship>(node);
 
   auto result = false;
 
@@ -83,8 +85,9 @@ auto hierarchy_panel::_context_menu() -> void {
   auto& scene_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
 
   auto& scene = scene_module.scene();
+  auto& graph = scene.graph();
 
-  auto node = scene.find_node(_selected_node_id);
+  auto node = graph.find_node(_selected_node_id);
 
   if (node == scenes::node::null) {
     if (ImGui::BeginPopupContextItem("Actions")) {
@@ -119,7 +122,7 @@ auto hierarchy_panel::_context_menu() -> void {
       ImGui::EndMenu();
     }
 
-    if (_selected_node_id != scene.get_component<sbx::scenes::id>(scene.root()) && !_node_or_any_child_has_camera(node)) {
+    if (_selected_node_id != graph.get_component<sbx::scenes::id>(graph.root()) && !_node_or_any_child_has_camera(node)) {
       if (ImGui::MenuItem("Delete")) {
         _open_popups.set(popup::delete_node);
       }
@@ -133,6 +136,7 @@ auto hierarchy_panel::_new_node_popup() -> void {
   auto& scene_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
 
   auto& scene = scene_module.scene();
+  auto& graph = scene.graph();
 
   if (_open_popups.has(popup::new_node)) {
     _open_popups.clear(popup::new_node);
@@ -170,10 +174,10 @@ auto hierarchy_panel::_new_node_popup() -> void {
     }
 
     if (ImGui::Button("Create", ImVec2{button_width, 0})) {
-      if (auto node = scene.find_node(_selected_node_id); node != scenes::node::null) {
-        scene.create_child_node(node, name);
+      if (auto node = graph.find_node(_selected_node_id); node != scenes::node::null) {
+        graph.create_child_node(node, name);
       } else {
-        scene.create_child_node(scene.root(), name);
+        graph.create_child_node(graph.root(), name);
       }
 
       _new_name_buffer.fill('\0');
@@ -215,6 +219,7 @@ auto hierarchy_panel::_delete_node_popup() -> void {
   auto& scene_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
 
   auto& scene = scene_module.scene();
+  auto& graph = scene.graph();
 
   if (_open_popups.has(popup::delete_node)) {
     _open_popups.clear(popup::delete_node);
@@ -229,8 +234,8 @@ auto hierarchy_panel::_delete_node_popup() -> void {
     const auto available_width = ImGui::GetContentRegionAvail().x;
     const auto total_width = (button_width * 2.0f) + padding;
 
-    if (auto node = scene.find_node(_selected_node_id); node != scenes::node::null) {
-      ImGui::Text("Do you want to delete '%s'", scene.get_component<sbx::scenes::tag>(node).c_str());
+    if (auto node = graph.find_node(_selected_node_id); node != scenes::node::null) {
+      ImGui::Text("Do you want to delete '%s'", graph.get_component<sbx::scenes::tag>(node).c_str());
 
       ImGui::SetCursorPosX(ImGui::GetCursorPosX() + available_width - total_width);
 
@@ -244,7 +249,7 @@ auto hierarchy_panel::_delete_node_popup() -> void {
       ImGui::SameLine();
 
       if (ImGui::Button("Delete", ImVec2{button_width, 0})) {
-        scene.destroy_node(node);
+        graph.destroy_node(node);
         _selected_node_id = sbx::math::uuid::null();
         ImGui::CloseCurrentPopup();
       }
@@ -264,12 +269,13 @@ auto hierarchy_panel::_build_tree(const sbx::scenes::node node) -> void {
   auto& scene_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
 
   auto& scene = scene_module.scene();
+  auto& graph = scene.graph();
 
-  if (!scene.is_valid(node)) {
+  if (!graph.is_valid(node)) {
     return;
   }
 
-  const auto& relationship = scene.get_component<sbx::scenes::relationship>(node);
+  const auto& relationship = graph.get_component<sbx::scenes::relationship>(node);
 
   auto flag = ImGuiTreeNodeFlags{ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_DefaultOpen};
 
@@ -277,12 +283,12 @@ auto hierarchy_panel::_build_tree(const sbx::scenes::node node) -> void {
     flag |= ImGuiTreeNodeFlags_Leaf;
   }
 
-  if (scene.get_component<sbx::scenes::id>(node) == _selected_node_id) {
+  if (graph.get_component<sbx::scenes::id>(node) == _selected_node_id) {
     flag |= ImGuiTreeNodeFlags_Selected;
   }
 
-  const auto& tag = scene.get_component<sbx::scenes::tag>(node);
-  const auto& id = scene.get_component<sbx::scenes::id>(node);
+  const auto& tag = graph.get_component<sbx::scenes::tag>(node);
+  const auto& id = graph.get_component<sbx::scenes::id>(node);
   const auto* ptr_id = reinterpret_cast<const void*>(static_cast<std::intptr_t>(id.value()));
 
   ImGui::PushStyleVar(ImGuiStyleVar_IndentSpacing, 12.0f);
@@ -290,7 +296,7 @@ auto hierarchy_panel::_build_tree(const sbx::scenes::node node) -> void {
 
   if (ImGui::TreeNodeEx(ptr_id, flag, "%s", tag.c_str())) {
     if (ImGui::IsItemClicked(ImGuiMouseButton_Right) || ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
-      _selected_node_id = scene.get_component<sbx::scenes::id>(node);
+      _selected_node_id = graph.get_component<sbx::scenes::id>(node);
 
       utility::logger<"editor">::debug("Selected node id {}", _selected_node_id);
     }

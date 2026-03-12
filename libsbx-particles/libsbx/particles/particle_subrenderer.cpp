@@ -22,15 +22,18 @@ auto particle_subrenderer::render(graphics::command_buffer& command_buffer) -> v
 
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
+
   auto& scene = scenes_module.scene();
+  auto& environment = scene.environment();
+  auto& graph = scene.graph();
 
   std::erase_if(_descriptor_data, [&](const auto& entry) {
     const auto& [node, handler] = entry;
 
-    return !scene.is_valid(node) || !scene.has_component<particle_emitter>(node);
+    return !graph.is_valid(node) || !graph.has_component<particle_emitter>(node);
   });
 
-  auto emitter_query = scene.query<const particle_emitter>();
+  auto emitter_query = graph.query<const particle_emitter>();
 
   for (auto&& [node, emitter] : emitter_query.each()) {
     utility::assert_that(emitter.images.size() > 0u, "Invalid particle_emitter with 0 images");
@@ -59,7 +62,7 @@ auto particle_subrenderer::render(graphics::command_buffer& command_buffer) -> v
 
     _pipeline.bind(command_buffer);
 
-    descriptor_handler.push("scene", scene.uniform_handler());
+    descriptor_handler.push("scene", environment.uniform_handler());
     descriptor_handler.push("particles", particles);
     descriptor_handler.push("alive_list", alive_list);
 

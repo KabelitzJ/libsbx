@@ -53,16 +53,18 @@ public:
   auto render(sbx::graphics::command_buffer& command_buffer) -> void override {
     auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
     auto& scene = scenes_module.scene();
+  auto& environment = scene.environment();
+  auto& graph = scene.graph();
 
-    auto camera_node = scene.camera();
+    auto camera_node = environment.camera();
 
-    auto& camera = scene.get_component<sbx::scenes::camera>(camera_node);
+    auto& camera = graph.get_component<sbx::scenes::camera>(camera_node);
 
     const auto& projection = camera.projection();
 
-    const auto camera_position = scene.world_position(camera_node);
+    const auto camera_position = graph.world_position(camera_node);
 
-    const auto view = sbx::math::matrix4x4::inverted(scene.world_transform(camera_node));
+    const auto view = sbx::math::matrix4x4::inverted(graph.world_transform(camera_node));
     
     _pipeline.bind(command_buffer);
 

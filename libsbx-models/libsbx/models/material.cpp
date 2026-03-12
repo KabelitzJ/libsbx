@@ -51,11 +51,13 @@ auto resolve_texture(scenes::scene& scene, const aiMaterial* ai_material, const 
   const auto image_path = (raw.is_absolute() ? raw : (root_directory / raw)).lexically_normal();
   const auto key = utility::hashed_string{image_path.string()};
 
-  if (!scene.has_image(key)) {
-    scene.add_image(key, image_path, format_for_texture_type(type));
+  auto& assets = scene.assets();
+
+  if (!assets.has_image(key)) {
+    assets.add_image(key, image_path, format_for_texture_type(type));
   }
 
-  return scene.get_image(key);
+  return assets.get_image(key);
 }
 
 auto resolve_material(scenes::scene& scene, const aiScene* ai_scene, const std::uint32_t mat_index, const std::filesystem::path& resolved_path, const std::filesystem::path& root_directory, std::unordered_map<std::uint32_t, math::uuid>& material_cache) -> math::uuid {
@@ -66,7 +68,9 @@ auto resolve_material(scenes::scene& scene, const aiScene* ai_scene, const std::
   const auto* ai_material = ai_scene->mMaterials[mat_index];
   const auto key = utility::hashed_string{fmt::format("{}#material_{}", resolved_path.string(), mat_index)};
 
-  if (!scene.has_material(key)) {
+  auto& assets = scene.assets();
+
+  if (!assets.has_material(key)) {
     auto material = models::material{};
 
     // Base color
@@ -117,10 +121,10 @@ auto resolve_material(scenes::scene& scene, const aiScene* ai_scene, const std::
     material.emissive.image = resolve_texture(scene, ai_material, aiTextureType_EMISSIVE, root_directory);
     material.height.image = resolve_texture(scene, ai_material, aiTextureType_HEIGHT, root_directory);
 
-    scene.add_material<models::material>(key, std::move(material));
+    assets.add_material<models::material>(key, std::move(material));
   }
 
-  const auto id = scene.get_material(key);
+  const auto id = assets.get_material(key);
 
   material_cache.emplace(mat_index, id);
 
@@ -173,6 +177,8 @@ auto load_materials(const std::filesystem::path& path) -> std::vector<scenes::st
   }
 
   auto& scene = scenes_module.scene();
+  auto& environment = scene.environment();
+  auto& graph = scene.graph();
 
   const auto root_directory = resolved_path.parent_path();
 

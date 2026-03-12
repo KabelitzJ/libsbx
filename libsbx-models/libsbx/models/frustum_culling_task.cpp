@@ -44,7 +44,10 @@ auto frustum_culling_task::execute(graphics::command_buffer& command_buffer) -> 
   auto& renderer = graphics_module.renderer();
 
   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
+
   auto& scene = scenes_module.scene();
+  auto& environment = scene.environment();
+  auto& graph = scene.graph();
 
   auto& draw_list = renderer.draw_list<models::static_mesh_material_draw_list>("static_mesh_material");
 
@@ -68,19 +71,19 @@ auto frustum_culling_task::execute(graphics::command_buffer& command_buffer) -> 
     });
   }
 
-  const auto camera_node = scene.camera();
-  const auto& camera_component = scene.get_component<scenes::camera>(camera_node);
+  const auto camera_node = environment.camera();
+  const auto& camera_component = graph.get_component<scenes::camera>(camera_node);
   const auto projection = camera_component.projection();
-  const auto view = math::matrix4x4::inverted(scene.world_transform(camera_node));
+  const auto view = math::matrix4x4::inverted(graph.world_transform(camera_node));
   const auto view_projection = projection * view;
   const auto camera_frustum = _extract_frustum_planes(view_projection);
 
   _cull_bucket(command_buffer, bucket::opaque, no_cascade, camera_frustum, draw_list);
   _cull_bucket(command_buffer, bucket::transparent, no_cascade, camera_frustum, draw_list);
 
-  const auto cascade_light_spaces = scene.cascade_light_spaces();
+  const auto cascade_light_spaces = environment.cascade_light_spaces();
 
-  for (auto cascade = std::uint32_t{0}; cascade < scenes::scene::cascade_count(); ++cascade) {
+  for (auto cascade = std::uint32_t{0}; cascade < scenes::scene_environment::cascade_count(); ++cascade) {
     const auto cascade_frustum = _extract_frustum_planes(cascade_light_spaces[cascade]);
 
     _cull_bucket(command_buffer, bucket::shadow, cascade, cascade_frustum, draw_list);

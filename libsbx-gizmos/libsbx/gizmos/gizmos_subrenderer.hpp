@@ -68,14 +68,16 @@ public:
 
     auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
     auto& scene = scenes_module.scene();
+  auto& environment = scene.environment();
+  auto& graph = scene.graph();
 
-    auto camera_node = scene.camera();
+    auto camera_node = environment.camera();
 
-    auto& camera = scene.get_component<scenes::camera>(camera_node);
+    auto& camera = graph.get_component<scenes::camera>(camera_node);
 
     _scene_uniform_handler.push("projection", camera.projection());
 
-    const auto& camera_transform = scene.get_component<scenes::transform>(camera_node);
+    const auto& camera_transform = graph.get_component<scenes::transform>(camera_node);
 
     _scene_uniform_handler.push("view", math::matrix4x4::inverted(camera_transform.local_transform()));
 
@@ -96,7 +98,7 @@ public:
     _used_uniforms.clear();
     _static_meshes.clear();
 
-    auto gizmo_query = scene.query<scenes::gizmo>();
+    auto gizmo_query = graph.query<scenes::gizmo>();
 
     for (const auto node : gizmo_query) {
       _submit_mesh(node);
@@ -136,14 +138,16 @@ private:
   auto _submit_mesh(const scenes::node node) -> void {
     auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
     auto& scene = scenes_module.scene();
+  auto& environment = scene.environment();
+  auto& graph = scene.graph();
 
-    const auto& gizmo = scene.get_component<scenes::gizmo>(node);
+    const auto& gizmo = graph.get_component<scenes::gizmo>(node);
 
     const auto key = mesh_key{gizmo.mesh_id(), gizmo.submesh_index(), gizmo.texture_id()};
 
     _used_uniforms.insert(key);
 
-    auto model = scene.world_transform(node);
+    auto model = graph.world_transform(node);
     auto normal = math::matrix4x4::transposed(math::matrix4x4::inverted(model));
 
     _static_meshes[key].push_back(per_mesh_data{std::move(model), std::move(normal), gizmo.tint()});

@@ -7,7 +7,7 @@
 #include <imgui.h>
 #include <imnodes.h>
 #include <implot.h>
-// #include <ImGuizmo.h>
+#include <ImGuizmo.h>
 
 #include <libsbx/editor/bindings/imgui.hpp>
 
@@ -84,6 +84,12 @@ private:
 
   auto _undo() -> void;
 
+  auto _draw_scene_toolbar() -> void;
+  auto _draw_scene_gizmo(const ImVec2& viewport_min, const ImVec2& viewport_size) -> void;
+
+  static auto _to_imguizmo_matrix(const sbx::math::matrix4x4& in, std::span<std::float_t, 16> out) -> void;
+  static auto _from_imguizmo_matrix(std::span<const std::float_t, 16> in) -> sbx::math::matrix4x4;
+
   std::string _attachment_name;
 
   pipeline _pipeline;
@@ -104,6 +110,9 @@ private:
 
   editor::themes _editor_theme;
   editor::fonts _editor_font;
+
+  std::int32_t _gizmo_operation{ImGuizmo::OPERATION::TRANSLATE};
+  std::int32_t _gizmo_mode{ImGuizmo::MODE::LOCAL};
 
 }; // class editor_subrenderer
 

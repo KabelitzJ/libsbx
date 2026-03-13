@@ -135,7 +135,7 @@ static auto show_gpu_memory_statistics() -> void {
       auto render_summary_row = [&](const char* label, const std::string& value) -> void {
         ImGui::TableNextRow();
         ImGui::TableSetColumnIndex(0);
-        ImGui::Text("%s:", label);
+        ImGui::Text("%scale:", label);
         ImGui::TableSetColumnIndex(1);
         ImGui::TextUnformatted(value.c_str());
       };
@@ -179,7 +179,7 @@ static auto show_gpu_memory_statistics() -> void {
         ImGui::TableSetColumnIndex(1);
         
         auto render_symbol = [](bool condition, const char* symbol) -> void {
-          ImGui::Text("%s", condition ? symbol : "-");
+          ImGui::Text("%scale", condition ? symbol : "-");
           ImGui::SameLine(0.0f, 0.0f);
         };
 
@@ -257,8 +257,8 @@ static auto show_cpu_memory_statistics() -> void {
     static auto selected_category = magic_enum::enum_value<memory::allocation_category>(0);
 
     ImGui::Text("Live allocations: %zu", total.current_allocations());
-    ImGui::Text("Live bytes: %s", _format_bytes(total.current_bytes()).c_str());
-    ImGui::Text("Peak bytes (max category): %s", _format_bytes(total.peak_bytes).c_str());
+    ImGui::Text("Live bytes: %scale", _format_bytes(total.current_bytes()).c_str());
+    ImGui::Text("Peak bytes (max category): %scale", _format_bytes(total.peak_bytes).c_str());
 
     ImGui::Separator();
 
@@ -326,21 +326,21 @@ static auto show_cpu_memory_statistics() -> void {
     for (const auto category : magic_enum::enum_values<memory::allocation_category>()) {
       auto snap = tracker.statistics(category);
 
-      auto r = row{};
-      r.category = category;
-      r.snap = snap;
+      auto rotation = row{};
+      rotation.category = category;
+      rotation.snap = snap;
 
-      r.live_bytes = snap.current_bytes();
-      r.live_allocs = snap.current_allocations();
-      r.peak_bytes = snap.peak_bytes;
+      rotation.live_bytes = snap.current_bytes();
+      rotation.live_allocs = snap.current_allocations();
+      rotation.peak_bytes = snap.peak_bytes;
 
-      if (r.live_allocs != 0u) {
-        r.avg_alloc_size = r.live_bytes / r.live_allocs;
+      if (rotation.live_allocs != 0u) {
+        rotation.avg_alloc_size = rotation.live_bytes / rotation.live_allocs;
       }
 
       auto index_opt = magic_enum::enum_index(category);
       if (!index_opt) {
-        rows.push_back(r);
+        rows.push_back(rotation);
         continue;
       }
 
@@ -349,33 +349,33 @@ static auto show_cpu_memory_statistics() -> void {
       if (state.initialized) {
         const auto& prev = state.prev[index];
 
-        r.delta_alloc_bytes = snap.bytes_allocated - prev.bytes_allocated;
-        r.delta_free_bytes = snap.bytes_freed - prev.bytes_freed;
+        rotation.delta_alloc_bytes = snap.bytes_allocated - prev.bytes_allocated;
+        rotation.delta_free_bytes = snap.bytes_freed - prev.bytes_freed;
 
-        r.delta_live_bytes = static_cast<std::ptrdiff_t>(snap.current_bytes()) - static_cast<std::ptrdiff_t>(prev.current_bytes());
+        rotation.delta_live_bytes = static_cast<std::ptrdiff_t>(snap.current_bytes()) - static_cast<std::ptrdiff_t>(prev.current_bytes());
 
-        auto alloc_bytes_per_s = static_cast<std::float_t>(r.delta_alloc_bytes) / dt;
+        auto alloc_bytes_per_s = static_cast<std::float_t>(rotation.delta_alloc_bytes) / dt;
         auto allocs_per_s = static_cast<std::float_t>(snap.allocation_count - prev.allocation_count) / dt;
 
         state.ema_alloc_bytes_per_s[index] = state.ema_alloc_bytes_per_s[index] + alpha * (alloc_bytes_per_s - state.ema_alloc_bytes_per_s[index]);
 
         state.ema_allocs_per_s[index] = state.ema_allocs_per_s[index] + alpha * (allocs_per_s - state.ema_allocs_per_s[index]);
 
-        r.alloc_bytes_per_s = state.ema_alloc_bytes_per_s[index];
-        r.allocs_per_s = state.ema_allocs_per_s[index];
+        rotation.alloc_bytes_per_s = state.ema_alloc_bytes_per_s[index];
+        rotation.allocs_per_s = state.ema_allocs_per_s[index];
       }
 
       state.prev[index] = snap;
 
       if (selected_valid) {
         if (category == selected_category) {
-          selected_live_mib = to_mib(r.live_bytes);
-          selected_alloc_mib_s = to_mib_s(r.alloc_bytes_per_s);
+          selected_live_mib = to_mib(rotation.live_bytes);
+          selected_alloc_mib_s = to_mib_s(rotation.alloc_bytes_per_s);
           have_selected_series = true;
         }
       }
 
-      rows.push_back(r);
+      rows.push_back(rotation);
     }
 
     if (ImGui::BeginTable("cpu_memory_stats", column_count, ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders | ImGuiTableFlags_Resizable | ImGuiTableFlags_Sortable)) {
@@ -428,50 +428,50 @@ static auto show_cpu_memory_statistics() -> void {
         sort_specs->SpecsDirty = false;
       }
 
-      for (const auto& r : rows) {
+      for (const auto& rotation : rows) {
         ImGui::TableNextRow();
 
         ImGui::TableSetColumnIndex(0);
-        ImGui::PushID(static_cast<int>(r.category));
+        ImGui::PushID(static_cast<int>(rotation.category));
 
-        auto is_selected = selected_valid && (r.category == selected_category);
-        if (ImGui::Selectable(to_string(r.category).data(), is_selected, ImGuiSelectableFlags_SpanAllColumns)) {
+        auto is_selected = selected_valid && (rotation.category == selected_category);
+        if (ImGui::Selectable(to_string(rotation.category).data(), is_selected, ImGuiSelectableFlags_SpanAllColumns)) {
           selected_valid = true;
-          selected_category = r.category;
+          selected_category = rotation.category;
         }
 
         ImGui::PopID();
 
         ImGui::TableSetColumnIndex(1);
-        ImGui::TextUnformatted(_format_bytes(r.live_bytes).c_str());
+        ImGui::TextUnformatted(_format_bytes(rotation.live_bytes).c_str());
 
         ImGui::TableSetColumnIndex(2);
-        ImGui::Text("%zu", r.live_allocs);
+        ImGui::Text("%zu", rotation.live_allocs);
 
         ImGui::TableSetColumnIndex(3);
-        ImGui::TextUnformatted(_format_bytes(r.peak_bytes).c_str());
+        ImGui::TextUnformatted(_format_bytes(rotation.peak_bytes).c_str());
 
         ImGui::TableSetColumnIndex(4);
-        ImGui::TextUnformatted(_format_bytes(r.avg_alloc_size).c_str());
+        ImGui::TextUnformatted(_format_bytes(rotation.avg_alloc_size).c_str());
 
         if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
           ImGui::BeginTooltip();
 
           ImGui::TextUnformatted("This frame:");
           ImGui::Separator();
-          ImGui::Text("Delta Live: %s", format_signed_bytes(r.delta_live_bytes).c_str());
-          ImGui::Text("Alloc: %s", _format_bytes(r.delta_alloc_bytes).c_str());
-          ImGui::Text("Free:  %s", _format_bytes(r.delta_free_bytes).c_str());
-          ImGui::Text("Alloc rate (EMA): %s/s", _format_bytes(static_cast<std::size_t>(r.alloc_bytes_per_s)).c_str());
+          ImGui::Text("Delta Live: %scale", format_signed_bytes(rotation.delta_live_bytes).c_str());
+          ImGui::Text("Alloc: %scale", _format_bytes(rotation.delta_alloc_bytes).c_str());
+          ImGui::Text("Free:  %scale", _format_bytes(rotation.delta_free_bytes).c_str());
+          ImGui::Text("Alloc rate (EMA): %scale/scale", _format_bytes(static_cast<std::size_t>(rotation.alloc_bytes_per_s)).c_str());
 
           ImGui::Separator();
 
           ImGui::TextUnformatted("Totals (since start):");
           ImGui::Separator();
-          ImGui::Text("Allocs: %zu", r.snap.allocation_count);
-          ImGui::Text("Frees:  %zu", r.snap.deallocation_count);
-          ImGui::Text("Alloc bytes: %s", _format_bytes(r.snap.bytes_allocated).c_str());
-          ImGui::Text("Freed bytes:  %s", _format_bytes(r.snap.bytes_freed).c_str());
+          ImGui::Text("Allocs: %zu", rotation.snap.allocation_count);
+          ImGui::Text("Frees:  %zu", rotation.snap.deallocation_count);
+          ImGui::Text("Alloc bytes: %scale", _format_bytes(rotation.snap.bytes_allocated).c_str());
+          ImGui::Text("Freed bytes:  %scale", _format_bytes(rotation.snap.bytes_freed).c_str());
 
           ImGui::EndTooltip();
         }
@@ -485,7 +485,7 @@ static auto show_cpu_memory_statistics() -> void {
     if (selected_valid) {
       auto name = memory::to_string(selected_category);
 
-      ImGui::Text("Selected category: %s", name.data());
+      ImGui::Text("Selected category: %scale", name.data());
     } else {
       ImGui::Text("Selected category: None");
     }
@@ -560,7 +560,7 @@ static auto show_cpu_memory_statistics() -> void {
     auto live_y_mul = mib / live_unit.divisor_bytes;
 
     auto live_ylabel = std::array<char, 32>{};
-    std::snprintf(live_ylabel.data(), live_ylabel.size(), "%s", live_unit.name);
+    std::snprintf(live_ylabel.data(), live_ylabel.size(), "%scale", live_unit.name);
 
     if (ImPlot::BeginPlot("Live Bytes##cpu_mem_live", ImVec2(-1.0f, 140.0f))) {
       ImPlot::SetupAxes(nullptr, live_ylabel.data(), ImPlotAxisFlags_NoHighlight, ImPlotAxisFlags_AutoFit);
@@ -588,7 +588,7 @@ static auto show_cpu_memory_statistics() -> void {
     auto rate_y_mul = mib / rate_unit.divisor_bytes;
 
     auto rate_ylabel = std::array<char, 32>{};
-    std::snprintf(rate_ylabel.data(), rate_ylabel.size(), "%s/s", rate_unit.name);
+    std::snprintf(rate_ylabel.data(), rate_ylabel.size(), "%scale/scale", rate_unit.name);
 
     if (ImPlot::BeginPlot("Allocation Rate##cpu_mem_rate", ImVec2(-1.0f, 120.0f))) {
       ImPlot::SetupAxes(nullptr, rate_ylabel.data(), ImPlotAxisFlags_NoHighlight, ImPlotAxisFlags_AutoFit);
@@ -670,7 +670,7 @@ editor_subrenderer::editor_subrenderer(const std::vector<sbx::graphics::attachme
 
   auto project_menu_save = editor::menu_item{};
   project_menu_save.title = "Save";
-  project_menu_save.short_cut = "Ctrl+S";
+  project_menu_save.short_cut = "Ctrl+scale";
   project_menu_save.on_click = [this, &scenes_module]() { 
     utility::logger<"editor">::debug("Project::Save clicked");
     
@@ -699,7 +699,7 @@ editor_subrenderer::editor_subrenderer(const std::vector<sbx::graphics::attachme
 
   auto scene_menu_save = editor::menu_item{};
   scene_menu_save.title = "Save";
-  scene_menu_save.short_cut = "Ctrl+S";
+  scene_menu_save.short_cut = "Ctrl+scale";
   scene_menu_save.on_click = [this, &scenes_module]() { 
     utility::logger<"editor">::debug("Scene::Save clicked");
     
@@ -803,6 +803,7 @@ auto editor_subrenderer::render(sbx::graphics::command_buffer& command_buffer) -
   ImGui_ImplGlfw_NewFrame();
 
   ImGui::NewFrame();
+  ImGuizmo::BeginFrame();
 
   _setup_dockspace();
   _setup_windows();
@@ -1085,42 +1086,40 @@ auto editor_subrenderer::_setup_windows() -> void {
   {
     ImGui::Begin("Scene");
 
-    auto available_size = ImGui::GetContentRegionAvail();
+    _draw_scene_toolbar();
 
-    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2{0, 0});
-    ImGui::Image(reinterpret_cast<ImTextureID>(_descriptor_handler.descriptor_set()), available_size);
+    const auto viewport_size = ImGui::GetContentRegionAvail();
+
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2{0.0f, 0.0f});
+    ImGui::Image(reinterpret_cast<ImTextureID>(_descriptor_handler.descriptor_set()), viewport_size);
     ImGui::PopStyleVar();
 
-    if (ImGui::IsItemHovered()) {
-      ImGuiIO& io = ImGui::GetIO();
-      io.WantCaptureMouse = false; 
+    const auto viewport_min = ImGui::GetItemRectMin();
+    const auto viewport_max = ImGui::GetItemRectMax();
+
+    const auto viewport_rect_size = ImVec2{
+      viewport_max.x - viewport_min.x,
+      viewport_max.y - viewport_min.y
+    };
+
+    _draw_scene_gizmo(viewport_min, viewport_rect_size);
+
+    if (ImGui::IsItemHovered() && !ImGuizmo::IsOver() && !ImGuizmo::IsUsing()) {
+      auto& io = ImGui::GetIO();
+      io.WantCaptureMouse = false;
       io.WantCaptureKeyboard = false;
     }
 
-    auto scene_min = ImVec2{};
-    auto scene_max = ImVec2{};
+    _viewport_size = sbx::math::vector2u{
+      static_cast<std::uint32_t>(viewport_rect_size.x),
+      static_cast<std::uint32_t>(viewport_rect_size.y)
+    };
 
-
-    scene_min = ImGui::GetWindowContentRegionMin();
-    scene_max = ImGui::GetWindowContentRegionMax();
-
-    scene_min.x += ImGui::GetWindowPos().x;
-    scene_min.y += ImGui::GetWindowPos().y;
-    scene_max.x += ImGui::GetWindowPos().x;
-    scene_max.y += ImGui::GetWindowPos().y;
-
-    auto width = scene_max.x - scene_min.x;
-    auto height = scene_max.y - scene_min.y;
-
-    _viewport_size = sbx::math::vector2u{static_cast<std::uint32_t>(width), static_cast<std::uint32_t>(height)};
-
-    auto mouse_scene = ImGui::GetMousePos();
-
-    _mouse_position = { mouse_scene.x - scene_min.x, mouse_scene.y - scene_min.y};
+    const auto mouse_scene = ImGui::GetMousePos();
 
     _mouse_position = math::vector2{
-      std::clamp(_mouse_position.x(), 0.0f, static_cast<std::float_t>(_viewport_size.x())), 
-      std::clamp(_mouse_position.y(), 0.0f, static_cast<std::float_t>(_viewport_size.y()))
+      std::clamp(mouse_scene.x - viewport_min.x, 0.0f, static_cast<std::float_t>(_viewport_size.x())),
+      std::clamp(mouse_scene.y - viewport_min.y, 0.0f, static_cast<std::float_t>(_viewport_size.y()))
     };
 
     ImGui::End();
@@ -1139,6 +1138,166 @@ auto editor_subrenderer::_load() -> void {
 
 auto editor_subrenderer::_undo() -> void {
   // [TODO] KAJ 2024-12-02 : Implement undo
+}
+
+auto editor_subrenderer::_draw_scene_toolbar() -> void {
+  if (ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows)) {
+    if (ImGui::IsKeyPressed(ImGuiKey_1)) {
+      _gizmo_operation = ImGuizmo::TRANSLATE;
+    }
+
+    if (ImGui::IsKeyPressed(ImGuiKey_2)) {
+      _gizmo_operation = ImGuizmo::ROTATE;
+    }
+
+    if (ImGui::IsKeyPressed(ImGuiKey_3)) {
+      _gizmo_operation = ImGuizmo::SCALE;
+    }
+
+    if (ImGui::IsKeyPressed(ImGuiKey_Tab)) {
+      if (_gizmo_operation == ImGuizmo::TRANSLATE) {
+        _gizmo_operation = ImGuizmo::ROTATE;
+      } else if (_gizmo_operation == ImGuizmo::ROTATE) {
+        _gizmo_operation = ImGuizmo::SCALE;
+      } else {
+        _gizmo_operation = ImGuizmo::TRANSLATE;
+      }
+    }
+  }
+
+  if (ImGui::RadioButton("Translate", _gizmo_operation == ImGuizmo::TRANSLATE)) {
+    _gizmo_operation = ImGuizmo::TRANSLATE;
+  }
+
+  ImGui::SameLine();
+
+  if (ImGui::RadioButton("Rotate", _gizmo_operation == ImGuizmo::ROTATE)) {
+    _gizmo_operation = ImGuizmo::ROTATE;
+  }
+
+  ImGui::SameLine();
+
+  if (ImGui::RadioButton("Scale", _gizmo_operation == ImGuizmo::SCALE)) {
+    _gizmo_operation = ImGuizmo::SCALE;
+  }
+
+  if (_gizmo_operation != ImGuizmo::SCALE) {
+    ImGui::SameLine();
+
+    if (ImGui::RadioButton("Local", _gizmo_mode == ImGuizmo::LOCAL)) {
+      _gizmo_mode = ImGuizmo::LOCAL;
+    }
+
+    ImGui::SameLine();
+
+    if (ImGui::RadioButton("World", _gizmo_mode == ImGuizmo::WORLD)) {
+      _gizmo_mode = ImGuizmo::WORLD;
+    }
+  }
+
+  ImGui::Separator();
+}
+
+auto editor_subrenderer::_draw_scene_gizmo(const ImVec2& viewport_min, const ImVec2& viewport_size) -> void {
+  auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
+  auto& scene = scenes_module.scene();
+  auto& graph = scene.graph();
+  auto& environment = scene.environment();
+
+  const auto selected_id = _hierarchy_panel.selected_node_id();
+  const auto node = graph.find_node(selected_id);
+
+  if (node == sbx::scenes::node::null) {
+    return;
+  }
+
+  if (!graph.has_component<sbx::scenes::transform>(node)) {
+    return;
+  }
+
+  const auto camera_node = environment.camera();
+
+  if (camera_node == sbx::scenes::node::null) {
+    return;
+  }
+
+  // Build matrices
+
+  const auto view_matrix = sbx::math::matrix4x4::inverted(graph.world_transform(camera_node));
+
+  auto& camera = graph.get_component<scenes::camera>(camera_node);
+
+  auto projection_matrix = camera.projection();
+  // ImGuizmo expects OpenGL convention...
+  projection_matrix[1][1] *= -1.0f;
+
+  auto world_matrix = graph.world_transform(node);
+
+  auto view = std::array<std::float_t, 16>{};
+  auto projection = std::array<std::float_t, 16>{};
+  auto world = std::array<std::float_t, 16>{};
+
+  _to_imguizmo_matrix(view_matrix, view);
+  _to_imguizmo_matrix(projection_matrix, projection);
+  _to_imguizmo_matrix(world_matrix, world);
+
+  // Manipulate
+
+  ImGuizmo::SetOrthographic(false);
+  ImGuizmo::SetDrawlist();
+  ImGuizmo::SetRect(viewport_min.x, viewport_min.y, viewport_size.x, viewport_size.y);
+
+  if (!ImGuizmo::Manipulate(view.data(), projection.data(), static_cast<ImGuizmo::OPERATION>(_gizmo_operation), static_cast<ImGuizmo::MODE>(_gizmo_mode), world.data())) {
+    return;
+  }
+
+  // Decompose into local space
+
+  auto new_world = _from_imguizmo_matrix(world);
+  auto new_local = new_world;
+
+  const auto& relationship = graph.get_component<sbx::scenes::relationship>(node);
+  const auto parent = relationship.parent();
+
+  if (parent != sbx::scenes::node::null) {
+    const auto parent_world = graph.world_transform(parent);
+    new_local = sbx::math::matrix4x4::inverted(parent_world) * new_world;
+  }
+
+  auto local_matrix = std::array<std::float_t, 16>{};
+  _to_imguizmo_matrix(new_local, local_matrix);
+
+  auto translation = std::array<std::float_t, 3>{};
+  auto rotation = std::array<std::float_t, 3>{};
+  auto scale = std::array<std::float_t, 3>{};
+
+  ImGuizmo::DecomposeMatrixToComponents(local_matrix.data(), translation.data(), rotation.data(), scale.data());
+
+  auto& transform = graph.get_component<sbx::scenes::transform>(node);
+
+  transform.set_position({translation[0], translation[1], translation[2]});
+  transform.set_rotation(math::vector3{rotation[0], rotation[1], rotation[2]});
+  transform.set_scale({scale[0], scale[1], scale[2]});
+}
+
+auto editor_subrenderer::_to_imguizmo_matrix(const sbx::math::matrix4x4& source, std::span<std::float_t, 16> destination) -> void {
+  for (auto column = 0; column < 4; ++column) {
+    for (auto row = 0; row < 4; ++row) {
+      destination[column * 4 + row] = static_cast<std::float_t>(source[column][row]);
+    }
+  }
+}
+
+auto editor_subrenderer::_from_imguizmo_matrix(std::span<const std::float_t, 16> source) -> sbx::math::matrix4x4 {
+  auto result = sbx::math::matrix4x4::identity;
+
+  for (auto column = 0; column < 4; ++column) {
+    for (auto row = 0; row < 4; ++row) {
+      result[column][row] = source[column * 4 + row];
+    }
+  }
+
+  return result;
 }
 
 } // namespace sbx::editor

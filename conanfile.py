@@ -213,7 +213,7 @@ class libsbx_recipe(ConanFile):
     self.requires("imgui/1.91.8-docking")
     self.requires("implot/0.16-docking")
     self.requires("imnodes/0.5.0-docking")
-    # self.requires("imguizmo/1.83-docking")
+    self.requires("imguizmo/1.83-docking")
     # self.requires("portable-file-dialogs/0.1.0")
     self.requires("easy_profiler/2.1.0", transitive_headers=True)
     self.requires("tsl-robin-map/1.3.0")

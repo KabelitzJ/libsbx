@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 #include <libsbx/sprites/sprites_module.hpp>
 
+#include <libsbx/scenes/scenes_module.hpp>
+
 namespace sbx::sprites {
 
 auto sprite_batch::clear() -> void {
@@ -35,6 +37,187 @@ auto sprite_batch::sort() -> void {
 
 [[nodiscard]] auto sprite_batch::byte_size() const -> std::size_t {
   return _instances.size() * sizeof(sprite_instance);
+}
+
+auto _sprite_kind(const sprites::screen_overlay_sprite&) -> const char* {
+  return "screen_overlay_sprite";
+}
+
+auto _sprite_kind(const sprites::screen_camera_sprite&) -> const char* {
+  return "screen_camera_sprite";
+}
+
+auto _sprite_kind(const sprites::world_sprite&) -> const char* {
+  return "world_sprite";
+}
+
+auto _emit_optional_image(YAML::Emitter& emitter, scenes::asset_registry& registry, const char* key, const graphics::image2d_handle& image) -> void {
+  if (image == graphics::image2d_handle{}) {
+    return;
+  }
+
+  const auto& metadata = registry.image_metadata(image);
+
+  emitter << YAML::Key << key << YAML::Value << YAML::Alias(metadata.name);
+}
+
+auto _read_optional_image(const YAML::Node& node, const char* key, scenes::asset_registry& registry, graphics::image2d_handle& image) -> void {
+  if (const auto image_node = node[key]; image_node) {
+    const auto image_name = image_node["name"].as<std::string>();
+
+    image = registry.get_image(utility::hashed_string{image_name});
+  }
+}
+
+template<typename T>
+auto _emit_if_not_default(YAML::Emitter& emitter, const char* key, const T& value, const T& default_value) -> void {
+  if (value != default_value) {
+    emitter << YAML::Key << key << YAML::Value << value;
+  }
+}
+
+template<typename Sprite>
+auto _emit_sprite_common(YAML::Emitter& emitter, scenes::asset_registry& registry, const Sprite& sprite) -> void {
+  const auto defaults = Sprite{};
+
+  _emit_if_not_default(emitter, "base_color", sprite.base_color, defaults.base_color);
+  _emit_optional_image(emitter, registry, "albedo_image", sprite.albedo_image);
+  _emit_if_not_default(emitter, "emissive_factor", sprite.emissive_factor, defaults.emissive_factor);
+  _emit_if_not_default(emitter, "emissive_strength", sprite.emissive_strength, defaults.emissive_strength);
+  _emit_optional_image(emitter, registry, "emissive_image", sprite.emissive_image);
+  _emit_if_not_default(emitter, "size", sprite.size, defaults.size);
+  _emit_if_not_default(emitter, "pivot", sprite.pivot, defaults.pivot);
+}
+
+template<typename Sprite>
+auto _read_sprite_common(const YAML::Node& node, scenes::asset_registry& registry, Sprite& sprite) -> void {
+  if (const auto value = node["base_color"]; value) {
+    sprite.base_color = value.as<math::color>();
+  }
+
+  _read_optional_image(node, "albedo_image", registry, sprite.albedo_image);
+
+  if (const auto value = node["emissive_factor"]; value) {
+    sprite.emissive_factor = value.as<math::color>();
+  }
+
+  if (const auto value = node["emissive_strength"]; value) {
+    sprite.emissive_strength = value.as<float>();
+  }
+
+  _read_optional_image(node, "emissive_image", registry, sprite.emissive_image);
+
+  if (const auto value = node["size"]; value) {
+    sprite.size = value.as<math::vector2>();
+  }
+
+  if (const auto value = node["pivot"]; value) {
+    sprite.pivot = value.as<math::vector2>();
+  }
+}
+
+auto _emit_sprite_extra(YAML::Emitter& emitter, const sprites::screen_overlay_sprite& sprite) -> void {
+  const auto defaults = sprites::screen_overlay_sprite{};
+
+  _emit_if_not_default(emitter, "position", sprite.position, defaults.position);
+  _emit_if_not_default(emitter, "sort_order", sprite.sort_order, defaults.sort_order);
+}
+
+auto _emit_sprite_extra(YAML::Emitter& emitter, const sprites::screen_camera_sprite& sprite) -> void {
+  const auto defaults = sprites::screen_camera_sprite{};
+
+  _emit_if_not_default(emitter, "position", sprite.position, defaults.position);
+  _emit_if_not_default(emitter, "depth", sprite.depth, defaults.depth);
+  _emit_if_not_default(emitter, "sort_order", sprite.sort_order, defaults.sort_order);
+}
+
+auto _emit_sprite_extra(YAML::Emitter& emitter, const sprites::world_sprite& sprite) -> void {
+  const auto defaults = sprites::world_sprite{};
+
+  _emit_if_not_default(emitter, "is_billboard", sprite.is_billboard, defaults.is_billboard);
+}
+
+auto _read_sprite_extra(const YAML::Node& node, sprites::screen_overlay_sprite& sprite) -> void {
+  if (const auto value = node["position"]; value) {
+    sprite.position = value.as<math::vector2>();
+  }
+
+  if (const auto value = node["sort_order"]; value) {
+    sprite.sort_order = value.as<std::int32_t>();
+  }
+}
+
+auto _read_sprite_extra(const YAML::Node& node, sprites::screen_camera_sprite& sprite) -> void {
+  if (const auto value = node["position"]; value) {
+    sprite.position = value.as<math::vector2>();
+  }
+
+  if (const auto value = node["depth"]; value) {
+    sprite.depth = value.as<float>();
+  }
+
+  if (const auto value = node["sort_order"]; value) {
+    sprite.sort_order = value.as<std::int32_t>();
+  }
+}
+
+auto _read_sprite_extra(const YAML::Node& node, sprites::world_sprite& sprite) -> void {
+  if (const auto value = node["is_billboard"]; value) {
+    sprite.is_billboard = value.as<bool>();
+  }
+}
+
+sprites_module::sprites_module() {
+  auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
+
+  auto& component_io_registry = scenes_module.get_component_io_registry();
+
+  component_io_registry.register_component<sprites::sprite>(
+    "sprite",
+    [](YAML::Emitter& emitter, [[maybe_unused]] scenes::scene_graph& graph, scenes::asset_registry& registry, const sprites::sprite& sprite) -> void {
+      std::visit(
+        [&](const auto& value) -> void {
+          emitter << YAML::Key << "kind" << YAML::Value << _sprite_kind(value);
+
+          _emit_sprite_common(emitter, registry, value);
+          _emit_sprite_extra(emitter, value);
+        },
+        sprite
+      );
+    },
+    [](const YAML::Node& node, [[maybe_unused]] scenes::scene_graph& graph, scenes::asset_registry& registry) -> sprites::sprite {
+      const auto kind = node["kind"].as<std::string>();
+
+      if (kind == "screen_overlay_sprite") {
+        auto sprite = sprites::screen_overlay_sprite{};
+
+        _read_sprite_common(node, registry, sprite);
+        _read_sprite_extra(node, sprite);
+
+        return sprite;
+      }
+
+      if (kind == "screen_camera_sprite") {
+        auto sprite = sprites::screen_camera_sprite{};
+
+        _read_sprite_common(node, registry, sprite);
+        _read_sprite_extra(node, sprite);
+
+        return sprite;
+      }
+
+      if (kind == "world_sprite") {
+        auto sprite = sprites::world_sprite{};
+
+        _read_sprite_common(node, registry, sprite);
+        _read_sprite_extra(node, sprite);
+
+        return sprite;
+      }
+
+      throw utility::runtime_error{"Unknown sprite kind '{}'", kind};
+    }
+  );
 }
 
 auto sprites_module::update() -> void {

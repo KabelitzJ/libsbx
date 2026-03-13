@@ -131,6 +131,11 @@ struct fmt::formatter<sbx::math::basic_vector2<Type>> {
 
 }; // struct fmt::formatter
 
+template<sbx::math::scalar Type>
+auto operator<<(YAML::Emitter& out, const sbx::math::basic_vector2<Type>& vector) -> YAML::Emitter& {
+  return out << YAML::convert<sbx::math::basic_vector2<Type>>::encode(vector);
+}
+
 #include <libsbx/math/vector2.ipp>
 
 #endif // LIBSBX_MATH_VECTOR2_HPP_

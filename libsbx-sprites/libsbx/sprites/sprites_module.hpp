@@ -130,7 +130,7 @@ class sprites_module : public core::module<sprites_module> {
 
 public:
 
-  sprites_module() = default;
+  sprites_module();
 
   ~sprites_module() override = default;
 

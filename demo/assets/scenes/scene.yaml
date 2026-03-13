@@ -6,6 +6,9 @@ assets:
     - &roboto_atlas
       name: roboto_atlas
       path: res://fonts/roboto_atlas.png
+    - &light_sprite
+      name: light_sprite
+      path: res://textures/guizmos/light_bulb_icon_white.png
   cube_images:
     - &skybox
       name: skybox
@@ -82,6 +85,22 @@ nodes:
         submeshes:
           - index: 0
             material: *helmet
+  - tag: Light0
+    id: 5555432423284594222
+    components:
+      - type: transform
+        position: {x: 0, y: 6, z: 0}
+        rotation: {x: 0, y: 0, z: 0, w: 1}
+        scale: {x: 1, y: 1, z: 1}
+      - type: point_light
+        color: {r: 1, g: 0, b: 0, a: 1}
+        radius: 10
+      - type: sprite
+        kind: world_sprite
+        albedo_image: *light_sprite
+        size: {x: 1.0, y: 1.0}
+        pivot: {x: 0.5, y: 0.5}
+        is_billboard: true
   - tag: Tree1
     id: 3472763237278276803
     components:
@@ -114,7 +133,7 @@ nodes:
     id: 5534890790884635642
     components:
       - type: transform
-        position: {x: 0, y: 10, z: 20}
+        position: {x: 0, y: 5, z: 5}
         rotation: {x: -0.229752958, y: 0, z: 0, w: 0.973249018}
         scale: {x: 1, y: 1, z: 1}
       - type: skybox

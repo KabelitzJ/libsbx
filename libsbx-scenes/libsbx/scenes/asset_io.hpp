@@ -10,7 +10,7 @@
 
 #include <libsbx/utility/hashed_string.hpp>
 
-#include <libsbx/scenes/scene_asset_table.hpp>
+#include <libsbx/scenes/asset_registry.hpp>
 
 namespace sbx::scenes {
 
@@ -18,7 +18,7 @@ class asset_io_registry {
 
 public:
 
-  template<std::invocable<scene_asset_table&, const utility::hashed_string&, const YAML::Node&> Load>
+  template<std::invocable<asset_registry&, const utility::hashed_string&, const YAML::Node&> Load>
   auto register_loader(const std::string& category, Load&& load) -> void {
     _loaders[category] = std::forward<Load>(load);
   }
@@ -27,13 +27,13 @@ public:
     return _loaders.contains(category);
   }
 
-  auto load(const std::string& category, scene_asset_table& assets, const utility::hashed_string& name, const YAML::Node& node) -> void {
-    _loaders.at(category)(assets, name, node);
+  auto load(const std::string& category, asset_registry& assets, const utility::hashed_string& name, const YAML::Node& node) -> void {
+    std::invoke(_loaders.at(category), assets, name, node);
   }
 
 private:
 
-  std::unordered_map<std::string, std::function<void(scene_asset_table&, const utility::hashed_string&, const YAML::Node&)>> _loaders;
+  std::unordered_map<std::string, std::function<void(asset_registry&, const utility::hashed_string&, const YAML::Node&)>> _loaders;
 
 }; // class asset_io_registry
 

@@ -70,9 +70,10 @@ application::application()
 
   auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
 
+  auto& asset_registry = scenes_module.asset_registry();
+
   auto& scene = scenes_module.load_scene("res://scenes/scene.yaml");
   auto& graph = scene.graph();
-  auto& assets = scene.assets();
   auto& environment = scene.environment();
 
   auto& scripting_module = sbx::core::engine::get_module<sbx::scripting::scripting_module>();
@@ -80,7 +81,7 @@ application::application()
 
   // Textures
 
-  assets.add_image("roboto_atlas", "res://fonts/roboto_atlas.png", sbx::graphics::format::r8g8b8a8_srgb);
+  asset_registry.request_image("roboto_atlas", "res://fonts/roboto_atlas.png", sbx::graphics::format::r8g8b8a8_srgb);
 
   _generate_brdf(512);
   _generate_irradiance(64);
@@ -473,11 +474,14 @@ auto application::_generate_irradiance(const std::uint32_t size) -> void {
   constexpr auto threads_per_group = std::uint32_t{16};
 
   auto& graphics_module = sbx::core::engine::get_module<sbx::graphics::graphics_module>();
+
   auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
+
+  auto& asset_registry = scenes_module.asset_registry();
+
   auto& scene = scenes_module.scene();
   auto& environment = scene.environment();
   auto& graph = scene.graph();
-  auto& assets = scene.assets();
 
   const auto& logical_device = graphics_module.logical_device();
   const auto& graphics_queue = logical_device.queue<sbx::graphics::queue::type::graphics>();
@@ -488,7 +492,7 @@ auto application::_generate_irradiance(const std::uint32_t size) -> void {
   auto timer = sbx::utility::timer{};
 
   auto& irradiance = graphics_module.get_resource<sbx::graphics::cube_image>(_irradiance);
-  auto& skybox = graphics_module.get_resource<sbx::graphics::cube_image>(assets.get_cube_image("skybox"));
+  auto& skybox = graphics_module.get_resource<sbx::graphics::cube_image>(asset_registry.get_cube_image("skybox"));
 
   auto initial_command_buffer = sbx::graphics::command_buffer{true, VK_QUEUE_GRAPHICS_BIT};
 
@@ -650,12 +654,14 @@ auto application::_generate_prefiltered(uint32_t size) -> void {
   constexpr auto threads_per_group = std::uint32_t{16};
 
   auto& graphics_module = sbx::core::engine::get_module<sbx::graphics::graphics_module>();
+
   auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
+
+  auto& asset_registry = scenes_module.asset_registry();
 
   auto& scene = scenes_module.scene();
   auto& environment = scene.environment();
   auto& graph = scene.graph();
-  auto& assets = scene.assets();
 
   const auto& logical_device = graphics_module.logical_device();
   const auto& graphics_queue = logical_device.queue<sbx::graphics::queue::type::graphics>();
@@ -666,7 +672,7 @@ auto application::_generate_prefiltered(uint32_t size) -> void {
   auto timer = sbx::utility::timer{};
 
   auto& prefiltered = graphics_module.get_resource<sbx::graphics::cube_image>(_prefiltered);
-  auto& skybox = graphics_module.get_resource<sbx::graphics::cube_image>(assets.get_cube_image("skybox"));
+  auto& skybox = graphics_module.get_resource<sbx::graphics::cube_image>(asset_registry.get_cube_image("skybox"));
 
   auto initial_command_buffer = sbx::graphics::command_buffer{true, VK_QUEUE_GRAPHICS_BIT};
 

@@ -11,7 +11,7 @@
 
 #include <libsbx/scenes/node.hpp>
 #include <libsbx/scenes/scene_graph.hpp>
-#include <libsbx/scenes/scene_asset_table.hpp>
+#include <libsbx/scenes/asset_registry.hpp>
 #include <libsbx/scenes/component_io.hpp>
 #include <libsbx/scenes/asset_io.hpp>
 
@@ -26,30 +26,32 @@ class scene_serializer {
 
 public:
 
-  scene_serializer(component_io_registry& component_io, asset_io_registry& asset_io)
+  scene_serializer(component_io_registry& component_io, asset_io_registry& asset_io, asset_registry& registry)
   : _component_io{component_io},
-    _asset_io{asset_io} { }
+    _asset_io{asset_io},
+    _registry{registry} { }
 
-  auto save(const std::filesystem::path& path, const std::string& name, scene_graph& graph, scene_asset_table& assets, const scenes::node camera) -> void;
+  auto save(const std::filesystem::path& path, const std::string& name, scene_graph& graph, const scenes::node camera) -> void;
 
-  auto load(const std::filesystem::path& path, scene_graph& graph, scene_asset_table& assets) -> scene_data;
+  auto load(const std::filesystem::path& path, scene_graph& graph) -> scene_data;
 
 private:
 
-  auto _save_assets(YAML::Emitter& emitter, const scene_asset_table& assets) -> void;
+  auto _save_assets(YAML::Emitter& emitter) -> void;
 
-  auto _save_node(YAML::Emitter& emitter, scene_graph& graph, scene_asset_table& assets, const scenes::node node) -> void;
+  auto _save_node(YAML::Emitter& emitter, scene_graph& graph, const scenes::node node) -> void;
 
-  auto _save_components(YAML::Emitter& emitter, scene_graph& graph, scene_asset_table& assets, const scenes::node node) -> void;
+  auto _save_components(YAML::Emitter& emitter, scene_graph& graph, const scenes::node node) -> void;
 
-  auto _load_assets(const YAML::Node& assets_node, scene_asset_table& assets) -> void;
+  auto _load_assets(const YAML::Node& assets_node) -> void;
 
-  auto _load_asset_category(const std::string& category, const YAML::Node& entries, scene_asset_table& assets) -> void;
+  auto _load_asset_category(const std::string& category, const YAML::Node& entries) -> void;
 
-  auto _load_nodes(const YAML::Node& nodes_node, scene_graph& graph, scene_asset_table& assets) -> void;
+  auto _load_nodes(const YAML::Node& nodes_node, scene_graph& graph) -> void;
 
   component_io_registry& _component_io;
   asset_io_registry& _asset_io;
+  asset_registry& _registry;
 
 }; // class scene_serializer
 

@@ -11,7 +11,6 @@
 
 #include <libsbx/scenes/scene_graph.hpp>
 #include <libsbx/scenes/scene_environment.hpp>
-#include <libsbx/scenes/scene_asset_table.hpp>
 #include <libsbx/scenes/scene_serializer.hpp>
 
 namespace sbx::scenes {
@@ -29,7 +28,7 @@ class scene {
 
 public:
 
-  scene(const std::filesystem::path& path, component_io_registry& component_io, asset_io_registry& asset_io);
+  scene(const std::filesystem::path& path, component_io_registry& component_io, asset_io_registry& asset_io, asset_registry& registry);
 
   virtual ~scene() = default;
 
@@ -49,14 +48,6 @@ public:
     return _environment;
   }
 
-  auto assets() -> scene_asset_table& {
-    return _assets;
-  }
-
-  auto assets() const -> const scene_asset_table& {
-    return _assets;
-  }
-
   auto name() const -> const std::string& {
     return _name;
   }
@@ -68,7 +59,6 @@ private:
   std::string _name;
   scene_graph _graph;
   scene_environment _environment;
-  scene_asset_table _assets;
   scene_serializer _serializer;
 
 }; // class scene

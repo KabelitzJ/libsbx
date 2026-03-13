@@ -16,30 +16,35 @@
 
 namespace sbx::scenes {
 
-scene::scene(const std::filesystem::path& path, component_io_registry& component_io, asset_io_registry& asset_io)
+scene::scene(const std::filesystem::path& path, component_io_registry& component_io, asset_io_registry& asset_io, asset_registry& registry)
 : _graph{},
   _environment{_graph, scenes::node::null, math::vector3{-1.0f, -1.0f, -1.0f}, math::color{1.0f, 1.0f, 1.0f, 1.0f}},
-  _serializer{component_io, asset_io} {
-  // Load scene from disk
-  const auto data = _serializer.load(path, _graph, _assets);
+  _serializer{component_io, asset_io, registry} {
+  const auto data = _serializer.load(path, _graph);
 
   _name = data.name;
 
-  // Resolve camera node from scene data
+  // Resolve camera: explicit id -> component query -> create default
   auto camera_node = scenes::node::null;
 
   if (data.camera_id != math::uuid::null()) {
     camera_node = _graph.find_node(scenes::id{data.camera_id});
   }
 
-  // If the scene file didn't specify a camera, create a default one
+  if (camera_node == scenes::node::null) {
+    auto view = _graph.query<scenes::camera>();
+
+    if (view.begin() != view.end()) {
+      camera_node = *view.begin();
+    }
+  }
+
   if (camera_node == scenes::node::null) {
     camera_node = _graph.create_node("CAMERA");
 
-    utility::logger<"scenes">::debug("No camera node in scene file, creating default");
+    utility::logger<"scenes">::debug("No camera node found, creating default");
   }
 
-  // Ensure camera component exists
   if (!_graph.has_component<scenes::camera>(camera_node)) {
     auto& devices_module = core::engine::get_module<devices::devices_module>();
     auto& window = devices_module.window();
@@ -51,7 +56,7 @@ scene::scene(const std::filesystem::path& path, component_io_registry& component
 }
 
 auto scene::save(const std::filesystem::path& path) -> void {
-  _serializer.save(path, _name, _graph, _assets, _environment.camera());
+  _serializer.save(path, _name, _graph, _environment.camera());
 }
 
 } // namespace sbx::scenes

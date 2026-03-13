@@ -14,6 +14,7 @@
 
 #include <libsbx/core/module.hpp>
 
+#include <libsbx/scenes/asset_registry.hpp>
 #include <libsbx/scenes/component_io.hpp>
 #include <libsbx/scenes/asset_io.hpp>
 #include <libsbx/scenes/scene.hpp>
@@ -45,6 +46,14 @@ public:
     if (_scene) {
       _scene->save(path);
     }
+  }
+
+  auto asset_registry() -> scenes::asset_registry& {
+    return _asset_registry;
+  }
+
+  auto asset_registry() const -> const scenes::asset_registry& {
+    return _asset_registry;
   }
 
   auto get_component_io_registry() -> component_io_registry& {
@@ -85,10 +94,11 @@ public:
 
 private:
 
-  std::optional<scenes::scene> _scene;
+  scenes::asset_registry _asset_registry;
+  scenes::component_io_registry _component_io_registry;
+  scenes::asset_io_registry _asset_io_registry;
 
-  component_io_registry _component_io_registry;
-  asset_io_registry _asset_io_registry;
+  std::optional<scenes::scene> _scene;
 
   std::vector<line> _debug_lines{};
 

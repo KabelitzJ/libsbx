@@ -177,8 +177,6 @@ struct material {
   }
 
 }; // struct material
-
-auto load_materials(const std::filesystem::path& path) -> std::vector<scenes::static_mesh::submesh>;
   
 } // namespace sbx::models
 

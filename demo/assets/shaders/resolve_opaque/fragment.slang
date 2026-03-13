@@ -220,7 +220,17 @@ float sample_shadow_map(uint cascade, float2 uv) {
 }
 
 float calculate_shadow(uint cascade, float3 world_position, float3 normal) {
-  float4 clip = mul(scene.light_spaces[cascade], float4(world_position, 1.0));
+  uint2 dimensions = shadow_map_dimensions(cascade);
+  float2 texel_size = 1.0 / float2(dimensions);
+
+  float3 light_dir = normalize(-scene.light_direction);
+  float ndl = dot(normal, light_dir);
+
+  // Normal offset bias — push sample point along normal proportional to texel size
+  float normal_offset_scale = texel_size.x * 2.0 * (1.0 + cascade);
+  float3 offset_position = world_position + normal * normal_offset_scale * saturate(1.0 - ndl);
+
+  float4 clip = mul(scene.light_spaces[cascade], float4(offset_position, 1.0));
   float3 ndc = clip.xyz / clip.w;
 
   float2 uv = ndc_to_uv(ndc.xy);
@@ -235,13 +245,8 @@ float calculate_shadow(uint cascade, float3 world_position, float3 normal) {
     return 1.0;
   }
 
-  float3 light_dir = normalize(-scene.light_direction);
-  float base_bias = max(0.002 * (1.0 - dot(normal, light_dir)), 0.0005);
+  float base_bias = max(0.002 * (1.0 - ndl), 0.0005);
   float bias = base_bias * (1.0 + cascade * 0.5);
-
-  uint2 dimensions = shadow_map_dimensions(cascade);
-
-  float2 texel_size = 1.0 / float2(dimensions);
 
   float resolution_scale = float(dimensions.x) / 2048.0;
   float base_radius = 1.0 / resolution_scale;
@@ -418,7 +423,8 @@ fs_out main(fs_in input) {
 
   float3 specular_ibl = prefiltered_color * (F_ibl * brdf.x + brdf.y) * specular_strength;
 
-  float3 ambient = (kD_ibl * diffuse_ibl + specular_ibl) * ao * ssao;
+  float shadow_occlusion = lerp(0.3, 1.0, shadow);
+  float3 ambient = (kD_ibl * diffuse_ibl * shadow_occlusion + specular_ibl) * ao * ssao;
 
   float3 final_color = ambient + color + emissive_color;
 

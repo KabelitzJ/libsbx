@@ -39,16 +39,16 @@ namespace demo {
 renderer::renderer(bool is_editor)
 : _clear_color{sbx::math::color::white()} {
   // Attachments
-  auto shadow0 = create_attachment("shadow0", sbx::graphics::attachment::type::image, sbx::math::color::white(), sbx::graphics::format::r32_sfloat, sbx::graphics::filter::linear, sbx::graphics::address_mode::clamp_to_edge);
+  auto shadow0 = create_attachment("shadow0", sbx::graphics::attachment::type::image, sbx::math::color::white(), sbx::graphics::format::r32_sfloat, sbx::graphics::filter::nearest, sbx::graphics::address_mode::clamp_to_edge);
   auto shadow0_depth = create_attachment("shadow0_depth", sbx::graphics::attachment::type::depth);
 
-  auto shadow1 = create_attachment("shadow1", sbx::graphics::attachment::type::image, sbx::math::color::white(), sbx::graphics::format::r32_sfloat, sbx::graphics::filter::linear, sbx::graphics::address_mode::clamp_to_edge);
+  auto shadow1 = create_attachment("shadow1", sbx::graphics::attachment::type::image, sbx::math::color::white(), sbx::graphics::format::r32_sfloat, sbx::graphics::filter::nearest, sbx::graphics::address_mode::clamp_to_edge);
   auto shadow1_depth = create_attachment("shadow1_depth", sbx::graphics::attachment::type::depth);
 
-  auto shadow2 = create_attachment("shadow2", sbx::graphics::attachment::type::image, sbx::math::color::white(), sbx::graphics::format::r32_sfloat, sbx::graphics::filter::linear, sbx::graphics::address_mode::clamp_to_edge);
+  auto shadow2 = create_attachment("shadow2", sbx::graphics::attachment::type::image, sbx::math::color::white(), sbx::graphics::format::r32_sfloat, sbx::graphics::filter::nearest, sbx::graphics::address_mode::clamp_to_edge);
   auto shadow2_depth = create_attachment("shadow2_depth", sbx::graphics::attachment::type::depth);
 
-  auto shadow3 = create_attachment("shadow3", sbx::graphics::attachment::type::image, sbx::math::color::white(), sbx::graphics::format::r32_sfloat, sbx::graphics::filter::linear, sbx::graphics::address_mode::clamp_to_edge);
+  auto shadow3 = create_attachment("shadow3", sbx::graphics::attachment::type::image, sbx::math::color::white(), sbx::graphics::format::r32_sfloat, sbx::graphics::filter::nearest, sbx::graphics::address_mode::clamp_to_edge);
   auto shadow3_depth = create_attachment("shadow3_depth", sbx::graphics::attachment::type::depth);
 
   auto depth = create_attachment("depth", sbx::graphics::attachment::type::depth);

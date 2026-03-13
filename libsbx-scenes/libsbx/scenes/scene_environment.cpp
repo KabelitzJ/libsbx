@@ -234,6 +234,16 @@ auto scene_environment::_build_light_space_for_slice(const scenes::camera& camer
 
   center_world /= 8.0f;
 
+  // Bounding sphere radius encompassing the frustum slice in world space
+  auto radius = 0.0f;
+
+  for (const auto& corner : corners_world) {
+    auto dist = math::vector3::distance(corner, center_world);
+    radius = std::max(radius, dist);
+  }
+
+  radius = std::ceil(radius);
+
   const auto light_dir = math::vector3::normalized(light_direction);
 
   auto up = math::vector3::up;
@@ -242,70 +252,38 @@ auto scene_environment::_build_light_space_for_slice(const scenes::camera& camer
     up = math::vector3{1.0f, 0.0f, 0.0f};
   }
 
-  const auto light_view_initial = math::matrix4x4::look_at(center_world, center_world + light_dir, up);
+  // Pull back along light direction to include shadow casters behind the frustum
+  static constexpr auto z_caster_padding = 100.0f;
+  const auto light_position = center_world - light_dir * (radius + z_caster_padding);
 
-  auto min_z = std::numeric_limits<std::float_t>::max();
-  auto max_z = std::numeric_limits<std::float_t>::lowest();
-
-  for (const auto& corner : corners_world) {
-    const auto p = light_view_initial * math::vector4{corner, 1.0f};
-
-    min_z = std::min(min_z, p.z());
-    max_z = std::max(max_z, p.z());
-  }
-
-  static constexpr auto z_caster_padding = 50.0f;
-  const auto pull_back = std::abs(min_z) + z_caster_padding;
-
-  const auto light_position = center_world - light_dir * pull_back;
   const auto light_view = math::matrix4x4::look_at(light_position, center_world, up);
 
-  auto min_bounds = math::vector3{std::numeric_limits<std::float_t>::max()};
-  auto max_bounds = math::vector3{std::numeric_limits<std::float_t>::lowest()};
-
-  for (const auto& corner : corners_world) {
-    const auto p4 = light_view * math::vector4{corner, 1.0f};
-    const auto p = math::vector3{p4};
-
-    min_bounds = math::vector3::min(min_bounds, p);
-    max_bounds = math::vector3::max(max_bounds, p);
-  }
-
-  static constexpr auto xy_padding = 10.0f;
-  const auto extent_x = max_bounds.x() - min_bounds.x();
-  const auto extent_y = max_bounds.y() - min_bounds.y();
-  const auto extent = std::max(extent_x, extent_y) + 2.0f * xy_padding;
-
-  const auto texel_size = extent / static_cast<std::float_t>(shadow_resolution);
-
-  const auto center_ls = (min_bounds + max_bounds) * 0.5f;
-
-  auto min_x = center_ls.x() - extent * 0.5f;
-  auto min_y = center_ls.y() - extent * 0.5f;
-
-  min_x = std::floor(min_x / texel_size) * texel_size;
-  min_y = std::floor(min_y / texel_size) * texel_size;
-
-  const auto max_x = min_x + texel_size * static_cast<std::float_t>(shadow_resolution);
-  const auto max_y = min_y + texel_size * static_cast<std::float_t>(shadow_resolution);
-
-  const auto z_range = max_bounds.z() - min_bounds.z();
-  const auto z_padding = std::max(z_range * 2.0f, 50.0f);
-
-  auto near_plane = -(max_bounds.z() + z_padding);
-  auto far_plane  = -(min_bounds.z() - z_padding);
-
-  if (near_plane > far_plane) {
-    std::swap(near_plane, far_plane);
-  }
+  const auto near_plane = 0.0f;
+  const auto far_plane = 2.0f * radius + z_caster_padding;
 
   const auto light_projection = math::matrix4x4::orthographic(
-    min_x, max_x,
-    min_y, max_y,
+    -radius, radius,
+    -radius, radius,
     near_plane, far_plane
   );
 
-  return light_projection * light_view;
+  auto shadow_matrix = light_projection * light_view;
+
+  // Snap to texel grid
+  const auto resolution = static_cast<std::float_t>(shadow_resolution);
+  auto shadow_origin = shadow_matrix * math::vector4{0.0f, 0.0f, 0.0f, 1.0f};
+  shadow_origin *= (resolution * 0.5f);
+
+  const auto rounded_x = std::round(shadow_origin.x());
+  const auto rounded_y = std::round(shadow_origin.y());
+
+  const auto offset_x = (rounded_x - shadow_origin.x()) * (2.0f / resolution);
+  const auto offset_y = (rounded_y - shadow_origin.y()) * (2.0f / resolution);
+
+  shadow_matrix[3][0] += offset_x;
+  shadow_matrix[3][1] += offset_y;
+
+  return shadow_matrix;
 }
 
 auto scene_environment::_build_csm() -> csm_data {
@@ -316,7 +294,7 @@ auto scene_environment::_build_csm() -> csm_data {
   const auto camera_far = camera.far_plane();
 
   static constexpr auto lambda = 0.65f;
-  static constexpr auto shadow_resolution = std::uint32_t{2048u};
+  static constexpr auto shadow_resolutions = std::array<std::uint32_t, csm_cascade_count>{2048u, 2048u, 1024u, 512u};
 
   const auto splits = _compute_csm_splits(camera_near, camera_far, lambda);
 
@@ -327,7 +305,7 @@ auto scene_environment::_build_csm() -> csm_data {
   for (auto i = 0u; i < csm_cascade_count; ++i) {
     const auto slice_far = splits[i];
 
-    result.light_spaces[i] = _build_light_space_for_slice(camera, camera_world, _light.direction(), slice_near, slice_far, shadow_resolution);
+    result.light_spaces[i] = _build_light_space_for_slice(camera, camera_world, _light.direction(), slice_near, slice_far, shadow_resolutions[i]);
 
     slice_near = slice_far;
   }

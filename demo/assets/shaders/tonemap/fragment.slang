@@ -38,7 +38,9 @@ float3 apply_white_balance(float3 c, float temperature, float tint) {
   return c * w;
 }
 
-float3 apply_tonemap(float3 value) {
+float3 apply_aces_tonemap(float3 value) {
+  value *= 0.6;
+
   static const float a = 2.51;
   static const float b = 0.03;
   static const float c = 2.43;
@@ -60,7 +62,7 @@ fs_out main(fs_in input) {
 
   float3 exposed = (color + bloom * push.bloom_mix) * exp2(push.exposure);
 
-  float3 mapped = apply_tonemap(exposed);
+  float3 mapped = apply_aces_tonemap(exposed);
 
   float luminance = dot(mapped, float3(0.2126, 0.7152, 0.0722));
 

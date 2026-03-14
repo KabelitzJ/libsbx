@@ -76,6 +76,7 @@ target_link_libraries(
     libsbx::core
     libsbx::graphics
     libsbx::scenes
+    libsbx::sprites
     libsbx::assets
 )
 

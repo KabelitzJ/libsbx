@@ -82,8 +82,6 @@ class asset_registry {
 
 public:
 
-  // --- Images ---
-
   template<typename... Args>
   auto request_image(const utility::hashed_string& name, const std::filesystem::path& path, Args&&... args) -> graphics::image2d_handle {
     if (_images.has(name)) {
@@ -115,8 +113,6 @@ public:
     return _images;
   }
 
-  // --- Cube images ---
-
   template<typename... Args>
   auto request_cube_image(const utility::hashed_string& name, const std::filesystem::path& path, Args&&... args) -> graphics::cube_image2d_handle {
     if (_cube_images.has(name)) {
@@ -147,8 +143,6 @@ public:
   auto cube_images() const -> const asset_table<graphics::cube_image2d_handle>& {
     return _cube_images;
   }
-
-  // --- Meshes ---
 
   template<typename Mesh, typename... Args>
   auto request_mesh(const utility::hashed_string& name, Args&&... args) -> math::uuid {
@@ -197,8 +191,6 @@ public:
     return _meshes;
   }
 
-  // --- Animations ---
-
   template<typename Animation, typename... Args>
   auto request_animation(const utility::hashed_string& name, Args&&... args) -> math::uuid {
     if (_animations.has(name)) {
@@ -225,8 +217,6 @@ public:
   auto animations() const -> const asset_table<math::uuid>& {
     return _animations;
   }
-
-  // --- Materials ---
 
   template<typename Material, typename... Args>
   auto request_material(const utility::hashed_string& name, Args&&... args) -> Material& {

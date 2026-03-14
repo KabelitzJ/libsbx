@@ -179,7 +179,7 @@ static auto show_gpu_memory_statistics() -> void {
         ImGui::TableSetColumnIndex(1);
         
         auto render_symbol = [](bool condition, const char* symbol) -> void {
-          ImGui::Text("%scale", condition ? symbol : "-");
+          ImGui::Text("%s", condition ? symbol : "-");
           ImGui::SameLine(0.0f, 0.0f);
         };
 

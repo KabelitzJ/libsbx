@@ -26,10 +26,12 @@ assets:
       name: tree_1
       path: res://meshes/trees/tree_1/tree_1.gltf
       source: disk
+      lod_count: 3
     - &tree_2
       name: tree_2
       path: res://meshes/trees/tree_2/tree_2.gltf
       source: disk
+      lod_count: 3
   materials:
     - &terrain
       name: terrain

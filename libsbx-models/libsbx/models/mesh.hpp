@@ -29,14 +29,14 @@ public:
 
   using base::mesh;
 
-  mesh(const std::filesystem::path& path);
+  mesh(const std::filesystem::path& path, std::uint32_t lod_count = 1u);
 
   ~mesh() override;
 
 private:
 
   static constexpr auto file_magic = utility::make_magic<std::uint64_t>("SBXSTMSH");
-  static constexpr auto file_version = std::uint16_t{1u};
+  static constexpr auto file_version = std::uint16_t{2u};
   static constexpr auto binary_file_extention = std::string_view{".sbxstmsh"};
 
   enum class file_flags : std::uint16_t {
@@ -79,9 +79,11 @@ private:
     std::float_t aabb_min[3];
     std::float_t aabb_max[3];
     std::float_t local_transform[16];
+    std::uint32_t lod_level;
+    std::uint32_t lod_group;
   }; // struct file_submesh
  
-  static_assert(sizeof(file_submesh) == 176u, "file_submesh layout changed");
+  static_assert(sizeof(file_submesh) == 184u, "file_submesh layout changed");
 
   struct alignas(2) file_vertex {
     std::int16_t position[3];
@@ -94,7 +96,9 @@ private:
 
   static_assert(sizeof(file_vertex) == 20u, "file_vertex layout changed");
 
-  static auto _load(const std::filesystem::path& path) -> mesh_data;
+  static auto _load(const std::filesystem::path& path, std::uint32_t lod_count) -> mesh_data;
+
+  static auto _generate_lods(mesh_data& data, std::uint32_t lod_count) -> void;
 
   static auto _load_binary(const std::filesystem::path& path) -> mesh_data;
 

@@ -34,11 +34,11 @@ struct chunk_coord_hash {
 }; // struct chunk_coord_hash
 
 struct cell {
+  std::uint16_t district_id{0};
   std::uint16_t building_id{0};
   std::uint8_t terrain_type{0};
   std::uint8_t zone_type{0};
   std::uint8_t flags{0};
-  std::uint16_t district_id{0};
 }; // struct cell
 
 struct grid_chunk {

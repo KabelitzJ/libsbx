@@ -10,7 +10,7 @@
 namespace demo {
 
 static constexpr auto chunk_size  = 32u;
-static constexpr auto chunk_verts = chunk_size + 1u;
+static constexpr auto chunk_vertices = chunk_size + 1u;
 
 struct chunk_coord {
 
@@ -58,20 +58,15 @@ struct grid_chunk {
 
 struct height_chunk {
 
-  std::vector<std::float_t> heights{};
+  std::array<std::float_t, chunk_vertices * chunk_vertices> heights{};
   bool is_dirty{true};
 
-  height_chunk()
-  : heights{} {
-    heights.resize(chunk_verts * chunk_verts, 0.0f);
-  }
-
   auto at(std::uint32_t local_x, std::uint32_t local_y) -> std::float_t& {
-    return heights[local_y * chunk_verts + local_x];
+    return heights[local_y * chunk_vertices + local_x];
   }
 
   auto at(std::uint32_t local_x, std::uint32_t local_y) const -> std::float_t {
-    return heights[local_y * chunk_verts + local_x];
+    return heights[local_y * chunk_vertices + local_x];
   }
 
 }; // struct height_chunk

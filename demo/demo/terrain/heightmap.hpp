@@ -245,8 +245,8 @@ private:
 
     auto& chunk = _chunks[cc];
 
-    for (auto ly = 0u; ly < chunk_verts; ++ly) {
-      for (auto lx = 0u; lx < chunk_verts; ++lx) {
+    for (auto ly = 0u; ly < chunk_vertices; ++ly) {
+      for (auto lx = 0u; lx < chunk_vertices; ++lx) {
         auto gx = cc.x * static_cast<std::int32_t>(chunk_size) + static_cast<std::int32_t>(lx);
         auto gy = cc.y * static_cast<std::int32_t>(chunk_size) + static_cast<std::int32_t>(ly);
 
@@ -255,25 +255,25 @@ private:
     }
 
     if (auto* left = _find_chunk({cc.x - 1, cc.y})) {
-      for (auto ly = 0u; ly < chunk_verts; ++ly) {
+      for (auto ly = 0u; ly < chunk_vertices; ++ly) {
         chunk.at(0, ly) = left->at(chunk_size, ly);
       }
     }
 
     if (auto* right = _find_chunk({cc.x + 1, cc.y})) {
-      for (auto ly = 0u; ly < chunk_verts; ++ly) {
+      for (auto ly = 0u; ly < chunk_vertices; ++ly) {
         chunk.at(chunk_size, ly) = right->at(0, ly);
       }
     }
 
     if (auto* top = _find_chunk({cc.x, cc.y - 1})) {
-      for (auto lx = 0u; lx < chunk_verts; ++lx) {
+      for (auto lx = 0u; lx < chunk_vertices; ++lx) {
         chunk.at(lx, 0) = top->at(lx, chunk_size);
       }
     }
 
     if (auto* bottom = _find_chunk({cc.x, cc.y + 1})) {
-      for (auto lx = 0u; lx < chunk_verts; ++lx) {
+      for (auto lx = 0u; lx < chunk_vertices; ++lx) {
         chunk.at(lx, chunk_size) = bottom->at(lx, 0);
       }
     }

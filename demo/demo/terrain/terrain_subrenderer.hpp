@@ -68,14 +68,14 @@ private:
   auto _upload_chunk(chunk_coord chunk_coordinates, gpu_chunk_data& gpu_chunk, const height_chunk& height_chunk_data) -> void;
 
   template<typename Type>
-  auto _update_buffer(sbx::graphics::storage_buffer& buffer, const std::vector<Type>& element_data) -> void {
-    const auto required_size = static_cast<VkDeviceSize>(element_data.size() * sizeof(Type));
+  auto _update_buffer(sbx::graphics::storage_buffer& buffer, std::span<const Type> elements) -> void {
+    const auto required_size = static_cast<VkDeviceSize>(elements.size() * sizeof(Type));
 
     if (required_size > buffer.size()) {
       buffer.resize(static_cast<VkDeviceSize>(required_size * 1.5f));
     }
 
-    buffer.update(element_data.data(), element_data.size() * sizeof(Type));
+    buffer.update(elements.data(), elements.size() * sizeof(Type));
   }
 
   pipeline _pipeline;

@@ -12,11 +12,11 @@ struct vs_out {
 
 struct push_data {
   float* height_data_buffer;
-  uint chunk_verts;
+  uint chunk_vertices;
   float cell_size;
   float chunk_world_x;
   float chunk_world_z;
-  float inv_chunk_verts;
+  float inv_chunk_vertices;
 }; // struct push_data
 
 [[vk::push_constant]]
@@ -26,26 +26,26 @@ ConstantBuffer<push_data> push;
 ConstantBuffer<sbx::common::scene_data> scene;
 
 float sample_height(uint x, uint y) {
-  if (x < push.chunk_verts && y < push.chunk_verts) {
-    return push.height_data_buffer[y * push.chunk_verts + x];
+  if (x < push.chunk_vertices && y < push.chunk_vertices) {
+    return push.height_data_buffer[y * push.chunk_vertices + x];
   }
 
   return 0.0;
 }
 
 float sample_height_safe(int x, int y) {
-  uint cx = uint(clamp(x, 0, int(push.chunk_verts) - 1));
-  uint cy = uint(clamp(y, 0, int(push.chunk_verts) - 1));
+  uint cx = uint(clamp(x, 0, int(push.chunk_vertices) - 1));
+  uint cy = uint(clamp(y, 0, int(push.chunk_vertices) - 1));
 
-  return push.height_data_buffer[cy * push.chunk_verts + cx];
+  return push.height_data_buffer[cy * push.chunk_vertices + cx];
 }
 
 [shader("vertex")]
 vs_out main(vs_in input) {
   vs_out output;
 
-  uint y = uint(float(input.vertex_id) * push.inv_chunk_verts);
-  uint x = input.vertex_id - y * push.chunk_verts;
+  uint y = uint(float(input.vertex_id) * push.inv_chunk_vertices);
+  uint x = input.vertex_id - y * push.chunk_vertices;
 
   float h = push.height_data_buffer[input.vertex_id];
 

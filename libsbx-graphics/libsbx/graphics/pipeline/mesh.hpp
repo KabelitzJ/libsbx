@@ -33,6 +33,8 @@ struct submesh {
   math::matrix4x4 local_transform;
   utility::hashed_string name;
   std::uint32_t material_index;
+  std::uint32_t lod_level{0u};
+  std::uint32_t lod_group{0u};
 }; // struct submesh
 
 template<vertex Vertex>
@@ -126,6 +128,31 @@ public:
 
   auto index_count() const noexcept -> std::uint32_t {
     return _index_count;
+  }
+
+  auto lod_count(std::uint32_t submesh_index) const -> std::uint32_t {
+    auto count = std::uint32_t{1u};
+    const auto group = _submeshes[submesh_index].lod_group;
+
+    for (auto i = submesh_index + 1u; i < static_cast<std::uint32_t>(_submeshes.size()); ++i) {
+      if (_submeshes[i].lod_group != group) {
+        break;
+      }
+
+      ++count;
+    }
+
+    return count;
+  }
+
+  auto base_submesh_index(std::uint32_t lod_group) const -> std::uint32_t {
+    for (auto i = std::uint32_t{0u}; i < static_cast<std::uint32_t>(_submeshes.size()); ++i) {
+      if (_submeshes[i].lod_group == lod_group && _submeshes[i].lod_level == 0u) {
+        return i;
+      }
+    }
+
+    throw utility::runtime_error{"LOD group {} not found", lod_group};
   }
 
 protected:

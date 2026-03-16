@@ -74,7 +74,13 @@ application::application()
 
   auto& asset_registry = scenes_module.asset_registry();
 
-  auto& scene = scenes_module.load_scene("res://scenes/scene.yaml");
+  auto scene_name = std::string{"res://scenes/scene.yaml"};
+
+  if (auto scene = cli.argument<std::string>("scene"); scene) {
+    scene_name = *scene;
+  }
+
+  auto& scene = scenes_module.load_scene(scene_name);
   auto& graph = scene.graph();
   auto& environment = scene.environment();
 

@@ -115,8 +115,9 @@ models_module::models_module() {
 
   asset_io.register_loader("static_meshes", [](scenes::asset_registry& registry, const utility::hashed_string& name, const YAML::Node& node) -> void {
     const auto path = node["path"].as<std::string>();
+    const auto lod_count = node["lod_count"].as<std::uint32_t>(1u);
 
-    registry.request_mesh<mesh>(name, path);
+    auto id = registry.request_mesh<mesh>(name, path, lod_count);
   });
 
   asset_io.register_loader("materials", [](scenes::asset_registry& registry, const utility::hashed_string& name, const YAML::Node& node) -> void {

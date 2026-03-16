@@ -181,27 +181,27 @@ static auto _load_node(const aiNode* node, const aiScene* scene, mesh::mesh_data
   }
 }
 
-mesh::mesh(const std::filesystem::path& path)
-: base{_load(path)} { }
+mesh::mesh(const std::filesystem::path& path, std::uint32_t lod_count)
+: base{_load(path, lod_count)} { }
 
 mesh::~mesh() {
 
 }
 
-auto mesh::_load(const std::filesystem::path& path) -> mesh_data {
+auto mesh::_load(const std::filesystem::path& path, std::uint32_t lod_count) -> mesh_data {
   auto& assets_module = core::engine::get_module<assets::assets_module>();
   const auto resolved_path = assets_module.resolve_path(path);
 
-  const auto binary_path = std::filesystem::path{resolved_path}.replace_extension(binary_file_extention);
+  // const auto binary_path = std::filesystem::path{resolved_path}.replace_extension(binary_file_extention);
 
-  if (std::filesystem::exists(binary_path)) {
-    const auto source_time = std::filesystem::last_write_time(resolved_path);
-    const auto binary_time = std::filesystem::last_write_time(binary_path);
+  // if (std::filesystem::exists(binary_path)) {
+  //   const auto source_time = std::filesystem::last_write_time(resolved_path);
+  //   const auto binary_time = std::filesystem::last_write_time(binary_path);
 
-    if (binary_time > source_time) {
-      return _load_binary(binary_path);
-    }
-  }
+  //   if (binary_time > source_time) {
+  //     return _load_binary(binary_path);
+  //   }
+  // }
 
   if (!std::filesystem::exists(resolved_path)) {
     throw std::runtime_error{"Mesh file not found: " + resolved_path.string()};
@@ -234,6 +234,14 @@ auto mesh::_load(const std::filesystem::path& path) -> mesh_data {
 
   _load_node(scene->mRootNode, scene, data, math::matrix4x4::identity);
 
+  if (lod_count > 1u) {
+    _generate_lods(data, lod_count);
+  }
+
+  for (const auto& submesh : data.submeshes) {
+    utility::logger<"models">::debug("  submesh '{}': group={}, lod={}, indices={}, vertices={}", submesh.name.str(), submesh.lod_group, submesh.lod_level, submesh.index_count, submesh.vertex_count);
+  }
+
   const auto vertices_count = data.vertices.size();
   const auto indices_count = data.indices.size();
 
@@ -242,9 +250,68 @@ auto mesh::_load(const std::filesystem::path& path) -> mesh_data {
 
   utility::logger<"models">::debug("Loaded mesh: {}, vertices: {}, indices: {}, size: {} kb in {:.2f}ms", resolved_path.string(), vertices_count, indices_count, kb.value(), units::quantity_cast<units::millisecond>(timer.elapsed()));
 
-  _process(resolved_path, data);
+  // _process(resolved_path, data);
 
   return data;
+}
+
+auto mesh::_generate_lods(mesh_data& data, std::uint32_t lod_count) -> void {
+  const auto base_submesh_count = static_cast<std::uint32_t>(data.submeshes.size());
+
+  for (auto s = std::uint32_t{0u}; s < base_submesh_count; ++s) {
+    data.submeshes[s].lod_group = s;
+    data.submeshes[s].lod_level = 0u;
+  }
+
+  auto target_ratio = 0.5f;
+  auto target_error = 0.02f;
+
+  for (auto lod = std::uint32_t{1u}; lod < lod_count; ++lod) {
+    for (auto s = std::uint32_t{0u}; s < base_submesh_count; ++s) {
+      const auto& base = data.submeshes[s];
+      const auto target_index_count = static_cast<std::size_t>(base.index_count * target_ratio);
+
+      auto simplified_indices = std::vector<std::uint32_t>(base.index_count);
+      auto result_count = meshopt_simplify(
+        simplified_indices.data(),
+        data.indices.data() + base.index_offset,
+        base.index_count,
+        &data.vertices[base.vertex_offset].position.x(),
+        base.vertex_count,
+        sizeof(vertex3d),
+        target_index_count,
+        target_error
+      );
+
+      target_ratio *= 0.25f;
+      target_error *= 1.5f;
+
+      simplified_indices.resize(result_count);
+
+      // Offset indices to account for vertex_offset already being baked into the buffer
+      auto lod_submesh = graphics::submesh{};
+      lod_submesh.index_count = static_cast<std::uint32_t>(result_count);
+      lod_submesh.index_offset = static_cast<std::uint32_t>(data.indices.size());
+      lod_submesh.vertex_count = base.vertex_count;
+      lod_submesh.vertex_offset = base.vertex_offset;
+      lod_submesh.bounds = base.bounds;
+      lod_submesh.local_transform = base.local_transform;
+      lod_submesh.name = base.name;
+      lod_submesh.material_index = base.material_index;
+      lod_submesh.lod_level = lod;
+      lod_submesh.lod_group = s;
+
+      data.indices.insert(data.indices.end(), simplified_indices.begin(), simplified_indices.end());
+      data.submeshes.push_back(lod_submesh);
+    }
+
+    target_ratio *= 0.5f;
+  }
+
+  // Reorder so LODs are consecutive per group: group0_lod0, group0_lod1, ..., group1_lod0, ...
+  std::ranges::stable_sort(data.submeshes, [](const auto& lhs, const auto& rhs) {
+    return std::tie(lhs.lod_group, lhs.lod_level) < std::tie(rhs.lod_group, rhs.lod_level);
+  });
 }
 
 static auto encode_octahedral(const math::vector3& vector) -> std::array<std::int16_t, 2> {
@@ -398,6 +465,9 @@ auto mesh::_load_binary(const std::filesystem::path& path) -> mesh_data {
     submesh.bounds = math::volume{math::vector3{fs.aabb_min[0], fs.aabb_min[1], fs.aabb_min[2]}, math::vector3{fs.aabb_max[0], fs.aabb_max[1], fs.aabb_max[2]}};
 
     std::memcpy(submesh.local_transform.data(), fs.local_transform, sizeof(fs.local_transform));
+
+    submesh.lod_level = fs.lod_level;
+    submesh.lod_group = fs.lod_group;
 
     data.submeshes.push_back(submesh);
   }
@@ -574,6 +644,9 @@ auto mesh::_process(const std::filesystem::path& path, const mesh_data& data) ->
     entry.aabb_max[2] = submesh.bounds.max().z();
 
     std::memcpy(entry.local_transform, submesh.local_transform.data(), sizeof(entry.local_transform));
+
+    entry.lod_level = submesh.lod_level;
+    entry.lod_group = submesh.lod_group;
 
     append_to(buffer, &entry, sizeof(entry));
   }

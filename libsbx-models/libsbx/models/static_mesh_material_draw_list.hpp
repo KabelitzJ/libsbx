@@ -66,12 +66,16 @@
 #include <libsbx/models/material.hpp>
 #include <libsbx/models/material_draw_list.hpp>
 
+#include <libsbx/sprites/sprites_module.hpp>
+
 namespace sbx::models {
 
 struct static_mesh_traits {
 
   using mesh_type = models::mesh;
-  struct instance_payload { };
+  struct instance_payload {
+    std::uint32_t lod_level{0u};
+  };
 
   template<typename DarwList>
   static auto create_shared_buffers([[maybe_unused]] DarwList& draw_list) -> void {
@@ -90,21 +94,39 @@ struct static_mesh_traits {
 
   template<typename Callable>
   static void for_each_submission(scenes::scene& scene, Callable&& callable) {
+    auto& assets_module = core::engine::get_module<assets::assets_module>();
+    auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
+
     auto& graph = scene.graph();
+    auto& environment = scene.environment();
+
+    auto& assets = scenes_module.asset_registry();
+
+    auto camera_node = environment.camera();
+    const auto camera_position = math::vector3{graph.world_position(camera_node)};
 
     auto query = graph.query<const scenes::static_mesh>();
 
     for (auto&& [node, static_mesh] : query.each()) {
       const auto transform_data = models::transform_data{graph.world_transform(node), graph.world_normal(node)};
+      const auto world_position = graph.world_position(node);
+
+      const auto distance_sq = math::vector3::distance_squared(camera_position, world_position);
+
+      const auto& mesh = assets_module.get_asset<models::mesh>(static_mesh.mesh_id());
 
       for (const auto& submesh : static_mesh.submeshes()) {
-        std::invoke(callable, node, static_mesh.mesh_id(), submesh.index, submesh.material, transform_data, instance_payload{});
+        const auto base_index = mesh.base_submesh_index(submesh.index);
+        const auto lod = _select_lod(distance_sq, mesh.lod_count(base_index));
+        const auto actual_index = base_index + lod;
+
+        std::invoke(callable, node, static_mesh.mesh_id(), actual_index, submesh.material, transform_data, instance_payload{lod});
       }
     }
   }
 
   static auto make_instance_data(const scenes::node node, const std::uint32_t transform_index, std::uint32_t material_index, [[maybe_unused]] const instance_payload& payload) -> instance_data {
-    return instance_data{transform_index, material_index, static_cast<std::uint32_t>(node), 0u};
+    return instance_data{transform_index, material_index, static_cast<std::uint32_t>(node), payload.lod_level};
   }
 
   template<typename Mesh, typename Emitter>
@@ -129,7 +151,24 @@ struct static_mesh_traits {
 
 private:
 
+  static auto _select_lod(std::float_t distance_sq, std::uint32_t lod_count) -> std::uint32_t {
+    static constexpr auto thresholds = std::array<std::float_t, 4u>{
+      900.0f,    // LOD 0: < 30m
+      6400.0f,   // LOD 1: < 80m
+      22500.0f,  // LOD 2: < 150m
+      90000.0f   // LOD 3: < 300m
+    };
 
+    auto level = std::uint32_t{0u};
+
+    for (auto i = std::uint32_t{0u}; i < static_cast<std::uint32_t>(thresholds.size()); ++i) {
+      if (distance_sq > thresholds[i]) {
+        level = i + 1u;
+      }
+    }
+
+    return std::min(level, lod_count - 1u);
+  }
 
 }; // static_mesh_traits
 

@@ -1,7 +1,7 @@
 name: tree_branch
 
 albedo:
-  image: res://meshes/trees/tree_1/textures/branch_albedo.png
+  image: res://meshes/trees/textures/branch_albedo.png
   format: r8g8b8a8_srgb
 
 base_color: [1.0, 1.0, 1.0, 1.0]

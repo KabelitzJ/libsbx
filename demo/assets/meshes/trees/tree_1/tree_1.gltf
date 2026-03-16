@@ -104,12 +104,12 @@
 		{
 			"mimeType":"image/jpeg",
 			"name":"trunk-01-1_baseColor",
-			"uri":"textures/trunk_albedo.jpg"
+			"uri":"../textures/trunk_albedo.jpg"
 		},
 		{
 			"mimeType":"image/png",
 			"name":"branch-02-1_baseColor",
-			"uri":"textures/branch_albedo.png"
+			"uri":"../textures/branch_albedo.png"
 		}
 	],
 	"accessors":[

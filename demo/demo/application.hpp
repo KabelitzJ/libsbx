@@ -51,6 +51,8 @@ private:
 
   sbx::ui::font _font;
 
+  bool _sculpt_raise{true};
+
 }; // class application
 
 } // namespace demo

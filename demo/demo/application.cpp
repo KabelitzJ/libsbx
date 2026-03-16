@@ -39,6 +39,8 @@
 
 #include <libsbx/audio/audio_module.hpp>
 
+#include <demo/terrain/terrain_module.hpp>
+
 namespace demo {
 
 application::application()
@@ -130,10 +132,11 @@ application::application()
   sbx::utility::logger<"demo">::info("string id: {}", sbx::utility::string_id<"foobar">());
 }
 
-auto application::update() -> void  {
+auto application::update() -> void {
   SBX_PROFILE_SCOPE("application::update");
 
   auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
+  auto& terrain_mod = sbx::core::engine::get_module<demo::terrain_module>();
 
   auto& scene = scenes_module.scene();
   auto& environment = scene.environment();
@@ -144,6 +147,61 @@ auto application::update() -> void  {
   if (sbx::devices::input::is_key_pressed(sbx::devices::key::escape)) {
     sbx::core::engine::quit();
     return;
+  }
+
+  if (sbx::devices::input::is_key_pressed(sbx::devices::key::t)) {
+    _sculpt_raise = !_sculpt_raise;
+    sbx::utility::logger<"demo">::info("Sculpt mode: {}", _sculpt_raise ? "raise" : "lower");
+  }
+
+  if (sbx::devices::input::is_mouse_button_down(sbx::devices::mouse_button::left)) {
+    auto mouse_pos = sbx::devices::input::mouse_position();
+    auto ray = environment.screen_point_to_ray(mouse_pos);
+
+    sbx::utility::logger<"demo">::debug("Ray origin: ({:.2f}, {:.2f}, {:.2f}) dir: ({:.2f}, {:.2f}, {:.2f})", ray.origin().x(), ray.origin().y(), ray.origin().z(), ray.direction().x(), ray.direction().y(), ray.direction().z());
+
+    constexpr auto max_distance = 500.0f;
+    constexpr auto step_size = 0.5f;
+
+    auto hit = std::optional<sbx::math::vector3>{};
+
+    for (auto t = 0.0f; t < max_distance; t += step_size) {
+      auto point = ray.origin() + ray.direction() * t;
+      auto terrain_h = terrain_mod.get_height_at(point.x(), point.z());
+
+      if (point.y() <= terrain_h) {
+        auto lo = t - step_size;
+        auto hi = t;
+
+        for (auto i = 0; i < 8; ++i) {
+          auto mid = (lo + hi) * 0.5f;
+          auto mp = ray.origin() + ray.direction() * mid;
+          auto mh = terrain_mod.get_height_at(mp.x(), mp.z());
+
+          if (mp.y() <= mh) {
+            hi = mid;
+          } else {
+            lo = mid;
+          }
+        }
+
+        hit = ray.origin() + ray.direction() * ((lo + hi) * 0.5f);
+
+        break;
+      }
+    }
+
+    if (hit) {
+      auto strength = (_sculpt_raise ? 10.0f : -10.0f) * delta_time;
+
+      sbx::utility::logger<"demo">::debug("Sculpt has_hit at ({:.2f}, {:.2f}, {:.2f}) strength: {:.3f}", hit->x(), hit->y(), hit->z(), strength);
+
+      auto result = terrain_mod.sculpt(hit->x(), hit->z(), 30.0f, strength);
+
+      sbx::utility::logger<"demo">::debug("Sculpt affected chunks ({}, {}) to ({}, {})", result.min_chunk.x, result.min_chunk.y, result.max_chunk.x, result.max_chunk.y);
+    } else {
+      sbx::utility::logger<"demo">::debug("Sculpt ray missed terrain (mouse: {:.0f}, {:.0f})", mouse_pos.x(), mouse_pos.y());
+    }
   }
 
   _rotation += sbx::math::degree{45} * delta_time;

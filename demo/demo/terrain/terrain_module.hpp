@@ -27,8 +27,8 @@ class terrain_module final : public sbx::core::module<terrain_module> {
   inline static const auto is_registered = register_module(stage::normal);
 
   inline static const auto config = terrain_config{
-    .world_width = 2048,
-    .world_height = 2048,
+    .world_width = 1024,
+    .world_height = 1024,
     .generation = {
       .base_scale = 0.004f,
       .height_scale = 30.0f,

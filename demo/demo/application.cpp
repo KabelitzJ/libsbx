@@ -157,14 +157,11 @@ auto application::update() -> void {
 
   if (sbx::devices::input::is_key_pressed(sbx::devices::key::t)) {
     _sculpt_raise = !_sculpt_raise;
-    sbx::utility::logger<"demo">::info("Sculpt mode: {}", _sculpt_raise ? "raise" : "lower");
   }
 
   if (sbx::devices::input::is_mouse_button_down(sbx::devices::mouse_button::left)) {
     auto mouse_pos = sbx::devices::input::mouse_position();
     auto ray = environment.screen_point_to_ray(mouse_pos);
-
-    sbx::utility::logger<"demo">::debug("Ray origin: ({:.2f}, {:.2f}, {:.2f}) dir: ({:.2f}, {:.2f}, {:.2f})", ray.origin().x(), ray.origin().y(), ray.origin().z(), ray.direction().x(), ray.direction().y(), ray.direction().z());
 
     constexpr auto max_distance = 500.0f;
     constexpr auto step_size = 0.5f;
@@ -199,14 +196,7 @@ auto application::update() -> void {
 
     if (hit) {
       auto strength = (_sculpt_raise ? 10.0f : -10.0f) * delta_time;
-
-      sbx::utility::logger<"demo">::debug("Sculpt has_hit at ({:.2f}, {:.2f}, {:.2f}) strength: {:.3f}", hit->x(), hit->y(), hit->z(), strength);
-
       auto result = terrain_mod.sculpt(hit->x(), hit->z(), 30.0f, strength);
-
-      sbx::utility::logger<"demo">::debug("Sculpt affected chunks ({}, {}) to ({}, {})", result.min_chunk.x, result.min_chunk.y, result.max_chunk.x, result.max_chunk.y);
-    } else {
-      sbx::utility::logger<"demo">::debug("Sculpt ray missed terrain (mouse: {:.0f}, {:.0f})", mouse_pos.x(), mouse_pos.y());
     }
   }
 

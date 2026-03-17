@@ -47,11 +47,11 @@ ConstantBuffer<push_data> push;
 ConstantBuffer<sbx::common::scene_data> scene;
 
 static const float3 COLOR_GRASS = float3(0.30, 0.50, 0.20);
-static const float3 COLOR_DIRT  = float3(0.45, 0.35, 0.22);
-static const float3 COLOR_ROCK  = float3(0.50, 0.48, 0.45);
-static const float3 COLOR_SAND  = float3(0.76, 0.70, 0.50);
-static const float3 COLOR_SNOW  = float3(0.90, 0.91, 0.93);
-static const float3 COLOR_MUD   = float3(0.30, 0.25, 0.18);
+static const float3 COLOR_DIRT = float3(0.45, 0.35, 0.22);
+static const float3 COLOR_ROCK = float3(0.50, 0.48, 0.45);
+static const float3 COLOR_SAND = float3(0.76, 0.70, 0.50);
+static const float3 COLOR_SNOW = float3(0.90, 0.91, 0.93);
+static const float3 COLOR_MUD = float3(0.30, 0.25, 0.18);
 
 float unpack_weight(uint8_t value) {
   return float(value) / 255.0;
@@ -68,12 +68,14 @@ struct unpacked_weights {
 
 unpacked_weights unpack_splat(splat_weights packed) {
   unpacked_weights result;
+
   result.grass = unpack_weight(packed.grass);
-  result.dirt  = unpack_weight(packed.dirt);
-  result.rock  = unpack_weight(packed.rock);
-  result.sand  = unpack_weight(packed.sand);
-  result.snow  = unpack_weight(packed.snow);
-  result.mud   = unpack_weight(packed.mud);
+  result.dirt = unpack_weight(packed.dirt);
+  result.rock = unpack_weight(packed.rock);
+  result.sand = unpack_weight(packed.sand);
+  result.snow = unpack_weight(packed.snow);
+  result.mud = unpack_weight(packed.mud);
+
   return result;
 }
 
@@ -100,12 +102,14 @@ unpacked_weights sample_splat_bilinear(float3 world_pos) {
   unpacked_weights s11 = unpack_splat(push.splat_data_buffer[y1 * int(push.chunk_cells) + x1]);
 
   unpacked_weights result;
+
   result.grass = lerp(lerp(s00.grass, s10.grass, wx), lerp(s01.grass, s11.grass, wx), wy);
-  result.dirt  = lerp(lerp(s00.dirt,  s10.dirt,  wx), lerp(s01.dirt,  s11.dirt,  wx), wy);
-  result.rock  = lerp(lerp(s00.rock,  s10.rock,  wx), lerp(s01.rock,  s11.rock,  wx), wy);
-  result.sand  = lerp(lerp(s00.sand,  s10.sand,  wx), lerp(s01.sand,  s11.sand,  wx), wy);
-  result.snow  = lerp(lerp(s00.snow,  s10.snow,  wx), lerp(s01.snow,  s11.snow,  wx), wy);
-  result.mud   = lerp(lerp(s00.mud,   s10.mud,   wx), lerp(s01.mud,   s11.mud,   wx), wy);
+  result.dirt = lerp(lerp(s00.dirt, s10.dirt, wx), lerp(s01.dirt, s11.dirt, wx), wy);
+  result.rock = lerp(lerp(s00.rock, s10.rock, wx), lerp(s01.rock, s11.rock, wx), wy);
+  result.sand = lerp(lerp(s00.sand, s10.sand, wx), lerp(s01.sand, s11.sand, wx), wy);
+  result.snow = lerp(lerp(s00.snow, s10.snow, wx), lerp(s01.snow, s11.snow, wx), wy);
+  result.mud = lerp(lerp(s00.mud, s10.mud, wx), lerp(s01.mud, s11.mud, wx), wy);
+
   return result;
 }
 
@@ -115,19 +119,8 @@ fs_out main(fs_in input) {
 
   unpacked_weights splat = sample_splat_bilinear(input.position);
 
-  float3 albedo = COLOR_GRASS * splat.grass
-                + COLOR_DIRT  * splat.dirt
-                + COLOR_ROCK  * splat.rock
-                + COLOR_SAND  * splat.sand
-                + COLOR_SNOW  * splat.snow
-                + COLOR_MUD   * splat.mud;
-
-  float roughness = 0.85 * splat.grass
-                  + 0.95 * splat.dirt
-                  + 0.75 * splat.rock
-                  + 0.90 * splat.sand
-                  + 0.60 * splat.snow
-                  + 0.98 * splat.mud;
+  float3 albedo = COLOR_GRASS * splat.grass + COLOR_DIRT * splat.dirt + COLOR_ROCK * splat.rock + COLOR_SAND * splat.sand + COLOR_SNOW * splat.snow + COLOR_MUD * splat.mud;
+  float roughness = 0.85 * splat.grass + 0.95 * splat.dirt + 0.75 * splat.rock + 0.90 * splat.sand + 0.60 * splat.snow + 0.98 * splat.mud;
 
   output.albedo = float4(albedo, 1.0);
   output.position = float4(input.position, 1.0);

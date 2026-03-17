@@ -22,11 +22,14 @@ target_sources(
   PUBLIC
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/renderer.hpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/application.hpp"
+    "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/terrain/terrain_subrenderer.hpp"
+    "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/terrain/water_subrenderer.hpp"
   PRIVATE
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/renderer.cpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/application.cpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/demo.cpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/terrain/terrain_subrenderer.cpp"
+    "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/terrain/water_subrenderer.cpp"
 )
 
 target_compile_definitions(

@@ -9,7 +9,7 @@
 
 namespace demo {
 
-static constexpr auto chunk_size  = 32u;
+static constexpr auto chunk_size  = 8u;
 static constexpr auto chunk_vertices = chunk_size + 1u;
 
 struct chunk_coord {
@@ -70,6 +70,59 @@ struct height_chunk {
   }
 
 }; // struct height_chunk
+
+struct splat_weights {
+  std::uint8_t grass{255};
+  std::uint8_t dirt{0};
+  std::uint8_t rock{0};
+  std::uint8_t sand{0};
+  std::uint8_t snow{0};
+  std::uint8_t mud{0};
+  std::uint8_t _padding0{0};
+  std::uint8_t _padding1{0};
+
+  static auto from_floats(std::float_t grass, std::float_t dirt, std::float_t rock, std::float_t sand, std::float_t snow, std::float_t mud) -> splat_weights {
+    auto total = grass + dirt + rock + sand + snow + mud;
+
+    if (total > 0.0f) {
+      auto inverse = 1.0f / total;
+
+      grass *= inverse;
+      dirt *= inverse;
+      rock *= inverse;
+      sand *= inverse;
+      snow *= inverse;
+      mud *= inverse;
+    }
+
+    return splat_weights{
+      .grass = static_cast<std::uint8_t>(std::clamp(grass, 0.0f, 1.0f) * 255.0f),
+      .dirt = static_cast<std::uint8_t>(std::clamp(dirt,  0.0f, 1.0f) * 255.0f),
+      .rock = static_cast<std::uint8_t>(std::clamp(rock,  0.0f, 1.0f) * 255.0f),
+      .sand = static_cast<std::uint8_t>(std::clamp(sand,  0.0f, 1.0f) * 255.0f),
+      .snow = static_cast<std::uint8_t>(std::clamp(snow,  0.0f, 1.0f) * 255.0f),
+      .mud = static_cast<std::uint8_t>(std::clamp(mud,   0.0f, 1.0f) * 255.0f),
+    };
+  }
+
+}; // struct splat_weights
+
+static_assert(sizeof(splat_weights) == 8, "splat_weights must be 8 bytes for GPU alignment");
+
+struct splat_chunk {
+
+  std::array<splat_weights, chunk_size * chunk_size> weights;
+  bool is_dirty{true};
+
+  auto at(std::uint32_t local_x, std::uint32_t local_y) -> splat_weights& {
+    return weights[local_y * chunk_size + local_x];
+  }
+
+  auto at(std::uint32_t local_x, std::uint32_t local_y) const -> const splat_weights& {
+    return weights[local_y * chunk_size + local_x];
+  }
+
+}; // struct splat_chunk
 
 } // namespace demo
 

@@ -346,6 +346,24 @@ auto logical_device::_get_enabled_features(const physical_device& physical_devic
     utility::logger<"graphics">::warn("Selected GPU does not support descriptor binding partially bound");
   }
 
+  if (available_vulkan12_features.shaderInt8) {
+    enabled_vulkan12_features.shaderInt8 = true;
+  } else {
+    utility::logger<"graphics">::warn("Selected GPU does not support shader int8");
+  }
+
+  if (available_vulkan12_features.storagePushConstant8) {
+    enabled_vulkan12_features.storagePushConstant8 = true;
+  } else {
+    utility::logger<"graphics">::warn("Selected GPU does not support storage push constant 8-bit");
+  }
+
+  if (available_vulkan12_features.storageBuffer8BitAccess) {
+    enabled_vulkan12_features.storageBuffer8BitAccess = true;
+  } else {
+    utility::logger<"graphics">::warn("Selected GPU does not support storage buffer 8-bit access");
+  }
+
   if (available_vulkan12_features.shaderFloat16) {
     enabled_vulkan12_features.shaderFloat16 = true;
   } else {

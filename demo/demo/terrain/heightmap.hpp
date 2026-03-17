@@ -14,16 +14,23 @@
 namespace demo {
 
 struct terrain_generation_params {
-  float base_scale{0.004f};
-  float height_scale{30.0f};
-  float valley_depth{5.0f};
-  float flatness{0.5f};
-  float river_width{0.015f};
-  float plateau_threshold{0.6f};
-  std::uint32_t octaves{4u};
-  float seed_x{0.0f};
-  float seed_z{0.0f};
+  std::float_t base_scale{0.003f};
+  std::float_t height_scale{30.0f};
+  std::float_t river_width{0.006f};
+  std::uint32_t octaves{3u};
+  std::float_t seed_x{0.0f};
+  std::float_t seed_z{0.0f};
 }; // struct terrain_generation_params
+
+struct terrain_constants {
+  static constexpr auto sea_level = 5.0f;
+  static constexpr auto river_bed_min = 1.0f;
+  static constexpr auto lake_bed_min = 0.5f;
+  static constexpr auto shore_max = 6.5f;
+  static constexpr auto plains_max = 10.0f;
+  static constexpr auto hills_max = 16.0f;
+  static constexpr auto mountain_max = 35.0f;
+}; // struct terrain_constants
 
 class heightmap {
 
@@ -34,7 +41,7 @@ public:
     _world_height{world_h},
     _params{params} { }
 
-  auto get_height(std::int32_t vx, std::int32_t vy) const -> float {
+  auto get_height(std::int32_t vx, std::int32_t vy) const -> std::float_t {
     auto cc = _to_chunk_coord(vx, vy);
 
     auto it = _chunks.find(cc);
@@ -90,7 +97,7 @@ public:
     }
   }
 
-  auto get_height_at(float world_x, float world_z) const -> float {
+  auto get_height_at(std::float_t world_x, std::float_t world_z) const -> std::float_t {
     auto gx = (world_x + _offset_x()) / cell_size();
     auto gz = (world_z + _offset_z()) / cell_size();
 
@@ -150,7 +157,7 @@ public:
     return _params;
   }
 
-  static auto cell_size() -> float {
+  static auto cell_size() -> std::float_t {
     return grid::cell_size;
   }
 
@@ -176,17 +183,17 @@ private:
     return (it != _chunks.end()) ? &it->second : nullptr;
   }
 
-  auto _offset_x() const -> float {
-    return static_cast<float>(_world_width) * grid::cell_size * 0.5f;
+  auto _offset_x() const -> std::float_t {
+    return static_cast<std::float_t>(_world_width) * grid::cell_size * 0.5f;
   }
 
-  auto _offset_z() const -> float {
-    return static_cast<float>(_world_height) * grid::cell_size * 0.5f;
+  auto _offset_z() const -> std::float_t {
+    return static_cast<std::float_t>(_world_height) * grid::cell_size * 0.5f;
   }
 
   auto _to_chunk_coord(std::int32_t vx, std::int32_t vy) const -> chunk_coord {
-    auto fx = static_cast<float>(vx) / static_cast<float>(chunk_size);
-    auto fy = static_cast<float>(vy) / static_cast<float>(chunk_size);
+    auto fx = static_cast<std::float_t>(vx) / static_cast<std::float_t>(chunk_size);
+    auto fy = static_cast<std::float_t>(vy) / static_cast<std::float_t>(chunk_size);
 
     return chunk_coord{static_cast<std::int32_t>(std::floor(fx)), static_cast<std::int32_t>(std::floor(fy))};
   }
@@ -195,31 +202,50 @@ private:
     auto wx = static_cast<float>(vx) + _params.seed_x;
     auto wz = static_cast<float>(vy) + _params.seed_z;
 
-    auto base = sbx::math::noise::fractal(wx * _params.base_scale, wz * _params.base_scale, _params.octaves);
+    // === Plains base ===
+    // Gentle rolling terrain centered above sea level
+    // Range: roughly [sea_level + 1, sea_level + 5]
+    auto plains_noise = sbx::math::noise::fractal(wx * _params.base_scale, wz * _params.base_scale, _params.octaves);
+    auto plains_height = terrain_constants::sea_level + 2.5f + plains_noise * 2.5f;
 
-    auto mountains = sbx::math::noise::fractal(wx * _params.base_scale * 0.5f + 100.0f, wz * _params.base_scale * 0.5f + 100.0f, 3u);
+    // === Mountain ranges ===
+    // Large-scale mask that's zero most of the map, high in isolated regions
+    auto mountain_mask_noise = sbx::math::noise::fractal(wx * _params.base_scale * 2.0f + 100.0f, wz * _params.base_scale * 2.0f + 100.0f, 2u);
+    auto mountain_mask = std::clamp((mountain_mask_noise - 0.3f) / 0.5f, 0.0f, 1.0f);
+    mountain_mask = mountain_mask * mountain_mask * mountain_mask;
 
-    auto detail = sbx::math::noise::fractal(wx * _params.base_scale * 4.0f + 200.0f, wz * _params.base_scale * 4.0f + 200.0f, 2u);
+    // Mountain shape within masked regions
+    auto mountain_shape = sbx::math::noise::fractal(wx * _params.base_scale * 4.0f + 200.0f, wz * _params.base_scale * 4.0f + 200.0f, 3u);
+    auto mountain_height = mountain_mask * (mountain_shape * 0.5f + 0.5f) * _params.height_scale;
 
-    auto river_noise = sbx::math::noise::fractal(wx * _params.river_width + 300.0f, wz * _params.river_width + 300.0f, 3u);
+    // === Rivers ===
+    // Narrow channels that carve below sea level
+    auto river_noise = sbx::math::noise::fractal(wx * _params.river_width + 300.0f, wz * _params.river_width + 300.0f, 2u);
+    auto river_proximity = 1.0f - std::clamp(std::abs(river_noise) / 0.08f, 0.0f, 1.0f);
+    // river_proximity is 1.0 at the river center, 0.0 away from it
 
-    auto river_carved = 1.0f - std::abs(river_noise);
-    river_carved = river_carved * river_carved;
+    // River carve depth — goes below sea level
+    auto river_carve = river_proximity * (terrain_constants::sea_level - terrain_constants::river_bed_min);
 
-    auto shaped = base;
+    // === Lakes ===
+    // Broad depressions that dip below sea level
+    auto lake_noise = sbx::math::noise::simplex(wx * _params.base_scale * 1.5f + 400.0f, wz * _params.base_scale * 1.5f + 400.0f);
+    auto lake_factor = std::clamp((-lake_noise - 0.45f) / 0.35f, 0.0f, 1.0f);
 
-    if (shaped > _params.plateau_threshold) {
-      auto excess = shaped - _params.plateau_threshold;
+    auto lake_carve = lake_factor * (terrain_constants::sea_level - terrain_constants::lake_bed_min);
 
-      shaped = _params.plateau_threshold + excess * 0.2f;
-    }
+    // === Fine detail ===
+    auto detail = sbx::math::noise::fractal(wx * _params.base_scale * 10.0f + 500.0f, wz * _params.base_scale * 10.0f + 500.0f, 2u);
 
-    auto height = shaped * _params.height_scale + mountains * _params.height_scale * 0.4f + detail * 0.8f - (1.0f - river_carved) * _params.valley_depth;
+    // === Combine ===
+    auto height = plains_height + mountain_height + detail * 0.2f;
 
-    auto flat_height = _params.height_scale * 0.2f;
-  
-    height = std::lerp(height, flat_height, _params.flatness);
+    // Carve rivers and lakes only in non-mountain areas
+    auto carve_mask = 1.0f - mountain_mask;
+    height -= river_carve * carve_mask;
+    height -= lake_carve * carve_mask;
 
+    // === Edge falloff ===
     auto total_verts_w = static_cast<float>(_world_width);
     auto total_verts_h = static_cast<float>(_world_height);
 
@@ -231,7 +257,9 @@ private:
 
     auto edge_fade = std::clamp(std::min(edge_fade_x, edge_fade_z), 0.0f, 1.0f);
 
-    height = std::lerp(flat_height, height, edge_fade);
+    // Fade to just above sea level at edges — keeps map border dry and buildable
+    auto edge_height = terrain_constants::sea_level + 2.0f;
+    height = std::lerp(edge_height, height, edge_fade);
 
     return height;
   }

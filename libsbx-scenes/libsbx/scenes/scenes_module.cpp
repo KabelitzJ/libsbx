@@ -17,8 +17,6 @@ namespace sbx::scenes {
 scenes_module::scenes_module()
 : _scene{std::nullopt} {
 
-  // --- Asset loaders ---
-
   _asset_io_registry.register_loader("images", [](scenes::asset_registry& registry, const utility::hashed_string& name, const YAML::Node& node) -> void {
     registry.request_image(name, node["path"].as<std::string>());
   });
@@ -26,10 +24,6 @@ scenes_module::scenes_module()
   _asset_io_registry.register_loader("cube_images", [](scenes::asset_registry& registry, const utility::hashed_string& name, const YAML::Node& node) -> void {
     registry.request_cube_image(name, node["path"].as<std::string>());
   });
-
-  // static_meshes and materials are registered by models_module
-
-  // --- Component loaders ---
 
   _component_io_registry.register_component<scenes::transform>(
     "transform",

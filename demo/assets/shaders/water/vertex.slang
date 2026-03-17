@@ -1,0 +1,49 @@
+#include <libsbx/common/scene_data.slang>
+
+struct vs_in {
+  uint vertex_id : SV_VertexID;
+}; // struct vs_in
+
+struct vs_out {
+  [[vk::location(0)]] float3 position : POSITION;
+  [[vk::location(1)]] float3 normal : NORMAL;
+  float4 sv_position : SV_Position;
+}; // struct vs_out
+
+struct push_data {
+  float chunk_world_x;
+  float chunk_world_z;
+  float chunk_size;
+  float water_level;
+}; // struct push_data
+
+[[vk::push_constant]]
+ConstantBuffer<push_data> push;
+
+[[vk::binding(0, 0)]]
+ConstantBuffer<sbx::common::scene_data> scene;
+
+[shader("vertex")]
+vs_out main(vs_in input) {
+  vs_out output;
+
+  // Two triangles forming a quad from 6 vertices
+  static const float2 quad_positions[6] = {
+    float2(0.0, 0.0),
+    float2(1.0, 0.0),
+    float2(0.0, 1.0),
+    float2(0.0, 1.0),
+    float2(1.0, 0.0),
+    float2(1.0, 1.0)
+  };
+
+  float2 local_position = quad_positions[input.vertex_id];
+
+  float3 world_position = float3(push.chunk_world_x + local_position.x * push.chunk_size, push.water_level, push.chunk_world_z + local_position.y * push.chunk_size);
+
+  output.position = world_position;
+  output.normal = float3(0.0, 1.0, 0.0);
+  output.sv_position = mul(scene.projection, mul(scene.view, float4(world_position, 1.0)));
+
+  return output;
+}

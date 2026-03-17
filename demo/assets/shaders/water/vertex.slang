@@ -7,6 +7,7 @@ struct vs_in {
 struct vs_out {
   [[vk::location(0)]] float3 position : POSITION;
   [[vk::location(1)]] float3 normal : NORMAL;
+  [[vk::location(2)]] float2 world_xz : WORLD_XZ;
   float4 sv_position : SV_Position;
 }; // struct vs_out
 
@@ -23,26 +24,35 @@ ConstantBuffer<push_data> push;
 [[vk::binding(0, 0)]]
 ConstantBuffer<sbx::common::scene_data> scene;
 
+static const float2 positions[6] = {
+  float2(0.0, 0.0),
+  float2(1.0, 0.0),
+  float2(0.0, 1.0),
+  float2(0.0, 1.0),
+  float2(1.0, 0.0),
+  float2(1.0, 1.0)
+};
+
 [shader("vertex")]
 vs_out main(vs_in input) {
   vs_out output;
 
-  // Two triangles forming a quad from 6 vertices
-  static const float2 quad_positions[6] = {
-    float2(0.0, 0.0),
-    float2(1.0, 0.0),
-    float2(0.0, 1.0),
-    float2(0.0, 1.0),
-    float2(1.0, 0.0),
-    float2(1.0, 1.0)
-  };
-
-  float2 local_position = quad_positions[input.vertex_id];
+  float2 local_position = positions[input.vertex_id];
 
   float3 world_position = float3(push.chunk_world_x + local_position.x * push.chunk_size, push.water_level, push.chunk_world_z + local_position.y * push.chunk_size);
 
+  // Gentle wave displacement
+  float time = scene.time;
+
+  float wave1 = sin(world_position.x * 0.08 + time * 0.8) * 0.06;
+  float wave2 = sin(world_position.z * 0.12 + time * 0.6) * 0.04;
+  float wave3 = sin((world_position.x + world_position.z) * 0.05 + time * 1.1) * 0.03;
+
+  world_position.y += wave1 + wave2 + wave3;
+
   output.position = world_position;
   output.normal = float3(0.0, 1.0, 0.0);
+  output.world_xz = world_position.xz;
   output.sv_position = mul(scene.projection, mul(scene.view, float4(world_position, 1.0)));
 
   return output;

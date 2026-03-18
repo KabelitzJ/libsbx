@@ -22,17 +22,6 @@ auto water_subrenderer::render(sbx::graphics::command_buffer& command_buffer) ->
 
   auto& scene = scenes_module.scene();
   auto& environment = scene.environment();
-  auto& graph = scene.graph();
-
-  auto camera_node = environment.camera();
-  auto& camera_transform = graph.get_component<sbx::scenes::transform>(camera_node);
-  auto camera_position = camera_transform.position();
-
-  auto visible_chunks = terrain_module.get_visible_chunks(camera_position.x(), camera_position.z(), _view_distance);
-
-  if (visible_chunks.empty()) {
-    return;
-  }
 
   _pipeline.bind(command_buffer);
 
@@ -44,25 +33,17 @@ auto water_subrenderer::render(sbx::graphics::command_buffer& command_buffer) ->
 
   _descriptor_handler.bind_descriptors(command_buffer);
 
-  auto terrain_cell_size = terrain_module.cell_size();
-  auto terrain_offset_x = terrain_module.offset_x();
-  auto terrain_offset_z = terrain_module.offset_z();
+  auto terrain_width = static_cast<std::float_t>(terrain_module.world_width()) * terrain_module.cell_size();
+  auto terrain_height = static_cast<std::float_t>(terrain_module.world_height()) * terrain_module.cell_size();
 
-  for (const auto& chunk_coordinates : visible_chunks) {
-    auto chunk_world_x = static_cast<std::float_t>(chunk_coordinates.x * static_cast<std::int32_t>(chunk_size)) * terrain_cell_size - terrain_offset_x;
-    auto chunk_world_z = static_cast<std::float_t>(chunk_coordinates.y * static_cast<std::int32_t>(chunk_size)) * terrain_cell_size - terrain_offset_z;
-    auto chunk_world_size = static_cast<std::float_t>(chunk_size) * terrain_cell_size;
+  _push_handler.push("chunk_world_x", -terrain_module.offset_x());
+  _push_handler.push("chunk_world_z", -terrain_module.offset_z());
+  _push_handler.push("chunk_size", std::max(terrain_width, terrain_height));
+  _push_handler.push("water_level", terrain_constants::sea_level);
 
-    _push_handler.push("chunk_world_x", chunk_world_x);
-    _push_handler.push("chunk_world_z", chunk_world_z);
-    _push_handler.push("chunk_size", chunk_world_size);
-    _push_handler.push("water_level", terrain_constants::sea_level);
+  _push_handler.bind(command_buffer);
 
-    _push_handler.bind(command_buffer);
-
-    // 6 vertices = 2 triangles = 1 quad
-    command_buffer.draw(6, 1, 0, 0);
-  }
+  command_buffer.draw(6, 1, 0, 0);
 }
 
 } // namespace demo

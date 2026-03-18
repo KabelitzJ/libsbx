@@ -31,12 +31,21 @@ struct splat_weights {
 struct push_data {
   float* height_data_buffer;
   splat_weights* splat_data_buffer;
-  uint chunk_verts;
-  uint chunk_cells;
-  float cell_size;
-  float chunk_world_x;
-  float chunk_world_z;
-  float inv_chunk_verts;
+  uint grid_verts;
+  uint grid_cells;
+  float ring_cell_size;
+  float ring_origin_x;
+  float ring_origin_z;
+  uint ring_level;
+  float base_cell_size;
+  float terrain_offset_x;
+  float terrain_offset_z;
+  float terrain_width;
+  float terrain_height;
+  uint vertices_x;
+  uint vertices_z;
+  uint cells_x;
+  uint cells_z;
   float tiling_scale;
 }; // struct push_data
 
@@ -80,35 +89,35 @@ unpacked_weights unpack_splat(splat_weights packed) {
 }
 
 unpacked_weights sample_splat_bilinear(float3 world_pos) {
-  float fx = (world_pos.x - push.chunk_world_x) / push.cell_size - 0.5;
-  float fz = (world_pos.z - push.chunk_world_z) / push.cell_size - 0.5;
+  float grid_x = (world_pos.x + push.terrain_offset_x) / push.base_cell_size - 0.5;
+  float grid_z = (world_pos.z + push.terrain_offset_z) / push.base_cell_size - 0.5;
 
-  int x0 = int(floor(fx));
-  int y0 = int(floor(fz));
+  int x0 = int(floor(grid_x));
+  int z0 = int(floor(grid_z));
   int x1 = x0 + 1;
-  int y1 = y0 + 1;
+  int z1 = z0 + 1;
 
-  float wx = fract(fx);
-  float wy = fract(fz);
+  float fraction_x = fract(grid_x);
+  float fraction_z = fract(grid_z);
 
-  x0 = clamp(x0, 0, int(push.chunk_cells) - 1);
-  x1 = clamp(x1, 0, int(push.chunk_cells) - 1);
-  y0 = clamp(y0, 0, int(push.chunk_cells) - 1);
-  y1 = clamp(y1, 0, int(push.chunk_cells) - 1);
+  x0 = clamp(x0, 0, int(push.cells_x) - 1);
+  x1 = clamp(x1, 0, int(push.cells_x) - 1);
+  z0 = clamp(z0, 0, int(push.cells_z) - 1);
+  z1 = clamp(z1, 0, int(push.cells_z) - 1);
 
-  unpacked_weights s00 = unpack_splat(push.splat_data_buffer[y0 * int(push.chunk_cells) + x0]);
-  unpacked_weights s10 = unpack_splat(push.splat_data_buffer[y0 * int(push.chunk_cells) + x1]);
-  unpacked_weights s01 = unpack_splat(push.splat_data_buffer[y1 * int(push.chunk_cells) + x0]);
-  unpacked_weights s11 = unpack_splat(push.splat_data_buffer[y1 * int(push.chunk_cells) + x1]);
+  unpacked_weights s00 = unpack_splat(push.splat_data_buffer[z0 * int(push.cells_x) + x0]);
+  unpacked_weights s10 = unpack_splat(push.splat_data_buffer[z0 * int(push.cells_x) + x1]);
+  unpacked_weights s01 = unpack_splat(push.splat_data_buffer[z1 * int(push.cells_x) + x0]);
+  unpacked_weights s11 = unpack_splat(push.splat_data_buffer[z1 * int(push.cells_x) + x1]);
 
   unpacked_weights result;
 
-  result.grass = lerp(lerp(s00.grass, s10.grass, wx), lerp(s01.grass, s11.grass, wx), wy);
-  result.dirt = lerp(lerp(s00.dirt, s10.dirt, wx), lerp(s01.dirt, s11.dirt, wx), wy);
-  result.rock = lerp(lerp(s00.rock, s10.rock, wx), lerp(s01.rock, s11.rock, wx), wy);
-  result.sand = lerp(lerp(s00.sand, s10.sand, wx), lerp(s01.sand, s11.sand, wx), wy);
-  result.snow = lerp(lerp(s00.snow, s10.snow, wx), lerp(s01.snow, s11.snow, wx), wy);
-  result.mud = lerp(lerp(s00.mud, s10.mud, wx), lerp(s01.mud, s11.mud, wx), wy);
+  result.grass = lerp(lerp(s00.grass, s10.grass, fraction_x), lerp(s01.grass, s11.grass, fraction_x), fraction_z);
+  result.dirt = lerp(lerp(s00.dirt, s10.dirt, fraction_x), lerp(s01.dirt, s11.dirt, fraction_x), fraction_z);
+  result.rock = lerp(lerp(s00.rock, s10.rock, fraction_x), lerp(s01.rock, s11.rock, fraction_x), fraction_z);
+  result.sand = lerp(lerp(s00.sand, s10.sand, fraction_x), lerp(s01.sand, s11.sand, fraction_x), fraction_z);
+  result.snow = lerp(lerp(s00.snow, s10.snow, fraction_x), lerp(s01.snow, s11.snow, fraction_x), fraction_z);
+  result.mud = lerp(lerp(s00.mud, s10.mud, fraction_x), lerp(s01.mud, s11.mud, fraction_x), fraction_z);
 
   return result;
 }

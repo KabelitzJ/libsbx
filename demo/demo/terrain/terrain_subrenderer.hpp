@@ -2,22 +2,21 @@
 #ifndef DEMO_TERRAIN_SUBRENDERER_HPP_
 #define DEMO_TERRAIN_SUBRENDERER_HPP_
 
-#include <unordered_map>
 #include <vector>
 #include <cstdint>
 
-#include <libsbx/math/vector3.hpp>
-
 #include <libsbx/graphics/graphics.hpp>
-
 #include <libsbx/scenes/scenes.hpp>
 
-#include <demo/terrain/chunk.hpp>
 #include <demo/terrain/terrain_module.hpp>
 
 namespace demo {
 
 class terrain_subrenderer : public sbx::graphics::subrenderer {
+
+  static constexpr auto clipmap_grid_size = 64u;
+  static constexpr auto clipmap_grid_verts = clipmap_grid_size + 1u;
+  static constexpr auto clipmap_ring_count = 5u;
 
   class pipeline : public sbx::graphics::graphics_pipeline {
 
@@ -42,13 +41,6 @@ class terrain_subrenderer : public sbx::graphics::subrenderer {
 
   }; // class pipeline
 
-  struct gpu_chunk_data {
-    sbx::graphics::storage_buffer_handle height_buffer;
-    sbx::graphics::storage_buffer_handle splat_buffer;
-    bool height_uploaded{false};
-    bool splat_uploaded{false};
-  }; // struct gpu_chunk_data
-
 public:
 
   terrain_subrenderer(const std::vector<sbx::graphics::attachment_description>& attachments, const std::filesystem::path& path);
@@ -57,41 +49,13 @@ public:
 
   auto render(sbx::graphics::command_buffer& command_buffer) -> void override;
 
-  auto set_view_distance(std::float_t distance) -> void { 
-    _view_distance = distance; 
-  }
-
-  auto set_tiling_scale(std::float_t scale) -> void { 
-    _tiling_scale = scale; 
+  auto set_tiling_scale(std::float_t scale) -> void {
+    _tiling_scale = scale;
   }
 
 private:
 
-  auto _generate_chunk_indices() -> std::vector<std::uint32_t>;
-
-  auto _ensure_gpu_chunk(chunk_coord chunk_coordinates) -> gpu_chunk_data&;
-
-  template<typename Type>
-  auto _update_buffer(sbx::graphics::storage_buffer& buffer, const std::vector<Type>& data) -> void {
-    const auto required_size = static_cast<VkDeviceSize>(data.size() * sizeof(Type));
-
-    if (required_size > buffer.size()) {
-      buffer.resize(static_cast<VkDeviceSize>(required_size * 1.5f));
-    }
-
-    buffer.update(data.data(), data.size() * sizeof(Type));
-  }
-
-  template<typename Type, std::size_t N>
-  auto _update_buffer(sbx::graphics::storage_buffer& buffer, const std::array<Type, N>& data) -> void {
-    const auto required_size = static_cast<VkDeviceSize>(N * sizeof(Type));
-
-    if (required_size > buffer.size()) {
-      buffer.resize(static_cast<VkDeviceSize>(required_size * 1.5f));
-    }
-
-    buffer.update(data.data(), N * sizeof(Type));
-  }
+  auto _generate_grid_indices() -> std::vector<std::uint32_t>;
 
   pipeline _pipeline;
 
@@ -99,11 +63,11 @@ private:
   sbx::graphics::descriptor_handler _descriptor_handler;
 
   sbx::graphics::storage_buffer_handle _index_buffer;
+  sbx::graphics::storage_buffer_handle _height_buffer;
+  sbx::graphics::storage_buffer_handle _splat_buffer;
+
   std::uint32_t _index_count{};
 
-  std::unordered_map<chunk_coord, gpu_chunk_data, chunk_coord_hash> _gpu_chunks;
-
-  std::float_t _view_distance{500.0f};
   std::float_t _tiling_scale{0.5f};
 
 }; // class terrain_subrenderer

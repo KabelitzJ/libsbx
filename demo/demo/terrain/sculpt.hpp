@@ -6,93 +6,80 @@
 #include <cmath>
 #include <algorithm>
 
-#include <demo/terrain/chunk.hpp>
 #include <demo/terrain/heightmap.hpp>
 #include <demo/terrain/grid.hpp>
 
 namespace demo {
 
 struct sculpt_result {
-  chunk_coord min_chunk;
-  chunk_coord max_chunk;
-  std::int32_t min_vx{};
-  std::int32_t min_vy{};
-  std::int32_t max_vx{};
-  std::int32_t max_vy{};
+  std::int32_t min_vertex_x{};
+  std::int32_t min_vertex_z{};
+  std::int32_t max_vertex_x{};
+  std::int32_t max_vertex_z{};
 }; // struct sculpt_result
 
-inline auto sculpt_terrain(heightmap& heightmap, std::float_t world_x, std::float_t world_z, std::float_t radius, std::float_t strength) -> sculpt_result {
-  auto cs = grid::cell_size;
-  auto offset_x = static_cast<std::float_t>(heightmap.world_width()) * cs * 0.5f;
-  auto offset_z = static_cast<std::float_t>(heightmap.world_height()) * cs * 0.5f;
+inline auto sculpt_terrain(heightmap& height_map, std::float_t world_x, std::float_t world_z, std::float_t radius, std::float_t strength) -> sculpt_result {
+  auto cell = grid::cell_size;
+  auto offset_x = static_cast<std::float_t>(height_map.world_width()) * cell * 0.5f;
+  auto offset_z = static_cast<std::float_t>(height_map.world_height()) * cell * 0.5f;
 
   auto grid_x = world_x + offset_x;
   auto grid_z = world_z + offset_z;
 
-  auto cx = static_cast<std::int32_t>(grid_x / cs);
-  auto cz = static_cast<std::int32_t>(grid_z / cs);
-  auto r = static_cast<std::int32_t>(std::ceil(radius / cs));
+  auto center_x = static_cast<std::int32_t>(grid_x / cell);
+  auto center_z = static_cast<std::int32_t>(grid_z / cell);
+  auto radius_cells = static_cast<std::int32_t>(std::ceil(radius / cell));
 
   auto result = sculpt_result{};
-  result.min_vx = std::max(cx - r, 0);
-  result.min_vy = std::max(cz - r, 0);
-  result.max_vx = std::min(cx + r, static_cast<std::int32_t>(heightmap.verts_w() - 1));
-  result.max_vy = std::min(cz + r, static_cast<std::int32_t>(heightmap.verts_h() - 1));
+  result.min_vertex_x = std::max(center_x - radius_cells, 0);
+  result.min_vertex_z = std::max(center_z - radius_cells, 0);
+  result.max_vertex_x = std::min(center_x + radius_cells, static_cast<std::int32_t>(height_map.vertices_x() - 1));
+  result.max_vertex_z = std::min(center_z + radius_cells, static_cast<std::int32_t>(height_map.vertices_z() - 1));
 
-  for (auto vy = result.min_vy; vy <= result.max_vy; ++vy) {
-    for (auto vx = result.min_vx; vx <= result.max_vx; ++vx) {
-      auto dx = static_cast<std::float_t>(vx) * cs - grid_x;
-      auto dz = static_cast<std::float_t>(vy) * cs - grid_z;
-      auto dist = std::sqrt(dx * dx + dz * dz);
+  for (auto vertex_z = result.min_vertex_z; vertex_z <= result.max_vertex_z; ++vertex_z) {
+    for (auto vertex_x = result.min_vertex_x; vertex_x <= result.max_vertex_x; ++vertex_x) {
+      auto delta_x = static_cast<std::float_t>(vertex_x) * cell - grid_x;
+      auto delta_z = static_cast<std::float_t>(vertex_z) * cell - grid_z;
+      auto distance = std::sqrt(delta_x * delta_x + delta_z * delta_z);
 
-      if (dist < radius) {
-        auto falloff = 1.0f - (dist / radius);
+      if (distance < radius) {
+        auto falloff = 1.0f - (distance / radius);
         falloff *= falloff;
 
-        auto current = heightmap.get_height(vx, vy);
-        heightmap.set_height(vx, vy, current + strength * falloff);
+        auto current = height_map.get_height(vertex_x, vertex_z);
+        height_map.set_height(vertex_x, vertex_z, current + strength * falloff);
       }
     }
   }
 
-  result.min_chunk = chunk_coord{
-    static_cast<std::int32_t>(std::floor(static_cast<std::float_t>(result.min_vx) / chunk_size)),
-    static_cast<std::int32_t>(std::floor(static_cast<std::float_t>(result.min_vy) / chunk_size))
-  };
-
-  result.max_chunk = chunk_coord{
-    static_cast<std::int32_t>(std::floor(static_cast<std::float_t>(result.max_vx) / chunk_size)),
-    static_cast<std::int32_t>(std::floor(static_cast<std::float_t>(result.max_vy) / chunk_size))
-  };
-
   return result;
 }
 
-inline auto flatten_for_building(heightmap& heightmap, std::int32_t cell_x, std::int32_t cell_y, std::uint32_t size_w, std::uint32_t size_h) -> void {
-  auto avg = 0.0f;
+inline auto flatten_for_building(heightmap& height_map, std::int32_t cell_x, std::int32_t cell_z, std::uint32_t size_width, std::uint32_t size_height) -> void {
+  auto average = 0.0f;
   auto count = 0u;
 
-  for (auto vy = cell_y; vy <= cell_y + static_cast<std::int32_t>(size_h); ++vy) {
-    for (auto vx = cell_x; vx <= cell_x + static_cast<std::int32_t>(size_w); ++vx) {
-      avg += heightmap.get_height(vx, vy);
+  for (auto vertex_z = cell_z; vertex_z <= cell_z + static_cast<std::int32_t>(size_height); ++vertex_z) {
+    for (auto vertex_x = cell_x; vertex_x <= cell_x + static_cast<std::int32_t>(size_width); ++vertex_x) {
+      average += height_map.get_height(vertex_x, vertex_z);
       ++count;
     }
   }
 
-  avg /= static_cast<std::float_t>(count);
+  average /= static_cast<std::float_t>(count);
 
-  for (auto vy = cell_y; vy <= cell_y + static_cast<std::int32_t>(size_h); ++vy) {
-    for (auto vx = cell_x; vx <= cell_x + static_cast<std::int32_t>(size_w); ++vx) {
-      heightmap.set_height(vx, vy, avg);
+  for (auto vertex_z = cell_z; vertex_z <= cell_z + static_cast<std::int32_t>(size_height); ++vertex_z) {
+    for (auto vertex_x = cell_x; vertex_x <= cell_x + static_cast<std::int32_t>(size_width); ++vertex_x) {
+      height_map.set_height(vertex_x, vertex_z, average);
     }
   }
 }
 
-inline auto get_slope_cost(const heightmap& heightmap, std::int32_t cell_x, std::int32_t cell_y) -> std::float_t {
-  auto h00 = heightmap.get_height(cell_x, cell_y);
-  auto h10 = heightmap.get_height(cell_x + 1, cell_y);
-  auto h01 = heightmap.get_height(cell_x, cell_y + 1);
-  auto h11 = heightmap.get_height(cell_x + 1, cell_y + 1);
+inline auto get_slope_cost(const heightmap& height_map, std::int32_t cell_x, std::int32_t cell_z) -> std::float_t {
+  auto h00 = height_map.get_height(cell_x, cell_z);
+  auto h10 = height_map.get_height(cell_x + 1, cell_z);
+  auto h01 = height_map.get_height(cell_x, cell_z + 1);
+  auto h11 = height_map.get_height(cell_x + 1, cell_z + 1);
 
   auto max_diff = std::max({
     std::abs(h00 - h10),

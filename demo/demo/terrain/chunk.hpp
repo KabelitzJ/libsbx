@@ -9,8 +9,7 @@
 
 namespace demo {
 
-static constexpr auto chunk_size  = 8u;
-static constexpr auto chunk_vertices = chunk_size + 1u;
+static constexpr auto chunk_size = 32u;
 
 struct chunk_coord {
 
@@ -56,21 +55,6 @@ struct grid_chunk {
 
 }; // struct grid_chunk
 
-struct height_chunk {
-
-  std::array<std::float_t, chunk_vertices * chunk_vertices> heights{};
-  bool is_dirty{true};
-
-  auto at(std::uint32_t local_x, std::uint32_t local_y) -> std::float_t& {
-    return heights[local_y * chunk_vertices + local_x];
-  }
-
-  auto at(std::uint32_t local_x, std::uint32_t local_y) const -> std::float_t {
-    return heights[local_y * chunk_vertices + local_x];
-  }
-
-}; // struct height_chunk
-
 struct splat_weights {
   std::uint8_t grass{255};
   std::uint8_t dirt{0};
@@ -108,21 +92,6 @@ struct splat_weights {
 }; // struct splat_weights
 
 static_assert(sizeof(splat_weights) == 8, "splat_weights must be 8 bytes for GPU alignment");
-
-struct splat_chunk {
-
-  std::array<splat_weights, chunk_size * chunk_size> weights;
-  bool is_dirty{true};
-
-  auto at(std::uint32_t local_x, std::uint32_t local_y) -> splat_weights& {
-    return weights[local_y * chunk_size + local_x];
-  }
-
-  auto at(std::uint32_t local_x, std::uint32_t local_y) const -> const splat_weights& {
-    return weights[local_y * chunk_size + local_x];
-  }
-
-}; // struct splat_chunk
 
 } // namespace demo
 

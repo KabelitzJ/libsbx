@@ -41,15 +41,6 @@ vs_out main(vs_in input) {
 
   float3 world_position = float3(push.chunk_world_x + local_position.x * push.chunk_size, push.water_level, push.chunk_world_z + local_position.y * push.chunk_size);
 
-  // Gentle wave displacement
-  float time = scene.time;
-
-  float wave1 = sin(world_position.x * 0.08 + time * 0.8) * 0.06;
-  float wave2 = sin(world_position.z * 0.12 + time * 0.6) * 0.04;
-  float wave3 = sin((world_position.x + world_position.z) * 0.05 + time * 1.1) * 0.03;
-
-  world_position.y += wave1 + wave2 + wave3;
-
   output.position = world_position;
   output.normal = float3(0.0, 1.0, 0.0);
   output.world_xz = world_position.xz;

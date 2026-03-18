@@ -14,25 +14,32 @@ terrain_subrenderer::terrain_subrenderer(const std::vector<sbx::graphics::attach
 
   auto& graphics_module = sbx::core::engine::get_module<sbx::graphics::graphics_module>();
 
-  auto indices = _generate_chunk_indices();
+  auto indices = _generate_grid_indices();
   _index_count = static_cast<std::uint32_t>(indices.size());
 
   _index_buffer = graphics_module.add_resource<sbx::graphics::storage_buffer>(sbx::graphics::storage_buffer::min_size, VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
+  _height_buffer = graphics_module.add_resource<sbx::graphics::storage_buffer>(sbx::graphics::storage_buffer::min_size, VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
+  _splat_buffer = graphics_module.add_resource<sbx::graphics::storage_buffer>(sbx::graphics::storage_buffer::min_size, VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
 
-  auto& index_buffer = graphics_module.get_resource<sbx::graphics::storage_buffer>(_index_buffer);
+  auto& index_storage = graphics_module.get_resource<sbx::graphics::storage_buffer>(_index_buffer);
+  auto required_index_size = static_cast<VkDeviceSize>(indices.size() * sizeof(std::uint32_t));
 
-  _update_buffer(index_buffer, indices);
+  if (required_index_size > index_storage.size()) {
+    index_storage.resize(required_index_size);
+  }
+
+  index_storage.update(indices.data(), indices.size() * sizeof(std::uint32_t));
 }
 
-auto terrain_subrenderer::_generate_chunk_indices() -> std::vector<std::uint32_t> {
+auto terrain_subrenderer::_generate_grid_indices() -> std::vector<std::uint32_t> {
   auto indices = std::vector<std::uint32_t>{};
-  indices.reserve(chunk_size * chunk_size * 6);
+  indices.reserve(clipmap_grid_size * clipmap_grid_size * 6);
 
-  for (auto y = 0u; y < chunk_size; ++y) {
-    for (auto x = 0u; x < chunk_size; ++x) {
-      auto top_left = y * chunk_vertices + x;
+  for (auto row = 0u; row < clipmap_grid_size; ++row) {
+    for (auto col = 0u; col < clipmap_grid_size; ++col) {
+      auto top_left = row * clipmap_grid_verts + col;
       auto top_right = top_left + 1;
-      auto bottom_left = (y + 1) * chunk_vertices + x;
+      auto bottom_left = (row + 1) * clipmap_grid_verts + col;
       auto bottom_right = bottom_left + 1;
 
       indices.push_back(top_left);
@@ -48,57 +55,51 @@ auto terrain_subrenderer::_generate_chunk_indices() -> std::vector<std::uint32_t
   return indices;
 }
 
-auto terrain_subrenderer::_ensure_gpu_chunk(chunk_coord chunk_coordinates) -> gpu_chunk_data& {
-  auto it = _gpu_chunks.find(chunk_coordinates);
-
-  if (it != _gpu_chunks.end()) {
-    return it->second;
-  }
-
-  auto& graphics_module = sbx::core::engine::get_module<sbx::graphics::graphics_module>();
-
-  auto& data = _gpu_chunks[chunk_coordinates];
-
-  data.height_buffer = graphics_module.add_resource<sbx::graphics::storage_buffer>(sbx::graphics::storage_buffer::min_size, VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
-  data.splat_buffer = graphics_module.add_resource<sbx::graphics::storage_buffer>(sbx::graphics::storage_buffer::min_size, VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
-  data.height_uploaded = false;
-  data.splat_uploaded = false;
-
-  return data;
-}
-
 auto terrain_subrenderer::render(sbx::graphics::command_buffer& command_buffer) -> void {
   SBX_PROFILE_SCOPE("terrain_subrenderer::render");
 
   auto& graphics_module = sbx::core::engine::get_module<sbx::graphics::graphics_module>();
   auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
   auto& terrain_module = sbx::core::engine::get_module<demo::terrain_module>();
-  auto& asset_registry = scenes_module.asset_registry();
 
   auto& scene = scenes_module.scene();
   auto& environment = scene.environment();
   auto& graph = scene.graph();
 
   auto camera_node = environment.camera();
-  auto& camera_transform = graph.get_component<sbx::scenes::transform>(camera_node);
-  auto camera_position = camera_transform.position();
+  auto camera_position = graph.world_position(camera_node);
 
-  auto visible_chunks = terrain_module.get_visible_chunks(camera_position.x(), camera_position.z(), _view_distance);
+  // Upload height data if dirty
+  auto& height_map = terrain_module.heightmap();
 
-  if (visible_chunks.empty()) {
-    return;
+  if (height_map.is_dirty()) {
+    auto& height_storage = graphics_module.get_resource<sbx::graphics::storage_buffer>(_height_buffer);
+    auto required_size = static_cast<VkDeviceSize>(height_map.data_size_bytes());
+
+    if (required_size > height_storage.size()) {
+      height_storage.resize(required_size);
+    }
+
+    height_storage.update(height_map.data(), height_map.data_size_bytes());
+    height_map.clear_dirty();
+  }
+
+  // Upload splat data if dirty
+  if (terrain_module.is_splat_dirty()) {
+    auto& splat_storage = graphics_module.get_resource<sbx::graphics::storage_buffer>(_splat_buffer);
+    auto required_size = static_cast<VkDeviceSize>(terrain_module.splat_data_size_bytes());
+
+    if (required_size > splat_storage.size()) {
+      splat_storage.resize(required_size);
+    }
+
+    splat_storage.update(terrain_module.splat_data(), terrain_module.splat_data_size_bytes());
+    terrain_module.clear_splat_dirty();
   }
 
   _pipeline.bind(command_buffer);
 
   _descriptor_handler.push("scene", environment.uniform_handler());
-
-  // _descriptor_handler.push("grass_image", graphics_module.get_resource<sbx::graphics::image2d>(asset_registry.get_image("terrain_grass")));
-  // _descriptor_handler.push("dirt_image", graphics_module.get_resource<sbx::graphics::image2d>(asset_registry.get_image("terrain_dirt")));
-  // _descriptor_handler.push("rock_image", graphics_module.get_resource<sbx::graphics::image2d>(asset_registry.get_image("terrain_rock")));
-  // _descriptor_handler.push("sand_image", graphics_module.get_resource<sbx::graphics::image2d>(asset_registry.get_image("terrain_sand")));
-  // _descriptor_handler.push("snow_image", graphics_module.get_resource<sbx::graphics::image2d>(asset_registry.get_image("terrain_snow")));
-  // _descriptor_handler.push("mud_image", graphics_module.get_resource<sbx::graphics::image2d>(asset_registry.get_image("terrain_mud")));
 
   if (!_descriptor_handler.update(_pipeline)) {
     return;
@@ -106,56 +107,42 @@ auto terrain_subrenderer::render(sbx::graphics::command_buffer& command_buffer) 
 
   _descriptor_handler.bind_descriptors(command_buffer);
 
-  auto& index_buffer = graphics_module.get_resource<sbx::graphics::storage_buffer>(_index_buffer);
-  command_buffer.bind_index_buffer(index_buffer.handle(), 0, VK_INDEX_TYPE_UINT32);
+  auto& index_storage = graphics_module.get_resource<sbx::graphics::storage_buffer>(_index_buffer);
+  command_buffer.bind_index_buffer(index_storage.handle(), 0, VK_INDEX_TYPE_UINT32);
 
-  auto terrain_cell_size = terrain_module.cell_size();
+  auto& height_storage = graphics_module.get_resource<sbx::graphics::storage_buffer>(_height_buffer);
+  auto& splat_storage = graphics_module.get_resource<sbx::graphics::storage_buffer>(_splat_buffer);
+
+  auto base_cell_size = terrain_module.cell_size();
   auto terrain_offset_x = terrain_module.offset_x();
   auto terrain_offset_z = terrain_module.offset_z();
-  auto inverse_chunk_vertices = 1.0f / static_cast<std::float_t>(chunk_vertices);
+  auto map_width = static_cast<std::float_t>(terrain_module.world_width()) * base_cell_size;
+  auto map_height = static_cast<std::float_t>(terrain_module.world_height()) * base_cell_size;
 
-  for (const auto& chunk_coordinates : visible_chunks) {
-    terrain_module.heightmap().ensure_chunk(chunk_coordinates);
+  // Draw clipmap rings
+  for (auto ring = 0u; ring < clipmap_ring_count; ++ring) {
+    auto ring_cell_size = base_cell_size * static_cast<std::float_t>(1u << ring);
 
-    auto* height_chunk_data = terrain_module.heightmap().get_chunk(chunk_coordinates);
+    auto ring_origin_x = std::floor(camera_position.x() / ring_cell_size) * ring_cell_size;
+    auto ring_origin_z = std::floor(camera_position.z() / ring_cell_size) * ring_cell_size;
 
-    if (!height_chunk_data) {
-      continue;
-    }
-
-    auto& splat_chunk_data = terrain_module.ensure_splat_chunk(chunk_coordinates);
-    auto& gpu_chunk = _ensure_gpu_chunk(chunk_coordinates);
-
-    // Upload heights if dirty
-    if (!gpu_chunk.height_uploaded || height_chunk_data->is_dirty) {
-      auto& height_storage_buffer = graphics_module.get_resource<sbx::graphics::storage_buffer>(gpu_chunk.height_buffer);
-      _update_buffer(height_storage_buffer, height_chunk_data->heights);
-      height_chunk_data->is_dirty = false;
-      gpu_chunk.height_uploaded = true;
-    }
-
-    // Upload splat if dirty
-    if (!gpu_chunk.splat_uploaded || splat_chunk_data.is_dirty) {
-      auto& splat_storage_buffer = graphics_module.get_resource<sbx::graphics::storage_buffer>(gpu_chunk.splat_buffer);
-      _update_buffer(splat_storage_buffer, splat_chunk_data.weights);
-      splat_chunk_data.is_dirty = false;
-      gpu_chunk.splat_uploaded = true;
-    }
-
-    auto& height_storage_buffer = graphics_module.get_resource<sbx::graphics::storage_buffer>(gpu_chunk.height_buffer);
-    auto& splat_storage_buffer = graphics_module.get_resource<sbx::graphics::storage_buffer>(gpu_chunk.splat_buffer);
-
-    auto chunk_world_x = static_cast<std::float_t>(chunk_coordinates.x * static_cast<std::int32_t>(chunk_size)) * terrain_cell_size - terrain_offset_x;
-    auto chunk_world_z = static_cast<std::float_t>(chunk_coordinates.y * static_cast<std::int32_t>(chunk_size)) * terrain_cell_size - terrain_offset_z;
-
-    _push_handler.push("height_data_buffer", height_storage_buffer.address());
-    _push_handler.push("splat_data_buffer", splat_storage_buffer.address());
-    _push_handler.push("chunk_verts", chunk_vertices);
-    _push_handler.push("chunk_cells", chunk_size);
-    _push_handler.push("cell_size", terrain_cell_size);
-    _push_handler.push("chunk_world_x", chunk_world_x);
-    _push_handler.push("chunk_world_z", chunk_world_z);
-    _push_handler.push("inv_chunk_verts", inverse_chunk_vertices);
+    _push_handler.push("height_data_buffer", height_storage.address());
+    _push_handler.push("splat_data_buffer", splat_storage.address());
+    _push_handler.push("grid_verts", clipmap_grid_verts);
+    _push_handler.push("grid_cells", clipmap_grid_size);
+    _push_handler.push("ring_cell_size", ring_cell_size);
+    _push_handler.push("ring_origin_x", ring_origin_x);
+    _push_handler.push("ring_origin_z", ring_origin_z);
+    _push_handler.push("ring_level", ring);
+    _push_handler.push("base_cell_size", base_cell_size);
+    _push_handler.push("terrain_offset_x", terrain_offset_x);
+    _push_handler.push("terrain_offset_z", terrain_offset_z);
+    _push_handler.push("terrain_width", map_width);
+    _push_handler.push("terrain_height", map_height);
+    _push_handler.push("vertices_x", height_map.vertices_x());
+    _push_handler.push("vertices_z", height_map.vertices_z());
+    _push_handler.push("cells_x", terrain_module.world_width());
+    _push_handler.push("cells_z", terrain_module.world_height());
     _push_handler.push("tiling_scale", _tiling_scale);
 
     _push_handler.bind(command_buffer);

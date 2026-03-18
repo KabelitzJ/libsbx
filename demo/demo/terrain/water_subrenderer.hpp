@@ -5,7 +5,6 @@
 #include <libsbx/graphics/graphics.hpp>
 #include <libsbx/scenes/scenes.hpp>
 
-#include <demo/terrain/chunk.hpp>
 #include <demo/terrain/terrain_module.hpp>
 
 namespace demo {
@@ -43,16 +42,12 @@ public:
 
   auto render(sbx::graphics::command_buffer& command_buffer) -> void override;
 
-  auto set_view_distance(std::float_t distance) -> void { _view_distance = distance; }
-
 private:
 
   pipeline _pipeline;
 
   sbx::graphics::push_handler _push_handler;
   sbx::graphics::descriptor_handler _descriptor_handler;
-
-  std::float_t _view_distance{500.0f};
 
 }; // class water_subrenderer
 

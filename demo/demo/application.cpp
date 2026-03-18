@@ -40,6 +40,7 @@
 #include <libsbx/audio/audio_module.hpp>
 
 #include <demo/terrain/terrain_module.hpp>
+#include <demo/building/building_module.hpp>
 
 namespace demo {
 
@@ -131,6 +132,8 @@ application::application()
 
   scripting_module.instantiate(camera_node, "Demo.EditorCameraController");
 
+  _register_buildings();
+
   if (auto hide_window = cli.argument<bool>("hide-window"); !hide_window) {
     window.show();
   }
@@ -141,12 +144,7 @@ application::application()
 auto application::update() -> void {
   SBX_PROFILE_SCOPE("application::update");
 
-  auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
-  auto& terrain_mod = sbx::core::engine::get_module<demo::terrain_module>();
-
-  auto& scene = scenes_module.scene();
-  auto& environment = scene.environment();
-  auto& graph = scene.graph();
+  auto& terrain_module = sbx::core::engine::get_module<demo::terrain_module>();
 
   const auto delta_time = sbx::core::engine::delta_time();
 
@@ -155,48 +153,20 @@ auto application::update() -> void {
     return;
   }
 
-  if (sbx::devices::input::is_key_pressed(sbx::devices::key::t)) {
-    _sculpt_raise = !_sculpt_raise;
-  }
+  _update_placement();
 
-  if (sbx::devices::input::is_mouse_button_down(sbx::devices::mouse_button::left)) {
-    auto mouse_pos = sbx::devices::input::mouse_position();
-    auto ray = environment.screen_point_to_ray(mouse_pos);
-
-    constexpr auto max_distance = 500.0f;
-    constexpr auto step_size = 0.5f;
-
-    auto hit = std::optional<sbx::math::vector3>{};
-
-    for (auto t = 0.0f; t < max_distance; t += step_size) {
-      auto point = ray.origin() + ray.direction() * t;
-      auto terrain_h = terrain_mod.get_height_at(point.x(), point.z());
-
-      if (point.y() <= terrain_h) {
-        auto lo = t - step_size;
-        auto hi = t;
-
-        for (auto i = 0; i < 8; ++i) {
-          auto mid = (lo + hi) * 0.5f;
-          auto mp = ray.origin() + ray.direction() * mid;
-          auto mh = terrain_mod.get_height_at(mp.x(), mp.z());
-
-          if (mp.y() <= mh) {
-            hi = mid;
-          } else {
-            lo = mid;
-          }
-        }
-
-        hit = ray.origin() + ray.direction() * ((lo + hi) * 0.5f);
-
-        break;
-      }
+  if (!_placement_active) {
+    if (sbx::devices::input::is_key_pressed(sbx::devices::key::t)) {
+      _sculpt_raise = !_sculpt_raise;
     }
 
-    if (hit) {
-      auto strength = (_sculpt_raise ? 10.0f : -10.0f) * delta_time;
-      auto result = terrain_mod.sculpt(hit->x(), hit->z(), 30.0f, strength);
+    if (sbx::devices::input::is_mouse_button_down(sbx::devices::mouse_button::left)) {
+      auto hit = _raycast_terrain();
+
+      if (hit) {
+        auto strength = (_sculpt_raise ? 10.0f : -10.0f) * delta_time;
+        terrain_module.sculpt(hit->x(), hit->z(), 30.0f, strength);
+      }
     }
   }
 
@@ -400,6 +370,182 @@ auto application::_build_ui() -> void {
     slot.color = {0.2f, 0.2f, 0.25f, 1.0f};
     slot.sort_order = 101;
   }
+}
+
+auto application::_register_buildings() -> void {
+  auto& building_module = sbx::core::engine::get_module<demo::building_module>();
+
+  auto test_building = building_definition{};
+  test_building.id = 1;
+  test_building.name = "Khrushchyovka";
+  test_building.category = building_category::housing;
+  test_building.footprint_width = 6;
+  test_building.footprint_height = 3;
+  test_building.mesh_id = "khrushchyovka";
+
+  building_module.register_definition(std::move(test_building));
+
+  _placement_definition_id = 1;
+}
+
+auto application::_raycast_terrain() -> std::optional<sbx::math::vector3> {
+  auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
+  auto& terrain_module = sbx::core::engine::get_module<demo::terrain_module>();
+
+  auto& scene = scenes_module.scene();
+  auto& environment = scene.environment();
+
+  auto mouse_pos = sbx::devices::input::mouse_position();
+  auto ray = environment.screen_point_to_ray(mouse_pos);
+
+  constexpr auto max_distance = 500.0f;
+  constexpr auto step_size = 0.5f;
+
+  for (auto t = 0.0f; t < max_distance; t += step_size) {
+    auto point = ray.origin() + ray.direction() * t;
+    auto terrain_height = terrain_module.get_height_at(point.x(), point.z());
+
+    if (point.y() <= terrain_height) {
+      auto lo = t - step_size;
+      auto hi = t;
+
+      for (auto i = 0; i < 8; ++i) {
+        auto mid = (lo + hi) * 0.5f;
+        auto mid_point = ray.origin() + ray.direction() * mid;
+        auto mid_height = terrain_module.get_height_at(mid_point.x(), mid_point.z());
+
+        if (mid_point.y() <= mid_height) {
+          hi = mid;
+        } else {
+          lo = mid;
+        }
+      }
+
+      return ray.origin() + ray.direction() * ((lo + hi) * 0.5f);
+    }
+  }
+
+  return std::nullopt;
+}
+
+auto application::_update_placement() -> void {
+  auto& building_mod = sbx::core::engine::get_module<demo::building_module>();
+  auto& terrain_mod = sbx::core::engine::get_module<demo::terrain_module>();
+  auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
+
+  if (sbx::devices::input::is_key_pressed(sbx::devices::key::b)) {
+    _placement_active = !_placement_active;
+    sbx::utility::logger<"buildings">::info("Placement mode {}", _placement_active ? "enabled" : "disabled");
+  }
+
+  if (!_placement_active) {
+    return;
+  }
+
+  if (sbx::devices::input::is_key_pressed(sbx::devices::key::r)) {
+    auto current = static_cast<std::uint8_t>(_placement_orientation);
+
+    if (sbx::devices::input::is_key_down(sbx::devices::key::left_shift)) {
+      _placement_orientation = static_cast<orientation>((current + orientation_count - 1) % orientation_count);
+    } else {
+      _placement_orientation = static_cast<orientation>((current + 1) % orientation_count);
+    }
+
+    sbx::utility::logger<"buildings">::info("Orientation: {}", static_cast<std::uint8_t>(_placement_orientation));
+  }
+
+  auto hit = _raycast_terrain();
+
+  if (!hit) {
+    return;
+  }
+
+  auto* definition = building_mod.get_definition(_placement_definition_id);
+
+  if (!definition) {
+    return;
+  }
+
+  // Compute footprint center offset
+  const auto& cells = definition->get_footprint(_placement_orientation);
+
+  auto min_x = std::numeric_limits<std::int32_t>::max();
+  auto max_x = std::numeric_limits<std::int32_t>::min();
+  auto min_z = std::numeric_limits<std::int32_t>::max();
+  auto max_z = std::numeric_limits<std::int32_t>::min();
+
+  for (const auto& offset : cells) {
+    min_x = std::min(min_x, offset.x);
+    max_x = std::max(max_x, offset.x);
+    min_z = std::min(min_z, offset.z);
+    max_z = std::max(max_z, offset.z);
+  }
+
+  auto center_offset_x = (min_x + max_x) / 2;
+  auto center_offset_z = (min_z + max_z) / 2;
+
+  auto cursor_cell = terrain_mod.world_to_cell(hit->x(), hit->z());
+  auto origin_x = cursor_cell.x - center_offset_x;
+  auto origin_z = cursor_cell.y - center_offset_z;
+
+  auto preview = building_mod.update_preview(_placement_definition_id, origin_x, origin_z, _placement_orientation);
+
+  // Draw footprint cells
+  auto color = preview.valid ? sbx::math::color::green() : sbx::math::color::red();
+  auto cell_size = terrain_mod.cell_size();
+  auto lift = 0.15f;
+
+  for (const auto& offset : cells) {
+    auto cell_x = origin_x + offset.x;
+    auto cell_z = origin_z + offset.z;
+
+    auto [world_x, world_z] = terrain_mod.cell_to_world(cell_x, cell_z);
+    auto height = terrain_mod.get_height_at(world_x + cell_size * 0.5f, world_z + cell_size * 0.5f) + lift;
+
+    auto a = sbx::math::vector3{world_x, height, world_z};
+    auto b = sbx::math::vector3{world_x + cell_size, height, world_z};
+    auto c = sbx::math::vector3{world_x + cell_size, height, world_z + cell_size};
+    auto d = sbx::math::vector3{world_x, height, world_z + cell_size};
+
+    scenes_module.add_debug_line(a, b, color);
+    scenes_module.add_debug_line(b, c, color);
+    scenes_module.add_debug_line(c, d, color);
+    scenes_module.add_debug_line(d, a, color);
+  }
+
+  if (preview.valid && sbx::devices::input::is_mouse_button_pressed(sbx::devices::mouse_button::left)) {
+    building_mod.place(_placement_definition_id, origin_x, origin_z, _placement_orientation);
+  }
+
+  // Draw placed building outlines
+  building_mod.for_each_instance([&](const building_instance& instance) {
+    auto* definition = building_mod.get_definition(instance.definition_id);
+
+    if (!definition) {
+      return;
+    }
+
+    const auto& placed_cells = definition->get_footprint(instance.orient);
+    auto placed_color = sbx::math::color{0.2f, 0.6f, 1.0f, 1.0f};
+
+    for (const auto& offset : placed_cells) {
+      auto cx = instance.origin_x + offset.x;
+      auto cz = instance.origin_z + offset.z;
+
+      auto [wx, wz] = terrain_mod.cell_to_world(cx, cz);
+      auto h = terrain_mod.get_height_at(wx + cell_size * 0.5f, wz + cell_size * 0.5f) + lift;
+
+      auto a = sbx::math::vector3{wx, h, wz};
+      auto b = sbx::math::vector3{wx + cell_size, h, wz};
+      auto c = sbx::math::vector3{wx + cell_size, h, wz + cell_size};
+      auto d = sbx::math::vector3{wx, h, wz + cell_size};
+
+      scenes_module.add_debug_line(a, b, placed_color);
+      scenes_module.add_debug_line(b, c, placed_color);
+      scenes_module.add_debug_line(c, d, placed_color);
+      scenes_module.add_debug_line(d, a, placed_color);
+    }
+  });
 }
 
 auto application::_generate_brdf(const std::uint32_t size) -> void {

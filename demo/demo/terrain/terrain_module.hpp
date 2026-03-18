@@ -140,6 +140,12 @@ public:
     flatten_for_building(_heightmap, cell_x, cell_z, size_width, size_height);
   }
 
+  auto get_height_at_cell(std::int32_t cell_x, std::int32_t cell_z) const -> std::float_t {
+    auto [world_x, world_z] = cell_to_world(cell_x, cell_z);
+
+    return _heightmap.get_height_at(world_x, world_z);
+  }
+
   auto can_build_at(std::int32_t cell_x, std::int32_t cell_z, std::uint32_t size_width, std::uint32_t size_height, std::float_t max_slope = 3.0f) const -> bool {
     for (auto z = cell_z; z < cell_z + static_cast<std::int32_t>(size_height); ++z) {
       for (auto x = cell_x; x < cell_x + static_cast<std::int32_t>(size_width); ++x) {

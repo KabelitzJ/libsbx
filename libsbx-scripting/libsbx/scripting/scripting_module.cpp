@@ -113,12 +113,18 @@ auto scripting_module::update() -> void {
   }
 }
 
-auto scripting_module::set_assembly_path(const std::filesystem::path& assembly_path) -> void {
-  // auto& assets_module = core::engine::get_module<assets::assets_module>();
-
-  // auto path = assets_module.resolve_path(assembly_path);
-
+auto scripting_module::load_assembly(const std::filesystem::path& assembly_path, std::initializer_list<internal_call> bindings) -> void {
   _assembly_path = assembly_path;
+
+  auto& assembly = _context.get_or_load_assembly(_assembly_path.string());
+
+  for (const auto& binding : bindings) {
+    assembly.add_internal_call(binding.type_name, binding.method_name, binding.function);
+  }
+
+  assembly.upload_internal_calls();
+
+  utility::logger<"scripting">::info("Loaded game assembly '{}' with {} bindings", assembly_path.string(), bindings.size());
 }
 
 auto scripting_module::instantiate(const scenes::node node, std::string_view class_name) -> managed::object {

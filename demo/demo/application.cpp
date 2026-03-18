@@ -40,6 +40,8 @@
 #include <libsbx/audio/audio_module.hpp>
 
 #include <demo/terrain/terrain_module.hpp>
+#include <demo/terrain/terrain_interop.hpp>
+
 #include <demo/building/building_module.hpp>
 
 namespace demo {
@@ -86,7 +88,14 @@ application::application()
   auto& environment = scene.environment();
 
   auto& scripting_module = sbx::core::engine::get_module<sbx::scripting::scripting_module>();
-  scripting_module.set_assembly_path("build/x86_64/gcc/debug/_dotnet/Demo.dll");
+  
+  scripting_module.load_assembly("build/x86_64/gcc/debug/_dotnet/Demo.dll", {
+    {"Demo.InternalCalls", "Terrain_GetHeightAt", reinterpret_cast<void*>(&demo::terrain_interop::terrain_get_height_at)},
+    {"Demo.InternalCalls", "Terrain_GetWorldSize", reinterpret_cast<void*>(&demo::terrain_interop::terrain_get_world_size)},
+    {"Demo.InternalCalls", "Terrain_GetCellSize", reinterpret_cast<void*>(&demo::terrain_interop::terrain_get_cell_size)},
+    {"Demo.InternalCalls", "Terrain_GetSlopeAt", reinterpret_cast<void*>(&demo::terrain_interop::terrain_get_slope_at)},
+    {"Demo.InternalCalls", "Terrain_GetSeaLevel", reinterpret_cast<void*>(&demo::terrain_interop::terrain_get_sea_level)},
+  });
 
   // Textures
 
@@ -130,7 +139,7 @@ application::application()
   skybox.irradiance_image = _irradiance;
   skybox.prefiltered_image = _prefiltered;
 
-  scripting_module.instantiate(camera_node, "Demo.EditorCameraController");
+  scripting_module.instantiate(camera_node, "Demo.StrategyCameraController");
 
   _register_buildings();
 

@@ -7,6 +7,8 @@
 #include <utility>
 #include <filesystem>
 #include <unordered_map>
+#include <string>
+#include <vector>
 
 #include <libsbx/utility/hashed_string.hpp>
 
@@ -23,6 +25,12 @@ struct scripts {
   std::vector<managed::object> instances;
 }; // struct scripts
 
+struct internal_call {
+  std::string type_name;
+  std::string method_name;
+  void* function;
+}; // struct internal_call
+
 class scripting_module final : public core::module<scripting_module> {
 
   inline static const auto is_registered = register_module(stage::normal, dependencies<scenes::scenes_module>{});
@@ -35,7 +43,7 @@ public:
 
   auto update() -> void override;
 
-  auto set_assembly_path(const std::filesystem::path& assembly_path) -> void;
+  auto load_assembly(const std::filesystem::path& assembly_path, std::initializer_list<internal_call> bindings = {}) -> void;
 
   auto instantiate(const scenes::node node, std::string_view class_name) -> managed::object;
 
@@ -51,7 +59,7 @@ private:
   scripting::managed::assembly_load_context _context;
   scripting::managed::assembly _core_assembly;
 
-}; // class scene_modules
+}; // class scripting_module
 
 } // namespace sbx::scripting
 

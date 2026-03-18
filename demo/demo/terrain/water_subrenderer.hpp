@@ -14,7 +14,7 @@ class water_subrenderer : public sbx::graphics::subrenderer {
   class pipeline : public sbx::graphics::graphics_pipeline {
 
     inline static const auto pipeline_definition = sbx::graphics::pipeline_definition{
-      .depth = sbx::graphics::depth::read_write,
+      .depth = sbx::graphics::depth::read_only,
       .uses_transparency = true,
       .rasterization_state = sbx::graphics::rasterization_state{
         .polygon_mode = sbx::graphics::polygon_mode::fill,
@@ -48,6 +48,8 @@ private:
 
   sbx::graphics::push_handler _push_handler;
   sbx::graphics::descriptor_handler _descriptor_handler;
+
+  sbx::graphics::storage_buffer_handle _height_buffer;
 
 }; // class water_subrenderer
 

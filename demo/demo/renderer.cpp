@@ -288,7 +288,7 @@ renderer::renderer(bool is_editor)
 
   add_subrenderer<sbx::particles::particle_subrenderer>(transparency_pass, "res://shaders/particles", sbx::memory::make_observer(particle_task));
 
-  add_subrenderer<demo::water_subrenderer>(transparency_pass, "res://shaders/water");
+  // add_subrenderer<demo::water_subrenderer>(transparency_pass, "res://shaders/water");
 
   // Resolve pass
   auto resolve_opaque_attachment_names = std::vector<std::pair<std::string, std::string>>{

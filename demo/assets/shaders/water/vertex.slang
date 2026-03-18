@@ -12,10 +12,16 @@ struct vs_out {
 }; // struct vs_out
 
 struct push_data {
+  float* height_data_buffer;
   float chunk_world_x;
   float chunk_world_z;
   float chunk_size;
   float water_level;
+  float terrain_offset_x;
+  float terrain_offset_z;
+  float base_cell_size;
+  uint vertices_x;
+  uint vertices_z;
 }; // struct push_data
 
 [[vk::push_constant]]
@@ -39,11 +45,14 @@ vs_out main(vs_in input) {
 
   float2 local_position = positions[input.vertex_id];
 
-  float3 world_position = float3(push.chunk_world_x + local_position.x * push.chunk_size, push.water_level, push.chunk_world_z + local_position.y * push.chunk_size);
+  float world_x = push.chunk_world_x + local_position.x * push.chunk_size;
+  float world_z = push.chunk_world_z + local_position.y * push.chunk_size;
+
+  float3 world_position = float3(world_x, push.water_level, world_z);
 
   output.position = world_position;
   output.normal = float3(0.0, 1.0, 0.0);
-  output.world_xz = world_position.xz;
+  output.world_xz = float2(world_x, world_z);
   output.sv_position = mul(scene.projection, mul(scene.view, float4(world_position, 1.0)));
 
   return output;

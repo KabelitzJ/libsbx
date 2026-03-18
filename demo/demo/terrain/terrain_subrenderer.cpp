@@ -119,12 +119,30 @@ auto terrain_subrenderer::render(sbx::graphics::command_buffer& command_buffer) 
   auto map_width = static_cast<std::float_t>(terrain_module.world_width()) * base_cell_size;
   auto map_height = static_cast<std::float_t>(terrain_module.world_height()) * base_cell_size;
 
-  // Draw clipmap rings
+  // Draw clipmap rings (fine to coarse for occlusion)
   for (auto ring = 0u; ring < clipmap_ring_count; ++ring) {
     auto ring_cell_size = base_cell_size * static_cast<std::float_t>(1u << ring);
 
     auto ring_origin_x = std::floor(camera_position.x() / ring_cell_size) * ring_cell_size;
     auto ring_origin_z = std::floor(camera_position.z() / ring_cell_size) * ring_cell_size;
+
+    // Inner ring world-space bounds for vertex shader cutout
+    auto inner_min_x = 0.0f;
+    auto inner_min_z = 0.0f;
+    auto inner_max_x = 0.0f;
+    auto inner_max_z = 0.0f;
+
+    if (ring > 0) {
+      auto inner_cell_size = base_cell_size * static_cast<std::float_t>(1u << (ring - 1));
+      auto inner_origin_x = std::floor(camera_position.x() / inner_cell_size) * inner_cell_size;
+      auto inner_origin_z = std::floor(camera_position.z() / inner_cell_size) * inner_cell_size;
+      auto inner_half = static_cast<std::float_t>(clipmap_grid_size) * inner_cell_size * 0.5f;
+
+      inner_min_x = inner_origin_x - inner_half;
+      inner_min_z = inner_origin_z - inner_half;
+      inner_max_x = inner_origin_x + inner_half;
+      inner_max_z = inner_origin_z + inner_half;
+    }
 
     _push_handler.push("height_data_buffer", height_storage.address());
     _push_handler.push("splat_data_buffer", splat_storage.address());
@@ -143,7 +161,11 @@ auto terrain_subrenderer::render(sbx::graphics::command_buffer& command_buffer) 
     _push_handler.push("vertices_z", height_map.vertices_z());
     _push_handler.push("cells_x", terrain_module.world_width());
     _push_handler.push("cells_z", terrain_module.world_height());
-    _push_handler.push("tiling_scale", _tiling_scale);
+    _push_handler.push("inner_min_x", inner_min_x);
+    _push_handler.push("inner_min_z", inner_min_z);
+    _push_handler.push("inner_max_x", inner_max_x);
+    _push_handler.push("inner_max_z", inner_max_z);
+    _push_handler.push("ring_count", clipmap_ring_count);
 
     _push_handler.bind(command_buffer);
 

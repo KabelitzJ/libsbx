@@ -46,7 +46,11 @@ struct push_data {
   uint vertices_z;
   uint cells_x;
   uint cells_z;
-  float tiling_scale;
+  float inner_min_x;
+  float inner_min_z;
+  float inner_max_x;
+  float inner_max_z;
+  uint ring_count;
 }; // struct push_data
 
 [[vk::push_constant]]
@@ -134,8 +138,8 @@ fs_out main(fs_in input) {
   output.albedo = float4(albedo, 1.0);
   output.position = float4(input.position, 1.0);
   output.normal = float4(normalize(input.normal) * 0.5 + 0.5, 1.0);
-  output.material = float4(0.0, roughness, 1.0, 1.0);
-  output.emissive = float4(0.0, 0.0, 0.0, 1.0);
+  output.material = float4(0.0, roughness, 1.0, 0.0);
+  output.emissive = float4(0.0, 0.0, 0.0, 0.25);
   output.object_id = 0;
   output.linear_depth = sbx::common::linearize_depth(input.sv_position.z, scene.camera_near, scene.camera_far);
 

@@ -15,10 +15,11 @@
 namespace demo {
 
 struct terrain_generation_params {
-  std::float_t base_scale{0.003f};
+  std::float_t base_scale{0.0015f};
   std::float_t height_scale{30.0f};
-  std::float_t river_width{0.003f};
-  std::uint32_t octaves{3u};
+  std::float_t warp_scale{0.002f};
+  std::float_t warp_strength{80.0f};
+  std::uint32_t octaves{4u};
   std::float_t seed_x{0.0f};
   std::float_t seed_z{0.0f};
 }; // struct terrain_generation_params
@@ -138,49 +139,71 @@ private:
     return static_cast<std::float_t>(_world_height) * grid::cell_size * 0.5f;
   }
 
+  auto _ridged_multifractal(float x, float z, std::uint32_t octaves) const -> float {
+    auto sum = 0.0f;
+    auto frequency = 1.0f;
+    auto amplitude = 1.0f;
+    auto weight = 1.0f;
+
+    for (auto i = 0u; i < octaves; ++i) {
+      auto signal = sbx::math::noise::simplex(x * frequency, z * frequency);
+      signal = 1.0f - std::abs(signal);
+      signal *= signal;
+      signal *= weight;
+      weight = std::clamp(signal * 2.0f, 0.0f, 1.0f);
+
+      sum += signal * amplitude;
+      frequency *= 2.2f;
+      amplitude *= 0.45f;
+    }
+
+    return sum;
+  }
+
   auto _generate_height(std::int32_t vertex_x, std::int32_t vertex_z) const -> float {
-    auto world_x = static_cast<float>(vertex_x) + _params.seed_x;
-    auto world_z = static_cast<float>(vertex_z) + _params.seed_z;
+    auto wx = static_cast<float>(vertex_x) + _params.seed_x;
+    auto wz = static_cast<float>(vertex_z) + _params.seed_z;
 
-    // Plains base
-    auto plains_noise = sbx::math::noise::fractal(world_x * _params.base_scale, world_z * _params.base_scale, _params.octaves);
-    auto plains_height = terrain_constants::sea_level + 2.5f + plains_noise * 2.5f;
+    // Domain warp for organic shapes
+    auto warp_x = sbx::math::noise::fractal(wx * _params.warp_scale, wz * _params.warp_scale, 2u) * _params.warp_strength;
+    auto warp_z = sbx::math::noise::fractal(wx * _params.warp_scale + 100.0f, wz * _params.warp_scale + 100.0f, 2u) * _params.warp_strength;
 
-    // Mountain ranges
-    auto mountain_mask_noise = sbx::math::noise::fractal(world_x * _params.base_scale * 0.5f + 100.0f, world_z * _params.base_scale * 0.5f + 100.0f, 2u);
-    auto mountain_mask = std::clamp((mountain_mask_noise - 0.4f) / 0.5f, 0.0f, 1.0f);
-    mountain_mask = mountain_mask * mountain_mask;
+    auto warped_x = wx + warp_x;
+    auto warped_z = wz + warp_z;
 
-    auto mountain_shape = sbx::math::noise::fractal(world_x * _params.base_scale * 2.0f + 200.0f, world_z * _params.base_scale * 2.0f + 200.0f, 3u);
+    // Continental shape — controls land vs sea boundary
+    auto continental = sbx::math::noise::fractal(warped_x * _params.base_scale, warped_z * _params.base_scale, 3u);
+    continental = continental * 0.5f + 0.65f;
+    continental = std::clamp(continental, 0.0f, 1.0f);
 
-    auto ridge_noise = sbx::math::noise::fractal(world_x * _params.base_scale * 6.0f + 600.0f, world_z * _params.base_scale * 6.0f + 600.0f, 3u);
-    auto ridge = 1.0f - std::abs(ridge_noise);
-    ridge = ridge * ridge;
+    // Smooth step for sharper coastlines
+    continental = continental * continental * (3.0f - 2.0f * continental);
 
-    auto mountain_detail = mountain_shape * 0.4f + ridge * 0.6f;
-    auto mountain_height = mountain_mask * mountain_detail * _params.height_scale;
+    auto base_height = continental * 12.0f;
 
-    // Rivers
-    auto river_noise = sbx::math::noise::fractal(world_x * _params.river_width + 300.0f, world_z * _params.river_width + 300.0f, 2u);
-    auto river_proximity = 1.0f - std::clamp(std::abs(river_noise) / 0.12f, 0.0f, 1.0f);
+    // Mountain mask — separate low-freq warped noise
+    auto mountain_noise = sbx::math::noise::fractal(warped_x * _params.base_scale * 0.8f + 300.0f, warped_z * _params.base_scale * 0.8f + 300.0f, 2u);
+    auto mountain_mask = std::clamp((mountain_noise - 0.15f) / 0.55f, 0.0f, 1.0f);
+    mountain_mask *= mountain_mask;
 
-    auto river_carve = river_proximity * (terrain_constants::sea_level - terrain_constants::river_bed_min);
+    // Mountains only on solid land
+    auto land_factor = std::clamp((continental - 0.45f) / 0.25f, 0.0f, 1.0f);
+    mountain_mask *= land_factor;
 
-    // Lakes
-    auto lake_noise = sbx::math::noise::simplex(world_x * _params.base_scale * 1.5f + 400.0f, world_z * _params.base_scale * 1.5f + 400.0f);
-    auto lake_factor = std::clamp((-lake_noise - 0.45f) / 0.35f, 0.0f, 1.0f);
+    // Ridged multifractal for mountain shape
+    auto ridge = _ridged_multifractal(warped_x * _params.base_scale * 3.0f + 200.0f, warped_z * _params.base_scale * 3.0f + 200.0f, _params.octaves);
+    auto mountain_height = mountain_mask * ridge * _params.height_scale;
 
-    auto lake_carve = lake_factor * (terrain_constants::sea_level - terrain_constants::lake_bed_min);
+    // Rolling hills — medium freq, gentle
+    auto hills = sbx::math::noise::fractal(warped_x * _params.base_scale * 5.0f + 500.0f, warped_z * _params.base_scale * 5.0f + 500.0f, 3u);
+    auto hill_strength = std::clamp(continental - 0.35f, 0.0f, 1.0f) * (1.0f - mountain_mask * 0.8f);
+    auto hill_contribution = hills * 2.5f * hill_strength;
 
-    // Fine detail
-    auto detail = sbx::math::noise::fractal(world_x * _params.base_scale * 10.0f + 500.0f, world_z * _params.base_scale * 10.0f + 500.0f, 2u);
+    // Fine detail noise
+    auto detail = sbx::math::noise::fractal(warped_x * _params.base_scale * 20.0f + 700.0f, warped_z * _params.base_scale * 20.0f + 700.0f, 2u);
+    auto detail_contribution = detail * 0.3f;
 
-    // Combine
-    auto height = plains_height + mountain_height + detail * 0.2f;
-
-    auto carve_mask = 1.0f - mountain_mask;
-    height -= river_carve * carve_mask;
-    height -= lake_carve * carve_mask;
+    auto height = base_height + mountain_height + hill_contribution + detail_contribution;
 
     // Edge falloff
     auto total_vertices_x = static_cast<float>(_world_width);
@@ -194,7 +217,7 @@ private:
 
     auto edge_fade = std::clamp(std::min(edge_fade_x, edge_fade_z), 0.0f, 1.0f);
 
-    auto edge_height = terrain_constants::sea_level + 2.0f;
+    auto edge_height = terrain_constants::sea_level - 1.0f;
     height = std::lerp(edge_height, height, edge_fade);
 
     return height;

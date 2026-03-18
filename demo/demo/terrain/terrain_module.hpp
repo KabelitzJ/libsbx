@@ -32,18 +32,19 @@ class terrain_module final : public sbx::core::module<terrain_module> {
     .world_width = 1024,
     .world_height = 1024,
     .generation = {
-      .base_scale = 0.003f,
+      .base_scale = 0.0015f,
       .height_scale = 30.0f,
-      .river_width = 0.003f,
-      .octaves = 3u,
-      .seed_x = 42.0f,
-      .seed_z = 73.0f,
+      .warp_scale = 0.002f,
+      .warp_strength = 80.0f,
+      .octaves = 4u,
+      .seed_x = 4809324.512381f,
+      .seed_z = -3094852.123123f,
     },
     .splat = {
       .variety_scale = 0.05f,
       .variety_strength = 0.15f,
       .moisture_scale = 0.02f,
-      .seed = 42.0f,
+      .seed = 5432.193581f,
     },
   };
 

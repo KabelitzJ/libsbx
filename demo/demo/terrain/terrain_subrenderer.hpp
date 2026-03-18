@@ -49,10 +49,6 @@ public:
 
   auto render(sbx::graphics::command_buffer& command_buffer) -> void override;
 
-  auto set_tiling_scale(std::float_t scale) -> void {
-    _tiling_scale = scale;
-  }
-
 private:
 
   auto _generate_grid_indices() -> std::vector<std::uint32_t>;
@@ -67,8 +63,6 @@ private:
   sbx::graphics::storage_buffer_handle _splat_buffer;
 
   std::uint32_t _index_count{};
-
-  std::float_t _tiling_scale{0.5f};
 
 }; // class terrain_subrenderer
 

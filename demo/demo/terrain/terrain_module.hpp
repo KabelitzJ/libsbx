@@ -8,6 +8,7 @@
 #include <utility>
 
 #include <libsbx/core/module.hpp>
+#include <libsbx/graphics/graphics.hpp>
 
 #include <demo/terrain/chunk.hpp>
 #include <demo/terrain/grid.hpp>
@@ -26,7 +27,7 @@ struct terrain_config {
 
 class terrain_module final : public sbx::core::module<terrain_module> {
 
-  inline static const auto is_registered = register_module(stage::normal);
+  inline static const auto is_registered = register_module(stage::normal, dependencies<sbx::graphics::graphics_module>{});
 
   inline static const auto config = terrain_config{
     .world_width = 1024,
@@ -36,6 +37,7 @@ class terrain_module final : public sbx::core::module<terrain_module> {
       .height_scale = 30.0f,
       .warp_scale = 0.002f,
       .warp_strength = 80.0f,
+      .continental_bias = 0.8f,
       .octaves = 4u,
       .seed_x = 4809324.512381f,
       .seed_z = -3094852.123123f,
@@ -50,143 +52,65 @@ class terrain_module final : public sbx::core::module<terrain_module> {
 
 public:
 
-  terrain_module()
-  : _grid{config.world_width, config.world_height},
-    _heightmap{config.world_width, config.world_height, config.generation},
-    _splat_weights{generate_splat_map(_heightmap, config.splat)},
-    _splat_dirty{true} {
-    sbx::utility::logger<"terrain">::info("Initialized {}x{} terrain (cell size: {}m)", config.world_width, config.world_height, grid::cell_size);
-  }
+  terrain_module();
 
   ~terrain_module() override = default;
 
-  auto update() -> void override { }
+  auto update() -> void override;
 
-  auto grid() -> demo::grid& {
-    return _grid;
-  }
+  auto height_buffer() const -> sbx::graphics::storage_buffer_handle;
 
-  auto grid() const -> const demo::grid& {
-    return _grid;
-  }
+  auto splat_buffer() const -> sbx::graphics::storage_buffer_handle;
 
-  auto heightmap() -> demo::heightmap& {
-    return _heightmap;
-  }
+  auto grid() -> demo::grid&;
 
-  auto heightmap() const -> const demo::heightmap& {
-    return _heightmap;
-  }
+  auto grid() const -> const demo::grid&;
 
-  auto splat_data() const -> const splat_weights* {
-    return _splat_weights.data();
-  }
+  auto heightmap() -> demo::heightmap&;
 
-  auto splat_data_size_bytes() const -> std::size_t {
-    return _splat_weights.size() * sizeof(splat_weights);
-  }
+  auto heightmap() const -> const demo::heightmap&;
 
-  auto is_splat_dirty() const -> bool {
-    return _splat_dirty;
-  }
+  auto splat_data() const -> const splat_weights*;
 
-  auto clear_splat_dirty() -> void {
-    _splat_dirty = false;
-  }
+  auto splat_data_size_bytes() const -> std::size_t;
 
-  auto offset_x() const -> std::float_t {
-    return _grid.offset_x();
-  }
+  auto offset_x() const -> std::float_t;
 
-  auto offset_z() const -> std::float_t {
-    return _grid.offset_z();
-  }
+  auto offset_z() const -> std::float_t;
 
-  auto cell_size() const -> std::float_t {
-    return grid::cell_size;
-  }
+  auto cell_size() const -> std::float_t;
 
-  auto world_to_cell(std::float_t world_x, std::float_t world_z) const -> chunk_coord {
-    auto cell_x = static_cast<std::int32_t>((world_x + offset_x()) / cell_size());
-    auto cell_z = static_cast<std::int32_t>((world_z + offset_z()) / cell_size());
+  auto world_to_cell(std::float_t world_x, std::float_t world_z) const -> chunk_coord;
 
-    return chunk_coord{cell_x, cell_z};
-  }
+  auto cell_to_world(std::int32_t cell_x, std::int32_t cell_z) const -> std::pair<std::float_t, std::float_t>;
 
-  auto cell_to_world(std::int32_t cell_x, std::int32_t cell_z) const -> std::pair<std::float_t, std::float_t> {
-    auto world_x = static_cast<std::float_t>(cell_x) * cell_size() - offset_x();
-    auto world_z = static_cast<std::float_t>(cell_z) * cell_size() - offset_z();
+  auto get_height_at(std::float_t world_x, std::float_t world_z) const -> std::float_t;
 
-    return {world_x, world_z};
-  }
+  auto get_slope_at(std::int32_t cell_x, std::int32_t cell_z) const -> std::float_t;
 
-  auto get_height_at(std::float_t world_x, std::float_t world_z) const -> std::float_t {
-    return _heightmap.get_height_at(world_x, world_z);
-  }
+  auto sculpt(std::float_t world_x, std::float_t world_z, std::float_t radius, std::float_t strength) -> sculpt_result;
 
-  auto get_slope_at(std::int32_t cell_x, std::int32_t cell_z) const -> std::float_t {
-    return get_slope_cost(_heightmap, cell_x, cell_z);
-  }
+  auto flatten(std::int32_t cell_x, std::int32_t cell_z, std::uint32_t size_width, std::uint32_t size_height) -> void;
 
-  auto sculpt(std::float_t world_x, std::float_t world_z, std::float_t radius, std::float_t strength) -> sculpt_result {
-    auto result = sculpt_terrain(_heightmap, world_x, world_z, radius, strength);
+  auto get_height_at_cell(std::int32_t cell_x, std::int32_t cell_z) const -> std::float_t;
 
-    regenerate_splat_region(_splat_weights, _heightmap, result.min_vertex_x, result.min_vertex_z, result.max_vertex_x, result.max_vertex_z, config.splat);
-    _splat_dirty = true;
+  auto can_build_at(std::int32_t cell_x, std::int32_t cell_z, std::uint32_t size_width, std::uint32_t size_height, std::float_t max_slope = 3.0f) const -> bool;
 
-    return result;
-  }
+  auto world_width() const -> std::uint32_t;
 
-  auto flatten(std::int32_t cell_x, std::int32_t cell_z, std::uint32_t size_width, std::uint32_t size_height) -> void {
-    flatten_for_building(_heightmap, cell_x, cell_z, size_width, size_height);
-  }
-
-  auto get_height_at_cell(std::int32_t cell_x, std::int32_t cell_z) const -> std::float_t {
-    auto [world_x, world_z] = cell_to_world(cell_x, cell_z);
-
-    return _heightmap.get_height_at(world_x, world_z);
-  }
-
-  auto can_build_at(std::int32_t cell_x, std::int32_t cell_z, std::uint32_t size_width, std::uint32_t size_height, std::float_t max_slope = 3.0f) const -> bool {
-    for (auto z = cell_z; z < cell_z + static_cast<std::int32_t>(size_height); ++z) {
-      for (auto x = cell_x; x < cell_x + static_cast<std::int32_t>(size_width); ++x) {
-        if (!_grid.in_bounds(x, z)) {
-          return false;
-        }
-
-        const auto& grid_cell = _grid.at(x, z);
-
-        if (grid_cell.building_id != 0) {
-          return false;
-        }
-
-        if (grid_cell.terrain_type == 3) {
-          return false;
-        }
-
-        if (get_slope_cost(_heightmap, x, z) > max_slope) {
-          return false;
-        }
-      }
-    }
-
-    return true;
-  }
-
-  auto world_width() const -> std::uint32_t {
-    return config.world_width;
-  }
-
-  auto world_height() const -> std::uint32_t {
-    return config.world_height;
-  }
+  auto world_height() const -> std::uint32_t;
 
 private:
+
+  auto _upload_gpu_data() -> void;
 
   demo::grid _grid;
   demo::heightmap _heightmap;
   std::vector<splat_weights> _splat_weights;
   bool _splat_dirty{true};
+
+  sbx::graphics::storage_buffer_handle _height_buffer;
+  sbx::graphics::storage_buffer_handle _splat_buffer;
 
 }; // class terrain_module
 

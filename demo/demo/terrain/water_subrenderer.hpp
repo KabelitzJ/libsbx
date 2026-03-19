@@ -2,6 +2,9 @@
 #ifndef DEMO_TERRAIN_WATER_SUBRENDERER_HPP_
 #define DEMO_TERRAIN_WATER_SUBRENDERER_HPP_
 
+#include <vector>
+#include <cstdint>
+
 #include <libsbx/graphics/graphics.hpp>
 #include <libsbx/scenes/scenes.hpp>
 
@@ -10,6 +13,9 @@
 namespace demo {
 
 class water_subrenderer : public sbx::graphics::subrenderer {
+
+  static constexpr auto water_grid_size = 128u;
+  static constexpr auto water_grid_vertices = water_grid_size + 1u;
 
   class pipeline : public sbx::graphics::graphics_pipeline {
 
@@ -44,12 +50,16 @@ public:
 
 private:
 
+  auto _generate_grid_indices() -> std::vector<std::uint32_t>;
+
   pipeline _pipeline;
 
   sbx::graphics::push_handler _push_handler;
   sbx::graphics::descriptor_handler _descriptor_handler;
 
-  sbx::graphics::storage_buffer_handle _height_buffer;
+  sbx::graphics::storage_buffer_handle _index_buffer;
+
+  std::uint32_t _index_count{};
 
 }; // class water_subrenderer
 

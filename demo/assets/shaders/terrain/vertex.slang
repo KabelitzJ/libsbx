@@ -24,7 +24,7 @@ struct splat_weights {
 struct push_data {
   float* height_data_buffer;
   splat_weights* splat_data_buffer;
-  uint grid_verts;
+  uint grid_vertices;
   uint grid_cells;
   float ring_cell_size;
   float ring_origin_x;
@@ -129,8 +129,8 @@ vs_out degenerate() {
 vs_out main(vs_in input) {
   vs_out output;
 
-  uint row = input.vertex_id / push.grid_verts;
-  uint col = input.vertex_id % push.grid_verts;
+  uint row = input.vertex_id / push.grid_vertices;
+  uint col = input.vertex_id % push.grid_vertices;
 
   // Local position centered on the grid
   float local_x = (float(col) - float(push.grid_cells) * 0.5) * push.ring_cell_size;

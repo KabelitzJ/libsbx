@@ -15,7 +15,7 @@ namespace demo {
 class terrain_subrenderer : public sbx::graphics::subrenderer {
 
   static constexpr auto clipmap_grid_size = 64u;
-  static constexpr auto clipmap_grid_verts = clipmap_grid_size + 1u;
+  static constexpr auto clipmap_grid_vertices = clipmap_grid_size + 1u;
   static constexpr auto clipmap_ring_count = 5u;
 
   class pipeline : public sbx::graphics::graphics_pipeline {
@@ -59,8 +59,6 @@ private:
   sbx::graphics::descriptor_handler _descriptor_handler;
 
   sbx::graphics::storage_buffer_handle _index_buffer;
-  sbx::graphics::storage_buffer_handle _height_buffer;
-  sbx::graphics::storage_buffer_handle _splat_buffer;
 
   std::uint32_t _index_count{};
 

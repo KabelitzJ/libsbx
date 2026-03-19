@@ -19,6 +19,7 @@ struct terrain_generation_params {
   std::float_t height_scale{30.0f};
   std::float_t warp_scale{0.002f};
   std::float_t warp_strength{80.0f};
+  std::float_t continental_bias{0.65f};
   std::uint32_t octaves{4u};
   std::float_t seed_x{0.0f};
   std::float_t seed_z{0.0f};
@@ -173,10 +174,11 @@ private:
 
     // Continental shape — controls land vs sea boundary
     auto continental = sbx::math::noise::fractal(warped_x * _params.base_scale, warped_z * _params.base_scale, 3u);
-    continental = continental * 0.5f + 0.65f;
+    continental = continental * 0.5f + _params.continental_bias;
     continental = std::clamp(continental, 0.0f, 1.0f);
 
-    // Smooth step for sharper coastlines
+    // Double smoothstep for steep coastlines — pushes values away from the sea level threshold
+    continental = continental * continental * (3.0f - 2.0f * continental);
     continental = continental * continental * (3.0f - 2.0f * continental);
 
     auto base_height = continental * 12.0f;

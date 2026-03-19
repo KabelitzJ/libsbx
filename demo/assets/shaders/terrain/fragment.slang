@@ -31,7 +31,7 @@ struct splat_weights {
 struct push_data {
   float* height_data_buffer;
   splat_weights* splat_data_buffer;
-  uint grid_verts;
+  uint grid_vertices;
   uint grid_cells;
   float ring_cell_size;
   float ring_origin_x;

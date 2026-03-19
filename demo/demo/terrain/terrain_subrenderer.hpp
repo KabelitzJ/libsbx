@@ -74,7 +74,7 @@ private:
   sbx::graphics::sampler_state_handle _terrain_sampler;
 
   std::uint32_t _index_count{};
-  std::float_t _tiling_scale{0.5f};
+  std::float_t _tiling_scale{0.05f};
 
 }; // class terrain_subrenderer
 

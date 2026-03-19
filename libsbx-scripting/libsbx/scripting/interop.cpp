@@ -572,6 +572,18 @@ auto interop::camera_get_up(math::vector3* up) -> void {
   *up = transform.up();
 }
 
+auto interop::camera_get_viewport(math::vector2* viewport) -> void {
+  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
+
+  if (!viewport) {
+    utility::logger<"scripting">::error("Attempting to get null viewport of camera");
+
+    return;
+  }
+
+  *viewport = graphics_module.viewport();
+}
+
 auto interop::time_delta_time(std::float_t* delta_time) -> void {
   if (!delta_time) {
     utility::logger<"scripting">::error("Attempting to set null delta_time");

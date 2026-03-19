@@ -139,7 +139,7 @@ application::application()
   skybox.irradiance_image = _irradiance;
   skybox.prefiltered_image = _prefiltered;
 
-  scripting_module.instantiate(camera_node, "Demo.EditorCameraController");
+  scripting_module.instantiate(camera_node, "Demo.StrategyCameraController");
 
   _register_buildings();
 

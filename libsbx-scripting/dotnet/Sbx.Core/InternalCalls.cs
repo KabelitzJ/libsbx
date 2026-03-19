@@ -51,6 +51,8 @@ namespace Sbx.Core
     internal static delegate* unmanaged<Vector3*, void> Camera_GetRight;
     internal static delegate* unmanaged<Vector3*, void> Camera_GetUp;
 
+    internal static delegate* unmanaged<Vector2*, void> Camera_GetViewport;
+
     internal static delegate* unmanaged<float*, void> Time_DeltaTime;
 
   } // class InternalCalls

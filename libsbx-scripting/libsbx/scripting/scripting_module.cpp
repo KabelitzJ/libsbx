@@ -80,6 +80,7 @@ scripting_module::scripting_module() {
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Camera_GetForward", reinterpret_cast<void*>(&interop::camera_get_forward));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Camera_GetRight", reinterpret_cast<void*>(&interop::camera_get_right));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Camera_GetUp", reinterpret_cast<void*>(&interop::camera_get_up));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Camera_GetViewport", reinterpret_cast<void*>(&interop::camera_get_viewport));
 
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Time_DeltaTime", reinterpret_cast<void*>(&interop::time_delta_time));
 

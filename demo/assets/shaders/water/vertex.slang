@@ -45,12 +45,12 @@ vs_out main(vs_in input) {
   float world_x = push.origin_x + u * push.plane_size;
   float world_z = push.origin_z + v * push.plane_size;
 
-  float3 world_pos = float3(world_x, push.water_level, world_z);
+  float3 world_position = float3(world_x, push.water_level, world_z);
 
-  output.position = world_pos;
+  output.position = world_position;
   output.normal = float3(0.0, 1.0, 0.0);
   output.world_xz = float2(world_x, world_z);
-  output.sv_position = mul(scene.projection, mul(scene.view, float4(world_pos, 1.0)));
+  output.sv_position = mul(scene.projection, mul(scene.view, float4(world_position, 1.0)));
 
   return output;
 }

@@ -33,20 +33,20 @@ class terrain_module final : public sbx::core::module<terrain_module> {
     .world_width = 1024,
     .world_height = 1024,
     .generation = {
-      .base_scale = 0.0015f,
-      .height_scale = 30.0f,
+      .base_scale = 0.0025f,
+      .height_scale = 40.0f,
       .warp_scale = 0.002f,
       .warp_strength = 80.0f,
-      .continental_bias = 0.8f,
+      .continental_bias = 0.75f,
       .octaves = 4u,
-      .seed_x = 4809324.512381f,
-      .seed_z = -3094852.123123f,
+      .seed_x = 51345.134513,
+      .seed_z = 6546264.61346,
     },
     .splat = {
       .variety_scale = 0.05f,
       .variety_strength = 0.15f,
       .moisture_scale = 0.02f,
-      .seed = 5432.193581f,
+      .seed = 134613.3146136,
     },
   };
 

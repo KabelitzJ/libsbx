@@ -83,6 +83,15 @@ namespace Sbx.Core
       }
     }
 
+    public Vector2 Viewport
+    {
+      get {
+        Vector2 viewport;
+        unsafe { InternalCalls.Camera_GetViewport(&viewport); }
+        return viewport;
+      }
+    }
+
   } // class Camera
 
 } // namespace Sbx.Core

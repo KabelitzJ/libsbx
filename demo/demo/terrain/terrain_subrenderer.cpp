@@ -27,6 +27,22 @@ terrain_subrenderer::terrain_subrenderer(const std::vector<sbx::graphics::attach
   }
 
   index_storage.update(indices.data(), indices.size() * sizeof(std::uint32_t));
+
+  auto layer_paths = std::array<std::filesystem::path, terrain_layer_count>{
+    "res://textures/terrain/grass/albedo.jpg",
+    "res://textures/terrain/dirt/albedo.jpg",
+    "res://textures/terrain/rock/albedo.jpg",
+    "res://textures/terrain/sand/albedo.jpg",
+    "res://textures/terrain/snow/albedo.jpg",
+    "res://textures/terrain/mud/albedo.jpg",
+  };
+
+  for (auto i = 0u; i < terrain_layer_count; ++i) {
+    _layer_textures[i] = graphics_module.add_resource<sbx::graphics::image2d>(layer_paths[i], sbx::graphics::format::r8g8b8a8_srgb, VK_FILTER_LINEAR, VK_SAMPLER_ADDRESS_MODE_REPEAT, true, true);
+    _terrain_images.push_back(_layer_textures[i]);
+  }
+
+  _terrain_sampler = graphics_module.add_resource<sbx::graphics::sampler_state>(sbx::graphics::filter::linear, sbx::graphics::filter::linear, sbx::graphics::address_mode::repeat, sbx::graphics::address_mode::repeat, 8.0f, VK_LOD_CLAMP_NONE);
 }
 
 auto terrain_subrenderer::_generate_grid_indices() -> std::vector<std::uint32_t> {
@@ -35,9 +51,9 @@ auto terrain_subrenderer::_generate_grid_indices() -> std::vector<std::uint32_t>
 
   for (auto row = 0u; row < clipmap_grid_size; ++row) {
     for (auto col = 0u; col < clipmap_grid_size; ++col) {
-      auto top_left = row * clipmap_grid_vertices + col;
+      auto top_left = row * clipmap_grid_verts + col;
       auto top_right = top_left + 1;
-      auto bottom_left = (row + 1) * clipmap_grid_vertices + col;
+      auto bottom_left = (row + 1) * clipmap_grid_verts + col;
       auto bottom_right = bottom_left + 1;
 
       indices.push_back(top_left);
@@ -70,6 +86,8 @@ auto terrain_subrenderer::render(sbx::graphics::command_buffer& command_buffer) 
   _pipeline.bind(command_buffer);
 
   _descriptor_handler.push("scene", environment.uniform_handler());
+  _descriptor_handler.push("terrain_textures", _terrain_images);
+  _descriptor_handler.push("terrain_sampler", graphics_module.get_resource<sbx::graphics::sampler_state>(_terrain_sampler));
 
   if (!_descriptor_handler.update(_pipeline)) {
     return;
@@ -115,7 +133,7 @@ auto terrain_subrenderer::render(sbx::graphics::command_buffer& command_buffer) 
 
     _push_handler.push("height_data_buffer", height_storage.address());
     _push_handler.push("splat_data_buffer", splat_storage.address());
-    _push_handler.push("grid_vertices", clipmap_grid_vertices);
+    _push_handler.push("grid_verts", clipmap_grid_verts);
     _push_handler.push("grid_cells", clipmap_grid_size);
     _push_handler.push("ring_cell_size", ring_cell_size);
     _push_handler.push("ring_origin_x", ring_origin_x);
@@ -135,6 +153,7 @@ auto terrain_subrenderer::render(sbx::graphics::command_buffer& command_buffer) 
     _push_handler.push("inner_max_x", inner_max_x);
     _push_handler.push("inner_max_z", inner_max_z);
     _push_handler.push("ring_count", clipmap_ring_count);
+    _push_handler.push("tiling_scale", _tiling_scale);
 
     _push_handler.bind(command_buffer);
 

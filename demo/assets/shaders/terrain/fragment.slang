@@ -1,5 +1,8 @@
 #include <libsbx/common/depth.slang>
 #include <libsbx/common/scene_data.slang>
+#include <libsbx/common/image.slang>
+
+#include <terrain/common.slang>
 
 struct fs_in {
   [[vk::location(0)]] float3 position : POSITION;
@@ -17,47 +20,12 @@ struct fs_out {
   float linear_depth : SV_Target6;
 }; // struct fs_out
 
-struct splat_weights {
-  uint8_t grass;
-  uint8_t dirt;
-  uint8_t rock;
-  uint8_t sand;
-  uint8_t snow;
-  uint8_t mud;
-  uint8_t _padding0;
-  uint8_t _padding1;
-}; // struct splat_weights
-
-struct push_data {
-  float* height_data_buffer;
-  splat_weights* splat_data_buffer;
-  uint grid_vertices;
-  uint grid_cells;
-  float ring_cell_size;
-  float ring_origin_x;
-  float ring_origin_z;
-  uint ring_level;
-  float base_cell_size;
-  float terrain_offset_x;
-  float terrain_offset_z;
-  float terrain_width;
-  float terrain_height;
-  uint vertices_x;
-  uint vertices_z;
-  uint cells_x;
-  uint cells_z;
-  float inner_min_x;
-  float inner_min_z;
-  float inner_max_x;
-  float inner_max_z;
-  uint ring_count;
-}; // struct push_data
-
-[[vk::push_constant]]
-ConstantBuffer<push_data> push;
-
-[[vk::binding(0, 0)]]
-ConstantBuffer<sbx::common::scene_data> scene;
+static const uint LAYER_GRASS = 0;
+static const uint LAYER_DIRT = 1;
+static const uint LAYER_ROCK = 2;
+static const uint LAYER_SAND = 3;
+static const uint LAYER_SNOW = 4;
+static const uint LAYER_MUD = 5;
 
 static const float3 COLOR_GRASS = float3(0.30, 0.50, 0.20);
 static const float3 COLOR_DIRT = float3(0.45, 0.35, 0.22);
@@ -66,9 +34,17 @@ static const float3 COLOR_SAND = float3(0.76, 0.70, 0.50);
 static const float3 COLOR_SNOW = float3(0.90, 0.91, 0.93);
 static const float3 COLOR_MUD = float3(0.30, 0.25, 0.18);
 
-float unpack_weight(uint8_t value) {
-  return float(value) / 255.0;
-}
+[[vk::push_constant]]
+ConstantBuffer<push_data> push;
+
+[[vk::binding(0, 0)]]
+ConstantBuffer<sbx::common::scene_data> scene;
+
+[[vk::binding(1, 0)]]
+SamplerState terrain_sampler;
+
+[[vk::binding(2, 0)]]
+Texture2D<float4> terrain_textures[sbx::common::max_image_array_size];
 
 struct unpacked_weights {
   float grass;
@@ -78,6 +54,10 @@ struct unpacked_weights {
   float snow;
   float mud;
 }; // struct unpacked_weights
+
+float unpack_weight(uint8_t value) {
+  return float(value) / 255.0;
+}
 
 unpacked_weights unpack_splat(splat_weights packed) {
   unpacked_weights result;
@@ -126,20 +106,60 @@ unpacked_weights sample_splat_bilinear(float3 world_pos) {
   return result;
 }
 
+float3 sample_layer(uint layer, float2 uv) {
+  return terrain_textures[layer].Sample(terrain_sampler, uv).rgb;
+}
+
+float3 sample_layer_triplanar(uint layer, float3 world_pos, float3 blend) {
+  float2 uv_xz = world_pos.xz * push.tiling_scale;
+  float2 uv_xy = world_pos.xy * push.tiling_scale;
+  float2 uv_zy = world_pos.zy * push.tiling_scale;
+
+  float3 col_xz = terrain_textures[layer].Sample(terrain_sampler, uv_xz).rgb;
+  float3 col_xy = terrain_textures[layer].Sample(terrain_sampler, uv_xy).rgb;
+  float3 col_zy = terrain_textures[layer].Sample(terrain_sampler, uv_zy).rgb;
+
+  return col_xz * blend.y + col_xy * blend.z + col_zy * blend.x;
+}
+
+float3 compute_flat_albedo(unpacked_weights splat) {
+  return COLOR_GRASS * splat.grass + COLOR_DIRT * splat.dirt + COLOR_ROCK * splat.rock + COLOR_SAND * splat.sand + COLOR_SNOW * splat.snow + COLOR_MUD * splat.mud;
+}
+
 [shader("fragment")]
 fs_out main(fs_in input) {
   fs_out output;
 
+  float3 normal = normalize(input.normal);
   unpacked_weights splat = sample_splat_bilinear(input.position);
 
-  float3 albedo = COLOR_GRASS * splat.grass + COLOR_DIRT * splat.dirt + COLOR_ROCK * splat.rock + COLOR_SAND * splat.sand + COLOR_SNOW * splat.snow + COLOR_MUD * splat.mud;
+  float3 albedo;
+
+  if (push.ring_level <= 1) {
+    float2 uv = input.position.xz * push.tiling_scale;
+
+    float3 blend = abs(normal);
+    blend = pow(blend, 4.0);
+    blend /= (blend.x + blend.y + blend.z);
+
+    albedo = sample_layer(LAYER_GRASS, uv) * splat.grass + sample_layer(LAYER_DIRT, uv) * splat.dirt + sample_layer_triplanar(LAYER_ROCK, input.position, blend) * splat.rock + sample_layer(LAYER_SAND, uv) * splat.sand + sample_layer(LAYER_SNOW, uv) * splat.snow + sample_layer(LAYER_MUD, uv) * splat.mud;
+  } else if (push.ring_level == 2) {
+    float2 uv = input.position.xz * push.tiling_scale;
+
+    float3 textured = sample_layer(LAYER_GRASS, uv) * splat.grass + sample_layer(LAYER_DIRT, uv)  * splat.dirt + sample_layer(LAYER_ROCK, uv)  * splat.rock + sample_layer(LAYER_SAND, uv)  * splat.sand + sample_layer(LAYER_SNOW, uv)  * splat.snow + sample_layer(LAYER_MUD, uv)   * splat.mud;
+
+    albedo = lerp(textured, compute_flat_albedo(splat), 0.5);
+  } else {
+    albedo = compute_flat_albedo(splat);
+  }
+
   float roughness = 0.85 * splat.grass + 0.95 * splat.dirt + 0.75 * splat.rock + 0.90 * splat.sand + 0.60 * splat.snow + 0.98 * splat.mud;
 
   output.albedo = float4(albedo, 1.0);
   output.position = float4(input.position, 1.0);
-  output.normal = float4(normalize(input.normal) * 0.5 + 0.5, 1.0);
-  output.material = float4(0.0, roughness, 1.0, 0.0);
-  output.emissive = float4(0.0, 0.0, 0.0, 0.25);
+  output.normal = float4(normal * 0.5 + 0.5, 1.0);
+  output.material = float4(0.0, roughness, 1.0, 1.0);
+  output.emissive = float4(0.0, 0.0, 0.0, 1.0);
   output.object_id = 0;
   output.linear_depth = sbx::common::linearize_depth(input.sv_position.z, scene.camera_near, scene.camera_far);
 

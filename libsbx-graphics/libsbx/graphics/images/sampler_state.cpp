@@ -9,9 +9,7 @@
 
 namespace sbx::graphics {
 
-sampler_state::sampler_state(graphics::filter mag_filter, graphics::filter min_filter, graphics::address_mode address_mode_u, graphics::address_mode address_mode_v, std::float_t anisotropy) {
-  // image::create_image_sampler(_handle, to_vk_enum<VkFilter>(filter), to_vk_enum<VkSamplerAddressMode>(address_mode), false, 1u);
-
+sampler_state::sampler_state(graphics::filter mag_filter, graphics::filter min_filter, graphics::address_mode address_mode_u, graphics::address_mode address_mode_v, std::float_t anisotropy, std::float_t max_lod) {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 
   auto& physical_device = graphics_module.physical_device();
@@ -26,7 +24,7 @@ sampler_state::sampler_state(graphics::filter mag_filter, graphics::filter min_f
   sampler_create_info.minFilter = to_vk_enum<VkFilter>(min_filter);
   sampler_create_info.addressModeU = to_vk_enum<VkSamplerAddressMode>(address_mode_u);
   sampler_create_info.addressModeV = to_vk_enum<VkSamplerAddressMode>(address_mode_v);
-  sampler_create_info.addressModeW = to_vk_enum<VkSamplerAddressMode>(address_mode_u);
+  sampler_create_info.addressModeW = to_vk_enum<VkSamplerAddressMode>(address_mode_v);
   sampler_create_info.mipmapMode = (to_vk_enum<VkFilter>(min_filter) == VK_FILTER_LINEAR) ? VK_SAMPLER_MIPMAP_MODE_LINEAR : VK_SAMPLER_MIPMAP_MODE_NEAREST;
   sampler_create_info.mipLodBias = 0.0f;
   sampler_create_info.anisotropyEnable = (anisotropy > 1.0f);
@@ -34,7 +32,7 @@ sampler_state::sampler_state(graphics::filter mag_filter, graphics::filter min_f
   sampler_create_info.compareEnable = false;
   sampler_create_info.compareOp = VK_COMPARE_OP_ALWAYS;
   sampler_create_info.minLod = 0.0f;
-  sampler_create_info.maxLod = 1.0f;
+  sampler_create_info.maxLod = max_lod;
   sampler_create_info.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
   sampler_create_info.unnormalizedCoordinates = false;
 

@@ -1,5 +1,7 @@
 #include <libsbx/common/scene_data.slang>
 
+#include <terrain/common.slang>
+
 struct vs_in {
   uint vertex_id : SV_VertexID;
 }; // struct vs_in
@@ -9,42 +11,6 @@ struct vs_out {
   [[vk::location(1)]] float3 normal : NORMAL;
   float4 sv_position : SV_Position;
 }; // struct vs_out
-
-struct splat_weights {
-  uint8_t grass;
-  uint8_t dirt;
-  uint8_t rock;
-  uint8_t sand;
-  uint8_t snow;
-  uint8_t mud;
-  uint8_t _padding0;
-  uint8_t _padding1;
-}; // struct splat_weights
-
-struct push_data {
-  float* height_data_buffer;
-  splat_weights* splat_data_buffer;
-  uint grid_vertices;
-  uint grid_cells;
-  float ring_cell_size;
-  float ring_origin_x;
-  float ring_origin_z;
-  uint ring_level;
-  float base_cell_size;
-  float terrain_offset_x;
-  float terrain_offset_z;
-  float terrain_width;
-  float terrain_height;
-  uint vertices_x;
-  uint vertices_z;
-  uint cells_x;
-  uint cells_z;
-  float inner_min_x;
-  float inner_min_z;
-  float inner_max_x;
-  float inner_max_z;
-  uint ring_count;
-}; // struct push_data
 
 [[vk::push_constant]]
 ConstantBuffer<push_data> push;
@@ -81,13 +47,13 @@ height_sample sample_height_and_gradient(float world_x, float world_z) {
   float h11 = push.height_data_buffer[z1 * push.vertices_x + x1];
 
   height_sample result;
+
   result.height = lerp(lerp(h00, h10, fx), lerp(h01, h11, fx), fz);
 
-  // Bilinear patch partial derivatives: dh/du, dh/dv in grid space
-  // Convert to world space by dividing by base_cell_size
-  float inv_cell = 1.0 / push.base_cell_size;
-  result.dh_dx = ((1.0 - fz) * (h10 - h00) + fz * (h11 - h01)) * inv_cell;
-  result.dh_dz = ((1.0 - fx) * (h01 - h00) + fx * (h11 - h10)) * inv_cell;
+  float inverse_cell_size = 1.0 / push.base_cell_size;
+
+  result.dh_dx = ((1.0 - fz) * (h10 - h00) + fz * (h11 - h01)) * inverse_cell_size;
+  result.dh_dz = ((1.0 - fx) * (h01 - h00) + fx * (h11 - h10)) * inverse_cell_size;
 
   return result;
 }
@@ -129,38 +95,31 @@ vs_out degenerate() {
 vs_out main(vs_in input) {
   vs_out output;
 
-  uint row = input.vertex_id / push.grid_vertices;
-  uint col = input.vertex_id % push.grid_vertices;
+  uint row = input.vertex_id / push.grid_verts;
+  uint column = input.vertex_id % push.grid_verts;
 
-  // Local position centered on the grid
-  float local_x = (float(col) - float(push.grid_cells) * 0.5) * push.ring_cell_size;
+  float local_x = (float(column) - float(push.grid_cells) * 0.5) * push.ring_cell_size;
   float local_z = (float(row) - float(push.grid_cells) * 0.5) * push.ring_cell_size;
 
   float world_x = local_x + push.ring_origin_x;
   float world_z = local_z + push.ring_origin_z;
 
-  // Clamp to terrain bounds
   float half_width = push.terrain_width * 0.5;
   float half_height = push.terrain_height * 0.5;
 
   world_x = clamp(world_x, -half_width, half_width);
   world_z = clamp(world_z, -half_height, half_height);
 
-  // Inner cutout: collapse vertices covered by the finer ring
-  // Shrink cutout by one inner cell on each side to guarantee overlap (no gaps)
+  // Inner cutout
   if (push.ring_level > 0) {
     float margin = push.ring_cell_size * 0.5;
 
-    if (world_x > (push.inner_min_x + margin) &&
-        world_x < (push.inner_max_x - margin) &&
-        world_z > (push.inner_min_z + margin) &&
-        world_z < (push.inner_max_z - margin)) {
+    if (world_x > (push.inner_min_x + margin) && world_x < (push.inner_max_x - margin) && world_z > (push.inner_min_z + margin) && world_z < (push.inner_max_z - margin)) {
       return degenerate();
     }
   }
 
-  // T-junction stitching: snap outer boundary vertices to the coarser grid
-  // Creates zero-area triangles that seal gaps between this ring and the next coarser
+  // T-junction stitching
   bool is_outermost_ring = (push.ring_level == push.ring_count - 1);
 
   if (!is_outermost_ring) {
@@ -170,16 +129,15 @@ vs_out main(vs_in input) {
       world_x = round(world_x / coarser_cell) * coarser_cell;
     }
 
-    if (col == 0 || col == push.grid_cells) {
+    if (column == 0 || column == push.grid_cells) {
       world_z = round(world_z / coarser_cell) * coarser_cell;
     }
 
-    // Re-clamp after snapping
     world_x = clamp(world_x, -half_width, half_width);
     world_z = clamp(world_z, -half_height, half_height);
   }
 
-  // Transition alpha: ramps from 0 in interior to 1 at outer boundary
+  // Transition alpha
   float alpha = 0.0;
 
   if (!is_outermost_ring) {
@@ -195,23 +153,22 @@ vs_out main(vs_in input) {
     alpha = max(alpha_x, alpha_z);
   }
 
-  // Sample height and gradient in one pass (4 buffer reads total)
-  height_sample hs = sample_height_and_gradient(world_x, world_z);
-  float h = hs.height;
+  // Height + analytical normal
+  height_sample height_sample = sample_height_and_gradient(world_x, world_z);
+
+  float h = height_sample.height;
 
   if (alpha > 0.0) {
     float z_coarse = sample_height_coarser(world_x, world_z);
     h = lerp(h, z_coarse, alpha);
   }
 
-  float3 world_pos = float3(world_x, h, world_z);
+  float3 world_position = float3(world_x, h, world_z);
+  float3 normal = normalize(float3(-height_sample.dh_dx, 1.0, -height_sample.dh_dz));
 
-  // Analytical normal from bilinear patch partial derivatives
-  float3 normal = normalize(float3(-hs.dh_dx, 1.0, -hs.dh_dz));
-
-  output.position = world_pos;
+  output.position = world_position;
   output.normal = normal;
-  output.sv_position = mul(scene.projection, mul(scene.view, float4(world_pos, 1.0)));
+  output.sv_position = mul(scene.projection, mul(scene.view, float4(world_position, 1.0)));
 
   return output;
 }

@@ -8,6 +8,9 @@
 #include <libsbx/graphics/graphics.hpp>
 #include <libsbx/scenes/scenes.hpp>
 
+#include <libsbx/graphics/images/separate_image2d_array.hpp>
+#include <libsbx/graphics/images/sampler_state.hpp>
+
 #include <demo/terrain/terrain_module.hpp>
 
 namespace demo {
@@ -15,8 +18,10 @@ namespace demo {
 class terrain_subrenderer : public sbx::graphics::subrenderer {
 
   static constexpr auto clipmap_grid_size = 64u;
-  static constexpr auto clipmap_grid_vertices = clipmap_grid_size + 1u;
+  static constexpr auto clipmap_grid_verts = clipmap_grid_size + 1u;
   static constexpr auto clipmap_ring_count = 5u;
+
+  static constexpr auto terrain_layer_count = 6u;
 
   class pipeline : public sbx::graphics::graphics_pipeline {
 
@@ -49,6 +54,10 @@ public:
 
   auto render(sbx::graphics::command_buffer& command_buffer) -> void override;
 
+  auto set_tiling_scale(std::float_t scale) -> void {
+    _tiling_scale = scale;
+  }
+
 private:
 
   auto _generate_grid_indices() -> std::vector<std::uint32_t>;
@@ -60,7 +69,12 @@ private:
 
   sbx::graphics::storage_buffer_handle _index_buffer;
 
+  std::array<sbx::graphics::image2d_handle, terrain_layer_count> _layer_textures;
+  sbx::graphics::separate_image2d_array _terrain_images;
+  sbx::graphics::sampler_state_handle _terrain_sampler;
+
   std::uint32_t _index_count{};
+  std::float_t _tiling_scale{0.5f};
 
 }; // class terrain_subrenderer
 

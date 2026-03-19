@@ -12,7 +12,7 @@ class sampler_state : public descriptor {
 
 public:
 
-  sampler_state(graphics::filter mag_filter, graphics::filter min_filter, graphics::address_mode address_mode_u, graphics::address_mode address_mode_v, std::float_t anisotropy = 1.0f);
+  sampler_state(graphics::filter mag_filter, graphics::filter min_filter, graphics::address_mode address_mode_u, graphics::address_mode address_mode_v, std::float_t anisotropy = 1.0f, std::float_t max_lod = 1.0f);
 
   sampler_state(graphics::filter filter = graphics::filter::linear, graphics::address_mode address_mode = graphics::address_mode::clamp_to_edge);
 

@@ -117,17 +117,17 @@ auto image2d::_load(const std::filesystem::path& path) -> void {
   if (!path.empty()) {
     from_file = true;
 
-    const auto binary_path = std::filesystem::path{path}.replace_extension(binary_file_extension);
+    // const auto binary_path = std::filesystem::path{path}.replace_extension(binary_file_extension);
 
-    if (std::filesystem::exists(binary_path)) {
-      const auto source_time = std::filesystem::last_write_time(path);
-      const auto binary_time = std::filesystem::last_write_time(binary_path);
+    // if (std::filesystem::exists(binary_path)) {
+    //   const auto source_time = std::filesystem::last_write_time(path);
+    //   const auto binary_time = std::filesystem::last_write_time(binary_path);
 
-      if (binary_time > source_time) {
-        _load_binary(binary_path);
-        return;
-      }
-    }
+    //   if (binary_time > source_time) {
+    //     _load_binary(binary_path);
+    //     return;
+    //   }
+    // }
 
     auto timer = utility::timer{};
 

@@ -47,6 +47,8 @@ public:
 
   constexpr basic_vector2(const base_type& base) noexcept;
 
+  constexpr basic_vector2() noexcept;
+
   template<scalar Other>
   constexpr basic_vector2(Other x, Other y) noexcept;
 

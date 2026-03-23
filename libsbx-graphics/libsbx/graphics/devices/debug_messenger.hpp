@@ -2,6 +2,8 @@
 #ifndef LIBSBX_GRAPHICS_DEVICES_DEBUG_MESSENGER_HPP_
 #define LIBSBX_GRAPHICS_DEVICES_DEBUG_MESSENGER_HPP_
 
+#include <cstdint>
+
 #include <vulkan/vulkan.hpp>
 
 #include <libsbx/graphics/devices/instance.hpp>

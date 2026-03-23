@@ -86,16 +86,16 @@ auto buffer::resize(const size_type new_size) -> void {
     allocation_create_info.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT;
     
     if (_properties & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) {
-        allocation_create_info.flags |= VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+      allocation_create_info.flags |= VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
     }
   } else {
     allocation_create_info.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
     allocation_create_info.flags = 0;
   }
 
-  if (_properties & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) {
-    allocation_create_info.requiredFlags |= VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-  }
+  // if (_properties & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) {
+  //   allocation_create_info.requiredFlags |= VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+  // }
 
   static constexpr auto dedicated_allocation_threshold = size_type{1024 * 1024};
   

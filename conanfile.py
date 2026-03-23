@@ -140,38 +140,119 @@ class libsbx_recipe(ConanFile):
 
     return None
 
+  def _get_vulkan_instance_version(self):
+    """
+    Returns the highest Vulkan API version detected among all GPUs,
+    as a tuple of integers, e.g., (1, 4, 335, 0).
+    """
+    exe = shutil.which("vulkaninfo")
+    if not exe:
+      return None
+
+    try:
+      out = subprocess.check_output(
+        [exe, "--summary"],
+        stderr=subprocess.STDOUT,
+        text=True
+      )
+    except Exception:
+      return None
+
+    max_version = (0, 0, 0, 0)
+
+    gpu_index = -1
+    for line in out.splitlines():
+      line = line.strip()
+
+      # Detect GPU start
+      if line.startswith("GPU"):
+        gpu_index += 1
+
+      # Detect apiVersion line
+      if "apiVersion" in line:
+        # example: apiVersion = 1.4.335
+        version_str = line.split("=")[-1].strip()
+        try:
+          version_parts = tuple(int(x) for x in version_str.split("."))
+          # normalize to 4 elements
+          version_parts = version_parts + (0,) * (4 - len(version_parts))
+          if version_parts > max_version:
+            max_version = version_parts
+        except Exception:
+          continue
+
+    # Fallback: still check Vulkan Instance Version if no GPU found
+    if max_version == (0, 0, 0, 0):
+      for line in out.splitlines():
+        line = line.strip()
+        if line.startswith("Vulkan Instance Version"):
+          version_str = line.split(":")[-1].strip()
+          try:
+            version_parts = tuple(int(x) for x in version_str.split("."))
+            version_parts = version_parts + (0,) * (4 - len(version_parts))
+            max_version = version_parts
+          except Exception:
+            pass
+
+    return max_version if max_version != (0, 0, 0, 0) else None
+  
   def _endure_vulkan_sdk(self):
+    """
+    Ensures that a Vulkan SDK is installed and the GPU supports
+    at least the required Vulkan version. On Linux, it uses Mesa
+    Vulkan API detection to avoid false negatives.
+    """
     if self.settings.os == "Linux":
       apt = Apt(self)
-
-      apt.install(["vulkan-tools"],update=True,check=True)
+      # Ensure vulkaninfo is installed
+      apt.install(["vulkan-tools"], update=True, check=True)
 
       version = self._get_vulkan_instance_version()
-
       if not version:
         raise ConanInvalidConfiguration(
           "Vulkan not found.\n"
-          f"Vulkan SDK {self.REQUIRED_VULKAN_VERSION} required.\n"
+          f"Vulkan SDK {self.REQUIRED_VULKAN_VERSION_STR} required.\n"
           "Please install Vulkan SDK:\n"
           "  https://vulkan.lunarg.com/sdk/home#linux"
         )
-      
+
       version = self._normalize_version(version)
+      required = self._normalize_version(self.REQUIRED_VULKAN_VERSION)
 
-      if version < self.REQUIRED_VULKAN_VERSION:
-        raise ConanInvalidConfiguration(
-          f"Vulkan Instance >= {'.'.join(map(str, self.REQUIRED_VULKAN_VERSION))} required.\n"
-          f"Detected: {'.'.join(map(str, version))}"
+      if version < required:
+        self.output.warn(
+          f"Detected Vulkan version: {'.'.join(map(str, version))} "
+          f"< required {self.REQUIRED_VULKAN_VERSION_STR}. "
+          "Check that your Mesa driver is up-to-date. "
+          "Intel GPUs with Mesa >= 26 should provide Vulkan 1.4 features."
         )
-    elif self.settings.os == "Windows":
-      version = self._get_vulkan_instance_version()
+      else:
+        self.output.info(
+          f"Vulkan SDK detected: {'.'.join(map(str, version))} >= {self.REQUIRED_VULKAN_VERSION_STR}"
+        )
 
+    elif self.settings.os == "Windows":
+      # Windows still uses strict check
+      version = self._get_vulkan_instance_version()
       if not version:
         raise ConanInvalidConfiguration(
           "Vulkan not found.\n"
-          f"Vulkan SDK {self.REQUIRED_VULKAN_VERSION} required.\n"
+          f"Vulkan SDK {self.REQUIRED_VULKAN_VERSION_STR} required.\n"
           "Please install Vulkan SDK:\n"
           "  https://vulkan.lunarg.com/sdk/home#windows"
+        )
+
+      version = self._normalize_version(version)
+      required = self._normalize_version(self.REQUIRED_VULKAN_VERSION)
+
+      if version < required:
+        raise ConanInvalidConfiguration(
+          f"Vulkan Instance >= {self.REQUIRED_VULKAN_VERSION_STR} required.\n"
+          f"Detected: {'.'.join(map(str, version))}"
+        )
+      else:
+        self.output.info(
+          f"Vulkan SDK detected: {'.'.join(map(str, version))} >= {self.REQUIRED_VULKAN_VERSION_STR}"
         )
 
   def system_requirements(self):

@@ -131,7 +131,7 @@ auto image::create_image(VkImage& image, VmaAllocation& allocation, const VkExte
   auto allocation_create_info = VmaAllocationCreateInfo{};
   allocation_create_info.usage = VMA_MEMORY_USAGE_AUTO;
   allocation_create_info.flags = 0u;
-  allocation_create_info.priority = 1.0f;
+  // allocation_create_info.priority = 1.0f;
 
   static constexpr auto image_dedicated_threshold = VkDeviceSize{1024 * 1024};
   

@@ -45,6 +45,20 @@ auto render_graph::_execute_pass_instruction(command_buffer& command_buffer, con
   viewport.minDepth = 0.0f;
   viewport.maxDepth = 1.0f;
 
+  auto memory_barrier = VkMemoryBarrier2{};
+  memory_barrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2;
+  memory_barrier.srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
+  memory_barrier.srcAccessMask = VK_ACCESS_2_MEMORY_WRITE_BIT;
+  memory_barrier.dstStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
+  memory_barrier.dstAccessMask = VK_ACCESS_2_MEMORY_READ_BIT | VK_ACCESS_2_MEMORY_WRITE_BIT;
+
+  auto dependency_info = VkDependencyInfo{};
+  dependency_info.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+  dependency_info.memoryBarrierCount = 1;
+  dependency_info.pMemoryBarriers = &memory_barrier;
+
+  vkCmdPipelineBarrier2(command_buffer, &dependency_info);
+
   command_buffer.set_viewport(viewport);
   command_buffer.set_scissor(render_area);
 
@@ -83,6 +97,20 @@ auto render_graph::_execute_pass_instruction(command_buffer& command_buffer, con
 template<typename Callable>
 auto render_graph::_execute_compute_instruction(command_buffer& command_buffer, const compute_instruction& instruction, Callable&& callable) -> void {
   (void)command_buffer;
+
+  auto memory_barrier = VkMemoryBarrier2{};
+  memory_barrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2;
+  memory_barrier.srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
+  memory_barrier.srcAccessMask = VK_ACCESS_2_MEMORY_WRITE_BIT;
+  memory_barrier.dstStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
+  memory_barrier.dstAccessMask = VK_ACCESS_2_MEMORY_READ_BIT | VK_ACCESS_2_MEMORY_WRITE_BIT;
+
+  auto dependency_info = VkDependencyInfo{};
+  dependency_info.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+  dependency_info.memoryBarrierCount = 1;
+  dependency_info.pMemoryBarriers = &memory_barrier;
+
+  vkCmdPipelineBarrier2(command_buffer, &dependency_info);
 
   std::invoke(std::forward<Callable>(callable), instruction.pass);
 }

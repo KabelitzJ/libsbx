@@ -10,6 +10,10 @@ inline constexpr basic_vector2<Type>::basic_vector2(const base_type& base) noexc
 : base_type{base} { }
 
 template<scalar Type>
+inline constexpr basic_vector2<Type>::basic_vector2() noexcept
+: base_type{static_cast<Type>(0), static_cast<Type>(0)} { }
+
+template<scalar Type>
 template<scalar Other>
 inline constexpr basic_vector2<Type>::basic_vector2(Other x, Other y) noexcept
 : base_type{x, y} { }

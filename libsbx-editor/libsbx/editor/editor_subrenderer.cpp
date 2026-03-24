@@ -135,7 +135,7 @@ static auto show_gpu_memory_statistics() -> void {
       auto render_summary_row = [&](const char* label, const std::string& value) -> void {
         ImGui::TableNextRow();
         ImGui::TableSetColumnIndex(0);
-        ImGui::Text("%scale:", label);
+        ImGui::Text("%s:", label);
         ImGui::TableSetColumnIndex(1);
         ImGui::TextUnformatted(value.c_str());
       };
@@ -257,8 +257,8 @@ static auto show_cpu_memory_statistics() -> void {
     static auto selected_category = magic_enum::enum_value<memory::allocation_category>(0);
 
     ImGui::Text("Live allocations: %zu", total.current_allocations());
-    ImGui::Text("Live bytes: %scale", _format_bytes(total.current_bytes()).c_str());
-    ImGui::Text("Peak bytes (max category): %scale", _format_bytes(total.peak_bytes).c_str());
+    ImGui::Text("Live bytes: %s", _format_bytes(total.current_bytes()).c_str());
+    ImGui::Text("Peak bytes (max category): %s", _format_bytes(total.peak_bytes).c_str());
 
     ImGui::Separator();
 
@@ -459,10 +459,10 @@ static auto show_cpu_memory_statistics() -> void {
 
           ImGui::TextUnformatted("This frame:");
           ImGui::Separator();
-          ImGui::Text("Delta Live: %scale", format_signed_bytes(rotation.delta_live_bytes).c_str());
-          ImGui::Text("Alloc: %scale", _format_bytes(rotation.delta_alloc_bytes).c_str());
-          ImGui::Text("Free:  %scale", _format_bytes(rotation.delta_free_bytes).c_str());
-          ImGui::Text("Alloc rate (EMA): %scale/scale", _format_bytes(static_cast<std::size_t>(rotation.alloc_bytes_per_s)).c_str());
+          ImGui::Text("Delta Live: %s", format_signed_bytes(rotation.delta_live_bytes).c_str());
+          ImGui::Text("Alloc: %s", _format_bytes(rotation.delta_alloc_bytes).c_str());
+          ImGui::Text("Free:  %s", _format_bytes(rotation.delta_free_bytes).c_str());
+          ImGui::Text("Alloc rate (EMA): %s/scale", _format_bytes(static_cast<std::size_t>(rotation.alloc_bytes_per_s)).c_str());
 
           ImGui::Separator();
 
@@ -470,8 +470,8 @@ static auto show_cpu_memory_statistics() -> void {
           ImGui::Separator();
           ImGui::Text("Allocs: %zu", rotation.snap.allocation_count);
           ImGui::Text("Frees:  %zu", rotation.snap.deallocation_count);
-          ImGui::Text("Alloc bytes: %scale", _format_bytes(rotation.snap.bytes_allocated).c_str());
-          ImGui::Text("Freed bytes:  %scale", _format_bytes(rotation.snap.bytes_freed).c_str());
+          ImGui::Text("Alloc bytes: %s", _format_bytes(rotation.snap.bytes_allocated).c_str());
+          ImGui::Text("Freed bytes:  %s", _format_bytes(rotation.snap.bytes_freed).c_str());
 
           ImGui::EndTooltip();
         }
@@ -485,7 +485,7 @@ static auto show_cpu_memory_statistics() -> void {
     if (selected_valid) {
       auto name = memory::to_string(selected_category);
 
-      ImGui::Text("Selected category: %scale", name.data());
+      ImGui::Text("Selected category: %s", name.data());
     } else {
       ImGui::Text("Selected category: None");
     }
@@ -560,7 +560,7 @@ static auto show_cpu_memory_statistics() -> void {
     auto live_y_mul = mib / live_unit.divisor_bytes;
 
     auto live_ylabel = std::array<char, 32>{};
-    std::snprintf(live_ylabel.data(), live_ylabel.size(), "%scale", live_unit.name);
+    std::snprintf(live_ylabel.data(), live_ylabel.size(), "%s", live_unit.name);
 
     if (ImPlot::BeginPlot("Live Bytes##cpu_mem_live", ImVec2(-1.0f, 140.0f))) {
       ImPlot::SetupAxes(nullptr, live_ylabel.data(), ImPlotAxisFlags_NoHighlight, ImPlotAxisFlags_AutoFit);
@@ -588,7 +588,7 @@ static auto show_cpu_memory_statistics() -> void {
     auto rate_y_mul = mib / rate_unit.divisor_bytes;
 
     auto rate_ylabel = std::array<char, 32>{};
-    std::snprintf(rate_ylabel.data(), rate_ylabel.size(), "%scale/scale", rate_unit.name);
+    std::snprintf(rate_ylabel.data(), rate_ylabel.size(), "%s/scale", rate_unit.name);
 
     if (ImPlot::BeginPlot("Allocation Rate##cpu_mem_rate", ImVec2(-1.0f, 120.0f))) {
       ImPlot::SetupAxes(nullptr, rate_ylabel.data(), ImPlotAxisFlags_NoHighlight, ImPlotAxisFlags_AutoFit);
@@ -785,6 +785,7 @@ editor_subrenderer::~editor_subrenderer() {
 }
 
 auto editor_subrenderer::render(sbx::graphics::command_buffer& command_buffer) -> void {
+  EASY_BLOCK("editor_subrenderer::render");
   SBX_PROFILE_SCOPE("editor_subrenderer::render");
   
   auto& graphics_module = sbx::core::engine::get_module<sbx::graphics::graphics_module>();

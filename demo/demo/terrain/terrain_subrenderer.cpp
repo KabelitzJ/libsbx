@@ -70,6 +70,7 @@ auto terrain_subrenderer::_generate_grid_indices() -> std::vector<std::uint32_t>
 }
 
 auto terrain_subrenderer::render(sbx::graphics::command_buffer& command_buffer) -> void {
+  EASY_BLOCK("terrain_subrenderer::render", profiler::colors::Green);
   SBX_PROFILE_SCOPE("terrain_subrenderer::render");
 
   auto& graphics_module = sbx::core::engine::get_module<sbx::graphics::graphics_module>();

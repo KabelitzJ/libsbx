@@ -36,6 +36,7 @@
 
 #include <demo/terrain/terrain_subrenderer.hpp>
 #include <demo/terrain/water_subrenderer.hpp>
+#include <demo/building/road_subrenderer.hpp>
 
 namespace demo {
 
@@ -261,7 +262,7 @@ renderer::renderer(bool is_editor)
   // Compute passes
   // const auto& frustum_culling_task = add_task<sbx::models::frustum_culling_task>(culling_pass, "res://shaders/frustum_culling");
   const auto& skinning_task = add_task<sbx::animations::skinning_task>(skinning_pass, "res://shaders/skinning");
-  // const auto& particle_task = add_task<sbx::particles::particle_task>(particles_pass, "res://shaders/particles");
+  const auto& particle_task = add_task<sbx::particles::particle_task>(particles_pass, "res://shaders/particles");
 
   // Shadow pass
   add_subrenderer<sbx::models::static_mesh_shadow_subrenderer>(shadow0_pass, "res://shaders/shadow", 0u);
@@ -281,12 +282,13 @@ renderer::renderer(bool is_editor)
   add_subrenderer<sbx::animations::skinned_mesh_material_subrenderer>(deferred_pass, "res://shaders/deferred_pbr_material", sbx::animations::skinned_mesh_material_draw_list::bucket::opaque);
 
   add_subrenderer<demo::terrain_subrenderer>(deferred_pass, "res://shaders/terrain");
+  add_subrenderer<demo::road_subrenderer>(deferred_pass, "res://shaders/road");
 
   // Transparency pass
   add_subrenderer<sbx::models::static_mesh_material_subrenderer>(transparency_pass, "res://shaders/deferred_pbr_material", sbx::models::static_mesh_material_draw_list::bucket::transparent);
   add_subrenderer<sbx::animations::skinned_mesh_material_subrenderer>(transparency_pass, "res://shaders/deferred_pbr_material", sbx::animations::skinned_mesh_material_draw_list::bucket::transparent);
 
-  // add_subrenderer<sbx::particles::particle_subrenderer>(transparency_pass, "res://shaders/particles", sbx::memory::make_observer(particle_task));
+  add_subrenderer<sbx::particles::particle_subrenderer>(transparency_pass, "res://shaders/particles", sbx::memory::make_observer(particle_task));
 
   add_subrenderer<demo::water_subrenderer>(transparency_pass, "res://shaders/water");
 

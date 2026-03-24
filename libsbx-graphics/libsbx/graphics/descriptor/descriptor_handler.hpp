@@ -68,7 +68,7 @@ public:
     }
 
     _descriptors.insert_or_assign(name, descriptor_entry{std::addressof(descriptor), std::move(write_descriptor_set), *binding});
-    _has_changed = true;
+    _dirty_frames = swapchain::max_frames_in_flight;
   }
 
   auto push(const std::string& name, uniform_handler& uniform_handler) -> void;
@@ -109,7 +109,7 @@ private:
 
     if (write_descriptor_set) {
       _descriptors.insert_or_assign(name, descriptor_entry{std::addressof(descriptor), std::move(write_descriptor_set), *binding});
-      _has_changed = true;
+      _dirty_frames = graphics::swapchain::max_frames_in_flight;
     }
 
   }
@@ -123,7 +123,7 @@ private:
   std::array<std::unique_ptr<graphics::descriptor_set>, graphics::swapchain::max_frames_in_flight> _descriptor_sets{};
 
   std::map<std::string, descriptor_entry> _descriptors{};
-  bool _has_changed{};
+  std::uint32_t _dirty_frames{0};
 
 }; // class descriptor_handler
 

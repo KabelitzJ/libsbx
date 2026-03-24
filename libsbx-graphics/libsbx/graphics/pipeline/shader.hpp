@@ -179,7 +179,7 @@ class uniform_block {
     }
 
     auto operator==(const uniform_block& other) const noexcept -> bool {
-      return _set == other._set && _binding == other._binding && _size == other._size && _type == other._type && _uniforms == other._uniforms;
+      return _set == other._set && _binding == other._binding && _size == other._size && _type == other._type; // && _uniforms == other._uniforms;
     }
 
   private:

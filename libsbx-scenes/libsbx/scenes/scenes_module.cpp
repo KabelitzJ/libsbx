@@ -108,6 +108,8 @@ scenes_module::~scenes_module() {
 }
 
 auto scenes_module::update() -> void {
+  EASY_BLOCK("scenes_module::update");
+
   if (_scene) {
     _scene->environment().update_uniforms();
   }

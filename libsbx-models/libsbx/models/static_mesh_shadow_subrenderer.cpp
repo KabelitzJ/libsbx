@@ -14,8 +14,7 @@ static_mesh_shadow_subrenderer::~static_mesh_shadow_subrenderer() {
 }
 
 auto static_mesh_shadow_subrenderer::render(graphics::command_buffer& command_buffer) -> void {
-  EASY_FUNCTION();
-
+  EASY_BLOCK("static_mesh_shadow_subrenderer::render");
   SBX_PROFILE_SCOPE("static_mesh_shadow_subrenderer::render");
 
   auto timer = graphics::scoped_gpu_timer{command_buffer, fmt::format("static shadow cascade: {}", _cascade)};

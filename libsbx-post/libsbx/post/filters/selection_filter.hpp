@@ -24,12 +24,13 @@ public:
   ~selection_filter() override = default;
 
   auto render(graphics::command_buffer& command_buffer) -> void override {
+    EASY_BLOCK("selection_filter::render");
     SBX_PROFILE_SCOPE("selection_filter::render");
 
     auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
     auto& scene = scenes_module.scene();
-  auto& environment = scene.environment();
-  auto& graph = scene.graph();
+    auto& environment = scene.environment();
+    auto& graph = scene.graph();
 
     auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 

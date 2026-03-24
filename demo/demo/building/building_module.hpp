@@ -16,6 +16,8 @@
 
 #include <demo/building/building_definition.hpp>
 #include <demo/building/building_instance.hpp>
+#include <demo/building/road_types.hpp>
+#include <demo/building/road_placement.hpp>
 
 namespace demo {
 
@@ -37,7 +39,9 @@ public:
 
   ~building_module() override = default;
 
-  auto update() -> void override { }
+  auto update() -> void override {
+    
+  }
 
   auto register_definition(building_definition definition) -> void {
     definition.precompute_footprints();
@@ -237,6 +241,36 @@ public:
     }
   }
 
+  auto place_road(std::int32_t start_x, std::int32_t start_y, std::int32_t end_x, std::int32_t end_y, road_type type) -> road_placement_result {
+    auto& terrain_module = sbx::core::engine::get_module<demo::terrain_module>();
+
+    auto result = place_road_line(terrain_module.grid(), start_x, start_y, end_x, end_y, type);
+
+    if (!result.placed_cells.empty()) {
+      _roads_dirty = true;
+    }
+
+    return result;
+  }
+
+  auto remove_road_at(std::int32_t cell_x, std::int32_t cell_y) -> void {
+    auto& terrain_module = sbx::core::engine::get_module<demo::terrain_module>();
+
+    auto dirty_chunks = remove_road(terrain_module.grid(), cell_x, cell_y);
+
+    if (!dirty_chunks.empty()) {
+      _roads_dirty = true;
+    }
+  }
+
+  auto roads_dirty() const -> bool {
+    return _roads_dirty;
+  }
+
+  auto clear_roads_dirty() -> void {
+    _roads_dirty = false;
+  }
+
 private:
 
   auto _flatten_footprint(const footprint& cells, std::int32_t origin_x, std::int32_t origin_z) -> void {
@@ -270,6 +304,8 @@ private:
   std::unordered_map<std::uint32_t, building_definition> _definitions;
   std::unordered_map<std::uint32_t, building_instance> _instances;
   std::uint32_t _next_instance_id{1};
+
+  bool _roads_dirty{false};
 
 }; // class building_module
 

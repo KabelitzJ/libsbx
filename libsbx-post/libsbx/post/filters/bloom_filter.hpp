@@ -27,6 +27,8 @@ public:
   ~bloom_filter() override = default;
 
   auto render(graphics::command_buffer& command_buffer) -> void override {
+    EASY_BLOCK("bloom_filter::render");
+  
     auto& pipeline = base::pipeline();
     auto& descriptor_handler = base::descriptor_handler();
 

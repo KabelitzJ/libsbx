@@ -14,7 +14,7 @@ static_mesh_material_subrenderer::~static_mesh_material_subrenderer() {
 }
 
 auto static_mesh_material_subrenderer::render(graphics::command_buffer& command_buffer) -> void {
-  EASY_FUNCTION();
+  EASY_BLOCK("static_mesh_material_subrenderer::render");
 
   SBX_PROFILE_SCOPE("static_mesh_material_subrenderer::render");
 

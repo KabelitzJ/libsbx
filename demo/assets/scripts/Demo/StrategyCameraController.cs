@@ -63,7 +63,7 @@ namespace Demo {
     {
       HandleKeyboardPan();
       HandleEdgeScroll();
-      HandleMousePan();
+      // HandleMousePan();
       HandleZoom();
       HandleRotation();
 
@@ -186,19 +186,19 @@ namespace Demo {
 
     void HandleRotation()
     {
-      if (Input.IsMouseButtonPressed(MouseButton.Right))
-      {
-        _lastMousePosition = new Vector3(Input.MousePosition());
-      }
+      // if (Input.IsMouseButtonPressed(MouseButton.Right))
+      // {
+      //   _lastMousePosition = new Vector3(Input.MousePosition());
+      // }
 
-      if (Input.IsMouseButtonDown(MouseButton.Right))
-      {
-        Vector3 current = new Vector3(Input.MousePosition());
-        Vector3 delta = _lastMousePosition - current;
-        _lastMousePosition = current;
+      // if (Input.IsMouseButtonDown(MouseButton.Right))
+      // {
+      //   Vector3 current = new Vector3(Input.MousePosition());
+      //   Vector3 delta = _lastMousePosition - current;
+      //   _lastMousePosition = current;
 
-        _yaw += delta.X * rotationSpeed;
-      }
+      //   _yaw += delta.X * rotationSpeed;
+      // }
 
       // Q/E rotation
       if (Input.IsKeyDown(KeyCode.Q))

@@ -34,6 +34,8 @@ auto skinning_task::vertex_buffer_handle() const -> graphics::storage_buffer_han
 }
 
 auto skinning_task::execute(graphics::command_buffer& command_buffer) -> void {
+  EASY_BLOCK("skinning_task::execute");
+
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
   auto& renderer = graphics_module.renderer();
 

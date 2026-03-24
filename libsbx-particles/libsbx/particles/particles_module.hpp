@@ -6,6 +6,8 @@
 #include <vector>
 #include <stdexcept>
 
+#include <easy/profiler.h>
+
 #include <libsbx/utility/logger.hpp>
 
 #include <libsbx/core/module.hpp>
@@ -27,7 +29,7 @@ public:
   }
 
   auto update() -> void override {
-
+    EASY_BLOCK("particles_module::update");
   }
 
 private:

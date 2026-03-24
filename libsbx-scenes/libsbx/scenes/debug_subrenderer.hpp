@@ -61,6 +61,8 @@ public:
   }
 
   auto render(sbx::graphics::command_buffer& command_buffer) -> void override {
+    EASY_BLOCK("debug_subrenderer::render");
+
     auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
     auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
 
@@ -71,8 +73,8 @@ public:
     }
 
     auto& scene = scenes_module.scene();
-  auto& environment = scene.environment();
-  auto& graph = scene.graph();
+    auto& environment = scene.environment();
+    auto& graph = scene.graph();
 
     auto camera_node = environment.camera();
 

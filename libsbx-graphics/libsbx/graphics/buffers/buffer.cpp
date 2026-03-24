@@ -29,9 +29,7 @@ buffer::~buffer() {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
   auto& allocator = graphics_module.allocator();
 
-  if (_handle != VK_NULL_HANDLE) {
-    vmaDestroyBuffer(allocator, _handle, _allocation);
-  }
+  graphics_module.enqueue_destruction(_handle, _allocation);
 }
 
 auto buffer::handle() const noexcept -> VkBuffer {
@@ -59,7 +57,9 @@ auto buffer::resize(const size_type new_size) -> void {
 
   if (_handle != VK_NULL_HANDLE) {
     unmap();
-    vmaDestroyBuffer(allocator, _handle, _allocation);
+
+    graphics_module.enqueue_destruction(_handle, _allocation);
+
     _handle = VK_NULL_HANDLE;
     _allocation = VK_NULL_HANDLE;
     _address = 0u;
@@ -92,10 +92,6 @@ auto buffer::resize(const size_type new_size) -> void {
     allocation_create_info.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
     allocation_create_info.flags = 0;
   }
-
-  // if (_properties & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) {
-  //   allocation_create_info.requiredFlags |= VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-  // }
 
   static constexpr auto dedicated_allocation_threshold = size_type{1024 * 1024};
   

@@ -1,0 +1,10 @@
+{
+  "depth": "read_write",
+  "uses_transparency": false,
+  "rasterization_state": {
+    "polygon_mode": "fill",
+    "cull_mode": "none",
+    "front_face": "counter_clockwise"
+  },
+  "primitive_topology": "triangle_list"
+}

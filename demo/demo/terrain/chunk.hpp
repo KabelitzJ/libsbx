@@ -38,6 +38,8 @@ struct cell {
   std::uint8_t terrain_type{0};
   std::uint8_t zone_type{0};
   std::uint8_t flags{0};
+  std::uint8_t road_type{0};
+  std::uint8_t road_mask{0};
 }; // struct cell
 
 struct grid_chunk {

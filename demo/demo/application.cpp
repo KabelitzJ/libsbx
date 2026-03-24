@@ -38,11 +38,16 @@
 #include <libsbx/ui/ui_module.hpp>
 
 #include <libsbx/audio/audio_module.hpp>
+#include <libsbx/sprites/sprites_module.hpp>
+#include <libsbx/ui/ui_module.hpp>
 
 #include <demo/terrain/terrain_module.hpp>
 #include <demo/terrain/terrain_interop.hpp>
 
 #include <demo/building/building_module.hpp>
+#include <demo/building/road_types.hpp>
+#include <demo/building/road_placement.hpp>
+#include <demo/building/road_subrenderer.hpp>
 
 namespace demo {
 
@@ -106,13 +111,39 @@ application::application()
   _generate_prefiltered(512);
 
   // Meshes
-
+  asset_registry.request_mesh<sbx::models::mesh>("sphere", "res://meshes/sphere/sphere.gltf");
 
   // Materials
 
   // Animations
 
   // Window
+
+  // auto spheres = graph.create_node(fmt::format("Spheres"));
+
+  // auto& spheres_transform = graph.get_component<sbx::scenes::transform>(spheres);
+  // spheres_transform.set_position(sbx::math::vector3{0, 0, -15});
+
+  // for (auto y = 0; y < 5; ++y) {
+  //   for (auto x = 0; x < 5; ++x) {
+  //     auto sphere = graph.create_child_node(spheres, fmt::format("Sphere{}{}", x, y));
+
+  //     const auto material_name = fmt::format("sphere_{}_{}_material", x, y);
+
+  //     auto& material = asset_registry.request_material<sbx::models::material>(material_name);
+  //     material.base_color = sbx::math::color::white();
+  //     material.alpha = sbx::models::alpha_mode::opaque;
+  //     material.metallic_factor = 0.2f * x;
+  //     material.roughness_factor = 0.2f * y;
+  //     material.occlusion_strength = 1.0f;
+
+  //     graph.add_component<sbx::scenes::static_mesh>(sphere, asset_registry.get_mesh("sphere"), asset_registry.get_material(material_name));
+
+  //     auto& sphere_transform = graph.get_component<sbx::scenes::transform>(sphere);
+  //     sphere_transform.set_position(sbx::math::vector3{x * 3, y * 3 + 5, 0.0f});
+  //     sphere_transform.set_scale(sbx::math::vector3{1.0f, 1.0f, 1.0f});
+  //   }
+  // }
 
   auto& devices_module = sbx::core::engine::get_module<sbx::devices::devices_module>();
 
@@ -124,7 +155,7 @@ application::application()
 
   // // UI
 
-  // _font = sbx::ui::load_font(assets.get_image("roboto_atlas"), "demo/assets/fonts/roboto_atlas.json");
+  // _font = sbx::ui::load_font(asset_registry.get_image("roboto_atlas"), "demo/assets/fonts/roboto_atlas.json");
 
   // _build_ui();
   
@@ -139,7 +170,7 @@ application::application()
   skybox.irradiance_image = _irradiance;
   skybox.prefiltered_image = _prefiltered;
 
-  scripting_module.instantiate(camera_node, "Demo.EditorCameraController");
+  scripting_module.instantiate(camera_node, "Demo.StrategyCameraController");
 
   _register_buildings();
 
@@ -151,6 +182,7 @@ application::application()
 }
 
 auto application::update() -> void {
+  EASY_BLOCK("application::update");
   SBX_PROFILE_SCOPE("application::update");
 
   auto& terrain_module = sbx::core::engine::get_module<demo::terrain_module>();
@@ -163,6 +195,7 @@ auto application::update() -> void {
   }
 
   _update_placement();
+  _update_road_drawing();
 
   if (!_placement_active) {
     if (sbx::devices::input::is_key_pressed(sbx::devices::key::t)) {
@@ -199,7 +232,7 @@ auto application::_build_ui() -> void {
   auto ui_node = graph.create_node("HUD");
 
   auto& canvas = graph.add_component<sbx::ui::canvas>(ui_node);
-  canvas.is_enabled = false;
+  canvas.is_enabled = true;
 
   // Left sidebar - vertical layout
   auto& sidebar = canvas.create<sbx::ui::panel>();
@@ -555,6 +588,56 @@ auto application::_update_placement() -> void {
       scenes_module.add_debug_line(d, a, placed_color);
     }
   });
+}
+
+auto application::_update_road_drawing() -> void {
+  if (_placement_active) {
+    return;
+  }
+
+  auto& building_module = sbx::core::engine::get_module<demo::building_module>();
+  auto& terrain_module = sbx::core::engine::get_module<demo::terrain_module>();
+
+  // Cycle road type with number keys
+  if (sbx::devices::input::is_key_pressed(sbx::devices::key::one)) {
+    _current_road_type = road_type::dirt;
+  }
+
+  if (sbx::devices::input::is_key_pressed(sbx::devices::key::two)) {
+    _current_road_type = road_type::gravel;
+  }
+
+  if (sbx::devices::input::is_key_pressed(sbx::devices::key::three)) {
+    _current_road_type = road_type::paved;
+  }
+
+  if (sbx::devices::input::is_key_pressed(sbx::devices::key::four)) {
+    _current_road_type = road_type::highway;
+  }
+
+  // Draw roads with right mouse button
+  if (sbx::devices::input::is_mouse_button_down(sbx::devices::mouse_button::right)) {
+    auto hit = _raycast_terrain();
+
+    if (hit) {
+      auto hit_cell = terrain_module.world_to_cell(hit->x(), hit->z());
+
+      if (!_is_drawing_road) {
+        _is_drawing_road = true;
+        _road_draw_previous_cell = hit_cell;
+
+        building_module.place_road(hit_cell.x, hit_cell.y, hit_cell.x, hit_cell.y, _current_road_type);
+      } else if (hit_cell.x != _road_draw_previous_cell.x || hit_cell.y != _road_draw_previous_cell.y) {
+        building_module.place_road(_road_draw_previous_cell.x, _road_draw_previous_cell.y, hit_cell.x, hit_cell.y, _current_road_type);
+
+        _road_draw_previous_cell = hit_cell;
+      }
+    }
+  }
+
+  if (sbx::devices::input::is_mouse_button_released(sbx::devices::mouse_button::right)) {
+    _is_drawing_road = false;
+  }
 }
 
 auto application::_generate_brdf(const std::uint32_t size) -> void {

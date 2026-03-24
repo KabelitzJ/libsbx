@@ -19,6 +19,7 @@ public:
   ~fxaa_filter() override = default;
 
   auto render(graphics::command_buffer& command_buffer) -> void override {
+    EASY_BLOCK("fxaa_filter::render");
     SBX_PROFILE_SCOPE("fxaa_filter::render");
 
     auto& pipeline = base_type::pipeline();

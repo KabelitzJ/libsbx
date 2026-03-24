@@ -25,6 +25,7 @@ target_sources(
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/terrain/terrain_module.hpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/terrain/terrain_subrenderer.hpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/terrain/water_subrenderer.hpp"
+    "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/building/road_subrenderer.hpp"
   PRIVATE
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/renderer.cpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/application.cpp"
@@ -32,6 +33,7 @@ target_sources(
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/terrain/terrain_module.cpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/terrain/terrain_subrenderer.cpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/terrain/water_subrenderer.cpp"
+    "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/building/road_subrenderer.cpp"
 )
 
 target_compile_definitions(

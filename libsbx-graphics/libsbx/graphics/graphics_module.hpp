@@ -66,6 +66,12 @@ constexpr auto to_vk_enum(Enum value) -> VkEnum {
   return static_cast<VkEnum>(value);
 }
 
+struct pending_deletion {
+  VkBuffer handle;
+  VmaAllocation allocation;
+  std::uint32_t frames_to_live;
+}; // struct pending_deletion
+
 /**
  * @brief Module for managing rendering specific tasks
  * 
@@ -205,6 +211,10 @@ public:
     _query_pool.write_timestamp(cmd, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, frame_base + (scope_index * 2) + 1);
 
     _per_frame_data[_current_frame].active_scopes.push_back(name);
+  }
+
+  auto enqueue_destruction(VkBuffer handle, VmaAllocation allocation) -> void {
+    _deletion_queue.push_back({handle, allocation, graphics::swapchain::max_frames_in_flight});
   }
 
 private:
@@ -405,6 +415,8 @@ private:
 
   std::map<std::string, std::uint32_t> _scope_registry;
   std::map<std::string, units::millisecond> _gpu_timings;
+
+  std::vector<pending_deletion> _deletion_queue;
 
 }; // class graphics_module
 

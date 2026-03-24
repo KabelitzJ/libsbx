@@ -56,6 +56,7 @@ auto water_subrenderer::_generate_grid_indices() -> std::vector<std::uint32_t> {
 }
 
 auto water_subrenderer::render(sbx::graphics::command_buffer& command_buffer) -> void {
+  EASY_BLOCK("water_subrenderer::render", profiler::colors::Orange600);
   SBX_PROFILE_SCOPE("water_subrenderer::render");
 
   auto& graphics_module = sbx::core::engine::get_module<sbx::graphics::graphics_module>();

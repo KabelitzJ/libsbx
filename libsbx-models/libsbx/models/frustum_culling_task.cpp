@@ -36,7 +36,7 @@ frustum_culling_task::~frustum_culling_task() {
 }
 
 auto frustum_culling_task::execute(graphics::command_buffer& command_buffer) -> void {
-  EASY_FUNCTION();
+  EASY_BLOCK("frustum_culling_task::execute");
 
   auto timer = graphics::scoped_gpu_timer{command_buffer, fmt::format("frustum_culling_task::execute")};
 

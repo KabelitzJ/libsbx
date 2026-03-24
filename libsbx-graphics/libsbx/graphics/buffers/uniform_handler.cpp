@@ -27,8 +27,12 @@ auto uniform_handler::update(const std::optional<shader::uniform_block>& uniform
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 
   if (_uniform_block != uniform_block) {
+    if (_uniform_buffer.is_valid()) {
+      graphics_module.remove_resource<graphics::uniform_buffer>(_uniform_buffer);
+    }
+
     _uniform_block = uniform_block;
-    // _uniform_buffer = std::make_unique<graphics::uniform_buffer>(_uniform_block->size());
+
     _uniform_buffer = graphics_module.add_resource<graphics::uniform_buffer>(_uniform_block->size());
 
     return false; 

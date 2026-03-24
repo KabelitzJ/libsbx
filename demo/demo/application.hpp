@@ -13,6 +13,7 @@
 #include <libsbx/scenes/scenes.hpp>
 
 #include <demo/building/building_definition.hpp>
+#include <demo/building/road_types.hpp>
 
 namespace demo {
 
@@ -37,6 +38,8 @@ private:
   auto _register_buildings() -> void;
   auto _update_placement() -> void;
   auto _raycast_terrain() -> std::optional<sbx::math::vector3>;
+
+  auto _update_road_drawing() -> void;
 
   auto _generate_brdf(const std::uint32_t size) -> void;
   auto _generate_irradiance(const std::uint32_t size) -> void;
@@ -64,6 +67,11 @@ private:
 
   // Sculpt state
   bool _sculpt_raise{true};
+
+  // Road drawing state
+  bool _is_drawing_road{false};
+  chunk_coord _road_draw_previous_cell{};
+  road_type _current_road_type{road_type::paved};
 
 }; // class application
 

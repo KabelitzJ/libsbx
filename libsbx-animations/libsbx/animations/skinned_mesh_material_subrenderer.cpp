@@ -14,7 +14,7 @@ skinned_mesh_material_subrenderer::~skinned_mesh_material_subrenderer() {
 }
 
 auto skinned_mesh_material_subrenderer::render(graphics::command_buffer& command_buffer) -> void {
-  EASY_FUNCTION();
+  EASY_BLOCK("skinned_mesh_material_subrenderer::render");
 
   SBX_PROFILE_SCOPE("skinned_mesh_material_subrenderer::render");
 

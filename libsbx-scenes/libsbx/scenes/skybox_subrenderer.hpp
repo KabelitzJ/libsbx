@@ -73,13 +73,15 @@ public:
   ~skybox_subrenderer() override = default;
 
   auto render(graphics::command_buffer& command_buffer) -> void override {
+    EASY_BLOCK("skybox_subrenderer::render", profiler::colors::Indigo500);
+
     auto& assets_module = core::engine::get_module<assets::assets_module>();
     auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
     auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
 
     auto& scene = scenes_module.scene();
-  auto& environment = scene.environment();
-  auto& graph = scene.graph();
+    auto& environment = scene.environment();
+    auto& graph = scene.graph();
 
     const auto camera_node = environment.camera();
     

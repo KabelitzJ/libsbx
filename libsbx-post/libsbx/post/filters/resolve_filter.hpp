@@ -60,6 +60,8 @@ public:
   ~resolve_filter() override = default;
 
   auto render(graphics::command_buffer& command_buffer) -> void override {
+    EASY_BLOCK("resolve_filter::render", profiler::colors::Red);
+
     auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 
     auto& scenes_module = core::engine::get_module<scenes::scenes_module>();

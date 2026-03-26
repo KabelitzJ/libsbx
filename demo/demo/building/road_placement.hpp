@@ -70,6 +70,45 @@ struct road_placement_result {
   std::unordered_set<chunk_coord, chunk_coord_hash> dirty_chunks;
 }; // struct road_placement_result
 
+// Place road along an explicit list of cells (from road_drawing path computation).
+inline auto place_road_path(grid& terrain_grid, const std::vector<chunk_coord>& cells, road_type type) -> road_placement_result {
+  auto result = road_placement_result{};
+
+  for (const auto& cell : cells) {
+    if (!terrain_grid.in_bounds(cell.x, cell.y)) {
+      continue;
+    }
+
+    auto& current_cell = terrain_grid.at(cell.x, cell.y);
+
+    if (current_cell.building_id != 0) {
+      continue;
+    }
+
+    auto new_type = static_cast<std::uint8_t>(type);
+
+    if (new_type > current_cell.road_type) {
+      current_cell.road_type = new_type;
+      result.placed_cells.push_back(cell);
+      result.dirty_chunks.insert(cell_to_chunk(cell.x, cell.y));
+    }
+  }
+
+  for (const auto& placed_cell : result.placed_cells) {
+    update_road_connectivity(terrain_grid, placed_cell.x, placed_cell.y);
+
+    for (auto direction = 0u; direction < 8u; ++direction) {
+      auto neighbor_x = placed_cell.x + road_direction_offset_x[direction];
+      auto neighbor_y = placed_cell.y + road_direction_offset_y[direction];
+
+      result.dirty_chunks.insert(cell_to_chunk(neighbor_x, neighbor_y));
+    }
+  }
+
+  return result;
+}
+
+// Legacy bresenham placement — kept for compatibility.
 inline auto place_road_line(grid& terrain_grid, std::int32_t start_x, std::int32_t start_y, std::int32_t end_x, std::int32_t end_y, road_type type) -> road_placement_result {
   auto result = road_placement_result{};
 

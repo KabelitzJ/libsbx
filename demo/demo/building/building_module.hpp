@@ -109,7 +109,6 @@ public:
 
     if (!definition) {
       sbx::utility::logger<"demo">::error("Failed to place building: unknown definition id {}", definition_id);
-
       return 0;
     }
 
@@ -118,6 +117,7 @@ public:
 
     auto& grid = terrain_module.grid();
     auto& graph = scenes_module.scene().graph();
+    auto& asset_registry = scenes_module.asset_registry();
 
     auto instance_id = _next_instance_id++;
 
@@ -141,15 +141,41 @@ public:
 
     _flatten_footprint(cells, origin_x, origin_z);
 
-    auto [world_x, world_z] = terrain_module.cell_to_world(origin_x, origin_z);
-    auto world_y = terrain_module.get_height_at(world_x, world_z);
+    // Compute footprint center in world space
+    auto cell_sz = grid::cell_size;
+
+    auto min_x = std::numeric_limits<std::int32_t>::max();
+    auto max_x = std::numeric_limits<std::int32_t>::min();
+    auto min_z = std::numeric_limits<std::int32_t>::max();
+    auto max_z = std::numeric_limits<std::int32_t>::min();
+
+    for (const auto& offset : cells) {
+      min_x = std::min(min_x, origin_x + offset.x);
+      max_x = std::max(max_x, origin_x + offset.x);
+      min_z = std::min(min_z, origin_z + offset.z);
+      max_z = std::max(max_z, origin_z + offset.z);
+    }
+
+    auto [corner_wx, corner_wz] = terrain_module.cell_to_world(min_x, min_z);
+    auto center_wx = corner_wx + static_cast<std::float_t>(max_x - min_x + 1) * cell_sz * 0.5f;
+    auto center_wz = corner_wz + static_cast<std::float_t>(max_z - min_z + 1) * cell_sz * 0.5f;
+    auto center_wy = terrain_module.get_height_at(center_wx, center_wz);
 
     auto node = graph.create_node(definition->name);
-    auto& transform = graph.get_component<sbx::scenes::transform>(node);
-    transform.set_position(sbx::math::vector3{world_x, world_y, world_z});
 
-    // @todo: set rotation from orientation
-    // @todo: attach mesh component from definition->mesh_id
+    // Rotation from orientation (8 directions, 45° each)
+    auto angle_degrees = static_cast<std::float_t>(static_cast<std::uint8_t>(orient)) * 45.0f;
+
+    auto rotation = sbx::math::quaternion{sbx::math::vector3::up, sbx::math::angle{sbx::math::degree{angle_degrees}}};
+
+    auto& transform = graph.get_component<sbx::scenes::transform>(node);
+    transform.set_position(sbx::math::vector3{center_wx, center_wy, center_wz});
+    transform.set_rotation(rotation);
+
+    // Attach mesh
+    auto mesh_handle = asset_registry.get_mesh(sbx::utility::hashed_string{definition->mesh_id});
+    auto material_handle = asset_registry.get_material(sbx::utility::hashed_string{definition->material_id});
+    graph.add_component<sbx::scenes::static_mesh>(node, mesh_handle, material_handle);
 
     instance.scene_node = node;
 
@@ -245,6 +271,18 @@ public:
     auto& terrain_module = sbx::core::engine::get_module<demo::terrain_module>();
 
     auto result = place_road_line(terrain_module.grid(), start_x, start_y, end_x, end_y, type);
+
+    if (!result.placed_cells.empty()) {
+      _roads_dirty = true;
+    }
+
+    return result;
+  }
+
+  auto place_road_path(const std::vector<chunk_coord>& cells, road_type type) -> road_placement_result {
+    auto& terrain_module = sbx::core::engine::get_module<demo::terrain_module>();
+
+    auto result = demo::place_road_path(terrain_module.grid(), cells, type);
 
     if (!result.placed_cells.empty()) {
       _roads_dirty = true;

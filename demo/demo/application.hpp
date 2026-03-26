@@ -12,6 +12,8 @@
 #include <libsbx/ui/ui.hpp>
 #include <libsbx/scenes/scenes.hpp>
 
+#include <demo/terrain/sculpt.hpp>
+
 #include <demo/building/building_definition.hpp>
 #include <demo/building/road_types.hpp>
 
@@ -64,13 +66,15 @@ private:
   bool _placement_active{false};
   std::uint32_t _placement_definition_id{0};
   orientation _placement_orientation{orientation::n};
+  sbx::scenes::node _placement_preview_node{};
+  bool _placement_preview_valid{false};
 
   // Sculpt state
-  bool _sculpt_raise{true};
+  sculpt_tool _sculpt_tool{sculpt_tool::raise};
 
   // Road drawing state
-  bool _is_drawing_road{false};
-  chunk_coord _road_draw_previous_cell{};
+  bool _road_draw_has_anchor{false};
+  chunk_coord _road_draw_anchor{};
   road_type _current_road_type{road_type::paved};
 
 }; // class application

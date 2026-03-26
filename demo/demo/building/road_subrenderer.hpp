@@ -2,20 +2,19 @@
 #ifndef DEMO_BUILDING_ROAD_SUBRENDERER_HPP_
 #define DEMO_BUILDING_ROAD_SUBRENDERER_HPP_
 
-#include <unordered_map>
-#include <unordered_set>
 #include <vector>
 #include <cstdint>
 
 #include <libsbx/graphics/graphics.hpp>
 #include <libsbx/scenes/scenes.hpp>
 
-#include <demo/terrain/chunk.hpp>
+#include <libsbx/graphics/images/separate_image2d_array.hpp>
+#include <libsbx/graphics/images/sampler_state.hpp>
+
 #include <demo/terrain/terrain_module.hpp>
 
 #include <demo/building/road_types.hpp>
 #include <demo/building/road_mesh.hpp>
-#include <demo/building/road_placement.hpp>
 
 namespace demo {
 
@@ -29,7 +28,11 @@ class road_subrenderer : public sbx::graphics::subrenderer {
       .rasterization_state = sbx::graphics::rasterization_state{
         .polygon_mode = sbx::graphics::polygon_mode::fill,
         .cull_mode = sbx::graphics::cull_mode::none,
-        .front_face = sbx::graphics::front_face::counter_clockwise
+        .front_face = sbx::graphics::front_face::counter_clockwise,
+        .depth_bias = sbx::graphics::depth_bias{
+          .constant_factor = -2.0f,
+          .slope_factor = -2.0f
+        }
       }
     };
 
@@ -44,13 +47,6 @@ class road_subrenderer : public sbx::graphics::subrenderer {
 
   }; // class pipeline
 
-  struct gpu_road_chunk {
-    sbx::graphics::storage_buffer_handle vertex_buffer;
-    sbx::graphics::storage_buffer_handle index_buffer;
-    std::uint32_t index_count{0};
-    bool is_uploaded{false};
-  }; // struct gpu_road_chunk
-
 public:
 
   road_subrenderer(const std::vector<sbx::graphics::attachment_description>& attachments, const std::filesystem::path& path);
@@ -59,13 +55,9 @@ public:
 
   auto render(sbx::graphics::command_buffer& command_buffer) -> void override;
 
-  auto mark_chunk_dirty(chunk_coord chunk_coordinates) -> void;
-
-  auto mark_chunks_dirty(const std::unordered_set<chunk_coord, chunk_coord_hash>& dirty_chunks) -> void;
+  auto mark_dirty() -> void;
 
 private:
-
-  auto _ensure_gpu_chunk(chunk_coord chunk_coordinates) -> gpu_road_chunk&;
 
   template<typename Type>
   auto _update_buffer(sbx::graphics::storage_buffer& buffer, const std::vector<Type>& data) -> void {
@@ -83,7 +75,17 @@ private:
   sbx::graphics::push_handler _push_handler;
   sbx::graphics::descriptor_handler _descriptor_handler;
 
-  std::unordered_map<chunk_coord, gpu_road_chunk, chunk_coord_hash> _gpu_chunks;
+  sbx::graphics::storage_buffer_handle _vertex_buffer;
+  sbx::graphics::storage_buffer_handle _index_buffer;
+  std::uint32_t _index_count{0};
+  bool _is_dirty{true};
+
+  static constexpr auto road_texture_count = 4u;
+  static constexpr auto road_image_count = road_texture_count * 2u;
+
+  std::array<sbx::graphics::image2d_handle, road_image_count> _road_texture_handles;
+  sbx::graphics::separate_image2d_array _road_images;
+  sbx::graphics::sampler_state_handle _road_sampler;
 
 }; // class road_subrenderer
 

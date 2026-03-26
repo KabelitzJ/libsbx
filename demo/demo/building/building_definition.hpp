@@ -95,6 +95,7 @@ struct building_definition {
   std::uint32_t footprint_width{};
   std::uint32_t footprint_height{};
   std::string mesh_id;
+  std::string material_id;
 
   std::array<footprint, orientation_count> footprints;
 

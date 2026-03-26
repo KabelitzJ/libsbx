@@ -6,7 +6,7 @@ struct vs_in {
 
 struct vs_out {
   [[vk::location(0)]] float3 position : POSITION;
-  [[vk::location(1)]] float edge_factor : EDGE_FACTOR;
+  [[vk::location(1)]] float2 uv : TEXCOORD;
   [[vk::location(2)]] nointerpolation uint road_type : ROAD_TYPE;
   float4 sv_position : SV_Position;
 }; // struct vs_out
@@ -15,7 +15,8 @@ struct road_vertex_data {
   float position_x;
   float position_y;
   float position_z;
-  float edge_factor;
+  float uv_u;
+  float uv_v;
   uint road_type;
 }; // struct road_vertex_data
 
@@ -38,7 +39,7 @@ vs_out main(vs_in input) {
   float3 world_position = float3(vertex.position_x, vertex.position_y, vertex.position_z);
 
   output.position = world_position;
-  output.edge_factor = vertex.edge_factor;
+  output.uv = float2(vertex.uv_u, vertex.uv_v);
   output.road_type = vertex.road_type;
   output.sv_position = mul(scene.projection, mul(scene.view, float4(world_position, 1.0)));
 

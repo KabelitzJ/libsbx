@@ -62,7 +62,7 @@ namespace Demo {
     public override void OnUpdate()
     {
       HandleKeyboardPan();
-      HandleEdgeScroll();
+      // HandleEdgeScroll();
       // HandleMousePan();
       HandleZoom();
       HandleRotation();

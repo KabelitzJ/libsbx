@@ -17,7 +17,7 @@ namespace demo {
 
 class terrain_subrenderer : public sbx::graphics::subrenderer {
 
-  static constexpr auto clipmap_grid_size = 64u;
+  static constexpr auto clipmap_grid_size = 128u;
   static constexpr auto clipmap_grid_verts = clipmap_grid_size + 1u;
   static constexpr auto clipmap_ring_count = 5u;
 
@@ -73,8 +73,10 @@ private:
   sbx::graphics::separate_image2d_array _terrain_images;
   sbx::graphics::sampler_state_handle _terrain_sampler;
 
+  sbx::graphics::image2d_handle _noise_image;
+
   std::uint32_t _index_count{};
-  std::float_t _tiling_scale{0.05f};
+  std::float_t _tiling_scale{0.02f};
 
 }; // class terrain_subrenderer
 

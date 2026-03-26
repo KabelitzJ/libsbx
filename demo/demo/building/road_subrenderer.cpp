@@ -12,39 +12,72 @@ road_subrenderer::road_subrenderer(const std::vector<sbx::graphics::attachment_d
 : sbx::graphics::subrenderer{},
   _pipeline{path, attachments},
   _push_handler{_pipeline},
-  _descriptor_handler{_pipeline, 0u} { }
-
-auto road_subrenderer::mark_chunk_dirty(chunk_coord chunk_coordinates) -> void {
-  auto entry = _gpu_chunks.find(chunk_coordinates);
-
-  if (entry != _gpu_chunks.end()) {
-    entry->second.is_uploaded = false;
-  }
-}
-
-auto road_subrenderer::mark_chunks_dirty(const std::unordered_set<chunk_coord, chunk_coord_hash>& dirty_chunks) -> void {
-  for (const auto& chunk_coordinates : dirty_chunks) {
-    mark_chunk_dirty(chunk_coordinates);
-  }
-}
-
-auto road_subrenderer::_ensure_gpu_chunk(chunk_coord chunk_coordinates) -> gpu_road_chunk& {
-  auto entry = _gpu_chunks.find(chunk_coordinates);
-
-  if (entry != _gpu_chunks.end()) {
-    return entry->second;
-  }
+  _descriptor_handler{_pipeline, 0u} {
 
   auto& graphics_module = sbx::core::engine::get_module<sbx::graphics::graphics_module>();
 
-  auto& data = _gpu_chunks[chunk_coordinates];
+  _vertex_buffer = graphics_module.add_resource<sbx::graphics::storage_buffer>(
+    sbx::graphics::storage_buffer::min_size,
+    VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
+  );
 
-  data.vertex_buffer = graphics_module.add_resource<sbx::graphics::storage_buffer>(sbx::graphics::storage_buffer::min_size, VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
-  data.index_buffer = graphics_module.add_resource<sbx::graphics::storage_buffer>(sbx::graphics::storage_buffer::min_size, VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
-  data.index_count = 0;
-  data.is_uploaded = false;
+  _index_buffer = graphics_module.add_resource<sbx::graphics::storage_buffer>(
+    sbx::graphics::storage_buffer::min_size,
+    VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT
+  );
 
-  return data;
+  auto albedo_paths = std::array<std::filesystem::path, road_texture_count>{
+    "res://textures/road/dirt/albedo.jpg",
+    "res://textures/road/gravel/albedo.jpg",
+    "res://textures/road/paved/albedo.jpg",
+    "res://textures/road/highway/albedo.jpg",
+  };
+
+  auto normal_paths = std::array<std::filesystem::path, road_texture_count>{
+    "res://textures/road/dirt/normal.jpg",
+    "res://textures/road/gravel/normal.jpg",
+    "res://textures/road/paved/normal.jpg",
+    "res://textures/road/highway/normal.jpg",
+  };
+
+  for (auto i = 0u; i < road_texture_count; ++i) {
+    _road_texture_handles[i] = graphics_module.add_resource<sbx::graphics::image2d>(
+      albedo_paths[i],
+      sbx::graphics::format::r8g8b8a8_srgb,
+      VK_FILTER_LINEAR,
+      VK_SAMPLER_ADDRESS_MODE_REPEAT,
+      true,
+      true
+    );
+
+    _road_images.push_back(_road_texture_handles[i]);
+  }
+
+  for (auto i = 0u; i < road_texture_count; ++i) {
+    _road_texture_handles[road_texture_count + i] = graphics_module.add_resource<sbx::graphics::image2d>(
+      normal_paths[i],
+      sbx::graphics::format::r8g8b8a8_unorm,
+      VK_FILTER_LINEAR,
+      VK_SAMPLER_ADDRESS_MODE_REPEAT,
+      true,
+      true
+    );
+
+    _road_images.push_back(_road_texture_handles[road_texture_count + i]);
+  }
+
+  _road_sampler = graphics_module.add_resource<sbx::graphics::sampler_state>(
+    sbx::graphics::filter::linear,
+    sbx::graphics::filter::linear,
+    sbx::graphics::address_mode::repeat,
+    sbx::graphics::address_mode::repeat,
+    8.0f,
+    VK_LOD_CLAMP_NONE
+  );
+}
+
+auto road_subrenderer::mark_dirty() -> void {
+  _is_dirty = true;
 }
 
 auto road_subrenderer::render(sbx::graphics::command_buffer& command_buffer) -> void {
@@ -59,64 +92,34 @@ auto road_subrenderer::render(sbx::graphics::command_buffer& command_buffer) -> 
   auto& scene = scenes_module.scene();
   auto& environment = scene.environment();
 
-  if (building_module.roads_dirty()) {
-    for (auto& [chunk_coordinates, gpu_chunk] : _gpu_chunks) {
-      gpu_chunk.is_uploaded = false;
+  if (building_module.roads_dirty() || _is_dirty) {
+    auto mesh = build_road_mesh(terrain_module.grid(), terrain_module.heightmap());
+
+    if (mesh.is_empty) {
+      _index_count = 0;
+    } else {
+      auto& vb = graphics_module.get_resource<sbx::graphics::storage_buffer>(_vertex_buffer);
+      _update_buffer(vb, mesh.vertices);
+
+      auto& ib = graphics_module.get_resource<sbx::graphics::storage_buffer>(_index_buffer);
+      _update_buffer(ib, mesh.indices);
+
+      _index_count = static_cast<std::uint32_t>(mesh.indices.size());
     }
 
-    terrain_module.grid().for_each_chunk([&](const chunk_coord& chunk_coordinates, const grid_chunk& chunk) {
-      auto has_roads_in_chunk = false;
-
-      for (auto local_y = 0u; local_y < chunk_size && !has_roads_in_chunk; ++local_y) {
-        for (auto local_x = 0u; local_x < chunk_size && !has_roads_in_chunk; ++local_x) {
-          if (chunk.at(local_x, local_y).road_type != 0) {
-            has_roads_in_chunk = true;
-          }
-        }
-      }
-
-      if (has_roads_in_chunk) {
-        _ensure_gpu_chunk(chunk_coordinates);
-      }
-    });
-
+    _is_dirty = false;
     building_module.clear_roads_dirty();
   }
 
-  auto has_any_roads = false;
-
-  for (auto& [chunk_coordinates, gpu_chunk] : _gpu_chunks) {
-    if (!gpu_chunk.is_uploaded) {
-      auto mesh = build_road_chunk_mesh(terrain_module.grid(), terrain_module.heightmap(), chunk_coordinates);
-
-      if (mesh.is_empty) {
-        gpu_chunk.index_count = 0;
-        gpu_chunk.is_uploaded = true;
-        continue;
-      }
-
-      auto& vertex_buffer = graphics_module.get_resource<sbx::graphics::storage_buffer>(gpu_chunk.vertex_buffer);
-      _update_buffer(vertex_buffer, mesh.vertices);
-
-      auto& index_buffer = graphics_module.get_resource<sbx::graphics::storage_buffer>(gpu_chunk.index_buffer);
-      _update_buffer(index_buffer, mesh.indices);
-
-      gpu_chunk.index_count = static_cast<std::uint32_t>(mesh.indices.size());
-      gpu_chunk.is_uploaded = true;
-    }
-
-    if (gpu_chunk.index_count > 0) {
-      has_any_roads = true;
-    }
-  }
-
-  if (!has_any_roads) {
+  if (_index_count == 0) {
     return;
   }
 
   _pipeline.bind(command_buffer);
 
   _descriptor_handler.push("scene", environment.uniform_handler());
+  _descriptor_handler.push("road_textures", _road_images);
+  _descriptor_handler.push("road_sampler", graphics_module.get_resource<sbx::graphics::sampler_state>(_road_sampler));
 
   if (!_descriptor_handler.update(_pipeline)) {
     return;
@@ -124,20 +127,14 @@ auto road_subrenderer::render(sbx::graphics::command_buffer& command_buffer) -> 
 
   _descriptor_handler.bind_descriptors(command_buffer);
 
-  for (auto& [chunk_coordinates, gpu_chunk] : _gpu_chunks) {
-    if (gpu_chunk.index_count == 0) {
-      continue;
-    }
+  auto& vb = graphics_module.get_resource<sbx::graphics::storage_buffer>(_vertex_buffer);
+  auto& ib = graphics_module.get_resource<sbx::graphics::storage_buffer>(_index_buffer);
 
-    auto& vertex_buffer = graphics_module.get_resource<sbx::graphics::storage_buffer>(gpu_chunk.vertex_buffer);
-    auto& index_buffer = graphics_module.get_resource<sbx::graphics::storage_buffer>(gpu_chunk.index_buffer);
+  _push_handler.push("vertex_data_buffer", vb.address());
+  _push_handler.bind(command_buffer);
 
-    _push_handler.push("vertex_data_buffer", vertex_buffer.address());
-    _push_handler.bind(command_buffer);
-
-    command_buffer.bind_index_buffer(index_buffer.handle(), 0, VK_INDEX_TYPE_UINT32);
-    command_buffer.draw_indexed(gpu_chunk.index_count, 1, 0, 0, 0);
-  }
+  command_buffer.bind_index_buffer(ib.handle(), 0, VK_INDEX_TYPE_UINT32);
+  command_buffer.draw_indexed(_index_count, 1, 0, 0, 0);
 }
 
 } // namespace demo

@@ -34,9 +34,12 @@ ConstantBuffer<push_data> push;
 ConstantBuffer<sbx::common::scene_data> scene;
 
 [[vk::binding(1, 0)]]
-SamplerState terrain_sampler;
+Sampler2D<float4> noise_image;
 
 [[vk::binding(2, 0)]]
+SamplerState terrain_sampler;
+
+[[vk::binding(3, 0)]]
 Texture2D<float4> terrain_textures[sbx::common::max_image_array_size];
 
 struct unpacked_weights {
@@ -99,6 +102,13 @@ unpacked_weights sample_splat_bilinear(float3 world_position) {
   return result;
 }
 
+float3 sample_layer_blended(uint layer, float2 uv, float distance_factor) {
+  float3 detail = terrain_textures[layer].Sample(terrain_sampler, uv).rgb;
+  float3 far_sample = terrain_textures[layer].Sample(terrain_sampler, uv * 0.1).rgb;
+
+  return lerp(detail, far_sample, distance_factor);
+}
+
 float3 sample_layer(uint layer, float2 uv) {
   return terrain_textures[layer].Sample(terrain_sampler, uv).rgb;
 }
@@ -122,13 +132,16 @@ fs_out main(fs_in input) {
   float3 normal = normalize(input.normal);
   unpacked_weights splat = sample_splat_bilinear(input.position);
 
+  float camera_distance = length(input.position - scene.camera_position.xyz);
+  float distance_factor = saturate(camera_distance / 200.0);
+
   float2 uv = input.position.xz * push.tiling_scale;
 
-  float3 tex_grass = sample_layer(LAYER_GRASS, uv);
-  float3 tex_dirt  = sample_layer(LAYER_DIRT, uv);
-  float3 tex_sand  = sample_layer(LAYER_SAND, uv);
-  float3 tex_snow  = sample_layer(LAYER_SNOW, uv);
-  float3 tex_mud   = sample_layer(LAYER_MUD, uv);
+  float3 tex_grass = sample_layer_blended(LAYER_GRASS, uv, distance_factor);
+  float3 tex_dirt  = sample_layer_blended(LAYER_DIRT, uv, distance_factor);
+  float3 tex_sand  = sample_layer_blended(LAYER_SAND, uv, distance_factor);
+  float3 tex_snow  = sample_layer_blended(LAYER_SNOW, uv, distance_factor);
+  float3 tex_mud   = sample_layer_blended(LAYER_MUD, uv, distance_factor);
 
   // Tri-planar rock only on close rings to save 2 extra samples at distance
   float3 tex_rock;
@@ -137,17 +150,23 @@ fs_out main(fs_in input) {
     float3 blend = abs(normal);
     blend = pow(blend, 4.0);
     blend /= (blend.x + blend.y + blend.z);
-    tex_rock = sample_layer_triplanar(LAYER_ROCK, input.position, blend);
+    float3 detail = sample_layer_triplanar(LAYER_ROCK, input.position, blend);
+    float3 far_sample = sample_layer_triplanar(LAYER_ROCK, input.position * 0.1, blend);
+    tex_rock = lerp(detail, far_sample, distance_factor);
   } else {
-    tex_rock = sample_layer(LAYER_ROCK, uv);
+    tex_rock = sample_layer_blended(LAYER_ROCK, uv, distance_factor);
   }
 
   float3 albedo = tex_grass * splat.grass
-                + tex_dirt  * splat.dirt
-                + tex_rock  * splat.rock
-                + tex_sand  * splat.sand
-                + tex_snow  * splat.snow
-                + tex_mud   * splat.mud;
+              + tex_dirt  * splat.dirt
+              + tex_rock  * splat.rock
+              + tex_sand  * splat.sand
+              + tex_snow  * splat.snow
+              + tex_mud   * splat.mud;
+
+  // Macro variation — large-scale color breakup
+  float macro = noise_image.Sample(input.position.xz * 0.002).r;
+  albedo *= lerp(0.8, 1.0, macro);
 
   float roughness = 0.85 * splat.grass
                   + 0.95 * splat.dirt

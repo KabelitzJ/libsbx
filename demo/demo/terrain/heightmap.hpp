@@ -183,8 +183,8 @@ private:
 
     auto base_height = continental * 12.0f;
 
-    // Mountain mask — separate low-freq warped noise
-    auto mountain_noise = sbx::math::noise::fractal(warped_x * _params.base_scale * 0.8f + 300.0f, warped_z * _params.base_scale * 0.8f + 300.0f, 2u);
+    // Mountain mask — broad regions where mountains can exist
+    auto mountain_noise = sbx::math::noise::fractal(warped_x * _params.base_scale * 0.4f + 300.0f, warped_z * _params.base_scale * 0.4f + 300.0f, 2u);
     auto mountain_mask = std::clamp((mountain_noise - 0.15f) / 0.55f, 0.0f, 1.0f);
     mountain_mask *= mountain_mask;
 
@@ -192,9 +192,21 @@ private:
     auto land_factor = std::clamp((continental - 0.45f) / 0.25f, 0.0f, 1.0f);
     mountain_mask *= land_factor;
 
-    // Ridged multifractal for mountain shape
-    auto ridge = _ridged_multifractal(warped_x * _params.base_scale * 3.0f + 200.0f, warped_z * _params.base_scale * 3.0f + 200.0f, _params.octaves);
-    auto mountain_height = mountain_mask * ridge * _params.height_scale;
+    // Ridged component — sharp crests and valleys
+    auto ridge = _ridged_multifractal(warped_x * _params.base_scale * 1.5f + 200.0f, warped_z * _params.base_scale * 1.5f + 200.0f, _params.octaves);
+
+    // Massif component — broad rounded domes
+    auto massif_raw = sbx::math::noise::fractal(warped_x * _params.base_scale * 0.6f + 800.0f, warped_z * _params.base_scale * 0.6f + 800.0f, 3u);
+    auto massif = std::clamp(massif_raw * 0.5f + 0.5f, 0.0f, 1.0f);
+    massif = massif * massif; // squaring rounds off the shape further
+
+    // Blend: where massif noise is strong, use the dome shape;
+    // where it's weak, the ridges show through.
+    auto blend_noise = sbx::math::noise::simplex(warped_x * _params.base_scale * 1.2f + 400.0f, warped_z * _params.base_scale * 1.2f + 400.0f);
+    auto ridge_weight = std::clamp(blend_noise * 0.5f + 0.5f, 0.25f, 0.75f);
+
+    auto mountain_shape = std::lerp(massif * 1.3f, ridge, ridge_weight);
+    auto mountain_height = mountain_mask * mountain_shape * _params.height_scale;
 
     // Rolling hills — medium freq, gentle
     auto hills = sbx::math::noise::fractal(warped_x * _params.base_scale * 5.0f + 500.0f, warped_z * _params.base_scale * 5.0f + 500.0f, 3u);

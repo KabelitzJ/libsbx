@@ -87,15 +87,38 @@ auto terrain_module::get_slope_at(std::int32_t cell_x, std::int32_t cell_z) cons
 }
 
 auto terrain_module::sculpt(std::float_t world_x, std::float_t world_z, std::float_t radius, std::float_t strength) -> sculpt_result {
-  auto result = sculpt_terrain(_heightmap, world_x, world_z, radius, strength);
+  auto result = sculpt_terrain(_heightmap, _grid, world_x, world_z, radius, strength);
 
-  regenerate_splat_region(_splat_weights, _heightmap, result.min_vertex_x, result.min_vertex_z, result.max_vertex_x, result.max_vertex_z, config.splat);
-  _splat_dirty = true;
+  _update_splat_from_result(result);
 
   return result;
 }
 
-auto terrain_module::flatten(std::int32_t cell_x, std::int32_t cell_z, std::uint32_t size_width, std::uint32_t size_height) -> void {
+auto terrain_module::flatten(std::float_t world_x, std::float_t world_z, std::float_t radius, std::float_t blend_strength) -> sculpt_result {
+  auto result = flatten_terrain(_heightmap, _grid, world_x, world_z, radius, blend_strength);
+
+  _update_splat_from_result(result);
+
+  return result;
+}
+
+auto terrain_module::smooth(std::float_t world_x, std::float_t world_z, std::float_t radius, std::float_t blend_strength) -> sculpt_result {
+  auto result = smooth_terrain(_heightmap, _grid, world_x, world_z, radius, blend_strength);
+
+  _update_splat_from_result(result);
+
+  return result;
+}
+
+auto terrain_module::level(std::float_t world_x, std::float_t world_z, std::float_t radius, std::float_t blend_strength) -> sculpt_result {
+  auto result = level_terrain(_heightmap, _grid, world_x, world_z, radius, blend_strength);
+
+  _update_splat_from_result(result);
+
+  return result;
+}
+
+auto terrain_module::flatten_footprint(std::int32_t cell_x, std::int32_t cell_z, std::uint32_t size_width, std::uint32_t size_height) -> void {
   flatten_for_building(_heightmap, cell_x, cell_z, size_width, size_height);
 }
 
@@ -137,6 +160,11 @@ auto terrain_module::world_width() const -> std::uint32_t {
 
 auto terrain_module::world_height() const -> std::uint32_t {
   return config.world_height;
+}
+
+auto terrain_module::_update_splat_from_result(const sculpt_result& result) -> void {
+  regenerate_splat_region(_splat_weights, _heightmap, result.min_vertex_x, result.min_vertex_z, result.max_vertex_x, result.max_vertex_z, config.splat);
+  _splat_dirty = true;
 }
 
 auto terrain_module::_upload_gpu_data() -> void {

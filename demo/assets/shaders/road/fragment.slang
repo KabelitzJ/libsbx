@@ -1,9 +1,10 @@
 #include <libsbx/common/depth.slang>
 #include <libsbx/common/scene_data.slang>
+#include <libsbx/common/image.slang>
 
 struct fs_in {
   [[vk::location(0)]] float3 position : POSITION;
-  [[vk::location(1)]] float edge_factor : EDGE_FACTOR;
+  [[vk::location(1)]] float2 uv : TEXCOORD;
   [[vk::location(2)]] nointerpolation uint road_type : ROAD_TYPE;
   float4 sv_position : SV_Position;
 }; // struct fs_in
@@ -22,7 +23,8 @@ struct road_vertex_data {
   float position_x;
   float position_y;
   float position_z;
-  float edge_factor;
+  float uv_u;
+  float uv_v;
   uint road_type;
 }; // struct road_vertex_data
 
@@ -36,18 +38,11 @@ ConstantBuffer<push_data> push;
 [[vk::binding(0, 0)]]
 ConstantBuffer<sbx::common::scene_data> scene;
 
-static const float3 COLOR_DIRT    = float3(0.45, 0.38, 0.28);
-static const float3 COLOR_GRAVEL  = float3(0.55, 0.52, 0.48);
-static const float3 COLOR_PAVED   = float3(0.25, 0.25, 0.27);
-static const float3 COLOR_HIGHWAY = float3(0.20, 0.20, 0.22);
+[[vk::binding(1, 0)]]
+SamplerState road_sampler;
 
-float3 get_road_color(uint type) {
-  if (type == 1) return COLOR_DIRT;
-  if (type == 2) return COLOR_GRAVEL;
-  if (type == 3) return COLOR_PAVED;
-  if (type == 4) return COLOR_HIGHWAY;
-  return float3(1.0, 0.0, 1.0);
-}
+[[vk::binding(2, 0)]]
+Texture2D<float4> road_textures[sbx::common::max_image_array_size];
 
 float get_road_roughness(uint type) {
   if (type == 1) return 0.95;
@@ -61,29 +56,47 @@ float get_road_roughness(uint type) {
 fs_out main(fs_in input) {
   fs_out output;
 
-  // Fade edges to transparent — discard fully faded pixels
-  float edge_blend = smoothstep(0.6, 1.0, input.edge_factor);
+  uint road_type = input.road_type;
 
-  if (edge_blend > 0.99) {
-    discard;
+  float tile_scale = 0.5;
+  float2 tex_uv = float2(input.uv.x, input.uv.y * tile_scale);
+
+  // Indices 0..3 = albedo, 4..7 = normal
+  uint layer = min(road_type, 4u) - 1u;
+  float3 tex_color = road_textures[layer].Sample(road_sampler, tex_uv).rgb;
+
+  // Normal map (tangent space)
+  float3 normal_sample = road_textures[layer + 4u].Sample(road_sampler, tex_uv).rgb;
+  normal_sample = normal_sample * 2.0 - 1.0;
+
+  // TBN from screen-space derivatives of position and UV
+  float3 dp_dx = ddx(input.position);
+  float3 dp_dy = ddy(input.position);
+  float2 duv_dx = ddx(input.uv);
+  float2 duv_dy = ddy(input.uv);
+
+  float inv_det = 1.0 / (duv_dx.x * duv_dy.y - duv_dx.y * duv_dy.x);
+
+  float3 tangent = normalize((dp_dx * duv_dy.y - dp_dy * duv_dx.y) * inv_det);
+  float3 bitangent = normalize((dp_dy * duv_dx.x - dp_dx * duv_dy.x) * inv_det);
+
+  float3 geom_normal = normalize(cross(dp_dx, dp_dy));
+
+  if (geom_normal.y < 0.0) {
+    geom_normal = -geom_normal;
   }
 
-  float3 road_color = get_road_color(input.road_type);
-  float road_roughness = get_road_roughness(input.road_type);
+  // Re-orthogonalize
+  tangent = normalize(tangent - geom_normal * dot(geom_normal, tangent));
+  bitangent = normalize(cross(geom_normal, tangent));
 
-  // Darken edges for a worn-in look
-  float3 edge_tint = road_color * 0.7;
-  float3 albedo = lerp(road_color, edge_tint, input.edge_factor * 0.4);
+  float3 normal = normalize(tangent * normal_sample.x + bitangent * normal_sample.y + geom_normal * normal_sample.z);
 
-  // Compute face normal from screen-space derivatives
-  float3 dx = ddx(input.position);
-  float3 dy = ddy(input.position);
-  float3 normal = normalize(cross(dx, dy));
-
-  // Ensure normal points upward
-  if (normal.y < 0.0) {
-    normal = -normal;
-  }
+  // Edge darkening
+  float road_roughness = get_road_roughness(road_type);
+  float edge_distance = abs(input.uv.x - 0.5) * 2.0;
+  float edge_darken = smoothstep(0.7, 1.0, edge_distance);
+  float3 albedo = tex_color * lerp(1.0, 0.7, edge_darken);
 
   output.albedo = float4(albedo, 1.0);
   output.position = float4(input.position, 1.0);

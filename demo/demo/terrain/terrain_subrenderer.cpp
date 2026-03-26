@@ -11,7 +11,6 @@ terrain_subrenderer::terrain_subrenderer(const std::vector<sbx::graphics::attach
   _pipeline{path, attachments},
   _push_handler{_pipeline},
   _descriptor_handler{_pipeline, 0u} {
-
   auto& graphics_module = sbx::core::engine::get_module<sbx::graphics::graphics_module>();
 
   auto indices = _generate_grid_indices();
@@ -43,6 +42,21 @@ terrain_subrenderer::terrain_subrenderer(const std::vector<sbx::graphics::attach
   }
 
   _terrain_sampler = graphics_module.add_resource<sbx::graphics::sampler_state>(sbx::graphics::filter::linear, sbx::graphics::filter::linear, sbx::graphics::address_mode::repeat, sbx::graphics::address_mode::repeat, 8.0f, VK_LOD_CLAMP_NONE);
+
+  auto macro_noise = std::vector<std::uint8_t>{};
+  auto macro_dimension = 64u;
+  macro_noise.resize(macro_dimension * macro_dimension);
+
+  for (auto i = 0u; i < macro_noise.size(); ++i) {
+    macro_noise[i] = static_cast<std::uint8_t>(sbx::math::random::next<std::float_t>(0.0f, 1.0f) * 255.0f);
+  }
+
+  _noise_image = graphics_module.add_resource<sbx::graphics::image2d>(
+    sbx::math::vector2u{macro_dimension, macro_dimension},
+    sbx::graphics::format::r8_unorm,
+    sbx::graphics::filter::linear,
+    macro_noise.data()
+  );
 }
 
 auto terrain_subrenderer::_generate_grid_indices() -> std::vector<std::uint32_t> {
@@ -84,11 +98,14 @@ auto terrain_subrenderer::render(sbx::graphics::command_buffer& command_buffer) 
   auto camera_node = environment.camera();
   auto camera_position = graph.world_position(camera_node);
 
+  auto& noise_image = graphics_module.get_resource<sbx::graphics::image2d>(_noise_image);
+
   _pipeline.bind(command_buffer);
 
   _descriptor_handler.push("scene", environment.uniform_handler());
   _descriptor_handler.push("terrain_textures", _terrain_images);
   _descriptor_handler.push("terrain_sampler", graphics_module.get_resource<sbx::graphics::sampler_state>(_terrain_sampler));
+  _descriptor_handler.push("noise_image", noise_image);
 
   if (!_descriptor_handler.update(_pipeline)) {
     return;

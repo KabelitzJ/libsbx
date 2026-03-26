@@ -198,8 +198,6 @@ auto graphics_module::update() -> void {
     EASY_BLOCK("wait for image");
 
     const auto result = _swapchain->acquire_next_image(frame_data.image_available_semaphore, frame_data.graphics_in_flight_fence);
-
-    EASY_END_BLOCK;
     
     if (result == VK_ERROR_OUT_OF_DATE_KHR) {
       _recreate_swapchain();
@@ -207,6 +205,8 @@ auto graphics_module::update() -> void {
     } else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
       throw std::runtime_error{"Failed to acquire swapchain image"};
     }
+
+    EASY_END_BLOCK;
   }
 
   EASY_BLOCK("draw");

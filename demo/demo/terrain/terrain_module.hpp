@@ -34,19 +34,19 @@ class terrain_module final : public sbx::core::module<terrain_module> {
     .world_height = 1024,
     .generation = {
       .base_scale = 0.0025f,
-      .height_scale = 40.0f,
+      .height_scale = 35.0f,
       .warp_scale = 0.002f,
       .warp_strength = 80.0f,
       .continental_bias = 0.75f,
       .octaves = 4u,
-      .seed_x = 51345.134513,
-      .seed_z = 6546264.61346,
+      .seed_x = 45.98123,
+      .seed_z = -0.00067291,
     },
     .splat = {
       .variety_scale = 0.05f,
       .variety_strength = 0.15f,
       .moisture_scale = 0.02f,
-      .seed = 134613.3146136,
+      .seed = 309.4478,
     },
   };
 
@@ -90,7 +90,14 @@ public:
 
   auto sculpt(std::float_t world_x, std::float_t world_z, std::float_t radius, std::float_t strength) -> sculpt_result;
 
-  auto flatten(std::int32_t cell_x, std::int32_t cell_z, std::uint32_t size_width, std::uint32_t size_height) -> void;
+  auto flatten(std::float_t world_x, std::float_t world_z, std::float_t radius, std::float_t blend_strength = 1.0f) -> sculpt_result;
+
+  auto smooth(std::float_t world_x, std::float_t world_z, std::float_t radius, std::float_t blend_strength = 0.5f) -> sculpt_result;
+
+  auto level(std::float_t world_x, std::float_t world_z, std::float_t radius, std::float_t blend_strength = 1.0f) -> sculpt_result;
+
+  // Legacy: flatten for building footprint (no protection, no falloff).
+  auto flatten_footprint(std::int32_t cell_x, std::int32_t cell_z, std::uint32_t size_width, std::uint32_t size_height) -> void;
 
   auto get_height_at_cell(std::int32_t cell_x, std::int32_t cell_z) const -> std::float_t;
 
@@ -103,6 +110,8 @@ public:
 private:
 
   auto _upload_gpu_data() -> void;
+
+  auto _update_splat_from_result(const sculpt_result& result) -> void;
 
   demo::grid _grid;
   demo::heightmap _heightmap;

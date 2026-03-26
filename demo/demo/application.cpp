@@ -45,6 +45,7 @@
 #include <demo/terrain/terrain_interop.hpp>
 
 #include <demo/building/building_module.hpp>
+#include <demo/building/road_drawing.hpp>
 #include <demo/building/road_types.hpp>
 #include <demo/building/road_placement.hpp>
 #include <demo/building/road_subrenderer.hpp>
@@ -197,17 +198,45 @@ auto application::update() -> void {
   _update_placement();
   _update_road_drawing();
 
-  if (!_placement_active) {
+    if (!_placement_active && !_road_draw_has_anchor) {
+    // Cycle sculpt tool with T
     if (sbx::devices::input::is_key_pressed(sbx::devices::key::t)) {
-      _sculpt_raise = !_sculpt_raise;
+      auto current = static_cast<std::uint8_t>(_sculpt_tool);
+      _sculpt_tool = static_cast<sculpt_tool>((current + 1) % 5);
+ 
+      static constexpr auto tool_names = std::array<const char*, 5>{
+        "raise", "lower", "flatten", "smooth", "level"
+      };
+ 
+      sbx::utility::logger<"demo">::info("Sculpt tool: {}", tool_names[static_cast<std::uint8_t>(_sculpt_tool)]);
     }
-
+ 
     if (sbx::devices::input::is_mouse_button_down(sbx::devices::mouse_button::left)) {
       auto hit = _raycast_terrain();
-
+ 
       if (hit) {
-        auto strength = (_sculpt_raise ? 10.0f : -10.0f) * delta_time;
-        terrain_module.sculpt(hit->x(), hit->z(), 30.0f, strength);
+        switch (_sculpt_tool) {
+          case sculpt_tool::raise: {
+            terrain_module.sculpt(hit->x(), hit->z(), 30.0f, 10.0f * delta_time);
+            break;
+          }
+          case sculpt_tool::lower: {
+            terrain_module.sculpt(hit->x(), hit->z(), 30.0f, -10.0f * delta_time);
+            break;
+          }
+          case sculpt_tool::flatten: {
+            terrain_module.flatten(hit->x(), hit->z(), 30.0f, 3.0f * delta_time);
+            break;
+          }
+          case sculpt_tool::smooth: {
+            terrain_module.smooth(hit->x(), hit->z(), 30.0f, 2.0f * delta_time);
+            break;
+          }
+          case sculpt_tool::level: {
+            terrain_module.level(hit->x(), hit->z(), 30.0f, 3.0f * delta_time);
+            break;
+          }
+        }
       }
     }
   }
@@ -416,16 +445,27 @@ auto application::_build_ui() -> void {
 
 auto application::_register_buildings() -> void {
   auto& building_module = sbx::core::engine::get_module<demo::building_module>();
+  auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
 
-  auto test_building = building_definition{};
-  test_building.id = 1;
-  test_building.name = "Khrushchyovka";
-  test_building.category = building_category::housing;
-  test_building.footprint_width = 6;
-  test_building.footprint_height = 3;
-  test_building.mesh_id = "khrushchyovka";
+  auto& asset_registry = scenes_module.asset_registry();
 
-  building_module.register_definition(std::move(test_building));
+  asset_registry.request_material<sbx::models::material>("house", sbx::models::material{
+    .base_color = sbx::math::color{1.0f, 0.0f, 0.0f, 1.0f}
+  });
+
+  // Load house mesh
+  asset_registry.request_mesh<sbx::models::mesh>("house_1", "res://meshes/houses/house_1/house_1.gltf");
+
+  auto house = building_definition{};
+  house.id = 1;
+  house.name = "House";
+  house.category = building_category::housing;
+  house.footprint_width = 3;
+  house.footprint_height = 3;
+  house.mesh_id = "house_1";
+  house.material_id = "house";
+
+  building_module.register_definition(std::move(house));
 
   _placement_definition_id = 1;
 }
@@ -475,8 +515,31 @@ auto application::_update_placement() -> void {
   auto& terrain_mod = sbx::core::engine::get_module<demo::terrain_module>();
   auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
 
+  auto& graph = scenes_module.scene().graph();
+  auto& asset_registry = scenes_module.asset_registry();
+
   if (sbx::devices::input::is_key_pressed(sbx::devices::key::b)) {
     _placement_active = !_placement_active;
+
+    if (_placement_active) {
+      // Create preview node with mesh
+      auto* definition = building_mod.get_definition(_placement_definition_id);
+
+      if (definition) {
+        _placement_preview_node = graph.create_node("placement_preview");
+
+        auto mesh_handle = asset_registry.get_mesh(sbx::utility::hashed_string{definition->mesh_id});
+        auto material_handle = asset_registry.get_material(sbx::utility::hashed_string{definition->material_id});
+        graph.add_component<sbx::scenes::static_mesh>(_placement_preview_node, mesh_handle, material_handle);
+      }
+    } else {
+      // Destroy preview node
+      if (_placement_preview_node != sbx::scenes::node{}) {
+        graph.destroy_node(_placement_preview_node);
+        _placement_preview_node = {};
+      }
+    }
+
     sbx::utility::logger<"buildings">::info("Placement mode {}", _placement_active ? "enabled" : "disabled");
   }
 
@@ -492,8 +555,6 @@ auto application::_update_placement() -> void {
     } else {
       _placement_orientation = static_cast<orientation>((current + 1) % orientation_count);
     }
-
-    sbx::utility::logger<"buildings">::info("Orientation: {}", static_cast<std::uint8_t>(_placement_orientation));
   }
 
   auto hit = _raycast_terrain();
@@ -531,6 +592,32 @@ auto application::_update_placement() -> void {
   auto origin_z = cursor_cell.y - center_offset_z;
 
   auto preview = building_mod.update_preview(_placement_definition_id, origin_x, origin_z, _placement_orientation);
+  _placement_preview_valid = preview.valid;
+
+  // Update preview node transform
+  if (_placement_preview_node != sbx::scenes::node{}) {
+    auto cell_sz = grid::cell_size;
+
+    auto fp_min_x = origin_x + min_x;
+    auto fp_min_z = origin_z + min_z;
+    auto fp_width = max_x - min_x + 1;
+    auto fp_height = max_z - min_z + 1;
+
+    auto [corner_wx, corner_wz] = terrain_mod.cell_to_world(fp_min_x, fp_min_z);
+    auto center_wx = corner_wx + static_cast<std::float_t>(fp_width) * cell_sz * 0.5f;
+    auto center_wz = corner_wz + static_cast<std::float_t>(fp_height) * cell_sz * 0.5f;
+    auto center_wy = terrain_mod.get_height_at(center_wx, center_wz);
+
+    auto angle_degrees = static_cast<std::float_t>(static_cast<std::uint8_t>(_placement_orientation)) * 45.0f;
+    auto rotation = sbx::math::quaternion{
+      sbx::math::vector3::up,
+      sbx::math::angle{sbx::math::degree{angle_degrees}}
+    };
+
+    auto& transform = graph.get_component<sbx::scenes::transform>(_placement_preview_node);
+    transform.set_position(sbx::math::vector3{center_wx, center_wy, center_wz});
+    transform.set_rotation(rotation);
+  }
 
   // Draw footprint cells
   auto color = preview.valid ? sbx::math::color::green() : sbx::math::color::red();
@@ -555,19 +642,20 @@ auto application::_update_placement() -> void {
     scenes_module.add_debug_line(d, a, color);
   }
 
+  // Place on click
   if (preview.valid && sbx::devices::input::is_mouse_button_pressed(sbx::devices::mouse_button::left)) {
     building_mod.place(_placement_definition_id, origin_x, origin_z, _placement_orientation);
   }
 
   // Draw placed building outlines
   building_mod.for_each_instance([&](const building_instance& instance) {
-    auto* definition = building_mod.get_definition(instance.definition_id);
+    auto* def = building_mod.get_definition(instance.definition_id);
 
-    if (!definition) {
+    if (!def) {
       return;
     }
 
-    const auto& placed_cells = definition->get_footprint(instance.orient);
+    const auto& placed_cells = def->get_footprint(instance.orient);
     auto placed_color = sbx::math::color{0.2f, 0.6f, 1.0f, 1.0f};
 
     for (const auto& offset : placed_cells) {
@@ -592,51 +680,132 @@ auto application::_update_placement() -> void {
 
 auto application::_update_road_drawing() -> void {
   if (_placement_active) {
+    _road_draw_has_anchor = false;
     return;
   }
-
+ 
   auto& building_module = sbx::core::engine::get_module<demo::building_module>();
   auto& terrain_module = sbx::core::engine::get_module<demo::terrain_module>();
-
+  auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
+ 
   // Cycle road type with number keys
   if (sbx::devices::input::is_key_pressed(sbx::devices::key::one)) {
     _current_road_type = road_type::dirt;
   }
-
+ 
   if (sbx::devices::input::is_key_pressed(sbx::devices::key::two)) {
     _current_road_type = road_type::gravel;
   }
-
+ 
   if (sbx::devices::input::is_key_pressed(sbx::devices::key::three)) {
     _current_road_type = road_type::paved;
   }
-
+ 
   if (sbx::devices::input::is_key_pressed(sbx::devices::key::four)) {
     _current_road_type = road_type::highway;
   }
-
-  // Draw roads with right mouse button
-  if (sbx::devices::input::is_mouse_button_down(sbx::devices::mouse_button::right)) {
-    auto hit = _raycast_terrain();
-
-    if (hit) {
-      auto hit_cell = terrain_module.world_to_cell(hit->x(), hit->z());
-
-      if (!_is_drawing_road) {
-        _is_drawing_road = true;
-        _road_draw_previous_cell = hit_cell;
-
-        building_module.place_road(hit_cell.x, hit_cell.y, hit_cell.x, hit_cell.y, _current_road_type);
-      } else if (hit_cell.x != _road_draw_previous_cell.x || hit_cell.y != _road_draw_previous_cell.y) {
-        building_module.place_road(_road_draw_previous_cell.x, _road_draw_previous_cell.y, hit_cell.x, hit_cell.y, _current_road_type);
-
-        _road_draw_previous_cell = hit_cell;
+ 
+  // Cancel with escape
+  if (_road_draw_has_anchor && sbx::devices::input::is_key_pressed(sbx::devices::key::escape)) {
+    _road_draw_has_anchor = false;
+    return;
+  }
+ 
+  auto hit = _raycast_terrain();
+ 
+  if (!hit) {
+    return;
+  }
+ 
+  auto hit_cell = terrain_module.world_to_cell(hit->x(), hit->z());
+  auto shift_held = sbx::devices::input::is_key_down(sbx::devices::key::left_shift);
+ 
+  // Snap to nearest existing road within a small radius.
+  auto snap_to_road = [&](chunk_coord cell) -> chunk_coord {
+    constexpr auto snap_radius = 2;
+ 
+    auto& grid = terrain_module.grid();
+    auto best = cell;
+    auto best_distance_squared = std::numeric_limits<std::int32_t>::max();
+ 
+    for (auto dy = -snap_radius; dy <= snap_radius; ++dy) {
+      for (auto dx = -snap_radius; dx <= snap_radius; ++dx) {
+        auto cx = cell.x + dx;
+        auto cy = cell.y + dy;
+ 
+        if (!grid.in_bounds(cx, cy)) {
+          continue;
+        }
+ 
+        if (grid.at(cx, cy).road_type == 0) {
+          continue;
+        }
+ 
+        auto dist = dx * dx + dy * dy;
+ 
+        if (dist < best_distance_squared) {
+          best_distance_squared = dist;
+          best = {cx, cy};
+        }
       }
     }
+ 
+    return best;
+  };
+ 
+  if (sbx::devices::input::is_mouse_button_pressed(sbx::devices::mouse_button::right)) {
+    if (!_road_draw_has_anchor) {
+      _road_draw_has_anchor = true;
+      _road_draw_anchor = snap_to_road(hit_cell);
+    } else {
+      auto snapped_end = snap_to_road(hit_cell);
+      auto path = build_snapped_road_path(_road_draw_anchor, snapped_end, shift_held);
+ 
+      building_module.place_road_path(path.cells, _current_road_type);
+ 
+      _road_draw_has_anchor = false;
+    }
   }
-
-  if (sbx::devices::input::is_mouse_button_released(sbx::devices::mouse_button::right)) {
-    _is_drawing_road = false;
+ 
+  // Draw preview while anchor is set
+  if (_road_draw_has_anchor) {
+    auto preview_path = build_snapped_road_path(_road_draw_anchor, hit_cell, shift_held);
+ 
+    auto properties = get_road_properties(_current_road_type);
+    auto preview_color = sbx::math::color{0.2f, 0.9f, 0.3f, 1.0f};
+    auto half = grid::cell_size * 0.4f;
+ 
+    for (const auto& cell : preview_path.cells) {
+      auto [world_x, world_z] = terrain_module.cell_to_world(cell.x, cell.y);
+      auto world_y = terrain_module.get_height_at(world_x, world_z) + properties.height_offset + 0.05f;
+ 
+      auto p0 = sbx::math::vector3{world_x - half, world_y, world_z - half};
+      auto p1 = sbx::math::vector3{world_x + half, world_y, world_z - half};
+      auto p2 = sbx::math::vector3{world_x + half, world_y, world_z + half};
+      auto p3 = sbx::math::vector3{world_x - half, world_y, world_z + half};
+ 
+      scenes_module.add_debug_line(p0, p1, preview_color);
+      scenes_module.add_debug_line(p1, p2, preview_color);
+      scenes_module.add_debug_line(p2, p3, preview_color);
+      scenes_module.add_debug_line(p3, p0, preview_color);
+    }
+ 
+    // Highlight anchor
+    auto anchor_color = sbx::math::color{0.9f, 0.9f, 0.2f, 1.0f};
+    auto [ax, az] = terrain_module.cell_to_world(_road_draw_anchor.x, _road_draw_anchor.y);
+    auto ay = terrain_module.get_height_at(ax, az) + properties.height_offset + 0.06f;
+ 
+    auto a0 = sbx::math::vector3{ax - half, ay, az - half};
+    auto a1 = sbx::math::vector3{ax + half, ay, az - half};
+    auto a2 = sbx::math::vector3{ax + half, ay, az + half};
+    auto a3 = sbx::math::vector3{ax - half, ay, az + half};
+ 
+    scenes_module.add_debug_line(a0, a1, anchor_color);
+    scenes_module.add_debug_line(a1, a2, anchor_color);
+    scenes_module.add_debug_line(a2, a3, anchor_color);
+    scenes_module.add_debug_line(a3, a0, anchor_color);
+    scenes_module.add_debug_line(a0, a2, anchor_color);
+    scenes_module.add_debug_line(a1, a3, anchor_color);
   }
 }
 

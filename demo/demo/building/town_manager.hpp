@@ -34,7 +34,7 @@ public:
     new_town.claim_radius = claim_radius;
 
     // Claim chunks around the town center
-    auto center_chunk = chunk_coord{
+    auto center_chunk = cell_coordinates{
       static_cast<std::int32_t>(std::floor(static_cast<std::float_t>(center_x) / chunk_size)),
       static_cast<std::int32_t>(std::floor(static_cast<std::float_t>(center_y) / chunk_size))
     };
@@ -49,15 +49,15 @@ public:
 
         // Circular claim area
         if (distance_squared <= radius * radius) {
-          auto chunk_coordinates = chunk_coord{chunk_x, chunk_y};
+          auto cell_coordinates = cell_coordinates{chunk_x, chunk_y};
 
           // Check if already claimed by another town
-          if (_chunk_ownership.contains(chunk_coordinates)) {
+          if (_chunk_ownership.contains(cell_coordinates)) {
             continue;
           }
 
-          new_town.claimed_chunks.insert(chunk_coordinates);
-          _chunk_ownership[chunk_coordinates] = id;
+          new_town.claimed_chunks.insert(cell_coordinates);
+          _chunk_ownership[cell_coordinates] = id;
         }
       }
     }
@@ -80,12 +80,12 @@ public:
   }
 
   auto get_town_at_cell(std::int32_t cell_x, std::int32_t cell_y) const -> town_id {
-    auto chunk_coordinates = chunk_coord{
+    auto cell_coordinates = cell_coordinates{
       static_cast<std::int32_t>(std::floor(static_cast<std::float_t>(cell_x) / chunk_size)),
       static_cast<std::int32_t>(std::floor(static_cast<std::float_t>(cell_y) / chunk_size))
     };
 
-    auto entry = _chunk_ownership.find(chunk_coordinates);
+    auto entry = _chunk_ownership.find(cell_coordinates);
 
     if (entry == _chunk_ownership.end()) {
       return invalid_town_id;
@@ -94,8 +94,8 @@ public:
     return entry->second;
   }
 
-  auto get_town_at_chunk(chunk_coord chunk_coordinates) const -> town_id {
-    auto entry = _chunk_ownership.find(chunk_coordinates);
+  auto get_town_at_chunk(cell_coordinates cell_coordinates) const -> town_id {
+    auto entry = _chunk_ownership.find(cell_coordinates);
 
     if (entry == _chunk_ownership.end()) {
       return invalid_town_id;
@@ -104,12 +104,12 @@ public:
     return entry->second;
   }
 
-  auto is_chunk_claimed(chunk_coord chunk_coordinates) const -> bool {
-    return _chunk_ownership.contains(chunk_coordinates);
+  auto is_chunk_claimed(cell_coordinates cell_coordinates) const -> bool {
+    return _chunk_ownership.contains(cell_coordinates);
   }
 
   auto can_found_town_at(std::int32_t center_x, std::int32_t center_y, std::uint32_t claim_radius = 3) const -> bool {
-    auto center_chunk = chunk_coord{
+    auto center_chunk = cell_coordinates{
       static_cast<std::int32_t>(std::floor(static_cast<std::float_t>(center_x) / chunk_size)),
       static_cast<std::int32_t>(std::floor(static_cast<std::float_t>(center_y) / chunk_size))
     };
@@ -143,7 +143,7 @@ public:
       return 0;
     }
 
-    auto center_chunk = chunk_coord{
+    auto center_chunk = cell_coordinates{
       static_cast<std::int32_t>(std::floor(static_cast<std::float_t>(target_town->center_x) / chunk_size)),
       static_cast<std::int32_t>(std::floor(static_cast<std::float_t>(target_town->center_y) / chunk_size))
     };
@@ -163,14 +163,14 @@ public:
           continue;
         }
 
-        auto chunk_coordinates = chunk_coord{chunk_x, chunk_y};
+        auto cell_coordinates = cell_coordinates{chunk_x, chunk_y};
 
-        if (_chunk_ownership.contains(chunk_coordinates)) {
+        if (_chunk_ownership.contains(cell_coordinates)) {
           continue;
         }
 
-        target_town->claimed_chunks.insert(chunk_coordinates);
-        _chunk_ownership[chunk_coordinates] = id;
+        target_town->claimed_chunks.insert(cell_coordinates);
+        _chunk_ownership[cell_coordinates] = id;
         ++chunks_added;
       }
     }
@@ -265,7 +265,7 @@ private:
 
   town_id _next_id{1};
   std::unordered_map<town_id, town> _towns;
-  std::unordered_map<chunk_coord, town_id, chunk_coord_hash> _chunk_ownership;
+  std::unordered_map<cell_coordinates, town_id, cell_coordinates_hash> _chunk_ownership;
 
 }; // class town_manager
 

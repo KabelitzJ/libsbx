@@ -64,73 +64,73 @@ auto terrain_module::cell_size() const -> std::float_t {
   return grid::cell_size;
 }
 
-auto terrain_module::world_to_cell(std::float_t world_x, std::float_t world_z) const -> chunk_coord {
-  auto cell_x = static_cast<std::int32_t>((world_x + offset_x()) / cell_size());
-  auto cell_z = static_cast<std::int32_t>((world_z + offset_z()) / cell_size());
+auto terrain_module::world_to_cell(const world_coordinates& coordinates) const -> cell_coordinates {
+  auto cell_x = static_cast<std::int32_t>((coordinates.x + offset_x()) / cell_size());
+  auto cell_z = static_cast<std::int32_t>((coordinates.z + offset_z()) / cell_size());
 
-  return chunk_coord{cell_x, cell_z};
+  return cell_coordinates{cell_x, cell_z};
 }
 
-auto terrain_module::cell_to_world(std::int32_t cell_x, std::int32_t cell_z) const -> std::pair<std::float_t, std::float_t> {
-  auto world_x = static_cast<std::float_t>(cell_x) * cell_size() - offset_x();
-  auto world_z = static_cast<std::float_t>(cell_z) * cell_size() - offset_z();
+auto terrain_module::cell_to_world(const cell_coordinates& coordinates) const -> world_coordinates {
+  auto world_x = static_cast<std::float_t>(coordinates.x) * cell_size() - offset_x();
+  auto world_z = static_cast<std::float_t>(coordinates.z) * cell_size() - offset_z();
 
-  return {world_x, world_z};
+  return world_coordinates{world_x, world_z};
 }
 
-auto terrain_module::get_height_at(std::float_t world_x, std::float_t world_z) const -> std::float_t {
+auto terrain_module::get_height_at(const world_coordinates& coordinates) const -> std::float_t {
+  return _heightmap.get_height_at(coordinates.x, coordinates.z);
+}
+
+auto terrain_module::get_slope_at(const cell_coordinates& coordinates) const -> std::float_t {
+  return get_slope_cost(_heightmap, coordinates.x, coordinates.z);
+}
+
+auto terrain_module::sculpt(const world_coordinates& coordinates, std::float_t radius, std::float_t strength) -> sculpt_result {
+  auto result = sculpt_terrain(_heightmap, _grid, coordinates.x, coordinates.z, radius, strength);
+
+  _update_splat_from_result(result);
+
+  return result;
+}
+
+auto terrain_module::flatten(const world_coordinates& coordinates, std::float_t radius, std::float_t blend_strength) -> sculpt_result {
+  auto result = flatten_terrain(_heightmap, _grid, coordinates.x, coordinates.z, radius, blend_strength);
+
+  _update_splat_from_result(result);
+
+  return result;
+}
+
+auto terrain_module::smooth(const world_coordinates& coordinates, std::float_t radius, std::float_t blend_strength) -> sculpt_result {
+  auto result = smooth_terrain(_heightmap, _grid, coordinates.x, coordinates.z, radius, blend_strength);
+
+  _update_splat_from_result(result);
+
+  return result;
+}
+
+auto terrain_module::level(const world_coordinates& coordinates, std::float_t radius, std::float_t blend_strength) -> sculpt_result {
+  auto result = level_terrain(_heightmap, _grid, coordinates.x, coordinates.z, radius, blend_strength);
+
+  _update_splat_from_result(result);
+
+  return result;
+}
+
+auto terrain_module::flatten_footprint(const cell_coordinates& coordinates, std::uint32_t size_width, std::uint32_t size_height) -> void {
+  flatten_for_building(_heightmap, coordinates.x, coordinates.z, size_width, size_height);
+}
+
+auto terrain_module::get_height_at_cell(const cell_coordinates& coordinates) const -> std::float_t {
+  auto [world_x, world_z] = cell_to_world(coordinates);
+
   return _heightmap.get_height_at(world_x, world_z);
 }
 
-auto terrain_module::get_slope_at(std::int32_t cell_x, std::int32_t cell_z) const -> std::float_t {
-  return get_slope_cost(_heightmap, cell_x, cell_z);
-}
-
-auto terrain_module::sculpt(std::float_t world_x, std::float_t world_z, std::float_t radius, std::float_t strength) -> sculpt_result {
-  auto result = sculpt_terrain(_heightmap, _grid, world_x, world_z, radius, strength);
-
-  _update_splat_from_result(result);
-
-  return result;
-}
-
-auto terrain_module::flatten(std::float_t world_x, std::float_t world_z, std::float_t radius, std::float_t blend_strength) -> sculpt_result {
-  auto result = flatten_terrain(_heightmap, _grid, world_x, world_z, radius, blend_strength);
-
-  _update_splat_from_result(result);
-
-  return result;
-}
-
-auto terrain_module::smooth(std::float_t world_x, std::float_t world_z, std::float_t radius, std::float_t blend_strength) -> sculpt_result {
-  auto result = smooth_terrain(_heightmap, _grid, world_x, world_z, radius, blend_strength);
-
-  _update_splat_from_result(result);
-
-  return result;
-}
-
-auto terrain_module::level(std::float_t world_x, std::float_t world_z, std::float_t radius, std::float_t blend_strength) -> sculpt_result {
-  auto result = level_terrain(_heightmap, _grid, world_x, world_z, radius, blend_strength);
-
-  _update_splat_from_result(result);
-
-  return result;
-}
-
-auto terrain_module::flatten_footprint(std::int32_t cell_x, std::int32_t cell_z, std::uint32_t size_width, std::uint32_t size_height) -> void {
-  flatten_for_building(_heightmap, cell_x, cell_z, size_width, size_height);
-}
-
-auto terrain_module::get_height_at_cell(std::int32_t cell_x, std::int32_t cell_z) const -> std::float_t {
-  auto [world_x, world_z] = cell_to_world(cell_x, cell_z);
-
-  return _heightmap.get_height_at(world_x, world_z);
-}
-
-auto terrain_module::can_build_at(std::int32_t cell_x, std::int32_t cell_z, std::uint32_t size_width, std::uint32_t size_height, std::float_t max_slope) const -> bool {
-  for (auto z = cell_z; z < cell_z + static_cast<std::int32_t>(size_height); ++z) {
-    for (auto x = cell_x; x < cell_x + static_cast<std::int32_t>(size_width); ++x) {
+auto terrain_module::can_build_at(const cell_coordinates& coordinates, std::uint32_t size_width, std::uint32_t size_height, std::float_t max_slope) const -> bool {
+  for (auto z = coordinates.z; z < coordinates.z + static_cast<std::int32_t>(size_height); ++z) {
+    for (auto x = coordinates.x; x < coordinates.x + static_cast<std::int32_t>(size_width); ++x) {
       if (!_grid.in_bounds(x, z)) {
         return false;
       }

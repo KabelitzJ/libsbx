@@ -34,19 +34,19 @@ class terrain_module final : public sbx::core::module<terrain_module> {
     .world_height = 1024,
     .generation = {
       .base_scale = 0.0025f,
-      .height_scale = 35.0f,
+      .height_scale = 40.0f,
       .warp_scale = 0.002f,
       .warp_strength = 80.0f,
       .continental_bias = 0.75f,
       .octaves = 4u,
-      .seed_x = 45.98123,
-      .seed_z = -0.00067291,
+      .seed_x = -72345.23522f,
+      .seed_z = 7154.2462f,
     },
     .splat = {
       .variety_scale = 0.05f,
       .variety_strength = 0.15f,
       .moisture_scale = 0.02f,
-      .seed = 309.4478,
+      .seed = 0.67235f,
     },
   };
 
@@ -80,28 +80,27 @@ public:
 
   auto cell_size() const -> std::float_t;
 
-  auto world_to_cell(std::float_t world_x, std::float_t world_z) const -> chunk_coord;
+  auto world_to_cell(const world_coordinates& coordinates) const -> cell_coordinates;
 
-  auto cell_to_world(std::int32_t cell_x, std::int32_t cell_z) const -> std::pair<std::float_t, std::float_t>;
+  auto cell_to_world(const cell_coordinates& coordinates) const -> world_coordinates;
 
-  auto get_height_at(std::float_t world_x, std::float_t world_z) const -> std::float_t;
+  auto get_height_at(const world_coordinates& coordinates) const -> std::float_t;
 
-  auto get_slope_at(std::int32_t cell_x, std::int32_t cell_z) const -> std::float_t;
+  auto get_slope_at(const cell_coordinates& coordinates) const -> std::float_t;
 
-  auto sculpt(std::float_t world_x, std::float_t world_z, std::float_t radius, std::float_t strength) -> sculpt_result;
+  auto sculpt(const world_coordinates& coordinates, std::float_t radius, std::float_t strength) -> sculpt_result;
 
-  auto flatten(std::float_t world_x, std::float_t world_z, std::float_t radius, std::float_t blend_strength = 1.0f) -> sculpt_result;
+  auto flatten(const world_coordinates& coordinates, std::float_t radius, std::float_t blend_strength = 1.0f) -> sculpt_result;
 
-  auto smooth(std::float_t world_x, std::float_t world_z, std::float_t radius, std::float_t blend_strength = 0.5f) -> sculpt_result;
+  auto smooth(const world_coordinates& coordinates, std::float_t radius, std::float_t blend_strength = 0.5f) -> sculpt_result;
 
-  auto level(std::float_t world_x, std::float_t world_z, std::float_t radius, std::float_t blend_strength = 1.0f) -> sculpt_result;
+  auto level(const world_coordinates& coordinates, std::float_t radius, std::float_t blend_strength = 1.0f) -> sculpt_result;
 
-  // Legacy: flatten for building footprint (no protection, no falloff).
-  auto flatten_footprint(std::int32_t cell_x, std::int32_t cell_z, std::uint32_t size_width, std::uint32_t size_height) -> void;
+  auto flatten_footprint(const cell_coordinates& coordinates, std::uint32_t size_width, std::uint32_t size_height) -> void;
 
-  auto get_height_at_cell(std::int32_t cell_x, std::int32_t cell_z) const -> std::float_t;
+  auto get_height_at_cell(const cell_coordinates& coordinates) const -> std::float_t;
 
-  auto can_build_at(std::int32_t cell_x, std::int32_t cell_z, std::uint32_t size_width, std::uint32_t size_height, std::float_t max_slope = 3.0f) const -> bool;
+  auto can_build_at(const cell_coordinates& coordinates, std::uint32_t size_width, std::uint32_t size_height, std::float_t max_slope = 3.0f) const -> bool;
 
   auto world_width() const -> std::uint32_t;
 

@@ -217,23 +217,23 @@ auto application::update() -> void {
       if (hit) {
         switch (_sculpt_tool) {
           case sculpt_tool::raise: {
-            terrain_module.sculpt(hit->x(), hit->z(), 30.0f, 10.0f * delta_time);
+            terrain_module.sculpt(world_coordinates{hit->x(), hit->z()}, 30.0f, 10.0f * delta_time);
             break;
           }
           case sculpt_tool::lower: {
-            terrain_module.sculpt(hit->x(), hit->z(), 30.0f, -10.0f * delta_time);
+            terrain_module.sculpt(world_coordinates{hit->x(), hit->z()}, 30.0f, -10.0f * delta_time);
             break;
           }
           case sculpt_tool::flatten: {
-            terrain_module.flatten(hit->x(), hit->z(), 30.0f, 3.0f * delta_time);
+            terrain_module.flatten(world_coordinates{hit->x(), hit->z()}, 30.0f, 3.0f * delta_time);
             break;
           }
           case sculpt_tool::smooth: {
-            terrain_module.smooth(hit->x(), hit->z(), 30.0f, 2.0f * delta_time);
+            terrain_module.smooth(world_coordinates{hit->x(), hit->z()}, 30.0f, 2.0f * delta_time);
             break;
           }
           case sculpt_tool::level: {
-            terrain_module.level(hit->x(), hit->z(), 30.0f, 3.0f * delta_time);
+            terrain_module.level(world_coordinates{hit->x(), hit->z()}, 30.0f, 3.0f * delta_time);
             break;
           }
         }
@@ -485,7 +485,7 @@ auto application::_raycast_terrain() -> std::optional<sbx::math::vector3> {
 
   for (auto t = 0.0f; t < max_distance; t += step_size) {
     auto point = ray.origin() + ray.direction() * t;
-    auto terrain_height = terrain_module.get_height_at(point.x(), point.z());
+    auto terrain_height = terrain_module.get_height_at(world_coordinates{point.x(), point.z()});
 
     if (point.y() <= terrain_height) {
       auto lo = t - step_size;
@@ -494,7 +494,7 @@ auto application::_raycast_terrain() -> std::optional<sbx::math::vector3> {
       for (auto i = 0; i < 8; ++i) {
         auto mid = (lo + hi) * 0.5f;
         auto mid_point = ray.origin() + ray.direction() * mid;
-        auto mid_height = terrain_module.get_height_at(mid_point.x(), mid_point.z());
+        auto mid_height = terrain_module.get_height_at(world_coordinates{mid_point.x(), mid_point.z()});
 
         if (mid_point.y() <= mid_height) {
           hi = mid;
@@ -512,7 +512,7 @@ auto application::_raycast_terrain() -> std::optional<sbx::math::vector3> {
 
 auto application::_update_placement() -> void {
   auto& building_mod = sbx::core::engine::get_module<demo::building_module>();
-  auto& terrain_mod = sbx::core::engine::get_module<demo::terrain_module>();
+  auto& terrain_module = sbx::core::engine::get_module<demo::terrain_module>();
   auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
 
   auto& graph = scenes_module.scene().graph();
@@ -587,9 +587,9 @@ auto application::_update_placement() -> void {
   auto center_offset_x = (min_x + max_x) / 2;
   auto center_offset_z = (min_z + max_z) / 2;
 
-  auto cursor_cell = terrain_mod.world_to_cell(hit->x(), hit->z());
+  auto cursor_cell = terrain_module.world_to_cell(world_coordinates{hit->x(), hit->z()});
   auto origin_x = cursor_cell.x - center_offset_x;
-  auto origin_z = cursor_cell.y - center_offset_z;
+  auto origin_z = cursor_cell.z - center_offset_z;
 
   auto preview = building_mod.update_preview(_placement_definition_id, origin_x, origin_z, _placement_orientation);
   _placement_preview_valid = preview.valid;
@@ -603,10 +603,11 @@ auto application::_update_placement() -> void {
     auto fp_width = max_x - min_x + 1;
     auto fp_height = max_z - min_z + 1;
 
-    auto [corner_wx, corner_wz] = terrain_mod.cell_to_world(fp_min_x, fp_min_z);
+    const auto [corner_wx, corner_wz] = terrain_module.cell_to_world(cell_coordinates{fp_min_x, fp_min_z});
+
     auto center_wx = corner_wx + static_cast<std::float_t>(fp_width) * cell_sz * 0.5f;
     auto center_wz = corner_wz + static_cast<std::float_t>(fp_height) * cell_sz * 0.5f;
-    auto center_wy = terrain_mod.get_height_at(center_wx, center_wz);
+    auto center_wy = terrain_module.get_height_at(world_coordinates{center_wx, center_wz});
 
     auto angle_degrees = static_cast<std::float_t>(static_cast<std::uint8_t>(_placement_orientation)) * 45.0f;
     auto rotation = sbx::math::quaternion{
@@ -621,15 +622,16 @@ auto application::_update_placement() -> void {
 
   // Draw footprint cells
   auto color = preview.valid ? sbx::math::color::green() : sbx::math::color::red();
-  auto cell_size = terrain_mod.cell_size();
+  auto cell_size = terrain_module.cell_size();
   auto lift = 0.15f;
 
   for (const auto& offset : cells) {
     auto cell_x = origin_x + offset.x;
     auto cell_z = origin_z + offset.z;
 
-    auto [world_x, world_z] = terrain_mod.cell_to_world(cell_x, cell_z);
-    auto height = terrain_mod.get_height_at(world_x + cell_size * 0.5f, world_z + cell_size * 0.5f) + lift;
+    auto [world_x, world_z] = terrain_module.cell_to_world(cell_coordinates{cell_x, cell_z});
+
+    auto height = terrain_module.get_height_at(world_coordinates{world_x + cell_size * 0.5f, world_z + cell_size * 0.5f}) + lift;
 
     auto a = sbx::math::vector3{world_x, height, world_z};
     auto b = sbx::math::vector3{world_x + cell_size, height, world_z};
@@ -662,8 +664,8 @@ auto application::_update_placement() -> void {
       auto cx = instance.origin_x + offset.x;
       auto cz = instance.origin_z + offset.z;
 
-      auto [wx, wz] = terrain_mod.cell_to_world(cx, cz);
-      auto h = terrain_mod.get_height_at(wx + cell_size * 0.5f, wz + cell_size * 0.5f) + lift;
+      auto [wx, wz] = terrain_module.cell_to_world(cell_coordinates{cx, cz});
+      auto h = terrain_module.get_height_at(world_coordinates{wx + cell_size * 0.5f, wz + cell_size * 0.5f}) + lift;
 
       auto a = sbx::math::vector3{wx, h, wz};
       auto b = sbx::math::vector3{wx + cell_size, h, wz};
@@ -717,35 +719,35 @@ auto application::_update_road_drawing() -> void {
     return;
   }
  
-  auto hit_cell = terrain_module.world_to_cell(hit->x(), hit->z());
+  auto hit_cell = terrain_module.world_to_cell(world_coordinates{world_coordinates{hit->x(), hit->z()}});
   auto shift_held = sbx::devices::input::is_key_down(sbx::devices::key::left_shift);
  
   // Snap to nearest existing road within a small radius.
-  auto snap_to_road = [&](chunk_coord cell) -> chunk_coord {
+  auto snap_to_road = [&](const cell_coordinates& cell) -> cell_coordinates {
     constexpr auto snap_radius = 2;
  
     auto& grid = terrain_module.grid();
     auto best = cell;
     auto best_distance_squared = std::numeric_limits<std::int32_t>::max();
  
-    for (auto dy = -snap_radius; dy <= snap_radius; ++dy) {
+    for (auto dz = -snap_radius; dz <= snap_radius; ++dz) {
       for (auto dx = -snap_radius; dx <= snap_radius; ++dx) {
         auto cx = cell.x + dx;
-        auto cy = cell.y + dy;
+        auto cz = cell.z + dz;
  
-        if (!grid.in_bounds(cx, cy)) {
+        if (!grid.in_bounds(cx, cz)) {
           continue;
         }
  
-        if (grid.at(cx, cy).road_type == 0) {
+        if (grid.at(cx, cz).road_type == 0) {
           continue;
         }
  
-        auto dist = dx * dx + dy * dy;
+        auto dist = dx * dx + dz * dz;
  
         if (dist < best_distance_squared) {
           best_distance_squared = dist;
-          best = {cx, cy};
+          best = {cx, cz};
         }
       }
     }
@@ -776,8 +778,8 @@ auto application::_update_road_drawing() -> void {
     auto half = grid::cell_size * 0.4f;
  
     for (const auto& cell : preview_path.cells) {
-      auto [world_x, world_z] = terrain_module.cell_to_world(cell.x, cell.y);
-      auto world_y = terrain_module.get_height_at(world_x, world_z) + properties.height_offset + 0.05f;
+      auto [world_x, world_z] = terrain_module.cell_to_world(cell);
+      auto world_y = terrain_module.get_height_at(world_coordinates{world_x, world_z}) + properties.height_offset + 0.05f;
  
       auto p0 = sbx::math::vector3{world_x - half, world_y, world_z - half};
       auto p1 = sbx::math::vector3{world_x + half, world_y, world_z - half};
@@ -792,13 +794,13 @@ auto application::_update_road_drawing() -> void {
  
     // Highlight anchor
     auto anchor_color = sbx::math::color{0.9f, 0.9f, 0.2f, 1.0f};
-    auto [ax, az] = terrain_module.cell_to_world(_road_draw_anchor.x, _road_draw_anchor.y);
-    auto ay = terrain_module.get_height_at(ax, az) + properties.height_offset + 0.06f;
+    auto anchor_world = terrain_module.cell_to_world(_road_draw_anchor);
+    auto anchor_y = terrain_module.get_height_at(anchor_world) + properties.height_offset + 0.06f;
  
-    auto a0 = sbx::math::vector3{ax - half, ay, az - half};
-    auto a1 = sbx::math::vector3{ax + half, ay, az - half};
-    auto a2 = sbx::math::vector3{ax + half, ay, az + half};
-    auto a3 = sbx::math::vector3{ax - half, ay, az + half};
+    auto a0 = sbx::math::vector3{anchor_world.x - half, anchor_y, anchor_world.z - half};
+    auto a1 = sbx::math::vector3{anchor_world.x + half, anchor_y, anchor_world.z - half};
+    auto a2 = sbx::math::vector3{anchor_world.x + half, anchor_y, anchor_world.z + half};
+    auto a3 = sbx::math::vector3{anchor_world.x - half, anchor_y, anchor_world.z + half};
  
     scenes_module.add_debug_line(a0, a1, anchor_color);
     scenes_module.add_debug_line(a1, a2, anchor_color);

@@ -58,28 +58,28 @@ inline auto update_road_connectivity(grid& terrain_grid, std::int32_t cell_x, st
   }
 }
 
-inline auto cell_to_chunk(std::int32_t cell_x, std::int32_t cell_y) -> chunk_coord {
-  return chunk_coord{
+inline auto cell_to_chunk(std::int32_t cell_x, std::int32_t cell_y) -> cell_coordinates {
+  return cell_coordinates{
     static_cast<std::int32_t>(std::floor(static_cast<std::float_t>(cell_x) / chunk_size)),
     static_cast<std::int32_t>(std::floor(static_cast<std::float_t>(cell_y) / chunk_size))
   };
 }
 
 struct road_placement_result {
-  std::vector<chunk_coord> placed_cells;
-  std::unordered_set<chunk_coord, chunk_coord_hash> dirty_chunks;
+  std::vector<cell_coordinates> placed_cells;
+  std::unordered_set<cell_coordinates, cell_coordinates_hash> dirty_chunks;
 }; // struct road_placement_result
 
 // Place road along an explicit list of cells (from road_drawing path computation).
-inline auto place_road_path(grid& terrain_grid, const std::vector<chunk_coord>& cells, road_type type) -> road_placement_result {
+inline auto place_road_path(grid& terrain_grid, const std::vector<cell_coordinates>& cells, road_type type) -> road_placement_result {
   auto result = road_placement_result{};
 
   for (const auto& cell : cells) {
-    if (!terrain_grid.in_bounds(cell.x, cell.y)) {
+    if (!terrain_grid.in_bounds(cell.x, cell.z)) {
       continue;
     }
 
-    auto& current_cell = terrain_grid.at(cell.x, cell.y);
+    auto& current_cell = terrain_grid.at(cell.x, cell.z);
 
     if (current_cell.building_id != 0) {
       continue;
@@ -90,16 +90,16 @@ inline auto place_road_path(grid& terrain_grid, const std::vector<chunk_coord>& 
     if (new_type > current_cell.road_type) {
       current_cell.road_type = new_type;
       result.placed_cells.push_back(cell);
-      result.dirty_chunks.insert(cell_to_chunk(cell.x, cell.y));
+      result.dirty_chunks.insert(cell_to_chunk(cell.x, cell.z));
     }
   }
 
   for (const auto& placed_cell : result.placed_cells) {
-    update_road_connectivity(terrain_grid, placed_cell.x, placed_cell.y);
+    update_road_connectivity(terrain_grid, placed_cell.x, placed_cell.z);
 
     for (auto direction = 0u; direction < 8u; ++direction) {
       auto neighbor_x = placed_cell.x + road_direction_offset_x[direction];
-      auto neighbor_y = placed_cell.y + road_direction_offset_y[direction];
+      auto neighbor_y = placed_cell.z + road_direction_offset_y[direction];
 
       result.dirty_chunks.insert(cell_to_chunk(neighbor_x, neighbor_y));
     }
@@ -154,11 +154,11 @@ inline auto place_road_line(grid& terrain_grid, std::int32_t start_x, std::int32
   }
 
   for (const auto& placed_cell : result.placed_cells) {
-    update_road_connectivity(terrain_grid, placed_cell.x, placed_cell.y);
+    update_road_connectivity(terrain_grid, placed_cell.x, placed_cell.z);
 
     for (auto direction = 0u; direction < 8u; ++direction) {
       auto neighbor_x = placed_cell.x + road_direction_offset_x[direction];
-      auto neighbor_y = placed_cell.y + road_direction_offset_y[direction];
+      auto neighbor_y = placed_cell.z + road_direction_offset_y[direction];
 
       result.dirty_chunks.insert(cell_to_chunk(neighbor_x, neighbor_y));
     }
@@ -167,8 +167,8 @@ inline auto place_road_line(grid& terrain_grid, std::int32_t start_x, std::int32
   return result;
 }
 
-inline auto remove_road(grid& terrain_grid, std::int32_t cell_x, std::int32_t cell_y) -> std::unordered_set<chunk_coord, chunk_coord_hash> {
-  auto dirty_chunks = std::unordered_set<chunk_coord, chunk_coord_hash>{};
+inline auto remove_road(grid& terrain_grid, std::int32_t cell_x, std::int32_t cell_y) -> std::unordered_set<cell_coordinates, cell_coordinates_hash> {
+  auto dirty_chunks = std::unordered_set<cell_coordinates, cell_coordinates_hash>{};
 
   if (!terrain_grid.in_bounds(cell_x, cell_y)) {
     return dirty_chunks;

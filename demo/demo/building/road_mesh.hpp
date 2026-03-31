@@ -39,14 +39,11 @@ inline auto _height_at(const heightmap& height_map, std::float_t x, std::float_t
   return height_map.get_height_at(x, z) + offset;
 }
 
-inline auto build_road_mesh(const grid& terrain_grid, const heightmap& height_map) -> road_mesh_data {
+inline auto build_road_mesh(const grid& terrain_grid, const heightmap& height_map, std::float_t world_origin_x, std::float_t world_origin_z) -> road_mesh_data {
   auto mesh = road_mesh_data{};
 
   auto grid_w = static_cast<std::int32_t>(terrain_grid.world_width());
   auto grid_h = static_cast<std::int32_t>(terrain_grid.world_height());
-
-  auto offset_x = static_cast<std::float_t>(grid_w) * grid::cell_size * 0.5f;
-  auto offset_z = static_cast<std::float_t>(grid_h) * grid::cell_size * 0.5f;
 
   for (auto gy = 0; gy < grid_h; ++gy) {
     for (auto gx = 0; gx < grid_w; ++gx) {
@@ -63,8 +60,8 @@ inline auto build_road_mesh(const grid& terrain_grid, const heightmap& height_ma
       auto props = get_road_properties(static_cast<road_type>(cell.road_type));
       auto half_w = props.half_width;
 
-      auto cx = (static_cast<std::float_t>(gx) + 0.5f) * grid::cell_size - offset_x;
-      auto cz = (static_cast<std::float_t>(gy) + 0.5f) * grid::cell_size - offset_z;
+      auto cx = world_origin_x + (static_cast<std::float_t>(gx) + 0.5f) * grid::cell_size;
+      auto cz = world_origin_z + (static_cast<std::float_t>(gy) + 0.5f) * grid::cell_size;
       auto cy = _height_at(height_map, cx, cz, props.height_offset);
 
       auto mask = cell.road_mask;
@@ -112,19 +109,18 @@ inline auto build_road_mesh(const grid& terrain_grid, const heightmap& height_ma
         continue;
       }
 
-      // ---- Connected node: shared center + edge points ----
+      // ---- Connected node: center + edge points + fan fill ----
       //
-      // 1. Emit center vertex (shared by fill fan and all strips)
-      // 2. For each direction, emit left/right edge points at this node's center
-      // 3. Sort all edge points by angle
-      // 4. Fan from center through sorted points (fills the intersection)
-      // 5. Strips reuse these exact edge point vertices (no overlap)
+      // 1. Emit edge point vertices for strips (left/right per direction)
+      // 2. Sort edge points by angle
+      // 3. Emit dedicated fan ring with radial UVs and fan from center
+      // 4. Strips reuse original edge point vertices
 
       auto center_index = static_cast<std::uint32_t>(mesh.vertices.size());
 
       mesh.vertices.push_back(road_vertex{
         .position_x = cx, .position_y = cy, .position_z = cz,
-        .uv_u = 0.5f, .uv_v = 0.0f,
+        .uv_u = 0.5f, .uv_v = 0.5f,
         .road_type = static_cast<std::uint32_t>(cell.road_type),
       });
 
@@ -142,8 +138,8 @@ inline auto build_road_mesh(const grid& terrain_grid, const heightmap& height_ma
         auto nx = gx + road_direction_offset_x[dir];
         auto ny = gy + road_direction_offset_y[dir];
 
-        auto nwx = (static_cast<std::float_t>(nx) + 0.5f) * grid::cell_size - offset_x;
-        auto nwz = (static_cast<std::float_t>(ny) + 0.5f) * grid::cell_size - offset_z;
+        auto nwx = world_origin_x + (static_cast<std::float_t>(nx) + 0.5f) * grid::cell_size;
+        auto nwz = world_origin_z + (static_cast<std::float_t>(ny) + 0.5f) * grid::cell_size;
 
         auto dx = nwx - cx;
         auto dz = nwz - cz;
@@ -204,12 +200,26 @@ inline auto build_road_mesh(const grid& terrain_grid, const heightmap& height_ma
 
       auto edge_count = static_cast<std::uint32_t>(edge_points.size());
 
+      // Emit dedicated fan ring with radial UVs (avoids degenerate UV determinant)
+      auto fan_ring_base = static_cast<std::uint32_t>(mesh.vertices.size());
+
+      for (auto i = 0u; i < edge_count; ++i) {
+        auto& src = mesh.vertices[edge_points[i].vertex_index];
+
+        mesh.vertices.push_back(road_vertex{
+          .position_x = src.position_x, .position_y = src.position_y, .position_z = src.position_z,
+          .uv_u = 0.5f + std::cos(edge_points[i].angle) * 0.5f,
+          .uv_v = 0.5f + std::sin(edge_points[i].angle) * 0.5f,
+          .road_type = src.road_type,
+        });
+      }
+
       for (auto i = 0u; i < edge_count; ++i) {
         auto next = (i + 1) % edge_count;
 
         mesh.indices.push_back(center_index);
-        mesh.indices.push_back(edge_points[i].vertex_index);
-        mesh.indices.push_back(edge_points[next].vertex_index);
+        mesh.indices.push_back(fan_ring_base + i);
+        mesh.indices.push_back(fan_ring_base + next);
       }
 
       // ---- Connection strips (deduped) ----
@@ -239,8 +249,8 @@ inline auto build_road_mesh(const grid& terrain_grid, const heightmap& height_ma
         auto neighbor_props = get_road_properties(static_cast<road_type>(neighbor_cell.road_type));
         auto neighbor_half_w = neighbor_props.half_width;
 
-        auto nwx = (static_cast<std::float_t>(nx) + 0.5f) * grid::cell_size - offset_x;
-        auto nwz = (static_cast<std::float_t>(ny) + 0.5f) * grid::cell_size - offset_z;
+        auto nwx = world_origin_x + (static_cast<std::float_t>(nx) + 0.5f) * grid::cell_size;
+        auto nwz = world_origin_z + (static_cast<std::float_t>(ny) + 0.5f) * grid::cell_size;
 
         auto dx = nwx - cx;
         auto dz = nwz - cz;

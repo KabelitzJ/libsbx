@@ -91,7 +91,7 @@ struct town {
   std::uint32_t claim_radius{3};
 
   // Chunks belonging to this town
-  std::unordered_set<chunk_coord, chunk_coord_hash> claimed_chunks;
+  std::unordered_set<cell_coordinates, cell_coordinates_hash> claimed_chunks;
 
   // Buildings belonging to this town
   std::vector<std::uint16_t> building_ids;

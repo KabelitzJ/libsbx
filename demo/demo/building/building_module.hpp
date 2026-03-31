@@ -88,14 +88,14 @@ public:
         return false;
       }
 
-      auto height = terrain_module.get_height_at_cell(cell_x, cell_z);
+      auto height = terrain_module.get_height_at_cell(cell_coordinates{cell_x, cell_z});
 
       if (height < terrain_constants::sea_level) {
         sbx::utility::logger<"buildings">::debug("Placement rejected at ({}, {}): below sea level", cell_x, cell_z);
         return false;
       }
 
-      if (terrain_module.get_slope_at(cell_x, cell_z) > max_slope) {
+      if (terrain_module.get_slope_at(cell_coordinates{cell_x, cell_z}) > max_slope) {
         sbx::utility::logger<"buildings">::debug("Placement rejected at ({}, {}): slope too steep", cell_x, cell_z);
         return false;
       }
@@ -156,10 +156,10 @@ public:
       max_z = std::max(max_z, origin_z + offset.z);
     }
 
-    auto [corner_wx, corner_wz] = terrain_module.cell_to_world(min_x, min_z);
+    auto [corner_wx, corner_wz] = terrain_module.cell_to_world(cell_coordinates{min_x, min_z});
     auto center_wx = corner_wx + static_cast<std::float_t>(max_x - min_x + 1) * cell_sz * 0.5f;
     auto center_wz = corner_wz + static_cast<std::float_t>(max_z - min_z + 1) * cell_sz * 0.5f;
-    auto center_wy = terrain_module.get_height_at(center_wx, center_wz);
+    auto center_wy = terrain_module.get_height_at(world_coordinates{center_wx, center_wz});
 
     auto node = graph.create_node(definition->name);
 
@@ -279,7 +279,7 @@ public:
     return result;
   }
 
-  auto place_road_path(const std::vector<chunk_coord>& cells, road_type type) -> road_placement_result {
+  auto place_road_path(const std::vector<cell_coordinates>& cells, road_type type) -> road_placement_result {
     auto& terrain_module = sbx::core::engine::get_module<demo::terrain_module>();
 
     auto result = demo::place_road_path(terrain_module.grid(), cells, type);
@@ -319,9 +319,9 @@ private:
     for (const auto& offset : cells) {
       auto cell_x = origin_x + offset.x;
       auto cell_z = origin_z + offset.z;
-      auto [world_x, world_z] = terrain_module.cell_to_world(cell_x, cell_z);
+      auto [world_x, world_z] = terrain_module.cell_to_world(cell_coordinates{cell_x, cell_z});
 
-      average_height += terrain_module.get_height_at(world_x, world_z);
+      average_height += terrain_module.get_height_at(world_coordinates{world_x, world_z});
     }
 
     average_height /= static_cast<std::float_t>(cells.size());

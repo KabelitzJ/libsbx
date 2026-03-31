@@ -19,10 +19,10 @@ enum class road_snap_mode : std::uint8_t {
 }; // enum class road_snap_mode
 
 struct road_path {
-  std::vector<chunk_coord> cells;
+  std::vector<cell_coordinates> cells;
 }; // struct road_path
 
-inline auto _build_straight_horizontal(chunk_coord start, chunk_coord end) -> road_path {
+inline auto _build_straight_horizontal(const cell_coordinates& start, const cell_coordinates& end) -> road_path {
   auto path = road_path{};
 
   auto dx = std::abs(end.x - start.x);
@@ -30,21 +30,21 @@ inline auto _build_straight_horizontal(chunk_coord start, chunk_coord end) -> ro
   auto x = start.x;
 
   for (auto i = 0; i <= dx; ++i) {
-    path.cells.push_back({x, start.y});
+    path.cells.push_back({x, start.z});
     x += sx;
   }
 
   return path;
 }
 
-inline auto _build_straight_vertical(chunk_coord start, chunk_coord end) -> road_path {
+inline auto _build_straight_vertical(const cell_coordinates& start, const cell_coordinates& end) -> road_path {
   auto path = road_path{};
 
-  auto dy = std::abs(end.y - start.y);
-  auto sy = (start.y < end.y) ? 1 : -1;
-  auto y = start.y;
+  auto dz = std::abs(end.z - start.z);
+  auto sy = (start.z < end.z) ? 1 : -1;
+  auto y = start.z;
 
-  for (auto i = 0; i <= dy; ++i) {
+  for (auto i = 0; i <= dz; ++i) {
     path.cells.push_back({start.x, y});
     y += sy;
   }
@@ -52,17 +52,17 @@ inline auto _build_straight_vertical(chunk_coord start, chunk_coord end) -> road
   return path;
 }
 
-inline auto _build_diagonal(chunk_coord start, chunk_coord end) -> road_path {
+inline auto _build_diagonal(const cell_coordinates& start, const cell_coordinates& end) -> road_path {
   auto path = road_path{};
 
   auto dx = std::abs(end.x - start.x);
-  auto dy = std::abs(end.y - start.y);
+  auto dz = std::abs(end.z - start.z);
   auto sx = (start.x < end.x) ? 1 : -1;
-  auto sy = (start.y < end.y) ? 1 : -1;
+  auto sy = (start.z < end.z) ? 1 : -1;
 
-  auto diagonal_steps = std::min(dx, dy);
+  auto diagonal_steps = std::min(dx, dz);
   auto x = start.x;
-  auto y = start.y;
+  auto y = start.z;
 
   for (auto i = 0; i < diagonal_steps; ++i) {
     path.cells.push_back({x, y});
@@ -71,7 +71,7 @@ inline auto _build_diagonal(chunk_coord start, chunk_coord end) -> road_path {
   }
 
   auto remaining_x = dx - diagonal_steps;
-  auto remaining_y = dy - diagonal_steps;
+  auto remaining_y = dz - diagonal_steps;
 
   if (remaining_x > 0) {
     for (auto i = 0; i <= remaining_x; ++i) {
@@ -90,24 +90,24 @@ inline auto _build_diagonal(chunk_coord start, chunk_coord end) -> road_path {
   return path;
 }
 
-inline auto _build_l_bend_horizontal_first(chunk_coord start, chunk_coord end) -> road_path {
+inline auto _build_l_bend_horizontal_first(const cell_coordinates& start, const cell_coordinates& end) -> road_path {
   auto path = road_path{};
 
   auto dx = std::abs(end.x - start.x);
-  auto dy = std::abs(end.y - start.y);
+  auto dz = std::abs(end.z - start.z);
   auto sx = (start.x < end.x) ? 1 : -1;
-  auto sy = (start.y < end.y) ? 1 : -1;
+  auto sy = (start.z < end.z) ? 1 : -1;
 
   auto x = start.x;
 
   for (auto i = 0; i <= dx; ++i) {
-    path.cells.push_back({x, start.y});
+    path.cells.push_back({x, start.z});
     x += sx;
   }
 
-  auto y = start.y + sy;
+  auto y = start.z + sy;
 
-  for (auto i = 1; i <= dy; ++i) {
+  for (auto i = 1; i <= dz; ++i) {
     path.cells.push_back({end.x, y});
     y += sy;
   }
@@ -115,17 +115,17 @@ inline auto _build_l_bend_horizontal_first(chunk_coord start, chunk_coord end) -
   return path;
 }
 
-inline auto _build_l_bend_vertical_first(chunk_coord start, chunk_coord end) -> road_path {
+inline auto _build_l_bend_vertical_first(const cell_coordinates& start, const cell_coordinates& end) -> road_path {
   auto path = road_path{};
 
   auto dx = std::abs(end.x - start.x);
-  auto dy = std::abs(end.y - start.y);
+  auto dz = std::abs(end.z - start.z);
   auto sx = (start.x < end.x) ? 1 : -1;
-  auto sy = (start.y < end.y) ? 1 : -1;
+  auto sy = (start.z < end.z) ? 1 : -1;
 
-  auto y = start.y;
+  auto y = start.z;
 
-  for (auto i = 0; i <= dy; ++i) {
+  for (auto i = 0; i <= dz; ++i) {
     path.cells.push_back({start.x, y});
     y += sy;
   }
@@ -133,14 +133,14 @@ inline auto _build_l_bend_vertical_first(chunk_coord start, chunk_coord end) -> 
   auto x = start.x + sx;
 
   for (auto i = 1; i <= dx; ++i) {
-    path.cells.push_back({x, end.y});
+    path.cells.push_back({x, end.z});
     x += sx;
   }
 
   return path;
 }
 
-inline auto build_road_path(chunk_coord start, chunk_coord end, road_snap_mode mode) -> road_path {
+inline auto build_road_path(const cell_coordinates& start, const cell_coordinates& end, road_snap_mode mode) -> road_path {
   switch (mode) {
     case road_snap_mode::straight_horizontal: {
       return _build_straight_horizontal(start, end);
@@ -162,11 +162,11 @@ inline auto build_road_path(chunk_coord start, chunk_coord end, road_snap_mode m
   return _build_straight_horizontal(start, end);
 }
 
-inline auto detect_snap_mode(chunk_coord start, chunk_coord end, bool shift_held) -> road_snap_mode {
+inline auto detect_snap_mode(const cell_coordinates& start, const cell_coordinates& end, bool shift_held) -> road_snap_mode {
   auto dx = std::abs(end.x - start.x);
-  auto dy = std::abs(end.y - start.y);
+  auto dz = std::abs(end.z - start.z);
 
-  if (dx == 0 && dy == 0) {
+  if (dx == 0 && dz == 0) {
     return road_snap_mode::straight_horizontal;
   }
 
@@ -174,11 +174,11 @@ inline auto detect_snap_mode(chunk_coord start, chunk_coord end, bool shift_held
     return road_snap_mode::straight_vertical;
   }
 
-  if (dy == 0) {
+  if (dz == 0) {
     return road_snap_mode::straight_horizontal;
   }
 
-  auto angle_degrees = std::atan2(static_cast<std::float_t>(dy), static_cast<std::float_t>(dx)) * 180.0f / 3.14159265f;
+  auto angle_degrees = std::atan2(static_cast<std::float_t>(dz), static_cast<std::float_t>(dx)) * 180.0f / 3.14159265f;
 
   if (angle_degrees < 22.5f) {
     return road_snap_mode::straight_horizontal;
@@ -189,7 +189,7 @@ inline auto detect_snap_mode(chunk_coord start, chunk_coord end, bool shift_held
   }
 
   if (shift_held) {
-    if (dx >= dy) {
+    if (dx >= dz) {
       return road_snap_mode::l_bend_horizontal_first;
     }
 
@@ -199,7 +199,7 @@ inline auto detect_snap_mode(chunk_coord start, chunk_coord end, bool shift_held
   return road_snap_mode::diagonal;
 }
 
-inline auto build_snapped_road_path(chunk_coord start, chunk_coord end, bool shift_held) -> road_path {
+inline auto build_snapped_road_path(const cell_coordinates& start, const cell_coordinates& end, bool shift_held) -> road_path {
   auto mode = detect_snap_mode(start, end, shift_held);
 
   return build_road_path(start, end, mode);

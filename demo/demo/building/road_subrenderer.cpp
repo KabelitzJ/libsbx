@@ -93,16 +93,17 @@ auto road_subrenderer::render(sbx::graphics::command_buffer& command_buffer) -> 
   auto& environment = scene.environment();
 
   if (building_module.roads_dirty() || _is_dirty) {
-    auto mesh = build_road_mesh(terrain_module.grid(), terrain_module.heightmap());
+    auto [ox, oz] = terrain_module.cell_to_world(cell_coordinates{0, 0});
+    auto mesh = build_road_mesh(terrain_module.grid(), terrain_module.heightmap(), ox, oz);
 
     if (mesh.is_empty) {
       _index_count = 0;
     } else {
-      auto& vb = graphics_module.get_resource<sbx::graphics::storage_buffer>(_vertex_buffer);
-      _update_buffer(vb, mesh.vertices);
+      auto& vertex_buffer = graphics_module.get_resource<sbx::graphics::storage_buffer>(_vertex_buffer);
+      _update_buffer(vertex_buffer, mesh.vertices);
 
-      auto& ib = graphics_module.get_resource<sbx::graphics::storage_buffer>(_index_buffer);
-      _update_buffer(ib, mesh.indices);
+      auto& index_buffer = graphics_module.get_resource<sbx::graphics::storage_buffer>(_index_buffer);
+      _update_buffer(index_buffer, mesh.indices);
 
       _index_count = static_cast<std::uint32_t>(mesh.indices.size());
     }
@@ -127,13 +128,13 @@ auto road_subrenderer::render(sbx::graphics::command_buffer& command_buffer) -> 
 
   _descriptor_handler.bind_descriptors(command_buffer);
 
-  auto& vb = graphics_module.get_resource<sbx::graphics::storage_buffer>(_vertex_buffer);
-  auto& ib = graphics_module.get_resource<sbx::graphics::storage_buffer>(_index_buffer);
+  auto& vertex_buffer = graphics_module.get_resource<sbx::graphics::storage_buffer>(_vertex_buffer);
+  auto& index_buffer = graphics_module.get_resource<sbx::graphics::storage_buffer>(_index_buffer);
 
-  _push_handler.push("vertex_data_buffer", vb.address());
+  _push_handler.push("vertex_data_buffer", vertex_buffer.address());
   _push_handler.bind(command_buffer);
 
-  command_buffer.bind_index_buffer(ib.handle(), 0, VK_INDEX_TYPE_UINT32);
+  command_buffer.bind_index_buffer(index_buffer.handle(), 0, VK_INDEX_TYPE_UINT32);
   command_buffer.draw_indexed(_index_count, 1, 0, 0, 0);
 }
 

@@ -30,8 +30,8 @@ class terrain_module final : public sbx::core::module<terrain_module> {
   inline static const auto is_registered = register_module(stage::normal, dependencies<sbx::graphics::graphics_module>{});
 
   inline static const auto config = terrain_config{
-    .world_width = 1024,
-    .world_height = 1024,
+    .world_width = 2048,
+    .world_height = 2048,
     .generation = {
       .base_scale = 0.0025f,
       .height_scale = 40.0f,
@@ -39,8 +39,8 @@ class terrain_module final : public sbx::core::module<terrain_module> {
       .warp_strength = 80.0f,
       .continental_bias = 0.75f,
       .octaves = 4u,
-      .seed_x = -72345.23522f,
-      .seed_z = 7154.2462f,
+      .seed_x = -345.23522f,
+      .seed_z = 53890.2462f,
     },
     .splat = {
       .variety_scale = 0.05f,

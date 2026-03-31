@@ -76,7 +76,7 @@ private:
   sbx::graphics::image2d_handle _noise_image;
 
   std::uint32_t _index_count{};
-  std::float_t _tiling_scale{0.02f};
+  std::float_t _tiling_scale{0.08f};
 
 }; // class terrain_subrenderer
 

@@ -34,7 +34,7 @@ inline auto get_road_properties(road_type type) -> road_properties {
 }
 
 static constexpr auto road_direction_offset_x = std::array<std::int32_t, 8>{0, 1, 1, 1, 0, -1, -1, -1};
-static constexpr auto road_direction_offset_y = std::array<std::int32_t, 8>{-1, -1, 0, 1, 1, 1, 0, -1};
+static constexpr auto road_direction_offset_z = std::array<std::int32_t, 8>{-1, -1, 0, 1, 1, 1, 0, -1};
 
 } // namespace demo
 

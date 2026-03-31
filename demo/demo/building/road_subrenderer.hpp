@@ -80,6 +80,10 @@ private:
   std::uint32_t _index_count{0};
   bool _is_dirty{true};
 
+  sbx::graphics::storage_buffer_handle _preview_vertex_buffer;
+  sbx::graphics::storage_buffer_handle _preview_index_buffer;
+  std::uint32_t _preview_index_count{0};
+
   static constexpr auto road_texture_count = 4u;
   static constexpr auto road_image_count = road_texture_count * 2u;
 

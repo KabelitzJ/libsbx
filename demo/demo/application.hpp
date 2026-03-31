@@ -73,8 +73,6 @@ private:
   sculpt_tool _sculpt_tool{sculpt_tool::raise};
 
   // Road drawing state
-  bool _road_draw_has_anchor{false};
-  cell_coordinates _road_draw_anchor{};
   road_type _current_road_type{road_type::paved};
 
 }; // class application

@@ -18,6 +18,7 @@
 #include <demo/building/building_instance.hpp>
 #include <demo/building/road_types.hpp>
 #include <demo/building/road_placement.hpp>
+#include <demo/building/road_drawing.hpp>
 
 namespace demo {
 
@@ -28,6 +29,17 @@ struct placement_preview {
   orientation orient{orientation::n};
   bool valid{false};
 }; // struct placement_preview
+
+struct road_preview {
+  bool active{false};
+  bool has_start{false};
+  cell_coordinates start{};
+  cell_coordinates cursor{};
+  road_type type{road_type::dirt};
+  bool shift_held{false};
+  std::vector<cell_coordinates> preview_cells;
+  bool dirty{false};
+}; // struct road_preview
 
 class building_module final : public sbx::core::module<building_module> {
 
@@ -88,6 +100,11 @@ public:
         return false;
       }
 
+      if (grid_cell.road_type != 0) {
+        sbx::utility::logger<"buildings">::debug("Placement rejected at ({}, {}): occupied by road", cell_x, cell_z);
+        return false;
+      }
+
       auto height = terrain_module.get_height_at_cell(cell_coordinates{cell_x, cell_z});
 
       if (height < terrain_constants::sea_level) {
@@ -140,6 +157,7 @@ public:
     }
 
     _flatten_footprint(cells, origin_x, origin_z);
+    _roads_dirty = true;
 
     // Compute footprint center in world space
     auto cell_sz = grid::cell_size;
@@ -156,9 +174,9 @@ public:
       max_z = std::max(max_z, origin_z + offset.z);
     }
 
-    auto [corner_wx, corner_wz] = terrain_module.cell_to_world(cell_coordinates{min_x, min_z});
-    auto center_wx = corner_wx + static_cast<std::float_t>(max_x - min_x + 1) * cell_sz * 0.5f;
-    auto center_wz = corner_wz + static_cast<std::float_t>(max_z - min_z + 1) * cell_sz * 0.5f;
+    auto corner = terrain_module.cell_to_world(cell_coordinates{min_x, min_z});
+    auto center_wx = corner.x + static_cast<std::float_t>(max_x - min_x + 1) * cell_sz * 0.5f;
+    auto center_wz = corner.z + static_cast<std::float_t>(max_z - min_z + 1) * cell_sz * 0.5f;
     auto center_wy = terrain_module.get_height_at(world_coordinates{center_wx, center_wz});
 
     auto node = graph.create_node(definition->name);
@@ -267,10 +285,10 @@ public:
     }
   }
 
-  auto place_road(std::int32_t start_x, std::int32_t start_y, std::int32_t end_x, std::int32_t end_y, road_type type) -> road_placement_result {
+  auto place_road(std::int32_t start_x, std::int32_t start_z, std::int32_t end_x, std::int32_t end_z, road_type type) -> road_placement_result {
     auto& terrain_module = sbx::core::engine::get_module<demo::terrain_module>();
 
-    auto result = place_road_line(terrain_module.grid(), start_x, start_y, end_x, end_y, type);
+    auto result = place_road_line(terrain_module.grid(), start_x, start_z, end_x, end_z, type);
 
     if (!result.placed_cells.empty()) {
       _roads_dirty = true;
@@ -291,10 +309,10 @@ public:
     return result;
   }
 
-  auto remove_road_at(std::int32_t cell_x, std::int32_t cell_y) -> void {
+  auto remove_road_at(std::int32_t cell_x, std::int32_t cell_z) -> void {
     auto& terrain_module = sbx::core::engine::get_module<demo::terrain_module>();
 
-    auto dirty_chunks = remove_road(terrain_module.grid(), cell_x, cell_y);
+    auto dirty_chunks = remove_road(terrain_module.grid(), cell_x, cell_z);
 
     if (!dirty_chunks.empty()) {
       _roads_dirty = true;
@@ -309,6 +327,77 @@ public:
     _roads_dirty = false;
   }
 
+  // ---- Road building mode ----
+
+  auto enter_road_mode(road_type type) -> void {
+    _road_preview_state.active = true;
+    _road_preview_state.has_start = false;
+    _road_preview_state.type = type;
+    _road_preview_state.preview_cells.clear();
+    _road_preview_state.dirty = true;
+  }
+
+  auto exit_road_mode() -> void {
+    _road_preview_state.active = false;
+    _road_preview_state.has_start = false;
+    _road_preview_state.preview_cells.clear();
+    _road_preview_state.dirty = true;
+  }
+
+  auto update_road_cursor(std::int32_t cell_x, std::int32_t cell_z, bool shift_held) -> void {
+    _road_preview_state.cursor = {cell_x, cell_z};
+    _road_preview_state.shift_held = shift_held;
+
+    _road_preview_state.preview_cells.clear();
+
+    if (_road_preview_state.has_start) {
+      auto path = build_snapped_road_path(_road_preview_state.start, _road_preview_state.cursor, shift_held);
+      _road_preview_state.preview_cells = std::move(path.cells);
+    } else {
+      _road_preview_state.preview_cells.push_back(_road_preview_state.cursor);
+    }
+
+    _road_preview_state.dirty = true;
+  }
+
+  auto confirm_road_point() -> road_placement_result {
+    if (!_road_preview_state.active) {
+      return {};
+    }
+
+    if (!_road_preview_state.has_start) {
+      _road_preview_state.has_start = true;
+      _road_preview_state.start = _road_preview_state.cursor;
+      return {};
+    }
+
+    auto result = place_road_path(_road_preview_state.preview_cells, _road_preview_state.type);
+
+    // Chain: next segment starts from current cursor
+    _road_preview_state.start = _road_preview_state.cursor;
+    _road_preview_state.preview_cells.clear();
+    _road_preview_state.preview_cells.push_back(_road_preview_state.cursor);
+    _road_preview_state.dirty = true;
+
+    return result;
+  }
+
+  auto get_road_preview() const -> const road_preview& {
+    return _road_preview_state;
+  }
+
+  auto is_road_mode() const -> bool {
+    return _road_preview_state.active;
+  }
+
+  auto road_preview_dirty() const -> bool {
+    return _road_preview_state.dirty;
+  }
+
+  auto clear_road_preview_dirty() -> void {
+    _road_preview_state.dirty = false;
+  }
+
 private:
 
   auto _flatten_footprint(const footprint& cells, std::int32_t origin_x, std::int32_t origin_z) -> void {
@@ -319,9 +408,9 @@ private:
     for (const auto& offset : cells) {
       auto cell_x = origin_x + offset.x;
       auto cell_z = origin_z + offset.z;
-      auto [world_x, world_z] = terrain_module.cell_to_world(cell_coordinates{cell_x, cell_z});
+      auto world = terrain_module.cell_to_world(cell_coordinates{cell_x, cell_z});
 
-      average_height += terrain_module.get_height_at(world_coordinates{world_x, world_z});
+      average_height += terrain_module.get_height_at(world);
     }
 
     average_height /= static_cast<std::float_t>(cells.size());
@@ -344,6 +433,8 @@ private:
   std::uint32_t _next_instance_id{1};
 
   bool _roads_dirty{false};
+
+  road_preview _road_preview_state;
 
 }; // class building_module
 

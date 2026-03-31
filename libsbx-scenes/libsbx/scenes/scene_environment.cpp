@@ -65,7 +65,7 @@ auto scene_environment::light_space() -> math::matrix4x4 {
   const auto& camera = _graph.get_component<scenes::camera>(_camera);
 
   const auto camera_view = math::matrix4x4::inverted(_graph.world_transform(_camera));
-  const auto camera_projection = camera.projection(0.1f, 100.0f);
+  const auto camera_projection = camera.projection(0.1f, 1000.0f);
 
   const auto inverse_view_projection = math::matrix4x4::inverted(camera_projection * camera_view);
 

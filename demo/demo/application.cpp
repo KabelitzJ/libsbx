@@ -191,14 +191,31 @@ auto application::update() -> void {
   const auto delta_time = sbx::core::engine::delta_time();
 
   if (sbx::devices::input::is_key_pressed(sbx::devices::key::escape)) {
-    sbx::core::engine::quit();
+    auto& building_module = sbx::core::engine::get_module<demo::building_module>();
+
+    if (building_module.is_road_mode()) {
+      building_module.exit_road_mode();
+    } else if (_placement_active) {
+      _placement_active = false;
+
+      auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
+      auto& graph = scenes_module.scene().graph();
+
+      if (_placement_preview_node != sbx::scenes::node{}) {
+        graph.destroy_node(_placement_preview_node);
+        _placement_preview_node = {};
+      }
+    } else {
+      sbx::core::engine::quit();
+    }
+
     return;
   }
 
   _update_placement();
   _update_road_drawing();
 
-    if (!_placement_active && !_road_draw_has_anchor) {
+    if (!_placement_active && !sbx::core::engine::get_module<demo::building_module>().is_road_mode()) {
     // Cycle sculpt tool with T
     if (sbx::devices::input::is_key_pressed(sbx::devices::key::t)) {
       auto current = static_cast<std::uint8_t>(_sculpt_tool);
@@ -449,9 +466,13 @@ auto application::_register_buildings() -> void {
 
   auto& asset_registry = scenes_module.asset_registry();
 
-  asset_registry.request_material<sbx::models::material>("house", sbx::models::material{
-    .base_color = sbx::math::color{1.0f, 0.0f, 0.0f, 1.0f}
-  });
+  auto house1_albedo = asset_registry.request_image("house1_albedo", "res://meshes/houses/house_1/textures/albedo.png", sbx::graphics::format::r8g8b8a8_srgb);
+
+  auto& house1_material = asset_registry.request_material<sbx::models::material>("house");
+  house1_material.albedo.image = house1_albedo;
+  house1_material.metallic_factor = 0.0f;
+  house1_material.roughness_factor = 0.8f;
+  house1_material.specular_factor = 1.0f;
 
   // Load house mesh
   asset_registry.request_mesh<sbx::models::mesh>("house_1", "res://meshes/houses/house_1/house_1.gltf");
@@ -682,132 +703,99 @@ auto application::_update_placement() -> void {
 
 auto application::_update_road_drawing() -> void {
   if (_placement_active) {
-    _road_draw_has_anchor = false;
     return;
   }
- 
+
   auto& building_module = sbx::core::engine::get_module<demo::building_module>();
   auto& terrain_module = sbx::core::engine::get_module<demo::terrain_module>();
-  auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
- 
-  // Cycle road type with number keys
-  if (sbx::devices::input::is_key_pressed(sbx::devices::key::one)) {
-    _current_road_type = road_type::dirt;
-  }
- 
-  if (sbx::devices::input::is_key_pressed(sbx::devices::key::two)) {
-    _current_road_type = road_type::gravel;
-  }
- 
-  if (sbx::devices::input::is_key_pressed(sbx::devices::key::three)) {
-    _current_road_type = road_type::paved;
-  }
- 
-  if (sbx::devices::input::is_key_pressed(sbx::devices::key::four)) {
-    _current_road_type = road_type::highway;
-  }
- 
-  // Cancel with escape
-  if (_road_draw_has_anchor && sbx::devices::input::is_key_pressed(sbx::devices::key::escape)) {
-    _road_draw_has_anchor = false;
+
+  // Toggle road mode with R
+  if (sbx::devices::input::is_key_pressed(sbx::devices::key::r)) {
+    if (building_module.is_road_mode()) {
+      building_module.exit_road_mode();
+    } else {
+      building_module.enter_road_mode(_current_road_type);
+    }
+
     return;
   }
- 
+
+  if (!building_module.is_road_mode()) {
+    return;
+  }
+
+  // Cycle road type with number keys (re-enter mode to update type)
+  auto switch_road_type = [&](road_type type) {
+    if (_current_road_type != type) {
+      _current_road_type = type;
+      building_module.enter_road_mode(_current_road_type);
+    }
+  };
+
+  if (sbx::devices::input::is_key_pressed(sbx::devices::key::one)) {
+    switch_road_type(road_type::dirt);
+  }
+
+  if (sbx::devices::input::is_key_pressed(sbx::devices::key::two)) {
+    switch_road_type(road_type::gravel);
+  }
+
+  if (sbx::devices::input::is_key_pressed(sbx::devices::key::three)) {
+    switch_road_type(road_type::paved);
+  }
+
+  if (sbx::devices::input::is_key_pressed(sbx::devices::key::four)) {
+    switch_road_type(road_type::highway);
+  }
+
   auto hit = _raycast_terrain();
- 
+
   if (!hit) {
     return;
   }
- 
-  auto hit_cell = terrain_module.world_to_cell(world_coordinates{world_coordinates{hit->x(), hit->z()}});
+
+  auto hit_cell = terrain_module.world_to_cell(world_coordinates{hit->x(), hit->z()});
   auto shift_held = sbx::devices::input::is_key_down(sbx::devices::key::left_shift);
- 
-  // Snap to nearest existing road within a small radius.
+
+  // Snap cursor to nearest existing road within a small radius
   auto snap_to_road = [&](const cell_coordinates& cell) -> cell_coordinates {
     constexpr auto snap_radius = 2;
- 
+
     auto& grid = terrain_module.grid();
     auto best = cell;
     auto best_distance_squared = std::numeric_limits<std::int32_t>::max();
- 
+
     for (auto dz = -snap_radius; dz <= snap_radius; ++dz) {
       for (auto dx = -snap_radius; dx <= snap_radius; ++dx) {
         auto cx = cell.x + dx;
         auto cz = cell.z + dz;
- 
+
         if (!grid.in_bounds(cx, cz)) {
           continue;
         }
- 
+
         if (grid.at(cx, cz).road_type == 0) {
           continue;
         }
- 
+
         auto dist = dx * dx + dz * dz;
- 
+
         if (dist < best_distance_squared) {
           best_distance_squared = dist;
           best = {cx, cz};
         }
       }
     }
- 
+
     return best;
   };
- 
+
+  auto snapped = snap_to_road(hit_cell);
+
+  building_module.update_road_cursor(snapped.x, snapped.z, shift_held);
+
   if (sbx::devices::input::is_mouse_button_pressed(sbx::devices::mouse_button::right)) {
-    if (!_road_draw_has_anchor) {
-      _road_draw_has_anchor = true;
-      _road_draw_anchor = snap_to_road(hit_cell);
-    } else {
-      auto snapped_end = snap_to_road(hit_cell);
-      auto path = build_snapped_road_path(_road_draw_anchor, snapped_end, shift_held);
- 
-      building_module.place_road_path(path.cells, _current_road_type);
- 
-      _road_draw_has_anchor = false;
-    }
-  }
- 
-  // Draw preview while anchor is set
-  if (_road_draw_has_anchor) {
-    auto preview_path = build_snapped_road_path(_road_draw_anchor, hit_cell, shift_held);
- 
-    auto properties = get_road_properties(_current_road_type);
-    auto preview_color = sbx::math::color{0.2f, 0.9f, 0.3f, 1.0f};
-    auto half = grid::cell_size * 0.4f;
- 
-    for (const auto& cell : preview_path.cells) {
-      auto [world_x, world_z] = terrain_module.cell_to_world(cell);
-      auto world_y = terrain_module.get_height_at(world_coordinates{world_x, world_z}) + properties.height_offset + 0.05f;
- 
-      auto p0 = sbx::math::vector3{world_x - half, world_y, world_z - half};
-      auto p1 = sbx::math::vector3{world_x + half, world_y, world_z - half};
-      auto p2 = sbx::math::vector3{world_x + half, world_y, world_z + half};
-      auto p3 = sbx::math::vector3{world_x - half, world_y, world_z + half};
- 
-      scenes_module.add_debug_line(p0, p1, preview_color);
-      scenes_module.add_debug_line(p1, p2, preview_color);
-      scenes_module.add_debug_line(p2, p3, preview_color);
-      scenes_module.add_debug_line(p3, p0, preview_color);
-    }
- 
-    // Highlight anchor
-    auto anchor_color = sbx::math::color{0.9f, 0.9f, 0.2f, 1.0f};
-    auto anchor_world = terrain_module.cell_to_world(_road_draw_anchor);
-    auto anchor_y = terrain_module.get_height_at(anchor_world) + properties.height_offset + 0.06f;
- 
-    auto a0 = sbx::math::vector3{anchor_world.x - half, anchor_y, anchor_world.z - half};
-    auto a1 = sbx::math::vector3{anchor_world.x + half, anchor_y, anchor_world.z - half};
-    auto a2 = sbx::math::vector3{anchor_world.x + half, anchor_y, anchor_world.z + half};
-    auto a3 = sbx::math::vector3{anchor_world.x - half, anchor_y, anchor_world.z + half};
- 
-    scenes_module.add_debug_line(a0, a1, anchor_color);
-    scenes_module.add_debug_line(a1, a2, anchor_color);
-    scenes_module.add_debug_line(a2, a3, anchor_color);
-    scenes_module.add_debug_line(a3, a0, anchor_color);
-    scenes_module.add_debug_line(a0, a2, anchor_color);
-    scenes_module.add_debug_line(a1, a3, anchor_color);
+    building_module.confirm_road_point();
   }
 }
 

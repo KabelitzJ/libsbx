@@ -22,6 +22,7 @@ struct road_vertex_data {
 
 struct push_data {
   road_vertex_data* vertex_data_buffer;
+  uint preview_mode;
 }; // struct push_data
 
 [[vk::push_constant]]

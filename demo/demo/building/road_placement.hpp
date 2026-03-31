@@ -14,12 +14,12 @@
 
 namespace demo {
 
-inline auto compute_road_mask(const grid& terrain_grid, std::int32_t cell_x, std::int32_t cell_y) -> std::uint8_t {
-  if (!terrain_grid.in_bounds(cell_x, cell_y)) {
+inline auto compute_road_mask(const grid& terrain_grid, std::int32_t cell_x, std::int32_t cell_z) -> std::uint8_t {
+  if (!terrain_grid.in_bounds(cell_x, cell_z)) {
     return 0;
   }
 
-  auto& center_cell = terrain_grid.at(cell_x, cell_y);
+  auto& center_cell = terrain_grid.at(cell_x, cell_z);
 
   if (center_cell.road_type == 0) {
     return 0;
@@ -29,13 +29,13 @@ inline auto compute_road_mask(const grid& terrain_grid, std::int32_t cell_x, std
 
   for (auto direction = 0u; direction < 8u; ++direction) {
     auto neighbor_x = cell_x + road_direction_offset_x[direction];
-    auto neighbor_y = cell_y + road_direction_offset_y[direction];
+    auto neighbor_z = cell_z + road_direction_offset_z[direction];
 
-    if (!terrain_grid.in_bounds(neighbor_x, neighbor_y)) {
+    if (!terrain_grid.in_bounds(neighbor_x, neighbor_z)) {
       continue;
     }
 
-    if (terrain_grid.at(neighbor_x, neighbor_y).road_type != 0) {
+    if (terrain_grid.at(neighbor_x, neighbor_z).road_type != 0) {
       mask |= (1u << direction);
     }
   }
@@ -43,25 +43,25 @@ inline auto compute_road_mask(const grid& terrain_grid, std::int32_t cell_x, std
   return mask;
 }
 
-inline auto update_road_connectivity(grid& terrain_grid, std::int32_t cell_x, std::int32_t cell_y) -> void {
-  if (terrain_grid.in_bounds(cell_x, cell_y)) {
-    terrain_grid.at(cell_x, cell_y).road_mask = compute_road_mask(terrain_grid, cell_x, cell_y);
+inline auto update_road_connectivity(grid& terrain_grid, std::int32_t cell_x, std::int32_t cell_z) -> void {
+  if (terrain_grid.in_bounds(cell_x, cell_z)) {
+    terrain_grid.at(cell_x, cell_z).road_mask = compute_road_mask(terrain_grid, cell_x, cell_z);
   }
 
   for (auto direction = 0u; direction < 8u; ++direction) {
     auto neighbor_x = cell_x + road_direction_offset_x[direction];
-    auto neighbor_y = cell_y + road_direction_offset_y[direction];
+    auto neighbor_z = cell_z + road_direction_offset_z[direction];
 
-    if (terrain_grid.in_bounds(neighbor_x, neighbor_y)) {
-      terrain_grid.at(neighbor_x, neighbor_y).road_mask = compute_road_mask(terrain_grid, neighbor_x, neighbor_y);
+    if (terrain_grid.in_bounds(neighbor_x, neighbor_z)) {
+      terrain_grid.at(neighbor_x, neighbor_z).road_mask = compute_road_mask(terrain_grid, neighbor_x, neighbor_z);
     }
   }
 }
 
-inline auto cell_to_chunk(std::int32_t cell_x, std::int32_t cell_y) -> cell_coordinates {
+inline auto cell_to_chunk(std::int32_t cell_x, std::int32_t cell_z) -> cell_coordinates {
   return cell_coordinates{
     static_cast<std::int32_t>(std::floor(static_cast<std::float_t>(cell_x) / chunk_size)),
-    static_cast<std::int32_t>(std::floor(static_cast<std::float_t>(cell_y) / chunk_size))
+    static_cast<std::int32_t>(std::floor(static_cast<std::float_t>(cell_z) / chunk_size))
   };
 }
 
@@ -99,9 +99,9 @@ inline auto place_road_path(grid& terrain_grid, const std::vector<cell_coordinat
 
     for (auto direction = 0u; direction < 8u; ++direction) {
       auto neighbor_x = placed_cell.x + road_direction_offset_x[direction];
-      auto neighbor_y = placed_cell.z + road_direction_offset_y[direction];
+      auto neighbor_z = placed_cell.z + road_direction_offset_z[direction];
 
-      result.dirty_chunks.insert(cell_to_chunk(neighbor_x, neighbor_y));
+      result.dirty_chunks.insert(cell_to_chunk(neighbor_x, neighbor_z));
     }
   }
 
@@ -109,47 +109,47 @@ inline auto place_road_path(grid& terrain_grid, const std::vector<cell_coordinat
 }
 
 // Legacy bresenham placement — kept for compatibility.
-inline auto place_road_line(grid& terrain_grid, std::int32_t start_x, std::int32_t start_y, std::int32_t end_x, std::int32_t end_y, road_type type) -> road_placement_result {
+inline auto place_road_line(grid& terrain_grid, std::int32_t start_x, std::int32_t start_z, std::int32_t end_x, std::int32_t end_z, road_type type) -> road_placement_result {
   auto result = road_placement_result{};
 
   auto dx = std::abs(end_x - start_x);
-  auto dy = std::abs(end_y - start_y);
+  auto dz = std::abs(end_z - start_z);
   auto sx = (start_x < end_x) ? 1 : -1;
-  auto sy = (start_y < end_y) ? 1 : -1;
-  auto error = dx - dy;
+  auto sz = (start_z < end_z) ? 1 : -1;
+  auto error = dx - dz;
 
   auto current_x = start_x;
-  auto current_y = start_y;
+  auto current_z = start_z;
 
   while (true) {
-    if (terrain_grid.in_bounds(current_x, current_y)) {
-      auto& current_cell = terrain_grid.at(current_x, current_y);
+    if (terrain_grid.in_bounds(current_x, current_z)) {
+      auto& current_cell = terrain_grid.at(current_x, current_z);
 
       if (current_cell.building_id == 0) {
         auto new_type = static_cast<std::uint8_t>(type);
 
         if (new_type > current_cell.road_type) {
           current_cell.road_type = new_type;
-          result.placed_cells.push_back({current_x, current_y});
-          result.dirty_chunks.insert(cell_to_chunk(current_x, current_y));
+          result.placed_cells.push_back({current_x, current_z});
+          result.dirty_chunks.insert(cell_to_chunk(current_x, current_z));
         }
       }
     }
 
-    if (current_x == end_x && current_y == end_y) {
+    if (current_x == end_x && current_z == end_z) {
       break;
     }
 
     auto error2 = error * 2;
 
-    if (error2 > -dy) {
-      error -= dy;
+    if (error2 > -dz) {
+      error -= dz;
       current_x += sx;
     }
 
     if (error2 < dx) {
       error += dx;
-      current_y += sy;
+      current_z += sz;
     }
   }
 
@@ -158,23 +158,23 @@ inline auto place_road_line(grid& terrain_grid, std::int32_t start_x, std::int32
 
     for (auto direction = 0u; direction < 8u; ++direction) {
       auto neighbor_x = placed_cell.x + road_direction_offset_x[direction];
-      auto neighbor_y = placed_cell.z + road_direction_offset_y[direction];
+      auto neighbor_z = placed_cell.z + road_direction_offset_z[direction];
 
-      result.dirty_chunks.insert(cell_to_chunk(neighbor_x, neighbor_y));
+      result.dirty_chunks.insert(cell_to_chunk(neighbor_x, neighbor_z));
     }
   }
 
   return result;
 }
 
-inline auto remove_road(grid& terrain_grid, std::int32_t cell_x, std::int32_t cell_y) -> std::unordered_set<cell_coordinates, cell_coordinates_hash> {
+inline auto remove_road(grid& terrain_grid, std::int32_t cell_x, std::int32_t cell_z) -> std::unordered_set<cell_coordinates, cell_coordinates_hash> {
   auto dirty_chunks = std::unordered_set<cell_coordinates, cell_coordinates_hash>{};
 
-  if (!terrain_grid.in_bounds(cell_x, cell_y)) {
+  if (!terrain_grid.in_bounds(cell_x, cell_z)) {
     return dirty_chunks;
   }
 
-  auto& current_cell = terrain_grid.at(cell_x, cell_y);
+  auto& current_cell = terrain_grid.at(cell_x, cell_z);
 
   if (current_cell.road_type == 0) {
     return dirty_chunks;
@@ -183,15 +183,15 @@ inline auto remove_road(grid& terrain_grid, std::int32_t cell_x, std::int32_t ce
   current_cell.road_type = 0;
   current_cell.road_mask = 0;
 
-  dirty_chunks.insert(cell_to_chunk(cell_x, cell_y));
+  dirty_chunks.insert(cell_to_chunk(cell_x, cell_z));
 
   for (auto direction = 0u; direction < 8u; ++direction) {
     auto neighbor_x = cell_x + road_direction_offset_x[direction];
-    auto neighbor_y = cell_y + road_direction_offset_y[direction];
+    auto neighbor_z = cell_z + road_direction_offset_z[direction];
 
-    if (terrain_grid.in_bounds(neighbor_x, neighbor_y)) {
-      terrain_grid.at(neighbor_x, neighbor_y).road_mask = compute_road_mask(terrain_grid, neighbor_x, neighbor_y);
-      dirty_chunks.insert(cell_to_chunk(neighbor_x, neighbor_y));
+    if (terrain_grid.in_bounds(neighbor_x, neighbor_z)) {
+      terrain_grid.at(neighbor_x, neighbor_z).road_mask = compute_road_mask(terrain_grid, neighbor_x, neighbor_z);
+      dirty_chunks.insert(cell_to_chunk(neighbor_x, neighbor_z));
     }
   }
 

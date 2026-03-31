@@ -116,7 +116,7 @@ public:
   }
 
   constexpr auto override(const value_type value) noexcept -> void {
-    _value = value;
+    _value = static_cast<underlying_type>(value);
   }
 
   constexpr auto has(const value_type value) const noexcept -> bool {

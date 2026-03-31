@@ -30,6 +30,7 @@ struct road_vertex_data {
 
 struct push_data {
   road_vertex_data* vertex_data_buffer;
+  uint preview_mode;
 }; // struct push_data
 
 [[vk::push_constant]]
@@ -102,7 +103,16 @@ fs_out main(fs_in input) {
   output.position = float4(input.position, 1.0);
   output.normal = float4(normal * 0.5 + 0.5, 1.0);
   output.material = float4(0.0, road_roughness, 1.0, 1.0);
-  output.emissive = float4(0.0, 0.0, 0.0, 1.0);
+
+  // Preview: green emissive overlay
+  float3 emissive_color = float3(0.0, 0.0, 0.0);
+
+  if (push.preview_mode == 1u) {
+    emissive_color = float3(0.15, 0.6, 0.15);
+    output.albedo.rgb = lerp(albedo, float3(0.2, 0.5, 0.2), 0.4);
+  }
+
+  output.emissive = float4(emissive_color, 1.0);
   output.object_id = 0;
   output.linear_depth = sbx::common::linearize_depth(input.sv_position.z, scene.camera_near, scene.camera_far);
 

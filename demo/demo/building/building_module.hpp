@@ -19,6 +19,7 @@
 #include <demo/building/road_types.hpp>
 #include <demo/building/road_placement.hpp>
 #include <demo/building/road_drawing.hpp>
+#include <demo/building/zone_types.hpp>
 
 namespace demo {
 
@@ -40,6 +41,12 @@ struct road_preview {
   std::vector<cell_coordinates> preview_cells;
   bool dirty{false};
 }; // struct road_preview
+
+struct zone_painting {
+  bool active{false};
+  zone_type current_type{zone_type::residential};
+  std::int32_t brush_radius{0};
+}; // struct zone_painting
 
 class building_module final : public sbx::core::module<building_module> {
 
@@ -398,6 +405,105 @@ public:
     _road_preview_state.dirty = false;
   }
 
+  // ---- Zone painting mode ----
+
+  auto enter_zone_mode(zone_type type) -> void {
+    _zone_painting_state.active = true;
+    _zone_painting_state.current_type = type;
+
+    sbx::utility::logger<"demo">::info("Zone mode entered: {}", get_zone_name(type));
+  }
+
+  auto exit_zone_mode() -> void {
+    _zone_painting_state.active = false;
+
+    sbx::utility::logger<"demo">::info("Zone mode exited");
+  }
+
+  auto set_zone_type(zone_type type) -> void {
+    _zone_painting_state.current_type = type;
+  }
+
+  auto set_zone_brush_radius(std::int32_t radius) -> void {
+    _zone_painting_state.brush_radius = radius;
+  }
+
+  auto paint_zone(std::int32_t cell_x, std::int32_t cell_z) -> void {
+    auto& terrain_module = sbx::core::engine::get_module<demo::terrain_module>();
+    auto& grid = terrain_module.grid();
+
+    auto radius = _zone_painting_state.brush_radius;
+
+    for (auto dz = -radius; dz <= radius; ++dz) {
+      for (auto dx = -radius; dx <= radius; ++dx) {
+        auto cx = cell_x + dx;
+        auto cz = cell_z + dz;
+
+        if (!grid.in_bounds(cx, cz)) {
+          continue;
+        }
+
+        auto& cell = grid.at(cx, cz);
+
+        // Don't paint over buildings or roads
+        if (cell.building_id != 0 || cell.road_type != 0) {
+          continue;
+        }
+
+        // Don't paint underwater
+        auto height = terrain_module.get_height_at_cell(cell_coordinates{cx, cz});
+
+        if (height < terrain_constants::sea_level) {
+          continue;
+        }
+
+        cell.zone_type = static_cast<std::uint8_t>(_zone_painting_state.current_type);
+      }
+    }
+
+    _zones_dirty = true;
+
+    sbx::utility::logger<"demo">::debug("Painted zone {} at ({}, {}) radius {}", get_zone_name(_zone_painting_state.current_type), cell_x, cell_z, radius);
+  }
+
+  auto erase_zone(std::int32_t cell_x, std::int32_t cell_z) -> void {
+    auto& terrain_module = sbx::core::engine::get_module<demo::terrain_module>();
+    auto& grid = terrain_module.grid();
+
+    auto radius = _zone_painting_state.brush_radius;
+
+    for (auto dz = -radius; dz <= radius; ++dz) {
+      for (auto dx = -radius; dx <= radius; ++dx) {
+        auto cx = cell_x + dx;
+        auto cz = cell_z + dz;
+
+        if (!grid.in_bounds(cx, cz)) {
+          continue;
+        }
+
+        grid.at(cx, cz).zone_type = 0;
+      }
+    }
+
+    _zones_dirty = true;
+  }
+
+  auto is_zone_mode() const -> bool {
+    return _zone_painting_state.active;
+  }
+
+  auto get_zone_painting() const -> const zone_painting& {
+    return _zone_painting_state;
+  }
+
+  auto zones_dirty() const -> bool {
+    return _zones_dirty;
+  }
+
+  auto clear_zones_dirty() -> void {
+    _zones_dirty = false;
+  }
+
 private:
 
   auto _flatten_footprint(const footprint& cells, std::int32_t origin_x, std::int32_t origin_z) -> void {
@@ -433,8 +539,10 @@ private:
   std::uint32_t _next_instance_id{1};
 
   bool _roads_dirty{false};
+  bool _zones_dirty{false};
 
   road_preview _road_preview_state;
+  zone_painting _zone_painting_state;
 
 }; // class building_module
 

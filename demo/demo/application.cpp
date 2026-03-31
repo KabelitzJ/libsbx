@@ -49,6 +49,7 @@
 #include <demo/building/road_types.hpp>
 #include <demo/building/road_placement.hpp>
 #include <demo/building/road_subrenderer.hpp>
+#include <demo/building/zone_subrenderer.hpp>
 
 namespace demo {
 
@@ -195,6 +196,8 @@ auto application::update() -> void {
 
     if (building_module.is_road_mode()) {
       building_module.exit_road_mode();
+    } else if (building_module.is_zone_mode()) {
+      building_module.exit_zone_mode();
     } else if (_placement_active) {
       _placement_active = false;
 
@@ -214,8 +217,9 @@ auto application::update() -> void {
 
   _update_placement();
   _update_road_drawing();
+  _update_zone_painting();
 
-    if (!_placement_active && !sbx::core::engine::get_module<demo::building_module>().is_road_mode()) {
+    if (!_placement_active && !sbx::core::engine::get_module<demo::building_module>().is_road_mode() && !sbx::core::engine::get_module<demo::building_module>().is_zone_mode()) {
     // Cycle sculpt tool with T
     if (sbx::devices::input::is_key_pressed(sbx::devices::key::t)) {
       auto current = static_cast<std::uint8_t>(_sculpt_tool);
@@ -481,8 +485,8 @@ auto application::_register_buildings() -> void {
   house.id = 1;
   house.name = "House";
   house.category = building_category::housing;
-  house.footprint_width = 3;
-  house.footprint_height = 3;
+  house.footprint_width = 6;
+  house.footprint_height = 2;
   house.mesh_id = "house_1";
   house.material_id = "house";
 
@@ -532,7 +536,7 @@ auto application::_raycast_terrain() -> std::optional<sbx::math::vector3> {
 }
 
 auto application::_update_placement() -> void {
-  auto& building_mod = sbx::core::engine::get_module<demo::building_module>();
+  auto& building_module = sbx::core::engine::get_module<demo::building_module>();
   auto& terrain_module = sbx::core::engine::get_module<demo::terrain_module>();
   auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
 
@@ -544,7 +548,7 @@ auto application::_update_placement() -> void {
 
     if (_placement_active) {
       // Create preview node with mesh
-      auto* definition = building_mod.get_definition(_placement_definition_id);
+      auto* definition = building_module.get_definition(_placement_definition_id);
 
       if (definition) {
         _placement_preview_node = graph.create_node("placement_preview");
@@ -584,7 +588,7 @@ auto application::_update_placement() -> void {
     return;
   }
 
-  auto* definition = building_mod.get_definition(_placement_definition_id);
+  auto* definition = building_module.get_definition(_placement_definition_id);
 
   if (!definition) {
     return;
@@ -612,7 +616,7 @@ auto application::_update_placement() -> void {
   auto origin_x = cursor_cell.x - center_offset_x;
   auto origin_z = cursor_cell.z - center_offset_z;
 
-  auto preview = building_mod.update_preview(_placement_definition_id, origin_x, origin_z, _placement_orientation);
+  auto preview = building_module.update_preview(_placement_definition_id, origin_x, origin_z, _placement_orientation);
   _placement_preview_valid = preview.valid;
 
   // Update preview node transform
@@ -667,12 +671,12 @@ auto application::_update_placement() -> void {
 
   // Place on click
   if (preview.valid && sbx::devices::input::is_mouse_button_pressed(sbx::devices::mouse_button::left)) {
-    building_mod.place(_placement_definition_id, origin_x, origin_z, _placement_orientation);
+    building_module.place(_placement_definition_id, origin_x, origin_z, _placement_orientation);
   }
 
   // Draw placed building outlines
-  building_mod.for_each_instance([&](const building_instance& instance) {
-    auto* def = building_mod.get_definition(instance.definition_id);
+  building_module.for_each_instance([&](const building_instance& instance) {
+    auto* def = building_module.get_definition(instance.definition_id);
 
     if (!def) {
       return;
@@ -796,6 +800,134 @@ auto application::_update_road_drawing() -> void {
 
   if (sbx::devices::input::is_mouse_button_pressed(sbx::devices::mouse_button::right)) {
     building_module.confirm_road_point();
+  }
+}
+
+auto application::_update_zone_painting() -> void {
+  if (_placement_active) {
+    return;
+  }
+
+  auto& building_module = sbx::core::engine::get_module<demo::building_module>();
+  auto& terrain_module = sbx::core::engine::get_module<demo::terrain_module>();
+
+  // Toggle zone mode with Z
+  if (sbx::devices::input::is_key_pressed(sbx::devices::key::z)) {
+    if (building_module.is_zone_mode()) {
+      building_module.exit_zone_mode();
+    } else {
+      // Exit road mode if active
+      if (building_module.is_road_mode()) {
+        building_module.exit_road_mode();
+      }
+
+      building_module.enter_zone_mode(_current_zone_type);
+    }
+
+    return;
+  }
+
+  if (!building_module.is_zone_mode()) {
+    return;
+  }
+
+  // Zone type selection with number keys
+  auto switch_zone = [&](zone_type type) {
+    if (_current_zone_type != type) {
+      _current_zone_type = type;
+      building_module.set_zone_type(type);
+
+      sbx::utility::logger<"demo">::info("Zone type: {}", get_zone_name(type));
+    }
+  };
+
+  if (sbx::devices::input::is_key_pressed(sbx::devices::key::one)) {
+    switch_zone(zone_type::residential);
+  }
+
+  if (sbx::devices::input::is_key_pressed(sbx::devices::key::two)) {
+    switch_zone(zone_type::industrial);
+  }
+
+  if (sbx::devices::input::is_key_pressed(sbx::devices::key::three)) {
+    switch_zone(zone_type::extraction);
+  }
+
+  if (sbx::devices::input::is_key_pressed(sbx::devices::key::four)) {
+    switch_zone(zone_type::agricultural);
+  }
+
+  if (sbx::devices::input::is_key_pressed(sbx::devices::key::five)) {
+    switch_zone(zone_type::civic);
+  }
+
+  if (sbx::devices::input::is_key_pressed(sbx::devices::key::six)) {
+    switch_zone(zone_type::military);
+  }
+
+  if (sbx::devices::input::is_key_pressed(sbx::devices::key::seven)) {
+    switch_zone(zone_type::infrastructure);
+  }
+
+  // Brush radius with scroll or +/-
+  if (sbx::devices::input::is_key_pressed(sbx::devices::key::p)) {
+    auto radius = building_module.get_zone_painting().brush_radius;
+    building_module.set_zone_brush_radius(std::min(radius + 1, 5));
+  }
+
+  if (sbx::devices::input::is_key_pressed(sbx::devices::key::l)) {
+    auto radius = building_module.get_zone_painting().brush_radius;
+    building_module.set_zone_brush_radius(std::max(radius - 1, 0));
+  }
+
+  auto hit = _raycast_terrain();
+
+  if (!hit) {
+    return;
+  }
+
+  auto hit_cell = terrain_module.world_to_cell(world_coordinates{hit->x(), hit->z()});
+
+  // Left click: paint zone
+  if (sbx::devices::input::is_mouse_button_down(sbx::devices::mouse_button::left)) {
+    building_module.paint_zone(hit_cell.x, hit_cell.z);
+  }
+
+  // Right click: erase zone
+  if (sbx::devices::input::is_mouse_button_down(sbx::devices::mouse_button::right)) {
+    building_module.erase_zone(hit_cell.x, hit_cell.z);
+  }
+
+  // Draw brush cursor
+  auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
+
+  auto radius = building_module.get_zone_painting().brush_radius;
+  auto cell_sz = terrain_module.cell_size();
+  auto color = get_zone_color(_current_zone_type);
+  auto cursor_color = sbx::math::color{color.r, color.g, color.b, 1.0f};
+
+  for (auto dz = -radius; dz <= radius; ++dz) {
+    for (auto dx = -radius; dx <= radius; ++dx) {
+      auto cx = hit_cell.x + dx;
+      auto cz = hit_cell.z + dz;
+
+      if (!terrain_module.grid().in_bounds(cx, cz)) {
+        continue;
+      }
+
+      auto [wx, wz] = terrain_module.cell_to_world(cell_coordinates{cx, cz});
+      auto wy = terrain_module.get_height_at(world_coordinates{wx + cell_sz * 0.5f, wz + cell_sz * 0.5f}) + 0.15f;
+
+      auto a = sbx::math::vector3{wx, wy, wz};
+      auto b = sbx::math::vector3{wx + cell_sz, wy, wz};
+      auto c = sbx::math::vector3{wx + cell_sz, wy, wz + cell_sz};
+      auto d = sbx::math::vector3{wx, wy, wz + cell_sz};
+
+      scenes_module.add_debug_line(a, b, cursor_color);
+      scenes_module.add_debug_line(b, c, cursor_color);
+      scenes_module.add_debug_line(c, d, cursor_color);
+      scenes_module.add_debug_line(d, a, cursor_color);
+    }
   }
 }
 

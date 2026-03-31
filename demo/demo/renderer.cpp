@@ -37,6 +37,7 @@
 #include <demo/terrain/terrain_subrenderer.hpp>
 #include <demo/terrain/water_subrenderer.hpp>
 #include <demo/building/road_subrenderer.hpp>
+#include <demo/building/zone_subrenderer.hpp>
 
 namespace demo {
 
@@ -283,6 +284,7 @@ renderer::renderer(bool is_editor)
 
   add_subrenderer<demo::terrain_subrenderer>(deferred_pass, "res://shaders/terrain");
   add_subrenderer<demo::road_subrenderer>(deferred_pass, "res://shaders/road");
+  add_subrenderer<demo::zone_subrenderer>(deferred_pass, "res://shaders/zone");
 
   // Transparency pass
   add_subrenderer<sbx::models::static_mesh_material_subrenderer>(transparency_pass, "res://shaders/deferred_pbr_material", sbx::models::static_mesh_material_draw_list::bucket::transparent);

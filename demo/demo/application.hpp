@@ -16,6 +16,7 @@
 
 #include <demo/building/building_definition.hpp>
 #include <demo/building/road_types.hpp>
+#include <demo/building/zone_types.hpp>
 
 namespace demo {
 
@@ -42,6 +43,7 @@ private:
   auto _raycast_terrain() -> std::optional<sbx::math::vector3>;
 
   auto _update_road_drawing() -> void;
+  auto _update_zone_painting() -> void;
 
   auto _generate_brdf(const std::uint32_t size) -> void;
   auto _generate_irradiance(const std::uint32_t size) -> void;
@@ -74,6 +76,9 @@ private:
 
   // Road drawing state
   road_type _current_road_type{road_type::paved};
+
+  // Zone painting state
+  zone_type _current_zone_type{zone_type::residential};
 
 }; // class application
 

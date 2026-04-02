@@ -51,6 +51,9 @@
 #include <demo/building/road_subrenderer.hpp>
 #include <demo/building/zone_subrenderer.hpp>
 
+#include <demo/simulation/simulation_module.hpp>
+#include <demo/simulation/day_night_cycle.hpp>
+
 namespace demo {
 
 application::application()
@@ -213,6 +216,38 @@ auto application::update() -> void {
     }
 
     return;
+  }
+
+  auto& simulation_module = sbx::core::engine::get_module<demo::simulation_module>();
+
+  if (sbx::devices::input::is_key_pressed(sbx::devices::key::space)) {
+    simulation_module.clock().toggle_pause();
+
+    sbx::utility::logger<"demo">::info("Simulation: {}", simulation_module.clock().speed_name());
+  }
+
+  if (sbx::devices::input::is_key_pressed(sbx::devices::key::comma)) {
+    auto current = simulation_module.clock().speed();
+
+    if (current == simulation_speed::faster) {
+      simulation_module.clock().set_speed(simulation_speed::fast);
+    } else if (current == simulation_speed::fast) {
+      simulation_module.clock().set_speed(simulation_speed::normal);
+    }
+
+    sbx::utility::logger<"demo">::info("Simulation: {}", simulation_module.clock().speed_name());
+  }
+
+  if (sbx::devices::input::is_key_pressed(sbx::devices::key::period)) {
+    auto current = simulation_module.clock().speed();
+
+    if (current == simulation_speed::normal) {
+      simulation_module.clock().set_speed(simulation_speed::fast);
+    } else if (current == simulation_speed::fast) {
+      simulation_module.clock().set_speed(simulation_speed::faster);
+    }
+
+    sbx::utility::logger<"demo">::info("Simulation: {}", simulation_module.clock().speed_name());
   }
 
   _update_placement();
@@ -870,12 +905,12 @@ auto application::_update_zone_painting() -> void {
   }
 
   // Brush radius with scroll or +/-
-  if (sbx::devices::input::is_key_pressed(sbx::devices::key::p)) {
+  if (sbx::devices::input::is_key_pressed(sbx::devices::key::equal)) {
     auto radius = building_module.get_zone_painting().brush_radius;
     building_module.set_zone_brush_radius(std::min(radius + 1, 5));
   }
 
-  if (sbx::devices::input::is_key_pressed(sbx::devices::key::l)) {
+  if (sbx::devices::input::is_key_pressed(sbx::devices::key::minus)) {
     auto radius = building_module.get_zone_painting().brush_radius;
     building_module.set_zone_brush_radius(std::max(radius - 1, 0));
   }

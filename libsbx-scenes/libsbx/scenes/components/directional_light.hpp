@@ -37,6 +37,10 @@ public:
     return _color;
   }
 
+  auto set_color(const math::color& color) noexcept -> void {
+    _color = color;
+  }
+
 private:
 
   math::vector3 _direction;

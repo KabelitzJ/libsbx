@@ -18,6 +18,8 @@
 #include <demo/building/road_types.hpp>
 #include <demo/building/zone_types.hpp>
 
+#include <demo/simulation/tick_clock.hpp>
+
 namespace demo {
 
 class application : public sbx::core::application {

@@ -12,11 +12,6 @@
 #include <libsbx/ui/ui.hpp>
 #include <libsbx/scenes/scenes.hpp>
 
-#include <demo/terrain/sculpt.hpp>
-
-#include <demo/building/building_definition.hpp>
-#include <demo/building/road_types.hpp>
-
 namespace demo {
 
 class application : public sbx::core::application {
@@ -37,12 +32,6 @@ private:
 
   auto _build_ui() -> void;
 
-  auto _register_buildings() -> void;
-  auto _update_placement() -> void;
-  auto _raycast_terrain() -> std::optional<sbx::math::vector3>;
-
-  auto _update_road_drawing() -> void;
-
   auto _generate_brdf(const std::uint32_t size) -> void;
   auto _generate_irradiance(const std::uint32_t size) -> void;
   auto _generate_prefiltered(const std::uint32_t size) -> void;
@@ -61,19 +50,6 @@ private:
   sbx::graphics::cube_image2d_handle _prefiltered;
 
   sbx::ui::font _font;
-
-  // Placement state
-  bool _placement_active{false};
-  std::uint32_t _placement_definition_id{0};
-  orientation _placement_orientation{orientation::n};
-  sbx::scenes::node _placement_preview_node{};
-  bool _placement_preview_valid{false};
-
-  // Sculpt state
-  sculpt_tool _sculpt_tool{sculpt_tool::raise};
-
-  // Road drawing state
-  road_type _current_road_type{road_type::paved};
 
 }; // class application
 

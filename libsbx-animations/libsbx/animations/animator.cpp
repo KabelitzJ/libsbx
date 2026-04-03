@@ -51,32 +51,6 @@ static auto sample_clip_locals(const skeleton& skeleton, const math::uuid& anima
   return locals;
 }
 
-// static auto locals_to_final_matrices(const skeleton& skeleton, const std::vector<animator::bone_transform>& local_transforms) -> std::vector<math::matrix4x4> {
-//   const auto bone_count = skeleton.bone_count();
-
-//   auto global_matrices = utility::make_vector<math::matrix4x4>(bone_count, math::matrix4x4::identity);
-//   auto final_matrices = utility::make_vector<math::matrix4x4>(bone_count, math::matrix4x4::identity);
-
-//   const auto& bones = skeleton.bones();
-
-//   for (std::uint32_t bone_index = 0; bone_index < bone_count; ++bone_index) {
-//     const auto& transform = local_transforms[bone_index];
-
-//     const auto translation_matrix = math::matrix4x4::translated(math::matrix4x4::identity, transform.position);
-//     const auto rotation_matrix = math::matrix_cast<math::matrix4x4>(transform.rotation);
-//     const auto scale_matrix = math::matrix4x4::scaled(math::matrix4x4::identity, transform.scale);
-
-//     const auto local_matrix = translation_matrix * rotation_matrix * scale_matrix;
-
-//     const auto global_matrix = (bones[bone_index].parent_id != skeleton::bone::null) ? global_matrices[bones[bone_index].parent_id] * local_matrix : local_matrix;
-
-//     final_matrices[bone_index] = skeleton.inverse_root_transform() * global_matrix * bones[bone_index].inverse_bind_matrix;
-//     global_matrices[bone_index] = std::move(global_matrix);
-//   }
-
-//   return final_matrices;
-// }
-
 static auto _clip_duration(const math::uuid& animation_id) ->  std::float_t {
   auto& assets_module = core::engine::get_module<assets::assets_module>();
 

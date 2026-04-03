@@ -186,7 +186,7 @@ auto mesh<Vertex>::_calculate_bounds_from_submeshes(math::volume&& bounds) const
     return bounds;
   }
 
-  auto min = _submeshes[0].bounds.max();
+  auto min = _submeshes[0].bounds.min();
   auto max = _submeshes[0].bounds.max();
 
   for (auto i = 1u; i < _submeshes.size(); ++i) {

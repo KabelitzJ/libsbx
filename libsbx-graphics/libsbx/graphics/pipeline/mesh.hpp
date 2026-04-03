@@ -131,28 +131,26 @@ public:
   }
 
   auto lod_count(std::uint32_t submesh_index) const -> std::uint32_t {
-    auto count = std::uint32_t{1u};
     const auto group = _submeshes[submesh_index].lod_group;
+    auto count = std::uint32_t{0u};
 
-    for (auto i = submesh_index + 1u; i < static_cast<std::uint32_t>(_submeshes.size()); ++i) {
-      if (_submeshes[i].lod_group != group) {
-        break;
+    for (const auto& submesh : _submeshes) {
+      if (submesh.lod_group == group) {
+        ++count;
       }
-
-      ++count;
     }
 
     return count;
   }
 
-  auto base_submesh_index(std::uint32_t lod_group) const -> std::uint32_t {
+  auto find_base_submesh_index(std::uint32_t lod_group) const -> std::optional<std::uint32_t> {
     for (auto i = std::uint32_t{0u}; i < static_cast<std::uint32_t>(_submeshes.size()); ++i) {
       if (_submeshes[i].lod_group == lod_group && _submeshes[i].lod_level == 0u) {
         return i;
       }
     }
 
-    throw utility::runtime_error{"LOD group {} not found", lod_group};
+    return std::nullopt;
   }
 
 protected:

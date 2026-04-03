@@ -67,7 +67,7 @@ using bone_offsets = std::vector<math::matrix4x4>;
 using transform_map = std::unordered_map<std::string, math::matrix4x4>;
 using bone_names = std::unordered_set<std::string>;
 
-static auto _load_mesh(const aiMesh* mesh, mesh::mesh_data& data, bone_map& bone_map, bone_offsets& bone_offsets) -> void {
+static auto _load_mesh(const aiMesh* mesh, mesh::mesh_data& data, const bone_map& bone_map, const bone_offsets& bone_offsets) -> void {
   if (!mesh->HasNormals()) {
     throw std::runtime_error{fmt::format("Mesh '{}' does not have normals", mesh->mName.C_Str())};
   }
@@ -112,9 +112,7 @@ static auto _load_mesh(const aiMesh* mesh, mesh::mesh_data& data, bone_map& bone
   auto bounds = math::volume{_convert_vec3(mesh->mAABB.mMin), _convert_vec3(mesh->mAABB.mMax)};
 
   if (bounds.min() == bounds.max()) {
-    const auto aabb = math::volume::construct(data.vertices, &vertex3d::position);
-
-    bounds = aabb;
+    bounds = math::volume::construct(data.vertices, &vertex3d::position);
   }
 
   data.bounds.include(bounds);
@@ -129,26 +127,74 @@ static auto _load_mesh(const aiMesh* mesh, mesh::mesh_data& data, bone_map& bone
 
   for (auto i = 0u; i < mesh->mNumBones; ++i) {
     const auto* bone = mesh->mBones[i];
-    const auto bone_name = std::string{bone->mName.C_Str()};
+    auto id = bone_map.at(bone->mName.C_Str());
 
-    if (bone_map.find(bone_name) == bone_map.end()) {
-      auto bone_id = static_cast<std::uint32_t>(bone_offsets.size());
+    for (auto j = 0u; j < bone->mNumWeights; ++j) {
+      const auto& weight = bone->mWeights[j];
+      auto& vertex = data.vertices[weight.mVertexId + submesh.vertex_offset];
 
-      bone_map.emplace(bone_name, bone_id);
-      bone_offsets.push_back(_convert_mat4(bone->mOffsetMatrix));
+      for (auto k = 0u; k < 4u; ++k) {
+        if (vertex.bone_weights[k] == 0.0f) {
+          vertex.bone_ids[k] = id;
+          vertex.bone_weights[k] = weight.mWeight;
+          break;
+        }
+      }
+    }
+  }
+
+  for (auto i = 0u; i < mesh->mNumVertices; ++i) {
+    auto& vertex = data.vertices[submesh.vertex_offset + i];
+    const auto sum = vertex.bone_weights.x() + vertex.bone_weights.y() + vertex.bone_weights.z() + vertex.bone_weights.w();
+
+    if (sum > 0.0f) {
+      vertex.bone_weights /= sum;
     }
   }
 }
 
-static auto _load_node(const aiNode* node, const aiScene* scene, mesh::mesh_data& data, bone_map& bone_map, bone_offsets& bone_offsets) -> void {
-  for (unsigned int i = 0; i < node->mNumMeshes; ++i) {
+static auto _load_node(const aiNode* node, const aiScene* scene, mesh::mesh_data& data, const bone_map& bone_map, const bone_offsets& bone_offsets) -> void {
+  for (auto i = 0u; i < node->mNumMeshes; ++i) {
     const auto* mesh = scene->mMeshes[node->mMeshes[i]];
     _load_mesh(mesh, data, bone_map, bone_offsets);
   }
 
-  for (unsigned int i = 0; i < node->mNumChildren; ++i) {
+  for (auto i = 0u; i < node->mNumChildren; ++i) {
     _load_node(node->mChildren[i], scene, data, bone_map, bone_offsets);
   }
+}
+
+static auto _traverse(const aiNode* node, bone_map& bone_map, bone_offsets& bone_offsets, std::unordered_map<std::string, math::matrix4x4>& bone_info) -> void {
+  const auto name = std::string{node->mName.C_Str()};
+  auto it = bone_info.find(name);
+
+  if (it != bone_info.end()) {
+    if (bone_map.find(name) == bone_map.end()) {
+      auto bone_id = static_cast<std::uint32_t>(bone_offsets.size());
+
+      bone_map.emplace(name, bone_id);
+      bone_offsets.push_back(it->second);
+    }
+  }
+
+  for (auto i = 0u; i < node->mNumChildren; ++i) {
+    _traverse(node->mChildren[i], bone_map, bone_offsets, bone_info);
+  }
+}
+
+static auto _build_bone_map(const aiScene* scene, bone_map& bone_map, bone_offsets& bone_offsets) -> void {
+  auto bone_info = std::unordered_map<std::string, math::matrix4x4>{};
+
+  for (auto i = 0u; i < scene->mNumMeshes; ++i) {
+    const auto* mesh = scene->mMeshes[i];
+
+    for (auto j = 0u; j < mesh->mNumBones; ++j) {
+      const auto* bone = mesh->mBones[j];
+      bone_info[std::string{bone->mName.C_Str()}] = _convert_mat4(bone->mOffsetMatrix);
+    }
+  }
+
+  _traverse(scene->mRootNode, bone_map, bone_offsets, bone_info);
 }
 
 static auto _build_skeleton_hierarchy(const aiScene* scene, const bone_map& bone_map, const bone_offsets& bone_offsets, animations::skeleton& skeleton) -> void {
@@ -157,7 +203,6 @@ static auto _build_skeleton_hierarchy(const aiScene* scene, const bone_map& bone
   ordered_names.resize(bone_map.size());
 
   for (const auto& [name, id] : bone_map) {
-    // utility::logger<"animations">::debug("Bone '{}' has id {}", name, id);
     ordered_names.at(id) = name;
   }
 
@@ -277,11 +322,12 @@ auto mesh::_load(const std::filesystem::path& path) -> skinned_mesh_data {
   auto bone_map = animations::bone_map{};
   auto bone_offsets = animations::bone_offsets{};
 
+  _build_bone_map(scene, bone_map, bone_offsets);
+
   const auto root_transform = _convert_mat4(scene->mRootNode->mTransformation);
   const auto inverse_root_transform = math::matrix4x4::inverted(root_transform);
 
   _load_node(scene->mRootNode, scene, mesh_data, bone_map, bone_offsets);
-  _apply_weights(scene, mesh_data, bone_map);
 
   skeleton.reserve(bone_map.size());
 

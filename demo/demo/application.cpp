@@ -92,6 +92,14 @@ application::application()
 
   asset_registry.request_image("roboto_atlas", "res://fonts/roboto_atlas.png", sbx::graphics::format::r8g8b8a8_srgb);
 
+  asset_registry.request_image("base", "res://textures/base.png", sbx::graphics::format::r8g8b8a8_srgb);
+
+  asset_registry.request_image("fox_albedo", "res://textures/fox/albedo.png", sbx::graphics::format::r8g8b8a8_srgb);
+
+  asset_registry.request_image("soldier_albedo", "res://meshes/soldier_rus/textures/atlas.png", sbx::graphics::format::r8g8b8a8_srgb);
+
+  asset_registry.request_image("akm_albedo", "res://meshes/weapons/akm/textures/atlas.png", sbx::graphics::format::r8g8b8a8_srgb);
+
   _generate_brdf(512);
   _generate_irradiance(64);
   _generate_prefiltered(512);
@@ -99,11 +107,164 @@ application::application()
   // Meshes
   asset_registry.request_mesh<sbx::models::mesh>("sphere", "res://meshes/sphere/sphere.gltf");
 
+  asset_registry.request_mesh<sbx::animations::mesh>("soldier_rus", "res://meshes/soldier_rus/soldier.gltf");
+
+  asset_registry.request_mesh<sbx::models::mesh>("akm", "res://meshes/weapons/akm/akm.gltf");
+
+  asset_registry.request_mesh<sbx::animations::mesh>("fox", "res://meshes/fox/fox.gltf");
+
+  asset_registry.request_animation<sbx::animations::animation>("Walk", "res://meshes/fox/fox.gltf", "Walk");
+  asset_registry.request_animation<sbx::animations::animation>("Survey", "res://meshes/fox/fox.gltf", "Survey");
+  asset_registry.request_animation<sbx::animations::animation>("Run", "res://meshes/fox/fox.gltf", "Run");
+
+  asset_registry.request_animation<sbx::animations::animation>("HeadNo", "res://meshes/soldier_rus/soldier.gltf", "HeadNo");
+  asset_registry.request_animation<sbx::animations::animation>("Idle", "res://meshes/soldier_rus/soldier.gltf", "Idle");
+  asset_registry.request_animation<sbx::animations::animation>("Idle_Weapon", "res://meshes/soldier_rus/soldier.gltf", "Idle_Weapon");
+
   // Materials
+
+  auto& base_material = asset_registry.request_material<sbx::models::material>("base");
+  base_material.albedo.image = asset_registry.get_image("base");
+  base_material.metallic_factor = 0.0f;
+  base_material.roughness_factor = 0.8f;
+  base_material.specular_factor = 1.0f;
+
+  auto& soldier_material = asset_registry.request_material<sbx::models::material>("soldier");
+  soldier_material.albedo.image = asset_registry.get_image("soldier_albedo");
+  soldier_material.metallic_factor = 0.0f;
+  soldier_material.roughness_factor = 0.5f;
+  soldier_material.specular_factor = 0.0f;
+
+  auto& soldier_helmet_material = asset_registry.request_material<sbx::models::material>("soldier_helmet");
+  soldier_helmet_material.albedo.image = asset_registry.get_image("soldier_albedo");
+  soldier_helmet_material.metallic_factor = 0.0f;
+  soldier_helmet_material.roughness_factor = 0.5f;
+  soldier_helmet_material.specular_factor = 0.0f;
+  soldier_helmet_material.is_double_sided = true;
+
+  auto& akm_material = asset_registry.request_material<sbx::models::material>("akm");
+  akm_material.albedo.image = asset_registry.get_image("akm_albedo");
+  akm_material.metallic_factor = 0.0f;
+  akm_material.roughness_factor = 0.5f;
+  akm_material.specular_factor = 0.0f;
 
   // Animations
 
+  auto& animations_module = sbx::core::engine::get_module<sbx::animations::animations_module>();
+
   // Window
+
+  auto fox1 = graph.create_node("Fox");
+
+  auto& fox_material = asset_registry.request_material<sbx::models::material>("fox");
+  fox_material.albedo.image = asset_registry.get_image("fox_albedo");
+  fox_material.metallic_factor = 0.0f;
+  fox_material.roughness_factor = 0.8f;
+  fox_material.specular_factor = 1.0f;
+
+  animations_module.add_skinned_mesh(fox1, asset_registry.get_mesh("fox"), asset_registry.get_material("fox"));
+
+  auto& fox_animator = graph.get_component<sbx::animations::animator>(fox1);
+
+  fox_animator.add_state({"Walk", asset_registry.get_animation("Walk"), true, 0.5f });
+  fox_animator.add_state({"Survey", asset_registry.get_animation("Survey"), true, 0.5f });
+  fox_animator.add_state({"Run", asset_registry.get_animation("Run"), true, 0.5f });
+
+  fox_animator.add_transition({
+    "Walk", "Survey", 0.20f,
+    [](const sbx::animations::animator& animator){
+      if (auto value = animator.float_parameter("speed"); value) {
+        return *value <= 0.05f;
+      }
+
+      return false;
+    }
+  });
+
+  fox_animator.add_transition({
+    "Run", "Survey", 0.25f,
+    [](const sbx::animations::animator& animator){
+      if (auto value = animator.float_parameter("speed"); value) {
+        return *value <= 0.05f;
+      }
+
+      return false;
+    }
+  });
+
+  fox_animator.add_transition({
+    "Walk", "Run", 0.15f,
+    [](const sbx::animations::animator& animator){
+      if (auto value = animator.float_parameter("speed"); value) {
+        return *value >= 2.0f;
+      }
+
+      return false;
+    }
+  });
+
+  fox_animator.add_transition({
+    "Run", "Walk", 0.15f,
+    [](const sbx::animations::animator& animator){
+      if (auto value = animator.float_parameter("speed"); value) {
+        return *value < 2.0f && *value > 0.05f;
+      }
+
+      return false;
+    }
+  });
+
+  fox_animator.add_transition({
+    "Survey", "Walk", 0.20f,
+    [](const sbx::animations::animator& animator){
+      if (auto value = animator.float_parameter("speed"); value) {
+        return *value > 0.05f && *value < 2.0f;
+      }
+
+      return false;
+    }
+  });
+
+  fox_animator.play("Survey", true);
+  fox_animator.set_float("speed", 1.0f);
+
+  auto& fox1_transform = graph.get_component<sbx::scenes::transform>(fox1);
+  fox1_transform.set_position(sbx::math::vector3{12.0f, 0.0f, 0.0f});
+  fox1_transform.set_scale(sbx::math::vector3{0.06f, 0.06f, 0.06f});
+
+  // Soldier
+
+  auto soldier = graph.create_node("Soldier");
+
+  auto soldier_submeshes = std::vector<sbx::scenes::skinned_mesh::submesh>{
+    sbx::scenes::skinned_mesh::submesh{0, asset_registry.get_material("soldier")},
+    sbx::scenes::skinned_mesh::submesh{1, asset_registry.get_material("soldier")},
+    sbx::scenes::skinned_mesh::submesh{2, asset_registry.get_material("soldier_helmet")}
+  };
+
+  animations_module.add_skinned_mesh(soldier, asset_registry.get_mesh("soldier_rus"), soldier_submeshes);
+
+  auto& soldier_animator = graph.get_component<sbx::animations::animator>(soldier);
+
+  soldier_animator.add_state({"HeadNo", asset_registry.get_animation("HeadNo"), true, 1.0f });
+  soldier_animator.add_state({"Idle", asset_registry.get_animation("Idle"), true, 1.0f });
+  soldier_animator.add_state({"Idle_Weapon", asset_registry.get_animation("Idle_Weapon"), true, 1.0f });
+
+  soldier_animator.play("Idle_Weapon", true);
+
+  // AKM
+
+  auto hand = animations_module.find_skeleton_node(soldier, "fingers0.R");
+
+  auto akm = graph.create_child_node(hand, "AKM");
+
+  auto akm_submeshes = std::vector<sbx::scenes::static_mesh::submesh>{
+    sbx::scenes::static_mesh::submesh{0, asset_registry.get_material("akm")},
+    sbx::scenes::static_mesh::submesh{1, asset_registry.get_material("akm")},
+    sbx::scenes::static_mesh::submesh{2, asset_registry.get_material("akm")}
+  };
+
+  graph.add_component<sbx::scenes::static_mesh>(akm, asset_registry.get_mesh("akm"), akm_submeshes);
 
   // auto spheres = graph.create_node(fmt::format("Spheres"));
 

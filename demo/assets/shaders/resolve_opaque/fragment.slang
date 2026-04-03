@@ -252,7 +252,8 @@ float calculate_shadow(uint cascade, float3 world_position, float3 normal) {
   float base_radius = 1.0 / resolution_scale;
   float radius = base_radius * (1.0 + cascade * 0.3);
 
-  float angle = random2(uv) * sbx::math::two_pi;
+  float angle = random2(uv * float2(dimensions)) * sbx::math::two_pi;
+
   float2x2 rotation = rotation_matrix(angle);
 
   float shadow = 0.0;

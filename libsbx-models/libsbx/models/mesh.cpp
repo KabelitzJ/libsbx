@@ -165,6 +165,8 @@ static auto _load_mesh(const aiMesh* mesh, mesh::mesh_data& data, const math::ma
   submesh.local_transform = local_transform;
   submesh.name = utility::hashed_string{mesh->mName.C_Str()};
   submesh.material_index = mesh->mMaterialIndex;
+  submesh.lod_group = static_cast<std::uint32_t>(data.submeshes.size());
+  submesh.lod_level = 0u;
 
   data.submeshes.push_back(submesh);
 }

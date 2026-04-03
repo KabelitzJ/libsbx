@@ -122,6 +122,8 @@ static auto _load_mesh(const aiMesh* mesh, mesh::mesh_data& data, const bone_map
   submesh.bounds = bounds;
   submesh.local_transform = math::matrix4x4::identity;
   submesh.name = utility::hashed_string{mesh->mName.C_Str()};
+  submesh.lod_group = static_cast<std::uint32_t>(data.submeshes.size());
+  submesh.lod_level = 0u;
 
   data.submeshes.push_back(submesh);
 

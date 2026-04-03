@@ -1,0 +1,22 @@
+metadata:
+  name: Empty Scene
+  camera: 5534890790884635642
+assets:
+  images: []
+  cube_images:
+    - &skybox
+      name: skybox
+      path: res://skyboxes/clouds2
+  static_meshes: []
+  materials: []
+nodes:
+  - tag: CAMERA
+    id: 5534890790884635642
+    components:
+      - type: transform
+        position: {x: 0, y: 0, z: 5}
+        rotation: {x: 0, y: 0, z: 0, w: 1}
+        scale: {x: 1, y: 1, z: 1}
+      - type: skybox
+        cube_image: *skybox
+        tint: {r: 1, g: 1, b: 1, a: 1}

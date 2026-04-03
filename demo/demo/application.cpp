@@ -74,7 +74,7 @@ application::application()
 
   auto& asset_registry = scenes_module.asset_registry();
 
-  auto scene_name = std::string{"res://scenes/scene.yaml"};
+  auto scene_name = std::string{"res://scenes/empty.yaml"};
 
   if (auto scene = cli.argument<std::string>("scene"); scene) {
     scene_name = *scene;
@@ -94,11 +94,15 @@ application::application()
 
   asset_registry.request_image("base", "res://textures/base.png", sbx::graphics::format::r8g8b8a8_srgb);
 
-  asset_registry.request_image("fox_albedo", "res://textures/fox/albedo.png", sbx::graphics::format::r8g8b8a8_srgb);
-
   asset_registry.request_image("soldier_albedo", "res://meshes/soldier_rus/textures/atlas.png", sbx::graphics::format::r8g8b8a8_srgb);
 
   asset_registry.request_image("akm_albedo", "res://meshes/weapons/akm/textures/atlas.png", sbx::graphics::format::r8g8b8a8_srgb);
+
+  asset_registry.request_image("terrain_albedo", "res://meshes/terrain/textures/albedo.jpg", sbx::graphics::format::r8g8b8a8_srgb);
+  asset_registry.request_image("terrain_normal", "res://meshes/terrain/textures/normal.jpg", sbx::graphics::format::r8g8b8a8_unorm);
+  asset_registry.request_image("terrain_metallic_roughness", "res://meshes/terrain/textures/aorm.jpg", sbx::graphics::format::r8g8b8a8_unorm);
+  asset_registry.request_image("terrain_occlusion", "res://meshes/terrain/textures/ao.jpg", sbx::graphics::format::r8g8b8a8_unorm);
+  asset_registry.request_image("terrain_displacement", "res://meshes/terrain/textures/displacement.jpg", sbx::graphics::format::r8g8b8a8_unorm);
 
   _generate_brdf(512);
   _generate_irradiance(64);
@@ -111,11 +115,7 @@ application::application()
 
   asset_registry.request_mesh<sbx::models::mesh>("akm", "res://meshes/weapons/akm/akm.gltf");
 
-  asset_registry.request_mesh<sbx::animations::mesh>("fox", "res://meshes/fox/fox.gltf");
-
-  asset_registry.request_animation<sbx::animations::animation>("Walk", "res://meshes/fox/fox.gltf", "Walk");
-  asset_registry.request_animation<sbx::animations::animation>("Survey", "res://meshes/fox/fox.gltf", "Survey");
-  asset_registry.request_animation<sbx::animations::animation>("Run", "res://meshes/fox/fox.gltf", "Run");
+  asset_registry.request_mesh<sbx::models::mesh>("terrain", "res://meshes/terrain/terrain.gltf");
 
   asset_registry.request_animation<sbx::animations::animation>("HeadNo", "res://meshes/soldier_rus/soldier.gltf", "HeadNo");
   asset_registry.request_animation<sbx::animations::animation>("Idle", "res://meshes/soldier_rus/soldier.gltf", "Idle");
@@ -148,89 +148,27 @@ application::application()
   akm_material.roughness_factor = 0.5f;
   akm_material.specular_factor = 0.0f;
 
+  auto& terrain_material = asset_registry.request_material<sbx::models::material>("terrain");
+  terrain_material.albedo.image = asset_registry.get_image("terrain_albedo");
+  terrain_material.normal.image = asset_registry.get_image("terrain_albedo");
+  terrain_material.metallic_factor = 0.0f;
+  terrain_material.roughness_factor = 0.8f;
+  terrain_material.specular_factor = 0.0f;
+  // terrain_material.metallic_roughness.image = asset_registry.get_image("terrain_metallic_roughness");
+  // terrain_material.occlusion.image = asset_registry.get_image("terrain_occlusion");
+  // terrain_material.height.image = asset_registry.get_image("terrain_displacement");
+
   // Animations
 
   auto& animations_module = sbx::core::engine::get_module<sbx::animations::animations_module>();
 
   // Window
 
-  auto fox1 = graph.create_node("Fox");
+  // Terrain
 
-  auto& fox_material = asset_registry.request_material<sbx::models::material>("fox");
-  fox_material.albedo.image = asset_registry.get_image("fox_albedo");
-  fox_material.metallic_factor = 0.0f;
-  fox_material.roughness_factor = 0.8f;
-  fox_material.specular_factor = 1.0f;
+  auto terrain = graph.create_node("Terrain");
 
-  animations_module.add_skinned_mesh(fox1, asset_registry.get_mesh("fox"), asset_registry.get_material("fox"));
-
-  auto& fox_animator = graph.get_component<sbx::animations::animator>(fox1);
-
-  fox_animator.add_state({"Walk", asset_registry.get_animation("Walk"), true, 0.5f });
-  fox_animator.add_state({"Survey", asset_registry.get_animation("Survey"), true, 0.5f });
-  fox_animator.add_state({"Run", asset_registry.get_animation("Run"), true, 0.5f });
-
-  fox_animator.add_transition({
-    "Walk", "Survey", 0.20f,
-    [](const sbx::animations::animator& animator){
-      if (auto value = animator.float_parameter("speed"); value) {
-        return *value <= 0.05f;
-      }
-
-      return false;
-    }
-  });
-
-  fox_animator.add_transition({
-    "Run", "Survey", 0.25f,
-    [](const sbx::animations::animator& animator){
-      if (auto value = animator.float_parameter("speed"); value) {
-        return *value <= 0.05f;
-      }
-
-      return false;
-    }
-  });
-
-  fox_animator.add_transition({
-    "Walk", "Run", 0.15f,
-    [](const sbx::animations::animator& animator){
-      if (auto value = animator.float_parameter("speed"); value) {
-        return *value >= 2.0f;
-      }
-
-      return false;
-    }
-  });
-
-  fox_animator.add_transition({
-    "Run", "Walk", 0.15f,
-    [](const sbx::animations::animator& animator){
-      if (auto value = animator.float_parameter("speed"); value) {
-        return *value < 2.0f && *value > 0.05f;
-      }
-
-      return false;
-    }
-  });
-
-  fox_animator.add_transition({
-    "Survey", "Walk", 0.20f,
-    [](const sbx::animations::animator& animator){
-      if (auto value = animator.float_parameter("speed"); value) {
-        return *value > 0.05f && *value < 2.0f;
-      }
-
-      return false;
-    }
-  });
-
-  fox_animator.play("Survey", true);
-  fox_animator.set_float("speed", 1.0f);
-
-  auto& fox1_transform = graph.get_component<sbx::scenes::transform>(fox1);
-  fox1_transform.set_position(sbx::math::vector3{12.0f, 0.0f, 0.0f});
-  fox1_transform.set_scale(sbx::math::vector3{0.06f, 0.06f, 0.06f});
+  graph.add_component<sbx::scenes::static_mesh>(terrain, asset_registry.get_mesh("terrain"), asset_registry.get_material("terrain"));
 
   // Soldier
 

@@ -208,45 +208,17 @@ auto scene_environment::_compute_csm_splits(const std::float_t near_plane, const
 }
 
 auto scene_environment::_build_light_space_for_slice(const scenes::camera& camera, std::float_t aspect_ratio, const math::matrix4x4& camera_world, const math::vector3& light_direction, const std::float_t slice_near, const std::float_t slice_far, const std::uint32_t shadow_resolution) -> math::matrix4x4 {
-  const auto camera_view = math::matrix4x4::inverted(camera_world);
-  const auto camera_projection = camera.projection(aspect_ratio, slice_near, slice_far);
+  const auto fov_y = camera.field_of_view().to_radians().value();
+  const auto tan_half_y = std::tan(fov_y * 0.5f);
+  const auto tan_half_x = tan_half_y * aspect_ratio;
 
-  const auto inv_view_projection = math::matrix4x4::inverted(camera_projection * camera_view);
+  const auto half_length = (slice_far - slice_near) * 0.5f;
+  const auto tan_sq = tan_half_x * tan_half_x + tan_half_y * tan_half_y;
+  const auto radius = std::sqrt(half_length * half_length + slice_far * slice_far * tan_sq);
 
-  static constexpr auto frustum_corners_clip = std::array<math::vector4, 8u>{
-    math::vector4{-1.0f, -1.0f, 0.0f, 1.0f},
-    math::vector4{ 1.0f, -1.0f, 0.0f, 1.0f},
-    math::vector4{ 1.0f,  1.0f, 0.0f, 1.0f},
-    math::vector4{-1.0f,  1.0f, 0.0f, 1.0f},
-    math::vector4{-1.0f, -1.0f, 1.0f, 1.0f},
-    math::vector4{ 1.0f, -1.0f, 1.0f, 1.0f},
-    math::vector4{ 1.0f,  1.0f, 1.0f, 1.0f},
-    math::vector4{-1.0f,  1.0f, 1.0f, 1.0f}
-  };
-
-  auto corners_world = std::array<math::vector3, 8u>{};
-  auto center_world = math::vector3::zero;
-
-  for (auto i = 0u; i < 8u; ++i) {
-    auto corner_world = inv_view_projection * frustum_corners_clip[i];
-    corner_world /= corner_world.w();
-
-    corners_world[i] = math::vector3{corner_world};
-    center_world += corners_world[i];
-  }
-
-  center_world /= 8.0f;
-
-  // Bounding sphere radius encompassing the frustum slice in world space
-  auto radius = 0.0f;
-
-  for (const auto& corner : corners_world) {
-    auto dist = math::vector3::distance(corner, center_world);
-    radius = std::max(radius, dist);
-  }
-
-  static constexpr auto radius_quantum = 4.0f;
-  radius = std::ceil(radius / radius_quantum) * radius_quantum;
+  const auto camera_position = math::vector3{camera_world[3]};
+  const auto camera_forward = -math::vector3{camera_world[2]};
+  const auto center_world = camera_position + camera_forward * ((slice_near + slice_far) * 0.5f);
 
   const auto light_dir = math::vector3::normalized(light_direction);
 
@@ -256,7 +228,6 @@ auto scene_environment::_build_light_space_for_slice(const scenes::camera& camer
     up = math::vector3{1.0f, 0.0f, 0.0f};
   }
 
-  // Pull back along light direction to include shadow casters behind the frustum
   static constexpr auto z_caster_padding = 100.0f;
   const auto light_position = center_world - light_dir * (radius + z_caster_padding);
 
@@ -273,7 +244,6 @@ auto scene_environment::_build_light_space_for_slice(const scenes::camera& camer
 
   auto shadow_matrix = light_projection * light_view;
 
-  // Snap to texel grid
   const auto resolution = static_cast<std::float_t>(shadow_resolution);
   auto shadow_origin = shadow_matrix * math::vector4{0.0f, 0.0f, 0.0f, 1.0f};
   shadow_origin *= (resolution * 0.5f);

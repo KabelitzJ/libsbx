@@ -119,9 +119,6 @@ auto scenes_module::update() -> void {
   auto& viewports = graphics_module.viewports();
   auto& environment = _scene->environment();
 
-  const auto size = viewports.size(_scene_viewport);
-  utility::logger<"scenes">::debug("scene viewport '{}' size {}x{}", _scene_viewport, size.x(), size.y());
-
   environment.set_render_target_size(viewports.size(_scene_viewport));
   environment.update_uniforms();
 }

@@ -731,14 +731,6 @@ editor_subrenderer::editor_subrenderer(const std::vector<sbx::graphics::attachme
   auto& device_module = sbx::core::engine::get_module<sbx::devices::devices_module>();
   auto& graphics_module = sbx::core::engine::get_module<sbx::graphics::graphics_module>();
 
-  graphics_module.set_dynamic_size_callback([&]() -> sbx::math::vector2u {
-    return _viewport_size;
-  });
-
-  devices::input::set_mouse_position_callback([&]() -> math::vector2 {
-    return _mouse_position;
-  });
-
   // Connect ImGui to GLFW
   ImGui_ImplGlfw_InitForVulkan(device_module.window(), true);
 
@@ -1111,17 +1103,19 @@ auto editor_subrenderer::_setup_windows() -> void {
       io.WantCaptureKeyboard = false;
     }
 
-    _viewport_size = sbx::math::vector2u{
-      static_cast<std::uint32_t>(viewport_rect_size.x),
-      static_cast<std::uint32_t>(viewport_rect_size.y)
-    };
+    const auto new_scene_size = sbx::math::vector2u{static_cast<std::uint32_t>(viewport_rect_size.x), static_cast<std::uint32_t>(viewport_rect_size.y)};
 
-    const auto mouse_scene = ImGui::GetMousePos();
+    if (new_scene_size.x() > 0u && new_scene_size.y() > 0u) {
+      auto& viewports = graphics_module.viewports();
+      
+      viewports.resize("scene", new_scene_size);
+    }
 
-    _mouse_position = math::vector2{
-      std::clamp(mouse_scene.x - viewport_min.x, 0.0f, static_cast<std::float_t>(_viewport_size.x())),
-      std::clamp(mouse_scene.y - viewport_min.y, 0.0f, static_cast<std::float_t>(_viewport_size.y()))
-    };
+    const auto is_scene_active = ImGui::IsWindowHovered() || ImGui::IsWindowFocused();
+
+    if (is_scene_active) {
+      devices::input::set_active_viewport(math::vector2{viewport_min.x, viewport_min.y}, math::vector2{static_cast<std::float_t>(new_scene_size.x()), static_cast<std::float_t>(new_scene_size.y())});
+    }
 
     ImGui::End();
   }
@@ -1228,8 +1222,10 @@ auto editor_subrenderer::_draw_scene_gizmo(const ImVec2& viewport_min, const ImV
 
   auto& camera = graph.get_component<scenes::camera>(camera_node);
 
-  auto projection_matrix = camera.projection();
-  // ImGuizmo expects OpenGL convention...
+  const auto size = environment.render_target_size();
+  const auto aspect = size.y() == 0u ? 1.0f : static_cast<std::float_t>(size.x()) / static_cast<std::float_t>(size.y());
+
+  auto projection_matrix = camera.projection(aspect);
   projection_matrix[1][1] *= -1.0f;
 
   auto world_matrix = graph.world_transform(node);

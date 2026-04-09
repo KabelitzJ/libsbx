@@ -4,9 +4,6 @@
 #include <libsbx/math/angle.hpp>
 #include <libsbx/math/color.hpp>
 
-#include <libsbx/devices/devices_module.hpp>
-#include <libsbx/devices/window.hpp>
-
 #include <libsbx/core/engine.hpp>
 
 #include <libsbx/utility/logger.hpp>
@@ -45,10 +42,7 @@ scene::scene(const std::filesystem::path& path, component_io_registry& component
   }
 
   if (!_graph.has_component<scenes::camera>(camera_node)) {
-    auto& devices_module = core::engine::get_module<devices::devices_module>();
-    auto& window = devices_module.window();
-
-    _graph.add_component<scenes::camera>(camera_node, math::angle{math::degree{60.0f}}, window.aspect_ratio(), 0.1f, 1000.0f);
+    _graph.add_component<scenes::camera>(camera_node, math::angle{math::degree{60.0f}}, 0.1f, 1000.0f);
   }
 
   _environment.set_active_camera(camera_node);

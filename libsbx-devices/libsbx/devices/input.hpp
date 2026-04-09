@@ -11,8 +11,6 @@
 
 #include <libsbx/math/vector2.hpp>
 
-#include <libsbx/core/delegate.hpp>
-
 #include <libsbx/devices/key.hpp>
 #include <libsbx/devices/mouse_button.hpp>
 #include <libsbx/devices/input_action.hpp>
@@ -35,49 +33,44 @@ public:
   input() = delete;
 
   static auto is_key_pressed(key key) -> bool;
-
   static auto is_key_down(key key) -> bool;
-
   static auto is_key_released(key key) -> bool;
 
   static auto is_mouse_button_pressed(mouse_button button) -> bool;
-
   static auto is_mouse_button_down(mouse_button button) -> bool;
-
   static auto is_mouse_button_released(mouse_button button) -> bool;
 
   static auto mouse_position() -> math::vector2;
 
+  static auto mouse_window_position() -> math::vector2;
+
   static auto scroll_delta() -> math::vector2;
 
-  template<typename Callable>
-  requires (std::is_invocable_r_v<math::vector2, Callable>)
-  static auto set_mouse_position_callback(Callable&& callback) -> void {
-    _mouse_position_callback = std::forward<Callable>(callback);
-  }
+  static auto set_active_viewport(const math::vector2& origin, const math::vector2& size) -> void;
+
+  static auto active_viewport_origin() -> math::vector2;
+
+  static auto active_viewport_size() -> math::vector2;
 
 private:
 
   static auto _transition_pressed_keys() -> void;
-
   static auto _transition_pressed_mouse_buttons() -> void;
-
   static auto _transition_scroll_delta() -> void;
 
   static auto _update_key_state(key key, input_action action) -> void;
-
   static auto _update_mouse_button_state(mouse_button button, input_action action) -> void;
-
   static auto _update_mouse_position(const math::vector2& position) -> void;
-
   static auto _update_scroll_delta(const math::vector2& delta) -> void;
-
-  static core::delegate<math::vector2()> _mouse_position_callback;
 
   static std::unordered_map<key, key_state> _key_states;
   static std::unordered_map<mouse_button, key_state> _mouse_button_states;
-  static math::vector2 _mouse_position;
+
+  static math::vector2 _mouse_window_position;
   static math::vector2 _scroll_delta;
+
+  static math::vector2 _active_viewport_origin;
+  static math::vector2 _active_viewport_size;
 
 }; // class input
 

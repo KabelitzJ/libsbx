@@ -203,7 +203,7 @@ auto window::_set_callbacks() -> void {
     
     self._last_mouse_position = mouse_position;
 
-    // input::_update_mouse_position(mouse_position);
+    input::_update_mouse_position(mouse_position);
   });
 
   glfwSetMouseButtonCallback(_handle, [](auto* window, auto button, auto action, auto mods){

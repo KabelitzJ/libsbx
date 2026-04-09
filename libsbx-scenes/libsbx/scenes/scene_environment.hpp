@@ -16,8 +16,6 @@
 
 #include <libsbx/core/engine.hpp>
 
-#include <libsbx/graphics/graphics_module.hpp>
-
 #include <libsbx/scenes/node.hpp>
 #include <libsbx/scenes/scene_graph.hpp>
 #include <libsbx/scenes/components/camera.hpp>
@@ -68,9 +66,21 @@ public:
 
   auto update_uniforms() -> void;
 
+  auto view_projection() const -> const math::matrix4x4& {
+    return _view_projection;
+  }
+
   auto light_space() -> math::matrix4x4;
 
   auto screen_point_to_ray(const math::vector2& position) -> math::ray;
+
+  auto set_render_target_size(const math::vector2u& size) -> void {
+    _render_target_size = size;
+  }
+
+  auto render_target_size() const -> const math::vector2u& {
+    return _render_target_size;
+  }
 
 private:
 
@@ -80,14 +90,18 @@ private:
 
   static auto _compute_csm_splits(const std::float_t near_plane, const std::float_t far_plane, const std::float_t lambda) -> std::array<std::float_t, csm_cascade_count>;
 
-  static auto _build_light_space_for_slice(const scenes::camera& camera, const math::matrix4x4& camera_world, const math::vector3& light_direction, const std::float_t slice_near, const std::float_t slice_far, const std::uint32_t shadow_resolution) -> math::matrix4x4;
+  static auto _build_light_space_for_slice(const scenes::camera& camera, std::float_t aspect_ratio, const math::matrix4x4& camera_world, const math::vector3& light_direction, const std::float_t slice_near, const std::float_t slice_far, const std::uint32_t shadow_resolution) -> math::matrix4x4;
 
-  auto _build_csm() -> csm_data;
+  auto _build_csm(std::float_t aspect_ratio) -> csm_data;
 
   scene_graph& _graph;
 
+  
   scenes::node _camera;
   directional_light _light;
+
+  math::vector2u _render_target_size{0, 0};
+  math::matrix4x4 _view_projection{math::matrix4x4::identity};
 
   graphics::uniform_handler _uniform_handler;
   csm_data _cached_csm;

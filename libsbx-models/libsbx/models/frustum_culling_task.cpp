@@ -71,12 +71,7 @@ auto frustum_culling_task::execute(graphics::command_buffer& command_buffer) -> 
     });
   }
 
-  const auto camera_node = environment.camera();
-  const auto& camera_component = graph.get_component<scenes::camera>(camera_node);
-  const auto projection = camera_component.projection();
-  const auto view = math::matrix4x4::inverted(graph.world_transform(camera_node));
-  const auto view_projection = projection * view;
-  const auto camera_frustum = _extract_frustum_planes(view_projection);
+  const auto camera_frustum = _extract_frustum_planes(environment.view_projection());
 
   _cull_bucket(command_buffer, bucket::opaque, no_cascade, camera_frustum, draw_list);
   _cull_bucket(command_buffer, bucket::transparent, no_cascade, camera_frustum, draw_list);

@@ -5,11 +5,12 @@
 
 namespace sbx::devices {
 
-core::delegate<math::vector2()> input::_mouse_position_callback;
 std::unordered_map<key, key_state> input::_key_states;
 std::unordered_map<mouse_button, key_state> input::_mouse_button_states;
-math::vector2 input::_mouse_position;
+math::vector2 input::_mouse_window_position;
 math::vector2 input::_scroll_delta;
+math::vector2 input::_active_viewport_origin;
+math::vector2 input::_active_viewport_size;
 
 auto input::is_key_pressed(key key) -> bool {
   if (auto entry = _key_states.find(key); entry != _key_states.end()) {
@@ -72,7 +73,29 @@ auto input::is_mouse_button_released(mouse_button button) -> bool {
 }
 
 auto input::mouse_position() -> math::vector2 {
-  return std::invoke(_mouse_position_callback);
+  const auto local = _mouse_window_position - _active_viewport_origin;
+
+  const auto x = std::clamp(local.x(), 0.0f, _active_viewport_size.x());
+  const auto y = std::clamp(local.y(), 0.0f, _active_viewport_size.y());
+
+  return math::vector2{x, y};
+}
+
+auto input::mouse_window_position() -> math::vector2 {
+  return _mouse_window_position;
+}
+
+auto input::set_active_viewport(const math::vector2& origin, const math::vector2& size) -> void {
+  _active_viewport_origin = origin;
+  _active_viewport_size = size;
+}
+
+auto input::active_viewport_origin() -> math::vector2 {
+  return _active_viewport_origin;
+}
+
+auto input::active_viewport_size() -> math::vector2 {
+  return _active_viewport_size;
 }
 
 auto input::scroll_delta() -> math::vector2 {
@@ -126,7 +149,7 @@ auto input::_update_mouse_button_state(mouse_button button, input_action action)
 }
 
 auto input::_update_mouse_position(const math::vector2& position) -> void {
-  _mouse_position = position;
+  _mouse_window_position = position;
 }
 
 auto input::_update_scroll_delta(const math::vector2& delta) -> void {

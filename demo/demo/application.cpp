@@ -72,6 +72,10 @@ application::application()
 
   auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
 
+  if (is_editor) {
+    scenes_module.set_scene_viewport("scene");
+  }
+
   auto& asset_registry = scenes_module.asset_registry();
 
   auto scene_name = std::string{"res://scenes/empty.yaml"};

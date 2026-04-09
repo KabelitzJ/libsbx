@@ -351,26 +351,37 @@ auto render_graph::build() -> void {
   }
 }
 
-auto render_graph::resize(const viewport::type flags) -> void {
+auto render_graph::_pass_matches(const pass_node& pass, const std::string& viewport_name) const -> bool {
+  const auto& viewport = pass._viewport;
+
+  if (viewport.is_fixed()) {
+    return viewport_name == viewport::window_name;
+  }
+
+  return viewport.name() == viewport_name;
+}
+
+auto render_graph::resize(const std::string& viewport_name) -> void {
   _update_viewports();
 
-  _clear_attachments(flags);
+  _clear_attachments(viewport_name);
 
   _depth_images.resize(_attachments.size(), depth_image_handle{});
   _color_images.resize(_attachments.size(), image2d_handle{});
 
   for (const auto& pass : _passes) {
-    _create_attachments(flags, pass);
+    if (!_pass_matches(pass, viewport_name)) {
+      continue;
+    }
+
+    _create_attachments(pass);
   }
-}
+} 
 
 auto render_graph::_update_viewports() -> void {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 
-  const auto& surface = graphics_module.surface();
-  const auto surface_extent = math::vector2u{surface.current_extent().width, surface.current_extent().height};
-
-  const auto viewport_extent = graphics_module.viewport();
+  const auto& viewports = graphics_module.viewports();
 
   for (auto& pass : _passes) {
     const auto& viewport = pass._viewport;
@@ -378,22 +389,24 @@ auto render_graph::_update_viewports() -> void {
 
     render_area.set_offset(viewport.offset());
 
-    const auto size = viewport.is_fixed() ? *viewport.size() : (viewport.is_window() ? surface_extent : viewport_extent);
+    const auto size = viewport.is_fixed()
+      ? *viewport.size()
+      : viewports.size(viewport.name());
 
     render_area.set_extent(math::vector2u{viewport.scale() * size});
 
-    render_area.set_aspect_ratio(static_cast<std::float_t>(render_area.extent().x()) / static_cast<std::float_t>(render_area.extent().y()));
-    render_area.set_extent(render_area.extent() + render_area.offset());
+    const auto extent_x = render_area.extent().x() == 0u ? 1u : render_area.extent().x();
+    const auto extent_y = render_area.extent().y() == 0u ? 1u : render_area.extent().y();
+
+    render_area.set_aspect_ratio(static_cast<std::float_t>(extent_x) / static_cast<std::float_t>(extent_y));
   }
 }
 
-auto render_graph::_clear_attachments(const viewport::type flags) -> void {
+auto render_graph::_clear_attachments(const std::string& viewport_name) -> void {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 
   for (const auto& pass : _passes) {
-    const auto& viewport = pass._viewport;
-
-    if (!viewport.is_type(flags) && !viewport.is_fixed()) {
+    if (!_pass_matches(pass, viewport_name)) {
       continue;
     }
 
@@ -401,13 +414,7 @@ auto render_graph::_clear_attachments(const viewport::type flags) -> void {
       auto& state = _attachment_states[attachment.index];
 
       switch (state.type) {
-        case attachment::type::image: {
-          if (state.image != VK_NULL_HANDLE) {
-            graphics_module.remove_resource<image2d>(_color_images[attachment.index]);
-            _color_images[attachment.index] = {};
-          }
-          break;
-        }
+        case attachment::type::image:
         case attachment::type::storage: {
           if (state.image != VK_NULL_HANDLE) {
             graphics_module.remove_resource<image2d>(_color_images[attachment.index]);
@@ -437,7 +444,7 @@ auto render_graph::_clear_attachments(const viewport::type flags) -> void {
   }
 }
 
-auto render_graph::_create_attachments(const viewport::type flags, const pass_node& pass) -> void {
+auto render_graph::_create_attachments(const pass_node& pass) -> void {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 
   const auto extent = pass._render_area.extent();

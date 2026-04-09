@@ -97,8 +97,7 @@ graphics_module::graphics_module()
   _surface{std::make_unique<graphics::surface>(*_instance, *_physical_device, *_logical_device)},
   _allocator{*_instance, *_physical_device, *_logical_device},
   _query_pool{*_logical_device, VK_QUERY_TYPE_TIMESTAMP, swapchain::max_frames_in_flight * max_queries_per_frame},
-  _is_framebuffer_resized{true},
-  _is_viewport_resized{true} {
+  _is_framebuffer_resized{true} {
   auto& devices_module = core::engine::get_module<devices::devices_module>();
 
   auto& window = devices_module.window();
@@ -107,9 +106,7 @@ graphics_module::graphics_module()
     _is_framebuffer_resized = true;
   };
 
-  _dynamic_size_callback = [this]() -> sbx::math::vector2u {
-    return math::vector2u{_surface->current_extent().width, _surface->current_extent().height};
-  };
+  _viewports.declare(std::string{viewport::window_name}, math::vector2u{0u, 0u});
 
   _graphics_command_buffers.reserve(swapchain::max_frames_in_flight);
   _compute_command_buffers.reserve(swapchain::max_frames_in_flight);
@@ -184,11 +181,18 @@ auto graphics_module::update() -> void {
     return;
   }
 
-  auto viewport = std::invoke(_dynamic_size_callback);
+  auto dirty_viewports = _viewports.take_dirty();
 
-  if (viewport != _viewport) {
-    _viewport = viewport;
-    _recreate_viewport();
+  if (!dirty_viewports.empty()) {
+    _logical_device->wait_idle();
+
+    for (const auto& name : dirty_viewports) {
+      if (name == viewport::window_name) {
+        continue;
+      }
+
+      _renderer->resize(name);
+    }
 
     return;
   }
@@ -298,13 +302,6 @@ auto graphics_module::attachment(const std::string& name) const -> const descrip
   return _renderer->attachment(name);
 }
 
-auto graphics_module::_recreate_viewport() -> void {
-  _logical_device->wait_idle();
-
-  _renderer->resize(viewport::type::dynamic);
-  _on_viewport_changed.emit(_viewport);
-}
-
 auto graphics_module::_recreate_swapchain() -> void {
   _logical_device->wait_idle();
 
@@ -315,11 +312,16 @@ auto graphics_module::_recreate_swapchain() -> void {
   _recreate_command_buffers();
   _recreate_attachments();
 
-  _viewport = std::invoke(_dynamic_size_callback);
+  const auto extent = _surface->current_extent();
+  const auto window_size = math::vector2u{extent.width, extent.height};
 
-  _renderer->resize(viewport::type::window | viewport::type::dynamic);
+  _viewports.resize(std::string{viewport::window_name}, window_size);
 
-  _on_viewport_changed.emit(_viewport);
+  auto dirty = _viewports.take_dirty();
+
+  for (const auto& name : dirty) {
+    _renderer->resize(name);
+  }
 
   _current_frame = 0;
   _is_framebuffer_resized = false;

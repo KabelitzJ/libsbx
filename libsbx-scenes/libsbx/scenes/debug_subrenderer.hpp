@@ -75,14 +75,6 @@ public:
     auto& scene = scenes_module.scene();
     auto& environment = scene.environment();
     auto& graph = scene.graph();
-
-    auto camera_node = environment.camera();
-
-    auto& camera = graph.get_component<sbx::scenes::camera>(camera_node);
-
-    const auto& projection = camera.projection();
-
-    const auto view = sbx::math::matrix4x4::inverted(graph.world_transform(camera_node));
     
     _pipeline.bind(command_buffer);
 
@@ -96,9 +88,9 @@ public:
 
     storage_buffer.update(lines.data(), required_size);
 
-    _push_handler.push("mvp", projection * view);
     _push_handler.push("vertices", storage_buffer.address());
 
+    _descriptor_handler.push("scene", environment.uniform_handler());
 
     if (!_descriptor_handler.update(_pipeline)) {
       return;

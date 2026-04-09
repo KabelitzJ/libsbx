@@ -1,13 +1,16 @@
+#include <libsbx/common/scene_data.slang>
+
 #include <grid/config.slang>
 
 struct push_data {
-  float4x4 mvp;
-  float4 camera_position;
   float4 origin;
 }; // struct push_data
 
 [[vk::push_constant]]
 ConstantBuffer<push_data> push;
+
+[[vk::binding(0, 0)]]
+ConstantBuffer<sbx::common::scene_data> scene;
 
 struct vs_in {
   uint vertex_id : SV_VertexID;
@@ -36,14 +39,14 @@ vs_out main(vs_in input) {
 
   float3 position = vertices[index] * grid_size;
 
-  position.x += push.camera_position.x;
-  position.z += push.camera_position.z;
+  position.x += scene.camera_position.x;
+  position.z += scene.camera_position.z;
   position += push.origin.xyz;
 
-  output.camera_position = push.camera_position.xz;
+  output.camera_position = scene.camera_position.xz;
   output.uv = position.xz;
 
-  output.position = mul(push.mvp, float4(position, 1.0));
+  output.position = mul(scene.projection, mul(scene.view, float4(position, 1.0)));
 
   return output;
 }

@@ -10,23 +10,25 @@
 
 namespace sbx::scenes {
 
+static auto _aspect_from(const math::vector2u& size) -> std::float_t {
+  return size.y() == 0u ? 1.0f : static_cast<std::float_t>(size.x()) / static_cast<std::float_t>(size.y());
+}
+
 scene_environment::scene_environment(scene_graph& graph, const scenes::node camera, const math::vector3& light_direction, const math::color& light_color)
 : _graph{graph},
   _camera{camera},
   _light{light_direction, light_color} { }
 
 auto scene_environment::update_uniforms() -> void {
-  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
-
   auto& camera = _graph.get_component<scenes::camera>(_camera);
 
-  const auto& projection = camera.projection();
+  const auto aspect = _aspect_from(_render_target_size);
+  const auto projection = camera.projection(aspect);
 
   _uniform_handler.push("projection", projection);
   _uniform_handler.push("inverse_projection", math::matrix4x4::inverted(projection));
 
   auto inverse_view = _graph.world_transform(_camera);
-
   const auto view = math::matrix4x4::inverted(inverse_view);
 
   inverse_view[3] = math::vector4{0.0f, 0.0f, 0.0f, 1.0f};
@@ -34,7 +36,9 @@ auto scene_environment::update_uniforms() -> void {
   _uniform_handler.push("view", view);
   _uniform_handler.push("inverse_view", inverse_view);
 
-  _uniform_handler.push("viewport", graphics_module.viewport());
+  _view_projection = projection * view;
+
+  _uniform_handler.push("viewport", _render_target_size);
 
   _uniform_handler.push("camera_position", _graph.world_position(_camera));
   _uniform_handler.push("camera_near", camera.near_plane());
@@ -48,7 +52,7 @@ auto scene_environment::update_uniforms() -> void {
   _uniform_handler.push("camera_right", camera_right);
   _uniform_handler.push("camera_up", camera_up);
 
-  _cached_csm = _build_csm();
+  _cached_csm = _build_csm(aspect);
 
   _uniform_handler.push("light_spaces", _cached_csm.light_spaces);
   _uniform_handler.push("cascade_splits", _cached_csm.cascade_splits);
@@ -65,7 +69,7 @@ auto scene_environment::light_space() -> math::matrix4x4 {
   const auto& camera = _graph.get_component<scenes::camera>(_camera);
 
   const auto camera_view = math::matrix4x4::inverted(_graph.world_transform(_camera));
-  const auto camera_projection = camera.projection(0.1f, 1000.0f);
+  const auto camera_projection = camera.projection(_aspect_from(_render_target_size), 0.1f, 1000.0f);
 
   const auto inverse_view_projection = math::matrix4x4::inverted(camera_projection * camera_view);
 
@@ -157,22 +161,21 @@ auto scene_environment::light_space() -> math::matrix4x4 {
 }
 
 auto scene_environment::screen_point_to_ray(const math::vector2& position) -> math::ray {
-  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
-  const auto& viewport = graphics_module.viewport();
-
   const auto& camera = _graph.get_component<scenes::camera>(_camera);
+
+  const auto aspect = _aspect_from(_render_target_size);
 
   const auto world = _graph.world_transform(_camera);
   const auto view = math::matrix4x4::inverted(world);
-  const auto projection = camera.projection();
+  const auto projection = camera.projection(aspect);
 
   const auto inverse_view_projection = math::matrix4x4::inverted(projection * view);
 
   const auto px = position.x() + 0.5f;
   const auto py = position.y() + 0.5f;
 
-  const auto x = (2.0f * px) / viewport.x() - 1.0f;
-  const auto y = (2.0f * py) / viewport.y() - 1.0f;
+  const auto x = (2.0f * px) / static_cast<std::float_t>(_render_target_size.x()) - 1.0f;
+  const auto y = (2.0f * py) / static_cast<std::float_t>(_render_target_size.y()) - 1.0f;
 
   const auto near_clip = math::vector4{x, y, 0.0f, 1.0f};
   const auto far_clip  = math::vector4{x, y, 1.0f, 1.0f};
@@ -204,46 +207,18 @@ auto scene_environment::_compute_csm_splits(const std::float_t near_plane, const
   return splits;
 }
 
-auto scene_environment::_build_light_space_for_slice(const scenes::camera& camera, const math::matrix4x4& camera_world, const math::vector3& light_direction, const std::float_t slice_near, const std::float_t slice_far, const std::uint32_t shadow_resolution) -> math::matrix4x4 {
-  const auto camera_view = math::matrix4x4::inverted(camera_world);
-  const auto camera_projection = camera.projection(slice_near, slice_far);
+auto scene_environment::_build_light_space_for_slice(const scenes::camera& camera, std::float_t aspect_ratio, const math::matrix4x4& camera_world, const math::vector3& light_direction, const std::float_t slice_near, const std::float_t slice_far, const std::uint32_t shadow_resolution) -> math::matrix4x4 {
+  const auto fov_y = camera.field_of_view().to_radians().value();
+  const auto tan_half_y = std::tan(fov_y * 0.5f);
+  const auto tan_half_x = tan_half_y * aspect_ratio;
 
-  const auto inv_view_projection = math::matrix4x4::inverted(camera_projection * camera_view);
+  const auto half_length = (slice_far - slice_near) * 0.5f;
+  const auto tan_sq = tan_half_x * tan_half_x + tan_half_y * tan_half_y;
+  const auto radius = std::sqrt(half_length * half_length + slice_far * slice_far * tan_sq);
 
-  static constexpr auto frustum_corners_clip = std::array<math::vector4, 8u>{
-    math::vector4{-1.0f, -1.0f, 0.0f, 1.0f},
-    math::vector4{ 1.0f, -1.0f, 0.0f, 1.0f},
-    math::vector4{ 1.0f,  1.0f, 0.0f, 1.0f},
-    math::vector4{-1.0f,  1.0f, 0.0f, 1.0f},
-    math::vector4{-1.0f, -1.0f, 1.0f, 1.0f},
-    math::vector4{ 1.0f, -1.0f, 1.0f, 1.0f},
-    math::vector4{ 1.0f,  1.0f, 1.0f, 1.0f},
-    math::vector4{-1.0f,  1.0f, 1.0f, 1.0f}
-  };
-
-  auto corners_world = std::array<math::vector3, 8u>{};
-  auto center_world = math::vector3::zero;
-
-  for (auto i = 0u; i < 8u; ++i) {
-    auto corner_world = inv_view_projection * frustum_corners_clip[i];
-    corner_world /= corner_world.w();
-
-    corners_world[i] = math::vector3{corner_world};
-    center_world += corners_world[i];
-  }
-
-  center_world /= 8.0f;
-
-  // Bounding sphere radius encompassing the frustum slice in world space
-  auto radius = 0.0f;
-
-  for (const auto& corner : corners_world) {
-    auto dist = math::vector3::distance(corner, center_world);
-    radius = std::max(radius, dist);
-  }
-
-  static constexpr auto radius_quantum = 4.0f;
-  radius = std::ceil(radius / radius_quantum) * radius_quantum;
+  const auto camera_position = math::vector3{camera_world[3]};
+  const auto camera_forward = -math::vector3{camera_world[2]};
+  const auto center_world = camera_position + camera_forward * ((slice_near + slice_far) * 0.5f);
 
   const auto light_dir = math::vector3::normalized(light_direction);
 
@@ -253,7 +228,6 @@ auto scene_environment::_build_light_space_for_slice(const scenes::camera& camer
     up = math::vector3{1.0f, 0.0f, 0.0f};
   }
 
-  // Pull back along light direction to include shadow casters behind the frustum
   static constexpr auto z_caster_padding = 100.0f;
   const auto light_position = center_world - light_dir * (radius + z_caster_padding);
 
@@ -270,7 +244,6 @@ auto scene_environment::_build_light_space_for_slice(const scenes::camera& camer
 
   auto shadow_matrix = light_projection * light_view;
 
-  // Snap to texel grid
   const auto resolution = static_cast<std::float_t>(shadow_resolution);
   auto shadow_origin = shadow_matrix * math::vector4{0.0f, 0.0f, 0.0f, 1.0f};
   shadow_origin *= (resolution * 0.5f);
@@ -287,7 +260,7 @@ auto scene_environment::_build_light_space_for_slice(const scenes::camera& camer
   return shadow_matrix;
 }
 
-auto scene_environment::_build_csm() -> csm_data {
+auto scene_environment::_build_csm(std::float_t aspect_ratio) -> csm_data {
   const auto& camera = _graph.get_component<scenes::camera>(_camera);
   const auto camera_world = _graph.world_transform(_camera);
 
@@ -308,7 +281,7 @@ auto scene_environment::_build_csm() -> csm_data {
   for (auto i = 0u; i < csm_cascade_count; ++i) {
     const auto slice_far = splits[i];
 
-    result.light_spaces[i] = _build_light_space_for_slice(camera, camera_world, _light.direction(), slice_near, slice_far, shadow_resolutions[i]);
+    result.light_spaces[i] = _build_light_space_for_slice(camera, aspect_ratio, camera_world, _light.direction(), slice_near, slice_far, shadow_resolutions[i]);
 
     slice_near = slice_far;
   }

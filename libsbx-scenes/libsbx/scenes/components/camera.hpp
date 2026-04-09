@@ -97,43 +97,17 @@ class camera {
 
 public:
 
-  camera(const math::angle& field_of_view, std::float_t aspect_ratio, std::float_t near_plane, std::float_t far_plane)
+  camera(const math::angle& field_of_view, std::float_t near_plane, std::float_t far_plane)
   : _field_of_view{field_of_view},
-    _aspect_ratio{aspect_ratio},
     _near_plane{near_plane},
-    _far_plane{far_plane} {
-    _update_projection();
-
-    auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
-
-    graphics_module.connect_on_viewport_changed([this](const math::vector2u& event) {
-      set_aspect_ratio(static_cast<std::float_t>(event.x()) / static_cast<std::float_t>(event.y()));
-    });
-  }
-
+    _far_plane{far_plane} { }
 
   auto field_of_view() const noexcept -> const math::angle& {
     return _field_of_view;
   }
 
-  auto set_field_of_view(const math::angle& field_of_view) -> void {
-    if (field_of_view == _field_of_view) {
-      return;
-    }
-
+  auto set_field_of_view(const math::angle& field_of_view) noexcept -> void {
     _field_of_view = field_of_view;
-    _update_projection();
-  }
-
-  auto aspect_ratio() const noexcept -> std::float_t {
-    return _aspect_ratio;
-  }
-
-  auto set_aspect_ratio(std::float_t aspect_ratio) noexcept -> void {
-    if (aspect_ratio != _aspect_ratio) {
-      _aspect_ratio = aspect_ratio;
-      _update_projection();
-    }
   }
 
   auto near_plane() const noexcept -> std::float_t {
@@ -144,30 +118,19 @@ public:
     return _far_plane;
   }
 
-  auto projection() const noexcept -> const math::matrix4x4& {
-    return _projection;
+  auto projection(std::float_t aspect_ratio) const noexcept -> math::matrix4x4 {
+    return math::matrix4x4::perspective(_field_of_view, aspect_ratio, _near_plane, _far_plane);
   }
 
-  auto projection(const std::float_t near, const std::float_t far) const noexcept -> math::matrix4x4 {
-    return math::matrix4x4::perspective(_field_of_view, _aspect_ratio, near, far);
-  }
-
-  auto view_frustum(const math::matrix4x4& view) const noexcept -> frustum {
-    return frustum{_projection * view};
+  auto projection(std::float_t aspect_ratio, std::float_t near, std::float_t far) const noexcept -> math::matrix4x4 {
+    return math::matrix4x4::perspective(_field_of_view, aspect_ratio, near, far);
   }
 
 private:
 
-  auto _update_projection() -> void {
-    _projection = math::matrix4x4::perspective(_field_of_view, _aspect_ratio, _near_plane, _far_plane);
-  }
-
   math::angle _field_of_view;
-  std::float_t _aspect_ratio;
   std::float_t _near_plane;
   std::float_t _far_plane;
-
-  math::matrix4x4 _projection;
 
 }; // class camera
 

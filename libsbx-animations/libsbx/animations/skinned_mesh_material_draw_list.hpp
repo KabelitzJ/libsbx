@@ -37,7 +37,10 @@ namespace sbx::animations {
 struct skinned_mesh_traits {
 
   using mesh_type = animations::mesh;
-  struct instance_payload { };
+  
+  struct instance_payload {
+    std::uint32_t skinned_vertex_offset{0u};
+  }; // struct instance_payload
 
   struct skinning_job {
     graphics::buffer::address_type pre_vertices;
@@ -75,6 +78,8 @@ struct skinned_mesh_traits {
 
     const auto query = graph.query<const scenes::skinned_mesh, animations::animator>();
 
+    auto vertex_cursor = std::uint32_t{0u};
+
     for (auto&& [node, skinned_mesh, animator] : query.each()) {
       const auto transform_data = models::transform_data{graph.world_transform(node), graph.world_normal(node)};
 
@@ -95,38 +100,35 @@ struct skinned_mesh_traits {
         .bone_offset = bone_offset
       });
 
+      const auto entity_vertex_offset = vertex_cursor;
+      vertex_cursor += mesh.vertex_count();
+
       for (const auto& submesh : skinned_mesh.submeshes()) {
-        std::invoke(callable, node, mesh_id, submesh.index, submesh.material, transform_data, instance_payload{});
+        std::invoke(callable, node, mesh_id, submesh.index, submesh.material, transform_data, instance_payload{entity_vertex_offset});
       }
     }
   }
 
-  static auto make_instance_data(const scenes::node node, const std::uint32_t transform_index, std::uint32_t material_index, [[maybe_unused]] const instance_payload& payload) -> models::instance_data {
-    return models::instance_data{transform_index, material_index, static_cast<std::uint32_t>(node), 0u};
+  static auto make_instance_data(const scenes::node node, const std::uint32_t transform_index, std::uint32_t material_index, const instance_payload& payload) -> models::instance_data {
+    return models::instance_data{transform_index, material_index, static_cast<std::uint32_t>(node), payload.skinned_vertex_offset};
   }
 
   template<typename Mesh, typename Emitter>
   static auto build_draw_commands(const Mesh& mesh, std::uint32_t submesh_index, std::vector<models::instance_data>&& instances, Emitter&& emitter) -> std::uint32_t {
-    auto base_instance_offset = std::uint32_t{0};
-
     const auto& submesh = mesh.submesh(submesh_index);
 
-    for (const auto& instance : instances) {
-      const auto instance_index = emitter.base_instance + base_instance_offset;
-
+    for (auto i = std::uint32_t{0u}; i < static_cast<std::uint32_t>(instances.size()); ++i) {
       auto command = VkDrawIndexedIndirectCommand{};
       command.indexCount = submesh.index_count;
       command.instanceCount = 1u;
       command.firstIndex = submesh.index_offset;
-      command.vertexOffset = static_cast<std::int32_t>(instance_index * mesh.vertex_count());
-      command.firstInstance = instance_index;
+      command.vertexOffset = static_cast<std::int32_t>(instances[i].payload + submesh.vertex_offset);
+      command.firstInstance = emitter.base_instance;
 
-      emitter.emit_single(command, instance);
-
-      base_instance_offset++;
+      emitter.emit_single(command, instances[i]);
     }
 
-    return base_instance_offset;
+    return static_cast<std::uint32_t>(instances.size());
   }
 
   static auto skinning_jobs() -> std::vector<skinning_job>& {

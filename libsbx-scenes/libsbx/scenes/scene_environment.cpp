@@ -242,7 +242,8 @@ auto scene_environment::_build_light_space_for_slice(const scenes::camera& camer
     radius = std::max(radius, dist);
   }
 
-  radius = std::ceil(radius);
+  static constexpr auto radius_quantum = 4.0f;
+  radius = std::ceil(radius / radius_quantum) * radius_quantum;
 
   const auto light_dir = math::vector3::normalized(light_direction);
 
@@ -290,17 +291,19 @@ auto scene_environment::_build_csm() -> csm_data {
   const auto& camera = _graph.get_component<scenes::camera>(_camera);
   const auto camera_world = _graph.world_transform(_camera);
 
-  const auto camera_near = camera.near_plane();
-  const auto camera_far = camera.far_plane();
-
-  static constexpr auto lambda = 0.65f;
+  static constexpr auto csm_near = 0.5f;
+  static constexpr auto csm_far = 300.0f;
+  static constexpr auto lambda = 0.85f;
   static constexpr auto shadow_resolutions = std::array<std::uint32_t, csm_cascade_count>{2048u, 2048u, 1024u, 512u};
 
-  const auto splits = _compute_csm_splits(camera_near, camera_far, lambda);
+  const auto effective_near = std::max(camera.near_plane(), csm_near);
+  const auto effective_far = std::min(camera.far_plane(), csm_far);
+
+  const auto splits = _compute_csm_splits(effective_near, effective_far, lambda);
 
   auto result = csm_data{};
 
-  auto slice_near = camera_near;
+  auto slice_near = effective_near;
 
   for (auto i = 0u; i < csm_cascade_count; ++i) {
     const auto slice_far = splits[i];
@@ -310,7 +313,7 @@ auto scene_environment::_build_csm() -> csm_data {
     slice_near = slice_far;
   }
 
-  result.cascade_splits = math::vector4{splits[0], splits[1], splits[2], camera_far};
+  result.cascade_splits = math::vector4{splits[0], splits[1], splits[2], effective_far};
 
   return result;
 }

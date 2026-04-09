@@ -31,15 +31,17 @@ public:
   auto update() -> void override;
 
   template<typename... Args>
-  auto add_animated_mesh(const scenes::node node, const math::uuid mesh_id, Args&&... args) -> scenes::skinned_mesh& {
+  auto add_skinned_mesh(const scenes::node node, const math::uuid mesh_id, Args&&... args) -> scenes::skinned_mesh& {
     auto& assets_module = core::engine::get_module<assets::assets_module>();
     auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
 
     auto& scene = scenes_module.scene();
-  auto& environment = scene.environment();
-  auto& graph = scene.graph();
+    auto& environment = scene.environment();
+    auto& graph = scene.graph();
 
     auto& skinned_mesh = graph.add_component<sbx::scenes::skinned_mesh>(node, mesh_id, std::forward<Args>(args)...);
+
+    auto& animator = graph.add_component<sbx::animations::animator>(node);
 
     const auto& mesh = assets_module.get_asset<animations::mesh>(mesh_id);
 

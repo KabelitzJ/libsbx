@@ -55,6 +55,10 @@ public:
     math::vector3 scale{math::vector3::one};
   }; // struct bone_transform
 
+  animator() {
+    _current_state.animation_id = math::uuid::null();
+  }
+
   auto add_state(const state& new_state) -> void;
 
   auto add_transition(transition&& transition) -> void;

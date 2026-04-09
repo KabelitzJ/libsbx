@@ -113,14 +113,16 @@ struct static_mesh_traits {
 
       const auto distance_sq = math::vector3::distance_squared(camera_position, world_position);
 
-      const auto& mesh = assets_module.get_asset<models::mesh>(static_mesh.mesh_id());
+      const auto& mesh_id = static_mesh.mesh_id();
+
+      const auto& mesh = assets_module.get_asset<models::mesh>(mesh_id);
 
       for (const auto& submesh : static_mesh.submeshes()) {
-        const auto base_index = mesh.base_submesh_index(submesh.index);
+        const auto base_index = mesh.find_base_submesh_index(submesh.index).value_or(submesh.index);
         const auto lod = _select_lod(distance_sq, mesh.lod_count(base_index));
         const auto actual_index = base_index + lod;
 
-        std::invoke(callable, node, static_mesh.mesh_id(), actual_index, submesh.material, transform_data, instance_payload{lod});
+        std::invoke(callable, node, mesh_id, actual_index, submesh.material, transform_data, instance_payload{lod});
       }
     }
   }

@@ -259,7 +259,7 @@ public:
 
   auto build() -> void;
 
-  auto resize(const viewport::type flags) -> void;
+  auto resize(const std::string& viewport_name) -> void;
 
   auto pass_kind(const pass_handle handle) const -> pass_node::kind {
     utility::assert_that(handle.is_valid() && handle.index < _passes.size(), "Invalid pass handle");
@@ -289,9 +289,11 @@ private:
 
   auto _update_viewports() -> void;
 
-  auto _clear_attachments(const viewport::type flags) -> void;  
+  auto _clear_attachments(const std::string& viewport_name) -> void;
 
-  auto _create_attachments(const viewport::type flags, const pass_node& node) -> void;
+  auto _create_attachments(const pass_node& node) -> void;
+
+  auto _pass_matches(const pass_node& pass, const std::string& viewport_name) const -> bool;
 
   auto _build_color_attachment_info(const attachment& attachment, const attachment_state& state, const swapchain& swapchain, const attachment_load_operation load_op) -> VkRenderingAttachmentInfo;
 

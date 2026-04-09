@@ -573,15 +573,18 @@ auto interop::camera_get_up(math::vector3* up) -> void {
 }
 
 auto interop::camera_get_viewport(math::vector2* viewport) -> void {
-  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
-
   if (!viewport) {
     utility::logger<"scripting">::error("Attempting to get null viewport of camera");
-
     return;
   }
 
-  *viewport = graphics_module.viewport();
+  auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
+  auto& scene = scenes_module.scene();
+  auto& environment = scene.environment();
+
+  const auto size = environment.render_target_size();
+
+  *viewport = math::vector2{static_cast<std::float_t>(size.x()), static_cast<std::float_t>(size.y())};
 }
 
 auto interop::time_delta_time(std::float_t* delta_time) -> void {

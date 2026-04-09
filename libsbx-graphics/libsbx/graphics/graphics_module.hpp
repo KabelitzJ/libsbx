@@ -48,6 +48,7 @@
 #include <libsbx/graphics/images/depth_image.hpp>
 
 #include <libsbx/graphics/renderer.hpp>
+#include <libsbx/graphics/viewport_registry.hpp>
 
 #include <libsbx/graphics/resource_storage.hpp>
 
@@ -173,20 +174,12 @@ public:
     });
   }
 
-  template<typename Callable>
-  requires (std::is_invocable_r_v<math::vector2u, Callable>)
-  auto set_dynamic_size_callback(Callable&& callback) -> void {
-    _dynamic_size_callback = std::forward<Callable>(callback);
+  auto viewports() -> viewport_registry& {
+    return _viewports;
   }
 
-  auto viewport() const -> const math::vector2u& {
-    return _viewport;
-  }
-
-  template<typename Callable>
-  requires (std::is_invocable_v<Callable, const math::vector2u&>)
-  auto connect_on_viewport_changed(Callable&& callable) -> void {
-    _on_viewport_changed.connect(std::forward<Callable>(callable));
+  auto viewports() const -> const viewport_registry& {
+    return _viewports;
   }
 
   auto compiler() -> graphics::compiler& {
@@ -241,8 +234,6 @@ private:
   }
 
   auto _reset_render_stages() -> void;
-
-  auto _recreate_viewport() -> void;
 
   auto _recreate_swapchain() -> void;
 
@@ -402,13 +393,8 @@ private:
 
   std::uint32_t _current_frame{};
   bool _is_framebuffer_resized{};
-  bool _is_viewport_resized{};
 
-  math::vector2u _viewport{};
-
-  signals::signal<const math::vector2u&> _on_viewport_changed;
-
-  core::delegate<math::vector2u()> _dynamic_size_callback;
+  viewport_registry _viewports;
 
   static constexpr auto max_queries_per_frame = 256u;
   static constexpr auto max_scopes = max_queries_per_frame / 2;

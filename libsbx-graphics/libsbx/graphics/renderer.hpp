@@ -77,8 +77,8 @@ public:
     _graph.execute(command_buffer, swapchain, pass_callback, compute_callback);
   }
 
-  auto resize(const viewport::type flags) -> void {
-    _graph.resize(flags);
+  auto resize(const std::string& viewport_name) -> void {
+    _graph.resize(viewport_name);
   }
 
   auto attachment(const std::string& name) const -> const descriptor& {

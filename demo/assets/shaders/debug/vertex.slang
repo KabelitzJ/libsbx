@@ -1,15 +1,19 @@
+#include <libsbx/common/scene_data.slang>
+
 struct vertex {
   float4 position;
   float4 color;
 }; // struct vertex
 
 struct push_data {
-  float4x4 mvp;
   Ptr<vertex> vertices;
 }; // struct push_data
 
 [[vk::push_constant]]
 ConstantBuffer<push_data> push;
+
+[[vk::binding(0, 0)]]
+ConstantBuffer<sbx::common::scene_data> scene;
 
 struct vs_in { 
   uint vertex_id : SV_VertexID; 
@@ -27,7 +31,7 @@ vs_out main(vs_in input) {
   vertex vertex = push.vertices[input.vertex_id];
 
   output.color = vertex.color;
-  output.position = mul(push.mvp, vertex.position);
+  output.position = mul(scene.projection, mul(scene.view, vertex.position));
 
   return output;
 }

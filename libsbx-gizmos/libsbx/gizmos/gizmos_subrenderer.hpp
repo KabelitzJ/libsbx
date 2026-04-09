@@ -62,75 +62,75 @@ public:
   ~gizmos_subrenderer() override = default;
 
   auto render(graphics::command_buffer& command_buffer) -> void override {
-    auto& assets_module = core::engine::get_module<assets::assets_module>();
-    auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
-    auto& devices_module = core::engine::get_module<devices::devices_module>();
+    // auto& assets_module = core::engine::get_module<assets::assets_module>();
+    // auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
+    // auto& devices_module = core::engine::get_module<devices::devices_module>();
 
-    auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
-    auto& scene = scenes_module.scene();
-  auto& environment = scene.environment();
-  auto& graph = scene.graph();
+    // auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
+    // auto& scene = scenes_module.scene();
+    // auto& environment = scene.environment();
+    // auto& graph = scene.graph();
 
-    auto camera_node = environment.camera();
+    // auto camera_node = environment.camera();
 
-    auto& camera = graph.get_component<scenes::camera>(camera_node);
+    // auto& camera = graph.get_component<scenes::camera>(camera_node);
 
-    _scene_uniform_handler.push("projection", camera.projection());
+    // _scene_uniform_handler.push("projection", camera.projection());
 
-    const auto& camera_transform = graph.get_component<scenes::transform>(camera_node);
+    // const auto& camera_transform = graph.get_component<scenes::transform>(camera_node);
 
-    _scene_uniform_handler.push("view", math::matrix4x4::inverted(camera_transform.local_transform()));
+    // _scene_uniform_handler.push("view", math::matrix4x4::inverted(camera_transform.local_transform()));
 
-    auto& window = devices_module.window();
+    // auto& window = devices_module.window();
 
-    _scene_uniform_handler.push("resolution", math::vector2{window.width(), window.height()});
+    // _scene_uniform_handler.push("resolution", math::vector2{window.width(), window.height()});
 
-    _scene_uniform_handler.push("camera_position", camera_transform.position());
+    // _scene_uniform_handler.push("camera_position", camera_transform.position());
 
-    for (auto entry = _uniform_data.begin(); entry != _uniform_data.end();) {
-      if (_used_uniforms.contains(entry->first)) {
-        ++entry;
-      } else {
-        entry = _uniform_data.erase(entry);
-      }
-    }
+    // for (auto entry = _uniform_data.begin(); entry != _uniform_data.end();) {
+    //   if (_used_uniforms.contains(entry->first)) {
+    //     ++entry;
+    //   } else {
+    //     entry = _uniform_data.erase(entry);
+    //   }
+    // }
 
-    _used_uniforms.clear();
-    _static_meshes.clear();
+    // _used_uniforms.clear();
+    // _static_meshes.clear();
 
-    auto gizmo_query = graph.query<scenes::gizmo>();
+    // auto gizmo_query = graph.query<scenes::gizmo>();
 
-    for (const auto node : gizmo_query) {
-      _submit_mesh(node);
-    }
+    // for (const auto node : gizmo_query) {
+    //   _submit_mesh(node);
+    // }
 
-    _pipeline.bind(command_buffer);
+    // _pipeline.bind(command_buffer);
     
-    for (const auto& [key, data] : _static_meshes) {
+    // for (const auto& [key, data] : _static_meshes) {
 
-      auto [entry, inserted] = _uniform_data.try_emplace(key, 1u);
+    //   auto [entry, inserted] = _uniform_data.try_emplace(key, 1u);
 
-      auto& descriptor_handler = entry->second.descriptor_handler;
-      auto& storage_handler = entry->second.storage_handler;
+    //   auto& descriptor_handler = entry->second.descriptor_handler;
+    //   auto& storage_handler = entry->second.storage_handler;
 
-      storage_handler.push(std::span<const per_mesh_data>{data});
+    //   storage_handler.push(std::span<const per_mesh_data>{data});
 
-      auto& mesh = assets_module.get_asset<models::mesh>(key.mesh_id);
+    //   auto& mesh = assets_module.get_asset<models::mesh>(key.mesh_id);
 
-      descriptor_handler.push("scene", _scene_uniform_handler);
-      descriptor_handler.push("buffer_mesh_data", storage_handler);
-      descriptor_handler.push("depth_image", graphics_module.attachment(_depth_image));
-      descriptor_handler.push("texture_image", assets_module.get_asset<graphics::image2d>(key.texture_id));
+    //   descriptor_handler.push("scene", _scene_uniform_handler);
+    //   descriptor_handler.push("buffer_mesh_data", storage_handler);
+    //   descriptor_handler.push("depth_image", graphics_module.attachment(_depth_image));
+    //   descriptor_handler.push("texture_image", assets_module.get_asset<graphics::image2d>(key.texture_id));
 
-      if (!descriptor_handler.update(_pipeline)) {
-        continue;
-      }
+    //   if (!descriptor_handler.update(_pipeline)) {
+    //     continue;
+    //   }
 
-      descriptor_handler.bind_descriptors(command_buffer);
+    //   descriptor_handler.bind_descriptors(command_buffer);
 
-      mesh.bind(command_buffer);
-      mesh.render_submesh(command_buffer, key.submesh_index, static_cast<std::uint32_t>(data.size()));
-    }
+    //   mesh.bind(command_buffer);
+    //   mesh.render_submesh(command_buffer, key.submesh_index, static_cast<std::uint32_t>(data.size()));
+    // }
   }
 
 private:

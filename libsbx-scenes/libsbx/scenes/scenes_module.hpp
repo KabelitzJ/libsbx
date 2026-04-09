@@ -42,10 +42,22 @@ public:
 
   auto scene() -> scenes::scene&;
 
+  auto has_scene() const -> bool {
+    return _scene.has_value();
+  }
+
   auto save_scene(const std::filesystem::path& path) -> void {
     if (_scene) {
       _scene->save(path);
     }
+  }
+
+  auto set_scene_viewport(std::string name) -> void {
+    _scene_viewport = std::move(name);
+  }
+
+  auto scene_viewport() const -> const std::string& {
+    return _scene_viewport;
   }
 
   auto asset_registry() -> scenes::asset_registry& {
@@ -101,6 +113,8 @@ private:
   std::optional<scenes::scene> _scene;
 
   std::vector<line> _debug_lines{};
+
+  std::string _scene_viewport{std::string{graphics::viewport::window_name}};
 
 }; // class scenes_module
 

@@ -110,9 +110,20 @@ scenes_module::~scenes_module() {
 auto scenes_module::update() -> void {
   EASY_BLOCK("scenes_module::update");
 
-  if (_scene) {
-    _scene->environment().update_uniforms();
+  if (!_scene) {
+    return;
   }
+
+  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
+
+  auto& viewports = graphics_module.viewports();
+  auto& environment = _scene->environment();
+
+  const auto size = viewports.size(_scene_viewport);
+  utility::logger<"scenes">::debug("scene viewport '{}' size {}x{}", _scene_viewport, size.x(), size.y());
+
+  environment.set_render_target_size(viewports.size(_scene_viewport));
+  environment.update_uniforms();
 }
 
 auto scenes_module::load_scene(const std::filesystem::path& path) -> scenes::scene& {

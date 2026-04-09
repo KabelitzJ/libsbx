@@ -103,7 +103,6 @@ private:
 
   utility::bit_field<popup> _open_popups;
 
-  math::vector2u _viewport_size;
   math::vector2 _mouse_position;
 
   std::vector<editor::menu> _menu;

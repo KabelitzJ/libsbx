@@ -731,10 +731,6 @@ editor_subrenderer::editor_subrenderer(const std::vector<sbx::graphics::attachme
   auto& device_module = sbx::core::engine::get_module<sbx::devices::devices_module>();
   auto& graphics_module = sbx::core::engine::get_module<sbx::graphics::graphics_module>();
 
-  devices::input::set_mouse_position_callback([&]() -> math::vector2 {
-    return _mouse_position;
-  });
-
   // Connect ImGui to GLFW
   ImGui_ImplGlfw_InitForVulkan(device_module.window(), true);
 
@@ -1107,10 +1103,7 @@ auto editor_subrenderer::_setup_windows() -> void {
       io.WantCaptureKeyboard = false;
     }
 
-    const auto new_scene_size = sbx::math::vector2u{
-      static_cast<std::uint32_t>(viewport_rect_size.x),
-      static_cast<std::uint32_t>(viewport_rect_size.y)
-    };
+    const auto new_scene_size = sbx::math::vector2u{static_cast<std::uint32_t>(viewport_rect_size.x), static_cast<std::uint32_t>(viewport_rect_size.y)};
 
     if (new_scene_size.x() > 0u && new_scene_size.y() > 0u) {
       auto& viewports = graphics_module.viewports();
@@ -1118,12 +1111,11 @@ auto editor_subrenderer::_setup_windows() -> void {
       viewports.resize("scene", new_scene_size);
     }
 
-    const auto mouse_scene = ImGui::GetMousePos();
+    const auto is_scene_active = ImGui::IsWindowHovered() || ImGui::IsWindowFocused();
 
-    _mouse_position = math::vector2{
-      std::clamp(mouse_scene.x - viewport_min.x, 0.0f, static_cast<std::float_t>(new_scene_size.x())),
-      std::clamp(mouse_scene.y - viewport_min.y, 0.0f, static_cast<std::float_t>(new_scene_size.y()))
-    };
+    if (is_scene_active) {
+      devices::input::set_active_viewport(math::vector2{viewport_min.x, viewport_min.y}, math::vector2{static_cast<std::float_t>(new_scene_size.x()), static_cast<std::float_t>(new_scene_size.y())});
+    }
 
     ImGui::End();
   }

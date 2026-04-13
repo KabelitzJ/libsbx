@@ -5,6 +5,8 @@
 
 #include <easy/profiler.h>
 
+#include <libsbx/reflection/reflection.hpp>
+
 #include <libsbx/math/color.hpp>
 #include <libsbx/math/noise.hpp>
 #include <libsbx/math/constants.hpp>

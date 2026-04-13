@@ -71,7 +71,7 @@ option(SBX_USE_ASAN "Use ASAN" ${_USE_ASAN_DEFAULT})
 message(STATUS "SBX_USE_ASAN: ${SBX_USE_ASAN}")
 
 # Default component list (override from CLI with -DLIBSBX_COMPONENTS="...;...")
-set(LIBSBX_COMPONENTS units utility io memory signals containers assets bitmaps math ecs core audio devices gizmos graphics scenes scripting models animations particles post ui sprites physics editor CACHE STRING "libsbx components to include (semicolon-separated)")
+set(LIBSBX_COMPONENTS utility reflection units io memory signals containers assets bitmaps math ecs core audio devices gizmos graphics scenes scripting models animations particles post ui sprites physics editor CACHE STRING "libsbx components to include (semicolon-separated)")
 
 foreach(_c IN LISTS LIBSBX_COMPONENTS)
   string(TOUPPER "${_c}" _C_UP)

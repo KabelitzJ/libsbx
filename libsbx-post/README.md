@@ -1,3 +1,3 @@
-# libsbx-utility
+# libsbx-post
 
 C++ library

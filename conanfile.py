@@ -220,7 +220,7 @@ class libsbx_recipe(ConanFile):
       required = self._normalize_version(self.REQUIRED_VULKAN_VERSION)
 
       if version < required:
-        self.output.warn(
+        self.output.warning(
           f"Detected Vulkan version: {'.'.join(map(str, version))} "
           f"< required {self.REQUIRED_VULKAN_VERSION_STR}. "
           "Check that your Mesa driver is up-to-date. "

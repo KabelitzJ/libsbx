@@ -364,7 +364,11 @@ auto graphics_pipeline::_initialize(const std::vector<attachment_description>& a
   _rendering_info.depth_format = VK_FORMAT_UNDEFINED;
   _rendering_info.stencil_format = VK_FORMAT_UNDEFINED;
 
+  auto max_array_layers = std::uint32_t{1u};
+
   for (const auto& attachment : attachments) {
+    max_array_layers = std::max(max_array_layers, attachment.array_layers);
+
     if (attachment.image_type == attachment::type::depth) {
       _rendering_info.depth_format = depth_image::format();
       _rendering_info.stencil_format = depth_image::format();
@@ -372,6 +376,8 @@ auto graphics_pipeline::_initialize(const std::vector<attachment_description>& a
       _rendering_info.color_formats.push_back(to_vk_enum<VkFormat>(attachment.format));
     }
   }
+
+  const auto view_mask = (max_array_layers > 1u) ? ((1u << max_array_layers) - 1u) : 0u;
 
   auto dynamic_states = std::array<VkDynamicState, 2u>{
     VK_DYNAMIC_STATE_VIEWPORT,
@@ -505,6 +511,7 @@ auto graphics_pipeline::_initialize(const std::vector<attachment_description>& a
 
   _rendering_info.info = VkPipelineRenderingCreateInfo{};
   _rendering_info.info.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
+  _rendering_info.info.viewMask = view_mask;
   _rendering_info.info.colorAttachmentCount = static_cast<std::uint32_t>(_rendering_info.color_formats.size());
   _rendering_info.info.pColorAttachmentFormats = _rendering_info.color_formats.data();
   _rendering_info.info.depthAttachmentFormat = _rendering_info.depth_format;

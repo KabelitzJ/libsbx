@@ -16,7 +16,7 @@ class depth_image : public image {
 
 public:
 
-  depth_image(const math::vector2u& extent, VkSampleCountFlagBits samples = VK_SAMPLE_COUNT_1_BIT);
+  depth_image(const math::vector2u& extent, VkSampleCountFlagBits samples = VK_SAMPLE_COUNT_1_BIT, std::uint32_t array_layers = 1u);
 
   ~depth_image() override = default;
 

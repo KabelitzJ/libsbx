@@ -80,7 +80,6 @@ struct push_data {
   transform_data* transform_data_buffer;
   material_data* material_data_buffer;
   instance_data* instance_data_buffer;
-  uint cascade;
 }; // struct push_data
 
 #endif // COMMON_SLANG_

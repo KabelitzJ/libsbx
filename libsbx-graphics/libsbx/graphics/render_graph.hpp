@@ -101,9 +101,9 @@ public:
     swapchain
   }; // enum class type
 
-  attachment(const utility::hashed_string& name, type type, const math::color& clear_color = math::color::black(), const format format = format::r8g8b8a8_unorm, const graphics::blend_state& blend_state = graphics::blend_state{}, const filter filter = filter::linear, const address_mode address_mode = address_mode::repeat) noexcept;
+  attachment(const utility::hashed_string& name, type type, const math::color& clear_color = math::color::black(), const format format = format::r8g8b8a8_unorm, const graphics::blend_state& blend_state = graphics::blend_state{}, const filter filter = filter::linear, const address_mode address_mode = address_mode::repeat, std::uint32_t array_layers = 1u) noexcept;
 
-  attachment(const utility::hashed_string& name, type type, const math::color& clear_color, const format format, const filter filter, const address_mode address_mode) noexcept;
+  attachment(const utility::hashed_string& name, type type, const math::color& clear_color, const format format, const filter filter, const address_mode address_mode, std::uint32_t array_layers = 1u) noexcept;
 
   auto name() const noexcept -> const utility::hashed_string&;
 
@@ -117,6 +117,8 @@ public:
 
   auto blend_state() const noexcept -> const graphics::blend_state&;
 
+  auto array_layers() const noexcept -> std::uint32_t;
+
 private:
 
   utility::hashed_string _name;
@@ -126,6 +128,7 @@ private:
   graphics::filter _filter;
   graphics::address_mode _address_mode;
   graphics::blend_state _blend_state;
+  std::uint32_t _array_layers;
 
 }; // class attachment
 
@@ -133,6 +136,7 @@ struct attachment_description {
   attachment::type image_type;
   graphics::format format;
   graphics::blend_state blend_state;
+  std::uint32_t array_layers{1u};
 }; // struct attachment_description
 
 struct attachment_handle {
@@ -230,6 +234,7 @@ struct attachment_state {
   VkFormat format;
   VkExtent2D extent;
   attachment::type type;
+  std::uint32_t array_layers{1u};
 }; // struct attachment_state
 
 class render_graph {

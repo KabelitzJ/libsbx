@@ -8,6 +8,7 @@ struct vs_in {
   uint instance_id : SV_InstanceID;
   uint base_vertex : SV_StartVertexLocation;
   uint base_instance : SV_StartInstanceLocation;
+  uint view_id : SV_ViewID;
 }; // struct vs_in
 
 struct vs_out {
@@ -86,7 +87,7 @@ vs_out main(vs_in input) {
   output.uv = in_uv;
   output.instance_index = global_instance;
 
-  output.sv_position = mul(scene.light_spaces[push.cascade], float4(world_position, 1.0));
+  output.sv_position = mul(scene.light_spaces[input.view_id], float4(world_position, 1.0));
 
   return output;
 }

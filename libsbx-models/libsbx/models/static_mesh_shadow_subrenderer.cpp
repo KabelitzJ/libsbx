@@ -3,11 +3,10 @@
 
 namespace sbx::models {
 
-static_mesh_shadow_subrenderer::static_mesh_shadow_subrenderer(const std::vector<graphics::attachment_description>& attachments, const std::filesystem::path& base_pipeline, const std::uint32_t cascade)
+static_mesh_shadow_subrenderer::static_mesh_shadow_subrenderer(const std::vector<graphics::attachment_description>& attachments, const std::filesystem::path& base_pipeline)
 : graphics::subrenderer{},
   _attachments{attachments},
-  _base_pipeline{base_pipeline},
-  _cascade{cascade} { }
+  _base_pipeline{base_pipeline} { }
 
 static_mesh_shadow_subrenderer::~static_mesh_shadow_subrenderer() {
   _pipeline_cache.clear();
@@ -17,7 +16,7 @@ auto static_mesh_shadow_subrenderer::render(graphics::command_buffer& command_bu
   EASY_BLOCK("static_mesh_shadow_subrenderer::render");
   SBX_PROFILE_SCOPE("static_mesh_shadow_subrenderer::render");
 
-  auto timer = graphics::scoped_gpu_timer{command_buffer, fmt::format("static shadow cascade: {}", _cascade)};
+  auto timer = graphics::scoped_gpu_timer{command_buffer, "static shadow"};
 
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
   auto& renderer = graphics_module.renderer();
@@ -62,7 +61,6 @@ auto static_mesh_shadow_subrenderer::render(graphics::command_buffer& command_bu
     pipeline_data.push_handler.push("transform_data_buffer", draw_list.buffer(static_mesh_material_draw_list::transform_data_buffer_name).address());
     pipeline_data.push_handler.push("material_data_buffer", draw_list.buffer(static_mesh_material_draw_list::material_data_buffer_name).address());
     pipeline_data.push_handler.push("instance_data_buffer", graphics_module.get_resource<graphics::storage_buffer>(data.instance_data_buffer).address());
-    pipeline_data.push_handler.push("cascade", _cascade);
 
     auto& draw_commands_buffer = graphics_module.get_resource<graphics::storage_buffer>(data.draw_commands_buffer);
 

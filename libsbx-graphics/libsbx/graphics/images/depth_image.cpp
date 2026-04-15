@@ -15,8 +15,8 @@ static const auto depth_formats = std::vector<VkFormat>{
   VK_FORMAT_D16_UNORM
 };
 
-depth_image::depth_image(const math::vector2u& extent, VkSampleCountFlagBits samples)
-: image{VkExtent3D{extent.x(), extent.y(), 1}, VK_FILTER_LINEAR, VK_SAMPLER_ADDRESS_MODE_REPEAT, samples, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, format(), 1, 1} {
+depth_image::depth_image(const math::vector2u& extent, VkSampleCountFlagBits samples, std::uint32_t array_layers)
+: image{VkExtent3D{extent.x(), extent.y(), 1}, VK_FILTER_LINEAR, VK_SAMPLER_ADDRESS_MODE_REPEAT, samples, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, format(), 1, array_layers} {
   if (_format == VK_FORMAT_UNDEFINED) {
     throw std::runtime_error{"Failed to find supported depth format"};
   }
@@ -29,9 +29,9 @@ depth_image::depth_image(const math::vector2u& extent, VkSampleCountFlagBits sam
     utility::logger<"graphics">::warn("Depth format '{}' does not have a stencil component", _format);
   }
 
-  create_image(_handle, _allocation, _extent, _format, _samples, VK_IMAGE_TILING_OPTIMAL, _usage, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 1, 1, VK_IMAGE_TYPE_2D);
+  create_image(_handle, _allocation, _extent, _format, _samples, VK_IMAGE_TILING_OPTIMAL, _usage, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 1, _array_layers, VK_IMAGE_TYPE_2D);
 	create_image_sampler(_sampler, _filter, _address_mode, false, 1);
-	create_image_view(_handle, _view, VK_IMAGE_VIEW_TYPE_2D, _format, aspect_mask, 1, 0, 1, 0);
+	create_image_view(_handle, _view, (_array_layers > 1u ? VK_IMAGE_VIEW_TYPE_2D_ARRAY : VK_IMAGE_VIEW_TYPE_2D), _format, aspect_mask, 1, 0, _array_layers, 0);
 }
 
 auto depth_image::format() -> VkFormat {

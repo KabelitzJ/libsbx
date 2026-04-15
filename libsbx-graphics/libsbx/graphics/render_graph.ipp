@@ -53,9 +53,13 @@ auto render_graph::_execute_pass_instruction(command_buffer& command_buffer, con
 
   auto depth_attachment = std::optional<VkRenderingAttachmentInfo>{};
 
+  auto max_array_layers = std::uint32_t{1u};
+
   for (const auto& [handle, load_op] : instruction.attachments) {
     auto& state = _attachment_states[handle.index];
     const auto& attachment = _attachments[handle.index];
+
+    max_array_layers = std::max(max_array_layers, state.array_layers);
 
     if (state.type == attachment::type::image || state.type == attachment::type::swapchain) {
       color_attachments.emplace_back(_build_color_attachment_info(attachment, state, swapchain, load_op));
@@ -64,10 +68,13 @@ auto render_graph::_execute_pass_instruction(command_buffer& command_buffer, con
     }
   }
 
+  const auto view_mask = (max_array_layers > 1u) ? ((1u << max_array_layers) - 1u) : 0u;
+
   auto rendering_info = VkRenderingInfo{};
   rendering_info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
   rendering_info.renderArea = render_area;
   rendering_info.layerCount = 1;
+  rendering_info.viewMask = view_mask;
   rendering_info.colorAttachmentCount = static_cast<std::uint32_t>(color_attachments.size());
   rendering_info.pColorAttachments = color_attachments.empty() ? nullptr : color_attachments.data();
   rendering_info.pDepthAttachment = depth_attachment ? &*depth_attachment : nullptr;

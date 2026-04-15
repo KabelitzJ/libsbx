@@ -16,23 +16,25 @@
 
 namespace sbx::graphics {
 
-attachment::attachment(const utility::hashed_string& name, type type, const math::color& clear_color, const graphics::format format, const graphics::blend_state& blend_state, const graphics::filter filter, const graphics::address_mode address_mode) noexcept
+attachment::attachment(const utility::hashed_string& name, type type, const math::color& clear_color, const graphics::format format, const graphics::blend_state& blend_state, const graphics::filter filter, const graphics::address_mode address_mode, std::uint32_t array_layers) noexcept
 : _name{name},
   _type{type},
   _clear_color{clear_color},
   _format{format},
   _filter{filter},
   _address_mode{address_mode},
-  _blend_state{blend_state} { }
+  _blend_state{blend_state},
+  _array_layers{array_layers} { }
 
-attachment::attachment(const utility::hashed_string& name, type type, const math::color& clear_color, const graphics::format format, const graphics::filter filter, const graphics::address_mode address_mode) noexcept
+attachment::attachment(const utility::hashed_string& name, type type, const math::color& clear_color, const graphics::format format, const graphics::filter filter, const graphics::address_mode address_mode, std::uint32_t array_layers) noexcept
 : _name{name},
   _type{type},
   _clear_color{clear_color},
   _format{format},
   _filter{filter},
   _address_mode{address_mode},
-  _blend_state{} { }
+  _blend_state{},
+  _array_layers{array_layers} { }
 
 auto attachment::name() const noexcept -> const utility::hashed_string& {
   return _name;
@@ -56,6 +58,10 @@ auto attachment::clear_color() const noexcept -> const math::color& {
 
 auto attachment::blend_state() const noexcept -> const graphics::blend_state& {
   return _blend_state;
+}
+
+auto attachment::array_layers() const noexcept -> std::uint32_t {
+  return _array_layers;
 }
 
 auto render_graph::context::graphics_pass(const utility::hashed_string& name, const viewport& viewport) const -> pass_node {
@@ -109,7 +115,7 @@ auto render_graph::attachment_descriptions(const pass_handle handle) const -> st
   for (const auto& [attachment_handle, load_op] : pass._writes) {
     auto& attachment = _attachments[attachment_handle.index];
 
-    descriptions.emplace_back(attachment.image_type(), attachment.format(), attachment.blend_state());
+    descriptions.emplace_back(attachment.image_type(), attachment.format(), attachment.blend_state(), attachment.array_layers());
   }
 
   return descriptions;
@@ -474,7 +480,10 @@ auto render_graph::_create_attachments(const pass_node& pass) -> void {
           needs_nearest_filter ? graphics::filter::nearest : graphics::filter::linear,
           attachment.address_mode(),
           usage,
-          VK_SAMPLE_COUNT_1_BIT
+          VK_SAMPLE_COUNT_1_BIT,
+          false,
+          false,
+          attachment.array_layers()
         );
 
         const auto& image = graphics_module.get_resource<image2d>(image_handle);
@@ -486,6 +495,7 @@ auto render_graph::_create_attachments(const pass_node& pass) -> void {
         state.format = image.format();
         state.extent = {extent.x(), extent.y()};
         state.current_layout = VK_IMAGE_LAYOUT_UNDEFINED;
+        state.array_layers = attachment.array_layers();
 
         const auto name = fmt::format("Render Graph Color Attachment '{}'", attachment.name().str());
 
@@ -507,7 +517,10 @@ auto render_graph::_create_attachments(const pass_node& pass) -> void {
           needs_nearest_filter ? graphics::filter::nearest : graphics::filter::linear,
           attachment.address_mode(),
           usage,
-          VK_SAMPLE_COUNT_1_BIT
+          VK_SAMPLE_COUNT_1_BIT,
+          false,
+          false,
+          attachment.array_layers()
         );
 
         const auto& image = graphics_module.get_resource<image2d>(image_handle);
@@ -519,6 +532,7 @@ auto render_graph::_create_attachments(const pass_node& pass) -> void {
         state.format = image.format();
         state.extent = {extent.x(), extent.y()};
         state.current_layout = VK_IMAGE_LAYOUT_UNDEFINED;
+        state.array_layers = attachment.array_layers();
 
         const auto name = fmt::format("Render Graph Storage Attachment '{}'", attachment.name().str());
 
@@ -527,7 +541,7 @@ auto render_graph::_create_attachments(const pass_node& pass) -> void {
         break;
       }
       case attachment::type::depth: {
-        const auto image_handle = graphics_module.add_resource<depth_image>(extent, VK_SAMPLE_COUNT_1_BIT);
+        const auto image_handle = graphics_module.add_resource<depth_image>(extent, VK_SAMPLE_COUNT_1_BIT, attachment.array_layers());
         const auto& image = graphics_module.get_resource<depth_image>(image_handle);
 
         _depth_images[handle.index] = image_handle;
@@ -537,6 +551,7 @@ auto render_graph::_create_attachments(const pass_node& pass) -> void {
         state.format = image.format();
         state.extent = {extent.x(), extent.y()};
         state.current_layout = VK_IMAGE_LAYOUT_UNDEFINED;
+        state.array_layers = attachment.array_layers();
 
         break;
       }
@@ -608,7 +623,7 @@ auto render_graph::_execute_transition_instruction(command_buffer& command_buffe
       aspect = VK_IMAGE_ASPECT_COLOR_BIT;
     }
 
-    image::transition_image_layout(command_buffer, state.image, state.format, old_layout, new_layout, aspect, 1, 0, 1, 0);
+    image::transition_image_layout(command_buffer, state.image, state.format, old_layout, new_layout, aspect, 1, 0, state.array_layers, 0);
   }
 
   state.current_layout = new_layout;

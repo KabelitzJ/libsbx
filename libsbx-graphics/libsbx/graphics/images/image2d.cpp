@@ -18,8 +18,8 @@
 
 namespace sbx::graphics {
 
-image2d::image2d(const math::vector2u& extent, graphics::format format, graphics::filter filter, graphics::address_mode address_mode, VkImageUsageFlags usage, VkSampleCountFlagBits samples, bool anisotropic, bool mipmap)
-: image{VkExtent3D{extent.x(), extent.y(), 1}, to_vk_enum<VkFilter>(filter), to_vk_enum<VkSamplerAddressMode>(address_mode), samples, (usage | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT), to_vk_enum<VkFormat>(format), 1, 1},
+image2d::image2d(const math::vector2u& extent, graphics::format format, graphics::filter filter, graphics::address_mode address_mode, VkImageUsageFlags usage, VkSampleCountFlagBits samples, bool anisotropic, bool mipmap, std::uint32_t array_layers)
+: image{VkExtent3D{extent.x(), extent.y(), 1}, to_vk_enum<VkFilter>(filter), to_vk_enum<VkSamplerAddressMode>(address_mode), samples, (usage | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT), to_vk_enum<VkFormat>(format), 1, array_layers},
   _anisotropic{anisotropic},
   _mipmap{mipmap} {
   _load();
@@ -90,7 +90,7 @@ auto image2d::_upload_pixels(const std::uint8_t* pixels, const std::size_t size)
 
   create_image(_handle, _allocation, _extent, _format, _samples, VK_IMAGE_TILING_OPTIMAL, _usage, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, _mip_levels, _array_layers, VK_IMAGE_TYPE_2D);
   create_image_sampler(_sampler, _filter, _address_mode, _anisotropic, _mip_levels);
-  create_image_view(_handle, _view, VK_IMAGE_VIEW_TYPE_2D, _format, VK_IMAGE_ASPECT_COLOR_BIT, _mip_levels, 0, _array_layers, 0);
+  create_image_view(_handle, _view, (_array_layers > 1u ? VK_IMAGE_VIEW_TYPE_2D_ARRAY : VK_IMAGE_VIEW_TYPE_2D), _format, VK_IMAGE_ASPECT_COLOR_BIT, _mip_levels, 0, _array_layers, 0);
 
   auto command_buffer = graphics::command_buffer{true, VK_QUEUE_GRAPHICS_BIT};
 
@@ -161,7 +161,7 @@ auto image2d::_load(const std::filesystem::path& path) -> void {
 
     create_image(_handle, _allocation, _extent, _format, _samples, VK_IMAGE_TILING_OPTIMAL, _usage, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, _mip_levels, _array_layers, VK_IMAGE_TYPE_2D);
     create_image_sampler(_sampler, _filter, _address_mode, _anisotropic, _mip_levels);
-    create_image_view(_handle, _view, VK_IMAGE_VIEW_TYPE_2D, _format, VK_IMAGE_ASPECT_COLOR_BIT, _mip_levels, 0, _array_layers, 0);
+    create_image_view(_handle, _view, (_array_layers > 1u ? VK_IMAGE_VIEW_TYPE_2D_ARRAY : VK_IMAGE_VIEW_TYPE_2D), _format, VK_IMAGE_ASPECT_COLOR_BIT, _mip_levels, 0, _array_layers, 0);
 
     auto command_buffer = graphics::command_buffer{true, VK_QUEUE_GRAPHICS_BIT};
     transition_image_layout(command_buffer, _handle, _format, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT, _mip_levels, 0, _array_layers, 0);

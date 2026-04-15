@@ -189,7 +189,9 @@ auto image2d::_load_binary(const std::filesystem::path& path) -> void {
   file.read(reinterpret_cast<char*>(buffer.data()), static_cast<std::streamsize>(file_size));
   file.close();
 
-  const auto stored_checksum = *reinterpret_cast<const std::uint32_t*>(buffer.data() + file_size - sizeof(std::uint32_t));
+  auto stored_checksum = std::uint32_t{0};
+  std::memcpy(&stored_checksum, buffer.data() + file_size - sizeof(std::uint32_t), sizeof(std::uint32_t));
+
   const auto computed_checksum = utility::crc32(std::span{buffer.data(), file_size - sizeof(std::uint32_t)});
 
   if (stored_checksum != computed_checksum) {
@@ -198,13 +200,10 @@ auto image2d::_load_binary(const std::filesystem::path& path) -> void {
 
   auto cursor = std::size_t{0};
 
-  const auto read = [&]<typename T>(T& dest) {
-    std::memcpy(&dest, buffer.data() + cursor, sizeof(T));
-    cursor += sizeof(T);
-  };
-
   auto header = file_header{};
-  read(header);
+  
+  std::memcpy(&header, buffer.data() + cursor, sizeof(file_header));
+  cursor += sizeof(file_header);
 
   if (header.magic != file_magic) {
     throw std::runtime_error{fmt::format("Invalid image magic in '{}'", path.string())};

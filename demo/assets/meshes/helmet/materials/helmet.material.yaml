@@ -28,6 +28,7 @@ specular_factor: 1.0
 
 surface_shader:
   path: res://meshes/helmet/materials/helmet.slang
+  required_attributes: [color]
 
 alpha_mode: opaque
 alpha_cutoff: 0.5

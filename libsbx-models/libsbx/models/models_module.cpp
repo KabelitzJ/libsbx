@@ -121,9 +121,9 @@ auto load_material(scenes::asset_registry& registry, const utility::hashed_strin
 
     material.surface_shader = shader_path;
 
-    if (surface_shader["required_streams"]) {
-      for (const auto& stream : surface_shader["required_streams"]) {
-        auto value = reflection::from_string<models::vertex_stream>(stream.as<std::string>());
+    if (surface_shader["required_attributes"]) {
+      for (const auto& attribute : surface_shader["required_attributes"]) {
+        auto value = reflection::from_string<models::vertex_stream>(attribute.as<std::string>());
 
         if (value) {
           material.required_streams.set(*value);

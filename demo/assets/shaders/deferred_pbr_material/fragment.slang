@@ -11,6 +11,21 @@ struct fs_in {
   [[vk::location(2)]] float4 tangent : TANGENT;
   [[vk::location(3)]] float2 uv : UV;
   [[vk::location(4)]] nointerpolation uint instance_index : INSTANCE_INDEX;
+#if defined(VERTEX_STREAM_COLOR)
+  [[vk::location(5)]] float4 color : COLOR0;
+#endif
+#if defined(VERTEX_STREAM_CUSTOM0)
+  [[vk::location(6)]] float4 custom0 : CUSTOM0;
+#endif
+#if defined(VERTEX_STREAM_CUSTOM1)
+  [[vk::location(7)]] float4 custom1 : CUSTOM1;
+#endif
+#if defined(VERTEX_STREAM_CUSTOM2)
+  [[vk::location(8)]] float4 custom2 : CUSTOM2;
+#endif
+#if defined(VERTEX_STREAM_CUSTOM3)
+  [[vk::location(9)]] float4 custom3 : CUSTOM3;
+#endif
   float4 sv_position : SV_Position;
   bool sv_is_front_face: SV_IsFrontFace;
 }; // struct fs_in

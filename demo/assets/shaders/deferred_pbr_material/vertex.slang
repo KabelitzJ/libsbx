@@ -17,6 +17,21 @@ struct vs_out {
   [[vk::location(2)]] float4 tangent : TANGENT;
   [[vk::location(3)]] float2 uv : UV;
   [[vk::location(4)]] nointerpolation uint instance_index : INSTANCE_INDEX;
+#if defined(VERTEX_STREAM_COLOR)
+  [[vk::location(5)]] float4 color : COLOR0;
+#endif
+#if defined(VERTEX_STREAM_CUSTOM0)
+  [[vk::location(6)]] float4 custom0 : CUSTOM0;
+#endif
+#if defined(VERTEX_STREAM_CUSTOM1)
+  [[vk::location(7)]] float4 custom1 : CUSTOM1;
+#endif
+#if defined(VERTEX_STREAM_CUSTOM2)
+  [[vk::location(8)]] float4 custom2 : CUSTOM2;
+#endif
+#if defined(VERTEX_STREAM_CUSTOM3)
+  [[vk::location(9)]] float4 custom3 : CUSTOM3;
+#endif
   float4 sv_position : SV_Position;
 }; // struct vs_out
 
@@ -94,6 +109,22 @@ vs_out main(vs_in input) {
   output.tangent = float4(normalize(mul(transform_data.normal, float4(in_tangent.xyz, 0.0)).xyz), in_tangent.w);
   output.uv = in_uv;
   output.instance_index = global_instance;
+
+#if defined(VERTEX_STREAM_COLOR)
+  output.color = push.color_buffer[global_vertex];
+#endif
+#if defined(VERTEX_STREAM_CUSTOM0)
+  output.custom0 = push.custom0_buffer[global_vertex];
+#endif
+#if defined(VERTEX_STREAM_CUSTOM1)
+  output.custom1 = push.custom1_buffer[global_vertex];
+#endif
+#if defined(VERTEX_STREAM_CUSTOM2)
+  output.custom2 = push.custom2_buffer[global_vertex];
+#endif
+#if defined(VERTEX_STREAM_CUSTOM3)
+  output.custom3 = push.custom3_buffer[global_vertex];
+#endif
 
   output.sv_position = mul(scene.projection, mul(scene.view, float4(world_position, 1.0)));
 

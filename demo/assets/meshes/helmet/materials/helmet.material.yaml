@@ -26,6 +26,10 @@ metallic_factor: 1.0
 roughness_factor: 1.0
 specular_factor: 1.0
 
+surface_shader:
+  path: helmet.slang
+  required_streams: [color, custom0]
+
 alpha_mode: opaque
 alpha_cutoff: 0.5
 is_double_sided: false

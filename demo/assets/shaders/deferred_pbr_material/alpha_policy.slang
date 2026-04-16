@@ -1,8 +1,6 @@
 #ifndef ALPHA_POLICY_SLANG_
 #define ALPHA_POLICY_SLANG_
 
-#include <features.slang>
-
 interface alpha_policy {
   static float4 combine_colors(float4 salmpled, float4 base);
 }; // interface alpha_policy

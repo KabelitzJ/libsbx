@@ -217,7 +217,7 @@ struct fmt::formatter<std::optional<Type>> : public fmt::formatter<Type> {
   using base_type = fmt::formatter<Type>;
 
   template<typename FormatContext>
-  auto format(const std::optional<Type>& value, FormatContext& context) -> decltype(auto) {
+  auto format(const std::optional<Type>& value, FormatContext& context) const -> decltype(auto) {
     if (value) {
       return base_type::format(*value, context);
     }
@@ -233,7 +233,7 @@ struct fmt::formatter<std::filesystem::path> : public fmt::formatter<std::filesy
   using base_type = fmt::formatter<std::filesystem::path::string_type>;
 
   template<typename FormatContext>
-  auto format(const std::filesystem::path& value, FormatContext& context) -> decltype(auto) {
+  auto format(const std::filesystem::path& value, FormatContext& context) const -> decltype(auto) {
     return fmt::format_to(context.out(), "{}", value.string());
   }
 

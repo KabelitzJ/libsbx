@@ -3,6 +3,9 @@
 #include <libsbx/common/scene_data.slang>
 
 #include <deferred_pbr_material/common.slang>
+#include <deferred_pbr_material/surface_context.slang>
+
+#include SBX_SURFACE_INCLUDE
 
 struct vs_in {
   uint vertex_id : SV_VertexID;
@@ -104,10 +107,25 @@ vs_out main(vs_in input) {
 
   world_position = apply_sway(world_position, in_position.y, material_data, scene.time, scene.wind_direction);
 
-  output.position = world_position;
-  output.normal = normalize(mul(transform_data.normal, float4(in_normal, 0.0)).xyz);
-  output.tangent = float4(normalize(mul(transform_data.normal, float4(in_tangent.xyz, 0.0)).xyz), in_tangent.w);
-  output.uv = in_uv;
+  surface_vertex_context ctx;
+  ctx.vertex_id = global_vertex;
+  ctx.instance_id = global_instance;
+  ctx.local_position = in_position;
+  ctx.local_normal = in_normal;
+  ctx.local_tangent = in_tangent;
+  ctx.local_uv = in_uv;
+  ctx.material = material_data;
+  ctx.world_position = world_position;
+  ctx.world_normal = normalize(mul(transform_data.normal, float4(in_normal, 0.0)).xyz);
+  ctx.world_tangent = float4(normalize(mul(transform_data.normal, float4(in_tangent.xyz, 0.0)).xyz), in_tangent.w);
+  ctx.uv = in_uv;
+
+  sbx_surface_vertex(ctx);
+
+  output.position = ctx.world_position;
+  output.normal = ctx.world_normal;
+  output.tangent = ctx.world_tangent;
+  output.uv = ctx.uv;
   output.instance_index = global_instance;
 
 #if defined(VERTEX_STREAM_COLOR)
@@ -126,7 +144,7 @@ vs_out main(vs_in input) {
   output.custom3 = push.custom3_buffer[global_vertex];
 #endif
 
-  output.sv_position = mul(scene.projection, mul(scene.view, float4(world_position, 1.0)));
+  output.sv_position = mul(scene.projection, mul(scene.view, float4(ctx.world_position, 1.0)));
 
   return output;
 }

@@ -4,6 +4,9 @@
 
 #include <deferred_pbr_material/common.slang>
 #include <deferred_pbr_material/alpha_policy.slang>
+#include <deferred_pbr_material/surface_context.slang>
+
+#include SBX_SURFACE_INCLUDE
 
 struct fs_in {
   [[vk::location(0)]] float3 position : POSITION;
@@ -126,24 +129,24 @@ float3 get_material(float2 uv, material_data material_data) {
   float roughness = material_data.roughness_factor;
 
   if (metallic_roughness_image_index < sbx::common::max_image_array_size) {
-    float4 mr = images[NonUniformResourceIndex(metallic_roughness_image_index)].Sample(samplers[NonUniformResourceIndex(metallic_roughness_sampler_index)], uv);
+    float4 metallic_roughness = images[NonUniformResourceIndex(metallic_roughness_image_index)].Sample(samplers[NonUniformResourceIndex(metallic_roughness_sampler_index)], uv);
 
-    metallic *= mr.b;
-    roughness *= mr.g;
+    metallic *= metallic_roughness.b;
+    roughness *= metallic_roughness.g;
   }
 
-  uint occlusion_image_index   = material_data.occlusion_image_index;
+  uint occlusion_image_index = material_data.occlusion_image_index;
   uint occlusion_sampler_index = material_data.occlusion_sampler_index;
 
-  float ao = 1.0;
+  float occlusion = 1.0;
 
   if (occlusion_image_index < sbx::common::max_image_array_size) {
-    float sampled_ao = images[NonUniformResourceIndex(occlusion_image_index)].Sample(samplers[NonUniformResourceIndex(occlusion_sampler_index)], uv).r;
+    float sampled_occlusion = images[NonUniformResourceIndex(occlusion_image_index)].Sample(samplers[NonUniformResourceIndex(occlusion_sampler_index)], uv).r;
 
-    ao = 1.0 + material_data.occlusion_strength * (sampled_ao - 1.0);
+    occlusion = 1.0 + material_data.occlusion_strength * (sampled_occlusion - 1.0);
   }
 
-  return float3(metallic, roughness, ao);
+  return float3(metallic, roughness, occlusion);
 }
 
 float3 get_emissive(float2 uv, material_data material_data) {
@@ -249,12 +252,40 @@ opaque_fs_out opaque_main(fs_in input) {
 
   float material_flags = float(material_data.flags & 255) / 255.0;
 
-  output.albedo = get_albedo<opaque_alpha_policy>(uv, material_data);
-  output.position = float4(input.position, 1.0);
-  // encode from [-1, 1] -> [0, 1]
-  output.normal = float4(get_normal(TBN, uv, input.normal, input.sv_is_front_face, material_data) * 0.5f + 0.5f, 0.0);
-  output.material = float4(get_material(uv, material_data), material_flags);
-  output.emissive = float4(get_emissive(uv, material_data), material_data.specular_factor);
+  surface_fragment_context ctx;
+  ctx.position = input.position;
+  ctx.normal = input.normal;
+  ctx.tangent = input.tangent;
+  ctx.uv = uv;
+  ctx.instance_index = input.instance_index;
+  ctx.material = material_data;
+#if defined(VERTEX_STREAM_COLOR)
+  ctx.color = input.color;
+#endif
+#if defined(VERTEX_STREAM_CUSTOM0)
+  ctx.custom0 = input.custom0;
+#endif
+#if defined(VERTEX_STREAM_CUSTOM1)
+  ctx.custom1 = input.custom1;
+#endif
+#if defined(VERTEX_STREAM_CUSTOM2)
+  ctx.custom2 = input.custom2;
+#endif
+#if defined(VERTEX_STREAM_CUSTOM3)
+  ctx.custom3 = input.custom3;
+#endif
+
+  ctx.albedo = get_albedo<opaque_alpha_policy>(uv, material_data);
+  ctx.world_normal = get_normal(TBN, uv, input.normal, input.sv_is_front_face, material_data);
+  ctx.metallic_roughness_occlusion = get_material(uv, material_data);
+  ctx.emissive = get_emissive(uv, material_data);
+
+  sbx_surface_fragment(ctx);
+
+  output.albedo = ctx.albedo;
+  output.normal = float4(ctx.world_normal * 0.5f + 0.5f, 0.0);
+  output.material = float4(ctx.metallic_roughness_occlusion, material_flags);
+  output.emissive = float4(ctx.emissive, material_data.specular_factor);
   output.object_id = instance_data.object_id;
   output.linear_depth = sbx::common::linearize_depth(input.sv_position.z, scene.camera_near, scene.camera_far);
 

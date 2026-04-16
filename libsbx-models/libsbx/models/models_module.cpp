@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 #include <libsbx/models/models_module.hpp>
 
+#include <libsbx/utility/logger.hpp>
+
 #include <libsbx/core/engine.hpp>
 
 #include <libsbx/scenes/scenes_module.hpp>
@@ -104,6 +106,20 @@ auto load_material(scenes::asset_registry& registry, const utility::hashed_strin
     material.scrumble_speed = scrumble["speed"].as<std::float_t>(0.0f);
     material.scrumble_strength = scrumble["strength"].as<std::float_t>(0.0f);
     material.scrumble_falloff_exponent = scrumble["falloff_exponent"].as<std::float_t>(1.0f);
+  }
+
+  if (node["surface_shader"]) {
+    const auto& surface_shader = node["surface_shader"];
+
+    const auto path = surface_shader["path"].as<std::string>();
+
+    utility::logger<"models">::debug("surface_shader: {}", path);
+
+    if (surface_shader["required_streams"]) {
+      for (const auto& stream : surface_shader["required_streams"]) {
+        utility::logger<"models">::debug("  required_streams: {}", reflection::from_string<models::vertex_stream>(stream.as<std::string>()));
+      }
+    }
   }
  
   registry.request_material<models::material>(name, std::move(material));

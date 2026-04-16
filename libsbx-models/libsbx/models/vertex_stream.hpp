@@ -8,11 +8,13 @@
 
 #include <libsbx/utility/enum.hpp>
 
+#include <libsbx/reflection/description.hpp>
+
 namespace sbx::models {
 
 enum class vertex_stream : std::uint8_t {
-  none    = 0,
-  color   = utility::bit_v<0>,
+  none = 0,
+  color = utility::bit_v<0>,
   custom0 = utility::bit_v<1>,
   custom1 = utility::bit_v<2>,
   custom2 = utility::bit_v<3>,
@@ -56,5 +58,25 @@ inline constexpr auto vertex_stream_index(const vertex_stream stream) -> std::ui
 
 template<>
 struct sbx::utility::is_bit_field<sbx::models::vertex_stream> : std::true_type { };
+
+template<>
+struct sbx::reflection::description<sbx::models::vertex_stream> {
+
+  static constexpr auto name() -> std::string_view {
+    return "vertex_stream";
+  }
+
+  static constexpr auto enumerators() {
+    return std::make_tuple(
+      enumerator{"none", sbx::models::vertex_stream::none},
+      enumerator{"color", sbx::models::vertex_stream::color},
+      enumerator{"custom0", sbx::models::vertex_stream::custom0},
+      enumerator{"custom1", sbx::models::vertex_stream::custom1},
+      enumerator{"custom2", sbx::models::vertex_stream::custom2},
+      enumerator{"custom3", sbx::models::vertex_stream::custom3}
+    );
+  }
+
+}; // struct sbx::reflection::description<sbx::graphics::vertex_stream>
 
 #endif // LIBSBX_MODELS_VERTEX_STREAM_HPP_

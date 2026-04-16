@@ -93,6 +93,15 @@ static auto _load_mesh(const aiMesh* mesh, mesh::mesh_data& data, const math::ma
   auto indices = std::vector<std::uint32_t>{};
   indices.reserve(mesh->mNumFaces * 3u);
 
+  // Per-submesh per-channel color staging (size == mesh->mNumVertices when present).
+  auto submesh_streams = std::array<std::vector<math::vector4>, vertex_stream_count>{};
+
+  for (auto c = std::uint32_t{0u}; c < vertex_stream_count; ++c) {
+    if (c < AI_MAX_NUMBER_OF_COLOR_SETS && mesh->HasVertexColors(c)) {
+      submesh_streams[c].reserve(mesh->mNumVertices);
+    }
+  }
+
   const auto normal_matrix = math::matrix4x4::transposed(math::matrix4x4::inverted(local_transform));
 
   for (auto i = 0u; i < mesh->mNumVertices; ++i) {
@@ -109,6 +118,15 @@ static auto _load_mesh(const aiMesh* mesh, mesh::mesh_data& data, const math::ma
     vertex.tangent = math::vector4{math::vector3::normalized(normal_matrix * math::vector4{T, 0.0f}), handedness};
 
     vertices.push_back(vertex);
+
+    for (auto c = std::uint32_t{0u}; c < vertex_stream_count; ++c) {
+      if (!submesh_streams[c].capacity()) {
+        continue;
+      }
+
+      const auto& color = mesh->mColors[c][i];
+      submesh_streams[c].push_back(math::vector4{color.r, color.g, color.b, color.a});
+    }
   }
 
   // [NOTE] KAJ 2025-07-08 : We need to keep "local" indices here and update them after meshoptimizer has used them
@@ -134,20 +152,78 @@ static auto _load_mesh(const aiMesh* mesh, mesh::mesh_data& data, const math::ma
   meshopt_remapVertexBuffer(unique_vertices.data(), vertices.data(), vertices.size(), sizeof(models::vertex3d), remap.data());
   meshopt_remapIndexBuffer(remapped_indices.data(), indices.data(), indices.size(), remap.data());
 
+  // Apply the same remap to any per-vertex streams so they stay aligned with unique_vertices.
+  auto unique_streams = std::array<std::vector<math::vector4>, vertex_stream_count>{};
+
+  for (auto c = std::uint32_t{0u}; c < vertex_stream_count; ++c) {
+    if (submesh_streams[c].empty()) {
+      continue;
+    }
+
+    unique_streams[c].resize(vertex_count);
+    meshopt_remapVertexBuffer(unique_streams[c].data(), submesh_streams[c].data(), submesh_streams[c].size(), sizeof(math::vector4), remap.data());
+  }
+
   // Step 3: Optimize index buffer for GPU vertex cache
   meshopt_optimizeVertexCache(remapped_indices.data(), remapped_indices.data(), remapped_indices.size(), vertex_count);
 
   // Step 4: Overdraw optimization
   meshopt_optimizeOverdraw(remapped_indices.data(), remapped_indices.data(), remapped_indices.size(), &unique_vertices[0].position.x(), vertex_count, sizeof(models::vertex3d), 1.05f);
 
-  // Step 5: Vertex fetch optimization
-  meshopt_optimizeVertexFetch(unique_vertices.data(), remapped_indices.data(), remapped_indices.size(), unique_vertices.data(), vertex_count, sizeof(models::vertex3d));
+  // Step 5: Vertex fetch optimization.
+  // A fetch remap must be applied to the vertex buffer AND every per-vertex stream identically.
+  auto fetch_remap = std::vector<std::uint32_t>{};
+  fetch_remap.resize(vertex_count);
+
+  meshopt_optimizeVertexFetchRemap(fetch_remap.data(), remapped_indices.data(), remapped_indices.size(), vertex_count);
+
+  auto fetched_vertices = std::vector<models::vertex3d>{};
+  fetched_vertices.resize(vertex_count);
+  meshopt_remapVertexBuffer(fetched_vertices.data(), unique_vertices.data(), vertex_count, sizeof(models::vertex3d), fetch_remap.data());
+  unique_vertices = std::move(fetched_vertices);
+
+  meshopt_remapIndexBuffer(remapped_indices.data(), remapped_indices.data(), remapped_indices.size(), fetch_remap.data());
+
+  for (auto c = std::uint32_t{0u}; c < vertex_stream_count; ++c) {
+    if (unique_streams[c].empty()) {
+      continue;
+    }
+
+    auto fetched = std::vector<math::vector4>{};
+    fetched.resize(vertex_count);
+    meshopt_remapVertexBuffer(fetched.data(), unique_streams[c].data(), vertex_count, sizeof(math::vector4), fetch_remap.data());
+    unique_streams[c] = std::move(fetched);
+  }
 
   // [NOTE] KAJ 2025-07-08 : Apply the "global" index offset here
   // std::transform(remapped_indices.begin(), remapped_indices.end(), remapped_indices.begin(), [vertices_count](const auto index) { return index + vertices_count; });
 
+  const auto previous_vertex_count = data.vertices.size();
+
   utility::append(data.vertices, unique_vertices);
   utility::append(data.indices, remapped_indices);
+
+  // Integrate per-vertex streams into the global data.streams arrays. Any channel that is present on
+  // at least one submesh must be dense across every vertex in the final buffer; channels missing on a
+  // given submesh are padded with (1, 1, 1, 1) so downstream shaders don't need to special-case gaps.
+  for (auto c = std::uint32_t{0u}; c < vertex_stream_count; ++c) {
+    const auto submesh_has_stream = !unique_streams[c].empty();
+
+    if (!submesh_has_stream && data.streams[c].empty()) {
+      continue;
+    }
+
+    if (data.streams[c].size() < previous_vertex_count) {
+      data.streams[c].resize(previous_vertex_count, math::vector4{1.0f, 1.0f, 1.0f, 1.0f});
+    }
+
+    if (submesh_has_stream) {
+      utility::append(data.streams[c], unique_streams[c]);
+    } else {
+      const auto pad_size = previous_vertex_count + vertex_count;
+      data.streams[c].resize(pad_size, math::vector4{1.0f, 1.0f, 1.0f, 1.0f});
+    }
+  }
 
   auto bounds = math::volume{_convert_vec3(mesh->mAABB.mMin), _convert_vec3(mesh->mAABB.mMax)};
 
@@ -183,27 +259,123 @@ static auto _load_node(const aiNode* node, const aiScene* scene, mesh::mesh_data
   }
 }
 
+mesh::mesh(const std::vector<vertex3d>& vertices, const std::vector<std::uint32_t>& indices, const math::volume& bounds)
+: base{vertices, indices, bounds} { }
+
+mesh::mesh(std::vector<vertex3d>&& vertices, std::vector<std::uint32_t>&& indices, const math::volume& bounds)
+: base{std::move(vertices), std::move(indices), bounds} { }
+
+mesh::mesh(mesh_data&& data)
+: base{mesh_data{std::move(data.vertices), std::move(data.indices), std::move(data.submeshes), data.bounds, {}}} {
+  _upload_streams(data.streams);
+}
+
 mesh::mesh(const std::filesystem::path& path, std::uint32_t lod_count)
-: base{_load(path, lod_count)} { }
+: mesh{_load(path, lod_count)} { }
 
 mesh::~mesh() {
+  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 
+  for (auto i = std::uint32_t{0u}; i < static_cast<std::uint32_t>(_stream_buffers.size()); ++i) {
+    const auto& descriptor = vertex_stream_descriptors[i];
+
+    if (_available_streams.has(descriptor.value)) {
+      graphics_module.remove_resource<graphics::buffer>(_stream_buffers[i]);
+    }
+  }
+}
+
+auto mesh::_upload_streams(std::array<std::vector<math::vector4>, vertex_stream_count>& streams) -> void {
+  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
+
+  for (auto i = std::uint32_t{0u}; i < vertex_stream_count; ++i) {
+    auto& source = streams[i];
+
+    if (source.empty()) {
+      continue;
+    }
+
+    utility::assert_that(source.size() == _vertex_count, fmt::format("Stream {} size {} does not match mesh vertex count {}", i, source.size(), _vertex_count));
+
+    const auto size_in_bytes = source.size() * sizeof(math::vector4);
+
+    _stream_buffers[i] = graphics_module.add_resource<graphics::buffer>(
+      size_in_bytes,
+      (VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT),
+      VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT
+    );
+
+    auto staging_buffer = graphics::staging_buffer{size_in_bytes};
+    staging_buffer.write(source.data(), size_in_bytes);
+
+    auto command_buffer = graphics::command_buffer{true, VK_QUEUE_GRAPHICS_BIT};
+    auto& target = graphics_module.get_resource<graphics::buffer>(_stream_buffers[i]);
+
+    auto copy_region = VkBufferCopy{};
+    copy_region.size = size_in_bytes;
+    copy_region.srcOffset = 0u;
+    copy_region.dstOffset = 0u;
+
+    command_buffer.copy_buffer(staging_buffer, target, copy_region);
+    command_buffer.submit_idle();
+
+    _available_streams.set(vertex_stream_descriptors[i].value);
+  }
+}
+
+auto mesh::set_stream(vertex_stream stream, std::span<const math::vector4> data) -> void {
+  utility::assert_that(data.size() == _vertex_count, fmt::format("Stream size {} does not match mesh vertex count {}", data.size(), _vertex_count));
+
+  const auto index = vertex_stream_index(stream);
+  utility::assert_that(index < vertex_stream_count, "Invalid vertex_stream");
+
+  auto streams = std::array<std::vector<math::vector4>, vertex_stream_count>{};
+  streams[index].assign(data.begin(), data.end());
+
+  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
+
+  if (_available_streams.has(stream)) {
+    graphics_module.remove_resource<graphics::buffer>(_stream_buffers[index]);
+    _available_streams.clear(stream);
+  }
+
+  _upload_streams(streams);
+}
+
+auto mesh::stream_address(vertex_stream stream) const -> std::uint64_t {
+  const auto index = vertex_stream_index(stream);
+
+  if (index >= vertex_stream_count || !_available_streams.has(stream)) {
+    return std::uint64_t{0u};
+  }
+
+  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
+
+  return graphics_module.get_resource<graphics::buffer>(_stream_buffers[index]).address();
+}
+
+auto mesh::available_streams() const noexcept -> const utility::bit_field<vertex_stream>& {
+  return _available_streams;
+}
+
+auto mesh::has_streams(const utility::bit_field<vertex_stream>& required) const noexcept -> bool {
+  return (_available_streams.underlying() & required.underlying()) == required.underlying();
 }
 
 auto mesh::_load(const std::filesystem::path& path, std::uint32_t lod_count) -> mesh_data {
   auto& assets_module = core::engine::get_module<assets::assets_module>();
   const auto resolved_path = assets_module.resolve_path(path);
 
-  // const auto binary_path = std::filesystem::path{resolved_path}.replace_extension(binary_file_extention);
+  const auto binary_path = std::filesystem::path{resolved_path}.replace_extension(binary_file_extention);
 
-  // if (std::filesystem::exists(binary_path)) {
-  //   const auto source_time = std::filesystem::last_write_time(resolved_path);
-  //   const auto binary_time = std::filesystem::last_write_time(binary_path);
+  if (std::filesystem::exists(binary_path)) {
+    const auto source_time = std::filesystem::last_write_time(resolved_path);
+    const auto binary_time = std::filesystem::last_write_time(binary_path);
 
-  //   if (binary_time > source_time) {
-  //     return _load_binary(binary_path);
-  //   }
-  // }
+    if (binary_time > source_time) {
+      return _load_binary(binary_path);
+    }
+  }
 
   if (!std::filesystem::exists(resolved_path)) {
     throw std::runtime_error{"Mesh file not found: " + resolved_path.string()};
@@ -252,7 +424,7 @@ auto mesh::_load(const std::filesystem::path& path, std::uint32_t lod_count) -> 
 
   utility::logger<"models">::debug("Loaded mesh: {}, vertices: {}, indices: {}, size: {} kb in {:.2f}ms", resolved_path.string(), vertices_count, indices_count, kb.value(), units::quantity_cast<units::millisecond>(timer.elapsed()));
 
-  // _process(resolved_path, data);
+  _process(resolved_path, data);
 
   return data;
 }
@@ -506,14 +678,44 @@ auto mesh::_load_binary(const std::filesystem::path& path) -> mesh_data {
 
     std::memcpy(data.indices.data(), payload.data(), indices_size);
     decode_vertices(payload.data() + indices_size);
+
+    cursor += header.compressed_size;
   } else {
     std::memcpy(data.indices.data(), buffer.data() + cursor, indices_size);
     decode_vertices(buffer.data() + cursor + indices_size);
+
+    cursor += indices_size + file_vertices_size;
+  }
+
+  if ((header.flags & static_cast<std::uint16_t>(file_flags::has_streams)) != 0u) {
+    auto stream_mask = std::uint32_t{0u};
+    read(stream_mask);
+
+    for (auto c = std::uint32_t{0u}; c < vertex_stream_count; ++c) {
+      if ((stream_mask & static_cast<std::uint32_t>(vertex_stream_descriptors[c].value)) == 0u) {
+        continue;
+      }
+
+      auto& stream = data.streams[c];
+      stream.resize(header.vertex_count);
+
+      const auto bytes = header.vertex_count * sizeof(math::vector4);
+      std::memcpy(stream.data(), buffer.data() + cursor, bytes);
+      cursor += bytes;
+    }
   }
 
   data.bounds = global_aabb;
 
-  utility::logger<"models">::debug("Loaded '{}': {} vertices, {} indices, {} submeshes in {:.2f}ms", path.string(), data.vertices.size(), data.indices.size(), data.submeshes.size(), units::quantity_cast<units::millisecond>(timer.elapsed()));
+  auto stream_count = std::uint32_t{0u};
+
+  for (const auto& stream : data.streams) {
+    if (!stream.empty()) {
+      ++stream_count;
+    }
+  }
+
+  utility::logger<"models">::debug("Loaded '{}': {} vertices, {} indices, {} submeshes, {} streams in {:.2f}ms", path.string(), data.vertices.size(), data.indices.size(), data.submeshes.size(), stream_count, units::quantity_cast<units::millisecond>(timer.elapsed()));
 
   return data;
 }
@@ -606,7 +808,19 @@ auto mesh::_process(const std::filesystem::path& path, const mesh_data& data) ->
   header.uncompressed_size = static_cast<std::uint32_t>(payload.size());
   header.compressed_size = static_cast<std::uint32_t>(compressed.size());
 
-  const auto total_bytes = sizeof(file_header) + sizeof(file_bounds) + submeshes_size + compressed.size() + sizeof(std::uint32_t);
+  auto stream_bytes = std::size_t{0u};
+
+  for (auto c = std::uint32_t{0u}; c < vertex_stream_count; ++c) {
+    if (data.streams[c].size() == data.vertices.size() && !data.streams[c].empty()) {
+      stream_bytes += data.streams[c].size() * sizeof(math::vector4);
+    }
+  }
+
+  if (stream_bytes > 0u) {
+    stream_bytes += sizeof(std::uint32_t); // stream_mask header
+  }
+
+  const auto total_bytes = sizeof(file_header) + sizeof(file_bounds) + submeshes_size + compressed.size() + stream_bytes + sizeof(std::uint32_t);
 
   auto buffer = std::vector<std::uint8_t>{};
   buffer.reserve(total_bytes);
@@ -655,6 +869,32 @@ auto mesh::_process(const std::filesystem::path& path, const mesh_data& data) ->
 
   append_to(buffer, compressed.data(), compressed.size());
 
+  // Streams block: uint32_t mask, then for each set bit a dense float4 array sized vertex_count.
+  auto stream_mask = std::uint32_t{0u};
+
+  for (auto c = std::uint32_t{0u}; c < vertex_stream_count; ++c) {
+    if (data.streams[c].size() == data.vertices.size() && !data.streams[c].empty()) {
+      stream_mask |= static_cast<std::uint32_t>(vertex_stream_descriptors[c].value);
+    }
+  }
+
+  if (stream_mask != 0u) {
+    header.flags |= static_cast<std::uint16_t>(file_flags::has_streams);
+
+    append_to(buffer, &stream_mask, sizeof(stream_mask));
+
+    for (auto c = std::uint32_t{0u}; c < vertex_stream_count; ++c) {
+      if ((stream_mask & static_cast<std::uint32_t>(vertex_stream_descriptors[c].value)) == 0u) {
+        continue;
+      }
+
+      append_to(buffer, data.streams[c].data(), data.streams[c].size() * sizeof(math::vector4));
+    }
+
+    // Rewrite header flags in the already-appended buffer.
+    std::memcpy(buffer.data() + offsetof(file_header, flags), &header.flags, sizeof(header.flags));
+  }
+
   const auto checksum = utility::crc32(buffer);
 
   append_to(buffer, &checksum, sizeof(checksum));
@@ -667,7 +907,7 @@ auto mesh::_process(const std::filesystem::path& path, const mesh_data& data) ->
 
   file.write(reinterpret_cast<const char*>(buffer.data()), static_cast<std::streamsize>(buffer.size()));
 
-  utility::logger<"models">::debug("Wrote '{}': {} vertices, {} indices, {} submeshes — {} bytes (compressed from {} bytes)", output_path.string(), data.vertices.size(), data.indices.size(), data.submeshes.size(), buffer.size(), payload.size());
+  utility::logger<"models">::debug("Wrote '{}': {} vertices, {} indices, {} submeshes, stream_mask 0x{:02X} — {} bytes (compressed from {} bytes)", output_path.string(), data.vertices.size(), data.indices.size(), data.submeshes.size(), stream_mask, buffer.size(), payload.size());
 }
 
 } // namespace sbx::models

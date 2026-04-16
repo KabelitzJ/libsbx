@@ -100,12 +100,15 @@ static_mesh_shadow_subrenderer::descriptor_data::descriptor_data(const graphics:
 auto static_mesh_shadow_subrenderer::_get_or_create_pipeline(const models::material_key& key) -> pipeline_data& {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 
-  if (auto it = _pipeline_cache.find(key); it != _pipeline_cache.end()) {
+  auto lookup_key = key;
+  lookup_key.stream_mask = 0u;
+
+  if (auto it = _pipeline_cache.find(lookup_key); it != _pipeline_cache.end()) {
     return it->second;
   }
 
   auto definition = pipeline_definition;
-  definition.rasterization_state.cull_mode = key.is_double_sided ? graphics::cull_mode::none : graphics::cull_mode::front;
+  definition.rasterization_state.cull_mode = lookup_key.is_double_sided ? graphics::cull_mode::none : graphics::cull_mode::front;
 
   auto& compiler = graphics_module.compiler();
 
@@ -113,7 +116,7 @@ auto static_mesh_shadow_subrenderer::_get_or_create_pipeline(const models::mater
     .path = _base_pipeline,
     .per_stage = {
       {SLANG_STAGE_VERTEX, { .entry_point = "main" }},
-      { SLANG_STAGE_FRAGMENT, { .entry_point = _entry_point.at(key.alpha) }}
+      { SLANG_STAGE_FRAGMENT, { .entry_point = _entry_point.at(lookup_key.alpha) }}
     }
   };
 
@@ -122,7 +125,7 @@ auto static_mesh_shadow_subrenderer::_get_or_create_pipeline(const models::mater
   auto compiled = graphics::graphics_pipeline::compiled_shaders{_base_pipeline.filename().string(), result.code};
   auto handle = graphics_module.add_resource<graphics::graphics_pipeline>(compiled, _attachments, definition);
 
-  auto [entry, inserted] = _pipeline_cache.emplace(key, handle);
+  auto [entry, inserted] = _pipeline_cache.emplace(lookup_key, handle);
 
   return entry->second;
 }

@@ -2,7 +2,9 @@
 #ifndef LIBSBX_MODELS_MESH_HPP_
 #define LIBSBX_MODELS_MESH_HPP_
 
+#include <array>
 #include <filesystem>
+#include <span>
 
 #include <libsbx/utility/hash.hpp>
 #include <libsbx/utility/enum.hpp>
@@ -10,12 +12,15 @@
 
 #include <libsbx/math/volume.hpp>
 #include <libsbx/math/sphere.hpp>
+#include <libsbx/math/vector4.hpp>
 
 #include <libsbx/io/loader_factory.hpp>
 
 #include <libsbx/graphics/pipeline/mesh.hpp>
+#include <libsbx/graphics/buffers/buffer.hpp>
 
 #include <libsbx/models/vertex3d.hpp>
+#include <libsbx/models/vertex_stream.hpp>
 
 namespace sbx::models {
 
@@ -27,22 +32,37 @@ public:
 
   using mesh_data = graphics::mesh<vertex3d>::mesh_data;
 
-  using base::mesh;
+  mesh(const std::vector<vertex3d>& vertices, const std::vector<std::uint32_t>& indices, const math::volume& bounds = math::volume{});
+
+  mesh(std::vector<vertex3d>&& vertices, std::vector<std::uint32_t>&& indices, const math::volume& bounds = math::volume{});
+
+  mesh(mesh_data&& data);
 
   mesh(const std::filesystem::path& path, std::uint32_t lod_count = 1u);
 
   ~mesh() override;
 
+  auto set_stream(vertex_stream stream, std::span<const math::vector4> data) -> void;
+
+  auto stream_address(vertex_stream stream) const -> std::uint64_t;
+
+  auto available_streams() const noexcept -> const utility::bit_field<vertex_stream>&;
+
+  auto has_streams(const utility::bit_field<vertex_stream>& required) const noexcept -> bool;
+
 private:
 
+  auto _upload_streams(std::array<std::vector<math::vector4>, vertex_stream_count>& streams) -> void;
+
   static constexpr auto file_magic = utility::make_magic<std::uint64_t>("SBXSTMSH");
-  static constexpr auto file_version = std::uint16_t{2u};
+  static constexpr auto file_version = std::uint16_t{3u};
   static constexpr auto binary_file_extention = std::string_view{".sbxstmsh"};
 
   enum class file_flags : std::uint16_t {
     none = 0,
     compressed = utility::bit_v<0>,  // reserved for future zstd block compression
     quantized = utility::bit_v<1>,  // reserved for future vertex quantization
+    has_streams = utility::bit_v<2>, // per-vertex stream payload follows the vertex/index block
   }; // enum class file_flags
 
   struct alignas(8) file_header {
@@ -82,7 +102,7 @@ private:
     std::uint32_t lod_level;
     std::uint32_t lod_group;
   }; // struct file_submesh
- 
+
   static_assert(sizeof(file_submesh) == 184u, "file_submesh layout changed");
 
   struct alignas(2) file_vertex {
@@ -103,6 +123,9 @@ private:
   static auto _load_binary(const std::filesystem::path& path) -> mesh_data;
 
   static auto _process(const std::filesystem::path& path, const mesh_data& data) -> void;
+
+  std::array<graphics::buffer_handle, vertex_stream_count> _stream_buffers{};
+  utility::bit_field<vertex_stream> _available_streams{};
 
 }; // class mesh
 

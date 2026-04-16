@@ -5,6 +5,7 @@
 #include <memory>
 #include <vector>
 #include <string>
+#include <array>
 #include <unordered_map>
 
 #include <libsbx/utility/hashed_string.hpp>
@@ -12,6 +13,7 @@
 #include <libsbx/utility/assert.hpp>
 
 #include <libsbx/math/volume.hpp>
+#include <libsbx/math/vector4.hpp>
 
 #include <libsbx/graphics/buffers/buffer.hpp>
 #include <libsbx/graphics/buffers/storage_buffer.hpp>
@@ -51,6 +53,7 @@ public:
     std::vector<index_type> indices;
     std::vector<graphics::submesh> submeshes;
     math::volume bounds;
+    std::array<std::vector<math::vector4>, 5u> streams{};
   }; // struct mesh_data
 
   mesh(const std::vector<vertex_type>& vertices, const std::vector<index_type>& indices, const math::volume& bounds = math::volume{});

@@ -82,6 +82,16 @@ auto static_mesh_material_subrenderer::render(graphics::command_buffer& command_
 
       pipeline_data.push_handler.push("vertex_buffer", mesh.address());
 
+      for (const auto& descriptor : vertex_stream_descriptors) {
+        if ((key.stream_mask & static_cast<std::uint8_t>(descriptor.value)) == 0u) {
+          continue;
+        }
+
+        utility::assert_that(mesh.available_streams().has(descriptor.value), fmt::format("Mesh missing required vertex stream '{}'", descriptor.name));
+
+        pipeline_data.push_handler.push(std::string{descriptor.push_name}, mesh.stream_address(descriptor.value));
+      }
+
       pipeline_data.push_handler.bind(command_buffer);
 
       command_buffer.draw_indexed_indirect(draw_commands_buffer, ref.range.offset, ref.range.count);
@@ -103,8 +113,17 @@ auto static_mesh_material_subrenderer::_get_or_create_pipeline(const material_ke
 
   auto& compiler = graphics_module.compiler();
 
+  auto defines = std::vector<graphics::compiler::define>{};
+
+  for (const auto& descriptor : vertex_stream_descriptors) {
+    if (key.stream_mask & static_cast<std::uint8_t>(descriptor.value)) {
+      defines.push_back(graphics::compiler::define{std::string{descriptor.define}, "1"});
+    }
+  }
+
   const auto request = graphics::compiler::compile_request{
     .path = _base_pipeline,
+    .defines = std::move(defines),
     .per_stage = {
       {SLANG_STAGE_VERTEX, { .entry_point = "main" }},
       {SLANG_STAGE_FRAGMENT, { .entry_point = _entry_point.at(key.alpha) }}

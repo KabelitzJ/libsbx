@@ -16,6 +16,8 @@
 
 #include <libsbx/scenes/components/static_mesh.hpp>
 
+#include <libsbx/models/vertex_stream.hpp>
+
 namespace sbx::models {
 
 enum class alpha_mode : std::uint8_t { 
@@ -85,7 +87,7 @@ static_assert(alignof(material_data) == 16u);
 struct material_key {
   std::uint16_t alpha           : 2;
   std::uint16_t is_double_sided : 1;
-  std::uint16_t _pad0           : 5;
+  std::uint16_t stream_mask     : 5;
   std::uint16_t feature_mask    : 8;
 
   material_key() {
@@ -166,11 +168,14 @@ struct material {
 
   utility::bit_field<material_feature> features{material_feature::cast_shadow | material_feature::receive_shadow | material_feature::invert_backface_normals};
 
+  utility::bit_field<vertex_stream> required_streams{};
+
   operator material_key() const {
     auto key = material_key{};
 
     key.alpha = static_cast<std::uint64_t>(alpha);
     key.is_double_sided = is_double_sided;
+    key.stream_mask = required_streams.underlying();
     // key.feature_mask = features.underlying();
 
     return key;

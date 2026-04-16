@@ -73,7 +73,7 @@ auto for_each(Callback&& callback) -> void {
 
 template<reflectable_enum Enum>
 auto to_string(Enum value) -> std::string_view {
-  auto result = std::string_view{};
+  auto result = std::string_view{"<unknown>"};
 
   for_each<Enum>([&](auto name, auto entry) {
     if (entry == value) {
@@ -95,6 +95,13 @@ auto from_string(std::string_view name) -> std::optional<Enum> {
   });
 
   return result;
+}
+
+template<reflectable_enum Enum>
+auto from_string_or(std::string_view name, const Enum default_value) -> Enum {
+  auto result = from_string<Enum>(name);
+
+  return result ? *result : default_value;
 }
 
 } // namespace sbx::reflection

@@ -88,7 +88,7 @@ auto load_material(scenes::asset_registry& registry, const utility::hashed_strin
   material.alpha = parse_alpha_mode(node["alpha_mode"].as<std::string>("opaque"));
   material.alpha_cutoff = node["alpha_cutoff"].as<std::float_t>(0.5f);
  
-  material.is_double_sided = node["double_sided"].as<bool>(false);
+  material.is_double_sided = node["is_double_sided"].as<bool>(false);
  
   if (node["sway"]) {
     const auto& sway = node["sway"];

@@ -148,6 +148,7 @@ target_link_libraries(
     slang::slang
     # Internal dependencies
     libsbx::utility
+    libsbx::reflection
     libsbx::containers
     libsbx::assets
     libsbx::io

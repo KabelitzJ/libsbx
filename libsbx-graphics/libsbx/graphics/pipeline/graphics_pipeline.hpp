@@ -16,6 +16,8 @@
 
 #include <libsbx/utility/enum.hpp>
 
+#include <libsbx/reflection/description.hpp>
+
 #include <libsbx/memory/tracking_allocator.hpp>
 
 #include <libsbx/containers/static_vector.hpp>
@@ -234,55 +236,71 @@ using graphics_pipeline_handle = resource_handle<graphics_pipeline>;
 } // namespace sbx::graphics
 
 template<>
-struct sbx::utility::enum_mapping<sbx::graphics::polygon_mode> {
+struct sbx::reflection::description<sbx::graphics::polygon_mode> {
 
-  using entry_type = sbx::utility::entry<sbx::graphics::polygon_mode>;
+  static constexpr auto name() -> std::string_view {
+    return "polygon_mode";
+  }
 
-  static constexpr auto values = std::array<entry_type, 3u>{
-    entry_type{sbx::graphics::polygon_mode::fill, "fill"},
-    entry_type{sbx::graphics::polygon_mode::line, "line"},
-    entry_type{sbx::graphics::polygon_mode::point, "point"}
-  };
+  static constexpr auto enumerators() {
+    return std::make_tuple(
+      enumerator{"fill", sbx::graphics::polygon_mode::fill},
+      enumerator{"line", sbx::graphics::polygon_mode::line},
+      enumerator{"point", sbx::graphics::polygon_mode::point}
+    );
+  }
 
-}; // struct sbx::utility::enum_mapping
-
-template<>
-struct sbx::utility::enum_mapping<sbx::graphics::depth> {
-
-  using entry_type = sbx::utility::entry<sbx::graphics::depth>;
-
-  static constexpr auto values = std::array<entry_type, 3u>{
-    entry_type{sbx::graphics::depth::disabled, "disabled"},
-    entry_type{sbx::graphics::depth::read_write, "read_write"},
-    entry_type{sbx::graphics::depth::read_only, "read_only"}
-  };
-
-}; // struct sbx::utility::enum_mapping
+}; // struct sbx::reflection::description<sbx::graphics::polygon_mode>
 
 template<>
-struct sbx::utility::enum_mapping<sbx::graphics::cull_mode> {
+struct sbx::reflection::description<sbx::graphics::depth> {
 
-  using entry_type = sbx::utility::entry<sbx::graphics::cull_mode>;
+  static constexpr auto name() -> std::string_view {
+    return "depth";
+  }
 
-  static constexpr auto values = std::array<entry_type, 4u>{
-    entry_type{sbx::graphics::cull_mode::back, "back"},
-    entry_type{sbx::graphics::cull_mode::front, "front"},
-    entry_type{sbx::graphics::cull_mode::front_and_back, "front_and_back"},
-    entry_type{sbx::graphics::cull_mode::none, "none"}
-  };
+  static constexpr auto enumerators() {
+    return std::make_tuple(
+      enumerator{"disabled", sbx::graphics::depth::disabled},
+      enumerator{"read_write", sbx::graphics::depth::read_write},
+      enumerator{"read_only", sbx::graphics::depth::read_only}
+    );
+  }
 
-}; // struct sbx::utility::enum_mapping
+}; // struct sbx::reflection::description<sbx::graphics::depth>
 
 template<>
-struct sbx::utility::enum_mapping<sbx::graphics::front_face> {
+struct sbx::reflection::description<sbx::graphics::cull_mode> {
 
-  using entry_type = sbx::utility::entry<sbx::graphics::front_face>;
+  static constexpr auto name() -> std::string_view {
+    return "cull_mode";
+  }
 
-  static constexpr auto values = std::array<entry_type, 2u>{
-    entry_type{sbx::graphics::front_face::clockwise, "clockwise"},
-    entry_type{sbx::graphics::front_face::counter_clockwise, "counter_clockwise"}
-  };
+  static constexpr auto enumerators() {
+    return std::make_tuple(
+      enumerator{"back", sbx::graphics::cull_mode::back},
+      enumerator{"front", sbx::graphics::cull_mode::front},
+      enumerator{"front_and_back", sbx::graphics::cull_mode::front_and_back},
+      enumerator{"none", sbx::graphics::cull_mode::none}
+    );
+  }
 
-}; // struct sbx::utility::enum_mapping
+}; // struct sbx::reflection::description<sbx::graphics::cull_mode>
+
+template<>
+struct sbx::reflection::description<sbx::graphics::front_face> {
+
+  static constexpr auto name() -> std::string_view {
+    return "front_face";
+  }
+
+  static constexpr auto enumerators() {
+    return std::make_tuple(
+      enumerator{"clockwise", sbx::graphics::front_face::clockwise},
+      enumerator{"counter_clockwise", sbx::graphics::front_face::counter_clockwise}
+    );
+  }
+
+}; // struct sbx::reflection::description<sbx::graphics::front_face>
 
 #endif // LIBSBX_GRAPHICS_PIPELINE_GRAPHICS_PIPELINE_HPP_

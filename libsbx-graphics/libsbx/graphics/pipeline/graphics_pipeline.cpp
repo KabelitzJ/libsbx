@@ -11,6 +11,8 @@
 
 #include <libsbx/units/time.hpp>
 
+#include <libsbx/reflection/description.hpp>
+
 #include <libsbx/utility/timer.hpp>
 #include <libsbx/utility/logger.hpp>
 #include <libsbx/utility/iterator.hpp>
@@ -598,7 +600,7 @@ auto graphics_pipeline::_update_definition(const std::filesystem::path& path, co
   auto result = default_definition;
 
   if (definition.contains("depth")) {
-    auto depth = utility::from_string<graphics::depth>(definition["depth"].get<std::string>());
+    auto depth = reflection::from_string<graphics::depth>(definition["depth"].get<std::string>());
 
     if (depth) {
       result.depth = *depth;
@@ -615,7 +617,7 @@ auto graphics_pipeline::_update_definition(const std::filesystem::path& path, co
     auto rasterization_state = definition["rasterization_state"];
 
     if (rasterization_state.contains("polygon_mode")) {
-      auto polygon_mode = utility::from_string<graphics::polygon_mode>(rasterization_state["polygon_mode"].get<std::string>());
+      auto polygon_mode = reflection::from_string<graphics::polygon_mode>(rasterization_state["polygon_mode"].get<std::string>());
 
       if (polygon_mode) {
         result.rasterization_state.polygon_mode = *polygon_mode;
@@ -625,7 +627,7 @@ auto graphics_pipeline::_update_definition(const std::filesystem::path& path, co
     }
 
     if (rasterization_state.contains("cull_mode")) {
-      auto cull_mode = utility::from_string<graphics::cull_mode>(rasterization_state["cull_mode"].get<std::string>());
+      auto cull_mode = reflection::from_string<graphics::cull_mode>(rasterization_state["cull_mode"].get<std::string>());
 
       if (cull_mode) {
         result.rasterization_state.cull_mode = *cull_mode;
@@ -635,7 +637,7 @@ auto graphics_pipeline::_update_definition(const std::filesystem::path& path, co
     }
 
     if (rasterization_state.contains("front_face")) {
-      auto front_face = utility::from_string<graphics::front_face>(rasterization_state["front_face"].get<std::string>());
+      auto front_face = reflection::from_string<graphics::front_face>(rasterization_state["front_face"].get<std::string>());
 
       if (front_face) {
         result.rasterization_state.front_face = *front_face;

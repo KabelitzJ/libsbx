@@ -107,10 +107,10 @@ auto texture_slot_hash::operator()(const texture_slot& texture_slot) const noexc
 //     ai_material->Get(AI_MATKEY_GLTF_ALPHACUTOFF, material.alpha_cutoff);
 
 //     // Double sided
-//     auto double_sided = false;
+//     auto is_double_sided = false;
 
-//     if (ai_material->Get(AI_MATKEY_TWOSIDED, double_sided) == AI_SUCCESS) {
-//       material.is_double_sided = double_sided;
+//     if (ai_material->Get(AI_MATKEY_TWOSIDED, is_double_sided) == AI_SUCCESS) {
+//       material.is_double_sided = is_double_sided;
 //     }
 
 //     // Textures

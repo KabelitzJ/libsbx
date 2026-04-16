@@ -17,6 +17,8 @@
 #include <libsbx/utility/logger.hpp>
 #include <libsbx/utility/enum.hpp>
 
+#include <libsbx/reflection/description.hpp>
+
 #include <libsbx/memory/tracking_allocator.hpp>
 
 #include <libsbx/containers/octree.hpp>
@@ -141,16 +143,20 @@ private:
 } // namespace sbx::models
 
 template<>
-struct sbx::utility::enum_mapping<sbx::models::material_feature> {
+struct sbx::reflection::description<sbx::models::material_feature> {
 
-  using entry_type = sbx::utility::entry<sbx::models::material_feature>;
+  static constexpr auto name() -> std::string_view {
+    return "material_feature";
+  }
 
-  static constexpr auto values = std::array<entry_type, 3u>{
-    entry_type{sbx::models::material_feature::cast_shadow, "cast_shadow"},
-    entry_type{sbx::models::material_feature::receive_shadow, "receive_shadow"},
-    entry_type{sbx::models::material_feature::invert_backface_normals, "invert_backface_normals"},
-  };
+  static constexpr auto enumerators() {
+    return std::make_tuple(
+      enumerator{"cast_shadow", sbx::models::material_feature::cast_shadow},
+      enumerator{"receive_shadow", sbx::models::material_feature::receive_shadow},
+      enumerator{"invert_backface_normals", sbx::models::material_feature::invert_backface_normals}
+    );
+  }
 
-}; // struct sbx::utility::enum_mapping
+}; // struct sbx::reflection::description<sbx::models::material_feature>
 
 #endif // LIBSBX_MODELS_STATIC_MESH_MATERIAL_SUBRENDERER_HPP_

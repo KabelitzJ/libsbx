@@ -11,7 +11,7 @@ specular_factor: 0.25
 
 alpha_mode: mask
 alpha_cutoff: 0.5
-double_sided: true
+is_double_sided: true
 
 sway:
   speed: 1.0

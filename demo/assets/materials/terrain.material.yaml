@@ -11,4 +11,4 @@ specular_factor: 0.0
 
 alpha_mode: opaque
 alpha_cutoff: 0.5
-double_sided: false
+is_double_sided: false

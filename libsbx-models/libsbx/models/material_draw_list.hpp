@@ -7,6 +7,8 @@
 
 #include <magic_enum/magic_enum.hpp>
 
+#include <libsbx/reflection/description.hpp>
+
 #include <libsbx/math/half.hpp>
 
 #include <libsbx/assets/assets_module.hpp>
@@ -173,7 +175,7 @@ public:
   }
 
   auto ranges(const bucket bucket) const -> const bucket_map& {
-    return _bucket_ranges[magic_enum::enum_underlying(bucket)];
+    return _bucket_ranges[utility::to_underlying(bucket)];
   }
 
 private:
@@ -343,7 +345,7 @@ private:
         push_draw_command_range(hash, mesh_id, range);
 
         for (const auto& bucket_type : buckets) {
-          auto& entry = _bucket_ranges[magic_enum::enum_underlying(bucket_type)][key];
+          auto& entry = _bucket_ranges[utility::to_underlying(bucket_type)][key];
 
           entry.draw_commands_buffer = pipeline.draw_commands_buffer;
           entry.instance_data_buffer = pipeline.instance_data_buffer;
@@ -399,16 +401,20 @@ private:
 } // namespace sbx::models
 
 template<>
-struct sbx::utility::enum_mapping<sbx::models::bucket> {
+struct sbx::reflection::description<sbx::models::bucket> {
 
-  using entry_type = sbx::utility::entry<sbx::models::bucket>;
+  static constexpr auto name() -> std::string_view {
+    return "bucket";
+  }
 
-  static constexpr auto values = std::array<entry_type, 3u>{
-    entry_type{sbx::models::bucket::opaque, "opaque"},
-    entry_type{sbx::models::bucket::transparent, "transparent"},
-    entry_type{sbx::models::bucket::shadow, "shadow"}
-  };
+  static constexpr auto enumerators() {
+    return std::make_tuple(
+      enumerator{"opaque", sbx::models::bucket::opaque},
+      enumerator{"transparent", sbx::models::bucket::transparent},
+      enumerator{"shadow", sbx::models::bucket::shadow}
+    );
+  }
 
-}; // struct sbx::utility::enum_mapping
+}; // struct sbx::reflection::description<sbx::models::bucket>
 
 #endif // LIBSBX_MODELS_MATERIAL_DRAW_LIST_HPP_

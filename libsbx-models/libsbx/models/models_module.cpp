@@ -111,13 +111,23 @@ auto load_material(scenes::asset_registry& registry, const utility::hashed_strin
   if (node["surface_shader"]) {
     const auto& surface_shader = node["surface_shader"];
 
-    const auto path = surface_shader["path"].as<std::string>();
+    // [NOTE] KAJ 2026-04-16 : This is bit hacky but for now we dont know where shader might end up
+    auto shader_path = surface_shader["path"].as<std::string>();
+    auto constexpr prefix = std::string_view{"res://"};
 
-    utility::logger<"models">::debug("surface_shader: {}", path);
+    if (shader_path.starts_with(prefix)) {
+      shader_path.erase(0, prefix.length());
+    }
+
+    material.surface_shader = shader_path;
 
     if (surface_shader["required_streams"]) {
       for (const auto& stream : surface_shader["required_streams"]) {
-        utility::logger<"models">::debug("  required_streams: {}", reflection::from_string<models::vertex_stream>(stream.as<std::string>()));
+        auto value = reflection::from_string<models::vertex_stream>(stream.as<std::string>());
+
+        if (value) {
+          material.required_streams.set(*value);
+        }
       }
     }
   }

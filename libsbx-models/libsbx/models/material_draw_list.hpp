@@ -4,6 +4,7 @@
 
 #include <memory_resource>
 #include <execution>
+#include <string>
 
 #include <magic_enum/magic_enum.hpp>
 
@@ -178,6 +179,14 @@ public:
     return _bucket_ranges[utility::to_underlying(bucket)];
   }
 
+  static auto surface_shader_path(const std::uint32_t hash) -> std::string {
+    if (auto entry = _surface_shader_paths.find(hash); entry != _surface_shader_paths.end()) {
+      return entry->second;
+    }
+
+    throw utility::runtime_error{"Could not find shader path for hash {}", hash};
+  }
+
 private:
 
   template<typename EmitInstanced, typename EmitSingle>
@@ -205,10 +214,6 @@ private:
 
   static auto _classify_bucket(const models::material& material) -> bucket {
     return (material.alpha == models::alpha_mode::blend) ? bucket::transparent : bucket::opaque;
-  }
-
-  static auto _submits_to_shadow(const models::material& material) -> bool {
-    return (material.alpha != models::alpha_mode::blend) && material.features.has(models::material_feature::cast_shadow);
   }
 
   auto _get_or_create_pipeline_data(const material_key& key) -> pipeline_data& {
@@ -292,11 +297,14 @@ private:
     _material_data.push_back(data);
 
     const auto key = static_cast<material_key>(material);
+
+    _surface_shader_paths.emplace(key.surface_shader_hash, material.surface_shader);
+
     auto& buckets = _material_buckets[key];
 
     buckets.insert(_classify_bucket(material));
 
-    if (_submits_to_shadow(material)) {
+    if (material.features.has(models::material_feature::cast_shadow) && material.alpha != models::alpha_mode::blend) {
       buckets.insert(bucket::shadow);
     }
   }
@@ -393,6 +401,8 @@ private:
   std::array<bucket_map, magic_enum::enum_count<bucket>()> _bucket_ranges;
 
   inline static auto _material_buckets = std::unordered_map<material_key, std::unordered_set<bucket>, material_key_hash>{};
+
+  inline static auto _surface_shader_paths = std::unordered_map<std::uint32_t, std::string>{};
 
   inline static auto _samplers = std::unordered_map<std::size_t, graphics::sampler_state_handle>{};
 

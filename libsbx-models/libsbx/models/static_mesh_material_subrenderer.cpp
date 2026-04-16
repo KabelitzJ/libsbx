@@ -121,6 +121,14 @@ auto static_mesh_material_subrenderer::_get_or_create_pipeline(const material_ke
     }
   }
 
+  if (key.surface_shader_hash != 0u) {
+    auto path = static_mesh_material_draw_list::surface_shader_path(key.surface_shader_hash);
+
+    if (!path.empty()) {
+      defines.push_back(graphics::compiler::define{"SBX_SURFACE_INCLUDE", fmt::format("\"{}\"", path)});
+    }
+  }
+
   const auto request = graphics::compiler::compile_request{
     .path = _base_pipeline,
     .defines = std::move(defines),

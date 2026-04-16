@@ -84,7 +84,8 @@ struct alignas(16) material_data {
 static_assert(sizeof(material_data) <= 256u);
 static_assert(alignof(material_data) == 16u);
 
-struct material_key {
+struct alignas(std::uint32_t) material_key {
+  std::uint32_t surface_shader_hash;
   std::uint16_t alpha           : 2;
   std::uint16_t is_double_sided : 1;
   std::uint16_t stream_mask     : 5;
@@ -96,8 +97,8 @@ struct material_key {
 
 }; // struct material_key
 
-static_assert(sizeof(material_key) == sizeof(std::uint16_t));
-static_assert(alignof(material_key) == alignof(std::uint16_t));
+static_assert(sizeof(material_key) == 8u);
+static_assert(alignof(material_key) == alignof(std::uint32_t));
 
 inline auto operator==(const material_key& lhs, const material_key& rhs) -> bool { 
   return std::memcmp(&lhs, &rhs, sizeof(material_key)) == 0; 
@@ -168,6 +169,7 @@ struct material {
 
   utility::bit_field<material_feature> features{material_feature::cast_shadow | material_feature::receive_shadow | material_feature::invert_backface_normals};
 
+  std::filesystem::path surface_shader{};
   utility::bit_field<vertex_stream> required_streams{};
 
   operator material_key() const {
@@ -176,7 +178,9 @@ struct material {
     key.alpha = static_cast<std::uint64_t>(alpha);
     key.is_double_sided = is_double_sided;
     key.stream_mask = required_streams.underlying();
-    // key.feature_mask = features.underlying();
+    
+    auto shader_path = surface_shader.generic_string();
+    key.surface_shader_hash = utility::crc32(std::span{reinterpret_cast<const std::uint8_t*>(shader_path.data()), shader_path.size()});
 
     return key;
   }

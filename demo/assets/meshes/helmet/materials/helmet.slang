@@ -8,9 +8,8 @@
 void sbx_surface_vertex(inout surface_vertex_context ctx) { }
 
 void sbx_surface_fragment(inout surface_fragment_context ctx) {
-#if defined(VERTEX_STREAM_COLOR)
-  ctx.albedo = ctx.albedo + ctx.color;
-#endif
+  ctx.albedo = float4(1, 0, 1, 1);
+  ctx.emissive = float3(0, 0, 0);
 }
 
 #endif

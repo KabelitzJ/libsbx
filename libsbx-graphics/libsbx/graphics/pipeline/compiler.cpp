@@ -17,22 +17,22 @@ struct stage_info {
 }; // struct stage_info
 
 static constexpr auto stage_infos = std::array<stage_info, SLANG_STAGE_COUNT>{
-    stage_info{ SLANG_STAGE_NONE,           nullptr,         nullptr,               nullptr },
-    stage_info{ SLANG_STAGE_VERTEX,         "vertex",        "vertex.slang",        "vs_6_0" },
-    stage_info{ SLANG_STAGE_HULL,           "hull",          "hull.slang",          "hs_6_0" },
-    stage_info{ SLANG_STAGE_DOMAIN,         "domain",        "domain.slang",        "ds_6_0" },
-    stage_info{ SLANG_STAGE_GEOMETRY,       "geometry",      "geometry.slang",      "gs_6_0" },
-    stage_info{ SLANG_STAGE_FRAGMENT,       "fragment",      "fragment.slang",      "ps_6_0" },
-    stage_info{ SLANG_STAGE_COMPUTE,        "compute",       "compute.slang",       "cs_6_0" },
-    stage_info{ SLANG_STAGE_RAY_GENERATION, "raygen",        "raygen.slang",        "rgs_6_0" },
-    stage_info{ SLANG_STAGE_INTERSECTION,   "intersection",  "intersection.slang",  "is_6_0" },
-    stage_info{ SLANG_STAGE_ANY_HIT,        "anyhit",        "anyhit.slang",        "ahs_6_0" },
-    stage_info{ SLANG_STAGE_CLOSEST_HIT,    "closesthit",    "closesthit.slang",    "chs_6_0" },
-    stage_info{ SLANG_STAGE_MISS,           "miss",          "miss.slang",          "ms_6_0" },
-    stage_info{ SLANG_STAGE_CALLABLE,       "callable",      "callable.slang",      "cs_6_0" },
-    stage_info{ SLANG_STAGE_MESH,           "mesh",          "mesh.slang",          "ms_6_0" },
-    stage_info{ SLANG_STAGE_AMPLIFICATION,  "amplification", "amplification.slang", "as_6_0" },
-    stage_info{ SLANG_STAGE_DISPATCH,       "dispatch",      "dispatch.slang",      "ds_6_0" }
+  stage_info{ SLANG_STAGE_NONE,           nullptr,         nullptr,               nullptr },
+  stage_info{ SLANG_STAGE_VERTEX,         "vertex",        "vertex.slang",        "vs_6_0" },
+  stage_info{ SLANG_STAGE_HULL,           "hull",          "hull.slang",          "hs_6_0" },
+  stage_info{ SLANG_STAGE_DOMAIN,         "domain",        "domain.slang",        "ds_6_0" },
+  stage_info{ SLANG_STAGE_GEOMETRY,       "geometry",      "geometry.slang",      "gs_6_0" },
+  stage_info{ SLANG_STAGE_FRAGMENT,       "fragment",      "fragment.slang",      "ps_6_0" },
+  stage_info{ SLANG_STAGE_COMPUTE,        "compute",       "compute.slang",       "cs_6_0" },
+  stage_info{ SLANG_STAGE_RAY_GENERATION, "raygen",        "raygen.slang",        "rgs_6_0" },
+  stage_info{ SLANG_STAGE_INTERSECTION,   "intersection",  "intersection.slang",  "is_6_0" },
+  stage_info{ SLANG_STAGE_ANY_HIT,        "anyhit",        "anyhit.slang",        "ahs_6_0" },
+  stage_info{ SLANG_STAGE_CLOSEST_HIT,    "closesthit",    "closesthit.slang",    "chs_6_0" },
+  stage_info{ SLANG_STAGE_MISS,           "miss",          "miss.slang",          "ms_6_0" },
+  stage_info{ SLANG_STAGE_CALLABLE,       "callable",      "callable.slang",      "cs_6_0" },
+  stage_info{ SLANG_STAGE_MESH,           "mesh",          "mesh.slang",          "ms_6_0" },
+  stage_info{ SLANG_STAGE_AMPLIFICATION,  "amplification", "amplification.slang", "as_6_0" },
+  stage_info{ SLANG_STAGE_DISPATCH,       "dispatch",      "dispatch.slang",      "ds_6_0" }
 };
 
 compiler::compiler() {
@@ -247,12 +247,14 @@ auto compiler::_create_session(const compile_request& compile_request, SlangStag
   session_description.preprocessorMacros = preprocessor_macro_descriptions.data();
   session_description.preprocessorMacroCount = preprocessor_macro_descriptions.size();
 
-  const auto parent_path = assets_module.resolve_path(compile_request.path.parent_path()).string();
-  const auto path = assets_module.resolve_path(compile_request.path).string();
+  const auto parent_path = assets_module.resolve_path(compile_request.path.parent_path()).generic_string();
+  const auto path = assets_module.resolve_path(compile_request.path).generic_string();
+  const auto asset_root = assets_module.asset_root().generic_string();
 
-  auto search_paths = std::array<const char*, 2u>{
+  auto search_paths = std::array<const char*, 3u>{
     parent_path.c_str(),
-    path.c_str()
+    path.c_str(),
+    asset_root.c_str()
   };
 
   session_description.searchPaths = search_paths.data();

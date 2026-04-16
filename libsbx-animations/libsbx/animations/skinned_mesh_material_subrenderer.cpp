@@ -101,8 +101,25 @@ auto skinned_mesh_material_subrenderer::_get_or_create_pipeline(const models::ma
 
   auto& compiler = graphics_module.compiler();
 
+  auto defines = std::vector<graphics::compiler::define>{};
+
+  for (const auto& descriptor : models::vertex_stream_descriptors) {
+    if (key.stream_mask & static_cast<std::uint8_t>(descriptor.value)) {
+      defines.push_back(graphics::compiler::define{std::string{descriptor.define}, "1"});
+    }
+  }
+
+  if (key.surface_shader_hash != 0u) {
+    auto path = skinned_mesh_material_draw_list::surface_shader_path(key.surface_shader_hash);
+
+    if (!path.empty()) {
+      defines.push_back(graphics::compiler::define{"SBX_SURFACE_INCLUDE", fmt::format("\"{}\"", path)});
+    }
+  }
+
   const auto request = graphics::compiler::compile_request{
     .path = _base_pipeline,
+    .defines = std::move(defines),
     .per_stage = {
       {SLANG_STAGE_VERTEX, {.entry_point = "main"}},
       {SLANG_STAGE_FRAGMENT, {.entry_point = _fs_entry.at(key.alpha)}}

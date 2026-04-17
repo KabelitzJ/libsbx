@@ -106,7 +106,7 @@ public:
       return *static_cast<Type*>(_tasks[pass][index].get());
     }
 
-    throw utility::runtime_error{"Draw list with name '{}' not found", utility::type_name<Type>()};
+    throw utility::runtime_error{"Task '{}' not found", utility::type_name<Type>()};
   }
 
 protected:

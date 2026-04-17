@@ -114,7 +114,7 @@ renderer::renderer()
   auto shadow_pass = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
     auto pass = context.graphics_pass("shadow", sbx::graphics::viewport::fixed(2048u, 2048u));
 
-    pass.depends_on(skinning_pass);
+    pass.depends_on(skinning_pass, culling_pass);
 
     pass.writes(shadow_depth, sbx::graphics::attachment_load_operation::clear);
     pass.writes(shadow, sbx::graphics::attachment_load_operation::clear);
@@ -197,7 +197,7 @@ renderer::renderer()
   add_draw_list<sbx::animations::skinned_mesh_material_draw_list>("skinned_mesh_material");
   
   // Compute passes
-  // const auto& frustum_culling_task = add_task<sbx::models::frustum_culling_task>(culling_pass, "res://shaders/frustum_culling");
+  const auto& frustum_culling_task = add_task<sbx::models::frustum_culling_task>(culling_pass, "res://shaders/frustum_culling");
   const auto& skinning_task = add_task<sbx::animations::skinning_task>(skinning_pass, "res://shaders/skinning");
   const auto& particle_task = add_task<sbx::particles::particle_task>(particles_pass, "res://shaders/particles");
 

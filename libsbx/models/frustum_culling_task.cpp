@@ -241,10 +241,10 @@ auto frustum_culling_task::_extract_frustum_planes(const math::matrix4x4f& vp) -
 
   // Near: row3 + row2
   result.planes[4] = math::vector4f{
-    vp[0][3] + vp[0][2],
-    vp[1][3] + vp[1][2],
-    vp[2][3] + vp[2][2],
-    vp[3][3] + vp[3][2]
+    vp[0][2],
+    vp[1][2],
+    vp[2][2],
+    vp[3][2]
   };
 
   // Far: row3 - row2
@@ -256,10 +256,10 @@ auto frustum_culling_task::_extract_frustum_planes(const math::matrix4x4f& vp) -
   };
 
   for (auto& plane : result.planes) {
-    const auto length = plane.length();
+    const auto n = std::sqrt(plane.x() * plane.x() + plane.y() * plane.y() + plane.z() * plane.z());
 
-    if (length > 0.0f) {
-      plane /= length;
+    if (n > 0.0f) {
+      plane /= n;
     }
   }
 

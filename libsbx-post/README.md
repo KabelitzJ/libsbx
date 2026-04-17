@@ -1,3 +1,0 @@
-# libsbx-post
-
-C++ library

@@ -1,3 +1,0 @@
-# libsbx-memory
-
-C++ library

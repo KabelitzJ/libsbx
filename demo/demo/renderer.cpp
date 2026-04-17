@@ -29,25 +29,15 @@
 #include <libsbx/post/filters/ssao_filter.hpp>
 
 #include <libsbx/gizmos/gizmos_subrenderer.hpp>
-#include <libsbx/editor/editor_subrenderer.hpp>
 #include <libsbx/sprites/sprite_subrenderer.hpp>
 
 #include <demo/application.hpp>
 
 namespace demo {
 
-renderer::renderer(bool is_editor)
+renderer::renderer()
 : _clear_color{sbx::math::color::white()} {
   auto& graphics_module = sbx::core::engine::get_module<sbx::graphics::graphics_module>();
-
-  const auto scene_viewport = is_editor ? std::string{"scene"} : std::string{sbx::graphics::viewport::window_name};
-
-  if (is_editor) {
-    auto& viewports = graphics_module.viewports();
-    const auto extent = graphics_module.surface().current_extent();
-
-    viewports.declare(scene_viewport, sbx::math::vector2u{extent.width, extent.height});
-  }
 
   // Attachments
   auto shadow = create_attachment("shadow", sbx::graphics::attachment::type::image, sbx::math::color::white(), sbx::graphics::format::r32_sfloat, sbx::graphics::blend_state{}, sbx::graphics::filter::nearest, sbx::graphics::address_mode::clamp_to_edge, 4u);
@@ -133,7 +123,7 @@ renderer::renderer(bool is_editor)
   });
 
   auto deferred_pass = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
-    auto pass = context.graphics_pass("deferred", sbx::graphics::viewport::named(scene_viewport));
+    auto pass = context.graphics_pass("deferred");
 
     pass.depends_on(skinning_pass, culling_pass);
 
@@ -150,7 +140,7 @@ renderer::renderer(bool is_editor)
   });
 
   auto transparency_pass = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
-    auto pass = context.graphics_pass("deferred", sbx::graphics::viewport::named(scene_viewport));
+    auto pass = context.graphics_pass("deferred");
 
     pass.depends_on(deferred_pass, culling_pass, skinning_pass, particles_pass);
 
@@ -162,7 +152,7 @@ renderer::renderer(bool is_editor)
   });
 
   auto resolve_pass = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
-    auto pass = context.graphics_pass("deferred", sbx::graphics::viewport::named(scene_viewport));
+    auto pass = context.graphics_pass("deferred");
 
     pass.depends_on(deferred_pass, transparency_pass, shadow_pass);
 
@@ -176,7 +166,7 @@ renderer::renderer(bool is_editor)
   });
 
   auto tonemap_pass = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
-    auto pass = context.graphics_pass("deferred", sbx::graphics::viewport::named(scene_viewport));
+    auto pass = context.graphics_pass("deferred");
 
     pass.depends_on(resolve_pass);
 
@@ -188,31 +178,13 @@ renderer::renderer(bool is_editor)
   });
 
   auto fxaa_pass = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
-    auto pass = context.graphics_pass("deferred", sbx::graphics::viewport::named(scene_viewport));
+    auto pass = context.graphics_pass("deferred");
 
     pass.depends_on(tonemap_pass);
 
     pass.reads(tonemap);
 
-    if (is_editor) {
-      pass.writes(fxaa, sbx::graphics::attachment_load_operation::clear);
-    } else {
-      pass.writes(swapchain, sbx::graphics::attachment_load_operation::clear);
-    }
-
-    return pass;
-  });
-
-  auto editor_pass = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
-    auto pass = context.graphics_pass("editor");
-    
-    if (is_editor) {
-      pass.depends_on(fxaa_pass);
-
-      pass.reads(fxaa);
-
-      pass.writes(swapchain, sbx::graphics::attachment_load_operation::clear);
-    }
+    pass.writes(swapchain, sbx::graphics::attachment_load_operation::clear);
 
     return pass;
   });
@@ -287,12 +259,6 @@ renderer::renderer(bool is_editor)
   add_subrenderer<sbx::post::tonemap_filter>(tonemap_pass, "res://shaders/tonemap", std::move(tonemap_attachment_names), tonemap_config);
 
   add_subrenderer<sbx::post::fxaa_filter>(fxaa_pass, "res://shaders/fxaa", "tonemap");
-
-  // Editor pass
-
-  if (is_editor) {
-    add_subrenderer<sbx::editor::editor_subrenderer>(editor_pass, "res://shaders/editor", "fxaa");
-  }
 }
 
 } // namespace demo

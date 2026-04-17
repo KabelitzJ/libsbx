@@ -1,3 +1,0 @@
-# libsbx-signal
-
-C++ library

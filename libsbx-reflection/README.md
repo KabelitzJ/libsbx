@@ -1,3 +1,0 @@
-# libsbx-reflection
-
-C++ library

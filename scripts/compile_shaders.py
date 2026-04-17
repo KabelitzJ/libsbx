@@ -141,7 +141,7 @@ def gather_jobs(shader_root_dir: Path, slangc_path: str) -> List[Tuple[str, Path
     dirs_seen = set()
     for f in all_slang_files:
         # Skip files in directories matching skip_shaders
-        if any(skip in f.parts for skip in skip_shaders):
+        if any(skip in f.relative_to(shader_root_dir).parts for skip in skip_shaders):
             continue
 
         # Only compile stage files (vertex, fragment, etc.), skip includes like common.slang

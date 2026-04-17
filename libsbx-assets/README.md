@@ -1,3 +1,0 @@
-# libsbx-assets
-
-C++ library

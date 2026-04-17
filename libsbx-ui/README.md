@@ -1,3 +1,0 @@
-# libsbx-ui
-
-C++ library

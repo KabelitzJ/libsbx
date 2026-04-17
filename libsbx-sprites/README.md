@@ -1,3 +1,0 @@
-# libsbx-sprites
-
-C++ library

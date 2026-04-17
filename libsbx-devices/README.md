@@ -1,3 +1,0 @@
-# libsbx-devices
-
-C++ library

@@ -1,3 +1,0 @@
-# libsbx-io
-
-C++ library

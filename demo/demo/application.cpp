@@ -58,23 +58,13 @@ application::application()
     assets_module.set_asset_root("demo/assets");
   }
 
-  auto is_editor = true;
-
-  if (auto editor = cli.argument<bool>("editor"); editor) {
-    is_editor = *editor;
-  }
-
   auto& audio_module = sbx::core::engine::get_module<sbx::audio::audio_module>();
 
   auto& graphics_module = sbx::core::engine::get_module<sbx::graphics::graphics_module>();
 
-  graphics_module.set_renderer<demo::renderer>(is_editor);
+  graphics_module.set_renderer<demo::renderer>();
 
   auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
-
-  if (is_editor) {
-    scenes_module.set_scene_viewport("scene");
-  }
 
   auto& asset_registry = scenes_module.asset_registry();
 

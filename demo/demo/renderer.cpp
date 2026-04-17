@@ -29,38 +29,19 @@
 #include <libsbx/post/filters/ssao_filter.hpp>
 
 #include <libsbx/gizmos/gizmos_subrenderer.hpp>
-#include <libsbx/editor/editor_subrenderer.hpp>
 #include <libsbx/sprites/sprite_subrenderer.hpp>
 
 #include <demo/application.hpp>
 
 namespace demo {
 
-renderer::renderer(bool is_editor)
+renderer::renderer()
 : _clear_color{sbx::math::color::white()} {
   auto& graphics_module = sbx::core::engine::get_module<sbx::graphics::graphics_module>();
 
-  const auto scene_viewport = is_editor ? std::string{"scene"} : std::string{sbx::graphics::viewport::window_name};
-
-  if (is_editor) {
-    auto& viewports = graphics_module.viewports();
-    const auto extent = graphics_module.surface().current_extent();
-
-    viewports.declare(scene_viewport, sbx::math::vector2u{extent.width, extent.height});
-  }
-
   // Attachments
-  auto shadow0 = create_attachment("shadow0", sbx::graphics::attachment::type::image, sbx::math::color::white(), sbx::graphics::format::r32_sfloat, sbx::graphics::filter::nearest, sbx::graphics::address_mode::clamp_to_edge);
-  auto shadow0_depth = create_attachment("shadow0_depth", sbx::graphics::attachment::type::depth);
-
-  auto shadow1 = create_attachment("shadow1", sbx::graphics::attachment::type::image, sbx::math::color::white(), sbx::graphics::format::r32_sfloat, sbx::graphics::filter::nearest, sbx::graphics::address_mode::clamp_to_edge);
-  auto shadow1_depth = create_attachment("shadow1_depth", sbx::graphics::attachment::type::depth);
-
-  auto shadow2 = create_attachment("shadow2", sbx::graphics::attachment::type::image, sbx::math::color::white(), sbx::graphics::format::r32_sfloat, sbx::graphics::filter::nearest, sbx::graphics::address_mode::clamp_to_edge);
-  auto shadow2_depth = create_attachment("shadow2_depth", sbx::graphics::attachment::type::depth);
-
-  auto shadow3 = create_attachment("shadow3", sbx::graphics::attachment::type::image, sbx::math::color::white(), sbx::graphics::format::r32_sfloat, sbx::graphics::filter::nearest, sbx::graphics::address_mode::clamp_to_edge);
-  auto shadow3_depth = create_attachment("shadow3_depth", sbx::graphics::attachment::type::depth);
+  auto shadow = create_attachment("shadow", sbx::graphics::attachment::type::image, sbx::math::color::white(), sbx::graphics::format::r32_sfloat, sbx::graphics::blend_state{}, sbx::graphics::filter::nearest, sbx::graphics::address_mode::clamp_to_edge, 4u);
+  auto shadow_depth = create_attachment("shadow_depth", sbx::graphics::attachment::type::depth, sbx::math::color::black(), sbx::graphics::format::undefined, sbx::graphics::blend_state{}, sbx::graphics::filter::linear, sbx::graphics::address_mode::repeat, 4u);
 
   auto depth = create_attachment("depth", sbx::graphics::attachment::type::depth);
   auto albedo = create_attachment("albedo", sbx::graphics::attachment::type::image, _clear_color, sbx::graphics::format::r8g8b8a8_unorm);
@@ -130,52 +111,19 @@ renderer::renderer(bool is_editor)
   });
 
   // Render passes
-  auto shadow0_pass = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
-    auto pass = context.graphics_pass("shadow0", sbx::graphics::viewport::fixed(2048u, 2048u));
+  auto shadow_pass = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
+    auto pass = context.graphics_pass("shadow", sbx::graphics::viewport::fixed(2048u, 2048u));
 
     pass.depends_on(skinning_pass);
 
-    pass.writes(shadow0_depth, sbx::graphics::attachment_load_operation::clear);
-    pass.writes(shadow0, sbx::graphics::attachment_load_operation::clear);
-
-    return pass;
-  });
-
-  auto shadow1_pass = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
-    auto pass = context.graphics_pass("shadow1", sbx::graphics::viewport::fixed(2048u, 2048u));
-
-    pass.depends_on(skinning_pass);
-
-    pass.writes(shadow1_depth, sbx::graphics::attachment_load_operation::clear);
-    pass.writes(shadow1, sbx::graphics::attachment_load_operation::clear);
-
-    return pass;
-  });
-
-  auto shadow2_pass = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
-    auto pass = context.graphics_pass("shadow2", sbx::graphics::viewport::fixed(1024u, 1024u));
-
-    pass.depends_on(skinning_pass);
-
-    pass.writes(shadow2_depth, sbx::graphics::attachment_load_operation::clear);
-    pass.writes(shadow2, sbx::graphics::attachment_load_operation::clear);
-
-    return pass;
-  });
-
-  auto shadow3_pass = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
-    auto pass = context.graphics_pass("shadow3", sbx::graphics::viewport::fixed(512u, 512u));
-
-    pass.depends_on(skinning_pass);
-
-    pass.writes(shadow3_depth, sbx::graphics::attachment_load_operation::clear);
-    pass.writes(shadow3, sbx::graphics::attachment_load_operation::clear);
+    pass.writes(shadow_depth, sbx::graphics::attachment_load_operation::clear);
+    pass.writes(shadow, sbx::graphics::attachment_load_operation::clear);
 
     return pass;
   });
 
   auto deferred_pass = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
-    auto pass = context.graphics_pass("deferred", sbx::graphics::viewport::named(scene_viewport));
+    auto pass = context.graphics_pass("deferred");
 
     pass.depends_on(skinning_pass, culling_pass);
 
@@ -192,7 +140,7 @@ renderer::renderer(bool is_editor)
   });
 
   auto transparency_pass = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
-    auto pass = context.graphics_pass("deferred", sbx::graphics::viewport::named(scene_viewport));
+    auto pass = context.graphics_pass("deferred");
 
     pass.depends_on(deferred_pass, culling_pass, skinning_pass, particles_pass);
 
@@ -204,11 +152,11 @@ renderer::renderer(bool is_editor)
   });
 
   auto resolve_pass = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
-    auto pass = context.graphics_pass("deferred", sbx::graphics::viewport::named(scene_viewport));
+    auto pass = context.graphics_pass("deferred");
 
-    pass.depends_on(deferred_pass, transparency_pass, shadow0_pass, shadow1_pass, shadow2_pass, shadow3_pass);
+    pass.depends_on(deferred_pass, transparency_pass, shadow_pass);
 
-    pass.reads(albedo, position, normal, material, emissive, accum, revealage, shadow0, shadow1, shadow2, shadow3);
+    pass.reads(albedo, position, normal, material, emissive, accum, revealage, shadow);
 
     pass.writes(depth, sbx::graphics::attachment_load_operation::load);
     pass.writes(resolve, sbx::graphics::attachment_load_operation::clear);
@@ -218,7 +166,7 @@ renderer::renderer(bool is_editor)
   });
 
   auto tonemap_pass = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
-    auto pass = context.graphics_pass("deferred", sbx::graphics::viewport::named(scene_viewport));
+    auto pass = context.graphics_pass("deferred");
 
     pass.depends_on(resolve_pass);
 
@@ -230,31 +178,13 @@ renderer::renderer(bool is_editor)
   });
 
   auto fxaa_pass = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
-    auto pass = context.graphics_pass("deferred", sbx::graphics::viewport::named(scene_viewport));
+    auto pass = context.graphics_pass("deferred");
 
     pass.depends_on(tonemap_pass);
 
     pass.reads(tonemap);
 
-    if (is_editor) {
-      pass.writes(fxaa, sbx::graphics::attachment_load_operation::clear);
-    } else {
-      pass.writes(swapchain, sbx::graphics::attachment_load_operation::clear);
-    }
-
-    return pass;
-  });
-
-  auto editor_pass = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
-    auto pass = context.graphics_pass("editor");
-    
-    if (is_editor) {
-      pass.depends_on(fxaa_pass);
-
-      pass.reads(fxaa);
-
-      pass.writes(swapchain, sbx::graphics::attachment_load_operation::clear);
-    }
+    pass.writes(swapchain, sbx::graphics::attachment_load_operation::clear);
 
     return pass;
   });
@@ -272,17 +202,8 @@ renderer::renderer(bool is_editor)
   const auto& particle_task = add_task<sbx::particles::particle_task>(particles_pass, "res://shaders/particles");
 
   // Shadow pass
-  add_subrenderer<sbx::models::static_mesh_shadow_subrenderer>(shadow0_pass, "res://shaders/shadow", 0u);
-  add_subrenderer<sbx::animations::skinned_mesh_shadow_subrenderer>(shadow0_pass, "res://shaders/shadow", 0u);
-
-  add_subrenderer<sbx::models::static_mesh_shadow_subrenderer>(shadow1_pass, "res://shaders/shadow", 1u);
-  add_subrenderer<sbx::animations::skinned_mesh_shadow_subrenderer>(shadow1_pass, "res://shaders/shadow", 1u);
-
-  add_subrenderer<sbx::models::static_mesh_shadow_subrenderer>(shadow2_pass, "res://shaders/shadow", 2u);
-  add_subrenderer<sbx::animations::skinned_mesh_shadow_subrenderer>(shadow2_pass, "res://shaders/shadow", 2u);
-
-  add_subrenderer<sbx::models::static_mesh_shadow_subrenderer>(shadow3_pass, "res://shaders/shadow", 3u);
-  add_subrenderer<sbx::animations::skinned_mesh_shadow_subrenderer>(shadow3_pass, "res://shaders/shadow", 3u);
+  add_subrenderer<sbx::models::static_mesh_shadow_subrenderer>(shadow_pass, "res://shaders/shadow");
+  add_subrenderer<sbx::animations::skinned_mesh_shadow_subrenderer>(shadow_pass, "res://shaders/shadow");
 
   // Deferred pass
   add_subrenderer<sbx::models::static_mesh_material_subrenderer>(deferred_pass, "res://shaders/deferred_pbr_material", sbx::models::static_mesh_material_draw_list::bucket::opaque);
@@ -301,10 +222,7 @@ renderer::renderer(bool is_editor)
     {"normal_image", "normal"},
     {"material_image", "material"},
     {"emissive_image", "emissive"},
-    {"shadow0_image", "shadow0"},
-    {"shadow1_image", "shadow1"},
-    {"shadow2_image", "shadow2"},
-    {"shadow3_image", "shadow3"},
+    {"shadow_image", "shadow"}
   };
 
   add_subrenderer<sbx::post::resolve_opaque_filter>(resolve_pass, "res://shaders/resolve_opaque", std::move(resolve_opaque_attachment_names));
@@ -341,12 +259,6 @@ renderer::renderer(bool is_editor)
   add_subrenderer<sbx::post::tonemap_filter>(tonemap_pass, "res://shaders/tonemap", std::move(tonemap_attachment_names), tonemap_config);
 
   add_subrenderer<sbx::post::fxaa_filter>(fxaa_pass, "res://shaders/fxaa", "tonemap");
-
-  // Editor pass
-
-  if (is_editor) {
-    add_subrenderer<sbx::editor::editor_subrenderer>(editor_pass, "res://shaders/editor", "fxaa");
-  }
 }
 
 } // namespace demo

@@ -64,7 +64,6 @@ class libsbx_recipe(ConanFile):
     "libsbx-assets/**",
     "libsbx-containers/**",
     "libsbx-devices/**",
-    "libsbx-editor/**",
     "libsbx-graphics/**",
     "libsbx-math/**",
     "libsbx-models/**",
@@ -99,11 +98,9 @@ class libsbx_recipe(ConanFile):
 
     self.cpp.source.components["utility"].includedirs = ["libsbx-utility"]
     self.cpp.source.components["core"].includedirs = ["libsbx-core"]
-    self.cpp.source.components["editor"].includedirs = ["libsbx-editor"]
 
     self.cpp.build.components["core"].libdirs = [self.folders.build]
     self.cpp.build.components["utility"].libdirs = [self.folders.build]
-    self.cpp.build.components["editor"].libdirs = [self.folders.build]
 
   def _ensure_dotnet(self):
     if self.settings.os == "Linux":
@@ -139,62 +136,6 @@ class libsbx_recipe(ConanFile):
         return tuple(map(int, version.split(".")))
 
     return None
-
-  def _get_vulkan_instance_version(self):
-    """
-    Returns the highest Vulkan API version detected among all GPUs,
-    as a tuple of integers, e.g., (1, 4, 335, 0).
-    """
-    exe = shutil.which("vulkaninfo")
-    if not exe:
-      return None
-
-    try:
-      out = subprocess.check_output(
-        [exe, "--summary"],
-        stderr=subprocess.STDOUT,
-        text=True
-      )
-    except Exception:
-      return None
-
-    max_version = (0, 0, 0, 0)
-
-    gpu_index = -1
-    for line in out.splitlines():
-      line = line.strip()
-
-      # Detect GPU start
-      if line.startswith("GPU"):
-        gpu_index += 1
-
-      # Detect apiVersion line
-      if "apiVersion" in line:
-        # example: apiVersion = 1.4.335
-        version_str = line.split("=")[-1].strip()
-        try:
-          version_parts = tuple(int(x) for x in version_str.split("."))
-          # normalize to 4 elements
-          version_parts = version_parts + (0,) * (4 - len(version_parts))
-          if version_parts > max_version:
-            max_version = version_parts
-        except Exception:
-          continue
-
-    # Fallback: still check Vulkan Instance Version if no GPU found
-    if max_version == (0, 0, 0, 0):
-      for line in out.splitlines():
-        line = line.strip()
-        if line.startswith("Vulkan Instance Version"):
-          version_str = line.split(":")[-1].strip()
-          try:
-            version_parts = tuple(int(x) for x in version_str.split("."))
-            version_parts = version_parts + (0,) * (4 - len(version_parts))
-            max_version = version_parts
-          except Exception:
-            pass
-
-    return max_version if max_version != (0, 0, 0, 0) else None
   
   def _endure_vulkan_sdk(self):
     """
@@ -419,10 +360,4 @@ class libsbx_recipe(ConanFile):
 
     self.cpp_info.components["ui"].requires = [
       "freetype::freetype"
-    ]
-
-    self.cpp_info.components["editor"].requires = [
-      "imgui::imgui",
-      "implot::implot",
-      "imnodes::imnodes"
     ]

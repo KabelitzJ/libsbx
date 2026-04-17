@@ -1,3 +1,0 @@
-# libsbx-physics
-
-C++ library

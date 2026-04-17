@@ -28,6 +28,8 @@ dump.txt
 
 suppress.asan_*
 
-sandbox.sln
+*.sln
 
 benchmark.json
+
+patches/

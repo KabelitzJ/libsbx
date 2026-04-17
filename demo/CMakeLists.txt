@@ -9,29 +9,23 @@ add_executable(${PROJECT_NAME})
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 
 add_custom_target(
-  compiled_shaders
+  compiled_shaders_demo
   COMMAND ${Python3_EXECUTABLE} "${CMAKE_SOURCE_DIR}/scripts/compile_shaders.py" "${PROJECT_SOURCE_DIR}/assets/shaders/"
   WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
   COMMENT "Compiling shaders for ${PROJECT_NAME}..."
 )
 
-add_dependencies(${PROJECT_NAME} compiled_shaders)
+add_dependencies(${PROJECT_NAME} compiled_shaders_demo)
 
 target_sources(
   ${PROJECT_NAME}
-  PUBLIC
-    "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/renderer.hpp"
-    "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/application.hpp"
   PRIVATE
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/renderer.cpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/application.cpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/demo.cpp"
-)
-
-target_compile_definitions(
-  ${PROJECT_NAME}
-  PRIVATE
-    LIBSBX_IMGUI_DOCKING=$<IF:$<BOOL:${LIBSBX_IMGUI_DOCKING}>,1,0>
+  PUBLIC
+    "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/renderer.hpp"
+    "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/application.hpp"
 )
 
 target_include_directories(
@@ -109,4 +103,4 @@ add_custom_target(
 
 add_dependencies(${PROJECT_NAME} scripting_demo)
 
-add_dependencies(scripting_demo scripting_managed scripting_core)
+add_dependencies(scripting_demo sbx_scripting_managed sbx_scripting_core)

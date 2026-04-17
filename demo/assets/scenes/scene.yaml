@@ -14,24 +14,24 @@ assets:
       name: skybox
       path: res://skyboxes/clouds2
   static_meshes:
-    # - &cube
-    #   name: cube
-    #   path: res://meshes/cube/cube.gltf
-    #   source: disk
+    - &cube
+      name: cube
+      path: res://meshes/cube/cube.gltf
+      source: disk
     - &helmet
       name: helmet
       path: res://meshes/helmet/helmet.gltf
       source: disk
-    # - &tree_1
-    #   name: tree_1
-    #   path: res://meshes/trees/tree_1/tree_1.gltf
-    #   source: disk
-    #   lod_count: 3
-    # - &tree_2
-    #   name: tree_2
-    #   path: res://meshes/trees/tree_2/tree_2.gltf
-    #   source: disk
-    #   lod_count: 3
+    - &tree_1
+      name: tree_1
+      path: res://meshes/trees/tree_1/tree_1.gltf
+      source: disk
+      lod_count: 3
+    - &tree_2
+      name: tree_2
+      path: res://meshes/trees/tree_2/tree_2.gltf
+      source: disk
+      lod_count: 3
   materials:
     - &terrain
       name: terrain
@@ -49,32 +49,32 @@ assets:
       name: tree_branch
       path: res://meshes/trees/materials/tree_branch.material.yaml
 nodes:
-  # - tag: Terrain
-  #   id: 13314578943253424941
-  #   components:
-  #     - type: transform
-  #       position: {x: 0, y: 0, z: 0}
-  #       rotation: {x: 0, y: 0, z: 0, w: 1}
-  #       scale: {x: 100, y: 0.100000001, z: 100}
-  #     - type: static_mesh
-  #       mesh: *cube
-  #       submeshes:
-  #         - index: 0
-  #           material: *terrain
-  # - tag: HUD
-  #   id: 7653120522685457571
-  #   components:
-  #     - type: transform
-  #       position: {x: 0, y: 0, z: 0}
-  #       rotation: {x: 0, y: 0, z: 0, w: 1}
-  #       scale: {x: 1, y: 1, z: 1}
-  # - tag: WorldSprite
-  #   id: 17022480189743828688
-  #   components:
-  #     - type: transform
-  #       position: {x: 5, y: 5, z: 5}
-  #       rotation: {x: 0, y: 0, z: 0, w: 1}
-  #       scale: {x: 1, y: 1, z: 1}
+  - tag: Terrain
+    id: 13314578943253424941
+    components:
+      - type: transform
+        position: {x: 0, y: 0, z: 0}
+        rotation: {x: 0, y: 0, z: 0, w: 1}
+        scale: {x: 100, y: 0.100000001, z: 100}
+      - type: static_mesh
+        mesh: *cube
+        submeshes:
+          - index: 0
+            material: *terrain
+  - tag: HUD
+    id: 7653120522685457571
+    components:
+      - type: transform
+        position: {x: 0, y: 0, z: 0}
+        rotation: {x: 0, y: 0, z: 0, w: 1}
+        scale: {x: 1, y: 1, z: 1}
+  - tag: WorldSprite
+    id: 17022480189743828688
+    components:
+      - type: transform
+        position: {x: 5, y: 5, z: 5}
+        rotation: {x: 0, y: 0, z: 0, w: 1}
+        scale: {x: 1, y: 1, z: 1}
   - tag: Helmet
     id: 738302446102942238
     components:
@@ -87,50 +87,50 @@ nodes:
         submeshes:
           - index: 0
             material: *helmet
-  # - tag: Light0
-  #   id: 5555432423284594222
-  #   components:
-  #     - type: transform
-  #       position: {x: 0, y: 6, z: 0}
-  #       rotation: {x: 0, y: 0, z: 0, w: 1}
-  #       scale: {x: 1, y: 1, z: 1}
-  #     - type: point_light
-  #       color: {r: 1, g: 0, b: 0, a: 75}
-  #       radius: 10
-  #     - type: sprite
-  #       kind: world_sprite
-  #       albedo_image: *light_sprite
-  #       size: {x: 1.0, y: 1.0}
-  #       pivot: {x: 0.5, y: 0.5}
-  #       is_billboard: true
-  # - tag: Tree1
-  #   id: 3472763237278276803
-  #   components:
-  #     - type: transform
-  #       position: {x: 5, y: 0, z: -5}
-  #       rotation: {x: 0, y: 0, z: 0, w: 1}
-  #       scale: {x: 1, y: 1, z: 1}
-  #     - type: static_mesh
-  #       mesh: *tree_1
-  #       submeshes:
-  #         - index: 0
-  #           material: *tree_trunk
-  #         - index: 1
-  #           material: *tree_branch
-  # - tag: Tree2
-  #   id: 17380286538492845946
-  #   components:
-  #     - type: transform
-  #       position: {x: -5, y: 0, z: -5}
-  #       rotation: {x: 0, y: 0, z: 0, w: 1}
-  #       scale: {x: 1, y: 1, z: 1}
-  #     - type: static_mesh
-  #       mesh: *tree_2
-  #       submeshes:
-  #         - index: 0
-  #           material: *tree_trunk
-  #         - index: 1
-  #           material: *tree_branch
+  - tag: Light0
+    id: 5555432423284594222
+    components:
+      - type: transform
+        position: {x: 0, y: 6, z: 0}
+        rotation: {x: 0, y: 0, z: 0, w: 1}
+        scale: {x: 1, y: 1, z: 1}
+      - type: point_light
+        color: {r: 1, g: 0, b: 0, a: 75}
+        radius: 10
+      - type: sprite
+        kind: world_sprite
+        albedo_image: *light_sprite
+        size: {x: 1.0, y: 1.0}
+        pivot: {x: 0.5, y: 0.5}
+        is_billboard: true
+  - tag: Tree1
+    id: 3472763237278276803
+    components:
+      - type: transform
+        position: {x: 5, y: 0, z: -5}
+        rotation: {x: 0, y: 0, z: 0, w: 1}
+        scale: {x: 1, y: 1, z: 1}
+      - type: static_mesh
+        mesh: *tree_1
+        submeshes:
+          - index: 0
+            material: *tree_trunk
+          - index: 1
+            material: *tree_branch
+  - tag: Tree2
+    id: 17380286538492845946
+    components:
+      - type: transform
+        position: {x: -5, y: 0, z: -5}
+        rotation: {x: 0, y: 0, z: 0, w: 1}
+        scale: {x: 1, y: 1, z: 1}
+      - type: static_mesh
+        mesh: *tree_2
+        submeshes:
+          - index: 0
+            material: *tree_trunk
+          - index: 1
+            material: *tree_branch
   - tag: CAMERA
     id: 5534890790884635642
     components:

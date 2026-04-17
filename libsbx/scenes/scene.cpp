@@ -48,6 +48,18 @@ scene::scene(const std::filesystem::path& path, component_io_registry& component
   _environment.set_active_camera(camera_node);
 }
 
+scene::scene(component_io_registry& component_io, asset_io_registry& asset_io, asset_registry& registry, const std::string& name)
+: _name{name},
+  _graph{},
+  _environment{_graph, scenes::node::null, math::vector3{-1.0f, -1.0f, -1.0f}, math::color{1.0f, 1.0f, 1.0f, 1.0f}},
+  _serializer{component_io, asset_io, registry} {
+  auto camera_node = _graph.create_node("Camera");
+
+  _graph.add_component<scenes::camera>(camera_node, math::angle{math::degree{60.0f}}, 0.1f, 1000.0f);
+
+  _environment.set_active_camera(camera_node);
+}
+
 auto scene::save(const std::filesystem::path& path) -> void {
   _serializer.save(path, _name, _graph, _environment.camera());
 }

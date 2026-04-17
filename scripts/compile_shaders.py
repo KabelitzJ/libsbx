@@ -178,7 +178,7 @@ def main(shader_root: str, jobs_arg: Optional[int] = None) -> int:
 
     if not jobs:
         print("Done. Built 0 shader stage(s).")
-        return 1
+        return 0
 
     # Resolve parallelism: CLI --jobs, else env SHADER_JOBS, else CPU heuristic
     if jobs_arg is not None and jobs_arg > 0:
@@ -203,7 +203,7 @@ def main(shader_root: str, jobs_arg: Optional[int] = None) -> int:
                 _safe_print(f"[ERROR] Unexpected: {e}")
 
     print(f"Done. Built {total_built} shader stage(s).")
-    return 0 if total_built > 0 else 1
+    return 0
 
 
 if __name__ == "__main__":

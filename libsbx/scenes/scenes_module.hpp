@@ -40,6 +40,12 @@ public:
 
   auto load_scene(const std::filesystem::path& path) -> scenes::scene&;
 
+  auto create_scene(const std::string& name = "Scene") -> scenes::scene& {
+    _scene.emplace(_component_io_registry, _asset_io_registry, _asset_registry, name);
+
+    return *_scene;
+  }
+
   auto scene() -> scenes::scene&;
 
   auto has_scene() const -> bool {

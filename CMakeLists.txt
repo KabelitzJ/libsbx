@@ -24,6 +24,7 @@ list(APPEND CMAKE_PREFIX_PATH "${CMAKE_BINARY_DIR}" "${CMAKE_BINARY_DIR}/depende
 # Options
 
 option(SBX_BUILD_DEMO "Build demo" ON)
+option(SBX_BUILD_EDITOR "Build editor" ON)
 option(SBX_BUILD_SHARED "Build shared library" OFF)
 option(SBX_BUILD_TESTS "Build tests" ON)
 option(SBX_CONSTEXPR_ENABLED "Enable constexpr" ON)
@@ -43,16 +44,13 @@ option(SBX_MEMORY_TRACKING "Use CPU memory tracking" ${_MEMORY_TRACKING})
 option(SBX_USE_ASAN "Use ASAN" ${_USE_ASAN_DEFAULT})
 
 message(STATUS "SBX_BUILD_DEMO: ${SBX_BUILD_DEMO}")
+message(STATUS "SBX_BUILD_EDITOR: ${SBX_BUILD_EDITOR}")
 message(STATUS "SBX_BUILD_SHARED: ${SBX_BUILD_SHARED}")
 message(STATUS "SBX_BUILD_TESTS: ${SBX_BUILD_TESTS}")
 message(STATUS "SBX_CONSTEXPR_ENABLED: ${SBX_CONSTEXPR_ENABLED}")
 message(STATUS "SBX_USE_PROFILER: ${SBX_USE_PROFILER}")
 message(STATUS "SBX_MEMORY_TRACKING: ${SBX_MEMORY_TRACKING}")
 message(STATUS "SBX_USE_ASAN: ${SBX_USE_ASAN}")
-
-if(SBX_BUILD_TESTS)
-  enable_testing()
-endif()
 
 # Build metadata
 
@@ -721,7 +719,7 @@ set(SBX_MANAGED_DIR ${CMAKE_SOURCE_DIR}/dotnet/Sbx.Managed)
 set(SBX_MANAGED_PROJECT ${SBX_MANAGED_DIR}/Sbx.Managed.csproj)
 
 add_custom_target(
-  scripting_managed
+  sbx_scripting_managed
   ALL
   COMMAND ${CMAKE_COMMAND} -E make_directory ${DOTNET_OUT_DIR}
   COMMAND dotnet build ${SBX_MANAGED_PROJECT} -c $<CONFIG> -o ${DOTNET_OUT_DIR}
@@ -729,13 +727,13 @@ add_custom_target(
   COMMENT "Building Sbx.Managed assembly"
 )
 
-add_dependencies(libsbx scripting_managed)
+add_dependencies(libsbx sbx_scripting_managed)
 
 set(SBX_CORE_DIR ${CMAKE_SOURCE_DIR}/dotnet/Sbx.Core)
 set(SBX_CORE_PROJECT ${SBX_CORE_DIR}/Sbx.Core.csproj)
 
 add_custom_target(
-  scripting_core
+  sbx_scripting_core
   ALL
   COMMAND ${CMAKE_COMMAND} -E make_directory ${DOTNET_OUT_DIR}
   COMMAND dotnet build ${SBX_CORE_PROJECT} -c $<CONFIG> -o ${DOTNET_OUT_DIR}
@@ -743,8 +741,8 @@ add_custom_target(
   COMMENT "Building Sbx.Core assembly"
 )
 
-add_dependencies(scripting_core scripting_managed)
-add_dependencies(libsbx scripting_core)
+add_dependencies(sbx_scripting_core sbx_scripting_managed)
+add_dependencies(libsbx sbx_scripting_core)
 
 # Install
 
@@ -796,4 +794,10 @@ endif()
 
 if(SBX_BUILD_DEMO)
   add_subdirectory(demo)
+endif()
+
+# Editor
+
+if(SBX_BUILD_EDITOR)
+  add_subdirectory(editor)
 endif()

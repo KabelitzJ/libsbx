@@ -30,6 +30,8 @@ public:
 
   scene(const std::filesystem::path& path, component_io_registry& component_io, asset_io_registry& asset_io, asset_registry& registry);
 
+  scene(component_io_registry& component_io, asset_io_registry& asset_io, asset_registry& registry, const std::string& name = "Scene");
+
   virtual ~scene() = default;
 
   auto graph() -> scene_graph& {

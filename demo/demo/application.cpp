@@ -154,10 +154,6 @@ application::application()
 
   scripting_module.instantiate(camera_node, "Demo.EditorCameraController");
 
-  if (auto hide_window = cli.argument<bool>("hide-window"); !hide_window) {
-    window.show();
-  }
-
   sbx::utility::logger<"demo">::info("string id: {}", sbx::utility::string_id<"foobar">());
 }
 
@@ -484,7 +480,7 @@ auto application::_generate_brdf(const std::uint32_t size) -> void {
     final_command_buffer.submit_idle();
   }
 
-  sbx::utility::logger<"application">::info("Generated 'brdf' in {:.2f}ms", sbx::units::quantity_cast<sbx::units::millisecond>(timer.elapsed()));
+  sbx::utility::logger<"demo">::info("Generated 'brdf' in {:.2f}ms", sbx::units::quantity_cast<sbx::units::millisecond>(timer.elapsed()));
 }
 
 auto application::_generate_irradiance(const std::uint32_t size) -> void {
@@ -664,7 +660,7 @@ auto application::_generate_irradiance(const std::uint32_t size) -> void {
     final_command_buffer.submit_idle();
   }
 
-  sbx::utility::logger<"application">::info("Generated 'irradiance' in {:.2f}ms", sbx::units::quantity_cast<sbx::units::millisecond>(timer.elapsed()));
+  sbx::utility::logger<"demo">::info("Generated 'irradiance' in {:.2f}ms", sbx::units::quantity_cast<sbx::units::millisecond>(timer.elapsed()));
 }
 
 auto application::_generate_prefiltered(uint32_t size) -> void {
@@ -912,7 +908,7 @@ auto application::_generate_prefiltered(uint32_t size) -> void {
     vkDestroyImageView(graphics_module.logical_device(), view, nullptr);
   }
 
-  sbx::utility::logger<"application">::info("Generated 'prefiltered' with {} mips in {:.2f}ms", prefiltered.mip_levels(), sbx::units::quantity_cast<sbx::units::millisecond>(timer.elapsed()));
+  sbx::utility::logger<"demo">::info("Generated 'prefiltered' with {} mips in {:.2f}ms", prefiltered.mip_levels(), sbx::units::quantity_cast<sbx::units::millisecond>(timer.elapsed()));
 }
 
 } // namespace demo

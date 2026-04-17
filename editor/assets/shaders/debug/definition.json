@@ -1,0 +1,11 @@
+{
+  "depth": "read_only",
+  "uses_transparency": true,
+  "rasterization_state": {
+    "polygon_mode": "fill",
+    "cull_mode": "none",
+    "front_face": "counter_clockwise",
+    "line_width": 5
+  },
+  "primitive_topology": "line_list"
+}

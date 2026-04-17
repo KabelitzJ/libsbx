@@ -10,8 +10,9 @@ window::window(const window_create_info& create_info)
   glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
   // [NOTE] KAJ 2023-08-15 : Currently there seems to be a bug in the Vukan SDK version 1.3.250.1 that causes the validation layers to crash when resizing the window.
   // glfwWindowHint(GLFW_RESIZABLE, false);
-  glfwWindowHint(GLFW_VISIBLE, false);
   // glfwWindowHint(GLFW_DECORATED, false);
+
+  // glfwWindowHint(GLFW_VISIBLE, false);
 
   _width = create_info.width;
   _height = create_info.height;

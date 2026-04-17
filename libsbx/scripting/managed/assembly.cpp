@@ -134,7 +134,7 @@ auto assembly_load_context::get_or_load_assembly(std::string_view file_path) -> 
   return load_assembly(file_path);
 }
 
-auto assembly_load_context::get_loaded_assemblies() const -> const stable_vector<assembly>& { 
+auto assembly_load_context::get_loaded_assemblies() const -> const containers::stable_vector<assembly>& { 
   return _loaded_assemblies; 
 }
 

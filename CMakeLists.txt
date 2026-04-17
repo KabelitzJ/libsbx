@@ -21,14 +21,12 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_BINARY_DIR}" "${CMAKE_BINARY_DIR}/dependencies" "${CMAKE_SOURCE_DIR}/cmake" "${CMAKE_SOURCE_DIR}/cmake/modules")
 list(APPEND CMAKE_PREFIX_PATH "${CMAKE_BINARY_DIR}" "${CMAKE_BINARY_DIR}/dependencies")
 
-# --- Options ---
+# Options
 
 option(SBX_BUILD_DEMO "Build demo" ON)
 option(SBX_BUILD_SHARED "Build shared library" OFF)
 option(SBX_BUILD_TESTS "Build tests" ON)
-option(SBX_BUILD_BENCHMARKS "Build benchmarks" ON)
 option(SBX_CONSTEXPR_ENABLED "Enable constexpr" ON)
-option(LIBSBX_EDITOR_DOCKING "Enable ImGui docking" ON)
 
 set(_USE_PROFILER_DEFAULT OFF)
 set(_MEMORY_TRACKING OFF)
@@ -47,7 +45,6 @@ option(SBX_USE_ASAN "Use ASAN" ${_USE_ASAN_DEFAULT})
 message(STATUS "SBX_BUILD_DEMO: ${SBX_BUILD_DEMO}")
 message(STATUS "SBX_BUILD_SHARED: ${SBX_BUILD_SHARED}")
 message(STATUS "SBX_BUILD_TESTS: ${SBX_BUILD_TESTS}")
-message(STATUS "SBX_BUILD_BENCHMARKS: ${SBX_BUILD_BENCHMARKS}")
 message(STATUS "SBX_CONSTEXPR_ENABLED: ${SBX_CONSTEXPR_ENABLED}")
 message(STATUS "SBX_USE_PROFILER: ${SBX_USE_PROFILER}")
 message(STATUS "SBX_MEMORY_TRACKING: ${SBX_MEMORY_TRACKING}")
@@ -57,7 +54,7 @@ if(SBX_BUILD_TESTS)
   enable_testing()
 endif()
 
-# --- Build metadata ---
+# Build metadata
 
 string(TIMESTAMP COMPILE_TIMESTAMP %Y%m%d-%H%M%S)
 set(SBX_COMPILE_TIMESTAMP "\"${COMPILE_TIMESTAMP}\"" CACHE STRING "Compile timestamp" FORCE)
@@ -90,7 +87,7 @@ add_compile_definitions(
 message(STATUS "Git branch: ${SBX_BRANCH}")
 message(STATUS "Git commit: ${SBX_COMMIT_HASH}")
 
-# --- External dependencies ---
+# External dependencies
 
 find_package(fmt CONFIG REQUIRED)
 find_package(spdlog CONFIG REQUIRED)
@@ -133,11 +130,11 @@ option(SPIRV_CROSS_ENABLE_TESTS "" OFF)
 set(BUILD_WITH_EASY_PROFILER 1 CACHE STRING "" FORCE)
 set(EASY_OPTION_LOG 1 CACHE STRING "" FORCE)
 
-# --- Configure version header ---
+# Configure version header
 
 configure_file("${CMAKE_SOURCE_DIR}/libsbx/version.hpp.in" "${CMAKE_SOURCE_DIR}/libsbx/version.hpp" @ONLY)
 
-# --- Library target ---
+# Library target
 
 if(SBX_BUILD_SHARED)
   add_library(libsbx SHARED)
@@ -338,6 +335,7 @@ target_sources(
       "${CMAKE_SOURCE_DIR}/libsbx/containers/octree.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/containers/ring_buffer.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/containers/spsc_queue.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/containers/stable_vector.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/containers/static_vector.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/containers/task_graph.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/core/application.hpp"
@@ -543,7 +541,6 @@ target_sources(
       "${CMAKE_SOURCE_DIR}/libsbx/scripting/managed/platform.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/scripting/managed/property_info.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/scripting/managed/runtime.hpp"
-      "${CMAKE_SOURCE_DIR}/libsbx/scripting/managed/stable_vector.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/scripting/managed/string.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/scripting/managed/type.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/scripting/scripting.hpp"
@@ -677,7 +674,6 @@ target_compile_definitions(
     $<$<BOOL:${SBX_USE_PROFILER}>:BUILD_WITH_EASY_PROFILER>
   PRIVATE
     GLFW_INCLUDE_VULKAN
-    LIBSBX_EDITOR_DOCKING=$<IF:$<BOOL:${LIBSBX_EDITOR_DOCKING}>,1,0>
 )
 
 target_compile_options(
@@ -717,7 +713,7 @@ endif()
 target_compile_options(libsbx PRIVATE ${_sbx_compile_options})
 target_link_options(libsbx PUBLIC ${_sbx_link_options})
 
-# --- Scripting: dotnet build targets ---
+# Scripting: dotnet build targets
 
 set(DOTNET_OUT_DIR ${CMAKE_BINARY_DIR}/_dotnet)
 
@@ -750,7 +746,7 @@ add_custom_target(
 add_dependencies(scripting_core scripting_managed)
 add_dependencies(libsbx scripting_core)
 
-# --- Install ---
+# Install
 
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
@@ -790,19 +786,13 @@ install(
     ${CMAKE_INSTALL_LIBDIR}/cmake/libsbx
 )
 
-# --- Tests ---
+# Tests
 
 if(SBX_BUILD_TESTS)
   add_subdirectory(tests)
 endif()
 
-# --- Benchmarks ---
-
-if(SBX_BUILD_BENCHMARKS)
-  add_subdirectory(benchmarks)
-endif()
-
-# --- Demo ---
+# Demo
 
 if(SBX_BUILD_DEMO)
   add_subdirectory(demo)

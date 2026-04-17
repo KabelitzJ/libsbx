@@ -6,11 +6,12 @@
 
 #include <libsbx/utility/hashed_string.hpp>
 
+#include <libsbx/containers/stable_vector.hpp>
+
 #include <libsbx/scripting/managed/fwd.hpp>
 #include <libsbx/scripting/managed/core.hpp>
 #include <libsbx/scripting/managed/platform.hpp>
 #include <libsbx/scripting/managed/type.hpp>
-#include <libsbx/scripting/managed/stable_vector.hpp>
 
 namespace sbx::scripting::managed {
 
@@ -71,12 +72,12 @@ public:
 
   auto get_or_load_assembly(std::string_view file_path) -> assembly&;
 
-  auto get_loaded_assemblies() const -> const stable_vector<assembly>&;
+  auto get_loaded_assemblies() const -> const containers::stable_vector<assembly>&;
 
 private:
 
   std::int32_t _context_id;
-  stable_vector<assembly> _loaded_assemblies;
+  containers::stable_vector<assembly> _loaded_assemblies;
   std::unordered_map<utility::hashed_string, std::uint32_t> _assembly_indices;
 
   runtime* _runtime = nullptr;

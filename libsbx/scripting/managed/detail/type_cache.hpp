@@ -5,9 +5,10 @@
 #include <unordered_map>
 #include <string>
 
+#include <libsbx/containers/stable_vector.hpp>
+
 #include <libsbx/scripting/managed/core.hpp>
 #include <libsbx/scripting/managed/type.hpp>
-#include <libsbx/scripting/managed/stable_vector.hpp>
 
 namespace sbx::scripting::managed::detail {
 
@@ -27,7 +28,7 @@ public:
 
 private:
 
-  stable_vector<type> _types;
+  containers::stable_vector<type> _types;
   std::unordered_map<std::string, type*> _name_cache;
   std::unordered_map<type_id, type*> _id_cache;
 

@@ -11,7 +11,6 @@
 #include <libsbx/scripting/managed/string.hpp>
 #include <libsbx/scripting/managed/attribute.hpp>
 #include <libsbx/scripting/managed/type.hpp>
-#include <libsbx/scripting/managed/stable_vector.hpp>
 #include <libsbx/scripting/managed/assembly.hpp>
 #include <libsbx/scripting/managed/object.hpp>
 #include <libsbx/scripting/managed/attribute.hpp>

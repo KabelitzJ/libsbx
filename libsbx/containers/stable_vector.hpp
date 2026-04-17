@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
-#ifndef LIBSBX_SCRIPTING_MANAGED_STABLE_VECTOR_HPP_
-#define LIBSBX_SCRIPTING_MANAGED_STABLE_VECTOR_HPP_
+#ifndef LIBSBX_CONTAINERS_STABLE_VECTOR_HPP_
+#define LIBSBX_CONTAINERS_STABLE_VECTOR_HPP_
 
 #include <cstring>
 
@@ -13,7 +13,7 @@
 #include <shared_mutex>
 #include <vector>
 
-namespace sbx::scripting::managed {
+namespace sbx::containers {
 
 inline constexpr auto pointer_size = sizeof(void*);
 
@@ -161,36 +161,33 @@ public:
   }
 
   auto emplace_back() -> std::pair<std::uint32_t, reference> {
-  const auto page_index = _element_count / page_size;
+    const auto page_index = _element_count / page_size;
 
-  if (_element_count >= _capacity) {
-    auto* new_page = new page();
+    if (_element_count >= _capacity) {
+      auto* new_page = new page();
 
-    if (page_index >= _page_count) {
-      auto old_pages = _page_count;
-      auto* old_table = _page_table.load();
+      if (page_index >= _page_count) {
+        auto old_pages = _page_count;
 
-      _page_count = std::max(std::uint64_t(16), _page_count * 2);
+        _page_count = (std::max)(std::uint64_t(16), _page_count * 2);
 
-      auto new_page_table = std::make_unique<page*[]>(_page_count);
+        auto new_page_table = std::make_unique<page*[]>(_page_count);
 
-      if (old_table && old_pages > 0) {
-        std::memcpy(new_page_table.get(), old_table, old_pages * pointer_size);
+        std::memcpy(new_page_table.get(), _page_table.load(), old_pages * pointer_size);
+
+        _page_table.exchange(new_page_table.get());
+        _page_tables.push_back(std::move(new_page_table));
       }
 
-      _page_table.exchange(new_page_table.get());
-      _page_tables.push_back(std::move(new_page_table));
+      _page_table[page_index] = new_page;
+
+      _capacity += page_size;
     }
 
-    _page_table.load()[page_index] = new_page;
+    const auto index = (++_element_count - 1);
 
-    _capacity += page_size;
+    return { index, _page_table[page_index]->elements[index - (page_index * page_size)] };
   }
-
-  const auto index = (_element_count++);
-
-  return { static_cast<std::uint32_t>(index), _page_table.load()[page_index]->elements[index % page_size] };
-}
 
   auto emplace_back_no_lock() -> std::pair<std::uint32_t, reference> {
     const auto page_index = _element_count / page_size;
@@ -253,6 +250,6 @@ private:
 
 }; // class stable_vector
 
-} // namespace sbx::scripting::managed
+} // namespace sbx::containers
 
-#endif // LIBSBX_SCRIPTING_MANAGED_STABLE_VECTOR_HPP_
+#endif // LIBSBX_CONTAINERS_STABLE_VECTOR_HPP_

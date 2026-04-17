@@ -31,10 +31,10 @@ struct point_light {
 [[vk::binding(1, 0)]]
 StructuredBuffer<point_light> buffer_point_lights;
 
-[[vk::binding(2, 0)]] 
+[[vk::binding(2, 0)]]
 Sampler2D<float4> albedo_image;
 
-[[vk::binding(3, 0)]] 
+[[vk::binding(3, 0)]]
 Sampler2D<float4> position_image;
 
 [[vk::binding(4, 0)]]
@@ -51,24 +51,15 @@ Sampler2D<float4> emissive_image;
 
 [[vk::binding(7, 0)]]
 Sampler2D<float2> brdf_image;
-  
+
 [[vk::binding(8, 0)]]
 SamplerCube<float4> irradiance_image;
 
 [[vk::binding(9, 0)]]
 SamplerCube<float4> prefiltered_image;
 
-[[vk::binding(10, 0)]] 
-Sampler2D<float> shadow0_image;
-
-[[vk::binding(11, 0)]] 
-Sampler2D<float> shadow1_image;
-
-[[vk::binding(12, 0)]] 
-Sampler2D<float> shadow2_image;
-
-[[vk::binding(13, 0)]] 
-Sampler2D<float> shadow3_image;
+[[vk::binding(10, 0)]]
+Sampler2DArray<float> shadow_image;
 
 static const float3 DEFAULT_F0 = float3(0.04, 0.04, 0.04);
 
@@ -88,7 +79,7 @@ float distribution_ggx(float3 n, float3 h, float alpha) {
 
   float ndh  = max(dot(n, h), 0.0);
   float ndh2 = ndh * ndh;
-  
+
   float denom = ndh2 * (a2 - 1.0) + 1.0;
 
   return a2 / (sbx::math::pi * denom * denom);
@@ -153,9 +144,9 @@ struct cascade_select {
 cascade_select select_cascade_with_blend(float view_depth) {
   cascade_select result;
   result.fade_out = false;
-  
+
   const float blend_threshold = 0.9;
-  
+
   if (view_depth < scene.cascade_splits.x) {
     result.cascade = 0;
     result.next_cascade = 1;
@@ -179,44 +170,19 @@ cascade_select select_cascade_with_blend(float view_depth) {
     float fade_start = cascade3_far * blend_threshold;
     result.blend_factor = saturate((view_depth - fade_start) / (cascade3_far - fade_start));
   }
-  
+
   return result;
 }
 
 uint2 shadow_map_dimensions(uint cascade) {
   uint2 dimensions;
-
-  switch (cascade) {
-    case 0: {
-      shadow0_image.GetDimensions(dimensions.x, dimensions.y);
-      break;
-    }
-    case 1: {
-      shadow1_image.GetDimensions(dimensions.x, dimensions.y);
-      break;
-    }
-    case 2: {
-      shadow2_image.GetDimensions(dimensions.x, dimensions.y);
-      break;
-    }
-    case 3:
-    default: {
-      shadow3_image.GetDimensions(dimensions.x, dimensions.y);
-      break;
-    }
-  }
-
+  uint elements;
+  shadow_image.GetDimensions(dimensions.x, dimensions.y, elements);
   return dimensions;
 }
 
 float sample_shadow_map(uint cascade, float2 uv) {
-  switch (cascade) {
-    case 0: return shadow0_image.Sample(uv);
-    case 1: return shadow1_image.Sample(uv);
-    case 2: return shadow2_image.Sample(uv);
-    case 3:
-    default: return shadow3_image.Sample(uv);
-  }
+  return shadow_image.Sample(float3(uv, float(cascade)));
 }
 
 float calculate_shadow(uint cascade, float3 world_position, float3 normal) {
@@ -294,10 +260,7 @@ fs_out main(fs_in input) {
   maybe_unused(irradiance_image);
   maybe_unused(brdf_image);
   maybe_unused(prefiltered_image);
-  maybe_unused(shadow0_image);
-  maybe_unused(shadow1_image);
-  maybe_unused(shadow2_image);
-  maybe_unused(shadow3_image);
+  maybe_unused(shadow_image);
 
   float3 albedo = albedo_image.Sample(input.uv).rgb;
   float3 world_position = position_image.Sample(input.uv).xyz;
@@ -350,9 +313,9 @@ fs_out main(fs_in input) {
     float view_depth = -mul(scene.view, float4(world_position, 1.0)).z;
 
     cascade_select cascade_info = select_cascade_with_blend(view_depth);
-  
+
     float shadow_current = calculate_shadow(cascade_info.cascade, world_position, normal);
-    
+
     if (cascade_info.fade_out) {
       shadow = lerp(shadow_current, 1.0, cascade_info.blend_factor);
     } else if (cascade_info.blend_factor > 0.0 && cascade_info.cascade < 3) {

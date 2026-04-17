@@ -7,6 +7,6 @@
     <GenerateRuntimeConfigurationFiles>true</GenerateRuntimeConfigurationFiles>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="../../../../libsbx-scripting/dotnet/Sbx.Core/Sbx.Core.csproj" />
+    <ProjectReference Include="../../../../dotnet/Sbx.Core/Sbx.Core.csproj" />
   </ItemGroup>
 </Project>

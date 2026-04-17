@@ -1,3 +1,0 @@
-# libsbx-utility
-
-C++ library

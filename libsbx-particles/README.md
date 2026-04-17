@@ -1,3 +1,0 @@
-# libsbx-particles
-
-C++ library

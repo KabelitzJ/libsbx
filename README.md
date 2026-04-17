@@ -1,29 +1,17 @@
-<p align="center">
-  <img src="images/logo.png" alt="Sandbox Engine Logo" width="400"/>
-</p>
+# libsbx - Sandbox Game Engine
 
-<h1 align="center">Sandbox Game Engine</h1>
+![C++20](https://img.shields.io/badge/Language-C%2B%2B20-blue?logo=c%2B%2B&logoColor=blue)
+![Version 0.2.0](https://img.shields.io/badge/Version-0.2.0-red?logo=git)
+![MIT License](https://img.shields.io/badge/License-MIT-green?logo=opensourceinitiative&logoColor=green)
+![Docs Build](https://img.shields.io/github/actions/workflow/status/KabelitzJ/sandbox/gh_pages.yml?logo=github&label=Deploy%20docs)
 
-<p align="center">
-  A modular, Vulkan-based game engine built with modern C++20
-</p>
-
-<p align="center">
-  <img src="https://img.shields.io/badge/Language-C%2B%2B20-blue?logo=c%2B%2B&logoColor=blue" alt="C++20"/>
-  <img src="https://img.shields.io/badge/Version-0.2.0-red?logo=git" alt="Version 0.2.0"/>
-  <img src="https://img.shields.io/badge/License-MIT-green?logo=opensourceinitiative&logoColor=green" alt="MIT License"/>
-  <img src="https://img.shields.io/github/actions/workflow/status/KabelitzJ/sandbox/gh_pages.yml?logo=github&label=Deploy%20docs" alt="Docs Build"/>
-</p>
+A modular, Vulkan-based game engine built with modern C++20
 
 ---
 
 Sandbox is a game engine written from the ground up in **C++20**, designed as both a learning tool and a practical framework for real-time 3D applications. It features a Vulkan-based deferred PBR rendering pipeline, a render graph architecture, and a modular design built around an Entity-Component-System core.
 
 > **Note:** Active development happens on the [`development`](https://github.com/KabelitzJ/sandbox/tree/development) branch.
-
-<p align="center">
-  <img src="images/screenshot.png" alt="Engine Screenshot" width="720"/>
-</p>
 
 ## Features
 
@@ -46,7 +34,6 @@ Sandbox is a game engine written from the ground up in **C++20**, designed as bo
 - GPU-driven particle system with configurable emitters
 - C# scripting via .NET integration
 - Audio engine
-- Editor and gizmo tools
 - Debug rendering and grid overlay
 - Profiling support (easy_profiler)
 
@@ -58,29 +45,28 @@ The engine is split into independent modules, each prefixed with `libsbx-`:
 
 | Module | Purpose |
 |---|---|
-| `core` | Engine lifecycle, application base class, CLI, module system |
-| `ecs` | Entity-Component-System framework |
-| `graphics` | Vulkan rendering, pipelines, render graph, compute passes |
-| `models` | Static mesh loading, materials, draw lists |
 | `animations` | Skeletal animation, GPU skinning, state machines |
-| `particles` | GPU particle simulation and rendering |
-| `scenes` | Scene graph, transforms, skybox, debug/grid rendering |
-| `physics` | Physics simulation |
+| `assets` | Asset pipeline and management |
 | `audio` | Audio playback |
-| `scripting` | C# scripting via .NET |
+| `bitmaps` | Image loading and manipulation |
+| `containers` | Custom container types |
+| `core` | Engine lifecycle, application base class, CLI, module system |
 | `devices` | Window management and input handling |
-| `ui` | User interface rendering |
-| `editor` | In-engine editor tools |
+| `ecs` | Entity-Component-System framework |
 | `gizmos` | Debug visualization |
-| `post` | Post-processing filters (tonemap, FXAA, blur, SSAO, bloom) |
-| `signals` | Event / signal system |
+| `graphics` | Vulkan rendering, pipelines, render graph, compute passes |
+| `io` | File I/O and resource loading |
 | `math` | Vectors, matrices, transforms, noise, colors |
 | `memory` | Custom allocators, observer pointers |
-| `io` | File I/O and resource loading |
-| `assets` | Asset pipeline and management |
-| `bitmaps` | Image loading and manipulation |
+| `models` | Static mesh loading, materials, draw lists |
+| `particles` | GPU particle simulation and rendering |
+| `physics` | Physics simulation |
+| `post` | Post-processing filters (tonemap, FXAA, blur, SSAO, bloom) |
+| `scenes` | Scene graph, transforms, skybox, debug/grid rendering |
+| `scripting` | C# scripting via .NET |
+| `signals` | Event / signal system |
 | `sprites` | 2D sprite rendering |
-| `containers` | Custom container types |
+| `ui` | User interface rendering |
 | `units` | Type-safe unit system |
 | `utility` | Logging, timers, string IDs, general utilities |
 
@@ -249,10 +235,10 @@ The renderer defines the full render graph — shadow passes, deferred G-buffer,
 ```cpp
 renderer::renderer() {
   // G-buffer attachments
-  auto depth    = create_attachment("depth", attachment::type::depth);
-  auto albedo   = create_attachment("albedo", attachment::type::image, ...);
+  auto depth = create_attachment("depth", attachment::type::depth);
+  auto albedo = create_attachment("albedo", attachment::type::image, ...);
   auto position = create_attachment("position", attachment::type::image, ...);
-  auto normal   = create_attachment("normal", attachment::type::image, ...);
+  auto normal = create_attachment("normal", attachment::type::image, ...);
   auto material = create_attachment("material", attachment::type::image, ...);
   auto emissive = create_attachment("emissive", attachment::type::image, ...);
 
@@ -261,7 +247,7 @@ renderer::renderer() {
   // ...
 
   // Compute passes
-  auto skinning_pass  = create_pass([&](auto& ctx) { return ctx.compute_pass("skinning"); });
+  auto skinning_pass = create_pass([&](auto& ctx) { return ctx.compute_pass("skinning"); });
   auto particles_pass = create_pass([&](auto& ctx) { return ctx.compute_pass("particles"); });
 
   // Graphics passes with explicit dependencies
@@ -314,18 +300,6 @@ auto main(int argc, const char** argv) -> int {
   return sbx::core::exit::success;
 }
 ```
-
-## Gallery
-
-<p align="center">
-  <img src="images/dynamic_lighting.gif" alt="Dynamic Lighting" width="720"/><br/>
-  <em>Real-time dynamic lighting</em>
-</p>
-
-<p align="center">
-  <img src="images/shadow.png" alt="Shadow Mapping" width="720"/><br/>
-  <em>Shadow mapping</em>
-</p>
 
 ## Contributing
 

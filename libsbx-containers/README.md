@@ -1,3 +1,0 @@
-# libsbx-containers
-
-C++ library

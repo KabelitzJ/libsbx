@@ -197,7 +197,7 @@ renderer::renderer()
   add_draw_list<sbx::animations::skinned_mesh_material_draw_list>("skinned_mesh_material");
   
   // Compute passes
-  const auto& frustum_culling_task = add_task<sbx::models::frustum_culling_task>(culling_pass, "res://shaders/frustum_culling");
+  // const auto& frustum_culling_task = add_task<sbx::models::frustum_culling_task>(culling_pass, "res://shaders/frustum_culling");
   const auto& skinning_task = add_task<sbx::animations::skinning_task>(skinning_pass, "res://shaders/skinning");
   const auto& particle_task = add_task<sbx::particles::particle_task>(particles_pass, "res://shaders/particles");
 

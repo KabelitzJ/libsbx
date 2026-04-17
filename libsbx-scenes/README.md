@@ -1,3 +1,0 @@
-# libsbx-scene
-
-C++ library

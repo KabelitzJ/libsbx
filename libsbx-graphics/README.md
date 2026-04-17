@@ -1,3 +1,0 @@
-# libsbx-graphics
-
-C++ library

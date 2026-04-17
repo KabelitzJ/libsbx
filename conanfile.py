@@ -64,7 +64,6 @@ class libsbx_recipe(ConanFile):
     "libsbx-assets/**",
     "libsbx-containers/**",
     "libsbx-devices/**",
-    "libsbx-editor/**",
     "libsbx-graphics/**",
     "libsbx-math/**",
     "libsbx-models/**",
@@ -99,11 +98,9 @@ class libsbx_recipe(ConanFile):
 
     self.cpp.source.components["utility"].includedirs = ["libsbx-utility"]
     self.cpp.source.components["core"].includedirs = ["libsbx-core"]
-    self.cpp.source.components["editor"].includedirs = ["libsbx-editor"]
 
     self.cpp.build.components["core"].libdirs = [self.folders.build]
     self.cpp.build.components["utility"].libdirs = [self.folders.build]
-    self.cpp.build.components["editor"].libdirs = [self.folders.build]
 
   def _ensure_dotnet(self):
     if self.settings.os == "Linux":
@@ -363,10 +360,4 @@ class libsbx_recipe(ConanFile):
 
     self.cpp_info.components["ui"].requires = [
       "freetype::freetype"
-    ]
-
-    self.cpp_info.components["editor"].requires = [
-      "imgui::imgui",
-      "implot::implot",
-      "imnodes::imnodes"
     ]

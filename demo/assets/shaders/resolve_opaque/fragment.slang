@@ -61,7 +61,7 @@ SamplerCube<float4> prefiltered_image;
 [[vk::binding(10, 0)]]
 Sampler2DArray<float> shadow_image;
 
-static const float3 DEFAULT_F0 = float3(0.04, 0.04, 0.04);
+static const float3 DEFAULT_F0 = float3(0.04);
 
 static const float PREFILTERED_ENV_MAX_MIP = 9.0;
 
@@ -372,7 +372,7 @@ fs_out main(fs_in input) {
   float3 diffuse_irradiance = irradiance_image.Sample(normal).rgb;
   float3 diffuse_ibl = diffuse_irradiance * albedo;
 
-  float lod = roughness * PREFILTERED_ENV_MAX_MIP;
+  float lod = roughness * (1.0 + roughness) * 0.5 * PREFILTERED_ENV_MAX_MIP;
   lod = clamp(lod, 0.0, PREFILTERED_ENV_MAX_MIP);
 
   float3 prefiltered_color = prefiltered_image.SampleLevel(r, lod).rgb;

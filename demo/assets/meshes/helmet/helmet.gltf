@@ -60,10 +60,9 @@
 						"POSITION":0,
 						"NORMAL":1,
 						"TEXCOORD_0":2,
-						"TANGENT":3,
-						"COLOR_0":4
+						"TANGENT":3
 					},
-					"indices":5,
+					"indices":4,
 					"material":0
 				}
 			]
@@ -146,12 +145,6 @@
 		},
 		{
 			"bufferView":4,
-			"componentType":5126,
-			"count":16184,
-			"type":"VEC3"
-		},
-		{
-			"bufferView":5,
 			"componentType":5123,
 			"count":46356,
 			"type":"SCALAR"
@@ -184,14 +177,8 @@
 		},
 		{
 			"buffer":0,
-			"byteLength":194208,
-			"byteOffset":776832,
-			"target":34962
-		},
-		{
-			"buffer":0,
 			"byteLength":92712,
-			"byteOffset":971040,
+			"byteOffset":776832,
 			"target":34963
 		}
 	],
@@ -203,7 +190,7 @@
 	],
 	"buffers":[
 		{
-			"byteLength":1063752,
+			"byteLength":869544,
 			"uri":"helmet.bin"
 		}
 	]

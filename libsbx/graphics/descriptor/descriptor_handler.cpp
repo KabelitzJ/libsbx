@@ -84,10 +84,12 @@ auto descriptor_handler::update(const pipeline& pipeline) -> bool {
     write_descriptor_sets.reserve(_descriptors.size());
 
     for (auto& [name, entry] : _descriptors) {
-      auto refreshed_write = entry.descriptor->write_descriptor_set(entry.binding, _pipeline->find_descriptor_type_at_binding(_set, entry.binding).value());
-      
-      entry.write_descriptor_set = std::move(refreshed_write);
-      
+      if (!entry.has_custom_write_set) {
+        auto refreshed_write = entry.descriptor->write_descriptor_set(entry.binding, _pipeline->find_descriptor_type_at_binding(_set, entry.binding).value());
+
+        entry.write_descriptor_set = std::move(refreshed_write);
+      }
+
       auto vk_write = entry.write_descriptor_set.handle();
       vk_write.dstSet = *descriptor_set;
       write_descriptor_sets.push_back(vk_write);

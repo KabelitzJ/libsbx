@@ -91,7 +91,7 @@ nodes:
     id: 5555432423284594222
     components:
       - type: transform
-        position: {x: 0, y: 6, z: 0}
+        position: {x: 0, y: 8, z: 0}
         rotation: {x: 0, y: 0, z: 0, w: 1}
         scale: {x: 1, y: 1, z: 1}
       - type: point_light

@@ -16,7 +16,7 @@ SamplerCube<float4> skybox;
 RWTexture2DArray<float4> output;
 
 static const float PI = 3.14159265358979323846f;
-static const uint samples = 32u;
+static const uint samples = 256u;
 
 float3 cube_direction(float2 uv, uint side) {
   // [0, 1] -> [-1, 1]
@@ -33,14 +33,14 @@ float3 cube_direction(float2 uv, uint side) {
 }
 
 float random2(float2 co) {
-    float a = 12.9898f;
-    float b = 78.233f;
-    float c = 43758.5453f;
+  float a = 12.9898f;
+  float b = 78.233f;
+  float c = 43758.5453f;
 
-    float dt = dot(co, float2(a, b));
-    float sn = fmod(dt, 3.14f);
+  float dt = dot(co, float2(a, b));
+  float sn = fmod(dt, 3.14f);
 
-    return frac(sin(sn) * c);
+  return frac(sin(sn) * c);
 }
 
 float2 hammersley2d(uint i, uint N) {

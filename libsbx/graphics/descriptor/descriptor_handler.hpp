@@ -67,7 +67,7 @@ public:
       throw std::runtime_error(fmt::format("Failed to find descriptor binding for descriptor '{}'", name));
     }
 
-    _descriptors.insert_or_assign(name, descriptor_entry{std::addressof(descriptor), std::move(write_descriptor_set), *binding});
+    _descriptors.insert_or_assign(name, descriptor_entry{std::addressof(descriptor), std::move(write_descriptor_set), *binding, true});
     _dirty_frames = swapchain::max_frames_in_flight;
   }
 
@@ -87,6 +87,7 @@ private:
     memory::observer_ptr<const graphics::descriptor> descriptor;
     graphics::write_descriptor_set write_descriptor_set;
     std::uint32_t binding;
+    bool has_custom_write_set{false};
   }; // struct descriptor_entry
 
   template<typename Descriptor>

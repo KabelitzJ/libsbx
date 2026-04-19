@@ -4,6 +4,7 @@
 
 #include <cstdint>
 #include <array>
+#include <optional>
 #include <vector>
 #include <filesystem>
 #include <unordered_map>
@@ -26,6 +27,7 @@
 #include <libsbx/graphics/buffers/storage_buffer.hpp>
 #include <libsbx/graphics/buffers/push_handler.hpp>
 #include <libsbx/graphics/pipeline/compute_pipeline.hpp>
+#include <libsbx/graphics/render_pass/swapchain.hpp>
 
 #include <libsbx/assets/assets_module.hpp>
 
@@ -55,10 +57,10 @@ public:
 
   static constexpr auto no_cascade = std::uint32_t{0xFFFFFFFF};
 
-  struct culled_range_data {
+  struct culled_range_view {
     graphics::storage_buffer_handle commands_buffer;
     graphics::storage_buffer_handle instances_buffer;
-  }; // struct culled_range_data
+  }; // struct culled_range_view
 
   frustum_culling_task(const std::filesystem::path& path);
 
@@ -66,9 +68,11 @@ public:
 
   auto execute(graphics::command_buffer& command_buffer) -> void override;
 
-  auto culled(bucket bucket, const material_key& key, std::uint32_t cascade = no_cascade) const -> const culled_range_data*;
+  auto culled(bucket bucket, const material_key& key, std::uint32_t cascade = no_cascade) const -> std::optional<culled_range_view>;
 
 private:
+
+  static constexpr auto ring_size = graphics::swapchain::max_frames_in_flight;
 
   struct prefix_sum_result {
     std::vector<std::uint32_t> prefix_sum;
@@ -86,12 +90,30 @@ private:
   struct culled_range_key_hash {
     auto operator()(const culled_range_key& key) const -> std::size_t {
       auto seed = std::size_t{0};
-      
+
       utility::hash_combine(seed, key.bucket, key.key, key.cascade);
 
       return seed;
     }
   }; // struct culled_range_key_hash
+
+  struct culled_range_data {
+    std::array<graphics::storage_buffer_handle, ring_size> commands_buffers;
+    std::array<graphics::storage_buffer_handle, ring_size> instances_buffers;
+  }; // struct culled_range_data
+
+  struct cull_job {
+    graphics::storage_buffer_handle input_commands;
+    graphics::storage_buffer_handle input_instances;
+    graphics::storage_buffer_handle output_commands;
+    graphics::storage_buffer_handle output_instances;
+    VkDeviceAddress transforms_address;
+    std::uint32_t bounds_offset_bytes;
+    std::uint32_t prefix_offset_bytes;
+    std::uint32_t frustum_offset_bytes;
+    std::uint32_t command_count;
+    std::uint32_t instance_count;
+  }; // struct cull_job
 
   static auto _extract_frustum_planes(const math::matrix4x4f& view_projection) -> frustum_planes;
 
@@ -101,13 +123,13 @@ private:
 
   auto _build_prefix_sum(const static_mesh_material_draw_list::bucket_entry& entry) -> prefix_sum_result;
 
-  auto _cull_bucket(graphics::command_buffer& command_buffer, bucket current_bucket, std::uint32_t cascade, const frustum_planes& frustum, static_mesh_material_draw_list& draw_list) -> void;
+  auto _collect_bucket(bucket current_bucket, std::uint32_t cascade, std::uint32_t frustum_index, static_mesh_material_draw_list& draw_list, std::vector<local_aabb>& bounds, std::vector<std::uint32_t>& prefix_sums, std::vector<cull_job>& jobs) -> void;
 
   std::unordered_map<culled_range_key, culled_range_data, culled_range_key_hash> _culled_ranges;
 
-  graphics::storage_buffer_handle _bounds_buffer;
-  graphics::storage_buffer_handle _prefix_sum_buffer;
-  graphics::storage_buffer_handle _frustum_buffer;
+  std::array<graphics::storage_buffer_handle, ring_size> _bounds_buffers;
+  std::array<graphics::storage_buffer_handle, ring_size> _prefix_sum_buffers;
+  std::array<graphics::storage_buffer_handle, ring_size> _frustum_buffers;
 
   graphics::compute_pipeline _pipeline;
   graphics::push_handler _push_handler;

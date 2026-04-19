@@ -33,6 +33,8 @@ auto static_mesh_material_subrenderer::render(graphics::command_buffer& command_
 
   auto& draw_list = renderer.draw_list<models::static_mesh_material_draw_list>("static_mesh_material");
 
+  auto frustum_culling_task = renderer.task<models::frustum_culling_task>();
+
   for (auto& [key, data] : draw_list.ranges(_bucket)) {
     auto& pipeline_data = _get_or_create_pipeline(key);
     auto& descriptor_data = _get_or_create_descriptor_data(pipeline_data.pipeline);
@@ -59,21 +61,14 @@ auto static_mesh_material_subrenderer::render(graphics::command_buffer& command_
     descriptor_data.sampler_descriptor_handler.bind_descriptors(command_buffer);
     descriptor_data.image_descriptor_handler.bind_descriptors(command_buffer);
 
+    auto culled = frustum_culling_task ? frustum_culling_task->culled(_bucket, key) : std::nullopt;
+
+    auto& instance_data_buffer = graphics_module.get_resource<graphics::storage_buffer>(culled ? culled->instances_buffer : data.instance_data_buffer);
+    auto& draw_commands_buffer = graphics_module.get_resource<graphics::storage_buffer>(culled ? culled->commands_buffer : data.draw_commands_buffer);
+
     pipeline_data.push_handler.push("transform_data_buffer", draw_list.buffer(static_mesh_material_draw_list::transform_data_buffer_name).address());
     pipeline_data.push_handler.push("material_data_buffer", draw_list.buffer(static_mesh_material_draw_list::material_data_buffer_name).address());
-    pipeline_data.push_handler.push("instance_data_buffer", graphics_module.get_resource<graphics::storage_buffer>(data.instance_data_buffer).address());
-
-    auto& draw_commands_buffer = graphics_module.get_resource<graphics::storage_buffer>(data.draw_commands_buffer);
-
-    // const auto culled = _cull_task ? _cull_task->culled(_bucket, key) : nullptr;
-
-    // auto& instance_data_buffer = culled
-    //   ? graphics_module.get_resource<graphics::storage_buffer>(culled->instances_buffer)
-    //   : graphics_module.get_resource<graphics::storage_buffer>(data.instance_data_buffer);
-
-    // auto& draw_commands_buffer = culled
-    //   ? graphics_module.get_resource<graphics::storage_buffer>(culled->commands_buffer)
-    //   : graphics_module.get_resource<graphics::storage_buffer>(data.draw_commands_buffer);
+    pipeline_data.push_handler.push("instance_data_buffer", instance_data_buffer.address());
 
     for (const auto& ref : data.ranges) {
       auto& mesh = assets_module.get_asset<models::mesh>(ref.mesh_id);

@@ -59,12 +59,12 @@ auto skinned_mesh_shadow_subrenderer::render(graphics::command_buffer& command_b
     descriptor_data.sampler_descriptor_handler.bind_descriptors(command_buffer);
     descriptor_data.image_descriptor_handler.bind_descriptors(command_buffer);
 
-    auto& skinning_task = renderer.task<animations::skinning_task>();
+    auto skinning_task = renderer.task<animations::skinning_task>();
 
     pipeline_data.push_handler.push("transform_data_buffer", draw_list.buffer(skinned_mesh_material_draw_list::transform_data_buffer_name).address());
     pipeline_data.push_handler.push("material_data_buffer", draw_list.buffer(skinned_mesh_material_draw_list::material_data_buffer_name).address());
     pipeline_data.push_handler.push("instance_data_buffer", graphics_module.get_resource<graphics::storage_buffer>(data.instance_data_buffer).address());
-    pipeline_data.push_handler.push("vertex_buffer", graphics_module.get_resource<graphics::storage_buffer>(skinning_task.vertex_buffer_handle()).address());
+    pipeline_data.push_handler.push("vertex_buffer", graphics_module.get_resource<graphics::storage_buffer>(skinning_task->vertex_buffer_handle()).address());
 
     auto& draw_commands_buffer = graphics_module.get_resource<graphics::storage_buffer>(data.draw_commands_buffer);
 

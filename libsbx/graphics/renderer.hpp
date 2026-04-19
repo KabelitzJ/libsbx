@@ -97,16 +97,16 @@ public:
 
   template<typename Type>
   requires (std::is_base_of_v<graphics::task, Type>)
-  auto task() -> Type& {
+  auto task() -> memory::observer_ptr<const Type> {
     const auto type = type_id<Type>::value();
 
     if (auto entry = _task_by_id.find(type); entry != _task_by_id.end()) {
       auto [pass, index] = entry->second;
 
-      return *static_cast<Type*>(_tasks[pass][index].get());
+      return memory::observer_ptr<const Type>{static_cast<const Type*>(_tasks[pass][index].get())};
     }
 
-    throw utility::runtime_error{"Task '{}' not found", utility::type_name<Type>()};
+    return nullptr;
   }
 
 protected:

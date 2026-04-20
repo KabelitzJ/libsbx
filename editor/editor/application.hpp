@@ -12,7 +12,12 @@
 #include <libsbx/ui/ui.hpp>
 #include <libsbx/scenes/scenes.hpp>
 
-namespace demo {
+#include <editor/editor_context.hpp>
+#include <editor/panels/scene_hierarchy_panel.hpp>
+#include <editor/panels/inspector_panel.hpp>
+#include <editor/panels/viewport_panel.hpp>
+
+namespace editor {
 
 class application : public sbx::core::application {
 
@@ -20,7 +25,7 @@ public:
 
   application();
 
-  ~application() override = default;
+  ~application() override;
 
   auto update() -> void override;
 
@@ -42,6 +47,6 @@ private:
 
 }; // class application
 
-} // namespace demo
+} // namespace editor
 
 #endif // EDITOR_APPLICATION_HPP_

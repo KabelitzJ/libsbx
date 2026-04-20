@@ -28,7 +28,7 @@ auto main(int argc, const char** argv) -> int {
   try {
     auto engine = std::make_unique<sbx::core::engine>(args);
 
-    engine->run<demo::application>();
+    engine->run<editor::application>();
   } catch(const std::exception& exception) {
     sbx::utility::logger<"core">::error("{}", exception.what());
 

@@ -29,10 +29,22 @@ target_sources(
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/renderer.cpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/application.cpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/editor.cpp"
+    "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/editor_context.cpp"
+    "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/editor_subrenderer.cpp"
+    "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/panels/inspector_panel.cpp"
+    "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/panels/log_panel.cpp"
+    "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/panels/scene_hierarchy_panel.cpp"
+    "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/panels/viewport_panel.cpp"
   PUBLIC
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/renderer.hpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/application.hpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/bindings/imgui.hpp"
+    "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/editor_context.hpp"
+    "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/editor_subrenderer.hpp"
+    "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/panels/inspector_panel.hpp"
+    "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/panels/log_panel.hpp"
+    "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/panels/scene_hierarchy_panel.hpp"
+    "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/panels/viewport_panel.hpp"
 )
 
 target_compile_definitions(

@@ -11,7 +11,7 @@
 
 #include <libsbx/scenes/scenes.hpp>
 
-namespace demo {
+namespace editor {
 
 class renderer : public sbx::graphics::renderer {
 
@@ -29,6 +29,6 @@ private:
 
 }; // class renderer
 
-} // namespace demo
+} // namespace editor
 
 #endif // EDITOR_RENDERER_HPP_

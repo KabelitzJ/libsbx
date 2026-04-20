@@ -33,7 +33,9 @@
 
 #include <editor/application.hpp>
 
-namespace demo {
+#include <editor/editor_subrenderer.hpp>
+
+namespace editor {
 
 renderer::renderer()
 : _clear_color{sbx::math::color::white()} {
@@ -90,7 +92,7 @@ renderer::renderer()
 
   auto tonemap = create_attachment("tonemap", sbx::graphics::attachment::type::image, _clear_color, sbx::graphics::format::r8g8b8a8_unorm);
   
-  auto fxaa = create_attachment("fxaa", sbx::graphics::attachment::type::image, _clear_color, sbx::graphics::format::r8g8b8a8_unorm);
+  auto scene_output = create_attachment("scene_output", sbx::graphics::attachment::type::image, _clear_color, sbx::graphics::format::r8g8b8a8_unorm);
 
   auto swapchain = create_attachment("swapchain", sbx::graphics::attachment::type::swapchain, _clear_color, sbx::graphics::format::b8g8r8a8_srgb);
 
@@ -184,6 +186,17 @@ renderer::renderer()
 
     pass.reads(tonemap);
 
+    pass.writes(scene_output, sbx::graphics::attachment_load_operation::clear);
+
+    return pass;
+  });
+
+  auto editor_pass = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
+    auto pass = context.graphics_pass("editor_pass");
+
+    pass.depends_on(fxaa_pass);
+
+    pass.reads(scene_output);
     pass.writes(swapchain, sbx::graphics::attachment_load_operation::clear);
 
     return pass;
@@ -259,6 +272,8 @@ renderer::renderer()
   add_subrenderer<sbx::post::tonemap_filter>(tonemap_pass, "res://shaders/tonemap", std::move(tonemap_attachment_names), tonemap_config);
 
   add_subrenderer<sbx::post::fxaa_filter>(fxaa_pass, "res://shaders/fxaa", "tonemap");
+
+  add_subrenderer<editor::editor_subrenderer>(editor_pass);
 }
 
-} // namespace demo
+} // namespace editor

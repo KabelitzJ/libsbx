@@ -5,6 +5,8 @@
 
 #include <easy/profiler.h>
 
+#include <imgui.h>
+
 #include <libsbx/reflection/reflection.hpp>
 
 #include <libsbx/math/color.hpp>
@@ -43,7 +45,7 @@
 
 #include <editor/renderer.hpp>
 
-namespace demo {
+namespace editor {
 
 application::application()
 : sbx::core::application{},
@@ -55,7 +57,7 @@ application::application()
 
   auto& graphics_module = sbx::core::engine::get_module<sbx::graphics::graphics_module>();
 
-  graphics_module.set_renderer<demo::renderer>();
+  graphics_module.set_renderer<editor::renderer>();
 
   auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
 
@@ -88,6 +90,10 @@ application::application()
   window.on_window_closed_signal() += [this]([[maybe_unused]] const auto& event){
     sbx::core::engine::quit();
   };
+}
+
+application::~application() {
+
 }
 
 auto application::update() -> void {
@@ -648,4 +654,4 @@ auto application::_generate_prefiltered(uint32_t size) -> void {
   sbx::utility::logger<"editor">::info("Generated 'prefiltered' with {} mips in {:.2f}ms", prefiltered.mip_levels(), sbx::units::quantity_cast<sbx::units::millisecond>(timer.elapsed()));
 }
 
-} // namespace demo
+} // namespace editor

@@ -3,7 +3,7 @@
 #define LIBSBX_SCENES_SCENE_MODULE_HPP_
 
 #include <memory>
-#include <optional>
+#include <unordered_map>
 #include <utility>
 #include <filesystem>
 
@@ -11,6 +11,8 @@
 
 #include <libsbx/math/vector4.hpp>
 #include <libsbx/math/color.hpp>
+
+#include <libsbx/utility/hashed_string.hpp>
 
 #include <libsbx/core/module.hpp>
 
@@ -38,23 +40,41 @@ public:
 
   auto update() -> void override;
 
-  auto load_scene(const std::filesystem::path& path) -> scenes::scene&;
+  auto create_scene(const std::string& name = "Scene") -> scenes::scene&;
 
-  auto create_scene(const std::string& name = "Scene") -> scenes::scene& {
-    _scene.emplace(_component_io_registry, _asset_io_registry, _asset_registry, name);
+  auto load_scene(const utility::hashed_string& name, const std::filesystem::path& path) -> scenes::scene&;
 
-    return *_scene;
+  auto close_scene(const utility::hashed_string& name) -> void;
+
+  auto set_active_scene(const utility::hashed_string& name) -> void;
+
+  auto active_scene() -> scenes::scene& {
+    return *_active_scene;
   }
 
-  auto scene() -> scenes::scene&;
+  auto active_scene() const -> const scenes::scene& {
+    return *_active_scene;
+  }
 
-  auto has_scene() const -> bool {
-    return _scene.has_value();
+  auto find_scene(const utility::hashed_string& name) -> memory::observer_ptr<scenes::scene> {
+    if (auto entry = _scenes.find(name); entry != _scenes.end()) {
+      return entry->second.get();
+    }
+
+    return nullptr;
+  }
+
+  auto has_active_scene() const -> bool {
+    return _active_scene != nullptr;
+  }
+
+  auto scene_count() const -> std::size_t {
+    return _scenes.size();
   }
 
   auto save_scene(const std::filesystem::path& path) -> void {
-    if (_scene) {
-      _scene->save(path);
+    if (_active_scene) {
+      _active_scene->save(path);
     }
   }
 
@@ -116,7 +136,8 @@ private:
   scenes::component_io_registry _component_io_registry;
   scenes::asset_io_registry _asset_io_registry;
 
-  std::optional<scenes::scene> _scene;
+  std::unordered_map<utility::hashed_string, std::unique_ptr<scenes::scene>> _scenes;
+  memory::observer_ptr<scenes::scene> _active_scene{nullptr};
 
   std::vector<line> _debug_lines{};
 

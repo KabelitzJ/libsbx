@@ -26,7 +26,7 @@ auto skinned_mesh_material_subrenderer::render(graphics::command_buffer& command
   auto& assets_module = core::engine::get_module<assets::assets_module>();
 
   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
-  auto& scene = scenes_module.scene();
+  auto& scene = scenes_module.active_scene();
   auto& environment = scene.environment();
 
   auto& draw_list = renderer.draw_list<skinned_mesh_material_draw_list>("skinned_mesh_material");

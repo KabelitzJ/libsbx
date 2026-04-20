@@ -54,7 +54,7 @@ public:
     EASY_BLOCK("grid_subrenderer::render");
 
     auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
-    auto& scene = scenes_module.scene();
+    auto& scene = scenes_module.active_scene();
     auto& environment = scene.environment();
     auto& graph = scene.graph();
     

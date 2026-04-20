@@ -76,7 +76,7 @@ application::application()
     scene_name = *scene;
   }
 
-  auto& scene = scenes_module.load_scene(scene_name);
+  auto& scene = scenes_module.load_scene("Scene", scene_name);
   auto& graph = scene.graph();
   auto& environment = scene.environment();
 
@@ -165,7 +165,7 @@ auto application::update() -> void {
   auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
   auto& graphics_module = sbx::core::engine::get_module<sbx::graphics::graphics_module>();
 
-  auto& scene = scenes_module.scene();
+  auto& scene = scenes_module.active_scene();
   auto& graph = scene.graph();
   auto& environment = scene.environment();
 
@@ -173,7 +173,7 @@ auto application::update() -> void {
 
   _rotation += sbx::math::degree{45} * delta_time;
 
-  if (!scenes_module.has_scene()) {
+  if (!scenes_module.has_active_scene()) {
     return;
   }
 
@@ -297,7 +297,7 @@ auto application::is_paused() const -> bool {
 auto application::_build_ui() -> void {
   auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
 
-  auto& scene = scenes_module.scene();
+  auto& scene = scenes_module.active_scene();
   auto& graph = scene.graph();
 
   auto ui_node = graph.create_node("HUD");
@@ -612,7 +612,7 @@ auto application::_generate_irradiance(const std::uint32_t size) -> void {
 
   auto& asset_registry = scenes_module.asset_registry();
 
-  auto& scene = scenes_module.scene();
+  auto& scene = scenes_module.active_scene();
   auto& environment = scene.environment();
   auto& graph = scene.graph();
 
@@ -792,7 +792,7 @@ auto application::_generate_prefiltered(uint32_t size) -> void {
 
   auto& asset_registry = scenes_module.asset_registry();
 
-  auto& scene = scenes_module.scene();
+  auto& scene = scenes_module.active_scene();
   auto& environment = scene.environment();
   auto& graph = scene.graph();
 

@@ -52,6 +52,10 @@ public:
 
   static auto active_viewport_size() -> math::vector2;
 
+  static auto set_scene_input_active(bool active) -> void;
+
+  static auto is_scene_input_active() -> bool;
+
 private:
 
   static auto _transition_pressed_keys() -> void;
@@ -71,6 +75,9 @@ private:
 
   static math::vector2 _active_viewport_origin;
   static math::vector2 _active_viewport_size;
+
+  static bool _is_active;
+  static bool _is_captured;
 
 }; // class input
 

@@ -26,6 +26,9 @@ auto viewport_panel::draw(const sbx::graphics::image2d& scene_image) -> void {
 
   _panel_size = sbx::math::vector2u{width, height};
 
+  auto cursor = ImGui::GetCursorScreenPos();
+  _content_min = sbx::math::vector2{cursor.x, cursor.y};
+
   _update_texture(scene_image);
 
   if (_texture_id != VK_NULL_HANDLE) {

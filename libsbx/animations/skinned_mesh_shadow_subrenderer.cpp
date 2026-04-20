@@ -25,7 +25,7 @@ auto skinned_mesh_shadow_subrenderer::render(graphics::command_buffer& command_b
   auto& assets_module = core::engine::get_module<assets::assets_module>();
 
   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
-  auto& scene = scenes_module.scene();
+  auto& scene = scenes_module.active_scene();
   auto& graph = scene.graph();
   auto& environment = scene.environment();
 

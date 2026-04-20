@@ -8,6 +8,7 @@
 #include <libsbx/core/engine.hpp>
 #include <libsbx/graphics/graphics_module.hpp>
 #include <libsbx/scenes/scenes_module.hpp>
+#include <libsbx/devices/input.hpp>
 
 namespace editor {
 
@@ -31,14 +32,23 @@ auto editor_subrenderer::render(sbx::graphics::command_buffer& command_buffer) -
 
   _viewport_panel.draw(scene_image);
 
-  if (scenes_module.has_scene()) {
-    auto& scene = scenes_module.scene();
+  const auto& panel_size = _viewport_panel.panel_size();
 
-    _hierarchy_panel.draw(scene);
-    _inspector_panel.draw(scene, _hierarchy_panel.selected_node());
+  if (panel_size.x() > 0u && panel_size.y() > 0u) {
+    graphics_module.viewports().resize("scene", panel_size);
   }
 
+  if (_viewport_panel.is_hovered() || _viewport_panel.is_focused()) {
+    const auto& content_min = _viewport_panel.content_min();
+
+    sbx::devices::input::set_active_viewport(content_min, sbx::math::vector2{static_cast<std::float_t>(panel_size.x()), static_cast<std::float_t>(panel_size.y())});
+  }
+
+  sbx::devices::input::set_scene_input_active(_viewport_panel.is_hovered());
+
   _log_panel.draw();
+  _hierarchy_panel.draw();
+  _inspector_panel.draw(_hierarchy_panel.selected_node());
 
   _context.render();
   _context.render_draw_data(command_buffer);

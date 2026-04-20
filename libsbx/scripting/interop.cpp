@@ -37,7 +37,7 @@ auto interop::log_log_message(log_level level, managed::string message) -> void 
 auto interop::behavior_add_component(std::uint32_t node, managed::reflection_type component_type) -> void {
   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
 
-  auto& scene = scenes_module.scene();
+  auto& scene = scenes_module.active_scene();
   auto& environment = scene.environment();
   auto& graph = scene.graph();
 
@@ -63,7 +63,7 @@ auto interop::behavior_add_component(std::uint32_t node, managed::reflection_typ
 auto interop::behavior_has_component(std::uint32_t node, managed::reflection_type component_type) -> bool {
   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
 
-  auto& scene = scenes_module.scene();
+  auto& scene = scenes_module.active_scene();
   auto& environment = scene.environment();
   auto& graph = scene.graph();
 
@@ -95,7 +95,7 @@ auto interop::behavior_has_component(std::uint32_t node, managed::reflection_typ
 auto interop::tag_get_tag(std::uint32_t node) -> managed::string {
   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
 
-  auto& scene = scenes_module.scene();
+  auto& scene = scenes_module.active_scene();
   auto& graph = scene.graph();
 
   auto& tag = graph.get_component<scenes::tag>(static_cast<scenes::node>(node));
@@ -106,7 +106,7 @@ auto interop::tag_get_tag(std::uint32_t node) -> managed::string {
 auto interop::tag_set_tag(std::uint32_t node, managed::string tag) -> void {
   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
 
-  auto& scene = scenes_module.scene();
+  auto& scene = scenes_module.active_scene();
   auto& graph = scene.graph();
 
   graph.get_component<scenes::tag>(static_cast<scenes::node>(node)) = std::string{tag};
@@ -115,7 +115,7 @@ auto interop::tag_set_tag(std::uint32_t node, managed::string tag) -> void {
 auto interop::transform_get_position(std::uint32_t node, math::vector3* position) -> void {
   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
 
-  auto& scene = scenes_module.scene();
+  auto& scene = scenes_module.active_scene();
   auto& graph = scene.graph();
 
   if (!graph.is_valid(static_cast<scenes::node>(node))) {
@@ -132,7 +132,7 @@ auto interop::transform_get_position(std::uint32_t node, math::vector3* position
 auto interop::transform_set_position(std::uint32_t node, math::vector3* position) -> void {
   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
 
-  auto& scene = scenes_module.scene();
+  auto& scene = scenes_module.active_scene();
   auto& graph = scene.graph();
 
   if (!graph.is_valid(static_cast<scenes::node>(node))) {
@@ -157,7 +157,7 @@ auto interop::transform_set_position(std::uint32_t node, math::vector3* position
 auto interop::transform_get_world_position(std::uint32_t node, math::vector3* position) -> void {
   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
 
-  auto& scene = scenes_module.scene();
+  auto& scene = scenes_module.active_scene();
   auto& graph = scene.graph();
 
   if (!graph.is_valid(static_cast<scenes::node>(node))) {
@@ -172,7 +172,7 @@ auto interop::transform_get_world_position(std::uint32_t node, math::vector3* po
 auto interop::transform_get_rotation(std::uint32_t node, math::quaternion* rotation) -> void {
   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
 
-  auto& scene = scenes_module.scene();
+  auto& scene = scenes_module.active_scene();
   auto& graph = scene.graph();
 
   if (!graph.is_valid(static_cast<scenes::node>(node))) {
@@ -189,7 +189,7 @@ auto interop::transform_get_rotation(std::uint32_t node, math::quaternion* rotat
 auto interop::transform_set_rotation(std::uint32_t node, math::quaternion* rotation) -> void {
   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
 
-  auto& scene = scenes_module.scene();
+  auto& scene = scenes_module.active_scene();
   auto& graph = scene.graph();
 
   if (!graph.is_valid(static_cast<scenes::node>(node))) {
@@ -214,7 +214,7 @@ auto interop::transform_set_rotation(std::uint32_t node, math::quaternion* rotat
 auto interop::transform_get_right(std::uint32_t node, math::vector3* right) -> void {
   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
 
-  auto& scene = scenes_module.scene();
+  auto& scene = scenes_module.active_scene();
   auto& graph = scene.graph();
 
   if (!graph.is_valid(static_cast<scenes::node>(node))) {
@@ -231,7 +231,7 @@ auto interop::transform_get_right(std::uint32_t node, math::vector3* right) -> v
 auto interop::transform_get_forward(std::uint32_t node, math::vector3* forward) -> void {
   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
 
-  auto& scene = scenes_module.scene();
+  auto& scene = scenes_module.active_scene();
   auto& graph = scene.graph();
 
   if (!graph.is_valid(static_cast<scenes::node>(node))) {
@@ -248,7 +248,7 @@ auto interop::transform_get_forward(std::uint32_t node, math::vector3* forward) 
 auto interop::transform_get_up(std::uint32_t node, math::vector3* up) -> void {
   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
 
-  auto& scene = scenes_module.scene();
+  auto& scene = scenes_module.active_scene();
   auto& graph = scene.graph();
 
   if (!graph.is_valid(static_cast<scenes::node>(node))) {
@@ -265,7 +265,7 @@ auto interop::transform_get_up(std::uint32_t node, math::vector3* up) -> void {
 auto interop::transform_look_at(std::uint32_t node, math::vector3* target) -> void {
   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
 
-  auto& scene = scenes_module.scene();
+  auto& scene = scenes_module.active_scene();
   auto& graph = scene.graph();
 
   if (!graph.is_valid(static_cast<scenes::node>(node))) {
@@ -290,7 +290,7 @@ auto interop::transform_look_at(std::uint32_t node, math::vector3* target) -> vo
 auto interop::character_controller_get_height(std::uint32_t node, std::float_t* height) -> void {
   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
 
-  auto& scene = scenes_module.scene();
+  auto& scene = scenes_module.active_scene();
   auto& graph = scene.graph();
 
   if (!graph.is_valid(static_cast<scenes::node>(node))) {
@@ -307,7 +307,7 @@ auto interop::character_controller_get_height(std::uint32_t node, std::float_t* 
 auto interop::character_controller_get_radius(std::uint32_t node, std::float_t* radius) -> void {
   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
 
-  auto& scene = scenes_module.scene();
+  auto& scene = scenes_module.active_scene();
   auto& graph = scene.graph();
 
   if (!graph.is_valid(static_cast<scenes::node>(node))) {
@@ -324,7 +324,7 @@ auto interop::character_controller_get_radius(std::uint32_t node, std::float_t* 
 auto interop::character_controller_get_slope_limit(std::uint32_t node, std::float_t* slope_limit) -> void {
   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
 
-  auto& scene = scenes_module.scene();
+  auto& scene = scenes_module.active_scene();
   auto& graph = scene.graph();
 
   if (!graph.is_valid(static_cast<scenes::node>(node))) {
@@ -341,7 +341,7 @@ auto interop::character_controller_get_slope_limit(std::uint32_t node, std::floa
 auto interop::character_controller_get_step_offset(std::uint32_t node, std::float_t* step_offset) -> void {
   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
 
-  auto& scene = scenes_module.scene();
+  auto& scene = scenes_module.active_scene();
   auto& graph = scene.graph();
 
   if (!graph.is_valid(static_cast<scenes::node>(node))) {
@@ -358,7 +358,7 @@ auto interop::character_controller_get_step_offset(std::uint32_t node, std::floa
 auto interop::character_controller_get_is_grounded(std::uint32_t node) -> managed::bool32 {
   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
 
-  auto& scene = scenes_module.scene();
+  auto& scene = scenes_module.active_scene();
   auto& graph = scene.graph();
 
   if (!graph.is_valid(static_cast<scenes::node>(node))) {
@@ -375,7 +375,7 @@ auto interop::character_controller_get_is_grounded(std::uint32_t node) -> manage
 auto interop::character_controller_get_flags(std::uint32_t node, std::uint8_t* flags) -> void {
   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
 
-  auto& scene = scenes_module.scene();
+  auto& scene = scenes_module.active_scene();
   auto& graph = scene.graph();
 
   if (!graph.is_valid(static_cast<scenes::node>(node))) {
@@ -392,7 +392,7 @@ auto interop::character_controller_get_flags(std::uint32_t node, std::uint8_t* f
 auto interop::character_controller_move(std::uint32_t node, math::vector3* displacement) -> void {
   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
 
-  auto& scene = scenes_module.scene();
+  auto& scene = scenes_module.active_scene();
   auto& graph = scene.graph();
 
   if (!graph.is_valid(static_cast<scenes::node>(node))) {
@@ -441,7 +441,7 @@ auto interop::input_scroll_delta(math::vector2* scroll_delta) -> void {
 auto interop::camera_screen_point_to_ray(math::ray* ray, math::vector2* position) -> void {
   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
 
-  auto& scene = scenes_module.scene();
+  auto& scene = scenes_module.active_scene();
   auto& environment = scene.environment();
   auto& graph = scene.graph();
 
@@ -461,7 +461,7 @@ auto interop::camera_screen_point_to_ray(math::ray* ray, math::vector2* position
 auto interop::camera_get_position(math::vector3* position) -> void {
   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
 
-  auto& scene = scenes_module.scene();
+  auto& scene = scenes_module.active_scene();
   auto& environment = scene.environment();
   auto& graph = scene.graph();
 
@@ -475,7 +475,7 @@ auto interop::camera_get_position(math::vector3* position) -> void {
 auto interop::camera_set_position(math::vector3* position) -> void {
   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
 
-  auto& scene = scenes_module.scene();
+  auto& scene = scenes_module.active_scene();
   auto& environment = scene.environment();
   auto& graph = scene.graph();
 
@@ -497,7 +497,7 @@ auto interop::camera_set_position(math::vector3* position) -> void {
 auto interop::camera_get_rotation(math::quaternion* rotation) -> void {
   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
 
-  auto& scene = scenes_module.scene();
+  auto& scene = scenes_module.active_scene();
   auto& environment = scene.environment();
   auto& graph = scene.graph();
 
@@ -511,7 +511,7 @@ auto interop::camera_get_rotation(math::quaternion* rotation) -> void {
 auto interop::camera_set_rotation(math::quaternion* rotation) -> void {
   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
 
-  auto& scene = scenes_module.scene();
+  auto& scene = scenes_module.active_scene();
   auto& environment = scene.environment();
   auto& graph = scene.graph();
 
@@ -533,7 +533,7 @@ auto interop::camera_set_rotation(math::quaternion* rotation) -> void {
 auto interop::camera_get_forward(math::vector3* forward) -> void {
   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
 
-  auto& scene = scenes_module.scene();
+  auto& scene = scenes_module.active_scene();
   auto& environment = scene.environment();
   auto& graph = scene.graph();
 
@@ -547,7 +547,7 @@ auto interop::camera_get_forward(math::vector3* forward) -> void {
 auto interop::camera_get_right(math::vector3* right) -> void {
   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
 
-  auto& scene = scenes_module.scene();
+  auto& scene = scenes_module.active_scene();
   auto& environment = scene.environment();
   auto& graph = scene.graph();
 
@@ -561,7 +561,7 @@ auto interop::camera_get_right(math::vector3* right) -> void {
 auto interop::camera_get_up(math::vector3* up) -> void {
   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
 
-  auto& scene = scenes_module.scene();
+  auto& scene = scenes_module.active_scene();
   auto& environment = scene.environment();
   auto& graph = scene.graph();
 
@@ -579,7 +579,7 @@ auto interop::camera_get_viewport(math::vector2* viewport) -> void {
   }
 
   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
-  auto& scene = scenes_module.scene();
+  auto& scene = scenes_module.active_scene();
   auto& environment = scene.environment();
 
   const auto size = environment.render_target_size();

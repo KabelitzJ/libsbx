@@ -67,7 +67,7 @@ public:
     // auto& devices_module = core::engine::get_module<devices::devices_module>();
 
     // auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
-    // auto& scene = scenes_module.scene();
+    // auto& scene = scenes_module.active_scene();
     // auto& environment = scene.environment();
     // auto& graph = scene.graph();
 
@@ -137,7 +137,7 @@ private:
 
   auto _submit_mesh(const scenes::node node) -> void {
     auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
-    auto& scene = scenes_module.scene();
+    auto& scene = scenes_module.active_scene();
   auto& environment = scene.environment();
   auto& graph = scene.graph();
 

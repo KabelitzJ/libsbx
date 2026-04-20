@@ -14,8 +14,7 @@
 
 namespace sbx::scenes {
 
-scenes_module::scenes_module()
-: _scene{std::nullopt} {
+scenes_module::scenes_module() {
 
   _asset_io_registry.register_loader("images", [](scenes::asset_registry& registry, const utility::hashed_string& name, const YAML::Node& node) -> void {
     registry.request_image(name, node["path"].as<std::string>());
@@ -110,29 +109,63 @@ scenes_module::~scenes_module() {
 auto scenes_module::update() -> void {
   EASY_BLOCK("scenes_module::update");
 
-  if (!_scene) {
+  if (!_active_scene) {
     return;
   }
 
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 
   auto& viewports = graphics_module.viewports();
-  auto& environment = _scene->environment();
+  auto& environment = _active_scene->environment();
 
   environment.set_render_target_size(viewports.size(_scene_viewport));
   environment.update_uniforms();
 }
 
-auto scenes_module::load_scene(const std::filesystem::path& path) -> scenes::scene& {
-  auto& assets_module = core::engine::get_module<assets::assets_module>();
+// --- Scene management ---
 
-  _scene.emplace(assets_module.resolve_path(path), _component_io_registry, _asset_io_registry, _asset_registry);
+auto scenes_module::create_scene(const std::string& name) -> scenes::scene& {
+  auto key = utility::hashed_string{name};
 
-  return *_scene;
+  auto [entry, inserted] = _scenes.emplace(key, std::make_unique<scenes::scene>(_component_io_registry, _asset_io_registry, _asset_registry, name));
+
+  _active_scene = entry->second.get();
+
+  return *_active_scene;
 }
 
-auto scenes_module::scene() -> scenes::scene& {
-  return *_scene;
+auto scenes_module::load_scene(const utility::hashed_string& name, const std::filesystem::path& path) -> scenes::scene& {
+  auto& assets_module = core::engine::get_module<assets::assets_module>();
+
+  auto [entry, inserted] = _scenes.emplace(name, std::make_unique<scenes::scene>(assets_module.resolve_path(path), _component_io_registry, _asset_io_registry, _asset_registry));
+
+  _active_scene = entry->second.get();
+
+  return *_active_scene;
+}
+
+auto scenes_module::close_scene(const utility::hashed_string& name) -> void {
+  auto entry = _scenes.find(name);
+
+  if (entry == _scenes.end()) {
+    return;
+  }
+
+  if (_active_scene == entry->second) {
+    _active_scene = nullptr;
+  }
+
+  _scenes.erase(entry);
+
+  if (_active_scene == nullptr && !_scenes.empty()) {
+    _active_scene = _scenes.begin()->second.get();
+  }
+}
+
+auto scenes_module::set_active_scene(const utility::hashed_string& name) -> void {
+  if (auto entry = _scenes.find(name); entry != _scenes.end()) {
+    _active_scene = entry->second.get();
+  }
 }
 
 auto scenes_module::debug_lines() const -> const std::vector<line>& {

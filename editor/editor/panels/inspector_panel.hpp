@@ -15,7 +15,7 @@ public:
 
   inspector_panel() = default;
 
-  auto draw(sbx::scenes::scene& scene, sbx::scenes::node selected_node) -> void;
+  auto draw(const sbx::scenes::node selected_node) -> void;
 
 private:
 

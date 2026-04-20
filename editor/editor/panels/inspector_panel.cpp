@@ -5,6 +5,7 @@
 
 #include <fmt/format.h>
 
+#include <libsbx/scenes/scenes_module.hpp>
 #include <libsbx/scenes/components/tag.hpp>
 #include <libsbx/scenes/components/transform.hpp>
 #include <libsbx/scenes/components/directional_light.hpp>
@@ -18,7 +19,15 @@
 
 namespace editor {
 
-auto inspector_panel::draw(sbx::scenes::scene& scene, sbx::scenes::node selected_node) -> void {
+auto inspector_panel::draw(const sbx::scenes::node selected_node) -> void {
+  auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
+
+  if (!scenes_module.has_active_scene()) {
+    return;
+  }
+
+  auto& scene = scenes_module.active_scene();
+
   ImGui::Begin("Inspector");
 
   if (selected_node == sbx::scenes::node::null) {

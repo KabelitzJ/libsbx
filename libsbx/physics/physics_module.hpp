@@ -100,7 +100,7 @@ private:
 
   auto _integrate_velocities(std::float_t dt) -> void {
     auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
-    auto& scene = scenes_module.scene();
+    auto& scene = scenes_module.active_scene();
   auto& environment = scene.environment();
   auto& graph = scene.graph();
 
@@ -130,7 +130,7 @@ private:
 
   auto _integrate_positions(std::float_t dt) -> void {
     auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
-    auto& scene = scenes_module.scene();
+    auto& scene = scenes_module.active_scene();
   auto& environment = scene.environment();
   auto& graph = scene.graph();
 
@@ -158,7 +158,7 @@ private:
 
   auto _collision_broad_phase() -> std::vector<collision_pair_type> {
     auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
-    auto& scene = scenes_module.scene();
+    auto& scene = scenes_module.active_scene();
   auto& environment = scene.environment();
   auto& graph = scene.graph();
 
@@ -179,7 +179,7 @@ private:
 
   auto _collision_narrow_phase(const std::vector<collision_pair_type>& pairs) -> std::vector<collision> {
     auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
-    auto& scene = scenes_module.scene();
+    auto& scene = scenes_module.active_scene();
   auto& environment = scene.environment();
   auto& graph = scene.graph();
 
@@ -219,7 +219,7 @@ private:
     SBX_PROFILE_SCOPE("physics_module::_resolve_collisions");
 
     auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
-    auto& scene = scenes_module.scene();
+    auto& scene = scenes_module.active_scene();
     auto& graph = scene.graph();
 
     ++_solver_tick;
@@ -468,7 +468,7 @@ private:
     SBX_PROFILE_SCOPE("physics_module::_update_character_controllers");
 
     auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
-    auto& scene = scenes_module.scene();
+    auto& scene = scenes_module.active_scene();
   auto& environment = scene.environment();
   auto& graph = scene.graph();
 
@@ -492,7 +492,7 @@ private:
 
   auto _positional_correction(const std::vector<collision>& collisions) -> void {
     auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
-    auto& scene = scenes_module.scene();
+    auto& scene = scenes_module.active_scene();
     auto& graph = scene.graph();
 
     constexpr auto correction_percent = 0.8f;

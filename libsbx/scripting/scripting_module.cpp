@@ -102,7 +102,7 @@ auto scripting_module::update() -> void {
 
   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
 
-  auto& scene = scenes_module.scene();
+  auto& scene = scenes_module.active_scene();
   auto& environment = scene.environment();
   auto& graph = scene.graph();
 
@@ -134,7 +134,7 @@ auto scripting_module::instantiate(const scenes::node node, std::string_view cla
 
   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
 
-  auto& scene = scenes_module.scene();
+  auto& scene = scenes_module.active_scene();
   auto& environment = scene.environment();
   auto& graph = scene.graph();
 

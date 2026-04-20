@@ -63,6 +63,8 @@ application::application()
 
   auto& scene = scenes_module.create_scene();
 
+  scenes_module.set_scene_viewport("scene");
+
   auto& graph = scene.graph();
   auto& environment = scene.environment();
 
@@ -75,7 +77,13 @@ application::application()
   _generate_prefiltered(512);
 
   // Camera
+  auto& scripting_module = sbx::core::engine::get_module<sbx::scripting::scripting_module>();
+  
+  scripting_module.load_assembly("build/x86_64/gcc/debug/_dotnet/Editor.dll");
+  
   auto camera_node = environment.camera();
+
+  scripting_module.instantiate(camera_node, "Editor.CameraController");
 
   auto& skybox = graph.add_component<sbx::scenes::skybox>(camera_node);
   skybox.cube_image = asset_registry.get_cube_image("skybox");
@@ -86,6 +94,8 @@ application::application()
   auto& devices_module = sbx::core::engine::get_module<sbx::devices::devices_module>();
 
   auto& window = devices_module.window();
+
+  window.set_title(scene.name());
 
   window.on_window_closed_signal() += [this]([[maybe_unused]] const auto& event){
     sbx::core::engine::quit();
@@ -235,7 +245,7 @@ auto application::_generate_irradiance(const std::uint32_t size) -> void {
 
   auto& asset_registry = scenes_module.asset_registry();
 
-  auto& scene = scenes_module.scene();
+  auto& scene = scenes_module.active_scene();
   auto& environment = scene.environment();
   auto& graph = scene.graph();
 
@@ -415,7 +425,7 @@ auto application::_generate_prefiltered(uint32_t size) -> void {
 
   auto& asset_registry = scenes_module.asset_registry();
 
-  auto& scene = scenes_module.scene();
+  auto& scene = scenes_module.active_scene();
   auto& environment = scene.environment();
   auto& graph = scene.graph();
 

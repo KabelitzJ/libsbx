@@ -50,7 +50,7 @@ auto frustum_culling_task::execute(graphics::command_buffer& command_buffer) -> 
   auto& renderer = graphics_module.renderer();
 
   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
-  auto& scene = scenes_module.scene();
+  auto& scene = scenes_module.active_scene();
   auto& environment = scene.environment();
 
   auto& draw_list = renderer.draw_list<models::static_mesh_material_draw_list>("static_mesh_material");

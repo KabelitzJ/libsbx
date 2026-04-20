@@ -10,9 +10,10 @@
 namespace sbx::memory {
 
 template<typename Type, typename Value>
-concept smart_pointer = requires(Type t, Value v) {
-  { Type::value_type} -> std::same_as<Value>;
-  { t.get() } -> std::same_as<Value>;
+concept smart_pointer = requires(Type instance) {
+  typename Type::element_type;
+  requires std::same_as<typename Type::element_type, Value>;
+  { instance.get() } -> std::same_as<Value*>;
 }; // concept smart_pointer
 
 /**

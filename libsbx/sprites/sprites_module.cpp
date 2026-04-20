@@ -263,7 +263,7 @@ auto sprites_module::submit(sprite_space space, const sprite_batch::sprite_insta
 auto sprites_module::_collect_sprites() -> void {
   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
 
-  auto& scene = scenes_module.scene();
+  auto& scene = scenes_module.active_scene();
   auto& environment = scene.environment();
   auto& graph = scene.graph();
 

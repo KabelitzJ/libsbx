@@ -13,7 +13,7 @@ public:
 
   scene_hierarchy_panel() = default;
 
-  auto draw(sbx::scenes::scene& scene) -> void;
+  auto draw() -> void;
 
   auto selected_node() const -> sbx::scenes::node {
     return _selected_node;
@@ -27,7 +27,12 @@ private:
 
   auto _draw_node(sbx::scenes::scene_graph& graph, sbx::scenes::node node) -> void;
 
+  auto _draw_create_node_popup(sbx::scenes::scene_graph& graph) -> void;
+
   sbx::scenes::node _selected_node{sbx::scenes::node::null};
+  sbx::scenes::node _create_parent{sbx::scenes::node::null};
+  bool _open_create_popup{false};
+  std::array<char, 128> _name_buffer{};
 
 }; // class scene_hierarchy_panel
 

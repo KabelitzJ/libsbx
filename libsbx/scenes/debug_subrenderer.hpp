@@ -72,7 +72,7 @@ public:
       return;
     }
 
-    auto& scene = scenes_module.scene();
+    auto& scene = scenes_module.active_scene();
     auto& environment = scene.environment();
     auto& graph = scene.graph();
     

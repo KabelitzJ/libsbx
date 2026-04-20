@@ -41,6 +41,13 @@ renderer::renderer()
 : _clear_color{sbx::math::color::white()} {
   auto& graphics_module = sbx::core::engine::get_module<sbx::graphics::graphics_module>();
 
+  // Declare scene viewport
+  auto& viewports = graphics_module.viewports();
+  const auto extent = graphics_module.surface().current_extent();
+  viewports.declare("scene", sbx::math::vector2u{extent.width, extent.height});
+
+  auto scene_viewport = sbx::graphics::viewport::named("scene");
+
   // Attachments
   auto shadow = create_attachment("shadow", sbx::graphics::attachment::type::image, sbx::math::color::white(), sbx::graphics::format::r32_sfloat, sbx::graphics::blend_state{}, sbx::graphics::filter::nearest, sbx::graphics::address_mode::clamp_to_edge, 4u);
   auto shadow_depth = create_attachment("shadow_depth", sbx::graphics::attachment::type::depth, sbx::math::color::black(), sbx::graphics::format::undefined, sbx::graphics::blend_state{}, sbx::graphics::filter::linear, sbx::graphics::address_mode::repeat, 4u);
@@ -125,7 +132,7 @@ renderer::renderer()
   });
 
   auto deferred_pass = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
-    auto pass = context.graphics_pass("deferred");
+    auto pass = context.graphics_pass("deferred", scene_viewport);
 
     pass.depends_on(skinning_pass, culling_pass);
 
@@ -142,7 +149,7 @@ renderer::renderer()
   });
 
   auto transparency_pass = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
-    auto pass = context.graphics_pass("deferred");
+    auto pass = context.graphics_pass("deferred", scene_viewport);
 
     pass.depends_on(deferred_pass, culling_pass, skinning_pass, particles_pass);
 
@@ -154,7 +161,7 @@ renderer::renderer()
   });
 
   auto resolve_pass = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
-    auto pass = context.graphics_pass("deferred");
+    auto pass = context.graphics_pass("deferred", scene_viewport);
 
     pass.depends_on(deferred_pass, transparency_pass, shadow_pass);
 
@@ -168,7 +175,7 @@ renderer::renderer()
   });
 
   auto tonemap_pass = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
-    auto pass = context.graphics_pass("deferred");
+    auto pass = context.graphics_pass("deferred", scene_viewport);
 
     pass.depends_on(resolve_pass);
 
@@ -180,7 +187,7 @@ renderer::renderer()
   });
 
   auto fxaa_pass = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
-    auto pass = context.graphics_pass("deferred");
+    auto pass = context.graphics_pass("deferred", scene_viewport);
 
     pass.depends_on(tonemap_pass);
 
@@ -192,7 +199,7 @@ renderer::renderer()
   });
 
   auto editor_pass = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
-    auto pass = context.graphics_pass("editor_pass");
+    auto pass = context.graphics_pass("editor");
 
     pass.depends_on(fxaa_pass);
 

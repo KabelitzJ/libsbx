@@ -6,11 +6,11 @@ namespace sbx::ui {
 auto ui_module::update() -> void {
   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
 
-  if (!scenes_module.has_scene()) {
+  if (!scenes_module.has_active_scene()) {
     return;
   }
 
-  auto& scene = scenes_module.scene();
+  auto& scene = scenes_module.active_scene();
   auto& environment = scene.environment();
   auto& graph = scene.graph();
 

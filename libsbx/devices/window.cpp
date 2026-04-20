@@ -3,6 +3,8 @@
 
 #include <libsbx/version.hpp>
 
+#include <libsbx/utility/logger.hpp>
+
 namespace sbx::devices {
 
 window::window(const window_create_info& create_info)
@@ -211,7 +213,7 @@ auto window::_set_callbacks() -> void {
 
   glfwSetMouseButtonCallback(_handle, [](auto* window, auto button, auto action, auto mods){
     auto& self = *static_cast<devices::window*>(glfwGetWindowUserPointer(window));
-
+ 
     if (action == GLFW_PRESS) {
       input::_update_mouse_button_state(static_cast<devices::mouse_button>(button), input_action::press);
       self._on_mouse_button_pressed(mouse_button_pressed_event{static_cast<devices::mouse_button>(button), static_cast<devices::input_mod>(mods)});

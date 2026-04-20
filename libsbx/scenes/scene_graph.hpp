@@ -93,6 +93,12 @@ public:
   }
 
   auto destroy_node(const scenes::node node) -> void {
+    const auto& relationship = _registry.get<scenes::relationship>(node);
+
+    if (relationship.parent() != scenes::node::null) {
+      _registry.get<scenes::relationship>(relationship.parent()).remove_child(node);
+    }
+
     auto stack = std::vector<std::pair<scenes::node, bool>>{};
     stack.reserve(32u);
 
@@ -109,9 +115,9 @@ public:
       if (!visited) {
         stack.emplace_back(current_node, true);
 
-        const auto& relationship = _registry.get<scenes::relationship>(current_node);
+        const auto& current_relationship = _registry.get<scenes::relationship>(current_node);
 
-        for (auto child : relationship.children()) {
+        for (auto child : current_relationship.children()) {
           if (child != node::null) {
             stack.emplace_back(child, false);
           }

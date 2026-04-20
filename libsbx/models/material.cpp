@@ -176,7 +176,7 @@ auto texture_slot_hash::operator()(const texture_slot& texture_slot) const noexc
 //     throw utility::runtime_error{"load_materials: failed to open '{}': {}", resolved_path.string(), importer.GetErrorString()};
 //   }
 
-//   auto& scene = scenes_module.scene();
+//   auto& scene = scenes_module.active_scene();
 //   auto& environment = scene.environment();
 //   auto& graph = scene.graph();
 

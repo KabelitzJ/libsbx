@@ -26,6 +26,10 @@ public:
     return _panel_size;
   }
 
+  auto content_min() const -> const sbx::math::vector2& {
+    return _content_min;
+  }
+
   auto is_focused() const -> bool {
     return _is_focused;
   }
@@ -42,6 +46,7 @@ private:
   VkImageView _cached_view{VK_NULL_HANDLE};
 
   sbx::math::vector2u _panel_size{0u, 0u};
+  sbx::math::vector2 _content_min{0.0f, 0.0f};
 
   bool _is_focused{false};
   bool _is_hovered{false};

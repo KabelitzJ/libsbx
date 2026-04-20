@@ -27,7 +27,7 @@ auto particle_task::execute(graphics::command_buffer& command_buffer) -> void {
 
   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
 
-  auto& scene = scenes_module.scene();
+  auto& scene = scenes_module.active_scene();
   auto& environment = scene.environment();
   auto& graph = scene.graph();
 

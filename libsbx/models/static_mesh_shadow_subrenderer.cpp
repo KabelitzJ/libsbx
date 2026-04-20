@@ -24,7 +24,7 @@ auto static_mesh_shadow_subrenderer::render(graphics::command_buffer& command_bu
   auto& assets_module = core::engine::get_module<assets::assets_module>();
 
   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
-  auto& scene = scenes_module.scene();
+  auto& scene = scenes_module.active_scene();
   auto& environment = scene.environment();
 
   auto& draw_list = renderer.draw_list<models::static_mesh_material_draw_list>("static_mesh_material");

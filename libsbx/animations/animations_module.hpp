@@ -35,7 +35,7 @@ public:
     auto& assets_module = core::engine::get_module<assets::assets_module>();
     auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
 
-    auto& scene = scenes_module.scene();
+    auto& scene = scenes_module.active_scene();
     auto& environment = scene.environment();
     auto& graph = scene.graph();
 

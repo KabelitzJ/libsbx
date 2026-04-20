@@ -83,13 +83,17 @@ application::application()
   
   auto camera_node = environment.camera();
 
-  scripting_module.instantiate(camera_node, "Editor.CameraController");
+  auto& camera_transform = graph.get_component<sbx::scenes::transform>(camera_node);
+  camera_transform.set_position(sbx::math::vector3{0.0f, 25.0f, 25.0f});
+  camera_transform.look_at(sbx::math::vector3::zero);
 
   auto& skybox = graph.add_component<sbx::scenes::skybox>(camera_node);
   skybox.cube_image = asset_registry.get_cube_image("skybox");
   skybox.brdf_image = _brdf;
   skybox.irradiance_image = _irradiance;
   skybox.prefiltered_image = _prefiltered;
+
+  scripting_module.instantiate(camera_node, "Editor.CameraController");
 
   auto& devices_module = sbx::core::engine::get_module<sbx::devices::devices_module>();
 

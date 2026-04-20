@@ -2,6 +2,7 @@
 #include <editor/editor_subrenderer.hpp>
 
 #include <imgui.h>
+#include <ImGuizmo.h>
 
 #include <editor/bindings/imgui.hpp>
 
@@ -30,7 +31,7 @@ auto editor_subrenderer::render(sbx::graphics::command_buffer& command_buffer) -
 
   auto& scene_image = static_cast<const sbx::graphics::image2d&>(graphics_module.attachment("scene_output"));
 
-  _viewport_panel.draw(scene_image);
+  _viewport_panel.draw(scene_image, _hierarchy_panel.selected_node());
 
   const auto& panel_size = _viewport_panel.panel_size();
 
@@ -38,13 +39,14 @@ auto editor_subrenderer::render(sbx::graphics::command_buffer& command_buffer) -
     graphics_module.viewports().resize("scene", panel_size);
   }
 
-  if (_viewport_panel.is_hovered() || _viewport_panel.is_focused()) {
+  if ((_viewport_panel.is_hovered() || _viewport_panel.is_focused()) && !(ImGuizmo::IsOver() || ImGuizmo::IsUsing())) {
     const auto& content_min = _viewport_panel.content_min();
 
     sbx::devices::input::set_active_viewport(content_min, sbx::math::vector2{static_cast<std::float_t>(panel_size.x()), static_cast<std::float_t>(panel_size.y())});
   }
 
-  sbx::devices::input::set_scene_input_active(_viewport_panel.is_hovered());
+  auto scene_active = _viewport_panel.is_hovered() && !_viewport_panel.is_gizmo_active();
+  sbx::devices::input::set_scene_input_active(scene_active);
 
   _log_panel.draw();
   _hierarchy_panel.draw();

@@ -4,8 +4,6 @@
 
 #include <vulkan/vulkan.h>
 
-#include <imgui.h>
-
 #include <libsbx/devices/devices_module.hpp>
 
 #include <libsbx/graphics/graphics_module.hpp>

@@ -1,6 +1,11 @@
 // SPDX-License-Identifier: MIT
 #include <editor/editor_context.hpp>
 
+#include <imgui.h>
+#include <imnodes.h>
+#include <implot.h>
+#include <ImGuizmo.h>
+
 #include <cstring>
 
 #include <editor/bindings/imgui.hpp>
@@ -52,7 +57,9 @@ editor_context::~editor_context() {
 auto editor_context::new_frame() -> void {
   ImGui_ImplVulkan_NewFrame();
   ImGui_ImplGlfw_NewFrame();
+
   ImGui::NewFrame();
+  ImGuizmo::BeginFrame();
 }
 
 auto editor_context::render() -> void {

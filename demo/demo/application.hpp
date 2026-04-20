@@ -51,6 +51,11 @@ private:
 
   sbx::ui::font _font;
 
+  bool _debug_frustum_active{false};
+  sbx::math::vector3 _debug_frustum_position{0.0f, 5.0f, 0.0f};
+  std::float_t _debug_frustum_yaw{0.0f};
+  std::float_t _debug_frustum_pitch{0.0f};
+
 }; // class application
 
 } // namespace demo

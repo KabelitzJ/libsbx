@@ -238,16 +238,16 @@ auto scenes_module::add_debug_sphere(const math::vector3& center, const std::flo
 
 auto scenes_module::add_debug_frustum(const math::matrix4x4& view, const math::matrix4x4& projection, const sbx::math::color& color) -> void {
   const auto corners = std::array<sbx::math::vector3, 8u>{
-    math::vector3(-1, -1, -1), math::vector3(+1, -1, -1),
-    math::vector3(+1, +1, -1), math::vector3(-1, +1, -1),
-    math::vector3(-1, -1, +1), math::vector3(+1, -1, +1),
-    math::vector3(+1, +1, +1), math::vector3(-1, +1, +1)
+    math::vector3(-1, -1, 0), math::vector3(+1, -1, 0),
+    math::vector3(+1, +1, 0), math::vector3(-1, +1, 0),
+    math::vector3(-1, -1, 1), math::vector3(+1, -1, 1),
+    math::vector3(+1, +1, 1), math::vector3(-1, +1, 1)
   };
 
   auto points = std::array<sbx::math::vector3, 8u>{};
 
   for (auto i = 0u; i < 8u; ++i) {
-    auto q = math::matrix4x4::inverted(view) * math::matrix4x4::inverted(projection) * math::vector4{corners[i]};
+    auto q = math::matrix4x4::inverted(view) * math::matrix4x4::inverted(projection) * math::vector4{corners[i], 1.0f};
     points[i] = math::vector3{q.x() / q.w(), q.y() / q.w(), q.z() / q.w()};
   }
 

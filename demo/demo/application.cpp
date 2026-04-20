@@ -161,9 +161,129 @@ auto application::update() -> void {
   EASY_BLOCK("application::update");
   SBX_PROFILE_SCOPE("application::update");
 
+  auto& assets_module = sbx::core::engine::get_module<sbx::assets::assets_module>();
+  auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
+  auto& graphics_module = sbx::core::engine::get_module<sbx::graphics::graphics_module>();
+
+  auto& scene = scenes_module.scene();
+  auto& graph = scene.graph();
+  auto& environment = scene.environment();
+
   const auto delta_time = sbx::core::engine::delta_time();
 
   _rotation += sbx::math::degree{45} * delta_time;
+
+  if (!scenes_module.has_scene()) {
+    return;
+  }
+
+  // --- debug bounding boxes (existing code) ---
+  auto query = graph.query<const sbx::scenes::static_mesh>();
+
+  for (auto&& [node, static_mesh] : query.each()) {
+    const auto& mesh = assets_module.get_asset<sbx::models::mesh>(static_mesh.mesh_id());
+    const auto world = graph.world_transform(node);
+
+    for (const auto& submesh : static_mesh.submeshes()) {
+      const auto base_index = mesh.find_base_submesh_index(submesh.index).value_or(submesh.index);
+      scenes_module.add_debug_box(world, mesh.submesh_bounds(base_index), sbx::math::color::green());
+    }
+  }
+
+  // --- debug frustum ---
+  if (sbx::devices::input::is_key_pressed(sbx::devices::key::f5)) {
+    _debug_frustum_active = !_debug_frustum_active;
+
+    if (_debug_frustum_active) {
+      // Snap to current camera position/orientation
+      const auto camera_node = environment.camera();
+      _debug_frustum_position = graph.world_position(camera_node);
+
+      const auto world = graph.world_transform(camera_node);
+      const auto forward = -sbx::math::vector3::normalized(sbx::math::vector3{world[2]});
+
+      _debug_frustum_yaw = std::atan2(forward.x(), forward.z());
+      _debug_frustum_pitch = std::asin(std::clamp(forward.y(), -1.0f, 1.0f));
+    }
+  }
+
+  auto& renderer = graphics_module.renderer();
+  auto culling_task = renderer.task<sbx::models::frustum_culling_task>();
+
+  if (!_debug_frustum_active) {
+    culling_task->clear_debug_view_projection();
+    return;
+  }
+
+  // Move the debug frustum
+  const auto dt = sbx::core::engine::delta_time().value();
+  const auto speed = 10.0f * dt;
+  const auto rotate_speed = 1.5f * dt;
+
+  if (sbx::devices::input::is_key_down(sbx::devices::key::kp_4)) {
+    _debug_frustum_yaw += rotate_speed;
+  }
+
+  if (sbx::devices::input::is_key_down(sbx::devices::key::kp_6)) {
+    _debug_frustum_yaw -= rotate_speed;
+  }
+
+  if (sbx::devices::input::is_key_down(sbx::devices::key::kp_8)) {
+    _debug_frustum_pitch += rotate_speed;
+  }
+
+  if (sbx::devices::input::is_key_down(sbx::devices::key::kp_2)) {
+    _debug_frustum_pitch -= rotate_speed;
+  }
+
+  _debug_frustum_pitch = std::clamp(_debug_frustum_pitch, -1.5f, 1.5f);
+
+  const auto forward = sbx::math::vector3{
+    std::sin(_debug_frustum_yaw) * std::cos(_debug_frustum_pitch),
+    std::sin(_debug_frustum_pitch),
+    std::cos(_debug_frustum_yaw) * std::cos(_debug_frustum_pitch)
+  };
+
+  const auto right = sbx::math::vector3::normalized(sbx::math::vector3::cross(forward, sbx::math::vector3::up));
+
+  if (sbx::devices::input::is_key_down(sbx::devices::key::kp_add)) {
+    _debug_frustum_position += forward * speed;
+  }
+
+  if (sbx::devices::input::is_key_down(sbx::devices::key::kp_subtract)) {
+    _debug_frustum_position -= forward * speed;
+  }
+
+  if (sbx::devices::input::is_key_down(sbx::devices::key::kp_7)) {
+    _debug_frustum_position += sbx::math::vector3::up * speed;
+  }
+
+  if (sbx::devices::input::is_key_down(sbx::devices::key::kp_1)) {
+    _debug_frustum_position -= sbx::math::vector3::up * speed;
+  }
+
+  if (sbx::devices::input::is_key_down(sbx::devices::key::kp_9)) {
+    _debug_frustum_position += right * speed;
+  }
+
+  if (sbx::devices::input::is_key_down(sbx::devices::key::kp_3)) {
+    _debug_frustum_position -= right * speed;
+  }
+
+  // Build VP
+  const auto camera_node = environment.camera();
+  const auto& cam = graph.get_component<sbx::scenes::camera>(camera_node);
+  const auto aspect = static_cast<std::float_t>(environment.render_target_size().x()) / static_cast<std::float_t>(environment.render_target_size().y());
+
+  const auto target = _debug_frustum_position + forward;
+  const auto view = sbx::math::matrix4x4::look_at(_debug_frustum_position, target, sbx::math::vector3::up);
+  const auto projection = cam.projection(aspect);
+  const auto vp = projection * view;
+
+  culling_task->set_debug_view_projection(vp);
+
+  // Visualize the frustum
+  scenes_module.add_debug_frustum(view, projection, sbx::math::color{1.0f, 0.5f, 0.0f, 1.0f});
 }
 
 auto application::fixed_update() -> void {

@@ -63,10 +63,14 @@ auto frustum_culling_task::execute(graphics::command_buffer& command_buffer) -> 
   auto jobs = std::vector<cull_job>{};
 
   const auto camera_frustum_index = static_cast<std::uint32_t>(frustums.size());
-  frustums.push_back(_extract_frustum_planes(environment.view_projection()));
+
+  const auto& view_projection = _debug_view_projection.value_or(environment.view_projection());
+  frustums.push_back(_extract_frustum_planes(view_projection));
 
   _collect_bucket(bucket::opaque, no_cascade, camera_frustum_index, draw_list, bounds, prefix_sums, jobs);
   _collect_bucket(bucket::transparent, no_cascade, camera_frustum_index, draw_list, bounds, prefix_sums, jobs);
+
+  _collect_bucket(bucket::shadow, no_cascade, camera_frustum_index, draw_list, bounds, prefix_sums, jobs);
 
   if (jobs.empty()) {
     return;

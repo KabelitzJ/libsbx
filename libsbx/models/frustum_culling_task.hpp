@@ -70,6 +70,14 @@ public:
 
   auto culled(bucket bucket, const material_key& key, std::uint32_t cascade = no_cascade) const -> std::optional<culled_range_view>;
 
+  auto set_debug_view_projection(const math::matrix4x4& vp) -> void {
+    _debug_view_projection = vp;
+  }
+
+  auto clear_debug_view_projection() -> void {
+    _debug_view_projection.reset();
+  }
+
 private:
 
   static constexpr auto ring_size = graphics::swapchain::max_frames_in_flight;
@@ -107,7 +115,7 @@ private:
     graphics::storage_buffer_handle input_instances;
     graphics::storage_buffer_handle output_commands;
     graphics::storage_buffer_handle output_instances;
-    VkDeviceAddress transforms_address;
+    graphics::buffer::address_type transforms_address;
     std::uint32_t bounds_offset_bytes;
     std::uint32_t prefix_offset_bytes;
     std::uint32_t frustum_offset_bytes;
@@ -133,6 +141,8 @@ private:
 
   graphics::compute_pipeline _pipeline;
   graphics::push_handler _push_handler;
+
+  std::optional<math::matrix4x4> _debug_view_projection;
 
 }; // class frustum_culling_task
 

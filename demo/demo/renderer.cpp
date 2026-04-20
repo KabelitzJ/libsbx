@@ -112,7 +112,7 @@ renderer::renderer()
 
   // Render passes
   auto shadow_pass = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
-    auto pass = context.graphics_pass("shadow", sbx::graphics::viewport::fixed(2048u, 2048u));
+    auto pass = context.graphics_pass("shadow", sbx::graphics::viewport::fixed(4096u, 4096u));
 
     pass.depends_on(skinning_pass, culling_pass);
 

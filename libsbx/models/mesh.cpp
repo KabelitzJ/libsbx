@@ -225,13 +225,7 @@ static auto _load_mesh(const aiMesh* mesh, mesh::mesh_data& data, const math::ma
     }
   }
 
-  auto bounds = math::volume{_convert_vec3(mesh->mAABB.mMin), _convert_vec3(mesh->mAABB.mMax)};
-
-  if (bounds.min() == bounds.max()) {
-    const auto aabb = math::volume::construct(unique_vertices, &vertex3d::position);
-
-    bounds = aabb;
-  }
+  auto bounds = math::volume::construct(unique_vertices, &vertex3d::position);
 
   data.bounds.include(bounds);
 

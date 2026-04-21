@@ -27,7 +27,8 @@ buffer::buffer(size_type size, VkBufferUsageFlags usage, VkMemoryPropertyFlags p
 
 buffer::~buffer() {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
-  auto& allocator = graphics_module.allocator();
+  
+  unmap();
 
   graphics_module.enqueue_destruction(_handle, _allocation);
 }
@@ -160,8 +161,6 @@ auto buffer::write(memory::observer_ptr<const void> data, size_type size, size_t
   utility::assert_that(offset + size <= _size, "Buffer write out of bounds");
 
   std::memcpy(static_cast<std::uint8_t*>(_mapped_memory.get()) + offset, data.get(), size);
-  
-  unmap();
 }
 
 } // namespace sbx::graphics

@@ -106,7 +106,7 @@ auto image::has_stencil_component(VkFormat format) noexcept -> bool {
   return std::find(stencil_formats.begin(), stencil_formats.end(), format) != stencil_formats.end();
 }
 
-auto image::create_image(VkImage& image, VmaAllocation& allocation, const VkExtent3D& extent, VkFormat format, VkSampleCountFlagBits samples, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, std::uint32_t mip_levels, std::uint32_t array_layers, VkImageType type) -> void {
+auto image::create_image(VkImage& image, VmaAllocation& allocation, const VkExtent3D& extent, VkFormat format, VkSampleCountFlagBits samples, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, std::uint32_t mip_levels, std::uint32_t array_layers, VkImageType type, VkImageCreateFlags flags) -> void {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 
   auto& physical_device = graphics_module.physical_device();
@@ -116,7 +116,7 @@ auto image::create_image(VkImage& image, VmaAllocation& allocation, const VkExte
 
   auto image_create_info = VkImageCreateInfo{};
   image_create_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-  image_create_info.flags = array_layers == 6 ? VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT : 0;
+  image_create_info.flags = flags;
   image_create_info.imageType = type;
   image_create_info.format = format;
   image_create_info.extent = extent;
@@ -328,6 +328,11 @@ auto image::transition_image_layout(command_buffer& command_buffer, const VkImag
       barrier.srcAccessMask = VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
       break;
     }
+    case VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL: {
+      barrier.srcStageMask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+      barrier.srcAccessMask = VK_ACCESS_2_SHADER_READ_BIT;
+      break;
+    }
     case VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL: {
       barrier.srcStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
       barrier.srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
@@ -368,6 +373,11 @@ auto image::transition_image_layout(command_buffer& command_buffer, const VkImag
     case VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL: {
       barrier.dstStageMask = VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT;
       barrier.dstAccessMask = VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+      break;
+    }
+    case VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL: {
+      barrier.dstStageMask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+      barrier.dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT;
       break;
     }
     case VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL: {
@@ -472,11 +482,9 @@ auto image::copy_image(const VkImage& src_image, VkImage& dst_image, VmaAllocati
   auto& physical_device = graphics_module.physical_device();
   auto& surface = graphics_module.surface();
 
-  // Checks blit swapchain support.
 	auto supports_blit = true;
 	auto format_properties = VkFormatProperties{}; 
 
-	// Check if the device supports blitting from optimal images (the swapchain images are in optimal format).
 	vkGetPhysicalDeviceFormatProperties(physical_device, surface.format().format, &format_properties);
 
 	if (!(format_properties.optimalTilingFeatures & VK_FORMAT_FEATURE_BLIT_SRC_BIT)) {
@@ -484,7 +492,6 @@ auto image::copy_image(const VkImage& src_image, VkImage& dst_image, VmaAllocati
 		supports_blit = false;
 	}
 
-	// Check if the device supports blitting to linear images.
 	vkGetPhysicalDeviceFormatProperties(physical_device, src_format, &format_properties);
 
 	if (!(format_properties.linearTilingFeatures & VK_FORMAT_FEATURE_BLIT_DST_BIT)) {
@@ -494,18 +501,12 @@ auto image::copy_image(const VkImage& src_image, VkImage& dst_image, VmaAllocati
 
 	create_image(dst_image, dst_allocation, extent, VK_FORMAT_R8G8B8A8_UNORM, VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_TILING_LINEAR, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, 1, 1, VK_IMAGE_TYPE_2D);
 
-	// Do the actual blit from the swapchain image to our host visible destination image.
 	auto command_buffer = graphics::command_buffer{};
 
-	// Transition destination image to transfer destination layout.
 	insert_image_memory_barrier(command_buffer, dst_image, 0, VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_IMAGE_ASPECT_COLOR_BIT, 1, 0, 1, 0);
-
-	// Transition image from previous usage to transfer source layout
 	insert_image_memory_barrier(command_buffer, src_image, VK_ACCESS_MEMORY_READ_BIT, VK_ACCESS_TRANSFER_READ_BIT, src_image_layout, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_IMAGE_ASPECT_COLOR_BIT, 1, mip_level, 1, array_layer);
 
-	// If source and destination support blit we'll blit as this also does automatic format conversion (e.g. from BGR to RGB).
 	if (supports_blit) {
-		// Define the region to blit (we will blit the whole swapchain image).
 		auto blit_size = VkOffset3D{static_cast<int32_t>(extent.width), static_cast<int32_t>(extent.height), static_cast<int32_t>(extent.depth)};
 
 		auto image_blit_region = VkImageBlit{};
@@ -522,7 +523,6 @@ auto image::copy_image(const VkImage& src_image, VkImage& dst_image, VmaAllocati
 
 		vkCmdBlitImage(command_buffer, src_image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dst_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &image_blit_region, VK_FILTER_NEAREST);
 	} else {
-		// Otherwise use image copy (requires us to manually flip components).
 		auto image_copy_region = VkImageCopy{};
 		image_copy_region.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 		image_copy_region.srcSubresource.mipLevel = mip_level;
@@ -537,10 +537,7 @@ auto image::copy_image(const VkImage& src_image, VkImage& dst_image, VmaAllocati
 		vkCmdCopyImage(command_buffer, src_image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dst_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &image_copy_region);
 	}
 
-	// Transition destination image to general layout, which is the required layout for mapping the image memory later on.
 	insert_image_memory_barrier(command_buffer, dst_image, VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_MEMORY_READ_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_IMAGE_ASPECT_COLOR_BIT, 1, 0, 1, 0);
-
-	// Transition back the image after the blit is done.
 	insert_image_memory_barrier(command_buffer, src_image, VK_ACCESS_TRANSFER_READ_BIT, VK_ACCESS_MEMORY_READ_BIT, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, src_image_layout, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_IMAGE_ASPECT_COLOR_BIT, 1, mip_level, 1, array_layer);
 
 	command_buffer.submit_idle();

@@ -146,9 +146,6 @@ auto render_graph::build() -> void {
   auto edges = std::vector<std::vector<std::uint32_t>>{};
   edges.resize(pass_count);
 
-  auto indegrees = std::vector<std::uint32_t>{};
-  indegrees.resize(pass_count, 0u);
-
   for (auto i = 0u; i < pass_count; ++i) {
     const auto& pass = _passes[i];
 
@@ -156,7 +153,6 @@ auto render_graph::build() -> void {
       utility::assert_that(dependency.is_valid() && dependency.index < pass_count, "Invalid pass handle in depends_on()");
 
       edges[dependency.index].emplace_back(i);
-      indegrees[i]++;
     }
   }
 
@@ -169,17 +165,29 @@ auto render_graph::build() -> void {
     for (const auto& attachment : pass._reads) {
       if (auto writer = last_writer[attachment.index]) {
         edges[*writer].push_back(i);
-        indegrees[i]++;
       }
     }
 
     for (const auto& [attachment, _] : pass._writes) {
       if (auto writer = last_writer[attachment.index]) {
         edges[*writer].push_back(i);
-        indegrees[i]++;
       }
 
       last_writer[attachment.index] = i;
+    }
+  }
+
+  for (auto& adjacent : edges) {
+    std::sort(adjacent .begin(), adjacent .end());
+    adjacent .erase(std::unique(adjacent .begin(), adjacent .end()), adjacent .end());
+  }
+
+  auto indegrees = std::vector<std::uint32_t>{};
+  indegrees.resize(pass_count, 0u);
+
+  for (auto i = 0u; i < pass_count; ++i) {
+    for (auto dependent : edges[i]) {
+      indegrees[dependent]++;
     }
   }
 
@@ -242,11 +250,15 @@ auto render_graph::build() -> void {
 
       auto& planned_layout = planned_layouts[handle.index];
 
-      if (state.type == attachment::type::depth) {
-        continue;
-      }
+      auto required_layout = VkImageLayout{VK_IMAGE_LAYOUT_UNDEFINED};
 
-      const auto required_layout = state.type == attachment::type::storage ? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+      if (state.type == attachment::type::depth) {
+        required_layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
+      } else if (state.type == attachment::type::storage) {
+        required_layout = VK_IMAGE_LAYOUT_GENERAL;
+      } else {
+        required_layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+      }
 
       if (planned_layout != required_layout) {
         _instructions.emplace_back(transition_instruction{
@@ -326,7 +338,10 @@ auto render_graph::build() -> void {
     const auto& state = _attachment_states[i];
 
     if (state.type == attachment::type::depth) {
-      utility::assert_that(planned_layouts[i] == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, "Depth attachment layout mutated after initialization");
+      const auto is_depth_stencil_attachment = planned_layouts[i] == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+      const auto is_depth_stencil_read = planned_layouts[i] == VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
+
+      utility::assert_that(is_depth_stencil_attachment || is_depth_stencil_read, "Depth attachment layout mutated after initialization");
     }
   }
 

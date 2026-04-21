@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 #include <libsbx/graphics/graphics_module.hpp>
 
+#include <vulkan/vulkan.h>
+
 #include <ranges>
 
 #include <fmt/format.h>
@@ -12,8 +14,6 @@
 #include <libsbx/core/engine.hpp>
 
 namespace sbx::graphics {
-
-#include <vulkan/vulkan.h>
 
 static auto vk_result_to_string(VkResult result) -> const char* {
   switch (result) {
@@ -231,7 +231,7 @@ auto graphics_module::update() -> void {
   auto& command_buffer = _graphics_command_buffers[_current_frame];
   
   command_buffer.reset();
-  command_buffer.begin(VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT);
+  command_buffer.begin(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
 
   _query_pool.reset(command_buffer, _current_frame * max_queries_per_frame, max_queries_per_frame);
 

@@ -16,12 +16,6 @@ storage_buffer::storage_buffer(VkDeviceSize size, VkBufferUsageFlags additional_
 }
 
 storage_buffer::~storage_buffer() {
-  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
-
-  const auto& logical_device = graphics_module.logical_device();
-
-  logical_device.wait_idle();
-  
   buffer::unmap();
 }
 

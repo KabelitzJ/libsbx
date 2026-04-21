@@ -297,7 +297,7 @@ private:
       return _storage_buffers;
     } else if constexpr (std::is_same_v<Type, uniform_buffer>) {
       return _uniform_buffers;
-    } if constexpr (std::is_same_v<Type, image2d>) {
+    } else if constexpr (std::is_same_v<Type, image2d>) {
       return _images;
     } else if constexpr (std::is_same_v<Type, depth_image>) {
       return _depth_images;
@@ -305,9 +305,9 @@ private:
       return _cube_images;
     } else if constexpr (std::is_same_v<Type, sampler_state>) {
       return _sampler_states;
+    } else {
+      static_assert(!sizeof(Type), "Invalid resource type");
     }
-
-    utility::assert_that(false, "Invalid resource type");
   }
 
   template<typename Type>
@@ -324,7 +324,7 @@ private:
       return _storage_buffers;
     } else if constexpr (std::is_same_v<Type, uniform_buffer>) {
       return _uniform_buffers;
-    } if constexpr (std::is_same_v<Type, image2d>) {
+    } else if constexpr (std::is_same_v<Type, image2d>) {
       return _images;
     } else if constexpr (std::is_same_v<Type, depth_image>) {
       return _depth_images;
@@ -332,9 +332,9 @@ private:
       return _cube_images;
     } else if constexpr (std::is_same_v<Type, sampler_state>) {
       return _sampler_states;
+    } else {
+      static_assert(!sizeof(Type), "Invalid resource type");
     }
-
-    utility::assert_that(false, "Invalid resource type");
   }
 
   auto _get_scope_index(const std::string& name) -> std::uint32_t {

@@ -11,12 +11,6 @@ uniform_buffer::uniform_buffer(VkDeviceSize size, memory::observer_ptr<void> dat
 }
 
 uniform_buffer::~uniform_buffer() {
-  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
-
-  const auto& logical_device = graphics_module.logical_device();
-
-  logical_device.wait_idle();
-  
   buffer::unmap();
 }
 

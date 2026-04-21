@@ -43,9 +43,13 @@ command_buffer::command_buffer(command_buffer&& other) noexcept
   _is_running{std::exchange(other._is_running, false)} { }
 
 command_buffer::~command_buffer() {
-  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
+  if (!_command_pool || !_handle) {
+    return;
+  }
 
+  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
   auto& logical_device = graphics_module.logical_device();
+
   vkFreeCommandBuffers(logical_device, *_command_pool, 1, &_handle);
 }
 

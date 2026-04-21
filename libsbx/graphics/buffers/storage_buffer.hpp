@@ -31,7 +31,7 @@ public:
 
   template<typename Type>
   auto read(const std::size_t index) const -> const Type& {
-    return *(static_cast<const Type*>(_mapped_memory.get()) + index * sizeof(Type));
+    return *(static_cast<const Type*>(_mapped_memory.get()) + index);
   }
 
   auto name() const noexcept -> std::string override {

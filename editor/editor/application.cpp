@@ -42,6 +42,7 @@
 #include <libsbx/audio/audio_module.hpp>
 #include <libsbx/sprites/sprites_module.hpp>
 #include <libsbx/ui/ui_module.hpp>
+#include <libsbx/filesystem/filesystem_module.hpp>
 
 #include <editor/renderer.hpp>
 

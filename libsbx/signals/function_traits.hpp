@@ -63,10 +63,10 @@ private:
 }; // struct function_ptr
 
 template<typename, typename = void>
-struct has_call_operator : std::false_type {};
+struct has_call_operator : std::false_type { };
 
 template<typename Type>
-struct has_call_operator<Type, std::void_t<decltype(&std::remove_reference_t<Type>::operator())>> : std::true_type {};
+struct has_call_operator<Type, std::void_t<decltype(&std::remove_reference_t<Type>::operator())>> : std::true_type { };
 
 template<typename Type>
 constexpr auto has_call_operator_v = has_call_operator<Type>::value;

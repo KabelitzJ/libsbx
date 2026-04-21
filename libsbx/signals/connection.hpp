@@ -4,7 +4,8 @@
 
 #include <memory>
 
-#include <libsbx/signals/lockable.hpp>
+#include <libsbx/utility/lockable.hpp>
+
 #include <libsbx/signals/slot_state.hpp>
 
 namespace sbx::signals {
@@ -58,7 +59,7 @@ private:
 
 class connection {
 
-  template<lockable, typename...> 
+  template<utility::lockable, typename...> 
   friend class signal_base;
 
 public:
@@ -121,7 +122,7 @@ protected:
 
 class scoped_connection final : public connection {
 
-  template <lockable, typename...> 
+  template <utility::lockable, typename...> 
   friend class signal_base;
 
 public:

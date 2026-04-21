@@ -21,7 +21,7 @@ using slot_ptr = std::shared_ptr<slot_base<Args...>>;
 template<typename... Args>
 class slot_base : public slot_state {
 
-  template<lockable, typename...>
+  template<utility::lockable, typename...>
   friend class signal_base;
 
 public:

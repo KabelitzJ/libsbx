@@ -28,7 +28,7 @@ template<typename T, typename... Rest>
 struct are_all_unique : std::bool_constant<!(std::is_same_v<T, Rest> || ...) && are_all_unique<Rest...>::value>{};
 
 template<typename T>
-struct are_all_unique<T> : std::true_type {};
+struct are_all_unique<T> : std::true_type { };
 
 template<typename... TypeList>
 inline constexpr auto are_all_unique_v = are_all_unique<TypeList...>::value;
@@ -40,7 +40,7 @@ template<typename Type, typename... TypeList>
 struct is_convertible_to_one_of : std::false_type{ };
 
 template<typename Type, typename... TypeList>
-struct is_convertible_to_one_of<Type, Type, TypeList...> : std::true_type{ };
+struct is_convertible_to_one_of<Type, Type, TypeList...> : std::true_type { };
 
 template<typename Type, typename Head, typename... Rest>
 struct is_convertible_to_one_of<Type, Head, Rest...> : std::conditional_t<std::is_convertible_v<Type, Head>, std::true_type, is_convertible_to_one_of<Type, Rest...>> { };

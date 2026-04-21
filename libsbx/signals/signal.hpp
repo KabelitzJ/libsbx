@@ -5,7 +5,8 @@
 #include <atomic>
 #include <type_traits>
 
-#include <libsbx/signals/lockable.hpp>
+#include <libsbx/utility/lockable.hpp>
+
 #include <libsbx/signals/copy_on_write.hpp>
 #include <libsbx/signals/slot.hpp>
 #include <libsbx/signals/connection.hpp>
@@ -13,11 +14,11 @@
 
 namespace sbx::signals {
 
-template<lockable Lockable, typename... Args>
+template<utility::lockable Lockable, typename... Args>
 class signal_base final : public cleanable {
 
   template<typename L>
-  inline constexpr static auto is_thread_safe_v = !std::is_same_v<L, null_mutex>;
+  inline constexpr static auto is_thread_safe_v = !std::is_same_v<L, utility::null_mutex>;
 
   template<typename U, typename L>
   using cow_type = std::conditional_t<is_thread_safe_v<L>, copy_on_write<U>, U>;
@@ -292,7 +293,7 @@ private:
 }; // class signal_base
 
 template<typename... Args>
-using signal_st = signal_base<null_mutex, Args...>;
+using signal_st = signal_base<utility::null_mutex, Args...>;
 
 template<typename... Args>
 using signal_mt = signal_base<std::mutex, Args...>;

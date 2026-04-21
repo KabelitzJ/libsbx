@@ -15,7 +15,7 @@ template<>
 struct in_place_delete<void>: std::false_type { };
 
 template<typename Type>
-struct in_place_delete<Type, std::enable_if_t<Type::in_place_delete>> : std::true_type {  };
+struct in_place_delete<Type, std::enable_if_t<Type::in_place_delete>> : std::true_type { };
 
 template<typename Type, typename = void>
 struct page_size: std::integral_constant<std::size_t, !std::is_empty_v<Type> * 1024u> { };

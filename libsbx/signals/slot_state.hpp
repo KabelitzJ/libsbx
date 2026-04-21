@@ -6,7 +6,7 @@
 #include <atomic>
 #include <cinttypes>
 
-#include <libsbx/signals/lockable.hpp>
+#include <libsbx/utility/lockable.hpp>
 
 namespace sbx::signals {
 
@@ -14,7 +14,7 @@ using group_id = std::int32_t;
 
 class slot_state {
 
-  template<lockable, typename...>
+  template<utility::lockable, typename...>
   friend class signal_base;
 
 public:

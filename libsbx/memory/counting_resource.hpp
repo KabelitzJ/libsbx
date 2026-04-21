@@ -9,10 +9,10 @@
 namespace sbx::memory {
 
 template<typename Type>
-struct is_atomic : std::false_type {};
+struct is_atomic : std::false_type { };
 
 template<typename Type>
-struct is_atomic<std::atomic<Type>> : std::true_type {};
+struct is_atomic<std::atomic<Type>> : std::true_type { };
 
 template<typename Type>
 inline constexpr bool is_atomic_v = is_atomic<Type>::value;

@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
-#ifndef LIBSBX_SIGNAL_LOCKABLE_HPP_
-#define LIBSBX_SIGNAL_LOCKABLE_HPP_
+#ifndef LIBSBX_UTILITY_LOCKABLE_HPP_
+#define LIBSBX_UTILITY_LOCKABLE_HPP_
 
 #include <mutex>
 
-namespace sbx::signals {
+namespace sbx::utility {
 
 template<typename Type>
 concept lockable = requires(Type& value) {
@@ -28,6 +28,6 @@ struct null_mutex {
   inline auto unlock() noexcept -> void {}
 }; // struct null_mutex
 
-} // namespace sbx::signals
+} // namespace sbx::utility
 
-#endif // LIBSBX_SIGNAL_LOCKABLE_HPP_
+#endif // LIBSBX_UTILITY_LOCKABLE_HPP_

@@ -2,7 +2,6 @@
 #ifndef LIBSBX_SIGNAL_HPP_
 #define LIBSBX_SIGNAL_HPP_
 
-#include <libsbx/signals/lockable.hpp>
 #include <libsbx/signals/cleanable.hpp>
 
 #include <libsbx/signals/copy_on_write.hpp>

@@ -9,7 +9,7 @@ namespace sbx::utility {
 
 template<typename Enum>
 requires (std::is_enum_v<Enum>)
-struct enable_bitmask_operators : std::false_type {};
+struct enable_bitmask_operators : std::false_type { };
 
 template<typename Enum>
 constexpr auto enable_bitmask_operators_v = enable_bitmask_operators<Enum>::value;

@@ -6,7 +6,7 @@
 #include <vector>
 #include <functional>
 
-#include <libsbx/signals/lockable.hpp>
+#include <libsbx/utility/lockable.hpp>
 
 namespace sbx::signals {
 
@@ -15,10 +15,10 @@ struct observer_type { };
 template<typename Type>
 constexpr auto is_observer_v = std::is_base_of_v<observer_type, std::remove_pointer_t<std::remove_reference_t<Type>>>;
 
-template<lockable Lockable>
+template<utility::lockable Lockable>
 class observer_base : private observer_type {
 
-  template <lockable, typename ...>
+  template <utility::lockable, typename ...>
   friend class signal_base;
 
 public:
@@ -48,7 +48,7 @@ private:
 
 }; // class observer_base
 
-using observer_st = observer_base<null_mutex>;
+using observer_st = observer_base<utility::null_mutex>;
 
 using observer_mt = observer_base<std::mutex>;
 

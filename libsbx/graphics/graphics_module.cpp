@@ -146,8 +146,8 @@ graphics_module::~graphics_module() {
   _cube_images.clear();
   _sampler_states.clear();
 
-  for (const auto& pending : _deletion_queue) {
-    vmaDestroyBuffer(_allocator, pending.handle, pending.allocation);
+  for (const auto& deletion : _deletion_queue) {
+    std::invoke(deletion.destroy, _allocator);
   }
 }
 
@@ -155,16 +155,7 @@ auto graphics_module::update() -> void {
   SBX_PROFILE_SCOPE("graphics_module::update");
   SBX_MEMORY_SCOPE(memory::allocation_category::graphics);
 
-  std::erase_if(_deletion_queue, [this](auto& pending) {
-    if (pending.frames_to_live == 0) {
-      vmaDestroyBuffer(_allocator, pending.handle, pending.allocation);
-
-      return true;
-    }
-    --pending.frames_to_live;
-
-    return false;
-  });
+  _poll_deletion_queue();
 
   auto& devices_module = core::engine::get_module<devices::devices_module>();
 
@@ -387,6 +378,20 @@ auto graphics_module::_recreate_command_buffers() -> void {
 
 auto graphics_module::_recreate_attachments() -> void {
   _attachments.clear();
+}
+
+auto graphics_module::_poll_deletion_queue() -> void {
+  std::erase_if(_deletion_queue, [this](auto& deletion) {
+    if (deletion.frames_to_live == 0) {
+      std::invoke(deletion.destroy, _allocator);
+
+      return true;
+    }
+
+    --deletion.frames_to_live;
+
+    return false;
+  });
 }
 
 scoped_gpu_timer::scoped_gpu_timer(command_buffer& command_buffer, std::string name)

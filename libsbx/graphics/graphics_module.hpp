@@ -19,6 +19,8 @@
 #include <libsbx/utility/hash.hpp>
 #include <libsbx/utility/concepts.hpp>
 
+#include <libsbx/core/delegate.hpp>
+
 #include <libsbx/signals/signal.hpp>
 
 #include <libsbx/graphics/devices/instance.hpp>
@@ -67,11 +69,10 @@ constexpr auto to_vk_enum(Enum value) -> VkEnum {
   return static_cast<VkEnum>(value);
 }
 
-struct pending_deletion {
-  VkBuffer handle;
-  VmaAllocation allocation;
+struct deferred_deletion {
+  core::delegate<void(graphics::allocator&)> destroy;
   std::uint32_t frames_to_live;
-}; // struct pending_deletion
+}; // struct deferred_deletion
 
 /**
  * @brief Module for managing rendering specific tasks
@@ -206,8 +207,10 @@ public:
     _per_frame_data[_current_frame].active_scopes.push_back(name);
   }
 
-  auto enqueue_destruction(VkBuffer handle, VmaAllocation allocation) -> void {
-    _deletion_queue.push_back({handle, allocation, graphics::swapchain::max_frames_in_flight});
+  template<typename Callable>
+  requires (std::is_invocable_r_v<void, Callable, graphics::allocator&>)
+  auto enqueue_destruction(Callable&& callable) -> void {
+    _deletion_queue.push_back({std::forward<Callable>(callable), graphics::swapchain::max_frames_in_flight});
   }
 
 private:
@@ -353,6 +356,8 @@ private:
     return index;
   }
 
+  auto _poll_deletion_queue() -> void;
+
   std::unique_ptr<graphics::instance> _instance{};
   std::unique_ptr<graphics::physical_device> _physical_device{};
   std::unique_ptr<graphics::logical_device> _logical_device{};
@@ -402,7 +407,7 @@ private:
   std::map<std::string, std::uint32_t> _scope_registry;
   std::map<std::string, units::millisecond> _gpu_timings;
 
-  std::vector<pending_deletion> _deletion_queue;
+  std::vector<deferred_deletion> _deletion_queue;
 
 }; // class graphics_module
 

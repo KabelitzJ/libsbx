@@ -30,7 +30,10 @@ buffer::~buffer() {
   
   unmap();
 
-  graphics_module.enqueue_destruction(_handle, _allocation);
+  // [NOTE] KAJ 2026-04-21 : Capture a copy of the old values since they are lost after the destructor
+  graphics_module.enqueue_destruction([handle = _handle, allocation = _allocation](auto& allocator){
+    vmaDestroyBuffer(allocator, handle, allocation);
+  });
 }
 
 auto buffer::handle() const noexcept -> VkBuffer {
@@ -59,7 +62,10 @@ auto buffer::resize(const size_type new_size) -> void {
   if (_handle != VK_NULL_HANDLE) {
     unmap();
 
-    graphics_module.enqueue_destruction(_handle, _allocation);
+    // [NOTE] KAJ 2026-04-21 : Capture a copy of the old values since they are overwritten in the buffer after resize
+    graphics_module.enqueue_destruction([handle = _handle, allocation = _allocation](auto& allocator){
+      vmaDestroyBuffer(allocator, handle, allocation);
+    });
 
     _handle = VK_NULL_HANDLE;
     _allocation = VK_NULL_HANDLE;

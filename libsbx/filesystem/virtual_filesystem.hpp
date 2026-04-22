@@ -179,6 +179,22 @@ public:
     return result.value_or(nullptr);
   }
 
+  [[nodiscard]] auto create_file(const std::string& path) -> file_ptr {
+    auto lock = std::scoped_lock{_mutex};
+
+    auto result = _visit(path, [&](const filesystem_ptr& filesystem, [[maybe_unused]] auto is_main) -> std::optional<file_ptr> {
+      if (!filesystem->is_read_only()) {
+        if (auto file = filesystem->create_file(path); file) {
+          return file;
+        }
+      }
+
+      return std::nullopt;
+    });
+
+    return result.value_or(nullptr);
+  }
+
   [[nodiscard]] auto exists(const std::string& path) const -> bool {
     auto lock = std::scoped_lock{_mutex};
 
@@ -208,8 +224,8 @@ public:
 
       const auto& list = entry->second;
 
-      for (auto it = list.rbegin(); it != list.rend(); ++it) {
-        auto filesystem = *it;
+      for (auto entry = list.rbegin(); entry != list.rend(); ++entry) {
+        auto filesystem = *entry;
         const auto& files = filesystem->files();
 
         for (const auto& info : files) {
@@ -247,8 +263,8 @@ private:
 
       const auto& list = entry->second;
 
-      for (auto it = list.rbegin(); it != list.rend(); ++it) {
-        auto filesystem = *it;
+      for (auto entry = list.rbegin(); entry != list.rend(); ++entry) {
+        auto filesystem = *entry;
         auto is_main = (filesystem == list.front());
         auto result = std::invoke(callback, filesystem, is_main);
 

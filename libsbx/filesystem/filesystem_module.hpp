@@ -38,8 +38,12 @@ public:
     return _filesystem->create_filesystem<Type>(std::move(alias), std::forward<Args>(args)...);
   }
 
-  auto open_file(const std::string& path, file_base::mode mode) -> file_ptr {
+  auto open_file(const std::string& path, const file_base::mode mode) -> file_ptr {
     return _filesystem->open_file(path, mode);
+  }
+
+  auto create_file(const std::string& path) -> file_ptr {
+    return _filesystem->create_file(path);
   }
 
   auto exists(const std::string& path) const -> bool {

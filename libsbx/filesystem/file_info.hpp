@@ -51,6 +51,8 @@ private:
   
     if (!base_path.empty() && file_name.find(base_path) == 0) {
       stripped_file_name = file_name.substr(base_path.length());
+    } else if (!alias_path.empty() && file_name.find(alias_path) == 0) {
+      stripped_file_name = file_name.substr(alias_path.length());
     }
 
     while (!stripped_file_name.empty() && (stripped_file_name.front() == '/' || stripped_file_name.front() == '\\')) {

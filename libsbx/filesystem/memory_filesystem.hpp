@@ -195,6 +195,7 @@ private:
         return handle.expired() || handle.lock() == exclude;
       }), opened_handles.end());
     }
+
   }; // struct file_entry
 
   auto _cleanup_handles(const file_ptr& to_close = nullptr) -> void {

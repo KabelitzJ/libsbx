@@ -296,6 +296,11 @@ private:
 
 }; // class basic_memory_file
 
+using memory_file_mt = basic_memory_file<std::mutex>;
+using memory_file_st = basic_memory_file<utility::null_mutex>;
+
+using memory_file = memory_file_mt;
+
 } // namespace sbx::filesystem
 
 #endif // LIBSBX_FILESYSTEM_MEMORY_FILE_HPP_

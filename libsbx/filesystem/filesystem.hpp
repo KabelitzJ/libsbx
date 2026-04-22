@@ -10,6 +10,8 @@
 
 #include <libsbx/filesystem/memory_file.hpp>
 #include <libsbx/filesystem/memory_filesystem.hpp>
+#include <libsbx/filesystem/native_file.hpp>
+#include <libsbx/filesystem/native_filesystem.hpp>
 
 #include <libsbx/filesystem/virtual_filesystem.hpp>
 

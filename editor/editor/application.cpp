@@ -79,16 +79,18 @@ application::application()
 
   auto& filesystem_module = sbx::core::engine::get_module<sbx::filesystem::filesystem_module>();
 
-  auto mfs = filesystem_module.create_filesystem<sbx::filesystem::memory_filesystem>(std::string{"/memory"});
+  if (!filesystem_module.create_filesystem<sbx::filesystem::native_filesystem>("/assets", "editor/assets")) {
+    sbx::utility::logger<"editor">::error("Could not create native_filesystem at 'editor/assets'");
+  }
 
-  if (auto file = mfs->open_file("/memory/config.json", sbx::filesystem::file_base::mode::write); file) {
+  if (auto file = filesystem_module.create_file("/assets/config.json"); file) {
     auto content = std::string{"Hello, libsbx!"};
     file->write({reinterpret_cast<const std::uint8_t*>(content.data()), content.size()});
   } else {
-    sbx::utility::logger<"editor">::error("Could not open '/memory/config.json'");
+    sbx::utility::logger<"editor">::error("Could not create '/assets/config.json'");
   }
 
-  if (auto file = mfs->open_file("/memory/config.json", sbx::filesystem::file_base::mode::read); file) {
+  if (auto file = filesystem_module.open_file("/assets/config.json", sbx::filesystem::file_base::mode::read); file) {
     auto size = file->size();
 
     auto buffer = std::vector<std::uint8_t>{};
@@ -98,16 +100,16 @@ application::application()
 
     auto content = std::string{reinterpret_cast<const char*>(buffer.data()), size};
 
-    sbx::utility::logger<"editor">::info("Content from '/memory/config.json': {}", content);
+    sbx::utility::logger<"editor">::info("Content from '/assets/config.json': {}", content);
   } else {
-    sbx::utility::logger<"editor">::error("Could not open '/memory/config.json'");
+    sbx::utility::logger<"editor">::error("Could not open '/assets/config.json'");
   }
 
-  auto all_files = filesystem_module.all_files();
+  // auto all_files = filesystem_module.all_files();
 
-  for (const auto& file : all_files) {
-    sbx::utility::logger<"editor">::info("{}", file);
-  }
+  // for (const auto& file : all_files) {
+  //   sbx::utility::logger<"editor">::info("{}", file);
+  // }
 
   // Camera
   auto& scripting_module = sbx::core::engine::get_module<sbx::scripting::scripting_module>();

@@ -46,7 +46,8 @@ public:
   }
 
   auto hash() const noexcept -> hash_type {
-    return static_cast<hash_type>(utility::fnv1a_hash<char_type, std::uint64_t>{}(_value));
+    // return static_cast<hash_type>(utility::fnv1a_hash<char_type, std::uint64_t>{}(_value));
+    return std::hash<string_type>{}(_value);
   }
 
   auto operator==(const basic_alias& other) const noexcept -> bool {

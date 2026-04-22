@@ -35,7 +35,7 @@ public:
 
   virtual ~file_base() = default;
   
-  [[nodiscard]] virtual auto file_info() const -> const file_info& = 0;
+  [[nodiscard]] virtual auto info() const -> const file_info& = 0;
   
   [[nodiscard]] virtual auto size() const -> std::uint64_t = 0;
 
@@ -64,15 +64,15 @@ public:
   }
 
   [[nodiscard]] static auto is_mode_valid(mode file_mode) -> bool {
-    if (!mode_has_flag(file_mode, file_mode::read) && !mode_has_flag(file_mode, file_mode::write)) {
+    if (!mode_has_flag(file_mode, mode::read) && !mode_has_flag(file_mode, mode::write)) {
       return false;
     }
 
-    if (mode_has_flag(file_mode, file_mode::append) && !mode_has_flag(file_mode, file_mode::write)) {
+    if (mode_has_flag(file_mode, mode::append) && !mode_has_flag(file_mode, mode::write)) {
       return false;
     }
 
-    if (mode_has_flag(file_mode, file_mode::truncate) && !mode_has_flag(file_mode, file_mode::write)) {
+    if (mode_has_flag(file_mode, mode::truncate) && !mode_has_flag(file_mode, mode::write)) {
       return false;
     }
 
@@ -89,12 +89,12 @@ inline bool operator==(const file_ptr& lhs, const file_ptr& rhs) {
     return false;
   }
   
-  return lhs->file_info() == rhs->file_info();
+  return lhs->info() == rhs->info();
 }
 
 } // namespace sbx::filesystem
 
 template<>
-struct sbx::utility::is_bit_field<sbx::filesystem::file::mode> : std::true_type { };
+struct sbx::utility::is_bit_field<sbx::filesystem::file_base::mode> : std::true_type { };
 
 #endif // LIBSBX_FILESYSTEM_FILE_BASE_HPP_

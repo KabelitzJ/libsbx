@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 
-#include <libsbx/filesystem/file.hpp>
+#include <libsbx/filesystem/file_base.hpp>
 #include <libsbx/filesystem/file_info.hpp>
 
 namespace sbx::filesystem {

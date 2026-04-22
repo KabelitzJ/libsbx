@@ -9,19 +9,24 @@
 #include <mutex>
 #include <algorithm>
 
+#include <libsbx/utility/lockable.hpp>
+
 #include <libsbx/filesystem/filesystem_base.hpp>
 #include <libsbx/filesystem/memory_file.hpp>
 
 namespace sbx::filesystem {
 
-class memory_filesystem final : public filesystem_base {
+template<utility::lockable Lockable>
+class basic_memory_filesystem final : public filesystem_base {
 
 public:
 
-  explicit memory_filesystem(std::string alias_path)
+  using lockable_type = Lockable;
+
+  explicit basic_memory_filesystem(std::string alias_path)
   : _alias_path(std::move(alias_path)) {}
 
-  ~memory_filesystem() override {
+  ~basic_memory_filesystem() override {
     shutdown();
   }
 
@@ -33,6 +38,7 @@ public:
     }
 
     _initialized = true;
+
     return true;
   }
 
@@ -45,23 +51,26 @@ public:
 
   [[nodiscard]] auto is_initialized() const -> bool override {
     auto lock = std::scoped_lock{_mutex};
+
     return _initialized;
   }
 
   [[nodiscard]] auto base_path() const -> const std::string& override {
     auto lock = std::scoped_lock{_mutex};
+
     return _alias_path;
   }
 
   [[nodiscard]] auto virtual_path() const -> const std::string& override {
     auto lock = std::scoped_lock{_mutex};
+
     return _alias_path;
   }
 
   [[nodiscard]] auto files() const -> files_list override {
     auto lock = std::scoped_lock{_mutex};
 
-    files_list list;
+    auto list = files_list{};
     list.reserve(_files.size());
 
     for (const auto& [path, entry] : _files) {
@@ -80,96 +89,90 @@ public:
 
     auto info = file_info{_alias_path, _alias_path, path};
 
-    auto [it, inserted] = _files.try_emplace(
-      path,
-      file_entry{info, std::make_shared<memory_file_object>()}
-    );
+    auto [entry, inserted] = _files.try_emplace(path, file_entry{info, std::make_shared<detail::memory_file_object<lockable_type>>()});
 
-    auto& entry = it->second;
+    auto& file_entry = entry->second;
 
-    if (!entry.object) {
-      entry.object = std::make_shared<memory_file_object>();
+    if (!file_entry.object) {
+      file_entry.object = std::make_shared<detail::memory_file_object<lockable_type>>();
     }
 
-    auto file = std::make_shared<memory_file>(
-      file_info(entry.info),
-      memory_file_object_ptr(entry.object)
-    );
+    auto file = std::make_shared<basic_memory_file<lockable_type>>(file_info{file_entry.info}, detail::memory_file_object_ptr<lockable_type>{file_entry.object});
 
     if (!file || !file->open(mode)) {
       return nullptr;
     }
 
-    entry.opened_handles.push_back(file);
+    file_entry.opened_handles.push_back(file);
+
     return file;
   }
 
-  auto close_file(file_ptr file) -> void override {
+  auto close_file(const file_ptr& file) -> void override {
     auto lock = std::scoped_lock{_mutex};
+
     _cleanup_handles(file);
   }
 
   [[nodiscard]] auto create_file(const std::string& path) -> file_ptr override {
-    return open_file(path, file::mode::read_write | file::mode::truncate);
+    return open_file(path, file_base::mode::read_write | file_base::mode::truncate);
   }
 
   [[nodiscard]] auto remove_file(const std::string& path) -> bool override {
     auto lock = std::scoped_lock{_mutex};
 
-    auto it = _files.find(path);
-    if (it == _files.end()) {
+    auto entry = _files.find(path);
+
+    if (entry == _files.end()) {
       return false;
     }
 
     _cleanup_handles();
-    _files.erase(it);
+    _files.erase(entry);
 
     return true;
   }
 
-  [[nodiscard]] auto copy_file(const std::string& src,
-                               const std::string& dst,
-                               const bool overwrite = false) -> bool override {
+  [[nodiscard]] auto copy_file(const std::string& source, const std::string& destination, const bool overwrite = false) -> bool override {
     auto lock = std::scoped_lock{_mutex};
 
-    auto src_it = _files.find(src);
-    if (src_it == _files.end()) {
+    auto source_entry = _files.find(source);
+
+    if (source_entry == _files.end()) {
       return false;
     }
 
-    auto dst_it = _files.find(dst);
+    auto destination_entry = _files.find(destination);
 
-    if (dst_it != _files.end() && !overwrite) {
+    if (destination_entry != _files.end() && !overwrite) {
       return false;
     }
 
-    if (dst_it != _files.end()) {
-      _files.erase(dst_it);
+    if (destination_entry != _files.end()) {
+      _files.erase(destination_entry);
     }
 
-    memory_file_object_ptr new_object;
+    auto new_object = detail::memory_file_object_ptr<lockable_type>{};
 
-    if (src_it->second.object) {
-      new_object = std::make_shared<memory_file_object>(
-        *src_it->second.object
-      );
+    if (source_entry->second.object) {
+      new_object = std::make_shared<detail::memory_file_object<lockable_type>>(*source_entry->second.object);
     } else {
-      new_object = std::make_shared<memory_file_object>();
+      new_object = std::make_shared<detail::memory_file_object<lockable_type>>();
     }
 
-    file_info info(_alias_path, _alias_path, dst);
+    auto info = file_info{_alias_path, _alias_path, destination};
 
-    _files.emplace(dst, file_entry{info, std::move(new_object)});
+    _files.emplace(destination, file_entry{info, std::move(new_object)});
+
     return true;
   }
 
-  [[nodiscard]] auto rename_file(const std::string& src,
-                                 const std::string& dst) -> bool override {
-    if (!copy_file(src, dst, false)) {
+  [[nodiscard]] auto rename_file(const std::string& source, const std::string& destination) -> bool override {
+    if (!copy_file(source, destination, false)) {
       return false;
     }
 
-    return remove_file(src);
+    return remove_file(source);
   }
 
   [[nodiscard]] auto exists(const std::string& path) const -> bool override {
@@ -181,33 +184,26 @@ private:
 
   struct file_entry {
 
-    file_info info;
-    memory_file_object_ptr object;
+    using weak_handle = std::weak_ptr<basic_memory_file<lockable_type>>;
 
-    using weak_handle = std::weak_ptr<memory_file>;
+    file_info info;
+    detail::memory_file_object_ptr<lockable_type> object;
     std::vector<weak_handle> opened_handles;
 
-    void cleanup(file_ptr exclude = nullptr) {
-      opened_handles.erase(
-        std::remove_if(
-          opened_handles.begin(),
-          opened_handles.end(),
-          [&](const weak_handle& w) {
-            return w.expired() || w.lock() == exclude;
-          }
-        ),
-        opened_handles.end()
-      );
+    void cleanup(const file_ptr& exclude = nullptr) {
+      opened_handles.erase(std::remove_if(opened_handles.begin(), opened_handles.end(), [&](const weak_handle& handle) {
+        return handle.expired() || handle.lock() == exclude;
+      }), opened_handles.end());
     }
-  };
+  }; // struct file_entry
 
-  auto _cleanup_handles(file_ptr to_close = nullptr) -> void {
-
+  auto _cleanup_handles(const file_ptr& to_close = nullptr) -> void {
     if (to_close) {
-      const auto& path = to_close->file_info().virtual_path();
+      const auto& path = to_close->info().virtual_path();
 
-      auto it = _files.find(path);
-      if (it != _files.end()) {
+      auto entry = _files.find(path);
+
+      if (entry != _files.end()) {
         to_close->close();
       }
     }
@@ -222,12 +218,15 @@ private:
   std::string _alias_path;
   bool _initialized{false};
 
-  mutable std::mutex _mutex;
+  mutable lockable_type _mutex;
   std::unordered_map<std::string, file_entry> _files;
-};
 
-using memory_filesystem_ptr = std::shared_ptr<memory_filesystem>;
-using memory_filesystem_weak_ptr = std::weak_ptr<memory_filesystem>;
+}; // class basic_memory_filesystem
+
+using memory_filesystem_mt = basic_memory_filesystem<std::mutex>;
+using memory_filesystem_st = basic_memory_filesystem<utility::null_mutex>;
+
+using memory_filesystem = memory_filesystem_mt;
 
 } // namespace sbx::filesystem
 

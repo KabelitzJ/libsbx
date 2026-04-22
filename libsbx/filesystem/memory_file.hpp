@@ -6,13 +6,21 @@
 #include <mutex>
 #include <algorithm>
 
+#include <libsbx/utility/lockable.hpp>
+
 #include <libsbx/filesystem/file_base.hpp>
+#include <libsbx/filesystem/file_info.hpp>
 
 namespace sbx::filesystem {
 
+namespace detail {
+
+template<utility::lockable Lockable>
 class memory_file_object {
 
 public:
+
+  using lockable_type = Lockable;
 
   memory_file_object()
   : _data{std::make_shared<std::vector<std::uint8_t>>()} {}
@@ -69,33 +77,38 @@ private:
 
 private:
 
-  mutable std::mutex _mutex;
+  mutable lockable_type _mutex;
   std::shared_ptr<std::vector<std::uint8_t>> _data;
 
 }; // memory_file_object
 
-using memory_file_object_ptr = std::shared_ptr<memory_file_object>;
+template<utility::lockable Lockable>
+using memory_file_object_ptr = std::shared_ptr<memory_file_object<Lockable>>;
 
-class memory_file final : public file_base {
+} // namespace detail
+
+template<utility::lockable Lockable>
+class basic_memory_file final : public file_base {
 
 public:
 
-  memory_file(file_info&& info, memory_file_object_ptr&& object)
-  : _object(std::move(object)),
-    _info(std::move(info)) {
+  using lockable_type = Lockable;
 
+  basic_memory_file(file_info&& info, detail::memory_file_object_ptr<lockable_type>&& object)
+  : _info(std::move(info)),
+    _object(std::move(object)) {
     if (!_object) {
-      _object = std::make_shared<memory_file_object>();
+      _object = std::make_shared<detail::memory_file_object<lockable_type>>();
     }
   }
 
-  ~memory_file() override {
+  ~basic_memory_file() override {
     _is_open = false;
     _position = 0;
     _mode = mode::read;
   }
 
-  [[nodiscard]] auto file_info() const -> const file_info& override {
+  [[nodiscard]] auto info() const -> const file_info& override {
     auto lock = std::scoped_lock{_mutex};
 
     return _info;
@@ -272,16 +285,16 @@ public:
 
 private:
 
-  memory_file_object_ptr _object;
+  mutable lockable_type _mutex;
+
   file_info _info;
+  detail::memory_file_object_ptr<lockable_type> _object;
 
   bool _is_open{false};
   std::uint64_t _position{0};
   mode _mode{mode::read};
 
-  mutable std::mutex _mutex;
-
-}; // class memory_file
+}; // class basic_memory_file
 
 } // namespace sbx::filesystem
 

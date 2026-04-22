@@ -3,7 +3,8 @@
 
 namespace sbx::filesystem {
 
-filesystem_module::filesystem_module() {
+filesystem_module::filesystem_module()
+: _filesystem{std::make_unique<virtual_filesystem>()} {
     
 }
 

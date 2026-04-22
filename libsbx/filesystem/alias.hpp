@@ -11,7 +11,6 @@ namespace sbx::filesystem {
 
 template<utility::character Char>
 class basic_alias {
-
 public:
 
   using char_type = Char;
@@ -21,17 +20,21 @@ public:
   using hash_type = std::size_t;
 
   basic_alias()
-  : _value{"/"} { }
+  : _value{_normalize(string_view_type{})} { }
 
   explicit basic_alias(string_view_type alias)
   : _value{_normalize(alias)} { }
 
   static auto root() -> basic_alias {
-    return basic_alias("/");
+    return basic_alias{string_view_type{}};
   }
 
-  auto string() const noexcept -> const string_type& {
+  auto string() const & noexcept -> const string_type& {
     return _value;
+  }
+
+  auto string() && noexcept -> string_type {
+    return std::move(_value);
   }
 
   auto view() const noexcept -> string_view_type {
@@ -46,16 +49,15 @@ public:
     return static_cast<hash_type>(utility::fnv1a_hash<char_type, std::uint64_t>{}(_value));
   }
 
-  bool operator==(const basic_alias& other) const noexcept {
+  auto operator==(const basic_alias& other) const noexcept -> bool {
     return _value == other._value;
   }
 
 private:
 
-  static auto _normalize(std::string_view alias) -> std::string {
+  static auto _normalize(string_view_type alias) -> string_type {
     auto normalized = string_type{alias};
-
-    static constexpr auto* whitespace = " \t\n\r";
+    auto whitespace = string_view_type{reinterpret_cast<const char_type*>(" \t\n\r")};
 
     auto begin = normalized.find_first_not_of(whitespace);
 
@@ -74,19 +76,19 @@ private:
     }
 
     if (normalized.empty()) {
-      normalized = "/";
+      normalized = reinterpret_cast<const char_type*>("/");
     }
 
-    if (normalized.front() != '/') {
-      normalized.insert(normalized.begin(), '/');
+    if (normalized.front() != static_cast<char_type>('/')) {
+      normalized.insert(normalized.begin(), static_cast<char_type>('/'));
     }
 
-    while (normalized.size() > 1 && normalized.back() == '/') {
+    while (normalized.size() > 1 && normalized.back() == static_cast<char_type>('/')) {
       normalized.pop_back();
     }
 
-    if (normalized.back() != '/') {
-      normalized.push_back('/');
+    if (normalized.back() != static_cast<char_type>('/')) {
+      normalized.push_back(static_cast<char_type>('/'));
     }
 
     return normalized;
@@ -94,7 +96,7 @@ private:
 
   string_type _value;
 
-}; // class alias
+}; // class basic_alias
 
 using alias = basic_alias<char>;
 
@@ -107,6 +109,6 @@ struct std::hash<sbx::filesystem::basic_alias<Char>> {
     return alias.hash();
   }
 
-}; // struct std::hash<sbx::filesystem::alias<Char>>
+}; // struct std::hash<sbx::filesystem::basic_alias<Char>>
 
 #endif // LIBSBX_FILESYSTEM_ALIAS_HPP_

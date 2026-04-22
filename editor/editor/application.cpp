@@ -77,6 +77,38 @@ application::application()
   _generate_irradiance(64);
   _generate_prefiltered(512);
 
+  auto& filesystem_module = sbx::core::engine::get_module<sbx::filesystem::filesystem_module>();
+
+  auto mfs = filesystem_module.create_filesystem<sbx::filesystem::memory_filesystem>(std::string{"/memory"});
+
+  if (auto file = mfs->open_file("/memory/config.json", sbx::filesystem::file_base::mode::write); file) {
+    auto content = std::string{"Hello, libsbx!"};
+    file->write({reinterpret_cast<const std::uint8_t*>(content.data()), content.size()});
+  } else {
+    sbx::utility::logger<"editor">::error("Could not open '/memory/config.json'");
+  }
+
+  if (auto file = mfs->open_file("/memory/config.json", sbx::filesystem::file_base::mode::read); file) {
+    auto size = file->size();
+
+    auto buffer = std::vector<std::uint8_t>{};
+    buffer.resize(size);
+
+    file->read({buffer.data(), size});
+
+    auto content = std::string{reinterpret_cast<const char*>(buffer.data()), size};
+
+    sbx::utility::logger<"editor">::info("Content from '/memory/config.json': {}", content);
+  } else {
+    sbx::utility::logger<"editor">::error("Could not open '/memory/config.json'");
+  }
+
+  auto all_files = filesystem_module.all_files();
+
+  for (const auto& file : all_files) {
+    sbx::utility::logger<"editor">::info("{}", file);
+  }
+
   // Camera
   auto& scripting_module = sbx::core::engine::get_module<sbx::scripting::scripting_module>();
   

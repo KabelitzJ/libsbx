@@ -234,24 +234,7 @@ float2 parallax_occlusion_mapping(fs_in input, material_data material_data, floa
   return lerp(current_uv, previous_uv, weight);
 }
 
-
-[earlydepthstencil]
-[shader("fragment")]
-opaque_fs_out opaque_main(fs_in input) {
-  opaque_fs_out output;
-
-  uint global_instance = input.instance_index;
-
-  instance_data instance_data = push.instance_data_buffer[global_instance];
-  material_data material_data = push.material_data_buffer[instance_data.material_index];
-
-  float3x3 TBN = build_tbn(input, material_data);
-
-  // float2 uv = parallax_occlusion_mapping(input, material_data, TBN);
-  float2 uv = input.uv * material_data.uv_scale + material_data.uv_offset;
-
-  float material_flags = float(material_data.flags & 255) / 255.0;
-
+surface_fragment_context build_surface_context(fs_in input, float2 uv, float3x3 TBN, material_data material_data) {
   surface_fragment_context ctx;
   ctx.position = input.position;
   ctx.normal = input.normal;
@@ -275,14 +258,21 @@ opaque_fs_out opaque_main(fs_in input) {
   ctx.custom3 = input.custom3;
 #endif
 
-  ctx.albedo = get_albedo<opaque_alpha_policy>(uv, material_data);
   ctx.world_normal = get_normal(TBN, uv, input.normal, input.sv_is_front_face, material_data);
   ctx.metallic_roughness_occlusion = get_material(uv, material_data);
   ctx.emissive = get_emissive(uv, material_data);
 
-  sbx_surface_fragment(ctx);
+  return ctx;
+}
+
+opaque_fs_out write_gbuffer(fs_in input, surface_fragment_context ctx, instance_data instance_data, material_data material_data) {
+  opaque_fs_out output;
+
+  float material_flags = float(material_data.flags & 255) / 255.0;
 
   output.albedo = ctx.albedo;
+  output.position = float4(ctx.position, 1.0);
+  // encode from [-1, 1] -> [0, 1]
   output.normal = float4(ctx.world_normal * 0.5f + 0.5f, 0.0);
   output.material = float4(ctx.metallic_roughness_occlusion, material_flags);
   output.emissive = float4(ctx.emissive, material_data.specular_factor);
@@ -292,10 +282,29 @@ opaque_fs_out opaque_main(fs_in input) {
   return output;
 }
 
+[earlydepthstencil]
+[shader("fragment")]
+opaque_fs_out opaque_main(fs_in input) {
+  uint global_instance = input.instance_index;
+
+  instance_data instance_data = push.instance_data_buffer[global_instance];
+  material_data material_data = push.material_data_buffer[instance_data.material_index];
+
+  float3x3 TBN = build_tbn(input, material_data);
+
+  // float2 uv = parallax_occlusion_mapping(input, material_data, TBN);
+  float2 uv = input.uv * material_data.uv_scale + material_data.uv_offset;
+
+  surface_fragment_context ctx = build_surface_context(input, uv, TBN, material_data);
+  ctx.albedo = get_albedo<opaque_alpha_policy>(uv, material_data);
+
+  sbx_surface_fragment(ctx);
+
+  return write_gbuffer(input, ctx, instance_data, material_data);
+}
+
 [shader("fragment")]
 opaque_fs_out mask_main(fs_in input) {
-  opaque_fs_out output;
-
   uint global_instance = input.instance_index;
 
   instance_data instance_data = push.instance_data_buffer[global_instance];
@@ -310,18 +319,12 @@ opaque_fs_out mask_main(fs_in input) {
 
   clip(albedo.a - material_data.alpha_cutoff);
 
-  float material_flags = float(material_data.flags & 255) / 255.0;
+  surface_fragment_context ctx = build_surface_context(input, uv, TBN, material_data);
+  ctx.albedo = albedo;
 
-  output.albedo = albedo;
-  output.position = float4(input.position, 1.0);
-  // encode from [-1, 1] -> [0, 1]
-  output.normal = float4(get_normal(TBN, uv, input.normal, input.sv_is_front_face, material_data) * 0.5f + 0.5f, 0.0);
-  output.material = float4(get_material(uv, material_data), material_flags);
-  output.emissive = float4(get_emissive(uv, material_data), material_data.specular_factor);
-  output.object_id = instance_data.object_id;
-  output.linear_depth = sbx::common::linearize_depth(input.sv_position.z, scene.camera_near, scene.camera_far);
+  sbx_surface_fragment(ctx);
 
-  return output;
+  return write_gbuffer(input, ctx, instance_data, material_data);
 }
 
 [shader("fragment")]

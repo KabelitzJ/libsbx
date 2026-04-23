@@ -53,11 +53,11 @@ renderer::renderer()
   auto shadow_depth = create_attachment("shadow_depth", sbx::graphics::attachment::type::depth, sbx::math::color::black(), sbx::graphics::format::undefined, sbx::graphics::blend_state{}, sbx::graphics::filter::linear, sbx::graphics::address_mode::repeat, 4u);
 
   auto depth = create_attachment("depth", sbx::graphics::attachment::type::depth);
-  auto albedo = create_attachment("albedo", sbx::graphics::attachment::type::image, _clear_color, sbx::graphics::format::r8g8b8a8_unorm);
+  auto albedo = create_attachment("albedo", sbx::graphics::attachment::type::image, _clear_color, sbx::graphics::format::r8g8b8a8_srgb);
   auto position = create_attachment("position", sbx::graphics::attachment::type::image, sbx::math::color::black(), sbx::graphics::format::r16g16b16a16_sfloat);
   auto normal = create_attachment("normal", sbx::graphics::attachment::type::image, sbx::math::color::black(), sbx::graphics::format::a2b10g10r10_unorm_pack32);
   auto material = create_attachment("material", sbx::graphics::attachment::type::image, _clear_color, sbx::graphics::format::r8g8b8a8_unorm);
-  auto emissive = create_attachment("emissive", sbx::graphics::attachment::type::image, _clear_color, sbx::graphics::format::r8g8b8a8_unorm);
+  auto emissive = create_attachment("emissive", sbx::graphics::attachment::type::image, sbx::math::color::black(), sbx::graphics::format::r16g16b16a16_sfloat);
   auto object_id = create_attachment("object_id", sbx::graphics::attachment::type::image, sbx::math::color::black(), sbx::graphics::format::r32_uint);
   auto linear_depth = create_attachment("linear_depth", sbx::graphics::attachment::type::image, sbx::math::color::black(), sbx::graphics::format::r32_sfloat);
 
@@ -97,9 +97,9 @@ renderer::renderer()
   auto resolve = create_attachment("resolve", sbx::graphics::attachment::type::image, _clear_color, sbx::graphics::format::r32g32b32a32_sfloat, resolve_blend);
   auto brightness = create_attachment("brightness", sbx::graphics::attachment::type::image, sbx::math::color::black(), sbx::graphics::format::r16g16b16a16_sfloat);
 
-  auto tonemap = create_attachment("tonemap", sbx::graphics::attachment::type::image, _clear_color, sbx::graphics::format::r8g8b8a8_unorm);
-  
-  auto scene_output = create_attachment("scene_output", sbx::graphics::attachment::type::image, _clear_color, sbx::graphics::format::r8g8b8a8_unorm);
+  auto tonemap = create_attachment("tonemap", sbx::graphics::attachment::type::image, _clear_color, sbx::graphics::format::r8g8b8a8_srgb);
+
+  auto scene_output = create_attachment("scene_output", sbx::graphics::attachment::type::image, _clear_color, sbx::graphics::format::r8g8b8a8_srgb);
 
   auto swapchain = create_attachment("swapchain", sbx::graphics::attachment::type::swapchain, _clear_color, sbx::graphics::format::b8g8r8a8_srgb);
 

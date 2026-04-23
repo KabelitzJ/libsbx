@@ -101,31 +101,31 @@ application::application()
 
   // Window
 
-  // auto spheres = graph.create_node(fmt::format("Spheres"));
+  auto spheres = graph.create_node(fmt::format("Spheres"));
 
-  // auto& spheres_transform = graph.get_component<sbx::scenes::transform>(spheres);
-  // spheres_transform.set_position(sbx::math::vector3{0, 0, -15});
+  auto& spheres_transform = graph.get_component<sbx::scenes::transform>(spheres);
+  spheres_transform.set_position(sbx::math::vector3{0, 0, -15});
 
-  // for (auto y = 0; y < 5; ++y) {
-  //   for (auto x = 0; x < 5; ++x) {
-  //     auto sphere = graph.create_child_node(spheres, fmt::format("Sphere{}{}", x, y));
+  for (auto y = 0; y < 5; ++y) {
+    for (auto x = 0; x < 5; ++x) {
+      auto sphere = graph.create_child_node(spheres, fmt::format("Sphere{}{}", x, y));
 
-  //     const auto material_name = fmt::format("sphere_{}_{}_material", x, y);
+      const auto material_name = fmt::format("sphere_{}_{}_material", x, y);
 
-  //     auto& material = asset_registry.request_material<sbx::models::material>(material_name);
-  //     material.base_color = sbx::math::color::white();
-  //     material.alpha = sbx::models::alpha_mode::opaque;
-  //     material.metallic_factor = 0.2f * x;
-  //     material.roughness_factor = 0.2f * y;
-  //     material.occlusion_strength = 1.0f;
+      auto& material = asset_registry.request_material<sbx::models::material>(material_name);
+      material.base_color = sbx::math::color::white();
+      material.alpha = sbx::models::alpha_mode::opaque;
+      material.metallic_factor = 0.2f * x;
+      material.roughness_factor = 0.2f * y;
+      material.occlusion_strength = 1.0f;
 
-  //     graph.add_component<sbx::scenes::static_mesh>(sphere, asset_registry.get_mesh("sphere"), asset_registry.get_material(material_name));
+      graph.add_component<sbx::scenes::static_mesh>(sphere, asset_registry.get_mesh("sphere"), asset_registry.get_material(material_name));
 
-  //     auto& sphere_transform = graph.get_component<sbx::scenes::transform>(sphere);
-  //     sphere_transform.set_position(sbx::math::vector3{x * 3, y * 3 + 5, 0.0f});
-  //     sphere_transform.set_scale(sbx::math::vector3{1.0f, 1.0f, 1.0f});
-  //   }
-  // }
+      auto& sphere_transform = graph.get_component<sbx::scenes::transform>(sphere);
+      sphere_transform.set_position(sbx::math::vector3{x * 3, y * 3 + 5, 0.0f});
+      sphere_transform.set_scale(sbx::math::vector3{1.0f, 1.0f, 1.0f});
+    }
+  }
 
   auto& devices_module = sbx::core::engine::get_module<sbx::devices::devices_module>();
 
@@ -177,7 +177,6 @@ auto application::update() -> void {
     return;
   }
 
-  // --- debug bounding boxes (existing code) ---
   auto query = graph.query<const sbx::scenes::static_mesh>();
 
   for (auto&& [node, static_mesh] : query.each()) {
@@ -190,7 +189,6 @@ auto application::update() -> void {
     }
   }
 
-  // --- debug frustum ---
   if (sbx::devices::input::is_key_pressed(sbx::devices::key::f5)) {
     _debug_frustum_active = !_debug_frustum_active;
 

@@ -62,7 +62,7 @@ application::application()
 
   auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
 
-  auto& scene = scenes_module.create_scene();
+  auto& scene = scenes_module.create_scene("Scenee");
 
   scenes_module.set_scene_viewport("scene");
 
@@ -71,45 +71,44 @@ application::application()
 
   auto& asset_registry = scenes_module.asset_registry();
 
-  asset_registry.request_cube_image("skybox", "res://skyboxes/clouds");
+  asset_registry.request_mesh<sbx::models::mesh>("helmet", "res://meshes/helmet/helmet.gltf");
+
+  asset_registry.request_image("helmet_albedo", "res://meshes/helmet/textures/albedo.jpg", sbx::graphics::format::r8g8b8a8_srgb);
+  asset_registry.request_image("helmet_ao", "res://meshes/helmet/textures/ao.jpg", sbx::graphics::format::r8g8b8a8_unorm);
+  asset_registry.request_image("helmet_emissive", "res://meshes/helmet/textures/emissive.jpg", sbx::graphics::format::r8g8b8a8_srgb);
+  asset_registry.request_image("helmet_mr", "res://meshes/helmet/textures/mr.jpg", sbx::graphics::format::r8g8b8a8_unorm);
+  asset_registry.request_image("helmet_normal", "res://meshes/helmet/textures/normal.jpg", sbx::graphics::format::r8g8b8a8_unorm);
+
+  asset_registry.request_cube_image("skybox", "res://skyboxes/hdr/clouds", std::string{".hdr"}, sbx::graphics::format::r32g32b32a32_sfloat);
+  // asset_registry.request_cube_image("skybox", "res://skyboxes/clouds");
 
   _generate_brdf(512);
   _generate_irradiance(64);
   _generate_prefiltered(512);
 
-  auto& filesystem_module = sbx::core::engine::get_module<sbx::filesystem::filesystem_module>();
+  // Helmet
 
-  if (!filesystem_module.create_filesystem<sbx::filesystem::native_filesystem>("/assets", "editor/assets")) {
-    sbx::utility::logger<"editor">::error("Could not create native_filesystem at 'editor/assets'");
-  }
+  auto helmet = graph.create_node("Helmet");
 
-  if (auto file = filesystem_module.create_file("/assets/config.json"); file) {
-    auto content = std::string{"Hello, libsbx!"};
-    file->write({reinterpret_cast<const std::uint8_t*>(content.data()), content.size()});
-  } else {
-    sbx::utility::logger<"editor">::error("Could not create '/assets/config.json'");
-  }
+  auto& helmet_transform = graph.get_component<sbx::scenes::transform>(helmet);
+  helmet_transform.set_position(sbx::math::vector3{0.0f, 5.0f, 0.0f});
+  helmet_transform.set_scale(sbx::math::vector3{1.0f, 1.0f, 1.0f});
 
-  if (auto file = filesystem_module.open_file("/assets/config.json", sbx::filesystem::file_base::mode::read); file) {
-    auto size = file->size();
+  auto& helmet_material = asset_registry.request_material<sbx::models::material>("helmet");
+  helmet_material.base_color = sbx::math::color::white();
+  helmet_material.alpha = sbx::models::alpha_mode::opaque;
+  helmet_material.metallic_factor = 1.0f;
+  helmet_material.roughness_factor = 1.0f;
+  helmet_material.occlusion_strength = 1.0f;
+  helmet_material.emissive_factor = sbx::math::vector4{1.0f, 1.0f, 1.0f, 1.0f};
 
-    auto buffer = std::vector<std::uint8_t>{};
-    buffer.resize(size);
+  helmet_material.albedo.image = asset_registry.get_image("helmet_albedo");
+  helmet_material.normal.image = asset_registry.get_image("helmet_normal");
+  helmet_material.metallic_roughness.image = asset_registry.get_image("helmet_mr");
+  helmet_material.occlusion.image = asset_registry.get_image("helmet_ao");
+  helmet_material.emissive.image = asset_registry.get_image("helmet_emissive");
 
-    file->read({buffer.data(), size});
-
-    auto content = std::string{reinterpret_cast<const char*>(buffer.data()), size};
-
-    sbx::utility::logger<"editor">::info("Content from '/assets/config.json': {}", content);
-  } else {
-    sbx::utility::logger<"editor">::error("Could not open '/assets/config.json'");
-  }
-
-  // auto all_files = filesystem_module.all_files();
-
-  // for (const auto& file : all_files) {
-  //   sbx::utility::logger<"editor">::info("{}", file);
-  // }
+  graph.add_component<sbx::scenes::static_mesh>(helmet, asset_registry.get_mesh("helmet"), asset_registry.get_material("helmet"));
 
   // Camera
   auto& scripting_module = sbx::core::engine::get_module<sbx::scripting::scripting_module>();
@@ -119,7 +118,7 @@ application::application()
   auto camera_node = environment.camera();
 
   auto& camera_transform = graph.get_component<sbx::scenes::transform>(camera_node);
-  camera_transform.set_position(sbx::math::vector3{0.0f, 25.0f, 25.0f});
+  camera_transform.set_position(sbx::math::vector3{2.0f, 5.0f, 2.0f});
   camera_transform.look_at(sbx::math::vector3::zero);
 
   auto& skybox = graph.add_component<sbx::scenes::skybox>(camera_node);

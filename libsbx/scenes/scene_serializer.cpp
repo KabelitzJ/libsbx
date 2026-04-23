@@ -16,8 +16,6 @@
 
 namespace sbx::scenes {
 
-// --- Save ---
-
 auto scene_serializer::save(const std::filesystem::path& path, const std::string& name, scene_graph& graph, const scenes::node camera) -> void {
   auto& assets_module = core::engine::get_module<assets::assets_module>();
 
@@ -200,8 +198,6 @@ auto scene_serializer::_save_components(YAML::Emitter& emitter, scene_graph& gra
     emitter << YAML::EndMap;
   }
 }
-
-// --- Load ---
 
 auto scene_serializer::load(const std::filesystem::path& path, scene_graph& graph) -> scene_data {
   const auto scene = YAML::LoadFile(path.string());

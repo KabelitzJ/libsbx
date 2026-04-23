@@ -482,12 +482,13 @@ auto render_graph::_create_attachments(const pass_node& pass) -> void {
       case attachment::type::image: {
         const auto needs_nearest_filter = (attachment.format() == format::r32_uint || attachment.format() == format::r64_uint || attachment.format() == format::r32g32_uint);
 
-        const auto usage = VkImageUsageFlags{
-          VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
-          VK_IMAGE_USAGE_STORAGE_BIT |
-          VK_IMAGE_USAGE_SAMPLED_BIT |
-          VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT
-        };
+        const auto is_srgb = (attachment.format() == format::r8g8b8a8_srgb || attachment.format() == format::b8g8r8a8_srgb);
+
+        auto usage = VkImageUsageFlags{VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT};
+
+        if (!is_srgb) {
+          usage |= VK_IMAGE_USAGE_STORAGE_BIT;
+        }
 
         const auto image_handle = graphics_module.add_resource<image2d>(
           extent,

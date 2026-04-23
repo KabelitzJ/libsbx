@@ -185,7 +185,7 @@ float sample_shadow_map(uint cascade, float2 uv) {
   return shadow_image.Sample(float3(uv, float(cascade)));
 }
 
-float calculate_shadow(uint cascade, float3 world_position, float3 normal) {
+float calculate_shadow_cascade(uint cascade, float3 world_position, float3 normal) {
   uint2 dimensions = shadow_map_dimensions(cascade);
   float2 texel_size = 1.0 / float2(dimensions);
 
@@ -234,6 +234,32 @@ float calculate_shadow(uint cascade, float3 world_position, float3 normal) {
   }
 
   return shadow / 16.0;
+}
+
+float calculate_shadow(float3 world_position, float3 normal, uint material_flags) {
+  float shadow = 1.0;
+
+  bool receive_shadow = (material_flags & material_feature::receive_shadow) != 0;
+
+  if (receive_shadow) {
+    float view_depth = -mul(scene.view, float4(world_position, 1.0)).z;
+
+    cascade_select cascade_info = select_cascade_with_blend(view_depth);
+  
+    float shadow_current = calculate_shadow_cascade(cascade_info.cascade, world_position, normal);
+    
+    if (cascade_info.fade_out) {
+      shadow = lerp(shadow_current, 1.0, cascade_info.blend_factor);
+    } else if (cascade_info.blend_factor > 0.0 && cascade_info.cascade < 3) {
+      float shadow_next = calculate_shadow_cascade(cascade_info.next_cascade, world_position, normal);
+
+      shadow = lerp(shadow_current, shadow_next, cascade_info.blend_factor);
+    } else {
+      shadow = shadow_current;
+    }
+  }
+
+  return shadow;
 }
 
 
@@ -305,31 +331,11 @@ fs_out main(fs_in input) {
   float3 k_s = F;
   float3 k_d = (1.0 - k_s) * (1.0 - metallic);
 
-  bool receive_shadow = (material_flags & material_feature::receive_shadow) != 0;
-
-  float shadow = 1.0;
-
-  if (receive_shadow) {
-    float view_depth = -mul(scene.view, float4(world_position, 1.0)).z;
-
-    cascade_select cascade_info = select_cascade_with_blend(view_depth);
-  
-    float shadow_current = calculate_shadow(cascade_info.cascade, world_position, normal);
-    
-    if (cascade_info.fade_out) {
-      shadow = lerp(shadow_current, 1.0, cascade_info.blend_factor);
-    } else if (cascade_info.blend_factor > 0.0 && cascade_info.cascade < 3) {
-      float shadow_next = calculate_shadow(cascade_info.next_cascade, world_position, normal);
-
-      shadow = lerp(shadow_current, shadow_next, cascade_info.blend_factor);
-    } else {
-      shadow = shadow_current;
-    }
-  }
+  float shadow = calculate_shadow(world_position, normal, material_flags);
 
   float3 irradiance = scene.light_color.rgb * ndl * shadow;
 
-  color += (k_d * albedo / sbx::math::pi + specular * specular_strength) * irradiance;
+  color += (k_d * albedo / sbx::math::pi + specular) * irradiance;
 
   // Point lights
 
@@ -362,7 +368,7 @@ fs_out main(fs_in input) {
 
     float3 kd_p = (1.0 - Fp) * (1.0 - metallic);
 
-    color += (kd_p * albedo / sbx::math::pi + spec_p * specular_strength) * radiance * ndl_p;
+    color += (kd_p * albedo / sbx::math::pi + spec_p) * radiance * ndl_p;
   }
 
   // Image based lighting
@@ -370,7 +376,7 @@ fs_out main(fs_in input) {
   float3 r = normalize(reflect(-view_dir, normal));
 
   float3 diffuse_irradiance = irradiance_image.Sample(normal).rgb;
-  float3 diffuse_ibl = diffuse_irradiance * albedo;
+  float3 diffuse_ibl = diffuse_irradiance * albedo / sbx::math::pi;
 
   float lod = roughness * PREFILTERED_ENV_MAX_MIP;
   lod = clamp(lod, 0.0, PREFILTERED_ENV_MAX_MIP);
@@ -384,7 +390,7 @@ fs_out main(fs_in input) {
 
   float2 brdf = brdf_image.Sample(float2(ndv, roughness)).rg;
 
-  float3 specular_ibl = prefiltered_color * (F_ibl * brdf.x + brdf.y) * specular_strength;
+  float3 specular_ibl = prefiltered_color * (F_ibl * brdf.x + brdf.y);
 
   float shadow_occlusion = lerp(0.3, 1.0, shadow);
   float3 ambient = (kD_ibl * diffuse_ibl * shadow_occlusion + specular_ibl) * ao * ssao;

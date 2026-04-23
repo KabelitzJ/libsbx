@@ -3,6 +3,8 @@
 
 #include <libsbx/assets/assets_module.hpp>
 
+#include <libsbx/reflection/reflection.hpp>
+
 #include <libsbx/scenes/scene.hpp>
 #include <libsbx/scenes/scene_graph.hpp>
 
@@ -21,7 +23,11 @@ scenes_module::scenes_module() {
   });
 
   _asset_io_registry.register_loader("cube_images", [](scenes::asset_registry& registry, const utility::hashed_string& name, const YAML::Node& node) -> void {
-    registry.request_cube_image(name, node["path"].as<std::string>());
+    const auto path = node["path"].as<std::string>();
+    const auto suffix = node["extention"] ? fmt::format(".{}", node["extention"].as<std::string>()) : std::string{".png"};
+    const auto format = reflection::from_string<graphics::format>(node["format"].as<std::string>("")).value_or(graphics::format::r8g8b8a8_srgb);
+
+    registry.request_cube_image(name, path, suffix, format);
   });
 
   _component_io_registry.register_component<scenes::transform>(
@@ -121,8 +127,6 @@ auto scenes_module::update() -> void {
   environment.set_render_target_size(viewports.size(_scene_viewport));
   environment.update_uniforms();
 }
-
-// --- Scene management ---
 
 auto scenes_module::create_scene(const std::string& name) -> scenes::scene& {
   auto key = utility::hashed_string{name};

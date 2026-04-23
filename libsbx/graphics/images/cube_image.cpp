@@ -41,14 +41,36 @@ cube_image::~cube_image() {
   vkDestroyImageView(logical_device, _array_view, nullptr);
 }
 
+auto bytes_per_pixel(const VkFormat format) -> std::uint32_t {
+  switch (format) {
+    case VK_FORMAT_R8G8B8A8_UNORM:
+    case VK_FORMAT_R8G8B8A8_SRGB:
+    case VK_FORMAT_B8G8R8A8_SRGB:
+    case VK_FORMAT_A2B10G10R10_UNORM_PACK32: {
+      return 4u;
+    }
+    case VK_FORMAT_R16G16B16A16_SFLOAT: {
+      return 8u;
+    }
+    case VK_FORMAT_R32G32B32A32_SFLOAT: {
+      return 16u;
+    }
+    default: {
+      throw std::runtime_error{fmt::format("Unsupported cube image format: {}", static_cast<std::int32_t>(format))};
+    }
+  }
+}
+
 auto cube_image::_load(const std::filesystem::path& path, const std::string& suffix) -> void {
   _channels = channels_from_format(_format);
+
+  const auto bpp = bytes_per_pixel(_format);
+  const auto is_hdr_format = (_format == VK_FORMAT_R16G16B16A16_SFLOAT || _format == VK_FORMAT_R32G32B32A32_SFLOAT);
 
   auto buffer = std::vector<std::uint8_t>{};
   auto offset = std::uint32_t{0};
 
   auto from_file = false;
-  auto is_hdr = false;
 
   if (!path.empty()) {
     auto timer = utility::timer{};
@@ -56,8 +78,12 @@ auto cube_image::_load(const std::filesystem::path& path, const std::string& suf
     from_file = true;
 
     const auto first_path = path / fmt::format("{}{}", side_names[0], suffix);
+    const auto is_hdr_file = stbi_is_hdr(first_path.string().c_str());
 
-    is_hdr = stbi_is_hdr(first_path.string().c_str());
+    utility::assert_that(is_hdr_file == is_hdr_format, "Cube image HDR-ness does not match target format");
+    utility::assert_that(!is_hdr_format || _format == VK_FORMAT_R32G32B32A32_SFLOAT, "HDR cube image currently requires R32G32B32A32_SFLOAT (R16 target needs CPU-side f32->f16 conversion)");
+
+    stbi_set_flip_vertically_on_load(true);
 
     for (const auto& side : side_names) {
       const auto sub_path = path / fmt::format("{}{}", side, suffix);
@@ -70,9 +96,8 @@ auto cube_image::_load(const std::filesystem::path& path, const std::string& suf
       auto height = std::int32_t{0};
       auto channels = std::int32_t{0};
 
-      if (is_hdr) {
-        utility::assert_that(stbi_is_hdr(sub_path.string().c_str()), "Cube image was determained to be HDR but face is not");
-        utility::assert_that(_channels == 4u, "HDR Cube image requires 4 color channels");
+      if (is_hdr_file) {
+        utility::assert_that(stbi_is_hdr(sub_path.string().c_str()), "Cube image was determined to be HDR but face is not");
 
         stbi_set_flip_vertically_on_load(false);
 
@@ -82,7 +107,7 @@ auto cube_image::_load(const std::filesystem::path& path, const std::string& suf
           throw std::runtime_error{fmt::format("Failed to load HDR image: {}", sub_path.string())};
         }
 
-        const auto size = width * height * _channels * sizeof(std::float_t);
+        const auto size = static_cast<std::size_t>(width) * static_cast<std::size_t>(height) * bpp;
 
         buffer.resize(buffer.size() + size);
         std::memcpy(buffer.data() + offset, image_data, size);
@@ -98,11 +123,11 @@ auto cube_image::_load(const std::filesystem::path& path, const std::string& suf
           throw std::runtime_error{fmt::format("Failed to load image: {}", sub_path.string())};
         }
 
-        const auto size = width * height * _channels * sizeof(std::uint8_t);
+        const auto size = static_cast<std::size_t>(width) * static_cast<std::size_t>(height) * bpp;
 
         buffer.resize(buffer.size() + size);
         std::memcpy(buffer.data() + offset, image_data, size);
-        offset += size;
+        offset += static_cast<std::uint32_t>(size);
 
         stbi_image_free(image_data);
       }
@@ -113,7 +138,7 @@ auto cube_image::_load(const std::filesystem::path& path, const std::string& suf
 
     const auto elapsed = units::quantity_cast<units::millisecond>(timer.elapsed());
 
-    utility::logger<"graphics">::debug("Loaded {} cube image: {} ({}x{}) in {:.2f}ms", is_hdr ? "HDR" : "LDR", path.string(), _extent.width, _extent.height, elapsed.value());
+    utility::logger<"graphics">::debug("Loaded {} cube image: {} ({}x{}) in {:.2f}ms", is_hdr_file ? "HDR" : "LDR", path.string(), _extent.width, _extent.height, elapsed.value());
   }
 
   if (_extent.width == 0 || _extent.height == 0) {

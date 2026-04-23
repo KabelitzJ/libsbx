@@ -9,6 +9,8 @@
 
 #include <libsbx/memory/observer_ptr.hpp>
 
+#include <libsbx/reflection/description.hpp>
+
 #include <libsbx/math/vector2.hpp>
 
 #include <libsbx/graphics/resource_storage.hpp>
@@ -106,5 +108,34 @@ private:
 using image2d_handle = resource_handle<image2d>;
 
 } // namespace sbx::graphics
+
+template<>
+struct sbx::reflection::description<sbx::graphics::format> {
+
+  static constexpr auto name() -> std::string_view {
+    return "format";
+  }
+
+  static constexpr auto enumerators() {
+    return std::make_tuple(
+      enumerator{"undefined", sbx::graphics::format::undefined},
+      enumerator{"r8_unorm", sbx::graphics::format::r8_unorm},
+      enumerator{"r16_sfloat", sbx::graphics::format::r16_sfloat},
+      enumerator{"r32_sfloat", sbx::graphics::format::r32_sfloat},
+      enumerator{"r32_uint", sbx::graphics::format::r32_uint},
+      enumerator{"r64_uint", sbx::graphics::format::r64_uint},
+      enumerator{"r16g16_sfloat", sbx::graphics::format::r16g16_sfloat},
+      enumerator{"r32g32_sfloat", sbx::graphics::format::r32g32_sfloat},
+      enumerator{"r32g32_uint", sbx::graphics::format::r32g32_uint},
+      enumerator{"r8g8b8a8_unorm", sbx::graphics::format::r8g8b8a8_unorm},
+      enumerator{"r8g8b8a8_srgb", sbx::graphics::format::r8g8b8a8_srgb},
+      enumerator{"b8g8r8a8_srgb", sbx::graphics::format::b8g8r8a8_srgb},
+      enumerator{"a2b10g10r10_unorm_pack32", sbx::graphics::format::a2b10g10r10_unorm_pack32},
+      enumerator{"r16g16b16a16_sfloat", sbx::graphics::format::r16g16b16a16_sfloat},
+      enumerator{"r32g32b32a32_sfloat", sbx::graphics::format::r32g32b32a32_sfloat}
+    );
+  }
+
+}; // struct sbx::reflection::description<sbx::graphics::format>
 
 #endif // LIBSBX_GRAPHICS_IMAGES_IMAGE2D_HPP_

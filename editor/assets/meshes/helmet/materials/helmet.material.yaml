@@ -1,0 +1,35 @@
+name: helmet_material_0
+
+albedo:
+  image: res://meshes/helmet/textures/albedo.jpg
+  format: r8g8b8a8_srgb
+
+normal:
+  image: res://meshes/helmet/textures/normal.jpg
+  format: r8g8b8a8_unorm
+
+metallic_roughness:
+  image: res://meshes/helmet/textures/mr.jpg
+  format: r8g8b8a8_unorm
+
+occlusion:
+  image: res://meshes/helmet/textures/ao.jpg
+  format: r8g8b8a8_unorm
+
+emissive:
+  image: res://meshes/helmet/textures/emissive.jpg
+  format: r8g8b8a8_srgb
+  factor: [1.0, 1.0, 1.0]
+
+base_color: [1.0, 1.0, 1.0, 1.0]
+metallic_factor: 1.0
+roughness_factor: 1.0
+specular_factor: 1.0
+
+# surface_shader:
+#   path: res://meshes/helmet/materials/helmet.slang
+#   required_attributes: [color]
+
+alpha_mode: opaque
+alpha_cutoff: 0.5
+is_double_sided: false

@@ -118,8 +118,8 @@ application::application()
   auto camera_node = environment.camera();
 
   auto& camera_transform = graph.get_component<sbx::scenes::transform>(camera_node);
-  camera_transform.set_position(sbx::math::vector3{2.0f, 5.0f, 2.0f});
-  camera_transform.look_at(sbx::math::vector3::zero);
+  camera_transform.set_position(sbx::math::vector3{2.0f, 7.0f, 2.0f});
+  camera_transform.look_at(helmet_transform.position());
 
   auto& skybox = graph.add_component<sbx::scenes::skybox>(camera_node);
   skybox.cube_image = asset_registry.get_cube_image("skybox");

@@ -1,0 +1,12 @@
+#ifndef LIBSBX_FILESYSTEM_PATHS_HPP_
+#define LIBSBX_FILESYSTEM_PATHS_HPP_
+
+#include <string_view>
+
+namespace sbx::filesystem {
+
+inline constexpr auto engine_data_directory = std::string_view{"@SBX_ENGINE_DATA_DIR@"};
+
+} // namespace sbx::filesystem
+
+#endif // LIBSBX_FILESYSTEM_PATHS_HPP_

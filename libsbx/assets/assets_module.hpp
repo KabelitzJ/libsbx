@@ -20,6 +20,10 @@
 
 #include <libsbx/core/module.hpp>
 
+#include <libsbx/filesystem/alias.hpp>
+#include <libsbx/filesystem/filesystem_module.hpp>
+#include <libsbx/filesystem/native_filesystem.hpp>
+
 #include <libsbx/assets/thread_pool.hpp>
 #include <libsbx/assets/metadata.hpp>
 
@@ -181,11 +185,27 @@ public:
     utility::logger<"assets">::debug("Setting asset_root to '{}'", root.string());
 
     _asset_root = root;
+
+    auto& filesystem_module = core::engine::get_module<filesystem::filesystem_module>();
+
+    const auto alias = filesystem::alias{"res://"};
+
+    if (filesystem_module.is_alias_registered(alias)) {
+      filesystem_module.unregister_alias(alias);
+    }
+
+    filesystem_module.create_filesystem<filesystem::native_filesystem>(alias, root.generic_string());
   }
 
   auto resolve_path(const std::filesystem::path& path) -> std::filesystem::path {
     if (path.empty()) {
       return path;
+    }
+
+    auto& filesystem_module = core::engine::get_module<filesystem::filesystem_module>();
+
+    if (filesystem_module.is_alias_registered(filesystem::alias{"res://"})) {
+      return filesystem_module.native_path_of(path);
     }
 
     const auto& path_string = path.string();

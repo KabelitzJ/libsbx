@@ -6,7 +6,9 @@
 !.vscode/tasks.json
 !.vscode/c_cpp_properties.json
 
-**/version.hpp
+# Generated headers
+libsbx/version.hpp
+libsbx/filesystem/paths.hpp
 
 compile_commands.json
 

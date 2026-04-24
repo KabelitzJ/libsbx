@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <optional>
 #include <functional>
+#include <filesystem>
 
 #include <libsbx/filesystem/filesystem.hpp>
 #include <libsbx/filesystem/file_base.hpp>
@@ -241,6 +242,41 @@ public:
     std::sort(result.begin(), result.end());
 
     return result;
+  }
+
+  [[nodiscard]] auto native_path_of(const std::string& virtual_path) const -> std::filesystem::path {
+    auto lock = std::scoped_lock{_mutex};
+
+    for (const auto& alias : _sorted_alias) {
+      const auto& prefix = alias.string();
+
+      if (!virtual_path.starts_with(prefix)) {
+        continue;
+      }
+
+      auto entry = _filesystems.find(alias);
+
+      if (entry == _filesystems.end() || entry->second.empty()) {
+        continue;
+      }
+
+      const auto& base = entry->second.back()->base_path();
+      const auto tail = std::string_view{virtual_path}.substr(prefix.size());
+
+      auto result = std::filesystem::path{base};
+
+      if (!tail.empty()) {
+        result /= std::string{tail};
+      }
+
+      return result;
+    }
+
+    return std::filesystem::path{virtual_path};
+  }
+
+  [[nodiscard]] auto native_path_of(const std::filesystem::path& virtual_path) const -> std::filesystem::path {
+    return native_path_of(virtual_path.string());
   }
 
 private:

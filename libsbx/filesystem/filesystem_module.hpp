@@ -5,6 +5,7 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <filesystem>
 
 #include <libsbx/core/module.hpp>
 #include <libsbx/core/engine.hpp>
@@ -60,6 +61,14 @@ public:
 
   auto is_alias_registered(const alias& alias) const -> bool {
     return _filesystem->is_alias_registered(alias);
+  }
+
+  auto native_path_of(const std::string& virtual_path) const -> std::filesystem::path {
+    return _filesystem->native_path_of(virtual_path);
+  }
+
+  auto native_path_of(const std::filesystem::path& virtual_path) const -> std::filesystem::path {
+    return _filesystem->native_path_of(virtual_path);
   }
 
 private:

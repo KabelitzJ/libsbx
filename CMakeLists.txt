@@ -132,6 +132,10 @@ set(EASY_OPTION_LOG 1 CACHE STRING "" FORCE)
 
 configure_file("${CMAKE_SOURCE_DIR}/libsbx/version.hpp.in" "${CMAKE_SOURCE_DIR}/libsbx/version.hpp" @ONLY)
 
+set(SBX_ENGINE_DATA_DIR "${CMAKE_SOURCE_DIR}/libsbx" CACHE PATH "Absolute path to the engine data directory (shaders, fonts, built-in assets). Overridable at runtime via the SBX_ENGINE_DATA_DIR environment variable.")
+
+configure_file("${CMAKE_SOURCE_DIR}/libsbx/filesystem/paths.hpp.in" "${CMAKE_SOURCE_DIR}/libsbx/filesystem/paths.hpp" @ONLY)
+
 # Library target
 
 if(SBX_BUILD_SHARED)
@@ -379,6 +383,7 @@ target_sources(
       "${CMAKE_SOURCE_DIR}/libsbx/filesystem/memory_filesystem.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/filesystem/native_file.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/filesystem/native_filesystem.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/filesystem/paths.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/filesystem/virtual_filesystem.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/gizmos/gizmos_subrenderer.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/gizmos/gizmos.hpp"

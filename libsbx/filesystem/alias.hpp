@@ -76,6 +76,10 @@ private:
       }
     }
 
+    if (normalized.find(reinterpret_cast<const char_type*>("://")) != string_type::npos) {
+      return normalized;
+    }
+
     if (normalized.empty()) {
       normalized = reinterpret_cast<const char_type*>("/");
     }

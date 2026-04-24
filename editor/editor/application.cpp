@@ -73,6 +73,14 @@ application::application()
 
   asset_registry.request_mesh<sbx::models::mesh>("cube", "res://meshes/cube/cube.gltf");
 
+  asset_registry.request_image("base_albedo", "res://textures/base/albedo.png", sbx::graphics::format::r8g8b8a8_srgb);
+
+  asset_registry.request_image("floor_albedo", "res://textures/floor/albedo.png", sbx::graphics::format::r8g8b8a8_srgb);
+  asset_registry.request_image("floor_ao", "res://textures/floor/ao.png", sbx::graphics::format::r8g8b8a8_unorm);
+  asset_registry.request_image("floor_arm", "res://textures/floor/arm.png", sbx::graphics::format::r8g8b8a8_unorm);
+  asset_registry.request_image("floor_normal", "res://textures/floor/normal.png", sbx::graphics::format::r8g8b8a8_unorm);
+  asset_registry.request_image("floor_height", "res://textures/floor/height.png", sbx::graphics::format::r8g8b8a8_unorm);
+
   asset_registry.request_mesh<sbx::models::mesh>("helmet", "res://meshes/helmet/helmet.gltf");
 
   asset_registry.request_image("helmet_albedo", "res://meshes/helmet/textures/albedo.jpg", sbx::graphics::format::r8g8b8a8_srgb);
@@ -117,14 +125,25 @@ application::application()
 
   auto& base_transform = graph.get_component<sbx::scenes::transform>(base);
   base_transform.set_position(sbx::math::vector3{0.0f, 0.0f, 0.0f});
-  base_transform.set_scale(sbx::math::vector3{25.0f, 0.2f, 25.0f});
+  base_transform.set_scale(sbx::math::vector3{100.0f, 0.2f, 100.0f});
 
   auto& base_material = asset_registry.request_material<sbx::models::material>("base");
-  base_material.base_color = sbx::math::color::white();
+  base_material.albedo.image = asset_registry.get_image("floor_albedo");
+  base_material.albedo.anisotropy = 16.0f;
+  base_material.normal.image = asset_registry.get_image("floor_normal");
+  base_material.normal.anisotropy = 16.0f;
+  base_material.metallic_roughness.image = asset_registry.get_image("floor_arm");
+  base_material.metallic_roughness.anisotropy = 16.0f;
+  base_material.occlusion.image = asset_registry.get_image("floor_ao");
+  base_material.occlusion.anisotropy = 16.0f;
+  base_material.height.image = asset_registry.get_image("floor_height");
+  base_material.height.anisotropy = 16.0f;
+  base_material.uv_scale = sbx::math::vector2{10, 10};
   base_material.alpha = sbx::models::alpha_mode::opaque;
   base_material.metallic_factor = 0.0f;
-  base_material.roughness_factor = 0.1f;
+  base_material.roughness_factor = 1.0f;
   base_material.occlusion_strength = 1.0f;
+  base_material.specular_factor = 0.0f;
 
   graph.add_component<sbx::scenes::static_mesh>(base, asset_registry.get_mesh("cube"), asset_registry.get_material("base"));
 

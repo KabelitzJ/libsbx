@@ -55,7 +55,7 @@ public:
 
   image2d(const math::vector2u& extent, graphics::format format = graphics::format::r8g8b8a8_unorm, graphics::filter filter = graphics::filter::linear, graphics::address_mode address_mode = graphics::address_mode::repeat, VkImageUsageFlags usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_STORAGE_BIT, VkSampleCountFlagBits samples = VK_SAMPLE_COUNT_1_BIT, bool anisotropic = false, bool mipmap = false, std::uint32_t array_layers = 1u);
 
-  image2d(const std::filesystem::path& path, graphics::format format = graphics::format::r8g8b8a8_srgb, VkFilter filter = VK_FILTER_LINEAR, VkSamplerAddressMode address_mode = VK_SAMPLER_ADDRESS_MODE_REPEAT, bool anisotropic = false, bool mipmap = false);
+  image2d(const std::filesystem::path& path, graphics::format format = graphics::format::r8g8b8a8_srgb, graphics::filter filter = graphics::filter::linear, graphics::address_mode address_mode = graphics::address_mode::repeat, bool anisotropic = false, bool mipmap = false);
 
   image2d(const math::vector2u& extent, graphics::format format, graphics::filter filter, memory::observer_ptr<const std::uint8_t> pixels);
 

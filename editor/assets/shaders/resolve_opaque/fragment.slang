@@ -189,8 +189,8 @@ float calculate_shadow_cascade(uint cascade, float3 world_position, float3 norma
   uint2 dimensions = shadow_map_dimensions(cascade);
   float2 texel_size = 1.0 / float2(dimensions);
 
-  float3 light_dir = normalize(-scene.light_direction);
-  float ndl = dot(normal, light_dir);
+  float3 light_direction = normalize(-scene.light_direction);
+  float ndl = dot(normal, light_direction);
 
   // Normal offset bias — push sample point along normal proportional to texel size
   float normal_offset_scale = texel_size.x * 2.0 * (1.0 + cascade);
@@ -308,23 +308,23 @@ fs_out main(fs_in input) {
   float roughness = clamp(mrao.g, 0.045, 1.0);
   float ao = clamp(mrao.b, 0.0, 1.0);
 
-  float3 view_dir = normalize(scene.camera_position - world_position);
-  float ndv = max(dot(normal, view_dir), 0.0);
+  float3 view_direction = normalize(scene.camera_position - world_position);
+  float ndv = max(dot(normal, view_direction), 0.0);
   float3 f0 = lerp(DEFAULT_F0, albedo, metallic);
 
   float3 color = float3(0.0, 0.0, 0.0);
 
   // Global directional light
 
-  float3 light_dir = normalize(-scene.light_direction);
-  float3 halfway_dir = normalize(view_dir + light_dir);
-  float ndl = max(dot(normal, light_dir), 0.0);
+  float3 light_direction = normalize(-scene.light_direction);
+  float3 halfway_direction = normalize(view_direction + light_direction);
+  float ndl = max(dot(normal, light_direction), 0.0);
 
   float alpha = roughness * roughness;
 
-  float D = distribution_ggx(normal, halfway_dir, alpha);
+  float D = distribution_ggx(normal, halfway_direction, alpha);
   float V = V_smith_ggx_correlated(ndv, ndl, alpha);
-  float3 F = fresnel_schlick(max(dot(halfway_dir, view_dir), 0.0), f0, specular_strength);
+  float3 F = fresnel_schlick(max(dot(halfway_direction, view_direction), 0.0), f0, specular_strength);
 
   float3 specular = D * V * F;
 
@@ -345,13 +345,13 @@ fs_out main(fs_in input) {
     float3 light_position = light.position.xyz;
     float light_radius = light.position.w;
 
-    float3 l_dir = light_position - world_position;
-    float  distance = max(length(l_dir), 0.001);
+    float3 light_direction = light_position - world_position;
+    float  distance = max(length(light_direction), 0.001);
 
-    l_dir /= distance;
+    light_direction /= distance;
 
-    float3 h = normalize(view_dir + l_dir);
-    float ndl_p = max(dot(normal, l_dir), 0.0);
+    float3 h = normalize(view_direction + light_direction);
+    float ndl_p = max(dot(normal, light_direction), 0.0);
 
     float d_over_r = distance / light_radius;
     float d_over_r_4 = d_over_r * d_over_r * d_over_r * d_over_r;
@@ -362,7 +362,7 @@ fs_out main(fs_in input) {
 
     float Dp = distribution_ggx(normal, h, alpha);
     float Vp = V_smith_ggx_correlated(ndv, ndl_p, alpha);
-    float3 Fp = fresnel_schlick(max(dot(h, view_dir), 0.0), f0, specular_strength);
+    float3 Fp = fresnel_schlick(max(dot(h, view_direction), 0.0), f0, specular_strength);
 
     float3 spec_p = Dp * Vp * Fp;
 
@@ -373,7 +373,7 @@ fs_out main(fs_in input) {
 
   // Image based lighting
 
-  float3 r = normalize(reflect(-view_dir, normal));
+  float3 r = normalize(reflect(-view_direction, normal));
 
   float3 diffuse_irradiance = irradiance_image.Sample(normal).rgb;
   float3 diffuse_ibl = diffuse_irradiance * albedo / sbx::math::pi;

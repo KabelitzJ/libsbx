@@ -292,8 +292,8 @@ opaque_fs_out opaque_main(fs_in input) {
 
   float3x3 TBN = build_tbn(input, material_data);
 
-  // float2 uv = parallax_occlusion_mapping(input, material_data, TBN);
-  float2 uv = input.uv * material_data.uv_scale + material_data.uv_offset;
+  float2 uv = parallax_occlusion_mapping(input, material_data, TBN);
+  // float2 uv = input.uv * material_data.uv_scale + material_data.uv_offset;
 
   surface_fragment_context ctx = build_surface_context(input, uv, TBN, material_data);
   ctx.albedo = get_albedo<opaque_alpha_policy>(uv, material_data);
@@ -312,8 +312,8 @@ opaque_fs_out mask_main(fs_in input) {
 
   float3x3 TBN = build_tbn(input, material_data);
 
-  // float2 uv = parallax_occlusion_mapping(input, material_data, TBN);
-  float2 uv = input.uv * material_data.uv_scale + material_data.uv_offset;
+  float2 uv = parallax_occlusion_mapping(input, material_data, TBN);
+  // float2 uv = input.uv * material_data.uv_scale + material_data.uv_offset;
 
   float4 albedo = get_albedo<mask_alpha_policy>(uv, material_data);
 

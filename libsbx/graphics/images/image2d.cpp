@@ -26,8 +26,8 @@ image2d::image2d(const math::vector2u& extent, graphics::format format, graphics
 }
 
 // [TODO] KAJ 2023-07-28 : We use VK_FORMAT_R8G8B8A8_SRGB here because it best matches the STBI_rgb_alpha format that we load the image with.
-image2d::image2d(const std::filesystem::path& path, graphics::format format, VkFilter filter, VkSamplerAddressMode address_mode, bool anisotropic, bool mipmap)
-: image{VkExtent3D{0, 0, 1}, filter, address_mode, VK_SAMPLE_COUNT_1_BIT, (VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT), to_vk_enum<VkFormat>(format), 1, 1},
+image2d::image2d(const std::filesystem::path& path, graphics::format format, graphics::filter filter, graphics::address_mode address_mode, bool anisotropic, bool mipmap)
+: image{VkExtent3D{0, 0, 1}, to_vk_enum<VkFilter>(filter), to_vk_enum<VkSamplerAddressMode>(address_mode), VK_SAMPLE_COUNT_1_BIT, (VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT), to_vk_enum<VkFormat>(format), 1, 1},
   _anisotropic{anisotropic},
   _mipmap{mipmap} {
   auto& assets_module = core::engine::get_module<assets::assets_module>();

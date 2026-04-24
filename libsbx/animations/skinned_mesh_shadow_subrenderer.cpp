@@ -29,7 +29,7 @@ auto skinned_mesh_shadow_subrenderer::render(graphics::command_buffer& command_b
   auto& graph = scene.graph();
   auto& environment = scene.environment();
 
-  auto& draw_list = renderer.draw_list<skinned_mesh_material_draw_list>("skinned_mesh_material");
+  auto& draw_list = renderer.draw_list<skinned_mesh_material_draw_list>();
 
   const auto& ranges = draw_list.ranges(skinned_mesh_material_draw_list::bucket::shadow);
 

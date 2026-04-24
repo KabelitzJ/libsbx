@@ -39,7 +39,7 @@ auto skinning_task::execute(graphics::command_buffer& command_buffer) -> void {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
   auto& renderer = graphics_module.renderer();
 
-  auto& draw_list = renderer.draw_list<skinned_mesh_material_draw_list>("skinned_mesh_material");
+  auto& draw_list = renderer.draw_list<skinned_mesh_material_draw_list>();
 
   const auto bone_matrices_buffer_address = draw_list.buffer(skinned_mesh_traits::bone_matrices_buffer_name).address();
 

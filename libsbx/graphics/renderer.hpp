@@ -87,7 +87,9 @@ public:
 
   template<typename Type>
   requires (std::is_base_of_v<graphics::draw_list, Type>)
-  auto draw_list(const utility::hashed_string& name) -> Type& {
+  auto draw_list() -> Type& {
+    const auto name = utility::hashed_string{std::string{utility::type_name<Type>()}};
+
     if (auto entry = _draw_lists.find(name); entry != _draw_lists.end()) {
       return *static_cast<Type*>(entry->second.get());
     }
@@ -167,7 +169,9 @@ protected:
 
   template<typename Type, typename... Args>
   requires (std::is_constructible_v<Type, Args...>)
-  auto add_draw_list(const utility::hashed_string& name, Args&&... args) -> Type& {
+  auto add_draw_list(Args&&... args) -> Type& {
+    auto name = utility::hashed_string{std::string{utility::type_name<Type>()}};
+
     auto result = _draw_lists.emplace(name, std::make_unique<Type>(std::forward<Args>(args)...));
 
     return *static_cast<Type*>(result.first->second.get());
@@ -194,8 +198,8 @@ protected:
 private:
 
   std::vector<std::vector<std::unique_ptr<graphics::subrenderer>>> _subrenderers;
-  std::vector<std::vector<std::unique_ptr<graphics::task>>> _tasks;
 
+  std::vector<std::vector<std::unique_ptr<graphics::task>>> _tasks;
   std::unordered_map<std::uint32_t, std::pair<std::uint32_t, std::size_t>> _task_by_id;
 
   std::unordered_map<utility::hashed_string, std::unique_ptr<graphics::draw_list>> _draw_lists;

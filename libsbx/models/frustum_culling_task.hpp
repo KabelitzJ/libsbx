@@ -53,6 +53,8 @@ struct frustum_planes {
 
 class frustum_culling_task final : public graphics::task {
 
+  inline static constexpr auto default_pipeline_path = std::string_view{"engine://shaders/frustum_culling"};
+
 public:
 
   static constexpr auto no_cascade = std::uint32_t{0xFFFFFFFF};
@@ -62,7 +64,7 @@ public:
     graphics::storage_buffer_handle instances_buffer;
   }; // struct culled_range_view
 
-  frustum_culling_task(const std::filesystem::path& path);
+  frustum_culling_task(const std::filesystem::path& path = default_pipeline_path);
 
   ~frustum_culling_task() override;
 

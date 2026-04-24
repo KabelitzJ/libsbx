@@ -41,9 +41,11 @@ class skinned_mesh_shadow_subrenderer final : public graphics::subrenderer {
     }
   };
 
+  inline static constexpr auto default_pipeline_path = std::string_view{"engine://shaders/shadow"};
+
 public:
 
-  skinned_mesh_shadow_subrenderer(const std::vector<graphics::attachment_description>& attachments, const std::filesystem::path& base_pipeline);
+  skinned_mesh_shadow_subrenderer(const std::vector<graphics::attachment_description>& attachments, const std::filesystem::path& base_pipeline = default_pipeline_path);
 
   ~skinned_mesh_shadow_subrenderer() override;
 

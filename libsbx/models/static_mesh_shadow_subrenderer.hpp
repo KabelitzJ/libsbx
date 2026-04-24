@@ -39,9 +39,11 @@ class static_mesh_shadow_subrenderer final : public graphics::subrenderer {
     }
   };
 
+  inline static constexpr auto default_pipeline_path = std::string_view{"engine://shaders/shadow"};
+
 public:
 
-  static_mesh_shadow_subrenderer(const std::vector<graphics::attachment_description>& attachments, const std::filesystem::path& base_pipeline);
+  static_mesh_shadow_subrenderer(const std::vector<graphics::attachment_description>& attachments, const std::filesystem::path& base_pipeline = default_pipeline_path);
 
   ~static_mesh_shadow_subrenderer() override;
 

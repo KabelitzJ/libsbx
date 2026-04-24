@@ -3,7 +3,7 @@
 
 namespace sbx::animations {
 
-skinned_mesh_material_subrenderer::skinned_mesh_material_subrenderer(const std::vector<graphics::attachment_description>& attachments, const std::filesystem::path& base_pipeline, const skinned_mesh_material_draw_list::bucket bucket)
+skinned_mesh_material_subrenderer::skinned_mesh_material_subrenderer(const std::vector<graphics::attachment_description>& attachments, const skinned_mesh_material_draw_list::bucket bucket, const std::filesystem::path& base_pipeline)
 : graphics::subrenderer{},
   _attachments{attachments},
   _base_pipeline{base_pipeline},
@@ -29,7 +29,7 @@ auto skinned_mesh_material_subrenderer::render(graphics::command_buffer& command
   auto& scene = scenes_module.active_scene();
   auto& environment = scene.environment();
 
-  auto& draw_list = renderer.draw_list<skinned_mesh_material_draw_list>("skinned_mesh_material");
+  auto& draw_list = renderer.draw_list<skinned_mesh_material_draw_list>();
 
   auto skinning_task = renderer.task<animations::skinning_task>();
 

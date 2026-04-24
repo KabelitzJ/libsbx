@@ -7,7 +7,7 @@
 #include <libsbx/utility/logger.hpp>
 
 #include <libsbx/filesystem/native_filesystem.hpp>
-#include <libsbx/filesystem/paths.hpp>
+#include <libsbx/filesystem/data_directory.hpp>
 
 namespace sbx::filesystem {
 
@@ -18,7 +18,7 @@ filesystem_module::filesystem_module()
   if (const auto* env = std::getenv("SBX_ENGINE_DATA_DIR"); env && *env) {
     engine_directory = env;
   } else {
-    engine_directory = filesystem::engine_data_directory;
+    engine_directory = filesystem::data_directory;
   }
 
   if (!std::filesystem::exists(engine_directory) || !std::filesystem::is_directory(engine_directory)) {

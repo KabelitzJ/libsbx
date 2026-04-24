@@ -26,9 +26,11 @@ namespace sbx::animations {
 
 class skinning_task final : public graphics::task {
 
+  inline static constexpr auto default_pipeline_path = std::string_view{"engine://shaders/skinning"};
+
 public:
 
-  skinning_task(const std::filesystem::path& path);
+  skinning_task(const std::filesystem::path& path = default_pipeline_path);
 
   ~skinning_task() override;
 

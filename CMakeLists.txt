@@ -132,9 +132,9 @@ set(EASY_OPTION_LOG 1 CACHE STRING "" FORCE)
 
 configure_file("${CMAKE_SOURCE_DIR}/libsbx/version.hpp.in" "${CMAKE_SOURCE_DIR}/libsbx/version.hpp" @ONLY)
 
-set(SBX_ENGINE_DATA_DIR "${CMAKE_SOURCE_DIR}/libsbx" CACHE PATH "Absolute path to the engine data directory (shaders, fonts, built-in assets). Overridable at runtime via the SBX_ENGINE_DATA_DIR environment variable.")
+set(SBX_ENGINE_DATA_DIRECTORY "${CMAKE_SOURCE_DIR}/libsbx" CACHE PATH "Absolute path to the engine data directory (shaders, fonts, built-in assets). Overridable at runtime via the SBX_ENGINE_DATA_DIR environment variable.")
 
-configure_file("${CMAKE_SOURCE_DIR}/libsbx/filesystem/paths.hpp.in" "${CMAKE_SOURCE_DIR}/libsbx/filesystem/paths.hpp" @ONLY)
+configure_file("${CMAKE_SOURCE_DIR}/libsbx/filesystem/data_directory.hpp.in" "${CMAKE_SOURCE_DIR}/libsbx/filesystem/data_directory.hpp" @ONLY)
 
 # Library target
 
@@ -145,6 +145,17 @@ else()
 endif()
 
 add_library(libsbx::libsbx ALIAS libsbx)
+
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+
+add_custom_target(
+  compiled_shaders_libsbx
+  COMMAND ${Python3_EXECUTABLE} "${CMAKE_SOURCE_DIR}/scripts/compile_shaders.py" "${CMAKE_SOURCE_DIR}/libsbx/shaders"
+  WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
+  COMMENT "Compiling shaders for ${PROJECT_NAME}..."
+)
+
+add_dependencies(${PROJECT_NAME} compiled_shaders_libsbx)
 
 target_sources(
   libsbx
@@ -375,6 +386,7 @@ target_sources(
       "${CMAKE_SOURCE_DIR}/libsbx/ecs/view.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/ecs/zip.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/filesystem/alias.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/filesystem/data_directory.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/filesystem/file_base.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/filesystem/file_info.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/filesystem/filesystem_base.hpp"
@@ -383,7 +395,6 @@ target_sources(
       "${CMAKE_SOURCE_DIR}/libsbx/filesystem/memory_filesystem.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/filesystem/native_file.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/filesystem/native_filesystem.hpp"
-      "${CMAKE_SOURCE_DIR}/libsbx/filesystem/paths.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/filesystem/virtual_filesystem.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/gizmos/gizmos_subrenderer.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/gizmos/gizmos.hpp"

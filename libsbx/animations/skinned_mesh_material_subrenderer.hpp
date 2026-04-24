@@ -51,9 +51,11 @@ class skinned_mesh_material_subrenderer final : public graphics::subrenderer {
     }
   };
 
+  inline static constexpr auto default_pipeline_path = std::string_view{"engine://shaders/deferred_pbr_material"};
+
 public:
 
-  skinned_mesh_material_subrenderer(const std::vector<graphics::attachment_description>& attachments, const std::filesystem::path& base_pipeline, const skinned_mesh_material_draw_list::bucket bucket);
+  skinned_mesh_material_subrenderer(const std::vector<graphics::attachment_description>& attachments, const skinned_mesh_material_draw_list::bucket bucket, const std::filesystem::path& base_pipeline = default_pipeline_path);
 
   ~skinned_mesh_material_subrenderer() override;
 

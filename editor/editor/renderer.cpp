@@ -213,27 +213,27 @@ renderer::renderer()
 
   
   // Draw lists
-  add_draw_list<sbx::models::static_mesh_material_draw_list>("static_mesh_material");
-  add_draw_list<sbx::animations::skinned_mesh_material_draw_list>("skinned_mesh_material");
+  add_draw_list<sbx::models::static_mesh_material_draw_list>();
+  add_draw_list<sbx::animations::skinned_mesh_material_draw_list>();
   
   // Compute passes
-  const auto& frustum_culling_task = add_task<sbx::models::frustum_culling_task>(culling_pass, "res://shaders/frustum_culling");
-  const auto& skinning_task = add_task<sbx::animations::skinning_task>(skinning_pass, "res://shaders/skinning");
-  const auto& particle_task = add_task<sbx::particles::particle_task>(particles_pass, "res://shaders/particles");
+  const auto& frustum_culling_task = add_task<sbx::models::frustum_culling_task>(culling_pass);
+  const auto& skinning_task = add_task<sbx::animations::skinning_task>(skinning_pass);
+  const auto& particle_task = add_task<sbx::particles::particle_task>(particles_pass);
 
   // Shadow pass
-  add_subrenderer<sbx::models::static_mesh_shadow_subrenderer>(shadow_pass, "res://shaders/shadow");
-  add_subrenderer<sbx::animations::skinned_mesh_shadow_subrenderer>(shadow_pass, "res://shaders/shadow");
+  add_subrenderer<sbx::models::static_mesh_shadow_subrenderer>(shadow_pass);
+  add_subrenderer<sbx::animations::skinned_mesh_shadow_subrenderer>(shadow_pass);
 
   // Deferred pass
-  add_subrenderer<sbx::models::static_mesh_material_subrenderer>(deferred_pass, "res://shaders/deferred_pbr_material", sbx::models::static_mesh_material_draw_list::bucket::opaque);
-  add_subrenderer<sbx::animations::skinned_mesh_material_subrenderer>(deferred_pass, "res://shaders/deferred_pbr_material", sbx::animations::skinned_mesh_material_draw_list::bucket::opaque);
+  add_subrenderer<sbx::models::static_mesh_material_subrenderer>(deferred_pass, sbx::models::static_mesh_material_draw_list::bucket::opaque);
+  add_subrenderer<sbx::animations::skinned_mesh_material_subrenderer>(deferred_pass, sbx::animations::skinned_mesh_material_draw_list::bucket::opaque);
 
   // Transparency pass
-  add_subrenderer<sbx::models::static_mesh_material_subrenderer>(transparency_pass, "res://shaders/deferred_pbr_material", sbx::models::static_mesh_material_draw_list::bucket::transparent);
-  add_subrenderer<sbx::animations::skinned_mesh_material_subrenderer>(transparency_pass, "res://shaders/deferred_pbr_material", sbx::animations::skinned_mesh_material_draw_list::bucket::transparent);
+  add_subrenderer<sbx::models::static_mesh_material_subrenderer>(transparency_pass, sbx::models::static_mesh_material_draw_list::bucket::transparent);
+  add_subrenderer<sbx::animations::skinned_mesh_material_subrenderer>(transparency_pass, sbx::animations::skinned_mesh_material_draw_list::bucket::transparent);
 
-  add_subrenderer<sbx::particles::particle_subrenderer>(transparency_pass, "res://shaders/particles", sbx::memory::make_observer(particle_task));
+  add_subrenderer<sbx::particles::particle_subrenderer>(transparency_pass);
 
   // Resolve pass
   auto resolve_opaque_attachment_names = std::vector<std::pair<std::string, std::string>>{

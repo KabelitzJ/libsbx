@@ -9,22 +9,33 @@
 
 namespace sbx::particles {
 
-particle_subrenderer::particle_subrenderer(const std::vector<graphics::attachment_description>& attachments, const std::filesystem::path& path, memory::observer_ptr<const particle_task> particle_task)
+particle_subrenderer::particle_subrenderer(const std::vector<graphics::attachment_description>& attachments, const std::filesystem::path& path)
 : graphics::subrenderer{},
   _pipeline{path, attachments, definition},
-  _push_handler{_pipeline},
-  _particle_task{particle_task} { }
+  _push_handler{_pipeline} { }
 
 auto particle_subrenderer::render(graphics::command_buffer& command_buffer) -> void {
   EASY_BLOCK("particle_subrenderer::render");
   SBX_PROFILE_SCOPE("particle_subrenderer::render");
 
+  auto timer = graphics::scoped_gpu_timer{command_buffer, "particle_subrenderer"};
+
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
+  auto& renderer = graphics_module.renderer();
+
   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
 
   auto& scene = scenes_module.active_scene();
   auto& environment = scene.environment();
   auto& graph = scene.graph();
+
+  auto particle_task = renderer.task<particles::particle_task>();
+
+  if (!particle_task) {
+    utility::logger<"particles">::warn("The particle_subrenderer requires 'sbx::particlesparticle_task' to run");
+
+    return;
+  }
 
   std::erase_if(_descriptor_data, [&](const auto& entry) {
     const auto& [node, handler] = entry;
@@ -38,9 +49,9 @@ auto particle_subrenderer::render(graphics::command_buffer& command_buffer) -> v
     utility::assert_that(emitter.images.size() > 0u, "Invalid particle_emitter with 0 images");
     utility::assert_that(emitter.images, [](const auto& handle) -> bool { return handle.is_valid(); }, "Invalid image handle in particle_emitter");
 
-    auto particle_buffer = _particle_task->particle_buffer(node);
-    auto alive_list_buffer = _particle_task->alive_list_buffer(node);
-    auto indirect_buffer = _particle_task->indirect_buffer(node);
+    auto particle_buffer = particle_task->particle_buffer(node);
+    auto alive_list_buffer = particle_task->alive_list_buffer(node);
+    auto indirect_buffer = particle_task->indirect_buffer(node);
 
     utility::assert_that(particle_buffer.is_valid() && alive_list_buffer.is_valid() && indirect_buffer.is_valid(), "Invalid buffer handles");
 

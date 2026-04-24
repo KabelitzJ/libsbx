@@ -31,9 +31,11 @@ class particle_subrenderer final : public graphics::subrenderer {
     }
   };
 
+  inline static constexpr auto default_pipeline_path = std::string_view{"engine://shaders/particles"};
+
 public:
 
-  particle_subrenderer(const std::vector<graphics::attachment_description>& attachments, const std::filesystem::path& path, memory::observer_ptr<const particle_task> particle_task);
+  particle_subrenderer(const std::vector<graphics::attachment_description>& attachments, const std::filesystem::path& path = default_pipeline_path);
 
   ~particle_subrenderer() override = default;
 
@@ -46,8 +48,6 @@ private:
     graphics::separate_image2d_array images;
     graphics::sampler_state sampler;
   }; // struct descriptor_data
-
-  memory::observer_ptr<const particle_task> _particle_task;
 
   graphics::graphics_pipeline _pipeline;
   graphics::push_handler _push_handler;

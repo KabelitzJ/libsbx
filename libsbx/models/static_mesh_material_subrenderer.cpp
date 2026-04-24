@@ -3,7 +3,7 @@
 
 namespace sbx::models {
 
-static_mesh_material_subrenderer::static_mesh_material_subrenderer(const std::vector<graphics::attachment_description>& attachments, const std::filesystem::path& base_pipeline, const static_mesh_material_draw_list::bucket bucket)
+static_mesh_material_subrenderer::static_mesh_material_subrenderer(const std::vector<graphics::attachment_description>& attachments, const static_mesh_material_draw_list::bucket bucket, const std::filesystem::path& base_pipeline)
 : graphics::subrenderer{},
   _attachments{attachments},
   _base_pipeline{base_pipeline},
@@ -31,7 +31,7 @@ auto static_mesh_material_subrenderer::render(graphics::command_buffer& command_
   auto& environment = scene.environment();
   auto& graph = scene.graph();
 
-  auto& draw_list = renderer.draw_list<models::static_mesh_material_draw_list>("static_mesh_material");
+  auto& draw_list = renderer.draw_list<models::static_mesh_material_draw_list>();
 
   auto frustum_culling_task = renderer.task<models::frustum_culling_task>();
 

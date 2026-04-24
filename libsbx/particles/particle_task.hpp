@@ -31,9 +31,11 @@ namespace sbx::particles {
 
 class particle_task final : public graphics::task {
 
+  inline static constexpr auto default_pipeline_path = std::string_view{"engine://shaders/particles"};
+
 public:
 
-  particle_task(const std::filesystem::path& path);
+  particle_task(const std::filesystem::path& path = default_pipeline_path);
 
   ~particle_task() override = default;
 

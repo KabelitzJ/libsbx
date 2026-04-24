@@ -89,6 +89,14 @@ application::application()
   asset_registry.request_image("helmet_mr", "res://meshes/helmet/textures/mr.jpg", sbx::graphics::format::r8g8b8a8_unorm);
   asset_registry.request_image("helmet_normal", "res://meshes/helmet/textures/normal.jpg", sbx::graphics::format::r8g8b8a8_unorm);
 
+  asset_registry.request_image("tree_bark_albedo", "res://meshes/tree/textures/bark/albedo.png", sbx::graphics::format::r8g8b8a8_srgb);
+  asset_registry.request_image("tree_bark_normal", "res://meshes/tree/textures/bark/normal.png", sbx::graphics::format::r8g8b8a8_unorm);
+
+  asset_registry.request_image("tree_leaves_albedo", "res://meshes/tree/textures/leaves/albedo.png", sbx::graphics::format::r8g8b8a8_srgb);
+  asset_registry.request_image("tree_leaves_normal", "res://meshes/tree/textures/leaves/normal.png", sbx::graphics::format::r8g8b8a8_unorm);
+
+  asset_registry.request_mesh<sbx::models::mesh>("tree", "res://meshes/tree/tree.gltf");
+
   asset_registry.request_cube_image("skybox", "res://skyboxes/hdr/clouds", std::string{".hdr"}, sbx::graphics::format::r32g32b32a32_sfloat);
   // asset_registry.request_cube_image("skybox", "res://skyboxes/clouds");
 
@@ -138,7 +146,7 @@ application::application()
   base_material.occlusion.anisotropy = 16.0f;
   base_material.height.image = asset_registry.get_image("floor_height");
   base_material.height.anisotropy = 16.0f;
-  base_material.uv_scale = sbx::math::vector2{10, 10};
+  base_material.uv_scale = sbx::math::vector2{15, 15};
   base_material.alpha = sbx::models::alpha_mode::opaque;
   base_material.metallic_factor = 0.0f;
   base_material.roughness_factor = 1.0f;
@@ -146,6 +154,49 @@ application::application()
   base_material.specular_factor = 0.0f;
 
   graph.add_component<sbx::scenes::static_mesh>(base, asset_registry.get_mesh("cube"), asset_registry.get_material("base"));
+
+  // Tree
+
+  auto tree = graph.create_node("Tree");
+
+  auto& tree_transform = graph.get_component<sbx::scenes::transform>(tree);
+  tree_transform.set_position(sbx::math::vector3{2.0f, 0.0f, 2.0f});
+
+  auto& tree_bark_material = asset_registry.request_material<sbx::models::material>("tree_bark");
+  tree_bark_material.albedo.image = asset_registry.get_image("tree_bark_albedo");
+  tree_bark_material.normal.image = asset_registry.get_image("tree_bark_normal");
+  tree_bark_material.alpha = sbx::models::alpha_mode::opaque;
+  tree_bark_material.metallic_factor = 0.0f;
+  tree_bark_material.roughness_factor = 1.0f;
+  tree_bark_material.occlusion_strength = 1.0f;
+  tree_bark_material.specular_factor = 0.0f;
+  tree_bark_material.sway_speed = 0.8f;
+  tree_bark_material.sway_strength = 0.04f;
+  tree_bark_material.sway_falloff_exponent = 3.0f;
+
+  auto& tree_leaves_material = asset_registry.request_material<sbx::models::material>("tree_leaves");
+  tree_leaves_material.albedo.image = asset_registry.get_image("tree_leaves_albedo");
+  tree_leaves_material.normal.image = asset_registry.get_image("tree_leaves_normal");
+  tree_leaves_material.alpha = sbx::models::alpha_mode::mask;
+  tree_leaves_material.is_double_sided = true;
+  tree_leaves_material.alpha_cutoff = 0.5f;
+  tree_leaves_material.metallic_factor = 0.0f;
+  tree_leaves_material.roughness_factor = 1.0f;
+  tree_leaves_material.occlusion_strength = 1.0f;
+  tree_leaves_material.specular_factor = 0.0f;
+  tree_leaves_material.sway_speed = 1.0f;
+  tree_leaves_material.sway_strength = 0.06f;
+  tree_leaves_material.sway_falloff_exponent = 2.0f;
+  tree_leaves_material.scrumble_speed = 3.0f;
+  tree_leaves_material.scrumble_strength = 0.02f;
+  tree_leaves_material.scrumble_falloff_exponent = 1.5f;
+
+  auto tree_submeshes = std::vector<sbx::scenes::static_mesh::submesh>{
+    sbx::scenes::static_mesh::submesh{0, asset_registry.get_material("tree_bark")},
+    sbx::scenes::static_mesh::submesh{1, asset_registry.get_material("tree_leaves")}
+  };
+
+  graph.add_component<sbx::scenes::static_mesh>(tree, asset_registry.get_mesh("tree"), tree_submeshes);
 
   // Camera
   auto& scripting_module = sbx::core::engine::get_module<sbx::scripting::scripting_module>();

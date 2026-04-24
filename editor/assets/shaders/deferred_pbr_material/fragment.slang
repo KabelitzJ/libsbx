@@ -50,9 +50,9 @@ struct blend_fs_out {
 
 enum material_feature : uint {
   none = 0,
-  cast_shadow = (1 << 1),
-  receive_shadow = (1 << 2),
-  invert_backface_normals = (1 << 3),
+  cast_shadow = (1 << 0),
+  receive_shadow = (1 << 1),
+  invert_backface_normals = (1 << 2),
 }; // struct material_feature
 
 [[vk::push_constant]]

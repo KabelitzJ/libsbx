@@ -247,14 +247,18 @@ auto compiler::_create_session(const compile_request& compile_request, SlangStag
   session_description.preprocessorMacros = preprocessor_macro_descriptions.data();
   session_description.preprocessorMacroCount = preprocessor_macro_descriptions.size();
 
+  auto& filesystem_module = core::engine::get_module<filesystem::filesystem_module>();
+
   const auto parent_path = assets_module.resolve_path(compile_request.path.parent_path()).generic_string();
   const auto path = assets_module.resolve_path(compile_request.path).generic_string();
   const auto asset_root = assets_module.asset_root().generic_string();
+  const auto engine_shaders = filesystem_module.native_path_of(std::string{"engine://shaders"}).generic_string();
 
-  auto search_paths = std::array<const char*, 3u>{
+  auto search_paths = std::array<const char*, 4u>{
     parent_path.c_str(),
     path.c_str(),
-    asset_root.c_str()
+    asset_root.c_str(),
+    engine_shaders.c_str()
   };
 
   session_description.searchPaths = search_paths.data();

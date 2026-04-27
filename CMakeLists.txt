@@ -693,6 +693,7 @@ set_target_properties(
     LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
     POSITION_INDEPENDENT_CODE ON
+    OUTPUT_NAME sbx
 )
 
 target_compile_features(libsbx PUBLIC cxx_std_23)
@@ -747,7 +748,7 @@ target_link_options(libsbx PUBLIC ${_sbx_link_options})
 
 # Scripting: dotnet build targets
 
-set(DOTNET_OUT_DIR ${CMAKE_BINARY_DIR}/_dotnet)
+set(DOTNET_OUT_DIR ${CMAKE_BINARY_DIR}/bin/dotnet)
 
 set(SBX_MANAGED_DIR ${CMAKE_SOURCE_DIR}/dotnet/Sbx.Managed)
 set(SBX_MANAGED_PROJECT ${SBX_MANAGED_DIR}/Sbx.Managed.csproj)
@@ -814,6 +815,23 @@ install(
     ${CMAKE_BINARY_DIR}/libsbxConfigVersion.cmake
   DESTINATION
     ${CMAKE_INSTALL_LIBDIR}/cmake/libsbx
+)
+
+install(
+  DIRECTORY ${CMAKE_SOURCE_DIR}/cmake/modules/
+  DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/libsbx/modules
+  FILES_MATCHING PATTERN "Find*.cmake"
+)
+
+install(
+  DIRECTORY ${DOTNET_OUT_DIR}/
+  DESTINATION ${CMAKE_INSTALL_DATADIR}/libsbx/dotnet
+  FILES_MATCHING
+    PATTERN "*.dll"
+    PATTERN "*.pdb"
+    PATTERN "*.json"
+    PATTERN "*.deps.json"
+    PATTERN "*.runtimeconfig.json"
 )
 
 # Tests

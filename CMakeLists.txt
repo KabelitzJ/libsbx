@@ -1,5 +1,8 @@
 cmake_minimum_required(VERSION 3.20)
 
+include(GNUInstallDirs)
+include(CMakePackageConfigHelpers)
+
 if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Debug)
 endif()
@@ -130,11 +133,11 @@ set(EASY_OPTION_LOG 1 CACHE STRING "" FORCE)
 
 # Configure version header
 
-configure_file("${CMAKE_SOURCE_DIR}/libsbx/version.hpp.in" "${CMAKE_SOURCE_DIR}/libsbx/version.hpp" @ONLY)
+configure_file("${CMAKE_SOURCE_DIR}/libsbx/version.hpp.in" "${CMAKE_BINARY_DIR}/generated/libsbx/version.hpp" @ONLY)
 
 set(SBX_ENGINE_DATA_DIRECTORY "${CMAKE_SOURCE_DIR}/libsbx" CACHE PATH "Absolute path to the engine data directory (shaders, fonts, built-in assets). Overridable at runtime via the SBX_ENGINE_DATA_DIR environment variable.")
 
-configure_file("${CMAKE_SOURCE_DIR}/libsbx/filesystem/data_directory.hpp.in" "${CMAKE_SOURCE_DIR}/libsbx/filesystem/data_directory.hpp" @ONLY)
+configure_file("${CMAKE_SOURCE_DIR}/libsbx/filesystem/data_directory.hpp.in" "${CMAKE_BINARY_DIR}/generated/libsbx/filesystem/data_directory.hpp" @ONLY)
 
 # Library target
 
@@ -317,7 +320,7 @@ target_sources(
     "${CMAKE_SOURCE_DIR}/libsbx/utility/timer.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/utility/utility.cpp"
   PUBLIC
-    FILE_SET HEADERS
+    FILE_SET headers TYPE HEADERS
     BASE_DIRS "${CMAKE_SOURCE_DIR}"
     FILES
       "${CMAKE_SOURCE_DIR}/libsbx/animations/animation.hpp"
@@ -386,7 +389,6 @@ target_sources(
       "${CMAKE_SOURCE_DIR}/libsbx/ecs/view.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/ecs/zip.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/filesystem/alias.hpp"
-      "${CMAKE_SOURCE_DIR}/libsbx/filesystem/data_directory.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/filesystem/file_base.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/filesystem/file_info.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/filesystem/filesystem_base.hpp"
@@ -635,13 +637,18 @@ target_sources(
       "${CMAKE_SOURCE_DIR}/libsbx/utility/type_name.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/utility/utility.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/utility/zip.hpp"
-      "${CMAKE_SOURCE_DIR}/libsbx/version.hpp"
+  FILE_SET generated TYPE HEADERS
+    BASE_DIRS "${CMAKE_BINARY_DIR}/generated"
+    FILES
+      "${CMAKE_BINARY_DIR}/generated/libsbx/version.hpp"
+      "${CMAKE_BINARY_DIR}/generated/libsbx/filesystem/data_directory.hpp"
 )
 
 target_include_directories(
   libsbx
   PUBLIC
     "$<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}>"
+    "$<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/generated>"
     "$<INSTALL_INTERFACE:include>"
 )
 
@@ -773,16 +780,14 @@ add_dependencies(libsbx sbx_scripting_core)
 
 # Install
 
-include(GNUInstallDirs)
-include(CMakePackageConfigHelpers)
-
 install(
   TARGETS libsbx
   EXPORT libsbxTargets
-  LIBRARY DESTINATION lib
-  ARCHIVE DESTINATION lib
-  RUNTIME DESTINATION bin
-  FILE_SET HEADERS
+  LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+  ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+  RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+  FILE_SET headers DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+  FILE_SET generated DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
 )
 
 install(

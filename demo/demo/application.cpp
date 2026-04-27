@@ -540,7 +540,7 @@ auto application::_generate_brdf(const std::uint32_t size) -> void {
     compute_command_buffer.acquire_image_ownership({brdf_acquire});
   }
 
-  auto pipeline = sbx::graphics::compute_pipeline{"res://shaders/ibl/brdf"};
+  auto pipeline = sbx::graphics::compute_pipeline{"engine://shaders/ibl/brdf"};
 
   pipeline.bind(compute_command_buffer);
 
@@ -693,7 +693,7 @@ auto application::_generate_irradiance(const std::uint32_t size) -> void {
     compute_command_buffer.acquire_image_ownership({irradiance_acquire, skybox_acquire});
   }
 
-  auto pipeline = sbx::graphics::compute_pipeline{"res://shaders/ibl/irradiance"};
+  auto pipeline = sbx::graphics::compute_pipeline{"engine://shaders/ibl/irradiance"};
 
   pipeline.bind(compute_command_buffer);
 
@@ -873,7 +873,7 @@ auto application::_generate_prefiltered(uint32_t size) -> void {
     compute_command_buffer.acquire_image_ownership({prefiltered_acquire, skybox_acquire});
   }
 
-  auto pipeline = sbx::graphics::compute_pipeline{"res://shaders/ibl/prefiltered"};
+  auto pipeline = sbx::graphics::compute_pipeline{"engine://shaders/ibl/prefiltered"};
   auto push_handler = sbx::graphics::push_handler{pipeline};
 
   pipeline.bind(compute_command_buffer);

@@ -6,16 +6,16 @@ find_package(easy_profiler CONFIG REQUIRED)
 
 add_executable(${PROJECT_NAME})
 
-find_package(Python3 REQUIRED COMPONENTS Interpreter)
+# find_package(Python3 REQUIRED COMPONENTS Interpreter)
 
-add_custom_target(
-  compiled_shaders_demo
-  COMMAND ${Python3_EXECUTABLE} "${CMAKE_SOURCE_DIR}/scripts/compile_shaders.py" "${PROJECT_SOURCE_DIR}/assets/shaders/"
-  WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
-  COMMENT "Compiling shaders for ${PROJECT_NAME}..."
-)
+# add_custom_target(
+#   compiled_shaders_demo
+#   COMMAND ${Python3_EXECUTABLE} "${CMAKE_SOURCE_DIR}/scripts/compile_shaders.py" "${PROJECT_SOURCE_DIR}/assets/shaders/"
+#   WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
+#   COMMENT "Compiling shaders for ${PROJECT_NAME}..."
+# )
 
-add_dependencies(${PROJECT_NAME} compiled_shaders_demo)
+# add_dependencies(${PROJECT_NAME} compiled_shaders_demo)
 
 target_sources(
   ${PROJECT_NAME}

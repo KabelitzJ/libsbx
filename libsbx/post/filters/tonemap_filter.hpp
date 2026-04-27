@@ -35,9 +35,11 @@ class tonemap_filter final : public filter {
   inline static constexpr auto temperature_key = core::prototype::setting_key<std::float_t>{"render.temperature", core::prototype::setting_range<std::float_t>{-1.0f, 1.0f}};
   inline static constexpr auto tint_key = core::prototype::setting_key<std::float_t>{"render.tint", core::prototype::setting_range<std::float_t>{-1.0f, 1.0f}};
 
+  inline static constexpr auto default_shader_path = std::string_view{"engine://shaders/tonemap"};
+
 public:
 
-  tonemap_filter(const std::vector<graphics::attachment_description>& attachments, const std::filesystem::path& path, std::vector<std::pair<std::string, std::string>>&& attachment_names, const tonemap_config& tonemap_config = post::tonemap_config{})
+  tonemap_filter(const std::vector<graphics::attachment_description>& attachments, std::vector<std::pair<std::string, std::string>>&& attachment_names, const tonemap_config& tonemap_config = post::tonemap_config{}, const std::filesystem::path& path = default_shader_path)
   : base{attachments, path, base::default_pipeline_definition},
     _push_handler{base::pipeline()},
     _attachment_names{std::move(attachment_names)},

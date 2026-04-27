@@ -1,0 +1,19 @@
+# IBL precomputation
+ibl/brdf
+ibl/irradiance
+ibl/prefiltered
+
+# Post / resolve
+fxaa
+resolve_opaque
+resolve_transparent
+tonemap
+
+# Forward / debug
+debug
+grid
+skybox
+
+# Compute
+frustum_culling
+particles

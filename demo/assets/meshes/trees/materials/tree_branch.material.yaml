@@ -7,7 +7,7 @@ albedo:
 base_color: [1.0, 1.0, 1.0, 1.0]
 metallic_factor: 0.0
 roughness_factor: 0.8
-specular_factor: 0.25
+specular_factor: 0.0
 
 alpha_mode: mask
 alpha_cutoff: 0.5

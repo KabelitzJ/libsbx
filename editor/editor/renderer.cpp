@@ -245,22 +245,22 @@ renderer::renderer()
     {"shadow_image", "shadow"}
   };
 
-  add_subrenderer<sbx::post::resolve_opaque_filter>(resolve_pass, "res://shaders/resolve_opaque", std::move(resolve_opaque_attachment_names));
+  add_subrenderer<sbx::post::resolve_opaque_filter>(resolve_pass, std::move(resolve_opaque_attachment_names));
 
-  add_subrenderer<sbx::scenes::skybox_subrenderer>(resolve_pass, "res://shaders/skybox");
+  add_subrenderer<sbx::scenes::skybox_subrenderer>(resolve_pass);
 
   auto resolve_transparent_attachment_names = std::vector<std::pair<std::string, std::string>>{
     {"accum_image", "accum"},
     {"revealage_image", "revealage"}
   };
 
-  add_subrenderer<sbx::post::resolve_transparent_filter>(resolve_pass, "res://shaders/resolve_transparent", std::move(resolve_transparent_attachment_names));
+  add_subrenderer<sbx::post::resolve_transparent_filter>(resolve_pass, std::move(resolve_transparent_attachment_names));
 
-  add_subrenderer<sbx::sprites::sprite_subrenderer>(resolve_pass, "res://shaders/sprites");
+  add_subrenderer<sbx::sprites::sprite_subrenderer>(resolve_pass);
 
-  add_subrenderer<sbx::scenes::grid_subrenderer>(resolve_pass, "res://shaders/grid");
+  add_subrenderer<sbx::scenes::grid_subrenderer>(resolve_pass);
 
-  add_subrenderer<sbx::scenes::debug_subrenderer>(resolve_pass, "res://shaders/debug");
+  add_subrenderer<sbx::scenes::debug_subrenderer>(resolve_pass);
 
   // Post-processing pass
   auto tonemap_attachment_names = std::vector<std::pair<std::string, std::string>>{
@@ -276,9 +276,9 @@ renderer::renderer()
     .tint = 0.0f
   };
 
-  add_subrenderer<sbx::post::tonemap_filter>(tonemap_pass, "res://shaders/tonemap", std::move(tonemap_attachment_names), tonemap_config);
+  add_subrenderer<sbx::post::tonemap_filter>(tonemap_pass, std::move(tonemap_attachment_names), tonemap_config);
 
-  add_subrenderer<sbx::post::fxaa_filter>(fxaa_pass, "res://shaders/fxaa", "tonemap");
+  add_subrenderer<sbx::post::fxaa_filter>(fxaa_pass, "tonemap");
 
   add_subrenderer<editor::editor_subrenderer>(editor_pass);
 }

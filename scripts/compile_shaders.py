@@ -65,12 +65,12 @@ def _safe_print(*args, **kwargs):
         print(*args, **kwargs)
 
 
-def build_slang_job(slangc_path: str, file: Path, shader_root_dir: Path) -> Optional[Tuple[str, Path, List[str], Optional[Path]]]:
+def build_slang_job(slangc_path: str, file: Path, shader_root_dir: Path, include_dirs: List[Path]) -> Optional[Tuple[str, Path, List[str], Optional[Path]]]:
     """
     Return a job tuple (kind, out_path, cmd, rename_to)
     If stage is 'pixel', out_path is pixel.spv and rename_to is fragment.spv
     """
-    stage = file.stem  # e.g., pixel.slang → "pixel"
+    stage = file.stem  # e.g., pixel.slang -> "pixel"
     info = SLANG_STAGE_INFO.get(stage)
     if not info:
         return None
@@ -105,6 +105,9 @@ def build_slang_job(slangc_path: str, file: Path, shader_root_dir: Path) -> Opti
         f"-I{file.parent}",
     ]
 
+    for include_dir in include_dirs:
+        cmd.append(f"-I{include_dir}")
+
     return ("slang", out_spv, cmd, rename_to)
 
 
@@ -125,45 +128,66 @@ def execute_job(job: Tuple[str, Path, List[str], Optional[Path]]) -> bool:
 
 
 # ----------------------
+# Manifest parsing
+# ----------------------
+
+def read_manifest(manifest_path: Path) -> List[str]:
+    """Read a manifest file, one shader directory entry per line.
+    Lines starting with '#' and empty lines are ignored.
+    Inline '#' comments are stripped."""
+    entries = []
+
+    with manifest_path.open("r", encoding="utf-8") as fp:
+        for raw_line in fp:
+            line = raw_line.split("#", 1)[0].strip()
+
+            if not line:
+                continue
+
+            entries.append(line)
+
+    return entries
+
+
+# ----------------------
 # Discovery & Orchestration
 # ----------------------
 
-skip_shaders = {"libsbx", "deferred_pbr_material", "depthpre", "shadow", "sprites"}
-
-
-def gather_jobs(shader_root_dir: Path, slangc_path: str) -> List[Tuple[str, Path, List[str], Optional[Path]]]:
+def gather_jobs(shader_root_dir: Path, shader_entries: List[str], slangc_path: str, include_dirs: List[Path]) -> List[Tuple[str, Path, List[str], Optional[Path]]]:
     jobs = []
+    seen_dirs = set()
 
-    # Recursively find all .slang files
-    all_slang_files = sorted(shader_root_dir.rglob("*.slang"), key=lambda p: str(p))
+    for entry in shader_entries:
+        shader_dir = (shader_root_dir / entry).resolve()
 
-    # Group by parent directory
-    dirs_seen = set()
-    for f in all_slang_files:
-        # Skip files in directories matching skip_shaders
-        if any(skip in f.relative_to(shader_root_dir).parts for skip in skip_shaders):
+        if not shader_dir.is_dir():
+            _safe_print(f"[WARN] Shader entry '{entry}' is not a directory under '{shader_root_dir}', skipping")
             continue
 
-        # Only compile stage files (vertex, fragment, etc.), skip includes like common.slang
-        if f.stem not in STAGES:
+        if shader_dir in seen_dirs:
             continue
 
-        shader_dir = f.parent
+        seen_dirs.add(shader_dir)
 
-        # Print directory header once per directory
-        if shader_dir not in dirs_seen:
-            dirs_seen.add(shader_dir)
-            rel_path = shader_dir.relative_to(shader_root_dir)
-            _safe_print(f"Compiling shaders: {rel_path}")
+        rel_path = shader_dir.relative_to(shader_root_dir)
+        _safe_print(f"Compiling shaders: {rel_path}")
 
-        job = build_slang_job(slangc_path, f, shader_root_dir)
-        if job is not None:
-            jobs.append(job)
+        stage_files = sorted([p for p in shader_dir.iterdir() if p.is_file() and p.suffix == ".slang" and p.stem in STAGES], key=lambda p: str(p))
+
+        if not stage_files:
+            _safe_print(f"[WARN] No stage files found in '{shader_dir}'")
+            continue
+
+        for f in stage_files:
+            job = build_slang_job(slangc_path, f, shader_root_dir, include_dirs)
+
+            if job is not None:
+                jobs.append(job)
 
     return jobs
 
 
-def main(shader_root: str, jobs_arg: Optional[int] = None) -> int:
+def main(shader_root: str, shader_entries: List[str], include_dirs: List[Path], jobs_arg: Optional[int] = None) -> int:
     shader_root_dir = Path(shader_root).resolve()
 
     slangc_path = which_or_none("slangc")
@@ -172,9 +196,13 @@ def main(shader_root: str, jobs_arg: Optional[int] = None) -> int:
         print("[ERROR] 'slangc' not found in PATH.")
         return 2
 
+    if not shader_entries:
+        print("[ERROR] No shaders specified. Use --manifest or --shader.")
+        return 2
+
     print_badge(f"Compiling shaders in {shader_root_dir}")
 
-    jobs = gather_jobs(shader_root_dir, slangc_path)
+    jobs = gather_jobs(shader_root_dir, shader_entries, slangc_path, include_dirs)
 
     if not jobs:
         print("Done. Built 0 shader stage(s).")
@@ -209,8 +237,37 @@ def main(shader_root: str, jobs_arg: Optional[int] = None) -> int:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Compile Slang shaders in parallel.")
     parser.add_argument("shader_root_dir", help="Root directory containing per-shader subfolders")
+    parser.add_argument("--manifest", "-m", type=Path, default=None,
+                        help="Path to a text file listing shader directories (one entry per line, relative to shader_root_dir). Lines starting with '#' are comments.")
+    parser.add_argument("--shader", "-s", action="append", default=[],
+                        help="Shader directory to compile (relative to shader_root_dir). Repeatable. Combines with --manifest.")
+    parser.add_argument("--include", "-I", action="append", default=[], type=Path,
+                        help="Additional include directory passed to slangc as '-I'. Repeatable.")
     parser.add_argument("--jobs", "-j", type=int, default=None,
                         help="Number of parallel jobs (default: CPU+2, capped at 32). Alternatively use SHADER_JOBS env var.")
 
     args = parser.parse_args()
-    sys.exit(main(args.shader_root_dir, args.jobs))
+
+    entries: List[str] = []
+
+    if args.manifest is not None:
+        if not args.manifest.is_file():
+            print(f"[ERROR] Manifest file '{args.manifest}' does not exist.")
+            sys.exit(2)
+
+        entries.extend(read_manifest(args.manifest))
+
+    entries.extend(args.shader)
+
+    # Deduplicate while preserving order
+    seen = set()
+    unique_entries = []
+
+    for e in entries:
+        if e not in seen:
+            seen.add(e)
+            unique_entries.append(e)
+
+    include_dirs = [d.resolve() for d in args.include]
+
+    sys.exit(main(args.shader_root_dir, unique_entries, include_dirs, args.jobs))

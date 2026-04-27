@@ -60,9 +60,11 @@ class sprite_subrenderer : public graphics::subrenderer {
 
   }; // struct pipeline_data
 
+  inline static const auto default_shader_path = std::string_view{"engine://shaders/sprites"};
+
 public:
 
-  sprite_subrenderer(const std::vector<graphics::attachment_description>& attachments, const std::filesystem::path& path);
+  sprite_subrenderer(const std::vector<graphics::attachment_description>& attachments, const std::filesystem::path& path = default_shader_path);
 
   ~sprite_subrenderer() override = default;
 

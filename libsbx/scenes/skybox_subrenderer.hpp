@@ -38,35 +38,24 @@ public:
 
 class skybox_subrenderer : public sbx::graphics::subrenderer {
 
-  class pipeline : public graphics::graphics_pipeline {
+  inline static const auto pipeline_definition = graphics::pipeline_definition{
+    .depth = graphics::depth::read_only,
+    .compare_operation = graphics::compare_operation::less_or_equal,
+    .uses_transparency = false,
+    .rasterization_state = graphics::rasterization_state{
+      .polygon_mode = graphics::polygon_mode::fill,
+      .cull_mode = graphics::cull_mode::none,
+      .front_face = graphics::front_face::counter_clockwise
+    }
+  };
 
-    inline static const auto pipeline_definition = graphics::pipeline_definition{
-      .depth = graphics::depth::read_only,
-      .compare_operation = graphics::compare_operation::less_or_equal,
-      .uses_transparency = false,
-      .rasterization_state = graphics::rasterization_state{
-        .polygon_mode = graphics::polygon_mode::fill,
-        .cull_mode = graphics::cull_mode::none,
-        .front_face = graphics::front_face::counter_clockwise
-      }
-    };
-  
-    using base_type = graphics::graphics_pipeline;
-  
-  public:
-  
-    pipeline(const std::filesystem::path& path, const std::vector<graphics::attachment_description>& attachments)
-    : base_type{path, attachments, pipeline_definition} { }
-  
-    ~pipeline() override = default;
-  
-  }; // class pipeline
+  inline static constexpr auto default_shader_path = std::string_view{"engine://shaders/skybox"};
 
 public:
 
-  skybox_subrenderer(const std::vector<graphics::attachment_description>& attachments, const std::filesystem::path& path)
+  skybox_subrenderer(const std::vector<graphics::attachment_description>& attachments, const std::filesystem::path& path = default_shader_path)
   : graphics::subrenderer{},
-    _pipeline{path, attachments},
+    _pipeline{path, attachments, pipeline_definition},
     _descriptor_handler{_pipeline, 0u},
     _push_handler{_pipeline} { }
 
@@ -111,7 +100,7 @@ public:
 
 private:
 
-  pipeline _pipeline;
+  graphics::graphics_pipeline _pipeline;
 
   graphics::descriptor_handler _descriptor_handler;
 

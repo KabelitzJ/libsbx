@@ -91,9 +91,11 @@ application::application()
 
   asset_registry.request_image("tree_bark_albedo", "res://meshes/tree/textures/bark/albedo.png", sbx::graphics::format::r8g8b8a8_srgb);
   asset_registry.request_image("tree_bark_normal", "res://meshes/tree/textures/bark/normal.png", sbx::graphics::format::r8g8b8a8_unorm);
+  asset_registry.request_image("tree_bark_arm", "res://meshes/tree/textures/bark/arm.png", sbx::graphics::format::r8g8b8a8_unorm);
 
   asset_registry.request_image("tree_leaves_albedo", "res://meshes/tree/textures/leaves/albedo.png", sbx::graphics::format::r8g8b8a8_srgb);
   asset_registry.request_image("tree_leaves_normal", "res://meshes/tree/textures/leaves/normal.png", sbx::graphics::format::r8g8b8a8_unorm);
+  asset_registry.request_image("tree_leaves_arm", "res://meshes/tree/textures/leaves/arm.png", sbx::graphics::format::r8g8b8a8_unorm);
 
   asset_registry.request_mesh<sbx::models::mesh>("tree", "res://meshes/tree/tree.gltf");
 
@@ -165,6 +167,7 @@ application::application()
   auto& tree_bark_material = asset_registry.request_material<sbx::models::material>("tree_bark");
   tree_bark_material.albedo.image = asset_registry.get_image("tree_bark_albedo");
   tree_bark_material.normal.image = asset_registry.get_image("tree_bark_normal");
+  tree_bark_material.metallic_roughness.image = asset_registry.get_image("tree_bark_arm");
   tree_bark_material.alpha = sbx::models::alpha_mode::opaque;
   tree_bark_material.metallic_factor = 0.0f;
   tree_bark_material.roughness_factor = 1.0f;
@@ -177,6 +180,7 @@ application::application()
   auto& tree_leaves_material = asset_registry.request_material<sbx::models::material>("tree_leaves");
   tree_leaves_material.albedo.image = asset_registry.get_image("tree_leaves_albedo");
   tree_leaves_material.normal.image = asset_registry.get_image("tree_leaves_normal");
+  tree_leaves_material.metallic_roughness.image = asset_registry.get_image("tree_leaves_arm");
   tree_leaves_material.alpha = sbx::models::alpha_mode::mask;
   tree_leaves_material.is_double_sided = true;
   tree_leaves_material.alpha_cutoff = 0.5f;
@@ -301,7 +305,7 @@ auto application::_generate_brdf(const std::uint32_t size) -> void {
     compute_command_buffer.acquire_image_ownership({brdf_acquire});
   }
 
-  auto pipeline = sbx::graphics::compute_pipeline{"res://shaders/ibl/brdf"};
+  auto pipeline = sbx::graphics::compute_pipeline{"engine://shaders/ibl/brdf"};
 
   pipeline.bind(compute_command_buffer);
 
@@ -454,7 +458,7 @@ auto application::_generate_irradiance(const std::uint32_t size) -> void {
     compute_command_buffer.acquire_image_ownership({irradiance_acquire, skybox_acquire});
   }
 
-  auto pipeline = sbx::graphics::compute_pipeline{"res://shaders/ibl/irradiance"};
+  auto pipeline = sbx::graphics::compute_pipeline{"engine://shaders/ibl/irradiance"};
 
   pipeline.bind(compute_command_buffer);
 
@@ -634,7 +638,7 @@ auto application::_generate_prefiltered(uint32_t size) -> void {
     compute_command_buffer.acquire_image_ownership({prefiltered_acquire, skybox_acquire});
   }
 
-  auto pipeline = sbx::graphics::compute_pipeline{"res://shaders/ibl/prefiltered"};
+  auto pipeline = sbx::graphics::compute_pipeline{"engine://shaders/ibl/prefiltered"};
   auto push_handler = sbx::graphics::push_handler{pipeline};
 
   pipeline.bind(compute_command_buffer);

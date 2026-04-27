@@ -54,6 +54,7 @@ public:
     const auto initial_size = math::vector2{_window.width(), _window.height()};
 
     input::set_active_viewport(math::vector2{0.0f, 0.0f}, initial_size);
+    input::set_scene_input_active(true);
 
     _window.on_framebuffer_resized() += [](const auto& event) {
       input::set_active_viewport(math::vector2{0.0f, 0.0f}, math::vector2{static_cast<std::float_t>(event.width), static_cast<std::float_t>(event.height)});

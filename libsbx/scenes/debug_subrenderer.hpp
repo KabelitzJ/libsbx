@@ -20,35 +20,24 @@ namespace sbx::scenes {
 
 class debug_subrenderer final : public sbx::graphics::subrenderer {
 
-  class pipeline : public sbx::graphics::graphics_pipeline {
+  inline static const auto pipeline_definition = sbx::graphics::pipeline_definition{
+    .depth = sbx::graphics::depth::disabled,
+    .uses_transparency = false,
+    .rasterization_state = sbx::graphics::rasterization_state{
+      .polygon_mode = sbx::graphics::polygon_mode::fill,
+      .cull_mode = sbx::graphics::cull_mode::none,
+      .front_face = sbx::graphics::front_face::counter_clockwise
+    },
+    .primitive_topology = sbx::graphics::primitive_topology::line_list
+  };
 
-    inline static const auto pipeline_definition = sbx::graphics::pipeline_definition{
-      .depth = sbx::graphics::depth::disabled,
-      .uses_transparency = false,
-      .rasterization_state = sbx::graphics::rasterization_state{
-        .polygon_mode = sbx::graphics::polygon_mode::fill,
-        .cull_mode = sbx::graphics::cull_mode::none,
-        .front_face = sbx::graphics::front_face::counter_clockwise
-      },
-      .primitive_topology = sbx::graphics::primitive_topology::line_list
-    };
-  
-    using base_type = sbx::graphics::graphics_pipeline;
-  
-  public:
-
-    pipeline(const std::filesystem::path& path, const std::vector<graphics::attachment_description>& attachments)
-    : base_type{path, attachments, pipeline_definition} { }
-
-    ~pipeline() override = default;
-  
-  }; // class pipeline
+  inline static constexpr auto default_shader_path = std::string_view{"engine://shaders/debug"};
 
 public:
 
-  debug_subrenderer(const std::vector<graphics::attachment_description>& attachments, const std::filesystem::path& path)
+  debug_subrenderer(const std::vector<graphics::attachment_description>& attachments, const std::filesystem::path& path = default_shader_path)
   : sbx::graphics::subrenderer{},
-    _pipeline{path, attachments},
+    _pipeline{path, attachments, pipeline_definition},
     _push_handler{_pipeline},
     _descriptor_handler{_pipeline, 0u} {
     auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
@@ -106,7 +95,7 @@ public:
 
 private:
 
-  pipeline _pipeline;
+  graphics::graphics_pipeline _pipeline;
 
   sbx::graphics::push_handler _push_handler;
 

@@ -150,7 +150,7 @@ find_package(Python3 REQUIRED COMPONENTS Interpreter)
 
 add_custom_target(
   compiled_shaders_libsbx
-  COMMAND ${Python3_EXECUTABLE} "${CMAKE_SOURCE_DIR}/scripts/compile_shaders.py" "${CMAKE_SOURCE_DIR}/libsbx/shaders"
+  COMMAND ${Python3_EXECUTABLE} "${CMAKE_SOURCE_DIR}/scripts/compile_shaders.py" "${CMAKE_SOURCE_DIR}/libsbx/shaders" "--manifest" "${CMAKE_SOURCE_DIR}/libsbx/shaders/manifest.txt"
   WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
   COMMENT "Compiling shaders for ${PROJECT_NAME}..."
 )

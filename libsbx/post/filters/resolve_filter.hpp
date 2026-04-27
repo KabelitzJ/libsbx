@@ -49,9 +49,17 @@ class resolve_filter final : public filter {
     }
   };
 
+  static constexpr auto _default_shader_path() -> std::string_view {
+    if constexpr (Transparent) {
+      return "engine://shaders/resolve_transparent";
+    } else {
+      return "engine://shaders/resolve_opaque";
+    }
+  }
+
 public:
 
-  resolve_filter(const std::vector<graphics::attachment_description>& attachments, const std::filesystem::path& path, std::vector<std::pair<std::string, std::string>>&& attachment_names)
+  resolve_filter(const std::vector<graphics::attachment_description>& attachments, std::vector<std::pair<std::string, std::string>>&& attachment_names, const std::filesystem::path& path = _default_shader_path())
   : base{attachments, path, pipeline_definition},
     _push_handler{base::pipeline()},
     _point_lights_storage_handler{},

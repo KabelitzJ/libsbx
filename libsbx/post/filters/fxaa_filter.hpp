@@ -10,9 +10,11 @@ class fxaa_filter final : public filter {
 
   using base_type = filter;
 
+  inline static constexpr auto default_shader_path = std::string_view{"engine://shaders/fxaa"};
+
 public:
 
-  fxaa_filter(const std::vector<graphics::attachment_description>& attachments, const std::filesystem::path& path, const std::string& in_image)
+  fxaa_filter(const std::vector<graphics::attachment_description>& attachments, const std::string& in_image, const std::filesystem::path& path = default_shader_path)
   : base_type{attachments, path},
     _in_image{in_image} { }
 

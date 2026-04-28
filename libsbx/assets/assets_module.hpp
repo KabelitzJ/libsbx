@@ -151,16 +151,13 @@ private:
 
 class assets_module : public core::module<assets_module> {
 
-  inline static const auto is_registered = register_module(stage::post);
-
-  inline static constexpr auto prefix = std::string_view{"res://"};
+  inline static const auto is_registered = register_module(stage::post, dependencies<filesystem::filesystem_module>{});
 
 public:
 
   assets_module()
-  : _thread_pool{std::thread::hardware_concurrency()},
-    _asset_root{std::filesystem::current_path()} {
-    utility::logger<"assets">::info("4cc of 'IMAG': {:#010x}", fourcc<"IMAG">());
+  : _thread_pool{std::thread::hardware_concurrency()} {
+    _register_asset_root(std::filesystem::current_path());
   }
 
   ~assets_module() override {
@@ -173,8 +170,10 @@ public:
     
   }
 
-  auto asset_root() const -> const std::filesystem::path& {
-    return _asset_root;
+  auto asset_root() const -> std::filesystem::path {
+    auto& filesystem_module = core::engine::get_module<filesystem::filesystem_module>();
+
+    return filesystem_module.native_path_of(std::string{"res://"});
   }
 
   auto set_asset_root(const std::filesystem::path& root) -> void {
@@ -184,37 +183,13 @@ public:
 
     utility::logger<"assets">::debug("Setting asset_root to '{}'", root.string());
 
-    _asset_root = root;
-
-    auto& filesystem_module = core::engine::get_module<filesystem::filesystem_module>();
-
-    const auto alias = filesystem::alias{"res://"};
-
-    if (filesystem_module.is_alias_registered(alias)) {
-      filesystem_module.unregister_alias(alias);
-    }
-
-    filesystem_module.create_filesystem<filesystem::native_filesystem>(alias, root.generic_string());
+    _register_asset_root(root);
   }
 
   auto resolve_path(const std::filesystem::path& path) -> std::filesystem::path {
-    if (path.empty()) {
-      return path;
-    }
-
     auto& filesystem_module = core::engine::get_module<filesystem::filesystem_module>();
 
-    if (filesystem_module.is_alias_registered(filesystem::alias{"res://"})) {
-      return filesystem_module.native_path_of(path);
-    }
-
-    const auto& path_string = path.string();
-
-    if (path_string.starts_with(prefix)) {
-      return _asset_root / path_string.substr(prefix.size());
-    }
-
-    return path;
+    return filesystem_module.native_path_of(path);
   }
 
   template<typename Function, typename... Args>
@@ -301,8 +276,19 @@ public:
 
 private:
 
+  auto _register_asset_root(const std::filesystem::path& root) -> void {
+    auto& filesystem_module = core::engine::get_module<filesystem::filesystem_module>();
+
+    const auto alias = filesystem::alias{"res://"};
+
+    if (filesystem_module.is_alias_registered(alias)) {
+      filesystem_module.unregister_alias(alias);
+    }
+
+    filesystem_module.create_filesystem<filesystem::native_filesystem>(alias, root.generic_string());
+  }
+
   thread_pool _thread_pool;
-  std::filesystem::path _asset_root;
 
   struct container_base {
     virtual ~container_base() = default;

@@ -117,7 +117,7 @@ target_compile_options(
 
 set(EDITOR_DIR ${CMAKE_CURRENT_SOURCE_DIR}/assets/scripts/Editor)
 set(EDITOR_PROJECT ${EDITOR_DIR}/Editor.csproj)
-set(EDITOR_DOTNET_OUT_DIR ${CMAKE_BINARY_DIR}/data/dotnet/edior)
+set(EDITOR_DOTNET_OUT_DIR ${CMAKE_BINARY_DIR}/data/dotnet/editor)
 
 file(GLOB_RECURSE EDITOR_SOURCES CONFIGURE_DEPENDS ${EDITOR_DIR}/**/*.cs)
 
@@ -130,7 +130,7 @@ add_custom_target(
     -p:UseAppHost=false
     -o ${EDITOR_DOTNET_OUT_DIR}
   WORKING_DIRECTORY ${EDITOR_DIR}
-  COMMENT "Publishing Demo assembly"
+  COMMENT "Publishing Editor assembly"
 )
 
 add_dependencies(scripting_editor sbx_scripting_managed sbx_scripting_core)

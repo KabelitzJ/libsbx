@@ -147,16 +147,17 @@ public:
     return result;
   }
 
-  template<typename TValue>
-  auto set_property_value(std::string_view name, TValue value) const -> void {
+  template<typename Type>
+  auto set_property_value(std::string_view name, Type value) const -> void {
     set_property_value_raw(name, &value);
   }
 
-  template<typename Result>
-  auto get_property_value(std::string_view name) const -> Result
-  {
-    Result result;
+  template<typename Type>
+  auto get_property_value(std::string_view name) const -> Type {
+    auto result = Type{};
+
     get_property_value_raw(name, &result);
+
     return result;
   }
 
@@ -180,8 +181,8 @@ private:
 
   auto _invoke_method_return_internal(std::string_view name, const void** parameters, const managed_type* parameter_types, std::size_t length, void* result_storage) const -> void;
 
-  void* _handle;
-  const type* _type;
+  void* _handle{nullptr};
+  const type* _type{nullptr};
 
 private:
   

@@ -95,7 +95,7 @@ target_compile_features(
 
 target_compile_options(
   ${PROJECT_NAME}
-  PUBLIC
+  PRIVATE
     -Wall 
     -Wextra
     -Wnon-virtual-dtor
@@ -115,21 +115,23 @@ target_compile_options(
     -Wuseless-cast
 )
 
-set(DOTNET_OUT_DIR ${CMAKE_BINARY_DIR}/_dotnet)
-
 set(EDITOR_DIR ${CMAKE_CURRENT_SOURCE_DIR}/assets/scripts/Editor)
 set(EDITOR_PROJECT ${EDITOR_DIR}/Editor.csproj)
+set(EDITOR_DOTNET_OUT_DIR ${CMAKE_BINARY_DIR}/data/dotnet/edior)
+
 file(GLOB_RECURSE EDITOR_SOURCES CONFIGURE_DEPENDS ${EDITOR_DIR}/**/*.cs)
 
 add_custom_target(
-  scripting_editor
-  ALL
-  COMMAND ${CMAKE_COMMAND} -E make_directory ${DOTNET_OUT_DIR}
-  COMMAND dotnet build ${EDITOR_PROJECT} -c $<CONFIG> -o ${DOTNET_OUT_DIR}
+  scripting_editor ALL
+  COMMAND ${CMAKE_COMMAND} -E make_directory ${EDITOR_DOTNET_OUT_DIR}
+  COMMAND dotnet publish ${EDITOR_PROJECT}
+    -c $<CONFIG>
+    --self-contained false
+    -p:UseAppHost=false
+    -o ${EDITOR_DOTNET_OUT_DIR}
   WORKING_DIRECTORY ${EDITOR_DIR}
-  COMMENT "Building managed assembly with dotnet build"
+  COMMENT "Publishing Demo assembly"
 )
 
-add_dependencies(${PROJECT_NAME} scripting_editor)
-
 add_dependencies(scripting_editor sbx_scripting_managed sbx_scripting_core)
+add_dependencies(${PROJECT_NAME} scripting_editor)

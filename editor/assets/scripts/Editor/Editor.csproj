@@ -7,6 +7,13 @@
     <GenerateRuntimeConfigurationFiles>true</GenerateRuntimeConfigurationFiles>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="../../../../dotnet/Sbx.Core/Sbx.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\dotnet\Sbx.Core\Sbx.Core.csproj">
+      <Private>false</Private>
+      <ExcludeAssets>runtime</ExcludeAssets>
+    </ProjectReference>
+    <ProjectReference Include="..\..\..\..\dotnet\Sbx.Managed\Sbx.Managed.csproj">
+      <Private>false</Private>
+      <ExcludeAssets>runtime</ExcludeAssets>
+    </ProjectReference>
   </ItemGroup>
 </Project>

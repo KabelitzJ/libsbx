@@ -28,7 +28,7 @@ inline constexpr auto is_build_configuration_debug_v = is_build_configuration_de
 /** @brief Possible operating systems */
 enum class operating_system : std::uint8_t {
   windows = 0,
-  max = 1,
+  apple = 1,
   linux = 2,
   unknown = 3
 }; // enum class operating_system
@@ -37,8 +37,8 @@ enum class operating_system : std::uint8_t {
 inline constexpr auto operating_system_v = operating_system::windows;
 #define SBX_WINDOWS
 #elif defined(__APPLE__)
-inline constexpr auto operating_system_v = operating_system::mac;
-#define SBX_MAC
+inline constexpr auto operating_system_v = operating_system::apple;
+#define SBX_APPLE
 #elif defined(__linux__) || defined(__linux)
 inline constexpr auto operating_system_v = operating_system::linux;
 #define SBX_UNIX

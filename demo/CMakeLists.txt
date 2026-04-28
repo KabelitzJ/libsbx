@@ -66,7 +66,7 @@ target_compile_features(
 
 target_compile_options(
   ${PROJECT_NAME}
-  PUBLIC
+  PRIVATE
     -Wall 
     -Wextra
     -Wnon-virtual-dtor
@@ -86,21 +86,23 @@ target_compile_options(
     -Wuseless-cast
 )
 
-set(DOTNET_OUT_DIR ${CMAKE_BINARY_DIR}/_dotnet)
-
 set(DEMO_DIR ${CMAKE_CURRENT_SOURCE_DIR}/assets/scripts/Demo)
 set(DEMO_PROJECT ${DEMO_DIR}/Demo.csproj)
+set(DEMO_DOTNET_OUT_DIR ${CMAKE_BINARY_DIR}/data/dotnet/demo)
+
 file(GLOB_RECURSE DEMO_SOURCES CONFIGURE_DEPENDS ${DEMO_DIR}/**/*.cs)
 
 add_custom_target(
-  scripting_demo
-  ALL
-  COMMAND ${CMAKE_COMMAND} -E make_directory ${DOTNET_OUT_DIR}
-  COMMAND dotnet build ${DEMO_PROJECT} -c $<CONFIG> -o ${DOTNET_OUT_DIR}
+  scripting_demo ALL
+  COMMAND ${CMAKE_COMMAND} -E make_directory ${DEMO_DOTNET_OUT_DIR}
+  COMMAND dotnet publish ${DEMO_PROJECT}
+    -c $<CONFIG>
+    --self-contained false
+    -p:UseAppHost=false
+    -o ${DEMO_DOTNET_OUT_DIR}
   WORKING_DIRECTORY ${DEMO_DIR}
-  COMMENT "Building managed assembly with dotnet build"
+  COMMENT "Publishing Demo assembly"
 )
 
-add_dependencies(${PROJECT_NAME} scripting_demo)
-
 add_dependencies(scripting_demo sbx_scripting_managed sbx_scripting_core)
+add_dependencies(${PROJECT_NAME} scripting_demo)

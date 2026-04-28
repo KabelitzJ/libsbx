@@ -36,7 +36,7 @@
 
 namespace sbx::graphics {
 
-static auto _get_stage_from_slang(SlangStage stage) -> VkShaderStageFlagBits {
+static constexpr auto _get_stage_from_slang(const SlangStage stage) -> VkShaderStageFlagBits {
   switch (stage) {
     case SLANG_STAGE_VERTEX: return VK_SHADER_STAGE_VERTEX_BIT;
     case SLANG_STAGE_HULL: return VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT;

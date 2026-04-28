@@ -65,7 +65,7 @@ def _safe_print(*args, **kwargs):
         print(*args, **kwargs)
 
 
-def build_slang_job(slangc_path: str, file: Path, shader_root_dir: Path, include_dirs: List[Path]) -> Optional[Tuple[str, Path, List[str], Optional[Path]]]:
+def build_slang_job(slangc_path: str, file: Path, shader_root_dir: Path, output_root_dir: Path, include_dirs: List[Path]) -> Optional[Tuple[str, Path, List[str], Optional[Path]]]:
     """
     Return a job tuple (kind, out_path, cmd, rename_to)
     If stage is 'pixel', out_path is pixel.spv and rename_to is fragment.spv
@@ -77,7 +77,8 @@ def build_slang_job(slangc_path: str, file: Path, shader_root_dir: Path, include
 
     profile, entry = info
 
-    binary_dir = file.parent / "bin"
+    rel_dir = file.parent.relative_to(shader_root_dir)
+    binary_dir = output_root_dir / rel_dir / "bin"
     binary_dir.mkdir(parents=True, exist_ok=True)
 
     if stage == "fragment":
@@ -153,7 +154,7 @@ def read_manifest(manifest_path: Path) -> List[str]:
 # Discovery & Orchestration
 # ----------------------
 
-def gather_jobs(shader_root_dir: Path, shader_entries: List[str], slangc_path: str, include_dirs: List[Path]) -> List[Tuple[str, Path, List[str], Optional[Path]]]:
+def gather_jobs(shader_root_dir: Path, output_root_dir: Path, shader_entries: List[str], slangc_path: str, include_dirs: List[Path]) -> List[Tuple[str, Path, List[str], Optional[Path]]]:
     jobs = []
     seen_dirs = set()
 
@@ -179,7 +180,7 @@ def gather_jobs(shader_root_dir: Path, shader_entries: List[str], slangc_path: s
             continue
 
         for f in stage_files:
-            job = build_slang_job(slangc_path, f, shader_root_dir, include_dirs)
+            job = build_slang_job(slangc_path, f, shader_root_dir, output_root_dir, include_dirs)
 
             if job is not None:
                 jobs.append(job)
@@ -187,8 +188,11 @@ def gather_jobs(shader_root_dir: Path, shader_entries: List[str], slangc_path: s
     return jobs
 
 
-def main(shader_root: str, shader_entries: List[str], include_dirs: List[Path], jobs_arg: Optional[int] = None) -> int:
+def main(shader_root: str, output_root: str, shader_entries: List[str], include_dirs: List[Path], jobs_arg: Optional[int] = None) -> int:
     shader_root_dir = Path(shader_root).resolve()
+    output_root_dir = Path(output_root).resolve()
+
+    output_root_dir.mkdir(parents=True, exist_ok=True)
 
     slangc_path = which_or_none("slangc")
 
@@ -200,15 +204,14 @@ def main(shader_root: str, shader_entries: List[str], include_dirs: List[Path], 
         print("[ERROR] No shaders specified. Use --manifest or --shader.")
         return 2
 
-    print_badge(f"Compiling shaders in {shader_root_dir}")
+    print_badge(f"Compiling shaders from {shader_root_dir} -> {output_root_dir}")
 
-    jobs = gather_jobs(shader_root_dir, shader_entries, slangc_path, include_dirs)
+    jobs = gather_jobs(shader_root_dir, output_root_dir, shader_entries, slangc_path, include_dirs)
 
     if not jobs:
         print("Done. Built 0 shader stage(s).")
         return 0
 
-    # Resolve parallelism: CLI --jobs, else env SHADER_JOBS, else CPU heuristic
     if jobs_arg is not None and jobs_arg > 0:
         max_workers = jobs_arg
     else:
@@ -237,6 +240,8 @@ def main(shader_root: str, shader_entries: List[str], include_dirs: List[Path], 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Compile Slang shaders in parallel.")
     parser.add_argument("shader_root_dir", help="Root directory containing per-shader subfolders")
+    parser.add_argument("--output", "-o", required=True,
+                        help="Output root directory; .spv files are written to <output>/<rel>/bin/<stage>.spv")
     parser.add_argument("--manifest", "-m", type=Path, default=None,
                         help="Path to a text file listing shader directories (one entry per line, relative to shader_root_dir). Lines starting with '#' are comments.")
     parser.add_argument("--shader", "-s", action="append", default=[],
@@ -259,7 +264,6 @@ if __name__ == "__main__":
 
     entries.extend(args.shader)
 
-    # Deduplicate while preserving order
     seen = set()
     unique_entries = []
 
@@ -270,4 +274,4 @@ if __name__ == "__main__":
 
     include_dirs = [d.resolve() for d in args.include]
 
-    sys.exit(main(args.shader_root_dir, unique_entries, include_dirs, args.jobs))
+    sys.exit(main(args.shader_root_dir, args.output, unique_entries, include_dirs, args.jobs))

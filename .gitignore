@@ -8,7 +8,6 @@
 
 # Generated headers
 libsbx/version.hpp
-libsbx/filesystem/data_directory.hpp
 
 compile_commands.json
 

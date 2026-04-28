@@ -88,6 +88,13 @@ add_compile_definitions(
 message(STATUS "Git branch: ${SBX_BRANCH}")
 message(STATUS "Git commit: ${SBX_COMMIT_HASH}")
 
+set(SBX_DATA_DIR ${CMAKE_BINARY_DIR}/data)
+
+set(SBX_SHADER_SRC_DIR ${CMAKE_SOURCE_DIR}/shaders)
+set(SBX_SHADER_OUT_DIR ${SBX_DATA_DIR}/shaders)
+
+set(DOTNET_OUT_DIR ${SBX_DATA_DIR}/dotnet)
+
 # External dependencies
 
 find_package(fmt CONFIG REQUIRED)
@@ -135,10 +142,6 @@ set(EASY_OPTION_LOG 1 CACHE STRING "" FORCE)
 
 configure_file("${CMAKE_SOURCE_DIR}/libsbx/version.hpp.in" "${CMAKE_BINARY_DIR}/generated/libsbx/version.hpp" @ONLY)
 
-set(SBX_ENGINE_DATA_DIRECTORY "${CMAKE_SOURCE_DIR}/libsbx" CACHE PATH "Absolute path to the engine data directory (shaders, fonts, built-in assets). Overridable at runtime via the SBX_ENGINE_DATA_DIR environment variable.")
-
-configure_file("${CMAKE_SOURCE_DIR}/libsbx/filesystem/data_directory.hpp.in" "${CMAKE_BINARY_DIR}/generated/libsbx/filesystem/data_directory.hpp" @ONLY)
-
 # Library target
 
 if(SBX_BUILD_SHARED)
@@ -152,13 +155,23 @@ add_library(libsbx::libsbx ALIAS libsbx)
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 
 add_custom_target(
-  compiled_shaders_libsbx
-  COMMAND ${Python3_EXECUTABLE} "${CMAKE_SOURCE_DIR}/scripts/compile_shaders.py" "${CMAKE_SOURCE_DIR}/libsbx/shaders" "--manifest" "${CMAKE_SOURCE_DIR}/libsbx/shaders/manifest.txt"
-  WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
+  compiled_shaders_libsbx ALL
+  COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/scripts/compile_shaders.py
+    ${SBX_SHADER_SRC_DIR}
+    --output ${SBX_SHADER_OUT_DIR}
+    --manifest ${SBX_SHADER_SRC_DIR}/manifest.txt
   COMMENT "Compiling shaders for ${PROJECT_NAME}..."
 )
 
-add_dependencies(${PROJECT_NAME} compiled_shaders_libsbx)
+add_custom_target(
+  staged_shaders_libsbx ALL
+  COMMAND ${CMAKE_COMMAND} -E copy_directory
+    ${SBX_SHADER_SRC_DIR} ${SBX_SHADER_OUT_DIR}
+  DEPENDS compiled_shaders_libsbx
+  COMMENT "Staging shader sources for ${PROJECT_NAME}..."
+)
+
+add_dependencies(${PROJECT_NAME} staged_shaders_libsbx)
 
 target_sources(
   libsbx
@@ -641,7 +654,6 @@ target_sources(
     BASE_DIRS "${CMAKE_BINARY_DIR}/generated"
     FILES
       "${CMAKE_BINARY_DIR}/generated/libsbx/version.hpp"
-      "${CMAKE_BINARY_DIR}/generated/libsbx/filesystem/data_directory.hpp"
 )
 
 target_include_directories(
@@ -696,6 +708,10 @@ set_target_properties(
     OUTPUT_NAME sbx
 )
 
+if(MSVC)
+  set_target_properties(libsbx PROPERTIES PREFIX "lib")
+endif()
+
 target_compile_features(libsbx PUBLIC cxx_std_23)
 
 target_compile_definitions(
@@ -711,7 +727,7 @@ target_compile_definitions(
 
 target_compile_options(
   libsbx
-  PUBLIC
+  PRIVATE
     -Wall
     -Wextra
     -Wnon-virtual-dtor
@@ -748,18 +764,41 @@ target_link_options(libsbx PUBLIC ${_sbx_link_options})
 
 # Scripting: dotnet build targets
 
-set(DOTNET_OUT_DIR ${CMAKE_BINARY_DIR}/bin/dotnet)
+if(CMAKE_HOST_SYSTEM_NAME STREQUAL "Linux")
+  set(_sbx_dotnet_os "linux")
+elseif(CMAKE_HOST_SYSTEM_NAME STREQUAL "Windows")
+  set(_sbx_dotnet_os "win")
+elseif(CMAKE_HOST_SYSTEM_NAME STREQUAL "Darwin")
+  set(_sbx_dotnet_os "osx")
+else()
+  message(FATAL_ERROR ".NET RID not defined for ${CMAKE_HOST_SYSTEM_NAME}")
+endif()
+
+if(CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64|amd64)$")
+  set(_sbx_dotnet_arch "x64")
+elseif(CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "^(aarch64|arm64|ARM64)$")
+  set(_sbx_dotnet_arch "arm64")
+else()
+  message(FATAL_ERROR ".NET RID not defined for processor ${CMAKE_HOST_SYSTEM_PROCESSOR}")
+endif()
+
+set(SBX_DOTNET_RID "${_sbx_dotnet_os}-${_sbx_dotnet_arch}" CACHE STRING ".NET runtime identifier for self-contained publish")
+
+message(STATUS "SBX_DOTNET_RID: ${SBX_DOTNET_RID}")
 
 set(SBX_MANAGED_DIR ${CMAKE_SOURCE_DIR}/dotnet/Sbx.Managed)
 set(SBX_MANAGED_PROJECT ${SBX_MANAGED_DIR}/Sbx.Managed.csproj)
 
 add_custom_target(
-  sbx_scripting_managed
-  ALL
+  sbx_scripting_managed ALL
   COMMAND ${CMAKE_COMMAND} -E make_directory ${DOTNET_OUT_DIR}
-  COMMAND dotnet build ${SBX_MANAGED_PROJECT} -c $<CONFIG> -o ${DOTNET_OUT_DIR}
+  COMMAND dotnet publish ${SBX_MANAGED_PROJECT}
+    -c $<CONFIG>
+    --self-contained false
+    -p:UseAppHost=false
+    -o ${DOTNET_OUT_DIR}
   WORKING_DIRECTORY ${SBX_MANAGED_DIR}
-  COMMENT "Building Sbx.Managed assembly"
+  COMMENT "Publishing Sbx.Managed assembly (framework-dependent)"
 )
 
 add_dependencies(libsbx sbx_scripting_managed)
@@ -768,12 +807,17 @@ set(SBX_CORE_DIR ${CMAKE_SOURCE_DIR}/dotnet/Sbx.Core)
 set(SBX_CORE_PROJECT ${SBX_CORE_DIR}/Sbx.Core.csproj)
 
 add_custom_target(
-  sbx_scripting_core
-  ALL
+  sbx_scripting_core ALL
   COMMAND ${CMAKE_COMMAND} -E make_directory ${DOTNET_OUT_DIR}
-  COMMAND dotnet build ${SBX_CORE_PROJECT} -c $<CONFIG> -o ${DOTNET_OUT_DIR}
+  COMMAND dotnet publish ${SBX_CORE_PROJECT}
+    -c $<CONFIG>
+    -r ${SBX_DOTNET_RID}
+    --self-contained true
+    -p:PublishSingleFile=false
+    -p:UseAppHost=false
+    -o ${DOTNET_OUT_DIR}
   WORKING_DIRECTORY ${SBX_CORE_DIR}
-  COMMENT "Building Sbx.Core assembly"
+  COMMENT "Publishing Sbx.Core assembly (self-contained ${SBX_DOTNET_RID})"
 )
 
 add_dependencies(sbx_scripting_core sbx_scripting_managed)
@@ -823,15 +867,23 @@ install(
   FILES_MATCHING PATTERN "Find*.cmake"
 )
 
+install(CODE "
+  if(NOT EXISTS \"${SBX_SHADER_OUT_DIR}/manifest.txt\")
+    message(FATAL_ERROR \"Engine data not staged. Run 'cmake --build' before 'cmake --install'.\")
+  endif()
+")
+
 install(
-  DIRECTORY ${DOTNET_OUT_DIR}/
-  DESTINATION ${CMAKE_INSTALL_DATADIR}/libsbx/dotnet
-  FILES_MATCHING
-    PATTERN "*.dll"
-    PATTERN "*.pdb"
-    PATTERN "*.json"
-    PATTERN "*.deps.json"
-    PATTERN "*.runtimeconfig.json"
+  DIRECTORY ${SBX_DATA_DIR}/
+  DESTINATION ${CMAKE_INSTALL_DATADIR}/libsbx
+  USE_SOURCE_PERMISSIONS
+  PATTERN "*.pdb" EXCLUDE
+)
+
+
+install(
+  FILES $<TARGET_FILE:slang::slang>
+  DESTINATION ${CMAKE_INSTALL_LIBDIR}
 )
 
 # Tests

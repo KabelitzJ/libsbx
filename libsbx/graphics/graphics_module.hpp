@@ -23,6 +23,8 @@
 
 #include <libsbx/signals/signal.hpp>
 
+#include <libsbx/filesystem/filesystem_module.hpp>
+
 #include <libsbx/graphics/devices/instance.hpp>
 #include <libsbx/graphics/devices/physical_device.hpp>
 #include <libsbx/graphics/devices/logical_device.hpp>
@@ -81,7 +83,7 @@ struct deferred_deletion {
  */
 class graphics_module final : public core::module<graphics_module> {
 
-  inline static const auto is_registered = register_module(stage::rendering, dependencies<devices::devices_module>{});
+  inline static const auto is_registered = register_module(stage::rendering, dependencies<devices::devices_module, filesystem::filesystem_module>{});
 
   inline static constexpr auto max_deletion_queue_size = std::size_t{16u};
 

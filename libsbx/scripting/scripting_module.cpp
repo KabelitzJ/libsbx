@@ -23,8 +23,12 @@
 namespace sbx::scripting {
 
 scripting_module::scripting_module() {
+  auto& filesystem_module = core::engine::get_module<filesystem::filesystem_module>();
+
+  const auto dotnet_dir = filesystem_module.native_path_of(std::string{"engine://dotnet"});
+
   auto config = scripting::managed::rumtime_config{
-		.backend_path = "build/x86_64/gcc/debug/_dotnet",
+		.backend_path = dotnet_dir.generic_string(),
 		.exception_callback = _exception_callback
 	};
 
@@ -32,7 +36,7 @@ scripting_module::scripting_module() {
 
   _context = _runtime.create_assembly_load_context("ScriptingContext");
 
-  auto core_assembly_path = std::filesystem::path{"build/x86_64/gcc/debug/_dotnet/Sbx.Core.dll"};
+  auto core_assembly_path = std::filesystem::path{dotnet_dir / "Sbx.Core.dll"};
 
 	_core_assembly = _context.load_assembly(core_assembly_path.string());
 

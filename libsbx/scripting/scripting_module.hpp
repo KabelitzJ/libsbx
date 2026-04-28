@@ -17,6 +17,8 @@
 #include <libsbx/scenes/node.hpp>
 #include <libsbx/scenes/scenes_module.hpp>
 
+#include <libsbx/filesystem/filesystem_module.hpp>
+
 #include <libsbx/scripting/managed/runtime.hpp>
 
 namespace sbx::scripting {
@@ -33,7 +35,7 @@ struct internal_call {
 
 class scripting_module final : public core::module<scripting_module> {
 
-  inline static const auto is_registered = register_module(stage::normal, dependencies<scenes::scenes_module>{});
+  inline static const auto is_registered = register_module(stage::normal, dependencies<scenes::scenes_module, filesystem::filesystem_module>{});
 
 public:
 
@@ -50,7 +52,7 @@ public:
 private:
 
   static auto _exception_callback(std::string_view message) -> void {
-    utility::logger<"scripting">::error("{}", message);
+    throw utility::runtime_error{"{}", message};
   }
 
   std::filesystem::path _assembly_path;

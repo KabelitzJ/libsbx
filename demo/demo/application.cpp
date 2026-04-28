@@ -39,6 +39,8 @@
 
 #include <libsbx/ui/ui_module.hpp>
 
+#include <libsbx/filesystem/filesystem_module.hpp>
+
 #include <libsbx/audio/audio_module.hpp>
 #include <libsbx/sprites/sprites_module.hpp>
 #include <libsbx/ui/ui_module.hpp>
@@ -80,9 +82,15 @@ application::application()
   auto& graph = scene.graph();
   auto& environment = scene.environment();
 
+  auto& filesystem_module = sbx::core::engine::get_module<sbx::filesystem::filesystem_module>();
+
   auto& scripting_module = sbx::core::engine::get_module<sbx::scripting::scripting_module>();
+
+  const auto dotnet_dir = filesystem_module.native_path_of(std::string{"engine://dotnet"});
+
+  auto core_assembly_path = std::filesystem::path{dotnet_dir / "demo/Demo.dll"};
   
-  scripting_module.load_assembly("build/x86_64/gcc/debug/_dotnet/Demo.dll");
+  scripting_module.load_assembly(core_assembly_path.string());
 
   // Textures
 

@@ -39,6 +39,8 @@
 
 #include <libsbx/ui/ui_module.hpp>
 
+#include <libsbx/filesystem/filesystem_module.hpp>
+
 #include <libsbx/audio/audio_module.hpp>
 #include <libsbx/sprites/sprites_module.hpp>
 #include <libsbx/ui/ui_module.hpp>
@@ -203,9 +205,16 @@ application::application()
   graph.add_component<sbx::scenes::static_mesh>(tree, asset_registry.get_mesh("tree"), tree_submeshes);
 
   // Camera
-  auto& scripting_module = sbx::core::engine::get_module<sbx::scripting::scripting_module>();
   
-  scripting_module.load_assembly("build/x86_64/gcc/debug/_dotnet/Editor.dll");
+  auto& filesystem_module = sbx::core::engine::get_module<sbx::filesystem::filesystem_module>();
+
+  auto& scripting_module = sbx::core::engine::get_module<sbx::scripting::scripting_module>();
+
+  const auto dotnet_dir = filesystem_module.native_path_of(std::string{"engine://dotnet"});
+
+  auto core_assembly_path = std::filesystem::path{dotnet_dir / "editor/Editor.dll"};
+  
+  scripting_module.load_assembly(core_assembly_path.string());
   
   auto camera_node = environment.camera();
 

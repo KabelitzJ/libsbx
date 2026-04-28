@@ -29,7 +29,7 @@ private:
 
   auto _draw_static_mesh(sbx::scenes::scene_graph& graph, sbx::scenes::node node) -> void;
 
-  auto _draw_vec3_control(const std::string& label, sbx::math::vector3& values, float reset_value = 0.0f) -> bool;
+  auto _draw_vector3_control(const std::string& label, sbx::math::vector3& values, float reset_value = 0.0f) -> bool;
 
   std::string _tag_buffer;
 

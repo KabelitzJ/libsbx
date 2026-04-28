@@ -165,7 +165,7 @@ static auto lerp(const ImVec4& a, const ImVec4& b, float t) -> ImVec4 {
 }
 
 auto editor_context::_apply_style() -> void {
-  // ImGui::StyleColorsDark();
+  ImGui::StyleColorsDark();
 
   auto& style = ImGui::GetStyle();
 
@@ -239,19 +239,8 @@ auto editor_context::_apply_style() -> void {
 
   auto color_highlight_1                         = lerp(h_color_1,h_color_2, 0);
 
-  auto color_accent_2                            = lerp(h_color_1,h_color_2, 0.2f);//{55.0f / 255.0f, 75.0f / 255.0f, 255.0f / 255.0f, 1.0f};
-  auto color_accent_3                            = lerp(h_color_1,h_color_2, 0.3f);//{50.0f / 255.0f, 70.0f / 255.0f, 255.0f / 255.0f, 1.0f};
-
-  // not used
-  // ImVec4 color_highlight_2                      = Lerp(h_color_1,h_color_2,.1);
-  // ImVec4 color_highlight_3                      = Lerp(h_color_1,h_color_2,.2);
-  // ImVec4 color_highlight_4                      = Lerp(h_color_1,h_color_2,.3);
-  // ImVec4 color_highlight_5                      = Lerp(h_color_1,h_color_2,.4);
-  // ImVec4 color_highlight_6                      = Lerp(h_color_1,h_color_2,.5);
-  // ImVec4 color_highlight_7                      = Lerp(h_color_1,h_color_2,.6);
-  // ImVec4 color_highlight_8                      = Lerp(h_color_1,h_color_2,.7);
-  // ImVec4 color_highlight_9                      = Lerp(h_color_1,h_color_2,.8);
-  // ImVec4 color_highlight_10                     = Lerp(h_color_1,h_color_2,.9);
+  auto color_accent_2                            = lerp(h_color_1,h_color_2, 0.2f);
+  auto color_accent_3                            = lerp(h_color_1,h_color_2, 0.3f);
 
   style.Colors[ImGuiCol_Text]                      = color_highlight_1;
   style.Colors[ImGuiCol_TextDisabled]              = color_background_9;
@@ -289,11 +278,6 @@ auto editor_context::_apply_style() -> void {
   style.Colors[ImGuiCol_Button]                    = color_background_3;
   style.Colors[ImGuiCol_ButtonHovered]             = color_background_4;
   style.Colors[ImGuiCol_ButtonActive]              = color_background_1;
-
-  // alternative
-  // style.Colors[ImGuiCol_Button]                 = {};
-  // style.Colors[ImGuiCol_ButtonHovered]          = color_highlight_4;
-  // style.Colors[ImGuiCol_ButtonActive]           = color_highlight_5;
 
   style.Colors[ImGuiCol_ResizeGrip]                =  color_black_transparent_3;
   style.Colors[ImGuiCol_ResizeGripHovered]         = color_black_transparent_6;

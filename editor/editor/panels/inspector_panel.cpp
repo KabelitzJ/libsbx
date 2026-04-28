@@ -90,17 +90,17 @@ auto inspector_panel::_draw_transform(sbx::scenes::scene_graph& graph, sbx::scen
   auto& transform = graph.get_component<sbx::scenes::transform>(node);
 
   auto position = transform.position();
-  if (_draw_vec3_control("Position", position)) {
+  if (_draw_vector3_control("Position", position)) {
     transform.set_position(position);
   }
 
   auto euler = sbx::math::quaternion::euler_angles(transform.rotation());
-  if (_draw_vec3_control("Rotation", euler)) {
+  if (_draw_vector3_control("Rotation", euler)) {
     transform.set_rotation(sbx::math::quaternion{euler});
   }
 
   auto scale = transform.scale();
-  if (_draw_vec3_control("Scale", scale, 1.0f)) {
+  if (_draw_vector3_control("Scale", scale, 1.0f)) {
     transform.set_scale(scale);
   }
 }
@@ -113,7 +113,7 @@ auto inspector_panel::_draw_directional_light(sbx::scenes::scene_graph& graph, s
   auto& light = graph.get_component<sbx::scenes::directional_light>(node);
 
   auto direction = light.direction();
-  if (_draw_vec3_control("Direction", direction)) {
+  if (_draw_vector3_control("Direction", direction)) {
     light.set_direction(direction);
   }
 
@@ -174,7 +174,7 @@ auto inspector_panel::_draw_static_mesh(sbx::scenes::scene_graph& graph, sbx::sc
   }
 }
 
-auto inspector_panel::_draw_vec3_control(const std::string& label, sbx::math::vector3& values, float reset_value) -> bool {
+auto inspector_panel::_draw_vector3_control(const std::string& label, sbx::math::vector3& values, float reset_value) -> bool {
   auto changed = false;
 
   ImGui::PushID(label.c_str());

@@ -32,28 +32,24 @@ option(SBX_BUILD_SHARED "Build shared library" OFF)
 option(SBX_BUILD_TESTS "Build tests" ON)
 option(SBX_CONSTEXPR_ENABLED "Enable constexpr" ON)
 
-set(_USE_PROFILER_DEFAULT OFF)
-set(_MEMORY_TRACKING OFF)
-set(_USE_ASAN_DEFAULT OFF)
+set(_PROFILING_ENABLED_DEFAULT OFF)
+set(_ASAN_ENABLED_DEFAULT OFF)
 
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-  set(_USE_PROFILER_DEFAULT ON)
-  set(_MEMORY_TRACKING ON)
-  set(_USE_ASAN_DEFAULT ON)
+  set(_PROFILING_ENABLED_DEFAULT ON)
+  set(_ASAN_ENABLED_DEFAULT ON)
 endif()
 
-option(SBX_USE_PROFILER "Use profiler" ${_USE_PROFILER_DEFAULT})
-option(SBX_MEMORY_TRACKING "Use CPU memory tracking" ${_MEMORY_TRACKING})
-option(SBX_USE_ASAN "Use ASAN" ${_USE_ASAN_DEFAULT})
+option(SBX_PROFILING_ENABLED "Enable profiling" ${_PROFILING_ENABLED_DEFAULT})
+option(SBX_ASAN_ENABLED "Enable AddressSanitizer" ${_ASAN_ENABLED_DEFAULT})
 
 message(STATUS "SBX_BUILD_DEMO: ${SBX_BUILD_DEMO}")
 message(STATUS "SBX_BUILD_EDITOR: ${SBX_BUILD_EDITOR}")
 message(STATUS "SBX_BUILD_SHARED: ${SBX_BUILD_SHARED}")
 message(STATUS "SBX_BUILD_TESTS: ${SBX_BUILD_TESTS}")
 message(STATUS "SBX_CONSTEXPR_ENABLED: ${SBX_CONSTEXPR_ENABLED}")
-message(STATUS "SBX_USE_PROFILER: ${SBX_USE_PROFILER}")
-message(STATUS "SBX_MEMORY_TRACKING: ${SBX_MEMORY_TRACKING}")
-message(STATUS "SBX_USE_ASAN: ${SBX_USE_ASAN}")
+message(STATUS "SBX_PROFILING_ENABLED: ${SBX_PROFILING_ENABLED}")
+message(STATUS "SBX_ASAN_ENABLED: ${SBX_ASAN_ENABLED}")
 
 # Build metadata
 
@@ -99,7 +95,6 @@ set(DOTNET_OUT_DIR ${SBX_DATA_DIR}/dotnet)
 
 find_package(fmt CONFIG REQUIRED)
 find_package(spdlog CONFIG REQUIRED)
-find_package(easy_profiler CONFIG REQUIRED)
 find_package(range-v3 CONFIG REQUIRED)
 find_package(lz4 CONFIG REQUIRED)
 find_package(zstd CONFIG REQUIRED)
@@ -126,6 +121,7 @@ find_package(drwav CONFIG REQUIRED)
 find_package(OpenAL CONFIG REQUIRED)
 find_package(sol2 CONFIG REQUIRED)
 find_package(Nethost REQUIRED)
+find_package(Tracy CONFIG REQUIRED)
 
 option(GLFW_BUILD_EXAMPLES "" OFF)
 option(GLFW_BUILD_TESTS "" OFF)
@@ -134,9 +130,6 @@ option(GLFW_INSTALL "" OFF)
 option(GLFW_DOCUMENT_INTERNALS "" OFF)
 option(SPIRV_CROSS_CLI "" OFF)
 option(SPIRV_CROSS_ENABLE_TESTS "" OFF)
-
-set(BUILD_WITH_EASY_PROFILER 1 CACHE STRING "" FORCE)
-set(EASY_OPTION_LOG 1 CACHE STRING "" FORCE)
 
 # Configure version header
 
@@ -243,6 +236,7 @@ target_sources(
     "${CMAKE_SOURCE_DIR}/libsbx/graphics/pipeline/graphics_pipeline.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/graphics/pipeline/mesh.ipp"
     "${CMAKE_SOURCE_DIR}/libsbx/graphics/pipeline/shader.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/graphics/profiler.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/graphics/render_graph.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/graphics/render_graph.ipp"
     "${CMAKE_SOURCE_DIR}/libsbx/graphics/render_pass/swapchain.cpp"
@@ -282,6 +276,7 @@ target_sources(
     "${CMAKE_SOURCE_DIR}/libsbx/physics/character_controller.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/physics/collision_detection.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/physics/mesh_collider.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/physics/physics_module.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/physics/physics.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/physics/rigidbody.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/physics/shape_collider.cpp"
@@ -451,6 +446,7 @@ target_sources(
       "${CMAKE_SOURCE_DIR}/libsbx/graphics/pipeline/pipeline.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/graphics/pipeline/shader.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/graphics/pipeline/vertex_input_description.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/graphics/profiler.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/graphics/render_graph.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/graphics/render_pass/swapchain.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/graphics/renderer.hpp"
@@ -641,6 +637,7 @@ target_sources(
       "${CMAKE_SOURCE_DIR}/libsbx/utility/noncopyable.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/utility/overload.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/utility/primitive.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/utility/profiler.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/utility/small_string.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/utility/string_literal.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/utility/target.hpp"
@@ -669,7 +666,6 @@ target_link_libraries(
   PUBLIC
     fmt::fmt
     spdlog::spdlog
-    easy_profiler
     range-v3::range-v3
     lz4::lz4
     zstd::libzstd
@@ -696,6 +692,7 @@ target_link_libraries(
     OpenAL::OpenAL
     sol2::sol2
     Nethost::nethost
+    Tracy::TracyClient
 )
 
 set_target_properties(
@@ -718,9 +715,8 @@ target_compile_definitions(
   libsbx
   PUBLIC
     SBX_CONSTEXPR_ENABLED=$<IF:$<BOOL:${SBX_CONSTEXPR_ENABLED}>,1,0>
-    SBX_USE_PROFILER=${SBX_USE_PROFILER}
-    SBX_MEMORY_TRACKING=$<IF:$<BOOL:${SBX_MEMORY_TRACKING}>,1,0>
-    $<$<BOOL:${SBX_USE_PROFILER}>:BUILD_WITH_EASY_PROFILER>
+    SBX_PROFILING_ENABLED=$<IF:$<BOOL:${SBX_PROFILING_ENABLED}>,1,0>
+    $<$<BOOL:${SBX_PROFILING_ENABLED}>:TRACY_ENABLE>
   PRIVATE
     GLFW_INCLUDE_VULKAN
 )
@@ -764,28 +760,6 @@ target_link_options(libsbx PUBLIC ${_sbx_link_options})
 
 # Scripting: dotnet build targets
 
-if(CMAKE_HOST_SYSTEM_NAME STREQUAL "Linux")
-  set(_sbx_dotnet_os "linux")
-elseif(CMAKE_HOST_SYSTEM_NAME STREQUAL "Windows")
-  set(_sbx_dotnet_os "win")
-elseif(CMAKE_HOST_SYSTEM_NAME STREQUAL "Darwin")
-  set(_sbx_dotnet_os "osx")
-else()
-  message(FATAL_ERROR ".NET RID not defined for ${CMAKE_HOST_SYSTEM_NAME}")
-endif()
-
-if(CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64|amd64)$")
-  set(_sbx_dotnet_arch "x64")
-elseif(CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "^(aarch64|arm64|ARM64)$")
-  set(_sbx_dotnet_arch "arm64")
-else()
-  message(FATAL_ERROR ".NET RID not defined for processor ${CMAKE_HOST_SYSTEM_PROCESSOR}")
-endif()
-
-set(SBX_DOTNET_RID "${_sbx_dotnet_os}-${_sbx_dotnet_arch}" CACHE STRING ".NET runtime identifier for self-contained publish")
-
-message(STATUS "SBX_DOTNET_RID: ${SBX_DOTNET_RID}")
-
 set(SBX_MANAGED_DIR ${CMAKE_SOURCE_DIR}/dotnet/Sbx.Managed)
 set(SBX_MANAGED_PROJECT ${SBX_MANAGED_DIR}/Sbx.Managed.csproj)
 
@@ -811,9 +785,7 @@ add_custom_target(
   COMMAND ${CMAKE_COMMAND} -E make_directory ${DOTNET_OUT_DIR}
   COMMAND dotnet publish ${SBX_CORE_PROJECT}
     -c $<CONFIG>
-    -r ${SBX_DOTNET_RID}
-    --self-contained true
-    -p:PublishSingleFile=false
+    --self-contained false
     -p:UseAppHost=false
     -o ${DOTNET_OUT_DIR}
   WORKING_DIRECTORY ${SBX_CORE_DIR}

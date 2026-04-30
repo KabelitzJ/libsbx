@@ -40,7 +40,7 @@ public:
   }
 
   auto render(sbx::graphics::command_buffer& command_buffer) -> void override {
-    EASY_BLOCK("grid_subrenderer::render");
+    SBX_PROFILE_SCOPE("grid_subrenderer::render");
 
     auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
     auto& scene = scenes_module.active_scene();

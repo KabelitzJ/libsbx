@@ -20,7 +20,6 @@ particle_task::particle_task(const std::filesystem::path& path)
   _frame_seed{math::random::next<std::uint32_t>()} { }
 
 auto particle_task::execute(graphics::command_buffer& command_buffer) -> void {
-  EASY_BLOCK("particle_task::execute");
   SBX_PROFILE_SCOPE("particle_task::execute");
 
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();

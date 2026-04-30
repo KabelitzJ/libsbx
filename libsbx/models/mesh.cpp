@@ -17,6 +17,7 @@
 
 #include <libsbx/utility/logger.hpp>
 #include <libsbx/utility/iterator.hpp>
+#include <libsbx/utility/profiler.hpp>
 
 #include <libsbx/core/engine.hpp>
 
@@ -70,6 +71,8 @@ static auto _calculate_aabb(const std::vector<vertex3d>& vertices) -> math::volu
 }
 
 static auto _load_mesh(const aiMesh* mesh, mesh::mesh_data& data, const math::matrix4x4& local_transform) -> void {
+  SBX_PROFILE_SCOPE("mesh::_load_mesh");
+
   if (!mesh->HasNormals()) {
     throw std::runtime_error{fmt::format("Mesh '{}' does not have normals", mesh->mName.C_Str())};
   }
@@ -136,6 +139,8 @@ static auto _load_mesh(const aiMesh* mesh, mesh::mesh_data& data, const math::ma
     indices.push_back(mesh->mFaces[i].mIndices[2]);
   }
 
+  SBX_PROFILE_SCOPE_START(s0, "optimize");
+
   // Step 1: Generate remap to deduplicate vertices and index
   auto remap = std::vector<std::uint32_t>{};
   remap.resize(indices.size());
@@ -194,6 +199,8 @@ static auto _load_mesh(const aiMesh* mesh, mesh::mesh_data& data, const math::ma
     meshopt_remapVertexBuffer(fetched.data(), unique_streams[c].data(), vertex_count, sizeof(math::vector4), fetch_remap.data());
     unique_streams[c] = std::move(fetched);
   }
+
+  SBX_PROFILE_SCOPE_END(s0);
 
   // [NOTE] KAJ 2025-07-08 : Apply the "global" index offset here
   // std::transform(remapped_indices.begin(), remapped_indices.end(), remapped_indices.begin(), [vertices_count](const auto index) { return index + vertices_count; });
@@ -280,6 +287,8 @@ mesh::~mesh() {
 }
 
 auto mesh::_upload_streams(std::array<std::vector<math::vector4>, vertex_stream_count>& streams) -> void {
+  SBX_PROFILE_SCOPE("mesh::_upload_streams");
+
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 
   for (auto i = std::uint32_t{0u}; i < vertex_stream_count; ++i) {
@@ -302,7 +311,7 @@ auto mesh::_upload_streams(std::array<std::vector<math::vector4>, vertex_stream_
     auto staging_buffer = graphics::staging_buffer{size_in_bytes};
     staging_buffer.write(source.data(), size_in_bytes);
 
-    auto command_buffer = graphics::command_buffer{true, VK_QUEUE_GRAPHICS_BIT};
+    auto command_buffer = graphics::command_buffer{graphics::queue::type::graphics, true};
     auto& target = graphics_module.get_resource<graphics::buffer>(_stream_buffers[i]);
 
     auto copy_region = VkBufferCopy{};
@@ -357,6 +366,8 @@ auto mesh::has_streams(const utility::bit_field<vertex_stream>& required) const 
 }
 
 auto mesh::_load(const std::filesystem::path& path, std::uint32_t lod_count) -> mesh_data {
+  SBX_PROFILE_SCOPE("mesh::_load");
+
   auto& assets_module = core::engine::get_module<assets::assets_module>();
   const auto resolved_path = assets_module.resolve_path(path);
 
@@ -560,6 +571,8 @@ static auto decode_uv(const std::array<std::int16_t, 2>& encoded) -> math::vecto
 }
 
 auto mesh::_load_binary(const std::filesystem::path& path) -> mesh_data {
+  SBX_PROFILE_SCOPE("mesh::_load_binary");
+
   auto timer = utility::timer{};
 
   auto file = std::ifstream{path, std::ios::binary | std::ios::ate};
@@ -739,6 +752,8 @@ static auto calculate_sphere(const std::vector<vertex3d>& vertices) -> math::sph
 }
 
 auto mesh::_process(const std::filesystem::path& path, const mesh_data& data) -> void {
+  SBX_PROFILE_SCOPE("mesh::_process");
+
   const auto output_path = std::filesystem::path{path}.replace_extension(binary_file_extention);
 
   const auto submeshes_size = data.submeshes.size() * sizeof(file_submesh);

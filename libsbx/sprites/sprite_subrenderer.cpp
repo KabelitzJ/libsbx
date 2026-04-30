@@ -29,7 +29,6 @@ sprite_subrenderer::sprite_subrenderer(const std::vector<graphics::attachment_de
 }
 
 auto sprite_subrenderer::render(graphics::command_buffer& command_buffer) -> void {
-  EASY_BLOCK("sprite_subrenderer::render");
   SBX_PROFILE_SCOPE("sprite_subrenderer::render");
 
   auto& sprites_module = core::engine::get_module<sprites::sprites_module>();

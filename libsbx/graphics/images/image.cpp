@@ -200,7 +200,7 @@ auto image::create_image_sampler(VkSampler& sampler, VkFilter filter, VkSamplerA
 }
 
 auto image::create_mipmaps(const VkImage& image, const VkExtent3D& extent, VkFormat format, VkImageLayout dst_image_layout, std::uint32_t mip_levels, std::uint32_t base_array_layer, std::uint32_t layer_count) -> void {
-  auto command_buffer = graphics::command_buffer{true, VK_QUEUE_GRAPHICS_BIT};
+  auto command_buffer = graphics::command_buffer{graphics::queue::type::graphics, true};
 
   create_mipmaps(command_buffer, image, extent, format, dst_image_layout, mip_levels, base_array_layer, layer_count);
 
@@ -288,7 +288,7 @@ auto image::create_mipmaps(command_buffer& command_buffer, const VkImage& image,
 }
 
 auto image::transition_image_layout(const VkImage& image, VkFormat format, VkImageLayout src_image_layout, VkImageLayout dst_image_layout, VkImageAspectFlags image_aspect, std::uint32_t mip_levels, std::uint32_t base_mip_level, std::uint32_t layer_count, std::uint32_t base_array_layer) -> void {
-  auto command_buffer = graphics::command_buffer{};
+  auto command_buffer = graphics::command_buffer{graphics::queue::type::graphics, true};
 
   transition_image_layout(command_buffer, image, format, src_image_layout, dst_image_layout, image_aspect, mip_levels, base_mip_level, layer_count, base_array_layer);
 
@@ -436,7 +436,7 @@ auto image::insert_image_memory_barrier(command_buffer& command_buffer, const Vk
 }
 
 auto image::copy_buffer_to_image(const VkBuffer& buffer, const VkImage& image, const VkExtent3D& extent, std::uint32_t layer_count, std::uint32_t base_array_layer) -> void {
-  auto command_buffer = graphics::command_buffer{};
+  auto command_buffer = graphics::command_buffer{graphics::queue::type::graphics, true};
 
   copy_buffer_to_image(command_buffer, buffer, image, extent, layer_count, base_array_layer);
 
@@ -459,7 +459,7 @@ auto image::copy_buffer_to_image(graphics::command_buffer& command_buffer, const
 }
 
 auto image::copy_image_to_buffer(const VkImage& image, VkFormat format, const VkBuffer& buffer, const VkOffset3D& offset, const VkExtent3D& extent, std::uint32_t mip_level, std::uint32_t layer_count, std::uint32_t base_array_layer) -> void {
-  auto command_buffer = graphics::command_buffer{};
+  auto command_buffer = graphics::command_buffer{graphics::queue::type::graphics, true};
 
   transition_image_layout(command_buffer, image, format, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_ASPECT_COLOR_BIT, 1, 0, layer_count, base_array_layer);
 
@@ -504,7 +504,7 @@ auto image::copy_image(const VkImage& src_image, VkImage& dst_image, VmaAllocati
 
 	create_image(dst_image, dst_allocation, extent, VK_FORMAT_R8G8B8A8_UNORM, VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_TILING_LINEAR, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, 1, 1, VK_IMAGE_TYPE_2D);
 
-	auto command_buffer = graphics::command_buffer{};
+	auto command_buffer = graphics::command_buffer{graphics::queue::type::graphics, true};
 
 	insert_image_memory_barrier(command_buffer, dst_image, 0, VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_IMAGE_ASPECT_COLOR_BIT, 1, 0, 1, 0);
 	insert_image_memory_barrier(command_buffer, src_image, VK_ACCESS_MEMORY_READ_BIT, VK_ACCESS_TRANSFER_READ_BIT, src_image_layout, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_IMAGE_ASPECT_COLOR_BIT, 1, mip_level, 1, array_layer);

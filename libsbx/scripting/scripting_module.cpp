@@ -100,9 +100,7 @@ scripting_module::~scripting_module() {
 }
 
 auto scripting_module::update() -> void {
-  EASY_BLOCK("scripting_module::update");
   SBX_PROFILE_SCOPE("scripting_module::update");
-  SBX_MEMORY_SCOPE(memory::allocation_category::scripting);
 
   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
 

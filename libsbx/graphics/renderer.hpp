@@ -6,7 +6,7 @@
 #include <vector>
 #include <typeindex>
 
-#include <easy/profiler.h>
+#include <libsbx/utility/profiler.hpp>
 
 #include <libsbx/utility/noncopyable.hpp>
 #include <libsbx/utility/concepts.hpp>

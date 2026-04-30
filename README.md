@@ -35,7 +35,7 @@ Sandbox is a game engine written from the ground up in **C++20**, designed as bo
 - C# scripting via .NET integration
 - Audio engine
 - Debug rendering and grid overlay
-- Profiling support (easy_profiler)
+- Profiling support (tracy integration)
 
 **In progress:** SSAO, bloom, physics engine, networking, AI systems
 

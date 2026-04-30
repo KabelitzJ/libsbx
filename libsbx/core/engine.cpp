@@ -3,7 +3,7 @@
 
 #include <range/v3/all.hpp>
 
-#include <easy/profiler.h>
+#include <libsbx/utility/profiler.hpp>
 
 namespace sbx::core {
 
@@ -25,9 +25,13 @@ engine::engine(std::span<std::string_view> args)
     }
   }
 
+  SBX_PROFILE_SCOPE_START(s0, "engine::initialize_modules");
+
   for (auto&& [type, factory] : module_manager::_factories() | ranges::views::filter([](const auto& entry) { return entry.has_value(); }) | ranges::views::enumerate) {
     _create_module(type, *factory);
   }
+
+  SBX_PROFILE_SCOPE_END(s0);
 }
 
 engine::~engine() {
@@ -74,53 +78,52 @@ auto engine::_run_main_loop() -> void {
   auto fixed_accumulator = units::second{};
 
   while (_is_running) {
-    SBX_MEMORY_SCOPE(memory::allocation_category::engine);
-
     const auto now = clock_type::now();
     const auto delta_time = std::chrono::duration_cast<std::chrono::duration<std::float_t>>(now - last).count();
     last = now;
-
 
     _delta_time = units::second{delta_time};
     _time += _delta_time;
 
     fixed_accumulator += _delta_time;
 
-    EASY_BLOCK("stage pre");
+    SBX_PROFILE_SCOPE_START(s0, "stage pre");
     _update_stage(stage::pre);
-    EASY_END_BLOCK;
+    SBX_PROFILE_SCOPE_END(s0);
 
-    EASY_BLOCK("application update");
+    SBX_PROFILE_SCOPE_START(s1, "application update");
     _application->update();
-    EASY_END_BLOCK;
+    SBX_PROFILE_SCOPE_END(s1);
 
-    EASY_BLOCK("stage normal");
+    SBX_PROFILE_SCOPE_START(s2, "stage normal");
     _update_stage(stage::normal);
-    EASY_END_BLOCK;
+    SBX_PROFILE_SCOPE_END(s2);
 
-    EASY_BLOCK("stage post");
+    SBX_PROFILE_SCOPE_START(s3, "stage post");
     _update_stage(stage::post);
-    EASY_END_BLOCK;
+    SBX_PROFILE_SCOPE_END(s3);
 
-    EASY_BLOCK("stage pre_fixed");
+    SBX_PROFILE_SCOPE_START(s4, "stage pre_fixed");
     _update_stage(stage::pre_fixed);
-    EASY_END_BLOCK;
+    SBX_PROFILE_SCOPE_END(s4);
 
+    SBX_PROFILE_SCOPE_START(s5, "stage fixed");
     while (fixed_accumulator >= fixed_delta_time()) {
-      EASY_BLOCK("stage fixed");
       _application->fixed_update();
       _update_stage(stage::fixed);
       fixed_accumulator -= fixed_delta_time();
-      EASY_END_BLOCK;
     }
+    SBX_PROFILE_SCOPE_END(s5);
 
-    EASY_BLOCK("stage post_fixed");
+    SBX_PROFILE_SCOPE_START(s6, "stage post_fixed");
     _update_stage(stage::post_fixed);
-    EASY_END_BLOCK;
+    SBX_PROFILE_SCOPE_END(s6);
 
-    EASY_BLOCK("stage rendering");
+    SBX_PROFILE_SCOPE_START(s7, "stage rendering");
     _update_stage(stage::rendering);
-    EASY_END_BLOCK;
+    SBX_PROFILE_SCOPE_END(s7);
+
+    SBX_PROFILE_FRAME_MARK_NAMED("main loop");
   }
 }
 

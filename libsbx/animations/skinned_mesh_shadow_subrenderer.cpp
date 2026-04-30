@@ -13,11 +13,8 @@ skinned_mesh_shadow_subrenderer::~skinned_mesh_shadow_subrenderer() {
 }
 
 auto skinned_mesh_shadow_subrenderer::render(graphics::command_buffer& command_buffer) -> void {
-  EASY_BLOCK("skinned_mesh_shadow_subrenderer::render");
-
   SBX_PROFILE_SCOPE("skinned_mesh_shadow_subrenderer::render");
-
-  auto timer = graphics::scoped_gpu_timer{command_buffer, "skinned shadow"};
+  SBX_PROFILE_GPU_SCOPE(command_buffer, "skinned_mesh_shadow_subrenderer::render");
 
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
   auto& renderer = graphics_module.renderer();

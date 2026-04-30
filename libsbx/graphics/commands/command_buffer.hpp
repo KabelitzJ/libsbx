@@ -77,7 +77,7 @@ public:
     VkImageLayout new_layout;
   }; // struct image_acquire_data
 
-  command_buffer(bool should_begin = true, VkQueueFlagBits queue_type = VK_QUEUE_GRAPHICS_BIT, VkCommandBufferLevel buffer_level = VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+  command_buffer(const queue::type type, bool should_begin = true, VkCommandBufferLevel buffer_level = VK_COMMAND_BUFFER_LEVEL_PRIMARY);
 
   command_buffer(const command_buffer&) = delete;
 
@@ -92,6 +92,8 @@ public:
   auto handle() const noexcept -> VkCommandBuffer;
 
   operator VkCommandBuffer() const noexcept;
+
+  auto type() const noexcept -> queue::type;
 
   auto is_running() const noexcept -> bool;
 
@@ -151,12 +153,10 @@ public:
 
 private:
 
-  auto _queue() const -> const graphics::queue&;
-
   std::shared_ptr<command_pool> _command_pool{};
 
+  queue::type _queue_type{};
   VkCommandBuffer _handle{};
-  VkQueueFlagBits _queue_type{};
   bool _is_running{};
 
 }; // class command_buffer

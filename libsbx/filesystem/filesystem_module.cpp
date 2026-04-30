@@ -6,6 +6,7 @@
 
 #include <libsbx/utility/logger.hpp>
 #include <libsbx/utility/target.hpp>
+#include <libsbx/utility/profiler.hpp>
 
 #if defined(SBX_WINDOWS)
   #define WIN32_LEAN_AND_MEAN

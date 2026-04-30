@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 #include <libsbx/animations/skeleton.hpp>
 
-#include <easy/profiler.h>
+#include <libsbx/utility/profiler.hpp>
 
 namespace sbx::animations {
 
@@ -44,7 +44,6 @@ auto skeleton::bones() const -> const std::vector<bone>& {
 }
 
 auto skeleton::evaluate_pose(const animation& animation, std::float_t time) const -> std::vector<math::matrix4x4> {
-  EASY_BLOCK("skeleton::evaluate_pose");
   SBX_PROFILE_SCOPE("skeleton::evaluate_pose");
 
   auto final_bones = std::vector<math::matrix4x4>{};
@@ -61,46 +60,43 @@ auto skeleton::evaluate_pose(const animation& animation, std::float_t time) cons
 
     const auto& track_map = animation.track_map();
 
-    EASY_BLOCK("skeleton::find_track");
+    SBX_PROFILE_SCOPE_START(s0, "skeleton::find_track");
 
     auto it = track_map.find(bone_name);
 
-    EASY_END_BLOCK;
+    SBX_PROFILE_SCOPE_END(s0);
 
     // Sample animation track if present
     if (it != track_map.cend()) {
-      EASY_BLOCK("skeleton::sample_track");
+      SBX_PROFILE_SCOPE("skeleton::sample_track");
       const auto& track = it->second;
 
-      EASY_BLOCK("skeleton::sample_position_rotation_scale");
+      SBX_PROFILE_SCOPE_START(s1, "skeleton::sample_position_rotation_scale");
 
       const auto position = track.position_spline.sample(time);
       const auto rotation = math::quaternion::normalized(track.rotation_spline.sample(time));
       const auto scale = track.scale_spline.sample(time);
 
-      EASY_END_BLOCK;
+      SBX_PROFILE_SCOPE_END(s1);
 
-      EASY_BLOCK("skeleton::calculate_local_transform");
+      SBX_PROFILE_SCOPE_START(s2, "skeleton::calculate_local_transform");
 
       const auto translation_matrix = math::matrix4x4::translated(math::matrix4x4::identity, position);
       const auto rotation_matrix = math::matrix_cast<math::matrix4x4>(rotation);
       const auto scale_matrix = math::matrix4x4::scaled(math::matrix4x4::identity, scale);
 
-      EASY_END_BLOCK;
+      SBX_PROFILE_SCOPE_END(s2);
 
       local_transform = translation_matrix * rotation_matrix * scale_matrix;
-      EASY_END_BLOCK;
     }
 
-    EASY_BLOCK("skeleton::local_transform");
+    SBX_PROFILE_SCOPE("skeleton::local_transform");
 
     const auto global_transform = (bone.parent_id != skeleton::bone::null) ? global_transforms[bone.parent_id] * local_transform : local_transform;
 
     final_bones[bone_id] = _inverse_root_transform * global_transform * bone.inverse_bind_matrix;
 
     global_transforms[bone_id] = std::move(global_transform);
-
-    EASY_END_BLOCK;
   }
 
   return final_bones;

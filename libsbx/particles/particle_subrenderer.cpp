@@ -15,10 +15,8 @@ particle_subrenderer::particle_subrenderer(const std::vector<graphics::attachmen
   _push_handler{_pipeline} { }
 
 auto particle_subrenderer::render(graphics::command_buffer& command_buffer) -> void {
-  EASY_BLOCK("particle_subrenderer::render");
   SBX_PROFILE_SCOPE("particle_subrenderer::render");
-
-  auto timer = graphics::scoped_gpu_timer{command_buffer, "particle_subrenderer"};
+  SBX_PROFILE_GPU_SCOPE(command_buffer, "particle_subrenderer::render");
 
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
   auto& renderer = graphics_module.renderer();

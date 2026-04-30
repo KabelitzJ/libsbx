@@ -68,7 +68,7 @@ public:
   ~resolve_filter() override = default;
 
   auto render(graphics::command_buffer& command_buffer) -> void override {
-    EASY_BLOCK("resolve_filter::render", profiler::colors::Red);
+    SBX_PROFILE_SCOPE("resolve_filter::render");
 
     auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 

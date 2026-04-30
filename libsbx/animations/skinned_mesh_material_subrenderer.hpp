@@ -8,9 +8,9 @@
 #include <algorithm>
 #include <iterator>
 
-#include <easy/profiler.h>
-
 #include <range/v3/view/enumerate.hpp>
+
+#include <libsbx/utility/profiler.hpp>
 
 #include <libsbx/core/engine.hpp>
 

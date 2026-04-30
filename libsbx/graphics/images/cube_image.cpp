@@ -4,6 +4,7 @@
 #include <stb_image.h>
 
 #include <libsbx/utility/logger.hpp>
+#include <libsbx/utility/profiler.hpp>
 
 #include <libsbx/core/engine.hpp>
 
@@ -62,6 +63,8 @@ auto bytes_per_pixel(const VkFormat format) -> std::uint32_t {
 }
 
 auto cube_image::_load(const std::filesystem::path& path, const std::string& suffix) -> void {
+  SBX_PROFILE_SCOPE("cube_image::_load");
+
   _channels = channels_from_format(_format);
 
   const auto bpp = bytes_per_pixel(_format);
@@ -73,6 +76,8 @@ auto cube_image::_load(const std::filesystem::path& path, const std::string& suf
   auto from_file = false;
 
   if (!path.empty()) {
+    SBX_PROFILE_SCOPE("cube_image::_load_from_file");
+
     auto timer = utility::timer{};
 
     from_file = true;
@@ -152,29 +157,33 @@ auto cube_image::_load(const std::filesystem::path& path, const std::string& suf
   create_image_view(_handle, _view, VK_IMAGE_VIEW_TYPE_CUBE, _format, VK_IMAGE_ASPECT_COLOR_BIT, _mip_levels, 0, _array_layers, 0);
   create_image_view(_handle, _array_view, VK_IMAGE_VIEW_TYPE_2D_ARRAY, _format, VK_IMAGE_ASPECT_COLOR_BIT, _mip_levels, 0, _array_layers, 0);
 
-  auto command_buffer = graphics::command_buffer{true, VK_QUEUE_GRAPHICS_BIT};
-
-  if (from_file || _mipmap) {
-    transition_image_layout(command_buffer, _handle, _format, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_ASPECT_COLOR_BIT, _mip_levels, 0, _array_layers, 0);
+  {
+    SBX_PROFILE_SCOPE("cube_image::_upload");
+    
+    auto command_buffer = graphics::command_buffer{graphics::queue::type::graphics, true};
+    
+    if (from_file || _mipmap) {
+      transition_image_layout(command_buffer, _handle, _format, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_ASPECT_COLOR_BIT, _mip_levels, 0, _array_layers, 0);
+    }
+    
+    auto staging_buffer = std::optional<graphics::staging_buffer>{};
+    
+    if (from_file) {
+      staging_buffer.emplace(std::span{buffer.data(), buffer.size()});
+      
+      copy_buffer_to_image(command_buffer, *staging_buffer, _handle, _extent, _array_layers, 0);
+    }
+    
+    if (_mipmap) {
+      create_mipmaps(command_buffer, _handle, _extent, _format, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, _mip_levels, 0, _array_layers);
+    } else if (from_file) {
+      transition_image_layout(command_buffer, _handle, _format, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_ASPECT_COLOR_BIT, _mip_levels, 0, _array_layers, 0);
+    } else {
+      transition_image_layout(command_buffer, _handle, _format, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT, _mip_levels, 0, _array_layers, 0);
+    }
+    
+    command_buffer.submit_idle();
   }
-
-  auto staging_buffer = std::optional<graphics::staging_buffer>{};
-
-  if (from_file) {
-    staging_buffer.emplace(std::span{buffer.data(), buffer.size()});
-
-    copy_buffer_to_image(command_buffer, *staging_buffer, _handle, _extent, _array_layers, 0);
-  }
-
-  if (_mipmap) {
-    create_mipmaps(command_buffer, _handle, _extent, _format, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, _mip_levels, 0, _array_layers);
-  } else if (from_file) {
-    transition_image_layout(command_buffer, _handle, _format, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_ASPECT_COLOR_BIT, _mip_levels, 0, _array_layers, 0);
-  } else {
-    transition_image_layout(command_buffer, _handle, _format, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT, _mip_levels, 0, _array_layers, 0);
-  }
-
-  command_buffer.submit_idle();
 }
 
 } // namespace sbx::graphics

@@ -3,7 +3,7 @@
 
 #include <nlohmann/json.hpp>
 
-#include <easy/profiler.h>
+#include <libsbx/utility/profiler.hpp>
 
 #include <imgui.h>
 
@@ -32,6 +32,7 @@
 
 #include <libsbx/particles/particle_emitter.hpp>
 
+#include <libsbx/physics/physics_module.hpp>
 #include <libsbx/physics/mesh_collider.hpp>
 #include <libsbx/physics/shape_collider.hpp>
 #include <libsbx/physics/rigidbody.hpp>
@@ -159,6 +160,19 @@ application::application()
 
   graph.add_component<sbx::scenes::static_mesh>(base, asset_registry.get_mesh("cube"), asset_registry.get_material("base"));
 
+  auto& base_rigidbody = graph.add_component<sbx::physics::rigidbody>(base);
+  base_rigidbody.set_is_static(true);
+
+  auto& base_collider = graph.add_component<sbx::physics::shape_collider>(base, sbx::physics::box{sbx::math::vector3{50.0f, 0.1f, 50.0f}});
+
+  auto& cube_material = asset_registry.request_material<sbx::models::material>("cube");
+  cube_material.base_color = sbx::math::color::white();
+  cube_material.alpha = sbx::models::alpha_mode::opaque;
+  cube_material.metallic_factor = 0.0f;
+  cube_material.roughness_factor = 1.0f;
+  cube_material.occlusion_strength = 1.0f;
+  cube_material.specular_factor = 0.0f;
+
   // Tree
 
   auto tree = graph.create_node("Tree");
@@ -246,7 +260,32 @@ application::~application() {
 }
 
 auto application::update() -> void {
+  auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
+  auto& scene = scenes_module.active_scene();
 
+  auto& asset_registry = scenes_module.asset_registry();
+  auto& graph = scene.graph();
+
+  if (sbx::devices::input::is_key_pressed(sbx::devices::key::space)) {
+    auto cube = graph.create_node("Cube");
+
+    auto axis = sbx::math::vector3::normalized(sbx::math::vector3{sbx::math::random::next<std::float_t>(-1.0f, 1.0f), sbx::math::random::next<std::float_t>(-1.0f, 1.0f), sbx::math::random::next<std::float_t>(-1.0f, 1.0f)});
+    auto angle = sbx::math::angle{sbx::math::radian{sbx::math::random::next<std::float_t>(sbx::math::radian::min, sbx::math::radian::max)}};
+
+    auto& cube_transform = graph.get_component<sbx::scenes::transform>(cube);
+    cube_transform.set_position(sbx::math::vector3{0.0f, 10.0f, 0.0f});
+    cube_transform.set_scale(sbx::math::vector3{1.0f, 1.0f, 1.0f});
+    cube_transform.set_rotation(axis, angle);
+
+    graph.add_component<sbx::scenes::static_mesh>(cube, asset_registry.get_mesh("cube"), asset_registry.get_material("cube"));
+
+    auto& cube_collider = graph.add_component<sbx::physics::shape_collider>(cube, sbx::physics::box{sbx::math::vector3{0.5f, 0.5f, 0.5f}});
+
+    auto& cube_rigidbody = graph.add_component<sbx::physics::rigidbody>(cube);
+    cube_rigidbody.set_mass(1.0f);
+    cube_rigidbody.add_constant_acceleration(sbx::math::vector3{0.0f, -9.81f, 0.0f});
+    cube_rigidbody.set_inverse_inertia_tensor(sbx::physics::inverse_inertia_tensor(cube_collider, cube_rigidbody.mass()));
+  }
 }
 
 auto application::fixed_update() -> void {
@@ -272,7 +311,7 @@ auto application::_generate_brdf(const std::uint32_t size) -> void {
 
   auto& brdf = graphics_module.get_resource<sbx::graphics::image2d>(_brdf);
 
-  auto initial_command_buffer = sbx::graphics::command_buffer{true, VK_QUEUE_GRAPHICS_BIT};
+  auto initial_command_buffer = sbx::graphics::command_buffer{sbx::graphics::queue::type::graphics, true};
 
   sbx::graphics::image::transition_image_layout(initial_command_buffer, brdf.handle(), VK_FORMAT_R16G16_SFLOAT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT, brdf.mip_levels(), 0, brdf.array_layers(), 0);
 
@@ -295,7 +334,7 @@ auto application::_generate_brdf(const std::uint32_t size) -> void {
 
   initial_command_buffer.submit_idle();
 
-  auto compute_command_buffer = sbx::graphics::command_buffer{true, VK_QUEUE_COMPUTE_BIT};
+  auto compute_command_buffer = sbx::graphics::command_buffer{sbx::graphics::queue::type::compute, true};
 
   if (graphics_queue.family() != compute_queue.family()) {
     auto brdf_acquire = sbx::graphics::command_buffer::image_acquire_data{
@@ -352,7 +391,7 @@ auto application::_generate_brdf(const std::uint32_t size) -> void {
   compute_command_buffer.submit_idle();
 
   if (graphics_queue.family() != compute_queue.family()) {
-    auto final_command_buffer = sbx::graphics::command_buffer{true, VK_QUEUE_GRAPHICS_BIT};
+    auto final_command_buffer = sbx::graphics::command_buffer{sbx::graphics::queue::type::graphics, true};
 
     auto brdf_acquire = sbx::graphics::command_buffer::image_acquire_data{
       .image = brdf.handle(),
@@ -399,7 +438,7 @@ auto application::_generate_irradiance(const std::uint32_t size) -> void {
   auto& irradiance = graphics_module.get_resource<sbx::graphics::cube_image>(_irradiance);
   auto& skybox = graphics_module.get_resource<sbx::graphics::cube_image>(asset_registry.get_cube_image("skybox"));
 
-  auto initial_command_buffer = sbx::graphics::command_buffer{true, VK_QUEUE_GRAPHICS_BIT};
+  auto initial_command_buffer = sbx::graphics::command_buffer{sbx::graphics::queue::type::graphics, true};
 
   sbx::graphics::image::transition_image_layout(initial_command_buffer, irradiance.handle(), VK_FORMAT_R32G32B32A32_SFLOAT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT, irradiance.mip_levels(), 0, irradiance.array_layers(), 0);
 
@@ -435,7 +474,7 @@ auto application::_generate_irradiance(const std::uint32_t size) -> void {
 
   initial_command_buffer.submit_idle();
 
-  auto compute_command_buffer = sbx::graphics::command_buffer{true, VK_QUEUE_COMPUTE_BIT};
+  auto compute_command_buffer = sbx::graphics::command_buffer{sbx::graphics::queue::type::compute, true};
 
   if (graphics_queue.family() != compute_queue.family()) {
     auto irradiance_acquire = sbx::graphics::command_buffer::image_acquire_data{
@@ -519,7 +558,7 @@ auto application::_generate_irradiance(const std::uint32_t size) -> void {
   compute_command_buffer.submit_idle();
 
   if (graphics_queue.family() != compute_queue.family()) {
-    auto final_command_buffer = sbx::graphics::command_buffer{true, VK_QUEUE_GRAPHICS_BIT};
+    auto final_command_buffer = sbx::graphics::command_buffer{sbx::graphics::queue::type::graphics, true};
 
     auto irradiance_acquire = sbx::graphics::command_buffer::image_acquire_data{
       .image = irradiance.handle(),
@@ -579,7 +618,7 @@ auto application::_generate_prefiltered(uint32_t size) -> void {
   auto& prefiltered = graphics_module.get_resource<sbx::graphics::cube_image>(_prefiltered);
   auto& skybox = graphics_module.get_resource<sbx::graphics::cube_image>(asset_registry.get_cube_image("skybox"));
 
-  auto initial_command_buffer = sbx::graphics::command_buffer{true, VK_QUEUE_GRAPHICS_BIT};
+  auto initial_command_buffer = sbx::graphics::command_buffer{sbx::graphics::queue::type::graphics, true};
 
   sbx::graphics::image::transition_image_layout(initial_command_buffer, prefiltered.handle(), VK_FORMAT_R32G32B32A32_SFLOAT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT, prefiltered.mip_levels(), 0, prefiltered.array_layers(), 0);
 
@@ -615,7 +654,7 @@ auto application::_generate_prefiltered(uint32_t size) -> void {
 
   initial_command_buffer.submit_idle();
 
-  auto compute_command_buffer = sbx::graphics::command_buffer{true, VK_QUEUE_COMPUTE_BIT};
+  auto compute_command_buffer = sbx::graphics::command_buffer{sbx::graphics::queue::type::compute, true};
 
   if (graphics_queue.family() != compute_queue.family()) {
     auto prefiltered_acquire = sbx::graphics::command_buffer::image_acquire_data{
@@ -763,7 +802,7 @@ auto application::_generate_prefiltered(uint32_t size) -> void {
   compute_command_buffer.submit_idle();
 
   if (graphics_queue.family() != compute_queue.family()) {
-    auto final_command_buffer = sbx::graphics::command_buffer{true, VK_QUEUE_GRAPHICS_BIT};
+    auto final_command_buffer = sbx::graphics::command_buffer{sbx::graphics::queue::type::graphics, true};
 
     auto prefiltered_acquire = sbx::graphics::command_buffer::image_acquire_data{
       .image = prefiltered.handle(),

@@ -14,6 +14,8 @@
 
 #include <libsbx/assets/assets_module.hpp>
 
+#include <libsbx/utility/profiler.hpp>
+
 #include <libsbx/memory/tracking_allocator.hpp>
 
 #include <libsbx/graphics/graphics_module.hpp>
@@ -94,6 +96,10 @@ public:
   }
 
   auto update() -> void override {
+    SBX_PROFILE_SCOPE("basic_material_draw_list::update");
+
+    SBX_PROFILE_SCOPE_START(s0, "clear data");
+
     _transform_data.clear();
     _material_data.clear();
 
@@ -105,12 +111,16 @@ public:
       buckets.clear();
     }
 
+    SBX_PROFILE_SCOPE_END(s0);
+
     auto& assets_module = core::engine::get_module<assets::assets_module>();
 
     auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
     auto& scene = scenes_module.active_scene();
     auto& environment = scene.environment();
     auto& graph = scene.graph();
+
+    SBX_PROFILE_SCOPE_START(s1, "classify submissions");
 
     auto memory = std::array<std::uint8_t, 2048u>{};
     auto pool = std::pmr::monotonic_buffer_resource{memory.data(), memory.size()};
@@ -139,6 +149,8 @@ public:
       per_mesh[submesh_index].push_back(instance);
     });
 
+    SBX_PROFILE_SCOPE_END(s1);
+
     update_buffer(_transform_data, transform_data_buffer_name);
     update_buffer(_material_data, material_data_buffer_name);
 
@@ -146,6 +158,8 @@ public:
     const auto camera_position = graph.world_position(camera_node);
 
     traits_type::update_shared_buffers(*this);
+
+    SBX_PROFILE_SCOPE_START(s2, "build draw commands");
 
     for (auto& [key, pipeline_data] : _pipeline_data) {
       if (pipeline_data.submesh_instances.empty()) {
@@ -173,6 +187,8 @@ public:
 
       _build_draw_commands(key, pipeline_data);
     }
+
+    SBX_PROFILE_SCOPE_END(s2);
   }
 
   auto ranges(const bucket bucket) const -> const bucket_map& {
@@ -311,6 +327,8 @@ private:
 
 
   auto _build_draw_commands(const material_key& key, pipeline_data& pipeline) -> void {
+    SBX_PROFILE_SCOPE("build_draw_commands");
+
     auto& assets_module = core::engine::get_module<assets::assets_module>();
 
     auto draw_commands = std::vector<VkDrawIndexedIndirectCommand>{};

@@ -13,10 +13,8 @@ static_mesh_shadow_subrenderer::~static_mesh_shadow_subrenderer() {
 }
 
 auto static_mesh_shadow_subrenderer::render(graphics::command_buffer& command_buffer) -> void {
-  EASY_BLOCK("static_mesh_shadow_subrenderer::render");
   SBX_PROFILE_SCOPE("static_mesh_shadow_subrenderer::render");
-
-  auto timer = graphics::scoped_gpu_timer{command_buffer, "static shadow"};
+  SBX_PROFILE_GPU_SCOPE(command_buffer, "static_mesh_shadow_subrenderer::render");
 
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
   auto& renderer = graphics_module.renderer();

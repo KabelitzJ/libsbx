@@ -2,8 +2,6 @@ project(demo VERSION 0.1.0 LANGUAGES CXX)
 
 message(STATUS "Configuring ${PROJECT_NAME}...")
 
-find_package(easy_profiler CONFIG REQUIRED)
-
 add_executable(${PROJECT_NAME})
 
 # find_package(Python3 REQUIRED COMPONENTS Interpreter)
@@ -38,7 +36,7 @@ target_include_directories(
 target_link_libraries(
   ${PROJECT_NAME}
   PUBLIC
-    easy_profiler
+    
   PRIVATE
     libsbx::libsbx
 )
@@ -99,6 +97,7 @@ add_custom_target(
     -c $<CONFIG>
     --self-contained false
     -p:UseAppHost=false
+    -p:BuildProjectReferences=false
     -o ${DEMO_DOTNET_OUT_DIR}
   WORKING_DIRECTORY ${DEMO_DIR}
   COMMENT "Publishing Demo assembly"

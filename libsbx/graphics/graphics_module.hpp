@@ -7,6 +7,8 @@
 #include <vector>
 #include <typeindex>
 
+#include <magic_enum/magic_enum.hpp>
+
 #include <libsbx/core/module.hpp>
 #include <libsbx/core/delegate.hpp>
 
@@ -18,6 +20,7 @@
 
 #include <libsbx/utility/hash.hpp>
 #include <libsbx/utility/concepts.hpp>
+#include <libsbx/utility/enum.hpp>
 
 #include <libsbx/core/delegate.hpp>
 
@@ -53,6 +56,7 @@
 
 #include <libsbx/graphics/renderer.hpp>
 #include <libsbx/graphics/viewport_registry.hpp>
+#include <libsbx/graphics/profiler.hpp>
 
 #include <libsbx/graphics/resource_storage.hpp>
 
@@ -103,7 +107,7 @@ public:
 
   auto surface() -> surface&;
 
-  auto command_pool(VkQueueFlagBits queue_type = VK_QUEUE_GRAPHICS_BIT, const std::thread::id& thread_id = std::this_thread::get_id()) -> const std::shared_ptr<command_pool>&;
+  auto command_pool(const queue::type type, const std::thread::id& thread_id = std::this_thread::get_id()) -> const std::shared_ptr<command_pool>&;
 
   auto swapchain() -> swapchain&;
 
@@ -116,8 +120,6 @@ public:
 
     return *static_cast<Renderer*>(_renderer.get());
   }
-
-  // auto render_stage(const pipeline::stage& stage) -> graphics::render_stage&;
   
   auto current_frame() const noexcept -> std::uint32_t {
     return _current_frame;
@@ -189,26 +191,6 @@ public:
     return _compiler;
   }
 
-  auto gpu_timings() const -> const std::map<std::string, units::millisecond>& {
-    return _gpu_timings;
-  }
-
-  auto profile_begin(graphics::command_buffer& cmd, const std::string& name) -> void {
-    auto frame_base = _current_frame * max_queries_per_frame;
-    auto scope_index = _get_scope_index(name);
-  
-    _query_pool.write_timestamp(cmd, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, frame_base + (scope_index * 2));
-  }
-
-  auto profile_end(graphics::command_buffer& cmd, const std::string& name) -> void {
-    auto frame_base = _current_frame * max_queries_per_frame;
-    auto scope_index = _get_scope_index(name);
-
-    _query_pool.write_timestamp(cmd, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, frame_base + (scope_index * 2) + 1);
-
-    _per_frame_data[_current_frame].active_scopes.push_back(name);
-  }
-
   template<typename Callable>
   requires (std::is_invocable_r_v<void, Callable, graphics::allocator&>)
   auto enqueue_destruction(Callable&& callable) -> void {
@@ -267,21 +249,21 @@ private:
   }; // struct per_image_data
 
   struct command_pool_key {
-    VkQueueFlagBits queue_type;
+    queue::type type;
     std::thread::id thread_id;
   }; // struct command_pool_key
 
   struct command_pool_key_hash {
     auto operator()(const command_pool_key& key) const noexcept -> std::size_t {
       auto hast = std::size_t{0};
-      utility::hash_combine(hast, key.queue_type, key.thread_id);
+      utility::hash_combine(hast, key.type, key.thread_id);
       return hast;
     }
   }; // struct command_pool_key_hash
 
   struct command_pool_key_equality {
     auto operator()(const command_pool_key& lhs, const command_pool_key& rhs) const noexcept -> bool {
-      return lhs.queue_type == rhs.queue_type && lhs.thread_id == rhs.thread_id;
+      return lhs.type == rhs.type && lhs.thread_id == rhs.thread_id;
     }
   }; // struct command_pool_key_equal
 
@@ -342,22 +324,6 @@ private:
     }
   }
 
-  auto _get_scope_index(const std::string& name) -> std::uint32_t {
-    if (auto it = _scope_registry.find(name); it != _scope_registry.end()) {
-      return it->second;
-    }
-
-    auto index = static_cast<std::uint32_t>(_scope_registry.size());
-
-    if (index >= max_scopes) {
-      throw std::runtime_error("Exceeded max GPU profiling scopes");
-    }
-
-    _scope_registry[name] = index;
-
-    return index;
-  }
-
   auto _poll_deletion_queue() -> void;
 
   std::unique_ptr<graphics::instance> _instance{};
@@ -391,7 +357,6 @@ private:
   resource_storage<graphics::sampler_state> _sampler_states;
 
   graphics::allocator _allocator;
-  graphics::query_pool _query_pool;
 
   graphics::compiler _compiler;
 
@@ -403,34 +368,9 @@ private:
 
   viewport_registry _viewports;
 
-  static constexpr auto max_queries_per_frame = 256u;
-  static constexpr auto max_scopes = max_queries_per_frame / 2;
-
-  std::map<std::string, std::uint32_t> _scope_registry;
-  std::map<std::string, units::millisecond> _gpu_timings;
-
   std::vector<deferred_deletion> _deletion_queue;
 
 }; // class graphics_module
-
-class scoped_gpu_timer {
-
-public:
-
-  scoped_gpu_timer(command_buffer& command_buffer, std::string name);
-
-  scoped_gpu_timer(const scoped_gpu_timer&) = delete;
-
-  ~scoped_gpu_timer();
-
-  auto operator=(const scoped_gpu_timer&) -> scoped_gpu_timer& = delete;
-
-private:
-
-  command_buffer& _command_buffer;
-  std::string _name;
-
-}; // class scoped_gpu_timer
 
 } // namespace sbx::graphics
 

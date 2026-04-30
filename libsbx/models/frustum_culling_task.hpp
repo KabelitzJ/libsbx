@@ -11,7 +11,7 @@
 
 #include <vulkan/vulkan.h>
 
-#include <easy/profiler.h>
+#include <libsbx/utility/profiler.hpp>
 
 #include <magic_enum/magic_enum.hpp>
 

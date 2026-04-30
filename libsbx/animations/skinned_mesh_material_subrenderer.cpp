@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 #include <libsbx/animations/skinned_mesh_material_subrenderer.hpp>
 
+#include <libsbx/graphics/profiler.hpp>
+
 namespace sbx::animations {
 
 skinned_mesh_material_subrenderer::skinned_mesh_material_subrenderer(const std::vector<graphics::attachment_description>& attachments, const skinned_mesh_material_draw_list::bucket bucket, const std::filesystem::path& base_pipeline)
@@ -14,11 +16,8 @@ skinned_mesh_material_subrenderer::~skinned_mesh_material_subrenderer() {
 }
 
 auto skinned_mesh_material_subrenderer::render(graphics::command_buffer& command_buffer) -> void {
-  EASY_BLOCK("skinned_mesh_material_subrenderer::render");
-
   SBX_PROFILE_SCOPE("skinned_mesh_material_subrenderer::render");
-
-  auto timer = graphics::scoped_gpu_timer{command_buffer, fmt::format("skinned material bucket: {}", reflection::to_string(_bucket))};
+  SBX_PROFILE_GPU_SCOPE(command_buffer, "skinned_material_subrenderer::render");
 
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
   auto& renderer = graphics_module.renderer();

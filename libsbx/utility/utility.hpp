@@ -47,6 +47,7 @@
 #include <libsbx/utility/multimap_key_range.hpp>
 #include <libsbx/utility/overload.hpp>
 #include <libsbx/utility/primitive.hpp>
+#include <libsbx/utility/profiler.hpp>
 #include <libsbx/utility/small_string.hpp>
 #include <libsbx/utility/string_literal.hpp>
 #include <libsbx/utility/target.hpp>

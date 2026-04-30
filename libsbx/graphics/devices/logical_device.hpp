@@ -77,6 +77,10 @@ public:
     return _queues.at(utility::to_underlying(Type));
   }
 
+  auto queue(const queue::type type) const -> const graphics::queue& {
+    return _queues.at(utility::to_underlying(type));
+  }
+
   auto wait_idle() const -> void;
 
 private:

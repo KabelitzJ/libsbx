@@ -193,33 +193,33 @@ struct scope_guard {
   
 }; // struct scope_guard
 
-#define SBX_CONCAT_TOKENS_IMPL(a, b) a##b
+// #define SBX_CONCAT_TOKENS_IMPL(a, b) a##b
 
-#define SBX_CONCAT_TOKENS(a, b) SBX_CONCAT_TOKENS_IMPL(a, b)
+// #define SBX_CONCAT_TOKENS(a, b) SBX_CONCAT_TOKENS_IMPL(a, b)
 
-#define SBX_UNIQUE_NAME(name) SBX_CONCAT_TOKENS(name, __LINE__)
+// #define SBX_UNIQUE_NAME(name) SBX_CONCAT_TOKENS(name, __LINE__)
 
-#if defined(__clang__) || defined(__GNUC__)
-  #define FUNC_NAME __PRETTY_FUNCTION__
-#elif defined(_MSC_VER)
-  #define FUNC_NAME __FUNCSIG__
-#else
-  #define FUNC_NAME __func__
-#endif
+// #if defined(__clang__) || defined(__GNUC__)
+//   #define FUNC_NAME __PRETTY_FUNCTION__
+// #elif defined(_MSC_VER)
+//   #define FUNC_NAME __FUNCSIG__
+// #else
+//   #define FUNC_NAME __func__
+// #endif
 
 } // namespace detail
 
-#define SBX_PROFILE_SCOPE(label) \
-  static thread_local auto& SBX_UNIQUE_NAME(profiler_scope_info) = ::sbx::core::detail::database::instance().create_node((label), __FILE__, FUNC_NAME, __LINE__); \
-  const auto SBX_UNIQUE_NAME(profiler_scope_guard) = ::sbx::core::detail::scope_guard{SBX_UNIQUE_NAME(profiler_scope_info)}
+// #define SBX_PROFILE_SCOPE(label) \
+//   static thread_local auto& SBX_UNIQUE_NAME(profiler_scope_info) = ::sbx::core::detail::database::instance().create_node((label), __FILE__, FUNC_NAME, __LINE__); \
+//   const auto SBX_UNIQUE_NAME(profiler_scope_guard) = ::sbx::core::detail::scope_guard{SBX_UNIQUE_NAME(profiler_scope_info)}
 
-#define SBX_PROFILE_BLOCK(label) \
-  static thread_local auto& SBX_UNIQUE_NAME(profiler_scope_info) = ::sbx::core::detail::database::instance().create_node((label), __FILE__, FUNC_NAME, __LINE__); \
-  if (const auto SBX_UNIQUE_NAME(profiler_scope_guard) = ::sbx::core::detail::scope_guard{SBX_UNIQUE_NAME(profiler_scope_info)}; true)
+// #define SBX_PROFILE_BLOCK(label) \
+//   static thread_local auto& SBX_UNIQUE_NAME(profiler_scope_info) = ::sbx::core::detail::database::instance().create_node((label), __FILE__, FUNC_NAME, __LINE__); \
+//   if (const auto SBX_UNIQUE_NAME(profiler_scope_guard) = ::sbx::core::detail::scope_guard{SBX_UNIQUE_NAME(profiler_scope_info)}; true)
 
-inline auto scope_infos() -> std::span<const scope_info> {
-  return std::span<const scope_info>{detail::database::instance().nodes.data(), detail::database::instance().next_node_id};
-}
+// inline auto scope_infos() -> std::span<const scope_info> {
+//   return std::span<const scope_info>{detail::database::instance().nodes.data(), detail::database::instance().next_node_id};
+// }
 
 } // namespace sbx::core
 

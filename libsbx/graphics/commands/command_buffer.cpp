@@ -14,14 +14,14 @@ namespace sbx::graphics {
 
 inline static constexpr auto submit_pipeline_stages = VkPipelineStageFlags{VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
 
-command_buffer::command_buffer(bool should_begin, VkQueueFlagBits queue_type, VkCommandBufferLevel buffer_level)
-: _queue_type{queue_type},
+command_buffer::command_buffer(const queue::type type, bool should_begin, VkCommandBufferLevel buffer_level)
+: _queue_type{type},
   _is_running{false} {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 
   auto& logical_device = graphics_module.logical_device();
 
-  _command_pool = graphics_module.command_pool(queue_type);
+  _command_pool = graphics_module.command_pool(type);
 
   auto command_buffer_allocate_info = VkCommandBufferAllocateInfo{};
 	command_buffer_allocate_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -83,6 +83,10 @@ command_buffer::operator VkCommandBuffer() const noexcept {
   return _handle;
 }
 
+auto command_buffer::type() const noexcept -> queue::type {
+  return _queue_type;
+}
+
 auto command_buffer::is_running() const noexcept -> bool {
   return _is_running;
 }
@@ -117,7 +121,7 @@ auto command_buffer::submit_idle() -> void {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 
   const auto& logical_device = graphics_module.logical_device();
-	const auto& selected_queue = _queue();
+	const auto& selected_queue = logical_device.queue(_queue_type);
 
 	if (_is_running) {
 		end();
@@ -148,7 +152,7 @@ auto command_buffer::submit(const std::vector<wait_data>& wait_data, const VkSem
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 
   const auto& logical_device = graphics_module.logical_device();
-	const auto& selected_queue = _queue();
+	const auto& selected_queue = logical_device.queue(_queue_type);
 
 	if (_is_running) {
 		end();
@@ -433,27 +437,6 @@ auto command_buffer::execute_commands(const std::vector<command_buffer>& command
   }
 
   vkCmdExecuteCommands(_handle, handles.size(), handles.data());
-}
-
-auto command_buffer::_queue() const -> const graphics::queue& {
-  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
-
-  auto& logical_device = graphics_module.logical_device();
-
-  switch (_queue_type) {
-    case VK_QUEUE_GRAPHICS_BIT: {
-      return logical_device.queue<graphics::queue::type::graphics>();
-    }
-    case VK_QUEUE_COMPUTE_BIT: {
-      return logical_device.queue<graphics::queue::type::compute>();
-    }
-    case VK_QUEUE_TRANSFER_BIT: {
-      return logical_device.queue<graphics::queue::type::transfer>();
-    }
-    default: {
-      throw std::runtime_error{"Invalid queue type"};
-    }
-  }
 }
 
 } // namespace sbx::graphics

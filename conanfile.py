@@ -237,7 +237,7 @@ class libsbx_recipe(ConanFile):
     self.requires("imnodes/0.5.0-docking")
     self.requires("imguizmo/1.83-docking")
     # self.requires("portable-file-dialogs/0.1.0")
-    self.requires("easy_profiler/2.1.0", transitive_headers=True)
+    # self.requires("easy_profiler/2.1.0", transitive_headers=True)
     self.requires("tsl-robin-map/1.3.0")
     self.requires("lz4/1.10.0")
     self.requires("assimp/5.4.3")
@@ -246,6 +246,7 @@ class libsbx_recipe(ConanFile):
     self.requires("sol2/3.5.0")
     self.requires("magic_enum/0.9.7")
     self.requires("zstd/1.5.7")
+    self.requires("tracy/0.13.1")
 
     if self.options.build_tests:
       self.test_requires("gtest/1.17.0")
@@ -330,8 +331,7 @@ class libsbx_recipe(ConanFile):
     #   self.cpp_info.components["math"].requires.append("GTest::gtest")
 
     self.cpp_info.components["core"].requires = [
-      "range-v3::range-v3",
-      "easy_profiler::easy_profiler"
+      "range-v3::range-v3"
     ]
 
     self.cpp_info.components["devices"].requires = [

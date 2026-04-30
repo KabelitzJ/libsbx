@@ -51,7 +51,7 @@ public:
   ~blur_filter() override = default;
 
   auto render(graphics::command_buffer& command_buffer) -> void override {
-    EASY_BLOCK("blur_filter::render");
+    SBX_PROFILE_SCOPE("blur_filter::render");
 
     auto& pipeline = base::pipeline();
     auto& descriptor_handler = base::descriptor_handler();

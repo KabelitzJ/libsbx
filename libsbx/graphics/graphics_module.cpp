@@ -96,7 +96,6 @@ graphics_module::graphics_module()
   _logical_device{std::make_unique<graphics::logical_device>(*_physical_device)},
   _surface{std::make_unique<graphics::surface>(*_instance, *_physical_device, *_logical_device)},
   _allocator{*_instance, *_physical_device, *_logical_device},
-  _query_pool{*_logical_device, VK_QUERY_TYPE_TIMESTAMP, swapchain::max_frames_in_flight * max_queries_per_frame},
   _is_framebuffer_resized{true} {
   auto& devices_module = core::engine::get_module<devices::devices_module>();
 
@@ -110,6 +109,9 @@ graphics_module::graphics_module()
 
   _graphics_command_buffers.reserve(swapchain::max_frames_in_flight);
   _compute_command_buffers.reserve(swapchain::max_frames_in_flight);
+
+  SBX_PROFILE_GPU_CONTEXT_CREATE(queue::type::graphics, "graphics", 8, *_physical_device, *_logical_device);
+  SBX_PROFILE_GPU_CONTEXT_CREATE(queue::type::compute, "compute", 7, *_physical_device, *_logical_device);
 }
 
 graphics_module::~graphics_module() {
@@ -149,11 +151,12 @@ graphics_module::~graphics_module() {
   for (const auto& deletion : _deletion_queue) {
     std::invoke(deletion.destroy, _allocator);
   }
+
+  SBX_PROFILE_GPU_CONTEXT_DESTROY();
 }
 
 auto graphics_module::update() -> void {
   SBX_PROFILE_SCOPE("graphics_module::update");
-  SBX_MEMORY_SCOPE(memory::allocation_category::graphics);
 
   _poll_deletion_queue();
 
@@ -188,51 +191,32 @@ auto graphics_module::update() -> void {
     return;
   }
 
-  SBX_PROFILE_BLOCK("graphics_module::acquire_next_image") {
-    // Get the next image in the swapchain (back/front buffer)
-    EASY_BLOCK("wait for image");
+  SBX_PROFILE_SCOPE_START(s0, "vkAcquireNextImageKHR");
 
-    const auto result = _swapchain->acquire_next_image(frame_data.image_available_semaphore, frame_data.graphics_in_flight_fence);
-    
-    if (result == VK_ERROR_OUT_OF_DATE_KHR) {
-      _recreate_swapchain();
-      return;
-    } else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
-      throw std::runtime_error{"Failed to acquire swapchain image"};
-    }
-
-    EASY_END_BLOCK;
-  }
-
-  EASY_BLOCK("draw");
-
-  for (const auto& name : frame_data.active_scopes) {
-    auto frame_base = _current_frame * max_queries_per_frame;
-    auto scope_index = _scope_registry[name];
-    
-    auto start_query = frame_base + (scope_index * 2);
-    auto end_query = frame_base + (scope_index * 2) + 1;
-
-    _gpu_timings[name] = _query_pool.get_duration(start_query, end_query);
-  }
-
-  frame_data.active_scopes.clear();
-
+  const auto acquire_result = _swapchain->acquire_next_image(frame_data.image_available_semaphore, frame_data.graphics_in_flight_fence);
   
+  if (acquire_result == VK_ERROR_OUT_OF_DATE_KHR) {
+    _recreate_swapchain();
+    SBX_PROFILE_SCOPE_END(s0);
+    return;
+  } else if (acquire_result != VK_SUCCESS && acquire_result != VK_SUBOPTIMAL_KHR) {
+    throw std::runtime_error{"Failed to acquire swapchain image"};
+  }
+
+  SBX_PROFILE_SCOPE_END(s0);
+
+  SBX_PROFILE_SCOPE_START(s1, "draw");
+
   auto& command_buffer = _graphics_command_buffers[_current_frame];
   
   command_buffer.reset();
   command_buffer.begin(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
 
-  _query_pool.reset(command_buffer, _current_frame * max_queries_per_frame, max_queries_per_frame);
+  SBX_PROFILE_GPU_COLLECT(command_buffer);
 
   auto& image_data = _per_image_data[_swapchain->active_image_index()];
 
-  profile_begin(command_buffer, "graphics_module::update");
-
   _renderer->render(command_buffer, *_swapchain);
-
-  profile_end(command_buffer, "graphics_module::update");
 
   command_buffer.end();
 
@@ -242,17 +226,17 @@ auto graphics_module::update() -> void {
   command_buffer.submit(wait_semaphores, image_data.render_finished_semaphore, frame_data.graphics_in_flight_fence);
 
   // Present the image to the screen
-  const auto result = _swapchain->present(image_data.render_finished_semaphore);
+  const auto present_result = _swapchain->present(image_data.render_finished_semaphore);
 
-  if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || _is_framebuffer_resized) {
+  if (present_result == VK_ERROR_OUT_OF_DATE_KHR || present_result == VK_SUBOPTIMAL_KHR || _is_framebuffer_resized) {
     _recreate_swapchain();
-  } else if (result != VK_SUCCESS) {
+  } else if (present_result != VK_SUCCESS) {
     throw std::runtime_error{"Failed to present swapchain image"};
   }
 
   _current_frame = utility::fast_mod(_current_frame + 1, swapchain::max_frames_in_flight);
 
-  EASY_END_BLOCK;
+  SBX_PROFILE_SCOPE_END(s1);
 }
 
 auto graphics_module::instance() -> graphics::instance&  {
@@ -271,14 +255,14 @@ auto graphics_module::surface() -> graphics::surface& {
   return *_surface;
 }
 
-auto graphics_module::command_pool(VkQueueFlagBits queue_type, const std::thread::id& thread_id) -> const std::shared_ptr<graphics::command_pool>& {
-  const auto key = command_pool_key{queue_type, thread_id};
+auto graphics_module::command_pool(const queue::type type, const std::thread::id& thread_id) -> const std::shared_ptr<graphics::command_pool>& {
+  const auto key = command_pool_key{type, thread_id};
 
   if (auto entry = _command_pools.find(key); entry != _command_pools.end()) {
     return entry->second;
   }
 
-  return _command_pools.insert({key, std::make_shared<graphics::command_pool>(queue_type)}).first->second;
+  return _command_pools.insert({key, std::make_shared<graphics::command_pool>(type)}).first->second;
 }
 
 auto graphics_module::swapchain() -> graphics::swapchain& {
@@ -360,7 +344,7 @@ auto graphics_module::_recreate_per_image_data() -> void {
 
 auto graphics_module::_recreate_command_buffers() -> void {
   for (auto i = _graphics_command_buffers.size(); i < swapchain::max_frames_in_flight; ++i) {
-    _graphics_command_buffers.emplace_back(false, VK_QUEUE_GRAPHICS_BIT);
+    _graphics_command_buffers.emplace_back(queue::type::graphics, false);
   }
 
   for (auto& command_buffer : _graphics_command_buffers) {
@@ -368,7 +352,7 @@ auto graphics_module::_recreate_command_buffers() -> void {
   }
 
   for (auto i = _compute_command_buffers.size(); i < swapchain::max_frames_in_flight; ++i) {
-    _compute_command_buffers.emplace_back(false, VK_QUEUE_COMPUTE_BIT);
+    _compute_command_buffers.emplace_back(queue::type::compute, false);
   }
 
   for (auto& command_buffer : _compute_command_buffers) {
@@ -392,20 +376,6 @@ auto graphics_module::_poll_deletion_queue() -> void {
 
     return false;
   });
-}
-
-scoped_gpu_timer::scoped_gpu_timer(command_buffer& command_buffer, std::string name)
-: _command_buffer{command_buffer},
-  _name{std::move(name)} {
-  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
-
-  graphics_module.profile_begin(_command_buffer, _name);
-}
-
-scoped_gpu_timer::~scoped_gpu_timer() {
-  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
-
-  graphics_module.profile_end(_command_buffer, _name);
 }
 
 } // namespace sbx::graphics

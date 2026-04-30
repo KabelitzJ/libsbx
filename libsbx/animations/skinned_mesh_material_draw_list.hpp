@@ -8,7 +8,7 @@
 #include <algorithm>
 #include <iterator>
 
-#include <easy/profiler.h>
+#include <libsbx/utility/profiler.hpp>
 
 #include <range/v3/view/enumerate.hpp>
 

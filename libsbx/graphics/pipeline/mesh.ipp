@@ -154,7 +154,7 @@ auto mesh<Vertex>::_upload_vertices(std::vector<vertex_type>&& vertices, std::ve
   // _vertex_buffer = std::make_unique<vertex_buffer_type>(vertices.size());
   // _index_buffer = std::make_unique<index_buffer_type>(indices.size());
 
-  auto command_buffer = graphics::command_buffer{true, VK_QUEUE_GRAPHICS_BIT};
+  auto command_buffer = graphics::command_buffer{graphics::queue::type::graphics, true};
 
   auto& index_buffer = graphics_module.get_resource<buffer>(_index_buffer);
   auto& vertex_buffer = graphics_module.get_resource<buffer>(_vertex_buffer); 

@@ -221,7 +221,7 @@ sprites_module::sprites_module() {
 }
 
 auto sprites_module::update() -> void {
-  EASY_BLOCK("sprites_module::update");
+  SBX_PROFILE_SCOPE("sprites_module::update");
 
   for (auto& batch : _batches) {
     batch.clear();

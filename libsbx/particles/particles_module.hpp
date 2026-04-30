@@ -6,7 +6,7 @@
 #include <vector>
 #include <stdexcept>
 
-#include <easy/profiler.h>
+#include <libsbx/utility/profiler.hpp>
 
 #include <libsbx/utility/logger.hpp>
 
@@ -29,7 +29,7 @@ public:
   }
 
   auto update() -> void override {
-    EASY_BLOCK("particles_module::update");
+    SBX_PROFILE_SCOPE("particles_module::update");
   }
 
 private:

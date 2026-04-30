@@ -24,7 +24,7 @@ public:
   ~default_filter() override = default;
 
   auto render(graphics::command_buffer& command_buffer) -> void override {
-    EASY_BLOCK("default_filter::render");
+    SBX_PROFILE_SCOPE("default_filter::render");
 
     auto& pipeline = base_type::pipeline();
     auto& descriptor_handler = base_type::descriptor_handler();

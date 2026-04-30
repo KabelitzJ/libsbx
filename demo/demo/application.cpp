@@ -3,7 +3,7 @@
 
 #include <nlohmann/json.hpp>
 
-#include <easy/profiler.h>
+#include <libsbx/utility/profiler.hpp>
 
 #include <libsbx/reflection/reflection.hpp>
 
@@ -166,8 +166,7 @@ application::application()
 }
 
 auto application::update() -> void {
-  EASY_BLOCK("application::update");
-  SBX_PROFILE_SCOPE("application::update");
+  SBX_PROFILE_SCOPE("application update");
 
   auto& assets_module = sbx::core::engine::get_module<sbx::assets::assets_module>();
   auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
@@ -506,7 +505,7 @@ auto application::_generate_brdf(const std::uint32_t size) -> void {
 
   auto& brdf = graphics_module.get_resource<sbx::graphics::image2d>(_brdf);
 
-  auto initial_command_buffer = sbx::graphics::command_buffer{true, VK_QUEUE_GRAPHICS_BIT};
+  auto initial_command_buffer = sbx::graphics::command_buffer{sbx::graphics::queue::type::graphics, true};
 
   sbx::graphics::image::transition_image_layout(initial_command_buffer, brdf.handle(), VK_FORMAT_R16G16_SFLOAT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT, brdf.mip_levels(), 0, brdf.array_layers(), 0);
 
@@ -529,7 +528,7 @@ auto application::_generate_brdf(const std::uint32_t size) -> void {
 
   initial_command_buffer.submit_idle();
 
-  auto compute_command_buffer = sbx::graphics::command_buffer{true, VK_QUEUE_COMPUTE_BIT};
+  auto compute_command_buffer = sbx::graphics::command_buffer{sbx::graphics::queue::type::compute, true};
 
   if (graphics_queue.family() != compute_queue.family()) {
     auto brdf_acquire = sbx::graphics::command_buffer::image_acquire_data{
@@ -586,7 +585,7 @@ auto application::_generate_brdf(const std::uint32_t size) -> void {
   compute_command_buffer.submit_idle();
 
   if (graphics_queue.family() != compute_queue.family()) {
-    auto final_command_buffer = sbx::graphics::command_buffer{true, VK_QUEUE_GRAPHICS_BIT};
+    auto final_command_buffer = sbx::graphics::command_buffer{sbx::graphics::queue::type::graphics, true};
 
     auto brdf_acquire = sbx::graphics::command_buffer::image_acquire_data{
       .image = brdf.handle(),
@@ -633,7 +632,7 @@ auto application::_generate_irradiance(const std::uint32_t size) -> void {
   auto& irradiance = graphics_module.get_resource<sbx::graphics::cube_image>(_irradiance);
   auto& skybox = graphics_module.get_resource<sbx::graphics::cube_image>(asset_registry.get_cube_image("skybox"));
 
-  auto initial_command_buffer = sbx::graphics::command_buffer{true, VK_QUEUE_GRAPHICS_BIT};
+  auto initial_command_buffer = sbx::graphics::command_buffer{sbx::graphics::queue::type::graphics, true};
 
   sbx::graphics::image::transition_image_layout(initial_command_buffer, irradiance.handle(), VK_FORMAT_R32G32B32A32_SFLOAT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT, irradiance.mip_levels(), 0, irradiance.array_layers(), 0);
 
@@ -669,7 +668,7 @@ auto application::_generate_irradiance(const std::uint32_t size) -> void {
 
   initial_command_buffer.submit_idle();
 
-  auto compute_command_buffer = sbx::graphics::command_buffer{true, VK_QUEUE_COMPUTE_BIT};
+  auto compute_command_buffer = sbx::graphics::command_buffer{sbx::graphics::queue::type::compute, true};
 
   if (graphics_queue.family() != compute_queue.family()) {
     auto irradiance_acquire = sbx::graphics::command_buffer::image_acquire_data{
@@ -753,7 +752,7 @@ auto application::_generate_irradiance(const std::uint32_t size) -> void {
   compute_command_buffer.submit_idle();
 
   if (graphics_queue.family() != compute_queue.family()) {
-    auto final_command_buffer = sbx::graphics::command_buffer{true, VK_QUEUE_GRAPHICS_BIT};
+    auto final_command_buffer = sbx::graphics::command_buffer{sbx::graphics::queue::type::graphics, true};
 
     auto irradiance_acquire = sbx::graphics::command_buffer::image_acquire_data{
       .image = irradiance.handle(),
@@ -813,7 +812,7 @@ auto application::_generate_prefiltered(uint32_t size) -> void {
   auto& prefiltered = graphics_module.get_resource<sbx::graphics::cube_image>(_prefiltered);
   auto& skybox = graphics_module.get_resource<sbx::graphics::cube_image>(asset_registry.get_cube_image("skybox"));
 
-  auto initial_command_buffer = sbx::graphics::command_buffer{true, VK_QUEUE_GRAPHICS_BIT};
+  auto initial_command_buffer = sbx::graphics::command_buffer{sbx::graphics::queue::type::graphics, true};
 
   sbx::graphics::image::transition_image_layout(initial_command_buffer, prefiltered.handle(), VK_FORMAT_R32G32B32A32_SFLOAT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT, prefiltered.mip_levels(), 0, prefiltered.array_layers(), 0);
 
@@ -849,7 +848,7 @@ auto application::_generate_prefiltered(uint32_t size) -> void {
 
   initial_command_buffer.submit_idle();
 
-  auto compute_command_buffer = sbx::graphics::command_buffer{true, VK_QUEUE_COMPUTE_BIT};
+  auto compute_command_buffer = sbx::graphics::command_buffer{sbx::graphics::queue::type::compute, true};
 
   if (graphics_queue.family() != compute_queue.family()) {
     auto prefiltered_acquire = sbx::graphics::command_buffer::image_acquire_data{
@@ -997,7 +996,7 @@ auto application::_generate_prefiltered(uint32_t size) -> void {
   compute_command_buffer.submit_idle();
 
   if (graphics_queue.family() != compute_queue.family()) {
-    auto final_command_buffer = sbx::graphics::command_buffer{true, VK_QUEUE_GRAPHICS_BIT};
+    auto final_command_buffer = sbx::graphics::command_buffer{sbx::graphics::queue::type::graphics, true};
 
     auto prefiltered_acquire = sbx::graphics::command_buffer::image_acquire_data{
       .image = prefiltered.handle(),

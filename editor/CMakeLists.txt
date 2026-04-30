@@ -2,7 +2,6 @@ project(editor VERSION 0.1.0 LANGUAGES CXX)
 
 message(STATUS "Configuring ${PROJECT_NAME}...")
 
-find_package(easy_profiler CONFIG REQUIRED)
 find_package(imgui CONFIG REQUIRED)
 find_package(implot CONFIG REQUIRED)
 find_package(imnodes CONFIG REQUIRED)
@@ -63,7 +62,6 @@ target_include_directories(
 target_link_libraries(
   ${PROJECT_NAME}
   PUBLIC
-    easy_profiler
     imgui::imgui
     implot::implot
     imnodes::imnodes
@@ -128,6 +126,7 @@ add_custom_target(
     -c $<CONFIG>
     --self-contained false
     -p:UseAppHost=false
+    -p:BuildProjectReferences=false
     -o ${EDITOR_DOTNET_OUT_DIR}
   WORKING_DIRECTORY ${EDITOR_DIR}
   COMMENT "Publishing Editor assembly"

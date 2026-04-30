@@ -113,7 +113,7 @@ scenes_module::~scenes_module() {
 }
 
 auto scenes_module::update() -> void {
-  EASY_BLOCK("scenes_module::update");
+  SBX_PROFILE_SCOPE("scenes_module::update");
 
   if (!_active_scene) {
     return;

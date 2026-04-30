@@ -16,4 +16,10 @@ skybox
 
 # Compute
 frustum_culling
+skinning
 particles
+particles/clear_all
+particles/emit
+particles/prepare_indirect
+particles/reset_counters
+particles/simulate

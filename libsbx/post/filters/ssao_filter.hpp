@@ -73,7 +73,6 @@ public:
   ~ssao_filter() override = default;
 
   auto render(graphics::command_buffer& command_buffer) -> void override {
-    EASY_BLOCK("ssao_filter::render");
     SBX_PROFILE_SCOPE("ssao_filter::render");
 
     auto& graphics_module = core::engine::get_module<graphics::graphics_module>();

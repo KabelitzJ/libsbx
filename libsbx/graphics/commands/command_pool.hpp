@@ -14,7 +14,7 @@ class command_pool {
 
 public:
 
-  command_pool(VkQueueFlagBits queue_type = VK_QUEUE_GRAPHICS_BIT);
+  command_pool(const queue::type queue_type);
 
   ~command_pool();
 
@@ -22,10 +22,11 @@ public:
 
   operator const VkCommandPool&() const noexcept;
 
+  auto type() const noexcept -> queue::type;
+
 private:
 
-  auto _queue(VkQueueFlagBits queue_type) const -> const queue&;
-
+  queue::type _queue_type{};
   VkCommandPool _handle{};
 
 }; // class command_pool

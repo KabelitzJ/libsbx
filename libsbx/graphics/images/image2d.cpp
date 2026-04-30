@@ -7,6 +7,7 @@
 
 #include <libsbx/utility/timer.hpp>
 #include <libsbx/utility/logger.hpp>
+#include <libsbx/utility/profiler.hpp>
 
 #include <libsbx/core/engine.hpp>
 
@@ -86,13 +87,15 @@ auto image2d::set_pixels(memory::observer_ptr<const std::uint8_t> pixels) -> voi
 }
 
 auto image2d::_upload_pixels(const std::uint8_t* pixels, const std::size_t size) -> void {
+  SBX_PROFILE_SCOPE("image2d::_upload_pixels");
+
   _mip_levels = _mipmap ? mip_levels(_extent) : 1;
 
   create_image(_handle, _allocation, _extent, _format, _samples, VK_IMAGE_TILING_OPTIMAL, _usage, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, _mip_levels, _array_layers, VK_IMAGE_TYPE_2D);
   create_image_sampler(_sampler, _filter, _address_mode, _anisotropic, _mip_levels);
   create_image_view(_handle, _view, (_array_layers > 1u ? VK_IMAGE_VIEW_TYPE_2D_ARRAY : VK_IMAGE_VIEW_TYPE_2D), _format, VK_IMAGE_ASPECT_COLOR_BIT, _mip_levels, 0, _array_layers, 0);
 
-  auto command_buffer = graphics::command_buffer{true, VK_QUEUE_GRAPHICS_BIT};
+  auto command_buffer = graphics::command_buffer{graphics::queue::type::graphics, true};
 
   transition_image_layout(command_buffer, _handle, _format, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_ASPECT_COLOR_BIT, _mip_levels, 0, _array_layers, 0);
 
@@ -109,6 +112,8 @@ auto image2d::_upload_pixels(const std::uint8_t* pixels, const std::size_t size)
 }
 
 auto image2d::_load(const std::filesystem::path& path) -> void {
+  SBX_PROFILE_SCOPE("image2d::_load");
+
   _channels = channels_from_format(_format);
 
   auto from_file = false;
@@ -163,13 +168,15 @@ auto image2d::_load(const std::filesystem::path& path) -> void {
     create_image_sampler(_sampler, _filter, _address_mode, _anisotropic, _mip_levels);
     create_image_view(_handle, _view, (_array_layers > 1u ? VK_IMAGE_VIEW_TYPE_2D_ARRAY : VK_IMAGE_VIEW_TYPE_2D), _format, VK_IMAGE_ASPECT_COLOR_BIT, _mip_levels, 0, _array_layers, 0);
 
-    auto command_buffer = graphics::command_buffer{true, VK_QUEUE_GRAPHICS_BIT};
+    auto command_buffer = graphics::command_buffer{graphics::queue::type::graphics, true};
     transition_image_layout(command_buffer, _handle, _format, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT, _mip_levels, 0, _array_layers, 0);
     command_buffer.submit_idle();
   }
 }
 
 auto image2d::_load_binary(const std::filesystem::path& path) -> void {
+  SBX_PROFILE_SCOPE("image2d::_load_binary");
+
   auto timer = utility::timer{};
 
   auto file = std::ifstream{path, std::ios::binary | std::ios::ate};
@@ -233,6 +240,8 @@ auto image2d::_load_binary(const std::filesystem::path& path) -> void {
 }
 
 auto image2d::_process(const std::filesystem::path& path, const std::uint32_t width, const std::uint32_t height, const std::uint32_t channels, const std::uint8_t* pixels) -> void {
+  SBX_PROFILE_SCOPE("image2d::_process");
+
   const auto output_path = std::filesystem::path{path}.replace_extension(binary_file_extension);
 
   const auto uncompressed_size = width * height * channels;

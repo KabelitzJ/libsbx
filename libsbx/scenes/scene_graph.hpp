@@ -5,7 +5,7 @@
 #include <string>
 #include <unordered_map>
 
-#include <easy/profiler.h>
+#include <libsbx/utility/profiler.hpp>
 
 #include <libsbx/utility/iterator.hpp>
 #include <libsbx/utility/logger.hpp>
@@ -219,17 +219,17 @@ public:
   }
 
   auto world_transform(const scenes::node node) -> math::matrix4x4 {
-    EASY_BLOCK("scene_graph::world_transform");
+    SBX_PROFILE_SCOPE("scene_graph::world_transform");
     return _ensure_world(node).model;
   }
 
   auto world_normal(const scenes::node node) -> math::matrix4x4 {
-    EASY_BLOCK("scene_graph::world_normal");
+    SBX_PROFILE_SCOPE("scene_graph::world_normal");
     return _ensure_world(node).normal;
   }
 
   auto parent_transform(const scenes::node node) -> math::matrix4x4 {
-    EASY_BLOCK("scene_graph::parent_transform");
+    SBX_PROFILE_SCOPE("scene_graph::parent_transform");
 
     const auto& relationship = _registry.get<scenes::relationship>(node);
 
@@ -241,17 +241,17 @@ public:
   }
 
   auto world_position(const scenes::node node) -> math::vector3 {
-    EASY_BLOCK("scene_graph::world_position");
+    SBX_PROFILE_SCOPE("scene_graph::world_position");
     return math::vector3{world_transform(node)[3]};
   }
 
   auto world_rotation(const scenes::node node) -> math::quaternion {
-    EASY_BLOCK("scene_graph::world_rotation");
+    SBX_PROFILE_SCOPE("scene_graph::world_rotation");
     return math::quaternion{math::matrix4x4::rotation_basis(world_transform(node))};
   }
 
   auto world_scale(const scenes::node node) -> math::vector3 {
-    EASY_BLOCK("scene_graph::world_scale");
+    SBX_PROFILE_SCOPE("scene_graph::world_scale");
 
     const auto world = world_transform(node);
 

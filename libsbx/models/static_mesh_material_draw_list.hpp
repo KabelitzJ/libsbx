@@ -8,7 +8,7 @@
 #include <ranges>
 #include <algorithm>
 
-#include <easy/profiler.h>
+#include <libsbx/utility/profiler.hpp>
 
 #include <fmt/format.h>
 

@@ -10,7 +10,7 @@
 #include <editor/editor_context.hpp>
 
 #include <editor/panels/viewport_panel.hpp>
-#include <editor/panels/scene_hierarchy_panel.hpp>
+#include <editor/panels/hierarchy_panel.hpp>
 #include <editor/panels/inspector_panel.hpp>
 #include <editor/panels/log_panel.hpp>
 
@@ -32,7 +32,7 @@ private:
 
   editor_context _context;
   viewport_panel _viewport_panel;
-  scene_hierarchy_panel _hierarchy_panel;
+  hierarchy_panel _hierarchy_panel;
   inspector_panel _inspector_panel;
   log_panel _log_panel;
 

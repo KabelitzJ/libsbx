@@ -14,6 +14,7 @@ class editor_context {
 
   inline static constexpr auto ini_file = std::string_view{"res://data/editor.ini"};
   inline static constexpr auto font_path = std::string_view{"res://fonts/Roboto-Regular.ttf"};
+  inline static constexpr auto icon_path = std::string_view{"res://fonts/materialdesignicons-webfont.ttf"};
 
 public:
 

@@ -254,6 +254,9 @@ class libsbx_recipe(ConanFile):
     if self.options.build_benchmarks:
       self.test_requires("benchmark/1.9.4")
 
+  def configure(self):
+    self.options["imgui"].wchar32 = True
+
   def generate(self):
     deps = CMakeDeps(self)
     toolchain = CMakeToolchain(self)

@@ -13,7 +13,7 @@
 #include <libsbx/scenes/scenes.hpp>
 
 #include <editor/editor_context.hpp>
-#include <editor/panels/scene_hierarchy_panel.hpp>
+#include <editor/panels/hierarchy_panel.hpp>
 #include <editor/panels/inspector_panel.hpp>
 #include <editor/panels/viewport_panel.hpp>
 

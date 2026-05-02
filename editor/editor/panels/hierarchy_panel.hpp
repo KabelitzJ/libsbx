@@ -1,17 +1,17 @@
 // SPDX-License-Identifier: MIT
-#ifndef EDITOR_PANELS_SCENE_HIERARCHY_PANEL_HPP_
-#define EDITOR_PANELS_SCENE_HIERARCHY_PANEL_HPP_
+#ifndef EDITOR_PANELS_hierarchy_panel_HPP_
+#define EDITOR_PANELS_hierarchy_panel_HPP_
 
 #include <libsbx/scenes/scene.hpp>
 #include <libsbx/scenes/scene_graph.hpp>
 
 namespace editor {
 
-class scene_hierarchy_panel {
+class hierarchy_panel {
 
 public:
 
-  scene_hierarchy_panel() = default;
+  hierarchy_panel() = default;
 
   auto draw() -> void;
 
@@ -34,8 +34,8 @@ private:
   bool _open_create_popup{false};
   std::array<char, 128> _name_buffer{};
 
-}; // class scene_hierarchy_panel
+}; // class hierarchy_panel
 
 } // namespace editor
 
-#endif // EDITOR_PANELS_SCENE_HIERARCHY_PANEL_HPP_
+#endif // EDITOR_PANELS_hierarchy_panel_HPP_

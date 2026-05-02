@@ -5,8 +5,6 @@
 
 #include <libsbx/utility/profiler.hpp>
 
-#include <imgui.h>
-
 #include <libsbx/reflection/reflection.hpp>
 
 #include <libsbx/math/color.hpp>

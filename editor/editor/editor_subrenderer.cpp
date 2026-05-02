@@ -1,15 +1,14 @@
 // SPDX-License-Identifier: MIT
 #include <editor/editor_subrenderer.hpp>
 
-#include <imgui.h>
-#include <ImGuizmo.h>
-
 #include <editor/bindings/imgui.hpp>
 
 #include <libsbx/core/engine.hpp>
 #include <libsbx/graphics/graphics_module.hpp>
 #include <libsbx/scenes/scenes_module.hpp>
 #include <libsbx/devices/input.hpp>
+
+#include <editor/bindings/imgui.hpp>
 
 namespace editor {
 
@@ -71,7 +70,7 @@ auto editor_subrenderer::_draw_dockspace() -> void {
   ImGui::Begin("##dockspace", nullptr, window_flags);
   ImGui::PopStyleVar(3);
 
-  ImGui::DockSpace(ImGui::GetID("editor_dockspace"), ImVec2{0.0f, 0.0f}, ImGuiDockNodeFlags_None);
+  ImGui::DockSpace(ImGui::GetID("editor_dockspace"), ImVec2{0.0f, 0.0f}, ImGuiDockNodeFlags_NoWindowMenuButton);
 
   if (ImGui::BeginMenuBar()) {
     if (ImGui::BeginMenu("File")) {

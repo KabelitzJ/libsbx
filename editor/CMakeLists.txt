@@ -32,7 +32,7 @@ target_sources(
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/editor_subrenderer.cpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/panels/inspector_panel.cpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/panels/log_panel.cpp"
-    "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/panels/scene_hierarchy_panel.cpp"
+    "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/panels/hierarchy_panel.cpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/panels/viewport_panel.cpp"
   PUBLIC
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/renderer.hpp"
@@ -42,7 +42,7 @@ target_sources(
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/editor_subrenderer.hpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/panels/inspector_panel.hpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/panels/log_panel.hpp"
-    "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/panels/scene_hierarchy_panel.hpp"
+    "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/panels/hierarchy_panel.hpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/panels/viewport_panel.hpp"
 )
 

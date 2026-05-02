@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: MIT
 #include <editor/panels/inspector_panel.hpp>
 
-#include <imgui.h>
-
 #include <fmt/format.h>
 
 #include <libsbx/scenes/scenes_module.hpp>
@@ -16,6 +14,8 @@
 
 #include <libsbx/math/quaternion.hpp>
 #include <libsbx/math/angle.hpp>
+
+#include <editor/bindings/imgui.hpp>
 
 namespace editor {
 
@@ -83,7 +83,7 @@ auto inspector_panel::draw(const sbx::scenes::node selected_node) -> void {
 }
 
 auto inspector_panel::_draw_transform(sbx::scenes::scene_graph& graph, sbx::scenes::node node) -> void {
-  if (!ImGui::CollapsingHeader("Transform", ImGuiTreeNodeFlags_DefaultOpen)) {
+  if (!ImGui::CollapsingHeader(ICON_MDI_AXIS_ARROW " Transform###transform", ImGuiTreeNodeFlags_DefaultOpen)) {
     return;
   }
 

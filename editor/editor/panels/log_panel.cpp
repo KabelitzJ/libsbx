@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MIT
 #include <editor/panels/log_panel.hpp>
 
-#include <imgui.h>
-
 #include <spdlog/spdlog.h>
 
 #include <libsbx/utility/logger.hpp>
+
+#include <editor/bindings/imgui.hpp>
 
 namespace editor {
 
@@ -22,7 +22,7 @@ static auto _log_color(spdlog::level::level_enum level) -> ImVec4 {
 }
 
 auto log_panel::draw() -> void {
-  ImGui::Begin("Log");
+  ImGui::Begin(ICON_MDI_INFORMATION " Log###log_panel");
 
   if (ImGui::Button("Clear")) {
     sbx::utility::detail::sink()->clear();

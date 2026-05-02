@@ -1,11 +1,6 @@
 // SPDX-License-Identifier: MIT
 #include <editor/editor_context.hpp>
 
-#include <imgui.h>
-#include <imnodes.h>
-#include <implot.h>
-#include <ImGuizmo.h>
-
 #include <cstring>
 
 #include <editor/bindings/imgui.hpp>
@@ -17,6 +12,8 @@
 #include <libsbx/graphics/graphics_module.hpp>
 
 #include <libsbx/assets/assets_module.hpp>
+
+#include <editor/bindings/imgui.hpp>
 
 namespace editor {
 
@@ -138,13 +135,28 @@ auto editor_context::_init_backends() -> void {
 
 auto editor_context::_upload_fonts() -> void {
   auto& assets_module = sbx::core::engine::get_module<sbx::assets::assets_module>();
-  const auto resolved_path = assets_module.resolve_path(font_path);
 
   auto& io = ImGui::GetIO();
 
-  auto* font = io.Fonts->AddFontFromFileTTF(resolved_path.string().c_str(), 16.0f);
+  const auto resolved_font_path = assets_module.resolve_path(font_path);
+
+  auto* font = io.Fonts->AddFontFromFileTTF(resolved_font_path.string().c_str(), 16.0f);
 
   io.FontDefault = font;
+
+  const auto resolved_icon_path = assets_module.resolve_path(icon_path);
+
+  static constexpr auto icon_ranges = std::array<ImWchar, 3>{ICON_MIN_MDI, ICON_MAX_MDI, 0};
+
+  auto icon_config = ImFontConfig{};
+  icon_config.MergeMode = true;
+  icon_config.PixelSnapH = true;
+  icon_config.GlyphMinAdvanceX = 16.0f;
+  icon_config.GlyphOffset.y = 1.0f;
+
+  io.Fonts->AddFontFromFileTTF(resolved_icon_path.string().c_str(), 16.0f, &icon_config, icon_ranges.data());
+
+  io.Fonts->Build();
 
   ImGui_ImplVulkan_CreateFontsTexture();
 }

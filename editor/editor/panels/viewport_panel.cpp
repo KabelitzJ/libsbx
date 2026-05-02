@@ -10,6 +10,8 @@
 #include <libsbx/scenes/components/camera.hpp>
 #include <libsbx/scenes/components/relationship.hpp>
 
+#include <libsbx/math/matrix_cast.hpp>
+
 namespace editor {
 
 viewport_panel::~viewport_panel() {
@@ -28,7 +30,7 @@ auto viewport_panel::draw(const sbx::graphics::image2d& scene_image, sbx::scenes
   auto& scene = scenes_module.active_scene();
 
   ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{0.0f, 0.0f});
-  ImGui::Begin("Viewport");
+  ImGui::Begin(ICON_MDI_GAMEPAD_VARIANT " Viewport###viewport_panel", nullptr, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
   ImGui::PopStyleVar();
 
   _is_focused = ImGui::IsWindowFocused();

@@ -6,9 +6,6 @@
 
 #include <vulkan/vulkan.h>
 
-#include <imgui.h>
-#include <ImGuizmo.h>
-
 #include <libsbx/math/vector2.hpp>
 #include <libsbx/math/matrix4x4.hpp>
 
@@ -16,6 +13,8 @@
 
 #include <libsbx/scenes/scene.hpp>
 #include <libsbx/scenes/node.hpp>
+
+#include <editor/bindings/imgui.hpp>
 
 namespace editor {
 

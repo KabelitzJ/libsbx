@@ -1,17 +1,20 @@
 // SPDX-License-Identifier: MIT
-#include <editor/panels/scene_hierarchy_panel.hpp>
-
-#include <imgui.h>
+#include <editor/panels/hierarchy_panel.hpp>
 
 #include <fmt/format.h>
 
 #include <libsbx/scenes/scenes_module.hpp>
 #include <libsbx/scenes/components/tag.hpp>
 #include <libsbx/scenes/components/relationship.hpp>
+#include <libsbx/scenes/components/directional_light.hpp>
+#include <libsbx/scenes/components/point_light.hpp>
+#include <libsbx/scenes/components/camera.hpp>
+
+#include <editor/bindings/imgui.hpp>
 
 namespace editor {
 
-auto scene_hierarchy_panel::draw() -> void {
+auto hierarchy_panel::draw() -> void {
   auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
 
   if (!scenes_module.has_active_scene()) {
@@ -20,7 +23,10 @@ auto scene_hierarchy_panel::draw() -> void {
 
   auto& scene = scenes_module.active_scene();
 
-  ImGui::Begin("Scene Hierarchy");
+  auto window_class = ImGuiWindowClass{};
+  window_class.DockNodeFlagsOverrideSet = ImGuiDockNodeFlags_NoWindowMenuButton;
+  ImGui::SetNextWindowClass(&window_class);
+  ImGui::Begin(ICON_MDI_FILE_TREE " Hierarchy###hierarchy_panel");
 
   auto& graph = scene.graph();
   auto root = graph.root();
@@ -53,7 +59,7 @@ auto scene_hierarchy_panel::draw() -> void {
   ImGui::End();
 }
 
-auto scene_hierarchy_panel::_draw_node(sbx::scenes::scene_graph& graph, sbx::scenes::node node) -> void {
+auto hierarchy_panel::_draw_node(sbx::scenes::scene_graph& graph, sbx::scenes::node node) -> void {
   const auto& tag = graph.get_component<sbx::scenes::tag>(node);
   const auto& relationship = graph.get_component<sbx::scenes::relationship>(node);
 
@@ -69,7 +75,12 @@ auto scene_hierarchy_panel::_draw_node(sbx::scenes::scene_graph& graph, sbx::sce
     flags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
   }
 
-  auto label = fmt::format("{}##{}", tag.c_str(), static_cast<std::uint32_t>(node));
+  const auto is_camera = graph.has_component<sbx::scenes::camera>(node);
+  const auto is_light = graph.has_component<sbx::scenes::directional_light>(node) || graph.has_component<sbx::scenes::point_light>(node);
+
+  const auto icon = is_camera ? ICON_MDI_CAMERA : (is_light ? ICON_MDI_LIGHTBULB : ICON_MDI_CUBE_OUTLINE);
+
+  auto label = fmt::format("{} {}##{}", icon, tag.c_str(), static_cast<std::uint32_t>(node));
   auto is_open = ImGui::TreeNodeEx(label.c_str(), flags);
 
   if (ImGui::IsItemClicked()) {
@@ -82,7 +93,7 @@ auto scene_hierarchy_panel::_draw_node(sbx::scenes::scene_graph& graph, sbx::sce
       _open_create_popup = true;
     }
 
-    if (ImGui::MenuItem("Delete")) {
+    if (!is_camera && ImGui::MenuItem("Delete")) {
       if (_selected_node == node) {
         _selected_node = sbx::scenes::node::null;
       }
@@ -116,7 +127,7 @@ auto scene_hierarchy_panel::_draw_node(sbx::scenes::scene_graph& graph, sbx::sce
   }
 }
 
-auto scene_hierarchy_panel::_draw_create_node_popup(sbx::scenes::scene_graph& graph) -> void {
+auto hierarchy_panel::_draw_create_node_popup(sbx::scenes::scene_graph& graph) -> void {
   if (_open_create_popup) {
     ImGui::OpenPopup("##create_node");
     _name_buffer.fill('\0');

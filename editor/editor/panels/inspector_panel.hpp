@@ -19,6 +19,8 @@ public:
 
 private:
 
+  auto _draw_tag(sbx::scenes::scene_graph& graph, sbx::scenes::node node) -> void;
+
   auto _draw_transform(sbx::scenes::scene_graph& graph, sbx::scenes::node node) -> void;
 
   auto _draw_directional_light(sbx::scenes::scene_graph& graph, sbx::scenes::node node) -> void;

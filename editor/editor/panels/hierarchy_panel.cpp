@@ -23,9 +23,6 @@ auto hierarchy_panel::draw() -> void {
 
   auto& scene = scenes_module.active_scene();
 
-  auto window_class = ImGuiWindowClass{};
-  window_class.DockNodeFlagsOverrideSet = ImGuiDockNodeFlags_NoWindowMenuButton;
-  ImGui::SetNextWindowClass(&window_class);
   ImGui::Begin(ICON_MDI_FILE_TREE " Hierarchy###hierarchy_panel");
 
   auto& graph = scene.graph();

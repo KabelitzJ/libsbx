@@ -28,7 +28,7 @@ auto inspector_panel::draw(const sbx::scenes::node selected_node) -> void {
 
   auto& scene = scenes_module.active_scene();
 
-  ImGui::Begin("Inspector");
+  ImGui::Begin(ICON_MDI_INFORMATION " Inspector##inspector_panel");
 
   if (selected_node == sbx::scenes::node::null) {
     ImGui::TextDisabled("No node selected");
@@ -44,25 +44,9 @@ auto inspector_panel::draw(const sbx::scenes::node selected_node) -> void {
     return;
   }
 
-  // Tag (name)
-  auto& tag = graph.get_component<sbx::scenes::tag>(selected_node);
-  _tag_buffer = tag.str();
-  _tag_buffer.resize(256);
-
-  if (ImGui::InputText("##tag", _tag_buffer.data(), _tag_buffer.capacity(), ImGuiInputTextFlags_EnterReturnsTrue)) {
-    auto new_tag = std::string{_tag_buffer.c_str()};
-
-    if (!new_tag.empty()) {
-      graph.get_component<sbx::scenes::tag>(selected_node) = sbx::scenes::tag{new_tag};
-    }
-  }
-
-  ImGui::Separator();
-
-  // Transform
+  _draw_tag(graph, selected_node);
   _draw_transform(graph, selected_node);
 
-  // Optional components
   if (graph.has_component<sbx::scenes::directional_light>(selected_node)) {
     _draw_directional_light(graph, selected_node);
   }
@@ -80,6 +64,24 @@ auto inspector_panel::draw(const sbx::scenes::node selected_node) -> void {
   }
 
   ImGui::End();
+}
+
+auto inspector_panel::_draw_tag(sbx::scenes::scene_graph& graph, sbx::scenes::node node) -> void {
+  if (!ImGui::CollapsingHeader(ICON_MDI_TAG " Tag###tag", ImGuiTreeNodeFlags_DefaultOpen)) {
+    return;
+  }
+
+  auto& tag = graph.get_component<sbx::scenes::tag>(node);
+  _tag_buffer = tag.str();
+  _tag_buffer.resize(256);
+
+  if (ImGui::InputText("##tag", _tag_buffer.data(), _tag_buffer.capacity(), ImGuiInputTextFlags_EnterReturnsTrue)) {
+    auto new_tag = std::string{_tag_buffer.c_str()};
+
+    if (!new_tag.empty()) {
+      graph.get_component<sbx::scenes::tag>(node) = sbx::scenes::tag{new_tag};
+    }
+  }
 }
 
 auto inspector_panel::_draw_transform(sbx::scenes::scene_graph& graph, sbx::scenes::node node) -> void {
@@ -106,7 +108,7 @@ auto inspector_panel::_draw_transform(sbx::scenes::scene_graph& graph, sbx::scen
 }
 
 auto inspector_panel::_draw_directional_light(sbx::scenes::scene_graph& graph, sbx::scenes::node node) -> void {
-  if (!ImGui::CollapsingHeader("Directional Light", ImGuiTreeNodeFlags_DefaultOpen)) {
+  if (!ImGui::CollapsingHeader(ICON_MDI_LIGHTBULB " Directional Light###directional_light", ImGuiTreeNodeFlags_DefaultOpen)) {
     return;
   }
 
@@ -127,7 +129,7 @@ auto inspector_panel::_draw_directional_light(sbx::scenes::scene_graph& graph, s
 }
 
 auto inspector_panel::_draw_point_light(sbx::scenes::scene_graph& graph, sbx::scenes::node node) -> void {
-  if (!ImGui::CollapsingHeader("Point Light", ImGuiTreeNodeFlags_DefaultOpen)) {
+  if (!ImGui::CollapsingHeader(ICON_MDI_LIGHTBULB " Point Light###point_light", ImGuiTreeNodeFlags_DefaultOpen)) {
     return;
   }
 
@@ -143,7 +145,7 @@ auto inspector_panel::_draw_point_light(sbx::scenes::scene_graph& graph, sbx::sc
 }
 
 auto inspector_panel::_draw_camera(sbx::scenes::scene_graph& graph, sbx::scenes::node node) -> void {
-  if (!ImGui::CollapsingHeader("Camera", ImGuiTreeNodeFlags_DefaultOpen)) {
+  if (!ImGui::CollapsingHeader(ICON_MDI_CAMERA " Camera###camera", ImGuiTreeNodeFlags_DefaultOpen)) {
     return;
   }
 
@@ -160,7 +162,7 @@ auto inspector_panel::_draw_camera(sbx::scenes::scene_graph& graph, sbx::scenes:
 }
 
 auto inspector_panel::_draw_static_mesh(sbx::scenes::scene_graph& graph, sbx::scenes::node node) -> void {
-  if (!ImGui::CollapsingHeader("Static Mesh", ImGuiTreeNodeFlags_DefaultOpen)) {
+  if (!ImGui::CollapsingHeader(ICON_MDI_VECTOR_TRIANGLE " Static Mesh###static_mesh", ImGuiTreeNodeFlags_DefaultOpen)) {
     return;
   }
 

@@ -22,7 +22,7 @@ static auto _log_color(spdlog::level::level_enum level) -> ImVec4 {
 }
 
 auto log_panel::draw() -> void {
-  ImGui::Begin(ICON_MDI_INFORMATION " Log###log_panel");
+  ImGui::Begin(ICON_MDI_VIEW_LIST " Log###log_panel");
 
   if (ImGui::Button("Clear")) {
     sbx::utility::detail::sink()->clear();

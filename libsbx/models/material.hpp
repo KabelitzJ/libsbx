@@ -178,6 +178,7 @@ struct material {
     key.alpha = static_cast<std::uint64_t>(alpha);
     key.is_double_sided = is_double_sided;
     key.stream_mask = required_streams.underlying();
+    key.feature_mask = features.underlying();
     
     auto shader_path = surface_shader.generic_string();
     key.surface_shader_hash = utility::crc32(std::span{reinterpret_cast<const std::uint8_t*>(shader_path.data()), shader_path.size()});

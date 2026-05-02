@@ -115,6 +115,10 @@ struct static_mesh_traits {
 
       const auto& mesh_id = static_mesh.mesh_id();
 
+      if (mesh_id == math::uuid::null()) {
+        continue;
+      }
+
       const auto& mesh = assets_module.get_asset<models::mesh>(mesh_id);
 
       for (const auto& submesh : static_mesh.submeshes()) {

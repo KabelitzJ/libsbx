@@ -122,10 +122,13 @@ public:
 
     SBX_PROFILE_SCOPE_START(s1, "classify submissions");
 
-    auto memory = std::array<std::uint8_t, 2048u>{};
+    auto memory = std::array<std::uint8_t, 4096u>{};
     auto pool = std::pmr::monotonic_buffer_resource{memory.data(), memory.size()};
 
     auto material_indices = std::pmr::unordered_map<math::uuid, std::uint32_t>{&pool};
+
+    using bucket_set = std::pmr::unordered_set<bucket>;
+    auto material_buckets = std::pmr::unordered_map<material_key, bucket_set, material_key_hash>{&pool};
 
     traits_type::for_each_submission(scene, [&](const scenes::node node, const math::uuid& mesh_id, std::uint32_t submesh_index, const math::uuid& material_id, const transform_data& transform, const instance_payload& payload) {
       const auto transform_index = static_cast<std::uint32_t>(_transform_data.size());
@@ -138,7 +141,7 @@ public:
       auto [entry, created] = material_indices.try_emplace(material_id, static_cast<std::uint32_t>(_material_data.size()));
 
       if (created) {
-        _push_material(material);
+        _push_material(material, material_buckets, pool);
       }
 
       const auto instance = traits_type::make_instance_data(node, transform_index, entry->second, payload);
@@ -185,7 +188,7 @@ public:
         }
       }
 
-      _build_draw_commands(key, pipeline_data);
+      _build_draw_commands(key, pipeline_data, material_buckets);
     }
 
     SBX_PROFILE_SCOPE_END(s2);
@@ -265,7 +268,7 @@ private:
     return std::bit_cast<std::float_t>(static_cast<std::uint32_t>(ha) | (static_cast<std::uint32_t>(hb) << 16));
   }
 
-  auto _push_material(const models::material& material) -> void {
+  auto _push_material(const models::material& material, std::pmr::unordered_map<material_key, std::pmr::unordered_set<bucket>, material_key_hash>& material_buckets, std::pmr::monotonic_buffer_resource& pool) -> void {
     auto data = models::material_data{};
 
     // Images
@@ -316,7 +319,9 @@ private:
 
     _surface_shader_paths.emplace(key.surface_shader_hash, material.surface_shader.generic_string());
 
-    auto& buckets = _material_buckets[key];
+    auto [entry, inserted] = material_buckets.try_emplace(key, std::pmr::unordered_set<bucket>{&pool});
+
+    auto& buckets = entry->second;
 
     buckets.insert(_classify_bucket(material));
 
@@ -325,19 +330,17 @@ private:
     }
   }
 
-
-  auto _build_draw_commands(const material_key& key, pipeline_data& pipeline) -> void {
+  auto _build_draw_commands(const material_key& key, pipeline_data& pipeline, const std::pmr::unordered_map<material_key, std::pmr::unordered_set<bucket>, material_key_hash>& material_buckets) -> void {
     SBX_PROFILE_SCOPE("build_draw_commands");
 
     auto& assets_module = core::engine::get_module<assets::assets_module>();
 
     auto draw_commands = std::vector<VkDrawIndexedIndirectCommand>{};
     auto instance_data = std::vector<models::instance_data>{};
-    // auto base_instance = std::uint32_t{0u};
     auto command_instance_counts = std::vector<std::uint32_t>{};
     auto range = graphics::draw_command_range{};
 
-    const auto& buckets = _material_buckets.at(key);
+    const auto& buckets = material_buckets.at(key);
 
     auto emitter = draw_command_emitter{
       .base_instance = std::uint32_t{0u},
@@ -417,8 +420,6 @@ private:
   std::unordered_map<material_key, pipeline_data, material_key_hash> _pipeline_data;
 
   std::array<bucket_map, magic_enum::enum_count<bucket>()> _bucket_ranges;
-
-  inline static auto _material_buckets = std::unordered_map<material_key, std::unordered_set<bucket>, material_key_hash>{};
 
   inline static auto _surface_shader_paths = std::unordered_map<std::uint32_t, std::string>{};
 

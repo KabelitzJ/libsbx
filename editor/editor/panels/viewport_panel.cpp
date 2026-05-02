@@ -3,6 +3,13 @@
 
 #include <editor/bindings/imgui.hpp>
 
+#include <libsbx/core/engine.hpp>
+
+#include <libsbx/graphics/graphics_module.hpp>
+#include <libsbx/graphics/buffers/buffer.hpp>
+#include <libsbx/graphics/commands/command_buffer.hpp>
+#include <libsbx/graphics/images/image.hpp>
+
 #include <libsbx/scenes/scenes_module.hpp>
 #include <libsbx/scenes/scene_graph.hpp>
 #include <libsbx/scenes/scene_environment.hpp>
@@ -54,9 +61,141 @@ auto viewport_panel::draw(const sbx::graphics::image2d& scene_image, sbx::scenes
     ImGui::Image(reinterpret_cast<ImTextureID>(_texture_id), available);
   }
 
+  _handle_picking();
+
   _draw_gizmo(scene, selected_node);
 
   ImGui::End();
+}
+
+auto viewport_panel::_handle_picking() -> void {
+  if (!_is_hovered) {
+    return;
+  }
+
+  if (is_gizmo_active()) {
+    return;
+  }
+
+  if (!ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+    return;
+  }
+
+  const auto mouse = ImGui::GetMousePos();
+
+  const auto local_x = mouse.x - _content_min.x();
+  const auto local_y = mouse.y - _content_min.y();
+
+  if (local_x < 0.0f || local_y < 0.0f) {
+    return;
+  }
+
+  if (local_x >= static_cast<std::float_t>(_panel_size.x()) || local_y >= static_cast<std::float_t>(_panel_size.y())) {
+    return;
+  }
+
+  auto& graphics_module = sbx::core::engine::get_module<sbx::graphics::graphics_module>();
+
+  const auto& object_id_image = static_cast<const sbx::graphics::image2d&>(graphics_module.attachment("object_id"));
+  const auto& image_size = object_id_image.size();
+
+  const auto pixel_x = static_cast<std::uint32_t>(local_x / static_cast<std::float_t>(_panel_size.x()) * static_cast<std::float_t>(image_size.x()));
+  const auto pixel_y = static_cast<std::uint32_t>(local_y / static_cast<std::float_t>(_panel_size.y()) * static_cast<std::float_t>(image_size.y()));
+
+  if (pixel_x >= image_size.x() || pixel_y >= image_size.y()) {
+    return;
+  }
+
+  const auto object_id = _read_object_id(object_id_image, pixel_x, pixel_y);
+
+  if (!object_id.has_value()) {
+    return;
+  }
+
+  if (*object_id == 0u) {
+    _picked_node = sbx::scenes::node::null;
+    return;
+  }
+
+  _picked_node = static_cast<sbx::scenes::node>(*object_id);
+}
+
+auto viewport_panel::_read_object_id(const sbx::graphics::image2d& image, std::uint32_t pixel_x, std::uint32_t pixel_y) -> std::optional<std::uint32_t> {
+  auto staging = sbx::graphics::buffer{sizeof(std::uint32_t), VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT};
+
+  auto command_buffer = sbx::graphics::command_buffer{sbx::graphics::queue::type::graphics, true};
+
+  const auto subresource_range = VkImageSubresourceRange{VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+
+  // Acquire: wait for color writes, transition to TRANSFER_SRC
+
+  auto pre_barrier = VkImageMemoryBarrier2{};
+  pre_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+  pre_barrier.srcStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
+  pre_barrier.srcAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
+  pre_barrier.dstStageMask = VK_PIPELINE_STAGE_2_COPY_BIT;
+  pre_barrier.dstAccessMask = VK_ACCESS_2_TRANSFER_READ_BIT;
+  pre_barrier.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+  pre_barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+  pre_barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  pre_barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  pre_barrier.image = image;
+  pre_barrier.subresourceRange = subresource_range;
+
+  auto pre_dependency = VkDependencyInfo{};
+  pre_dependency.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+  pre_dependency.imageMemoryBarrierCount = 1;
+  pre_dependency.pImageMemoryBarriers = &pre_barrier;
+
+  vkCmdPipelineBarrier2(command_buffer, &pre_dependency);
+
+  // Copy
+
+  auto region = VkBufferImageCopy{};
+  region.bufferOffset = 0;
+  region.bufferRowLength = 0;
+  region.bufferImageHeight = 0;
+  region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+  region.imageSubresource.mipLevel = 0;
+  region.imageSubresource.baseArrayLayer = 0;
+  region.imageSubresource.layerCount = 1;
+  region.imageOffset = VkOffset3D{static_cast<std::int32_t>(pixel_x), static_cast<std::int32_t>(pixel_y), 0};
+  region.imageExtent = VkExtent3D{1, 1, 1};
+
+  vkCmdCopyImageToBuffer(command_buffer, image.handle(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, staging.handle(), 1, &region);
+
+  // Release: transition back to SHADER_READ_ONLY
+
+  auto post_barrier = VkImageMemoryBarrier2{};
+  post_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+  post_barrier.srcStageMask = VK_PIPELINE_STAGE_2_COPY_BIT;
+  post_barrier.srcAccessMask = VK_ACCESS_2_TRANSFER_READ_BIT;
+  post_barrier.dstStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
+  post_barrier.dstAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
+  post_barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+  post_barrier.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;          
+  post_barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  post_barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  post_barrier.image = image;
+  post_barrier.subresourceRange = subresource_range;
+
+  auto post_dependency = VkDependencyInfo{};
+  post_dependency.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+  post_dependency.imageMemoryBarrierCount = 1;
+  post_dependency.pImageMemoryBarriers = &post_barrier;
+
+  vkCmdPipelineBarrier2(command_buffer, &post_dependency);
+
+  command_buffer.submit_idle();
+
+  staging.map();
+
+  auto value = std::uint32_t{0};
+  std::memcpy(&value, staging.mapped_memory().get(), sizeof(std::uint32_t));
+
+  staging.unmap();
+
+  return value;
 }
 
 auto viewport_panel::_update_texture(const sbx::graphics::image2d& image) -> void {

@@ -9,10 +9,12 @@
 
 #include <editor/editor_context.hpp>
 
+#include <editor/panels/texture_cache.hpp>
 #include <editor/panels/viewport_panel.hpp>
 #include <editor/panels/hierarchy_panel.hpp>
 #include <editor/panels/inspector_panel.hpp>
 #include <editor/panels/log_panel.hpp>
+#include <editor/panels/asset_browser_panel.hpp>
 
 namespace editor {
 
@@ -31,10 +33,12 @@ private:
   auto _draw_dockspace() -> void;
 
   editor_context _context;
+  texture_cache _texture_cache;
   viewport_panel _viewport_panel;
   hierarchy_panel _hierarchy_panel;
-  inspector_panel _inspector_panel;
+  inspector_panel _inspector_panel{_texture_cache};
   log_panel _log_panel;
+  asset_browser_panel _asset_browser_panel{_texture_cache};
 
 }; // class editor_subrenderer
 

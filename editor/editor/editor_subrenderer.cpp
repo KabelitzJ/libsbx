@@ -47,9 +47,14 @@ auto editor_subrenderer::render(sbx::graphics::command_buffer& command_buffer) -
   auto scene_active = _viewport_panel.is_hovered() && !_viewport_panel.is_gizmo_active();
   sbx::devices::input::set_scene_input_active(scene_active);
 
+  if (auto picked = _viewport_panel.consume_picked_node()) {
+    _hierarchy_panel.set_selected_node(*picked);
+  }
+
   _log_panel.draw();
   _hierarchy_panel.draw();
   _inspector_panel.draw(_hierarchy_panel.selected_node());
+  _asset_browser_panel.draw();
 
   _context.render();
   _context.render_draw_data(command_buffer);

@@ -3,6 +3,8 @@
 
 #include <fmt/format.h>
 
+#include <libsbx/assets/assets_module.hpp>
+
 #include <libsbx/scenes/scenes_module.hpp>
 #include <libsbx/scenes/components/tag.hpp>
 #include <libsbx/scenes/components/transform.hpp>
@@ -12,10 +14,16 @@
 #include <libsbx/scenes/components/static_mesh.hpp>
 #include <libsbx/scenes/components/skinned_mesh.hpp>
 
+#include <libsbx/models/material.hpp>
+
 #include <libsbx/math/quaternion.hpp>
 #include <libsbx/math/angle.hpp>
 
 #include <editor/bindings/imgui.hpp>
+
+#include <editor/panels/asset_browser_panel.hpp>
+
+#include <editor/widgets/controls.hpp>
 
 namespace editor {
 
@@ -92,17 +100,20 @@ auto inspector_panel::_draw_transform(sbx::scenes::scene_graph& graph, sbx::scen
   auto& transform = graph.get_component<sbx::scenes::transform>(node);
 
   auto position = transform.position();
-  if (_draw_vector3_control("Position", position)) {
+
+  if (controls::vector3("Position", position)) {
     transform.set_position(position);
   }
 
   auto euler = sbx::math::quaternion::euler_angles(transform.rotation());
-  if (_draw_vector3_control("Rotation", euler)) {
+
+  if (controls::vector3("Rotation", euler)) {
     transform.set_rotation(sbx::math::quaternion{euler});
   }
 
   auto scale = transform.scale();
-  if (_draw_vector3_control("Scale", scale, 1.0f)) {
+
+  if (controls::vector3("Scale", scale, 1.0f)) {
     transform.set_scale(scale);
   }
 }
@@ -115,17 +126,12 @@ auto inspector_panel::_draw_directional_light(sbx::scenes::scene_graph& graph, s
   auto& light = graph.get_component<sbx::scenes::directional_light>(node);
 
   auto direction = light.direction();
-  if (_draw_vector3_control("Direction", direction)) {
+
+  if (controls::vector3("Direction", direction)) {
     light.set_direction(direction);
   }
 
-  auto color = std::array<std::float_t, 3>{light.color().r(), light.color().g(), light.color().b()};
-
-  if (ImGui::ColorEdit3("Color", color.data())) {
-    light.color().r() = color[0];
-    light.color().g() = color[1];
-    light.color().b() = color[2];
-  }
+  controls::color3("Color", light.color());
 }
 
 auto inspector_panel::_draw_point_light(sbx::scenes::scene_graph& graph, sbx::scenes::node node) -> void {
@@ -135,13 +141,10 @@ auto inspector_panel::_draw_point_light(sbx::scenes::scene_graph& graph, sbx::sc
 
   auto& light = graph.get_component<sbx::scenes::point_light>(node);
 
-  auto color = std::array<std::float_t, 3>{light.color().r(), light.color().g(), light.color().b()};
+  auto color_copy = light.color();
+  controls::color3("Color##point_light", color_copy);
 
-  if (ImGui::ColorEdit3("Color##point_light", color.data())) {
-    // point_light color is const; display only for now
-  }
-
-  ImGui::Text("Radius: %.2f", light.radius());
+  controls::labeled_text("Radius", "%.2f", light.radius());
 }
 
 auto inspector_panel::_draw_camera(sbx::scenes::scene_graph& graph, sbx::scenes::node node) -> void {
@@ -157,124 +160,169 @@ auto inspector_panel::_draw_camera(sbx::scenes::scene_graph& graph, sbx::scenes:
     cam.set_field_of_view(sbx::math::angle{sbx::math::degree{fov}});
   }
 
-  ImGui::Text("Near: %.3f", cam.near_plane());
-  ImGui::Text("Far: %.1f", cam.far_plane());
+  controls::labeled_text("Near", "%.3f", cam.near_plane());
+  controls::labeled_text("Far", "%.1f", cam.far_plane());
 }
 
 auto inspector_panel::_draw_static_mesh(sbx::scenes::scene_graph& graph, sbx::scenes::node node) -> void {
-  if (!ImGui::CollapsingHeader(ICON_MDI_VECTOR_TRIANGLE " Static Mesh###static_mesh", ImGuiTreeNodeFlags_DefaultOpen)) {
+  if (!ImGui::CollapsingHeader(ICON_MDI_VECTOR_POLYGON " Static Mesh###static_mesh", ImGuiTreeNodeFlags_DefaultOpen)) {
     return;
   }
 
   const auto& mesh = graph.get_component<sbx::scenes::static_mesh>(node);
 
-  ImGui::Text("Mesh: %s", fmt::format("{}", mesh.mesh_id()).c_str());
-  ImGui::Text("Submeshes: %zu", mesh.submeshes().size());
+  controls::labeled_text("Mesh", "%s", fmt::format("{}", mesh.mesh_id()).c_str());
+  controls::labeled_text("Submeshes", "%zu", mesh.submeshes().size());
+
+  ImGui::Separator();
 
   for (auto i = 0u; i < mesh.submeshes().size(); ++i) {
-    ImGui::Text("  [%u] Material: %s", i, fmt::format("{}", mesh.submeshes()[i].material).c_str());
+    const auto& submesh = mesh.submeshes()[i];
+
+    ImGui::PushID(static_cast<std::int32_t>(i));
+
+    const auto label = fmt::format(ICON_MDI_TEXTURE_BOX " Submesh {} - Material###submesh_material_{}", i, i);
+
+    if (ImGui::TreeNodeEx(label.c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
+      _draw_material(submesh.material, i);
+      ImGui::TreePop();
+    }
+
+    ImGui::PopID();
   }
 }
 
-auto inspector_panel::_draw_vector3_control(const std::string& label, sbx::math::vector3& values, float reset_value) -> bool {
-  auto changed = false;
+auto inspector_panel::_draw_material(const sbx::math::uuid& material_id, std::uint32_t submesh_index) -> void {
+  auto& assets_module = sbx::core::engine::get_module<sbx::assets::assets_module>();
+  auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
 
-  ImGui::PushID(label.c_str());
+  const auto& asset_registry = scenes_module.asset_registry();
 
-  ImGui::Columns(2);
-  ImGui::SetColumnWidth(0, 80.0f);
-  ImGui::Text("%s", label.c_str());
-  ImGui::NextColumn();
+  auto& material = assets_module.get_asset<sbx::models::material>(material_id);
 
-  auto region = ImGui::GetContentRegionAvail().x;
-  auto spacing = 4.0f;
-  auto line_height = ImGui::GetFrameHeight();
-  auto button_width = line_height;
-  auto item_width = std::max(40.0f, (region - button_width * 3.0f - spacing * 2.0f) / 3.0f);
-  auto button_size = ImVec2{button_width, line_height};
+  ImGui::PushID(static_cast<std::int32_t>(submesh_index));
 
-  ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2{2.0f, 0.0f});
+  const auto& metadata = asset_registry.material_metadata(material_id);
 
-  // X
-  ImGui::PushStyleColor(ImGuiCol_Button, ImVec4{0.7f, 0.15f, 0.15f, 1.0f});
-  ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4{0.85f, 0.2f, 0.2f, 1.0f});
-  ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4{0.7f, 0.15f, 0.15f, 1.0f});
+  controls::labeled_text("Name", "%s", metadata.name.c_str());
+  controls::labeled_text("UUID", "%s", fmt::format("{}", material_id).c_str());
 
-  if (ImGui::Button("X", button_size)) {
-    values.x() = reset_value;
-    changed = true;
+  ImGui::Spacing();
+
+  controls::color4("Base Color", material.base_color);
+
+  ImGui::DragFloat("Metallic", &material.metallic_factor, 0.005f, 0.0f, 1.0f, "%.3f");
+  ImGui::DragFloat("Roughness", &material.roughness_factor, 0.005f, 0.0f, 1.0f, "%.3f");
+  ImGui::DragFloat("Specular", &material.specular_factor, 0.005f, 0.0f, 1.0f, "%.3f");
+  ImGui::DragFloat("Occlusion", &material.occlusion_strength, 0.005f, 0.0f, 1.0f, "%.3f");
+  ImGui::DragFloat("Normal Scale", &material.normal_scale, 0.01f, 0.0f, 4.0f, "%.3f");
+
+  ImGui::Spacing();
+  ImGui::SeparatorText("Emissive");
+
+  auto emissive = sbx::math::color{material.emissive_factor.x(), material.emissive_factor.y(), material.emissive_factor.z(), 1.0f};
+
+  if (controls::color3("Emissive Color", emissive)) {
+    material.emissive_factor.x() = emissive.r();
+    material.emissive_factor.y() = emissive.g();
+    material.emissive_factor.z() = emissive.b();
   }
 
-  ImGui::PopStyleColor(3);
-  ImGui::SameLine();
+  ImGui::DragFloat("Emissive Strength", &material.emissive_strength, 0.05f, 0.0f, 100.0f, "%.3f");
 
-  auto x = values.x();
+  ImGui::Spacing();
+  ImGui::SeparatorText("Alpha");
 
-  ImGui::PushItemWidth(item_width);
+  controls::enum_combo("Alpha Mode", material.alpha);
 
-  if (ImGui::DragFloat("##x", &x, 0.05f, 0.0f, 0.0f, "%.3f")) {
-    values.x() = x;
-    changed = true;
+  if (material.alpha == sbx::models::alpha_mode::mask) {
+    ImGui::DragFloat("Alpha Cutoff", &material.alpha_cutoff, 0.005f, 0.0f, 1.0f, "%.3f");
   }
 
-  ImGui::PopItemWidth();
-  ImGui::SameLine(0.0f, spacing);
+  ImGui::Checkbox("Double Sided", &material.is_double_sided);
 
-  // Y
-  ImGui::PushStyleColor(ImGuiCol_Button, ImVec4{0.15f, 0.6f, 0.15f, 1.0f});
-  ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4{0.2f, 0.75f, 0.2f, 1.0f});
-  ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4{0.15f, 0.6f, 0.15f, 1.0f});
+  ImGui::Spacing();
+  ImGui::SeparatorText("UV Transform");
 
-  if (ImGui::Button("Y", button_size)) {
-    values.y() = reset_value;
-    changed = true;
+  auto uv_scale = std::array<std::float_t, 2>{material.uv_scale.x(), material.uv_scale.y()};
+
+  if (ImGui::DragFloat2("UV Scale", uv_scale.data(), 0.05f, 0.001f, 1000.0f, "%.3f")) {
+    material.uv_scale.x() = uv_scale[0];
+    material.uv_scale.y() = uv_scale[1];
   }
 
-  ImGui::PopStyleColor(3);
-  ImGui::SameLine();
+  auto uv_offset = std::array<std::float_t, 2>{material.uv_offset.x(), material.uv_offset.y()};
 
-  auto y = values.y();
-
-  ImGui::PushItemWidth(item_width);
-
-  if (ImGui::DragFloat("##y", &y, 0.05f, 0.0f, 0.0f, "%.3f")) {
-    values.y() = y;
-    changed = true;
+  if (ImGui::DragFloat2("UV Offset", uv_offset.data(), 0.005f, -10.0f, 10.0f, "%.3f")) {
+    material.uv_offset.x() = uv_offset[0];
+    material.uv_offset.y() = uv_offset[1];
   }
 
-  ImGui::PopItemWidth();
-  ImGui::SameLine(0.0f, spacing);
+  ImGui::Spacing();
+  ImGui::SeparatorText("Parallax");
 
-  // Z
-  ImGui::PushStyleColor(ImGuiCol_Button, ImVec4{0.15f, 0.15f, 0.7f, 1.0f});
-  ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4{0.2f, 0.2f, 0.85f, 1.0f});
-  ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4{0.15f, 0.15f, 0.7f, 1.0f});
+  ImGui::DragFloat("Height Scale", &material.height_scale, 0.001f, 0.0f, 1.0f, "%.4f");
+  ImGui::DragFloat("Height Offset", &material.height_offset, 0.001f, -1.0f, 1.0f, "%.4f");
+  ImGui::DragFloat("Min Layers", &material.parallax_min_layers, 1.0f, 1.0f, 256.0f, "%.0f");
+  ImGui::DragFloat("Max Layers", &material.parallax_max_layers, 1.0f, 1.0f, 256.0f, "%.0f");
 
-  if (ImGui::Button("Z", button_size)) {
-    values.z() = reset_value;
-    changed = true;
+  ImGui::Spacing();
+  ImGui::SeparatorText("Sway");
+
+  ImGui::DragFloat("Sway Speed", &material.sway_speed, 0.01f, 0.0f, 10.0f, "%.3f");
+  ImGui::DragFloat("Sway Strength", &material.sway_strength, 0.005f, 0.0f, 1.0f, "%.3f");
+  ImGui::DragFloat("Sway Falloff", &material.sway_falloff_exponent, 0.05f, 0.0f, 16.0f, "%.3f");
+
+  ImGui::DragFloat("Scrumble Speed", &material.scrumble_speed, 0.01f, 0.0f, 10.0f, "%.3f");
+  ImGui::DragFloat("Scrumble Strength", &material.scrumble_strength, 0.005f, 0.0f, 1.0f, "%.3f");
+  ImGui::DragFloat("Scrumble Falloff", &material.scrumble_falloff_exponent, 0.05f, 0.0f, 16.0f, "%.3f");
+
+  ImGui::Spacing();
+  ImGui::SeparatorText("Features");
+
+  auto cast_shadow = material.features.has(sbx::models::material_feature::cast_shadow);
+
+  if (ImGui::Checkbox("Cast Shadow", &cast_shadow)) {
+    if (cast_shadow) {
+      material.features.set(sbx::models::material_feature::cast_shadow);
+    } else {
+      material.features.clear(sbx::models::material_feature::cast_shadow);
+    }
   }
 
-  ImGui::PopStyleColor(3);
-  ImGui::SameLine();
+  auto receive_shadow = material.features.has(sbx::models::material_feature::receive_shadow);
 
-  auto z = values.z();
-
-  ImGui::PushItemWidth(item_width);
-
-  if (ImGui::DragFloat("##z", &z, 0.05f, 0.0f, 0.0f, "%.3f")) {
-    values.z() = z;
-    changed = true;
+  if (ImGui::Checkbox("Receive Shadow", &receive_shadow)) {
+    if (receive_shadow) {
+      material.features.set(sbx::models::material_feature::receive_shadow);
+    } else {
+      material.features.clear(sbx::models::material_feature::receive_shadow);
+    }
   }
 
-  ImGui::PopItemWidth();
+  auto invert_backface_normals = material.features.has(sbx::models::material_feature::invert_backface_normals);
 
-  ImGui::PopStyleVar();
-  ImGui::Columns(1);
+  if (ImGui::Checkbox("Invert Backface Normals", &invert_backface_normals)) {
+    if (invert_backface_normals) {
+      material.features.set(sbx::models::material_feature::invert_backface_normals);
+    } else {
+      material.features.clear(sbx::models::material_feature::invert_backface_normals);
+    }
+  }
+
+  ImGui::Spacing();
+  ImGui::SeparatorText("Textures");
+
+  const auto image_payload = asset_browser_panel::image_handle_payload();
+
+  controls::texture_slot("Albedo", material.albedo, _texture_cache, image_payload);
+  controls::texture_slot("Normal", material.normal, _texture_cache, image_payload);
+  controls::texture_slot("Metallic/Roughness", material.metallic_roughness, _texture_cache, image_payload);
+  controls::texture_slot("Occlusion", material.occlusion, _texture_cache, image_payload);
+  controls::texture_slot("Emissive", material.emissive, _texture_cache, image_payload);
+  controls::texture_slot("Height", material.height, _texture_cache, image_payload);
 
   ImGui::PopID();
-
-  return changed;
 }
 
 } // namespace editor

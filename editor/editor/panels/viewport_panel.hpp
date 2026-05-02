@@ -2,6 +2,7 @@
 #ifndef EDITOR_PANELS_VIEWPORT_PANEL_HPP_
 #define EDITOR_PANELS_VIEWPORT_PANEL_HPP_
 
+#include <optional>
 #include <span>
 
 #include <vulkan/vulkan.h>
@@ -48,6 +49,13 @@ public:
     return ImGuizmo::IsUsing() || ImGuizmo::IsOver();
   }
 
+  auto consume_picked_node() -> std::optional<sbx::scenes::node> {
+    auto result = _picked_node;
+    _picked_node.reset();
+
+    return result;
+  }
+
 private:
 
   auto _update_texture(const sbx::graphics::image2d& image) -> void;
@@ -55,6 +63,10 @@ private:
   auto _draw_toolbar() -> void;
 
   auto _draw_gizmo(sbx::scenes::scene& scene, sbx::scenes::node selected_node) -> void;
+
+  auto _handle_picking() -> void;
+
+  auto _read_object_id(const sbx::graphics::image2d& image, std::uint32_t pixel_x, std::uint32_t pixel_y) -> std::optional<std::uint32_t>;
 
   static auto _to_imguizmo(const sbx::math::matrix4x4& source, std::span<std::float_t, 16> destination) -> void;
 
@@ -68,6 +80,8 @@ private:
 
   bool _is_focused{false};
   bool _is_hovered{false};
+
+  std::optional<sbx::scenes::node> _picked_node;
 
   ImGuizmo::OPERATION _gizmo_operation{ImGuizmo::TRANSLATE};
   ImGuizmo::MODE _gizmo_mode{ImGuizmo::LOCAL};

@@ -5,6 +5,8 @@
 #include <libsbx/scenes/scene.hpp>
 #include <libsbx/scenes/scene_graph.hpp>
 
+#include <editor/selection.hpp>
+
 namespace editor {
 
 class hierarchy_panel {
@@ -16,11 +18,11 @@ public:
   auto draw() -> void;
 
   auto selected_node() const -> sbx::scenes::node {
-    return _selected_node;
+    return selection::selected_node();
   }
 
   auto set_selected_node(sbx::scenes::node node) -> void {
-    _selected_node = node;
+    selection::set_selected_node(node);
   }
 
 private:
@@ -29,7 +31,6 @@ private:
 
   auto _draw_create_node_popup(sbx::scenes::scene_graph& graph) -> void;
 
-  sbx::scenes::node _selected_node{sbx::scenes::node::null};
   sbx::scenes::node _create_parent{sbx::scenes::node::null};
   bool _open_create_popup{false};
   std::array<char, 128> _name_buffer{};

@@ -144,7 +144,7 @@ auto inspector_panel::_draw_point_light(sbx::scenes::scene_graph& graph, sbx::sc
   auto color_copy = light.color();
   controls::color3("Color##point_light", color_copy);
 
-  controls::labeled_text("Radius", "%.2f", light.radius());
+  controls::labeled_text("Radius", "{:.2f}", light.radius());
 }
 
 auto inspector_panel::_draw_camera(sbx::scenes::scene_graph& graph, sbx::scenes::node node) -> void {
@@ -160,8 +160,8 @@ auto inspector_panel::_draw_camera(sbx::scenes::scene_graph& graph, sbx::scenes:
     cam.set_field_of_view(sbx::math::angle{sbx::math::degree{fov}});
   }
 
-  controls::labeled_text("Near", "%.3f", cam.near_plane());
-  controls::labeled_text("Far", "%.1f", cam.far_plane());
+  controls::labeled_text("Near", "{:.3f}", cam.near_plane());
+  controls::labeled_text("Far", "{:.1f}", cam.far_plane());
 }
 
 auto inspector_panel::_draw_static_mesh(sbx::scenes::scene_graph& graph, sbx::scenes::node node) -> void {
@@ -171,8 +171,8 @@ auto inspector_panel::_draw_static_mesh(sbx::scenes::scene_graph& graph, sbx::sc
 
   const auto& mesh = graph.get_component<sbx::scenes::static_mesh>(node);
 
-  controls::labeled_text("Mesh", "%s", fmt::format("{}", mesh.mesh_id()).c_str());
-  controls::labeled_text("Submeshes", "%zu", mesh.submeshes().size());
+  controls::labeled_text("Mesh", "{}", mesh.mesh_id());
+  controls::labeled_text("Submeshes", "{}", mesh.submeshes().size());
 
   ImGui::Separator();
 
@@ -204,8 +204,8 @@ auto inspector_panel::_draw_material(const sbx::math::uuid& material_id, std::ui
 
   const auto& metadata = asset_registry.material_metadata(material_id);
 
-  controls::labeled_text("Name", "%s", metadata.name.c_str());
-  controls::labeled_text("UUID", "%s", fmt::format("{}", material_id).c_str());
+  controls::labeled_text("Name", "{:s}", metadata.name.c_str());
+  controls::labeled_text("UUID", "{}", material_id);
 
   ImGui::Spacing();
 

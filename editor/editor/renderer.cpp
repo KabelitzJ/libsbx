@@ -33,6 +33,7 @@
 
 #include <editor/application.hpp>
 
+#include <editor/filters/selection_filter.hpp>
 #include <editor/editor_subrenderer.hpp>
 
 namespace editor {
@@ -58,8 +59,8 @@ renderer::renderer()
   auto normal = create_attachment("normal", sbx::graphics::attachment::type::image, sbx::math::color::black(), sbx::graphics::format::a2b10g10r10_unorm_pack32);
   auto material = create_attachment("material", sbx::graphics::attachment::type::image, _clear_color, sbx::graphics::format::r8g8b8a8_unorm);
   auto emissive = create_attachment("emissive", sbx::graphics::attachment::type::image, sbx::math::color::black(), sbx::graphics::format::r16g16b16a16_sfloat);
-  auto object_id = create_attachment("object_id", sbx::graphics::attachment::type::image, sbx::math::color::black(), sbx::graphics::format::r32_uint);
-  auto linear_depth = create_attachment("linear_depth", sbx::graphics::attachment::type::image, sbx::math::color::black(), sbx::graphics::format::r32_sfloat);
+  auto object_id = create_attachment("object_id", sbx::graphics::attachment::type::image, sbx::math::vector4u{0xFFFFFFFFu, 0u, 0u, 0u}, sbx::graphics::format::r32_uint);
+  auto linear_depth = create_attachment("linear_depth", sbx::graphics::attachment::type::image, sbx::math::color::white(), sbx::graphics::format::r32_sfloat);
 
   const auto accum_blend = sbx::graphics::blend_state{
     .color_source = sbx::graphics::blend_factor::one,
@@ -100,6 +101,8 @@ renderer::renderer()
   auto tonemap = create_attachment("tonemap", sbx::graphics::attachment::type::image, _clear_color, sbx::graphics::format::r8g8b8a8_srgb);
 
   auto scene_output = create_attachment("scene_output", sbx::graphics::attachment::type::image, _clear_color, sbx::graphics::format::r8g8b8a8_srgb);
+
+  auto selection_output = create_attachment("selection_output", sbx::graphics::attachment::type::image, _clear_color, sbx::graphics::format::r8g8b8a8_srgb);
 
   auto swapchain = create_attachment("swapchain", sbx::graphics::attachment::type::swapchain, _clear_color, sbx::graphics::format::b8g8r8a8_srgb);
 
@@ -149,7 +152,7 @@ renderer::renderer()
   });
 
   auto transparency_pass = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
-    auto pass = context.graphics_pass("deferred", scene_viewport);
+    auto pass = context.graphics_pass("transparency", scene_viewport);
 
     pass.depends_on(deferred_pass, culling_pass, skinning_pass, particles_pass);
 
@@ -161,7 +164,7 @@ renderer::renderer()
   });
 
   auto resolve_pass = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
-    auto pass = context.graphics_pass("deferred", scene_viewport);
+    auto pass = context.graphics_pass("resolve", scene_viewport);
 
     pass.depends_on(deferred_pass, transparency_pass, shadow_pass);
 
@@ -175,7 +178,7 @@ renderer::renderer()
   });
 
   auto tonemap_pass = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
-    auto pass = context.graphics_pass("deferred", scene_viewport);
+    auto pass = context.graphics_pass("tonemap", scene_viewport);
 
     pass.depends_on(resolve_pass);
 
@@ -187,7 +190,7 @@ renderer::renderer()
   });
 
   auto fxaa_pass = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
-    auto pass = context.graphics_pass("deferred", scene_viewport);
+    auto pass = context.graphics_pass("fxaa", scene_viewport);
 
     pass.depends_on(tonemap_pass);
 
@@ -198,12 +201,24 @@ renderer::renderer()
     return pass;
   });
 
+  auto selection_pass = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
+    auto pass = context.graphics_pass("deferred", scene_viewport);
+
+    pass.depends_on(fxaa_pass, deferred_pass);
+
+    pass.reads(scene_output, object_id, linear_depth);
+
+    pass.writes(selection_output, sbx::graphics::attachment_load_operation::clear);
+
+    return pass;
+  });
+
   auto editor_pass = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
     auto pass = context.graphics_pass("editor");
 
-    pass.depends_on(fxaa_pass);
+    pass.depends_on(selection_pass);
 
-    pass.reads(scene_output);
+    pass.reads(selection_output);
     pass.writes(swapchain, sbx::graphics::attachment_load_operation::clear);
 
     return pass;
@@ -279,6 +294,14 @@ renderer::renderer()
   add_subrenderer<sbx::post::tonemap_filter>(tonemap_pass, std::move(tonemap_attachment_names), tonemap_config);
 
   add_subrenderer<sbx::post::fxaa_filter>(fxaa_pass, "tonemap");
+
+  auto selection_attachment_names = std::vector<std::pair<std::string, std::string>>{
+    {"resolve_image", "scene_output"},
+    {"object_id_image", "object_id"},
+    {"linear_depth_image", "linear_depth"}
+  };
+
+  add_subrenderer<editor::selection_filter>(selection_pass, "editor://shaders/selection", std::move(selection_attachment_names));
 
   add_subrenderer<editor::editor_subrenderer>(editor_pass);
 }

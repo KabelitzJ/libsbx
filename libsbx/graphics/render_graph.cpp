@@ -5,6 +5,7 @@
 
 #include <libsbx/utility/logger.hpp>
 #include <libsbx/utility/exception.hpp>
+#include <libsbx/utility/concepts.hpp>
 
 #include <libsbx/math/color.hpp>
 
@@ -16,20 +17,20 @@
 
 namespace sbx::graphics {
 
-attachment::attachment(const utility::hashed_string& name, type type, const math::color& clear_color, const graphics::format format, const graphics::blend_state& blend_state, const graphics::filter filter, const graphics::address_mode address_mode, std::uint32_t array_layers) noexcept
+attachment::attachment(const utility::hashed_string& name, type type, const clear_value_type& clear_value, const graphics::format format, const graphics::blend_state& blend_state, const graphics::filter filter, const graphics::address_mode address_mode, std::uint32_t array_layers) noexcept
 : _name{name},
   _type{type},
-  _clear_color{clear_color},
+  _clear_value{clear_value},
   _format{format},
   _filter{filter},
   _address_mode{address_mode},
   _blend_state{blend_state},
   _array_layers{array_layers} { }
 
-attachment::attachment(const utility::hashed_string& name, type type, const math::color& clear_color, const graphics::format format, const graphics::filter filter, const graphics::address_mode address_mode, std::uint32_t array_layers) noexcept
+attachment::attachment(const utility::hashed_string& name, type type, const clear_value_type& clear_value, const graphics::format format, const graphics::filter filter, const graphics::address_mode address_mode, std::uint32_t array_layers) noexcept
 : _name{name},
   _type{type},
-  _clear_color{clear_color},
+  _clear_value{clear_value},
   _format{format},
   _filter{filter},
   _address_mode{address_mode},
@@ -52,8 +53,8 @@ auto attachment::address_mode() const noexcept -> graphics::address_mode {
   return _address_mode;
 }
 
-auto attachment::clear_color() const noexcept -> const math::color& {
-  return _clear_color;
+auto attachment::clear_value() const noexcept -> const clear_value_type& {
+  return _clear_value;
 }
 
 auto attachment::blend_state() const noexcept -> const graphics::blend_state& {
@@ -594,10 +595,29 @@ auto render_graph::_build_color_attachment_info(const attachment& attachment, co
   info.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
   info.loadOp = to_vk_enum<VkAttachmentLoadOp>(load_op);
   info.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-  info.clearValue.color.float32[0] = attachment.clear_color().r();
-  info.clearValue.color.float32[1] = attachment.clear_color().g();
-  info.clearValue.color.float32[2] = attachment.clear_color().b();
-  info.clearValue.color.float32[3] = attachment.clear_color().a();
+  
+  std::visit([&](const auto& value) {
+    using Type = std::decay_t<decltype(value)>;
+
+    if constexpr (std::is_same_v<Type, math::color>) {
+      info.clearValue.color.float32[0] = value.r();
+      info.clearValue.color.float32[1] = value.g();
+      info.clearValue.color.float32[2] = value.b();
+      info.clearValue.color.float32[3] = value.a();
+    } else if constexpr (std::is_same_v<Type, math::vector4i>) {
+      info.clearValue.color.int32[0] = value.x();
+      info.clearValue.color.int32[1] = value.y();
+      info.clearValue.color.int32[2] = value.z();
+      info.clearValue.color.int32[3] = value.w();
+    } else if constexpr (std::is_same_v<Type, math::vector4u>) {
+      info.clearValue.color.uint32[0] = value.x();
+      info.clearValue.color.uint32[1] = value.y();
+      info.clearValue.color.uint32[2] = value.z();
+      info.clearValue.color.uint32[3] = value.w();
+    } else {
+      static_assert(utility::always_false<Type>, "Unsupported clear color type");
+    }
+  }, attachment.clear_value());
 
   return info;
 }

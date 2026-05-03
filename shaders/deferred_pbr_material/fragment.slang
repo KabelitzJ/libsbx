@@ -277,7 +277,8 @@ opaque_fs_out write_gbuffer(fs_in input, surface_fragment_context ctx, instance_
   output.material = float4(ctx.metallic_roughness_occlusion, material_flags);
   output.emissive = float4(ctx.emissive, material_data.specular_factor);
   output.object_id = instance_data.object_id;
-  output.linear_depth = sbx::common::linearize_depth(input.sv_position.z, scene.camera_near, scene.camera_far);
+  // Linearize depth and encode in [0, 1]
+  output.linear_depth = sbx::common::linearize_depth(input.sv_position.z, scene.camera_near, scene.camera_far) / scene.camera_far;
 
   return output;
 }

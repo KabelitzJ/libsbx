@@ -39,6 +39,7 @@
 #include <libsbx/ui/ui_module.hpp>
 
 #include <libsbx/filesystem/filesystem_module.hpp>
+#include <libsbx/filesystem/native_filesystem.hpp>
 
 #include <libsbx/audio/audio_module.hpp>
 #include <libsbx/sprites/sprites_module.hpp>
@@ -57,13 +58,24 @@ application::application()
 
   assets_module.set_asset_root("editor/assets");
 
+  auto& filesystem_module = sbx::core::engine::get_module<sbx::filesystem::filesystem_module>();
+
+  const auto engine_data_dir = filesystem_module.native_path_of(std::string{"engine://"});
+  const auto editor_data_dir = engine_data_dir / "editor";
+
+  if (!std::filesystem::exists(editor_data_dir)) {
+    std::filesystem::create_directories(editor_data_dir);
+  }
+
+  filesystem_module.create_filesystem<sbx::filesystem::native_filesystem>(sbx::filesystem::alias{"editor://"}, editor_data_dir.generic_string());
+
   auto& graphics_module = sbx::core::engine::get_module<sbx::graphics::graphics_module>();
 
   graphics_module.set_renderer<editor::renderer>();
 
   auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
 
-  auto& scene = scenes_module.create_scene("Scenee");
+  auto& scene = scenes_module.create_scene("Scene");
 
   scenes_module.set_scene_viewport("scene");
 
@@ -217,8 +229,6 @@ application::application()
   graph.add_component<sbx::scenes::static_mesh>(tree, asset_registry.get_mesh("tree"), tree_submeshes);
 
   // Camera
-  
-  auto& filesystem_module = sbx::core::engine::get_module<sbx::filesystem::filesystem_module>();
 
   auto& scripting_module = sbx::core::engine::get_module<sbx::scripting::scripting_module>();
 

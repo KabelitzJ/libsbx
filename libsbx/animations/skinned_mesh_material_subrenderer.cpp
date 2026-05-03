@@ -31,6 +31,11 @@ auto skinned_mesh_material_subrenderer::render(graphics::command_buffer& command
   auto& draw_list = renderer.draw_list<skinned_mesh_material_draw_list>();
 
   auto skinning_task = renderer.task<animations::skinning_task>();
+  
+  if (!skinning_task) {
+    utility::logger<"animations">::error("Skinning task is not available. Cannot render skinned meshes.");
+    return;
+  }
 
   for (auto& [key, data] : draw_list.ranges(_bucket)) {
     auto& pipeline_data = _get_or_create_pipeline(key);

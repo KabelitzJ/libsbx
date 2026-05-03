@@ -112,7 +112,7 @@ auto viewport_panel::_handle_picking() -> void {
     return;
   }
 
-  if (*object_id == 0u) {
+  if (*object_id == 0xFFFFFFFFu) {
     _picked_node = sbx::scenes::node::null;
     return;
   }
@@ -131,12 +131,12 @@ auto viewport_panel::_read_object_id(const sbx::graphics::image2d& image, std::u
 
   auto pre_barrier = VkImageMemoryBarrier2{};
   pre_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-  pre_barrier.srcStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
-  pre_barrier.srcAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
+  pre_barrier.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+  pre_barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+  pre_barrier.srcStageMask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
+  pre_barrier.srcAccessMask = VK_ACCESS_2_SHADER_SAMPLED_READ_BIT;
   pre_barrier.dstStageMask = VK_PIPELINE_STAGE_2_COPY_BIT;
   pre_barrier.dstAccessMask = VK_ACCESS_2_TRANSFER_READ_BIT;
-  pre_barrier.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-  pre_barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
   pre_barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
   pre_barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
   pre_barrier.image = image;
@@ -168,12 +168,12 @@ auto viewport_panel::_read_object_id(const sbx::graphics::image2d& image, std::u
 
   auto post_barrier = VkImageMemoryBarrier2{};
   post_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+  post_barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+  post_barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
   post_barrier.srcStageMask = VK_PIPELINE_STAGE_2_COPY_BIT;
   post_barrier.srcAccessMask = VK_ACCESS_2_TRANSFER_READ_BIT;
-  post_barrier.dstStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
-  post_barrier.dstAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
-  post_barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-  post_barrier.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;          
+  post_barrier.dstStageMask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
+  post_barrier.dstAccessMask = VK_ACCESS_2_SHADER_SAMPLED_READ_BIT;         
   post_barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
   post_barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
   post_barrier.image = image;
@@ -352,20 +352,20 @@ auto viewport_panel::_draw_gizmo(sbx::scenes::scene& scene, sbx::scenes::node se
   transform.set_scale({scale[0], scale[1], scale[2]});
 }
 
-auto viewport_panel::_to_imguizmo(const sbx::math::matrix4x4& source, std::span<std::float_t, 16> destination) -> void {
-  for (auto column = 0; column < 4; ++column) {
-    for (auto row = 0; row < 4; ++row) {
-      destination[column * 4 + row] = static_cast<std::float_t>(source[column][row]);
+auto viewport_panel::_to_imguizmo(const sbx::math::matrix4x4& source, std::span<std::float_t, 16u> destination) -> void {
+  for (auto column = 0u; column < 4u; ++column) {
+    for (auto row = 0u; row < 4u; ++row) {
+      destination[column * 4u + row] = static_cast<std::float_t>(source[column][row]);
     }
   }
 }
 
-auto viewport_panel::_from_imguizmo(std::span<const std::float_t, 16> source) -> sbx::math::matrix4x4 {
+auto viewport_panel::_from_imguizmo(std::span<const std::float_t, 16u> source) -> sbx::math::matrix4x4 {
   auto result = sbx::math::matrix4x4::identity;
 
-  for (auto column = 0; column < 4; ++column) {
-    for (auto row = 0; row < 4; ++row) {
-      result[column][row] = source[column * 4 + row];
+  for (auto column = 0u; column < 4u; ++column) {
+    for (auto row = 0u; row < 4u; ++row) {
+      result[column][row] = source[column * 4u + row];
     }
   }
 

@@ -9,16 +9,30 @@ find_package(imguizmo CONFIG REQUIRED)
 
 add_executable(${PROJECT_NAME})
 
-# find_package(Python3 REQUIRED COMPONENTS Interpreter)
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
 
-# add_custom_target(
-#   compiled_shaders_editor
-#   COMMAND ${Python3_EXECUTABLE} "${CMAKE_SOURCE_DIR}/scripts/compile_shaders.py" "${PROJECT_SOURCE_DIR}/assets/shaders/"
-#   WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
-#   COMMENT "Compiling shaders for ${PROJECT_NAME}..."
-# )
+set(EDITOR_SHADER_SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/assets/shaders)
+set(EDITOR_SHADER_OUT_DIR ${SBX_DATA_DIR}/editor/shaders)
 
-# add_dependencies(${PROJECT_NAME} compiled_shaders_editor)
+add_custom_target(
+  compiled_shaders_editor ALL
+  COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/scripts/compile_shaders.py
+    ${EDITOR_SHADER_SRC_DIR}
+    --output ${EDITOR_SHADER_OUT_DIR}
+    --manifest ${EDITOR_SHADER_SRC_DIR}/manifest.txt
+    -I ${SBX_SHADER_SRC_DIR}
+  COMMENT "Compiling shaders for ${PROJECT_NAME}..."
+)
+
+add_custom_target(
+  staged_shaders_editor ALL
+  COMMAND ${CMAKE_COMMAND} -E copy_directory
+    ${EDITOR_SHADER_SRC_DIR} ${EDITOR_SHADER_OUT_DIR}
+  DEPENDS compiled_shaders_editor
+  COMMENT "Staging shader sources for ${PROJECT_NAME}..."
+)
+
+add_dependencies(${PROJECT_NAME} staged_shaders_editor)
 
 target_sources(
   ${PROJECT_NAME}
@@ -37,11 +51,13 @@ target_sources(
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/panels/viewport_panel.cpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/renderer.cpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/widgets/controls.cpp"
+    "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/filters/selection_filter.cpp"
   PUBLIC
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/application.hpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/bindings/imgui.hpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/editor_context.hpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/editor_subrenderer.hpp"
+    "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/selection.hpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/panels/asset_browser_panel.hpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/panels/hierarchy_panel.hpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/panels/inspector_panel.hpp"
@@ -51,6 +67,7 @@ target_sources(
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/renderer.hpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/widgets/controls.hpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/widgets/controls.ipp"
+    "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/filters/selection_filter.hpp"
 )
 
 target_compile_definitions(

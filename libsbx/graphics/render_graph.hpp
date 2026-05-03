@@ -20,6 +20,7 @@
 #include <libsbx/utility/overload.hpp>
 
 #include <libsbx/math/color.hpp>
+#include <libsbx/math/vector4.hpp>
 
 #include <libsbx/memory/observer_ptr.hpp>
 
@@ -101,9 +102,11 @@ public:
     swapchain
   }; // enum class type
 
-  attachment(const utility::hashed_string& name, type type, const math::color& clear_color = math::color::black(), const format format = format::r8g8b8a8_unorm, const graphics::blend_state& blend_state = graphics::blend_state{}, const filter filter = filter::linear, const address_mode address_mode = address_mode::repeat, std::uint32_t array_layers = 1u) noexcept;
+  using clear_value_type = std::variant<math::color, math::vector4i, math::vector4u>;
 
-  attachment(const utility::hashed_string& name, type type, const math::color& clear_color, const format format, const filter filter, const address_mode address_mode, std::uint32_t array_layers = 1u) noexcept;
+  attachment(const utility::hashed_string& name, type type, const clear_value_type& clear_value = math::color::black(), const format format = format::r8g8b8a8_unorm, const graphics::blend_state& blend_state = graphics::blend_state{}, const filter filter = filter::linear, const address_mode address_mode = address_mode::repeat, std::uint32_t array_layers = 1u) noexcept;
+
+  attachment(const utility::hashed_string& name, type type, const clear_value_type& clear_value, const format format, const filter filter, const address_mode address_mode, std::uint32_t array_layers = 1u) noexcept;
 
   auto name() const noexcept -> const utility::hashed_string&;
 
@@ -113,7 +116,7 @@ public:
 
   auto address_mode() const noexcept -> graphics::address_mode;
 
-  auto clear_color() const noexcept -> const math::color&;
+  auto clear_value() const noexcept -> const clear_value_type&;
 
   auto blend_state() const noexcept -> const graphics::blend_state&;
 
@@ -123,7 +126,7 @@ private:
 
   utility::hashed_string _name;
   type _type;
-  math::color _clear_color;
+  clear_value_type _clear_value;
   graphics::format _format;
   graphics::filter _filter;
   graphics::address_mode _address_mode;

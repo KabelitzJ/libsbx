@@ -526,7 +526,6 @@ target_sources(
       "${CMAKE_SOURCE_DIR}/libsbx/post/filters/downsample_filter.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/post/filters/fxaa_filter.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/post/filters/resolve_filter.hpp"
-      "${CMAKE_SOURCE_DIR}/libsbx/post/filters/selection_filter.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/post/filters/ssao_filter.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/post/filters/tonemap_filter.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/post/filters/upsample_filter.hpp"

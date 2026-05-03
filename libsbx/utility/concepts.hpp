@@ -6,6 +6,15 @@
 
 namespace sbx::utility {
 
+template<typename Type>
+struct is_always_false : std::false_type { };
+
+template<typename Type>
+inline constexpr auto is_always_false_v = is_always_false<Type>::value;
+
+template<typename Type>
+concept always_false = is_always_false_v<Type>;
+
 template<typename Type, typename... TypeList>
 struct is_one_of : std::false_type { };
 

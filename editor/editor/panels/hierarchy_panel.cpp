@@ -39,7 +39,7 @@ auto hierarchy_panel::draw() -> void {
   }
 
   if (ImGui::IsMouseDown(0) && ImGui::IsWindowHovered()) {
-    _selected_node = sbx::scenes::node::null;
+    selection::set_selected_node(sbx::scenes::node::null);
   }
 
   if (ImGui::BeginPopupContextWindow("##hierarchy_context", ImGuiPopupFlags_NoOpenOverItems | ImGuiPopupFlags_MouseButtonRight)) {
@@ -64,7 +64,7 @@ auto hierarchy_panel::_draw_node(sbx::scenes::scene_graph& graph, sbx::scenes::n
 
   auto flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAvailWidth;
 
-  if (_selected_node == node) {
+  if (selection::selected_node() == node) {
     flags |= ImGuiTreeNodeFlags_Selected;
   }
 
@@ -81,7 +81,7 @@ auto hierarchy_panel::_draw_node(sbx::scenes::scene_graph& graph, sbx::scenes::n
   auto is_open = ImGui::TreeNodeEx(label.c_str(), flags);
 
   if (ImGui::IsItemClicked()) {
-    _selected_node = node;
+    selection::set_selected_node(node);
   }
 
   if (ImGui::BeginPopupContextItem()) {
@@ -91,13 +91,13 @@ auto hierarchy_panel::_draw_node(sbx::scenes::scene_graph& graph, sbx::scenes::n
     }
 
     if (!is_camera && ImGui::MenuItem("Delete")) {
-      if (_selected_node == node) {
-        _selected_node = sbx::scenes::node::null;
+      if (selection::selected_node() == node) {
+        selection::set_selected_node(sbx::scenes::node::null);
       }
 
       graph.destroy_node(node);
 
-      _selected_node = sbx::scenes::node::null;
+      selection::set_selected_node(sbx::scenes::node::null);
 
       ImGui::EndPopup();
 
@@ -163,7 +163,9 @@ auto hierarchy_panel::_draw_create_node_popup(sbx::scenes::scene_graph& graph) -
     if (ImGui::Button("Create") || (confirm && valid)) {
       auto name = std::string{_name_buffer.data()};
 
-      _selected_node = graph.create_child_node(_create_parent, name);
+      auto node = graph.create_child_node(_create_parent, name);
+
+      selection::set_selected_node(node);
 
       ImGui::CloseCurrentPopup();
     }

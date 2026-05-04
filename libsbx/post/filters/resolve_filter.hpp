@@ -117,8 +117,9 @@ public:
 
     for (const auto& node : directional_light_nodes) {
       const auto& light = graph.get_component<scenes::directional_light>(node);
+      const auto& transform = graph.get_component<scenes::transform>(node);
 
-      const auto direction = math::vector3::normalized(light.direction());
+      const auto direction = -transform.up();
 
       directional_lights.push_back(directional_light_data{math::vector4{direction, 0.0f}, light.color()});
 

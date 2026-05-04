@@ -4,11 +4,13 @@
 
 #include <libsbx/core/module.hpp>
 
+#include <libsbx/scenes/scenes_module.hpp>
+
 namespace sbx::models {
 
 class models_module final : public core::module<models_module> {
 
-  inline static const auto is_registered = register_module(stage::normal);
+  inline static const auto is_registered = register_module(stage::normal, dependencies<scenes::scenes_module>{});
 
 public:
 

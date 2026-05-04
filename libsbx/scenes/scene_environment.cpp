@@ -17,7 +17,7 @@ static auto _aspect_from(const math::vector2u& size) -> std::float_t {
 scene_environment::scene_environment(scene_graph& graph, const scenes::node camera, const math::vector3& light_direction, const math::color& light_color)
 : _graph{graph},
   _camera{camera},
-  _light{light_direction, light_color} { }
+  _light{light_color, light_direction} { }
 
 auto scene_environment::update_uniforms() -> void {
   auto& camera = _graph.get_component<scenes::camera>(_camera);

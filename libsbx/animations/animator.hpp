@@ -56,7 +56,7 @@ public:
   }; // struct bone_transform
 
   animator() {
-    _current_state.animation_id = math::uuid::null();
+    _current_state.animation_id = math::uuid::nil();
   }
 
   auto add_state(const state& new_state) -> void;

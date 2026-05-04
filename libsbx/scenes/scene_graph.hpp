@@ -210,6 +210,11 @@ public:
     return _registry.try_get<Component>(node);
   }
 
+  template<typename Component, typename... Other>
+  auto remove_component(const scenes::node node) -> std::size_t {
+    return _registry.remove<Component, Other...>(node);
+  }
+
   auto registry() -> registry_type& {
     return _registry;
   }

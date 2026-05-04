@@ -18,7 +18,15 @@ public:
     return _color;
   }
 
+  auto color() noexcept -> math::color& {
+    return _color;
+  }
+
   auto radius() const noexcept -> std::float_t {
+    return _radius;
+  }
+
+  auto radius() noexcept -> std::float_t& {
     return _radius;
   }
 

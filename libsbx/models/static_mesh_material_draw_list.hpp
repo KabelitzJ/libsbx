@@ -115,13 +115,17 @@ struct static_mesh_traits {
 
       const auto& mesh_id = static_mesh.mesh_id();
 
-      if (mesh_id == math::uuid::null()) {
+      if (mesh_id == math::uuid::nil()) {
         continue;
       }
 
       const auto& mesh = assets_module.get_asset<models::mesh>(mesh_id);
 
       for (const auto& submesh : static_mesh.submeshes()) {
+        if (submesh.material == math::uuid::nil()) {
+          continue;
+        }
+
         const auto base_index = mesh.find_base_submesh_index(submesh.index).value_or(submesh.index);
         const auto lod = _select_lod(distance_sq, mesh.lod_count(base_index));
         const auto actual_index = base_index + lod;

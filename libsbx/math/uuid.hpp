@@ -164,9 +164,9 @@ public:
   using value_type = Type;
 
   basic_uuid()
-  : _value{random::next<value_type>()} { }
+  : _value{random::next<value_type>(1u)} { }
 
-  static constexpr auto null() -> basic_uuid {
+  static constexpr auto nil() -> basic_uuid {
     return basic_uuid{0u};
   }
 
@@ -214,6 +214,10 @@ struct fmt::formatter<sbx::math::basic_uuid<Type>> {
   template<typename FormatContext>
   auto format(const sbx::math::basic_uuid<Type>& uuid, FormatContext& context) const -> decltype(context.out()) {
     static constexpr auto width = sizeof(Type) * 2;
+
+    if (uuid == sbx::math::basic_uuid<Type>::nil()) {
+      return fmt::format_to(context.out(), "[nil]");
+    }
 
     return fmt::format_to(context.out(), "{:0{}x}", uuid.value(), width);
   }

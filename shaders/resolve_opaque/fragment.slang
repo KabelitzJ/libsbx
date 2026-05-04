@@ -15,6 +15,7 @@ struct fs_out {
 
 struct push_data {
   uint point_light_count;
+  uint directional_light_count;
 }; // struct push_data
 
 [[vk::push_constant]]
@@ -24,41 +25,46 @@ ConstantBuffer<push_data> push;
 ConstantBuffer<sbx::common::scene_data> scene;
 
 struct point_light {
-  float4 position;
-  float4 color;
+  float4 position;  // xyz = position, w = radius
+  float4 color;     // rgb = color, a = intensity
 }; // point_light
 
 [[vk::binding(1, 0)]]
 StructuredBuffer<point_light> buffer_point_lights;
 
-[[vk::binding(2, 0)]] 
+struct directional_light {
+  float4 direction; // xyz = direction (normalized), w = unused
+  float4 color;     // rgb = color, a = intensity
+}; // directional_light
+
+[[vk::binding(2, 0)]]
+StructuredBuffer<directional_light> buffer_directional_lights;
+
+[[vk::binding(3, 0)]]
 Sampler2D<float4> albedo_image;
 
-[[vk::binding(3, 0)]] 
+[[vk::binding(4, 0)]]
 Sampler2D<float4> position_image;
 
-[[vk::binding(4, 0)]]
+[[vk::binding(5, 0)]]
 Sampler2D<float4> normal_image;
 
-[[vk::binding(5, 0)]]
+[[vk::binding(6, 0)]]
 Sampler2D<float4> material_image;
 
-[[vk::binding(6, 0)]]
+[[vk::binding(7, 0)]]
 Sampler2D<float4> emissive_image;
 
-// [[vk::binding(7, 0)]]
-// Sampler2D<float> ssao_image;
-
-[[vk::binding(7, 0)]]
-Sampler2D<float2> brdf_image;
-  
 [[vk::binding(8, 0)]]
-SamplerCube<float4> irradiance_image;
+Sampler2D<float2> brdf_image;
 
 [[vk::binding(9, 0)]]
-SamplerCube<float4> prefiltered_image;
+SamplerCube<float4> irradiance_image;
 
 [[vk::binding(10, 0)]]
+SamplerCube<float4> prefiltered_image;
+
+[[vk::binding(11, 0)]]
 Sampler2DArray<float> shadow_image;
 
 static const float3 DEFAULT_F0 = float3(0.04, 0.04, 0.04);
@@ -79,7 +85,7 @@ float distribution_ggx(float3 n, float3 h, float alpha) {
 
   float ndh  = max(dot(n, h), 0.0);
   float ndh2 = ndh * ndh;
-  
+
   float denom = ndh2 * (a2 - 1.0) + 1.0;
 
   return a2 / (sbx::math::pi * denom * denom);
@@ -144,9 +150,9 @@ struct cascade_select {
 cascade_select select_cascade_with_blend(float view_depth) {
   cascade_select result;
   result.fade_out = false;
-  
+
   const float blend_threshold = 0.9;
-  
+
   if (view_depth < scene.cascade_splits.x) {
     result.cascade = 0;
     result.next_cascade = 1;
@@ -170,7 +176,7 @@ cascade_select select_cascade_with_blend(float view_depth) {
     float fade_start = cascade3_far * blend_threshold;
     result.blend_factor = saturate((view_depth - fade_start) / (cascade3_far - fade_start));
   }
-  
+
   return result;
 }
 
@@ -185,16 +191,15 @@ float sample_shadow_map(uint cascade, float2 uv) {
   return shadow_image.Sample(float3(uv, float(cascade)));
 }
 
-float calculate_shadow_cascade(uint cascade, float3 world_position, float3 normal) {
+float calculate_shadow_cascade(uint cascade, float3 world_position, float3 world_normal) {
   uint2 dimensions = shadow_map_dimensions(cascade);
   float2 texel_size = 1.0 / float2(dimensions);
 
   float3 light_direction = normalize(-scene.light_direction);
-  float ndl = dot(normal, light_direction);
+  float ndl = dot(world_normal, light_direction);
 
-  // Normal offset bias — push sample point along normal proportional to texel size
   float normal_offset_scale = texel_size.x * 2.0 * (1.0 + cascade);
-  float3 offset_position = world_position + normal * normal_offset_scale * saturate(1.0 - ndl);
+  float3 offset_position = world_position + world_normal * normal_offset_scale * saturate(1.0 - ndl);
 
   float4 clip = mul(scene.light_spaces[cascade], float4(offset_position, 1.0));
   float3 ndc = clip.xyz / clip.w;
@@ -236,7 +241,7 @@ float calculate_shadow_cascade(uint cascade, float3 world_position, float3 norma
   return shadow / 16.0;
 }
 
-float calculate_shadow(float3 world_position, float3 normal, uint material_flags) {
+float calculate_shadow(float3 world_position, float3 world_normal, uint material_flags) {
   float shadow = 1.0;
 
   bool receive_shadow = (material_flags & material_feature::receive_shadow) != 0;
@@ -245,13 +250,13 @@ float calculate_shadow(float3 world_position, float3 normal, uint material_flags
     float view_depth = -mul(scene.view, float4(world_position, 1.0)).z;
 
     cascade_select cascade_info = select_cascade_with_blend(view_depth);
-  
-    float shadow_current = calculate_shadow_cascade(cascade_info.cascade, world_position, normal);
-    
+
+    float shadow_current = calculate_shadow_cascade(cascade_info.cascade, world_position, world_normal);
+
     if (cascade_info.fade_out) {
       shadow = lerp(shadow_current, 1.0, cascade_info.blend_factor);
     } else if (cascade_info.blend_factor > 0.0 && cascade_info.cascade < 3) {
-      float shadow_next = calculate_shadow_cascade(cascade_info.next_cascade, world_position, normal);
+      float shadow_next = calculate_shadow_cascade(cascade_info.next_cascade, world_position, world_normal);
 
       shadow = lerp(shadow_current, shadow_next, cascade_info.blend_factor);
     } else {
@@ -262,6 +267,69 @@ float calculate_shadow(float3 world_position, float3 normal, uint material_flags
   return shadow;
 }
 
+float3 calculate_directional_lights(float3 world_normal, float3 view_direction, float3 albedo, float alpha, float ndv, float3 f0, float specular_strength, float metallic) {
+  float3 color = float3(0, 0, 0);
+
+  for (uint i = 0u; i < push.directional_light_count; ++i) {
+    directional_light light = buffer_directional_lights[i];
+
+    float3 ld = normalize(-light.direction.xyz);
+    float3 hd = normalize(view_direction + ld);
+    float ndl_d = max(dot(world_normal, ld), 0.0);
+
+    float Dd = distribution_ggx(world_normal, hd, alpha);
+    float Vd = V_smith_ggx_correlated(ndv, ndl_d, alpha);
+    float3 Fd = fresnel_schlick(max(dot(hd, view_direction), 0.0), f0, specular_strength);
+
+    float3 specular_d = Dd * Vd * Fd;
+    float3 ks_d = Fd;
+    float3 kd_d = (1.0 - ks_d) * (1.0 - metallic);
+
+    float3 radiance_d = light.color.rgb * light.color.a * ndl_d;
+
+    color += (kd_d * albedo / sbx::math::pi + specular_d) * radiance_d;
+  }
+
+  return color;
+}
+
+float3 calculate_point_lights(float3 world_position, float3 world_normal, float3 view_direction, float3 albedo, float alpha, float ndv, float3 f0, float specular_strength, float metallic) {
+  float3 color = float3(0, 0, 0);
+
+  for (uint i = 0u; i < push.point_light_count; ++i) {
+    point_light light = buffer_point_lights[i];
+
+    float3 light_position = light.position.xyz;
+    float light_radius = light.position.w;
+
+    float3 light_direction = light_position - world_position;
+    float  distance = max(length(light_direction), 0.001);
+
+    light_direction /= distance;
+
+    float3 h = normalize(view_direction + light_direction);
+    float ndl_p = max(dot(world_normal, light_direction), 0.0);
+
+    float d_over_r = distance / light_radius;
+    float d_over_r_4 = d_over_r * d_over_r * d_over_r * d_over_r;
+    float clamped = saturate(1.0 - d_over_r_4);
+    float attenuation = (clamped * clamped) / max(distance * distance, 1e-4);
+
+    float3 radiance = light.color.rgb * light.color.a * attenuation;
+
+    float Dp = distribution_ggx(world_normal, h, alpha);
+    float Vp = V_smith_ggx_correlated(ndv, ndl_p, alpha);
+    float3 Fp = fresnel_schlick(max(dot(h, view_direction), 0.0), f0, specular_strength);
+
+    float3 spec_p = Dp * Vp * Fp;
+
+    float3 kd_p = (1.0 - Fp) * (1.0 - metallic);
+
+    color += (kd_p * albedo / sbx::math::pi + spec_p) * radiance * ndl_p;
+  }
+
+  return color;
+}
 
 [noinline] T maybe_unused<T>(T value) {
   return value;
@@ -287,11 +355,11 @@ fs_out main(fs_in input) {
   maybe_unused(brdf_image);
   maybe_unused(prefiltered_image);
   maybe_unused(shadow_image);
+  maybe_unused(buffer_directional_lights);
 
   float3 albedo = albedo_image.Sample(input.uv).rgb;
   float3 world_position = position_image.Sample(input.uv).xyz;
-  // [0, 1] -> [-1, 1]
-  float3 normal = normalize(normal_image.Sample(input.uv).xyz * 2.0f - 1.0f);
+  float3 world_normal = normalize(normal_image.Sample(input.uv).xyz * 2.0f - 1.0f);
 
   float4 material = material_image.Sample(input.uv).rgba;
   float3 mrao = material.rgb;
@@ -301,7 +369,6 @@ fs_out main(fs_in input) {
   float3 emissive_color = emissive.rgb;
   float specular_strength = emissive.a;
 
-  // float ssao = ssao_image.Sample(input.uv);
   float ssao = 1.0;
 
   float metallic = clamp(mrao.r, 0.0, 1.0);
@@ -309,20 +376,20 @@ fs_out main(fs_in input) {
   float ao = clamp(mrao.b, 0.0, 1.0);
 
   float3 view_direction = normalize(scene.camera_position - world_position);
-  float ndv = max(dot(normal, view_direction), 0.0);
+  float ndv = max(dot(world_normal, view_direction), 0.0);
   float3 f0 = lerp(DEFAULT_F0, albedo, metallic);
 
   float3 color = float3(0.0, 0.0, 0.0);
 
-  // Global directional light
+  // Global directional light (the sun) — drives CSM and IBL.
 
-  float3 light_direction = normalize(-scene.light_direction);
-  float3 halfway_direction = normalize(view_direction + light_direction);
-  float ndl = max(dot(normal, light_direction), 0.0);
+  float3 sun_direction = normalize(-scene.light_direction);
+  float3 halfway_direction = normalize(view_direction + sun_direction);
+  float ndl = max(dot(world_normal, sun_direction), 0.0);
 
   float alpha = roughness * roughness;
 
-  float D = distribution_ggx(normal, halfway_direction, alpha);
+  float D = distribution_ggx(world_normal, halfway_direction, alpha);
   float V = V_smith_ggx_correlated(ndv, ndl, alpha);
   float3 F = fresnel_schlick(max(dot(halfway_direction, view_direction), 0.0), f0, specular_strength);
 
@@ -331,51 +398,25 @@ fs_out main(fs_in input) {
   float3 k_s = F;
   float3 k_d = (1.0 - k_s) * (1.0 - metallic);
 
-  float shadow = calculate_shadow(world_position, normal, material_flags);
+  float shadow = calculate_shadow(world_position, world_normal, material_flags);
 
-  float3 irradiance = scene.light_color.rgb * ndl * shadow;
+  float3 sun_irradiance = scene.light_color.rgb * scene.light_color.a * ndl * shadow;
 
-  color += (k_d * albedo / sbx::math::pi + specular) * irradiance;
+  color += (k_d * albedo / sbx::math::pi + specular) * sun_irradiance;
 
-  // Point lights
+  // Additional directional lights (no shadows).
 
-  for (uint i = 0u; i < push.point_light_count; ++i) {
-    point_light light = buffer_point_lights[i];
+  color += calculate_directional_lights(world_normal, view_direction, albedo, alpha, ndv, f0, specular_strength, metallic);
 
-    float3 light_position = light.position.xyz;
-    float light_radius = light.position.w;
+  // Point lights.
 
-    float3 light_direction = light_position - world_position;
-    float  distance = max(length(light_direction), 0.001);
+  color += calculate_point_lights(world_position, world_normal, view_direction, albedo, alpha, ndv, f0, specular_strength, metallic);
 
-    light_direction /= distance;
+  // Image based lighting.
 
-    float3 h = normalize(view_direction + light_direction);
-    float ndl_p = max(dot(normal, light_direction), 0.0);
+  float3 r = normalize(reflect(-view_direction, world_normal));
 
-    float d_over_r = distance / light_radius;
-    float d_over_r_4 = d_over_r * d_over_r * d_over_r * d_over_r;
-    float clamped = saturate(1.0 - d_over_r_4);
-    float attenuation = (clamped * clamped) / max(distance * distance, 1e-4);
-
-    float3 radiance = light.color.rgb * light.color.a * attenuation;
-
-    float Dp = distribution_ggx(normal, h, alpha);
-    float Vp = V_smith_ggx_correlated(ndv, ndl_p, alpha);
-    float3 Fp = fresnel_schlick(max(dot(h, view_direction), 0.0), f0, specular_strength);
-
-    float3 spec_p = Dp * Vp * Fp;
-
-    float3 kd_p = (1.0 - Fp) * (1.0 - metallic);
-
-    color += (kd_p * albedo / sbx::math::pi + spec_p) * radiance * ndl_p;
-  }
-
-  // Image based lighting
-
-  float3 r = normalize(reflect(-view_direction, normal));
-
-  float3 diffuse_irradiance = irradiance_image.Sample(normal).rgb;
+  float3 diffuse_irradiance = irradiance_image.Sample(world_normal).rgb;
   float3 diffuse_ibl = diffuse_irradiance * albedo / sbx::math::pi;
 
   float lod = roughness * PREFILTERED_ENV_MAX_MIP;

@@ -18,6 +18,8 @@
 
 #include <libsbx/math/quaternion.hpp>
 #include <libsbx/math/angle.hpp>
+#include <libsbx/math/vector3.hpp>
+#include <libsbx/math/color.hpp>
 
 #include <editor/bindings/imgui.hpp>
 
@@ -26,6 +28,11 @@
 #include <editor/widgets/controls.hpp>
 
 namespace editor {
+
+inspector_panel::inspector_panel(texture_cache& cache)
+: _texture_cache{cache} {
+  _register_default_components();
+}
 
 auto inspector_panel::draw(const sbx::scenes::node selected_node) -> void {
   auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
@@ -52,32 +59,139 @@ auto inspector_panel::draw(const sbx::scenes::node selected_node) -> void {
     return;
   }
 
-  _draw_tag(graph, selected_node);
-  _draw_transform(graph, selected_node);
+  _draw_tag(selected_node);
+  _draw_transform(selected_node);
+  _draw_components(selected_node);
 
-  if (graph.has_component<sbx::scenes::directional_light>(selected_node)) {
-    _draw_directional_light(graph, selected_node);
-  }
+  ImGui::Spacing();
+  ImGui::Separator();
+  ImGui::Spacing();
 
-  if (graph.has_component<sbx::scenes::point_light>(selected_node)) {
-    _draw_point_light(graph, selected_node);
-  }
-
-  if (graph.has_component<sbx::scenes::camera>(selected_node)) {
-    _draw_camera(graph, selected_node);
-  }
-
-  if (graph.has_component<sbx::scenes::static_mesh>(selected_node)) {
-    _draw_static_mesh(graph, selected_node);
-  }
+  _draw_add_component_button(selected_node);
 
   ImGui::End();
 }
 
-auto inspector_panel::_draw_tag(sbx::scenes::scene_graph& graph, sbx::scenes::node node) -> void {
+auto inspector_panel::_register_default_components() -> void {
+  _components.register_component<sbx::scenes::directional_light>(
+    ICON_MDI_LIGHTBULB " Directional Light",
+    true,
+    [this](sbx::scenes::node node, sbx::scenes::directional_light& light) -> void {
+      _draw_directional_light(node, light);
+    },
+    []() -> sbx::scenes::directional_light {
+      return sbx::scenes::directional_light{sbx::math::color::white(), sbx::math::vector3::down};
+    }
+  );
+
+  _components.register_component<sbx::scenes::point_light>(
+    ICON_MDI_LIGHTBULB " Point Light",
+    true,
+    [this](sbx::scenes::node node, sbx::scenes::point_light& light) -> void {
+      _draw_point_light(node, light);
+    },
+    []() -> sbx::scenes::point_light {
+      return sbx::scenes::point_light{sbx::math::color::white(), 5.0f};
+    }
+  );
+
+  _components.register_component<sbx::scenes::camera>(
+    ICON_MDI_CAMERA " Camera",
+    true,
+    [this](sbx::scenes::node node, sbx::scenes::camera& cam) -> void {
+      _draw_camera(node, cam);
+    },
+    []() -> sbx::scenes::camera {
+      return sbx::scenes::camera{sbx::math::angle{sbx::math::degree{60.0f}}, 0.1f, 1000.0f};
+    }
+  );
+
+  // No factory: static_mesh requires a mesh and material asset and must be added through code or serialization.
+  _components.register_component<sbx::scenes::static_mesh>(
+    ICON_MDI_VECTOR_POLYGON " Static Mesh",
+    true,
+    [this](sbx::scenes::node node, sbx::scenes::static_mesh& mesh) -> void {
+      _draw_static_mesh(node, mesh);
+    },
+    []() -> sbx::scenes::static_mesh {
+      return sbx::scenes::static_mesh{sbx::math::uuid::nil(), sbx::math::uuid::nil()};
+    }
+  );
+}
+
+auto inspector_panel::_draw_components(sbx::scenes::node node) -> void {
+  for (const auto& entry : _components.entries()) {
+    if (!entry.has(node)) {
+      continue;
+    }
+
+    ImGui::PushID(static_cast<std::int32_t>(entry.id));
+
+    auto is_visible = true;
+    auto* visible_ptr = entry.is_removable ? &is_visible : nullptr;
+
+    const auto is_expanded = ImGui::CollapsingHeader(entry.label.c_str(), visible_ptr, ImGuiTreeNodeFlags_DefaultOpen);
+
+    if (is_expanded && is_visible) {
+      entry.draw(node);
+    }
+
+    if (entry.is_removable && !is_visible) {
+      entry.remove(node);
+    }
+
+    ImGui::PopID();
+  }
+}
+
+auto inspector_panel::_draw_add_component_button(sbx::scenes::node node) -> void {
+  static constexpr auto popup_id = "##add_component_popup";
+
+  const auto avail_width = ImGui::GetContentRegionAvail().x;
+  const auto button_width = std::min(avail_width, 220.0f);
+  const auto offset = (avail_width - button_width) * 0.5f;
+
+  if (offset > 0.0f) {
+    ImGui::SetCursorPosX(ImGui::GetCursorPosX() + offset);
+  }
+
+  if (ImGui::Button(ICON_MDI_PLUS " Add Component", ImVec2{button_width, 0.0f})) {
+    ImGui::OpenPopup(popup_id);
+  }
+
+  if (ImGui::BeginPopup(popup_id)) {
+    auto any_available = false;
+
+    for (const auto& entry : _components.entries()) {
+      if (!entry.factory) {
+        continue;
+      }
+
+      if (entry.has(node)) {
+        continue;
+      }
+
+      any_available = true;
+
+      if (ImGui::MenuItem(entry.label.c_str())) {
+        entry.factory(node);
+      }
+    }
+
+    if (!any_available) {
+      ImGui::TextDisabled("No components to add");
+    }
+
+    ImGui::EndPopup();
+  }
+}
+
+auto inspector_panel::_draw_tag(sbx::scenes::node node) -> void {
   if (!ImGui::CollapsingHeader(ICON_MDI_TAG " Tag###tag", ImGuiTreeNodeFlags_DefaultOpen)) {
     return;
   }
+
+  auto& graph = sbx::core::engine::get_module<sbx::scenes::scenes_module>().active_scene().graph();
 
   auto& tag = graph.get_component<sbx::scenes::tag>(node);
   _tag_buffer = tag.str();
@@ -92,10 +206,12 @@ auto inspector_panel::_draw_tag(sbx::scenes::scene_graph& graph, sbx::scenes::no
   }
 }
 
-auto inspector_panel::_draw_transform(sbx::scenes::scene_graph& graph, sbx::scenes::node node) -> void {
+auto inspector_panel::_draw_transform(sbx::scenes::node node) -> void {
   if (!ImGui::CollapsingHeader(ICON_MDI_AXIS_ARROW " Transform###transform", ImGuiTreeNodeFlags_DefaultOpen)) {
     return;
   }
+
+  auto& graph = sbx::core::engine::get_module<sbx::scenes::scenes_module>().active_scene().graph();
 
   auto& transform = graph.get_component<sbx::scenes::transform>(node);
 
@@ -118,12 +234,8 @@ auto inspector_panel::_draw_transform(sbx::scenes::scene_graph& graph, sbx::scen
   }
 }
 
-auto inspector_panel::_draw_directional_light(sbx::scenes::scene_graph& graph, sbx::scenes::node node) -> void {
-  if (!ImGui::CollapsingHeader(ICON_MDI_LIGHTBULB " Directional Light###directional_light", ImGuiTreeNodeFlags_DefaultOpen)) {
-    return;
-  }
-
-  auto& light = graph.get_component<sbx::scenes::directional_light>(node);
+auto inspector_panel::_draw_directional_light(sbx::scenes::node node, sbx::scenes::directional_light& light) -> void {
+  static_cast<void>(node);
 
   auto direction = light.direction();
 
@@ -131,28 +243,39 @@ auto inspector_panel::_draw_directional_light(sbx::scenes::scene_graph& graph, s
     light.set_direction(direction);
   }
 
-  controls::color3("Color", light.color());
-}
+  auto& color = light.color();
 
-auto inspector_panel::_draw_point_light(sbx::scenes::scene_graph& graph, sbx::scenes::node node) -> void {
-  if (!ImGui::CollapsingHeader(ICON_MDI_LIGHTBULB " Point Light###point_light", ImGuiTreeNodeFlags_DefaultOpen)) {
-    return;
+  auto rgb = sbx::math::color{color.r(), color.g(), color.b(), 1.0f};
+
+  if (controls::color3("Color", rgb)) {
+    color.r() = rgb.r();
+    color.g() = rgb.g();
+    color.b() = rgb.b();
   }
 
-  auto& light = graph.get_component<sbx::scenes::point_light>(node);
-
-  auto color_copy = light.color();
-  controls::color3("Color##point_light", color_copy);
-
-  controls::labeled_text("Radius", "{:.2f}", light.radius());
+  ImGui::DragFloat("Intensity", &color.a(), 0.1f, 0.0f, 10000.0f, "%.2f");
 }
 
-auto inspector_panel::_draw_camera(sbx::scenes::scene_graph& graph, sbx::scenes::node node) -> void {
-  if (!ImGui::CollapsingHeader(ICON_MDI_CAMERA " Camera###camera", ImGuiTreeNodeFlags_DefaultOpen)) {
-    return;
+auto inspector_panel::_draw_point_light(sbx::scenes::node node, sbx::scenes::point_light& light) -> void {
+  static_cast<void>(node);
+
+  auto& color = light.color();
+
+  auto rgb = sbx::math::color{color.r(), color.g(), color.b(), 1.0f};
+
+  if (controls::color3("Color##point_light", rgb)) {
+    color.r() = rgb.r();
+    color.g() = rgb.g();
+    color.b() = rgb.b();
   }
 
-  auto& cam = graph.get_component<sbx::scenes::camera>(node);
+  ImGui::DragFloat("Intensity##point_light", &color.a(), 0.1f, 0.0f, 10000.0f, "%.2f");
+
+  ImGui::DragFloat("Radius##point_light", &light.radius(), 0.1f, 0.0f, 10000.0f, "%.2f");
+}
+
+auto inspector_panel::_draw_camera(sbx::scenes::node node, sbx::scenes::camera& cam) -> void {
+  static_cast<void>(node);
 
   auto fov = cam.field_of_view().to_degrees().value();
 
@@ -164,20 +287,22 @@ auto inspector_panel::_draw_camera(sbx::scenes::scene_graph& graph, sbx::scenes:
   controls::labeled_text("Far", "{:.1f}", cam.far_plane());
 }
 
-auto inspector_panel::_draw_static_mesh(sbx::scenes::scene_graph& graph, sbx::scenes::node node) -> void {
-  if (!ImGui::CollapsingHeader(ICON_MDI_VECTOR_POLYGON " Static Mesh###static_mesh", ImGuiTreeNodeFlags_DefaultOpen)) {
-    return;
-  }
-
-  const auto& mesh = graph.get_component<sbx::scenes::static_mesh>(node);
+auto inspector_panel::_draw_static_mesh(sbx::scenes::node node, sbx::scenes::static_mesh& mesh) -> void {
+  static_cast<void>(node);
 
   controls::labeled_text("Mesh", "{}", mesh.mesh_id());
   controls::labeled_text("Submeshes", "{}", mesh.submeshes().size());
 
   ImGui::Separator();
 
-  for (auto i = 0u; i < mesh.submeshes().size(); ++i) {
-    const auto& submesh = mesh.submeshes()[i];
+  const auto& submeshes = mesh.submeshes();
+
+  for (auto i = 0u; i < submeshes.size(); ++i) {
+    const auto& submesh = submeshes[i];
+
+    if (submesh.material == sbx::math::uuid::nil()) {
+      continue;
+    }
 
     ImGui::PushID(static_cast<std::int32_t>(i));
 

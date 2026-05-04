@@ -23,7 +23,7 @@ scene::scene(const std::filesystem::path& path, component_io_registry& component
 
   auto camera_node = scenes::node::null;
 
-  if (data.camera_id != math::uuid::null()) {
+  if (data.camera_id != math::uuid::nil()) {
     camera_node = _graph.find_node(scenes::id{data.camera_id});
   }
 

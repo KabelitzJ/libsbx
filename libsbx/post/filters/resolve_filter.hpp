@@ -13,12 +13,9 @@
 
 #include <libsbx/scenes/scenes_module.hpp>
 #include <libsbx/scenes/scene.hpp>
-#include <libsbx/scenes/components/camera.hpp>
-
-#include <libsbx/scenes/scenes_module.hpp>
-#include <libsbx/scenes/scene.hpp>
 #include <libsbx/scenes/node.hpp>
 #include <libsbx/scenes/components/camera.hpp>
+#include <libsbx/scenes/components/directional_light.hpp>
 #include <libsbx/scenes/components/point_light.hpp>
 #include <libsbx/scenes/components/static_mesh.hpp>
 #include <libsbx/scenes/components/skybox.hpp>
@@ -33,11 +30,17 @@ class resolve_filter final : public filter {
   using base = filter;
 
   inline static constexpr auto max_point_lights = std::size_t{32};
+  inline static constexpr auto max_directional_lights = std::size_t{4};
 
   struct point_light_data {
     alignas(16) math::vector4 position;
     alignas(16) math::color color;
   }; // struct point_light_data
+
+  struct directional_light_data {
+    alignas(16) math::vector4 direction;
+    alignas(16) math::color color;
+  }; // struct directional_light_data
 
   inline static const auto pipeline_definition = graphics::pipeline_definition{
     .depth = graphics::depth::disabled,
@@ -63,6 +66,7 @@ public:
   : base{attachments, path, pipeline_definition},
     _push_handler{base::pipeline()},
     _point_lights_storage_handler{},
+    _directional_lights_storage_handler{},
     _attachment_names{std::move(attachment_names)} { }
 
   ~resolve_filter() override = default;
@@ -97,7 +101,7 @@ public:
       const auto position = math::vector3{model[3]};
 
       point_lights.push_back(point_light_data{math::vector4{position, light.radius()}, light.color()});
-      
+
       ++point_light_count;
 
       if (point_light_count >= max_point_lights) {
@@ -105,12 +109,36 @@ public:
       }
     }
 
+    auto directional_light_nodes = graph.query<scenes::directional_light>();
+
+    auto directional_lights = std::vector<directional_light_data>{};
+    directional_lights.reserve(max_directional_lights);
+    auto directional_light_count = std::uint32_t{0};
+
+    for (const auto& node : directional_light_nodes) {
+      const auto& light = graph.get_component<scenes::directional_light>(node);
+
+      const auto direction = math::vector3::normalized(light.direction());
+
+      directional_lights.push_back(directional_light_data{math::vector4{direction, 0.0f}, light.color()});
+
+      ++directional_light_count;
+
+      if (directional_light_count >= max_directional_lights) {
+        break;
+      }
+    }
+
     if constexpr (!Transparent) {
       _point_lights_storage_handler.push(std::span<const point_light_data>{point_lights.data(), point_light_count});
+      _directional_lights_storage_handler.push(std::span<const directional_light_data>{directional_lights.data(), directional_light_count});
+
       _push_handler.push("point_light_count", point_light_count);
+      _push_handler.push("directional_light_count", directional_light_count);
 
       descriptor_handler.push("scene", environment.uniform_handler());
       descriptor_handler.push("buffer_point_lights", _point_lights_storage_handler);
+      descriptor_handler.push("buffer_directional_lights", _directional_lights_storage_handler);
     }
 
     for (const auto& [name, attachment] : _attachment_names) {
@@ -145,6 +173,7 @@ private:
 
   graphics::push_handler _push_handler;
   graphics::storage_handler _point_lights_storage_handler;
+  graphics::storage_handler _directional_lights_storage_handler;
   std::vector<std::pair<std::string, std::string>> _attachment_names;
 
 }; // class resolve_filter

@@ -317,7 +317,7 @@ auto animator::_wrap_state_time(const state& state, std::float_t time) const -> 
 }
 
 auto animator::_has_valid_clip(const state& state) const -> bool {
-  return state.animation_id != math::uuid::null();
+  return state.animation_id != math::uuid::nil();
 }
 
 } // namespace sbx::animations 

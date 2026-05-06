@@ -13,6 +13,7 @@
 #include <libsbx/math/volume.hpp>
 #include <libsbx/math/sphere.hpp>
 #include <libsbx/math/vector4.hpp>
+#include <libsbx/math/uuid.hpp>
 
 #include <libsbx/io/loader_factory.hpp>
 
@@ -128,6 +129,22 @@ private:
   utility::bit_field<vertex_stream> _available_streams{};
 
 }; // class mesh
+
+struct mesh_handle : public math::uuid {
+
+  constexpr mesh_handle()
+  : math::uuid{math::uuid::nil()} { }
+
+  constexpr explicit mesh_handle(const math::uuid& id)
+  : math::uuid{id} { }
+
+  constexpr auto is_valid() const noexcept -> bool {
+    return (*this) != math::uuid::nil();
+  }
+
+  constexpr auto operator==(const mesh_handle& other) const noexcept -> bool = default;
+
+}; // struct mesh_handle
 
 } // namespace sbx::models
 

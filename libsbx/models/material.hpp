@@ -188,6 +188,22 @@ struct material {
 
 }; // struct material
   
+struct material_handle : public math::uuid {
+
+  constexpr material_handle()
+  : math::uuid{math::uuid::nil()}  { }
+
+  constexpr explicit material_handle(const math::uuid& id)
+  : math::uuid{id} { }
+
+  constexpr auto is_valid() const noexcept -> bool {
+    return (*this) != math::uuid::nil();
+  }
+
+  constexpr auto operator==(const material_handle& other) const noexcept -> bool = default;
+
+}; // struct material_handle
+
 } // namespace sbx::models
 
 template<>

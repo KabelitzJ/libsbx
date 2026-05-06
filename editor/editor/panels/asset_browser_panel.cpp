@@ -50,6 +50,26 @@ auto _matches_filter(std::string_view name, std::string_view filter) -> bool {
   return name.find(filter) != std::string_view::npos;
 }
 
+auto _native_to_res_uri(const std::filesystem::path& root, const std::filesystem::path& native) -> std::string {
+  auto relative = native.lexically_relative(root);
+
+  if (relative.empty()) {
+    return std::string{};
+  }
+
+  const auto first = relative.begin();
+
+  if (first != relative.end() && *first == "..") {
+    return std::string{};
+  }
+
+  if (relative == ".") {
+    return std::string{"res://"};
+  }
+
+  return "res://" + relative.generic_string();
+}
+
 auto asset_browser_panel::draw() -> void {
   auto& assets_module = sbx::core::engine::get_module<sbx::assets::assets_module>();
 
@@ -65,6 +85,12 @@ auto asset_browser_panel::draw() -> void {
   if (ImGui::Button(ICON_MDI_REFRESH " Refresh")) {
     _last_image_count = 0;
     _path_to_image.clear();
+  }
+
+  ImGui::SameLine();
+
+  if (ImGui::Button(ICON_MDI_FOLDER_PLUS " New Folder")) {
+    _begin_create(_selected_directory);
   }
 
   ImGui::SameLine();
@@ -137,9 +163,20 @@ auto asset_browser_panel::draw() -> void {
 
   ImGui::BeginChild("##grid", ImVec2{0.0f, 0.0f}, ImGuiChildFlags_None, ImGuiWindowFlags_HorizontalScrollbar);
   _draw_grid();
+
+  if (ImGui::BeginPopupContextWindow("##grid_context", ImGuiPopupFlags_MouseButtonRight | ImGuiPopupFlags_NoOpenOverItems)) {
+    if (ImGui::MenuItem(ICON_MDI_FOLDER_PLUS " New Folder")) {
+      _begin_create(_selected_directory);
+    }
+
+    ImGui::EndPopup();
+  }
+
   ImGui::EndChild();
 
   ImGui::EndChild();
+
+  _draw_folder_dialogs();
 
   ImGui::End();
 }
@@ -185,6 +222,8 @@ auto asset_browser_panel::_draw_tree(const std::filesystem::path& directory) -> 
   if (ImGui::IsItemClicked() && !ImGui::IsItemToggledOpen()) {
     _selected_directory = directory;
   }
+
+  _draw_folder_context_menu(directory);
 
   if (is_leaf) {
     _expanded_directories.erase(key);
@@ -331,6 +370,8 @@ auto asset_browser_panel::_draw_file_card(const std::filesystem::directory_entry
     if (ImGui::Button(ICON_MDI_FOLDER "##dir", ImVec2{_item_size, _item_size})) {
       _selected_directory = path;
     }
+
+    _draw_folder_context_menu(path);
   } else {
     auto extension = path.extension().generic_string();
 
@@ -373,6 +414,352 @@ auto asset_browser_panel::_draw_file_card(const std::filesystem::directory_entry
   ImGui::PopTextWrapPos();
 
   ImGui::EndGroup();
+}
+
+auto asset_browser_panel::_draw_folder_context_menu(const std::filesystem::path& path) -> void {
+  if (!ImGui::BeginPopupContextItem()) {
+    return;
+  }
+
+  const auto is_root = (path == _root);
+
+  if (ImGui::MenuItem(ICON_MDI_FOLDER_PLUS " New Folder")) {
+    _begin_create(path);
+  }
+
+  ImGui::Separator();
+
+  if (ImGui::MenuItem(ICON_MDI_RENAME_BOX " Rename", nullptr, false, !is_root)) {
+    _begin_rename(path);
+  }
+
+  if (ImGui::MenuItem(ICON_MDI_DELETE " Delete", nullptr, false, !is_root)) {
+    _begin_remove(path);
+  }
+
+  ImGui::EndPopup();
+}
+
+auto asset_browser_panel::_begin_create(const std::filesystem::path& parent) -> void {
+  _pending_action = folder_action::create;
+  _action_target = parent;
+  _action_name_buffer = "New Folder";
+  _action_error.clear();
+  _action_focus_input = true;
+  _action_request_open = true;
+}
+
+auto asset_browser_panel::_begin_rename(const std::filesystem::path& target) -> void {
+  _pending_action = folder_action::rename;
+  _action_target = target;
+  _action_name_buffer = target.filename().generic_string();
+  _action_error.clear();
+  _action_focus_input = true;
+  _action_request_open = true;
+}
+
+auto asset_browser_panel::_begin_remove(const std::filesystem::path& target) -> void {
+  _pending_action = folder_action::remove;
+  _action_target = target;
+  _action_name_buffer.clear();
+  _action_error.clear();
+  _action_focus_input = false;
+  _action_request_open = true;
+}
+
+auto asset_browser_panel::_draw_folder_dialogs() -> void {
+  if (_action_request_open) {
+    _action_request_open = false;
+
+    switch (_pending_action) {
+      case folder_action::create: {
+        ImGui::OpenPopup("##create_folder_dialog");
+        break;
+      }
+      case folder_action::rename: {
+        ImGui::OpenPopup("##rename_folder_dialog");
+        break;
+      }
+      case folder_action::remove: {
+        ImGui::OpenPopup("##remove_folder_dialog");
+        break;
+      }
+      case folder_action::none: {
+        break;
+      }
+    }
+  }
+
+  const auto modal_flags = ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings;
+
+  if (ImGui::BeginPopupModal("##create_folder_dialog", nullptr, modal_flags)) {
+    ImGui::Text("Create folder in %s", _action_target.generic_string().c_str());
+    ImGui::Spacing();
+
+    _action_name_buffer.resize(std::max<std::size_t>(_action_name_buffer.size(), 256));
+
+    if (_action_focus_input) {
+      ImGui::SetKeyboardFocusHere();
+      _action_focus_input = false;
+    }
+
+    const auto submitted = ImGui::InputText("Name##create_name", _action_name_buffer.data(), _action_name_buffer.capacity(), ImGuiInputTextFlags_EnterReturnsTrue);
+
+    if (!_action_error.empty()) {
+      ImGui::TextColored(ImVec4{1.0f, 0.4f, 0.4f, 1.0f}, "%s", _action_error.c_str());
+    }
+
+    ImGui::Spacing();
+
+    auto do_commit = submitted;
+
+    if (ImGui::Button("Create", ImVec2{120.0f, 0.0f})) {
+      do_commit = true;
+    }
+
+    ImGui::SameLine();
+
+    if (ImGui::Button("Cancel", ImVec2{120.0f, 0.0f})) {
+      _pending_action = folder_action::none;
+      ImGui::CloseCurrentPopup();
+    }
+
+    if (do_commit && _commit_create()) {
+      ImGui::CloseCurrentPopup();
+    }
+
+    ImGui::EndPopup();
+  }
+
+  if (ImGui::BeginPopupModal("##rename_folder_dialog", nullptr, modal_flags)) {
+    ImGui::Text("Rename %s", _action_target.filename().generic_string().c_str());
+    ImGui::Spacing();
+
+    _action_name_buffer.resize(std::max<std::size_t>(_action_name_buffer.size(), 256));
+
+    if (_action_focus_input) {
+      ImGui::SetKeyboardFocusHere();
+      _action_focus_input = false;
+    }
+
+    const auto submitted = ImGui::InputText("Name##rename_name", _action_name_buffer.data(), _action_name_buffer.capacity(), ImGuiInputTextFlags_EnterReturnsTrue);
+
+    if (!_action_error.empty()) {
+      ImGui::TextColored(ImVec4{1.0f, 0.4f, 0.4f, 1.0f}, "%s", _action_error.c_str());
+    }
+
+    ImGui::Spacing();
+
+    auto do_commit = submitted;
+
+    if (ImGui::Button("Rename", ImVec2{120.0f, 0.0f})) {
+      do_commit = true;
+    }
+
+    ImGui::SameLine();
+
+    if (ImGui::Button("Cancel", ImVec2{120.0f, 0.0f})) {
+      _pending_action = folder_action::none;
+      ImGui::CloseCurrentPopup();
+    }
+
+    if (do_commit && _commit_rename()) {
+      ImGui::CloseCurrentPopup();
+    }
+
+    ImGui::EndPopup();
+  }
+
+  if (ImGui::BeginPopupModal("##remove_folder_dialog", nullptr, modal_flags)) {
+    ImGui::Text("Delete %s and all its contents?", _action_target.generic_string().c_str());
+    ImGui::TextDisabled("This cannot be undone.");
+
+    if (!_action_error.empty()) {
+      ImGui::TextColored(ImVec4{1.0f, 0.4f, 0.4f, 1.0f}, "%s", _action_error.c_str());
+    }
+
+    ImGui::Spacing();
+
+    if (ImGui::Button("Delete", ImVec2{120.0f, 0.0f})) {
+      if (_commit_remove()) {
+        ImGui::CloseCurrentPopup();
+      }
+    }
+
+    ImGui::SameLine();
+
+    if (ImGui::Button("Cancel", ImVec2{120.0f, 0.0f})) {
+      _pending_action = folder_action::none;
+      ImGui::CloseCurrentPopup();
+    }
+
+    ImGui::EndPopup();
+  }
+}
+
+auto asset_browser_panel::_commit_create() -> bool {
+  const auto name = std::string{_action_name_buffer.c_str()};
+
+  if (!_is_valid_folder_name(name)) {
+    _action_error = "Invalid folder name";
+    return false;
+  }
+
+  const auto target = _action_target / name;
+
+  auto error = std::error_code{};
+
+  if (std::filesystem::exists(target, error)) {
+    _action_error = "A folder with that name already exists";
+    return false;
+  }
+
+  if (!std::filesystem::create_directory(target, error) || error) {
+    _action_error = error ? error.message() : std::string{"Failed to create folder"};
+    return false;
+  }
+
+  _pending_action = folder_action::none;
+  _on_directory_structure_changed();
+
+  return true;
+}
+
+auto asset_browser_panel::_commit_rename() -> bool {
+  const auto name = std::string{_action_name_buffer.c_str()};
+
+  if (!_is_valid_folder_name(name)) {
+    _action_error = "Invalid folder name";
+    return false;
+  }
+
+  const auto new_path = _action_target.parent_path() / name;
+
+  if (new_path == _action_target) {
+    _pending_action = folder_action::none;
+    return true;
+  }
+
+  auto error = std::error_code{};
+
+  if (std::filesystem::exists(new_path, error)) {
+    _action_error = "A folder with that name already exists";
+    return false;
+  }
+
+  const auto old_uri = _native_to_res_uri(_root, _action_target);
+  const auto new_uri = _native_to_res_uri(_root, new_path);
+
+  std::filesystem::rename(_action_target, new_path, error);
+
+  if (error) {
+    _action_error = error.message();
+    return false;
+  }
+
+  if (!old_uri.empty() && !new_uri.empty()) {
+    auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
+    scenes_module.asset_registry().rebase_paths(old_uri, new_uri);
+  }
+
+  if (_is_under(_selected_directory, _action_target)) {
+    _selected_directory = _remap_under(_selected_directory, _action_target, new_path);
+  }
+
+  _pending_action = folder_action::none;
+  _on_directory_structure_changed();
+
+  return true;
+}
+
+auto asset_browser_panel::_commit_remove() -> bool {
+  if (_action_target == _root) {
+    _action_error = "Cannot delete the asset root";
+    return false;
+  }
+
+  const auto removed_uri = _native_to_res_uri(_root, _action_target);
+
+  auto error = std::error_code{};
+
+  std::filesystem::remove_all(_action_target, error);
+
+  if (error) {
+    _action_error = error.message();
+    return false;
+  }
+
+  if (!removed_uri.empty()) {
+    auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
+    scenes_module.asset_registry().clear_paths_under(removed_uri);
+  }
+
+  if (_is_under(_selected_directory, _action_target)) {
+    auto fallback = _action_target.parent_path();
+
+    while (!fallback.empty() && !std::filesystem::exists(fallback)) {
+      fallback = fallback.parent_path();
+    }
+
+    _selected_directory = fallback.empty() ? _root : fallback;
+  }
+
+  _pending_action = folder_action::none;
+  _on_directory_structure_changed();
+
+  return true;
+}
+
+auto asset_browser_panel::_on_directory_structure_changed() -> void {
+  _expanded_directories.clear();
+  _last_image_count = 0;
+  _path_to_image.clear();
+}
+
+auto asset_browser_panel::_is_valid_folder_name(std::string_view name) -> bool {
+  if (name.empty()) {
+    return false;
+  }
+
+  if (name == "." || name == "..") {
+    return false;
+  }
+
+  if (name.find('/') != std::string_view::npos) {
+    return false;
+  }
+
+  if (name.find('\\') != std::string_view::npos) {
+    return false;
+  }
+
+  if (name.find('\0') != std::string_view::npos) {
+    return false;
+  }
+
+  return true;
+}
+
+auto asset_browser_panel::_is_under(const std::filesystem::path& path, const std::filesystem::path& prefix) -> bool {
+  auto relative = path.lexically_relative(prefix);
+
+  if (relative.empty()) {
+    return false;
+  }
+
+  const auto first = relative.begin();
+
+  return first != relative.end() && *first != "..";
+}
+
+auto asset_browser_panel::_remap_under(const std::filesystem::path& path, const std::filesystem::path& old_prefix, const std::filesystem::path& new_prefix) -> std::filesystem::path {
+  auto relative = path.lexically_relative(old_prefix);
+
+  if (relative.empty() || relative == ".") {
+    return new_prefix;
+  }
+
+  return new_prefix / relative;
 }
 
 auto asset_browser_panel::_refresh_image_cache() -> void {

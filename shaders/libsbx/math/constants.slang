@@ -7,7 +7,7 @@ static const float pi = 3.14159265358979323846;
 static const float two_pi = 6.28318530717958647692;
 static const float half_pi = 1.57079632679489661923;
 
-static const float epsilon = 0.00001f;
+static const float epsilon = 0.0001f;
 
 } // namespace sbx::math
 

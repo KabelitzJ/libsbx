@@ -71,6 +71,14 @@ public:
     return _metadata.end();
   }
 
+  auto begin() {
+    return _metadata.begin();
+  }
+
+  auto end() {
+    return _metadata.end();
+  }
+
 private:
 
   std::unordered_map<utility::hashed_string, Handle> _by_name;
@@ -150,9 +158,9 @@ public:
       return _meshes.get(name);
     }
 
-    auto& am = core::engine::get_module<assets::assets_module>();
+    auto& assets_module = core::engine::get_module<assets::assets_module>();
 
-    const auto id = am.add_asset<Mesh>(std::forward<Args>(args)...);
+    const auto id = assets_module.add_asset<Mesh>(std::forward<Args>(args)...);
 
     _meshes.insert(name, id, asset_metadata{"", name.str(), "mesh", "generated"});
 
@@ -166,9 +174,9 @@ public:
       return _meshes.get(name);
     }
 
-    auto& am = core::engine::get_module<assets::assets_module>();
+    auto& assets_module = core::engine::get_module<assets::assets_module>();
 
-    const auto id = am.add_asset<Mesh>(path, std::forward<Args>(args)...);
+    const auto id = assets_module.add_asset<Mesh>(path, std::forward<Args>(args)...);
 
     _meshes.insert(name, id, asset_metadata{path, name.str(), "mesh", "disk"});
 
@@ -197,9 +205,9 @@ public:
       return _animations.get(name);
     }
 
-    auto& am = core::engine::get_module<assets::assets_module>();
+    auto& assets_module = core::engine::get_module<assets::assets_module>();
 
-    const auto id = am.add_asset<Animation>(std::forward<Args>(args)...);
+    const auto id = assets_module.add_asset<Animation>(std::forward<Args>(args)...);
 
     _animations.insert(name, id, asset_metadata{"", name.str(), "animation", "generated"});
 
@@ -220,17 +228,17 @@ public:
 
   template<typename Material, typename... Args>
   auto request_material(const utility::hashed_string& name, Args&&... args) -> Material& {
-    auto& am = core::engine::get_module<assets::assets_module>();
+    auto& assets_module = core::engine::get_module<assets::assets_module>();
 
     if (_materials.has(name)) {
-      return am.get_asset<Material>(_materials.get(name));
+      return assets_module.get_asset<Material>(_materials.get(name));
     }
 
-    const auto id = am.add_asset<Material>(std::forward<Args>(args)...);
+    const auto id = assets_module.add_asset<Material>(std::forward<Args>(args)...);
 
     _materials.insert(name, id, asset_metadata{"", name.str(), "material", "dynamic"});
 
-    return am.get_asset<Material>(id);
+    return assets_module.get_asset<Material>(id);
   }
 
   auto has_material(const utility::hashed_string& name) const -> bool {
@@ -249,7 +257,80 @@ public:
     return _materials;
   }
 
+  auto rebase_paths(std::string_view old_uri, std::string_view new_uri) -> void {
+    _rebase_table(_images, old_uri, new_uri);
+    _rebase_table(_cube_images, old_uri, new_uri);
+    _rebase_table(_meshes, old_uri, new_uri);
+    _rebase_table(_animations, old_uri, new_uri);
+    _rebase_table(_materials, old_uri, new_uri);
+  }
+
+  auto clear_paths_under(std::string_view uri) -> void {
+    _clear_table_paths_under(_images, uri);
+    _clear_table_paths_under(_cube_images, uri);
+    _clear_table_paths_under(_meshes, uri);
+    _clear_table_paths_under(_animations, uri);
+    _clear_table_paths_under(_materials, uri);
+  }
+
 private:
+
+  template<typename Table>
+  static auto _rebase_table(Table& table, std::string_view old_uri, std::string_view new_uri) -> void {
+    for (auto& [handle, metadata] : table) {
+      static_cast<void>(handle);
+
+      if (metadata.path.empty()) {
+        continue;
+      }
+
+      const auto current = metadata.path.generic_string();
+
+      if (!_uri_starts_with(current, old_uri)) {
+        continue;
+      }
+
+      auto rebuilt = std::string{new_uri};
+      rebuilt.append(current, old_uri.size(), std::string::npos);
+
+      metadata.path = std::filesystem::path{rebuilt};
+    }
+  }
+
+  template<typename Table>
+  static auto _clear_table_paths_under(Table& table, std::string_view uri) -> void {
+    for (auto& [handle, metadata] : table) {
+      static_cast<void>(handle);
+
+      if (metadata.path.empty()) {
+        continue;
+      }
+
+      const auto current = metadata.path.generic_string();
+
+      if (!_uri_starts_with(current, uri)) {
+        continue;
+      }
+
+      metadata.path.clear();
+    }
+  }
+
+  static auto _uri_starts_with(std::string_view path, std::string_view prefix) -> bool {
+    if (path.size() < prefix.size()) {
+      return false;
+    }
+
+    if (path.substr(0, prefix.size()) != prefix) {
+      return false;
+    }
+
+    if (path.size() == prefix.size()) {
+      return true;
+    }
+
+    return path[prefix.size()] == '/';
+  }
 
   asset_table<graphics::image2d_handle> _images;
   asset_table<graphics::cube_image2d_handle> _cube_images;

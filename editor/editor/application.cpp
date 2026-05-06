@@ -142,6 +142,44 @@ application::application()
 
   graph.add_component<sbx::scenes::static_mesh>(helmet, asset_registry.get_mesh("helmet"), asset_registry.get_material("helmet"));
 
+  // Transparency
+
+  auto red = graph.create_node("Red");
+
+  auto& red_transform = graph.get_component<sbx::scenes::transform>(red);
+  red_transform.set_position(sbx::math::vector3{-5.0f, 5.0f, 0.0f});
+  red_transform.set_scale(sbx::math::vector3{2.0f, 2.0f, 2.0f});
+
+  auto& red_material = asset_registry.request_material<sbx::models::material>("red");
+  red_material.base_color = sbx::math::color{1.0f, 0.0f, 0.0f, 0.7f};
+  red_material.alpha = sbx::models::alpha_mode::blend;
+
+  graph.add_component<sbx::scenes::static_mesh>(red, asset_registry.get_mesh("cube"), asset_registry.get_material("red"));
+
+  auto green = graph.create_node("Green");
+
+  auto& green_transform = graph.get_component<sbx::scenes::transform>(green);
+  green_transform.set_position(sbx::math::vector3{-5.0f, 5.0f, 2.5f});
+  green_transform.set_scale(sbx::math::vector3{2.0f, 2.0f, 2.0f});
+
+  auto& green_material = asset_registry.request_material<sbx::models::material>("green");
+  green_material.base_color = sbx::math::color{0.0f, 1.0f, 0.0f, 0.7f};
+  green_material.alpha = sbx::models::alpha_mode::blend;
+
+  graph.add_component<sbx::scenes::static_mesh>(green, asset_registry.get_mesh("cube"), asset_registry.get_material("green"));
+
+  auto blue = graph.create_node("Blue");
+
+  auto& blue_transform = graph.get_component<sbx::scenes::transform>(blue);
+  blue_transform.set_position(sbx::math::vector3{-5.0f, 5.0f, -2.5f});
+  blue_transform.set_scale(sbx::math::vector3{2.0f, 2.0f, 2.0f});
+
+  auto& blue_material = asset_registry.request_material<sbx::models::material>("blue");
+  blue_material.base_color = sbx::math::color{0.0f, 0.0f, 1.0f, 0.7f};
+  blue_material.alpha = sbx::models::alpha_mode::blend;
+
+  graph.add_component<sbx::scenes::static_mesh>(blue, asset_registry.get_mesh("cube"), asset_registry.get_material("blue"));
+
   // Base
 
   auto base = graph.create_node("Base");

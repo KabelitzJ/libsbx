@@ -6,7 +6,7 @@
 #include <cinttypes>
 
 #include <libsbx/math/color.hpp>
-#include <libsbx/math/uuid.hpp> 
+#include <libsbx/math/uuid.hpp>
 
 #include <libsbx/graphics/resource_storage.hpp>
 
@@ -22,6 +22,8 @@ public:
     std::uint32_t index;
     math::uuid material;
   }; // struct submesh
+
+  static_mesh() = default;
 
   static_mesh(const math::uuid mesh_id, const math::uuid material)
   : _mesh_id{mesh_id},
@@ -39,8 +41,34 @@ public:
     return _mesh_id;
   }
 
+  auto set_mesh_id(const math::uuid mesh_id) noexcept -> void {
+    _mesh_id = mesh_id;
+  }
+
   auto submeshes() const noexcept -> const std::vector<submesh>& {
     return _submeshes;
+  }
+
+  auto submeshes() noexcept -> std::vector<submesh>& {
+    return _submeshes;
+  }
+
+  auto resize_submeshes(const std::size_t count) -> void {
+    const auto previous = _submeshes.size();
+
+    _submeshes.resize(count);
+
+    for (auto i = previous; i < count; ++i) {
+      _submeshes[i] = submesh{static_cast<std::uint32_t>(i), math::uuid::nil()};
+    }
+  }
+
+  auto set_submesh_material(const std::size_t index, const math::uuid material) -> void {
+    if (index >= _submeshes.size()) {
+      return;
+    }
+
+    _submeshes[index].material = material;
   }
 
 private:

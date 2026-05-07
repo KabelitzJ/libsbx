@@ -10,6 +10,7 @@
 
 #include <libsbx/math/vector3.hpp>
 #include <libsbx/math/quaternion.hpp>
+#include <libsbx/math/uuid.hpp>
 
 #include <libsbx/animations/spline.hpp>
 
@@ -40,6 +41,22 @@ private:
   std::unordered_map<utility::hashed_string, bone_track> _track_map;
 
 }; // class animation
+
+struct animation_handle : public math::uuid {
+
+  constexpr animation_handle()
+  : math::uuid{math::uuid::nil()}  { }
+
+  constexpr explicit animation_handle(const math::uuid& id)
+  : math::uuid{id} { }
+
+  constexpr auto is_valid() const noexcept -> bool {
+    return (*this) != math::uuid::nil();
+  }
+
+  constexpr auto operator==(const animation_handle& other) const noexcept -> bool = default;
+
+}; // struct animation_handle
 
 } // namespace sbx::animations
 

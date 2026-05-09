@@ -112,12 +112,40 @@ application::application()
 
   asset_registry.request_mesh<sbx::models::mesh>("tree", "res://meshes/tree/tree.gltf");
 
+  asset_registry.request_mesh<sbx::models::mesh>("sphere", "res://meshes/sphere/sphere.gltf");
+
   asset_registry.request_cube_image("skybox", "res://skyboxes/hdr/clouds", std::string{".hdr"}, sbx::graphics::format::r32g32b32a32_sfloat);
   // asset_registry.request_cube_image("skybox", "res://skyboxes/clouds");
 
   _generate_brdf(512);
   _generate_irradiance(64);
   _generate_prefiltered(512);
+
+  auto spheres = graph.create_node(fmt::format("Spheres"));
+
+  auto& spheres_transform = graph.get_component<sbx::scenes::transform>(spheres);
+  spheres_transform.set_position(sbx::math::vector3{0, 0, -15});
+
+  for (auto y = 0; y < 5; ++y) {
+    for (auto x = 0; x < 5; ++x) {
+      auto sphere = graph.create_child_node(spheres, fmt::format("Sphere{}{}", x, y));
+
+      const auto material_name = fmt::format("sphere_{}_{}_material", x, y);
+
+      auto& material = asset_registry.request_material<sbx::models::material>(material_name);
+      material.base_color = sbx::math::color::white();
+      material.alpha = sbx::models::alpha_mode::opaque;
+      material.metallic_factor = 0.2f * x;
+      material.roughness_factor = 0.2f * y;
+      material.occlusion_strength = 1.0f;
+
+      graph.add_component<sbx::scenes::static_mesh>(sphere, asset_registry.get_mesh("sphere"), asset_registry.get_material(material_name));
+
+      auto& sphere_transform = graph.get_component<sbx::scenes::transform>(sphere);
+      sphere_transform.set_position(sbx::math::vector3{x * 3, y * 3 + 5, 0.0f});
+      sphere_transform.set_scale(sbx::math::vector3{1.0f, 1.0f, 1.0f});
+    }
+  }
 
   // Helmet
 

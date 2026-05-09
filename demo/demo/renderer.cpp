@@ -5,6 +5,7 @@
 
 #include <libsbx/core/engine.hpp>
 
+#include <libsbx/scenes/scenes_module.hpp>
 #include <libsbx/scenes/skybox_subrenderer.hpp>
 #include <libsbx/scenes/debug_subrenderer.hpp>
 #include <libsbx/scenes/grid_subrenderer.hpp>
@@ -31,7 +32,8 @@
 #include <libsbx/gizmos/gizmos_subrenderer.hpp>
 #include <libsbx/sprites/sprite_subrenderer.hpp>
 
-#include <demo/application.hpp>
+#include <demo/terrain/terrain_subrenderer.hpp>
+#include <demo/terrain/water_subrenderer.hpp>
 
 namespace demo {
 
@@ -40,17 +42,17 @@ renderer::renderer()
   auto& graphics_module = sbx::core::engine::get_module<sbx::graphics::graphics_module>();
 
   // Attachments
-  auto shadow = create_attachment("shadow", sbx::graphics::attachment::type::image, sbx::math::color::white(), sbx::graphics::format::r32_sfloat, sbx::graphics::blend_state{}, sbx::graphics::filter::nearest, sbx::graphics::address_mode::clamp_to_edge, 4u);
+ auto shadow = create_attachment("shadow", sbx::graphics::attachment::type::image, sbx::math::color::white(), sbx::graphics::format::r32_sfloat, sbx::graphics::blend_state{}, sbx::graphics::filter::nearest, sbx::graphics::address_mode::clamp_to_edge, 4u);
   auto shadow_depth = create_attachment("shadow_depth", sbx::graphics::attachment::type::depth, sbx::math::color::black(), sbx::graphics::format::undefined, sbx::graphics::blend_state{}, sbx::graphics::filter::linear, sbx::graphics::address_mode::repeat, 4u);
 
   auto depth = create_attachment("depth", sbx::graphics::attachment::type::depth);
-  auto albedo = create_attachment("albedo", sbx::graphics::attachment::type::image, _clear_color, sbx::graphics::format::r8g8b8a8_unorm);
+  auto albedo = create_attachment("albedo", sbx::graphics::attachment::type::image, _clear_color, sbx::graphics::format::r8g8b8a8_srgb);
   auto position = create_attachment("position", sbx::graphics::attachment::type::image, sbx::math::color::black(), sbx::graphics::format::r16g16b16a16_sfloat);
   auto normal = create_attachment("normal", sbx::graphics::attachment::type::image, sbx::math::color::black(), sbx::graphics::format::a2b10g10r10_unorm_pack32);
   auto material = create_attachment("material", sbx::graphics::attachment::type::image, _clear_color, sbx::graphics::format::r8g8b8a8_unorm);
-  auto emissive = create_attachment("emissive", sbx::graphics::attachment::type::image, _clear_color, sbx::graphics::format::r8g8b8a8_unorm);
-  auto object_id = create_attachment("object_id", sbx::graphics::attachment::type::image, sbx::math::color::black(), sbx::graphics::format::r32_uint);
-  auto linear_depth = create_attachment("linear_depth", sbx::graphics::attachment::type::image, sbx::math::color::black(), sbx::graphics::format::r32_sfloat);
+  auto emissive = create_attachment("emissive", sbx::graphics::attachment::type::image, sbx::math::color::black(), sbx::graphics::format::r16g16b16a16_sfloat);
+  auto object_id = create_attachment("object_id", sbx::graphics::attachment::type::image, sbx::math::vector4u{0xFFFFFFFFu, 0u, 0u, 0u}, sbx::graphics::format::r32_uint);
+  auto linear_depth = create_attachment("linear_depth", sbx::graphics::attachment::type::image, sbx::math::color::white(), sbx::graphics::format::r32_sfloat);
 
   const auto accum_blend = sbx::graphics::blend_state{
     .color_source = sbx::graphics::blend_factor::one,
@@ -88,9 +90,9 @@ renderer::renderer()
   auto resolve = create_attachment("resolve", sbx::graphics::attachment::type::image, _clear_color, sbx::graphics::format::r32g32b32a32_sfloat, resolve_blend);
   auto brightness = create_attachment("brightness", sbx::graphics::attachment::type::image, sbx::math::color::black(), sbx::graphics::format::r16g16b16a16_sfloat);
 
-  auto tonemap = create_attachment("tonemap", sbx::graphics::attachment::type::image, _clear_color, sbx::graphics::format::r8g8b8a8_unorm);
+  auto tonemap = create_attachment("tonemap", sbx::graphics::attachment::type::image, _clear_color, sbx::graphics::format::r8g8b8a8_srgb);
   
-  auto fxaa = create_attachment("fxaa", sbx::graphics::attachment::type::image, _clear_color, sbx::graphics::format::r8g8b8a8_unorm);
+  auto fxaa = create_attachment("fxaa", sbx::graphics::attachment::type::image, _clear_color, sbx::graphics::format::r8g8b8a8_srgb);
 
   auto swapchain = create_attachment("swapchain", sbx::graphics::attachment::type::swapchain, _clear_color, sbx::graphics::format::b8g8r8a8_srgb);
 
@@ -209,9 +211,13 @@ renderer::renderer()
   add_subrenderer<sbx::models::static_mesh_material_subrenderer>(deferred_pass, sbx::models::static_mesh_material_draw_list::bucket::opaque);
   add_subrenderer<sbx::animations::skinned_mesh_material_subrenderer>(deferred_pass, sbx::animations::skinned_mesh_material_draw_list::bucket::opaque);
 
+  add_subrenderer<demo::terrain_subrenderer>(deferred_pass, "demo://shaders/terrain");
+
   // Transparency pass
   add_subrenderer<sbx::models::static_mesh_material_subrenderer>(transparency_pass, sbx::models::static_mesh_material_draw_list::bucket::transparent);
   add_subrenderer<sbx::animations::skinned_mesh_material_subrenderer>(transparency_pass, sbx::animations::skinned_mesh_material_draw_list::bucket::transparent);
+
+  add_subrenderer<demo::water_subrenderer>(transparency_pass, "demo://shaders/water");
 
   add_subrenderer<sbx::particles::particle_subrenderer>(transparency_pass);
 

@@ -45,6 +45,8 @@
 #include <libsbx/sprites/sprites_module.hpp>
 #include <libsbx/ui/ui_module.hpp>
 
+#include <demo/terrain/terrain_module.hpp>
+
 namespace demo {
 
 application::application()
@@ -62,7 +64,21 @@ application::application()
     assets_module.set_asset_root("demo/assets");
   }
 
+  auto& filesystem_module = sbx::core::engine::get_module<sbx::filesystem::filesystem_module>();
+
+  const auto engine_data_dir = filesystem_module.native_path_of(std::string{"engine://"});
+  const auto editor_data_dir = engine_data_dir / "demo";
+
+  if (!std::filesystem::exists(editor_data_dir)) {
+    std::filesystem::create_directories(editor_data_dir);
+  }
+
+  filesystem_module.create_filesystem<sbx::filesystem::native_filesystem>(sbx::filesystem::alias{"demo://"}, editor_data_dir.generic_string());
+
   auto& audio_module = sbx::core::engine::get_module<sbx::audio::audio_module>();
+
+  auto& terrain = sbx::core::engine::get_module<demo::terrain_module>();
+  terrain.load();
 
   auto& graphics_module = sbx::core::engine::get_module<sbx::graphics::graphics_module>();
 
@@ -78,11 +94,9 @@ application::application()
     scene_name = *scene;
   }
 
-  auto& scene = scenes_module.load_scene("Scene", scene_name);
+  auto& scene = scenes_module.create_scene("Scene");
   auto& graph = scene.graph();
   auto& environment = scene.environment();
-
-  auto& filesystem_module = sbx::core::engine::get_module<sbx::filesystem::filesystem_module>();
 
   auto& scripting_module = sbx::core::engine::get_module<sbx::scripting::scripting_module>();
 
@@ -95,6 +109,8 @@ application::application()
   // Textures
 
   asset_registry.request_image("roboto_atlas", "res://fonts/roboto_atlas.png", sbx::graphics::format::r8g8b8a8_srgb);
+
+  asset_registry.request_cube_image("skybox", "res://skyboxes/hdr/clouds", std::string{".hdr"}, sbx::graphics::format::r32g32b32a32_sfloat);
 
   _generate_brdf(512);
   _generate_irradiance(64);
@@ -109,31 +125,31 @@ application::application()
 
   // Window
 
-  auto spheres = graph.create_node(fmt::format("Spheres"));
+  // auto spheres = graph.create_node(fmt::format("Spheres"));
 
-  auto& spheres_transform = graph.get_component<sbx::scenes::transform>(spheres);
-  spheres_transform.set_position(sbx::math::vector3{0, 0, -15});
+  // auto& spheres_transform = graph.get_component<sbx::scenes::transform>(spheres);
+  // spheres_transform.set_position(sbx::math::vector3{0, 0, -15});
 
-  for (auto y = 0; y < 5; ++y) {
-    for (auto x = 0; x < 5; ++x) {
-      auto sphere = graph.create_child_node(spheres, fmt::format("Sphere{}{}", x, y));
+  // for (auto y = 0; y < 5; ++y) {
+  //   for (auto x = 0; x < 5; ++x) {
+  //     auto sphere = graph.create_child_node(spheres, fmt::format("Sphere{}{}", x, y));
 
-      const auto material_name = fmt::format("sphere_{}_{}_material", x, y);
+  //     const auto material_name = fmt::format("sphere_{}_{}_material", x, y);
 
-      auto& material = asset_registry.request_material<sbx::models::material>(material_name);
-      material.base_color = sbx::math::color::white();
-      material.alpha = sbx::models::alpha_mode::opaque;
-      material.metallic_factor = 0.2f * x;
-      material.roughness_factor = 0.2f * y;
-      material.occlusion_strength = 1.0f;
+  //     auto& material = asset_registry.request_material<sbx::models::material>(material_name);
+  //     material.base_color = sbx::math::color::white();
+  //     material.alpha = sbx::models::alpha_mode::opaque;
+  //     material.metallic_factor = 0.2f * x;
+  //     material.roughness_factor = 0.2f * y;
+  //     material.occlusion_strength = 1.0f;
 
-      graph.add_component<sbx::scenes::static_mesh>(sphere, asset_registry.get_mesh("sphere"), asset_registry.get_material(material_name));
+  //     graph.add_component<sbx::scenes::static_mesh>(sphere, asset_registry.get_mesh("sphere"), asset_registry.get_material(material_name));
 
-      auto& sphere_transform = graph.get_component<sbx::scenes::transform>(sphere);
-      sphere_transform.set_position(sbx::math::vector3{x * 3, y * 3 + 5, 0.0f});
-      sphere_transform.set_scale(sbx::math::vector3{1.0f, 1.0f, 1.0f});
-    }
-  }
+  //     auto& sphere_transform = graph.get_component<sbx::scenes::transform>(sphere);
+  //     sphere_transform.set_position(sbx::math::vector3{x * 3, y * 3 + 5, 0.0f});
+  //     sphere_transform.set_scale(sbx::math::vector3{1.0f, 1.0f, 1.0f});
+  //   }
+  // }
 
   auto& devices_module = sbx::core::engine::get_module<sbx::devices::devices_module>();
 
@@ -155,7 +171,8 @@ application::application()
 
   // graph.add_component<sbx::scenes::skybox>(camera_node, assets.get_cube_image("skybox"), _brdf, _irradiance, _prefiltered, sbx::math::color::white());
 
-  auto& skybox = graph.get_component<sbx::scenes::skybox>(camera_node);
+  auto& skybox = graph.add_component<sbx::scenes::skybox>(camera_node);
+  skybox.cube_image = asset_registry.get_cube_image("skybox");
   skybox.brdf_image = _brdf;
   skybox.irradiance_image = _irradiance;
   skybox.prefiltered_image = _prefiltered;
@@ -184,111 +201,15 @@ auto application::update() -> void {
     return;
   }
 
-  auto query = graph.query<const sbx::scenes::static_mesh>();
+  _time_accumulator += delta_time;
+  _frame_count++;
 
-  for (auto&& [node, static_mesh] : query.each()) {
-    const auto& mesh = assets_module.get_asset<sbx::models::mesh>(static_mesh.mesh_id());
-    const auto world = graph.world_transform(node);
-
-    for (const auto& submesh : static_mesh.submeshes()) {
-      const auto base_index = mesh.find_base_submesh_index(submesh.index).value_or(submesh.index);
-      scenes_module.add_debug_box(world, mesh.submesh_bounds(base_index), sbx::math::color::green());
-    }
+  if (_time_accumulator >= sbx::units::second{1}) {
+    const auto fps = static_cast<std::float_t>(_frame_count) / _time_accumulator.value();
+    sbx::utility::logger<"demo">::info("FPS: {:.2f}", fps);
+    _time_accumulator = sbx::units::second{0};
+    _frame_count = 0u;
   }
-
-  if (sbx::devices::input::is_key_pressed(sbx::devices::key::f5)) {
-    _debug_frustum_active = !_debug_frustum_active;
-
-    if (_debug_frustum_active) {
-      // Snap to current camera position/orientation
-      const auto camera_node = environment.camera();
-      _debug_frustum_position = graph.world_position(camera_node);
-
-      const auto world = graph.world_transform(camera_node);
-      const auto forward = -sbx::math::vector3::normalized(sbx::math::vector3{world[2]});
-
-      _debug_frustum_yaw = std::atan2(forward.x(), forward.z());
-      _debug_frustum_pitch = std::asin(std::clamp(forward.y(), -1.0f, 1.0f));
-    }
-  }
-
-  auto& renderer = graphics_module.renderer();
-  auto culling_task = renderer.task<sbx::models::frustum_culling_task>();
-
-  if (!_debug_frustum_active) {
-    culling_task->clear_debug_view_projection();
-    return;
-  }
-
-  // Move the debug frustum
-  const auto dt = sbx::core::engine::delta_time().value();
-  const auto speed = 10.0f * dt;
-  const auto rotate_speed = 1.5f * dt;
-
-  if (sbx::devices::input::is_key_down(sbx::devices::key::kp_4)) {
-    _debug_frustum_yaw += rotate_speed;
-  }
-
-  if (sbx::devices::input::is_key_down(sbx::devices::key::kp_6)) {
-    _debug_frustum_yaw -= rotate_speed;
-  }
-
-  if (sbx::devices::input::is_key_down(sbx::devices::key::kp_8)) {
-    _debug_frustum_pitch += rotate_speed;
-  }
-
-  if (sbx::devices::input::is_key_down(sbx::devices::key::kp_2)) {
-    _debug_frustum_pitch -= rotate_speed;
-  }
-
-  _debug_frustum_pitch = std::clamp(_debug_frustum_pitch, -1.5f, 1.5f);
-
-  const auto forward = sbx::math::vector3{
-    std::sin(_debug_frustum_yaw) * std::cos(_debug_frustum_pitch),
-    std::sin(_debug_frustum_pitch),
-    std::cos(_debug_frustum_yaw) * std::cos(_debug_frustum_pitch)
-  };
-
-  const auto right = sbx::math::vector3::normalized(sbx::math::vector3::cross(forward, sbx::math::vector3::up));
-
-  if (sbx::devices::input::is_key_down(sbx::devices::key::kp_add)) {
-    _debug_frustum_position += forward * speed;
-  }
-
-  if (sbx::devices::input::is_key_down(sbx::devices::key::kp_subtract)) {
-    _debug_frustum_position -= forward * speed;
-  }
-
-  if (sbx::devices::input::is_key_down(sbx::devices::key::kp_7)) {
-    _debug_frustum_position += sbx::math::vector3::up * speed;
-  }
-
-  if (sbx::devices::input::is_key_down(sbx::devices::key::kp_1)) {
-    _debug_frustum_position -= sbx::math::vector3::up * speed;
-  }
-
-  if (sbx::devices::input::is_key_down(sbx::devices::key::kp_9)) {
-    _debug_frustum_position += right * speed;
-  }
-
-  if (sbx::devices::input::is_key_down(sbx::devices::key::kp_3)) {
-    _debug_frustum_position -= right * speed;
-  }
-
-  // Build VP
-  const auto camera_node = environment.camera();
-  const auto& cam = graph.get_component<sbx::scenes::camera>(camera_node);
-  const auto aspect = static_cast<std::float_t>(environment.render_target_size().x()) / static_cast<std::float_t>(environment.render_target_size().y());
-
-  const auto target = _debug_frustum_position + forward;
-  const auto view = sbx::math::matrix4x4::look_at(_debug_frustum_position, target, sbx::math::vector3::up);
-  const auto projection = cam.projection(aspect);
-  const auto vp = projection * view;
-
-  culling_task->set_debug_view_projection(vp);
-
-  // Visualize the frustum
-  scenes_module.add_debug_frustum(view, projection, sbx::math::color{1.0f, 0.5f, 0.0f, 1.0f});
 }
 
 auto application::fixed_update() -> void {

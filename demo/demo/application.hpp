@@ -56,6 +56,9 @@ private:
   std::float_t _debug_frustum_yaw{0.0f};
   std::float_t _debug_frustum_pitch{0.0f};
 
+  sbx::units::second _time_accumulator{0};
+  std::uint32_t _frame_count{0u};
+
 }; // class application
 
 } // namespace demo

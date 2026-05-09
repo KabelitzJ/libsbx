@@ -4,16 +4,30 @@ message(STATUS "Configuring ${PROJECT_NAME}...")
 
 add_executable(${PROJECT_NAME})
 
-# find_package(Python3 REQUIRED COMPONENTS Interpreter)
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
 
-# add_custom_target(
-#   compiled_shaders_demo
-#   COMMAND ${Python3_EXECUTABLE} "${CMAKE_SOURCE_DIR}/scripts/compile_shaders.py" "${PROJECT_SOURCE_DIR}/assets/shaders/"
-#   WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
-#   COMMENT "Compiling shaders for ${PROJECT_NAME}..."
-# )
+set(DEMO_SHADER_SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/assets/shaders)
+set(DEMO_SHADER_OUT_DIR ${SBX_DATA_DIR}/demo/shaders)
 
-# add_dependencies(${PROJECT_NAME} compiled_shaders_demo)
+add_custom_target(
+  compiled_shaders_demo ALL
+  COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/scripts/compile_shaders.py
+    ${DEMO_SHADER_SRC_DIR}
+    --output ${DEMO_SHADER_OUT_DIR}
+    --manifest ${DEMO_SHADER_SRC_DIR}/manifest.txt
+    -I ${SBX_SHADER_SRC_DIR}
+  COMMENT "Compiling shaders for ${PROJECT_NAME}..."
+)
+
+add_custom_target(
+  staged_shaders_demo ALL
+  COMMAND ${CMAKE_COMMAND} -E copy_directory
+    ${DEMO_SHADER_SRC_DIR} ${DEMO_SHADER_OUT_DIR}
+  DEPENDS compiled_shaders_demo
+  COMMENT "Staging shader sources for ${PROJECT_NAME}..."
+)
+
+add_dependencies(${PROJECT_NAME} staged_shaders_demo)
 
 target_sources(
   ${PROJECT_NAME}
@@ -21,6 +35,9 @@ target_sources(
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/renderer.cpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/application.cpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/demo.cpp"
+    "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/terrain/terrain_module.cpp"
+    "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/terrain/terrain_subrenderer.cpp"
+    "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/terrain/water_subrenderer.cpp"
   PUBLIC
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/renderer.hpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/application.hpp"

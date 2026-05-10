@@ -54,6 +54,7 @@ static auto bytes_per_channel(VkFormat format) -> std::uint8_t {
       return 1;
     }
     case VK_FORMAT_R16_SFLOAT:
+    case VK_FORMAT_R16_UNORM:
     case VK_FORMAT_R16G16_SFLOAT:
     case VK_FORMAT_R16G16B16_SFLOAT:
     case VK_FORMAT_R16G16B16A16_SFLOAT: {

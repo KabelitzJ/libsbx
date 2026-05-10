@@ -5,7 +5,7 @@ import colorsys
 import numpy as np
 import yaml
 from opensimplex import OpenSimplex
-from PIL import Image
+from PIL import Image, ImageDraw
 from scipy.spatial import cKDTree
 from scipy.ndimage import gaussian_filter, distance_transform_edt
 
@@ -14,13 +14,13 @@ FALLOFF = 1.25
 RELAX_ITERS = 3
 SEED = 480923423
 
-HILLS_QUANTILE = 0.72
-MOUNTAINS_QUANTILE = 0.95
-EDGE_EROSION = 0.05
+HILLS_QUANTILE = 0.55
+MOUNTAINS_QUANTILE = 0.85
+EDGE_EROSION = 0.02
 
 DETAIL_AMPLITUDE = 1.0
 
-LAKE_FRACTION = 0.05
+LAKE_FRACTION = 0.12
 LAKE_INTERIOR_BIAS = 1.0
 
 TERRAIN_OCEAN = 0    # used for lakes too
@@ -75,11 +75,11 @@ def compute_elevation_field(w, h, seed, detail_amplitude, edge_erosion):
   n4 = OpenSimplex(seed=seed + 3).noise2array(xs_1d * 0.0200, ys_1d * 0.0200).astype(np.float32)
   n5 = OpenSimplex(seed=seed + 4).noise2array(xs_1d * 0.0600, ys_1d * 0.0600).astype(np.float32)
 
-  e  = n1 * 0.40
+  e  = n1 * 0.15
   e += n2 * 0.25
-  e += n3 * 0.10
-  e += n4 * 0.04  * detail_amplitude
-  e += n5 * 0.015 * detail_amplitude
+  e += n3 * 0.35
+  e += n4 * 0.18 * detail_amplitude
+  e += n5 * 0.07 * detail_amplitude
 
   edge_x = np.abs(xs / w - 0.5) * 2.0
   edge_y = np.abs(ys / h - 0.5) * 2.0
@@ -415,6 +415,117 @@ if __name__ == "__main__":
   province_ids_uint32.tofile(output_dir / "province_ids.r32u")
 
   #
+  # Voronoi edges as line geometry for province borders.
+  # Each edge is two endpoints in centered pixel coordinates (4 floats per edge).
+  # The terrain renderer will lift them onto the heightmap surface in the vertex shader.
+  #
+
+  from scipy.spatial import Voronoi
+  vor = Voronoi(points)
+
+  edges_list = []
+
+  # for infinite ridges we need a direction to extend the finite endpoint into
+  seed_center = vor.points.mean(axis=0)
+  far_distance = float(max(args.width, args.height)) * 2.0
+
+  for ridge, seed_pair in zip(vor.ridge_vertices, vor.ridge_points):
+    if -1 not in ridge:
+      v1 = vor.vertices[ridge[0]]
+      v2 = vor.vertices[ridge[1]]
+      edges_list.append([v1[0], v1[1], v2[0], v2[1]])
+      continue
+
+    # infinite ridge: one vertex is at infinity, build a synthetic far endpoint
+    finite_idx = ridge[0] if ridge[1] == -1 else ridge[1]
+    finite_v = vor.vertices[finite_idx]
+
+    tangent = vor.points[seed_pair[1]] - vor.points[seed_pair[0]]
+    tangent_len = np.linalg.norm(tangent)
+    if tangent_len < 1e-9:
+      continue
+    tangent /= tangent_len
+
+    normal = np.array([-tangent[1], tangent[0]])
+    midpoint = vor.points[seed_pair].mean(axis=0)
+    direction = np.sign(np.dot(midpoint - seed_center, normal)) * normal
+
+    far_v = finite_v + direction * far_distance
+
+    edges_list.append([finite_v[0], finite_v[1], far_v[0], far_v[1]])
+
+  edges_arr = np.array(edges_list, dtype=np.float32)
+
+  # clip edges to map bounds (Liang-Barsky) so boundary edges aren't dropped
+  if len(edges_arr) > 0:
+    x1 = edges_arr[:, 0].copy()
+    y1 = edges_arr[:, 1].copy()
+    x2 = edges_arr[:, 2].copy()
+    y2 = edges_arr[:, 3].copy()
+
+    dx = x2 - x1
+    dy = y2 - y1
+
+    t_enter = np.zeros(len(edges_arr), dtype=np.float64)
+    t_exit  = np.ones(len(edges_arr),  dtype=np.float64)
+    fully_outside = np.zeros(len(edges_arr), dtype=bool)
+
+    for p, q in [(-dx, x1 - 0.0), (dx, args.width  - x1),
+                 (-dy, y1 - 0.0), (dy, args.height - y1)]:
+      parallel = p == 0
+      outside_parallel = parallel & (q < 0)
+      fully_outside |= outside_parallel
+
+      with np.errstate(divide="ignore", invalid="ignore"):
+        t = np.where(parallel, 0.0, q / np.where(parallel, 1.0, p))
+
+      entering = p < 0
+      exiting  = p > 0
+
+      t_enter = np.where(entering, np.maximum(t_enter, t), t_enter)
+      t_exit  = np.where(exiting,  np.minimum(t_exit,  t), t_exit)
+
+    valid = (~fully_outside) & (t_enter <= t_exit)
+
+    nx1 = x1 + t_enter * dx
+    ny1 = y1 + t_enter * dy
+    nx2 = x1 + t_exit  * dx
+    ny2 = y1 + t_exit  * dy
+
+    edges_arr = np.stack([nx1, ny1, nx2, ny2], axis=1)[valid].astype(np.float32)
+
+  # convert to centered pixel coordinates (origin at map center)
+  edges_arr[:, 0] -= args.width * 0.5
+  edges_arr[:, 1] -= args.height * 0.5
+  edges_arr[:, 2] -= args.width * 0.5
+  edges_arr[:, 3] -= args.height * 0.5
+
+  edges_arr.tofile(output_dir / "borders.f32")
+  edge_count = int(len(edges_arr))
+
+  # visualization: white background, dark ink lines + dim seed points
+  border_image = Image.new("RGB", (args.width, args.height), (245, 240, 230))
+  draw = ImageDraw.Draw(border_image)
+
+  half_w = args.width * 0.5
+  half_h = args.height * 0.5
+
+  for ex1, ey1, ex2, ey2 in edges_arr:
+    draw.line(
+      [(ex1 + half_w, ey1 + half_h), (ex2 + half_w, ey2 + half_h)],
+      fill=(20, 18, 16),
+      width=1,
+    )
+
+  for px, py in points:
+    draw.ellipse(
+      [(px - 1.5, py - 1.5), (px + 1.5, py + 1.5)],
+      fill=(180, 60, 60),
+    )
+
+  border_image.save(output_dir / "borders.png")
+
+  #
   # Sidecar metadata
   #
 
@@ -437,6 +548,8 @@ if __name__ == "__main__":
       "province_count": args.points,
       "heightmap_format": "r16_uint_le",
       "province_ids_format": "r32u_uint_le",
+      "borders_format": "f32_le_quads_world_centered_pixels",
+      "edge_count": edge_count,
     },
     "provinces": provinces_meta,
   }
@@ -455,5 +568,7 @@ if __name__ == "__main__":
   print(f"Generated: {output_dir / 'heightmap.png'}        (8-bit, visual)")
   print(f"Generated: {output_dir / 'heightmap.r16'}        ({args.width * args.height * 2} bytes, engine)")
   print(f"Generated: {output_dir / 'province_ids.r32u'}    ({args.width * args.height * 4} bytes, engine)")
+  print(f"Generated: {output_dir / 'borders.f32'}          ({edge_count * 16} bytes, {edge_count} edges)")
+  print(f"Generated: {output_dir / 'borders.png'}          ({args.width}x{args.height} visualization)")
   print(f"Generated: {output_dir / 'provinces.yaml'}       (metadata + per-province)")
   

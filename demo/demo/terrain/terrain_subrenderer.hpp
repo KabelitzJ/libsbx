@@ -58,16 +58,12 @@ public:
     _tiling_scale = scale;
   }
 
-  auto set_border_strength(std::float_t strength) -> void {
-    _border_strength = strength;
+  auto set_selection_color(const sbx::math::vector3& color) -> void {
+    _selection_color = color;
   }
 
-  auto set_border_width(std::float_t width) -> void {
-    _border_width = width;
-  }
-
-  auto set_border_color(const sbx::math::vector3& color) -> void {
-    _border_color = color;
+  auto set_selection_strength(std::float_t strength) -> void {
+    _selection_strength = strength;
   }
 
 private:
@@ -88,9 +84,8 @@ private:
 
   std::uint32_t _index_count{};
   std::float_t _tiling_scale{0.3f};
-  std::float_t _border_strength{0.85f};
-  std::float_t _border_width{1.0f};
-  sbx::math::vector3 _border_color{0.05f, 0.04f, 0.03f};
+  std::float_t _selection_strength{0.45f};
+  sbx::math::vector3 _selection_color{1.0f, 0.85f, 0.30f};
 
 }; // class terrain_subrenderer
 

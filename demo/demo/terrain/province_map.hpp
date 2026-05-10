@@ -20,7 +20,9 @@ class province_map {
 
 public:
 
-  using province_id_t = std::uint32_t;
+  using province_id = std::uint32_t;
+
+  inline static const auto invalid_id = std::numeric_limits<province_id>::max();
 
   struct province_record {
     landform terrain{landform::plains};
@@ -38,7 +40,7 @@ public:
     _load_metadata(metadata_path);
   }
 
-  auto province_at(const world_coordinates& coordinates) const -> province_id_t {
+  auto province_at(const world_coordinates& coordinates) const -> province_id {
     auto pixel_x = (coordinates.x + _offset_x()) / _cell_size;
     auto pixel_y = (coordinates.z + _offset_z()) / _cell_size;
 
@@ -52,7 +54,7 @@ public:
     return landform_of(province_at(coordinates));
   }
 
-  auto landform_of(province_id_t id) const -> landform {
+  auto landform_of(province_id id) const -> landform {
     if (id >= _records.size()) {
       return landform::plains;
     }
@@ -60,7 +62,7 @@ public:
     return _records[id].terrain;
   }
 
-  auto centroid_of(province_id_t id) const -> world_coordinates {
+  auto centroid_of(province_id id) const -> world_coordinates {
     if (id >= _records.size()) {
       return world_coordinates{};
     }
@@ -68,7 +70,7 @@ public:
     return _records[id].centroid;
   }
 
-  auto record_of(province_id_t id) const -> const province_record& {
+  auto record_of(province_id id) const -> const province_record& {
     return _records[id];
   }
 
@@ -76,7 +78,7 @@ public:
     return _records[_id_at_pixel(pixel_x, pixel_y)].terrain;
   }
 
-  auto province_at_pixel(std::uint32_t pixel_x, std::uint32_t pixel_y) const -> province_id_t {
+  auto province_at_pixel(std::uint32_t pixel_x, std::uint32_t pixel_y) const -> province_id {
     return _id_at_pixel(pixel_x, pixel_y);
   }
 
@@ -96,12 +98,12 @@ public:
     return _records;
   }
 
-  auto ids_data() const -> const province_id_t* {
+  auto ids_data() const -> const province_id* {
     return _ids.data();
   }
 
   auto ids_data_size_bytes() const -> std::size_t {
-    return _ids.size() * sizeof(province_id_t);
+    return _ids.size() * sizeof(province_id);
   }
 
 private:
@@ -114,11 +116,11 @@ private:
     return static_cast<std::float_t>(_height - 1u) * _cell_size * 0.5f;
   }
 
-  auto _id_at_pixel(std::uint32_t pixel_x, std::uint32_t pixel_y) const -> province_id_t {
+  auto _id_at_pixel(std::uint32_t pixel_x, std::uint32_t pixel_y) const -> province_id {
     return _ids[static_cast<std::size_t>(pixel_y) * _width + pixel_x];
   }
 
-  auto _id_at_pixel_clamped(std::int32_t pixel_x, std::int32_t pixel_y) const -> province_id_t {
+  auto _id_at_pixel_clamped(std::int32_t pixel_x, std::int32_t pixel_y) const -> province_id {
     auto px = static_cast<std::uint32_t>(std::clamp(pixel_x, 0, static_cast<std::int32_t>(_width - 1)));
     auto py = static_cast<std::uint32_t>(std::clamp(pixel_y, 0, static_cast<std::int32_t>(_height - 1)));
 
@@ -136,7 +138,7 @@ private:
 
     _ids.resize(count);
 
-    file.read(reinterpret_cast<char*>(_ids.data()), static_cast<std::streamsize>(count * sizeof(province_id_t)));
+    file.read(reinterpret_cast<char*>(_ids.data()), static_cast<std::streamsize>(count * sizeof(province_id)));
 
     if (!file) {
       throw std::runtime_error{"failed to read province ids: " + path.string()};
@@ -180,7 +182,7 @@ private:
   std::uint32_t _width;
   std::uint32_t _height;
   std::float_t _cell_size;
-  std::vector<province_id_t> _ids;
+  std::vector<province_id> _ids;
   std::vector<province_record> _records;
 
 }; // class province_map

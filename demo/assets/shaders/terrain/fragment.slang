@@ -53,19 +53,6 @@ uint sample_province_id(float world_x, float world_z) {
   return push.province_data_buffer[z * push.vertices_x + x];
 }
 
-float province_border_factor(float3 world_position) {
-  float step = push.base_cell_size * push.border_width;
-
-  uint id_center = sample_province_id(world_position.x, world_position.z);
-  uint id_n = sample_province_id(world_position.x,        world_position.z - step);
-  uint id_s = sample_province_id(world_position.x,        world_position.z + step);
-  uint id_e = sample_province_id(world_position.x + step, world_position.z);
-  uint id_w = sample_province_id(world_position.x - step, world_position.z);
-
-  uint diffs = uint(id_n != id_center) + uint(id_s != id_center) + uint(id_e != id_center) + uint(id_w != id_center);
-  return saturate(float(diffs) * 0.5);
-}
-
 struct unpacked_weights {
   float grass;
   float dirt;
@@ -196,9 +183,13 @@ fs_out main(fs_in input) {
   float macro = noise_image.Sample(input.position.xz * 0.002).r;
   albedo *= lerp(0.8, 1.0, macro);
 
-  // Province border ink
-  float border = province_border_factor(input.position) * push.border_strength;
-  albedo = lerp(albedo, push.border_color, border);
+  // Province selection highlight
+  if (push.selected_province_id != 0xFFFFFFFFu) {
+    uint pid = sample_province_id(input.position.x, input.position.z);
+    if (pid == push.selected_province_id) {
+      albedo = lerp(albedo, push.selection_color, push.selection_strength);
+    }
+  }
 
   // Tangent-space normals — sample, blend, and re-derive Z
   float3 tn_grass = sample_normal_layer(LAYER_GRASS, uv);

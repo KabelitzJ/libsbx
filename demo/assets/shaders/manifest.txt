@@ -1,3 +1,4 @@
 # Selection
 terrain
 water
+border

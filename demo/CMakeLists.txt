@@ -38,6 +38,7 @@ target_sources(
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/terrain/terrain_module.cpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/terrain/terrain_subrenderer.cpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/terrain/water_subrenderer.cpp"
+    "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/terrain/border_subrenderer.cpp"
   PUBLIC
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/renderer.hpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/application.hpp"

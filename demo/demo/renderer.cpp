@@ -33,6 +33,7 @@
 #include <libsbx/sprites/sprite_subrenderer.hpp>
 
 #include <demo/terrain/terrain_subrenderer.hpp>
+#include <demo/terrain/border_subrenderer.hpp>
 #include <demo/terrain/water_subrenderer.hpp>
 
 namespace demo {
@@ -212,6 +213,7 @@ renderer::renderer()
   add_subrenderer<sbx::animations::skinned_mesh_material_subrenderer>(deferred_pass, sbx::animations::skinned_mesh_material_draw_list::bucket::opaque);
 
   add_subrenderer<demo::terrain_subrenderer>(deferred_pass, "demo://shaders/terrain");
+  add_subrenderer<demo::border_subrenderer>(deferred_pass, "demo://shaders/border");
 
   // Transparency pass
   add_subrenderer<sbx::models::static_mesh_material_subrenderer>(transparency_pass, sbx::models::static_mesh_material_draw_list::bucket::transparent);

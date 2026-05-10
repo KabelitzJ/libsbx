@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 #include <demo/terrain/terrain_module.hpp>
 
+#include <fstream>
 #include <stdexcept>
 
 #include <yaml-cpp/yaml.h>
@@ -13,12 +14,14 @@ namespace demo {
 terrain_module::terrain_module()
 : _splat_dirty{false},
   _province_dirty{false},
+  _borders_dirty{false},
   _loaded{false} {
   auto& graphics_module = sbx::core::engine::get_module<sbx::graphics::graphics_module>();
 
   _height_buffer = graphics_module.add_resource<sbx::graphics::storage_buffer>(sbx::graphics::storage_buffer::min_size, VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
   _splat_buffer = graphics_module.add_resource<sbx::graphics::storage_buffer>(sbx::graphics::storage_buffer::min_size, VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
   _province_buffer = graphics_module.add_resource<sbx::graphics::storage_buffer>(sbx::graphics::storage_buffer::min_size, VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
+  _borders_buffer = graphics_module.add_resource<sbx::graphics::storage_buffer>(sbx::graphics::storage_buffer::min_size, VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
 }
 
 auto terrain_module::update() -> void {
@@ -38,6 +41,7 @@ auto terrain_module::load() -> void {
 
   auto heightmap_path = assets_module.resolve_path(config.heightmap_path);
   auto province_ids_path = assets_module.resolve_path(config.province_ids_path);
+  auto borders_path = assets_module.resolve_path(config.borders_path);
   auto metadata_path = assets_module.resolve_path(config.metadata_path);
 
   auto info = _read_metadata(metadata_path);
@@ -47,9 +51,33 @@ auto terrain_module::load() -> void {
   _splat_weights = generate_splat_from_provinces(*_province_map, *_heightmap, config.splat);
   _splat_dirty = true;
   _province_dirty = true;
+
+  // Load Voronoi edges: 4 floats per edge (start_x, start_y, end_x, end_y),
+  // in centered pixel coordinates. Convert to world XZ via cell_size.
+  _edge_count = info.edge_count;
+  _edges_world.resize(static_cast<std::size_t>(_edge_count) * 4u);
+
+  auto edges_size = _edges_world.size() * sizeof(std::float_t);
+  auto edges_stream = std::ifstream{borders_path, std::ios::binary};
+
+  if (!edges_stream) {
+    throw std::runtime_error{"failed to open: " + borders_path.string()};
+  }
+
+  edges_stream.read(reinterpret_cast<char*>(_edges_world.data()), static_cast<std::streamsize>(edges_size));
+
+  if (static_cast<std::size_t>(edges_stream.gcount()) != edges_size) {
+    throw std::runtime_error{"short read on: " + borders_path.string()};
+  }
+
+  for (auto i = std::size_t{0}; i < _edges_world.size(); ++i) {
+    _edges_world[i] *= config.cell_size;
+  }
+
+  _borders_dirty = true;
   _loaded = true;
 
-  sbx::utility::logger<"terrain">::info("Loaded terrain {}x{} (cell size: {}m, height scale: {}m, provinces: {})", info.width, info.height, config.cell_size, config.height_scale, _province_map->province_count());
+  sbx::utility::logger<"terrain">::info("Loaded terrain {}x{} (cell size: {}m, height scale: {}m, provinces: {}, edges: {})", info.width, info.height, config.cell_size, config.height_scale, _province_map->province_count(), _edge_count);
 }
 
 auto terrain_module::is_loaded() const -> bool {
@@ -66,6 +94,14 @@ auto terrain_module::splat_buffer() const -> sbx::graphics::storage_buffer_handl
 
 auto terrain_module::province_buffer() const -> sbx::graphics::storage_buffer_handle {
   return _province_buffer;
+}
+
+auto terrain_module::borders_buffer() const -> sbx::graphics::storage_buffer_handle {
+  return _borders_buffer;
+}
+
+auto terrain_module::edge_count() const -> std::uint32_t {
+  return _edge_count;
 }
 
 auto terrain_module::heightmap() -> demo::heightmap& {
@@ -132,7 +168,7 @@ auto terrain_module::get_landform_at(const world_coordinates& coordinates) const
   return _province_map->landform_at(coordinates);
 }
 
-auto terrain_module::get_province_at(const world_coordinates& coordinates) const -> province_map::province_id_t {
+auto terrain_module::get_province_at(const world_coordinates& coordinates) const -> province_map::province_id {
   return _province_map->province_at(coordinates);
 }
 
@@ -142,6 +178,14 @@ auto terrain_module::splat_data() const -> const splat_weights* {
 
 auto terrain_module::splat_data_size_bytes() const -> std::size_t {
   return _splat_weights.size() * sizeof(splat_weights);
+}
+
+auto terrain_module::selected_province_id() const -> province_map::province_id {
+  return _selected_province_id;
+}
+
+auto terrain_module::set_selected_province_id(province_map::province_id id) -> void {
+  _selected_province_id = id;
 }
 
 auto terrain_module::_read_metadata(const std::filesystem::path& path) -> metadata_info {
@@ -156,6 +200,7 @@ auto terrain_module::_read_metadata(const std::filesystem::path& path) -> metada
   return metadata_info{
     .width = m["width"].as<std::uint32_t>(),
     .height = m["height"].as<std::uint32_t>(),
+    .edge_count = m["edge_count"] ? m["edge_count"].as<std::uint32_t>() : 0u,
   };
 }
 
@@ -196,6 +241,18 @@ auto terrain_module::_upload_gpu_data() -> void {
 
     storage.update(_province_map->ids_data(), _province_map->ids_data_size_bytes());
     _province_dirty = false;
+  }
+
+  if (_borders_dirty) {
+    auto& storage = graphics_module.get_resource<sbx::graphics::storage_buffer>(_borders_buffer);
+    auto required_size = static_cast<VkDeviceSize>(_edges_world.size() * sizeof(std::float_t));
+
+    if (required_size > storage.size()) {
+      storage.resize(required_size);
+    }
+
+    storage.update(_edges_world.data(), _edges_world.size() * sizeof(std::float_t));
+    _borders_dirty = false;
   }
 }
 

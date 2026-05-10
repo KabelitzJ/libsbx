@@ -188,9 +188,9 @@ auto terrain_subrenderer::render(sbx::graphics::command_buffer& command_buffer) 
     _push_handler.push("inner_max_z", inner_max_z);
     _push_handler.push("ring_count", clipmap_ring_count);
     _push_handler.push("tiling_scale", _tiling_scale);
-    _push_handler.push("border_strength", _border_strength);
-    _push_handler.push("border_width", _border_width);
-    _push_handler.push("border_color", _border_color);
+    _push_handler.push("selected_province_id", terrain_module.selected_province_id());
+    _push_handler.push("selection_strength", _selection_strength);
+    _push_handler.push("selection_color", _selection_color);
 
     _push_handler.bind(command_buffer);
 

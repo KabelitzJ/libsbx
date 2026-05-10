@@ -28,6 +28,8 @@ ConstantBuffer<sbx::common::scene_data> scene;
 
 [shader("fragment")]
 fs_out main(fs_in input) {
+  fs_out output;
+
   // ribbon_uv.y is in [-1, 1] across the ribbon width
   float across = abs(input.ribbon_uv.y);
 
@@ -35,13 +37,9 @@ fs_out main(fs_in input) {
   float aa = fwidth(across) + 1e-5;
   float alpha = 1.0 - smoothstep(1.0 - aa, 1.0, across);
 
-  if (alpha <= 0.001) {
-    discard;
-  }
+  clip(alpha - 0.001);
 
-  fs_out output;
-
-  output.albedo = float4(push.color * alpha, 1.0);
+  output.albedo = float4(push.color.rgb * alpha, 1.0);
   output.position = float4(input.position, 1.0);
   output.normal = float4(normalize(input.normal) * 0.5 + 0.5, 1.0);
   output.material = float4(0.0, 0.95, 1.0, 1.0);

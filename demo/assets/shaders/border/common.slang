@@ -17,8 +17,7 @@ struct push_data {
   float width;
   float height_offset;
   uint subdivisions;
-  float3 color;
-  float _pad1;
+  float4 color;
 }; // struct push_data
 
 #endif // BORDER_COMMON_SLANG_

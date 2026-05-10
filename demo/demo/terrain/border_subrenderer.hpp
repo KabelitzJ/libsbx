@@ -52,7 +52,7 @@ public:
     _width = width;
   }
 
-  auto set_color(const sbx::math::vector3& color) -> void {
+  auto set_color(const sbx::math::color& color) -> void {
     _color = color;
   }
 
@@ -73,7 +73,7 @@ private:
   std::float_t _width{0.30f};
   std::float_t _height_offset{0.08f};
   std::uint32_t _subdivisions{16u};
-  sbx::math::vector3 _color{0.05f, 0.04f, 0.03f};
+  sbx::math::color _color{0.05f, 0.04f, 0.03f};
 
 }; // class border_subrenderer
 

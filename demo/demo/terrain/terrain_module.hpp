@@ -37,7 +37,7 @@ class terrain_module final : public sbx::core::module<terrain_module> {
     .borders_path = "res://map/borders.f32",
     .metadata_path = "res://map/provinces.yaml",
     .cell_size = 0.5f,
-    .height_scale = 15.0f,
+    .height_scale = 10.0f,
   };
 
 public:

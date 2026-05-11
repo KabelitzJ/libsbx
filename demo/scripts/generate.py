@@ -42,6 +42,9 @@ TERRAIN_INTERIOR    = np.array([0.03, 0.13, 0.17, 0.85], dtype=np.float32)
 TERRAIN_PEAK_DIST   = np.array([15.0, 1.0,  10.0, 25.0], dtype=np.float32)
 TERRAIN_SHAPE_EXP   = np.array([0.7,  1.0,  0.4,  0.6],  dtype=np.float32)
 TERRAIN_NOISE_AMP   = np.array([0.005, 0.005, 0.06, 0.30], dtype=np.float32)
+# inset (in pixels): flat plateau along borders with lower-tier neighbors
+# before the rise begins. mountains have a wider plateau than hills.
+TERRAIN_INSET       = np.array([2.0,  0.0,  3.0,  6.0],  dtype=np.float32)
 
 
 def density_at(x, y, w, h, falloff):
@@ -131,7 +134,7 @@ def select_lakes(rng, plains_ids, plains_centroids, plains_elevations, map_w, ma
   return np.array(selected, dtype=np.int64)
 
 
-def generate_civ_style_heightmap(width, height, province_ids, terrain_class, seed):
+def generate_civ_style_heightmap(width, height, province_ids, terrain_class, points, seed):
   terrain_per_pixel = terrain_class[province_ids]
 
   # distance to nearest pixel of a STRICTLY LOWER tier
@@ -151,19 +154,34 @@ def generate_civ_style_heightmap(width, height, province_ids, terrain_class, see
     dist = distance_transform_edt(~lower_mask)
     distance_to_lower[in_tier] = dist[in_tier].astype(np.float32)
 
-  # lakes are inverted depressions: ramp from edge (plains height) down to interior
-  # use distance to nearest non-lake
+  # lakes: polygon-following depression with smoothed corners and noise modulation.
+  # keeps the cell-shape feel but rounds out sharp Voronoi corners.
   in_lake = terrain_per_pixel == 0
   if in_lake.any():
     non_lake = terrain_per_pixel != 0
     if non_lake.any():
-      dist = distance_transform_edt(~non_lake)
-      distance_to_lower[in_lake] = dist[in_lake].astype(np.float32)
+      # distance to nearest non-lake pixel (polygon-based shape)
+      polygon_dist = distance_transform_edt(~non_lake).astype(np.float32)
+
+      # smooth the distance field to round sharp corners
+      smoothed_dist = gaussian_filter(polygon_dist, sigma=3.0)
+
+      # low-frequency noise breaks up the smooth boundary for organic edges
+      lake_noise = OpenSimplex(seed=seed + 30).noise2array(
+        np.arange(width, dtype=np.float64) * 0.025,
+        np.arange(height, dtype=np.float64) * 0.025,
+      ).astype(np.float32)
+
+      LAKE_NOISE_AMPLITUDE = 2.5  # pixels of edge displacement
+      noisy_dist = smoothed_dist + lake_noise * LAKE_NOISE_AMPLITUDE
+
+      distance_to_lower[in_lake] = np.maximum(noisy_dist[in_lake], 0.0)
 
   interior  = TERRAIN_INTERIOR[terrain_per_pixel]
   edge      = EDGE_TARGET[terrain_per_pixel]
   peak_dist = TERRAIN_PEAK_DIST[terrain_per_pixel]
   exp       = TERRAIN_SHAPE_EXP[terrain_per_pixel]
+  inset     = TERRAIN_INSET[terrain_per_pixel]
 
   # surface noise — three octaves
   xs_1d = np.arange(width, dtype=np.float64)
@@ -190,7 +208,10 @@ def generate_civ_style_heightmap(width, height, province_ids, terrain_class, see
   delta_modulated = np.where(delta > 0.0, delta * peak_mod, delta)
   local_interior = np.clip(edge + delta_modulated, 0.0, 1.0)
 
-  t = np.clip(distance_to_lower / peak_dist, 0.0, 1.0)
+  # Pixels within `inset` of a lower-tier neighbor stay at edge height.
+  # Beyond that, the standard power ramp toward interior kicks in.
+  effective_distance = np.maximum(distance_to_lower - inset, 0.0)
+  t = np.clip(effective_distance / peak_dist, 0.0, 1.0)
   shape = np.power(t, exp)
 
   height_field = edge + shape * (local_interior - edge)
@@ -397,6 +418,7 @@ if __name__ == "__main__":
     args.height,
     province_ids,
     base,
+    points,
     args.seed,
   )
 
@@ -571,4 +593,3 @@ if __name__ == "__main__":
   print(f"Generated: {output_dir / 'borders.f32'}          ({edge_count * 16} bytes, {edge_count} edges)")
   print(f"Generated: {output_dir / 'borders.png'}          ({args.width}x{args.height} visualization)")
   print(f"Generated: {output_dir / 'provinces.yaml'}       (metadata + per-province)")
-  

@@ -186,8 +186,9 @@ fs_out main(fs_in input) {
   // Province selection highlight
   if (push.selected_province_id != 0xFFFFFFFFu) {
     uint pid = sample_province_id(input.position.x, input.position.z);
+
     if (pid == push.selected_province_id) {
-      albedo = lerp(albedo, push.selection_color, push.selection_strength);
+      albedo = lerp(albedo, push.selection_color.rgb, push.selection_strength);
     }
   }
 
@@ -231,7 +232,7 @@ fs_out main(fs_in input) {
   output.normal = float4(perturbed_normal * 0.5 + 0.5, 1.0);
   output.material = float4(0.0, roughness, 1.0, 1.0);
   output.emissive = float4(0.0, 0.0, 0.0, 0.1);
-  output.object_id = 0;
+  output.object_id = 0x80000000u | sample_province_id(input.position.x, input.position.z);
   output.linear_depth = sbx::common::linearize_depth(input.sv_position.z, scene.camera_near, scene.camera_far);
 
   return output;

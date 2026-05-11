@@ -185,6 +185,8 @@ auto terrain_module::selected_province_id() const -> province_map::province_id {
 }
 
 auto terrain_module::set_selected_province_id(province_map::province_id id) -> void {
+  sbx::utility::logger<"demo">::info("province_id: {}", id);
+
   _selected_province_id = id;
 }
 

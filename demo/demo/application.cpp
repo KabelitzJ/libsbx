@@ -182,12 +182,103 @@ application::application()
   sbx::utility::logger<"demo">::info("string id: {}", sbx::utility::string_id<"foobar">());
 }
 
+auto _read_object_id(const sbx::graphics::image2d& image, std::uint32_t pixel_x, std::uint32_t pixel_y) -> std::optional<std::uint32_t> {
+  auto staging = sbx::graphics::buffer{sizeof(std::uint32_t), VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT};
+
+  auto command_buffer = sbx::graphics::command_buffer{sbx::graphics::queue::type::graphics, true};
+
+  const auto subresource_range = VkImageSubresourceRange{VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+
+  // Acquire: wait for color writes, transition to TRANSFER_SRC
+
+  auto pre_barrier = VkImageMemoryBarrier2{};
+  pre_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+
+  pre_barrier.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+  pre_barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+
+  pre_barrier.srcStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
+  pre_barrier.srcAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
+
+  pre_barrier.dstStageMask = VK_PIPELINE_STAGE_2_COPY_BIT;
+  pre_barrier.dstAccessMask = VK_ACCESS_2_TRANSFER_READ_BIT;
+
+  pre_barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  pre_barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+
+  pre_barrier.image = image.handle();
+
+  pre_barrier.subresourceRange = subresource_range;
+
+  auto pre_dependency = VkDependencyInfo{};
+  pre_dependency.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+  pre_dependency.imageMemoryBarrierCount = 1;
+  pre_dependency.pImageMemoryBarriers = &pre_barrier;
+
+  vkCmdPipelineBarrier2(command_buffer, &pre_dependency);
+
+  // Copy
+
+  auto region = VkBufferImageCopy{};
+  region.bufferOffset = 0;
+  region.bufferRowLength = 0;
+  region.bufferImageHeight = 0;
+  region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+  region.imageSubresource.mipLevel = 0;
+  region.imageSubresource.baseArrayLayer = 0;
+  region.imageSubresource.layerCount = 1;
+  region.imageOffset = VkOffset3D{static_cast<std::int32_t>(pixel_x), static_cast<std::int32_t>(pixel_y), 0};
+  region.imageExtent = VkExtent3D{1, 1, 1};
+
+  vkCmdCopyImageToBuffer(command_buffer, image.handle(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, staging.handle(), 1, &region);
+
+  // Release: transition back to SHADER_READ_ONLY
+
+  auto post_barrier = VkImageMemoryBarrier2{};
+  post_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+
+  post_barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+  post_barrier.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+  post_barrier.srcStageMask = VK_PIPELINE_STAGE_2_COPY_BIT;
+  post_barrier.srcAccessMask = VK_ACCESS_2_TRANSFER_READ_BIT;
+
+  post_barrier.dstStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
+  post_barrier.dstAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
+
+  post_barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  post_barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+
+  post_barrier.image = image.handle();
+  post_barrier.subresourceRange = subresource_range;
+
+  auto post_dependency = VkDependencyInfo{};
+  post_dependency.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+  post_dependency.imageMemoryBarrierCount = 1;
+  post_dependency.pImageMemoryBarriers = &post_barrier;
+
+  vkCmdPipelineBarrier2(command_buffer, &post_dependency);
+
+  command_buffer.submit_idle();
+
+  staging.map();
+
+  auto value = std::uint32_t{0};
+  std::memcpy(&value, staging.mapped_memory().get(), sizeof(std::uint32_t));
+
+  staging.unmap();
+
+  return value;
+}
+
 auto application::update() -> void {
   SBX_PROFILE_SCOPE("application update");
 
   auto& assets_module = sbx::core::engine::get_module<sbx::assets::assets_module>();
   auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
   auto& graphics_module = sbx::core::engine::get_module<sbx::graphics::graphics_module>();
+  auto& devices_module = sbx::core::engine::get_module<sbx::devices::devices_module>();
+  auto& terrain_module = sbx::core::engine::get_module<demo::terrain_module>();
 
   auto& scene = scenes_module.active_scene();
   auto& graph = scene.graph();
@@ -210,6 +301,25 @@ auto application::update() -> void {
     _time_accumulator = sbx::units::second{0};
     _frame_count = 0u;
   }
+
+  if (sbx::devices::input::is_mouse_button_pressed(sbx::devices::mouse_button::left)) {
+    const auto& object_id_image = static_cast<const sbx::graphics::image2d&>(graphics_module.attachment("object_id"));
+    const auto& image_size = object_id_image.size();
+  
+    const auto mouse_position = sbx::devices::input::mouse_position();
+  
+    const auto id = _read_object_id(object_id_image, mouse_position.x(), mouse_position.y());
+  
+    if (!id.has_value() || *id == 0xFFFFFFFFu) {
+      terrain_module.set_selected_province_id(0xFFFFFFFFu);
+    } else {
+      if ((*id & 0x80000000u) != 0u) {
+        auto province_id = *id & 0x7FFFFFFFu;
+        terrain_module.set_selected_province_id(province_id);
+      }
+    }
+  }
+
 }
 
 auto application::fixed_update() -> void {

@@ -58,7 +58,7 @@ public:
     _tiling_scale = scale;
   }
 
-  auto set_selection_color(const sbx::math::vector3& color) -> void {
+  auto set_selection_color(const sbx::math::color& color) -> void {
     _selection_color = color;
   }
 
@@ -84,8 +84,8 @@ private:
 
   std::uint32_t _index_count{};
   std::float_t _tiling_scale{0.3f};
-  std::float_t _selection_strength{0.45f};
-  sbx::math::vector3 _selection_color{1.0f, 0.85f, 0.30f};
+  std::float_t _selection_strength{0.25f};
+  sbx::math::color _selection_color{1.0f, 0.0f, 0.0f};
 
 }; // class terrain_subrenderer
 

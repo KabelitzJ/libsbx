@@ -49,8 +49,7 @@ struct push_data {
   float selection_strength;
   float _pad0;
 
-  float3 selection_color;
-  float _pad1;
+  float4 selection_color;
 }; // struct push_data
 
 #endif // TERRAIN_COMMON_SLANG_

@@ -58,7 +58,6 @@ float sample_terrain_height(float world_x, float world_z) {
 fs_out main(fs_in input) {
   fs_out output;
 
-  // discard above-water terrain so the water plane only shows where there's actual depth
   float terrain_h = sample_terrain_height(input.position.x, input.position.z);
   float water_depth = push.water_y - terrain_h;
 
@@ -66,44 +65,35 @@ fs_out main(fs_in input) {
     discard;
   }
 
-  // base body color from depth
   float depth_t = saturate(water_depth / push.depth_fade_distance);
   float3 base_color = lerp(push.water_color_shallow.rgb, push.water_color_deep.rgb, depth_t);
 
-  // lighting setup
   float3 N = normalize(input.normal);
   float3 V = normalize(scene.camera_position.xyz - input.position);
   float NdotV = max(dot(N, V), 0.001);
 
-  // Schlick Fresnel — at grazing, mostly reflection; perpendicular, mostly base color
   float fresnel_t = pow(1.0 - NdotV, 5.0);
   float3 F = WATER_F0 + (1.0 - WATER_F0) * fresnel_t;
 
-  // IBL specular — sky reflection
   float3 R = reflect(-V, N);
   float lod = push.roughness * PREFILTERED_ENV_MAX_MIP;
   float3 sky_reflection = prefiltered_image.SampleLevel(R, lod).rgb;
 
-  // IBL diffuse — small ambient contribution to body
   float3 ambient_irradiance = irradiance_image.Sample(N).rgb;
   float3 diffuse_lit = base_color * ambient_irradiance / sbx::math::pi;
 
-  // direct sun specular — sharp glints
   float3 sun_direction = normalize(-scene.light_direction);
   float3 H = normalize(V + sun_direction);
   float NdotH = max(dot(N, H), 0.0);
   float glint = pow(NdotH, 256.0);
   float3 sun_specular = scene.light_color.rgb * scene.light_color.a * glint;
 
-  // mix body color with reflection by Fresnel; sun glint adds on top
   float3 final_color = lerp(diffuse_lit, sky_reflection, F) + sun_specular * F;
 
-  // alpha: shallow more transparent, deep more opaque, grazing fully reflective
   float alpha_body = lerp(0.35, 0.85, depth_t);
   float alpha = lerp(alpha_body, 1.0, fresnel_t);
   alpha = saturate(alpha);
 
-  // WBOIT output (McGuire weighted blended)
   float view_z = -mul(scene.view, float4(input.position, 1.0)).z;
   float weight = clamp(0.03 / (1e-5 + pow(view_z * 0.01, 4.0)), 1e-2, 3e3);
 

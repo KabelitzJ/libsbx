@@ -85,9 +85,11 @@ float sample_height_coarser(float world_x, float world_z) {
 
 vs_out degenerate() {
   vs_out output;
+
   output.sv_position = float4(0.0, 0.0, 2.0, 1.0);
   output.position = float3(0.0, 0.0, 0.0);
   output.normal = float3(0.0, 1.0, 0.0);
+
   return output;
 }
 

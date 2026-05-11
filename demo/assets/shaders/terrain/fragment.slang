@@ -28,6 +28,8 @@ static const uint LAYER_SNOW = 4;
 static const uint LAYER_MUD = 5;
 static const uint LAYER_NORMAL_OFFSET = 6;
 
+static const uint PID_MASK = 0x80000000u;
+
 [[vk::push_constant]]
 ConstantBuffer<push_data> push;
 
@@ -104,11 +106,11 @@ unpacked_weights sample_splat_bilinear(float3 world_position) {
   unpacked_weights result;
 
   result.grass = lerp(lerp(s00.grass, s10.grass, fraction_x), lerp(s01.grass, s11.grass, fraction_x), fraction_z);
-  result.dirt  = lerp(lerp(s00.dirt,  s10.dirt,  fraction_x), lerp(s01.dirt,  s11.dirt,  fraction_x), fraction_z);
-  result.rock  = lerp(lerp(s00.rock,  s10.rock,  fraction_x), lerp(s01.rock,  s11.rock,  fraction_x), fraction_z);
-  result.sand  = lerp(lerp(s00.sand,  s10.sand,  fraction_x), lerp(s01.sand,  s11.sand,  fraction_x), fraction_z);
-  result.snow  = lerp(lerp(s00.snow,  s10.snow,  fraction_x), lerp(s01.snow,  s11.snow,  fraction_x), fraction_z);
-  result.mud   = lerp(lerp(s00.mud,   s10.mud,   fraction_x), lerp(s01.mud,   s11.mud,   fraction_x), fraction_z);
+  result.dirt = lerp(lerp(s00.dirt,  s10.dirt,  fraction_x), lerp(s01.dirt,  s11.dirt,  fraction_x), fraction_z);
+  result.rock = lerp(lerp(s00.rock,  s10.rock,  fraction_x), lerp(s01.rock,  s11.rock,  fraction_x), fraction_z);
+  result.sand = lerp(lerp(s00.sand,  s10.sand,  fraction_x), lerp(s01.sand,  s11.sand,  fraction_x), fraction_z);
+  result.snow = lerp(lerp(s00.snow,  s10.snow,  fraction_x), lerp(s01.snow,  s11.snow,  fraction_x), fraction_z);
+  result.mud = lerp(lerp(s00.mud,   s10.mud,   fraction_x), lerp(s01.mud,   s11.mud,   fraction_x), fraction_z);
 
   return result;
 }
@@ -152,43 +154,37 @@ fs_out main(fs_in input) {
 
   float2 uv = input.position.xz * push.tiling_scale;
 
-  float3 tex_grass = sample_layer_blended(LAYER_GRASS, uv, distance_factor);
-  float3 tex_dirt  = sample_layer_blended(LAYER_DIRT,  uv, distance_factor);
-  float3 tex_sand  = sample_layer_blended(LAYER_SAND,  uv, distance_factor);
-  float3 tex_snow  = sample_layer_blended(LAYER_SNOW,  uv, distance_factor);
-  float3 tex_mud   = sample_layer_blended(LAYER_MUD,   uv, distance_factor);
+  float3 texture_grass = sample_layer_blended(LAYER_GRASS, uv, distance_factor);
+  float3 texture_dirt = sample_layer_blended(LAYER_DIRT, uv, distance_factor);
+  float3 texture_sand = sample_layer_blended(LAYER_SAND, uv, distance_factor);
+  float3 texture_snow = sample_layer_blended(LAYER_SNOW, uv, distance_factor);
+  float3 texture_mud = sample_layer_blended(LAYER_MUD, uv, distance_factor);
 
-  // Tri-planar rock only on close rings to save 2 extra samples at distance
-  float3 tex_rock;
+  float3 texture_rock;
 
   if (push.ring_level <= 1) {
     float3 blend = abs(normal);
     blend = pow(blend, 4.0);
     blend /= (blend.x + blend.y + blend.z);
+
     float3 detail = sample_layer_triplanar(LAYER_ROCK, input.position, blend);
     float3 far_sample = sample_layer_triplanar(LAYER_ROCK, input.position * 0.1, blend);
-    tex_rock = lerp(detail, far_sample, distance_factor);
+
+    texture_rock = lerp(detail, far_sample, distance_factor);
   } else {
-    tex_rock = sample_layer_blended(LAYER_ROCK, uv, distance_factor);
+    texture_rock = sample_layer_blended(LAYER_ROCK, uv, distance_factor);
   }
 
-  float3 albedo = tex_grass * splat.grass
-              + tex_dirt  * splat.dirt
-              + tex_rock  * splat.rock
-              + tex_sand  * splat.sand
-              + tex_snow  * splat.snow
-              + tex_mud   * splat.mud;
+  float3 albedo = texture_grass * splat.grass + texture_dirt * splat.dirt + texture_rock * splat.rock + texture_sand * splat.sand + texture_snow * splat.snow + texture_mud * splat.mud;
 
-  // Macro variation — large-scale color breakup
   float macro = noise_image.Sample(input.position.xz * 0.002).r;
   albedo *= lerp(0.8, 1.0, macro);
 
-  // Per-province biome tint
   uint pid = sample_province_id(input.position.x, input.position.z);
+
   float4 tint = push.tints_data_buffer[pid];
   albedo = lerp(albedo, albedo * tint.rgb, tint.a);
 
-  // Province selection highlight
   if (push.selected_province_id != 0xFFFFFFFFu) {
     if (pid == push.selected_province_id) {
       albedo = lerp(albedo, push.selection_color.rgb, push.selection_strength);
@@ -197,45 +193,32 @@ fs_out main(fs_in input) {
 
   // Tangent-space normals — sample, blend, and re-derive Z
   float3 tn_grass = sample_normal_layer(LAYER_GRASS, uv);
-  float3 tn_dirt  = sample_normal_layer(LAYER_DIRT,  uv);
-  float3 tn_rock  = sample_normal_layer(LAYER_ROCK,  uv);
-  float3 tn_sand  = sample_normal_layer(LAYER_SAND,  uv);
-  float3 tn_snow  = sample_normal_layer(LAYER_SNOW,  uv);
-  float3 tn_mud   = sample_normal_layer(LAYER_MUD,   uv);
+  float3 tn_dirt = sample_normal_layer(LAYER_DIRT,  uv);
+  float3 tn_rock = sample_normal_layer(LAYER_ROCK,  uv);
+  float3 tn_sand = sample_normal_layer(LAYER_SAND,  uv);
+  float3 tn_snow = sample_normal_layer(LAYER_SNOW,  uv);
+  float3 tn_mud = sample_normal_layer(LAYER_MUD,   uv);
 
-  float2 tn_xy = tn_grass.xy * splat.grass
-               + tn_dirt.xy  * splat.dirt
-               + tn_rock.xy  * splat.rock
-               + tn_sand.xy  * splat.sand
-               + tn_snow.xy  * splat.snow
-               + tn_mud.xy   * splat.mud;
+  float2 tn_xy = tn_grass.xy * splat.grass + tn_dirt.xy * splat.dirt + tn_rock.xy * splat.rock + tn_sand.xy * splat.sand + tn_snow.xy * splat.snow + tn_mud.xy * splat.mud;
 
-  // Fade detail at distance, re-derive Z so the result stays unit-length
   tn_xy *= (1.0 - distance_factor);
   float tn_z = sqrt(saturate(1.0 - dot(tn_xy, tn_xy)));
   float3 tn = float3(tn_xy, tn_z);
 
-  // Build TBN from analytical geometric normal.
-  // UV = (world_x, world_z) * tiling, so T aligns with world +X and B with world +Z.
   float3 N = normal;
   float3 T = normalize(float3(1.0, 0.0, 0.0) - N * N.x);
   float3 B = cross(T, N);
 
   float3 perturbed_normal = normalize(T * tn.x + B * tn.y + N * tn.z);
 
-  float roughness = 0.85 * splat.grass
-                  + 0.95 * splat.dirt
-                  + 0.75 * splat.rock
-                  + 0.90 * splat.sand
-                  + 0.60 * splat.snow
-                  + 0.98 * splat.mud;
+  float roughness = 0.85 * splat.grass + 0.95 * splat.dirt + 0.75 * splat.rock + 0.90 * splat.sand + 0.60 * splat.snow + 0.98 * splat.mud;
 
   output.albedo = float4(albedo, 1.0);
   output.position = float4(input.position, 1.0);
   output.normal = float4(perturbed_normal * 0.5 + 0.5, 1.0);
   output.material = float4(0.0, roughness, 1.0, 1.0);
   output.emissive = float4(0.0, 0.0, 0.0, 0.1);
-  output.object_id = 0x80000000u | pid;
+  output.object_id = PID_MASK | pid;
   output.linear_depth = sbx::common::linearize_depth(input.sv_position.z, scene.camera_near, scene.camera_far);
 
   return output;

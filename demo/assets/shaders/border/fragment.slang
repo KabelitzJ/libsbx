@@ -30,10 +30,8 @@ ConstantBuffer<sbx::common::scene_data> scene;
 fs_out main(fs_in input) {
   fs_out output;
 
-  // ribbon_uv.y is in [-1, 1] across the ribbon width
   float across = abs(input.ribbon_uv.y);
 
-  // anti-alias the edge: across=0 fully opaque, across=1 fully transparent
   float aa = fwidth(across) + 1e-5;
   float alpha = 1.0 - smoothstep(1.0 - aa, 1.0, across);
 

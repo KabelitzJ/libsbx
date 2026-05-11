@@ -47,10 +47,6 @@ float sample_terrain_height(float world_x, float world_z) {
 
 [shader("vertex")]
 vs_out main(vs_in input) {
-  // Each edge is divided into `subdivisions` sub-quads (6 verts each).
-  // sub_index identifies which sub-quad this vertex belongs to.
-  // local_id identifies which of the 6 verts inside that sub-quad.
-
   uint sub_index = input.vertex_id / 6;
   uint local_id  = input.vertex_id % 6;
 
@@ -68,9 +64,6 @@ vs_out main(vs_in input) {
   float t0 = float(sub_index)     / float(push.subdivisions);
   float t1 = float(sub_index + 1) / float(push.subdivisions);
 
-  // sub-quad triangle pattern (CCW from +Y):
-  // 0: t0, across=-1   1: t1, across=-1   2: t0, across=+1
-  // 3: t1, across=-1   4: t1, across=+1   5: t0, across=+1
   float along = 0.0;
   float across = 0.0;
 

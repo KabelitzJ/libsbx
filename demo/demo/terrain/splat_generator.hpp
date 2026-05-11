@@ -67,7 +67,7 @@ struct splat_generation_params {
   std::float_t slope_threshold_high{2.0f};
   std::float_t rock_boost_max{0.7f};
   // snow blends in based on normalized [0..1] height; independent of height_scale
-  std::float_t snow_normalized_start{0.45f};
+  std::float_t snow_normalized_start{0.55f};
   std::float_t snow_normalized_full{0.70f};
 }; // struct splat_generation_params
 

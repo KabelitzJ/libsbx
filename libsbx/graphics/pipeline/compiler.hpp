@@ -4,9 +4,9 @@
 
 #include <vulkan/vulkan.hpp>
 
-#include <slang.h>
-#include <slang-com-ptr.h>
-#include <slang-com-helper.h>
+#include <slang/slang.h>
+#include <slang/slang-com-ptr.h>
+#include <slang/slang-com-helper.h>
 
 #include <libsbx/utility/logger.hpp>
 #include <libsbx/utility/exception.hpp>

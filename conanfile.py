@@ -32,6 +32,7 @@ class libsbx_recipe(ConanFile):
     "shared": [True, False],
     "fPIC": [True, False],
     "build_demo": [True, False],
+    "build_editor": [True, False],
     "build_tests": [True, False],
     "build_benchmarks": [True, False]
   }
@@ -39,41 +40,29 @@ class libsbx_recipe(ConanFile):
   default_options = {
     "shared": False,
     "fPIC": True,
-    "build_demo": True,
-    "build_tests": True,
-    "build_benchmarks": True
+    "build_demo": False,
+    "build_editor": False,
+    "build_tests": False,
+    "build_benchmarks": False
   }
 
-  # Source directories
   exports_sources = (
     "CMakeLists.txt",
+
     "cmake/**",
     "scripts/**",
-    "libsbx-animations/**",
-    "libsbx-bitmaps/**",
-    "libsbx-core/**",
-    "libsbx-ecs/**",
-    "libsbx-gizmos/**",
-    "libsbx-io/**",
-    "libsbx-memory/**",
-    "libsbx-physics/**",
-    "libsbx-scenes/**",
-    "libsbx-shadows/**",
-    "libsbx-ui/**",
-    "libsbx-utility/**",
-    "libsbx-assets/**",
-    "libsbx-containers/**",
-    "libsbx-devices/**",
-    "libsbx-graphics/**",
-    "libsbx-math/**",
-    "libsbx-models/**",
-    "libsbx-post/**",
-    "libsbx-scripting/**",
-    "libsbx-signals/**",
-    "libsbx-units/**",
+
+    "libsbx/**",
+
+    "dotnet/**",
+    "shaders/**",
+
+    "tests/**",
+    "editor/**",
     "demo/**",
-    # "!demo/assets/**"
   )
+
+  no_copy_source = True
 
   REQUIRED_VULKAN_VERSION = (1, 4, 335, 0)
   REQUIRED_VULKAN_VERSION_STR = ".".join(map(str, REQUIRED_VULKAN_VERSION))
@@ -244,7 +233,7 @@ class libsbx_recipe(ConanFile):
     # self.requires("bullet3/3.25")
     self.requires("meshoptimizer/0.25")
     self.requires("sol2/3.5.0")
-    self.requires("magic_enum/0.9.7")
+    self.requires("magic_enum/0.9.7", transitive_headers=True)
     self.requires("zstd/1.5.7")
     self.requires("tracy/0.13.1")
 
@@ -267,11 +256,12 @@ class libsbx_recipe(ConanFile):
   def build(self):
     cmake = CMake(self)
 
-    cmake.configure({
-      "SBX_BUILD_DEMO": "ON" if self.options.build_demo else "OFF",
-      "SBX_BUILD_SHARED": "ON" if self.options.shared else "OFF",
-      "SBX_BUILD_TESTS": "ON" if self.options.build_tests else "OFF",
-      "SBX_BUILD_BENCHMARKS": "ON" if self.options.build_benchmarks else "OFF"
+    cmake.configure(variables={
+      "SBX_BUILD_DEMO": self.options.build_demo,
+      "SBX_BUILD_EDITOR": self.options.build_editor,
+      "SBX_BUILD_SHARED": self.options.shared,
+      "SBX_BUILD_TESTS": self.options.build_tests,
+      "SBX_BUILD_BENCHMARKS": self.options.build_benchmarks,
     })
   
     cmake.build()
@@ -315,52 +305,61 @@ class libsbx_recipe(ConanFile):
     self.cpp_info.set_property("cmake_file_name", "libsbx")
     self.cpp_info.set_property("cmake_target_name", "libsbx::libsbx")
 
-    self.cpp_info.bindirs.append("bin/dotnet")
-    
-    self.cpp_info.components["utility"].requires = [
-      "fmt::fmt", 
-      "spdlog::spdlog",
-      "magic_enum::magic_enum",
-      "lz4::lz4"
-    ]
+    # single library
+    self.cpp_info.libs = ["sbx"]
 
-    self.cpp_info.components["math"].requires = [
+    # include / binary layout
+    self.cpp_info.includedirs = ["include"]
+    self.cpp_info.libdirs = ["lib"]
+    self.cpp_info.bindirs = ["bin", "bin/dotnet"]
+
+    self.cpp_info.requires = [
+      # core utilities
       "fmt::fmt",
+      "spdlog::spdlog",
+      "range-v3::range-v3",
+      "magic_enum::magic_enum",
+      "tsl-robin-map::tsl-robin-map",
+
+      # serialization / data
       "yaml-cpp::yaml-cpp",
-      "range-v3::range-v3"
-    ]
-
-    # if self.options.build_tests:
-    #   self.cpp_info.components["math"].requires.append("GTest::gtest")
-
-    self.cpp_info.components["core"].requires = [
-      "range-v3::range-v3"
-    ]
-
-    self.cpp_info.components["devices"].requires = [
-      "glfw::glfw"
-    ]
-
-    self.cpp_info.components["graphics"].requires = [
-      "vulkan-memory-allocator::vulkan-memory-allocator",
-      "vulkan-headers::vulkan-headers",
-      "stb::stb",
-      "spirv-cross::spirv-cross"
-    ]
-
-    self.cpp_info.components["models"].requires = [
-      "tinyobjloader::tinyobjloader",
       "nlohmann_json::nlohmann_json",
       "base64::base64",
-      "tsl-robin-map::tsl-robin-map",
+
+      # compression / performance
+      "lz4::lz4",
+      "zstd::zstd",
+      "meshoptimizer::meshoptimizer",
+
+      # graphics stack
+      "glfw::glfw",
+      "vulkan-memory-allocator::vulkan-memory-allocator",
+      "vulkan-headers::vulkan-headers",
+      "spirv-cross::spirv-cross",
+      "stb::stb",
+
+      # assets
+      "tinyobjloader::tinyobjloader",
       "assimp::assimp",
-      "meshoptimizer::meshoptimizer"
+
+      # scripting
+      "sol2::sol2",
+
+      # audio
+      "openal-soft::openal-soft",
+      "drwav::drwav",
+      "drmp3::drmp3",
+
+      # UI
+      "imgui::imgui",
+      "implot::implot",
+      "imnodes::imnodes",
+      "imguizmo::imguizmo",
+      "freetype::freetype",
+
+      # profiling
+      "tracy::tracy"
     ]
 
-    self.cpp_info.components["scripting"].requires = [
-      "sol2::sol2"
-    ]
-
-    self.cpp_info.components["ui"].requires = [
-      "freetype::freetype"
-    ]
+    # optional: make headers transitive if you rely heavily on templates
+    self.cpp_info.requires_private = []

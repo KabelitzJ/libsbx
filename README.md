@@ -1,15 +1,13 @@
-# libsbx - Sandbox Game Engine
+<img src="images/logo.png" width="400" />
 
-![C++20](https://img.shields.io/badge/Language-C%2B%2B20-blue?logo=c%2B%2B&logoColor=blue)
+A modular, Vulkan-based game engine built with modern C++23
+
+![C++20](https://img.shields.io/badge/Language-C%2B%2B23-blue?logo=c%2B%2B&logoColor=blue)
 ![Version 0.2.0](https://img.shields.io/badge/Version-0.2.0-red?logo=git)
 ![MIT License](https://img.shields.io/badge/License-MIT-green?logo=opensourceinitiative&logoColor=green)
 ![Docs Build](https://img.shields.io/github/actions/workflow/status/KabelitzJ/sandbox/gh_pages.yml?logo=github&label=Deploy%20docs)
 
-A modular, Vulkan-based game engine built with modern C++20
-
----
-
-Sandbox is a game engine written from the ground up in **C++20**, designed as both a learning tool and a practical framework for real-time 3D applications. It features a Vulkan-based deferred PBR rendering pipeline, a render graph architecture, and a modular design built around an Entity-Component-System core.
+Sandbox is a game engine written from the ground up in **C++23**, designed as both a learning tool and a practical framework for real-time 3D applications. It features a Vulkan-based deferred PBR rendering pipeline, a render graph architecture, and a modular design built around an Entity-Component-System core.
 
 > **Note:** Active development happens on the [`development`](https://github.com/KabelitzJ/sandbox/tree/development) branch.
 

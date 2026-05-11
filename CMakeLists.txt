@@ -105,7 +105,7 @@ find_package(Vulkan REQUIRED)
 find_package(spirv-cross CONFIG REQUIRED)
 find_package(VulkanMemoryAllocator CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
-find_package(slang REQUIRED)
+find_package(slang REQUIRED MODULE)
 find_package(glfw3 CONFIG REQUIRED)
 find_package(tinyobjloader CONFIG REQUIRED)
 find_package(base64 CONFIG REQUIRED)
@@ -120,7 +120,7 @@ find_package(freetype CONFIG REQUIRED)
 find_package(drwav CONFIG REQUIRED)
 find_package(OpenAL CONFIG REQUIRED)
 find_package(sol2 CONFIG REQUIRED)
-find_package(Nethost REQUIRED)
+find_package(Nethost REQUIRED MODULE)
 find_package(Tracy CONFIG REQUIRED)
 
 option(GLFW_BUILD_EXAMPLES "" OFF)
@@ -745,7 +745,7 @@ target_compile_options(
 set(_sbx_link_options)
 set(_sbx_compile_options)
 
-if(SBX_USE_ASAN AND NOT MINGW)
+if(SBX_ASAN_ENABLED AND NOT MINGW)
   list(APPEND _sbx_compile_options -fsanitize=address,undefined -fno-omit-frame-pointer)
   list(APPEND _sbx_link_options -fsanitize=address,undefined)
 endif()
@@ -859,18 +859,18 @@ install(
 
 # Tests
 
-if(SBX_BUILD_TESTS)
+if(SBX_BUILD_TESTS AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
   add_subdirectory(tests)
 endif()
 
 # Demo
 
-if(SBX_BUILD_DEMO)
+if(SBX_BUILD_DEMO AND EXISTS "${CMAKE_SOURCE_DIR}/demo")
   add_subdirectory(demo)
 endif()
 
 # Editor
 
-if(SBX_BUILD_EDITOR)
+if(SBX_BUILD_EDITOR AND EXISTS "${CMAKE_SOURCE_DIR}/editor")
   add_subdirectory(editor)
 endif()

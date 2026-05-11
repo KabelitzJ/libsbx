@@ -17,14 +17,12 @@
 include(FindPackageHandleStandardArgs)
 
 set(_SLANG_INCLUDE_HINTS
-  "$ENV{VULKAN_SDK}/Include/slang"
   "$ENV{VULKAN_SDK}/Include"
-  "$ENV{VULKAN_SDK}/include/slang" 
   "$ENV{VULKAN_SDK}/include"
-  "/usr/include/slang" 
-  "/usr/local/include/slang"
-  "/opt/homebrew/include/slang"
-  "/opt/local/include/slang"
+  "/usr/include"
+  "/usr/local/include"
+  "/opt/homebrew/include"
+  "/opt/local/include"
 )
 
 set(_SLANG_LIB_HINTS
@@ -37,7 +35,7 @@ set(_SLANG_LIB_HINTS
 )
 
 find_path(slang_INCLUDE_DIR
-  NAMES slang.h
+  NAMES slang/slang.h
   HINTS ${_SLANG_INCLUDE_HINTS}
 )
 

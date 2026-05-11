@@ -554,6 +554,8 @@ auto image::channels_from_format(VkFormat format) -> std::uint8_t {
     case VK_FORMAT_R8_SRGB:
     case VK_FORMAT_R8_UINT:
     case VK_FORMAT_R16_SFLOAT:
+    case VK_FORMAT_R16_UINT:
+    case VK_FORMAT_R16_UNORM:
     case VK_FORMAT_R32_SFLOAT:
     case VK_FORMAT_R32_UINT:
     case VK_FORMAT_R64_UINT: {
@@ -581,7 +583,7 @@ auto image::channels_from_format(VkFormat format) -> std::uint8_t {
       return 4;
     }
     default: {
-      throw std::runtime_error{fmt::format("Unsupported image format: {}", static_cast<std::int32_t>(format))};
+      throw utility::runtime_error{"Unsupported image format: {}", static_cast<std::int32_t>(format)};
     }
   }
 }

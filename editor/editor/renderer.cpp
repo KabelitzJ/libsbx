@@ -100,9 +100,9 @@ renderer::renderer()
 
   auto tonemap = create_attachment("tonemap", sbx::graphics::attachment::type::image, _clear_color, sbx::graphics::format::r8g8b8a8_srgb);
 
-  auto scene_output = create_attachment("scene_output", sbx::graphics::attachment::type::image, _clear_color, sbx::graphics::format::r8g8b8a8_srgb);
+  auto fxaa = create_attachment("fxaa", sbx::graphics::attachment::type::image, _clear_color, sbx::graphics::format::r8g8b8a8_srgb);
 
-  auto selection_output = create_attachment("selection_output", sbx::graphics::attachment::type::image, _clear_color, sbx::graphics::format::r8g8b8a8_srgb);
+  auto selection = create_attachment("selection", sbx::graphics::attachment::type::image, _clear_color, sbx::graphics::format::r8g8b8a8_srgb);
 
   auto swapchain = create_attachment("swapchain", sbx::graphics::attachment::type::swapchain, _clear_color, sbx::graphics::format::b8g8r8a8_srgb);
 
@@ -196,7 +196,7 @@ renderer::renderer()
 
     pass.reads(tonemap);
 
-    pass.writes(scene_output, sbx::graphics::attachment_load_operation::clear);
+    pass.writes(fxaa, sbx::graphics::attachment_load_operation::clear);
 
     return pass;
   });
@@ -206,9 +206,9 @@ renderer::renderer()
 
     pass.depends_on(fxaa_pass, deferred_pass);
 
-    pass.reads(scene_output, object_id, linear_depth);
+    pass.reads(fxaa, object_id, linear_depth);
 
-    pass.writes(selection_output, sbx::graphics::attachment_load_operation::clear);
+    pass.writes(selection, sbx::graphics::attachment_load_operation::clear);
 
     return pass;
   });
@@ -218,7 +218,7 @@ renderer::renderer()
 
     pass.depends_on(selection_pass);
 
-    pass.reads(selection_output);
+    pass.reads(selection);
     pass.writes(swapchain, sbx::graphics::attachment_load_operation::clear);
 
     return pass;
@@ -296,7 +296,7 @@ renderer::renderer()
   add_subrenderer<sbx::post::fxaa_filter>(fxaa_pass, "tonemap");
 
   auto selection_attachment_names = std::vector<std::pair<std::string, std::string>>{
-    {"resolve_image", "scene_output"},
+    {"resolve_image", "fxaa"},
     {"object_id_image", "object_id"},
     {"linear_depth_image", "linear_depth"}
   };

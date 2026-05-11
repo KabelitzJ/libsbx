@@ -21,6 +21,7 @@ struct terrain_config {
   std::filesystem::path heightmap_path;
   std::filesystem::path province_ids_path;
   std::filesystem::path borders_path;
+  std::filesystem::path tints_path;
   std::filesystem::path metadata_path;
   std::float_t cell_size{0.05f};
   std::float_t height_scale{30.0f};
@@ -35,9 +36,10 @@ class terrain_module final : public sbx::core::module<terrain_module> {
     .heightmap_path = "res://map/heightmap.r16",
     .province_ids_path = "res://map/province_ids.r32u",
     .borders_path = "res://map/borders.f32",
+    .tints_path = "res://map/province_tints.f32",
     .metadata_path = "res://map/provinces.yaml",
     .cell_size = 0.5f,
-    .height_scale = 5.0f,
+    .height_scale = 10.0f,
   };
 
 public:
@@ -55,6 +57,7 @@ public:
   auto splat_buffer() const -> sbx::graphics::storage_buffer_handle;
   auto province_buffer() const -> sbx::graphics::storage_buffer_handle;
   auto borders_buffer() const -> sbx::graphics::storage_buffer_handle;
+  auto tints_buffer() const -> sbx::graphics::storage_buffer_handle;
   auto edge_count() const -> std::uint32_t;
 
   auto heightmap() -> demo::heightmap&;
@@ -83,8 +86,15 @@ public:
   auto splat_data() const -> const splat_weights*;
   auto splat_data_size_bytes() const -> std::size_t;
 
-  auto selected_province_id() const -> province_map::province_id;
-  auto set_selected_province_id(province_map::province_id id) -> void;
+  auto selected_province_id() const -> province_map::province_id {
+    return _selected_province_id;
+  }
+
+  auto set_selected_province_id(province_map::province_id id) -> void {
+    sbx::utility::logger<"demo">::info("province_id: {}", id);
+    _selected_province_id = id;
+  }
+
 
 private:
 
@@ -104,17 +114,20 @@ private:
   bool _splat_dirty;
   bool _province_dirty;
   bool _borders_dirty;
+  bool _tints_dirty;
   bool _loaded;
 
   std::uint32_t _edge_count{0};
   std::vector<std::float_t> _edges_world;
+  std::vector<std::float_t> _tints;
 
-  province_map::province_id _selected_province_id{province_map::invalid_id};
+  province_map::province_id _selected_province_id{province_map::invalid_province_id};
 
   sbx::graphics::storage_buffer_handle _height_buffer;
   sbx::graphics::storage_buffer_handle _splat_buffer;
   sbx::graphics::storage_buffer_handle _province_buffer;
   sbx::graphics::storage_buffer_handle _borders_buffer;
+  sbx::graphics::storage_buffer_handle _tints_buffer;
 
 }; // class terrain_module
 

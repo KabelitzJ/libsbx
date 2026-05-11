@@ -15,6 +15,7 @@ terrain_module::terrain_module()
 : _splat_dirty{false},
   _province_dirty{false},
   _borders_dirty{false},
+  _tints_dirty{false},
   _loaded{false} {
   auto& graphics_module = sbx::core::engine::get_module<sbx::graphics::graphics_module>();
 
@@ -22,6 +23,7 @@ terrain_module::terrain_module()
   _splat_buffer = graphics_module.add_resource<sbx::graphics::storage_buffer>(sbx::graphics::storage_buffer::min_size, VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
   _province_buffer = graphics_module.add_resource<sbx::graphics::storage_buffer>(sbx::graphics::storage_buffer::min_size, VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
   _borders_buffer = graphics_module.add_resource<sbx::graphics::storage_buffer>(sbx::graphics::storage_buffer::min_size, VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
+  _tints_buffer = graphics_module.add_resource<sbx::graphics::storage_buffer>(sbx::graphics::storage_buffer::min_size, VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
 }
 
 auto terrain_module::update() -> void {
@@ -42,6 +44,7 @@ auto terrain_module::load() -> void {
   auto heightmap_path = assets_module.resolve_path(config.heightmap_path);
   auto province_ids_path = assets_module.resolve_path(config.province_ids_path);
   auto borders_path = assets_module.resolve_path(config.borders_path);
+  auto tints_path = assets_module.resolve_path(config.tints_path);
   auto metadata_path = assets_module.resolve_path(config.metadata_path);
 
   auto info = _read_metadata(metadata_path);
@@ -75,6 +78,25 @@ auto terrain_module::load() -> void {
   }
 
   _borders_dirty = true;
+
+  // Per-province biome tints: 4 floats (rgba) per province.
+  auto n_provinces = _province_map->province_count();
+  _tints.resize(static_cast<std::size_t>(n_provinces) * 4u);
+
+  auto tints_size = _tints.size() * sizeof(std::float_t);
+  auto tints_stream = std::ifstream{tints_path, std::ios::binary};
+
+  if (!tints_stream) {
+    throw std::runtime_error{"failed to open: " + tints_path.string()};
+  }
+
+  tints_stream.read(reinterpret_cast<char*>(_tints.data()), static_cast<std::streamsize>(tints_size));
+
+  if (static_cast<std::size_t>(tints_stream.gcount()) != tints_size) {
+    throw std::runtime_error{"short read on: " + tints_path.string()};
+  }
+
+  _tints_dirty = true;
   _loaded = true;
 
   sbx::utility::logger<"terrain">::info("Loaded terrain {}x{} (cell size: {}m, height scale: {}m, provinces: {}, edges: {})", info.width, info.height, config.cell_size, config.height_scale, _province_map->province_count(), _edge_count);
@@ -98,6 +120,10 @@ auto terrain_module::province_buffer() const -> sbx::graphics::storage_buffer_ha
 
 auto terrain_module::borders_buffer() const -> sbx::graphics::storage_buffer_handle {
   return _borders_buffer;
+}
+
+auto terrain_module::tints_buffer() const -> sbx::graphics::storage_buffer_handle {
+  return _tints_buffer;
 }
 
 auto terrain_module::edge_count() const -> std::uint32_t {
@@ -180,16 +206,6 @@ auto terrain_module::splat_data_size_bytes() const -> std::size_t {
   return _splat_weights.size() * sizeof(splat_weights);
 }
 
-auto terrain_module::selected_province_id() const -> province_map::province_id {
-  return _selected_province_id;
-}
-
-auto terrain_module::set_selected_province_id(province_map::province_id id) -> void {
-  sbx::utility::logger<"demo">::info("province_id: {}", id);
-
-  _selected_province_id = id;
-}
-
 auto terrain_module::_read_metadata(const std::filesystem::path& path) -> metadata_info {
   auto root = YAML::LoadFile(path.string());
 
@@ -255,6 +271,18 @@ auto terrain_module::_upload_gpu_data() -> void {
 
     storage.update(_edges_world.data(), _edges_world.size() * sizeof(std::float_t));
     _borders_dirty = false;
+  }
+
+  if (_tints_dirty) {
+    auto& storage = graphics_module.get_resource<sbx::graphics::storage_buffer>(_tints_buffer);
+    auto required_size = static_cast<VkDeviceSize>(_tints.size() * sizeof(std::float_t));
+
+    if (required_size > storage.size()) {
+      storage.resize(required_size);
+    }
+
+    storage.update(_tints.data(), _tints.size() * sizeof(std::float_t));
+    _tints_dirty = false;
   }
 }
 

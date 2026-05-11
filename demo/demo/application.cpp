@@ -309,6 +309,8 @@ auto application::update() -> void {
     const auto mouse_position = sbx::devices::input::mouse_position();
   
     const auto id = _read_object_id(object_id_image, mouse_position.x(), mouse_position.y());
+
+    sbx::utility::logger<"demo">::info("_read_object_id: {}", id);
   
     if (!id.has_value() || *id == 0xFFFFFFFFu) {
       terrain_module.set_selected_province_id(0xFFFFFFFFu);

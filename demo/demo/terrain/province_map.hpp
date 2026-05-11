@@ -22,7 +22,7 @@ public:
 
   using province_id = std::uint32_t;
 
-  inline static const auto invalid_id = std::numeric_limits<province_id>::max();
+  inline static const auto invalid_province_id = std::numeric_limits<province_id>::max();
 
   struct province_record {
     landform terrain{landform::plains};

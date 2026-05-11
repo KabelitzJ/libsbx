@@ -44,7 +44,7 @@ TERRAIN_SHAPE_EXP   = np.array([0.7,  1.0,  0.4,  0.6],  dtype=np.float32)
 TERRAIN_NOISE_AMP   = np.array([0.005, 0.005, 0.06, 0.30], dtype=np.float32)
 # inset (in pixels): flat plateau along borders with lower-tier neighbors
 # before the rise begins. mountains have a wider plateau than hills.
-TERRAIN_INSET       = np.array([2.0,  0.0,  3.0,  6.0],  dtype=np.float32)
+TERRAIN_INSET       = np.array([0.0,  0.0,  3.0,  6.0],  dtype=np.float32)
 
 
 def density_at(x, y, w, h, falloff):
@@ -437,6 +437,71 @@ if __name__ == "__main__":
   province_ids_uint32.tofile(output_dir / "province_ids.r32u")
 
   #
+  # Per-province climate tints (Paradox-style biome colors)
+  # Temperature from latitude (Y axis), moisture from noise.
+  # Tint applied as lerp in shader: lerp(albedo, albedo * tint.rgb, tint.a)
+  #
+
+  n_provinces = len(points)
+
+  # latitude: 0 at top (cold/polar), 1 at bottom (warm/equator)
+  py_norm = points[:, 1].astype(np.float32) / args.height
+
+  # add a band of warmer noise to break up the latitudinal gradient
+  temp_noise_sampler = OpenSimplex(seed=args.seed + 100)
+  temp_noise = np.array([
+    temp_noise_sampler.noise2(p[0] * 0.003, p[1] * 0.003) for p in points
+  ], dtype=np.float32) * 0.15
+
+  temperature = np.clip((1.0 - py_norm) + temp_noise, 0.0, 1.0)
+
+  # moisture: pure noise field
+  moist_noise_sampler = OpenSimplex(seed=args.seed + 101)
+  moisture = np.array([
+    moist_noise_sampler.noise2(p[0] * 0.004, p[1] * 0.004) for p in points
+  ], dtype=np.float32)
+  moisture = (moisture + 1.0) * 0.5  # [0, 1]
+
+  def climate_tint(landform_idx, t, m):
+    if landform_idx == 0:  # lake — water covers it
+      return (1.0, 1.0, 1.0, 0.0)
+
+    if landform_idx == 3:  # mountains
+      if t < 0.30:
+        return (1.15, 1.20, 1.35, 0.55)  # alpine / snowy blue-white
+      else:
+        return (1.10, 0.95, 0.80, 0.40)  # warm brown rock
+
+    # plains / hills
+    if t < 0.18:
+      return (1.20, 1.20, 1.25, 0.65)  # tundra — pale
+    elif t < 0.40:
+      if m > 0.55:
+        return (0.50, 0.70, 0.45, 0.50)  # taiga
+      else:
+        return (0.95, 0.95, 0.70, 0.45)  # cold steppe
+    elif t < 0.70:
+      if m > 0.65:
+        return (0.45, 0.85, 0.45, 0.55)  # temperate forest
+      elif m > 0.35:
+        return (0.95, 1.10, 0.65, 0.30)  # grassland (default look)
+      else:
+        return (1.20, 1.10, 0.65, 0.50)  # dry steppe
+    else:
+      if m > 0.65:
+        return (0.55, 1.00, 0.50, 0.55)  # tropical forest
+      elif m > 0.30:
+        return (1.30, 1.05, 0.50, 0.60)  # savanna
+      else:
+        return (1.50, 1.25, 0.65, 0.70)  # desert
+
+  tints = np.zeros((n_provinces, 4), dtype=np.float32)
+  for i in range(n_provinces):
+    tints[i] = climate_tint(int(base[i]), float(temperature[i]), float(moisture[i]))
+
+  tints.tofile(output_dir / "province_tints.f32")
+
+  #
   # Voronoi edges as line geometry for province borders.
   # Each edge is two endpoints in centered pixel coordinates (4 floats per edge).
   # The terrain renderer will lift them onto the heightmap surface in the vertex shader.
@@ -572,6 +637,7 @@ if __name__ == "__main__":
       "province_ids_format": "r32u_uint_le",
       "borders_format": "f32_le_quads_world_centered_pixels",
       "edge_count": edge_count,
+      "tints_format": "f32_le_rgba_per_province",
     },
     "provinces": provinces_meta,
   }
@@ -591,5 +657,6 @@ if __name__ == "__main__":
   print(f"Generated: {output_dir / 'heightmap.r16'}        ({args.width * args.height * 2} bytes, engine)")
   print(f"Generated: {output_dir / 'province_ids.r32u'}    ({args.width * args.height * 4} bytes, engine)")
   print(f"Generated: {output_dir / 'borders.f32'}          ({edge_count * 16} bytes, {edge_count} edges)")
+  print(f"Generated: {output_dir / 'province_tints.f32'}   ({n_provinces * 16} bytes, biome colors)")
   print(f"Generated: {output_dir / 'borders.png'}          ({args.width}x{args.height} visualization)")
   print(f"Generated: {output_dir / 'provinces.yaml'}       (metadata + per-province)")

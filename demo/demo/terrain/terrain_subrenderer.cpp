@@ -134,6 +134,7 @@ auto terrain_subrenderer::render(sbx::graphics::command_buffer& command_buffer) 
   auto& height_storage = graphics_module.get_resource<sbx::graphics::storage_buffer>(terrain_module.height_buffer());
   auto& splat_storage = graphics_module.get_resource<sbx::graphics::storage_buffer>(terrain_module.splat_buffer());
   auto& province_storage = graphics_module.get_resource<sbx::graphics::storage_buffer>(terrain_module.province_buffer());
+  auto& tints_storage = graphics_module.get_resource<sbx::graphics::storage_buffer>(terrain_module.tints_buffer());
 
   auto base_cell_size = terrain_module.cell_size();
   auto terrain_offset_x = terrain_module.offset_x();
@@ -167,6 +168,7 @@ auto terrain_subrenderer::render(sbx::graphics::command_buffer& command_buffer) 
     _push_handler.push("height_data_buffer", height_storage.address());
     _push_handler.push("splat_data_buffer", splat_storage.address());
     _push_handler.push("province_data_buffer", province_storage.address());
+    _push_handler.push("tints_data_buffer", tints_storage.address());
     _push_handler.push("grid_verts", clipmap_grid_verts);
     _push_handler.push("grid_cells", clipmap_grid_size);
     _push_handler.push("ring_cell_size", ring_cell_size);

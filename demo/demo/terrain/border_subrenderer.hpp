@@ -70,9 +70,9 @@ private:
   sbx::graphics::push_handler _push_handler;
   sbx::graphics::descriptor_handler _descriptor_handler;
 
-  std::float_t _width{0.30f};
+  std::float_t _width{0.20f};
   std::float_t _height_offset{0.08f};
-  std::uint32_t _subdivisions{16u};
+  std::uint32_t _subdivisions{4u};
   sbx::math::color _color{0.05f, 0.04f, 0.03f};
 
 }; // class border_subrenderer

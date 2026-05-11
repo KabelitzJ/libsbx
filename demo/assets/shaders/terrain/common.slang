@@ -16,6 +16,7 @@ struct push_data {
   float* height_data_buffer;
   splat_weights* splat_data_buffer;
   uint* province_data_buffer;
+  float4* tints_data_buffer;
 
   // ring & terrain layout
   uint grid_verts;

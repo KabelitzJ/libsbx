@@ -95,7 +95,7 @@ private:
   sbx::graphics::storage_buffer_handle _index_buffer;
   std::uint32_t _index_count{};
 
-  std::float_t _water_level{0.6f};
+  std::float_t _water_level{1.1f};
   sbx::math::color _water_color_shallow{0.20f, 0.45f, 0.55f};
   sbx::math::color _water_color_deep{0.02f, 0.10f, 0.20f};
   std::float_t _depth_fade_distance{2.0f};

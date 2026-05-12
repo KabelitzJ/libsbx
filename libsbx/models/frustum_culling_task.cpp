@@ -163,6 +163,7 @@ auto frustum_culling_task::execute(graphics::command_buffer& command_buffer) -> 
     _push_handler.push("frustum", frustum_address + job.frustum_offset_bytes);
     _push_handler.push("command_count", job.command_count);
     _push_handler.push("instance_count", job.instance_count);
+    _push_handler.push("radius_scale", _radius_scale);
 
     _push_handler.bind(command_buffer);
 
@@ -351,7 +352,7 @@ auto frustum_culling_task::_build_bounds(const static_mesh_material_draw_list::b
       const auto center = (submesh.bounds.min() + submesh.bounds.max()) * 0.5f;
       const auto extents = (submesh.bounds.max() - submesh.bounds.min()) * 0.5f;
 
-      result.push_back(local_aabb{math::vector4f{center.x(), center.y(), center.z(), 0.0f}, math::vector4f{extents.x(), extents.y(), extents.z(), 0.0f} * 2.0f});
+      result.push_back(local_aabb{math::vector4f{center.x(), center.y(), center.z(), 0.0f}, math::vector4f{extents.x(), extents.y(), extents.z(), 0.0f}});
     }
   }
 

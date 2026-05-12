@@ -38,6 +38,7 @@ struct push_data {
   frustum_planes* frustum;
   uint command_count;
   uint instance_count;
+  float radius_scale;
 }; // struct push_data
 
 [[vk::push_constant]]
@@ -96,7 +97,7 @@ void main(uint3 dispatch_thread_id : SV_DispatchThreadID) {
   float scale_y = length(world[1].xyz);
   float scale_z = length(world[2].xyz);
   float max_scale = max(scale_x, max(scale_y, scale_z));
-  float radius = length(aabb.extents.xyz) * max_scale;
+  float radius = length(aabb.extents.xyz) * max_scale * push.radius_scale;
 
   if (test_sphere_frustum(world_center, radius)) {
     uint slot;

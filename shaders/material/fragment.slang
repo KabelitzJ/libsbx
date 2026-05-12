@@ -56,6 +56,13 @@ struct shadow_fs_out {
   float depth : SV_Target0;
 }; // struct shadow_fs_out
 
+struct surface_input {
+  instance_data instance;
+  material_data material;
+  float2 uv;
+  float4 albedo;
+}; // struct surface_input
+
 enum material_feature : uint {
   none = 0,
   cast_shadow = (1 << 0),
@@ -74,6 +81,19 @@ SamplerState samplers[sbx::common::max_sampler_array_size];
 
 [[vk::binding(0, 2)]]
 Texture2D<float4> images[sbx::common::max_image_array_size];
+
+surface_input load_surface<AlphaPolicy : alpha_policy>(uint instance_index, float2 uv) {
+  surface_input surface;
+
+  surface.instance = push.instance_data_buffer[instance_index];
+  surface.material = push.material_data_buffer[surface.instance.material_index];
+  surface.uv = uv * surface.material.uv_scale + surface.material.uv_offset;
+  surface.albedo = get_albedo<AlphaPolicy>(surface.uv, surface.material);
+
+  AlphaPolicy::alpha_test(surface.albedo.a, surface.material.alpha_cutoff);
+
+  return surface;
+}
 
 float3x3 build_tbn(gbuffer_fs_in input, material_data material_data) {
   bool invert_backface_normals = (material_data.flags & material_feature::invert_backface_normals) != 0;
@@ -277,19 +297,53 @@ opaque_fs_out write_gbuffer(gbuffer_fs_in input, float2 uv, float3x3 TBN, float4
 [earlydepthstencil]
 [shader("fragment")]
 opaque_fs_out gbuffer_opaque_main(gbuffer_fs_in input) {
-  uint global_instance = input.instance_index;
+  surface_input surface = load_surface<opaque_alpha_policy>(input.instance_index, input.uv);
 
-  instance_data instance_data = push.instance_data_buffer[global_instance];
-  material_data material_data = push.material_data_buffer[instance_data.material_index];
+  float3x3 TBN = build_tbn(input, surface.material);
 
-  float3x3 TBN = build_tbn(input, material_data);
+  return write_gbuffer(input, surface.uv, TBN, surface.albedo, surface.instance, surface.material);
+}
 
-  // float2 uv = parallax_occlusion_mapping(input, material_data, TBN);
-  float2 uv = input.uv * material_data.uv_scale + material_data.uv_offset;
+[shader("fragment")]
+opaque_fs_out gbuffer_mask_main(gbuffer_fs_in input) {
+  surface_input surface = load_surface<mask_alpha_policy>(input.instance_index, input.uv);
 
-  float4 albedo = get_albedo<opaque_alpha_policy>(uv, material_data);
+  float3x3 TBN = build_tbn(input, surface.material);
 
-  return write_gbuffer(input, uv, TBN, albedo, instance_data, material_data);
+  return write_gbuffer(input, surface.uv, TBN, surface.albedo, surface.instance, surface.material);
+}
+
+[shader("fragment")]
+blend_fs_out blend_main(gbuffer_fs_in input) {
+  blend_fs_out output;
+
+  surface_input surface = load_surface<blend_alpha_policy>(input.instance_index, input.uv);
+
+  float alpha = clamp(surface.albedo.a, 0.01, 0.99);
+  float weight_alpha = pow(min(1.0, alpha * 10.0) + 0.01, 3.0);
+  float weight_depth = pow(1.0 - input.sv_position.z * 0.9, 3.0);
+  float weight = clamp(weight_alpha * 1e8 * weight_depth, 1e-2, 3e3);
+
+  output.accumulator = float4(surface.albedo.rgb * surface.albedo.a, surface.albedo.a) * weight;
+  output.revealage = surface.albedo.a;
+
+  return output;
+}
+
+[shader("fragment")]
+void depth_prepass_main(gbuffer_fs_in input) {
+  load_surface<mask_alpha_policy>(input.instance_index, input.uv);
+}
+
+[shader("fragment")]
+shadow_fs_out shadow_mask_main(shadow_fs_in input) {
+  shadow_fs_out output;
+
+  load_surface<mask_alpha_policy>(input.instance_index, input.uv);
+
+  output.depth = input.sv_position.z;
+
+  return output;
 }
 
 [earlydepthstencil]
@@ -299,94 +353,8 @@ shadow_fs_out shadow_opaque_main(shadow_fs_in input) {
 
   maybe_unused(images);
   maybe_unused(samplers);
-  
-  uint global_instance = input.instance_index;
 
-  instance_data instance_data = push.instance_data_buffer[global_instance];
-  material_data material_data = push.material_data_buffer[instance_data.material_index];
-
-  output.depth = float(input.sv_position.z);
+  output.depth = input.sv_position.z;
 
   return output;
-}
-
-[shader("fragment")]
-opaque_fs_out gbuffer_mask_main(gbuffer_fs_in input) {
-  uint global_instance = input.instance_index;
-
-  instance_data instance_data = push.instance_data_buffer[global_instance];
-  material_data material_data = push.material_data_buffer[instance_data.material_index];
-
-  float3x3 TBN = build_tbn(input, material_data);
-
-  // float2 uv = parallax_occlusion_mapping(input, material_data, TBN);
-  float2 uv = input.uv * material_data.uv_scale + material_data.uv_offset;
-
-  float4 albedo = get_albedo<mask_alpha_policy>(uv, material_data);
-
-  clip(albedo.a - material_data.alpha_cutoff);
-
-  return write_gbuffer(input, uv, TBN, albedo, instance_data, material_data);
-}
-
-[shader("fragment")]
-shadow_fs_out shadow_mask_main(shadow_fs_in input) {
-  shadow_fs_out output;
-  
-  uint global_instance = input.instance_index;
-
-  instance_data instance_data = push.instance_data_buffer[global_instance];
-  material_data material_data = push.material_data_buffer[instance_data.material_index];
-
-  float2 uv = input.uv * material_data.uv_scale + material_data.uv_offset;
-
-  float4 albedo = get_albedo<mask_alpha_policy>(uv, material_data);
-
-  clip(albedo.a - material_data.alpha_cutoff);
-
-  output.depth = float(input.sv_position.z);
-
-  return output;
-}
-
-[shader("fragment")]
-blend_fs_out blend_main(gbuffer_fs_in input) {
-  blend_fs_out output;
-
-  uint global_instance = input.instance_index;
-
-  instance_data instance_data = push.instance_data_buffer[global_instance];
-  material_data material_data = push.material_data_buffer[instance_data.material_index];
-  
-  float4 albedo = get_albedo<blend_alpha_policy>(input.uv, material_data);
-
-  // Equivalent to: clamp(pow(min(1, a*10)+0.01, 3)*1e8 * pow(1 - z*0.9, 3), 1e-2, 3e3)
-  float alpha = clamp(albedo.a, 0.01, 0.99);
-
-  float w_alpha = pow(min(1.0, alpha * 10.0) + 0.01, 3.0);
-  float w_depth = pow(1.0 - input.sv_position.z * 0.9, 3.0);
-
-  float weight = clamp(w_alpha * 1e8 * w_depth, 1e-2, 3e3);
-
-  output.accumulator = float4(albedo.rgb * albedo.a, albedo.a) * weight;
-  output.revealage = albedo.a;
-
-  return output;
-}
-
-[shader("fragment")]
-void depth_prepass_main(gbuffer_fs_in input) {
-  uint global_instance = input.instance_index;
-
-  instance_data instance_data = push.instance_data_buffer[global_instance];
-  material_data material_data = push.material_data_buffer[instance_data.material_index];
-
-  float3x3 TBN = build_tbn(input, material_data);
-
-  // float2 uv = parallax_occlusion_mapping(input, material_data, TBN);
-  float2 uv = input.uv * material_data.uv_scale + material_data.uv_offset;
-
-  float4 albedo = get_albedo<mask_alpha_policy>(uv, material_data);
-
-  clip(albedo.a - material_data.alpha_cutoff);
 }

@@ -146,6 +146,8 @@ private:
 
   std::optional<math::matrix4x4> _debug_view_projection;
 
+  std::float_t _radius_scale{2.0f};
+
 }; // class frustum_culling_task
 
 } // namespace sbx::models

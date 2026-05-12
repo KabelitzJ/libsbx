@@ -90,6 +90,21 @@ struct push_data {
   transform_data* transform_data_buffer;
   material_data* material_data_buffer;
   instance_data* instance_data_buffer;
+#if defined(VERTEX_STREAM_COLOR)
+  float4* color_buffer;
+#endif
+#if defined(VERTEX_STREAM_CUSTOM0)
+  float4* custom0_buffer;
+#endif
+#if defined(VERTEX_STREAM_CUSTOM1)
+  float4* custom1_buffer;
+#endif
+#if defined(VERTEX_STREAM_CUSTOM2)
+  float4* custom2_buffer;
+#endif
+#if defined(VERTEX_STREAM_CUSTOM3)
+  float4* custom3_buffer;
+#endif
 }; // struct push_data
 
 #endif // MATERIAL_GBUFFER_COMMON_SLANG_

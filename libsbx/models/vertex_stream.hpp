@@ -4,6 +4,7 @@
 
 #include <array>
 #include <cstdint>
+#include <optional>
 #include <string_view>
 
 #include <libsbx/utility/enum.hpp>
@@ -44,14 +45,14 @@ inline constexpr auto vertex_stream_descriptors = std::array<vertex_stream_descr
   vertex_stream_descriptor{vertex_stream::custom3, "custom3", "custom3_buffer", "VERTEX_STREAM_CUSTOM3"}
 };
 
-inline constexpr auto vertex_stream_index(const vertex_stream stream) -> std::uint32_t {
+inline constexpr auto vertex_stream_index(const vertex_stream stream) -> std::optional<std::uint32_t> {
   for (auto i = std::uint32_t{0u}; i < static_cast<std::uint32_t>(vertex_stream_descriptors.size()); ++i) {
     if (vertex_stream_descriptors[i].value == stream) {
       return i;
     }
   }
 
-  return ~std::uint32_t{0u};
+  return std::nullopt;
 }
 
 } // namespace sbx::models

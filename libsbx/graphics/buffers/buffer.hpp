@@ -26,6 +26,8 @@ public:
   using size_type = VkDeviceSize;
   using address_type = VkDeviceAddress;
 
+  inline static constexpr auto null = address_type{0};
+
   buffer(size_type size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, memory::observer_ptr<const void> memory = nullptr);
 
   virtual ~buffer();

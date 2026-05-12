@@ -330,31 +330,31 @@ auto mesh::set_stream(vertex_stream stream, std::span<const math::vector4> data)
   utility::assert_that(data.size() == _vertex_count, fmt::format("Stream size {} does not match mesh vertex count {}", data.size(), _vertex_count));
 
   const auto index = vertex_stream_index(stream);
-  utility::assert_that(index < vertex_stream_count, "Invalid vertex_stream");
+  utility::assert_that(!index, "Invalid vertex_stream");
 
   auto streams = std::array<std::vector<math::vector4>, vertex_stream_count>{};
-  streams[index].assign(data.begin(), data.end());
+  streams[*index].assign(data.begin(), data.end());
 
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 
   if (_available_streams.has(stream)) {
-    graphics_module.remove_resource<graphics::buffer>(_stream_buffers[index]);
+    graphics_module.remove_resource<graphics::buffer>(_stream_buffers[*index]);
     _available_streams.clear(stream);
   }
 
   _upload_streams(streams);
 }
 
-auto mesh::stream_address(vertex_stream stream) const -> std::uint64_t {
+auto mesh::stream_address(vertex_stream stream) const -> graphics::buffer::address_type {
   const auto index = vertex_stream_index(stream);
 
-  if (index >= vertex_stream_count || !_available_streams.has(stream)) {
-    return std::uint64_t{0u};
+  if (!index || !_available_streams.has(stream)) {
+    return graphics::buffer::null;
   }
 
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 
-  return graphics_module.get_resource<graphics::buffer>(_stream_buffers[index]).address();
+  return graphics_module.get_resource<graphics::buffer>(_stream_buffers[*index]).address();
 }
 
 auto mesh::available_streams() const noexcept -> const utility::bit_field<vertex_stream>& {

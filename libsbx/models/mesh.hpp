@@ -45,7 +45,7 @@ public:
 
   auto set_stream(vertex_stream stream, std::span<const math::vector4> data) -> void;
 
-  auto stream_address(vertex_stream stream) const -> std::uint64_t;
+  auto stream_address(vertex_stream stream) const -> graphics::buffer::address_type;
 
   auto available_streams() const noexcept -> const utility::bit_field<vertex_stream>&;
 

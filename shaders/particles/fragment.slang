@@ -11,7 +11,7 @@ struct fs_in {
 }; // struct fs_in
 
 struct fs_out {
-  float4 accum : SV_Target0;
+  float4 accumulator : SV_Target0;
   float revealage : SV_Target1;
 }; // struct fs_out
 
@@ -45,7 +45,7 @@ fs_out main(fs_in input) {
 
   float weight = clamp(w_alpha * 1e8 * w_depth, 1e-2, 3e3);
 
-  output.accum = float4(albedo.rgb * albedo.a, albedo.a) * weight;
+  output.accumulator = float4(albedo.rgb * albedo.a, albedo.a) * weight;
   output.revealage = albedo.a;
 
   return output;

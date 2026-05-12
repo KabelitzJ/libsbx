@@ -72,7 +72,7 @@ renderer::renderer()
     .color_write_mask = sbx::graphics::color_component::r
   };
 
-  auto accum = create_attachment("accum", sbx::graphics::attachment::type::image, sbx::math::color{0.0f, 0.0f, 0.0f, 0.0f}, sbx::graphics::format::r32g32b32a32_sfloat, accum_blend);
+  auto accumulator = create_attachment("accumulator", sbx::graphics::attachment::type::image, sbx::math::color{0.0f, 0.0f, 0.0f, 0.0f}, sbx::graphics::format::r32g32b32a32_sfloat, accum_blend);
   auto revealage = create_attachment("revealage", sbx::graphics::attachment::type::image, sbx::math::color{1.0f, 0.0f, 0.0f, 0.0f}, sbx::graphics::format::r32_sfloat, revealage_blend);
 
   const auto resolve_blend = sbx::graphics::blend_state{
@@ -145,7 +145,7 @@ renderer::renderer()
     pass.depends_on(deferred_pass, culling_pass, skinning_pass, particles_pass);
 
     pass.writes(depth, sbx::graphics::attachment_load_operation::load);
-    pass.writes(accum, sbx::graphics::attachment_load_operation::clear);
+    pass.writes(accumulator, sbx::graphics::attachment_load_operation::clear);
     pass.writes(revealage, sbx::graphics::attachment_load_operation::clear);
 
     return pass;
@@ -156,7 +156,7 @@ renderer::renderer()
 
     pass.depends_on(deferred_pass, transparency_pass, shadow_pass);
 
-    pass.reads(albedo, position, normal, material, emissive, accum, revealage, shadow);
+    pass.reads(albedo, position, normal, material, emissive, accumulator, revealage, shadow);
 
     pass.writes(depth, sbx::graphics::attachment_load_operation::load);
     pass.writes(resolve, sbx::graphics::attachment_load_operation::clear);
@@ -230,7 +230,7 @@ renderer::renderer()
   add_subrenderer<sbx::scenes::skybox_subrenderer>(resolve_pass);
 
   auto resolve_transparent_attachment_names = std::vector<std::pair<std::string, std::string>>{
-    {"accum_image", "accum"},
+    {"accumulator_image", "accumulator"},
     {"revealage_image", "revealage"}
   };
 

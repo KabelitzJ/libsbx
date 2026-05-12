@@ -39,7 +39,7 @@ class static_mesh_shadow_subrenderer final : public graphics::subrenderer {
     }
   };
 
-  inline static constexpr auto default_pipeline_path = std::string_view{"engine://shaders/shadow"};
+  inline static constexpr auto default_pipeline_path = std::string_view{"engine://shaders/material_gbuffer"};
 
 public:
 
@@ -74,10 +74,10 @@ private:
 
   auto _get_or_create_descriptor_data(const graphics::graphics_pipeline_handle& handle) -> descriptor_data&;
 
-  inline static const auto _entry_point = std::array<std::string, 3u>{
-    "opaque_main",  // alpha_mode::opaque
-    "mask_main",    // alpha_mode::mask 
-    "blend_main"    // alpha_mode::blend
+  inline static const auto _entry_points = std::array<std::string, 3u>{
+    "shadow_opaque_main", // alpha_mode::opaque
+    "shadow_mask_main",   // alpha_mode::mask 
+    "blend_main"          // alpha_mode::blend
   };
 
   std::vector<graphics::attachment_description> _attachments;

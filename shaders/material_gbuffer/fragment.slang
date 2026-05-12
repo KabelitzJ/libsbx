@@ -4,11 +4,8 @@
 
 #include <deferred_pbr_material/common.slang>
 #include <deferred_pbr_material/alpha_policy.slang>
-#include <deferred_pbr_material/surface_context.slang>
 
-#include SBX_SURFACE_INCLUDE
-
-struct fs_in {
+struct gbuffer_fs_in {
   [[vk::location(0)]] float3 position : POSITION;
   [[vk::location(1)]] float3 normal : NORMAL;
   [[vk::location(2)]] float4 tangent : TANGENT;
@@ -31,7 +28,13 @@ struct fs_in {
 #endif
   float4 sv_position : SV_Position;
   bool sv_is_front_face: SV_IsFrontFace;
-}; // struct fs_in
+}; // struct gbuffer_fs_in
+
+struct shadow_fs_in {
+  [[vk::location(0)]] float2 uv : UV;
+  [[vk::location(1)]] nointerpolation uint instance_index : INSTANCE_INDEX;
+  float4 sv_position : SV_Position;
+}; // struct shadow_fs_in
 
 struct opaque_fs_out {
   float4 albedo : SV_Target0;
@@ -44,9 +47,13 @@ struct opaque_fs_out {
 }; // struct opaque_fs_out
 
 struct blend_fs_out {
-  float4 accum : SV_Target0;
+  float4 accumulator : SV_Target0;
   float revealage : SV_Target1;
 }; // struct blend_fs_out
+
+struct shadow_fs_out {
+  float depth : SV_Target0;
+}; // struct shadow_fs_out
 
 enum material_feature : uint {
   none = 0,
@@ -67,7 +74,7 @@ SamplerState samplers[sbx::common::max_sampler_array_size];
 [[vk::binding(0, 2)]]
 Texture2D<float4> images[sbx::common::max_image_array_size];
 
-float3x3 build_tbn(fs_in input, material_data material_data) {
+float3x3 build_tbn(gbuffer_fs_in input, material_data material_data) {
   bool invert_backface_normals = (material_data.flags & material_feature::invert_backface_normals) != 0;
 
   float sign = (invert_backface_normals && !input.sv_is_front_face) ? -1.0 : 1.0;
@@ -175,7 +182,7 @@ float get_height(float2 uv, material_data material_data) {
   return height * material_data.height_scale + material_data.height_offset;
 }
 
-float2 parallax_occlusion_mapping(fs_in input, material_data material_data, float3x3 TBN) {
+float2 parallax_occlusion_mapping(gbuffer_fs_in input, material_data material_data, float3x3 TBN) {
   uint image_index = material_data.height_image_index;
 
   float2 uv = input.uv * material_data.uv_scale + material_data.uv_offset;
@@ -234,58 +241,38 @@ float2 parallax_occlusion_mapping(fs_in input, material_data material_data, floa
   return lerp(current_uv, previous_uv, weight);
 }
 
-surface_fragment_context build_surface_context(fs_in input, float2 uv, float3x3 TBN, material_data material_data) {
-  surface_fragment_context ctx;
-  ctx.position = input.position;
-  ctx.normal = input.normal;
-  ctx.tangent = input.tangent;
-  ctx.uv = uv;
-  ctx.instance_index = input.instance_index;
-  ctx.material = material_data;
-#if defined(VERTEX_STREAM_COLOR)
-  ctx.color = input.color;
-#endif
-#if defined(VERTEX_STREAM_CUSTOM0)
-  ctx.custom0 = input.custom0;
-#endif
-#if defined(VERTEX_STREAM_CUSTOM1)
-  ctx.custom1 = input.custom1;
-#endif
-#if defined(VERTEX_STREAM_CUSTOM2)
-  ctx.custom2 = input.custom2;
-#endif
-#if defined(VERTEX_STREAM_CUSTOM3)
-  ctx.custom3 = input.custom3;
-#endif
-
-  ctx.world_normal = get_normal(TBN, uv, input.normal, input.sv_is_front_face, material_data);
-  ctx.metallic_roughness_occlusion = get_material(uv, material_data);
-  ctx.emissive = get_emissive(uv, material_data);
-
-  return ctx;
-}
-
-opaque_fs_out write_gbuffer(fs_in input, surface_fragment_context ctx, instance_data instance_data, material_data material_data) {
+opaque_fs_out write_gbuffer(gbuffer_fs_in input, float2 uv, float3x3 TBN, float4 albedo, instance_data instance_data, material_data material_data) {
   opaque_fs_out output;
+
+  float3 normal = get_normal(TBN, uv, input.normal, input.sv_is_front_face, material_data);
+  float3 metallic_roughness_occlusion = get_material(uv, material_data);
+  float3 emissive = get_emissive(uv, material_data);
 
   float material_flags = float(material_data.flags & 255) / 255.0;
 
-  output.albedo = ctx.albedo;
-  output.position = float4(ctx.position, 1.0);
+  output.albedo = albedo;
+  output.position = float4(input.position, 1.0);
+
   // encode from [-1, 1] -> [0, 1]
-  output.normal = float4(ctx.world_normal * 0.5f + 0.5f, 0.0);
-  output.material = float4(ctx.metallic_roughness_occlusion, material_flags);
-  output.emissive = float4(ctx.emissive, material_data.specular_factor);
+  output.normal = float4(normal * 0.5f + 0.5f, 0.0);
+
+  output.material = float4(metallic_roughness_occlusion, material_flags);
+  output.emissive = float4(emissive, material_data.specular_factor);
   output.object_id = instance_data.object_id;
+
   // Linearize depth and encode in [0, 1]
   output.linear_depth = sbx::common::linearize_depth(input.sv_position.z, scene.camera_near, scene.camera_far) / scene.camera_far;
 
   return output;
 }
 
+[noinline] T maybe_unused<T>(T value) {
+  return value;
+}
+
 [earlydepthstencil]
 [shader("fragment")]
-opaque_fs_out opaque_main(fs_in input) {
+opaque_fs_out gbuffer_opaque_main(gbuffer_fs_in input) {
   uint global_instance = input.instance_index;
 
   instance_data instance_data = push.instance_data_buffer[global_instance];
@@ -296,16 +283,31 @@ opaque_fs_out opaque_main(fs_in input) {
   // float2 uv = parallax_occlusion_mapping(input, material_data, TBN);
   float2 uv = input.uv * material_data.uv_scale + material_data.uv_offset;
 
-  surface_fragment_context ctx = build_surface_context(input, uv, TBN, material_data);
-  ctx.albedo = get_albedo<opaque_alpha_policy>(uv, material_data);
+  float4 albedo = get_albedo<opaque_alpha_policy>(uv, material_data);
 
-  sbx_surface_fragment(ctx);
+  return write_gbuffer(input, uv, TBN, albedo, instance_data, material_data);
+}
 
-  return write_gbuffer(input, ctx, instance_data, material_data);
+[earlydepthstencil]
+[shader("fragment")]
+shadow_fs_out shadow_opaque_main(shadow_fs_in input) {
+  shadow_fs_out output;
+
+  maybe_unused(images);
+  maybe_unused(samplers);
+  
+  uint global_instance = input.instance_index;
+
+  instance_data instance_data = push.instance_data_buffer[global_instance];
+  material_data material_data = push.material_data_buffer[instance_data.material_index];
+
+  output.depth = float(input.sv_position.z);
+
+  return output;
 }
 
 [shader("fragment")]
-opaque_fs_out mask_main(fs_in input) {
+opaque_fs_out gbuffer_mask_main(gbuffer_fs_in input) {
   uint global_instance = input.instance_index;
 
   instance_data instance_data = push.instance_data_buffer[global_instance];
@@ -320,16 +322,31 @@ opaque_fs_out mask_main(fs_in input) {
 
   clip(albedo.a - material_data.alpha_cutoff);
 
-  surface_fragment_context ctx = build_surface_context(input, uv, TBN, material_data);
-  ctx.albedo = albedo;
-
-  sbx_surface_fragment(ctx);
-
-  return write_gbuffer(input, ctx, instance_data, material_data);
+  return write_gbuffer(input, uv, TBN, albedo, instance_data, material_data);
 }
 
 [shader("fragment")]
-blend_fs_out blend_main(fs_in input) {
+shadow_fs_out shadow_mask_main(shadow_fs_in input) {
+  shadow_fs_out output;
+  
+  uint global_instance = input.instance_index;
+
+  instance_data instance_data = push.instance_data_buffer[global_instance];
+  material_data material_data = push.material_data_buffer[instance_data.material_index];
+
+  float2 uv = input.uv * material_data.uv_scale + material_data.uv_offset;
+
+  float4 albedo = get_albedo<mask_alpha_policy>(uv, material_data);
+
+  clip(albedo.a - material_data.alpha_cutoff);
+
+  output.depth = float(input.sv_position.z);
+
+  return output;
+}
+
+[shader("fragment")]
+blend_fs_out blend_main(gbuffer_fs_in input) {
   blend_fs_out output;
 
   uint global_instance = input.instance_index;
@@ -347,14 +364,14 @@ blend_fs_out blend_main(fs_in input) {
 
   float weight = clamp(w_alpha * 1e8 * w_depth, 1e-2, 3e3);
 
-  output.accum = float4(albedo.rgb * albedo.a, albedo.a) * weight;
+  output.accumulator = float4(albedo.rgb * albedo.a, albedo.a) * weight;
   output.revealage = albedo.a;
 
   return output;
 }
 
 [shader("fragment")]
-void depth_prepass_main(fs_in input) {
+void depth_prepass_main(gbuffer_fs_in input) {
   uint global_instance = input.instance_index;
 
   instance_data instance_data = push.instance_data_buffer[global_instance];

@@ -1,5 +1,5 @@
-#ifndef ALPHA_POLICY_SLANG_
-#define ALPHA_POLICY_SLANG_
+#ifndef MATERIAL_GBUFFER_ALPHA_POLICY_SLANG_
+#define MATERIAL_GBUFFER_ALPHA_POLICY_SLANG_
 
 interface alpha_policy {
   static float4 combine_colors(float4 salmpled, float4 base);
@@ -17,4 +17,10 @@ struct mask_alpha_policy : alpha_policy {
   }
 }; // struct mask_alpha_policy
 
-#endif // ALPHA_POLICY_SLANG_
+struct blend_alpha_policy : alpha_policy {
+  static float4 combine_colors(float4 salmpled, float4 base) { 
+    return float4(salmpled * base); 
+  }
+}; // struct blend_alpha_policy
+
+#endif // MATERIAL_GBUFFER_ALPHA_POLICY_SLANG_

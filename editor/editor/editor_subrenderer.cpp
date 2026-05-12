@@ -10,6 +10,8 @@
 
 #include <editor/bindings/imgui.hpp>
 
+#include <editor/editor_module.hpp>
+
 namespace editor {
 
 editor_subrenderer::editor_subrenderer(const std::vector<sbx::graphics::attachment_description>& attachment_descriptions) {
@@ -27,10 +29,11 @@ auto editor_subrenderer::render(sbx::graphics::command_buffer& command_buffer) -
 
   auto& graphics_module = sbx::core::engine::get_module<sbx::graphics::graphics_module>();
   auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
+  auto& editor_module = sbx::core::engine::get_module<editor::editor_module>();
 
   auto& scene_image = static_cast<const sbx::graphics::image2d&>(graphics_module.attachment("selection"));
 
-  _viewport_panel.draw(scene_image, _hierarchy_panel.selected_node());
+  _viewport_panel.draw(scene_image, editor_module.selected_node());
 
   const auto& panel_size = _viewport_panel.panel_size();
 
@@ -48,12 +51,12 @@ auto editor_subrenderer::render(sbx::graphics::command_buffer& command_buffer) -
   sbx::devices::input::set_scene_input_active(scene_active);
 
   if (auto picked = _viewport_panel.consume_picked_node()) {
-    _hierarchy_panel.set_selected_node(*picked);
+    editor_module.set_selected_node(*picked);
   }
 
   _log_panel.draw();
   _hierarchy_panel.draw();
-  _inspector_panel.draw(_hierarchy_panel.selected_node());
+  _inspector_panel.draw(editor_module.selected_node());
   _asset_browser_panel.draw();
 
   _context.render();

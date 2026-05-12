@@ -5,7 +5,7 @@
 #include <libsbx/scenes/scene.hpp>
 #include <libsbx/scenes/scene_graph.hpp>
 
-#include <editor/selection.hpp>
+#include <editor/editor_module.hpp>
 
 namespace editor {
 
@@ -16,14 +16,6 @@ public:
   hierarchy_panel() = default;
 
   auto draw() -> void;
-
-  auto selected_node() const -> sbx::scenes::node {
-    return selection::selected_node();
-  }
-
-  auto set_selected_node(sbx::scenes::node node) -> void {
-    selection::set_selected_node(node);
-  }
 
 private:
 

@@ -12,10 +12,13 @@
 
 #include <editor/bindings/imgui.hpp>
 
+#include <editor/editor_module.hpp>
+
 namespace editor {
 
 auto hierarchy_panel::draw() -> void {
   auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
+  auto& editor_module = sbx::core::engine::get_module<editor::editor_module>();
 
   if (!scenes_module.has_active_scene()) {
     return;
@@ -39,7 +42,7 @@ auto hierarchy_panel::draw() -> void {
   }
 
   if (ImGui::IsMouseDown(0) && ImGui::IsWindowHovered()) {
-    selection::set_selected_node(sbx::scenes::node::null);
+    editor_module.set_selected_node(sbx::scenes::node::null);
   }
 
   if (ImGui::BeginPopupContextWindow("##hierarchy_context", ImGuiPopupFlags_NoOpenOverItems | ImGuiPopupFlags_MouseButtonRight)) {
@@ -57,6 +60,8 @@ auto hierarchy_panel::draw() -> void {
 }
 
 auto hierarchy_panel::_draw_node(sbx::scenes::scene_graph& graph, sbx::scenes::node node) -> void {
+  auto& editor_module = sbx::core::engine::get_module<editor::editor_module>();
+
   const auto& tag = graph.get_component<sbx::scenes::tag>(node);
   const auto& relationship = graph.get_component<sbx::scenes::relationship>(node);
 
@@ -64,7 +69,7 @@ auto hierarchy_panel::_draw_node(sbx::scenes::scene_graph& graph, sbx::scenes::n
 
   auto flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAvailWidth;
 
-  if (selection::selected_node() == node) {
+  if (editor_module.selected_node() == node) {
     flags |= ImGuiTreeNodeFlags_Selected;
   }
 
@@ -81,7 +86,7 @@ auto hierarchy_panel::_draw_node(sbx::scenes::scene_graph& graph, sbx::scenes::n
   auto is_open = ImGui::TreeNodeEx(label.c_str(), flags);
 
   if (ImGui::IsItemClicked()) {
-    selection::set_selected_node(node);
+    editor_module.set_selected_node(node);
   }
 
   if (ImGui::BeginPopupContextItem()) {
@@ -91,13 +96,13 @@ auto hierarchy_panel::_draw_node(sbx::scenes::scene_graph& graph, sbx::scenes::n
     }
 
     if (!is_camera && ImGui::MenuItem("Delete")) {
-      if (selection::selected_node() == node) {
-        selection::set_selected_node(sbx::scenes::node::null);
+      if (editor_module.selected_node() == node) {
+        editor_module.set_selected_node(sbx::scenes::node::null);
       }
 
       graph.destroy_node(node);
 
-      selection::set_selected_node(sbx::scenes::node::null);
+      editor_module.set_selected_node(sbx::scenes::node::null);
 
       ImGui::EndPopup();
 
@@ -125,6 +130,8 @@ auto hierarchy_panel::_draw_node(sbx::scenes::scene_graph& graph, sbx::scenes::n
 }
 
 auto hierarchy_panel::_draw_create_node_popup(sbx::scenes::scene_graph& graph) -> void {
+  auto& editor_module = sbx::core::engine::get_module<editor::editor_module>();
+
   if (_open_create_popup) {
     ImGui::OpenPopup("##create_node");
     _name_buffer.fill('\0');
@@ -165,7 +172,7 @@ auto hierarchy_panel::_draw_create_node_popup(sbx::scenes::scene_graph& graph) -
 
       auto node = graph.create_child_node(_create_parent, name);
 
-      selection::set_selected_node(node);
+      editor_module.set_selected_node(node);
 
       ImGui::CloseCurrentPopup();
     }

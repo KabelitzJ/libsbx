@@ -2,19 +2,17 @@
 #include <libsbx/common/convert_to.slang>
 #include <libsbx/common/scene_data.slang>
 
-#include <deferred_pbr_material/common.slang>
-#include <deferred_pbr_material/surface_context.slang>
-
-#include SBX_SURFACE_INCLUDE
+#include <material_gbuffer/common.slang>
 
 struct vs_in {
   uint vertex_id : SV_VertexID;
   uint instance_id : SV_InstanceID;
   uint base_vertex : SV_StartVertexLocation;
   uint base_instance : SV_StartInstanceLocation;
+  uint view_id : SV_ViewID;
 }; // struct vs_in
 
-struct vs_out {
+struct gbuffer_vs_out {
   [[vk::location(0)]] float3 position : POSITION;
   [[vk::location(1)]] float3 normal : NORMAL;
   [[vk::location(2)]] float4 tangent : TANGENT;
@@ -36,7 +34,13 @@ struct vs_out {
   [[vk::location(9)]] float4 custom3 : CUSTOM3;
 #endif
   float4 sv_position : SV_Position;
-}; // struct vs_out
+}; // struct gbuffer_vs_out
+
+struct shadow_vs_out {
+  [[vk::location(0)]] float2 uv : UV;
+  [[vk::location(1)]] nointerpolation uint instance_index : INSTANCE_INDEX;
+  float4 sv_position : SV_Position;
+}; // struct shadow_vs_out
 
 [[vk::push_constant]] 
 ConstantBuffer<push_data> push;
@@ -84,19 +88,16 @@ float3 apply_sway(float3 world_position, float local_height, material_data mater
   return world_position;
 }
 
-[shader("vertex")]
-vs_out main(vs_in input) {
-  vs_out output;
+vertex_setup compute_vertex_setup(vs_in input) {
+  vertex_setup setup;
 
-  uint global_vertex = input.vertex_id + input.base_vertex;
-  uint global_instance = input.instance_id + input.base_instance;
+  setup.global_vertex = input.vertex_id + input.base_vertex;
+  setup.global_instance = input.instance_id + input.base_instance;
 
-  vertex vertex = push.vertex_buffer[global_vertex];
-
-  instance_data instance_data = push.instance_data_buffer[global_instance];
-
+  vertex vertex = push.vertex_buffer[setup.global_vertex];
+  instance_data instance_data = push.instance_data_buffer[setup.global_instance];
   transform_data transform_data = push.transform_data_buffer[instance_data.transform_index];
-  material_data material_data = push.material_data_buffer[instance_data.material_index];
+  setup.material = push.material_data_buffer[instance_data.material_index];
 
   float3 in_position = float3(vertex.position_x, vertex.position_y, vertex.position_z);
   float3 in_normal = float3(vertex.normal_x, vertex.normal_y, vertex.normal_z);
@@ -104,47 +105,58 @@ vs_out main(vs_in input) {
   float4 in_tangent = float4(vertex.tangent_x, vertex.tangent_y, vertex.tangent_z, vertex.tangent_w);
 
   float3 world_position = mul(transform_data.model, float4(in_position, 1.0)).xyz;
+  world_position = apply_sway(world_position, in_position.y, setup.material, scene.time, scene.wind_direction);
 
-  world_position = apply_sway(world_position, in_position.y, material_data, scene.time, scene.wind_direction);
+  setup.world_position = world_position;
+  setup.world_normal = normalize(mul(transform_data.normal, float4(in_normal, 0.0)).xyz);
+  setup.world_tangent = float4(normalize(mul(transform_data.normal, float4(in_tangent.xyz, 0.0)).xyz), in_tangent.w);
+  setup.uv = in_uv;
 
-  surface_vertex_context ctx;
-  ctx.vertex_id = global_vertex;
-  ctx.instance_id = global_instance;
-  ctx.local_position = in_position;
-  ctx.local_normal = in_normal;
-  ctx.local_tangent = in_tangent;
-  ctx.local_uv = in_uv;
-  ctx.material = material_data;
-  ctx.world_position = world_position;
-  ctx.world_normal = normalize(mul(transform_data.normal, float4(in_normal, 0.0)).xyz);
-  ctx.world_tangent = float4(normalize(mul(transform_data.normal, float4(in_tangent.xyz, 0.0)).xyz), in_tangent.w);
-  ctx.uv = in_uv;
+  return setup;
+}
 
-  sbx_surface_vertex(ctx);
+[shader("vertex")]
+gbuffer_vs_out gbuffer_main(vs_in input) {
+  gbuffer_vs_out output;
 
-  output.position = ctx.world_position;
-  output.normal = ctx.world_normal;
-  output.tangent = ctx.world_tangent;
-  output.uv = ctx.uv;
-  output.instance_index = global_instance;
+  vertex_setup setup = compute_vertex_setup(input);
+
+  output.position = setup.world_position;
+  output.normal = setup.world_normal;
+  output.tangent = setup.world_tangent;
+  output.uv = setup.uv;
+  output.instance_index = setup.global_instance;
 
 #if defined(VERTEX_STREAM_COLOR)
-  output.color = push.color_buffer[global_vertex];
+  output.color = push.color_buffer[setup.global_vertex];
 #endif
 #if defined(VERTEX_STREAM_CUSTOM0)
-  output.custom0 = push.custom0_buffer[global_vertex];
+  output.custom0 = push.custom0_buffer[setup.global_vertex];
 #endif
 #if defined(VERTEX_STREAM_CUSTOM1)
-  output.custom1 = push.custom1_buffer[global_vertex];
+  output.custom1 = push.custom1_buffer[setup.global_vertex];
 #endif
 #if defined(VERTEX_STREAM_CUSTOM2)
-  output.custom2 = push.custom2_buffer[global_vertex];
+  output.custom2 = push.custom2_buffer[setup.global_vertex];
 #endif
 #if defined(VERTEX_STREAM_CUSTOM3)
-  output.custom3 = push.custom3_buffer[global_vertex];
+  output.custom3 = push.custom3_buffer[setup.global_vertex];
 #endif
 
-  output.sv_position = mul(scene.projection, mul(scene.view, float4(ctx.world_position, 1.0)));
+  output.sv_position = mul(scene.projection, mul(scene.view, float4(setup.world_position, 1.0)));
+
+  return output;
+}
+
+[shader("vertex")]
+shadow_vs_out shadow_main(vs_in input) {
+  shadow_vs_out output;
+
+  vertex_setup setup = compute_vertex_setup(input);
+
+  output.uv = setup.uv;
+  output.instance_index = setup.global_instance;
+  output.sv_position = mul(scene.light_spaces[input.view_id], float4(setup.world_position, 1.0));
 
   return output;
 }

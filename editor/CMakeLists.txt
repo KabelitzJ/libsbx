@@ -37,9 +37,10 @@ add_dependencies(${PROJECT_NAME} staged_shaders_editor)
 target_sources(
   ${PROJECT_NAME}
   PRIVATE
-    "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/application.cpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/bindings/1.91.8-docking/imgui_impl_glfw.cpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/bindings/1.91.8-docking/imgui_impl_vulkan.cpp"
+    "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/application.cpp"
+    "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/editor_module.cpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/editor_context.cpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/editor_subrenderer.cpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/editor.cpp"
@@ -57,7 +58,6 @@ target_sources(
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/bindings/imgui.hpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/editor_context.hpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/editor_subrenderer.hpp"
-    "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/selection.hpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/panels/asset_browser_panel.hpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/panels/hierarchy_panel.hpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/panels/inspector_panel.hpp"

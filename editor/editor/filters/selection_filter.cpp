@@ -5,7 +5,7 @@
 
 #include <libsbx/scenes/scenes_module.hpp>
 
-#include <editor/selection.hpp>
+#include <editor/editor_module.hpp>
 
 namespace editor {
 
@@ -18,13 +18,14 @@ auto selection_filter::render(sbx::graphics::command_buffer& command_buffer) -> 
   SBX_PROFILE_SCOPE("selection_filter::render");
 
   auto& graphics_module = sbx::core::engine::get_module<sbx::graphics::graphics_module>();
+  auto& editor_module = sbx::core::engine::get_module<editor::editor_module>();
 
   auto& pipeline = base::pipeline();
   auto& descriptor_handler = base::descriptor_handler();
 
   pipeline.bind(command_buffer);
 
-  const auto selected = selection::selected_node();
+  const auto selected = editor_module.selected_node();
   const auto selected_id = static_cast<std::uint32_t>(selected);
 
   _push_handler.push("color", sbx::math::color{1.0f, 0.86f, 0.49f, 1.0f});

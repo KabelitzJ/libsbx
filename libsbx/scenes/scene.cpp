@@ -15,7 +15,7 @@ namespace sbx::scenes {
 
 scene::scene(const std::filesystem::path& path, component_io_registry& component_io, asset_io_registry& asset_io, asset_registry& registry)
 : _graph{},
-  _environment{_graph, scenes::node::null, math::vector3{-1.0f, -1.0f, -1.0f}, math::color{1.0f, 1.0f, 1.0f, 1.0f}},
+  _environment{_graph, scenes::node::null, math::vector3{-1.0f, -1.0f, -1.0f}, math::color{1.0f, 0.92f, 0.78f, 5.0f}},
   _serializer{component_io, asset_io, registry} {
   const auto data = _serializer.load(path, _graph);
 

@@ -82,7 +82,7 @@ renderer::renderer()
     .color_write_mask = sbx::graphics::color_component::r
   };
 
-  auto accum = create_attachment("accum", sbx::graphics::attachment::type::image, sbx::math::color{0.0f, 0.0f, 0.0f, 0.0f}, sbx::graphics::format::r32g32b32a32_sfloat, accum_blend);
+  auto accumulator = create_attachment("accumulator", sbx::graphics::attachment::type::image, sbx::math::color{0.0f, 0.0f, 0.0f, 0.0f}, sbx::graphics::format::r32g32b32a32_sfloat, accum_blend);
   auto revealage = create_attachment("revealage", sbx::graphics::attachment::type::image, sbx::math::color{1.0f, 0.0f, 0.0f, 0.0f}, sbx::graphics::format::r32_sfloat, revealage_blend);
 
   const auto resolve_blend = sbx::graphics::blend_state{
@@ -134,7 +134,7 @@ renderer::renderer()
     return pass;
   });
 
-  auto deferred_pass = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
+  auto gbuffer_pass = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
     auto pass = context.graphics_pass("deferred", scene_viewport);
 
     pass.depends_on(skinning_pass, culling_pass);
@@ -154,10 +154,10 @@ renderer::renderer()
   auto transparency_pass = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
     auto pass = context.graphics_pass("transparency", scene_viewport);
 
-    pass.depends_on(deferred_pass, culling_pass, skinning_pass, particles_pass);
+    pass.depends_on(gbuffer_pass, culling_pass, skinning_pass, particles_pass);
 
     pass.writes(depth, sbx::graphics::attachment_load_operation::load);
-    pass.writes(accum, sbx::graphics::attachment_load_operation::clear);
+    pass.writes(accumulator, sbx::graphics::attachment_load_operation::clear);
     pass.writes(revealage, sbx::graphics::attachment_load_operation::clear);
 
     return pass;
@@ -166,9 +166,9 @@ renderer::renderer()
   auto resolve_pass = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
     auto pass = context.graphics_pass("resolve", scene_viewport);
 
-    pass.depends_on(deferred_pass, transparency_pass, shadow_pass);
+    pass.depends_on(gbuffer_pass, transparency_pass, shadow_pass);
 
-    pass.reads(albedo, position, normal, material, emissive, accum, revealage, shadow);
+    pass.reads(albedo, position, normal, material, emissive, accumulator, revealage, shadow);
 
     pass.writes(depth, sbx::graphics::attachment_load_operation::load);
     pass.writes(resolve, sbx::graphics::attachment_load_operation::clear);
@@ -204,7 +204,7 @@ renderer::renderer()
   auto selection_pass = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
     auto pass = context.graphics_pass("deferred", scene_viewport);
 
-    pass.depends_on(fxaa_pass, deferred_pass);
+    pass.depends_on(fxaa_pass, gbuffer_pass);
 
     pass.reads(fxaa, object_id, linear_depth);
 
@@ -241,8 +241,8 @@ renderer::renderer()
   add_subrenderer<sbx::animations::skinned_mesh_shadow_subrenderer>(shadow_pass);
 
   // Deferred pass
-  add_subrenderer<sbx::models::static_mesh_material_subrenderer>(deferred_pass, sbx::models::static_mesh_material_draw_list::bucket::opaque);
-  add_subrenderer<sbx::animations::skinned_mesh_material_subrenderer>(deferred_pass, sbx::animations::skinned_mesh_material_draw_list::bucket::opaque);
+  add_subrenderer<sbx::models::static_mesh_material_subrenderer>(gbuffer_pass, sbx::models::static_mesh_material_draw_list::bucket::opaque);
+  add_subrenderer<sbx::animations::skinned_mesh_material_subrenderer>(gbuffer_pass, sbx::animations::skinned_mesh_material_draw_list::bucket::opaque);
 
   // Transparency pass
   add_subrenderer<sbx::models::static_mesh_material_subrenderer>(transparency_pass, sbx::models::static_mesh_material_draw_list::bucket::transparent);
@@ -265,7 +265,7 @@ renderer::renderer()
   add_subrenderer<sbx::scenes::skybox_subrenderer>(resolve_pass);
 
   auto resolve_transparent_attachment_names = std::vector<std::pair<std::string, std::string>>{
-    {"accum_image", "accum"},
+    {"accumulator_image", "accumulator"},
     {"revealage_image", "revealage"}
   };
 

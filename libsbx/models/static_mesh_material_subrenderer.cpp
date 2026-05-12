@@ -125,8 +125,8 @@ auto static_mesh_material_subrenderer::_get_or_create_pipeline(const material_ke
     .path = _base_pipeline,
     .defines = std::move(defines),
     .per_stage = {
-      {SLANG_STAGE_VERTEX, { .entry_point = "main" }},
-      {SLANG_STAGE_FRAGMENT, { .entry_point = _entry_point.at(key.alpha) }}
+      {SLANG_STAGE_VERTEX, { .entry_point = "gbuffer_main" }},
+      {SLANG_STAGE_FRAGMENT, { .entry_point = _entry_points.at(key.alpha) }}
     }
   };
 

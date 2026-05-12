@@ -107,8 +107,8 @@ auto static_mesh_shadow_subrenderer::_get_or_create_pipeline(const models::mater
   const auto request = graphics::compiler::compile_request{
     .path = _base_pipeline,
     .per_stage = {
-      {SLANG_STAGE_VERTEX, { .entry_point = "main" }},
-      { SLANG_STAGE_FRAGMENT, { .entry_point = _entry_point.at(lookup_key.alpha) }}
+      {SLANG_STAGE_VERTEX, { .entry_point = "shadow_main" }},
+      { SLANG_STAGE_FRAGMENT, { .entry_point = _entry_points.at(lookup_key.alpha) }}
     }
   };
 

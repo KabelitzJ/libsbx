@@ -1,5 +1,15 @@
-#ifndef COMMON_SLANG_
-#define COMMON_SLANG_
+#ifndef MATERIAL_GBUFFER_COMMON_SLANG_
+#define MATERIAL_GBUFFER_COMMON_SLANG_
+
+struct vertex_setup {
+  uint global_vertex;
+  uint global_instance;
+  float3 world_position;
+  float3 world_normal;
+  float4 world_tangent;
+  float2 uv;
+  material_data material;
+}; // struct vertex_setup
 
 struct transform_data {
   float4x4 model;
@@ -82,4 +92,4 @@ struct push_data {
   instance_data* instance_data_buffer;
 }; // struct push_data
 
-#endif // COMMON_SLANG_
+#endif // MATERIAL_GBUFFER_COMMON_SLANG_

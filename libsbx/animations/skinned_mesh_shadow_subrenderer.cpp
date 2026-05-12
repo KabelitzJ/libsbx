@@ -106,8 +106,8 @@ auto skinned_mesh_shadow_subrenderer::_get_or_create_pipeline(const models::mate
   const auto request = graphics::compiler::compile_request{
     .path = _base_pipeline,
     .per_stage = {
-      {SLANG_STAGE_VERTEX, { .entry_point = "main" }},
-      { SLANG_STAGE_FRAGMENT, { .entry_point = _entry_point.at(key.alpha) }}
+      {SLANG_STAGE_VERTEX, { .entry_point = "shadow_main" }},
+      { SLANG_STAGE_FRAGMENT, { .entry_point = _entry_points.at(key.alpha) }}
     }
   };
 

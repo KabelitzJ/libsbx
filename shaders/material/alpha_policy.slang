@@ -1,5 +1,5 @@
-#ifndef ALPHA_POLICY_SLANG_
-#define ALPHA_POLICY_SLANG_
+#ifndef MATERIAL_ALPHA_POLICY_SLANG_
+#define MATERIAL_ALPHA_POLICY_SLANG_
 
 interface alpha_policy {
   static float4 combine_colors(float4 sampled, float4 base);
@@ -23,4 +23,4 @@ struct blend_alpha_policy : alpha_policy {
   }
 }; // struct blend_alpha_policy
 
-#endif // ALPHA_POLICY_SLANG_
+#endif // MATERIAL_ALPHA_POLICY_SLANG_

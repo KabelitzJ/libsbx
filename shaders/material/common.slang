@@ -1,5 +1,5 @@
-#ifndef MATERIAL_GBUFFER_COMMON_SLANG_
-#define MATERIAL_GBUFFER_COMMON_SLANG_
+#ifndef MATERIAL_COMMON_SLANG_
+#define MATERIAL_COMMON_SLANG_
 
 struct vertex_setup {
   uint global_vertex;
@@ -83,6 +83,23 @@ struct vertex {
   float tangent_y;
   float tangent_z;
   float tangent_w; // sign of the tangent
+
+  float3 position() {
+    return float3(position_x, position_y, position_z);
+  }
+
+  float3 normal() {
+    return float3(normal_x, normal_y, normal_z);
+  }
+
+  float2 uv() {
+    return float2(uv_x, uv_y);
+  }
+
+  float4 tangent() {
+    return float4(tangent_x, tangent_y, tangent_z, tangent_w);
+  }
+
 }; // struct vertex
 
 struct push_data {
@@ -107,4 +124,4 @@ struct push_data {
 #endif
 }; // struct push_data
 
-#endif // MATERIAL_GBUFFER_COMMON_SLANG_
+#endif // MATERIAL_COMMON_SLANG_

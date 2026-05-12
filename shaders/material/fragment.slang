@@ -2,8 +2,9 @@
 #include <libsbx/common/image.slang>
 #include <libsbx/common/scene_data.slang>
 
-#include <deferred_pbr_material/common.slang>
-#include <deferred_pbr_material/alpha_policy.slang>
+#include <material/common.slang>
+#include <material/alpha_policy.slang>
+#include <material/texture_slot.slang>
 
 struct gbuffer_fs_in {
   [[vk::location(0)]] float3 position : POSITION;
@@ -91,28 +92,26 @@ float3x3 build_tbn(gbuffer_fs_in input, material_data material_data) {
 }
 
 float4 get_albedo<AlphaPolicy: alpha_policy>(float2 uv, material_data material_data) {
-  uint image_index = material_data.albedo_image_index;
-  uint sampler_index = material_data.albedo_sampler_index;
+  texture_slot<float4> slot = { material_data.albedo_image_index, material_data.albedo_sampler_index };
 
-  if (image_index >= sbx::common::max_image_array_size) {
+  if (!slot.is_valid()) {
     return material_data.base_color;
   }
 
-  float4 color = images[NonUniformResourceIndex(image_index)].Sample(samplers[NonUniformResourceIndex(sampler_index)], uv);
+  float4 color = slot.sample(images, samplers, uv);
 
   return AlphaPolicy::combine_colors(color, material_data.base_color);
 }
 
 float3 get_normal(float3x3 TBN, float2 uv, float3 normal, bool is_front_face, material_data material_data) {
-  uint image_index = material_data.normal_image_index;
-  uint sampler_index = material_data.normal_sampler_index;
+  texture_slot<float4> slot = { material_data.normal_image_index, material_data.normal_sampler_index };
 
   float3 result;
 
-  if (image_index >= sbx::common::max_image_array_size) {
+  if (!slot.is_valid()) {
     result = normalize(normal);
   } else {
-    float3 sampled_normal = images[NonUniformResourceIndex(image_index)].Sample(samplers[NonUniformResourceIndex(sampler_index)], uv).xyz;
+    float3 sampled_normal = slot.sample(images, samplers, uv).xyz;
   
     // encode from [0, 1] -> [-1, 1]
     sampled_normal = sampled_normal * 2.0 - 1.0;
@@ -128,66 +127,71 @@ float3 get_normal(float3x3 TBN, float2 uv, float3 normal, bool is_front_face, ma
   return result;
 }
 
-float3 get_material(float2 uv, material_data material_data) {
-  uint metallic_roughness_image_index = material_data.metallic_roughness_image_index;
-  uint metallic_roughness_sampler_index = material_data.metallic_roughness_sampler_index;
+float2 get_metallic_roughness(float2 uv, material_data material_data) {
+  texture_slot<float4> slot = { material_data.metallic_roughness_image_index, material_data.metallic_roughness_sampler_index };
 
   float metallic = material_data.metallic_factor;
   float roughness = material_data.roughness_factor;
 
-  if (metallic_roughness_image_index < sbx::common::max_image_array_size) {
-    float4 metallic_roughness = images[NonUniformResourceIndex(metallic_roughness_image_index)].Sample(samplers[NonUniformResourceIndex(metallic_roughness_sampler_index)], uv);
-
-    metallic *= metallic_roughness.b;
-    roughness *= metallic_roughness.g;
+  if (slot.is_valid()) {
+    float4 mr = slot.sample(images, samplers, uv);
+    metallic *= mr.b;
+    roughness *= mr.g;
   }
 
-  uint occlusion_image_index = material_data.occlusion_image_index;
-  uint occlusion_sampler_index = material_data.occlusion_sampler_index;
+  return float2(metallic, roughness);
+}
+
+float get_occlusion(float2 uv, material_data material_data) {
+  texture_slot<float4> slot = { material_data.occlusion_image_index, material_data.occlusion_sampler_index };
 
   float occlusion = 1.0;
 
-  if (occlusion_image_index < sbx::common::max_image_array_size) {
-    float sampled_occlusion = images[NonUniformResourceIndex(occlusion_image_index)].Sample(samplers[NonUniformResourceIndex(occlusion_sampler_index)], uv).r;
-
-    occlusion = 1.0 + material_data.occlusion_strength * (sampled_occlusion - 1.0);
+  if (slot.is_valid()) {
+    float sampled = slot.sample(images, samplers, uv).r;
+    occlusion = 1.0 + material_data.occlusion_strength * (sampled - 1.0);
   }
 
-  return float3(metallic, roughness, occlusion);
+  return occlusion;
+}
+
+float3 get_material(float2 uv, material_data material_data) {
+  float2 metallic_roughness = get_metallic_roughness(uv, material_data);
+  float occlusion = get_occlusion(uv, material_data);
+
+  return float3(metallic_roughness, occlusion);
 }
 
 float3 get_emissive(float2 uv, material_data material_data) {
-  uint image_index = material_data.emissive_image_index;
-  uint sampler_index = material_data.emissive_sampler_index;
+  texture_slot<float4> slot = { material_data.emissive_image_index, material_data.emissive_sampler_index };
 
   float3 emissive = material_data.emissive_factor.rgb * material_data.emissive_strength;
 
-  if (image_index >= sbx::common::max_image_array_size) {
+  if (!slot.is_valid()) {
     return emissive;
   }
 
-  return emissive * images[NonUniformResourceIndex(image_index)].Sample(samplers[NonUniformResourceIndex(sampler_index)], uv).rgb;
+  return emissive * slot.sample(images, samplers, uv).rgb;
 }
 
 float get_height(float2 uv, material_data material_data) {
-  uint image_index = material_data.height_image_index;
-  uint sampler_index = material_data.height_sampler_index;
+  texture_slot<float4> slot = { material_data.height_image_index, material_data.height_sampler_index };
 
-  if (image_index >= sbx::common::max_image_array_size) {
-    return 0.0f;
+  if (!slot.is_valid()) {
+    return 0.0;
   }
 
-  float height = images[NonUniformResourceIndex(image_index)].Sample(samplers[NonUniformResourceIndex(sampler_index)], uv).r;
+  float height = slot.sample(images, samplers, uv).r;
 
   return height * material_data.height_scale + material_data.height_offset;
 }
 
 float2 parallax_occlusion_mapping(gbuffer_fs_in input, material_data material_data, float3x3 TBN) {
-  uint image_index = material_data.height_image_index;
+  texture_slot<float4> slot = { material_data.height_image_index, material_data.height_sampler_index };
 
   float2 uv = input.uv * material_data.uv_scale + material_data.uv_offset;
 
-  if (image_index >= sbx::common::max_image_array_size) {
+  if (!slot.is_valid()) {
     return uv;
   }
 

@@ -51,7 +51,7 @@ class skinned_mesh_material_subrenderer final : public graphics::subrenderer {
     }
   };
 
-  inline static constexpr auto default_pipeline_path = std::string_view{"engine://shaders/material_gbuffer"};
+  inline static constexpr auto default_pipeline_path = std::string_view{"engine://shaders/material"};
 
 public:
 

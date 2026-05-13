@@ -11,11 +11,9 @@ namespace editor {
 
 static const auto attachment_names = std::vector<std::string_view>{
   "albedo",
-  "normal",
   "position",
   "material",
   "emissive",
-  "object_id",
   "linear_depth",
   "resolve",
   "brightness",

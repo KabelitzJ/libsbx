@@ -103,7 +103,7 @@ auto static_mesh_depthpre_subrenderer::_get_or_create_pipeline(const material_ke
   definition.depth = graphics::depth::read_write;
   definition.compare_operation = graphics::compare_operation::less_or_equal;
   definition.rasterization_state.cull_mode = key.is_double_sided ? graphics::cull_mode::none : graphics::cull_mode::back;
-  definition.uses_transparency = false
+  definition.uses_transparency = false;
 
   auto& compiler = graphics_module.compiler();
 

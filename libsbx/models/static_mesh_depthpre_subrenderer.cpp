@@ -1,21 +1,20 @@
 // SPDX-License-Identifier: MIT
-#include <libsbx/models/static_mesh_material_subrenderer.hpp>
+#include <libsbx/models/static_mesh_depthpre_subrenderer.hpp>
 
 namespace sbx::models {
 
-static_mesh_material_subrenderer::static_mesh_material_subrenderer(const std::vector<graphics::attachment_description>& attachments, const static_mesh_material_draw_list::bucket bucket, const std::filesystem::path& base_pipeline)
+static_mesh_depthpre_subrenderer::static_mesh_depthpre_subrenderer(const std::vector<graphics::attachment_description>& attachments, const std::filesystem::path& base_pipeline)
 : graphics::subrenderer{},
   _attachments{attachments},
-  _base_pipeline{base_pipeline},
-  _bucket{bucket} { }
+  _base_pipeline{base_pipeline} { }
 
-static_mesh_material_subrenderer::~static_mesh_material_subrenderer() {
+static_mesh_depthpre_subrenderer::~static_mesh_depthpre_subrenderer() {
   _pipeline_cache.clear();
 }
 
-auto static_mesh_material_subrenderer::render(graphics::command_buffer& command_buffer) -> void {
-  SBX_PROFILE_SCOPE("static_mesh_material_subrenderer::render");
-  SBX_PROFILE_GPU_SCOPE(command_buffer, "static_mesh_material_subrenderer::render");
+auto static_mesh_depthpre_subrenderer::render(graphics::command_buffer& command_buffer) -> void {
+  SBX_PROFILE_SCOPE("static_mesh_depthpre_subrenderer::render");
+  SBX_PROFILE_GPU_SCOPE(command_buffer, "static_mesh_depthpre_subrenderer::render");
 
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
   auto& renderer = graphics_module.renderer();
@@ -32,7 +31,9 @@ auto static_mesh_material_subrenderer::render(graphics::command_buffer& command_
 
   auto frustum_culling_task = renderer.task<models::frustum_culling_task>();
 
-  for (auto& [key, data] : draw_list.ranges(_bucket)) {
+  const auto& ranges = draw_list.ranges(models::bucket::opaque);
+
+  for (auto& [key, data] : ranges) {
     auto& pipeline_data = _get_or_create_pipeline(key);
     auto& descriptor_data = _get_or_create_descriptor_data(pipeline_data.pipeline);
 
@@ -58,7 +59,7 @@ auto static_mesh_material_subrenderer::render(graphics::command_buffer& command_
     descriptor_data.sampler_descriptor_handler.bind_descriptors(command_buffer);
     descriptor_data.image_descriptor_handler.bind_descriptors(command_buffer);
 
-    auto culled = frustum_culling_task ? frustum_culling_task->culled(_bucket, key) : std::nullopt;
+    auto culled = frustum_culling_task ? frustum_culling_task->culled(models::bucket::opaque, key) : std::nullopt;
 
     auto& instance_data_buffer = graphics_module.get_resource<graphics::storage_buffer>(culled ? culled->instances_buffer : data.instance_data_buffer);
     auto& draw_commands_buffer = graphics_module.get_resource<graphics::storage_buffer>(culled ? culled->commands_buffer : data.draw_commands_buffer);
@@ -91,7 +92,7 @@ auto static_mesh_material_subrenderer::render(graphics::command_buffer& command_
   }
 }
 
-auto static_mesh_material_subrenderer::_get_or_create_pipeline(const material_key& key) -> pipeline_data& {
+auto static_mesh_depthpre_subrenderer::_get_or_create_pipeline(const material_key& key) -> pipeline_data& {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 
   if (auto entry = _pipeline_cache.find(key); entry != _pipeline_cache.end()) {
@@ -99,10 +100,10 @@ auto static_mesh_material_subrenderer::_get_or_create_pipeline(const material_ke
   }
 
   auto definition = pipeline_definition;
-  definition.depth = graphics::depth::read_only;
-  definition.compare_operation = (static_cast<models::alpha_mode>(key.alpha) == models::alpha_mode::blend) ? graphics::compare_operation::less_or_equal : graphics::compare_operation::equal;
+  definition.depth = graphics::depth::read_write;
+  definition.compare_operation = graphics::compare_operation::less_or_equal;
   definition.rasterization_state.cull_mode = key.is_double_sided ? graphics::cull_mode::none : graphics::cull_mode::back;
-  definition.uses_transparency = (static_cast<models::alpha_mode>(key.alpha) == models::alpha_mode::blend);
+  definition.uses_transparency = false
 
   auto& compiler = graphics_module.compiler();
 
@@ -134,7 +135,7 @@ auto static_mesh_material_subrenderer::_get_or_create_pipeline(const material_ke
   return entry->second;
 }
 
-auto static_mesh_material_subrenderer::_get_or_create_descriptor_data(const graphics::graphics_pipeline_handle& handle) -> descriptor_data& {
+auto static_mesh_depthpre_subrenderer::_get_or_create_descriptor_data(const graphics::graphics_pipeline_handle& handle) -> descriptor_data& {
   if (auto it = _descriptor_cache.find(handle); it != _descriptor_cache.end()) {
     return it->second;
   }

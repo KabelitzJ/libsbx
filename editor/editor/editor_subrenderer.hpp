@@ -15,6 +15,7 @@
 #include <editor/panels/inspector_panel.hpp>
 #include <editor/panels/log_panel.hpp>
 #include <editor/panels/asset_browser_panel.hpp>
+#include <editor/panels/attachment_panel.hpp>
 
 namespace editor {
 
@@ -39,6 +40,7 @@ private:
   inspector_panel _inspector_panel{_texture_cache};
   log_panel _log_panel;
   asset_browser_panel _asset_browser_panel{_texture_cache};
+  attachment_panel _attachment_panel{};
 
 }; // class editor_subrenderer
 

@@ -58,6 +58,7 @@ auto editor_subrenderer::render(sbx::graphics::command_buffer& command_buffer) -
   _hierarchy_panel.draw();
   _inspector_panel.draw(editor_module.selected_node());
   _asset_browser_panel.draw();
+  _attachment_panel.draw();
 
   _context.render();
   _context.render_draw_data(command_buffer);

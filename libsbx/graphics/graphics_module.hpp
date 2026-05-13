@@ -6,6 +6,7 @@
 #include <unordered_map>
 #include <vector>
 #include <typeindex>
+#include <deque>
 
 #include <magic_enum/magic_enum.hpp>
 
@@ -368,7 +369,7 @@ private:
 
   viewport_registry _viewports;
 
-  std::vector<deferred_deletion> _deletion_queue;
+  std::deque<deferred_deletion> _deletion_queue;
 
 }; // class graphics_module
 

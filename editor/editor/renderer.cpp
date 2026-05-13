@@ -75,7 +75,7 @@ renderer::renderer()
 
   const auto revealage_blend = sbx::graphics::blend_state{
     .color_source = sbx::graphics::blend_factor::zero,
-    .color_destination = sbx::graphics::blend_factor::one_minus_source_color,
+    .color_destination = sbx::graphics::blend_factor::one_minus_source_alpha,
     .color_operation = sbx::graphics::blend_operation::add,
     .alpha_source = sbx::graphics::blend_factor::zero,
     .alpha_destination = sbx::graphics::blend_factor::one_minus_source_alpha,
@@ -152,11 +152,13 @@ renderer::renderer()
 
     pass.depends_on(depthpre_pass);
 
+    pass.reads(depth);
+
     return pass;
   });
 
   auto gbuffer_pass = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
-    auto pass = context.graphics_pass("deferred", scene_viewport);
+    auto pass = context.graphics_pass("gbuffer", scene_viewport);
 
     pass.depends_on(depthpre_pass, occlusion_culling_pass);
 
@@ -175,7 +177,7 @@ renderer::renderer()
   auto transparency_pass = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
     auto pass = context.graphics_pass("transparency", scene_viewport);
 
-    pass.depends_on(gbuffer_pass, occlusion_culling_pass, skinning_pass, particles_pass);
+    pass.depends_on(gbuffer_pass, occlusion_culling_pass, depthpre_pass, skinning_pass, particles_pass);
 
     pass.writes(depth, sbx::graphics::attachment_load_operation::load);
     pass.writes(accumulator, sbx::graphics::attachment_load_operation::clear);
@@ -223,7 +225,7 @@ renderer::renderer()
   });
 
   auto selection_pass = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
-    auto pass = context.graphics_pass("deferred", scene_viewport);
+    auto pass = context.graphics_pass("selection", scene_viewport);
 
     pass.depends_on(fxaa_pass, gbuffer_pass);
 

@@ -98,11 +98,13 @@ auto static_mesh_material_subrenderer::_get_or_create_pipeline(const material_ke
     return entry->second;
   }
 
+  const auto is_blend = (static_cast<models::alpha_mode>(key.alpha) == models::alpha_mode::blend);
+
   auto definition = pipeline_definition;
   definition.depth = graphics::depth::read_only;
-  definition.compare_operation = (static_cast<models::alpha_mode>(key.alpha) == models::alpha_mode::blend) ? graphics::compare_operation::less_or_equal : graphics::compare_operation::equal;
+  definition.compare_operation = is_blend ? graphics::compare_operation::always : graphics::compare_operation::equal;
   definition.rasterization_state.cull_mode = key.is_double_sided ? graphics::cull_mode::none : graphics::cull_mode::back;
-  definition.uses_transparency = (static_cast<models::alpha_mode>(key.alpha) == models::alpha_mode::blend);
+  definition.uses_transparency = is_blend;
 
   auto& compiler = graphics_module.compiler();
 

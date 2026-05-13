@@ -246,6 +246,12 @@ auto render_graph::build() -> void {
   for (auto pass_index : execution_order) {
     const auto& pass = _passes[pass_index];
 
+    sbx::utility::logger<"graphics">::debug("pass: {}", pass._name);
+  }
+
+  for (auto pass_index : execution_order) {
+    const auto& pass = _passes[pass_index];
+
     for (const auto& handle : pass._reads) {
       auto& state = _attachment_states[handle.index];
 

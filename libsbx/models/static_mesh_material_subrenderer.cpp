@@ -67,8 +67,8 @@ auto static_mesh_material_subrenderer::render(graphics::command_buffer& command_
     pipeline_data.push_handler.push("material_data_buffer", draw_list.buffer(static_mesh_material_draw_list::material_data_buffer_name).address());
     pipeline_data.push_handler.push("instance_data_buffer", instance_data_buffer.address());
 
-    for (const auto& ref : data.ranges) {
-      auto& mesh = assets_module.get_asset<models::mesh>(ref.mesh_id);
+    for (const auto& reference : data.ranges) {
+      auto& mesh = assets_module.get_asset<models::mesh>(reference.mesh_id);
 
       mesh.bind(command_buffer);
 
@@ -86,7 +86,7 @@ auto static_mesh_material_subrenderer::render(graphics::command_buffer& command_
 
       pipeline_data.push_handler.bind(command_buffer);
 
-      command_buffer.draw_indexed_indirect(draw_commands_buffer, ref.range.offset, ref.range.count);
+      command_buffer.draw_indexed_indirect(draw_commands_buffer, reference.range.offset, reference.range.count);
     }
   }
 }
@@ -99,7 +99,8 @@ auto static_mesh_material_subrenderer::_get_or_create_pipeline(const material_ke
   }
 
   auto definition = pipeline_definition;
-  definition.depth = (static_cast<models::alpha_mode>(key.alpha) == models::alpha_mode::blend) ? graphics::depth::read_only : graphics::depth::read_write;
+  definition.depth = graphics::depth::read_only;
+  definition.compare_operation = graphics::compare_operation::less_or_equal;
   definition.rasterization_state.cull_mode = key.is_double_sided ? graphics::cull_mode::none : graphics::cull_mode::back;
   definition.uses_transparency = (static_cast<models::alpha_mode>(key.alpha) == models::alpha_mode::blend);
 

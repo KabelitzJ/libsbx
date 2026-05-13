@@ -29,7 +29,7 @@ auto static_mesh_shadow_subrenderer::render(graphics::command_buffer& command_bu
 
   auto frustum_culling_task = renderer.task<models::frustum_culling_task>();
 
-  const auto& ranges = draw_list.ranges(models::static_mesh_material_draw_list::bucket::shadow);
+  const auto& ranges = draw_list.ranges(models::bucket::shadow);
 
   for (auto& [key, data] : ranges) {
     auto& pipeline_data = _get_or_create_pipeline(key);

@@ -15,6 +15,8 @@ static const auto attachment_names = std::vector<std::string_view>{
   "material",
   "emissive",
   "linear_depth",
+  "accumulator",
+  "revealage",
   "resolve",
   "brightness",
   "tonemap",

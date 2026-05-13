@@ -12,6 +12,7 @@
 #include <libsbx/models/models.hpp>
 #include <libsbx/models/static_mesh_material_subrenderer.hpp>
 #include <libsbx/models/static_mesh_shadow_subrenderer.hpp>
+#include <libsbx/models/static_mesh_depthpre_subrenderer.hpp>
 
 #include <libsbx/animations/skinning_task.hpp>
 #include <libsbx/animations/skinned_mesh_material_subrenderer.hpp>
@@ -106,14 +107,17 @@ renderer::renderer()
 
   auto swapchain = create_attachment("swapchain", sbx::graphics::attachment::type::swapchain, _clear_color, sbx::graphics::format::b8g8r8a8_srgb);
 
-  // Compute passes
-  auto culling_pass = create_pass([&](sbx::graphics::render_graph::context& context) {
-    auto pass = context.compute_pass("culling");
+  // Passes
+  auto skinning_pass = create_pass([&](sbx::graphics::render_graph::context& context) {
+    auto pass = context.compute_pass("skinning");
     return pass;
   });
 
-  auto skinning_pass = create_pass([&](sbx::graphics::render_graph::context& context) {
-    auto pass = context.compute_pass("skinning");
+  auto frustum_culling_pass = create_pass([&](sbx::graphics::render_graph::context& context) {
+    auto pass = context.compute_pass("frustum_culling");
+
+    pass.depends_on(skinning_pass);
+
     return pass;
   });
 
@@ -122,7 +126,6 @@ renderer::renderer()
     return pass;
   });
 
-  // Render passes
   auto shadow_pass = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
     auto pass = context.graphics_pass("shadow", sbx::graphics::viewport::fixed(2048u, 2048u));
 
@@ -134,12 +137,30 @@ renderer::renderer()
     return pass;
   });
 
+  auto depthpre_pass = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
+    auto pass = context.graphics_pass("depthpre", scene_viewport);
+
+    pass.depends_on(frustum_culling_pass, skinning_pass);
+
+    pass.writes(depth, sbx::graphics::attachment_load_operation::clear);
+
+    return pass;
+  });
+
+  auto occlusion_culling_pass = create_pass([&](sbx::graphics::render_graph::context& context) {
+    auto pass = context.compute_pass("occlusion_culling");
+
+    pass.depends_on(depthpre_pass);
+
+    return pass;
+  });
+
   auto gbuffer_pass = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
     auto pass = context.graphics_pass("deferred", scene_viewport);
 
-    pass.depends_on(skinning_pass, culling_pass);
+    pass.depends_on(depthpre_pass, occlusion_culling_pass);
 
-    pass.writes(depth, sbx::graphics::attachment_load_operation::clear);
+    pass.writes(depth, sbx::graphics::attachment_load_operation::load);
     pass.writes(albedo, sbx::graphics::attachment_load_operation::clear);
     pass.writes(position, sbx::graphics::attachment_load_operation::clear);
     pass.writes(normal, sbx::graphics::attachment_load_operation::clear);
@@ -154,7 +175,7 @@ renderer::renderer()
   auto transparency_pass = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
     auto pass = context.graphics_pass("transparency", scene_viewport);
 
-    pass.depends_on(gbuffer_pass, culling_pass, skinning_pass, particles_pass);
+    pass.depends_on(gbuffer_pass, occlusion_culling_pass, skinning_pass, particles_pass);
 
     pass.writes(depth, sbx::graphics::attachment_load_operation::load);
     pass.writes(accumulator, sbx::graphics::attachment_load_operation::clear);
@@ -232,7 +253,7 @@ renderer::renderer()
   add_draw_list<sbx::animations::skinned_mesh_material_draw_list>();
   
   // Compute passes
-  const auto& frustum_culling_task = add_task<sbx::models::frustum_culling_task>(culling_pass);
+  const auto& frustum_culling_task = add_task<sbx::models::frustum_culling_task>(frustum_culling_pass);
   const auto& skinning_task = add_task<sbx::animations::skinning_task>(skinning_pass);
   const auto& particle_task = add_task<sbx::particles::particle_task>(particles_pass);
 
@@ -240,7 +261,10 @@ renderer::renderer()
   add_subrenderer<sbx::models::static_mesh_shadow_subrenderer>(shadow_pass);
   add_subrenderer<sbx::animations::skinned_mesh_shadow_subrenderer>(shadow_pass);
 
-  // Deferred pass
+  // Depthpre pass
+  add_subrenderer<sbx::models::static_mesh_depthpre_subrenderer>(depthpre_pass);
+
+  // GBuffer pass
   add_subrenderer<sbx::models::static_mesh_material_subrenderer>(gbuffer_pass, sbx::models::static_mesh_material_draw_list::bucket::opaque);
   add_subrenderer<sbx::animations::skinned_mesh_material_subrenderer>(gbuffer_pass, sbx::animations::skinned_mesh_material_draw_list::bucket::opaque);
 

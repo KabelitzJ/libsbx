@@ -331,7 +331,12 @@ blend_fs_out blend_main(gbuffer_fs_in input) {
 }
 
 [shader("fragment")]
-void depth_prepass_main(gbuffer_fs_in input) {
+void depth_prepass_opaque_main(gbuffer_fs_in input) {
+  load_surface<opaque_alpha_policy>(input.instance_index, input.uv);
+}
+
+[shader("fragment")]
+void depth_prepass_mask_main(gbuffer_fs_in input) {
   load_surface<mask_alpha_policy>(input.instance_index, input.uv);
 }
 

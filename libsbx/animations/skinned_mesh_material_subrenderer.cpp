@@ -94,8 +94,8 @@ skinned_mesh_material_subrenderer::descriptor_data::descriptor_data(const graphi
 auto skinned_mesh_material_subrenderer::_get_or_create_pipeline(const models::material_key& key) -> pipeline_data& {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 
-  if (auto it = _pipeline_cache.find(key); it != _pipeline_cache.end()) {
-    return it->second;
+  if (auto entry = _pipeline_cache.find(key); entry != _pipeline_cache.end()) {
+    return entry->second;
   }
 
   auto definition = pipeline_definition;
@@ -110,14 +110,6 @@ auto skinned_mesh_material_subrenderer::_get_or_create_pipeline(const models::ma
   for (const auto& descriptor : models::vertex_stream_descriptors) {
     if (key.stream_mask & static_cast<std::uint8_t>(descriptor.value)) {
       defines.push_back(graphics::compiler::define{std::string{descriptor.define}, "1"});
-    }
-  }
-
-  if (key.surface_shader_hash != 0u) {
-    auto path = skinned_mesh_material_draw_list::surface_shader_path(key.surface_shader_hash);
-
-    if (!path.empty()) {
-      defines.push_back(graphics::compiler::define{"SBX_SURFACE_INCLUDE", fmt::format("\"{}\"", path)});
     }
   }
 
@@ -141,8 +133,8 @@ auto skinned_mesh_material_subrenderer::_get_or_create_pipeline(const models::ma
 }
 
 auto skinned_mesh_material_subrenderer::_get_or_create_descriptor_data(const graphics::graphics_pipeline_handle& handle) -> descriptor_data& {
-  if (auto it = _descriptor_cache.find(handle); it != _descriptor_cache.end()) {
-    return it->second;
+  if (auto entry = _descriptor_cache.find(handle); entry != _descriptor_cache.end()) {
+    return entry->second;
   }
 
   auto descriptor = descriptor_data{handle};

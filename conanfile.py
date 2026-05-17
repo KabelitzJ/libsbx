@@ -192,12 +192,12 @@ class libsbx_recipe(ConanFile):
   def build_requirements(self):
     self.tool_requires("cmake/[>=3.20]")
 
-  # def test_requirements(self):
-  #   if self.options.build_tests:
-  #     self.test_requires("gtest/1.17.0")
+  def test_requirements(self):
+    if self.options.build_tests:
+      self.test_requires("gtest/1.17.0")
 
-  #   if self.options.build_benchmarks:
-  #     self.test_requires("benchmark/1.9.4")
+    if self.options.build_benchmarks:
+      self.test_requires("benchmark/1.9.4")
 
   def requirements(self):
     self.requires("fmt/11.2.0", transitive_headers=True)
@@ -237,11 +237,14 @@ class libsbx_recipe(ConanFile):
     self.requires("zstd/1.5.7")
     self.requires("tracy/0.13.1")
 
-    if self.options.build_tests:
-      self.test_requires("gtest/1.17.0")
+    self.test_requires("gtest/1.17.0")
+    self.test_requires("benchmark/1.9.4")
 
-    if self.options.build_benchmarks:
-      self.test_requires("benchmark/1.9.4")
+    # if self.options.build_tests:
+    #   self.test_requires("gtest/1.17.0")
+
+    # if self.options.build_benchmarks:
+    #   self.test_requires("benchmark/1.9.4")
 
   def configure(self):
     self.options["imgui"].wchar32 = True

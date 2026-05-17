@@ -110,9 +110,17 @@ application::application()
   asset_registry.request_image("tree_leaves_normal", "res://meshes/tree/textures/leaves/normal.png", sbx::graphics::format::r8g8b8a8_unorm);
   asset_registry.request_image("tree_leaves_arm", "res://meshes/tree/textures/leaves/arm.png", sbx::graphics::format::r8g8b8a8_unorm);
 
-  asset_registry.request_mesh<sbx::models::mesh>("tree", "res://meshes/tree/tree.gltf");
+  asset_registry.request_image("black_albedo", "res://textures/chess/black/albedo.png", sbx::graphics::format::r8g8b8a8_srgb);
+  asset_registry.request_image("black_normal", "res://textures/chess/black/normal.png", sbx::graphics::format::r8g8b8a8_unorm);
+  asset_registry.request_image("black_metallic_roughness", "res://textures/chess/black/metallic_roughness.png", sbx::graphics::format::r8g8b8a8_unorm);
 
+  asset_registry.request_image("white_albedo", "res://textures/chess/white/albedo.png", sbx::graphics::format::r8g8b8a8_srgb);
+  asset_registry.request_image("white_normal", "res://textures/chess/white/normal.png", sbx::graphics::format::r8g8b8a8_unorm);
+  asset_registry.request_image("white_metallic_roughness", "res://textures/chess/white/metallic_roughness.png", sbx::graphics::format::r8g8b8a8_unorm);
+
+  asset_registry.request_mesh<sbx::models::mesh>("tree", "res://meshes/tree/tree.gltf");
   asset_registry.request_mesh<sbx::models::mesh>("sphere", "res://meshes/sphere/sphere.gltf");
+  asset_registry.request_mesh<sbx::models::mesh>("pawn", "res://meshes/chess/pawn/pawn.gltf");
 
   asset_registry.request_cube_image("skybox", "res://skyboxes/hdr/clouds", std::string{".hdr"}, sbx::graphics::format::r32g32b32a32_sfloat);
   // asset_registry.request_cube_image("skybox", "res://skyboxes/clouds");
@@ -293,6 +301,44 @@ application::application()
   };
 
   graph.add_component<sbx::scenes::static_mesh>(tree, asset_registry.get_mesh("tree"), tree_submeshes);
+
+  // Chess
+
+  auto& black_material = asset_registry.request_material<sbx::models::material>("black");
+  black_material.albedo.image = asset_registry.get_image("black_albedo");
+  black_material.normal.image = asset_registry.get_image("black_normal");
+  black_material.metallic_roughness.image = asset_registry.get_image("black_metallic_roughness");
+  black_material.alpha = sbx::models::alpha_mode::opaque;
+  black_material.metallic_factor = 0.0f;
+  black_material.roughness_factor = 1.0f;
+  black_material.occlusion_strength = 1.0f;
+  black_material.specular_factor = 0.0f;
+
+  auto& white_material = asset_registry.request_material<sbx::models::material>("white");
+  white_material.albedo.image = asset_registry.get_image("white_albedo");
+  white_material.normal.image = asset_registry.get_image("white_normal");
+  white_material.metallic_roughness.image = asset_registry.get_image("white_metallic_roughness");
+  white_material.alpha = sbx::models::alpha_mode::opaque;
+  white_material.metallic_factor = 0.0f;
+  white_material.roughness_factor = 1.0f;
+  white_material.occlusion_strength = 1.0f;
+  white_material.specular_factor = 0.0f;
+
+  for (auto i = 0; i < 8; ++i) {
+    auto white_pawn = graph.create_node(fmt::format("White Pawn {}", i + 1));
+
+    auto& white_pawn_transform = graph.get_component<sbx::scenes::transform>(white_pawn);
+    white_pawn_transform.set_position(sbx::math::vector3{-3.5f + i, 0.1f, -3.0f});
+
+    graph.add_component<sbx::scenes::static_mesh>(white_pawn, asset_registry.get_mesh("pawn"), asset_registry.get_material("white"));
+
+    auto black_pawn = graph.create_node(fmt::format("Black Pawn {}", i + 1));
+
+    auto& black_pawn_transform = graph.get_component<sbx::scenes::transform>(black_pawn);
+    black_pawn_transform.set_position(sbx::math::vector3{-3.5f + i, 0.1f, 3.0f});
+
+    graph.add_component<sbx::scenes::static_mesh>(black_pawn, asset_registry.get_mesh("pawn"), asset_registry.get_material("black"));
+  }
 
   // Camera
 

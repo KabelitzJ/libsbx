@@ -38,16 +38,36 @@ float3 apply_white_balance(float3 c, float temperature, float tint) {
   return c * w;
 }
 
+static const float3x3 aces_input = float3x3(
+  0.59719, 0.35458, 0.04823,
+  0.07600, 0.90834, 0.01566,
+  0.02840, 0.13383, 0.83777
+);
+
+static const float3x3 aces_output = float3x3(
+   1.60475, -0.53108, -0.07367,
+  -0.10208,  1.10813, -0.00605,
+  -0.00327, -0.07276,  1.07602
+);
+
+float3 rrt_and_odt_fit(float3 color) {
+  float3 a = color * (color + 0.0245786) - 0.000090537;
+  float3 b = color * (0.983729 * color + 0.4329510) + 0.238081;
+
+  return a / b;
+}
+
+static const float exposure = 1.25;
+
 float3 apply_aces_tonemap(float3 value) {
-  value *= 0.6;
+  value *= exposure;
+  value /= 0.6;
 
-  static const float a = 2.51;
-  static const float b = 0.03;
-  static const float c = 2.43;
-  static const float d = 0.59;
-  static const float e = 0.14;
+  value = mul(aces_input, value);
+  value = rrt_and_odt_fit(value);
+  value = mul(aces_output, value);
 
-  return saturate((value * (a * value + b)) / (value * (c * value + d) + e));
+  return clamp(value, 0.0, 1.0);
 }
 
 [shader("fragment")]
@@ -58,11 +78,11 @@ fs_out main(fs_in input) {
   float3 bloom = float3(0.0, 0.0, 0.0);
   // float3 bloom = bloom_image.Sample(input.uv).rgb;
 
-  color = apply_white_balance(color, push.temperature, push.tint);
+  // color = apply_white_balance(color, push.temperature, push.tint);
 
-  float3 exposed = (color + bloom * push.bloom_mix) * exp2(push.exposure);
+  // float3 exposed = (color + bloom * push.bloom_mix) * exp2(push.exposure);
 
-  float3 mapped = apply_aces_tonemap(exposed);
+  float3 mapped = apply_aces_tonemap(color);
 
   float luminance = dot(mapped, float3(0.2126, 0.7152, 0.0722));
 

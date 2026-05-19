@@ -94,12 +94,9 @@ skinned_mesh_shadow_subrenderer::descriptor_data::descriptor_data(const graphics
 auto skinned_mesh_shadow_subrenderer::_get_or_create_pipeline(const models::material_key& key) -> pipeline_data& {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 
-  if (auto it = _pipeline_cache.find(key); it != _pipeline_cache.end()) {
-    return it->second;
+  if (auto entry = _pipeline_cache.find(key); entry != _pipeline_cache.end()) {
+    return entry->second;
   }
-
-  auto definition = pipeline_definition;
-  definition.rasterization_state.cull_mode = key.is_double_sided ? graphics::cull_mode::none : graphics::cull_mode::front;
 
   auto& compiler = graphics_module.compiler();
 
@@ -114,7 +111,7 @@ auto skinned_mesh_shadow_subrenderer::_get_or_create_pipeline(const models::mate
   const auto result = compiler.compile(request);
 
   auto compiled = graphics::graphics_pipeline::compiled_shaders{_base_pipeline.filename().string(), result.code};
-  auto handle = graphics_module.add_resource<graphics::graphics_pipeline>(compiled, _attachments, definition);
+  auto handle = graphics_module.add_resource<graphics::graphics_pipeline>(compiled, _attachments, pipeline_definition);
 
   auto [entry, inserted] = _pipeline_cache.emplace(key, handle);
 
@@ -122,8 +119,8 @@ auto skinned_mesh_shadow_subrenderer::_get_or_create_pipeline(const models::mate
 }
 
 auto skinned_mesh_shadow_subrenderer::_get_or_create_descriptor_data(const graphics::graphics_pipeline_handle& handle) -> descriptor_data& {
-  if (auto it = _descriptor_cache.find(handle); it != _descriptor_cache.end()) {
-    return it->second;
+  if (auto entry = _descriptor_cache.find(handle); entry != _descriptor_cache.end()) {
+    return entry->second;
   }
 
   auto [entry, inserted] = _descriptor_cache.emplace(handle, descriptor_data{handle});

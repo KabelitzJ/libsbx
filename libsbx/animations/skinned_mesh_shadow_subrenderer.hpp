@@ -37,7 +37,12 @@ class skinned_mesh_shadow_subrenderer final : public graphics::subrenderer {
     .rasterization_state = graphics::rasterization_state{
       .polygon_mode = graphics::polygon_mode::fill,
       .cull_mode = graphics::cull_mode::none,
-      .front_face = graphics::front_face::counter_clockwise
+      .front_face = graphics::front_face::counter_clockwise,
+      .depth_bias = graphics::depth_bias{
+        .constant_factor = 0.15f, 
+        .slope_factor = 0.5f, 
+        .clamp = 0.0f 
+      }
     }
   };
 

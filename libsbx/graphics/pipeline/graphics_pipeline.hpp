@@ -60,8 +60,8 @@ enum class front_face : std::int32_t {
 
 struct depth_bias {
   std::float_t constant_factor{0.0f};
-  std::float_t clamp{0.0f};
   std::float_t slope_factor{0.0f};
+  std::float_t clamp{0.0f};
 }; // struct depth_bias
 
 struct rasterization_state {

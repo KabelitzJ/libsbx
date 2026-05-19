@@ -95,12 +95,9 @@ auto static_mesh_shadow_subrenderer::_get_or_create_pipeline(const models::mater
   auto lookup_key = key;
   lookup_key.stream_mask = 0u;
 
-  if (auto it = _pipeline_cache.find(lookup_key); it != _pipeline_cache.end()) {
-    return it->second;
+  if (auto entry = _pipeline_cache.find(lookup_key); entry != _pipeline_cache.end()) {
+    return entry->second;
   }
-
-  auto definition = pipeline_definition;
-  definition.rasterization_state.cull_mode = lookup_key.is_double_sided ? graphics::cull_mode::none : graphics::cull_mode::front;
 
   auto& compiler = graphics_module.compiler();
 
@@ -115,7 +112,7 @@ auto static_mesh_shadow_subrenderer::_get_or_create_pipeline(const models::mater
   const auto result = compiler.compile(request);
 
   auto compiled = graphics::graphics_pipeline::compiled_shaders{_base_pipeline.filename().string(), result.code};
-  auto handle = graphics_module.add_resource<graphics::graphics_pipeline>(compiled, _attachments, definition);
+  auto handle = graphics_module.add_resource<graphics::graphics_pipeline>(compiled, _attachments, pipeline_definition);
 
   auto [entry, inserted] = _pipeline_cache.emplace(lookup_key, handle);
 
@@ -123,8 +120,8 @@ auto static_mesh_shadow_subrenderer::_get_or_create_pipeline(const models::mater
 }
 
 auto static_mesh_shadow_subrenderer::_get_or_create_descriptor_data(const graphics::graphics_pipeline_handle& handle) -> descriptor_data& {
-  if (auto it = _descriptor_cache.find(handle); it != _descriptor_cache.end()) {
-    return it->second;
+  if (auto entry = _descriptor_cache.find(handle); entry != _descriptor_cache.end()) {
+    return entry->second;
   }
 
   auto [entry, inserted] = _descriptor_cache.emplace(handle, descriptor_data{handle});

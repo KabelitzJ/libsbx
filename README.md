@@ -1,4 +1,8 @@
-<img src="images/logo.png" width="400" />
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="images/logo-dark.png" width="400">
+  <source media="(prefers-color-scheme: light)" srcset="images/logo-light.png" width="400">
+  <img alt="Fallback image description" src="images/logo-dark.png" width="400">
+</picture>
 
 A modular, Vulkan-based game engine built with modern C++23
 

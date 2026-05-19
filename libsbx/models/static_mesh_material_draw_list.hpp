@@ -100,8 +100,6 @@ struct static_mesh_traits {
     auto& graph = scene.graph();
     auto& environment = scene.environment();
 
-    auto& assets = scenes_module.asset_registry();
-
     auto camera_node = environment.camera();
     const auto camera_position = math::vector3{graph.world_position(camera_node)};
 

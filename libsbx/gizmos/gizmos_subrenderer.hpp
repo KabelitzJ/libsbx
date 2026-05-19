@@ -138,8 +138,7 @@ private:
   auto _submit_mesh(const scenes::node node) -> void {
     auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
     auto& scene = scenes_module.active_scene();
-  auto& environment = scene.environment();
-  auto& graph = scene.graph();
+    auto& graph = scene.graph();
 
     const auto& gizmo = graph.get_component<scenes::gizmo>(node);
 

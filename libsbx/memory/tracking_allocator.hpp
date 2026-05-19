@@ -376,7 +376,7 @@ public:
   : _previous(_current) {
     _current.category = category;
     _current.file_name = source_location.file_name();
-    _current.line = static_cast<std::uint32_t>(source_location.line());
+    _current.line = source_location.line();
   }
 
   ~allocation_scope() noexcept {

@@ -19,8 +19,8 @@
 
 namespace sbx::graphics {
 
-image2d::image2d(const math::vector2u& extent, graphics::format format, graphics::filter filter, graphics::address_mode address_mode, VkImageUsageFlags usage, VkSampleCountFlagBits samples, bool anisotropic, bool mipmap, std::uint32_t array_layers)
-: image{VkExtent3D{extent.x(), extent.y(), 1}, to_vk_enum<VkFilter>(filter), to_vk_enum<VkSamplerAddressMode>(address_mode), samples, (usage | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT), to_vk_enum<VkFormat>(format), 1, array_layers},
+image2d::image2d(const math::vector2u& extent, graphics::format format, graphics::filter filter, graphics::address_mode address_mode, graphics::usage usage, graphics::samples samples, bool anisotropic, bool mipmap, std::uint32_t array_layers)
+: image{VkExtent3D{extent.x(), extent.y(), 1}, to_vk_enum<VkFilter>(filter), to_vk_enum<VkSamplerAddressMode>(address_mode), to_vk_enum<VkSampleCountFlagBits>(samples), to_vk_enum<VkImageUsageFlags>(usage | graphics::usage::transfer_source | graphics::usage::transfer_destination | graphics::usage::sampled), to_vk_enum<VkFormat>(format), 1, array_layers},
   _anisotropic{anisotropic},
   _mipmap{mipmap} {
   _load();

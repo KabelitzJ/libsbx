@@ -80,7 +80,6 @@ public:
     auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
     auto& scene = scenes_module.active_scene();
     auto& environment = scene.environment();
-    auto& graph = scene.graph();
 
     auto& pipeline = base::pipeline();
     auto& descriptor_handler = base::descriptor_handler();

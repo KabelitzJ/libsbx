@@ -37,71 +37,15 @@
 
 #include <libsbx/graphics/render_graph.hpp>
 #include <libsbx/graphics/resource_storage.hpp>
+#include <libsbx/graphics/types.hpp>
 
 namespace sbx::graphics {
-
-enum class polygon_mode : std::int32_t {
-  fill = VK_POLYGON_MODE_FILL,
-  line = VK_POLYGON_MODE_LINE,
-  point = VK_POLYGON_MODE_POINT
-}; // enum class polygon_mode
-
-enum class cull_mode : std::int32_t {
-  none = VK_CULL_MODE_NONE,
-  front = VK_CULL_MODE_FRONT_BIT,
-  back = VK_CULL_MODE_BACK_BIT,
-  front_and_back = VK_CULL_MODE_FRONT_AND_BACK
-}; // enum class cull_mode
-
-enum class front_face : std::int32_t {
-  counter_clockwise = VK_FRONT_FACE_COUNTER_CLOCKWISE,
-  clockwise = VK_FRONT_FACE_CLOCKWISE
-}; // enum class front_face
-
-struct depth_bias {
-  std::float_t constant_factor{0.0f};
-  std::float_t slope_factor{0.0f};
-  std::float_t clamp{0.0f};
-}; // struct depth_bias
-
-struct rasterization_state {
-  graphics::polygon_mode polygon_mode{graphics::polygon_mode::fill};
-  std::float_t line_width{1.0f};
-  graphics::cull_mode cull_mode{graphics::cull_mode::back};
-  graphics::front_face front_face{graphics::front_face::counter_clockwise};
-  std::optional<graphics::depth_bias> depth_bias{};
-}; // struct rasterization_state
-
-enum class primitive_topology : std::int32_t {
-  point_list = VK_PRIMITIVE_TOPOLOGY_POINT_LIST,
-  line_list = VK_PRIMITIVE_TOPOLOGY_LINE_LIST,
-  line_strip = VK_PRIMITIVE_TOPOLOGY_LINE_STRIP,
-  triangle_list = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
-  triangle_strip = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP,
-  triangle_fan = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN,
-  line_list_with_adjacency = VK_PRIMITIVE_TOPOLOGY_LINE_LIST_WITH_ADJACENCY,
-  line_strip_with_adjacency = VK_PRIMITIVE_TOPOLOGY_LINE_STRIP_WITH_ADJACENCY,
-  triangle_list_with_adjacency = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST_WITH_ADJACENCY,
-  triangle_strip_with_adjacency = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP_WITH_ADJACENCY,
-  patch_list = VK_PRIMITIVE_TOPOLOGY_PATCH_LIST,
-}; // enum class primitive_topology
 
 enum class depth : std::int32_t {
   disabled = 0,
   read_write = 1,
   read_only = 2
 }; // enum class depth_test
-
-enum class compare_operation : std::int32_t {
-  never = VK_COMPARE_OP_NEVER,
-  less = VK_COMPARE_OP_LESS,
-  equal = VK_COMPARE_OP_EQUAL,
-  less_or_equal = VK_COMPARE_OP_LESS_OR_EQUAL,
-  greater = VK_COMPARE_OP_GREATER,
-  not_equal = VK_COMPARE_OP_NOT_EQUAL,
-  greater_or_equal = VK_COMPARE_OP_GREATER_OR_EQUAL,
-  always = VK_COMPARE_OP_ALWAYS
-}; // enum class compare_operation
 
 struct pipeline_definition {
   graphics::depth depth{graphics::depth::read_write};
@@ -236,23 +180,6 @@ using graphics_pipeline_handle = resource_handle<graphics_pipeline>;
 } // namespace sbx::graphics
 
 template<>
-struct sbx::reflection::description<sbx::graphics::polygon_mode> {
-
-  static constexpr auto name() -> std::string_view {
-    return "polygon_mode";
-  }
-
-  static constexpr auto enumerators() {
-    return std::make_tuple(
-      enumerator{"fill", sbx::graphics::polygon_mode::fill},
-      enumerator{"line", sbx::graphics::polygon_mode::line},
-      enumerator{"point", sbx::graphics::polygon_mode::point}
-    );
-  }
-
-}; // struct sbx::reflection::description<sbx::graphics::polygon_mode>
-
-template<>
 struct sbx::reflection::description<sbx::graphics::depth> {
 
   static constexpr auto name() -> std::string_view {
@@ -268,39 +195,5 @@ struct sbx::reflection::description<sbx::graphics::depth> {
   }
 
 }; // struct sbx::reflection::description<sbx::graphics::depth>
-
-template<>
-struct sbx::reflection::description<sbx::graphics::cull_mode> {
-
-  static constexpr auto name() -> std::string_view {
-    return "cull_mode";
-  }
-
-  static constexpr auto enumerators() {
-    return std::make_tuple(
-      enumerator{"back", sbx::graphics::cull_mode::back},
-      enumerator{"front", sbx::graphics::cull_mode::front},
-      enumerator{"front_and_back", sbx::graphics::cull_mode::front_and_back},
-      enumerator{"none", sbx::graphics::cull_mode::none}
-    );
-  }
-
-}; // struct sbx::reflection::description<sbx::graphics::cull_mode>
-
-template<>
-struct sbx::reflection::description<sbx::graphics::front_face> {
-
-  static constexpr auto name() -> std::string_view {
-    return "front_face";
-  }
-
-  static constexpr auto enumerators() {
-    return std::make_tuple(
-      enumerator{"clockwise", sbx::graphics::front_face::clockwise},
-      enumerator{"counter_clockwise", sbx::graphics::front_face::counter_clockwise}
-    );
-  }
-
-}; // struct sbx::reflection::description<sbx::graphics::front_face>
 
 #endif // LIBSBX_GRAPHICS_PIPELINE_GRAPHICS_PIPELINE_HPP_

@@ -485,23 +485,13 @@ auto render_graph::_create_attachments(const pass_node& pass) -> void {
 
         const auto is_srgb = (attachment.format() == format::r8g8b8a8_srgb || attachment.format() == format::b8g8r8a8_srgb);
 
-        auto usage = VkImageUsageFlags{VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT};
+        auto usage = graphics::usage::color_attachment | graphics::usage::sampled | graphics::usage::input_attachment;
 
         if (!is_srgb) {
-          usage |= VK_IMAGE_USAGE_STORAGE_BIT;
+          usage |= graphics::usage::storage;
         }
 
-        const auto image_handle = graphics_module.add_resource<image2d>(
-          extent,
-          attachment.format(),
-          needs_nearest_filter ? graphics::filter::nearest : graphics::filter::linear,
-          attachment.address_mode(),
-          usage,
-          VK_SAMPLE_COUNT_1_BIT,
-          false,
-          false,
-          attachment.array_layers()
-        );
+        const auto image_handle = graphics_module.add_resource<image2d>(extent, attachment.format(), needs_nearest_filter ? graphics::filter::nearest : graphics::filter::linear, attachment.address_mode(), usage, graphics::samples::count_1, false, false, attachment.array_layers());
 
         const auto& image = graphics_module.get_resource<image2d>(image_handle);
 
@@ -523,22 +513,9 @@ auto render_graph::_create_attachments(const pass_node& pass) -> void {
       case attachment::type::storage: {
         const auto needs_nearest_filter = (attachment.format() == format::r32_uint || attachment.format() == format::r64_uint || attachment.format() == format::r32g32_uint);
 
-        const auto usage = VkImageUsageFlags{
-          VK_IMAGE_USAGE_STORAGE_BIT |
-          VK_IMAGE_USAGE_SAMPLED_BIT
-        };
+        const auto usage = graphics::usage::storage | graphics::usage::sampled;
 
-        const auto image_handle = graphics_module.add_resource<image2d>(
-          extent,
-          attachment.format(),
-          needs_nearest_filter ? graphics::filter::nearest : graphics::filter::linear,
-          attachment.address_mode(),
-          usage,
-          VK_SAMPLE_COUNT_1_BIT,
-          false,
-          false,
-          attachment.array_layers()
-        );
+        const auto image_handle = graphics_module.add_resource<image2d>(extent, attachment.format(), needs_nearest_filter ? graphics::filter::nearest : graphics::filter::linear, attachment.address_mode(), usage, graphics::samples::count_1, false, false, attachment.array_layers());
 
         const auto& image = graphics_module.get_resource<image2d>(image_handle);
 

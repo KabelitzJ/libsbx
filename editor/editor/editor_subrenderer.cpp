@@ -28,7 +28,6 @@ auto editor_subrenderer::render(sbx::graphics::command_buffer& command_buffer) -
   _draw_dockspace();
 
   auto& graphics_module = sbx::core::engine::get_module<sbx::graphics::graphics_module>();
-  auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
   auto& editor_module = sbx::core::engine::get_module<editor::editor_module>();
 
   auto& scene_image = static_cast<const sbx::graphics::image2d&>(graphics_module.attachment("selection"));

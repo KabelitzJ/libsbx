@@ -128,6 +128,14 @@ constexpr auto operator&(Type lhs, Type rhs) -> Type {
 
 template<typename Type>
 requires (sbx::utility::is_bit_field_v<Type>)
+constexpr auto operator&=(Type& lhs, Type rhs) -> Type& {
+  lhs = lhs & rhs;
+
+  return lhs;
+}
+
+template<typename Type>
+requires (sbx::utility::is_bit_field_v<Type>)
 constexpr auto operator^(Type lhs, Type rhs) -> Type {
   return sbx::utility::from_underlying<Type>(sbx::utility::to_underlying(lhs) ^ sbx::utility::to_underlying(rhs));
 }

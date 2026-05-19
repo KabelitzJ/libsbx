@@ -14,7 +14,9 @@
 
 #include <libsbx/utility/noncopyable.hpp>
 #include <libsbx/utility/type_id.hpp>
+
 #include <libsbx/memory/tracking_allocator.hpp>
+#include <libsbx/memory/raw_allocate.hpp>
 
 namespace sbx::core {
 
@@ -119,33 +121,28 @@ protected:
       .stage = stage,
       .dependencies = dependencies.get(),
       .create = []() -> module_base* {
-        auto allocator = memory::general_tracking_allocator<Derived>{};
-        auto* instance = allocator.allocate(1u);
-
-        if (!instance) {
-          throw std::bad_alloc{};
-        }
+        auto* instance = memory::raw_allocate<Derived>();
         
         try {
           std::construct_at(instance);
         } catch (...) {
-          allocator.deallocate(instance, 1u);
+          memory::raw_deallocate(instance);
+
           throw;
         }
 
         return instance;
       },
-      .destroy = [](module_base* instance){
-        if (!instance) {
+      .destroy = [](module_base* pointer){
+        if (!pointer) {
           return;
         }
 
-        auto* derived = static_cast<Derived*>(instance);
+        auto* instance = static_cast<Derived*>(pointer);
 
-        std::destroy_at(derived);
+        std::destroy_at(instance);
 
-        auto allocator = memory::general_tracking_allocator<Derived>{};
-        allocator.deallocate(derived, 1u);
+        memory::raw_deallocate(instance);
       }
     };
 

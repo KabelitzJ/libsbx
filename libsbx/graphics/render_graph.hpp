@@ -104,9 +104,9 @@ public:
 
   using clear_value_type = std::variant<math::color, math::vector4i, math::vector4u>;
 
-  attachment(const utility::hashed_string& name, type type, const clear_value_type& clear_value = math::color::black(), const format format = format::r8g8b8a8_unorm, const graphics::blend_state& blend_state = graphics::blend_state{}, const filter filter = filter::linear, const address_mode address_mode = address_mode::repeat, std::uint32_t array_layers = 1u) noexcept;
+  attachment(const utility::hashed_string& name, type type, const clear_value_type& clear_value = math::color::black(), const graphics::format format = graphics::format::r8g8b8a8_unorm, const graphics::blend_state& blend_state = graphics::blend_state{}, const graphics::filter filter = graphics::filter::linear, const graphics::address_mode address_mode = graphics::address_mode::repeat, std::uint32_t array_layers = 1u) noexcept;
 
-  attachment(const utility::hashed_string& name, type type, const clear_value_type& clear_value, const format format, const filter filter, const address_mode address_mode, std::uint32_t array_layers = 1u) noexcept;
+  attachment(const utility::hashed_string& name, type type, const clear_value_type& clear_value, const graphics::format format, const graphics::filter filter, const graphics::address_mode address_mode, std::uint32_t array_layers = 1u) noexcept;
 
   auto name() const noexcept -> const utility::hashed_string&;
 

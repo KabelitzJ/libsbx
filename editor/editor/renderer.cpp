@@ -100,9 +100,9 @@ renderer::renderer()
 
   auto brightness = create_attachment("brightness", sbx::graphics::attachment::type::image, sbx::math::color::black(), sbx::graphics::format::r16g16b16a16_sfloat);
 
-  auto bloom_0_down = create_attachment("bloom_0_down", sbx::graphics::attachment::type::image, sbx::math::color::black(), sbx::graphics::format::r16g16b16a16_sfloat);
-  auto bloom_1_down = create_attachment("bloom_1_down", sbx::graphics::attachment::type::image, sbx::math::color::black(), sbx::graphics::format::r16g16b16a16_sfloat);
-  auto bloom_2_down = create_attachment("bloom_2_down", sbx::graphics::attachment::type::image, sbx::math::color::black(), sbx::graphics::format::r16g16b16a16_sfloat);
+  auto bloom_0_down = create_attachment("bloom_0_down", sbx::graphics::attachment::type::image, sbx::math::color::black(), sbx::graphics::format::r16g16b16a16_sfloat, sbx::graphics::filter::linear, sbx::graphics::address_mode::clamp_to_edge);
+  auto bloom_1_down = create_attachment("bloom_1_down", sbx::graphics::attachment::type::image, sbx::math::color::black(), sbx::graphics::format::r16g16b16a16_sfloat, sbx::graphics::filter::linear, sbx::graphics::address_mode::clamp_to_edge);
+  auto bloom_2_down = create_attachment("bloom_2_down", sbx::graphics::attachment::type::image, sbx::math::color::black(), sbx::graphics::format::r16g16b16a16_sfloat, sbx::graphics::filter::linear, sbx::graphics::address_mode::clamp_to_edge);
   auto bloom_2_horizontal_blur = create_attachment("bloom_2_horizontal_blur", sbx::graphics::attachment::type::image, sbx::math::color::black(), sbx::graphics::format::r16g16b16a16_sfloat);
   auto bloom_2_full_blur = create_attachment("bloom_2_full_blur", sbx::graphics::attachment::type::image, sbx::math::color::black(), sbx::graphics::format::r16g16b16a16_sfloat);
   auto bloom_1_up = create_attachment("bloom_1_up", sbx::graphics::attachment::type::image, sbx::math::color::black(), sbx::graphics::format::r16g16b16a16_sfloat);

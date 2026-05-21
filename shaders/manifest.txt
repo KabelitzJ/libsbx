@@ -5,6 +5,10 @@ ibl/prefiltered
 
 # Post / resolve
 fxaa
+brightness
+upsample
+downsample
+blur
 resolve_opaque
 resolve_transparent
 tonemap

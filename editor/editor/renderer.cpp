@@ -27,6 +27,7 @@
 #include <libsbx/post/filters/downsample_filter.hpp>
 #include <libsbx/post/filters/upsample_filter.hpp>
 #include <libsbx/post/filters/ssao_filter.hpp>
+#include <libsbx/post/filters/brightness_filter.hpp>
 
 #include <libsbx/gizmos/gizmos_subrenderer.hpp>
 #include <libsbx/sprites/sprite_subrenderer.hpp>
@@ -96,7 +97,16 @@ renderer::renderer()
   };
 
   auto resolve = create_attachment("resolve", sbx::graphics::attachment::type::image, _clear_color, sbx::graphics::format::r32g32b32a32_sfloat, resolve_blend);
+
   auto brightness = create_attachment("brightness", sbx::graphics::attachment::type::image, sbx::math::color::black(), sbx::graphics::format::r16g16b16a16_sfloat);
+
+  auto bloom_0_down = create_attachment("bloom_0_down", sbx::graphics::attachment::type::image, sbx::math::color::black(), sbx::graphics::format::r16g16b16a16_sfloat);
+  auto bloom_1_down = create_attachment("bloom_1_down", sbx::graphics::attachment::type::image, sbx::math::color::black(), sbx::graphics::format::r16g16b16a16_sfloat);
+  auto bloom_2_down = create_attachment("bloom_2_down", sbx::graphics::attachment::type::image, sbx::math::color::black(), sbx::graphics::format::r16g16b16a16_sfloat);
+  auto bloom_2_horizontal_blur = create_attachment("bloom_2_horizontal_blur", sbx::graphics::attachment::type::image, sbx::math::color::black(), sbx::graphics::format::r16g16b16a16_sfloat);
+  auto bloom_2_full_blur = create_attachment("bloom_2_full_blur", sbx::graphics::attachment::type::image, sbx::math::color::black(), sbx::graphics::format::r16g16b16a16_sfloat);
+  auto bloom_1_up = create_attachment("bloom_1_up", sbx::graphics::attachment::type::image, sbx::math::color::black(), sbx::graphics::format::r16g16b16a16_sfloat);
+  auto bloom_0_up = create_attachment("bloom_0_up", sbx::graphics::attachment::type::image, sbx::math::color::black(), sbx::graphics::format::r16g16b16a16_sfloat);
 
   auto tonemap = create_attachment("tonemap", sbx::graphics::attachment::type::image, _clear_color, sbx::graphics::format::r8g8b8a8_srgb);
 
@@ -172,7 +182,106 @@ renderer::renderer()
 
     pass.writes(depth, sbx::graphics::attachment_load_operation::load);
     pass.writes(resolve, sbx::graphics::attachment_load_operation::clear);
+
+    return pass;
+  });
+
+  auto brightness_pass = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
+    auto pass = context.graphics_pass("brightness_pass", scene_viewport);
+
+    pass.depends_on(resolve_pass);
+
+    pass.reads(resolve);
+
     pass.writes(brightness, sbx::graphics::attachment_load_operation::clear);
+
+    return pass;
+  });
+
+  const auto half_viewport    = sbx::graphics::viewport::named("scene", sbx::math::vector2f{0.5f,   0.5f});
+  const auto quarter_viewport = sbx::graphics::viewport::named("scene", sbx::math::vector2f{0.25f,  0.25f});
+  const auto eighth_viewport  = sbx::graphics::viewport::named("scene", sbx::math::vector2f{0.125f, 0.125f});
+
+  auto bloom_downsample_0_pass = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
+    auto pass = context.graphics_pass("bloom_downsample_0", half_viewport);
+
+    pass.depends_on(brightness_pass);
+
+    pass.reads(brightness);
+
+    pass.writes(bloom_0_down, sbx::graphics::attachment_load_operation::clear);
+
+    return pass;
+  });
+
+  auto bloom_downsample_1_pass = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
+    auto pass = context.graphics_pass("bloom_downsample_1", quarter_viewport);
+
+    pass.depends_on(bloom_downsample_0_pass);
+
+    pass.reads(bloom_0_down);
+
+    pass.writes(bloom_1_down, sbx::graphics::attachment_load_operation::clear);
+
+    return pass;
+  });
+
+  auto bloom_downsample_2_pass = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
+    auto pass = context.graphics_pass("bloom_downsample_2", eighth_viewport);
+
+    pass.depends_on(bloom_downsample_1_pass);
+
+    pass.reads(bloom_1_down);
+
+    pass.writes(bloom_2_down, sbx::graphics::attachment_load_operation::clear);
+
+    return pass;
+  });
+
+  auto bloom_blur_h_pass = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
+    auto pass = context.graphics_pass("bloom_blur_h", eighth_viewport);
+
+    pass.depends_on(bloom_downsample_2_pass);
+
+    pass.reads(bloom_2_down);
+
+    pass.writes(bloom_2_horizontal_blur, sbx::graphics::attachment_load_operation::clear);
+
+    return pass;
+  });
+
+  auto bloom_blur_v_pass = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
+    auto pass = context.graphics_pass("bloom_blur_v", eighth_viewport);
+
+    pass.depends_on(bloom_blur_h_pass);
+
+    pass.reads(bloom_2_horizontal_blur);
+
+    pass.writes(bloom_2_full_blur, sbx::graphics::attachment_load_operation::clear);
+
+    return pass;
+  });
+
+  auto bloom_upsample_1_pass = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
+    auto pass = context.graphics_pass("bloom_upsample_1", quarter_viewport);
+
+    pass.depends_on(bloom_blur_v_pass, bloom_downsample_1_pass);
+
+    pass.reads(bloom_2_full_blur, bloom_1_down);
+
+    pass.writes(bloom_1_up, sbx::graphics::attachment_load_operation::clear);
+
+    return pass;
+  });
+
+  auto bloom_upsample_0_pass = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
+    auto pass = context.graphics_pass("bloom_upsample_0", half_viewport);
+
+    pass.depends_on(bloom_upsample_1_pass, bloom_downsample_0_pass);
+
+    pass.reads(bloom_1_up, bloom_0_down);
+
+    pass.writes(bloom_0_up, sbx::graphics::attachment_load_operation::clear);
 
     return pass;
   });
@@ -180,9 +289,9 @@ renderer::renderer()
   auto tonemap_pass = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
     auto pass = context.graphics_pass("tonemap", scene_viewport);
 
-    pass.depends_on(resolve_pass);
+    pass.depends_on(resolve_pass, bloom_upsample_0_pass);
 
-    pass.reads(resolve);
+    pass.reads(resolve, bloom_0_up);
 
     pass.writes(tonemap, sbx::graphics::attachment_load_operation::clear);
 
@@ -277,9 +386,24 @@ renderer::renderer()
 
   add_subrenderer<sbx::scenes::debug_subrenderer>(resolve_pass);
 
+  // Brightness pass
+  add_subrenderer<sbx::post::brightness_filter>(brightness_pass, "resolve", sbx::post::brightness_config{.threshold = 1.0f, .soft_knee = 0.5f});
+
+  // Bloom chain
+  add_subrenderer<sbx::post::downsample_filter>(bloom_downsample_0_pass, "engine://shaders/downsample", "brightness");
+  add_subrenderer<sbx::post::downsample_filter>(bloom_downsample_1_pass, "engine://shaders/downsample", "bloom_0_down");
+  add_subrenderer<sbx::post::downsample_filter>(bloom_downsample_2_pass, "engine://shaders/downsample", "bloom_1_down");
+
+  add_subrenderer<sbx::post::blur_filter_gaussian_9>(bloom_blur_h_pass, "engine://shaders/blur", "bloom_2_down",   sbx::math::vector2{1.0f, 0.0f});
+  add_subrenderer<sbx::post::blur_filter_gaussian_9>(bloom_blur_v_pass, "engine://shaders/blur", "bloom_2_horizontal_blur", sbx::math::vector2{0.0f, 1.0f});
+
+  add_subrenderer<sbx::post::upsample_filter>(bloom_upsample_1_pass, "engine://shaders/upsample", "bloom_2_full_blur", "bloom_1_down", 1.0f);
+  add_subrenderer<sbx::post::upsample_filter>(bloom_upsample_0_pass, "engine://shaders/upsample", "bloom_1_up", "bloom_0_down", 1.0f);
+
   // Post-processing pass
   auto tonemap_attachment_names = std::vector<std::pair<std::string, std::string>>{
-    {"resolve_image", "resolve"}
+    {"resolve_image", "resolve"},
+    {"bloom_image",   "bloom_0_up"}
   };
 
   auto tonemap_config = sbx::post::tonemap_config{

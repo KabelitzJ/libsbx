@@ -170,6 +170,7 @@ application::application()
   helmet_material.roughness_factor = 1.0f;
   helmet_material.occlusion_strength = 1.0f;
   helmet_material.emissive_factor = sbx::math::vector4{1.0f, 1.0f, 1.0f, 1.0f};
+  helmet_material.emissive_strength = 5.0f;
   helmet_material.albedo.image = asset_registry.get_image("helmet_albedo");
   helmet_material.normal.image = asset_registry.get_image("helmet_normal");
   helmet_material.metallic_roughness.image = asset_registry.get_image("helmet_mr");

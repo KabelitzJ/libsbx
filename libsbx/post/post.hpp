@@ -9,5 +9,6 @@
 #include <libsbx/post/filters/blur_filter.hpp>
 #include <libsbx/post/filters/fxaa_filter.hpp>
 #include <libsbx/post/filters/tonemap_filter.hpp>
+#include <libsbx/post/filters/brightness_filter.hpp>
 
 #endif // LIBSBX_POST_HPP_

@@ -14,7 +14,6 @@ struct fs_in {
 
 struct fs_out {
   float4 color : SV_Target0;
-  float4 brightness : SV_Target1;
 }; // struct fs_out
 
 struct push_data {
@@ -86,12 +85,6 @@ sbx::common::surface build_surface(float2 uv) {
   return surface;
 }
 
-float4 compute_brightness(float3 color) {
-  float brightness = dot(color, float3(0.2126, 0.7152, 0.0722));
-
-  return (brightness > 1.0) ? float4(color, 1.0) : float4(0.0, 0.0, 0.0, 1.0);
-}
-
 [shader("fragment")]
 fs_out main(fs_in input) {
   sbx::common::surface surface = build_surface(input.uv);
@@ -113,7 +106,6 @@ fs_out main(fs_in input) {
 
   fs_out output;
   output.color = float4(final_color, 1.0);
-  output.brightness = compute_brightness(final_color);
 
   return output;
 }

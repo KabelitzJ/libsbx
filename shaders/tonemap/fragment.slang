@@ -3,8 +3,8 @@
 [[vk::binding(0, 0)]]
 Sampler2D resolve_image;
 
-// [[vk::binding(1, 0)]]
-// Sampler2D bloom_image;
+[[vk::binding(1, 0)]]
+Sampler2D bloom_image;
 
 struct push_data {
   float exposure;
@@ -57,10 +57,10 @@ float3 rrt_and_odt_fit(float3 color) {
   return a / b;
 }
 
-static const float exposure = 1.25;
+static const float aces_pre_scale = 1.25;
 
 float3 apply_aces_tonemap(float3 value) {
-  value *= exposure;
+  value *= aces_pre_scale;
   value /= 0.6;
 
   value = mul(aces_input, value);
@@ -75,14 +75,13 @@ fs_out main(fs_in input) {
   fs_out output;
 
   float3 color = resolve_image.Sample(input.uv).rgb;
-  float3 bloom = float3(0.0, 0.0, 0.0);
-  // float3 bloom = bloom_image.Sample(input.uv).rgb;
+  float3 bloom = bloom_image.Sample(input.uv).rgb;
 
-  // color = apply_white_balance(color, push.temperature, push.tint);
+  color = apply_white_balance(color, push.temperature, push.tint);
 
-  // float3 exposed = (color + bloom * push.bloom_mix) * exp2(push.exposure);
+  float3 exposed = (color + bloom * push.bloom_mix) * exp2(push.exposure);
 
-  float3 mapped = apply_aces_tonemap(color);
+  float3 mapped = apply_aces_tonemap(exposed);
 
   float luminance = dot(mapped, float3(0.2126, 0.7152, 0.0722));
 

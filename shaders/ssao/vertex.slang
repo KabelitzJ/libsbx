@@ -1,6 +1,6 @@
 struct vs_in {
   uint vertex_id : SV_VertexID;
-}; // struct VSIn
+}; // struct vs_in
 
 struct vs_out {
   float4 position : SV_Position;

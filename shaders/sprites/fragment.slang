@@ -10,7 +10,6 @@ struct fs_in {
 
 struct fs_out {
   float4 color : SV_Target0;
-  float4 brightness : SV_Target1;
 }; // struct fs_out
 
 struct push_data {
@@ -93,10 +92,6 @@ fs_out main(fs_in input) {
   float3 emissive = get_emissive(input, sprite);
 
   output.color = float4(albedo.rgb + emissive, albedo.a);
-
-  float brightness = dot(output.color.rgb, float3(0.2126, 0.7152, 0.0722));
-
-  output.brightness = (brightness > bloom_threshold) ? float4(output.color.rgb, 1.0) : float4(0.0, 0.0, 0.0, 1.0);
 
   return output;
 }

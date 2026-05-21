@@ -5,7 +5,6 @@ struct fs_in {
 
 struct fs_out {
   float4 color : SV_Target0;
-  float4 brightness : SV_Target1;
 }; // struct fs_out
 
 [[vk::binding(1, 0)]]
@@ -25,7 +24,6 @@ fs_out main(fs_in input) {
   float fog_factor = clamp(1.0 - exp(-FOG_DISTANCE * FOG_DENSITY), 0.0, 1.0);
 
   output.color = float4(cube_map_color.rgb * input.color.rgb, 1.0);
-  output.brightness = float4(0.0, 0.0, 0.0, 1.0);
 
   return output;
 }

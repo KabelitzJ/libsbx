@@ -19,6 +19,13 @@ static const auto attachment_names = std::vector<std::string_view>{
   "revealage",
   "resolve",
   "brightness",
+  "bloom_0",
+  "bloom_1",
+  "bloom_2",
+  "bloom_2_horizontal_blur",
+  "bloom_2_full_blur",
+  "bloom_1_up",
+  "bloom_0_up",
   "tonemap",
   "fxaa"
 };

@@ -3,6 +3,10 @@
 
 #include <fmt/format.h>
 
+#include <libsbx/utility/static_string.hpp>
+
+#include <libsbx/reflection/description.hpp>
+
 #include <libsbx/assets/assets_module.hpp>
 
 #include <libsbx/scenes/scenes_module.hpp>
@@ -395,6 +399,23 @@ auto inspector_panel::_draw_material(const sbx::math::uuid& material_id, std::ui
   if (ImGui::DragFloat2("UV1 Offset", uv1_offset.data(), 0.005f, -10.0f, 10.0f, "%.3f")) {
     material.uv1_offset.x() = uv1_offset[0];
     material.uv1_offset.y() = uv1_offset[1];
+  }
+
+  for (int i = 0; i < 6; ++i) {
+    const auto bit = std::uint32_t{1u << i};
+    const auto use_uv1 = (material.uv_mask & bit) != 0;
+
+    const auto type = sbx::reflection::to_string(static_cast<sbx::models::uv_index>(bit));
+
+    ImGui::Text("%s", type.data());
+
+    ImGui::SameLine();
+
+    auto button_label = sbx::utility::static_string<32>::format("{}##uv_toggle_{}", use_uv1 ? "UV1" : "UV0", i);
+
+    if (ImGui::Button(button_label.c_str())) {
+      material.uv_mask ^= bit;
+    }
   }
 
   ImGui::Spacing();

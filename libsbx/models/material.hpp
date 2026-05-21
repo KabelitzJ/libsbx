@@ -12,6 +12,8 @@
 #include <libsbx/math/matrix4x4.hpp>
 #include <libsbx/math/color.hpp>
 
+#include <libsbx/reflection/description.hpp>
+
 #include <libsbx/graphics/images/image2d.hpp>
 
 #include <libsbx/scenes/components/static_mesh.hpp>
@@ -36,6 +38,15 @@ enum class material_feature : std::uint8_t {
 inline constexpr auto operator|(const material_feature lhs, const material_feature rhs) -> material_feature {
   return static_cast<material_feature>(static_cast<std::uint8_t>(lhs) | static_cast<std::uint8_t>(rhs));
 }
+
+enum class uv_index : std::uint32_t {
+  albedo = utility::bit_v<0>,
+  normal = utility::bit_v<1>,
+  metallic_roughness = utility::bit_v<2>,
+  occlusion = utility::bit_v<3>,
+  emissive = utility::bit_v<4>,
+  height = utility::bit_v<5>,
+}; // enum material_feature
 
 struct alignas(16) material_data {
   std::uint32_t albedo_image_index;
@@ -220,5 +231,25 @@ struct std::hash<sbx::models::material_key> {
     return sbx::models::material_key_hash{}(key);
   }
 }; // struct std::hash
+
+template<>
+struct sbx::reflection::description<sbx::models::uv_index> {
+
+  static constexpr auto name() -> std::string_view {
+    return "uv_index";
+  }
+
+  static constexpr auto enumerators() {
+    return std::make_tuple(
+      enumerator{"albedo", sbx::models::uv_index::albedo},
+      enumerator{"normal", sbx::models::uv_index::normal},
+      enumerator{"metallic_roughness", sbx::models::uv_index::metallic_roughness},
+      enumerator{"occlusion", sbx::models::uv_index::occlusion},
+      enumerator{"emissive", sbx::models::uv_index::emissive},
+      enumerator{"height", sbx::models::uv_index::height}
+    );
+  }
+
+}; // struct sbx::reflection::description<sbx::models::uv_index>
 
 #endif // LIBSBX_MODELS_MATERIAL_HPP_

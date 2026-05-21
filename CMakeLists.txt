@@ -643,6 +643,7 @@ target_sources(
       "${CMAKE_SOURCE_DIR}/libsbx/utility/noncopyable.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/utility/overload.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/utility/primitive.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/utility/static_string.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/utility/profiler.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/utility/small_string.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/utility/string_literal.hpp"

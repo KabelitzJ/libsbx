@@ -306,12 +306,17 @@ private:
     data.parallax_max_layers = material.parallax_max_layers;
 
     // UV
-    data.uv_offset = material.uv_offset;
-    data.uv_scale = material.uv_scale;
+    data.uv0_offset = material.uv0_offset;
+    data.uv0_scale = material.uv0_scale;
+
+    data.uv1_offset = material.uv1_offset;
+    data.uv1_scale = material.uv1_scale;
 
     data.sway_speed_strength = _pack_half2(material.sway_speed, material.sway_strength);
     data.scrumble_speed_strength = _pack_half2(material.scrumble_speed, material.scrumble_strength);
     data.falloff_exponents = _pack_half2(material.sway_falloff_exponent, material.scrumble_falloff_exponent);
+
+    data.uv_mask = material.uv_mask;
 
     _material_data.push_back(data);
 

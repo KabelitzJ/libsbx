@@ -102,7 +102,7 @@ renderer::renderer()
 
   auto fxaa = create_attachment("fxaa", sbx::graphics::attachment::type::image, _clear_color, sbx::graphics::format::r8g8b8a8_srgb);
 
-  // auto selection = create_attachment("selection", sbx::graphics::attachment::type::image, _clear_color, sbx::graphics::format::r8g8b8a8_srgb);
+  auto selection = create_attachment("selection", sbx::graphics::attachment::type::image, _clear_color, sbx::graphics::format::r8g8b8a8_srgb);
 
   auto swapchain = create_attachment("swapchain", sbx::graphics::attachment::type::swapchain, _clear_color, sbx::graphics::format::b8g8r8a8_srgb);
 
@@ -201,24 +201,24 @@ renderer::renderer()
     return pass;
   });
 
-  // auto selection_pass = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
-  //   auto pass = context.graphics_pass("deferred", scene_viewport);
+  auto selection_pass = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
+    auto pass = context.graphics_pass("selection", scene_viewport);
 
-  //   pass.depends_on(fxaa_pass, gbuffer_pass);
+    pass.depends_on(fxaa_pass, gbuffer_pass);
 
-  //   pass.reads(fxaa, object_id, linear_depth);
+    pass.reads(fxaa, object_id, linear_depth);
 
-  //   pass.writes(selection, sbx::graphics::attachment_load_operation::clear);
+    pass.writes(selection, sbx::graphics::attachment_load_operation::clear);
 
-  //   return pass;
-  // });
+    return pass;
+  });
 
   auto editor_pass = create_pass([&](sbx::graphics::render_graph::context& context) -> sbx::graphics::pass_node {
     auto pass = context.graphics_pass("editor");
 
-    pass.depends_on(fxaa_pass);
+    pass.depends_on(selection_pass);
 
-    pass.reads(fxaa);
+    pass.reads(selection);
     pass.writes(swapchain, sbx::graphics::attachment_load_operation::clear);
 
     return pass;
@@ -295,15 +295,15 @@ renderer::renderer()
 
   add_subrenderer<sbx::post::fxaa_filter>(fxaa_pass, "tonemap");
 
-  // auto selection_attachment_names = std::vector<std::pair<std::string, std::string>>{
-  //   {"resolve_image", "fxaa"},
-  //   {"object_id_image", "object_id"},
-  //   {"linear_depth_image", "linear_depth"}
-  // };
+  auto selection_attachment_names = std::vector<std::pair<std::string, std::string>>{
+    {"resolve_image", "fxaa"},
+    {"object_id_image", "object_id"},
+    {"linear_depth_image", "linear_depth"}
+  };
 
-  // add_subrenderer<editor::selection_filter>(selection_pass, "editor://shaders/selection", std::move(selection_attachment_names));
+  add_subrenderer<editor::selection_filter>(selection_pass, "editor://shaders/selection", std::move(selection_attachment_names));
 
-  add_subrenderer<editor::editor_subrenderer>(editor_pass, "fxaa");
+  add_subrenderer<editor::editor_subrenderer>(editor_pass, "selection");
 }
 
 } // namespace editor

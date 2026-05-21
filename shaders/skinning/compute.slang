@@ -13,8 +13,11 @@ struct static_vertex {
   float normal_y;
   float normal_z;
 
-  float uv_x;
-  float uv_y;
+  float uv0_x;
+  float uv0_y;
+
+  float uv1_x;
+  float uv1_y;
 
   float tangent_x;
   float tangent_y;
@@ -31,8 +34,11 @@ struct skinned_vertex {
   float normal_y;
   float normal_z;
 
-  float uv_x;
-  float uv_y;
+  float uv0_x;
+  float uv0_y;
+
+  float uv1_x;
+  float uv1_y;
 
   float tangent_x;
   float tangent_y;
@@ -103,7 +109,8 @@ void main(cs_in input) {
   float3 in_position = float3(vin.position_x, vin.position_y, vin.position_z);
   float3 in_normal = float3(vin.normal_x, vin.normal_y, vin.normal_z);
   float4 in_tangent = float4(vin.tangent_x, vin.tangent_y, vin.tangent_z, vin.tangent_w);
-  float2 in_uv = float2(vin.uv_x, vin.uv_y);
+  float2 in_uv0 = float2(vin.uv0_x, vin.uv0_y);
+  float2 in_uv1 = float2(vin.uv1_x, vin.uv1_y);
 
   uint4 bone_indices = uint4(vin.bone_index_x, vin.bone_index_y, vin.bone_index_z, vin.bone_index_w);
   float4 bone_weights = float4(vin.bone_weight_x, vin.bone_weight_y, vin.bone_weight_z, vin.bone_weight_w);
@@ -124,8 +131,11 @@ void main(cs_in input) {
   vout.normal_y = skinned_normal.y;
   vout.normal_z = skinned_normal.z;
 
-  vout.uv_x = in_uv.x;
-  vout.uv_y = in_uv.y;
+  vout.uv0_x = in_uv0.x;
+  vout.uv0_y = in_uv0.y;
+
+  vout.uv1_x = in_uv1.x;
+  vout.uv1_y = in_uv1.y;
 
   vout.tangent_x = skinned_tangent.x;
   vout.tangent_y = skinned_tangent.y;

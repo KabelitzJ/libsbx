@@ -235,7 +235,7 @@ application::application()
   base_material.occlusion.anisotropy = 16.0f;
   base_material.height.image = asset_registry.get_image("floor_height");
   base_material.height.anisotropy = 16.0f;
-  base_material.uv_scale = sbx::math::vector2{15, 15};
+  base_material.uv0_scale = sbx::math::vector2{15, 15};
   base_material.alpha = sbx::models::alpha_mode::opaque;
   base_material.metallic_factor = 0.0f;
   base_material.roughness_factor = 1.0f;

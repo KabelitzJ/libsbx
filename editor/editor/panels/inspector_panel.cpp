@@ -369,18 +369,32 @@ auto inspector_panel::_draw_material(const sbx::math::uuid& material_id, std::ui
   ImGui::Spacing();
   ImGui::SeparatorText("UV Transform");
 
-  auto uv_scale = std::array<std::float_t, 2>{material.uv_scale.x(), material.uv_scale.y()};
+  auto uv0_scale = std::array<std::float_t, 2>{material.uv0_scale.x(), material.uv0_scale.y()};
 
-  if (ImGui::DragFloat2("UV Scale", uv_scale.data(), 0.05f, 0.001f, 1000.0f, "%.3f")) {
-    material.uv_scale.x() = uv_scale[0];
-    material.uv_scale.y() = uv_scale[1];
+  if (ImGui::DragFloat2("UV0 Scale", uv0_scale.data(), 0.05f, 0.001f, 1000.0f, "%.3f")) {
+    material.uv0_scale.x() = uv0_scale[0];
+    material.uv0_scale.y() = uv0_scale[1];
   }
 
-  auto uv_offset = std::array<std::float_t, 2>{material.uv_offset.x(), material.uv_offset.y()};
+  auto uv0_offset = std::array<std::float_t, 2>{material.uv0_offset.x(), material.uv0_offset.y()};
 
-  if (ImGui::DragFloat2("UV Offset", uv_offset.data(), 0.005f, -10.0f, 10.0f, "%.3f")) {
-    material.uv_offset.x() = uv_offset[0];
-    material.uv_offset.y() = uv_offset[1];
+  if (ImGui::DragFloat2("UV0 Offset", uv0_offset.data(), 0.005f, -10.0f, 10.0f, "%.3f")) {
+    material.uv0_offset.x() = uv0_offset[0];
+    material.uv0_offset.y() = uv0_offset[1];
+  }
+
+  auto uv1_scale = std::array<std::float_t, 2>{material.uv1_scale.x(), material.uv1_scale.y()};
+
+  if (ImGui::DragFloat2("UV1 Scale", uv1_scale.data(), 0.05f, 0.001f, 1000.0f, "%.3f")) {
+    material.uv1_scale.x() = uv1_scale[0];
+    material.uv1_scale.y() = uv1_scale[1];
+  }
+
+  auto uv1_offset = std::array<std::float_t, 2>{material.uv1_offset.x(), material.uv1_offset.y()};
+
+  if (ImGui::DragFloat2("UV1 Offset", uv1_offset.data(), 0.005f, -10.0f, 10.0f, "%.3f")) {
+    material.uv1_offset.x() = uv1_offset[0];
+    material.uv1_offset.y() = uv1_offset[1];
   }
 
   ImGui::Spacing();

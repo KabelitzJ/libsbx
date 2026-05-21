@@ -16,17 +16,18 @@ namespace sbx::animations {
 struct alignas(alignof(std::float_t)) vertex3d {
   math::vector3 position;
   math::vector3 normal;
-  math::vector2 uv;
+  math::vector2 uv0;
+  math::vector2 uv1;
   math::vector4 tangent;
   math::vector4u bone_ids;
   math::vector4 bone_weights;
 }; // struct vertex
 
-static_assert(sizeof(vertex3d) == 80, "Incorrect sbx::animations::vertex3d size");
+static_assert(sizeof(vertex3d) == 88, "Incorrect sbx::animations::vertex3d size");
 static_assert(alignof(vertex3d) == 4, "Incorrect sbx::animations::vertex3d alignment");
 
 constexpr auto operator==(const vertex3d& lhs, const vertex3d& rhs) noexcept -> bool {
-  return lhs.position == rhs.position && lhs.normal == rhs.normal && lhs.tangent == rhs.tangent && lhs.uv == rhs.uv && lhs.bone_ids == rhs.bone_ids && lhs.bone_weights == rhs.bone_weights;
+  return lhs.position == rhs.position && lhs.normal == rhs.normal && lhs.tangent == rhs.tangent && lhs.uv0 == rhs.uv0 && lhs.uv1 == rhs.uv1 && lhs.bone_ids == rhs.bone_ids && lhs.bone_weights == rhs.bone_weights;
 }
 
 } // namespace sbx::animation
@@ -67,18 +68,25 @@ struct sbx::graphics::vertex_input<sbx::animations::vertex3d> {
       .location = 3,
       .binding = 0,
       .format = VK_FORMAT_R32G32_SFLOAT,
-      .offset = offsetof(sbx::animations::vertex3d, uv)
+      .offset = offsetof(sbx::animations::vertex3d, uv0)
     });
 
     result.attribute_descriptions.push_back(VkVertexInputAttributeDescription{
       .location = 4,
+      .binding = 0,
+      .format = VK_FORMAT_R32G32_SFLOAT,
+      .offset = offsetof(sbx::animations::vertex3d, uv1)
+    });
+
+    result.attribute_descriptions.push_back(VkVertexInputAttributeDescription{
+      .location = 5,
       .binding = 0,
       .format = VK_FORMAT_R32G32B32A32_UINT,
       .offset = offsetof(sbx::animations::vertex3d, bone_ids)
     });
 
     result.attribute_descriptions.push_back(VkVertexInputAttributeDescription{
-      .location = 5,
+      .location = 6,
       .binding = 0,
       .format = VK_FORMAT_R32G32B32_SFLOAT,
       .offset = offsetof(sbx::animations::vertex3d, bone_weights)
@@ -92,7 +100,7 @@ template<>
 struct std::hash<sbx::animations::vertex3d> {
   auto operator()(const sbx::animations::vertex3d& vertex) const noexcept -> std::size_t {
     auto hash = std::size_t{0};
-    sbx::utility::hash_combine(hash, vertex.position, vertex.normal, vertex.tangent, vertex.uv, vertex.bone_ids, vertex.bone_weights);
+    sbx::utility::hash_combine(hash, vertex.position, vertex.normal, vertex.tangent, vertex.uv0, vertex.uv1, vertex.bone_ids, vertex.bone_weights);
     return hash;
   }
 }; // struct std::hash<vertex3d>

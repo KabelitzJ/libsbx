@@ -42,6 +42,10 @@ static auto _convert_vec2(const aiVector2D& vector) -> math::vector2 {
   return math::vector2{vector.x, vector.y};
 }
 
+static auto _convert_vec2(const aiVector3D& vector) -> math::vector2 {
+  return math::vector2{vector.x, vector.y};
+}
+
 static auto _convert_vec3(const aiVector3D& vector) -> math::vector3 {
   return math::vector3{vector.x, vector.y, vector.z};
 }
@@ -96,7 +100,8 @@ static auto _load_mesh(const aiMesh* mesh, mesh::mesh_data& data, const bone_map
     vertex.position = _convert_vec4(mesh->mVertices[i], 1.0f);
     vertex.normal = _convert_vec4(mesh->mNormals[i], 0.0f);
     vertex.tangent = _convert_vec4(mesh->mTangents[i], 0.0f);
-    vertex.uv = _convert_vec3(mesh->mTextureCoords[0][i]);
+    vertex.uv0 = mesh->mTextureCoords[0] ? _convert_vec2(mesh->mTextureCoords[0][i]) : math::vector2{0.0f, 0.0f};
+    vertex.uv1 = mesh->mTextureCoords[1] ? _convert_vec2(mesh->mTextureCoords[1][i]) : math::vector2{0.0f, 0.0f};
     vertex.bone_weights = math::vector4{0.0f, 0.0f, 0.0f, 0.0f};
     vertex.bone_ids = math::vector4u{0u, 0u, 0u, 0u};
 
@@ -245,13 +250,13 @@ static auto _apply_weights(const aiScene* scene, mesh::mesh_data& data, const bo
     for (auto j = 0u; j < mesh->mNumBones; ++j) {
       const auto* bone = mesh->mBones[j];
 
-      auto itr = bone_map.find(bone->mName.C_Str());
+      auto entry = bone_map.find(bone->mName.C_Str());
 
-      if (itr == bone_map.end()) {
+      if (entry == bone_map.end()) {
         throw utility::runtime_error{"Invalid bone name '{}", bone->mName.C_Str()};
       }
 
-      auto id = itr->second;
+      auto id = entry->second;
 
       for (auto k = 0u; k < bone->mNumWeights; ++k) {
         const auto& weight = bone->mWeights[k];

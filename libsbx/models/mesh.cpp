@@ -33,6 +33,11 @@ static auto _convert_vec2(const aiVector2D& vector) -> math::vector2 {
   return math::vector2{vector.x, vector.y};
 }
 
+static auto _convert_vec2(const aiVector3D& vector) -> math::vector2 {
+  return math::vector2{vector.x, vector.y};
+}
+
+
 static auto _convert_vec3(const aiVector3D& vector) -> math::vector3 {
   return math::vector3{vector.x, vector.y, vector.z};
 }
@@ -117,7 +122,8 @@ static auto _load_mesh(const aiMesh* mesh, mesh::mesh_data& data, const math::ma
     auto vertex = models::vertex3d{};
     vertex.position = local_transform * _convert_vec4(mesh->mVertices[i], 1.0f);
     vertex.normal = math::vector3::normalized(normal_matrix * math::vector4{N, 0.0f});
-    vertex.uv = _convert_vec3(mesh->mTextureCoords[0][i]);
+    vertex.uv0 = mesh->mTextureCoords[0] ? _convert_vec2(mesh->mTextureCoords[0][i]) : math::vector2{0.0f, 0.0f};
+    vertex.uv1 = mesh->mTextureCoords[1] ? _convert_vec2(mesh->mTextureCoords[1][i]) : math::vector2{0.0f, 0.0f};
     vertex.tangent = math::vector4{math::vector3::normalized(normal_matrix * math::vector4{T, 0.0f}), handedness};
 
     vertices.push_back(vertex);
@@ -669,8 +675,11 @@ auto mesh::_load_binary(const std::filesystem::path& path) -> mesh_data {
         vertex.position = decode_position({file_vert.position[0], file_vert.position[1], file_vert.position[2]}, global_aabb);
         vertex.normal = decode_octahedral({file_vert.normal[0], file_vert.normal[1]});
 
-        const auto decoded_uv = decode_uv({file_vert.uv[0], file_vert.uv[1]});
-        vertex.uv = math::vector3{decoded_uv.x(), decoded_uv.y(), 0.0f};
+        const auto decoded_uv0 = decode_uv({file_vert.uv0[0], file_vert.uv0[1]});
+        vertex.uv0 = math::vector3{decoded_uv0.x(), decoded_uv0.y(), 0.0f};
+
+        const auto decoded_uv1 = decode_uv({file_vert.uv1[0], file_vert.uv1[1]});
+        vertex.uv1 = math::vector3{decoded_uv1.x(), decoded_uv1.y(), 0.0f};
 
         const auto decoded_tangent = decode_octahedral({file_vert.tangent[0], file_vert.tangent[1]});
         vertex.tangent = math::vector4{decoded_tangent.x(), decoded_tangent.y(), decoded_tangent.z(), static_cast<std::float_t>(file_vert.tangent_w)};
@@ -783,9 +792,13 @@ auto mesh::_process(const std::filesystem::path& path, const mesh_data& data) ->
     file_vert.normal[0] = encoded_normal[0];
     file_vert.normal[1] = encoded_normal[1];
 
-    const auto encoded_uv = encode_uv(math::vector2{vertex.uv.x(), vertex.uv.y()});
-    file_vert.uv[0] = encoded_uv[0];
-    file_vert.uv[1] = encoded_uv[1];
+    const auto encoded_uv0 = encode_uv(math::vector2{vertex.uv0.x(), vertex.uv0.y()});
+    file_vert.uv0[0] = encoded_uv0[0];
+    file_vert.uv0[1] = encoded_uv0[1];
+
+    const auto encoded_uv1 = encode_uv(math::vector2{vertex.uv1.x(), vertex.uv1.y()});
+    file_vert.uv1[0] = encoded_uv1[0];
+    file_vert.uv1[1] = encoded_uv1[1];
 
     const auto encoded_tangent = encode_octahedral(math::vector3{vertex.tangent.x(), vertex.tangent.y(), vertex.tangent.z()});
     file_vert.tangent[0] = encoded_tangent[0];

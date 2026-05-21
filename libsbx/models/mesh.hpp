@@ -56,7 +56,7 @@ private:
   auto _upload_streams(std::array<std::vector<math::vector4>, vertex_stream_count>& streams) -> void;
 
   static constexpr auto file_magic = utility::make_magic<std::uint64_t>("SBXSTMSH");
-  static constexpr auto file_version = std::uint16_t{3u};
+  static constexpr auto file_version = std::uint16_t{4u};
   static constexpr auto binary_file_extention = std::string_view{".sbxstmsh"};
 
   enum class file_flags : std::uint16_t {
@@ -109,13 +109,14 @@ private:
   struct alignas(2) file_vertex {
     std::int16_t position[3];
     std::int16_t normal[2];
-    std::int16_t uv[2];
+    std::int16_t uv0[2];
+    std::int16_t uv1[2];
     std::int16_t tangent[2];
     std::int8_t tangent_w;
     std::uint8_t _pad;
   }; // struct file_vertex
 
-  static_assert(sizeof(file_vertex) == 20u, "file_vertex layout changed");
+  static_assert(sizeof(file_vertex) == 24u, "file_vertex layout changed");
 
   static auto _load(const std::filesystem::path& path, std::uint32_t lod_count) -> mesh_data;
 

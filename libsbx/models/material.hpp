@@ -68,8 +68,11 @@ struct alignas(16) material_data {
   std::float_t alpha_cutoff;
   std::uint32_t flags;
 
-  math::vector2 uv_offset;
-  math::vector2 uv_scale;
+  math::vector2 uv0_offset;
+  math::vector2 uv0_scale;
+
+  math::vector2 uv1_offset;
+  math::vector2 uv1_scale;
 
   math::color base_color;
 
@@ -78,7 +81,7 @@ struct alignas(16) material_data {
   std::float_t sway_speed_strength;
   std::float_t scrumble_speed_strength;
   std::float_t falloff_exponents;
-  std::uint32_t _pad0;
+  std::uint32_t uv_mask;
 }; // struct material_data
 
 static_assert(sizeof(material_data) <= 256u);
@@ -164,8 +167,13 @@ struct material {
   std::float_t scrumble_strength{0.0f};
   std::float_t scrumble_falloff_exponent{2.0f};
 
-  math::vector2 uv_scale{1.0f, 1.0f};
-  math::vector2 uv_offset{0.0f, 0.0f};
+  math::vector2 uv0_scale{1.0f, 1.0f};
+  math::vector2 uv0_offset{0.0f, 0.0f};
+
+  math::vector2 uv1_scale{1.0f, 1.0f};
+  math::vector2 uv1_offset{0.0f, 0.0f};
+
+  std::uint32_t uv_mask{0x00000000};
 
   utility::bit_field<material_feature> features{material_feature::cast_shadow | material_feature::receive_shadow | material_feature::invert_backface_normals};
 

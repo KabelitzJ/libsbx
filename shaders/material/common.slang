@@ -1,20 +1,19 @@
 #ifndef MATERIAL_COMMON_SLANG_
 #define MATERIAL_COMMON_SLANG_
 
-struct vertex_setup {
-  uint global_vertex;
-  uint global_instance;
-  float3 world_position;
-  float3 world_normal;
-  float4 world_tangent;
-  float2 uv;
-  material_data material;
-}; // struct vertex_setup
-
 struct transform_data {
   float4x4 model;
   float4x4 normal;
 }; // struct transform_data
+
+enum uv_index : uint {
+  albedo = (1 << 0),
+  normal = (1 << 1),
+  metallic_roughness = (1 << 2),
+  occlusion = (1 << 3),
+  emissive = (1 << 4),
+  height = (1 << 5),
+}; // enum material_feature
 
 struct material_data {
   uint albedo_image_index;
@@ -47,8 +46,11 @@ struct material_data {
   float alpha_cutoff;
   uint flags;
 
-  float2 uv_offset;
-  float2 uv_scale;
+  float2 uv0_offset;
+  float2 uv0_scale;
+
+  float2 uv1_offset;
+  float2 uv1_scale;
 
   float4 base_color;
 
@@ -57,7 +59,7 @@ struct material_data {
   float sway_speed_strength;
   float scrumble_speed_strength;
   float falloff_exponents;
-  uint _pad0;
+  uint uv_mask;
 }; // struct material_data
 
 struct instance_data {
@@ -76,8 +78,11 @@ struct vertex {
   float normal_y;
   float normal_z;
 
-  float uv_x;
-  float uv_y;
+  float uv0_x;
+  float uv0_y;
+
+  float uv1_x;
+  float uv1_y;
 
   float tangent_x;
   float tangent_y;
@@ -92,8 +97,12 @@ struct vertex {
     return float3(normal_x, normal_y, normal_z);
   }
 
-  float2 uv() {
-    return float2(uv_x, uv_y);
+  float2 uv0() {
+    return float2(uv0_x, uv0_y);
+  }
+
+  float2 uv1() {
+    return float2(uv1_x, uv1_y);
   }
 
   float4 tangent() {
@@ -101,6 +110,12 @@ struct vertex {
   }
 
 }; // struct vertex
+
+float2 select_uv(float4 uv0uv1, material_data material_data, uv_index uv_index) {
+  bool is_uv0 = (material_data.uv_mask & (uint)uv_index) == 0;
+
+  return is_uv0 ? (uv0uv1.xy * material_data.uv0_scale + material_data.uv0_offset) : (uv0uv1.zw * material_data.uv1_scale + material_data.uv1_offset);
+}
 
 struct push_data {
   vertex* vertex_buffer;

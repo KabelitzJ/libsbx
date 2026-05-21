@@ -16,7 +16,7 @@ struct gbuffer_vs_out {
   [[vk::location(0)]] float3 position : POSITION;
   [[vk::location(1)]] float3 normal : NORMAL;
   [[vk::location(2)]] float4 tangent : TANGENT;
-  [[vk::location(3)]] float2 uv : UV;
+  [[vk::location(3)]] float4 uv0uv1 : UV0UV1;
   [[vk::location(4)]] nointerpolation uint instance_index : INSTANCE_INDEX;
 #if defined(VERTEX_STREAM_COLOR)
   [[vk::location(5)]] float4 color : COLOR0;
@@ -37,7 +37,7 @@ struct gbuffer_vs_out {
 }; // struct gbuffer_vs_out
 
 struct shadow_vs_out {
-  [[vk::location(0)]] float2 uv : UV;
+  [[vk::location(0)]] float4 uv0uv1 : UV0UV1;
   [[vk::location(1)]] nointerpolation uint instance_index : INSTANCE_INDEX;
   float4 sv_position : SV_Position;
 }; // struct shadow_vs_out
@@ -122,33 +122,6 @@ float3 compute_world_position(vertex_context contex) {
   return apply_sway(world, local.y, contex.material, scene.time, scene.wind_direction);
 }
 
-vertex_setup compute_vertex_setup(vs_in input) {
-  vertex_setup setup;
-
-  setup.global_vertex = input.vertex_id + input.base_vertex;
-  setup.global_instance = input.instance_id + input.base_instance;
-
-  vertex vertex = push.vertex_buffer[setup.global_vertex];
-  instance_data instance_data = push.instance_data_buffer[setup.global_instance];
-  transform_data transform_data = push.transform_data_buffer[instance_data.transform_index];
-  setup.material = push.material_data_buffer[instance_data.material_index];
-
-  float3 in_position = float3(vertex.position_x, vertex.position_y, vertex.position_z);
-  float3 in_normal = float3(vertex.normal_x, vertex.normal_y, vertex.normal_z);
-  float2 in_uv = float2(vertex.uv_x, vertex.uv_y);
-  float4 in_tangent = float4(vertex.tangent_x, vertex.tangent_y, vertex.tangent_z, vertex.tangent_w);
-
-  float3 world_position = mul(transform_data.model, float4(in_position, 1.0)).xyz;
-  world_position = apply_sway(world_position, in_position.y, setup.material, scene.time, scene.wind_direction);
-
-  setup.world_position = world_position;
-  setup.world_normal = normalize(mul(transform_data.normal, float4(in_normal, 0.0)).xyz);
-  setup.world_tangent = float4(normalize(mul(transform_data.normal, float4(in_tangent.xyz, 0.0)).xyz), in_tangent.w);
-  setup.uv = in_uv;
-
-  return setup;
-}
-
 [shader("vertex")]
 gbuffer_vs_out gbuffer_main(vs_in input) {
   gbuffer_vs_out output;
@@ -162,7 +135,7 @@ gbuffer_vs_out gbuffer_main(vs_in input) {
 
   float3 world_tangent = normalize(mul(context.transform.normal, float4(context.vertex.tangent().xyz, 0.0)).xyz);
   output.tangent = float4(world_tangent, context.vertex.tangent().w);
-  output.uv = context.vertex.uv();
+  output.uv0uv1 = float4(context.vertex.uv0(), context.vertex.uv1());
   output.instance_index = context.global_instance;
 
 #if defined(VERTEX_STREAM_COLOR)
@@ -193,7 +166,7 @@ shadow_vs_out shadow_main(vs_in input) {
   vertex_context context = load_vertex_context(input);
   float3 world_position = compute_world_position(context);
 
-  output.uv = context.vertex.uv();
+  output.uv0uv1 = float4(context.vertex.uv0(), context.vertex.uv1());
   output.instance_index = context.global_instance;
   output.sv_position = mul(scene.light_spaces[input.view_id], float4(world_position, 1.0));
 

@@ -14,7 +14,8 @@
 
 namespace editor {
 
-editor_subrenderer::editor_subrenderer(const std::vector<sbx::graphics::attachment_description>& attachment_descriptions) {
+editor_subrenderer::editor_subrenderer(const std::vector<sbx::graphics::attachment_description>& attachment_descriptions, const std::string& attachment_name)
+: _attachment_name{attachment_name} {
   static_cast<void>(attachment_descriptions);
 }
 
@@ -30,7 +31,7 @@ auto editor_subrenderer::render(sbx::graphics::command_buffer& command_buffer) -
   auto& graphics_module = sbx::core::engine::get_module<sbx::graphics::graphics_module>();
   auto& editor_module = sbx::core::engine::get_module<editor::editor_module>();
 
-  auto& scene_image = static_cast<const sbx::graphics::image2d&>(graphics_module.attachment("selection"));
+  auto& scene_image = static_cast<const sbx::graphics::image2d&>(graphics_module.attachment(_attachment_name));
 
   _viewport_panel.draw(scene_image, editor_module.selected_node());
 

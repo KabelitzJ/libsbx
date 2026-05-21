@@ -138,8 +138,8 @@ public:
       _push_handler.push("directional_light_count", directional_light_count);
 
       descriptor_handler.push("scene", environment.uniform_handler());
-      descriptor_handler.push("buffer_point_lights", _point_lights_storage_handler);
-      descriptor_handler.push("buffer_directional_lights", _directional_lights_storage_handler);
+      descriptor_handler.push("point_lights", _point_lights_storage_handler);
+      descriptor_handler.push("directional_lights", _directional_lights_storage_handler);
     }
 
     for (const auto& [name, attachment] : _attachment_names) {

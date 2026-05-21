@@ -23,7 +23,9 @@ float3 evaluate_direct_brdf(surface surface, float3 light_direction, float3 radi
 
   float D = distribution_ggx(surface.world_normal, h, surface.alpha);
   float V = v_smith_ggx_correlated(surface.ndv, ndl, surface.alpha);
-  float3 F = fresnel_schlick(max(dot(h, surface.view_direction), 0.0), surface.f0, surface.specular_strength);
+
+  float3 f90 = compute_f90(surface.f0, surface.specular_strength);
+  float3 F = fresnel_schlick(max(dot(h, surface.view_direction), 0.0), surface.f0, f90);
 
   float3 specular = D * V * F;
   float3 kd = (1.0 - F) * (1.0 - surface.metallic);

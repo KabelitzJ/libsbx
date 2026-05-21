@@ -7,14 +7,20 @@ namespace sbx::common {
 
 static const float3 default_f0 = float3(0.04, 0.04, 0.04);
 
-float3 fresnel_schlick(float cos_theta, float3 f0, float specular_factor) {
-  return f0 + (specular_factor - f0) * pow(1.0 - cos_theta, 5.0);
+float3 compute_f90(float3 f0, float specular_strength) {
+  float reflectance = max(max(f0.r, f0.g), f0.b);
+
+  return float3(saturate(reflectance * 50.0) * specular_strength);
 }
 
-float3 fresnel_schlick_roughness(float cos_theta, float3 f0, float specular_factor, float roughness) {
-  float3 f_max = max(float3(1.0 - roughness, 1.0 - roughness, 1.0 - roughness), f0);
+float3 fresnel_schlick(float cos_theta, float3 f0, float3 f90) {
+  return f0 + (f90 - f0) * pow(saturate(1.0 - cos_theta), 5.0);
+}
 
-  return f0 + (min(f_max, float3(specular_factor, specular_factor, specular_factor)) - f0) * pow(1.0 - cos_theta, 5.0);
+float3 fresnel_schlick_roughness(float cos_theta, float3 f0, float roughness) {
+  float3 f90 = max(float3(1.0 - roughness, 1.0 - roughness, 1.0 - roughness), f0);
+
+  return f0 + (f90 - f0) * pow(saturate(1.0 - cos_theta), 5.0);
 }
 
 float distribution_ggx(float3 n, float3 h, float alpha) {

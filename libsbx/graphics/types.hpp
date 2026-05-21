@@ -22,6 +22,7 @@ enum class format : std::int32_t {
   r16g16_sfloat = VK_FORMAT_R16G16_SFLOAT,
   r32g32_sfloat = VK_FORMAT_R32G32_SFLOAT,
   r32g32_uint = VK_FORMAT_R32G32_UINT,
+  r16g16b16_sfloat = VK_FORMAT_R16G16B16_SFLOAT,
   r8g8b8a8_unorm = VK_FORMAT_R8G8B8A8_UNORM,
   r8g8b8a8_srgb = VK_FORMAT_R8G8B8A8_SRGB,
   b8g8r8a8_srgb = VK_FORMAT_B8G8R8A8_SRGB,

@@ -1,12 +1,13 @@
+#include <libsbx/math/constants.slang>
+
 struct cs_in {
   uint3 id : SV_DispatchThreadID;
 }; // struct cs_in
 
 [[vk::binding(0, 0)]]
-RWTexture2D<float2> output;
+RWTexture2D<float4> output;
 
-static const float PI = 3.1415926535897932384626433832795;
-static const uint NUM_SAMPLES = 1024u;
+static const uint num_samples = 1024u;
 
 float random(float2 co) {
   float a = 12.9898;
@@ -33,7 +34,7 @@ float2 hammersley_2d(uint i, uint n) {
 
 float3 importance_sample_ggx(float2 xi, float roughness, float3 normal) {
   float alpha = roughness * roughness;
-  float phi = 2.0 * PI * xi.x + random(normal.xz) * 0.1;
+  float phi = 2.0 * sbx::math::pi * xi.x + random(normal.xz) * 0.1;
   float cos_theta = sqrt((1.0 - xi.y) / (1.0 + (alpha * alpha - 1.0) * xi.y));
   float sin_theta = sqrt(1.0 - cos_theta * cos_theta);
 
@@ -53,13 +54,43 @@ float g_schlicksmith_ggx(float dot_nl, float dot_nv, float roughness) {
   return gl * gv;
 }
 
-float2 brdf(float no_v, float roughness) {
-  float3 n = float3(0, 0, 1);
-  float3 v = float3(sqrt(1.0 - no_v * no_v), 0.0, no_v);
-  float2 lut = float2(0.0, 0.0);
+float v_ashikhmin(float ndot_l, float ndot_v) {
+ return clamp(1.0 / (4.0 * (ndot_l + ndot_v - ndot_l * ndot_v)), 0.0, 1.0);
+}
 
-  for (uint i = 0; i < NUM_SAMPLES; ++i) {
-    float2 xi = hammersley_2d(i, NUM_SAMPLES);
+float d_charlie(float sheen_roughness, float ndot_h) {
+ sheen_roughness = max(sheen_roughness, 0.000001);
+
+ float inv_r = 1.0 / sheen_roughness;
+ float cos2h = ndot_h * ndot_h;
+ float sin2h = 1.0 - cos2h;
+
+ return (2.0 + inv_r) * pow(sin2h, inv_r * 0.5) / (2.0 * sbx::math::pi);
+}
+
+float3 importance_sample_charlie(float2 xi, float roughness, float3 normal) {
+ float alpha = roughness * roughness;
+ float phi = 2.0 * sbx::math::pi * xi.x;
+ float sin_theta = pow(xi.y, alpha / (2.0 * alpha + 1.0));
+ float cos_theta = sqrt(1.0 - sin_theta * sin_theta);
+
+ float3 h = float3(sin_theta * cos(phi), sin_theta * sin(phi), cos_theta);
+ float3 up = abs(normal.z) < 0.999 ? float3(0.0, 0.0, 1.0) : float3(1.0, 0.0, 0.0);
+
+ float3 tangent_x = normalize(cross(up, normal));
+ float3 tangent_y = normalize(cross(normal, tangent_x));
+
+ return normalize(tangent_x * h.x + tangent_y * h.y + normal * h.z);
+}
+
+float3 brdf(float n_o_v, float roughness) {
+  float3 n = float3(0.0, 0.0, 1.0);
+  float3 v = float3(sqrt(1.0 - n_o_v * n_o_v), 0.0, n_o_v);
+
+  float3 lut = float3(0.0, 0.0, 0.0);
+
+  for (uint i = 0; i < num_samples; ++i) {
+    float2 xi = hammersley_2d(i, num_samples);
     float3 h = importance_sample_ggx(xi, roughness, n);
     float3 l = 2.0 * dot(v, h) * h - v;
 
@@ -73,11 +104,29 @@ float2 brdf(float no_v, float roughness) {
       float g_vis = (g * dot_vh) / (dot_nh * dot_nv);
       float fc = pow(1.0 - dot_vh, 5.0);
 
-      lut += float2((1.0 - fc) * g_vis, fc * g_vis);
+      lut.rg += float2((1.0 - fc) * g_vis, fc * g_vis);
     }
   }
 
-  return lut / float(NUM_SAMPLES);
+  for (uint i = 0u; i < num_samples; i++) {
+    float2 xi = hammersley_2d(i, num_samples);
+    float3 h = importance_sample_charlie(xi, roughness, n);
+    float3 l = 2.0 * dot(v, h) * h - v;
+
+    float dot_nl = max(dot(n, l), 0.0);
+    float dot_nv = max(dot(n, v), 0.0);
+    float dot_vh = max(dot(v, h), 0.0);
+    float dot_nh = max(dot(h, n), 0.0);
+    
+    if (dot_nl > 0.0) {
+      float sheen_distribution = d_charlie(roughness, dot_nh);
+      float sheen_visibility = v_ashikhmin(dot_nl, dot_nv);
+
+      lut.b += sheen_visibility * sheen_distribution * dot_nl * dot_vh;
+    }
+  }
+
+  return lut / float(num_samples);
 }
 
 [shader("compute")]
@@ -87,7 +136,8 @@ void main(cs_in input) {
   output.GetDimensions(width, height);
 
   float2 uv = (float2(input.id.xy) + float2(0.5)) / float2(width, height);
-  float2 result = brdf(uv.x, uv.y);
 
-  output.Store(input.id.xy, result);
+  float3 result = brdf(uv.x, 1.0 - uv.y);
+
+  output.Store(input.id.xy, float4(result, 0.0));
 }

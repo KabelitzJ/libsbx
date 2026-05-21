@@ -23,7 +23,7 @@ class editor_subrenderer final : public sbx::graphics::subrenderer {
 
 public:
 
-  editor_subrenderer(const std::vector<sbx::graphics::attachment_description>& attachment_descriptions);
+  editor_subrenderer(const std::vector<sbx::graphics::attachment_description>& attachment_descriptions, const std::string& attachment_name);
 
   ~editor_subrenderer() override;
 
@@ -32,6 +32,8 @@ public:
 private:
 
   auto _draw_dockspace() -> void;
+
+  std::string _attachment_name;
 
   editor_context _context;
   texture_cache _texture_cache;

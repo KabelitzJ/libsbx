@@ -425,7 +425,7 @@ auto application::_generate_brdf(const std::uint32_t size) -> void {
   const auto& graphics_queue = logical_device.queue<sbx::graphics::queue::type::graphics>();
   const auto& compute_queue = logical_device.queue<sbx::graphics::queue::type::compute>();
 
-  _brdf = graphics_module.add_resource<sbx::graphics::image2d>(sbx::math::vector2u{size}, sbx::graphics::format::r16g16_sfloat, sbx::graphics::filter::linear, sbx::graphics::address_mode::repeat);
+  _brdf = graphics_module.add_resource<sbx::graphics::image2d>(sbx::math::vector2u{size}, sbx::graphics::format::r16g16b16a16_sfloat, sbx::graphics::filter::linear, sbx::graphics::address_mode::repeat);
 
   auto timer = sbx::utility::timer{};
 
@@ -641,7 +641,7 @@ auto application::_generate_irradiance(const std::uint32_t size) -> void {
   const auto group_count_x = (irradiance.size().x() + threads_per_group - 1) / threads_per_group;
   const auto group_count_y = (irradiance.size().y() + threads_per_group - 1) / threads_per_group;
 
-  pipeline.dispatch(compute_command_buffer, sbx::math::vector3u{group_count_x, group_count_y, 1u});
+  pipeline.dispatch(compute_command_buffer, sbx::math::vector3u{group_count_x, group_count_y, 6u});
 
   if (graphics_queue.family() != compute_queue.family()) {
     auto irradiance_release = sbx::graphics::command_buffer::image_release_data{

@@ -29,10 +29,10 @@ ConstantBuffer<push_data> push;
 ConstantBuffer<sbx::common::scene_data> scene;
 
 [[vk::binding(1, 0)]]
-StructuredBuffer<sbx::common::point_light> buffer_point_lights;
+StructuredBuffer<sbx::common::point_light> point_lights;
 
 [[vk::binding(2, 0)]]
-StructuredBuffer<sbx::common::directional_light> buffer_directional_lights;
+StructuredBuffer<sbx::common::directional_light> directional_lights;
 
 [[vk::binding(3, 0)]]
 Sampler2D<float4> albedo_image;
@@ -50,7 +50,7 @@ Sampler2D<float4> material_image;
 Sampler2D<float4> emissive_image;
 
 [[vk::binding(8, 0)]]
-Sampler2D<float2> brdf_image;
+Sampler2D<float4> brdf_image;
 
 [[vk::binding(9, 0)]]
 SamplerCube<float4> irradiance_image;
@@ -103,11 +103,11 @@ fs_out main(fs_in input) {
 
   float3 direct = float3(0.0, 0.0, 0.0);
   direct += sbx::common::evaluate_sun(surface, sun_direction, sun_radiance, shadow);
-  direct += sbx::common::evaluate_directional_array(surface, buffer_directional_lights, push.directional_light_count);
-  direct += sbx::common::evaluate_point_array(surface, buffer_point_lights, push.point_light_count);
+  direct += sbx::common::evaluate_directional_array(surface, directional_lights, push.directional_light_count);
+  direct += sbx::common::evaluate_point_array(surface, point_lights, push.point_light_count);
 
   const float ssao = 1.0;
-  float3 ambient = sbx::common::evaluate_ibl(surface, irradiance_image, prefiltered_image, brdf_image, shadow, ssao);
+  float3 ambient = sbx::common::evaluate_ibl(surface, irradiance_image, prefiltered_image, brdf_image, ssao);
 
   float3 final_color = ambient + direct + surface.emissive;
 

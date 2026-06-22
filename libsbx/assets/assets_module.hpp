@@ -7,6 +7,11 @@
 #include <typeindex>
 #include <memory>
 #include <filesystem>
+#include <string>
+#include <string_view>
+#include <initializer_list>
+
+#include <yaml-cpp/yaml.h>
 
 #include <libsbx/utility/compression.hpp>
 #include <libsbx/utility/exception.hpp>
@@ -26,6 +31,11 @@
 
 #include <libsbx/assets/thread_pool.hpp>
 #include <libsbx/assets/metadata.hpp>
+#include <libsbx/assets/asset.hpp>
+#include <libsbx/assets/asset_database.hpp>
+#include <libsbx/assets/importer.hpp>
+#include <libsbx/assets/importer_registry.hpp>
+#include <libsbx/assets/meta_file.hpp>
 
 namespace sbx::assets {
 
@@ -49,106 +59,6 @@ constexpr auto fourcc() -> std::uint32_t {
 template<typename Type>
 using type_id = utility::scoped_type_id<detail::assets_type_id_scope, Type>;
 
-template<utility::string_literal Type>
-struct asset_handle {
-
-  inline static constexpr auto hash = Type.hash();
-
-  inline static constexpr auto invalid = std::uint32_t{0xFFFFFFFF};
-
-  constexpr asset_handle()
-  : _handle{invalid}, 
-    _generation{0} { }
-
-  constexpr asset_handle(const std::uint32_t handle, const std::uint32_t generation)
-  : _handle{handle}, 
-    _generation{generation} { }
-
-  constexpr auto handle() const noexcept -> std::uint32_t {
-    return _handle;
-  }
-
-  constexpr auto generation() const noexcept -> std::uint32_t {
-    return _generation;
-  }
-
-  constexpr auto operator==(const asset_handle& other) const noexcept -> bool {
-    return _handle == other._handle && _generation == other._generation;
-  }
-
-  constexpr auto is_valid() const noexcept -> bool {
-    return _handle != invalid;
-  }
-
-  constexpr operator bool() const noexcept {
-    return is_valid();
-  }
-
-private:
-
-  std::uint32_t _handle;
-  std::uint32_t _generation;
-
-}; // struct asset_handle
-
-struct asset_metadata {
-  std::filesystem::path path;
-  std::string name;
-  std::string type{"unknown"};
-  std::string source{"dynamic"};
-}; // struct asset_metadata
-
-struct asset_io {
-  std::string name;
-  std::function<void()> save; 
-  std::function<void()> load; 
-}; // struct asset_io
-
-class asset_io_registry {
-
-  struct scope { };
-
-public:
-
-  template<typename Type>
-  using type_id = utility::scoped_type_id<scope, Type>;
-
-  template<typename Type, std::invocable<const Type&> Save, std::invocable<void> Load>
-  auto register_asset(const std::string& name, Save&& save, Load&& load) -> void {
-    const auto id = assets::type_id<Type>::value();
-
-    _by_name[name] = id;
-
-    _by_id[id] = asset_io{
-      .name = name,
-      .save = [s = std::forward<Save>(save)]() -> void {
-        std::invoke(s);
-      },
-      .load = []() -> void {
-
-      }
-    };
-  }
-
-  auto get(const std::uint32_t id) -> asset_io& {
-    return _by_id.at(id);
-  }
-
-  auto has(const std::uint32_t id) -> bool {
-    return _by_id.contains(id);
-  }
-
-  auto get(const std::string& name) -> asset_io& {
-    return _by_id.at(_by_name.at(name));
-  }
-
-private:
-
-  std::unordered_map<std::uint32_t, asset_io> _by_id;
-  std::unordered_map<std::string, std::uint32_t> _by_name;
-
-}; // class asset_io_registry
-
 class assets_module : public core::module<assets_module> {
 
   inline static const auto is_registered = register_module(stage::post, dependencies<filesystem::filesystem_module>{});
@@ -161,13 +71,15 @@ public:
   }
 
   ~assets_module() override {
+    _payloads.clear();
+
     for (const auto& container : _containers) {
       container->clear();
     }
   }
 
   auto update() -> void override {
-    
+
   }
 
   auto asset_root() const -> std::filesystem::path {
@@ -198,22 +110,137 @@ public:
     return _thread_pool.submit(std::forward<Function>(function), std::forward<Args>(args)...);
   }
 
-  template<utility::string_literal Type, typename... Args>
-  auto load_asset(const std::filesystem::path& path, Args&&... args) -> asset_handle<Type> {
-
+  /**
+   * @brief Registers @p instance for a single file-extension suffix (e.g. ".png").
+   */
+  auto register_importer(std::string_view extension, std::shared_ptr<importer> instance) -> void {
+    _importers.register_for(extension, std::move(instance));
   }
 
-  template<typename Type, std::invocable<void> Save, std::invocable<void> Load>
-  auto register_asset(const std::string& name, Save&& save, Load&& load) -> void {
-    _asset_io_registry.register_asset<Type>(name, std::forward<Save>(save), std::forward<Load>(load));
+  /**
+   * @brief Registers @p instance for several file-extension suffixes at once.
+   */
+  auto register_importer(std::initializer_list<std::string_view> extensions, std::shared_ptr<importer> instance) -> void {
+    _importers.register_for(extensions, std::move(instance));
   }
 
-  auto asset_io(const std::uint32_t id) -> asset_io& {
-    return _asset_io_registry.get(id);
+  /**
+   * @brief Synchronously resolves @p source to a stable UUID, importing the payload if it is not already loaded.
+   *
+   * Identity is established from the .meta sidecar next to the resolved file; if no sidecar exists one is minted and written (best-effort, skipped on a read-only asset root). Loading the same source twice returns the same UUID and increments its reference count.
+   *
+   * @throws sbx::utility::runtime_error if no importer is registered for the source's extension or the import fails.
+   */
+  auto load_asset(const std::filesystem::path& source, const YAML::Node& default_settings = YAML::Node{}) -> math::uuid {
+    const auto resolved = resolve_path(source);
+
+    auto id = _database.resolve(source);
+
+    if (id != math::uuid::nil() && _database.get(id).state == load_state::ready) {
+      _database.acquire(id);
+
+      return id;
+    }
+
+    const auto instance = _importers.find_for(source);
+
+    if (!instance) {
+      throw utility::runtime_error{"No importer registered for asset '{}'", source.string()};
+    }
+
+    auto settings = YAML::Node{};
+
+    if (id == math::uuid::nil()) {
+      auto type = std::string{instance->type()};
+
+      if (const auto meta = read_meta_file(meta_path_for(resolved)); meta) {
+        id = meta->id;
+        type = meta->type;
+        settings = meta->import_settings;
+      } else {
+        id = math::uuid{};
+        settings = default_settings;
+
+        try {
+          write_meta_file(meta_path_for(resolved), meta_data{.id = id, .type = type, .import_settings = default_settings});
+        } catch (const std::exception& error) {
+          utility::logger<"assets">::warn("Could not write .meta for '{}': {}", source.string(), error.what());
+        }
+      }
+
+      _database.insert(asset_record{.id = id, .type = type, .source = source, .state = load_state::unloaded});
+    } else if (const auto meta = read_meta_file(meta_path_for(resolved)); meta) {
+      settings = meta->import_settings;
+    }
+
+    auto& record = _database.get(id);
+
+    record.state = load_state::loading;
+
+    const auto context = import_context{.source = source, .resolved = resolved, .settings = settings, .id = id};
+
+    try {
+      _payloads[id] = instance->import(context);
+    } catch (...) {
+      record.state = load_state::failed;
+
+      throw;
+    }
+
+    record.state = load_state::ready;
+
+    _database.acquire(id);
+
+    return id;
   }
 
-  auto has_asset_io(const std::uint32_t id) -> bool {
-    return _asset_io_registry.has(id);
+  /**
+   * @brief Returns the imported payload for @p id downcast to @p Type.
+   *
+   * @throws sbx::utility::runtime_error if no payload is loaded for @p id or it is not a @p Type.
+   */
+  template<typename Type>
+  auto get_loaded(const math::uuid& id) -> Type& {
+    const auto entry = _payloads.find(id);
+
+    if (entry == _payloads.end()) {
+      throw utility::runtime_error{"Asset with ID '{}' is not loaded", id};
+    }
+
+    auto* typed = dynamic_cast<Type*>(entry->second.get());
+
+    if (!typed) {
+      throw utility::runtime_error{"Asset with ID '{}' is not of the requested type", id};
+    }
+
+    return *typed;
+  }
+
+  /**
+   * @brief Drops one reference to @p id. When the count reaches zero the payload is released and the record marked unloaded.
+   *
+   * @note GPU-backed payloads are freed immediately here; deferring this until the frame fence is a later step.
+   */
+  auto release(const math::uuid& id) -> void {
+    if (!_database.contains(id)) {
+      return;
+    }
+
+    const auto count = _database.release(id);
+
+    if (count != 0u) {
+      return;
+    }
+
+    auto node = _payloads.extract(id);
+
+    _database.get(id).state = load_state::unloaded;
+
+    if (node) {
+      for (const auto& dependency : node.mapped()->dependencies()) {
+        release(dependency);
+      }
+    }
   }
 
   template<typename Type, typename... Args>
@@ -290,6 +317,10 @@ private:
 
   thread_pool _thread_pool;
 
+  asset_database _database;
+  importer_registry _importers;
+  std::unordered_map<math::uuid, std::unique_ptr<asset_base>> _payloads;
+
   struct container_base {
     virtual ~container_base() = default;
     virtual auto remove(const math::uuid& id) -> void = 0;
@@ -353,8 +384,6 @@ private:
   };
 
   std::vector<std::unique_ptr<container_base>> _containers;
-
-  asset_io_registry _asset_io_registry;
 
 }; // class assets_module
 

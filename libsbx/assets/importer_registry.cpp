@@ -8,6 +8,16 @@
 
 namespace sbx::assets {
 
+namespace detail {
+
+auto pending_importers() -> std::vector<pending_importer>& {
+  static auto instance = std::vector<pending_importer>{};
+
+  return instance;
+}
+
+} // namespace detail
+
 auto importer_registry::register_for(std::string_view extension, std::shared_ptr<importer> instance) -> void {
   if (extension.empty() || extension.front() != '.') {
     throw utility::runtime_error{"Importer extension '{}' must start with a dot", extension};
@@ -23,6 +33,16 @@ auto importer_registry::register_for(std::string_view extension, std::shared_ptr
 auto importer_registry::register_for(std::initializer_list<std::string_view> extensions, std::shared_ptr<importer> instance) -> void {
   for (const auto& extension : extensions) {
     register_for(extension, instance);
+  }
+}
+
+auto importer_registry::install_registered() -> void {
+  for (const auto& pending : detail::pending_importers()) {
+    auto instance = pending.factory();
+
+    for (const auto& extension : pending.extensions) {
+      register_for(extension, instance);
+    }
   }
 }
 

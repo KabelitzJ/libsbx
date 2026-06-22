@@ -3,6 +3,7 @@
 #define LIBSBX_ASSETS_IMPORTER_REGISTRY_HPP_
 
 #include <filesystem>
+#include <functional>
 #include <initializer_list>
 #include <memory>
 #include <span>
@@ -14,6 +15,27 @@
 #include <libsbx/assets/importer.hpp>
 
 namespace sbx::assets {
+
+namespace detail {
+
+/**
+ * @brief A deferred importer registration collected at static-init time.
+ *
+ * The factory is invoked once, when the assets_module installs the registered importers; the extensions are then bound to that instance.
+ */
+struct pending_importer {
+  std::vector<std::string> extensions;
+  std::function<std::shared_ptr<importer>()> factory;
+}; // struct pending_importer
+
+/**
+ * @brief Process-wide list of importers registered via register_importer<T>(...).
+ *
+ * Function-local static so it is initialized on first use, avoiding static-init order issues between importer translation units.
+ */
+auto pending_importers() -> std::vector<pending_importer>&;
+
+} // namespace detail
 
 /**
  * @brief Maps file-extension suffixes to importer instances.
@@ -47,6 +69,13 @@ public:
   auto register_for(std::initializer_list<std::string_view> extensions, std::shared_ptr<importer> instance) -> void;
 
   /**
+   * @brief Instantiates and binds every importer registered via register_importer<T>(...).
+   *
+   * Called once by the assets_module on construction. Safe to call again; later calls re-bind the same extensions.
+   */
+  auto install_registered() -> void;
+
+  /**
    * @brief Unregisters a single extension binding. Returns true if a binding was removed.
    */
   auto unregister(std::string_view extension) -> bool;
@@ -78,6 +107,37 @@ private:
   std::unordered_map<std::string, std::shared_ptr<importer>> _by_extension;
 
 }; // class importer_registry
+
+/**
+ * @brief Registers @p Derived as an importer for @p extensions, to be instantiated when the assets_module installs importers.
+ *
+ * Call this from a namespace-scope object in the importer's .cpp so the type is complete and the translation unit is linked:
+ *
+ *   namespace { 
+ *     const auto registered = sbx::assets::register_importer<my_importer>({".ext"}); 
+ *   }
+ *
+ * @tparam Derived A concrete importer type with a default constructor that does not touch other modules.
+ */
+template<typename Derived>
+auto register_importer(std::initializer_list<std::string_view> extensions) -> bool {
+  auto names = std::vector<std::string>{};
+
+  names.reserve(extensions.size());
+
+  for (const auto extension : extensions) {
+    names.emplace_back(extension);
+  }
+
+  detail::pending_importers().push_back(detail::pending_importer{
+    .extensions = std::move(names),
+    .factory = []() -> std::shared_ptr<importer> {
+      return std::make_shared<Derived>();
+    }
+  });
+
+  return true;
+}
 
 } // namespace sbx::assets
 

@@ -198,6 +198,13 @@ public:
     _deletion_queue.push_back({std::forward<Callable>(callable), graphics::swapchain::max_frames_in_flight});
   }
 
+  template<typename Type>
+  auto enqueue_resource_destruction(const resource_handle<Type>& handle) -> void {
+    enqueue_destruction([this, handle](graphics::allocator& allocator) -> void {
+      _storage<Type>().remove(handle);
+    });
+  }
+
 private:
 
   static constexpr auto _access_mask_from_stage(VkPipelineStageFlagBits2 stage) -> VkAccessFlagBits2 {

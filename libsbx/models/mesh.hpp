@@ -5,10 +5,13 @@
 #include <array>
 #include <filesystem>
 #include <span>
+#include <string_view>
 
 #include <libsbx/utility/hash.hpp>
 #include <libsbx/utility/enum.hpp>
 #include <libsbx/utility/crc32.hpp>
+
+#include <libsbx/assets/asset.hpp>
 
 #include <libsbx/math/volume.hpp>
 #include <libsbx/math/sphere.hpp>
@@ -25,13 +28,15 @@
 
 namespace sbx::models {
 
-class mesh : public graphics::mesh<vertex3d>, public io::loader_factory<mesh, graphics::mesh<vertex3d>::mesh_data> {
+class mesh : public graphics::mesh<vertex3d>, public io::loader_factory<mesh, graphics::mesh<vertex3d>::mesh_data>, public assets::asset_base {
 
   using base = graphics::mesh<vertex3d>;
 
 public:
 
   using mesh_data = graphics::mesh<vertex3d>::mesh_data;
+
+  inline static constexpr auto type_name = std::string_view{"static_mesh"};
 
   mesh(const std::vector<vertex3d>& vertices, const std::vector<std::uint32_t>& indices, const math::volume& bounds = math::volume{});
 
@@ -42,6 +47,10 @@ public:
   mesh(const std::filesystem::path& path, std::uint32_t lod_count = 1u);
 
   ~mesh() override;
+
+  auto type() const -> assets::asset_type override {
+    return assets::asset_type::static_mesh;
+  }
 
   auto set_stream(vertex_stream stream, std::span<const math::vector4> data) -> void;
 

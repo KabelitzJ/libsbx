@@ -81,11 +81,13 @@ public:
   }
 
   constexpr auto str() const noexcept -> const std::basic_string<char_type>& {
-    if constexpr (is_build_configuration_debug_v) {
-      return _string;
-    } else {
-      return _string.str();
-    }
+    // if constexpr (is_build_configuration_debug_v) {
+    //   return _string;
+    // } else {
+    //   return _string.str();
+    // }
+
+    return _string;
   }
 
   constexpr auto rfind(std::basic_string_view<char_type> string) const noexcept -> size_type {
@@ -114,7 +116,7 @@ private:
 
     }
 
-     constexpr auto data() const noexcept -> const char_type* {
+    constexpr auto data() const noexcept -> const char_type* {
       return _empty_cstr();
     }
 
@@ -147,9 +149,10 @@ private:
 
   }; // struct empty_string
 
-  using string_type = std::conditional_t<is_build_configuration_debug_v, std::basic_string<char_type>, empty_string>;
+  // using string_type = std::conditional_t<is_build_configuration_debug_v, std::basic_string<char_type>, empty_string>;
+  // [[no_unique_address]] string_type _string{};
 
-  [[no_unique_address]] string_type _string{};
+  std::basic_string<char_type> _string{};
   hash_type _hash{};
 
 }; // class basic_hashed_string

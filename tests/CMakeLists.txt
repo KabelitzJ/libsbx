@@ -9,6 +9,7 @@ add_component_test(containers)
 add_component_test(ecs)
 add_component_test(math)
 add_component_test(reflection)
+add_component_test(units)
 
 add_executable(
   all-tests
@@ -16,6 +17,7 @@ add_executable(
     ecs/tests.cpp
     math/tests.cpp
     reflection/tests.cpp
+    units/tests.cpp
 )
 
 target_link_libraries(

@@ -4,8 +4,13 @@
 
 #include <cinttypes>
 #include <cmath>
+#include <span>
+#include <string_view>
+#include <vector>
 
 #include <libsbx/utility/hash.hpp>
+
+#include <libsbx/assets/asset.hpp>
 
 #include <libsbx/math/uuid.hpp>
 #include <libsbx/math/vector3.hpp>
@@ -139,7 +144,7 @@ struct texture_slot_hash {
   auto operator()(const texture_slot& texture_slot) const noexcept -> std::size_t;
 }; // struct texture_slot_hash
 
-struct material {
+struct material : public assets::asset_base {
 
   math::color base_color{math::color::white()};
 
@@ -203,6 +208,18 @@ struct material {
     key.surface_shader_hash = utility::crc32(std::span{reinterpret_cast<const std::uint8_t*>(shader_path.data()), shader_path.size()});
 
     return key;
+  }
+
+  inline static constexpr auto type_name = std::string_view{"material"};
+
+  std::vector<math::uuid> texture_dependencies{};
+
+  auto type() const -> assets::asset_type override {
+    return assets::asset_type::material;
+  }
+
+  auto dependencies() const -> std::span<const math::uuid> override {
+    return texture_dependencies;
   }
 
 }; // struct material

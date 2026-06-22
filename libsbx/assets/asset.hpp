@@ -4,7 +4,9 @@
 
 #include <cinttypes>
 #include <filesystem>
+#include <span>
 #include <string>
+#include <string_view>
 
 #include <libsbx/math/uuid.hpp>
 
@@ -34,12 +36,14 @@ enum class asset_type : std::uint8_t {
 /**
  * @brief Canonical metadata for an asset, keyed by its UUID.
  *
- * The record never owns the payload (mesh/texture/material data). It owns the identity (UUID, type tag, source path) and the lifecycle state. 
+ * The record never owns the payload (mesh/texture/material data). It owns the identity (UUID, type tag, source path) and the lifecycle state.
  * The typed payload is stored separately by the assets_module.
+ *
+ * The type tag is a string that matches the producing importer's type() and the .meta `type` field.
  */
 struct asset_record {
   math::uuid id{math::uuid::nil()};
-  asset_type type{asset_type::none};
+  std::string type{};
   std::filesystem::path source{};
   std::uint32_t generation{0u};
   std::uint32_t reference_count{0u};
@@ -49,10 +53,10 @@ struct asset_record {
 /**
  * @brief Polymorphic base for every typed asset payload owned by the assets_module.
  *
- * Asset types do not store identity (UUID, source path) themselves; that lives in the asset_record. 
+ * Asset types do not store identity (UUID, source path) themselves; that lives in the asset_record.
  * The payload only carries the data that the engine uses at runtime (e.g. a graphics handle wrapper for a texture).
  *
- * Concrete asset types must override type(). The tag is matched against the record's type for safe downcasts in assets_module::get<T>.
+ * Concrete asset types must override type(). Composite assets (a material referencing textures, a scene referencing everything) override dependencies() to return the UUIDs they hold a strong reference to; the assets_module releases those when the asset is released.
  */
 class asset_base {
 
@@ -61,6 +65,10 @@ public:
   virtual ~asset_base() = default;
 
   virtual auto type() const -> asset_type = 0;
+
+  virtual auto dependencies() const -> std::span<const math::uuid> {
+    return {};
+  }
 
 }; // class asset_base
 

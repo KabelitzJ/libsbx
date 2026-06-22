@@ -131,10 +131,10 @@ auto viewport_panel::_read_object_id(const sbx::graphics::image2d& image, std::u
 
   auto pre_barrier = VkImageMemoryBarrier2{};
   pre_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-  pre_barrier.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+  pre_barrier.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
   pre_barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-  pre_barrier.srcStageMask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
-  pre_barrier.srcAccessMask = VK_ACCESS_2_SHADER_SAMPLED_READ_BIT;
+  pre_barrier.srcStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
+  pre_barrier.srcAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
   pre_barrier.dstStageMask = VK_PIPELINE_STAGE_2_COPY_BIT;
   pre_barrier.dstAccessMask = VK_ACCESS_2_TRANSFER_READ_BIT;
   pre_barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
@@ -164,16 +164,16 @@ auto viewport_panel::_read_object_id(const sbx::graphics::image2d& image, std::u
 
   vkCmdCopyImageToBuffer(command_buffer, image.handle(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, staging.handle(), 1, &region);
 
-  // Release: transition back to SHADER_READ_ONLY
+  // Release: transition back to COLOR_ATTACHMENT_OPTIMAL
 
   auto post_barrier = VkImageMemoryBarrier2{};
   post_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
   post_barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-  post_barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+  post_barrier.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
   post_barrier.srcStageMask = VK_PIPELINE_STAGE_2_COPY_BIT;
   post_barrier.srcAccessMask = VK_ACCESS_2_TRANSFER_READ_BIT;
-  post_barrier.dstStageMask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
-  post_barrier.dstAccessMask = VK_ACCESS_2_SHADER_SAMPLED_READ_BIT;         
+  post_barrier.dstStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
+  post_barrier.dstAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;      
   post_barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
   post_barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
   post_barrier.image = image;

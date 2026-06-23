@@ -325,15 +325,16 @@ auto inspector_panel::_draw_material(const sbx::math::uuid& material_id, std::ui
   auto& assets_module = sbx::core::engine::get_module<sbx::assets::assets_module>();
   auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
 
-  const auto& asset_registry = scenes_module.asset_registry();
+  // const auto& asset_registry = scenes_module.asset_registry();
 
-  auto& material = assets_module.get_asset<sbx::models::material>(material_id);
+  auto& material = assets_module.get_loaded<sbx::models::material>(material_id);
 
   ImGui::PushID(static_cast<std::int32_t>(submesh_index));
 
-  const auto& metadata = asset_registry.material_metadata(material_id);
+  // const auto& metadata = asset_registry.material_metadata(material_id);
 
-  controls::labeled_text("Name", "{:s}", metadata.name.c_str());
+  // controls::labeled_text("Name", "{:s}", metadata.name.c_str());
+  controls::labeled_text("Name", "TEMP");
   controls::labeled_text("UUID", "{}", material_id);
 
   ImGui::Spacing();

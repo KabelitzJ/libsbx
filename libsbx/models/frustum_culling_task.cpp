@@ -344,7 +344,7 @@ auto frustum_culling_task::_build_bounds(const static_mesh_material_draw_list::b
   auto result = std::vector<local_aabb>{};
 
   for (const auto& [mesh_id, range] : entry.ranges) {
-    auto& mesh = assets_module.get_asset<models::mesh>(mesh_id);
+    auto& mesh = assets_module.get_loaded<models::mesh>(mesh_id);
 
     for (auto i = std::uint32_t{0}; i < range.count; ++i) {
       const auto& submesh = mesh.submesh(i);

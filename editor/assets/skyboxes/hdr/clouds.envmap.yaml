@@ -1,0 +1,3 @@
+cube: "res://skyboxes/hdr/clouds"
+suffix: ".hdr"
+format: "r32g32b32a32_sfloat"

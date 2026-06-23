@@ -17,6 +17,4 @@ auto mesh_importer::import(const assets::import_context& context) -> std::unique
   return std::make_unique<models::mesh>(context.resolved, lod_count);
 }
 
-const auto mesh_importer_registered = sbx::assets::register_importer<sbx::models::mesh_importer>({".gltf", ".sbxstmsh"});
-
 } // namespace sbx::models

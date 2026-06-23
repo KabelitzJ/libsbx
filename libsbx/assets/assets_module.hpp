@@ -33,7 +33,6 @@
 #include <libsbx/assets/metadata.hpp>
 #include <libsbx/assets/asset.hpp>
 #include <libsbx/assets/asset_database.hpp>
-#include <libsbx/assets/importer.hpp>
 #include <libsbx/assets/importer_registry.hpp>
 #include <libsbx/assets/meta_file.hpp>
 
@@ -68,6 +67,7 @@ public:
   assets_module()
   : _thread_pool{std::thread::hardware_concurrency()} {
     _register_asset_root(std::filesystem::current_path());
+    _importers.install_registered();
   }
 
   ~assets_module() override {
@@ -108,20 +108,6 @@ public:
   requires (std::is_invocable_v<Function, Args...>)
   auto submit(Function&& function, Args&&... args) -> std::future<std::invoke_result_t<Function, Args...>> {
     return _thread_pool.submit(std::forward<Function>(function), std::forward<Args>(args)...);
-  }
-
-  /**
-   * @brief Registers @p instance for a single file-extension suffix (e.g. ".png").
-   */
-  auto register_importer(std::string_view extension, std::shared_ptr<importer> instance) -> void {
-    _importers.register_for(extension, std::move(instance));
-  }
-
-  /**
-   * @brief Registers @p instance for several file-extension suffixes at once.
-   */
-  auto register_importer(std::initializer_list<std::string_view> extensions, std::shared_ptr<importer> instance) -> void {
-    _importers.register_for(extensions, std::move(instance));
   }
 
   /**
@@ -194,6 +180,17 @@ public:
     return id;
   }
 
+  auto add_runtime_asset(std::unique_ptr<asset_base> payload) -> math::uuid {
+    const auto id = math::uuid{};
+
+    _database.insert(asset_record{.id = id, .source = {}, .state = load_state::ready});
+    _database.acquire(id);
+
+    _payloads[id] = std::move(payload);
+
+    return id;
+  }
+
   /**
    * @brief Returns the imported payload for @p id downcast to @p Type.
    *
@@ -243,63 +240,63 @@ public:
     }
   }
 
-  template<typename Type, typename... Args>
-  auto add_asset(Args&&... args) -> math::uuid {
-    const auto id = math::uuid{};
-    const auto type = type_id<Type>::value();
+  // template<typename Type, typename... Args>
+  // auto add_asset(Args&&... args) -> math::uuid {
+  //   const auto id = math::uuid{};
+  //   const auto type = type_id<Type>::value();
 
-    if (type >= _containers.size()) {
-      _containers.resize(std::max(_containers.size(), static_cast<std::size_t>(type + 1u)));
-    }
+  //   if (type >= _containers.size()) {
+  //     _containers.resize(std::max(_containers.size(), static_cast<std::size_t>(type + 1u)));
+  //   }
 
-    if (!_containers[type]) {
-      _containers[type] = std::make_unique<container<Type>>();
-    }
+  //   if (!_containers[type]) {
+  //     _containers[type] = std::make_unique<container<Type>>();
+  //   }
 
-    static_cast<container<Type>*>(_containers[type].get())->add(id, std::forward<Args>(args)...);
+  //   static_cast<container<Type>*>(_containers[type].get())->add(id, std::forward<Args>(args)...);
 
-    return id;
-  }
+  //   return id;
+  // }
 
-  template<typename Type>
-  auto add_asset(std::unique_ptr<Type>&& asset) -> math::uuid {
-    const auto id = math::uuid{};
-    const auto type = type_id<Type>::value();
+  // template<typename Type>
+  // auto add_asset(std::unique_ptr<Type>&& asset) -> math::uuid {
+  //   const auto id = math::uuid{};
+  //   const auto type = type_id<Type>::value();
 
-    if (type >= _containers.size()) {
-      _containers.resize(std::max(_containers.size(), static_cast<std::size_t>(type + 1u)));
-    }
+  //   if (type >= _containers.size()) {
+  //     _containers.resize(std::max(_containers.size(), static_cast<std::size_t>(type + 1u)));
+  //   }
 
-    if (!_containers[type]) {
-      _containers[type] = std::make_unique<container<Type>>();
-    }
+  //   if (!_containers[type]) {
+  //     _containers[type] = std::make_unique<container<Type>>();
+  //   }
 
-    static_cast<container<Type>*>(_containers[type].get())->add(id, std::move(asset));
+  //   static_cast<container<Type>*>(_containers[type].get())->add(id, std::move(asset));
 
-    return id;
-  }
+  //   return id;
+  // }
 
-  template<typename Type>
-  auto get_asset(const math::uuid& id) const -> const Type& {
-    const auto type = type_id<Type>::value();
+  // template<typename Type>
+  // auto get_asset(const math::uuid& id) const -> const Type& {
+  //   const auto type = type_id<Type>::value();
 
-    if (type >= _containers.size() || !_containers[type]) {
-      throw std::runtime_error{"Asset does not exist"};
-    }
+  //   if (type >= _containers.size() || !_containers[type]) {
+  //     throw std::runtime_error{"Asset does not exist"};
+  //   }
 
-    return static_cast<const container<Type>*>(_containers[type].get())->get(id);
-  }
+  //   return static_cast<const container<Type>*>(_containers[type].get())->get(id);
+  // }
 
-  template<typename Type>
-  auto get_asset(const math::uuid& id) -> Type& {
-    const auto type = type_id<Type>::value();
+  // template<typename Type>
+  // auto get_asset(const math::uuid& id) -> Type& {
+  //   const auto type = type_id<Type>::value();
 
-    if (type >= _containers.size() || !_containers[type]) {
-      throw std::runtime_error{"Asset does not exist"};
-    }
+  //   if (type >= _containers.size() || !_containers[type]) {
+  //     throw std::runtime_error{"Asset does not exist"};
+  //   }
 
-    return static_cast<container<Type>*>(_containers[type].get())->get(id);
-  }
+  //   return static_cast<container<Type>*>(_containers[type].get())->get(id);
+  // }
 
 private:
 

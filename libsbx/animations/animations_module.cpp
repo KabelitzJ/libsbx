@@ -38,7 +38,7 @@ auto animations_module::update() -> void {
 
     auto& skinned_mesh = graph.get_component<scenes::skinned_mesh>(node);
 
-    const auto& mesh = assets_module.get_asset<animations::mesh>(skinned_mesh.mesh_id());
+    const auto& mesh = assets_module.get_loaded<animations::mesh>(skinned_mesh.mesh_id());
 
     const auto& skeleton = mesh.skeleton();
 
@@ -70,7 +70,7 @@ auto animations_module::find_skeleton_node(const scenes::node node, const utilit
 
   auto& skinned_mesh = graph.get_component<sbx::scenes::skinned_mesh>(node);
 
-  const auto& mesh = assets_module.get_asset<animations::mesh>(skinned_mesh.mesh_id());
+  const auto& mesh = assets_module.get_loaded<animations::mesh>(skinned_mesh.mesh_id());
 
   const auto& skeleton = mesh.skeleton();
 

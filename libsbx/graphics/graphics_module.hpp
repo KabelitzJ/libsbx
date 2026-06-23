@@ -200,6 +200,8 @@ public:
 
   template<typename Type>
   auto enqueue_resource_destruction(const resource_handle<Type>& handle) -> void {
+    utility::logger<"graphics">::debug("enqueue image2d remove idx={} gen={}", handle.handle(), handle.generation());
+
     enqueue_destruction([this, handle](graphics::allocator& allocator) -> void {
       _storage<Type>().remove(handle);
     });

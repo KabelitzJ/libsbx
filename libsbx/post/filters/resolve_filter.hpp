@@ -5,11 +5,14 @@
 #include <string>
 #include <unordered_map>
 
+#include <libsbx/assets/assets_module.hpp>
+
 #include <libsbx/scenes/components/transform.hpp>
 
 #include <libsbx/graphics/graphics_module.hpp>
 #include <libsbx/graphics/buffers/uniform_buffer.hpp>
 #include <libsbx/graphics/buffers/push_handler.hpp>
+#include <libsbx/graphics/environment_map.hpp>
 
 #include <libsbx/scenes/scenes_module.hpp>
 #include <libsbx/scenes/scene.hpp>
@@ -73,6 +76,8 @@ public:
 
   auto render(graphics::command_buffer& command_buffer) -> void override {
     SBX_PROFILE_SCOPE("resolve_filter::render");
+
+    auto& assets_module = core::engine::get_module<assets::assets_module>();
 
     auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 
@@ -151,9 +156,11 @@ public:
 
       const auto& skybox = graph.get_component<scenes::skybox>(camera_node);
 
-      descriptor_handler.push("brdf_image", graphics_module.get_resource<graphics::image2d>(skybox.brdf_image));
-      descriptor_handler.push("irradiance_image", graphics_module.get_resource<graphics::cube_image>(skybox.irradiance_image));
-      descriptor_handler.push("prefiltered_image", graphics_module.get_resource<graphics::cube_image>(skybox.prefiltered_image));
+      const auto& environment_map = assets_module.get_loaded<graphics::environment_map>(skybox.environment);
+
+      descriptor_handler.push("brdf_image", graphics_module.get_resource<graphics::image2d>(environment_map.brdf()));
+      descriptor_handler.push("irradiance_image", graphics_module.get_resource<graphics::cube_image>(environment_map.irradiance()));
+      descriptor_handler.push("prefiltered_image", graphics_module.get_resource<graphics::cube_image>(environment_map.prefiltered()));
     }
 
     if (!descriptor_handler.update(pipeline)) {

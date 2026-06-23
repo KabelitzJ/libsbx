@@ -658,8 +658,8 @@ auto asset_browser_panel::_commit_rename() -> bool {
   }
 
   if (!old_uri.empty() && !new_uri.empty()) {
-    auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
-    scenes_module.asset_registry().rebase_paths(old_uri, new_uri);
+    // auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
+    // scenes_module.asset_registry().rebase_paths(old_uri, new_uri);
   }
 
   if (_is_under(_selected_directory, _action_target)) {
@@ -690,8 +690,8 @@ auto asset_browser_panel::_commit_remove() -> bool {
   }
 
   if (!removed_uri.empty()) {
-    auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
-    scenes_module.asset_registry().clear_paths_under(removed_uri);
+    // auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
+    // scenes_module.asset_registry().clear_paths_under(removed_uri);
   }
 
   if (_is_under(_selected_directory, _action_target)) {
@@ -766,25 +766,25 @@ auto asset_browser_panel::_refresh_image_cache() -> void {
   auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
   auto& assets_module = sbx::core::engine::get_module<sbx::assets::assets_module>();
 
-  const auto& asset_registry = scenes_module.asset_registry();
-  const auto current_count = asset_registry.images().size();
+  // const auto& asset_registry = scenes_module.asset_registry();
+  // const auto current_count = asset_registry.images().size();
 
-  if (current_count == _last_image_count && !_path_to_image.empty()) {
-    return;
-  }
+  // if (current_count == _last_image_count && !_path_to_image.empty()) {
+  //   return;
+  // }
 
-  _path_to_image.clear();
+  // _path_to_image.clear();
 
-  for (const auto& [handle, metadata] : asset_registry.images()) {
-    if (metadata.path.empty()) {
-      continue;
-    }
+  // for (const auto& [handle, metadata] : asset_registry.images()) {
+  //   if (metadata.path.empty()) {
+  //     continue;
+  //   }
 
-    const auto native = assets_module.resolve_path(metadata.path);
-    _path_to_image.emplace(_canonical_string(native), handle);
-  }
+  //   const auto native = assets_module.resolve_path(metadata.path);
+  //   _path_to_image.emplace(_canonical_string(native), handle);
+  // }
 
-  _last_image_count = current_count;
+  // _last_image_count = current_count;
 }
 
 } // namespace editor

@@ -68,7 +68,7 @@ auto static_mesh_material_subrenderer::render(graphics::command_buffer& command_
     pipeline_data.push_handler.push("instance_data_buffer", instance_data_buffer.address());
 
     for (const auto& ref : data.ranges) {
-      auto& mesh = assets_module.get_asset<models::mesh>(ref.mesh_id);
+      auto& mesh = assets_module.get_loaded<models::mesh>(ref.mesh_id);
 
       mesh.bind(command_buffer);
 

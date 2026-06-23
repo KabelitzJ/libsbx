@@ -5,43 +5,18 @@
 #include <cctype>
 
 #include <libsbx/utility/exception.hpp>
+#include <libsbx/utility/logger.hpp>
 
 namespace sbx::assets {
 
-namespace detail {
-
-auto pending_importers() -> std::vector<pending_importer>& {
-  static auto instance = std::vector<pending_importer>{};
-
-  return instance;
-}
-
-} // namespace detail
-
-auto importer_registry::register_for(std::string_view extension, std::shared_ptr<importer> instance) -> void {
-  if (extension.empty() || extension.front() != '.') {
-    throw utility::runtime_error{"Importer extension '{}' must start with a dot", extension};
-  }
-
-  if (!instance) {
-    throw utility::runtime_error{"Refusing to register null importer for '{}'", extension};
-  }
-
-  _by_extension[_normalize(extension)] = std::move(instance);
-}
-
-auto importer_registry::register_for(std::initializer_list<std::string_view> extensions, std::shared_ptr<importer> instance) -> void {
-  for (const auto& extension : extensions) {
-    register_for(extension, instance);
-  }
-}
-
 auto importer_registry::install_registered() -> void {
-  for (const auto& pending : detail::pending_importers()) {
-    auto instance = pending.factory();
+  utility::logger<"assets">::info("installing {} importers", _pending_importers().size());
+
+  for (const auto& pending : _pending_importers()) {
+    auto instance = std::invoke(pending.factory);
 
     for (const auto& extension : pending.extensions) {
-      register_for(extension, instance);
+      _register_importer(extension, instance);
     }
   }
 }
@@ -50,7 +25,7 @@ auto importer_registry::unregister(std::string_view extension) -> bool {
   return _by_extension.erase(_normalize(extension)) > 0u;
 }
 
-auto importer_registry::find_for(const std::filesystem::path& source) const -> std::shared_ptr<importer> {
+auto importer_registry::find_for(const std::filesystem::path& source) const -> std::shared_ptr<importer_base> {
   auto filename = source.filename().string();
 
   std::transform(filename.begin(), filename.end(), filename.begin(), [](unsigned char character) -> unsigned char {
@@ -72,7 +47,7 @@ auto importer_registry::find_for(const std::filesystem::path& source) const -> s
   return nullptr;
 }
 
-auto importer_registry::find(std::string_view extension) const -> std::shared_ptr<importer> {
+auto importer_registry::find(std::string_view extension) const -> std::shared_ptr<importer_base> {
   if (const auto entry = _by_extension.find(_normalize(extension)); entry != _by_extension.end()) {
     return entry->second;
   }
@@ -96,6 +71,18 @@ auto importer_registry::_normalize(std::string_view extension) -> std::string {
   });
 
   return result;
+}
+
+auto importer_registry::_register_importer(std::string_view extension, std::shared_ptr<importer_base> instance) -> void {
+  if (extension.empty() || extension.front() != '.') {
+    throw utility::runtime_error{"Importer extension '{}' must start with a dot", extension};
+  }
+
+  if (!instance) {
+    throw utility::runtime_error{"Refusing to register null importer for '{}'", extension};
+  }
+
+  _by_extension[_normalize(extension)] = std::move(instance);
 }
 
 } // namespace sbx::assets

@@ -16,9 +16,6 @@
 
 #include <libsbx/core/module.hpp>
 
-#include <libsbx/scenes/asset_registry.hpp>
-#include <libsbx/scenes/component_io.hpp>
-#include <libsbx/scenes/asset_io.hpp>
 #include <libsbx/scenes/scene.hpp>
 
 namespace sbx::scenes {
@@ -86,30 +83,6 @@ public:
     return _scene_viewport;
   }
 
-  auto asset_registry() -> scenes::asset_registry& {
-    return _asset_registry;
-  }
-
-  auto asset_registry() const -> const scenes::asset_registry& {
-    return _asset_registry;
-  }
-
-  auto get_component_io_registry() -> component_io_registry& {
-    return _component_io_registry;
-  }
-
-  auto get_asset_io_registry() -> asset_io_registry& {
-    return _asset_io_registry;
-  }
-
-  auto get_component_io(const std::uint32_t id) -> scenes::component_io& {
-    return _component_io_registry.get(id);
-  }
-
-  auto has_component_io(const std::uint32_t id) const -> bool {
-    return _component_io_registry.has(id);
-  }
-
   auto debug_lines() const -> const std::vector<line>&;
 
   auto clear_debug_lines() -> void;
@@ -131,10 +104,6 @@ public:
   auto add_debug_frustum(const math::matrix4x4& view, const math::matrix4x4& projection, const sbx::math::color& color) -> void;
 
 private:
-
-  scenes::asset_registry _asset_registry;
-  scenes::component_io_registry _component_io_registry;
-  scenes::asset_io_registry _asset_io_registry;
 
   std::unordered_map<utility::hashed_string, std::unique_ptr<scenes::scene>> _scenes;
   memory::observer_ptr<scenes::scene> _active_scene{nullptr};

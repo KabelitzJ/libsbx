@@ -17,95 +17,94 @@
 namespace sbx::scenes {
 
 scenes_module::scenes_module() {
+  // _asset_io_registry.register_loader("images", [](scenes::asset_registry& registry, const utility::hashed_string& name, const YAML::Node& node) -> void {
+  //   registry.request_image(name, node["path"].as<std::string>());
+  // });
 
-  _asset_io_registry.register_loader("images", [](scenes::asset_registry& registry, const utility::hashed_string& name, const YAML::Node& node) -> void {
-    registry.request_image(name, node["path"].as<std::string>());
-  });
+  // _asset_io_registry.register_loader("cube_images", [](scenes::asset_registry& registry, const utility::hashed_string& name, const YAML::Node& node) -> void {
+  //   const auto path = node["path"].as<std::string>();
+  //   const auto suffix = node["extention"] ? fmt::format(".{}", node["extention"].as<std::string>()) : std::string{".png"};
+  //   const auto format = reflection::from_string<graphics::format>(node["format"].as<std::string>("")).value_or(graphics::format::r8g8b8a8_srgb);
 
-  _asset_io_registry.register_loader("cube_images", [](scenes::asset_registry& registry, const utility::hashed_string& name, const YAML::Node& node) -> void {
-    const auto path = node["path"].as<std::string>();
-    const auto suffix = node["extention"] ? fmt::format(".{}", node["extention"].as<std::string>()) : std::string{".png"};
-    const auto format = reflection::from_string<graphics::format>(node["format"].as<std::string>("")).value_or(graphics::format::r8g8b8a8_srgb);
+  //   registry.request_cube_image(name, path, suffix, format);
+  // });
 
-    registry.request_cube_image(name, path, suffix, format);
-  });
+  // _component_io_registry.register_component<scenes::transform>(
+  //   "transform",
+  //   [](YAML::Emitter& emitter, [[maybe_unused]] scene_graph& graph, [[maybe_unused]] scenes::asset_registry& registry, const scenes::transform& transform) -> void {
+  //     emitter << YAML::Key << "position" << YAML::Value << transform.position();
+  //     emitter << YAML::Key << "rotation" << YAML::Value << transform.rotation();
+  //     emitter << YAML::Key << "scale" << YAML::Value << transform.scale();
+  //   },
+  //   [](const YAML::Node& node, [[maybe_unused]] scene_graph& graph, [[maybe_unused]] scenes::asset_registry& registry) -> scenes::transform {
+  //     return {node["position"].as<math::vector3>(), node["rotation"].as<math::quaternion>(), node["scale"].as<math::vector3>()};
+  //   }
+  // );
 
-  _component_io_registry.register_component<scenes::transform>(
-    "transform",
-    [](YAML::Emitter& emitter, [[maybe_unused]] scene_graph& graph, [[maybe_unused]] scenes::asset_registry& registry, const scenes::transform& transform) -> void {
-      emitter << YAML::Key << "position" << YAML::Value << transform.position();
-      emitter << YAML::Key << "rotation" << YAML::Value << transform.rotation();
-      emitter << YAML::Key << "scale" << YAML::Value << transform.scale();
-    },
-    [](const YAML::Node& node, [[maybe_unused]] scene_graph& graph, [[maybe_unused]] scenes::asset_registry& registry) -> scenes::transform {
-      return {node["position"].as<math::vector3>(), node["rotation"].as<math::quaternion>(), node["scale"].as<math::vector3>()};
-    }
-  );
+  // _component_io_registry.register_component<scenes::skybox>(
+  //   "skybox",
+  //   [](YAML::Emitter& emitter, [[maybe_unused]] scene_graph& graph, scenes::asset_registry& registry, const scenes::skybox& skybox) -> void {
+  //     const auto& metadata = registry.cube_image_metadata(skybox.cube_image);
 
-  _component_io_registry.register_component<scenes::skybox>(
-    "skybox",
-    [](YAML::Emitter& emitter, [[maybe_unused]] scene_graph& graph, scenes::asset_registry& registry, const scenes::skybox& skybox) -> void {
-      const auto& metadata = registry.cube_image_metadata(skybox.cube_image);
+  //     emitter << YAML::Key << "cube_image" << YAML::Value << YAML::Alias(metadata.name);
+  //     emitter << YAML::Key << "tint" << YAML::Value << skybox.tint;
+  //   },
+  //   [](const YAML::Node& node, [[maybe_unused]] scene_graph& graph, scenes::asset_registry& registry) -> scenes::skybox {
+  //     const auto cube_image_name = node["cube_image"]["name"].as<std::string>();
+  //     const auto cube_image_handle = registry.get_cube_image(utility::hashed_string{cube_image_name});
 
-      emitter << YAML::Key << "cube_image" << YAML::Value << YAML::Alias(metadata.name);
-      emitter << YAML::Key << "tint" << YAML::Value << skybox.tint;
-    },
-    [](const YAML::Node& node, [[maybe_unused]] scene_graph& graph, scenes::asset_registry& registry) -> scenes::skybox {
-      const auto cube_image_name = node["cube_image"]["name"].as<std::string>();
-      const auto cube_image_handle = registry.get_cube_image(utility::hashed_string{cube_image_name});
+  //     return scenes::skybox{cube_image_handle, graphics::image2d_handle{}, graphics::cube_image2d_handle{}, graphics::cube_image2d_handle{}, node["tint"].as<math::color>()};
+  //   }
+  // );
 
-      return scenes::skybox{cube_image_handle, graphics::image2d_handle{}, graphics::cube_image2d_handle{}, graphics::cube_image2d_handle{}, node["tint"].as<math::color>()};
-    }
-  );
+  // _component_io_registry.register_component<scenes::point_light>(
+  //   "point_light",
+  //   [](YAML::Emitter& emitter, [[maybe_unused]] scene_graph& graph, [[maybe_unused]] scenes::asset_registry& registry, const scenes::point_light& point_light) -> void {
+  //     emitter << YAML::Key << "color" << YAML::Value << point_light.color();
+  //     emitter << YAML::Key << "radius" << YAML::Value << point_light.radius();
+  //   },
+  //   [](const YAML::Node& node, [[maybe_unused]] scene_graph& graph, [[maybe_unused]] scenes::asset_registry& registry) -> scenes::point_light {
+  //     return {node["color"].as<math::color>(), node["radius"].as<std::float_t>()};
+  //   }
+  // );
 
-  _component_io_registry.register_component<scenes::point_light>(
-    "point_light",
-    [](YAML::Emitter& emitter, [[maybe_unused]] scene_graph& graph, [[maybe_unused]] scenes::asset_registry& registry, const scenes::point_light& point_light) -> void {
-      emitter << YAML::Key << "color" << YAML::Value << point_light.color();
-      emitter << YAML::Key << "radius" << YAML::Value << point_light.radius();
-    },
-    [](const YAML::Node& node, [[maybe_unused]] scene_graph& graph, [[maybe_unused]] scenes::asset_registry& registry) -> scenes::point_light {
-      return {node["color"].as<math::color>(), node["radius"].as<std::float_t>()};
-    }
-  );
+  // _component_io_registry.register_component<scenes::static_mesh>(
+  //   "static_mesh",
+  //   [](YAML::Emitter& emitter, [[maybe_unused]] scene_graph& graph, scenes::asset_registry& registry, const scenes::static_mesh& static_mesh) -> void {
+  //     const auto& mesh_metadata = registry.mesh_metadata(static_mesh.mesh_id());
 
-  _component_io_registry.register_component<scenes::static_mesh>(
-    "static_mesh",
-    [](YAML::Emitter& emitter, [[maybe_unused]] scene_graph& graph, scenes::asset_registry& registry, const scenes::static_mesh& static_mesh) -> void {
-      const auto& mesh_metadata = registry.mesh_metadata(static_mesh.mesh_id());
+  //     emitter << YAML::Key << "mesh" << YAML::Value << YAML::Alias(mesh_metadata.name);
+  //     emitter << YAML::Key << "submeshes" << YAML::Value << YAML::BeginSeq;
 
-      emitter << YAML::Key << "mesh" << YAML::Value << YAML::Alias(mesh_metadata.name);
-      emitter << YAML::Key << "submeshes" << YAML::Value << YAML::BeginSeq;
+  //     for (const auto& submesh : static_mesh.submeshes()) {
+  //       const auto& material_metadata = registry.material_metadata(submesh.material);
 
-      for (const auto& submesh : static_mesh.submeshes()) {
-        const auto& material_metadata = registry.material_metadata(submesh.material);
+  //       emitter << YAML::BeginMap;
+  //       emitter << YAML::Key << "index" << YAML::Value << submesh.index;
+  //       emitter << YAML::Key << "material" << YAML::Value << YAML::Alias(material_metadata.name);
+  //       emitter << YAML::EndMap;
+  //     }
 
-        emitter << YAML::BeginMap;
-        emitter << YAML::Key << "index" << YAML::Value << submesh.index;
-        emitter << YAML::Key << "material" << YAML::Value << YAML::Alias(material_metadata.name);
-        emitter << YAML::EndMap;
-      }
+  //     emitter << YAML::EndSeq;
+  //   },
+  //   [](const YAML::Node& node, [[maybe_unused]] scene_graph& graph, scenes::asset_registry& registry) -> scenes::static_mesh {
+  //     const auto mesh_name = node["mesh"]["name"].as<std::string>();
+  //     const auto mesh_id = registry.get_mesh(utility::hashed_string{mesh_name});
 
-      emitter << YAML::EndSeq;
-    },
-    [](const YAML::Node& node, [[maybe_unused]] scene_graph& graph, scenes::asset_registry& registry) -> scenes::static_mesh {
-      const auto mesh_name = node["mesh"]["name"].as<std::string>();
-      const auto mesh_id = registry.get_mesh(utility::hashed_string{mesh_name});
+  //     auto submeshes = std::vector<scenes::static_mesh::submesh>{};
 
-      auto submeshes = std::vector<scenes::static_mesh::submesh>{};
+  //     if (node["submeshes"] && node["submeshes"].IsSequence()) {
+  //       for (const auto& sub : node["submeshes"]) {
+  //         const auto material_name = sub["material"]["name"].as<std::string>();
+  //         const auto material_id = registry.get_material(utility::hashed_string{material_name});
 
-      if (node["submeshes"] && node["submeshes"].IsSequence()) {
-        for (const auto& sub : node["submeshes"]) {
-          const auto material_name = sub["material"]["name"].as<std::string>();
-          const auto material_id = registry.get_material(utility::hashed_string{material_name});
+  //         submeshes.push_back({sub["index"].as<std::uint32_t>(), material_id});
+  //       }
+  //     }
 
-          submeshes.push_back({sub["index"].as<std::uint32_t>(), material_id});
-        }
-      }
-
-      return scenes::static_mesh{mesh_id, std::move(submeshes)};
-    }
-  );
+  //     return scenes::static_mesh{mesh_id, std::move(submeshes)};
+  //   }
+  // );
 }
 
 scenes_module::~scenes_module() {
@@ -131,7 +130,7 @@ auto scenes_module::update() -> void {
 auto scenes_module::create_scene(const std::string& name) -> scenes::scene& {
   auto key = utility::hashed_string{name};
 
-  auto [entry, inserted] = _scenes.emplace(key, std::make_unique<scenes::scene>(_component_io_registry, _asset_io_registry, _asset_registry, name));
+  auto [entry, inserted] = _scenes.emplace(key, std::make_unique<scenes::scene>(name));
 
   _active_scene = entry->second.get();
 
@@ -141,7 +140,7 @@ auto scenes_module::create_scene(const std::string& name) -> scenes::scene& {
 auto scenes_module::load_scene(const utility::hashed_string& name, const std::filesystem::path& path) -> scenes::scene& {
   auto& assets_module = core::engine::get_module<assets::assets_module>();
 
-  auto [entry, inserted] = _scenes.emplace(name, std::make_unique<scenes::scene>(assets_module.resolve_path(path), _component_io_registry, _asset_io_registry, _asset_registry));
+  auto [entry, inserted] = _scenes.emplace(name, std::make_unique<scenes::scene>(assets_module.resolve_path(path)));
 
   _active_scene = entry->second.get();
 

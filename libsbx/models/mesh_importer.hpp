@@ -9,7 +9,7 @@
 #include <yaml-cpp/yaml.h>
 
 #include <libsbx/assets/asset.hpp>
-#include <libsbx/assets/importer.hpp>
+#include <libsbx/assets/importer_registry.hpp>
 
 #include <libsbx/models/mesh.hpp>
 
@@ -20,7 +20,9 @@ namespace sbx::models {
  *
  * Reads `lod_count` (default 1) from the asset's .meta `import_settings`.
  */
-class mesh_importer final : public assets::importer {
+class mesh_importer final : public assets::importer<mesh_importer> {
+
+  inline static const auto is_registered = register_importer({".gltf", ".sbxstmsh"});
 
 public:
 

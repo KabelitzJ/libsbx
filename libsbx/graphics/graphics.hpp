@@ -6,6 +6,10 @@
 #include <libsbx/graphics/renderer.hpp>
 #include <libsbx/graphics/subrenderer.hpp>
 #include <libsbx/graphics/task.hpp>
+#include <libsbx/graphics/environment_map.hpp>
+#include <libsbx/graphics/environment_map_importer.hpp>
+#include <libsbx/graphics/texture.hpp>
+#include <libsbx/graphics/texture_importer.hpp>
 
 #include <libsbx/graphics/devices/extensions.hpp>
 #include <libsbx/graphics/devices/validation_layers.hpp>

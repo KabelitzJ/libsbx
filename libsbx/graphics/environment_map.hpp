@@ -19,25 +19,54 @@ public:
 
   inline static constexpr auto type_name = std::string_view{"environment_map"};
 
-  explicit environment_map() {
+  explicit environment_map(const graphics::cube_image2d_handle cube, const graphics::image2d_handle brdf, const graphics::cube_image2d_handle irradiance, const graphics::cube_image2d_handle prefiltered);
 
+  environment_map(const environment_map& other) = delete;
+
+  environment_map(environment_map&& other)
+  : _cube{other._cube},
+    _brdf{other._brdf},
+    _irradiance{other._irradiance},
+    _prefiltered{other._prefiltered} {
+    other._cube = graphics::cube_image2d_handle{};
+    other._brdf = graphics::image2d_handle{};
+    other._irradiance = graphics::cube_image2d_handle{};
+    other._prefiltered = graphics::cube_image2d_handle{};
   }
 
-  ~environment_map() override {
+  auto operator=(const environment_map& other) -> environment_map& = delete;
 
+  auto operator=(environment_map&& other) -> environment_map& {
+    if (this != &other) {
+      _cube = other._cube;
+      _brdf = other._brdf;
+      _irradiance = other._irradiance;
+      _prefiltered = other._prefiltered;
+
+      other._cube = cube_image2d_handle{};
+      other._brdf = image2d_handle{};
+      other._irradiance = cube_image2d_handle{};
+      other._prefiltered = cube_image2d_handle{};
+    }
+
+    return *this;
   }
 
-  auto type() const -> assets::asset_type override {
-    return assets::asset_type::environment_map;
-  }
+  ~environment_map() override ;
+
+  auto type() const -> assets::asset_type override;
+
+  auto cube() const noexcept -> cube_image2d_handle;
+ 
+  auto brdf() const noexcept -> image2d_handle;
+ 
+  auto irradiance() const noexcept -> cube_image2d_handle;
+ 
+  auto prefiltered() const noexcept -> cube_image2d_handle;
 
 private:
 
-  auto _generate_brdf(const std::uint32_t size) -> void;
-  auto _generate_irradiance(const std::uint32_t size) -> void;
-  auto _generate_prefiltered(const std::uint32_t size) -> void;
-
-  graphics::cube_image2d_handle _skybox;
+  graphics::cube_image2d_handle _cube;
   graphics::image2d_handle _brdf;
   graphics::cube_image2d_handle _irradiance;
   graphics::cube_image2d_handle _prefiltered;

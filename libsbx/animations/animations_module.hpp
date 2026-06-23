@@ -43,7 +43,7 @@ public:
 
     auto& animator = graph.add_component<sbx::animations::animator>(node);
 
-    const auto& mesh = assets_module.get_asset<animations::mesh>(mesh_id);
+    const auto& mesh = assets_module.get_loaded<animations::mesh>(mesh_id);
 
     const auto& skeleton = mesh.skeleton();
 

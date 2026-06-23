@@ -11,13 +11,13 @@
 #include <libsbx/core/engine.hpp>
 
 #include <libsbx/assets/asset.hpp>
-#include <libsbx/assets/importer.hpp>
+#include <libsbx/assets/importer_registry.hpp>
 
 #include <libsbx/graphics/graphics_module.hpp>
 #include <libsbx/graphics/types.hpp>
 #include <libsbx/graphics/images/image2d.hpp>
 
-#include <libsbx/graphics/assets/texture.hpp>
+#include <libsbx/graphics/texture.hpp>
 
 namespace sbx::graphics {
 
@@ -28,9 +28,15 @@ namespace sbx::graphics {
  *   srgb (bool, default true), mipmap (bool, default false), anisotropic (bool, default false),
  *   filter ("linear" | "nearest", default "linear"), address_mode ("repeat" | "clamp", default "repeat").
  */
-class texture_importer final : public assets::importer {
+class texture_importer final : public assets::importer<texture_importer> {
+
+  inline static const auto is_registered = register_importer({".png", ".jpg", ".jpeg", ".tga", ".sbxtex"});
 
 public:
+
+  texture_importer() = default;
+
+  ~texture_importer() override = default;
 
   auto type() const -> std::string_view override;
 

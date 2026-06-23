@@ -14,7 +14,7 @@ static auto lerp_bone_transform(const animator::bone_transform& a, const animato
 static auto sample_clip_locals(const skeleton& skeleton, const math::uuid& animation_id, const std::float_t time) -> std::vector<animator::bone_transform> {
   auto& assets_module = core::engine::get_module<assets::assets_module>();
 
-  auto& animation = assets_module.get_asset<animations::animation>(animation_id);
+  auto& animation = assets_module.get_loaded<animations::animation>(animation_id);
 
   auto locals = std::vector<animator::bone_transform>{};
   locals.resize(skeleton.bone_count());
@@ -54,7 +54,7 @@ static auto sample_clip_locals(const skeleton& skeleton, const math::uuid& anima
 static auto _clip_duration(const math::uuid& animation_id) ->  std::float_t {
   auto& assets_module = core::engine::get_module<assets::assets_module>();
 
-  const auto& clip = assets_module.get_asset<animations::animation>(animation_id);
+  const auto& clip = assets_module.get_loaded<animations::animation>(animation_id);
 
   return clip.duration();
 }

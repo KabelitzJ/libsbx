@@ -6,7 +6,6 @@
 #include <libsbx/scenes/scene.hpp>
 #include <libsbx/scenes/scene_environment.hpp>
 #include <libsbx/scenes/scene_graph.hpp>
-#include <libsbx/scenes/scene_serializer.hpp>
 
 #include <libsbx/scenes/skybox_subrenderer.hpp>
 #include <libsbx/scenes/debug_subrenderer.hpp>

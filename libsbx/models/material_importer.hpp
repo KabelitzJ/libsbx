@@ -19,7 +19,7 @@
 #include <libsbx/reflection/description.hpp>
 
 #include <libsbx/assets/asset.hpp>
-#include <libsbx/assets/importer.hpp>
+#include <libsbx/assets/importer_registry.hpp>
 #include <libsbx/assets/assets_module.hpp>
 
 #include <libsbx/graphics/images/image2d.hpp>
@@ -35,7 +35,9 @@ namespace sbx::models {
  *
  * Each texture slot's `image:` URI is loaded through the assets_module, so the texture becomes a dependency of this material. The legacy per-slot `format:` seeds the texture's color space only when that texture has no .meta yet; thereafter the texture's own .meta governs it.
  */
-class material_importer final : public assets::importer {
+class material_importer final : public assets::importer<material_importer> {
+
+  inline static const auto is_registered = register_importer({".material.yaml"});
 
 public:
 

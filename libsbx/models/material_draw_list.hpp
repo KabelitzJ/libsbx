@@ -134,7 +134,7 @@ public:
       const auto transform_index = static_cast<std::uint32_t>(_transform_data.size());
       _transform_data.push_back(transform);
 
-      const auto& material = assets_module.get_asset<models::material>(material_id);
+      const auto& material = assets_module.get_loaded<models::material>(material_id);
 
       auto& pipeline = _get_or_create_pipeline_data(material);
 
@@ -364,7 +364,7 @@ private:
     };
 
     for (auto& [mesh_id, submesh_vectors] : pipeline.submesh_instances) {
-      const auto& mesh = assets_module.get_asset<mesh_type>(mesh_id);
+      const auto& mesh = assets_module.get_loaded<mesh_type>(mesh_id);
 
       range.offset = static_cast<std::uint32_t>(draw_commands.size());
       range.count = 0u;

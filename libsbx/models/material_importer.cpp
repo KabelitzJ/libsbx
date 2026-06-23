@@ -117,6 +117,4 @@ auto material_importer::_parse_alpha_mode(const std::string& value) -> models::a
   return models::alpha_mode::opaque;
 }
 
-const auto material_importer_registered = sbx::assets::register_importer<sbx::models::material_importer>({".material.yaml"});
-
 } // namespace sbx::models

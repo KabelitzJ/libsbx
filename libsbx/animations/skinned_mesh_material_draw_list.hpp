@@ -91,7 +91,7 @@ struct skinned_mesh_traits {
 
       const auto& mesh_id = skinned_mesh.mesh_id();
 
-      auto& mesh = assets_module.get_asset<animations::mesh>(mesh_id);
+      auto& mesh = assets_module.get_loaded<animations::mesh>(mesh_id);
 
       _skinning_jobs.emplace_back(skinning_job{
         .pre_vertices = mesh.address(),

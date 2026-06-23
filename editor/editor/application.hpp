@@ -35,15 +35,10 @@ public:
 
 private:
 
-  auto _generate_brdf(const std::uint32_t size) -> void;
-  auto _generate_irradiance(const std::uint32_t size) -> void;
-  auto _generate_prefiltered(const std::uint32_t size) -> void;
-
   bool _is_paused;
 
-  sbx::graphics::image2d_handle _brdf;
-  sbx::graphics::cube_image2d_handle _irradiance;
-  sbx::graphics::cube_image2d_handle _prefiltered;
+  sbx::math::uuid _cube_mesh;
+  sbx::math::uuid _cube_material;
 
 }; // class application
 

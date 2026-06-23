@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-#include <libsbx/graphics/assets/texture_importer.hpp>
+#include <libsbx/graphics/texture_importer.hpp>
 
 #include <libsbx/assets/importer_registry.hpp>
 
@@ -42,7 +42,5 @@ auto texture_importer::_parse_address_mode(const std::string& value) -> graphics
 
   return graphics::address_mode::repeat;
 }
-
-const auto texture_importer_registered = sbx::assets::register_importer<sbx::graphics::texture_importer>({".png", ".jpg", ".jpeg", ".tga", ".sbxtex"});
 
 } // namespace sbx::graphics

@@ -29,10 +29,32 @@ public:
   explicit texture(const image2d_handle handle)
   : _handle{handle} { }
 
+  texture(const texture& other) = delete;
+
+  texture(texture&& other) noexcept
+  : _handle{other._handle} {
+    other._handle = image2d_handle{};
+  }
+
   ~texture() override {
+    if (_handle == image2d_handle{}) {
+      return;
+    }
+
     auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 
     graphics_module.enqueue_resource_destruction(_handle);
+  }
+
+  auto operator=(const texture& other) -> texture& = delete;
+
+  auto operator=(texture&& other) noexcept -> texture& {
+    if (this != &other) {
+      _handle = other._handle;
+      other._handle = image2d_handle{};
+    }
+
+    return *this;
   }
 
   auto type() const -> assets::asset_type override {

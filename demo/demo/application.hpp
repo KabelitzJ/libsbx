@@ -32,10 +32,6 @@ private:
 
   auto _build_ui() -> void;
 
-  auto _generate_brdf(const std::uint32_t size) -> void;
-  auto _generate_irradiance(const std::uint32_t size) -> void;
-  auto _generate_prefiltered(const std::uint32_t size) -> void;
-
   bool _is_paused;
 
   sbx::math::angle _rotation;
@@ -44,10 +40,6 @@ private:
   sbx::scenes::node _rune1_emitter;
   sbx::scenes::node _rune2_emitter;
   sbx::scenes::node _rune3_emitter;
-
-  sbx::graphics::image2d_handle _brdf;
-  sbx::graphics::cube_image2d_handle _irradiance;
-  sbx::graphics::cube_image2d_handle _prefiltered;
 
   sbx::ui::font _font;
 

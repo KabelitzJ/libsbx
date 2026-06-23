@@ -71,7 +71,7 @@ auto skinned_mesh_shadow_subrenderer::render(graphics::command_buffer& command_b
     auto& draw_commands_buffer = graphics_module.get_resource<graphics::storage_buffer>(data.draw_commands_buffer);
 
     for (const auto& draw_range : data.ranges) {
-      auto& mesh = assets_module.get_asset<animations::mesh>(draw_range.mesh_id);
+      auto& mesh = assets_module.get_loaded<animations::mesh>(draw_range.mesh_id);
 
       mesh.bind(command_buffer);
 

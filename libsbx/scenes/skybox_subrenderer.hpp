@@ -11,8 +11,8 @@
 #include <libsbx/graphics/pipeline/mesh.hpp>
 
 #include <libsbx/graphics/descriptor/descriptor_handler.hpp>
-
 #include <libsbx/graphics/buffers/uniform_handler.hpp>
+#include <libsbx/graphics/environment_map.hpp>
 
 #include <libsbx/assets/assets_module.hpp>
 
@@ -81,10 +81,16 @@ public:
 
     const auto& skybox = graph.get_component<scenes::skybox>(camera_node);
 
+    if (skybox.environment == math::uuid::nil()) {
+      return;
+    }
+
+    const auto& environment_map = assets_module.get_loaded<graphics::environment_map>(skybox.environment);
+
     _pipeline.bind(command_buffer);
 
     _descriptor_handler.push("scene", environment.uniform_handler());
-    _descriptor_handler.push("skybox", graphics_module.get_resource<graphics::cube_image>(skybox.cube_image));
+    _descriptor_handler.push("skybox", graphics_module.get_resource<graphics::cube_image>(environment_map.cube()));
 
     _push_handler.push("tint", skybox.tint);
 

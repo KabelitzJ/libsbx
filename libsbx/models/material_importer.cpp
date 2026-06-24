@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 #include <libsbx/models/material_importer.hpp>
 
-#include <libsbx/assets/importer_registry.hpp>
+#include <libsbx/assets/serializer_registry.hpp>
 
 namespace sbx::models {
 
@@ -9,7 +9,7 @@ auto material_importer::type() const -> std::string_view {
   return models::material::type_name;
 }
 
-auto material_importer::import(const assets::import_context& context) -> std::unique_ptr<assets::asset_base> {
+auto material_importer::read(const assets::serializer_context& context) -> std::unique_ptr<assets::asset_base> {
   auto& assets_module = core::engine::get_module<assets::assets_module>();
 
   const auto node = YAML::LoadFile(context.resolved.string());
@@ -115,6 +115,10 @@ auto material_importer::_parse_alpha_mode(const std::string& value) -> models::a
   }
 
   return models::alpha_mode::opaque;
+}
+
+auto material_importer::write(const assets::serializer_context& context, const std::unique_ptr<assets::asset_base>& asset) -> bool {
+  return true;
 }
 
 } // namespace sbx::models

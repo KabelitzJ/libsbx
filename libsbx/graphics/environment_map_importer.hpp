@@ -12,7 +12,7 @@
 #include <libsbx/core/engine.hpp>
 
 #include <libsbx/assets/asset.hpp>
-#include <libsbx/assets/importer_registry.hpp>
+#include <libsbx/assets/serializer_registry.hpp>
 #include <libsbx/assets/assets_module.hpp>
 
 #include <libsbx/graphics/graphics_module.hpp>
@@ -31,15 +31,17 @@ namespace sbx::graphics {
  *
  * Loads the cube and bakes the BRDF / irradiance / prefiltered set at load time.
  */
-class environment_map_importer final : public assets::importer<environment_map_importer> {
+class environment_map_importer final : public assets::serializer<environment_map_importer> {
 
-  inline static const auto is_registered = register_importer({".envmap.yaml"});
+  inline static const auto is_registered = register_serializer({".envmap.yaml"});
 
 public:
 
   auto type() const -> std::string_view override;
 
-  auto import(const assets::import_context& context) -> std::unique_ptr<assets::asset_base> override;
+  auto read(const assets::serializer_context& context) -> std::unique_ptr<assets::asset_base> override;
+
+  auto write(const assets::serializer_context& context, const std::unique_ptr<assets::asset_base>& asset) -> bool override;
 
 private:
 

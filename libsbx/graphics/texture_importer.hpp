@@ -11,7 +11,7 @@
 #include <libsbx/core/engine.hpp>
 
 #include <libsbx/assets/asset.hpp>
-#include <libsbx/assets/importer_registry.hpp>
+#include <libsbx/assets/serializer_registry.hpp>
 
 #include <libsbx/graphics/graphics_module.hpp>
 #include <libsbx/graphics/types.hpp>
@@ -28,9 +28,9 @@ namespace sbx::graphics {
  *   srgb (bool, default true), mipmap (bool, default false), anisotropic (bool, default false),
  *   filter ("linear" | "nearest", default "linear"), address_mode ("repeat" | "clamp", default "repeat").
  */
-class texture_importer final : public assets::importer<texture_importer> {
+class texture_importer final : public assets::serializer<texture_importer> {
 
-  inline static const auto is_registered = register_importer({".png", ".jpg", ".jpeg", ".tga", ".sbxtex"});
+  inline static const auto is_registered = register_serializer({".png", ".jpg", ".jpeg", ".tga", ".sbxtex"});
 
 public:
 
@@ -40,7 +40,9 @@ public:
 
   auto type() const -> std::string_view override;
 
-  auto import(const assets::import_context& context) -> std::unique_ptr<assets::asset_base> override;
+  auto read(const assets::serializer_context& context) -> std::unique_ptr<assets::asset_base> override;
+
+  auto write(const assets::serializer_context& context, const std::unique_ptr<assets::asset_base>& asset) -> bool override;
 
 private:
 

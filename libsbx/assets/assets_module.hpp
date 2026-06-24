@@ -33,7 +33,7 @@
 #include <libsbx/assets/metadata.hpp>
 #include <libsbx/assets/asset.hpp>
 #include <libsbx/assets/asset_database.hpp>
-#include <libsbx/assets/importer_registry.hpp>
+#include <libsbx/assets/serializer_registry.hpp>
 #include <libsbx/assets/meta_file.hpp>
 
 namespace sbx::assets {
@@ -67,7 +67,7 @@ public:
   assets_module()
   : _thread_pool{std::thread::hardware_concurrency()} {
     _register_asset_root(std::filesystem::current_path());
-    _importers.install_registered();
+    _serializers.install_registered();
   }
 
   ~assets_module() override {
@@ -128,16 +128,16 @@ public:
       return id;
     }
 
-    const auto instance = _importers.find_for(source);
+    const auto serializer = _serializers.find_for(source);
 
-    if (!instance) {
-      throw utility::runtime_error{"No importer registered for asset '{}'", source.string()};
+    if (!serializer) {
+      throw utility::runtime_error{"No serializer registered for asset '{}'", source.string()};
     }
 
     auto settings = YAML::Node{};
 
     if (id == math::uuid::nil()) {
-      auto type = std::string{instance->type()};
+      auto type = std::string{serializer->type()};
 
       if (const auto meta = read_meta_file(meta_path_for(resolved)); meta) {
         id = meta->id;
@@ -163,10 +163,10 @@ public:
 
     record.state = load_state::loading;
 
-    const auto context = import_context{.source = source, .resolved = resolved, .settings = settings, .id = id};
+    const auto context = serializer_context{.source = source, .resolved = resolved, .settings = settings, .id = id};
 
     try {
-      _payloads[id] = instance->import(context);
+      _payloads[id] = serializer->read(context);
     } catch (...) {
       record.state = load_state::failed;
 
@@ -323,7 +323,7 @@ private:
   thread_pool _thread_pool;
 
   asset_database _database;
-  importer_registry _importers;
+  serializer_registry _serializers;
   std::unordered_map<math::uuid, std::unique_ptr<asset_base>> _payloads;
 
   struct container_base {

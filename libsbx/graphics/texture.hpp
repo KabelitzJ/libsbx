@@ -41,8 +41,6 @@ public:
       return;
     }
 
-    utility::logger<"graphics">::debug("~texture this={} handle idx={} gen={}", static_cast<void*>(this), _handle.handle(), _handle.generation());
-
     auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 
     graphics_module.remove_resource(_handle);

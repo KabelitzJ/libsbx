@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-#include <libsbx/assets/importer_registry.hpp>
+#include <libsbx/assets/serializer_registry.hpp>
 
 #include <algorithm>
 #include <cctype>
@@ -9,23 +9,23 @@
 
 namespace sbx::assets {
 
-auto importer_registry::install_registered() -> void {
-  utility::logger<"assets">::info("installing {} importers", _pending_importers().size());
+auto serializer_registry::install_registered() -> void {
+  utility::logger<"assets">::info("installing {} importers", _pending_serializers().size());
 
-  for (const auto& pending : _pending_importers()) {
+  for (const auto& pending : _pending_serializers()) {
     auto instance = std::invoke(pending.factory);
 
     for (const auto& extension : pending.extensions) {
-      _register_importer(extension, instance);
+      _register_serializer(extension, instance);
     }
   }
 }
 
-auto importer_registry::unregister(std::string_view extension) -> bool {
+auto serializer_registry::unregister(std::string_view extension) -> bool {
   return _by_extension.erase(_normalize(extension)) > 0u;
 }
 
-auto importer_registry::find_for(const std::filesystem::path& source) const -> std::shared_ptr<importer_base> {
+auto serializer_registry::find_for(const std::filesystem::path& source) const -> std::shared_ptr<serializer_base> {
   auto filename = source.filename().string();
 
   std::transform(filename.begin(), filename.end(), filename.begin(), [](unsigned char character) -> unsigned char {
@@ -47,7 +47,7 @@ auto importer_registry::find_for(const std::filesystem::path& source) const -> s
   return nullptr;
 }
 
-auto importer_registry::find(std::string_view extension) const -> std::shared_ptr<importer_base> {
+auto serializer_registry::find(std::string_view extension) const -> std::shared_ptr<serializer_base> {
   if (const auto entry = _by_extension.find(_normalize(extension)); entry != _by_extension.end()) {
     return entry->second;
   }
@@ -55,15 +55,15 @@ auto importer_registry::find(std::string_view extension) const -> std::shared_pt
   return nullptr;
 }
 
-auto importer_registry::contains(std::string_view extension) const -> bool {
+auto serializer_registry::contains(std::string_view extension) const -> bool {
   return _by_extension.contains(_normalize(extension));
 }
 
-auto importer_registry::clear() -> void {
+auto serializer_registry::clear() -> void {
   _by_extension.clear();
 }
 
-auto importer_registry::_normalize(std::string_view extension) -> std::string {
+auto serializer_registry::_normalize(std::string_view extension) -> std::string {
   auto result = std::string{extension};
 
   std::transform(result.begin(), result.end(), result.begin(), [](unsigned char character) -> unsigned char {
@@ -73,9 +73,9 @@ auto importer_registry::_normalize(std::string_view extension) -> std::string {
   return result;
 }
 
-auto importer_registry::_register_importer(std::string_view extension, std::shared_ptr<importer_base> instance) -> void {
+auto serializer_registry::_register_serializer(std::string_view extension, std::shared_ptr<serializer_base> instance) -> void {
   if (extension.empty() || extension.front() != '.') {
-    throw utility::runtime_error{"Importer extension '{}' must start with a dot", extension};
+    throw utility::runtime_error{"Serializer extension '{}' must start with a dot", extension};
   }
 
   if (!instance) {

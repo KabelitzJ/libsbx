@@ -9,7 +9,7 @@
 #include <yaml-cpp/yaml.h>
 
 #include <libsbx/assets/asset.hpp>
-#include <libsbx/assets/importer_registry.hpp>
+#include <libsbx/assets/serializer_registry.hpp>
 
 #include <libsbx/models/mesh.hpp>
 
@@ -20,15 +20,17 @@ namespace sbx::models {
  *
  * Reads `lod_count` (default 1) from the asset's .meta `import_settings`.
  */
-class mesh_importer final : public assets::importer<mesh_importer> {
+class mesh_importer final : public assets::serializer<mesh_importer> {
 
-  inline static const auto is_registered = register_importer({".gltf", ".sbxstmsh"});
+  inline static const auto is_registered = register_serializer({".gltf", ".sbxstmsh"});
 
 public:
 
   auto type() const -> std::string_view override;
 
-  auto import(const assets::import_context& context) -> std::unique_ptr<assets::asset_base> override;
+  auto read(const assets::serializer_context& context) -> std::unique_ptr<assets::asset_base> override;
+
+  auto write(const assets::serializer_context& context, const std::unique_ptr<assets::asset_base>& asset) -> bool override;
 
 }; // class mesh_importer
 

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 #include <libsbx/graphics/texture_importer.hpp>
 
-#include <libsbx/assets/importer_registry.hpp>
+#include <libsbx/assets/serializer_registry.hpp>
 
 namespace sbx::graphics {
 
@@ -9,7 +9,7 @@ auto texture_importer::type() const -> std::string_view {
   return texture::type_name;
 }
 
-auto texture_importer::import(const assets::import_context& context) -> std::unique_ptr<assets::asset_base> {
+auto texture_importer::read(const assets::serializer_context& context) -> std::unique_ptr<assets::asset_base> {
   auto settings = context.settings;
 
   const auto use_srgb = settings["srgb"].as<bool>(true);
@@ -25,6 +25,10 @@ auto texture_importer::import(const assets::import_context& context) -> std::uni
   const auto handle = graphics_module.add_resource<graphics::image2d>(context.resolved, format, filter, address_mode, use_anisotropic, use_mipmap);
 
   return std::make_unique<texture>(handle);
+}
+
+auto texture_importer::write(const assets::serializer_context& context, const std::unique_ptr<assets::asset_base>& asset) -> bool {
+  return true;
 }
 
 auto texture_importer::_parse_filter(const std::string& value) -> graphics::filter {

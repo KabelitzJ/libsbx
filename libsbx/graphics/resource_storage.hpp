@@ -125,8 +125,6 @@ public:
   }
 
   auto remove(const handle_type& handle) -> void {
-    utility::logger<"graphics">::debug("resource_storage remove idx={} gen={}", handle.handle(), handle.generation());
-
     utility::assert_that(handle.handle() < _storage.size(), "Handle is out of bounds");
     utility::assert_that(handle.generation() == _generations[handle.handle()], "Handle generation does not match");
 

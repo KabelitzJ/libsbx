@@ -31,6 +31,14 @@ auto _is_mesh_extension(std::string_view extension) -> bool {
   return std::ranges::find(mesh_extensions, extension) != mesh_extensions.end();
 }
 
+auto _to_lower(std::string value) -> std::string {
+  std::ranges::transform(value, value.begin(), [](auto character) {
+    return static_cast<char>(std::tolower(static_cast<unsigned char>(character)));
+  });
+
+  return value;
+}
+
 auto _canonical_string(const std::filesystem::path& path) -> std::string {
   auto error = std::error_code{};
   auto canonical = std::filesystem::weakly_canonical(path, error);
@@ -68,6 +76,26 @@ auto _native_to_res_uri(const std::filesystem::path& root, const std::filesystem
   }
 
   return "res://" + relative.generic_string();
+}
+
+auto asset_browser_panel::_classify(const std::filesystem::path& path) -> asset_kind {
+  const auto name = _to_lower(path.filename().generic_string());
+
+  if (name.ends_with(".material.yaml")) {
+    return asset_kind::material;
+  }
+
+  const auto extension = _to_lower(path.extension().generic_string());
+
+  if (_is_image_extension(extension)) {
+    return asset_kind::image;
+  }
+
+  if (_is_mesh_extension(extension)) {
+    return asset_kind::mesh;
+  }
+
+  return asset_kind::other;
 }
 
 auto asset_browser_panel::draw() -> void {
@@ -113,6 +141,11 @@ auto asset_browser_panel::draw() -> void {
 
     if (ImGui::BeginTabItem(ICON_MDI_CUBE_OUTLINE " Meshes")) {
       _active_filter = filter_kind::meshes;
+      ImGui::EndTabItem();
+    }
+
+    if (ImGui::BeginTabItem(ICON_MDI_PALETTE " Materials")) {
+      _active_filter = filter_kind::materials;
       ImGui::EndTabItem();
     }
 
@@ -313,30 +346,30 @@ auto asset_browser_panel::_draw_grid() -> void {
     }
 
     if (!entry.is_directory()) {
-      auto extension = entry.path().extension().generic_string();
+      if (_to_lower(name).ends_with(".meta")) {
+        continue;
+      }
 
-      std::ranges::transform(extension, extension.begin(), [](auto character) {
-        return static_cast<char>(std::tolower(static_cast<unsigned char>(character)));
-      });
-
-      const auto is_image = _is_image_extension(extension);
-      const auto is_mesh = _is_mesh_extension(extension);
+      const auto kind = _classify(entry.path());
 
       switch (_active_filter) {
         case filter_kind::all: {
-          if (!is_image && !is_mesh) {
-            continue;
-          }
           break;
         }
         case filter_kind::images: {
-          if (!is_image) {
+          if (kind != asset_kind::image) {
             continue;
           }
           break;
         }
         case filter_kind::meshes: {
-          if (!is_mesh) {
+          if (kind != asset_kind::mesh) {
+            continue;
+          }
+          break;
+        }
+        case filter_kind::materials: {
+          if (kind != asset_kind::material) {
             continue;
           }
           break;
@@ -373,39 +406,56 @@ auto asset_browser_panel::_draw_file_card(const std::filesystem::directory_entry
 
     _draw_folder_context_menu(path);
   } else {
-    auto extension = path.extension().generic_string();
+    switch (_classify(path)) {
+      case asset_kind::image: {
+        const auto canonical = _canonical_string(path);
 
-    std::ranges::transform(extension, extension.begin(), [](auto character) {
-      return static_cast<char>(std::tolower(static_cast<unsigned char>(character)));
-    });
+        auto handle_entry = _path_to_image.find(canonical);
+        auto descriptor_set = static_cast<VkDescriptorSet>(VK_NULL_HANDLE);
+        auto handle = sbx::graphics::image2d_handle{};
 
-    if (_is_image_extension(extension)) {
-      const auto canonical = _canonical_string(path);
+        if (handle_entry != _path_to_image.end()) {
+          handle = handle_entry->second;
+          descriptor_set = _texture_cache.descriptor_for(handle);
+        }
 
-      auto handle_entry = _path_to_image.find(canonical);
-      auto descriptor_set = static_cast<VkDescriptorSet>(VK_NULL_HANDLE);
-      auto handle = sbx::graphics::image2d_handle{};
+        if (descriptor_set != VK_NULL_HANDLE) {
+          ImGui::ImageButton("##thumb", reinterpret_cast<ImTextureID>(descriptor_set), ImVec2{_item_size, _item_size});
+        } else {
+          ImGui::Button(ICON_MDI_IMAGE "##img", ImVec2{_item_size, _item_size});
+        }
 
-      if (handle_entry != _path_to_image.end()) {
-        handle = handle_entry->second;
-        descriptor_set = _texture_cache.descriptor_for(handle);
+        if (handle.is_valid() && ImGui::BeginDragDropSource(ImGuiDragDropFlags_None)) {
+          ImGui::SetDragDropPayload(payload_image_handle, &handle, sizeof(sbx::graphics::image2d_handle));
+          ImGui::Text("%s", name.c_str());
+          ImGui::EndDragDropSource();
+        }
+
+        break;
       }
-
-      if (descriptor_set != VK_NULL_HANDLE) {
-        ImGui::ImageButton("##thumb", reinterpret_cast<ImTextureID>(descriptor_set), ImVec2{_item_size, _item_size});
-      } else {
-        ImGui::Button(ICON_MDI_IMAGE "##img", ImVec2{_item_size, _item_size});
+      case asset_kind::mesh: {
+        ImGui::Button(ICON_MDI_CUBE_OUTLINE "##mesh", ImVec2{_item_size, _item_size});
+        break;
       }
+      case asset_kind::material: {
+        if (ImGui::Button(ICON_MDI_PALETTE "##material", ImVec2{_item_size, _item_size})) {
+          auto& assets_module = sbx::core::engine::get_module<sbx::assets::assets_module>();
 
-      if (handle.is_valid() && ImGui::BeginDragDropSource(ImGuiDragDropFlags_None)) {
-        ImGui::SetDragDropPayload(payload_image_handle, &handle, sizeof(sbx::graphics::image2d_handle));
-        ImGui::Text("%s", name.c_str());
-        ImGui::EndDragDropSource();
+          const auto uri = _native_to_res_uri(_root, path);
+
+          if (!uri.empty()) {
+            auto& editor_module = sbx::core::engine::get_module<editor::editor_module>();
+
+            editor_module.set_selection(editor::asset_selection{assets_module.load_asset(uri)});
+          }
+        }
+
+        break;
       }
-    } else if (_is_mesh_extension(extension)) {
-      ImGui::Button(ICON_MDI_CUBE_OUTLINE "##mesh", ImVec2{_item_size, _item_size});
-    } else {
-      ImGui::Button(ICON_MDI_FILE_OUTLINE "##file", ImVec2{_item_size, _item_size});
+      case asset_kind::other: {
+        ImGui::Button(ICON_MDI_FILE_OUTLINE "##file", ImVec2{_item_size, _item_size});
+        break;
+      }
     }
   }
 
@@ -647,19 +697,11 @@ auto asset_browser_panel::_commit_rename() -> bool {
     return false;
   }
 
-  const auto old_uri = _native_to_res_uri(_root, _action_target);
-  const auto new_uri = _native_to_res_uri(_root, new_path);
-
   std::filesystem::rename(_action_target, new_path, error);
 
   if (error) {
     _action_error = error.message();
     return false;
-  }
-
-  if (!old_uri.empty() && !new_uri.empty()) {
-    // auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
-    // scenes_module.asset_registry().rebase_paths(old_uri, new_uri);
   }
 
   if (_is_under(_selected_directory, _action_target)) {
@@ -678,8 +720,6 @@ auto asset_browser_panel::_commit_remove() -> bool {
     return false;
   }
 
-  const auto removed_uri = _native_to_res_uri(_root, _action_target);
-
   auto error = std::error_code{};
 
   std::filesystem::remove_all(_action_target, error);
@@ -687,11 +727,6 @@ auto asset_browser_panel::_commit_remove() -> bool {
   if (error) {
     _action_error = error.message();
     return false;
-  }
-
-  if (!removed_uri.empty()) {
-    // auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
-    // scenes_module.asset_registry().clear_paths_under(removed_uri);
   }
 
   if (_is_under(_selected_directory, _action_target)) {
@@ -763,28 +798,9 @@ auto asset_browser_panel::_remap_under(const std::filesystem::path& path, const 
 }
 
 auto asset_browser_panel::_refresh_image_cache() -> void {
-  auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
-  auto& assets_module = sbx::core::engine::get_module<sbx::assets::assets_module>();
-
-  // const auto& asset_registry = scenes_module.asset_registry();
-  // const auto current_count = asset_registry.images().size();
-
-  // if (current_count == _last_image_count && !_path_to_image.empty()) {
-  //   return;
-  // }
-
-  // _path_to_image.clear();
-
-  // for (const auto& [handle, metadata] : asset_registry.images()) {
-  //   if (metadata.path.empty()) {
-  //     continue;
-  //   }
-
-  //   const auto native = assets_module.resolve_path(metadata.path);
-  //   _path_to_image.emplace(_canonical_string(native), handle);
-  // }
-
-  // _last_image_count = current_count;
+  // TODO: repopulate _path_to_image from the assets_module's loaded textures
+  // (the old scenes::asset_registry image table is gone). Until then, image
+  // thumbnails fall back to the generic image icon.
 }
 
 } // namespace editor

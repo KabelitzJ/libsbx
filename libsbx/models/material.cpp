@@ -26,6 +26,41 @@ auto texture_slot_hash::operator()(const texture_slot& texture_slot) const noexc
   return hash;
 }
 
+auto material::create(const std::string& name, models::material material) -> math::uuid {
+  auto& assets_module = core::engine::get_module<assets::assets_module>();
+  auto& serializers = assets_module.serializers();
+
+  material.name = name;
+
+  const auto source = fmt::format("res://materials/{}.material.yaml", name);
+  const auto resolved = assets_module.resolve_path(source);
+
+  const auto serializer = serializers.find_for(resolved);
+  const auto payload = std::unique_ptr<assets::asset_base>{std::make_unique<models::material>(std::move(material))};
+
+  serializer->write(assets::serializer_context{.source = source, .resolved = resolved, .id = {}}, payload);
+
+  // now load it back as a real file-backed asset
+  return assets_module.load_asset(source);
+}
+
+auto material::save(const math::uuid& id) -> bool {
+  auto& assets_module = core::engine::get_module<assets::assets_module>();
+  auto& serializers = assets_module.serializers();
+
+  const auto source = assets_module.source_of(id);
+
+  if (!source || source->empty()) { 
+    return false; 
+  }
+
+  const auto resolved = assets_module.resolve_path(*source);
+  const auto serializer = serializers.find_for(resolved);
+
+  // return serializer->write(assets::serializer_context{.source = source, .resolved = resolved, .id = id}, /* payload for id */);
+  return true;
+}
+
 // auto format_for_texture_type(const aiTextureType type) -> graphics::format {
 //   switch (type) {
 //     case aiTextureType_BASE_COLOR:

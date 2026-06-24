@@ -147,6 +147,8 @@ struct texture_slot_hash {
 
 struct material : public assets::asset_base {
 
+  std::string name{"Material"};
+
   math::color base_color{math::color::white()};
 
   std::float_t metallic_factor{1.0f};
@@ -223,7 +225,12 @@ struct material : public assets::asset_base {
     return texture_dependencies;
   }
 
+  static auto create(const std::string& name, models::material material) -> math::uuid;
+
+  static auto save(const math::uuid& id) -> bool;
+
 }; // struct material
+
   
 struct material_handle : public math::uuid {
 

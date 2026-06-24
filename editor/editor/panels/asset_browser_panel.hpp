@@ -2,12 +2,15 @@
 #ifndef EDITOR_PANELS_ASSET_BROWSER_PANEL_HPP_
 #define EDITOR_PANELS_ASSET_BROWSER_PANEL_HPP_
 
+#include <cstdint>
 #include <filesystem>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
 
 #include <libsbx/graphics/images/image2d.hpp>
+
+#include <editor/editor_module.hpp>
 
 #include <editor/panels/texture_cache.hpp>
 
@@ -20,8 +23,16 @@ class asset_browser_panel {
   enum class filter_kind : std::uint8_t {
     all,
     images,
-    meshes
+    meshes,
+    materials
   }; // enum class filter_kind
+
+  enum class asset_kind : std::uint8_t {
+    image,
+    mesh,
+    material,
+    other
+  }; // enum class asset_kind
 
   enum class folder_action : std::uint8_t {
     none,
@@ -32,7 +43,7 @@ class asset_browser_panel {
 
 public:
 
-  explicit asset_browser_panel(texture_cache& cache)
+  asset_browser_panel(texture_cache& cache)
   : _texture_cache{cache} { }
 
   ~asset_browser_panel() = default;
@@ -76,6 +87,8 @@ private:
   auto _commit_remove() -> bool;
 
   auto _on_directory_structure_changed() -> void;
+
+  static auto _classify(const std::filesystem::path& path) -> asset_kind;
 
   static auto _is_valid_folder_name(std::string_view name) -> bool;
 

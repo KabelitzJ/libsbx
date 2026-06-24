@@ -19,6 +19,8 @@
 
 #include <libsbx/math/matrix_cast.hpp>
 
+#include <editor/editor_module.hpp>
+
 namespace editor {
 
 viewport_panel::~viewport_panel() {
@@ -27,7 +29,7 @@ viewport_panel::~viewport_panel() {
   }
 }
 
-auto viewport_panel::draw(const sbx::graphics::image2d& scene_image, sbx::scenes::node selected_node) -> void {
+auto viewport_panel::draw(const sbx::graphics::image2d& scene_image) -> void {
   auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
 
   if (!scenes_module.has_active_scene()) {
@@ -63,7 +65,7 @@ auto viewport_panel::draw(const sbx::graphics::image2d& scene_image, sbx::scenes
 
   _handle_picking();
 
-  _draw_gizmo(scene, selected_node);
+  _draw_gizmo(scene);
 
   ImGui::End();
 }
@@ -275,7 +277,17 @@ auto viewport_panel::_draw_toolbar() -> void {
   ImGui::Separator();
 }
 
-auto viewport_panel::_draw_gizmo(sbx::scenes::scene& scene, sbx::scenes::node selected_node) -> void {
+auto viewport_panel::_draw_gizmo(sbx::scenes::scene& scene) -> void {
+  auto& editor_module = sbx::core::engine::get_module<editor::editor_module>();
+
+  const auto& selection = editor_module.selection();
+
+  if (!std::holds_alternative<editor::node_selection>(selection)) {
+    return;
+  }
+
+  const auto selected_node = std::get<editor::node_selection>(selection).node;
+
   if (selected_node == sbx::scenes::node::null) {
     return;
   }

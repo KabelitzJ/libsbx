@@ -275,63 +275,51 @@ public:
     return std::nullopt;
   }
 
-  // template<typename Type, typename... Args>
-  // auto add_asset(Args&&... args) -> math::uuid {
-  //   const auto id = math::uuid{};
-  //   const auto type = type_id<Type>::value();
+  /**
+   * @brief Whether a payload is currently loaded for @p id.
+   */
+  auto is_loaded(const math::uuid& id) const -> bool {
+    return _payloads.contains(id);
+  }
 
-  //   if (type >= _containers.size()) {
-  //     _containers.resize(std::max(_containers.size(), static_cast<std::size_t>(type + 1u)));
-  //   }
+  /**
+   * @brief Returns the payload for @p id downcast to @p Type, or nullptr if not loaded or not that type.
+   *
+   * Non-throwing counterpart to get_loaded; use when the caller dispatches on type.
+   */
+  template<typename Type>
+  auto try_get_loaded(const math::uuid& id) -> Type* {
+    const auto entry = _payloads.find(id);
 
-  //   if (!_containers[type]) {
-  //     _containers[type] = std::make_unique<container<Type>>();
-  //   }
+    if (entry == _payloads.end()) {
+      return nullptr;
+    }
 
-  //   static_cast<container<Type>*>(_containers[type].get())->add(id, std::forward<Args>(args)...);
+    return dynamic_cast<Type*>(entry->second.get());
+  }
 
-  //   return id;
-  // }
+  /**
+   * @brief Re-writes an already-file-backed asset to its own source via the matching serializer.
+   *
+   * Used by the editor to persist in-place edits. Returns false if the asset isn't loaded, has no source, or its format has no writer.
+   */
+  auto save_asset(const math::uuid& id) -> bool {
+    if (!_database.contains(id)) {
+      return false;
+    }
 
-  // template<typename Type>
-  // auto add_asset(std::unique_ptr<Type>&& asset) -> math::uuid {
-  //   const auto id = math::uuid{};
-  //   const auto type = type_id<Type>::value();
+    const auto source = _database.get(id).source;
 
-  //   if (type >= _containers.size()) {
-  //     _containers.resize(std::max(_containers.size(), static_cast<std::size_t>(type + 1u)));
-  //   }
+    if (source.empty()) {
+      return false;
+    }
 
-  //   if (!_containers[type]) {
-  //     _containers[type] = std::make_unique<container<Type>>();
-  //   }
+    return save_asset(id, source);
+  }
 
-  //   static_cast<container<Type>*>(_containers[type].get())->add(id, std::move(asset));
-
-  //   return id;
-  // }
-
-  // template<typename Type>
-  // auto get_asset(const math::uuid& id) const -> const Type& {
-  //   const auto type = type_id<Type>::value();
-
-  //   if (type >= _containers.size() || !_containers[type]) {
-  //     throw std::runtime_error{"Asset does not exist"};
-  //   }
-
-  //   return static_cast<const container<Type>*>(_containers[type].get())->get(id);
-  // }
-
-  // template<typename Type>
-  // auto get_asset(const math::uuid& id) -> Type& {
-  //   const auto type = type_id<Type>::value();
-
-  //   if (type >= _containers.size() || !_containers[type]) {
-  //     throw std::runtime_error{"Asset does not exist"};
-  //   }
-
-  //   return static_cast<container<Type>*>(_containers[type].get())->get(id);
-  // }
+  auto serializers() -> serializer_registry& {
+    return _serializers;
+  }
 
 private:
 

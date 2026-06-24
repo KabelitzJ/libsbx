@@ -18,6 +18,7 @@ auto material_serializer::read(const assets::serializer_context& context) -> std
 
   auto material = models::material{};
 
+  material.name = node["name"].as<std::string>("Material");
   material.albedo = _resolve_texture(assets_module, node["albedo"]);
   material.normal = _resolve_texture(assets_module, node["normal"]);
   material.metallic_roughness = _resolve_texture(assets_module, node["metallic_roughness"]);
@@ -98,6 +99,8 @@ auto material_serializer::write(const assets::serializer_context& context, const
   auto& assets_module = core::engine::get_module<assets::assets_module>();
 
   auto node = YAML::Node{};
+
+  node["name"] = material->name;
 
   auto base_color = YAML::Node{};
   base_color.SetStyle(YAML::EmitterStyle::Flow);

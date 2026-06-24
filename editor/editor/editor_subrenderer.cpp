@@ -33,7 +33,7 @@ auto editor_subrenderer::render(sbx::graphics::command_buffer& command_buffer) -
 
   auto& scene_image = static_cast<const sbx::graphics::image2d&>(graphics_module.attachment(_attachment_name));
 
-  _viewport_panel.draw(scene_image, editor_module.selected_node());
+  _viewport_panel.draw(scene_image);
 
   const auto& panel_size = _viewport_panel.panel_size();
 
@@ -51,12 +51,12 @@ auto editor_subrenderer::render(sbx::graphics::command_buffer& command_buffer) -
   sbx::devices::input::set_scene_input_active(scene_active);
 
   if (auto picked = _viewport_panel.consume_picked_node()) {
-    editor_module.set_selected_node(*picked);
+    editor_module.set_selection(editor::node_selection{*picked});
   }
 
   _log_panel.draw();
   _hierarchy_panel.draw();
-  _inspector_panel.draw(editor_module.selected_node());
+  _inspector_panel.draw();
   _asset_browser_panel.draw();
   _attachment_panel.draw();
 

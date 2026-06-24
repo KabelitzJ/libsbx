@@ -27,7 +27,7 @@ public:
 
   ~viewport_panel();
 
-  auto draw(const sbx::graphics::image2d& scene_image, sbx::scenes::node selected_node) -> void;
+  auto draw(const sbx::graphics::image2d& scene_image) -> void;
 
   auto panel_size() const -> const sbx::math::vector2u& {
     return _panel_size;
@@ -62,7 +62,7 @@ private:
 
   auto _draw_toolbar() -> void;
 
-  auto _draw_gizmo(sbx::scenes::scene& scene, sbx::scenes::node selected_node) -> void;
+  auto _draw_gizmo(sbx::scenes::scene& scene) -> void;
 
   auto _handle_picking() -> void;
 

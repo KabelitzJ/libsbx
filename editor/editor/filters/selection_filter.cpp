@@ -25,8 +25,13 @@ auto selection_filter::render(sbx::graphics::command_buffer& command_buffer) -> 
 
   pipeline.bind(command_buffer);
 
-  const auto selected = editor_module.selected_node();
-  const auto selected_id = static_cast<std::uint32_t>(selected);
+  const auto& selection = editor_module.selection();
+
+  if (!std::holds_alternative<editor::node_selection>(selection)) {
+    return;
+  }
+
+  const auto selected_id = static_cast<std::uint32_t>(std::get<editor::node_selection>(selection).node);
 
   _push_handler.push("color", sbx::math::color{1.0f, 0.86f, 0.49f, 1.0f});
   _push_handler.push("thickness", 2.0f);

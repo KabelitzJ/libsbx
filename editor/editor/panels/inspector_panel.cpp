@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: MIT
 #include <editor/panels/inspector_panel.hpp>
 
+#include <array>
+#include <variant>
+
 #include <fmt/format.h>
 
 #include <libsbx/utility/static_string.hpp>
@@ -30,6 +33,7 @@
 #include <editor/panels/asset_browser_panel.hpp>
 
 #include <editor/widgets/controls.hpp>
+#include <editor/editor_module.hpp>
 
 namespace editor {
 
@@ -38,42 +42,70 @@ inspector_panel::inspector_panel(texture_cache& cache)
   _register_default_components();
 }
 
-auto inspector_panel::draw(const sbx::scenes::node selected_node) -> void {
+auto inspector_panel::draw() -> void {
+  ImGui::Begin(ICON_MDI_INFORMATION " Inspector##inspector_panel");
+
+  auto& editor_module = sbx::core::engine::get_module<editor::editor_module>();
+
+  const auto& selection = editor_module.selection();
+
+  std::visit([&](const auto& value) {
+    using Type = std::decay_t<decltype(value)>;
+
+    if constexpr (std::is_same_v<Type, editor::node_selection>) {
+      _draw_node(value.node);
+    } else if constexpr (std::is_same_v<Type, editor::asset_selection>) {
+      _draw_asset(value.id);
+    } else if constexpr (std::is_same_v<Type, std::monostate>) {
+      ImGui::TextDisabled("Nothing selected");
+    } else {
+      static_assert(sbx::utility::always_false<Type>, "Unsupported editor selection type");
+    }
+  }, selection);
+
+  ImGui::End();
+}
+
+auto inspector_panel::_draw_node(sbx::scenes::node node) -> void {
   auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
 
   if (!scenes_module.has_active_scene()) {
+    ImGui::TextDisabled("No active scene");
     return;
   }
 
-  auto& scene = scenes_module.active_scene();
+  auto& graph = scenes_module.active_scene().graph();
 
-  ImGui::Begin(ICON_MDI_INFORMATION " Inspector##inspector_panel");
-
-  if (selected_node == sbx::scenes::node::null) {
+  if (node == sbx::scenes::node::null || !graph.is_valid(node)) {
     ImGui::TextDisabled("No node selected");
-    ImGui::End();
     return;
   }
 
-  auto& graph = scene.graph();
-
-  if (!graph.is_valid(selected_node)) {
-    ImGui::TextDisabled("Invalid node");
-    ImGui::End();
-    return;
-  }
-
-  _draw_tag(selected_node);
-  _draw_transform(selected_node);
-  _draw_components(selected_node);
+  _draw_tag(node);
+  _draw_transform(node);
+  _draw_components(node);
 
   ImGui::Spacing();
   ImGui::Separator();
   ImGui::Spacing();
 
-  _draw_add_component_button(selected_node);
+  _draw_add_component_button(node);
+}
 
-  ImGui::End();
+auto inspector_panel::_draw_asset(const sbx::math::uuid& id) -> void {
+  auto& assets_module = sbx::core::engine::get_module<sbx::assets::assets_module>();
+
+  if (id == sbx::math::uuid::nil() || !assets_module.is_loaded(id)) {
+    ImGui::TextDisabled("Asset not loaded");
+    return;
+  }
+
+  if (auto* material = assets_module.try_get_loaded<sbx::models::material>(id)) {
+    _draw_material_fields(id, *material);
+    return;
+  }
+
+  ImGui::TextDisabled("No inspector for this asset type");
 }
 
 auto inspector_panel::_register_default_components() -> void {
@@ -323,18 +355,30 @@ auto inspector_panel::_draw_static_mesh(sbx::scenes::node node, sbx::scenes::sta
 
 auto inspector_panel::_draw_material(const sbx::math::uuid& material_id, std::uint32_t submesh_index) -> void {
   auto& assets_module = sbx::core::engine::get_module<sbx::assets::assets_module>();
-  auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
 
-  // const auto& asset_registry = scenes_module.asset_registry();
-
-  auto& material = assets_module.get_loaded<sbx::models::material>(material_id);
+  if (material_id == sbx::math::uuid::nil() || !assets_module.is_loaded(material_id)) {
+    controls::labeled_text("Material", "{} (unresolved)", material_id);
+    return;
+  }
 
   ImGui::PushID(static_cast<std::int32_t>(submesh_index));
 
-  // const auto& metadata = asset_registry.material_metadata(material_id);
+  _draw_material_fields(material_id, assets_module.get_loaded<sbx::models::material>(material_id));
 
-  // controls::labeled_text("Name", "{:s}", metadata.name.c_str());
-  controls::labeled_text("Name", "TEMP");
+  ImGui::PopID();
+}
+
+auto inspector_panel::_draw_material_fields(const sbx::math::uuid& material_id, sbx::models::material& material) -> void {
+  auto& assets_module = sbx::core::engine::get_module<sbx::assets::assets_module>();
+
+  _name_buffer = material.name;
+  _name_buffer.resize(256);
+
+  if (ImGui::InputText("Name", _name_buffer.data(), _name_buffer.capacity(), ImGuiInputTextFlags_EnterReturnsTrue)) {
+    material.name = std::string{_name_buffer.c_str()};
+    assets_module.save_asset(material_id);
+  }
+
   controls::labeled_text("UUID", "{}", material_id);
 
   ImGui::Spacing();
@@ -402,7 +446,7 @@ auto inspector_panel::_draw_material(const sbx::math::uuid& material_id, std::ui
     material.uv1_offset.y() = uv1_offset[1];
   }
 
-  for (int i = 0; i < 6; ++i) {
+  for (auto i = 0; i < 6; ++i) {
     const auto bit = std::uint32_t{1u << i};
     const auto use_uv1 = (material.uv_mask & bit) != 0;
 
@@ -483,7 +527,12 @@ auto inspector_panel::_draw_material(const sbx::math::uuid& material_id, std::ui
   controls::texture_slot("Emissive", material.emissive, _texture_cache, image_payload);
   controls::texture_slot("Height", material.height, _texture_cache, image_payload);
 
-  ImGui::PopID();
+  ImGui::Spacing();
+  ImGui::Separator();
+
+  if (ImGui::Button(ICON_MDI_CONTENT_SAVE " Save Material")) {
+    assets_module.save_asset(material_id);
+  }
 }
 
 } // namespace editor

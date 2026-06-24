@@ -168,19 +168,22 @@ auto scene::save(const std::filesystem::path& path) -> void {
   auto assets_node = YAML::Node{};
 
   for (const auto& id : assets) {
-    const auto source = assets_module.source_of(id);
+    auto source = assets_module.source_of(id);
 
     if (!source || source->empty()) {
-      utility::logger<"scenes">::warn("Skipping runtime asset '{}' with no source during save", id);
+      const auto target = fmt::format("res://materials/{}/{}.material.yaml", _name, id);
 
-      continue;
+      if (!assets_module.save_asset(id, target)) {
+        utility::logger<"scenes">::warn("Skipping runtime asset '{}' (no writable serializer)", id);
+        continue;
+      }
+
+      source = assets_module.source_of(id);
     }
 
     auto asset_node = YAML::Node{};
-
     asset_node["id"] = id;
     asset_node["source"] = source->generic_string();
-
     assets_node.push_back(asset_node);
   }
 

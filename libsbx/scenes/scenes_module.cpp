@@ -95,6 +95,18 @@ scenes_module::scenes_module() {
       graph.add_component<scenes::static_mesh>(n, node["mesh"].as<math::uuid>(), std::move(submeshes));
     }
   );
+
+  _component_serializer.register_component<scenes::camera>(
+    "camera",
+    [](YAML::Node& out, const scenes::camera& camera, [[maybe_unused]] component_serializer::asset_set& assets) -> void {
+      out["field_of_view"] = camera.field_of_view().to_degrees().value();
+      out["near"] = camera.near_plane();
+      out["far"] = camera.far_plane();
+    },
+    [](const YAML::Node& node, scene_graph& graph, scenes::node n) -> void {
+      graph.add_component<scenes::camera>(n, math::angle{math::degree{node["field_of_view"].as<std::float_t>(60.0f)}}, node["near"].as<std::float_t>(0.1f), node["far"].as<std::float_t>(1000.0f));
+    }
+  );
 }
 
 scenes_module::~scenes_module() {

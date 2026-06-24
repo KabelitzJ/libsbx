@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
-#ifndef LIBSBX_GRAPHICS_ENVIRONMENT_MAP_IMPORTER_HPP_
-#define LIBSBX_GRAPHICS_ENVIRONMENT_MAP_IMPORTER_HPP_
+#ifndef LIBSBX_GRAPHICS_ENVIRONMENT_MAP_SERIALIZER_HPP_
+#define LIBSBX_GRAPHICS_ENVIRONMENT_MAP_SERIALIZER_HPP_
 
 #include <cstdint>
 #include <memory>
@@ -31,7 +31,7 @@ namespace sbx::graphics {
  *
  * Loads the cube and bakes the BRDF / irradiance / prefiltered set at load time.
  */
-class environment_map_importer final : public assets::serializer<environment_map_importer> {
+class environment_map_serializer final : public assets::serializer<environment_map_serializer> {
 
   inline static const auto is_registered = register_serializer({".envmap.yaml"});
 
@@ -49,8 +49,8 @@ private:
   static auto _generate_irradiance(const cube_image2d_handle source, const std::uint32_t size) -> graphics::cube_image2d_handle;
   static auto _generate_prefiltered(const cube_image2d_handle source, const std::uint32_t size) -> graphics::cube_image2d_handle;
 
-}; // class environment_map_importer
+}; // class environment_map_serializer
 
 } // namespace sbx::graphics
 
-#endif // LIBSBX_GRAPHICS_ENVIRONMENT_MAP_IMPORTER_HPP_
+#endif // LIBSBX_GRAPHICS_ENVIRONMENT_MAP_SERIALIZER_HPP_

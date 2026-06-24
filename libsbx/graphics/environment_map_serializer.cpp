@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-#include <libsbx/graphics/environment_map_importer.hpp>
+#include <libsbx/graphics/environment_map_serializer.hpp>
 
 #include <libsbx/assets/serializer_registry.hpp>
 
@@ -11,11 +11,11 @@
 
 namespace sbx::graphics {
 
-auto environment_map_importer::type() const -> std::string_view {
+auto environment_map_serializer::type() const -> std::string_view {
   return environment_map::type_name;
 }
 
-auto environment_map_importer::read(const assets::serializer_context& context) -> std::unique_ptr<assets::asset_base> {
+auto environment_map_serializer::read(const assets::serializer_context& context) -> std::unique_ptr<assets::asset_base> {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
   auto& assets_module = core::engine::get_module<assets::assets_module>();
 
@@ -39,11 +39,11 @@ auto environment_map_importer::read(const assets::serializer_context& context) -
   return std::make_unique<environment_map>(cube, brdf, irradiance, prefiltered);
 }
 
-auto environment_map_importer::write(const assets::serializer_context& context, const std::unique_ptr<assets::asset_base>& asset) -> bool {
+auto environment_map_serializer::write(const assets::serializer_context& context, const std::unique_ptr<assets::asset_base>& asset) -> bool {
   return true;
 }
 
-auto environment_map_importer::_generate_brdf(const std::uint32_t size) -> graphics::image2d_handle {
+auto environment_map_serializer::_generate_brdf(const std::uint32_t size) -> graphics::image2d_handle {
   constexpr auto threads_per_group = std::uint32_t{16};
 
   auto& graphics_module = sbx::core::engine::get_module<sbx::graphics::graphics_module>();
@@ -163,7 +163,7 @@ auto environment_map_importer::_generate_brdf(const std::uint32_t size) -> graph
   return handle;
 }
 
-auto environment_map_importer::_generate_irradiance(const cube_image2d_handle source, const std::uint32_t size) -> graphics::cube_image2d_handle {
+auto environment_map_serializer::_generate_irradiance(const cube_image2d_handle source, const std::uint32_t size) -> graphics::cube_image2d_handle {
   constexpr auto threads_per_group = std::uint32_t{16};
 
   auto& graphics_module = sbx::core::engine::get_module<sbx::graphics::graphics_module>();
@@ -337,7 +337,7 @@ auto environment_map_importer::_generate_irradiance(const cube_image2d_handle so
   return handle;
 }
 
-auto environment_map_importer::_generate_prefiltered(const cube_image2d_handle source, const std::uint32_t size) -> graphics::cube_image2d_handle {
+auto environment_map_serializer::_generate_prefiltered(const cube_image2d_handle source, const std::uint32_t size) -> graphics::cube_image2d_handle {
   constexpr auto threads_per_group = std::uint32_t{16};
 
   auto& graphics_module = sbx::core::engine::get_module<sbx::graphics::graphics_module>();

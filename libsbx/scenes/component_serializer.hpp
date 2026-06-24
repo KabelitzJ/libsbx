@@ -65,7 +65,7 @@ public:
 
     for (const auto& entry : _entries) {
       if (const auto component_node = components[entry.key]; component_node) {
-        entry.deserialize(component_node, graph, n);
+        std::invoke(entry.deserialize, component_node, graph, n);
       }
     }
   }

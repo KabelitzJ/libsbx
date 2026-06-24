@@ -1,19 +1,87 @@
 name: Scene
 assets:
+  - id: 7023679979754690464
+    source: res:/skyboxes/hdr/clouds.envmap.yaml
+  - id: 12330449350128458932
+    source: res:/materials/Scene/ab1e8e5abb5a5cb4.material.yaml
+  - id: 12208348759269295673
+    source: res:/materials/Scene/a96cc4839253c639.material.yaml
+  - id: 12027749599302854270
+    source: res:/materials/Scene/a6eb2688e9cb267e.material.yaml
+  - id: 11810132874714501445
+    source: res:/materials/Scene/a3e60546db855145.material.yaml
+  - id: 11724327589884161958
+    source: res:/materials/Scene/a2b52dd3295b6fa6.material.yaml
+  - id: 5773366179135457786
+    source: res:/materials/Scene/501f1df3899f89fa.material.yaml
+  - id: 9686370814851685743
+    source: res:/materials/Scene/866ce6ef7df21d6f.material.yaml
+  - id: 6834117120390975352
+    source: res:/materials/Scene/5ed7a94ff251cf78.material.yaml
+  - id: 574485984772331155
+    source: res:/materials/Scene/07f8fbf59acb9693.material.yaml
+  - id: 13816302864189327089
+    source: res:/materials/Scene/bfbd5e40c93786f1.material.yaml
+  - id: 15209938982768712390
+    source: res:/materials/Scene/d3148eeb4b4b9ac6.material.yaml
+  - id: 12635219300201724838
+    source: res:/meshes/helmet/helmet.gltf
+  - id: 6871725300886888768
+    source: res:/materials/Scene/5f5d45c0d16d6140.material.yaml
+  - id: 14200458076466019147
+    source: res:/materials/Scene/c51229621f957b4b.material.yaml
+  - id: 673922314215851733
+    source: res:/materials/Scene/095a40c6310b86d5.material.yaml
   - id: 14898293749905318833
     source: res:/meshes/cube/cube.gltf
+  - id: 15278814856482471350
+    source: res:/materials/Scene/d40941294d993db6.material.yaml
+  - id: 5175446900304133507
+    source: res:/materials/Scene/47d2e188fe863d83.material.yaml
   - id: 7476664350855877632
     source: res:/meshes/chess/pawn/pawn.gltf
+  - id: 11945074654930161162
+    source: res:/materials/Scene/a5c56e1c66a24e0a.material.yaml
+  - id: 1135885894008702008
+    source: res:/materials/Scene/0fc37a33d1c40438.material.yaml
   - id: 3107844384939351421
     source: res:/meshes/tree/tree.gltf
   - id: 1080424834659736061
     source: res:/meshes/sphere/sphere.gltf
-  - id: 5134925074828327929
-    source: res:/skyboxes/hdr/clouds.envmap.yaml
-  - id: 12635219300201724838
-    source: res:/meshes/helmet/helmet.gltf
+  - id: 11260528022705851434
+    source: res:/materials/Scene/9c456e9368b6cc2a.material.yaml
+  - id: 579417222998537524
+    source: res:/materials/Scene/080a80e4f9923534.material.yaml
+  - id: 8882432758212053366
+    source: res:/materials/Scene/7b44bd884e85c976.material.yaml
+  - id: 1841609011354768678
+    source: res:/materials/Scene/198eb5a378f59526.material.yaml
+  - id: 14806215436928382343
+    source: res:/materials/Scene/cd7a3e7e42057587.material.yaml
+  - id: 3303640474211146655
+    source: res:/materials/Scene/2dd8e38202f55b9f.material.yaml
+  - id: 9540932911812556493
+    source: res:/materials/Scene/846833eeea6bb6cd.material.yaml
+  - id: 7680882660384066190
+    source: res:/materials/Scene/6a97fa15a5a64a8e.material.yaml
+  - id: 61565951374902382
+    source: res:/materials/Scene/00dab9e815f5c46e.material.yaml
+  - id: 10857415597667773946
+    source: res:/materials/Scene/96ad49f605c5edfa.material.yaml
+  - id: 4739123476556884310
+    source: res:/materials/Scene/41c4bfb166e32956.material.yaml
+  - id: 17407473832254562287
+    source: res:/materials/Scene/f193c538c070dfef.material.yaml
+  - id: 8376247161050206980
+    source: res:/materials/Scene/743e6869e9459304.material.yaml
+  - id: 1616336191934331789
+    source: res:/materials/Scene/166e6133edda7b8d.material.yaml
+  - id: 10609403954046315780
+    source: res:/materials/Scene/933c2caf678e2d04.material.yaml
+  - id: 15752748393586545198
+    source: res:/materials/Scene/da9d0133cbd4d22e.material.yaml
 nodes:
-  - id: 8166675539894478826
+  - id: 3121066740854455518
     tag: Black Pawn 8
     transform:
       position: {x: 3.5, y: 0.100000001, z: 3}
@@ -24,8 +92,8 @@ nodes:
         mesh: 7476664350855877632
         submeshes:
           - index: 0
-            material: 13508489748257261100
-  - id: 16653460978901791619
+            material: 6834117120390975352
+  - id: 15969348822028525744
     tag: White Pawn 8
     transform:
       position: {x: 3.5, y: 0.100000001, z: -3}
@@ -36,8 +104,8 @@ nodes:
         mesh: 7476664350855877632
         submeshes:
           - index: 0
-            material: 6156677542587610415
-  - id: 12207840314053737359
+            material: 11945074654930161162
+  - id: 1468774897586248776
     tag: Black Pawn 7
     transform:
       position: {x: 2.5, y: 0.100000001, z: 3}
@@ -48,8 +116,8 @@ nodes:
         mesh: 7476664350855877632
         submeshes:
           - index: 0
-            material: 13508489748257261100
-  - id: 1897938858399066515
+            material: 6834117120390975352
+  - id: 5653179248484374598
     tag: White Pawn 7
     transform:
       position: {x: 2.5, y: 0.100000001, z: -3}
@@ -60,8 +128,8 @@ nodes:
         mesh: 7476664350855877632
         submeshes:
           - index: 0
-            material: 6156677542587610415
-  - id: 6593286187683706159
+            material: 11945074654930161162
+  - id: 13083969976245925917
     tag: Black Pawn 6
     transform:
       position: {x: 1.5, y: 0.100000001, z: 3}
@@ -72,8 +140,8 @@ nodes:
         mesh: 7476664350855877632
         submeshes:
           - index: 0
-            material: 13508489748257261100
-  - id: 6238755202836304040
+            material: 6834117120390975352
+  - id: 14433890801399595381
     tag: White Pawn 6
     transform:
       position: {x: 1.5, y: 0.100000001, z: -3}
@@ -84,8 +152,8 @@ nodes:
         mesh: 7476664350855877632
         submeshes:
           - index: 0
-            material: 6156677542587610415
-  - id: 4721028371805553902
+            material: 11945074654930161162
+  - id: 419651632425042110
     tag: Black Pawn 5
     transform:
       position: {x: 0.5, y: 0.100000001, z: 3}
@@ -96,8 +164,8 @@ nodes:
         mesh: 7476664350855877632
         submeshes:
           - index: 0
-            material: 13508489748257261100
-  - id: 7798712646085859545
+            material: 6834117120390975352
+  - id: 3755684085419303255
     tag: White Pawn 5
     transform:
       position: {x: 0.5, y: 0.100000001, z: -3}
@@ -108,8 +176,8 @@ nodes:
         mesh: 7476664350855877632
         submeshes:
           - index: 0
-            material: 6156677542587610415
-  - id: 1968111292778560718
+            material: 11945074654930161162
+  - id: 5136135748183316496
     tag: Black Pawn 4
     transform:
       position: {x: -0.5, y: 0.100000001, z: 3}
@@ -120,8 +188,8 @@ nodes:
         mesh: 7476664350855877632
         submeshes:
           - index: 0
-            material: 13508489748257261100
-  - id: 12248593608249996765
+            material: 6834117120390975352
+  - id: 9176206077036688996
     tag: White Pawn 4
     transform:
       position: {x: -0.5, y: 0.100000001, z: -3}
@@ -132,8 +200,8 @@ nodes:
         mesh: 7476664350855877632
         submeshes:
           - index: 0
-            material: 6156677542587610415
-  - id: 15845531262942741947
+            material: 11945074654930161162
+  - id: 1562956812661051520
     tag: Black Pawn 3
     transform:
       position: {x: -1.5, y: 0.100000001, z: 3}
@@ -144,8 +212,8 @@ nodes:
         mesh: 7476664350855877632
         submeshes:
           - index: 0
-            material: 13508489748257261100
-  - id: 13222940964542845828
+            material: 6834117120390975352
+  - id: 750055264813601584
     tag: White Pawn 3
     transform:
       position: {x: -1.5, y: 0.100000001, z: -3}
@@ -156,8 +224,8 @@ nodes:
         mesh: 7476664350855877632
         submeshes:
           - index: 0
-            material: 6156677542587610415
-  - id: 251225631985310622
+            material: 11945074654930161162
+  - id: 11029093930161793518
     tag: Black Pawn 2
     transform:
       position: {x: -2.5, y: 0.100000001, z: 3}
@@ -168,8 +236,8 @@ nodes:
         mesh: 7476664350855877632
         submeshes:
           - index: 0
-            material: 13508489748257261100
-  - id: 10563490467210105185
+            material: 6834117120390975352
+  - id: 5875542301002936128
     tag: White Pawn 2
     transform:
       position: {x: -2.5, y: 0.100000001, z: -3}
@@ -180,8 +248,8 @@ nodes:
         mesh: 7476664350855877632
         submeshes:
           - index: 0
-            material: 6156677542587610415
-  - id: 3581972328862839911
+            material: 11945074654930161162
+  - id: 4895413915287576681
     tag: Black Pawn 1
     transform:
       position: {x: -3.5, y: 0.100000001, z: 3}
@@ -192,8 +260,8 @@ nodes:
         mesh: 7476664350855877632
         submeshes:
           - index: 0
-            material: 13508489748257261100
-  - id: 13465568076233358048
+            material: 6834117120390975352
+  - id: 15444531912163252138
     tag: White Pawn 1
     transform:
       position: {x: -3.5, y: 0.100000001, z: -3}
@@ -204,8 +272,8 @@ nodes:
         mesh: 7476664350855877632
         submeshes:
           - index: 0
-            material: 6156677542587610415
-  - id: 10026901558566562819
+            material: 11945074654930161162
+  - id: 8290034933274931350
     tag: Tree
     transform:
       position: {x: 2, y: 0, z: 2}
@@ -216,10 +284,10 @@ nodes:
         mesh: 3107844384939351421
         submeshes:
           - index: 0
-            material: 13320449381599949470
+            material: 5175446900304133507
           - index: 1
-            material: 5062057664545426986
-  - id: 918208140446618666
+            material: 10857415597667773946
+  - id: 11288606499412992394
     tag: Base
     transform:
       position: {x: 0, y: 0, z: 0}
@@ -230,8 +298,8 @@ nodes:
         mesh: 14898293749905318833
         submeshes:
           - index: 0
-            material: 11538598379617101358
-  - id: 6013120641621740656
+            material: 673922314215851733
+  - id: 1063035475605127076
     tag: Blue
     transform:
       position: {x: -5, y: 5, z: -2.5}
@@ -242,8 +310,8 @@ nodes:
         mesh: 14898293749905318833
         submeshes:
           - index: 0
-            material: 13903118153070444710
-  - id: 10984595687160664931
+            material: 3303640474211146655
+  - id: 17667831291267190500
     tag: Green
     transform:
       position: {x: -5, y: 5, z: 2.5}
@@ -254,8 +322,8 @@ nodes:
         mesh: 14898293749905318833
         submeshes:
           - index: 0
-            material: 3743077102457873351
-  - id: 13071734553046436763
+            material: 13816302864189327089
+  - id: 4038475634007809081
     tag: Red
     transform:
       position: {x: -5, y: 5, z: 0}
@@ -266,8 +334,8 @@ nodes:
         mesh: 14898293749905318833
         submeshes:
           - index: 0
-            material: 15864794865203501563
-  - id: 15847977451911967473
+            material: 17407473832254562287
+  - id: 3052728277884413664
     tag: Helmet
     transform:
       position: {x: 0, y: 5, z: 0}
@@ -278,10 +346,10 @@ nodes:
         mesh: 12635219300201724838
         submeshes:
           - index: 0
-            material: 8780219390817153026
-  - id: 13957909535592302705
+            material: 9686370814851685743
+  - id: 5534024112014179730
     tag: Sphere44
-    parent: 3058042213033665513
+    parent: 9450795414915489500
     transform:
       position: {x: 12, y: 17, z: 0}
       rotation: {x: 0, y: 0, z: 0, w: 1}
@@ -291,10 +359,10 @@ nodes:
         mesh: 1080424834659736061
         submeshes:
           - index: 0
-            material: 383667568333031915
-  - id: 1594344135374630055
+            material: 574485984772331155
+  - id: 9292863270085393085
     tag: Sphere34
-    parent: 3058042213033665513
+    parent: 9450795414915489500
     transform:
       position: {x: 9, y: 17, z: 0}
       rotation: {x: 0, y: 0, z: 0, w: 1}
@@ -304,10 +372,10 @@ nodes:
         mesh: 1080424834659736061
         submeshes:
           - index: 0
-            material: 11368336054619494673
-  - id: 8284960048407365697
+            material: 11260528022705851434
+  - id: 5441185858340116795
     tag: Sphere24
-    parent: 3058042213033665513
+    parent: 9450795414915489500
     transform:
       position: {x: 6, y: 17, z: 0}
       rotation: {x: 0, y: 0, z: 0, w: 1}
@@ -317,10 +385,10 @@ nodes:
         mesh: 1080424834659736061
         submeshes:
           - index: 0
-            material: 15078070332124167327
-  - id: 4251757117144253082
+            material: 10609403954046315780
+  - id: 14933308124304480669
     tag: Sphere14
-    parent: 3058042213033665513
+    parent: 9450795414915489500
     transform:
       position: {x: 3, y: 17, z: 0}
       rotation: {x: 0, y: 0, z: 0, w: 1}
@@ -330,10 +398,10 @@ nodes:
         mesh: 1080424834659736061
         submeshes:
           - index: 0
-            material: 8018425990295823957
-  - id: 1653244197077202419
+            material: 579417222998537524
+  - id: 14981634873163422295
     tag: Sphere04
-    parent: 3058042213033665513
+    parent: 9450795414915489500
     transform:
       position: {x: 0, y: 17, z: 0}
       rotation: {x: 0, y: 0, z: 0, w: 1}
@@ -343,10 +411,10 @@ nodes:
         mesh: 1080424834659736061
         submeshes:
           - index: 0
-            material: 1700406257829171694
-  - id: 8344139752641231710
+            material: 8882432758212053366
+  - id: 10042838984410087514
     tag: Sphere43
-    parent: 3058042213033665513
+    parent: 9450795414915489500
     transform:
       position: {x: 12, y: 14, z: 0}
       rotation: {x: 0, y: 0, z: 0, w: 1}
@@ -356,10 +424,10 @@ nodes:
         mesh: 1080424834659736061
         submeshes:
           - index: 0
-            material: 16221749164531219249
-  - id: 1947518795451042869
+            material: 14806215436928382343
+  - id: 1040300779766217678
     tag: Sphere33
-    parent: 3058042213033665513
+    parent: 9450795414915489500
     transform:
       position: {x: 9, y: 14, z: 0}
       rotation: {x: 0, y: 0, z: 0, w: 1}
@@ -369,10 +437,10 @@ nodes:
         mesh: 1080424834659736061
         submeshes:
           - index: 0
-            material: 13542585498496866688
-  - id: 13591323226727023950
+            material: 9540932911812556493
+  - id: 14791861216256342875
     tag: Sphere23
-    parent: 3058042213033665513
+    parent: 9450795414915489500
     transform:
       position: {x: 6, y: 14, z: 0}
       rotation: {x: 0, y: 0, z: 0, w: 1}
@@ -382,10 +450,10 @@ nodes:
         mesh: 1080424834659736061
         submeshes:
           - index: 0
-            material: 13232360280749148025
-  - id: 13072781556872332434
+            material: 7680882660384066190
+  - id: 12269688337043659760
     tag: Sphere13
-    parent: 3058042213033665513
+    parent: 9450795414915489500
     transform:
       position: {x: 3, y: 14, z: 0}
       rotation: {x: 0, y: 0, z: 0, w: 1}
@@ -395,10 +463,10 @@ nodes:
         mesh: 1080424834659736061
         submeshes:
           - index: 0
-            material: 7526374794625559935
-  - id: 4887264910522261349
+            material: 8376247161050206980
+  - id: 4220395621262728277
     tag: Sphere03
-    parent: 3058042213033665513
+    parent: 9450795414915489500
     transform:
       position: {x: 0, y: 14, z: 0}
       rotation: {x: 0, y: 0, z: 0, w: 1}
@@ -408,10 +476,10 @@ nodes:
         mesh: 1080424834659736061
         submeshes:
           - index: 0
-            material: 11771799700597375342
-  - id: 3717240981145388256
+            material: 14200458076466019147
+  - id: 5845699893784515291
     tag: Sphere42
-    parent: 3058042213033665513
+    parent: 9450795414915489500
     transform:
       position: {x: 12, y: 11, z: 0}
       rotation: {x: 0, y: 0, z: 0, w: 1}
@@ -421,10 +489,10 @@ nodes:
         mesh: 1080424834659736061
         submeshes:
           - index: 0
-            material: 14423587531568392652
-  - id: 6797292598049750399
+            material: 1616336191934331789
+  - id: 2402259591592867176
     tag: Sphere32
-    parent: 3058042213033665513
+    parent: 9450795414915489500
     transform:
       position: {x: 9, y: 11, z: 0}
       rotation: {x: 0, y: 0, z: 0, w: 1}
@@ -434,10 +502,10 @@ nodes:
         mesh: 1080424834659736061
         submeshes:
           - index: 0
-            material: 5013498393541931554
-  - id: 3757598048825270128
+            material: 15752748393586545198
+  - id: 3657124064053478949
     tag: Sphere22
-    parent: 3058042213033665513
+    parent: 9450795414915489500
     transform:
       position: {x: 6, y: 11, z: 0}
       rotation: {x: 0, y: 0, z: 0, w: 1}
@@ -447,10 +515,10 @@ nodes:
         mesh: 1080424834659736061
         submeshes:
           - index: 0
-            material: 14479222056496126519
-  - id: 13684671513134633561
+            material: 4739123476556884310
+  - id: 1208077282569766230
     tag: Sphere12
-    parent: 3058042213033665513
+    parent: 9450795414915489500
     transform:
       position: {x: 3, y: 11, z: 0}
       rotation: {x: 0, y: 0, z: 0, w: 1}
@@ -460,10 +528,10 @@ nodes:
         mesh: 1080424834659736061
         submeshes:
           - index: 0
-            material: 12327505273141194224
-  - id: 638776187732371422
+            material: 1841609011354768678
+  - id: 10222581778014812885
     tag: Sphere02
-    parent: 3058042213033665513
+    parent: 9450795414915489500
     transform:
       position: {x: 0, y: 11, z: 0}
       rotation: {x: 0, y: 0, z: 0, w: 1}
@@ -473,10 +541,10 @@ nodes:
         mesh: 1080424834659736061
         submeshes:
           - index: 0
-            material: 10264129675033810589
-  - id: 8792116536037520863
+            material: 15209938982768712390
+  - id: 6065323916137972839
     tag: Sphere41
-    parent: 3058042213033665513
+    parent: 9450795414915489500
     transform:
       position: {x: 12, y: 8, z: 0}
       rotation: {x: 0, y: 0, z: 0, w: 1}
@@ -486,10 +554,10 @@ nodes:
         mesh: 1080424834659736061
         submeshes:
           - index: 0
-            material: 16922530777795992881
-  - id: 6402330086430767080
+            material: 5773366179135457786
+  - id: 15016251349305579538
     tag: Sphere31
-    parent: 3058042213033665513
+    parent: 9450795414915489500
     transform:
       position: {x: 9, y: 8, z: 0}
       rotation: {x: 0, y: 0, z: 0, w: 1}
@@ -499,10 +567,10 @@ nodes:
         mesh: 1080424834659736061
         submeshes:
           - index: 0
-            material: 8549742850815766792
-  - id: 17557740821073535336
+            material: 1135885894008702008
+  - id: 11186392328037100352
     tag: Sphere21
-    parent: 3058042213033665513
+    parent: 9450795414915489500
     transform:
       position: {x: 6, y: 8, z: 0}
       rotation: {x: 0, y: 0, z: 0, w: 1}
@@ -512,10 +580,10 @@ nodes:
         mesh: 1080424834659736061
         submeshes:
           - index: 0
-            material: 17515895842764001405
-  - id: 16263981337854315978
+            material: 11810132874714501445
+  - id: 10760753679050710554
     tag: Sphere11
-    parent: 3058042213033665513
+    parent: 9450795414915489500
     transform:
       position: {x: 3, y: 8, z: 0}
       rotation: {x: 0, y: 0, z: 0, w: 1}
@@ -525,10 +593,10 @@ nodes:
         mesh: 1080424834659736061
         submeshes:
           - index: 0
-            material: 11915918158191505442
-  - id: 3891156959076177052
+            material: 61565951374902382
+  - id: 14975091426311716145
     tag: Sphere01
-    parent: 3058042213033665513
+    parent: 9450795414915489500
     transform:
       position: {x: 0, y: 8, z: 0}
       rotation: {x: 0, y: 0, z: 0, w: 1}
@@ -538,10 +606,10 @@ nodes:
         mesh: 1080424834659736061
         submeshes:
           - index: 0
-            material: 1483409715740105541
-  - id: 4096061904917322692
+            material: 12027749599302854270
+  - id: 13999582956383446296
     tag: Sphere40
-    parent: 3058042213033665513
+    parent: 9450795414915489500
     transform:
       position: {x: 12, y: 5, z: 0}
       rotation: {x: 0, y: 0, z: 0, w: 1}
@@ -551,10 +619,10 @@ nodes:
         mesh: 1080424834659736061
         submeshes:
           - index: 0
-            material: 9227602844055784050
-  - id: 3744676801210606864
+            material: 12330449350128458932
+  - id: 149036537926320361
     tag: Sphere30
-    parent: 3058042213033665513
+    parent: 9450795414915489500
     transform:
       position: {x: 9, y: 5, z: 0}
       rotation: {x: 0, y: 0, z: 0, w: 1}
@@ -564,10 +632,10 @@ nodes:
         mesh: 1080424834659736061
         submeshes:
           - index: 0
-            material: 16778756660181347347
-  - id: 14004979768887824266
+            material: 6871725300886888768
+  - id: 6043424107133706265
     tag: Sphere20
-    parent: 3058042213033665513
+    parent: 9450795414915489500
     transform:
       position: {x: 6, y: 5, z: 0}
       rotation: {x: 0, y: 0, z: 0, w: 1}
@@ -577,10 +645,10 @@ nodes:
         mesh: 1080424834659736061
         submeshes:
           - index: 0
-            material: 16067690074691147374
-  - id: 2898412353079481678
+            material: 11724327589884161958
+  - id: 15445057789687810636
     tag: Sphere10
-    parent: 3058042213033665513
+    parent: 9450795414915489500
     transform:
       position: {x: 3, y: 5, z: 0}
       rotation: {x: 0, y: 0, z: 0, w: 1}
@@ -590,10 +658,10 @@ nodes:
         mesh: 1080424834659736061
         submeshes:
           - index: 0
-            material: 9430677304202560831
-  - id: 12177248668849500843
+            material: 15278814856482471350
+  - id: 14064335072002283336
     tag: Sphere00
-    parent: 3058042213033665513
+    parent: 9450795414915489500
     transform:
       position: {x: 0, y: 5, z: 0}
       rotation: {x: 0, y: 0, z: 0, w: 1}
@@ -603,20 +671,24 @@ nodes:
         mesh: 1080424834659736061
         submeshes:
           - index: 0
-            material: 3985805430533244347
-  - id: 3058042213033665513
+            material: 12208348759269295673
+  - id: 9450795414915489500
     tag: Spheres
     transform:
       position: {x: 0, y: 0, z: -15}
       rotation: {x: 0, y: 0, z: 0, w: 1}
       scale: {x: 1, y: 1, z: 1}
-  - id: 15231144800923822509
+  - id: 2418624491350700166
     tag: Camera
     transform:
-      position: {x: 8.19843197, y: 13.1984329, z: 8.19843197}
-      rotation: {x: -0.218506277, y: 0.266794771, z: 0.0622431487, w: 0.936590314}
+      position: {x: 2, y: 7, z: 2}
+      rotation: {x: -0.279848188, y: 0.364705205, z: 0.115916908, w: 0.880476236}
       scale: {x: 1, y: 1, z: 1}
     components:
       skybox:
-        environment: 5134925074828327929
+        environment: 7023679979754690464
         tint: {r: 1, g: 1, b: 1, a: 1}
+      camera:
+        field_of_view: 60
+        near: 0.100000001
+        far: 1000

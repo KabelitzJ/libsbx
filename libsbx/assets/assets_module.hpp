@@ -191,6 +191,33 @@ public:
     return id;
   }
 
+  auto save_asset(const math::uuid& id, const std::filesystem::path& source) -> bool {
+    const auto payload = _payloads.find(id);
+
+    if (payload == _payloads.end()) {
+      return false;
+    }
+
+    const auto resolved = resolve_path(source);
+
+    const auto serializer = _serializers.find_for(resolved);
+
+    if (!serializer) {
+      return false;
+    }
+
+    const auto context = serializer_context{.source = source, .resolved = resolved, .settings = {}, .id = id};
+
+    if (!serializer->write(context, payload->second)) {
+      return false;
+    }
+
+    auto& record = _database.get(id);
+    record.source = source.generic_string();
+
+    return true;
+  }
+
   /**
    * @brief Returns the imported payload for @p id downcast to @p Type.
    *

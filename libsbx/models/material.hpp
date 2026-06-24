@@ -130,6 +130,7 @@ struct material_key_hash {
 }; // struct material_key_hash
 
 struct texture_slot {
+  math::uuid texture{math::uuid::nil()};
   graphics::image2d_handle image{};
 
   graphics::address_mode address_mode_u{graphics::address_mode::repeat};

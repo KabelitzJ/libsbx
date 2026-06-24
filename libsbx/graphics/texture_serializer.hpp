@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
-#ifndef LIBSBX_GRAPHICS_ASSETS_TEXTURE_IMPORTER_HPP_
-#define LIBSBX_GRAPHICS_ASSETS_TEXTURE_IMPORTER_HPP_
+#ifndef LIBSBX_GRAPHICS_ASSETS_TEXTURE_SERIALIZER_HPP_
+#define LIBSBX_GRAPHICS_ASSETS_TEXTURE_SERIALIZER_HPP_
 
 #include <memory>
 #include <string>
@@ -28,15 +28,15 @@ namespace sbx::graphics {
  *   srgb (bool, default true), mipmap (bool, default false), anisotropic (bool, default false),
  *   filter ("linear" | "nearest", default "linear"), address_mode ("repeat" | "clamp", default "repeat").
  */
-class texture_importer final : public assets::serializer<texture_importer> {
+class texture_serializer final : public assets::serializer<texture_serializer> {
 
   inline static const auto is_registered = register_serializer({".png", ".jpg", ".jpeg", ".tga", ".sbxtex"});
 
 public:
 
-  texture_importer() = default;
+  texture_serializer() = default;
 
-  ~texture_importer() override = default;
+  ~texture_serializer() override = default;
 
   auto type() const -> std::string_view override;
 
@@ -50,8 +50,8 @@ private:
 
   static auto _parse_address_mode(const std::string& value) -> graphics::address_mode;
 
-}; // class texture_importer
+}; // class texture_serializer
 
 } // namespace sbx::graphics
 
-#endif // LIBSBX_GRAPHICS_ASSETS_TEXTURE_IMPORTER_HPP_
+#endif // LIBSBX_GRAPHICS_ASSETS_TEXTURE_SERIALIZER_HPP_

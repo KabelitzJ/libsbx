@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: MIT
-#ifndef LIBSBX_MODELS_MATERIAL_IMPORTER_HPP_
-#define LIBSBX_MODELS_MATERIAL_IMPORTER_HPP_
+#ifndef LIBSBX_MODELS_MATERIAL_SERIALIZER_HPP_
+#define LIBSBX_MODELS_MATERIAL_SERIALIZER_HPP_
 
 #include <cmath>
+#include <filesystem>
 #include <memory>
 #include <string>
 #include <string_view>
-#include <vector>
 
 #include <yaml-cpp/yaml.h>
 
@@ -31,11 +31,11 @@
 namespace sbx::models {
 
 /**
- * @brief Imports a `.material.yaml` file into a material.
+ * @brief Reads and writes `.material.yaml` files.
  *
- * Each texture slot's `image:` URI is loaded through the assets_module, so the texture becomes a dependency of this material. The legacy per-slot `format:` seeds the texture's color space only when that texture has no .meta yet; thereafter the texture's own .meta governs it.
+ * On read, each texture slot's `image:` URI is loaded through the assets_module; the slot keeps the texture's uuid as its serializable identity and the resolved image2d_handle as a render-time cache. Write is the exact inverse: each slot's texture uuid is resolved back to a source and emitted as `image: <source>`.
  */
-class material_importer final : public assets::serializer<material_importer> {
+class material_serializer final : public assets::serializer<material_serializer> {
 
   inline static const auto is_registered = register_serializer({".material.yaml"});
 
@@ -49,12 +49,16 @@ public:
 
 private:
 
-  static auto _resolve_texture(assets::assets_module& assets_module, std::vector<math::uuid>& dependencies, const YAML::Node& node) -> graphics::image2d_handle;
+  static auto _resolve_texture(assets::assets_module& assets_module, const YAML::Node& node) -> texture_slot;
+
+  static auto _encode_texture(assets::assets_module& assets_module, YAML::Node& parent, const std::string& key, const texture_slot& slot) -> void;
 
   static auto _parse_alpha_mode(const std::string& value) -> models::alpha_mode;
 
-}; // class material_importer
+  static auto _alpha_mode_name(models::alpha_mode value) -> std::string;
+
+}; // class material_serializer
 
 } // namespace sbx::models
 
-#endif // LIBSBX_MODELS_MATERIAL_IMPORTER_HPP_
+#endif // LIBSBX_MODELS_MATERIAL_SERIALIZER_HPP_

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
-#ifndef LIBSBX_MODELS_MESH_IMPORTER_HPP_
-#define LIBSBX_MODELS_MESH_IMPORTER_HPP_
+#ifndef LIBSBX_MODELS_MESH_SERIALIZER_HPP_
+#define LIBSBX_MODELS_MESH_SERIALIZER_HPP_
 
 #include <cstdint>
 #include <memory>
@@ -20,7 +20,7 @@ namespace sbx::models {
  *
  * Reads `lod_count` (default 1) from the asset's .meta `import_settings`.
  */
-class mesh_importer final : public assets::serializer<mesh_importer> {
+class mesh_serializer final : public assets::serializer<mesh_serializer> {
 
   inline static const auto is_registered = register_serializer({".gltf", ".sbxstmsh"});
 
@@ -32,8 +32,8 @@ public:
 
   auto write(const assets::serializer_context& context, const std::unique_ptr<assets::asset_base>& asset) -> bool override;
 
-}; // class mesh_importer
+}; // class mesh_serializer
 
 } // namespace sbx::models
 
-#endif // LIBSBX_MODELS_MESH_IMPORTER_HPP_
+#endif // LIBSBX_MODELS_MESH_SERIALIZER_HPP_

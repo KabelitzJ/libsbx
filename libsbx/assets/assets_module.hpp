@@ -240,6 +240,14 @@ public:
     }
   }
 
+  auto source_of(const math::uuid& id) const -> std::optional<std::filesystem::path> {
+    if (const auto record = _database.try_get(id); record) {
+      return record->source;
+    }
+
+    return std::nullopt;
+  }
+
   // template<typename Type, typename... Args>
   // auto add_asset(Args&&... args) -> math::uuid {
   //   const auto id = math::uuid{};

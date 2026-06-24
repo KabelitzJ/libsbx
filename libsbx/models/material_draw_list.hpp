@@ -113,9 +113,14 @@ public:
 
     SBX_PROFILE_SCOPE_END(s0);
 
+    auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
+    
+    if (!scenes_module.has_active_scene()) {
+      return;
+    }
+
     auto& assets_module = core::engine::get_module<assets::assets_module>();
 
-    auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
     auto& scene = scenes_module.active_scene();
     auto& environment = scene.environment();
     auto& graph = scene.graph();

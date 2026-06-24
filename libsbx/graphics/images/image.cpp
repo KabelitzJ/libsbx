@@ -55,11 +55,11 @@ image::~image() {
 
   auto& allocator = graphics_module.allocator();
 
-  vkDestroyImageView(logical_device, _view, nullptr);
-  vkDestroySampler(logical_device, _sampler, nullptr);
-  vmaDestroyImage(allocator, _handle, _allocation);
-  // vkFreeMemory(logical_device, _memory, nullptr);
-  // vkDestroyImage(logical_device, _handle, nullptr);
+  graphics_module.enqueue_destruction([&logical_device, view = _view, sampler = _sampler, handle = _handle, allocation = _allocation](graphics::allocator& allocator) -> void {
+    vkDestroyImageView(logical_device, view, nullptr);
+    vkDestroySampler(logical_device, sampler, nullptr);
+    vmaDestroyImage(allocator, handle, allocation);
+  });
 }
 
 auto image::create_descriptor_set_layout_binding(std::uint32_t binding, VkDescriptorType descriptor_type, VkShaderStageFlags shader_stage_flags, std::uint32_t count) noexcept -> VkDescriptorSetLayoutBinding {

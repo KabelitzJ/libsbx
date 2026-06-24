@@ -14,22 +14,24 @@ environment_map::environment_map(const graphics::cube_image2d_handle cube, const
   _prefiltered{prefiltered} { }
 
 environment_map::~environment_map() {
+  utility::logger<"graphics">::debug("~environment_map this={} brdf idx={}", static_cast<void*>(this), _brdf.handle());
+
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 
   if (_cube.is_valid()) {
-    graphics_module.enqueue_resource_destruction(_cube);
+    graphics_module.remove_resource(_cube);
   }
 
   if (_brdf.is_valid()) {
-    graphics_module.enqueue_resource_destruction(_brdf);
+    graphics_module.remove_resource(_brdf);
   }
 
   if (_irradiance.is_valid()) {
-    graphics_module.enqueue_resource_destruction(_irradiance);
+    graphics_module.remove_resource(_irradiance);
   }
 
   if (_prefiltered.is_valid()) {
-    graphics_module.enqueue_resource_destruction(_prefiltered);
+    graphics_module.remove_resource(_prefiltered);
   }
 }
 

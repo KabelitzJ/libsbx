@@ -1,0 +1,622 @@
+name: Scene
+assets:
+  - id: 14898293749905318833
+    source: res:/meshes/cube/cube.gltf
+  - id: 5134925074828327929
+    source: res:/skyboxes/hdr/clouds.envmap.yaml
+  - id: 12635219300201724838
+    source: res:/meshes/helmet/helmet.gltf
+  - id: 1080424834659736061
+    source: res:/meshes/sphere/sphere.gltf
+  - id: 3107844384939351421
+    source: res:/meshes/tree/tree.gltf
+  - id: 7476664350855877632
+    source: res:/meshes/chess/pawn/pawn.gltf
+nodes:
+  - id: 11777062750294858058
+    tag: Black Pawn 8
+    transform:
+      position: {x: 3.5, y: 0.100000001, z: 3}
+      rotation: {x: 0, y: 0, z: 0, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    components:
+      static_mesh:
+        mesh: 7476664350855877632
+        submeshes:
+          - index: 0
+            material: 3854642724723197999
+  - id: 8671580632918451487
+    tag: White Pawn 8
+    transform:
+      position: {x: 3.5, y: 0.100000001, z: -3}
+      rotation: {x: 0, y: 0, z: 0, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    components:
+      static_mesh:
+        mesh: 7476664350855877632
+        submeshes:
+          - index: 0
+            material: 10328940511650328478
+  - id: 15063521085475577761
+    tag: Black Pawn 7
+    transform:
+      position: {x: 2.5, y: 0.100000001, z: 3}
+      rotation: {x: 0, y: 0, z: 0, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    components:
+      static_mesh:
+        mesh: 7476664350855877632
+        submeshes:
+          - index: 0
+            material: 3854642724723197999
+  - id: 16974458255671389650
+    tag: White Pawn 7
+    transform:
+      position: {x: 2.5, y: 0.100000001, z: -3}
+      rotation: {x: 0, y: 0, z: 0, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    components:
+      static_mesh:
+        mesh: 7476664350855877632
+        submeshes:
+          - index: 0
+            material: 10328940511650328478
+  - id: 14769198434526727619
+    tag: Black Pawn 6
+    transform:
+      position: {x: 1.5, y: 0.100000001, z: 3}
+      rotation: {x: 0, y: 0, z: 0, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    components:
+      static_mesh:
+        mesh: 7476664350855877632
+        submeshes:
+          - index: 0
+            material: 3854642724723197999
+  - id: 9667800870791254467
+    tag: White Pawn 6
+    transform:
+      position: {x: 1.5, y: 0.100000001, z: -3}
+      rotation: {x: 0, y: 0, z: 0, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    components:
+      static_mesh:
+        mesh: 7476664350855877632
+        submeshes:
+          - index: 0
+            material: 10328940511650328478
+  - id: 15641127424564101388
+    tag: Black Pawn 5
+    transform:
+      position: {x: 0.5, y: 0.100000001, z: 3}
+      rotation: {x: 0, y: 0, z: 0, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    components:
+      static_mesh:
+        mesh: 7476664350855877632
+        submeshes:
+          - index: 0
+            material: 3854642724723197999
+  - id: 10348635255504120925
+    tag: White Pawn 5
+    transform:
+      position: {x: 0.5, y: 0.100000001, z: -3}
+      rotation: {x: 0, y: 0, z: 0, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    components:
+      static_mesh:
+        mesh: 7476664350855877632
+        submeshes:
+          - index: 0
+            material: 10328940511650328478
+  - id: 16095166264353671008
+    tag: Black Pawn 4
+    transform:
+      position: {x: -0.5, y: 0.100000001, z: 3}
+      rotation: {x: 0, y: 0, z: 0, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    components:
+      static_mesh:
+        mesh: 7476664350855877632
+        submeshes:
+          - index: 0
+            material: 3854642724723197999
+  - id: 6763325563305849828
+    tag: White Pawn 4
+    transform:
+      position: {x: -0.5, y: 0.100000001, z: -3}
+      rotation: {x: 0, y: 0, z: 0, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    components:
+      static_mesh:
+        mesh: 7476664350855877632
+        submeshes:
+          - index: 0
+            material: 10328940511650328478
+  - id: 424809863901960280
+    tag: Black Pawn 3
+    transform:
+      position: {x: -1.5, y: 0.100000001, z: 3}
+      rotation: {x: 0, y: 0, z: 0, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    components:
+      static_mesh:
+        mesh: 7476664350855877632
+        submeshes:
+          - index: 0
+            material: 3854642724723197999
+  - id: 14591502869055145379
+    tag: White Pawn 3
+    transform:
+      position: {x: -1.5, y: 0.100000001, z: -3}
+      rotation: {x: 0, y: 0, z: 0, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    components:
+      static_mesh:
+        mesh: 7476664350855877632
+        submeshes:
+          - index: 0
+            material: 10328940511650328478
+  - id: 13563696221175428901
+    tag: Black Pawn 2
+    transform:
+      position: {x: -2.5, y: 0.100000001, z: 3}
+      rotation: {x: 0, y: 0, z: 0, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    components:
+      static_mesh:
+        mesh: 7476664350855877632
+        submeshes:
+          - index: 0
+            material: 3854642724723197999
+  - id: 6861068857265230129
+    tag: White Pawn 2
+    transform:
+      position: {x: -2.5, y: 0.100000001, z: -3}
+      rotation: {x: 0, y: 0, z: 0, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    components:
+      static_mesh:
+        mesh: 7476664350855877632
+        submeshes:
+          - index: 0
+            material: 10328940511650328478
+  - id: 5228659527710805077
+    tag: Black Pawn 1
+    transform:
+      position: {x: -3.5, y: 0.100000001, z: 3}
+      rotation: {x: 0, y: 0, z: 0, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    components:
+      static_mesh:
+        mesh: 7476664350855877632
+        submeshes:
+          - index: 0
+            material: 3854642724723197999
+  - id: 4493512159188253798
+    tag: White Pawn 1
+    transform:
+      position: {x: -3.5, y: 0.100000001, z: -3}
+      rotation: {x: 0, y: 0, z: 0, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    components:
+      static_mesh:
+        mesh: 7476664350855877632
+        submeshes:
+          - index: 0
+            material: 10328940511650328478
+  - id: 15579470626514216553
+    tag: Tree
+    transform:
+      position: {x: 2, y: 0, z: 2}
+      rotation: {x: 0, y: 0, z: 0, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    components:
+      static_mesh:
+        mesh: 3107844384939351421
+        submeshes:
+          - index: 0
+            material: 17966376942337248305
+          - index: 1
+            material: 2424914773824952419
+  - id: 11567694637786378258
+    tag: Base
+    transform:
+      position: {x: 0, y: 0, z: 0}
+      rotation: {x: 0, y: 0, z: 0, w: 1}
+      scale: {x: 100, y: 0.200000003, z: 100}
+    components:
+      static_mesh:
+        mesh: 14898293749905318833
+        submeshes:
+          - index: 0
+            material: 10927678478580770721
+  - id: 5665091902756677382
+    tag: Blue
+    transform:
+      position: {x: -5, y: 5, z: -2.5}
+      rotation: {x: 0, y: 0, z: 0, w: 1}
+      scale: {x: 2, y: 2, z: 2}
+    components:
+      static_mesh:
+        mesh: 14898293749905318833
+        submeshes:
+          - index: 0
+            material: 12285271563563180735
+  - id: 3378318614311793074
+    tag: Green
+    transform:
+      position: {x: -5, y: 5, z: 2.5}
+      rotation: {x: 0, y: 0, z: 0, w: 1}
+      scale: {x: 2, y: 2, z: 2}
+    components:
+      static_mesh:
+        mesh: 14898293749905318833
+        submeshes:
+          - index: 0
+            material: 11720099846087393520
+  - id: 10705452371369754517
+    tag: Red
+    transform:
+      position: {x: -5, y: 5, z: 0}
+      rotation: {x: 0, y: 0, z: 0, w: 1}
+      scale: {x: 2, y: 2, z: 2}
+    components:
+      static_mesh:
+        mesh: 14898293749905318833
+        submeshes:
+          - index: 0
+            material: 6212118964293641267
+  - id: 10218052975983312548
+    tag: Helmet
+    transform:
+      position: {x: 0, y: 5, z: 0}
+      rotation: {x: 0, y: 0, z: 0, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    components:
+      static_mesh:
+        mesh: 12635219300201724838
+        submeshes:
+          - index: 0
+            material: 7804877646822810014
+  - id: 17607069451920104090
+    tag: Sphere44
+    parent: 13085464449344860412
+    transform:
+      position: {x: 12, y: 17, z: 0}
+      rotation: {x: 0, y: 0, z: 0, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    components:
+      static_mesh:
+        mesh: 1080424834659736061
+        submeshes:
+          - index: 0
+            material: 14450085401720111324
+  - id: 6941748892673849556
+    tag: Sphere34
+    parent: 13085464449344860412
+    transform:
+      position: {x: 9, y: 17, z: 0}
+      rotation: {x: 0, y: 0, z: 0, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    components:
+      static_mesh:
+        mesh: 1080424834659736061
+        submeshes:
+          - index: 0
+            material: 18361949847805725736
+  - id: 14484082953252863555
+    tag: Sphere24
+    parent: 13085464449344860412
+    transform:
+      position: {x: 6, y: 17, z: 0}
+      rotation: {x: 0, y: 0, z: 0, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    components:
+      static_mesh:
+        mesh: 1080424834659736061
+        submeshes:
+          - index: 0
+            material: 8480763460796598358
+  - id: 1664734267558646873
+    tag: Sphere14
+    parent: 13085464449344860412
+    transform:
+      position: {x: 3, y: 17, z: 0}
+      rotation: {x: 0, y: 0, z: 0, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    components:
+      static_mesh:
+        mesh: 1080424834659736061
+        submeshes:
+          - index: 0
+            material: 10776081341226720592
+  - id: 9533955812912677072
+    tag: Sphere04
+    parent: 13085464449344860412
+    transform:
+      position: {x: 0, y: 17, z: 0}
+      rotation: {x: 0, y: 0, z: 0, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    components:
+      static_mesh:
+        mesh: 1080424834659736061
+        submeshes:
+          - index: 0
+            material: 2325667091184839292
+  - id: 8982978705034725206
+    tag: Sphere43
+    parent: 13085464449344860412
+    transform:
+      position: {x: 12, y: 14, z: 0}
+      rotation: {x: 0, y: 0, z: 0, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    components:
+      static_mesh:
+        mesh: 1080424834659736061
+        submeshes:
+          - index: 0
+            material: 5153307038803775546
+  - id: 17752796498713310779
+    tag: Sphere33
+    parent: 13085464449344860412
+    transform:
+      position: {x: 9, y: 14, z: 0}
+      rotation: {x: 0, y: 0, z: 0, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    components:
+      static_mesh:
+        mesh: 1080424834659736061
+        submeshes:
+          - index: 0
+            material: 7928832625697799175
+  - id: 5475123735234232696
+    tag: Sphere23
+    parent: 13085464449344860412
+    transform:
+      position: {x: 6, y: 14, z: 0}
+      rotation: {x: 0, y: 0, z: 0, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    components:
+      static_mesh:
+        mesh: 1080424834659736061
+        submeshes:
+          - index: 0
+            material: 15739352839245950564
+  - id: 9238893883873675958
+    tag: Sphere13
+    parent: 13085464449344860412
+    transform:
+      position: {x: 3, y: 14, z: 0}
+      rotation: {x: 0, y: 0, z: 0, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    components:
+      static_mesh:
+        mesh: 1080424834659736061
+        submeshes:
+          - index: 0
+            material: 7688785106405912190
+  - id: 12936451603067892959
+    tag: Sphere03
+    parent: 13085464449344860412
+    transform:
+      position: {x: 0, y: 14, z: 0}
+      rotation: {x: 0, y: 0, z: 0, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    components:
+      static_mesh:
+        mesh: 1080424834659736061
+        submeshes:
+          - index: 0
+            material: 14588590159238462143
+  - id: 16498380313417229788
+    tag: Sphere42
+    parent: 13085464449344860412
+    transform:
+      position: {x: 12, y: 11, z: 0}
+      rotation: {x: 0, y: 0, z: 0, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    components:
+      static_mesh:
+        mesh: 1080424834659736061
+        submeshes:
+          - index: 0
+            material: 5190755225079931843
+  - id: 13971149432371726948
+    tag: Sphere32
+    parent: 13085464449344860412
+    transform:
+      position: {x: 9, y: 11, z: 0}
+      rotation: {x: 0, y: 0, z: 0, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    components:
+      static_mesh:
+        mesh: 1080424834659736061
+        submeshes:
+          - index: 0
+            material: 13772140135431432502
+  - id: 17808125114312382602
+    tag: Sphere22
+    parent: 13085464449344860412
+    transform:
+      position: {x: 6, y: 11, z: 0}
+      rotation: {x: 0, y: 0, z: 0, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    components:
+      static_mesh:
+        mesh: 1080424834659736061
+        submeshes:
+          - index: 0
+            material: 346846848278510580
+  - id: 12342649415634844835
+    tag: Sphere12
+    parent: 13085464449344860412
+    transform:
+      position: {x: 3, y: 11, z: 0}
+      rotation: {x: 0, y: 0, z: 0, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    components:
+      static_mesh:
+        mesh: 1080424834659736061
+        submeshes:
+          - index: 0
+            material: 16486361745722855453
+  - id: 9483481981522392333
+    tag: Sphere02
+    parent: 13085464449344860412
+    transform:
+      position: {x: 0, y: 11, z: 0}
+      rotation: {x: 0, y: 0, z: 0, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    components:
+      static_mesh:
+        mesh: 1080424834659736061
+        submeshes:
+          - index: 0
+            material: 1686526205017972876
+  - id: 13012503410875061511
+    tag: Sphere41
+    parent: 13085464449344860412
+    transform:
+      position: {x: 12, y: 8, z: 0}
+      rotation: {x: 0, y: 0, z: 0, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    components:
+      static_mesh:
+        mesh: 1080424834659736061
+        submeshes:
+          - index: 0
+            material: 15788088301621337199
+  - id: 16962053024293252889
+    tag: Sphere31
+    parent: 13085464449344860412
+    transform:
+      position: {x: 9, y: 8, z: 0}
+      rotation: {x: 0, y: 0, z: 0, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    components:
+      static_mesh:
+        mesh: 1080424834659736061
+        submeshes:
+          - index: 0
+            material: 17443389704992591844
+  - id: 11081252810554681401
+    tag: Sphere21
+    parent: 13085464449344860412
+    transform:
+      position: {x: 6, y: 8, z: 0}
+      rotation: {x: 0, y: 0, z: 0, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    components:
+      static_mesh:
+        mesh: 1080424834659736061
+        submeshes:
+          - index: 0
+            material: 8754049467349490305
+  - id: 2477280708480440891
+    tag: Sphere11
+    parent: 13085464449344860412
+    transform:
+      position: {x: 3, y: 8, z: 0}
+      rotation: {x: 0, y: 0, z: 0, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    components:
+      static_mesh:
+        mesh: 1080424834659736061
+        submeshes:
+          - index: 0
+            material: 15305877422501513888
+  - id: 13316508976849438170
+    tag: Sphere01
+    parent: 13085464449344860412
+    transform:
+      position: {x: 0, y: 8, z: 0}
+      rotation: {x: 0, y: 0, z: 0, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    components:
+      static_mesh:
+        mesh: 1080424834659736061
+        submeshes:
+          - index: 0
+            material: 18366613796390516407
+  - id: 18004118253206446261
+    tag: Sphere40
+    parent: 13085464449344860412
+    transform:
+      position: {x: 12, y: 5, z: 0}
+      rotation: {x: 0, y: 0, z: 0, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    components:
+      static_mesh:
+        mesh: 1080424834659736061
+        submeshes:
+          - index: 0
+            material: 10352349432177285344
+  - id: 2096554526599526384
+    tag: Sphere30
+    parent: 13085464449344860412
+    transform:
+      position: {x: 9, y: 5, z: 0}
+      rotation: {x: 0, y: 0, z: 0, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    components:
+      static_mesh:
+        mesh: 1080424834659736061
+        submeshes:
+          - index: 0
+            material: 16978898251655604951
+  - id: 6989446084999047394
+    tag: Sphere20
+    parent: 13085464449344860412
+    transform:
+      position: {x: 6, y: 5, z: 0}
+      rotation: {x: 0, y: 0, z: 0, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    components:
+      static_mesh:
+        mesh: 1080424834659736061
+        submeshes:
+          - index: 0
+            material: 6976707298478361597
+  - id: 16475940159860011504
+    tag: Sphere10
+    parent: 13085464449344860412
+    transform:
+      position: {x: 3, y: 5, z: 0}
+      rotation: {x: 0, y: 0, z: 0, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    components:
+      static_mesh:
+        mesh: 1080424834659736061
+        submeshes:
+          - index: 0
+            material: 16803857455090526768
+  - id: 14679091656615533434
+    tag: Sphere00
+    parent: 13085464449344860412
+    transform:
+      position: {x: 0, y: 5, z: 0}
+      rotation: {x: 0, y: 0, z: 0, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    components:
+      static_mesh:
+        mesh: 1080424834659736061
+        submeshes:
+          - index: 0
+            material: 17960975672793739495
+  - id: 13085464449344860412
+    tag: Spheres
+    transform:
+      position: {x: 0, y: 0, z: -15}
+      rotation: {x: 0, y: 0, z: 0, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+  - id: 13112838782762101044
+    tag: Camera
+    transform:
+      position: {x: 2, y: 7, z: 2}
+      rotation: {x: -0.279848188, y: 0.364705205, z: 0.115916908, w: 0.880476236}
+      scale: {x: 1, y: 1, z: 1}
+    components:
+      skybox:
+        environment: 5134925074828327929
+        tint: {r: 1, g: 1, b: 1, a: 1}

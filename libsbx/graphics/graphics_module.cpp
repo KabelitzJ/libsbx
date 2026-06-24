@@ -148,9 +148,7 @@ graphics_module::~graphics_module() {
   _cube_images.clear();
   _sampler_states.clear();
 
-  for (const auto& deletion : _deletion_queue) {
-    std::invoke(deletion.destroy, _allocator);
-  }
+  _flush_deletion_queue();
 
   SBX_PROFILE_GPU_CONTEXT_DESTROY();
 }
@@ -376,6 +374,15 @@ auto graphics_module::_poll_deletion_queue() -> void {
 
     return false;
   });
+}
+
+auto graphics_module::_flush_deletion_queue() -> void {
+  while (!_deletion_queue.empty()) {
+    auto deletion = std::move(_deletion_queue.front());
+    _deletion_queue.pop_front();
+
+    std::invoke(deletion.destroy, _allocator);
+  }
 }
 
 } // namespace sbx::graphics

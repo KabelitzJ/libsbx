@@ -198,15 +198,6 @@ public:
     _deletion_queue.push_back({std::forward<Callable>(callable), graphics::swapchain::max_frames_in_flight});
   }
 
-  template<typename Type>
-  auto enqueue_resource_destruction(const resource_handle<Type>& handle) -> void {
-    utility::logger<"graphics">::debug("enqueue image2d remove idx={} gen={}", handle.handle(), handle.generation());
-
-    enqueue_destruction([this, handle](graphics::allocator& allocator) -> void {
-      _storage<Type>().remove(handle);
-    });
-  }
-
 private:
 
   static constexpr auto _access_mask_from_stage(VkPipelineStageFlagBits2 stage) -> VkAccessFlagBits2 {
@@ -335,6 +326,8 @@ private:
   }
 
   auto _poll_deletion_queue() -> void;
+
+  auto _flush_deletion_queue() -> void;
 
   std::unique_ptr<graphics::instance> _instance{};
   std::unique_ptr<graphics::physical_device> _physical_device{};

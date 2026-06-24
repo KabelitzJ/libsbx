@@ -83,12 +83,14 @@ render_graph::~render_graph() {
   for (auto& image_handle : _color_images) {
     if (image_handle.is_valid()) {
       rendering_module.remove_resource<image2d>(image_handle);
+      image_handle = {};
     }
   }
 
   for (auto& depth_image_handle : _depth_images) {
     if (depth_image_handle.is_valid()) {
       rendering_module.remove_resource<depth_image>(depth_image_handle);
+      depth_image_handle = {};
     }
   }
 }

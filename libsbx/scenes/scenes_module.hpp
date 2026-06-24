@@ -9,6 +9,8 @@
 
 #include <libsbx/memory/tracking_allocator.hpp>
 
+#include <libsbx/assets/assets_module.hpp>
+
 #include <libsbx/math/vector4.hpp>
 #include <libsbx/math/color.hpp>
 
@@ -17,6 +19,7 @@
 #include <libsbx/core/module.hpp>
 
 #include <libsbx/scenes/scene.hpp>
+#include <libsbx/scenes/component_serializer.hpp>
 
 namespace sbx::scenes {
 
@@ -69,10 +72,20 @@ public:
     return _scenes.size();
   }
 
-  auto save_scene(const std::filesystem::path& path) -> void {
-    if (_active_scene) {
-      _active_scene->save(path);
+  auto save_scene(const std::filesystem::path& source) -> void {
+    if (!has_active_scene()) {
+      return;
     }
+
+    auto& assets_module = core::engine::get_module<assets::assets_module>();
+
+    const auto path = assets_module.resolve_path(source);
+
+    std::filesystem::create_directories(path.parent_path());
+
+    _active_scene->save(path);
+
+    utility::logger<"scenes">::info("Saved scene to '{}'", path.generic_string());
   }
 
   auto set_scene_viewport(std::string name) -> void {
@@ -81,6 +94,10 @@ public:
 
   auto scene_viewport() const -> const std::string& {
     return _scene_viewport;
+  }
+
+  auto component_serializer() const -> const scenes::component_serializer& {
+    return _component_serializer;
   }
 
   auto debug_lines() const -> const std::vector<line>&;
@@ -111,6 +128,8 @@ private:
   std::vector<line> _debug_lines{};
 
   std::string _scene_viewport{std::string{graphics::viewport::window_name}};
+
+  scenes::component_serializer _component_serializer;
 
 }; // class scenes_module
 

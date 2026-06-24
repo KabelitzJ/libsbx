@@ -29,82 +29,72 @@ scenes_module::scenes_module() {
   //   registry.request_cube_image(name, path, suffix, format);
   // });
 
-  // _component_io_registry.register_component<scenes::transform>(
-  //   "transform",
-  //   [](YAML::Emitter& emitter, [[maybe_unused]] scene_graph& graph, [[maybe_unused]] scenes::asset_registry& registry, const scenes::transform& transform) -> void {
-  //     emitter << YAML::Key << "position" << YAML::Value << transform.position();
-  //     emitter << YAML::Key << "rotation" << YAML::Value << transform.rotation();
-  //     emitter << YAML::Key << "scale" << YAML::Value << transform.scale();
-  //   },
-  //   [](const YAML::Node& node, [[maybe_unused]] scene_graph& graph, [[maybe_unused]] scenes::asset_registry& registry) -> scenes::transform {
-  //     return {node["position"].as<math::vector3>(), node["rotation"].as<math::quaternion>(), node["scale"].as<math::vector3>()};
-  //   }
-  // );
+  _component_serializer.register_component<scenes::skybox>(
+    "skybox",
+    [](YAML::Node& out, const scenes::skybox& skybox, component_serializer::asset_set& assets) -> void {
+      out["environment"] = skybox.environment;
+      out["tint"] = skybox.tint;
 
-  // _component_io_registry.register_component<scenes::skybox>(
-  //   "skybox",
-  //   [](YAML::Emitter& emitter, [[maybe_unused]] scene_graph& graph, scenes::asset_registry& registry, const scenes::skybox& skybox) -> void {
-  //     const auto& metadata = registry.cube_image_metadata(skybox.cube_image);
+      assets.insert(skybox.environment);
+    },
+    [](const YAML::Node& node, scene_graph& graph, scenes::node n) -> void {
+      auto skybox = scenes::skybox{};
 
-  //     emitter << YAML::Key << "cube_image" << YAML::Value << YAML::Alias(metadata.name);
-  //     emitter << YAML::Key << "tint" << YAML::Value << skybox.tint;
-  //   },
-  //   [](const YAML::Node& node, [[maybe_unused]] scene_graph& graph, scenes::asset_registry& registry) -> scenes::skybox {
-  //     const auto cube_image_name = node["cube_image"]["name"].as<std::string>();
-  //     const auto cube_image_handle = registry.get_cube_image(utility::hashed_string{cube_image_name});
+      skybox.environment = node["environment"].as<math::uuid>();
 
-  //     return scenes::skybox{cube_image_handle, graphics::image2d_handle{}, graphics::cube_image2d_handle{}, graphics::cube_image2d_handle{}, node["tint"].as<math::color>()};
-  //   }
-  // );
+      if (const auto tint = node["tint"]; tint) {
+        skybox.tint = tint.as<math::color>();
+      }
 
-  // _component_io_registry.register_component<scenes::point_light>(
-  //   "point_light",
-  //   [](YAML::Emitter& emitter, [[maybe_unused]] scene_graph& graph, [[maybe_unused]] scenes::asset_registry& registry, const scenes::point_light& point_light) -> void {
-  //     emitter << YAML::Key << "color" << YAML::Value << point_light.color();
-  //     emitter << YAML::Key << "radius" << YAML::Value << point_light.radius();
-  //   },
-  //   [](const YAML::Node& node, [[maybe_unused]] scene_graph& graph, [[maybe_unused]] scenes::asset_registry& registry) -> scenes::point_light {
-  //     return {node["color"].as<math::color>(), node["radius"].as<std::float_t>()};
-  //   }
-  // );
+      graph.add_component<scenes::skybox>(n, skybox);
+    }
+  );
 
-  // _component_io_registry.register_component<scenes::static_mesh>(
-  //   "static_mesh",
-  //   [](YAML::Emitter& emitter, [[maybe_unused]] scene_graph& graph, scenes::asset_registry& registry, const scenes::static_mesh& static_mesh) -> void {
-  //     const auto& mesh_metadata = registry.mesh_metadata(static_mesh.mesh_id());
+  _component_serializer.register_component<scenes::point_light>(
+    "point_light",
+    [](YAML::Node& out, const scenes::point_light& point_light, [[maybe_unused]] component_serializer::asset_set& assets) -> void {
+      out["color"] = point_light.color();
+      out["radius"] = point_light.radius();
+    },
+    [](const YAML::Node& node, scene_graph& graph, scenes::node n) -> void {
+      graph.add_component<scenes::point_light>(n, node["color"].as<math::color>(), node["radius"].as<std::float_t>());
+    }
+  );
 
-  //     emitter << YAML::Key << "mesh" << YAML::Value << YAML::Alias(mesh_metadata.name);
-  //     emitter << YAML::Key << "submeshes" << YAML::Value << YAML::BeginSeq;
+  _component_serializer.register_component<scenes::static_mesh>(
+    "static_mesh",
+    [](YAML::Node& out, const scenes::static_mesh& static_mesh, component_serializer::asset_set& assets) -> void {
+      out["mesh"] = static_mesh.mesh_id();
 
-  //     for (const auto& submesh : static_mesh.submeshes()) {
-  //       const auto& material_metadata = registry.material_metadata(submesh.material);
+      assets.insert(static_mesh.mesh_id());
 
-  //       emitter << YAML::BeginMap;
-  //       emitter << YAML::Key << "index" << YAML::Value << submesh.index;
-  //       emitter << YAML::Key << "material" << YAML::Value << YAML::Alias(material_metadata.name);
-  //       emitter << YAML::EndMap;
-  //     }
+      auto submeshes = YAML::Node{};
 
-  //     emitter << YAML::EndSeq;
-  //   },
-  //   [](const YAML::Node& node, [[maybe_unused]] scene_graph& graph, scenes::asset_registry& registry) -> scenes::static_mesh {
-  //     const auto mesh_name = node["mesh"]["name"].as<std::string>();
-  //     const auto mesh_id = registry.get_mesh(utility::hashed_string{mesh_name});
+      for (const auto& submesh : static_mesh.submeshes()) {
+        auto submesh_node = YAML::Node{};
 
-  //     auto submeshes = std::vector<scenes::static_mesh::submesh>{};
+        submesh_node["index"] = submesh.index;
+        submesh_node["material"] = submesh.material;
 
-  //     if (node["submeshes"] && node["submeshes"].IsSequence()) {
-  //       for (const auto& sub : node["submeshes"]) {
-  //         const auto material_name = sub["material"]["name"].as<std::string>();
-  //         const auto material_id = registry.get_material(utility::hashed_string{material_name});
+        submeshes.push_back(submesh_node);
 
-  //         submeshes.push_back({sub["index"].as<std::uint32_t>(), material_id});
-  //       }
-  //     }
+        assets.insert(submesh.material);
+      }
 
-  //     return scenes::static_mesh{mesh_id, std::move(submeshes)};
-  //   }
-  // );
+      out["submeshes"] = submeshes;
+    },
+    [](const YAML::Node& node, scene_graph& graph, scenes::node n) -> void {
+      auto submeshes = std::vector<scenes::static_mesh::submesh>{};
+
+      if (const auto submeshes_node = node["submeshes"]; submeshes_node && submeshes_node.IsSequence()) {
+        for (const auto& submesh_node : submeshes_node) {
+          submeshes.push_back(scenes::static_mesh::submesh{submesh_node["index"].as<std::uint32_t>(), submesh_node["material"].as<math::uuid>()});
+        }
+      }
+
+      graph.add_component<scenes::static_mesh>(n, node["mesh"].as<math::uuid>(), std::move(submeshes));
+    }
+  );
 }
 
 scenes_module::~scenes_module() {

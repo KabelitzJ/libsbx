@@ -81,13 +81,157 @@ auto editor_subrenderer::_draw_dockspace() -> void {
 
   ImGui::DockSpace(ImGui::GetID("editor_dockspace"), ImVec2{0.0f, 0.0f}, ImGuiDockNodeFlags_NoWindowMenuButton);
 
+  auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
+
   if (ImGui::BeginMenuBar()) {
-    if (ImGui::BeginMenu("File")) {
-      if (ImGui::MenuItem("Quit")) {
-        sbx::core::engine::quit();
+    if (ImGui::BeginMenu("Scene")) {
+      if (ImGui::MenuItem("New Scene", "Ctrl+N")) {
+        // TODO: create a new empty scene
+      }
+
+      if (ImGui::MenuItem("Open Scene...", "Ctrl+O")) {
+        // TODO: open scene from file dialog
+      }
+
+      ImGui::Separator();
+
+      if (ImGui::MenuItem("Save Scene", "Ctrl+S")) {
+        scenes_module.save_scene("res://scenes/default.yaml");
+      }
+
+      if (ImGui::MenuItem("Save Scene As...", "Ctrl+Shift+S")) {
+        // TODO: save scene to a path chosen via file dialog
       }
 
       ImGui::EndMenu();
+    }
+
+    if (ImGui::BeginMenu("Edit")) {
+      if (ImGui::MenuItem("Undo", "Ctrl+Z")) {
+        // TODO
+      }
+
+      if (ImGui::MenuItem("Redo", "Ctrl+Y")) {
+        // TODO
+      }
+
+      ImGui::Separator();
+
+      if (ImGui::MenuItem("Duplicate", "Ctrl+D")) {
+        // TODO: duplicate selected node
+      }
+
+      if (ImGui::MenuItem("Delete", "Del")) {
+        // TODO: delete selected node
+      }
+
+      ImGui::Separator();
+
+      if (ImGui::MenuItem("Preferences...")) {
+        // TODO
+      }
+
+      ImGui::EndMenu();
+    }
+
+    if (ImGui::BeginMenu("Create")) {
+      if (ImGui::MenuItem("Empty Node")) {
+        // TODO: create empty node at scene root
+      }
+
+      if (ImGui::BeginMenu("3D Object")) {
+        if (ImGui::MenuItem("Cube")) {
+          // TODO
+        }
+
+        if (ImGui::MenuItem("Sphere")) {
+          // TODO
+        }
+
+        if (ImGui::MenuItem("Plane")) {
+          // TODO
+        }
+
+        ImGui::EndMenu();
+      }
+
+      if (ImGui::BeginMenu("Light")) {
+        if (ImGui::MenuItem("Point Light")) {
+          // TODO
+        }
+
+        if (ImGui::MenuItem("Directional Light")) {
+          // TODO
+        }
+
+        ImGui::EndMenu();
+      }
+
+      if (ImGui::MenuItem("Camera")) {
+        // TODO
+      }
+
+      ImGui::Separator();
+
+      if (ImGui::MenuItem("Material")) {
+        // TODO: create a new material asset
+      }
+
+      ImGui::EndMenu();
+    }
+
+    if (ImGui::BeginMenu("View")) {
+      if (ImGui::MenuItem("Hierarchy", nullptr, false)) {
+        // TODO: toggle hierarchy panel
+      }
+
+      if (ImGui::MenuItem("Inspector", nullptr, false)) {
+        // TODO: toggle inspector panel
+      }
+
+      if (ImGui::MenuItem("Console", nullptr, false)) {
+        // TODO: toggle console panel
+      }
+
+      if (ImGui::MenuItem("Asset Browser", nullptr, false)) {
+        // TODO: toggle asset browser panel
+      }
+
+      ImGui::Separator();
+
+      if (ImGui::MenuItem("Reset Layout")) {
+        // TODO
+      }
+
+      ImGui::EndMenu();
+    }
+
+    if (ImGui::BeginMenu("Tools")) {
+      if (ImGui::MenuItem("Bake IBL")) {
+        // TODO
+      }
+
+      if (ImGui::MenuItem("Statistics")) {
+        // TODO
+      }
+
+      ImGui::EndMenu();
+    }
+
+    if (ImGui::BeginMenu("Help")) {
+      if (ImGui::MenuItem("Documentation")) {
+        // TODO
+      }
+
+      if (ImGui::MenuItem("About")) {
+        // TODO
+      }
+
+      ImGui::EndMenu();
+    }
+
+    if (ImGui::MenuItem("Quit")) {
+      sbx::core::engine::quit();
     }
 
     ImGui::EndMenuBar();

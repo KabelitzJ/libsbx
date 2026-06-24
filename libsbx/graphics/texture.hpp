@@ -41,9 +41,11 @@ public:
       return;
     }
 
+    utility::logger<"graphics">::debug("~texture this={} handle idx={} gen={}", static_cast<void*>(this), _handle.handle(), _handle.generation());
+
     auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 
-    graphics_module.enqueue_resource_destruction(_handle);
+    graphics_module.remove_resource(_handle);
   }
 
   auto operator=(const texture& other) -> texture& = delete;

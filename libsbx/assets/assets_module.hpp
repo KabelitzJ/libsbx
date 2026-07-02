@@ -180,7 +180,7 @@ public:
     return id;
   }
 
-  auto add_runtime_asset(std::unique_ptr<asset_base> payload) -> math::uuid {
+  auto add_runtime_asset(std::unique_ptr<asset> payload) -> math::uuid {
     const auto id = math::uuid{};
 
     _database.insert(asset_record{.id = id, .source = {}, .state = load_state::ready});
@@ -339,7 +339,7 @@ private:
 
   asset_database _database;
   serializer_registry _serializers;
-  std::unordered_map<math::uuid, std::unique_ptr<asset_base>> _payloads;
+  std::unordered_map<math::uuid, std::unique_ptr<asset>> _payloads;
 
   struct container_base {
     virtual ~container_base() = default;

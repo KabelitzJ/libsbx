@@ -26,7 +26,7 @@ enum class asset_type : std::uint8_t {
   material,
   static_mesh,
   skinned_mesh,
-  skelleton,
+  skeleton,
   animation,
   audio,
   font,
@@ -58,11 +58,11 @@ struct asset_record {
  *
  * Concrete asset types must override type(). Composite assets (a material referencing textures, a scene referencing everything) override dependencies() to return the UUIDs they hold a strong reference to; the assets_module releases those when the asset is released.
  */
-class asset_base {
+class asset {
 
 public:
 
-  virtual ~asset_base() = default;
+  virtual ~asset() = default;
 
   virtual auto type() const -> asset_type = 0;
 
@@ -70,7 +70,7 @@ public:
     return {};
   }
 
-}; // class asset_base
+}; // class asset
 
 } // namespace sbx::assets
 

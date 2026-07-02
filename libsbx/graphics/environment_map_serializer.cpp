@@ -15,7 +15,7 @@ auto environment_map_serializer::type() const -> std::string_view {
   return environment_map::type_name;
 }
 
-auto environment_map_serializer::read(const assets::serializer_context& context) -> std::unique_ptr<assets::asset_base> {
+auto environment_map_serializer::read(const assets::serializer_context& context) -> std::unique_ptr<assets::asset> {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
   auto& assets_module = core::engine::get_module<assets::assets_module>();
 
@@ -39,7 +39,7 @@ auto environment_map_serializer::read(const assets::serializer_context& context)
   return std::make_unique<environment_map>(cube, brdf, irradiance, prefiltered);
 }
 
-auto environment_map_serializer::write(const assets::serializer_context& context, const std::unique_ptr<assets::asset_base>& asset) -> bool {
+auto environment_map_serializer::write(const assets::serializer_context& context, const std::unique_ptr<assets::asset>& asset) -> bool {
   return true;
 }
 

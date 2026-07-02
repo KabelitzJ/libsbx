@@ -28,7 +28,7 @@
 
 namespace sbx::models {
 
-class mesh : public graphics::mesh<vertex3d>, public io::loader_factory<mesh, graphics::mesh<vertex3d>::mesh_data>, public assets::asset_base {
+class mesh : public graphics::mesh<vertex3d>, public io::loader_factory<mesh, graphics::mesh<vertex3d>::mesh_data>, public assets::asset {
 
   using base = graphics::mesh<vertex3d>;
 

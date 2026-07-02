@@ -13,7 +13,7 @@
 
 namespace sbx::graphics {
 
-class environment_map final : public assets::asset_base {
+class environment_map final : public assets::asset {
 
 public:
 

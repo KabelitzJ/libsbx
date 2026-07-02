@@ -209,19 +209,22 @@ auto frustum_culling_task::_collect_bucket(bucket current_bucket, std::uint32_t 
     auto& input_commands = graphics_module.get_resource<graphics::storage_buffer>(entry.draw_commands_buffer);
     auto& input_instances = graphics_module.get_resource<graphics::storage_buffer>(entry.instance_data_buffer);
 
+    const auto input_commands_size = input_commands.size();
+    const auto input_instances_size = input_instances.size();
+
     const auto range_key = culled_range_key{current_bucket, key, cascade};
-    auto& culled = _get_or_create_culled_range(range_key, input_commands.size(), input_instances.size());
+    auto& culled = _get_or_create_culled_range(range_key, input_commands_size, input_instances_size);
 
     for (auto i = std::uint32_t{0}; i < ring_size; ++i) {
       auto& out_cmds = graphics_module.get_resource<graphics::storage_buffer>(culled.commands_buffers[i]);
       auto& out_inst = graphics_module.get_resource<graphics::storage_buffer>(culled.instances_buffers[i]);
 
-      if (out_cmds.size() < input_commands.size()) {
-        out_cmds.resize(input_commands.size());
+      if (out_cmds.size() < input_commands_size) {
+        out_cmds.resize(input_commands_size);
       }
 
-      if (out_inst.size() < input_instances.size()) {
-        out_inst.resize(input_instances.size());
+      if (out_inst.size() < input_instances_size) {
+        out_inst.resize(input_instances_size);
       }
     }
 

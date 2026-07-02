@@ -36,8 +36,8 @@ class serializer_registry {
   struct serializer_base {
     virtual ~serializer_base() = default;
     virtual auto type() const -> std::string_view = 0;
-    virtual auto read(const serializer_context& context) -> std::unique_ptr<asset_base> = 0;
-    virtual auto write(const serializer_context& context, const std::unique_ptr<asset_base>& asset) -> bool = 0;
+    virtual auto read(const serializer_context& context) -> std::unique_ptr<asset> = 0;
+    virtual auto write(const serializer_context& context, const std::unique_ptr<asset>& asset) -> bool = 0;
   }; // class serializer_base
 
 public:

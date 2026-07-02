@@ -36,7 +36,7 @@ auto material::create(const std::string& name, models::material material) -> mat
   const auto resolved = assets_module.resolve_path(source);
 
   const auto serializer = serializers.find_for(resolved);
-  const auto payload = std::unique_ptr<assets::asset_base>{std::make_unique<models::material>(std::move(material))};
+  const auto payload = std::unique_ptr<assets::asset>{std::make_unique<models::material>(std::move(material))};
 
   serializer->write(assets::serializer_context{.source = source, .resolved = resolved, .id = {}}, payload);
 

@@ -9,7 +9,7 @@ auto texture_serializer::type() const -> std::string_view {
   return texture::type_name;
 }
 
-auto texture_serializer::read(const assets::serializer_context& context) -> std::unique_ptr<assets::asset_base> {
+auto texture_serializer::read(const assets::serializer_context& context) -> std::unique_ptr<assets::asset> {
   auto settings = context.settings;
 
   const auto use_srgb = settings["srgb"].as<bool>(true);
@@ -27,7 +27,7 @@ auto texture_serializer::read(const assets::serializer_context& context) -> std:
   return std::make_unique<texture>(handle);
 }
 
-auto texture_serializer::write(const assets::serializer_context& context, const std::unique_ptr<assets::asset_base>& asset) -> bool {
+auto texture_serializer::write(const assets::serializer_context& context, const std::unique_ptr<assets::asset>& asset) -> bool {
   return true;
 }
 

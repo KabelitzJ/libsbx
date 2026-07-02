@@ -145,7 +145,7 @@ struct texture_slot_hash {
   auto operator()(const texture_slot& texture_slot) const noexcept -> std::size_t;
 }; // struct texture_slot_hash
 
-struct material : public assets::asset_base {
+struct material : public assets::asset {
 
   std::string name{"Material"};
 

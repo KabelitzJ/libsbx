@@ -20,7 +20,7 @@ namespace sbx::graphics {
  *
  * @note Requires the assets_module to be torn down before the graphics_module (declare the dependency, or unload before graphics shutdown).
  */
-class texture final : public assets::asset_base {
+class texture final : public assets::asset {
 
 public:
 

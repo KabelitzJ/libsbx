@@ -11,7 +11,7 @@ auto material_serializer::type() const -> std::string_view {
   return models::material::type_name;
 }
 
-auto material_serializer::read(const assets::serializer_context& context) -> std::unique_ptr<assets::asset_base> {
+auto material_serializer::read(const assets::serializer_context& context) -> std::unique_ptr<assets::asset> {
   auto& assets_module = core::engine::get_module<assets::assets_module>();
 
   const auto node = YAML::LoadFile(context.resolved.string());
@@ -89,7 +89,7 @@ auto material_serializer::read(const assets::serializer_context& context) -> std
   return std::make_unique<models::material>(std::move(material));
 }
 
-auto material_serializer::write(const assets::serializer_context& context, const std::unique_ptr<assets::asset_base>& asset) -> bool {
+auto material_serializer::write(const assets::serializer_context& context, const std::unique_ptr<assets::asset>& asset) -> bool {
   const auto* material = dynamic_cast<const models::material*>(asset.get());
 
   if (!material) {

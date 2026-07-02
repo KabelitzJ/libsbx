@@ -43,9 +43,9 @@ public:
 
   auto type() const -> std::string_view override;
 
-  auto read(const assets::serializer_context& context) -> std::unique_ptr<assets::asset_base> override;
+  auto read(const assets::serializer_context& context) -> std::unique_ptr<assets::asset> override;
 
-  auto write(const assets::serializer_context& context, const std::unique_ptr<assets::asset_base>& asset) -> bool override;
+  auto write(const assets::serializer_context& context, const std::unique_ptr<assets::asset>& asset) -> bool override;
 
 private:
 

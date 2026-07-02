@@ -9,7 +9,7 @@ auto mesh_serializer::type() const -> std::string_view {
   return models::mesh::type_name;
 }
 
-auto mesh_serializer::read(const assets::serializer_context& context) -> std::unique_ptr<assets::asset_base> {
+auto mesh_serializer::read(const assets::serializer_context& context) -> std::unique_ptr<assets::asset> {
   auto settings = context.settings;
 
   const auto lod_count = settings["lod_count"].as<std::uint32_t>(1u);
@@ -17,7 +17,7 @@ auto mesh_serializer::read(const assets::serializer_context& context) -> std::un
   return std::make_unique<models::mesh>(context.resolved, lod_count);
 }
 
-auto mesh_serializer::write(const assets::serializer_context& context, const std::unique_ptr<assets::asset_base>& asset) -> bool {
+auto mesh_serializer::write(const assets::serializer_context& context, const std::unique_ptr<assets::asset>& asset) -> bool {
   return true;
 }
 

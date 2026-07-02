@@ -102,10 +102,6 @@ application::application()
     material.texture_dependencies.push_back(id);
   };
 
-  auto register_material = [&assets_module](sbx::models::material&& material) -> sbx::math::uuid {
-    return assets_module.add_runtime_asset(std::make_unique<sbx::models::material>(std::move(material)));
-  };
-
   // Shared meshes
 
   _cube_mesh = assets_module.load_asset("res://meshes/cube/cube.gltf");
@@ -133,7 +129,7 @@ application::application()
       material.roughness_factor = 0.2f * y;
       material.occlusion_strength = 1.0f;
 
-      const auto material_id = register_material(std::move(material));
+      const auto material_id = assets_module.add_runtime_asset(std::make_unique<sbx::models::material>(std::move(material)));
 
       graph.add_component<sbx::scenes::static_mesh>(sphere, sphere_mesh, material_id);
 
@@ -166,7 +162,7 @@ application::application()
   bind_texture(helmet_material, helmet_material.occlusion, "res://meshes/helmet/textures/ao.jpg", false);
   bind_texture(helmet_material, helmet_material.emissive, "res://meshes/helmet/textures/emissive.jpg", true);
 
-  graph.add_component<sbx::scenes::static_mesh>(helmet, helmet_mesh, register_material(std::move(helmet_material)));
+  graph.add_component<sbx::scenes::static_mesh>(helmet, helmet_mesh, assets_module.add_runtime_asset(std::make_unique<sbx::models::material>(std::move(helmet_material))));
 
   // Transparency
 
@@ -180,7 +176,7 @@ application::application()
   red_material.base_color = sbx::math::color{1.0f, 0.0f, 0.0f, 0.7f};
   red_material.alpha = sbx::models::alpha_mode::blend;
 
-  graph.add_component<sbx::scenes::static_mesh>(red, _cube_mesh, register_material(std::move(red_material)));
+  graph.add_component<sbx::scenes::static_mesh>(red, _cube_mesh, assets_module.add_runtime_asset(std::make_unique<sbx::models::material>(std::move(red_material))));
 
   auto green = graph.create_node("Green");
 
@@ -192,7 +188,7 @@ application::application()
   green_material.base_color = sbx::math::color{0.0f, 1.0f, 0.0f, 0.7f};
   green_material.alpha = sbx::models::alpha_mode::blend;
 
-  graph.add_component<sbx::scenes::static_mesh>(green, _cube_mesh, register_material(std::move(green_material)));
+  graph.add_component<sbx::scenes::static_mesh>(green, _cube_mesh, assets_module.add_runtime_asset(std::make_unique<sbx::models::material>(std::move(green_material))));
 
   auto blue = graph.create_node("Blue");
 
@@ -204,7 +200,7 @@ application::application()
   blue_material.base_color = sbx::math::color{0.0f, 0.0f, 1.0f, 0.7f};
   blue_material.alpha = sbx::models::alpha_mode::blend;
 
-  graph.add_component<sbx::scenes::static_mesh>(blue, _cube_mesh, register_material(std::move(blue_material)));
+  graph.add_component<sbx::scenes::static_mesh>(blue, _cube_mesh, assets_module.add_runtime_asset(std::make_unique<sbx::models::material>(std::move(blue_material))));
 
   // Base
 
@@ -234,7 +230,7 @@ application::application()
   base_material.occlusion_strength = 1.0f;
   base_material.specular_factor = 0.0f;
 
-  graph.add_component<sbx::scenes::static_mesh>(base, _cube_mesh, register_material(std::move(base_material)));
+  graph.add_component<sbx::scenes::static_mesh>(base, _cube_mesh, assets_module.add_runtime_asset(std::make_unique<sbx::models::material>(std::move(base_material))));
 
   auto& base_rigidbody = graph.add_component<sbx::physics::rigidbody>(base);
   base_rigidbody.set_is_static(true);
@@ -251,7 +247,7 @@ application::application()
   cube_material.occlusion_strength = 1.0f;
   cube_material.specular_factor = 0.0f;
 
-  _cube_material = register_material(std::move(cube_material));
+  _cube_material = assets_module.add_runtime_asset(std::make_unique<sbx::models::material>(std::move(cube_material)));
 
   // Tree
 
@@ -292,8 +288,8 @@ application::application()
   tree_leaves_material.scrumble_falloff_exponent = 1.5f;
 
   auto tree_submeshes = std::vector<sbx::scenes::static_mesh::submesh>{
-    sbx::scenes::static_mesh::submesh{0, register_material(std::move(tree_bark_material))},
-    sbx::scenes::static_mesh::submesh{1, register_material(std::move(tree_leaves_material))}
+    sbx::scenes::static_mesh::submesh{0, assets_module.add_runtime_asset(std::make_unique<sbx::models::material>(std::move(tree_bark_material)))},
+    sbx::scenes::static_mesh::submesh{1, assets_module.add_runtime_asset(std::make_unique<sbx::models::material>(std::move(tree_leaves_material)))}
   };
 
   graph.add_component<sbx::scenes::static_mesh>(tree, tree_mesh, tree_submeshes);
@@ -320,8 +316,8 @@ application::application()
   white_material.occlusion_strength = 1.0f;
   white_material.specular_factor = 0.0f;
 
-  const auto black_material_id = register_material(std::move(black_material));
-  const auto white_material_id = register_material(std::move(white_material));
+  const auto black_material_id = assets_module.add_runtime_asset(std::make_unique<sbx::models::material>(std::move(black_material)));
+  const auto white_material_id = assets_module.add_runtime_asset(std::make_unique<sbx::models::material>(std::move(white_material)));
 
   for (auto i = 0; i < 8; ++i) {
     auto white_pawn = graph.create_node(fmt::format("White Pawn {}", i + 1));

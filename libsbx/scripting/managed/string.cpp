@@ -11,7 +11,7 @@
 
 #include <libsbx/scripting/managed/memory.hpp>
 
-#if defined(SBX_WINDOWS)
+#if defined(SBX_OPERATING_SYSTEM_WIN32)
 #include <windows.h>
 #include <stringapiset.h>
 #endif

@@ -81,7 +81,7 @@ public:
   }
 
   constexpr auto str() const noexcept -> const std::basic_string<char_type>& {
-    // if constexpr (is_build_configuration_debug_v) {
+    // if constexpr (is_build_type_debug_v) {
     //   return _string;
     // } else {
     //   return _string.str();
@@ -149,7 +149,7 @@ private:
 
   }; // struct empty_string
 
-  // using string_type = std::conditional_t<is_build_configuration_debug_v, std::basic_string<char_type>, empty_string>;
+  // using string_type = std::conditional_t<is_build_type_debug_v, std::basic_string<char_type>, empty_string>;
   // [[no_unique_address]] string_type _string{};
 
   std::basic_string<char_type> _string{};

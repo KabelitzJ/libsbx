@@ -8,22 +8,22 @@
 namespace sbx::utility {
 
 /** @brief Possible build configurations */
-enum class build_configuration : std::uint8_t {
+enum class build_type : std::uint8_t {
   debug = 0,
   release = 1
-}; // enum class build_configuration
+}; // enum class build_type
 
-#if defined(DEBUG) || !defined(NDEBUG)
-inline constexpr auto build_configuration_v = build_configuration::debug;
+#if defined(SBX_BUILD_TYPE_DEBUG)
+inline constexpr auto build_type_v = build_type::debug;
 #else
-inline constexpr auto build_configuration_v = build_configuration::release;
+inline constexpr auto build_type_v = build_type::release;
 #endif
 
-struct is_build_configuration_debug {
-  inline static constexpr auto value = (build_configuration_v == build_configuration::debug);
-}; // struct is_build_configuration_debug
+struct is_build_type_debug {
+  inline static constexpr auto value = (build_type_v == build_type::debug);
+}; // struct is_build_type_debug
 
-inline constexpr auto is_build_configuration_debug_v = is_build_configuration_debug::value;
+inline constexpr auto is_build_type_debug_v = is_build_type_debug::value;
 
 /** @brief Possible operating systems */
 enum class operating_system : std::uint8_t {
@@ -33,15 +33,12 @@ enum class operating_system : std::uint8_t {
   unknown = 3
 }; // enum class operating_system
 
-#if defined(WIN32) || defined(_WIN32)
+#if defined(SBX_OPERATING_SYSTEM_WIN32)
 inline constexpr auto operating_system_v = operating_system::windows;
-#define SBX_WINDOWS
-#elif defined(__APPLE__)
+#elif defined(SBX_OPERATING_SYSTEM_APPLE)
 inline constexpr auto operating_system_v = operating_system::apple;
-#define SBX_APPLE
-#elif defined(__linux__) || defined(__linux)
+#elif defined(SBX_OPERATING_SYSTEM_LINUX)
 inline constexpr auto operating_system_v = operating_system::linux;
-#define SBX_UNIX
 #else 
 inline constexpr auto operating_system_v = operating_system::unknown;
 #warning "Unknown operating system"
@@ -55,11 +52,11 @@ enum class compiler : std::uint8_t {
   unknown = 3
 }; // enum class compiler
 
-#if defined(__clang__)
+#if defined(SBX_COMPILER_CLANG)
 inline constexpr auto compiler_v = compiler::clang;
-#elif (defined(__GNUC__) || defined(__GNUG__) || defined(__MINGW32__))
+#elif defined(SBX_COMPILER_GNU)
 inline constexpr auto compiler_v = compiler::gnu;
-#elif defined(__MSC_VER)
+#elif defined(SBX_COMPILER_MSC)
 inline constexpr auto compiler_v = compiler::msc;
 #else
 inline constexpr auto compiler_v = compiler::unknown;

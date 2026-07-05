@@ -4,7 +4,7 @@ include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
 
 if(NOT CMAKE_BUILD_TYPE)
-  set(CMAKE_BUILD_TYPE Debug)
+  set(CMAKE_BUILD_TYPE "Debug")
 endif()
 
 project(libsbx VERSION 0.1.0 LANGUAGES CXX)
@@ -23,6 +23,38 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_BINARY_DIR}" "${CMAKE_BINARY_DIR}/dependencies" "${CMAKE_SOURCE_DIR}/cmake" "${CMAKE_SOURCE_DIR}/cmake/modules")
 list(APPEND CMAKE_PREFIX_PATH "${CMAKE_BINARY_DIR}" "${CMAKE_BINARY_DIR}/dependencies")
+
+# Operating system
+if(WIN32)
+  set(SBX_OPERATING_SYSTEM "WIN32")
+elseif(APPLE)
+  set(SBX_OPERATING_SYSTEM "APPLE")
+elseif(UNIX)
+  set(SBX_OPERATING_SYSTEM "LINUX")
+else()
+  set(SBX_OPERATING_SYSTEM "UNKNOWN")
+  message(WARNING "Unknown operating system")
+endif()
+
+# Compiler
+if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang" OR CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang")
+  set(SBX_COMPILER "CLANG")
+elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+  set(SBX_COMPILER "GNU")
+elseif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+  set(SBX_COMPILER "MSC")
+else()
+  set(SBX_COMPILER "UNKNOWN")
+  message(WARNING "Unknown compiler")
+endif()
+
+# Build type
+
+if (CMAKE_BUILD_TYPE STREQUAL "Debug")
+  set(SBX_BUILD_TYPE "DEBUG")
+else()
+  set(SBX_BUILD_TYPE "RELEASE")
+endif()
 
 # Options
 
@@ -727,6 +759,9 @@ target_compile_definitions(
     SBX_CONSTEXPR_ENABLED=$<IF:$<BOOL:${SBX_CONSTEXPR_ENABLED}>,1,0>
     SBX_PROFILING_ENABLED=$<IF:$<BOOL:${SBX_PROFILING_ENABLED}>,1,0>
     $<$<BOOL:${SBX_PROFILING_ENABLED}>:TRACY_ENABLE>
+    SBX_OPERATING_SYSTEM_${SBX_OPERATING_SYSTEM}
+    SBX_COMPILER_${SBX_COMPILER}
+    SBX_BUILD_TYPE_${SBX_BUILD_TYPE}
   PRIVATE
     GLFW_INCLUDE_VULKAN
 )

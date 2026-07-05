@@ -8,7 +8,7 @@
 
 #include <libsbx/utility/target.hpp>
 
-#if defined(SBX_WINDOWS)
+#if defined(SBX_OPERATING_SYSTEM_WIN32)
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <objbase.h>
@@ -17,7 +17,7 @@
 namespace sbx::scripting::managed {
 
 auto memory::allocate_hglobal(std::size_t size) -> void* {
-#if defined(SBX_WINDOWS)
+#if defined(SBX_OPERATING_SYSTEM_WIN32)
   return LocalAlloc(LMEM_FIXED | LMEM_ZEROINIT, size);
 #else
   return malloc(size);
@@ -25,7 +25,7 @@ auto memory::allocate_hglobal(std::size_t size) -> void* {
 }
 
 auto memory::free_hglobal(void* pointer) -> void {
-#if defined(SBX_WINDOWS)
+#if defined(SBX_OPERATING_SYSTEM_WIN32)
   LocalFree(pointer);
 #else
   free(pointer);
@@ -36,7 +36,7 @@ auto memory::string_to_co_task_memory_auto(string_view_type string) -> char_type
   auto length = string.length() + 1;
   auto size = length * sizeof(char_type);
 
-#if defined(SBX_WINDOWS)
+#if defined(SBX_OPERATING_SYSTEM_WIN32)
   auto* buffer = static_cast<char_type*>(CoTaskMemAlloc(size));
 
   if (buffer != nullptr) {
@@ -56,7 +56,7 @@ auto memory::string_to_co_task_memory_auto(string_view_type string) -> char_type
 }
 
 auto memory::free_co_task_memory(void* memory) -> void {
-#if defined(SBX_WINDOWS)
+#if defined(SBX_OPERATING_SYSTEM_WIN32)
   CoTaskMemFree(memory);
 #else
   free_hglobal(memory);

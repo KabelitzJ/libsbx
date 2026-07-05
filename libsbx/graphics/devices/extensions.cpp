@@ -23,7 +23,7 @@ auto extensions::instance() -> std::vector<const char*> {
 
   // required_extensions.push_back(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
 
-  if constexpr (utility::build_configuration_v == utility::build_configuration::debug) {
+  if constexpr (utility::build_type_v == utility::build_type::debug) {
     required_extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
     // required_extensions.push_back(VK_EXT_VALIDATION_FEATURES_EXTENSION_NAME);
   }
@@ -37,7 +37,7 @@ auto extensions::instance() -> std::vector<const char*> {
 
   vkEnumerateInstanceExtensionProperties(nullptr, &available_extention_count, available_extensions.data());
 
-  if constexpr (utility::build_configuration_v == utility::build_configuration::debug) {
+  if constexpr (utility::build_type_v == utility::build_type::debug) {
     utility::logger<"graphics">::debug("Available instance extension:");
     for (const auto& extension : available_extensions) {
       utility::logger<"graphics">::debug("\t{}", std::string_view{extension.extensionName});

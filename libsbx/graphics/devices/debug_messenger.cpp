@@ -9,7 +9,7 @@
 namespace sbx::graphics {
 
 auto set_debug_name(const VkObjectType object_type, const std::uint64_t object_handle, const std::string& name) -> void {
-  if constexpr (utility::build_configuration_v == utility::build_configuration::debug) {
+  if constexpr (utility::build_type_v == utility::build_type::debug) {
     auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
     auto& logical_device = graphics_module.logical_device();
 
@@ -28,7 +28,7 @@ auto set_debug_name(const VkObjectType object_type, const std::uint64_t object_h
 }
 
 auto debug_messenger::create(const instance& target, const VkAllocationCallbacks* allocator) -> VkResult {
-  if constexpr (utility::build_configuration_v == utility::build_configuration::debug) {
+  if constexpr (utility::build_type_v == utility::build_type::debug) {
     auto* function = reinterpret_cast<PFN_vkCreateDebugUtilsMessengerEXT>(vkGetInstanceProcAddr(target.handle(), "vkCreateDebugUtilsMessengerEXT"));
 
     if (function) {
@@ -42,7 +42,7 @@ auto debug_messenger::create(const instance& target, const VkAllocationCallbacks
 }
 
  auto debug_messenger::destroy(const instance& target, const VkAllocationCallbacks* allocator) -> void {
-  if constexpr (utility::build_configuration_v == utility::build_configuration::debug) {
+  if constexpr (utility::build_type_v == utility::build_type::debug) {
     auto* function = reinterpret_cast<PFN_vkDestroyDebugUtilsMessengerEXT>(vkGetInstanceProcAddr(target.handle(), "vkDestroyDebugUtilsMessengerEXT"));
 
     if (function) {
@@ -52,7 +52,7 @@ auto debug_messenger::create(const instance& target, const VkAllocationCallbacks
 }
 
 auto debug_messenger::create_info() -> VkDebugUtilsMessengerCreateInfoEXT* {
-  if constexpr (utility::build_configuration_v == utility::build_configuration::debug) {
+  if constexpr (utility::build_type_v == utility::build_type::debug) {
     static auto validation_feature_enables = std::array<VkValidationFeatureEnableEXT, 2u>{
       // VK_VALIDATION_FEATURE_ENABLE_DEBUG_PRINTF_EXT,
       // VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT,

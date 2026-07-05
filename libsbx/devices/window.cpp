@@ -20,7 +20,7 @@ window::window(const window_create_info& create_info)
   _height = create_info.height;
   _title = create_info.title;
 
-  if constexpr (utility::build_configuration_v == utility::build_configuration::debug) {
+  if constexpr (utility::build_type_v == utility::build_type::debug) {
     _title = fmt::format("{} [Debug] v" SBX_VERSION_STRING "+" SBX_COMPILE_TIMESTAMP, _title);
   }
 
@@ -82,7 +82,7 @@ auto window::title() const -> const std::string& {
 auto window::set_title(const std::string& title) -> void {
   _title = title;
 
-  if (utility::build_configuration_v == utility::build_configuration::debug) {
+  if (utility::build_type_v == utility::build_type::debug) {
     _title = fmt::format("{} [Debug] v" SBX_VERSION_STRING "+" SBX_COMPILE_TIMESTAMP, _title);
   }
 

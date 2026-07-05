@@ -71,7 +71,7 @@ auto compute_stage_key(const compiler::compile_request& request, SlangStage stag
   meta.reserve(512u);
 
   meta.append("schema=").append(std::to_string(cache_schema_version)).push_back('\n');
-  meta.append("debug=").append(utility::is_build_configuration_debug_v ? "1" : "0").push_back('\n');
+  meta.append("debug=").append(utility::is_build_type_debug_v ? "1" : "0").push_back('\n');
   meta.append("slang=").append(slang_tag).push_back('\n');
   meta.append("stage=").append(stage_name).push_back('\n');
   meta.append("profile=").append(stage_profile).push_back('\n');
@@ -504,7 +504,7 @@ auto compiler::_create_session(const compile_request& compile_request, SlangStag
   auto preprocessor_macro_descriptions = std::vector<slang::PreprocessorMacroDesc>{};
   preprocessor_macro_descriptions.reserve(compile_request.defines.size() + 1u);
 
-  preprocessor_macro_descriptions.push_back(slang::PreprocessorMacroDesc{"SBX_DEBUG", utility::is_build_configuration_debug_v ? "1" : "0"});
+  preprocessor_macro_descriptions.push_back(slang::PreprocessorMacroDesc{"SBX_DEBUG", utility::is_build_type_debug_v ? "1" : "0"});
 
   for (const auto& [key, value] : compile_request.defines) {
     preprocessor_macro_descriptions.push_back(slang::PreprocessorMacroDesc{key.c_str(), value.c_str()});

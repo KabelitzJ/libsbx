@@ -43,13 +43,13 @@ instance::instance()
 
   validate(vkCreateInstance(&instance_create_info, nullptr, &_handle));
 
-  if constexpr (utility::build_configuration_v == utility::build_configuration::debug) {
+  if constexpr (utility::build_type_v == utility::build_type::debug) {
     validate(debug_messenger::create(*this));
   }
 }
 
 instance::~instance() {
-  if constexpr (utility::build_configuration_v == utility::build_configuration::debug) {
+  if constexpr (utility::build_type_v == utility::build_type::debug) {
     debug_messenger::destroy(*this);
   }
 

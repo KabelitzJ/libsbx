@@ -39,7 +39,7 @@ descriptor_set::descriptor_set(const pipeline& pipeline, std::uint32_t set) noex
 
   for (auto i = 0; i < descriptor_counts.size(); ++i) {
     if (descriptor_counts[i] > 1u) {
-      if constexpr (sbx::utility::is_build_configuration_debug_v) {
+      if constexpr (sbx::utility::is_build_type_debug_v) {
         if (variable_descriptor_index != -1) {
           throw std::runtime_error{"Descriptor set has more than one variable descriptor count."};
         }

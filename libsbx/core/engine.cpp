@@ -17,7 +17,7 @@ engine::engine(std::span<std::string_view> args)
 
   _instance = this;
 
-  if constexpr (sbx::utility::is_build_configuration_debug_v) {
+  if constexpr (sbx::utility::is_build_type_debug_v) {
     sbx::utility::logger<"core">::debug("Cli args:");
 
     for (const auto& arg : args) {

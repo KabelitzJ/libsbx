@@ -84,7 +84,7 @@ struct logger_instance {
 
     sinks.push_back(std::make_shared<spdlog::sinks::basic_file_sink_st>("./demo/logs/sbx.log", true));
 
-    if constexpr (utility::build_configuration_v == utility::build_configuration::debug) {
+    if constexpr (utility::build_type_v == utility::build_type::debug) {
       sinks.push_back(std::make_shared<spdlog::sinks::stdout_color_sink_st>());
     }
 
@@ -96,7 +96,7 @@ struct logger_instance {
 
     logger.set_pattern("[%Y-%m-%d %H:%M:%S] [%^%l%$] %v");
 
-    if constexpr (build_configuration_v == build_configuration::debug) {
+    if constexpr (build_type_v == build_type::debug) {
       logger.set_level(spdlog::level::trace);
     } else {
       logger.set_level(spdlog::level::info);

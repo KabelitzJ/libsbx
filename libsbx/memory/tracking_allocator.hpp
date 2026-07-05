@@ -29,7 +29,7 @@ struct is_memory_tracking_enabled {
 #if defined(SBX_MEMORY_TRACKING)
   inline static constexpr auto value = (SBX_MEMORY_TRACKING != 0);
 #else
-  inline static constexpr auto value = utility::is_build_configuration_debug_v;
+  inline static constexpr auto value = utility::is_build_type_debug_v;
 #endif
 
 }; // struct is_memory_tracking_enabled

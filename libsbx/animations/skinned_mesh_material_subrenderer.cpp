@@ -65,10 +65,10 @@ auto skinned_mesh_material_subrenderer::render(graphics::command_buffer& command
 
     pipeline_data.push_handler.push("transform_data_buffer", draw_list.buffer(skinned_mesh_material_draw_list::transform_data_buffer_name).address());
     pipeline_data.push_handler.push("material_data_buffer", draw_list.buffer(skinned_mesh_material_draw_list::material_data_buffer_name).address());
-    pipeline_data.push_handler.push("instance_data_buffer", graphics_module.get_resource<graphics::storage_buffer>(data.instance_data_buffer).address());
+    pipeline_data.push_handler.push("instance_data_buffer", draw_list.buffer(skinned_mesh_material_draw_list::instance_data_buffer_name).address());
     pipeline_data.push_handler.push("vertex_buffer", graphics_module.get_resource<graphics::storage_buffer>(skinning_task->vertex_buffer_handle()).address());
 
-    auto& draw_commands_buffer = graphics_module.get_resource<graphics::storage_buffer>(data.draw_commands_buffer);
+    auto& draw_commands_buffer = draw_list.buffer(skinned_mesh_material_draw_list::draw_commands_buffer_name);
 
     for (const auto& draw_range : data.ranges) {
       auto& mesh = assets_module.get_loaded<animations::mesh>(draw_range.mesh_id);

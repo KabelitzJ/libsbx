@@ -59,8 +59,12 @@ auto static_mesh_shadow_subrenderer::render(graphics::command_buffer& command_bu
 
     auto culled = frustum_culling_task ? frustum_culling_task->culled(models::bucket::shadow, key) : std::nullopt;
 
-    auto& instance_data_buffer = graphics_module.get_resource<graphics::storage_buffer>(culled ? culled->instances_buffer : data.instance_data_buffer);
-    auto& draw_commands_buffer = graphics_module.get_resource<graphics::storage_buffer>(culled ? culled->commands_buffer : data.draw_commands_buffer);
+    auto& instance_data_buffer = culled
+      ? graphics_module.get_resource<graphics::storage_buffer>(culled->instances_buffer)
+      : draw_list.buffer(static_mesh_material_draw_list::instance_data_buffer_name);
+    auto& draw_commands_buffer = culled
+      ? graphics_module.get_resource<graphics::storage_buffer>(culled->commands_buffer)
+      : draw_list.buffer(static_mesh_material_draw_list::draw_commands_buffer_name);
 
     pipeline_data.push_handler.push("transform_data_buffer", draw_list.buffer(static_mesh_material_draw_list::transform_data_buffer_name).address());
     pipeline_data.push_handler.push("material_data_buffer", draw_list.buffer(static_mesh_material_draw_list::material_data_buffer_name).address());
@@ -75,7 +79,8 @@ auto static_mesh_shadow_subrenderer::render(graphics::command_buffer& command_bu
 
       pipeline_data.push_handler.bind(command_buffer);
 
-      command_buffer.draw_indexed_indirect(draw_commands_buffer, range_ref.range.offset, range_ref.range.count);
+      auto command_offset = culled ? (range_ref.range.offset - data.commands_offset) : range_ref.range.offset;
+      command_buffer.draw_indexed_indirect(draw_commands_buffer, command_offset, range_ref.range.count);
     }
   }
 }

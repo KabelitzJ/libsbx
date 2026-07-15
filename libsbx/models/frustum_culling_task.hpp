@@ -113,8 +113,8 @@ private:
   }; // struct culled_range_data
 
   struct cull_job {
-    graphics::storage_buffer_handle input_commands;
-    graphics::storage_buffer_handle input_instances;
+    graphics::buffer::address_type input_commands_address;
+    graphics::buffer::address_type input_instances_address;
     graphics::storage_buffer_handle output_commands;
     graphics::storage_buffer_handle output_instances;
     graphics::buffer::address_type transforms_address;

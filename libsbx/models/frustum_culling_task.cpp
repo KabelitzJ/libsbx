@@ -148,13 +148,11 @@ auto frustum_culling_task::execute(graphics::command_buffer& command_buffer) -> 
   const auto frustum_address = frustum_buffer.address();
 
   for (const auto& job : jobs) {
-    auto& in_cmds = graphics_module.get_resource<graphics::storage_buffer>(job.input_commands);
-    auto& in_inst = graphics_module.get_resource<graphics::storage_buffer>(job.input_instances);
     auto& out_cmds = graphics_module.get_resource<graphics::storage_buffer>(job.output_commands);
     auto& out_inst = graphics_module.get_resource<graphics::storage_buffer>(job.output_instances);
 
-    _push_handler.push("input_commands", in_cmds.address());
-    _push_handler.push("input_instances", in_inst.address());
+    _push_handler.push("input_commands", job.input_commands_address);
+    _push_handler.push("input_instances", job.input_instances_address);
     _push_handler.push("output_commands", out_cmds.address());
     _push_handler.push("output_instances", out_inst.address());
     _push_handler.push("transforms", job.transforms_address);
@@ -206,11 +204,11 @@ auto frustum_culling_task::_collect_bucket(bucket current_bucket, std::uint32_t 
       continue;
     }
 
-    auto& input_commands = graphics_module.get_resource<graphics::storage_buffer>(entry.draw_commands_buffer);
-    auto& input_instances = graphics_module.get_resource<graphics::storage_buffer>(entry.instance_data_buffer);
+    auto& input_commands = draw_list.buffer(static_mesh_material_draw_list::draw_commands_buffer_name);
+    auto& input_instances = draw_list.buffer(static_mesh_material_draw_list::instance_data_buffer_name);
 
-    const auto input_commands_size = input_commands.size();
-    const auto input_instances_size = input_instances.size();
+    const auto input_commands_size = static_cast<VkDeviceSize>(job_bounds.size()) * sizeof(VkDrawIndexedIndirectCommand);
+    const auto input_instances_size = static_cast<VkDeviceSize>(total_instances) * sizeof(models::instance_data);
 
     const auto range_key = culled_range_key{current_bucket, key, cascade};
     auto& culled = _get_or_create_culled_range(range_key, input_commands_size, input_instances_size);
@@ -228,9 +226,12 @@ auto frustum_culling_task::_collect_bucket(bucket current_bucket, std::uint32_t 
       }
     }
 
+    const auto commands_byte_offset = static_cast<VkDeviceSize>(entry.commands_offset) * sizeof(VkDrawIndexedIndirectCommand);
+    const auto instances_byte_offset = static_cast<VkDeviceSize>(entry.instances_offset) * sizeof(models::instance_data);
+
     auto job = cull_job{};
-    job.input_commands = entry.draw_commands_buffer;
-    job.input_instances = entry.instance_data_buffer;
+    job.input_commands_address = input_commands.address() + commands_byte_offset;
+    job.input_instances_address = input_instances.address() + instances_byte_offset;
     job.output_commands = culled.commands_buffers[frame];
     job.output_instances = culled.instances_buffers[frame];
     job.transforms_address = transforms_address;

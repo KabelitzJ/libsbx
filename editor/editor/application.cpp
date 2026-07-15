@@ -111,6 +111,8 @@ application::application()
   const auto tree_mesh = assets_module.load_asset("res://meshes/tree/tree.gltf");
   const auto pawn_mesh = assets_module.load_asset("res://meshes/chess/pawn/pawn.gltf");
 
+  const auto fox_mesh = assets_module.load_asset("res://meshes/chess/pawn/pawn.gltf");
+
   // Spheres
 
   auto spheres = graph.create_node(fmt::format("Spheres"));

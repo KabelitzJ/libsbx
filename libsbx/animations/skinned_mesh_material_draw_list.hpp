@@ -110,25 +110,27 @@ struct skinned_mesh_traits {
   }
 
   static auto make_instance_data(const scenes::node node, const std::uint32_t transform_index, std::uint32_t material_index, const instance_payload& payload) -> models::instance_data {
-    return models::instance_data{transform_index, material_index, static_cast<std::uint32_t>(node), payload.skinned_vertex_offset};
+    return models::instance_data{transform_index, material_index, static_cast<std::uint32_t>(node), (payload.skinned_vertex_offset << 4) | 0u};
   }
 
   template<typename Mesh, typename Emitter>
   static auto build_draw_commands(const Mesh& mesh, std::uint32_t submesh_index, std::vector<models::instance_data>&& instances, Emitter&& emitter) -> std::uint32_t {
-    const auto& submesh = mesh.submesh(submesh_index);
-
-    for (auto i = std::uint32_t{0u}; i < static_cast<std::uint32_t>(instances.size()); ++i) {
-      auto command = VkDrawIndexedIndirectCommand{};
-      command.indexCount = submesh.index_count;
-      command.instanceCount = 1u;
-      command.firstIndex = submesh.index_offset;
-      command.vertexOffset = static_cast<std::int32_t>(instances[i].payload + submesh.vertex_offset);
-      command.firstInstance = emitter.base_instance;
-
-      emitter.emit_single(command, instances[i]);
+    if (instances.empty()) {
+      return 0;
     }
 
-    return static_cast<std::uint32_t>(instances.size());
+    const auto& submesh = mesh.submesh(submesh_index);
+
+    auto command = VkDrawIndexedIndirectCommand{};
+    command.indexCount = submesh.index_count;
+    command.instanceCount = static_cast<std::uint32_t>(instances.size());
+    command.firstIndex = submesh.index_offset;
+    command.vertexOffset = static_cast<std::int32_t>(submesh.vertex_offset);
+    command.firstInstance = emitter.base_instance;
+
+    emitter.emit_instanced(command, std::move(instances));
+
+    return command.instanceCount;
   }
 
   static auto skinning_jobs() -> std::vector<skinning_job>& {

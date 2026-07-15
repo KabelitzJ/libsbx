@@ -134,7 +134,7 @@ struct static_mesh_traits {
   }
 
   static auto make_instance_data(const scenes::node node, const std::uint32_t transform_index, std::uint32_t material_index, [[maybe_unused]] const instance_payload& payload) -> instance_data {
-    return instance_data{transform_index, material_index, static_cast<std::uint32_t>(node), payload.lod_level};
+    return instance_data{transform_index, material_index, static_cast<std::uint32_t>(node), (0u << 4u) | payload.lod_level};
   }
 
   template<typename Mesh, typename Emitter>

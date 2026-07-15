@@ -100,6 +100,8 @@ void main(uint3 dispatch_thread_id : SV_DispatchThreadID) {
   float radius = length(aabb.extents.xyz) * max_scale * push.radius_scale;
 
   if (test_sphere_frustum(world_center, radius)) {
+    uint local_base = push.prefix_sum[command_index];
+
     uint slot;
     InterlockedAdd(push.output_commands[command_index].instance_count, 1, slot);
 
@@ -107,9 +109,9 @@ void main(uint3 dispatch_thread_id : SV_DispatchThreadID) {
       push.output_commands[command_index].index_count = input_command.index_count;
       push.output_commands[command_index].first_index = input_command.first_index;
       push.output_commands[command_index].vertex_offset = input_command.vertex_offset;
-      push.output_commands[command_index].first_instance = input_command.first_instance;
+      push.output_commands[command_index].first_instance = local_base;
     }
 
-    push.output_instances[input_command.first_instance + slot] = instance_data;
+    push.output_instances[local_base + slot] = instance_data;
   }
 }

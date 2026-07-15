@@ -104,11 +104,14 @@ float3 apply_sway(float3 world_position, float local_height, material_data mater
 vertex_context load_vertex_context(vs_in input) {
   vertex_context contex;
 
-  contex.global_vertex = input.vertex_id + input.base_vertex;
   contex.global_instance = input.instance_id + input.base_instance;
-  contex.vertex = push.vertex_buffer[contex.global_vertex];
 
   instance_data instance = push.instance_data_buffer[contex.global_instance];
+
+  uint offset = (instance.payload >> 4);
+
+  contex.global_vertex = offset + input.vertex_id + input.base_vertex;
+  contex.vertex = push.vertex_buffer[contex.global_vertex];
   contex.transform = push.transform_data_buffer[instance.transform_index];
   contex.material = push.material_data_buffer[instance.material_index];
 

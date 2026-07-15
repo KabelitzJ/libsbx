@@ -39,7 +39,7 @@ struct alignas(16) instance_data {
   std::uint32_t transform_index;
   std::uint32_t material_index;
   std::uint32_t object_id;
-  std::uint32_t payload;
+  std::uint32_t payload; // upper 28 bits for vertex offset, lower 4 bits for LOD level
 }; // struct instance_data
 
 enum class bucket : std::uint8_t {
@@ -66,8 +66,8 @@ public:
   }; // struct range_reference
 
   struct bucket_entry {
-    graphics::storage_buffer_handle draw_commands_buffer{};
-    graphics::storage_buffer_handle instance_data_buffer{};
+    std::uint32_t commands_offset{0u};  // index of first command in global buffer
+    std::uint32_t instances_offset{0u}; // index of first instance in global buffer
     std::vector<std::uint32_t> command_instance_counts;
     std::vector<range_reference> ranges;
   }; // struct bucket_entry
@@ -76,22 +76,19 @@ public:
 
   inline static const auto transform_data_buffer_name = utility::hashed_string{"transform_data"};
   inline static const auto material_data_buffer_name = utility::hashed_string{"material_data"};
+  inline static const auto draw_commands_buffer_name = utility::hashed_string{"draw_commands"};
+  inline static const auto instance_data_buffer_name = utility::hashed_string{"instance_data"};
 
   basic_material_draw_list() {
     create_buffer(transform_data_buffer_name, graphics::storage_buffer::min_size, VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
     create_buffer(material_data_buffer_name, graphics::storage_buffer::min_size, VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
+    create_buffer(draw_commands_buffer_name, graphics::storage_buffer::min_size, VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT);
+    create_buffer(instance_data_buffer_name, graphics::storage_buffer::min_size, VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
 
     traits_type::create_shared_buffers(*this);
   }
 
   ~basic_material_draw_list() override {
-    auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
-
-    for (const auto& [key, data] : _pipeline_data) {  
-      graphics_module.remove_resource<graphics::storage_buffer>(data.draw_commands_buffer);
-      graphics_module.remove_resource<graphics::storage_buffer>(data.instance_data_buffer);
-    }
-
     traits_type::destroy_shared_buffers(*this);
   }
 
@@ -169,6 +166,10 @@ public:
 
     SBX_PROFILE_SCOPE_START(s2, "build draw commands");
 
+    _draw_commands.clear();
+    _instance_data.clear();
+    _command_instance_counts.clear();
+
     for (auto& [key, pipeline_data] : _pipeline_data) {
       if (pipeline_data.submesh_instances.empty()) {
         continue;
@@ -194,6 +195,11 @@ public:
       }
 
       _build_draw_commands(key, pipeline_data, material_buckets);
+    }
+
+    if (!_draw_commands.empty()) {
+      update_buffer(_draw_commands, draw_commands_buffer_name);
+      update_buffer(_instance_data, instance_data_buffer_name);
     }
 
     SBX_PROFILE_SCOPE_END(s2);
@@ -223,16 +229,6 @@ private:
   struct pipeline_data {
 
     std::unordered_map<math::uuid, std::vector<std::vector<instance_data>>> submesh_instances;
-
-    graphics::storage_buffer_handle draw_commands_buffer;
-    graphics::storage_buffer_handle instance_data_buffer;
-
-    pipeline_data() {
-      auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
-      
-      draw_commands_buffer = graphics_module.add_resource<graphics::storage_buffer>(graphics::storage_buffer::min_size, VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT);
-      instance_data_buffer = graphics_module.add_resource<graphics::storage_buffer>(graphics::storage_buffer::min_size, VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
-    }
 
   }; // struct pipeline_data
 
@@ -345,25 +341,28 @@ private:
 
     auto& assets_module = core::engine::get_module<assets::assets_module>();
 
-    auto draw_commands = std::vector<VkDrawIndexedIndirectCommand>{};
-    auto instance_data = std::vector<models::instance_data>{};
-    auto command_instance_counts = std::vector<std::uint32_t>{};
+    auto key_command_instance_counts = std::vector<std::uint32_t>{};
     auto range = graphics::draw_command_range{};
 
     const auto& buckets = material_buckets.at(key);
 
+    const auto key_commands_offset = static_cast<std::uint32_t>(_draw_commands.size());
+    const auto key_instances_offset = static_cast<std::uint32_t>(_instance_data.size());
+
     auto emitter = draw_command_emitter{
-      .base_instance = std::uint32_t{0u},
+      .base_instance = key_instances_offset,
       .emit_instanced = [&](const VkDrawIndexedIndirectCommand& command, std::vector<models::instance_data>&& instances) -> void {
-        draw_commands.push_back(command);
-        command_instance_counts.push_back(command.instanceCount);
-        utility::append(instance_data, std::move(instances));
+        _draw_commands.push_back(command);
+        key_command_instance_counts.push_back(command.instanceCount);
+        _command_instance_counts.push_back(command.instanceCount);
+        utility::append(_instance_data, std::move(instances));
         range.count++;
       },
       .emit_single = [&](const VkDrawIndexedIndirectCommand& command, const models::instance_data& instance) -> void {
-        draw_commands.push_back(command);
-        command_instance_counts.push_back(command.instanceCount);
-        instance_data.push_back(instance);
+        _draw_commands.push_back(command);
+        key_command_instance_counts.push_back(command.instanceCount);
+        _command_instance_counts.push_back(command.instanceCount);
+        _instance_data.push_back(instance);
         range.count++;
       }
     };
@@ -371,7 +370,7 @@ private:
     for (auto& [mesh_id, submesh_vectors] : pipeline.submesh_instances) {
       const auto& mesh = assets_module.get_loaded<mesh_type>(mesh_id);
 
-      range.offset = static_cast<std::uint32_t>(draw_commands.size());
+      range.offset = static_cast<std::uint32_t>(_draw_commands.size());
       range.count = 0u;
 
       for (auto&& [submesh_index, instances] : ranges::views::enumerate(submesh_vectors)) {
@@ -386,46 +385,31 @@ private:
         for (const auto& bucket_type : buckets) {
           auto& entry = _bucket_ranges[utility::to_underlying(bucket_type)][key];
 
-          entry.draw_commands_buffer = pipeline.draw_commands_buffer;
-          entry.instance_data_buffer = pipeline.instance_data_buffer;
+          if (entry.ranges.empty()) {
+            entry.commands_offset = key_commands_offset;
+            entry.instances_offset = key_instances_offset;
+          }
+
           entry.ranges.push_back(range_reference{ .mesh_id = mesh_id, .range = range });
         }
       }
     }
 
-    utility::assert_that(emitter.base_instance == instance_data.size(), "build_draw_commands is broken");
-
-    if (!draw_commands.empty()) {
-      _update_buffer(pipeline.draw_commands_buffer, draw_commands);
-      _update_buffer(pipeline.instance_data_buffer, instance_data);
-
+    if (!key_command_instance_counts.empty()) {
       for (auto& bucket_ranges : _bucket_ranges) {
         if (auto entry = bucket_ranges.find(key); entry != bucket_ranges.end()) {
-          entry->second.command_instance_counts = command_instance_counts;
+          entry->second.command_instance_counts = key_command_instance_counts;
         }
       }
     }
   }
 
-
-  template <typename Type>
-  static auto _update_buffer(graphics::storage_buffer_handle handle, const std::vector<Type>& data) -> void {
-    auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
-    auto& buffer = graphics_module.get_resource<graphics::storage_buffer>(handle);
-
-    const auto required_size = static_cast<std::uint32_t>(data.size() * sizeof(Type));
-
-    if (buffer.size() < required_size) {
-      buffer.resize(static_cast<std::size_t>(static_cast<std::float_t>(required_size) * 1.5f));
-    }
-
-    if (required_size > 0) {
-      buffer.update(data.data(), required_size);
-    }
-  }
-
   std::vector<transform_data> _transform_data;
   std::vector<material_data> _material_data;
+
+  std::vector<VkDrawIndexedIndirectCommand> _draw_commands;
+  std::vector<instance_data> _instance_data;
+  std::vector<std::uint32_t> _command_instance_counts;
 
   std::unordered_map<material_key, pipeline_data, material_key_hash> _pipeline_data;
 

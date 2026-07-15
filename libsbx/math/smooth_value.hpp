@@ -6,7 +6,7 @@
 #include <concepts>
 #include <type_traits>
 
-#include <libsbx/units/time.hpp>
+#include <libsbx/units/units.hpp>
 
 #include <libsbx/utility/logger.hpp>
 
@@ -118,7 +118,7 @@ public:
     return value();
   }
 
-  constexpr void update(const units::second& delta_time, const value_type base_speed) {
+  constexpr void update(const units::seconds& delta_time, const value_type base_speed) {
     const auto difference = _target - _current;
 
     if (comparision_traits<value_type>::equal(difference, static_cast<value_type>(0))) {
@@ -143,7 +143,7 @@ private:
   : _current{current},
     _target{target} { }
 
-  constexpr auto _compute_step(const value_type difference, const value_type base_speed, const units::second& delta_time) const -> value_type {
+  constexpr auto _compute_step(const value_type difference, const value_type base_speed, const units::seconds& delta_time) const -> value_type {
     switch (mode) {
       case smoothing_mode::linear: {
         return (difference > 0 ? 1 : -1) * base_speed * delta_time;

@@ -19,7 +19,7 @@
 #include <libsbx/utility/timer.hpp>
 #include <libsbx/utility/logger.hpp>
 
-#include <libsbx/units/time.hpp>
+#include <libsbx/units/units.hpp>
 
 #include <libsbx/core/module.hpp>
 #include <libsbx/core/application.hpp>
@@ -41,11 +41,11 @@ public:
 
   ~engine();
 
-  static auto delta_time() -> units::second;
+  static auto delta_time() -> units::seconds;
 
-  static auto fixed_delta_time() -> units::second;
+  static auto fixed_delta_time() -> units::seconds;
 
-  static auto time() -> units::second;
+  static auto time() -> units::seconds;
 
   static auto quit() -> void;
 
@@ -99,8 +99,8 @@ private:
 
   static engine* _instance;
 
-  units::second _delta_time;
-  units::second _time;
+  units::seconds _delta_time;
+  units::seconds _time;
 
   bool _is_running{};
   // std::vector<std::string_view> _args{};

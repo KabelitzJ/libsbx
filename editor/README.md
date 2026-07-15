@@ -1,3 +1,0 @@
-# editor
-
-C++ executable

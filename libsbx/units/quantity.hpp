@@ -1,189 +1,190 @@
-// SPDX-License-Identifier: MIT
-#ifndef LIBSBX_UNITS_QUANTITY_HPP_
-#define LIBSBX_UNITS_QUANTITY_HPP_
+#ifndef LIBSBX_UNITS_V2_QUANTITY_HPP_
+#define LIBSBX_UNITS_V2_QUANTITY_HPP_
 
-#include <ratio>
 #include <cmath>
-#include <typeindex>
-#include <iostream>
 
-#include <fmt/format.h>
+#include <libsbx/units/dimension.hpp>
 
 namespace sbx::units {
 
-template<typename Type>
-concept representation = (std::is_integral_v<Type> && !std::is_same_v<Type, bool> ) || std::is_floating_point_v<Type>;
+namespace detail {
 
-template<typename Type>
-concept ratio = requires {
-  { Type::num } -> std::convertible_to<std::intmax_t>;
-  { Type::den } -> std::convertible_to<std::intmax_t>;
-};
+template<typename ToScale, typename FromScale, typename Representation>
+constexpr auto convert_value(const Representation value) -> Representation {
+  using factor = std::ratio_divide<FromScale, ToScale>;
 
-template<typename LhsDimension, typename RhsDimension = LhsDimension, typename ResultDimension = LhsDimension>
-concept addable_dimensions = std::is_same_v<LhsDimension, RhsDimension> || requires(LhsDimension dimension1, ResultDimension dimension2) {
-  { dimension1 + dimension2 } -> std::same_as<ResultDimension>;
-  { dimension2 + dimension1 } -> std::same_as<ResultDimension>;
-};
+  return value * (static_cast<Representation>(factor::num) / static_cast<Representation>(factor::den));
+}
 
-template<typename LhsDimension, typename RhsDimension = LhsDimension, typename ResultDimension = LhsDimension>
-concept subtractable_dimensions = std::is_same_v<LhsDimension, RhsDimension> || requires(LhsDimension dimension1, ResultDimension dimension2) {
-  { dimension1 - dimension2 } -> std::same_as<ResultDimension>;
-  { dimension2 - dimension1 } -> std::same_as<ResultDimension>;
-};
+} // namespace detail
 
-template<typename LhsDimension, typename RhsDimension = LhsDimension, typename ResultDimension = LhsDimension>
-concept multipliable_dimensions = std::is_same_v<LhsDimension, RhsDimension> || requires(LhsDimension dimension1, ResultDimension dimension2) {
-  { dimension1 * dimension2 } -> std::same_as<ResultDimension>;
-  { dimension2 * dimension1 } -> std::same_as<ResultDimension>;
-};
-
-template<typename LhsDimension, typename RhsDimension = LhsDimension, typename ResultDimension = LhsDimension>
-concept dividable_dimensions = std::is_same_v<LhsDimension, RhsDimension> || requires(LhsDimension dimension1, ResultDimension dimension2) {
-  { dimension1 / dimension2 } -> std::same_as<ResultDimension>;
-  { dimension2 / dimension1 } -> std::same_as<ResultDimension>;
-};
-
-template<ratio Ratio, ratio OtherRatio>
-struct ratio_multiply {
-  using type = std::ratio<Ratio::num + OtherRatio::num, Ratio::den * OtherRatio::den>;
-}; // struct ratio_multiply
-
-template<ratio Ratio, ratio OtherRatio>
-using ratio_multiply_t = typename ratio_multiply<Ratio, OtherRatio>::type;
-
-template<representation Representation, ratio Ratio, ratio OtherRatio>
-struct ratio_conversion {
-  static constexpr auto value = 
-    static_cast<Representation>(OtherRatio::num) / static_cast<Representation>(OtherRatio::den) *
-    static_cast<Representation>(Ratio::den) / static_cast<Representation>(Ratio::num);
-}; // struct ratio_conversion
-
-template<representation Representation, ratio R1, ratio R2>
-inline static constexpr auto ratio_conversion_v = ratio_conversion<Representation, R1, R2>::value;
-
-template<typename Dimension, representation Representation, ratio Ratio = std::ratio<1, 1>>
+template<typename Dimension, typename Representation, typename Scale = std::ratio<1>>
 class quantity {
 
 public:
 
   using dimension_type = Dimension;
-  using value_type = Representation;
-  using ratio_type = Ratio;
+  using representation_type = Representation;
+  using scale = Scale;
 
-  quantity() = default;
+  constexpr quantity() = default;
 
-  template<std::convertible_to<value_type> Type>
-  constexpr explicit quantity(Type value) noexcept
-  : _value{static_cast<value_type>(value)} { }
+  explicit constexpr quantity(const representation_type value)
+  : _value{value} { }
 
-  template<representation OtherRepresentation, ratio OtherRatio = ratio_type>
-  constexpr quantity(const quantity<dimension_type, OtherRepresentation, OtherRatio>& other) noexcept
-  : _value{quantity_cast<quantity>(other)} { }
+  template<typename OtherScale>
+  constexpr quantity(const quantity<dimension_type, representation_type, OtherScale>& other)
+  : _value{detail::convert_value<scale, OtherScale, representation_type>(other.value())} { }
 
-  constexpr quantity(const quantity& other) noexcept = default;
-
-  constexpr quantity(quantity&& other) noexcept = default;
-
-  constexpr ~quantity() noexcept = default;
-
-  constexpr auto operator=(const quantity& other) noexcept -> quantity& = default;
-
-  constexpr auto operator=(quantity&& other) noexcept -> quantity& = default;
-
-  template<representation OtherRepresentation, ratio OtherRatio>
-  constexpr auto operator=(const quantity<dimension_type, OtherRepresentation, OtherRatio>& other) noexcept -> quantity& {
-    _value = static_cast<value_type>(other.value()) * ratio_conversion_v<value_type, Ratio, OtherRatio>;
-
-    return *this;
-  }
-
-  template<representation OtherRepresentation, ratio OtherRatio>
-  constexpr auto operator+=(const quantity<dimension_type, OtherRepresentation, OtherRatio>& other) noexcept -> quantity& {
-    _value += static_cast<value_type>(other.value()) * ratio_conversion_v<value_type, Ratio, OtherRatio>;
-
-    return *this;
-  }
-
-  template<representation OtherRepresentation, ratio OtherRatio>
-  constexpr auto operator-=(const quantity<dimension_type, OtherRepresentation, OtherRatio>& other) noexcept -> quantity& {
-    _value -= static_cast<value_type>(other.value()) * ratio_conversion_v<value_type, Ratio, OtherRatio>;
-
-    return *this;
-  }
-
-  constexpr auto operator-() const noexcept -> quantity {
-    return quantity{-_value};
-  }
-
-  template<typename Type>
-  constexpr auto operator/(const Type other) -> quantity {
-    return quantity{_value / other};
-  }
-
-  constexpr auto value() const noexcept -> value_type {
+  constexpr auto value() const -> representation_type {
     return _value;
   }
 
-  constexpr operator value_type() const noexcept {
-    return _value;
+  constexpr operator representation_type() const {
+    return value();
+  }
+
+  template<typename OtherScale>
+  constexpr auto operator+=(const quantity<dimension_type, representation_type, OtherScale>& other) -> quantity& {
+    _value += detail::convert_value<scale, OtherScale, representation_type>(other.value());
+
+    return *this;
+  }
+
+  template<typename OtherScale>
+  constexpr auto operator-=(const quantity<dimension_type, representation_type, OtherScale>& other) -> quantity& {
+    _value += detail::convert_value<scale, OtherScale, representation_type>(other.value());
+
+    return *this;
   }
 
 private:
 
-  value_type _value{};
+  representation_type _value{};
 
 }; // class quantity
 
-template<typename Dimension, representation Representation, ratio Ratio>
-constexpr auto operator==(const quantity<Dimension, Representation, Ratio>& lhs, const quantity<Dimension, Representation, Ratio>& rhs) noexcept -> bool {
-  return lhs.value() == rhs.value();
+template<typename Dimension, typename Representation, typename LhsScale, typename RhsScale>
+constexpr auto operator+(quantity<Dimension, Representation, LhsScale> lhs, quantity<Dimension, Representation, RhsScale> rhs) -> quantity<Dimension, Representation, LhsScale> {
+  lhs += rhs;
+
+  return lhs;
 }
 
-template<typename Dimension, representation Representation, ratio Ratio>
-constexpr auto operator<=>(const quantity<Dimension, Representation, Ratio>& lhs, const quantity<Dimension, Representation, Ratio>& rhs) noexcept -> std::partial_ordering {
-  return lhs.value() <=> rhs.value();
+template<typename Dimension, typename Representation, typename LhsScale, typename RhsScale>
+constexpr auto operator-(quantity<Dimension, Representation, LhsScale> lhs, quantity<Dimension, Representation, RhsScale> rhs) -> quantity<Dimension, Representation, LhsScale> {
+  lhs -= rhs;
+
+  return lhs;
 }
 
-template<typename Dimension, representation LhsRepresentation, ratio LhsRatio, representation RhsRepresentation, ratio RhsRatio>
-constexpr auto operator+(quantity<Dimension, LhsRepresentation, LhsRatio> lhs, const quantity<Dimension, RhsRepresentation, RhsRatio>& rhs) -> quantity<Dimension, LhsRepresentation, LhsRatio> {
-  return lhs += rhs;
+template<typename Dimension, typename Representation, typename Scale>
+constexpr auto operator-(quantity<Dimension, Representation, Scale> lhs) -> quantity<Dimension, Representation, Scale> {
+  return quantity<Dimension, Representation, Scale>{-lhs.value()};
 }
 
-template<typename Dimension, representation LhsRepresentation, ratio LhsRatio, representation RhsRepresentation, ratio RhsRatio>
-constexpr auto operator-(quantity<Dimension, LhsRepresentation, LhsRatio> lhs, const quantity<Dimension, RhsRepresentation, RhsRatio>& rhs) -> quantity<Dimension, LhsRepresentation, LhsRatio> {
-  return lhs -= rhs;
+template<typename LhsDimension, typename RhsDimension, typename Representation, typename LhsScale, typename RhsScale>
+constexpr auto operator*(quantity<LhsDimension, Representation, LhsScale> lhs, quantity<RhsDimension, Representation, RhsScale> rhs) -> quantity<dimension_multiply<LhsDimension, RhsDimension>, Representation, std::ratio_multiply<LhsScale, RhsScale>> {
+  return quantity<dimension_multiply<LhsDimension, RhsDimension>, Representation, std::ratio_multiply<LhsScale, RhsScale>>{lhs.value() * rhs.value()};
 }
 
-template<typename Dimension, representation Representation, ratio Ratio>
-constexpr auto operator-(const quantity<Dimension, Representation, Ratio>& value) -> quantity<Dimension, Representation, Ratio> {
-  return -value;
+template<typename LhsDimension, typename RhsDimension, typename Representation, typename LhsScale, typename RhsScale>
+constexpr auto operator/(quantity<LhsDimension, Representation, LhsScale> lhs, quantity<RhsDimension, Representation, RhsScale> rhs) -> quantity<dimension_division<LhsDimension, RhsDimension>, Representation, std::ratio_divide<LhsScale, RhsScale>> {
+  return quantity<dimension_division<LhsDimension, RhsDimension>, Representation, std::ratio_divide<LhsScale, RhsScale>>{lhs.value() / rhs.value()};
 }
 
-template<typename TargetQuantity, representation FromRepresentation, ratio FromRatio>
-constexpr auto quantity_cast(const quantity<typename TargetQuantity::dimension_type, FromRepresentation, FromRatio>& from) -> TargetQuantity {
-  using value_type = typename TargetQuantity::value_type;
-  using to_ratio = typename TargetQuantity::ratio_type;
-
-  using ratio_type = std::conditional_t<std::is_floating_point_v<value_type>, value_type, std::float_t>;
-
-  const auto ratio = ratio_conversion_v<ratio_type, to_ratio, FromRatio>;
-
-  return TargetQuantity{static_cast<value_type>(from.value()) * static_cast<value_type>(ratio)};
+template<typename Dimension, typename Representation, typename Scale>
+constexpr auto operator*(quantity<Dimension, Representation, Scale> lhs, Representation scale) -> quantity<Dimension, Representation, Scale> {
+  return quantity<Dimension, Representation, Scale>{lhs.value() * scale};
 }
+
+template<typename Dimension, typename Representation, typename Scale>
+constexpr auto operator*(Representation scale, quantity<Dimension, Representation, Scale> lhs) -> quantity<Dimension, Representation, Scale> {
+  return quantity<Dimension, Representation, Scale>{scale * lhs.value()};
+}
+
+template<typename Dimension, typename Representation, typename Scale>
+constexpr auto operator/(quantity<Dimension, Representation, Scale> lhs, Representation scale) -> quantity<Dimension, Representation, Scale> {
+  return quantity<Dimension, Representation, Scale>{lhs.value() / scale};
+}
+
+template<typename Dimension, typename Representation, typename LhsScale, typename RhsScale>
+constexpr auto operator==(quantity<Dimension, Representation, LhsScale> lhs, quantity<Dimension, Representation, RhsScale> rhs) -> bool {
+  return lhs.value() == quantity<Dimension, Representation, LhsScale>{rhs}.value();
+}
+
+template<typename Dimension, typename Representation, typename LhsScale, typename RhsScale>
+constexpr auto operator<=>(quantity<Dimension, Representation, LhsScale> lhs, quantity<Dimension, Representation, RhsScale> rhs) -> std::compare_three_way_result_t<Representation> {
+  return lhs.value() <=> quantity<Dimension, Representation, LhsScale>{rhs}.value();
+}
+
+using millimeters = quantity<length_dimension, std::float_t, std::milli>;
+using centimeters = quantity<length_dimension, std::float_t, std::centi>;
+using meters = quantity<length_dimension, std::float_t>;
+using kilometers = quantity<length_dimension, std::float_t, std::kilo>;
+
+using milliseconds = quantity<time_dimension, std::float_t, std::milli>;
+using seconds = quantity<time_dimension, std::float_t>;
+using minutes = quantity<time_dimension, std::float_t, std::ratio<60>>;
+using hours = quantity<time_dimension, std::float_t, std::ratio<3600>>;
+
+using grams = quantity<mass_dimension, std::float_t, std::milli>;
+using kilograms = quantity<mass_dimension, std::float_t>;
+
+using meters_per_second = quantity<velocity_dimension, std::float_t>;
+
+namespace literals {
+
+constexpr auto operator""_m(long double value) -> meters {
+  return meters{static_cast<typename meters::representation_type>(value)};
+}
+
+constexpr auto operator""_m(unsigned long long int value) -> meters {
+  return meters{static_cast<typename meters::representation_type>(value)};
+}
+
+constexpr auto operator""_km(long double value) -> kilometers {
+  return kilometers{static_cast<typename kilometers::representation_type>(value)};
+}
+
+constexpr auto operator""_km(unsigned long long int value) -> kilometers {
+  return kilometers{static_cast<typename kilometers::representation_type>(value)};
+}
+
+constexpr auto operator""_cm(long double value) -> centimeters {
+  return centimeters{static_cast<typename centimeters::representation_type>(value)};
+}
+
+constexpr auto operator""_cm(unsigned long long int value) -> centimeters {
+  return centimeters{static_cast<typename centimeters::representation_type>(value)};
+}
+
+constexpr auto operator""_ms(long double value) -> milliseconds {
+  return milliseconds{static_cast<typename milliseconds::representation_type>(value)};
+}
+
+constexpr auto operator""_ms(unsigned long long int value) -> milliseconds {
+  return milliseconds{static_cast<typename milliseconds::representation_type>(value)};
+}
+
+constexpr auto operator""_s(long double value) -> seconds {
+  return seconds{static_cast<typename seconds::representation_type>(value)};
+}
+
+constexpr auto operator""_s(unsigned long long int value) -> seconds {
+  return seconds{static_cast<typename seconds::representation_type>(value)};
+}
+
+constexpr auto operator""_kg(long double value) -> kilograms {
+  return kilograms{static_cast<typename kilograms::representation_type>(value)};
+}
+
+constexpr auto operator""_kg(unsigned long long int value) -> kilograms {
+  return kilograms{static_cast<typename kilograms::representation_type>(value)};
+}
+
+} // namespace literals
 
 } // namespace sbx::units
 
-template<typename Dimension, sbx::units::representation Representation, sbx::units::ratio Ratio>
-struct fmt::formatter<sbx::units::quantity<Dimension, Representation, Ratio>> : fmt::formatter<Representation> {
-
-  using base_type = fmt::formatter<Representation>;
-
-  template<typename FormatContext>
-  auto format(const sbx::units::quantity<Dimension, Representation, Ratio>& quantity, FormatContext& context) const -> decltype(context.out()) {
-    return base_type::format(quantity.value(), context);
-  }
-
-}; // fmt::formatter
-
-#endif // LIBSBX_UNITS_QUANTITY_HPP_
+#endif // LIBSBX_UNITS_V2_QUANTITY_HPP_

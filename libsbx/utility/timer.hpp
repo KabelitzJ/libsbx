@@ -7,7 +7,7 @@
 #include <functional>
 #include <type_traits>
 
-#include <libsbx/units/time.hpp>
+#include <libsbx/units/units.hpp>
 
 namespace sbx::utility {
 
@@ -19,7 +19,7 @@ public:
 
   ~timer() = default;
 
-  auto elapsed() noexcept -> units::second;
+  auto elapsed() noexcept -> units::seconds;
 
 private:
 
@@ -32,7 +32,7 @@ class scoped_timer {
 public:
 
   template<typename Callable>
-  requires (std::is_invocable_v<Callable, const units::second&>)
+  requires (std::is_invocable_v<Callable, const units::seconds&>)
   scoped_timer(Callable&& callable)
   : _on_destroy{std::forward<Callable>(callable)},
     _start{std::chrono::high_resolution_clock::now()} { }
@@ -40,7 +40,7 @@ public:
   ~scoped_timer() {
     if (_on_destroy) {
       const auto now = std::chrono::high_resolution_clock::now();
-      const auto elapsed = units::second{std::chrono::duration_cast<std::chrono::duration<std::float_t>>(now - _start).count()};
+      const auto elapsed = units::seconds{std::chrono::duration_cast<std::chrono::duration<std::float_t>>(now - _start).count()};
       
       std::invoke(_on_destroy, elapsed);
     }
@@ -48,7 +48,7 @@ public:
 
 private:
 
-  std::function<void(const units::second&)> _on_destroy;
+  std::function<void(const units::seconds&)> _on_destroy;
   std::chrono::time_point<std::chrono::high_resolution_clock> _start;
 
 }; // class scoped_timer

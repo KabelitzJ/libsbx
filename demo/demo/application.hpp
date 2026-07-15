@@ -2,15 +2,7 @@
 #ifndef DEMO_APPLICATION_HPP_
 #define DEMO_APPLICATION_HPP_
 
-#include <libsbx/units/units.hpp>
-#include <libsbx/utility/utility.hpp>
-#include <libsbx/math/math.hpp>
-#include <libsbx/core/core.hpp>
-#include <libsbx/devices/devices.hpp>
-#include <libsbx/graphics/graphics.hpp>
-#include <libsbx/models/models.hpp>
-#include <libsbx/ui/ui.hpp>
-#include <libsbx/scenes/scenes.hpp>
+#include <libsbx/core/application.hpp>
 
 namespace demo {
 
@@ -30,23 +22,7 @@ public:
 
 private:
 
-  auto _build_ui() -> void;
-
   bool _is_paused;
-
-  sbx::math::angle _rotation;
-
-  sbx::scenes::node _rune0_emitter;
-  sbx::scenes::node _rune1_emitter;
-  sbx::scenes::node _rune2_emitter;
-  sbx::scenes::node _rune3_emitter;
-
-  sbx::ui::font _font;
-
-  bool _debug_frustum_active{false};
-  sbx::math::vector3 _debug_frustum_position{0.0f, 5.0f, 0.0f};
-  std::float_t _debug_frustum_yaw{0.0f};
-  std::float_t _debug_frustum_pitch{0.0f};
 
 }; // class application
 

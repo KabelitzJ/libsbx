@@ -4,25 +4,12 @@ message(STATUS "Configuring ${PROJECT_NAME}...")
 
 add_executable(${PROJECT_NAME})
 
-# find_package(Python3 REQUIRED COMPONENTS Interpreter)
-
-# add_custom_target(
-#   compiled_shaders_demo
-#   COMMAND ${Python3_EXECUTABLE} "${CMAKE_SOURCE_DIR}/scripts/compile_shaders.py" "${PROJECT_SOURCE_DIR}/assets/shaders/"
-#   WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
-#   COMMENT "Compiling shaders for ${PROJECT_NAME}..."
-# )
-
-# add_dependencies(${PROJECT_NAME} compiled_shaders_demo)
-
 target_sources(
   ${PROJECT_NAME}
   PRIVATE
-    "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/renderer.cpp"
-    "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/application.cpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/demo.cpp"
+    "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/application.cpp"
   PUBLIC
-    "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/renderer.hpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/application.hpp"
 )
 
@@ -48,12 +35,6 @@ set_target_properties(
     LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
     POSITION_INDEPENDENT_CODE ON
-)
-
-target_compile_definitions(
-  ${PROJECT_NAME}
-  PRIVATE
-    SBX_CONSTEXPR_ENABLED=$<IF:$<BOOL:${SBX_CONSTEXPR_ENABLED}>,1,0>
 )
 
 target_compile_features(
@@ -83,25 +64,3 @@ target_compile_options(
     -Wlogical-op
     -Wuseless-cast
 )
-
-set(DEMO_DIR ${CMAKE_CURRENT_SOURCE_DIR}/assets/scripts/Demo)
-set(DEMO_PROJECT ${DEMO_DIR}/Demo.csproj)
-set(DEMO_DOTNET_OUT_DIR ${CMAKE_BINARY_DIR}/data/dotnet/demo)
-
-file(GLOB_RECURSE DEMO_SOURCES CONFIGURE_DEPENDS ${DEMO_DIR}/**/*.cs)
-
-add_custom_target(
-  scripting_demo ALL
-  COMMAND ${CMAKE_COMMAND} -E make_directory ${DEMO_DOTNET_OUT_DIR}
-  COMMAND dotnet publish ${DEMO_PROJECT}
-    -c $<CONFIG>
-    --self-contained false
-    -p:UseAppHost=false
-    -p:BuildProjectReferences=false
-    -o ${DEMO_DOTNET_OUT_DIR}
-  WORKING_DIRECTORY ${DEMO_DIR}
-  COMMENT "Publishing Demo assembly"
-)
-
-add_dependencies(scripting_demo sbx_scripting_managed sbx_scripting_core)
-add_dependencies(${PROJECT_NAME} scripting_demo)

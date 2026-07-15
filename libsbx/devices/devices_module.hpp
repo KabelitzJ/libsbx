@@ -15,7 +15,7 @@
 #include <libsbx/core/module.hpp>
 #include <libsbx/core/engine.hpp>
 
-#include <libsbx/units/time.hpp>
+#include <libsbx/units/units.hpp>
 
 #include <libsbx/memory/aligned_storage.hpp>
 

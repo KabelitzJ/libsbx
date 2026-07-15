@@ -217,12 +217,14 @@ public:
 private:
 
   constexpr auto _ptr(const size_type index) noexcept -> pointer {
-    // utility::assert_that(index < Capacity, "index is out of range");
+    utility::assert_that(index < Capacity, "index is out of range");
+
     return std::launder(reinterpret_cast<pointer>(_buffer.data() + index));
   }
 
   constexpr auto _ptr(const size_type index) const noexcept -> const_pointer {
-    // utility::assert_that(index < Capacity, "index is out of range");
+    utility::assert_that(index < Capacity, "index is out of range");
+
     return std::launder(reinterpret_cast<const_pointer>(_buffer.data() + index));
   }
 

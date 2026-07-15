@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: MIT
 #include <libsbx/core/engine.hpp>
 
-#include <range/v3/all.hpp>
-
 #include <libsbx/utility/profiler.hpp>
 
 namespace sbx::core {
@@ -27,7 +25,7 @@ engine::engine(std::span<std::string_view> args)
 
   SBX_PROFILE_SCOPE_START(s0, "engine::initialize_modules");
 
-  for (auto&& [type, factory] : module_manager::_factories() | ranges::views::filter([](const auto& entry) { return entry.has_value(); }) | ranges::views::enumerate) {
+  for (auto&& [type, factory] : module_manager::_factories() | std::ranges::views::filter([](const auto& entry) { return entry.has_value(); }) | std::ranges::views::enumerate) {
     _create_module(type, *factory);
   }
 
@@ -37,22 +35,22 @@ engine::engine(std::span<std::string_view> args)
 engine::~engine() {
   _application.reset();
 
-  for (auto&& [type, entry] : _modules | ranges::views::enumerate | std::views::reverse) {
+  for (auto&& [type, entry] : _modules | std::ranges::views::enumerate | std::views::reverse) {
     _destroy_module(type);
   }
 
   _instance = nullptr;
 }
 
-auto engine::delta_time() -> units::second {
+auto engine::delta_time() -> units::seconds {
   return _instance->_delta_time;
 }
 
-auto engine::fixed_delta_time() -> units::second {
-  return units::second{1.0f / 60.0f};
+auto engine::fixed_delta_time() -> units::seconds {
+  return units::seconds{1.0f / 60.0f};
 }
 
-auto engine::time() -> units::second {
+auto engine::time() -> units::seconds {
   return _instance->_time;
 }
 
@@ -75,14 +73,14 @@ auto engine::_run_main_loop() -> void {
 
   auto last = clock_type::now();
 
-  auto fixed_accumulator = units::second{};
+  auto fixed_accumulator = units::seconds{};
 
   while (_is_running) {
     const auto now = clock_type::now();
     const auto delta_time = std::chrono::duration_cast<std::chrono::duration<std::float_t>>(now - last).count();
     last = now;
 
-    _delta_time = units::second{delta_time};
+    _delta_time = units::seconds{delta_time};
     _time += _delta_time;
 
     fixed_accumulator += _delta_time;

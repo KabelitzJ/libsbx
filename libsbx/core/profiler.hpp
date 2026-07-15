@@ -8,7 +8,7 @@
 #include <ranges>
 #include <chrono>
 
-#include <libsbx/units/time.hpp>
+#include <libsbx/units/units.hpp>
 
 #include <libsbx/utility/assert.hpp>
 

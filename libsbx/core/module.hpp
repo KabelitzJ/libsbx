@@ -15,7 +15,6 @@
 #include <libsbx/utility/noncopyable.hpp>
 #include <libsbx/utility/type_id.hpp>
 
-#include <libsbx/memory/tracking_allocator.hpp>
 #include <libsbx/memory/raw_allocate.hpp>
 
 namespace sbx::core {

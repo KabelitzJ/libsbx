@@ -8,6 +8,7 @@
 #include <libsbx/utility/timer.hpp>
 #include <libsbx/utility/logger.hpp>
 #include <libsbx/utility/profiler.hpp>
+#include <libsbx/utility/compression.hpp>
 
 #include <libsbx/core/engine.hpp>
 

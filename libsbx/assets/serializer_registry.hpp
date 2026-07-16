@@ -117,6 +117,32 @@ public:
 
   auto clear() -> void;
 
+  auto owner_for(std::span<const std::shared_ptr<serializer_base>> serializers, const serializer_context& probe, std::string_view sub_id) -> std::shared_ptr<serializer_base> {
+    for (const auto& serializer : serializers) {
+      if (serializer->owns(probe, sub_id)) {
+        return serializer;
+      }
+    }
+
+    return nullptr;
+  }
+
+  auto find_writer(const std::filesystem::path& source, std::string_view type) -> std::shared_ptr<serializer_base> {
+    const auto serializers = find_all_for(source);
+
+    if (serializers.empty()) {
+      return nullptr;
+    }
+
+    for (const auto& serializer : serializers) {
+      if (serializer->type() == type) {
+        return serializer;
+      }
+    }
+
+    return serializers.front();
+  }
+
 private:
 
   struct pending_serializer {

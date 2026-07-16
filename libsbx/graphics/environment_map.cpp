@@ -14,8 +14,6 @@ environment_map::environment_map(const graphics::cube_image2d_handle cube, const
   _prefiltered{prefiltered} { }
 
 environment_map::~environment_map() {
-  utility::logger<"graphics">::debug("~environment_map this={} brdf idx={}", static_cast<void*>(this), _brdf.handle());
-
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 
   if (_cube.is_valid()) {

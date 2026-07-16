@@ -9,5 +9,7 @@
 #include <libsbx/animations/skinning_task.hpp>
 #include <libsbx/animations/skinned_mesh_material_subrenderer.hpp>
 #include <libsbx/animations/skinned_mesh_shadow_subrenderer.hpp>
+#include <libsbx/animations/skinned_mesh_serializer.hpp>
+#include <libsbx/animations/animation_serializer.hpp>
 
 #endif // LIBSBX_ANIMATIONS_HPP_

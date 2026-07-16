@@ -111,7 +111,9 @@ application::application()
   const auto tree_mesh = assets_module.load_asset("res://meshes/tree/tree.gltf");
   const auto pawn_mesh = assets_module.load_asset("res://meshes/chess/pawn/pawn.gltf");
 
-  const auto fox_mesh = assets_module.load_asset("res://meshes/chess/pawn/pawn.gltf");
+  const auto fox_mesh = assets_module.load_asset("res://meshes/fox/fox.gltf#skinned_mesh");
+
+  const auto fox_idle = assets_module.load_asset("res://meshes/fox/fox.gltf#animation:Survey");
 
   // Spheres
 

@@ -115,14 +115,14 @@ public:
 
     const auto probe = serializer_context{.source = base, .resolved = resolved, .settings = settings, .id = math::uuid::nil(), .sub_id = sub_id};
 
-    const auto owner = _owner_for(serializers, probe, sub_id);
+    const auto owner = _serializers.owner_for(serializers, probe, sub_id);
 
     if (!owner) {
       throw utility::runtime_error{"No serializer produces sub-asset '{}' of '{}'", sub_id, base.string()};
     }
 
     if (!meta) {
-      const auto primary = sub_id.empty() ? owner : _owner_for(serializers, probe, std::string_view{});
+      const auto primary = sub_id.empty() ? owner : _serializers.owner_for(serializers, probe, std::string_view{});
       const auto primary_type = primary ? std::string{primary->type()} : std::string{serializers.front()->type()};
 
       meta = meta_data{.id = math::uuid{}, .type = primary_type, .import_settings = default_settings};
@@ -245,7 +245,7 @@ public:
 
     const auto& type = _database.get(id).type;
 
-    const auto serializer = _find_writer(resolved, type);
+    const auto serializer = _serializers.find_writer(resolved, type);
 
     if (!serializer) {
       return false;
@@ -377,32 +377,6 @@ private:
     }
 
     return {std::filesystem::path{text.substr(0u, hash)}, text.substr(hash + 1u)};
-  }
-
-  auto _owner_for(auto serializers, const serializer_context& probe, std::string_view sub_id) -> std::shared_ptr<serializer_base> {
-    for (const auto& serializer : serializers) {
-      if (serializer->owns(probe, sub_id)) {
-        return serializer;
-      }
-    }
-
-    return nullptr;
-  }
-
-  auto _find_writer(const std::filesystem::path& source, std::string_view type) -> std::shared_ptr<serializer_base> {
-    const auto serializers = _serializers.find_all_for(source);
-
-    if (serializers.empty()) {
-      return nullptr;
-    }
-
-    for (const auto& serializer : serializers) {
-      if (serializer->type() == type) {
-        return serializer;
-      }
-    }
-
-    return serializers.front();
   }
 
   auto _register_asset_root(const std::filesystem::path& root) -> void {

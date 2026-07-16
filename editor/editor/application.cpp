@@ -118,9 +118,15 @@ application::application()
   asset_registry.request_image("white_normal", "res://textures/chess/white/normal.png", sbx::graphics::format::r8g8b8a8_unorm);
   asset_registry.request_image("white_metallic_roughness", "res://textures/chess/white/metallic_roughness.png", sbx::graphics::format::r8g8b8a8_unorm);
 
+  asset_registry.request_image("fox_albedo", "res://meshes/fox/textures/albedo.png", sbx::graphics::format::r8g8b8a8_srgb);
+
   asset_registry.request_mesh<sbx::models::mesh>("tree", "res://meshes/tree/tree.gltf");
   asset_registry.request_mesh<sbx::models::mesh>("sphere", "res://meshes/sphere/sphere.gltf");
   asset_registry.request_mesh<sbx::models::mesh>("pawn", "res://meshes/chess/pawn/pawn.gltf");
+
+  asset_registry.request_mesh<sbx::animations::mesh>("fox", "res://meshes/fox/fox.gltf");
+
+  asset_registry.request_animation<sbx::animations::animation>("fox_survey", "res://meshes/fox/fox.gltf", "Survey");
 
   asset_registry.request_cube_image("skybox", "res://skyboxes/hdr/clouds", std::string{".hdr"}, sbx::graphics::format::r32g32b32a32_sfloat);
   // asset_registry.request_cube_image("skybox", "res://skyboxes/clouds");
@@ -128,6 +134,31 @@ application::application()
   _generate_brdf(512);
   _generate_irradiance(64);
   _generate_prefiltered(512);
+
+  auto& animations_module = sbx::core::engine::get_module<sbx::animations::animations_module>();
+
+  auto& fox_material = asset_registry.request_material<sbx::models::material>("fox");
+  fox_material.albedo.image = asset_registry.get_image("fox_albedo");
+  fox_material.alpha = sbx::models::alpha_mode::opaque;
+  fox_material.metallic_factor = 0.1f;
+  fox_material.roughness_factor = 0.7f;
+  fox_material.occlusion_strength = 1.0f;
+
+  auto fox = graph.create_node("Fox");
+
+  animations_module.add_skinned_mesh(fox, asset_registry.get_mesh("fox"), asset_registry.get_material("fox"));
+
+  auto& fox_animator = graph.get_component<sbx::animations::animator>(fox);
+
+  fox_animator.add_state({
+    .name = "Survey",
+    .animation_id = asset_registry.get_animation("fox_survey")
+  });
+
+  fox_animator.play("Survey");
+
+  auto& fox_transform = graph.get_component<sbx::scenes::transform>(fox);
+  fox_transform.set_scale(sbx::math::vector3{0.02, 0.02, 0.02});
 
   auto spheres = graph.create_node(fmt::format("Spheres"));
 

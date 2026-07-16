@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 #include <editor/widgets/controls.hpp>
 
+#include <type_traits>
+
 #include <magic_enum/magic_enum.hpp>
 
 #include <fmt/format.h>
@@ -21,7 +23,7 @@ requires (std::is_enum_v<Enum>)
 auto controls::enum_combo(const char* label, Enum& value) -> bool {
   constexpr auto names = magic_enum::enum_names<Enum>();
 
-  auto current = static_cast<std::underlying_t<Enum>>(magic_enum::enum_index(value).value_or(0));
+  auto current = static_cast<std::underlying_type_t<Enum>>(magic_enum::enum_index(value).value_or(0));
   const auto current_label = std::string{names[static_cast<std::size_t>(current)]};
 
   auto changed = false;

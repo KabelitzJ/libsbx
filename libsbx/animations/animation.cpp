@@ -137,6 +137,33 @@ animation::animation(const std::filesystem::path& path, const std::string& name)
   utility::logger<"animations">::debug("Loaded animation: {} '{}' in {:.2f}ms", resolved_path.string(), _name, units::quantity_cast<units::millisecond>(timer.elapsed()));
 }
 
+auto animation::clip_names(const std::filesystem::path& path) -> std::vector<std::string> {
+  auto& assets_module = core::engine::get_module<assets::assets_module>();
+  const auto resolved_path = assets_module.resolve_path(path);
+
+  if (!std::filesystem::exists(resolved_path)) {
+    return {};
+  }
+
+  auto importer = Assimp::Importer{};
+
+  const auto* scene = importer.ReadFile(resolved_path.string(), import_flags);
+
+  if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode) {
+    return {};
+  }
+
+  auto names = std::vector<std::string>{};
+
+  names.reserve(scene->mNumAnimations);
+
+  for (auto i = 0u; i < scene->mNumAnimations; ++i) {
+    names.emplace_back(scene->mAnimations[i]->mName.C_Str());
+  }
+
+  return names;
+}
+
 auto animation::track_map() const noexcept -> const std::unordered_map<utility::hashed_string, bone_track>& {
   return _track_map;
 }

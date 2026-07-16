@@ -11,6 +11,8 @@
 
 #include <libsbx/io/loader_factory.hpp>
 
+#include <libsbx/assets/asset.hpp>
+
 #include <libsbx/graphics/pipeline/mesh.hpp>
 
 #include <libsbx/animations/vertex3d.hpp>
@@ -18,7 +20,7 @@
 
 namespace sbx::animations {
 
-class mesh : public graphics::mesh<vertex3d> {
+class mesh : public graphics::mesh<vertex3d>, public assets::asset {
 
   using base = graphics::mesh<vertex3d>;
 
@@ -31,6 +33,10 @@ public:
   mesh(const std::filesystem::path& path);
 
   ~mesh() override;
+
+  auto type() const -> assets::asset_type override {
+    return assets::asset_type::skinned_mesh;
+  }
 
   auto skeleton() const -> const animations::skeleton& {
     return _skeleton;

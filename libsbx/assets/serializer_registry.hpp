@@ -14,18 +14,28 @@
 
 #include <yaml-cpp/yaml.h>
 
-#include <libsbx/assets/serializer_registry.hpp>
 #include <libsbx/assets/asset.hpp>
 
 #include <libsbx/math/uuid.hpp>
 
-namespace sbx::assets { 
+namespace sbx::assets {
+
+/**
+ * @brief Identifies one asset a serializer can extract from a source file.
+ *
+ * @ref sub_id is a stable, source-local name for the asset ("" for the source's primary asset, "animation:Idle", "skinned_mesh:0", ...). @ref type is the string type tag the extracted payload will carry.
+ */
+struct sub_asset_info {
+  std::string sub_id;
+  std::string type;
+}; // struct sub_asset_info
 
 struct serializer_context {
   std::filesystem::path source;
   std::filesystem::path resolved;
   YAML::Node settings;
   math::uuid id;
+  std::string sub_id;
 }; // struct serializer_context
 
 class serializer_registry {
@@ -35,10 +45,35 @@ class serializer_registry {
 
   struct serializer_base {
     virtual ~serializer_base() = default;
+
     virtual auto type() const -> std::string_view = 0;
+
+    /**
+     * @brief Lists every asset this serializer can extract from @p context.source.
+     *
+     * The default implementation reports a single primary asset (empty sub_id) tagged with type(). Serializers for container formats (glTF, FBX) override this to fan a source out into several assets.
+     */
+    virtual auto enumerate(const serializer_context& context) -> std::vector<sub_asset_info> {
+      static_cast<void>(context);
+
+      return {sub_asset_info{.sub_id = std::string{}, .type = std::string{type()}}};
+    }
+
+    /**
+     * @brief Whether this serializer produces @p sub_id for @p context.source.
+     *
+     * The default claims only the primary (empty) sub_id. Overrides must agree with enumerate().
+     */
+    virtual auto owns(const serializer_context& context, std::string_view sub_id) -> bool {
+      static_cast<void>(context);
+
+      return sub_id.empty();
+    }
+
     virtual auto read(const serializer_context& context) -> std::unique_ptr<asset> = 0;
+
     virtual auto write(const serializer_context& context, const std::unique_ptr<asset>& asset) -> bool = 0;
-  }; // class serializer_base
+  }; // struct serializer_base
 
 public:
 
@@ -58,21 +93,21 @@ public:
   auto install_registered() -> void;
 
   /**
-   * @brief Unregisters a single extension binding. Returns true if a binding was removed.
+   * @brief Unregisters every serializer bound to a single extension. Returns true if a binding was removed.
    */
   auto unregister(std::string_view extension) -> bool;
 
   /**
-   * @brief Finds the serializer whose registered extension matches the longest suffix of @p source's filename. Returns nullptr if no match.
+   * @brief Returns every serializer whose registered extension matches the longest suffix of @p source's filename, in registration order. Empty if no match.
    *
    * For `foo.material.yaml`, lookup tries `.material.yaml` first, then `.yaml`.
    */
-  auto find_for(const std::filesystem::path& source) const -> std::shared_ptr<serializer_base>;
+  auto find_all_for(const std::filesystem::path& source) const -> std::span<const std::shared_ptr<serializer_base>>;
 
   /**
-   * @brief Returns the serializer registered exactly for @p extension, or nullptr.
+   * @brief Returns the first serializer matching @p source, or nullptr. Convenience for single-asset formats.
    */
-  auto find(std::string_view extension) const -> std::shared_ptr<serializer_base>;
+  auto find_for(const std::filesystem::path& source) const -> std::shared_ptr<serializer_base>;
 
   auto contains(std::string_view extension) const -> bool;
 
@@ -97,9 +132,11 @@ private:
 
   static auto _normalize(std::string_view extension) -> std::string;
 
+  auto _matched_extension(const std::filesystem::path& source) const -> const std::vector<std::shared_ptr<serializer_base>>*;
+
   auto _register_serializer(std::string_view extension, std::shared_ptr<serializer_base> instance) -> void;
 
-  std::unordered_map<std::string, std::shared_ptr<serializer_base>> _by_extension;
+  std::unordered_map<std::string, std::vector<std::shared_ptr<serializer_base>>> _by_extension;
 
 }; // class serializer_registry
 

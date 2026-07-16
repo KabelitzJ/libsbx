@@ -40,10 +40,15 @@ enum class asset_type : std::uint8_t {
  * The typed payload is stored separately by the assets_module.
  *
  * The type tag is a string that matches the producing importer's type() and the .meta `type` field.
+ *
+ * A single source file may back multiple records (e.g. a `.gltf` yielding a static mesh, a skeleton and several animations).
+ * In that case each record shares the same @ref source but carries a distinct @ref sub_id. The record whose sub_id is empty is the primary asset of the source; @ref parent points every sub-asset back to that primary (nil for the primary itself).
  */
 struct asset_record {
   math::uuid id{math::uuid::nil()};
+  math::uuid parent{math::uuid::nil()};
   std::string type{};
+  std::string sub_id{};
   std::filesystem::path source{};
   std::uint32_t generation{0u};
   std::uint32_t reference_count{0u};

@@ -4,6 +4,7 @@
 
 #include <filesystem>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 
 #include <libsbx/memory/observer_ptr.hpp>
@@ -43,7 +44,7 @@ public:
 
   auto contains(const math::uuid& id) const -> bool;
 
-  auto contains_path(const std::filesystem::path& source) const -> bool;
+  auto contains_path(const std::filesystem::path& source, std::string_view sub_id = {}) const -> bool;
 
   /**
    * @brief Returns the record for @p id.
@@ -59,9 +60,11 @@ public:
   auto try_get(const math::uuid& id) const -> memory::observer_ptr<const asset_record>;
 
   /**
-   * @brief Returns the UUID bound to @p source, or math::uuid::nil() if none.
+   * @brief Returns the UUID bound to (@p source, @p sub_id), or math::uuid::nil() if none.
+   *
+   * @p sub_id defaults to empty, which addresses the source's primary asset.
    */
-  auto resolve(const std::filesystem::path& source) const -> math::uuid;
+  auto resolve(const std::filesystem::path& source, std::string_view sub_id = {}) const -> math::uuid;
 
   /**
    * @brief Updates the source path of an existing record. Removes the old path-index entry and inserts the new one.
@@ -97,9 +100,9 @@ public:
 
 private:
 
-  static auto _normalize(const std::filesystem::path& source) -> std::string;
+  static auto _key(const std::filesystem::path& source, std::string_view sub_id) -> std::string;
 
-  auto _erase_path_entry(const std::filesystem::path& source) -> void;
+  auto _erase_path_entry(const std::filesystem::path& source, std::string_view sub_id) -> void;
 
   std::unordered_map<math::uuid, asset_record> _records;
   std::unordered_map<std::string, math::uuid> _by_path;

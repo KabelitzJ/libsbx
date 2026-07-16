@@ -38,6 +38,12 @@ auto read_meta_file(const std::filesystem::path& meta_path) -> std::optional<met
       data.import_settings = node["import"];
     }
 
+    if (const auto sub_assets = node["sub_assets"]; sub_assets && sub_assets.IsMap()) {
+      for (const auto& entry : sub_assets) {
+        data.sub_assets.emplace(entry.first.as<std::string>(), entry.second.as<math::uuid>());
+      }
+    }
+
     return data;
   } catch (const std::exception& exception) {
     utility::logger<"assets">::warn("Failed to read meta file '{}': {}", meta_path.string(), exception.what());
@@ -56,6 +62,16 @@ auto write_meta_file(const std::filesystem::path& meta_path, const meta_data& da
 
   if (data.import_settings && data.import_settings.IsDefined() && !data.import_settings.IsNull()) {
     emitter << YAML::Key << "import" << YAML::Value << data.import_settings;
+  }
+
+  if (!data.sub_assets.empty()) {
+    emitter << YAML::Key << "sub_assets" << YAML::Value << YAML::BeginMap;
+
+    for (const auto& [sub_id, id] : data.sub_assets) {
+      emitter << YAML::Key << sub_id << YAML::Value << id;
+    }
+
+    emitter << YAML::EndMap;
   }
 
   emitter << YAML::EndMap;

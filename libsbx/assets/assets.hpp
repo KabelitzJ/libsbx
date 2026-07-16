@@ -2,7 +2,6 @@
 #ifndef LIBSBX_ASSETS_HPP_
 #define LIBSBX_ASSETS_HPP_
 
-#include <libsbx/assets/metadata.hpp>
 #include <libsbx/assets/assets_module.hpp>
 
 #endif // LIBSBX_ASSETS_HPP_

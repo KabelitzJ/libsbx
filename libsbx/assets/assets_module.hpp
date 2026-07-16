@@ -2,24 +2,20 @@
 #ifndef LIBSBX_ASSETS_ASSETS_MODULE_HPP_
 #define LIBSBX_ASSETS_ASSETS_MODULE_HPP_
 
-#include <vector>
 #include <unordered_map>
-#include <typeindex>
+#include <vector>
 #include <memory>
 #include <filesystem>
+#include <optional>
 #include <string>
 #include <string_view>
-#include <initializer_list>
+#include <iterator>
+#include <utility>
 
 #include <yaml-cpp/yaml.h>
 
-#include <libsbx/utility/compression.hpp>
 #include <libsbx/utility/exception.hpp>
-#include <libsbx/utility/type_id.hpp>
-#include <libsbx/utility/iterator.hpp>
 #include <libsbx/utility/logger.hpp>
-#include <libsbx/utility/hashed_string.hpp>
-#include <libsbx/utility/string_literal.hpp>
 
 #include <libsbx/math/uuid.hpp>
 
@@ -30,33 +26,12 @@
 #include <libsbx/filesystem/native_filesystem.hpp>
 
 #include <libsbx/assets/thread_pool.hpp>
-#include <libsbx/assets/metadata.hpp>
 #include <libsbx/assets/asset.hpp>
 #include <libsbx/assets/asset_database.hpp>
 #include <libsbx/assets/serializer_registry.hpp>
 #include <libsbx/assets/meta_file.hpp>
 
 namespace sbx::assets {
-
-namespace detail {
-
-struct assets_type_id_scope { };
-
-} // namespace detail
-
-template<utility::string_literal String>
-requires (String.size() == 4u)
-constexpr auto fourcc() -> std::uint32_t {
-  return String[0] | (String[1] << 8) | (String[2] << 16) | (String[3] << 24);
-}
-
-/**
- * @brief A scoped type ID generator for the libsbx-assets scope.
- *
- * @tparam Type The type for which the ID is generated.
- */
-template<typename Type>
-using type_id = utility::scoped_type_id<detail::assets_type_id_scope, Type>;
 
 class assets_module : public core::module<assets_module> {
 
@@ -72,10 +47,6 @@ public:
 
   ~assets_module() override {
     _payloads.clear();
-
-    for (const auto& container : _containers) {
-      container->clear();
-    }
   }
 
   auto update() -> void override {
@@ -113,60 +84,89 @@ public:
   /**
    * @brief Synchronously resolves @p source to a stable UUID, importing the payload if it is not already loaded.
    *
-   * Identity is established from the .meta sidecar next to the resolved file; if no sidecar exists one is minted and written (best-effort, skipped on a read-only asset root). Loading the same source twice returns the same UUID and increments its reference count.
+   * @p source may carry a `#sub_id` fragment (e.g. `res://model.gltf#animation:Idle`) to address a single asset inside a container source. Without a fragment the source's primary asset is loaded.
    *
-   * @throws sbx::utility::runtime_error if no importer is registered for the source's extension or the import fails.
+   * Identity is established from the .meta sidecar next to the resolved file; if no sidecar exists one is minted and written (best-effort, skipped on a read-only asset root). Sub-asset UUIDs are recorded in the sidecar so re-imports reuse them. Loading the same (source, sub_id) twice returns the same UUID and increments its reference count.
+   *
+   * @throws sbx::utility::runtime_error if no serializer produces the requested asset or the import fails.
    */
   auto load_asset(const std::filesystem::path& source, const YAML::Node& default_settings = YAML::Node{}) -> math::uuid {
-    const auto resolved = resolve_path(source);
+    const auto [base, sub_id] = _split_fragment(source);
 
-    auto id = _database.resolve(source);
+    if (const auto existing = _database.resolve(base, sub_id); existing != math::uuid::nil() && _database.get(existing).state == load_state::ready) {
+      _database.acquire(existing);
 
-    if (id != math::uuid::nil() && _database.get(id).state == load_state::ready) {
-      _database.acquire(id);
-
-      return id;
+      return existing;
     }
 
-    const auto serializer = _serializers.find_for(source);
+    const auto serializers = _serializers.find_all_for(base);
 
-    if (!serializer) {
-      throw utility::runtime_error{"No serializer registered for asset '{}'", source.string()};
+    if (serializers.empty()) {
+      throw utility::runtime_error{"No serializer registered for asset '{}'", base.string()};
     }
 
-    auto settings = YAML::Node{};
+    const auto resolved = resolve_path(base);
+    const auto meta_path = meta_path_for(resolved);
 
-    if (id == math::uuid::nil()) {
-      auto type = std::string{serializer->type()};
+    auto meta = read_meta_file(meta_path);
+    auto meta_dirty = false;
 
-      if (const auto meta = read_meta_file(meta_path_for(resolved)); meta) {
-        id = meta->id;
-        type = meta->type;
-        settings = meta->import_settings;
+    const auto settings = (meta && meta->import_settings && meta->import_settings.IsDefined() && !meta->import_settings.IsNull()) ? meta->import_settings : default_settings;
+
+    const auto probe = serializer_context{.source = base, .resolved = resolved, .settings = settings, .id = math::uuid::nil(), .sub_id = sub_id};
+
+    const auto owner = _owner_for(serializers, probe, sub_id);
+
+    if (!owner) {
+      throw utility::runtime_error{"No serializer produces sub-asset '{}' of '{}'", sub_id, base.string()};
+    }
+
+    if (!meta) {
+      const auto primary = sub_id.empty() ? owner : _owner_for(serializers, probe, std::string_view{});
+      const auto primary_type = primary ? std::string{primary->type()} : std::string{serializers.front()->type()};
+
+      meta = meta_data{.id = math::uuid{}, .type = primary_type, .import_settings = default_settings};
+      meta_dirty = true;
+    }
+
+    auto id = math::uuid::nil();
+    auto type = std::string{};
+
+    if (sub_id.empty()) {
+      id = meta->id;
+      type = meta->type;
+    } else {
+      type = std::string{owner->type()};
+
+      if (const auto entry = meta->sub_assets.find(sub_id); entry != meta->sub_assets.end()) {
+        id = entry->second;
       } else {
         id = math::uuid{};
-        settings = default_settings;
-
-        try {
-          write_meta_file(meta_path_for(resolved), meta_data{.id = id, .type = type, .import_settings = default_settings});
-        } catch (const std::exception& error) {
-          utility::logger<"assets">::warn("Could not write .meta for '{}': {}", source.string(), error.what());
-        }
+        meta->sub_assets.emplace(sub_id, id);
+        meta_dirty = true;
       }
+    }
 
-      _database.insert(asset_record{.id = id, .type = type, .source = source, .state = load_state::unloaded});
-    } else if (const auto meta = read_meta_file(meta_path_for(resolved)); meta) {
-      settings = meta->import_settings;
+    if (meta_dirty) {
+      try {
+        write_meta_file(meta_path, *meta);
+      } catch (const std::exception& error) {
+        utility::logger<"assets">::warn("Could not write .meta for '{}': {}", base.string(), error.what());
+      }
+    }
+
+    if (!_database.contains(id)) {
+      _database.insert(asset_record{.id = id, .parent = sub_id.empty() ? math::uuid::nil() : meta->id, .type = type, .sub_id = sub_id, .source = base, .state = load_state::unloaded});
     }
 
     auto& record = _database.get(id);
 
     record.state = load_state::loading;
 
-    const auto context = serializer_context{.source = source, .resolved = resolved, .settings = settings, .id = id};
+    const auto context = serializer_context{.source = base, .resolved = resolved, .settings = settings, .id = id, .sub_id = sub_id};
 
     try {
-      _payloads[id] = serializer->read(context);
+      _payloads[id] = owner->read(context);
     } catch (...) {
       record.state = load_state::failed;
 
@@ -178,6 +178,49 @@ public:
     _database.acquire(id);
 
     return id;
+  }
+
+  /**
+   * @brief Loads a single asset addressed by (@p source, @p sub_id). Equivalent to appending `#sub_id` to @p source.
+   */
+  auto load_sub_asset(const std::filesystem::path& source, std::string_view sub_id, const YAML::Node& default_settings = YAML::Node{}) -> math::uuid {
+    if (sub_id.empty()) {
+      return load_asset(source, default_settings);
+    }
+
+    auto qualified = source.generic_string();
+
+    qualified += '#';
+    qualified += sub_id;
+
+    return load_asset(qualified, default_settings);
+  }
+
+  /**
+   * @brief Lists every asset (primary and sub-assets) that the registered serializers can extract from @p source.
+   *
+   * Does not import anything. Intended for the editor's importer UI.
+   */
+  auto enumerate_sub_assets(const std::filesystem::path& source) -> std::vector<sub_asset_info> {
+    const auto [base, sub_id] = _split_fragment(source);
+
+    static_cast<void>(sub_id);
+
+    const auto serializers = _serializers.find_all_for(base);
+
+    const auto resolved = resolve_path(base);
+
+    const auto context = serializer_context{.source = base, .resolved = resolved, .settings = YAML::Node{}, .id = math::uuid::nil(), .sub_id = std::string{}};
+
+    auto result = std::vector<sub_asset_info>{};
+
+    for (const auto& serializer : serializers) {
+      auto entries = serializer->enumerate(context);
+
+      result.insert(result.end(), std::make_move_iterator(entries.begin()), std::make_move_iterator(entries.end()));
+    }
+
+    return result;
   }
 
   auto add_runtime_asset(std::unique_ptr<asset> payload) -> math::uuid {
@@ -200,22 +243,42 @@ public:
 
     const auto resolved = resolve_path(source);
 
-    const auto serializer = _serializers.find_for(resolved);
+    const auto& type = _database.get(id).type;
+
+    const auto serializer = _find_writer(resolved, type);
 
     if (!serializer) {
       return false;
     }
 
-    const auto context = serializer_context{.source = source, .resolved = resolved, .settings = {}, .id = id};
+    const auto context = serializer_context{.source = source, .resolved = resolved, .settings = {}, .id = id, .sub_id = {}};
 
     if (!serializer->write(context, payload->second)) {
       return false;
     }
 
-    auto& record = _database.get(id);
-    record.source = source.generic_string();
+    _database.rebind_path(id, source);
 
     return true;
+  }
+
+  /**
+   * @brief Re-writes an already-file-backed asset to its own source via the matching serializer.
+   *
+   * Used by the editor to persist in-place edits. Returns false if the asset isn't loaded, has no source, or its format has no writer.
+   */
+  auto save_asset(const math::uuid& id) -> bool {
+    if (!_database.contains(id)) {
+      return false;
+    }
+
+    const auto source = _database.get(id).source;
+
+    if (source.empty()) {
+      return false;
+    }
+
+    return save_asset(id, source);
   }
 
   /**
@@ -298,30 +361,49 @@ public:
     return dynamic_cast<Type*>(entry->second.get());
   }
 
-  /**
-   * @brief Re-writes an already-file-backed asset to its own source via the matching serializer.
-   *
-   * Used by the editor to persist in-place edits. Returns false if the asset isn't loaded, has no source, or its format has no writer.
-   */
-  auto save_asset(const math::uuid& id) -> bool {
-    if (!_database.contains(id)) {
-      return false;
-    }
-
-    const auto source = _database.get(id).source;
-
-    if (source.empty()) {
-      return false;
-    }
-
-    return save_asset(id, source);
-  }
-
   auto serializers() -> serializer_registry& {
     return _serializers;
   }
 
 private:
+
+  static auto _split_fragment(const std::filesystem::path& source) -> std::pair<std::filesystem::path, std::string> {
+    const auto text = source.generic_string();
+
+    const auto hash = text.find('#');
+
+    if (hash == std::string::npos) {
+      return {source, std::string{}};
+    }
+
+    return {std::filesystem::path{text.substr(0u, hash)}, text.substr(hash + 1u)};
+  }
+
+  auto _owner_for(auto serializers, const serializer_context& probe, std::string_view sub_id) -> std::shared_ptr<serializer_base> {
+    for (const auto& serializer : serializers) {
+      if (serializer->owns(probe, sub_id)) {
+        return serializer;
+      }
+    }
+
+    return nullptr;
+  }
+
+  auto _find_writer(const std::filesystem::path& source, std::string_view type) -> std::shared_ptr<serializer_base> {
+    const auto serializers = _serializers.find_all_for(source);
+
+    if (serializers.empty()) {
+      return nullptr;
+    }
+
+    for (const auto& serializer : serializers) {
+      if (serializer->type() == type) {
+        return serializer;
+      }
+    }
+
+    return serializers.front();
+  }
 
   auto _register_asset_root(const std::filesystem::path& root) -> void {
     auto& filesystem_module = core::engine::get_module<filesystem::filesystem_module>();
@@ -340,70 +422,6 @@ private:
   asset_database _database;
   serializer_registry _serializers;
   std::unordered_map<math::uuid, std::unique_ptr<asset>> _payloads;
-
-  struct container_base {
-    virtual ~container_base() = default;
-    virtual auto remove(const math::uuid& id) -> void = 0;
-    virtual auto clear() -> void = 0;
-  };
-
-  template<typename Type>
-  class container : public container_base {
-
-  public:
-
-    container() {
-
-    }
-
-    ~container() override {
-
-    }
-
-    auto remove(const math::uuid& id) -> void override {
-      _assets.erase(id);
-    }
-
-    auto clear() -> void override {
-      _assets.clear();
-    }
-
-    template<typename... Args>
-    auto add(const math::uuid& id, Args&&... args) -> void {
-      _assets.insert({id, std::make_unique<Type>(std::forward<Args>(args)...)});
-    }
-
-    auto add(const math::uuid& id, std::unique_ptr<Type>&& asset) -> void {
-      _assets.insert({id, std::move(asset)});
-    }
-
-    auto get(const math::uuid& id) const -> const Type& {
-      const auto entry = _assets.find(id);
-
-      if (entry == _assets.end()) {
-        throw utility::runtime_error{"Asset with ID '{}' not found", id};
-      }
-
-      return *entry->second;
-    }
-
-    auto get(const math::uuid& id) -> Type& {
-      auto entry = _assets.find(id);
-
-      if (entry == _assets.end()) {
-        throw utility::runtime_error{"Asset with ID '{}' not found", id};
-      }
-
-      return *entry->second;
-    }
-
-  private:
-
-    std::unordered_map<math::uuid, std::unique_ptr<Type>> _assets;
-
-  };
-
-  std::vector<std::unique_ptr<container_base>> _containers;
 
 }; // class assets_module
 

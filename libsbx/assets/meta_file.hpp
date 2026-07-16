@@ -5,6 +5,7 @@
 #include <filesystem>
 #include <optional>
 #include <string>
+#include <unordered_map>
 
 #include <yaml-cpp/yaml.h>
 
@@ -16,11 +17,14 @@ namespace sbx::assets {
  * @brief Parsed contents of an .meta sidecar file.
  *
  * The import_settings node is opaque to the database; each importer interprets it according to the asset type.
+ *
+ * @ref id is the UUID of the source's primary asset. @ref sub_assets maps each stable sub-asset id (e.g. "animation:Idle") to the UUID minted for it, so re-importing the same source reuses identities instead of re-minting them.
  */
 struct meta_data {
   math::uuid id{math::uuid::nil()};
   std::string type{};
   YAML::Node import_settings{};
+  std::unordered_map<std::string, math::uuid> sub_assets{};
 }; // struct meta_data
 
 /**

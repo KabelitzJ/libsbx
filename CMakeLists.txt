@@ -202,6 +202,8 @@ target_sources(
   libsbx
   PRIVATE
     "${CMAKE_SOURCE_DIR}/libsbx/animations/animation.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/animations/animation_serializer.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/animations/skinned_mesh_serializer.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/animations/animations_module.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/animations/animations.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/animations/animator.cpp"
@@ -384,7 +386,7 @@ target_sources(
       "${CMAKE_SOURCE_DIR}/libsbx/animations/vertex3d.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/assets/assets_module.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/assets/assets.hpp"
-      "${CMAKE_SOURCE_DIR}/libsbx/assets/metadata.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/assets/meta_file.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/assets/thread_pool.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/assets/asset_database.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/assets/meta_file.hpp"

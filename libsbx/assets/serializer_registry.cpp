@@ -25,7 +25,7 @@ auto serializer_registry::unregister(std::string_view extension) -> bool {
   return _by_extension.erase(_normalize(extension)) > 0u;
 }
 
-auto serializer_registry::find_for(const std::filesystem::path& source) const -> std::shared_ptr<serializer_base> {
+auto serializer_registry::_matched_extension(const std::filesystem::path& source) const -> const std::vector<std::shared_ptr<serializer_base>>* {
   auto filename = source.filename().string();
 
   std::transform(filename.begin(), filename.end(), filename.begin(), [](unsigned char character) -> unsigned char {
@@ -38,7 +38,7 @@ auto serializer_registry::find_for(const std::filesystem::path& source) const ->
     const auto suffix = std::string_view{filename.data() + dot, filename.size() - dot};
 
     if (const auto entry = _by_extension.find(std::string{suffix}); entry != _by_extension.end()) {
-      return entry->second;
+      return &entry->second;
     }
 
     dot = filename.find('.', dot + 1u);
@@ -47,12 +47,22 @@ auto serializer_registry::find_for(const std::filesystem::path& source) const ->
   return nullptr;
 }
 
-auto serializer_registry::find(std::string_view extension) const -> std::shared_ptr<serializer_base> {
-  if (const auto entry = _by_extension.find(_normalize(extension)); entry != _by_extension.end()) {
-    return entry->second;
+auto serializer_registry::find_all_for(const std::filesystem::path& source) const -> std::span<const std::shared_ptr<serializer_base>> {
+  if (const auto* serializers = _matched_extension(source); serializers) {
+    return std::span<const std::shared_ptr<serializer_base>>{*serializers};
   }
 
-  return nullptr;
+  return {};
+}
+
+auto serializer_registry::find_for(const std::filesystem::path& source) const -> std::shared_ptr<serializer_base> {
+  const auto serializers = find_all_for(source);
+
+  if (serializers.empty()) {
+    return nullptr;
+  }
+
+  return serializers.front();
 }
 
 auto serializer_registry::contains(std::string_view extension) const -> bool {
@@ -82,7 +92,7 @@ auto serializer_registry::_register_serializer(std::string_view extension, std::
     throw utility::runtime_error{"Refusing to register null importer for '{}'", extension};
   }
 
-  _by_extension[_normalize(extension)] = std::move(instance);
+  _by_extension[_normalize(extension)].push_back(std::move(instance));
 }
 
 } // namespace sbx::assets

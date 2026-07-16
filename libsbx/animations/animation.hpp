@@ -12,11 +12,13 @@
 #include <libsbx/math/quaternion.hpp>
 #include <libsbx/math/uuid.hpp>
 
+#include <libsbx/assets/asset.hpp>
+
 #include <libsbx/animations/spline.hpp>
 
 namespace sbx::animations {
 
-class animation {
+class animation : public assets::asset {
 
 public:
 
@@ -27,6 +29,19 @@ public:
   }; // struct bone_track
 
   animation(const std::filesystem::path& path, const std::string& name);
+
+  ~animation() override = default;
+
+  /**
+   * @brief Returns the names of every animation clip contained in @p path, in file order. Empty if the file has none or cannot be read.
+   *
+   * Used by the importer to enumerate the `animation:<name>` sub-assets a source exposes.
+   */
+  static auto clip_names(const std::filesystem::path& path) -> std::vector<std::string>;
+
+  auto type() const -> assets::asset_type override {
+    return assets::asset_type::animation;
+  }
 
   auto track_map() const noexcept -> const std::unordered_map<utility::hashed_string, bone_track>&;
 

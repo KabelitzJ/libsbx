@@ -160,6 +160,11 @@ application::application()
   auto& fox_transform = graph.get_component<sbx::scenes::transform>(fox);
   fox_transform.set_scale(sbx::math::vector3{0.02, 0.02, 0.02});
 
+  auto& fox_emitter = graph.add_component<sbx::particles::particle_emitter>(fox);
+  fox_emitter.loop = false;
+  fox_emitter.emission_shape = sbx::math::volume{{-3, 0, -3}, {3, 0, 3}};
+  fox_emitter.images.push_back(asset_registry.get_image("fox_albedo"));
+
   auto spheres = graph.create_node(fmt::format("Spheres"));
 
   auto& spheres_transform = graph.get_component<sbx::scenes::transform>(spheres);

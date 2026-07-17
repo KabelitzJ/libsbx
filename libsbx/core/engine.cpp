@@ -35,10 +35,13 @@ engine::engine(std::span<std::string_view> args)
 engine::~engine() {
   _application.reset();
 
-  for (auto&& [type, entry] : _modules | std::ranges::views::enumerate | std::views::reverse) {
-    _destroy_module(type);
+  for (const auto type : _construction_order | std::views::reverse) {
+    auto& factory = module_manager::_factories().at(type);
+    std::invoke(factory->destroy, _modules[type]);
+    _modules[type] = nullptr;
   }
 
+  _construction_order.clear();
   _instance = nullptr;
 }
 
@@ -140,6 +143,7 @@ auto engine::_create_module(const std::uint32_t type, const module_factory& fact
 
   _modules[type] = std::invoke(factory.create);
   _module_by_stage[factory.stage].push_back(type);
+  _construction_order.push_back(type);
 }
 
 auto engine::_destroy_module(const std::uint32_t type) -> void {

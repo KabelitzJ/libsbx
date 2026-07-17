@@ -111,6 +111,7 @@ private:
   std::unique_ptr<application> _application;
 
   std::vector<module_base*> _modules{};
+  std::vector<std::uint32_t> _construction_order{};
   std::map<stage, std::vector<std::uint32_t>> _module_by_stage{};
 
 }; // class engine

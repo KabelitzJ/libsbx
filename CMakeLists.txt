@@ -24,7 +24,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_BINARY_DIR}" "${CMAKE_BINARY_DIR}/dependencies" "${CMAKE_SOURCE_DIR}/cmake" "${CMAKE_SOURCE_DIR}/cmake/modules")
 list(APPEND CMAKE_PREFIX_PATH "${CMAKE_BINARY_DIR}" "${CMAKE_BINARY_DIR}/dependencies")
 
-include(cmake/dependencies.cmake)
+include(cmake/fetch_dependencies.cmake)
 
 fetch_dependencies("${CMAKE_SOURCE_DIR}/dependencies.json" "${CMAKE_BINARY_DIR}/dependencies")
 
@@ -74,7 +74,7 @@ message(STATUS "SBX_BUILD_SHARED: ${SBX_BUILD_SHARED}")
 # Build metadata
 
 string(TIMESTAMP COMPILE_TIMESTAMP %Y%m%d-%H%M%S)
-set(SBX_COMPILE_TIMESTAMP "\"${COMPILE_TIMESTAMP}\"" CACHE STRING "Compile timestamp" FORCE)
+set(SBX_COMPILE_TIMESTAMP "${COMPILE_TIMESTAMP}" CACHE STRING "Compile timestamp" FORCE)
 
 find_package(Git QUIET)
 if(GIT_FOUND AND EXISTS "${CMAKE_SOURCE_DIR}/.git")
@@ -337,11 +337,6 @@ install(
   EXPORT libsbxTargets
   NAMESPACE libsbx::
   DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/libsbx
-)
-
-install(
-  TARGETS fmt spdlog yaml-cpp glfw
-  EXPORT libsbxTargets
 )
 
 write_basic_package_version_file(

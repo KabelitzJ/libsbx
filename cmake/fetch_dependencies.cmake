@@ -58,7 +58,7 @@ function(fetch_dependencies DEPENDENCIES_FILE INSTALL_DIR)
 
     string(JSON OPT_COUNT ERROR_VARIABLE ERR LENGTH "${JSON}" "${NAME}" options)
 
-    if(NOT ERR)
+    if(NOT ERR AND OPT_COUNT GREATER 0)
         math(EXPR OPT_LAST "${OPT_COUNT} - 1")
 
         foreach(J RANGE ${OPT_LAST})

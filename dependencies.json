@@ -4,6 +4,9 @@
       "type": "git",
       "uri": "https://github.com/fmtlib/fmt",
       "tag": "12.2.0"
+    },
+    "options": {
+      "FMT_INSTALL": true
     }
   },
   "spdlog": {
@@ -11,13 +14,10 @@
       "type": "git",
       "uri": "https://github.com/gabime/spdlog",
       "tag": "v1.17.0"
-    }
-  },
-  "imgui": {
-    "source": {
-      "type": "git",
-      "uri": "https://github.com/ocornut/imgui",
-      "tag": "v1.92.8-docking"
+    },
+    "options": {
+      "SPDLOG_INSTALL": true,
+      "SPDLOG_FMT_EXTERNAL": true
     }
   },
   "yaml-cpp": {
@@ -25,6 +25,9 @@
       "type": "git",
       "uri": "https://github.com/jbeder/yaml-cpp",
       "tag": "yaml-cpp-0.9.0"
+    },
+    "options": {
+      "YAML_CPP_INSTALL": true
     }
   },
   "glfw": {
@@ -32,6 +35,10 @@
       "type": "git",
       "uri": "https://github.com/glfw/glfw",
       "tag": "3.4"
+    },
+    "options": {
+      "GLFW_INSTALL": true,
+      "GLFW_BUILD_DOCS": false
     }
   }
 }

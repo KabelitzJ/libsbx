@@ -40,5 +40,46 @@
       "GLFW_INSTALL": true,
       "GLFW_BUILD_DOCS": false
     }
+  },
+  "stb": {
+    "source": {
+      "type": "git",
+      "uri": "https://github.com/KabelitzJ/stb",
+      "tag": "v1.0.0"
+    },
+    "options": {
+      "STB_INSTALL": true
+    }
+  },
+  "meshoptimizer": {
+    "source": {
+      "type": "git",
+      "uri": "https://github.com/zeux/meshoptimizer",
+      "tag": "v1.2"
+    },
+    "options": {
+      "MESHOPT_INSTALL": true
+    }
+  },
+  "Vulkan-Headers": {
+    "source": {
+      "type": "git",
+      "uri": "https://github.com/KhronosGroup/Vulkan-Headers",
+      "tag": "vulkan-sdk-1.4.350.0"
+    },
+    "options": {
+      "VULKAN_HEADERS_ENABLE_INSTALL": true
+    }
+  }
+  ,
+  "VulkanMemoryAllocator": {
+    "source": {
+      "type": "git",
+      "uri": "https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator",
+      "tag": "v3.4.0"
+    },
+    "options": {
+      "VMA_ENABLE_INSTALL": true
+    }
   }
 }

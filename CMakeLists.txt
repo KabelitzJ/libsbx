@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.20)
+cmake_minimum_required(VERSION 3.24)
 
 if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE "Debug")
@@ -124,7 +124,7 @@ message(STATUS "Git commit: ${SBX_COMMIT_HASH}")
 # find_package(spirv-cross CONFIG REQUIRED)
 # find_package(VulkanMemoryAllocator CONFIG REQUIRED)
 # find_package(nlohmann_json CONFIG REQUIRED)
-# find_package(slang REQUIRED MODULE)
+find_package(slang REQUIRED MODULE)
 # find_package(glfw3 CONFIG REQUIRED)
 # find_package(tinyobjloader CONFIG REQUIRED)
 # find_package(base64 CONFIG REQUIRED)
@@ -139,7 +139,7 @@ message(STATUS "Git commit: ${SBX_COMMIT_HASH}")
 # find_package(drwav CONFIG REQUIRED)
 # find_package(OpenAL CONFIG REQUIRED)
 # find_package(sol2 CONFIG REQUIRED)
-# find_package(Nethost REQUIRED MODULE)
+find_package(Nethost REQUIRED MODULE)
 # find_package(Tracy CONFIG REQUIRED)
 
 # option(GLFW_BUILD_EXAMPLES "" OFF)
@@ -221,6 +221,12 @@ target_link_libraries(
     spdlog::spdlog
     yaml-cpp::yaml-cpp
     glfw
+    Nethost::nethost
+    slang::slang
+    stb::stb
+    meshoptimizer
+    Vulkan::Headers
+    GPUOpen::VulkanMemoryAllocator
 )
 
 set_target_properties(

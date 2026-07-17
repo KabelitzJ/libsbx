@@ -11,6 +11,10 @@
 
 #include <demo/application.hpp>
 
+#include <stb_image.h>
+
+#include <vulkan/vulkan.h>
+
 auto main(int argc, const char** argv) -> int {
   auto args = std::vector<std::string_view>{argv, argv + argc};
 

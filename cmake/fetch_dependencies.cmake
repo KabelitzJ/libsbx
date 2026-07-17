@@ -148,6 +148,17 @@ function(fetch_dependencies DEPENDENCIES_FILE INSTALL_DIR)
 
     FetchContent_MakeAvailable(${DEPENDENCIES_TO_FETCH})
 
+    foreach(NAME IN LISTS DEPENDENCIES_TO_FETCH)
+      if(NOT TARGET ${NAME})
+        string(TOLOWER "${NAME}" NAME_LOWER)
+        
+        add_library(${NAME} INTERFACE)
+        target_include_directories(${NAME} INTERFACE "${${NAME_LOWER}_SOURCE_DIR}")
+        
+        message(STATUS "  ${NAME}: Created automatic INTERFACE target")
+      endif()
+    endforeach()
+
     message(STATUS "Dependencies resolved")
   else()
     message(STATUS "No dependencies to fetch")

@@ -22,19 +22,19 @@ constexpr auto parse_type_name(std::string_view prefix, std::string_view suffix,
 
 template<typename Type>
 constexpr auto type_name() -> std::string_view {
-#if defined(__clang__)
+#if defined(SBX_COMPILER_CLANG)
   constexpr auto prefix = std::string_view{"[Type = "};
   constexpr auto suffix = "]";
   constexpr auto function = std::string_view{__PRETTY_FUNCTION__};
 
   return detail::parse_type_name(prefix, suffix, function);
-#elif (defined(__GNUC__) || defined(__GNUG__) || defined(__MINGW32__))
+#elif defined(SBX_COMPILER_GNU)
   constexpr auto prefix = std::string_view{"with Type = "};
   constexpr auto suffix = "; ";
   constexpr auto function = std::string_view{__PRETTY_FUNCTION__};
 
   return detail::parse_type_name(prefix, suffix, function);
-#elif defined(__MSC_VER)
+#elif defined(SBX_COMPILER_MSVC)
   constexpr auto prefix = std::string_view{"type_name<"};
   constexpr auto suffix = ">(void)";
   constexpr auto function = std::string_view{__FUNCSIG__};

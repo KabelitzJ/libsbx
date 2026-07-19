@@ -23,9 +23,8 @@ template<module... Modules>
 class basic_engine;
 
 /**
- * @brief The engine core: timing state, cli args, application ownership and
- * the static access surface. Constructed and driven by @ref basic_engine,
- * which owns it as a member together with the module storage and the main loop.
+ * @brief The engine core: timing state, cli args, application ownership and the static access surface. 
+ * Driven by @ref basic_engine, which inherits from this class and provides the module composition.
  */
 class engine : public utility::noncopyable {
 

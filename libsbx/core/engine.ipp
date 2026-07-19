@@ -5,13 +5,16 @@
 #include <chrono>
 #include <cmath>
 
+#include <libsbx/utility/assert.hpp>
+#include <libsbx/utility/type_name.hpp>
+
 namespace sbx::core {
 
 template<module Module>
 inline auto engine::get_module() -> Module& {
   auto* instance = detail::module_instance<Module>::pointer;
 
-  utility::assert_that(instance != nullptr, "Module is not part of the running engine");
+  utility::assert_that(instance != nullptr, fmt::format("Module '{}' is not part of the running engine's module composition", utility::type_name<Module>()));
 
   return *instance;
 }

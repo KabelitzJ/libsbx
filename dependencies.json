@@ -81,5 +81,12 @@
     "options": {
       "VMA_ENABLE_INSTALL": true
     }
+  },
+  "fastgltf": {
+    "source": {
+      "type": "git",
+      "uri": "https://github.com/spnda/fastgltf",
+      "tag": "v0.9.0"
+    }
   }
 }

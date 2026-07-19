@@ -196,8 +196,10 @@ target_sources(
     FILE_SET headers TYPE HEADERS
     BASE_DIRS "${CMAKE_SOURCE_DIR}"
     FILES
+      "${CMAKE_SOURCE_DIR}/libsbx/engine.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/core/core.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/core/engine.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/core/engine.ipp"
       "${CMAKE_SOURCE_DIR}/libsbx/platform/platform_module.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/platform/window.hpp"
   FILE_SET generated TYPE HEADERS
@@ -217,16 +219,17 @@ target_include_directories(
 target_link_libraries(
   libsbx
   PUBLIC
+    fastgltf::fastgltf
     fmt::fmt
-    spdlog::spdlog
-    yaml-cpp::yaml-cpp
     glfw
+    GPUOpen::VulkanMemoryAllocator
+    meshoptimizer
     Nethost::nethost
     slang::slang
+    spdlog::spdlog
     stb::stb
-    meshoptimizer
     Vulkan::Headers
-    GPUOpen::VulkanMemoryAllocator
+    yaml-cpp::yaml-cpp
 )
 
 set_target_properties(

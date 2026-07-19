@@ -2,110 +2,132 @@
 #ifndef LIBSBX_CORE_ENGINE_HPP_
 #define LIBSBX_CORE_ENGINE_HPP_
 
-#include <map>
-#include <vector>
-#include <typeindex>
 #include <memory>
 #include <span>
 #include <string_view>
-#include <cmath>
-#include <chrono>
-#include <ranges>
+#include <type_traits>
+#include <utility>
+#include <vector>
 
-#include <libsbx/utility/concepts.hpp>
-#include <libsbx/utility/noncopyable.hpp>
 #include <libsbx/utility/assert.hpp>
-#include <libsbx/utility/type_name.hpp>
-#include <libsbx/utility/timer.hpp>
-#include <libsbx/utility/logger.hpp>
+#include <libsbx/utility/noncopyable.hpp>
 
 #include <libsbx/units/units.hpp>
 
-#include <libsbx/core/module.hpp>
 #include <libsbx/core/application.hpp>
+#include <libsbx/core/module.hpp>
 
 namespace sbx::core {
 
-class engine : public utility::noncopyable {
+template<module... Modules>
+class basic_engine;
 
-  using stage = module_manager::stage;
-  using module_base = module_manager::module_base;
-  using module_factory = module_manager::module_factory;
+/**
+ * @brief The engine core: timing state, cli args, application ownership and
+ * the static access surface. Constructed and driven by @ref basic_engine,
+ * which owns it as a member together with the module storage and the main loop.
+ */
+class engine final : public utility::noncopyable {
+
+  template<module... Modules>
+  friend class basic_engine;
 
 public:
 
-  engine(std::span<std::string_view> args);
+  [[nodiscard]] static auto delta_time() -> units::seconds;
 
-  ~engine();
+  [[nodiscard]] static auto fixed_delta_time() -> units::seconds;
 
-  static auto delta_time() -> units::seconds;
+  [[nodiscard]] static auto time() -> units::seconds;
 
-  static auto fixed_delta_time() -> units::seconds;
-
-  static auto time() -> units::seconds;
+  [[nodiscard]] static auto args() -> const std::vector<std::string_view>&;
 
   static auto quit() -> void;
 
-  template<typename Module>
-  requires (std::is_base_of_v<module_base, Module>)
-  [[nodiscard]] static auto get_module() -> Module& {
-    const auto type = type_id<Module>::value();
+  /**
+   * @brief Access to a module owned by the running engine.
+   *
+   * Valid from the moment the module is constructed until it is destroyed,
+   * which means a module may access all modules listed before it already in
+   * its constructor.
+   *
+   * @tparam Module The module type to access. Must be part of the running engine's module composition.
+   *
+   * @return A reference to the module instance.
+   */
+  template<module Module>
+  [[nodiscard]] static auto get_module() -> Module&;
 
-    auto& modules = _instance->_modules;
-
-    if (type >= modules.size() || !modules[type]) {
-      throw std::runtime_error{fmt::format("Failed to find module '{}'", utility::type_name<Module>())};
-    }
-
-    return *static_cast<Module*>(modules[type]);
-  }
-
+  /**
+   * @brief Access to the application owned by the running engine.
+   *
+   * @tparam Application The application type to cast to. Must be the same as or derived from the base @ref core::application type.
+   *
+   * @return A reference to the application instance.
+   */
   template<typename Application = core::application>
   requires (std::is_same_v<core::application, Application> || std::is_base_of_v<core::application, Application>)
-  [[nodiscard]] static auto get_application() -> Application& {
-    utility::assert_that(_instance != nullptr, "Engine instance does not exist");
-    utility::assert_that(_instance->_application != nullptr, "Engine has no application running");
-
-    return *static_cast<Application*>(_instance->_application.get());
-  }
-
-  template<typename Application, typename... Args>
-  requires (std::is_base_of_v<core::application, Application> && std::is_constructible_v<Application, Args...>)
-  auto run(Args&&... args) -> void {
-    utility::assert_that(_instance != nullptr, "Engine instance does not exist");
-    utility::assert_that(!_is_running, "Engine instance is already running");
-
-    _application = std::make_unique<Application>(std::forward<Args>(args)...);
-
-    _run_main_loop();
-  }
+  [[nodiscard]] static auto get_application() -> Application&;
 
 private:
 
-  auto _run_main_loop() -> void;
+  explicit engine(std::span<std::string_view> args);
 
-  auto _create_module(const std::uint32_t type, const module_factory& factory) -> void;
-
-  auto _destroy_module(const std::uint32_t type) -> void;
-
-  auto _update_stage(stage stage) -> void;
+  ~engine();
 
   static engine* _instance;
 
-  units::seconds _delta_time;
-  units::seconds _time;
+  units::seconds _delta_time{};
+  units::seconds _time{};
 
   bool _is_running{};
+
   std::vector<std::string_view> _args{};
 
-  std::unique_ptr<application> _application;
-
-  std::vector<module_base*> _modules{};
-  std::vector<std::uint32_t> _construction_order{};
-  std::map<stage, std::vector<std::uint32_t>> _module_by_stage{};
+  std::unique_ptr<application> _application{};
 
 }; // class engine
 
+/**
+ * @brief The composed engine: an explicit, ordered list of modules driving
+ * the @ref engine core.
+ *
+ * The list order is the construction order and the update order within each
+ * stage; destruction runs in reverse. Every module's `dependencies` must
+ * appear before the module itself.
+ */
+template<module... Modules>
+class basic_engine final : public utility::noncopyable {
+
+  static_assert(detail::are_unique_v<Modules...>, "Modules must not be listed twice");
+  static_assert(detail::dependencies_ordered_v<Modules...>, "Every module must be listed after all of its dependencies");
+
+public:
+
+  explicit basic_engine(std::span<std::string_view> args);
+
+  ~basic_engine() = default;
+
+  template<typename Application, typename... Args>
+  requires (std::is_base_of_v<core::application, Application> && std::is_constructible_v<Application, Args...>)
+  auto run(Args&&... args) -> void;
+
+private:
+
+  template<stage Stage>
+  auto _dispatch() -> void;
+
+  auto _loop() -> void;
+
+  // The engine core must be constructed before (and outlive) the modules:
+  // module constructors may already use the engine's static surface.
+  engine _engine;
+  module_storage<Modules...> _modules;
+
+}; // class basic_engine
+
 } // namespace sbx::core
+
+#include <libsbx/core/engine.ipp>
 
 #endif // LIBSBX_CORE_ENGINE_HPP_

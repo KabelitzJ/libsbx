@@ -2,151 +2,211 @@
 #ifndef LIBSBX_CORE_MODULE_HPP_
 #define LIBSBX_CORE_MODULE_HPP_
 
-#include <type_traits>
-#include <unordered_set>
-#include <unordered_map>
-#include <typeindex>
+#include <concepts>
+#include <cstdint>
 #include <functional>
-#include <memory>
-#include <cinttypes>
-#include <cmath>
-#include <optional>
+#include <type_traits>
 
-#include <libsbx/utility/noncopyable.hpp>
-#include <libsbx/utility/type_id.hpp>
-
-#include <libsbx/memory/raw_allocate.hpp>
+#include <libsbx/utility/assert.hpp>
+#include <libsbx/utility/type_list.hpp>
 
 namespace sbx::core {
 
+enum class stage : std::uint8_t {
+  pre,
+  update,
+  post,
+  fixed,
+  render
+}; // enum class stage
+
+/**
+ * @brief Declares the modules a module must be constructed after.
+ *
+ * Usage: `using dependencies = core::dependency_list<platform::platform_module>;`
+ */
+template<typename... Types>
+struct dependency_list {
+  using type = dependency_list;
+  inline static constexpr auto size = sizeof...(Types);
+}; // struct dependency_list
+
+/**
+ * @brief A module is any default-constructible class. Stage participation is
+ * opt-in by defining any of the hooks:
+ *
+ * - `auto pre_update() -> void`
+ * - `auto update() -> void`
+ * - `auto post_update() -> void`
+ * - `auto fixed_update() -> void`
+ * - `auto render() -> void`
+ *
+ * Frame timing is available through `core::engine::delta_time()` and friends;
+ * fixed update hooks must use `core::engine::fixed_delta_time()`.
+ */
+template<typename Type>
+concept module = std::is_class_v<Type> && std::default_initializable<Type>;
+
+template<typename Module>
+concept has_pre_update = requires(Module& module) {
+  { module.pre_update() } -> std::same_as<void>;
+}; // concept has_pre_update
+
+template<typename Module>
+concept has_update = requires(Module& module) {
+  { module.update() } -> std::same_as<void>;
+}; // concept has_update
+
+template<typename Module>
+concept has_post_update = requires(Module& module) {
+  { module.post_update() } -> std::same_as<void>;
+}; // concept has_post_update
+
+template<typename Module>
+concept has_fixed_update = requires(Module& module) {
+  { module.fixed_update() } -> std::same_as<void>;
+}; // concept has_fixed_update
+
+template<typename Module>
+concept has_render = requires(Module& module) {
+  { module.render() } -> std::same_as<void>;
+}; // concept has_render
+
 namespace detail {
 
-struct core_type_id_scope { };
+/**
+ * @brief Invokes the hook belonging to Stage if the module defines it.
+ */
+template<stage Stage, typename Module>
+auto invoke_stage_hook(Module& module) -> void {
+  if constexpr (Stage == stage::pre) {
+    if constexpr (has_pre_update<Module>) {
+      module.pre_update();
+    }
+  } else if constexpr (Stage == stage::update) {
+    if constexpr (has_update<Module>) {
+      module.update();
+    }
+  } else if constexpr (Stage == stage::post) {
+    if constexpr (has_post_update<Module>) {
+      module.post_update();
+    }
+  } else if constexpr (Stage == stage::fixed) {
+    if constexpr (has_fixed_update<Module>) {
+      module.fixed_update();
+    }
+  } else if constexpr (Stage == stage::render) {
+    if constexpr (has_render<Module>) {
+      module.render();
+    }
+  }
+}
+
+template<typename Module>
+struct module_instance {
+  inline static Module* pointer = nullptr;
+}; // struct module_instance
+
+template<typename Type, typename... Types>
+inline constexpr auto contains_v = (std::is_same_v<Type, Types> || ...);
+
+template<typename... Types>
+struct are_unique : std::true_type { };
+
+template<typename First, typename... Rest>
+struct are_unique<First, Rest...> : std::bool_constant<!contains_v<First, Rest...> && are_unique<Rest...>::value> { };
+
+template<typename... Types>
+inline constexpr auto are_unique_v = are_unique<Types...>::value;
+
+template<typename Module>
+struct module_dependencies {
+  using type = dependency_list<>;
+}; // struct module_dependencies
+
+template<typename Module>
+requires requires { typename Module::dependencies; }
+struct module_dependencies<Module> {
+  using type = typename Module::dependencies;
+}; // struct module_dependencies
+
+template<typename Module>
+using module_dependencies_t = typename module_dependencies<Module>::type;
+
+template<typename List, typename... Previous>
+struct dependencies_in;
+
+template<typename... Dependencies, typename... Previous>
+struct dependencies_in<dependency_list<Dependencies...>, Previous...> : std::bool_constant<(contains_v<Dependencies, Previous...> && ...)> { };
+
+/**
+ * @brief Checks that every module's dependencies appear before it in the list.
+ */
+template<typename Checked, typename... Rest>
+struct dependencies_ordered;
+
+template<typename... Checked>
+struct dependencies_ordered<utility::type_list<Checked...>> : std::true_type { };
+
+template<typename... Checked, typename First, typename... Rest>
+struct dependencies_ordered<utility::type_list<Checked...>, First, Rest...>
+: std::conditional_t<
+    dependencies_in<module_dependencies_t<First>, Checked...>::value,
+    dependencies_ordered<utility::type_list<Checked..., First>, Rest...>,
+    std::false_type
+  > { };
+
+template<typename... Modules>
+inline constexpr auto dependencies_ordered_v = dependencies_ordered<utility::type_list<>, Modules...>::value;
+
+/**
+ * @brief Owns a module and publishes its location for @ref engine::get_module.
+ *
+ * The pointer is published after the module's constructor completes, so
+ * modules constructed later may already access it during their construction.
+ */
+template<module Module>
+struct module_slot {
+
+  module_slot() {
+    module_instance<Module>::pointer = &instance;
+  }
+
+  ~module_slot() {
+    module_instance<Module>::pointer = nullptr;
+  }
+
+  Module instance{};
+
+}; // struct module_slot
 
 } // namespace detail
 
 /**
- * @brief A scoped type ID generator for the libsbx-core scope.
- *
- * @tparam Type The type for which the ID is generated.
+ * @brief Stores modules with guaranteed in-order construction and reverse-order
+ * destruction.
  */
-template<typename Type>
-using type_id = utility::scoped_type_id<detail::core_type_id_scope, Type>;
+template<module... Modules>
+struct module_storage {
 
-template<typename Derived, typename Base>
-concept derived_from = std::is_base_of_v<Base, Derived>;
+  template<typename Callable>
+  auto for_each([[maybe_unused]] Callable&& callable) -> void { }
 
-class module_manager {
+}; // struct module_storage
 
-  template<typename>
-  friend class module;
+template<module First, module... Rest>
+struct module_storage<First, Rest...> {
 
-  friend class engine;
-
-public:
-
-  module_manager() = delete;
-  
-  ~module_manager() = default;
-
-private:
-
-  enum class stage : std::uint8_t {
-    pre,
-    normal,
-    post,
-    fixed,
-    rendering
-  }; // enum class stage
-
-  template<typename... Types>
-  struct dependencies {
-    auto get() const noexcept -> std::unordered_set<std::uint32_t> {
-      auto types = std::unordered_set<std::uint32_t>{};
-      (types.insert(type_id<Types>::value()), ...);
-      return types;
-    }
-  }; // struct dependencies
-
-  struct module_base {
-    virtual ~module_base() = default;
-    virtual auto update() -> void = 0;
-  }; // struct module_base
-
-  struct module_factory {
-    module_manager::stage stage{};
-    std::unordered_set<std::uint32_t> dependencies{};
-    std::function<module_base*()> create{};
-    std::function<void(module_base*)> destroy{};
-  }; // module_factory
-
-  static auto _factories() -> std::vector<std::optional<module_factory>>& {
-    static auto instance = std::vector<std::optional<module_factory>>{};
-    return instance;
+  template<typename Callable>
+  auto for_each(Callable&& callable) -> void {
+    std::invoke(callable, slot.instance);
+    rest.for_each(callable);
   }
 
-}; // class module_manager
+  detail::module_slot<First> slot{};
+  module_storage<Rest...> rest{};
 
-template<typename Derived>
-class module : public module_manager::module_base, public utility::noncopyable {
-
-public:
-
-  virtual ~module() {
-    static_assert(!std::is_abstract_v<Derived>, "Class may not be abstract.");
-    static_assert(std::is_base_of_v<module<Derived>, Derived>, "Class must inherit from module<Class>.");
-  }
-
-protected:
-
-  using base_type = module_manager::module_base;
-
-  template<typename... Dependencies>
-  using dependencies = module_manager::dependencies<Dependencies...>;
-
-  using stage = module_manager::stage;
-
-  template<derived_from<base_type>... Dependencies>
-  static auto register_module(stage stage, dependencies<Dependencies...>&& dependencies = {}) -> bool {
-    const auto type = type_id<Derived>::value();
-
-    auto& factories = module_manager::_factories();
-
-    factories.resize(std::max(factories.size(), static_cast<std::size_t>(type + 1u)));
-
-    factories[type] = module_manager::module_factory{
-      .stage = stage,
-      .dependencies = dependencies.get(),
-      .create = []() -> module_base* {
-        auto* instance = memory::raw_allocate<Derived>();
-        
-        try {
-          std::construct_at(instance);
-        } catch (...) {
-          memory::raw_deallocate(instance);
-
-          throw;
-        }
-
-        return instance;
-      },
-      .destroy = [](module_base* pointer){
-        if (!pointer) {
-          return;
-        }
-
-        auto* instance = static_cast<Derived*>(pointer);
-
-        std::destroy_at(instance);
-
-        memory::raw_deallocate(instance);
-      }
-    };
-
-    return true;
-  }
-
-}; // class module
+}; // struct module_storage
 
 } // namespace sbx::core
 

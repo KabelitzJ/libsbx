@@ -11,8 +11,8 @@ platform_module::~platform_module() {
 
 }
 
-auto platform_module::update() -> void {
-  
+auto platform_module::pre_update() -> void {
+
 }
 
 } // namespace sbx::platform

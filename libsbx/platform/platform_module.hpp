@@ -2,21 +2,21 @@
 #ifndef LIBSBX_PLATFORM_PLATFORM_MODULE_HPP_
 #define LIBSBX_PLATFORM_PLATFORM_MODULE_HPP_
 
+#include <libsbx/utility/noncopyable.hpp>
+
 #include <libsbx/core/module.hpp>
 
 namespace sbx::platform {
 
-class platform_module : public core::module<platform_module> {
-
-inline static const auto is_registered = register_module(stage::normal);
+class platform_module : public utility::noncopyable {
 
 public:
 
   platform_module();
 
-  ~platform_module() override;
+  ~platform_module();
 
-  auto update() -> void override;
+  auto pre_update() -> void;
 
 }; // class platform_module
 

@@ -4,15 +4,7 @@
 
 namespace sbx::utility {
 
-struct noncopyable {
-
-  noncopyable(const noncopyable&) = delete;
-
-  noncopyable(noncopyable&&) noexcept = default;
-
-  auto operator=(const noncopyable&) -> noncopyable& = delete;
-
-  auto operator=(noncopyable&&) noexcept -> noncopyable& = default;
+class noncopyable {
 
 protected:
 
@@ -20,7 +12,15 @@ protected:
 
   ~noncopyable() = default;
 
-}; // struct noncopyable
+  noncopyable(const noncopyable&) = delete;
+
+  noncopyable(noncopyable&&) = default;
+
+  auto operator=(const noncopyable&) -> noncopyable& = delete;
+
+  auto operator=(noncopyable&&) -> noncopyable& = default;
+
+}; // class noncopyable
 
 } // namespace sbx::utility
 

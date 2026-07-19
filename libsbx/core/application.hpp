@@ -6,8 +6,6 @@ namespace sbx::core {
 
 class application {
 
-  friend class engine;
-
 public:
 
   virtual ~application() = default;

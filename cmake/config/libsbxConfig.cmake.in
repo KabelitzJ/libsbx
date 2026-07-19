@@ -2,15 +2,16 @@
 
 include(CMakeFindDependencyMacro)
 
+find_dependency(fastgltf)
 find_dependency(fmt)
-find_dependency(spdlog)
-find_dependency(yaml-cpp)
 find_dependency(glfw3)
+find_dependency(meshoptimizer)
 find_dependency(Nethost)
 find_dependency(slang)
+find_dependency(spdlog)
 find_dependency(stb)
-find_dependency(meshoptimizer)
 find_dependency(Vulkan)
-find_dependency(VulkanMemoryAllocator )
+find_dependency(VulkanMemoryAllocator)
+find_dependency(yaml-cpp)
 
 include("${CMAKE_CURRENT_LIST_DIR}/libsbxTargets.cmake")

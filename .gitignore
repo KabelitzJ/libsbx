@@ -14,6 +14,8 @@ compile_commands.json
 .cache
 .env*
 
+.claude
+
 *.profile
 *.prof
 

@@ -70,8 +70,7 @@
     "options": {
       "VULKAN_HEADERS_ENABLE_INSTALL": true
     }
-  }
-  ,
+  },
   "VulkanMemoryAllocator": {
     "source": {
       "type": "git",

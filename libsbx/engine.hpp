@@ -6,6 +6,8 @@
 
 #include <libsbx/platform/platform_module.hpp>
 
+#include <libsbx/graphics/graphics_module.hpp>
+
 namespace sbx {
 
 /**
@@ -15,7 +17,8 @@ namespace sbx {
  * core::basic_engine themselves.
  */
 using engine = core::basic_engine<
-  platform::platform_module
+  platform::platform_module,
+  graphics::graphics_module
 >;
 
 } // namespace sbx

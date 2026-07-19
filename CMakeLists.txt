@@ -54,7 +54,7 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang" OR CMAKE_CXX_COMPILER_ID STREQUAL "App
   set(SBX_COMPILER "CLANG")
 elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
   set(SBX_COMPILER "GNU")
-  message(STATUS "GNU compiler detected")
+elseif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
   set(SBX_COMPILER "MSC")
 else()
   set(SBX_COMPILER "UNKNOWN")
@@ -137,7 +137,9 @@ message(STATUS "Git commit: ${SBX_COMMIT_HASH}")
 # find_package(magic_enum CONFIG REQUIRED)
 # find_package(yaml-cpp CONFIG REQUIRED)
 # find_package(stb CONFIG REQUIRED)
-# find_package(Vulkan REQUIRED)
+# The system loader provides the core entry points; headers stay pinned via
+# the fetched Vulkan-Headers (listed before Vulkan::Vulkan in link order).
+find_package(Vulkan REQUIRED)
 # find_package(spirv-cross CONFIG REQUIRED)
 # find_package(VulkanMemoryAllocator CONFIG REQUIRED)
 # find_package(nlohmann_json CONFIG REQUIRED)
@@ -210,6 +212,12 @@ target_sources(
     "${CMAKE_SOURCE_DIR}/libsbx/platform/platform_module.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/platform/window.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/platform/input.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/graphics/graphics_module.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/graphics/devices/features.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/graphics/devices/instance.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/graphics/devices/physical_device.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/graphics/devices/logical_device.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/graphics/devices/allocator.cpp"
   PUBLIC
     FILE_SET headers TYPE HEADERS
     BASE_DIRS "${CMAKE_SOURCE_DIR}"
@@ -226,6 +234,13 @@ target_sources(
       "${CMAKE_SOURCE_DIR}/libsbx/platform/mouse_button.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/platform/input_action.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/platform/input_mod.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/graphics/graphics_module.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/graphics/vulkan.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/graphics/devices/features.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/graphics/devices/instance.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/graphics/devices/physical_device.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/graphics/devices/logical_device.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/graphics/devices/allocator.hpp"
   FILE_SET generated TYPE HEADERS
     BASE_DIRS "${CMAKE_BINARY_DIR}/generated"
     FILES
@@ -253,6 +268,7 @@ target_link_libraries(
     spdlog::spdlog
     stb::stb
     Vulkan::Headers
+    Vulkan::Vulkan
     yaml-cpp::yaml-cpp
 )
 

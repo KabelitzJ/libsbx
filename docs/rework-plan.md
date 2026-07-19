@@ -130,8 +130,22 @@ the fixed-timestep loop — fixed.)
 
 Scene-agnostic RHI. Suggested layout:
 
-- `devices/` — `instance`, `physical_device`, `logical_device` (graphics/compute/transfer
-  queues), `debug_messenger`, VMA `allocator` wrapper.
+- `devices/` — **implemented 2026-07-20**: `instance` (validation layer + debug
+  messenger owned privately — members/functions behind `#if SBX_BUILD_TYPE_DEBUG`,
+  zero footprint in release; extension entry points via vkGetInstanceProcAddr).
+  `logical_device::set_debug_name(...)` names vulkan objects for validation/RenderDoc
+  (PFN via vkGetDeviceProcAddr, inline no-op in release).
+  Features split like the old engine: `required()` hard floor
+  filters device selection, `optional()` (wide lines, geometry/tess, 8/16-bit types,
+  texture compression, compute shader derivatives, ...) merges enable-if-available
+  via `device_features::enabled()`.
+  `physical_device` (scored selection, requires 1.3 + required feature set),
+  `logical_device` (graphics/dedicated-compute/dedicated-transfer queues with
+  graphics-family fallback), VMA `allocator`, and `devices/features.hpp` — the
+  single `device_features` chain used for both device selection and creation.
+  Core functions come from the system loader (`find_package(Vulkan)`, own wrapper
+  api — no volk); `graphics/vulkan.hpp` is the only header that includes vulkan.
+  Verified: RTX 2070 SUPER selected, queues graphics 0 / compute 2 / transfer 1.
 - `swapchain` — dynamic-rendering presentation, frames in flight (2), per-frame command
   buffers/sync, per-frame deletion queue. Timeline semaphores for queue sync.
 - `resources/` — `buffer`, `image` (all through VMA), staging/upload ring + transfer queue

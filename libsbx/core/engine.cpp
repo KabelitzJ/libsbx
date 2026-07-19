@@ -8,8 +8,7 @@ namespace sbx::core {
 engine* engine::_instance{nullptr};
 
 engine::engine(std::span<std::string_view> args)
-: _cli{args},
-  _is_running{false},
+: _is_running{false},
   _application{nullptr} {
   utility::assert_that(_instance == nullptr, "Engine instance already exists");
 
@@ -61,14 +60,6 @@ auto engine::quit() -> void {
   _instance->_is_running = false;
 }
 
-auto engine::cli() noexcept -> core::cli& {
-  return _instance->_cli;
-}
-
-auto engine::settings() noexcept -> core::settings& {
-  return _instance->_settings;
-}
-
 auto engine::_run_main_loop() -> void {
   using clock_type = std::chrono::high_resolution_clock;
 
@@ -88,43 +79,21 @@ auto engine::_run_main_loop() -> void {
 
     fixed_accumulator += _delta_time;
 
-    SBX_PROFILE_SCOPE_START(s0, "stage pre");
     _update_stage(stage::pre);
-    SBX_PROFILE_SCOPE_END(s0);
 
-    SBX_PROFILE_SCOPE_START(s1, "application update");
     _application->update();
-    SBX_PROFILE_SCOPE_END(s1);
 
-    SBX_PROFILE_SCOPE_START(s2, "stage normal");
     _update_stage(stage::normal);
-    SBX_PROFILE_SCOPE_END(s2);
 
-    SBX_PROFILE_SCOPE_START(s3, "stage post");
     _update_stage(stage::post);
-    SBX_PROFILE_SCOPE_END(s3);
-
-    SBX_PROFILE_SCOPE_START(s4, "stage pre_fixed");
-    _update_stage(stage::pre_fixed);
-    SBX_PROFILE_SCOPE_END(s4);
-
-    SBX_PROFILE_SCOPE_START(s5, "stage fixed");
+  
     while (fixed_accumulator >= fixed_delta_time()) {
       _application->fixed_update();
       _update_stage(stage::fixed);
       fixed_accumulator -= fixed_delta_time();
     }
-    SBX_PROFILE_SCOPE_END(s5);
 
-    SBX_PROFILE_SCOPE_START(s6, "stage post_fixed");
-    _update_stage(stage::post_fixed);
-    SBX_PROFILE_SCOPE_END(s6);
-
-    SBX_PROFILE_SCOPE_START(s7, "stage rendering");
     _update_stage(stage::rendering);
-    SBX_PROFILE_SCOPE_END(s7);
-
-    SBX_PROFILE_FRAME_MARK_NAMED("main loop");
   }
 }
 

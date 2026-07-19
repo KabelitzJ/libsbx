@@ -23,9 +23,6 @@
 
 #include <libsbx/core/module.hpp>
 #include <libsbx/core/application.hpp>
-#include <libsbx/core/cli.hpp>
-#include <libsbx/core/profiler.hpp>
-#include <libsbx/core/settings.hpp>
 
 namespace sbx::core {
 
@@ -48,10 +45,6 @@ public:
   static auto time() -> units::seconds;
 
   static auto quit() -> void;
-
-  static auto cli() noexcept -> core::cli&;
-
-  static auto settings() noexcept -> core::settings&;
 
   template<typename Module>
   requires (std::is_base_of_v<module_base, Module>)
@@ -103,10 +96,7 @@ private:
   units::seconds _time;
 
   bool _is_running{};
-  // std::vector<std::string_view> _args{};
-  core::cli _cli;
-  // core::profiler _profiler;
-  core::settings _settings;
+  std::vector<std::string_view> _args{};
 
   std::unique_ptr<application> _application;
 

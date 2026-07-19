@@ -106,6 +106,8 @@ function(fetch_dependencies DEPENDENCIES_FILE INSTALL_DIR)
       list(APPEND DECLARE_ARGS PATCH_COMMAND ${PATCH_COMMAND_ARGS})
     endif()
 
+    list(APPEND DECLARE_ARGS SYSTEM)
+
     FetchContent_Declare(${NAME} ${DECLARE_ARGS})
 
     # Options

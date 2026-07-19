@@ -24,39 +24,6 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_BINARY_DIR}" "${CMAKE_BINARY_DIR}/dependencies" "${CMAKE_SOURCE_DIR}/cmake" "${CMAKE_SOURCE_DIR}/cmake/modules")
 list(APPEND CMAKE_PREFIX_PATH "${CMAKE_BINARY_DIR}" "${CMAKE_BINARY_DIR}/dependencies")
 
-include(cmake/fetch_dependencies.cmake)
-
-fetch_dependencies("${CMAKE_SOURCE_DIR}/dependencies.json" "${CMAKE_BINARY_DIR}/dependencies")
-
-# Operating system
-if(WIN32)
-  set(SBX_OPERATING_SYSTEM "WIN32")
-  message(STATUS "Windows platform detected")
-elseif(APPLE)
-  set(SBX_OPERATING_SYSTEM "APPLE")
-  message(STATUS "Apple platform detected")
-elseif(UNIX)
-  set(SBX_OPERATING_SYSTEM "LINUX")
-else()
-  set(SBX_OPERATING_SYSTEM "UNKNOWN")
-  message(WARNING "Unknown operating system")
-endif()
-
-# Compiler
-if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang" OR CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang")
-  set(SBX_COMPILER "CLANG")
-  message(STATUS "Clang compiler detected")
-elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-  set(SBX_COMPILER "GNU")
-  message(STATUS "GNU compiler detected")
-elseif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
-  set(SBX_COMPILER "MSC")
-  message(STATUS "MSVC compiler detected")
-else()
-  set(SBX_COMPILER "UNKNOWN")
-  message(WARNING "Unknown compiler")
-endif()
-
 # Build type
 
 if (CMAKE_BUILD_TYPE STREQUAL "Debug")
@@ -65,16 +32,61 @@ else()
   set(SBX_BUILD_TYPE "RELEASE")
 endif()
 
+# Operating system
+if(WIN32)
+  set(SBX_OPERATING_SYSTEM "WIN32")
+elseif(APPLE)
+  set(SBX_OPERATING_SYSTEM "APPLE")
+elseif(UNIX)
+  set(SBX_OPERATING_SYSTEM "LINUX")
+else()
+  set(SBX_OPERATING_SYSTEM "UNKNOWN")
+endif()
+
+if (SBX_OPERATING_SYSTEM STREQUAL "UNKNOWN")
+  message(FATAL_ERROR "Unsupported operating system")
+else()
+  message(STATUS "SBX_OPERATING_SYSTEM: ${SBX_OPERATING_SYSTEM}")
+endif()
+
+# Compiler
+if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang" OR CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang")
+  set(SBX_COMPILER "CLANG")
+elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+  set(SBX_COMPILER "GNU")
+  message(STATUS "GNU compiler detected")
+  set(SBX_COMPILER "MSC")
+else()
+  set(SBX_COMPILER "UNKNOWN")
+endif()
+
+if (SBX_COMPILER STREQUAL "UNKNOWN")
+  message(FATAL_ERROR "Unsupported compiler")
+else()
+  message(STATUS "SBX_COMPILER: ${SBX_COMPILER}")
+endif()
+
+set(_SBX_ENABLE_PROFILING_DEFAULT OFF)
+
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+  set(_SBX_ENABLE_PROFILING_DEFAULT ON)
+endif()
+
 # Options
 
 option(SBX_BUILD_DEMO "Build demo" ON)
 option(SBX_BUILD_TESTS "Build tests" ON)
 option(SBX_BUILD_SHARED "Build shared library" OFF)
-
+option(SBX_ENABLE_PROFILING "Enable tracy profiling" ${_SBX_ENABLE_PROFILING_DEFAULT})
 
 message(STATUS "SBX_BUILD_DEMO: ${SBX_BUILD_DEMO}")
 message(STATUS "SBX_BUILD_TESTS: ${SBX_BUILD_TESTS}")
 message(STATUS "SBX_BUILD_SHARED: ${SBX_BUILD_SHARED}")
+message(STATUS "SBX_ENABLE_PROFILING: ${SBX_ENABLE_PROFILING}")
+
+include(cmake/fetch_dependencies.cmake)
+
+fetch_dependencies("${CMAKE_SOURCE_DIR}/dependencies.json" "${CMAKE_BINARY_DIR}/dependencies")
 
 # Build metadata
 
@@ -240,10 +252,13 @@ target_link_libraries(
     slang::slang
     spdlog::spdlog
     stb::stb
-    TracyClient
     Vulkan::Headers
     yaml-cpp::yaml-cpp
 )
+
+if(SBX_ENABLE_PROFILING)
+  target_link_libraries(libsbx PUBLIC TracyClient)
+endif()
 
 set_target_properties(
   libsbx
@@ -270,8 +285,10 @@ target_compile_definitions(
     SBX_OPERATING_SYSTEM_${SBX_OPERATING_SYSTEM}
     SBX_COMPILER_${SBX_COMPILER}
     SBX_BUILD_TYPE_${SBX_BUILD_TYPE}
+    $<$<BOOL:${SBX_ENABLE_PROFILING}>:SBX_ENABLE_PROFILING>
   PRIVATE
     GLFW_INCLUDE_VULKAN
+    $<$<BOOL:${SBX_ENABLE_PROFILING}>:TRACY_ENABLE>
 )
 
 target_compile_options(

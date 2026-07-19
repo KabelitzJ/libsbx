@@ -82,15 +82,41 @@ Custom lists are for deviating apps (headless tools, tests).
   module finishes construction — so a module's constructor may use all modules listed
   before it.
 
+## utility: logger & profiler (reworked 2026-07-19)
+
+- Logger: per-tag `spdlog::logger` instances (named after the tag, rendered via `%n`)
+  sharing global sinks from a lazily created `logger_context` (magic static — no
+  static-init construction). Single-pass, level-gated formatting (the old design
+  eagerly `fmt::format`ed args even for disabled levels, twice). Sinks are `_mt`
+  (thread pool ahead), `flush_on(warn)`, file at CWD-relative `logs/sbx.log`
+  (the old hardcoded `./demo/logs/` path knew about the demo app from library code).
+  Ring-buffer sink kept for a future editor console via `utility::logged_lines()`.
+- Profiler: tracy integrated behind `SBX_ENABLE_PROFILING` (CMake option; defaults
+  ON for Debug, OFF otherwise). When OFF the tracy dependency is not even fetched
+  (`"condition"` key in dependencies.json) and no tracy code is linked. When ON,
+  TracyClient links and publicly propagates `TRACY_ENABLE`, from which
+  `utility/profiler.hpp` derives `SBX_ENABLE_PROFILING`. Built with
+  `TRACY_ON_DEMAND` (zones recorded only while a Tracy server is connected).
+  Engine loop has zones per stage + `FrameMark`; connect the Tracy UI to profile.
+
 ## platform module (`libsbx/platform/`) — implemented 2026-07-19
 
 Port of the old `devices` module into `sbx::platform` (the old `libsbx/devices/`
 directory is deleted):
 
-- `window` — GLFW wrapper with signals for window/input events; windowed at the
-  size given in `window_create_info` (the old video-mode size override was dropped).
-- `input` — static keyboard/mouse state, `key`, `mouse_button`, `input_mod`,
-  `input_action`; press→repeat transitions run in `platform_module::pre_update`.
+- **glfw is a private implementation detail** — no public platform header includes
+  it. The enums (`key`, `mouse_button`, `input_action`, `input_mod`) carry literal
+  values matching the glfw constants, verified by static_asserts in window.cpp;
+  window.hpp only forward-declares `GLFWwindow`.
+- `window` — signals for window/input events; windowed at the size given in
+  `window_create_info` (the old video-mode size override was dropped). Exposes
+  `native_info() -> native_window_info` (variant of `win32_window_info` /
+  `x11_window_info` / `wayland_window_info`) so the graphics module creates its
+  `VkSurfaceKHR` from native handles (vkCreateWin32SurfaceKHR etc.), not via glfw.
+- `input` — static keyboard/mouse state; press→repeat transitions run in
+  `platform_module::pre_update`. The old viewport/capture state
+  (`_active_viewport_*`, `_is_active`, `_is_captured` — imgui-era workarounds) was
+  intentionally not ported; viewport-local input mapping is the editor's concern later.
 - `events` — window/input event structs dispatched through `signals`.
 - `platform_module` — owns the glfw context + window; `pre_update` transitions input
   state and polls events; `required_instance_extensions()` ready for the graphics module.

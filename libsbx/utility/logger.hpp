@@ -2,11 +2,12 @@
 #ifndef LIBSBX_UTILITY_LOGGER_HPP_
 #define LIBSBX_UTILITY_LOGGER_HPP_
 
-#include <iostream>
-#include <optional>
-#include <mutex>
-#include <deque>
 #include <filesystem>
+#include <memory>
+#include <mutex>
+#include <optional>
+#include <string>
+#include <vector>
 
 #include <fmt/format.h>
 
@@ -15,6 +16,8 @@
 #include <spdlog/sinks/basic_file_sink.h>
 #include <spdlog/sinks/base_sink.h>
 
+#include <libsbx/containers/ring_buffer.hpp>
+
 #include <libsbx/utility/target.hpp>
 #include <libsbx/utility/string_literal.hpp>
 
@@ -22,6 +25,9 @@ namespace sbx::utility {
 
 namespace detail {
 
+/**
+ * @brief Keeps the last lines in memory for an in-engine console (editor).
+ */
 template<typename Mutex>
 class ring_buffer_sink final : public spdlog::sinks::base_sink<Mutex> {
 
@@ -29,13 +35,16 @@ class ring_buffer_sink final : public spdlog::sinks::base_sink<Mutex> {
 
 public:
 
+  using MutexType = Mutex;
+  using log_level_type = spdlog::level::level_enum;
+
   struct log_line {
     std::string text;
-    spdlog::level::level_enum level;
+    log_level_type level;
   }; // struct log_line
 
-  explicit ring_buffer_sink(const std::size_t max_lines = 512)
-  : _max_lines{max_lines} {}
+  explicit ring_buffer_sink(const std::size_t max_lines = 256u)
+  : _lines{max_lines} { }
 
   [[nodiscard]] auto lines() -> std::vector<log_line> {
     auto lock = std::lock_guard<Mutex>{base::mutex_};
@@ -43,83 +52,114 @@ public:
     return {_lines.begin(), _lines.end()};
   }
 
-  void clear() {
-    std::lock_guard<Mutex> lock(base::mutex_);
-    
+  auto clear() -> void {
+    auto lock = std::lock_guard<Mutex>{base::mutex_};
+
     _lines.clear();
   }
 
 protected:
 
-  void sink_it_(const spdlog::details::log_msg& msg) override {
+  auto sink_it_(const spdlog::details::log_msg& msg) -> void override {
     auto formatted = spdlog::memory_buf_t{};
+
     base::formatter_->format(msg, formatted);
 
-    auto lock = std::lock_guard<Mutex>{base::mutex_};
-    _lines.emplace_back(fmt::to_string(formatted), msg.level);
-
-    if (_lines.size() > _max_lines) {
-      _lines.pop_front();
-    }
+    _lines.emplace(fmt::to_string(formatted), msg.level);
   }
 
-  void flush_() override {
-
-  }
+  auto flush_() -> void override { }
 
 private:
 
-  std::size_t _max_lines;
-  std::deque<log_line> _lines;
+  containers::ring_buffer<log_line> _lines;
 
 }; // class ring_buffer_sink
 
 using ring_buffer_sink_mt = ring_buffer_sink<std::mutex>;
-using ring_buffer_sink_st = ring_buffer_sink<spdlog::details::null_mutex>;
 
-struct logger_instance {
+/**
+ * @brief Sinks shared by every tagged logger. Created lazily on first log
+ * call (thread-safe magic static) — never during static initialization.
+ */
+class logger_context {
 
-  static auto create_logger() -> spdlog::logger {
-    auto sinks = std::vector<std::shared_ptr<spdlog::sinks::sink>>{};
+public:
 
-    sinks.push_back(std::make_shared<spdlog::sinks::basic_file_sink_st>("./demo/logs/sbx.log", true));
+  static auto instance() -> logger_context& {
+    static auto context = logger_context{};
 
-    if constexpr (utility::build_type_v == utility::build_type::debug) {
-      sinks.push_back(std::make_shared<spdlog::sinks::stdout_color_sink_st>());
-    }
-
-    sink = std::make_shared<ring_buffer_sink_st>();
-
-    sinks.push_back(sink);
-
-    auto logger = spdlog::logger{"logger", std::begin(sinks), std::end(sinks)};
-
-    logger.set_pattern("[%Y-%m-%d %H:%M:%S] [%^%l%$] %v");
-
-    if constexpr (build_type_v == build_type::debug) {
-      logger.set_level(spdlog::level::trace);
-    } else {
-      logger.set_level(spdlog::level::info);
-    }
-
-    return logger;
+    return context;
   }
 
-  inline static auto sink = std::shared_ptr<ring_buffer_sink_st>{};
-  inline static auto logger = create_logger();
+  auto sinks() const -> const std::vector<spdlog::sink_ptr>& {
+    return _sinks;
+  }
 
-}; // struct logger_instance
+  auto ring_buffer() const -> const std::shared_ptr<ring_buffer_sink_mt>& {
+    return _ring_buffer;
+  }
 
-inline auto instance() -> spdlog::logger& {
-  return logger_instance::logger;
-}
+  auto level() const -> spdlog::level::level_enum {
+    return _level;
+  }
 
-inline auto sink() -> std::shared_ptr<ring_buffer_sink_st>& {
-  return logger_instance::sink;
+private:
+
+  logger_context() {
+    const auto log_path = std::filesystem::path{"logs/sbx.log"};
+
+    if (log_path.has_parent_path()) {
+      std::filesystem::create_directories(log_path.parent_path());
+    }
+
+    _sinks.push_back(std::make_shared<spdlog::sinks::basic_file_sink_mt>(log_path.string(), true));
+
+    if constexpr (build_type_v == build_type::debug) {
+      _sinks.push_back(std::make_shared<spdlog::sinks::stdout_color_sink_mt>());
+    }
+
+    _ring_buffer = std::make_shared<ring_buffer_sink_mt>();
+    _sinks.push_back(_ring_buffer);
+
+    _level = (build_type_v == build_type::debug) ? spdlog::level::trace : spdlog::level::info;
+  }
+
+  std::vector<spdlog::sink_ptr> _sinks{};
+  std::shared_ptr<ring_buffer_sink_mt> _ring_buffer{};
+  spdlog::level::level_enum _level{};
+
+}; // class logger_context
+
+inline auto make_logger(std::string name) -> spdlog::logger {
+  auto& context = logger_context::instance();
+
+  const auto& sinks = context.sinks();
+
+  auto logger = spdlog::logger{std::move(name), sinks.begin(), sinks.end()};
+
+  logger.set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%^%l%$] [%n] %v");
+  logger.set_level(context.level());
+  logger.flush_on(spdlog::level::warn);
+
+  return logger;
 }
 
 } // namespace detail
 
+/**
+ * @brief Lines held by the in-memory ring buffer sink (for an editor console).
+ */
+[[nodiscard]] inline auto logged_lines() -> std::vector<detail::ring_buffer_sink_mt::log_line> {
+  return detail::logger_context::instance().ring_buffer()->lines();
+}
+
+/**
+ * @brief A tagged logger. Every tag owns a lightweight spdlog::logger named
+ * after it; all of them share the global sinks. The tag is rendered by the
+ * sink pattern (%n), so messages are formatted exactly once and only when the
+ * level is enabled.
+ */
 template<string_literal Tag>
 class logger {
 
@@ -134,69 +174,76 @@ public:
 
   template<typename... Args>
   static auto trace(format_string_type<Args...> format, Args&&... args) -> void {
-    detail::instance().trace("[{}] : {}", Tag, fmt::format(format, std::forward<Args>(args)...));
+    _instance().trace(format, std::forward<Args>(args)...);
   }
 
   template<typename Type>
   static auto trace(const Type& value) -> void {
-    detail::instance().trace("[{}] : {}", Tag, value);
+    _instance().trace(value);
   }
 
   template<typename... Args>
   static auto debug(format_string_type<Args...> format, Args&&... args) -> void {
-    detail::instance().debug("[{}] : {}", Tag, fmt::format(format, std::forward<Args>(args)...));
+    _instance().debug(format, std::forward<Args>(args)...);
   }
 
   template<typename Type>
   static auto debug(const Type& value) -> void {
-    detail::instance().debug("[{}] : {}", Tag, value);
+    _instance().debug(value);
   }
 
   template<typename... Args>
   static auto info(format_string_type<Args...> format, Args&&... args) -> void {
-    detail::instance().info("[{}] : {}", Tag, fmt::format(format, std::forward<Args>(args)...));
+    _instance().info(format, std::forward<Args>(args)...);
   }
 
   template<typename Type>
   static auto info(const Type& value) -> void {
-    detail::instance().info("[{}] : {}", Tag, value);
+    _instance().info(value);
   }
 
   template<typename... Args>
   static auto warn(format_string_type<Args...> format, Args&&... args) -> void {
-    detail::instance().warn("[{}] : {}", Tag, fmt::format(format, std::forward<Args>(args)...));
+    _instance().warn(format, std::forward<Args>(args)...);
   }
 
   template<typename Type>
   static auto warn(const Type& value) -> void {
-    detail::instance().warn("[{}] : {}", Tag, value);
+    _instance().warn(value);
   }
 
   template<typename... Args>
   static auto error(format_string_type<Args...> format, Args&&... args) -> void {
-    detail::instance().error("[{}] : {}", Tag, fmt::format(format, std::forward<Args>(args)...));
+    _instance().error(format, std::forward<Args>(args)...);
   }
 
   template<typename Type>
   static auto error(const Type& value) -> void {
-    detail::instance().error("[{}] : {}", Tag, value);
+    _instance().error(value);
   }
 
   template<typename... Args>
   static auto critical(format_string_type<Args...> format, Args&&... args) -> void {
-    detail::instance().critical("[{}] : {}", Tag, fmt::format(format, std::forward<Args>(args)...));
+    _instance().critical(format, std::forward<Args>(args)...);
   }
 
   template<typename Type>
   static auto critical(const Type& value) -> void {
-    detail::instance().critical("[{}] : {}", Tag, value);
+    _instance().critical(value);
+  }
+
+private:
+
+  static auto _instance() -> spdlog::logger& {
+    static auto instance = detail::make_logger(std::string{Tag.data(), Tag.size()});
+
+    return instance;
   }
 
 }; // class logger
 
 } // namespace sbx::utility
 
-// [NOTE] KAJ 2024-01-19 : Enable formatting to underlying type for all enums
 template<typename Type>
 requires (std::is_enum_v<Type>)
 struct fmt::formatter<Type> : public fmt::formatter<std::underlying_type_t<Type>> {
@@ -210,7 +257,6 @@ struct fmt::formatter<Type> : public fmt::formatter<std::underlying_type_t<Type>
 
 }; // struct fmt::formatter
 
-// [NOTE] KAJ 2025-05-27 : Enable formatting for optionals
 template<typename Type>
 struct fmt::formatter<std::optional<Type>> : public fmt::formatter<Type> {
 
@@ -238,6 +284,5 @@ struct fmt::formatter<std::filesystem::path> : public fmt::formatter<std::filesy
   }
 
 }; // struct fmt::formatter<Type>
-
 
 #endif // LIBSBX_UTILITY_LOGGER_HPP_

@@ -89,11 +89,16 @@
       "tag": "v0.9.0"
     }
   },
-  "tracy": {
+  "TracyClient": {
+    "condition": "SBX_ENABLE_PROFILING",
     "source": {
       "type": "git",
       "uri": "https://github.com/wolfpld/tracy",
       "tag": "v0.13.0"
+    },
+    "options": {
+      "TRACY_ENABLE": true,
+      "TRACY_ON_DEMAND": true
     }
   }
 }

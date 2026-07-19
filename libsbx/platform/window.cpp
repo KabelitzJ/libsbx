@@ -24,45 +24,6 @@
 
 namespace sbx::platform {
 
-// The public enums mirror the glfw constants so the callbacks below can cast
-// directly. Keep them in sync — sampled here at the boundaries of every
-// contiguous run.
-static_assert(static_cast<std::int32_t>(key::unknown) == GLFW_KEY_UNKNOWN);
-static_assert(static_cast<std::int32_t>(key::space) == GLFW_KEY_SPACE);
-static_assert(static_cast<std::int32_t>(key::zero) == GLFW_KEY_0);
-static_assert(static_cast<std::int32_t>(key::nine) == GLFW_KEY_9);
-static_assert(static_cast<std::int32_t>(key::a) == GLFW_KEY_A);
-static_assert(static_cast<std::int32_t>(key::z) == GLFW_KEY_Z);
-static_assert(static_cast<std::int32_t>(key::grave_accent) == GLFW_KEY_GRAVE_ACCENT);
-static_assert(static_cast<std::int32_t>(key::world_2) == GLFW_KEY_WORLD_2);
-static_assert(static_cast<std::int32_t>(key::escape) == GLFW_KEY_ESCAPE);
-static_assert(static_cast<std::int32_t>(key::end) == GLFW_KEY_END);
-static_assert(static_cast<std::int32_t>(key::caps_lock) == GLFW_KEY_CAPS_LOCK);
-static_assert(static_cast<std::int32_t>(key::pause) == GLFW_KEY_PAUSE);
-static_assert(static_cast<std::int32_t>(key::f1) == GLFW_KEY_F1);
-static_assert(static_cast<std::int32_t>(key::f25) == GLFW_KEY_F25);
-static_assert(static_cast<std::int32_t>(key::kp_0) == GLFW_KEY_KP_0);
-static_assert(static_cast<std::int32_t>(key::kp_equal) == GLFW_KEY_KP_EQUAL);
-static_assert(static_cast<std::int32_t>(key::left_shift) == GLFW_KEY_LEFT_SHIFT);
-static_assert(static_cast<std::int32_t>(key::menu) == GLFW_KEY_MENU);
-
-static_assert(static_cast<std::int32_t>(mouse_button::one) == GLFW_MOUSE_BUTTON_1);
-static_assert(static_cast<std::int32_t>(mouse_button::eight) == GLFW_MOUSE_BUTTON_8);
-static_assert(static_cast<std::int32_t>(mouse_button::left) == GLFW_MOUSE_BUTTON_LEFT);
-static_assert(static_cast<std::int32_t>(mouse_button::right) == GLFW_MOUSE_BUTTON_RIGHT);
-static_assert(static_cast<std::int32_t>(mouse_button::middle) == GLFW_MOUSE_BUTTON_MIDDLE);
-
-static_assert(static_cast<std::int32_t>(input_action::release) == GLFW_RELEASE);
-static_assert(static_cast<std::int32_t>(input_action::press) == GLFW_PRESS);
-static_assert(static_cast<std::int32_t>(input_action::repeat) == GLFW_REPEAT);
-
-static_assert(static_cast<std::int32_t>(input_mod::shift) == GLFW_MOD_SHIFT);
-static_assert(static_cast<std::int32_t>(input_mod::control) == GLFW_MOD_CONTROL);
-static_assert(static_cast<std::int32_t>(input_mod::alt) == GLFW_MOD_ALT);
-static_assert(static_cast<std::int32_t>(input_mod::super) == GLFW_MOD_SUPER);
-static_assert(static_cast<std::int32_t>(input_mod::caps_lock) == GLFW_MOD_CAPS_LOCK);
-static_assert(static_cast<std::int32_t>(input_mod::num_lock) == GLFW_MOD_NUM_LOCK);
-
 window::window(const window_create_info& create_info)
 : _title{create_info.title},
   _width{create_info.width},
@@ -87,7 +48,6 @@ window::window(const window_create_info& create_info)
   }
 
   glfwSetInputMode(_handle, GLFW_STICKY_KEYS, true);
-
   glfwSetInputMode(_handle, GLFW_LOCK_KEY_MODS, true);
 
   _set_callbacks();

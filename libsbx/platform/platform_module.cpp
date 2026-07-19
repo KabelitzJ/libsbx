@@ -5,7 +5,7 @@
 
 #include <GLFW/glfw3.h>
 
-#include <libsbx/math/vector2.hpp>
+#include <libsbx/utility/profiler.hpp>
 
 namespace sbx::platform {
 
@@ -25,15 +25,15 @@ platform_module::context::~context() {
 
 platform_module::platform_module()
 : _context{},
-  _window{window_create_info{"libsbx", 1280u, 720u}} {
-
-}
+  _window{window_create_info{"libsbx", 1280u, 720u}} { }
 
 platform_module::~platform_module() {
 
 }
 
 auto platform_module::pre_update() -> void {
+  SBX_PROFILE_FUNCTION();
+
   input::_transition_pressed_keys();
   input::_transition_pressed_mouse_buttons();
   input::_transition_scroll_delta();

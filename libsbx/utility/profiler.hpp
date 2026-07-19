@@ -1,7 +1,7 @@
 #ifndef LIBSBX_UTILITY_PROFILER_HPP_
 #define LIBSBX_UTILITY_PROFILER_HPP_
 
-#if defined(SBX_PROFILING_ENABLED)
+#if defined(SBX_ENABLE_PROFILING)
 
 #include <tracy/Tracy.hpp>
 #include <tracy/TracyC.h>
@@ -48,6 +48,6 @@
 #define SBX_PROFILE_MESSAGE(text, size) static_cast<void>(0)
 #define SBX_PROFILE_MESSAGE_LITERAL(text) static_cast<void>(0)
 
-#endif // SBX_PROFILING_ENABLED
+#endif // SBX_ENABLE_PROFILING
 
 #endif // LIBSBX_UTILITY_PROFILER_HPP_

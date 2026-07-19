@@ -6,6 +6,7 @@
 #include <cmath>
 
 #include <libsbx/utility/assert.hpp>
+#include <libsbx/utility/profiler.hpp>
 #include <libsbx/utility/type_name.hpp>
 
 namespace sbx::core {
@@ -86,20 +87,38 @@ inline auto basic_engine<Modules...>::_loop() -> void {
 
     fixed_accumulator += _delta_time;
 
-    _dispatch<stage::pre>();
-
-    _dispatch<stage::update>();
-    _application->update();
-
-    _dispatch<stage::post>();
-
-    while (fixed_accumulator >= engine::fixed_delta_time()) {
-      _application->fixed_update();
-      _dispatch<stage::fixed>();
-      fixed_accumulator -= engine::fixed_delta_time();
+    {
+      SBX_PROFILE_SCOPE("stage::pre");
+      _dispatch<stage::pre>();
     }
 
-    _dispatch<stage::render>();
+    {
+      SBX_PROFILE_SCOPE("stage::update");
+      _dispatch<stage::update>();
+      _application->update();
+    }
+
+    {
+      SBX_PROFILE_SCOPE("stage::post");
+      _dispatch<stage::post>();
+    }
+
+    {
+      SBX_PROFILE_SCOPE("stage::fixed");
+
+      while (fixed_accumulator >= engine::fixed_delta_time()) {
+        _application->fixed_update();
+        _dispatch<stage::fixed>();
+        fixed_accumulator -= engine::fixed_delta_time();
+      }
+    }
+
+    {
+      SBX_PROFILE_SCOPE("stage::render");
+      _dispatch<stage::render>();
+    }
+
+    SBX_PROFILE_FRAME_MARK();
   }
 }
 

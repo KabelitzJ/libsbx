@@ -48,7 +48,7 @@ public:
   }
 
   constexpr auto end() const noexcept -> iterator {
-    return std::end(_data.data());
+    return _data.data() + size();
   }
 
   constexpr auto data() const noexcept -> const character_type* {
@@ -75,12 +75,14 @@ public:
     return fnv1a_hash<character_type, std::size_t>{}({_data.data(), _data.size()});
   }
 
+  // _data holds Size - 1 characters (no null terminator) — conversions must
+  // use size(), not Size.
   constexpr operator string_view_type() const noexcept {
-    return string_view_type{_data.data(), Size};
+    return string_view_type{_data.data(), size()};
   }
 
   constexpr operator string_type() const noexcept {
-    return (Size != 0u) ? string_type{_data.data(), Size} : std::string{};
+    return (size() != 0u) ? string_type{_data.data(), size()} : string_type{};
   }
 
   std::array<character_type, Size - 1> _data;

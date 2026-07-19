@@ -1,5 +1,5 @@
-#ifndef LIBSBX_UNITS_V2_DIMENSION_HPP_
-#define LIBSBX_UNITS_V2_DIMENSION_HPP_
+#ifndef LIBSBX_UNITS_DIMENSION_HPP_
+#define LIBSBX_UNITS_DIMENSION_HPP_
 
 #include <ratio>
 #include <type_traits>
@@ -54,4 +54,4 @@ using acceleration_dimension = dimension_division<velocity_dimension, time_dimen
 
 } // namespace sbx::units
 
-#endif // LIBSBX_UNITS_V2_DIMENSION_HPP_
+#endif // LIBSBX_UNITS_DIMENSION_HPP_

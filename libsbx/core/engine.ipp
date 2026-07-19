@@ -27,27 +27,27 @@ inline auto engine::get_application() -> Application& {
 
 template<module... Modules>
 inline basic_engine<Modules...>::basic_engine(std::span<std::string_view> args)
-: _engine{args},
+: engine{args},
   _modules{} { }
 
 template<module... Modules>
 template<typename Application, typename... Args>
 requires (std::is_base_of_v<core::application, Application> && std::is_constructible_v<Application, Args...>)
 inline auto basic_engine<Modules...>::run(Args&&... args) -> void {
-  utility::assert_that(!_engine._is_running, "Engine instance is already running");
+  utility::assert_that(!_is_running, "Engine instance is already running");
 
-  _engine._application = std::make_unique<Application>(std::forward<Args>(args)...);
+  _application = std::make_unique<Application>(std::forward<Args>(args)...);
 
   try {
     _loop();
   } catch (...) {
     // The application must die before the modules it uses.
-    _engine._application.reset();
+    _application.reset();
 
     throw;
   }
 
-  _engine._application.reset();
+  _application.reset();
 }
 
 template<module... Modules>
@@ -67,31 +67,31 @@ inline auto basic_engine<Modules...>::_loop() -> void {
   // triggering a fixed update burst.
   constexpr auto max_delta_time = 0.25f;
 
-  _engine._is_running = true;
+  _is_running = true;
 
   auto last = clock_type::now();
 
   auto fixed_accumulator = units::seconds{};
 
-  while (_engine._is_running) {
+  while (_is_running) {
     const auto now = clock_type::now();
     const auto elapsed = std::chrono::duration_cast<std::chrono::duration<std::float_t>>(now - last).count();
     last = now;
 
-    _engine._delta_time = units::seconds{std::min(elapsed, max_delta_time)};
-    _engine._time += _engine._delta_time;
+    _delta_time = units::seconds{std::min(elapsed, max_delta_time)};
+    _time += _delta_time;
 
-    fixed_accumulator += _engine._delta_time;
+    fixed_accumulator += _delta_time;
 
     _dispatch<stage::pre>();
 
     _dispatch<stage::update>();
-    _engine._application->update();
+    _application->update();
 
     _dispatch<stage::post>();
 
     while (fixed_accumulator >= engine::fixed_delta_time()) {
-      _engine._application->fixed_update();
+      _application->fixed_update();
       _dispatch<stage::fixed>();
       fixed_accumulator -= engine::fixed_delta_time();
     }

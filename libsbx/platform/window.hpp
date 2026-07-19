@@ -2,11 +2,20 @@
 #ifndef LIBSBX_PLATFORM_WINDOW_HPP_
 #define LIBSBX_PLATFORM_WINDOW_HPP_
 
+#include <cmath>
 #include <cstdint>
-#include <variant>
 #include <string>
-#include <functional>
-#include <memory>
+#include <variant>
+
+#include <libsbx/utility/noncopyable.hpp>
+
+#include <libsbx/math/vector2.hpp>
+
+#include <libsbx/signals/signal.hpp>
+
+#include <libsbx/platform/events.hpp>
+
+struct GLFWwindow;
 
 namespace sbx::platform {
 
@@ -27,31 +36,90 @@ struct wayland_window_info {
 
 using native_window_info = std::variant<win32_window_info, x11_window_info, wayland_window_info>;
 
-struct window_description {
-  std::uint32_t width{1280};
-  std::uint32_t height{720};
-  std::string title{"norn"};
-  bool is_resizable{true};
-}; // struct window_description
+struct window_create_info {
+  std::string title{};
+  std::uint32_t width{};
+  std::uint32_t height{};
+}; // struct window_create_info
 
-class window {
+class window : public utility::noncopyable {
 
 public:
 
-  window(const window_description& description)
-  : _description{description} { }
+  window(const window_create_info& create_info);
 
-  virtual ~window() = default;
+  ~window();
 
-  static auto create(const window_description& description) -> std::unique_ptr<window>;
+  /**
+   * @brief Native handles for surface creation. The graphics layer consumes
+   * these directly (e.g. vkCreateWin32SurfaceKHR) and stays glfw-free.
+   */
+  auto native_info() const -> native_window_info;
 
-  virtual auto poll_events() -> void = 0;
-  virtual auto should_close() const -> bool = 0;
-  virtual auto get_native_info() const -> native_window_info = 0;
+  auto title() const -> const std::string&;
 
-protected:
+  auto set_title(const std::string& title) -> void;
 
-  window_description _description;
+  auto width() const -> std::uint32_t;
+
+  auto height() const -> std::uint32_t;
+
+  auto aspect_ratio() const -> std::float_t;
+
+  auto should_close() -> bool;
+
+  auto show() -> void;
+
+  auto hide() -> void;
+
+  auto is_iconified() const noexcept -> bool;
+
+  auto is_focused() const noexcept -> bool;
+
+  auto is_visible() const noexcept -> bool;
+
+  auto on_window_closed() -> signals::signal<const window_closed_event&>&;
+
+  auto on_window_moved() -> signals::signal<const window_moved_event&>&;
+
+  auto on_window_resized() -> signals::signal<const window_resized_event&>&;
+
+  auto on_framebuffer_resized() -> signals::signal<const framebuffer_resized_event&>&;
+
+  auto on_key_pressed() -> signals::signal<const key_pressed_event&>&;
+
+  auto on_key_released() -> signals::signal<const key_released_event&>&;
+
+  auto on_mouse_moved() -> signals::signal<const mouse_moved_event&>&;
+
+  auto on_mouse_button_pressed() -> signals::signal<const mouse_button_pressed_event&>&;
+
+  auto on_mouse_button_released() -> signals::signal<const mouse_button_released_event&>&;
+
+  auto on_mouse_scrolled() -> signals::signal<const mouse_scrolled_event&>&;
+
+private:
+
+  auto _set_callbacks() -> void;
+
+  std::string _title{};
+  std::uint32_t _width{};
+  std::uint32_t _height{};
+
+  GLFWwindow* _handle{};
+
+  math::vector2 _last_mouse_position;
+
+  signals::signal<const window_closed_event&> _on_window_closed;
+  signals::signal<const window_moved_event&> _on_window_moved;
+  signals::signal<const window_resized_event&> _on_window_resized;
+  signals::signal<const framebuffer_resized_event&> _on_framebuffer_resized;
+  signals::signal<const key_pressed_event&> _on_key_pressed;
+  signals::signal<const key_released_event&> _on_key_released;
+  signals::signal<const mouse_moved_event&> _on_mouse_moved;
+  signals::signal<const mouse_button_pressed_event&> _on_mouse_button_pressed;
+  signals::signal<const mouse_button_released_event&> _on_mouse_button_released;
+  signals::signal<const mouse_scrolled_event&> _on_mouse_scrolled;
 
 }; // class window
 

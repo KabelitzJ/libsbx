@@ -82,14 +82,23 @@ Custom lists are for deviating apps (headless tools, tests).
   module finishes construction — so a module's constructor may use all modules listed
   before it.
 
-## platform module (`libsbx/platform/`)
+## platform module (`libsbx/platform/`) — implemented 2026-07-19
 
-Port of the old `devices` module into `sbx::platform`, joining the already-started
-`platform_module`/`window`:
+Port of the old `devices` module into `sbx::platform` (the old `libsbx/devices/`
+directory is deleted):
 
-- `window` — GLFW wrapper, surface creation callback for graphics, resize/close signals.
-- `input` — keyboard/mouse state, `key`, `mouse_button`, `input_mod`, `input_action`.
-- `events` — window/input event types dispatched through `signals`.
+- `window` — GLFW wrapper with signals for window/input events; windowed at the
+  size given in `window_create_info` (the old video-mode size override was dropped).
+- `input` — static keyboard/mouse state, `key`, `mouse_button`, `input_mod`,
+  `input_action`; press→repeat transitions run in `platform_module::pre_update`.
+- `events` — window/input event structs dispatched through `signals`.
+- `platform_module` — owns the glfw context + window; `pre_update` transitions input
+  state and polls events; `required_instance_extensions()` ready for the graphics module.
+
+Verified end-to-end: WM_CLOSE → glfw close callback → `on_window_closed` signal →
+application lambda → `engine::quit()` → clean exit. (Debugging this surfaced a
+foundation bug: `units::quantity::operator-=` added instead of subtracting, freezing
+the fixed-timestep loop — fixed.)
 
 ## graphics module (`libsbx/graphics/`)
 

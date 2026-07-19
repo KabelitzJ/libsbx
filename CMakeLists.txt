@@ -192,6 +192,7 @@ target_sources(
     "${CMAKE_SOURCE_DIR}/libsbx/core/engine.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/platform/platform_module.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/platform/window.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/platform/input.cpp"
   PUBLIC
     FILE_SET headers TYPE HEADERS
     BASE_DIRS "${CMAKE_SOURCE_DIR}"
@@ -202,6 +203,12 @@ target_sources(
       "${CMAKE_SOURCE_DIR}/libsbx/core/engine.ipp"
       "${CMAKE_SOURCE_DIR}/libsbx/platform/platform_module.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/platform/window.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/platform/input.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/platform/events.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/platform/key.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/platform/mouse_button.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/platform/input_action.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/platform/input_mod.hpp"
   FILE_SET generated TYPE HEADERS
     BASE_DIRS "${CMAKE_BINARY_DIR}/generated"
     FILES
@@ -228,6 +235,7 @@ target_link_libraries(
     slang::slang
     spdlog::spdlog
     stb::stb
+    TracyClient
     Vulkan::Headers
     yaml-cpp::yaml-cpp
 )

@@ -1,24 +1,14 @@
 // SPDX-License-Identifier: MIT
-#include <libsbx/devices/input.hpp>
+#include <libsbx/platform/input.hpp>
 
-#include <libsbx/devices/devices_module.hpp>
-
-namespace sbx::devices {
+namespace sbx::platform {
 
 std::unordered_map<key, key_state> input::_key_states;
 std::unordered_map<mouse_button, key_state> input::_mouse_button_states;
-math::vector2 input::_mouse_window_position;
+math::vector2 input::_mouse_position;
 math::vector2 input::_scroll_delta;
-math::vector2 input::_active_viewport_origin;
-math::vector2 input::_active_viewport_size;
-bool input::_is_active{false};
-bool input::_is_captured{false};
 
 auto input::is_key_pressed(key key) -> bool {
-  if (!_is_captured && !_is_active) {
-    return false;
-  }
-
   if (auto entry = _key_states.find(key); entry != _key_states.end()) {
     return entry->second.action == input_action::press;
   }
@@ -27,10 +17,6 @@ auto input::is_key_pressed(key key) -> bool {
 }
 
 auto input::is_key_down(key key) -> bool {
-  if (!_is_captured && !_is_active) {
-    return false;
-  }
-
   if (auto entry = _key_states.find(key); entry != _key_states.end()) {
     const auto& state = entry->second;
 
@@ -41,10 +27,6 @@ auto input::is_key_down(key key) -> bool {
 }
 
 auto input::is_key_released(key key) -> bool {
-  if (!_is_captured && !_is_active) {
-    return false;
-  }
-
   if (auto entry = _key_states.find(key); entry != _key_states.end()) {
     return entry->second.action == input_action::release;
   }
@@ -53,10 +35,6 @@ auto input::is_key_released(key key) -> bool {
 }
 
 auto input::is_mouse_button_pressed(mouse_button button) -> bool {
-  if (!_is_captured && !_is_active) {
-    return false;
-  }
-
   if (auto entry = _mouse_button_states.find(button); entry != _mouse_button_states.end()) {
     return entry->second.action == input_action::press;
   }
@@ -65,10 +43,6 @@ auto input::is_mouse_button_pressed(mouse_button button) -> bool {
 }
 
 auto input::is_mouse_button_down(mouse_button button) -> bool {
-  if (!_is_captured && !_is_active) {
-    return false;
-  }
-
   if (auto entry = _mouse_button_states.find(button); entry != _mouse_button_states.end()) {
     const auto& state = entry->second;
 
@@ -79,10 +53,6 @@ auto input::is_mouse_button_down(mouse_button button) -> bool {
 }
 
 auto input::is_mouse_button_released(mouse_button button) -> bool {
-  if (!_is_captured && !_is_active) {
-    return false;
-  }
-
   if (auto entry = _mouse_button_states.find(button); entry != _mouse_button_states.end()) {
     return entry->second.action == input_action::release;
   }
@@ -91,44 +61,10 @@ auto input::is_mouse_button_released(mouse_button button) -> bool {
 }
 
 auto input::mouse_position() -> math::vector2 {
-  const auto local = _mouse_window_position - _active_viewport_origin;
-
-  const auto x = std::clamp(local.x(), 0.0f, _active_viewport_size.x());
-  const auto y = std::clamp(local.y(), 0.0f, _active_viewport_size.y());
-
-  return math::vector2{x, y};
-}
-
-auto input::mouse_window_position() -> math::vector2 {
-  return _mouse_window_position;
-}
-
-auto input::set_active_viewport(const math::vector2& origin, const math::vector2& size) -> void {
-  _active_viewport_origin = origin;
-  _active_viewport_size = size;
-}
-
-auto input::active_viewport_origin() -> math::vector2 {
-  return _active_viewport_origin;
-}
-
-auto input::active_viewport_size() -> math::vector2 {
-  return _active_viewport_size;
-}
-
-auto input::set_scene_input_active(bool active) -> void {
-  _is_active = active;
-}
-
-auto input::is_scene_input_active() -> bool {
-  return _is_active;
+  return _mouse_position;
 }
 
 auto input::scroll_delta() -> math::vector2 {
-  if (!_is_captured && !_is_active) {
-    return math::vector2{};
-  }
-
   return _scroll_delta;
 }
 
@@ -176,33 +112,14 @@ auto input::_update_mouse_button_state(mouse_button button, input_action action)
 
   state.last_action = state.action;
   state.action = action;
-
-  if (action == input_action::press && _is_active) {
-    _is_captured = true;
-  }
-
-  if (_is_captured && action == input_action::release) {
-    auto any_held = false;
-
-    for (const auto& [btn, s] : _mouse_button_states) {
-      if (s.action != input_action::release) {
-        any_held = true;
-        break;
-      }
-    }
-
-    if (!any_held) {
-      _is_captured = false;
-    }
-  }
 }
 
 auto input::_update_mouse_position(const math::vector2& position) -> void {
-  _mouse_window_position = position;
+  _mouse_position = position;
 }
 
 auto input::_update_scroll_delta(const math::vector2& delta) -> void {
   _scroll_delta = delta;
 }
 
-} // namespace sbx::devices
+} // namespace sbx::platform

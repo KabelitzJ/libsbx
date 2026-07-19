@@ -1,8 +1,283 @@
 // SPDX-License-Identifier: MIT
 #include <libsbx/platform/window.hpp>
 
+#include <stdexcept>
+
+#include <GLFW/glfw3.h>
+
+#if defined(SBX_OPERATING_SYSTEM_WIN32)
+  #define GLFW_EXPOSE_NATIVE_WIN32
+#elif defined(SBX_OPERATING_SYSTEM_LINUX)
+  #define GLFW_EXPOSE_NATIVE_X11
+  #define GLFW_EXPOSE_NATIVE_WAYLAND
+#endif
+
+#include <GLFW/glfw3native.h>
+
+#include <fmt/format.h>
+
+#include <libsbx/version.hpp>
+
+#include <libsbx/utility/target.hpp>
+
+#include <libsbx/platform/input.hpp>
+
 namespace sbx::platform {
 
+// The public enums mirror the glfw constants so the callbacks below can cast
+// directly. Keep them in sync — sampled here at the boundaries of every
+// contiguous run.
+static_assert(static_cast<std::int32_t>(key::unknown) == GLFW_KEY_UNKNOWN);
+static_assert(static_cast<std::int32_t>(key::space) == GLFW_KEY_SPACE);
+static_assert(static_cast<std::int32_t>(key::zero) == GLFW_KEY_0);
+static_assert(static_cast<std::int32_t>(key::nine) == GLFW_KEY_9);
+static_assert(static_cast<std::int32_t>(key::a) == GLFW_KEY_A);
+static_assert(static_cast<std::int32_t>(key::z) == GLFW_KEY_Z);
+static_assert(static_cast<std::int32_t>(key::grave_accent) == GLFW_KEY_GRAVE_ACCENT);
+static_assert(static_cast<std::int32_t>(key::world_2) == GLFW_KEY_WORLD_2);
+static_assert(static_cast<std::int32_t>(key::escape) == GLFW_KEY_ESCAPE);
+static_assert(static_cast<std::int32_t>(key::end) == GLFW_KEY_END);
+static_assert(static_cast<std::int32_t>(key::caps_lock) == GLFW_KEY_CAPS_LOCK);
+static_assert(static_cast<std::int32_t>(key::pause) == GLFW_KEY_PAUSE);
+static_assert(static_cast<std::int32_t>(key::f1) == GLFW_KEY_F1);
+static_assert(static_cast<std::int32_t>(key::f25) == GLFW_KEY_F25);
+static_assert(static_cast<std::int32_t>(key::kp_0) == GLFW_KEY_KP_0);
+static_assert(static_cast<std::int32_t>(key::kp_equal) == GLFW_KEY_KP_EQUAL);
+static_assert(static_cast<std::int32_t>(key::left_shift) == GLFW_KEY_LEFT_SHIFT);
+static_assert(static_cast<std::int32_t>(key::menu) == GLFW_KEY_MENU);
 
+static_assert(static_cast<std::int32_t>(mouse_button::one) == GLFW_MOUSE_BUTTON_1);
+static_assert(static_cast<std::int32_t>(mouse_button::eight) == GLFW_MOUSE_BUTTON_8);
+static_assert(static_cast<std::int32_t>(mouse_button::left) == GLFW_MOUSE_BUTTON_LEFT);
+static_assert(static_cast<std::int32_t>(mouse_button::right) == GLFW_MOUSE_BUTTON_RIGHT);
+static_assert(static_cast<std::int32_t>(mouse_button::middle) == GLFW_MOUSE_BUTTON_MIDDLE);
+
+static_assert(static_cast<std::int32_t>(input_action::release) == GLFW_RELEASE);
+static_assert(static_cast<std::int32_t>(input_action::press) == GLFW_PRESS);
+static_assert(static_cast<std::int32_t>(input_action::repeat) == GLFW_REPEAT);
+
+static_assert(static_cast<std::int32_t>(input_mod::shift) == GLFW_MOD_SHIFT);
+static_assert(static_cast<std::int32_t>(input_mod::control) == GLFW_MOD_CONTROL);
+static_assert(static_cast<std::int32_t>(input_mod::alt) == GLFW_MOD_ALT);
+static_assert(static_cast<std::int32_t>(input_mod::super) == GLFW_MOD_SUPER);
+static_assert(static_cast<std::int32_t>(input_mod::caps_lock) == GLFW_MOD_CAPS_LOCK);
+static_assert(static_cast<std::int32_t>(input_mod::num_lock) == GLFW_MOD_NUM_LOCK);
+
+window::window(const window_create_info& create_info)
+: _title{create_info.title},
+  _width{create_info.width},
+  _height{create_info.height},
+  _last_mouse_position{-1.0f, -1.0f} {
+  glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+
+  if constexpr (utility::build_type_v == utility::build_type::debug) {
+    _title = fmt::format("{} [Debug] v" SBX_VERSION_STRING "+" SBX_COMPILE_TIMESTAMP, _title);
+  }
+
+  _handle = glfwCreateWindow(static_cast<std::int32_t>(_width), static_cast<std::int32_t>(_height), _title.c_str(), nullptr, nullptr);
+
+  if (!_handle) {
+    throw std::runtime_error{"Could not create glfw window"};
+  }
+
+  glfwFocusWindow(_handle);
+
+  if (glfwRawMouseMotionSupported()) {
+    glfwSetInputMode(_handle, GLFW_RAW_MOUSE_MOTION, true);
+  }
+
+  glfwSetInputMode(_handle, GLFW_STICKY_KEYS, true);
+
+  glfwSetInputMode(_handle, GLFW_LOCK_KEY_MODS, true);
+
+  _set_callbacks();
+}
+
+window::~window() {
+  glfwDestroyWindow(_handle);
+}
+
+auto window::native_info() const -> native_window_info {
+#if defined(SBX_OPERATING_SYSTEM_WIN32)
+  return win32_window_info{glfwGetWin32Window(_handle), GetModuleHandleW(nullptr)};
+#elif defined(SBX_OPERATING_SYSTEM_LINUX)
+  if (glfwGetPlatform() == GLFW_PLATFORM_WAYLAND) {
+    return wayland_window_info{glfwGetWaylandDisplay(), glfwGetWaylandWindow(_handle)};
+  }
+
+  return x11_window_info{glfwGetX11Display(), static_cast<std::uint64_t>(glfwGetX11Window(_handle))};
+#else
+  #error "Unsupported platform for native window info"
+#endif
+}
+
+auto window::title() const -> const std::string& {
+  return _title;
+}
+
+auto window::set_title(const std::string& title) -> void {
+  _title = title;
+
+  if constexpr (utility::build_type_v == utility::build_type::debug) {
+    _title = fmt::format("{} [Debug] v" SBX_VERSION_STRING, _title);
+  }
+
+  glfwSetWindowTitle(_handle, _title.c_str());
+}
+
+auto window::width() const -> std::uint32_t {
+  return _width;
+}
+
+auto window::height() const -> std::uint32_t {
+  return _height;
+}
+
+auto window::aspect_ratio() const -> std::float_t {
+  return static_cast<std::float_t>(_width) / static_cast<std::float_t>(_height);
+}
+
+auto window::should_close() -> bool {
+  return glfwWindowShouldClose(_handle);
+}
+
+auto window::show() -> void {
+  glfwShowWindow(_handle);
+}
+
+auto window::hide() -> void {
+  glfwHideWindow(_handle);
+}
+
+auto window::is_iconified() const noexcept -> bool {
+  return glfwGetWindowAttrib(_handle, GLFW_ICONIFIED);
+}
+
+auto window::is_focused() const noexcept -> bool {
+  return glfwGetWindowAttrib(_handle, GLFW_FOCUSED);
+}
+
+auto window::is_visible() const noexcept -> bool {
+  return glfwGetWindowAttrib(_handle, GLFW_VISIBLE);
+}
+
+auto window::on_window_closed() -> signals::signal<const window_closed_event&>& {
+  return _on_window_closed;
+}
+
+auto window::on_window_moved() -> signals::signal<const window_moved_event&>& {
+  return _on_window_moved;
+}
+
+auto window::on_window_resized() -> signals::signal<const window_resized_event&>& {
+  return _on_window_resized;
+}
+
+auto window::on_framebuffer_resized() -> signals::signal<const framebuffer_resized_event&>& {
+  return _on_framebuffer_resized;
+}
+
+auto window::on_key_pressed() -> signals::signal<const key_pressed_event&>& {
+  return _on_key_pressed;
+}
+
+auto window::on_key_released() -> signals::signal<const key_released_event&>& {
+  return _on_key_released;
+}
+
+auto window::on_mouse_moved() -> signals::signal<const mouse_moved_event&>& {
+  return _on_mouse_moved;
+}
+
+auto window::on_mouse_button_pressed() -> signals::signal<const mouse_button_pressed_event&>& {
+  return _on_mouse_button_pressed;
+}
+
+auto window::on_mouse_button_released() -> signals::signal<const mouse_button_released_event&>& {
+  return _on_mouse_button_released;
+}
+
+auto window::on_mouse_scrolled() -> signals::signal<const mouse_scrolled_event&>& {
+  return _on_mouse_scrolled;
+}
+
+auto window::_set_callbacks() -> void {
+  glfwSetWindowUserPointer(_handle, this);
+
+  glfwSetWindowCloseCallback(_handle, [](GLFWwindow* window){
+    auto& self = *static_cast<platform::window*>(glfwGetWindowUserPointer(window));
+
+    self._on_window_closed(window_closed_event{});
+  });
+
+  glfwSetWindowPosCallback(_handle, [](GLFWwindow* window, std::int32_t x, std::int32_t y){
+    auto& self = *static_cast<platform::window*>(glfwGetWindowUserPointer(window));
+
+    self._on_window_moved(window_moved_event{x, y});
+  });
+
+  glfwSetWindowSizeCallback(_handle, [](GLFWwindow* window, std::int32_t width, std::int32_t height){
+    auto& self = *static_cast<platform::window*>(glfwGetWindowUserPointer(window));
+
+    self._on_window_resized(window_resized_event{width, height});
+  });
+
+  glfwSetFramebufferSizeCallback(_handle, [](GLFWwindow* window, std::int32_t width, std::int32_t height){
+    auto& self = *static_cast<platform::window*>(glfwGetWindowUserPointer(window));
+
+    self._on_framebuffer_resized(framebuffer_resized_event{width, height});
+
+    self._width = static_cast<std::uint32_t>(width);
+    self._height = static_cast<std::uint32_t>(height);
+  });
+
+  glfwSetKeyCallback(_handle, [](GLFWwindow* window, std::int32_t key, [[maybe_unused]] std::int32_t scancode, std::int32_t action, std::int32_t mods){
+    auto& self = *static_cast<platform::window*>(glfwGetWindowUserPointer(window));
+
+    if (action == GLFW_PRESS) {
+      input::_update_key_state(static_cast<platform::key>(key), input_action::press);
+      self._on_key_pressed(key_pressed_event{static_cast<platform::key>(key), static_cast<platform::input_mod>(mods)});
+    } else if (action == GLFW_RELEASE) {
+      input::_update_key_state(static_cast<platform::key>(key), input_action::release);
+      self._on_key_released(key_released_event{static_cast<platform::key>(key), static_cast<platform::input_mod>(mods)});
+    }
+  });
+
+  glfwSetCursorPosCallback(_handle, [](GLFWwindow* window, double x, double y){
+    auto& self = *static_cast<platform::window*>(glfwGetWindowUserPointer(window));
+
+    const auto mouse_position = math::vector2{static_cast<std::float_t>(x), static_cast<std::float_t>(y)};
+
+    if (self._last_mouse_position.x() < 0.0f || self._last_mouse_position.y() < 0.0f) {
+      self._on_mouse_moved(mouse_moved_event{mouse_position.x(), mouse_position.y()});
+    } else {
+      self._on_mouse_moved(mouse_moved_event{mouse_position.x() - self._last_mouse_position.x(), mouse_position.y() - self._last_mouse_position.y()});
+    }
+
+    self._last_mouse_position = mouse_position;
+
+    input::_update_mouse_position(mouse_position);
+  });
+
+  glfwSetMouseButtonCallback(_handle, [](GLFWwindow* window, std::int32_t button, std::int32_t action, std::int32_t mods){
+    auto& self = *static_cast<platform::window*>(glfwGetWindowUserPointer(window));
+
+    if (action == GLFW_PRESS) {
+      input::_update_mouse_button_state(static_cast<platform::mouse_button>(button), input_action::press);
+      self._on_mouse_button_pressed(mouse_button_pressed_event{static_cast<platform::mouse_button>(button), static_cast<platform::input_mod>(mods)});
+    } else if (action == GLFW_RELEASE) {
+      input::_update_mouse_button_state(static_cast<platform::mouse_button>(button), input_action::release);
+      self._on_mouse_button_released(mouse_button_released_event{static_cast<platform::mouse_button>(button), static_cast<platform::input_mod>(mods)});
+    }
+  });
+
+  glfwSetScrollCallback(_handle, [](GLFWwindow* window, double x, double y){
+    auto& self = *static_cast<platform::window*>(glfwGetWindowUserPointer(window));
+
+    self._on_mouse_scrolled(mouse_scrolled_event{static_cast<std::float_t>(x), static_cast<std::float_t>(y)});
+
+    input::_update_scroll_delta(math::vector2{static_cast<std::float_t>(x), static_cast<std::float_t>(y)});
+  });
+}
 
 } // namespace sbx::platform

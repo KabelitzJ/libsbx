@@ -88,5 +88,12 @@
       "uri": "https://github.com/spnda/fastgltf",
       "tag": "v0.9.0"
     }
+  },
+  "tracy": {
+    "source": {
+      "type": "git",
+      "uri": "https://github.com/wolfpld/tracy",
+      "tag": "v0.13.0"
+    }
   }
 }

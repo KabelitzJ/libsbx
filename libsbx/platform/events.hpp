@@ -1,16 +1,16 @@
 // SPDX-License-Identifier: MIT
-#ifndef LIBSBX_DEVICES_EVENTS_HPP_
-#define LIBSBX_DEVICES_EVENTS_HPP_
+#ifndef LIBSBX_PLATFORM_EVENTS_HPP_
+#define LIBSBX_PLATFORM_EVENTS_HPP_
 
 #include <cinttypes>
 #include <cmath>
 
-#include <libsbx/devices/key.hpp>
-#include <libsbx/devices/mouse_button.hpp>
-#include <libsbx/devices/input_action.hpp>
-#include <libsbx/devices/input_mod.hpp>
+#include <libsbx/platform/key.hpp>
+#include <libsbx/platform/mouse_button.hpp>
+#include <libsbx/platform/input_action.hpp>
+#include <libsbx/platform/input_mod.hpp>
 
-namespace sbx::devices {
+namespace sbx::platform {
 
 /** 
  * @brief An event that is fired when a window requests to be closed 
@@ -33,12 +33,12 @@ struct framebuffer_resized_event {
 };
 
 struct key_pressed_event {
-  devices::key key;
+  platform::key key;
   input_mod mods;
 }; // struct key_pressed_event
 
 struct key_released_event {
-  devices::key key;
+  platform::key key;
   input_mod mods;
 }; // struct key_released_event
 
@@ -62,6 +62,6 @@ struct mouse_scrolled_event {
   std::float_t y;
 }; // struct mouse_scrolled_event
 
-} // namespace sbx::devices
+} // namespace sbx::platform
 
-#endif // LIBSBX_DEVICES_EVENTS_HPP_
+#endif // LIBSBX_PLATFORM_EVENTS_HPP_

@@ -1,5 +1,5 @@
-#ifndef LIBSBX_UNITS_V2_QUANTITY_HPP_
-#define LIBSBX_UNITS_V2_QUANTITY_HPP_
+#ifndef LIBSBX_UNITS_QUANTITY_HPP_
+#define LIBSBX_UNITS_QUANTITY_HPP_
 
 #include <cmath>
 
@@ -53,7 +53,7 @@ public:
 
   template<typename OtherScale>
   constexpr auto operator-=(const quantity<dimension_type, representation_type, OtherScale>& other) -> quantity& {
-    _value += detail::convert_value<scale, OtherScale, representation_type>(other.value());
+    _value -= detail::convert_value<scale, OtherScale, representation_type>(other.value());
 
     return *this;
   }
@@ -187,4 +187,14 @@ constexpr auto operator""_kg(unsigned long long int value) -> kilograms {
 
 } // namespace sbx::units
 
-#endif // LIBSBX_UNITS_V2_QUANTITY_HPP_
+template<typename Dimension, typename Representation, typename Scale>
+struct fmt::formatter<sbx::units::quantity<Dimension, Representation, Scale>> : fmt::formatter<Representation> {
+
+  template<typename FormatContext>
+  auto format(const sbx::units::quantity<Dimension, Representation, Scale>& quantity, FormatContext& context) const -> decltype(context.out()) {
+    return fmt::formatter<Representation>::format(quantity.value(), context);
+  }
+
+}; // struct fmt::formatter
+
+#endif // LIBSBX_UNITS_QUANTITY_HPP_

@@ -1,22 +1,18 @@
 // SPDX-License-Identifier: MIT
-#ifndef LIBSBX_DEVICES_INPUT_HPP_
-#define LIBSBX_DEVICES_INPUT_HPP_
+#ifndef LIBSBX_PLATFORM_INPUT_HPP_
+#define LIBSBX_PLATFORM_INPUT_HPP_
 
 #include <cinttypes>
 #include <unordered_map>
 
-#include <GLFW/glfw3.h>
-
-#include <libsbx/utility/bitmask.hpp>
-
 #include <libsbx/math/vector2.hpp>
 
-#include <libsbx/devices/key.hpp>
-#include <libsbx/devices/mouse_button.hpp>
-#include <libsbx/devices/input_action.hpp>
-#include <libsbx/devices/input_mod.hpp>
+#include <libsbx/platform/key.hpp>
+#include <libsbx/platform/mouse_button.hpp>
+#include <libsbx/platform/input_action.hpp>
+#include <libsbx/platform/input_mod.hpp>
 
-namespace sbx::devices {
+namespace sbx::platform {
 
 struct key_state {
   input_action action;
@@ -25,7 +21,7 @@ struct key_state {
 
 class input {
 
-  friend class devices_module;
+  friend class platform_module;
   friend class window;
 
 public:
@@ -42,19 +38,7 @@ public:
 
   static auto mouse_position() -> math::vector2;
 
-  static auto mouse_window_position() -> math::vector2;
-
   static auto scroll_delta() -> math::vector2;
-
-  static auto set_active_viewport(const math::vector2& origin, const math::vector2& size) -> void;
-
-  static auto active_viewport_origin() -> math::vector2;
-
-  static auto active_viewport_size() -> math::vector2;
-
-  static auto set_scene_input_active(bool active) -> void;
-
-  static auto is_scene_input_active() -> bool;
 
 private:
 
@@ -70,17 +54,11 @@ private:
   static std::unordered_map<key, key_state> _key_states;
   static std::unordered_map<mouse_button, key_state> _mouse_button_states;
 
-  static math::vector2 _mouse_window_position;
+  static math::vector2 _mouse_position;
   static math::vector2 _scroll_delta;
-
-  static math::vector2 _active_viewport_origin;
-  static math::vector2 _active_viewport_size;
-
-  static bool _is_active;
-  static bool _is_captured;
 
 }; // class input
 
-} // namespace sbx::devices
+} // namespace sbx::platform
 
-#endif // LIBSBX_DEVICES_INPUT_HPP_
+#endif // LIBSBX_PLATFORM_INPUT_HPP_

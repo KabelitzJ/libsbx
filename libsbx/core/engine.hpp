@@ -27,10 +27,7 @@ class basic_engine;
  * the static access surface. Constructed and driven by @ref basic_engine,
  * which owns it as a member together with the module storage and the main loop.
  */
-class engine final : public utility::noncopyable {
-
-  template<module... Modules>
-  friend class basic_engine;
+class engine : public utility::noncopyable {
 
 public:
 
@@ -69,7 +66,7 @@ public:
   requires (std::is_same_v<core::application, Application> || std::is_base_of_v<core::application, Application>)
   [[nodiscard]] static auto get_application() -> Application&;
 
-private:
+protected:
 
   explicit engine(std::span<std::string_view> args);
 
@@ -97,7 +94,7 @@ private:
  * appear before the module itself.
  */
 template<module... Modules>
-class basic_engine final : public utility::noncopyable {
+class basic_engine final : public engine {
 
   static_assert(detail::are_unique_v<Modules...>, "Modules must not be listed twice");
   static_assert(detail::dependencies_ordered_v<Modules...>, "Every module must be listed after all of its dependencies");
@@ -119,9 +116,6 @@ private:
 
   auto _loop() -> void;
 
-  // The engine core must be constructed before (and outlive) the modules:
-  // module constructors may already use the engine's static surface.
-  engine _engine;
   module_storage<Modules...> _modules;
 
 }; // class basic_engine

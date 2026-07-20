@@ -1,21 +1,10 @@
-// SPDX-License-Identifier: MIT
-#ifndef LIBSBX_GRAPHICS_VULKAN_HPP_
-#define LIBSBX_GRAPHICS_VULKAN_HPP_
-
-#include <string_view>
-
-// The single entry point for vulkan declarations inside the graphics module.
-// Core functions come from the system loader (Vulkan::Vulkan); extension
-// entry points are fetched via vkGetInstanceProcAddr by the owning wrapper.
-#include <vulkan/vulkan.h>
-
-#include <fmt/format.h>
+#include <libsbx/graphics/validate.hpp>
 
 #include <libsbx/utility/exception.hpp>
 
 namespace sbx::graphics {
 
-[[nodiscard]] constexpr auto to_string(const VkResult result) -> std::string_view {
+[[nodiscard]] constexpr auto _to_string(const VkResult result) -> std::string_view {
   switch (result) {
     case VK_SUCCESS: return "VK_SUCCESS";
     case VK_NOT_READY: return "VK_NOT_READY";
@@ -48,15 +37,10 @@ namespace sbx::graphics {
   }
 }
 
-/**
- * @brief Throws if a vulkan call did not return VK_SUCCESS.
- */
-inline auto validate(const VkResult result, const std::string_view what) -> void {
+auto validate(const VkResult result, const std::string_view what) -> void {
   if (result != VK_SUCCESS) {
-    throw utility::runtime_error{"{} failed: {}", what, to_string(result)};
+    throw utility::runtime_error{"{} failed: {}", what, _to_string(result)};
   }
 }
 
 } // namespace sbx::graphics
-
-#endif // LIBSBX_GRAPHICS_VULKAN_HPP_

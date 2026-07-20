@@ -3,17 +3,6 @@
 
 #include <stdexcept>
 
-#include <GLFW/glfw3.h>
-
-#if defined(SBX_OPERATING_SYSTEM_WIN32)
-  #define GLFW_EXPOSE_NATIVE_WIN32
-#elif defined(SBX_OPERATING_SYSTEM_LINUX)
-  #define GLFW_EXPOSE_NATIVE_X11
-  #define GLFW_EXPOSE_NATIVE_WAYLAND
-#endif
-
-#include <GLFW/glfw3native.h>
-
 #include <fmt/format.h>
 
 #include <libsbx/version.hpp>
@@ -57,18 +46,12 @@ window::~window() {
   glfwDestroyWindow(_handle);
 }
 
-auto window::native_info() const -> native_window_info {
-#if defined(SBX_OPERATING_SYSTEM_WIN32)
-  return win32_window_info{glfwGetWin32Window(_handle), GetModuleHandleW(nullptr)};
-#elif defined(SBX_OPERATING_SYSTEM_LINUX)
-  if (glfwGetPlatform() == GLFW_PLATFORM_WAYLAND) {
-    return wayland_window_info{glfwGetWaylandDisplay(), glfwGetWaylandWindow(_handle)};
-  }
+auto window::handle() const noexcept -> handle_type {
+  return _handle;
+}
 
-  return x11_window_info{glfwGetX11Display(), static_cast<std::uint64_t>(glfwGetX11Window(_handle))};
-#else
-  #error "Unsupported platform for native window info"
-#endif
+window::operator handle_type() const noexcept {
+  return _handle;
 }
 
 auto window::title() const -> const std::string& {

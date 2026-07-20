@@ -1,7 +1,13 @@
 // SPDX-License-Identifier: MIT
 #include <libsbx/graphics/devices/physical_device.hpp>
 
+#include <vulkan/vulkan.h>
+
 #include <libsbx/utility/logger.hpp>
+#include <libsbx/utility/exception.hpp>
+#include <libsbx/utility/iterator.hpp>
+
+#include <libsbx/graphics/validate.hpp>
 
 #include <libsbx/graphics/devices/features.hpp>
 
@@ -35,10 +41,10 @@ physical_device::physical_device(const instance& instance) {
     throw utility::runtime_error{"No vulkan capable devices found"};
   }
 
-  auto devices = std::vector<VkPhysicalDevice>{count};
+  auto devices = utility::make_vector<VkPhysicalDevice>(count);
   validate(vkEnumeratePhysicalDevices(instance, &count, devices.data()), "vkEnumeratePhysicalDevices");
 
-  const auto required_features = device_features::required();
+  const auto required_features = features::required();
 
   auto best_score = std::uint32_t{0};
 
@@ -46,13 +52,15 @@ physical_device::physical_device(const instance& instance) {
     auto properties = VkPhysicalDeviceProperties{};
     vkGetPhysicalDeviceProperties(candidate, &properties);
 
-    if (properties.apiVersion < VK_API_VERSION_1_3) {
-      utility::logger<"graphics">::debug("Skipping '{}': api version below 1.3", std::string_view{properties.deviceName});
+    utility::logger<"graphics">::info("Device: {}", std::string_view{properties.deviceName});
+
+    if (properties.apiVersion < VK_API_VERSION_1_4) {
+      utility::logger<"graphics">::debug("Skipping '{}': api version below 1.4", std::string_view{properties.deviceName});
 
       continue;
     }
 
-    if (!device_features::query(candidate).supports(required_features)) {
+    if (!features::query(candidate).supports(required_features)) {
       utility::logger<"graphics">::debug("Skipping '{}': missing required features", std::string_view{properties.deviceName});
 
       continue;
@@ -60,7 +68,7 @@ physical_device::physical_device(const instance& instance) {
 
     const auto score = _score(properties);
 
-    if (score >= best_score) {
+    if (score > best_score) {
       best_score = score;
       _handle = candidate;
       _properties = properties;
@@ -68,8 +76,13 @@ physical_device::physical_device(const instance& instance) {
   }
 
   if (!_handle) {
-    throw utility::runtime_error{"No device supports the required vulkan 1.3 feature set"};
+    throw utility::runtime_error{"No device supports the required vulkan 1.4 feature set"};
   }
+
+  auto properties = VkPhysicalDeviceProperties{};
+  vkGetPhysicalDeviceProperties(_handle, &properties);
+
+  utility::logger<"graphics">::info("Device: {}", std::string_view{properties.deviceName});
 
   vkGetPhysicalDeviceMemoryProperties(_handle, &_memory_properties);
 

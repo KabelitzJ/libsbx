@@ -7,6 +7,8 @@
 #include <string>
 #include <variant>
 
+#include <GLFW/glfw3.h>
+
 #include <libsbx/utility/noncopyable.hpp>
 
 #include <libsbx/math/vector2.hpp>
@@ -15,26 +17,7 @@
 
 #include <libsbx/platform/events.hpp>
 
-struct GLFWwindow;
-
 namespace sbx::platform {
-
-struct win32_window_info {
-  void* hwnd{nullptr};
-  void* hinstance{nullptr};
-}; // struct win32_window_info
-
-struct x11_window_info {
-  void* display{nullptr};
-  std::uint64_t window{0};
-}; // struct x11_window_info
-
-struct wayland_window_info {
-  void* display{nullptr};
-  void* surface{nullptr};
-}; // struct wayland_window_info
-
-using native_window_info = std::variant<win32_window_info, x11_window_info, wayland_window_info>;
 
 struct window_create_info {
   std::string title{};
@@ -46,15 +29,15 @@ class window : public utility::noncopyable {
 
 public:
 
+  using handle_type = GLFWwindow*;
+
   window(const window_create_info& create_info);
 
   ~window();
 
-  /**
-   * @brief Native handles for surface creation. The graphics layer consumes
-   * these directly (e.g. vkCreateWin32SurfaceKHR) and stays glfw-free.
-   */
-  auto native_info() const -> native_window_info;
+  auto handle() const noexcept -> handle_type;
+
+  operator handle_type() const noexcept;
 
   auto title() const -> const std::string&;
 
@@ -106,7 +89,7 @@ private:
   std::uint32_t _width{};
   std::uint32_t _height{};
 
-  GLFWwindow* _handle{};
+  handle_type _handle{};
 
   math::vector2 _last_mouse_position;
 

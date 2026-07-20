@@ -4,9 +4,9 @@
 
 #include <vector>
 
-#include <libsbx/utility/noncopyable.hpp>
+#include <vulkan/vulkan.h>
 
-#include <libsbx/graphics/vulkan.hpp>
+#include <libsbx/utility/noncopyable.hpp>
 
 #include <libsbx/graphics/devices/instance.hpp>
 

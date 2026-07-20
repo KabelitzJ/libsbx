@@ -12,6 +12,7 @@
 #include <libsbx/graphics/devices/physical_device.hpp>
 #include <libsbx/graphics/devices/logical_device.hpp>
 #include <libsbx/graphics/devices/allocator.hpp>
+#include <libsbx/graphics/devices/surface.hpp>
 
 namespace sbx::graphics {
 
@@ -43,12 +44,11 @@ public:
 
 private:
 
-  // Construction order is destruction order in reverse — members depend on
-  // the ones declared above them.
   graphics::instance _instance;
   graphics::physical_device _physical_device;
   graphics::logical_device _logical_device;
   graphics::allocator _allocator;
+  graphics::surface _surface;
 
 }; // class graphics_module
 

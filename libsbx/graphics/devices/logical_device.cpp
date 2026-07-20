@@ -5,7 +5,12 @@
 #include <unordered_set>
 #include <vector>
 
+#include <libsbx/core/engine.hpp>
+
 #include <libsbx/utility/logger.hpp>
+#include <libsbx/utility/exception.hpp>
+
+#include <libsbx/graphics/validate.hpp>
 
 #include <libsbx/graphics/devices/features.hpp>
 
@@ -68,11 +73,9 @@ logical_device::logical_device(const physical_device& physical_device) {
     VK_KHR_SWAPCHAIN_EXTENSION_NAME
   };
 
-  // required ∪ (optional ∩ available) — the old engine's enable-if-available
-  // behavior, expressed as one merge instead of forty if-statements.
-  const auto available = device_features::query(physical_device);
+  const auto available = features::query(physical_device);
 
-  auto features = device_features::enabled(device_features::required(), device_features::optional(), available);
+  auto features = features::enabled(features::required(), features::optional(), available);
 
   // Extension features may only be enabled together with their extension.
   if (features.compute_shader_derivatives().computeDerivativeGroupQuads || features.compute_shader_derivatives().computeDerivativeGroupLinear) {
@@ -96,10 +99,6 @@ logical_device::logical_device(const physical_device& physical_device) {
   vkGetDeviceQueue(_handle, _graphics_queue.family, 0u, &_graphics_queue.handle);
   vkGetDeviceQueue(_handle, _compute_queue.family, 0u, &_compute_queue.handle);
   vkGetDeviceQueue(_handle, _transfer_queue.family, 0u, &_transfer_queue.handle);
-
-#if defined(SBX_BUILD_TYPE_DEBUG)
-  _set_object_name_function = reinterpret_cast<PFN_vkSetDebugUtilsObjectNameEXT>(vkGetDeviceProcAddr(_handle, "vkSetDebugUtilsObjectNameEXT"));
-#endif
 }
 
 logical_device::~logical_device() {
@@ -110,22 +109,22 @@ auto logical_device::wait_idle() const -> void {
   validate(vkDeviceWaitIdle(_handle), "vkDeviceWaitIdle");
 }
 
-#if defined(SBX_BUILD_TYPE_DEBUG)
+auto logical_device::_set_debug_name(VkObjectType object_type, std::uint64_t object_handle, const std::string& name) const -> void {
+  if constexpr (utility::is_build_type_debug_v) {
+    auto* function = reinterpret_cast<PFN_vkSetDebugUtilsObjectNameEXT>(vkGetDeviceProcAddr(_handle, "vkSetDebugUtilsObjectNameEXT"));
 
-auto logical_device::set_debug_name(VkObjectType object_type, std::uint64_t object_handle, const std::string& name) const -> void {
-  if (!_set_object_name_function) {
-    return;
+    if (function) {
+      auto name_info = VkDebugUtilsObjectNameInfoEXT{};
+      name_info.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT;
+      name_info.objectType = object_type;
+      name_info.objectHandle = object_handle;
+      name_info.pObjectName = name.c_str();
+
+      std::invoke(function, _handle, &name_info);
+    } else {
+      utility::logger<"graphics">::warn("Function 'vkSetDebugUtilsObjectNameEXT' could not be found");
+    }
   }
-
-  auto name_info = VkDebugUtilsObjectNameInfoEXT{};
-  name_info.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT;
-  name_info.objectType = object_type;
-  name_info.objectHandle = object_handle;
-  name_info.pObjectName = name.c_str();
-
-  _set_object_name_function(_handle, &name_info);
 }
-
-#endif // SBX_BUILD_TYPE_DEBUG
 
 } // namespace sbx::graphics

@@ -5,14 +5,40 @@
 #include <cstdint>
 #include <string>
 
+#include <vulkan/vulkan.h>
+
 #include <libsbx/utility/noncopyable.hpp>
 #include <libsbx/utility/target.hpp>
 
-#include <libsbx/graphics/vulkan.hpp>
-
 #include <libsbx/graphics/devices/physical_device.hpp>
+#include <libsbx/graphics/devices/object_type.hpp>
 
 namespace sbx::graphics {
+
+namespace detail {
+
+template<typename Type>
+struct object_type;
+
+template<>
+struct object_type<VkInstance> {
+  inline static constexpr auto value = VK_OBJECT_TYPE_INSTANCE;
+}; // struct object_type
+
+template<>
+struct object_type<VkPhysicalDevice> {
+  inline static constexpr auto value = VK_OBJECT_TYPE_PHYSICAL_DEVICE;
+}; // struct object_type
+
+template<>
+struct object_type<VkDevice> {
+  inline static constexpr auto value = VK_OBJECT_TYPE_DEVICE;
+}; // struct object_type
+
+template<typename Type>
+constexpr auto object_type_v = object_type<Type>::value;
+
+} // namespace detail
 
 class logical_device : public utility::noncopyable {
 
@@ -51,14 +77,14 @@ public:
   }
 
   /**
-   * @brief Dedicated async compute queue; falls back to the graphics family.
+   * @brief Dedicated async compute queue. Falls back to the graphics family.
    */
   [[nodiscard]] auto compute_queue() const noexcept -> const queue& {
     return _compute_queue;
   }
 
   /**
-   * @brief Dedicated transfer queue; falls back to the graphics family.
+   * @brief Dedicated transfer queue. Falls back to the graphics family.
    */
   [[nodiscard]] auto transfer_queue() const noexcept -> const queue& {
     return _transfer_queue;
@@ -69,25 +95,21 @@ public:
   /**
    * @brief Attaches a name to a vulkan object (visible in validation messages and debuggers like RenderDoc). No-op in release builds.
    */
-#if defined(SBX_BUILD_TYPE_DEBUG)
-  auto set_debug_name(VkObjectType object_type, std::uint64_t object_handle, const std::string& name) const -> void;
-#else
-  auto set_debug_name([[maybe_unused]] VkObjectType object_type, [[maybe_unused]] std::uint64_t object_handle, [[maybe_unused]] const std::string& name) const -> void { }
-#endif // SBX_BUILD_TYPE_DEBUG
-
+  template<typename Handle>
+  requires (named_object_type<Handle>)
+  auto _set_debug_name(const Handle handle, const std::string& name) const -> void {
+    _set_debug_name(object_type_v<Handle>, reinterpret_cast<std::uint64_t>(handle), name);
+  }
+  
 private:
+
+  auto _set_debug_name(VkObjectType object_type, std::uint64_t object_handle, const std::string& name) const -> void;
 
   handle_type _handle{};
 
   queue _graphics_queue{};
   queue _compute_queue{};
   queue _transfer_queue{};
-
-#if defined(SBX_BUILD_TYPE_DEBUG)
-
-  PFN_vkSetDebugUtilsObjectNameEXT _set_object_name_function{};
-
-#endif // SBX_BUILD_TYPE_DEBUG
 
 }; // class logical_device
 

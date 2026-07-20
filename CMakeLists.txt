@@ -33,6 +33,7 @@ else()
 endif()
 
 # Operating system
+
 if(WIN32)
   set(SBX_OPERATING_SYSTEM "WIN32")
 elseif(APPLE)
@@ -40,16 +41,13 @@ elseif(APPLE)
 elseif(UNIX)
   set(SBX_OPERATING_SYSTEM "LINUX")
 else()
-  set(SBX_OPERATING_SYSTEM "UNKNOWN")
+  message(FATAL_ERROR "Unsupported operating system")
 endif()
 
-if (SBX_OPERATING_SYSTEM STREQUAL "UNKNOWN")
-  message(FATAL_ERROR "Unsupported operating system")
-else()
-  message(STATUS "SBX_OPERATING_SYSTEM: ${SBX_OPERATING_SYSTEM}")
-endif()
+message(STATUS "SBX_OPERATING_SYSTEM: ${SBX_OPERATING_SYSTEM}")
 
 # Compiler
+
 if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang" OR CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang")
   set(SBX_COMPILER "CLANG")
 elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
@@ -57,18 +55,14 @@ elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
 elseif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
   set(SBX_COMPILER "MSC")
 else()
-  set(SBX_COMPILER "UNKNOWN")
+  message(FATAL_ERROR "Unsupported compiler: ${CMAKE_CXX_COMPILER_ID}")
 endif()
 
-if (SBX_COMPILER STREQUAL "UNKNOWN")
-  message(FATAL_ERROR "Unsupported compiler")
-else()
-  message(STATUS "SBX_COMPILER: ${SBX_COMPILER}")
-endif()
+message(STATUS "SBX_COMPILER: ${SBX_COMPILER}")
 
 set(_SBX_ENABLE_PROFILING_DEFAULT OFF)
 
-if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+if(SBX_BUILD_TYPE STREQUAL "Debug")
   set(_SBX_ENABLE_PROFILING_DEFAULT ON)
 endif()
 
@@ -84,7 +78,7 @@ message(STATUS "SBX_BUILD_TESTS: ${SBX_BUILD_TESTS}")
 message(STATUS "SBX_BUILD_SHARED: ${SBX_BUILD_SHARED}")
 message(STATUS "SBX_ENABLE_PROFILING: ${SBX_ENABLE_PROFILING}")
 
-include(cmake/fetch_dependencies.cmake)
+include(fetch_dependencies)
 
 fetch_dependencies("${CMAKE_SOURCE_DIR}/dependencies.json" "${CMAKE_BINARY_DIR}/dependencies")
 
@@ -161,14 +155,6 @@ find_package(slang REQUIRED MODULE)
 find_package(Nethost REQUIRED MODULE)
 # find_package(Tracy CONFIG REQUIRED)
 
-# option(GLFW_BUILD_EXAMPLES "" OFF)
-# option(GLFW_BUILD_TESTS "" OFF)
-# option(GLFW_BUILD_DOCS "" OFF)
-# option(GLFW_INSTALL "" OFF)
-# option(GLFW_DOCUMENT_INTERNALS "" OFF)
-# option(SPIRV_CROSS_CLI "" OFF)
-# option(SPIRV_CROSS_ENABLE_TESTS "" OFF)
-
 # Configure version header
 
 configure_file("${CMAKE_SOURCE_DIR}/libsbx/version.hpp.in" "${CMAKE_BINARY_DIR}/generated/libsbx/version.hpp" @ONLY)
@@ -209,38 +195,48 @@ target_sources(
   PRIVATE
     "${CMAKE_SOURCE_DIR}/libsbx/core/core.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/core/engine.cpp"
-    "${CMAKE_SOURCE_DIR}/libsbx/platform/platform_module.cpp"
-    "${CMAKE_SOURCE_DIR}/libsbx/platform/window.cpp"
-    "${CMAKE_SOURCE_DIR}/libsbx/platform/input.cpp"
-    "${CMAKE_SOURCE_DIR}/libsbx/graphics/graphics_module.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/graphics/devices/allocator.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/graphics/devices/debug_messenger.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/graphics/devices/extensions.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/graphics/devices/features.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/graphics/devices/instance.cpp"
-    "${CMAKE_SOURCE_DIR}/libsbx/graphics/devices/physical_device.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/graphics/devices/layers.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/graphics/devices/logical_device.cpp"
-    "${CMAKE_SOURCE_DIR}/libsbx/graphics/devices/allocator.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/graphics/devices/physical_device.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/graphics/devices/surface.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/graphics/graphics_module.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/graphics/validate.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/platform/input.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/platform/platform_module.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/platform/window.cpp"
   PUBLIC
     FILE_SET headers TYPE HEADERS
     BASE_DIRS "${CMAKE_SOURCE_DIR}"
     FILES
-      "${CMAKE_SOURCE_DIR}/libsbx/engine.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/core/core.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/core/engine.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/core/engine.ipp"
-      "${CMAKE_SOURCE_DIR}/libsbx/platform/platform_module.hpp"
-      "${CMAKE_SOURCE_DIR}/libsbx/platform/window.hpp"
-      "${CMAKE_SOURCE_DIR}/libsbx/platform/input.hpp"
-      "${CMAKE_SOURCE_DIR}/libsbx/platform/events.hpp"
-      "${CMAKE_SOURCE_DIR}/libsbx/platform/key.hpp"
-      "${CMAKE_SOURCE_DIR}/libsbx/platform/mouse_button.hpp"
-      "${CMAKE_SOURCE_DIR}/libsbx/platform/input_action.hpp"
-      "${CMAKE_SOURCE_DIR}/libsbx/platform/input_mod.hpp"
-      "${CMAKE_SOURCE_DIR}/libsbx/graphics/graphics_module.hpp"
-      "${CMAKE_SOURCE_DIR}/libsbx/graphics/vulkan.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/engine.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/graphics/devices/allocator.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/graphics/devices/debug_messenger.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/graphics/devices/extensions.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/graphics/devices/features.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/graphics/devices/instance.hpp"
-      "${CMAKE_SOURCE_DIR}/libsbx/graphics/devices/physical_device.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/graphics/devices/layers.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/graphics/devices/logical_device.hpp"
-      "${CMAKE_SOURCE_DIR}/libsbx/graphics/devices/allocator.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/graphics/devices/object_type.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/graphics/devices/physical_device.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/graphics/devices/surface.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/graphics/graphics_module.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/graphics/validate.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/platform/events.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/platform/input_action.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/platform/input_mod.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/platform/input.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/platform/key.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/platform/mouse_button.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/platform/platform_module.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/platform/window.hpp"
   FILE_SET generated TYPE HEADERS
     BASE_DIRS "${CMAKE_BINARY_DIR}/generated"
     FILES
@@ -303,7 +299,6 @@ target_compile_definitions(
     SBX_BUILD_TYPE_${SBX_BUILD_TYPE}
     $<$<BOOL:${SBX_ENABLE_PROFILING}>:SBX_ENABLE_PROFILING>
   PRIVATE
-    GLFW_INCLUDE_VULKAN
     $<$<BOOL:${SBX_ENABLE_PROFILING}>:TRACY_ENABLE>
 )
 

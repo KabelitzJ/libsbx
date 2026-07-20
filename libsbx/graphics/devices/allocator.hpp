@@ -4,7 +4,7 @@
 
 #include <libsbx/utility/noncopyable.hpp>
 
-#include <libsbx/graphics/vulkan.hpp>
+#include <vulkan/vulkan.h>
 
 #include <vk_mem_alloc.h>
 

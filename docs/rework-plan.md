@@ -138,11 +138,11 @@ Scene-agnostic RHI. Suggested layout:
   Features split like the old engine: `required()` hard floor
   filters device selection, `optional()` (wide lines, geometry/tess, 8/16-bit types,
   texture compression, compute shader derivatives, ...) merges enable-if-available
-  via `device_features::enabled()`.
+  via `features::enabled()`.
   `physical_device` (scored selection, requires 1.3 + required feature set),
   `logical_device` (graphics/dedicated-compute/dedicated-transfer queues with
   graphics-family fallback), VMA `allocator`, and `devices/features.hpp` — the
-  single `device_features` chain used for both device selection and creation.
+  single `features` chain used for both device selection and creation.
   Core functions come from the system loader (`find_package(Vulkan)`, own wrapper
   api — no volk); `graphics/vulkan.hpp` is the only header that includes vulkan.
   Verified: RTX 2070 SUPER selected, queues graphics 0 / compute 2 / transfer 1.

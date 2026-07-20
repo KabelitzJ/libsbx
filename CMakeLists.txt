@@ -123,37 +123,9 @@ message(STATUS "Git commit: ${SBX_COMMIT_HASH}")
 
 # External dependencies
 
-# find_package(fmt CONFIG REQUIRED)
-# find_package(spdlog CONFIG REQUIRED)
-# find_package(range-v3 CONFIG REQUIRED)
-# find_package(lz4 CONFIG REQUIRED)
-# find_package(zstd CONFIG REQUIRED)
-# find_package(magic_enum CONFIG REQUIRED)
-# find_package(yaml-cpp CONFIG REQUIRED)
-# find_package(stb CONFIG REQUIRED)
-# The system loader provides the core entry points; headers stay pinned via
-# the fetched Vulkan-Headers (listed before Vulkan::Vulkan in link order).
 find_package(Vulkan REQUIRED)
-# find_package(spirv-cross CONFIG REQUIRED)
-# find_package(VulkanMemoryAllocator CONFIG REQUIRED)
-# find_package(nlohmann_json CONFIG REQUIRED)
 find_package(slang REQUIRED MODULE)
-# find_package(glfw3 CONFIG REQUIRED)
-# find_package(tinyobjloader CONFIG REQUIRED)
-# find_package(base64 CONFIG REQUIRED)
-# find_package(tsl-robin-map CONFIG REQUIRED)
-# find_package(assimp CONFIG REQUIRED)
-# find_package(meshoptimizer CONFIG REQUIRED)
-# find_package(imgui CONFIG REQUIRED)
-# find_package(implot CONFIG REQUIRED)
-# find_package(imnodes CONFIG REQUIRED)
-# find_package(imguizmo CONFIG REQUIRED)
-# find_package(freetype CONFIG REQUIRED)
-# find_package(drwav CONFIG REQUIRED)
-# find_package(OpenAL CONFIG REQUIRED)
-# find_package(sol2 CONFIG REQUIRED)
 find_package(Nethost REQUIRED MODULE)
-# find_package(Tracy CONFIG REQUIRED)
 
 # Configure version header
 

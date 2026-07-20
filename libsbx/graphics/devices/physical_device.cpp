@@ -81,12 +81,6 @@ physical_device::physical_device(const instance& instance) {
   vkGetPhysicalDeviceProperties(_handle, &properties);
 
   vkGetPhysicalDeviceMemoryProperties(_handle, &_memory_properties);
-
-  auto family_count = std::uint32_t{0};
-  vkGetPhysicalDeviceQueueFamilyProperties(_handle, &family_count, nullptr);
-
-  _queue_families.resize(family_count);
-  vkGetPhysicalDeviceQueueFamilyProperties(_handle, &family_count, _queue_families.data());
 }
 
 auto physical_device::device_local_memory() const noexcept -> VkDeviceSize {

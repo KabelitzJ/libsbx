@@ -38,10 +38,6 @@ public:
     return _memory_properties;
   }
 
-  [[nodiscard]] auto queue_families() const noexcept -> const std::vector<VkQueueFamilyProperties>& {
-    return _queue_families;
-  }
-
   /**
    * @brief Total device-local memory in bytes.
    */
@@ -53,7 +49,6 @@ private:
 
   VkPhysicalDeviceProperties _properties{};
   VkPhysicalDeviceMemoryProperties _memory_properties{};
-  std::vector<VkQueueFamilyProperties> _queue_families{};
 
 }; // class physical_device
 

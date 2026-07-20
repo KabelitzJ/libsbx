@@ -9,96 +9,223 @@
 
 #include <libsbx/utility/logger.hpp>
 #include <libsbx/utility/exception.hpp>
+#include <libsbx/utility/iterator.hpp>
 
 #include <libsbx/graphics/validate.hpp>
 
 #include <libsbx/graphics/devices/features.hpp>
+#include <libsbx/graphics/devices/layers.hpp>
+#include <libsbx/graphics/devices/extensions.hpp>
 
 namespace sbx::graphics {
 
-struct queue_family_selection {
-  std::uint32_t graphics{};
-  std::uint32_t compute{};
-  std::uint32_t transfer{};
-}; // struct queue_family_selection
+static auto _print_queue_families(const VkQueueFamilyProperties& queue_family_properties) -> std::string {
+  auto result = std::string{};
 
-static auto _select_queue_families(const std::vector<VkQueueFamilyProperties>& families) -> queue_family_selection {
-  auto graphics = std::optional<std::uint32_t>{};
-  auto dedicated_compute = std::optional<std::uint32_t>{};
-  auto dedicated_transfer = std::optional<std::uint32_t>{};
-
-  for (auto i = std::uint32_t{0}; i < static_cast<std::uint32_t>(families.size()); ++i) {
-    const auto flags = families[i].queueFlags;
-
-    if (!graphics && (flags & VK_QUEUE_GRAPHICS_BIT) && (flags & VK_QUEUE_COMPUTE_BIT)) {
-      graphics = i;
-    } else if (!dedicated_compute && (flags & VK_QUEUE_COMPUTE_BIT) && !(flags & VK_QUEUE_GRAPHICS_BIT)) {
-      dedicated_compute = i;
-    } else if (!dedicated_transfer && (flags & VK_QUEUE_TRANSFER_BIT) && !(flags & VK_QUEUE_GRAPHICS_BIT) && !(flags & VK_QUEUE_COMPUTE_BIT)) {
-      dedicated_transfer = i;
+  if (queue_family_properties.queueFlags & VK_QUEUE_GRAPHICS_BIT) {
+    if (!result.empty()) {
+      result += "|";
     }
+    result += "Graphics";
   }
 
-  if (!graphics) {
-    throw utility::runtime_error{"No graphics capable queue family found"};
+  if (queue_family_properties.queueFlags & VK_QUEUE_COMPUTE_BIT) {
+    if (!result.empty()) {
+      result += "|";
+    }
+    result += "Compute";
   }
 
-  return queue_family_selection{
-    .graphics = *graphics,
-    .compute = dedicated_compute.value_or(*graphics),
-    .transfer = dedicated_transfer.value_or(*graphics)
-  };
+  if (queue_family_properties.queueFlags & VK_QUEUE_TRANSFER_BIT) {
+    if (!result.empty()) {
+      result += "|";
+    }
+    result += "Transfer";
+  }
+
+  if (queue_family_properties.queueFlags & VK_QUEUE_SPARSE_BINDING_BIT) {
+    if (!result.empty()) {
+      result += "|";
+    }
+    result += "Sparse Binding";
+  }
+
+  return result;
+};
+
+auto queue::handle() const noexcept -> handle_type {
+  return _handle;
+}
+
+queue::operator handle_type() const noexcept {
+  return _handle;
+}
+
+auto queue::family() const noexcept -> std::uint32_t {
+  return _family;
+}
+
+struct queue_family_indices {
+  std::optional<std::uint32_t> graphics{};
+  std::optional<std::uint32_t> present{};
+  std::optional<std::uint32_t> compute{};
+  std::optional<std::uint32_t> transfer{};
+}; // struct queue_family_indices
+
+static auto _get_queue_family_indices(const physical_device& physical_device) -> queue_family_indices {
+  auto result = queue_family_indices{};
+
+  auto device_queue_family_property_count = std::uint32_t{0};
+	vkGetPhysicalDeviceQueueFamilyProperties(physical_device, &device_queue_family_property_count, nullptr);
+
+	auto device_queue_family_properties = utility::make_vector<VkQueueFamilyProperties>(device_queue_family_property_count);
+	vkGetPhysicalDeviceQueueFamilyProperties(physical_device, &device_queue_family_property_count, device_queue_family_properties.data());
+
+  for (auto i = std::uint32_t{0}; i < device_queue_family_property_count; ++i) {
+    utility::logger<"graphics">::debug("Queue Family {} supports {} queues of type [{}]", i, device_queue_family_properties[i].queueCount, _print_queue_families(device_queue_family_properties[i]));
+
+    // [NOTE] KAJ 2023-03-20 : Always pick the queue that is the most specialized for the task i.e. has the least flags other than the one we are looking for
+		if (device_queue_family_properties[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) {
+			if (!result.graphics) {
+        result.graphics = i;
+      } else {
+        const auto old_queue = device_queue_family_properties[*result.graphics];
+
+        if (std::popcount(device_queue_family_properties[i].queueFlags) < std::popcount(old_queue.queueFlags)) {
+          result.graphics = i;
+        }
+      }
+
+      if (device_queue_family_properties[i].queueCount > 0u) {
+        if (!result.present) {
+          result.present = i;
+        } else {
+          const auto old_queue = device_queue_family_properties[*result.present];
+
+          if (std::popcount(device_queue_family_properties[i].queueFlags) < std::popcount(old_queue.queueFlags)) {
+            result.present = i;
+          } 
+        }
+      }
+		}
+
+		if (device_queue_family_properties[i].queueFlags & VK_QUEUE_COMPUTE_BIT) {
+			if (!result.compute) {
+        result.compute = i;
+      } else {
+        const auto old_queue = device_queue_family_properties[*result.compute];
+
+        if (std::popcount(device_queue_family_properties[i].queueFlags) < std::popcount(old_queue.queueFlags)) {
+          result.compute = i;
+        }
+      }
+		}
+
+		if (device_queue_family_properties[i].queueFlags & VK_QUEUE_TRANSFER_BIT) {
+			if (!result.transfer) {
+        result.transfer = i;
+      } else {
+        const auto old_queue = device_queue_family_properties[*result.transfer];
+
+        if (std::popcount(device_queue_family_properties[i].queueFlags) < std::popcount(old_queue.queueFlags)) {
+          result.transfer = i;
+        }
+      }
+		}
+	}
+
+	if (!result.graphics) {
+		throw std::runtime_error("Failed to find suitable graphics queue family");
+  }
+
+  utility::logger<"graphics">::debug("Selected graphics queue family: {}", *result.graphics);
+
+  if (!result.present) {
+    result.present = result.graphics;
+  }
+
+  utility::logger<"graphics">::debug("Selected present queue family: {}", *result.present);
+
+  if (!result.compute) {
+    throw std::runtime_error("Failed to find suitable compute queue family");
+  }
+
+  utility::logger<"graphics">::debug("Selected compute queue family: {}", *result.compute);
+
+  if (!result.transfer) {
+    throw std::runtime_error("Failed to find suitable transfer queue family");
+  }
+
+  utility::logger<"graphics">::debug("Selected transfer queue family: {}", *result.transfer);
+
+  return result;
 }
 
 logical_device::logical_device(const physical_device& physical_device) {
-  const auto selection = _select_queue_families(physical_device.queue_families());
+  const auto queue_family_indices = _get_queue_family_indices(physical_device);
 
-  const auto unique_families = std::unordered_set<std::uint32_t>{selection.graphics, selection.compute, selection.transfer};
-
-  constexpr auto priority = 1.0f;
+  const auto graphics_queue_family_index = queue_family_indices.graphics.value();
+  const auto present_queue_family_index = queue_family_indices.present.value();
+  const auto compute_queue_family_index = queue_family_indices.compute.value();
+  const auto transfer_queue_family_index = queue_family_indices.transfer.value();
 
   auto queue_create_infos = std::vector<VkDeviceQueueCreateInfo>{};
+	auto queue_priorities = 0.0f;
 
-  for (const auto family : unique_families) {
-    auto queue_create_info = VkDeviceQueueCreateInfo{};
-    queue_create_info.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-    queue_create_info.queueFamilyIndex = family;
-    queue_create_info.queueCount = 1u;
-    queue_create_info.pQueuePriorities = &priority;
+  auto graphics_queue_create_info = VkDeviceQueueCreateInfo{};
+  graphics_queue_create_info.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+  graphics_queue_create_info.queueFamilyIndex = graphics_queue_family_index;
+  graphics_queue_create_info.queueCount = (present_queue_family_index != graphics_queue_family_index) ? 2u : 1u;
+  graphics_queue_create_info.pQueuePriorities = &queue_priorities;
 
-    queue_create_infos.push_back(queue_create_info);
+  queue_create_infos.emplace_back(graphics_queue_create_info);
+
+  if (compute_queue_family_index != graphics_queue_family_index) {
+    auto compute_queue_create_info = VkDeviceQueueCreateInfo{};
+    compute_queue_create_info.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+    compute_queue_create_info.queueFamilyIndex = compute_queue_family_index;
+    compute_queue_create_info.queueCount = 1;
+    compute_queue_create_info.pQueuePriorities = &queue_priorities;
+
+    queue_create_infos.emplace_back(compute_queue_create_info);
   }
 
-  auto extensions = std::vector<const char*>{
-    VK_KHR_SWAPCHAIN_EXTENSION_NAME
-  };
+  if (transfer_queue_family_index != graphics_queue_family_index && transfer_queue_family_index != compute_queue_family_index) {
+    auto transfer_queue_create_info = VkDeviceQueueCreateInfo{};
+    transfer_queue_create_info.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+    transfer_queue_create_info.queueFamilyIndex = transfer_queue_family_index;
+    transfer_queue_create_info.queueCount = 1;
+    transfer_queue_create_info.pQueuePriorities = &queue_priorities;
 
-  const auto available = features::query(physical_device);
-
-  auto features = features::enabled(features::required(), features::optional(), available);
-
-  // Extension features may only be enabled together with their extension.
-  if (features.compute_shader_derivatives().computeDerivativeGroupQuads || features.compute_shader_derivatives().computeDerivativeGroupLinear) {
-    extensions.push_back(VK_KHR_COMPUTE_SHADER_DERIVATIVES_EXTENSION_NAME);
+    queue_create_infos.emplace_back(transfer_queue_create_info);
   }
 
-  auto create_info = VkDeviceCreateInfo{};
-  create_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-  create_info.pNext = &features.chain();
-  create_info.queueCreateInfoCount = static_cast<std::uint32_t>(queue_create_infos.size());
-  create_info.pQueueCreateInfos = queue_create_infos.data();
-  create_info.enabledExtensionCount = static_cast<std::uint32_t>(extensions.size());
-  create_info.ppEnabledExtensionNames = extensions.data();
+  const auto instance_validation_layers = layers::instance();
+  const auto device_extensions = extensions::device();
 
-  validate(vkCreateDevice(physical_device, &create_info, nullptr, &_handle), "vkCreateDevice");
+  const auto available_features = features::query(physical_device);
 
-  _graphics_queue.family = selection.graphics;
-  _compute_queue.family = selection.compute;
-  _transfer_queue.family = selection.transfer;
+  auto features = features::enabled(features::required(), features::optional(), available_features);
 
-  vkGetDeviceQueue(_handle, _graphics_queue.family, 0u, &_graphics_queue.handle);
-  vkGetDeviceQueue(_handle, _compute_queue.family, 0u, &_compute_queue.handle);
-  vkGetDeviceQueue(_handle, _transfer_queue.family, 0u, &_transfer_queue.handle);
+	auto device_create_info = VkDeviceCreateInfo{};
+	device_create_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+  device_create_info.pNext = &features.chain();
+	device_create_info.queueCreateInfoCount = static_cast<std::uint32_t>(queue_create_infos.size());
+	device_create_info.pQueueCreateInfos = queue_create_infos.data();
+  device_create_info.enabledLayerCount = static_cast<std::uint32_t>(instance_validation_layers.size());
+  device_create_info.ppEnabledLayerNames = instance_validation_layers.data();
+	device_create_info.enabledExtensionCount = static_cast<std::uint32_t>(device_extensions.size());
+	device_create_info.ppEnabledExtensionNames = device_extensions.data();
+	device_create_info.pEnabledFeatures = nullptr;
+
+	validate(vkCreateDevice(physical_device, &device_create_info, nullptr, &_handle), "vkCreateDevice");
+
+  _get_queue<queue::type::graphics>(graphics_queue_family_index);
+  _get_queue<queue::type::present>(present_queue_family_index);
+  _get_queue<queue::type::compute>(compute_queue_family_index);
+  _get_queue<queue::type::transfer>(transfer_queue_family_index);
+
+  utility::logger<"graphics">::debug("Created logical device with {} unique queues", queue_create_infos.size());
 }
 
 logical_device::~logical_device() {

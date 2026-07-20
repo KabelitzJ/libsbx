@@ -167,6 +167,8 @@ target_sources(
   PRIVATE
     "${CMAKE_SOURCE_DIR}/libsbx/core/core.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/core/engine.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/graphics/commands/command_buffer.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/graphics/commands/command_pool.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/graphics/devices/allocator.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/graphics/devices/debug_messenger.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/graphics/devices/extensions.cpp"
@@ -189,6 +191,8 @@ target_sources(
       "${CMAKE_SOURCE_DIR}/libsbx/core/core.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/core/engine.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/core/engine.ipp"
+      "${CMAKE_SOURCE_DIR}/libsbx/graphics/commands/command_buffer.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/graphics/commands/command_pool.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/graphics/devices/allocator.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/graphics/devices/debug_messenger.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/graphics/devices/extensions.hpp"

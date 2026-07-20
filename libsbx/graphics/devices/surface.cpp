@@ -24,10 +24,10 @@ surface::surface(const instance& instance, const physical_device& physical_devic
 
   validate(glfwCreateWindowSurface(instance, window, nullptr, &_handle), "glfwCreateWindowSurface");
 
-  const auto& graphics_queue = logical_device.graphics_queue();
+  const auto& present_queue = logical_device.queue<queue::type::present>();
 
 	auto present_support = std::uint32_t{0};
-	validate(vkGetPhysicalDeviceSurfaceSupportKHR(physical_device, graphics_queue.family, _handle, &present_support), "vkGetPhysicalDeviceSurfaceSupportKHR");
+	validate(vkGetPhysicalDeviceSurfaceSupportKHR(physical_device, present_queue.family(), _handle, &present_support), "vkGetPhysicalDeviceSurfaceSupportKHR");
 
 	if (!present_support) {
 		throw std::runtime_error("Graphics queue family does not have presentation support");

@@ -10,6 +10,8 @@
 #include <libsbx/utility/assert.hpp>
 #include <libsbx/utility/type_list.hpp>
 
+#include <libsbx/memory/aligned_storage.hpp>
+
 namespace sbx::core {
 
 enum class stage : std::uint8_t {
@@ -169,14 +171,22 @@ template<module Module>
 struct module_slot {
 
   module_slot() {
-    module_instance<Module>::pointer = &instance;
+    std::construct_at(get());
+
+    module_instance<Module>::pointer = get();
   }
 
-  ~module_slot() {
+  ~module_slot() noexcept {
+    std::destroy_at(get());
+
     module_instance<Module>::pointer = nullptr;
   }
 
-  Module instance{};
+  auto get() noexcept -> Module* {
+    return std::launder(reinterpret_cast<Module*>(&storage));
+  }
+
+  memory::storage_for_t<Module> storage{};
 
 }; // struct module_slot
 
@@ -199,7 +209,7 @@ struct module_storage<First, Rest...> {
 
   template<typename Callable>
   auto for_each(Callable&& callable) -> void {
-    std::invoke(callable, slot.instance);
+    std::invoke(callable, *slot.get());
     rest.for_each(callable);
   }
 

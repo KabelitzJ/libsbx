@@ -10,9 +10,9 @@ namespace sbx::memory {
 
 template<std::size_t Size, std::size_t Alignment>
 struct aligned_storage {
-  struct type {
-    alignas(Alignment) std::byte data[Size];
-  }; // union type
+  struct alignas(Alignment) type {
+    std::array<std::byte, Size> data;
+  }; // struct type
 }; // struct aligned_storage
 
 template<std::size_t Size, std::size_t Alignment>
@@ -20,10 +20,7 @@ using aligned_storage_t = typename aligned_storage<Size, Alignment>::type;
 
 template<typename Type>
 struct storage_for {
-  // using type = alignas(alignof(Type)) std::byte[sizeof(Type)];
-  struct alignas(alignof(Type)) type {
-    std::byte data[sizeof(Type)];
-  }; // struct type
+  using type = aligned_storage_t<sizeof(Type), alignof(Type)>;
 }; // struct storage_for
 
 template<typename Type>

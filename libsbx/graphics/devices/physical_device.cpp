@@ -52,8 +52,6 @@ physical_device::physical_device(const instance& instance) {
     auto properties = VkPhysicalDeviceProperties{};
     vkGetPhysicalDeviceProperties(candidate, &properties);
 
-    utility::logger<"graphics">::info("Device: {}", std::string_view{properties.deviceName});
-
     if (properties.apiVersion < VK_API_VERSION_1_4) {
       utility::logger<"graphics">::debug("Skipping '{}': api version below 1.4", std::string_view{properties.deviceName});
 
@@ -81,8 +79,6 @@ physical_device::physical_device(const instance& instance) {
 
   auto properties = VkPhysicalDeviceProperties{};
   vkGetPhysicalDeviceProperties(_handle, &properties);
-
-  utility::logger<"graphics">::info("Device: {}", std::string_view{properties.deviceName});
 
   vkGetPhysicalDeviceMemoryProperties(_handle, &_memory_properties);
 

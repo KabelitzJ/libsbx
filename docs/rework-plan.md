@@ -79,8 +79,10 @@ Custom lists are for deviating apps (headless tools, tests).
   `static_assert` (every dependency must appear earlier in the module list); duplicate
   modules are a compile error too.
 - `engine::get_module<M>()` resolves via a per-type instance pointer published as each
-  module finishes construction — so a module's constructor may use all modules listed
-  before it.
+  module finishes construction and unpublished only **after** its destruction completes
+  (`module_slot` uses raw storage + construct_at/destroy_at). Like the old engine,
+  `get_module` is therefore valid everywhere — including destructors of module-owned
+  objects (e.g. `surface::~surface` resolves the graphics module).
 
 ## utility: logger & profiler (reworked 2026-07-19)
 
@@ -109,10 +111,10 @@ directory is deleted):
   values matching the glfw constants, verified by static_asserts in window.cpp;
   window.hpp only forward-declares `GLFWwindow`.
 - `window` — signals for window/input events; windowed at the size given in
-  `window_create_info` (the old video-mode size override was dropped). Exposes
-  `native_info() -> native_window_info` (variant of `win32_window_info` /
-  `x11_window_info` / `wayland_window_info`) so the graphics module creates its
-  `VkSurfaceKHR` from native handles (vkCreateWin32SurfaceKHR etc.), not via glfw.
+  `window_create_info` (the old video-mode size override was dropped). Exposes the
+  `GLFWwindow*` handle; the graphics `surface` is created via
+  `glfwCreateWindowSurface` (decision revised 2026-07-20 — simpler than the
+  native-handle variant approach, glfw already abstracts win32/x11/wayland).
 - `input` — static keyboard/mouse state; press→repeat transitions run in
   `platform_module::pre_update`. The old viewport/capture state
   (`_active_viewport_*`, `_is_active`, `_is_captured` — imgui-era workarounds) was

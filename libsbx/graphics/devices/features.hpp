@@ -26,12 +26,12 @@ public:
    * @brief The hard minimum the engine refuses to run without (bindless, dynamic rendering, BDA, timeline semaphores).
    * Device selection filters on this set.
    */
-  [[nodiscard]] static auto required() -> features;
+  [[nodiscard]] static auto required() -> const features&;
 
   /**
    * @brief Features enabled opportunistically when the device supports them (wide lines, geometry/tessellation, 8/16 bit types).
    */
-  [[nodiscard]] static auto optional() -> features;
+  [[nodiscard]] static auto optional() -> const features&;
 
   /**
    * @brief Queries the features a physical device actually supports.

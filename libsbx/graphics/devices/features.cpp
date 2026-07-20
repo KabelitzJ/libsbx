@@ -81,7 +81,7 @@ auto features::operator=(const features& other) -> features& {
   return *this;
 }
 
-auto features::required() -> features {
+auto features::required() -> const features& {
   static auto features = graphics::features{};
 
   // Core
@@ -118,7 +118,7 @@ auto features::required() -> features {
   return features;
 }
 
-auto features::optional() -> features {
+auto features::optional() -> const features& {
   static auto features = graphics::features{};
 
   // Core

@@ -22,7 +22,7 @@ instance::instance()
   validate(vkEnumerateInstanceVersion(&api_version), "vkEnumerateInstanceVersion");
 
   if (api_version < VK_API_VERSION_1_4) {
-    throw utility::runtime_error{"Vulkan 1.3 required, loader reports {}.{}", VK_API_VERSION_MAJOR(api_version), VK_API_VERSION_MINOR(api_version)};
+    throw utility::runtime_error{"Vulkan 1.4 required, loader reports {}.{}", VK_API_VERSION_MAJOR(api_version), VK_API_VERSION_MINOR(api_version)};
   }
 
   auto app_info = VkApplicationInfo{};
@@ -31,7 +31,7 @@ instance::instance()
   app_info.applicationVersion = VK_MAKE_VERSION(0, 1, 0);
   app_info.pEngineName = "libsbx";
   app_info.engineVersion = VK_MAKE_VERSION(0, 1, 0);
-  app_info.apiVersion = api_version;
+  app_info.apiVersion = VK_API_VERSION_1_4;
 
   const auto instance_extensions = extensions::instance();
   const auto instance_layers = layers::instance();

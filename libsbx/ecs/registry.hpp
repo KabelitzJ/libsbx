@@ -21,7 +21,6 @@
 
 #include <libsbx/memory/concepts.hpp>
 #include <libsbx/memory/observer_ptr.hpp>
-#include <libsbx/memory/tracking_allocator.hpp>
 
 #include <libsbx/containers/dense_map.hpp>
 
@@ -285,7 +284,7 @@ public:
 
   template<typename Callable>
   auto invoke(const utility::hashed_string& tag, Callable&& callable) -> void {
-    for (const auto entity : _entities | ranges::views::filter(std::forward<Callable>(callable))) {
+    for (const auto entity : _entities | std::ranges::views::filter(std::forward<Callable>(callable))) {
       for (auto&& [type, storage] : storage()) {
         storage.invoke(tag, entity);
       }

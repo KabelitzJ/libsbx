@@ -140,6 +140,7 @@ public:
     swap(first(), other.first());
     swap(second(), other.second());
   }
+
   template<std::size_t Index>
   [[nodiscard]] constexpr auto get() noexcept -> decltype(auto) {
     if constexpr (Index == 0u) {

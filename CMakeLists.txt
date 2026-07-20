@@ -188,7 +188,6 @@ target_sources(
       "${CMAKE_SOURCE_DIR}/libsbx/core/core.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/core/engine.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/core/engine.ipp"
-      "${CMAKE_SOURCE_DIR}/libsbx/engine.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/graphics/devices/allocator.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/graphics/devices/debug_messenger.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/graphics/devices/extensions.hpp"

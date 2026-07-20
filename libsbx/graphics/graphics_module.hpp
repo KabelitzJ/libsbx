@@ -2,6 +2,8 @@
 #ifndef LIBSBX_GRAPHICS_GRAPHICS_MODULE_HPP_
 #define LIBSBX_GRAPHICS_GRAPHICS_MODULE_HPP_
 
+#include <memory>
+
 #include <libsbx/utility/noncopyable.hpp>
 
 #include <libsbx/core/module.hpp>
@@ -13,6 +15,7 @@
 #include <libsbx/graphics/devices/logical_device.hpp>
 #include <libsbx/graphics/devices/allocator.hpp>
 #include <libsbx/graphics/devices/surface.hpp>
+#include <libsbx/graphics/devices/swapchain.hpp>
 
 namespace sbx::graphics {
 
@@ -42,6 +45,14 @@ public:
     return _allocator;
   }
 
+  [[nodiscard]] auto surface() noexcept -> graphics::surface& {
+    return _surface;
+  }
+
+  [[nodiscard]] auto swapchain() noexcept -> graphics::swapchain& {
+    return *_swapchain;
+  }
+
 private:
 
   graphics::instance _instance;
@@ -49,6 +60,10 @@ private:
   graphics::logical_device _logical_device;
   graphics::allocator _allocator;
   graphics::surface _surface;
+
+  std::unique_ptr<graphics::swapchain> _swapchain;
+
+  bool _is_framebuffer_resized;
 
 }; // class graphics_module
 

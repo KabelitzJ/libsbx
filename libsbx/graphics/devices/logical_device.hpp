@@ -97,7 +97,7 @@ public:
    */
   template<typename Handle>
   requires (named_object_type<Handle>)
-  auto _set_debug_name(const Handle handle, const std::string& name) const -> void {
+  auto set_debug_name(const Handle handle, const std::string& name) const -> void {
     _set_debug_name(object_type_v<Handle>, reinterpret_cast<std::uint64_t>(handle), name);
   }
   

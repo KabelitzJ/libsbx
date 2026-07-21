@@ -1,5 +1,14 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Jonas Kabelitz
+
+/**
+ * @file libsbx/containers/stable_vector.hpp
+ *
+ * @brief A paged, thread-safe vector that never invalidates references to existing elements on growth.
+ *
+ * @ingroup libsbx-containers
+ */
+
 #ifndef LIBSBX_CONTAINERS_STABLE_VECTOR_HPP_
 #define LIBSBX_CONTAINERS_STABLE_VECTOR_HPP_
 

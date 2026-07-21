@@ -1,5 +1,14 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Jonas Kabelitz
+
+/**
+ * @file libsbx/containers/dense_map.hpp
+ *
+ * @brief An associative container with contiguous, cache-friendly value storage and stable iteration order.
+ *
+ * @ingroup libsbx-containers
+ */
+
 #ifndef LIBSBX_CONTAINERS_DENSE_MAP_HPP_
 #define LIBSBX_CONTAINERS_DENSE_MAP_HPP_
 

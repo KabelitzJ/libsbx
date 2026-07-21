@@ -1,5 +1,14 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Jonas Kabelitz
+
+/**
+ * @file libsbx/containers/static_vector.hpp
+ *
+ * @brief A fixed-capacity vector with inline storage and no heap allocation.
+ *
+ * @ingroup libsbx-containers
+ */
+
 #ifndef LIBSBX_CONTAINERS_STATIC_VECTOR_HPP_
 #define LIBSBX_CONTAINERS_STATIC_VECTOR_HPP_
 

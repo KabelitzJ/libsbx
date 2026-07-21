@@ -1,5 +1,14 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Jonas Kabelitz
+
+/**
+ * @file libsbx/containers/compressed_pair.hpp
+ *
+ * @brief A compressed pair implementation using the empty base optimization.
+ *
+ * @ingroup libsbx-containers
+ */
+
 #ifndef LIBSBX_CONTAINERS_COMPRESSED_PAIR_HPP_
 #define LIBSBX_CONTAINERS_COMPRESSED_PAIR_HPP_
 

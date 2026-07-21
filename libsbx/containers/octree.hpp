@@ -1,5 +1,14 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Jonas Kabelitz
+
+/**
+ * @file libsbx/containers/octree.hpp
+ *
+ * @brief A spatial partitioning tree for volume-bounded values, supporting insertion, intersection queries, and region queries.
+ *
+ * @ingroup libsbx-containers
+ */
+
 #ifndef LIBSBX_CONTAINERS_OCTREE_HPP_
 #define LIBSBX_CONTAINERS_OCTREE_HPP_
 

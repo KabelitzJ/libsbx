@@ -1,5 +1,14 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Jonas Kabelitz
+
+/**
+ * @file libsbx/containers/ring_buffer.hpp
+ *
+ * @brief A fixed-capacity FIFO overwrite buffer on contiguous storage.
+ *
+ * @ingroup libsbx-containers
+ */
+
 #ifndef LIBSBX_CONTAINERS_RING_BUFFER_HPP_
 #define LIBSBX_CONTAINERS_RING_BUFFER_HPP_
 

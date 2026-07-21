@@ -26,6 +26,12 @@ static auto _score(const VkPhysicalDeviceProperties& properties) -> std::uint32_
       score += 100u;
       break;
     }
+#if defined(SBX_PREFER_CPU_DEVICE)
+    case VK_PHYSICAL_DEVICE_TYPE_CPU: {
+      score += 200u;
+      break;
+    }
+#endif // SBX_PREFER_CPU_DEVICE
     default: {
       break;
     }
@@ -52,6 +58,9 @@ physical_device::physical_device(const instance& instance) {
   for (const auto& candidate : devices) {
     auto properties = VkPhysicalDeviceProperties{};
     vkGetPhysicalDeviceProperties(candidate, &properties);
+
+    utility::logger<"graphics">::debug("Scoring: {}", std::string_view{properties.deviceName});
+    utility::logger<"graphics">::debug("  Type: {}", properties.deviceType);
 
     if (properties.apiVersion < VK_API_VERSION_1_4) {
       utility::logger<"graphics">::debug("Skipping '{}': api version below 1.4", std::string_view{properties.deviceName});
@@ -80,6 +89,8 @@ physical_device::physical_device(const instance& instance) {
 
   auto properties = VkPhysicalDeviceProperties{};
   vkGetPhysicalDeviceProperties(_handle, &properties);
+
+  utility::logger<"graphics">::debug("Selected: {}", std::string_view{properties.deviceName});
 
   vkGetPhysicalDeviceMemoryProperties(_handle, &_memory_properties);
 }

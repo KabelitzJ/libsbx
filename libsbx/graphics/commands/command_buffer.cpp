@@ -363,6 +363,32 @@ auto command_buffer::acquire_buffer_ownership(const std::vector<buffer_acquire_d
   vkCmdPipelineBarrier2(_handle, &dependency_info);
 }
 
+auto command_buffer::transition_image_layout(const image_transition_data& data) -> void {
+  auto image_barrier = VkImageMemoryBarrier2{};
+  image_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+  image_barrier.srcStageMask = data.src_stage_mask;
+  image_barrier.srcAccessMask = data.src_access_mask;
+  image_barrier.dstStageMask = data.dst_stage_mask;
+  image_barrier.dstAccessMask = data.dst_access_mask;
+  image_barrier.oldLayout = data.old_layout;
+  image_barrier.newLayout = data.new_layout;
+  image_barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  image_barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  image_barrier.image = data.image;
+  image_barrier.subresourceRange.aspectMask = data.aspect_mask;
+  image_barrier.subresourceRange.baseMipLevel = data.base_mip_level;
+  image_barrier.subresourceRange.levelCount = data.mip_levels;
+  image_barrier.subresourceRange.baseArrayLayer = data.base_array_layer;
+  image_barrier.subresourceRange.layerCount = data.layer_count;
+
+  auto dependency_info = VkDependencyInfo{};
+  dependency_info.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+  dependency_info.imageMemoryBarrierCount = 1u;
+  dependency_info.pImageMemoryBarriers = &image_barrier;
+
+  vkCmdPipelineBarrier2(_handle, &dependency_info);
+}
+
 auto command_buffer::set_viewport(const VkViewport& viewport) -> void {
   vkCmdSetViewport(_handle, 0, 1, &viewport);
 }

@@ -10,6 +10,7 @@
 
 #include <libsbx/utility/assert.hpp>
 #include <libsbx/utility/type_list.hpp>
+#include <libsbx/utility/concepts.hpp>
 
 #include <libsbx/memory/aligned_storage.hpp>
 
@@ -110,17 +111,7 @@ struct module_instance {
   inline static Module* pointer = nullptr;
 }; // struct module_instance
 
-template<typename Type, typename... Types>
-inline constexpr auto contains_v = (std::is_same_v<Type, Types> || ...);
 
-template<typename... Types>
-struct are_unique : std::true_type { };
-
-template<typename First, typename... Rest>
-struct are_unique<First, Rest...> : std::bool_constant<!contains_v<First, Rest...> && are_unique<Rest...>::value> { };
-
-template<typename... Types>
-inline constexpr auto are_unique_v = are_unique<Types...>::value;
 
 template<typename Module>
 struct module_dependencies {
@@ -140,7 +131,7 @@ template<typename List, typename... Previous>
 struct dependencies_in;
 
 template<typename... Dependencies, typename... Previous>
-struct dependencies_in<dependency_list<Dependencies...>, Previous...> : std::bool_constant<(contains_v<Dependencies, Previous...> && ...)> { };
+struct dependencies_in<dependency_list<Dependencies...>, Previous...> : std::bool_constant<(utility::contains_v<Dependencies, Previous...> && ...)> { };
 
 /**
  * @brief Checks that every module's dependencies appear before it in the list.

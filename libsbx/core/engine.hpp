@@ -12,6 +12,7 @@
 
 #include <libsbx/utility/assert.hpp>
 #include <libsbx/utility/noncopyable.hpp>
+#include <libsbx/utility/concepts.hpp>
 
 #include <libsbx/units/units.hpp>
 
@@ -96,7 +97,7 @@ protected:
 template<module... Modules>
 class basic_engine final : public engine {
 
-  static_assert(detail::are_unique_v<Modules...>, "Modules must not be listed twice");
+  static_assert(utility::are_unique_v<Modules...>, "Modules must not be listed twice");
   static_assert(detail::dependencies_ordered_v<Modules...>, "Every module must be listed after all of its dependencies");
 
 public:

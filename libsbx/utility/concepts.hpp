@@ -34,17 +34,20 @@ concept one_of = is_one_of_v<Type, TypeList...>;
 template<typename Type, typename... TypeList>
 concept none_of = !is_one_of_v<Type, TypeList...>;
 
-template<typename T, typename... Rest>
-struct are_all_unique : std::bool_constant<!(std::is_same_v<T, Rest> || ...) && are_all_unique<Rest...>::value>{};
+template<typename... Types>
+struct are_unique : std::true_type { };
+ 
+template<typename First, typename... Rest>
+struct are_unique<First, Rest...> : std::bool_constant<(!std::is_same_v<First, Rest> && ...) && are_unique<Rest...>::value> { };
+ 
+template<typename... Types>
+inline constexpr auto are_unique_v = are_unique<Types...>::value;
 
-template<typename T>
-struct are_all_unique<T> : std::true_type { };
+template<typename... Types>
+concept unique = are_unique_v<Types...>;
 
-template<typename... TypeList>
-inline constexpr auto are_all_unique_v = are_all_unique<TypeList...>::value;
-
-template<typename... TypeList>
-concept all_unique = are_all_unique_v<TypeList...>;
+template<typename Type, typename... Types>
+inline constexpr auto contains_v = (std::is_same_v<Type, Types> || ...);
 
 template<typename Type, typename... TypeList>
 struct is_convertible_to_one_of : std::false_type{ };

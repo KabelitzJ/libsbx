@@ -100,14 +100,54 @@ auto graphics_module::update() -> void {
   command_buffer.reset();
   command_buffer.begin(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
 
-  auto& image_data = _per_image_data[_swapchain->active_image_index()];
+  const auto image_index = _swapchain->active_image_index();
 
-  // Submit the command buffer to the graphics queue and wait for it to finish
+  auto& image_data = _per_image_data[image_index];
+
+  auto to_color_attachment = command_buffer::image_transition_data{};
+  to_color_attachment.image = _swapchain->image(image_index);
+  to_color_attachment.src_stage_mask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
+  to_color_attachment.src_access_mask = VK_ACCESS_2_NONE;
+  to_color_attachment.dst_stage_mask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
+  to_color_attachment.dst_access_mask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
+  to_color_attachment.old_layout = VK_IMAGE_LAYOUT_UNDEFINED;
+  to_color_attachment.new_layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+  command_buffer.transition_image_layout(to_color_attachment);
+
+  auto color_attachment = VkRenderingAttachmentInfo{};
+  color_attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+  color_attachment.imageView = _swapchain->image_view(image_index);
+  color_attachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+  color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+  color_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+  color_attachment.clearValue.color = VkClearColorValue{{0.1f, 0.2f, 0.7f, 1.0f}};
+
+  auto rendering_info = VkRenderingInfo{};
+  rendering_info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
+  rendering_info.renderArea = VkRect2D{VkOffset2D{0, 0}, _swapchain->extent()};
+  rendering_info.layerCount = 1u;
+  rendering_info.colorAttachmentCount = 1u;
+  rendering_info.pColorAttachments = &color_attachment;
+
+  command_buffer.begin_rendering(rendering_info);
+  command_buffer.end_rendering();
+
+  auto to_present_src = command_buffer::image_transition_data{};
+  to_present_src.image = _swapchain->image(image_index);
+  to_present_src.src_stage_mask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
+  to_present_src.src_access_mask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
+  to_present_src.dst_stage_mask = VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT;
+  to_present_src.dst_access_mask = VK_ACCESS_2_NONE;
+  to_present_src.old_layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+  to_present_src.new_layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+
+  command_buffer.transition_image_layout(to_present_src);
 
   command_buffer.end();
 
   auto wait_semaphores = std::vector<command_buffer::wait_semaphore>{};
-  wait_semaphores.push_back({frame_data.image_available_semaphore, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT});
+  wait_semaphores.push_back({frame_data.image_available_semaphore, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT});
 
   command_buffer.submit(wait_semaphores, image_data.render_finished_semaphore, frame_data.graphics_in_flight_fence);
 

@@ -80,6 +80,21 @@ public:
     VkImageLayout new_layout;
   }; // struct image_acquire_data
 
+  struct image_transition_data {
+    VkImage image;
+    VkPipelineStageFlags2 src_stage_mask;
+    VkAccessFlags2 src_access_mask;
+    VkPipelineStageFlags2 dst_stage_mask;
+    VkAccessFlags2 dst_access_mask;
+    VkImageLayout old_layout;
+    VkImageLayout new_layout;
+    VkImageAspectFlags aspect_mask{VK_IMAGE_ASPECT_COLOR_BIT};
+    std::uint32_t base_mip_level{0u};
+    std::uint32_t mip_levels{1u};
+    std::uint32_t base_array_layer{0u};
+    std::uint32_t layer_count{1u};
+  }; // struct image_transition_data
+
   command_buffer(const queue::type type, bool should_begin = true, VkCommandBufferLevel buffer_level = VK_COMMAND_BUFFER_LEVEL_PRIMARY);
 
   command_buffer(command_buffer&&) noexcept;
@@ -115,6 +130,8 @@ public:
   auto acquire_buffer_ownership(const std::vector<buffer_acquire_data>& acquires) -> void;
 
   auto acquire_image_ownership(const std::vector<image_acquire_data>& acquires) -> void;
+
+  auto transition_image_layout(const image_transition_data& transition_data) -> void;
 
   auto release_image_ownership(const std::vector<image_release_data>& releases) -> void;
 

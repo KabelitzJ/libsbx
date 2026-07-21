@@ -95,8 +95,6 @@ swapchain::swapchain(const std::unique_ptr<swapchain>& old_swapchain)
 	if (surface_capabilities.supportedUsageFlags & VK_IMAGE_USAGE_TRANSFER_DST_BIT) {
 		swapchain_create_info.imageUsage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
     utility::logger<"graphics">::debug("Swapchain supports VK_IMAGE_USAGE_TRANSFER_DST_BIT");
-  } else {
-    throw std::runtime_error("Swapchain does not support VK_IMAGE_USAGE_TRANSFER_DST_BIT");
   }
 
 	if (old_swapchain) {

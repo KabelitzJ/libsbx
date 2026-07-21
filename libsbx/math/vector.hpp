@@ -1,25 +1,12 @@
 // SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Jonas Kabelitz
+
 /**
  * @file libsbx/math/vector.hpp
- * 
- * @brief Generic fixed-size vector type.
  *
- * @details
- * 
- * This header defines a statically sized vector template parameterized by
- * component count and scalar type.
+ * @brief A generic, statically sized vector type with arithmetic, interpolation, and normalization support.
  *
- * The vector stores its components contiguously and supports basic arithmetic,
- * interpolation, normalization, and utility operations such as component-wise
- * min/max and absolute value.
- * 
- * @author KAJ
- *
- * @copyright (C) 2026 Jonas Kabelitz
- *
- * @package libsbx::math
- * @version 0.1.0
- * @since 2024-01-06
+ * @ingroup libsbx-math
  */
 
 #ifndef LIBSBX_MATH_VECTOR_HPP_

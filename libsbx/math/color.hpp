@@ -1,26 +1,12 @@
 // SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Jonas Kabelitz
+
 /**
  * @file libsbx/math/color.hpp
- * 
- * @brief RGBA color representation and utilities.
  *
- * @details
- * 
- * This header defines a lightweight RGBA color class using floating-point
- * components in the range [0, 1]. The type is intended for rendering,
- * serialization, hashing, and general math usage.
+ * @brief An RGBA color type with named factories, YAML conversion, and hashing support.
  *
- * The color is stored in linear space and provides convenience constructors,
- * named color factories, component accessors, and interoperability with YAML
- * and hashing utilities.
- * 
- * @author KAJ
- *
- * @copyright (C) 2026 Jonas Kabelitz
- *
- * @package libsbx::math
- * @version 0.1.0
- * @since 2023-02-17
+ * @ingroup libsbx-math
  */
 
 #ifndef LIBSBX_MATH_COLOR_HPP_

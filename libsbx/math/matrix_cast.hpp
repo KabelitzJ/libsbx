@@ -1,27 +1,12 @@
 // SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Jonas Kabelitz
+
 /**
  * @file libsbx/math/matrix_cast.hpp
- * 
- * @brief Matrix casting and decomposition utilities.
  *
- * @details
- * 
- * This header provides a generic, extensible mechanism for casting between
- * different matrix representations, as well as helpers for extracting
- * transformation components from matrices.
+ * @brief Casting between matrix representations and decomposition of transformation matrices into position, rotation, and scale.
  *
- * Supported conversions include:
- * - 3x3 <-> 4x4 matrix casting
- * - quaternion -> matrix casting
- * - Matrix decomposition into position, rotation, and scale
- * 
- * @author KAJ
- *
- * @copyright (C) 2026 Jonas Kabelitz
- *
- * @package libsbx::math
- * @version 0.1.0
- * @since 2025-08-25
+ * @ingroup libsbx-math
  */
 
 #ifndef LIBSBX_MATH_MATRIX_CAST_HPP_

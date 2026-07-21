@@ -1,26 +1,12 @@
 // SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Jonas Kabelitz
+
 /**
  * @file libsbx/math/matrix.hpp
- * 
- * @brief Generic fixed-size matrix type.
  *
- * @details
- * 
- * This header defines a statically sized, column-major matrix template
- * parameterized by column count, row count, and scalar type.
+ * @brief A generic, statically sized, column-major matrix type parameterized by dimensions and scalar type.
  *
- * The matrix is implemented as an array of column vectors and supports
- * element access, arithmetic operations, row extraction, and identity
- * construction. It is intended as a low-level building block for higher-
- * level math types such as transforms and projections.
- * 
- * @author KAJ
- *
- * @copyright (C) 2026 Jonas Kabelitz
- *
- * @package libsbx::math
- * @version 0.1.0
- * @since 2024-01-08
+ * @ingroup libsbx-math
  */
 
 #ifndef LIBSBX_MATH_MATRIX_HPP_

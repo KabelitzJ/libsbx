@@ -1,24 +1,12 @@
 // SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Jonas Kabelitz
+
 /**
  * @file libsbx/math/angle.hpp
- * 
- * @brief Angle types and utilities.
  *
- * @details
- * 
- * This header defines strongly-typed wrappers for angular quantities in degrees and radians,
- * plus a unified angle type that stores angles internally in radians.
+ * @brief Strongly-typed degree, radian, and unified angle types for preventing unit-mismatch bugs.
  *
- * The provided types are lightweight value wrappers intended to prevent unit-mismatch bugs,
- * while remaining usable in constexpr contexts where possible.
- * 
- * @author KAJ
- *
- * @copyright (C) 2026 Jonas Kabelitz
- *
- * @package libsbx::math
- * @version 0.1.0
- * @since 2023-05-24
+ * @ingroup libsbx-math
  */
 
 #ifndef LIBSBX_MATH_ANGLE_HPP_

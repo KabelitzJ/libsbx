@@ -1,26 +1,12 @@
 // SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Jonas Kabelitz
+
 /**
  * @file libsbx/math/constants.hpp
- * 
- * @brief Mathematical constants.
  *
- * @details
- * 
- * This header defines commonly used mathematical constants in a type-safe,
- * constexpr-friendly manner. Constants are provided as variable templates
- * parameterized on floating-point type, along with convenient aliases for
- * commonly used precisions.
+ * @brief Type-safe, constexpr mathematical constants (epsilon, pi, two-pi) parameterized on floating-point type.
  *
- * All constants are intended to be used consistently across the math module
- * to avoid magic numbers and precision mismatches.
- * 
- * @author KAJ
- *
- * @copyright (C) 2026 Jonas Kabelitz
- *
- * @package libsbx::math
- * @version 0.1.0
- * @since 2025-07-14
+ * @ingroup libsbx-math
  */
 
 #ifndef LIBSBX_MATH_CONSTANTS_HPP_

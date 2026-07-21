@@ -1,30 +1,12 @@
 // SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Jonas Kabelitz
+
 /**
  * @file libsbx/ecs/sparse_set.hpp
- * 
- * @brief Sparse set container for ECS entity storage.
  *
- * @details
- * 
- * This header defines a sparse set data structure optimized for use in
- * entity-component systems. The container maintains a dense array of entities
- * and a sparse mapping that allows constant-time lookup, insertion, and
- * removal.
+ * @brief A sparse set container for entity storage, with configurable deletion policies and allocator support.
  *
- * Multiple deletion strategies are supported via configurable policies,
- * enabling trade-offs between memory locality, iteration stability, and
- * deletion cost.
- *
- * The sparse set is allocator-aware and designed to be extensible through
- * inheritance.
- * 
- * @author KAJ
- *
- * @copyright (C) 2026 Jonas Kabelitz
- *
- * @package libsbx::ecs
- * @version 0.1.0
- * @since 2024-01-06
+ * @ingroup libsbx-ecs
  */
 
 #ifndef LIBSBX_SPARSE_SET_HPP_

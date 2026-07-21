@@ -1,22 +1,12 @@
 // SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Jonas Kabelitz
+
 /**
  * @file libsbx/math/ray.hpp
- * 
- * @brief Ray type for geometric queries.
  *
- * @details
- * 
- * This header defines a simple ray type consisting of an origin and a direction.
- * The direction is stored normalized to ensure predictable behavior for ray-based
- * computations such as intersection tests and sampling.
- * 
- * @author KAJ
+ * @brief A 3D ray type with normalized direction for geometric intersection and sampling queries.
  *
- * @copyright (C) 2026 Jonas Kabelitz
- *
- * @package libsbx::math
- * @version 0.1.0
- * @since 2026-01-07
+ * @ingroup libsbx-math
  */
 
 #ifndef LIBSBX_MATH_RAY_HPP_

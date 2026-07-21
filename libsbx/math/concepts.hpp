@@ -1,26 +1,12 @@
 // SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Jonas Kabelitz
+
 /**
  * @file libsbx/math/concepts.hpp
- * 
- * @brief Core numeric concepts and type traits.
  *
- * @details
- * 
- * This header defines foundational type traits and C++20 concepts used
- * throughout the math module. The provided concepts classify numeric,
- * scalar, integral, and floating-point types with stricter semantics
- * than the standard library equivalents.
+ * @brief Core numeric concepts and type traits classifying scalar, integral, and floating-point types.
  *
- * These utilities are intended to enforce stronger compile-time
- * constraints and improve readability of template interfaces.
- * 
- * @author KAJ
- *
- * @copyright (C) 2026 Jonas Kabelitz
- *
- * @package libsbx::math
- * @version 0.1.0
- * @since 2022-12-14
+ * @ingroup libsbx-math
  */
 
 #ifndef LIBSBX_MATH_CONCEPTS_HPP_

@@ -1,24 +1,12 @@
 // SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Jonas Kabelitz
+
 /**
  * @file libsbx/math/box.hpp
- * 
- * @brief Box / frustum-style volume intersection helpers.
  *
- * @details
+ * @brief A plane-based box for frustum-style volume intersection tests.
  *
- * This header defines a box-like structure represented by six clipping planes.
- * It can be used for intersection tests against axis-aligned volumes.
- *
- * The primary use case is view-frustum culling or generalized half-space tests
- * against bounding volumes.
- *
- * @author KAJ
- *
- * @copyright (c) 2026 Jonas Kabelitz
- *
- * @package libsbx::math
- * @version 0.1.0
- * @since 2025-05-18
+ * @ingroup libsbx-math
  */
 
 #ifndef LIBSBX_MATH_BOX_HPP_

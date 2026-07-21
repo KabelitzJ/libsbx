@@ -224,21 +224,17 @@ struct fmt::formatter<sbx::math::basic_matrix3x3<Type>> {
 
   template<typename FormatContext>
   auto format(const sbx::math::basic_matrix3x3<Type>& matrix, FormatContext& context) const -> decltype(context.out()) {
-    if constexpr (sbx::math::is_floating_point_v<Type>) {
-      return fmt::format_to(context.out(), 
-        "\n{:.2f}, {:.2f}, {:.2f}\n{:.2f}, {:.2f}, {:.2f}\n{:.2f}, {:.2f}, {:.2f}", 
-        matrix[0][0], matrix[1][0], matrix[2][0],
-        matrix[0][1], matrix[1][1], matrix[2][1],
-        matrix[0][2], matrix[1][2], matrix[2][2]
-      );
-    } else {
-      return fmt::format_to(context.out(), 
-        "\n{}, {}, {}\n{}, {}, {}\n{}, {}, {}\n{}, {}, {}", 
-        matrix[0][0], matrix[1][0], matrix[2][0],
-        matrix[0][1], matrix[1][1], matrix[2][1],
-        matrix[0][2], matrix[1][2], matrix[2][2]
-      );
-    }
+    constexpr auto format = std::is_floating_point_v<Type> 
+      ? "\n{:.2f}, {:.2f}, {:.2f}\n{:.2f}, {:.2f}, {:.2f}\n{:.2f}, {:.2f}, {:.2f}"
+      : "\n{}, {}, {}\n{}, {}, {}\n{}, {}, {}\n{}, {}, {}";
+
+    return fmt::format_to(
+      context.out(), 
+      format, 
+      matrix[0][0], matrix[1][0], matrix[2][0],
+      matrix[0][1], matrix[1][1], matrix[2][1],
+      matrix[0][2], matrix[1][2], matrix[2][2]
+    );
   }
 
 }; // struct fmt::formatter

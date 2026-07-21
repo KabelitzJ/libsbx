@@ -400,9 +400,15 @@ target_sources(
       "${CMAKE_SOURCE_DIR}/libsbx/signals/slot_state.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/signals/to_weak.hpp"
 
+      "${CMAKE_SOURCE_DIR}/libsbx/units/area.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/units/dimension.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/units/length.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/units/mass.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/units/quantity.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/units/time.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/units/units.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/units/velocity.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/units/volume.hpp"
 
       "${CMAKE_SOURCE_DIR}/libsbx/utility/algorithm.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/utility/assert.hpp"

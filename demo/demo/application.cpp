@@ -4,6 +4,8 @@
 
 #include <libsbx/utility/logger.hpp>
 
+#include <libsbx/math/matrix4x4.hpp>
+
 #include <libsbx/core/engine.hpp>
 
 #include <libsbx/platform/platform_module.hpp>
@@ -17,7 +19,9 @@ static auto image = sbx::graphics::image_handle{};
 
 application::application()
 : sbx::core::application{},
-  _is_paused{false} {
+  _is_paused{false},
+  _time{0},
+  _fps{0} {
   auto& platform_module = sbx::core::engine::get_module<sbx::platform::platform_module>();
 
   platform_module.window().on_window_closed() += []([[maybe_unused]] const auto& event) {
@@ -37,8 +41,19 @@ application::application()
 }
 
 auto application::update() -> void {
+  using namespace sbx::units::literals;
+
   if (sbx::platform::input::is_key_pressed(sbx::platform::key::escape)) {
     sbx::core::engine::quit();
+  }
+
+  _time += sbx::core::engine::delta_time();
+
+  if (_time >= 1_s) {
+    sbx::utility::logger<"demo">::info("FPS: {}", _fps);
+
+    _time -= 1_s;
+    _fps = 0;
   }
 
   auto& graphics_module = sbx::core::engine::get_module<sbx::graphics::graphics_module>();
@@ -97,6 +112,8 @@ auto application::update() -> void {
   command_buffer->transition_image_layout(to_present_src);
   
   frame_context.end_frame();
+
+  ++_fps;
 }
 
 auto application::fixed_update() -> void {

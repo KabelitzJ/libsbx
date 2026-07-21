@@ -5,6 +5,8 @@
 
 #include <libsbx/core/application.hpp>
 
+#include <libsbx/units/units.hpp>
+
 namespace demo {
 
 class application : public sbx::core::application {
@@ -24,6 +26,9 @@ public:
 private:
 
   bool _is_paused;
+
+  sbx::units::seconds _time;
+  std::uint32_t _fps;
 
 }; // class application
 

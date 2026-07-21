@@ -33,7 +33,7 @@ namespace sbx::graphics {
  * the frame context, and hands them out. Driving the frame is the render module's job, which calls
  * `frame().begin_frame()` and `frame().end_frame()` during the render stage.
  */
-class graphics_module : public utility::noncopyable {
+class graphics_module final : public utility::noncopyable {
 
 public:
 

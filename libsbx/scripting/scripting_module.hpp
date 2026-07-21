@@ -17,7 +17,7 @@
 #include <libsbx/core/module.hpp>
 
 // #include <libsbx/scenes/node.hpp>
-// #include <libsbx/scenes/scenes_module.hpp>
+#include <libsbx/scenes/scenes_module.hpp>
 
 #include <libsbx/filesystem/filesystem_module.hpp>
 
@@ -39,8 +39,7 @@ class scripting_module final : public utility::noncopyable {
   
 public:
 
-  // inline static const auto is_registered = register_module(stage::normal, dependencies<scenes::scenes_module, filesystem::filesystem_module>{});
-  using dependencies = core::dependency_list<filesystem::filesystem_module>;
+  using dependencies = core::dependency_list<filesystem::filesystem_module, scenes::scenes_module>;
 
   scripting_module();
 

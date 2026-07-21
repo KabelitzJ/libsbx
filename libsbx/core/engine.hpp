@@ -21,9 +21,6 @@
 
 namespace sbx::core {
 
-template<module... Modules>
-class basic_engine;
-
 /**
  * @brief The engine core: timing state, cli args, application ownership and the static access surface. 
  * Driven by @ref basic_engine, which inherits from this class and provides the module composition.
@@ -86,6 +83,13 @@ protected:
 
 }; // class engine
 
+template<module... Modules>
+using module_list = utility::type_list<Modules...>;
+
+template<typename ModuleList>
+requires (utility::is_type_list_v<ModuleList>)
+class basic_engine;
+
 /**
  * @brief The composed engine: an explicit, ordered list of modules driving
  * the @ref engine core.
@@ -95,7 +99,7 @@ protected:
  * appear before the module itself.
  */
 template<module... Modules>
-class basic_engine final : public engine {
+class basic_engine<module_list<Modules...>> final : public engine {
 
   static_assert(utility::are_unique_v<Modules...>, "Modules must not be listed twice");
   static_assert(detail::dependencies_ordered_v<Modules...>, "Every module must be listed after all of its dependencies");

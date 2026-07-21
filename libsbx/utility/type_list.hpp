@@ -13,6 +13,15 @@ struct type_list {
   inline static constexpr auto size = sizeof...(Type);
 }; // struct type_list
 
+template<typename>
+struct is_type_list : std::false_type { };
+
+template<typename... Types>
+struct is_type_list<type_list<Types...>> : std::true_type { };
+
+template<typename Type>
+inline constexpr auto is_type_list_v = is_type_list<Type>::value;
+
 template<std::size_t, typename>
 struct type_list_element;
 

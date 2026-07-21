@@ -167,6 +167,8 @@ find_package(Python3 REQUIRED COMPONENTS Interpreter)
 target_sources(
   libsbx
   PRIVATE
+    "${CMAKE_SOURCE_DIR}/libsbx/assets/assets_module.cpp"
+
     "${CMAKE_SOURCE_DIR}/libsbx/core/core.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/core/engine.cpp"
 
@@ -207,6 +209,10 @@ target_sources(
 
     "${CMAKE_SOURCE_DIR}/libsbx/reflection/reflection.cpp"
 
+    "${CMAKE_SOURCE_DIR}/libsbx/render/render_module.cpp"
+
+    "${CMAKE_SOURCE_DIR}/libsbx/scenes/scenes_module.cpp"
+
     "${CMAKE_SOURCE_DIR}/libsbx/scripting/interop.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/scripting/scripting.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/scripting/scripting_module.cpp"
@@ -234,6 +240,8 @@ target_sources(
     FILE_SET headers TYPE HEADERS
     BASE_DIRS "${CMAKE_SOURCE_DIR}"
     FILES
+      "${CMAKE_SOURCE_DIR}/libsbx/assets/assets_module.hpp"
+
       "${CMAKE_SOURCE_DIR}/libsbx/containers/compressed_pair.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/containers/containers.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/containers/dense_map.hpp"
@@ -366,6 +374,10 @@ target_sources(
       "${CMAKE_SOURCE_DIR}/libsbx/reflection/enumerator.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/reflection/member.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/reflection/reflection.hpp"
+
+      "${CMAKE_SOURCE_DIR}/libsbx/render/render_module.hpp"
+
+      "${CMAKE_SOURCE_DIR}/libsbx/scenes/scenes_module.hpp"
 
       "${CMAKE_SOURCE_DIR}/libsbx/scripting/interop.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/scripting/scripting.hpp"

@@ -31,14 +31,14 @@ inline auto engine::get_application() -> Application& {
 }
 
 template<module... Modules>
-inline basic_engine<Modules...>::basic_engine(std::span<std::string_view> args)
+inline basic_engine<module_list<Modules...>>::basic_engine(std::span<std::string_view> args)
 : engine{args},
   _modules{} { }
 
 template<module... Modules>
 template<typename Application, typename... Args>
 requires (std::is_base_of_v<core::application, Application> && std::is_constructible_v<Application, Args...>)
-inline auto basic_engine<Modules...>::run(Args&&... args) -> void {
+inline auto basic_engine<module_list<Modules...>>::run(Args&&... args) -> void {
   utility::assert_that(!_is_running, "Engine instance is already running");
 
   _application = std::make_unique<Application>(std::forward<Args>(args)...);
@@ -57,14 +57,14 @@ inline auto basic_engine<Modules...>::run(Args&&... args) -> void {
 
 template<module... Modules>
 template<stage Stage>
-inline auto basic_engine<Modules...>::_dispatch() -> void {
+inline auto basic_engine<module_list<Modules...>>::_dispatch() -> void {
   _modules.for_each([](auto& module) {
     detail::invoke_stage_hook<Stage>(module);
   });
 }
 
 template<module... Modules>
-inline auto basic_engine<Modules...>::_loop() -> void {
+inline auto basic_engine<module_list<Modules...>>::_loop() -> void {
   using clock_type = std::chrono::steady_clock;
 
   // Longest frame the simulation will try to catch up on. Anything above

@@ -10,17 +10,37 @@
 
 #include <libsbx/platform/platform_module.hpp>
 
+#include <libsbx/filesystem/filesystem_module.hpp>
+
 #include <libsbx/graphics/graphics_module.hpp>
+
+#include <libsbx/assets/assets_module.hpp>
+
+#include <libsbx/scenes/scenes_module.hpp>
+
+#include <libsbx/scripting/scripting_module.hpp>
+
+#include <libsbx/render/render_module.hpp>
 
 #include <libsbx/ecs/registry.hpp>
 
 #include <demo/application.hpp>
 
+using module_list = sbx::core::module_list<
+  sbx::platform::platform_module,
+  sbx::filesystem::filesystem_module,
+  sbx::graphics::graphics_module,
+  sbx::assets::assets_module,
+  sbx::scenes::scenes_module,
+  sbx::scripting::scripting_module,
+  sbx::render::render_module
+>;
+
 auto main(int argc, const char** argv) -> int {
   auto args = std::vector<std::string_view>{argv, argv + argc};
 
   try {
-    auto engine = sbx::core::basic_engine<sbx::platform::platform_module, sbx::graphics::graphics_module>{args};
+    auto engine = sbx::core::basic_engine<module_list>{args};
 
     engine.run<demo::application>();
   } catch (const std::exception& exception) {

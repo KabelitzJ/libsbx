@@ -18,7 +18,7 @@
 
 namespace sbx::filesystem {
 
-class filesystem_module : public utility::noncopyable {
+class filesystem_module final : public utility::noncopyable {
     
 public:
 

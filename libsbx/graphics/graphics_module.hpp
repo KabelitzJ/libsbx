@@ -5,24 +5,34 @@
 
 #include <memory>
 
+#include <libsbx/utility/hash.hpp>
 #include <libsbx/utility/noncopyable.hpp>
 
 #include <libsbx/core/module.hpp>
 
 #include <libsbx/platform/platform_module.hpp>
 
+#include <libsbx/graphics/frame_context.hpp>
+
 #include <libsbx/graphics/commands/command_pool.hpp>
-#include <libsbx/graphics/commands/command_buffer.hpp>
 
 #include <libsbx/graphics/devices/instance.hpp>
 #include <libsbx/graphics/devices/physical_device.hpp>
 #include <libsbx/graphics/devices/logical_device.hpp>
 #include <libsbx/graphics/devices/allocator.hpp>
 #include <libsbx/graphics/devices/surface.hpp>
-#include <libsbx/graphics/devices/swapchain.hpp>
+
+#include <libsbx/graphics/resources/resource_registry.hpp>
 
 namespace sbx::graphics {
 
+/**
+ * @brief Owns the device and everything that lives for the whole run.
+ *
+ * The module participates in no engine stage. It holds the device objects, the resource pools and
+ * the frame context, and hands them out. Driving the frame is the render module's job, which calls
+ * `frame().begin_frame()` and `frame().end_frame()` during the render stage.
+ */
 class graphics_module : public utility::noncopyable {
 
 public:
@@ -32,8 +42,6 @@ public:
   graphics_module();
 
   ~graphics_module();
-
-  auto update() -> void;
 
   [[nodiscard]] auto instance() noexcept -> graphics::instance& {
     return _instance;
@@ -55,26 +63,24 @@ public:
     return _surface;
   }
 
-  [[nodiscard]] auto swapchain() noexcept -> graphics::swapchain& {
-    return *_swapchain;
+  /**
+   * @brief The frame loop: timeline, swapchain, per frame command buffers.
+   */
+  [[nodiscard]] auto frame_context() noexcept -> graphics::frame_context& {
+    return _frame_context;
+  }
+
+  /**
+   * @brief The resource pools. Retire with `frame().frame_index()`; collection happens in
+   * `frame_context::begin_frame`.
+   */
+  [[nodiscard]] auto resource_registry() noexcept -> graphics::resource_registry& {
+    return _resource_registry;
   }
 
   auto command_pool(const queue::type type, const std::thread::id& thread_id = std::this_thread::get_id()) -> const std::shared_ptr<command_pool>&;
 
 private:
-
-  struct per_frame_data {
-    // graphics
-    VkSemaphore image_available_semaphore{nullptr};
-    VkFence graphics_in_flight_fence{nullptr};
-    // compute
-    VkSemaphore compute_finished_semaphore{nullptr};
-    VkFence compute_in_flight_fence{nullptr};
-  }; // struct per_frame_data
-  
-  struct per_image_data {
-    VkSemaphore render_finished_semaphore{nullptr};
-  }; // struct per_image_data
 
   struct command_pool_key {
     queue::type type;
@@ -84,7 +90,9 @@ private:
   struct command_pool_key_hash {
     auto operator()(const command_pool_key& key) const noexcept -> std::size_t {
       auto hash = std::size_t{0};
+
       utility::hash_combine(hash, key.type, key.thread_id);
+
       return hash;
     }
   }; // struct command_pool_key_hash
@@ -93,15 +101,7 @@ private:
     auto operator()(const command_pool_key& lhs, const command_pool_key& rhs) const noexcept -> bool {
       return lhs.type == rhs.type && lhs.thread_id == rhs.thread_id;
     }
-  }; // struct command_pool_key_equal
-
-  auto _recreate_swapchain() -> void;
-
-  auto _recreate_per_frame_data() -> void;
-
-  auto _recreate_per_image_data() -> void;
-
-  auto _recreate_command_buffers() -> void;
+  }; // struct command_pool_key_equality
 
   graphics::instance _instance;
   graphics::physical_device _physical_device;
@@ -109,17 +109,10 @@ private:
   graphics::allocator _allocator;
   graphics::surface _surface;
 
-  std::unique_ptr<graphics::swapchain> _swapchain;
-
   std::unordered_map<command_pool_key, std::shared_ptr<graphics::command_pool>, command_pool_key_hash, command_pool_key_equality> _command_pools{};
 
-  std::uint32_t _current_frame;
-
-  std::array<per_frame_data, swapchain::max_frames_in_flight> _per_frame_data{};
-  std::vector<per_image_data> _per_image_data{};
-
-  std::vector<graphics::command_buffer> _graphics_command_buffers;
-  std::vector<graphics::command_buffer> _compute_command_buffers;
+  graphics::resource_registry _resource_registry{};
+  graphics::frame_context _frame_context{};
 
 }; // class graphics_module
 

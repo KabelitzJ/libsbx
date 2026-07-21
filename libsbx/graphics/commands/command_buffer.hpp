@@ -13,6 +13,9 @@
 
 #include <libsbx/graphics/commands/command_pool.hpp>
 
+#include <libsbx/graphics/resources/image.hpp>
+#include <libsbx/graphics/resources/buffer.hpp>
+
 namespace sbx::graphics {
 
 class command_buffer : public utility::noncopyable {
@@ -63,8 +66,8 @@ public:
     VkAccessFlags2 src_access_mask;
     std::uint32_t src_queue_family;
     std::uint32_t dst_queue_family;
-    VkImageLayout old_layout;
-    VkImageLayout new_layout;
+    graphics::image_layout old_layout;
+    graphics::image_layout new_layout;
   }; // struct image_release_data
 
   struct image_acquire_data {
@@ -76,18 +79,18 @@ public:
     VkAccessFlags2 dst_access_mask;
     std::uint32_t src_queue_family;
     std::uint32_t dst_queue_family;
-    VkImageLayout old_layout;
-    VkImageLayout new_layout;
+    graphics::image_layout old_layout;
+    graphics::image_layout new_layout;
   }; // struct image_acquire_data
 
   struct image_transition_data {
-    VkImage image;
+    graphics::image::handle_type image;
     VkPipelineStageFlags2 src_stage_mask;
     VkAccessFlags2 src_access_mask;
     VkPipelineStageFlags2 dst_stage_mask;
     VkAccessFlags2 dst_access_mask;
-    VkImageLayout old_layout;
-    VkImageLayout new_layout;
+    graphics::image_layout old_layout;
+    graphics::image_layout new_layout;
     VkImageAspectFlags aspect_mask{VK_IMAGE_ASPECT_COLOR_BIT};
     std::uint32_t base_mip_level{0u};
     std::uint32_t mip_levels{1u};

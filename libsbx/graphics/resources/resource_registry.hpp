@@ -14,6 +14,8 @@
 
 #include <libsbx/graphics/resources/resource_handle.hpp>
 #include <libsbx/graphics/resources/resource_pool.hpp>
+#include <libsbx/graphics/resources/image.hpp>
+#include <libsbx/graphics/resources/buffer.hpp>
 
 namespace sbx::graphics {
 
@@ -36,12 +38,6 @@ class basic_resource_registry : public utility::noncopyable {
   using type_list = utility::type_list<Types...>;
 
 public:
-
-  template<typename Type>
-  inline static constexpr auto index_of = utility::type_list_index_v<Type, type_list>;
-
-  template<typename Type>
-  inline static constexpr auto contains = (index_of<Type> < types::size);
 
   basic_resource_registry() = default;
 
@@ -130,6 +126,8 @@ private:
   std::tuple<resource_pool<Types>...> _pools{};
 
 }; // class basic_resource_registry
+
+using resource_registry = basic_resource_registry<image, buffer>;
 
 } // namespace sbx::graphics
 

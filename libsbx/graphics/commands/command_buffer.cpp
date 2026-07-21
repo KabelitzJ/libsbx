@@ -234,9 +234,8 @@ auto command_buffer::acquire_image_ownership(const std::vector<image_acquire_dat
     image_barrier.srcStageMask = VK_PIPELINE_STAGE_2_NONE_KHR;
     image_barrier.srcAccessMask = 0;
     image_barrier.dstStageMask = data.dst_stage_mask;
-    image_barrier.dstAccessMask = data.dst_access_mask;
-    image_barrier.oldLayout = data.old_layout;
-    image_barrier.newLayout = data.new_layout;
+    image_barrier.oldLayout = to_vk_enum<VkImageLayout>(data.old_layout);
+    image_barrier.newLayout = to_vk_enum<VkImageLayout>(data.new_layout);
     image_barrier.srcQueueFamilyIndex = data.src_queue_family;
     image_barrier.dstQueueFamilyIndex = data.dst_queue_family;
     image_barrier.image = data.image;
@@ -272,8 +271,8 @@ auto command_buffer::release_image_ownership(const std::vector<image_release_dat
     image_barrier.srcAccessMask = data.src_access_mask;
     image_barrier.dstStageMask = VK_PIPELINE_STAGE_2_NONE_KHR;
     image_barrier.dstAccessMask = 0;
-    image_barrier.oldLayout = data.old_layout;
-    image_barrier.newLayout = data.new_layout;
+    image_barrier.oldLayout = to_vk_enum<VkImageLayout>(data.old_layout);
+    image_barrier.newLayout = to_vk_enum<VkImageLayout>(data.new_layout);
     image_barrier.srcQueueFamilyIndex = data.src_queue_family;
     image_barrier.dstQueueFamilyIndex = data.dst_queue_family;
     image_barrier.image = data.image;
@@ -370,8 +369,8 @@ auto command_buffer::transition_image_layout(const image_transition_data& data) 
   image_barrier.srcAccessMask = data.src_access_mask;
   image_barrier.dstStageMask = data.dst_stage_mask;
   image_barrier.dstAccessMask = data.dst_access_mask;
-  image_barrier.oldLayout = data.old_layout;
-  image_barrier.newLayout = data.new_layout;
+  image_barrier.oldLayout = to_vk_enum<VkImageLayout>(data.old_layout);
+  image_barrier.newLayout = to_vk_enum<VkImageLayout>(data.new_layout);
   image_barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
   image_barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
   image_barrier.image = data.image;

@@ -19,6 +19,8 @@
 #include <libsbx/graphics/resources/resource_handle.hpp>
 #include <libsbx/graphics/resources/resource_pool.hpp>
 #include <libsbx/graphics/resources/resource_registry.hpp>
+#include <libsbx/graphics/resources/image.hpp>
+#include <libsbx/graphics/resources/buffer.hpp>
 
 #include <libsbx/graphics/graphics_module.hpp>
 #include <libsbx/graphics/validate.hpp>

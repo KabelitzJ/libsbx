@@ -7,7 +7,7 @@
 #include <memory>
 #include <vector>
 
-#include <vulkan/vulkan.hpp>
+#include <vulkan/vulkan.h>
 
 namespace sbx::graphics {
 
@@ -15,21 +15,21 @@ class swapchain {
 
 public:
 
+  using handle_type = VkSwapchainKHR;
+
   static constexpr auto max_frames_in_flight = std::uint32_t{2};
 
   swapchain(const std::unique_ptr<swapchain>& old_swapchain = nullptr);
 
   ~swapchain();
 
-  auto handle() const noexcept -> const VkSwapchainKHR&;
+  auto handle() const noexcept -> handle_type;
 
-  operator const VkSwapchainKHR&() const noexcept;
+  operator handle_type() const noexcept;
 
   auto extent() const noexcept -> const VkExtent2D&;
 
-  auto is_outdated(const VkExtent2D& extent) const noexcept -> bool {
-    return _extent.width != extent.width || _extent.height != extent.height;
-  }
+  auto is_outdated() const -> bool;
 
   auto active_image_index() const noexcept -> std::uint32_t;
 
@@ -55,9 +55,11 @@ public:
 
 private:
 
-  auto _choose_present_mode() const -> VkPresentModeKHR;
+  static auto _choose_extent(const VkSurfaceCapabilitiesKHR& capabilities) -> VkExtent2D;
 
-  auto _create_image_view(const VkImage& image, VkFormat format, VkImageAspectFlags aspect, VkImageView& image_view) -> void;
+  static auto _choose_present_mode() -> VkPresentModeKHR;
+
+  static auto _create_image_view(const VkImage& image, VkFormat format, VkImageAspectFlags aspect, VkImageView& image_view) -> void;
 
   VkExtent2D _extent{};
   VkPresentModeKHR _present_mode{};
@@ -72,7 +74,7 @@ private:
 	std::vector<VkImage> _images{};
   std::vector<VkImageView> _image_views{};
 
-	VkSwapchainKHR _handle{};
+	handle_type _handle{};
 
 }; // class swapchain
 

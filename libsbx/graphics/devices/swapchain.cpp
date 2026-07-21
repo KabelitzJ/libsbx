@@ -30,7 +30,6 @@ swapchain::swapchain(const std::unique_ptr<swapchain>& old_swapchain)
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 
   const auto& logical_device = graphics_module.logical_device();
-  const auto& physical_device = graphics_module.physical_device();
   const auto& surface = graphics_module.surface();
 
   const auto surface_capabilities = surface.capabilities();
@@ -65,11 +64,7 @@ swapchain::swapchain(const std::unique_ptr<swapchain>& old_swapchain)
 		}
 	}
 
-  auto capabilities = VkSurfaceCapabilitiesKHR{};
-
-  validate(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physical_device, surface, &capabilities), "vkGetPhysicalDeviceSurfaceCapabilitiesKHR");
-
-  _extent = capabilities.currentExtent;
+  _extent = _choose_extent(surface_capabilities);
   _format = surface_format.format;
 
 	auto swapchain_create_info = VkSwapchainCreateInfoKHR{};
@@ -147,16 +142,24 @@ swapchain::~swapchain() {
 	vkDestroySwapchainKHR(logical_device, _handle, nullptr);
 }
 
-auto swapchain::handle() const noexcept -> const VkSwapchainKHR& {
+auto swapchain::handle() const noexcept -> handle_type {
   return _handle;
 }
 
-swapchain::operator const VkSwapchainKHR&() const noexcept {
+swapchain::operator handle_type() const noexcept {
   return _handle;
 }
 
 auto swapchain::extent() const noexcept -> const VkExtent2D& {
   return _extent;
+}
+
+auto swapchain::is_outdated() const -> bool {
+  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
+
+  const auto extent = _choose_extent(graphics_module.surface().capabilities());
+
+  return _extent.width != extent.width || _extent.height != extent.height;
 }
 
 auto swapchain::active_image_index() const noexcept -> std::uint32_t {
@@ -223,7 +226,26 @@ auto swapchain::present(const VkSemaphore& wait_semaphore) -> VkResult {
 	return vkQueuePresentKHR(present_queue, &present_info);
 }
 
-auto swapchain::_choose_present_mode() const -> VkPresentModeKHR {
+auto swapchain::_choose_extent(const VkSurfaceCapabilitiesKHR& capabilities) -> VkExtent2D {
+  constexpr auto undefined_extent = std::numeric_limits<std::uint32_t>::max();
+
+  if (capabilities.currentExtent.width != undefined_extent && capabilities.currentExtent.height != undefined_extent) {
+    return capabilities.currentExtent;
+  }
+
+  auto& platform_module = core::engine::get_module<platform::platform_module>();
+
+  const auto& window = platform_module.window();
+
+  auto extent = VkExtent2D{window.width(), window.height()};
+
+  extent.width = std::clamp(extent.width, capabilities.minImageExtent.width, capabilities.maxImageExtent.width);
+  extent.height = std::clamp(extent.height, capabilities.minImageExtent.height, capabilities.maxImageExtent.height);
+
+  return extent;
+}
+
+auto swapchain::_choose_present_mode() -> VkPresentModeKHR {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 
   const auto& physical_device = graphics_module.physical_device();

@@ -5,7 +5,7 @@
 
 #include <thread>
 
-#include <vulkan/vulkan.hpp>
+#include <vulkan/vulkan.h>
 
 #include <libsbx/graphics/devices/logical_device.hpp>
 

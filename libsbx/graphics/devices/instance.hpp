@@ -3,7 +3,7 @@
 #ifndef LIBSBX_GRAPHICS_DEVICES_INSTANCE_HPP_
 #define LIBSBX_GRAPHICS_DEVICES_INSTANCE_HPP_
 
-#include <vulkan/vulkan.hpp>
+#include <vulkan/vulkan.h>
 
 #include <libsbx/utility/noncopyable.hpp>
 

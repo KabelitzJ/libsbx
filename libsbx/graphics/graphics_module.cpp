@@ -72,7 +72,7 @@ auto graphics_module::update() -> void {
 
   auto& frame_data = _per_frame_data[_current_frame];
 
-  if (!_swapchain || _swapchain->is_outdated(_surface.current_extent())) {
+  if (!_swapchain || _swapchain->is_outdated()) {
     _recreate_swapchain();
   }
 

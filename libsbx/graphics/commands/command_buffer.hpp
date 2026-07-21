@@ -5,7 +5,7 @@
 
 #include <memory>
 
-#include <vulkan/vulkan.hpp>
+#include <vulkan/vulkan.h>
 
 #include <libsbx/utility/noncopyable.hpp>
 

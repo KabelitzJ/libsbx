@@ -17,7 +17,7 @@ auto covers(const Type& available, const Type& required, const std::size_t heade
   const auto* required_bools = reinterpret_cast<const VkBool32*>(reinterpret_cast<const std::byte*>(&required) + header_size);
 
   for (auto i = std::size_t{0}; i < count; ++i) {
-    if (required_bools[i] == VK_TRUE && available_bools[i] != VK_TRUE) {
+    if (required_bools[i] == true && available_bools[i] != true) {
       return false;
     }
   }
@@ -36,7 +36,7 @@ auto merge(Type& out, const Type& required, const Type& optional, const Type& av
   const auto* available_bools = reinterpret_cast<const VkBool32*>(reinterpret_cast<const std::byte*>(&available) + header_size);
 
   for (auto i = std::size_t{0}; i < count; ++i) {
-    out_bools[i] = (required_bools[i] == VK_TRUE || (optional_bools[i] == VK_TRUE && available_bools[i] == VK_TRUE)) ? VK_TRUE : VK_FALSE;
+    out_bools[i] = (required_bools[i] == true || (optional_bools[i] == true && available_bools[i] == true)) ? true : false;
   }
 }
 
@@ -86,35 +86,35 @@ auto features::required() -> const features& {
   static auto features = graphics::features{};
 
   // Core
-  features.core().samplerAnisotropy = VK_TRUE;
-  features.core().multiDrawIndirect = VK_TRUE;
-  features.core().fillModeNonSolid = VK_TRUE;
-  features.core().independentBlend = VK_TRUE;
+  features.core().samplerAnisotropy = true;
+  features.core().multiDrawIndirect = true;
+  features.core().fillModeNonSolid = true;
+  features.core().independentBlend = true;
 
   // 1.1
-  features.vulkan11().shaderDrawParameters = VK_TRUE;
+  features.vulkan11().shaderDrawParameters = true;
 
   // 1.2 — bindless (descriptor indexing), BDA, indirect count, timeline
-  features.vulkan12().bufferDeviceAddress = VK_TRUE;
-  features.vulkan12().timelineSemaphore = VK_TRUE;
-  features.vulkan12().descriptorIndexing = VK_TRUE;
-  features.vulkan12().runtimeDescriptorArray = VK_TRUE;
-  features.vulkan12().shaderSampledImageArrayNonUniformIndexing = VK_TRUE;
-  features.vulkan12().shaderStorageBufferArrayNonUniformIndexing = VK_TRUE;
-  features.vulkan12().descriptorBindingSampledImageUpdateAfterBind = VK_TRUE;
-  features.vulkan12().descriptorBindingStorageImageUpdateAfterBind = VK_TRUE;
-  features.vulkan12().descriptorBindingStorageBufferUpdateAfterBind = VK_TRUE;
-  features.vulkan12().descriptorBindingUpdateUnusedWhilePending = VK_TRUE;
-  features.vulkan12().descriptorBindingPartiallyBound = VK_TRUE;
-  features.vulkan12().descriptorBindingVariableDescriptorCount = VK_TRUE;
-  features.vulkan12().drawIndirectCount = VK_TRUE;
-  features.vulkan12().scalarBlockLayout = VK_TRUE;
-  features.vulkan12().hostQueryReset = VK_TRUE;
+  features.vulkan12().bufferDeviceAddress = true;
+  features.vulkan12().timelineSemaphore = true;
+  features.vulkan12().descriptorIndexing = true;
+  features.vulkan12().runtimeDescriptorArray = true;
+  features.vulkan12().shaderSampledImageArrayNonUniformIndexing = true;
+  features.vulkan12().shaderStorageBufferArrayNonUniformIndexing = true;
+  features.vulkan12().descriptorBindingSampledImageUpdateAfterBind = true;
+  features.vulkan12().descriptorBindingStorageImageUpdateAfterBind = true;
+  features.vulkan12().descriptorBindingStorageBufferUpdateAfterBind = true;
+  features.vulkan12().descriptorBindingUpdateUnusedWhilePending = true;
+  features.vulkan12().descriptorBindingPartiallyBound = true;
+  features.vulkan12().descriptorBindingVariableDescriptorCount = true;
+  features.vulkan12().drawIndirectCount = true;
+  features.vulkan12().scalarBlockLayout = true;
+  features.vulkan12().hostQueryReset = true;
 
   // 1.3 — dynamic rendering, sync2
-  features.vulkan13().dynamicRendering = VK_TRUE;
-  features.vulkan13().synchronization2 = VK_TRUE;
-  features.vulkan13().maintenance4 = VK_TRUE;
+  features.vulkan13().dynamicRendering = true;
+  features.vulkan13().synchronization2 = true;
+  features.vulkan13().maintenance4 = true;
 
   return features;
 }
@@ -123,38 +123,38 @@ auto features::optional() -> const features& {
   static auto features = graphics::features{};
 
   // Core
-  features.core().sampleRateShading = VK_TRUE;
-  features.core().wideLines = VK_TRUE;
-  features.core().textureCompressionBC = VK_TRUE;
-  features.core().textureCompressionASTC_LDR = VK_TRUE;
-  features.core().textureCompressionETC2 = VK_TRUE;
-  features.core().vertexPipelineStoresAndAtomics = VK_TRUE;
-  features.core().fragmentStoresAndAtomics = VK_TRUE;
-  features.core().shaderStorageImageExtendedFormats = VK_TRUE;
-  features.core().shaderStorageImageWriteWithoutFormat = VK_TRUE;
-  features.core().shaderClipDistance = VK_TRUE;
-  features.core().shaderCullDistance = VK_TRUE;
-  features.core().geometryShader = VK_TRUE;
-  features.core().tessellationShader = VK_TRUE;
-  features.core().multiViewport = VK_TRUE;
-  features.core().drawIndirectFirstInstance = VK_TRUE;
-  features.core().shaderInt16 = VK_TRUE;
+  features.core().sampleRateShading = true;
+  features.core().wideLines = true;
+  features.core().textureCompressionBC = true;
+  features.core().textureCompressionASTC_LDR = true;
+  features.core().textureCompressionETC2 = true;
+  features.core().vertexPipelineStoresAndAtomics = true;
+  features.core().fragmentStoresAndAtomics = true;
+  features.core().shaderStorageImageExtendedFormats = true;
+  features.core().shaderStorageImageWriteWithoutFormat = true;
+  features.core().shaderClipDistance = true;
+  features.core().shaderCullDistance = true;
+  features.core().geometryShader = true;
+  features.core().tessellationShader = true;
+  features.core().multiViewport = true;
+  features.core().drawIndirectFirstInstance = true;
+  features.core().shaderInt16 = true;
 
   // 1.1
-  features.vulkan11().multiview = VK_TRUE;
+  features.vulkan11().multiview = true;
 
   // 1.2
-  features.vulkan12().shaderInt8 = VK_TRUE;
-  features.vulkan12().storagePushConstant8 = VK_TRUE;
-  features.vulkan12().storageBuffer8BitAccess = VK_TRUE;
-  features.vulkan12().shaderFloat16 = VK_TRUE;
+  features.vulkan12().shaderInt8 = true;
+  features.vulkan12().storagePushConstant8 = true;
+  features.vulkan12().storageBuffer8BitAccess = true;
+  features.vulkan12().shaderFloat16 = true;
 
   // 1.3
-  features.vulkan13().shaderDemoteToHelperInvocation = VK_TRUE;
+  features.vulkan13().shaderDemoteToHelperInvocation = true;
 
   // Extensions
-  features.compute_shader_derivatives().computeDerivativeGroupQuads = VK_TRUE;
-  features.compute_shader_derivatives().computeDerivativeGroupLinear = VK_TRUE;
+  features.compute_shader_derivatives().computeDerivativeGroupQuads = true;
+  features.compute_shader_derivatives().computeDerivativeGroupLinear = true;
 
   return features;
 }

@@ -52,6 +52,27 @@ struct type_list_index<Type, type_list<>> {
 template<typename Type, typename List>
 inline constexpr auto type_list_index_v = type_list_index<Type, List>::value;
 
+template<typename, typename>
+struct type_list_contains;
+
+template<typename Type>
+struct type_list_contains<Type, type_list<>> {
+  inline static constexpr auto value = false;
+}; // struct type_list_contains
+
+template<typename Type, typename First, typename... Other>
+struct type_list_contains<Type, type_list<First, Other...>> {
+  inline static constexpr auto value = type_list_contains<Type, type_list<Other...>>::value;
+}; // struct type_list_contains
+
+template<typename Type, typename... Other>
+struct type_list_contains<Type, type_list<Type, Other...>> {
+  inline static constexpr auto value = true;
+}; // struct type_list_contains
+
+template<typename Type, typename List>
+inline constexpr auto type_list_contains_v = type_list_contains<Type, List>::value;
+
 } // namespace sbx::utility
 
 #endif // LIBSBX_UTILITY_TYPE_LIST_HPP_

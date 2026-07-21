@@ -5,6 +5,7 @@
       "uri": "https://github.com/fmtlib/fmt",
       "tag": "11.2.0"
     },
+    "target": "fmt::fmt",
     "options": {
       "FMT_INSTALL": true
     }
@@ -15,9 +16,37 @@
       "uri": "https://github.com/gabime/spdlog",
       "tag": "v1.17.0"
     },
+    "target": "spdlog::spdlog",
     "options": {
       "SPDLOG_INSTALL": true,
       "SPDLOG_FMT_EXTERNAL": true
+    }
+  },
+  "zstd": {
+    "source": {
+      "type": "git",
+      "uri": "https://github.com/facebook/zstd",
+      "tag": "v1.5.7",
+      "subdir": "build/cmake"
+    },
+    "target": "libzstd_static",
+    "options": {
+      "ZSTD_BUILD_PROGRAMS": false,
+      "ZSTD_BUILD_SHARED": false,
+      "ZSTD_BUILD_TESTS": false
+    }
+  },
+  "lz4": {
+    "source": {
+      "type": "git",
+      "uri": "https://github.com/lz4/lz4",
+      "tag": "v1.10.0",
+      "subdir": "build/cmake"
+    },
+    "export": ["lz4_static"],
+    "options": {
+      "LZ4_BUILD_CLI": false,
+      "LZ4_BUILD_LEGACY_LZ4C": false
     }
   },
   "yaml-cpp": {
@@ -26,8 +55,11 @@
       "uri": "https://github.com/jbeder/yaml-cpp",
       "tag": "yaml-cpp-0.9.0"
     },
+    "target": "yaml-cpp::yaml-cpp",
     "options": {
-      "YAML_CPP_INSTALL": true
+      "YAML_CPP_INSTALL": true,
+      "YAML_CPP_BUILD_TESTS": false,
+      "YAML_CPP_BUILD_TOOLS": false
     }
   },
   "glfw": {
@@ -38,7 +70,9 @@
     },
     "options": {
       "GLFW_INSTALL": true,
-      "GLFW_BUILD_DOCS": false
+      "GLFW_BUILD_DOCS": false,
+      "GLFW_BUILD_TESTS": false,
+      "GLFW_BUILD_EXAMPLES": false
     }
   },
   "stb": {
@@ -58,7 +92,8 @@
       "tag": "v1.2"
     },
     "options": {
-      "MESHOPT_INSTALL": true
+      "MESHOPT_INSTALL": true,
+      "MESHOPT_BUILD_DEMO": false
     }
   },
   "Vulkan-Headers": {
@@ -67,6 +102,7 @@
       "uri": "https://github.com/KhronosGroup/Vulkan-Headers",
       "tag": "vulkan-sdk-1.4.350.0"
     },
+    "target": "Vulkan::Headers",
     "options": {
       "VULKAN_HEADERS_ENABLE_INSTALL": true
     }
@@ -77,8 +113,10 @@
       "uri": "https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator",
       "tag": "v3.4.0"
     },
+    "target": "GPUOpen::VulkanMemoryAllocator",
     "options": {
-      "VMA_ENABLE_INSTALL": true
+      "VMA_ENABLE_INSTALL": true,
+      "VMA_BUILD_SAMPLES": false
     }
   },
   "fastgltf": {
@@ -86,7 +124,8 @@
       "type": "git",
       "uri": "https://github.com/spnda/fastgltf",
       "tag": "v0.9.0"
-    }
+    },
+    "target": "fastgltf::fastgltf"
   },
   "TracyClient": {
     "condition": "SBX_ENABLE_PROFILING",
@@ -95,6 +134,7 @@
       "uri": "https://github.com/wolfpld/tracy",
       "tag": "v0.13.0"
     },
+    "target": "Tracy::TracyClient",
     "options": {
       "TRACY_ENABLE": true,
       "TRACY_ON_DEMAND": true

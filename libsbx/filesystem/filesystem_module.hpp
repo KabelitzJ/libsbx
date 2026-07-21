@@ -18,16 +18,15 @@
 
 namespace sbx::filesystem {
 
-class filesystem_module : public core::module<filesystem_module> {
-  inline static const auto is_registered = register_module(stage::pre);
-
+class filesystem_module : public utility::noncopyable {
+    
 public:
 
   filesystem_module();
 
-  ~filesystem_module() override;
+  ~filesystem_module();
 
-  auto update() -> void override;
+  auto update() -> void;
 
   template<typename Type, typename... Args>
   requires (std::is_base_of_v<filesystem_base, Type>)

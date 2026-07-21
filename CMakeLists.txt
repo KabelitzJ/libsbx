@@ -82,7 +82,7 @@ message(STATUS "SBX_PREFER_CPU_DEVICE: ${SBX_PREFER_CPU_DEVICE}")
 
 include(fetch_dependencies)
 
-fetch_dependencies("${CMAKE_SOURCE_DIR}/dependencies.json" "${CMAKE_BINARY_DIR}/dependencies")
+fetch_dependencies("${CMAKE_SOURCE_DIR}/dependencies.json" "${CMAKE_BINARY_DIR}/dependencies" "libsbxTargets")
 
 # Build metadata
 
@@ -169,6 +169,11 @@ target_sources(
   PRIVATE
     "${CMAKE_SOURCE_DIR}/libsbx/core/core.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/core/engine.cpp"
+
+    "${CMAKE_SOURCE_DIR}/libsbx/ecs/ecs.cpp"
+
+    "${CMAKE_SOURCE_DIR}/libsbx/filesystem/filesystem_module.cpp"
+
     "${CMAKE_SOURCE_DIR}/libsbx/graphics/commands/command_buffer.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/graphics/commands/command_pool.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/graphics/devices/allocator.cpp"
@@ -183,16 +188,99 @@ target_sources(
     "${CMAKE_SOURCE_DIR}/libsbx/graphics/devices/swapchain.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/graphics/graphics_module.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/graphics/validate.cpp"
+
+    "${CMAKE_SOURCE_DIR}/libsbx/math/color.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/math/math.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/math/matrix_cast.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/math/random.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/math/ray.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/math/uuid.cpp"
+
+    "${CMAKE_SOURCE_DIR}/libsbx/memory/memory.cpp"
+
     "${CMAKE_SOURCE_DIR}/libsbx/platform/input.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/platform/platform_module.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/platform/window.cpp"
+
+    "${CMAKE_SOURCE_DIR}/libsbx/reflection/reflection.cpp"
+
+    "${CMAKE_SOURCE_DIR}/libsbx/scripting/interop.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/scripting/scripting.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/scripting/scripting_module.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/scripting/managed/assembly.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/scripting/managed/attribute.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/scripting/managed/detail/type_cache.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/scripting/managed/field_info.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/scripting/managed/garbage_collection.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/scripting/managed/memory.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/scripting/managed/method_info.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/scripting/managed/object.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/scripting/managed/property_info.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/scripting/managed/runtime.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/scripting/managed/string.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/scripting/managed/type.cpp"
+
+    "${CMAKE_SOURCE_DIR}/libsbx/signals/signals.cpp"
+
+    "${CMAKE_SOURCE_DIR}/libsbx/utility/compression.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/utility/crc32.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/utility/timer.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/utility/utility.cpp"
+
   PUBLIC
     FILE_SET headers TYPE HEADERS
     BASE_DIRS "${CMAKE_SOURCE_DIR}"
     FILES
+      "${CMAKE_SOURCE_DIR}/libsbx/containers/compressed_pair.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/containers/containers.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/containers/dense_map.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/containers/octree.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/containers/ring_buffer.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/containers/stable_vector.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/containers/static_vector.hpp"
+
+      "${CMAKE_SOURCE_DIR}/libsbx/core/application.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/core/concepts.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/core/core.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/core/delegate.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/core/engine.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/core/engine.ipp"
+      "${CMAKE_SOURCE_DIR}/libsbx/core/exit.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/core/module.hpp"
+
+      "${CMAKE_SOURCE_DIR}/libsbx/ecs/component.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/ecs/ecs.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/ecs/entity.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/ecs/entity.ipp"
+      "${CMAKE_SOURCE_DIR}/libsbx/ecs/meta.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/ecs/range.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/ecs/registry.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/ecs/sparse_set.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/ecs/sparse_set.ipp"
+      "${CMAKE_SOURCE_DIR}/libsbx/ecs/storage.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/ecs/storage.ipp"
+      "${CMAKE_SOURCE_DIR}/libsbx/ecs/view.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/ecs/zip.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/ecs/detail/registry_storage_iterator.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/ecs/detail/sparse_set_iterator.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/ecs/detail/storage_iterator.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/ecs/detail/view_iterator.hpp"
+
+      "${CMAKE_SOURCE_DIR}/libsbx/filesystem/alias.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/filesystem/file_base.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/filesystem/file_info.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/filesystem/filesystem.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/filesystem/filesystem_base.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/filesystem/filesystem_module.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/filesystem/memory_file.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/filesystem/memory_filesystem.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/filesystem/native_file.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/filesystem/native_filesystem.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/filesystem/virtual_filesystem.hpp"
+
+      "${CMAKE_SOURCE_DIR}/libsbx/graphics/graphics.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/graphics/graphics_module.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/graphics/validate.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/graphics/commands/command_buffer.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/graphics/commands/command_pool.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/graphics/devices/allocator.hpp"
@@ -206,16 +294,144 @@ target_sources(
       "${CMAKE_SOURCE_DIR}/libsbx/graphics/devices/physical_device.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/graphics/devices/surface.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/graphics/devices/swapchain.hpp"
-      "${CMAKE_SOURCE_DIR}/libsbx/graphics/graphics_module.hpp"
-      "${CMAKE_SOURCE_DIR}/libsbx/graphics/validate.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/graphics/resources/resource_handle.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/graphics/resources/resource_pool.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/graphics/resources/resource_registry.hpp"
+
+      "${CMAKE_SOURCE_DIR}/libsbx/math/algorithm.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/math/algorithm.ipp"
+      "${CMAKE_SOURCE_DIR}/libsbx/math/angle.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/math/angle.ipp"
+      "${CMAKE_SOURCE_DIR}/libsbx/math/box.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/math/box.ipp"
+      "${CMAKE_SOURCE_DIR}/libsbx/math/color.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/math/concepts.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/math/constants.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/math/half.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/math/ieee_754_float.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/math/math.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/math/matrix.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/math/matrix.ipp"
+      "${CMAKE_SOURCE_DIR}/libsbx/math/matrix3x3.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/math/matrix3x3.ipp"
+      "${CMAKE_SOURCE_DIR}/libsbx/math/matrix4x4.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/math/matrix4x4.ipp"
+      "${CMAKE_SOURCE_DIR}/libsbx/math/matrix_cast.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/math/matrix_cast.ipp"
+      "${CMAKE_SOURCE_DIR}/libsbx/math/noise.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/math/plane.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/math/quaternion.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/math/quaternion.ipp"
+      "${CMAKE_SOURCE_DIR}/libsbx/math/random.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/math/ray.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/math/smooth_value.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/math/sphere.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/math/traits.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/math/uuid.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/math/vector.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/math/vector.ipp"
+      "${CMAKE_SOURCE_DIR}/libsbx/math/vector2.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/math/vector2.ipp"
+      "${CMAKE_SOURCE_DIR}/libsbx/math/vector3.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/math/vector3.ipp"
+      "${CMAKE_SOURCE_DIR}/libsbx/math/vector4.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/math/vector4.ipp"
+      "${CMAKE_SOURCE_DIR}/libsbx/math/volume.hpp"
+
+      "${CMAKE_SOURCE_DIR}/libsbx/memory/aligned_storage.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/memory/cache.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/memory/concepts.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/memory/counting_resource.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/memory/iterable_adaptor.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/memory/memory.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/memory/observer_ptr.hpp"
+
       "${CMAKE_SOURCE_DIR}/libsbx/platform/events.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/platform/input.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/platform/input_action.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/platform/input_mod.hpp"
-      "${CMAKE_SOURCE_DIR}/libsbx/platform/input.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/platform/key.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/platform/mouse_button.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/platform/platform_module.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/platform/window.hpp"
+
+      "${CMAKE_SOURCE_DIR}/libsbx/reflection/description.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/reflection/enumerator.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/reflection/member.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/reflection/reflection.hpp"
+
+      "${CMAKE_SOURCE_DIR}/libsbx/scripting/interop.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/scripting/scripting.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/scripting/scripting_module.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/scripting/managed/assembly.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/scripting/managed/attribute.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/scripting/managed/core.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/scripting/managed/field_info.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/scripting/managed/fwd.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/scripting/managed/garbage_collection.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/scripting/managed/memory.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/scripting/managed/message_type.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/scripting/managed/method_info.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/scripting/managed/object.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/scripting/managed/platform.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/scripting/managed/property_info.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/scripting/managed/runtime.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/scripting/managed/string.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/scripting/managed/type.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/scripting/managed/detail/backend.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/scripting/managed/detail/type_cache.hpp"
+
+      "${CMAKE_SOURCE_DIR}/libsbx/signals/cleanable.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/signals/connection.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/signals/copy_on_write.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/signals/function_traits.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/signals/object_ptr.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/signals/observer.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/signals/signal.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/signals/signals.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/signals/slot.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/signals/slot_state.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/signals/to_weak.hpp"
+
+      "${CMAKE_SOURCE_DIR}/libsbx/units/dimension.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/units/quantity.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/units/units.hpp"
+
+      "${CMAKE_SOURCE_DIR}/libsbx/utility/algorithm.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/utility/assert.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/utility/bitmask.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/utility/cast.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/utility/compression.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/utility/concepts.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/utility/crc32.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/utility/enable_private_constructor.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/utility/enum.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/utility/exception.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/utility/expected.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/utility/fast_mod.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/utility/hashed_string.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/utility/hash.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/utility/iterator.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/utility/layout.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/utility/lockable.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/utility/logger.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/utility/make_array.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/utility/multimap_key_range.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/utility/noncopyable.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/utility/overload.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/utility/primitive.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/utility/profiler.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/utility/small_string.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/utility/static_string.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/utility/string_literal.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/utility/target.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/utility/timer.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/utility/type_id.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/utility/type_list.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/utility/type_name.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/utility/utility.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/utility/zip.hpp"
+
   FILE_SET generated TYPE HEADERS
     BASE_DIRS "${CMAKE_BINARY_DIR}/generated"
     FILES
@@ -237,6 +453,8 @@ target_link_libraries(
     fmt::fmt
     glfw
     GPUOpen::VulkanMemoryAllocator
+    libzstd_static
+    lz4_static
     meshoptimizer
     Nethost::nethost
     slang::slang
@@ -282,26 +500,40 @@ target_compile_definitions(
     $<$<BOOL:${SBX_ENABLE_PROFILING}>:TRACY_ENABLE>
 )
 
+set(_sbx_warning_options_gnu_clang
+  -Wall
+  -Wextra
+  -Wpedantic
+  -Wcast-align
+  -Wconversion
+  -Wdouble-promotion
+  -Wformat=2
+  -Wnon-virtual-dtor
+  -Wnull-dereference
+  -Wold-style-cast
+  -Woverloaded-virtual
+  -Wsign-conversion
+  -Wunused
+)
+
+set(_sbx_warning_options_gnu
+  -Wduplicated-branches
+  -Wduplicated-cond
+  -Wlogical-op
+  -Wuseless-cast
+)
+
+set(_sbx_warning_options_msvc
+  /W4
+  /permissive-
+)
+
 target_compile_options(
   libsbx
   PRIVATE
-    -Wall
-    -Wextra
-    -Wnon-virtual-dtor
-    -Wold-style-cast
-    -Wcast-align
-    -Wunused
-    -Woverloaded-virtual
-    -Wpedantic
-    -Wconversion
-    -Wsign-conversion
-    -Wnull-dereference
-    -Wdouble-promotion
-    -Wformat=2
-    -Wduplicated-cond
-    -Wduplicated-branches
-    -Wlogical-op
-    -Wuseless-cast
+    "$<$<COMPILE_LANG_AND_ID:CXX,GNU,Clang,AppleClang>:${_sbx_warning_options_gnu_clang}>"
+    "$<$<COMPILE_LANG_AND_ID:CXX,GNU>:${_sbx_warning_options_gnu}>"
+    "$<$<COMPILE_LANG_AND_ID:CXX,MSVC>:${_sbx_warning_options_msvc}>"
 )
 
 set(_sbx_link_options)

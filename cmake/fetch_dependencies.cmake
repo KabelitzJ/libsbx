@@ -1,6 +1,18 @@
 include(FetchContent)
 
+# fetch_dependencies(<dependencies_file> <install_dir> [<export_set>])
+#
+# <export_set> is optional. If given, fallback INTERFACE targets created for
+# dependencies that expose no CMake target of their own are installed into that
+# export set, so consumers exporting their own targets do not fail with
+# "requires target X that is not in any export set".
 function(fetch_dependencies DEPENDENCIES_FILE INSTALL_DIR)
+  set(EXPORT_SET "")
+
+  if(ARGC GREATER 2)
+    set(EXPORT_SET "${ARGV2}")
+  endif()
+
   set(FETCHCONTENT_BASE_DIR "${INSTALL_DIR}")
 
   set(PATCH_HELPER "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/apply_patch.cmake")
@@ -30,17 +42,21 @@ function(fetch_dependencies DEPENDENCIES_FILE INSTALL_DIR)
   foreach(I RANGE ${DEP_LAST})
     string(JSON NAME MEMBER "${JSON}" ${I})
 
+    # Condition
+
     unset(ERR)
 
     string(JSON CONDITION ERROR_VARIABLE ERR GET "${JSON}" "${NAME}" condition)
 
     if(NOT ERR)
-      if(NOT DEFINED ${CONDITION} OR NOT ${${CONDITION}})
+      if(NOT DEFINED ${CONDITION} OR NOT "${${CONDITION}}")
         message(STATUS "  ${NAME}: skipped (condition '${CONDITION}' not met)")
 
         continue()
       endif()
     endif()
+
+    # Source
 
     string(JSON TYPE GET "${JSON}" "${NAME}" source type)
 
@@ -62,6 +78,24 @@ function(fetch_dependencies DEPENDENCIES_FILE INSTALL_DIR)
       message(STATUS "  ${NAME}: archive ${URI}")
     else()
       message(FATAL_ERROR "Unknown source type '${TYPE}' for dependency '${NAME}'")
+    endif()
+
+    # Source subdirectory
+    #
+    # Two uses:
+    #   1. The CMakeLists.txt is not at the repository root (lz4: build/cmake).
+    #   2. The dependency has no CMake at all. Point this at a directory that
+    #      contains no CMakeLists.txt; FetchContent then only downloads and
+    #      skips add_subdirectory, and the fallback below creates the target.
+
+    unset(ERR)
+
+    string(JSON SUBDIR ERROR_VARIABLE ERR GET "${JSON}" "${NAME}" source subdir)
+
+    if(NOT ERR)
+      list(APPEND DECLARE_ARGS SOURCE_SUBDIR "${SUBDIR}")
+
+      message(STATUS "    subdir: ${SUBDIR}")
     endif()
 
     # Patches
@@ -143,27 +177,93 @@ function(fetch_dependencies DEPENDENCIES_FILE INSTALL_DIR)
 
   endforeach()
 
-  if(DEPENDENCIES_TO_FETCH)
-    list(LENGTH DEPENDENCIES_TO_FETCH FETCH_TOTAL)
-
-    message(STATUS "Fetching ${FETCH_TOTAL} dependencies: ${DEPENDENCIES_TO_FETCH}")
-
-    FetchContent_MakeAvailable(${DEPENDENCIES_TO_FETCH})
-
-    foreach(NAME IN LISTS DEPENDENCIES_TO_FETCH)
-      if(NOT TARGET ${NAME})
-        string(TOLOWER "${NAME}" NAME_LOWER)
-        
-        add_library(${NAME} INTERFACE)
-        target_include_directories(${NAME} INTERFACE "${${NAME_LOWER}_SOURCE_DIR}")
-        
-        message(STATUS "  ${NAME}: Created automatic INTERFACE target")
-      endif()
-    endforeach()
-
-    message(STATUS "Dependencies resolved")
-  else()
+  if(NOT DEPENDENCIES_TO_FETCH)
     message(STATUS "No dependencies to fetch")
+
+    return()
   endif()
+
+  list(LENGTH DEPENDENCIES_TO_FETCH FETCH_TOTAL)
+
+  message(STATUS "Fetching ${FETCH_TOTAL} dependencies: ${DEPENDENCIES_TO_FETCH}")
+
+  FetchContent_MakeAvailable(${DEPENDENCIES_TO_FETCH})
+
+  # Target resolution
+
+  foreach(NAME IN LISTS DEPENDENCIES_TO_FETCH)
+    unset(ERR)
+
+    string(JSON ADOPT_COUNT ERROR_VARIABLE ERR LENGTH "${JSON}" "${NAME}" export)
+
+    if(NOT ERR AND ADOPT_COUNT GREATER 0)
+      if(NOT EXPORT_SET)
+        message(FATAL_ERROR "'${NAME}' requests export but no export set was passed to fetch_dependencies()")
+      endif()
+
+      math(EXPR ADOPT_LAST "${ADOPT_COUNT} - 1")
+
+      foreach(E RANGE ${ADOPT_LAST})
+        string(JSON ADOPT_TARGET GET "${JSON}" "${NAME}" export ${E})
+
+        if(NOT TARGET ${ADOPT_TARGET})
+          message(FATAL_ERROR "Export target '${ADOPT_TARGET}' for '${NAME}' does not exist")
+        endif()
+
+        install(TARGETS ${ADOPT_TARGET} EXPORT ${EXPORT_SET}
+          ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+          LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+          RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+          INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+
+        message(STATUS "  ${NAME}: adopted ${ADOPT_TARGET} into ${EXPORT_SET}")
+      endforeach()
+    endif()
+
+    if(TARGET ${NAME})
+      continue()
+    endif()
+
+    string(TOLOWER "${NAME}" NAME_LOWER)
+
+    unset(ERR)
+
+    string(JSON REAL_TARGET ERROR_VARIABLE ERR GET "${JSON}" "${NAME}" target)
+
+    if(NOT ERR)
+      if(NOT TARGET ${REAL_TARGET})
+        message(FATAL_ERROR "Target '${REAL_TARGET}' declared for '${NAME}' does not exist")
+      endif()
+
+      add_library(${NAME} ALIAS ${REAL_TARGET})
+
+      message(STATUS "  ${NAME}: aliased to ${REAL_TARGET}")
+
+      continue()
+    endif()
+
+    unset(ERR)
+
+    string(JSON INCLUDE_DIR ERROR_VARIABLE ERR GET "${JSON}" "${NAME}" include_dir)
+
+    if(ERR)
+      set(INCLUDE_DIR "")
+    endif()
+
+    message(WARNING "  ${NAME}: no CMake target found, creating INTERFACE fallback")
+
+    add_library(${NAME} INTERFACE)
+
+    target_include_directories(${NAME} INTERFACE
+      $<BUILD_INTERFACE:${${NAME_LOWER}_SOURCE_DIR}/${INCLUDE_DIR}>
+      $<INSTALL_INTERFACE:include>)
+
+    if(EXPORT_SET)
+      install(TARGETS ${NAME} EXPORT ${EXPORT_SET})
+      install(DIRECTORY "${${NAME_LOWER}_SOURCE_DIR}/${INCLUDE_DIR}/" DESTINATION include)
+    endif()
+  endforeach()
+
+  message(STATUS "Dependencies resolved")
 
 endfunction()

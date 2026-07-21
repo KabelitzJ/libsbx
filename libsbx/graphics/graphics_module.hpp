@@ -113,7 +113,6 @@ private:
 
   std::unordered_map<command_pool_key, std::shared_ptr<graphics::command_pool>, command_pool_key_hash, command_pool_key_equality> _command_pools{};
 
-  bool _is_framebuffer_resized;
   std::uint32_t _current_frame;
 
   std::array<per_frame_data, swapchain::max_frames_in_flight> _per_frame_data{};

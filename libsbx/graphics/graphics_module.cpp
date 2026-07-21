@@ -27,7 +27,6 @@ graphics_module::graphics_module()
   _logical_device{_physical_device},
   _allocator{_instance, _physical_device, _logical_device},
   _surface{_instance, _physical_device, _logical_device},
-  _is_framebuffer_resized{true},
   _current_frame{0} {
   const auto& properties = _physical_device.properties();
 
@@ -39,14 +38,6 @@ graphics_module::graphics_module()
   utility::logger<"graphics">::info("  Present: {}", _logical_device.queue<queue::type::present>().family());
   utility::logger<"graphics">::info("  Compute: {}", _logical_device.queue<queue::type::compute>().family());
   utility::logger<"graphics">::info("  Transfer: {}", _logical_device.queue<queue::type::transfer>().family());
-
-  auto& platform_module = core::engine::get_module<platform::platform_module>();
-
-  auto& window = platform_module.window();
-
-  window.on_framebuffer_resized() += [this]([[maybe_unused]] const platform::framebuffer_resized_event& event) {
-    _is_framebuffer_resized = true;
-  };
 }
 
 graphics_module::~graphics_module() {
@@ -81,9 +72,8 @@ auto graphics_module::update() -> void {
 
   auto& frame_data = _per_frame_data[_current_frame];
 
-  if (_is_framebuffer_resized || !_swapchain || _swapchain->is_outdated(_surface.current_extent())) {
+  if (!_swapchain || _swapchain->is_outdated(_surface.current_extent())) {
     _recreate_swapchain();
-    return;
   }
 
   const auto acquire_result = _swapchain->acquire_next_image(frame_data.image_available_semaphore, frame_data.graphics_in_flight_fence);
@@ -154,7 +144,7 @@ auto graphics_module::update() -> void {
   // Present the image to the screen
   const auto present_result = _swapchain->present(image_data.render_finished_semaphore);
 
-  if (present_result == VK_ERROR_OUT_OF_DATE_KHR || present_result == VK_SUBOPTIMAL_KHR || _is_framebuffer_resized) {
+  if (present_result == VK_ERROR_OUT_OF_DATE_KHR || present_result == VK_SUBOPTIMAL_KHR) {
     _recreate_swapchain();
   } else if (present_result != VK_SUCCESS) {
     throw std::runtime_error{"Failed to present swapchain image"};
@@ -181,9 +171,6 @@ auto graphics_module::_recreate_swapchain() -> void {
   _recreate_per_frame_data();
   _recreate_per_image_data();
   _recreate_command_buffers();
-
-  _is_framebuffer_resized = false;
-  _current_frame = 0;
 }
 
 auto graphics_module::_recreate_per_frame_data() -> void {

@@ -12,11 +12,12 @@
 #include <vector>
 
 #include <libsbx/utility/hashed_string.hpp>
+#include <libsbx/utility/exception.hpp>
 
 #include <libsbx/core/module.hpp>
 
-#include <libsbx/scenes/node.hpp>
-#include <libsbx/scenes/scenes_module.hpp>
+// #include <libsbx/scenes/node.hpp>
+// #include <libsbx/scenes/scenes_module.hpp>
 
 #include <libsbx/filesystem/filesystem_module.hpp>
 
@@ -34,21 +35,22 @@ struct internal_call {
   void* function;
 }; // struct internal_call
 
-class scripting_module final : public core::module<scripting_module> {
-
-  inline static const auto is_registered = register_module(stage::normal, dependencies<scenes::scenes_module, filesystem::filesystem_module>{});
-
+class scripting_module final : public utility::noncopyable {
+  
 public:
+
+  // inline static const auto is_registered = register_module(stage::normal, dependencies<scenes::scenes_module, filesystem::filesystem_module>{});
+  using dependencies = core::dependency_list<filesystem::filesystem_module>;
 
   scripting_module();
 
-  ~scripting_module() override;
+  ~scripting_module();
 
-  auto update() -> void override;
+  auto update() -> void;
 
   auto load_assembly(const std::filesystem::path& assembly_path, std::initializer_list<internal_call> bindings = {}) -> void;
 
-  auto instantiate(const scenes::node node, std::string_view class_name) -> managed::object;
+  // auto instantiate(const scenes::node node, std::string_view class_name) -> managed::object;
 
 private:
 

@@ -3,6 +3,8 @@
 
 #include <cmath>
 
+#include <fmt/format.h>
+
 #include <libsbx/units/dimension.hpp>
 
 namespace sbx::units {

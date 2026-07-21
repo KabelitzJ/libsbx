@@ -16,7 +16,7 @@
 namespace sbx::render {
 
 /**
- * @brief ...
+ * @brief Owns the render stages and drives the frame loop.
  */
 class render_module final : public utility::noncopyable {
 

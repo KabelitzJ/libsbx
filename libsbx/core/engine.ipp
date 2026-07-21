@@ -31,11 +31,13 @@ inline auto engine::get_application() -> Application& {
 }
 
 template<module... Modules>
+requires (utility::are_unique_v<Modules...> && detail::dependencies_ordered_v<Modules...>)
 inline basic_engine<module_list<Modules...>>::basic_engine(std::span<std::string_view> args)
 : engine{args},
   _modules{} { }
 
 template<module... Modules>
+requires (utility::are_unique_v<Modules...> && detail::dependencies_ordered_v<Modules...>)
 template<typename Application, typename... Args>
 requires (std::is_base_of_v<core::application, Application> && std::is_constructible_v<Application, Args...>)
 inline auto basic_engine<module_list<Modules...>>::run(Args&&... args) -> void {
@@ -56,6 +58,7 @@ inline auto basic_engine<module_list<Modules...>>::run(Args&&... args) -> void {
 }
 
 template<module... Modules>
+requires (utility::are_unique_v<Modules...> && detail::dependencies_ordered_v<Modules...>)
 template<stage Stage>
 inline auto basic_engine<module_list<Modules...>>::_dispatch() -> void {
   _modules.for_each([](auto& module) {
@@ -64,6 +67,7 @@ inline auto basic_engine<module_list<Modules...>>::_dispatch() -> void {
 }
 
 template<module... Modules>
+requires (utility::are_unique_v<Modules...> && detail::dependencies_ordered_v<Modules...>)
 inline auto basic_engine<module_list<Modules...>>::_loop() -> void {
   using clock_type = std::chrono::steady_clock;
 

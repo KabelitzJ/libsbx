@@ -99,10 +99,8 @@ class basic_engine;
  * appear before the module itself.
  */
 template<module... Modules>
+requires (utility::are_unique_v<Modules...> && detail::dependencies_ordered_v<Modules...>)
 class basic_engine<module_list<Modules...>> final : public engine {
-
-  static_assert(utility::are_unique_v<Modules...>, "Modules must not be listed twice");
-  static_assert(detail::dependencies_ordered_v<Modules...>, "Every module must be listed after all of its dependencies");
 
 public:
 

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Jonas Kabelitz
 #ifndef LIBSBX_CONTAINERS_DENSE_MAP_HPP_
 #define LIBSBX_CONTAINERS_DENSE_MAP_HPP_
 

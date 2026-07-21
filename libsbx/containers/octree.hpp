@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Jonas Kabelitz
 #ifndef LIBSBX_CONTAINERS_OCTREE_HPP_
 #define LIBSBX_CONTAINERS_OCTREE_HPP_
 

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Jonas Kabelitz
 #include <demo/application.hpp>
 
 #include <libsbx/utility/logger.hpp>

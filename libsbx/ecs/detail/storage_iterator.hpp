@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Jonas Kabelitz
 #ifndef LIBSBX_ECS_DETAIL_STORAGE_ITERATOR_HPP_
 #define LIBSBX_ECS_DETAIL_STORAGE_ITERATOR_HPP_
 

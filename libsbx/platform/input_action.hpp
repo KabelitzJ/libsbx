@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Jonas Kabelitz
 #ifndef LIBSBX_PLATFORM_INPUT_ACTION_HPP_
 #define LIBSBX_PLATFORM_INPUT_ACTION_HPP_
 

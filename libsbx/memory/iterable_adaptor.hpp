@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Jonas Kabelitz
 #ifndef LIBSBX_MEMORY_ITERABLE_ADAPTOR_HPP_
 #define LIBSBX_MEMORY_ITERABLE_ADAPTOR_HPP_
 

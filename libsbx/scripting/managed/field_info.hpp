@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Jonas Kabelitz
 #ifndef LIBSBX_SCRIPTING_MANAGED_FIELD_INFO_HPP_
 #define LIBSBX_SCRIPTING_MANAGED_FIELD_INFO_HPP_
 

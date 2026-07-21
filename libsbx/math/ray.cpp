@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Jonas Kabelitz
 #include <libsbx/math/ray.hpp>
 
 namespace sbx::math {

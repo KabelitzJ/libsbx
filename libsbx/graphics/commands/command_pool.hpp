@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Jonas Kabelitz
 #ifndef LIBSBX_GRAPHICS_COMMANDS_COMMAND_POOL_HPP_
 #define LIBSBX_GRAPHICS_COMMANDS_COMMAND_POOL_HPP_
 

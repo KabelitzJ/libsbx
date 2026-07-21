@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Jonas Kabelitz
 #include <libsbx/math/matrix.hpp>
 
 #include <libsbx/utility/make_array.hpp>

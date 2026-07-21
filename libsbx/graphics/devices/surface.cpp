@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Jonas Kabelitz
 #include <libsbx/graphics/devices/surface.hpp>
 
 #include <GLFW/glfw3.h>
@@ -23,6 +24,8 @@ surface::surface(const instance& instance, const physical_device& physical_devic
   auto& window = platform_module.window();
 
   validate(glfwCreateWindowSurface(instance, window, nullptr, &_handle), "glfwCreateWindowSurface");
+
+  logical_device.set_debug_name(_handle, "Surface");
 
   const auto& present_queue = logical_device.queue<queue::type::present>();
 

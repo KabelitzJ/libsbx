@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Jonas Kabelitz
 #ifndef LIBSBX_FILESYSTEM_MEMORY_FILESYSTEM_HPP_
 #define LIBSBX_FILESYSTEM_MEMORY_FILESYSTEM_HPP_
 

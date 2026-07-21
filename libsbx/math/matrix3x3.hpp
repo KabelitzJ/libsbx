@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Jonas Kabelitz
 #ifndef LIBSBX_MATH_MATRIX3X3_HPP_
 #define LIBSBX_MATH_MATRIX3X3_HPP_
 

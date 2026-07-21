@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Jonas Kabelitz
 #ifndef LIBSBX_CORE_MODULE_HPP_
 #define LIBSBX_CORE_MODULE_HPP_
 

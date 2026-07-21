@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Jonas Kabelitz
 #include <libsbx/graphics/devices/debug_messenger.hpp>
 
 #include <libsbx/utility/target.hpp>

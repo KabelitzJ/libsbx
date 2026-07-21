@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Jonas Kabelitz
 #ifndef LIBSBX_UTILITY_EXCEPTION_HPP_
 #define LIBSBX_UTILITY_EXCEPTION_HPP_
 

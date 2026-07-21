@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Jonas Kabelitz
 #include <libsbx/graphics/commands/command_pool.hpp>
 
 #include <libsbx/core/engine.hpp>

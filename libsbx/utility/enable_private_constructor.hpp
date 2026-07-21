@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Jonas Kabelitz
 #ifndef LIBSBX_UTILITY_ENABLE_PRIVATE_CONSTRUCTOR_HPP_
 #define LIBSBX_UTILITY_ENABLE_PRIVATE_CONSTRUCTOR_HPP_
 

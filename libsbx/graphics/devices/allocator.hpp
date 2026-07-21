@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Jonas Kabelitz
 #ifndef LIBSBX_GRAPHICS_DEVICES_ALLOCATOR_HPP_
 #define LIBSBX_GRAPHICS_DEVICES_ALLOCATOR_HPP_
 

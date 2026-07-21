@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Jonas Kabelitz
 #ifndef LIBSBX_CONTAINERS_STABLE_VECTOR_HPP_
 #define LIBSBX_CONTAINERS_STABLE_VECTOR_HPP_
 

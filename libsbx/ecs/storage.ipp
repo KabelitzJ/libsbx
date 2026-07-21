@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Jonas Kabelitz
 #include <libsbx/ecs/sparse_set.hpp>
 
 namespace sbx::ecs {

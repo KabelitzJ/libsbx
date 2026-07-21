@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Jonas Kabelitz
 #include <libsbx/scripting/managed/object.hpp>
 
 #include <libsbx/scripting/managed/detail/type_cache.hpp>

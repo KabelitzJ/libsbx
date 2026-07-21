@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Jonas Kabelitz
 #ifndef DEMO_APPLICATION_HPP_
 #define DEMO_APPLICATION_HPP_
 

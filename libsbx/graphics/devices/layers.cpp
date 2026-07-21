@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Jonas Kabelitz
 #include <libsbx/graphics/devices/layers.hpp>
 
 #include <vulkan/vulkan.h>

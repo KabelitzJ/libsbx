@@ -2,6 +2,9 @@
 // Copyright (c) 2026 Jonas Kabelitz
 #include <demo/application.hpp>
 
+#define STB_IMAGE_IMPLEMENTATION
+#include <stb_image.h>
+
 #include <libsbx/utility/logger.hpp>
 
 #include <libsbx/math/matrix4x4.hpp>

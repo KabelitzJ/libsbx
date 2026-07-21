@@ -472,7 +472,7 @@ target_link_libraries(
     Nethost::nethost
     slang::slang
     spdlog::spdlog
-    stb::stb
+    stb
     Vulkan::Headers
     Vulkan::Vulkan
     yaml-cpp::yaml-cpp

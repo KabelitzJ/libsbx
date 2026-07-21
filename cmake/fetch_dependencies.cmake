@@ -2,9 +2,9 @@ include(FetchContent)
 
 # fetch_dependencies(<dependencies_file> <install_dir> [<export_set>])
 #
-# <export_set> is optional. If given, fallback INTERFACE targets created for
-# dependencies that expose no CMake target of their own are installed into that
-# export set, so consumers exporting their own targets do not fail with
+# <export_set> is optional. If given, header-only targets created for
+# dependencies declared with "build": "none" are installed into that export
+# set, so consumers exporting their own targets do not fail with
 # "requires target X that is not in any export set".
 function(fetch_dependencies DEPENDENCIES_FILE INSTALL_DIR)
   set(EXPORT_SET "")
@@ -16,6 +16,14 @@ function(fetch_dependencies DEPENDENCIES_FILE INSTALL_DIR)
   set(FETCHCONTENT_BASE_DIR "${INSTALL_DIR}")
 
   set(PATCH_HELPER "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/apply_patch.cmake")
+
+  # Pointing SOURCE_SUBDIR at a path that contains no CMakeLists.txt makes
+  # FetchContent populate the sources and skip add_subdirectory. This is the
+  # documented way to consume a dependency that ships no CMake at all. The
+  # path must not exist in any dependency.
+  set(NO_CMAKE_SUBDIR "_fetch_no_cmake")
+
+  set(NO_CMAKE_DEPENDENCIES)
 
   get_filename_component(DEPS_DIR "${DEPENDENCIES_FILE}" DIRECTORY)
 
@@ -80,22 +88,51 @@ function(fetch_dependencies DEPENDENCIES_FILE INSTALL_DIR)
       message(FATAL_ERROR "Unknown source type '${TYPE}' for dependency '${NAME}'")
     endif()
 
-    # Source subdirectory
+    # Build mode
     #
-    # Two uses:
-    #   1. The CMakeLists.txt is not at the repository root (lz4: build/cmake).
-    #   2. The dependency has no CMake at all. Point this at a directory that
-    #      contains no CMakeLists.txt; FetchContent then only downloads and
-    #      skips add_subdirectory, and the fallback below creates the target.
+    #   cmake (default) The dependency configures itself via add_subdirectory.
+    #                   Use source.subdir when its CMakeLists.txt is not at the
+    #                   repository root (lz4, zstd: build/cmake).
+    #
+    #   none            The dependency ships no CMake. Only the sources are
+    #                   downloaded; a header-only target is created below.
+    #                   Set include_dir when the headers live in a
+    #                   subdirectory; it defaults to the repository root.
+
+    unset(ERR)
+
+    string(JSON BUILD_MODE ERROR_VARIABLE ERR GET "${JSON}" "${NAME}" build)
+
+    if(ERR)
+      set(BUILD_MODE "cmake")
+    endif()
 
     unset(ERR)
 
     string(JSON SUBDIR ERROR_VARIABLE ERR GET "${JSON}" "${NAME}" source subdir)
 
-    if(NOT ERR)
-      list(APPEND DECLARE_ARGS SOURCE_SUBDIR "${SUBDIR}")
+    if(ERR)
+      set(SUBDIR "")
+    endif()
 
-      message(STATUS "    subdir: ${SUBDIR}")
+    if(BUILD_MODE STREQUAL "none")
+      if(SUBDIR)
+        message(FATAL_ERROR "'${NAME}' sets build=none and source.subdir; these are mutually exclusive")
+      endif()
+
+      list(APPEND DECLARE_ARGS SOURCE_SUBDIR "${NO_CMAKE_SUBDIR}")
+
+      list(APPEND NO_CMAKE_DEPENDENCIES "${NAME}")
+
+      message(STATUS "    build: none (header-only)")
+    elseif(BUILD_MODE STREQUAL "cmake")
+      if(SUBDIR)
+        list(APPEND DECLARE_ARGS SOURCE_SUBDIR "${SUBDIR}")
+
+        message(STATUS "    subdir: ${SUBDIR}")
+      endif()
+    else()
+      message(FATAL_ERROR "Unknown build mode '${BUILD_MODE}' for dependency '${NAME}'")
     endif()
 
     # Patches
@@ -210,11 +247,14 @@ function(fetch_dependencies DEPENDENCIES_FILE INSTALL_DIR)
           message(FATAL_ERROR "Export target '${ADOPT_TARGET}' for '${NAME}' does not exist")
         endif()
 
-        install(TARGETS ${ADOPT_TARGET} EXPORT ${EXPORT_SET}
+        install(
+          TARGETS ${ADOPT_TARGET} 
+          EXPORT ${EXPORT_SET}
           ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
           LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
           RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-          INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+          INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+        )
 
         message(STATUS "  ${NAME}: adopted ${ADOPT_TARGET} into ${EXPORT_SET}")
       endforeach()
@@ -242,6 +282,16 @@ function(fetch_dependencies DEPENDENCIES_FILE INSTALL_DIR)
       continue()
     endif()
 
+    # Header-only target
+    #
+    # Reached only for build=none. A build=cmake dependency that produced no
+    # target named after its key and declared no 'target' is a configuration
+    # error, not something to paper over with an empty INTERFACE library.
+
+    if(NOT "${NAME}" IN_LIST NO_CMAKE_DEPENDENCIES)
+      message(FATAL_ERROR "'${NAME}' builds with CMake but defines no target '${NAME}' and declares no 'target' key")
+    endif()
+
     unset(ERR)
 
     string(JSON INCLUDE_DIR ERROR_VARIABLE ERR GET "${JSON}" "${NAME}" include_dir)
@@ -250,17 +300,42 @@ function(fetch_dependencies DEPENDENCIES_FILE INSTALL_DIR)
       set(INCLUDE_DIR "")
     endif()
 
-    message(WARNING "  ${NAME}: no CMake target found, creating INTERFACE fallback")
+    if(INCLUDE_DIR)
+      set(INCLUDE_ROOT "${${NAME_LOWER}_SOURCE_DIR}/${INCLUDE_DIR}")
+    else()
+      set(INCLUDE_ROOT "${${NAME_LOWER}_SOURCE_DIR}")
+    endif()
+
+    if(NOT IS_DIRECTORY "${INCLUDE_ROOT}")
+      message(FATAL_ERROR "Include directory for '${NAME}' does not exist: ${INCLUDE_ROOT}")
+    endif()
 
     add_library(${NAME} INTERFACE)
 
-    target_include_directories(${NAME} INTERFACE
-      $<BUILD_INTERFACE:${${NAME_LOWER}_SOURCE_DIR}/${INCLUDE_DIR}>
-      $<INSTALL_INTERFACE:include>)
+    target_include_directories(
+      ${NAME} 
+      INTERFACE 
+        $<BUILD_INTERFACE:${INCLUDE_ROOT}> 
+        $<INSTALL_INTERFACE:include>
+    )
+
+    message(STATUS "  ${NAME}: header-only target from ${INCLUDE_ROOT}")
 
     if(EXPORT_SET)
-      install(TARGETS ${NAME} EXPORT ${EXPORT_SET})
-      install(DIRECTORY "${${NAME_LOWER}_SOURCE_DIR}/${INCLUDE_DIR}/" DESTINATION include)
+      install(
+        TARGETS ${NAME} 
+        EXPORT ${EXPORT_SET}
+        INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+      )
+
+      install(
+        DIRECTORY "${INCLUDE_ROOT}/" 
+        DESTINATION include 
+        FILES_MATCHING 
+          PATTERN "*.h" 
+          PATTERN "*.hpp" 
+          PATTERN "*.inl"
+      )
     endif()
   endforeach()
 

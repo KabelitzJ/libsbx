@@ -30,6 +30,7 @@
       "subdir": "build/cmake"
     },
     "target": "libzstd_static",
+    "export": ["libzstd_static"],
     "options": {
       "ZSTD_BUILD_PROGRAMS": false,
       "ZSTD_BUILD_SHARED": false,
@@ -43,6 +44,7 @@
       "tag": "v1.10.0",
       "subdir": "build/cmake"
     },
+    "target": "lz4_static",
     "export": ["lz4_static"],
     "options": {
       "LZ4_BUILD_CLI": false,
@@ -78,12 +80,10 @@
   "stb": {
     "source": {
       "type": "git",
-      "uri": "https://github.com/KabelitzJ/stb",
-      "tag": "v1.0.0"
+      "uri": "https://github.com/nothings/stb",
+      "tag": "31c1ad37456438565541f4919958214b6e762fb4"
     },
-    "options": {
-      "STB_INSTALL": true
-    }
+    "build": "none"
   },
   "meshoptimizer": {
     "source": {

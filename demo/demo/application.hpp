@@ -3,6 +3,8 @@
 #ifndef DEMO_APPLICATION_HPP_
 #define DEMO_APPLICATION_HPP_
 
+#include <stb_image.h>
+
 #include <libsbx/core/application.hpp>
 
 #include <libsbx/units/units.hpp>

@@ -100,6 +100,9 @@ auto frame_context::begin_frame() -> memory::observer_ptr<command_buffer> {
   auto& resource_registry = graphics_module.resource_registry();
   resource_registry.collect_all(_timeline_value);
 
+  auto& bindless_table = graphics_module.bindless_table();
+  bindless_table.flush_writes();
+
   const auto slot = _slot();
 
   const auto acquire_result = _swapchain->acquire_next_image(_image_available[slot]);

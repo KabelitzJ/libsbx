@@ -26,7 +26,12 @@ graphics_module::graphics_module()
   _physical_device{_instance},
   _logical_device{_physical_device},
   _allocator{_instance, _physical_device, _logical_device},
-  _surface{_instance, _physical_device, _logical_device} {
+  _surface{_instance, _physical_device, _logical_device},
+  _command_pools{},
+  _resource_registry{},
+  _bindless_table{_physical_device, _logical_device},
+  _frame_context{},
+  _upload_context{} {
   const auto& properties = _physical_device.properties();
 
   utility::logger<"graphics">::info("Device: {} ({})", std::string_view{properties.deviceName}, _device_type_name(properties.deviceType));

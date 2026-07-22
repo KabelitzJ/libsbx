@@ -14,8 +14,8 @@
 
 #include <libsbx/graphics/resources/resource_handle.hpp>
 #include <libsbx/graphics/resources/resource_pool.hpp>
-#include <libsbx/graphics/resources/image.hpp>
 #include <libsbx/graphics/resources/buffer.hpp>
+#include <libsbx/graphics/resources/image.hpp>
 
 namespace sbx::graphics {
 
@@ -127,7 +127,7 @@ private:
 
 }; // class basic_resource_registry
 
-using resource_registry = basic_resource_registry<image, buffer>;
+using resource_registry = basic_resource_registry<buffer, image>;
 
 } // namespace sbx::graphics
 

@@ -7,6 +7,9 @@
 #include <span>
 #include <cstddef>
 
+#include <libsbx/utility/assert.hpp>
+#include <libsbx/utility/logger.hpp>
+
 #include <libsbx/math/vector3.hpp>
 
 #include <libsbx/core/engine.hpp>
@@ -170,6 +173,15 @@ auto render_module::_consume_packet(const render_packet& packet) -> void {
         upload_context.stage_image(_display_texture, bytes, sbx::graphics::image_layout::transfer_source_optimal);
 
         _display_ready = true;
+
+        auto& bindless = graphics_module.bindless_table();
+
+        const auto& texture = registry.get<sbx::graphics::image>(_display_texture);
+
+        const auto texture_index = bindless.register_sampled_image(texture.view());
+        const auto sampler_index = bindless.sampler_index(sbx::graphics::sampler::create_info{});
+
+        utility::logger<"render">::info("bindless: sampled image index {}, sampler index {}", texture_index, sampler_index);
       }
     }
 

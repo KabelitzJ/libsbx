@@ -12,9 +12,6 @@
 
 #include <libsbx/platform/platform_module.hpp>
 
-#include <libsbx/graphics/frame_context.hpp>
-#include <libsbx/graphics/upload_context.hpp>
-
 #include <libsbx/graphics/commands/command_pool.hpp>
 
 #include <libsbx/graphics/devices/instance.hpp>
@@ -24,6 +21,10 @@
 #include <libsbx/graphics/devices/surface.hpp>
 
 #include <libsbx/graphics/resources/resource_registry.hpp>
+
+#include <libsbx/graphics/frame_context.hpp>
+#include <libsbx/graphics/upload_context.hpp>
+#include <libsbx/graphics/bindless_table.hpp>
 
 namespace sbx::graphics {
 
@@ -83,6 +84,10 @@ public:
     return _resource_registry;
   }
 
+  [[nodiscard]] auto bindless_table() noexcept -> graphics::bindless_table& {
+    return _bindless_table;
+  }
+
   auto command_pool(const queue::type type, const std::thread::id& thread_id = std::this_thread::get_id()) -> const std::shared_ptr<command_pool>&;
 
 private:
@@ -114,11 +119,13 @@ private:
   graphics::allocator _allocator;
   graphics::surface _surface;
 
-  std::unordered_map<command_pool_key, std::shared_ptr<graphics::command_pool>, command_pool_key_hash, command_pool_key_equality> _command_pools{};
+  std::unordered_map<command_pool_key, std::shared_ptr<graphics::command_pool>, command_pool_key_hash, command_pool_key_equality> _command_pools;
 
-  graphics::resource_registry _resource_registry{};
-  graphics::frame_context _frame_context{};
-  graphics::upload_context _upload_context{};
+  graphics::resource_registry _resource_registry;
+  graphics::bindless_table _bindless_table;
+  graphics::frame_context _frame_context;
+  graphics::upload_context _upload_context;
+
 }; // class graphics_module
 
 } // namespace sbx::graphics

@@ -13,6 +13,7 @@
 #include <libsbx/platform/platform_module.hpp>
 
 #include <libsbx/graphics/frame_context.hpp>
+#include <libsbx/graphics/upload_context.hpp>
 
 #include <libsbx/graphics/commands/command_pool.hpp>
 
@@ -70,6 +71,10 @@ public:
     return _frame_context;
   }
 
+  [[nodiscard]] auto upload_context() noexcept -> graphics::upload_context& {
+    return _upload_context;
+  }
+
   /**
    * @brief The resource pools. Retire with `frame().frame_index()`; collection happens in
    * `frame_context::begin_frame`.
@@ -113,7 +118,7 @@ private:
 
   graphics::resource_registry _resource_registry{};
   graphics::frame_context _frame_context{};
-
+  graphics::upload_context _upload_context{};
 }; // class graphics_module
 
 } // namespace sbx::graphics

@@ -5,7 +5,13 @@
 
 #include <condition_variable>
 #include <mutex>
+#include <optional>
+#include <span>
 #include <thread>
+#include <utility>
+#include <vector>
+
+#include <libsbx/math/vector3.hpp>
 
 #include <libsbx/utility/noncopyable.hpp>
 
@@ -36,6 +42,8 @@ public:
 
   auto render() -> void;
 
+  auto upload_texture(std::vector<std::byte> pixels, std::uint32_t width, std::uint32_t height, graphics::format format) -> void;
+
 private:
 
   auto _start() -> void;
@@ -59,6 +67,19 @@ private:
   bool _is_running{false};
   bool _is_started{false};
 
+  struct pending_texture {
+    std::vector<std::byte> pixels;
+    std::uint32_t width;
+    std::uint32_t height;
+    graphics::format format;
+  }; // struct pending_texture
+
+  // Main thread posts here; the render thread drains it in _consume.
+  std::mutex _texture_mutex{};
+  std::optional<pending_texture> _pending_texture{};
+
+  graphics::image_handle _display_texture{};
+  bool _display_ready{false};
 
 }; // class render_module
 

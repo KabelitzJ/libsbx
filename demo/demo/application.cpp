@@ -15,10 +15,11 @@
 #include <libsbx/platform/input.hpp>
 
 #include <libsbx/graphics/graphics_module.hpp>
+#include <libsbx/graphics/types.hpp>
+
+#include <libsbx/render/render_module.hpp>
 
 namespace demo {
-
-static auto image = sbx::graphics::image_handle{};
 
 application::application()
 : sbx::core::application{},
@@ -31,16 +32,25 @@ application::application()
     sbx::core::engine::quit();
   };
 
-  auto& graphics_module = sbx::core::engine::get_module<sbx::graphics::graphics_module>();
+  auto& render_module = sbx::core::engine::get_module<sbx::render::render_module>();
 
-  auto& resource_registry = graphics_module.resource_registry();
+  auto width = std::int32_t{0};
+  auto height = std::int32_t{0};
+  auto channels = std::int32_t{0};
 
-  image = resource_registry.emplace<sbx::graphics::image>(sbx::graphics::image::create_info{
-    .extent = sbx::math::vector3u{1, 1, 1},
-    .format = sbx::graphics::format::r32g32b32a32_sfloat,
-    .usage = sbx::graphics::image_usage::sampled | sbx::graphics::image_usage::storage,
-    .name = std::string{"Test"}
-  });
+  auto* data = stbi_load("demo/assets/icons/logo-dark.png", &width, &height, &channels, STBI_rgb_alpha);
+
+  if (data != nullptr) {
+    const auto count = static_cast<std::size_t>(width) * static_cast<std::size_t>(height) * 4u;
+
+    auto pixels = std::vector<std::byte>{reinterpret_cast<const std::byte*>(data), reinterpret_cast<const std::byte*>(data) + count};
+
+    stbi_image_free(data);
+
+    render_module.upload_texture(std::move(pixels), static_cast<std::uint32_t>(width), static_cast<std::uint32_t>(height), sbx::graphics::format::r8g8b8a8_unorm);
+  } else {
+    sbx::utility::logger<"demo">::warn("Could not load image '{}'", "demo/assets/icons/logo-dark.png");
+  }
 }
 
 auto application::update() -> void {

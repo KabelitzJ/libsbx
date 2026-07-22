@@ -85,6 +85,7 @@ inline auto basic_engine<module_list<Modules...>>::_loop() -> void {
   while (_is_running) {
     const auto now = clock_type::now();
     const auto elapsed = std::chrono::duration_cast<std::chrono::duration<std::float_t>>(now - last).count();
+
     last = now;
 
     _delta_time = units::seconds{std::min(elapsed, max_delta_time)};

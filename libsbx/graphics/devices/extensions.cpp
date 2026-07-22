@@ -25,6 +25,10 @@ auto extensions::device() -> std::vector<const char*> {
     VK_KHR_COMPUTE_SHADER_DERIVATIVES_EXTENSION_NAME
   };
 
+#if defined(SBX_ENABLE_PROFILING)
+  required_extensions.push_back(VK_EXT_CALIBRATED_TIMESTAMPS_EXTENSION_NAME);
+#endif
+
   return required_extensions;
 }
 

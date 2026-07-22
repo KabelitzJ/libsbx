@@ -38,7 +38,7 @@ graphics_module::graphics_module()
   utility::logger<"graphics">::info("  Compute: {}", _logical_device.queue<queue::type::compute>().family());
   utility::logger<"graphics">::info("  Transfer: {}", _logical_device.queue<queue::type::transfer>().family());
 
-  SBX_PROFILE_GPU_CONTEXT_CREATE(queue::type::graphics, "graphics", _physical_device, _logical_device);
+  SBX_PROFILE_GPU_CONTEXT_CREATE(queue::type::graphics, "graphics", _instance, _physical_device, _logical_device);
 }
 
 graphics_module::~graphics_module() {

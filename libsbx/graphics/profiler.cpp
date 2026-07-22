@@ -8,6 +8,8 @@
 
 #include <magic_enum/magic_enum.hpp>
 
+#include <libsbx/utility/logger.hpp>
+
 #include <libsbx/graphics/commands/command_buffer.hpp>
 
 #include <libsbx/graphics/graphics_module.hpp>
@@ -17,7 +19,7 @@ namespace sbx::graphics::detail {
 
 static auto contexts = std::array<TracyVkCtx, magic_enum::enum_count<queue::type>()>{};
 
-auto register_gpu_context(const queue::type type, std::string_view name, const physical_device& physical_device, const logical_device& logical_device) -> void {
+auto register_gpu_context(const queue::type type, std::string_view name, const instance& instance, const physical_device& physical_device, const logical_device& logical_device) -> void {
   const auto index = utility::to_underlying(type);
 
   const auto& queue = logical_device.queue(type);
@@ -39,12 +41,24 @@ auto register_gpu_context(const queue::type type, std::string_view name, const p
   auto command_buffer = VkCommandBuffer{};
   validate(vkAllocateCommandBuffers(logical_device, &allocate_info, &command_buffer), "vkAllocateCommandBuffers");
 
+  auto* get_time_domains = reinterpret_cast<PFN_vkGetPhysicalDeviceCalibrateableTimeDomainsEXT>(vkGetInstanceProcAddr(instance, "vkGetPhysicalDeviceCalibrateableTimeDomainsEXT"));
+  auto* get_calibrated_timestamps = reinterpret_cast<PFN_vkGetCalibratedTimestampsEXT>(vkGetDeviceProcAddr(logical_device, "vkGetCalibratedTimestampsEXT"));
+
+  if (get_time_domains != nullptr && get_calibrated_timestamps != nullptr) {
+    contexts[index] = TracyVkContextCalibrated(physical_device, logical_device, queue, command_buffer, get_time_domains, get_calibrated_timestamps);
+  } else {
+    contexts[index] = TracyVkContext(physical_device, logical_device, queue, command_buffer);
+
+    utility::logger<"graphics">::warn("Calibrated timestamps unavailable; GPU/CPU timelines may drift");
+  }
+
   contexts[index] = TracyVkContext(physical_device, logical_device, queue, command_buffer);
+
   TracyVkContextName(contexts[index], name.data(), static_cast<std::uint16_t>(name.size()));
 
   vkFreeCommandBuffers(logical_device, command_pool, 1, &command_buffer);
   vkDestroyCommandPool(logical_device, command_pool, nullptr);
-  }
+}
 
 auto destroy_gpu_contexts() -> void {
   for (auto& context : contexts) {

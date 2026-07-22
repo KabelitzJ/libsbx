@@ -30,6 +30,10 @@ public:
 
   auto render() -> void;
 
+private:
+
+  auto _render_scene(graphics::command_buffer& command_buffer, graphics::frame_context& frame_context) -> void;
+
 }; // class render_module
 
 } // namespace sbx::render

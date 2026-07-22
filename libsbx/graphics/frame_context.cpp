@@ -13,6 +13,7 @@
 #include <libsbx/platform/platform_module.hpp>
 
 #include <libsbx/graphics/graphics_module.hpp>
+#include <libsbx/graphics/profiler.hpp>
 #include <libsbx/graphics/validate.hpp>
 
 namespace sbx::graphics {
@@ -76,6 +77,8 @@ auto frame_context::_initialize() -> void {
 }
 
 auto frame_context::begin_frame() -> memory::observer_ptr<command_buffer> {
+  SBX_PROFILE_SCOPE("frame_context::begin_frame");
+
   auto& platform_module = core::engine::get_module<platform::platform_module>();
 
   const auto& window = platform_module.window();
@@ -101,34 +104,39 @@ auto frame_context::begin_frame() -> memory::observer_ptr<command_buffer> {
     _wait_timeline(_frame_index - swapchain::max_frames_in_flight);
   }
 
-  validate(vkGetSemaphoreCounterValue(logical_device, _timeline, &_completed_value), "vkGetSemaphoreCounterValue");
+  validate(vkGetSemaphoreCounterValue(logical_device, _timeline, &_timeline_value), "vkGetSemaphoreCounterValue");
 
   // Everything retired at or before this value is no longer referenced by the device.
   auto& resource_registry = graphics_module.resource_registry();
-  resource_registry.collect_all(_completed_value);
+  resource_registry.collect_all(_timeline_value);
 
-  const auto acquire_result = _swapchain->acquire_next_image(_image_available[_slot()]);
+  const auto slot = _slot();
+
+  const auto acquire_result = _swapchain->acquire_next_image(_image_available[slot]);
 
   if (acquire_result == VK_ERROR_OUT_OF_DATE_KHR) {
     _recreate_swapchain();
 
-    // No image was acquired and the semaphore was not signalled, so there is nothing to submit.
-    return memory::observer_ptr<command_buffer>{nullptr};
+    return nullptr;
   }
 
   if (acquire_result != VK_SUCCESS && acquire_result != VK_SUBOPTIMAL_KHR) {
     throw std::runtime_error{"Failed to acquire swapchain image"};
   }
 
-  auto& command_buffer = _command_buffers[_slot()];
+  auto& command_buffer = _command_buffers[slot];
 
   command_buffer.reset();
   command_buffer.begin(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
 
-  return memory::observer_ptr<graphics::command_buffer>{&command_buffer};
+  SBX_PROFILE_GPU_COLLECT(command_buffer);
+
+  return memory::make_observer(command_buffer);
 }
 
 auto frame_context::end_frame() -> void {
+  SBX_PROFILE_SCOPE("frame_context::end_frame");
+
   utility::assert_that(is_initialized(), "Called end_frame without a matching begin_frame");
 
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
@@ -182,6 +190,8 @@ auto frame_context::end_frame() -> void {
 }
 
 auto frame_context::_recreate_swapchain() -> void {
+  SBX_PROFILE_SCOPE("frame_context::_recreate_swapchain");
+
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 
   const auto& logical_device = graphics_module.logical_device();
@@ -227,6 +237,8 @@ auto frame_context::_destroy_per_image_semaphores() -> void {
 }
 
 auto frame_context::_wait_timeline(const std::uint64_t value) const -> void {
+  SBX_PROFILE_SCOPE("frame_context::_wait_timeline");
+
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 
   const auto& logical_device = graphics_module.logical_device();

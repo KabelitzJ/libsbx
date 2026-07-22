@@ -6,6 +6,7 @@
 
 #include <libsbx/utility/logger.hpp>
 
+#include <libsbx/graphics/profiler.hpp>
 #include <libsbx/graphics/validate.hpp>
 
 namespace sbx::graphics {
@@ -36,10 +37,14 @@ graphics_module::graphics_module()
   utility::logger<"graphics">::info("  Present: {}", _logical_device.queue<queue::type::present>().family());
   utility::logger<"graphics">::info("  Compute: {}", _logical_device.queue<queue::type::compute>().family());
   utility::logger<"graphics">::info("  Transfer: {}", _logical_device.queue<queue::type::transfer>().family());
+
+  SBX_PROFILE_GPU_CONTEXT_CREATE(queue::type::graphics, "graphics", _physical_device, _logical_device);
 }
 
 graphics_module::~graphics_module() {
   _logical_device.wait_idle();
+
+  SBX_PROFILE_GPU_CONTEXT_DESTROY();
 }
 
 auto graphics_module::command_pool(const queue::type type, const std::thread::id& thread_id) -> const std::shared_ptr<graphics::command_pool>& {

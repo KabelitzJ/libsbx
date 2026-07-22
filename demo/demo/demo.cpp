@@ -26,6 +26,25 @@
 
 #include <demo/application.hpp>
 
+void* operator new(std::size_t count)
+{
+    auto ptr = std::malloc(count);
+    TracyAllocS(ptr, count, 10);
+    return ptr;
+}
+ 
+void operator delete(void* ptr) noexcept
+{
+    TracyFreeS(ptr, 10);
+    std::free(ptr);
+}
+
+void operator delete(void* ptr, std::size_t size) noexcept
+{
+    TracyFreeS(ptr, 10);
+    std::free(ptr);
+}
+
 using module_list = sbx::core::module_list<
   sbx::platform::platform_module,
   sbx::filesystem::filesystem_module,

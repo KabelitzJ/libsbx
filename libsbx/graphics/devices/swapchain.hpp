@@ -43,7 +43,11 @@ public:
 
   auto image(std::uint32_t index) const noexcept -> const VkImage&;
 
+  auto active_image() const noexcept -> const VkImage&;
+
   auto image_view(std::uint32_t index) const noexcept -> const VkImageView&;
+
+  auto active_image_view() const noexcept -> const VkImageView&;
 
   auto acquire_next_image(const VkSemaphore& image_available_semaphore = nullptr, const VkFence& fence = nullptr) -> VkResult;
 

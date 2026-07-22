@@ -186,8 +186,16 @@ auto swapchain::image(std::uint32_t index) const noexcept -> const VkImage& {
   return _images.at(index);
 }
 
+auto swapchain::active_image() const noexcept -> const VkImage& {
+  return _images.at(_active_image_index);
+}
+
 auto swapchain::image_view(std::uint32_t index) const noexcept -> const VkImageView& {
   return _image_views.at(index);
+}
+
+auto swapchain::active_image_view() const noexcept -> const VkImageView& {
+  return _image_views.at(_active_image_index);
 }
 
 auto swapchain::acquire_next_image(const VkSemaphore& image_available_semaphore, const VkFence& fence) -> VkResult {

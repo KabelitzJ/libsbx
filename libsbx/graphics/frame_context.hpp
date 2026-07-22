@@ -74,8 +74,8 @@ public:
    * @brief The highest timeline value the GPU has signalled, sampled once at the start of the
    * current frame so that every pool observes the same value.
    */
-  [[nodiscard]] auto completed_value() const noexcept -> std::uint64_t {
-    return _completed_value;
+  [[nodiscard]] auto timeline_value() const noexcept -> std::uint64_t {
+    return _timeline_value;
   }
 
   [[nodiscard]] auto is_initialized() const noexcept -> bool {
@@ -84,13 +84,6 @@ public:
 
   [[nodiscard]] auto swapchain() const noexcept -> const graphics::swapchain& {
     return *_swapchain;
-  }
-
-  /**
-   * @brief The swapchain image being rendered into this frame.
-   */
-  [[nodiscard]] auto active_image_index() const noexcept -> std::uint32_t {
-    return _swapchain->active_image_index();
   }
 
 private:
@@ -110,9 +103,9 @@ private:
   }
 
   VkSemaphore _timeline{};
+  std::uint64_t _timeline_value{0u};
 
   std::uint64_t _frame_index{1u};
-  std::uint64_t _completed_value{0u};
 
   std::unique_ptr<graphics::swapchain> _swapchain{};
 

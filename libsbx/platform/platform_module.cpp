@@ -33,7 +33,7 @@ platform_module::~platform_module() {
 }
 
 auto platform_module::pre_update() -> void {
-  SBX_PROFILE_FUNCTION();
+  SBX_PROFILE_SCOPE("platform_module::update");
 
   input::_transition_pressed_keys();
   input::_transition_pressed_mouse_buttons();

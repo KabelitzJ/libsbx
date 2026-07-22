@@ -192,6 +192,7 @@ target_sources(
     "${CMAKE_SOURCE_DIR}/libsbx/graphics/devices/swapchain.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/graphics/frame_context.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/graphics/graphics_module.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/graphics/profiler.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/graphics/validate.cpp"
 
     "${CMAKE_SOURCE_DIR}/libsbx/math/color.cpp"
@@ -310,6 +311,7 @@ target_sources(
       "${CMAKE_SOURCE_DIR}/libsbx/graphics/frame_context.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/graphics/graphics_module.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/graphics/graphics.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/graphics/profiler.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/graphics/types.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/graphics/validate.hpp"
 
@@ -480,6 +482,7 @@ target_link_libraries(
     GPUOpen::VulkanMemoryAllocator
     libzstd_static
     lz4_static
+    magic_enum::magic_enum
     meshoptimizer
     Nethost::nethost
     slang::slang

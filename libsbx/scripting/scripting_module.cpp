@@ -101,7 +101,7 @@ scripting_module::~scripting_module() {
 }
 
 auto scripting_module::update() -> void {
-  // SBX_PROFILE_SCOPE("scripting_module::update");
+  SBX_PROFILE_SCOPE("scripting_module::update");
 
   // auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
 

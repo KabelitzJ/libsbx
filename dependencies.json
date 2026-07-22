@@ -22,6 +22,19 @@
       "SPDLOG_FMT_EXTERNAL": true
     }
   },
+  "magic_enum": {
+    "source": {
+      "type": "git",
+      "uri": "https://github.com/Neargye/magic_enum",
+      "tag": "v0.9.8"
+    },
+    "target": "magic_enum::magic_enum",
+    "options": {
+      "MAGIC_ENUM_OPT_BUILD_EXAMPLES": false,
+      "MAGIC_ENUM_OPT_BUILD_TESTS": false,
+      "MAGIC_ENUM_OPT_INSTALL": true
+    }
+  },
   "zstd": {
     "source": {
       "type": "git",

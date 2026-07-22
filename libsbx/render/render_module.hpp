@@ -3,7 +3,9 @@
 #ifndef LIBSBX_RENDER_RENDER_MODULE_HPP_
 #define LIBSBX_RENDER_RENDER_MODULE_HPP_
 
+#include <array>
 #include <condition_variable>
+#include <memory>
 #include <mutex>
 #include <optional>
 #include <span>
@@ -20,6 +22,8 @@
 #include <libsbx/assets/assets_module.hpp>
 
 #include <libsbx/graphics/graphics_module.hpp>
+#include <libsbx/graphics/pipeline/shader.hpp>
+#include <libsbx/graphics/pipeline/graphics_pipeline.hpp>
 
 #include <libsbx/scenes/scenes_module.hpp>
 
@@ -78,8 +82,14 @@ private:
   std::mutex _texture_mutex{};
   std::optional<pending_texture> _pending_texture{};
 
-  graphics::image_handle _display_texture{};
-  bool _display_ready{false};
+  graphics::image_handle _texture{};
+  std::uint32_t _texture_index{0u};
+  std::uint32_t _sampler_index{0u};
+  std::uint64_t _texture_frame{0u};
+  bool _has_texture{false};
+
+  std::unique_ptr<graphics::shader> _shader{};
+  std::unique_ptr<graphics::graphics_pipeline> _pipeline{};
 
 }; // class render_module
 

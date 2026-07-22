@@ -22,6 +22,8 @@
 
 #include <libsbx/graphics/resources/resource_registry.hpp>
 
+#include <libsbx/graphics/pipeline/shader_compiler.hpp>
+
 #include <libsbx/graphics/frame_context.hpp>
 #include <libsbx/graphics/upload_context.hpp>
 #include <libsbx/graphics/bindless_table.hpp>
@@ -88,6 +90,10 @@ public:
     return _bindless_table;
   }
 
+  [[nodiscard]] auto shader_compiler() noexcept -> graphics::shader_compiler& {
+    return _shader_compiler;
+  }
+
   auto command_pool(const queue::type type, const std::thread::id& thread_id = std::this_thread::get_id()) -> const std::shared_ptr<command_pool>&;
 
 private:
@@ -125,6 +131,8 @@ private:
   graphics::bindless_table _bindless_table;
   graphics::frame_context _frame_context;
   graphics::upload_context _upload_context;
+
+  graphics::shader_compiler _shader_compiler;
 
 }; // class graphics_module
 

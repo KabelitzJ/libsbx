@@ -3,9 +3,10 @@
 #include <libsbx/render/render_module.hpp>
 
 #include <array>
-#include <vector>
-#include <span>
 #include <cstddef>
+#include <cstring>
+#include <span>
+#include <vector>
 
 #include <libsbx/utility/assert.hpp>
 #include <libsbx/utility/logger.hpp>
@@ -24,6 +25,11 @@
 #include <libsbx/graphics/profiler.hpp>
 
 namespace sbx::render {
+
+struct push_constants {
+  std::uint32_t image_index;
+  std::uint32_t sampler_index;
+}; // struct push_constants
 
 render_module::render_module() { }
 
@@ -134,9 +140,10 @@ auto render_module::_consume_packet(const render_packet& packet) -> void {
 
   auto& graphics_module = sbx::core::engine::get_module<sbx::graphics::graphics_module>();
 
-  auto& registry = graphics_module.resource_registry();
   auto& frame_context = graphics_module.frame_context();
+  auto& registry = graphics_module.resource_registry();
   auto& upload_context = graphics_module.upload_context();
+  auto& bindless_table = graphics_module.bindless_table();
 
   auto command_buffer = frame_context.begin_frame();
 
@@ -147,8 +154,27 @@ auto render_module::_consume_packet(const render_packet& packet) -> void {
   {
     SBX_PROFILE_GPU_SCOPE((*command_buffer), "render_module::render");
 
-    // Pick up a texture posted from the main thread and turn it into a GPU image here.
-    {
+    const auto& swapchain = frame_context.swapchain();
+    const auto extent = swapchain.extent();
+
+    if (_pipeline == nullptr) {
+      const auto entry_points = std::array<sbx::graphics::shader_compiler::entry_point_request, 2u>{
+        sbx::graphics::shader_compiler::entry_point_request{"vertex_main", VK_SHADER_STAGE_VERTEX_BIT},
+        sbx::graphics::shader_compiler::entry_point_request{"fragment_main", VK_SHADER_STAGE_FRAGMENT_BIT}
+      };
+
+      _shader = std::make_unique<sbx::graphics::shader>(graphics_module.shader_compiler(), "shaders/triangle/triangle.slang", entry_points);
+
+      _pipeline = std::make_unique<sbx::graphics::graphics_pipeline>(sbx::graphics::graphics_pipeline::create_info{
+        .shader = _shader.get(),
+        .color_formats = {static_cast<sbx::graphics::format>(swapchain.format())},
+        .name = "Triangle"
+      });
+    }
+
+    // Pick up the texture posted from the main thread, create + upload it, and register it in the
+    // bindless table. Record the frame so we know when it is resident.
+    if (!_has_texture) {
       auto pending = std::optional<pending_texture>{};
 
       {
@@ -157,115 +183,92 @@ auto render_module::_consume_packet(const render_packet& packet) -> void {
       }
 
       if (pending) {
-        if (_display_ready) {
-          registry.retire(_display_texture, frame_context.frame_index());
-        }
-
-        _display_texture = registry.emplace<sbx::graphics::image>(sbx::graphics::image::create_info{
+        _texture = registry.emplace<sbx::graphics::image>(sbx::graphics::image::create_info{
           .extent = sbx::math::vector3u{pending->width, pending->height, 1u},
           .format = pending->format,
-          .usage = sbx::graphics::image_usage::transfer_destination | sbx::graphics::image_usage::transfer_source | sbx::graphics::image_usage::sampled,
+          .usage = sbx::graphics::image_usage::transfer_destination | sbx::graphics::image_usage::sampled,
           .name = "Display Texture"
         });
 
         const auto bytes = std::span<const std::byte>{pending->pixels.data(), pending->pixels.size()};
 
-        upload_context.stage_image(_display_texture, bytes, sbx::graphics::image_layout::transfer_source_optimal);
+        upload_context.stage_image(_texture, bytes, sbx::graphics::image_layout::shader_read_only_optimal);
 
-        _display_ready = true;
+        const auto& texture = registry.get<sbx::graphics::image>(_texture);
 
-        auto& bindless = graphics_module.bindless_table();
-
-        const auto& texture = registry.get<sbx::graphics::image>(_display_texture);
-
-        const auto texture_index = bindless.register_sampled_image(texture.view());
-        const auto sampler_index = bindless.sampler_index(sbx::graphics::sampler::create_info{});
-
-        utility::logger<"render">::info("bindless: sampled image index {}, sampler index {}", texture_index, sampler_index);
+        _texture_index = bindless_table.register_sampled_image(texture.view());
+        _sampler_index = bindless_table.sampler_index(sbx::graphics::sampler::create_info{});
+        _texture_frame = frame_context.frame_index();
+        _has_texture = true;
       }
     }
 
     upload_context.flush(*command_buffer, frame_context.frame_index());
 
-    const auto& swapchain = frame_context.swapchain();
-    const auto extent = swapchain.extent();
+    auto to_color = sbx::graphics::command_buffer::image_transition_data{};
+    to_color.image = swapchain.active_image();
+    to_color.src_stage_mask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
+    to_color.src_access_mask = VK_ACCESS_2_NONE;
+    to_color.dst_stage_mask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
+    to_color.dst_access_mask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
+    to_color.old_layout = sbx::graphics::image_layout::undefined;
+    to_color.new_layout = sbx::graphics::image_layout::color_attachment_optimal;
 
-    if (_display_ready) {
-      auto to_transfer_dst = sbx::graphics::command_buffer::image_transition_data{};
-      to_transfer_dst.image = swapchain.active_image();
-      to_transfer_dst.src_stage_mask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
-      to_transfer_dst.src_access_mask = VK_ACCESS_2_NONE;
-      to_transfer_dst.dst_stage_mask = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
-      to_transfer_dst.dst_access_mask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
-      to_transfer_dst.old_layout = sbx::graphics::image_layout::undefined;
-      to_transfer_dst.new_layout = sbx::graphics::image_layout::transfer_destination_optimal;
+    command_buffer->transition_image_layout(to_color);
 
-      command_buffer->transition_image_layout(to_transfer_dst);
+    auto color_attachment = VkRenderingAttachmentInfo{};
+    color_attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+    color_attachment.imageView = swapchain.active_image_view();
+    color_attachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    color_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    color_attachment.clearValue.color = VkClearColorValue{{packet.clear_color.r(), packet.clear_color.g(), packet.clear_color.b(), packet.clear_color.a()}};
 
-      const auto& texture = registry.get<sbx::graphics::image>(_display_texture);
+    auto rendering_info = VkRenderingInfo{};
+    rendering_info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
+    rendering_info.renderArea = VkRect2D{VkOffset2D{0, 0}, extent};
+    rendering_info.layerCount = 1u;
+    rendering_info.colorAttachmentCount = 1u;
+    rendering_info.pColorAttachments = &color_attachment;
 
-      auto blit = VkImageBlit{};
-      blit.srcSubresource = VkImageSubresourceLayers{VK_IMAGE_ASPECT_COLOR_BIT, 0u, 0u, 1u};
-      blit.srcOffsets[0] = VkOffset3D{0, 0, 0};
-      blit.srcOffsets[1] = VkOffset3D{static_cast<std::int32_t>(texture.extent().x()), static_cast<std::int32_t>(texture.extent().y()), 1};
-      blit.dstSubresource = VkImageSubresourceLayers{VK_IMAGE_ASPECT_COLOR_BIT, 0u, 0u, 1u};
-      blit.dstOffsets[0] = VkOffset3D{0, 0, 0};
-      blit.dstOffsets[1] = VkOffset3D{static_cast<std::int32_t>(extent.width), static_cast<std::int32_t>(extent.height), 1};
+    command_buffer->begin_rendering(rendering_info);
 
-      vkCmdBlitImage(command_buffer->handle(), texture.handle(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, swapchain.active_image(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1u, &blit, VK_FILTER_LINEAR);
+    // Only sample once the upload has completed (texture resident) — by then flush_writes has
+    // applied the descriptor too. Until then, just show the clear.
+    if (_has_texture && frame_context.timeline_value() >= _texture_frame) {
+      vkCmdBindPipeline(command_buffer->handle(), _pipeline->bind_point(), *_pipeline);
 
-      auto to_present = sbx::graphics::command_buffer::image_transition_data{};
-      to_present.image = swapchain.active_image();
-      to_present.src_stage_mask = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
-      to_present.src_access_mask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
-      to_present.dst_stage_mask = VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT;
-      to_present.dst_access_mask = VK_ACCESS_2_NONE;
-      to_present.old_layout = sbx::graphics::image_layout::transfer_destination_optimal;
-      to_present.new_layout = sbx::graphics::image_layout::present_source;
+      const auto descriptor_set = bindless_table.descriptor_set();
+      vkCmdBindDescriptorSets(command_buffer->handle(), VK_PIPELINE_BIND_POINT_GRAPHICS, bindless_table.pipeline_layout(), 0u, 1u, &descriptor_set, 0u, nullptr);
 
-      command_buffer->transition_image_layout(to_present);
-    } else {
-      // No texture yet — clear to the packet colour.
-      auto to_color = sbx::graphics::command_buffer::image_transition_data{};
-      to_color.image = swapchain.active_image();
-      to_color.src_stage_mask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
-      to_color.src_access_mask = VK_ACCESS_2_NONE;
-      to_color.dst_stage_mask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
-      to_color.dst_access_mask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
-      to_color.old_layout = sbx::graphics::image_layout::undefined;
-      to_color.new_layout = sbx::graphics::image_layout::color_attachment_optimal;
+      const auto viewport = VkViewport{0.0f, 0.0f, static_cast<std::float_t>(extent.width), static_cast<std::float_t>(extent.height), 0.0f, 1.0f};
+      command_buffer->set_viewport(viewport);
 
-      command_buffer->transition_image_layout(to_color);
+      const auto scissor = VkRect2D{VkOffset2D{0, 0}, extent};
+      command_buffer->set_scissor(scissor);
 
-      auto color_attachment = VkRenderingAttachmentInfo{};
-      color_attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-      color_attachment.imageView = swapchain.active_image_view();
-      color_attachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-      color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-      color_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-      color_attachment.clearValue.color = VkClearColorValue{{packet.clear_color.r(), packet.clear_color.g(), packet.clear_color.b(), packet.clear_color.a()}};
+      const auto values = push_constants{_texture_index, _sampler_index};
 
-      auto rendering_info = VkRenderingInfo{};
-      rendering_info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
-      rendering_info.renderArea = VkRect2D{VkOffset2D{0, 0}, extent};
-      rendering_info.layerCount = 1u;
-      rendering_info.colorAttachmentCount = 1u;
-      rendering_info.pColorAttachments = &color_attachment;
+      auto range = std::array<std::byte, sbx::graphics::bindless_table::push_constant_size>{};
+      std::memcpy(range.data(), &values, sizeof(push_constants));
 
-      command_buffer->begin_rendering(rendering_info);
-      command_buffer->end_rendering();
+      vkCmdPushConstants(command_buffer->handle(), bindless_table.pipeline_layout(), VK_SHADER_STAGE_ALL, 0u, static_cast<std::uint32_t>(range.size()), range.data());
 
-      auto to_present = sbx::graphics::command_buffer::image_transition_data{};
-      to_present.image = swapchain.active_image();
-      to_present.src_stage_mask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
-      to_present.src_access_mask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
-      to_present.dst_stage_mask = VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT;
-      to_present.dst_access_mask = VK_ACCESS_2_NONE;
-      to_present.old_layout = sbx::graphics::image_layout::color_attachment_optimal;
-      to_present.new_layout = sbx::graphics::image_layout::present_source;
-
-      command_buffer->transition_image_layout(to_present);
+      command_buffer->draw(3u, 1u, 0u, 0u);
     }
+
+    command_buffer->end_rendering();
+
+    auto to_present = sbx::graphics::command_buffer::image_transition_data{};
+    to_present.image = swapchain.active_image();
+    to_present.src_stage_mask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
+    to_present.src_access_mask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
+    to_present.dst_stage_mask = VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT;
+    to_present.dst_access_mask = VK_ACCESS_2_NONE;
+    to_present.old_layout = sbx::graphics::image_layout::color_attachment_optimal;
+    to_present.new_layout = sbx::graphics::image_layout::present_source;
+
+    command_buffer->transition_image_layout(to_present);
   }
 
   frame_context.end_frame();

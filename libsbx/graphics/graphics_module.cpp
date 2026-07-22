@@ -31,7 +31,8 @@ graphics_module::graphics_module()
   _resource_registry{},
   _bindless_table{_physical_device, _logical_device},
   _frame_context{},
-  _upload_context{} {
+  _upload_context{},
+  _shader_compiler{} {
   const auto& properties = _physical_device.properties();
 
   utility::logger<"graphics">::info("Device: {} ({})", std::string_view{properties.deviceName}, _device_type_name(properties.deviceType));

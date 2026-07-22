@@ -378,6 +378,7 @@ target_sources(
       "${CMAKE_SOURCE_DIR}/libsbx/reflection/reflection.hpp"
 
       "${CMAKE_SOURCE_DIR}/libsbx/render/render_module.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/render/render_packet.hpp"
 
       "${CMAKE_SOURCE_DIR}/libsbx/scenes/scenes_module.hpp"
 

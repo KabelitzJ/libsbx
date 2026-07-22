@@ -3,6 +3,10 @@
 #ifndef LIBSBX_RENDER_RENDER_MODULE_HPP_
 #define LIBSBX_RENDER_RENDER_MODULE_HPP_
 
+#include <condition_variable>
+#include <mutex>
+#include <thread>
+
 #include <libsbx/utility/noncopyable.hpp>
 
 #include <libsbx/core/module.hpp>
@@ -12,6 +16,8 @@
 #include <libsbx/graphics/graphics_module.hpp>
 
 #include <libsbx/scenes/scenes_module.hpp>
+
+#include <libsbx/render/render_packet.hpp>
 
 namespace sbx::render {
 
@@ -32,7 +38,27 @@ public:
 
 private:
 
-  auto _render_scene(graphics::command_buffer& command_buffer, graphics::frame_context& frame_context) -> void;
+  auto _start() -> void;
+
+  auto _stop() -> void;
+
+  auto _render_loop() -> void;
+
+  [[nodiscard]] auto _build_packet() -> render_packet;
+
+  auto _consume_packet(const render_packet& packet) -> void;
+
+  std::thread _thread{};
+
+  std::mutex _mutex{};
+  std::condition_variable _has_produced{};
+  std::condition_variable _has_consumed{};
+
+  render_packet _packet{};
+  bool _has_packet{false};
+  bool _is_running{false};
+  bool _is_started{false};
+
 
 }; // class render_module
 

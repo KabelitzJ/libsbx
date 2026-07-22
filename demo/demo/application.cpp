@@ -49,17 +49,6 @@ auto application::update() -> void {
   if (sbx::platform::input::is_key_pressed(sbx::platform::key::escape)) {
     sbx::core::engine::quit();
   }
-
-  _time += sbx::core::engine::delta_time();
-
-  if (_time >= 1_s) {
-    sbx::utility::logger<"demo">::info("FPS: {}", _fps);
-
-    _time -= 1_s;
-    _fps = 0;
-  }
-
-  ++_fps;
 }
 
 auto application::fixed_update() -> void {

@@ -10,8 +10,6 @@
 
 #include <libsbx/core/engine.hpp>
 
-#include <libsbx/platform/platform_module.hpp>
-
 #include <libsbx/graphics/graphics_module.hpp>
 #include <libsbx/graphics/profiler.hpp>
 #include <libsbx/graphics/validate.hpp>
@@ -78,14 +76,6 @@ auto frame_context::_initialize() -> void {
 
 auto frame_context::begin_frame() -> memory::observer_ptr<command_buffer> {
   SBX_PROFILE_SCOPE("frame_context::begin_frame");
-
-  auto& platform_module = core::engine::get_module<platform::platform_module>();
-
-  const auto& window = platform_module.window();
-
-  if (window.is_iconified()) {
-    return memory::observer_ptr<command_buffer>{nullptr};
-  }
 
   if (!is_initialized()) {
     _initialize();

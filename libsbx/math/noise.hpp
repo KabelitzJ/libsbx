@@ -302,7 +302,7 @@ private:
     return ((h & 1) ? -u : u) + ((h & 2) ? -2.0f * v : 2.0f * v);
   }
 
-  static constexpr float grad(std::int32_t hash, std::float_t x, std::float_t y, std::float_t z) {
+  static constexpr auto grad(std::int32_t hash, std::float_t x, std::float_t y, std::float_t z) -> std::float_t {
     const auto h = hash & 15;
     const auto u = h < 8 ? x : y; 
     const auto v = h < 4 ? y : h == 12 || h == 14 ? x : z;

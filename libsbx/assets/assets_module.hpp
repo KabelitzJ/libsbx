@@ -24,6 +24,7 @@
 
 #include <libsbx/assets/asset_handle.hpp>
 #include <libsbx/assets/texture.hpp>
+#include <libsbx/assets/mesh.hpp>
 
 namespace sbx::assets {
 
@@ -44,12 +45,20 @@ public:
   auto load_texture(const std::filesystem::path& path) -> texture_handle;
 
   /**
+   * @brief Main thread. Loads (or returns the already-loaded) mesh at @p path via fastgltf, queues
+   * the GPU upload, and returns a handle immediately. Drawable once resident.
+   */
+  auto load_mesh(const std::filesystem::path& path) -> mesh_handle;
+
+  /**
    * @brief Render thread. Turns queued texture loads into GPU images + bindless writes. Copies are
    * recorded by the caller's subsequent upload_context::flush.
    */
   auto process_uploads(std::uint64_t frame_index) -> void;
 
   [[nodiscard]] auto is_resident(const texture_handle& texture) const -> bool;
+
+  [[nodiscard]] auto is_resident(const mesh_handle& mesh) const -> bool;
 
 private:
 
@@ -61,12 +70,21 @@ private:
     graphics::format format;
   }; // struct pending_texture_upload
 
+  struct pending_mesh_upload {
+    std::shared_ptr<mesh> record;
+    std::vector<vertex> vertices;
+    std::vector<std::uint32_t> indices;
+  }; // struct pending_mesh_upload
+
   mutable std::mutex _mutex{};
 
   std::unordered_map<std::string, std::shared_ptr<texture>> _textures{};
-  std::vector<pending_texture_upload> _pending{};
+  std::vector<pending_texture_upload> _pending_textures{};
   std::unordered_map<std::uint32_t, graphics::image_handle> _images{};
   std::unordered_map<std::uint32_t, std::uint64_t> _resident_frame{};
+
+  std::unordered_map<std::string, std::shared_ptr<mesh>> _meshes{};
+  std::vector<pending_mesh_upload> _pending_meshes{};
 
 }; // class assets_module
 

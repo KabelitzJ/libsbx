@@ -57,14 +57,67 @@ auto upload_context::stage_image(image_handle destination, std::span<const std::
   });
 }
 
+auto upload_context::stage_buffer(buffer_handle destination, std::span<const std::byte> data, buffer::size_type destination_offset) -> void {
+  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
+
+  auto& registry = graphics_module.resource_registry();
+
+  const auto staging = registry.emplace<buffer>(buffer::create_info{
+    .size = static_cast<buffer::size_type>(data.size()),
+    .usage = buffer_usage::transfer_source,
+    .memory = memory_usage::host_write,
+    .name = "Staging"
+  });
+
+  registry.get<buffer>(staging).write(data.data(), static_cast<buffer::size_type>(data.size()));
+
+  _pending_buffers.push_back(pending_buffer{
+    .destination = destination,
+    .staging = staging,
+    .size = static_cast<buffer::size_type>(data.size()),
+    .destination_offset = destination_offset
+  });
+}
+
 auto upload_context::flush(command_buffer& commands, std::uint64_t frame_index) -> void {
-  if (_pending_images.empty()) {
+  if (_pending_images.empty() && _pending_buffers.empty()) {
     return;
   }
 
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 
   auto& registry = graphics_module.resource_registry();
+
+  // Buffer copies first, then one global barrier making all of them visible to any later read
+  if (!_pending_buffers.empty()) {
+    for (const auto& pending : _pending_buffers) {
+      auto& destination = registry.get<buffer>(pending.destination);
+      auto& staging = registry.get<buffer>(pending.staging);
+
+      auto region = VkBufferCopy{};
+      region.srcOffset = 0u;
+      region.dstOffset = pending.destination_offset;
+      region.size = pending.size;
+
+      vkCmdCopyBuffer(commands.handle(), staging.handle(), destination.handle(), 1u, &region);
+
+      registry.retire(pending.staging, frame_index);
+    }
+
+    auto memory_barrier = VkMemoryBarrier2{};
+    memory_barrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2;
+    memory_barrier.srcStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
+    memory_barrier.srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
+    memory_barrier.dstStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
+    memory_barrier.dstAccessMask = VK_ACCESS_2_MEMORY_READ_BIT;
+
+    auto dependency = VkDependencyInfo{};
+    dependency.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+    dependency.memoryBarrierCount = 1u;
+    dependency.pMemoryBarriers = &memory_barrier;
+
+    vkCmdPipelineBarrier2(commands.handle(), &dependency);
+  }
 
   for (const auto& pending : _pending_images) {
     auto& destination_image = registry.get<image>(pending.destination);
@@ -115,6 +168,7 @@ auto upload_context::flush(command_buffer& commands, std::uint64_t frame_index) 
   }
 
   _pending_images.clear();
+  _pending_buffers.clear();
 }
 
 } // namespace sbx::graphics

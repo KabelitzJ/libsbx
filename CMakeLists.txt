@@ -220,6 +220,7 @@ target_sources(
 
     "${CMAKE_SOURCE_DIR}/libsbx/render/render_module.cpp"
 
+    "${CMAKE_SOURCE_DIR}/libsbx/scenes/scene.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/scenes/scenes_module.cpp"
 
     "${CMAKE_SOURCE_DIR}/libsbx/scripting/interop.cpp"
@@ -250,8 +251,9 @@ target_sources(
     BASE_DIRS "${CMAKE_SOURCE_DIR}"
     FILES
       "${CMAKE_SOURCE_DIR}/libsbx/assets/asset_handle.hpp"
-      "${CMAKE_SOURCE_DIR}/libsbx/assets/texture.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/assets/assets_module.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/assets/mesh.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/assets/texture.hpp"
 
       "${CMAKE_SOURCE_DIR}/libsbx/containers/compressed_pair.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/containers/containers.hpp"
@@ -398,6 +400,8 @@ target_sources(
       "${CMAKE_SOURCE_DIR}/libsbx/render/render_module.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/render/render_packet.hpp"
 
+      "${CMAKE_SOURCE_DIR}/libsbx/scenes/components.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/scenes/scene.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/scenes/scenes_module.hpp"
 
       "${CMAKE_SOURCE_DIR}/libsbx/scripting/interop.hpp"

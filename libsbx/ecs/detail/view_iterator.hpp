@@ -61,9 +61,6 @@ class view_iterator final {
   template<typename, typename...>
   friend class extended_view_iterator;
 
-  template<typename LhsType, auto... LhsArgs, typename RhsType, auto... RhsArgs>
-  friend constexpr bool operator==(const view_iterator<LhsType, LhsArgs...>&, const view_iterator<RhsType, RhsArgs...>&) noexcept;
-
   using iterator_type = typename Type::const_iterator;
   using iterator_traits = std::iterator_traits<iterator_type>;
 
@@ -110,6 +107,14 @@ public:
     return *operator->();
   }
 
+  [[nodiscard]] friend constexpr auto operator==(const view_iterator& lhs, const view_iterator& rhs) noexcept -> bool {
+    return lhs._iterator == rhs._iterator;
+  }
+
+  [[nodiscard]] friend constexpr auto operator!=(const view_iterator& lhs, const view_iterator& rhs) noexcept -> bool {
+    return !(lhs == rhs);
+  }
+
 private:
 
   [[nodiscard]] auto _is_valid(const value_type entity) const noexcept -> bool {
@@ -129,16 +134,8 @@ private:
 
 }; // class view_iterator
 
-template<typename LhsType, auto... LhsArgs, typename RhsType, auto... RhsArgs>
-[[nodiscard]] constexpr auto operator==(const view_iterator<LhsType, LhsArgs...>& lhs, const view_iterator<RhsType, RhsArgs...>& rhs) noexcept -> bool {
-  return lhs._iterator == rhs._iterator;
-}
-
 template<typename Iterator, typename... Get>
 class extended_view_iterator final {
-
-  template<typename... Lhs, typename... Rhs>
-  friend auto constexpr operator==(const extended_view_iterator<Lhs...>&, const extended_view_iterator<Rhs...>&) noexcept -> bool;
 
 public:
 
@@ -178,6 +175,14 @@ public:
     return _iterator;
   }
 
+  [[nodiscard]] friend constexpr auto operator==(const extended_view_iterator& lhs, const extended_view_iterator& rhs) noexcept -> bool {
+    return lhs._iterator == rhs._iterator;
+  }
+
+  [[nodiscard]] friend constexpr auto operator!=(const extended_view_iterator& lhs, const extended_view_iterator& rhs) noexcept -> bool {
+    return !(lhs == rhs);
+  }
+
 private:
 
   template<std::size_t... Index>
@@ -188,11 +193,6 @@ private:
   Iterator _iterator;
 
 }; // class extended_view_iterator
-
-template<typename... Lhs, typename... Rhs>
-[[nodiscard]] constexpr auto operator==(const extended_view_iterator<Lhs...>& lhs, const extended_view_iterator<Rhs...>& rhs) noexcept -> bool {
-  return lhs._iterator == rhs._iterator;
-}
 
 } // namespace sbx::ecs::detail
 

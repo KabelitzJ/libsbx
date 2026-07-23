@@ -19,7 +19,9 @@ public:
   using value_type = Type;
   using vector_type = basic_vector3<value_type>;
 
-  basic_volume() noexcept = default;
+  basic_volume() noexcept
+  : _min{std::numeric_limits<value_type>::max()},
+    _max{std::numeric_limits<value_type>::lowest()} { }
   
   basic_volume(const vector_type& min, const vector_type& max) noexcept
   : _min{min}, 

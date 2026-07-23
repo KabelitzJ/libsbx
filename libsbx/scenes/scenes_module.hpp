@@ -9,6 +9,8 @@
 
 #include <libsbx/assets/assets_module.hpp>
 
+#include <libsbx/scenes/scene.hpp>
+
 namespace sbx::scenes {
 
 class scenes_module final : public utility::noncopyable {
@@ -20,6 +22,20 @@ public:
   scenes_module();
 
   ~scenes_module();
+
+  auto update() -> void;
+
+  [[nodiscard]] auto active_scene() noexcept -> scene& {
+    return _scene;
+  }
+
+  [[nodiscard]] auto active_scene() const noexcept -> const scene& {
+    return _scene;
+  }
+
+private:
+
+  scene _scene{};
 
 }; // class scenes_module
 

@@ -310,7 +310,7 @@ inline constexpr get_t<Type...> get{};
 template<typename... Type>
 struct exclude_t final : utility::type_list<Type...> {
   explicit constexpr exclude_t() = default;
-}; // struct exclude
+}; // struct exclude_t
 
 template<typename... Type>
 inline constexpr exclude_t<Type...> exclude{};

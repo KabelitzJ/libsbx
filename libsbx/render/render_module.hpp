@@ -5,7 +5,6 @@
 
 #include <condition_variable>
 #include <cstdint>
-#include <memory>
 #include <mutex>
 #include <thread>
 #include <utility>
@@ -15,12 +14,10 @@
 #include <libsbx/core/module.hpp>
 
 #include <libsbx/assets/assets_module.hpp>
-#include <libsbx/assets/asset_handle.hpp>
-#include <libsbx/assets/texture.hpp>
 
 #include <libsbx/graphics/graphics_module.hpp>
-#include <libsbx/graphics/pipeline/shader.hpp>
 #include <libsbx/graphics/pipeline/graphics_pipeline.hpp>
+#include <libsbx/graphics/resources/image.hpp>
 
 #include <libsbx/scenes/scenes_module.hpp>
 
@@ -29,7 +26,8 @@
 namespace sbx::render {
 
 /**
- * @brief Owns the render stages and drives the frame loop.
+ * @brief Owns the render thread and drives the frame loop. The main thread extracts the active
+ * scene into a render_packet; the render thread consumes it and never touches the ECS.
  */
 class render_module final : public utility::noncopyable {
 
@@ -42,14 +40,6 @@ public:
   ~render_module();
 
   auto render() -> void;
-
-  /**
-   * @brief Main thread. The texture the render thread samples once it is resident. The app holds the
-   * asset; the render thread only reads its bindless index.
-   */
-  auto set_display_texture(assets::texture_handle texture) -> void {
-    _display_texture = std::move(texture);
-  }
 
 private:
 
@@ -74,10 +64,13 @@ private:
   bool _is_running{false};
   bool _is_started{false};
 
-  assets::texture_handle _display_texture{};
   std::uint32_t _sampler_index{0u};
 
   memory::observer_ptr<graphics::graphics_pipeline> _pipeline{nullptr};
+
+  graphics::image_handle _depth_image{};
+  std::uint32_t _depth_width{0u};
+  std::uint32_t _depth_height{0u};
 
 }; // class render_module
 

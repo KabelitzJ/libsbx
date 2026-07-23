@@ -14,13 +14,14 @@
 
 #include <libsbx/math/vector3.hpp>
 
-#include <libsbx/graphics/types.hpp>
 #include <libsbx/graphics/resources/image.hpp>
 #include <libsbx/graphics/resources/buffer.hpp>
 
-namespace sbx::graphics {
+#include <libsbx/graphics/commands/command_buffer.hpp>
 
-class command_buffer;
+#include <libsbx/graphics/types.hpp>
+
+namespace sbx::graphics {
 
 /**
  * @brief Stages CPU data into device-local images.
@@ -34,10 +35,22 @@ public:
   ~upload_context() = default;
 
   /**
-   * @brief Queues @p pixels to be copied into @p destination (mip 0), ending in
-   * @p final_layout. The destination must have `image_usage::transfer_destination`.
+   * @brief Queues @p pixels to be copied into @p destination (mip 0), ending in @p final_layout. The destination must have `image_usage::transfer_destination`.
+   * 
+   * @param destination The destination image.
+   * @param pixels The pixel data to copy.
+   * @param final_layout The layout the destination image should be transitioned to after the copy.
    */
   auto stage_image(image_handle destination, std::span<const std::byte> pixels, image_layout final_layout = image_layout::shader_read_only_optimal) -> void;
+
+  /**
+   * @brief Queues @p data to be copied into @p destination at @p destination_offset. The destination must have `buffer_usage::transfer_destination`.
+   * 
+   * @param destination The destination buffer.
+   * @param data The data to copy.
+   * @param destination_offset The offset into the destination buffer to copy to.
+   */
+  auto stage_buffer(buffer_handle destination, std::span<const std::byte> data, buffer::size_type destination_offset = 0u) -> void;
 
   /**
    * @brief Records every queued copy and its barriers into @p commands, retiring the staging
@@ -60,7 +73,15 @@ private:
     image_layout final_layout;
   }; // struct pending_image
 
+  struct pending_buffer {
+    buffer_handle destination;
+    buffer_handle staging;
+    buffer::size_type size;
+    buffer::size_type destination_offset;
+  }; // struct pending_buffer
+
   std::vector<pending_image> _pending_images{};
+  std::vector<pending_buffer> _pending_buffers{};
 
 }; // class upload_context
 

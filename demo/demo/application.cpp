@@ -33,11 +33,36 @@ application::application()
 
   auto& assets_module = sbx::core::engine::get_module<sbx::assets::assets_module>();
 
-  const auto texture = assets_module.load_texture("demo/assets/icons/logo-dark.png");
+  const auto texture = assets_module.load_texture("demo/assets/models/duck/textures/albedo.png");
+  const auto mesh = assets_module.load_mesh("demo/assets/models/duck/duck.gltf");
 
   auto& render_module = sbx::core::engine::get_module<sbx::render::render_module>();
 
-  render_module.set_display_texture(texture);
+  auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
+  auto& scene = scenes_module.active_scene();
+
+  const auto& bounds = mesh->bounds();
+  const auto center = bounds.center();
+  const auto radius = std::max(bounds.diagonal_length() * 0.5f, 0.001f);
+  const auto fov = 60.0f;
+  const auto distance = radius / std::sin(sbx::math::to_radians(sbx::math::degree{fov}).value() * 0.5f) * 2.0f;
+
+  auto model = scene.create_node();
+  model.transform().position = center * -1.0f;
+
+  auto& renderer = model.add_component<sbx::scenes::mesh_renderer>();
+  renderer.mesh = mesh;
+  renderer.texture = texture;
+
+  auto camera = scene.create_node();
+  camera.transform().position = sbx::math::vector3f{0.0f, 0.0f, distance};
+
+  auto& camera_component = camera.add_component<sbx::scenes::camera>();
+  camera_component.fov_degrees = fov;
+  camera_component.near_plane = std::max(0.01f, distance - radius * 2.0f);
+  camera_component.far_plane = distance + radius * 2.0f;
+
+  scene.set_active_camera(camera);
 }
 
 auto application::update() -> void {

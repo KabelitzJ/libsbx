@@ -14,7 +14,15 @@ struct fs_out {
   float4 color : SV_Target0;
 }; // struct fs_out
 
+struct vertex {
+  float3 position;
+  float3 normal;
+  float2 uv;
+}; // struct vertex
+
 struct push_data {
+  float4x4 mvp;
+  vertex* vertices;
   uint image_index;
   uint sampler_index;
 }; // struct push_data
@@ -26,10 +34,11 @@ struct push_data {
 
 [shader("vertex")]
 vs_out vertex_main(uint vertex_id : SV_VertexID) {
-  vs_out output;
+  vertex vertex = push.vertices[vertex_id];
 
-  output.uv = float2((vertex_id << 1) & 2, vertex_id & 2);
-  output.position = float4(output.uv * 2.0 - 1.0, 0.0, 1.0);
+  vs_out output;
+  output.uv = vertex.uv;
+  output.position = mul(push.mvp, float4(vertex.position, 1.0));
 
   return output;
 }

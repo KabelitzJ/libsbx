@@ -5,11 +5,13 @@
 #include <array>
 #include <cstddef>
 #include <cstring>
+#include <vector>
 
-#include <libsbx/utility/assert.hpp>
 #include <libsbx/utility/logger.hpp>
 
 #include <libsbx/math/vector3.hpp>
+#include <libsbx/math/matrix4x4.hpp>
+#include <libsbx/math/angle.hpp>
 
 #include <libsbx/core/engine.hpp>
 
@@ -19,12 +21,20 @@
 #include <libsbx/graphics/frame_context.hpp>
 #include <libsbx/graphics/devices/swapchain.hpp>
 #include <libsbx/graphics/commands/command_buffer.hpp>
+#include <libsbx/graphics/resources/buffer.hpp>
+#include <libsbx/graphics/resources/image.hpp>
 
 #include <libsbx/graphics/profiler.hpp>
+
+#include <libsbx/scenes/scenes_module.hpp>
+#include <libsbx/scenes/scene.hpp>
+#include <libsbx/scenes/components.hpp>
 
 namespace sbx::render {
 
 struct push_constants {
+  float mvp[16];
+  std::uint64_t vertex_address;
   std::uint32_t image_index;
   std::uint32_t sampler_index;
 }; // struct push_constants
@@ -42,8 +52,8 @@ auto render_module::render() -> void {
     _start();
   }
 
-  // The iconified check is a glfw call and must stay on the main thread.
-  // When iconified we simply publish nothing and the render thread idles.
+  // The iconified check is a glfw call and must stay on the main thread. When iconified we publish
+  // nothing and the render thread idles.
   auto& platform_module = core::engine::get_module<platform::platform_module>();
 
   auto& window = platform_module.window();
@@ -52,7 +62,7 @@ auto render_module::render() -> void {
     return;
   }
 
-  const auto packet = _build_packet();
+  auto packet = _build_packet();
 
   {
     auto lock = std::unique_lock{_mutex};
@@ -122,7 +132,26 @@ auto render_module::_build_packet() -> render_packet {
 
   auto packet = render_packet{};
 
-  packet.clear_color = math::color{0.7f, 0.2f, 0.2f, 1.0f};
+  auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
+  auto& scene = scenes_module.active_scene();
+
+  if (scene.has_active_camera()) {
+    auto camera_node = scene.active_camera();
+
+    const auto& camera = camera_node.get_component<scenes::camera>();
+
+    packet.camera.view = math::matrix4x4::inverted(camera_node.world_matrix());
+    packet.camera.fov_degrees = camera.fov_degrees;
+    packet.camera.near_plane = camera.near_plane;
+    packet.camera.far_plane = camera.far_plane;
+    packet.camera.active = true;
+  }
+
+  auto view = scene.query<scenes::world_transform, scenes::mesh_renderer>();
+
+  for (const auto [entity, world, renderer] : view.each()) {
+    packet.items.push_back(render_item{world.matrix, renderer.mesh, renderer.texture});
+  }
 
   return packet;
 }
@@ -130,10 +159,11 @@ auto render_module::_build_packet() -> render_packet {
 auto render_module::_consume_packet(const render_packet& packet) -> void {
   SBX_PROFILE_SCOPE("render_module::consume");
 
-  auto& graphics_module = sbx::core::engine::get_module<sbx::graphics::graphics_module>();
-  auto& assets_module = sbx::core::engine::get_module<sbx::assets::assets_module>();
+  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
+  auto& assets_module = core::engine::get_module<assets::assets_module>();
 
   auto& frame_context = graphics_module.frame_context();
+  auto& registry = graphics_module.resource_registry();
   auto& upload_context = graphics_module.upload_context();
   auto& bindless_table = graphics_module.bindless_table();
 
@@ -149,39 +179,71 @@ auto render_module::_consume_packet(const render_packet& packet) -> void {
     const auto& swapchain = frame_context.swapchain();
     const auto extent = swapchain.extent();
 
-    if (!_pipeline) {
-      const auto entry_points = std::vector<sbx::graphics::shader_compiler::entry_point_request>{
+    if (_pipeline == nullptr) {
+      const auto entry_points = std::vector<graphics::shader_compiler::entry_point_request>{
         {"vertex_main", VK_SHADER_STAGE_VERTEX_BIT},
         {"fragment_main", VK_SHADER_STAGE_FRAGMENT_BIT}
       };
 
-      auto& shader_cache = graphics_module.shader_cache();
-      auto& pipeline_cache = graphics_module.pipeline_cache();
+      const auto& shader = graphics_module.shader_cache().get({"shaders/triangle/triangle.slang", entry_points});
 
-      auto shader = shader_cache.get({"shaders/triangle/triangle.slang", entry_points});
-
-      _pipeline = pipeline_cache.get(sbx::graphics::graphics_pipeline::create_info{
+      _pipeline = graphics_module.pipeline_cache().get(graphics::graphics_pipeline::create_info{
         .shader = shader,
-        .color_formats = {static_cast<sbx::graphics::format>(swapchain.format())},
-        .name = "Triangle"
+        .color_formats = {static_cast<graphics::format>(swapchain.format())},
+        .depth_format = graphics::format::d32_sfloat,
+        .depth_test = true,
+        .depth_write = true,
+        .name = "Mesh"
       });
 
-      _sampler_index = bindless_table.sampler_index(sbx::graphics::sampler::create_info{});
+      _sampler_index = bindless_table.sampler_index(graphics::sampler::create_info{});
     }
 
-    // Turn any queued texture loads into GPU images + bindless writes, then record their copies.
+    // Turn queued asset uploads into GPU images/buffers + bindless writes, then record their copies.
     assets_module.process_uploads(frame_context.frame_index());
 
     upload_context.flush(*command_buffer, frame_context.frame_index());
 
-    auto to_color = sbx::graphics::command_buffer::image_transition_data{};
+    // (Re)create the depth target to match the swapchain, retiring the old one on resize.
+    if (_depth_width != extent.width || _depth_height != extent.height) {
+      if (_depth_width != 0u) {
+        registry.retire(_depth_image, frame_context.frame_index());
+      }
+
+      _depth_image = registry.emplace<graphics::image>(graphics::image::create_info{
+        .extent = math::vector3u{extent.width, extent.height, 1u},
+        .format = graphics::format::d32_sfloat,
+        .usage = graphics::image_usage::depth_stencil_attachment,
+        .name = "Depth"
+      });
+
+      _depth_width = extent.width;
+      _depth_height = extent.height;
+    }
+
+    auto& depth = registry.get<graphics::image>(_depth_image);
+
+    auto to_depth = graphics::command_buffer::image_transition_data{};
+    to_depth.image = depth.handle();
+    to_depth.src_stage_mask = VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT;
+    to_depth.src_access_mask = VK_ACCESS_2_NONE;
+    to_depth.dst_stage_mask = VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT;
+    to_depth.dst_access_mask = VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT | VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
+    to_depth.old_layout = graphics::image_layout::undefined;
+    to_depth.new_layout = graphics::image_layout::depth_attachment_optimal;
+    to_depth.aspect_mask = depth.aspect();
+    to_depth.layer_count = 1u;
+
+    command_buffer->transition_image_layout(to_depth);
+
+    auto to_color = graphics::command_buffer::image_transition_data{};
     to_color.image = swapchain.active_image();
     to_color.src_stage_mask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
     to_color.src_access_mask = VK_ACCESS_2_NONE;
     to_color.dst_stage_mask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
     to_color.dst_access_mask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
-    to_color.old_layout = sbx::graphics::image_layout::undefined;
-    to_color.new_layout = sbx::graphics::image_layout::color_attachment_optimal;
+    to_color.old_layout = graphics::image_layout::undefined;
+    to_color.new_layout = graphics::image_layout::color_attachment_optimal;
 
     command_buffer->transition_image_layout(to_color);
 
@@ -193,49 +255,94 @@ auto render_module::_consume_packet(const render_packet& packet) -> void {
     color_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
     color_attachment.clearValue.color = VkClearColorValue{{packet.clear_color.r(), packet.clear_color.g(), packet.clear_color.b(), packet.clear_color.a()}};
 
+    auto depth_attachment = VkRenderingAttachmentInfo{};
+    depth_attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+    depth_attachment.imageView = depth.view();
+    depth_attachment.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
+    depth_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    depth_attachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    depth_attachment.clearValue.depthStencil = VkClearDepthStencilValue{1.0f, 0u};
+
     auto rendering_info = VkRenderingInfo{};
     rendering_info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
     rendering_info.renderArea = VkRect2D{VkOffset2D{0, 0}, extent};
     rendering_info.layerCount = 1u;
     rendering_info.colorAttachmentCount = 1u;
     rendering_info.pColorAttachments = &color_attachment;
+    rendering_info.pDepthAttachment = &depth_attachment;
 
     command_buffer->begin_rendering(rendering_info);
 
-    // Only sample once the upload has completed (texture resident) — by then flush_writes has
-    // applied the descriptor too. Until then, just show the clear.
-    if (_display_texture.is_valid() && assets_module.is_resident(_display_texture)) {
-      command_buffer->bind_pipeline(*_pipeline);
+    if (packet.camera.active) {
+      const auto aspect = static_cast<float>(extent.width) / static_cast<float>(extent.height);
+      const auto projection = math::matrix4x4::perspective(math::degree{packet.camera.fov_degrees}, aspect, packet.camera.near_plane, packet.camera.far_plane);
+      const auto& view = packet.camera.view;
 
-      const auto descriptor_set = bindless_table.descriptor_set();
-      vkCmdBindDescriptorSets(command_buffer->handle(), VK_PIPELINE_BIND_POINT_GRAPHICS, bindless_table.pipeline_layout(), 0u, 1u, &descriptor_set, 0u, nullptr);
+      auto bound = false;
 
-      const auto viewport = VkViewport{0.0f, 0.0f, static_cast<std::float_t>(extent.width), static_cast<std::float_t>(extent.height), 0.0f, 1.0f};
-      command_buffer->set_viewport(viewport);
+      for (const auto& item : packet.items) {
+        if (!item.mesh.is_valid() || !assets_module.is_resident(item.mesh)) {
+          continue;
+        }
 
-      const auto scissor = VkRect2D{VkOffset2D{0, 0}, extent};
-      command_buffer->set_scissor(scissor);
+        if (!item.texture.is_valid() || !assets_module.is_resident(item.texture)) {
+          continue;
+        }
 
-      const auto values = push_constants{_display_texture->index(), _sampler_index};
+        const auto& mesh = *item.mesh;
 
-      auto range = std::array<std::byte, sbx::graphics::bindless_table::push_constant_size>{};
-      std::memcpy(range.data(), &values, sizeof(push_constants));
+        if (!bound) {
+          command_buffer->bind_pipeline(*_pipeline);
 
-      vkCmdPushConstants(command_buffer->handle(), bindless_table.pipeline_layout(), VK_SHADER_STAGE_ALL, 0u, static_cast<std::uint32_t>(range.size()), range.data());
+          const auto descriptor_set = bindless_table.descriptor_set();
+          vkCmdBindDescriptorSets(command_buffer->handle(), VK_PIPELINE_BIND_POINT_GRAPHICS, bindless_table.pipeline_layout(), 0u, 1u, &descriptor_set, 0u, nullptr);
 
-      command_buffer->draw(3u, 1u, 0u, 0u);
+          const auto viewport = VkViewport{0.0f, 0.0f, static_cast<std::float_t>(extent.width), static_cast<std::float_t>(extent.height), 0.0f, 1.0f};
+          command_buffer->set_viewport(viewport);
+
+          const auto scissor = VkRect2D{VkOffset2D{0, 0}, extent};
+          command_buffer->set_scissor(scissor);
+
+          bound = true;
+        }
+
+        const auto mvp = projection * view * item.model;
+
+        auto values = push_constants{};
+
+        for (auto column = 0u; column < 4u; ++column) {
+          for (auto row = 0u; row < 4u; ++row) {
+            values.mvp[column * 4u + row] = mvp[column][row];
+          }
+        }
+
+        values.vertex_address = mesh.vertex_address();
+        values.image_index = item.texture->index();
+        values.sampler_index = _sampler_index;
+
+        vkCmdBindIndexBuffer(command_buffer->handle(), registry.get<graphics::buffer>(mesh.index_buffer()).handle(), 0u, VK_INDEX_TYPE_UINT32);
+
+        auto range = std::array<std::byte, graphics::bindless_table::push_constant_size>{};
+        std::memcpy(range.data(), &values, sizeof(push_constants));
+
+        vkCmdPushConstants(command_buffer->handle(), bindless_table.pipeline_layout(), VK_SHADER_STAGE_ALL, 0u, static_cast<std::uint32_t>(range.size()), range.data());
+
+        for (const auto& submesh : mesh.submeshes()) {
+          vkCmdDrawIndexed(command_buffer->handle(), submesh.index_count, 1u, submesh.index_offset, 0, 0u);
+        }
+      }
     }
 
     command_buffer->end_rendering();
 
-    auto to_present = sbx::graphics::command_buffer::image_transition_data{};
+    auto to_present = graphics::command_buffer::image_transition_data{};
     to_present.image = swapchain.active_image();
     to_present.src_stage_mask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
     to_present.src_access_mask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
     to_present.dst_stage_mask = VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT;
     to_present.dst_access_mask = VK_ACCESS_2_NONE;
-    to_present.old_layout = sbx::graphics::image_layout::color_attachment_optimal;
-    to_present.new_layout = sbx::graphics::image_layout::present_source;
+    to_present.old_layout = graphics::image_layout::color_attachment_optimal;
+    to_present.new_layout = graphics::image_layout::present_source;
 
     command_buffer->transition_image_layout(to_present);
   }

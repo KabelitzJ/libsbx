@@ -239,7 +239,9 @@ private:
 
     utility::assert_that(index < handle_type::invalid_index, "Resource pool ran out of addressable slots");
 
-    if (index / page_size >= _pages.size()) {
+    const auto page_index = index / page_size;
+
+    if (page_index >= _pages.size()) {
       _pages.push_back(std::make_unique_for_overwrite<page>());
     }
 
@@ -249,11 +251,17 @@ private:
   }
 
   auto _pointer(const size_type index) noexcept -> value_type* {
-    return std::launder(reinterpret_cast<value_type*>(std::addressof(_pages[index / page_size]->slots[index % page_size])));
+    const auto page_index = index / page_size;
+    const auto slot_index = index % page_size;
+
+    return std::launder(reinterpret_cast<value_type*>(std::addressof(_pages[page_index]->slots[slot_index])));
   }
 
   auto _pointer(const size_type index) const noexcept -> const value_type* {
-    return std::launder(reinterpret_cast<const value_type*>(std::addressof(_pages[index / page_size]->slots[index % page_size])));
+    const auto page_index = index / page_size;
+    const auto slot_index = index % page_size;
+
+    return std::launder(reinterpret_cast<const value_type*>(std::addressof(_pages[page_index]->slots[slot_index])));
   }
 
   std::vector<std::unique_ptr<page>> _pages{};

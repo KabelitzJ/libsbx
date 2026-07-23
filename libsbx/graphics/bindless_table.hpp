@@ -55,6 +55,10 @@ public:
 
   auto register_sampled_image(VkImageView view) -> std::uint32_t;
 
+  auto reserve_sampled_image() -> std::uint32_t;
+
+  auto write_sampled_image(std::uint32_t index, VkImageView view) -> void;
+
   auto register_storage_image(VkImageView view) -> std::uint32_t;
 
   auto unregister_sampled_image(std::uint32_t index) -> void;

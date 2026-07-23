@@ -2,9 +2,6 @@
 // Copyright (c) 2026 Jonas Kabelitz
 #include <demo/application.hpp>
 
-#define STB_IMAGE_IMPLEMENTATION
-#include <stb_image.h>
-
 #include <libsbx/utility/logger.hpp>
 
 #include <libsbx/math/matrix4x4.hpp>
@@ -16,6 +13,8 @@
 
 #include <libsbx/graphics/graphics_module.hpp>
 #include <libsbx/graphics/types.hpp>
+
+#include <libsbx/assets/assets_module.hpp>
 
 #include <libsbx/render/render_module.hpp>
 
@@ -32,25 +31,13 @@ application::application()
     sbx::core::engine::quit();
   };
 
+  auto& assets_module = sbx::core::engine::get_module<sbx::assets::assets_module>();
+
+  const auto texture = assets_module.load_texture("demo/assets/icons/logo-dark.png");
+
   auto& render_module = sbx::core::engine::get_module<sbx::render::render_module>();
 
-  auto width = std::int32_t{0};
-  auto height = std::int32_t{0};
-  auto channels = std::int32_t{0};
-
-  auto* data = stbi_load("demo/assets/icons/logo-dark.png", &width, &height, &channels, STBI_rgb_alpha);
-
-  if (data != nullptr) {
-    const auto count = static_cast<std::size_t>(width) * static_cast<std::size_t>(height) * 4u;
-
-    auto pixels = std::vector<std::byte>{reinterpret_cast<const std::byte*>(data), reinterpret_cast<const std::byte*>(data) + count};
-
-    stbi_image_free(data);
-
-    render_module.upload_texture(std::move(pixels), static_cast<std::uint32_t>(width), static_cast<std::uint32_t>(height), sbx::graphics::format::r8g8b8a8_unorm);
-  } else {
-    sbx::utility::logger<"demo">::warn("Could not load image '{}'", "demo/assets/icons/logo-dark.png");
-  }
+  render_module.set_display_texture(texture);
 }
 
 auto application::update() -> void {

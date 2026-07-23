@@ -144,6 +144,22 @@ auto bindless_table::register_sampled_image(VkImageView view) -> std::uint32_t {
   return index;
 }
 
+auto bindless_table::reserve_sampled_image() -> std::uint32_t {
+  auto lock = std::lock_guard{_mutex};
+
+  return _sampled_images.allocate();
+}
+
+auto bindless_table::write_sampled_image(std::uint32_t index, VkImageView view) -> void {
+  auto lock = std::lock_guard{_mutex};
+
+  auto image_info = VkDescriptorImageInfo{};
+  image_info.imageView = view;
+  image_info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+  _pending_writes.push_back(pending_write{sampled_image_binding, index, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, image_info});
+}
+
 auto bindless_table::register_storage_image(VkImageView view) -> std::uint32_t {
   auto lock = std::lock_guard{_mutex};
 

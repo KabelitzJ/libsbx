@@ -247,6 +247,8 @@ target_sources(
     FILE_SET headers TYPE HEADERS
     BASE_DIRS "${CMAKE_SOURCE_DIR}"
     FILES
+      "${CMAKE_SOURCE_DIR}/libsbx/assets/asset_handle.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/assets/texture.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/assets/assets_module.hpp"
 
       "${CMAKE_SOURCE_DIR}/libsbx/containers/compressed_pair.hpp"

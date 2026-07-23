@@ -5,8 +5,6 @@
 #include <array>
 #include <cstddef>
 #include <cstring>
-#include <span>
-#include <vector>
 
 #include <libsbx/utility/assert.hpp>
 #include <libsbx/utility/logger.hpp>
@@ -34,7 +32,15 @@ struct push_constants {
 render_module::render_module() { }
 
 render_module::~render_module() {
+  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
+  auto& logical_device = graphics_module.logical_device();
+  
   _stop();
+
+  logical_device.wait_idle();
+
+  _pipeline.reset();
+  _shader.reset();
 }
 
 auto render_module::render() -> void {
@@ -44,7 +50,7 @@ auto render_module::render() -> void {
     _start();
   }
 
-  // The iconified check is a glfw call and must stay on the main thread. 
+  // The iconified check is a glfw call and must stay on the main thread.
   // When iconified we simply publish nothing and the render thread idles.
   auto& platform_module = core::engine::get_module<platform::platform_module>();
 
@@ -67,12 +73,6 @@ auto render_module::render() -> void {
   }
 
   _has_produced.notify_one();
-}
-
-auto render_module::upload_texture(std::vector<std::byte> pixels, std::uint32_t width, std::uint32_t height, graphics::format format) -> void {
-  auto lock = std::lock_guard{_texture_mutex};
-
-  _pending_texture = pending_texture{std::move(pixels), width, height, format};
 }
 
 auto render_module::_start() -> void {
@@ -139,9 +139,9 @@ auto render_module::_consume_packet(const render_packet& packet) -> void {
   SBX_PROFILE_SCOPE("render_module::consume");
 
   auto& graphics_module = sbx::core::engine::get_module<sbx::graphics::graphics_module>();
+  auto& assets_module = sbx::core::engine::get_module<sbx::assets::assets_module>();
 
   auto& frame_context = graphics_module.frame_context();
-  auto& registry = graphics_module.resource_registry();
   auto& upload_context = graphics_module.upload_context();
   auto& bindless_table = graphics_module.bindless_table();
 
@@ -170,38 +170,12 @@ auto render_module::_consume_packet(const render_packet& packet) -> void {
         .color_formats = {static_cast<sbx::graphics::format>(swapchain.format())},
         .name = "Triangle"
       });
+
+      _sampler_index = bindless_table.sampler_index(sbx::graphics::sampler::create_info{});
     }
 
-    // Pick up the texture posted from the main thread, create + upload it, and register it in the
-    // bindless table. Record the frame so we know when it is resident.
-    if (!_has_texture) {
-      auto pending = std::optional<pending_texture>{};
-
-      {
-        auto lock = std::lock_guard{_texture_mutex};
-        pending.swap(_pending_texture);
-      }
-
-      if (pending) {
-        _texture = registry.emplace<sbx::graphics::image>(sbx::graphics::image::create_info{
-          .extent = sbx::math::vector3u{pending->width, pending->height, 1u},
-          .format = pending->format,
-          .usage = sbx::graphics::image_usage::transfer_destination | sbx::graphics::image_usage::sampled,
-          .name = "Display Texture"
-        });
-
-        const auto bytes = std::span<const std::byte>{pending->pixels.data(), pending->pixels.size()};
-
-        upload_context.stage_image(_texture, bytes, sbx::graphics::image_layout::shader_read_only_optimal);
-
-        const auto& texture = registry.get<sbx::graphics::image>(_texture);
-
-        _texture_index = bindless_table.register_sampled_image(texture.view());
-        _sampler_index = bindless_table.sampler_index(sbx::graphics::sampler::create_info{});
-        _texture_frame = frame_context.frame_index();
-        _has_texture = true;
-      }
-    }
+    // Turn any queued texture loads into GPU images + bindless writes, then record their copies.
+    assets_module.process_uploads(frame_context.frame_index());
 
     upload_context.flush(*command_buffer, frame_context.frame_index());
 
@@ -235,7 +209,7 @@ auto render_module::_consume_packet(const render_packet& packet) -> void {
 
     // Only sample once the upload has completed (texture resident) — by then flush_writes has
     // applied the descriptor too. Until then, just show the clear.
-    if (_has_texture && frame_context.timeline_value() >= _texture_frame) {
+    if (_display_texture.is_valid() && assets_module.is_resident(_display_texture)) {
       vkCmdBindPipeline(command_buffer->handle(), _pipeline->bind_point(), *_pipeline);
 
       const auto descriptor_set = bindless_table.descriptor_set();
@@ -247,7 +221,7 @@ auto render_module::_consume_packet(const render_packet& packet) -> void {
       const auto scissor = VkRect2D{VkOffset2D{0, 0}, extent};
       command_buffer->set_scissor(scissor);
 
-      const auto values = push_constants{_texture_index, _sampler_index};
+      const auto values = push_constants{_display_texture->index(), _sampler_index};
 
       auto range = std::array<std::byte, sbx::graphics::bindless_table::push_constant_size>{};
       std::memcpy(range.data(), &values, sizeof(push_constants));

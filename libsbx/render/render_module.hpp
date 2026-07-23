@@ -3,23 +3,20 @@
 #ifndef LIBSBX_RENDER_RENDER_MODULE_HPP_
 #define LIBSBX_RENDER_RENDER_MODULE_HPP_
 
-#include <array>
 #include <condition_variable>
+#include <cstdint>
 #include <memory>
 #include <mutex>
-#include <optional>
-#include <span>
 #include <thread>
 #include <utility>
-#include <vector>
-
-#include <libsbx/math/vector3.hpp>
 
 #include <libsbx/utility/noncopyable.hpp>
 
 #include <libsbx/core/module.hpp>
 
 #include <libsbx/assets/assets_module.hpp>
+#include <libsbx/assets/asset_handle.hpp>
+#include <libsbx/assets/texture.hpp>
 
 #include <libsbx/graphics/graphics_module.hpp>
 #include <libsbx/graphics/pipeline/shader.hpp>
@@ -38,7 +35,7 @@ class render_module final : public utility::noncopyable {
 
 public:
 
-  using dependencies = core::dependency_list<assets::assets_module, graphics::graphics_module, scenes::scenes_module>;
+  using dependencies = core::dependency_list<graphics::graphics_module, assets::assets_module, scenes::scenes_module>;
 
   render_module();
 
@@ -46,7 +43,13 @@ public:
 
   auto render() -> void;
 
-  auto upload_texture(std::vector<std::byte> pixels, std::uint32_t width, std::uint32_t height, graphics::format format) -> void;
+  /**
+   * @brief Main thread. The texture the render thread samples once it is resident. The app holds the
+   * asset; the render thread only reads its bindless index.
+   */
+  auto set_display_texture(assets::texture_handle texture) -> void {
+    _display_texture = std::move(texture);
+  }
 
 private:
 
@@ -71,22 +74,8 @@ private:
   bool _is_running{false};
   bool _is_started{false};
 
-  struct pending_texture {
-    std::vector<std::byte> pixels;
-    std::uint32_t width;
-    std::uint32_t height;
-    graphics::format format;
-  }; // struct pending_texture
-
-  // Main thread posts here; the render thread drains it in _consume.
-  std::mutex _texture_mutex{};
-  std::optional<pending_texture> _pending_texture{};
-
-  graphics::image_handle _texture{};
-  std::uint32_t _texture_index{0u};
+  assets::texture_handle _display_texture{};
   std::uint32_t _sampler_index{0u};
-  std::uint64_t _texture_frame{0u};
-  bool _has_texture{false};
 
   std::unique_ptr<graphics::shader> _shader{};
   std::unique_ptr<graphics::graphics_pipeline> _pipeline{};

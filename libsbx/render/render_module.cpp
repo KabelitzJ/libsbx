@@ -191,6 +191,8 @@ auto render_module::_consume_packet(const render_packet& packet) -> void {
         .shader = shader,
         .color_formats = {static_cast<graphics::format>(swapchain.format())},
         .depth_format = graphics::format::d32_sfloat,
+        .cull_mode = graphics::cull_mode::back,
+        .front_face = graphics::front_face::counter_clockwise,
         .depth_test = true,
         .depth_write = true,
         .name = "Mesh"

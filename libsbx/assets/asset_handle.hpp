@@ -4,6 +4,7 @@
 #define LIBSBX_ASSETS_ASSET_HANDLE_HPP_
 
 #include <memory>
+#include <type_traits>
 
 namespace sbx::assets {
 
@@ -42,7 +43,7 @@ public:
 
 private:
 
-  std::shared_ptr<const Type> _record{};
+  std::shared_ptr<value_type> _record{};
 
 }; // class asset_handle
 

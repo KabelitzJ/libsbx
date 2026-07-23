@@ -23,6 +23,8 @@
 #include <libsbx/graphics/resources/resource_registry.hpp>
 
 #include <libsbx/graphics/pipeline/shader_compiler.hpp>
+#include <libsbx/graphics/pipeline/shader_cache.hpp>
+#include <libsbx/graphics/pipeline/pipeline_cache.hpp>
 
 #include <libsbx/graphics/frame_context.hpp>
 #include <libsbx/graphics/upload_context.hpp>
@@ -94,6 +96,14 @@ public:
     return _shader_compiler;
   }
 
+  [[nodiscard]] auto shader_cache() noexcept -> graphics::shader_cache& {
+    return _shader_cache;
+  }
+
+  [[nodiscard]] auto pipeline_cache() noexcept -> graphics::pipeline_cache& {
+    return _pipeline_cache;
+  }
+
   auto command_pool(const queue::type type, const std::thread::id& thread_id = std::this_thread::get_id()) -> const std::shared_ptr<command_pool>&;
 
 private:
@@ -133,6 +143,8 @@ private:
   graphics::upload_context _upload_context;
 
   graphics::shader_compiler _shader_compiler;
+  graphics::shader_cache _shader_cache;
+  graphics::pipeline_cache _pipeline_cache;
 
 }; // class graphics_module
 

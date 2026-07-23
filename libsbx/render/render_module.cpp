@@ -32,15 +32,7 @@ struct push_constants {
 render_module::render_module() { }
 
 render_module::~render_module() {
-  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
-  auto& logical_device = graphics_module.logical_device();
-  
   _stop();
-
-  logical_device.wait_idle();
-
-  _pipeline.reset();
-  _shader.reset();
 }
 
 auto render_module::render() -> void {
@@ -157,16 +149,19 @@ auto render_module::_consume_packet(const render_packet& packet) -> void {
     const auto& swapchain = frame_context.swapchain();
     const auto extent = swapchain.extent();
 
-    if (_pipeline == nullptr) {
-      const auto entry_points = std::array<sbx::graphics::shader_compiler::entry_point_request, 2u>{
-        sbx::graphics::shader_compiler::entry_point_request{"vertex_main", VK_SHADER_STAGE_VERTEX_BIT},
-        sbx::graphics::shader_compiler::entry_point_request{"fragment_main", VK_SHADER_STAGE_FRAGMENT_BIT}
+    if (!_pipeline) {
+      const auto entry_points = std::vector<sbx::graphics::shader_compiler::entry_point_request>{
+        {"vertex_main", VK_SHADER_STAGE_VERTEX_BIT},
+        {"fragment_main", VK_SHADER_STAGE_FRAGMENT_BIT}
       };
 
-      _shader = std::make_unique<sbx::graphics::shader>(graphics_module.shader_compiler(), "shaders/triangle/triangle.slang", entry_points);
+      auto& shader_cache = graphics_module.shader_cache();
+      auto& pipeline_cache = graphics_module.pipeline_cache();
 
-      _pipeline = std::make_unique<sbx::graphics::graphics_pipeline>(sbx::graphics::graphics_pipeline::create_info{
-        .shader = _shader.get(),
+      auto shader = shader_cache.get({"shaders/triangle/triangle.slang", entry_points});
+
+      _pipeline = pipeline_cache.get(sbx::graphics::graphics_pipeline::create_info{
+        .shader = shader,
         .color_formats = {static_cast<sbx::graphics::format>(swapchain.format())},
         .name = "Triangle"
       });
@@ -210,7 +205,7 @@ auto render_module::_consume_packet(const render_packet& packet) -> void {
     // Only sample once the upload has completed (texture resident) — by then flush_writes has
     // applied the descriptor too. Until then, just show the clear.
     if (_display_texture.is_valid() && assets_module.is_resident(_display_texture)) {
-      vkCmdBindPipeline(command_buffer->handle(), _pipeline->bind_point(), *_pipeline);
+      command_buffer->bind_pipeline(*_pipeline);
 
       const auto descriptor_set = bindless_table.descriptor_set();
       vkCmdBindDescriptorSets(command_buffer->handle(), VK_PIPELINE_BIND_POINT_GRAPHICS, bindless_table.pipeline_layout(), 0u, 1u, &descriptor_set, 0u, nullptr);

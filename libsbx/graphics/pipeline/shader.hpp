@@ -3,6 +3,7 @@
 #ifndef LIBSBX_GRAPHICS_PIPELINE_SHADER_HPP_
 #define LIBSBX_GRAPHICS_PIPELINE_SHADER_HPP_
 
+#include <cstdint>
 #include <filesystem>
 #include <span>
 #include <string>
@@ -23,15 +24,21 @@ class shader : public utility::noncopyable {
 
 public:
 
+  using id_type = std::uint32_t;
+
   struct stage {
     VkShaderStageFlagBits stage;
     VkShaderModule module;
     std::string entry_point;
   }; // struct stage
 
-  shader(shader_compiler& compiler, const std::filesystem::path& path, std::span<const shader_compiler::entry_point_request> entry_points);
+  shader(const std::filesystem::path& path, std::span<const shader_compiler::entry_point_request> entry_points, id_type id);
 
   ~shader();
+
+  [[nodiscard]] auto id() const noexcept -> id_type {
+    return _id;
+  }
 
   [[nodiscard]] auto stages() const noexcept -> const std::vector<stage>& {
     return _stages;
@@ -46,6 +53,7 @@ public:
 
 private:
 
+  id_type _id{0u};
   std::vector<stage> _stages{};
 
 }; // class shader

@@ -27,9 +27,10 @@ graphics_pipeline::graphics_pipeline(const create_info& create_info) {
   auto vertex_input_state = VkPipelineVertexInputStateCreateInfo{};
   vertex_input_state.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
 
-  auto input_assembly_state = VkPipelineInputAssemblyStateCreateInfo{};
+    auto input_assembly_state = VkPipelineInputAssemblyStateCreateInfo{};
   input_assembly_state.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
   input_assembly_state.topology = to_vk_enum<VkPrimitiveTopology>(create_info.topology);
+  input_assembly_state.primitiveRestartEnable = create_info.primitive_restart ? VK_TRUE : VK_FALSE;
 
   auto viewport_state = VkPipelineViewportStateCreateInfo{};
   viewport_state.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
@@ -43,23 +44,38 @@ graphics_pipeline::graphics_pipeline(const create_info& create_info) {
   rasterization_state.frontFace = to_vk_enum<VkFrontFace>(create_info.front_face);
   rasterization_state.lineWidth = 1.0f;
 
+  if (create_info.depth_bias.has_value()) {
+    rasterization_state.depthBiasEnable = VK_TRUE;
+    rasterization_state.depthBiasConstantFactor = create_info.depth_bias->constant_factor;
+    rasterization_state.depthBiasSlopeFactor = create_info.depth_bias->slope_factor;
+    rasterization_state.depthBiasClamp = create_info.depth_bias->clamp;
+  }
+
   auto multisample_state = VkPipelineMultisampleStateCreateInfo{};
   multisample_state.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
-  multisample_state.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+  multisample_state.rasterizationSamples = to_vk_enum<VkSampleCountFlagBits>(create_info.samples);
 
   auto depth_stencil_state = VkPipelineDepthStencilStateCreateInfo{};
   depth_stencil_state.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
   depth_stencil_state.depthTestEnable = create_info.depth_test ? VK_TRUE : VK_FALSE;
   depth_stencil_state.depthWriteEnable = create_info.depth_write ? VK_TRUE : VK_FALSE;
-  depth_stencil_state.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
+  depth_stencil_state.depthCompareOp = to_vk_enum<VkCompareOp>(create_info.depth_compare);
 
   auto color_blend_attachments = std::vector<VkPipelineColorBlendAttachmentState>{};
   color_blend_attachments.reserve(create_info.color_formats.size());
 
   for (auto index = std::size_t{0u}; index < create_info.color_formats.size(); ++index) {
+    const auto blend = (index < create_info.color_blend_attachments.size()) ? create_info.color_blend_attachments[index] : blend_attachment{};
+
     auto attachment = VkPipelineColorBlendAttachmentState{};
-    attachment.blendEnable = VK_FALSE;
-    attachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+    attachment.blendEnable = blend.enable ? VK_TRUE : VK_FALSE;
+    attachment.srcColorBlendFactor = to_vk_enum<VkBlendFactor>(blend.source_color);
+    attachment.dstColorBlendFactor = to_vk_enum<VkBlendFactor>(blend.destination_color);
+    attachment.colorBlendOp = to_vk_enum<VkBlendOp>(blend.color_operation);
+    attachment.srcAlphaBlendFactor = to_vk_enum<VkBlendFactor>(blend.source_alpha);
+    attachment.dstAlphaBlendFactor = to_vk_enum<VkBlendFactor>(blend.destination_alpha);
+    attachment.alphaBlendOp = to_vk_enum<VkBlendOp>(blend.alpha_operation);
+    attachment.colorWriteMask = utility::to_underlying(blend.color_write_mask);
 
     color_blend_attachments.push_back(attachment);
   }

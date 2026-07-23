@@ -32,6 +32,9 @@ public:
   struct entry_point_request {
     std::string name;
     VkShaderStageFlagBits stage;
+
+    auto operator==(const entry_point_request&) const -> bool = default;
+
   }; // struct entry_point_request
 
   struct compiled_entry_point {

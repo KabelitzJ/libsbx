@@ -77,8 +77,7 @@ private:
   assets::texture_handle _display_texture{};
   std::uint32_t _sampler_index{0u};
 
-  std::unique_ptr<graphics::shader> _shader{};
-  std::unique_ptr<graphics::graphics_pipeline> _pipeline{};
+  memory::observer_ptr<graphics::graphics_pipeline> _pipeline{nullptr};
 
 }; // class render_module
 

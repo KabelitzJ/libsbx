@@ -415,6 +415,10 @@ auto command_buffer::bind_index_buffer(const VkBuffer& buffer, VkDeviceSize offs
   vkCmdBindIndexBuffer(_handle, buffer, offset, index_type);
 }
 
+auto command_buffer::bind_pipeline(const graphics::graphics_pipeline& pipeline) -> void {
+  vkCmdBindPipeline(_handle, to_vk_enum<VkPipelineBindPoint>(pipeline.bind_point()), pipeline.handle());
+}
+
 auto command_buffer::draw(std::uint32_t vertex_count, std::uint32_t instance_count, std::uint32_t first_vertex, std::uint32_t first_instance) -> void {
   vkCmdDraw(_handle, vertex_count, instance_count, first_vertex, first_instance);
 }

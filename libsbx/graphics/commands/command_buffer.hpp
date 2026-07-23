@@ -16,6 +16,10 @@
 #include <libsbx/graphics/resources/image.hpp>
 #include <libsbx/graphics/resources/buffer.hpp>
 
+#include <libsbx/graphics/pipeline/graphics_pipeline.hpp>
+
+#include <libsbx/graphics/types.hpp>
+
 namespace sbx::graphics {
 
 class command_buffer : public utility::noncopyable {
@@ -145,6 +149,8 @@ public:
   auto bind_vertex_buffer(std::uint32_t first_binding, const VkBuffer& buffer) -> void;
 
   auto bind_index_buffer(const VkBuffer& buffer, VkDeviceSize offset, VkIndexType index_type) -> void;
+
+  auto bind_pipeline(const graphics::graphics_pipeline& pipeline) -> void;
 
   auto draw(std::uint32_t vertex_count, std::uint32_t instance_count, std::uint32_t first_vertex, std::uint32_t first_instance) -> void;
 

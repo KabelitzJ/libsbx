@@ -102,6 +102,39 @@ enum class image_layout : std::int32_t {
   rendering_local_read = VK_IMAGE_LAYOUT_RENDERING_LOCAL_READ
 }; // enum class image_layout
 
+enum class blend_factor : std::int32_t {
+  zero = VK_BLEND_FACTOR_ZERO,
+  one = VK_BLEND_FACTOR_ONE,
+  source_color = VK_BLEND_FACTOR_SRC_COLOR,
+  one_minus_source_color = VK_BLEND_FACTOR_ONE_MINUS_SRC_COLOR,
+  destination_color = VK_BLEND_FACTOR_DST_COLOR,
+  one_minus_destination_color = VK_BLEND_FACTOR_ONE_MINUS_DST_COLOR,
+  source_alpha = VK_BLEND_FACTOR_SRC_ALPHA,
+  one_minus_source_alpha = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+  destination_alpha = VK_BLEND_FACTOR_DST_ALPHA,
+  one_minus_destination_alpha = VK_BLEND_FACTOR_ONE_MINUS_DST_ALPHA,
+  constant_color = VK_BLEND_FACTOR_CONSTANT_COLOR,
+  one_minus_constant_color = VK_BLEND_FACTOR_ONE_MINUS_CONSTANT_COLOR,
+  constant_alpha = VK_BLEND_FACTOR_CONSTANT_ALPHA,
+  one_minus_constant_alpha = VK_BLEND_FACTOR_ONE_MINUS_CONSTANT_ALPHA,
+  source_alpha_saturate = VK_BLEND_FACTOR_SRC_ALPHA_SATURATE
+}; // enum class blend_factor
+
+enum class color_component : std::int32_t {
+  r = VK_COLOR_COMPONENT_R_BIT,
+  g = VK_COLOR_COMPONENT_G_BIT,
+  b = VK_COLOR_COMPONENT_B_BIT,
+  a = VK_COLOR_COMPONENT_A_BIT
+}; // enum class color_component
+
+enum class blend_operation : std::int32_t {
+  add = VK_BLEND_OP_ADD,
+  subtract = VK_BLEND_OP_SUBTRACT,
+  reverse_subtract = VK_BLEND_OP_REVERSE_SUBTRACT,
+  min = VK_BLEND_OP_MIN,
+  max = VK_BLEND_OP_MAX
+}; // enum class blend_operation
+
 enum class attachment_load_op : std::int32_t {
   load = VK_ATTACHMENT_LOAD_OP_LOAD,
   clear = VK_ATTACHMENT_LOAD_OP_CLEAR,
@@ -214,6 +247,9 @@ struct sbx::utility::is_bit_field<sbx::graphics::buffer_usage> : std::true_type 
 
 template<>
 struct sbx::utility::is_bit_field<sbx::graphics::image_usage> : std::true_type { };
+
+template<>
+struct sbx::utility::is_bit_field<sbx::graphics::color_component> : std::true_type { };
 
 template<>
 struct sbx::reflection::description<sbx::graphics::format> {

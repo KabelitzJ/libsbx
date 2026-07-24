@@ -8,24 +8,62 @@
 
 #include <libsbx/version.hpp>
 
+#include <libsbx/utility/overload.hpp>
 #include <libsbx/utility/target.hpp>
 
 #include <libsbx/platform/input.hpp>
 
 namespace sbx::platform {
 
-window::window(const window_create_info& create_info)
-: _title{create_info.title},
-  _width{create_info.width},
-  _height{create_info.height},
-  _last_mouse_position{-1.0f, -1.0f} {
+window::window(const create_info& create_info)
+: _last_mouse_position{-1.0f, -1.0f} {
   glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+
+  std::visit([this](const auto& info) {
+    _title = info.title;
+  }, create_info);
 
   if constexpr (utility::build_type_v == utility::build_type::debug) {
     _title = fmt::format("{} [Debug] v" SBX_VERSION_STRING, _title);
   }
 
-  _handle = glfwCreateWindow(static_cast<std::int32_t>(_width), static_cast<std::int32_t>(_height), _title.c_str(), nullptr, nullptr);
+  auto* monitor = glfwGetPrimaryMonitor();
+
+  if (!monitor) {
+    throw std::runtime_error{"Could not get primary monitor"};
+  }
+
+  const auto* video_mode = glfwGetVideoMode(monitor);
+
+  if (!video_mode) {
+    throw std::runtime_error{"Could not get video mode"};
+  }
+
+  std::visit(utility::overload(
+    [this](const windowed_create_info& info) {
+      _width = info.size.x();
+      _height = info.size.y();
+
+      _handle = glfwCreateWindow(static_cast<int>(_width), static_cast<int>(_height), info.title.c_str(), nullptr, nullptr);
+    },
+    [this, monitor, video_mode](const fullscreen_create_info& info) {
+      _width = info.size.x();
+      _height = info.size.y();
+
+      _handle = glfwCreateWindow(static_cast<int>(_width), static_cast<int>(_height), info.title.c_str(), monitor, nullptr);
+    },
+    [this, monitor, video_mode](const borderless_create_info& info) {
+      _width = static_cast<std::uint32_t>(video_mode->width);
+      _height = static_cast<std::uint32_t>(video_mode->height);
+
+      glfwWindowHint(GLFW_RED_BITS, video_mode->redBits);
+      glfwWindowHint(GLFW_GREEN_BITS, video_mode->greenBits);
+      glfwWindowHint(GLFW_BLUE_BITS, video_mode->blueBits);
+      glfwWindowHint(GLFW_REFRESH_RATE, video_mode->refreshRate);
+
+      _handle = glfwCreateWindow(static_cast<int>(_width), static_cast<int>(_height), info.title.c_str(), monitor, nullptr);
+    }
+  ), create_info);
 
   if (!_handle) {
     throw std::runtime_error{"Could not create glfw window"};

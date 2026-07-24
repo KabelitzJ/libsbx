@@ -20,19 +20,29 @@
 
 namespace sbx::platform {
 
-struct window_create_info {
-  std::string title{};
-  std::uint32_t width{};
-  std::uint32_t height{};
-}; // struct window_create_info
-
 class window : public utility::noncopyable {
 
 public:
 
+  struct windowed_create_info {
+    std::string title{};
+    math::vector2u size{};
+  }; // struct windowed_create_info
+
+  struct fullscreen_create_info {
+    std::string title{};
+    math::vector2u size{};
+  }; // struct fullscreen_create_info
+
+  struct borderless_create_info {
+    std::string title{};
+  }; // struct borderless_create_info
+
+  using create_info = std::variant<windowed_create_info, fullscreen_create_info, borderless_create_info>;
+
   using handle_type = GLFWwindow*;
 
-  window(const window_create_info& create_info);
+  window(const create_info& create_info);
 
   ~window();
 

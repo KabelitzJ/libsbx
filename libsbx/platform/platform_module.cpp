@@ -26,7 +26,7 @@ platform_module::context::~context() {
 
 platform_module::platform_module()
 : _context{},
-  _window{window_create_info{"libsbx", 1280u, 720u}} { }
+  _window{window::windowed_create_info{"libsbx", {1920, 1080}}} { }
 
 platform_module::~platform_module() {
 

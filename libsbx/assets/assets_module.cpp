@@ -131,8 +131,8 @@ auto assets_module::load_texture(const math::uuid& id, graphics::format format) 
   auto* data = stbi_load(path.string().c_str(), &width, &height, &channels, STBI_rgb_alpha);
 
   if (data == nullptr) {
-    utility::logger<"assets">::warn("Could not load texture '{}'", key);
-
+    utility::logger<"assets">::warn("Could not load texture '{}'", path.generic_string());
+  
     return texture_handle{};
   }
 
@@ -187,8 +187,8 @@ auto assets_module::load_mesh(const math::uuid& id) -> mesh_handle {
   auto data = fastgltf::GltfDataBuffer::FromPath(path);
 
   if (data.error() != fastgltf::Error::None) {
-    utility::logger<"assets">::warn("Could not open mesh '{}'", id);
-
+    utility::logger<"assets">::warn("Could not open mesh '{}'", path.generic_string());
+  
     return mesh_handle{};
   }
 
@@ -197,7 +197,7 @@ auto assets_module::load_mesh(const math::uuid& id) -> mesh_handle {
   auto loaded = parser.loadGltf(data.get(), path.parent_path(), fastgltf::Options::LoadExternalBuffers | fastgltf::Options::GenerateMeshIndices);
 
   if (loaded.error() != fastgltf::Error::None) {
-    utility::logger<"assets">::warn("Could not parse mesh '{}'", id);
+    utility::logger<"assets">::warn("Could not parse mesh '{}'", path.generic_string());
 
     return mesh_handle{};
   }
@@ -224,7 +224,7 @@ auto assets_module::load_mesh(const math::uuid& id) -> mesh_handle {
       return load_texture(path.parent_path() / std::filesystem::path{std::string{uri->uri.path()}}, format);
     }
 
-    utility::logger<"assets">::warn("Mesh '{}': non-file image, using default", id.value());
+    utility::logger<"assets">::warn("Mesh '{}': non-file image, using default", path.generic_string());
 
     return texture_handle{};
   };
@@ -378,7 +378,8 @@ auto assets_module::load_mesh(const math::uuid& id) -> mesh_handle {
   }
 
   if (vertices.empty() || indices.empty()) {
-    utility::logger<"assets">::warn("Mesh '{}' has no drawable geometry", id.value());
+    utility::logger<"assets">::warn("Mesh '{}' has no drawable geometry", path.generic_string());
+
     return mesh_handle{};
   }
 
@@ -395,7 +396,7 @@ auto assets_module::load_mesh(const math::uuid& id) -> mesh_handle {
     _pending_meshes.push_back(pending_mesh_upload{record, std::move(vertices), std::move(indices)});
   }
 
-  utility::logger<"assets">::info("Loaded mesh '{}': {} vertices, {} indices, {} submeshes", id.value(), vertex_count, index_count, submesh_count);
+  utility::logger<"assets">::info("Loaded mesh '{}': {} vertices, {} indices, {} submeshes", path.generic_string(), vertex_count, index_count, submesh_count);
 
   return mesh_handle{record};
 }

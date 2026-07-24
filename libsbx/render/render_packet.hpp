@@ -7,6 +7,7 @@
 
 #include <libsbx/math/color.hpp>
 #include <libsbx/math/matrix4x4.hpp>
+#include <libsbx/math/vector3.hpp>
 
 #include <libsbx/assets/mesh.hpp>
 #include <libsbx/assets/texture.hpp>
@@ -21,6 +22,7 @@ struct render_item {
 
 struct camera_data {
   math::matrix4x4 view{math::matrix4x4::identity};
+  math::vector3f position{0.0f, 0.0f, 0.0f};
   float fov_degrees{60.0f};
   float near_plane{0.1f};
   float far_plane{1000.0f};

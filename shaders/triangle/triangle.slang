@@ -1,6 +1,11 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Jonas Kabelitz
 
+struct vs_in {
+  [[vk::location(0)]] uint vertex_id : SV_VertexID;
+  [[vk::location(1)]] uint instance_id : SV_InstanceID;
+}; // struct vs_in
+
 struct vs_out {
   [[vk::location(0)]] float2 uv : UV;
   float4 position : SV_Position;
@@ -20,9 +25,16 @@ struct vertex {
   float2 uv;
 }; // struct vertex
 
+struct frame_data {
+  float4x4 view;
+  float4x4 projection;
+  float4 camera_position;
+}; // struct frame_data
+
 struct push_data {
-  float4x4 mvp;
+  frame_data* frame_data;
   vertex* vertices;
+  float4x4 model;
   uint image_index;
   uint sampler_index;
 }; // struct push_data
@@ -33,12 +45,17 @@ struct push_data {
 [[vk::binding(1, 0)]] SamplerState samplers[];
 
 [shader("vertex")]
-vs_out vertex_main(uint vertex_id : SV_VertexID) {
-  vertex vertex = push.vertices[vertex_id];
+vs_out vertex_main(vs_in input) {
+  vertex vertex = push.vertices[input.vertex_id];
+
+  frame_data frame = *push.frame_data;
+
+  float4 world_position = mul(push.model, float4(vertex.position, 1.0));
+  float4 view_position = mul(frame.view, world_position);
 
   vs_out output;
   output.uv = vertex.uv;
-  output.position = mul(push.mvp, float4(vertex.position, 1.0));
+  output.position = mul(frame.projection, view_position);
 
   return output;
 }

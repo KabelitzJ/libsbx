@@ -47,10 +47,10 @@ application::application()
   const auto fov = 60.0f;
   const auto distance = radius / std::sin(sbx::math::to_radians(sbx::math::degree{fov}).value() * 0.5f) * 2.0f;
 
-  auto model = scene.create_node();
-  model.transform().position = center * -1.0f;
+  _duck = scene.create_node();
+  _duck.transform().position = center * -1.0f;
 
-  auto& renderer = model.add_component<sbx::scenes::mesh_renderer>();
+  auto& renderer = _duck.add_component<sbx::scenes::mesh_renderer>();
   renderer.mesh = mesh;
   renderer.texture = texture;
 
@@ -71,6 +71,9 @@ auto application::update() -> void {
   if (sbx::platform::input::is_key_pressed(sbx::platform::key::escape)) {
     sbx::core::engine::quit();
   }
+
+  _rotation += sbx::math::degree{90.0f} * sbx::core::engine::delta_time();
+  _duck.transform().rotation = sbx::math::quaternion{sbx::math::vector3f{0.0f, 1.0f, 0.0f}, _rotation};
 }
 
 auto application::fixed_update() -> void {

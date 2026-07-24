@@ -19,10 +19,14 @@ namespace sbx::utility {
  * 
  * @return Type The result of the modulus operation.
  */
-template<std::unsigned_integral Value, std::unsigned_integral Mod>
-constexpr auto fast_mod(const Value value, const Mod modulus) noexcept -> Value {
-  // return value - (value / modulus) * modulus;
+template<std::unsigned_integral Value, std::unsigned_integral Modulus>
+constexpr auto fast_mod(const Value value, const Modulus modulus) noexcept -> Value {
   return value < modulus ? value : value % static_cast<Value>(modulus);
+}
+
+template<std::unsigned_integral Value, std::size_t Modulus>
+constexpr auto fast_mod(const Value value) noexcept -> Value {
+  return value < Modulus ? value : value % static_cast<Value>(Modulus);
 }
 
 template<std::floating_point Type>

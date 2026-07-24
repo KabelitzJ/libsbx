@@ -586,6 +586,11 @@ public:
   using value_type = Type;
 
   /**
+   * @brief Constructs an angle initialized to zero radians.
+   */
+  constexpr basic_angle() noexcept = default;
+
+  /**
    * @brief Constructs an angle from a degree value.
    *
    * @param degree Angle expressed in degrees.

@@ -5,9 +5,13 @@
 
 #include <stb_image.h>
 
+#include <libsbx/units/units.hpp>
+
+#include <libsbx/math/angle.hpp>
+
 #include <libsbx/core/application.hpp>
 
-#include <libsbx/units/units.hpp>
+#include <libsbx/scenes/scene.hpp>
 
 namespace demo {
 
@@ -31,6 +35,9 @@ private:
 
   sbx::units::seconds _time;
   std::uint32_t _fps;
+
+  sbx::scenes::scene::node _duck;
+  sbx::math::angle _rotation;
 
 }; // class application
 

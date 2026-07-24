@@ -9,6 +9,8 @@
 
 #include <libsbx/utility/logger.hpp>
 
+#include <libsbx/memory/alignment.hpp>
+
 #include <libsbx/math/vector3.hpp>
 #include <libsbx/math/matrix4x4.hpp>
 #include <libsbx/math/angle.hpp>
@@ -32,9 +34,16 @@
 
 namespace sbx::render {
 
+struct frame_data {
+  math::matrix4x4 view;
+  math::matrix4x4 projection;
+  math::vector4 camera_position;
+}; // struct frame_data
+
 struct push_constants {
-  float mvp[16];
-  std::uint64_t vertex_address;
+  graphics::buffer::address_type frame_address;
+  graphics::buffer::address_type vertex_address;
+  math::matrix4x4 model;
   std::uint32_t image_index;
   std::uint32_t sampler_index;
 }; // struct push_constants
@@ -139,8 +148,10 @@ auto render_module::_build_packet() -> render_packet {
     auto camera_node = scene.active_camera();
 
     const auto& camera = camera_node.get_component<scenes::camera>();
+    const auto& world = camera_node.world_matrix();
 
-    packet.camera.view = math::matrix4x4::inverted(camera_node.world_matrix());
+    packet.camera.view = math::matrix4x4::inverted(world);
+    packet.camera.position = math::vector3f{world[3]};
     packet.camera.fov_degrees = camera.fov_degrees;
     packet.camera.near_plane = camera.near_plane;
     packet.camera.far_plane = camera.far_plane;
@@ -199,6 +210,19 @@ auto render_module::_consume_packet(const render_packet& packet) -> void {
       });
 
       _sampler_index = bindless_table.sampler_index(graphics::sampler::create_info{});
+
+      _frame_buffer = registry.emplace<graphics::buffer>(graphics::buffer::create_info{
+        .size = sizeof(frame_data) * graphics::swapchain::max_frames_in_flight,
+        .usage = graphics::buffer_usage::device_address | graphics::buffer_usage::storage,
+        .memory = graphics::memory_usage::host_write,
+        .name = fmt::format("Frame Data")
+      });
+
+      const auto base = registry.get<graphics::buffer>(_frame_buffer).address();
+
+      for (auto slot = std::size_t{0u}; slot < graphics::swapchain::max_frames_in_flight; ++slot) {
+        _frame_addresses[slot] = base + slot * memory::stride_v<frame_data>;
+      }
     }
 
     // Turn queued asset uploads into GPU images/buffers + bindless writes, then record their copies.
@@ -280,6 +304,19 @@ auto render_module::_consume_packet(const render_packet& packet) -> void {
       const auto projection = math::matrix4x4::perspective(math::degree{packet.camera.fov_degrees}, aspect, packet.camera.near_plane, packet.camera.far_plane);
       const auto& view = packet.camera.view;
 
+      // Write this frame's data into its slot buffer. The throttle guarantees the slot from two frames ago is done, so this never races the GPU.
+      const auto slot = utility::fast_mod(frame_context.frame_index(), graphics::swapchain::max_frames_in_flight);
+
+      auto data = frame_data{};
+      data.view = view;
+      data.projection = projection;
+      data.camera_position = math::vector4{packet.camera.position, 1.0f};
+
+      auto& frame_buffer = registry.get<graphics::buffer>(_frame_buffer);
+      frame_buffer.write(&data, sizeof(frame_data), slot * memory::stride_v<frame_data>);
+
+      const auto frame_address = _frame_addresses[slot];
+
       auto bound = false;
 
       for (const auto& item : packet.items) {
@@ -308,17 +345,10 @@ auto render_module::_consume_packet(const render_packet& packet) -> void {
           bound = true;
         }
 
-        const auto mvp = projection * view * item.model;
-
         auto values = push_constants{};
-
-        for (auto column = 0u; column < 4u; ++column) {
-          for (auto row = 0u; row < 4u; ++row) {
-            values.mvp[column * 4u + row] = mvp[column][row];
-          }
-        }
-
+        values.frame_address = frame_address;
         values.vertex_address = mesh.vertex_address();
+        values.model = item.model;
         values.image_index = item.texture->index();
         values.sampler_index = _sampler_index;
 

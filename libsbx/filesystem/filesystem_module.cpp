@@ -12,7 +12,7 @@
 #if defined(SBX_OPERATING_SYSTEM_WIN32)
   #define WIN32_LEAN_AND_MEAN
   #include <windows.h>
-#elif defined(SBX_APPLE)
+#elif defined(SBX_OPERATING_SYSTEM_APPLE)
   #include <cstdint>
   #include <mach-o/dyld.h>
 #endif
@@ -22,7 +22,7 @@
 namespace sbx::filesystem {
 
 auto _executable_directory() -> std::filesystem::path {
-#if defined(_WIN32)
+#if defined(SBX_OPERATING_SYSTEM_WIN32)
   auto buffer = std::vector<wchar_t>(MAX_PATH);
 
   for (;;) {
@@ -38,7 +38,7 @@ auto _executable_directory() -> std::filesystem::path {
 
     buffer.resize(buffer.size() * 2);
   }
-#elif defined(__APPLE__)
+#elif defined(SBX_OPERATING_SYSTEM_APPLE)
   auto buffer = std::vector<char>(1024);
   auto size = static_cast<std::uint32_t>(buffer.size());
 
@@ -82,23 +82,23 @@ auto _data_directory() -> std::filesystem::path {
 
 filesystem_module::filesystem_module()
 : _filesystem{std::make_unique<virtual_filesystem>()} {
-  auto data_directory = std::filesystem::path{};
+  // auto data_directory = std::filesystem::path{};
 
-  try {
-    data_directory = _data_directory();
-  } catch (const std::exception& exception) {
-    utility::logger<"filesystem">::warn("Engine data directory not found: {}; the 'engine://' mount will not be registered", exception.what());
-    return;
-  }
+  // try {
+  //   data_directory = _data_directory();
+  // } catch (const std::exception& exception) {
+  //   utility::logger<"filesystem">::warn("Engine data directory not found: {}; the 'engine://' mount will not be registered", exception.what());
+  //   return;
+  // }
 
-  const auto mount = _filesystem->create_filesystem<native_filesystem>(alias{"engine://"}, data_directory.string());
+  // const auto mount = _filesystem->create_filesystem<native_filesystem>(alias{"engine://"}, data_directory.string());
 
-  if (!mount) {
-    utility::logger<"filesystem">::warn("Failed to register 'engine://' mount at '{}'", data_directory.string());
-    return;
-  }
+  // if (!mount) {
+  //   utility::logger<"filesystem">::warn("Failed to register 'engine://' mount at '{}'", data_directory.string());
+  //   return;
+  // }
 
-  utility::logger<"filesystem">::debug("Registered 'engine://' mount at '{}'", data_directory.string());
+  // utility::logger<"filesystem">::debug("Registered 'engine://' mount at '{}'", data_directory.string());
 }
 
 filesystem_module::~filesystem_module() {

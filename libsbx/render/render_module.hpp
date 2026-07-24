@@ -3,6 +3,7 @@
 #ifndef LIBSBX_RENDER_RENDER_MODULE_HPP_
 #define LIBSBX_RENDER_RENDER_MODULE_HPP_
 
+#include <array>
 #include <condition_variable>
 #include <cstdint>
 #include <mutex>
@@ -15,8 +16,13 @@
 
 #include <libsbx/assets/assets_module.hpp>
 
+#include <libsbx/graphics/devices/swapchain.hpp>
+
 #include <libsbx/graphics/graphics_module.hpp>
+
 #include <libsbx/graphics/pipeline/graphics_pipeline.hpp>
+
+#include <libsbx/graphics/resources/buffer.hpp>
 #include <libsbx/graphics/resources/image.hpp>
 
 #include <libsbx/scenes/scenes_module.hpp>
@@ -71,6 +77,9 @@ private:
   graphics::image_handle _depth_image{};
   std::uint32_t _depth_width{0u};
   std::uint32_t _depth_height{0u};
+
+  graphics::buffer_handle _frame_buffer{};
+  std::array<graphics::buffer::address_type, graphics::swapchain::max_frames_in_flight> _frame_addresses{};
 
 }; // class render_module
 

@@ -170,31 +170,31 @@ auto render_module::_build_packet() -> render_packet {
   }
 
   for (auto&& [entity, transform, light] : scene.query<scenes::world_transform, scenes::directional_light>().each()) {
-    const auto& m = transform.matrix;
+    const auto& matrix = transform.matrix;
     auto& out = packet.lights.emplace_back();
   
     out.type = light_type::directional;
     out.color = math::vector4{light.color.r(), light.color.g(), light.color.b(), light.intensity};
-    out.direction = math::vector4{math::vector3f::normalized(math::vector3f{-m[2].x(), -m[2].y(), -m[2].z()}), 0.0f};
+    out.direction = math::vector4{math::vector3f::normalized(math::vector3f{-matrix[2].x(), -matrix[2].y(), -matrix[2].z()}), 0.0f};
   }
 
   for (auto&& [entity, transform, light] : scene.query<scenes::world_transform, scenes::point_light>().each()) {
-    const auto& m = transform.matrix;
+    const auto& matrix = transform.matrix;
     auto& out = packet.lights.emplace_back();
   
     out.type = light_type::point;
     out.color = math::vector4{light.color.r(), light.color.g(), light.color.b(), light.intensity};
-    out.position = math::vector4{m[3].x(), m[3].y(), m[3].z(), light.range};
+    out.position = math::vector4{matrix[3].x(), matrix[3].y(), matrix[3].z(), light.range};
   }
 
   for (auto&& [entity, transform, light] : scene.query<scenes::world_transform, scenes::spot_light>().each()) {
-    const auto& m = transform.matrix;
+    const auto& matrix = transform.matrix;
     auto& out = packet.lights.emplace_back();
   
     out.type = light_type::spot;
     out.color = math::vector4{light.color.r(), light.color.g(), light.color.b(), light.intensity};
-    out.position = math::vector4{m[3].x(), m[3].y(), m[3].z(), light.range};
-    out.direction = math::vector4{math::vector3f::normalized(math::vector3f{-m[2].x(), -m[2].y(), -m[2].z()}), 0.0f};
+    out.position = math::vector4{matrix[3].x(), matrix[3].y(), matrix[3].z(), light.range};
+    out.direction = math::vector4{math::vector3f::normalized(math::vector3f{-matrix[2].x(), -matrix[2].y(), -matrix[2].z()}), 0.0f};
     out.inner_cos = std::cos(light.inner_angle);
     out.outer_cos = std::cos(light.outer_angle);
   }

@@ -63,6 +63,15 @@ application::application()
   auto& flight_helmet_renderer = _flight_helmet.add_component<sbx::scenes::mesh_renderer>();
   flight_helmet_renderer.mesh = flight_helmet_mesh;
 
+  auto light = scene.create_node();
+  auto& light_transform = light.transform();
+  light_transform.position = sbx::math::vector3f{0.0f, 3.0f, 0.0f};
+
+  auto& light_component = light.add_component<sbx::scenes::point_light>();
+  light_component.color = sbx::math::color{1.0f, 0.0f, 0.0f, 1.0f};
+  light_component.intensity = 10.0f;
+  light_component.range = 20.0f;
+
   auto camera = scene.create_node();
   camera.transform().position = sbx::math::vector3f{0.0f, 0.0f, 4.0f};
 

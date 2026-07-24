@@ -81,7 +81,7 @@ struct spot_light {
   std::float_t intensity{1.0f};
   std::float_t range{10.0f};
   std::float_t inner_angle{0.4f}; // radians
-  std::float_t outer_angle{0.6f};
+  std::float_t outer_angle{0.6f}; // radians
 }; // struct spot_light
 
 } // namespace sbx::scenes

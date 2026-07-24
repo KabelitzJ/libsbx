@@ -30,10 +30,27 @@ struct camera_data {
   bool active{false};
 }; // struct camera_data
 
+enum class light_type : std::uint32_t {
+  directional = 0u,
+  point = 1u,
+  spot = 2u
+}; // enum class light_type
+
+struct light_data {
+  math::vector4 color{1.0f, 1.0f, 1.0f, 1.0f}; // rgb + intensity in a
+  math::vector4 position{0.0f, 0.0f, 0.0f, 0.0f}; // xyz + range in w
+  math::vector4 direction{0.0f, 0.0f, -1.0f, 0.0f};
+  light_type type{light_type::directional};
+  float inner_cos{0.0f};
+  float outer_cos{0.0f};
+  std::uint32_t padding{0u};
+}; // struct light_data
+
 struct render_packet {
   math::color clear_color{0.05f, 0.05f, 0.08f, 1.0f};
   camera_data camera{};
   std::vector<render_item> items{};
+  std::vector<light_data> lights{};
 }; // struct render_packet
 
 } // namespace sbx::render

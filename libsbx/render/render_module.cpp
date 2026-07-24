@@ -3,6 +3,7 @@
 #include <libsbx/render/render_module.hpp>
 
 #include <array>
+#include <cmath>
 #include <cstddef>
 #include <cstring>
 #include <vector>
@@ -38,8 +39,9 @@ struct frame_data {
   math::matrix4x4 view;
   math::matrix4x4 projection;
   math::vector4 camera_position;
-  math::vector4 light_direction;
-  math::vector4 light_color;
+  graphics::buffer::address_type light_address;
+  std::uint32_t light_count;
+  std::uint32_t padding;
   graphics::buffer::address_type material_address;
 }; // struct frame_data
 
@@ -167,6 +169,36 @@ auto render_module::_build_packet() -> render_packet {
     packet.items.push_back(render_item{world.matrix, renderer.mesh, renderer.materials});
   }
 
+  for (auto&& [entity, transform, light] : scene.query<scenes::world_transform, scenes::directional_light>().each()) {
+    const auto& m = transform.matrix;
+    auto& out = packet.lights.emplace_back();
+  
+    out.type = light_type::directional;
+    out.color = math::vector4{light.color.r(), light.color.g(), light.color.b(), light.intensity};
+    out.direction = math::vector4{math::vector3f::normalized(math::vector3f{-m[2].x(), -m[2].y(), -m[2].z()}), 0.0f};
+  }
+
+  for (auto&& [entity, transform, light] : scene.query<scenes::world_transform, scenes::point_light>().each()) {
+    const auto& m = transform.matrix;
+    auto& out = packet.lights.emplace_back();
+  
+    out.type = light_type::point;
+    out.color = math::vector4{light.color.r(), light.color.g(), light.color.b(), light.intensity};
+    out.position = math::vector4{m[3].x(), m[3].y(), m[3].z(), light.range};
+  }
+
+  for (auto&& [entity, transform, light] : scene.query<scenes::world_transform, scenes::spot_light>().each()) {
+    const auto& m = transform.matrix;
+    auto& out = packet.lights.emplace_back();
+  
+    out.type = light_type::spot;
+    out.color = math::vector4{light.color.r(), light.color.g(), light.color.b(), light.intensity};
+    out.position = math::vector4{m[3].x(), m[3].y(), m[3].z(), light.range};
+    out.direction = math::vector4{math::vector3f::normalized(math::vector3f{-m[2].x(), -m[2].y(), -m[2].z()}), 0.0f};
+    out.inner_cos = std::cos(light.inner_angle);
+    out.outer_cos = std::cos(light.outer_angle);
+  }
+
   return packet;
 }
 
@@ -215,7 +247,7 @@ auto render_module::_consume_packet(const render_packet& packet) -> void {
       _sampler_index = bindless_table.sampler_index(graphics::sampler::create_info{});
 
       _frame_buffer = registry.emplace<graphics::buffer>(graphics::buffer::create_info{
-        .size = sizeof(frame_data) * graphics::swapchain::max_frames_in_flight,
+        .size = memory::stride_v<frame_data> * graphics::swapchain::max_frames_in_flight,
         .usage = graphics::buffer_usage::device_address | graphics::buffer_usage::storage,
         .memory = graphics::memory_usage::host_write,
         .name = fmt::format("Frame Data")
@@ -225,6 +257,18 @@ auto render_module::_consume_packet(const render_packet& packet) -> void {
 
       for (auto slot = std::size_t{0u}; slot < graphics::swapchain::max_frames_in_flight; ++slot) {
         _frame_addresses[slot] = base + slot * memory::stride_v<frame_data>;
+      }
+
+      _light_buffer = registry.emplace<graphics::buffer>(graphics::buffer::create_info{
+        .size = memory::stride_v<light_data> * light_capacity * graphics::swapchain::max_frames_in_flight,
+        .usage = graphics::buffer_usage::device_address | graphics::buffer_usage::storage,
+        .memory = graphics::memory_usage::host_write,
+        .name = "Light Data"
+      });
+
+      const auto light_base = registry.get<graphics::buffer>(_light_buffer).address();
+      for (auto slot = std::size_t{0u}; slot < graphics::swapchain::max_frames_in_flight; ++slot) {
+        _light_addresses[slot] = light_base + slot * light_capacity * memory::stride_v<light_data>;
       }
     }
 
@@ -310,20 +354,23 @@ auto render_module::_consume_packet(const render_packet& packet) -> void {
       // Write this frame's data into its slot buffer. The throttle guarantees the slot from two frames ago is done, so this never races the GPU.
       const auto slot = utility::fast_mod(frame_context.frame_index(), graphics::swapchain::max_frames_in_flight);
 
-      const auto light_direction = math::vector3f::normalized(math::vector3f{-0.4f, -1.0f, -0.5f});
+      const auto light_count = std::min(static_cast<std::uint32_t>(packet.lights.size()), light_capacity);
+
+      if (light_count > 0u) {
+        auto& light_buffer = registry.get<graphics::buffer>(_light_buffer);
+        light_buffer.write(packet.lights.data(), light_count * memory::stride_v<light_data>, slot * light_capacity * memory::stride_v<light_data>);
+      }
 
       auto data = frame_data{};
       data.view = view;
       data.projection = projection;
       data.camera_position = math::vector4{packet.camera.position, 1.0f};
-      data.light_direction = math::vector4{light_direction, 0.0f};
-      data.light_color = math::vector4{1.0f, 1.0f, 1.0f, 3.0f}; // rgb + intensity
+      data.light_address = _light_addresses[slot];
+      data.light_count = light_count;
       data.material_address = assets_module.material_buffer_address();
 
       auto& frame_buffer = registry.get<graphics::buffer>(_frame_buffer);
       frame_buffer.write(&data, sizeof(frame_data), slot * memory::stride_v<frame_data>);
-
-      const auto frame_address = _frame_addresses[slot];
 
       auto bound = false;
 
@@ -361,7 +408,7 @@ auto render_module::_consume_packet(const render_packet& packet) -> void {
           }
 
           auto values = push_constants{};
-          values.frame_address = frame_address;
+          values.frame_address = _frame_addresses[slot];
           values.vertex_address = mesh.vertex_address();
           values.model = item.model;
           values.material_index = selected_material->index();

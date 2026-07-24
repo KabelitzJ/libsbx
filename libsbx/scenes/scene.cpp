@@ -24,6 +24,14 @@ auto scene::active_camera() -> node {
   return node{this, _active_camera};
 }
 
+auto scene::set_primary_light(node light) -> void { 
+  _primary_light = light._entity;
+}
+
+auto scene::primary_light() -> node { 
+  return node{this, _primary_light}; 
+}
+
 auto scene::update() -> void {
   SBX_PROFILE_SCOPE("scene::update");
 

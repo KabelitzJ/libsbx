@@ -72,6 +72,16 @@ application::application()
   camera_component.far_plane = 1000.0f;
 
   scene.set_active_camera(camera);
+
+  auto sun = scene.create_node();
+
+  auto& sun_transform = sun.transform();
+  sun_transform.rotation = sbx::math::quaternion::look_at(sbx::math::vector3f{-0.4f, -1.0f, -0.5f});
+
+  auto& sun_light = sun.add_component<sbx::scenes::directional_light>();
+  sun_light.intensity = 3.0f;
+
+  scene.set_primary_light(sun);
 }
 
 auto application::update() -> void {

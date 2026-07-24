@@ -181,6 +181,32 @@ public:
     return math::vector3{to_degrees(radian{roll}).value(), to_degrees(radian{pitch}).value(), to_degrees(radian{yaw}).value()};
   }
 
+  /**
+   * @brief The rotation orienting an object's forward (-Z) along @p direction, with its up aligned to @p up. 
+   * Works for cameras and directional/spot lights (all use -Z as forward).
+   * 
+   * @param direction The direction to look at.
+   * @param up The up vector to align with.
+   * 
+   * @return A quaternion representing the rotation to look at the given direction with the specified up vector.
+   */
+  [[nodiscard]] static auto look_at(const vector_type& direction, const vector_type& up = vector_type::up) noexcept -> basic_quaternion {
+    const auto forward = vector_type::normalized(direction);
+    const auto z = forward * static_cast<value_type>(-1); // the +Z basis column (forward is -Z)
+
+    auto reference = vector_type::normalized(up);
+
+    // Avoid a degenerate basis when direction is (anti)parallel to up.
+    if (math::abs(vector_type::dot(forward, reference)) > static_cast<value_type>(0.9999)) {
+      reference = vector_type{value_type{0}, value_type{0}, value_type{1}};
+    }
+
+    const auto x = vector_type::normalized(vector_type::cross(reference, z));
+    const auto y = vector_type::cross(z, x);
+
+    return basic_quaternion{basic_matrix3x3<value_type>{x, y, z}};
+  }
+
   template<floating_point Other = value_type>
   constexpr auto operator+=(const basic_quaternion<Other>& other) noexcept -> basic_quaternion&;
 

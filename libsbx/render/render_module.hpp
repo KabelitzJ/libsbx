@@ -49,6 +49,8 @@ public:
 
 private:
 
+  inline static constexpr auto light_capacity = std::uint32_t{256u};
+
   auto _start() -> void;
 
   auto _stop() -> void;
@@ -80,6 +82,9 @@ private:
 
   graphics::buffer_handle _frame_buffer{};
   std::array<graphics::buffer::address_type, graphics::swapchain::max_frames_in_flight> _frame_addresses{};
+
+  graphics::buffer_handle _light_buffer{};
+  std::array<graphics::buffer::address_type, graphics::swapchain::max_frames_in_flight> _light_addresses{};
 
 }; // class render_module
 

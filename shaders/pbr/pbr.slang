@@ -45,12 +45,29 @@ struct material_data {
   uint padding;
 }; // struct material_data
 
+enum class light_type : uint {
+  directional = 0,
+  point = 1,
+  spot = 2
+}; // enum light_type
+
+struct light_data {
+  float4 color;
+  float4 position;
+  float4 direction;
+  light_type type;
+  float inner_cos;
+  float outer_cos;
+  uint padding;
+}; // struct light_data
+
 struct frame_data {
   float4x4 view;
   float4x4 projection;
   float4 camera_position;
-  float4 light_direction;
-  float4 light_color;
+  light_data* lights;
+  uint light_count;
+  uint padding;
   material_data* materials;
 }; // struct frame_data
 
@@ -89,6 +106,18 @@ float geometry_smith(float3 n, float3 v, float3 l, float roughness) {
 
 float3 fresnel_schlick(float cos_theta, float3 f0) {
   return f0 + (1.0 - f0) * pow(clamp(1.0 - cos_theta, 0.0, 1.0), 5.0);
+}
+
+float3 brdf(float3 n, float3 v, float3 l, float3 albedo, float3 f0, float roughness, float metallic) {
+  float3 h = normalize(v + l);
+  float ndf = distribution_ggx(n, h, roughness);
+  float g = geometry_smith(n, v, l, roughness);
+  float3 f = fresnel_schlick(max(dot(h, v), 0.0), f0);
+
+  float3 specular = (ndf * g * f) / max(4.0 * max(dot(n, v), 0.0) * max(dot(n, l), 0.0), 0.0001);
+  float3 kd = (1.0 - f) * (1.0 - metallic);
+
+  return (kd * albedo / pi + specular) * max(dot(n, l), 0.0);
 }
 
 [shader("vertex")]
@@ -138,20 +167,36 @@ fs_out fragment_main(fs_in input) {
   n = normalize(tangent_normal.x * t + tangent_normal.y * b + tangent_normal.z * n);
 
   float3 v = normalize(frame.camera_position.xyz - input.position);
-  float3 l = normalize(-frame.light_direction.xyz);
-  float3 h = normalize(v + l);
-  float3 radiance = frame.light_color.rgb * frame.light_color.a;
 
   float3 f0 = lerp(float3(0.04, 0.04, 0.04), albedo, metallic);
-  float ndf = distribution_ggx(n, h, roughness);
-  float g = geometry_smith(n, v, l, roughness);
-  float3 f = fresnel_schlick(max(dot(h, v), 0.0), f0);
+  float3 lo = float3(0.0, 0.0, 0.0);
 
-  float3 specular = (ndf * g * f) / max(4.0 * max(dot(n, v), 0.0) * max(dot(n, l), 0.0), 0.0001);
+  for (uint i = 0u; i < frame.light_count; ++i) {
+    light_data light = frame.lights[i];
 
-  float3 kd = (1.0 - f) * (1.0 - metallic);
-  float n_dot_l = max(dot(n, l), 0.0);
-  float3 lo = (kd * albedo / pi + specular) * radiance * n_dot_l;
+    float3 l;
+    float attenuation = 1.0;
+
+    if (light.type == light_type::directional) {
+      l = normalize(-light.direction.xyz);
+    } else {
+      float3 to_light = light.position.xyz - input.position;
+      float distance = length(to_light);
+      l = to_light / max(distance, 0.0001);
+
+      float range = light.position.w;
+      float falloff = saturate(1.0 - pow(distance / max(range, 0.0001), 4.0));
+      attenuation = (falloff * falloff) / max(distance * distance, 0.0001);
+
+      if (light.type == light_type::spot) {
+        float cos_angle = dot(-l, normalize(light.direction.xyz));
+        attenuation *= saturate((cos_angle - light.outer_cos) / max(light.inner_cos - light.outer_cos, 0.0001));
+      }
+    }
+
+    float3 radiance = light.color.rgb * light.color.a * attenuation;
+    lo += brdf(n, v, l, albedo, f0, roughness, metallic) * radiance;
+  }
 
   float3 ambient = 0.03 * albedo * ao;
   float3 color = ambient + lo + emissive;

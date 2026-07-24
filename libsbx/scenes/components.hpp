@@ -6,11 +6,12 @@
 #include <optional>
 #include <vector>
 
+#include <libsbx/math/color.hpp>
+#include <libsbx/math/matrix_cast.hpp>
+#include <libsbx/math/matrix4x4.hpp>
+#include <libsbx/math/quaternion.hpp>
 #include <libsbx/math/vector3.hpp>
 #include <libsbx/math/vector4.hpp>
-#include <libsbx/math/quaternion.hpp>
-#include <libsbx/math/matrix4x4.hpp>
-#include <libsbx/math/matrix_cast.hpp>
 
 #include <libsbx/ecs/entity.hpp>
 
@@ -51,9 +52,9 @@ struct relationship {
 }; // struct relationship
 
 struct camera {
-  float fov_degrees{60.0f};
-  float near_plane{0.1f};
-  float far_plane{1000.0f};
+  std::float_t fov_degrees{60.0f};
+  std::float_t near_plane{0.1f};
+  std::float_t far_plane{1000.0f};
 }; // struct camera
 
 /**
@@ -63,6 +64,25 @@ struct mesh_renderer {
   assets::mesh_handle mesh{};
   std::vector<assets::material_handle> materials{};
 }; // struct mesh_renderer
+
+struct directional_light {
+  math::color color{1.0f, 1.0f, 1.0f, 1.0f};
+  std::float_t intensity{1.0f};
+}; // struct directional_light
+
+struct point_light {
+  math::color color{1.0f, 1.0f, 1.0f, 1.0f};
+  std::float_t intensity{1.0f};
+  std::float_t range{10.0f};
+}; // struct point_light
+
+struct spot_light {
+  math::color color{1.0f, 1.0f, 1.0f, 1.0f};
+  std::float_t intensity{1.0f};
+  std::float_t range{10.0f};
+  std::float_t inner_angle{0.4f}; // radians
+  std::float_t outer_angle{0.6f};
+}; // struct spot_light
 
 } // namespace sbx::scenes
 

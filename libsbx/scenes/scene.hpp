@@ -94,6 +94,14 @@ public:
     return _active_camera != ecs::null_entity;
   }
 
+  auto set_primary_light(node light) -> void;
+
+  [[nodiscard]] auto primary_light() -> node;
+
+  [[nodiscard]] auto has_primary_light() const noexcept -> bool {
+    return _active_camera != ecs::null_entity;
+  }
+
   /**
    * @brief Recomputes every node's world_transform from the hierarchy. Once per frame before extract.
    */
@@ -117,6 +125,7 @@ private:
 
   ecs::registry _registry{};
   ecs::entity _active_camera{ecs::null_entity};
+  ecs::entity _primary_light{ecs::null_entity};
 
 }; // class scene
 

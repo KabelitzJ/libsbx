@@ -130,51 +130,58 @@ inline constexpr basic_quaternion<Type>::basic_quaternion(const basic_matrix4x4<
 template<floating_point Type>
 template<floating_point Other>
 constexpr basic_quaternion<Type>::basic_quaternion(const basic_matrix3x3<Other>& matrix) noexcept {
-  const auto trace = static_cast<value_type>(matrix[0][0]) + static_cast<value_type>(matrix[1][1]) + static_cast<value_type>(matrix[2][2]);
+  const auto four_x_squared_minus1 = matrix[0][0] - matrix[1][1] - matrix[2][2];
+  const auto four_y_squared_minus1 = matrix[1][1] - matrix[0][0] - matrix[2][2];
+  const auto four_z_squared_minus1 = matrix[2][2] - matrix[0][0] - matrix[1][1];
+  const auto four_w_squared_minus1 = matrix[0][0] + matrix[1][1] + matrix[2][2];
 
-  if (trace > static_cast<value_type>(0)) {
-    const auto s = math::sqrt(trace + static_cast<value_type>(1)) * static_cast<value_type>(2);
+  auto biggest_index = 0;
+  auto four_biggest_squared_minus1 = four_w_squared_minus1;
 
-    _scalar = static_cast<value_type>(0.25) * s;
-
-    const auto x = (matrix[2][1] - matrix[1][2]) / s;
-    const auto y = (matrix[0][2] - matrix[2][0]) / s;
-    const auto z = (matrix[1][0] - matrix[0][1]) / s;
-
-    _complex = vector_type{x, y, z};
-  } else if (matrix[0][0] > matrix[1][1] && matrix[0][0] > matrix[2][2]) {
-    const auto s = math::sqrt(static_cast<value_type>(1) + matrix[0][0] - matrix[1][1] - matrix[2][2]) * static_cast<value_type>(2);
-
-    _scalar = (matrix[2][1] - matrix[1][2]) / s;
-
-    const auto x = static_cast<value_type>(0.25) * s;
-    const auto y = (matrix[0][1] + matrix[1][0]) / s;
-    const auto z = (matrix[0][2] + matrix[2][0]) / s;
-
-    _complex = vector_type{x, y, z};
-  } else if (matrix[1][1] > matrix[2][2]) {
-    const auto s = math::sqrt(static_cast<value_type>(1) + matrix[1][1] - matrix[0][0] - matrix[2][2]) * static_cast<value_type>(2);
-
-    _scalar = (matrix[0][2] - matrix[2][0]) / s;
-
-    const auto x = (matrix[0][1] + matrix[1][0]) / s;
-    const auto y = static_cast<value_type>(0.25) * s;
-    const auto z = (matrix[1][2] + matrix[2][1]) / s;
-
-    _complex = vector_type{x, y, z};
-  } else {
-    const auto s = math::sqrt(static_cast<value_type>(1) + matrix[2][2] - matrix[0][0] - matrix[1][1]) * static_cast<value_type>(2);
-
-    _scalar = (matrix[1][0] - matrix[0][1]) / s;
-
-    const auto x = (matrix[0][2] + matrix[2][0]) / s;
-    const auto y = (matrix[1][2] + matrix[2][1]) / s;
-    const auto z = static_cast<value_type>(0.25) * s;
-
-    _complex = vector_type{x, y, z};
+  if (four_x_squared_minus1 > four_biggest_squared_minus1) {
+    four_biggest_squared_minus1 = four_x_squared_minus1;
+    biggest_index = 1;
   }
 
-  normalize();
+  if (four_y_squared_minus1 > four_biggest_squared_minus1) {
+    four_biggest_squared_minus1 = four_y_squared_minus1;
+    biggest_index = 2;
+  }
+
+  if (four_z_squared_minus1 > four_biggest_squared_minus1) {
+    four_biggest_squared_minus1 = four_z_squared_minus1;
+    biggest_index = 3;
+  }
+
+  const auto biggest_val = std::sqrt(four_biggest_squared_minus1 + static_cast<Type>(1)) * static_cast<Type>(0.5);
+  const auto mult = static_cast<Type>(0.25) / biggest_val;
+
+  switch (biggest_index) {
+    case 0: {
+      _scalar = biggest_val;
+      _complex = vector_type{(matrix[1][2] - matrix[2][1]) * mult, (matrix[2][0] - matrix[0][2]) * mult, (matrix[0][1] - matrix[1][0]) * mult};
+      break;
+    }
+    case 1: {
+      _scalar = (matrix[1][2] - matrix[2][1]) * mult;
+      _complex = vector_type{biggest_val, (matrix[0][1] + matrix[1][0]) * mult, (matrix[2][0] + matrix[0][2]) * mult};
+      break;
+    }
+    case 2: {
+      _scalar = (matrix[2][0] - matrix[0][2]) * mult;
+      _complex = vector_type{(matrix[0][1] + matrix[1][0]) * mult, biggest_val, (matrix[1][2] + matrix[2][1]) * mult};
+      break;
+    }
+    case 3: {
+      _scalar = (matrix[0][1] - matrix[1][0]) * mult;
+      _complex = vector_type{(matrix[2][0] + matrix[0][2]) * mult, (matrix[1][2] + matrix[2][1]) * mult, biggest_val};
+      break;
+    }
+    default: {
+      *this = basic_quaternion<Type>::identity;
+      break;
+    }
+  }
 }
 
 template<floating_point Type>

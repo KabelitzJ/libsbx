@@ -43,8 +43,13 @@ public:
   /**
    * @brief Main thread. Loads (or returns the already-loaded) texture at @p path: reserves a
    * bindless index, decodes, queues the GPU upload, and returns a handle immediately.
+   * 
+   * @param path The path to the texture file to load.
+   * @param srgb Whether the texture should be treated as sRGB (true) or linear (false). Default is false.
+   *
+   * @return A handle to the loaded texture. Valid
    */
-  auto load_texture(const std::filesystem::path& path) -> texture_handle;
+  auto load_texture(const std::filesystem::path& path, graphics::format format = graphics::format::r8g8b8a8_srgb) -> texture_handle;
 
   /**
    * @brief Main thread. Loads (or returns the already-loaded) mesh at @p path via fastgltf, queues

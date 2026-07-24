@@ -33,32 +33,43 @@ application::application()
 
   auto& assets_module = sbx::core::engine::get_module<sbx::assets::assets_module>();
 
-  const auto mesh = assets_module.load_mesh("demo/assets/models/flight_helmet/flight_helmet.gltf");
+  const auto duck_mesh = assets_module.load_mesh("demo/assets/models/duck/duck.gltf");
+  const auto damaged_helmet_mesh = assets_module.load_mesh("demo/assets/models/damaged_helmet/damaged_helmet.gltf");
+  const auto flight_helmet_mesh = assets_module.load_mesh("demo/assets/models/flight_helmet/flight_helmet.gltf");
 
   auto& render_module = sbx::core::engine::get_module<sbx::render::render_module>();
 
   auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
   auto& scene = scenes_module.active_scene();
 
-  const auto& bounds = mesh->bounds();
-  const auto center = bounds.center();
-  const auto radius = std::max(bounds.diagonal_length() * 0.5f, 0.001f);
-  const auto fov = 60.0f;
-  const auto distance = radius / std::sin(sbx::math::to_radians(sbx::math::degree{fov}).value() * 0.5f) * 2.0f;
-
   _duck = scene.create_node();
-  _duck.transform().position = center * -1.0f;
+  auto& duck_transform = _duck.transform();
+  duck_transform.position = sbx::math::vector3f{0.0f, 0.0f, 0.0f};
 
-  auto& renderer = _duck.add_component<sbx::scenes::mesh_renderer>();
-  renderer.mesh = mesh;
+  auto& duck_renderer = _duck.add_component<sbx::scenes::mesh_renderer>();
+  duck_renderer.mesh = duck_mesh;
+
+  _damaged_helmet = scene.create_node();
+  auto& damaged_helmet_transform = _damaged_helmet.transform();
+  damaged_helmet_transform.position = sbx::math::vector3f{-2.0f, 0.0f, 0.0f};
+
+  auto& damaged_helmet_renderer = _damaged_helmet.add_component<sbx::scenes::mesh_renderer>();
+  damaged_helmet_renderer.mesh = damaged_helmet_mesh;
+
+  _flight_helmet = scene.create_node();
+  auto& flight_helmet_transform = _flight_helmet.transform();
+  flight_helmet_transform.position = sbx::math::vector3f{2.0f, 0.0f, 0.0f};
+
+  auto& flight_helmet_renderer = _flight_helmet.add_component<sbx::scenes::mesh_renderer>();
+  flight_helmet_renderer.mesh = flight_helmet_mesh;
 
   auto camera = scene.create_node();
-  camera.transform().position = sbx::math::vector3f{0.0f, 0.0f, distance};
+  camera.transform().position = sbx::math::vector3f{0.0f, 0.0f, 4.0f};
 
   auto& camera_component = camera.add_component<sbx::scenes::camera>();
-  camera_component.fov_degrees = fov;
-  camera_component.near_plane = std::max(0.01f, distance - radius * 2.0f);
-  camera_component.far_plane = distance + radius * 2.0f;
+  camera_component.fov_degrees = 60.0f;
+  camera_component.near_plane = 0.01f;
+  camera_component.far_plane = 1000.0f;
 
   scene.set_active_camera(camera);
 }
@@ -71,7 +82,15 @@ auto application::update() -> void {
   }
 
   _rotation += sbx::math::degree{90.0f} * sbx::core::engine::delta_time();
-  _duck.transform().rotation = sbx::math::quaternion{sbx::math::vector3f{0.0f, 1.0f, 0.0f}, _rotation};
+
+  auto& duck_transform = _duck.transform();
+  duck_transform.rotation = sbx::math::quaternion{sbx::math::vector3f{0.0f, 1.0f, 0.0f}, _rotation};
+
+  auto& damaged_helmet_transform = _damaged_helmet.transform();
+  damaged_helmet_transform.rotation = sbx::math::quaternion{sbx::math::vector3f{0.0f, 1.0f, 0.0f}, _rotation};
+
+  auto& flight_helmet_transform = _flight_helmet.transform();
+  flight_helmet_transform.rotation = sbx::math::quaternion{sbx::math::vector3f{0.0f, 1.0f, 0.0f}, _rotation};
 }
 
 auto application::fixed_update() -> void {

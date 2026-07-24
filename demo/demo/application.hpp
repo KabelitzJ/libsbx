@@ -36,8 +36,11 @@ private:
   sbx::units::seconds _time;
   std::uint32_t _fps;
 
-  sbx::scenes::scene::node _duck;
   sbx::math::angle _rotation;
+
+  sbx::scenes::scene::node _duck;
+  sbx::scenes::scene::node _damaged_helmet;
+  sbx::scenes::scene::node _flight_helmet;
 
 }; // class application
 

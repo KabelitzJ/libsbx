@@ -38,6 +38,8 @@ struct frame_data {
   math::matrix4x4 view;
   math::matrix4x4 projection;
   math::vector4 camera_position;
+  math::vector4 light_direction;
+  math::vector4 light_color;
   graphics::buffer::address_type material_address;
 }; // struct frame_data
 
@@ -308,10 +310,14 @@ auto render_module::_consume_packet(const render_packet& packet) -> void {
       // Write this frame's data into its slot buffer. The throttle guarantees the slot from two frames ago is done, so this never races the GPU.
       const auto slot = utility::fast_mod(frame_context.frame_index(), graphics::swapchain::max_frames_in_flight);
 
+      const auto light_direction = math::vector3f::normalized(math::vector3f{-0.4f, -1.0f, -0.5f});
+
       auto data = frame_data{};
       data.view = view;
       data.projection = projection;
       data.camera_position = math::vector4{packet.camera.position, 1.0f};
+      data.light_direction = math::vector4{light_direction, 0.0f};
+      data.light_color = math::vector4{1.0f, 1.0f, 1.0f, 3.0f}; // rgb + intensity
       data.material_address = assets_module.material_buffer_address();
 
       auto& frame_buffer = registry.get<graphics::buffer>(_frame_buffer);

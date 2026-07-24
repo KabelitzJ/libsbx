@@ -25,6 +25,7 @@ struct alignas(std::float_t) vertex {
   math::vector3 position;
   math::vector3 normal;
   math::vector2 uv;
+  math::vector4 tangent;
 }; // struct vertex
 
 /**

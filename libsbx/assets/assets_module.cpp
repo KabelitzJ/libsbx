@@ -53,8 +53,10 @@ assets_module::assets_module() {
 
 assets_module::~assets_module() { }
 
-auto assets_module::load_texture(const std::filesystem::path& path) -> texture_handle {
-  const auto key = path.generic_string();
+auto assets_module::load_texture(const std::filesystem::path& path, graphics::format format) -> texture_handle {
+  const auto is_srgb = (format == graphics::format::r8g8b8a8_srgb);
+
+  const auto key = path.generic_string() + (is_srgb ? "#srgb" : "#linear");
 
   {
     auto lock = std::lock_guard{_mutex};
@@ -94,7 +96,7 @@ auto assets_module::load_texture(const std::filesystem::path& path) -> texture_h
     auto lock = std::lock_guard{_mutex};
 
     _textures.emplace(key, record);
-    _pending_textures.push_back(pending_texture_upload{index, std::move(pixels), static_cast<std::uint32_t>(width), static_cast<std::uint32_t>(height), graphics::format::r8g8b8a8_unorm});
+    _pending_textures.push_back(pending_texture_upload{index, std::move(pixels), static_cast<std::uint32_t>(width), static_cast<std::uint32_t>(height), format});
   }
 
   return texture_handle{record};
@@ -138,20 +140,21 @@ auto assets_module::load_mesh(const std::filesystem::path& path) -> mesh_handle 
 
   auto mesh_volume = math::volume{};
 
-  const auto load_gltf_texture = [&](std::size_t texture_index) -> texture_handle {
+  const auto load_gltf_texture = [&](std::size_t texture_index, graphics::format format) -> texture_handle {
     const auto& gltf_texture = gltf.textures[texture_index];
 
-    if (!gltf_texture.imageIndex.has_value()) {
-      return texture_handle{};
+    if (!gltf_texture.imageIndex.has_value()) { 
+      return texture_handle{}; 
     }
 
     const auto& image = gltf.images[gltf_texture.imageIndex.value()];
 
     if (const auto* uri = std::get_if<fastgltf::sources::URI>(&image.data)) {
-      return load_texture(path.parent_path() / std::filesystem::path{std::string{uri->uri.path()}});
+      return load_texture(path.parent_path() / std::filesystem::path{std::string{uri->uri.path()}}, format);
     }
 
-    utility::logger<"assets">::warn("Mesh '{}': non-file image, using default (embedded images not yet supported)", key);
+    utility::logger<"assets">::warn("Mesh '{}': non-file image, using default", key);
+
     return texture_handle{};
   };
 
@@ -166,23 +169,23 @@ auto assets_module::load_mesh(const std::filesystem::path& path) -> mesh_handle 
     info.emissive_factor = math::vector3{gltf_material.emissiveFactor[0], gltf_material.emissiveFactor[1], gltf_material.emissiveFactor[2]};
 
     if (pbr.baseColorTexture.has_value()) {
-      info.albedo = load_gltf_texture(pbr.baseColorTexture->textureIndex);
+      info.albedo = load_gltf_texture(pbr.baseColorTexture->textureIndex, graphics::format::r8g8b8a8_srgb);
     }
 
     if (pbr.metallicRoughnessTexture.has_value()) {
-      info.metallic_roughness = load_gltf_texture(pbr.metallicRoughnessTexture->textureIndex);
+      info.metallic_roughness = load_gltf_texture(pbr.metallicRoughnessTexture->textureIndex, graphics::format::r8g8b8a8_unorm);
     }
 
     if (gltf_material.normalTexture.has_value()) {
-      info.normal = load_gltf_texture(gltf_material.normalTexture->textureIndex);
+      info.normal = load_gltf_texture(gltf_material.normalTexture->textureIndex, graphics::format::r8g8b8a8_unorm);
     }
 
     if (gltf_material.occlusionTexture.has_value()) {
-      info.occlusion = load_gltf_texture(gltf_material.occlusionTexture->textureIndex);
+      info.occlusion = load_gltf_texture(gltf_material.occlusionTexture->textureIndex, graphics::format::r8g8b8a8_unorm);
     }
 
     if (gltf_material.emissiveTexture.has_value()) {
-      info.emissive = load_gltf_texture(gltf_material.emissiveTexture->textureIndex);
+      info.emissive = load_gltf_texture(gltf_material.emissiveTexture->textureIndex, graphics::format::r8g8b8a8_srgb);
     }
 
     materials.push_back(create_material(info));
@@ -243,6 +246,21 @@ auto assets_module::load_mesh(const std::filesystem::path& path) -> mesh_handle 
           current.normal[0] = world_normal[0] / length;
           current.normal[1] = world_normal[1] / length;
           current.normal[2] = world_normal[2] / length;
+        });
+      }
+
+      if (const auto* tangent = primitive.findAttribute("TANGENT"); tangent != primitive.attributes.end()) {
+        fastgltf::iterateAccessorWithIndex<fastgltf::math::fvec4>(gltf, gltf.accessors[tangent->accessorIndex], [&](fastgltf::math::fvec4 value, std::size_t index) {
+          const auto world_tangent = world * fastgltf::math::fvec4{value[0], value[1], value[2], 0.0f};
+
+          auto length = std::sqrt(world_tangent[0] * world_tangent[0] + world_tangent[1] * world_tangent[1] + world_tangent[2] * world_tangent[2]);
+          length = (length > 0.0f) ? length : 1.0f;
+
+          auto& current = vertices[vertex_start + index];
+          current.tangent[0] = world_tangent[0] / length;
+          current.tangent[1] = world_tangent[1] / length;
+          current.tangent[2] = world_tangent[2] / length;
+          current.tangent[3] = value[3];
         });
       }
 

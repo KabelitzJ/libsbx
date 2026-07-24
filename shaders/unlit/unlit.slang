@@ -23,6 +23,7 @@ struct vertex {
   float3 position;
   float3 normal;
   float2 uv;
+  float4 tangent;
 }; // struct vertex
 
 struct material_data {

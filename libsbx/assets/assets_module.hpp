@@ -64,6 +64,8 @@ public:
 
   [[nodiscard]] auto is_resident(const mesh_handle& mesh) const -> bool;
 
+  [[nodiscard]] auto is_resident(const material_handle& material) const -> bool;
+
   [[nodiscard]] auto white_texture() const noexcept -> texture_handle {
     return _white;
   }

@@ -197,7 +197,7 @@ auto render_module::_consume_packet(const render_packet& packet) -> void {
         {"fragment_main", VK_SHADER_STAGE_FRAGMENT_BIT}
       };
 
-      const auto& shader = graphics_module.shader_cache().get({"shaders/unlit/unlit.slang", entry_points});
+      const auto& shader = graphics_module.shader_cache().get({"shaders/pbr/pbr.slang", entry_points});
 
       _pipeline = graphics_module.pipeline_cache().get(graphics::graphics_pipeline::create_info{
         .shader = shader,
@@ -348,16 +348,9 @@ auto render_module::_consume_packet(const render_packet& packet) -> void {
         const auto& submeshes = mesh.submeshes();
 
         for (auto&& [index, submesh] : std::views::enumerate(submeshes)) {
-          const auto& selected = (index < item.materials.size() && item.materials[index].is_valid()) ? item.materials[index] : submesh.material;
+          const auto& selected_material = (index < item.materials.size() && item.materials[index].is_valid()) ? item.materials[index] : submesh.material;
 
-          if (!selected.is_valid()) {
-            continue;
-          }
-
-          const auto& material = *selected;
-          const auto& albedo = material.albedo();
-
-          if (albedo.is_valid() && !assets_module.is_resident(albedo)) {
+          if (!selected_material.is_valid() || !assets_module.is_resident(selected_material)) {
             continue;
           }
 
@@ -365,7 +358,7 @@ auto render_module::_consume_packet(const render_packet& packet) -> void {
           values.frame_address = frame_address;
           values.vertex_address = mesh.vertex_address();
           values.model = item.model;
-          values.material_index = material.index();
+          values.material_index = selected_material->index();
           values.sampler_index = _sampler_index;
 
           auto range = std::array<std::byte, graphics::bindless_table::push_constant_size>{};

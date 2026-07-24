@@ -31,8 +31,15 @@ namespace sbx::assets {
 
 struct material_data {
   math::vector4 base_color_factor;
+  math::vector4 emissive_factor;
   std::uint32_t albedo_index;
-  std::uint32_t padding[3];
+  std::uint32_t normal_index;
+  std::uint32_t metallic_roughness_index;
+  std::uint32_t occlusion_index;
+  std::uint32_t emissive_index;
+  std::float_t metallic_factor;
+  std::float_t roughness_factor;
+  std::uint32_t padding;
 }; // struct material_data
 
 assets_module::assets_module() {
@@ -131,25 +138,51 @@ auto assets_module::load_mesh(const std::filesystem::path& path) -> mesh_handle 
 
   auto mesh_volume = math::volume{};
 
+  const auto load_gltf_texture = [&](std::size_t texture_index) -> texture_handle {
+    const auto& gltf_texture = gltf.textures[texture_index];
+
+    if (!gltf_texture.imageIndex.has_value()) {
+      return texture_handle{};
+    }
+
+    const auto& image = gltf.images[gltf_texture.imageIndex.value()];
+
+    if (const auto* uri = std::get_if<fastgltf::sources::URI>(&image.data)) {
+      return load_texture(path.parent_path() / std::filesystem::path{std::string{uri->uri.path()}});
+    }
+
+    utility::logger<"assets">::warn("Mesh '{}': non-file image, using default (embedded images not yet supported)", key);
+    return texture_handle{};
+  };
+
   for (const auto& gltf_material : gltf.materials) {
     auto info = material::create_info{};
 
-    const auto& factor = gltf_material.pbrData.baseColorFactor;
-    info.base_color_factor = math::color{factor[0], factor[1], factor[2], factor[3]};
+    const auto& pbr = gltf_material.pbrData;
 
-    if (gltf_material.pbrData.baseColorTexture.has_value()) {
-      const auto& gltf_texture = gltf.textures[gltf_material.pbrData.baseColorTexture->textureIndex];
+    info.base_color_factor = math::color{pbr.baseColorFactor[0], pbr.baseColorFactor[1], pbr.baseColorFactor[2], pbr.baseColorFactor[3]};
+    info.metallic_factor = pbr.metallicFactor;
+    info.roughness_factor = pbr.roughnessFactor;
+    info.emissive_factor = math::vector3{gltf_material.emissiveFactor[0], gltf_material.emissiveFactor[1], gltf_material.emissiveFactor[2]};
 
-      if (gltf_texture.imageIndex.has_value()) {
-        const auto& image = gltf.images[gltf_texture.imageIndex.value()];
+    if (pbr.baseColorTexture.has_value()) {
+      info.albedo = load_gltf_texture(pbr.baseColorTexture->textureIndex);
+    }
 
-        if (const auto* uri = std::get_if<fastgltf::sources::URI>(&image.data)) {
-          const auto image_path = path.parent_path() / std::filesystem::path{std::string{uri->uri.path()}};
-          info.albedo = load_texture(image_path);
-        } else {
-          utility::logger<"assets">::warn("Mesh '{}': non-file base-color image, using default (embedded images not yet supported)", key);
-        }
-      }
+    if (pbr.metallicRoughnessTexture.has_value()) {
+      info.metallic_roughness = load_gltf_texture(pbr.metallicRoughnessTexture->textureIndex);
+    }
+
+    if (gltf_material.normalTexture.has_value()) {
+      info.normal = load_gltf_texture(gltf_material.normalTexture->textureIndex);
+    }
+
+    if (gltf_material.occlusionTexture.has_value()) {
+      info.occlusion = load_gltf_texture(gltf_material.occlusionTexture->textureIndex);
+    }
+
+    if (gltf_material.emissiveTexture.has_value()) {
+      info.emissive = load_gltf_texture(gltf_material.emissiveTexture->textureIndex);
     }
 
     materials.push_back(create_material(info));
@@ -378,12 +411,23 @@ auto assets_module::process_uploads(std::uint64_t frame_index) -> void {
   for (auto& request : pending_materials) {
     const auto& material = *request.record;
 
-    // Absent albedo -> white default (always resident).
-    const auto albedo = material.albedo().is_valid() ? material.albedo()->index() : _white->index();
+    const auto resolve = [this](const texture_handle& texture, const texture_handle& fallback) {
+      return texture.is_valid() ? texture->index() : fallback->index();
+    };
+
+    const auto& base_color_factor = material.base_color_factor();
+    const auto& emissive_factor = material.emissive_factor();
 
     auto data = material_data{};
-    data.base_color_factor = math::vector4{material.base_color_factor().r(), material.base_color_factor().g(), material.base_color_factor().b(), material.base_color_factor().a()};
-    data.albedo_index = albedo;
+    data.base_color_factor = math::vector4{base_color_factor.r(), base_color_factor.g(), base_color_factor.b(), base_color_factor.a()};
+    data.emissive_factor = math::vector4{emissive_factor.x(), emissive_factor.y(), emissive_factor.z(), 0.0f};
+    data.albedo_index = resolve(material.albedo(), _white);
+    data.normal_index = resolve(material.normal(), _normal);
+    data.metallic_roughness_index = resolve(material.metallic_roughness(), _white);
+    data.occlusion_index = resolve(material.occlusion(), _white);
+    data.emissive_index = resolve(material.emissive(), _black);
+    data.metallic_factor = material.metallic_factor();
+    data.roughness_factor = material.roughness_factor();
 
     buffer.write(&data, sizeof(material_data), material.index() * memory::stride_v<material_data>);
   }
@@ -417,6 +461,20 @@ auto assets_module::is_resident(const mesh_handle& mesh) const -> bool {
   const auto value = graphics_module.frame_context().timeline_value();
 
   return value >= mesh->resident_frame();
+}
+
+auto assets_module::is_resident(const material_handle& material) const -> bool {
+  if (!material.is_valid()) {
+    return false;
+  }
+
+  const auto is_ready = [this](const texture_handle& texture) -> bool {
+    return !texture.is_valid() || is_resident(texture);
+  };
+
+  const auto& record = *material;
+
+  return is_ready(record.albedo()) && is_ready(record.normal()) && is_ready(record.metallic_roughness()) && is_ready(record.occlusion()) && is_ready(record.emissive());
 }
 
 auto assets_module::_create_default_texture(std::array<std::uint8_t, 4u> color) -> texture_handle {

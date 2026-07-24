@@ -24,7 +24,14 @@
 
 namespace sbx::assets {
 
-assets_module::assets_module() { }
+assets_module::assets_module() {
+  // Reserve the neutral fallbacks first so their bindless indices are stable. Uploaded by the first
+  // process_uploads, resident from frame 1 — so materials can point any absent slot at one of these.
+  _white = _create_default_texture({255u, 255u, 255u, 255u});
+  _normal = _create_default_texture({128u, 128u, 255u, 255u}); // (0,0,1) tangent-space normal
+  _black = _create_default_texture({0u, 0u, 0u, 255u});
+  _magenta = _create_default_texture({255u, 0u, 255u, 255u});   // load-error marker
+}
 
 assets_module::~assets_module() { }
 
@@ -313,6 +320,25 @@ auto assets_module::is_resident(const mesh_handle& mesh) const -> bool {
   const auto value = graphics_module.frame_context().timeline_value();
 
   return value >= mesh->resident_frame();
+}
+
+auto assets_module::_create_default_texture(std::array<std::uint8_t, 4u> color) -> texture_handle {
+  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
+
+  const auto index = graphics_module.bindless_table().reserve_sampled_image();
+
+  auto record = std::make_shared<texture>(texture{index});
+
+  auto pixels = std::vector<std::byte>{
+    std::byte{color[0]}, std::byte{color[1]}, std::byte{color[2]}, std::byte{color[3]}
+  };
+
+  {
+    auto lock = std::lock_guard{_mutex};
+    _pending_textures.push_back(pending_texture_upload{index, std::move(pixels), 1u, 1u, graphics::format::r8g8b8a8_unorm});
+  }
+
+  return texture_handle{record};
 }
 
 } // namespace sbx::assets

@@ -52,7 +52,7 @@ application::application()
 
   auto& renderer = _duck.add_component<sbx::scenes::mesh_renderer>();
   renderer.mesh = mesh;
-  renderer.texture = texture;
+  renderer.texture = assets_module.magenta_texture();
 
   auto camera = scene.create_node();
   camera.transform().position = sbx::math::vector3f{0.0f, 0.0f, distance};

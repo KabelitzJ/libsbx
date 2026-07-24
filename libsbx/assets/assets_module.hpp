@@ -3,6 +3,7 @@
 #ifndef LIBSBX_ASSETS_ASSETS_MODULE_HPP_
 #define LIBSBX_ASSETS_ASSETS_MODULE_HPP_
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
@@ -60,7 +61,25 @@ public:
 
   [[nodiscard]] auto is_resident(const mesh_handle& mesh) const -> bool;
 
+  [[nodiscard]] auto white_texture() const noexcept -> texture_handle {
+    return _white;
+  }
+
+  [[nodiscard]] auto normal_texture() const noexcept -> texture_handle {
+    return _normal;
+  }
+
+  [[nodiscard]] auto black_texture() const noexcept -> texture_handle {
+    return _black;
+  }
+
+  [[nodiscard]] auto magenta_texture() const noexcept -> texture_handle {
+    return _magenta;
+  }
+
 private:
+
+  auto _create_default_texture(std::array<std::uint8_t, 4u> color) -> texture_handle;
 
   struct pending_texture_upload {
     std::uint32_t index;
@@ -85,6 +104,11 @@ private:
 
   std::unordered_map<std::string, std::shared_ptr<mesh>> _meshes{};
   std::vector<pending_mesh_upload> _pending_meshes{};
+
+  texture_handle _white{};
+  texture_handle _normal{};
+  texture_handle _black{};
+  texture_handle _magenta{};
 
 }; // class assets_module
 

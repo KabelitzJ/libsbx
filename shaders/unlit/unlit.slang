@@ -25,17 +25,26 @@ struct vertex {
   float2 uv;
 }; // struct vertex
 
+struct material_data {
+  float4 base_color_factor;
+  uint albedo_index;
+  uint padding0;
+  uint padding1;
+  uint padding2;
+}; // struct material_data
+
 struct frame_data {
   float4x4 view;
   float4x4 projection;
   float4 camera_position;
+  material_data* materials;
 }; // struct frame_data
 
 struct push_data {
-  frame_data* frame_data;
+  frame_data* frame;
   vertex* vertices;
   float4x4 model;
-  uint image_index;
+  uint material_index;
   uint sampler_index;
 }; // struct push_data
 
@@ -46,14 +55,15 @@ struct push_data {
 
 [shader("vertex")]
 vs_out vertex_main(vs_in input) {
+  
   vertex vertex = push.vertices[input.vertex_id];
-
-  frame_data frame = *push.frame_data;
-
+  frame_data frame = *push.frame;
+  
   float4 world_position = mul(push.model, float4(vertex.position, 1.0));
   float4 view_position = mul(frame.view, world_position);
-
+  
   vs_out output;
+
   output.uv = vertex.uv;
   output.position = mul(frame.projection, view_position);
 
@@ -62,12 +72,15 @@ vs_out vertex_main(vs_in input) {
 
 [shader("fragment")]
 fs_out fragment_main(fs_in input) {
+  
+  frame_data frame = *push.frame;
+  material_data material = frame.materials[push.material_index];
+  
+  float4 albedo = textures[material.albedo_index].Sample(samplers[push.sampler_index], input.uv);
+  
   fs_out output;
 
-  Texture2D texture = textures[push.image_index];
-  SamplerState sampler = samplers[push.sampler_index];
-
-  output.color = texture.Sample(sampler, input.uv);
+  output.color = material.base_color_factor * albedo;
 
   return output;
 }

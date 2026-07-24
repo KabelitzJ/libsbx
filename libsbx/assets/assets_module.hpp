@@ -26,6 +26,7 @@
 #include <libsbx/assets/asset_handle.hpp>
 #include <libsbx/assets/texture.hpp>
 #include <libsbx/assets/mesh.hpp>
+#include <libsbx/assets/material.hpp>
 
 namespace sbx::assets {
 
@@ -50,6 +51,8 @@ public:
    * the GPU upload, and returns a handle immediately. Drawable once resident.
    */
   auto load_mesh(const std::filesystem::path& path) -> mesh_handle;
+
+  auto create_material(const material::create_info& create_info) -> material_handle;
 
   /**
    * @brief Render thread. Turns queued texture loads into GPU images + bindless writes. Copies are
@@ -77,7 +80,13 @@ public:
     return _magenta;
   }
 
+  [[nodiscard]] auto material_buffer_address() const noexcept -> graphics::buffer::address_type {
+    return _material_address;
+  }
+
 private:
+
+  inline static constexpr auto material_capacity = std::uint32_t{1024u};
 
   auto _create_default_texture(std::array<std::uint8_t, 4u> color) -> texture_handle;
 
@@ -95,6 +104,10 @@ private:
     std::vector<std::uint32_t> indices;
   }; // struct pending_mesh_upload
 
+  struct pending_material_upload {
+    std::shared_ptr<material> record;
+  }; // struct pending_material_upload
+
   mutable std::mutex _mutex{};
 
   std::unordered_map<std::string, std::shared_ptr<texture>> _textures{};
@@ -104,6 +117,12 @@ private:
 
   std::unordered_map<std::string, std::shared_ptr<mesh>> _meshes{};
   std::vector<pending_mesh_upload> _pending_meshes{};
+
+  std::vector<std::shared_ptr<material>> _materials{};
+  std::vector<pending_material_upload> _pending_materials{};
+  graphics::buffer_handle _material_buffer{};
+  graphics::buffer::address_type _material_address{0u};
+  std::uint32_t _material_count{0u};
 
   texture_handle _white{};
   texture_handle _normal{};

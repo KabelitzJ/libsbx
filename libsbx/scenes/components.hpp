@@ -14,6 +14,7 @@
 
 #include <libsbx/ecs/entity.hpp>
 
+#include <libsbx/assets/material.hpp>
 #include <libsbx/assets/mesh.hpp>
 #include <libsbx/assets/texture.hpp>
 
@@ -60,7 +61,7 @@ struct camera {
  */
 struct mesh_renderer {
   assets::mesh_handle mesh{};
-  assets::texture_handle texture{};
+  assets::material_handle material{};
 }; // struct mesh_renderer
 
 } // namespace sbx::scenes

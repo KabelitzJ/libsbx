@@ -16,6 +16,8 @@
 #include <fastgltf/types.hpp>
 #include <fastgltf/math.hpp>
 
+#include <libsbx/memory/alignment.hpp>
+
 #include <libsbx/core/engine.hpp>
 
 #include <libsbx/utility/logger.hpp>
@@ -23,6 +25,12 @@
 #include <libsbx/math/vector3.hpp>
 
 namespace sbx::assets {
+
+struct material_data {
+  math::vector4 base_color_factor;
+  std::uint32_t albedo_index;
+  std::uint32_t padding[3];
+}; // struct material_data
 
 assets_module::assets_module() {
   // Reserve the neutral fallbacks first so their bindless indices are stable. Uploaded by the first
@@ -225,17 +233,34 @@ auto assets_module::load_mesh(const std::filesystem::path& path) -> mesh_handle 
   return mesh_handle{record};
 }
 
+auto assets_module::create_material(const material::create_info& create_info) -> material_handle {
+  auto record = std::make_shared<material>(create_info);
+
+  auto lock = std::lock_guard{_mutex};
+
+  utility::assert_that(_material_count < material_capacity, "Exceeded material capacity");
+
+  record->_index = _material_count++;
+
+  _materials.push_back(record);
+  _pending_materials.push_back(pending_material_upload{record});
+
+  return material_handle{record};
+}
+
 auto assets_module::process_uploads(std::uint64_t frame_index) -> void {
   auto pending_textures = std::vector<pending_texture_upload>{};
   auto pending_meshes = std::vector<pending_mesh_upload>{};
+  auto pending_materials = std::vector<pending_material_upload>{};
 
   {
     auto lock = std::lock_guard{_mutex};
     pending_textures.swap(_pending_textures);
     pending_meshes.swap(_pending_meshes);
+    pending_materials.swap(_pending_materials);
   }
 
-  if (pending_textures.empty() && pending_meshes.empty()) {
+  if (pending_textures.empty() && pending_meshes.empty() && pending_materials.empty()) {
     return;
   }
 
@@ -289,6 +314,33 @@ auto assets_module::process_uploads(std::uint64_t frame_index) -> void {
     const auto vertex_address = registry.get<graphics::buffer>(vertex_buffer).address();
 
     request.record->_finalize(vertex_buffer, index_buffer, vertex_address, frame_index);
+  }
+
+  // Create the material buffer once, sized for the whole capacity.
+  if (!_material_buffer.is_valid()) {
+    _material_buffer = registry.emplace<graphics::buffer>(graphics::buffer::create_info{
+      .size = material_capacity * memory::stride_v<material_data>,
+      .usage = graphics::buffer_usage::device_address | graphics::buffer_usage::storage,
+      .memory = graphics::memory_usage::host_write,
+      .name = "Material Data"
+    });
+
+    _material_address = registry.get<graphics::buffer>(_material_buffer).address();
+  }
+
+  auto& buffer = registry.get<graphics::buffer>(_material_buffer);
+
+  for (auto& request : pending_materials) {
+    const auto& material = *request.record;
+
+    // Absent albedo -> white default (always resident).
+    const auto albedo = material.albedo().is_valid() ? material.albedo()->index() : _white->index();
+
+    auto data = material_data{};
+    data.base_color_factor = math::vector4{material.base_color_factor().r(), material.base_color_factor().g(), material.base_color_factor().b(), material.base_color_factor().a()};
+    data.albedo_index = albedo;
+
+    buffer.write(&data, sizeof(material_data), material.index() * memory::stride_v<material_data>);
   }
 }
 

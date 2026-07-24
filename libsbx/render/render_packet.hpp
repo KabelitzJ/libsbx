@@ -9,6 +9,7 @@
 #include <libsbx/math/matrix4x4.hpp>
 #include <libsbx/math/vector3.hpp>
 
+#include <libsbx/assets/material.hpp>
 #include <libsbx/assets/mesh.hpp>
 #include <libsbx/assets/texture.hpp>
 
@@ -17,7 +18,7 @@ namespace sbx::render {
 struct render_item {
   math::matrix4x4 model{math::matrix4x4::identity};
   assets::mesh_handle mesh{};
-  assets::texture_handle texture{};
+  assets::material_handle material{};
 }; // struct render_item
 
 struct camera_data {

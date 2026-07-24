@@ -33,6 +33,8 @@ application::application()
 
   auto& assets_module = sbx::core::engine::get_module<sbx::assets::assets_module>();
 
+  assets_module.import_directory("demo/assets");
+
   const auto duck_mesh = assets_module.load_mesh("demo/assets/models/duck/duck.gltf");
   const auto damaged_helmet_mesh = assets_module.load_mesh("demo/assets/models/damaged_helmet/damaged_helmet.gltf");
   const auto flight_helmet_mesh = assets_module.load_mesh("demo/assets/models/flight_helmet/flight_helmet.gltf");

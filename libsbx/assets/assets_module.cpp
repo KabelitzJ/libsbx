@@ -4,9 +4,13 @@
 
 #include <algorithm>
 #include <array>
+#include <cctype>
+#include <fstream>
 #include <limits>
 #include <span>
 #include <utility>
+
+#include <yaml-cpp/yaml.h>
 
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
@@ -53,17 +57,71 @@ assets_module::assets_module() {
 
 assets_module::~assets_module() { }
 
-auto assets_module::load_texture(const std::filesystem::path& path, graphics::format format) -> texture_handle {
-  const auto is_srgb = (format == graphics::format::r8g8b8a8_srgb);
-
-  const auto key = path.generic_string() + (is_srgb ? "#srgb" : "#linear");
+auto assets_module::import(const std::filesystem::path& path) -> math::uuid {
+  const auto key = path.generic_string();
 
   {
     auto lock = std::lock_guard{_mutex};
 
+    if (const auto entry = _uuids.find(key); entry != _uuids.end()) {
+      return entry->second;
+    }
+  }
+
+  const auto uuid = _read_or_create_meta(path);
+
+  {
+    auto lock = std::lock_guard{_mutex};
+
+    _uuids.emplace(key, uuid);
+    _paths.emplace(uuid, path);
+  }
+
+  return uuid;
+}
+
+auto assets_module::import_directory(const std::filesystem::path& root) -> void {
+  if (!std::filesystem::exists(root)) {
+    utility::logger<"assets">::warn("Asset root '{}' does not exist", root.generic_string());
+
+    return;
+  }
+
+  for (const auto& entry : std::filesystem::recursive_directory_iterator{root}) {
+    if (!entry.is_regular_file()) {
+      continue;
+    }
+
+    auto extension = entry.path().extension().string();
+    std::ranges::transform(extension, extension.begin(), [](unsigned char character) { return static_cast<char>(std::tolower(character)); });
+
+    if (extension == ".png" || extension == ".jpg" || extension == ".jpeg" || extension == ".gltf" || extension == ".glb") {
+      import(entry.path());
+    }
+  }
+}
+
+auto assets_module::load_texture(const math::uuid& id, graphics::format format) -> texture_handle {
+  const auto is_srgb = (format == graphics::format::r8g8b8a8_srgb);
+
+  const auto key = fmt::format("{}:{}", id.value(), (is_srgb ? "#srgb" : "#linear"));
+
+  {
+    auto lock = std::lock_guard{_mutex};
     if (const auto entry = _textures.find(key); entry != _textures.end()) {
       return texture_handle{entry->second};
     }
+  }
+
+  auto path = std::filesystem::path{};
+  {
+    auto lock = std::lock_guard{_mutex};
+    const auto entry = _paths.find(id);
+    if (entry == _paths.end()) {
+      utility::logger<"assets">::warn("Unknown texture uuid {}", id);
+      return texture_handle{};
+    }
+    path = entry->second;
   }
 
   auto width = std::int32_t{0};
@@ -102,21 +160,34 @@ auto assets_module::load_texture(const std::filesystem::path& path, graphics::fo
   return texture_handle{record};
 }
 
-auto assets_module::load_mesh(const std::filesystem::path& path) -> mesh_handle {
-  const auto key = path.generic_string();
+auto assets_module::load_texture(const std::filesystem::path& path, graphics::format format) -> texture_handle {
+  return load_texture(import(path), format);
+}
+
+auto assets_module::load_mesh(const math::uuid& id) -> mesh_handle {
+  {
+    auto lock = std::lock_guard{_mutex};
+    if (const auto entry = _meshes.find(id); entry != _meshes.end()) {
+      return mesh_handle{entry->second};
+    }
+  }
+
+  auto path = std::filesystem::path{};
 
   {
     auto lock = std::lock_guard{_mutex};
-
-    if (const auto entry = _meshes.find(key); entry != _meshes.end()) {
-      return mesh_handle{entry->second};
+    const auto entry = _paths.find(id);
+    if (entry == _paths.end()) {
+      utility::logger<"assets">::warn("Unknown mesh uuid {}", id);
+      return mesh_handle{};
     }
+    path = entry->second;
   }
 
   auto data = fastgltf::GltfDataBuffer::FromPath(path);
 
   if (data.error() != fastgltf::Error::None) {
-    utility::logger<"assets">::warn("Could not open mesh '{}'", key);
+    utility::logger<"assets">::warn("Could not open mesh '{}'", id);
 
     return mesh_handle{};
   }
@@ -126,7 +197,7 @@ auto assets_module::load_mesh(const std::filesystem::path& path) -> mesh_handle 
   auto loaded = parser.loadGltf(data.get(), path.parent_path(), fastgltf::Options::LoadExternalBuffers | fastgltf::Options::GenerateMeshIndices);
 
   if (loaded.error() != fastgltf::Error::None) {
-    utility::logger<"assets">::warn("Could not parse mesh '{}'", key);
+    utility::logger<"assets">::warn("Could not parse mesh '{}'", id);
 
     return mesh_handle{};
   }
@@ -153,7 +224,7 @@ auto assets_module::load_mesh(const std::filesystem::path& path) -> mesh_handle 
       return load_texture(path.parent_path() / std::filesystem::path{std::string{uri->uri.path()}}, format);
     }
 
-    utility::logger<"assets">::warn("Mesh '{}': non-file image, using default", key);
+    utility::logger<"assets">::warn("Mesh '{}': non-file image, using default", id.value());
 
     return texture_handle{};
   };
@@ -307,7 +378,7 @@ auto assets_module::load_mesh(const std::filesystem::path& path) -> mesh_handle 
   }
 
   if (vertices.empty() || indices.empty()) {
-    utility::logger<"assets">::warn("Mesh '{}' has no drawable geometry", key);
+    utility::logger<"assets">::warn("Mesh '{}' has no drawable geometry", id.value());
     return mesh_handle{};
   }
 
@@ -320,13 +391,17 @@ auto assets_module::load_mesh(const std::filesystem::path& path) -> mesh_handle 
   {
     auto lock = std::lock_guard{_mutex};
 
-    _meshes.emplace(key, record);
+    _meshes.emplace(id, record);
     _pending_meshes.push_back(pending_mesh_upload{record, std::move(vertices), std::move(indices)});
   }
 
-  utility::logger<"assets">::info("Loaded mesh '{}': {} vertices, {} indices, {} submeshes", key, vertex_count, index_count, submesh_count);
+  utility::logger<"assets">::info("Loaded mesh '{}': {} vertices, {} indices, {} submeshes", id.value(), vertex_count, index_count, submesh_count);
 
   return mesh_handle{record};
+}
+
+auto assets_module::load_mesh(const std::filesystem::path& path) -> mesh_handle {
+  return load_mesh(import(path));
 }
 
 auto assets_module::create_material(const material::create_info& create_info) -> material_handle {
@@ -512,6 +587,32 @@ auto assets_module::_create_default_texture(std::array<std::uint8_t, 4u> color) 
   }
 
   return texture_handle{record};
+}
+
+auto assets_module::_read_or_create_meta(const std::filesystem::path& path) -> math::uuid {
+  auto meta_path = path;
+  meta_path += ".meta";
+
+  if (std::filesystem::exists(meta_path)) {
+    try {
+      const auto node = YAML::LoadFile(meta_path.string());
+      return node["uuid"].as<math::uuid>();
+    } catch (const std::exception& exception) {
+      utility::logger<"assets">::warn("Invalid meta '{}' ({}); regenerating", meta_path.generic_string(), exception.what());
+    }
+  }
+
+  const auto uuid = math::uuid::create();
+
+  auto node = YAML::Node{};
+  node["uuid"] = uuid;
+
+  auto out = std::ofstream{meta_path};
+  out << node;
+
+  utility::logger<"assets">::debug("Imported '{}' as {}", path.generic_string(), uuid);
+
+  return uuid;
 }
 
 } // namespace sbx::assets

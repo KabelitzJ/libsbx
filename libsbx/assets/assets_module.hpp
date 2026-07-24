@@ -7,6 +7,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
+#include <filesystem>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -14,6 +15,8 @@
 #include <vector>
 
 #include <libsbx/utility/noncopyable.hpp>
+
+#include <libsbx/math/uuid.hpp>
 
 #include <libsbx/core/module.hpp>
 
@@ -40,21 +43,32 @@ public:
 
   ~assets_module();
 
+  auto import(const std::filesystem::path& path) -> math::uuid;
+
+  auto import_directory(const std::filesystem::path& root) -> void;
+
   /**
-   * @brief Main thread. Loads (or returns the already-loaded) texture at @p path: reserves a
-   * bindless index, decodes, queues the GPU upload, and returns a handle immediately.
+   * @brief Loads a texture from a UUID or path. If the texture has already been loaded, returns the existing handle.
    * 
-   * @param path The path to the texture file to load.
-   * @param srgb Whether the texture should be treated as sRGB (true) or linear (false). Default is false.
+   * @param id The UUID of the texture to load.
+   * @param format The format to load the texture as. Defaults to sRGB.
    *
    * @return A handle to the loaded texture. Valid
    */
+  auto load_texture(const math::uuid& id, graphics::format format = graphics::format::r8g8b8a8_srgb) -> texture_handle;
+
   auto load_texture(const std::filesystem::path& path, graphics::format format = graphics::format::r8g8b8a8_srgb) -> texture_handle;
 
   /**
-   * @brief Main thread. Loads (or returns the already-loaded) mesh at @p path via fastgltf, queues
-   * the GPU upload, and returns a handle immediately. Drawable once resident.
+   * @brief Loads a mesh from a UUID or path. If the mesh has already been loaded, returns the existing handle.
+   * 
+   * @param id The UUID of the mesh to load.
+   * @param path The path to the mesh file to load.
+   * 
+   * @return A handle to the loaded mesh. Valid if the mesh was successfully loaded.
    */
+  auto load_mesh(const math::uuid& id) -> mesh_handle;
+
   auto load_mesh(const std::filesystem::path& path) -> mesh_handle;
 
   auto create_material(const material::create_info& create_info) -> material_handle;
@@ -95,8 +109,6 @@ private:
 
   inline static constexpr auto material_capacity = std::uint32_t{1024u};
 
-  auto _create_default_texture(std::array<std::uint8_t, 4u> color) -> texture_handle;
-
   struct pending_texture_upload {
     std::uint32_t index;
     std::vector<std::byte> pixels;
@@ -115,14 +127,21 @@ private:
     std::shared_ptr<material> record;
   }; // struct pending_material_upload
 
+  auto _create_default_texture(std::array<std::uint8_t, 4u> color) -> texture_handle;
+
+  auto _read_or_create_meta(const std::filesystem::path& path) -> math::uuid;
+
   mutable std::mutex _mutex{};
+
+  std::unordered_map<std::string, math::uuid> _uuids{};
+  std::unordered_map<math::uuid, std::filesystem::path> _paths{};
 
   std::unordered_map<std::string, std::shared_ptr<texture>> _textures{};
   std::vector<pending_texture_upload> _pending_textures{};
   std::unordered_map<std::uint32_t, graphics::image_handle> _images{};
   std::unordered_map<std::uint32_t, std::uint64_t> _resident_frame{};
 
-  std::unordered_map<std::string, std::shared_ptr<mesh>> _meshes{};
+  std::unordered_map<math::uuid, std::shared_ptr<mesh>> _meshes{};
   std::vector<pending_mesh_upload> _pending_meshes{};
 
   std::vector<std::shared_ptr<material>> _materials{};

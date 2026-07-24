@@ -16,6 +16,9 @@
 #include <fastgltf/types.hpp>
 #include <fastgltf/math.hpp>
 
+#include <libsbx/utility/assert.hpp>
+#include <libsbx/utility/iterator.hpp>
+
 #include <libsbx/memory/alignment.hpp>
 
 #include <libsbx/core/engine.hpp>
@@ -124,9 +127,49 @@ auto assets_module::load_mesh(const std::filesystem::path& path) -> mesh_handle 
   auto vertices = std::vector<vertex>{};
   auto indices = std::vector<std::uint32_t>{};
   auto submeshes = std::vector<mesh::submesh>{};
+  auto materials = utility::make_reserved_vector<material_handle>(gltf.materials.size());
 
-  auto mesh_min = math::vector3f{std::numeric_limits<float>::max(), std::numeric_limits<float>::max(), std::numeric_limits<float>::max()};
-  auto mesh_max = math::vector3f{std::numeric_limits<float>::lowest(), std::numeric_limits<float>::lowest(), std::numeric_limits<float>::lowest()};
+  auto mesh_volume = math::volume{};
+
+  for (const auto& gltf_material : gltf.materials) {
+    auto info = material::create_info{};
+
+    const auto& factor = gltf_material.pbrData.baseColorFactor;
+    info.base_color_factor = math::color{factor[0], factor[1], factor[2], factor[3]};
+
+    if (gltf_material.pbrData.baseColorTexture.has_value()) {
+      const auto& gltf_texture = gltf.textures[gltf_material.pbrData.baseColorTexture->textureIndex];
+
+      if (gltf_texture.imageIndex.has_value()) {
+        const auto& image = gltf.images[gltf_texture.imageIndex.value()];
+
+        if (const auto* uri = std::get_if<fastgltf::sources::URI>(&image.data)) {
+          const auto image_path = path.parent_path() / std::filesystem::path{std::string{uri->uri.path()}};
+          info.albedo = load_texture(image_path);
+        } else {
+          utility::logger<"assets">::warn("Mesh '{}': non-file base-color image, using default (embedded images not yet supported)", key);
+        }
+      }
+    }
+
+    materials.push_back(create_material(info));
+  }
+
+  auto fallback_material = material_handle{};
+
+  const auto material_for = [&](fastgltf::Optional<std::size_t> index) -> material_handle {
+    if (index.has_value() && index.value() < materials.size()) {
+      return materials[index.value()];
+    }
+
+    if (!fallback_material.is_valid()) {
+      fallback_material = create_material(material::create_info{
+        .albedo = _magenta
+      });
+    }
+
+    return fallback_material;
+  };
 
   const auto append = [&](const fastgltf::Mesh& gltf_mesh, const fastgltf::math::fmat4x4& world) {
     for (const auto& primitive : gltf_mesh.primitives) {
@@ -141,8 +184,7 @@ auto assets_module::load_mesh(const std::filesystem::path& path) -> mesh_handle 
       const auto& position_accessor = gltf.accessors[position->accessorIndex];
       vertices.resize(vertex_start + position_accessor.count);
 
-      auto submesh_min = math::vector3f{std::numeric_limits<float>::max(), std::numeric_limits<float>::max(), std::numeric_limits<float>::max()};
-      auto submesh_max = math::vector3f{std::numeric_limits<float>::lowest(), std::numeric_limits<float>::lowest(), std::numeric_limits<float>::lowest()};
+      auto submesh_volume = math::volume{};
 
       fastgltf::iterateAccessorWithIndex<fastgltf::math::fvec3>(gltf, position_accessor, [&](fastgltf::math::fvec3 value, std::size_t index) {
         const auto world_position = world * fastgltf::math::fvec4{value[0], value[1], value[2], 1.0f};
@@ -153,10 +195,8 @@ auto assets_module::load_mesh(const std::filesystem::path& path) -> mesh_handle 
         current.position[1] = point.y();
         current.position[2] = point.z();
 
-        submesh_min = math::vector3f::min(submesh_min, point);
-        submesh_max = math::vector3f::max(submesh_max, point);
-        mesh_min = math::vector3f::min(mesh_min, point);
-        mesh_max = math::vector3f::max(mesh_max, point);
+        submesh_volume.include(point);
+        mesh_volume.include(point);
       });
 
       if (const auto* normal = primitive.findAttribute("NORMAL"); normal != primitive.attributes.end()) {
@@ -192,7 +232,12 @@ auto assets_module::load_mesh(const std::filesystem::path& path) -> mesh_handle 
         indices.push_back(static_cast<std::uint32_t>(vertex_start) + index);
       });
 
-      submeshes.push_back(mesh::submesh{static_cast<std::uint32_t>(index_start), static_cast<std::uint32_t>(index_accessor.count), math::volume{submesh_min, submesh_max}});
+      submeshes.push_back(mesh::submesh{
+        static_cast<std::uint32_t>(index_start),
+        static_cast<std::uint32_t>(index_accessor.count),
+        submesh_volume,
+        material_for(primitive.materialIndex)
+      });
     }
   };
 
@@ -219,7 +264,7 @@ auto assets_module::load_mesh(const std::filesystem::path& path) -> mesh_handle 
   const auto index_count = indices.size();
   const auto submesh_count = submeshes.size();
 
-  auto record = std::make_shared<mesh>(std::move(submeshes), math::volume{mesh_min, mesh_max});
+  auto record = std::make_shared<mesh>(std::move(submeshes), mesh_volume);
 
   {
     auto lock = std::lock_guard{_mutex};

@@ -14,6 +14,7 @@
 #include <libsbx/graphics/resources/buffer.hpp>
 
 #include <libsbx/assets/asset_handle.hpp>
+#include <libsbx/assets/material.hpp>
 
 namespace sbx::assets {
 
@@ -41,6 +42,7 @@ public:
     std::uint32_t index_offset;
     std::uint32_t index_count;
     math::volume bounds;
+    material_handle material;
   }; // struct submesh
 
   mesh() = default;

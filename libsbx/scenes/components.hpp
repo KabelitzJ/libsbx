@@ -61,7 +61,7 @@ struct camera {
  */
 struct mesh_renderer {
   assets::mesh_handle mesh{};
-  assets::material_handle material{};
+  std::vector<assets::material_handle> materials{};
 }; // struct mesh_renderer
 
 } // namespace sbx::scenes

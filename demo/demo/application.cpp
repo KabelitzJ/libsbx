@@ -33,12 +33,7 @@ application::application()
 
   auto& assets_module = sbx::core::engine::get_module<sbx::assets::assets_module>();
 
-  const auto texture = assets_module.load_texture("demo/assets/models/duck/textures/albedo.png");
-  const auto mesh = assets_module.load_mesh("demo/assets/models/duck/duck.gltf");
-
-  auto material = assets_module.create_material(sbx::assets::material::create_info{
-    .albedo = texture
-  });
+  const auto mesh = assets_module.load_mesh("demo/assets/models/flight_helmet/flight_helmet.gltf");
 
   auto& render_module = sbx::core::engine::get_module<sbx::render::render_module>();
 
@@ -56,7 +51,6 @@ application::application()
 
   auto& renderer = _duck.add_component<sbx::scenes::mesh_renderer>();
   renderer.mesh = mesh;
-  renderer.material = material;
 
   auto camera = scene.create_node();
   camera.transform().position = sbx::math::vector3f{0.0f, 0.0f, distance};

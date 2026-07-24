@@ -94,6 +94,11 @@ public:
     _max = vector_type::max(_max, other.max());
   }
 
+  auto include(const vector_type& point) noexcept -> void {
+    _min = vector_type::min(_min, point);
+    _max = vector_type::max(_max, point);
+  }
+
   static auto merge(const basic_volume& a, const basic_volume& b) -> basic_volume {
     return basic_volume{
       vector_type::min(a.min(), b.min()),

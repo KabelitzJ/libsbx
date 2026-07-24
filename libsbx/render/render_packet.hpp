@@ -18,7 +18,7 @@ namespace sbx::render {
 struct render_item {
   math::matrix4x4 model{math::matrix4x4::identity};
   assets::mesh_handle mesh{};
-  assets::material_handle material{};
+  std::vector<assets::material_handle> materials{};
 }; // struct render_item
 
 struct camera_data {

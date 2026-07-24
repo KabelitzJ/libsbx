@@ -162,7 +162,7 @@ auto render_module::_build_packet() -> render_packet {
   auto view = scene.query<scenes::world_transform, scenes::mesh_renderer>();
 
   for (const auto [entity, world, renderer] : view.each()) {
-    packet.items.push_back(render_item{world.matrix, renderer.mesh, renderer.material});
+    packet.items.push_back(render_item{world.matrix, renderer.mesh, renderer.materials});
   }
 
   return packet;
@@ -326,17 +326,7 @@ auto render_module::_consume_packet(const render_packet& packet) -> void {
           continue;
         }
 
-        if (!item.material.is_valid()) {
-          continue;
-        }
-
-        const auto& material = *item.material;
-        const auto& albedo = material.albedo();
-
-        // Wait for a real albedo; a default (invalid handle) is already resident via material_data.
-        if (albedo.is_valid() && !assets_module.is_resident(albedo)) {
-          continue;
-        }
+        const auto& mesh = *item.mesh;
 
         if (!bound) {
           command_buffer->bind_pipeline(*_pipeline);
@@ -353,21 +343,36 @@ auto render_module::_consume_packet(const render_packet& packet) -> void {
           bound = true;
         }
 
-        auto values = push_constants{};
-        values.frame_address = frame_address;
-        values.vertex_address = item.mesh->vertex_address();
-        values.model = item.model;
-        values.material_index = material.index();
-        values.sampler_index = _sampler_index;
+        vkCmdBindIndexBuffer(command_buffer->handle(), registry.get<graphics::buffer>(mesh.index_buffer()).handle(), 0u, VK_INDEX_TYPE_UINT32);
 
-        vkCmdBindIndexBuffer(command_buffer->handle(), registry.get<graphics::buffer>(item.mesh->index_buffer()).handle(), 0u, VK_INDEX_TYPE_UINT32);
+        const auto& submeshes = mesh.submeshes();
 
-        auto range = std::array<std::byte, graphics::bindless_table::push_constant_size>{};
-        std::memcpy(range.data(), &values, sizeof(push_constants));
+        for (auto&& [index, submesh] : std::views::enumerate(submeshes)) {
+          const auto& selected = (index < item.materials.size() && item.materials[index].is_valid()) ? item.materials[index] : submesh.material;
 
-        vkCmdPushConstants(command_buffer->handle(), bindless_table.pipeline_layout(), VK_SHADER_STAGE_ALL, 0u, static_cast<std::uint32_t>(range.size()), range.data());
+          if (!selected.is_valid()) {
+            continue;
+          }
 
-        for (const auto& submesh : item.mesh->submeshes()) {
+          const auto& material = *selected;
+          const auto& albedo = material.albedo();
+
+          if (albedo.is_valid() && !assets_module.is_resident(albedo)) {
+            continue;
+          }
+
+          auto values = push_constants{};
+          values.frame_address = frame_address;
+          values.vertex_address = mesh.vertex_address();
+          values.model = item.model;
+          values.material_index = material.index();
+          values.sampler_index = _sampler_index;
+
+          auto range = std::array<std::byte, graphics::bindless_table::push_constant_size>{};
+          std::memcpy(range.data(), &values, sizeof(push_constants));
+
+          vkCmdPushConstants(command_buffer->handle(), bindless_table.pipeline_layout(), VK_SHADER_STAGE_ALL, 0u, static_cast<std::uint32_t>(range.size()), range.data());
+
           vkCmdDrawIndexed(command_buffer->handle(), submesh.index_count, 1u, submesh.index_offset, 0, 0u);
         }
       }

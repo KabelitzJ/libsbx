@@ -6,14 +6,16 @@
 
 namespace sbx::scenes {
 
-auto scene::create_node() -> node {
-  const auto entity = _registry.create();
+auto scene::create_node(const utility::hashed_string& name, const scenes::local_transform& transform) -> node {
+  return _create_node(name, transform, math::uuid::create());
+}
 
-  _registry.emplace<local_transform>(entity);
-  _registry.emplace<world_transform>(entity);
-  _registry.emplace<relationship>(entity);
+auto scene::find(math::uuid id) -> node {
+  if (const auto entry = _entities_by_id.find(id); entry != _entities_by_id.end()) {
+    return node{this, entry->second};
+  }
 
-  return node{this, entity};
+  return node{};
 }
 
 auto scene::set_active_camera(node camera) -> void {
@@ -42,6 +44,20 @@ auto scene::update() -> void {
       _update_node(entity, math::matrix4x4::identity);
     }
   }
+}
+
+auto scene::_create_node(const utility::hashed_string& name, const scenes::local_transform& transform, const math::uuid& id) -> node {
+  const auto entity = _registry.create();
+
+  _registry.emplace<local_transform>(entity, transform);
+  _registry.emplace<world_transform>(entity);
+  _registry.emplace<relationship>(entity);
+  _registry.emplace<scenes::id>(entity, id);
+  _registry.emplace<scenes::tag>(entity, name);
+
+  _entities_by_id.emplace(id, entity);
+
+  return node{this, entity};
 }
 
 auto scene::_set_parent(ecs::entity child, ecs::entity parent) -> void {

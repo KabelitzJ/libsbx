@@ -175,18 +175,61 @@ auto basic_sparse_set<Entity, Allocator>::erase(const entity_type entity) -> voi
 }
 
 template<typename Entity, memory::allocator_for<Entity> Allocator>
-auto basic_sparse_set<Entity, Allocator>::remove(const entity_type entity) -> bool {
-  if (!contains(entity)) {
-    return false;
+template<std::input_iterator Iterator>
+auto basic_sparse_set<Entity, Allocator>::erase(Iterator first, Iterator last) -> void {
+  if constexpr(std::is_same_v<Iterator, basic_iterator>) {
+    pop(first, last);
+  } else {
+    for(; first != last; ++first) {
+      erase(*first);
+    }
   }
-  
-  erase(entity);
-  return true;
+}
+
+template<typename Entity, memory::allocator_for<Entity> Allocator>
+auto basic_sparse_set<Entity, Allocator>::remove(const entity_type entity) -> bool {
+  return contains(entity) && (erase(entity), true);
+}
+
+template<typename Entity, memory::allocator_for<Entity> Allocator>
+template<typename Compare, typename Sort, typename... Args>
+auto basic_sparse_set<Entity, Allocator>::sort(Compare compare, Sort sort, Args&&... args) -> void {
+  const auto length = (_policy == deletion_policy::swap_only) ? _head : _dense.size();
+
+  sort_n(length, std::move(compare), std::move(sort), std::forward<Args>(args)...);
+}
+
+template<typename Entity, memory::allocator_for<Entity> Allocator>
+template<typename Compare, typename Sort, typename... Args>
+auto basic_sparse_set<Entity, Allocator>::sort_n(const size_type length, Compare compare, Sort sort, Args&&... args) -> void {
+  utility::assert_that((_policy != deletion_policy::in_place) || (_head == max_size), "Sorting with tombstones not allowed");
+  utility::assert_that(!(length > _dense.size()), "Length exceeds the number of elements");
+
+  std::invoke(sort, _dense.rend() - static_cast<difference_type>(length), _dense.rend(), std::move(compare), std::forward<Args>(args)...);
+
+  for(auto i= size_type{0}; i < length; ++i) {
+    auto current = i;
+    auto next = index(_dense[current]);
+
+    while(current != next) {
+      const auto idx = index(_dense[next]);
+      const auto entity = _dense[current];
+
+      _swap_or_move(next, idx);
+
+      const auto element = static_cast<entity_traits::entity_type>(current);
+
+      _sparse_reference(entity) = entity_traits::combine(element, entity_traits::to_integral(_dense[current]));
+
+      current = std::exchange(next, idx);
+    }
+  }
 }
 
 template<typename Entity, memory::allocator_for<Entity> Allocator>
 auto basic_sparse_set<Entity, Allocator>::clear() -> void {
   pop_all();
+
   _head = _policy_to_head();
   _dense.clear();
 }

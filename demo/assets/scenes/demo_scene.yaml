@@ -1,0 +1,56 @@
+nodes:
+  - id: 16412000330068842091
+    tag: Node
+    transform:
+      position: {x: 0, y: 0, z: 0}
+      rotation: {x: -0.45292172, y: 0.29038575, z: 0.15887637, w: 0.82782626}
+      scale: {x: 1, y: 1, z: 1}
+    directional_light:
+      color: {r: 1, g: 1, b: 1, a: 1}
+      intensity: 3
+  - id: 3702785471599073834
+    tag: Node
+    transform:
+      position: {x: 0, y: 0, z: 4}
+      rotation: {x: 0, y: 0, z: 0, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    camera:
+      fov_degrees: 60
+      near_plane: 0.01
+      far_plane: 1000
+  - id: 11996703528708368144
+    tag: Node
+    transform:
+      position: {x: 0, y: 3, z: 0}
+      rotation: {x: 0, y: 0, z: 0, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    point_light:
+      color: {r: 1, g: 0, b: 0, a: 1}
+      intensity: 10
+      range: 20
+  - id: 14591655315062509043
+    tag: Node
+    transform:
+      position: {x: 2, y: 0, z: 0}
+      rotation: {x: 0, y: 0, z: 0, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    mesh_renderer:
+      mesh: 13085842659508629620
+  - id: 14156767957593491334
+    tag: Node
+    transform:
+      position: {x: -2, y: 0, z: 0}
+      rotation: {x: 0, y: 0, z: 0, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    mesh_renderer:
+      mesh: 14970803277157233044
+  - id: 6816602338320597656
+    tag: Node
+    transform:
+      position: {x: 0, y: 0, z: 0}
+      rotation: {x: 0, y: 0, z: 0, w: 1}
+      scale: {x: 1, y: 1, z: 1}
+    mesh_renderer:
+      mesh: 6431251213594870473
+active_camera: 3702785471599073834
+primary_light: 16412000330068842091

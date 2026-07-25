@@ -51,6 +51,31 @@ struct relationship {
   std::vector<ecs::entity> children{};
 }; // struct relationship
 
+struct id final : math::uuid {
+
+  using base_type = math::uuid;
+
+  id()
+  : base_type{} { }
+
+  id(const base_type& base)
+  : base_type{base} { }
+
+}; // class id
+
+template<typename Char>
+struct basic_tag final : utility::basic_hashed_string<Char> {
+
+  using base_type = utility::basic_hashed_string<Char>;
+
+  template<typename... Args>
+  basic_tag(Args&&... args)
+  : base_type{std::forward<Args>(args)...} { }
+
+}; // class tag
+
+using tag = basic_tag<char>;
+
 struct camera {
   std::float_t fov_degrees{60.0f};
   std::float_t near_plane{0.1f};
@@ -85,5 +110,20 @@ struct spot_light {
 }; // struct spot_light
 
 } // namespace sbx::scenes
+
+template<typename Char>
+struct fmt::formatter<sbx::scenes::basic_tag<Char>> : fmt::formatter<sbx::utility::basic_hashed_string<Char>> {
+
+  template<typename ParseContext>
+  constexpr auto parse(ParseContext& ctx) -> decltype(ctx.begin()) {
+    return ctx.begin();
+  }
+
+  template<typename FormatContext>
+  auto format(const sbx::scenes::basic_tag<Char>& tag, FormatContext& ctx) const -> decltype(ctx.out()) {
+    return fmt::format_to(ctx.out(), "{}", tag.c_str());
+  }
+
+}; // struct fmt::formatter
 
 #endif // LIBSBX_SCENES_COMPONENTS_HPP_

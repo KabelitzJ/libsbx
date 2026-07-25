@@ -220,6 +220,7 @@ target_sources(
 
     "${CMAKE_SOURCE_DIR}/libsbx/render/render_module.cpp"
 
+    "${CMAKE_SOURCE_DIR}/libsbx/scenes/scene_serializer.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/scenes/scene.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/scenes/scenes_module.cpp"
 
@@ -401,6 +402,7 @@ target_sources(
       "${CMAKE_SOURCE_DIR}/libsbx/render/render_packet.hpp"
 
       "${CMAKE_SOURCE_DIR}/libsbx/scenes/components.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/scenes/scene_serializer.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/scenes/scene.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/scenes/scenes_module.hpp"
 

@@ -4,6 +4,7 @@
 #define LIBSBX_SCENES_SCENE_HPP_
 
 #include <utility>
+#include <unordered_map>
 
 #include <libsbx/math/matrix4x4.hpp>
 
@@ -18,6 +19,8 @@ namespace sbx::scenes {
  * @brief A scene owns the ECS registry and a transform hierarchy.
  */
 class scene {
+
+  friend class scene_serializer;
 
 public:
 
@@ -40,6 +43,18 @@ public:
       return is_valid();
     }
 
+    [[nodiscard]] auto id() const -> const scenes::id& {
+      return get_component<scenes::id>();
+    }
+
+    [[nodiscard]] auto name() -> tag& {
+      return get_component<scenes::tag>();
+    }
+
+    [[nodiscard]] auto name() const -> const tag& {
+      return get_component<scenes::tag>();
+    }
+
     template<typename Component, typename... Args>
     auto add_component(Args&&... args) -> Component& {
       return _scene->_registry.emplace<Component>(_entity, std::forward<Args>(args)...);
@@ -47,6 +62,11 @@ public:
 
     template<typename Component>
     [[nodiscard]] auto get_component() -> Component& {
+      return _scene->_registry.get<Component>(_entity);
+    }
+
+    template<typename Component>
+    [[nodiscard]] auto get_component() const -> const Component& {
       return _scene->_registry.get<Component>(_entity);
     }
 
@@ -84,7 +104,9 @@ public:
 
   scene() = default;
 
-  auto create_node() -> node;
+  auto create_node(const utility::hashed_string& name = "Node", const scenes::local_transform& transform = scenes::local_transform{}) -> node;
+
+  [[nodiscard]] auto find(math::uuid id) -> node;
 
   auto set_active_camera(node camera) -> void;
 
@@ -119,11 +141,14 @@ public:
 
 private:
 
+  auto _create_node(const utility::hashed_string& name, const scenes::local_transform& transform, const math::uuid& id) -> node;
+
   auto _set_parent(ecs::entity child, ecs::entity parent) -> void;
 
   auto _update_node(ecs::entity entity, const math::matrix4x4& parent_world) -> void;
 
   ecs::registry _registry{};
+  std::unordered_map<math::uuid, ecs::entity> _entities_by_id{};
   ecs::entity _active_camera{ecs::null_entity};
   ecs::entity _primary_light{ecs::null_entity};
 

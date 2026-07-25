@@ -388,6 +388,7 @@ auto assets_module::load_mesh(const math::uuid& id) -> mesh_handle {
   const auto submesh_count = submeshes.size();
 
   auto record = std::make_shared<mesh>(std::move(submeshes), mesh_volume);
+  record->_id = id;
 
   {
     auto lock = std::lock_guard{_mutex};
@@ -455,8 +456,6 @@ auto assets_module::process_uploads(std::uint64_t frame_index) -> void {
     upload_context.stage_image(handle, bytes, graphics::image_layout::shader_read_only_optimal);
 
     bindless_table.write_sampled_image(request.index, registry.get<graphics::image>(handle).view());
-
-    auto lock = std::lock_guard{_mutex};
 
     _images.emplace(request.index, handle);
     _resident_frame.emplace(request.index, frame_index);

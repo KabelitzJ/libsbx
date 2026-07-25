@@ -16,6 +16,9 @@
 
 #include <libsbx/assets/assets_module.hpp>
 
+#include <libsbx/scenes/scenes_module.hpp>
+#include <libsbx/scenes/scene_serializer.hpp>
+
 #include <libsbx/render/render_module.hpp>
 
 namespace demo {
@@ -93,6 +96,8 @@ application::application()
   sun_light.intensity = 3.0f;
 
   scene.set_primary_light(sun);
+
+  sbx::scenes::scene_serializer::save(scene, "demo/assets/scenes/demo_scene.yaml");
 }
 
 auto application::update() -> void {

@@ -267,6 +267,9 @@ public:
    */
   auto erase(const entity_type entity) -> void;
 
+  template<std::input_iterator Iterator>
+  auto erase(Iterator first, Iterator last) -> void;
+
   /**
    * @brief Removes an entity if present.
    */

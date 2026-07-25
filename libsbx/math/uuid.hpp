@@ -31,7 +31,7 @@ public:
   }
 
   static constexpr auto create() -> basic_uuid {
-    return basic_uuid{random::next<value_type>()};
+    return basic_uuid{random::next<value_type>(1u)};
   }
 
   constexpr auto operator==(const basic_uuid& other) const noexcept -> bool {

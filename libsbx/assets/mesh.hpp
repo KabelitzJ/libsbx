@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <vector>
 
+#include <libsbx/math/uuid.hpp>
 #include <libsbx/math/vector2.hpp>
 #include <libsbx/math/vector3.hpp>
 #include <libsbx/math/vector4.hpp>
@@ -79,6 +80,10 @@ public:
     return _resident_frame;
   }
 
+  [[nodiscard]] auto id() const noexcept -> const math::uuid& {
+    return _id;
+  }
+
 private:
 
   // Called once by assets_module on the render thread, after the GPU buffers exist.
@@ -97,6 +102,7 @@ private:
   std::uint64_t _resident_frame{0u};
   bool _uploaded{false};
   math::volume _bounds{};
+  math::uuid _id{math::uuid::nil()};
 
 }; // class mesh
 

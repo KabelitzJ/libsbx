@@ -36,3 +36,5 @@ suppress.asan_*
 benchmark.json
 
 patches/
+
+.sbx/

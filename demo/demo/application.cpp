@@ -7,6 +7,7 @@
 #include <libsbx/math/matrix4x4.hpp>
 
 #include <libsbx/core/engine.hpp>
+#include <libsbx/core/project.hpp>
 
 #include <libsbx/platform/platform_module.hpp>
 #include <libsbx/platform/input.hpp>
@@ -34,15 +35,17 @@ application::application()
     sbx::core::engine::quit();
   };
 
+  auto& project = sbx::core::engine::set_project(sbx::core::project::open_or_create("demo", "Demo"));
+
   auto& assets_module = sbx::core::engine::get_module<sbx::assets::assets_module>();
 
-  assets_module.import_directory("demo/assets");
+  assets_module.import_directory(project.assets_directory());
 
-  const auto duck_mesh = assets_module.load_mesh("demo/assets/models/duck/duck.gltf");
-  const auto damaged_helmet_mesh = assets_module.load_mesh("demo/assets/models/damaged_helmet/damaged_helmet.gltf");
-  const auto flight_helmet_mesh = assets_module.load_mesh("demo/assets/models/flight_helmet/flight_helmet.gltf");
+  const auto duck_mesh = assets_module.load_mesh("models/duck/duck.gltf");
+  const auto damaged_helmet_mesh = assets_module.load_mesh("models/damaged_helmet/damaged_helmet.gltf");
+  const auto flight_helmet_mesh = assets_module.load_mesh("models/flight_helmet/flight_helmet.gltf");
 
-  assets_module.save_material(damaged_helmet_mesh->submeshes().front().material, "demo/assets/materials/damaged_helmet.material");
+  assets_module.save_material(damaged_helmet_mesh->submeshes().front().material, "materials/damaged_helmet.material");
 
   auto& render_module = sbx::core::engine::get_module<sbx::render::render_module>();
 
@@ -99,7 +102,7 @@ application::application()
 
   scene.set_primary_light(sun);
 
-  sbx::scenes::scene_serializer::save(scene, "demo/assets/scenes/demo_scene.yaml");
+  sbx::scenes::scene_serializer::save(scene, "scenes/demo_scene.yaml");
 }
 
 auto application::update() -> void {

@@ -8,6 +8,8 @@
 #include <fstream>
 #include <limits>
 #include <span>
+#include <string_view>
+#include <system_error>
 #include <utility>
 
 #include <yaml-cpp/yaml.h>
@@ -46,7 +48,24 @@ struct material_data {
   std::uint32_t padding;
 }; // struct material_data
 
+// Cooked texture container. Bump texture_version to invalidate every cooked texture.
+inline constexpr auto texture_magic = std::uint32_t{0x58544253u};  // 'SBTX'
+inline constexpr auto texture_version = std::uint32_t{1u};
+
+struct texture_header {
+  std::uint32_t magic;
+  std::uint32_t version;
+  std::uint32_t width;
+  std::uint32_t height;
+  std::uint32_t channels;   // always 4 (RGBA) for now
+  std::uint32_t data_size;  // bytes of pixel data following the header
+}; // struct texture_header
+
 assets_module::assets_module() {
+  // The cooked-asset library location is set by the application from the active project (see
+  // projects_module); the directory is created on demand when the first asset is cooked. Nothing
+  // is created here so a stray '.sbx/' is never left at the working directory.
+
   // Reserve the neutral fallbacks first so their bindless indices are stable. Uploaded by the first
   // process_uploads, resident from frame 1 — so materials can point any absent slot at one of these.
   _white = _create_default_texture({255u, 255u, 255u, 255u});
@@ -111,6 +130,7 @@ auto assets_module::load_texture(const math::uuid& id, graphics::format format) 
 
   {
     auto lock = std::lock_guard{_mutex};
+
     if (const auto entry = _textures.find(key); entry != _textures.end()) {
       return texture_handle{entry->second};
     }
@@ -119,31 +139,37 @@ auto assets_module::load_texture(const math::uuid& id, graphics::format format) 
   auto path = std::filesystem::path{};
   {
     auto lock = std::lock_guard{_mutex};
+
     const auto entry = _paths.find(id);
+  
     if (entry == _paths.end()) {
       utility::logger<"assets">::warn("Unknown texture uuid {}", id);
       return texture_handle{};
     }
+
     path = entry->second;
   }
 
-  auto width = std::int32_t{0};
-  auto height = std::int32_t{0};
-  auto channels = std::int32_t{0};
+  const auto cooked = _cooked_path(id, ".sbxtex");
 
-  auto* data = stbi_load(path.string().c_str(), &width, &height, &channels, STBI_rgb_alpha);
-
-  if (data == nullptr) {
-    utility::logger<"assets">::warn("Could not load texture '{}'", path.generic_string());
-  
-    return texture_handle{};
+  if (!std::filesystem::exists(cooked) || _source_newer(path, cooked)) {
+    if (!_cook_texture(path, cooked)) {
+      utility::logger<"assets">::warn("Could not cook texture '{}'", path.generic_string());
+      return texture_handle{};
+    }
   }
 
-  const auto count = static_cast<std::size_t>(width) * static_cast<std::size_t>(height) * 4u;
+  auto pixels = std::vector<std::byte>{};
+  auto width = std::uint32_t{0u};
+  auto height = std::uint32_t{0u};
 
-  auto pixels = std::vector<std::byte>{reinterpret_cast<const std::byte*>(data), reinterpret_cast<const std::byte*>(data) + count};
-
-  stbi_image_free(data);
+  // If the blob is unreadable/out-of-date (e.g. cooker version bumped), recook once.
+  if (!_load_cooked_texture(cooked, pixels, width, height)) {
+    if (!_cook_texture(path, cooked) || !_load_cooked_texture(cooked, pixels, width, height)) {
+      utility::logger<"assets">::warn("Could not load cooked texture '{}'", cooked.generic_string());
+      return texture_handle{};
+    }
+  }
 
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 
@@ -158,14 +184,18 @@ auto assets_module::load_texture(const math::uuid& id, graphics::format format) 
     auto lock = std::lock_guard{_mutex};
 
     _textures.emplace(key, record);
-    _pending_textures.push_back(pending_texture_upload{index, std::move(pixels), static_cast<std::uint32_t>(width), static_cast<std::uint32_t>(height), format});
+    _pending_textures.push_back(pending_texture_upload{index, std::move(pixels), width, height, format});
   }
 
   return texture_handle{record};
 }
 
 auto assets_module::load_texture(const std::filesystem::path& path, graphics::format format) -> texture_handle {
-  return load_texture(import(path), format);
+  const auto& project = core::engine::project();
+
+  const auto assets_directory = project.assets_directory();
+
+  return load_texture(import(assets_directory / path), format);
 }
 
 auto assets_module::load_mesh(const math::uuid& id) -> mesh_handle {
@@ -192,7 +222,7 @@ auto assets_module::load_mesh(const math::uuid& id) -> mesh_handle {
 
   if (data.error() != fastgltf::Error::None) {
     utility::logger<"assets">::warn("Could not open mesh '{}'", path.generic_string());
-  
+
     return mesh_handle{};
   }
 
@@ -218,14 +248,18 @@ auto assets_module::load_mesh(const math::uuid& id) -> mesh_handle {
   const auto load_gltf_texture = [&](std::size_t texture_index, graphics::format format) -> texture_handle {
     const auto& gltf_texture = gltf.textures[texture_index];
 
-    if (!gltf_texture.imageIndex.has_value()) { 
-      return texture_handle{}; 
+    if (!gltf_texture.imageIndex.has_value()) {
+      return texture_handle{};
     }
 
     const auto& image = gltf.images[gltf_texture.imageIndex.value()];
 
     if (const auto* uri = std::get_if<fastgltf::sources::URI>(&image.data)) {
-      return load_texture(path.parent_path() / std::filesystem::path{std::string{uri->uri.path()}}, format);
+      const auto& project = core::engine::project();
+
+      const auto parent_path = std::filesystem::relative(path.parent_path(), project.assets_directory());
+
+      return load_texture(parent_path / std::filesystem::path{std::string{uri->uri.path()}}, format);
     }
 
     utility::logger<"assets">::warn("Mesh '{}': non-file image, using default", path.generic_string());
@@ -408,7 +442,11 @@ auto assets_module::load_mesh(const math::uuid& id) -> mesh_handle {
 }
 
 auto assets_module::load_mesh(const std::filesystem::path& path) -> mesh_handle {
-  return load_mesh(import(path));
+  const auto& project = core::engine::project();
+
+  const auto assets_directory = project.assets_directory();
+
+  return load_mesh(import(assets_directory / path));
 }
 
 auto assets_module::load_material(const math::uuid& id) -> material_handle {
@@ -440,24 +478,24 @@ auto assets_module::load_material(const math::uuid& id) -> material_handle {
 
   auto info = material::create_info{};
 
-  if (root["name"]) { 
-    info.name = root["name"].as<std::string>(); 
+  if (root["name"]) {
+    info.name = root["name"].as<std::string>();
   }
 
-  if (root["base_color_factor"]) { 
-    info.base_color_factor = root["base_color_factor"].as<math::color>(); 
+  if (root["base_color_factor"]) {
+    info.base_color_factor = root["base_color_factor"].as<math::color>();
   }
 
-  if (root["emissive_factor"]) { 
-    info.emissive_factor = root["emissive_factor"].as<math::vector3>(); 
+  if (root["emissive_factor"]) {
+    info.emissive_factor = root["emissive_factor"].as<math::vector3>();
   }
 
-  if (root["metallic_factor"]) { 
-    info.metallic_factor = root["metallic_factor"].as<std::float_t>(); 
+  if (root["metallic_factor"]) {
+    info.metallic_factor = root["metallic_factor"].as<std::float_t>();
   }
 
-  if (root["roughness_factor"])  { 
-    info.roughness_factor = root["roughness_factor"].as<std::float_t>(); 
+  if (root["roughness_factor"]) {
+    info.roughness_factor = root["roughness_factor"].as<std::float_t>();
   }
 
   const auto load_slot = [&](const char* key, graphics::format format) -> texture_handle {
@@ -490,7 +528,11 @@ auto assets_module::load_material(const math::uuid& id) -> material_handle {
 }
 
 auto assets_module::load_material(const std::filesystem::path& path) -> material_handle {
-  return load_material(import(path));
+  const auto& project = core::engine::project();
+
+  const auto assets_directory = project.assets_directory();
+
+  return load_material(import(assets_directory / path));
 }
 
 auto assets_module::create_material(const material::create_info& create_info) -> material_handle {
@@ -525,24 +567,24 @@ auto assets_module::save_material(const material_handle& material, const std::fi
   node["metallic_factor"] = material->metallic_factor();
   node["roughness_factor"] = material->roughness_factor();
 
-  if (const auto slot = path_of(material->albedo())) { 
-    node["albedo"] = *slot; 
+  if (const auto slot = path_of(material->albedo())) {
+    node["albedo"] = *slot;
   }
 
-  if (const auto slot = path_of(material->normal())) { 
-    node["normal"] = *slot; 
+  if (const auto slot = path_of(material->normal())) {
+    node["normal"] = *slot;
   }
 
-  if (const auto slot = path_of(material->metallic_roughness())) { 
-    node["metallic_roughness"] = *slot; 
+  if (const auto slot = path_of(material->metallic_roughness())) {
+    node["metallic_roughness"] = *slot;
   }
 
-  if (const auto slot = path_of(material->occlusion())) { 
-    node["occlusion"] = *slot; 
+  if (const auto slot = path_of(material->occlusion())) {
+    node["occlusion"] = *slot;
   }
 
-  if (const auto slot = path_of(material->emissive())) { 
-    node["emissive"] = *slot; 
+  if (const auto slot = path_of(material->emissive())) {
+    node["emissive"] = *slot;
   }
 
   if (!path.parent_path().empty()) {
@@ -770,6 +812,99 @@ auto assets_module::_register_material(std::shared_ptr<material> record) -> mate
   _pending_materials.push_back(pending_material_upload{record});
 
   return material_handle{record};
+}
+
+auto assets_module::_cooked_path(const math::uuid& id, std::string_view extension) const -> std::filesystem::path {
+  const auto& project = core::engine::project();
+
+  return project.library_directory() / fmt::format("{}{}", id.value(), extension);
+}
+
+auto assets_module::_source_newer(const std::filesystem::path& source, const std::filesystem::path& cooked) -> bool {
+  auto error = std::error_code{};
+
+  const auto source_time = std::filesystem::last_write_time(source, error);
+  if (error) {
+    return true; // can't tell -> cook
+  }
+
+  const auto cooked_time = std::filesystem::last_write_time(cooked, error);
+  if (error) {
+    return true;
+  }
+
+  return source_time > cooked_time;
+}
+
+auto assets_module::_cook_texture(const std::filesystem::path& source, const std::filesystem::path& cooked) -> bool {
+  auto width = std::int32_t{0};
+  auto height = std::int32_t{0};
+  auto channels = std::int32_t{0};
+
+  auto* data = stbi_load(source.string().c_str(), &width, &height, &channels, STBI_rgb_alpha);
+
+  if (data == nullptr) {
+    utility::logger<"assets">::warn("Cook: could not decode '{}'", source.generic_string());
+    return false;
+  }
+
+  const auto data_size = static_cast<std::uint32_t>(width) * static_cast<std::uint32_t>(height) * 4u;
+
+  const auto header = texture_header{
+    texture_magic,
+    texture_version,
+    static_cast<std::uint32_t>(width),
+    static_cast<std::uint32_t>(height),
+    4u,
+    data_size
+  };
+
+  auto error = std::error_code{};
+  std::filesystem::create_directories(cooked.parent_path(), error);
+
+  auto out = std::ofstream{cooked, std::ios::binary};
+
+  if (!out) {
+    utility::logger<"assets">::warn("Cook: could not write '{}'", cooked.generic_string());
+    stbi_image_free(data);
+    return false;
+  }
+
+  out.write(reinterpret_cast<const char*>(&header), sizeof(header));
+  out.write(reinterpret_cast<const char*>(data), static_cast<std::streamsize>(data_size));
+
+  stbi_image_free(data);
+
+  utility::logger<"assets">::debug("Cooked texture '{}' -> '{}'", source.generic_string(), cooked.generic_string());
+
+  return true;
+}
+
+auto assets_module::_load_cooked_texture(const std::filesystem::path& cooked, std::vector<std::byte>& pixels, std::uint32_t& width, std::uint32_t& height) -> bool {
+  auto in = std::ifstream{cooked, std::ios::binary};
+
+  if (!in) {
+    return false;
+  }
+
+  auto header = texture_header{};
+  in.read(reinterpret_cast<char*>(&header), sizeof(header));
+
+  if (!in || header.magic != texture_magic || header.version != texture_version) {
+    return false; // missing / corrupt / stale format -> caller recooks
+  }
+
+  pixels.resize(header.data_size);
+  in.read(reinterpret_cast<char*>(pixels.data()), static_cast<std::streamsize>(header.data_size));
+
+  if (!in) {
+    return false;
+  }
+
+  width = header.width;
+  height = header.height;
+
+  return true;
 }
 
 } // namespace sbx::assets

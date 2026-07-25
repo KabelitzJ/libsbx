@@ -171,6 +171,7 @@ target_sources(
 
     "${CMAKE_SOURCE_DIR}/libsbx/core/core.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/core/engine.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/core/project.cpp"
 
     "${CMAKE_SOURCE_DIR}/libsbx/ecs/ecs.cpp"
 

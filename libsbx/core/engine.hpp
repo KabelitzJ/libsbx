@@ -4,6 +4,7 @@
 #define LIBSBX_CORE_ENGINE_HPP_
 
 #include <memory>
+#include <optional>
 #include <span>
 #include <string_view>
 #include <type_traits>
@@ -13,11 +14,13 @@
 #include <libsbx/utility/assert.hpp>
 #include <libsbx/utility/noncopyable.hpp>
 #include <libsbx/utility/concepts.hpp>
+#include <libsbx/utility/logger.hpp>
 
 #include <libsbx/units/units.hpp>
 
 #include <libsbx/core/application.hpp>
 #include <libsbx/core/module.hpp>
+#include <libsbx/core/project.hpp>
 
 namespace sbx::core {
 
@@ -38,6 +41,39 @@ public:
   [[nodiscard]] static auto args() -> const std::vector<std::string_view>&;
 
   static auto quit() -> void;
+
+  static auto set_project(const core::project& project) -> core::project& {
+    utility::assert_that(_instance != nullptr, "Engine instance does not exist");
+
+    auto& projects = _instance->_projects;
+
+    const auto root = std::filesystem::weakly_canonical(project.root());
+
+    const auto existing = std::ranges::find_if(projects, [&](const auto& known) {
+      return std::filesystem::weakly_canonical(known.root()) == root;
+    });
+
+    if (existing != projects.end()) {
+      *existing = project;
+      _instance->_active_project = static_cast<std::size_t>(std::distance(projects.begin(), existing));
+    } else {
+      projects.push_back(project);
+      _instance->_active_project = projects.size() - 1u;
+    }
+
+    auto& active = projects[*_instance->_active_project];
+
+    utility::logger<"core">::info("Active project '{}' at '{}'", active.name(), active.root().string());
+
+    return active;
+  }
+
+  [[nodiscard]] static auto projects() -> const std::vector<core::project>&;
+
+  [[nodiscard]] static auto has_project() -> bool;
+
+  /** @brief The active project. Asserts one has been set — a project is required. */
+  [[nodiscard]] static auto project() -> core::project&;
 
   /**
    * @brief Access to a module owned by the running engine.
@@ -79,7 +115,10 @@ protected:
 
   std::vector<std::string_view> _args{};
 
-  std::unique_ptr<application> _application{};
+  std::unique_ptr<core::application> _application{};
+
+  std::vector<core::project> _projects{};
+  std::optional<std::size_t> _active_project{};
 
 }; // class engine
 

@@ -11,7 +11,9 @@
 #include <mutex>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include <libsbx/utility/noncopyable.hpp>
@@ -33,6 +35,14 @@
 
 namespace sbx::assets {
 
+/**
+ * @brief Owns the asset database and GPU residency.
+ *
+ * Every path argument to @ref import, @ref import_directory and the `load_*` overloads is
+ * interpreted **relative to the active project's assets directory** (core::engine::project()).
+ * Assets are keyed by that project-relative path, which keeps serialized references portable and
+ * independent of the working directory. A project is required — asset access asserts one is set.
+ */
 class assets_module final : public utility::noncopyable {
 
 public:
@@ -43,13 +53,21 @@ public:
 
   ~assets_module();
 
+  /**
+   * @brief Registers an asset by its project-relative path and returns its stable UUID.
+   * @param path Path relative to the active project's assets directory.
+   */
   auto import(const std::filesystem::path& path) -> math::uuid;
 
-  auto import_directory(const std::filesystem::path& root) -> void;
+  /**
+   * @brief Imports every supported asset under a project-relative subdirectory.
+   * @param root Subdirectory relative to the assets directory. Empty (default) scans the whole tree.
+   */
+  auto import_directory(const std::filesystem::path& root = {}) -> void;
 
   /**
-   * @brief Loads a texture from a UUID or path. If the texture has already been loaded, returns the existing handle.
-   * 
+   * @brief Loads a texture from a UUID or project-relative path. If already loaded, returns the existing handle.
+   *
    * @param id The UUID of the texture to load.
    * @param format The format to load the texture as. Defaults to sRGB.
    *
@@ -60,11 +78,11 @@ public:
   auto load_texture(const std::filesystem::path& path, graphics::format format = graphics::format::r8g8b8a8_srgb) -> texture_handle;
 
   /**
-   * @brief Loads a mesh from a UUID or path. If the mesh has already been loaded, returns the existing handle.
-   * 
+   * @brief Loads a mesh from a UUID or project-relative path. If already loaded, returns the existing handle.
+   *
    * @param id The UUID of the mesh to load.
-   * @param path The path to the mesh file to load.
-   * 
+   * @param path The path (relative to the assets directory) to the mesh file to load.
+   *
    * @return A handle to the loaded mesh. Valid if the mesh was successfully loaded.
    */
   auto load_mesh(const math::uuid& id) -> mesh_handle;
@@ -77,6 +95,10 @@ public:
 
   auto create_material(const material::create_info& create_info) -> material_handle;
 
+  /**
+   * @brief Writes a material to a `.material` file.
+   * @param path Destination path relative to the active project's assets directory.
+   */
   auto save_material(const material_handle& material, const std::filesystem::path& path) -> void;
 
   /**
@@ -111,6 +133,7 @@ public:
     return _material_address;
   }
 
+  /** @brief The project-relative path an asset was imported from, or empty if unknown. */
   [[nodiscard]] auto path_of(const math::uuid& id) const -> std::filesystem::path;
 
 private:
@@ -141,10 +164,23 @@ private:
 
   auto _register_material(std::shared_ptr<material> record) -> material_handle;
 
+  /** @brief Resolves a project-relative asset path to its on-disk location under the active project. */
+  [[nodiscard]] static auto _absolute(const std::filesystem::path& relative) -> std::filesystem::path;
+
+  // -- Cooked-asset library (P1: textures) --
+
+  [[nodiscard]] auto _cooked_path(const math::uuid& id, std::string_view extension) const -> std::filesystem::path;
+
+  [[nodiscard]] static auto _source_newer(const std::filesystem::path& source, const std::filesystem::path& cooked) -> bool;
+
+  auto _cook_texture(const std::filesystem::path& source, const std::filesystem::path& cooked) -> bool;
+
+  auto _load_cooked_texture(const std::filesystem::path& cooked, std::vector<std::byte>& pixels, std::uint32_t& width, std::uint32_t& height) -> bool;
+
   mutable std::mutex _mutex{};
 
   std::unordered_map<std::string, math::uuid> _uuids{};
-  std::unordered_map<math::uuid, std::filesystem::path> _paths{};
+  std::unordered_map<math::uuid, std::filesystem::path> _paths{}; // project-relative (to assets directory)
 
   std::unordered_map<std::string, std::shared_ptr<texture>> _textures{};
   std::vector<pending_texture_upload> _pending_textures{};

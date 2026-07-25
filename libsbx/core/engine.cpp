@@ -4,6 +4,7 @@
 
 #include <libsbx/utility/logger.hpp>
 #include <libsbx/utility/target.hpp>
+#include <libsbx/utility/assert.hpp>
 
 namespace sbx::core {
 
@@ -54,6 +55,25 @@ auto engine::quit() -> void {
   utility::assert_that(_instance != nullptr, "Engine instance does not exist");
 
   _instance->_is_running = false;
+}
+
+auto engine::projects() -> const std::vector<core::project>& {
+  utility::assert_that(_instance != nullptr, "Engine instance does not exist");
+
+  return _instance->_projects;
+}
+
+auto engine::has_project() -> bool {
+  utility::assert_that(_instance != nullptr, "Engine instance does not exist");
+
+  return _instance->_active_project.has_value();
+}
+
+auto engine::project() -> core::project& {
+  utility::assert_that(_instance != nullptr, "Engine instance does not exist");
+  utility::assert_that(_instance->_active_project.has_value(), "No active project — a project is required");
+
+  return _instance->_projects[*_instance->_active_project];
 }
 
 } // namespace sbx::core

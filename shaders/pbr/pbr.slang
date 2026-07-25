@@ -42,7 +42,11 @@ struct material_data {
   uint emissive_index;
   float metallic_factor;
   float roughness_factor;
-  uint padding;
+  float alpha_cutoff;
+  uint flags;
+  uint pad0;
+  uint pad1;
+  uint pad2;
 }; // struct material_data
 
 enum class light_type : uint {
@@ -74,7 +78,8 @@ struct frame_data {
 struct push_data {
   frame_data* frame;
   vertex* vertices;
-  float4x4 model;
+  float4x4* transforms;
+  uint transform_offset;
   uint material_index;
   uint sampler_index;
 }; // struct push_data
@@ -123,10 +128,12 @@ float3 brdf(float3 n, float3 v, float3 l, float3 albedo, float3 f0, float roughn
 [shader("vertex")]
 vs_out vertex_main(vs_in input) {
   vertex v = push.vertices[input.vertex_id];
-  frame_data frame = push.frame[0];
+  frame_data frame = *push.frame;
 
-  float4 world = mul(push.model, float4(v.position, 1.0));
-  float3x3 normal_matrix = (float3x3)push.model;
+  float4x4 model = push.transforms[push.transform_offset + input.instance_id];
+
+  float4 world = mul(model, float4(v.position, 1.0));
+  float3x3 normal_matrix = (float3x3)model;
 
   vs_out output;
   output.position = world.xyz;
@@ -140,11 +147,16 @@ vs_out vertex_main(vs_in input) {
 
 [shader("fragment")]
 fs_out fragment_main(fs_in input) {
-  frame_data frame = push.frame[0];
+  frame_data frame = *push.frame;
   material_data material = frame.materials[push.material_index];
   SamplerState sampler = samplers[push.sampler_index];
 
   float4 base = material.base_color_factor * textures[material.albedo_index].Sample(sampler, input.uv);
+
+  if ((material.flags & 1u) != 0u && base.a < material.alpha_cutoff) {
+    discard;
+  }
+
   float3 albedo = base.rgb;
 
   float4 mr = textures[material.metallic_roughness_index].Sample(sampler, input.uv);

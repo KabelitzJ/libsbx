@@ -2,10 +2,12 @@
 // Copyright (c) 2026 Jonas Kabelitz
 #include <libsbx/render/render_module.hpp>
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstddef>
 #include <cstring>
+#include <map>
 #include <vector>
 
 #include <libsbx/utility/logger.hpp>
@@ -48,12 +50,115 @@ struct frame_data {
 struct push_constants {
   graphics::buffer::address_type frame_address;
   graphics::buffer::address_type vertex_address;
-  math::matrix4x4 model;
+  graphics::buffer::address_type transform_address;
+  std::uint32_t transform_offset;
   std::uint32_t material_index;
   std::uint32_t sampler_index;
 }; // struct push_constants
 
-render_module::render_module() { }
+struct draw_bucket {
+  assets::mesh_handle mesh{};
+  std::uint32_t submesh_index{0u};
+  assets::material_handle material{};
+  std::uint32_t pipeline_id{0u};
+  std::vector<math::matrix4x4> transforms{};
+}; // struct draw_bucket
+
+struct transparent_entry {
+  assets::mesh_handle mesh{};
+  std::uint32_t submesh_index{0u};
+  assets::material_handle material{};
+  std::uint32_t pipeline_id{0u};
+  math::matrix4x4 transform{math::matrix4x4::identity};
+  std::float_t depth{0.0f};
+}; // struct transparent_entry
+
+render_module::render_module() {
+  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
+  auto& bindless_table = graphics_module.bindless_table();
+  auto& registry = graphics_module.resource_registry();
+  auto& surface = graphics_module.surface();
+
+  const auto entry_points = std::vector<graphics::shader_compiler::entry_point_request>{
+    {VK_SHADER_STAGE_VERTEX_BIT, "vertex_main"},
+    {VK_SHADER_STAGE_FRAGMENT_BIT, "fragment_main"}
+  };
+
+  const auto& shader = graphics_module.shader_cache().get({"shaders/pbr/pbr.slang", entry_points});
+
+  const auto make_pipeline = [&](bool is_transparent, graphics::cull_mode cull, const std::string& name) {
+    auto info = graphics::graphics_pipeline::create_info{
+      .shader = shader,
+      .color_formats = {static_cast<graphics::format>(surface.format().format)},
+      .depth_format = graphics::format::d32_sfloat,
+      .cull_mode = cull,
+      .front_face = graphics::front_face::counter_clockwise,
+      .depth_test = true,
+      .depth_write = !is_transparent,
+      .name = name
+    };
+
+    if (is_transparent) {
+      info.color_blend_attachments = {graphics::blend_attachment{
+        .enable = true,
+        .source_color = graphics::blend_factor::source_alpha,
+        .destination_color = graphics::blend_factor::one_minus_source_alpha,
+        .color_operation = graphics::blend_operation::add,
+        .source_alpha = graphics::blend_factor::one,
+        .destination_alpha = graphics::blend_factor::one_minus_source_alpha,
+        .alpha_operation = graphics::blend_operation::add
+      }};
+    }
+
+    return graphics_module.pipeline_cache().get(info);
+  };
+
+  _opaque_pipelines[0] = make_pipeline(false, graphics::cull_mode::back, "Mesh Opaque");
+  _opaque_pipelines[1] = make_pipeline(false, graphics::cull_mode::none, "Mesh Opaque Double-Sided");
+  _transparent_pipelines[0] = make_pipeline(true, graphics::cull_mode::back, "Mesh Transparent");
+  _transparent_pipelines[1] = make_pipeline(true, graphics::cull_mode::none, "Mesh Transparent Double-Sided");
+
+  _sampler_index = bindless_table.sampler_index(graphics::sampler::create_info{});
+
+  _frame_buffer = registry.emplace<graphics::buffer>(graphics::buffer::create_info{
+    .size = memory::stride_v<frame_data> * graphics::swapchain::max_frames_in_flight,
+    .usage = graphics::buffer_usage::device_address | graphics::buffer_usage::storage,
+    .memory = graphics::memory_usage::host_write,
+    .name = fmt::format("Frame Data")
+  });
+
+  const auto base = registry.get<graphics::buffer>(_frame_buffer).address();
+
+  for (auto slot = std::size_t{0u}; slot < graphics::swapchain::max_frames_in_flight; ++slot) {
+    _frame_addresses[slot] = base + slot * memory::stride_v<frame_data>;
+  }
+
+  _light_buffer = registry.emplace<graphics::buffer>(graphics::buffer::create_info{
+    .size = memory::stride_v<light_data> * light_capacity * graphics::swapchain::max_frames_in_flight,
+    .usage = graphics::buffer_usage::device_address | graphics::buffer_usage::storage,
+    .memory = graphics::memory_usage::host_write,
+    .name = "Light Data"
+  });
+
+  const auto light_base = registry.get<graphics::buffer>(_light_buffer).address();
+
+  for (auto slot = std::size_t{0u}; slot < graphics::swapchain::max_frames_in_flight; ++slot) {
+    _light_addresses[slot] = light_base + slot * light_capacity * memory::stride_v<light_data>;
+  }
+
+  _transform_buffer = registry.emplace<graphics::buffer>(graphics::buffer::create_info{
+    .size = memory::stride_v<math::matrix4x4> * transform_capacity * graphics::swapchain::max_frames_in_flight,
+    .usage = graphics::buffer_usage::device_address | graphics::buffer_usage::storage,
+    .memory = graphics::memory_usage::host_write,
+    .name = "Instance Transforms"
+  });
+
+  const auto transform_base = registry.get<graphics::buffer>(_transform_buffer).address();
+
+  for (auto slot = std::size_t{0u}; slot < graphics::swapchain::max_frames_in_flight; ++slot) {
+    _transform_addresses[slot] = transform_base + slot * transform_capacity * memory::stride_v<math::matrix4x4>;
+  }
+}
 
 render_module::~render_module() {
   _stop();
@@ -163,10 +268,74 @@ auto render_module::_build_packet() -> render_packet {
     packet.camera.active = true;
   }
 
-  auto view = scene.query<scenes::world_transform, scenes::mesh_renderer>();
+    auto opaque = std::map<mesh_key, draw_bucket>{};
+  auto transparent = std::vector<transparent_entry>{};
 
-  for (const auto [entity, world, renderer] : view.each()) {
-    packet.items.push_back(render_item{world.matrix, renderer.mesh, renderer.materials});
+  for (const auto [entity, world, renderer] : scene.query<scenes::world_transform, scenes::mesh_renderer>().each()) {
+    if (!renderer.mesh.is_valid()) {
+      continue;
+    }
+
+    const auto& submeshes = renderer.mesh->submeshes();
+
+    for (auto index = std::uint32_t{0u}; index < submeshes.size(); ++index) {
+      const auto& submesh = submeshes[index];
+
+      const auto& material = (index < renderer.materials.size() && renderer.materials[index].is_valid()) ? renderer.materials[index] : submesh.material;
+
+      if (!material.is_valid()) {
+        continue;
+      }
+
+      const auto pipeline_id = material->is_double_sided() ? 1u : 0u;
+
+      if (material->alpha() == assets::alpha_mode::blend) {
+        const auto translation = world.matrix[3];
+        const auto to_camera = packet.camera.position - math::vector3f{world.matrix[3]};
+        const auto depth = to_camera.length_squared();
+
+        transparent.push_back(transparent_entry{renderer.mesh, index, material, pipeline_id, world.matrix, depth});
+      } else {
+        auto& bucket = opaque[mesh_key{renderer.mesh->id(), index, material->id()}];
+        bucket.mesh = renderer.mesh;
+        bucket.submesh_index = index;
+        bucket.material = material;
+        bucket.pipeline_id = pipeline_id;
+        bucket.transforms.push_back(world.matrix);
+      }
+    }
+  }
+
+  packet.opaque_commands.reserve(opaque.size());
+
+  for (auto& [key, bucket] : opaque) {
+    auto command = draw_command{};
+    command.mesh = bucket.mesh;
+    command.submesh_index = bucket.submesh_index;
+    command.material = bucket.material;
+    command.instance_count = static_cast<std::uint32_t>(bucket.transforms.size());
+    command.transform_offset = static_cast<std::uint32_t>(packet.transforms.size());
+    command.pipeline_id = bucket.pipeline_id;
+
+    packet.transforms.insert(packet.transforms.end(), bucket.transforms.begin(), bucket.transforms.end());
+    packet.opaque_commands.push_back(std::move(command));
+  }
+
+  std::ranges::sort(transparent, std::greater<>{}, &transparent_entry::depth);
+
+  packet.transparent_commands.reserve(transparent.size());
+
+  for (const auto& entry : transparent) {
+    auto command = draw_command{};
+    command.mesh = entry.mesh;
+    command.submesh_index = entry.submesh_index;
+    command.material = entry.material;
+    command.instance_count = 1u;
+    command.transform_offset = static_cast<std::uint32_t>(packet.transforms.size());
+    command.pipeline_id = entry.pipeline_id;
+
+    packet.transforms.push_back(entry.transform);
+    packet.transparent_commands.push_back(std::move(command));
   }
 
   for (auto&& [entity, transform, light] : scene.query<scenes::world_transform, scenes::directional_light>().each()) {
@@ -224,53 +393,6 @@ auto render_module::_consume_packet(const render_packet& packet) -> void {
 
     const auto& swapchain = frame_context.swapchain();
     const auto extent = swapchain.extent();
-
-    if (_pipeline == nullptr) {
-      const auto entry_points = std::vector<graphics::shader_compiler::entry_point_request>{
-        {"vertex_main", VK_SHADER_STAGE_VERTEX_BIT},
-        {"fragment_main", VK_SHADER_STAGE_FRAGMENT_BIT}
-      };
-
-      const auto& shader = graphics_module.shader_cache().get({"shaders/pbr/pbr.slang", entry_points});
-
-      _pipeline = graphics_module.pipeline_cache().get(graphics::graphics_pipeline::create_info{
-        .shader = shader,
-        .color_formats = {static_cast<graphics::format>(swapchain.format())},
-        .depth_format = graphics::format::d32_sfloat,
-        .cull_mode = graphics::cull_mode::back,
-        .front_face = graphics::front_face::counter_clockwise,
-        .depth_test = true,
-        .depth_write = true,
-        .name = "Mesh"
-      });
-
-      _sampler_index = bindless_table.sampler_index(graphics::sampler::create_info{});
-
-      _frame_buffer = registry.emplace<graphics::buffer>(graphics::buffer::create_info{
-        .size = memory::stride_v<frame_data> * graphics::swapchain::max_frames_in_flight,
-        .usage = graphics::buffer_usage::device_address | graphics::buffer_usage::storage,
-        .memory = graphics::memory_usage::host_write,
-        .name = fmt::format("Frame Data")
-      });
-
-      const auto base = registry.get<graphics::buffer>(_frame_buffer).address();
-
-      for (auto slot = std::size_t{0u}; slot < graphics::swapchain::max_frames_in_flight; ++slot) {
-        _frame_addresses[slot] = base + slot * memory::stride_v<frame_data>;
-      }
-
-      _light_buffer = registry.emplace<graphics::buffer>(graphics::buffer::create_info{
-        .size = memory::stride_v<light_data> * light_capacity * graphics::swapchain::max_frames_in_flight,
-        .usage = graphics::buffer_usage::device_address | graphics::buffer_usage::storage,
-        .memory = graphics::memory_usage::host_write,
-        .name = "Light Data"
-      });
-
-      const auto light_base = registry.get<graphics::buffer>(_light_buffer).address();
-      for (auto slot = std::size_t{0u}; slot < graphics::swapchain::max_frames_in_flight; ++slot) {
-        _light_addresses[slot] = light_base + slot * light_capacity * memory::stride_v<light_data>;
-      }
-    }
 
     // Turn queued asset uploads into GPU images/buffers + bindless writes, then record their copies.
     assets_module.process_uploads(frame_context.frame_index());
@@ -347,7 +469,7 @@ auto render_module::_consume_packet(const render_packet& packet) -> void {
     command_buffer->begin_rendering(rendering_info);
 
     if (packet.camera.active) {
-      const auto aspect = static_cast<float>(extent.width) / static_cast<float>(extent.height);
+      const auto aspect = static_cast<std::float_t>(extent.width) / static_cast<std::float_t>(extent.height);
       const auto projection = math::matrix4x4::perspective(math::degree{packet.camera.fov_degrees}, aspect, packet.camera.near_plane, packet.camera.far_plane);
       const auto& view = packet.camera.view;
 
@@ -358,6 +480,7 @@ auto render_module::_consume_packet(const render_packet& packet) -> void {
 
       if (light_count > 0u) {
         auto& light_buffer = registry.get<graphics::buffer>(_light_buffer);
+
         light_buffer.write(packet.lights.data(), light_count * memory::stride_v<light_data>, slot * light_capacity * memory::stride_v<light_data>);
       }
 
@@ -372,56 +495,75 @@ auto render_module::_consume_packet(const render_packet& packet) -> void {
       auto& frame_buffer = registry.get<graphics::buffer>(_frame_buffer);
       frame_buffer.write(&data, sizeof(frame_data), slot * memory::stride_v<frame_data>);
 
-      auto bound = false;
+      const auto instance_count = std::min(static_cast<std::uint32_t>(packet.transforms.size()), transform_capacity);
 
-      for (const auto& item : packet.items) {
-        if (!item.mesh.is_valid() || !assets_module.is_resident(item.mesh)) {
-          continue;
-        }
+      if (instance_count > 0u) {
+        auto& transform_buffer = registry.get<graphics::buffer>(_transform_buffer);
 
-        const auto& mesh = *item.mesh;
+        transform_buffer.write(packet.transforms.data(), instance_count * memory::stride_v<math::matrix4x4>, slot * transform_capacity * memory::stride_v<math::matrix4x4>);
+      }
 
-        if (!bound) {
-          command_buffer->bind_pipeline(*_pipeline);
+      if (!packet.opaque_commands.empty() || !packet.transparent_commands.empty()) {
+        const auto descriptor_set = bindless_table.descriptor_set();
+        vkCmdBindDescriptorSets(*command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, bindless_table.pipeline_layout(), 0u, 1u, &descriptor_set, 0u, nullptr);
 
-          const auto descriptor_set = bindless_table.descriptor_set();
-          vkCmdBindDescriptorSets(command_buffer->handle(), VK_PIPELINE_BIND_POINT_GRAPHICS, bindless_table.pipeline_layout(), 0u, 1u, &descriptor_set, 0u, nullptr);
+        const auto viewport = VkViewport{0.0f, 0.0f, static_cast<std::float_t>(extent.width), static_cast<std::float_t>(extent.height), 0.0f, 1.0f};
+        command_buffer->set_viewport(viewport);
 
-          const auto viewport = VkViewport{0.0f, 0.0f, static_cast<std::float_t>(extent.width), static_cast<std::float_t>(extent.height), 0.0f, 1.0f};
-          command_buffer->set_viewport(viewport);
+        const auto scissor = VkRect2D{VkOffset2D{0, 0}, extent};
+        command_buffer->set_scissor(scissor);
+      }
 
-          const auto scissor = VkRect2D{VkOffset2D{0, 0}, extent};
-          command_buffer->set_scissor(scissor);
+      const auto draw_list = [&](const std::vector<draw_command>& commands, const std::array<memory::observer_ptr<graphics::graphics_pipeline>, 2u>& pipelines) {
+        auto bound = false;
+        auto current_pipeline = std::uint32_t{0u};
+        const auto* current_mesh = static_cast<const assets::mesh*>(nullptr);
 
-          bound = true;
-        }
-
-        vkCmdBindIndexBuffer(command_buffer->handle(), registry.get<graphics::buffer>(mesh.index_buffer()).handle(), 0u, VK_INDEX_TYPE_UINT32);
-
-        const auto& submeshes = mesh.submeshes();
-
-        for (auto&& [index, submesh] : std::views::enumerate(submeshes)) {
-          const auto& selected_material = (index < item.materials.size() && item.materials[index].is_valid()) ? item.materials[index] : submesh.material;
-
-          if (!selected_material.is_valid() || !assets_module.is_resident(selected_material)) {
+        for (const auto& command : commands) {
+          if (!command.mesh.is_valid() || !assets_module.is_resident(command.mesh)) {
             continue;
           }
 
+          if (!command.material.is_valid() || !assets_module.is_resident(command.material)) {
+            continue;
+          }
+
+          if (command.transform_offset + command.instance_count > instance_count) {
+            continue;
+          }
+
+          if (!bound || current_pipeline != command.pipeline_id) {
+            command_buffer->bind_pipeline(*pipelines[command.pipeline_id]);
+            current_pipeline = command.pipeline_id;
+            bound = true;
+          }
+
+          if (current_mesh != command.mesh.get()) {
+            vkCmdBindIndexBuffer(*command_buffer, registry.get<graphics::buffer>(command.mesh->index_buffer()), 0u, VK_INDEX_TYPE_UINT32);
+            current_mesh = command.mesh.get();
+          }
+
+          const auto& submesh = command.mesh->submeshes()[command.submesh_index];
+
           auto values = push_constants{};
           values.frame_address = _frame_addresses[slot];
-          values.vertex_address = mesh.vertex_address();
-          values.model = item.model;
-          values.material_index = selected_material->index();
+          values.vertex_address = command.mesh->vertex_address();
+          values.transform_address = _transform_addresses[slot];
+          values.transform_offset = command.transform_offset;
+          values.material_index = command.material->index();
           values.sampler_index = _sampler_index;
 
           auto range = std::array<std::byte, graphics::bindless_table::push_constant_size>{};
           std::memcpy(range.data(), &values, sizeof(push_constants));
 
-          vkCmdPushConstants(command_buffer->handle(), bindless_table.pipeline_layout(), VK_SHADER_STAGE_ALL, 0u, static_cast<std::uint32_t>(range.size()), range.data());
+          vkCmdPushConstants(*command_buffer, bindless_table.pipeline_layout(), VK_SHADER_STAGE_ALL, 0u, static_cast<std::uint32_t>(range.size()), range.data());
 
-          vkCmdDrawIndexed(command_buffer->handle(), submesh.index_count, 1u, submesh.index_offset, 0, 0u);
+          vkCmdDrawIndexed(*command_buffer, submesh.index_count, command.instance_count, submesh.index_offset, 0, 0u);
         }
-      }
+      };
+
+      draw_list(packet.opaque_commands, _opaque_pipelines);
+      draw_list(packet.transparent_commands, _transparent_pipelines);
     }
 
     command_buffer->end_rendering();

@@ -41,6 +41,10 @@ public:
     return *_record;
   }
 
+  [[nodiscard]] auto get() const noexcept -> pointer {
+    return _record.get();
+  }
+
 private:
 
   std::shared_ptr<value_type> _record{};

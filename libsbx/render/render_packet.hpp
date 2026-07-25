@@ -3,11 +3,13 @@
 #ifndef LIBSBX_RENDER_RENDER_PACKET_HPP_
 #define LIBSBX_RENDER_RENDER_PACKET_HPP_
 
+#include <cstdint>
 #include <vector>
 
 #include <libsbx/math/color.hpp>
 #include <libsbx/math/matrix4x4.hpp>
 #include <libsbx/math/vector3.hpp>
+#include <libsbx/math/uuid.hpp>
 
 #include <libsbx/assets/material.hpp>
 #include <libsbx/assets/mesh.hpp>
@@ -15,11 +17,46 @@
 
 namespace sbx::render {
 
-struct render_item {
-  math::matrix4x4 model{math::matrix4x4::identity};
+/**
+ * @brief Identity of a coalesced draw. Draws sharing a key (same mesh, submesh and material) differ only by transform and collapse into one instanced draw. 
+ * Ordered mesh -> submesh -> material so a mesh's submeshes stay adjacent (its index buffer binds once).
+ */
+struct mesh_key {
+
+  math::uuid mesh{math::uuid::nil()};
+  std::uint32_t submesh{0u};
+  math::uuid material{math::uuid::nil()};
+
+  auto operator<(const mesh_key& other) const -> bool {
+    if (mesh < other.mesh) { 
+      return true; 
+    }
+
+    if (other.mesh < mesh) { 
+      return false; 
+    }
+
+    if (submesh < other.submesh) { 
+      return true; 
+    }
+
+    if (other.submesh < submesh) { 
+      return false; 
+    }
+
+    return material < other.material;
+  }
+
+}; // struct mesh_key
+
+struct draw_command {
   assets::mesh_handle mesh{};
-  std::vector<assets::material_handle> materials{};
-}; // struct render_item
+  std::uint32_t submesh_index{0u};
+  assets::material_handle material{};
+  std::uint32_t instance_count{0u};
+  std::uint32_t transform_offset{0u};
+  std::uint32_t pipeline_id{0u};
+}; // struct draw_command
 
 struct camera_data {
   math::matrix4x4 view{math::matrix4x4::identity};
@@ -49,7 +86,9 @@ struct light_data {
 struct render_packet {
   math::color clear_color{0.05f, 0.05f, 0.08f, 1.0f};
   camera_data camera{};
-  std::vector<render_item> items{};
+  std::vector<draw_command> opaque_commands{};
+  std::vector<draw_command> transparent_commands{};
+  std::vector<math::matrix4x4> transforms{};
   std::vector<light_data> lights{};
 }; // struct render_packet
 

@@ -43,7 +43,7 @@ application::application()
   auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
   auto& scene = scenes_module.active_scene();
 
-  sbx::scenes::scene_serializer::load(scene, "scenes/demo_scene.yaml");
+  sbx::scenes::scene_serializer::load(scene, "scenes/demo.yaml");
 
   _duck = scene.find("Duck");
   _damaged_helmet = scene.find("DamagedHelmet");
@@ -69,8 +69,8 @@ auto application::update() -> void {
   auto& damaged_helmet_transform = _damaged_helmet.transform();
   damaged_helmet_transform.rotation = sbx::math::quaternion{sbx::math::vector3f{0.0f, 1.0f, 0.0f}, _rotation};
 
-  auto& flight_helmet_transform = _flight_helmet.transform();
-  flight_helmet_transform.rotation = sbx::math::quaternion{sbx::math::vector3f{0.0f, 1.0f, 0.0f}, _rotation};
+  // auto& flight_helmet_transform = _flight_helmet.transform();
+  // flight_helmet_transform.rotation = sbx::math::quaternion{sbx::math::vector3f{0.0f, 1.0f, 0.0f}, _rotation};
 }
 
 auto application::fixed_update() -> void {

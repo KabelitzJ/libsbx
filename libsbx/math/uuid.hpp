@@ -69,8 +69,6 @@ struct fmt::formatter<sbx::math::basic_uuid<Type>> {
 
   template<typename FormatContext>
   auto format(const sbx::math::basic_uuid<Type>& uuid, FormatContext& context) const -> decltype(context.out()) {
-    static constexpr auto width = sizeof(Type) * 2;
-
     if (uuid == sbx::math::basic_uuid<Type>::nil()) {
       return fmt::format_to(context.out(), "[nil]");
     }

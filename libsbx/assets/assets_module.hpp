@@ -153,6 +153,9 @@ private:
     math::vector3 emissive_factor{0.0f, 0.0f, 0.0f};
     std::float_t metallic_factor{1.0f};
     std::float_t roughness_factor{1.0f};
+    alpha_mode alpha{alpha_mode::opaque};
+    std::float_t alpha_cutoff{0.5f};
+    bool is_double_sided{false};
     math::uuid albedo{math::uuid::nil()};
     math::uuid normal{math::uuid::nil()};
     math::uuid metallic_roughness{math::uuid::nil()};
@@ -197,13 +200,9 @@ private:
 
   [[nodiscard]] auto _cooked_path(const math::uuid& id, std::string_view extension) const -> std::filesystem::path;
 
-  // -- Staleness (P3: content hash + cooker version, tracked in the manifest) --
-
   [[nodiscard]] auto _is_cooked_stale(const math::uuid& id, const std::filesystem::path& source, const std::filesystem::path& cooked, std::uint32_t cooker_version) -> bool;
 
   auto _record_cook(const math::uuid& id, std::uint32_t cooker_version, const std::filesystem::path& source) -> void;
-
-  // -- Asset manifest (P3: uuid -> source path + staleness, so startup needs no rescan) --
 
   auto _ensure_manifest_loaded() -> void;
 

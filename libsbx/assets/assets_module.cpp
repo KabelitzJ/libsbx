@@ -35,6 +35,8 @@
 
 namespace sbx::assets {
 
+inline constexpr auto material_flag_masked = std::uint32_t{1u << 0u};
+
 struct material_data {
   math::vector4 base_color_factor;
   math::vector4 emissive_factor;
@@ -45,7 +47,11 @@ struct material_data {
   std::uint32_t emissive_index;
   std::float_t metallic_factor;
   std::float_t roughness_factor;
-  std::uint32_t padding;
+  std::float_t alpha_cutoff;
+  std::uint32_t flags;
+  std::uint32_t padding0;
+  std::uint32_t padding1;
+  std::uint32_t padding2;
 }; // struct material_data
 
 template<utility::string_literal Name>
@@ -63,14 +69,14 @@ template<utility::string_literal Name>
 requires (Name.size() == 4u)
 constexpr auto fourcc_v = fourcc<Name>::value;
 
-inline constexpr auto texture_magic = std::uint32_t{0x58544253u};  // 'SBTX'
+inline constexpr auto texture_magic = fourcc_v<"SBTX">;  // 'SBTX'
 inline constexpr auto texture_version = std::uint32_t{1u};
 
-inline constexpr auto mesh_magic = std::uint32_t{0x48534253u};   // 'SBSH'
+inline constexpr auto mesh_magic = fourcc_v<"SBSH">;   // 'SBSH'
 inline constexpr auto mesh_version = std::uint32_t{1u};
 
-inline constexpr auto material_magic = std::uint32_t{0x544D4253u}; // 'SBMT'
-inline constexpr auto material_version = std::uint32_t{1u};
+inline constexpr auto material_magic = fourcc_v<"SBMT">; // 'SBMT'
+inline constexpr auto material_version = std::uint32_t{2u};
 
 // A mesh cook also emits its materials, so a mesh blob's freshness depends on both cookers.
 inline constexpr auto mesh_cooker_version = mesh_version * 1000u + material_version;
@@ -133,6 +139,9 @@ struct material_file_header {
   std::float_t emissive_factor[3];
   std::float_t metallic_factor;
   std::float_t roughness_factor;
+  std::uint32_t alpha_mode;
+  std::float_t alpha_cutoff;
+  std::uint32_t is_double_sided;
   std::uint64_t albedo_uuid;
   std::uint64_t normal_uuid;
   std::uint64_t metallic_roughness_uuid;
@@ -317,8 +326,6 @@ auto assets_module::load_mesh(const math::uuid& id) -> mesh_handle {
   const auto source = relative_path;
   const auto cooked = _cooked_path(id, ".sbxmsh");
 
-  // Cook on demand: (re)cook when the blob is missing, the source content changed, or the cooker
-  // version bumped. Cooking also extracts the glTF's materials into .sbxmat assets referenced below.
   if (_is_cooked_stale(id, source, cooked, mesh_cooker_version)) {
     if (!_cook_mesh(source, relative_path, id, cooked)) {
       return mesh_handle{};
@@ -331,7 +338,6 @@ auto assets_module::load_mesh(const math::uuid& id) -> mesh_handle {
   auto cooked_submeshes = std::vector<cooked_submesh>{};
   auto bounds = math::volume{};
 
-  // Recook once if the blob is unreadable/out-of-date (e.g. cooker version bumped).
   if (!_load_cooked_mesh(cooked, vertices, indices, cooked_submeshes, bounds)) {
     if (!_cook_mesh(source, relative_path, id, cooked) || !_load_cooked_mesh(cooked, vertices, indices, cooked_submeshes, bounds)) {
       utility::logger<"assets">::warn("Could not load cooked mesh '{}'", cooked.generic_string());
@@ -414,7 +420,6 @@ auto assets_module::load_material(const math::uuid& id) -> material_handle {
     }
   }
 
-  // Authored `.material` asset -> load its YAML.
   if (!source_path.empty() && source_path.extension() == ".material") {
     const auto path = source_path;
 
@@ -433,6 +438,12 @@ auto assets_module::load_material(const math::uuid& id) -> material_handle {
     if (root["emissive_factor"]) info.emissive_factor = root["emissive_factor"].as<math::vector3>();
     if (root["metallic_factor"]) info.metallic_factor = root["metallic_factor"].as<std::float_t>();
     if (root["roughness_factor"]) info.roughness_factor = root["roughness_factor"].as<std::float_t>();
+    if (root["alpha_mode"]) {
+      const auto mode = root["alpha_mode"].as<std::string>();
+      info.alpha = (mode == "blend") ? alpha_mode::blend : (mode == "mask") ? alpha_mode::mask : alpha_mode::opaque;
+    }
+    if (root["alpha_cutoff"]) info.alpha_cutoff = root["alpha_cutoff"].as<std::float_t>();
+    if (root["is_double_sided"]) info.is_double_sided = root["is_double_sided"].as<bool>();
 
     const auto load_slot = [&](const char* key, graphics::format format) -> texture_handle {
       if (const auto node = root[key]) {
@@ -520,6 +531,9 @@ auto assets_module::save_material(const material_handle& material, const std::fi
   node["emissive_factor"] = material->emissive_factor();
   node["metallic_factor"] = material->metallic_factor();
   node["roughness_factor"] = material->roughness_factor();
+  node["alpha_mode"] = (material->alpha() == alpha_mode::blend) ? "blend" : (material->alpha() == alpha_mode::mask) ? "mask" : "opaque";
+  node["alpha_cutoff"] = material->alpha_cutoff();
+  node["is_double_sided"] = material->is_double_sided();
 
   if (const auto slot = path_of(material->albedo())) {
     node["albedo"] = *slot;
@@ -653,6 +667,8 @@ auto assets_module::process_uploads(std::uint64_t frame_index) -> void {
     data.emissive_index = resolve(material.emissive(), _black);
     data.metallic_factor = material.metallic_factor();
     data.roughness_factor = material.roughness_factor();
+    data.alpha_cutoff = material.alpha_cutoff();
+    data.flags = (material.alpha() == alpha_mode::mask) ? material_flag_masked : 0u;
 
     buffer.write(&data, sizeof(material_data), material.index() * memory::stride_v<material_data>);
   }
@@ -1019,7 +1035,6 @@ auto assets_module::_cook_mesh(const std::filesystem::path& source, const std::f
 
   auto& gltf = loaded.get();
 
-  // Resolve a glTF texture to a stable asset uuid (imports the external image so uuid -> path is known).
   const auto texture_uuid = [&](std::size_t texture_index) -> math::uuid {
     const auto& gltf_texture = gltf.textures[texture_index];
 
@@ -1037,7 +1052,6 @@ auto assets_module::_cook_mesh(const std::filesystem::path& source, const std::f
     return math::uuid::nil();
   };
 
-  // Extract each glTF material into its own .sbxmat with a stable, derived uuid.
   auto material_uuids = std::vector<math::uuid>{};
   material_uuids.reserve(gltf.materials.size());
 
@@ -1050,6 +1064,9 @@ auto assets_module::_cook_mesh(const std::filesystem::path& source, const std::f
     description.emissive_factor = math::vector3{gltf_material.emissiveFactor[0], gltf_material.emissiveFactor[1], gltf_material.emissiveFactor[2]};
     description.metallic_factor = pbr.metallicFactor;
     description.roughness_factor = pbr.roughnessFactor;
+    description.alpha = (gltf_material.alphaMode == fastgltf::AlphaMode::Blend) ? alpha_mode::blend : (gltf_material.alphaMode == fastgltf::AlphaMode::Mask) ? alpha_mode::mask : alpha_mode::opaque;
+    description.alpha_cutoff = gltf_material.alphaCutoff;
+    description.is_double_sided = gltf_material.doubleSided;
 
     if (pbr.baseColorTexture.has_value())         description.albedo             = texture_uuid(pbr.baseColorTexture->textureIndex);
     if (pbr.metallicRoughnessTexture.has_value()) description.metallic_roughness = texture_uuid(pbr.metallicRoughnessTexture->textureIndex);
@@ -1303,6 +1320,9 @@ auto assets_module::_cook_material(const math::uuid& id, const material_descript
   header.emissive_factor[2] = description.emissive_factor.z();
   header.metallic_factor = description.metallic_factor;
   header.roughness_factor = description.roughness_factor;
+  header.alpha_mode = static_cast<std::uint32_t>(description.alpha);
+  header.alpha_cutoff = description.alpha_cutoff;
+  header.is_double_sided = description.is_double_sided ? 1u : 0u;
   header.albedo_uuid = description.albedo.value();
   header.normal_uuid = description.normal.value();
   header.metallic_roughness_uuid = description.metallic_roughness.value();
@@ -1348,11 +1368,15 @@ auto assets_module::_load_cooked_material(const std::filesystem::path& cooked, c
   info.emissive_factor = math::vector3{header.emissive_factor[0], header.emissive_factor[1], header.emissive_factor[2]};
   info.metallic_factor = header.metallic_factor;
   info.roughness_factor = header.roughness_factor;
+  info.alpha = static_cast<alpha_mode>(header.alpha_mode);
+  info.alpha_cutoff = header.alpha_cutoff;
+  info.is_double_sided = header.is_double_sided != 0u;
 
   const auto load_slot = [&](std::uint64_t uuid, graphics::format format) -> texture_handle {
     if (uuid == 0ull) {
       return texture_handle{};
     }
+
     return load_texture(math::uuid::from_value(uuid), format);
   };
 

@@ -50,6 +50,7 @@ public:
 private:
 
   inline static constexpr auto light_capacity = std::uint32_t{256u};
+  inline static constexpr auto transform_capacity = std::uint32_t{16384u};
 
   auto _start() -> void;
 
@@ -74,7 +75,8 @@ private:
 
   std::uint32_t _sampler_index{0u};
 
-  memory::observer_ptr<graphics::graphics_pipeline> _pipeline{nullptr};
+  std::array<memory::observer_ptr<graphics::graphics_pipeline>, 2u> _opaque_pipelines{};
+  std::array<memory::observer_ptr<graphics::graphics_pipeline>, 2u> _transparent_pipelines{};
 
   graphics::image_handle _depth_image{};
   std::uint32_t _depth_width{0u};
@@ -85,6 +87,9 @@ private:
 
   graphics::buffer_handle _light_buffer{};
   std::array<graphics::buffer::address_type, graphics::swapchain::max_frames_in_flight> _light_addresses{};
+
+  graphics::buffer_handle _transform_buffer{};
+  std::array<graphics::buffer::address_type, graphics::swapchain::max_frames_in_flight> _transform_addresses{};
 
 }; // class render_module
 

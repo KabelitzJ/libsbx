@@ -52,9 +52,9 @@ nodes:
     id: 7853293024889737634
     components:
       - type: transform
-        position: {x: 2, y: 0, z: 0}
+        position: {x: 2, y: -1, z: 0}
         rotation: {x: 0, y: 0, z: 0, w: 1}
-        scale: {x: 1, y: 1, z: 1}
+        scale: {x: 3, y: 3, z: 3}
       - type: static_mesh
         mesh: flight_helmet
   - tag: DamagedHelmet

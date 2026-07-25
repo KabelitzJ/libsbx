@@ -30,8 +30,8 @@ class shader_compiler : public utility::noncopyable {
 public:
 
   struct entry_point_request {
-    std::string name;
     VkShaderStageFlagBits stage;
+    std::string name;
 
     auto operator==(const entry_point_request&) const -> bool = default;
 

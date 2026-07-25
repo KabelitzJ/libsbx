@@ -45,8 +45,6 @@ application::application()
   const auto damaged_helmet_mesh = assets_module.load_mesh("models/damaged_helmet/damaged_helmet.gltf");
   const auto flight_helmet_mesh = assets_module.load_mesh("models/flight_helmet/flight_helmet.gltf");
 
-  assets_module.save_material(damaged_helmet_mesh->submeshes().front().material, "materials/damaged_helmet.material");
-
   auto& render_module = sbx::core::engine::get_module<sbx::render::render_module>();
 
   auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();

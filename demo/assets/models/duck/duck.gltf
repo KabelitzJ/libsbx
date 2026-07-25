@@ -61,7 +61,7 @@
 		{
 			"mimeType":"image/png",
 			"name":"albedo",
-			"uri":"albedo.png"
+			"uri":"textures/albedo.png"
 		}
 	],
 	"accessors":[

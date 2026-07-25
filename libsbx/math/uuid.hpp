@@ -75,7 +75,8 @@ struct fmt::formatter<sbx::math::basic_uuid<Type>> {
       return fmt::format_to(context.out(), "[nil]");
     }
 
-    return fmt::format_to(context.out(), "{:0{}x}", uuid.value(), width);
+    // return fmt::format_to(context.out(), "{:0{}x}", uuid.value(), width);
+    return fmt::format_to(context.out(), "{}", uuid.value());
   }
 }; // struct fmt::formatter<sbx::math::uuid>
 

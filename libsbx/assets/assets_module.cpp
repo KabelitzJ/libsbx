@@ -540,8 +540,14 @@ auto assets_module::create_material(const material::create_info& create_info) ->
 }
 
 auto assets_module::save_material(const material_handle& material, const std::filesystem::path& path) -> void {
+  const auto& project = core::engine::project();
+
+  const auto assets_directory = project.assets_directory();
+
+  const auto resolved_path = assets_directory / path;
+
   if (!material.is_valid()) {
-    utility::logger<"assets">::warn("Cannot save an invalid material to '{}'", path.generic_string());
+    utility::logger<"assets">::warn("Cannot save an invalid material to '{}'", resolved_path.generic_string());
     return;
   }
 
@@ -587,16 +593,16 @@ auto assets_module::save_material(const material_handle& material, const std::fi
     node["emissive"] = *slot;
   }
 
-  if (!path.parent_path().empty()) {
-    std::filesystem::create_directories(path.parent_path());
+  if (!resolved_path.parent_path().empty()) {
+    std::filesystem::create_directories(resolved_path.parent_path());
   }
 
-  auto out = std::ofstream{path};
+  auto out = std::ofstream{resolved_path};
   out << node;
 
-  import(path); // register + create the .meta so it's a first-class asset
+  import(resolved_path); // register + create the .meta so it's a first-class asset
 
-  utility::logger<"assets">::info("Saved material '{}'", path.generic_string());
+  utility::logger<"assets">::info("Saved material '{}'", resolved_path.generic_string());
 }
 
 auto assets_module::process_uploads(std::uint64_t frame_index) -> void {

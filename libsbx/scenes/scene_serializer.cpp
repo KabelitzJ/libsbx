@@ -23,6 +23,12 @@ auto scene_serializer::save(scene& target, const std::filesystem::path& path) ->
   auto& registry = target._registry;
   auto& assets_module = core::engine::get_module<assets::assets_module>();
 
+  auto& project = core::engine::project();
+
+  const auto assets_directory = project.assets_directory();
+
+  const auto resolved_path = assets_directory / path;
+
   // Assets table: collect referenced meshes/materials, assign unique keys
   auto mesh_keys = std::unordered_map<math::uuid, std::string>{};
   auto material_keys = std::unordered_map<math::uuid, std::string>{};
@@ -224,23 +230,29 @@ auto scene_serializer::save(scene& target, const std::filesystem::path& path) ->
   root["assets_module"] = assets_node;
   root["nodes"] = nodes_node;
 
-  if (!path.parent_path().empty()) {
-    std::filesystem::create_directories(path.parent_path());
+  if (!resolved_path.parent_path().empty()) {
+    std::filesystem::create_directories(resolved_path.parent_path());
   }
 
-  auto out = std::ofstream{path};
+  auto out = std::ofstream{resolved_path};
   out << root;
 
-  utility::logger<"scenes">::info("Saved scene '{}' ({} nodes)", path.generic_string(), nodes_node.size());
+  utility::logger<"scenes">::info("Saved scene '{}' ({} nodes)", resolved_path.generic_string(), nodes_node.size());
 }
 
 auto scene_serializer::load(scene& target, const std::filesystem::path& path) -> void {
-  if (!std::filesystem::exists(path)) {
-    utility::logger<"scenes">::warn("Scene '{}' does not exist", path.generic_string());
+  auto& project = core::engine::project();
+
+  const auto assets_directory = project.assets_directory();
+
+  const auto resolved_path = assets_directory / path;
+
+  if (!std::filesystem::exists(resolved_path)) {
+    utility::logger<"scenes">::warn("Scene '{}' does not exist", resolved_path.generic_string());
     return;
   }
 
-  const auto root = YAML::LoadFile(path.string());
+  const auto root = YAML::LoadFile(resolved_path.string());
 
   target._registry.clear();
   target._entities_by_id.clear();

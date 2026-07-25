@@ -64,6 +64,11 @@ public:
     return _root / _library;
   }
 
+  /** @brief The log directory (default `<root>/.sbx/logs`). */
+  [[nodiscard]] auto logs_directory() const -> std::filesystem::path {
+    return _root / _logs;
+  }
+
   /** @brief Resolve a project-relative path against the root. */
   [[nodiscard]] auto resolve(const std::filesystem::path& relative) const -> std::filesystem::path {
     return _root / relative;
@@ -87,6 +92,7 @@ private:
   std::string _name{"Untitled"};
   std::filesystem::path _assets{"assets"};
   std::filesystem::path _library{".sbx/library"};
+  std::filesystem::path _logs{".sbx/logs"};
 
 }; // class project
 

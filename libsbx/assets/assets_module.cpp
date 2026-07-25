@@ -92,10 +92,13 @@ auto assets_module::import_directory(const std::filesystem::path& root) -> void 
       continue;
     }
 
-    auto extension = entry.path().extension().string();
+    const auto& path = entry.path();
+
+    auto extension = path.extension().string();
+
     std::ranges::transform(extension, extension.begin(), [](unsigned char character) { return static_cast<char>(std::tolower(character)); });
 
-    if (extension == ".png" || extension == ".jpg" || extension == ".jpeg" || extension == ".gltf" || extension == ".glb") {
+    if (extension == ".png" || extension == ".jpg" || extension == ".jpeg" || extension == ".gltf" || extension == ".glb" || extension == ".material") {
       import(entry.path());
     }
   }
@@ -149,6 +152,7 @@ auto assets_module::load_texture(const math::uuid& id, graphics::format format) 
   const auto index = bindless_table.reserve_sampled_image();
 
   auto record = std::make_shared<texture>(texture{index});
+  record->_id = id;
 
   {
     auto lock = std::lock_guard{_mutex};
@@ -234,6 +238,7 @@ auto assets_module::load_mesh(const math::uuid& id) -> mesh_handle {
 
     const auto& pbr = gltf_material.pbrData;
 
+    info.name = gltf_material.name.empty() ? std::string{"material"} : std::string{gltf_material.name.begin(), gltf_material.name.end()};
     info.base_color_factor = math::color{pbr.baseColorFactor[0], pbr.baseColorFactor[1], pbr.baseColorFactor[2], pbr.baseColorFactor[3]};
     info.metallic_factor = pbr.metallicFactor;
     info.roughness_factor = pbr.roughnessFactor;
@@ -406,19 +411,150 @@ auto assets_module::load_mesh(const std::filesystem::path& path) -> mesh_handle 
   return load_mesh(import(path));
 }
 
+auto assets_module::load_material(const math::uuid& id) -> material_handle {
+  {
+    auto lock = std::lock_guard{_mutex};
+    if (const auto entry = _material_files.find(id); entry != _material_files.end()) {
+      return material_handle{entry->second};
+    }
+  }
+
+  auto path = std::filesystem::path{};
+  {
+    auto lock = std::lock_guard{_mutex};
+    const auto entry = _paths.find(id);
+    if (entry == _paths.end()) {
+      utility::logger<"assets">::warn("Unknown material uuid {}", id);
+      return material_handle{};
+    }
+    path = entry->second;
+  }
+
+  auto root = YAML::Node{};
+  try {
+    root = YAML::LoadFile(path.string());
+  } catch (const std::exception& exception) {
+    utility::logger<"assets">::warn("Could not parse material '{}' ({})", path.generic_string(), exception.what());
+    return material_handle{};
+  }
+
+  auto info = material::create_info{};
+
+  if (root["name"]) { 
+    info.name = root["name"].as<std::string>(); 
+  }
+
+  if (root["base_color_factor"]) { 
+    info.base_color_factor = root["base_color_factor"].as<math::color>(); 
+  }
+
+  if (root["emissive_factor"]) { 
+    info.emissive_factor = root["emissive_factor"].as<math::vector3>(); 
+  }
+
+  if (root["metallic_factor"]) { 
+    info.metallic_factor = root["metallic_factor"].as<std::float_t>(); 
+  }
+
+  if (root["roughness_factor"])  { 
+    info.roughness_factor = root["roughness_factor"].as<std::float_t>(); 
+  }
+
+  const auto load_slot = [&](const char* key, graphics::format format) -> texture_handle {
+    if (const auto node = root[key]) {
+      return load_texture(std::filesystem::path{node.as<std::string>()}, format);
+    }
+
+    return texture_handle{};
+  };
+
+  info.albedo = load_slot("albedo", graphics::format::r8g8b8a8_srgb);
+  info.normal = load_slot("normal", graphics::format::r8g8b8a8_unorm);
+  info.metallic_roughness = load_slot("metallic_roughness", graphics::format::r8g8b8a8_unorm);
+  info.occlusion = load_slot("occlusion", graphics::format::r8g8b8a8_unorm);
+  info.emissive = load_slot("emissive", graphics::format::r8g8b8a8_srgb);
+
+  auto record = std::make_shared<material>(info);
+  record->_id = id;
+
+  auto handle = _register_material(record);
+
+  {
+    auto lock = std::lock_guard{_mutex};
+    _material_files.emplace(id, record);
+  }
+
+  utility::logger<"assets">::info("Loaded material '{}'", path.generic_string());
+
+  return handle;
+}
+
+auto assets_module::load_material(const std::filesystem::path& path) -> material_handle {
+  return load_material(import(path));
+}
+
 auto assets_module::create_material(const material::create_info& create_info) -> material_handle {
-  auto record = std::make_shared<material>(create_info);
+  return _register_material(std::make_shared<material>(create_info));
+}
 
-  auto lock = std::lock_guard{_mutex};
+auto assets_module::save_material(const material_handle& material, const std::filesystem::path& path) -> void {
+  if (!material.is_valid()) {
+    utility::logger<"assets">::warn("Cannot save an invalid material to '{}'", path.generic_string());
+    return;
+  }
 
-  utility::assert_that(_material_count < material_capacity, "Exceeded material capacity");
+  const auto path_of = [this](const texture_handle& texture) -> std::optional<std::string> {
+    if (!texture.is_valid()) {
+      return std::nullopt;
+    }
 
-  record->_index = _material_count++;
+    auto lock = std::lock_guard{_mutex};
 
-  _materials.push_back(record);
-  _pending_materials.push_back(pending_material_upload{record});
+    if (const auto entry = _paths.find(texture->id()); entry != _paths.end()) {
+      return entry->second.generic_string();
+    }
 
-  return material_handle{record};
+    return std::nullopt; // default/procedural texture (nil uuid) — omit the slot
+  };
+
+  auto node = YAML::Node{};
+
+  node["name"] = material->name();
+  node["base_color_factor"] = material->base_color_factor();
+  node["emissive_factor"] = material->emissive_factor();
+  node["metallic_factor"] = material->metallic_factor();
+  node["roughness_factor"] = material->roughness_factor();
+
+  if (const auto slot = path_of(material->albedo())) { 
+    node["albedo"] = *slot; 
+  }
+
+  if (const auto slot = path_of(material->normal())) { 
+    node["normal"] = *slot; 
+  }
+
+  if (const auto slot = path_of(material->metallic_roughness())) { 
+    node["metallic_roughness"] = *slot; 
+  }
+
+  if (const auto slot = path_of(material->occlusion())) { 
+    node["occlusion"] = *slot; 
+  }
+
+  if (const auto slot = path_of(material->emissive())) { 
+    node["emissive"] = *slot; 
+  }
+
+  if (!path.parent_path().empty()) {
+    std::filesystem::create_directories(path.parent_path());
+  }
+
+  auto out = std::ofstream{path};
+  out << node;
+
+  import(path); // register + create the .meta so it's a first-class asset
+
+  utility::logger<"assets">::info("Saved material '{}'", path.generic_string());
 }
 
 auto assets_module::process_uploads(std::uint64_t frame_index) -> void {
@@ -565,9 +701,17 @@ auto assets_module::is_resident(const material_handle& material) const -> bool {
     return !texture.is_valid() || is_resident(texture);
   };
 
-  const auto& record = *material;
+  return is_ready(material->albedo()) && is_ready(material->normal()) && is_ready(material->metallic_roughness()) && is_ready(material->occlusion()) && is_ready(material->emissive());
+}
 
-  return is_ready(record.albedo()) && is_ready(record.normal()) && is_ready(record.metallic_roughness()) && is_ready(record.occlusion()) && is_ready(record.emissive());
+auto assets_module::path_of(const math::uuid& id) const -> std::filesystem::path {
+  auto lock = std::lock_guard{_mutex};
+
+  if (const auto entry = _paths.find(id); entry != _paths.end()) {
+    return entry->second;
+  }
+
+  return {};
 }
 
 auto assets_module::_create_default_texture(std::array<std::uint8_t, 4u> color) -> texture_handle {
@@ -613,6 +757,19 @@ auto assets_module::_read_or_create_meta(const std::filesystem::path& path) -> m
   utility::logger<"assets">::debug("Imported '{}' as {}", path.generic_string(), uuid);
 
   return uuid;
+}
+
+auto assets_module::_register_material(std::shared_ptr<material> record) -> material_handle {
+  auto lock = std::lock_guard{_mutex};
+
+  utility::assert_that(_material_count < material_capacity, "Exceeded material capacity");
+
+  record->_index = _material_count++;
+
+  _materials.push_back(record);
+  _pending_materials.push_back(pending_material_upload{record});
+
+  return material_handle{record};
 }
 
 } // namespace sbx::assets

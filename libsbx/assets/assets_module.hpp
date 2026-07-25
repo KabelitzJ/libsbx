@@ -7,9 +7,9 @@
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
-#include <filesystem>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -71,7 +71,13 @@ public:
 
   auto load_mesh(const std::filesystem::path& path) -> mesh_handle;
 
+  auto load_material(const math::uuid& id) -> material_handle;
+
+  auto load_material(const std::filesystem::path& path) -> material_handle;
+
   auto create_material(const material::create_info& create_info) -> material_handle;
+
+  auto save_material(const material_handle& material, const std::filesystem::path& path) -> void;
 
   /**
    * @brief Render thread. Turns queued texture loads into GPU images + bindless writes. Copies are
@@ -105,6 +111,8 @@ public:
     return _material_address;
   }
 
+  [[nodiscard]] auto path_of(const math::uuid& id) const -> std::filesystem::path;
+
 private:
 
   inline static constexpr auto material_capacity = std::uint32_t{1024u};
@@ -131,6 +139,8 @@ private:
 
   auto _read_or_create_meta(const std::filesystem::path& path) -> math::uuid;
 
+  auto _register_material(std::shared_ptr<material> record) -> material_handle;
+
   mutable std::mutex _mutex{};
 
   std::unordered_map<std::string, math::uuid> _uuids{};
@@ -149,6 +159,7 @@ private:
   graphics::buffer_handle _material_buffer{};
   graphics::buffer::address_type _material_address{0u};
   std::uint32_t _material_count{0u};
+  std::unordered_map<math::uuid, std::shared_ptr<material>> _material_files{};
 
   texture_handle _white{};
   texture_handle _normal{};

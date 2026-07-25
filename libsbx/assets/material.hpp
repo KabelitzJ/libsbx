@@ -5,6 +5,7 @@
 
 #include <cstdint>
 #include <limits>
+#include <string>
 
 #include <libsbx/math/color.hpp>
 #include <libsbx/math/vector3.hpp>
@@ -23,6 +24,7 @@ public:
   inline static constexpr auto invalid_index = std::numeric_limits<std::uint32_t>::max();
 
   struct create_info {
+    std::string name{"material"};
     math::color base_color_factor{1.0f, 1.0f, 1.0f, 1.0f};
     math::vector3 emissive_factor{0.0f, 0.0f, 0.0f};
     float metallic_factor{1.0f};
@@ -45,7 +47,8 @@ public:
     _normal{create_info.normal},
     _metallic_roughness{create_info.metallic_roughness},
     _occlusion{create_info.occlusion},
-    _emissive{create_info.emissive} { }
+    _emissive{create_info.emissive},
+    _name{create_info.name} { }
 
   [[nodiscard]] auto is_valid() const noexcept -> bool { 
     return _index != invalid_index; 
@@ -92,6 +95,14 @@ public:
     return _emissive; 
   }
 
+  [[nodiscard]] auto id() const noexcept -> const math::uuid& {
+    return _id;
+  }
+
+  [[nodiscard]] auto name() const noexcept -> const std::string& { 
+    return _name; 
+  }
+
 private:
 
   math::color _base_color_factor{1.0f, 1.0f, 1.0f, 1.0f};
@@ -104,6 +115,8 @@ private:
   texture_handle _occlusion{};
   texture_handle _emissive{};
   std::uint32_t _index{invalid_index};
+  math::uuid _id{math::uuid::nil()};
+  std::string _name{"material"};
 
 }; // class material
 

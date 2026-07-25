@@ -6,6 +6,8 @@
 #include <cstdint>
 #include <limits>
 
+#include <libsbx/math/uuid.hpp>
+
 #include <libsbx/assets/asset_handle.hpp>
 
 namespace sbx::assets {
@@ -15,6 +17,8 @@ namespace sbx::assets {
  * Can be sampled only once resident.
  */
 class texture final {
+
+  friend class assets_module;
 
 public:
 
@@ -34,9 +38,14 @@ public:
     return _bindless_index;
   }
 
+  [[nodiscard]] auto id() const noexcept -> const math::uuid& {
+    return _id;
+  }
+
 private:
 
   std::uint32_t _bindless_index{invalid_index};
+  math::uuid _id{math::uuid::nil()};
 
 }; // class texture
 

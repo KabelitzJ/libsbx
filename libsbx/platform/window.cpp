@@ -68,7 +68,11 @@ window::window(const create_info& create_info)
   if (!_handle) {
     throw std::runtime_error{"Could not create glfw window"};
   }
-
+  
+  if (std::holds_alternative<windowed_create_info>(create_info)) {
+    glfwSetWindowPos(_handle, (video_mode->width - static_cast<int>(_width)) / 2, (video_mode->height - static_cast<int>(_height)) / 2);
+  }
+    
   glfwFocusWindow(_handle);
 
   if (glfwRawMouseMotionSupported()) {

@@ -102,7 +102,8 @@ public:
 
   }; // class node
 
-  scene() = default;
+  scene(const std::string& name = "Scene")
+  : _name{name} { }
 
   auto create_node(const utility::hashed_string& name = "Node", const scenes::local_transform& transform = scenes::local_transform{}) -> node;
 
@@ -139,6 +140,14 @@ public:
     return _registry.view<Type, Other...>(ecs::exclude<Exclude...>);
   }
 
+  [[nodiscard]] auto name() const noexcept -> const std::string& { 
+    return _name; 
+  }
+
+  auto set_name(std::string name) -> void { 
+    _name = std::move(name);
+  }
+
 private:
 
   auto _create_node(const utility::hashed_string& name, const scenes::local_transform& transform, const math::uuid& id) -> node;
@@ -147,6 +156,7 @@ private:
 
   auto _update_node(ecs::entity entity, const math::matrix4x4& parent_world) -> void;
 
+  std::string _name{"Scene"};
   ecs::registry _registry{};
   std::unordered_map<math::uuid, ecs::entity> _entities_by_id{};
   ecs::entity _active_camera{ecs::null_entity};

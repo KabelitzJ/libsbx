@@ -42,33 +42,35 @@ application::application()
   const auto damaged_helmet_mesh = assets_module.load_mesh("demo/assets/models/damaged_helmet/damaged_helmet.gltf");
   const auto flight_helmet_mesh = assets_module.load_mesh("demo/assets/models/flight_helmet/flight_helmet.gltf");
 
+  assets_module.save_material(damaged_helmet_mesh->submeshes().front().material, "demo/assets/materials/damaged_helmet.material");
+
   auto& render_module = sbx::core::engine::get_module<sbx::render::render_module>();
 
   auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
   auto& scene = scenes_module.active_scene();
 
-  _duck = scene.create_node();
+  _duck = scene.create_node("Duck");
   auto& duck_transform = _duck.transform();
   duck_transform.position = sbx::math::vector3f{0.0f, 0.0f, 0.0f};
 
   auto& duck_renderer = _duck.add_component<sbx::scenes::mesh_renderer>();
   duck_renderer.mesh = duck_mesh;
 
-  _damaged_helmet = scene.create_node();
+  _damaged_helmet = scene.create_node("Damaged Helmet");
   auto& damaged_helmet_transform = _damaged_helmet.transform();
   damaged_helmet_transform.position = sbx::math::vector3f{-2.0f, 0.0f, 0.0f};
 
   auto& damaged_helmet_renderer = _damaged_helmet.add_component<sbx::scenes::mesh_renderer>();
   damaged_helmet_renderer.mesh = damaged_helmet_mesh;
 
-  _flight_helmet = scene.create_node();
+  _flight_helmet = scene.create_node("Flight Helmet");
   auto& flight_helmet_transform = _flight_helmet.transform();
   flight_helmet_transform.position = sbx::math::vector3f{2.0f, 0.0f, 0.0f};
 
   auto& flight_helmet_renderer = _flight_helmet.add_component<sbx::scenes::mesh_renderer>();
   flight_helmet_renderer.mesh = flight_helmet_mesh;
 
-  auto light = scene.create_node();
+  auto light = scene.create_node("Light");
   auto& light_transform = light.transform();
   light_transform.position = sbx::math::vector3f{0.0f, 3.0f, 0.0f};
 
@@ -77,7 +79,7 @@ application::application()
   light_component.intensity = 10.0f;
   light_component.range = 20.0f;
 
-  auto camera = scene.create_node();
+  auto camera = scene.create_node("Camera");
   camera.transform().position = sbx::math::vector3f{0.0f, 0.0f, 4.0f};
 
   auto& camera_component = camera.add_component<sbx::scenes::camera>();
@@ -87,7 +89,7 @@ application::application()
 
   scene.set_active_camera(camera);
 
-  auto sun = scene.create_node();
+  auto sun = scene.create_node("Sun");
 
   auto& sun_transform = sun.transform();
   sun_transform.rotation = sbx::math::quaternion::look_at(sbx::math::vector3f{-0.4f, -1.0f, -0.5f});

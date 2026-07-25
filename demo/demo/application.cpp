@@ -52,55 +52,17 @@ application::application()
   auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
   auto& scene = scenes_module.active_scene();
 
-  _duck = scene.create_node("Duck");
-  auto& duck_transform = _duck.transform();
-  duck_transform.position = sbx::math::vector3f{0.0f, 0.0f, 0.0f};
+  sbx::scenes::scene_serializer::load(scene, "scenes/demo_scene.yaml");
 
-  auto& duck_renderer = _duck.add_component<sbx::scenes::mesh_renderer>();
-  duck_renderer.mesh = duck_mesh;
+  _duck = scene.find("Duck");
+  _damaged_helmet = scene.find("Damaged Helmet");
+  _flight_helmet = scene.find("Flight Helmet");
+  
+}
 
-  _damaged_helmet = scene.create_node("Damaged Helmet");
-  auto& damaged_helmet_transform = _damaged_helmet.transform();
-  damaged_helmet_transform.position = sbx::math::vector3f{-2.0f, 0.0f, 0.0f};
-
-  auto& damaged_helmet_renderer = _damaged_helmet.add_component<sbx::scenes::mesh_renderer>();
-  damaged_helmet_renderer.mesh = damaged_helmet_mesh;
-
-  _flight_helmet = scene.create_node("Flight Helmet");
-  auto& flight_helmet_transform = _flight_helmet.transform();
-  flight_helmet_transform.position = sbx::math::vector3f{2.0f, 0.0f, 0.0f};
-
-  auto& flight_helmet_renderer = _flight_helmet.add_component<sbx::scenes::mesh_renderer>();
-  flight_helmet_renderer.mesh = flight_helmet_mesh;
-
-  auto light = scene.create_node("Light");
-  auto& light_transform = light.transform();
-  light_transform.position = sbx::math::vector3f{0.0f, 3.0f, 0.0f};
-
-  auto& light_component = light.add_component<sbx::scenes::point_light>();
-  light_component.color = sbx::math::color{1.0f, 0.0f, 0.0f, 1.0f};
-  light_component.intensity = 10.0f;
-  light_component.range = 20.0f;
-
-  auto camera = scene.create_node("Camera");
-  camera.transform().position = sbx::math::vector3f{0.0f, 0.0f, 4.0f};
-
-  auto& camera_component = camera.add_component<sbx::scenes::camera>();
-  camera_component.fov_degrees = 60.0f;
-  camera_component.near_plane = 0.01f;
-  camera_component.far_plane = 1000.0f;
-
-  scene.set_active_camera(camera);
-
-  auto sun = scene.create_node("Sun");
-
-  auto& sun_transform = sun.transform();
-  sun_transform.rotation = sbx::math::quaternion::look_at(sbx::math::vector3f{-0.4f, -1.0f, -0.5f});
-
-  auto& sun_light = sun.add_component<sbx::scenes::directional_light>();
-  sun_light.intensity = 3.0f;
-
-  scene.set_primary_light(sun);
+application::~application() {
+  auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
+  auto& scene = scenes_module.active_scene();
 
   sbx::scenes::scene_serializer::save(scene, "scenes/demo_scene.yaml");
 }

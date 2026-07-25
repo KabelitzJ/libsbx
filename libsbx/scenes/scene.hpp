@@ -109,6 +109,8 @@ public:
 
   [[nodiscard]] auto find(math::uuid id) -> node;
 
+  [[nodiscard]] auto find(const utility::hashed_string& name) -> node;
+
   auto set_active_camera(node camera) -> void;
 
   [[nodiscard]] auto active_camera() -> node;
@@ -159,6 +161,7 @@ private:
   std::string _name{"Scene"};
   ecs::registry _registry{};
   std::unordered_map<math::uuid, ecs::entity> _entities_by_id{};
+  std::unordered_multimap<utility::hashed_string, ecs::entity> _entities_by_name{};
   ecs::entity _active_camera{ecs::null_entity};
   ecs::entity _primary_light{ecs::null_entity};
 

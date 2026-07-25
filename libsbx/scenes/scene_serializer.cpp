@@ -55,15 +55,15 @@ auto scene_serializer::save(scene& target, const std::filesystem::path& path) ->
 
     if (renderer.mesh.is_valid() && !mesh_keys.contains(renderer.mesh->id())) {
       const auto id = renderer.mesh->id();
-      const auto asset_path = assets_module.path_of(id);
-      const auto key = make_key(asset_path.stem().string());
+      const auto name = assets_module.path_of(id).stem().string();
+      const auto key = make_key(name);
 
       mesh_keys.emplace(id, key);
 
       auto entry = YAML::Node{};
       entry["key"] = key;
-      entry["name"] = asset_path.stem().string();
-      entry["path"] = asset_path.generic_string();
+      entry["name"] = name;
+      entry["uuid"] = id.value();
 
       meshes_table.push_back(entry);
     }
@@ -81,7 +81,6 @@ auto scene_serializer::save(scene& target, const std::filesystem::path& path) ->
       }
 
       if (!material_keys.contains(id)) {
-        const auto asset_path = assets_module.path_of(id);
         const auto key = make_key(material->name());
 
         material_keys.emplace(id, key);
@@ -89,7 +88,7 @@ auto scene_serializer::save(scene& target, const std::filesystem::path& path) ->
         auto entry = YAML::Node{};
         entry["key"] = key;
         entry["name"] = material->name();
-        entry["path"] = asset_path.generic_string();
+        entry["uuid"] = id.value();
 
         materials_table.push_back(entry);
       }
@@ -266,12 +265,12 @@ auto scene_serializer::load(scene& target, const std::filesystem::path& path) ->
   }
 
   // Asset table: key -> path
-  auto key_to_path = std::unordered_map<std::string, std::filesystem::path>{};
+  auto key_to_uuid = std::unordered_map<std::string, math::uuid>{};
 
   const auto register_category = [&](const char* category) {
     if (const auto sequence = root["assets_module"][category]) {
       for (const auto entry : sequence) {
-        key_to_path.emplace(entry["key"].as<std::string>(), std::filesystem::path{entry["path"].as<std::string>()});
+        key_to_uuid.emplace(entry["key"].as<std::string>(), entry["uuid"].as<math::uuid>());
       }
     }
   };
@@ -304,7 +303,7 @@ auto scene_serializer::load(scene& target, const std::filesystem::path& path) ->
         transform.scale = component["scale"].as<math::vector3f>();
       } else if (type == "static_mesh") {
         auto& renderer = node.add_component<mesh_renderer>();
-        renderer.mesh = assets_module.load_mesh(key_to_path.at(component["mesh"].as<std::string>()));
+        renderer.mesh = assets_module.load_mesh(key_to_uuid.at(component["mesh"].as<std::string>()));
 
         if (const auto submeshes = component["submeshes"]) {
           for (const auto submesh : submeshes) {
@@ -314,7 +313,7 @@ auto scene_serializer::load(scene& target, const std::filesystem::path& path) ->
               renderer.materials.resize(index + 1u);
             }
 
-            renderer.materials[index] = assets_module.load_material(key_to_path.at(submesh["material"].as<std::string>()));
+            renderer.materials[index] = assets_module.load_material(key_to_uuid.at(submesh["material"].as<std::string>()));
           }
         }
       } else if (type == "camera") {

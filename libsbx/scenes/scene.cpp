@@ -18,6 +18,14 @@ auto scene::find(math::uuid id) -> node {
   return node{};
 }
 
+auto scene::find(const utility::hashed_string& name) -> node {
+  if (const auto [first, last] = _entities_by_name.equal_range(name); first != last) {
+    return node{this, first->second};
+  }
+
+  return node{};
+}
+
 auto scene::set_active_camera(node camera) -> void {
   _active_camera = camera._entity;
 }
@@ -56,6 +64,7 @@ auto scene::_create_node(const utility::hashed_string& name, const scenes::local
   _registry.emplace<scenes::tag>(entity, name);
 
   _entities_by_id.emplace(id, entity);
+  _entities_by_name.emplace(name, entity);
 
   return node{this, entity};
 }

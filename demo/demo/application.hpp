@@ -21,7 +21,7 @@ public:
 
   application();
 
-  ~application() override = default;
+  ~application() override;
 
   auto update() -> void override;
 

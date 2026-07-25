@@ -1,44 +1,50 @@
 metadata:
   name: Scene
-  camera: 12680966305419598456
-  primary_light: 11244162652650574650
+  camera: 14368543155659007003
+  primary_light: 12444696120567412527
 assets_module:
   static_meshes:
-    - key: flight_helmet
-      name: flight_helmet
-      path: demo/assets/models/flight_helmet/flight_helmet.gltf
-    - key: damaged_helmet
-      name: damaged_helmet
-      path: demo/assets/models/damaged_helmet/damaged_helmet.gltf
     - key: duck
       name: duck
-      path: demo/assets/models/duck/duck.gltf
+      uuid: 6431251213594870473
+    - key: damaged_helmet
+      name: damaged_helmet
+      uuid: 14970803277157233044
+    - key: flight_helmet
+      name: flight_helmet
+      uuid: 13085842659508629620
   materials:
     []
 nodes:
-  - tag: Sun
-    id: 11244162652650574650
+  - tag: Duck
+    id: 17868748510169104140
     components:
       - type: transform
         position: {x: 0, y: 0, z: 0}
-        rotation: {x: -0.45292172, y: 0.29038575, z: 0.15887637, w: 0.82782626}
+        rotation: {x: 0, y: 0.100730866, z: 0, w: -0.9949137}
         scale: {x: 1, y: 1, z: 1}
-      - type: directional_light
-        color: {r: 1, g: 1, b: 1, a: 1}
-        intensity: 3
-  - tag: Camera
-    id: 12680966305419598456
+      - type: static_mesh
+        mesh: duck
+  - tag: Damaged Helmet
+    id: 7929958286266546628
     components:
       - type: transform
-        position: {x: 0, y: 0, z: 4}
-        rotation: {x: 0, y: 0, z: 0, w: 1}
+        position: {x: -2, y: 0, z: 0}
+        rotation: {x: 0, y: 0.100730866, z: 0, w: -0.9949137}
         scale: {x: 1, y: 1, z: 1}
-      - type: camera
-        fov_degrees: 60
-        near_plane: 0.01
-        far_plane: 1000
+      - type: static_mesh
+        mesh: damaged_helmet
+  - tag: Flight Helmet
+    id: 12006682422664083825
+    components:
+      - type: transform
+        position: {x: 2, y: 0, z: 0}
+        rotation: {x: 0, y: 0.100730866, z: 0, w: -0.9949137}
+        scale: {x: 1, y: 1, z: 1}
+      - type: static_mesh
+        mesh: flight_helmet
   - tag: Light
-    id: 1028990785791820078
+    id: 8385595899627165246
     components:
       - type: transform
         position: {x: 0, y: 3, z: 0}
@@ -48,30 +54,24 @@ nodes:
         color: {r: 1, g: 0, b: 0, a: 1}
         intensity: 10
         range: 20
-  - tag: Flight Helmet
-    id: 8352609200555949562
+  - tag: Camera
+    id: 14368543155659007003
     components:
       - type: transform
-        position: {x: 2, y: 0, z: 0}
+        position: {x: 0, y: 0, z: 4}
         rotation: {x: 0, y: 0, z: 0, w: 1}
         scale: {x: 1, y: 1, z: 1}
-      - type: static_mesh
-        mesh: flight_helmet
-  - tag: Damaged Helmet
-    id: 14597011435982920254
-    components:
-      - type: transform
-        position: {x: -2, y: 0, z: 0}
-        rotation: {x: 0, y: 0, z: 0, w: 1}
-        scale: {x: 1, y: 1, z: 1}
-      - type: static_mesh
-        mesh: damaged_helmet
-  - tag: Duck
-    id: 9171731193400070954
+      - type: camera
+        fov_degrees: 60
+        near_plane: 0.01
+        far_plane: 1000
+  - tag: Sun
+    id: 12444696120567412527
     components:
       - type: transform
         position: {x: 0, y: 0, z: 0}
-        rotation: {x: 0, y: 0, z: 0, w: 1}
+        rotation: {x: -0.45292172, y: 0.29038575, z: 0.15887637, w: 0.82782626}
         scale: {x: 1, y: 1, z: 1}
-      - type: static_mesh
-        mesh: duck
+      - type: directional_light
+        color: {r: 1, g: 1, b: 1, a: 1}
+        intensity: 3

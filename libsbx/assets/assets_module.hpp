@@ -140,6 +140,26 @@ private:
 
   inline static constexpr auto material_capacity = std::uint32_t{1024u};
 
+  struct cooked_submesh {
+    std::uint32_t index_offset;
+    std::uint32_t index_count;
+    math::volume bounds;
+    math::uuid material;
+  }; // struct cooked_submesh
+
+  struct material_description {
+    std::string name{"material"};
+    math::color base_color_factor{1.0f, 1.0f, 1.0f, 1.0f};
+    math::vector3 emissive_factor{0.0f, 0.0f, 0.0f};
+    std::float_t metallic_factor{1.0f};
+    std::float_t roughness_factor{1.0f};
+    math::uuid albedo{math::uuid::nil()};
+    math::uuid normal{math::uuid::nil()};
+    math::uuid metallic_roughness{math::uuid::nil()};
+    math::uuid occlusion{math::uuid::nil()};
+    math::uuid emissive{math::uuid::nil()};
+  }; // struct material_description
+
   struct pending_texture_upload {
     std::uint32_t index;
     std::vector<std::byte> pixels;
@@ -164,10 +184,7 @@ private:
 
   auto _register_material(std::shared_ptr<material> record) -> material_handle;
 
-  /** @brief Resolves a project-relative asset path to its on-disk location under the active project. */
   [[nodiscard]] static auto _absolute(const std::filesystem::path& relative) -> std::filesystem::path;
-
-  // -- Cooked-asset library (P1: textures) --
 
   [[nodiscard]] auto _cooked_path(const math::uuid& id, std::string_view extension) const -> std::filesystem::path;
 
@@ -176,6 +193,16 @@ private:
   auto _cook_texture(const std::filesystem::path& source, const std::filesystem::path& cooked) -> bool;
 
   auto _load_cooked_texture(const std::filesystem::path& cooked, std::vector<std::byte>& pixels, std::uint32_t& width, std::uint32_t& height) -> bool;
+
+  [[nodiscard]] static auto _derive_material_uuid(const math::uuid& mesh, std::size_t index) -> math::uuid;
+
+  auto _cook_mesh(const std::filesystem::path& source, const std::filesystem::path& relative_source, const math::uuid& id, const std::filesystem::path& cooked) -> bool;
+
+  auto _load_cooked_mesh(const std::filesystem::path& cooked, std::vector<vertex>& vertices, std::vector<std::uint32_t>& indices, std::vector<cooked_submesh>& submeshes, math::volume& bounds) -> bool;
+
+  auto _cook_material(const math::uuid& id, const material_description& description) -> bool;
+
+  auto _load_cooked_material(const std::filesystem::path& cooked, const math::uuid& id) -> material_handle;
 
   mutable std::mutex _mutex{};
 

@@ -27,8 +27,8 @@ public:
     std::string name{"material"};
     math::color base_color_factor{1.0f, 1.0f, 1.0f, 1.0f};
     math::vector3 emissive_factor{0.0f, 0.0f, 0.0f};
-    float metallic_factor{1.0f};
-    float roughness_factor{1.0f};
+    std::float_t metallic_factor{1.0f};
+    std::float_t roughness_factor{1.0f};
     texture_handle albedo{};
     texture_handle normal{};
     texture_handle metallic_roughness{};
@@ -66,11 +66,11 @@ public:
     return _emissive_factor; 
   }
 
-  [[nodiscard]] auto metallic_factor() const noexcept -> float { 
+  [[nodiscard]] auto metallic_factor() const noexcept -> std::float_t { 
     return _metallic_factor; 
   }
 
-  [[nodiscard]] auto roughness_factor() const noexcept -> float { 
+  [[nodiscard]] auto roughness_factor() const noexcept -> std::float_t { 
     return _roughness_factor; 
   }
 
@@ -107,8 +107,8 @@ private:
 
   math::color _base_color_factor{1.0f, 1.0f, 1.0f, 1.0f};
   math::vector3 _emissive_factor{0.0f, 0.0f, 0.0f};
-  float _metallic_factor{1.0f};
-  float _roughness_factor{1.0f};
+  std::float_t _metallic_factor{1.0f};
+  std::float_t _roughness_factor{1.0f};
   texture_handle _albedo{};
   texture_handle _normal{};
   texture_handle _metallic_roughness{};

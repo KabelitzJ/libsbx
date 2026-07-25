@@ -48,9 +48,29 @@ struct material_data {
   std::uint32_t padding;
 }; // struct material_data
 
-// Cooked texture container. Bump texture_version to invalidate every cooked texture.
+template<utility::string_literal Name>
+requires (Name.size() == 4u)
+struct fourcc {
+  static constexpr auto value = std::uint32_t{
+    (static_cast<std::uint32_t>(Name[0]) << 0u) |
+    (static_cast<std::uint32_t>(Name[1]) << 8u) |
+    (static_cast<std::uint32_t>(Name[2]) << 16u) |
+    (static_cast<std::uint32_t>(Name[3]) << 24u)
+  };
+}; // struct fourcc
+
+template<utility::string_literal Name>
+requires (Name.size() == 4u)
+constexpr auto fourcc_v = fourcc<Name>::value;
+
 inline constexpr auto texture_magic = std::uint32_t{0x58544253u};  // 'SBTX'
 inline constexpr auto texture_version = std::uint32_t{1u};
+
+inline constexpr auto mesh_magic = std::uint32_t{0x48534253u};   // 'SBSH'
+inline constexpr auto mesh_version = std::uint32_t{1u};
+
+inline constexpr auto material_magic = std::uint32_t{0x544D4253u}; // 'SBMT'
+inline constexpr auto material_version = std::uint32_t{1u};
 
 struct texture_header {
   std::uint32_t magic;
@@ -61,13 +81,40 @@ struct texture_header {
   std::uint32_t data_size;  // bytes of pixel data following the header
 }; // struct texture_header
 
-assets_module::assets_module() {
-  // The cooked-asset library location is set by the application from the active project (see
-  // projects_module); the directory is created on demand when the first asset is cooked. Nothing
-  // is created here so a stray '.sbx/' is never left at the working directory.
+struct mesh_file_header {
+  std::uint32_t magic;
+  std::uint32_t version;
+  std::uint32_t vertex_count;
+  std::uint32_t index_count;
+  std::uint32_t submesh_count;
+  std::float_t bounds_min[3];
+  std::float_t bounds_max[3];
+}; // struct mesh_file_header
 
-  // Reserve the neutral fallbacks first so their bindless indices are stable. Uploaded by the first
-  // process_uploads, resident from frame 1 — so materials can point any absent slot at one of these.
+struct submesh_file_record {
+  std::uint32_t index_offset;
+  std::uint32_t index_count;
+  std::float_t bounds_min[3];
+  std::float_t bounds_max[3];
+  std::uint64_t material_uuid; // 0 = none
+}; // struct submesh_file_record
+
+struct material_file_header {
+  std::uint32_t magic;
+  std::uint32_t version;
+  std::float_t base_color_factor[4];
+  std::float_t emissive_factor[3];
+  std::float_t metallic_factor;
+  std::float_t roughness_factor;
+  std::uint64_t albedo_uuid;
+  std::uint64_t normal_uuid;
+  std::uint64_t metallic_roughness_uuid;
+  std::uint64_t occlusion_uuid;
+  std::uint64_t emissive_uuid;
+  std::uint32_t name_length;
+}; // struct material_file_header
+
+assets_module::assets_module() {
   _white = _create_default_texture({255u, 255u, 255u, 255u});
   _normal = _create_default_texture({128u, 128u, 255u, 255u}); // (0,0,1) tangent-space normal
   _black = _create_default_texture({0u, 0u, 0u, 255u});
@@ -201,232 +248,85 @@ auto assets_module::load_texture(const std::filesystem::path& path, graphics::fo
 auto assets_module::load_mesh(const math::uuid& id) -> mesh_handle {
   {
     auto lock = std::lock_guard{_mutex};
+
     if (const auto entry = _meshes.find(id); entry != _meshes.end()) {
       return mesh_handle{entry->second};
     }
   }
 
-  auto path = std::filesystem::path{};
-
+  auto relative_path = std::filesystem::path{};
   {
     auto lock = std::lock_guard{_mutex};
+
     const auto entry = _paths.find(id);
+
     if (entry == _paths.end()) {
       utility::logger<"assets">::warn("Unknown mesh uuid {}", id);
+
       return mesh_handle{};
     }
-    path = entry->second;
+
+    relative_path = entry->second;
   }
 
-  auto data = fastgltf::GltfDataBuffer::FromPath(path);
+  const auto source = relative_path; 
+  const auto cooked = _cooked_path(id, ".sbxmsh");
 
-  if (data.error() != fastgltf::Error::None) {
-    utility::logger<"assets">::warn("Could not open mesh '{}'", path.generic_string());
-
-    return mesh_handle{};
+  // Cook on demand (dev): (re)cook when the blob is missing or the source changed. Cooking also
+  // extracts the glTF's materials into .sbxmat assets referenced by the submeshes below.
+  if (!std::filesystem::exists(cooked) || _source_newer(source, cooked)) {
+    if (!_cook_mesh(source, relative_path, id, cooked)) {
+      return mesh_handle{};
+    }
   }
-
-  auto parser = fastgltf::Parser{};
-
-  auto loaded = parser.loadGltf(data.get(), path.parent_path(), fastgltf::Options::LoadExternalBuffers | fastgltf::Options::GenerateMeshIndices);
-
-  if (loaded.error() != fastgltf::Error::None) {
-    utility::logger<"assets">::warn("Could not parse mesh '{}'", path.generic_string());
-
-    return mesh_handle{};
-  }
-
-  auto& gltf = loaded.get();
 
   auto vertices = std::vector<vertex>{};
   auto indices = std::vector<std::uint32_t>{};
-  auto submeshes = std::vector<mesh::submesh>{};
-  auto materials = utility::make_reserved_vector<material_handle>(gltf.materials.size());
+  auto cooked_submeshes = std::vector<cooked_submesh>{};
+  auto bounds = math::volume{};
 
-  auto mesh_volume = math::volume{};
+  // Recook once if the blob is unreadable/out-of-date (e.g. cooker version bumped).
+  if (!_load_cooked_mesh(cooked, vertices, indices, cooked_submeshes, bounds)) {
+    if (!_cook_mesh(source, relative_path, id, cooked) || !_load_cooked_mesh(cooked, vertices, indices, cooked_submeshes, bounds)) {
+      utility::logger<"assets">::warn("Could not load cooked mesh '{}'", cooked.generic_string());
 
-  const auto load_gltf_texture = [&](std::size_t texture_index, graphics::format format) -> texture_handle {
-    const auto& gltf_texture = gltf.textures[texture_index];
-
-    if (!gltf_texture.imageIndex.has_value()) {
-      return texture_handle{};
-    }
-
-    const auto& image = gltf.images[gltf_texture.imageIndex.value()];
-
-    if (const auto* uri = std::get_if<fastgltf::sources::URI>(&image.data)) {
-      const auto& project = core::engine::project();
-
-      const auto parent_path = std::filesystem::relative(path.parent_path(), project.assets_directory());
-
-      return load_texture(parent_path / std::filesystem::path{std::string{uri->uri.path()}}, format);
-    }
-
-    utility::logger<"assets">::warn("Mesh '{}': non-file image, using default", path.generic_string());
-
-    return texture_handle{};
-  };
-
-  for (const auto& gltf_material : gltf.materials) {
-    auto info = material::create_info{};
-
-    const auto& pbr = gltf_material.pbrData;
-
-    info.name = gltf_material.name.empty() ? std::string{"material"} : std::string{gltf_material.name.begin(), gltf_material.name.end()};
-    info.base_color_factor = math::color{pbr.baseColorFactor[0], pbr.baseColorFactor[1], pbr.baseColorFactor[2], pbr.baseColorFactor[3]};
-    info.metallic_factor = pbr.metallicFactor;
-    info.roughness_factor = pbr.roughnessFactor;
-    info.emissive_factor = math::vector3{gltf_material.emissiveFactor[0], gltf_material.emissiveFactor[1], gltf_material.emissiveFactor[2]};
-
-    if (pbr.baseColorTexture.has_value()) {
-      info.albedo = load_gltf_texture(pbr.baseColorTexture->textureIndex, graphics::format::r8g8b8a8_srgb);
-    }
-
-    if (pbr.metallicRoughnessTexture.has_value()) {
-      info.metallic_roughness = load_gltf_texture(pbr.metallicRoughnessTexture->textureIndex, graphics::format::r8g8b8a8_unorm);
-    }
-
-    if (gltf_material.normalTexture.has_value()) {
-      info.normal = load_gltf_texture(gltf_material.normalTexture->textureIndex, graphics::format::r8g8b8a8_unorm);
-    }
-
-    if (gltf_material.occlusionTexture.has_value()) {
-      info.occlusion = load_gltf_texture(gltf_material.occlusionTexture->textureIndex, graphics::format::r8g8b8a8_unorm);
-    }
-
-    if (gltf_material.emissiveTexture.has_value()) {
-      info.emissive = load_gltf_texture(gltf_material.emissiveTexture->textureIndex, graphics::format::r8g8b8a8_srgb);
-    }
-
-    materials.push_back(create_material(info));
-  }
-
-  auto fallback_material = material_handle{};
-
-  const auto material_for = [&](fastgltf::Optional<std::size_t> index) -> material_handle {
-    if (index.has_value() && index.value() < materials.size()) {
-      return materials[index.value()];
-    }
-
-    if (!fallback_material.is_valid()) {
-      fallback_material = create_material(material::create_info{
-        .albedo = _magenta
-      });
-    }
-
-    return fallback_material;
-  };
-
-  const auto append = [&](const fastgltf::Mesh& gltf_mesh, const fastgltf::math::fmat4x4& world) {
-    for (const auto& primitive : gltf_mesh.primitives) {
-      const auto* position = primitive.findAttribute("POSITION");
-
-      if (position == primitive.attributes.end()) {
-        continue;
-      }
-
-      const auto vertex_start = vertices.size();
-
-      const auto& position_accessor = gltf.accessors[position->accessorIndex];
-      vertices.resize(vertex_start + position_accessor.count);
-
-      auto submesh_volume = math::volume{};
-
-      fastgltf::iterateAccessorWithIndex<fastgltf::math::fvec3>(gltf, position_accessor, [&](fastgltf::math::fvec3 value, std::size_t index) {
-        const auto world_position = world * fastgltf::math::fvec4{value[0], value[1], value[2], 1.0f};
-        const auto point = math::vector3f{world_position[0], world_position[1], world_position[2]};
-
-        auto& current = vertices[vertex_start + index];
-        current.position[0] = point.x();
-        current.position[1] = point.y();
-        current.position[2] = point.z();
-
-        submesh_volume.include(point);
-        mesh_volume.include(point);
-      });
-
-      if (const auto* normal = primitive.findAttribute("NORMAL"); normal != primitive.attributes.end()) {
-        fastgltf::iterateAccessorWithIndex<fastgltf::math::fvec3>(gltf, gltf.accessors[normal->accessorIndex], [&](fastgltf::math::fvec3 value, std::size_t index) {
-          const auto world_normal = world * fastgltf::math::fvec4{value[0], value[1], value[2], 0.0f};
-
-          auto length = std::sqrt(world_normal[0] * world_normal[0] + world_normal[1] * world_normal[1] + world_normal[2] * world_normal[2]);
-          length = (length > 0.0f) ? length : 1.0f;
-
-          auto& current = vertices[vertex_start + index];
-          current.normal[0] = world_normal[0] / length;
-          current.normal[1] = world_normal[1] / length;
-          current.normal[2] = world_normal[2] / length;
-        });
-      }
-
-      if (const auto* tangent = primitive.findAttribute("TANGENT"); tangent != primitive.attributes.end()) {
-        fastgltf::iterateAccessorWithIndex<fastgltf::math::fvec4>(gltf, gltf.accessors[tangent->accessorIndex], [&](fastgltf::math::fvec4 value, std::size_t index) {
-          const auto world_tangent = world * fastgltf::math::fvec4{value[0], value[1], value[2], 0.0f};
-
-          auto length = std::sqrt(world_tangent[0] * world_tangent[0] + world_tangent[1] * world_tangent[1] + world_tangent[2] * world_tangent[2]);
-          length = (length > 0.0f) ? length : 1.0f;
-
-          auto& current = vertices[vertex_start + index];
-          current.tangent[0] = world_tangent[0] / length;
-          current.tangent[1] = world_tangent[1] / length;
-          current.tangent[2] = world_tangent[2] / length;
-          current.tangent[3] = value[3];
-        });
-      }
-
-      if (const auto* uv = primitive.findAttribute("TEXCOORD_0"); uv != primitive.attributes.end()) {
-        fastgltf::iterateAccessorWithIndex<fastgltf::math::fvec2>(gltf, gltf.accessors[uv->accessorIndex], [&](fastgltf::math::fvec2 value, std::size_t index) {
-          vertices[vertex_start + index].uv[0] = value[0];
-          vertices[vertex_start + index].uv[1] = value[1];
-        });
-      }
-
-      if (!primitive.indicesAccessor.has_value()) {
-        continue;
-      }
-
-      const auto& index_accessor = gltf.accessors[primitive.indicesAccessor.value()];
-      const auto index_start = indices.size();
-      indices.reserve(index_start + index_accessor.count);
-
-      fastgltf::iterateAccessor<std::uint32_t>(gltf, index_accessor, [&](std::uint32_t index) {
-        indices.push_back(static_cast<std::uint32_t>(vertex_start) + index);
-      });
-
-      submeshes.push_back(mesh::submesh{
-        static_cast<std::uint32_t>(index_start),
-        static_cast<std::uint32_t>(index_accessor.count),
-        submesh_volume,
-        material_for(primitive.materialIndex)
-      });
-    }
-  };
-
-  if (!gltf.scenes.empty()) {
-    const auto scene_index = gltf.defaultScene.value_or(std::size_t{0});
-
-    fastgltf::iterateSceneNodes(gltf, scene_index, fastgltf::math::fmat4x4{}, [&](const fastgltf::Node& node, const fastgltf::math::fmat4x4& world) {
-      if (node.meshIndex.has_value()) {
-        append(gltf.meshes[node.meshIndex.value()], world);
-      }
-    });
-  } else {
-    for (const auto& gltf_mesh : gltf.meshes) {
-      append(gltf_mesh, fastgltf::math::fmat4x4{});
+      return mesh_handle{};
     }
   }
 
   if (vertices.empty() || indices.empty()) {
-    utility::logger<"assets">::warn("Mesh '{}' has no drawable geometry", path.generic_string());
+    utility::logger<"assets">::warn("Mesh '{}' has no drawable geometry", source.generic_string());
 
     return mesh_handle{};
+  }
+
+  auto fallback_material = material_handle{};
+
+  auto submeshes = std::vector<mesh::submesh>{};
+  submeshes.reserve(cooked_submeshes.size());
+
+  for (const auto& cooked_submesh : cooked_submeshes) {
+    auto material = material_handle{};
+
+    if (cooked_submesh.material != math::uuid::nil()) {
+      material = load_material(cooked_submesh.material);
+    }
+
+    if (!material.is_valid()) {
+      if (!fallback_material.is_valid()) {
+        fallback_material = create_material(material::create_info{ .albedo = _magenta });
+      }
+      material = fallback_material;
+    }
+
+    submeshes.push_back(mesh::submesh{cooked_submesh.index_offset, cooked_submesh.index_count, cooked_submesh.bounds, material});
   }
 
   const auto vertex_count = vertices.size();
   const auto index_count = indices.size();
   const auto submesh_count = submeshes.size();
 
-  auto record = std::make_shared<mesh>(std::move(submeshes), mesh_volume);
+  auto record = std::make_shared<mesh>(std::move(submeshes), bounds);
   record->_id = id;
 
   {
@@ -436,7 +336,7 @@ auto assets_module::load_mesh(const math::uuid& id) -> mesh_handle {
     _pending_meshes.push_back(pending_mesh_upload{record, std::move(vertices), std::move(indices)});
   }
 
-  utility::logger<"assets">::info("Loaded mesh '{}': {} vertices, {} indices, {} submeshes", path.generic_string(), vertex_count, index_count, submesh_count);
+  utility::logger<"assets">::info("Loaded mesh '{}': {} vertices, {} indices, {} submeshes", source.generic_string(), vertex_count, index_count, submesh_count);
 
   return mesh_handle{record};
 }
@@ -457,75 +357,74 @@ auto assets_module::load_material(const math::uuid& id) -> material_handle {
     }
   }
 
-  auto path = std::filesystem::path{};
+  auto source_path = std::filesystem::path{};
   {
     auto lock = std::lock_guard{_mutex};
-    const auto entry = _paths.find(id);
-    if (entry == _paths.end()) {
-      utility::logger<"assets">::warn("Unknown material uuid {}", id);
+    if (const auto entry = _paths.find(id); entry != _paths.end()) {
+      source_path = entry->second;
+    }
+  }
+
+  // Authored `.material` asset -> load its YAML.
+  if (!source_path.empty() && source_path.extension() == ".material") {
+    const auto path = source_path;
+
+    auto root = YAML::Node{};
+    try {
+      root = YAML::LoadFile(path.string());
+    } catch (const std::exception& exception) {
+      utility::logger<"assets">::warn("Could not parse material '{}' ({})", path.generic_string(), exception.what());
       return material_handle{};
     }
-    path = entry->second;
-  }
 
-  auto root = YAML::Node{};
-  try {
-    root = YAML::LoadFile(path.string());
-  } catch (const std::exception& exception) {
-    utility::logger<"assets">::warn("Could not parse material '{}' ({})", path.generic_string(), exception.what());
-    return material_handle{};
-  }
+    auto info = material::create_info{};
 
-  auto info = material::create_info{};
+    if (root["name"]) info.name = root["name"].as<std::string>();
+    if (root["base_color_factor"]) info.base_color_factor = root["base_color_factor"].as<math::color>();
+    if (root["emissive_factor"]) info.emissive_factor = root["emissive_factor"].as<math::vector3>();
+    if (root["metallic_factor"]) info.metallic_factor = root["metallic_factor"].as<std::float_t>();
+    if (root["roughness_factor"]) info.roughness_factor = root["roughness_factor"].as<std::float_t>();
 
-  if (root["name"]) {
-    info.name = root["name"].as<std::string>();
-  }
+    const auto load_slot = [&](const char* key, graphics::format format) -> texture_handle {
+      if (const auto node = root[key]) {
+        return load_texture(std::filesystem::path{node.as<std::string>()}, format);
+      }
+      return texture_handle{};
+    };
 
-  if (root["base_color_factor"]) {
-    info.base_color_factor = root["base_color_factor"].as<math::color>();
-  }
+    info.albedo = load_slot("albedo", graphics::format::r8g8b8a8_srgb);
+    info.normal = load_slot("normal", graphics::format::r8g8b8a8_unorm);
+    info.metallic_roughness = load_slot("metallic_roughness", graphics::format::r8g8b8a8_unorm);
+    info.occlusion = load_slot("occlusion", graphics::format::r8g8b8a8_unorm);
+    info.emissive = load_slot("emissive", graphics::format::r8g8b8a8_srgb);
 
-  if (root["emissive_factor"]) {
-    info.emissive_factor = root["emissive_factor"].as<math::vector3>();
-  }
+    auto record = std::make_shared<material>(info);
+    record->_id = id;
 
-  if (root["metallic_factor"]) {
-    info.metallic_factor = root["metallic_factor"].as<std::float_t>();
-  }
+    auto handle = _register_material(record);
 
-  if (root["roughness_factor"]) {
-    info.roughness_factor = root["roughness_factor"].as<std::float_t>();
-  }
-
-  const auto load_slot = [&](const char* key, graphics::format format) -> texture_handle {
-    if (const auto node = root[key]) {
-      return load_texture(std::filesystem::path{node.as<std::string>()}, format);
+    {
+      auto lock = std::lock_guard{_mutex};
+      _material_files.emplace(id, record);
     }
 
-    return texture_handle{};
-  };
+    utility::logger<"assets">::info("Loaded material '{}'", path.generic_string());
 
-  info.albedo = load_slot("albedo", graphics::format::r8g8b8a8_srgb);
-  info.normal = load_slot("normal", graphics::format::r8g8b8a8_unorm);
-  info.metallic_roughness = load_slot("metallic_roughness", graphics::format::r8g8b8a8_unorm);
-  info.occlusion = load_slot("occlusion", graphics::format::r8g8b8a8_unorm);
-  info.emissive = load_slot("emissive", graphics::format::r8g8b8a8_srgb);
-
-  auto record = std::make_shared<material>(info);
-  record->_id = id;
-
-  auto handle = _register_material(record);
-
-  {
-    auto lock = std::lock_guard{_mutex};
-    _material_files.emplace(id, record);
+    return handle;
   }
 
-  utility::logger<"assets">::info("Loaded material '{}'", path.generic_string());
+  // Otherwise a cooked material extracted from a mesh import.
+  const auto cooked = _cooked_path(id, ".sbxmat");
 
-  return handle;
+  if (std::filesystem::exists(cooked)) {
+    return _load_cooked_material(cooked, id);
+  }
+
+  utility::logger<"assets">::warn("Unknown material uuid {}", id);
+
+  return material_handle{};
 }
+
 
 auto assets_module::load_material(const std::filesystem::path& path) -> material_handle {
   const auto& project = core::engine::project();
@@ -820,6 +719,12 @@ auto assets_module::_register_material(std::shared_ptr<material> record) -> mate
   return material_handle{record};
 }
 
+auto assets_module::_absolute(const std::filesystem::path& relative) -> std::filesystem::path {
+  const auto& project = core::engine::project();
+
+  return project.assets_directory() / relative;
+}
+
 auto assets_module::_cooked_path(const math::uuid& id, std::string_view extension) const -> std::filesystem::path {
   const auto& project = core::engine::project();
 
@@ -911,6 +816,391 @@ auto assets_module::_load_cooked_texture(const std::filesystem::path& cooked, st
   height = header.height;
 
   return true;
+}
+
+auto assets_module::_cook_mesh(const std::filesystem::path& source, const std::filesystem::path& relative_source, const math::uuid& id, const std::filesystem::path& cooked) -> bool {
+  auto data = fastgltf::GltfDataBuffer::FromPath(source);
+
+  if (data.error() != fastgltf::Error::None) {
+    utility::logger<"assets">::warn("Cook: could not open mesh '{}'", source.generic_string());
+    return false;
+  }
+
+  auto parser = fastgltf::Parser{};
+
+  auto loaded = parser.loadGltf(data.get(), source.parent_path(), fastgltf::Options::LoadExternalBuffers | fastgltf::Options::GenerateMeshIndices);
+
+  if (loaded.error() != fastgltf::Error::None) {
+    utility::logger<"assets">::warn("Cook: could not parse mesh '{}'", source.generic_string());
+    return false;
+  }
+
+  auto& gltf = loaded.get();
+
+  // Resolve a glTF texture to a stable asset uuid (imports the external image so uuid -> path is known).
+  const auto texture_uuid = [&](std::size_t texture_index) -> math::uuid {
+    const auto& gltf_texture = gltf.textures[texture_index];
+
+    if (!gltf_texture.imageIndex.has_value()) {
+      return math::uuid::nil();
+    }
+
+    const auto& image = gltf.images[gltf_texture.imageIndex.value()];
+
+    if (const auto* uri = std::get_if<fastgltf::sources::URI>(&image.data)) {
+      return import(relative_source.parent_path() / std::filesystem::path{std::string{uri->uri.path()}});
+    }
+
+    utility::logger<"assets">::warn("Cook: mesh '{}' has a non-file image, using default", source.generic_string());
+    return math::uuid::nil();
+  };
+
+  // Extract each glTF material into its own .sbxmat with a stable, derived uuid.
+  auto material_uuids = std::vector<math::uuid>{};
+  material_uuids.reserve(gltf.materials.size());
+
+  for (const auto& gltf_material : gltf.materials) {
+    const auto& pbr = gltf_material.pbrData;
+
+    auto description = material_description{};
+    description.name = gltf_material.name.empty() ? std::string{"material"} : std::string{gltf_material.name.begin(), gltf_material.name.end()};
+    description.base_color_factor = math::color{pbr.baseColorFactor[0], pbr.baseColorFactor[1], pbr.baseColorFactor[2], pbr.baseColorFactor[3]};
+    description.emissive_factor = math::vector3{gltf_material.emissiveFactor[0], gltf_material.emissiveFactor[1], gltf_material.emissiveFactor[2]};
+    description.metallic_factor = pbr.metallicFactor;
+    description.roughness_factor = pbr.roughnessFactor;
+
+    if (pbr.baseColorTexture.has_value())         description.albedo             = texture_uuid(pbr.baseColorTexture->textureIndex);
+    if (pbr.metallicRoughnessTexture.has_value()) description.metallic_roughness = texture_uuid(pbr.metallicRoughnessTexture->textureIndex);
+    if (gltf_material.normalTexture.has_value())  description.normal             = texture_uuid(gltf_material.normalTexture->textureIndex);
+    if (gltf_material.occlusionTexture.has_value()) description.occlusion        = texture_uuid(gltf_material.occlusionTexture->textureIndex);
+    if (gltf_material.emissiveTexture.has_value()) description.emissive          = texture_uuid(gltf_material.emissiveTexture->textureIndex);
+
+    const auto material_uuid = _derive_material_uuid(id, material_uuids.size());
+
+    if (!_cook_material(material_uuid, description)) {
+      return false;
+    }
+
+    material_uuids.push_back(material_uuid);
+  }
+
+  const auto material_uuid_for = [&](fastgltf::Optional<std::size_t> index) -> math::uuid {
+    if (index.has_value() && index.value() < material_uuids.size()) {
+      return material_uuids[index.value()];
+    }
+
+    return math::uuid::nil();
+  };
+
+  auto vertices = std::vector<vertex>{};
+  auto indices = std::vector<std::uint32_t>{};
+  auto submeshes = std::vector<cooked_submesh>{};
+  auto mesh_volume = math::volume{};
+
+  const auto append = [&](const fastgltf::Mesh& gltf_mesh, const fastgltf::math::fmat4x4& world) {
+    for (const auto& primitive : gltf_mesh.primitives) {
+      const auto* position = primitive.findAttribute("POSITION");
+
+      if (position == primitive.attributes.end()) {
+        continue;
+      }
+
+      const auto vertex_start = vertices.size();
+
+      const auto& position_accessor = gltf.accessors[position->accessorIndex];
+      vertices.resize(vertex_start + position_accessor.count);
+
+      auto submesh_volume = math::volume{};
+
+      fastgltf::iterateAccessorWithIndex<fastgltf::math::fvec3>(gltf, position_accessor, [&](fastgltf::math::fvec3 value, std::size_t index) {
+        const auto world_position = world * fastgltf::math::fvec4{value[0], value[1], value[2], 1.0f};
+        const auto point = math::vector3f{world_position[0], world_position[1], world_position[2]};
+
+        auto& current = vertices[vertex_start + index];
+        current.position[0] = point.x();
+        current.position[1] = point.y();
+        current.position[2] = point.z();
+
+        submesh_volume.include(point);
+        mesh_volume.include(point);
+      });
+
+      if (const auto* normal = primitive.findAttribute("NORMAL"); normal != primitive.attributes.end()) {
+        fastgltf::iterateAccessorWithIndex<fastgltf::math::fvec3>(gltf, gltf.accessors[normal->accessorIndex], [&](fastgltf::math::fvec3 value, std::size_t index) {
+          const auto world_normal = world * fastgltf::math::fvec4{value[0], value[1], value[2], 0.0f};
+
+          auto length = std::sqrt(world_normal[0] * world_normal[0] + world_normal[1] * world_normal[1] + world_normal[2] * world_normal[2]);
+          length = (length > 0.0f) ? length : 1.0f;
+
+          auto& current = vertices[vertex_start + index];
+          current.normal[0] = world_normal[0] / length;
+          current.normal[1] = world_normal[1] / length;
+          current.normal[2] = world_normal[2] / length;
+        });
+      }
+
+      if (const auto* tangent = primitive.findAttribute("TANGENT"); tangent != primitive.attributes.end()) {
+        fastgltf::iterateAccessorWithIndex<fastgltf::math::fvec4>(gltf, gltf.accessors[tangent->accessorIndex], [&](fastgltf::math::fvec4 value, std::size_t index) {
+          const auto world_tangent = world * fastgltf::math::fvec4{value[0], value[1], value[2], 0.0f};
+
+          auto length = std::sqrt(world_tangent[0] * world_tangent[0] + world_tangent[1] * world_tangent[1] + world_tangent[2] * world_tangent[2]);
+          length = (length > 0.0f) ? length : 1.0f;
+
+          auto& current = vertices[vertex_start + index];
+          current.tangent[0] = world_tangent[0] / length;
+          current.tangent[1] = world_tangent[1] / length;
+          current.tangent[2] = world_tangent[2] / length;
+          current.tangent[3] = value[3];
+        });
+      }
+
+      if (const auto* uv = primitive.findAttribute("TEXCOORD_0"); uv != primitive.attributes.end()) {
+        fastgltf::iterateAccessorWithIndex<fastgltf::math::fvec2>(gltf, gltf.accessors[uv->accessorIndex], [&](fastgltf::math::fvec2 value, std::size_t index) {
+          vertices[vertex_start + index].uv[0] = value[0];
+          vertices[vertex_start + index].uv[1] = value[1];
+        });
+      }
+
+      if (!primitive.indicesAccessor.has_value()) {
+        continue;
+      }
+
+      const auto& index_accessor = gltf.accessors[primitive.indicesAccessor.value()];
+      const auto index_start = indices.size();
+      indices.reserve(index_start + index_accessor.count);
+
+      fastgltf::iterateAccessor<std::uint32_t>(gltf, index_accessor, [&](std::uint32_t index) {
+        indices.push_back(static_cast<std::uint32_t>(vertex_start) + index);
+      });
+
+      submeshes.push_back(cooked_submesh{
+        static_cast<std::uint32_t>(index_start),
+        static_cast<std::uint32_t>(index_accessor.count),
+        submesh_volume,
+        material_uuid_for(primitive.materialIndex)
+      });
+    }
+  };
+
+  if (!gltf.scenes.empty()) {
+    const auto scene_index = gltf.defaultScene.value_or(std::size_t{0});
+
+    fastgltf::iterateSceneNodes(gltf, scene_index, fastgltf::math::fmat4x4{}, [&](const fastgltf::Node& node, const fastgltf::math::fmat4x4& world) {
+      if (node.meshIndex.has_value()) {
+        append(gltf.meshes[node.meshIndex.value()], world);
+      }
+    });
+  } else {
+    for (const auto& gltf_mesh : gltf.meshes) {
+      append(gltf_mesh, fastgltf::math::fmat4x4{});
+    }
+  }
+
+  if (vertices.empty() || indices.empty()) {
+    utility::logger<"assets">::warn("Cook: mesh '{}' has no drawable geometry", source.generic_string());
+    return false;
+  }
+
+  auto error = std::error_code{};
+  std::filesystem::create_directories(cooked.parent_path(), error);
+
+  auto out = std::ofstream{cooked, std::ios::binary};
+
+  if (!out) {
+    utility::logger<"assets">::warn("Cook: could not write '{}'", cooked.generic_string());
+    return false;
+  }
+
+  auto header = mesh_file_header{};
+  header.magic = mesh_magic;
+  header.version = mesh_version;
+  header.vertex_count = static_cast<std::uint32_t>(vertices.size());
+  header.index_count = static_cast<std::uint32_t>(indices.size());
+  header.submesh_count = static_cast<std::uint32_t>(submeshes.size());
+  header.bounds_min[0] = mesh_volume.min().x();
+  header.bounds_min[1] = mesh_volume.min().y();
+  header.bounds_min[2] = mesh_volume.min().z();
+  header.bounds_max[0] = mesh_volume.max().x();
+  header.bounds_max[1] = mesh_volume.max().y();
+  header.bounds_max[2] = mesh_volume.max().z();
+
+  out.write(reinterpret_cast<const char*>(&header), sizeof(header));
+  out.write(reinterpret_cast<const char*>(vertices.data()), static_cast<std::streamsize>(vertices.size() * sizeof(vertex)));
+  out.write(reinterpret_cast<const char*>(indices.data()), static_cast<std::streamsize>(indices.size() * sizeof(std::uint32_t)));
+
+  for (const auto& submesh : submeshes) {
+    auto record = submesh_file_record{};
+    record.index_offset = submesh.index_offset;
+    record.index_count = submesh.index_count;
+    record.bounds_min[0] = submesh.bounds.min().x();
+    record.bounds_min[1] = submesh.bounds.min().y();
+    record.bounds_min[2] = submesh.bounds.min().z();
+    record.bounds_max[0] = submesh.bounds.max().x();
+    record.bounds_max[1] = submesh.bounds.max().y();
+    record.bounds_max[2] = submesh.bounds.max().z();
+    record.material_uuid = submesh.material.value();
+
+    out.write(reinterpret_cast<const char*>(&record), sizeof(record));
+  }
+
+  utility::logger<"assets">::debug("Cooked mesh '{}' -> '{}'", source.generic_string(), cooked.generic_string());
+
+  return true;
+}
+
+auto assets_module::_load_cooked_mesh(const std::filesystem::path& cooked, std::vector<vertex>& vertices, std::vector<std::uint32_t>& indices, std::vector<cooked_submesh>& submeshes, math::volume& bounds) -> bool {
+  auto in = std::ifstream{cooked, std::ios::binary};
+
+  if (!in) {
+    return false;
+  }
+
+  auto header = mesh_file_header{};
+  in.read(reinterpret_cast<char*>(&header), sizeof(header));
+
+  if (!in || header.magic != mesh_magic || header.version != mesh_version) {
+    return false; // missing / corrupt / stale format -> caller recooks
+  }
+
+  vertices.resize(header.vertex_count);
+  in.read(reinterpret_cast<char*>(vertices.data()), static_cast<std::streamsize>(header.vertex_count * sizeof(vertex)));
+
+  indices.resize(header.index_count);
+  in.read(reinterpret_cast<char*>(indices.data()), static_cast<std::streamsize>(header.index_count * sizeof(std::uint32_t)));
+
+  submeshes.clear();
+  submeshes.reserve(header.submesh_count);
+
+  for (auto i = std::uint32_t{0u}; i < header.submesh_count; ++i) {
+    auto record = submesh_file_record{};
+    in.read(reinterpret_cast<char*>(&record), sizeof(record));
+
+    if (!in) {
+      return false;
+    }
+
+    submeshes.push_back(cooked_submesh{
+      record.index_offset,
+      record.index_count,
+      math::volume{math::vector3{record.bounds_min[0], record.bounds_min[1], record.bounds_min[2]}, math::vector3{record.bounds_max[0], record.bounds_max[1], record.bounds_max[2]}},
+      math::uuid::from_value(record.material_uuid)
+    });
+  }
+
+  if (!in) {
+    return false;
+  }
+
+  bounds = math::volume{math::vector3{header.bounds_min[0], header.bounds_min[1], header.bounds_min[2]}, math::vector3{header.bounds_max[0], header.bounds_max[1], header.bounds_max[2]}};
+
+  return true;
+}
+
+auto assets_module::_cook_material(const math::uuid& id, const material_description& description) -> bool {
+  const auto cooked = _cooked_path(id, ".sbxmat");
+
+  auto error = std::error_code{};
+  std::filesystem::create_directories(cooked.parent_path(), error);
+
+  auto out = std::ofstream{cooked, std::ios::binary};
+
+  if (!out) {
+    utility::logger<"assets">::warn("Cook: could not write material '{}'", cooked.generic_string());
+    return false;
+  }
+
+  auto header = material_file_header{};
+  header.magic = material_magic;
+  header.version = material_version;
+  header.base_color_factor[0] = description.base_color_factor.r();
+  header.base_color_factor[1] = description.base_color_factor.g();
+  header.base_color_factor[2] = description.base_color_factor.b();
+  header.base_color_factor[3] = description.base_color_factor.a();
+  header.emissive_factor[0] = description.emissive_factor.x();
+  header.emissive_factor[1] = description.emissive_factor.y();
+  header.emissive_factor[2] = description.emissive_factor.z();
+  header.metallic_factor = description.metallic_factor;
+  header.roughness_factor = description.roughness_factor;
+  header.albedo_uuid = description.albedo.value();
+  header.normal_uuid = description.normal.value();
+  header.metallic_roughness_uuid = description.metallic_roughness.value();
+  header.occlusion_uuid = description.occlusion.value();
+  header.emissive_uuid = description.emissive.value();
+  header.name_length = static_cast<std::uint32_t>(description.name.size());
+
+  out.write(reinterpret_cast<const char*>(&header), sizeof(header));
+  out.write(description.name.data(), static_cast<std::streamsize>(description.name.size()));
+
+  return true;
+}
+
+auto assets_module::_load_cooked_material(const std::filesystem::path& cooked, const math::uuid& id) -> material_handle {
+  auto in = std::ifstream{cooked, std::ios::binary};
+
+  if (!in) {
+    utility::logger<"assets">::warn("Could not open cooked material '{}'", cooked.generic_string());
+    return material_handle{};
+  }
+
+  auto header = material_file_header{};
+  in.read(reinterpret_cast<char*>(&header), sizeof(header));
+
+  if (!in || header.magic != material_magic || header.version != material_version) {
+    utility::logger<"assets">::warn("Invalid cooked material '{}'", cooked.generic_string());
+    return material_handle{};
+  }
+
+  auto name = std::string(header.name_length, '\0');
+
+  if (header.name_length > 0u) {
+    in.read(name.data(), static_cast<std::streamsize>(header.name_length));
+
+    if (!in) {
+      return material_handle{};
+    }
+  }
+
+  auto info = material::create_info{};
+  info.name = name.empty() ? std::string{"material"} : name;
+  info.base_color_factor = math::color{header.base_color_factor[0], header.base_color_factor[1], header.base_color_factor[2], header.base_color_factor[3]};
+  info.emissive_factor = math::vector3{header.emissive_factor[0], header.emissive_factor[1], header.emissive_factor[2]};
+  info.metallic_factor = header.metallic_factor;
+  info.roughness_factor = header.roughness_factor;
+
+  const auto load_slot = [&](std::uint64_t uuid, graphics::format format) -> texture_handle {
+    if (uuid == 0ull) {
+      return texture_handle{};
+    }
+    return load_texture(math::uuid::from_value(uuid), format);
+  };
+
+  info.albedo = load_slot(header.albedo_uuid, graphics::format::r8g8b8a8_srgb);
+  info.normal = load_slot(header.normal_uuid, graphics::format::r8g8b8a8_unorm);
+  info.metallic_roughness = load_slot(header.metallic_roughness_uuid, graphics::format::r8g8b8a8_unorm);
+  info.occlusion = load_slot(header.occlusion_uuid, graphics::format::r8g8b8a8_unorm);
+  info.emissive = load_slot(header.emissive_uuid, graphics::format::r8g8b8a8_srgb);
+
+  auto record = std::make_shared<material>(info);
+  record->_id = id;
+
+  auto handle = _register_material(record);
+
+  {
+    auto lock = std::lock_guard{_mutex};
+    _material_files.emplace(id, record);
+  }
+
+  return handle;
+}
+
+auto assets_module::_derive_material_uuid(const math::uuid& mesh, std::size_t index) -> math::uuid {
+  // splitmix64 over (mesh uuid, index) — deterministic so re-cooking is stable.
+  auto x = mesh.value() ^ (0x9e3779b97f4a7c15ull * (static_cast<std::uint64_t>(index) + 1ull));
+  x ^= x >> 30; x *= 0xbf58476d1ce4e5b9ull;
+  x ^= x >> 27; x *= 0x94d049bb133111ebull;
+  x ^= x >> 31;
+
+  return math::uuid::from_value(x == 0ull ? 1ull : x); // never nil
 }
 
 } // namespace sbx::assets

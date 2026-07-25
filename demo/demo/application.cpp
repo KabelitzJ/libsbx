@@ -25,12 +25,8 @@
 namespace demo {
 
 application::application()
-: sbx::core::application{},
-  _is_paused{false},
-  _time{0},
-  _fps{0} {
+: sbx::core::application{}, _is_paused{false}, _time{0}, _fps{0} {
   auto& platform_module = sbx::core::engine::get_module<sbx::platform::platform_module>();
-
   platform_module.window().on_window_closed() += []([[maybe_unused]] const auto& event) {
     sbx::core::engine::quit();
   };
@@ -38,14 +34,11 @@ application::application()
   auto& project = sbx::core::engine::set_project(sbx::core::project::open_or_create("demo", "Demo"));
 
   auto& assets_module = sbx::core::engine::get_module<sbx::assets::assets_module>();
-
   assets_module.import_directory(project.assets_directory());
 
   const auto duck_mesh = assets_module.load_mesh("models/duck/duck.gltf");
   const auto damaged_helmet_mesh = assets_module.load_mesh("models/damaged_helmet/damaged_helmet.gltf");
   const auto flight_helmet_mesh = assets_module.load_mesh("models/flight_helmet/flight_helmet.gltf");
-
-  auto& render_module = sbx::core::engine::get_module<sbx::render::render_module>();
 
   auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
   auto& scene = scenes_module.active_scene();
@@ -53,16 +46,12 @@ application::application()
   sbx::scenes::scene_serializer::load(scene, "scenes/demo_scene.yaml");
 
   _duck = scene.find("Duck");
-  _damaged_helmet = scene.find("Damaged Helmet");
-  _flight_helmet = scene.find("Flight Helmet");
-  
+  _damaged_helmet = scene.find("DamagedHelmet");
+  _flight_helmet = scene.find("FlightHelmet");
 }
 
 application::~application() {
-  auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
-  auto& scene = scenes_module.active_scene();
 
-  sbx::scenes::scene_serializer::save(scene, "scenes/demo_scene.yaml");
 }
 
 auto application::update() -> void {

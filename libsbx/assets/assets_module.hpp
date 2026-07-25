@@ -160,6 +160,15 @@ private:
     math::uuid emissive{math::uuid::nil()};
   }; // struct material_description
 
+  // One row of the asset manifest: the durable uuid -> source path index plus the staleness data
+  // (content hash + cooker version) recorded at the last cook.
+  struct manifest_entry {
+    std::filesystem::path path;        // project source path (same form as _paths)
+    std::uint32_t cooker_version{0u};  // cooker that produced the current cooked output (0 = never)
+    std::uint64_t source_hash{0u};     // source content hash at last cook
+    std::int64_t source_mtime{0};      // source mtime at last cook (fast-path skip)
+  }; // struct manifest_entry
+
   struct pending_texture_upload {
     std::uint32_t index;
     std::vector<std::byte> pixels;
@@ -188,7 +197,21 @@ private:
 
   [[nodiscard]] auto _cooked_path(const math::uuid& id, std::string_view extension) const -> std::filesystem::path;
 
-  [[nodiscard]] static auto _source_newer(const std::filesystem::path& source, const std::filesystem::path& cooked) -> bool;
+  // -- Staleness (P3: content hash + cooker version, tracked in the manifest) --
+
+  [[nodiscard]] auto _is_cooked_stale(const math::uuid& id, const std::filesystem::path& source, const std::filesystem::path& cooked, std::uint32_t cooker_version) -> bool;
+
+  auto _record_cook(const math::uuid& id, std::uint32_t cooker_version, const std::filesystem::path& source) -> void;
+
+  // -- Asset manifest (P3: uuid -> source path + staleness, so startup needs no rescan) --
+
+  auto _ensure_manifest_loaded() -> void;
+
+  auto _load_manifest() -> void;
+
+  auto _save_manifest() -> void;
+
+  [[nodiscard]] auto _manifest_path() const -> std::filesystem::path;
 
   auto _cook_texture(const std::filesystem::path& source, const std::filesystem::path& cooked) -> bool;
 
@@ -208,6 +231,10 @@ private:
 
   std::unordered_map<std::string, math::uuid> _uuids{};
   std::unordered_map<math::uuid, std::filesystem::path> _paths{}; // project-relative (to assets directory)
+
+  std::unordered_map<math::uuid, manifest_entry> _manifest{};
+  bool _manifest_loaded{false};
+  bool _manifest_dirty{false};
 
   std::unordered_map<std::string, std::shared_ptr<texture>> _textures{};
   std::vector<pending_texture_upload> _pending_textures{};

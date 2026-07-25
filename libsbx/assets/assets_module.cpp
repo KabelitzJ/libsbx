@@ -72,6 +72,33 @@ inline constexpr auto mesh_version = std::uint32_t{1u};
 inline constexpr auto material_magic = std::uint32_t{0x544D4253u}; // 'SBMT'
 inline constexpr auto material_version = std::uint32_t{1u};
 
+// A mesh cook also emits its materials, so a mesh blob's freshness depends on both cookers.
+inline constexpr auto mesh_cooker_version = mesh_version * 1000u + material_version;
+
+// FNV-1a over the file's bytes. Returns 0 on failure (treated as "changed" -> recook).
+static auto hash_file(const std::filesystem::path& path) -> std::uint64_t {
+  auto in = std::ifstream{path, std::ios::binary};
+
+  if (!in) {
+    return 0u;
+  }
+
+  auto hash = std::uint64_t{14695981039346656037ull};
+  auto buffer = std::array<char, std::size_t{1u} << 16>{};
+
+  while (in) {
+    in.read(buffer.data(), static_cast<std::streamsize>(buffer.size()));
+    const auto count = static_cast<std::size_t>(in.gcount());
+
+    for (auto i = std::size_t{0u}; i < count; ++i) {
+      hash ^= static_cast<std::uint8_t>(buffer[i]);
+      hash *= 1099511628211ull;
+    }
+  }
+
+  return hash;
+}
+
 struct texture_header {
   std::uint32_t magic;
   std::uint32_t version;
@@ -121,9 +148,13 @@ assets_module::assets_module() {
   _magenta = _create_default_texture({255u, 0u, 255u, 255u});   // load-error marker
 }
 
-assets_module::~assets_module() { }
+assets_module::~assets_module() {
+  _save_manifest();
+}
 
 auto assets_module::import(const std::filesystem::path& path) -> math::uuid {
+  _ensure_manifest_loaded();
+
   const auto key = path.generic_string();
 
   {
@@ -141,12 +172,20 @@ auto assets_module::import(const std::filesystem::path& path) -> math::uuid {
 
     _uuids.emplace(key, uuid);
     _paths.emplace(uuid, path);
+
+    auto& entry = _manifest[uuid];
+    if (entry.path.empty()) {
+      entry.path = path;
+      _manifest_dirty = true;
+    }
   }
 
   return uuid;
 }
 
 auto assets_module::import_directory(const std::filesystem::path& root) -> void {
+  _ensure_manifest_loaded();
+
   if (!std::filesystem::exists(root)) {
     utility::logger<"assets">::warn("Asset root '{}' does not exist", root.generic_string());
 
@@ -171,6 +210,8 @@ auto assets_module::import_directory(const std::filesystem::path& root) -> void 
 }
 
 auto assets_module::load_texture(const math::uuid& id, graphics::format format) -> texture_handle {
+  _ensure_manifest_loaded();
+
   const auto is_srgb = (format == graphics::format::r8g8b8a8_srgb);
 
   const auto key = fmt::format("{}:{}", id.value(), (is_srgb ? "#srgb" : "#linear"));
@@ -188,7 +229,7 @@ auto assets_module::load_texture(const math::uuid& id, graphics::format format) 
     auto lock = std::lock_guard{_mutex};
 
     const auto entry = _paths.find(id);
-  
+
     if (entry == _paths.end()) {
       utility::logger<"assets">::warn("Unknown texture uuid {}", id);
       return texture_handle{};
@@ -199,11 +240,12 @@ auto assets_module::load_texture(const math::uuid& id, graphics::format format) 
 
   const auto cooked = _cooked_path(id, ".sbxtex");
 
-  if (!std::filesystem::exists(cooked) || _source_newer(path, cooked)) {
+  if (_is_cooked_stale(id, path, cooked, texture_version)) {
     if (!_cook_texture(path, cooked)) {
       utility::logger<"assets">::warn("Could not cook texture '{}'", path.generic_string());
       return texture_handle{};
     }
+    _record_cook(id, texture_version, path);
   }
 
   auto pixels = std::vector<std::byte>{};
@@ -216,6 +258,7 @@ auto assets_module::load_texture(const math::uuid& id, graphics::format format) 
       utility::logger<"assets">::warn("Could not load cooked texture '{}'", cooked.generic_string());
       return texture_handle{};
     }
+    _record_cook(id, texture_version, path);
   }
 
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
@@ -246,6 +289,8 @@ auto assets_module::load_texture(const std::filesystem::path& path, graphics::fo
 }
 
 auto assets_module::load_mesh(const math::uuid& id) -> mesh_handle {
+  _ensure_manifest_loaded();
+
   {
     auto lock = std::lock_guard{_mutex};
 
@@ -269,15 +314,16 @@ auto assets_module::load_mesh(const math::uuid& id) -> mesh_handle {
     relative_path = entry->second;
   }
 
-  const auto source = relative_path; 
+  const auto source = relative_path;
   const auto cooked = _cooked_path(id, ".sbxmsh");
 
-  // Cook on demand (dev): (re)cook when the blob is missing or the source changed. Cooking also
-  // extracts the glTF's materials into .sbxmat assets referenced by the submeshes below.
-  if (!std::filesystem::exists(cooked) || _source_newer(source, cooked)) {
+  // Cook on demand: (re)cook when the blob is missing, the source content changed, or the cooker
+  // version bumped. Cooking also extracts the glTF's materials into .sbxmat assets referenced below.
+  if (_is_cooked_stale(id, source, cooked, mesh_cooker_version)) {
     if (!_cook_mesh(source, relative_path, id, cooked)) {
       return mesh_handle{};
     }
+    _record_cook(id, mesh_cooker_version, source);
   }
 
   auto vertices = std::vector<vertex>{};
@@ -292,6 +338,7 @@ auto assets_module::load_mesh(const math::uuid& id) -> mesh_handle {
 
       return mesh_handle{};
     }
+    _record_cook(id, mesh_cooker_version, source);
   }
 
   if (vertices.empty() || indices.empty()) {
@@ -350,6 +397,8 @@ auto assets_module::load_mesh(const std::filesystem::path& path) -> mesh_handle 
 }
 
 auto assets_module::load_material(const math::uuid& id) -> material_handle {
+  _ensure_manifest_loaded();
+
   {
     auto lock = std::lock_guard{_mutex};
     if (const auto entry = _material_files.find(id); entry != _material_files.end()) {
@@ -731,20 +780,153 @@ auto assets_module::_cooked_path(const math::uuid& id, std::string_view extensio
   return project.library_directory() / fmt::format("{}{}", id.value(), extension);
 }
 
-auto assets_module::_source_newer(const std::filesystem::path& source, const std::filesystem::path& cooked) -> bool {
-  auto error = std::error_code{};
-
-  const auto source_time = std::filesystem::last_write_time(source, error);
-  if (error) {
-    return true; // can't tell -> cook
+auto assets_module::_is_cooked_stale(const math::uuid& id, const std::filesystem::path& source, const std::filesystem::path& cooked, std::uint32_t cooker_version) -> bool {
+  if (!std::filesystem::exists(cooked)) {
+    return true;
   }
 
-  const auto cooked_time = std::filesystem::last_write_time(cooked, error);
+  auto lock = std::lock_guard{_mutex};
+
+  const auto entry = _manifest.find(id);
+
+  if (entry == _manifest.end() || entry->second.cooker_version != cooker_version) {
+    return true;
+  }
+
+  auto error = std::error_code{};
+  const auto mtime = std::filesystem::last_write_time(source, error);
+
   if (error) {
     return true;
   }
 
-  return source_time > cooked_time;
+  const auto mtime_count = static_cast<std::int64_t>(mtime.time_since_epoch().count());
+
+  if (entry->second.source_mtime == mtime_count) {
+    return false; // fast path: unchanged since last cook
+  }
+
+  // mtime moved — confirm with a content hash before recooking.
+  if (entry->second.source_hash == hash_file(source)) {
+    entry->second.source_mtime = mtime_count; // touched, not changed
+    _manifest_dirty = true;
+    return false;
+  }
+
+  return true;
+}
+
+auto assets_module::_record_cook(const math::uuid& id, std::uint32_t cooker_version, const std::filesystem::path& source) -> void {
+  auto error = std::error_code{};
+  const auto mtime = std::filesystem::last_write_time(source, error);
+  const auto mtime_count = error ? std::int64_t{0} : static_cast<std::int64_t>(mtime.time_since_epoch().count());
+  const auto hash = hash_file(source);
+
+  {
+    auto lock = std::lock_guard{_mutex};
+
+    auto& entry = _manifest[id];
+    entry.cooker_version = cooker_version;
+    entry.source_hash = hash;
+    entry.source_mtime = mtime_count;
+    _manifest_dirty = true;
+  }
+
+  _save_manifest();
+}
+
+auto assets_module::_ensure_manifest_loaded() -> void {
+  {
+    auto lock = std::lock_guard{_mutex};
+
+    if (_manifest_loaded) {
+      return;
+    }
+
+    _manifest_loaded = true;
+  }
+
+  _load_manifest();
+}
+
+auto assets_module::_manifest_path() const -> std::filesystem::path {
+  return core::engine::project().library_directory() / "manifest.yaml";
+}
+
+auto assets_module::_load_manifest() -> void {
+  const auto path = _manifest_path();
+
+  if (!std::filesystem::exists(path)) {
+    return;
+  }
+
+  auto root = YAML::Node{};
+
+  try {
+    root = YAML::LoadFile(path.string());
+  } catch (const std::exception& exception) {
+    utility::logger<"assets">::warn("Could not read asset manifest '{}' ({})", path.generic_string(), exception.what());
+    return;
+  }
+
+  const auto assets = root["assets"];
+
+  if (!assets) {
+    return;
+  }
+
+  auto lock = std::lock_guard{_mutex};
+
+  for (const auto node : assets) {
+    const auto uuid = node["uuid"].as<math::uuid>();
+
+    auto entry = manifest_entry{};
+    entry.path = node["path"].as<std::string>();
+    entry.cooker_version = node["cooker_version"].as<std::uint32_t>();
+    entry.source_hash = node["source_hash"].as<std::uint64_t>();
+    entry.source_mtime = node["source_mtime"].as<std::int64_t>();
+
+    _uuids.emplace(entry.path.generic_string(), uuid);
+    _paths.emplace(uuid, entry.path);
+    _manifest.emplace(uuid, std::move(entry));
+  }
+
+  utility::logger<"assets">::debug("Loaded asset manifest: {} entries", _manifest.size());
+}
+
+auto assets_module::_save_manifest() -> void {
+  auto lock = std::lock_guard{_mutex};
+
+  if (!_manifest_dirty) {
+    return;
+  }
+
+  auto emitter = YAML::Emitter{};
+
+  emitter << YAML::BeginMap;
+  emitter << YAML::Key << "version" << YAML::Value << 1u;
+  emitter << YAML::Key << "assets" << YAML::Value << YAML::BeginSeq;
+
+  for (const auto& [uuid, entry] : _manifest) {
+    emitter << YAML::BeginMap;
+    emitter << YAML::Key << "uuid" << YAML::Value << uuid.value();
+    emitter << YAML::Key << "path" << YAML::Value << entry.path.generic_string();
+    emitter << YAML::Key << "cooker_version" << YAML::Value << entry.cooker_version;
+    emitter << YAML::Key << "source_hash" << YAML::Value << entry.source_hash;
+    emitter << YAML::Key << "source_mtime" << YAML::Value << entry.source_mtime;
+    emitter << YAML::EndMap;
+  }
+
+  emitter << YAML::EndSeq;
+  emitter << YAML::EndMap;
+
+  auto error = std::error_code{};
+  std::filesystem::create_directories(_manifest_path().parent_path(), error);
+
+  auto out = std::ofstream{_manifest_path()};
+  out << emitter.c_str();
+
+  _manifest_dirty = false;
 }
 
 auto assets_module::_cook_texture(const std::filesystem::path& source, const std::filesystem::path& cooked) -> bool {

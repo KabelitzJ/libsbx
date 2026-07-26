@@ -59,7 +59,7 @@ auto depth_pre_pass::execute(render_context& context) -> void {
   }
 
   auto& registry = graphics_module.resource_registry();
-  auto& depth = registry.get<graphics::image>(context.depth_attachment);
+  auto& depth = registry.get<graphics::image>(context.depth);
 
   auto to_depth = graphics::command_buffer::image_transition_data{};
   to_depth.image = depth.handle();

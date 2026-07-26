@@ -20,10 +20,10 @@
 
 namespace sbx::render {
 
+inline constexpr auto hdr_format = graphics::format::r16g16b16a16_sfloat;
+
 geometry_pass::geometry_pass() {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
-
-  auto& surface = graphics_module.surface();
 
   auto& shader_cache = graphics_module.shader_cache();
   auto& pipeline_cache = graphics_module.pipeline_cache();
@@ -38,13 +38,13 @@ geometry_pass::geometry_pass() {
   const auto make = [&](bool is_transparent, graphics::cull_mode cull, const std::string& name) {
     auto info = graphics::graphics_pipeline::create_info{
       .shader = shader,
-      .color_formats = {static_cast<graphics::format>(surface.format().format)},
+      .color_formats = {hdr_format},
       .depth_format = graphics::format::d32_sfloat,
       .cull_mode = cull,
       .front_face = graphics::front_face::counter_clockwise,
       .depth_test = true,
       .depth_write = false,
-      .depth_compare = graphics::compare_operation::equal,
+      .depth_compare = graphics::compare_operation::less_or_equal,
       .name = name
     };
 
@@ -81,7 +81,20 @@ auto geometry_pass::execute(render_context& context) -> void {
     return;
   }
 
-  auto& depth = registry.get<graphics::image>(context.depth_attachment);
+  auto& depth = registry.get<graphics::image>(context.depth);
+  auto& color = registry.get<graphics::image>(context.color);
+
+  auto to_color = graphics::command_buffer::image_transition_data{};
+  to_color.image = color;
+  to_color.src_stage_mask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
+  to_color.src_access_mask = VK_ACCESS_2_NONE;
+  to_color.dst_stage_mask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
+  to_color.dst_access_mask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
+  to_color.old_layout = graphics::image_layout::undefined;
+  to_color.new_layout = graphics::image_layout::color_attachment_optimal;
+  to_color.aspect_mask = color.aspect();
+  to_color.layer_count = 1u;
+  context.command_buffer->transition_image_layout(to_color);
 
   auto depth_barrier = graphics::command_buffer::image_transition_data{};
   depth_barrier.image = depth;
@@ -97,7 +110,7 @@ auto geometry_pass::execute(render_context& context) -> void {
 
   auto color_attachment = VkRenderingAttachmentInfo{};
   color_attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-  color_attachment.imageView = swapchain.active_image_view();
+  color_attachment.imageView = color.view();
   color_attachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
   color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
   color_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;

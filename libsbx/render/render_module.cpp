@@ -37,6 +37,7 @@
 
 #include <libsbx/render/depth_pre_pass.hpp>
 #include <libsbx/render/geometry_pass.hpp>
+#include <libsbx/render/tonemap_pass.hpp>
 
 namespace sbx::render {
 
@@ -73,6 +74,7 @@ render_module::render_module() {
   // Creation order = execution order in the render thread.
   _passes.push_back(std::make_unique<depth_pre_pass>());
   _passes.push_back(std::make_unique<geometry_pass>());
+  _passes.push_back(std::make_unique<tonemap_pass>());
 
   _start();
 }
@@ -308,7 +310,7 @@ auto render_module::_consume_packet(const render_packet& packet) -> void {
     assets_module.process_uploads(frame_context.frame_index());
     upload_context.flush(*command_buffer, frame_context.frame_index());
 
-    _resize_depth(extent);
+    _resize_targets(extent);
 
     // Frame wrapper owns the swapchain transitions: acquire -> color attachment.
     auto to_color = graphics::command_buffer::image_transition_data{};
@@ -330,7 +332,9 @@ auto render_module::_consume_packet(const render_packet& packet) -> void {
         .frame_index = frame_context.frame_index(),
         .slot = static_cast<std::uint32_t>(slot),
         .extent = extent,
-        .depth_attachment = _depth_image
+        .depth = _depth_image,
+        .color = _color_image,
+        .color_index = _color_index
       };
 
       _prepare_frame(context);
@@ -380,6 +384,8 @@ auto render_module::_ensure_resources() -> void {
 
   _sampler_index = bindless_table.sampler_index(graphics::sampler::create_info{});
 
+  _color_index = bindless_table.reserve_sampled_image();
+
   _frame_buffer = registry.emplace<graphics::buffer>(graphics::buffer::create_info{
     .size = memory::stride_v<frame_data> * graphics::swapchain::max_frames_in_flight,
     .usage = graphics::buffer_usage::device_address | graphics::buffer_usage::storage,
@@ -388,6 +394,7 @@ auto render_module::_ensure_resources() -> void {
   });
 
   const auto frame_base = registry.get<graphics::buffer>(_frame_buffer).address();
+
   for (auto slot = std::size_t{0u}; slot < graphics::swapchain::max_frames_in_flight; ++slot) {
     _frame_addresses[slot] = frame_base + slot * memory::stride_v<frame_data>;
   }
@@ -400,6 +407,7 @@ auto render_module::_ensure_resources() -> void {
   });
 
   const auto light_base = registry.get<graphics::buffer>(_light_buffer).address();
+
   for (auto slot = std::size_t{0u}; slot < graphics::swapchain::max_frames_in_flight; ++slot) {
     _light_addresses[slot] = light_base + slot * light_capacity * memory::stride_v<light_data>;
   }
@@ -412,33 +420,46 @@ auto render_module::_ensure_resources() -> void {
   });
 
   const auto transform_base = registry.get<graphics::buffer>(_transform_buffer).address();
+
   for (auto slot = std::size_t{0u}; slot < graphics::swapchain::max_frames_in_flight; ++slot) {
     _transform_addresses[slot] = transform_base + slot * transform_capacity * sizeof(math::matrix4x4);
   }
 }
 
-auto render_module::_resize_depth(const math::vector2u extent) -> void {
-  if (_depth_extent.x() == extent.x() && _depth_extent.y() == extent.y()) {
+auto render_module::_resize_targets(const math::vector2u extent) -> void {
+  if (_target_extent == extent) {
     return;
   }
 
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
-  auto& frame_context = graphics_module.frame_context();
 
   auto& registry = graphics_module.resource_registry();
+  auto& bindless_table = graphics_module.bindless_table();
+  auto& frame_context = graphics_module.frame_context();
+  const auto frame_index = frame_context.frame_index();
 
-  if (_depth_extent.x() != 0u) {
-    registry.retire(_depth_image, frame_context.frame_index());
+  if (_target_extent != math::vector2u{0u, 0u}) {
+    registry.retire(_depth_image, frame_index);
+    registry.retire(_color_image, frame_index);
   }
 
   _depth_image = registry.emplace<graphics::image>(graphics::image::create_info{
-    .extent = math::vector3u{extent.x(), extent.y(), 1u},
+    .extent = math::vector3u{extent, 1u},
     .format = graphics::format::d32_sfloat,
     .usage = graphics::image_usage::depth_stencil_attachment,
     .name = "Depth"
   });
 
-  _depth_extent = extent;
+  _color_image = registry.emplace<graphics::image>(graphics::image::create_info{
+    .extent = math::vector3u{extent, 1u},
+    .format = graphics::format::r16g16b16a16_sfloat,
+    .usage = graphics::image_usage::color_attachment | graphics::image_usage::sampled,
+    .name = "HDR Color"
+  });
+
+  bindless_table.write_sampled_image(_color_index, registry.get<graphics::image>(_color_image).view());
+
+  _target_extent = extent;
 }
 
 auto render_module::_prepare_frame(render_context& context) -> void {

@@ -62,7 +62,7 @@ private:
 
   auto _ensure_resources() -> void;
 
-  auto _resize_depth(const math::vector2u extent) -> void;
+  auto _resize_targets(const math::vector2u extent) -> void;
 
   auto _prepare_frame(render_context& context) -> void;
 
@@ -85,7 +85,9 @@ private:
   std::vector<std::unique_ptr<render_pass>> _passes{};
 
   graphics::image_handle _depth_image{};
-  math::vector2u _depth_extent{};
+  graphics::image_handle _color_image{};
+  std::uint32_t _color_index{0u};
+  math::vector2u _target_extent{};
 
   graphics::buffer_handle _frame_buffer{};
   std::array<graphics::buffer::address_type, graphics::swapchain::max_frames_in_flight> _frame_addresses{};

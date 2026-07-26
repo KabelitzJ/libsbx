@@ -37,7 +37,10 @@ struct render_context {
   std::uint32_t slot{0u};
   math::vector2u extent{};
 
-  graphics::image_handle depth_attachment{};
+  graphics::image_handle depth{};
+
+  graphics::image_handle color{};
+  std::uint32_t color_index{0u};
 
   graphics::buffer::address_type frame_address{0u};
   graphics::buffer::address_type transform_address{0u};
@@ -53,6 +56,8 @@ struct push_constants {
   std::uint32_t material_index;
   std::uint32_t sampler_index;
 }; // struct push_constants
+
+static_assert(sizeof(push_constants) <= 128u, "Push constants must not exceed 128 bytes.");
 
 /**
  * @brief A logical render stage (dynamic rendering — not a VkRenderPass). Owns its own pipelines and

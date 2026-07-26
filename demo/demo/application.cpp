@@ -48,6 +48,8 @@ application::application()
   _duck = scene.find("Duck");
   _damaged_helmet = scene.find("DamagedHelmet");
   _flight_helmet = scene.find("FlightHelmet");
+
+  _camera = fly_camera{scene.find("Camera")};
 }
 
 application::~application() {
@@ -71,6 +73,8 @@ auto application::update() -> void {
 
   // auto& flight_helmet_transform = _flight_helmet.transform();
   // flight_helmet_transform.rotation = sbx::math::quaternion{sbx::math::vector3f{0.0f, 1.0f, 0.0f}, _rotation};
+
+  _camera.update();
 }
 
 auto application::fixed_update() -> void {

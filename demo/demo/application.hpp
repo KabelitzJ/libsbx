@@ -13,6 +13,8 @@
 
 #include <libsbx/scenes/scene.hpp>
 
+#include <demo/fly_camera.hpp>
+
 namespace demo {
 
 class application : public sbx::core::application {
@@ -41,6 +43,8 @@ private:
   sbx::scenes::scene::node _duck;
   sbx::scenes::scene::node _damaged_helmet;
   sbx::scenes::scene::node _flight_helmet;
+
+  fly_camera _camera;
 
 }; // class application
 

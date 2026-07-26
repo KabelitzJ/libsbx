@@ -637,10 +637,12 @@ auto render_module::_bake_fullscreen(graphics::command_buffer& command_buffer, g
   command_buffer.set_scissor(VkRect2D{VkOffset2D{0, 0}, VkExtent2D{extent.x(), extent.y()}});
   command_buffer.bind_pipeline(pipeline);
 
-  auto range = std::array<std::byte, graphics::bindless_table::push_constant_size>{};
-  std::memcpy(range.data(), push_data.data(), push_data.size());
-  
-  command_buffer.push_constants(bindless_table.pipeline_layout(), VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0u, range);
+  if (push_data.size() > 0u) {
+    auto range = std::array<std::byte, graphics::bindless_table::push_constant_size>{};
+    std::memcpy(range.data(), push_data.data(), push_data.size());
+    
+    command_buffer.push_constants(bindless_table.pipeline_layout(), VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0u, range);
+  }
 
   command_buffer.draw(3u, 1u, 0u, 0u);
   

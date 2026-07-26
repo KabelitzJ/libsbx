@@ -266,7 +266,5 @@ fs_out fragment_main(fs_in input) {
 
   output.color = float4(color, base.a);
 
-  output.color = float4(kd * diffuse * ao, 1.0);
-
   return output;
 }

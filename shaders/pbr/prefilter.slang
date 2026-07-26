@@ -30,6 +30,7 @@ struct push_data {
 [[vk::binding(1, 0)]] SamplerState samplers[];
 
 static const float pi = 3.14159265359;
+static const float firefly_clamp = 30.0f;
 
 float radical_inverse(uint bits) {
   bits = (bits << 16u) | (bits >> 16u);
@@ -100,7 +101,8 @@ fs_out fragment_main(fs_in input) {
     float ndl = max(dot(n, l), 0.0);
 
     if (ndl > 0.0) {
-      prefiltered += textures[push.environment_index].SampleLevel(samplers[push.sampler_index], direction_to_equirect(l), 0.0).rgb * ndl;
+      float3 radiance = min(textures[push.environment_index].SampleLevel(samplers[push.sampler_index], direction_to_equirect(l), 0.0).rgb, float3(firefly_clamp));
+      prefiltered += radiance * ndl;
       weight += ndl;
     }
   }

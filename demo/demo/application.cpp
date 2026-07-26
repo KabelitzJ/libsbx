@@ -55,7 +55,7 @@ application::application()
 
   auto& skybox = _camera.add_component<sbx::scenes::skybox>();
   skybox.environment = assets_module.load_environment_map("environments/sky.hdr");
-  skybox.intensity = 0.1f;
+  skybox.intensity = 1.0f;
 }
 
 application::~application() {

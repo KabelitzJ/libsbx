@@ -29,6 +29,7 @@ struct push_data {
 [[vk::binding(1, 0)]] SamplerState samplers[];
 
 static const float pi = 3.14159265359;
+static const float firefly_clamp = 30.0f;
 
 float3 equirect_direction(float2 uv) {
   float phi = (uv.x * 2.0 - 1.0) * pi;
@@ -70,7 +71,9 @@ fs_out fragment_main(fs_in input) {
       float3 tangent = float3(sin(theta) * cos(phi), sin(theta) * sin(phi), cos(theta));
       float3 dir = tangent.x * right + tangent.y * up + tangent.z * n;
 
-      irradiance += textures[push.environment_index].SampleLevel(samplers[push.sampler_index], direction_to_equirect(dir), 0.0).rgb * cos(theta) * sin(theta);
+      float3 radiance = min(textures[push.environment_index].SampleLevel(samplers[push.sampler_index], direction_to_equirect(dir), 0.0).rgb, float3(firefly_clamp));
+      irradiance += radiance * cos(theta) * sin(theta);
+
       samples += 1.0;
     }
   }

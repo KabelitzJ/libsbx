@@ -728,7 +728,7 @@ auto render_module::_bake_environment(graphics::command_buffer& command_buffer, 
       .extent = math::vector3u{extent, 1u},
       .format = graphics::format::r16g16b16a16_sfloat,
       .usage = graphics::image_usage::color_attachment | graphics::image_usage::sampled,
-      .name = "IBL Prefiltered"
+      .name = fmt::format("IBL Prefiltered Level {}", level)
     });
 
     const auto index = bindless_table.reserve_sampled_image();

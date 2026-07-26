@@ -38,3 +38,5 @@ benchmark.json
 patches/
 
 .sbx/
+
+*.cap

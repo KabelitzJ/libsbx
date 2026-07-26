@@ -268,7 +268,7 @@ auto render_module::_build_packet() -> render_packet {
     packet.camera.active = true;
   }
 
-    auto opaque = std::map<mesh_key, draw_bucket>{};
+  auto opaque = std::map<mesh_key, draw_bucket>{};
   auto transparent = std::vector<transparent_entry>{};
 
   for (const auto [entity, world, renderer] : scene.query<scenes::world_transform, scenes::mesh_renderer>().each()) {

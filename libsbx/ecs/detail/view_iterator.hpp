@@ -163,7 +163,7 @@ public:
     return original;
   }
 
-  [[nodiscard]] auto operator*() const noexcept -> reference{
+  [[nodiscard]] auto operator*() const noexcept -> reference {
     return _dereference(std::index_sequence_for<Get...>{});
   }
 
@@ -186,7 +186,7 @@ public:
 private:
 
   template<std::size_t... Index>
-  [[nodiscard]] auto _dereference(std::index_sequence<Index...>) const noexcept {
+  [[nodiscard]] auto _dereference(std::index_sequence<Index...>) const noexcept -> reference {
     return std::tuple_cat(std::make_tuple(*_iterator), static_cast<Get*>(const_cast<utility::constness_as_t<typename Get::base_type, Get>*>(std::get<Index>(_iterator._pools)))->get_as_tuple(*_iterator)...);
   }
 

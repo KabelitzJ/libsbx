@@ -32,6 +32,11 @@ struct vertex {
   float4 tangent;
 }; // struct vertex
 
+enum class material_flags : uint {
+  none = 0,
+  alpha_masked = 1 << 0
+}; // enum material_flags
+
 struct material_data {
   float4 base_color_factor;
   float4 emissive_factor;
@@ -153,9 +158,9 @@ fs_out fragment_main(fs_in input) {
 
   float4 base = material.base_color_factor * textures[material.albedo_index].Sample(sampler, input.uv);
 
-  if ((material.flags & 1u) != 0u && base.a < material.alpha_cutoff) {
-    discard;
-  }
+  uint is_alpha_masked = (material.flags & material_flags::alpha_masked) != 0u;
+
+  clip(is_alpha_masked * (base.a - material.alpha_cutoff));
 
   float3 albedo = base.rgb;
 

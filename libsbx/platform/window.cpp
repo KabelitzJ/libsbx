@@ -44,13 +44,13 @@ window::window(const create_info& create_info)
       _width = info.size.x();
       _height = info.size.y();
 
-      _handle = glfwCreateWindow(static_cast<int>(_width), static_cast<int>(_height), info.title.c_str(), nullptr, nullptr);
+      _handle = glfwCreateWindow(static_cast<int>(_width), static_cast<int>(_height), _title.c_str(), nullptr, nullptr);
     },
     [this, monitor, video_mode](const fullscreen_create_info& info) {
       _width = info.size.x();
       _height = info.size.y();
 
-      _handle = glfwCreateWindow(static_cast<int>(_width), static_cast<int>(_height), info.title.c_str(), monitor, nullptr);
+      _handle = glfwCreateWindow(static_cast<int>(_width), static_cast<int>(_height), _title.c_str(), monitor, nullptr);
     },
     [this, monitor, video_mode](const borderless_create_info& info) {
       _width = static_cast<std::uint32_t>(video_mode->width);
@@ -61,7 +61,7 @@ window::window(const create_info& create_info)
       glfwWindowHint(GLFW_BLUE_BITS, video_mode->blueBits);
       glfwWindowHint(GLFW_REFRESH_RATE, video_mode->refreshRate);
 
-      _handle = glfwCreateWindow(static_cast<int>(_width), static_cast<int>(_height), info.title.c_str(), monitor, nullptr);
+      _handle = glfwCreateWindow(static_cast<int>(_width), static_cast<int>(_height), _title.c_str(), monitor, nullptr);
     }
   ), create_info);
 

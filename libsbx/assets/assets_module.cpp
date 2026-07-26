@@ -78,6 +78,9 @@ inline constexpr auto mesh_version = std::uint32_t{1u};
 inline constexpr auto material_magic = fourcc_v<"SBMT">; // 'SBMT'
 inline constexpr auto material_version = std::uint32_t{2u};
 
+inline constexpr auto environment_magic = fourcc_v<"SBEN">; // 'SBEN'
+inline constexpr auto environment_version = std::uint32_t{1u};
+
 // A mesh cook also emits its materials, so a mesh blob's freshness depends on both cookers.
 inline constexpr auto mesh_cooker_version = mesh_version * 1000u + material_version;
 
@@ -212,7 +215,7 @@ auto assets_module::import_directory(const std::filesystem::path& root) -> void 
 
     std::ranges::transform(extension, extension.begin(), [](unsigned char character) { return static_cast<char>(std::tolower(character)); });
 
-    if (extension == ".png" || extension == ".jpg" || extension == ".jpeg" || extension == ".gltf" || extension == ".glb" || extension == ".material") {
+    if (extension == ".png" || extension == ".jpg" || extension == ".jpeg" || extension == ".gltf" || extension == ".glb" || extension == ".material" || extension == ".hdr") {
       import(entry.path());
     }
   }
@@ -567,16 +570,82 @@ auto assets_module::save_material(const material_handle& material, const std::fi
   utility::logger<"assets">::info("Saved material '{}'", resolved_path.generic_string());
 }
 
+auto assets_module::load_environment_map(const math::uuid& id) -> environment_map_handle {
+  _ensure_manifest_loaded();
+
+  {
+    auto lock = std::lock_guard{_mutex};
+    if (const auto entry = _environment_maps.find(id); entry != _environment_maps.end()) {
+      return environment_map_handle{entry->second};
+    }
+  }
+
+  auto relative_path = std::filesystem::path{};
+  {
+    auto lock = std::lock_guard{_mutex};
+    const auto entry = _paths.find(id);
+    if (entry == _paths.end()) {
+      utility::logger<"assets">::warn("Unknown environment map uuid {}", id);
+      return environment_map_handle{};
+    }
+    relative_path = entry->second;
+  }
+
+  const auto source = relative_path;
+  const auto cooked = _cooked_path(id, ".sbxenv");
+
+  if (_is_cooked_stale(id, source, cooked, environment_version)) {
+    if (!_cook_environment_map(source, cooked)) {
+      utility::logger<"assets">::warn("Could not cook environment map '{}'", source.generic_string());
+      return environment_map_handle{};
+    }
+    _record_cook(id, environment_version, source);
+  }
+
+  auto pixels = std::vector<std::byte>{};
+  auto width = std::uint32_t{0u};
+  auto height = std::uint32_t{0u};
+
+  if (!_load_cooked_environment_map(cooked, pixels, width, height)) {
+    if (!_cook_environment_map(source, cooked) || !_load_cooked_environment_map(cooked, pixels, width, height)) {
+      utility::logger<"assets">::warn("Could not load cooked environment map '{}'", cooked.generic_string());
+      return environment_map_handle{};
+    }
+    _record_cook(id, environment_version, source);
+  }
+
+  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
+  const auto index = graphics_module.bindless_table().reserve_sampled_image();
+
+  auto record = std::make_shared<environment_map>();
+  record->_id = id;
+  record->_radiance_index = index;
+
+  {
+    auto lock = std::lock_guard{_mutex};
+    _environment_maps.emplace(id, record);
+    _pending_environments.push_back(pending_environment_upload{index, std::move(pixels), width, height});
+  }
+
+  return environment_map_handle{record};
+}
+
+auto assets_module::load_environment_map(const std::filesystem::path& path) -> environment_map_handle {
+  return load_environment_map(import(path));
+}
+
 auto assets_module::process_uploads(std::uint64_t frame_index) -> void {
   auto pending_textures = std::vector<pending_texture_upload>{};
   auto pending_meshes = std::vector<pending_mesh_upload>{};
   auto pending_materials = std::vector<pending_material_upload>{};
+  auto pending_environments = std::vector<pending_environment_upload>{};
 
   {
     auto lock = std::lock_guard{_mutex};
     pending_textures.swap(_pending_textures);
     pending_meshes.swap(_pending_meshes);
     pending_materials.swap(_pending_materials);
+    pending_environments.swap(_pending_environments);
   }
 
   if (pending_textures.empty() && pending_meshes.empty() && pending_materials.empty()) {
@@ -672,6 +741,23 @@ auto assets_module::process_uploads(std::uint64_t frame_index) -> void {
 
     buffer.write(&data, sizeof(material_data), material.index() * memory::stride_v<material_data>);
   }
+
+  for (auto& request : pending_environments) {
+    const auto handle = registry.emplace<graphics::image>(graphics::image::create_info{
+      .extent = math::vector3u{request.width, request.height, 1u},
+      .format = graphics::format::r32g32b32a32_sfloat,
+      .usage = graphics::image_usage::transfer_destination | graphics::image_usage::sampled,
+      .name = "Environment"
+    });
+
+    const auto bytes = std::span<const std::byte>{request.pixels.data(), request.pixels.size()};
+    upload_context.stage_image(handle, bytes, graphics::image_layout::shader_read_only_optimal);
+
+    bindless_table.write_sampled_image(request.index, registry.get<graphics::image>(handle).view());
+
+    _images.emplace(request.index, handle);
+    _resident_frame.emplace(request.index, frame_index);
+  }
 }
 
 auto assets_module::is_resident(const texture_handle& texture) const -> bool {
@@ -714,6 +800,21 @@ auto assets_module::is_resident(const material_handle& material) const -> bool {
   };
 
   return is_ready(material->albedo()) && is_ready(material->normal()) && is_ready(material->metallic_roughness()) && is_ready(material->occlusion()) && is_ready(material->emissive());
+}
+
+auto assets_module::is_resident(const environment_map_handle& environment) const -> bool {
+  if (!environment.is_valid()) {
+    return false;
+  }
+
+  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
+  const auto value = graphics_module.frame_context().timeline_value();
+
+  auto lock = std::lock_guard{_mutex};
+
+  const auto entry = _resident_frame.find(environment->radiance_index());
+
+  return entry != _resident_frame.end() && value >= entry->second;
 }
 
 auto assets_module::path_of(const math::uuid& id) const -> std::filesystem::path {
@@ -1397,6 +1498,69 @@ auto assets_module::_load_cooked_material(const std::filesystem::path& cooked, c
   }
 
   return handle;
+}
+
+auto assets_module::_cook_environment_map(const std::filesystem::path& source, const std::filesystem::path& cooked) -> bool {
+  auto width = std::int32_t{0};
+  auto height = std::int32_t{0};
+  auto channels = std::int32_t{0};
+
+  auto* data = stbi_loadf(_absolute(source).string().c_str(), &width, &height, &channels, 4);
+
+  if (data == nullptr) {
+    utility::logger<"assets">::warn("Cook: could not decode HDR '{}'", source.generic_string());
+    return false;
+  }
+
+  const auto data_size = static_cast<std::uint32_t>(width) * static_cast<std::uint32_t>(height) * 4u * static_cast<std::uint32_t>(sizeof(float));
+
+  const auto header = texture_header{environment_magic, environment_version, static_cast<std::uint32_t>(width), static_cast<std::uint32_t>(height), 4u, data_size};
+
+  auto error = std::error_code{};
+  std::filesystem::create_directories(cooked.parent_path(), error);
+
+  auto out = std::ofstream{cooked, std::ios::binary};
+
+  if (!out) {
+    utility::logger<"assets">::warn("Cook: could not write '{}'", cooked.generic_string());
+    stbi_image_free(data);
+    return false;
+  }
+
+  out.write(reinterpret_cast<const char*>(&header), sizeof(header));
+  out.write(reinterpret_cast<const char*>(data), static_cast<std::streamsize>(data_size));
+
+  stbi_image_free(data);
+
+  utility::logger<"assets">::debug("Cooked environment '{}' -> '{}'", source.generic_string(), cooked.generic_string());
+  return true;
+}
+
+auto assets_module::_load_cooked_environment_map(const std::filesystem::path& cooked, std::vector<std::byte>& pixels, std::uint32_t& width, std::uint32_t& height) -> bool {
+  auto in = std::ifstream{cooked, std::ios::binary};
+
+  if (!in) {
+    return false;
+  }
+
+  auto header = texture_header{};
+  in.read(reinterpret_cast<char*>(&header), sizeof(header));
+
+  if (!in || header.magic != environment_magic || header.version != environment_version) {
+    return false;
+  }
+
+  pixels.resize(header.data_size);
+  in.read(reinterpret_cast<char*>(pixels.data()), static_cast<std::streamsize>(header.data_size));
+
+  if (!in) {
+    return false;
+  }
+
+  width = header.width;
+  height = header.height;
+
+  return true;
 }
 
 auto assets_module::_derive_material_uuid(const math::uuid& mesh, std::size_t index) -> math::uuid {

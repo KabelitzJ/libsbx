@@ -38,6 +38,7 @@
 #include <libsbx/render/depth_pre_pass.hpp>
 #include <libsbx/render/geometry_pass.hpp>
 #include <libsbx/render/tonemap_pass.hpp>
+#include <libsbx/render/skybox_pass.hpp>
 
 namespace sbx::render {
 
@@ -74,6 +75,7 @@ render_module::render_module() {
   // Creation order = execution order in the render thread.
   _passes.push_back(std::make_unique<depth_pre_pass>());
   _passes.push_back(std::make_unique<geometry_pass>());
+  _passes.push_back(std::make_unique<skybox_pass>());
   _passes.push_back(std::make_unique<tonemap_pass>());
 
   _start();
@@ -180,6 +182,13 @@ auto render_module::_build_packet() -> render_packet {
     packet.camera.near_plane = camera.near_plane;
     packet.camera.far_plane = camera.far_plane;
     packet.camera.is_active = true;
+
+    if (camera_node.has_component<scenes::skybox>()) {
+      const auto& sky = camera_node.get_component<scenes::skybox>();
+
+      packet.environment = sky.environment;
+      packet.environment_intensity = sky.intensity;
+    }
   }
 
   auto opaque = std::map<mesh_key, draw_bucket>{};
@@ -326,12 +335,16 @@ auto render_module::_consume_packet(const render_packet& packet) -> void {
     if (packet.camera.is_active) {
       const auto slot = utility::fast_mod(frame_context.frame_index(), graphics::swapchain::max_frames_in_flight);
 
+      const auto environment_index = (packet.environment.is_valid() && assets_module.is_resident(packet.environment)) ? packet.environment->radiance_index() : 0xFFFFFFFFu;
+
       auto context = render_context{
         .command_buffer = command_buffer,
         .packet = memory::make_observer<const render_packet>(packet),
         .frame_index = frame_context.frame_index(),
         .slot = static_cast<std::uint32_t>(slot),
         .extent = extent,
+        .environment_index = environment_index,
+        .environment_intensity = packet.environment_intensity,
         .depth = _depth_image,
         .color = _color_image,
         .color_index = _color_index
@@ -502,6 +515,7 @@ auto render_module::_prepare_frame(render_context& context) -> void {
   context.transform_address = _transform_addresses[context.slot];
   context.instance_count = instance_count;
   context.sampler_index = _sampler_index;
+  context.inverse_view_projection = math::matrix4x4::inverted(projection * context.packet->camera.view);
 }
 
 } // namespace sbx::render

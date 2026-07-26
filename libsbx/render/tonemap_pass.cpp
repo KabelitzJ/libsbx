@@ -97,9 +97,12 @@ auto tonemap_pass::execute(render_context& context) -> void {
   context.command_buffer->bind_pipeline(*_pipeline);
 
   auto values = tonemap_push{context.color_index, context.sampler_index};
-  vkCmdPushConstants(context.command_buffer->handle(), bindless_table.pipeline_layout(), VK_SHADER_STAGE_ALL, 0u, sizeof(tonemap_push), &values);
+  auto range = std::array<std::byte, graphics::bindless_table::push_constant_size>{};
+  std::memcpy(range.data(), &values, sizeof(values));
 
-  vkCmdDraw(context.command_buffer->handle(), 3u, 1u, 0u, 0u);
+  context.command_buffer->push_constants(bindless_table.pipeline_layout(), VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0u, range);
+
+  context.command_buffer->draw(3u, 1u, 0u, 0u);
 
   context.command_buffer->end_rendering();
 }

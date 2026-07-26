@@ -37,6 +37,10 @@ struct render_context {
   std::uint32_t slot{0u};
   math::vector2u extent{};
 
+  std::uint32_t environment_index{0xFFFFFFFFu};
+  std::float_t environment_intensity{1.0f};
+  math::matrix4x4 inverse_view_projection{math::matrix4x4::identity};
+
   graphics::image_handle depth{};
 
   graphics::image_handle color{};
@@ -66,6 +70,8 @@ static_assert(sizeof(push_constants) <= 128u, "Push constants must not exceed 12
 class render_pass : public utility::noncopyable {
 
 public:
+
+  inline static constexpr auto hdr_format = graphics::format::r16g16b16a16_sfloat;
 
   virtual ~render_pass() = default;
 

@@ -20,8 +20,6 @@
 
 namespace sbx::render {
 
-inline constexpr auto hdr_format = graphics::format::r16g16b16a16_sfloat;
-
 geometry_pass::geometry_pass() {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 
@@ -38,7 +36,7 @@ geometry_pass::geometry_pass() {
   const auto make = [&](bool is_transparent, graphics::cull_mode cull, const std::string& name) {
     auto info = graphics::graphics_pipeline::create_info{
       .shader = shader,
-      .color_formats = {hdr_format},
+      .color_formats = {render_pass::hdr_format},
       .depth_format = graphics::format::d32_sfloat,
       .cull_mode = cull,
       .front_face = graphics::front_face::counter_clockwise,

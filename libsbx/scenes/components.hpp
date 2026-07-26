@@ -18,6 +18,7 @@
 #include <libsbx/assets/material.hpp>
 #include <libsbx/assets/mesh.hpp>
 #include <libsbx/assets/texture.hpp>
+#include <libsbx/assets/environment_map.hpp>
 
 namespace sbx::scenes {
 
@@ -108,6 +109,11 @@ struct spot_light {
   std::float_t inner_angle{0.4f}; // radians
   std::float_t outer_angle{0.6f}; // radians
 }; // struct spot_light
+
+struct skybox {
+  assets::environment_map_handle environment{};
+  std::float_t intensity{1.0f};
+}; // struct skybox
 
 } // namespace sbx::scenes
 

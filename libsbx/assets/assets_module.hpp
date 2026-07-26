@@ -32,6 +32,7 @@
 #include <libsbx/assets/texture.hpp>
 #include <libsbx/assets/mesh.hpp>
 #include <libsbx/assets/material.hpp>
+#include <libsbx/assets/environment_map.hpp>
 
 namespace sbx::assets {
 
@@ -101,6 +102,10 @@ public:
    */
   auto save_material(const material_handle& material, const std::filesystem::path& path) -> void;
 
+  auto load_environment_map(const math::uuid& id) -> environment_map_handle;
+
+  auto load_environment_map(const std::filesystem::path& path) -> environment_map_handle;
+
   /**
    * @brief Render thread. Turns queued texture loads into GPU images + bindless writes. Copies are
    * recorded by the caller's subsequent upload_context::flush.
@@ -112,6 +117,8 @@ public:
   [[nodiscard]] auto is_resident(const mesh_handle& mesh) const -> bool;
 
   [[nodiscard]] auto is_resident(const material_handle& material) const -> bool;
+
+  [[nodiscard]] auto is_resident(const environment_map_handle& environment) const -> bool;
 
   [[nodiscard]] auto white_texture() const noexcept -> texture_handle {
     return _white;
@@ -190,6 +197,13 @@ private:
     std::shared_ptr<material> record;
   }; // struct pending_material_upload
 
+  struct pending_environment_upload {
+    std::uint32_t index;
+    std::vector<std::byte> pixels;
+    std::uint32_t width;
+    std::uint32_t height;
+  }; // struct pending_environment_upload
+
   auto _create_default_texture(std::array<std::uint8_t, 4u> color) -> texture_handle;
 
   auto _read_or_create_meta(const std::filesystem::path& path) -> math::uuid;
@@ -226,6 +240,10 @@ private:
 
   auto _load_cooked_material(const std::filesystem::path& cooked, const math::uuid& id) -> material_handle;
 
+  auto _cook_environment_map(const std::filesystem::path& source, const std::filesystem::path& cooked) -> bool;
+
+  auto _load_cooked_environment_map(const std::filesystem::path& cooked, std::vector<std::byte>& pixels, std::uint32_t& width, std::uint32_t& height) -> bool;
+
   mutable std::mutex _mutex{};
 
   std::unordered_map<std::string, math::uuid> _uuids{};
@@ -249,6 +267,9 @@ private:
   graphics::buffer::address_type _material_address{0u};
   std::uint32_t _material_count{0u};
   std::unordered_map<math::uuid, std::shared_ptr<material>> _material_files{};
+
+  std::unordered_map<math::uuid, std::shared_ptr<environment_map>> _environment_maps{};
+  std::vector<pending_environment_upload> _pending_environments{};
 
   texture_handle _white{};
   texture_handle _normal{};

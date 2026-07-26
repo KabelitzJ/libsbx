@@ -19,6 +19,7 @@
 
 #include <libsbx/scenes/scenes_module.hpp>
 #include <libsbx/scenes/scene_serializer.hpp>
+#include <libsbx/scenes/components.hpp>
 
 #include <libsbx/render/render_module.hpp>
 
@@ -45,11 +46,15 @@ application::application()
 
   sbx::scenes::scene_serializer::load(scene, "scenes/demo.yaml");
 
+  _camera = scene.find("Camera");
   _duck = scene.find("Duck");
   _damaged_helmet = scene.find("DamagedHelmet");
   _flight_helmet = scene.find("FlightHelmet");
 
-  _camera = fly_camera{scene.find("Camera")};
+  _camera_controller = fly_camera{_camera};
+
+  auto& skybox = _camera.add_component<sbx::scenes::skybox>();
+  skybox.environment = assets_module.load_environment_map("environments/sky.hdr");
 }
 
 application::~application() {
@@ -74,7 +79,7 @@ auto application::update() -> void {
   // auto& flight_helmet_transform = _flight_helmet.transform();
   // flight_helmet_transform.rotation = sbx::math::quaternion{sbx::math::vector3f{0.0f, 1.0f, 0.0f}, _rotation};
 
-  _camera.update();
+  _camera_controller.update();
 }
 
 auto application::fixed_update() -> void {

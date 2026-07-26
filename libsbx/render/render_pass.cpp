@@ -43,7 +43,8 @@ auto submit_draw_commands(render_context& context, const std::vector<draw_comman
     const auto& mesh = *command.mesh;
 
     if (current_mesh != &mesh) {
-      vkCmdBindIndexBuffer(*context.command_buffer, registry.get<graphics::buffer>(mesh.index_buffer()).handle(), 0u, VK_INDEX_TYPE_UINT32);
+      auto& index_buffer = registry.get<graphics::buffer>(mesh.index_buffer());
+      context.command_buffer->bind_index_buffer(index_buffer, 0u, VK_INDEX_TYPE_UINT32);
       current_mesh = &mesh;
     }
 
@@ -60,9 +61,9 @@ auto submit_draw_commands(render_context& context, const std::vector<draw_comman
     auto range = std::array<std::byte, graphics::bindless_table::push_constant_size>{};
     std::memcpy(range.data(), &values, sizeof(push_constants));
 
-    vkCmdPushConstants(*context.command_buffer, bindless_table.pipeline_layout(), VK_SHADER_STAGE_ALL, 0u, static_cast<std::uint32_t>(range.size()), range.data());
+    context.command_buffer->push_constants(bindless_table.pipeline_layout(), VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0u, range);
 
-    vkCmdDrawIndexed(*context.command_buffer, submesh.index_count, command.instance_count, submesh.index_offset, 0, 0u);
+    context.command_buffer->draw_indexed(submesh.index_count, command.instance_count, submesh.index_offset, 0, 0u);
   }
 }
 

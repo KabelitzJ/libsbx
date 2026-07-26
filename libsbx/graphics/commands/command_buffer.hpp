@@ -18,6 +18,7 @@
 
 #include <libsbx/graphics/pipeline/graphics_pipeline.hpp>
 
+#include <libsbx/graphics/bindless_table.hpp>
 #include <libsbx/graphics/types.hpp>
 
 namespace sbx::graphics {
@@ -167,6 +168,8 @@ public:
   auto end_render_pass() -> void;
 
   auto fill_buffer(const VkBuffer& buffer, VkDeviceSize offset, VkDeviceSize size, std::uint32_t data) -> void;
+
+  auto push_constants(const VkPipelineLayout& layout, VkShaderStageFlags stage_flags, std::uint32_t offset, const std::array<std::byte, graphics::bindless_table::push_constant_size>& values) -> void;
 
   auto begin_rendering(const VkRenderingInfo& rendering_info) -> void;
 

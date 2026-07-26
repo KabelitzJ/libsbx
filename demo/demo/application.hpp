@@ -40,11 +40,12 @@ private:
 
   sbx::math::angle _rotation;
 
+  sbx::scenes::scene::node _camera;
   sbx::scenes::scene::node _duck;
   sbx::scenes::scene::node _damaged_helmet;
   sbx::scenes::scene::node _flight_helmet;
 
-  fly_camera _camera;
+  fly_camera _camera_controller;
 
 }; // class application
 

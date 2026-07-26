@@ -33,6 +33,7 @@ auto scene_serializer::save(scene& target, const std::filesystem::path& path) ->
   auto mesh_keys = std::unordered_map<math::uuid, std::string>{};
   auto material_keys = std::unordered_map<math::uuid, std::string>{};
   auto used_keys = std::unordered_set<std::string>{};
+  auto environment_keys = std::unordered_map<math::uuid, std::string>{};
 
   const auto make_key = [&](const std::string& base) {
     auto key = base.empty() ? std::string{"asset"} : base;
@@ -49,6 +50,7 @@ auto scene_serializer::save(scene& target, const std::filesystem::path& path) ->
 
   auto meshes_table = YAML::Node{YAML::NodeType::Sequence};
   auto materials_table = YAML::Node{YAML::NodeType::Sequence};
+  auto environments_table = YAML::Node{YAML::NodeType::Sequence};
 
   for (const auto entity : registry.view<mesh_renderer>()) {
     const auto& renderer = registry.get<mesh_renderer>(entity);
@@ -203,6 +205,32 @@ auto scene_serializer::save(scene& target, const std::filesystem::path& path) ->
       components.push_back(component);
     }
 
+    if (registry.all_of<skybox>(entity)) {
+      const auto& sky = registry.get<skybox>(entity);
+
+      if (sky.environment.is_valid()) {
+        const auto id = sky.environment->id();
+
+        if (!environment_keys.contains(id)) {
+          const auto name = assets_module.path_of(id).stem().string();
+          const auto key = make_key(name);
+          environment_keys.emplace(id, key);
+
+          auto entry = YAML::Node{};
+          entry["key"] = key;
+          entry["name"] = name;
+          entry["uuid"] = id.value();
+          environments_table.push_back(entry);
+        }
+
+        auto component = YAML::Node{};
+        component["type"] = "skybox";
+        component["environment"] = environment_keys.at(id);
+        component["intensity"] = sky.intensity;
+        components.push_back(component);
+      }
+    }
+
     node_yaml["components"] = components;
     nodes_node.push_back(node_yaml);
   }
@@ -223,6 +251,7 @@ auto scene_serializer::save(scene& target, const std::filesystem::path& path) ->
   auto assets_node = YAML::Node{};
   assets_node["static_meshes"] = meshes_table;
   assets_node["materials"] = materials_table;
+  assets_node["environment_maps"] = environments_table;
 
   auto root = YAML::Node{};
   root["metadata"] = metadata;
@@ -277,6 +306,7 @@ auto scene_serializer::load(scene& target, const std::filesystem::path& path) ->
 
   register_category("static_meshes");
   register_category("materials");
+  register_category("environment_maps");
 
   const auto nodes_node = root["nodes"];
 
@@ -337,6 +367,14 @@ auto scene_serializer::load(scene& target, const std::filesystem::path& path) ->
         light.range = component["range"].as<std::float_t>();
         light.inner_angle = component["inner_angle"].as<std::float_t>();
         light.outer_angle = component["outer_angle"].as<std::float_t>();
+      } else if (type == "skybox") {
+        auto& sky = node.add_component<skybox>();
+
+        sky.environment = assets_module.load_environment_map(key_to_uuid.at(component["environment"].as<std::string>()));
+        
+        if (component["intensity"]) {
+          sky.intensity = component["intensity"].as<std::float_t>();
+        } 
       } else {
         utility::logger<"scenes">::warn("Unknown component type '{}'", type);
       }

@@ -14,6 +14,7 @@
 #include <libsbx/assets/material.hpp>
 #include <libsbx/assets/mesh.hpp>
 #include <libsbx/assets/texture.hpp>
+#include <libsbx/assets/environment_map.hpp>
 
 namespace sbx::render {
 
@@ -90,6 +91,8 @@ struct render_packet {
   std::vector<draw_command> transparent_commands{};
   std::vector<math::matrix4x4> transforms{};
   std::vector<light_data> lights{};
+  assets::environment_map_handle environment{};
+  std::float_t environment_intensity{1.0f};
 }; // struct render_packet
 
 } // namespace sbx::render

@@ -103,7 +103,10 @@ bindless_table::bindless_table(const physical_device& physical_device, const log
 
   validate(vkAllocateDescriptorSets(logical_device, &allocate_info, &_descriptor_set), "vkAllocateDescriptorSets");
 
-  const auto push_constant_range = VkPushConstantRange{VK_SHADER_STAGE_ALL, 0u, push_constant_size};
+  auto push_constant_range = VkPushConstantRange{};
+  push_constant_range.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+  push_constant_range.offset = 0u;
+  push_constant_range.size = push_constant_size;
 
   auto pipeline_layout_create_info = VkPipelineLayoutCreateInfo{};
   pipeline_layout_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;

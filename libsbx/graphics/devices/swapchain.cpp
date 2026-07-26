@@ -150,8 +150,8 @@ swapchain::operator handle_type() const noexcept {
   return _handle;
 }
 
-auto swapchain::extent() const noexcept -> const VkExtent2D& {
-  return _extent;
+auto swapchain::extent() const noexcept -> math::vector2u {
+  return math::vector2u{_extent.width, _extent.height};
 }
 
 auto swapchain::is_outdated() const -> bool {

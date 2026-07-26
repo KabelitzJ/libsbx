@@ -220,6 +220,9 @@ target_sources(
     "${CMAKE_SOURCE_DIR}/libsbx/reflection/reflection.cpp"
 
     "${CMAKE_SOURCE_DIR}/libsbx/render/render_module.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/render/render_pass.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/render/geometry_pass.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/render/depth_pre_pass.cpp"
 
     "${CMAKE_SOURCE_DIR}/libsbx/scenes/scene_serializer.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/scenes/scene.cpp"
@@ -401,6 +404,9 @@ target_sources(
 
       "${CMAKE_SOURCE_DIR}/libsbx/render/render_module.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/render/render_packet.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/render/render_pass.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/render/geometry_pass.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/render/depth_pre_pass.hpp"
 
       "${CMAKE_SOURCE_DIR}/libsbx/scenes/components.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/scenes/scene_serializer.hpp"

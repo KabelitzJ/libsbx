@@ -6,6 +6,7 @@
 #include <array>
 #include <condition_variable>
 #include <cstdint>
+#include <memory>
 #include <mutex>
 #include <thread>
 #include <utility>
@@ -28,6 +29,7 @@
 #include <libsbx/scenes/scenes_module.hpp>
 
 #include <libsbx/render/render_packet.hpp>
+#include <libsbx/render/render_pass.hpp>
 
 namespace sbx::render {
 
@@ -58,6 +60,12 @@ private:
 
   auto _render_loop() -> void;
 
+  auto _ensure_resources() -> void;
+
+  auto _resize_depth(const math::vector2u extent) -> void;
+
+  auto _prepare_frame(render_context& context) -> void;
+
   [[nodiscard]] auto _build_packet() -> render_packet;
 
   auto _consume_packet(const render_packet& packet) -> void;
@@ -71,16 +79,13 @@ private:
   render_packet _packet{};
   bool _has_packet{false};
   bool _is_running{false};
-  bool _is_started{false};
 
   std::uint32_t _sampler_index{0u};
 
-  std::array<memory::observer_ptr<graphics::graphics_pipeline>, 2u> _opaque_pipelines{};
-  std::array<memory::observer_ptr<graphics::graphics_pipeline>, 2u> _transparent_pipelines{};
+  std::vector<std::unique_ptr<render_pass>> _passes{};
 
   graphics::image_handle _depth_image{};
-  std::uint32_t _depth_width{0u};
-  std::uint32_t _depth_height{0u};
+  math::vector2u _depth_extent{};
 
   graphics::buffer_handle _frame_buffer{};
   std::array<graphics::buffer::address_type, graphics::swapchain::max_frames_in_flight> _frame_addresses{};

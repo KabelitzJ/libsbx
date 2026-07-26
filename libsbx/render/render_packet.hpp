@@ -64,7 +64,7 @@ struct camera_data {
   float fov_degrees{60.0f};
   float near_plane{0.1f};
   float far_plane{1000.0f};
-  bool active{false};
+  bool is_active{false};
 }; // struct camera_data
 
 enum class light_type : std::uint32_t {

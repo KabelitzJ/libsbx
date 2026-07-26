@@ -7,6 +7,8 @@
 #include <memory>
 #include <vector>
 
+#include <libsbx/math/vector2.hpp>
+
 #include <vulkan/vulkan.h>
 
 namespace sbx::graphics {
@@ -27,7 +29,7 @@ public:
 
   operator handle_type() const noexcept;
 
-  auto extent() const noexcept -> const VkExtent2D&;
+  auto extent() const noexcept -> math::vector2u;
 
   auto is_outdated() const -> bool;
 

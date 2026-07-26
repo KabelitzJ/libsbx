@@ -43,6 +43,7 @@ depth_pre_pass::depth_pre_pass() {
       .depth_test = true,
       .depth_write = true,
       .depth_compare = graphics::compare_operation::less_or_equal,
+      .samples = render_pass::sample_count,
       .name = name
     });
   };

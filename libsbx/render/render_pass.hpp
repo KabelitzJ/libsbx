@@ -46,8 +46,8 @@ struct render_context {
   math::matrix4x4 inverse_view_projection{math::matrix4x4::identity};
 
   graphics::image_handle depth{};
-
   graphics::image_handle color{};
+  graphics::image_handle color_msaa{};
   std::uint32_t color_index{0u};
 
   graphics::buffer::address_type frame_address{0u};
@@ -76,6 +76,7 @@ class render_pass : public utility::noncopyable {
 public:
 
   inline static constexpr auto hdr_format = graphics::format::r16g16b16a16_sfloat;
+  inline static constexpr auto sample_count = graphics::samples::count_4;
 
   virtual ~render_pass() = default;
 

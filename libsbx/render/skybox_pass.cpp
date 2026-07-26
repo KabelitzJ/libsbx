@@ -49,6 +49,7 @@ skybox_pass::skybox_pass() {
       .depth_test = true,
       .depth_write = false,
       .depth_compare = graphics::compare_operation::less_or_equal,
+      .samples = render_pass::sample_count,
       .name = "Skybox"
     });
   };
@@ -68,32 +69,47 @@ auto skybox_pass::execute(render_context& context) -> void {
 
   auto& color = registry.get<graphics::image>(context.color);
   auto& depth = registry.get<graphics::image>(context.depth);
+  auto& color_msaa = registry.get<graphics::image>(context.color_msaa);
 
-  // Order geometry's color writes before this pass's color writes (same HDR attachment).
-  auto color_barrier = graphics::command_buffer::image_transition_data{};
-  color_barrier.image = color;
-  color_barrier.src_stage_mask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
-  color_barrier.src_access_mask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
-  color_barrier.dst_stage_mask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
-  color_barrier.dst_access_mask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
-  color_barrier.old_layout = graphics::image_layout::color_attachment_optimal;
-  color_barrier.new_layout = graphics::image_layout::color_attachment_optimal;
-  color_barrier.aspect_mask = color.aspect();
-  color_barrier.layer_count = 1u;
-  context.command_buffer->transition_image_layout(color_barrier);
+  auto to_color = graphics::command_buffer::image_transition_data{};
+  to_color.image = color_msaa;
+  to_color.src_stage_mask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
+  to_color.src_access_mask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
+  to_color.dst_stage_mask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
+  to_color.dst_access_mask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT;
+  to_color.old_layout = graphics::image_layout::color_attachment_optimal;
+  to_color.new_layout = graphics::image_layout::color_attachment_optimal;
+  to_color.aspect_mask = color_msaa.aspect();
+  to_color.layer_count = 1u;
+  context.command_buffer->transition_image_layout(to_color);
+
+  auto to_resolve = graphics::command_buffer::image_transition_data{};
+  to_resolve.image = color;
+  to_resolve.src_stage_mask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
+  to_resolve.src_access_mask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
+  to_resolve.dst_stage_mask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
+  to_resolve.dst_access_mask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
+  to_resolve.old_layout = graphics::image_layout::color_attachment_optimal;
+  to_resolve.new_layout = graphics::image_layout::color_attachment_optimal;
+  to_resolve.aspect_mask = color.aspect();
+  to_resolve.layer_count = 1u;
+  context.command_buffer->transition_image_layout(to_resolve);
 
   auto color_attachment = VkRenderingAttachmentInfo{};
   color_attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-  color_attachment.imageView = color.view();
+  color_attachment.imageView = color_msaa.view();
   color_attachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-  color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;   // keep the geometry the pass already drew
+  color_attachment.resolveMode = VK_RESOLVE_MODE_AVERAGE_BIT;
+  color_attachment.resolveImageView = color.view();
+  color_attachment.resolveImageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+  color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
   color_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
 
   auto depth_attachment = VkRenderingAttachmentInfo{};
   depth_attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
   depth_attachment.imageView = depth.view();
   depth_attachment.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
-  depth_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;   // test against the scene depth, don't write
+  depth_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
   depth_attachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
 
   auto rendering_info = VkRenderingInfo{};

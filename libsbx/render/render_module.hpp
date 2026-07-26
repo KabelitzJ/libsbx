@@ -104,6 +104,7 @@ private:
 
   graphics::image_handle _depth_image{};
   graphics::image_handle _color_image{};
+  graphics::image_handle _color_msaa_image{};
   std::uint32_t _color_index{0u};
   math::vector2u _target_extent{};
 

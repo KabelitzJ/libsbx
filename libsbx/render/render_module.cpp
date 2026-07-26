@@ -391,6 +391,7 @@ auto render_module::_consume_packet(const render_packet& packet) -> void {
         .prefiltered_count = prefiltered_count,
         .depth = _depth_image,
         .color = _color_image,
+        .color_msaa = _color_msaa_image,
         .color_index = _color_index
       };
 
@@ -498,20 +499,31 @@ auto render_module::_resize_targets(const math::vector2u extent) -> void {
   if (_target_extent != math::vector2u{0u, 0u}) {
     registry.retire(_depth_image, frame_index);
     registry.retire(_color_image, frame_index);
+    registry.retire(_color_msaa_image, frame_index);
   }
 
   _depth_image = registry.emplace<graphics::image>(graphics::image::create_info{
     .extent = math::vector3u{extent, 1u},
     .format = graphics::format::d32_sfloat,
     .usage = graphics::image_usage::depth_stencil_attachment,
+    .samples = render_pass::sample_count,
     .name = "Depth"
+  });
+
+  _color_msaa_image = registry.emplace<graphics::image>(graphics::image::create_info{
+    .extent = math::vector3u{extent, 1u},
+    .format = graphics::format::r16g16b16a16_sfloat,
+    .usage = graphics::image_usage::color_attachment,
+    .samples = render_pass::sample_count,
+    .name = "HDR Color MSAA"
   });
 
   _color_image = registry.emplace<graphics::image>(graphics::image::create_info{
     .extent = math::vector3u{extent, 1u},
     .format = graphics::format::r16g16b16a16_sfloat,
     .usage = graphics::image_usage::color_attachment | graphics::image_usage::sampled,
-    .name = "HDR Color"
+    .samples = graphics::samples::count_1,
+    .name = "HDR Color Resolve"
   });
 
   bindless_table.write_sampled_image(_color_index, registry.get<graphics::image>(_color_image).view());

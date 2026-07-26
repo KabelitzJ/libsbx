@@ -78,6 +78,12 @@ struct frame_data {
   uint light_count;
   uint padding;
   material_data* materials;
+  uint irradiance_index;
+  uint brdf_lut_index;
+  uint prefiltered_base_index;
+  uint prefiltered_count;
+  float environment_intensity;
+  uint pad0;
 }; // struct frame_data
 
 struct push_data {
@@ -95,6 +101,16 @@ struct push_data {
 [[vk::binding(1, 0)]] SamplerState samplers[];
 
 static const float pi = 3.14159265359;
+
+float3 fresnel_schlick_roughness(float cos_theta, float3 f0, float roughness) {
+  float3 r = max(float3(1.0 - roughness), f0);
+
+  return f0 + (r - f0) * pow(clamp(1.0 - cos_theta, 0.0, 1.0), 5.0);
+}
+
+float2 direction_to_equirect(float3 d) {
+  return float2(atan2(d.z, d.x) / (2.0 * pi) + 0.5, acos(clamp(d.y, -1.0, 1.0)) / pi);
+}
 
 float distribution_ggx(float3 n, float3 h, float roughness) {
   float a = roughness * roughness;
@@ -215,11 +231,42 @@ fs_out fragment_main(fs_in input) {
     lo += brdf(n, v, l, albedo, f0, roughness, metallic) * radiance;
   }
 
-  float3 ambient = 0.03 * albedo * ao;
+  float ndv = max(dot(n, v), 0.0);
+  float3 fr = fresnel_schlick_roughness(ndv, f0, roughness);
+  float3 kd = (1.0 - fr) * (1.0 - metallic);
+
+  float3 irradiance = (frame.irradiance_index != 0xFFFFFFFF) ? textures[frame.irradiance_index].Sample(sampler, direction_to_equirect(n)).rgb : float3(0.03, 0.03, 0.03);
+  float3 diffuse = irradiance * albedo;
+
+  float3 specular = float3(0.0, 0.0, 0.0);
+
+  if (frame.prefiltered_count > 0u && frame.brdf_lut_index != 0xFFFFFFFF) {
+    float3 reflection = reflect(-v, n);
+    float2 ruv = direction_to_equirect(reflection);
+
+    float level = roughness * float(frame.prefiltered_count - 1u);
+
+    uint low = (uint)floor(level);
+    uint high = min(low + 1u, frame.prefiltered_count - 1u);
+
+    float3 pa = textures[frame.prefiltered_base_index + low].Sample(sampler, ruv).rgb;
+    float3 pb = textures[frame.prefiltered_base_index + high].Sample(sampler, ruv).rgb;
+
+    float3 prefiltered = lerp(pa, pb, frac(level));
+    float2 brdf = textures[frame.brdf_lut_index].Sample(sampler, float2(ndv, roughness)).rg;
+
+    specular = prefiltered * (fr * brdf.x + brdf.y);
+  }
+
+  float3 ambient = (kd * diffuse + specular) * ao * frame.environment_intensity;
+
   float3 color = ambient + lo + emissive;
 
   fs_out output;
+
   output.color = float4(color, base.a);
+
+  output.color = float4(kd * diffuse * ao, 1.0);
 
   return output;
 }

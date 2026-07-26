@@ -39,6 +39,10 @@ struct render_context {
 
   std::uint32_t environment_index{0xFFFFFFFFu};
   std::float_t environment_intensity{1.0f};
+  std::uint32_t irradiance_index{0xFFFFFFFFu};
+  std::uint32_t brdf_lut_index{0xFFFFFFFFu};
+  std::uint32_t prefiltered_base_index{0u};
+  std::uint32_t prefiltered_count{0u};
   math::matrix4x4 inverse_view_projection{math::matrix4x4::identity};
 
   graphics::image_handle depth{};

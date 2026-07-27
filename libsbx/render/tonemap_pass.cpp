@@ -61,7 +61,6 @@ auto tonemap_pass::execute(render_context& context) -> void {
   auto& frame_context = graphics_module.frame_context();
   auto& swapchain = frame_context.swapchain();
 
-  auto& depth = registry.get<graphics::image>(context.depth);
   auto& color = registry.get<graphics::image>(context.color);
 
   // HDR target: geometry's writes -> this pass's sampled reads.

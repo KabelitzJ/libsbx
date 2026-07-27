@@ -71,10 +71,7 @@ geometry_pass::geometry_pass() {
 auto geometry_pass::execute(render_context& context) -> void {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 
-  auto& bindless_table = graphics_module.bindless_table();
   auto& registry = graphics_module.resource_registry();
-  auto& frame_context = graphics_module.frame_context();
-  auto& swapchain = frame_context.swapchain();
 
   if (!context.packet->camera.is_active) {
     return;

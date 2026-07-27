@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Jonas Kabelitz
 
+#include <common.slang>
+#include <descriptors.slang>
+
 struct vs_in { 
   uint id : SV_VertexID; 
 }; // struct vs_in
@@ -24,23 +27,6 @@ struct push_data {
 }; // struct push_data
 
 [[vk::push_constant]] ConstantBuffer<push_data> push;
-
-[[vk::binding(0, 0)]] Texture2D textures[];
-[[vk::binding(1, 0)]] SamplerState samplers[];
-
-static const float pi = 3.14159265359;
-static const float firefly_clamp = 30.0f;
-
-float3 equirect_direction(float2 uv) {
-  float phi = (uv.x * 2.0 - 1.0) * pi;
-  float theta = uv.y * pi;
-  float st = sin(theta);
-
-  return float3(st * cos(phi), cos(theta), st * sin(phi));
-}
-float2 direction_to_equirect(float3 d) {
-  return float2(atan2(d.z, d.x) / (2.0 * pi) + 0.5, acos(clamp(d.y, -1.0, 1.0)) / pi);
-}
 
 [shader("vertex")]
 vs_out vertex_main(vs_in input) {

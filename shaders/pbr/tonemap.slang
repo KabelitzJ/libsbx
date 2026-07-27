@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Jonas Kabelitz
 
+#include <descriptors.slang>
+
 struct vs_in {
   uint id : SV_VertexID;
 }; // struct vs_in
@@ -24,9 +26,6 @@ struct push_data {
 }; // struct push_data
 
 [[vk::push_constant]] ConstantBuffer<push_data> push;
-
-[[vk::binding(0, 0)]] Texture2D textures[];
-[[vk::binding(1, 0)]] SamplerState samplers[];
 
 static const float3x3 input_matrix = float3x3(
   0.59719, 0.35458, 0.04823,

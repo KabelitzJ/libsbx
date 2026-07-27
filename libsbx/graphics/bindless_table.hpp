@@ -95,7 +95,7 @@ private:
   }; // struct pending_write
 
   struct sampler_entry {
-    sampler::create_info create_info;
+    graphics::sampler::create_info create_info;
     graphics::sampler sampler;
     std::uint32_t index;
   }; // struct sampler_entry

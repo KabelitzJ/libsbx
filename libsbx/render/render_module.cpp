@@ -231,7 +231,6 @@ auto render_module::_build_packet() -> render_packet {
       const auto pipeline_id = material->is_double_sided() ? 1u : 0u;
 
       if (material->alpha() == assets::alpha_mode::blend) {
-        const auto translation = world.matrix[3];
         const auto to_camera = packet.camera.position - math::vector3f{world.matrix[3]};
         const auto depth = to_camera.length_squared();
 
@@ -319,7 +318,6 @@ auto render_module::_consume_packet(const render_packet& packet) -> void {
   auto& assets_module = core::engine::get_module<assets::assets_module>();
 
   auto& frame_context = graphics_module.frame_context();
-  auto& registry = graphics_module.resource_registry();
   auto& upload_context = graphics_module.upload_context();
 
   auto command_buffer = frame_context.begin_frame();
@@ -438,7 +436,6 @@ auto render_module::_ensure_resources() -> void {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
   auto& bindless_table = graphics_module.bindless_table();
   auto& registry = graphics_module.resource_registry();
-  auto& surface = graphics_module.surface();
 
   _sampler_index = bindless_table.sampler_index(graphics::sampler::create_info{});
 

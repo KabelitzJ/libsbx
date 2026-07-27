@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Jonas Kabelitz
 
+#include <common.slang>
+#include <descriptors.slang>
+
 struct vs_out {
   [[vk::location(0)]] float2 clip : TEXCOORD;
   float4 sv_position : SV_Position;
@@ -22,11 +25,6 @@ struct push_data {
 }; // struct push_data
 
 [[vk::push_constant]] ConstantBuffer<push_data> push;
-
-[[vk::binding(0, 0)]] Texture2D textures[];
-[[vk::binding(1, 0)]] SamplerState samplers[];
-
-static const float pi = 3.14159265359;
 
 [shader("vertex")]
 vs_out vertex_main(uint vertex_id : SV_VertexID) {

@@ -52,7 +52,7 @@ window::window(const create_info& create_info)
 
       _handle = glfwCreateWindow(static_cast<int>(_width), static_cast<int>(_height), _title.c_str(), monitor, nullptr);
     },
-    [this, monitor, video_mode](const borderless_create_info& info) {
+    [this, monitor, video_mode]([[maybe_unused]] const borderless_create_info& info) {
       _width = static_cast<std::uint32_t>(video_mode->width);
       _height = static_cast<std::uint32_t>(video_mode->height);
 

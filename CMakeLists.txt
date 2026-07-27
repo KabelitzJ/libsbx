@@ -601,13 +601,11 @@ target_compile_options(
 )
 
 set(_sbx_link_options)
-set(_sbx_compile_options)
 
 if(MINGW)
   list(APPEND _sbx_link_options -Wl,--disable-dynamicbase,--default-image-base-low)
 endif()
 
-target_compile_options(libsbx PRIVATE ${_sbx_compile_options})
 target_link_options(libsbx PUBLIC ${_sbx_link_options})
 
 # Scripting: dotnet build targets

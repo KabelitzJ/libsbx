@@ -154,7 +154,7 @@ public:
 		}
   }
 
-  [[constexpr]] static auto euler_angles(const basic_quaternion& quaternion) -> vector_type {
+  [[nodiscard]] static constexpr auto euler_angles(const basic_quaternion& quaternion) -> vector_type {
     const auto x = quaternion.x();
     const auto y = quaternion.y();
     const auto z = quaternion.z();

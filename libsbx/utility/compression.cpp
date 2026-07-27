@@ -9,22 +9,24 @@
 namespace sbx::utility {
 
 auto basic_compressor<compression_type::lz4>::compress(std::span<const char> input) -> std::vector<char> {
-  auto compressed = std::vector<char>{};
-  compressed.resize(LZ4_compressBound(static_cast<int>(input.size())));
+  const auto bounds = LZ4_compressBound(static_cast<std::int32_t>(input.size()));
 
-  const auto compressed_size = LZ4_compress_default(input.data(), compressed.data(), static_cast<int>(input.size()), static_cast<int>(compressed.size()));
+  auto compressed = std::vector<char>{};
+  compressed.resize(static_cast<std::size_t>(bounds));
+
+  const auto compressed_size = LZ4_compress_default(input.data(), compressed.data(), static_cast<std::int32_t>(input.size()), static_cast<std::int32_t>(compressed.size()));
 
   if (compressed_size <= 0) {
     throw compression_error{"LZ4 compression failed"};
   }
 
-  compressed.resize(compressed_size);
+  compressed.resize(static_cast<std::size_t>(compressed_size));
 
   return compressed;
 }
 
 auto basic_compressor<compression_type::lz4>::decompress(std::span<const char> input, std::span<char> output) -> void {
-  const auto result = LZ4_decompress_safe(input.data(), output.data(), static_cast<int>(input.size()), static_cast<int>(output.size()));
+  const auto result = LZ4_decompress_safe(input.data(), output.data(), static_cast<std::int32_t>(input.size()), static_cast<std::int32_t>(output.size()));
 
   if (result < 0) {
     throw decompression_error{"LZ4 decompression failed"};
@@ -41,7 +43,7 @@ auto basic_compressor<compression_type::zstd>::compress(std::span<const char> in
     throw compression_error{ZSTD_getErrorName(compressed_size)};
   }
 
-  compressed.resize(compressed_size);
+  compressed.resize(static_cast<std::size_t>(compressed_size));
 
   return compressed;
 }

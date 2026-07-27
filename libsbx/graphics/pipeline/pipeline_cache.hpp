@@ -28,7 +28,7 @@ namespace sbx::graphics {
  * pipelines are the same iff their pipeline_state compares equal — this is the cache key.
  */
 struct pipeline_state {
-  shader::id_type shader{0u};
+  graphics::shader::id_type shader{0u};
   std::vector<graphics::format> color_formats{};
   graphics::format depth_format{format::undefined};
   graphics::primitive_topology topology{primitive_topology::triangle_list};

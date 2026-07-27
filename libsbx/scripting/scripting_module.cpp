@@ -97,7 +97,7 @@ scripting_module::scripting_module() {
 }
 
 scripting_module::~scripting_module() {
-  _runtime.shutdown();
+  // _runtime.shutdown();
 }
 
 auto scripting_module::update() -> void {

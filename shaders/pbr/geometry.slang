@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Jonas Kabelitz
 
+#include <common.slang>
+#include <descriptors.slang>
+#include <frame_data.slang>
+
 struct vs_in {
   [[vk::location(0)]] uint vertex_id : SV_VertexID;
   [[vk::location(1)]] uint instance_id : SV_InstanceID;
@@ -25,67 +29,6 @@ struct fs_out {
   float4 color : SV_Target0;
 }; // struct fs_out
 
-struct vertex {
-  float3 position;
-  float3 normal;
-  float2 uv;
-  float4 tangent;
-}; // struct vertex
-
-enum class material_flags : uint {
-  none = 0,
-  alpha_masked = 1 << 0
-}; // enum material_flags
-
-struct material_data {
-  float4 base_color_factor;
-  float4 emissive_factor;
-  uint albedo_index;
-  uint normal_index;
-  uint metallic_roughness_index;
-  uint occlusion_index;
-  uint emissive_index;
-  float metallic_factor;
-  float roughness_factor;
-  float alpha_cutoff;
-  uint flags;
-  uint pad0;
-  uint pad1;
-  uint pad2;
-}; // struct material_data
-
-enum class light_type : uint {
-  directional = 0,
-  point = 1,
-  spot = 2
-}; // enum light_type
-
-struct light_data {
-  float4 color;
-  float4 position;
-  float4 direction;
-  light_type type;
-  float inner_cos;
-  float outer_cos;
-  uint padding;
-}; // struct light_data
-
-struct frame_data {
-  float4x4 view;
-  float4x4 projection;
-  float4 camera_position;
-  light_data* lights;
-  uint light_count;
-  uint padding;
-  material_data* materials;
-  uint irradiance_index;
-  uint brdf_lut_index;
-  uint prefiltered_base_index;
-  uint prefiltered_count;
-  float environment_intensity;
-  uint pad0;
-}; // struct frame_data
-
 struct push_data {
   frame_data* frame;
   vertex* vertices;
@@ -97,19 +40,10 @@ struct push_data {
 
 [[vk::push_constant]] ConstantBuffer<push_data> push;
 
-[[vk::binding(0, 0)]] Texture2D textures[];
-[[vk::binding(1, 0)]] SamplerState samplers[];
-
-static const float pi = 3.14159265359;
-
 float3 fresnel_schlick_roughness(float cos_theta, float3 f0, float roughness) {
   float3 r = max(float3(1.0 - roughness), f0);
 
   return f0 + (r - f0) * pow(clamp(1.0 - cos_theta, 0.0, 1.0), 5.0);
-}
-
-float2 direction_to_equirect(float3 d) {
-  return float2(atan2(d.z, d.x) / (2.0 * pi) + 0.5, acos(clamp(d.y, -1.0, 1.0)) / pi);
 }
 
 float distribution_ggx(float3 n, float3 h, float roughness) {

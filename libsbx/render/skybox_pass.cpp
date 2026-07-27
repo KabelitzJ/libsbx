@@ -40,21 +40,17 @@ skybox_pass::skybox_pass() {
 
   const auto& shader = shader_cache.get({"shaders/pbr/skybox.slang", entry_points});
 
-  const auto make = [&](graphics::cull_mode cull, const std::string& name) {
-    return pipeline_cache.get(graphics::graphics_pipeline::create_info{
-      .shader = shader,
-      .color_formats = {render_pass::hdr_format},
-      .depth_format = graphics::format::d32_sfloat,
-      .cull_mode = graphics::cull_mode::none,
-      .depth_test = true,
-      .depth_write = false,
-      .depth_compare = graphics::compare_operation::less_or_equal,
-      .samples = render_pass::sample_count,
-      .name = "Skybox"
-    });
-  };
-
-  _pipeline = make(graphics::cull_mode::back, "Skybox");
+  _pipeline = pipeline_cache.get(graphics::graphics_pipeline::create_info{
+    .shader = shader,
+    .color_formats = {render_pass::hdr_format},
+    .depth_format = graphics::format::d32_sfloat,
+    .cull_mode = graphics::cull_mode::none,
+    .depth_test = true,
+    .depth_write = false,
+    .depth_compare = graphics::compare_operation::less_or_equal,
+    .samples = render_pass::sample_count,
+    .name = "Skybox"
+  });
 }
 
 auto skybox_pass::execute(render_context& context) -> void {

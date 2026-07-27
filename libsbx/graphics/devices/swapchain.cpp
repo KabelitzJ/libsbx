@@ -60,7 +60,7 @@ swapchain::swapchain(const std::unique_ptr<swapchain>& old_swapchain)
 	for (const auto& composite_alpha_flag : composite_alpha_flags) {
 		if (surface_capabilities.supportedCompositeAlpha & composite_alpha_flag) {
 			_composite_alpha = composite_alpha_flag;
-			break;
+      break;
 		}
 	}
 

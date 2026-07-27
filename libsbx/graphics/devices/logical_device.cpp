@@ -171,13 +171,14 @@ logical_device::logical_device(const physical_device& physical_device) {
   const auto transfer_queue_family_index = queue_family_indices.transfer.value();
 
   auto queue_create_infos = std::vector<VkDeviceQueueCreateInfo>{};
-	auto queue_priorities = 0.0f;
+
+	auto queue_priorities = std::array<std::float_t, 2u>{0.0f, 0.0f};
 
   auto graphics_queue_create_info = VkDeviceQueueCreateInfo{};
   graphics_queue_create_info.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
   graphics_queue_create_info.queueFamilyIndex = graphics_queue_family_index;
   graphics_queue_create_info.queueCount = (present_queue_family_index != graphics_queue_family_index) ? 2u : 1u;
-  graphics_queue_create_info.pQueuePriorities = &queue_priorities;
+  graphics_queue_create_info.pQueuePriorities = queue_priorities.data();
 
   queue_create_infos.emplace_back(graphics_queue_create_info);
 
@@ -186,7 +187,7 @@ logical_device::logical_device(const physical_device& physical_device) {
     compute_queue_create_info.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
     compute_queue_create_info.queueFamilyIndex = compute_queue_family_index;
     compute_queue_create_info.queueCount = 1;
-    compute_queue_create_info.pQueuePriorities = &queue_priorities;
+    compute_queue_create_info.pQueuePriorities = queue_priorities.data();
 
     queue_create_infos.emplace_back(compute_queue_create_info);
   }
@@ -196,7 +197,7 @@ logical_device::logical_device(const physical_device& physical_device) {
     transfer_queue_create_info.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
     transfer_queue_create_info.queueFamilyIndex = transfer_queue_family_index;
     transfer_queue_create_info.queueCount = 1;
-    transfer_queue_create_info.pQueuePriorities = &queue_priorities;
+    transfer_queue_create_info.pQueuePriorities = queue_priorities.data();
 
     queue_create_infos.emplace_back(transfer_queue_create_info);
   }

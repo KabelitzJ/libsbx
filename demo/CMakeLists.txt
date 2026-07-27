@@ -10,6 +10,7 @@ target_sources(
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/demo.cpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/application.cpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/fly_camera.cpp"
+    "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/memory.cpp"
   PUBLIC
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/application.hpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/fly_camera.hpp"

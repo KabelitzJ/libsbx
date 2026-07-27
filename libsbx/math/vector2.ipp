@@ -145,3 +145,18 @@ inline auto YAML::convert<sbx::math::basic_vector2<Type>>::decode(const YAML::No
 
   return true;
 }
+
+template<sbx::math::scalar Type>
+template<typename ParseContext>
+inline constexpr auto fmt::formatter<sbx::math::basic_vector2<Type>>::parse(ParseContext& context) noexcept -> decltype(context.begin()) {
+  return context.begin();
+}
+
+template<sbx::math::scalar Type>
+template<typename FormatContext>
+inline auto fmt::formatter<sbx::math::basic_vector2<Type>>::format(const sbx::math::basic_vector2<Type>& vector, FormatContext& context) const noexcept -> decltype(context.out()) {
+  constexpr auto format = std::is_floating_point_v<Type> ? "[{:.2f}, {:.2f}]" : "[{}, {}]";
+
+  return fmt::format_to(context.out(), format, vector.x(), vector.y());
+}
+

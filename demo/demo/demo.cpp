@@ -25,9 +25,7 @@
 
 #include <libsbx/ecs/registry.hpp>
 
-#include <libsbx/reflection/enum.hpp>
-#include <libsbx/reflection/struct.hpp>
-#include <libsbx/reflection/formatter.hpp>
+#include <libsbx/reflection/reflection.hpp>
 
 #include <demo/application.hpp>
 
@@ -40,12 +38,6 @@ using module_list = sbx::core::module_list<
   sbx::scripting::scripting_module,
   sbx::render::render_module
 >;
-
-static_assert(
-    !std::meta::annotations_of_with_type(
-        std::meta::template_of(^^sbx::math::basic_vector2<unsigned int>),
-        ^^sbx::reflection::reflected).empty(),
-    "reflected not seen on template");
 
 auto main(int argc, const char** argv) -> int {
   auto args = std::vector<std::string_view>{argv, argv + argc};

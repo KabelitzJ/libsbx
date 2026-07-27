@@ -13,7 +13,7 @@
 
 #include <yaml-cpp/yaml.h>
 
-#include <libsbx/reflection/formatter.hpp>
+#include <fmt/format.h>
 
 #include <libsbx/math/concepts.hpp>
 #include <libsbx/math/vector.hpp>
@@ -26,7 +26,7 @@ namespace sbx::math {
  * @tparam Type The type of the vectors components.
  */
 template<scalar Type>
-class [[=sbx::reflection::reflected]] basic_vector2 : public basic_vector<2u, Type> {
+class basic_vector2 : public basic_vector<2u, Type> {
 
   using base_type = basic_vector<2u, Type>;
 
@@ -68,11 +68,11 @@ public:
 
   [[nodiscard]] constexpr auto x() noexcept -> reference;
 
-  [[nodiscard]] [[=sbx::reflection::expose{}]] constexpr auto x() const noexcept -> const_reference;
+  [[nodiscard]] constexpr auto x() const noexcept -> const_reference;
 
   [[nodiscard]] constexpr auto y() noexcept -> reference;
 
-  [[nodiscard]] [[=sbx::reflection::expose{}]] constexpr auto y() const noexcept -> const_reference;
+  [[nodiscard]] constexpr auto y() const noexcept -> const_reference;
 
 }; // class basic_vector2
 
@@ -127,6 +127,17 @@ template<sbx::math::scalar Type>
 auto operator<<(YAML::Emitter& out, const sbx::math::basic_vector2<Type>& vector) -> YAML::Emitter& {
   return out << YAML::convert<sbx::math::basic_vector2<Type>>::encode(vector);
 }
+
+template<sbx::math::scalar Type>
+struct fmt::formatter<sbx::math::basic_vector2<Type>> {
+
+  template<typename ParseContext>
+  constexpr auto parse(ParseContext& context) noexcept -> decltype(context.begin());
+
+  template<typename FormatContext>
+  auto format(const sbx::math::basic_vector2<Type>& vector, FormatContext& context) const noexcept -> decltype(context.out());
+
+}; // struct fmt::formatter<sbx::math::basic_vector3<Type>>
 
 #include <libsbx/math/vector2.ipp>
 

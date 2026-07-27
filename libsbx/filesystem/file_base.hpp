@@ -7,7 +7,9 @@
 #include <vector>
 #include <memory>
 
-#include <libsbx/utility/enum.hpp>
+#include <libsbx/reflection/enum.hpp>
+
+#include <libsbx/utility/bit.hpp>
 
 #include <libsbx/filesystem/file_info.hpp>
 
@@ -23,7 +25,7 @@ public:
     set
   }; // enum class origin
     
-  enum class mode : std::uint8_t {
+  enum class [[=reflection::bit_field]] mode : std::uint8_t {
     read = utility::bit_v<0>,
     write = utility::bit_v<1>,
     append = utility::bit_v<2>,
@@ -94,8 +96,5 @@ inline bool operator==(const file_ptr& lhs, const file_ptr& rhs) {
 }
 
 } // namespace sbx::filesystem
-
-template<>
-struct sbx::utility::is_bit_field<sbx::filesystem::file_base::mode> : std::true_type { };
 
 #endif // LIBSBX_FILESYSTEM_FILE_BASE_HPP_

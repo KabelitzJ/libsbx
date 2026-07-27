@@ -4,6 +4,8 @@
 
 #include <cstring>
 
+#include <libsbx/reflection/enum.hpp>
+
 #include <libsbx/utility/assert.hpp>
 
 #include <libsbx/core/engine.hpp>
@@ -57,7 +59,7 @@ buffer::buffer(const create_info& create_info)
 
   _mapped = allocation_info.pMappedData;
 
-  if (utility::to_underlying(create_info.usage & buffer_usage::device_address) != 0) {
+  if (reflection::to_underlying(create_info.usage & buffer_usage::device_address) != 0) {
     auto address_info = VkBufferDeviceAddressInfo{};
     address_info.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
     address_info.buffer = _handle;

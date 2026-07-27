@@ -10,15 +10,12 @@ namespace sbx::utility {
 
 namespace detail {
 
-template<typename Scope>
 struct id_generator final {
   [[nodiscard]] static auto next() noexcept -> std::uint32_t {
     static auto id = std::uint32_t{};
     return id++;
   }
 }; // struct id_generator
-
-struct default_type_id_scope { };
 
 } // namespace detail
 
@@ -28,11 +25,10 @@ struct default_type_id_scope { };
  * @tparam Scope The scope in which the type ID is generated.
  * @tparam Type The type for which the ID is generated.
  */
-template<typename Scope, typename Type>
-struct scoped_type_id {
+template<typename Type>
+struct type_id {
 
   using type = Type;
-  using scope = Scope;
 
   /**
    * @brief Generates a unique ID for the type.
@@ -40,7 +36,7 @@ struct scoped_type_id {
    * @return A unique ID for the type.
    */
   [[nodiscard]] static auto value() noexcept -> std::uint32_t {
-    static const auto value = detail::id_generator<Scope>::next();
+    static const auto value = detail::id_generator::next();
 
     return value;
   }
@@ -50,14 +46,6 @@ struct scoped_type_id {
   }
 
 }; // struct type_id
-
-/**
- * @brief A default tagged type ID generator.
- *
- * @tparam Type The type for which the ID is generated.
- */
-template<typename Type>
-using type_id = scoped_type_id<detail::default_type_id_scope, Type>;
 
 } // namespace sbx::utility
 

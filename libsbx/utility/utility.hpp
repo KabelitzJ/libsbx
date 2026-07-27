@@ -14,11 +14,10 @@
 #define LIBSBX_UTILITY_HPP_
 
 #include <libsbx/utility/assert.hpp>
-#include <libsbx/utility/bitmask.hpp>
+#include <libsbx/utility/bit.hpp>
 #include <libsbx/utility/compression.hpp>
 #include <libsbx/utility/concepts.hpp>
 #include <libsbx/utility/enable_private_constructor.hpp>
-#include <libsbx/utility/enum.hpp>
 #include <libsbx/utility/expected.hpp>
 #include <libsbx/utility/fast_mod.hpp>
 #include <libsbx/utility/hash.hpp>

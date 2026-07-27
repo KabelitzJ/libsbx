@@ -2,7 +2,7 @@
 // Copyright (c) 2026 Jonas Kabelitz
 #include <libsbx/math/color.hpp>
 
-#include <libsbx/utility/enum.hpp>
+#include <libsbx/reflection/enum.hpp>
 
 namespace sbx::math {
 
@@ -22,7 +22,7 @@ enum class component : std::uint8_t {
 }; // enum class component
 
 static constexpr auto extract_component(std::uint32_t rgba, component component) noexcept -> std::float_t {
-  return scale(extract(rgba, utility::to_underlying(component)));
+  return scale(extract(rgba, reflection::to_underlying(component)));
 }
 
 color::color() noexcept

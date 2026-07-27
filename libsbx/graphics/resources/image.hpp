@@ -10,7 +10,6 @@
 
 #include <vk_mem_alloc.h>
 
-#include <libsbx/utility/enum.hpp>
 #include <libsbx/utility/noncopyable.hpp>
 
 #include <libsbx/math/vector3.hpp>

@@ -2,6 +2,8 @@
 // Copyright (c) 2026 Jonas Kabelitz
 #include <libsbx/scripting/interop.hpp>
 
+#include <libsbx/reflection/enum.hpp>
+
 #include <libsbx/utility/logger.hpp>
 
 #include <libsbx/core/engine.hpp>
@@ -389,7 +391,7 @@ auto interop::log_log_message(log_level level, managed::string message) -> void 
 
 //   auto& character_controller = graph.get_component<physics::character_controller>(static_cast<scenes::node>(node));
 
-//   *flags = utility::to_underlying(character_controller.flags);
+//   *flags = reflection::to_underlying(character_controller.flags);
 // }
 
 // auto interop::character_controller_move(std::uint32_t node, math::vector3* displacement) -> void {

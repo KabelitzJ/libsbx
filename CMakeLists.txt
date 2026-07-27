@@ -11,7 +11,7 @@ include(CMakePackageConfigHelpers)
 
 set(CMAKE_PROJECT_NAME_UPPER "SBX" CACHE STRING "CMAKE_PROJECT_NAME_UPPER" FORCE)
 
-set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD 26)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
@@ -547,7 +547,7 @@ if(MSVC)
   set_target_properties(libsbx PROPERTIES PREFIX "lib")
 endif()
 
-target_compile_features(libsbx PUBLIC cxx_std_23)
+target_compile_features(libsbx PUBLIC cxx_std_26)
 
 target_compile_definitions(
   libsbx
@@ -594,6 +594,8 @@ set(_sbx_warning_options_msvc
 
 target_compile_options(
   libsbx
+  PUBLIC
+    $<$<COMPILE_LANG_AND_ID:CXX,GNU>:-freflection>
   PRIVATE
     "$<$<COMPILE_LANG_AND_ID:CXX,GNU,Clang,AppleClang>:${_sbx_warning_options_gnu_clang}>"
     "$<$<COMPILE_LANG_AND_ID:CXX,GNU>:${_sbx_warning_options_gnu}>"

@@ -25,7 +25,7 @@ public:
     set
   }; // enum class origin
     
-  enum class [[=reflection::bit_field]] mode : std::uint8_t {
+  enum class [[=reflection::bit_field{}]] mode : std::uint8_t {
     read = utility::bit_v<0>,
     write = utility::bit_v<1>,
     append = utility::bit_v<2>,

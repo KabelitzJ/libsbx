@@ -399,9 +399,8 @@ target_sources(
       "${CMAKE_SOURCE_DIR}/libsbx/platform/platform_module.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/platform/window.hpp"
 
-      "${CMAKE_SOURCE_DIR}/libsbx/reflection/description.hpp"
-      "${CMAKE_SOURCE_DIR}/libsbx/reflection/enumerator.hpp"
-      "${CMAKE_SOURCE_DIR}/libsbx/reflection/member.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/reflection/enum.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/reflection/annotations.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/reflection/reflection.hpp"
 
       "${CMAKE_SOURCE_DIR}/libsbx/render/render_module.hpp"
@@ -462,13 +461,12 @@ target_sources(
 
       "${CMAKE_SOURCE_DIR}/libsbx/utility/algorithm.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/utility/assert.hpp"
-      "${CMAKE_SOURCE_DIR}/libsbx/utility/bitmask.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/utility/bit.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/utility/cast.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/utility/compression.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/utility/concepts.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/utility/crc32.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/utility/enable_private_constructor.hpp"
-      "${CMAKE_SOURCE_DIR}/libsbx/utility/enum.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/utility/exception.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/utility/expected.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/utility/fast_mod.hpp"
@@ -518,7 +516,6 @@ target_link_libraries(
     GPUOpen::VulkanMemoryAllocator
     libzstd_static
     lz4_static
-    magic_enum::magic_enum
     meshoptimizer
     Nethost::nethost
     slang::slang

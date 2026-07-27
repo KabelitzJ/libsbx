@@ -7,15 +7,48 @@
 
 namespace sbx::reflection {
 
-namespace detail {
+struct reflected { };
 
-struct reflected_tag {};
-struct bit_field_tag {};
+struct skip { };
 
-} // namespace detail
+struct bit_field { };
 
-inline constexpr auto reflected = detail::reflected_tag{};
-inline constexpr auto bit_field = detail::bit_field_tag{};
+struct expose { };
+
+template<std::size_t Size>
+struct rename {
+
+  std::array<char, Size - 1> data;
+
+  consteval rename(const char (&string)[Size]) {
+    for (auto i = std::size_t{0}; i < Size - 1; ++i) {
+      data[i] = string[i];
+    }
+  }
+
+  constexpr auto view() const noexcept -> std::string_view {
+    return {data.data(), data.size()};
+  }
+
+}; // struct rename
+
+template<std::size_t Size>
+struct format {
+
+  std::array<char, Size - 1> data;
+
+  consteval format(const char (&string)[Size]) {
+    for (auto i = std::size_t{0}; i < Size - 1; ++i) {
+      data[i] = string[i];
+    }
+  }
+
+  constexpr auto view() const noexcept -> std::string_view {
+    return {data.data(), data.size()};
+  }
+
+}; // struct format
+
 
 } // namespace sbx::reflection
 

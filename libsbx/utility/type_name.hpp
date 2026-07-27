@@ -21,30 +21,30 @@ constexpr auto parse_type_name(std::string_view prefix, std::string_view suffix,
 
 } // namespace detail
 
-template<typename Type>
-constexpr auto type_name() -> std::string_view {
-#if defined(SBX_COMPILER_CLANG)
-  constexpr auto prefix = std::string_view{"[Type = "};
-  constexpr auto suffix = "]";
-  constexpr auto function = std::string_view{__PRETTY_FUNCTION__};
+// template<typename Type>
+// constexpr auto type_name() -> std::string_view {
+// #if defined(SBX_COMPILER_CLANG)
+//   constexpr auto prefix = std::string_view{"[Type = "};
+//   constexpr auto suffix = "]";
+//   constexpr auto function = std::string_view{__PRETTY_FUNCTION__};
 
-  return detail::parse_type_name(prefix, suffix, function);
-#elif defined(SBX_COMPILER_GNU)
-  constexpr auto prefix = std::string_view{"with Type = "};
-  constexpr auto suffix = "; ";
-  constexpr auto function = std::string_view{__PRETTY_FUNCTION__};
+//   return detail::parse_type_name(prefix, suffix, function);
+// #elif defined(SBX_COMPILER_GNU)
+//   constexpr auto prefix = std::string_view{"with Type = "};
+//   constexpr auto suffix = "; ";
+//   constexpr auto function = std::string_view{__PRETTY_FUNCTION__};
 
-  return detail::parse_type_name(prefix, suffix, function);
-#elif defined(SBX_COMPILER_MSVC)
-  constexpr auto prefix = std::string_view{"type_name<"};
-  constexpr auto suffix = ">(void)";
-  constexpr auto function = std::string_view{__FUNCSIG__};
+//   return detail::parse_type_name(prefix, suffix, function);
+// #elif defined(SBX_COMPILER_MSVC)
+//   constexpr auto prefix = std::string_view{"type_name<"};
+//   constexpr auto suffix = ">(void)";
+//   constexpr auto function = std::string_view{__FUNCSIG__};
 
-  return detail::parse_type_name(prefix, suffix, function);
-#else
-  return typeid(Type).name(); 
-#endif
-}
+//   return detail::parse_type_name(prefix, suffix, function);
+// #else
+//   return typeid(Type).name(); 
+// #endif
+// }
 
 } // namespace sbx::utility
 

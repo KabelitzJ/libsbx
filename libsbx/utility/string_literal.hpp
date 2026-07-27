@@ -44,6 +44,12 @@ public:
     detail::copy(data, data + Size - 1, _data.data());
   }
 
+  template<std::size_t OtherSize>
+  requires (OtherSize <= Size)
+  consteval basic_string_literal(const character_type (&data)[OtherSize]) noexcept {
+    detail::copy(data, data + OtherSize - 1, _data.data());
+  }
+
   constexpr auto begin() const noexcept -> iterator {
     return std::begin(_data);
   }

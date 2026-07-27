@@ -4,5 +4,8 @@
 #define LIBSBX_REFLECTION_HPP_
 
 #include <libsbx/reflection/enum.hpp>
+#include <libsbx/reflection/struct.hpp>
+#include <libsbx/reflection/formatter.hpp>
+#include <libsbx/reflection/type_name.hpp>
 
 #endif // LIBSBX_REFLECTION_HPP_

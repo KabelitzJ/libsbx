@@ -20,7 +20,7 @@ consteval auto enum_count() -> std::size_t {
 }
 
 template<typename Enum>
-concept reflected_enum = std::meta::is_enum_type(^^Enum) && !std::meta::annotations_of_with_type(^^Enum, std::meta::remove_cv(^^decltype(reflected))).empty();
+concept reflected_enum = std::meta::is_enum_type(^^Enum) && !std::meta::annotations_of_with_type(^^Enum, std::meta::remove_cv(^^reflected)).empty();
 
 template<reflected_enum Enum, typename Callable>
 constexpr auto for_each(Callable&& callable) -> void {
@@ -76,7 +76,7 @@ constexpr auto from_underlying(const std::underlying_type_t<Enum> value) -> Enum
 
 template<typename Enum>
 requires (std::is_enum_v<Enum>)
-inline constexpr auto is_bit_field_v = !std::meta::annotations_of_with_type(^^Enum, std::meta::remove_cv(^^decltype(bit_field))).empty();
+inline constexpr auto is_bit_field_v = !std::meta::annotations_of_with_type(^^Enum, std::meta::remove_cv(^^bit_field)).empty();
 
 } // namespace sbx::reflection
 

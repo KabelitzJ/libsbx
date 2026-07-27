@@ -6,7 +6,7 @@
 
 #include <array>
 
-#include <magic_enum/magic_enum.hpp>
+#include <libsbx/reflection/enum.hpp>
 
 #include <libsbx/utility/logger.hpp>
 
@@ -17,10 +17,10 @@
 
 namespace sbx::graphics::detail {
 
-static auto contexts = std::array<TracyVkCtx, magic_enum::enum_count<queue::type>()>{};
+static auto contexts = std::array<TracyVkCtx, reflection::enum_count<queue::type>()>{};
 
 auto register_gpu_context(const queue::type type, std::string_view name, const instance& instance, const physical_device& physical_device, const logical_device& logical_device) -> void {
-  const auto index = utility::to_underlying(type);
+  const auto index = reflection::to_underlying(type);
 
   const auto& queue = logical_device.queue(type);
 
@@ -70,7 +70,7 @@ auto destroy_gpu_contexts() -> void {
 }
 
 auto gpu_context(const queue::type type) noexcept -> TracyVkCtx {
-  return contexts[utility::to_underlying(type)];
+  return contexts[reflection::to_underlying(type)];
 }
 
 } // namespace sbx::graphics::detail

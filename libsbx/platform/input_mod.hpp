@@ -5,23 +5,21 @@
 
 #include <cinttypes>
 
-#include <libsbx/utility/bitmask.hpp>
+#include <libsbx/reflection/enum.hpp>
+
+#include <libsbx/utility/bit.hpp>
 
 namespace sbx::platform {
 
-// Values match the glfw modifier bits; verified by static_asserts in window.cpp.
-enum class input_mod : std::int32_t {
-  shift = 0x0001,
-  control = 0x0002,
-  alt = 0x0004,
-  super = 0x0008,
-  caps_lock = 0x0010,
-  num_lock = 0x0020,
+enum class [[=reflection::bit_field{}]] input_mod : std::int32_t {
+  shift = utility::bit_v<0>,
+  control = utility::bit_v<1>,
+  alt = utility::bit_v<2>,
+  super = utility::bit_v<3>,
+  caps_lock = utility::bit_v<4>,
+  num_lock = utility::bit_v<5>,
 }; // enum class input_mod
 
 } // namespace sbx::platform
-
-template<>
-struct sbx::utility::enable_bitmask_operators<sbx::platform::input_mod> : std::true_type { };
 
 #endif // LIBSBX_PLATFORM_INPUT_MOD_HPP_

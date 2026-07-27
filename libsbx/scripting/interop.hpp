@@ -5,7 +5,8 @@
 
 #include <functional>
 
-#include <libsbx/utility/enum.hpp>
+#include <libsbx/reflection/enum.hpp>
+
 #include <libsbx/utility/type_name.hpp>
 #include <libsbx/utility/exception.hpp>
 

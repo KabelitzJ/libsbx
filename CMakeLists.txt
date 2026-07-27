@@ -11,7 +11,7 @@ include(CMakePackageConfigHelpers)
 
 set(CMAKE_PROJECT_NAME_UPPER "SBX" CACHE STRING "CMAKE_PROJECT_NAME_UPPER" FORCE)
 
-set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD 26)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
@@ -399,9 +399,7 @@ target_sources(
       "${CMAKE_SOURCE_DIR}/libsbx/platform/platform_module.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/platform/window.hpp"
 
-      "${CMAKE_SOURCE_DIR}/libsbx/reflection/description.hpp"
-      "${CMAKE_SOURCE_DIR}/libsbx/reflection/enumerator.hpp"
-      "${CMAKE_SOURCE_DIR}/libsbx/reflection/member.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/reflection/enum.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/reflection/reflection.hpp"
 
       "${CMAKE_SOURCE_DIR}/libsbx/render/render_module.hpp"
@@ -462,13 +460,12 @@ target_sources(
 
       "${CMAKE_SOURCE_DIR}/libsbx/utility/algorithm.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/utility/assert.hpp"
-      "${CMAKE_SOURCE_DIR}/libsbx/utility/bitmask.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/utility/bit.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/utility/cast.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/utility/compression.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/utility/concepts.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/utility/crc32.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/utility/enable_private_constructor.hpp"
-      "${CMAKE_SOURCE_DIR}/libsbx/utility/enum.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/utility/exception.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/utility/expected.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/utility/fast_mod.hpp"
@@ -518,7 +515,6 @@ target_link_libraries(
     GPUOpen::VulkanMemoryAllocator
     libzstd_static
     lz4_static
-    magic_enum::magic_enum
     meshoptimizer
     Nethost::nethost
     slang::slang
@@ -594,6 +590,8 @@ set(_sbx_warning_options_msvc
 
 target_compile_options(
   libsbx
+  PUBLIC
+    $<$<COMPILE_LANG_AND_ID:CXX,GNU>:-freflection>
   PRIVATE
     "$<$<COMPILE_LANG_AND_ID:CXX,GNU,Clang,AppleClang>:${_sbx_warning_options_gnu_clang}>"
     "$<$<COMPILE_LANG_AND_ID:CXX,GNU>:${_sbx_warning_options_gnu}>"

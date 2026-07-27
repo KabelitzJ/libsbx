@@ -11,13 +11,12 @@
 
 #include <vulkan/vulkan.h>
 
-#include <libsbx/utility/enum.hpp>
-
-#include <libsbx/reflection/description.hpp>
+#include <libsbx/reflection/annotations.hpp>
+#include <libsbx/reflection/enum.hpp>
 
 namespace sbx::graphics {
 
-enum class format : std::int32_t {
+enum class [[=reflection::reflected{}]] format : std::int32_t {
   undefined = VK_FORMAT_UNDEFINED,
   r8_unorm = VK_FORMAT_R8_UNORM,
   r16_sfloat = VK_FORMAT_R16_SFLOAT,
@@ -53,7 +52,7 @@ enum class memory_usage : std::uint8_t {
   host_read
 }; // enum class memory_usage
 
-enum class buffer_usage : std::int32_t {
+enum class [[=reflection::bit_field{}]] buffer_usage : std::int32_t {
   transfer_source = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
   transfer_destination = VK_BUFFER_USAGE_TRANSFER_DST_BIT,
   uniform = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
@@ -64,7 +63,7 @@ enum class buffer_usage : std::int32_t {
   device_address = VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
 }; // enum class buffer_usage
 
-enum class image_usage : std::int32_t {
+enum class [[=reflection::bit_field{}]] image_usage : std::int32_t {
   transfer_source = VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
   transfer_destination = VK_IMAGE_USAGE_TRANSFER_DST_BIT,
   sampled = VK_IMAGE_USAGE_SAMPLED_BIT,
@@ -120,7 +119,7 @@ enum class blend_factor : std::int32_t {
   source_alpha_saturate = VK_BLEND_FACTOR_SRC_ALPHA_SATURATE
 }; // enum class blend_factor
 
-enum class color_component : std::int32_t {
+enum class [[=reflection::bit_field{}]] color_component : std::int32_t {
   r = VK_COLOR_COMPONENT_R_BIT,
   g = VK_COLOR_COMPONENT_G_BIT,
   b = VK_COLOR_COMPONENT_B_BIT,
@@ -154,14 +153,14 @@ enum class pipeline_bind_point : std::int32_t {
   ray_tracing = VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR
 }; // enum class pipeline_bind_point
 
-enum class address_mode : std::int32_t {
+enum class [[=reflection::reflected{}]] address_mode : std::int32_t {
   repeat = VK_SAMPLER_ADDRESS_MODE_REPEAT,
   mirror = VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT,
   clamp_to_edge = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
   clamp_to_border = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER
 }; // enum class address_mode
 
-enum class filter : std::int32_t {
+enum class [[=reflection::reflected{}]] filter : std::int32_t {
   nearest = VK_FILTER_NEAREST,
   linear = VK_FILTER_LINEAR
 }; // enum class filter
@@ -181,20 +180,20 @@ enum class samples : std::int32_t {
   count_64 = VK_SAMPLE_COUNT_64_BIT
 }; // enum class samples
 
-enum class polygon_mode : std::int32_t {
+enum class [[=reflection::reflected{}]] polygon_mode : std::int32_t {
   fill = VK_POLYGON_MODE_FILL,
   line = VK_POLYGON_MODE_LINE,
   point = VK_POLYGON_MODE_POINT
 }; // enum class polygon_mode
 
-enum class cull_mode : std::int32_t {
+enum class [[=reflection::reflected{}]] cull_mode : std::int32_t {
   none = VK_CULL_MODE_NONE,
   front = VK_CULL_MODE_FRONT_BIT,
   back = VK_CULL_MODE_BACK_BIT,
   front_and_back = VK_CULL_MODE_FRONT_AND_BACK
 }; // enum class cull_mode
 
-enum class front_face : std::int32_t {
+enum class [[=reflection::reflected{}]] front_face : std::int32_t {
   counter_clockwise = VK_FRONT_FACE_COUNTER_CLOCKWISE,
   clockwise = VK_FRONT_FACE_CLOCKWISE
 }; // enum class front_face
@@ -213,7 +212,7 @@ struct rasterization_state {
   std::optional<graphics::depth_bias> depth_bias{};
 }; // struct rasterization_state
 
-enum class primitive_topology : std::int32_t {
+enum class [[=reflection::reflected{}]] primitive_topology : std::int32_t {
   point_list = VK_PRIMITIVE_TOPOLOGY_POINT_LIST,
   line_list = VK_PRIMITIVE_TOPOLOGY_LINE_LIST,
   line_strip = VK_PRIMITIVE_TOPOLOGY_LINE_STRIP,
@@ -241,134 +240,5 @@ constexpr auto to_vk_enum(Enum value) -> VkEnum {
 }
 
 } // namespace sbx::graphics
-
-template<>
-struct sbx::utility::is_bit_field<sbx::graphics::buffer_usage> : std::true_type { };
-
-template<>
-struct sbx::utility::is_bit_field<sbx::graphics::image_usage> : std::true_type { };
-
-template<>
-struct sbx::utility::is_bit_field<sbx::graphics::color_component> : std::true_type { };
-
-template<>
-struct sbx::reflection::description<sbx::graphics::format> {
-
-  static constexpr auto name() -> std::string_view {
-    return "format";
-  }
-
-  static constexpr auto enumerators() {
-    return std::make_tuple(
-      enumerator{"undefined", sbx::graphics::format::undefined},
-      enumerator{"r8_unorm", sbx::graphics::format::r8_unorm},
-      enumerator{"r16_sfloat", sbx::graphics::format::r16_sfloat},
-      enumerator{"r16_unorm", sbx::graphics::format::r16_unorm},
-      enumerator{"r32_sfloat", sbx::graphics::format::r32_sfloat},
-      enumerator{"r32_uint", sbx::graphics::format::r32_uint},
-      enumerator{"r64_uint", sbx::graphics::format::r64_uint},
-      enumerator{"r16g16_sfloat", sbx::graphics::format::r16g16_sfloat},
-      enumerator{"r32g32_sfloat", sbx::graphics::format::r32g32_sfloat},
-      enumerator{"r32g32_uint", sbx::graphics::format::r32g32_uint},
-      enumerator{"r8g8b8a8_unorm", sbx::graphics::format::r8g8b8a8_unorm},
-      enumerator{"r8g8b8a8_srgb", sbx::graphics::format::r8g8b8a8_srgb},
-      enumerator{"b8g8r8a8_unorm", sbx::graphics::format::b8g8r8a8_unorm},
-      enumerator{"b8g8r8a8_srgb", sbx::graphics::format::b8g8r8a8_srgb},
-      enumerator{"a2b10g10r10_unorm_pack32", sbx::graphics::format::a2b10g10r10_unorm_pack32},
-      enumerator{"r16g16b16a16_sfloat", sbx::graphics::format::r16g16b16a16_sfloat},
-      enumerator{"r32g32b32a32_sfloat", sbx::graphics::format::r32g32b32a32_sfloat},
-      enumerator{"d16_unorm", sbx::graphics::format::d16_unorm},
-      enumerator{"d32_sfloat", sbx::graphics::format::d32_sfloat},
-      enumerator{"d24_unorm_s8_uint", sbx::graphics::format::d24_unorm_s8_uint},
-      enumerator{"d32_sfloat_s8_uint", sbx::graphics::format::d32_sfloat_s8_uint}
-    );
-  }
-
-}; // struct sbx::reflection::description<sbx::graphics::format>
-
-template<>
-struct sbx::reflection::description<sbx::graphics::polygon_mode> {
-
-  static constexpr auto name() -> std::string_view {
-    return "polygon_mode";
-  }
-
-  static constexpr auto enumerators() {
-    return std::make_tuple(
-      enumerator{"fill", sbx::graphics::polygon_mode::fill},
-      enumerator{"line", sbx::graphics::polygon_mode::line},
-      enumerator{"point", sbx::graphics::polygon_mode::point}
-    );
-  }
-
-}; // struct sbx::reflection::description<sbx::graphics::polygon_mode>
-
-template<>
-struct sbx::reflection::description<sbx::graphics::cull_mode> {
-
-  static constexpr auto name() -> std::string_view {
-    return "cull_mode";
-  }
-
-  static constexpr auto enumerators() {
-    return std::make_tuple(
-      enumerator{"back", sbx::graphics::cull_mode::back},
-      enumerator{"front", sbx::graphics::cull_mode::front},
-      enumerator{"front_and_back", sbx::graphics::cull_mode::front_and_back},
-      enumerator{"none", sbx::graphics::cull_mode::none}
-    );
-  }
-
-}; // struct sbx::reflection::description<sbx::graphics::cull_mode>
-
-template<>
-struct sbx::reflection::description<sbx::graphics::front_face> {
-
-  static constexpr auto name() -> std::string_view {
-    return "front_face";
-  }
-
-  static constexpr auto enumerators() {
-    return std::make_tuple(
-      enumerator{"clockwise", sbx::graphics::front_face::clockwise},
-      enumerator{"counter_clockwise", sbx::graphics::front_face::counter_clockwise}
-    );
-  }
-
-}; // struct sbx::reflection::description<sbx::graphics::front_face>
-
-template<>
-struct sbx::reflection::description<sbx::graphics::filter> {
-
-  static constexpr auto name() -> std::string_view {
-    return "filter";
-  }
-
-  static constexpr auto enumerators() {
-    return std::make_tuple(
-      enumerator{"nearest", sbx::graphics::filter::nearest},
-      enumerator{"linear", sbx::graphics::filter::linear}
-    );
-  }
-
-}; // struct sbx::reflection::description<sbx::graphics::filter>
-
-template<>
-struct sbx::reflection::description<sbx::graphics::address_mode> {
-
-  static constexpr auto name() -> std::string_view {
-    return "address_mode";
-  }
-
-  static constexpr auto enumerators() {
-    return std::make_tuple(
-      enumerator{"repeat", sbx::graphics::address_mode::repeat},
-      enumerator{"mirror", sbx::graphics::address_mode::mirror},
-      enumerator{"clamp_to_edge", sbx::graphics::address_mode::clamp_to_edge},
-      enumerator{"clamp_to_border", sbx::graphics::address_mode::clamp_to_border}
-    );
-  }
-
-}; // struct sbx::reflection::description<sbx::graphics::address_mode>
 
 #endif // LIBSBX_GRAPHICS_TYPES_HPP_

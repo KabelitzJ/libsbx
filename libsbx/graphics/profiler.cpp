@@ -52,8 +52,6 @@ auto register_gpu_context(const queue::type type, std::string_view name, const i
     utility::logger<"graphics">::warn("Calibrated timestamps unavailable; GPU/CPU timelines may drift");
   }
 
-  contexts[index] = TracyVkContext(physical_device, logical_device, queue, command_buffer);
-
   TracyVkContextName(contexts[index], name.data(), static_cast<std::uint16_t>(name.size()));
 
   vkFreeCommandBuffers(logical_device, command_pool, 1, &command_buffer);

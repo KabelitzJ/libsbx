@@ -26,6 +26,11 @@ struct is_build_type_debug {
 
 inline constexpr auto is_build_type_debug_v = is_build_type_debug::value;
 
+#if defined(linux)
+#undef linux
+#define was_linux
+#endif
+
 /** @brief Possible operating systems */
 enum class operating_system : std::uint8_t {
   windows = 0,
@@ -43,6 +48,11 @@ inline constexpr auto operating_system_v = operating_system::linux;
 #else 
 inline constexpr auto operating_system_v = operating_system::unknown;
 #warning "Unknown operating system"
+#endif
+
+#if defined(was_linux)
+#define linux
+#undef was_linux
 #endif
 
 /** @brief Possible compilers */

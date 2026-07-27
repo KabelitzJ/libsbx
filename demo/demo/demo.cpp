@@ -53,6 +53,7 @@ auto main(int argc, const char** argv) -> int {
   // }
 
   std::println("{}", fmt::format("{}", sbx::math::vector2u{32, 1}));
+  std::println("{}", sbx::reflection::type_name<sbx::math::vector2i, true>());
 
   return sbx::core::exit::success;
 }

@@ -13,21 +13,21 @@ namespace sbx::reflection {
 namespace detail {
 
 consteval auto display_name_of(std::meta::info member) -> std::string_view {
-  auto renames = std::meta::annotations_of_with_type(member, ^^detail::rename);
+  auto renames = std::meta::annotations_of_with_type(member, ^^rename);
 
-  return (!renames.empty()) ? std::meta::extract<detail::rename>(renames.front()).view() : std::meta::identifier_of(member);
+  return (!renames.empty()) ? std::meta::extract<rename>(renames.front()).view() : std::meta::identifier_of(member);
 }
 
 consteval auto format_specifier_of(std::meta::info member) -> std::optional<std::string_view> {
-  auto formats = std::meta::annotations_of_with_type(member, ^^detail::format);
+  auto formats = std::meta::annotations_of_with_type(member, ^^rename);
 
-  return (!formats.empty()) ? std::optional{std::meta::extract<detail::format>(formats.front()).view()} : std::nullopt;
+  return (!formats.empty()) ? std::optional{std::meta::extract<format>(formats.front()).view()} : std::nullopt;
 }
 
 } // namespace detail
 
 template<typename Type>
-concept named_struct = std::meta::is_class_type(^^Type) && !std::meta::annotations_of_with_type(^^Type, std::meta::remove_cv(^^detail::named)).empty();
+concept named_struct = std::meta::is_class_type(^^Type) && has_annotation<Type, named>();
 
 template<named_struct Type>
 auto to_string(const Type& value) -> std::string {
@@ -43,7 +43,7 @@ auto to_string(const Type& value) -> std::string {
   auto is_first = true;
 
   template for (constexpr auto member : std::define_static_array(std::meta::nonstatic_data_members_of(type_info, std::meta::access_context::unchecked()))) {
-    if constexpr (std::meta::annotations_of_with_type(member, ^^detail::skip).empty()) {
+    if constexpr (std::meta::annotations_of_with_type(member, ^^skip_t).empty()) {
       if (!is_first) {
         result += ", ";
       }

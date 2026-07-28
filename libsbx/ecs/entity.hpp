@@ -99,33 +99,33 @@ struct entity_traits : basic_entity_traits<Type> {
 
 enum class entity : std::uint32_t { };
 
-struct basic_null_entity {
+struct null_entity_t {
 
   template<typename Entity>
   [[nodiscard]] constexpr operator Entity() const noexcept;
 
-  [[nodiscard]] constexpr auto operator==([[maybe_unused]] const basic_null_entity other) const noexcept -> bool;
+  [[nodiscard]] constexpr auto operator==([[maybe_unused]] const null_entity_t other) const noexcept -> bool;
 
   template<typename Entity>
   [[nodiscard]] constexpr bool operator==(const Entity entity) const noexcept;
 
-}; // struct basic_null_entity
+}; // struct null_entity_t
 
-inline constexpr auto null_entity = basic_null_entity{};
+inline constexpr auto null_entity = null_entity_t{};
 
-struct basic_tombstone_entity {
+struct tombstone_entity_t {
 
   template<typename Entity>
   [[nodiscard]] constexpr operator Entity() const noexcept;
 
-  [[nodiscard]] constexpr auto operator==([[maybe_unused]] const basic_tombstone_entity other) const noexcept -> bool;
+  [[nodiscard]] constexpr auto operator==([[maybe_unused]] const tombstone_entity_t other) const noexcept -> bool;
 
   template<typename Entity>
   [[nodiscard]] constexpr bool operator==(const Entity entity) const noexcept;
 
-}; // struct basic_tombstone_entity
+}; // struct tombstone_entity_t
 
-inline constexpr auto tombstone_entity = basic_tombstone_entity{};
+inline constexpr auto tombstone_entity = tombstone_entity_t{};
 
 } // namespace sbx::ecs
 

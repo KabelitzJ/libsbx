@@ -36,30 +36,30 @@ constexpr auto entity_traits<Type>::combine(const entity_type lhs, const entity_
 }
 
 template<typename Entity>
-constexpr basic_null_entity::operator Entity() const noexcept {
+constexpr null_entity_t::operator Entity() const noexcept {
   return entity_traits<Entity>::construct(entity_traits<Entity>::entity_mask, entity_traits<Entity>::version_mask);
 }
 
-constexpr auto basic_null_entity::operator==([[maybe_unused]] const basic_null_entity other) const noexcept -> bool {
+constexpr auto null_entity_t::operator==([[maybe_unused]] const null_entity_t other) const noexcept -> bool {
   return true;
 }
 
 template<typename Entity>
-constexpr bool basic_null_entity::operator==(const Entity entity) const noexcept {
+constexpr bool null_entity_t::operator==(const Entity entity) const noexcept {
   return entity_traits<Entity>::to_entity(entity) == entity_traits<Entity>::to_entity(*this);
 }
 
 template<typename Entity>
-constexpr basic_tombstone_entity::operator Entity() const noexcept {
+constexpr tombstone_entity_t::operator Entity() const noexcept {
   return entity_traits<Entity>::construct(entity_traits<Entity>::entity_mask, entity_traits<Entity>::version_mask);
 }
 
-constexpr auto basic_tombstone_entity::operator==([[maybe_unused]] const basic_tombstone_entity other) const noexcept -> bool {
+constexpr auto tombstone_entity_t::operator==([[maybe_unused]] const tombstone_entity_t other) const noexcept -> bool {
   return true;
 }
 
 template<typename Entity>
-constexpr bool basic_tombstone_entity::operator==(const Entity entity) const noexcept {
+constexpr bool tombstone_entity_t::operator==(const Entity entity) const noexcept {
   if constexpr (entity_traits<Entity>::version_mask == 0u) {
     return false;
   } else {

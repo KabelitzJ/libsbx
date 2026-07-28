@@ -1,6 +1,7 @@
 import os
 
 from conan import ConanFile
+from conan.tools.files import copy
 from conan.tools.cmake import CMake, CMakeDeps, CMakeToolchain, cmake_layout
 
 
@@ -71,3 +72,4 @@ class LibsbxConan(ConanFile):
         cmake = CMake(self)
         cmake.configure(build_script_folder=self.source_path.parent)
         cmake.build()
+

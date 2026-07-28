@@ -5,10 +5,17 @@
 #include <fstream>
 #include <unordered_map>
 #include <unordered_set>
+#include <vector>
+#include <concepts>
+#include <type_traits>
+#include <meta>
 
 #include <fmt/format.h>
 
 #include <yaml-cpp/yaml.h>
+
+#include <libsbx/reflection/enum.hpp>
+#include <libsbx/reflection/struct.hpp>
 
 #include <libsbx/utility/logger.hpp>
 #include <libsbx/utility/hashed_string.hpp>
@@ -18,6 +25,72 @@
 #include <libsbx/assets/assets_module.hpp>
 
 namespace sbx::scenes {
+
+consteval auto display_name_of(std::meta::info member) -> std::string_view {
+  auto renames = std::meta::annotations_of_with_type(member, ^^reflection::detail::rename);
+
+  return (!renames.empty()) ? std::meta::extract<reflection::detail::rename>(renames.front()).view() : std::meta::identifier_of(member);
+}
+
+consteval auto type_name_of(std::meta::info type) -> std::string_view {
+  return display_name_of(type);
+}
+
+consteval auto serializable_components_of(std::meta::info namespace_reflection) -> std::vector<std::meta::info> {
+  auto result = std::vector<std::meta::info>{};
+
+  for (auto member : std::meta::members_of(namespace_reflection, std::meta::access_context::unchecked())) {
+    if (std::meta::is_type(member) && !std::meta::annotations_of_with_type(member, ^^reflection::detail::serializable).empty()) {
+      result.push_back(member);
+    }
+  }
+
+  return result;
+}
+
+template<typename Component>
+auto serialize_component(const Component& value) -> YAML::Node {
+  auto node = YAML::Node{};
+
+  template for (constexpr auto member : std::define_static_array(std::meta::nonstatic_data_members_of(^^Component, std::meta::access_context::unchecked()))) {
+    if constexpr (std::meta::annotations_of_with_type(member, ^^reflection::detail::skip).empty()) {
+      const auto name = std::string{display_name_of(member)};
+
+      using field_type = std::remove_cvref_t<typename [:std::meta::type_of(member):]>;
+
+      if constexpr (reflection::named_enum<field_type>) {
+        const auto& entry = value.[:member:];
+
+        node[name] = std::string{reflection::to_string(entry)};
+      } else {
+        node[name] = value.[:member:];
+      }
+    }
+  }
+
+  return node;
+}
+
+template<typename Component>
+auto deserialize_component(const YAML::Node& node) -> Component {
+  auto value = Component{};
+
+  template for (constexpr auto member : std::define_static_array(std::meta::nonstatic_data_members_of(^^Component, std::meta::access_context::unchecked()))) {
+    if constexpr (std::meta::annotations_of_with_type(member, ^^reflection::detail::skip).empty()) {
+      if (const auto field = node[std::string{display_name_of(member)}]) {
+        using field_type = std::remove_cvref_t<typename [:std::meta::type_of(member):]>;
+
+        if constexpr (reflection::named_enum<field_type>) {
+          value.[:member:] = reflection::from_string_or<field_type>(field.as<std::string>(), field_type{});
+        } else {
+          value.[:member:] = field.as<field_type>();
+        }
+      }
+    }
+  }
+
+  return value;
+}
 
 auto scene_serializer::save(scene& target, const std::filesystem::path& path) -> void {
   auto& registry = target._registry;
@@ -114,18 +187,20 @@ auto scene_serializer::save(scene& target, const std::filesystem::path& path) ->
 
     auto components = YAML::Node{YAML::NodeType::Sequence};
 
-    {
-      const auto& transform = registry.get<local_transform>(entity);
-  
-      auto component = YAML::Node{};
-      component["type"] = "transform";
-      component["position"] = transform.position;
-      component["rotation"] = transform.rotation;
-      component["scale"] = transform.scale;
+    // Generic value components (transform, camera, lights) via reflection.
+    template for (constexpr auto component_type : std::define_static_array(serializable_components_of(^^sbx::scenes))) {
+      using Component = typename [:component_type:];
 
-      components.push_back(component);
+      if (registry.all_of<Component>(entity)) {
+        auto component_yaml = serialize_component(registry.get<Component>(entity));
+
+        component_yaml["type"] = std::string{type_name_of(component_type)};
+
+        components.push_back(component_yaml);
+      }
     }
 
+    // Custom: mesh_renderer (asset keys + submesh material overrides).
     if (registry.all_of<mesh_renderer>(entity)) {
       const auto& renderer = registry.get<mesh_renderer>(entity);
 
@@ -156,55 +231,7 @@ auto scene_serializer::save(scene& target, const std::filesystem::path& path) ->
       }
     }
 
-    if (registry.all_of<camera>(entity)) {
-      const auto& c = registry.get<camera>(entity);
-
-      auto component = YAML::Node{};
-      component["type"] = "camera";
-      component["fov_degrees"] = c.fov_degrees;
-      component["near_plane"] = c.near_plane;
-      component["far_plane"] = c.far_plane;
-
-      components.push_back(component);
-    }
-
-    if (registry.all_of<directional_light>(entity)) {
-      const auto& light = registry.get<directional_light>(entity);
-
-      auto component = YAML::Node{};
-      component["type"] = "directional_light";
-      component["color"] = light.color;
-      component["intensity"] = light.intensity;
-
-      components.push_back(component);
-    }
-
-    if (registry.all_of<point_light>(entity)) {
-      const auto& light = registry.get<point_light>(entity);
-  
-      auto component = YAML::Node{};
-      component["type"] = "point_light";
-      component["color"] = light.color;
-      component["intensity"] = light.intensity;
-      component["range"] = light.range;
-
-      components.push_back(component);
-    }
-
-    if (registry.all_of<spot_light>(entity)) {
-      const auto& light = registry.get<spot_light>(entity);
-
-      auto component = YAML::Node{};
-      component["type"] = "spot_light";
-      component["color"] = light.color;
-      component["intensity"] = light.intensity;
-      component["range"] = light.range;
-      component["inner_angle"] = light.inner_angle;
-      component["outer_angle"] = light.outer_angle;
-
-      components.push_back(component);
-    }
-
+    // Custom: skybox (environment asset key, lazily registered).
     if (registry.all_of<skybox>(entity)) {
       const auto& sky = registry.get<skybox>(entity);
 
@@ -293,7 +320,7 @@ auto scene_serializer::load(scene& target, const std::filesystem::path& path) ->
     target.set_name(metadata["name"].as<std::string>());
   }
 
-  // Asset table: key -> path
+  // Asset table: key -> uuid
   auto key_to_uuid = std::unordered_map<std::string, math::uuid>{};
 
   const auto register_category = [&](const char* category) {
@@ -315,7 +342,7 @@ auto scene_serializer::load(scene& target, const std::filesystem::path& path) ->
     target._create_node(node_yaml["tag"].as<std::string>(), local_transform{}, node_yaml["id"].as<math::uuid>());
   }
 
-  // Pass 2: tag, parent, components.
+  // Pass 2: parent, components.
   for (const auto node_yaml : nodes_node) {
     auto node = target.find(node_yaml["id"].as<math::uuid>());
 
@@ -323,19 +350,32 @@ auto scene_serializer::load(scene& target, const std::filesystem::path& path) ->
       node.set_parent(target.find(parent.as<math::uuid>()));
     }
 
-    for (const auto component : node_yaml["components"]) {
-      const auto type = component["type"].as<std::string>();
+    for (const auto component_yaml : node_yaml["components"]) {
+      const auto type = component_yaml["type"].as<std::string>();
 
-      if (type == "transform") {
-        auto& transform = node.transform();
-        transform.position = component["position"].as<math::vector3f>();
-        transform.rotation = component["rotation"].as<math::quaternion>();
-        transform.scale = component["scale"].as<math::vector3f>();
-      } else if (type == "static_mesh") {
+      auto handled = false;
+
+      // Generic value components via reflection.
+      template for (constexpr auto component_type : std::define_static_array(serializable_components_of(^^sbx::scenes))) {
+        using Component = typename [:component_type:];
+
+        if (!handled && type == type_name_of(component_type)) {
+          node.add_or_update<Component>(deserialize_component<Component>(component_yaml));
+
+          handled = true;
+        }
+      }
+
+      if (handled) {
+        continue;
+      }
+
+      // Custom: mesh_renderer.
+      if (type == "static_mesh") {
         auto& renderer = node.add_component<mesh_renderer>();
-        renderer.mesh = assets_module.load_mesh(key_to_uuid.at(component["mesh"].as<std::string>()));
+        renderer.mesh = assets_module.load_mesh(key_to_uuid.at(component_yaml["mesh"].as<std::string>()));
 
-        if (const auto submeshes = component["submeshes"]) {
+        if (const auto submeshes = component_yaml["submeshes"]) {
           for (const auto submesh : submeshes) {
             const auto index = submesh["index"].as<std::size_t>();
 
@@ -346,35 +386,14 @@ auto scene_serializer::load(scene& target, const std::filesystem::path& path) ->
             renderer.materials[index] = assets_module.load_material(key_to_uuid.at(submesh["material"].as<std::string>()));
           }
         }
-      } else if (type == "camera") {
-        auto& c = node.add_component<camera>();
-        c.fov_degrees = component["fov_degrees"].as<std::float_t>();
-        c.near_plane = component["near_plane"].as<std::float_t>();
-        c.far_plane = component["far_plane"].as<std::float_t>();
-      } else if (type == "directional_light") {
-        auto& light = node.add_component<directional_light>();
-        light.color = component["color"].as<math::color>();
-        light.intensity = component["intensity"].as<std::float_t>();
-      } else if (type == "point_light") {
-        auto& light = node.add_component<point_light>();
-        light.color = component["color"].as<math::color>();
-        light.intensity = component["intensity"].as<std::float_t>();
-        light.range = component["range"].as<std::float_t>();
-      } else if (type == "spot_light") {
-        auto& light = node.add_component<spot_light>();
-        light.color = component["color"].as<math::color>();
-        light.intensity = component["intensity"].as<std::float_t>();
-        light.range = component["range"].as<std::float_t>();
-        light.inner_angle = component["inner_angle"].as<std::float_t>();
-        light.outer_angle = component["outer_angle"].as<std::float_t>();
       } else if (type == "skybox") {
         auto& sky = node.add_component<skybox>();
 
-        sky.environment = assets_module.load_environment_map(key_to_uuid.at(component["environment"].as<std::string>()));
-        
-        if (component["intensity"]) {
-          sky.intensity = component["intensity"].as<std::float_t>();
-        } 
+        sky.environment = assets_module.load_environment_map(key_to_uuid.at(component_yaml["environment"].as<std::string>()));
+
+        if (component_yaml["intensity"]) {
+          sky.intensity = component_yaml["intensity"].as<std::float_t>();
+        }
       } else {
         utility::logger<"scenes">::warn("Unknown component type '{}'", type);
       }

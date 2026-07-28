@@ -55,6 +55,8 @@ struct range {
   std::size_t max;
 }; // struct range
 
+struct serializable { };
+
 } // namespace detail
 
 inline constexpr auto named = detail::named{};
@@ -71,6 +73,8 @@ inline constexpr auto format = detail::format{Format};
 
 template<std::size_t Min, std::size_t Max>
 inline constexpr auto range = detail::range{Min, Max};
+
+inline constexpr auto serializable = detail::serializable{};
 
 } // namespace sbx::reflection
 

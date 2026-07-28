@@ -6,6 +6,8 @@
 #include <optional>
 #include <vector>
 
+#include <libsbx/reflection/annotations.hpp>
+
 #include <libsbx/math/color.hpp>
 #include <libsbx/math/matrix_cast.hpp>
 #include <libsbx/math/matrix4x4.hpp>
@@ -26,7 +28,7 @@ namespace sbx::scenes {
  * @brief The authored transform of a node, relative to its parent.
  * Its derived from the world transform each frame by scene::update() and written to the world_transform component.
  */
-struct local_transform {
+struct [[=reflection::serializable, =reflection::rename<"transform">]] local_transform {
 
   math::vector3f position{0.0f, 0.0f, 0.0f};
   math::quaternion rotation{math::quaternion::identity};
@@ -77,7 +79,7 @@ struct basic_tag final : utility::basic_hashed_string<Char> {
 
 using tag = basic_tag<char>;
 
-struct camera {
+struct [[=reflection::serializable]] camera {
   std::float_t fov_degrees{60.0f};
   std::float_t near_plane{0.1f};
   std::float_t far_plane{1000.0f};
@@ -91,18 +93,18 @@ struct mesh_renderer {
   std::vector<assets::material_handle> materials{};
 }; // struct mesh_renderer
 
-struct directional_light {
+struct [[=reflection::serializable]] directional_light {
   math::color color{1.0f, 1.0f, 1.0f, 1.0f};
   std::float_t intensity{1.0f};
 }; // struct directional_light
 
-struct point_light {
+struct [[=reflection::serializable]] point_light {
   math::color color{1.0f, 1.0f, 1.0f, 1.0f};
   std::float_t intensity{1.0f};
   std::float_t range{10.0f};
 }; // struct point_light
 
-struct spot_light {
+struct [[=reflection::serializable]] spot_light {
   math::color color{1.0f, 1.0f, 1.0f, 1.0f};
   std::float_t intensity{1.0f};
   std::float_t range{10.0f};

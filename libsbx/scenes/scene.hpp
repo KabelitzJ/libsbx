@@ -70,6 +70,11 @@ public:
       return _scene->_registry.get<Component>(_entity);
     }
 
+    template<typename Component, typename... Args>
+    auto add_or_update(Args&&... args) -> Component& {
+      return _scene->_registry.emplace_or_replace<Component>(_entity, std::forward<Args>(args)...);
+    }
+
     template<typename Component>
     [[nodiscard]] auto has_component() const -> bool {
       return _scene->_registry.all_of<Component>(_entity);

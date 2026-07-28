@@ -72,6 +72,21 @@ inline constexpr auto format = detail::format{Format};
 template<std::size_t Min, std::size_t Max>
 inline constexpr auto range = detail::range{Min, Max};
 
+template<typename Type, auto Annotation>
+consteval auto has_annotation() -> bool {
+  return !std::meta::annotations_of_with_type(^^Type, ^^decltype(Annotation)).empty();
+}
+
+template<typename Type, auto... Annotation>
+consteval auto has_any_annotations(std::meta::info reflected) -> bool {
+  return (has_annotation<Annotation>(reflected) || ...);
+}
+
+template<typename Type, auto... Annotation>
+consteval auto has_all_annotations(std::meta::info reflected) -> bool {
+  return (has_annotation<Annotation>(reflected) && ...);
+}
+
 } // namespace sbx::reflection
 
 #endif // LIBSBX_REFLECTION_ANNOTATIONS_HPP_

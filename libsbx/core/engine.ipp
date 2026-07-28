@@ -94,8 +94,8 @@ inline auto basic_engine<module_list<Modules...>>::_loop() -> void {
     fixed_accumulator += _delta_time;
 
     {
-      SBX_PROFILE_SCOPE("stage::pre");
-      _dispatch<stage::pre>();
+      SBX_PROFILE_SCOPE("stage::pre_update");
+      _dispatch<stage::pre_update>();
     }
 
     {
@@ -105,16 +105,16 @@ inline auto basic_engine<module_list<Modules...>>::_loop() -> void {
     }
 
     {
-      SBX_PROFILE_SCOPE("stage::post");
-      _dispatch<stage::post>();
+      SBX_PROFILE_SCOPE("stage::post_update");
+      _dispatch<stage::post_update>();
     }
 
     {
-      SBX_PROFILE_SCOPE("stage::fixed");
+      SBX_PROFILE_SCOPE("stage::fixed_update");
 
       while (fixed_accumulator >= engine::fixed_delta_time()) {
+        _dispatch<stage::fixed_update>();
         _application->fixed_update();
-        _dispatch<stage::fixed>();
         fixed_accumulator -= engine::fixed_delta_time();
       }
     }

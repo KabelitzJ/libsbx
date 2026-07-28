@@ -6,7 +6,11 @@
 #include <concepts>
 #include <cstdint>
 #include <functional>
+#include <meta>
 #include <type_traits>
+
+#include <libsbx/reflection/annotations.hpp>
+#include <libsbx/reflection/enum.hpp>
 
 #include <libsbx/utility/assert.hpp>
 #include <libsbx/utility/type_list.hpp>
@@ -16,11 +20,11 @@
 
 namespace sbx::core {
 
-enum class stage : std::uint8_t {
-  pre,
+enum class [[=reflection::named]] stage : std::uint8_t {
+  pre_update,
   update,
-  post,
-  fixed,
+  post_update,
+  fixed_update,
   render
 }; // enum class stage
 
@@ -35,74 +39,34 @@ struct dependency_list {
   inline static constexpr auto size = sizeof...(Types);
 }; // struct dependency_list
 
-/**
- * @brief A module is any default-constructible class. Stage participation is
- * opt-in by defining any of the hooks:
- *
- * - `auto pre_update() -> void`
- * - `auto update() -> void`
- * - `auto post_update() -> void`
- * - `auto fixed_update() -> void`
- * - `auto render() -> void`
- *
- * Frame timing is available through `core::engine::delta_time()` and friends;
- * fixed update hooks must use `core::engine::fixed_delta_time()`.
- */
 template<typename Type>
 concept module = std::is_class_v<Type> && std::default_initializable<Type>;
 
-template<typename Module>
-concept has_pre_update = requires(Module& module) {
-  { module.pre_update() } -> std::same_as<void>;
-}; // concept has_pre_update
-
-template<typename Module>
-concept has_update = requires(Module& module) {
-  { module.update() } -> std::same_as<void>;
-}; // concept has_update
-
-template<typename Module>
-concept has_post_update = requires(Module& module) {
-  { module.post_update() } -> std::same_as<void>;
-}; // concept has_post_update
-
-template<typename Module>
-concept has_fixed_update = requires(Module& module) {
-  { module.fixed_update() } -> std::same_as<void>;
-}; // concept has_fixed_update
-
-template<typename Module>
-concept has_render = requires(Module& module) {
-  { module.render() } -> std::same_as<void>;
-}; // concept has_render
-
 namespace detail {
 
-/**
- * @brief Invokes the hook belonging to Stage if the module defines it.
- */
+template<typename Module>
+consteval auto find_hook(std::string_view name) -> std::meta::info {
+  for (auto member : std::meta::members_of(^^Module, std::meta::access_context::current())) {
+    auto matches = std::meta::is_function(member) 
+      && std::meta::has_identifier(member) 
+      && (std::meta::identifier_of(member) == name) 
+      && (std::meta::return_type_of(member) == ^^void) 
+      && std::meta::parameters_of(member).empty();
+
+    if (matches) {
+      return member;
+    }
+  }
+
+  return std::meta::info{};
+}
+
 template<stage Stage, typename Module>
 auto invoke_stage_hook(Module& module) -> void {
-  if constexpr (Stage == stage::pre) {
-    if constexpr (has_pre_update<Module>) {
-      module.pre_update();
-    }
-  } else if constexpr (Stage == stage::update) {
-    if constexpr (has_update<Module>) {
-      module.update();
-    }
-  } else if constexpr (Stage == stage::post) {
-    if constexpr (has_post_update<Module>) {
-      module.post_update();
-    }
-  } else if constexpr (Stage == stage::fixed) {
-    if constexpr (has_fixed_update<Module>) {
-      module.fixed_update();
-    }
-  } else if constexpr (Stage == stage::render) {
-    if constexpr (has_render<Module>) {
-      module.render();
-    }
+  constexpr auto member = find_hook<Module>(reflection::to_string(Stage));
+
+  if constexpr (member != std::meta::info{}) {
+    module.[:member:]();
   }
 }
 

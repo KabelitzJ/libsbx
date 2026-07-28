@@ -35,6 +35,10 @@ struct internal_call {
   void* function;
 }; // struct internal_call
 
+struct script_runtime_error : public std::runtime_error {
+  using std::runtime_error::runtime_error;
+}; // struct script_runtime_error
+
 class scripting_module final : public utility::noncopyable {
   
 public:
@@ -53,9 +57,7 @@ public:
 
 private:
 
-  static auto _exception_callback(std::string_view message) -> void {
-    throw utility::runtime_error{"{}", message};
-  }
+  static auto _exception_callback(std::string_view message) -> void;
 
   std::filesystem::path _assembly_path;
 

@@ -6,15 +6,19 @@ namespace Editor
   
   public class Test : Behavior
   {
+    Transform transform;
     
     public override void OnCreate()
     {
-      Logger.Info("OnCreate: {}", Time.DeltaTime);
+      transform = GetComponent<Transform>();
+
+      Logger.Info("Test script created for entity with UUID: {0}", UUID);
+      Logger.Info("Transform component: {0}", transform.Position);
     }
 
     public override void OnUpdate()
     {
-      Logger.Info("OnUpdate: {}", Time.DeltaTime);
+
     }
 
   }

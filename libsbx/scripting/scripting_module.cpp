@@ -140,7 +140,7 @@ auto scripting_module::instantiate(scenes::node& node, std::string_view class_na
 
   auto instance = type.create_instance();
 
-  instance.set_field_value("Uuid", static_cast<std::uint64_t>(node.get_component<scenes::id>().value()));
+  instance.set_field_value("UUID", static_cast<std::uint64_t>(node.get_component<scenes::id>().value()));
 
   instance.invoke("OnCreate");
 
@@ -149,6 +149,12 @@ auto scripting_module::instantiate(scenes::node& node, std::string_view class_na
   scripts.instances.push_back(instance);
 
   return instance;
+}
+
+auto scripting_module::_exception_callback(std::string_view message) -> void {
+  utility::logger<"scripting">::error("Script runtime error: {}", message); 
+
+  throw script_runtime_error{std::string{message}};
 }
 
 } // namespace sbx::scripting

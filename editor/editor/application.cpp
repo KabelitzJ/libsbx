@@ -60,6 +60,9 @@ application::application()
   skybox.intensity = 1.0f;
 
   auto& scripting_module = sbx::core::engine::get_module<sbx::scripting::scripting_module>();
+  
+  scripting_module.load_assembly("build/x86_64/gcc/debug/dotnet/editor/Editor.dll");
+
 
   scripting_module.instantiate(_camera, "Editor.Test");
 }

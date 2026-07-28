@@ -6,7 +6,7 @@ namespace Sbx.Core
   public abstract class Component
   {
 
-    public ulong Uuid { get; internal set; }
+    public ulong UUID { get; internal set; }
 
   }
 
@@ -17,11 +17,11 @@ namespace Sbx.Core
     {
       get 
       { 
-        unsafe { return InternalCalls.Tag_GetTag(Uuid); } 
+        unsafe { return InternalCalls.Tag_GetTag(UUID); } 
       }
       set 
       { 
-        unsafe { InternalCalls.Tag_SetTag(Uuid, value); } 
+        unsafe { InternalCalls.Tag_SetTag(UUID, value); } 
       }
     }
 
@@ -40,12 +40,12 @@ namespace Sbx.Core
       get 
       {
         Vector3 position;
-        unsafe { InternalCalls.Transform_GetPosition(Uuid, &position); }
+        unsafe { InternalCalls.Transform_GetPosition(UUID, &position); }
         return position;
       }
       set 
       { 
-        unsafe { InternalCalls.Transform_SetPosition(Uuid, &value); } 
+        unsafe { InternalCalls.Transform_SetPosition(UUID, &value); } 
       }
     }
 
@@ -54,7 +54,7 @@ namespace Sbx.Core
       get 
       {
         Vector3 position;
-        unsafe { InternalCalls.Transform_GetWorldPosition(Uuid, &position); }
+        unsafe { InternalCalls.Transform_GetWorldPosition(UUID, &position); }
         return position;
       }
     }
@@ -64,12 +64,12 @@ namespace Sbx.Core
       get 
       {
         Quaternion rotation;
-        unsafe { InternalCalls.Transform_GetRotation(Uuid, &rotation); }
+        unsafe { InternalCalls.Transform_GetRotation(UUID, &rotation); }
         return rotation;
       }
       set 
       { 
-        unsafe { InternalCalls.Transform_SetRotation(Uuid, &value); } 
+        unsafe { InternalCalls.Transform_SetRotation(UUID, &value); } 
       }
     }
 
@@ -78,7 +78,7 @@ namespace Sbx.Core
       get 
       {
         Vector3 right;
-        unsafe { InternalCalls.Transform_GetRight(Uuid, &right); }
+        unsafe { InternalCalls.Transform_GetRight(UUID, &right); }
         return right;
       }
     }
@@ -88,7 +88,7 @@ namespace Sbx.Core
       get 
       {
         Vector3 forward;
-        unsafe { InternalCalls.Transform_GetForward(Uuid, &forward); }
+        unsafe { InternalCalls.Transform_GetForward(UUID, &forward); }
         return forward;
       }
     }
@@ -98,7 +98,7 @@ namespace Sbx.Core
       get 
       {
         Vector3 up;
-        unsafe { InternalCalls.Transform_GetUp(Uuid, &up); }
+        unsafe { InternalCalls.Transform_GetUp(UUID, &up); }
         return up;
       }
     }
@@ -107,7 +107,7 @@ namespace Sbx.Core
 
     public void LookAt(Vector3 target)
     {
-      unsafe { InternalCalls.Transform_LookAt(Uuid, &target); }
+      unsafe { InternalCalls.Transform_LookAt(UUID, &target); }
     }
 
     public override bool Equals(object? obj) {
@@ -148,7 +148,7 @@ namespace Sbx.Core
       get
       {
         float height;
-        unsafe { InternalCalls.CharacterController_GetHeight(Uuid, &height); }
+        unsafe { InternalCalls.CharacterController_GetHeight(UUID, &height); }
         return height;
       } 
     }
@@ -158,7 +158,7 @@ namespace Sbx.Core
       get
       {
         float radius;
-        unsafe { InternalCalls.CharacterController_GetRadius(Uuid, &radius); }
+        unsafe { InternalCalls.CharacterController_GetRadius(UUID, &radius); }
         return radius;
       } 
     }
@@ -168,7 +168,7 @@ namespace Sbx.Core
       get
       {
         float slopeLimit;
-        unsafe { InternalCalls.CharacterController_GetSlopeLimit(Uuid, &slopeLimit); }
+        unsafe { InternalCalls.CharacterController_GetSlopeLimit(UUID, &slopeLimit); }
         return slopeLimit;
       } 
     }
@@ -178,7 +178,7 @@ namespace Sbx.Core
       get
       {
         float stepOffset;
-        unsafe { InternalCalls.CharacterController_GetStepOffset(Uuid, &stepOffset); }
+        unsafe { InternalCalls.CharacterController_GetStepOffset(UUID, &stepOffset); }
         return stepOffset;
       } 
     }
@@ -187,7 +187,7 @@ namespace Sbx.Core
     { 
       get
       {
-        unsafe { return InternalCalls.CharacterController_GetIsGrounded(Uuid); }
+        unsafe { return InternalCalls.CharacterController_GetIsGrounded(UUID); }
       } 
     }
 
@@ -196,14 +196,14 @@ namespace Sbx.Core
       get
       {
         CollisionFlags flags;
-        unsafe { InternalCalls.CharacterController_GetFlags(Uuid, (byte*)&flags); }
+        unsafe { InternalCalls.CharacterController_GetFlags(UUID, (byte*)&flags); }
         return flags;
       } 
     }
 
     public void Move(Vector3 displacement)
     {
-      unsafe { InternalCalls.CharacterController_Move(Uuid, &displacement); }
+      unsafe { InternalCalls.CharacterController_Move(UUID, &displacement); }
     }
   }
 

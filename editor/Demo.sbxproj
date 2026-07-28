@@ -1,0 +1,4 @@
+project:
+  name: Editor
+  assets: assets
+  library: .sbx/library

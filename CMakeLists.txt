@@ -69,12 +69,14 @@ endif()
 # Options
 
 option(SBX_BUILD_DEMO "Build demo" ON)
+option(SBX_BUILD_EDITOR "Build editor" ON)
 option(SBX_BUILD_TESTS "Build tests" ON)
 option(SBX_BUILD_SHARED "Build shared library" OFF)
 option(SBX_ENABLE_PROFILING "Enable tracy profiling" ${_SBX_ENABLE_PROFILING_DEFAULT})
 option(SBX_PREFER_CPU_DEVICE "Prefer CPU device" OFF)
 
 message(STATUS "SBX_BUILD_DEMO: ${SBX_BUILD_DEMO}")
+message(STATUS "SBX_BUILD_EDITOR: ${SBX_BUILD_EDITOR}")
 message(STATUS "SBX_BUILD_TESTS: ${SBX_BUILD_TESTS}")
 message(STATUS "SBX_BUILD_SHARED: ${SBX_BUILD_SHARED}")
 message(STATUS "SBX_ENABLE_PROFILING: ${SBX_ENABLE_PROFILING}")
@@ -710,4 +712,8 @@ install(
 
 if(SBX_BUILD_DEMO AND EXISTS "${CMAKE_SOURCE_DIR}/demo")
   add_subdirectory(demo)
+endif()
+
+if (SBX_BUILD_EDITOR AND EXISTS "${CMAKE_SOURCE_DIR}/editor")
+  add_subdirectory(editor)
 endif()

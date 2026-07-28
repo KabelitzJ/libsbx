@@ -16,6 +16,12 @@
 
 namespace sbx::utility {
 
+struct assertion_failure : public std::exception {
+  
+  assertion_failure() = default;
+
+}; // struct assertion_failure
+
 template<std::convertible_to<bool> Expression>
 inline auto assert_that(Expression&& expression, std::string_view message, const std::source_location& source_location = std::source_location::current()) -> void {
   if constexpr (is_build_type_debug_v) {
@@ -25,7 +31,7 @@ inline auto assert_that(Expression&& expression, std::string_view message, const
       std::cerr.write(error.data(), static_cast<std::streamsize>(error.size()));
       std::cerr.flush();
 
-      std::terminate();
+      throw assertion_failure{};
     }
   }
 }
@@ -41,7 +47,7 @@ inline auto assert_that(Range&& range, Project&& project, std::string_view messa
         std::cerr.write(error.data(), static_cast<std::streamsize>(error.size()));
         std::cerr.flush();
 
-        std::terminate();
+        throw assertion_failure{};
       }
     }
 

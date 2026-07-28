@@ -4,7 +4,7 @@
 
 namespace editor {
 
-fly_camera::fly_camera(sbx::scenes::scene::node node)
+fly_camera::fly_camera(const sbx::scenes::node& node)
 : _node{node} { }
 
 auto fly_camera::update() -> void {

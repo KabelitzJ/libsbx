@@ -64,3 +64,25 @@ target_compile_options(
     -Wlogical-op
     -Wuseless-cast
 )
+
+set(EDITOR_DIR ${CMAKE_CURRENT_SOURCE_DIR}/assets/scripts/Editor)
+set(EDITOR_PROJECT ${EDITOR_DIR}/Editor.csproj)
+set(EDITOR_DOTNET_OUT_DIR ${CMAKE_BINARY_DIR}/dotnet/editor)
+
+file(GLOB_RECURSE EDITOR_SOURCES CONFIGURE_DEPENDS ${EDITOR_DIR}/**/*.cs)
+
+add_custom_target(
+  editor_scripting ALL
+  COMMAND ${CMAKE_COMMAND} -E make_directory ${EDITOR_DOTNET_OUT_DIR}
+  COMMAND dotnet publish ${EDITOR_PROJECT}
+    -c $<CONFIG>
+    --self-contained false
+    -p:UseAppHost=false
+    -p:BuildProjectReferences=false
+    -o ${EDITOR_DOTNET_OUT_DIR}
+  WORKING_DIRECTORY ${EDITOR_DIR}
+  COMMENT "Publishing Editor assembly"
+)
+
+add_dependencies(editor_scripting sbx_scripting_managed sbx_scripting_core)
+add_dependencies(${PROJECT_NAME} editor_scripting)

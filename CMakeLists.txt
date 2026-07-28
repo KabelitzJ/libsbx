@@ -114,12 +114,10 @@ add_compile_definitions(
 message(STATUS "Git branch: ${SBX_BRANCH}")
 message(STATUS "Git commit: ${SBX_COMMIT_HASH}")
 
-# set(SBX_DATA_DIR ${CMAKE_BINARY_DIR}/data)
+set(SBX_SHADER_SRC_DIR ${CMAKE_SOURCE_DIR}/shaders)
+set(SBX_SHADER_OUT_DIR ${CMAKE_BINARY_DIR}/shaders)
 
-# set(SBX_SHADER_SRC_DIR ${CMAKE_SOURCE_DIR}/shaders)
-# set(SBX_SHADER_OUT_DIR ${SBX_DATA_DIR}/shaders)
-
-# set(DOTNET_OUT_DIR ${SBX_DATA_DIR}/dotnet)
+set(SBX_DOTNET_OUT_DIR ${CMAKE_BINARY_DIR}/dotnet)
 
 # External dependencies
 
@@ -620,40 +618,40 @@ target_link_options(libsbx PUBLIC ${_sbx_link_options})
 
 # Scripting: dotnet build targets
 
-# set(SBX_MANAGED_DIR ${CMAKE_SOURCE_DIR}/dotnet/Sbx.Managed)
-# set(SBX_MANAGED_PROJECT ${SBX_MANAGED_DIR}/Sbx.Managed.csproj)
+set(SBX_MANAGED_DIR ${CMAKE_SOURCE_DIR}/dotnet/Sbx.Managed)
+set(SBX_MANAGED_PROJECT ${SBX_MANAGED_DIR}/Sbx.Managed.csproj)
 
-# add_custom_target(
-#   sbx_scripting_managed ALL
-#   COMMAND ${CMAKE_COMMAND} -E make_directory ${DOTNET_OUT_DIR}
-#   COMMAND dotnet publish ${SBX_MANAGED_PROJECT}
-#     -c $<CONFIG>
-#     --self-contained false
-#     -p:UseAppHost=false
-#     -o ${DOTNET_OUT_DIR}
-#   WORKING_DIRECTORY ${SBX_MANAGED_DIR}
-#   COMMENT "Publishing Sbx.Managed assembly (framework-dependent)"
-# )
+add_custom_target(
+  sbx_scripting_managed ALL
+  COMMAND ${CMAKE_COMMAND} -E make_directory ${SBX_DOTNET_OUT_DIR}
+  COMMAND dotnet publish ${SBX_MANAGED_PROJECT}
+    -c $<CONFIG>
+    --self-contained false
+    -p:UseAppHost=false
+    -o ${SBX_DOTNET_OUT_DIR}
+  WORKING_DIRECTORY ${SBX_MANAGED_DIR}
+  COMMENT "Publishing Sbx.Managed assembly (framework-dependent)"
+)
 
-# add_dependencies(libsbx sbx_scripting_managed)
+add_dependencies(libsbx sbx_scripting_managed)
 
-# set(SBX_CORE_DIR ${CMAKE_SOURCE_DIR}/dotnet/Sbx.Core)
-# set(SBX_CORE_PROJECT ${SBX_CORE_DIR}/Sbx.Core.csproj)
+set(SBX_CORE_DIR ${CMAKE_SOURCE_DIR}/dotnet/Sbx.Core)
+set(SBX_CORE_PROJECT ${SBX_CORE_DIR}/Sbx.Core.csproj)
 
-# add_custom_target(
-#   sbx_scripting_core ALL
-#   COMMAND ${CMAKE_COMMAND} -E make_directory ${DOTNET_OUT_DIR}
-#   COMMAND dotnet publish ${SBX_CORE_PROJECT}
-#     -c $<CONFIG>
-#     --self-contained false
-#     -p:UseAppHost=false
-#     -o ${DOTNET_OUT_DIR}
-#   WORKING_DIRECTORY ${SBX_CORE_DIR}
-#   COMMENT "Publishing Sbx.Core assembly (self-contained ${SBX_DOTNET_RID})"
-# )
+add_custom_target(
+  sbx_scripting_core ALL
+  COMMAND ${CMAKE_COMMAND} -E make_directory ${SBX_DOTNET_OUT_DIR}
+  COMMAND dotnet publish ${SBX_CORE_PROJECT}
+    -c $<CONFIG>
+    --self-contained false
+    -p:UseAppHost=false
+    -o ${SBX_DOTNET_OUT_DIR}
+  WORKING_DIRECTORY ${SBX_CORE_DIR}
+  COMMENT "Publishing Sbx.Core assembly (self-contained ${SBX_DOTNET_RID})"
+)
 
-# add_dependencies(sbx_scripting_core sbx_scripting_managed)
-# add_dependencies(libsbx sbx_scripting_core)
+add_dependencies(sbx_scripting_core sbx_scripting_managed)
+add_dependencies(libsbx sbx_scripting_core)
 
 # Install
 
@@ -705,12 +703,12 @@ install(
 #   endif()
 # ")
 
-# install(
-#   DIRECTORY ${SBX_DATA_DIR}/
-#   DESTINATION ${CMAKE_INSTALL_DATADIR}/libsbx
-#   USE_SOURCE_PERMISSIONS
-#   PATTERN "*.pdb" EXCLUDE
-# )
+install(
+  DIRECTORY ${SBX_DOTNET_OUT_DIR}
+  DESTINATION ${CMAKE_INSTALL_DATADIR}/libsbx
+  USE_SOURCE_PERMISSIONS
+  PATTERN "*.pdb" EXCLUDE
+)
 
 
 # install(

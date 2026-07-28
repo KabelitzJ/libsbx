@@ -12,7 +12,7 @@ auto scene::create_node(const utility::hashed_string& name, const scenes::local_
 
 auto scene::find(math::uuid id) -> node {
   if (const auto entry = _entities_by_id.find(id); entry != _entities_by_id.end()) {
-    return node{this, entry->second};
+    return node{memory::make_observer(_registry), entry->second};
   }
 
   return node{};
@@ -20,7 +20,7 @@ auto scene::find(math::uuid id) -> node {
 
 auto scene::find(const utility::hashed_string& name) -> node {
   if (const auto [first, last] = _entities_by_name.equal_range(name); first != last) {
-    return node{this, first->second};
+    return node{memory::make_observer(_registry), first->second};
   }
 
   return node{};
@@ -31,7 +31,7 @@ auto scene::set_active_camera(node camera) -> void {
 }
 
 auto scene::active_camera() -> node {
-  return node{this, _active_camera};
+  return node{memory::make_observer(_registry), _active_camera};
 }
 
 auto scene::set_primary_light(node light) -> void { 
@@ -39,7 +39,7 @@ auto scene::set_primary_light(node light) -> void {
 }
 
 auto scene::primary_light() -> node { 
-  return node{this, _primary_light}; 
+  return node{memory::make_observer(_registry), _primary_light}; 
 }
 
 auto scene::update() -> void {
@@ -66,7 +66,7 @@ auto scene::_create_node(const utility::hashed_string& name, const scenes::local
   _entities_by_id.emplace(id, entity);
   _entities_by_name.emplace(name, entity);
 
-  return node{this, entity};
+  return node{memory::make_observer(_registry), entity};
 }
 
 auto scene::_set_parent(ecs::entity child, ecs::entity parent) -> void {

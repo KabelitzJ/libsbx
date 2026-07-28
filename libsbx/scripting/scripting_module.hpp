@@ -49,7 +49,7 @@ public:
 
   auto load_assembly(const std::filesystem::path& assembly_path, std::initializer_list<internal_call> bindings = {}) -> void;
 
-  // auto instantiate(const scenes::node node, std::string_view class_name) -> managed::object;
+  auto instantiate(scenes::node& node, std::string_view class_name) -> managed::object;
 
 private:
 

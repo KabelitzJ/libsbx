@@ -320,7 +320,9 @@ auto scene_serializer::load(scene& target, const std::filesystem::path& path) ->
     auto node = target.find(node_yaml["id"].as<math::uuid>());
 
     if (const auto parent = node_yaml["parent"]) {
-      node.set_parent(target.find(parent.as<math::uuid>()));
+      auto parent_node = target.find(parent.as<math::uuid>());
+
+      node.set_parent(parent_node);
     }
 
     for (const auto component : node_yaml["components"]) {

@@ -7,14 +7,14 @@ namespace Sbx.Core
   public abstract class Behavior
   {
 
-    protected uint Node;
+    protected ulong Uuid;
     private Dictionary<Type, Component> componentCache = new Dictionary<Type, Component>();
 
-    protected Behavior() { Node = 0; }
+    protected Behavior() { Uuid = 0; }
 
-		internal Behavior(uint node)
+		internal Behavior(ulong uuid)
 		{
-			Node = node;
+			Uuid = uuid;
 		}
 
 		public virtual void OnCreate() { }
@@ -33,9 +33,9 @@ namespace Sbx.Core
 				return GetComponent<T>();
 			}
 
-			unsafe { InternalCalls.Behavior_AddComponent(Node, typeof(T)); }
+			unsafe { InternalCalls.Behavior_AddComponent(Uuid, typeof(T)); }
 
-			var component = new T { Node = Node };
+			var component = new T { Uuid = Uuid };
 
 			componentCache.Add(typeof(T), component);
 
@@ -44,12 +44,12 @@ namespace Sbx.Core
 
 		public bool HasComponent<T>() where T : Component
 		{
-			unsafe { return InternalCalls.Behavior_HasComponent(Node, typeof(T)); }
+			unsafe { return InternalCalls.Behavior_HasComponent(Uuid, typeof(T)); }
 		}
 
 		public bool HasComponent(Type type)
 		{
-			unsafe { return InternalCalls.Behavior_HasComponent(Node, type); }
+			unsafe { return InternalCalls.Behavior_HasComponent(Uuid, type); }
 		}
 
 		public T? GetComponent<T>() where T : Component, new()
@@ -65,7 +65,7 @@ namespace Sbx.Core
 
 			if (!componentCache.ContainsKey(componentType))
       {
-        var component = new T { Node = Node };
+        var component = new T { Uuid = Uuid };
         
 				componentCache.Add(componentType, component);
 

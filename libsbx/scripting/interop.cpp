@@ -37,567 +37,606 @@ auto interop::log_log_message(log_level level, managed::string message) -> void 
   }
 }
 
-// auto interop::behavior_add_component(std::uint32_t node, managed::reflection_type component_type) -> void {
+auto interop::behavior_add_component(std::uint64_t uuid, managed::reflection_type component_type) -> void {
+  auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
+
+  auto& scene = scenes_module.active_scene();
+
+  auto node = scene.find(math::uuid::from_value(uuid));
+
+  if (!node.is_valid()) {
+    utility::logger<"scripting">::error("Attempting to call add_component on invalid node");
+
+    return;
+  }
+
+  auto& type = static_cast<managed::type&>(component_type);
+
+  if (!type) {
+    return;
+  }
+
+  if (auto entry = _add_component_functions.find(type.get_type_id()); entry != _add_component_functions.end()) {
+    auto function = entry->second;
+
+    std::invoke(function, node);
+  }
+}
+
+auto interop::behavior_has_component(std::uint64_t uuid, managed::reflection_type component_type) -> bool {
+  auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
+
+  auto& scene = scenes_module.active_scene();
+
+  auto node = scene.find(math::uuid::from_value(uuid));
+
+  if (!node.is_valid()) {
+    utility::logger<"scripting">::error("Attempting to call has_component on invalid node");
+
+    return false;
+  }
+
+  auto& type = static_cast<managed::type&>(component_type);
+
+  if (!type) {
+    return false;
+  }
+
+  if (auto entry = _has_component_functions.find(type.get_type_id()); entry != _has_component_functions.end()) {
+    auto function = entry->second;
+
+    return std::invoke(function, node);
+  }
+
+  return false;
+}
+
+// auto interop::behavior_remove_component(std::uint64_t uuid, managed::reflection_type component_type) -> bool {
 //   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
 
 //   auto& scene = scenes_module.active_scene();
-//   auto& environment = scene.environment();
-//   auto& graph = scene.graph();
 
-//   if (!graph.is_valid(static_cast<scenes::node>(node))) {
-//     utility::logger<"scripting">::error("Attempting to call add_component on invalid node");
+//   auto node = scene.find(math::uuid::from_value(uuid));
 
-//     return;
-//   };
+//   if (!node.is_valid()) {
+//     utility::logger<"scripting">::error("Attempting to call remove_component on invalid node");
+
+//     return false;
+//   }
 
 //   auto& type = static_cast<managed::type&>(component_type);
 
 //   if (!type) {
-//     return;
-//   }
-
-//   if (auto entry = _add_component_functions.find(type.get_type_id()); entry != _add_component_functions.end()) {
-//     auto function = entry->second;
-
-//     std::invoke(function, static_cast<scenes::node>(node));
-//   }
-// }
-
-// auto interop::behavior_has_component(std::uint32_t node, managed::reflection_type component_type) -> bool {
-//   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
-
-//   auto& scene = scenes_module.active_scene();
-//   auto& environment = scene.environment();
-//   auto& graph = scene.graph();
-
-//   if (!graph.is_valid(static_cast<scenes::node>(node))) {
-//     utility::logger<"scripting">::error("Attempting to call has_component on invalid node");
-
-//     return false;
-//   };
-
-//   auto& type = static_cast<managed::type&>(component_type);
-
-//   if (!type) {
 //     return false;
 //   }
 
-//   if (auto entry = _has_component_functions.find(type.get_type_id()); entry != _has_component_functions.end()) {
+//   if (auto entry = _remove_component_functions.find(type.get_type_id()); entry != _remove_component_functions.end()) {
 //     auto function = entry->second;
 
-//     return std::invoke(function, static_cast<scenes::node>(node));
+//     return std::invoke(function, node);
 //   }
 
 //   return false;
 // }
 
-// // auto interop::behavior_remove_component(std::uint32_t node, managed::reflection_type componentType) -> bool {
+auto interop::tag_get_tag(std::uint64_t uuid) -> managed::string {
+  auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
 
-// // }
+  auto& scene = scenes_module.active_scene();
 
-// auto interop::tag_get_tag(std::uint32_t node) -> managed::string {
+  auto node = scene.find(math::uuid::from_value(uuid));
+
+  if (!node.is_valid()) {
+    utility::logger<"scripting">::error("Attempting to get tag of invalid node");
+
+    return managed::string::create("");
+  }
+
+  return managed::string::create(node.name().c_str());
+}
+
+auto interop::tag_set_tag(std::uint64_t uuid, managed::string tag) -> void {
+  auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
+
+  auto& scene = scenes_module.active_scene();
+
+  auto node = scene.find(math::uuid::from_value(uuid));
+
+  if (!node.is_valid()) {
+    utility::logger<"scripting">::error("Attempting to set tag of invalid node");
+
+    return;
+  }
+
+  node.name() = scenes::tag{std::string{tag}};
+}
+
+auto interop::transform_get_position(std::uint64_t uuid, math::vector3* position) -> void {
+  auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
+
+  auto& scene = scenes_module.active_scene();
+
+  auto node = scene.find(math::uuid::from_value(uuid));
+
+  if (!node.is_valid()) {
+    utility::logger<"scripting">::error("Attempting to get position of invalid node");
+
+    return;
+  }
+
+  *position = node.transform().position;
+}
+
+auto interop::transform_set_position(std::uint64_t uuid, math::vector3* position) -> void {
+  auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
+
+  auto& scene = scenes_module.active_scene();
+
+  auto node = scene.find(math::uuid::from_value(uuid));
+
+  if (!node.is_valid()) {
+    utility::logger<"scripting">::error("Attempting to set position of invalid node");
+
+    return;
+  }
+
+  if (!position) {
+    utility::logger<"scripting">::error("Attempting to set null position of node '{}'", node.name());
+
+    return;
+  }
+
+  node.transform().position = *position;
+}
+
+auto interop::transform_get_world_position(std::uint64_t uuid, math::vector3* position) -> void {
+  auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
+
+  auto& scene = scenes_module.active_scene();
+
+  auto node = scene.find(math::uuid::from_value(uuid));
+
+  if (!node.is_valid()) {
+    utility::logger<"scripting">::error("Attempting to get world position of invalid node");
+
+    return;
+  }
+
+  const auto& matrix = node.world_matrix();
+
+  *position = math::vector3{matrix[3][0], matrix[3][1], matrix[3][2]};
+}
+
+auto interop::transform_get_rotation(std::uint64_t uuid, math::quaternion* rotation) -> void {
+  auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
+
+  auto& scene = scenes_module.active_scene();
+
+  auto node = scene.find(math::uuid::from_value(uuid));
+
+  if (!node.is_valid()) {
+    utility::logger<"scripting">::error("Attempting to get rotation of invalid node");
+
+    return;
+  }
+
+  *rotation = node.transform().rotation;
+}
+
+auto interop::transform_set_rotation(std::uint64_t uuid, math::quaternion* rotation) -> void {
+  auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
+
+  auto& scene = scenes_module.active_scene();
+
+  auto node = scene.find(math::uuid::from_value(uuid));
+
+  if (!node.is_valid()) {
+    utility::logger<"scripting">::error("Attempting to set rotation of invalid node");
+
+    return;
+  }
+
+  if (!rotation) {
+    utility::logger<"scripting">::error("Attempting to set null rotation of node '{}'", node.name());
+
+    return;
+  }
+
+  node.transform().rotation = *rotation;
+}
+
+auto interop::transform_get_right(std::uint64_t uuid, math::vector3* right) -> void {
+  auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
+
+  auto& scene = scenes_module.active_scene();
+
+  auto node = scene.find(math::uuid::from_value(uuid));
+
+  if (!node.is_valid()) {
+    utility::logger<"scripting">::error("Attempting to get right of invalid node");
+
+    return;
+  }
+
+  *right = node.transform().right();
+}
+
+auto interop::transform_get_forward(std::uint64_t uuid, math::vector3* forward) -> void {
+  auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
+
+  auto& scene = scenes_module.active_scene();
+
+  auto node = scene.find(math::uuid::from_value(uuid));
+
+  if (!node.is_valid()) {
+    utility::logger<"scripting">::error("Attempting to get forward of invalid node");
+
+    return;
+  }
+
+  *forward = node.transform().forward();
+}
+
+auto interop::transform_get_up(std::uint64_t uuid, math::vector3* up) -> void {
+  auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
+
+  auto& scene = scenes_module.active_scene();
+
+  auto node = scene.find(math::uuid::from_value(uuid));
+
+  if (!node.is_valid()) {
+    utility::logger<"scripting">::error("Attempting to get up of invalid node");
+
+    return;
+  }
+
+  *up = node.transform().up();
+}
+
+// auto interop::transform_look_at(std::uint64_t uuid, math::vector3* target) -> void {
 //   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
 
 //   auto& scene = scenes_module.active_scene();
-//   auto& graph = scene.graph();
 
-//   auto& tag = graph.get_component<scenes::tag>(static_cast<scenes::node>(node));
+//   auto node = scene.find(math::uuid::from_value(uuid));
 
-//   return managed::string::create(tag.data());
-// }
-
-// auto interop::tag_set_tag(std::uint32_t node, managed::string tag) -> void {
-//   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
-
-//   auto& scene = scenes_module.active_scene();
-//   auto& graph = scene.graph();
-
-//   graph.get_component<scenes::tag>(static_cast<scenes::node>(node)) = std::string{tag};
-// }
-
-// auto interop::transform_get_position(std::uint32_t node, math::vector3* position) -> void {
-//   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
-
-//   auto& scene = scenes_module.active_scene();
-//   auto& graph = scene.graph();
-
-//   if (!graph.is_valid(static_cast<scenes::node>(node))) {
-//     utility::logger<"scripting">::error("Attempting to get position of invalid node");
-
-//     return;
-//   }
-
-//   auto& transform = graph.get_component<scenes::transform>(static_cast<scenes::node>(node));
-
-//   *position = transform.position();
-// }
-
-// auto interop::transform_set_position(std::uint32_t node, math::vector3* position) -> void {
-//   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
-
-//   auto& scene = scenes_module.active_scene();
-//   auto& graph = scene.graph();
-
-//   if (!graph.is_valid(static_cast<scenes::node>(node))) {
-//     utility::logger<"scripting">::error("Attempting to set position of invalid node");
-
-//     return;
-//   }
-
-//   if (!position) {
-//     auto& tag = graph.get_component<scenes::tag>(static_cast<scenes::node>(node));
-
-//     utility::logger<"scripting">::error("Attempting to set null position of node '{}'", tag);
-
-//     return;
-//   }
-
-//   auto& transform = graph.get_component<scenes::transform>(static_cast<scenes::node>(node));
-
-//   transform.set_position(*position);
-// }
-
-// auto interop::transform_get_world_position(std::uint32_t node, math::vector3* position) -> void {
-//   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
-
-//   auto& scene = scenes_module.active_scene();
-//   auto& graph = scene.graph();
-
-//   if (!graph.is_valid(static_cast<scenes::node>(node))) {
-//     utility::logger<"scripting">::error("Attempting to get position of invalid node");
-
-//     return;
-//   }
-
-//   *position = graph.world_position(static_cast<scenes::node>(node));
-// }
-
-// auto interop::transform_get_rotation(std::uint32_t node, math::quaternion* rotation) -> void {
-//   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
-
-//   auto& scene = scenes_module.active_scene();
-//   auto& graph = scene.graph();
-
-//   if (!graph.is_valid(static_cast<scenes::node>(node))) {
-//     utility::logger<"scripting">::error("Attempting to get rotation of invalid node");
-
-//     return;
-//   }
-
-//   auto& transform = graph.get_component<scenes::transform>(static_cast<scenes::node>(node));
-
-//   *rotation = transform.rotation();
-// }
-
-// auto interop::transform_set_rotation(std::uint32_t node, math::quaternion* rotation) -> void {
-//   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
-
-//   auto& scene = scenes_module.active_scene();
-//   auto& graph = scene.graph();
-
-//   if (!graph.is_valid(static_cast<scenes::node>(node))) {
-//     utility::logger<"scripting">::error("Attempting to set rotation of invalid node");
-
-//     return;
-//   }
-
-//   if (!rotation) {
-//     auto& tag = graph.get_component<scenes::tag>(static_cast<scenes::node>(node));
-
-//     utility::logger<"scripting">::error("Attempting to set null rotation of node '{}'", tag);
-
-//     return;
-//   }
-
-//   auto& transform = graph.get_component<scenes::transform>(static_cast<scenes::node>(node));
-
-//   transform.set_rotation(*rotation);
-// }
-
-// auto interop::transform_get_right(std::uint32_t node, math::vector3* right) -> void {
-//   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
-
-//   auto& scene = scenes_module.active_scene();
-//   auto& graph = scene.graph();
-
-//   if (!graph.is_valid(static_cast<scenes::node>(node))) {
-//     utility::logger<"scripting">::error("Attempting to set position of invalid node");
-
-//     return;
-//   }
-
-//   auto& transform = graph.get_component<scenes::transform>(static_cast<scenes::node>(node));
-
-//   *right = transform.right();
-// }
-
-// auto interop::transform_get_forward(std::uint32_t node, math::vector3* forward) -> void {
-//   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
-
-//   auto& scene = scenes_module.active_scene();
-//   auto& graph = scene.graph();
-
-//   if (!graph.is_valid(static_cast<scenes::node>(node))) {
-//     utility::logger<"scripting">::error("Attempting to set position of invalid node");
-
-//     return;
-//   }
-
-//   auto& transform = graph.get_component<scenes::transform>(static_cast<scenes::node>(node));
-
-//   *forward = transform.forward();
-// }
-
-// auto interop::transform_get_up(std::uint32_t node, math::vector3* up) -> void {
-//   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
-
-//   auto& scene = scenes_module.active_scene();
-//   auto& graph = scene.graph();
-
-//   if (!graph.is_valid(static_cast<scenes::node>(node))) {
-//     utility::logger<"scripting">::error("Attempting to set position of invalid node");
-
-//     return;
-//   }
-
-//   auto& transform = graph.get_component<scenes::transform>(static_cast<scenes::node>(node));
-
-//   *up = transform.up();
-// }
-
-// auto interop::transform_look_at(std::uint32_t node, math::vector3* target) -> void {
-//   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
-
-//   auto& scene = scenes_module.active_scene();
-//   auto& graph = scene.graph();
-
-//   if (!graph.is_valid(static_cast<scenes::node>(node))) {
-//     utility::logger<"scripting">::error("Attempting to set position of invalid node");
+//   if (!node.is_valid()) {
+//     utility::logger<"scripting">::error("Attempting to call look_at on invalid node");
 
 //     return;
 //   }
 
 //   if (!target) {
-//     auto& tag = graph.get_component<scenes::tag>(static_cast<scenes::node>(node));
-
-//     utility::logger<"scripting">::error("Attempting to call LookAt with null target of node '{}'", tag);
+//     utility::logger<"scripting">::error("Attempting to call look_at with null target of node '{}'", node.name());
 
 //     return;
 //   }
 
-//   auto& transform = graph.get_component<scenes::transform>(static_cast<scenes::node>(node));
-
-//   transform.look_at(*target);
+//   node.transform().look_at(*target);
 // }
 
-// auto interop::character_controller_get_height(std::uint32_t node, std::float_t* height) -> void {
+// auto interop::character_controller_get_height(std::uint64_t uuid, std::float_t* height) -> void {
 //   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
 
 //   auto& scene = scenes_module.active_scene();
-//   auto& graph = scene.graph();
 
-//   if (!graph.is_valid(static_cast<scenes::node>(node))) {
+//   auto node = scene.find(math::uuid::from_value(uuid));
+
+//   if (!node.is_valid()) {
 //     utility::logger<"scripting">::error("Attempting to get height of invalid node");
 
 //     return;
 //   }
 
-//   auto& character_controller = graph.get_component<physics::character_controller>(static_cast<scenes::node>(node));
+//   auto& character_controller = node.get_component<physics::character_controller>();
 
 //   *height = character_controller.height;
 // }
 
-// auto interop::character_controller_get_radius(std::uint32_t node, std::float_t* radius) -> void {
+// auto interop::character_controller_get_radius(std::uint64_t uuid, std::float_t* radius) -> void {
 //   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
 
 //   auto& scene = scenes_module.active_scene();
-//   auto& graph = scene.graph();
 
-//   if (!graph.is_valid(static_cast<scenes::node>(node))) {
+//   auto node = scene.find(math::uuid::from_value(uuid));
+
+//   if (!node.is_valid()) {
 //     utility::logger<"scripting">::error("Attempting to get radius of invalid node");
 
 //     return;
 //   }
 
-//   auto& character_controller = graph.get_component<physics::character_controller>(static_cast<scenes::node>(node));
+//   auto& character_controller = node.get_component<physics::character_controller>();
 
 //   *radius = character_controller.radius;
 // }
 
-// auto interop::character_controller_get_slope_limit(std::uint32_t node, std::float_t* slope_limit) -> void {
+// auto interop::character_controller_get_slope_limit(std::uint64_t uuid, std::float_t* slope_limit) -> void {
 //   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
 
 //   auto& scene = scenes_module.active_scene();
-//   auto& graph = scene.graph();
 
-//   if (!graph.is_valid(static_cast<scenes::node>(node))) {
+//   auto node = scene.find(math::uuid::from_value(uuid));
+
+//   if (!node.is_valid()) {
 //     utility::logger<"scripting">::error("Attempting to get slope_limit of invalid node");
 
 //     return;
 //   }
 
-//   auto& character_controller = graph.get_component<physics::character_controller>(static_cast<scenes::node>(node));
+//   auto& character_controller = node.get_component<physics::character_controller>();
 
 //   *slope_limit = character_controller.slope_limit;
 // }
 
-// auto interop::character_controller_get_step_offset(std::uint32_t node, std::float_t* step_offset) -> void {
+// auto interop::character_controller_get_step_offset(std::uint64_t uuid, std::float_t* step_offset) -> void {
 //   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
 
 //   auto& scene = scenes_module.active_scene();
-//   auto& graph = scene.graph();
 
-//   if (!graph.is_valid(static_cast<scenes::node>(node))) {
+//   auto node = scene.find(math::uuid::from_value(uuid));
+
+//   if (!node.is_valid()) {
 //     utility::logger<"scripting">::error("Attempting to get step_offset of invalid node");
 
 //     return;
 //   }
 
-//   auto& character_controller = graph.get_component<physics::character_controller>(static_cast<scenes::node>(node));
+//   auto& character_controller = node.get_component<physics::character_controller>();
 
 //   *step_offset = character_controller.step_offset;
 // }
 
-// auto interop::character_controller_get_is_grounded(std::uint32_t node) -> managed::bool32 {
+// auto interop::character_controller_get_is_grounded(std::uint64_t uuid) -> managed::bool32 {
 //   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
 
 //   auto& scene = scenes_module.active_scene();
-//   auto& graph = scene.graph();
 
-//   if (!graph.is_valid(static_cast<scenes::node>(node))) {
-//     utility::logger<"scripting">::error("Attempting to get step_offset of invalid node");
+//   auto node = scene.find(math::uuid::from_value(uuid));
+
+//   if (!node.is_valid()) {
+//     utility::logger<"scripting">::error("Attempting to get is_grounded of invalid node");
 
 //     return false;
 //   }
 
-//   auto& character_controller = graph.get_component<physics::character_controller>(static_cast<scenes::node>(node));
+//   auto& character_controller = node.get_component<physics::character_controller>();
 
 //   return character_controller.is_grounded;
 // }
 
-// auto interop::character_controller_get_flags(std::uint32_t node, std::uint8_t* flags) -> void {
+// auto interop::character_controller_get_flags(std::uint64_t uuid, std::uint8_t* flags) -> void {
 //   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
 
 //   auto& scene = scenes_module.active_scene();
-//   auto& graph = scene.graph();
 
-//   if (!graph.is_valid(static_cast<scenes::node>(node))) {
-//     utility::logger<"scripting">::error("Attempting to get step_offset of invalid node");
+//   auto node = scene.find(math::uuid::from_value(uuid));
+
+//   if (!node.is_valid()) {
+//     utility::logger<"scripting">::error("Attempting to get flags of invalid node");
 
 //     return;
 //   }
 
-//   auto& character_controller = graph.get_component<physics::character_controller>(static_cast<scenes::node>(node));
+//   auto& character_controller = node.get_component<physics::character_controller>();
 
 //   *flags = reflection::to_underlying(character_controller.flags);
 // }
 
-// auto interop::character_controller_move(std::uint32_t node, math::vector3* displacement) -> void {
+// auto interop::character_controller_move(std::uint64_t uuid, math::vector3* displacement) -> void {
 //   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
 
 //   auto& scene = scenes_module.active_scene();
-//   auto& graph = scene.graph();
 
-//   if (!graph.is_valid(static_cast<scenes::node>(node))) {
-//     utility::logger<"scripting">::error("Attempting to get position of invalid node");
+//   auto node = scene.find(math::uuid::from_value(uuid));
+
+//   if (!node.is_valid()) {
+//     utility::logger<"scripting">::error("Attempting to move invalid node");
 
 //     return;
 //   }
 
-//   auto& character_controller = graph.get_component<physics::character_controller>(static_cast<scenes::node>(node));
+//   auto& character_controller = node.get_component<physics::character_controller>();
 
 //   character_controller.displacement += *displacement;
 // }
 
-// auto interop::input_is_key_pressed(platform::key key) -> managed::bool32 { 
-//   return platform::input::is_key_pressed(key); 
-// }
+auto interop::input_is_key_pressed(platform::key key) -> managed::bool32 { 
+  return platform::input::is_key_pressed(key); 
+}
 
-// auto interop::input_is_key_down(platform::key key) -> managed::bool32 { 
-//   return platform::input::is_key_down(key); 
-// }
+auto interop::input_is_key_down(platform::key key) -> managed::bool32 { 
+  return platform::input::is_key_down(key); 
+}
 
-// auto interop::input_is_key_released(platform::key key) -> managed::bool32 { 
-//   return platform::input::is_key_released(key); 
-// }
+auto interop::input_is_key_released(platform::key key) -> managed::bool32 { 
+  return platform::input::is_key_released(key); 
+}
 
-// auto interop::input_is_mouse_button_pressed(platform::mouse_button mouse_button) -> managed::bool32 { 
-//   return platform::input::is_mouse_button_pressed(mouse_button); 
-// }
+auto interop::input_is_mouse_button_pressed(platform::mouse_button mouse_button) -> managed::bool32 { 
+  return platform::input::is_mouse_button_pressed(mouse_button); 
+}
 
-// auto interop::input_is_mouse_button_down(platform::mouse_button mouse_button) -> managed::bool32 { 
-//   return platform::input::is_mouse_button_down(mouse_button); 
-// }
+auto interop::input_is_mouse_button_down(platform::mouse_button mouse_button) -> managed::bool32 { 
+  return platform::input::is_mouse_button_down(mouse_button); 
+}
 
-// auto interop::input_is_mouse_button_released(platform::mouse_button mouse_button) -> managed::bool32 { 
-//   return platform::input::is_mouse_button_released(mouse_button); 
-// }
+auto interop::input_is_mouse_button_released(platform::mouse_button mouse_button) -> managed::bool32 { 
+  return platform::input::is_mouse_button_released(mouse_button); 
+}
 
-// auto interop::input_mouse_position(math::vector2* position) -> void {
-//   *position = platform::input::mouse_position();
-// }
+auto interop::input_mouse_position(math::vector2* position) -> void {
+  *position = platform::input::mouse_position();
+}
 
-// auto interop::input_scroll_delta(math::vector2* scroll_delta) -> void {
-//   *scroll_delta = platform::input::scroll_delta();
-// }
+auto interop::input_scroll_delta(math::vector2* scroll_delta) -> void {
+  *scroll_delta = platform::input::scroll_delta();
+}
 
 // auto interop::camera_screen_point_to_ray(math::ray* ray, math::vector2* position) -> void {
 //   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
 
 //   auto& scene = scenes_module.active_scene();
-//   auto& environment = scene.environment();
-//   auto& graph = scene.graph();
 
-//   auto camera_node = environment.camera();
+//   auto node = scene.active_camera();
 
-//   if (!ray) {
-//     auto& tag = graph.get_component<scenes::tag>(static_cast<scenes::node>(camera_node));
-
-//     utility::logger<"scripting">::error("Attempting to call ScreenPointToRay with null ray of node '{}'", tag);
+//   if (!node.is_valid()) {
+//     utility::logger<"scripting">::error("Attempting to call screen_point_to_ray with no active camera");
 
 //     return;
 //   }
 
-//   *ray = environment.screen_point_to_ray(*position);
+//   if (!ray) {
+//     utility::logger<"scripting">::error("Attempting to call screen_point_to_ray with null ray of node '{}'", node.name());
+
+//     return;
+//   }
+
+//   // NOTE: screen_point_to_ray lived on environment, which is gone. Reimplement against camera component + viewport.
 // }
 
 // auto interop::camera_get_position(math::vector3* position) -> void {
 //   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
 
 //   auto& scene = scenes_module.active_scene();
-//   auto& environment = scene.environment();
-//   auto& graph = scene.graph();
 
-//   auto camera_node = environment.camera();
+//   auto node = scene.active_camera();
 
-//   auto& transform = graph.get_component<scenes::transform>(static_cast<scenes::node>(camera_node));
+//   if (!node.is_valid()) {
+//     utility::logger<"scripting">::error("Attempting to get position with no active camera");
 
-//   *position = transform.position();
+//     return;
+//   }
+
+//   *position = node.transform().position;
 // }
 
 // auto interop::camera_set_position(math::vector3* position) -> void {
 //   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
 
 //   auto& scene = scenes_module.active_scene();
-//   auto& environment = scene.environment();
-//   auto& graph = scene.graph();
 
-//   auto camera_node = environment.camera();
+//   auto node = scene.active_camera();
 
-//   if (!position) {
-//     auto& tag = graph.get_component<scenes::tag>(static_cast<scenes::node>(camera_node));
-
-//     utility::logger<"scripting">::error("Attempting to set null position of camera node '{}'", tag);
+//   if (!node.is_valid()) {
+//     utility::logger<"scripting">::error("Attempting to set position with no active camera");
 
 //     return;
 //   }
 
-//   auto& transform = graph.get_component<scenes::transform>(static_cast<scenes::node>(camera_node));
+//   if (!position) {
+//     utility::logger<"scripting">::error("Attempting to set null position of camera node '{}'", node.name());
 
-//   transform.set_position(*position);
+//     return;
+//   }
+
+//   node.transform().position = *position;
 // }
 
 // auto interop::camera_get_rotation(math::quaternion* rotation) -> void {
 //   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
 
 //   auto& scene = scenes_module.active_scene();
-//   auto& environment = scene.environment();
-//   auto& graph = scene.graph();
 
-//   auto camera_node = environment.camera();
+//   auto node = scene.active_camera();
 
-//   auto& transform = graph.get_component<scenes::transform>(static_cast<scenes::node>(camera_node));
+//   if (!node.is_valid()) {
+//     utility::logger<"scripting">::error("Attempting to get rotation with no active camera");
 
-//   *rotation = transform.rotation();
+//     return;
+//   }
+
+//   *rotation = node.transform().rotation;
 // }
 
 // auto interop::camera_set_rotation(math::quaternion* rotation) -> void {
 //   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
 
 //   auto& scene = scenes_module.active_scene();
-//   auto& environment = scene.environment();
-//   auto& graph = scene.graph();
 
-//   auto camera_node = environment.camera();
+//   auto node = scene.active_camera();
 
-//   if (!rotation) {
-//     auto& tag = graph.get_component<scenes::tag>(static_cast<scenes::node>(camera_node));
-
-//     utility::logger<"scripting">::error("Attempting to set null rotation of camera node '{}'", tag);
+//   if (!node.is_valid()) {
+//     utility::logger<"scripting">::error("Attempting to set rotation with no active camera");
 
 //     return;
 //   }
 
-//   auto& transform = graph.get_component<scenes::transform>(static_cast<scenes::node>(camera_node));
+//   if (!rotation) {
+//     utility::logger<"scripting">::error("Attempting to set null rotation of camera node '{}'", node.name());
 
-//   transform.set_rotation(*rotation);
+//     return;
+//   }
+
+//   node.transform().rotation = *rotation;
 // }
 
 // auto interop::camera_get_forward(math::vector3* forward) -> void {
 //   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
 
 //   auto& scene = scenes_module.active_scene();
-//   auto& environment = scene.environment();
-//   auto& graph = scene.graph();
 
-//   auto camera_node = environment.camera();
+//   auto node = scene.active_camera();
 
-//   auto& transform = graph.get_component<scenes::transform>(static_cast<scenes::node>(camera_node));
+//   if (!node.is_valid()) {
+//     utility::logger<"scripting">::error("Attempting to get forward with no active camera");
 
-//   *forward = transform.forward();
+//     return;
+//   }
+
+//   *forward = node.transform().forward();
 // }
 
 // auto interop::camera_get_right(math::vector3* right) -> void {
 //   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
 
 //   auto& scene = scenes_module.active_scene();
-//   auto& environment = scene.environment();
-//   auto& graph = scene.graph();
 
-//   auto camera_node = environment.camera();
+//   auto node = scene.active_camera();
 
-//   auto& transform = graph.get_component<scenes::transform>(static_cast<scenes::node>(camera_node));
+//   if (!node.is_valid()) {
+//     utility::logger<"scripting">::error("Attempting to get right with no active camera");
 
-//   *right = transform.right();
+//     return;
+//   }
+
+//   *right = node.transform().right();
 // }
 
 // auto interop::camera_get_up(math::vector3* up) -> void {
 //   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
 
 //   auto& scene = scenes_module.active_scene();
-//   auto& environment = scene.environment();
-//   auto& graph = scene.graph();
 
-//   auto camera_node = environment.camera();
+//   auto node = scene.active_camera();
 
-//   auto& transform = graph.get_component<scenes::transform>(static_cast<scenes::node>(camera_node));
+//   if (!node.is_valid()) {
+//     utility::logger<"scripting">::error("Attempting to get up with no active camera");
 
-//   *up = transform.up();
+//     return;
+//   }
+
+//   *up = node.transform().up();
 // }
 
 // auto interop::camera_get_viewport(math::vector2* viewport) -> void {
 //   if (!viewport) {
 //     utility::logger<"scripting">::error("Attempting to get null viewport of camera");
-//     return;
-//   }
-
-//   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
-//   auto& scene = scenes_module.active_scene();
-//   auto& environment = scene.environment();
-
-//   const auto size = environment.render_target_size();
-
-//   *viewport = math::vector2{static_cast<std::float_t>(size.x()), static_cast<std::float_t>(size.y())};
-// }
-
-// auto interop::time_delta_time(std::float_t* delta_time) -> void {
-//   if (!delta_time) {
-//     utility::logger<"scripting">::error("Attempting to set null delta_time");
 
 //     return;
 //   }
 
-//   *delta_time = core::engine::delta_time().value();
+//   // NOTE: render_target_size lived on environment, which is gone. Source viewport from the render target / swapchain.
 // }
+
+auto interop::time_delta_time(std::float_t* delta_time) -> void {
+  if (!delta_time) {
+    utility::logger<"scripting">::error("Attempting to set null delta_time");
+
+    return;
+  }
+
+  *delta_time = core::engine::delta_time().value();
+}
 
 } // namespace sbx::scripting

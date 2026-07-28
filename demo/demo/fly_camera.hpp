@@ -29,7 +29,7 @@ public:
 
   fly_camera() = default;
 
-  explicit fly_camera(sbx::scenes::scene::node node);
+  explicit fly_camera(const sbx::scenes::node& node);
 
   auto update() -> void;
 
@@ -39,7 +39,7 @@ public:
 
 private:
 
-  sbx::scenes::scene::node _node{};
+  sbx::scenes::node _node{};
   std::float_t _yaw{0.0f};
   std::float_t _pitch{0.0f};
   std::float_t _move_speed{4.0f};

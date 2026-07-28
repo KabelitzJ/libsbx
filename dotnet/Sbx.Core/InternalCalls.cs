@@ -8,30 +8,30 @@ namespace Sbx.Core
   {
     internal static delegate* unmanaged<Logger.Level, NativeString, void> Log_LogMessage;
 
-    internal static delegate* unmanaged<uint, ReflectionType, void> Behavior_AddComponent;
-		internal static delegate* unmanaged<uint, ReflectionType, bool> Behavior_HasComponent;
-		// internal static delegate* unmanaged<uint, ReflectionType, bool> Behavior_RemoveComponent;
+    internal static delegate* unmanaged<ulong, ReflectionType, void> Behavior_AddComponent;
+		internal static delegate* unmanaged<ulong, ReflectionType, bool> Behavior_HasComponent;
+		// internal static delegate* unmanaged<ulong, ReflectionType, bool> Behavior_RemoveComponent;
 
-    internal static delegate* unmanaged<uint, NativeString> Tag_GetTag;
-    internal static delegate* unmanaged<uint, NativeString, void> Tag_SetTag;
+    internal static delegate* unmanaged<ulong, NativeString> Tag_GetTag;
+    internal static delegate* unmanaged<ulong, NativeString, void> Tag_SetTag;
 
-    internal static delegate* unmanaged<uint, Vector3*, void> Transform_GetPosition;
-    internal static delegate* unmanaged<uint, Vector3*, void> Transform_SetPosition;
-    internal static delegate* unmanaged<uint, Vector3*, void> Transform_GetWorldPosition;
-    internal static delegate* unmanaged<uint, Quaternion*, void> Transform_GetRotation;
-    internal static delegate* unmanaged<uint, Quaternion*, void> Transform_SetRotation;
-    internal static delegate* unmanaged<uint, Vector3*, void> Transform_GetRight;
-    internal static delegate* unmanaged<uint, Vector3*, void> Transform_GetForward;
-    internal static delegate* unmanaged<uint, Vector3*, void> Transform_GetUp;
-    internal static delegate* unmanaged<uint, Vector3*, void> Transform_LookAt;
+    internal static delegate* unmanaged<ulong, Vector3*, void> Transform_GetPosition;
+    internal static delegate* unmanaged<ulong, Vector3*, void> Transform_SetPosition;
+    internal static delegate* unmanaged<ulong, Vector3*, void> Transform_GetWorldPosition;
+    internal static delegate* unmanaged<ulong, Quaternion*, void> Transform_GetRotation;
+    internal static delegate* unmanaged<ulong, Quaternion*, void> Transform_SetRotation;
+    internal static delegate* unmanaged<ulong, Vector3*, void> Transform_GetRight;
+    internal static delegate* unmanaged<ulong, Vector3*, void> Transform_GetForward;
+    internal static delegate* unmanaged<ulong, Vector3*, void> Transform_GetUp;
+    internal static delegate* unmanaged<ulong, Vector3*, void> Transform_LookAt;
 
-    internal static delegate* unmanaged<uint, float*, void> CharacterController_GetHeight;
-    internal static delegate* unmanaged<uint, float*, void> CharacterController_GetRadius;
-    internal static delegate* unmanaged<uint, float*, void> CharacterController_GetSlopeLimit;
-    internal static delegate* unmanaged<uint, float*, void> CharacterController_GetStepOffset;
-    internal static delegate* unmanaged<uint, bool> CharacterController_GetIsGrounded;
-    internal static delegate* unmanaged<uint, byte*, void> CharacterController_GetFlags;
-    internal static delegate* unmanaged<uint, Vector3*, void> CharacterController_Move;
+    internal static delegate* unmanaged<ulong, float*, void> CharacterController_GetHeight;
+    internal static delegate* unmanaged<ulong, float*, void> CharacterController_GetRadius;
+    internal static delegate* unmanaged<ulong, float*, void> CharacterController_GetSlopeLimit;
+    internal static delegate* unmanaged<ulong, float*, void> CharacterController_GetStepOffset;
+    internal static delegate* unmanaged<ulong, bool> CharacterController_GetIsGrounded;
+    internal static delegate* unmanaged<ulong, byte*, void> CharacterController_GetFlags;
+    internal static delegate* unmanaged<ulong, Vector3*, void> CharacterController_Move;
 
     internal static delegate* unmanaged<KeyCode, Bool32> Input_IsKeyPressed;
 		internal static delegate* unmanaged<KeyCode, Bool32> Input_IsKeyDown;

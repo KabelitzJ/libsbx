@@ -21,6 +21,8 @@
 #include <libsbx/scenes/scene_serializer.hpp>
 #include <libsbx/scenes/components.hpp>
 
+#include <libsbx/scripting/scripting_module.hpp>
+
 #include <libsbx/render/render_module.hpp>
 
 namespace editor {
@@ -56,6 +58,10 @@ application::application()
   auto& skybox = _camera.add_component<sbx::scenes::skybox>();
   skybox.environment = assets_module.load_environment_map("environments/sky.hdr");
   skybox.intensity = 1.0f;
+
+  auto& scripting_module = sbx::core::engine::get_module<sbx::scripting::scripting_module>();
+
+  scripting_module.instantiate(_camera, "Editor.Test");
 }
 
 application::~application() {

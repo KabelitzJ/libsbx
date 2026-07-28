@@ -12,6 +12,7 @@
 #include <libsbx/ecs/entity.hpp>
 
 #include <libsbx/scenes/components.hpp>
+#include <libsbx/scenes/node.hpp>
 
 namespace sbx::scenes {
 
@@ -23,84 +24,6 @@ class scene {
   friend class scene_serializer;
 
 public:
-
-  /**
-   * @brief A lightweight handle to one node in a scene.
-   */
-  class node {
-
-    friend class scene;
-
-  public:
-
-    node() = default;
-
-    [[nodiscard]] auto is_valid() const noexcept -> bool {
-      return _scene != nullptr && _entity != ecs::null_entity;
-    }
-
-    [[nodiscard]] explicit operator bool() const noexcept {
-      return is_valid();
-    }
-
-    [[nodiscard]] auto id() const -> const scenes::id& {
-      return get_component<scenes::id>();
-    }
-
-    [[nodiscard]] auto name() -> tag& {
-      return get_component<scenes::tag>();
-    }
-
-    [[nodiscard]] auto name() const -> const tag& {
-      return get_component<scenes::tag>();
-    }
-
-    template<typename Component, typename... Args>
-    auto add_component(Args&&... args) -> Component& {
-      return _scene->_registry.emplace<Component>(_entity, std::forward<Args>(args)...);
-    }
-
-    template<typename Component>
-    [[nodiscard]] auto get_component() -> Component& {
-      return _scene->_registry.get<Component>(_entity);
-    }
-
-    template<typename Component>
-    [[nodiscard]] auto get_component() const -> const Component& {
-      return _scene->_registry.get<Component>(_entity);
-    }
-
-    template<typename Component>
-    [[nodiscard]] auto has_component() const -> bool {
-      return _scene->_registry.all_of<Component>(_entity);
-    }
-
-    template<typename Component>
-    auto remove_component() -> void {
-      _scene->_registry.remove<Component>(_entity);
-    }
-
-    [[nodiscard]] auto transform() -> local_transform& {
-      return get_component<local_transform>();
-    }
-
-    [[nodiscard]] auto world_matrix() -> const math::matrix4x4& {
-      return get_component<world_transform>().matrix;
-    }
-
-    auto set_parent(node parent) -> void {
-      _scene->_set_parent(_entity, parent._entity);
-    }
-
-  private:
-
-    node(scene* scene, ecs::entity entity)
-    : _scene{scene}, _entity{entity} { }
-
-    memory::observer_ptr<scene> _scene{nullptr};
-    ecs::entity _entity{ecs::null_entity};
-
-  }; // class node
 
   scene(const std::string& name = "Scene")
   : _name{name} { }

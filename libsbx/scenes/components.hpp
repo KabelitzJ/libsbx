@@ -38,6 +38,19 @@ struct local_transform {
 
     return translation_matrix * math::matrix_cast<math::matrix4x4>(rotation) * scale_matrix;
   }
+
+  [[nodiscard]] auto right() const -> math::vector3f {
+    return rotation * math::vector3f{1.0f, 0.0f, 0.0f};
+  }
+
+  [[nodiscard]] auto up() const -> math::vector3f {
+    return rotation * math::vector3f{0.0f, 1.0f, 0.0f};
+  }
+
+  [[nodiscard]] auto forward() const -> math::vector3f {
+    return rotation * math::vector3f{0.0f, 0.0f, -1.0f};
+  }
+
 }; // struct local_transform
 
 /**

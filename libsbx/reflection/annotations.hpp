@@ -59,9 +59,14 @@ struct range {
   std::size_t max;
 }; // struct range
 
+template<typename Type, typename Annotation>
+consteval auto has_annotation() -> bool {
+  return !std::meta::annotations_of_with_type(^^Type, ^^Annotation).empty();
+}
+
 template<typename Type, auto Annotation>
 consteval auto has_annotation() -> bool {
-  return !std::meta::annotations_of_with_type(^^Type, ^^decltype(Annotation)).empty();
+  return has_annotation<Type, decltype(Annotation)>();
 }
 
 template<typename Type, auto... Annotation>

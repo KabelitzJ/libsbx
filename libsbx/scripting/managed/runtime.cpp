@@ -12,7 +12,7 @@
 
 #include <libsbx/scripting/managed/platform.hpp>
 
-#if defined(SBX_OPERATING_SYSTEM_WIN32)
+#if defined(SBX_PLATFORM_WIN32)
 	#include <ShlObj.h>
 #else
 	#include <dlfcn.h>
@@ -166,7 +166,7 @@ auto runtime::unload_assembly_load_context(assembly_load_context& load_context) 
 
 template<typename Function>
 auto load_function_ptr(void* library_handle, const char* function_name) -> Function {
-#if defined(SBX_OPERATING_SYSTEM_WIN32)
+#if defined(SBX_PLATFORM_WIN32)
   auto result = reinterpret_cast<Function>(GetProcAddress((HMODULE)library_handle, function_name));
 
   return result;
@@ -178,7 +178,7 @@ auto load_function_ptr(void* library_handle, const char* function_name) -> Funct
 }
 
 auto get_host_fxr_path() -> std::filesystem::path {
-#if defined(SBX_OPERATING_SYSTEM_WIN32)
+#if defined(SBX_PLATFORM_WIN32)
   std::filesystem::path base_path = "";
 		
 
@@ -193,7 +193,7 @@ auto get_host_fxr_path() -> std::filesystem::path {
     base_path
   };
 
-#elif defined(SBX_OPERATING_SYSTEM_LINUX)
+#elif defined(SBX_PLATFORM_LINUX)
   auto search_paths = std::array{
     std::filesystem::path("/usr/lib/dotnet/host/fxr/"),
     std::filesystem::path("/usr/share/dotnet/host/fxr/"),
@@ -233,7 +233,7 @@ auto runtime::load_host_fxr() const -> bool {
   // Load the CoreCLR library
   auto library_handle = static_cast<void*>(nullptr);
 
-#ifdef SBX_OPERATING_SYSTEM_WIN32
+#ifdef SBX_PLATFORM_WIN32
 #ifdef SBX_SCRIPTING_WIDE_CHARS
   library_handle = LoadLibraryW(hostfxr_path.c_str());
 #else

@@ -12,7 +12,7 @@
 
 #include <libsbx/scripting/managed/memory.hpp>
 
-#if defined(SBX_OPERATING_SYSTEM_WIN32)
+#if defined(SBX_PLATFORM_WIN32)
 #include <windows.h>
 #include <stringapiset.h>
 #endif

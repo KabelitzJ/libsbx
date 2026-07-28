@@ -9,7 +9,7 @@
 
 namespace sbx::scripting::managed {
 
-#ifdef SBX_OPERATING_SYSTEM_WIN32
+#ifdef SBX_PLATFORM_WIN32
 #define SBX_SCRIPTING_CALLTYPE __cdecl
 #define SBX_SCRIPTING_HOSTFXR_NAME "hostfxr.dll"
 

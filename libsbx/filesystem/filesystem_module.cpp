@@ -9,10 +9,10 @@
 #include <libsbx/utility/target.hpp>
 #include <libsbx/utility/profiler.hpp>
 
-#if defined(SBX_OPERATING_SYSTEM_WIN32)
+#if defined(SBX_PLATFORM_WIN32)
   #define WIN32_LEAN_AND_MEAN
   #include <windows.h>
-#elif defined(SBX_OPERATING_SYSTEM_APPLE)
+#elif defined(SBX_PLATFORM_APPLE)
   #include <cstdint>
   #include <mach-o/dyld.h>
 #endif
@@ -22,7 +22,7 @@
 namespace sbx::filesystem {
 
 auto _executable_directory() -> std::filesystem::path {
-#if defined(SBX_OPERATING_SYSTEM_WIN32)
+#if defined(SBX_PLATFORM_WIN32)
   auto buffer = std::vector<wchar_t>(MAX_PATH);
 
   for (;;) {
@@ -38,7 +38,7 @@ auto _executable_directory() -> std::filesystem::path {
 
     buffer.resize(buffer.size() * 2);
   }
-#elif defined(SBX_OPERATING_SYSTEM_APPLE)
+#elif defined(SBX_PLATFORM_APPLE)
   auto buffer = std::vector<char>(1024);
   auto size = static_cast<std::uint32_t>(buffer.size());
 

@@ -82,10 +82,6 @@ message(STATUS "SBX_BUILD_SHARED: ${SBX_BUILD_SHARED}")
 message(STATUS "SBX_ENABLE_PROFILING: ${SBX_ENABLE_PROFILING}")
 message(STATUS "SBX_PREFER_CPU_DEVICE: ${SBX_PREFER_CPU_DEVICE}")
 
-include(fetch_dependencies)
-
-fetch_dependencies("${CMAKE_SOURCE_DIR}/dependencies.json" "${CMAKE_BINARY_DIR}/dependencies" "libsbxTargets")
-
 # Build metadata
 
 string(TIMESTAMP COMPILE_TIMESTAMP %Y%m%d-%H%M%S)
@@ -127,9 +123,24 @@ message(STATUS "Git commit: ${SBX_COMMIT_HASH}")
 
 # External dependencies
 
-find_package(Vulkan REQUIRED)
-find_package(slang REQUIRED MODULE)
+# System packages
 find_package(Nethost REQUIRED MODULE)
+find_package(slang REQUIRED MODULE)
+find_package(Vulkan REQUIRED)
+
+# Conan packages
+find_package(fastgltf REQUIRED)
+find_package(fmt REQUIRED)
+find_package(glfw3 REQUIRED)
+find_package(lz4 REQUIRED)
+find_package(meshoptimizer REQUIRED)
+find_package(nlohmann_json REQUIRED)
+find_package(spdlog REQUIRED)
+find_package(stb REQUIRED)
+find_package(Tracy REQUIRED)
+find_package(VulkanMemoryAllocator REQUIRED)
+find_package(yaml-cpp REQUIRED)
+find_package(zstd REQUIRED)
 
 # Configure version header
 
@@ -515,16 +526,17 @@ target_link_libraries(
     fmt::fmt
     glfw
     GPUOpen::VulkanMemoryAllocator
-    libzstd_static
-    lz4_static
-    meshoptimizer
+    lz4::lz4
+    meshoptimizer::meshoptimizer
     Nethost::nethost
     slang::slang
     spdlog::spdlog
-    stb
+    stb::stb
+    Tracy::TracyClient
     Vulkan::Headers
     Vulkan::Vulkan
     yaml-cpp::yaml-cpp
+    zstd::libzstd
 )
 
 if(SBX_ENABLE_PROFILING)
@@ -544,8 +556,6 @@ set_target_properties(
 if(MSVC)
   set_target_properties(libsbx PROPERTIES PREFIX "lib")
 endif()
-
-target_compile_features(libsbx PUBLIC cxx_std_23)
 
 target_compile_definitions(
   libsbx

@@ -2,6 +2,9 @@ project(editor VERSION 0.1.0 LANGUAGES CXX)
 
 message(STATUS "Configuring ${PROJECT_NAME}...")
 
+find_package(fastgltf REQUIRED)
+find_package(fmt REQUIRED)
+
 add_executable(${PROJECT_NAME})
 
 target_sources(
@@ -38,12 +41,6 @@ set_target_properties(
     LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
     POSITION_INDEPENDENT_CODE ON
-)
-
-target_compile_features(
-  ${PROJECT_NAME}
-  PUBLIC
-    cxx_std_23
 )
 
 target_compile_options(

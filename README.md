@@ -4,14 +4,14 @@
   <img alt="Fallback image description" src="images/logo-dark.png" width="400">
 </picture>
 
-A modular, Vulkan-based game engine built with modern C++23
+A modular, Vulkan-based game engine built with modern C++26
 
-![C++20](https://img.shields.io/badge/Language-C%2B%2B23-blue?logo=c%2B%2B&logoColor=blue)
-![Version 0.2.0](https://img.shields.io/badge/Version-0.2.0-red?logo=git)
+![C++26](https://img.shields.io/badge/Language-C%2B%2B26-blue?logo=c%2B%2B&logoColor=blue)
+![Version 0.1.0](https://img.shields.io/badge/Version-0.1.0-red?logo=git)
 ![MIT License](https://img.shields.io/badge/License-MIT-green?logo=opensourceinitiative&logoColor=green)
 ![Docs Build](https://img.shields.io/github/actions/workflow/status/KabelitzJ/sandbox/gh_pages.yml?logo=github&label=Deploy%20docs)
 
-Sandbox is a game engine written from the ground up in **C++23**, designed as both a learning tool and a practical framework for real-time 3D applications. It features a Vulkan-based deferred PBR rendering pipeline, a render graph architecture, and a modular design built around an Entity-Component-System core.
+Sandbox is a game engine written from the ground up in **C++26**, designed as both a learning tool and a practical framework for real-time 3D applications. It features a Vulkan-based deferred PBR rendering pipeline, a render graph architecture, and a modular design built around an Entity-Component-System core.
 
 > **Note:** Active development happens on the [`development`](https://github.com/KabelitzJ/sandbox/tree/development) branch.
 
@@ -19,7 +19,7 @@ Sandbox is a game engine written from the ground up in **C++23**, designed as bo
 
 **Rendering**
 
-- Vulkan-based deferred PBR shading pipeline
+- Vulkan-based Forward+ PBR shading pipeline
 - Image-Based Lighting (IBL) — compute-generated BRDF LUT, irradiance, and prefiltered environment maps
 - Cascaded Shadow Maps (4 cascades at varying resolutions)
 - Weighted Blended Order-Independent Transparency (WBOIT)

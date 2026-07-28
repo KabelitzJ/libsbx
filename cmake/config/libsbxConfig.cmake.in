@@ -2,17 +2,18 @@
 
 include(CMakeFindDependencyMacro)
 
-find_dependency(fastgltf)
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/modules")
+
 find_dependency(fmt)
 find_dependency(glfw3)
-find_dependency(meshoptimizer)
-find_dependency(Nethost)
-find_dependency(slang)
+find_dependency(Nethost MODULE)
+find_dependency(nlohmann_json)
+find_dependency(slang MODULE)
 find_dependency(spdlog)
-find_dependency(stb)
-find_dependency(TracyClient)
-find_dependency(Vulkan)
+find_dependency(Tracy)
+find_dependency(Vulkan MODULE)
 find_dependency(VulkanMemoryAllocator)
-find_dependency(yaml-cpp)
 
 include("${CMAKE_CURRENT_LIST_DIR}/libsbxTargets.cmake")
+
+check_required_components(libsbx)

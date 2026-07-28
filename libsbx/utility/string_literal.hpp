@@ -76,10 +76,14 @@ public:
     return fnv1a_hash<character_type, std::size_t>{}({_data.data(), _data.size()});
   }
 
+  constexpr auto view() const noexcept -> string_view_type {
+    return string_view_type{_data.data(), size()};
+  }
+
   // _data holds Size - 1 characters (no null terminator) — conversions must
   // use size(), not Size.
   constexpr operator string_view_type() const noexcept {
-    return string_view_type{_data.data(), size()};
+    return view();
   }
 
   constexpr operator string_type() const noexcept {

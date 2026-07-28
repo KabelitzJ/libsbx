@@ -4,10 +4,15 @@
 #define LIBSBX_REFLECTION_ANNOTATIONS_HPP_
 
 #include <meta>
+#include <string_view>
+
+#include <libsbx/utility/string_literal.hpp>
 
 namespace sbx::reflection {
 
-struct reflected { };
+namespace detail {
+
+struct named { };
 
 struct skip { };
 
@@ -15,40 +20,57 @@ struct bit_field { };
 
 struct expose { };
 
-template<std::size_t Size>
 struct rename {
 
-  std::array<char, Size - 1> data;
+  const char* data;
+  std::size_t size;
 
-  consteval rename(const char (&string)[Size]) {
-    for (auto i = std::size_t{0}; i < Size - 1; ++i) {
-      data[i] = string[i];
-    }
-  }
+  consteval rename(std::string_view value)
+  : data{std::define_static_string(value)},
+    size{value.size()} { }
 
   constexpr auto view() const noexcept -> std::string_view {
-    return {data.data(), data.size()};
+    return std::string_view{data, size};
   }
 
 }; // struct rename
 
-template<std::size_t Size>
 struct format {
 
-  std::array<char, Size - 1> data;
+  const char* data;
+  std::size_t size;
 
-  consteval format(const char (&string)[Size]) {
-    for (auto i = std::size_t{0}; i < Size - 1; ++i) {
-      data[i] = string[i];
-    }
-  }
+  consteval format(std::string_view value)
+  : data{std::define_static_string(value)},
+    size{value.size()} { }
 
   constexpr auto view() const noexcept -> std::string_view {
-    return {data.data(), data.size()};
+    return std::string_view{data, size};
   }
 
-}; // struct format
+}; // struct rename
 
+struct range {
+  std::size_t min;
+  std::size_t max;
+}; // struct range
+
+} // namespace detail
+
+inline constexpr auto named = detail::named{};
+
+inline constexpr auto skip = detail::skip{};
+
+inline constexpr auto bit_field = detail::bit_field{};
+
+template<utility::string_literal Name>
+inline constexpr auto rename = detail::rename{Name};
+
+template<utility::string_literal Format>
+inline constexpr auto format = detail::format{Format};
+
+template<std::size_t Min, std::size_t Max>
+inline constexpr auto range = detail::range{Min, Max};
 
 } // namespace sbx::reflection
 

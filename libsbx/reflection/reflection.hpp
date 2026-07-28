@@ -5,5 +5,6 @@
 
 #include <libsbx/reflection/annotations.hpp>
 #include <libsbx/reflection/enum.hpp>
+#include <libsbx/reflection/struct.hpp>
 
 #endif // LIBSBX_REFLECTION_HPP_

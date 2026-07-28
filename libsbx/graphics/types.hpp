@@ -16,7 +16,7 @@
 
 namespace sbx::graphics {
 
-enum class [[=reflection::reflected{}]] format : std::int32_t {
+enum class [[=reflection::named]] format : std::int32_t {
   undefined = VK_FORMAT_UNDEFINED,
   r8_unorm = VK_FORMAT_R8_UNORM,
   r16_sfloat = VK_FORMAT_R16_SFLOAT,
@@ -52,7 +52,7 @@ enum class memory_usage : std::uint8_t {
   host_read
 }; // enum class memory_usage
 
-enum class [[=reflection::bit_field{}]] buffer_usage : std::int32_t {
+enum class [[=reflection::bit_field]] buffer_usage : std::int32_t {
   transfer_source = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
   transfer_destination = VK_BUFFER_USAGE_TRANSFER_DST_BIT,
   uniform = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
@@ -63,7 +63,7 @@ enum class [[=reflection::bit_field{}]] buffer_usage : std::int32_t {
   device_address = VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
 }; // enum class buffer_usage
 
-enum class [[=reflection::bit_field{}]] image_usage : std::int32_t {
+enum class [[=reflection::bit_field]] image_usage : std::int32_t {
   transfer_source = VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
   transfer_destination = VK_IMAGE_USAGE_TRANSFER_DST_BIT,
   sampled = VK_IMAGE_USAGE_SAMPLED_BIT,
@@ -119,7 +119,7 @@ enum class blend_factor : std::int32_t {
   source_alpha_saturate = VK_BLEND_FACTOR_SRC_ALPHA_SATURATE
 }; // enum class blend_factor
 
-enum class [[=reflection::bit_field{}]] color_component : std::int32_t {
+enum class [[=reflection::bit_field]] color_component : std::int32_t {
   r = VK_COLOR_COMPONENT_R_BIT,
   g = VK_COLOR_COMPONENT_G_BIT,
   b = VK_COLOR_COMPONENT_B_BIT,
@@ -153,14 +153,14 @@ enum class pipeline_bind_point : std::int32_t {
   ray_tracing = VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR
 }; // enum class pipeline_bind_point
 
-enum class [[=reflection::reflected{}]] address_mode : std::int32_t {
+enum class [[=reflection::named]] address_mode : std::int32_t {
   repeat = VK_SAMPLER_ADDRESS_MODE_REPEAT,
   mirror = VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT,
   clamp_to_edge = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
   clamp_to_border = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER
 }; // enum class address_mode
 
-enum class [[=reflection::reflected{}]] filter : std::int32_t {
+enum class [[=reflection::named]] filter : std::int32_t {
   nearest = VK_FILTER_NEAREST,
   linear = VK_FILTER_LINEAR
 }; // enum class filter
@@ -180,20 +180,20 @@ enum class samples : std::int32_t {
   count_64 = VK_SAMPLE_COUNT_64_BIT
 }; // enum class samples
 
-enum class [[=reflection::reflected{}]] polygon_mode : std::int32_t {
+enum class [[=reflection::named]] polygon_mode : std::int32_t {
   fill = VK_POLYGON_MODE_FILL,
   line = VK_POLYGON_MODE_LINE,
   point = VK_POLYGON_MODE_POINT
 }; // enum class polygon_mode
 
-enum class [[=reflection::reflected{}]] cull_mode : std::int32_t {
+enum class [[=reflection::named]] cull_mode : std::int32_t {
   none = VK_CULL_MODE_NONE,
   front = VK_CULL_MODE_FRONT_BIT,
   back = VK_CULL_MODE_BACK_BIT,
   front_and_back = VK_CULL_MODE_FRONT_AND_BACK
 }; // enum class cull_mode
 
-enum class [[=reflection::reflected{}]] front_face : std::int32_t {
+enum class [[=reflection::named]] front_face : std::int32_t {
   counter_clockwise = VK_FRONT_FACE_COUNTER_CLOCKWISE,
   clockwise = VK_FRONT_FACE_CLOCKWISE
 }; // enum class front_face
@@ -212,7 +212,7 @@ struct rasterization_state {
   std::optional<graphics::depth_bias> depth_bias{};
 }; // struct rasterization_state
 
-enum class [[=reflection::reflected{}]] primitive_topology : std::int32_t {
+enum class [[=reflection::named]] primitive_topology : std::int32_t {
   point_list = VK_PRIMITIVE_TOPOLOGY_POINT_LIST,
   line_list = VK_PRIMITIVE_TOPOLOGY_LINE_LIST,
   line_strip = VK_PRIMITIVE_TOPOLOGY_LINE_STRIP,

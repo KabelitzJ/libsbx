@@ -11,7 +11,7 @@
 
 namespace sbx::platform {
 
-enum class [[=reflection::bit_field{}]] input_mod : std::int32_t {
+enum class [[=reflection::bit_field]] input_mod : std::int32_t {
   shift = utility::bit_v<0>,
   control = utility::bit_v<1>,
   alt = utility::bit_v<2>,

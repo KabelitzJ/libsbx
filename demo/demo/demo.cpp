@@ -2,6 +2,7 @@
 // Copyright (c) 2026 Jonas Kabelitz
 #include <span>
 #include <vector>
+#include <print>
 
 #include <libsbx/utility/logger.hpp>
 

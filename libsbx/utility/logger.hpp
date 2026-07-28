@@ -17,6 +17,8 @@
 #include <spdlog/sinks/basic_file_sink.h>
 #include <spdlog/sinks/base_sink.h>
 
+#include <libsbx/reflection/enum.hpp>
+
 #include <libsbx/containers/ring_buffer.hpp>
 
 #include <libsbx/utility/target.hpp>
@@ -244,19 +246,6 @@ private:
 }; // class logger
 
 } // namespace sbx::utility
-
-template<typename Type>
-requires (std::is_enum_v<Type>)
-struct fmt::formatter<Type> : public fmt::formatter<std::underlying_type_t<Type>> {
-
-  using base_type = fmt::formatter<std::underlying_type_t<Type>>;
-
-  template<typename FormatContext>
-  auto format(const Type& value, FormatContext& context) const -> decltype(auto) {
-    return base_type::format(static_cast<std::underlying_type_t<Type>>(value), context);
-  }
-
-}; // struct fmt::formatter
 
 template<typename Type>
 struct fmt::formatter<std::optional<Type>> : public fmt::formatter<Type> {

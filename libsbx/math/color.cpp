@@ -14,15 +14,15 @@ static constexpr  auto scale(std::uint8_t component) noexcept -> std::float_t {
   return static_cast<std::float_t>(component) / 255.0f;
 }
 
-enum class component : std::uint8_t {
+enum class component_shift : std::uint8_t {
   red = 24u,
   green = 16u,
   blue = 8u,
   alpha = 0u
-}; // enum class component
+}; // enum class component_shift
 
-static constexpr auto extract_component(std::uint32_t rgba, component component) noexcept -> std::float_t {
-  return scale(extract(rgba, reflection::to_underlying(component)));
+static constexpr auto extract_component(std::uint32_t rgba, component_shift shift) noexcept -> std::float_t {
+  return scale(extract(rgba, reflection::to_underlying(shift)));
 }
 
 color::color() noexcept
@@ -32,10 +32,10 @@ color::color() noexcept
   _alpha{1.0f} { }
 
 color::color(std::uint32_t rgba) noexcept
-: _red{extract_component(rgba, component::red)},
-  _green{extract_component(rgba, component::green)},
-  _blue{extract_component(rgba, component::blue)},
-  _alpha{extract_component(rgba, component::alpha)} { }
+: _red{extract_component(rgba, component_shift::red)},
+  _green{extract_component(rgba, component_shift::green)},
+  _blue{extract_component(rgba, component_shift::blue)},
+  _alpha{extract_component(rgba, component_shift::alpha)} { }
 
 color::color(std::uint8_t red, std::uint8_t green, std::uint8_t blue, std::uint8_t alpha) noexcept
 : _red{static_cast<std::float_t>(red) / 255.0f},

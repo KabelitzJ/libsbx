@@ -53,25 +53,35 @@ auto main(int argc, const char** argv) -> int {
   //   return sbx::core::exit::failure;
   // }
 
-  auto q = sbx::core::command_queue{};
+  auto q = sbx::core::command_queue<sbx::memory::kib_v<10>>{};
 
-  q.enqueue([]() -> void {
-    std::println("Hello!");
+  auto i = std::size_t{0};
+
+  q.enqueue([i]() -> void {
+    std::println("Hello! {}", i);
   });
 
-  q.enqueue([]() -> void {
-    std::println("World!");
+  i = 1;
+
+  q.enqueue([i]() -> void {
+    std::println("Hello! {}", i);
   });
+
+  i = 2;
 
   q.execute();
 
-  q.enqueue([]() -> void {
-    std::println("Hello!");
+  q.enqueue([i]() -> void {
+    std::println("Hello! {}", i);
   });
 
-  q.enqueue([]() -> void {
-    std::println("World!");
+  i = 3;
+
+  q.enqueue([i]() -> void {
+    std::println("Hello! {}", i);
   });
+
+  i = 4;
 
   q.execute();
 

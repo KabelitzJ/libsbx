@@ -13,6 +13,7 @@
 
 namespace sbx::core {
 
+template<std::size_t Size>
 class command_queue {
 
   using command_function_ptr = utility::function_ptr<void, sbx::memory::observer_ptr<std::byte>>;
@@ -26,13 +27,14 @@ class command_queue {
   static_assert(sizeof(command_header) == 16);
   static_assert(alignof(command_header) >= alignof(std::uint64_t));
 
-  static constexpr auto command_buffer_alignment = std::size_t{alignof(std::max_align_t)};
-  static constexpr auto command_buffer_size = memory::mib_v<10>;
+  static constexpr auto alignment = std::size_t{alignof(std::max_align_t)};
 
 public:
 
+  static constexpr auto size = Size;
+
   command_queue() 
-  : _buffer{sbx::memory::make_aligned_buffer(command_buffer_size, command_buffer_alignment)},
+  : _buffer{sbx::memory::make_aligned_buffer(size, alignment)},
     _cursor{_buffer.get()},
     _count{0u} { }
 
@@ -73,12 +75,8 @@ public:
 
 private:
 
-  static constexpr auto _align_up(const std::size_t value) noexcept -> std::size_t {
-    return (value + command_buffer_alignment - 1) & ~(command_buffer_alignment - 1);
-  }
-
   auto _allocate(command_function_ptr function, const std::uint32_t size) -> sbx::memory::observer_ptr<std::byte> {
-    const auto aligned_size = static_cast<std::uint32_t>(_align_up(size));
+    const auto aligned_size = static_cast<std::uint32_t>(memory::align_up(size, alignment));
 
     auto* header = reinterpret_cast<command_header*>(_cursor.get());
 

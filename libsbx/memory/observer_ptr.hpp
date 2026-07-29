@@ -114,11 +114,11 @@ public:
     return *_value;
   }
 
-  constexpr auto get() const noexcept -> const_pointer {
+  [[nodiscard]] constexpr auto get() const noexcept -> const_pointer {
     return _value;
   }
 
-  constexpr auto get() noexcept -> pointer {
+  [[nodiscard]] constexpr auto get() noexcept -> pointer {
     return _value;
   }
 

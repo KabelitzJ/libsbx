@@ -127,18 +127,20 @@ find_package(slang REQUIRED MODULE)
 find_package(Vulkan REQUIRED)
 
 # Conan packages
-find_package(fastgltf REQUIRED)
-find_package(fmt REQUIRED)
-find_package(glfw3 REQUIRED)
-find_package(lz4 REQUIRED)
-find_package(meshoptimizer REQUIRED)
-find_package(nlohmann_json REQUIRED)
-find_package(spdlog REQUIRED)
-find_package(stb REQUIRED)
-find_package(Tracy REQUIRED)
-find_package(VulkanMemoryAllocator REQUIRED)
-find_package(yaml-cpp REQUIRED)
-find_package(zstd REQUIRED)
+find_package(fastgltf CONFIG REQUIRED)
+find_package(fmt CONFIG REQUIRED)
+find_package(glfw3 CONFIG REQUIRED)
+find_package(imgui CONFIG REQUIRED)
+find_package(imguizmo CONFIG REQUIRED)
+find_package(lz4 CONFIG REQUIRED)
+find_package(meshoptimizer CONFIG REQUIRED)
+find_package(nlohmann_json CONFIG REQUIRED)
+find_package(spdlog CONFIG REQUIRED)
+find_package(stb CONFIG REQUIRED)
+find_package(Tracy CONFIG REQUIRED)
+find_package(VulkanMemoryAllocator CONFIG REQUIRED)
+find_package(yaml-cpp CONFIG REQUIRED)
+find_package(zstd CONFIG REQUIRED)
 
 # Configure version header
 
@@ -524,6 +526,8 @@ target_link_libraries(
     fmt::fmt
     glfw
     GPUOpen::VulkanMemoryAllocator
+    imgui::imgui
+    imguizmo::imguizmo
     lz4::lz4
     meshoptimizer::meshoptimizer
     Nethost::nethost

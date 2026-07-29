@@ -8,6 +8,7 @@
 
 #include <libsbx/core/engine.hpp>
 #include <libsbx/core/exit.hpp>
+#include <libsbx/core/command_queue.hpp>
 
 #include <libsbx/platform/platform_module.hpp>
 
@@ -25,6 +26,8 @@
 
 #include <libsbx/ecs/registry.hpp>
 
+#include <libsbx/memory/memory.hpp>
+
 #include <demo/application.hpp>
 
 using module_list = sbx::core::module_list<
@@ -38,17 +41,39 @@ using module_list = sbx::core::module_list<
 >;
 
 auto main(int argc, const char** argv) -> int {
-  auto args = std::vector<std::string_view>{argv, argv + argc};
+  // auto args = std::vector<std::string_view>{argv, argv + argc};
 
-  try {
-    auto engine = sbx::core::basic_engine<module_list>{args};
+  // try {
+  //   auto engine = sbx::core::basic_engine<module_list>{args};
 
-    engine.run<demo::application>();
-  } catch (const std::exception& exception) {
-    sbx::utility::logger<"core">::error("{}", exception.what());
+  //   engine.run<demo::application>();
+  // } catch (const std::exception& exception) {
+  //   sbx::utility::logger<"core">::error("{}", exception.what());
 
-    return sbx::core::exit::failure;
-  }
+  //   return sbx::core::exit::failure;
+  // }
+
+  auto q = sbx::core::command_queue{};
+
+  q.enqueue([]() -> void {
+    std::println("Hello!");
+  });
+
+  q.enqueue([]() -> void {
+    std::println("World!");
+  });
+
+  q.execute();
+
+  q.enqueue([]() -> void {
+    std::println("Hello!");
+  });
+
+  q.enqueue([]() -> void {
+    std::println("World!");
+  });
+
+  q.execute();
 
   return sbx::core::exit::success;
 }

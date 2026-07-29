@@ -30,6 +30,77 @@
 
 #include <demo/application.hpp>
 
+struct static_string {
+
+  const char* data;
+  std::size_t size;
+
+  consteval static_string(std::string_view view)
+  : data{std::define_static_string(view)},
+    size(view.size()) { }
+
+  constexpr auto view() const noexcept -> std::string_view {
+    return std::string_view{data, size};
+  }
+
+}; // struct static_string
+
+struct getter : static_string {
+  using static_string::static_string;
+}; // struct getter
+
+struct setter : static_string {
+  using static_string::static_string;
+}; // struct setter
+
+struct serializable_t { };
+
+inline constexpr auto serializable = serializable_t{};
+
+template<typename Type, typename Annotation>
+concept annotated_with = !std::meta::annotations_of_with_type(^^Type, std::meta::remove_cv(^^Annotation)).empty();
+
+consteval auto get_annotation(std::meta::info member, std::meta::info annotation) -> std::meta::info {
+  for (auto attribute : std::meta::annotations_of(member)) {
+    if (std::meta::remove_cv(std::meta::type_of(attribute)) == annotation) {
+      return attribute;
+    }
+  }
+
+  return {};
+}
+
+template<annotated_with<serializable_t> Type, typename Callable>
+constexpr auto for_each_getter(const Type& instance, Callable&& callable) -> void {
+  template for (constexpr auto member : std::define_static_array(std::meta::members_of(^^Type, std::meta::access_context::unchecked()))) {
+    constexpr auto annotation = get_annotation(member, ^^getter);
+
+    if constexpr (annotation != std::meta::info{}) {
+      constexpr auto name = std::meta::extract<getter>(annotation);
+
+      std::invoke(callable, name.view(), instance.[:member:]());
+    }
+  }
+}
+
+class [[=serializable]] vector3 {
+
+public:
+
+  [[=setter{"x"}]] auto x() -> float& {
+    return _x;
+  }
+
+  [[=getter{"x"}]] auto x() const -> const float& {
+    return _x;
+  }
+
+private:
+
+  float _x;
+
+}; // struct vector3
+
 using module_list = sbx::core::module_list<
   sbx::platform::platform_module,
   sbx::filesystem::filesystem_module,
@@ -53,37 +124,11 @@ auto main(int argc, const char** argv) -> int {
   //   return sbx::core::exit::failure;
   // }
 
-  auto q = sbx::core::command_queue<sbx::memory::kib_v<10>>{};
+  auto v = vector3{};
 
-  auto i = std::size_t{0};
-
-  q.enqueue([i]() -> void {
-    std::println("Hello! {}", i);
-  });
-
-  i = 1;
-
-  q.enqueue([i]() -> void {
-    std::println("Hello! {}", i);
-  });
-
-  i = 2;
-
-  q.execute();
-
-  q.enqueue([i]() -> void {
-    std::println("Hello! {}", i);
-  });
-
-  i = 3;
-
-  q.enqueue([i]() -> void {
-    std::println("Hello! {}", i);
-  });
-
-  i = 4;
-
-  q.execute();
+  for_each_getter<vector3>(v, [](auto name, auto value){
+    std::println("{}: {}", name, value);
+  }); 
 
   return sbx::core::exit::success;
 }

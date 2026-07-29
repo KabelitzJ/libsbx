@@ -44,6 +44,8 @@ private:
 
   auto _apply_style() -> void;
 
+  auto _draw_dockspace() -> void;
+
   VkDescriptorPool _descriptor_pool{nullptr};
   std::string _ini_file;
 

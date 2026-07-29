@@ -15,13 +15,13 @@ target_sources(
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/editor.cpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/fly_camera.cpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/memory.cpp"
-    "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/backends/imgui_impl_glfw.cpp"
-    "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/backends/imgui_impl_vulkan.cpp"
+    "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/backends/v1.92.9-docking/imgui_impl_glfw.cpp"
+    "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/backends/v1.92.9-docking/imgui_impl_vulkan.cpp"
   PUBLIC
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/application.hpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/fly_camera.hpp"
-    "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/backends/imgui_impl_glfw.h"
-    "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/backends/imgui_impl_vulkan.h"
+    "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/backends/v1.92.9-docking/imgui_impl_glfw.h"
+    "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/backends/v1.92.9-docking/imgui_impl_vulkan.h"
 )
 
 target_include_directories(

@@ -10,8 +10,8 @@
 #include <vulkan/vulkan.h>
 
 #include <imgui.h>
-#include <editor/backends/imgui_impl_glfw.h>
-#include <editor/backends/imgui_impl_vulkan.h>
+#include <editor/backends/v1.92.9-docking/imgui_impl_glfw.h>
+#include <editor/backends/v1.92.9-docking/imgui_impl_vulkan.h>
 
 #include <editor/fonts/material_design_icons.hpp>
 
@@ -69,6 +69,12 @@ class viewport_composite_pass final : public sbx::render::render_pass {
 
 public:
 
+  ~viewport_composite_pass() override {
+    if (_texture_id != VK_NULL_HANDLE && ImGui::GetCurrentContext() != nullptr) {
+      ImGui_ImplVulkan_RemoveTexture(_texture_id);
+    }
+  }
+
   [[nodiscard]] auto name() const -> std::string_view override {
     return "Editor";
   }
@@ -87,7 +93,9 @@ public:
     }
 
     auto& graphics_module = sbx::core::engine::get_module<sbx::graphics::graphics_module>();
-    auto& swapchain = graphics_module.frame_context().swapchain();
+
+    auto& frame_context = graphics_module.frame_context();
+    auto& swapchain = frame_context.swapchain();
 
     auto barrier = VkMemoryBarrier2{};
     barrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2;
@@ -118,7 +126,34 @@ public:
 
 private:
 
+  auto _update_texture(const sbx::graphics::image_handle& image) -> void {
+    auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
+
+    auto& registry = graphics_module.resource_registry();
+
+    auto& scene = registry.get<sbx::graphics::image>(image);
+
+    auto current_view = scene.view();
+
+    if (current_view == _cached_view) {
+      return;
+    }
+
+    if (_texture_id != VK_NULL_HANDLE) {
+      ImGui_ImplVulkan_RemoveTexture(_texture_id);
+    }
+
+    _texture_id = ImGui_ImplVulkan_AddTexture(image.sampler(), current_view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    _cached_view = current_view;
+  }
+
   sbx::render::present_pass _present{};
+
+  VkDescriptorSet _texture_id{VK_NULL_HANDLE};
+  VkImageView _cached_view{VK_NULL_HANDLE};
+
+  sbx::math::vector2u _panel_size{0u, 0u};
+  sbx::math::vector2 _content_min{0.0f, 0.0f};
 
 }; // class viewport_composite_pass
 
@@ -153,7 +188,7 @@ editor_module::~editor_module() {
   ImGui_ImplGlfw_Shutdown();
   ImGui::DestroyContext();
 
-  if (_descriptor_pool != VK_NULL_HANDLE) {
+  if (_descriptor_pool) {
     vkDestroyDescriptorPool(graphics_module.logical_device(), _descriptor_pool, nullptr);
   }
 }
@@ -163,7 +198,9 @@ auto editor_module::post_update() -> void {
   ImGui_ImplGlfw_NewFrame();
   ImGui::NewFrame();
 
-  ImGui::Begin("Debug");
+  _draw_dockspace();
+
+  ImGui::Begin(ICON_MDI_BUG_OUTLINE " Debug");
   ImGui::Text("%.1f FPS (%.3f ms)", ImGui::GetIO().Framerate, 1000.0f / ImGui::GetIO().Framerate);
   ImGui::End();
 
@@ -250,22 +287,22 @@ auto editor_module::_upload_fonts() -> void {
   io.Fonts->AddFontFromFileTTF(resolved_icon_path.c_str(), 16.0f, &icon_config, icon_ranges.data());
 }
 
-static auto bg_color_1 = ImVec4{0.1f,0.1f,0.1f,1.0f};
-static auto bg_color_2 = ImVec4{0.59f,0.59f,0.59f,1.0f};
-static auto h_color_1 = ImVec4{1.0f,1.0f,1.0f,1.0f};
-static auto h_color_2 = ImVec4{1.0f,1.0f,1.0f,0.1f};
-static auto color_accent_1 = ImVec4{59.0f / 255.0f, 79.0f / 255.0f, 255.0f / 255.0f, 1.0f};
-static auto color_accent_2 = ImVec4{45.0f / 255.0f, 80.0f / 255.0f, 255.0f / 255.0f, 1.0f};
-static auto color_ok = ImVec4{51.0f / 255.0f, 179.0f / 255.0f, 89.0f / 255.0f, 1.0f};
-static auto color_info = ImVec4{235.0f / 255.0f, 235.0f / 255.0f, 235.0f / 255.0f, 1.0f};
-static auto color_warning = ImVec4{255.0f / 255.0f, 149.0f / 255.0f, 49.0f / 255.0f, 1.0f};
-static auto color_error = ImVec4{255.0f / 255.0f, 58.0f / 255.0f, 58.0f / 255.0f, 1.0f};
-
-static auto lerp(const ImVec4& a, const ImVec4& b, float t) -> ImVec4 {
-  return ImVec4{a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, a.z + (b.z - a.z) * t, a.w + (b.w - a.w) * t};
-}
-
 auto editor_module::_apply_style() -> void {
+  static auto bg_color_1 = ImVec4{0.1f,0.1f,0.1f,1.0f};
+  static auto bg_color_2 = ImVec4{0.59f,0.59f,0.59f,1.0f};
+  static auto h_color_1 = ImVec4{1.0f,1.0f,1.0f,1.0f};
+  static auto h_color_2 = ImVec4{1.0f,1.0f,1.0f,0.1f};
+  static auto color_accent_1 = ImVec4{59.0f / 255.0f, 79.0f / 255.0f, 255.0f / 255.0f, 1.0f};
+  static auto color_accent_2 = ImVec4{45.0f / 255.0f, 80.0f / 255.0f, 255.0f / 255.0f, 1.0f};
+  static auto color_ok = ImVec4{51.0f / 255.0f, 179.0f / 255.0f, 89.0f / 255.0f, 1.0f};
+  static auto color_info = ImVec4{235.0f / 255.0f, 235.0f / 255.0f, 235.0f / 255.0f, 1.0f};
+  static auto color_warning = ImVec4{255.0f / 255.0f, 149.0f / 255.0f, 49.0f / 255.0f, 1.0f};
+  static auto color_error = ImVec4{255.0f / 255.0f, 58.0f / 255.0f, 58.0f / 255.0f, 1.0f};
+
+  auto lerp = [](const ImVec4& a, const ImVec4& b, std::float_t t) -> ImVec4 {
+    return ImVec4{a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, a.z + (b.z - a.z) * t, a.w + (b.w - a.w) * t};
+  };
+
   ImGui::StyleColorsDark();
 
   auto& style = ImGui::GetStyle();
@@ -339,7 +376,7 @@ auto editor_module::_apply_style() -> void {
 
   auto color_highlight_1 = lerp(h_color_1, h_color_2, 0);
 
-  auto color_accent_2 = lerp(h_color_1, h_color_2, 0.2f);
+  // auto color_accent_2 = lerp(h_color_1, h_color_2, 0.2f);
   auto color_accent_3 = lerp(h_color_1, h_color_2, 0.3f);
 
   style.Colors[ImGuiCol_Text] = color_highlight_1;
@@ -424,6 +461,38 @@ auto editor_module::_apply_style() -> void {
     color.y = color.y <= 0.04045f ? color.y / 12.92f : std::pow((color.y + 0.055f) / 1.055f, 2.4f);
     color.z = color.z <= 0.04045f ? color.z / 12.92f : std::pow((color.z + 0.055f) / 1.055f, 2.4f);
   }
+}
+
+auto editor_module::_draw_dockspace() -> void {
+  auto window_flags = ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus | ImGuiWindowFlags_MenuBar;
+
+  auto* viewport = ImGui::GetMainViewport();
+  ImGui::SetNextWindowPos(viewport->WorkPos);
+  ImGui::SetNextWindowSize(viewport->WorkSize);
+  ImGui::SetNextWindowViewport(viewport->ID);
+
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{0.0f, 0.0f});
+
+  ImGui::Begin("##dockspace", nullptr, window_flags);
+  ImGui::PopStyleVar(3);
+
+  ImGui::DockSpace(ImGui::GetID("editor_dockspace"), ImVec2{0.0f, 0.0f});
+
+  if (ImGui::BeginMenuBar()) {
+    if (ImGui::BeginMenu("File")) {
+      if (ImGui::MenuItem("Quit")) {
+        sbx::core::engine::quit();
+      }
+
+      ImGui::EndMenu();
+    }
+
+    ImGui::EndMenuBar();
+  }
+
+  ImGui::End();
 }
 
 } // namespace editor

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Jonas Kabelitz
 #ifndef EDITOR_EDITOR_MODULE_HPP_
 #define EDITOR_EDITOR_MODULE_HPP_
 
@@ -18,23 +20,32 @@ namespace editor {
 
 class editor_module final : public sbx::utility::noncopyable {
 
+  inline static constexpr auto ini_file = std::string_view{"editor/assets/data/editor.ini"};
+  inline static constexpr auto font_path = std::string_view{"editor/assets/fonts/Roboto-Regular.ttf"};
+  inline static constexpr auto icon_path = std::string_view{"editor/assets/fonts/materialdesignicons-webfont.ttf"};
+
 public:
 
   using dependencies = sbx::core::dependency_list<sbx::graphics::graphics_module, sbx::assets::assets_module, sbx::scenes::scenes_module, sbx::render::render_module>;
 
-  editor_module() {
+  editor_module();
 
-  }
+  ~editor_module();
 
-  ~editor_module() {
-
-  }
-
-  auto update() -> void {
-    
-  }
+  auto post_update() -> void;
 
 private:
+
+  auto _create_descriptor_pool() -> void;
+
+  auto _init_backends() -> void;
+
+  auto _upload_fonts() -> void;
+
+  auto _apply_style() -> void;
+
+  VkDescriptorPool _descriptor_pool{nullptr};
+  std::string _ini_file;
 
 }; // class editor_module
 

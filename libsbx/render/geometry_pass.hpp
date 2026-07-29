@@ -24,7 +24,7 @@ public:
   geometry_pass();
 
   [[nodiscard]] auto name() const -> std::string_view override {
-    return "geometry";
+    return "Geometry";
   }
 
   auto execute(render_context& context) -> void override;

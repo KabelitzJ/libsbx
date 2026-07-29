@@ -24,7 +24,7 @@ public:
   tonemap_pass();
 
   [[nodiscard]] auto name() const -> std::string_view override {
-    return "tonemap";
+    return "Tonemap";
   }
 
   auto execute(render_context& context) -> void override;

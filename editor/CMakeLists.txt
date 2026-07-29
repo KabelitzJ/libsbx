@@ -10,8 +10,9 @@ add_executable(${PROJECT_NAME})
 target_sources(
   ${PROJECT_NAME}
   PRIVATE
-    "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/editor.cpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/application.cpp"
+    "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/editor_module.cpp"
+    "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/editor.cpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/fly_camera.cpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/memory.cpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/backends/imgui_impl_glfw.cpp"

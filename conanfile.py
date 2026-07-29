@@ -32,6 +32,8 @@ class LibsbxConan(ConanFile):
     def configure(self):
         if self.options.shared:
             self.options.rm_safe("fPIC")
+            
+        self.options["imgui/*"].use_wchar32 = True
 
     def layout(self):
         cmake_layout(self)

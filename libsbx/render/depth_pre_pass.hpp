@@ -24,7 +24,7 @@ public:
   depth_pre_pass();
 
   [[nodiscard]] auto name() const -> std::string_view override {
-    return "depth_pre";
+    return "Depth Pre";
   }
 
   auto execute(render_context& context) -> void override;

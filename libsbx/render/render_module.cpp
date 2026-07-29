@@ -138,6 +138,10 @@ auto render_module::set_composite_pass(std::unique_ptr<render_pass> pass) -> voi
   _composite_pass = std::move(pass);
 }
 
+auto render_module::set_packet_producer(std::function<std::unique_ptr<render_packet_extension>()> producer) -> void {
+  _packet_producer = std::move(producer);
+}
+
 auto render_module::_start() -> void {
   _is_running = true;
 
@@ -315,6 +319,10 @@ auto render_module::_build_packet() -> render_packet {
     out.outer_cos = std::cos(light.outer_angle);
   }
 
+  if (_packet_producer) {
+    packet.extension = std::invoke(_packet_producer);
+  }
+
   return packet;
 }
 
@@ -385,6 +393,7 @@ auto render_module::_consume_packet(const render_packet& packet) -> void {
       auto context = render_context{
         .command_buffer = command_buffer,
         .packet = memory::make_observer<const render_packet>(packet),
+        .extension = packet.extension.get(),
         .frame_index = frame_context.frame_index(),
         .slot = static_cast<std::uint32_t>(slot),
         .extent = extent,

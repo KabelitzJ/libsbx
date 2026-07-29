@@ -24,7 +24,7 @@ public:
   skybox_pass();
 
   [[nodiscard]] auto name() const -> std::string_view override {
-    return "skybox";
+    return "Skybox";
   }
 
   auto execute(render_context& context) -> void override;

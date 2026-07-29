@@ -32,6 +32,7 @@ namespace sbx::render {
 struct render_context {
   memory::observer_ptr<graphics::command_buffer> command_buffer;
   memory::observer_ptr<const render_packet> packet;
+  memory::observer_ptr<const render_packet_extension> extension{nullptr};
 
   std::uint64_t frame_index{0u};
   std::uint32_t slot{0u};

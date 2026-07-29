@@ -2,8 +2,8 @@ project(editor VERSION 0.1.0 LANGUAGES CXX)
 
 message(STATUS "Configuring ${PROJECT_NAME}...")
 
-find_package(fastgltf REQUIRED)
-find_package(fmt REQUIRED)
+find_package(imgui CONFIG REQUIRED)
+find_package(imguizmo CONFIG REQUIRED)
 
 add_executable(${PROJECT_NAME})
 
@@ -14,9 +14,13 @@ target_sources(
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/application.cpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/fly_camera.cpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/memory.cpp"
+    "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/backends/imgui_impl_glfw.cpp"
+    "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/backends/imgui_impl_vulkan.cpp"
   PUBLIC
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/application.hpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/fly_camera.hpp"
+    "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/backends/imgui_impl_glfw.h"
+    "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/backends/imgui_impl_vulkan.h"
 )
 
 target_include_directories(
@@ -29,8 +33,8 @@ target_include_directories(
 target_link_libraries(
   ${PROJECT_NAME}
   PUBLIC
-    
-  PRIVATE
+    imgui::imgui
+    imguizmo::imguizmo
     libsbx::libsbx
 )
 

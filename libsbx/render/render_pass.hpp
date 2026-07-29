@@ -49,6 +49,8 @@ struct render_context {
   graphics::image_handle color{};
   graphics::image_handle color_msaa{};
   std::uint32_t color_index{0u};
+  graphics::image_handle scene{};
+  std::uint32_t scene_index{0u};  
 
   graphics::buffer::address_type frame_address{0u};
   graphics::buffer::address_type transform_address{0u};

@@ -37,8 +37,9 @@
 
 #include <libsbx/render/depth_pre_pass.hpp>
 #include <libsbx/render/geometry_pass.hpp>
-#include <libsbx/render/tonemap_pass.hpp>
+#include <libsbx/render/present_pass.hpp>
 #include <libsbx/render/skybox_pass.hpp>
+#include <libsbx/render/tonemap_pass.hpp>
 
 namespace sbx::render {
 
@@ -96,6 +97,8 @@ render_module::render_module() {
   _passes.push_back(std::make_unique<skybox_pass>());
   _passes.push_back(std::make_unique<tonemap_pass>());
 
+  _composite_pass = std::make_unique<present_pass>();
+
   _start();
 }
 
@@ -129,6 +132,10 @@ auto render_module::render() -> void {
   }
 
   _has_produced.notify_one();
+}
+
+auto render_module::set_composite_pass(std::unique_ptr<render_pass> pass) -> void {
+  _composite_pass = std::move(pass);
 }
 
 auto render_module::_start() -> void {
@@ -390,13 +397,19 @@ auto render_module::_consume_packet(const render_packet& packet) -> void {
         .depth = _depth_image,
         .color = _color_image,
         .color_msaa = _color_msaa_image,
-        .color_index = _color_index
+        .color_index = _color_index,
+        .scene = _scene_images[slot],
+        .scene_index = _scene_indices[slot]
       };
 
       _prepare_frame(context);
 
       for (auto& pass : _passes) {
         pass->execute(context);
+      }
+
+      if (_composite_pass) {
+        _composite_pass->execute(context);
       }
     } else {
       auto color_attachment = VkRenderingAttachmentInfo{};
@@ -440,6 +453,10 @@ auto render_module::_ensure_resources() -> void {
   _sampler_index = bindless_table.sampler_index(graphics::sampler::create_info{});
 
   _color_index = bindless_table.reserve_sampled_image();
+
+  for (auto slot = std::size_t{0u}; slot < graphics::swapchain::max_frames_in_flight; ++slot) {
+    _scene_indices[slot] = bindless_table.reserve_sampled_image();
+  }
 
   _frame_buffer = registry.emplace<graphics::buffer>(graphics::buffer::create_info{
     .size = memory::stride_v<frame_data> * graphics::swapchain::max_frames_in_flight,
@@ -488,6 +505,7 @@ auto render_module::_resize_targets(const math::vector2u extent) -> void {
 
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 
+  auto& surface = graphics_module.surface();
   auto& registry = graphics_module.resource_registry();
   auto& bindless_table = graphics_module.bindless_table();
   auto& frame_context = graphics_module.frame_context();
@@ -497,6 +515,10 @@ auto render_module::_resize_targets(const math::vector2u extent) -> void {
     registry.retire(_depth_image, frame_index);
     registry.retire(_color_image, frame_index);
     registry.retire(_color_msaa_image, frame_index);
+
+    for (auto slot = std::size_t{0u}; slot < graphics::swapchain::max_frames_in_flight; ++slot) {
+      registry.retire(_scene_images[slot], frame_index);
+    }
   }
 
   _depth_image = registry.emplace<graphics::image>(graphics::image::create_info{
@@ -524,6 +546,20 @@ auto render_module::_resize_targets(const math::vector2u extent) -> void {
   });
 
   bindless_table.write_sampled_image(_color_index, registry.get<graphics::image>(_color_image).view());
+
+  const auto scene_format = static_cast<graphics::format>(surface.format().format);
+
+  for (auto slot = std::size_t{0u}; slot < graphics::swapchain::max_frames_in_flight; ++slot) {
+    _scene_images[slot] = registry.emplace<graphics::image>(graphics::image::create_info{
+      .extent = math::vector3u{extent, 1u},
+      .format = scene_format,
+      .usage = graphics::image_usage::color_attachment | graphics::image_usage::sampled,
+      .samples = graphics::samples::count_1,
+      .name = fmt::format("Scene Image {}", slot)
+    });
+
+    bindless_table.write_sampled_image(_scene_indices[slot], registry.get<graphics::image>(_scene_images[slot]).view());
+  }
 
   _target_extent = extent;
 }

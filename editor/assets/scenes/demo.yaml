@@ -45,7 +45,7 @@ nodes:
         rotation: {x: 0, y: 0, z: 0, w: 1}
         scale: {x: 1, y: 1, z: 1}
       - type: point_light
-        color: {r: 1, g: 0, b: 0, a: 1}
+        color: {r: 1, g: 0, b: 1, a: 1}
         intensity: 10
         range: 20
   - tag: FlightHelmet

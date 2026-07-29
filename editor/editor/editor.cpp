@@ -25,6 +25,7 @@
 #include <libsbx/ecs/registry.hpp>
 
 #include <editor/application.hpp>
+#include <editor/editor_module.hpp>
 
 using module_list = sbx::core::module_list<
   sbx::platform::platform_module,
@@ -33,7 +34,8 @@ using module_list = sbx::core::module_list<
   sbx::assets::assets_module,
   sbx::scenes::scenes_module,
   sbx::scripting::scripting_module,
-  sbx::render::render_module
+  sbx::render::render_module,
+  editor::editor_module
 >;
 
 auto main(int argc, const char** argv) -> int {

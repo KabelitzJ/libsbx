@@ -130,8 +130,6 @@ find_package(Vulkan REQUIRED)
 find_package(fastgltf CONFIG REQUIRED)
 find_package(fmt CONFIG REQUIRED)
 find_package(glfw3 CONFIG REQUIRED)
-find_package(imgui CONFIG REQUIRED)
-find_package(imguizmo CONFIG REQUIRED)
 find_package(lz4 CONFIG REQUIRED)
 find_package(meshoptimizer CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
@@ -232,12 +230,13 @@ target_sources(
 
     "${CMAKE_SOURCE_DIR}/libsbx/reflection/reflection.cpp"
 
+    "${CMAKE_SOURCE_DIR}/libsbx/render/depth_pre_pass.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/render/geometry_pass.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/render/present_pass.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/render/render_module.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/render/render_pass.cpp"
-    "${CMAKE_SOURCE_DIR}/libsbx/render/geometry_pass.cpp"
-    "${CMAKE_SOURCE_DIR}/libsbx/render/depth_pre_pass.cpp"
-    "${CMAKE_SOURCE_DIR}/libsbx/render/tonemap_pass.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/render/skybox_pass.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/render/tonemap_pass.cpp"
 
     "${CMAKE_SOURCE_DIR}/libsbx/scenes/scene_serializer.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/scenes/scene.cpp"
@@ -415,13 +414,14 @@ target_sources(
       "${CMAKE_SOURCE_DIR}/libsbx/reflection/enum.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/reflection/reflection.hpp"
 
+      "${CMAKE_SOURCE_DIR}/libsbx/render/depth_pre_pass.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/render/geometry_pass.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/render/present_pass.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/render/render_module.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/render/render_packet.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/render/render_pass.hpp"
-      "${CMAKE_SOURCE_DIR}/libsbx/render/geometry_pass.hpp"
-      "${CMAKE_SOURCE_DIR}/libsbx/render/depth_pre_pass.hpp"
-      "${CMAKE_SOURCE_DIR}/libsbx/render/tonemap_pass.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/render/skybox_pass.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/render/tonemap_pass.hpp"
 
       "${CMAKE_SOURCE_DIR}/libsbx/scenes/components.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/scenes/scene_serializer.hpp"
@@ -526,8 +526,6 @@ target_link_libraries(
     fmt::fmt
     glfw
     GPUOpen::VulkanMemoryAllocator
-    imgui::imgui
-    imguizmo::imguizmo
     lz4::lz4
     meshoptimizer::meshoptimizer
     Nethost::nethost

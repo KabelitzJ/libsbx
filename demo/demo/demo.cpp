@@ -3,6 +3,7 @@
 #include <span>
 #include <vector>
 #include <print>
+#include <meta>
 
 #include <libsbx/utility/logger.hpp>
 
@@ -87,6 +88,8 @@ class [[=serializable]] vector3 {
 
 public:
 
+  vector3(float x = 0.0f) : _x{x} { }
+
   [[=setter{"x"}]] auto x() -> float& {
     return _x;
   }
@@ -112,22 +115,22 @@ using module_list = sbx::core::module_list<
 >;
 
 auto main(int argc, const char** argv) -> int {
-  // auto args = std::vector<std::string_view>{argv, argv + argc};
+  auto args = std::vector<std::string_view>{argv, argv + argc};
 
-  // try {
-  //   auto engine = sbx::core::basic_engine<module_list>{args};
+  try {
+    auto engine = sbx::core::basic_engine<module_list>{args};
 
-  //   engine.run<demo::application>();
-  // } catch (const std::exception& exception) {
-  //   sbx::utility::logger<"core">::error("{}", exception.what());
+    engine.run<demo::application>();
+  } catch (const std::exception& exception) {
+    sbx::utility::logger<"core">::error("{}", exception.what());
 
-  //   return sbx::core::exit::failure;
-  // }
+    return sbx::core::exit::failure;
+  }
 
-  auto v = vector3{};
+  auto v = vector3{4};
 
   for_each_getter<vector3>(v, [](auto name, auto value){
-    std::println("{}: {}", name, value);
+    sbx::utility::logger<"demo">::info("Property: {} = {}", name, value);
   }); 
 
   return sbx::core::exit::success;

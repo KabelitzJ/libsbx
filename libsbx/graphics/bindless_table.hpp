@@ -78,6 +78,7 @@ public:
 private:
 
   struct index_allocator {
+
     std::uint32_t next{0u};
     std::uint32_t capacity{0u};
     std::vector<std::uint32_t> released{};
@@ -85,6 +86,7 @@ private:
     auto allocate() -> std::uint32_t;
 
     auto release(std::uint32_t index) -> void;
+
   }; // struct index_allocator
 
   struct pending_write {

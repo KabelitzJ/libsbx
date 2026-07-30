@@ -30,16 +30,28 @@ namespace editor {
 
 // Deep copy of the finished ImGui draw data. A fresh one per frame rides the render packet, so the
 // main thread's next NewFrame cannot clobber what the render thread is still recording.
-struct imgui_frame final : sbx::render::render_packet_extension {
+struct imgui_render_packet_extension final : sbx::render::render_packet_extension {
 
   ImDrawData data{};
   ImVector<ImDrawList*> lists{};
 
-  ~imgui_frame() override {
+  imgui_render_packet_extension(const ImDrawData* source)
+  : data{*source} {
+    lists.reserve(source->CmdListsCount);
+
+    for (auto index = 0; index < source->CmdListsCount; ++index) {
+      lists.push_back(source->CmdLists[index]->CloneOutput());
+    }
+
+    data.CmdLists = lists;
+  }
+
+  ~imgui_render_packet_extension() override {
     for (auto* list : lists) {
       IM_DELETE(list);
     }
   }
+
 }; // struct imgui_frame
 
 auto capture_imgui_frame() -> std::unique_ptr<sbx::render::render_packet_extension> {
@@ -49,25 +61,16 @@ auto capture_imgui_frame() -> std::unique_ptr<sbx::render::render_packet_extensi
     return nullptr;
   }
 
-  auto frame = std::make_unique<imgui_frame>();
-
-  frame->data = *source;
-
-  frame->lists.reserve(source->CmdListsCount);
-
-  for (auto index = 0; index < source->CmdListsCount; ++index) {
-    frame->lists.push_back(source->CmdLists[index]->CloneOutput());
-  }
-
-  frame->data.CmdLists = frame->lists;
-
-  return frame;
+  return std::make_unique<imgui_render_packet_extension>(source);
 }
 
 // Composite: blit the scene image to the swapchain (default present), then draw ImGui over it.
 class viewport_composite_pass final : public sbx::render::render_pass {
 
 public:
+
+  viewport_composite_pass()
+  : _sampler{sbx::graphics::sampler::create_info{}} { }
 
   ~viewport_composite_pass() override {
     if (_texture_id != VK_NULL_HANDLE && ImGui::GetCurrentContext() != nullptr) {
@@ -86,9 +89,9 @@ public:
 
     _present.execute(context);
 
-    const auto* frame = dynamic_cast<const imgui_frame*>(context.extension.get());
+    const auto* packet_extension = dynamic_cast<const imgui_render_packet_extension*>(context.extension.get());
 
-    if (frame == nullptr) {
+    if (packet_extension == nullptr) {
       return;
     }
 
@@ -120,14 +123,14 @@ public:
     rendering_info.pColorAttachments = &color_attachment;
 
     context.command_buffer->begin_rendering(rendering_info);
-    ImGui_ImplVulkan_RenderDrawData(const_cast<ImDrawData*>(&frame->data), *context.command_buffer);
+    ImGui_ImplVulkan_RenderDrawData(const_cast<ImDrawData*>(&packet_extension->data), *context.command_buffer);
     context.command_buffer->end_rendering();
   }
 
 private:
 
   auto _update_texture(const sbx::graphics::image_handle& image) -> void {
-    auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
+    auto& graphics_module = sbx::core::engine::get_module<sbx::graphics::graphics_module>();
 
     auto& registry = graphics_module.resource_registry();
 
@@ -143,7 +146,7 @@ private:
       ImGui_ImplVulkan_RemoveTexture(_texture_id);
     }
 
-    _texture_id = ImGui_ImplVulkan_AddTexture(image.sampler(), current_view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    _texture_id = ImGui_ImplVulkan_AddTexture(_sampler, current_view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
     _cached_view = current_view;
   }
 
@@ -151,6 +154,8 @@ private:
 
   VkDescriptorSet _texture_id{VK_NULL_HANDLE};
   VkImageView _cached_view{VK_NULL_HANDLE};
+
+  sbx::graphics::sampler _sampler;
 
   sbx::math::vector2u _panel_size{0u, 0u};
   sbx::math::vector2 _content_min{0.0f, 0.0f};

@@ -41,11 +41,15 @@ class delegate;
 template<typename Return, typename... Args>
 class delegate<Return(Args...)> {
 
-  using static_storage_type = memory::aligned_storage_t<sizeof(std::byte*), alignof(std::byte*)>;
+  using static_storage_type = memory::aligned_storage_t<3 * sizeof(std::byte*), alignof(std::byte*)>;
   using dynamic_storage_type = std::byte*;
 
+  template<typename Callable>
+  inline static constexpr auto requires_dynamic_allocation_v = !(std::is_nothrow_move_constructible_v<Callable> && sizeof(Callable) <= sizeof(static_storage_type) && alignof(Callable) <= alignof(static_storage_type));
+
+  
   union storage {
-    static_storage_type static_storage;
+    mutable static_storage_type static_storage;
     dynamic_storage_type dynamic_storage;
   }; // union storage
 
@@ -71,13 +75,13 @@ public:
    * @param callable Forwarded reference to a functor instance 
    */
   template<callable<Return, Args...> Callable>
-  requires (!std::is_same_v<std::remove_reference_t<Callable>, delegate>) // Dont allow other delegates here!
+  requires (!std::is_same_v<std::remove_reference_t<Callable>, delegate>)
   delegate(Callable&& callable)
   : _vtable{_create_vtable<std::remove_reference_t<Callable>>()},
-    _storage{_create_storage<std::remove_reference_t<Callable>>(std::forward<std::remove_reference_t<Callable>>(callable))} { }
+    _storage{_create_storage<std::remove_reference_t<Callable>>(std::forward<Callable>(callable))} { }
 
   delegate(Return(*callable)(Args...))
-  : delegate{[callable](Args... args){ std::invoke(callable, std::forward<Args>(args)...); }} { }
+  : delegate{[callable](Args... args){ return std::invoke(callable, std::forward<Args>(args)...); }} { }
   
   template<typename Class>
   delegate(Class& instance, Return(Class::*method)(Args...))
@@ -106,32 +110,23 @@ public:
   }
 
   ~delegate() {
-    if (_vtable) {
-      _vtable->destroy(_storage);
-    }
+    reset();
   }
 
-  delegate& operator=(const delegate& other) {
+  auto operator=(const delegate& other) -> delegate& {
     if (this != &other) {
-      if (_vtable) {
-        _vtable->destroy(_storage);
-      }
-
-      _vtable = other._vtable;
-
-      if (_vtable) {
-        _vtable->copy(other._storage, _storage);
+      if (this != &other) {
+        auto tmp = delegate{other};
+        swap(tmp);
       }
     }
 
     return *this;
   }
 
-  delegate& operator=(delegate&& other) noexcept {
+  auto operator=(delegate&& other) noexcept -> delegate& {
     if (this != &other) {
-      if (_vtable) {
-        _vtable->destroy(_storage);
-      }
+      reset();
 
       _vtable = std::exchange(other._vtable, nullptr);
 
@@ -143,15 +138,21 @@ public:
     return *this;
   }
 
-  auto invoke(Args&&... args) const {
+  auto operator=(std::nullptr_t) noexcept -> delegate& {
+    reset();
+
+    return *this;
+  }
+
+  auto invoke(Args&&... args) const -> Return {
     if (!_vtable) {
-      throw std::runtime_error{"bad_delegate_call"};
+      throw bad_delegate_call{};
     }
 
     return std::invoke(_vtable->invoke, _storage, std::forward<Args>(args)...);
   }
 
-  Return operator()(Args&&... args) const {
+  auto operator()(Args&&... args) const -> Return {
     return invoke(std::forward<Args>(args)...);
   }
 
@@ -163,24 +164,43 @@ public:
     return is_valid();
   }
 
-private:
+  auto operator==(std::nullptr_t) const noexcept -> bool {
+    return _vtable == nullptr;
+  }
 
-  template<typename Callable>
-  inline static constexpr auto requires_dynamic_allocation_v = !(std::is_nothrow_move_constructible_v<Callable> && sizeof(Callable) <= sizeof(static_storage_type) && alignof(Callable) <= alignof(static_storage_type));
+  auto reset() noexcept -> void {
+    if (_vtable) {
+      _vtable->destroy(_storage);
+      _vtable = nullptr;
+    }
+  }
+
+  auto swap(delegate& other) noexcept -> void {
+    using std::swap;
+
+    swap(_vtable, other._vtable);
+    swap(_storage, other._storage);
+  }
+
+  auto uses_dynamic_storage() const noexcept -> bool {
+    return _vtable && _vtable->uses_dynamic_storage;
+  }
+
+private:
 
   template<typename Class>
   auto _wrap_method(Class* instance, Return(Class::*method)(Args...)) {
-    return [instance, method](Args... args){ std::invoke(method, instance, std::forward<Args>(args)...); };
+    return [instance, method](Args... args){ return std::invoke(method, instance, std::forward<Args>(args)...); };
   }
 
   template<typename Class>
   auto _wrap_method(Class* instance, Return(Class::*method)(Args...)const) {
-    return [instance, method](Args... args){ std::invoke(method, instance, std::forward<Args>(args)...); };
+    return [instance, method](Args... args){ return std::invoke(method, instance, std::forward<Args>(args)...); };
   }
 
   template<typename Class>
   auto _wrap_method(const Class* instance, Return(Class::*method)(Args...)const) {
-    return [instance, method](Args... args){ std::invoke(method, instance, std::forward<Args>(args)...); };
+    return [instance, method](Args... args){ return std::invoke(method, instance, std::forward<Args>(args)...); };
   }
 
   struct vtable {
@@ -188,76 +208,81 @@ private:
     void(*copy)(const storage& source, storage& destination);
     void(*move)(storage& source, storage& destination);
     void(*destroy)(storage& storage);
-  };
+
+    bool uses_dynamic_storage{false};
+  }; // struct vtable
 
   template<typename Callable>
   struct static_vtable {
-    static Return invoke(const storage& storage, Args&&... args) {
+    static auto invoke(const storage& storage, Args&&... args) -> Return {
       return std::invoke(reinterpret_cast<const Callable&>(storage.static_storage), std::forward<Args>(args)...);
     }
 
-    static void copy(const storage& source, storage& destination) {
+    static auto copy(const storage& source, storage& destination) -> void {
       std::construct_at(reinterpret_cast<Callable*>(&destination.static_storage), reinterpret_cast<const Callable&>(source.static_storage));
     }
 
-    static void move(storage& source, storage& destination) {
+    static auto move(storage& source, storage& destination) -> void {
       std::construct_at(reinterpret_cast<Callable*>(&destination.static_storage), std::move(reinterpret_cast<Callable&>(source.static_storage)));
       destroy(source);
     }
 
-    static void destroy(storage& storage) {
+    static auto destroy(storage& storage) -> void {
       std::destroy_at(reinterpret_cast<Callable*>(&storage.static_storage));
     }
   };
 
   template<typename Callable>
   struct dynamic_vtable {
-    static Return invoke(const storage& storage, Args&&... args) {
+    static auto invoke(const storage& storage, Args&&... args) -> Return {
       return std::invoke(*reinterpret_cast<const Callable*>(storage.dynamic_storage), std::forward<Args>(args)...);
     }
 
-    static void copy(const storage& source, storage& destination) {
+    static auto copy(const storage& source, storage& destination) -> void {
       destination.dynamic_storage = reinterpret_cast<dynamic_storage_type>(new Callable{*reinterpret_cast<Callable*>(source.dynamic_storage)});
     }
 
-    static void move(storage& source, storage& destination) {
+    static auto move(storage& source, storage& destination) -> void {
       destination.dynamic_storage = source.dynamic_storage;
       source.dynamic_storage = nullptr;
     }
 
-    static void destroy(storage& storage) {
+    static auto destroy(storage& storage) -> void {
       delete reinterpret_cast<Callable*>(storage.dynamic_storage);
     }
   };
 
   template<typename Callable>
-  static vtable* _create_vtable() {
-    using vtable_type = std::conditional_t<requires_dynamic_allocation_v<Callable>, dynamic_vtable<Callable>, static_vtable<Callable>>;
+  static auto _create_vtable() -> vtable* {
+    constexpr auto requires_dynamic_allocation = requires_dynamic_allocation_v<Callable>;
+    
+    using vtable_type = std::conditional_t<requires_dynamic_allocation, dynamic_vtable<Callable>, static_vtable<Callable>>;
 
     static auto instance = vtable{
       vtable_type::invoke,
       vtable_type::copy,
       vtable_type::move,
-      vtable_type::destroy
+      vtable_type::destroy,
+      requires_dynamic_allocation
     };
 
     return &instance;
   }
 
   template<typename Callable>
-  storage _create_storage(Callable&& callable) {
+  auto _create_storage(Callable&& callable) -> storage {
     if constexpr (requires_dynamic_allocation_v<Callable>) {
-      // switch from new to malloc/construct_at maybe
-      return storage{ .dynamic_storage = reinterpret_cast<dynamic_storage_type>(new Callable{std::forward<Callable>(callable)}) };
+      return storage{ .dynamic_storage = reinterpret_cast<dynamic_storage_type>(new Callable{std::forward<Callable>(callable)})};
     } else {
       auto static_storage = static_storage_type{};
       std::construct_at(reinterpret_cast<Callable*>(&static_storage), std::forward<Callable>(callable));
+
       return storage{ .static_storage = static_storage };
     }
   }
 
   vtable* _vtable{};
-  mutable storage _storage{};
+  storage _storage{};
 
 }; // class delegate
 

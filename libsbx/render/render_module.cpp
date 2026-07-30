@@ -407,8 +407,8 @@ auto render_module::_consume_packet(const render_packet& packet) -> void {
         .color = _color_image,
         .color_msaa = _color_msaa_image,
         .color_index = _color_index,
-        .scene = _scene_images[slot],
-        .scene_index = _scene_indices[slot]
+        .scene = _scene_image,
+        .scene_index = _scene_index
       };
 
       _prepare_frame(context);
@@ -463,9 +463,7 @@ auto render_module::_ensure_resources() -> void {
 
   _color_index = bindless_table.reserve_sampled_image();
 
-  for (auto slot = std::size_t{0u}; slot < graphics::swapchain::max_frames_in_flight; ++slot) {
-    _scene_indices[slot] = bindless_table.reserve_sampled_image();
-  }
+  _scene_index = bindless_table.reserve_sampled_image();
 
   _frame_buffer = registry.emplace<graphics::buffer>(graphics::buffer::create_info{
     .size = memory::stride_v<frame_data> * graphics::swapchain::max_frames_in_flight,
@@ -524,10 +522,7 @@ auto render_module::_resize_targets(const math::vector2u extent) -> void {
     registry.retire(_depth_image, frame_index);
     registry.retire(_color_image, frame_index);
     registry.retire(_color_msaa_image, frame_index);
-
-    for (auto slot = std::size_t{0u}; slot < graphics::swapchain::max_frames_in_flight; ++slot) {
-      registry.retire(_scene_images[slot], frame_index);
-    }
+    registry.retire(_scene_image, frame_index);
   }
 
   _depth_image = registry.emplace<graphics::image>(graphics::image::create_info{
@@ -558,17 +553,15 @@ auto render_module::_resize_targets(const math::vector2u extent) -> void {
 
   const auto scene_format = static_cast<graphics::format>(surface.format().format);
 
-  for (auto slot = std::size_t{0u}; slot < graphics::swapchain::max_frames_in_flight; ++slot) {
-    _scene_images[slot] = registry.emplace<graphics::image>(graphics::image::create_info{
-      .extent = math::vector3u{extent, 1u},
-      .format = scene_format,
-      .usage = graphics::image_usage::color_attachment | graphics::image_usage::sampled,
-      .samples = graphics::samples::count_1,
-      .name = fmt::format("Scene Image {}", slot)
-    });
+  _scene_image = registry.emplace<graphics::image>(graphics::image::create_info{
+    .extent = math::vector3u{extent, 1u},
+    .format = scene_format,
+    .usage = graphics::image_usage::color_attachment | graphics::image_usage::sampled,
+    .samples = graphics::samples::count_1,
+    .name = "Scene Color"
+  });
 
-    bindless_table.write_sampled_image(_scene_indices[slot], registry.get<graphics::image>(_scene_images[slot]).view());
-  }
+  bindless_table.write_sampled_image(_scene_index, registry.get<graphics::image>(_scene_image).view());
 
   _target_extent = extent;
 }

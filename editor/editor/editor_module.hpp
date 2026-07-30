@@ -35,10 +35,12 @@ public:
   auto post_update() -> void;
 
 private:
+  
+  auto _update_texture(sbx::graphics::image_handle image) -> void;
 
   auto _create_descriptor_pool() -> void;
 
-  auto _init_backends() -> void;
+  auto _initialize_backends() -> void;
 
   auto _upload_fonts() -> void;
 
@@ -48,6 +50,10 @@ private:
 
   VkDescriptorPool _descriptor_pool{nullptr};
   std::string _ini_file;
+
+  sbx::graphics::sampler _sampler;
+  VkDescriptorSet _texture_id{VK_NULL_HANDLE};
+  VkImageView _cached_view{VK_NULL_HANDLE};
 
 }; // class editor_module
 

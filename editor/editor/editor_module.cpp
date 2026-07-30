@@ -69,13 +69,12 @@ class viewport_composite_pass final : public sbx::render::render_pass {
 
 public:
 
-  viewport_composite_pass()
-  : _sampler{sbx::graphics::sampler::create_info{}} { }
+  viewport_composite_pass() {
+
+  }
 
   ~viewport_composite_pass() override {
-    if (_texture_id != VK_NULL_HANDLE && ImGui::GetCurrentContext() != nullptr) {
-      ImGui_ImplVulkan_RemoveTexture(_texture_id);
-    }
+    
   }
 
   [[nodiscard]] auto name() const -> std::string_view override {
@@ -83,12 +82,6 @@ public:
   }
 
   auto execute(sbx::render::render_context& context) -> void override {
-    if (!context.packet->camera.is_active) {
-      return;
-    }
-
-    _present.execute(context);
-
     const auto* packet_extension = dynamic_cast<const imgui_render_packet_extension*>(context.extension.get());
 
     if (packet_extension == nullptr) {
@@ -96,24 +89,32 @@ public:
     }
 
     auto& graphics_module = sbx::core::engine::get_module<sbx::graphics::graphics_module>();
+    auto& registry = graphics_module.resource_registry();
+    auto& swapchain = graphics_module.frame_context().swapchain();
 
-    auto& frame_context = graphics_module.frame_context();
-    auto& swapchain = frame_context.swapchain();
+    if (context.packet->camera.is_active) {
+      auto& scene = registry.get<sbx::graphics::image>(context.scene);
 
-    auto barrier = VkMemoryBarrier2{};
-    barrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2;
-    barrier.srcStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
-    barrier.srcAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
-    barrier.dstStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
-    barrier.dstAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT;
-    context.command_buffer->memory_dependency(barrier);
+      auto to_read = sbx::graphics::command_buffer::image_transition_data{};
+      to_read.image = scene;
+      to_read.src_stage_mask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
+      to_read.src_access_mask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
+      to_read.dst_stage_mask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
+      to_read.dst_access_mask = VK_ACCESS_2_SHADER_SAMPLED_READ_BIT;
+      to_read.old_layout = sbx::graphics::image_layout::color_attachment_optimal;
+      to_read.new_layout = sbx::graphics::image_layout::shader_read_only_optimal;
+      to_read.aspect_mask = scene.aspect();
+      to_read.layer_count = 1u;
+      context.command_buffer->transition_image_layout(to_read);
+    }
 
     auto color_attachment = VkRenderingAttachmentInfo{};
     color_attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
     color_attachment.imageView = swapchain.active_image_view();
     color_attachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-    color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+    color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
     color_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    color_attachment.clearValue.color = VkClearColorValue{{0.1f, 0.1f, 0.1f, 1.0f}};
 
     auto rendering_info = VkRenderingInfo{};
     rendering_info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
@@ -129,41 +130,28 @@ public:
 
 private:
 
-  auto _update_texture(const sbx::graphics::image_handle& image) -> void {
-    auto& graphics_module = sbx::core::engine::get_module<sbx::graphics::graphics_module>();
-
-    auto& registry = graphics_module.resource_registry();
-
-    auto& scene = registry.get<sbx::graphics::image>(image);
-
-    auto current_view = scene.view();
-
-    if (current_view == _cached_view) {
-      return;
-    }
-
-    if (_texture_id != VK_NULL_HANDLE) {
-      ImGui_ImplVulkan_RemoveTexture(_texture_id);
-    }
-
-    _texture_id = ImGui_ImplVulkan_AddTexture(_sampler, current_view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-    _cached_view = current_view;
-  }
-
-  sbx::render::present_pass _present{};
-
-  VkDescriptorSet _texture_id{VK_NULL_HANDLE};
-  VkImageView _cached_view{VK_NULL_HANDLE};
-
-  sbx::graphics::sampler _sampler;
-
   sbx::math::vector2u _panel_size{0u, 0u};
   sbx::math::vector2 _content_min{0.0f, 0.0f};
 
 }; // class viewport_composite_pass
 
+static auto viewport_sampler_create_info() -> sbx::graphics::sampler::create_info {
+  return sbx::graphics::sampler::create_info{
+    .mag_filter = sbx::graphics::filter::linear,
+    .min_filter = sbx::graphics::filter::linear,
+    .mipmap_mode = sbx::graphics::mipmap_mode::linear,
+    .address_mode_u = sbx::graphics::address_mode::clamp_to_edge,
+    .address_mode_v = sbx::graphics::address_mode::clamp_to_edge,
+    .address_mode_w = sbx::graphics::address_mode::clamp_to_edge,
+    .max_anisotropy = 1.0f,
+    .max_lod = VK_LOD_CLAMP_NONE,
+    .name = "Editor Viewport Sampler"
+  };
+}
+
 editor_module::editor_module()
-: _ini_file{ini_file} {
+: _ini_file{ini_file},
+  _sampler{viewport_sampler_create_info()}  {
   IMGUI_CHECKVERSION();
   ImGui::CreateContext();
 
@@ -172,7 +160,7 @@ editor_module::editor_module()
   io.IniFilename = _ini_file.data();
 
   _create_descriptor_pool();
-  _init_backends();
+  _initialize_backends();
   _upload_fonts();
   _apply_style();
 
@@ -189,13 +177,15 @@ editor_module::~editor_module() {
 
   logical_device.wait_idle();
 
+  if (_texture_id != VK_NULL_HANDLE && ImGui::GetCurrentContext() != nullptr) {
+    ImGui_ImplVulkan_RemoveTexture(_texture_id);
+  }
+
   ImGui_ImplVulkan_Shutdown();
   ImGui_ImplGlfw_Shutdown();
   ImGui::DestroyContext();
 
-  if (_descriptor_pool) {
-    vkDestroyDescriptorPool(graphics_module.logical_device(), _descriptor_pool, nullptr);
-  }
+  vkDestroyDescriptorPool(logical_device, _descriptor_pool, nullptr);
 }
 
 auto editor_module::post_update() -> void {
@@ -205,11 +195,53 @@ auto editor_module::post_update() -> void {
 
   _draw_dockspace();
 
-  ImGui::Begin(ICON_MDI_BUG_OUTLINE " Debug");
-  ImGui::Text("%.1f FPS (%.3f ms)", ImGui::GetIO().Framerate, 1000.0f / ImGui::GetIO().Framerate);
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{0.0f, 0.0f});
+  ImGui::Begin(ICON_MDI_GAMEPAD_VARIANT " Viewport###viewport_panel", nullptr, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+  // ImGui::PopStyleVar();
+
+  auto available = ImGui::GetContentRegionAvail();
+
+  auto width = static_cast<std::uint32_t>(available.x > 0.0f ? available.x : 1.0f);
+  auto height = static_cast<std::uint32_t>(available.y > 0.0f ? available.y : 1.0f);
+
+  auto& render_module = sbx::core::engine::get_module<sbx::render::render_module>();
+
+  const auto scene_image = render_module.scene_image();
+
+  if (scene_image.is_valid() && available.x > 0.0f && available.y > 0.0f) {
+    _update_texture(scene_image);
+
+    if (_texture_id != VK_NULL_HANDLE) {
+      ImGui::Image(reinterpret_cast<ImTextureID>(_texture_id), available);
+    }
+  }
+
+  ImGui::End();
+  ImGui::PopStyleVar();
+
+  ImGui::Begin("Stats");
+  ImGui::Text("%.1f FPS (%.3f ms)", static_cast<double>(ImGui::GetIO().Framerate), 1000.0 / static_cast<double>(ImGui::GetIO().Framerate));
   ImGui::End();
 
   ImGui::Render();
+}
+
+auto editor_module::_update_texture(sbx::graphics::image_handle image) -> void {
+  auto& graphics_module = sbx::core::engine::get_module<sbx::graphics::graphics_module>();
+  auto& registry = graphics_module.resource_registry();
+
+  const auto current_view = registry.get<sbx::graphics::image>(image).view();
+
+  if (current_view == _cached_view) {
+    return;
+  }
+
+  if (_texture_id != VK_NULL_HANDLE) {
+    ImGui_ImplVulkan_RemoveTexture(_texture_id);
+  }
+
+  _texture_id = ImGui_ImplVulkan_AddTexture(_sampler, current_view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+  _cached_view = current_view;
 }
 
 auto editor_module::_create_descriptor_pool() -> void {
@@ -229,7 +261,7 @@ auto editor_module::_create_descriptor_pool() -> void {
   sbx::graphics::validate(vkCreateDescriptorPool(graphics_module.logical_device(), &pool_info, nullptr, &_descriptor_pool), "vkCreateDescriptorPool");
 }
 
-auto editor_module::_init_backends() -> void {
+auto editor_module::_initialize_backends() -> void {
   auto& platform_module = sbx::core::engine::get_module<sbx::platform::platform_module>();
   auto& graphics_module = sbx::core::engine::get_module<sbx::graphics::graphics_module>();
 

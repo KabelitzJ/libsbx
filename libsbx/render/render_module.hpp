@@ -54,6 +54,10 @@ public:
 
   auto set_packet_producer(std::function<std::unique_ptr<render_packet_extension>()> producer) -> void;
 
+  [[nodiscard]] auto scene_image() const noexcept -> graphics::image_handle {
+    return _scene_image;
+  }
+
 private:
 
   inline static constexpr auto light_capacity = std::uint32_t{256u};
@@ -116,8 +120,8 @@ private:
   std::vector<std::unique_ptr<render_pass>> _passes{};
   std::unique_ptr<render_pass> _composite_pass{};
 
-  std::array<graphics::image_handle, graphics::swapchain::max_frames_in_flight> _scene_images{};
-  std::array<std::uint32_t, graphics::swapchain::max_frames_in_flight> _scene_indices{};
+  graphics::image_handle _scene_image{};
+  std::uint32_t _scene_index{0u};
 
   graphics::buffer_handle _frame_buffer{};
   std::array<graphics::buffer::address_type, graphics::swapchain::max_frames_in_flight> _frame_addresses{};

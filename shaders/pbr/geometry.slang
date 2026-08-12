@@ -169,24 +169,19 @@ fs_out fragment_main(fs_in input) {
   float3 fr = fresnel_schlick_roughness(ndv, f0, roughness);
   float3 kd = (1.0 - fr) * (1.0 - metallic);
 
-  float3 irradiance = (frame.irradiance_index != 0xFFFFFFFF) ? textures[frame.irradiance_index].Sample(sampler, direction_to_equirect(n)).rgb : float3(0.03, 0.03, 0.03);
-  float3 diffuse = irradiance * albedo;
+  // irradiance is the full E(n) (cosine-weighted convolution already includes the pi that a
+  // cosine-weighted-PDF Monte Carlo estimator produces) — Lambertian outgoing radiance is E(n)/pi.
+  float3 irradiance = (frame.irradiance_index != 0xFFFFFFFF) ? cubes[frame.irradiance_index].Sample(sampler, n).rgb : float3(0.03, 0.03, 0.03);
+  float3 diffuse = irradiance * albedo / pi;
 
   float3 specular = float3(0.0, 0.0, 0.0);
 
-  if (frame.prefiltered_count > 0u && frame.brdf_lut_index != 0xFFFFFFFF) {
+  if (frame.prefiltered_mip_count > 0u && frame.brdf_lut_index != 0xFFFFFFFF) {
     float3 reflection = reflect(-v, n);
-    float2 ruv = direction_to_equirect(reflection);
 
-    float level = roughness * float(frame.prefiltered_count - 1u);
+    float level = roughness * float(frame.prefiltered_mip_count - 1u);
 
-    uint low = (uint)floor(level);
-    uint high = min(low + 1u, frame.prefiltered_count - 1u);
-
-    float3 pa = textures[frame.prefiltered_base_index + low].Sample(sampler, ruv).rgb;
-    float3 pb = textures[frame.prefiltered_base_index + high].Sample(sampler, ruv).rgb;
-
-    float3 prefiltered = lerp(pa, pb, frac(level));
+    float3 prefiltered = cubes[frame.prefiltered_index].SampleLevel(sampler, reflection, level).rgb;
     float2 brdf = textures[frame.brdf_lut_index].Sample(sampler, float2(ndv, roughness)).rg;
 
     specular = prefiltered * (fr * brdf.x + brdf.y);

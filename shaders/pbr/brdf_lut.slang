@@ -2,23 +2,19 @@
 // Copyright (c) 2026 Jonas Kabelitz
 
 #include <common.slang>
+#include <descriptors.slang>
 
-struct vs_in { 
-  uint id : SV_VertexID; 
-}; // struct vs_in
+struct push_data {
+  uint output_index;
+}; // struct push_data
 
-struct vs_out { 
-  [[vk::location(0)]] float2 uv : TEXCOORD; 
-  float4 sv_position : SV_Position; 
-}; // struct vs_out
+[[vk::push_constant]] ConstantBuffer<push_data> push;
 
-struct fs_in { 
-  [[vk::location(0)]] float2 uv : TEXCOORD; 
-}; // struct fs_in
+struct cs_in {
+  uint3 id : SV_DispatchThreadID;
+}; // struct cs_in
 
-struct fs_out { 
-  float4 color : SV_Target0; 
-}; // struct fs_out
+static const uint sample_count = 1024u;
 
 float2 integrate_brdf(float ndv, float roughness) {
   float3 v = float3(sqrt(1.0 - ndv * ndv), 0.0, ndv);
@@ -26,10 +22,8 @@ float2 integrate_brdf(float ndv, float roughness) {
   float a = 0.0;
   float b = 0.0;
 
-  const uint samples = 1024u;
-
-  for (uint i = 0u; i < samples; ++i) {
-    float2 xi = hammersley(i, samples);
+  for (uint i = 0u; i < sample_count; ++i) {
+    float2 xi = hammersley(i, sample_count);
     float3 h = importance_sample_ggx(xi, n, roughness);
     float3 l = normalize(2.0 * dot(v, h) * h - v);
 
@@ -47,26 +41,21 @@ float2 integrate_brdf(float ndv, float roughness) {
     }
   }
 
-  return float2(a, b) / float(samples);
+  return float2(a, b) / float(sample_count);
 }
 
-[shader("vertex")]
-vs_out vertex_main(vs_in input) {
-  float2 uv = float2((input.id << 1) & 2, input.id & 2);
+[shader("compute")]
+[numthreads(8, 8, 1)]
+void compute_main(cs_in input) {
+  uint width, height;
+  storage_images[push.output_index].GetDimensions(width, height);
 
-  vs_out output; 
+  if (input.id.x >= width || input.id.y >= height) {
+    return;
+  }
 
-  output.uv = uv; 
-  output.sv_position = float4(uv * 2.0 - 1.0, 0.0, 1.0); 
+  float2 uv = (float2(input.id.xy) + 0.5) / float2(width, height);
+  float2 result = integrate_brdf(max(uv.x, 1e-3), uv.y);
 
-  return output;
-}
-
-[shader("fragment")]
-fs_out fragment_main(fs_in input) {
-  fs_out output;
-
-  output.color = float4(integrate_brdf(max(input.uv.x, 1e-3), input.uv.y), 0.0, 1.0);
-
-  return output;
+  storage_images[push.output_index][input.id.xy] = float4(result, 0.0, 1.0);
 }

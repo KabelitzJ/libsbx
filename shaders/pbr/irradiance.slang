@@ -4,69 +4,58 @@
 #include <common.slang>
 #include <descriptors.slang>
 
-struct vs_in { 
-  uint id : SV_VertexID; 
-}; // struct vs_in
-
-struct vs_out { 
-  [[vk::location(0)]] float2 uv : TEXCOORD; 
-  float4 sv_position : SV_Position; 
-}; // struct vs_out
-
-struct fs_in { 
-  [[vk::location(0)]] float2 uv : TEXCOORD; 
-}; // struct fs_in
-
-struct fs_out { 
-  float4 color : SV_Target0; 
-}; // struct fs_out
-
-struct push_data { 
-  uint environment_index; 
-  uint sampler_index; 
+struct push_data {
+  uint source_index;
+  uint sampler_index;
+  uint output_index;
 }; // struct push_data
 
 [[vk::push_constant]] ConstantBuffer<push_data> push;
 
-[shader("vertex")]
-vs_out vertex_main(vs_in input) {
-  float2 uv = float2((input.id << 1) & 2, input.id & 2);
+struct cs_in {
+  uint3 id : SV_DispatchThreadID;
+}; // struct cs_in
 
-  vs_out output; 
+static const uint sample_count = 4096u;
 
-  output.uv = uv; 
-  output.sv_position = float4(uv * 2.0 - 1.0, 0.0, 1.0); 
+float3 cosine_sample_hemisphere(float2 xi) {
+  float phi = 2.0 * pi * xi.x;
+  float cos_theta = sqrt(1.0 - xi.y);
+  float sin_theta = sqrt(xi.y);
 
-  return output;
+  return float3(sin_theta * cos(phi), sin_theta * sin(phi), cos_theta);
 }
 
-[shader("fragment")]
-fs_out fragment_main(fs_in input) {
-  float3 n = equirect_direction(input.uv);
+[shader("compute")]
+[numthreads(8, 8, 1)]
+void compute_main(cs_in input) {
+  uint width, height, layers;
+  storage_cubes[push.output_index].GetDimensions(width, height, layers);
 
-  float3 up = abs(n.y) < 0.999 ? float3(0, 1, 0) : float3(1, 0, 0);
-  float3 right = normalize(cross(up, n));
-  up = cross(n, right);
-
-  float3 irradiance = float3(0, 0, 0);
-  float samples = 0.0;
-  const float delta = 0.05;
-
-  for (float phi = 0.0; phi < 2.0 * pi; phi += delta) {
-    for (float theta = 0.0; theta < 0.5 * pi; theta += delta) {
-      float3 tangent = float3(sin(theta) * cos(phi), sin(theta) * sin(phi), cos(theta));
-      float3 dir = tangent.x * right + tangent.y * up + tangent.z * n;
-
-      float3 radiance = min(textures[push.environment_index].SampleLevel(samplers[push.sampler_index], direction_to_equirect(dir), 0.0).rgb, float3(firefly_clamp));
-      irradiance += radiance * cos(theta) * sin(theta);
-
-      samples += 1.0;
-    }
+  if (input.id.x >= width || input.id.y >= height || input.id.z >= 6u) {
+    return;
   }
 
-  fs_out output;
+  float2 uv = (float2(input.id.xy) + 0.5) / float2(width, height);
+  float3 n = normalize(cube_direction(uv, input.id.z));
 
-  output.color = float4(pi * irradiance / samples, 1.0);
+  float3 up = abs(n.z) < 0.999 ? float3(0, 0, 1) : float3(1, 0, 0);
+  float3 tangent = normalize(cross(up, n));
+  float3 bitangent = cross(n, tangent);
 
-  return output;
+  float3 sum = float3(0, 0, 0);
+
+  for (uint i = 0u; i < sample_count; ++i) {
+    float2 xi = hammersley(i, sample_count);
+    float3 h = cosine_sample_hemisphere(xi);
+    float3 direction = normalize(tangent * h.x + bitangent * h.y + n * h.z);
+
+    sum += min(cubes[push.source_index].SampleLevel(samplers[push.sampler_index], direction, 0.0).rgb, float3(firefly_clamp));
+  }
+
+  // Cosine-weighted importance sampling: the cos(theta)/pi PDF cancels the BRDF's cosine term,
+  // leaving E(n) = pi * mean(L) rather than a plain average.
+  float3 irradiance = pi * sum / float(sample_count);
+
+  storage_cubes[push.output_index][input.id] = float4(irradiance, 1.0);
 }

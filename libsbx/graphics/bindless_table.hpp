@@ -32,10 +32,15 @@ class bindless_table : public utility::noncopyable {
 public:
 
   inline static constexpr auto set_index = std::uint32_t{0u};
+
   inline static constexpr auto sampled_image_binding = std::uint32_t{0u};
   inline static constexpr auto sampler_binding = std::uint32_t{1u};
   inline static constexpr auto storage_image_binding = std::uint32_t{2u};
+  inline static constexpr auto sampled_cube_binding = std::uint32_t{3u};
+  inline static constexpr auto storage_cube_binding = std::uint32_t{4u};
+  
   inline static constexpr auto push_constant_size = std::uint32_t{128u};
+  inline static constexpr auto push_constant_stages = VkShaderStageFlags{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT};
 
   bindless_table(const physical_device& physical_device, const logical_device& logical_device);
 
@@ -64,6 +69,18 @@ public:
   auto unregister_sampled_image(std::uint32_t index) -> void;
 
   auto unregister_storage_image(std::uint32_t index) -> void;
+
+  auto register_sampled_cube(VkImageView view) -> std::uint32_t;
+
+  auto reserve_sampled_cube() -> std::uint32_t;
+
+  auto write_sampled_cube(std::uint32_t index, VkImageView view) -> void;
+
+  auto unregister_sampled_cube(std::uint32_t index) -> void;
+
+  auto register_storage_cube(VkImageView view) -> std::uint32_t;
+
+  auto unregister_storage_cube(std::uint32_t index) -> void;
 
   /**
    * @brief Returns the bindless index of a sampler matching @p create_info, creating and caching it on first request.
@@ -112,6 +129,8 @@ private:
   index_allocator _sampled_images{};
   index_allocator _samplers{};
   index_allocator _storage_images{};
+  index_allocator _sampled_cubes{};
+  index_allocator _storage_cubes{};
 
   std::vector<pending_write> _pending_writes{};
   std::vector<sampler_entry> _sampler_cache{};

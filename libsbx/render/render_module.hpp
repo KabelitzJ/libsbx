@@ -63,16 +63,6 @@ private:
   inline static constexpr auto light_capacity = std::uint32_t{256u};
   inline static constexpr auto transform_capacity = std::uint32_t{16384u};
 
-  inline static constexpr auto prefiltered_levels = std::uint32_t{5u};
-
-  struct baked_environment {
-    std::uint32_t irradiance_index{0xFFFFFFFFu};
-    std::uint32_t prefiltered_base{0u};
-    std::uint32_t prefiltered_count{0u};
-    graphics::image_handle irradiance_image{};
-    std::vector<graphics::image_handle> prefiltered_images{};
-  }; // struct baked_environment
-
   auto _start() -> void;
 
   auto _stop() -> void;
@@ -88,14 +78,6 @@ private:
   [[nodiscard]] auto _build_packet() -> render_packet;
 
   auto _consume_packet(const render_packet& packet) -> void;
-
-  auto _ensure_ibl_pipelines() -> void;
-
-  auto _ensure_brdf_lut(graphics::command_buffer& command_buffer) -> void;
-
-  auto _bake_environment(graphics::command_buffer& command_buffer, const math::uuid& id, std::uint32_t radiance_index) -> void;
-
-  auto _bake_fullscreen(graphics::command_buffer& command_buffer, graphics::image& target, const math::vector2u& extent, graphics::graphics_pipeline& pipeline, std::span<const std::byte> push_data) -> void;
 
   std::thread _thread{};
 
@@ -131,15 +113,6 @@ private:
 
   graphics::buffer_handle _transform_buffer{};
   std::array<graphics::buffer::address_type, graphics::swapchain::max_frames_in_flight> _transform_addresses{};
-
-  memory::observer_ptr<graphics::graphics_pipeline> _brdf_lut_pipeline{nullptr};
-  memory::observer_ptr<graphics::graphics_pipeline> _irradiance_pipeline{nullptr};
-  memory::observer_ptr<graphics::graphics_pipeline> _prefilter_pipeline{nullptr};
-
-  graphics::image_handle _brdf_lut_image{};
-  std::uint32_t _brdf_lut_index{0xFFFFFFFFu};
-
-  std::unordered_map<math::uuid, baked_environment> _baked_environments{};
 
 }; // class render_module
 

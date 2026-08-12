@@ -53,8 +53,8 @@ struct frame_data {
   graphics::buffer::address_type material_address;
   std::uint32_t irradiance_index;
   std::uint32_t brdf_lut_index;
-  std::uint32_t prefiltered_base_index;
-  std::uint32_t prefiltered_count;
+  std::uint32_t prefiltered_index;
+  std::uint32_t prefiltered_mip_count;
   std::float_t environment_intensity;
   std::uint32_t pad0;
 }; // struct frame_data
@@ -76,20 +76,8 @@ struct transparent_entry {
   std::float_t depth{0.0f};
 }; // struct transparent_entry
 
-struct ibl_convolve_push { 
-  std::uint32_t environment_index; 
-  std::uint32_t sampler_index;
-}; // struct ibl_convolve_push
-
-struct ibl_prefilter_push { 
-  std::uint32_t environment_index; 
-  std::uint32_t sampler_index; 
-  std::float_t roughness; 
-}; // struct ibl_prefilter_push
-
 render_module::render_module() {
   _ensure_resources();
-  _ensure_ibl_pipelines();
 
   // Creation order = execution order in the render thread.
   _passes.push_back(std::make_unique<depth_pre_pass>());
@@ -350,26 +338,19 @@ auto render_module::_consume_packet(const render_packet& packet) -> void {
     assets_module.process_uploads(frame_context.frame_index());
     upload_context.flush(*command_buffer, frame_context.frame_index());
 
+    // Baked once, synchronously, by assets_module::_bake_environment at load time (via compute
+    // dispatch on the async compute queue) — the render thread just reads the resulting indices
+    // straight off the environment_map asset. No more lazy first-frame bake here.
     auto irradiance_index = 0xFFFFFFFFu;
     auto brdf_lut_index = 0xFFFFFFFFu;
-    auto prefiltered_base = 0u;
-    auto prefiltered_count = 0u;
+    auto prefiltered_index = 0xFFFFFFFFu;
+    auto prefiltered_mip_count = 0u;
 
     if (packet.camera.is_active && packet.environment.is_valid() && assets_module.is_resident(packet.environment)) {
-      _ensure_brdf_lut(*command_buffer);
-
-      const auto id = packet.environment->id();
-
-      if (!_baked_environments.contains(id)) {
-        _bake_environment(*command_buffer, id, packet.environment->radiance_index());
-      }
-
-      const auto& baked = _baked_environments.at(id);
-
-      irradiance_index = baked.irradiance_index;
-      brdf_lut_index = _brdf_lut_index;
-      prefiltered_base = baked.prefiltered_base;
-      prefiltered_count = baked.prefiltered_count;
+      irradiance_index = packet.environment->irradiance_index();
+      brdf_lut_index = assets_module.brdf_lut_index();
+      prefiltered_index = packet.environment->prefiltered_index();
+      prefiltered_mip_count = packet.environment->prefiltered_mip_count();
     }
 
     _resize_targets(extent);
@@ -401,8 +382,8 @@ auto render_module::_consume_packet(const render_packet& packet) -> void {
         .environment_intensity = packet.environment_intensity,
         .irradiance_index = irradiance_index,
         .brdf_lut_index = brdf_lut_index,
-        .prefiltered_base_index = prefiltered_base,
-        .prefiltered_count = prefiltered_count,
+        .prefiltered_index = prefiltered_index,
+        .prefiltered_mip_count = prefiltered_mip_count,
         .depth = _depth_image,
         .color = _color_image,
         .color_msaa = _color_msaa_image,
@@ -600,8 +581,8 @@ auto render_module::_prepare_frame(render_context& context) -> void {
   data.material_address = assets_module.material_buffer_address();
   data.irradiance_index = context.irradiance_index;
   data.brdf_lut_index = context.brdf_lut_index;
-  data.prefiltered_base_index = context.prefiltered_base_index;
-  data.prefiltered_count = context.prefiltered_count;
+  data.prefiltered_index = context.prefiltered_index;
+  data.prefiltered_mip_count = context.prefiltered_mip_count;
   data.environment_intensity = context.environment_intensity;
   data.pad0 = 0u;
 
@@ -613,193 +594,6 @@ auto render_module::_prepare_frame(render_context& context) -> void {
   context.instance_count = instance_count;
   context.sampler_index = _sampler_index;
   context.inverse_view_projection = math::matrix4x4::inverted(projection * context.packet->camera.view);
-}
-
-auto render_module::_ensure_ibl_pipelines() -> void {
-  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
-
-  auto& shader_cache = graphics_module.shader_cache();
-  auto& pipeline_cache = graphics_module.pipeline_cache();
-
-  const auto entry_points = std::vector<graphics::shader_compiler::entry_point_request>{
-    {VK_SHADER_STAGE_VERTEX_BIT, "vertex_main"},
-    {VK_SHADER_STAGE_FRAGMENT_BIT, "fragment_main"}
-  };
-
-  const auto make = [&](const std::filesystem::path& path, graphics::format format, const std::string& name) {
-    const auto& shader = shader_cache.get({path, entry_points});
-    return pipeline_cache.get(graphics::graphics_pipeline::create_info{
-      .shader = shader,
-      .color_formats = {format},
-      .cull_mode = graphics::cull_mode::none,
-      .depth_test = false,
-      .depth_write = false,
-      .name = name
-    });
-  };
-
-  _brdf_lut_pipeline = make("shaders/pbr/brdf_lut.slang", graphics::format::r16g16_sfloat, "IBL BRDF LUT");
-  _irradiance_pipeline = make("shaders/pbr/irradiance.slang", graphics::format::r16g16b16a16_sfloat, "IBL Irradiance");
-  _prefilter_pipeline = make("shaders/pbr/prefilter.slang", graphics::format::r16g16b16a16_sfloat, "IBL Prefilter");
-}
-
-auto render_module::_bake_fullscreen(graphics::command_buffer& command_buffer, graphics::image& target, const math::vector2u& extent, graphics::graphics_pipeline& pipeline, std::span<const std::byte> push_data) -> void {
-  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
-    
-  auto& bindless_table = graphics_module.bindless_table();
-
-  auto to_color = graphics::command_buffer::image_transition_data{};
-  to_color.image = target.handle();
-  to_color.src_stage_mask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
-  to_color.src_access_mask = VK_ACCESS_2_NONE;
-  to_color.dst_stage_mask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
-  to_color.dst_access_mask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
-  to_color.old_layout = graphics::image_layout::undefined;
-  to_color.new_layout = graphics::image_layout::color_attachment_optimal;
-  to_color.aspect_mask = target.aspect();
-  to_color.layer_count = 1u;
-  command_buffer.transition_image_layout(to_color);
-
-  auto attachment = VkRenderingAttachmentInfo{};
-  attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-  attachment.imageView = target.view();
-  attachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-  attachment.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-  attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-
-  auto rendering_info = VkRenderingInfo{};
-  rendering_info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
-  rendering_info.renderArea = VkRect2D{VkOffset2D{0, 0}, VkExtent2D{extent.x(), extent.y()}};
-  rendering_info.layerCount = 1u;
-  rendering_info.colorAttachmentCount = 1u;
-  rendering_info.pColorAttachments = &attachment;
-
-  command_buffer.begin_rendering(rendering_info);
-
-  const auto descriptor_set = bindless_table.descriptor_set();
-
-  vkCmdBindDescriptorSets(command_buffer.handle(), VK_PIPELINE_BIND_POINT_GRAPHICS, bindless_table.pipeline_layout(), 0u, 1u, &descriptor_set, 0u, nullptr);
-
-  command_buffer.set_viewport(VkViewport{0.0f, 0.0f, static_cast<std::float_t>(extent.x()), static_cast<std::float_t>(extent.y()), 0.0f, 1.0f});
-  command_buffer.set_scissor(VkRect2D{VkOffset2D{0, 0}, VkExtent2D{extent.x(), extent.y()}});
-  command_buffer.bind_pipeline(pipeline);
-
-  if (push_data.size() > 0u) {
-    auto range = std::array<std::byte, graphics::bindless_table::push_constant_size>{};
-    std::memcpy(range.data(), push_data.data(), push_data.size());
-    
-    command_buffer.push_constants(bindless_table.pipeline_layout(), VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0u, range);
-  }
-
-  command_buffer.draw(3u, 1u, 0u, 0u);
-  
-  command_buffer.end_rendering();
-
-  auto to_read = graphics::command_buffer::image_transition_data{};
-  to_read.image = target.handle();
-  to_read.src_stage_mask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
-  to_read.src_access_mask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
-  to_read.dst_stage_mask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
-  to_read.dst_access_mask = VK_ACCESS_2_SHADER_SAMPLED_READ_BIT;
-  to_read.old_layout = graphics::image_layout::color_attachment_optimal;
-  to_read.new_layout = graphics::image_layout::shader_read_only_optimal;
-  to_read.aspect_mask = target.aspect();
-  to_read.layer_count = 1u;
-  command_buffer.transition_image_layout(to_read);
-}
-
-auto render_module::_ensure_brdf_lut(graphics::command_buffer& command_buffer) -> void {
-  if (_brdf_lut_index != 0xFFFFFFFFu) {
-    return;
-  }
-
-  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
-
-  auto& registry = graphics_module.resource_registry();
-  auto& bindless_table = graphics_module.bindless_table();
-
-  const auto extent = math::vector2u{512u, 512u};
-
-  _brdf_lut_image = registry.emplace<graphics::image>(graphics::image::create_info{
-    .extent = math::vector3u{extent.x(), extent.y(), 1u},
-    .format = graphics::format::r16g16_sfloat,
-    .usage = graphics::image_usage::color_attachment | graphics::image_usage::sampled,
-    .name = "IBL BRDF LUT"
-  });
-
-  _brdf_lut_index = bindless_table.reserve_sampled_image();
-
-  _bake_fullscreen(command_buffer, registry.get<graphics::image>(_brdf_lut_image), extent, *_brdf_lut_pipeline, std::span<const std::byte>{});
-
-  bindless_table.write_sampled_image(_brdf_lut_index, registry.get<graphics::image>(_brdf_lut_image).view());
-}
-
-auto render_module::_bake_environment(graphics::command_buffer& command_buffer, const math::uuid& id, std::uint32_t radiance_index) -> void {
-  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
-
-  auto& registry = graphics_module.resource_registry();
-  auto& bindless_table = graphics_module.bindless_table();
-
-  auto baked = baked_environment{};
-  baked.prefiltered_count = prefiltered_levels;
-
-  // Irradiance.
-  {
-    const auto extent = math::vector2u{64u, 64u};
-
-    baked.irradiance_image = registry.emplace<graphics::image>(graphics::image::create_info{
-      .extent = math::vector3u{extent, 1u},
-      .format = graphics::format::r16g16b16a16_sfloat,
-      .usage = graphics::image_usage::color_attachment | graphics::image_usage::sampled,
-      .name = "IBL Irradiance"
-    });
-
-    baked.irradiance_index = bindless_table.reserve_sampled_image();
-
-    auto push = ibl_convolve_push{};
-    push.environment_index = radiance_index;
-    push.sampler_index = _sampler_index;
-
-    _bake_fullscreen(command_buffer, registry.get<graphics::image>(baked.irradiance_image), extent, *_irradiance_pipeline, std::span<const std::byte>{reinterpret_cast<const std::byte*>(&push), sizeof(push)});
-
-    bindless_table.write_sampled_image(baked.irradiance_index, registry.get<graphics::image>(baked.irradiance_image).view());
-  }
-
-  // Prefiltered specular: N separate roughness textures with consecutive bindless indices.
-  baked.prefiltered_images.reserve(prefiltered_levels);
-
-  for (auto level = std::uint32_t{0u}; level < prefiltered_levels; ++level) {
-    const auto extent = math::vector2u{512u, 512u};
-
-    const auto image = registry.emplace<graphics::image>(graphics::image::create_info{
-      .extent = math::vector3u{extent, 1u},
-      .format = graphics::format::r16g16b16a16_sfloat,
-      .usage = graphics::image_usage::color_attachment | graphics::image_usage::sampled,
-      .name = fmt::format("IBL Prefiltered Level {}", level)
-    });
-
-    const auto index = bindless_table.reserve_sampled_image();
-
-    if (level == 0u) {
-      baked.prefiltered_base = index; // subsequent reserves are consecutive
-    }
-
-    const auto roughness = static_cast<std::float_t>(level) / static_cast<std::float_t>(prefiltered_levels - 1u);
-
-    auto push = ibl_prefilter_push{};
-    push.environment_index = radiance_index;
-    push.sampler_index = _sampler_index;
-    push.roughness = roughness;
-
-    _bake_fullscreen(command_buffer, registry.get<graphics::image>(image), extent, *_prefilter_pipeline, std::span<const std::byte>{reinterpret_cast<const std::byte*>(&push), sizeof(push)});
-
-    bindless_table.write_sampled_image(index, registry.get<graphics::image>(image).view());
-    baked.prefiltered_images.push_back(image);
-  }
-
-  _baked_environments.emplace(id, std::move(baked));
-
-  utility::logger<"render">::info("Baked IBL for environment {}", id);
 }
 
 } // namespace sbx::render

@@ -56,15 +56,19 @@ bindless_table::bindless_table(const physical_device& physical_device, const log
   _sampled_images.capacity = std::min(std::uint32_t{16384u}, indexing_properties.maxDescriptorSetUpdateAfterBindSampledImages);
   _samplers.capacity = std::min(std::uint32_t{1024u}, indexing_properties.maxDescriptorSetUpdateAfterBindSamplers);
   _storage_images.capacity = std::min(std::uint32_t{8192u}, indexing_properties.maxDescriptorSetUpdateAfterBindStorageImages);
+  _sampled_cubes.capacity = std::min(std::uint32_t{1024u}, indexing_properties.maxDescriptorSetUpdateAfterBindSampledImages);
+  _storage_cubes.capacity = std::min(std::uint32_t{512u}, indexing_properties.maxDescriptorSetUpdateAfterBindStorageImages);
 
-  const auto bindings = std::array<VkDescriptorSetLayoutBinding, 3u>{
+  const auto bindings = std::array<VkDescriptorSetLayoutBinding, 5u>{
     VkDescriptorSetLayoutBinding{sampled_image_binding, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, _sampled_images.capacity, VK_SHADER_STAGE_ALL, nullptr},
     VkDescriptorSetLayoutBinding{sampler_binding, VK_DESCRIPTOR_TYPE_SAMPLER, _samplers.capacity, VK_SHADER_STAGE_ALL, nullptr},
-    VkDescriptorSetLayoutBinding{storage_image_binding, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, _storage_images.capacity, VK_SHADER_STAGE_ALL, nullptr}
+    VkDescriptorSetLayoutBinding{storage_image_binding, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, _storage_images.capacity, VK_SHADER_STAGE_ALL, nullptr},
+    VkDescriptorSetLayoutBinding{sampled_cube_binding, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, _sampled_cubes.capacity, VK_SHADER_STAGE_ALL, nullptr},
+    VkDescriptorSetLayoutBinding{storage_cube_binding, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, _storage_cubes.capacity, VK_SHADER_STAGE_ALL, nullptr}
   };
 
   const auto binding_flag = VkDescriptorBindingFlags{VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT | VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT};
-  const auto binding_flags = std::array<VkDescriptorBindingFlags, 3u>{binding_flag, binding_flag, binding_flag};
+  const auto binding_flags = std::array<VkDescriptorBindingFlags, 5u>{binding_flag, binding_flag, binding_flag, binding_flag, binding_flag};
 
   auto binding_flags_info = VkDescriptorSetLayoutBindingFlagsCreateInfo{};
   binding_flags_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO;
@@ -81,9 +85,9 @@ bindless_table::bindless_table(const physical_device& physical_device, const log
   validate(vkCreateDescriptorSetLayout(logical_device, &layout_create_info, nullptr, &_descriptor_set_layout), "vkCreateDescriptorSetLayout");
 
   const auto pool_sizes = std::array<VkDescriptorPoolSize, 3u>{
-    VkDescriptorPoolSize{VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, _sampled_images.capacity},
+    VkDescriptorPoolSize{VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, _sampled_images.capacity + _sampled_cubes.capacity},
     VkDescriptorPoolSize{VK_DESCRIPTOR_TYPE_SAMPLER, _samplers.capacity},
-    VkDescriptorPoolSize{VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, _storage_images.capacity}
+    VkDescriptorPoolSize{VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, _storage_images.capacity + _storage_cubes.capacity}
   };
 
   auto pool_create_info = VkDescriptorPoolCreateInfo{};
@@ -104,7 +108,7 @@ bindless_table::bindless_table(const physical_device& physical_device, const log
   validate(vkAllocateDescriptorSets(logical_device, &allocate_info, &_descriptor_set), "vkAllocateDescriptorSets");
 
   auto push_constant_range = VkPushConstantRange{};
-  push_constant_range.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+  push_constant_range.stageFlags = push_constant_stages;
   push_constant_range.offset = 0u;
   push_constant_range.size = push_constant_size;
 
@@ -189,6 +193,62 @@ auto bindless_table::unregister_storage_image(std::uint32_t index) -> void {
   _storage_images.release(index);
 }
 
+auto bindless_table::register_sampled_cube(VkImageView view) -> std::uint32_t {
+  auto lock = std::lock_guard{_mutex};
+
+  const auto index = _sampled_cubes.allocate();
+
+  auto image_info = VkDescriptorImageInfo{};
+  image_info.imageView = view;
+  image_info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+  _pending_writes.push_back(pending_write{sampled_cube_binding, index, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, image_info});
+
+  return index;
+}
+
+auto bindless_table::reserve_sampled_cube() -> std::uint32_t {
+  auto lock = std::lock_guard{_mutex};
+
+  return _sampled_cubes.allocate();
+}
+
+auto bindless_table::write_sampled_cube(std::uint32_t index, VkImageView view) -> void {
+  auto lock = std::lock_guard{_mutex};
+
+  auto image_info = VkDescriptorImageInfo{};
+  image_info.imageView = view;
+  image_info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+  _pending_writes.push_back(pending_write{sampled_cube_binding, index, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, image_info});
+}
+
+auto bindless_table::unregister_sampled_cube(std::uint32_t index) -> void {
+  auto lock = std::lock_guard{_mutex};
+
+  _sampled_cubes.release(index);
+}
+
+auto bindless_table::register_storage_cube(VkImageView view) -> std::uint32_t {
+  auto lock = std::lock_guard{_mutex};
+
+  const auto index = _storage_cubes.allocate();
+
+  auto image_info = VkDescriptorImageInfo{};
+  image_info.imageView = view;
+  image_info.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+
+  _pending_writes.push_back(pending_write{storage_cube_binding, index, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, image_info});
+
+  return index;
+}
+
+auto bindless_table::unregister_storage_cube(std::uint32_t index) -> void {
+  auto lock = std::lock_guard{_mutex};
+
+  _storage_cubes.release(index);
+}
+
 auto bindless_table::sampler_index(const sampler::create_info& create_info) -> std::uint32_t {
   auto lock = std::lock_guard{_mutex};
 
@@ -216,22 +276,21 @@ auto bindless_table::flush_writes() -> void {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
   auto& logical_device = graphics_module.logical_device();
 
-  auto pending = std::vector<pending_write>{};
+  // Held across vkUpdateDescriptorSets itself, not just the pending-write bookkeeping: Vulkan
+  // requires external synchronization of a VkDescriptorSet across threads, and this table's
+  // single descriptor set can now be flushed from more than one thread (the render thread every
+  // frame, and an asset-loading thread doing a one-shot compute bake) — swapping the pending
+  // vector under the lock and then updating outside it would let two flushes race on the same set.
+  auto lock = std::lock_guard{_mutex};
 
-  {
-    auto lock = std::lock_guard{_mutex};
-
-    if (_pending_writes.empty()) {
-      return;
-    }
-
-    pending.swap(_pending_writes);
+  if (_pending_writes.empty()) {
+    return;
   }
 
   auto writes = std::vector<VkWriteDescriptorSet>{};
-  writes.reserve(pending.size());
+  writes.reserve(_pending_writes.size());
 
-  for (auto& entry : pending) {
+  for (auto& entry : _pending_writes) {
     auto write = VkWriteDescriptorSet{};
     write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
     write.dstSet = _descriptor_set;
@@ -245,6 +304,8 @@ auto bindless_table::flush_writes() -> void {
   }
 
   vkUpdateDescriptorSets(logical_device, static_cast<std::uint32_t>(writes.size()), writes.data(), 0u, nullptr);
+
+  _pending_writes.clear();
 }
 
 } // namespace sbx::graphics

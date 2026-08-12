@@ -17,6 +17,7 @@
 #include <libsbx/graphics/resources/buffer.hpp>
 
 #include <libsbx/graphics/pipeline/graphics_pipeline.hpp>
+#include <libsbx/graphics/pipeline/compute_pipeline.hpp>
 
 #include <libsbx/graphics/bindless_table.hpp>
 #include <libsbx/graphics/types.hpp>
@@ -152,6 +153,10 @@ public:
   auto bind_index_buffer(const VkBuffer& buffer, VkDeviceSize offset, VkIndexType index_type) -> void;
 
   auto bind_pipeline(const graphics::graphics_pipeline& pipeline) -> void;
+
+  auto bind_pipeline(const graphics::compute_pipeline& pipeline) -> void;
+
+  auto dispatch(std::uint32_t group_count_x, std::uint32_t group_count_y, std::uint32_t group_count_z) -> void;
 
   auto draw(std::uint32_t vertex_count, std::uint32_t instance_count, std::uint32_t first_vertex, std::uint32_t first_instance) -> void;
 

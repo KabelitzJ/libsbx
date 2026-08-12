@@ -6,13 +6,13 @@ assets_module:
   static_meshes:
     - key: flight_helmet
       name: flight_helmet
-      uuid: 14759204959247742620
+      uuid: 14461802237679278954
     - key: damaged_helmet
       name: damaged_helmet
-      uuid: 15774294770223009164
+      uuid: 1821435028467519771
     - key: duck
       name: duck
-      uuid: 5687815377470583070
+      uuid: 17482914061356141443
   materials:
     []
 nodes:

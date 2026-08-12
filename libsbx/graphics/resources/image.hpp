@@ -50,6 +50,7 @@ public:
     std::uint32_t array_layers{1u};
     graphics::image_view_type view_type{image_view_type::two_dimensional};
     graphics::samples samples{samples::count_1};
+    bool concurrent_sharing{false};
     std::string name{"Image"};
   }; // struct create_info
 
@@ -97,6 +98,16 @@ public:
    * @brief The subresource range spanning every mip level and array layer.
    */
   [[nodiscard]] auto subresource_range() const noexcept -> VkImageSubresourceRange;
+
+  /**
+   * @brief Creates an additional, caller-owned view over a subrange of mips/layers — e.g. one mip
+   * level across all 6 faces of a cube image, to bind as a compute storage-image write target.
+   *
+   * Not tracked by the image; unlike @ref view, this one is the caller's responsibility to
+   * `vkDestroyImageView` once done with it — typically right after the compute dispatch that used
+   * it, since these are transient, bake-time-only views.
+   */
+  [[nodiscard]] auto create_view(graphics::image_view_type type, std::uint32_t base_mip_level, std::uint32_t mip_levels, std::uint32_t base_array_layer, std::uint32_t array_layers) const -> view_type;
 
   /**
    * @brief The number of mip levels a full chain would have for @p extent.

@@ -4,6 +4,7 @@
 #define LIBSBX_GRAPHICS_GRAPHICS_MODULE_HPP_
 
 #include <memory>
+#include <mutex>
 
 #include <libsbx/utility/hash.hpp>
 #include <libsbx/utility/noncopyable.hpp>
@@ -25,6 +26,7 @@
 #include <libsbx/graphics/pipeline/shader_compiler.hpp>
 #include <libsbx/graphics/pipeline/shader_cache.hpp>
 #include <libsbx/graphics/pipeline/pipeline_cache.hpp>
+#include <libsbx/graphics/pipeline/compute_pipeline_cache.hpp>
 
 #include <libsbx/graphics/frame_context.hpp>
 #include <libsbx/graphics/upload_context.hpp>
@@ -104,6 +106,10 @@ public:
     return _pipeline_cache;
   }
 
+  [[nodiscard]] auto compute_pipeline_cache() noexcept -> graphics::compute_pipeline_cache& {
+    return _compute_pipeline_cache;
+  }
+
   auto command_pool(const queue::type type, const std::thread::id& thread_id = std::this_thread::get_id()) -> const std::shared_ptr<command_pool>&;
 
 private:
@@ -135,6 +141,7 @@ private:
   graphics::allocator _allocator;
   graphics::surface _surface;
 
+  std::mutex _command_pool_mutex{};
   std::unordered_map<command_pool_key, std::shared_ptr<graphics::command_pool>, command_pool_key_hash, command_pool_key_equality> _command_pools;
 
   graphics::resource_registry _resource_registry;
@@ -145,6 +152,7 @@ private:
   graphics::shader_compiler _shader_compiler;
   graphics::shader_cache _shader_cache;
   graphics::pipeline_cache _pipeline_cache;
+  graphics::compute_pipeline_cache _compute_pipeline_cache;
 
 }; // class graphics_module
 

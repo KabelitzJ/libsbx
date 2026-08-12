@@ -4,6 +4,7 @@
 #define LIBSBX_GRAPHICS_RESOURCES_RESOURCE_REGISTRY_HPP_
 
 #include <cstdint>
+#include <mutex>
 #include <tuple>
 #include <type_traits>
 #include <utility>
@@ -28,6 +29,12 @@ namespace sbx::graphics {
  * The registry owns the collection point for deferred destruction. @ref collect_all is called
  * once per frame from `frame_context::begin_frame`, after the timeline wait and before any
  * descriptor writes, so that a slot is never reused while a command buffer still references it.
+ *
+ * Guarded by a single mutex: the render thread and an asset-loading thread (e.g. the compute IBL
+ * bake at environment-map load time) may call into this concurrently. Resource storage itself is
+ * page-stable (see resource_pool), so a reference returned by @ref get stays valid after the lock
+ * is released — only the pool's own bookkeeping (slots/free-list/pages/retired-queue) needs
+ * protecting from concurrent mutation.
  *
  * @tparam Types The resource types the registry owns. Must be unique.
  */
@@ -58,21 +65,29 @@ public:
   template<typename Type, typename... Args>
   requires (std::is_constructible_v<Type, Args...>)
   auto emplace(Args&&... args) -> resource_handle<Type> {
+    auto lock = std::lock_guard{_mutex};
+
     return pool<Type>().emplace(std::forward<Args>(args)...);
   }
 
   template<typename Type>
   [[nodiscard]] auto get(const resource_handle<Type> handle) -> Type& {
+    auto lock = std::lock_guard{_mutex};
+
     return pool<Type>().get(handle);
   }
 
   template<typename Type>
   [[nodiscard]] auto get(const resource_handle<Type> handle) const -> const Type& {
+    auto lock = std::lock_guard{_mutex};
+
     return pool<Type>().get(handle);
   }
 
   template<typename Type>
   [[nodiscard]] auto is_valid(const resource_handle<Type> handle) const noexcept -> bool {
+    auto lock = std::lock_guard{_mutex};
+
     return pool<Type>().is_valid(handle);
   }
 
@@ -85,6 +100,8 @@ public:
    */
   template<typename Type>
   auto retire(const resource_handle<Type> handle, const std::uint64_t timeline_value) -> void {
+    auto lock = std::lock_guard{_mutex};
+
     pool<Type>().retire(handle, timeline_value);
   }
 
@@ -94,6 +111,8 @@ public:
    * @param completed_value The highest timeline value the GPU has signalled.
    */
   auto collect_all(const std::uint64_t completed_value) -> void {
+    auto lock = std::lock_guard{_mutex};
+
     std::apply([completed_value](auto&... pools) -> void {
       (pools.collect(completed_value), ...);
     }, _pools);
@@ -103,6 +122,8 @@ public:
    * @brief Destroys everything every pool owns, retired or not. Only safe once the device is idle.
    */
   auto clear_all() -> void {
+    auto lock = std::lock_guard{_mutex};
+
     std::apply([](auto&... pools) -> void {
       (pools.clear(), ...);
     }, _pools);
@@ -112,6 +133,8 @@ public:
    * @brief The number of resources across all pools still waiting on the timeline.
    */
   [[nodiscard]] auto pending_count() const noexcept -> std::size_t {
+    auto lock = std::lock_guard{_mutex};
+
     auto result = std::size_t{0u};
 
     std::apply([&result](const auto&... pools) -> void {
@@ -122,6 +145,8 @@ public:
   }
 
 private:
+
+  mutable std::mutex _mutex{};
 
   std::tuple<resource_pool<Types>...> _pools{};
 

@@ -56,6 +56,8 @@ graphics_module::~graphics_module() {
 auto graphics_module::command_pool(const queue::type type, const std::thread::id& thread_id) -> const std::shared_ptr<graphics::command_pool>& {
   const auto key = command_pool_key{type, thread_id};
 
+  auto lock = std::lock_guard{_command_pool_mutex};
+
   if (auto entry = _command_pools.find(key); entry != _command_pools.end()) {
     return entry->second;
   }

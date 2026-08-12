@@ -56,8 +56,8 @@ struct frame_data {
   material_data* materials;
   uint irradiance_index;
   uint brdf_lut_index;
-  uint prefiltered_base_index;
-  uint prefiltered_count;
+  uint prefiltered_index;
+  uint prefiltered_mip_count;
   float environment_intensity;
   uint pad0;
 }; // struct frame_data

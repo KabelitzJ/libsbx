@@ -110,7 +110,7 @@ auto tonemap_pass::execute(render_context& context) -> void {
   auto range = std::array<std::byte, graphics::bindless_table::push_constant_size>{};
   std::memcpy(range.data(), &values, sizeof(values));
 
-  context.command_buffer->push_constants(bindless_table.pipeline_layout(), VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0u, range);
+  context.command_buffer->push_constants(bindless_table.pipeline_layout(), graphics::bindless_table::push_constant_stages, 0u, range);
 
   context.command_buffer->draw(3u, 1u, 0u, 0u);
 

@@ -419,6 +419,14 @@ auto command_buffer::bind_pipeline(const graphics::graphics_pipeline& pipeline) 
   vkCmdBindPipeline(_handle, to_vk_enum<VkPipelineBindPoint>(pipeline.bind_point()), pipeline.handle());
 }
 
+auto command_buffer::bind_pipeline(const graphics::compute_pipeline& pipeline) -> void {
+  vkCmdBindPipeline(_handle, to_vk_enum<VkPipelineBindPoint>(pipeline.bind_point()), pipeline.handle());
+}
+
+auto command_buffer::dispatch(std::uint32_t group_count_x, std::uint32_t group_count_y, std::uint32_t group_count_z) -> void {
+  vkCmdDispatch(_handle, group_count_x, group_count_y, group_count_z);
+}
+
 auto command_buffer::draw(std::uint32_t vertex_count, std::uint32_t instance_count, std::uint32_t first_vertex, std::uint32_t first_instance) -> void {
   vkCmdDraw(_handle, vertex_count, instance_count, first_vertex, first_instance);
 }

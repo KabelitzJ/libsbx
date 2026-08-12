@@ -200,6 +200,8 @@ target_sources(
     "${CMAKE_SOURCE_DIR}/libsbx/graphics/devices/physical_device.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/graphics/devices/surface.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/graphics/devices/swapchain.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/graphics/pipeline/compute_pipeline.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/graphics/pipeline/compute_pipeline_cache.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/graphics/pipeline/graphics_pipeline.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/graphics/pipeline/pipeline_cache.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/graphics/pipeline/shader_cache.cpp"

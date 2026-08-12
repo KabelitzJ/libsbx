@@ -61,7 +61,7 @@ auto submit_draw_commands(render_context& context, const std::vector<draw_comman
     auto range = std::array<std::byte, graphics::bindless_table::push_constant_size>{};
     std::memcpy(range.data(), &values, sizeof(push_constants));
 
-    context.command_buffer->push_constants(bindless_table.pipeline_layout(), VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0u, range);
+    context.command_buffer->push_constants(bindless_table.pipeline_layout(), graphics::bindless_table::push_constant_stages, 0u, range);
 
     context.command_buffer->draw_indexed(submesh.index_count, command.instance_count, submesh.index_offset, 0, 0u);
   }

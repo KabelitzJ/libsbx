@@ -3,6 +3,7 @@
 #include <libsbx/graphics/resources/image.hpp>
 
 #include <algorithm>
+#include <array>
 #include <bit>
 
 #include <libsbx/utility/assert.hpp>
@@ -85,6 +86,12 @@ image::image(const create_info& create_info)
   const auto& logical_device = graphics_module.logical_device();
   const auto& allocator = graphics_module.allocator();
 
+  const auto graphics_family = logical_device.queue<queue::type::graphics>().family();
+  const auto compute_family = logical_device.queue<queue::type::compute>().family();
+
+  const auto queue_families = std::array<std::uint32_t, 2u>{graphics_family, compute_family};
+  const auto use_concurrent = create_info.concurrent_sharing && graphics_family != compute_family;
+
   auto image_info = VkImageCreateInfo{};
   image_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
   image_info.flags = _image_flags_for(create_info.view_type);
@@ -96,7 +103,13 @@ image::image(const create_info& create_info)
   image_info.samples = to_vk_enum<VkSampleCountFlagBits>(create_info.samples);
   image_info.tiling = VK_IMAGE_TILING_OPTIMAL;
   image_info.usage = to_vk_enum<VkImageUsageFlags>(create_info.usage);
-  image_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+  image_info.sharingMode = use_concurrent ? VK_SHARING_MODE_CONCURRENT : VK_SHARING_MODE_EXCLUSIVE;
+
+  if (use_concurrent) {
+    image_info.queueFamilyIndexCount = static_cast<std::uint32_t>(queue_families.size());
+    image_info.pQueueFamilyIndices = queue_families.data();
+  }
+
   image_info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 
   auto allocation_create_info = VmaAllocationCreateInfo{};
@@ -139,6 +152,32 @@ auto image::subresource_range() const noexcept -> VkImageSubresourceRange {
   range.layerCount = _array_layers;
 
   return range;
+}
+
+auto image::create_view(const graphics::image_view_type type, const std::uint32_t base_mip_level, const std::uint32_t mip_levels, const std::uint32_t base_array_layer, const std::uint32_t array_layers) const -> view_type {
+  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
+
+  const auto& logical_device = graphics_module.logical_device();
+
+  auto range = VkImageSubresourceRange{};
+  range.aspectMask = _aspect;
+  range.baseMipLevel = base_mip_level;
+  range.levelCount = mip_levels;
+  range.baseArrayLayer = base_array_layer;
+  range.layerCount = array_layers;
+
+  auto view_info = VkImageViewCreateInfo{};
+  view_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+  view_info.image = _handle;
+  view_info.viewType = to_vk_enum<VkImageViewType>(type);
+  view_info.format = to_vk_enum<VkFormat>(_format);
+  view_info.subresourceRange = range;
+
+  auto result = view_type{};
+
+  validate(vkCreateImageView(logical_device, &view_info, nullptr, &result), "vkCreateImageView");
+
+  return result;
 }
 
 } // namespace sbx::graphics

@@ -13,8 +13,10 @@
 namespace sbx::assets {
 
 /**
- * @brief An HDR image-based-lighting source. Phase A wraps the equirectangular radiance map;
- * later it also holds the baked irradiance / prefiltered / BRDF resources.
+ * @brief An HDR image-based-lighting source: the equirectangular radiance map plus the irradiance
+ * and prefiltered-specular cubemaps baked from it via compute shaders at load time (see
+ * assets_module::_bake_environment). By the time load_environment_map returns a valid handle,
+ * every index here is already resident — there is no separate async bake step to wait on.
  */
 class environment_map final {
 
@@ -30,6 +32,18 @@ public:
     return _radiance_index;
   }
 
+  [[nodiscard]] auto irradiance_index() const noexcept -> std::uint32_t {
+    return _irradiance_index;
+  }
+
+  [[nodiscard]] auto prefiltered_index() const noexcept -> std::uint32_t {
+    return _prefiltered_index;
+  }
+
+  [[nodiscard]] auto prefiltered_mip_count() const noexcept -> std::uint32_t {
+    return _prefiltered_mip_count;
+  }
+
   [[nodiscard]] auto id() const noexcept -> const math::uuid& {
     return _id;
   }
@@ -37,6 +51,9 @@ public:
 private:
 
   std::uint32_t _radiance_index{invalid_index};
+  std::uint32_t _irradiance_index{invalid_index};
+  std::uint32_t _prefiltered_index{invalid_index};
+  std::uint32_t _prefiltered_mip_count{0u};
   math::uuid _id{math::uuid::nil()};
 
 }; // class environment_map

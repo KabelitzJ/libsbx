@@ -27,6 +27,7 @@
 #include <libsbx/graphics/graphics_module.hpp>
 #include <libsbx/graphics/types.hpp>
 #include <libsbx/graphics/resources/image.hpp>
+#include <libsbx/graphics/commands/command_buffer.hpp>
 
 #include <libsbx/assets/asset_handle.hpp>
 #include <libsbx/assets/texture.hpp>
@@ -140,12 +141,29 @@ public:
     return _material_address;
   }
 
+  /**
+   * @brief The bindless index of the global BRDF LUT, baked once (lazily, on the first
+   * environment-map load) and shared by every environment. `environment_map::invalid_index` if
+   * nothing has been loaded yet.
+   */
+  [[nodiscard]] auto brdf_lut_index() const noexcept -> std::uint32_t {
+    return _brdf_lut_index;
+  }
+
   /** @brief The project-relative path an asset was imported from, or empty if unknown. */
   [[nodiscard]] auto path_of(const math::uuid& id) const -> std::filesystem::path;
 
 private:
 
   inline static constexpr auto material_capacity = std::uint32_t{1024u};
+
+  // IBL bake sizes. The prefiltered cube is a real mip chain now (continuous roughness -> LOD),
+  // not N discrete images, so these fix the base resolution and how many mips it carries.
+  inline static constexpr auto radiance_cube_size = std::uint32_t{512u};
+  inline static constexpr auto irradiance_cube_size = std::uint32_t{32u};
+  inline static constexpr auto prefiltered_cube_size = std::uint32_t{128u};
+  inline static constexpr auto prefiltered_mip_count = std::uint32_t{6u};
+  inline static constexpr auto brdf_lut_size = std::uint32_t{512u};
 
   struct cooked_submesh {
     std::uint32_t index_offset;
@@ -197,13 +215,6 @@ private:
     std::shared_ptr<material> record;
   }; // struct pending_material_upload
 
-  struct pending_environment_upload {
-    std::uint32_t index;
-    std::vector<std::byte> pixels;
-    std::uint32_t width;
-    std::uint32_t height;
-  }; // struct pending_environment_upload
-
   auto _create_default_texture(std::array<std::uint8_t, 4u> color) -> texture_handle;
 
   auto _read_or_create_meta(const std::filesystem::path& path) -> math::uuid;
@@ -244,6 +255,23 @@ private:
 
   auto _load_cooked_environment_map(const std::filesystem::path& cooked, std::vector<std::byte>& pixels, std::uint32_t& width, std::uint32_t& height) -> bool;
 
+  /**
+   * @brief Uploads the equirectangular radiance and bakes the irradiance + prefiltered cubemaps
+   * for @p record via compute dispatch, blocking until the GPU has finished. Runs entirely on the
+   * async compute queue via a one-shot command buffer, so it never touches the graphics queue the
+   * render thread submits to every frame — see the plan's threading section for why.
+   *
+   * Called synchronously from load_environment_map; by the time it returns, record's indices are
+   * resident and safe to read from any thread.
+   */
+  auto _bake_environment(environment_map& record, const std::vector<std::byte>& pixels, std::uint32_t width, std::uint32_t height) -> void;
+
+  /** @brief Bakes the global BRDF LUT into @p command_buffer if it hasn't been baked yet. */
+  auto _ensure_brdf_lut(graphics::command_buffer& command_buffer) -> void;
+
+  /** @brief Fills mips 1..N of a cube image by successively blitting each mip from the one below it. */
+  auto _generate_cube_mips(graphics::command_buffer& command_buffer, graphics::image& cube) -> void;
+
   mutable std::mutex _mutex{};
 
   std::unordered_map<std::string, math::uuid> _uuids{};
@@ -269,7 +297,9 @@ private:
   std::unordered_map<math::uuid, std::shared_ptr<material>> _material_files{};
 
   std::unordered_map<math::uuid, std::shared_ptr<environment_map>> _environment_maps{};
-  std::vector<pending_environment_upload> _pending_environments{};
+
+  graphics::image_handle _brdf_lut_image{};
+  std::uint32_t _brdf_lut_index{environment_map::invalid_index};
 
   texture_handle _white{};
   texture_handle _normal{};

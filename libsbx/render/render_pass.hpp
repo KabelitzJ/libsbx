@@ -35,7 +35,14 @@ struct render_context {
 
   std::uint64_t frame_index{0u};
   std::uint32_t slot{0u};
+
+  // Scene/offscreen render extent — what the 3D passes render into and what the projection's aspect
+  // ratio is computed from. For the editor this is the Viewport panel's size, not the OS window's.
   math::vector2u extent{};
+
+  // Always the real swapchain size, for whichever pass composites onto the actual window surface —
+  // that always covers the full window/dockspace regardless of the 3D scene's own resolution.
+  math::vector2u swapchain_extent{};
 
   std::uint32_t environment_index{0xFFFFFFFFu};
   std::float_t environment_intensity{1.0f};

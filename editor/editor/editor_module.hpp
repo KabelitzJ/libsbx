@@ -36,6 +36,15 @@ public:
 
   ~editor_module();
 
+  /**
+   * @brief Whether the mouse was over the Viewport panel as of the last frame's UI pass. A plain
+   * UI-layer fact (ImGui::IsWindowHovered) — the editor app uses it to gate viewport-only input
+   * like the dev fly-camera, keeping that gameplay-adjacent logic out of editor_module itself.
+   */
+  [[nodiscard]] auto is_viewport_hovered() const noexcept -> bool {
+    return _viewport_is_hovered;
+  }
+
 private:
 
   auto _build_ui_frame() -> void;
@@ -64,6 +73,8 @@ private:
   VkImageView _cached_view{VK_NULL_HANDLE};
 
   std::vector<std::pair<VkDescriptorSet, std::uint64_t>> _pending_texture_frees{};
+
+  bool _viewport_is_hovered{false};
 
 }; // class editor_module
 

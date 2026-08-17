@@ -79,7 +79,7 @@ public:
 
     auto rendering_info = VkRenderingInfo{};
     rendering_info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
-    rendering_info.renderArea = VkRect2D{VkOffset2D{0, 0}, VkExtent2D{context.extent.x(), context.extent.y()}};
+    rendering_info.renderArea = VkRect2D{VkOffset2D{0, 0}, VkExtent2D{context.swapchain_extent.x(), context.swapchain_extent.y()}};
     rendering_info.layerCount = 1u;
     rendering_info.colorAttachmentCount = 1u;
     rendering_info.pColorAttachments = &color_attachment;
@@ -170,6 +170,8 @@ auto editor_module::_build_ui_frame() -> void {
   ImGui::Begin(ICON_MDI_GAMEPAD_VARIANT " Viewport###viewport_panel", nullptr, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
   // ImGui::PopStyleVar();
 
+  _viewport_is_hovered = ImGui::IsWindowHovered();
+
   auto available = ImGui::GetContentRegionAvail();
 
   auto width = static_cast<std::uint32_t>(available.x > 0.0f ? available.x : 1.0f);
@@ -180,6 +182,8 @@ auto editor_module::_build_ui_frame() -> void {
   const auto scene_image = render_module.scene_image();
 
   if (scene_image.is_valid() && available.x > 0.0f && available.y > 0.0f) {
+    render_module.set_viewport_extent(sbx::math::vector2u{width, height});
+
     _update_texture(scene_image);
 
     if (_texture_id != VK_NULL_HANDLE) {

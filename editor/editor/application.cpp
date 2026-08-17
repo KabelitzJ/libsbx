@@ -25,6 +25,8 @@
 
 #include <libsbx/render/render_module.hpp>
 
+#include <editor/editor_module.hpp>
+
 namespace editor {
 
 application::application()
@@ -74,13 +76,21 @@ application::~application() {
 auto application::update() -> void {
   using namespace sbx::units::literals;
 
-  if (sbx::platform::input::is_key_pressed(sbx::platform::key::escape)) {
-    sbx::core::engine::quit();
-  }
-
   _rotation += sbx::math::degree{90.0f} * sbx::core::engine::delta_time();
 
-  _camera_controller.update();
+  auto& editor_module = sbx::core::engine::get_module<editor::editor_module>();
+
+  if (sbx::platform::input::is_mouse_button_pressed(sbx::platform::mouse_button::right) && editor_module.is_viewport_hovered()) {
+    _camera_is_engaged = true;
+  }
+
+  if (!sbx::platform::input::is_mouse_button_down(sbx::platform::mouse_button::right)) {
+    _camera_is_engaged = false;
+  }
+
+  if (_camera_is_engaged) {
+    _camera_controller.update();
+  }
 }
 
 auto application::fixed_update() -> void {

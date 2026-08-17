@@ -137,6 +137,10 @@ auto render_module::set_pre_render_callback(core::delegate<void()> callback) -> 
   _pre_render_callback = std::move(callback);
 }
 
+auto render_module::set_viewport_extent(math::vector2u extent) -> void {
+  _viewport_extent = extent;
+}
+
 auto render_module::_build_packet() -> render_packet {
   SBX_PROFILE_SCOPE("render_module::build_packet");
 
@@ -287,7 +291,10 @@ auto render_module::_consume_packet(const render_packet& packet) -> void {
     SBX_PROFILE_GPU_SCOPE((*command_buffer), "render_module::render");
 
     const auto& swapchain = frame_context.swapchain();
-    const auto extent = swapchain.extent();
+    const auto swapchain_extent = swapchain.extent();
+
+    // Falls back to the swapchain extent unless overridden (editor: the Viewport panel's size).
+    const auto scene_extent = (_viewport_extent.x() > 0u && _viewport_extent.y() > 0u) ? _viewport_extent : swapchain_extent;
 
     assets_module.process_uploads(frame_context.frame_index());
     upload_context.flush(*command_buffer, frame_context.frame_index());
@@ -307,7 +314,7 @@ auto render_module::_consume_packet(const render_packet& packet) -> void {
       prefiltered_mip_count = packet.environment->prefiltered_mip_count();
     }
 
-    _resize_targets(extent);
+    _resize_targets(scene_extent);
 
     // Frame wrapper owns the swapchain transitions: acquire -> color attachment.
     auto to_color = graphics::command_buffer::image_transition_data{};
@@ -330,7 +337,8 @@ auto render_module::_consume_packet(const render_packet& packet) -> void {
         .packet = memory::make_observer<const render_packet>(packet),
         .frame_index = frame_context.frame_index(),
         .slot = static_cast<std::uint32_t>(slot),
-        .extent = extent,
+        .extent = scene_extent,
+        .swapchain_extent = swapchain_extent,
         .environment_index = environment_index,
         .environment_intensity = packet.environment_intensity,
         .irradiance_index = irradiance_index,
@@ -365,7 +373,7 @@ auto render_module::_consume_packet(const render_packet& packet) -> void {
 
       auto rendering_info = VkRenderingInfo{};
       rendering_info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
-      rendering_info.renderArea = VkRect2D{VkOffset2D{0, 0}, VkExtent2D{extent.x(), extent.y()}};
+      rendering_info.renderArea = VkRect2D{VkOffset2D{0, 0}, VkExtent2D{swapchain_extent.x(), swapchain_extent.y()}};
       rendering_info.layerCount = 1u;
       rendering_info.colorAttachmentCount = 1u;
       rendering_info.pColorAttachments = &color_attachment;

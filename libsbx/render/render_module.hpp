@@ -55,6 +55,14 @@ public:
 
   auto set_pre_render_callback(core::delegate<void()> callback) -> void;
 
+  /**
+   * @brief The extent the scene/offscreen render targets (and the projection's aspect ratio) should
+   * use, overriding the default of the swapchain's extent — e.g. the editor's Viewport panel size,
+   * which can differ from the OS window. Pass {0, 0} (the default) to fall back to the swapchain
+   * extent; demo never calls this, so it always renders at window resolution as before.
+   */
+  auto set_viewport_extent(math::vector2u extent) -> void;
+
   [[nodiscard]] auto scene_image() const noexcept -> graphics::image_handle {
     return _scene_image;
   }
@@ -84,6 +92,7 @@ private:
   graphics::image_handle _color_msaa_image{};
   std::uint32_t _color_index{0u};
   math::vector2u _target_extent{};
+  math::vector2u _viewport_extent{0u, 0u};
 
   core::delegate<void()> _pre_render_callback{};
 

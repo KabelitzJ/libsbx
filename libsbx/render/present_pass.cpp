@@ -86,7 +86,7 @@ auto present_pass::execute(render_context& context) -> void {
 
   auto rendering_info = VkRenderingInfo{};
   rendering_info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
-  rendering_info.renderArea = VkRect2D{VkOffset2D{0, 0}, VkExtent2D{context.extent.x(), context.extent.y()}};
+  rendering_info.renderArea = VkRect2D{VkOffset2D{0, 0}, VkExtent2D{context.swapchain_extent.x(), context.swapchain_extent.y()}};
   rendering_info.layerCount = 1u;
   rendering_info.colorAttachmentCount = 1u;
   rendering_info.pColorAttachments = &color_attachment;

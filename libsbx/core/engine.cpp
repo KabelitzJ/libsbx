@@ -10,8 +10,9 @@ namespace sbx::core {
 
 engine* engine::_instance{nullptr};
 
-engine::engine(std::span<std::string_view> args)
-: _args{args.begin(), args.end()} {
+engine::engine(std::span<std::string_view> args, engine_config config)
+: _args{args.begin(), args.end()},
+  _config{config} {
   utility::assert_that(_instance == nullptr, "Engine instance already exists");
 
   _instance = this;
@@ -49,6 +50,12 @@ auto engine::args() -> const std::vector<std::string_view>& {
   utility::assert_that(_instance != nullptr, "Engine instance does not exist");
 
   return _instance->_args;
+}
+
+auto engine::config() -> const engine_config& {
+  utility::assert_that(_instance != nullptr, "Engine instance does not exist");
+
+  return _instance->_config;
 }
 
 auto engine::quit() -> void {

@@ -4,17 +4,15 @@
 #define LIBSBX_RENDER_RENDER_MODULE_HPP_
 
 #include <array>
-#include <condition_variable>
 #include <cstdint>
 #include <functional>
 #include <memory>
-#include <mutex>
-#include <thread>
 #include <utility>
 
 #include <libsbx/utility/noncopyable.hpp>
 
 #include <libsbx/core/module.hpp>
+#include <libsbx/core/delegate.hpp>
 
 #include <libsbx/assets/assets_module.hpp>
 
@@ -31,12 +29,15 @@
 
 #include <libsbx/render/render_packet.hpp>
 #include <libsbx/render/render_pass.hpp>
+#include <libsbx/render/render_thread.hpp>
 
 namespace sbx::render {
 
 /**
- * @brief Owns the render thread and drives the frame loop. The main thread extracts the active
- * scene into a render_packet; the render thread consumes it and never touches the ECS.
+ * @brief Drives the frame loop via a render_thread (see render_thread.hpp), whose threading policy
+ * comes from core::engine::config(). The calling (main) thread always extracts the active scene
+ * into a render_packet; whichever thread ends up consuming it (itself, or a dedicated render
+ * thread, depending on policy) never touches the ECS.
  */
 class render_module final : public utility::noncopyable {
 
@@ -52,7 +53,7 @@ public:
 
   auto set_composite_pass(std::unique_ptr<render_pass> pass) -> void;
 
-  auto set_packet_producer(std::function<std::unique_ptr<render_packet_extension>()> producer) -> void;
+  auto set_pre_render_callback(core::delegate<void()> callback) -> void;
 
   [[nodiscard]] auto scene_image() const noexcept -> graphics::image_handle {
     return _scene_image;
@@ -62,12 +63,6 @@ private:
 
   inline static constexpr auto light_capacity = std::uint32_t{256u};
   inline static constexpr auto transform_capacity = std::uint32_t{16384u};
-
-  auto _start() -> void;
-
-  auto _stop() -> void;
-
-  auto _render_loop() -> void;
 
   auto _ensure_resources() -> void;
 
@@ -79,15 +74,8 @@ private:
 
   auto _consume_packet(const render_packet& packet) -> void;
 
-  std::thread _thread{};
-
-  std::mutex _mutex{};
-  std::condition_variable _has_produced{};
-  std::condition_variable _has_consumed{};
-
-  render_packet _packet{};
-  bool _has_packet{false};
-  bool _is_running{false};
+  std::unique_ptr<render_thread> _render_thread{};
+  render_packet _work_packet{};
 
   std::uint32_t _sampler_index{0u};
 
@@ -97,7 +85,7 @@ private:
   std::uint32_t _color_index{0u};
   math::vector2u _target_extent{};
 
-  std::function<std::unique_ptr<render_packet_extension>()> _packet_producer{};
+  core::delegate<void()> _pre_render_callback{};
 
   std::vector<std::unique_ptr<render_pass>> _passes{};
   std::unique_ptr<render_pass> _composite_pass{};

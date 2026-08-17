@@ -19,6 +19,7 @@
 #include <libsbx/math/angle.hpp>
 
 #include <libsbx/core/engine.hpp>
+#include <libsbx/core/delegate.hpp>
 
 #include <libsbx/platform/platform_module.hpp>
 #include <libsbx/platform/window.hpp>
@@ -87,11 +88,16 @@ render_module::render_module() {
 
   _composite_pass = std::make_unique<present_pass>();
 
-  _start();
+  _render_thread = std::make_unique<render::render_thread>(
+    core::engine::config().threading,
+    [this]() { _consume_packet(_work_packet); }
+  );
+
+  _render_thread->run();
 }
 
 render_module::~render_module() {
-  _stop();
+  _render_thread->terminate();
 }
 
 auto render_module::render() -> void {
@@ -107,76 +113,28 @@ auto render_module::render() -> void {
     return;
   }
 
-  auto packet = _build_packet();
+  // Throttle: wait for the previously kicked frame to fully finish before touching _work_packet
+  // or anything ECS-derived again.
+  _render_thread->block_until_render_complete();
+  _render_thread->next_frame();
 
-  {
-    auto lock = std::unique_lock{_mutex};
-
-    // Throttle: wait until the render thread has taken the previous packet.
-    _has_consumed.wait(lock, [this]() { return !_has_packet; });
-
-    _packet = std::move(packet);
-    _has_packet = true;
+  if (_pre_render_callback) {
+    // e.g. editor_module's ImGui NewFrame/build/Render — must run before _build_packet() below,
+    // on this same (main) thread, so the composite pass sees this frame's finished draw data.
+    std::invoke(_pre_render_callback);
   }
 
-  _has_produced.notify_one();
+  _work_packet = _build_packet();
+
+  _render_thread->kick();
 }
 
 auto render_module::set_composite_pass(std::unique_ptr<render_pass> pass) -> void {
   _composite_pass = std::move(pass);
 }
 
-auto render_module::set_packet_producer(std::function<std::unique_ptr<render_packet_extension>()> producer) -> void {
-  _packet_producer = std::move(producer);
-}
-
-auto render_module::_start() -> void {
-  _is_running = true;
-
-  _thread = std::thread{[this]() { _render_loop(); }};
-}
-
-auto render_module::_stop() -> void {
-  if (!_is_running) {
-    return;
-  }
-
-  {
-    auto lock = std::unique_lock{_mutex};
-    _is_running = false;
-  }
-
-  _has_produced.notify_one();
-
-  if (_thread.joinable()) {
-    _thread.join();
-  }
-}
-
-auto render_module::_render_loop() -> void {
-  SBX_PROFILE_THREAD_NAME("Render thread");
-
-  while (true) {
-    auto packet = render_packet{};
-
-    {
-      auto lock = std::unique_lock{_mutex};
-
-      _has_produced.wait(lock, [this]() { return _has_packet || !_is_running; });
-
-      if (!_has_packet && !_is_running) {
-        break;
-      }
-
-      packet = std::move(_packet);
-      _has_packet = false;
-    }
-
-    // Let the main thread produce the next packet while this frame renders.
-    _has_consumed.notify_one();
-
-    _consume_packet(packet);
-  }
+auto render_module::set_pre_render_callback(core::delegate<void()> callback) -> void {
+  _pre_render_callback = std::move(callback);
 }
 
 auto render_module::_build_packet() -> render_packet {
@@ -307,10 +265,6 @@ auto render_module::_build_packet() -> render_packet {
     out.outer_cos = std::cos(light.outer_angle);
   }
 
-  if (_packet_producer) {
-    packet.extension = std::invoke(_packet_producer);
-  }
-
   return packet;
 }
 
@@ -374,7 +328,6 @@ auto render_module::_consume_packet(const render_packet& packet) -> void {
       auto context = render_context{
         .command_buffer = command_buffer,
         .packet = memory::make_observer<const render_packet>(packet),
-        .extension = packet.extension.get(),
         .frame_index = frame_context.frame_index(),
         .slot = static_cast<std::uint32_t>(slot),
         .extent = extent,

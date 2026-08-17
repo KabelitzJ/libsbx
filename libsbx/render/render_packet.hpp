@@ -5,7 +5,6 @@
 
 #include <cstdint>
 #include <vector>
-#include <memory>
 
 #include <libsbx/math/color.hpp>
 #include <libsbx/math/matrix4x4.hpp>
@@ -85,14 +84,6 @@ struct light_data {
   std::uint32_t padding{0u};
 }; // struct light_data
 
-/**
- * @brief Opaque per-frame payload an application may attach to the packet. The engine moves it
- * through the render handoff and hands it to the composite pass; it never inspects the contents.
- */
-struct render_packet_extension {
-  virtual ~render_packet_extension() = default;
-}; // struct render_packet_extension
-
 struct render_packet {
   math::color clear_color{0.05f, 0.05f, 0.08f, 1.0f};
   camera_data camera{};
@@ -102,7 +93,6 @@ struct render_packet {
   std::vector<light_data> lights{};
   assets::environment_map_handle environment{};
   std::float_t environment_intensity{1.0f};
-  std::unique_ptr<render_packet_extension> extension{}; 
 }; // struct render_packet
 
 } // namespace sbx::render

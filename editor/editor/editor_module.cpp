@@ -1,7 +1,5 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Jonas Kabelitz
-// SPDX-License-Identifier: MIT
-// Copyright (c) 2026 Jonas Kabelitz
 #include <editor/editor_module.hpp>
 
 #include <array>
@@ -28,43 +26,6 @@
 
 namespace editor {
 
-// Deep copy of the finished ImGui draw data. A fresh one per frame rides the render packet, so the
-// main thread's next NewFrame cannot clobber what the render thread is still recording.
-struct imgui_render_packet_extension final : sbx::render::render_packet_extension {
-
-  ImDrawData data{};
-  ImVector<ImDrawList*> lists{};
-
-  imgui_render_packet_extension(const ImDrawData* source)
-  : data{*source} {
-    lists.reserve(source->CmdListsCount);
-
-    for (auto index = 0; index < source->CmdListsCount; ++index) {
-      lists.push_back(source->CmdLists[index]->CloneOutput());
-    }
-
-    data.CmdLists = lists;
-  }
-
-  ~imgui_render_packet_extension() override {
-    for (auto* list : lists) {
-      IM_DELETE(list);
-    }
-  }
-
-}; // struct imgui_frame
-
-auto capture_imgui_frame() -> std::unique_ptr<sbx::render::render_packet_extension> {
-  const auto* source = ImGui::GetDrawData();
-
-  if (source == nullptr || !source->Valid || source->CmdListsCount == 0) {
-    return nullptr;
-  }
-
-  return std::make_unique<imgui_render_packet_extension>(source);
-}
-
-// Composite: blit the scene image to the swapchain (default present), then draw ImGui over it.
 class viewport_composite_pass final : public sbx::render::render_pass {
 
 public:
@@ -82,9 +43,9 @@ public:
   }
 
   auto execute(sbx::render::render_context& context) -> void override {
-    const auto* packet_extension = dynamic_cast<const imgui_render_packet_extension*>(context.extension.get());
+    auto* draw_data = ImGui::GetDrawData();
 
-    if (packet_extension == nullptr) {
+    if (draw_data == nullptr || !draw_data->Valid || draw_data->CmdListsCount == 0) {
       return;
     }
 
@@ -124,7 +85,7 @@ public:
     rendering_info.pColorAttachments = &color_attachment;
 
     context.command_buffer->begin_rendering(rendering_info);
-    ImGui_ImplVulkan_RenderDrawData(const_cast<ImDrawData*>(&packet_extension->data), *context.command_buffer);
+    ImGui_ImplVulkan_RenderDrawData(draw_data, *context.command_buffer);
     context.command_buffer->end_rendering();
   }
 
@@ -166,8 +127,8 @@ editor_module::editor_module()
 
   auto& render_module = sbx::core::engine::get_module<sbx::render::render_module>();
 
-  render_module.set_packet_producer([]() { return capture_imgui_frame(); });
   render_module.set_composite_pass(std::make_unique<viewport_composite_pass>());
+  render_module.set_pre_render_callback([this]() { _build_ui_frame(); });
 }
 
 editor_module::~editor_module() {
@@ -176,6 +137,14 @@ editor_module::~editor_module() {
   auto& logical_device = graphics_module.logical_device();
 
   logical_device.wait_idle();
+
+  // The device is fully idle here, so every pending free below is safe to flush unconditionally
+  // rather than waiting on its retirement frame.
+  for (auto& [descriptor_set, frame_index] : _pending_texture_frees) {
+    ImGui_ImplVulkan_RemoveTexture(descriptor_set);
+  }
+
+  _pending_texture_frees.clear();
 
   if (_texture_id != VK_NULL_HANDLE && ImGui::GetCurrentContext() != nullptr) {
     ImGui_ImplVulkan_RemoveTexture(_texture_id);
@@ -188,7 +157,9 @@ editor_module::~editor_module() {
   vkDestroyDescriptorPool(logical_device, _descriptor_pool, nullptr);
 }
 
-auto editor_module::post_update() -> void {
+auto editor_module::_build_ui_frame() -> void {
+  _collect_pending_textures();
+
   ImGui_ImplVulkan_NewFrame();
   ImGui_ImplGlfw_NewFrame();
   ImGui::NewFrame();
@@ -237,11 +208,39 @@ auto editor_module::_update_texture(sbx::graphics::image_handle image) -> void {
   }
 
   if (_texture_id != VK_NULL_HANDLE) {
-    ImGui_ImplVulkan_RemoveTexture(_texture_id);
+    _retire_texture(_texture_id);
   }
 
   _texture_id = ImGui_ImplVulkan_AddTexture(_sampler, current_view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
   _cached_view = current_view;
+}
+
+auto editor_module::_retire_texture(VkDescriptorSet descriptor_set) -> void {
+  auto& graphics_module = sbx::core::engine::get_module<sbx::graphics::graphics_module>();
+
+  // Frames up to and including the one currently being recorded may still reference the old
+  // descriptor set through in-flight ImGui draw data; only free it once the GPU has caught up.
+  const auto frame_index = graphics_module.frame_context().frame_index();
+
+  _pending_texture_frees.emplace_back(descriptor_set, frame_index);
+}
+
+auto editor_module::_collect_pending_textures() -> void {
+  auto& graphics_module = sbx::core::engine::get_module<sbx::graphics::graphics_module>();
+
+  const auto completed_value = graphics_module.frame_context().timeline_value();
+
+  std::erase_if(_pending_texture_frees, [completed_value](const auto& entry) {
+    const auto& [descriptor_set, frame_index] = entry;
+
+    if (frame_index > completed_value) {
+      return false;
+    }
+
+    ImGui_ImplVulkan_RemoveTexture(descriptor_set);
+
+    return true;
+  });
 }
 
 auto editor_module::_create_descriptor_pool() -> void {

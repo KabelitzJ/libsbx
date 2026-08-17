@@ -8,8 +8,10 @@
 #include <libsbx/utility/logger.hpp>
 
 #include <libsbx/core/engine.hpp>
+#include <libsbx/core/engine_config.hpp>
 #include <libsbx/core/exit.hpp>
 #include <libsbx/core/command_queue.hpp>
+#include <libsbx/core/threading_policy.hpp>
 
 #include <libsbx/platform/platform_module.hpp>
 
@@ -118,7 +120,10 @@ auto main(int argc, const char** argv) -> int {
   auto args = std::vector<std::string_view>{argv, argv + argc};
 
   try {
-    auto engine = sbx::core::basic_engine<module_list>{args};
+    // Standalone runtime: keep the threaded render path for the CPU/GPU submission overlap.
+    auto config = sbx::core::engine_config{.threading = sbx::core::threading_policy::multi_threaded};
+
+    auto engine = sbx::core::basic_engine<module_list>{args, config};
 
     engine.run<demo::application>();
   } catch (const std::exception& exception) {

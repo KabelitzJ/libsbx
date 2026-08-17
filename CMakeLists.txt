@@ -237,6 +237,7 @@ target_sources(
     "${CMAKE_SOURCE_DIR}/libsbx/render/present_pass.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/render/render_module.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/render/render_pass.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/render/render_thread.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/render/skybox_pass.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/render/tonemap_pass.cpp"
 
@@ -290,8 +291,10 @@ target_sources(
       "${CMAKE_SOURCE_DIR}/libsbx/core/delegate.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/core/engine.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/core/engine.ipp"
+      "${CMAKE_SOURCE_DIR}/libsbx/core/engine_config.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/core/exit.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/core/module.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/core/threading_policy.hpp"
 
       "${CMAKE_SOURCE_DIR}/libsbx/ecs/component.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/ecs/ecs.hpp"
@@ -422,6 +425,7 @@ target_sources(
       "${CMAKE_SOURCE_DIR}/libsbx/render/render_module.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/render/render_packet.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/render/render_pass.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/render/render_thread.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/render/skybox_pass.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/render/tonemap_pass.hpp"
 

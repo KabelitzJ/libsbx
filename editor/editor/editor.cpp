@@ -6,7 +6,9 @@
 #include <libsbx/utility/logger.hpp>
 
 #include <libsbx/core/engine.hpp>
+#include <libsbx/core/engine_config.hpp>
 #include <libsbx/core/exit.hpp>
+#include <libsbx/core/threading_policy.hpp>
 
 #include <libsbx/platform/platform_module.hpp>
 
@@ -42,7 +44,9 @@ auto main(int argc, const char** argv) -> int {
   auto args = std::vector<std::string_view>{argv, argv + argc};
 
   try {
-    auto engine = sbx::core::basic_engine<module_list>{args};
+    auto config = sbx::core::engine_config{.threading = sbx::core::threading_policy::single_threaded};
+
+    auto engine = sbx::core::basic_engine<module_list>{args, config};
 
     engine.run<editor::application>();
   } catch (const std::exception& exception) {

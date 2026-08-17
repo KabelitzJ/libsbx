@@ -3,6 +3,10 @@
 #ifndef EDITOR_EDITOR_MODULE_HPP_
 #define EDITOR_EDITOR_MODULE_HPP_
 
+#include <cstdint>
+#include <utility>
+#include <vector>
+
 #include <libsbx/utility/noncopyable.hpp>
 
 #include <libsbx/core/module.hpp>
@@ -32,11 +36,15 @@ public:
 
   ~editor_module();
 
-  auto post_update() -> void;
-
 private:
-  
+
+  auto _build_ui_frame() -> void;
+
   auto _update_texture(sbx::graphics::image_handle image) -> void;
+
+  auto _retire_texture(VkDescriptorSet descriptor_set) -> void;
+
+  auto _collect_pending_textures() -> void;
 
   auto _create_descriptor_pool() -> void;
 
@@ -54,6 +62,8 @@ private:
   sbx::graphics::sampler _sampler;
   VkDescriptorSet _texture_id{VK_NULL_HANDLE};
   VkImageView _cached_view{VK_NULL_HANDLE};
+
+  std::vector<std::pair<VkDescriptorSet, std::uint64_t>> _pending_texture_frees{};
 
 }; // class editor_module
 

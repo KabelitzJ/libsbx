@@ -19,6 +19,7 @@
 #include <libsbx/units/units.hpp>
 
 #include <libsbx/core/application.hpp>
+#include <libsbx/core/engine_config.hpp>
 #include <libsbx/core/module.hpp>
 #include <libsbx/core/project.hpp>
 
@@ -39,6 +40,9 @@ public:
   [[nodiscard]] static auto time() -> units::seconds;
 
   [[nodiscard]] static auto args() -> const std::vector<std::string_view>&;
+
+  /** @brief Engine-wide settings, set once at construction. See @ref engine_config. */
+  [[nodiscard]] static auto config() -> const engine_config&;
 
   static auto quit() -> void;
 
@@ -102,7 +106,7 @@ public:
 
 protected:
 
-  explicit engine(std::span<std::string_view> args);
+  explicit engine(std::span<std::string_view> args, engine_config config = {});
 
   ~engine();
 
@@ -114,6 +118,8 @@ protected:
   bool _is_running{};
 
   std::vector<std::string_view> _args{};
+
+  engine_config _config{};
 
   std::unique_ptr<core::application> _application{};
 
@@ -143,7 +149,7 @@ class basic_engine<module_list<Modules...>> final : public engine {
 
 public:
 
-  explicit basic_engine(std::span<std::string_view> args);
+  explicit basic_engine(std::span<std::string_view> args, engine_config config = {});
 
   ~basic_engine() = default;
 

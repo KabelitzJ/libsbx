@@ -32,8 +32,8 @@ inline auto engine::get_application() -> Application& {
 
 template<module... Modules>
 requires (utility::are_unique_v<Modules...> && detail::dependencies_ordered_v<Modules...>)
-inline basic_engine<module_list<Modules...>>::basic_engine(std::span<std::string_view> args)
-: engine{args},
+inline basic_engine<module_list<Modules...>>::basic_engine(std::span<std::string_view> args, engine_config config)
+: engine{args, config},
   _modules{} { }
 
 template<module... Modules>

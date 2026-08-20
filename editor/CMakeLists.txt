@@ -19,6 +19,9 @@ target_sources(
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/panels/hierarchy_panel.cpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/panels/properties_panel.cpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/panels/asset_browser_panel.cpp"
+    "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/viewport_camera.cpp"
+    "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/viewport_gizmo.cpp"
+    "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/viewport_picking.cpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/backends/v1.92.9-docking/imgui_impl_glfw.cpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/backends/v1.92.9-docking/imgui_impl_vulkan.cpp"
   PUBLIC
@@ -28,6 +31,9 @@ target_sources(
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/panels/hierarchy_panel.hpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/panels/properties_panel.hpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/panels/asset_browser_panel.hpp"
+    "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/viewport_camera.hpp"
+    "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/viewport_gizmo.hpp"
+    "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/viewport_picking.hpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/backends/v1.92.9-docking/imgui_impl_glfw.h"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/backends/v1.92.9-docking/imgui_impl_vulkan.h"
 )

@@ -8,6 +8,7 @@
 #include <vulkan/vulkan.h>
 
 #include <imgui.h>
+#include <ImGuizmo.h>
 #include <editor/backends/v1.92.9-docking/imgui_impl_glfw.h>
 #include <editor/backends/v1.92.9-docking/imgui_impl_vulkan.h>
 
@@ -16,6 +17,9 @@
 #include <editor/panels/asset_browser_panel.hpp>
 #include <editor/panels/hierarchy_panel.hpp>
 #include <editor/panels/properties_panel.hpp>
+
+#include <editor/viewport_gizmo.hpp>
+#include <editor/viewport_picking.hpp>
 
 #include <libsbx/core/engine.hpp>
 
@@ -167,6 +171,7 @@ auto editor_module::_build_ui_frame() -> void {
   ImGui_ImplVulkan_NewFrame();
   ImGui_ImplGlfw_NewFrame();
   ImGui::NewFrame();
+  ImGuizmo::BeginFrame();
 
   _draw_dockspace();
 
@@ -192,6 +197,21 @@ auto editor_module::_build_ui_frame() -> void {
 
     if (_texture_id != VK_NULL_HANDLE) {
       ImGui::Image(reinterpret_cast<ImTextureID>(_texture_id), available);
+
+      // Captured before the gizmo call below, since ImGuizmo's own widgets can disturb ImGui's
+      // "last item" tracking that IsItemClicked/GetItemRectMin rely on.
+      const auto image_clicked = ImGui::IsItemClicked(ImGuiMouseButton_Left);
+      const auto image_origin = ImGui::GetItemRectMin();
+
+      const auto gizmo_active = draw_viewport_gizmo(_state, image_origin, available);
+
+      // Left-click picks the node under the cursor, unless it landed on the gizmo (right-drag is
+      // already the fly camera, so there's no input conflict there either).
+      if (image_clicked && !gizmo_active) {
+        const auto mouse_position = ImGui::GetMousePos();
+
+        pick_node_at_viewport_position(_state, sbx::math::vector2{mouse_position.x - image_origin.x, mouse_position.y - image_origin.y}, sbx::math::vector2u{width, height});
+      }
     }
   }
 

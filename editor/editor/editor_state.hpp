@@ -62,6 +62,19 @@ struct asset_browser_state {
   bool needs_refresh{true};
 }; // struct asset_browser_state
 
+/** @brief Which handles the viewport gizmo shows for the current selection. */
+enum class gizmo_operation {
+  translate,
+  rotate,
+  scale,
+}; // enum class gizmo_operation
+
+/** @brief Whether the gizmo manipulates in the selected node's local axes or world axes. */
+enum class gizmo_mode {
+  local,
+  world,
+}; // enum class gizmo_mode
+
 /**
  * @brief Shared state passed to every editor panel: what's currently selected (a node or an
  * asset), plus per-panel state that doesn't belong anywhere else. Panels only ever read or write
@@ -71,6 +84,8 @@ struct editor_state {
 
   selection current_selection{empty_selection{}};
   asset_browser_state asset_browser{};
+  gizmo_operation current_gizmo_operation{gizmo_operation::translate};
+  gizmo_mode current_gizmo_mode{gizmo_mode::world};
 
   /**
    * @brief Re-resolves the currently selected node (if any) against @p scene. Returns an invalid

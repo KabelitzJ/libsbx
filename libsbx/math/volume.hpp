@@ -3,11 +3,14 @@
 #ifndef LIBSBX_MATH_VOLUME_HPP_
 #define LIBSBX_MATH_VOLUME_HPP_
 
+#include <algorithm>
+#include <cmath>
 #include <ranges>
 
 #include <libsbx/math/concepts.hpp>
 #include <libsbx/math/vector3.hpp>
 #include <libsbx/math/matrix4x4.hpp>
+#include <libsbx/math/ray.hpp>
 
 namespace sbx::math {
 
@@ -75,6 +78,55 @@ public:
 
   auto intersects(const basic_volume& other) const noexcept -> bool {
     return _min.x() <= other.max().x() && _max.x() >= other.min().x() && _min.y() <= other.max().y() && _max.y() >= other.min().y() && _min.z() <= other.max().z() && _max.z() >= other.min().z();
+  }
+
+  /**
+   * @brief Ray-AABB intersection (slab method).
+   * 
+   * @return On a hit, returns the ray parameter of the nearest intersection point (point_at(t)), empty if the box lies entirely behind the ray origin.
+   */
+  auto intersects(const math::ray& ray) const noexcept -> std::optional<value_type> {
+    auto t_min = std::numeric_limits<value_type>::lowest();
+    auto t_max = std::numeric_limits<value_type>::max();
+
+    const auto& origin = ray.origin();
+    const auto& direction = ray.direction();
+
+    const auto slab = [&t_min, &t_max](value_type origin_component, value_type direction_component, value_type min_bound, value_type max_bound) -> bool {
+      if (std::abs(direction_component) < std::numeric_limits<value_type>::epsilon()) {
+        return origin_component >= min_bound && origin_component <= max_bound;
+      }
+
+      auto t1 = (min_bound - origin_component) / direction_component;
+      auto t2 = (max_bound - origin_component) / direction_component;
+
+      if (t1 > t2) {
+        std::swap(t1, t2);
+      }
+
+      t_min = std::max(t_min, t1);
+      t_max = std::min(t_max, t2);
+
+      return t_min <= t_max;
+    };
+
+    if (!slab(origin.x(), direction.x(), _min.x(), _max.x())) {
+      return std::nullopt;
+    }
+
+    if (!slab(origin.y(), direction.y(), _min.y(), _max.y())) {
+      return std::nullopt;
+    }
+
+    if (!slab(origin.z(), direction.z(), _min.z(), _max.z())) {
+      return std::nullopt;
+    }
+
+    if (t_max < value_type{0}) {
+      return std::nullopt;
+    }
+
+    return (t_min >= value_type{0}) ? t_min : t_max;
   }
 
   auto extend() const noexcept -> math::vector3 {

@@ -132,19 +132,22 @@ auto draw_transform_section(sbx::scenes::node& node) -> void {
   }
 
   // Rotation is a quaternion, edited as Euler degrees. Re-deriving Euler from the quaternion every
-  // frame is unstable near gimbal lock, so the working triplet is cached per node and only
-  // re-synced on selection change; external rotation while selected won't show until reselected.
+  // frame is unstable near gimbal lock, so the working triplet is cached and only re-synced when
+  // something other than this widget changed the quaternion (a reselect, or e.g. the gizmo).
   static auto last_rotation_id = sbx::math::uuid::nil();
+  static auto last_rotation_quaternion = sbx::math::quaternion::identity;
   static auto rotation = std::array<float, 3u>{0.0f, 0.0f, 0.0f};
 
-  if (node.id().value() != last_rotation_id.value()) {
+  if (node.id().value() != last_rotation_id.value() || !(transform.rotation == last_rotation_quaternion)) {
     const auto euler = sbx::math::quaternion::euler_angles(transform.rotation);
     rotation = {euler.x(), euler.y(), euler.z()};
     last_rotation_id = node.id();
+    last_rotation_quaternion = transform.rotation;
   }
 
   if (draw_vector3_control("Rotation", rotation, 0.0f, 0.5f)) {
     transform.rotation = sbx::math::quaternion{sbx::math::vector3f{rotation[0], rotation[1], rotation[2]}};
+    last_rotation_quaternion = transform.rotation;
   }
 
   auto scale = std::array<float, 3u>{transform.scale.x(), transform.scale.y(), transform.scale.z()};

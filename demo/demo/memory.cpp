@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Jonas Kabelitz
+#if defined(SBX_ENABLE_PROFILING)
+
 #include <cstdlib>
 #include <cstdint>
 #include <memory>
@@ -164,3 +166,5 @@ auto operator delete[](void* ptr, [[maybe_unused]] std::align_val_t alignment, s
   TracyFreeS(ptr, tracy_depth);
   detail::aligned_free(ptr);
 }
+
+#endif

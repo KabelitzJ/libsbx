@@ -44,7 +44,13 @@ auto main(int argc, const char** argv) -> int {
   auto args = std::vector<std::string_view>{argv, argv + argc};
 
   try {
-    auto config = sbx::core::engine_config{.threading = sbx::core::threading_policy::single_threaded};
+    auto config = sbx::core::engine_config{
+      .threading = sbx::core::threading_policy::single_threaded,
+      .project = sbx::core::project_config{
+        .root = "editor", 
+        .name = "Editor"
+      }
+    };
 
     auto engine = sbx::core::basic_engine<module_list>{args, config};
 

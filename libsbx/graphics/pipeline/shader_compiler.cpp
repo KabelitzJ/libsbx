@@ -5,9 +5,13 @@
 #include <array>
 #include <cstring>
 #include <fstream>
+#include <string_view>
+
+#include <fmt/format.h>
 
 #include <libsbx/utility/logger.hpp>
 #include <libsbx/utility/exception.hpp>
+#include <libsbx/utility/hash.hpp>
 
 namespace sbx::graphics {
 
@@ -40,6 +44,46 @@ shader_compiler::~shader_compiler() {
 
 }
 
+// Content hash over everything that affects the emitted SPIR-V: the source itself, the requested
+// entry points, the fixed compiler options below and the target profile, plus the Slang toolchain's
+// own build tag so a Slang version bump invalidates every cache entry automatically. Deliberately
+// not mtime-based — that isn't stable across a fresh checkout or a different machine.
+auto shader_compiler::_cache_key(const std::string& source, std::span<const entry_point_request> entry_points, std::span<const slang::CompilerOptionEntry> options, const char* profile) const -> std::string {
+  auto buffer = std::string{};
+  buffer.reserve(source.size() + 256u);
+
+  buffer.append(source);
+  buffer.push_back('\0');
+
+  for (const auto& entry_point : entry_points) {
+    buffer.append(entry_point.name);
+    buffer.push_back('\0');
+
+    const auto stage = static_cast<std::uint32_t>(entry_point.stage);
+    buffer.append(reinterpret_cast<const char*>(&stage), sizeof(stage));
+  }
+
+  for (const auto& option : options) {
+    const auto name = static_cast<std::uint32_t>(option.name);
+    const auto kind = static_cast<std::uint32_t>(option.value.kind);
+    const auto value0 = option.value.intValue0;
+    const auto value1 = option.value.intValue1;
+
+    buffer.append(reinterpret_cast<const char*>(&name), sizeof(name));
+    buffer.append(reinterpret_cast<const char*>(&kind), sizeof(kind));
+    buffer.append(reinterpret_cast<const char*>(&value0), sizeof(value0));
+    buffer.append(reinterpret_cast<const char*>(&value1), sizeof(value1));
+  }
+
+  buffer.append(profile);
+  buffer.push_back('\0');
+  buffer.append(_global_session->getBuildTagString());
+
+  const auto hash = utility::fnv1a_hash<char>{}(std::string_view{buffer});
+
+  return fmt::format("{:016x}", hash);
+}
+
 auto shader_compiler::compile(const std::filesystem::path& path, std::span<const entry_point_request> entry_points) -> std::vector<compiled_entry_point> {
   const auto source = _read_file(path);
   const auto parent = path.parent_path().string();
@@ -53,6 +97,23 @@ auto shader_compiler::compile(const std::filesystem::path& path, std::span<const
     slang::CompilerOptionEntry{slang::CompilerOptionName::EmitSpirvDirectly, {slang::CompilerOptionValueKind::Int, 1, 0, nullptr, nullptr}},
     slang::CompilerOptionEntry{slang::CompilerOptionName::VulkanUseEntryPointName, {slang::CompilerOptionValueKind::Int, 1, 0, nullptr, nullptr}}
   };
+
+  const auto key = _cache_key(source, entry_points, options, "spirv_1_5");
+
+  if (auto cached = _disk_cache.try_load(key)) {
+    auto results = std::vector<compiled_entry_point>{};
+    results.reserve(cached->size());
+
+    for (auto& entry : *cached) {
+      results.push_back(compiled_entry_point{entry.stage, std::move(entry.name), std::move(entry.spirv)});
+    }
+
+    utility::logger<"graphics">::debug("Shader cache hit for '{}'", path.generic_string());
+
+    return results;
+  }
+
+  utility::logger<"graphics">::debug("Shader cache miss for '{}', compiling", path.generic_string());
 
   const auto search_paths = std::array<const char*, 1u>{parent.c_str()};
 
@@ -127,6 +188,15 @@ auto shader_compiler::compile(const std::filesystem::path& path, std::span<const
 
     results.push_back(compiled_entry_point{request.stage, request.name, std::move(spirv)});
   }
+
+  auto to_store = std::vector<shader_binary_entry>{};
+  to_store.reserve(results.size());
+
+  for (const auto& entry : results) {
+    to_store.push_back(shader_binary_entry{entry.stage, entry.name, entry.spirv});
+  }
+
+  _disk_cache.store(key, to_store);
 
   return results;
 }

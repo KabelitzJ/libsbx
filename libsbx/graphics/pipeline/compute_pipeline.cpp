@@ -18,6 +18,7 @@ compute_pipeline::compute_pipeline(const create_info& create_info) {
 
   const auto& logical_device = graphics_module.logical_device();
   const auto& bindless_table = graphics_module.bindless_table();
+  const auto& pipeline_binary_cache = graphics_module.pipeline_binary_cache();
 
   const auto stages = create_info.shader->stage_create_infos();
 
@@ -30,7 +31,7 @@ compute_pipeline::compute_pipeline(const create_info& create_info) {
   pipeline_create_info.basePipelineIndex = -1;
   pipeline_create_info.basePipelineHandle = VK_NULL_HANDLE;
 
-  validate(vkCreateComputePipelines(logical_device, VK_NULL_HANDLE, 1u, &pipeline_create_info, nullptr, &_handle), "vkCreateComputePipelines");
+  validate(vkCreateComputePipelines(logical_device, pipeline_binary_cache, 1u, &pipeline_create_info, nullptr, &_handle), "vkCreateComputePipelines");
 
   logical_device.set_debug_name(_handle, create_info.name);
 }

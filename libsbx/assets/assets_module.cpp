@@ -25,12 +25,14 @@
 
 #include <libsbx/utility/assert.hpp>
 #include <libsbx/utility/iterator.hpp>
+#include <libsbx/utility/fourcc.hpp>
 
 #include <libsbx/memory/alignment.hpp>
 
 #include <libsbx/core/engine.hpp>
 
 #include <libsbx/utility/logger.hpp>
+#include <libsbx/utility/timer.hpp>
 
 #include <libsbx/math/vector3.hpp>
 
@@ -62,31 +64,16 @@ struct material_data {
   std::uint32_t padding2;
 }; // struct material_data
 
-template<utility::string_literal Name>
-requires (Name.size() == 4u)
-struct fourcc {
-  static constexpr auto value = std::uint32_t{
-    (static_cast<std::uint32_t>(Name[0]) << 0u) |
-    (static_cast<std::uint32_t>(Name[1]) << 8u) |
-    (static_cast<std::uint32_t>(Name[2]) << 16u) |
-    (static_cast<std::uint32_t>(Name[3]) << 24u)
-  };
-}; // struct fourcc
-
-template<utility::string_literal Name>
-requires (Name.size() == 4u)
-constexpr auto fourcc_v = fourcc<Name>::value;
-
-inline constexpr auto texture_magic = fourcc_v<"SBTX">;  // 'SBTX'
+inline constexpr auto texture_magic = utility::fourcc_v<"SBTX">;  // 'SBTX'
 inline constexpr auto texture_version = std::uint32_t{1u};
 
-inline constexpr auto mesh_magic = fourcc_v<"SBSH">;   // 'SBSH'
+inline constexpr auto mesh_magic = utility::fourcc_v<"SBSH">;   // 'SBSH'
 inline constexpr auto mesh_version = std::uint32_t{1u};
 
-inline constexpr auto material_magic = fourcc_v<"SBMT">; // 'SBMT'
+inline constexpr auto material_magic = utility::fourcc_v<"SBMT">; // 'SBMT'
 inline constexpr auto material_version = std::uint32_t{2u};
 
-inline constexpr auto environment_magic = fourcc_v<"SBEN">; // 'SBEN'
+inline constexpr auto environment_magic = utility::fourcc_v<"SBEN">; // 'SBEN'
 inline constexpr auto environment_version = std::uint32_t{1u};
 
 // A mesh cook also emits its materials, so a mesh blob's freshness depends on both cookers.
@@ -579,6 +566,10 @@ auto assets_module::save_material(const material_handle& material, const std::fi
 }
 
 auto assets_module::load_environment_map(const math::uuid& id) -> environment_map_handle {
+  auto timer = utility::scoped_timer{[&id](const units::seconds& elapsed) {
+    utility::logger<"assets">::info("Loaded environment map {} in {}", id, units::milliseconds{elapsed});
+  }};
+
   _ensure_manifest_loaded();
 
   {

@@ -21,6 +21,7 @@ graphics_pipeline::graphics_pipeline(const create_info& create_info) {
 
   const auto& logical_device = graphics_module.logical_device();
   const auto& bindless_table = graphics_module.bindless_table();
+  const auto& pipeline_binary_cache = graphics_module.pipeline_binary_cache();
 
   const auto stages = create_info.shader->stage_create_infos();
 
@@ -123,7 +124,7 @@ graphics_pipeline::graphics_pipeline(const create_info& create_info) {
   pipeline_create_info.pDynamicState = &dynamic_state;
   pipeline_create_info.layout = bindless_table.pipeline_layout();
 
-  validate(vkCreateGraphicsPipelines(logical_device, VK_NULL_HANDLE, 1u, &pipeline_create_info, nullptr, &_handle), "vkCreateGraphicsPipelines");
+  validate(vkCreateGraphicsPipelines(logical_device, pipeline_binary_cache, 1u, &pipeline_create_info, nullptr, &_handle), "vkCreateGraphicsPipelines");
 
   logical_device.set_debug_name(_handle, create_info.name);
 }

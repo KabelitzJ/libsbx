@@ -3,6 +3,7 @@
 #ifndef LIBSBX_CORE_ENGINE_HPP_
 #define LIBSBX_CORE_ENGINE_HPP_
 
+#include <deque>
 #include <memory>
 #include <optional>
 #include <span>
@@ -72,7 +73,7 @@ public:
     return active;
   }
 
-  [[nodiscard]] static auto projects() -> const std::vector<core::project>&;
+  [[nodiscard]] static auto projects() -> const std::deque<core::project>&;
 
   [[nodiscard]] static auto has_project() -> bool;
 
@@ -123,7 +124,10 @@ protected:
 
   std::unique_ptr<core::application> _application{};
 
-  std::vector<core::project> _projects{};
+  // deque, not vector: project() hands out references into this container, and a later
+  // set_project() call (e.g. a runtime project switch) must not invalidate references any
+  // caller is still holding — deque keeps push-back-stable references.
+  std::deque<core::project> _projects{};
   std::optional<std::size_t> _active_project{};
 
 }; // class engine

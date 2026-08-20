@@ -16,6 +16,8 @@
 
 #include <libsbx/utility/noncopyable.hpp>
 
+#include <libsbx/graphics/pipeline/shader_disk_cache.hpp>
+
 namespace sbx::graphics {
 
 /**
@@ -51,7 +53,10 @@ public:
 
 private:
 
+  [[nodiscard]] auto _cache_key(const std::string& source, std::span<const entry_point_request> entry_points, std::span<const slang::CompilerOptionEntry> options, const char* profile) const -> std::string;
+
   Slang::ComPtr<slang::IGlobalSession> _global_session{};
+  shader_disk_cache _disk_cache{};
 
 }; // class shader_compiler
 

@@ -24,6 +24,15 @@ engine::engine(std::span<std::string_view> args, engine_config config)
       utility::logger<"core">::debug("  {}", arg);
     }
   }
+
+  // Resolved here, before any module constructs, so every module — including ones that
+  // eagerly build project-relative state in their own constructor (e.g. graphics_module's
+  // shader/pipeline disk caches) — always sees an active project.
+  if (_config.project.has_value()) {
+    const auto& initial = *_config.project;
+
+    set_project(core::project::open_or_create(initial.root, initial.name));
+  }
 }
 
 engine::~engine() {
@@ -64,7 +73,7 @@ auto engine::quit() -> void {
   _instance->_is_running = false;
 }
 
-auto engine::projects() -> const std::vector<core::project>& {
+auto engine::projects() -> const std::deque<core::project>& {
   utility::assert_that(_instance != nullptr, "Engine instance does not exist");
 
   return _instance->_projects;

@@ -27,6 +27,7 @@
 #include <libsbx/graphics/pipeline/shader_cache.hpp>
 #include <libsbx/graphics/pipeline/pipeline_cache.hpp>
 #include <libsbx/graphics/pipeline/compute_pipeline_cache.hpp>
+#include <libsbx/graphics/pipeline/pipeline_binary_cache.hpp>
 
 #include <libsbx/graphics/frame_context.hpp>
 #include <libsbx/graphics/upload_context.hpp>
@@ -110,6 +111,10 @@ public:
     return _compute_pipeline_cache;
   }
 
+  [[nodiscard]] auto pipeline_binary_cache() noexcept -> graphics::pipeline_binary_cache& {
+    return _pipeline_binary_cache;
+  }
+
   auto command_pool(const queue::type type, const std::thread::id& thread_id = std::this_thread::get_id()) -> const std::shared_ptr<command_pool>&;
 
 private:
@@ -148,6 +153,10 @@ private:
   graphics::bindless_table _bindless_table;
   graphics::frame_context _frame_context;
   graphics::upload_context _upload_context;
+
+  // Declared after _logical_device so it is destroyed before it (reverse declaration order) —
+  // its destructor still needs a live device to write the cache blob back to disk.
+  graphics::pipeline_binary_cache _pipeline_binary_cache;
 
   graphics::shader_compiler _shader_compiler;
   graphics::shader_cache _shader_cache;

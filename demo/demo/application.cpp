@@ -32,7 +32,7 @@ application::application()
     sbx::core::engine::quit();
   };
 
-  auto& project = sbx::core::engine::set_project(sbx::core::project::open_or_create("demo", "Demo"));
+  auto& project = sbx::core::engine::project();
 
   auto& assets_module = sbx::core::engine::get_module<sbx::assets::assets_module>();
   assets_module.import_directory(project.assets_directory());

@@ -32,6 +32,7 @@ graphics_module::graphics_module()
   _bindless_table{_physical_device, _logical_device},
   _frame_context{},
   _upload_context{},
+  _pipeline_binary_cache{_logical_device},
   _shader_compiler{} {
   const auto& properties = _physical_device.properties();
 

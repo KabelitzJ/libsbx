@@ -30,13 +30,19 @@
 namespace editor {
 
 application::application()
-: sbx::core::application{}, _is_paused{false}, _time{0}, _fps{0} {
+: sbx::core::application{},
+  _is_paused{false}, 
+  _time{0}, 
+  _fps{0} {
   auto& platform_module = sbx::core::engine::get_module<sbx::platform::platform_module>();
-  platform_module.window().on_window_closed() += []([[maybe_unused]] const auto& event) {
+
+  auto& window = platform_module.window();
+
+  window.on_window_closed() += []([[maybe_unused]] const auto& event) {
     sbx::core::engine::quit();
   };
 
-  auto& project = sbx::core::engine::set_project(sbx::core::project::open_or_create("editor", "Editor"));
+  auto& project = sbx::core::engine::project();
 
   auto& assets_module = sbx::core::engine::get_module<sbx::assets::assets_module>();
   assets_module.import_directory(project.assets_directory());

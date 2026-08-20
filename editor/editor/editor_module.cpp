@@ -13,6 +13,10 @@
 
 #include <editor/fonts/material_design_icons.hpp>
 
+#include <editor/panels/asset_browser_panel.hpp>
+#include <editor/panels/hierarchy_panel.hpp>
+#include <editor/panels/properties_panel.hpp>
+
 #include <libsbx/core/engine.hpp>
 
 #include <libsbx/graphics/frame_context.hpp>
@@ -197,6 +201,10 @@ auto editor_module::_build_ui_frame() -> void {
   ImGui::Begin("Stats");
   ImGui::Text("%.1f FPS (%.3f ms)", static_cast<double>(ImGui::GetIO().Framerate), 1000.0 / static_cast<double>(ImGui::GetIO().Framerate));
   ImGui::End();
+
+  draw_hierarchy_panel(_state);
+  draw_properties_panel(_state);
+  draw_asset_browser_panel(_state);
 
   ImGui::Render();
 }

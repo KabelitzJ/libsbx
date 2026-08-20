@@ -34,6 +34,13 @@ public:
 
   [[nodiscard]] auto find(const utility::hashed_string& name) -> node;
 
+  /**
+   * @brief Wraps an arbitrary entity (e.g. from scene::query<>() or relationship::children) in a
+   * node handle. The returned node's validity still depends on the entity being alive — check
+   * node::is_valid() before using it.
+   */
+  [[nodiscard]] auto node_of(ecs::entity entity) -> node;
+
   auto set_active_camera(node camera) -> void;
 
   [[nodiscard]] auto active_camera() -> node;

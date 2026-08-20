@@ -385,9 +385,9 @@ public:
       auto& node = _dense.first().emplace_back(_dense.first().size(), std::forward<Args>(args)...);
       const auto index = _key_to_bucket(node.element.first);
 
-      if (auto it = _constrained_find(node.element.first, index); it != end()) {
+      if (auto entry = _constrained_find(node.element.first, index); entry != end()) {
         _dense.first().pop_back();
-        return std::make_pair(it, false);
+        return std::make_pair(entry, false);
       }
 
       std::swap(node.next, _sparse.first()[index]);
@@ -418,17 +418,17 @@ public:
   }
 
   [[nodiscard]] auto at(const key_type& key) -> mapped_type& {
-    auto it = find(key);
-    utility::assert_that(it != end(), "Invalid key");
+    auto entry = find(key);
+    utility::assert_that(entry != end(), "Invalid key");
 
-    return it->second;
+    return entry->second;
   }
 
   /*! @copydoc at */
   [[nodiscard]] auto at(const key_type &key) const -> const mapped_type& {
-    auto it = find(key);
-    utility::assert_that(it != cend(), "Invalid key");
-    return it->second;
+    auto entry = find(key);
+    utility::assert_that(entry != cend(), "Invalid key");
+    return entry->second;
   }
 
   [[nodiscard]] auto operator[](const key_type& key) -> mapped_type& {
@@ -530,9 +530,9 @@ private:
 
   template<typename Other>
   [[nodiscard]] auto _constrained_find(const Other& key, const size_type bucket) -> iterator {
-    for (auto it = begin(bucket), last = end(bucket); it != last; ++it) {
-      if (_dense.second()(it->first, key)) {
-        return begin() + static_cast<difference_type>(it.index());
+    for (auto entry = begin(bucket), last = end(bucket); entry != last; ++entry) {
+      if (_dense.second()(entry->first, key)) {
+        return begin() + static_cast<difference_type>(entry.index());
       }
     }
 
@@ -541,9 +541,9 @@ private:
 
   template<typename Other>
   [[nodiscard]] auto _constrained_find(const Other& key, const size_type bucket) const -> const_iterator {
-    for (auto it = cbegin(bucket), last = cend(bucket); it != last; ++it) {
-      if (_dense.second()(it->first, key)) {
-        return cbegin() + static_cast<difference_type>(it.index());
+    for (auto entry = cbegin(bucket), last = cend(bucket); entry != last; ++entry) {
+      if (_dense.second()(entry->first, key)) {
+        return cbegin() + static_cast<difference_type>(entry.index());
       }
     }
 
@@ -554,8 +554,8 @@ private:
   [[nodiscard]] auto _insert_or_do_nothing(Other &&key, Args &&...args) -> std::pair<iterator, bool> {
     const auto index = _key_to_bucket(key);
 
-    if (auto it = _constrained_find(key, index); it != end()) {
-      return std::make_pair(it, false);
+    if (auto entry = _constrained_find(key, index); entry != end()) {
+      return std::make_pair(entry, false);
     }
 
     _dense.first().emplace_back(_sparse.first()[index], std::piecewise_construct, std::forward_as_tuple(std::forward<Other>(key)), std::forward_as_tuple(std::forward<Args>(args)...));
@@ -569,9 +569,9 @@ private:
   [[nodiscard]] auto _insert_or_overwrite(Other&& key, Arg&& value) -> std::pair<iterator, bool> {
     const auto index = key_to_bucket(key);
 
-    if (auto it = _constrained_find(key, index); it != end()) {
-      it->second = std::forward<Arg>(value);
-      return std::make_pair(it, false);
+    if (auto entry = _constrained_find(key, index); entry != end()) {
+      entry->second = std::forward<Arg>(value);
+      return std::make_pair(entry, false);
     }
 
     _dense.first().emplace_back(_sparse.first()[index], std::forward<Other>(key), std::forward<Arg>(value));

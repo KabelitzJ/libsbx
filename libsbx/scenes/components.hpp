@@ -15,6 +15,8 @@
 
 #include <libsbx/ecs/entity.hpp>
 
+#include <libsbx/utility/hashed_string.hpp>
+
 #include <libsbx/assets/material.hpp>
 #include <libsbx/assets/mesh.hpp>
 #include <libsbx/assets/texture.hpp>

@@ -107,11 +107,11 @@ template<typename... Args>
 requires (std::is_constructible_v<Type, Args...>)
 auto basic_storage<Type, Entity, Allocator>::emplace(const entity_type entity, Args&&... args) -> Type& {
   if constexpr (std::is_aggregate_v<value_type> && (sizeof...(Args) != 0u || !std::is_default_constructible_v<value_type>)) {
-    const auto it = _emplace_element(entity, false, Type{std::forward<Args>(args)...});
-    return _element_at(static_cast<size_type>(it.index()));
+    const auto entry = _emplace_element(entity, false, Type{std::forward<Args>(args)...});
+    return _element_at(static_cast<size_type>(entry.index()));
   } else {
-    const auto it = _emplace_element(entity, false, std::forward<Args>(args)...);
-    return _element_at(static_cast<size_type>(it.index()));
+    const auto entry = _emplace_element(entity, false, std::forward<Args>(args)...);
+    return _element_at(static_cast<size_type>(entry.index()));
   }
 }
 

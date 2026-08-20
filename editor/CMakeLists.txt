@@ -12,14 +12,22 @@ target_sources(
   PRIVATE
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/application.cpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/editor_module.cpp"
+    "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/editor_state.cpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/editor.cpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/fly_camera.cpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/memory.cpp"
+    "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/panels/hierarchy_panel.cpp"
+    "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/panels/properties_panel.cpp"
+    "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/panels/asset_browser_panel.cpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/backends/v1.92.9-docking/imgui_impl_glfw.cpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/backends/v1.92.9-docking/imgui_impl_vulkan.cpp"
   PUBLIC
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/application.hpp"
+    "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/editor_state.hpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/fly_camera.hpp"
+    "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/panels/hierarchy_panel.hpp"
+    "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/panels/properties_panel.hpp"
+    "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/panels/asset_browser_panel.hpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/backends/v1.92.9-docking/imgui_impl_glfw.h"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/backends/v1.92.9-docking/imgui_impl_vulkan.h"
 )

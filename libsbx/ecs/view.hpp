@@ -62,18 +62,18 @@ public:
   }
 
   [[nodiscard]] auto front() const noexcept -> entity_type {
-    const auto it = begin();
-    return it != end() ? *it : null_entity;
+    const auto entry = begin();
+    return entry != end() ? *entry : null_entity;
   }
 
   [[nodiscard]] auto back() const noexcept -> entity_type {
     if(_index != Get) {
-      auto it = _pools[_index]->rbegin();
-      const auto last = it + static_cast<difference_type>(_offset());
+      auto entry = _pools[_index]->rbegin();
+      const auto last = entry + static_cast<difference_type>(_offset());
 
-      for (const auto idx = static_cast<difference_type>(_index); it != last && !(detail::all_of(_pools.begin(), _pools.begin() + idx, *it) && detail::all_of(_pools.begin() + idx + 1, _pools.end(), *it)); ++it) { }
+      for (const auto idx = static_cast<difference_type>(_index); entry != last && !(detail::all_of(_pools.begin(), _pools.begin() + idx, *entry) && detail::all_of(_pools.begin() + idx + 1, _pools.end(), *entry)); ++entry) { }
 
-      return it == last ? null_entity : *it;
+      return entry == last ? null_entity : *entry;
     }
 
     return null_entity;
@@ -232,9 +232,9 @@ public:
       return is_empty() ? null_entity : *(_leading->end() - static_cast<difference_type>(_leading->free_list()));
     } else {
       static_assert(Policy == deletion_policy::in_place, "Unexpected storage policy");
-      const auto it = begin();
+      const auto entry = begin();
 
-      return (it == end()) ? null_entity : *it;
+      return (entry == end()) ? null_entity : *entry;
     }
   }
 
@@ -245,12 +245,12 @@ public:
       static_assert(Policy == deletion_policy::in_place, "Unexpected storage policy");
 
       if (_leading) {
-        auto it = _leading->rbegin();
+        auto entry = _leading->rbegin();
         const auto last = _leading->rend();
 
-        for(; (it != last) && (*it == tombstone_entity); ++it) { }
+        for(; (entry != last) && (*entry == tombstone_entity); ++entry) { }
         
-        return it == last ? null_entity : *it;
+        return entry == last ? null_entity : *entry;
       }
 
       return null_entity;
@@ -261,8 +261,8 @@ public:
     if constexpr (Policy == deletion_policy::swap_and_pop) {
       return _leading ? _leading->find(entity) : iterator{};
     } else if constexpr (Policy == deletion_policy::swap_only) {
-      const auto it = _leading ? _leading->find(entity) : iterator{};
-      return _leading && (static_cast<size_type>(it.index()) < _leading->free_list()) ? it : iterator{};
+      const auto entry = _leading ? _leading->find(entity) : iterator{};
+      return _leading && (static_cast<size_type>(entry.index()) < _leading->free_list()) ? entry : iterator{};
     } else {
       return _leading ? iterator{_leading->find(entity), {_leading}, {}, 0u} : iterator{};
     }

@@ -20,6 +20,8 @@
 
 #include <libsbx/render/render_module.hpp>
 
+#include <editor/editor_state.hpp>
+
 namespace editor {
 
 class editor_module final : public sbx::utility::noncopyable {
@@ -75,6 +77,8 @@ private:
   std::vector<std::pair<VkDescriptorSet, std::uint64_t>> _pending_texture_frees{};
 
   bool _viewport_is_hovered{false};
+
+  editor_state _state{};
 
 }; // class editor_module
 

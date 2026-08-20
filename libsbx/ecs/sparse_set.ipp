@@ -170,8 +170,8 @@ auto basic_sparse_set<Entity, Allocator>::index(const entity_type entity) const 
 
 template<typename Entity, memory::allocator_for<Entity> Allocator>
 auto basic_sparse_set<Entity, Allocator>::erase(const entity_type entity) -> void {
-  const auto it = _to_iterator(entity);
-  pop(it, it + 1u);
+  const auto entry = _to_iterator(entity);
+  pop(entry, entry + 1u);
 }
 
 template<typename Entity, memory::allocator_for<Entity> Allocator>
@@ -265,7 +265,7 @@ auto basic_sparse_set<Entity, Allocator>::swap_and_pop(const basic_iterator iter
   _sparse_reference(_dense.back()) = entity_traits::combine(entity, entity_traits::to_integral(_dense.back()));
   _dense[static_cast<size_type>(entity)] = _dense.back();
 
-  utility::assert_that((_dense.back() = null_entity, true), "unnecessary but it helps to detect nasty bugs");
+  utility::assert_that((_dense.back() = null_entity, true), "unnecessary but entry helps to detect nasty bugs");
 
   self = null_entity;
   _dense.pop_back();

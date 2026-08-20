@@ -26,6 +26,10 @@ auto scene::find(const utility::hashed_string& name) -> node {
   return node{};
 }
 
+auto scene::node_of(ecs::entity entity) -> node {
+  return node{memory::make_observer(_registry), entity};
+}
+
 auto scene::set_active_camera(node camera) -> void {
   _active_camera = camera._entity;
 }

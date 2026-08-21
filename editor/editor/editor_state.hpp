@@ -6,7 +6,6 @@
 #include <filesystem>
 #include <utility>
 #include <variant>
-#include <vector>
 
 #include <libsbx/ecs/entity.hpp>
 
@@ -46,22 +45,6 @@ struct asset_selection {
 
 using selection = std::variant<empty_selection, node_selection, asset_selection>;
 
-/** @brief One row cached by the Asset Browser for the currently browsed directory. */
-struct asset_browser_entry {
-  std::filesystem::path path{}; // project-relative
-  bool is_directory{false};
-  asset_kind kind{asset_kind::unknown};
-  bool is_importable{false};
-  sbx::math::uuid id{sbx::math::uuid::nil()}; // resolved lazily, on click
-}; // struct asset_browser_entry
-
-/** @brief Asset Browser panel state: which directory is open and its cached listing. */
-struct asset_browser_state {
-  std::filesystem::path current_directory{}; // project-relative; empty = assets root
-  std::vector<asset_browser_entry> cached_entries{};
-  bool needs_refresh{true};
-}; // struct asset_browser_state
-
 /** @brief Which handles the viewport gizmo shows for the current selection. */
 enum class gizmo_operation {
   translate,
@@ -76,14 +59,13 @@ enum class gizmo_mode {
 }; // enum class gizmo_mode
 
 /**
- * @brief Shared state passed to every editor panel: what's currently selected (a node or an
- * asset), plus per-panel state that doesn't belong anywhere else. Panels only ever read or write
- * through this — they never reference each other directly.
+ * @brief State shared across editor panels: what's currently selected (a node or an asset), plus
+ * the viewport gizmo's operation/mode. Anything private to a single panel lives on that panel
+ * instead (see editor_panel) — this only holds what genuinely crosses panel boundaries.
  */
 struct editor_state {
 
   selection current_selection{empty_selection{}};
-  asset_browser_state asset_browser{};
   gizmo_operation current_gizmo_operation{gizmo_operation::translate};
   gizmo_mode current_gizmo_mode{gizmo_mode::world};
 

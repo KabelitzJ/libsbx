@@ -2,27 +2,13 @@
 // Copyright (c) 2026 Jonas Kabelitz
 #include <editor/panels/logger_panel.hpp>
 
-#include <array>
-#include <cstddef>
-
-#include <imgui.h>
-
-#include <spdlog/common.h>
-
 #include <libsbx/utility/logger.hpp>
 
 #include <editor/fonts/material_design_icons.hpp>
 
 namespace editor {
 
-/** @brief One toggle per real level (trace..critical); "off" is never emitted, so it's excluded. */
-inline constexpr auto level_count = static_cast<std::size_t>(spdlog::level::n_levels) - 1u;
-
-struct logger_panel_state {
-  ImGuiTextFilter text_filter{};
-  std::array<bool, level_count> level_enabled{true, true, true, true, true, true};
-  bool is_auto_scroll{true};
-}; // struct logger_panel_state
+namespace {
 
 auto level_color(spdlog::level::level_enum level) -> ImVec4 {
   switch (level) {
@@ -59,9 +45,9 @@ auto trim_eol(const std::string& text) -> std::string_view {
   return view;
 }
 
-auto draw_logger_panel() -> void {
-  static auto state = logger_panel_state{};
+} // namespace
 
+auto logger_panel::draw(editor_state&) -> void {
   ImGui::Begin(ICON_MDI_CONSOLE " Console###logger_panel");
 
   if (ImGui::Button(ICON_MDI_TRASH_CAN " Clear")) {
@@ -69,18 +55,18 @@ auto draw_logger_panel() -> void {
   }
 
   ImGui::SameLine();
-  ImGui::Checkbox("Auto-scroll", &state.is_auto_scroll);
+  ImGui::Checkbox("Auto-scroll", &_is_auto_scroll);
 
   ImGui::SameLine();
   ImGui::SetNextItemWidth(200.0f);
-  state.text_filter.Draw(ICON_MDI_MAGNIFY " Filter");
+  _text_filter.Draw(ICON_MDI_MAGNIFY " Filter");
 
   for (auto index = std::size_t{0u}; index < level_count; ++index) {
     const auto level = static_cast<spdlog::level::level_enum>(index);
 
     ImGui::SameLine();
     ImGui::PushStyleColor(ImGuiCol_Text, level_color(level));
-    ImGui::Checkbox(level_label(level), &state.level_enabled[index]);
+    ImGui::Checkbox(level_label(level), &_level_enabled[index]);
     ImGui::PopStyleColor();
   }
 
@@ -93,11 +79,11 @@ auto draw_logger_panel() -> void {
   for (const auto& line : sbx::utility::logged_lines()) {
     const auto level_index = static_cast<std::size_t>(line.level);
 
-    if (level_index < level_count && !state.level_enabled[level_index]) {
+    if (level_index < level_count && !_level_enabled[level_index]) {
       continue;
     }
 
-    if (!state.text_filter.PassFilter(line.text.c_str())) {
+    if (!_text_filter.PassFilter(line.text.c_str())) {
       continue;
     }
 
@@ -110,7 +96,7 @@ auto draw_logger_panel() -> void {
 
   ImGui::PopStyleVar();
 
-  if (state.is_auto_scroll && ImGui::GetScrollY() >= ImGui::GetScrollMaxY() - 1.0f) {
+  if (_is_auto_scroll && ImGui::GetScrollY() >= ImGui::GetScrollMaxY() - 1.0f) {
     ImGui::SetScrollHereY(1.0f);
   }
 

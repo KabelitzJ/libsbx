@@ -54,20 +54,27 @@ auto icon_for(const asset_browser_entry& entry) -> const char* {
   return ICON_MDI_FILE_OUTLINE;
 }
 
-auto refresh_entries(asset_browser_state& browser_state) -> void {
-  browser_state.cached_entries.clear();
+auto is_entry_selected(const editor_state& state, const std::filesystem::path& path) -> bool {
+  const auto* selected = std::get_if<asset_selection>(&state.current_selection);
+  return selected != nullptr && selected->path == path;
+}
+
+} // namespace
+
+auto asset_browser_panel::_refresh_entries() -> void {
+  _cached_entries.clear();
 
   auto& project = sbx::core::engine::project();
-  const auto absolute_directory = project.assets_directory() / browser_state.current_directory;
+  const auto absolute_directory = project.assets_directory() / _current_directory;
 
   if (!std::filesystem::exists(absolute_directory)) {
-    browser_state.needs_refresh = false;
+    _needs_refresh = false;
     return;
   }
 
   for (const auto& dir_entry : std::filesystem::directory_iterator{absolute_directory}) {
     auto entry = asset_browser_entry{};
-    entry.path = browser_state.current_directory / dir_entry.path().filename();
+    entry.path = _current_directory / dir_entry.path().filename();
     entry.is_directory = dir_entry.is_directory();
 
     if (!entry.is_directory) {
@@ -76,10 +83,10 @@ auto refresh_entries(asset_browser_state& browser_state) -> void {
                              entry.kind == asset_kind::material || entry.kind == asset_kind::environment_map;
     }
 
-    browser_state.cached_entries.push_back(std::move(entry));
+    _cached_entries.push_back(std::move(entry));
   }
 
-  std::ranges::sort(browser_state.cached_entries, [](const auto& lhs, const auto& rhs) {
+  std::ranges::sort(_cached_entries, [](const auto& lhs, const auto& rhs) {
     if (lhs.is_directory != rhs.is_directory) {
       return lhs.is_directory > rhs.is_directory;
     }
@@ -87,11 +94,11 @@ auto refresh_entries(asset_browser_state& browser_state) -> void {
     return lhs.path.filename() < rhs.path.filename();
   });
 
-  browser_state.needs_refresh = false;
+  _needs_refresh = false;
 }
 
 // Recursively lists subdirectories only, live per expanded node — cheap (names only, no imports).
-auto draw_directory_tree(editor_state& state, const std::filesystem::path& absolute_assets_root, const std::filesystem::path& relative_directory) -> void {
+auto asset_browser_panel::_draw_directory_tree(editor_state& state, const std::filesystem::path& absolute_assets_root, const std::filesystem::path& relative_directory) -> void {
   const auto absolute_directory = absolute_assets_root / relative_directory;
 
   if (!std::filesystem::exists(absolute_directory)) {
@@ -107,7 +114,7 @@ auto draw_directory_tree(editor_state& state, const std::filesystem::path& absol
     const auto child_name = dir_entry.path().filename().string();
 
     auto flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAvailWidth;
-    if (state.asset_browser.current_directory == relative_child) {
+    if (_current_directory == relative_child) {
       flags |= ImGuiTreeNodeFlags_Selected;
     }
 
@@ -116,12 +123,12 @@ auto draw_directory_tree(editor_state& state, const std::filesystem::path& absol
     const auto is_open = ImGui::TreeNodeEx("##dir", flags, "%s %s", ICON_MDI_FOLDER, child_name.c_str());
 
     if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
-      state.asset_browser.current_directory = relative_child;
-      state.asset_browser.needs_refresh = true;
+      _current_directory = relative_child;
+      _needs_refresh = true;
     }
 
     if (is_open) {
-      draw_directory_tree(state, absolute_assets_root, relative_child);
+      _draw_directory_tree(state, absolute_assets_root, relative_child);
       ImGui::TreePop();
     }
 
@@ -129,29 +136,22 @@ auto draw_directory_tree(editor_state& state, const std::filesystem::path& absol
   }
 }
 
-auto is_entry_selected(const editor_state& state, const std::filesystem::path& path) -> bool {
-  const auto* selected = std::get_if<asset_selection>(&state.current_selection);
-  return selected != nullptr && selected->path == path;
-}
-
-} // namespace
-
-auto draw_asset_browser_panel(editor_state& state) -> void {
+auto asset_browser_panel::draw(editor_state& state) -> void {
   ImGui::Begin(ICON_MDI_FOLDER_MULTIPLE_IMAGE " Asset Browser###asset_browser_panel");
 
   auto& project = sbx::core::engine::project();
   auto& assets_module = sbx::core::engine::get_module<sbx::assets::assets_module>();
 
   if (ImGui::Button("Import All in This Folder")) {
-    assets_module.import_directory(state.asset_browser.current_directory);
-    state.asset_browser.needs_refresh = true;
+    assets_module.import_directory(_current_directory);
+    _needs_refresh = true;
   }
 
   ImGui::SameLine();
-  ImGui::TextDisabled("assets/%s", state.asset_browser.current_directory.string().c_str());
+  ImGui::TextDisabled("assets/%s", _current_directory.string().c_str());
 
-  if (state.asset_browser.needs_refresh) {
-    refresh_entries(state.asset_browser);
+  if (_needs_refresh) {
+    _refresh_entries();
   }
 
   // Folder tree gets a narrow fixed-width column (user-resizable); contents gets the rest.
@@ -163,45 +163,45 @@ auto draw_asset_browser_panel(editor_state& state) -> void {
     ImGui::TableSetColumnIndex(0);
 
     auto root_flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_DefaultOpen;
-    if (state.asset_browser.current_directory.empty()) {
+    if (_current_directory.empty()) {
       root_flags |= ImGuiTreeNodeFlags_Selected;
     }
 
     const auto is_root_open = ImGui::TreeNodeEx("##assets_root", root_flags, "%s assets", ICON_MDI_FOLDER_OPEN);
 
     if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
-      state.asset_browser.current_directory.clear();
-      state.asset_browser.needs_refresh = true;
+      _current_directory.clear();
+      _needs_refresh = true;
     }
 
     if (is_root_open) {
-      draw_directory_tree(state, project.assets_directory(), std::filesystem::path{});
+      _draw_directory_tree(state, project.assets_directory(), std::filesystem::path{});
       ImGui::TreePop();
     }
 
     ImGui::TableSetColumnIndex(1);
 
     // Current directory's immediate contents.
-    if (!state.asset_browser.current_directory.empty()) {
+    if (!_current_directory.empty()) {
       if (ImGui::Selectable(ICON_MDI_ARROW_LEFT " ..")) {
-        state.asset_browser.current_directory = state.asset_browser.current_directory.parent_path();
-        state.asset_browser.needs_refresh = true;
+        _current_directory = _current_directory.parent_path();
+        _needs_refresh = true;
       }
     }
 
-    if (state.asset_browser.cached_entries.empty()) {
+    if (_cached_entries.empty()) {
       ImGui::TextDisabled("Nothing here.");
     }
 
-    for (auto& entry : state.asset_browser.cached_entries) {
+    for (auto& entry : _cached_entries) {
       ImGui::PushID(entry.path.string().c_str());
 
       const auto label = std::string{icon_for(entry)} + " " + entry.path.filename().string();
 
       if (entry.is_directory) {
         if (ImGui::Selectable(label.c_str())) {
-          state.asset_browser.current_directory = entry.path;
-          state.asset_browser.needs_refresh = true;
+          _current_directory = entry.path;
+          _needs_refresh = true;
         }
       } else if (entry.is_importable) {
         if (ImGui::Selectable(label.c_str(), is_entry_selected(state, entry.path))) {

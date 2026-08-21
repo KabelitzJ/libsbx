@@ -133,6 +133,7 @@ editor_module::editor_module()
   _initialize_backends();
   _upload_fonts();
   _apply_style();
+  _create_panels();
 
   auto& render_module = sbx::core::engine::get_module<sbx::render::render_module>();
 
@@ -223,10 +224,9 @@ auto editor_module::_build_ui_frame() -> void {
   ImGui::Text("%.1f FPS (%.3f ms)", static_cast<double>(ImGui::GetIO().Framerate), 1000.0 / static_cast<double>(ImGui::GetIO().Framerate));
   ImGui::End();
 
-  draw_hierarchy_panel(_state);
-  draw_properties_panel(_state);
-  draw_asset_browser_panel(_state);
-  draw_logger_panel();
+  for (auto& panel : _panels) {
+    panel->draw(_state);
+  }
 
   ImGui::Render();
 }
@@ -531,6 +531,13 @@ auto editor_module::_apply_style() -> void {
     color.y = color.y <= 0.04045f ? color.y / 12.92f : std::pow((color.y + 0.055f) / 1.055f, 2.4f);
     color.z = color.z <= 0.04045f ? color.z / 12.92f : std::pow((color.z + 0.055f) / 1.055f, 2.4f);
   }
+}
+
+auto editor_module::_create_panels() -> void {
+  _panels.push_back(std::make_unique<hierarchy_panel>());
+  _panels.push_back(std::make_unique<properties_panel>());
+  _panels.push_back(std::make_unique<asset_browser_panel>());
+  _panels.push_back(std::make_unique<logger_panel>());
 }
 
 auto editor_module::_draw_dockspace() -> void {

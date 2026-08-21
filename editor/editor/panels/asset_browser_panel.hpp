@@ -3,16 +3,47 @@
 #ifndef EDITOR_PANELS_ASSET_BROWSER_PANEL_HPP_
 #define EDITOR_PANELS_ASSET_BROWSER_PANEL_HPP_
 
-#include <editor/editor_state.hpp>
+#include <filesystem>
+#include <vector>
+
+#include <libsbx/math/uuid.hpp>
+
+#include <editor/panels/editor_panel.hpp>
 
 namespace editor {
+
+/** @brief One row cached by the Asset Browser for the currently browsed directory. */
+struct asset_browser_entry {
+  std::filesystem::path path{}; // project-relative
+  bool is_directory{false};
+  asset_kind kind{asset_kind::unknown};
+  bool is_importable{false};
+  sbx::math::uuid id{sbx::math::uuid::nil()}; // resolved lazily, on click
+}; // struct asset_browser_entry
 
 /**
  * @brief Draws the "Asset Browser" panel: a two-pane view of the active project's assets
  * directory (folder tree left, current folder's contents right). Clicking an importable file
- * registers it with assets_module and selects it in @p state; clicking a folder navigates into it.
+ * registers it with assets_module and selects it in the shared editor_state; clicking a folder
+ * navigates into it. Which directory is browsed and its cached listing are this panel's own
+ * state — no other panel needs them.
  */
-auto draw_asset_browser_panel(editor_state& state) -> void;
+class asset_browser_panel final : public editor_panel {
+
+public:
+
+  auto draw(editor_state& state) -> void override;
+
+private:
+
+  auto _refresh_entries() -> void;
+  auto _draw_directory_tree(editor_state& state, const std::filesystem::path& absolute_assets_root, const std::filesystem::path& relative_directory) -> void;
+
+  std::filesystem::path _current_directory{}; // project-relative; empty = assets root
+  std::vector<asset_browser_entry> _cached_entries{};
+  bool _needs_refresh{true};
+
+}; // class asset_browser_panel
 
 } // namespace editor
 

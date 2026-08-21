@@ -4,6 +4,7 @@
 #define EDITOR_EDITOR_MODULE_HPP_
 
 #include <cstdint>
+#include <memory>
 #include <utility>
 #include <vector>
 
@@ -21,6 +22,7 @@
 #include <libsbx/render/render_module.hpp>
 
 #include <editor/editor_state.hpp>
+#include <editor/panels/editor_panel.hpp>
 
 namespace editor {
 
@@ -67,6 +69,8 @@ private:
 
   auto _draw_dockspace() -> void;
 
+  auto _create_panels() -> void;
+
   VkDescriptorPool _descriptor_pool{nullptr};
   std::string _ini_file;
 
@@ -79,6 +83,7 @@ private:
   bool _viewport_is_hovered{false};
 
   editor_state _state{};
+  std::vector<std::unique_ptr<editor_panel>> _panels{};
 
 }; // class editor_module
 

@@ -17,7 +17,6 @@
 #include <libsbx/assets/assets_module.hpp>
 
 #include <libsbx/scenes/components.hpp>
-#include <libsbx/scenes/node.hpp>
 #include <libsbx/scenes/scene.hpp>
 #include <libsbx/scenes/scenes_module.hpp>
 
@@ -38,33 +37,6 @@ auto alpha_mode_name(sbx::assets::alpha_mode mode) -> const char* {
   }
 
   return "Unknown";
-}
-
-auto draw_name_field(sbx::scenes::node& node) -> void {
-  static auto buffer = std::array<char, 128u>{};
-  static auto last_id = sbx::math::uuid::nil();
-
-  const auto id = node.id();
-
-  if (id.value() != last_id.value()) {
-    const auto& current_name = node.name();
-    std::strncpy(buffer.data(), current_name.c_str(), buffer.size() - 1u);
-    buffer[buffer.size() - 1u] = '\0';
-    last_id = id;
-  }
-
-  if (ImGui::InputText("Name", buffer.data(), buffer.size())) {
-    // Live-edited into the buffer; committed below once editing finishes.
-  }
-
-  if (ImGui::IsItemDeactivatedAfterEdit()) {
-    // Renaming here does not update scene::_entities_by_name (populated at creation only), so
-    // scene::find(name) can go stale for renamed nodes. Fine: selection/hierarchy key on
-    // entity/id, never name.
-    node.name() = sbx::scenes::tag{std::string{buffer.data()}};
-  }
-
-  ImGui::Text("UUID: %llu", static_cast<unsigned long long>(id.value()));
 }
 
 // A compact, color-coded X/Y/Z row: a label, then three tinted axis buttons (click to reset that
@@ -118,42 +90,6 @@ auto draw_vector3_control(const char* label, std::array<std::float_t, 3u>& value
   ImGui::PopID();
 
   return changed;
-}
-
-auto draw_transform_section(sbx::scenes::node& node) -> void {
-  ImGui::SeparatorText("Transform");
-
-  auto& transform = node.transform();
-
-  auto position = std::array<std::float_t, 3u>{transform.position.x(), transform.position.y(), transform.position.z()};
-
-  if (draw_vector3_control("Position", position, 0.0f, 0.05f)) {
-    transform.position = sbx::math::vector3f{position[0], position[1], position[2]};
-  }
-
-  // Rotation is a quaternion, edited as Euler degrees. Re-deriving Euler from the quaternion every
-  // frame is unstable near gimbal lock, so the working triplet is cached and only re-synced when
-  // something other than this widget changed the quaternion (a reselect, or e.g. the gizmo).
-  static auto last_rotation_id = sbx::math::uuid::nil();
-  static auto last_rotation_quaternion = sbx::math::quaternion::identity;
-  static auto rotation = std::array<std::float_t, 3u>{0.0f, 0.0f, 0.0f};
-
-  if (node.id().value() != last_rotation_id.value() || !(transform.rotation == last_rotation_quaternion)) {
-    const auto euler = sbx::math::quaternion::euler_angles(transform.rotation);
-    rotation = {euler.x(), euler.y(), euler.z()};
-    last_rotation_id = node.id();
-    last_rotation_quaternion = transform.rotation;
-  }
-
-  if (draw_vector3_control("Rotation", rotation, 0.0f, 0.5f)) {
-    transform.rotation = sbx::math::quaternion{sbx::math::vector3f{rotation[0], rotation[1], rotation[2]}};
-    last_rotation_quaternion = transform.rotation;
-  }
-
-  auto scale = std::array<std::float_t, 3u>{transform.scale.x(), transform.scale.y(), transform.scale.z()};
-  if (draw_vector3_control("Scale", scale, 1.0f, 0.05f)) {
-    transform.scale = sbx::math::vector3f{scale[0], scale[1], scale[2]};
-  }
 }
 
 auto draw_color_field(const char* label, sbx::math::color& color) -> void {
@@ -265,9 +201,66 @@ auto draw_skybox_section(sbx::scenes::node& node, sbx::assets::assets_module& as
   ImGui::DragFloat("Intensity", &sky.intensity, 0.05f, 0.0f, 100.0f);
 }
 
-auto draw_node_properties(sbx::scenes::node& node, sbx::assets::assets_module& assets_module) -> void {
-  draw_name_field(node);
-  draw_transform_section(node);
+} // namespace
+
+auto properties_panel::_draw_name_field(sbx::scenes::node& node) -> void {
+  const auto id = node.id();
+
+  if (id.value() != _name_buffer_id.value()) {
+    const auto& current_name = node.name();
+    std::strncpy(_name_buffer.data(), current_name.c_str(), _name_buffer.size() - 1u);
+    _name_buffer[_name_buffer.size() - 1u] = '\0';
+    _name_buffer_id = id;
+  }
+
+  if (ImGui::InputText("Name", _name_buffer.data(), _name_buffer.size())) {
+    // Live-edited into the buffer; committed below once editing finishes.
+  }
+
+  if (ImGui::IsItemDeactivatedAfterEdit()) {
+    // Renaming here does not update scene::_entities_by_name (populated at creation only), so
+    // scene::find(name) can go stale for renamed nodes. Fine: selection/hierarchy key on
+    // entity/id, never name.
+    node.name() = sbx::scenes::tag{std::string{_name_buffer.data()}};
+  }
+
+  ImGui::Text("UUID: %llu", static_cast<unsigned long long>(id.value()));
+}
+
+auto properties_panel::_draw_transform_section(sbx::scenes::node& node) -> void {
+  ImGui::SeparatorText("Transform");
+
+  auto& transform = node.transform();
+
+  auto position = std::array<std::float_t, 3u>{transform.position.x(), transform.position.y(), transform.position.z()};
+
+  if (draw_vector3_control("Position", position, 0.0f, 0.05f)) {
+    transform.position = sbx::math::vector3f{position[0], position[1], position[2]};
+  }
+
+  // See _rotation_node_id/_rotation_cache/_rotation's declarations for why this is cached rather
+  // than re-derived from the quaternion every frame.
+  if (node.id().value() != _rotation_node_id.value() || !(transform.rotation == _rotation_cache)) {
+    const auto euler = sbx::math::quaternion::euler_angles(transform.rotation);
+    _rotation = {euler.x(), euler.y(), euler.z()};
+    _rotation_node_id = node.id();
+    _rotation_cache = transform.rotation;
+  }
+
+  if (draw_vector3_control("Rotation", _rotation, 0.0f, 0.5f)) {
+    transform.rotation = sbx::math::quaternion{sbx::math::vector3f{_rotation[0], _rotation[1], _rotation[2]}};
+    _rotation_cache = transform.rotation;
+  }
+
+  auto scale = std::array<std::float_t, 3u>{transform.scale.x(), transform.scale.y(), transform.scale.z()};
+  if (draw_vector3_control("Scale", scale, 1.0f, 0.05f)) {
+    transform.scale = sbx::math::vector3f{scale[0], scale[1], scale[2]};
+  }
+}
+
+auto properties_panel::_draw_node_properties(sbx::scenes::node& node, sbx::assets::assets_module& assets_module) -> void {
+  _draw_name_field(node);
+  _draw_transform_section(node);
 
   if (node.has_component<sbx::scenes::camera>()) {
     draw_camera_section(node);
@@ -294,30 +287,16 @@ auto draw_node_properties(sbx::scenes::node& node, sbx::assets::assets_module& a
   }
 }
 
-// Caches the handle for whichever asset was selected most recently, so a load is only attempted
-// once per distinct selection rather than every frame — repeatedly calling load_*() per frame is
-// wasteful even when it hits assets_module's cache, and is actively harmful if a load ever fails:
-// without this, a failed load retries the full cook pipeline every single frame, forever.
-struct asset_property_cache {
-  sbx::math::uuid id{sbx::math::uuid::nil()};
-  sbx::assets::texture_handle texture{};
-  sbx::assets::mesh_handle mesh{};
-  sbx::assets::material_handle material{};
-  sbx::assets::environment_map_handle environment_map{};
-}; // struct asset_property_cache
-
-auto draw_asset_properties(const asset_selection& asset, sbx::assets::assets_module& assets_module) -> void {
-  static auto cache = asset_property_cache{};
-
-  if (cache.id.value() != asset.id.value()) {
-    cache = asset_property_cache{};
-    cache.id = asset.id;
+auto properties_panel::_draw_asset_properties(const asset_selection& asset, sbx::assets::assets_module& assets_module) -> void {
+  if (_asset_cache.id.value() != asset.id.value()) {
+    _asset_cache = asset_property_cache{};
+    _asset_cache.id = asset.id;
 
     switch (asset.kind) {
-      case asset_kind::texture: cache.texture = assets_module.load_texture(asset.id); break;
-      case asset_kind::mesh: cache.mesh = assets_module.load_mesh(asset.id); break;
-      case asset_kind::material: cache.material = assets_module.load_material(asset.id); break;
-      case asset_kind::environment_map: cache.environment_map = assets_module.load_environment_map(asset.id); break;
+      case asset_kind::texture: _asset_cache.texture = assets_module.load_texture(asset.id); break;
+      case asset_kind::mesh: _asset_cache.mesh = assets_module.load_mesh(asset.id); break;
+      case asset_kind::material: _asset_cache.material = assets_module.load_material(asset.id); break;
+      case asset_kind::environment_map: _asset_cache.environment_map = assets_module.load_environment_map(asset.id); break;
       case asset_kind::scene:
       case asset_kind::unknown:
         break;
@@ -330,7 +309,7 @@ auto draw_asset_properties(const asset_selection& asset, sbx::assets::assets_mod
   switch (asset.kind) {
     case asset_kind::texture: {
       ImGui::Text("Type: Texture");
-      const auto& handle = cache.texture;
+      const auto& handle = _asset_cache.texture;
       if (handle.is_valid()) {
         ImGui::Text("Bindless Index: %u", handle->index());
         ImGui::Text("Resident: %s", assets_module.is_resident(handle) ? "yes" : "no");
@@ -339,7 +318,7 @@ auto draw_asset_properties(const asset_selection& asset, sbx::assets::assets_mod
     }
     case asset_kind::mesh: {
       ImGui::Text("Type: Mesh");
-      const auto& handle = cache.mesh;
+      const auto& handle = _asset_cache.mesh;
       if (handle.is_valid()) {
         ImGui::Text("Submeshes: %zu", handle->submeshes().size());
         ImGui::Text("Uploaded: %s", handle->is_uploaded() ? "yes" : "no");
@@ -348,7 +327,7 @@ auto draw_asset_properties(const asset_selection& asset, sbx::assets::assets_mod
     }
     case asset_kind::material: {
       ImGui::Text("Type: Material");
-      const auto& handle = cache.material;
+      const auto& handle = _asset_cache.material;
       if (handle.is_valid()) {
         ImGui::Text("Name: %s", handle->name().c_str());
 
@@ -382,7 +361,7 @@ auto draw_asset_properties(const asset_selection& asset, sbx::assets::assets_mod
     }
     case asset_kind::environment_map: {
       ImGui::Text("Type: Environment Map");
-      const auto& handle = cache.environment_map;
+      const auto& handle = _asset_cache.environment_map;
       if (handle.is_valid()) {
         const auto is_baked = handle->radiance_index() != sbx::assets::environment_map::invalid_index &&
                                handle->irradiance_index() != sbx::assets::environment_map::invalid_index &&
@@ -403,9 +382,7 @@ auto draw_asset_properties(const asset_selection& asset, sbx::assets::assets_mod
   }
 }
 
-} // namespace
-
-auto draw_properties_panel(editor_state& state) -> void {
+auto properties_panel::draw(editor_state& state) -> void {
   ImGui::Begin(ICON_MDI_TUNE " Properties###properties_panel");
 
   auto& assets_module = sbx::core::engine::get_module<sbx::assets::assets_module>();
@@ -414,14 +391,14 @@ auto draw_properties_panel(editor_state& state) -> void {
     auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
 
     if (auto node = state.selected_node(scenes_module.active_scene()); node.is_valid()) {
-      draw_node_properties(node, assets_module);
+      _draw_node_properties(node, assets_module);
     } else {
       // The selected entity no longer exists (e.g. deleted); fall back to the empty state.
       state.clear_selection();
       ImGui::TextDisabled("Nothing selected.");
     }
   } else if (const auto* asset = std::get_if<asset_selection>(&state.current_selection); asset != nullptr) {
-    draw_asset_properties(*asset, assets_module);
+    _draw_asset_properties(*asset, assets_module);
   } else {
     ImGui::TextDisabled("Nothing selected.");
   }

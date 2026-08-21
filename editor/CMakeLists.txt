@@ -29,6 +29,7 @@ target_sources(
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/application.hpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/editor_state.hpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/fly_camera.hpp"
+    "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/panels/editor_panel.hpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/panels/hierarchy_panel.hpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/panels/properties_panel.hpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/panels/asset_browser_panel.hpp"

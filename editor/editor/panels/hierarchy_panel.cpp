@@ -17,6 +17,19 @@ namespace editor {
 
 namespace {
 
+// Matches the same glyphs Properties uses as each component's section-header icon, so a node's
+// row here and its component sections there always agree. Checked in a fixed priority order —
+// a node with more than one of these just shows the first match.
+auto icon_for(const sbx::scenes::node& node) -> const char* {
+  if (node.has_component<sbx::scenes::camera>()) return ICON_MDI_CAMERA_OUTLINE;
+  if (node.has_component<sbx::scenes::directional_light>()) return ICON_MDI_WHITE_BALANCE_SUNNY;
+  if (node.has_component<sbx::scenes::point_light>()) return ICON_MDI_LIGHTBULB_OUTLINE;
+  if (node.has_component<sbx::scenes::spot_light>()) return ICON_MDI_FLASHLIGHT;
+  if (node.has_component<sbx::scenes::skybox>()) return ICON_MDI_EARTH;
+  if (node.has_component<sbx::scenes::mesh_renderer>()) return ICON_MDI_CUBE_OUTLINE;
+  return ICON_MDI_AXIS_ARROW; // plain transform/group node — no renderable/functional component
+}
+
 auto draw_node_row(editor_state& state, sbx::scenes::scene& scene, sbx::ecs::entity entity) -> void {
   auto node = scene.node_of(entity);
 
@@ -39,7 +52,7 @@ auto draw_node_row(editor_state& state, sbx::scenes::scene& scene, sbx::ecs::ent
 
   ImGui::PushID(static_cast<int>(entity));
 
-  const auto is_open = ImGui::TreeNodeEx("##node_row", flags, "%s %s", ICON_MDI_CUBE_OUTLINE, tag.c_str());
+  const auto is_open = ImGui::TreeNodeEx("##node_row", flags, "%s %s", icon_for(node), tag.c_str());
 
   if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
     state.select_node(entity);

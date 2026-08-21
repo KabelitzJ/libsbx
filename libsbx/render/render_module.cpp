@@ -514,7 +514,7 @@ auto render_module::_prepare_frame(render_context& context) -> void {
 
   auto& registry = graphics_module.resource_registry();
 
-  const auto aspect = static_cast<float>(context.extent.x()) / static_cast<float>(context.extent.y());
+  const auto aspect = static_cast<std::float_t>(context.extent.x()) / static_cast<std::float_t>(context.extent.y());
   const auto projection = math::matrix4x4::perspective(math::degree{context.packet->camera.fov_degrees}, aspect, context.packet->camera.near_plane, context.packet->camera.far_plane);
 
   const auto light_count = std::min(static_cast<std::uint32_t>(context.packet->lights.size()), light_capacity);

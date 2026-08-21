@@ -158,6 +158,13 @@ inline auto make_logger(std::string name) -> spdlog::logger {
 }
 
 /**
+ * @brief Discards every line currently held by the in-memory ring buffer sink.
+ */
+inline auto clear_logged_lines() -> void {
+  detail::logger_context::instance().ring_buffer()->clear();
+}
+
+/**
  * @brief A tagged logger. Every tag owns a lightweight spdlog::logger named
  * after it; all of them share the global sinks. The tag is rendered by the
  * sink pattern (%n), so messages are formatted exactly once and only when the

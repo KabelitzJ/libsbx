@@ -16,6 +16,7 @@
 
 #include <editor/panels/asset_browser_panel.hpp>
 #include <editor/panels/hierarchy_panel.hpp>
+#include <editor/panels/logger_panel.hpp>
 #include <editor/panels/properties_panel.hpp>
 
 #include <editor/viewport_gizmo.hpp>
@@ -225,6 +226,7 @@ auto editor_module::_build_ui_frame() -> void {
   draw_hierarchy_panel(_state);
   draw_properties_panel(_state);
   draw_asset_browser_panel(_state);
+  draw_logger_panel();
 
   ImGui::Render();
 }

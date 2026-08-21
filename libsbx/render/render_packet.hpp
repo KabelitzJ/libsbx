@@ -62,9 +62,9 @@ struct draw_command {
 struct camera_data {
   math::matrix4x4 view{math::matrix4x4::identity};
   math::vector3f position{0.0f, 0.0f, 0.0f};
-  float fov_degrees{60.0f};
-  float near_plane{0.1f};
-  float far_plane{1000.0f};
+  std::float_t fov_degrees{60.0f};
+  std::float_t near_plane{0.1f};
+  std::float_t far_plane{1000.0f};
   bool is_active{false};
 }; // struct camera_data
 
@@ -79,8 +79,8 @@ struct light_data {
   math::vector4 position{0.0f, 0.0f, 0.0f, 0.0f}; // xyz + range in w
   math::vector4 direction{0.0f, 0.0f, -1.0f, 0.0f};
   light_type type{light_type::directional};
-  float inner_cos{0.0f};
-  float outer_cos{0.0f};
+  std::float_t inner_cos{0.0f};
+  std::float_t outer_cos{0.0f};
   std::uint32_t padding{0u};
 }; // struct light_data
 

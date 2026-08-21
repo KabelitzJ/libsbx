@@ -70,7 +70,7 @@ auto draw_name_field(sbx::scenes::node& node) -> void {
 // A compact, color-coded X/Y/Z row: a label, then three tinted axis buttons (click to reset that
 // axis to reset_value) each immediately followed by its own drag field. Returns true if any axis
 // changed this frame.
-auto draw_vector3_control(const char* label, std::array<float, 3u>& values, float reset_value, float speed) -> bool {
+auto draw_vector3_control(const char* label, std::array<std::float_t, 3u>& values, std::float_t reset_value, std::float_t speed) -> bool {
   static constexpr auto axis_labels = std::array<const char*, 3u>{"X", "Y", "Z"};
   static constexpr auto axis_ids = std::array<const char*, 3u>{"##X", "##Y", "##Z"};
   static constexpr auto axis_colors = std::array<ImVec4, 3u>{
@@ -125,7 +125,7 @@ auto draw_transform_section(sbx::scenes::node& node) -> void {
 
   auto& transform = node.transform();
 
-  auto position = std::array<float, 3u>{transform.position.x(), transform.position.y(), transform.position.z()};
+  auto position = std::array<std::float_t, 3u>{transform.position.x(), transform.position.y(), transform.position.z()};
 
   if (draw_vector3_control("Position", position, 0.0f, 0.05f)) {
     transform.position = sbx::math::vector3f{position[0], position[1], position[2]};
@@ -136,7 +136,7 @@ auto draw_transform_section(sbx::scenes::node& node) -> void {
   // something other than this widget changed the quaternion (a reselect, or e.g. the gizmo).
   static auto last_rotation_id = sbx::math::uuid::nil();
   static auto last_rotation_quaternion = sbx::math::quaternion::identity;
-  static auto rotation = std::array<float, 3u>{0.0f, 0.0f, 0.0f};
+  static auto rotation = std::array<std::float_t, 3u>{0.0f, 0.0f, 0.0f};
 
   if (node.id().value() != last_rotation_id.value() || !(transform.rotation == last_rotation_quaternion)) {
     const auto euler = sbx::math::quaternion::euler_angles(transform.rotation);
@@ -150,14 +150,14 @@ auto draw_transform_section(sbx::scenes::node& node) -> void {
     last_rotation_quaternion = transform.rotation;
   }
 
-  auto scale = std::array<float, 3u>{transform.scale.x(), transform.scale.y(), transform.scale.z()};
+  auto scale = std::array<std::float_t, 3u>{transform.scale.x(), transform.scale.y(), transform.scale.z()};
   if (draw_vector3_control("Scale", scale, 1.0f, 0.05f)) {
     transform.scale = sbx::math::vector3f{scale[0], scale[1], scale[2]};
   }
 }
 
 auto draw_color_field(const char* label, sbx::math::color& color) -> void {
-  auto value = std::array<float, 4u>{color.r(), color.g(), color.b(), color.a()};
+  auto value = std::array<std::float_t, 4u>{color.r(), color.g(), color.b(), color.a()};
   if (ImGui::ColorEdit4(label, value.data())) {
     color.r() = value[0];
     color.g() = value[1];

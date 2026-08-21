@@ -1484,7 +1484,7 @@ auto assets_module::_cook_environment_map(const std::filesystem::path& source, c
     return false;
   }
 
-  const auto data_size = static_cast<std::uint32_t>(width) * static_cast<std::uint32_t>(height) * 4u * static_cast<std::uint32_t>(sizeof(float));
+  const auto data_size = static_cast<std::uint32_t>(width) * static_cast<std::uint32_t>(height) * 4u * static_cast<std::uint32_t>(sizeof(std::float_t));
 
   const auto header = texture_header{environment_magic, environment_version, static_cast<std::uint32_t>(width), static_cast<std::uint32_t>(height), 4u, data_size};
 

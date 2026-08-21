@@ -102,9 +102,9 @@ auto draw_viewport_gizmo(editor_state& state, const ImVec2& viewport_origin, con
       }
     }
 
-    auto translation = std::array<float, 3u>{};
-    auto rotation = std::array<float, 3u>{}; // degrees
-    auto scale = std::array<float, 3u>{};
+    auto translation = std::array<std::float_t, 3u>{};
+    auto rotation = std::array<std::float_t, 3u>{}; // degrees
+    auto scale = std::array<std::float_t, 3u>{};
 
     ImGuizmo::DecomposeMatrixToComponents(local_matrix.data(), translation.data(), rotation.data(), scale.data());
 

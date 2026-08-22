@@ -44,7 +44,7 @@ private:
     sbx::assets::environment_map_handle environment_map{};
   }; // struct asset_property_cache
 
-  auto _draw_node_properties(sbx::scenes::node& node, sbx::assets::assets_module& assets_module) -> void;
+  auto _draw_node_properties(editor_state& state, sbx::scenes::node& node, sbx::assets::assets_module& assets_module) -> void;
   auto _draw_name_field(sbx::scenes::node& node) -> void;
   auto _draw_transform_section(sbx::scenes::node& node) -> void;
   auto _draw_asset_properties(const asset_selection& asset, sbx::assets::assets_module& assets_module) -> void;

@@ -2,7 +2,9 @@
 // Copyright (c) 2026 Jonas Kabelitz
 #include <editor/panels/properties_panel.hpp>
 
+#include <algorithm>
 #include <array>
+#include <cctype>
 #include <cstring>
 #include <filesystem>
 #include <string_view>
@@ -34,6 +36,34 @@ auto path_text(const sbx::assets::assets_module& assets_module, const sbx::math:
   return path.empty() ? std::string{"(unknown)"} : path.string();
 }
 
+// Just the file name — for compact picker-button labels; path_text's full path is one hover away
+// via a tooltip instead.
+auto short_label(const sbx::assets::assets_module& assets_module, const sbx::math::uuid& id) -> std::string {
+  const auto path = assets_module.path_of(id);
+  return path.empty() ? std::string{"(unknown)"} : path.filename().string();
+}
+
+// path_of() returns whatever path an asset was originally import()-ed with, which is already
+// fully resolved (assets_directory() baked in) — not relative to assets_directory() the way
+// asset_selection::path and every load_*(path)/save_material destination argument need. Empty
+// (unknown asset, or somehow outside assets_directory() entirely) maps to an empty path.
+auto relative_asset_path(const sbx::assets::assets_module& assets_module, const sbx::math::uuid& id) -> std::filesystem::path {
+  const auto path = assets_module.path_of(id);
+
+  if (path.empty()) {
+    return {};
+  }
+
+  auto& project = sbx::core::engine::project();
+  const auto relative = std::filesystem::relative(path, project.assets_directory());
+
+  if (relative.empty() || relative.begin()->string() == "..") {
+    return {};
+  }
+
+  return relative;
+}
+
 // Recursively collects every file under root whose extension matches. Used by the asset pickers
 // below — rescanned fresh each time a popup opens (the lists are small; this only runs while a
 // popup is open, never per-frame).
@@ -49,20 +79,65 @@ auto collect_files_with_extension(const std::filesystem::path& root, std::string
   }
 }
 
-// A button showing the slot's current material's path (mesh_renderer.materials is the source of
-// truth — no "override vs default" distinction to display). Opens a popup listing every
-// ".material" file under the project's assets directory, plus — when mesh_default is valid — a
-// "Reset to Mesh Default" entry that reseeds the slot from the mesh's own submesh material.
-auto draw_material_picker(const char* popup_id, sbx::assets::material_handle& slot, sbx::assets::assets_module& assets_module, const sbx::assets::material_handle& mesh_default = {}) -> void {
+// Case-insensitive substring test, for the picker popups' filter boxes below.
+auto contains_ignore_case(std::string_view haystack, std::string_view needle) -> bool {
+  const auto to_lower = [](std::string_view text) -> std::string {
+    auto result = std::string{text};
+    std::ranges::transform(result, result.begin(), [](unsigned char character) { return static_cast<char>(std::tolower(character)); });
+    return result;
+  };
+
+  return to_lower(haystack).find(to_lower(needle)) != std::string::npos;
+}
+
+// A button showing the slot's current material's file name (full path on hover — see short_label)
+// — mesh_renderer.materials is the source of truth, so there's no "override vs default"
+// distinction to display. Opens a popup with a filter box, "Reset to Mesh Default" (when
+// mesh_default is valid — reseeds the slot from the mesh's own submesh material), and every
+// ".material" file under the project's assets directory. A second small button next to it jumps
+// Properties straight to that material's own editable view.
+auto draw_material_picker(editor_state& state, const char* popup_id, sbx::assets::material_handle& slot, sbx::assets::assets_module& assets_module, const sbx::assets::material_handle& mesh_default = {}) -> void {
   // popup_id (e.g. "##albedo_picker") appended so multiple pickers showing the same label — most
   // commonly several empty "(none)" slots at once — don't collide on ImGui's label-derived ID.
-  const auto label = (slot.is_valid() ? path_text(assets_module, slot->id()) : std::string{"(none)"}) + popup_id;
+  const auto label = (slot.is_valid() ? short_label(assets_module, slot->id()) : std::string{"(none)"}) + popup_id;
 
   if (ImGui::Button(label.c_str())) {
     ImGui::OpenPopup(popup_id);
   }
 
+  if (slot.is_valid() && ImGui::IsItemHovered()) {
+    ImGui::SetTooltip("%s", path_text(assets_module, slot->id()).c_str());
+  }
+
+  if (slot.is_valid()) {
+    ImGui::SameLine();
+
+    if (ImGui::Button((std::string{ICON_MDI_ARROW_RIGHT_BOX} + popup_id + "_edit").c_str())) {
+      state.select_asset(slot->id(), relative_asset_path(assets_module, slot->id()), asset_kind::material);
+    }
+
+    if (ImGui::IsItemHovered()) {
+      ImGui::SetTooltip("Edit this material");
+    }
+  }
+
+  // Fixed width so the popup doesn't reflow (and the filter box along with it) as filtering
+  // changes which entries — and therefore how wide the widest visible one is — are shown.
+  ImGui::SetNextWindowSize(ImVec2{320.0f, 0.0f}, ImGuiCond_Always);
+
   if (ImGui::BeginPopup(popup_id)) {
+    // Reset whenever a *different* picker's popup opens, so leftover text doesn't carry over.
+    static auto filter_buffer = std::array<char, 128u>{};
+    static auto last_popup_id = std::string{};
+
+    if (last_popup_id != popup_id) {
+      filter_buffer[0] = '\0';
+      last_popup_id = popup_id;
+    }
+
+    ImGui::SetNextItemWidth(-1.0f);
+    ImGui::InputTextWithHint("##filter", "Filter...", filter_buffer.data(), filter_buffer.size());
+
     if (mesh_default.is_valid() && ImGui::MenuItem("Reset to Mesh Default")) {
       slot = mesh_default;
     }
@@ -73,8 +148,13 @@ auto draw_material_picker(const char* popup_id, sbx::assets::material_handle& sl
 
     for (const auto& file : files) {
       const auto relative = std::filesystem::relative(file, project.assets_directory());
+      const auto relative_string = relative.string();
 
-      if (ImGui::MenuItem(relative.string().c_str())) {
+      if (filter_buffer[0] != '\0' && !contains_ignore_case(relative_string, filter_buffer.data())) {
+        continue;
+      }
+
+      if (ImGui::MenuItem(relative_string.c_str())) {
         // load_material(path) resolves relative against assets_directory() internally and
         // reuses the file's real uuid if it's already imported — calling import(relative)
         // directly here would mint a second, broken uuid keyed on an unresolved path.
@@ -94,21 +174,7 @@ auto draw_material_picker(const char* popup_id, sbx::assets::material_handle& sl
 auto extract_material_to_asset(sbx::assets::assets_module& assets_module, const sbx::assets::material_handle& source, const sbx::math::uuid& mesh_id) -> sbx::assets::material_handle {
   auto& project = sbx::core::engine::project();
 
-  // path_of() returns whatever path the mesh was originally import()-ed with, which for a
-  // gltf-loaded mesh is already resolved to an absolute/root path (assets_directory() prepended
-  // during load), not one relative to assets_directory() the way asset_browser's own entries are
-  // — so it has to be re-relativized here (same as draw_material_picker/draw_texture_picker do for
-  // their own directory listings) rather than joined onto assets_directory() a second time.
-  const auto mesh_path = assets_module.path_of(mesh_id);
-  auto directory = std::filesystem::path{};
-
-  if (!mesh_path.empty()) {
-    const auto relative = std::filesystem::relative(mesh_path, project.assets_directory());
-
-    if (!relative.empty() && relative.begin()->string() != "..") {
-      directory = relative.parent_path();
-    }
-  }
+  const auto directory = relative_asset_path(assets_module, mesh_id).parent_path();
 
   auto info = sbx::assets::material::create_info{};
   info.name = source->name();
@@ -141,18 +207,41 @@ auto extract_material_to_asset(sbx::assets::assets_module& assets_module, const 
 // Same idea as draw_material_picker, for a material's texture slots. format matches the same
 // per-slot convention assets_module::load_material already uses (srgb for albedo/emissive, unorm
 // for normal/metallic_roughness/occlusion).
-auto draw_texture_picker(const char* popup_id, sbx::assets::texture_handle& slot, sbx::assets::assets_module& assets_module, sbx::graphics::format format) -> void {
+auto draw_texture_picker(const char* popup_id, sbx::assets::texture_handle& slot, sbx::assets::assets_module& assets_module, sbx::graphics::format format) -> bool {
+  auto changed = false;
+
   // popup_id appended so multiple pickers showing the same label (most commonly several empty
   // "(none)" slots at once) don't collide on ImGui's label-derived ID.
-  const auto label = (slot.is_valid() ? path_text(assets_module, slot->id()) : std::string{"(none)"}) + popup_id;
+  const auto label = (slot.is_valid() ? short_label(assets_module, slot->id()) : std::string{"(none)"}) + popup_id;
 
   if (ImGui::Button(label.c_str())) {
     ImGui::OpenPopup(popup_id);
   }
 
+  if (slot.is_valid() && ImGui::IsItemHovered()) {
+    ImGui::SetTooltip("%s", path_text(assets_module, slot->id()).c_str());
+  }
+
+  // Fixed width so the popup doesn't reflow (and the filter box along with it) as filtering
+  // changes which entries — and therefore how wide the widest visible one is — are shown.
+  ImGui::SetNextWindowSize(ImVec2{320.0f, 0.0f}, ImGuiCond_Always);
+
   if (ImGui::BeginPopup(popup_id)) {
+    // Reset whenever a *different* picker's popup opens, so leftover text doesn't carry over.
+    static auto filter_buffer = std::array<char, 128u>{};
+    static auto last_popup_id = std::string{};
+
+    if (last_popup_id != popup_id) {
+      filter_buffer[0] = '\0';
+      last_popup_id = popup_id;
+    }
+
+    ImGui::SetNextItemWidth(-1.0f);
+    ImGui::InputTextWithHint("##filter", "Filter...", filter_buffer.data(), filter_buffer.size());
+
     if (ImGui::MenuItem("(None)")) {
       slot = sbx::assets::texture_handle{};
+      changed = true;
     }
 
     auto& project = sbx::core::engine::project();
@@ -163,9 +252,83 @@ auto draw_texture_picker(const char* popup_id, sbx::assets::texture_handle& slot
 
     for (const auto& file : files) {
       const auto relative = std::filesystem::relative(file, project.assets_directory());
+      const auto relative_string = relative.string();
 
-      if (ImGui::MenuItem(relative.string().c_str())) {
+      if (filter_buffer[0] != '\0' && !contains_ignore_case(relative_string, filter_buffer.data())) {
+        continue;
+      }
+
+      if (ImGui::MenuItem(relative_string.c_str())) {
         slot = assets_module.load_texture(relative, format);
+        changed = true;
+      }
+    }
+
+    ImGui::EndPopup();
+  }
+
+  return changed;
+}
+
+// Same idea as draw_material_picker, for mesh_renderer.mesh. Doesn't touch renderer.materials
+// itself when a different mesh is picked — draw_mesh_renderer_section detects the change and
+// clears it so sync_materials_with_mesh reseeds cleanly from the new mesh's own submeshes, rather
+// than keeping stale entries left over from whatever mesh was assigned before.
+auto draw_mesh_picker(editor_state& state, const char* popup_id, sbx::assets::mesh_handle& slot, sbx::assets::assets_module& assets_module) -> void {
+  const auto label = (slot.is_valid() ? short_label(assets_module, slot->id()) : std::string{"(none)"}) + popup_id;
+
+  if (ImGui::Button(label.c_str())) {
+    ImGui::OpenPopup(popup_id);
+  }
+
+  if (slot.is_valid() && ImGui::IsItemHovered()) {
+    ImGui::SetTooltip("%s", path_text(assets_module, slot->id()).c_str());
+  }
+
+  if (slot.is_valid()) {
+    ImGui::SameLine();
+
+    if (ImGui::Button((std::string{ICON_MDI_ARROW_RIGHT_BOX} + popup_id + "_edit").c_str())) {
+      state.select_asset(slot->id(), relative_asset_path(assets_module, slot->id()), asset_kind::mesh);
+    }
+
+    if (ImGui::IsItemHovered()) {
+      ImGui::SetTooltip("Edit this mesh");
+    }
+  }
+
+  // Fixed width so the popup doesn't reflow (and the filter box along with it) as filtering
+  // changes which entries — and therefore how wide the widest visible one is — are shown.
+  ImGui::SetNextWindowSize(ImVec2{320.0f, 0.0f}, ImGuiCond_Always);
+
+  if (ImGui::BeginPopup(popup_id)) {
+    // Reset whenever a *different* picker's popup opens, so leftover text doesn't carry over.
+    static auto filter_buffer = std::array<char, 128u>{};
+    static auto last_popup_id = std::string{};
+
+    if (last_popup_id != popup_id) {
+      filter_buffer[0] = '\0';
+      last_popup_id = popup_id;
+    }
+
+    ImGui::SetNextItemWidth(-1.0f);
+    ImGui::InputTextWithHint("##filter", "Filter...", filter_buffer.data(), filter_buffer.size());
+
+    auto& project = sbx::core::engine::project();
+    auto files = std::vector<std::filesystem::path>{};
+    collect_files_with_extension(project.assets_directory(), ".gltf", files);
+    collect_files_with_extension(project.assets_directory(), ".glb", files);
+
+    for (const auto& file : files) {
+      const auto relative = std::filesystem::relative(file, project.assets_directory());
+      const auto relative_string = relative.string();
+
+      if (filter_buffer[0] != '\0' && !contains_ignore_case(relative_string, filter_buffer.data())) {
+        continue;
+      }
+
+      if (ImGui::MenuItem(relative_string.c_str())) {
+        slot = assets_module.load_mesh(relative);
       }
     }
 
@@ -226,14 +389,19 @@ auto draw_vector3_control(const char* label, std::array<std::float_t, 3u>& value
   return changed;
 }
 
-auto draw_color_field(const char* label, sbx::math::color& color) -> void {
+auto draw_color_field(const char* label, sbx::math::color& color) -> bool {
   auto value = std::array<std::float_t, 4u>{color.r(), color.g(), color.b(), color.a()};
-  if (ImGui::ColorEdit4(label, value.data())) {
-    color.r() = value[0];
-    color.g() = value[1];
-    color.b() = value[2];
-    color.a() = value[3];
+
+  if (!ImGui::ColorEdit4(label, value.data())) {
+    return false;
   }
+
+  color.r() = value[0];
+  color.g() = value[1];
+  color.b() = value[2];
+  color.a() = value[3];
+
+  return true;
 }
 
 auto draw_camera_section(sbx::scenes::node& node) -> void {
@@ -257,7 +425,7 @@ auto draw_camera_section(sbx::scenes::node& node) -> void {
   ImGui::DragFloat("Far Plane", &camera.far_plane, 1.0f, camera.near_plane, 100000.0f);
 }
 
-auto draw_mesh_renderer_section(sbx::scenes::node& node, sbx::assets::assets_module& assets_module) -> void {
+auto draw_mesh_renderer_section(editor_state& state, sbx::scenes::node& node, sbx::assets::assets_module& assets_module) -> void {
   auto is_open = true;
 
   const auto is_expanded = ImGui::CollapsingHeader(ICON_MDI_CUBE_OUTLINE " Mesh Renderer", &is_open, ImGuiTreeNodeFlags_DefaultOpen);
@@ -273,13 +441,26 @@ auto draw_mesh_renderer_section(sbx::scenes::node& node, sbx::assets::assets_mod
 
   auto& renderer = node.get_component<sbx::scenes::mesh_renderer>();
 
+  const auto previous_mesh_id = renderer.mesh.is_valid() ? renderer.mesh->id() : sbx::math::uuid::nil();
+
+  ImGui::Text("Mesh:");
+  ImGui::SameLine();
+  draw_mesh_picker(state, "##mesh_picker_popup", renderer.mesh, assets_module);
+
+  const auto new_mesh_id = renderer.mesh.is_valid() ? renderer.mesh->id() : sbx::math::uuid::nil();
+
+  if (new_mesh_id != previous_mesh_id) {
+    // A different mesh was just picked — its own submeshes' materials should take over cleanly,
+    // not share slots (by index) with whatever the previous mesh happened to have.
+    renderer.materials.clear();
+  }
+
   sbx::scenes::sync_materials_with_mesh(renderer);
 
   if (renderer.mesh.is_valid()) {
-    ImGui::Text("Mesh: %s", path_text(assets_module, renderer.mesh->id()).c_str());
     ImGui::Text("Submeshes: %zu", renderer.mesh->submeshes().size());
   } else {
-    ImGui::TextDisabled("Mesh: (none)");
+    ImGui::TextDisabled("No mesh assigned.");
   }
 
   for (auto index = std::size_t{0u}; index < renderer.materials.size(); ++index) {
@@ -292,7 +473,7 @@ auto draw_mesh_renderer_section(sbx::scenes::node& node, sbx::assets::assets_mod
 
     ImGui::Text("Material %zu:", index);
     ImGui::SameLine();
-    draw_material_picker("##material_picker_popup", slot, assets_module, mesh_default);
+    draw_material_picker(state, "##material_picker_popup", slot, assets_module, mesh_default);
 
     if (slot.is_valid()) {
       ImGui::SameLine();
@@ -498,7 +679,7 @@ auto properties_panel::_draw_transform_section(sbx::scenes::node& node) -> void 
   }
 }
 
-auto properties_panel::_draw_node_properties(sbx::scenes::node& node, sbx::assets::assets_module& assets_module) -> void {
+auto properties_panel::_draw_node_properties(editor_state& state, sbx::scenes::node& node, sbx::assets::assets_module& assets_module) -> void {
   _draw_name_field(node);
   _draw_transform_section(node);
 
@@ -507,7 +688,7 @@ auto properties_panel::_draw_node_properties(sbx::scenes::node& node, sbx::asset
   }
 
   if (node.has_component<sbx::scenes::mesh_renderer>()) {
-    draw_mesh_renderer_section(node, assets_module);
+    draw_mesh_renderer_section(state, node, assets_module);
   }
 
   if (node.has_component<sbx::scenes::directional_light>()) {
@@ -536,66 +717,75 @@ auto properties_panel::_draw_material_properties(const asset_selection& asset, s
     return;
   }
 
+  auto changed = false;
+
   auto name_buffer = std::array<char, 128u>{};
   std::strncpy(name_buffer.data(), _material_edit.name.c_str(), name_buffer.size() - 1u);
   name_buffer[name_buffer.size() - 1u] = '\0';
 
   if (ImGui::InputText("Name", name_buffer.data(), name_buffer.size())) {
     _material_edit.name = std::string{name_buffer.data()};
+    changed = true;
   }
 
-  draw_color_field("Base Color", _material_edit.base_color_factor);
+  changed |= draw_color_field("Base Color", _material_edit.base_color_factor);
 
   auto emissive = std::array<std::float_t, 3u>{_material_edit.emissive_factor.x(), _material_edit.emissive_factor.y(), _material_edit.emissive_factor.z()};
   if (ImGui::ColorEdit3("Emissive", emissive.data())) {
     _material_edit.emissive_factor = sbx::math::vector3{emissive[0], emissive[1], emissive[2]};
+    changed = true;
   }
 
-  ImGui::DragFloat("Metallic", &_material_edit.metallic_factor, 0.01f, 0.0f, 1.0f);
-  ImGui::DragFloat("Roughness", &_material_edit.roughness_factor, 0.01f, 0.0f, 1.0f);
+  changed |= ImGui::DragFloat("Metallic", &_material_edit.metallic_factor, 0.01f, 0.0f, 1.0f);
+  changed |= ImGui::DragFloat("Roughness", &_material_edit.roughness_factor, 0.01f, 0.0f, 1.0f);
 
   static constexpr auto alpha_mode_names = std::array<const char*, 3u>{"Opaque", "Mask", "Blend"};
   auto alpha_index = static_cast<int>(_material_edit.alpha);
 
   if (ImGui::Combo("Alpha Mode", &alpha_index, alpha_mode_names.data(), static_cast<int>(alpha_mode_names.size()))) {
     _material_edit.alpha = static_cast<sbx::assets::alpha_mode>(alpha_index);
+    changed = true;
   }
 
   if (_material_edit.alpha == sbx::assets::alpha_mode::mask) {
-    ImGui::DragFloat("Alpha Cutoff", &_material_edit.alpha_cutoff, 0.01f, 0.0f, 1.0f);
+    changed |= ImGui::DragFloat("Alpha Cutoff", &_material_edit.alpha_cutoff, 0.01f, 0.0f, 1.0f);
   }
 
-  ImGui::Checkbox("Double Sided", &_material_edit.is_double_sided);
+  changed |= ImGui::Checkbox("Double Sided", &_material_edit.is_double_sided);
 
   ImGui::SeparatorText("Textures");
 
   ImGui::Text("Albedo");
   ImGui::SameLine();
-  draw_texture_picker("##albedo_picker", _material_edit.albedo, assets_module, sbx::graphics::format::r8g8b8a8_srgb);
+  changed |= draw_texture_picker("##albedo_picker", _material_edit.albedo, assets_module, sbx::graphics::format::r8g8b8a8_srgb);
 
   ImGui::Text("Normal");
   ImGui::SameLine();
-  draw_texture_picker("##normal_picker", _material_edit.normal, assets_module, sbx::graphics::format::r8g8b8a8_unorm);
+  changed |= draw_texture_picker("##normal_picker", _material_edit.normal, assets_module, sbx::graphics::format::r8g8b8a8_unorm);
 
   ImGui::Text("Metallic/Roughness");
   ImGui::SameLine();
-  draw_texture_picker("##metallic_roughness_picker", _material_edit.metallic_roughness, assets_module, sbx::graphics::format::r8g8b8a8_unorm);
+  changed |= draw_texture_picker("##metallic_roughness_picker", _material_edit.metallic_roughness, assets_module, sbx::graphics::format::r8g8b8a8_unorm);
 
   ImGui::Text("Occlusion");
   ImGui::SameLine();
-  draw_texture_picker("##occlusion_picker", _material_edit.occlusion, assets_module, sbx::graphics::format::r8g8b8a8_unorm);
+  changed |= draw_texture_picker("##occlusion_picker", _material_edit.occlusion, assets_module, sbx::graphics::format::r8g8b8a8_unorm);
 
   ImGui::Text("Emissive");
   ImGui::SameLine();
-  draw_texture_picker("##emissive_picker", _material_edit.emissive, assets_module, sbx::graphics::format::r8g8b8a8_srgb);
+  changed |= draw_texture_picker("##emissive_picker", _material_edit.emissive, assets_module, sbx::graphics::format::r8g8b8a8_srgb);
+
+  if (changed) {
+    // Live preview: mutates the material in place immediately, so every material_handle already
+    // pointing at it (e.g. a mesh_renderer slot elsewhere in the scene) reflects the edit on the
+    // very next frame — no Save needed to see it. Persisting to disk stays an explicit action
+    // (below): writing the file on every drag tick/keystroke would be wasteful.
+    assets_module.update_material(_asset_cache.material, _material_edit);
+  }
 
   ImGui::Separator();
 
   if (ImGui::Button(ICON_MDI_CONTENT_SAVE " Save")) {
-    // Mutates the existing record in place — every material_handle already pointing at it (e.g. a
-    // mesh_renderer's material slot elsewhere in the scene) picks up the change immediately, with
-    // no reload needed. save_material then persists that state to disk.
-    assets_module.update_material(_asset_cache.material, _material_edit);
     assets_module.save_material(_asset_cache.material, asset.path);
   }
 }
@@ -693,7 +883,7 @@ auto properties_panel::draw(editor_state& state) -> void {
     auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
 
     if (auto node = state.selected_node(scenes_module.active_scene()); node.is_valid()) {
-      _draw_node_properties(node, assets_module);
+      _draw_node_properties(state, node, assets_module);
     } else {
       // The selected node no longer exists (e.g. deleted); fall back to the empty state.
       state.clear_selection();

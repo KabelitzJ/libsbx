@@ -526,6 +526,16 @@ auto assets_module::update_material(material_handle& material, const material::c
   material->_occlusion = create_info.occlusion;
   material->_emissive = create_info.emissive;
   material->_name = create_info.name;
+
+  // _register_material only ever queues a GPU buffer upload once, at creation time — without
+  // re-queuing here, an in-place edit updates the CPU-side object but the renderer keeps reading
+  // the stale material_data it already uploaded. _materials is indexed by material::index(), the
+  // same slot _register_material itself pushed to, so this is the same shared_ptr, not a copy.
+  auto lock = std::lock_guard{_mutex};
+
+  if (material->index() < _materials.size()) {
+    _pending_materials.push_back(pending_material_upload{_materials[material->index()]});
+  }
 }
 
 auto assets_module::save_material(material_handle& material, const std::filesystem::path& path) -> math::uuid {

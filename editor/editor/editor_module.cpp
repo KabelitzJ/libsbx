@@ -24,6 +24,9 @@
 
 #include <libsbx/core/engine.hpp>
 
+#include <libsbx/scenes/scene.hpp>
+#include <libsbx/scenes/scenes_module.hpp>
+
 #include <libsbx/graphics/frame_context.hpp>
 #include <libsbx/graphics/validate.hpp>
 #include <libsbx/graphics/devices/swapchain.hpp>
@@ -561,6 +564,17 @@ auto editor_module::_draw_dockspace() -> void {
     if (ImGui::BeginMenu("File")) {
       if (ImGui::MenuItem("Quit")) {
         sbx::core::engine::quit();
+      }
+
+      ImGui::EndMenu();
+    }
+
+    if (ImGui::BeginMenu("Scene")) {
+      if (ImGui::MenuItem(ICON_MDI_PLUS " Add Node")) {
+        auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
+        auto& scene = scenes_module.active_scene();
+
+        _state.select_node(scene.create_node());
       }
 
       ImGui::EndMenu();

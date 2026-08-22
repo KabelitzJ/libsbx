@@ -59,10 +59,9 @@ auto hierarchy_panel::_draw_node_row(editor_state& state, sbx::scenes::scene& sc
   }
 
   if (ImGui::BeginPopupContextItem("##node_context")) {
-    if (ImGui::MenuItem(ICON_MDI_PLUS " Create Child Node")) {
-      auto child = scene.create_node();
-      child.set_parent(node);
-      state.select_node(child);
+    if (ImGui::MenuItem(ICON_MDI_PLUS " Add Child")) {
+      // Deferred — see _pending_add_child_parent_id's declaration for why this can't happen here.
+      _pending_add_child_parent_id = node.id();
     }
 
     if (ImGui::MenuItem(ICON_MDI_DELETE " Delete Node")) {
@@ -89,12 +88,6 @@ auto hierarchy_panel::draw(editor_state& state) -> void {
   auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
   auto& scene = scenes_module.active_scene();
 
-  if (ImGui::Button(ICON_MDI_PLUS " Create Node")) {
-    state.select_node(scene.create_node());
-  }
-
-  ImGui::Separator();
-
   auto has_any = false;
 
   for (const auto entity : scene.query<sbx::scenes::relationship>()) {
@@ -112,6 +105,16 @@ auto hierarchy_panel::draw(editor_state& state) -> void {
     state.clear_selection();
   }
 
+  // Right-click on empty space (below/between rows, never over a row — that's each row's own
+  // ##node_context popup) adds a new top-level node.
+  if (ImGui::BeginPopupContextWindow("##hierarchy_context", ImGuiPopupFlags_MouseButtonRight | ImGuiPopupFlags_NoOpenOverItems)) {
+    if (ImGui::MenuItem(ICON_MDI_PLUS " Add Node")) {
+      state.select_node(scene.create_node());
+    }
+
+    ImGui::EndPopup();
+  }
+
   if (ImGui::IsWindowHovered() && ImGui::IsKeyPressed(ImGuiKey_Delete, false)) {
     if (auto selected = state.selected_node(scene); selected.is_valid()) {
       _pending_delete_id = selected.id();
@@ -124,6 +127,16 @@ auto hierarchy_panel::draw(editor_state& state) -> void {
     }
 
     _pending_delete_id = sbx::math::uuid::nil();
+  }
+
+  if (_pending_add_child_parent_id != sbx::math::uuid::nil()) {
+    if (auto parent = scene.find(_pending_add_child_parent_id); parent.is_valid()) {
+      auto child = scene.create_node();
+      child.set_parent(parent);
+      state.select_node(child);
+    }
+
+    _pending_add_child_parent_id = sbx::math::uuid::nil();
   }
 
   ImGui::End();

@@ -28,10 +28,8 @@ private:
 
   auto _draw_node_row(editor_state& state, sbx::scenes::scene& scene, sbx::ecs::entity entity) -> void;
 
-  // Set by a row's "Delete Node" context-menu item, resolved and destroyed once after the whole
-  // tree has been walked (deleting mid-walk would mutate relationship.children out from under the
-  // recursion). A uuid, not an entity — see editor_state::node_selection for why.
   sbx::math::uuid _pending_delete_id{sbx::math::uuid::nil()};
+  sbx::math::uuid _pending_add_child_parent_id{sbx::math::uuid::nil()};
 
 }; // class hierarchy_panel
 

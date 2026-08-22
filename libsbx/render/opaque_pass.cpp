@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Jonas Kabelitz
-#include <libsbx/render/geometry_pass.hpp>
+#include <libsbx/render/opaque_pass.hpp>
 
 #include <array>
 #include <cstddef>
@@ -20,7 +20,7 @@
 
 namespace sbx::render {
 
-geometry_pass::geometry_pass() {
+opaque_pass::opaque_pass() {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 
   auto& shader_cache = graphics_module.shader_cache();
@@ -33,8 +33,8 @@ geometry_pass::geometry_pass() {
 
   const auto& shader = shader_cache.get({"shaders/pbr/geometry.slang", entry_points});
 
-  const auto make = [&](bool is_transparent, graphics::cull_mode cull, const std::string& name) {
-    auto info = graphics::graphics_pipeline::create_info{
+  const auto make = [&](graphics::cull_mode cull, const std::string& name) {
+    return pipeline_cache.get(graphics::graphics_pipeline::create_info{
       .shader = shader,
       .color_formats = {render_pass::hdr_format},
       .depth_format = graphics::format::d32_sfloat,
@@ -45,30 +45,14 @@ geometry_pass::geometry_pass() {
       .depth_compare = graphics::compare_operation::less_or_equal,
       .samples = render_pass::sample_count,
       .name = name
-    };
-
-    if (is_transparent) {
-      info.color_blend_attachments = {graphics::blend_attachment{
-        .enable = true,
-        .source_color = graphics::blend_factor::source_alpha,
-        .destination_color = graphics::blend_factor::one_minus_source_alpha,
-        .color_operation = graphics::blend_operation::add,
-        .source_alpha = graphics::blend_factor::one,
-        .destination_alpha = graphics::blend_factor::one_minus_source_alpha,
-        .alpha_operation = graphics::blend_operation::add
-      }};
-    }
-
-    return pipeline_cache.get(info);
+    });
   };
 
-  _opaque_pipelines[0] = make(false, graphics::cull_mode::back, "Mesh Opaque");
-  _opaque_pipelines[1] = make(false, graphics::cull_mode::none, "Mesh Opaque Double-Sided");
-  _transparent_pipelines[0] = make(true, graphics::cull_mode::back, "Mesh Transparent");
-  _transparent_pipelines[1] = make(true, graphics::cull_mode::none, "Mesh Transparent Double-Sided");
+  _pipelines[0] = make(graphics::cull_mode::back, "Mesh Opaque");
+  _pipelines[1] = make(graphics::cull_mode::none, "Mesh Opaque Double-Sided");
 }
 
-auto geometry_pass::execute(render_context& context) -> void {
+auto opaque_pass::execute(render_context& context) -> void {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 
   auto& registry = graphics_module.resource_registry();
@@ -147,8 +131,7 @@ auto geometry_pass::execute(render_context& context) -> void {
 
   bind_globals(context);
 
-  submit_draw_commands(context, context.packet->opaque_commands, _opaque_pipelines);
-  submit_draw_commands(context, context.packet->transparent_commands, _transparent_pipelines);
+  submit_draw_commands(context, context.packet->opaque_commands, _pipelines);
 
   context.command_buffer->end_rendering();
 }

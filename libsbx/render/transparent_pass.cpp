@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Jonas Kabelitz
-#include <libsbx/render/skybox_pass.hpp>
+#include <libsbx/render/transparent_pass.hpp>
 
 #include <array>
 #include <cstddef>
@@ -20,14 +20,7 @@
 
 namespace sbx::render {
 
-struct skybox_push {
-  math::matrix4x4 inverse_view_projection;
-  math::vector4 camera_position;
-  std::uint32_t environment_index;
-  std::uint32_t sampler_index;
-}; // struct skybox_push
-
-skybox_pass::skybox_pass() {
+transparent_pass::transparent_pass() {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 
   auto& shader_cache = graphics_module.shader_cache();
@@ -38,22 +31,42 @@ skybox_pass::skybox_pass() {
     {VK_SHADER_STAGE_FRAGMENT_BIT, "fragment_main"}
   };
 
-  const auto& shader = shader_cache.get({"shaders/pbr/skybox.slang", entry_points});
+  const auto& shader = shader_cache.get({"shaders/pbr/geometry.slang", entry_points});
 
-  _pipeline = pipeline_cache.get(graphics::graphics_pipeline::create_info{
-    .shader = shader,
-    .color_formats = {render_pass::hdr_format},
-    .depth_format = graphics::format::d32_sfloat,
-    .cull_mode = graphics::cull_mode::none,
-    .depth_test = true,
-    .depth_write = false,
-    .depth_compare = graphics::compare_operation::less_or_equal,
-    .samples = render_pass::sample_count,
-    .name = "Skybox"
-  });
+  const auto make = [&](graphics::cull_mode cull, const std::string& name) {
+    auto info = graphics::graphics_pipeline::create_info{
+      .shader = shader,
+      .color_formats = {render_pass::hdr_format},
+      .depth_format = graphics::format::d32_sfloat,
+      .cull_mode = cull,
+      .front_face = graphics::front_face::counter_clockwise,
+      .depth_test = true,
+      .depth_write = false,
+      .depth_compare = graphics::compare_operation::less_or_equal,
+      .samples = render_pass::sample_count,
+      .name = name
+    };
+
+    info.color_blend_attachments = {graphics::blend_attachment{
+      .enable = true,
+      .source_color = graphics::blend_factor::source_alpha,
+      .destination_color = graphics::blend_factor::one_minus_source_alpha,
+      .color_operation = graphics::blend_operation::add,
+      .source_alpha = graphics::blend_factor::one,
+      .destination_alpha = graphics::blend_factor::one_minus_source_alpha,
+      .alpha_operation = graphics::blend_operation::add
+    }};
+
+    return pipeline_cache.get(info);
+  };
+
+  // [0]: single-sided, also reused for the front-faces half of double-sided draws (same GPU
+  // state — see class doc comment). [1]: double-sided back-faces half only.
+  _pipelines[0] = make(graphics::cull_mode::back, "Mesh Transparent");
+  _pipelines[1] = make(graphics::cull_mode::front, "Mesh Transparent Double-Sided Back-Faces");
 }
 
-auto skybox_pass::execute(render_context& context) -> void {
+auto transparent_pass::execute(render_context& context) -> void {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 
   if (!context.packet->camera.is_active) {
@@ -61,12 +74,16 @@ auto skybox_pass::execute(render_context& context) -> void {
   }
 
   auto& registry = graphics_module.resource_registry();
-  auto& bindless_table = graphics_module.bindless_table();
 
   auto& color = registry.get<graphics::image>(context.color);
   auto& depth = registry.get<graphics::image>(context.depth);
   auto& color_msaa = registry.get<graphics::image>(context.color_msaa);
 
+  // Continuation barriers, not fresh transitions — color is already color_attachment_optimal
+  // (opaque_pass/skybox_pass wrote it this frame), depth is already depth_attachment_optimal
+  // (opaque_pass transitioned it). Pattern copied from skybox_pass, which runs in the same
+  // "after something already wrote color this frame" position; no depth barrier needed either,
+  // for the same reason skybox_pass doesn't need one.
   auto to_color = graphics::command_buffer::image_transition_data{};
   to_color.image = color_msaa;
   to_color.src_stage_mask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
@@ -117,18 +134,10 @@ auto skybox_pass::execute(render_context& context) -> void {
   rendering_info.pDepthAttachment = &depth_attachment;
 
   context.command_buffer->begin_rendering(rendering_info);
+
   bind_globals(context);
 
-  context.command_buffer->bind_pipeline(*_pipeline);
-
-  auto values = skybox_push{context.inverse_view_projection, math::vector4{context.packet->camera.position, 1.0f}, context.environment_index, context.sampler_index};
-
-  auto range = std::array<std::byte, graphics::bindless_table::push_constant_size>{};
-  std::memcpy(range.data(), &values, sizeof(values));
-
-  context.command_buffer->push_constants(bindless_table.pipeline_layout(), graphics::bindless_table::push_constant_stages, 0u, range);
-
-  context.command_buffer->draw(3u, 1u, 0u, 0u);
+  submit_draw_commands(context, context.packet->transparent_commands, _pipelines);
 
   context.command_buffer->end_rendering();
 }

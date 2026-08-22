@@ -37,10 +37,11 @@
 #include <libsbx/scenes/components.hpp>
 
 #include <libsbx/render/depth_pre_pass.hpp>
-#include <libsbx/render/geometry_pass.hpp>
+#include <libsbx/render/opaque_pass.hpp>
 #include <libsbx/render/present_pass.hpp>
 #include <libsbx/render/skybox_pass.hpp>
 #include <libsbx/render/tonemap_pass.hpp>
+#include <libsbx/render/transparent_pass.hpp>
 
 namespace sbx::render {
 
@@ -82,8 +83,9 @@ render_module::render_module() {
 
   // Creation order = execution order in the render thread.
   _passes.push_back(std::make_unique<depth_pre_pass>());
-  _passes.push_back(std::make_unique<geometry_pass>());
-  _passes.push_back(std::make_unique<skybox_pass>());
+  _passes.push_back(std::make_unique<opaque_pass>());
+  _passes.push_back(std::make_unique<skybox_pass>()); // after opaque, before transparent — see skybox_pass doc comment
+  _passes.push_back(std::make_unique<transparent_pass>());
   _passes.push_back(std::make_unique<tonemap_pass>());
 
   _composite_pass = std::make_unique<present_pass>();
@@ -197,7 +199,16 @@ auto render_module::_build_packet() -> render_packet {
         const auto to_camera = packet.camera.position - math::vector3f{world.matrix[3]};
         const auto depth = to_camera.length_squared();
 
-        transparent.push_back(transparent_entry{renderer.mesh, index, material, pipeline_id, world.matrix, depth});
+        if (material->is_double_sided()) {
+          // Two draws, same depth key: back faces (pipeline 1, cull_mode::front) must land
+          // before front faces (pipeline 0, the same pipeline single-sided objects use) so the
+          // shell composites correctly against itself. stable_sort below preserves this push
+          // order once the cross-object depth sort runs.
+          transparent.push_back(transparent_entry{renderer.mesh, index, material, 1u, world.matrix, depth});
+          transparent.push_back(transparent_entry{renderer.mesh, index, material, 0u, world.matrix, depth});
+        } else {
+          transparent.push_back(transparent_entry{renderer.mesh, index, material, 0u, world.matrix, depth});
+        }
       } else {
         auto& bucket = opaque[mesh_key{renderer.mesh->id(), index, material->id()}];
         bucket.mesh = renderer.mesh;
@@ -224,7 +235,10 @@ auto render_module::_build_packet() -> render_packet {
     packet.opaque_commands.push_back(std::move(command));
   }
 
-  std::ranges::sort(transparent, std::greater<>{}, &transparent_entry::depth);
+  // stable_sort: the double-sided pair pushed above shares an identical depth key, and
+  // std::ranges::sort isn't guaranteed stable — an unstable sort could swap them and break the
+  // back-faces-before-front-faces guarantee for that object.
+  std::ranges::stable_sort(transparent, std::greater<>{}, &transparent_entry::depth);
 
   packet.transparent_commands.reserve(transparent.size());
 

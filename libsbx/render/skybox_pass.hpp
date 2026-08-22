@@ -14,8 +14,18 @@
 
 namespace sbx::render {
 
-/** 
- * @brief Skybox pass: renders the skybox environment. 
+/**
+ * @brief Skybox pass: renders the skybox environment.
+ *
+ * Runs between opaque_pass and transparent_pass, not after (it used to run last): the skybox is
+ * a full-screen triangle whose depth is pushed to exactly the far plane and tested less-or-equal
+ * against the pre-pass depth, so it only lands on pixels no opaque geometry claimed. Transparent
+ * draws never write depth, so a pixel behind a transparent fragment still reads as "empty"
+ * (far-plane depth) to that test. Running the skybox after transparent meant it passed that test
+ * on exactly those pixels and unconditionally overwrote the (non-blending) skybox pipeline over
+ * whatever transparent had already blended there — transparent objects were invisible wherever
+ * only sky was behind them. Drawing it before transparent instead makes it part of what
+ * transparent blends against.
  */
 class skybox_pass final : public render_pass {
 

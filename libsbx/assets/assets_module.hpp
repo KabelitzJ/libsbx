@@ -185,12 +185,10 @@ private:
 
   inline static constexpr auto material_capacity = std::uint32_t{1024u};
 
-  // IBL bake sizes. The prefiltered cube is a real mip chain now (continuous roughness -> LOD),
-  // not N discrete images, so these fix the base resolution and how many mips it carries.
+  // IBL bake sizes. The prefiltered cube is a real mip chain now, not N discrete images, so these fix the base resolution and how many mips it carries.
   inline static constexpr auto radiance_cube_size = std::uint32_t{512u};
-  inline static constexpr auto irradiance_cube_size = std::uint32_t{32u};
-  inline static constexpr auto prefiltered_cube_size = std::uint32_t{128u};
-  inline static constexpr auto prefiltered_mip_count = std::uint32_t{6u};
+  inline static constexpr auto irradiance_cube_size = std::uint32_t{64u};
+  inline static constexpr auto prefiltered_cube_size = std::uint32_t{512u};
   inline static constexpr auto brdf_lut_size = std::uint32_t{512u};
 
   struct cooked_submesh {
@@ -274,6 +272,14 @@ private:
   [[nodiscard]] static auto _derive_material_uuid(const math::uuid& mesh, std::size_t index) -> math::uuid;
 
   /**
+   * @brief Fills in vertices[vertex_start, vertex_start + vertex_count)'s tangents from scratch,
+   * for a glTF primitive that didn't provide its own TANGENT attribute (its normals and UVs must
+   * already be populated). indices[index_start, index_start + index_count) are that primitive's
+   * triangle indices, already offset by vertex_start.
+   */
+  static auto _generate_tangents(std::vector<vertex>& vertices, const std::vector<std::uint32_t>& indices, std::size_t vertex_start, std::size_t vertex_count, std::size_t index_start, std::size_t index_count) -> void;
+
+  /**
    * @brief Turns one gltf-embedded material description into a real, standalone `.material` asset
    * next to the mesh (models/<name>/materials/<material name>.material), reusing one already there
    * instead of overwriting it. Used by _cook_mesh when mesh_import_options::extract_materials.
@@ -305,9 +311,6 @@ private:
 
   /** @brief Bakes the global BRDF LUT into @p command_buffer if it hasn't been baked yet. */
   auto _ensure_brdf_lut(graphics::command_buffer& command_buffer) -> void;
-
-  /** @brief Fills mips 1..N of a cube image by successively blitting each mip from the one below it. */
-  auto _generate_cube_mips(graphics::command_buffer& command_buffer, graphics::image& cube) -> void;
 
   mutable std::mutex _mutex{};
 

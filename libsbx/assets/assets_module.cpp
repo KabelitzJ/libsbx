@@ -68,7 +68,7 @@ inline constexpr auto texture_magic = utility::fourcc_v<"SBTX">;  // 'SBTX'
 inline constexpr auto texture_version = std::uint32_t{1u};
 
 inline constexpr auto mesh_magic = utility::fourcc_v<"SBSH">;   // 'SBSH'
-inline constexpr auto mesh_version = std::uint32_t{4u}; // bumped again: save_material's texture-slot paths were written fully-resolved instead of assets-relative
+inline constexpr auto mesh_version = std::uint32_t{5u}; // bumped again: generate fallback tangents for primitives with no TANGENT attribute (fixes NaN-shading-normal -> whole mesh renders white)
 
 inline constexpr auto material_magic = utility::fourcc_v<"SBMT">; // 'SBMT'
 inline constexpr auto material_version = std::uint32_t{2u};
@@ -681,7 +681,11 @@ auto assets_module::load_environment_map(const math::uuid& id) -> environment_ma
 }
 
 auto assets_module::load_environment_map(const std::filesystem::path& path) -> environment_map_handle {
-  return load_environment_map(import(path));
+  const auto& project = core::engine::project();
+
+  const auto assets_directory = project.assets_directory();
+
+  return load_environment_map(import(assets_directory / path));
 }
 
 auto assets_module::process_uploads(std::uint64_t frame_index) -> void {
@@ -707,10 +711,13 @@ auto assets_module::process_uploads(std::uint64_t frame_index) -> void {
   auto& bindless_table = graphics_module.bindless_table();
 
   for (auto& request : pending_textures) {
+    const auto mip_levels = graphics::image::mip_levels_for(math::vector3u{request.width, request.height, 1u});
+
     const auto handle = registry.emplace<graphics::image>(graphics::image::create_info{
       .extent = math::vector3u{request.width, request.height, 1u},
       .format = request.format,
-      .usage = graphics::image_usage::transfer_destination | graphics::image_usage::sampled,
+      .usage = graphics::image_usage::transfer_destination | graphics::image_usage::transfer_source | graphics::image_usage::sampled,
+      .mip_levels = mip_levels,
       .name = "Texture"
     });
 
@@ -1196,6 +1203,59 @@ auto assets_module::_extract_gltf_material(const material_description& descripti
   return save_material(handle, relative_path);
 }
 
+auto assets_module::_generate_tangents(std::vector<vertex>& vertices, const std::vector<std::uint32_t>& indices, std::size_t vertex_start, std::size_t vertex_count, std::size_t index_start, std::size_t index_count) -> void {
+  // Lengyel's per-triangle method: accumulate a tangent and bitangent per vertex from every
+  // triangle referencing it, then orthogonalize against the (already-populated) normal and derive
+  // handedness from the accumulated bitangent. Standard fallback used by essentially every glTF
+  // importer for primitives that omit their own TANGENT attribute.
+  auto tangent_sum = std::vector<math::vector3f>(vertex_count, math::vector3f::zero);
+  auto bitangent_sum = std::vector<math::vector3f>(vertex_count, math::vector3f::zero);
+
+  for (auto i = std::size_t{0u}; i + 2u < index_count; i += 3u) {
+    const auto i0 = indices[index_start + i];
+    const auto i1 = indices[index_start + i + 1u];
+    const auto i2 = indices[index_start + i + 2u];
+
+    const auto& v0 = vertices[i0];
+    const auto& v1 = vertices[i1];
+    const auto& v2 = vertices[i2];
+
+    const auto edge1 = v1.position - v0.position;
+    const auto edge2 = v2.position - v0.position;
+
+    const auto delta_uv1 = v1.uv - v0.uv;
+    const auto delta_uv2 = v2.uv - v0.uv;
+
+    const auto denom = delta_uv1.x() * delta_uv2.y() - delta_uv2.x() * delta_uv1.y();
+    const auto f = (std::abs(denom) > 1e-8f) ? (1.0f / denom) : 0.0f;
+
+    const auto triangle_tangent = f * (edge1 * delta_uv2.y() - edge2 * delta_uv1.y());
+    const auto triangle_bitangent = f * (edge2 * delta_uv1.x() - edge1 * delta_uv2.x());
+
+    for (const auto index : {i0, i1, i2}) {
+      const auto local = index - static_cast<std::uint32_t>(vertex_start);
+      tangent_sum[local] = tangent_sum[local] + triangle_tangent;
+      bitangent_sum[local] = bitangent_sum[local] + triangle_bitangent;
+    }
+  }
+
+  for (auto local = std::size_t{0u}; local < vertex_count; ++local) {
+    auto& current = vertices[vertex_start + local];
+
+    const auto n = current.normal;
+    auto t = tangent_sum[local] - n * math::vector3f::dot(n, tangent_sum[local]);
+
+    t = (t.length_squared() < 1e-12f) ? math::vector3f::orthogonal(n) : math::vector3f::normalized(t);
+
+    const auto handedness = (math::vector3f::dot(math::vector3f::cross(n, t), bitangent_sum[local]) < 0.0f) ? -1.0f : 1.0f;
+
+    current.tangent[0] = t.x();
+    current.tangent[1] = t.y();
+    current.tangent[2] = t.z();
+    current.tangent[3] = handedness;
+  }
+}
+
 auto assets_module::_cook_mesh(const std::filesystem::path& source, const std::filesystem::path& relative_source, const math::uuid& id, const std::filesystem::path& cooked, const mesh_import_options& options) -> bool {
   auto data = fastgltf::GltfDataBuffer::FromPath(source);
 
@@ -1324,7 +1384,10 @@ auto assets_module::_cook_mesh(const std::filesystem::path& source, const std::f
         });
       }
 
-      if (const auto* tangent = primitive.findAttribute("TANGENT"); tangent != primitive.attributes.end()) {
+      const auto* tangent = primitive.findAttribute("TANGENT");
+      const auto has_explicit_tangent = tangent != primitive.attributes.end();
+
+      if (has_explicit_tangent) {
         fastgltf::iterateAccessorWithIndex<fastgltf::math::fvec4>(gltf, gltf.accessors[tangent->accessorIndex], [&](fastgltf::math::fvec4 value, std::size_t index) {
           const auto world_tangent = world * fastgltf::math::fvec4{value[0], value[1], value[2], 0.0f};
 
@@ -1357,6 +1420,10 @@ auto assets_module::_cook_mesh(const std::filesystem::path& source, const std::f
       fastgltf::iterateAccessor<std::uint32_t>(gltf, index_accessor, [&](std::uint32_t index) {
         indices.push_back(static_cast<std::uint32_t>(vertex_start) + index);
       });
+
+      if (!has_explicit_tangent) {
+        _generate_tangents(vertices, indices, vertex_start, position_accessor.count, index_start, index_accessor.count);
+      }
 
       submeshes.push_back(cooked_submesh{
         static_cast<std::uint32_t>(index_start),
@@ -1590,7 +1657,9 @@ auto assets_module::_cook_environment_map(const std::filesystem::path& source, c
   auto height = std::int32_t{0};
   auto channels = std::int32_t{0};
 
-  auto* data = stbi_loadf(_absolute(source).string().c_str(), &width, &height, &channels, 4);
+  // source (from _paths[uuid]) is already fully resolved — same as _cook_texture's source.string()
+  // just below in this file; wrapping it in _absolute() here would double-prefix assets_directory().
+  auto* data = stbi_loadf(source.string().c_str(), &width, &height, &channels, 4);
 
   if (data == nullptr) {
     utility::logger<"assets">::warn("Cook: could not decode HDR '{}'", source.generic_string());
@@ -1646,86 +1715,6 @@ auto assets_module::_load_cooked_environment_map(const std::filesystem::path& co
   height = header.height;
 
   return true;
-}
-
-auto assets_module::_generate_cube_mips(graphics::command_buffer& command_buffer, graphics::image& cube) -> void {
-  const auto mip_levels = cube.mip_levels();
-
-  if (mip_levels <= 1u) {
-    return;
-  }
-
-  // Mip 0 was just written by a compute shader (layout GENERAL) — make it a valid blit source.
-  auto base_to_source = graphics::command_buffer::image_transition_data{};
-  base_to_source.image = cube.handle();
-  base_to_source.src_stage_mask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
-  base_to_source.src_access_mask = VK_ACCESS_2_SHADER_WRITE_BIT;
-  base_to_source.dst_stage_mask = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
-  base_to_source.dst_access_mask = VK_ACCESS_2_TRANSFER_READ_BIT;
-  base_to_source.old_layout = graphics::image_layout::general;
-  base_to_source.new_layout = graphics::image_layout::transfer_source_optimal;
-  base_to_source.aspect_mask = cube.aspect();
-  base_to_source.layer_count = 6u;
-  command_buffer.transition_image_layout(base_to_source);
-
-  auto width = static_cast<std::int32_t>(cube.extent().x());
-  auto height = static_cast<std::int32_t>(cube.extent().y());
-
-  for (auto mip = std::uint32_t{1u}; mip < mip_levels; ++mip) {
-    const auto source_width = width;
-    const auto source_height = height;
-
-    width = std::max(width / 2, 1);
-    height = std::max(height / 2, 1);
-
-    auto to_destination = graphics::command_buffer::image_transition_data{};
-    to_destination.image = cube.handle();
-    to_destination.src_stage_mask = VK_PIPELINE_STAGE_2_NONE;
-    to_destination.src_access_mask = VK_ACCESS_2_NONE;
-    to_destination.dst_stage_mask = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
-    to_destination.dst_access_mask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
-    to_destination.old_layout = graphics::image_layout::undefined;
-    to_destination.new_layout = graphics::image_layout::transfer_destination_optimal;
-    to_destination.aspect_mask = cube.aspect();
-    to_destination.base_mip_level = mip;
-    to_destination.layer_count = 6u;
-    command_buffer.transition_image_layout(to_destination);
-
-    auto blit = VkImageBlit{};
-    blit.srcSubresource = VkImageSubresourceLayers{VK_IMAGE_ASPECT_COLOR_BIT, mip - 1u, 0u, 6u};
-    blit.srcOffsets[1] = VkOffset3D{source_width, source_height, 1};
-    blit.dstSubresource = VkImageSubresourceLayers{VK_IMAGE_ASPECT_COLOR_BIT, mip, 0u, 6u};
-    blit.dstOffsets[1] = VkOffset3D{width, height, 1};
-
-    vkCmdBlitImage(command_buffer.handle(), cube.handle(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, cube.handle(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1u, &blit, VK_FILTER_LINEAR);
-
-    auto to_source = graphics::command_buffer::image_transition_data{};
-    to_source.image = cube.handle();
-    to_source.src_stage_mask = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
-    to_source.src_access_mask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
-    to_source.dst_stage_mask = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
-    to_source.dst_access_mask = VK_ACCESS_2_TRANSFER_READ_BIT;
-    to_source.old_layout = graphics::image_layout::transfer_destination_optimal;
-    to_source.new_layout = graphics::image_layout::transfer_source_optimal;
-    to_source.aspect_mask = cube.aspect();
-    to_source.base_mip_level = mip;
-    to_source.layer_count = 6u;
-    command_buffer.transition_image_layout(to_source);
-  }
-
-  // Every mip now sits in TRANSFER_SRC_OPTIMAL; move the whole chain to shader-readable in one go.
-  auto to_read = graphics::command_buffer::image_transition_data{};
-  to_read.image = cube.handle();
-  to_read.src_stage_mask = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
-  to_read.src_access_mask = VK_ACCESS_2_TRANSFER_READ_BIT;
-  to_read.dst_stage_mask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
-  to_read.dst_access_mask = VK_ACCESS_2_SHADER_READ_BIT;
-  to_read.old_layout = graphics::image_layout::transfer_source_optimal;
-  to_read.new_layout = graphics::image_layout::shader_read_only_optimal;
-  to_read.aspect_mask = cube.aspect();
-  to_read.mip_levels = mip_levels;
-  to_read.layer_count = 6u;
-  command_buffer.transition_image_layout(to_read);
 }
 
 auto assets_module::_ensure_brdf_lut(graphics::command_buffer& command_buffer) -> void {
@@ -1903,16 +1892,16 @@ auto assets_module::_bake_environment(environment_map& record, const std::vector
 
   const auto radiance_index = bindless_table.register_sampled_image(radiance.view());
 
-  // --- Equirect -> cubemap: a transient, mip-chained cube used only as convolution input below;
-  // never touched by the graphics queue, so plain exclusive sharing (the image default) is fine. ---
-
-  const auto radiance_cube_mip_levels = graphics::image::mip_levels_for(math::vector3u{radiance_cube_size, radiance_cube_size, 1u});
+  // --- Equirect -> cubemap: a transient, single-mip cube used only as convolution input below;
+  // never touched by the graphics queue, so plain exclusive sharing (the image default) is fine.
+  // Single mip, not a chain: both irradiance.slang and prefilter.slang always sample this at mip
+  // 0 (see prefilter.slang's doc comment on why it stopped doing solid-angle-driven mip
+  // selection), so building a mip chain here would just be wasted bake-time work. ---
 
   auto radiance_cube = graphics::image{graphics::image::create_info{
     .extent = math::vector3u{radiance_cube_size, radiance_cube_size, 1u},
     .format = graphics::format::r16g16b16a16_sfloat,
-    .usage = graphics::image_usage::storage | graphics::image_usage::sampled | graphics::image_usage::transfer_source | graphics::image_usage::transfer_destination,
-    .mip_levels = radiance_cube_mip_levels,
+    .usage = graphics::image_usage::storage | graphics::image_usage::sampled,
     .array_layers = 6u,
     .view_type = graphics::image_view_type::cube,
     .name = "Environment Radiance Cube (scratch)"
@@ -1958,7 +1947,19 @@ auto assets_module::_bake_environment(environment_map& record, const std::vector
     command_buffer.dispatch(groups, groups, 6u);
   }
 
-  _generate_cube_mips(command_buffer, radiance_cube);
+  {
+    auto to_read = graphics::command_buffer::image_transition_data{};
+    to_read.image = radiance_cube.handle();
+    to_read.src_stage_mask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+    to_read.src_access_mask = VK_ACCESS_2_SHADER_WRITE_BIT;
+    to_read.dst_stage_mask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+    to_read.dst_access_mask = VK_ACCESS_2_SHADER_READ_BIT;
+    to_read.old_layout = graphics::image_layout::general;
+    to_read.new_layout = graphics::image_layout::shader_read_only_optimal;
+    to_read.aspect_mask = radiance_cube.aspect();
+    to_read.layer_count = 6u;
+    command_buffer.transition_image_layout(to_read);
+  }
 
   const auto radiance_cube_sampled_index = bindless_table.register_sampled_cube(radiance_cube.view());
   pending_sampled.push_back(radiance_cube_sampled_index);
@@ -2023,6 +2024,10 @@ auto assets_module::_bake_environment(environment_map& record, const std::vector
 
   // --- Prefiltered specular: a real mip chain now, one dispatch per mip with a roughness push
   // constant, rather than N unrelated discrete images blended in the shader. ---
+
+  // Full auto chain from prefiltered_cube_size (mip_levels_for isn't constexpr, so this can't be
+  // a class constant) — matches the pre-rework engine's mipmap=true behavior at the same 512 base.
+  const auto prefiltered_mip_count = graphics::image::mip_levels_for(math::vector3u{prefiltered_cube_size, prefiltered_cube_size, 1u});
 
   const auto prefiltered_handle = registry.emplace<graphics::image>(graphics::image::create_info{
     .extent = math::vector3u{prefiltered_cube_size, prefiltered_cube_size, 1u},

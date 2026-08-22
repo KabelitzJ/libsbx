@@ -1,11 +1,8 @@
 {
 	"asset":{
-		"generator":"Khronos glTF Blender I/O v5.1.19",
+		"generator":"Khronos glTF Blender I/O v5.1.18",
 		"version":"2.0"
 	},
-	"extensionsUsed":[
-		"KHR_materials_emissive_strength"
-	],
 	"scene":0,
 	"scenes":[
 		{
@@ -18,7 +15,7 @@
 	"nodes":[
 		{
 			"mesh":0,
-			"name":"helmet",
+			"name":"damaged_helmet",
 			"rotation":[
 				0.70710688829422,
 				0,
@@ -37,12 +34,7 @@
 			"emissiveTexture":{
 				"index":0
 			},
-			"extensions":{
-				"KHR_materials_emissive_strength":{
-					"emissiveStrength":15
-				}
-			},
-			"name":"helmet",
+			"name":"damaged_helmet",
 			"normalTexture":{
 				"index":1
 			},
@@ -61,7 +53,7 @@
 	],
 	"meshes":[
 		{
-			"name":"helmet",
+			"name":"damaged_helmet",
 			"primitives":[
 				{
 					"attributes":{

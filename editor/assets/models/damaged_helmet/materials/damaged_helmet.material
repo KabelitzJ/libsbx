@@ -1,4 +1,4 @@
-name: helmet
+name: damaged_helmet
 base_color_factor: {r: 1, g: 1, b: 1, a: 1}
 emissive_factor: {x: 1, y: 1, z: 1}
 metallic_factor: 1

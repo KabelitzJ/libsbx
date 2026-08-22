@@ -6,30 +6,9 @@
 
 #include <libsbx/graphics/graphics_module.hpp>
 #include <libsbx/graphics/commands/command_buffer.hpp>
+#include <libsbx/graphics/commands/mip_chain.hpp>
 
 namespace sbx::graphics {
-
-struct access_scope {
-  VkPipelineStageFlags2 stage;
-  VkAccessFlags2 access;
-}; // struct access_scope
-
-auto _scope_for_layout(const image_layout layout) -> access_scope {
-  switch (layout) {
-    case image_layout::shader_read_only_optimal: {
-      return access_scope{VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, VK_ACCESS_2_SHADER_READ_BIT};
-    }
-    case image_layout::transfer_source_optimal: {
-      return access_scope{VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_READ_BIT};
-    }
-    case image_layout::transfer_destination_optimal: {
-      return access_scope{VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT};
-    }
-    default: {
-      return access_scope{VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, VK_ACCESS_2_MEMORY_READ_BIT};
-    }
-  }
-}
 
 auto upload_context::stage_image(image_handle destination, std::span<const std::byte> pixels, image_layout final_layout) -> void {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
@@ -51,6 +30,7 @@ auto upload_context::stage_image(image_handle destination, std::span<const std::
     .destination = destination,
     .staging = staging,
     .extent = destination_image.extent(),
+    .mip_levels = destination_image.mip_levels(),
     .array_layers = destination_image.array_layers(),
     .aspect = destination_image.aspect(),
     .final_layout = final_layout
@@ -149,20 +129,30 @@ auto upload_context::flush(command_buffer& commands, std::uint64_t frame_index) 
 
     vkCmdCopyBufferToImage(commands.handle(), staging.handle(), destination_image.handle(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1u, &region);
 
-    const auto final_scope = _scope_for_layout(pending.final_layout);
+    if (pending.mip_levels > 1u) {
+      const auto source = mip_chain_source{
+        .layout = image_layout::transfer_destination_optimal,
+        .stage_mask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+        .access_mask = VK_ACCESS_2_TRANSFER_WRITE_BIT
+      };
 
-    auto to_final = command_buffer::image_transition_data{};
-    to_final.image = destination_image.handle();
-    to_final.src_stage_mask = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
-    to_final.src_access_mask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
-    to_final.dst_stage_mask = final_scope.stage;
-    to_final.dst_access_mask = final_scope.access;
-    to_final.old_layout = image_layout::transfer_destination_optimal;
-    to_final.new_layout = pending.final_layout;
-    to_final.aspect_mask = pending.aspect;
-    to_final.layer_count = pending.array_layers;
+      generate_mip_chain(commands, destination_image, source, pending.final_layout);
+    } else {
+      const auto final_scope = scope_for_layout(pending.final_layout);
 
-    commands.transition_image_layout(to_final);
+      auto to_final = command_buffer::image_transition_data{};
+      to_final.image = destination_image.handle();
+      to_final.src_stage_mask = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
+      to_final.src_access_mask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
+      to_final.dst_stage_mask = final_scope.stage;
+      to_final.dst_access_mask = final_scope.access;
+      to_final.old_layout = image_layout::transfer_destination_optimal;
+      to_final.new_layout = pending.final_layout;
+      to_final.aspect_mask = pending.aspect;
+      to_final.layer_count = pending.array_layers;
+
+      commands.transition_image_layout(to_final);
+    }
 
     registry.retire(pending.staging, frame_index);
   }

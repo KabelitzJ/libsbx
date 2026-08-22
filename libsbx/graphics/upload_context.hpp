@@ -68,6 +68,7 @@ private:
     image_handle destination;
     buffer_handle staging;
     math::vector3u extent;
+    std::uint32_t mip_levels;
     std::uint32_t array_layers;
     VkImageAspectFlags aspect;
     image_layout final_layout;

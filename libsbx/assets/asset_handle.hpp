@@ -16,9 +16,11 @@ class asset_handle {
 
 public:
 
-  using value_type = const std::remove_cvref_t<Type>;
+  using value_type = std::remove_cvref_t<Type>;
   using pointer = value_type*;
+  using const_pointer = const value_type*;
   using reference = value_type&;
+  using const_reference = const value_type&;
 
   asset_handle() = default;
 
@@ -33,15 +35,27 @@ public:
     return is_valid();
   }
 
-  [[nodiscard]] auto operator->() const noexcept -> pointer {
+  [[nodiscard]] auto operator->() const noexcept -> const_pointer {
     return _record.get();
   }
 
-  [[nodiscard]] auto operator*() const noexcept -> reference {
+  [[nodiscard]] auto operator->() noexcept -> pointer {
+    return _record.get();
+  }
+
+  [[nodiscard]] auto operator*() const noexcept -> const_reference {
     return *_record;
   }
 
-  [[nodiscard]] auto get() const noexcept -> pointer {
+  [[nodiscard]] auto operator*() noexcept -> reference {
+    return *_record;
+  }
+
+  [[nodiscard]] auto get() const noexcept -> const_pointer {
+    return _record.get();
+  }
+
+  [[nodiscard]] auto get() noexcept -> pointer {
     return _record.get();
   }
 

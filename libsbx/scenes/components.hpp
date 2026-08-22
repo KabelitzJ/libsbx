@@ -100,11 +100,39 @@ struct camera {
 
 /**
  * @brief What a node draws. Holds runtime handles for now; becomes asset uuids in F3.
+ *
+ * materials is the sole source of truth for what each submesh renders with — there is no
+ * render-time fallback to the mesh's own per-submesh material. See sync_materials_with_mesh().
  */
 struct mesh_renderer {
   assets::mesh_handle mesh{};
   std::vector<assets::material_handle> materials{};
 }; // struct mesh_renderer
+
+/**
+ * @brief Resizes materials to match the mesh's current submesh count and seeds any slot that's
+ * still unset (default-constructed/invalid) from that submesh's own material. Never touches a
+ * slot that already has a value — mesh_renderer.materials is the source of truth once set; this
+ * only fills in gaps (a freshly assigned mesh, or a mesh whose submesh count grew). No-op if no
+ * mesh is assigned yet.
+ */
+inline auto sync_materials_with_mesh(mesh_renderer& renderer) -> void {
+  if (!renderer.mesh.is_valid()) {
+    return;
+  }
+
+  const auto& submeshes = renderer.mesh->submeshes();
+
+  if (renderer.materials.size() < submeshes.size()) {
+    renderer.materials.resize(submeshes.size());
+  }
+
+  for (auto index = std::size_t{0u}; index < submeshes.size(); ++index) {
+    if (!renderer.materials[index].is_valid()) {
+      renderer.materials[index] = submeshes[index].material;
+    }
+  }
+}
 
 struct directional_light {
   math::color color{1.0f, 1.0f, 1.0f, 1.0f};

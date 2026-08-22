@@ -15,7 +15,6 @@
 
 namespace editor {
 
-namespace {
 
 // Matches the same glyphs Properties uses as each component's section-header icon, so a node's
 // row here and its component sections there always agree. Checked in a fixed priority order —
@@ -30,7 +29,8 @@ auto icon_for(const sbx::scenes::node& node) -> const char* {
   return ICON_MDI_AXIS_ARROW; // plain transform/group node — no renderable/functional component
 }
 
-auto draw_node_row(editor_state& state, sbx::scenes::scene& scene, sbx::ecs::entity entity) -> void {
+
+auto hierarchy_panel::_draw_node_row(editor_state& state, sbx::scenes::scene& scene, sbx::ecs::entity entity) -> void {
   auto node = scene.node_of(entity);
 
   if (!node.is_valid()) {
@@ -46,7 +46,7 @@ auto draw_node_row(editor_state& state, sbx::scenes::scene& scene, sbx::ecs::ent
     flags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
   }
 
-  if (state.is_node_selected(entity)) {
+  if (state.is_node_selected(node)) {
     flags |= ImGuiTreeNodeFlags_Selected;
   }
 
@@ -55,12 +55,26 @@ auto draw_node_row(editor_state& state, sbx::scenes::scene& scene, sbx::ecs::ent
   const auto is_open = ImGui::TreeNodeEx("##node_row", flags, "%s %s", icon_for(node), tag.c_str());
 
   if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
-    state.select_node(entity);
+    state.select_node(node);
+  }
+
+  if (ImGui::BeginPopupContextItem("##node_context")) {
+    if (ImGui::MenuItem(ICON_MDI_PLUS " Create Child Node")) {
+      auto child = scene.create_node();
+      child.set_parent(node);
+      state.select_node(child);
+    }
+
+    if (ImGui::MenuItem(ICON_MDI_DELETE " Delete Node")) {
+      _pending_delete_id = node.id();
+    }
+
+    ImGui::EndPopup();
   }
 
   if (is_open && !relationship.children.empty()) {
     for (const auto child : relationship.children) {
-      draw_node_row(state, scene, child);
+      _draw_node_row(state, scene, child);
     }
 
     ImGui::TreePop();
@@ -69,20 +83,24 @@ auto draw_node_row(editor_state& state, sbx::scenes::scene& scene, sbx::ecs::ent
   ImGui::PopID();
 }
 
-} // namespace
-
 auto hierarchy_panel::draw(editor_state& state) -> void {
   ImGui::Begin(ICON_MDI_FILE_TREE " Hierarchy###hierarchy_panel");
 
   auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
   auto& scene = scenes_module.active_scene();
 
+  if (ImGui::Button(ICON_MDI_PLUS " Create Node")) {
+    state.select_node(scene.create_node());
+  }
+
+  ImGui::Separator();
+
   auto has_any = false;
 
   for (const auto entity : scene.query<sbx::scenes::relationship>()) {
     if (scene.node_of(entity).get_component<sbx::scenes::relationship>().parent == sbx::ecs::null_entity) {
       has_any = true;
-      draw_node_row(state, scene, entity);
+      _draw_node_row(state, scene, entity);
     }
   }
 
@@ -92,6 +110,20 @@ auto hierarchy_panel::draw(editor_state& state) -> void {
 
   if (ImGui::IsWindowHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !ImGui::IsAnyItemHovered()) {
     state.clear_selection();
+  }
+
+  if (ImGui::IsWindowHovered() && ImGui::IsKeyPressed(ImGuiKey_Delete, false)) {
+    if (auto selected = state.selected_node(scene); selected.is_valid()) {
+      _pending_delete_id = selected.id();
+    }
+  }
+
+  if (_pending_delete_id != sbx::math::uuid::nil()) {
+    if (auto target = scene.find(_pending_delete_id); target.is_valid()) {
+      scene.destroy_node(target);
+    }
+
+    _pending_delete_id = sbx::math::uuid::nil();
   }
 
   ImGui::End();

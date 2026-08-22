@@ -9,7 +9,7 @@ namespace editor {
 
 auto editor_state::selected_node(sbx::scenes::scene& scene) const -> sbx::scenes::node {
   if (const auto* selected = std::get_if<node_selection>(&current_selection); selected != nullptr) {
-    if (auto node = scene.node_of(selected->entity); node.is_valid()) {
+    if (auto node = scene.find(selected->id); node.is_valid()) {
       return node;
     }
   }
@@ -17,13 +17,13 @@ auto editor_state::selected_node(sbx::scenes::scene& scene) const -> sbx::scenes
   return sbx::scenes::node{};
 }
 
-auto editor_state::is_node_selected(sbx::ecs::entity entity) const noexcept -> bool {
+auto editor_state::is_node_selected(const sbx::scenes::node& node) const noexcept -> bool {
   const auto* selected = std::get_if<node_selection>(&current_selection);
-  return selected != nullptr && selected->entity == entity;
+  return selected != nullptr && node.is_valid() && selected->id == node.id();
 }
 
-auto editor_state::select_node(sbx::ecs::entity entity) -> void {
-  current_selection = node_selection{entity};
+auto editor_state::select_node(const sbx::scenes::node& node) -> void {
+  current_selection = node_selection{node.id()};
 }
 
 auto editor_state::select_asset(sbx::math::uuid id, std::filesystem::path path, asset_kind kind) -> void {

@@ -8,13 +8,11 @@
 
 namespace sbx::render {
 
-namespace {
 
 auto _render_thread_id = std::atomic<std::thread::id>{};
 
-} // namespace
 
-render_thread::render_thread(core::threading_policy policy, core::delegate<void()> work)
+render_thread::render_thread(const core::threading_policy policy, core::delegate<void()> work)
 : _policy{policy},
   _work{std::move(work)} { }
 

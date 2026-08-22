@@ -7,8 +7,6 @@
 #include <utility>
 #include <variant>
 
-#include <libsbx/ecs/entity.hpp>
-
 #include <libsbx/math/uuid.hpp>
 
 #include <libsbx/scenes/node.hpp>
@@ -31,9 +29,9 @@ enum class asset_kind {
 /** @brief Nothing is selected. */
 struct empty_selection { };
 
-/** @brief A scene node is selected, identified by its (not necessarily stable across reload) entity. */
+/** @brief A scene node is selected, identified by its uuid. */
 struct node_selection {
-  sbx::ecs::entity entity{sbx::ecs::null_entity};
+  sbx::math::uuid id{sbx::math::uuid::nil()};
 }; // struct node_selection
 
 /** @brief An asset file is selected, from the Asset Browser. */
@@ -70,14 +68,15 @@ struct editor_state {
   gizmo_mode current_gizmo_mode{gizmo_mode::world};
 
   /**
-   * @brief Re-resolves the currently selected node (if any) against @p scene. Returns an invalid
-   * node if nothing is selected, the selection isn't a node, or the entity is no longer alive.
+   * @brief Re-resolves the currently selected node (if any) against @p scene, via its uuid.
+   * Returns an invalid node if nothing is selected, the selection isn't a node, or no node with
+   * that uuid exists any more (e.g. it was deleted).
    */
   [[nodiscard]] auto selected_node(sbx::scenes::scene& scene) const -> sbx::scenes::node;
 
-  [[nodiscard]] auto is_node_selected(sbx::ecs::entity entity) const noexcept -> bool;
+  [[nodiscard]] auto is_node_selected(const sbx::scenes::node& node) const noexcept -> bool;
 
-  auto select_node(sbx::ecs::entity entity) -> void;
+  auto select_node(const sbx::scenes::node& node) -> void;
 
   auto select_asset(sbx::math::uuid id, std::filesystem::path path, asset_kind kind) -> void;
 

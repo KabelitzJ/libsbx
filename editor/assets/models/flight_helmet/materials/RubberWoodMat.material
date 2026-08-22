@@ -1,0 +1,12 @@
+name: RubberWoodMat
+base_color_factor: {r: 1, g: 1, b: 1, a: 1}
+emissive_factor: {x: 0, y: 0, z: 0}
+metallic_factor: 1
+roughness_factor: 1
+alpha_mode: opaque
+alpha_cutoff: 0.5
+is_double_sided: false
+albedo: models/flight_helmet/textures/rubber_wood/albedo.png
+normal: models/flight_helmet/textures/rubber_wood/normal.png
+metallic_roughness: models/flight_helmet/textures/rubber_wood/orm.png
+occlusion: models/flight_helmet/textures/rubber_wood/orm.png

@@ -181,9 +181,11 @@ auto render_module::_build_packet() -> render_packet {
     const auto& submeshes = renderer.mesh->submeshes();
 
     for (auto index = std::uint32_t{0u}; index < submeshes.size(); ++index) {
-      const auto& submesh = submeshes[index];
+      if (index >= renderer.materials.size()) {
+        continue;
+      }
 
-      const auto& material = (index < renderer.materials.size() && renderer.materials[index].is_valid()) ? renderer.materials[index] : submesh.material;
+      const auto& material = renderer.materials[index];
 
       if (!material.is_valid()) {
         continue;

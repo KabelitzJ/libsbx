@@ -8,7 +8,6 @@
 
 namespace editor {
 
-namespace {
 
 auto level_color(spdlog::level::level_enum level) -> ImVec4 {
   switch (level) {
@@ -45,7 +44,6 @@ auto trim_eol(const std::string& text) -> std::string_view {
   return view;
 }
 
-} // namespace
 
 auto logger_panel::draw(editor_state&) -> void {
   ImGui::Begin(ICON_MDI_CONSOLE " Console###logger_panel");

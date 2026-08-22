@@ -68,7 +68,7 @@ inline constexpr auto texture_magic = utility::fourcc_v<"SBTX">;  // 'SBTX'
 inline constexpr auto texture_version = std::uint32_t{1u};
 
 inline constexpr auto mesh_magic = utility::fourcc_v<"SBSH">;   // 'SBSH'
-inline constexpr auto mesh_version = std::uint32_t{1u};
+inline constexpr auto mesh_version = std::uint32_t{4u}; // bumped again: save_material's texture-slot paths were written fully-resolved instead of assets-relative
 
 inline constexpr auto material_magic = utility::fourcc_v<"SBMT">; // 'SBMT'
 inline constexpr auto material_version = std::uint32_t{2u};
@@ -78,6 +78,18 @@ inline constexpr auto environment_version = std::uint32_t{1u};
 
 // A mesh cook also emits its materials, so a mesh blob's freshness depends on both cookers.
 inline constexpr auto mesh_cooker_version = mesh_version * 1000u + material_version;
+
+// Strips characters a filename can't contain, for turning a gltf material's (freeform) name into
+// a safe file name when extracting it.
+static auto sanitize_file_name(std::string name) -> std::string {
+  for (auto& character : name) {
+    if (character == '/' || character == '\\' || character == ':' || character == '*' || character == '?' || character == '"' || character == '<' || character == '>' || character == '|') {
+      character = '_';
+    }
+  }
+
+  return name;
+}
 
 // FNV-1a over the file's bytes. Returns 0 on failure (treated as "changed" -> recook).
 static auto hash_file(const std::filesystem::path& path) -> std::uint64_t {
@@ -295,7 +307,7 @@ auto assets_module::load_texture(const std::filesystem::path& path, graphics::fo
   return load_texture(import(assets_directory / path), format);
 }
 
-auto assets_module::load_mesh(const math::uuid& id) -> mesh_handle {
+auto assets_module::load_mesh(const math::uuid& id, const mesh_import_options& options) -> mesh_handle {
   _ensure_manifest_loaded();
 
   {
@@ -325,7 +337,7 @@ auto assets_module::load_mesh(const math::uuid& id) -> mesh_handle {
   const auto cooked = _cooked_path(id, ".sbxmsh");
 
   if (_is_cooked_stale(id, source, cooked, mesh_cooker_version)) {
-    if (!_cook_mesh(source, relative_path, id, cooked)) {
+    if (!_cook_mesh(source, relative_path, id, cooked, options)) {
       return mesh_handle{};
     }
     _record_cook(id, mesh_cooker_version, source);
@@ -337,7 +349,7 @@ auto assets_module::load_mesh(const math::uuid& id) -> mesh_handle {
   auto bounds = math::volume{};
 
   if (!_load_cooked_mesh(cooked, vertices, indices, cooked_submeshes, bounds)) {
-    if (!_cook_mesh(source, relative_path, id, cooked) || !_load_cooked_mesh(cooked, vertices, indices, cooked_submeshes, bounds)) {
+    if (!_cook_mesh(source, relative_path, id, cooked, options) || !_load_cooked_mesh(cooked, vertices, indices, cooked_submeshes, bounds)) {
       utility::logger<"assets">::warn("Could not load cooked mesh '{}'", cooked.generic_string());
 
       return mesh_handle{};
@@ -392,12 +404,12 @@ auto assets_module::load_mesh(const math::uuid& id) -> mesh_handle {
   return mesh_handle{record};
 }
 
-auto assets_module::load_mesh(const std::filesystem::path& path) -> mesh_handle {
+auto assets_module::load_mesh(const std::filesystem::path& path, const mesh_import_options& options) -> mesh_handle {
   const auto& project = core::engine::project();
 
   const auto assets_directory = project.assets_directory();
 
-  return load_mesh(import(assets_directory / path));
+  return load_mesh(import(assets_directory / path), options);
 }
 
 auto assets_module::load_material(const math::uuid& id) -> material_handle {
@@ -496,7 +508,27 @@ auto assets_module::create_material(const material::create_info& create_info) ->
   return _register_material(std::make_shared<material>(create_info));
 }
 
-auto assets_module::save_material(const material_handle& material, const std::filesystem::path& path) -> void {
+auto assets_module::update_material(material_handle& material, const material::create_info& create_info) -> void {
+  if (!material.is_valid()) {
+    return;
+  }
+
+  material->_base_color_factor = create_info.base_color_factor;
+  material->_emissive_factor = create_info.emissive_factor;
+  material->_metallic_factor = create_info.metallic_factor;
+  material->_roughness_factor = create_info.roughness_factor;
+  material->_alpha = create_info.alpha;
+  material->_alpha_cutoff = create_info.alpha_cutoff;
+  material->_is_double_sided = create_info.is_double_sided;
+  material->_albedo = create_info.albedo;
+  material->_normal = create_info.normal;
+  material->_metallic_roughness = create_info.metallic_roughness;
+  material->_occlusion = create_info.occlusion;
+  material->_emissive = create_info.emissive;
+  material->_name = create_info.name;
+}
+
+auto assets_module::save_material(material_handle& material, const std::filesystem::path& path) -> math::uuid {
   const auto& project = core::engine::project();
 
   const auto assets_directory = project.assets_directory();
@@ -505,7 +537,7 @@ auto assets_module::save_material(const material_handle& material, const std::fi
 
   if (!material.is_valid()) {
     utility::logger<"assets">::warn("Cannot save an invalid material to '{}'", resolved_path.generic_string());
-    return;
+    return math::uuid::nil();
   }
 
   const auto path_of = [this](const texture_handle& texture) -> std::optional<std::string> {
@@ -516,7 +548,9 @@ auto assets_module::save_material(const material_handle& material, const std::fi
     auto lock = std::lock_guard{_mutex};
 
     if (const auto entry = _paths.find(texture->id()); entry != _paths.end()) {
-      return entry->second.generic_string();
+      // entry->second is stored fully resolved; the slot needs to hold the assets-relative form
+      // (that's what load_material's own reader passes straight into load_texture(path, ...)).
+      return _relative(entry->second).generic_string();
     }
 
     return std::nullopt; // default/procedural texture (nil uuid) — omit the slot
@@ -560,9 +594,16 @@ auto assets_module::save_material(const material_handle& material, const std::fi
   auto out = std::ofstream{resolved_path};
   out << node;
 
-  import(resolved_path); // register + create the .meta so it's a first-class asset
+  const auto id = import(resolved_path); // register + create the .meta so it's a first-class asset
+
+  // import() is idempotent (returns the existing uuid from .meta on a re-save), so this is always
+  // the right id to stamp onto the record — including the very first save of a create_material()'d
+  // material, which otherwise keeps a nil id forever.
+  material->_id = id;
 
   utility::logger<"assets">::info("Saved material '{}'", resolved_path.generic_string());
+
+  return id;
 }
 
 auto assets_module::load_environment_map(const math::uuid& id) -> environment_map_handle {
@@ -863,6 +904,18 @@ auto assets_module::_absolute(const std::filesystem::path& relative) -> std::fil
   return project.assets_directory() / relative;
 }
 
+// The inverse of _absolute — an already-resolved (cwd-openable) path back to one relative to
+// assets_directory(), for writing into a place (like a .material file's texture slots) that's
+// meant to hold the assets-relative form. _paths entries are stored fully resolved (see
+// assets_module.hpp's class doc comment), so anything read from _paths needs this before being
+// handed to something that expects assets-relative input (load_*(path), save_material's own path
+// argument, ...).
+auto assets_module::_relative(const std::filesystem::path& absolute) -> std::filesystem::path {
+  const auto& project = core::engine::project();
+
+  return std::filesystem::relative(absolute, project.assets_directory());
+}
+
 auto assets_module::_cooked_path(const math::uuid& id, std::string_view extension) const -> std::filesystem::path {
   const auto& project = core::engine::project();
 
@@ -1089,7 +1142,51 @@ auto assets_module::_load_cooked_texture(const std::filesystem::path& cooked, st
   return true;
 }
 
-auto assets_module::_cook_mesh(const std::filesystem::path& source, const std::filesystem::path& relative_source, const math::uuid& id, const std::filesystem::path& cooked) -> bool {
+auto assets_module::_extract_gltf_material(const material_description& description, const std::filesystem::path& relative_source) -> math::uuid {
+  // relative_source (== _cook_mesh's `source`, i.e. _paths[mesh_id]) is already fully resolved —
+  // cwd-openable, with assets_directory() baked in (same convention save_material/load_material's
+  // path overload assume on their *output* side) — but save_material/load_material(path) both
+  // expect a path relative to assets_directory() as *input*, so it has to be re-relativized before
+  // use here, exactly like the editor's extract_material_to_asset does for the same reason.
+  const auto& project = core::engine::project();
+  const auto source_relative = std::filesystem::relative(relative_source, project.assets_directory());
+
+  const auto directory = source_relative.parent_path() / "materials"; // mirrors textures already landing in models/<name>/textures/
+  const auto relative_path = directory / (sanitize_file_name(description.name.empty() ? "material" : description.name) + ".material");
+
+  // Already extracted (possibly hand-edited since a previous cook) — reuse it as-is, never overwrite.
+  if (std::filesystem::exists(_absolute(relative_path))) {
+    if (auto existing = load_material(relative_path); existing.is_valid()) {
+      return existing->id();
+    }
+  }
+
+  auto info = material::create_info{};
+  info.name = description.name.empty() ? "material" : description.name;
+  info.base_color_factor = description.base_color_factor;
+  info.emissive_factor = description.emissive_factor;
+  info.metallic_factor = description.metallic_factor;
+  info.roughness_factor = description.roughness_factor;
+  info.alpha = description.alpha;
+  info.alpha_cutoff = description.alpha_cutoff;
+  info.is_double_sided = description.is_double_sided;
+
+  const auto load_slot = [&](const math::uuid& uuid, graphics::format format) -> texture_handle {
+    return (uuid == math::uuid::nil()) ? texture_handle{} : load_texture(uuid, format);
+  };
+
+  info.albedo = load_slot(description.albedo, graphics::format::r8g8b8a8_srgb);
+  info.normal = load_slot(description.normal, graphics::format::r8g8b8a8_unorm);
+  info.metallic_roughness = load_slot(description.metallic_roughness, graphics::format::r8g8b8a8_unorm);
+  info.occlusion = load_slot(description.occlusion, graphics::format::r8g8b8a8_unorm);
+  info.emissive = load_slot(description.emissive, graphics::format::r8g8b8a8_srgb);
+
+  auto handle = create_material(info);
+
+  return save_material(handle, relative_path);
+}
+
+auto assets_module::_cook_mesh(const std::filesystem::path& source, const std::filesystem::path& relative_source, const math::uuid& id, const std::filesystem::path& cooked, const mesh_import_options& options) -> bool {
   auto data = fastgltf::GltfDataBuffer::FromPath(source);
 
   if (data.error() != fastgltf::Error::None) {
@@ -1147,10 +1244,16 @@ auto assets_module::_cook_mesh(const std::filesystem::path& source, const std::f
     if (gltf_material.occlusionTexture.has_value()) description.occlusion        = texture_uuid(gltf_material.occlusionTexture->textureIndex);
     if (gltf_material.emissiveTexture.has_value()) description.emissive          = texture_uuid(gltf_material.emissiveTexture->textureIndex);
 
-    const auto material_uuid = _derive_material_uuid(id, material_uuids.size());
+    auto material_uuid = math::uuid::nil();
 
-    if (!_cook_material(material_uuid, description)) {
-      return false;
+    if (options.extract_materials) {
+      material_uuid = _extract_gltf_material(description, relative_source);
+    } else {
+      material_uuid = _derive_material_uuid(id, material_uuids.size());
+
+      if (!_cook_material(material_uuid, description)) {
+        return false;
+      }
     }
 
     material_uuids.push_back(material_uuid);

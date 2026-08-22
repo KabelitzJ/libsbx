@@ -7,6 +7,8 @@
 #include <string>
 #include <unordered_map>
 
+#include <fmt/format.h>
+
 #include <imgui.h>
 
 #include <editor/fonts/material_design_icons.hpp>
@@ -15,10 +17,9 @@
 #include <libsbx/core/project.hpp>
 
 #include <libsbx/assets/assets_module.hpp>
+#include <libsbx/assets/material.hpp>
 
 namespace editor {
-
-namespace {
 
 auto classify_extension(const std::filesystem::path& extension) -> asset_kind {
   static const auto table = std::unordered_map<std::string, asset_kind>{
@@ -58,8 +59,6 @@ auto is_entry_selected(const editor_state& state, const std::filesystem::path& p
   const auto* selected = std::get_if<asset_selection>(&state.current_selection);
   return selected != nullptr && selected->path == path;
 }
-
-} // namespace
 
 auto asset_browser_panel::_refresh_entries() -> void {
   _cached_entries.clear();
@@ -143,8 +142,29 @@ auto asset_browser_panel::draw(editor_state& state) -> void {
   auto& assets_module = sbx::core::engine::get_module<sbx::assets::assets_module>();
 
   if (ImGui::Button("Import All in This Folder")) {
-    assets_module.import_directory(_current_directory);
+    // import_directory (like import()) needs a path resolvable from cwd, not one merely
+    // relative to assets_directory() — see assets_module.hpp's doc comment.
+    assets_module.import_directory(project.assets_directory() / _current_directory);
     _needs_refresh = true;
+  }
+
+  ImGui::SameLine();
+
+  if (ImGui::Button(ICON_MDI_PLUS " New Material")) {
+    auto file_name = std::string{"New Material.material"};
+    auto suffix = 1;
+
+    while (std::filesystem::exists(project.assets_directory() / _current_directory / file_name)) {
+      file_name = fmt::format("New Material {}.material", suffix++);
+    }
+
+    const auto relative_path = _current_directory / file_name;
+
+    auto handle = assets_module.create_material(sbx::assets::material::create_info{.name = "New Material"});
+    const auto id = assets_module.save_material(handle, relative_path);
+
+    _needs_refresh = true;
+    state.select_asset(id, relative_path, asset_kind::material);
   }
 
   ImGui::SameLine();
@@ -205,8 +225,20 @@ auto asset_browser_panel::draw(editor_state& state) -> void {
         }
       } else if (entry.is_importable) {
         if (ImGui::Selectable(label.c_str(), is_entry_selected(state, entry.path))) {
-          entry.id = assets_module.import(entry.path);
-          state.select_asset(entry.id, entry.path, entry.kind);
+          const auto meta_path = std::filesystem::path{project.assets_directory() / entry.path}.concat(".meta");
+
+          if (entry.kind == asset_kind::mesh && !std::filesystem::exists(meta_path)) {
+            // First time this mesh has ever been seen — let the user decide whether to extract
+            // its materials before it's actually cooked (deferring would mean the choice has
+            // nowhere to be remembered until something else needs the mesh).
+            _pending_import_path = entry.path;
+            _import_extract_materials = true;
+            _show_import_mesh_dialog = true;
+          } else {
+            // Same resolution requirement as above — entry.path is relative to assets_directory().
+            entry.id = assets_module.import(project.assets_directory() / entry.path);
+            state.select_asset(entry.id, entry.path, entry.kind);
+          }
         }
       } else if (entry.kind == asset_kind::scene) {
         if (ImGui::Selectable(label.c_str(), is_entry_selected(state, entry.path))) {
@@ -220,6 +252,33 @@ auto asset_browser_panel::draw(editor_state& state) -> void {
     }
 
     ImGui::EndTable();
+  }
+
+  if (_show_import_mesh_dialog) {
+    ImGui::OpenPopup("Import Mesh");
+    _show_import_mesh_dialog = false;
+  }
+
+  if (ImGui::BeginPopupModal("Import Mesh", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+    ImGui::Text("Import '%s'", _pending_import_path.filename().string().c_str());
+    ImGui::Checkbox("Extract materials to editable .material assets", &_import_extract_materials);
+    ImGui::TextDisabled("Recommended. When off, materials are cooked read-only and won't appear in the Asset Browser.");
+
+    if (ImGui::Button("Import")) {
+      const auto id = assets_module.import(project.assets_directory() / _pending_import_path);
+      assets_module.load_mesh(id, sbx::assets::mesh_import_options{.extract_materials = _import_extract_materials});
+      state.select_asset(id, _pending_import_path, asset_kind::mesh);
+      _needs_refresh = true; // newly extracted .material files may now be visible in this folder
+      ImGui::CloseCurrentPopup();
+    }
+
+    ImGui::SameLine();
+
+    if (ImGui::Button("Cancel")) {
+      ImGui::CloseCurrentPopup();
+    }
+
+    ImGui::EndPopup();
   }
 
   ImGui::End();

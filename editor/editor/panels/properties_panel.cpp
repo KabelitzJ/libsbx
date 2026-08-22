@@ -4,12 +4,18 @@
 
 #include <array>
 #include <cstring>
+#include <filesystem>
+#include <string_view>
+#include <vector>
+
+#include <fmt/format.h>
 
 #include <imgui.h>
 
 #include <editor/fonts/material_design_icons.hpp>
 
 #include <libsbx/core/engine.hpp>
+#include <libsbx/core/project.hpp>
 
 #include <libsbx/math/quaternion.hpp>
 #include <libsbx/math/uuid.hpp>
@@ -22,21 +28,149 @@
 
 namespace editor {
 
-namespace {
 
 auto path_text(const sbx::assets::assets_module& assets_module, const sbx::math::uuid& id) -> std::string {
   const auto path = assets_module.path_of(id);
   return path.empty() ? std::string{"(unknown)"} : path.string();
 }
 
-auto alpha_mode_name(sbx::assets::alpha_mode mode) -> const char* {
-  switch (mode) {
-    case sbx::assets::alpha_mode::opaque: return "Opaque";
-    case sbx::assets::alpha_mode::mask: return "Mask";
-    case sbx::assets::alpha_mode::blend: return "Blend";
+// Recursively collects every file under root whose extension matches. Used by the asset pickers
+// below — rescanned fresh each time a popup opens (the lists are small; this only runs while a
+// popup is open, never per-frame).
+auto collect_files_with_extension(const std::filesystem::path& root, std::string_view extension, std::vector<std::filesystem::path>& out) -> void {
+  if (!std::filesystem::exists(root)) {
+    return;
   }
 
-  return "Unknown";
+  for (const auto& entry : std::filesystem::recursive_directory_iterator{root}) {
+    if (!entry.is_directory() && entry.path().extension() == extension) {
+      out.push_back(entry.path());
+    }
+  }
+}
+
+// A button showing the slot's current material's path (mesh_renderer.materials is the source of
+// truth — no "override vs default" distinction to display). Opens a popup listing every
+// ".material" file under the project's assets directory, plus — when mesh_default is valid — a
+// "Reset to Mesh Default" entry that reseeds the slot from the mesh's own submesh material.
+auto draw_material_picker(const char* popup_id, sbx::assets::material_handle& slot, sbx::assets::assets_module& assets_module, const sbx::assets::material_handle& mesh_default = {}) -> void {
+  // popup_id (e.g. "##albedo_picker") appended so multiple pickers showing the same label — most
+  // commonly several empty "(none)" slots at once — don't collide on ImGui's label-derived ID.
+  const auto label = (slot.is_valid() ? path_text(assets_module, slot->id()) : std::string{"(none)"}) + popup_id;
+
+  if (ImGui::Button(label.c_str())) {
+    ImGui::OpenPopup(popup_id);
+  }
+
+  if (ImGui::BeginPopup(popup_id)) {
+    if (mesh_default.is_valid() && ImGui::MenuItem("Reset to Mesh Default")) {
+      slot = mesh_default;
+    }
+
+    auto& project = sbx::core::engine::project();
+    auto files = std::vector<std::filesystem::path>{};
+    collect_files_with_extension(project.assets_directory(), ".material", files);
+
+    for (const auto& file : files) {
+      const auto relative = std::filesystem::relative(file, project.assets_directory());
+
+      if (ImGui::MenuItem(relative.string().c_str())) {
+        // load_material(path) resolves relative against assets_directory() internally and
+        // reuses the file's real uuid if it's already imported — calling import(relative)
+        // directly here would mint a second, broken uuid keyed on an unresolved path.
+        slot = assets_module.load_material(relative);
+      }
+    }
+
+    ImGui::EndPopup();
+  }
+}
+
+// Forks a material into a new, independent .material asset next to the mesh — so editing the copy
+// doesn't affect every other node sharing the original (materials are otherwise shared by
+// reference: mesh_renderer.materials[i] usually starts out pointing at the exact same asset every
+// other instance of that mesh does). Mirrors asset_browser_panel's "New Material" dedup-by-suffix
+// naming; mesh_id may be nil (falls back to the assets root as the destination directory).
+auto extract_material_to_asset(sbx::assets::assets_module& assets_module, const sbx::assets::material_handle& source, const sbx::math::uuid& mesh_id) -> sbx::assets::material_handle {
+  auto& project = sbx::core::engine::project();
+
+  // path_of() returns whatever path the mesh was originally import()-ed with, which for a
+  // gltf-loaded mesh is already resolved to an absolute/root path (assets_directory() prepended
+  // during load), not one relative to assets_directory() the way asset_browser's own entries are
+  // — so it has to be re-relativized here (same as draw_material_picker/draw_texture_picker do for
+  // their own directory listings) rather than joined onto assets_directory() a second time.
+  const auto mesh_path = assets_module.path_of(mesh_id);
+  auto directory = std::filesystem::path{};
+
+  if (!mesh_path.empty()) {
+    const auto relative = std::filesystem::relative(mesh_path, project.assets_directory());
+
+    if (!relative.empty() && relative.begin()->string() != "..") {
+      directory = relative.parent_path();
+    }
+  }
+
+  auto info = sbx::assets::material::create_info{};
+  info.name = source->name();
+  info.base_color_factor = source->base_color_factor();
+  info.emissive_factor = source->emissive_factor();
+  info.metallic_factor = source->metallic_factor();
+  info.roughness_factor = source->roughness_factor();
+  info.alpha = source->alpha();
+  info.alpha_cutoff = source->alpha_cutoff();
+  info.is_double_sided = source->is_double_sided();
+  info.albedo = source->albedo();
+  info.normal = source->normal();
+  info.metallic_roughness = source->metallic_roughness();
+  info.occlusion = source->occlusion();
+  info.emissive = source->emissive();
+
+  auto file_name = info.name + ".material";
+  auto suffix = 1;
+
+  while (std::filesystem::exists(project.assets_directory() / directory / file_name)) {
+    file_name = fmt::format("{} {}.material", info.name, suffix++);
+  }
+
+  auto handle = assets_module.create_material(info);
+  assets_module.save_material(handle, directory / file_name);
+
+  return handle;
+}
+
+// Same idea as draw_material_picker, for a material's texture slots. format matches the same
+// per-slot convention assets_module::load_material already uses (srgb for albedo/emissive, unorm
+// for normal/metallic_roughness/occlusion).
+auto draw_texture_picker(const char* popup_id, sbx::assets::texture_handle& slot, sbx::assets::assets_module& assets_module, sbx::graphics::format format) -> void {
+  // popup_id appended so multiple pickers showing the same label (most commonly several empty
+  // "(none)" slots at once) don't collide on ImGui's label-derived ID.
+  const auto label = (slot.is_valid() ? path_text(assets_module, slot->id()) : std::string{"(none)"}) + popup_id;
+
+  if (ImGui::Button(label.c_str())) {
+    ImGui::OpenPopup(popup_id);
+  }
+
+  if (ImGui::BeginPopup(popup_id)) {
+    if (ImGui::MenuItem("(None)")) {
+      slot = sbx::assets::texture_handle{};
+    }
+
+    auto& project = sbx::core::engine::project();
+    auto files = std::vector<std::filesystem::path>{};
+    collect_files_with_extension(project.assets_directory(), ".png", files);
+    collect_files_with_extension(project.assets_directory(), ".jpg", files);
+    collect_files_with_extension(project.assets_directory(), ".jpeg", files);
+
+    for (const auto& file : files) {
+      const auto relative = std::filesystem::relative(file, project.assets_directory());
+
+      if (ImGui::MenuItem(relative.string().c_str())) {
+        slot = assets_module.load_texture(relative, format);
+      }
+    }
+
+    ImGui::EndPopup();
+  }
 }
 
 // A compact, color-coded X/Y/Z row: a label, then three tinted axis buttons (click to reset that
@@ -103,7 +237,16 @@ auto draw_color_field(const char* label, sbx::math::color& color) -> void {
 }
 
 auto draw_camera_section(sbx::scenes::node& node) -> void {
-  if (!ImGui::CollapsingHeader(ICON_MDI_CAMERA_OUTLINE " Camera", ImGuiTreeNodeFlags_DefaultOpen)) {
+  auto is_open = true;
+
+  const auto is_expanded = ImGui::CollapsingHeader(ICON_MDI_CAMERA_OUTLINE " Camera", &is_open, ImGuiTreeNodeFlags_DefaultOpen);
+
+  if (!is_open) {
+    node.remove_component<sbx::scenes::camera>();
+    return;
+  }
+
+  if (!is_expanded) {
     return;
   }
 
@@ -115,11 +258,22 @@ auto draw_camera_section(sbx::scenes::node& node) -> void {
 }
 
 auto draw_mesh_renderer_section(sbx::scenes::node& node, sbx::assets::assets_module& assets_module) -> void {
-  if (!ImGui::CollapsingHeader(ICON_MDI_CUBE_OUTLINE " Mesh Renderer", ImGuiTreeNodeFlags_DefaultOpen)) {
+  auto is_open = true;
+
+  const auto is_expanded = ImGui::CollapsingHeader(ICON_MDI_CUBE_OUTLINE " Mesh Renderer", &is_open, ImGuiTreeNodeFlags_DefaultOpen);
+
+  if (!is_open) {
+    node.remove_component<sbx::scenes::mesh_renderer>();
     return;
   }
 
-  const auto& renderer = node.get_component<sbx::scenes::mesh_renderer>();
+  if (!is_expanded) {
+    return;
+  }
+
+  auto& renderer = node.get_component<sbx::scenes::mesh_renderer>();
+
+  sbx::scenes::sync_materials_with_mesh(renderer);
 
   if (renderer.mesh.is_valid()) {
     ImGui::Text("Mesh: %s", path_text(assets_module, renderer.mesh->id()).c_str());
@@ -129,18 +283,44 @@ auto draw_mesh_renderer_section(sbx::scenes::node& node, sbx::assets::assets_mod
   }
 
   for (auto index = std::size_t{0u}; index < renderer.materials.size(); ++index) {
-    const auto& material = renderer.materials[index];
+    ImGui::PushID(static_cast<int>(index));
 
-    if (material.is_valid()) {
-      ImGui::Text("Material %zu: %s", index, path_text(assets_module, material->id()).c_str());
-    } else {
-      ImGui::TextDisabled("Material %zu: (none)", index);
+    auto& slot = renderer.materials[index];
+    const auto mesh_default = (renderer.mesh.is_valid() && index < renderer.mesh->submeshes().size())
+      ? renderer.mesh->submeshes()[index].material
+      : sbx::assets::material_handle{};
+
+    ImGui::Text("Material %zu:", index);
+    ImGui::SameLine();
+    draw_material_picker("##material_picker_popup", slot, assets_module, mesh_default);
+
+    if (slot.is_valid()) {
+      ImGui::SameLine();
+
+      if (ImGui::Button(ICON_MDI_EXPORT_VARIANT " Duplicate")) {
+        slot = extract_material_to_asset(assets_module, slot, renderer.mesh.is_valid() ? renderer.mesh->id() : sbx::math::uuid::nil());
+      }
+
+      if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("Fork this slot's material into an independent copy, so editing it only affects this node.");
+      }
     }
+
+    ImGui::PopID();
   }
 }
 
 auto draw_directional_light_section(sbx::scenes::node& node) -> void {
-  if (!ImGui::CollapsingHeader(ICON_MDI_WHITE_BALANCE_SUNNY " Directional Light", ImGuiTreeNodeFlags_DefaultOpen)) {
+  auto is_open = true;
+
+  const auto is_expanded = ImGui::CollapsingHeader(ICON_MDI_WHITE_BALANCE_SUNNY " Directional Light", &is_open, ImGuiTreeNodeFlags_DefaultOpen);
+
+  if (!is_open) {
+    node.remove_component<sbx::scenes::directional_light>();
+    return;
+  }
+
+  if (!is_expanded) {
     return;
   }
 
@@ -151,7 +331,16 @@ auto draw_directional_light_section(sbx::scenes::node& node) -> void {
 }
 
 auto draw_point_light_section(sbx::scenes::node& node) -> void {
-  if (!ImGui::CollapsingHeader(ICON_MDI_LIGHTBULB_OUTLINE " Point Light", ImGuiTreeNodeFlags_DefaultOpen)) {
+  auto is_open = true;
+
+  const auto is_expanded = ImGui::CollapsingHeader(ICON_MDI_LIGHTBULB_OUTLINE " Point Light", &is_open, ImGuiTreeNodeFlags_DefaultOpen);
+
+  if (!is_open) {
+    node.remove_component<sbx::scenes::point_light>();
+    return;
+  }
+
+  if (!is_expanded) {
     return;
   }
 
@@ -163,7 +352,16 @@ auto draw_point_light_section(sbx::scenes::node& node) -> void {
 }
 
 auto draw_spot_light_section(sbx::scenes::node& node) -> void {
-  if (!ImGui::CollapsingHeader(ICON_MDI_FLASHLIGHT " Spot Light", ImGuiTreeNodeFlags_DefaultOpen)) {
+  auto is_open = true;
+
+  const auto is_expanded = ImGui::CollapsingHeader(ICON_MDI_FLASHLIGHT " Spot Light", &is_open, ImGuiTreeNodeFlags_DefaultOpen);
+
+  if (!is_open) {
+    node.remove_component<sbx::scenes::spot_light>();
+    return;
+  }
+
+  if (!is_expanded) {
     return;
   }
 
@@ -180,7 +378,16 @@ auto draw_spot_light_section(sbx::scenes::node& node) -> void {
 }
 
 auto draw_skybox_section(sbx::scenes::node& node, sbx::assets::assets_module& assets_module) -> void {
-  if (!ImGui::CollapsingHeader(ICON_MDI_EARTH " Skybox", ImGuiTreeNodeFlags_DefaultOpen)) {
+  auto is_open = true;
+
+  const auto is_expanded = ImGui::CollapsingHeader(ICON_MDI_EARTH " Skybox", &is_open, ImGuiTreeNodeFlags_DefaultOpen);
+
+  if (!is_open) {
+    node.remove_component<sbx::scenes::skybox>();
+    return;
+  }
+
+  if (!is_expanded) {
     return;
   }
 
@@ -201,7 +408,40 @@ auto draw_skybox_section(sbx::scenes::node& node, sbx::assets::assets_module& as
   ImGui::DragFloat("Intensity", &sky.intensity, 0.05f, 0.0f, 100.0f);
 }
 
-} // namespace
+auto draw_add_component_menu(sbx::scenes::node& node) -> void {
+  if (ImGui::Button(ICON_MDI_PLUS " Add Component")) {
+    ImGui::OpenPopup("##add_component_popup");
+  }
+
+  if (ImGui::BeginPopup("##add_component_popup")) {
+    if (!node.has_component<sbx::scenes::camera>() && ImGui::MenuItem(ICON_MDI_CAMERA_OUTLINE " Camera")) {
+      node.add_component<sbx::scenes::camera>();
+    }
+
+    if (!node.has_component<sbx::scenes::mesh_renderer>() && ImGui::MenuItem(ICON_MDI_CUBE_OUTLINE " Mesh Renderer")) {
+      node.add_component<sbx::scenes::mesh_renderer>();
+    }
+
+    if (!node.has_component<sbx::scenes::directional_light>() && ImGui::MenuItem(ICON_MDI_WHITE_BALANCE_SUNNY " Directional Light")) {
+      node.add_component<sbx::scenes::directional_light>();
+    }
+
+    if (!node.has_component<sbx::scenes::point_light>() && ImGui::MenuItem(ICON_MDI_LIGHTBULB_OUTLINE " Point Light")) {
+      node.add_component<sbx::scenes::point_light>();
+    }
+
+    if (!node.has_component<sbx::scenes::spot_light>() && ImGui::MenuItem(ICON_MDI_FLASHLIGHT " Spot Light")) {
+      node.add_component<sbx::scenes::spot_light>();
+    }
+
+    if (!node.has_component<sbx::scenes::skybox>() && ImGui::MenuItem(ICON_MDI_EARTH " Skybox")) {
+      node.add_component<sbx::scenes::skybox>();
+    }
+
+    ImGui::EndPopup();
+  }
+}
+
 
 auto properties_panel::_draw_name_field(sbx::scenes::node& node) -> void {
   const auto id = node.id();
@@ -285,6 +525,79 @@ auto properties_panel::_draw_node_properties(sbx::scenes::node& node, sbx::asset
   if (node.has_component<sbx::scenes::skybox>()) {
     draw_skybox_section(node, assets_module);
   }
+
+  ImGui::Separator();
+  draw_add_component_menu(node);
+}
+
+auto properties_panel::_draw_material_properties(const asset_selection& asset, sbx::assets::assets_module& assets_module) -> void {
+  if (!_asset_cache.material.is_valid()) {
+    ImGui::TextDisabled("Could not load this material.");
+    return;
+  }
+
+  auto name_buffer = std::array<char, 128u>{};
+  std::strncpy(name_buffer.data(), _material_edit.name.c_str(), name_buffer.size() - 1u);
+  name_buffer[name_buffer.size() - 1u] = '\0';
+
+  if (ImGui::InputText("Name", name_buffer.data(), name_buffer.size())) {
+    _material_edit.name = std::string{name_buffer.data()};
+  }
+
+  draw_color_field("Base Color", _material_edit.base_color_factor);
+
+  auto emissive = std::array<std::float_t, 3u>{_material_edit.emissive_factor.x(), _material_edit.emissive_factor.y(), _material_edit.emissive_factor.z()};
+  if (ImGui::ColorEdit3("Emissive", emissive.data())) {
+    _material_edit.emissive_factor = sbx::math::vector3{emissive[0], emissive[1], emissive[2]};
+  }
+
+  ImGui::DragFloat("Metallic", &_material_edit.metallic_factor, 0.01f, 0.0f, 1.0f);
+  ImGui::DragFloat("Roughness", &_material_edit.roughness_factor, 0.01f, 0.0f, 1.0f);
+
+  static constexpr auto alpha_mode_names = std::array<const char*, 3u>{"Opaque", "Mask", "Blend"};
+  auto alpha_index = static_cast<int>(_material_edit.alpha);
+
+  if (ImGui::Combo("Alpha Mode", &alpha_index, alpha_mode_names.data(), static_cast<int>(alpha_mode_names.size()))) {
+    _material_edit.alpha = static_cast<sbx::assets::alpha_mode>(alpha_index);
+  }
+
+  if (_material_edit.alpha == sbx::assets::alpha_mode::mask) {
+    ImGui::DragFloat("Alpha Cutoff", &_material_edit.alpha_cutoff, 0.01f, 0.0f, 1.0f);
+  }
+
+  ImGui::Checkbox("Double Sided", &_material_edit.is_double_sided);
+
+  ImGui::SeparatorText("Textures");
+
+  ImGui::Text("Albedo");
+  ImGui::SameLine();
+  draw_texture_picker("##albedo_picker", _material_edit.albedo, assets_module, sbx::graphics::format::r8g8b8a8_srgb);
+
+  ImGui::Text("Normal");
+  ImGui::SameLine();
+  draw_texture_picker("##normal_picker", _material_edit.normal, assets_module, sbx::graphics::format::r8g8b8a8_unorm);
+
+  ImGui::Text("Metallic/Roughness");
+  ImGui::SameLine();
+  draw_texture_picker("##metallic_roughness_picker", _material_edit.metallic_roughness, assets_module, sbx::graphics::format::r8g8b8a8_unorm);
+
+  ImGui::Text("Occlusion");
+  ImGui::SameLine();
+  draw_texture_picker("##occlusion_picker", _material_edit.occlusion, assets_module, sbx::graphics::format::r8g8b8a8_unorm);
+
+  ImGui::Text("Emissive");
+  ImGui::SameLine();
+  draw_texture_picker("##emissive_picker", _material_edit.emissive, assets_module, sbx::graphics::format::r8g8b8a8_srgb);
+
+  ImGui::Separator();
+
+  if (ImGui::Button(ICON_MDI_CONTENT_SAVE " Save")) {
+    // Mutates the existing record in place — every material_handle already pointing at it (e.g. a
+    // mesh_renderer's material slot elsewhere in the scene) picks up the change immediately, with
+    // no reload needed. save_material then persists that state to disk.
+    assets_module.update_material(_asset_cache.material, _material_edit);
+    assets_module.save_material(_asset_cache.material, asset.path);
+  }
 }
 
 auto properties_panel::_draw_asset_properties(const asset_selection& asset, sbx::assets::assets_module& assets_module) -> void {
@@ -300,6 +613,24 @@ auto properties_panel::_draw_asset_properties(const asset_selection& asset, sbx:
       case asset_kind::scene:
       case asset_kind::unknown:
         break;
+    }
+
+    if (asset.kind == asset_kind::material && _asset_cache.material.is_valid()) {
+      const auto& material = *_asset_cache.material;
+
+      _material_edit.name = material.name();
+      _material_edit.base_color_factor = material.base_color_factor();
+      _material_edit.emissive_factor = material.emissive_factor();
+      _material_edit.metallic_factor = material.metallic_factor();
+      _material_edit.roughness_factor = material.roughness_factor();
+      _material_edit.alpha = material.alpha();
+      _material_edit.alpha_cutoff = material.alpha_cutoff();
+      _material_edit.is_double_sided = material.is_double_sided();
+      _material_edit.albedo = material.albedo();
+      _material_edit.normal = material.normal();
+      _material_edit.metallic_roughness = material.metallic_roughness();
+      _material_edit.occlusion = material.occlusion();
+      _material_edit.emissive = material.emissive();
     }
   }
 
@@ -327,36 +658,7 @@ auto properties_panel::_draw_asset_properties(const asset_selection& asset, sbx:
     }
     case asset_kind::material: {
       ImGui::Text("Type: Material");
-      const auto& handle = _asset_cache.material;
-      if (handle.is_valid()) {
-        ImGui::Text("Name: %s", handle->name().c_str());
-
-        auto base_color = handle->base_color_factor();
-        ImGui::BeginDisabled();
-        draw_color_field("Base Color", base_color);
-        ImGui::EndDisabled();
-
-        ImGui::Text("Metallic: %.2f", static_cast<double>(handle->metallic_factor()));
-        ImGui::Text("Roughness: %.2f", static_cast<double>(handle->roughness_factor()));
-        ImGui::Text("Alpha Mode: %s", alpha_mode_name(handle->alpha()));
-        ImGui::Text("Double Sided: %s", handle->is_double_sided() ? "yes" : "no");
-
-        if (handle->albedo().is_valid()) {
-          ImGui::Text("Albedo: %s", path_text(assets_module, handle->albedo()->id()).c_str());
-        }
-        if (handle->normal().is_valid()) {
-          ImGui::Text("Normal: %s", path_text(assets_module, handle->normal()->id()).c_str());
-        }
-        if (handle->metallic_roughness().is_valid()) {
-          ImGui::Text("Metallic/Roughness: %s", path_text(assets_module, handle->metallic_roughness()->id()).c_str());
-        }
-        if (handle->occlusion().is_valid()) {
-          ImGui::Text("Occlusion: %s", path_text(assets_module, handle->occlusion()->id()).c_str());
-        }
-        if (handle->emissive().is_valid()) {
-          ImGui::Text("Emissive: %s", path_text(assets_module, handle->emissive()->id()).c_str());
-        }
-      }
+      _draw_material_properties(asset, assets_module);
       break;
     }
     case asset_kind::environment_map: {
@@ -393,7 +695,7 @@ auto properties_panel::draw(editor_state& state) -> void {
     if (auto node = state.selected_node(scenes_module.active_scene()); node.is_valid()) {
       _draw_node_properties(node, assets_module);
     } else {
-      // The selected entity no longer exists (e.g. deleted); fall back to the empty state.
+      // The selected node no longer exists (e.g. deleted); fall back to the empty state.
       state.clear_selection();
       ImGui::TextDisabled("Nothing selected.");
     }

@@ -38,12 +38,25 @@
 namespace sbx::assets {
 
 /**
+ * @brief Extracts every material a cooked mesh embeds into a standalone, editable `.material`
+ * asset next to the mesh (reusing one already there rather than overwriting it) instead of a
+ * hidden, unregistered cook-cache blob. On by default.
+ */
+struct mesh_import_options {
+  bool extract_materials{true};
+}; // struct mesh_import_options
+
+/**
  * @brief Owns the asset database and GPU residency.
  *
- * Every path argument to @ref import, @ref import_directory and the `load_*` overloads is
- * interpreted **relative to the active project's assets directory** (core::engine::project()).
- * Assets are keyed by that project-relative path, which keeps serialized references portable and
- * independent of the working directory. A project is required — asset access asserts one is set.
+ * Every path argument to the `load_*` overloads is interpreted **relative to the active project's
+ * assets directory** (core::engine::project()) — they resolve it internally before doing anything
+ * else. @ref import and @ref import_directory do **not**: despite registering assets under a
+ * project-relative key, the path/root they're given must already be resolvable from the process's
+ * current working directory (typically `project.assets_directory() / relative` — see any `load_*`
+ * overload's implementation for the exact pattern). Passing a bare assets-relative path straight
+ * to import()/import_directory() silently mints a second, broken uuid rather than failing loudly.
+ * A project is required — asset access asserts one is set.
  */
 class assets_module final : public utility::noncopyable {
 
@@ -56,14 +69,18 @@ public:
   ~assets_module();
 
   /**
-   * @brief Registers an asset by its project-relative path and returns its stable UUID.
-   * @param path Path relative to the active project's assets directory.
+   * @brief Registers an asset by its path and returns its stable UUID.
+   * @param path Must be resolvable from the current working directory (see class doc comment) —
+   * not merely relative to the assets directory. Prefer a `load_*(path)` overload where possible;
+   * it resolves for you.
    */
   auto import(const std::filesystem::path& path) -> math::uuid;
 
   /**
-   * @brief Imports every supported asset under a project-relative subdirectory.
-   * @param root Subdirectory relative to the assets directory. Empty (default) scans the whole tree.
+   * @brief Imports every supported asset under a subdirectory.
+   * @param root Must be resolvable from the current working directory (see class doc comment).
+   * Empty (default) is *not* "the whole assets tree" here — pass `project.assets_directory()`
+   * explicitly for that.
    */
   auto import_directory(const std::filesystem::path& root = {}) -> void;
 
@@ -84,12 +101,14 @@ public:
    *
    * @param id The UUID of the mesh to load.
    * @param path The path (relative to the assets directory) to the mesh file to load.
+   * @param options Only consulted the first time this mesh is actually cooked (a cache hit ignores
+   * it) — see @ref mesh_import_options.
    *
    * @return A handle to the loaded mesh. Valid if the mesh was successfully loaded.
    */
-  auto load_mesh(const math::uuid& id) -> mesh_handle;
+  auto load_mesh(const math::uuid& id, const mesh_import_options& options = {}) -> mesh_handle;
 
-  auto load_mesh(const std::filesystem::path& path) -> mesh_handle;
+  auto load_mesh(const std::filesystem::path& path, const mesh_import_options& options = {}) -> mesh_handle;
 
   auto load_material(const math::uuid& id) -> material_handle;
 
@@ -98,10 +117,19 @@ public:
   auto create_material(const material::create_info& create_info) -> material_handle;
 
   /**
-   * @brief Writes a material to a `.material` file.
-   * @param path Destination path relative to the active project's assets directory.
+   * @brief Overwrites an existing material's fields in place. Every material_handle already
+   * pointing at this record (e.g. a mesh_renderer's material slot) observes the change
+   * immediately, since they all share the same underlying object. Does not touch identity
+   * (index/uuid) or persist to disk — pair with save_material to do that.
    */
-  auto save_material(const material_handle& material, const std::filesystem::path& path) -> void;
+  auto update_material(material_handle& material, const material::create_info& create_info) -> void;
+
+  /**
+   * @brief Writes a material to a `.material` file and (re-)registers it as a first-class asset.
+   * @param path Destination path relative to the active project's assets directory.
+   * @return The material's canonical uuid (also written back onto the material record itself).
+   */
+  auto save_material(material_handle& material, const std::filesystem::path& path) -> math::uuid;
 
   auto load_environment_map(const math::uuid& id) -> environment_map_handle;
 
@@ -223,6 +251,8 @@ private:
 
   [[nodiscard]] static auto _absolute(const std::filesystem::path& relative) -> std::filesystem::path;
 
+  [[nodiscard]] static auto _relative(const std::filesystem::path& absolute) -> std::filesystem::path;
+
   [[nodiscard]] auto _cooked_path(const math::uuid& id, std::string_view extension) const -> std::filesystem::path;
 
   [[nodiscard]] auto _is_cooked_stale(const math::uuid& id, const std::filesystem::path& source, const std::filesystem::path& cooked, std::uint32_t cooker_version) -> bool;
@@ -243,7 +273,14 @@ private:
 
   [[nodiscard]] static auto _derive_material_uuid(const math::uuid& mesh, std::size_t index) -> math::uuid;
 
-  auto _cook_mesh(const std::filesystem::path& source, const std::filesystem::path& relative_source, const math::uuid& id, const std::filesystem::path& cooked) -> bool;
+  /**
+   * @brief Turns one gltf-embedded material description into a real, standalone `.material` asset
+   * next to the mesh (models/<name>/materials/<material name>.material), reusing one already there
+   * instead of overwriting it. Used by _cook_mesh when mesh_import_options::extract_materials.
+   */
+  auto _extract_gltf_material(const material_description& description, const std::filesystem::path& relative_source) -> math::uuid;
+
+  auto _cook_mesh(const std::filesystem::path& source, const std::filesystem::path& relative_source, const math::uuid& id, const std::filesystem::path& cooked, const mesh_import_options& options) -> bool;
 
   auto _load_cooked_mesh(const std::filesystem::path& cooked, std::vector<vertex>& vertices, std::vector<std::uint32_t>& indices, std::vector<cooked_submesh>& submeshes, math::volume& bounds) -> bool;
 

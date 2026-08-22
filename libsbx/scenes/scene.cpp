@@ -30,6 +30,21 @@ auto scene::node_of(ecs::entity entity) -> node {
   return node{memory::make_observer(_registry), entity};
 }
 
+auto scene::destroy_node(node target) -> void {
+  if (!target.is_valid()) {
+    return;
+  }
+
+  const auto entity = target._entity;
+
+  if (const auto& target_relationship = _registry.get<relationship>(entity); target_relationship.parent != ecs::null_entity && _registry.is_valid(target_relationship.parent)) {
+    auto& parent_relationship = _registry.get<relationship>(target_relationship.parent);
+    std::erase(parent_relationship.children, entity);
+  }
+
+  _destroy_node_recursive(entity);
+}
+
 auto scene::set_active_camera(node camera) -> void {
   _active_camera = camera._entity;
 }
@@ -76,6 +91,40 @@ auto scene::_create_node(const utility::hashed_string& name, const scenes::local
 auto scene::_set_parent(ecs::entity child, ecs::entity parent) -> void {
   _registry.get<relationship>(child).parent = parent;
   _registry.get<relationship>(parent).children.push_back(child);
+}
+
+auto scene::_destroy_node_recursive(ecs::entity entity) -> void {
+  // Copy out first — children are destroyed (and thus erased from this very vector, one level up)
+  // while we're still iterating it otherwise.
+  const auto children = _registry.get<relationship>(entity).children;
+
+  for (const auto child : children) {
+    _destroy_node_recursive(child);
+  }
+
+  const auto& node_id = _registry.get<id>(entity);
+  const auto& node_tag = _registry.get<tag>(entity);
+
+  _entities_by_id.erase(node_id);
+
+  if (const auto [first, last] = _entities_by_name.equal_range(node_tag); first != last) {
+    for (auto entry = first; entry != last; ++entry) {
+      if (entry->second == entity) {
+        _entities_by_name.erase(entry);
+        break;
+      }
+    }
+  }
+
+  if (_active_camera == entity) {
+    _active_camera = ecs::null_entity;
+  }
+
+  if (_primary_light == entity) {
+    _primary_light = ecs::null_entity;
+  }
+
+  _registry.destroy(entity);
 }
 
 auto scene::_update_node(ecs::entity entity, const math::matrix4x4& parent_world) -> void {

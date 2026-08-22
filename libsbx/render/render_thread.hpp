@@ -37,7 +37,7 @@ public:
     kick
   }; // enum class state
 
-  render_thread(core::threading_policy policy, core::delegate<void()> work);
+  render_thread(const core::threading_policy policy, core::delegate<void()> work);
 
   ~render_thread();
 

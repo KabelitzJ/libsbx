@@ -10,6 +10,7 @@
 #include <libsbx/math/uuid.hpp>
 
 #include <libsbx/assets/assets_module.hpp>
+#include <libsbx/assets/material.hpp>
 
 #include <libsbx/scenes/node.hpp>
 
@@ -19,8 +20,9 @@ namespace editor {
 
 /**
  * @brief The "Properties" panel: an inspector for whatever editor_state's current selection is —
- * a scene node's name/transform/components, a read-only asset summary, or an empty-state message
- * if nothing is selected.
+ * a scene node's name/transform/components (with add/remove-component controls), a material
+ * asset's editable fields, other asset kinds' read-only summaries, or an empty-state message if
+ * nothing is selected.
  */
 class properties_panel final : public editor_panel {
 
@@ -46,6 +48,7 @@ private:
   auto _draw_name_field(sbx::scenes::node& node) -> void;
   auto _draw_transform_section(sbx::scenes::node& node) -> void;
   auto _draw_asset_properties(const asset_selection& asset, sbx::assets::assets_module& assets_module) -> void;
+  auto _draw_material_properties(const asset_selection& asset, sbx::assets::assets_module& assets_module) -> void;
 
   // Editable name field: staged into a buffer, only re-synced from the node when the selection
   // changes (so mid-edit keystrokes aren't clobbered by re-reading the committed name).
@@ -60,6 +63,11 @@ private:
   std::array<std::float_t, 3u> _rotation{0.0f, 0.0f, 0.0f};
 
   asset_property_cache _asset_cache{};
+
+  // Staged edits for the selected material asset (case asset_kind::material in
+  // _draw_asset_properties). Seeded from the loaded material whenever _asset_cache.id changes;
+  // committed to the material record (and disk) only by an explicit Save button.
+  sbx::assets::material::create_info _material_edit{};
 
 }; // class properties_panel
 

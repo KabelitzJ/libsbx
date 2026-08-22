@@ -41,6 +41,12 @@ public:
    */
   [[nodiscard]] auto node_of(ecs::entity entity) -> node;
 
+  /**
+   * @brief Destroys @p target and its entire subtree, unlinking it from its parent's
+   * relationship.children first. No-op if target is already invalid.
+   */
+  auto destroy_node(node target) -> void;
+
   auto set_active_camera(node camera) -> void;
 
   [[nodiscard]] auto active_camera() -> node;
@@ -85,6 +91,8 @@ private:
   auto _create_node(const utility::hashed_string& name, const scenes::local_transform& transform, const math::uuid& id) -> node;
 
   auto _set_parent(ecs::entity child, ecs::entity parent) -> void;
+
+  auto _destroy_node_recursive(ecs::entity entity) -> void;
 
   auto _update_node(ecs::entity entity, const math::matrix4x4& parent_world) -> void;
 

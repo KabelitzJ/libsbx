@@ -337,6 +337,8 @@ auto scene_serializer::load(scene& target, const std::filesystem::path& path) ->
         auto& renderer = node.add_component<mesh_renderer>();
         renderer.mesh = assets_module.load_mesh(key_to_uuid.at(component["mesh"].as<std::string>()));
 
+        sync_materials_with_mesh(renderer);
+
         if (const auto submeshes = component["submeshes"]) {
           for (const auto submesh : submeshes) {
             const auto index = submesh["index"].as<std::size_t>();

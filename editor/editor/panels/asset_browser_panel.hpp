@@ -43,6 +43,15 @@ private:
   std::vector<asset_browser_entry> _cached_entries{};
   bool _needs_refresh{true};
 
+  // "Import Mesh" modal state — shown once, the first time a .gltf/.glb without a .meta yet is
+  // clicked, to surface mesh_import_options::extract_materials before the mesh is actually cooked.
+  // _show_import_mesh_dialog is consumed (and ImGui::OpenPopup called) outside the per-entry
+  // PushID scope it's set from — OpenPopup/BeginPopupModal must see the same ID stack, and the
+  // click happens inside PushID(entry.path...).
+  bool _show_import_mesh_dialog{false};
+  std::filesystem::path _pending_import_path{};
+  bool _import_extract_materials{true};
+
 }; // class asset_browser_panel
 
 } // namespace editor

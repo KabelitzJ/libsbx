@@ -21,8 +21,6 @@
 
 namespace editor {
 
-namespace {
-
 // Unprojects a viewport-relative pixel position into a world-space ray through camera_node.
 // perspective() bakes in Vulkan's y-flip (see its implementation), so Vulkan's own NDC-to-pixel
 // mapping applies unchanged here: pixel (0,0) at the viewport's top-left maps to NDC (-1,-1), no
@@ -47,7 +45,6 @@ auto ray_from_viewport_position(sbx::scenes::node& camera_node, const sbx::scene
   return sbx::math::ray{near_point, far_point - near_point};
 }
 
-} // namespace
 
 auto pick_node_at_viewport_position(editor_state& state, const sbx::math::vector2& position, const sbx::math::vector2u& viewport_size) -> void {
   auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
@@ -68,9 +65,8 @@ auto pick_node_at_viewport_position(editor_state& state, const sbx::math::vector
   const auto& camera = camera_node.get_component<sbx::scenes::camera>();
   const auto ray = ray_from_viewport_position(camera_node, camera, position, viewport_size);
 
-  auto closest_entity = sbx::ecs::entity{sbx::ecs::null_entity};
+  auto closest_node = sbx::scenes::node{};
   auto closest_t = std::numeric_limits<std::float_t>::max();
-  auto found_hit = false;
 
   for (const auto entity : scene.query<sbx::scenes::mesh_renderer, sbx::scenes::world_transform>()) {
     auto node = scene.node_of(entity);
@@ -85,13 +81,12 @@ auto pick_node_at_viewport_position(editor_state& state, const sbx::math::vector
 
     if (const auto hit = world_bounds.intersects(ray); hit.has_value() && *hit < closest_t) {
       closest_t = *hit;
-      closest_entity = entity;
-      found_hit = true;
+      closest_node = node;
     }
   }
 
-  if (found_hit) {
-    state.select_node(closest_entity);
+  if (closest_node.is_valid()) {
+    state.select_node(closest_node);
   } else {
     state.clear_selection();
   }

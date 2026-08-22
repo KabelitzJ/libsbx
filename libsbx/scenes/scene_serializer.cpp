@@ -3,6 +3,7 @@
 #include <libsbx/scenes/scene_serializer.hpp>
 
 #include <fstream>
+#include <sstream>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -19,15 +20,9 @@
 
 namespace sbx::scenes {
 
-auto scene_serializer::save(scene& target, const std::filesystem::path& path) -> void {
+auto scene_serializer::_build(scene& target) -> YAML::Node {
   auto& registry = target._registry;
   auto& assets_module = core::engine::get_module<assets::assets_module>();
-
-  auto& project = core::engine::project();
-
-  const auto assets_directory = project.assets_directory();
-
-  const auto resolved_path = assets_directory / path;
 
   // Assets table: collect referenced meshes/materials, assign unique keys
   auto mesh_keys = std::unordered_map<math::uuid, std::string>{};
@@ -258,14 +253,29 @@ auto scene_serializer::save(scene& target, const std::filesystem::path& path) ->
   root["assets_module"] = assets_node;
   root["nodes"] = nodes_node;
 
+  return root;
+}
+
+auto scene_serializer::serialize(scene& target) -> std::string {
+  auto stream = std::ostringstream{};
+  stream << _build(target);
+  return stream.str();
+}
+
+auto scene_serializer::save(scene& target, const std::filesystem::path& path) -> void {
+  auto& project = core::engine::project();
+
+  const auto resolved_path = project.assets_directory() / path;
+  const auto content = serialize(target);
+
   if (!resolved_path.parent_path().empty()) {
     std::filesystem::create_directories(resolved_path.parent_path());
   }
 
   auto out = std::ofstream{resolved_path};
-  out << root;
+  out << content;
 
-  utility::logger<"scenes">::info("Saved scene '{}' ({} nodes)", resolved_path.generic_string(), nodes_node.size());
+  utility::logger<"scenes">::info("Saved scene '{}'", resolved_path.generic_string());
 }
 
 auto scene_serializer::load(scene& target, const std::filesystem::path& path) -> void {

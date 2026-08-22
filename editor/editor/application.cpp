@@ -39,7 +39,7 @@ application::application()
   auto& window = platform_module.window();
 
   window.on_window_closed() += []([[maybe_unused]] const auto& event) {
-    sbx::core::engine::quit();
+    sbx::core::engine::get_module<editor::editor_module>().request_quit();
   };
 
   auto& project = sbx::core::engine::project();
@@ -56,6 +56,9 @@ application::application()
 
   sbx::scenes::scene_serializer::load(scene, "scenes/demo.yaml");
 
+  auto& editor_module = sbx::core::engine::get_module<editor::editor_module>();
+  editor_module.set_scene_path("scenes/demo.yaml");
+
   _camera = scene.find("Camera");
   _duck = scene.find("Duck");
   _damaged_helmet = scene.find("DamagedHelmet");
@@ -63,9 +66,11 @@ application::application()
 
   _camera_controller = fly_camera{_camera};
 
-  auto& skybox = _camera.add_component<sbx::scenes::skybox>();
-  skybox.environment = assets_module.load_environment_map("environments/sky.hdr");
-  skybox.intensity = 1.0f;
+  if (!_camera.has_component<sbx::scenes::skybox>()) {
+    auto& skybox = _camera.add_component<sbx::scenes::skybox>();
+    skybox.environment = assets_module.load_environment_map("environments/sky.hdr");
+    skybox.intensity = 1.0f;
+  }
 
   auto& scripting_module = sbx::core::engine::get_module<sbx::scripting::scripting_module>();
   

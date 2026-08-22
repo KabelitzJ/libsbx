@@ -3,6 +3,8 @@
 #include <editor/editor_module.hpp>
 
 #include <array>
+#include <cstring>
+#include <fstream>
 #include <memory>
 
 #include <vulkan/vulkan.h>
@@ -25,7 +27,10 @@
 #include <libsbx/core/engine.hpp>
 
 #include <libsbx/scenes/scene.hpp>
+#include <libsbx/scenes/scene_serializer.hpp>
 #include <libsbx/scenes/scenes_module.hpp>
+
+#include <libsbx/core/project.hpp>
 
 #include <libsbx/graphics/frame_context.hpp>
 #include <libsbx/graphics/validate.hpp>
@@ -563,7 +568,7 @@ auto editor_module::_draw_dockspace() -> void {
   if (ImGui::BeginMenuBar()) {
     if (ImGui::BeginMenu("File")) {
       if (ImGui::MenuItem("Quit")) {
-        sbx::core::engine::quit();
+        request_quit();
       }
 
       ImGui::EndMenu();
@@ -577,13 +582,146 @@ auto editor_module::_draw_dockspace() -> void {
         _state.select_node(scene.create_node());
       }
 
+      ImGui::Separator();
+
+      if (ImGui::MenuItem(ICON_MDI_CONTENT_SAVE " Save")) {
+        if (_scene_path.empty()) {
+          std::strncpy(_save_as_buffer.data(), "scenes/new_scene.yaml", _save_as_buffer.size() - 1u);
+          _save_as_buffer[_save_as_buffer.size() - 1u] = '\0';
+          _show_save_as_dialog = true;
+        } else {
+          _save_scene(_scene_path);
+        }
+      }
+
+      if (ImGui::MenuItem(ICON_MDI_CONTENT_SAVE_EDIT " Save As...")) {
+        const auto& seed = _scene_path.empty() ? std::string{"scenes/new_scene.yaml"} : _scene_path.string();
+        std::strncpy(_save_as_buffer.data(), seed.c_str(), _save_as_buffer.size() - 1u);
+        _save_as_buffer[_save_as_buffer.size() - 1u] = '\0';
+        _show_save_as_dialog = true;
+      }
+
       ImGui::EndMenu();
     }
 
     ImGui::EndMenuBar();
   }
 
+  _draw_save_as_dialog();
+  _draw_unsaved_changes_dialog();
+
   ImGui::End();
+}
+
+auto editor_module::request_quit() -> void {
+  if (_is_scene_dirty()) {
+    _show_unsaved_changes_dialog = true;
+  } else {
+    sbx::core::engine::quit();
+  }
+}
+
+auto editor_module::_save_scene(const std::filesystem::path& path) -> void {
+  auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
+
+  sbx::scenes::scene_serializer::save(scenes_module.active_scene(), path);
+
+  _scene_path = path;
+}
+
+auto editor_module::_is_scene_dirty() -> bool {
+  if (_scene_path.empty()) {
+    return true; // never saved — anything at all counts as unsaved
+  }
+
+  auto& project = sbx::core::engine::project();
+  auto file = std::ifstream{project.assets_directory() / _scene_path, std::ios::binary};
+
+  if (!file) {
+    return true; // no file at that path (yet)
+  }
+
+  const auto on_disk = std::string{std::istreambuf_iterator<char>{file}, std::istreambuf_iterator<char>{}};
+
+  auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
+
+  return on_disk != sbx::scenes::scene_serializer::serialize(scenes_module.active_scene());
+}
+
+auto editor_module::_draw_save_as_dialog() -> void {
+  if (_show_save_as_dialog) {
+    ImGui::OpenPopup("Save Scene As");
+    _show_save_as_dialog = false;
+  }
+
+  if (ImGui::BeginPopupModal("Save Scene As", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+    ImGui::TextDisabled("Relative to the project's assets directory.");
+    ImGui::InputText("##save_as_path", _save_as_buffer.data(), _save_as_buffer.size());
+
+    if (ImGui::Button(ICON_MDI_CONTENT_SAVE " Save")) {
+      if (_save_as_buffer[0] != '\0') {
+        _save_scene(std::filesystem::path{_save_as_buffer.data()});
+
+        if (_quit_after_save_as) {
+          _quit_after_save_as = false;
+          sbx::core::engine::quit();
+        }
+
+        ImGui::CloseCurrentPopup();
+      }
+    }
+
+    ImGui::SameLine();
+
+    if (ImGui::Button("Cancel")) {
+      ImGui::CloseCurrentPopup();
+    }
+
+    ImGui::EndPopup();
+  }
+}
+
+auto editor_module::_draw_unsaved_changes_dialog() -> void {
+  if (_show_unsaved_changes_dialog) {
+    ImGui::OpenPopup("Unsaved Changes");
+    _show_unsaved_changes_dialog = false;
+  }
+
+  if (ImGui::BeginPopupModal("Unsaved Changes", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+    ImGui::Text(ICON_MDI_CONTENT_SAVE_ALERT " The current scene has unsaved changes.");
+
+    if (ImGui::Button(ICON_MDI_CONTENT_SAVE " Save")) {
+      if (_scene_path.empty()) {
+        std::strncpy(_save_as_buffer.data(), "scenes/new_scene.yaml", _save_as_buffer.size() - 1u);
+        _save_as_buffer[_save_as_buffer.size() - 1u] = '\0';
+        _show_save_as_dialog = true;
+        _quit_after_save_as = true;
+      } else {
+        _save_scene(_scene_path);
+        sbx::core::engine::quit();
+      }
+
+      _show_unsaved_changes_dialog = false;
+      ImGui::CloseCurrentPopup();
+    }
+
+    ImGui::SameLine();
+
+    if (ImGui::Button("Don't Save")) {
+      _show_unsaved_changes_dialog = false;
+      ImGui::CloseCurrentPopup();
+      sbx::core::engine::quit();
+    }
+
+    ImGui::SameLine();
+
+    if (ImGui::Button("Cancel")) {
+      _show_unsaved_changes_dialog = false;
+      ImGui::CloseCurrentPopup();
+    }
+
+    ImGui::EndPopup();
+  }
 }
 
 } // namespace editor

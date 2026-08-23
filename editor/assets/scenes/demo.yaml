@@ -50,9 +50,9 @@ nodes:
     id: 914089331969664293
     components:
       - type: transform
-        position: {x: 0, y: 0, z: 0}
-        rotation: {x: 0.258006871, y: 0.655278146, z: 0.699526072, w: 0.121269397}
-        scale: {x: 0.999990821, y: 0.999991834, z: 0.99998939}
+        position: {x: 0, y: 6.15887451, z: 0}
+        rotation: {x: 0.258006871, y: 0.655278087, z: 0.699526131, w: 0.121269405}
+        scale: {x: 0.99999088, y: 0.999991834, z: 0.999989331}
       - type: directional_light
         color: {r: 1, g: 1, b: 1, a: 1}
         intensity: 3
@@ -60,7 +60,7 @@ nodes:
     id: 5275514898628331403
     components:
       - type: transform
-        position: {x: 1.27056599, y: -0.580544472, z: 0.00316208601}
+        position: {x: 1.20543933, y: 0, z: 0.00316208601}
         rotation: {x: 0, y: -0.493597358, z: 0, w: 0.869690537}
         scale: {x: 0.499999672, y: 0.5, z: 0.499999672}
       - type: static_mesh
@@ -96,9 +96,9 @@ nodes:
     id: 5387185583104597123
     components:
       - type: transform
-        position: {x: -2.16499996, y: 0.114598513, z: 0}
-        rotation: {x: 0, y: 0, z: 0, w: 1}
-        scale: {x: 1, y: 1, z: 1}
+        position: {x: -2.26088619, y: 1.17917264, z: 0}
+        rotation: {x: -1.97695726e-08, y: 0.477239192, z: 1.45029935e-06, w: 0.878773451}
+        scale: {x: 0.999995768, y: 1, z: 0.999995172}
       - type: static_mesh
         mesh: damaged_helmet
         submeshes:
@@ -108,9 +108,9 @@ nodes:
     id: 7853293024889737634
     components:
       - type: transform
-        position: {x: 2.90384173, y: 0.373055547, z: -6.10351562e-05}
-        rotation: {x: 0, y: 0, z: 0, w: 1}
-        scale: {x: 2.99999905, y: 2.99999905, z: 3}
+        position: {x: 0.292918324, y: 0, z: -2.24465728}
+        rotation: {x: 0, y: 0.365675211, z: 0, w: 0.930742502}
+        scale: {x: 2.99999785, y: 2.99999905, z: 3}
       - type: static_mesh
         mesh: flight_helmet
         submeshes:
@@ -130,8 +130,8 @@ nodes:
     id: 9852644092818528630
     components:
       - type: transform
-        position: {x: 0, y: 1.64696467, z: 0}
-        rotation: {x: -3.3258101e-07, y: 0.234547794, z: 1.37867005e-07, w: 0.972104609}
+        position: {x: 0, y: 2.96713638, z: 0}
+        rotation: {x: -3.32581152e-07, y: 0.234547794, z: 1.37867033e-07, w: 0.972104609}
         scale: {x: 0.999996901, y: 1, z: 0.999996901}
       - type: point_light
         color: {r: 1, g: 0, b: 1, a: 1}
@@ -141,8 +141,8 @@ nodes:
     id: 1867269432501270719
     components:
       - type: transform
-        position: {x: 1.35516059, y: 1.61464381, z: 3.46059322}
-        rotation: {x: -0.121520922, y: 0.10402175, z: 0.0128067937, w: 0.987040102}
+        position: {x: 5.94495678, y: 7.11769152, z: 3.60867739}
+        rotation: {x: -0.241615072, y: 0.372488737, z: 0.1010869, w: 0.890312135}
         scale: {x: 1, y: 1, z: 1}
       - type: camera
         fov_degrees: 60

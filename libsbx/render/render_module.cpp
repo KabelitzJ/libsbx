@@ -40,6 +40,7 @@
 #include <libsbx/render/opaque_pass.hpp>
 #include <libsbx/render/present_pass.hpp>
 #include <libsbx/render/skybox_pass.hpp>
+#include <libsbx/render/grid_pass.hpp>
 #include <libsbx/render/tonemap_pass.hpp>
 #include <libsbx/render/transparent_pass.hpp>
 
@@ -85,6 +86,7 @@ render_module::render_module() {
   _passes.push_back(std::make_unique<depth_pre_pass>());
   _passes.push_back(std::make_unique<opaque_pass>());
   _passes.push_back(std::make_unique<skybox_pass>()); // after opaque, before transparent — see skybox_pass doc comment
+  _passes.push_back(std::make_unique<grid_pass>()); // same ordering reasons as skybox_pass — see grid_pass doc comment
   _passes.push_back(std::make_unique<transparent_pass>());
   _passes.push_back(std::make_unique<tonemap_pass>());
 
@@ -141,6 +143,10 @@ auto render_module::set_pre_render_callback(core::delegate<void()> callback) -> 
 
 auto render_module::set_viewport_extent(math::vector2u extent) -> void {
   _viewport_extent = extent;
+}
+
+auto render_module::set_grid_enabled(bool enabled) -> void {
+  _grid_enabled = enabled;
 }
 
 auto render_module::_build_packet() -> render_packet {
@@ -579,6 +585,7 @@ auto render_module::_prepare_frame(render_context& context) -> void {
   context.instance_count = instance_count;
   context.sampler_index = _sampler_index;
   context.clamp_sampler_index = _clamp_sampler_index;
+  context.show_grid = _grid_enabled;
   context.inverse_view_projection = math::matrix4x4::inverted(projection * context.packet->camera.view);
 }
 

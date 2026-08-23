@@ -36,6 +36,21 @@ auto draw_viewport_gizmo(editor_state& state, const ImVec2& viewport_origin, con
  */
 auto draw_gizmo_toolbar(editor_state& state, const ImVec2& viewport_origin) -> bool;
 
+/**
+ * @brief Draws the Blender/Unity/Godot-style camera-orientation cube in the viewport's top-right
+ * corner (X/Y/Z colored handles, click a face/axis to snap the view). Writes an updated view back
+ * onto the active camera node's transform when clicked/dragged. Unlike draw_viewport_gizmo, this
+ * isn't tied to node selection — it's shown whenever there's an active camera. Must be called
+ * while the Viewport window is the current ImGui window.
+ *
+ * @param viewport_origin Screen-space top-left of the viewport image.
+ * @param viewport_size Screen-space size of the viewport image.
+ *
+ * @return true if the cursor is over the widget — callers should skip viewport click-to-pick this
+ * frame when true, the same way they already do for the other viewport overlays.
+ */
+auto draw_view_gizmo(const ImVec2& viewport_origin, const ImVec2& viewport_size) -> bool;
+
 } // namespace editor
 
 #endif // EDITOR_VIEWPORT_GIZMO_HPP_

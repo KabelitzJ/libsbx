@@ -3,6 +3,8 @@
 #include <editor/viewport_gizmo.hpp>
 
 #include <array>
+#include <algorithm>
+#include <cstring>
 
 #include <ImGuizmo.h>
 
@@ -91,7 +93,23 @@ auto draw_viewport_gizmo(editor_state& state, const ImVec2& viewport_origin, con
 
   auto world_matrix = node.world_matrix();
 
-  const auto changed = ImGuizmo::Manipulate(matrices.view.data(), gizmo_projection.data(), operation, mode, world_matrix.data());
+  // Hold Ctrl to snap (Blender/Unity convention) instead of moving freely. ImGuizmo reads snap
+  // as 3 per-axis values for translate/scale, or just snap[0] (degrees) for rotate.
+  static constexpr auto translate_snap = std::array<std::float_t, 3u>{1.0f, 1.0f, 1.0f};
+  static constexpr auto rotate_snap = std::array<std::float_t, 3u>{15.0f, 15.0f, 15.0f};
+  static constexpr auto scale_snap = std::array<std::float_t, 3u>{0.1f, 0.1f, 0.1f};
+
+  const std::float_t* snap = nullptr;
+
+  if (ImGui::GetIO().KeyCtrl) {
+    switch (state.current_gizmo_operation) {
+      case gizmo_operation::translate: snap = translate_snap.data(); break;
+      case gizmo_operation::rotate: snap = rotate_snap.data(); break;
+      case gizmo_operation::scale: snap = scale_snap.data(); break;
+    }
+  }
+
+  const auto changed = ImGuizmo::Manipulate(matrices.view.data(), gizmo_projection.data(), operation, mode, world_matrix.data(), nullptr, snap);
 
   if (changed) {
     const auto& relationship = node.get_component<sbx::scenes::relationship>();
@@ -163,6 +181,73 @@ auto draw_gizmo_toolbar(editor_state& state, const ImVec2& viewport_origin) -> b
   ImGui::PopStyleVar();
 
   return ImGui::IsItemHovered();
+}
+
+auto draw_view_gizmo(const ImVec2& viewport_origin, const ImVec2& viewport_size) -> bool {
+  if (viewport_size.x <= 0.0f || viewport_size.y <= 0.0f) {
+    return false;
+  }
+
+  auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
+  auto& scene = scenes_module.active_scene();
+
+  if (!scene.has_active_camera()) {
+    return false;
+  }
+
+  auto camera_node = scene.active_camera();
+
+  if (!camera_node.is_valid() || !camera_node.has_component<sbx::scenes::camera>()) {
+    return false;
+  }
+
+  ImGuizmo::SetDrawlist();
+  ImGuizmo::SetRect(viewport_origin.x, viewport_origin.y, viewport_size.x, viewport_size.y);
+
+  const auto& camera = camera_node.get_component<sbx::scenes::camera>();
+  const auto aspect = viewport_size.x / viewport_size.y;
+  const auto matrices = compute_viewport_camera_matrices(camera_node, camera, aspect);
+
+  auto view = matrices.view;
+
+  // No orbit-pivot concept on this fly camera, so distance-from-origin is the closest stand-in
+  // for the "length" ViewManipulate uses when computing the snapped view on a face/axis click.
+  const auto camera_position = sbx::math::vector3f{camera_node.world_matrix()[3]};
+  const auto length = std::max(camera_position.length(), 1.0f);
+
+  constexpr auto padding = 8.0f;
+  constexpr auto size = ImVec2{96.0f, 96.0f};
+  const auto position = ImVec2{viewport_origin.x + viewport_size.x - size.x - padding, viewport_origin.y + padding};
+
+  ImGuizmo::ViewManipulate(view.data(), length, position, size, IM_COL32(26, 26, 26, 60));
+
+  // ViewManipulate has no return value — a click/drag is detected by the view it wrote back
+  // differing from what was passed in.
+  if (std::memcmp(view.data(), matrices.view.data(), 16u * sizeof(std::float_t)) != 0) {
+    auto camera_world_matrix = sbx::math::matrix4x4::inverted(view);
+
+    const auto& relationship = camera_node.get_component<sbx::scenes::relationship>();
+
+    auto local_matrix = camera_world_matrix;
+
+    if (relationship.parent != sbx::ecs::null_entity) {
+      if (auto parent_node = scene.node_of(relationship.parent); parent_node.is_valid()) {
+        local_matrix = sbx::math::matrix4x4::inverted(parent_node.world_matrix()) * camera_world_matrix;
+      }
+    }
+
+    auto translation = std::array<std::float_t, 3u>{};
+    auto rotation = std::array<std::float_t, 3u>{}; // degrees
+    auto scale = std::array<std::float_t, 3u>{};
+
+    ImGuizmo::DecomposeMatrixToComponents(local_matrix.data(), translation.data(), rotation.data(), scale.data());
+
+    auto& transform = camera_node.transform();
+    transform.position = sbx::math::vector3f{translation[0], translation[1], translation[2]};
+    transform.rotation = sbx::math::quaternion{sbx::math::vector3f{rotation[0], rotation[1], rotation[2]}};
+  }
+
+  return ImGuizmo::IsViewManipulateHovered() || ImGuizmo::IsUsingViewManipulate();
 }
 
 } // namespace editor

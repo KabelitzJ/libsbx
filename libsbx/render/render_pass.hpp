@@ -64,6 +64,9 @@ struct render_context {
   std::uint32_t instance_count{0u};
   std::uint32_t sampler_index{0u};
   std::uint32_t clamp_sampler_index{0u};
+
+  // Editor-only reference grid — see render_module::set_grid_enabled. Always false in demo.
+  bool show_grid{false};
 }; // struct render_context
 
 struct push_constants {

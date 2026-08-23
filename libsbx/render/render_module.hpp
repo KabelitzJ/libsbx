@@ -67,6 +67,13 @@ public:
     return _scene_image;
   }
 
+  /**
+   * @brief Shows/hides the world-space reference grid (see grid_pass). Off by default; demo never
+   * calls this, so the grid pass — always present in the fixed pass list — stays a no-op there.
+   * editor_module calls this once to turn it on.
+   */
+  auto set_grid_enabled(bool enabled) -> void;
+
 private:
 
   inline static constexpr auto light_capacity = std::uint32_t{256u};
@@ -87,6 +94,7 @@ private:
 
   std::uint32_t _sampler_index{0u};
   std::uint32_t _clamp_sampler_index{0u};
+  bool _grid_enabled{false};
 
   graphics::image_handle _depth_image{};
   graphics::image_handle _color_image{};

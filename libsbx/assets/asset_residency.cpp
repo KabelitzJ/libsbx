@@ -400,6 +400,193 @@ auto asset_residency::save_material(material_handle& material, const std::filesy
   return id;
 }
 
+auto asset_residency::load_particle_effect(const math::uuid& id) -> particle_effect_handle {
+  _cooker.ensure_manifest_loaded();
+
+  {
+    auto lock = std::lock_guard{_mutex};
+    if (const auto entry = _particle_effect_files.find(id); entry != _particle_effect_files.end()) {
+      return particle_effect_handle{entry->second};
+    }
+  }
+
+  const auto source_path = _cooker.path_of(id);
+
+  if (source_path.empty() || source_path.extension() != ".particle_effect") {
+    utility::logger<"assets">::warn("Unknown particle_effect uuid {}", id);
+    return particle_effect_handle{};
+  }
+
+  const auto& path = source_path;
+
+  auto root = YAML::Node{};
+  try {
+    root = YAML::LoadFile(path.string());
+  } catch (const std::exception& exception) {
+    utility::logger<"assets">::warn("Could not parse particle_effect '{}' ({})", path.generic_string(), exception.what());
+    return particle_effect_handle{};
+  }
+
+  auto info = particle_effect::create_info{};
+
+  if (root["name"]) info.name = root["name"].as<std::string>();
+
+  if (const auto emitters = root["emitters"]) {
+    info.emitters.reserve(emitters.size());
+
+    for (const auto emitter_node : emitters) {
+      auto emitter = particle_emitter_definition{};
+
+      if (emitter_node["name"]) emitter.name = emitter_node["name"].as<std::string>();
+
+      if (emitter_node["blend_mode"]) {
+        const auto mode = emitter_node["blend_mode"].as<std::string>();
+        emitter.blend_mode = (mode == "alpha_blend") ? particle_blend_mode::alpha_blend : particle_blend_mode::additive;
+      }
+
+      if (emitter_node["emission_rate"]) emitter.emission_rate = emitter_node["emission_rate"].as<std::float_t>();
+      if (emitter_node["burst_count"]) emitter.burst_count = emitter_node["burst_count"].as<std::uint32_t>();
+
+      if (emitter_node["shape"]) {
+        const auto shape = emitter_node["shape"].as<std::string>();
+        emitter.shape = (shape == "sphere") ? particle_emission_shape::sphere : (shape == "box") ? particle_emission_shape::box : particle_emission_shape::point;
+      }
+
+      if (emitter_node["shape_extents"]) emitter.shape_extents = emitter_node["shape_extents"].as<math::vector3>();
+
+      if (emitter_node["velocity_min"]) emitter.velocity_min = emitter_node["velocity_min"].as<math::vector3>();
+      if (emitter_node["velocity_max"]) emitter.velocity_max = emitter_node["velocity_max"].as<math::vector3>();
+      if (emitter_node["lifetime_min"]) emitter.lifetime_min = emitter_node["lifetime_min"].as<std::float_t>();
+      if (emitter_node["lifetime_max"]) emitter.lifetime_max = emitter_node["lifetime_max"].as<std::float_t>();
+      if (emitter_node["start_color"]) emitter.start_color = emitter_node["start_color"].as<math::color>();
+      if (emitter_node["end_color"]) emitter.end_color = emitter_node["end_color"].as<math::color>();
+      if (emitter_node["size_min"]) emitter.size_min = emitter_node["size_min"].as<std::float_t>();
+      if (emitter_node["size_max"]) emitter.size_max = emitter_node["size_max"].as<std::float_t>();
+      if (emitter_node["gravity"]) emitter.gravity = emitter_node["gravity"].as<std::float_t>();
+      if (emitter_node["drag"]) emitter.drag = emitter_node["drag"].as<std::float_t>();
+
+      if (emitter_node["texture"]) {
+        emitter.texture = load_texture(std::filesystem::path{emitter_node["texture"].as<std::string>()}, graphics::format::r8g8b8a8_srgb);
+      }
+
+      info.emitters.push_back(emitter);
+    }
+  }
+
+  auto record = std::make_shared<particle_effect>(info);
+  record->_id = id;
+
+  {
+    auto lock = std::lock_guard{_mutex};
+    _particle_effect_files.emplace(id, record);
+  }
+
+  utility::logger<"assets">::info("Loaded particle_effect '{}'", path.generic_string());
+
+  return particle_effect_handle{record};
+}
+
+auto asset_residency::load_particle_effect(const std::filesystem::path& path) -> particle_effect_handle {
+  const auto& project = core::engine::project();
+
+  const auto assets_directory = project.assets_directory();
+
+  return load_particle_effect(_cooker.import(assets_directory / path));
+}
+
+auto asset_residency::create_particle_effect(const particle_effect::create_info& create_info) -> particle_effect_handle {
+  return particle_effect_handle{std::make_shared<particle_effect>(create_info)};
+}
+
+auto asset_residency::update_particle_effect(particle_effect_handle& effect, const particle_effect::create_info& create_info) -> void {
+  if (!effect.is_valid()) {
+    return;
+  }
+
+  effect->_emitters = create_info.emitters;
+  effect->_name = create_info.name;
+}
+
+auto asset_residency::save_particle_effect(particle_effect_handle& effect, const std::filesystem::path& path) -> math::uuid {
+  const auto& project = core::engine::project();
+
+  const auto assets_directory = project.assets_directory();
+
+  const auto resolved_path = assets_directory / path;
+
+  if (!effect.is_valid()) {
+    utility::logger<"assets">::warn("Cannot save an invalid particle_effect to '{}'", resolved_path.generic_string());
+    return math::uuid::nil();
+  }
+
+  auto node = YAML::Node{};
+
+  node["name"] = effect->name();
+
+  auto emitters_node = YAML::Node{YAML::NodeType::Sequence};
+
+  // Same idea as save_material's path_of lambda: a texture slot's absolute import()-ed path has to
+  // be turned back into the assets-relative form load_texture(path, ...) expects. Empty/nil-uuid
+  // (no texture assigned — the common case) omits the key entirely.
+  const auto texture_path_of = [this](const texture_handle& texture) -> std::optional<std::string> {
+    if (!texture.is_valid()) {
+      return std::nullopt;
+    }
+
+    const auto absolute = _cooker.path_of(texture->id());
+
+    if (absolute.empty()) {
+      return std::nullopt;
+    }
+
+    return _cooker.relative(absolute).generic_string();
+  };
+
+  for (const auto& emitter : effect->emitters()) {
+    auto emitter_node = YAML::Node{};
+
+    emitter_node["name"] = emitter.name;
+    emitter_node["blend_mode"] = (emitter.blend_mode == particle_blend_mode::alpha_blend) ? "alpha_blend" : "additive";
+    emitter_node["emission_rate"] = emitter.emission_rate;
+    emitter_node["burst_count"] = emitter.burst_count;
+    emitter_node["shape"] = (emitter.shape == particle_emission_shape::sphere) ? "sphere" : (emitter.shape == particle_emission_shape::box) ? "box" : "point";
+    emitter_node["shape_extents"] = emitter.shape_extents;
+    emitter_node["velocity_min"] = emitter.velocity_min;
+    emitter_node["velocity_max"] = emitter.velocity_max;
+    emitter_node["lifetime_min"] = emitter.lifetime_min;
+    emitter_node["lifetime_max"] = emitter.lifetime_max;
+    emitter_node["start_color"] = emitter.start_color;
+    emitter_node["end_color"] = emitter.end_color;
+    emitter_node["size_min"] = emitter.size_min;
+    emitter_node["size_max"] = emitter.size_max;
+    emitter_node["gravity"] = emitter.gravity;
+    emitter_node["drag"] = emitter.drag;
+
+    if (const auto slot = texture_path_of(emitter.texture)) {
+      emitter_node["texture"] = *slot;
+    }
+
+    emitters_node.push_back(emitter_node);
+  }
+
+  node["emitters"] = emitters_node;
+
+  if (!resolved_path.parent_path().empty()) {
+    std::filesystem::create_directories(resolved_path.parent_path());
+  }
+
+  auto out = std::ofstream{resolved_path};
+  out << node;
+
+  const auto id = _cooker.import(resolved_path);
+
+  effect->_id = id;
+
+  utility::logger<"assets">::info("Saved particle_effect '{}'", resolved_path.generic_string());
+
+  return id;
+}
+
 auto asset_residency::load_environment_map(const math::uuid& id) -> environment_map_handle {
   auto timer = utility::scoped_timer{[&id](const units::seconds& elapsed) {
     utility::logger<"assets">::info("Loaded environment map {} in {}", id, units::milliseconds{elapsed});

@@ -293,6 +293,7 @@ target_sources(
       "${CMAKE_SOURCE_DIR}/libsbx/assets/ibl_baker.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/assets/material.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/assets/mesh.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/assets/particle_effect.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/assets/texture.hpp"
 
       "${CMAKE_SOURCE_DIR}/libsbx/containers/compressed_pair.hpp"

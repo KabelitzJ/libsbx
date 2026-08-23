@@ -35,6 +35,16 @@ struct particle_gpu {
 
 static_assert(sizeof(particle_gpu) == 64u, "particle_gpu must stay byte-mirrored with shaders/particles/particle_data.slang's particle struct");
 
+// Ordinal values byte-mirror assets::particle_emission_shape and shaders/particles/
+// particle_data.slang's particle_emission_shape_* constants — keep all three in sync by hand.
+enum class particle_emission_shape_gpu : std::uint32_t {
+  point = 0u,
+  sphere = 1u,
+  box = 2u
+}; // enum class particle_emission_shape_gpu
+
+inline static constexpr auto particle_texture_index_none = std::uint32_t{0xFFFFFFFFu};
+
 /**
  * @brief Per-emitter-instance data, rewritten wholesale from the CPU every frame (same pattern as
  * render_module's _transform_buffer/_light_buffer). One pool-local array of these per particle_pool
@@ -57,10 +67,12 @@ struct emitter_instance_gpu {
   std::uint32_t active{0u};
   std::uint32_t particles_to_emit{0u};
   std::uint32_t seed{0u};
-  std::uint32_t pad0{0u};
+  std::uint32_t shape{static_cast<std::uint32_t>(particle_emission_shape_gpu::point)};
+  math::vector3 shape_extents{math::vector3::zero};
+  std::uint32_t texture_index{particle_texture_index_none};
 }; // struct emitter_instance_gpu
 
-static_assert(sizeof(emitter_instance_gpu) == 112u, "emitter_instance_gpu must stay byte-mirrored with shaders/particles/particle_data.slang's emitter_instance struct");
+static_assert(sizeof(emitter_instance_gpu) == 128u, "emitter_instance_gpu must stay byte-mirrored with shaders/particles/particle_data.slang's emitter_instance struct");
 
 /**
  * @brief The pool's persistent free-stack/alive-list bookkeeping. Entirely GPU read-modify-write

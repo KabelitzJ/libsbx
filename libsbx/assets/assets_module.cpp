@@ -59,6 +59,26 @@ auto assets_module::load_environment_map(const std::filesystem::path& path) -> e
   return _residency.load_environment_map(path);
 }
 
+auto assets_module::load_particle_effect(const math::uuid& id) -> particle_effect_handle {
+  return _residency.load_particle_effect(id);
+}
+
+auto assets_module::load_particle_effect(const std::filesystem::path& path) -> particle_effect_handle {
+  return _residency.load_particle_effect(path);
+}
+
+auto assets_module::create_particle_effect(const particle_effect::create_info& create_info) -> particle_effect_handle {
+  return _residency.create_particle_effect(create_info);
+}
+
+auto assets_module::update_particle_effect(particle_effect_handle& effect, const particle_effect::create_info& create_info) -> void {
+  _residency.update_particle_effect(effect, create_info);
+}
+
+auto assets_module::save_particle_effect(particle_effect_handle& effect, const std::filesystem::path& path) -> math::uuid {
+  return _residency.save_particle_effect(effect, path);
+}
+
 auto assets_module::process_uploads(std::uint64_t frame_index) -> void {
   _residency.process_uploads(frame_index);
 }

@@ -25,6 +25,7 @@
 #include <libsbx/assets/mesh.hpp>
 #include <libsbx/assets/material.hpp>
 #include <libsbx/assets/environment_map.hpp>
+#include <libsbx/assets/particle_effect.hpp>
 #include <libsbx/assets/asset_cooker.hpp>
 #include <libsbx/assets/ibl_baker.hpp>
 
@@ -79,6 +80,27 @@ public:
   auto load_environment_map(const math::uuid& id) -> environment_map_handle;
 
   auto load_environment_map(const std::filesystem::path& path) -> environment_map_handle;
+
+  auto load_particle_effect(const math::uuid& id) -> particle_effect_handle;
+
+  auto load_particle_effect(const std::filesystem::path& path) -> particle_effect_handle;
+
+  auto create_particle_effect(const particle_effect::create_info& create_info) -> particle_effect_handle;
+
+  /**
+   * @brief Overwrites an existing particle_effect's emitters in place. Every particle_effect_handle
+   * already pointing at this record observes the change immediately. Does not touch identity
+   * (uuid) or persist to disk.
+   */
+  auto update_particle_effect(particle_effect_handle& effect, const particle_effect::create_info& create_info) -> void;
+
+  /**
+   * @brief Writes a particle_effect to a `.particle_effect` file and (re-)registers it as a
+   * first-class asset.
+   * @param path Destination path relative to the active project's assets directory.
+   * @return The effect's canonical uuid (also written back onto the record itself).
+   */
+  auto save_particle_effect(particle_effect_handle& effect, const std::filesystem::path& path) -> math::uuid;
 
   /**
    * @brief Render thread. Turns queued texture loads into GPU images + bindless writes. Copies are
@@ -169,6 +191,9 @@ private:
   std::unordered_map<math::uuid, std::shared_ptr<material>> _material_files{};
 
   std::unordered_map<math::uuid, std::shared_ptr<environment_map>> _environment_maps{};
+
+  // Pure CPU data — no GPU buffer/index, unlike _materials above.
+  std::unordered_map<math::uuid, std::shared_ptr<particle_effect>> _particle_effect_files{};
 
   texture_handle _white{};
   texture_handle _normal{};

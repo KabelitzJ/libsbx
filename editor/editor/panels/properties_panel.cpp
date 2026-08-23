@@ -7,6 +7,7 @@
 #include <cctype>
 #include <cstring>
 #include <filesystem>
+#include <optional>
 #include <string_view>
 #include <vector>
 
@@ -23,6 +24,7 @@
 #include <libsbx/math/uuid.hpp>
 
 #include <libsbx/assets/assets_module.hpp>
+#include <libsbx/assets/particle_effect.hpp>
 
 #include <libsbx/scenes/components.hpp>
 #include <libsbx/scenes/scene.hpp>
@@ -336,6 +338,74 @@ auto draw_mesh_picker(editor_state& state, const char* popup_id, sbx::assets::me
   }
 }
 
+// Same idea as draw_mesh_picker, for particle_effect_instance.effect — including the same
+// jump-to-edit button draw_material_picker has, since particle_effect assets are edited in place
+// (see _draw_particle_effect_properties) exactly like materials are.
+auto draw_particle_effect_picker(editor_state& state, const char* popup_id, sbx::assets::particle_effect_handle& slot, sbx::assets::assets_module& assets_module) -> void {
+  const auto label = (slot.is_valid() ? short_label(assets_module, slot->id()) : std::string{"(none)"}) + popup_id;
+
+  if (ImGui::Button(label.c_str())) {
+    ImGui::OpenPopup(popup_id);
+  }
+
+  if (slot.is_valid() && ImGui::IsItemHovered()) {
+    ImGui::SetTooltip("%s", path_text(assets_module, slot->id()).c_str());
+  }
+
+  if (slot.is_valid()) {
+    ImGui::SameLine();
+
+    if (ImGui::Button(fmt::format("{}{}_edit", std::string{ICON_MDI_FILE_EDIT_OUTLINE}, popup_id).c_str())) {
+      state.select_asset(slot->id(), relative_asset_path(assets_module, slot->id()), asset_kind::particle_effect);
+    }
+
+    if (ImGui::IsItemHovered()) {
+      ImGui::SetTooltip("Edit this particle effect");
+    }
+  }
+
+  // Fixed width so the popup doesn't reflow (and the filter box along with it) as filtering
+  // changes which entries — and therefore how wide the widest visible one is — are shown.
+  ImGui::SetNextWindowSize(ImVec2{320.0f, 0.0f}, ImGuiCond_Always);
+
+  if (ImGui::BeginPopup(popup_id)) {
+    // Reset whenever a *different* picker's popup opens, so leftover text doesn't carry over.
+    static auto filter_buffer = std::array<char, 128u>{};
+    static auto last_popup_id = std::string{};
+
+    if (last_popup_id != popup_id) {
+      filter_buffer[0] = '\0';
+      last_popup_id = popup_id;
+    }
+
+    ImGui::SetNextItemWidth(-1.0f);
+    ImGui::InputTextWithHint("##filter", "Filter...", filter_buffer.data(), filter_buffer.size());
+
+    if (ImGui::MenuItem("(None)")) {
+      slot = sbx::assets::particle_effect_handle{};
+    }
+
+    auto& project = sbx::core::engine::project();
+    auto files = std::vector<std::filesystem::path>{};
+    collect_files_with_extension(project.assets_directory(), ".particle_effect", files);
+
+    for (const auto& file : files) {
+      const auto relative = std::filesystem::relative(file, project.assets_directory());
+      const auto relative_string = relative.string();
+
+      if (filter_buffer[0] != '\0' && !contains_ignore_case(relative_string, filter_buffer.data())) {
+        continue;
+      }
+
+      if (ImGui::MenuItem(relative_string.c_str())) {
+        slot = assets_module.load_particle_effect(relative);
+      }
+    }
+
+    ImGui::EndPopup();
+  }
+}
+
 // A compact, color-coded X/Y/Z row: a label, then three tinted axis buttons (click to reset that
 // axis to reset_value) each immediately followed by its own drag field. Returns true if any axis
 // changed this frame.
@@ -578,15 +648,81 @@ auto draw_skybox_section(sbx::scenes::node& node, sbx::assets::assets_module& as
     ImGui::Text("Environment: %s", path_text(assets_module, sky.environment->id()).c_str());
 
     const auto* environment = sky.environment.get();
-    const auto is_baked = environment->radiance_index() != sbx::assets::environment_map::invalid_index &&
-                           environment->irradiance_index() != sbx::assets::environment_map::invalid_index &&
-                           environment->prefiltered_index() != sbx::assets::environment_map::invalid_index;
+    const auto is_baked = environment->radiance_index() != sbx::assets::environment_map::invalid_index && environment->irradiance_index() != sbx::assets::environment_map::invalid_index && environment->prefiltered_index() != sbx::assets::environment_map::invalid_index;
     ImGui::Text("Baked: %s", is_baked ? "yes" : "no");
   } else {
     ImGui::TextDisabled("Environment: (none)");
   }
 
   ImGui::DragFloat("Intensity", &sky.intensity, 0.05f, 0.0f, 100.0f);
+}
+
+// loop and the duration/burst controls the plan for this section originally called for don't have
+// anything to bind to yet — particle_effect_instance::loop is a stub for a future burst/duration
+// model (see its doc comment) and nothing in particle_emitter_definition is duration-bounded
+// either (see particle_effect.hpp). Exposed anyway so authoring intent isn't lost once that lands.
+auto draw_particle_effect_instance_section(editor_state& state, sbx::scenes::node& node, sbx::assets::assets_module& assets_module) -> void {
+  auto is_open = true;
+
+  const auto is_expanded = ImGui::CollapsingHeader(ICON_MDI_FIREWORK " Particle Effect", &is_open, ImGuiTreeNodeFlags_DefaultOpen);
+
+  if (!is_open) {
+    node.remove_component<sbx::scenes::particle_effect_instance>();
+    return;
+  }
+
+  if (!is_expanded) {
+    return;
+  }
+
+  auto& instance = node.get_component<sbx::scenes::particle_effect_instance>();
+
+  ImGui::Text("Effect:");
+  ImGui::SameLine();
+  draw_particle_effect_picker(state, "##particle_effect_picker_popup", instance.effect, assets_module);
+
+  if (instance.effect.is_valid()) {
+    ImGui::Text("Emitters: %zu", instance.effect->emitters().size());
+  } else {
+    ImGui::TextDisabled("No effect assigned.");
+  }
+
+  ImGui::Checkbox("Loop", &instance.loop);
+
+  ImGui::SeparatorText("Playback");
+
+  const auto is_playing = instance.playback == sbx::scenes::particle_playback_state::playing;
+  const auto is_stopped = instance.playback == sbx::scenes::particle_playback_state::stopped;
+
+  ImGui::BeginDisabled(!instance.effect.is_valid());
+
+  if (is_playing) {
+    if (ImGui::Button(ICON_MDI_PAUSE " Pause")) {
+      instance.playback = sbx::scenes::particle_playback_state::paused;
+    }
+  } else if (ImGui::Button(ICON_MDI_PLAY " Play")) {
+    instance.playback = sbx::scenes::particle_playback_state::playing;
+  }
+
+  ImGui::EndDisabled();
+
+  ImGui::SameLine();
+
+  ImGui::BeginDisabled(is_stopped);
+
+  if (ImGui::Button(ICON_MDI_STOP " Stop")) {
+    // Only flips playback — render_module notices its emitter slots stopped being claimed next
+    // frame and drains them on its own (waits out lifetime_max before recycling); nothing here
+    // needs to touch gpu_slot/emission_accumulator directly. See particle_slot_pool_state's doc
+    // comment in render_module.hpp for the full mechanism.
+    instance.playback = sbx::scenes::particle_playback_state::stopped;
+    instance.elapsed = 0.0f;
+  }
+
+  ImGui::EndDisabled();
+
+  ImGui::SameLine();
+  ImGui::TextDisabled("(%s)", is_playing ? "Playing" : is_stopped ? "Stopped" : "Paused");
 }
 
 auto draw_add_component_menu(sbx::scenes::node& node) -> void {
@@ -617,6 +753,10 @@ auto draw_add_component_menu(sbx::scenes::node& node) -> void {
 
     if (!node.has_component<sbx::scenes::skybox>() && ImGui::MenuItem(ICON_MDI_EARTH " Skybox")) {
       node.add_component<sbx::scenes::skybox>();
+    }
+
+    if (!node.has_component<sbx::scenes::particle_effect_instance>() && ImGui::MenuItem(ICON_MDI_FIREWORK " Particle Effect")) {
+      node.add_component<sbx::scenes::particle_effect_instance>();
     }
 
     ImGui::EndPopup();
@@ -707,6 +847,10 @@ auto properties_panel::_draw_node_properties(editor_state& state, sbx::scenes::n
     draw_skybox_section(node, assets_module);
   }
 
+  if (node.has_component<sbx::scenes::particle_effect_instance>()) {
+    draw_particle_effect_instance_section(state, node, assets_module);
+  }
+
   ImGui::Separator();
   draw_add_component_menu(node);
 }
@@ -790,6 +934,156 @@ auto properties_panel::_draw_material_properties(const asset_selection& asset, s
   }
 }
 
+auto properties_panel::_draw_particle_effect_properties(const asset_selection& asset, sbx::assets::assets_module& assets_module) -> void {
+  if (!_asset_cache.particle_effect.is_valid()) {
+    ImGui::TextDisabled("Could not load this particle effect.");
+    return;
+  }
+
+  auto changed = false;
+
+  auto name_buffer = std::array<char, 128u>{};
+  std::strncpy(name_buffer.data(), _particle_effect_edit.name.c_str(), name_buffer.size() - 1u);
+  name_buffer[name_buffer.size() - 1u] = '\0';
+
+  if (ImGui::InputText("Name", name_buffer.data(), name_buffer.size())) {
+    _particle_effect_edit.name = std::string{name_buffer.data()};
+    changed = true;
+  }
+
+  ImGui::SeparatorText("Emitters");
+
+  static constexpr auto blend_mode_names = std::array<const char*, 2u>{"Additive", "Alpha Blend"};
+  static constexpr auto shape_names = std::array<const char*, 3u>{"Point", "Sphere", "Box"};
+
+  auto& emitters = _particle_effect_edit.emitters;
+  auto removed_index = std::optional<std::size_t>{};
+
+  for (auto index = std::size_t{0u}; index < emitters.size(); ++index) {
+    ImGui::PushID(static_cast<int>(index));
+
+    auto& emitter = emitters[index];
+
+    const auto header_label = emitter.name.empty() ? fmt::format("Emitter {}", index) : emitter.name;
+    const auto is_expanded = ImGui::TreeNodeEx("##emitter_node", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed, "%s", header_label.c_str());
+
+    ImGui::SameLine(ImGui::GetContentRegionAvail().x - ImGui::CalcTextSize(ICON_MDI_DELETE).x - ImGui::GetStyle().FramePadding.x);
+
+    if (ImGui::SmallButton(ICON_MDI_DELETE)) {
+      removed_index = index;
+      changed = true;
+    }
+
+    if (ImGui::IsItemHovered()) {
+      ImGui::SetTooltip("Remove this emitter");
+    }
+
+    if (is_expanded) {
+      auto emitter_name_buffer = std::array<char, 128u>{};
+      std::strncpy(emitter_name_buffer.data(), emitter.name.c_str(), emitter_name_buffer.size() - 1u);
+      emitter_name_buffer[emitter_name_buffer.size() - 1u] = '\0';
+
+      if (ImGui::InputText("Name", emitter_name_buffer.data(), emitter_name_buffer.size())) {
+        emitter.name = std::string{emitter_name_buffer.data()};
+        changed = true;
+      }
+
+      auto blend_mode_index = static_cast<int>(emitter.blend_mode);
+
+      if (ImGui::Combo("Blend Mode", &blend_mode_index, blend_mode_names.data(), static_cast<int>(blend_mode_names.size()))) {
+        emitter.blend_mode = static_cast<sbx::assets::particle_blend_mode>(blend_mode_index);
+        changed = true;
+      }
+
+      changed |= ImGui::DragFloat("Emission Rate", &emitter.emission_rate, 0.5f, 0.0f, 10000.0f);
+
+      auto burst_count = static_cast<int>(emitter.burst_count);
+      if (ImGui::DragInt("Burst Count", &burst_count, 1.0f, 0, 100000)) {
+        emitter.burst_count = static_cast<std::uint32_t>(std::max(burst_count, 0));
+        changed = true;
+      }
+
+      if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("Spawned once, on top of Emission Rate, the moment this emitter becomes active.");
+      }
+
+      auto shape_index = static_cast<int>(emitter.shape);
+
+      if (ImGui::Combo("Shape", &shape_index, shape_names.data(), static_cast<int>(shape_names.size()))) {
+        emitter.shape = static_cast<sbx::assets::particle_emission_shape>(shape_index);
+        changed = true;
+      }
+
+      if (emitter.shape == sbx::assets::particle_emission_shape::sphere) {
+        changed |= ImGui::DragFloat("Radius", &emitter.shape_extents.x(), 0.01f, 0.0f, 1000.0f);
+      } else if (emitter.shape == sbx::assets::particle_emission_shape::box) {
+        auto shape_extents = std::array<std::float_t, 3u>{emitter.shape_extents.x(), emitter.shape_extents.y(), emitter.shape_extents.z()};
+        if (draw_vector3_control("Half Extents", shape_extents, 0.0f, 0.01f)) {
+          emitter.shape_extents = sbx::math::vector3{shape_extents[0], shape_extents[1], shape_extents[2]};
+          changed = true;
+        }
+      }
+
+      auto velocity_min = std::array<std::float_t, 3u>{emitter.velocity_min.x(), emitter.velocity_min.y(), emitter.velocity_min.z()};
+      if (draw_vector3_control("Velocity Min", velocity_min, 0.0f, 0.05f)) {
+        emitter.velocity_min = sbx::math::vector3{velocity_min[0], velocity_min[1], velocity_min[2]};
+        changed = true;
+      }
+
+      auto velocity_max = std::array<std::float_t, 3u>{emitter.velocity_max.x(), emitter.velocity_max.y(), emitter.velocity_max.z()};
+      if (draw_vector3_control("Velocity Max", velocity_max, 0.0f, 0.05f)) {
+        emitter.velocity_max = sbx::math::vector3{velocity_max[0], velocity_max[1], velocity_max[2]};
+        changed = true;
+      }
+
+      changed |= ImGui::DragFloat("Lifetime Min", &emitter.lifetime_min, 0.01f, 0.0f, 3600.0f);
+      changed |= ImGui::DragFloat("Lifetime Max", &emitter.lifetime_max, 0.01f, emitter.lifetime_min, 3600.0f);
+
+      changed |= draw_color_field("Start Color", emitter.start_color);
+      changed |= draw_color_field("End Color", emitter.end_color);
+
+      changed |= ImGui::DragFloat("Size Min", &emitter.size_min, 0.005f, 0.0f, 1000.0f);
+      changed |= ImGui::DragFloat("Size Max", &emitter.size_max, 0.005f, emitter.size_min, 1000.0f);
+
+      changed |= ImGui::DragFloat("Gravity", &emitter.gravity, 0.05f, -1000.0f, 1000.0f);
+      changed |= ImGui::DragFloat("Drag", &emitter.drag, 0.01f, 0.0f, 100.0f);
+
+      ImGui::Text("Texture");
+      ImGui::SameLine();
+      // Leaving this unset (the default) keeps draw.slang's procedural circular-falloff look —
+      // the common case for additive fire/spark-style emitters.
+      changed |= draw_texture_picker("##particle_texture_picker", emitter.texture, assets_module, sbx::graphics::format::r8g8b8a8_srgb);
+
+      ImGui::TreePop();
+    }
+
+    ImGui::PopID();
+  }
+
+  if (removed_index) {
+    emitters.erase(emitters.begin() + static_cast<std::ptrdiff_t>(*removed_index));
+  }
+
+  if (ImGui::Button(ICON_MDI_PLUS " Add Emitter")) {
+    emitters.push_back(sbx::assets::particle_emitter_definition{.name = fmt::format("Emitter {}", emitters.size())});
+    changed = true;
+  }
+
+  if (changed) {
+    // Live preview: mutates the record in place immediately, so every particle_effect_handle
+    // already pointing at it (e.g. a particle_effect_instance elsewhere in the scene) reflects the
+    // edit on the very next frame — no Save needed to see it. Persisting to disk stays an explicit
+    // action (below), same as _draw_material_properties.
+    assets_module.update_particle_effect(_asset_cache.particle_effect, _particle_effect_edit);
+  }
+
+  ImGui::Separator();
+
+  if (ImGui::Button(ICON_MDI_CONTENT_SAVE " Save")) {
+    assets_module.save_particle_effect(_asset_cache.particle_effect, asset.path);
+  }
+}
+
 auto properties_panel::_draw_asset_properties(const asset_selection& asset, sbx::assets::assets_module& assets_module) -> void {
   if (_asset_cache.id.value() != asset.id.value()) {
     _asset_cache = asset_property_cache{};
@@ -800,9 +1094,17 @@ auto properties_panel::_draw_asset_properties(const asset_selection& asset, sbx:
       case asset_kind::mesh: _asset_cache.mesh = assets_module.load_mesh(asset.id); break;
       case asset_kind::material: _asset_cache.material = assets_module.load_material(asset.id); break;
       case asset_kind::environment_map: _asset_cache.environment_map = assets_module.load_environment_map(asset.id); break;
+      case asset_kind::particle_effect: _asset_cache.particle_effect = assets_module.load_particle_effect(asset.id); break;
       case asset_kind::scene:
       case asset_kind::unknown:
         break;
+    }
+
+    if (asset.kind == asset_kind::particle_effect && _asset_cache.particle_effect.is_valid()) {
+      const auto& effect = *_asset_cache.particle_effect;
+
+      _particle_effect_edit.name = effect.name();
+      _particle_effect_edit.emitters = effect.emitters();
     }
 
     if (asset.kind == asset_kind::material && _asset_cache.material.is_valid()) {
@@ -861,6 +1163,11 @@ auto properties_panel::_draw_asset_properties(const asset_selection& asset, sbx:
         ImGui::Text("Baked: %s", is_baked ? "yes" : "no");
         ImGui::Text("Prefiltered Mips: %u", handle->prefiltered_mip_count());
       }
+      break;
+    }
+    case asset_kind::particle_effect: {
+      ImGui::Text("Type: Particle Effect");
+      _draw_particle_effect_properties(asset, assets_module);
       break;
     }
     case asset_kind::scene: {

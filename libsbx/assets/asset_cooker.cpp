@@ -166,7 +166,7 @@ auto asset_cooker::import_directory(const std::filesystem::path& root) -> void {
 
     std::ranges::transform(extension, extension.begin(), [](unsigned char character) { return static_cast<char>(std::tolower(character)); });
 
-    if (extension == ".png" || extension == ".jpg" || extension == ".jpeg" || extension == ".gltf" || extension == ".glb" || extension == ".material" || extension == ".hdr") {
+    if (extension == ".png" || extension == ".jpg" || extension == ".jpeg" || extension == ".gltf" || extension == ".glb" || extension == ".material" || extension == ".hdr" || extension == ".particle_effect") {
       import(entry.path());
     }
   }

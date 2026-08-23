@@ -149,9 +149,7 @@ private:
   std::array<graphics::buffer::address_type, graphics::swapchain::max_frames_in_flight> _cluster_counter_addresses{};
 
   // pool[0] = additive, pool[1] = alpha blend — see particle_pool.hpp for why the split is by
-  // blend mode rather than one pool per emitter. M1 has no ECS/asset layer yet, so
-  // _consume_packet feeds each pool one hardcoded test emitter instance directly; M2 replaces
-  // that with the real (world_transform, particle_effect_instance) extraction.
+  // blend mode rather than one pool per emitter.
   inline static constexpr auto particle_additive_pool_index = std::uint32_t{0u};
   inline static constexpr auto particle_alpha_pool_index = std::uint32_t{1u};
 
@@ -159,10 +157,28 @@ private:
   std::unique_ptr<particle_simulate_pass> _particle_simulate_pass{};
   particle_simulate_pass::result _particle_last_result{};
 
-  // M1 has no ECS/asset layer yet: one hardcoded test emitter instance (slot 0) per pool,
-  // exercised every frame to validate the whole compute chain + WBOIT-integrated draw. Replaced by
-  // real (world_transform, particle_effect_instance) extraction in M2.
-  std::array<std::float_t, 2u> _particle_test_emission_accumulator{};
+  /**
+   * @brief Owns one pool's emitter_instances free-list — allocation, and a delayed release so a
+   * slot is never handed to a new emitter while particles from its previous owner might still be
+   * alive (they read emitters[emitter_slot] every frame in both simulate.slang and draw.slang, so
+   * an early reuse would visibly corrupt them mid-flight).
+   *
+   * Built entirely from render_module::_build_packet()'s own frame-to-frame bookkeeping: a slot
+   * that was claimed last frame but isn't claimed this frame (its emitter stopped, or the owning
+   * entity/component was destroyed) starts draining for `lifetime_max[slot]` seconds — the longest
+   * a particle it spawned could still be alive — before going back on free_list. No explicit
+   * "on stop"/"on destroy" hook is needed for this: _build_packet just compares this frame's
+   * claimed set against last frame's every time.
+   */
+  struct particle_slot_pool_state {
+    std::vector<std::uint32_t> free_list{};
+    std::vector<std::float_t> drain_timer{};   // per slot; < 0 = not draining
+    std::vector<std::float_t> lifetime_max{};  // per slot; last known lifetime_max while claimed
+    std::vector<bool> claimed_last_frame{};
+    bool exhaustion_logged{false};
+  }; // struct particle_slot_pool_state
+
+  std::array<particle_slot_pool_state, 2u> _particle_slot_pools{};
 
 }; // class render_module
 

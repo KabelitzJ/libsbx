@@ -28,6 +28,7 @@ struct push_data {
   graphics::buffer::address_type particles;
   graphics::buffer::address_type alive_list;
   graphics::buffer::address_type emitters;
+  std::uint32_t sampler_index;
 }; // struct push_data
 
 auto push(render_context& context, const push_data& data) -> void {
@@ -187,7 +188,7 @@ auto particle_draw_pass::execute(render_context& context) -> void {
     bind_globals(context);
 
     context.command_buffer->bind_pipeline(*_additive_pipeline);
-    push(context, push_data{context.frame_address, context.particle_additive_particles_address, context.particle_additive_alive_list_address, context.particle_additive_emitters_address});
+    push(context, push_data{context.frame_address, context.particle_additive_particles_address, context.particle_additive_alive_list_address, context.particle_additive_emitters_address, context.sampler_index});
 
     auto& draw_args = registry.get<graphics::buffer>(context.particle_additive_draw_args);
     context.command_buffer->draw_indirect(draw_args, 0u, 1u);
@@ -244,7 +245,7 @@ auto particle_draw_pass::execute(render_context& context) -> void {
     bind_globals(context);
 
     context.command_buffer->bind_pipeline(*_alpha_blend_pipeline);
-    push(context, push_data{context.frame_address, context.particle_alpha_particles_address, context.particle_alpha_alive_list_address, context.particle_alpha_emitters_address});
+    push(context, push_data{context.frame_address, context.particle_alpha_particles_address, context.particle_alpha_alive_list_address, context.particle_alpha_emitters_address, context.sampler_index});
 
     auto& draw_args = registry.get<graphics::buffer>(context.particle_alpha_draw_args);
     context.command_buffer->draw_indirect(draw_args, 0u, 1u);

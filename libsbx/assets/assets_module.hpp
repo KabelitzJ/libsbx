@@ -23,6 +23,7 @@
 #include <libsbx/assets/mesh.hpp>
 #include <libsbx/assets/material.hpp>
 #include <libsbx/assets/environment_map.hpp>
+#include <libsbx/assets/particle_effect.hpp>
 #include <libsbx/assets/asset_cooker.hpp>
 #include <libsbx/assets/asset_residency.hpp>
 #include <libsbx/assets/ibl_baker.hpp>
@@ -123,6 +124,16 @@ public:
   auto load_environment_map(const math::uuid& id) -> environment_map_handle;
 
   auto load_environment_map(const std::filesystem::path& path) -> environment_map_handle;
+
+  auto load_particle_effect(const math::uuid& id) -> particle_effect_handle;
+
+  auto load_particle_effect(const std::filesystem::path& path) -> particle_effect_handle;
+
+  auto create_particle_effect(const particle_effect::create_info& create_info) -> particle_effect_handle;
+
+  auto update_particle_effect(particle_effect_handle& effect, const particle_effect::create_info& create_info) -> void;
+
+  auto save_particle_effect(particle_effect_handle& effect, const std::filesystem::path& path) -> math::uuid;
 
   /**
    * @brief Render thread. Turns queued texture loads into GPU images + bindless writes. Copies are

@@ -2,6 +2,7 @@
 // Copyright (c) 2026 Jonas Kabelitz
 
 #include <frame_data.slang>
+#include <descriptors.slang>
 
 #include <particles/particle_data.slang>
 
@@ -13,12 +14,14 @@ struct vs_in {
 struct vs_out {
   [[vk::location(0)]] float2 uv : TEXCOORD;
   [[vk::location(1)]] float4 color : COLOR;
+  [[vk::location(2)]] nointerpolation uint texture_index : TEXTURE_INDEX;
   float4 sv_position : SV_Position;
 }; // struct vs_out
 
 struct fs_in {
   [[vk::location(0)]] float2 uv : TEXCOORD;
   [[vk::location(1)]] float4 color : COLOR;
+  [[vk::location(2)]] nointerpolation uint texture_index : TEXTURE_INDEX;
   float4 sv_position : SV_Position;
 }; // struct fs_in
 
@@ -81,6 +84,7 @@ struct push_data {
   particle* particles;
   uint* alive_list;
   emitter_instance* emitters;
+  uint sampler_index;
 }; // struct push_data
 
 [[vk::push_constant]] ConstantBuffer<push_data> push;
@@ -134,19 +138,26 @@ vs_out vertex_main(vs_in input) {
   output.sv_position = mul(frame.projection, mul(frame.view, float4(world_position, 1.0)));
   output.uv = local_position * 0.5 + 0.5;
   output.color = color;
+  output.texture_index = e.texture_index;
 
   return output;
 }
 
 [shader("fragment")]
 Policy::Output fragment_main<Policy : shading_policy>(fs_in input) {
-  // Soft circular falloff from the quad center — procedural, no texture needed yet (M3's
-  // particle_effect asset adds a per-emitter texture; this is the placeholder look until then).
-  float distance_from_center = length(input.uv * 2.0 - 1.0);
-  float mask = saturate(1.0 - smoothstep(0.7, 1.0, distance_from_center));
-
   float4 color = input.color;
-  color.a *= mask;
+
+  if (input.texture_index != particle_texture_index_none) {
+    // An authored texture's own alpha defines the sprite's shape — no procedural mask needed.
+    SamplerState sampler = samplers[push.sampler_index];
+    color *= textures[NonUniformResourceIndex(input.texture_index)].Sample(sampler, input.uv);
+  } else {
+    // No texture assigned (the common case for additive fire/spark-style emitters) — fall back to
+    // a soft circular falloff from the quad center.
+    float distance_from_center = length(input.uv * 2.0 - 1.0);
+    float mask = saturate(1.0 - smoothstep(0.7, 1.0, distance_from_center));
+    color.a *= mask;
+  }
 
   return Policy::shade(color, input);
 }

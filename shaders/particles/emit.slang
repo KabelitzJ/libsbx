@@ -54,7 +54,7 @@ void compute_main(cs_in input) {
   uint seed = pcg_hash(e.seed ^ push.emitter_index ^ local_index ^ asuint(push.time));
 
   particle p;
-  p.position = e.position;
+  p.position = e.position + sample_emission_shape(seed, e.shape, e.shape_extents);
   p.velocity = random_range3(seed, e.velocity_min, e.velocity_max);
   p.age = 0.0;
   p.lifetime = random_range(seed, e.lifetime_min, e.lifetime_max);

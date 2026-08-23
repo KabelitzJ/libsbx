@@ -1,0 +1,50 @@
+name: explosion
+emitters:
+  - name: fire
+    blend_mode: additive
+    emission_rate: 150
+    burst_count: 0
+    shape: point
+    shape_extents: {x: -0.200000003, y: 0, z: 0}
+    velocity_min: {x: -1, y: 2, z: -1}
+    velocity_max: {x: 1, y: 4, z: 1}
+    lifetime_min: 0.349999994
+    lifetime_max: 0.800000012
+    start_color: {r: 1, g: 0.699999988, b: 0.25, a: 1}
+    end_color: {r: 1, g: 0.150000006, b: 0, a: 0}
+    size_min: 0.0799999982
+    size_max: 0.219999999
+    gravity: -0.300000012
+    drag: 0.150000006
+  - name: debris
+    blend_mode: additive
+    emission_rate: 25
+    burst_count: 0
+    shape: point
+    shape_extents: {x: 0, y: 0, z: 0}
+    velocity_min: {x: -3, y: 1, z: -3}
+    velocity_max: {x: 3, y: 5, z: 3}
+    lifetime_min: 0.600000024
+    lifetime_max: 1.29999995
+    start_color: {r: 1, g: 0.600000024, b: 0.200000003, a: 1}
+    end_color: {r: 0.400000006, g: 0.0500000007, b: 0, a: 0}
+    size_min: 0.0299999993
+    size_max: 0.0700000003
+    gravity: -4
+    drag: 0.0500000007
+  - name: smoke
+    blend_mode: alpha_blend
+    emission_rate: 35
+    burst_count: 0
+    shape: point
+    shape_extents: {x: 0, y: 0, z: 0}
+    velocity_min: {x: -0.300000012, y: 0.600000024, z: -0.300000012}
+    velocity_max: {x: 0.300000012, y: 1.39999998, z: 0.300000012}
+    lifetime_min: 1.79999995
+    lifetime_max: 2
+    start_color: {r: 0.449999988, g: 0.449999988, b: 0.449999988, a: 0.5}
+    end_color: {r: 0.25, g: 0.25, b: 0.25, a: 0}
+    size_min: 0.400000006
+    size_max: 0.899999976
+    gravity: -0.0500000007
+    drag: 0.400000006

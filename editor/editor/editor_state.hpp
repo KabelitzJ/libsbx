@@ -23,6 +23,7 @@ enum class asset_kind {
   mesh,
   material,
   environment_map,
+  particle_effect,
   scene, // .yaml, reference-only: not routed through assets_module::import
 }; // enum class asset_kind
 

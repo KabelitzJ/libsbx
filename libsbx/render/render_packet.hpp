@@ -16,6 +16,8 @@
 #include <libsbx/assets/texture.hpp>
 #include <libsbx/assets/environment_map.hpp>
 
+#include <libsbx/render/particle_data.hpp>
+
 namespace sbx::render {
 
 /**
@@ -84,6 +86,21 @@ struct light_data {
   std::uint32_t padding{0u};
 }; // struct light_data
 
+/**
+ * @brief One emitter instance's fully-resolved-for-this-frame GPU data, extracted from the ECS on
+ * the main thread by render_module::_build_packet() (particle_emitter_runtime::gpu_slot already
+ * assigned, world position already read, emission accumulator already stepped). _consume_packet
+ * (render thread) just writes `data` into pool[pool_index] at `gpu_slot` and, if
+ * `data.particles_to_emit > 0`, turns this into a particle_simulate_pass::emit_request — it never
+ * touches the ECS itself, keeping the "ECS only on the main thread" contract render_module.hpp
+ * documents for the rest of the packet.
+ */
+struct particle_emitter_snapshot {
+  std::uint32_t pool_index{0u};
+  std::uint32_t gpu_slot{0u};
+  emitter_instance_gpu data{};
+}; // struct particle_emitter_snapshot
+
 struct render_packet {
   math::color clear_color{0.05f, 0.05f, 0.08f, 1.0f};
   camera_data camera{};
@@ -94,6 +111,7 @@ struct render_packet {
   std::uint32_t directional_light_count{0u};
   assets::environment_map_handle environment{};
   std::float_t environment_intensity{1.0f};
+  std::vector<particle_emitter_snapshot> particle_emitters{};
 }; // struct render_packet
 
 } // namespace sbx::render

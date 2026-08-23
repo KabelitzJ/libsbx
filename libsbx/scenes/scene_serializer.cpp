@@ -29,6 +29,7 @@ auto scene_serializer::_build(scene& target) -> YAML::Node {
   auto material_keys = std::unordered_map<math::uuid, std::string>{};
   auto used_keys = std::unordered_set<std::string>{};
   auto environment_keys = std::unordered_map<math::uuid, std::string>{};
+  auto particle_effect_keys = std::unordered_map<math::uuid, std::string>{};
 
   const auto make_key = [&](const std::string& base) {
     auto key = base.empty() ? std::string{"asset"} : base;
@@ -46,6 +47,7 @@ auto scene_serializer::_build(scene& target) -> YAML::Node {
   auto meshes_table = YAML::Node{YAML::NodeType::Sequence};
   auto materials_table = YAML::Node{YAML::NodeType::Sequence};
   auto environments_table = YAML::Node{YAML::NodeType::Sequence};
+  auto particle_effects_table = YAML::Node{YAML::NodeType::Sequence};
 
   for (const auto entity : registry.view<mesh_renderer>()) {
     const auto& renderer = registry.get<mesh_renderer>(entity);
@@ -226,6 +228,38 @@ auto scene_serializer::_build(scene& target) -> YAML::Node {
       }
     }
 
+    if (registry.all_of<particle_effect_instance>(entity)) {
+      const auto& instance = registry.get<particle_effect_instance>(entity);
+
+      if (instance.effect.is_valid()) {
+        const auto effect_id = instance.effect->id();
+
+        if (effect_id == math::uuid::nil()) {
+          utility::logger<"scenes">::warn("Skipping a transient particle_effect override (no file asset — save it first)");
+        } else {
+          if (!particle_effect_keys.contains(effect_id)) {
+            const auto name = assets_module.path_of(effect_id).stem().string();
+            const auto key = make_key(name);
+            particle_effect_keys.emplace(effect_id, key);
+
+            auto entry = YAML::Node{};
+            entry["key"] = key;
+            entry["name"] = name;
+            entry["uuid"] = effect_id.value();
+            particle_effects_table.push_back(entry);
+          }
+
+          auto component = YAML::Node{};
+          component["type"] = "particle_effect_instance";
+          component["effect"] = particle_effect_keys.at(effect_id);
+          component["loop"] = instance.loop;
+          component["playback"] = (instance.playback == particle_playback_state::paused) ? "paused" : (instance.playback == particle_playback_state::stopped) ? "stopped" : "playing";
+
+          components.push_back(component);
+        }
+      }
+    }
+
     node_yaml["components"] = components;
     nodes_node.push_back(node_yaml);
   }
@@ -247,6 +281,7 @@ auto scene_serializer::_build(scene& target) -> YAML::Node {
   assets_node["static_meshes"] = meshes_table;
   assets_node["materials"] = materials_table;
   assets_node["environment_maps"] = environments_table;
+  assets_node["particle_effects"] = particle_effects_table;
 
   auto root = YAML::Node{};
   root["metadata"] = metadata;
@@ -317,6 +352,7 @@ auto scene_serializer::load(scene& target, const std::filesystem::path& path) ->
   register_category("static_meshes");
   register_category("materials");
   register_category("environment_maps");
+  register_category("particle_effects");
 
   const auto nodes_node = root["nodes"];
 
@@ -388,7 +424,20 @@ auto scene_serializer::load(scene& target, const std::filesystem::path& path) ->
         
         if (component["intensity"]) {
           sky.intensity = component["intensity"].as<std::float_t>();
-        } 
+        }
+      } else if (type == "particle_effect_instance") {
+        auto& instance = node.add_component<particle_effect_instance>();
+
+        instance.effect = assets_module.load_particle_effect(key_to_uuid.at(component["effect"].as<std::string>()));
+
+        if (component["loop"]) {
+          instance.loop = component["loop"].as<bool>();
+        }
+
+        if (const auto playback = component["playback"]) {
+          const auto value = playback.as<std::string>();
+          instance.playback = (value == "paused") ? particle_playback_state::paused : (value == "stopped") ? particle_playback_state::stopped : particle_playback_state::playing;
+        }
       } else {
         utility::logger<"scenes">::warn("Unknown component type '{}'", type);
       }

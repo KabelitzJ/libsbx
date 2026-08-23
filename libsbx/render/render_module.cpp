@@ -32,6 +32,8 @@
 
 #include <libsbx/graphics/profiler.hpp>
 
+#include <libsbx/assets/particle_effect.hpp>
+
 #include <libsbx/scenes/scenes_module.hpp>
 #include <libsbx/scenes/scene.hpp>
 #include <libsbx/scenes/components.hpp>
@@ -113,6 +115,23 @@ render_module::render_module() {
   });
 
   _particle_simulate_pass = std::make_unique<particle_simulate_pass>();
+
+  for (auto pool_index = std::uint32_t{0u}; pool_index < 2u; ++pool_index) {
+    const auto capacity = _particle_pools[pool_index]->max_emitter_instances();
+
+    auto& pool_state = _particle_slot_pools[pool_index];
+
+    pool_state.free_list.resize(capacity);
+    // Reversed so slot 0 is the first one handed out — purely cosmetic (free_list is a stack,
+    // any order is correct), but makes gpu_slot assignment easier to read while debugging.
+    for (auto slot = std::uint32_t{0u}; slot < capacity; ++slot) {
+      pool_state.free_list[slot] = capacity - 1u - slot;
+    }
+
+    pool_state.drain_timer.assign(capacity, -1.0f);
+    pool_state.lifetime_max.assign(capacity, 0.0f);
+    pool_state.claimed_last_frame.assign(capacity, false);
+  }
 
   _passes.push_back(std::make_unique<depth_pre_pass>());
   _passes.push_back(std::make_unique<light_culling_pass>());
@@ -307,6 +326,143 @@ auto render_module::_build_packet() -> render_packet {
     out.outer_cos = std::cos(light.outer_angle);
   }
 
+  // Particle emitter extraction — ECS access happens only here (main thread), per this class's own
+  // threading contract (see the class doc comment): _consume_packet (render thread) only ever
+  // reads packet.particle_emitters, never the scene itself.
+  {
+    auto& assets_module = core::engine::get_module<assets::assets_module>();
+
+    const auto dt = static_cast<std::float_t>(core::engine::delta_time());
+
+    auto claimed_this_frame = std::array<std::vector<bool>, 2u>{};
+
+    for (auto pool_index = std::uint32_t{0u}; pool_index < 2u; ++pool_index) {
+      claimed_this_frame[pool_index].assign(_particle_pools[pool_index]->max_emitter_instances(), false);
+    }
+
+    for (auto&& [entity, world, instance] : scene.query<scenes::world_transform, scenes::particle_effect_instance>().each()) {
+      if (!instance.effect.is_valid()) {
+        continue;
+      }
+
+      const auto& definitions = instance.effect->emitters();
+
+      if (instance.emitters.size() < definitions.size()) {
+        instance.emitters.resize(definitions.size());
+      }
+
+      instance.elapsed += dt;
+
+      const auto is_playing = instance.playback == scenes::particle_playback_state::playing;
+
+      for (auto index = std::size_t{0u}; index < definitions.size(); ++index) {
+        const auto& definition = definitions[index];
+        auto& runtime = instance.emitters[index];
+
+        if (!is_playing) {
+          // Not claiming this slot below (if it already has one) is what starts the drain. Also
+          // forget the slot and reset burst_fired right away, not once the drain finishes: the
+          // GPU-side slot recycling is entirely keyed by slot index in render_module's own
+          // bookkeeping below, so the runtime doesn't need to remember which slot it had — and
+          // dropping it now means resuming playback later claims a fresh slot and re-fires burst,
+          // instead of writing into a slot index that may since have been handed to someone else.
+          runtime.gpu_slot = scenes::particle_emitter_runtime::invalid_slot;
+          runtime.emission_accumulator = 0.0f;
+          runtime.burst_fired = false;
+          continue;
+        }
+
+        const auto pool_index = (definition.blend_mode == assets::particle_blend_mode::alpha_blend) ? particle_alpha_pool_index : particle_additive_pool_index;
+        auto& pool_state = _particle_slot_pools[pool_index];
+
+        if (runtime.gpu_slot == scenes::particle_emitter_runtime::invalid_slot) {
+          if (pool_state.free_list.empty()) {
+            if (!pool_state.exhaustion_logged) {
+              utility::logger<"render">::warn("Particle emitter-instance pool {} exhausted ({} slots) — new emitters won't spawn until one frees up", pool_index, _particle_pools[pool_index]->max_emitter_instances());
+              pool_state.exhaustion_logged = true;
+            }
+
+            continue;
+          }
+
+          runtime.gpu_slot = pool_state.free_list.back();
+          pool_state.free_list.pop_back();
+        }
+
+        // burst_count only ever contributes on the first frame of a given activation (the frame a
+        // slot is freshly claimed, or resumed after having been fully reset above) — it has no
+        // GPU-side field of its own, it's just folded into this one frame's particles_to_emit.
+        auto burst_this_frame = std::uint32_t{0u};
+
+        if (!runtime.burst_fired) {
+          burst_this_frame = definition.burst_count;
+          runtime.burst_fired = true;
+        }
+
+        // Fractional emission accumulator so a rate like 200/s doesn't lose particles to
+        // per-frame truncation.
+        runtime.emission_accumulator += definition.emission_rate * dt;
+
+        const auto continuous_to_emit = static_cast<std::uint32_t>(runtime.emission_accumulator);
+        runtime.emission_accumulator -= static_cast<std::float_t>(continuous_to_emit);
+
+        const auto particles_to_emit = continuous_to_emit + burst_this_frame;
+
+        const auto texture_index = (definition.texture.is_valid() && assets_module.is_resident(definition.texture))
+          ? definition.texture->index()
+          : particle_texture_index_none;
+
+        auto data = emitter_instance_gpu{};
+        data.position = math::vector3f{world.matrix[3]};
+        data.emission_rate = definition.emission_rate;
+        data.velocity_min = definition.velocity_min;
+        data.velocity_max = definition.velocity_max;
+        data.lifetime_min = definition.lifetime_min;
+        data.lifetime_max = definition.lifetime_max;
+        data.start_color = math::vector4{definition.start_color.r(), definition.start_color.g(), definition.start_color.b(), definition.start_color.a()};
+        data.end_color = math::vector4{definition.end_color.r(), definition.end_color.g(), definition.end_color.b(), definition.end_color.a()};
+        data.size_min = definition.size_min;
+        data.size_max = definition.size_max;
+        data.gravity = definition.gravity;
+        data.drag = definition.drag;
+        data.active = 1u;
+        data.particles_to_emit = particles_to_emit;
+        data.seed = (runtime.gpu_slot * 9781u) ^ (static_cast<std::uint32_t>(index) * 6271u) ^ 0x9E3779B9u;
+        data.shape = static_cast<std::uint32_t>(definition.shape);
+        data.shape_extents = definition.shape_extents;
+        data.texture_index = texture_index;
+
+        claimed_this_frame[pool_index][runtime.gpu_slot] = true;
+        pool_state.lifetime_max[runtime.gpu_slot] = definition.lifetime_max;
+
+        packet.particle_emitters.push_back(particle_emitter_snapshot{pool_index, runtime.gpu_slot, data});
+      }
+    }
+
+    // Slots claimed last frame but not this frame just lost their emitter (stopped, or the
+    // entity/component was destroyed) — drain them for lifetime_max seconds before recycling.
+    for (auto pool_index = std::uint32_t{0u}; pool_index < 2u; ++pool_index) {
+      auto& pool_state = _particle_slot_pools[pool_index];
+
+      for (auto slot = std::uint32_t{0u}; slot < pool_state.claimed_last_frame.size(); ++slot) {
+        if (pool_state.claimed_last_frame[slot] && !claimed_this_frame[pool_index][slot]) {
+          pool_state.drain_timer[slot] = pool_state.lifetime_max[slot];
+        }
+
+        if (pool_state.drain_timer[slot] >= 0.0f) {
+          pool_state.drain_timer[slot] -= dt;
+
+          if (pool_state.drain_timer[slot] <= 0.0f) {
+            pool_state.drain_timer[slot] = -1.0f;
+            pool_state.free_list.push_back(slot);
+          }
+        }
+      }
+
+      pool_state.claimed_last_frame = std::move(claimed_this_frame[pool_index]);
+    }
+  }
+
   return packet;
 }
 
@@ -329,58 +485,24 @@ auto render_module::_consume_packet(const render_packet& packet) -> void {
     auto& additive_pool = *_particle_pools[particle_additive_pool_index];
     auto& alpha_pool = *_particle_pools[particle_alpha_pool_index];
 
-    // M1 hardcoded test emitters (no ECS/asset layer yet) — one per pool, slot 0, so the whole
-    // chain (dead-list free-stack, ping-pong alive lists, indirect dispatch/draw, WBOIT-integrated
-    // draw) can be validated on screen before M2 wires up real (world_transform,
-    // particle_effect_instance) extraction.
-    auto additive_emitter = emitter_instance_gpu{};
-    additive_emitter.position = math::vector3{-1.5f, 0.5f, 0.0f};
-    additive_emitter.emission_rate = 200.0f;
-    additive_emitter.velocity_min = math::vector3{-0.5f, 1.5f, -0.5f};
-    additive_emitter.velocity_max = math::vector3{0.5f, 3.0f, 0.5f};
-    additive_emitter.lifetime_min = 0.6f;
-    additive_emitter.lifetime_max = 1.2f;
-    additive_emitter.start_color = math::vector4{1.0f, 0.6f, 0.1f, 1.0f};
-    additive_emitter.end_color = math::vector4{1.0f, 0.1f, 0.0f, 0.0f};
-    additive_emitter.size_min = 0.05f;
-    additive_emitter.size_max = 0.15f;
-    additive_emitter.gravity = -0.5f;
-    additive_emitter.drag = 0.1f;
-    additive_emitter.active = 1u;
-    additive_emitter.seed = 1u;
+    // packet.particle_emitters was built by _build_packet() on the main thread (the only place
+    // that's allowed to touch the ECS — see this class's doc comment); every slot in it was
+    // already claimed from this pool's free-list there too. This thread just writes the data and
+    // turns each non-zero particles_to_emit into an emit.slang dispatch request.
+    auto additive_emits = std::vector<particle_simulate_pass::emit_request>{};
+    auto alpha_emits = std::vector<particle_simulate_pass::emit_request>{};
 
-    auto alpha_emitter = emitter_instance_gpu{};
-    alpha_emitter.position = math::vector3{1.5f, 0.5f, 0.0f};
-    alpha_emitter.emission_rate = 60.0f;
-    alpha_emitter.velocity_min = math::vector3{-0.2f, 0.4f, -0.2f};
-    alpha_emitter.velocity_max = math::vector3{0.2f, 1.0f, 0.2f};
-    alpha_emitter.lifetime_min = 1.5f;
-    alpha_emitter.lifetime_max = 2.5f;
-    alpha_emitter.start_color = math::vector4{0.8f, 0.8f, 0.85f, 0.6f};
-    alpha_emitter.end_color = math::vector4{0.8f, 0.8f, 0.85f, 0.0f};
-    alpha_emitter.size_min = 0.3f;
-    alpha_emitter.size_max = 0.6f;
-    alpha_emitter.gravity = -0.05f;
-    alpha_emitter.drag = 0.3f;
-    alpha_emitter.active = 1u;
-    alpha_emitter.seed = 2u;
+    for (const auto& snapshot : packet.particle_emitters) {
+      auto& pool = *_particle_pools[snapshot.pool_index];
+      pool.write_emitter_instance(snapshot.gpu_slot, snapshot.data);
 
-    // Fractional emission accumulator so a rate like 200/s doesn't lose particles to per-frame
-    // truncation — same idea the old particle_emitter's emission_accumulator used.
-    _particle_test_emission_accumulator[particle_additive_pool_index] += additive_emitter.emission_rate * dt;
-    _particle_test_emission_accumulator[particle_alpha_pool_index] += alpha_emitter.emission_rate * dt;
+      if (snapshot.data.particles_to_emit == 0u) {
+        continue;
+      }
 
-    additive_emitter.particles_to_emit = static_cast<std::uint32_t>(_particle_test_emission_accumulator[particle_additive_pool_index]);
-    alpha_emitter.particles_to_emit = static_cast<std::uint32_t>(_particle_test_emission_accumulator[particle_alpha_pool_index]);
-
-    _particle_test_emission_accumulator[particle_additive_pool_index] -= static_cast<std::float_t>(additive_emitter.particles_to_emit);
-    _particle_test_emission_accumulator[particle_alpha_pool_index] -= static_cast<std::float_t>(alpha_emitter.particles_to_emit);
-
-    additive_pool.write_emitter_instance(0u, additive_emitter);
-    alpha_pool.write_emitter_instance(0u, alpha_emitter);
-
-    const auto additive_emits = std::array{particle_simulate_pass::emit_request{0u, additive_emitter.particles_to_emit}};
-    const auto alpha_emits = std::array{particle_simulate_pass::emit_request{0u, alpha_emitter.particles_to_emit}};
+      auto& emits = (snapshot.pool_index == particle_alpha_pool_index) ? alpha_emits : additive_emits;
+      emits.push_back(particle_simulate_pass::emit_request{snapshot.gpu_slot, snapshot.data.particles_to_emit});
+    }
 
     _particle_last_result = _particle_simulate_pass->execute(additive_pool, additive_emits, alpha_pool, alpha_emits, dt, time);
   }

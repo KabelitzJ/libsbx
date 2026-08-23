@@ -18,6 +18,7 @@
 
 #include <libsbx/assets/assets_module.hpp>
 #include <libsbx/assets/material.hpp>
+#include <libsbx/assets/particle_effect.hpp>
 
 namespace editor {
 
@@ -30,6 +31,7 @@ auto classify_extension(const std::filesystem::path& extension) -> asset_kind {
     {".glb", asset_kind::mesh},
     {".material", asset_kind::material},
     {".hdr", asset_kind::environment_map},
+    {".particle_effect", asset_kind::particle_effect},
     {".yaml", asset_kind::scene},
   };
 
@@ -48,6 +50,7 @@ auto icon_for(const asset_browser_entry& entry) -> const char* {
     case asset_kind::mesh: return ICON_MDI_CUBE_OUTLINE;
     case asset_kind::material: return ICON_MDI_PALETTE_SWATCH;
     case asset_kind::environment_map: return ICON_MDI_EARTH;
+    case asset_kind::particle_effect: return ICON_MDI_FIREWORK;
     case asset_kind::scene: return ICON_MDI_FILE_TREE;
     case asset_kind::unknown: return ICON_MDI_FILE_OUTLINE;
   }
@@ -79,7 +82,8 @@ auto asset_browser_panel::_refresh_entries() -> void {
     if (!entry.is_directory) {
       entry.kind = classify_extension(dir_entry.path().extension());
       entry.is_importable = entry.kind == asset_kind::texture || entry.kind == asset_kind::mesh ||
-                             entry.kind == asset_kind::material || entry.kind == asset_kind::environment_map;
+                             entry.kind == asset_kind::material || entry.kind == asset_kind::environment_map ||
+                             entry.kind == asset_kind::particle_effect;
     }
 
     _cached_entries.push_back(std::move(entry));
@@ -165,6 +169,25 @@ auto asset_browser_panel::draw(editor_state& state) -> void {
 
     _needs_refresh = true;
     state.select_asset(id, relative_path, asset_kind::material);
+  }
+
+  ImGui::SameLine();
+
+  if (ImGui::Button(ICON_MDI_FIREWORK " New Particle Effect")) {
+    auto file_name = std::string{"New Particle Effect.particle_effect"};
+    auto suffix = 1;
+
+    while (std::filesystem::exists(project.assets_directory() / _current_directory / file_name)) {
+      file_name = fmt::format("New Particle Effect {}.particle_effect", suffix++);
+    }
+
+    const auto relative_path = _current_directory / file_name;
+
+    auto handle = assets_module.create_particle_effect(sbx::assets::particle_effect::create_info{.name = "New Particle Effect"});
+    const auto id = assets_module.save_particle_effect(handle, relative_path);
+
+    _needs_refresh = true;
+    state.select_asset(id, relative_path, asset_kind::particle_effect);
   }
 
   ImGui::SameLine();

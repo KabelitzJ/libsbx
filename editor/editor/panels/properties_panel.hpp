@@ -11,6 +11,7 @@
 
 #include <libsbx/assets/assets_module.hpp>
 #include <libsbx/assets/material.hpp>
+#include <libsbx/assets/particle_effect.hpp>
 
 #include <libsbx/scenes/node.hpp>
 
@@ -42,6 +43,7 @@ private:
     sbx::assets::mesh_handle mesh{};
     sbx::assets::material_handle material{};
     sbx::assets::environment_map_handle environment_map{};
+    sbx::assets::particle_effect_handle particle_effect{};
   }; // struct asset_property_cache
 
   auto _draw_node_properties(editor_state& state, sbx::scenes::node& node, sbx::assets::assets_module& assets_module) -> void;
@@ -49,6 +51,7 @@ private:
   auto _draw_transform_section(sbx::scenes::node& node) -> void;
   auto _draw_asset_properties(const asset_selection& asset, sbx::assets::assets_module& assets_module) -> void;
   auto _draw_material_properties(const asset_selection& asset, sbx::assets::assets_module& assets_module) -> void;
+  auto _draw_particle_effect_properties(const asset_selection& asset, sbx::assets::assets_module& assets_module) -> void;
 
   // Editable name field: staged into a buffer, only re-synced from the node when the selection
   // changes (so mid-edit keystrokes aren't clobbered by re-reading the committed name).
@@ -68,6 +71,9 @@ private:
   // _draw_asset_properties). Seeded from the loaded material whenever _asset_cache.id changes;
   // committed to the material record (and disk) only by an explicit Save button.
   sbx::assets::material::create_info _material_edit{};
+
+  // Same idea as _material_edit, for asset_kind::particle_effect.
+  sbx::assets::particle_effect::create_info _particle_effect_edit{};
 
 }; // class properties_panel
 

@@ -3,6 +3,8 @@
 #ifndef LIBSBX_SCENES_COMPONENTS_HPP_
 #define LIBSBX_SCENES_COMPONENTS_HPP_
 
+#include <cstdint>
+#include <limits>
 #include <optional>
 #include <vector>
 
@@ -21,6 +23,7 @@
 #include <libsbx/assets/mesh.hpp>
 #include <libsbx/assets/texture.hpp>
 #include <libsbx/assets/environment_map.hpp>
+#include <libsbx/assets/particle_effect.hpp>
 
 namespace sbx::scenes {
 
@@ -157,6 +160,47 @@ struct skybox {
   assets::environment_map_handle environment{};
   std::float_t intensity{1.0f};
 }; // struct skybox
+
+enum class particle_playback_state : std::uint8_t {
+  playing,
+  paused,
+  stopped
+}; // enum class particle_playback_state
+
+/**
+ * @brief Per-emitter runtime state for one particle_effect_instance — one of these per entry in
+ * the owning effect's emitters(), lazily sized/grown by render_module::_build_packet() to match.
+ *
+ * gpu_slot indexes into a particle_pool's emitter_instances array (see particle_pool.hpp) — it's
+ * assigned once, from render_module's own free-list, the first frame this emitter actually spawns,
+ * and held until the instance stops or is destroyed. render_module notices the slot stopped being
+ * claimed and drains it (waits out the emitter's lifetime_max before returning it to the free
+ * list) entirely on its own; nothing here needs to know about that.
+ */
+struct particle_emitter_runtime {
+  inline static constexpr auto invalid_slot = std::numeric_limits<std::uint32_t>::max();
+
+  std::uint32_t gpu_slot{invalid_slot};
+  std::float_t emission_accumulator{0.0f};
+  // Whether this activation's assets::particle_emitter_definition::burst_count has already been
+  // folded into a particles_to_emit — set the same frame gpu_slot is (re)claimed, cleared whenever
+  // the emitter stops (see render_module::_build_packet), so resuming playback bursts again.
+  bool burst_fired{false};
+}; // struct particle_emitter_runtime
+
+/**
+ * @brief Spawns an assets::particle_effect at this node's position. `loop` is accepted here for
+ * forward compatibility with a future duration model but isn't consumed by anything yet — every
+ * emitter just emits continuously (plus its one-time burst_count) for as long as playback is
+ * playing.
+ */
+struct particle_effect_instance {
+  assets::particle_effect_handle effect{};
+  particle_playback_state playback{particle_playback_state::playing};
+  bool loop{true};
+  std::float_t elapsed{0.0f};
+  std::vector<particle_emitter_runtime> emitters{};
+}; // struct particle_effect_instance
 
 } // namespace sbx::scenes
 

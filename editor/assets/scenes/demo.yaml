@@ -44,7 +44,7 @@ assets_module:
   environment_maps:
     - key: shy
       name: shy
-      uuid: 749293211965073730
+      uuid: 16235111279438891485
 nodes:
   - tag: Camera
     id: 1867269432501270719

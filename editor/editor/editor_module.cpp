@@ -217,11 +217,12 @@ auto editor_module::_build_ui_frame() -> void {
       const auto gizmo_active = draw_viewport_gizmo(_state, image_origin, available);
       const auto toolbar_active = draw_gizmo_toolbar(_state, image_origin);
       const auto view_gizmo_active = draw_view_gizmo(image_origin, available);
+      const auto icons_active = draw_node_icons(_state, image_origin, available);
 
-      // Left-click picks the node under the cursor, unless it landed on the gizmo, its toolbar, or
-      // the view-orientation cube (right-drag is already the fly camera, so there's no input
-      // conflict there either).
-      if (image_clicked && !gizmo_active && !toolbar_active && !view_gizmo_active) {
+      // Left-click picks the node under the cursor, unless it landed on the gizmo, its toolbar, the
+      // view-orientation cube, or a light/camera icon (right-drag is already the fly camera, so
+      // there's no input conflict there either).
+      if (image_clicked && !gizmo_active && !toolbar_active && !view_gizmo_active && !icons_active) {
         const auto mouse_position = ImGui::GetMousePos();
 
         pick_node_at_viewport_position(_state, sbx::math::vector2{mouse_position.x - image_origin.x, mouse_position.y - image_origin.y}, sbx::math::vector2u{width, height});

@@ -51,6 +51,20 @@ auto draw_gizmo_toolbar(editor_state& state, const ImVec2& viewport_origin) -> b
  */
 auto draw_view_gizmo(const ImVec2& viewport_origin, const ImVec2& viewport_size) -> bool;
 
+/**
+ * @brief Draws a clickable icon at the projected screen position of every light and camera node
+ * (mesh-less objects with nothing else to represent them in the 3D view) — a light bulb, spotlight,
+ * sun, or camera glyph depending on component. Clicking one selects that node, same as clicking a
+ * mesh. Always drawn on top (not depth-tested against the scene), like the other viewport overlays.
+ *
+ * @param viewport_origin Screen-space top-left of the viewport image.
+ * @param viewport_size Screen-space size of the viewport image.
+ *
+ * @return true if the cursor is over any icon — callers should skip viewport click-to-pick this
+ * frame when true, the same way they already do for the other viewport overlays.
+ */
+auto draw_node_icons(editor_state& state, const ImVec2& viewport_origin, const ImVec2& viewport_size) -> bool;
+
 } // namespace editor
 
 #endif // EDITOR_VIEWPORT_GIZMO_HPP_

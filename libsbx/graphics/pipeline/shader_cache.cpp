@@ -36,7 +36,7 @@ auto shader_cache::key_hash::operator()(const key& key) const noexcept -> std::s
   utility::hash_combine(seed, key.path);
 
   for (const auto& entry_point : key.entry_points) {
-    utility::hash_combine(seed, entry_point.name, static_cast<std::uint32_t>(entry_point.stage));
+    utility::hash_combine(seed, entry_point.name, static_cast<std::uint32_t>(entry_point.stage), entry_point.specialization.value_or(std::string{}));
   }
 
   return seed;

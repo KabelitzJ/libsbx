@@ -61,6 +61,11 @@ auto shader_compiler::_cache_key(const std::string& source, std::span<const entr
 
     const auto stage = static_cast<std::uint32_t>(entry_point.stage);
     buffer.append(reinterpret_cast<const char*>(&stage), sizeof(stage));
+
+    if (entry_point.specialization) {
+      buffer.append(*entry_point.specialization);
+    }
+    buffer.push_back('\0');
   }
 
   for (const auto& option : options) {
@@ -153,7 +158,36 @@ auto shader_compiler::compile(const std::filesystem::path& path, std::span<const
       throw utility::runtime_error{"Entry point '{}' not found in '{}'", request.name, path.string()};
     }
 
-    const auto components = std::array<slang::IComponentType*, 2u>{module, entry_point};
+    // A generic entry point (e.g. `Policy.Output fragment_main<Policy : shading_policy>(...)`)
+    // must be bound to a concrete type argument before it can be linked/compiled — see
+    // shaders/pbr/geometry.slang for an example. `request.specialization` names that type;
+    // module->getLayout() resolves it via reflection.
+    auto component = Slang::ComPtr<slang::IComponentType>{entry_point};
+
+    if (request.specialization) {
+      auto* type = module->getLayout()->findTypeByName(request.specialization->c_str());
+
+      if (type == nullptr) {
+        throw utility::runtime_error{"Specialization type '{}' not found for entry point '{}' in '{}'", *request.specialization, request.name, path.string()};
+      }
+
+      const auto specialization_args = std::array{slang::SpecializationArg::fromType(type)};
+
+      auto specialized_entry_point = Slang::ComPtr<slang::IComponentType>{};
+      auto specialization_diagnostics = Slang::ComPtr<ISlangBlob>{};
+
+      if (SLANG_FAILED(entry_point->specialize(specialization_args.data(), static_cast<SlangInt>(specialization_args.size()), specialized_entry_point.writeRef(), specialization_diagnostics.writeRef())) || !specialized_entry_point) {
+        if (specialization_diagnostics && specialization_diagnostics->getBufferSize() > 1u) {
+          utility::logger<"graphics">::error("Slang specialization error for '{}':\n{}", path.string(), static_cast<const char*>(specialization_diagnostics->getBufferPointer()));
+        }
+
+        throw utility::runtime_error{"Failed to specialize entry point '{}' with '{}' in '{}'", request.name, *request.specialization, path.string()};
+      }
+
+      component = specialized_entry_point;
+    }
+
+    const auto components = std::array<slang::IComponentType*, 2u>{module, component};
 
     auto program = Slang::ComPtr<slang::IComponentType>{};
     auto link_diagnostics = Slang::ComPtr<ISlangBlob>{};

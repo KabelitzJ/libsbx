@@ -248,7 +248,8 @@ target_sources(
     "${CMAKE_SOURCE_DIR}/libsbx/render/render_thread.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/render/skybox_pass.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/render/tonemap_pass.cpp"
-    "${CMAKE_SOURCE_DIR}/libsbx/render/transparent_pass.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/render/transparent_accumulate_pass.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/render/transparent_resolve_pass.cpp"
 
     "${CMAKE_SOURCE_DIR}/libsbx/scenes/scene_serializer.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/scenes/scene.cpp"
@@ -446,7 +447,8 @@ target_sources(
       "${CMAKE_SOURCE_DIR}/libsbx/render/render_thread.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/render/skybox_pass.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/render/tonemap_pass.hpp"
-      "${CMAKE_SOURCE_DIR}/libsbx/render/transparent_pass.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/render/transparent_accumulate_pass.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/render/transparent_resolve_pass.hpp"
 
       "${CMAKE_SOURCE_DIR}/libsbx/scenes/components.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/scenes/scene_serializer.hpp"

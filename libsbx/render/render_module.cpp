@@ -43,7 +43,8 @@
 #include <libsbx/render/skybox_pass.hpp>
 #include <libsbx/render/grid_pass.hpp>
 #include <libsbx/render/tonemap_pass.hpp>
-#include <libsbx/render/transparent_pass.hpp>
+#include <libsbx/render/transparent_accumulate_pass.hpp>
+#include <libsbx/render/transparent_resolve_pass.hpp>
 
 namespace sbx::render {
 
@@ -93,7 +94,6 @@ struct transparent_entry {
   assets::material_handle material{};
   std::uint32_t pipeline_id{0u};
   math::matrix4x4 transform{math::matrix4x4::identity};
-  std::float_t depth{0.0f};
 }; // struct transparent_entry
 
 render_module::render_module() {
@@ -104,7 +104,8 @@ render_module::render_module() {
   _passes.push_back(std::make_unique<opaque_pass>());
   _passes.push_back(std::make_unique<skybox_pass>());
   _passes.push_back(std::make_unique<grid_pass>());
-  _passes.push_back(std::make_unique<transparent_pass>());
+  _passes.push_back(std::make_unique<transparent_accumulate_pass>());
+  _passes.push_back(std::make_unique<transparent_resolve_pass>());
   _passes.push_back(std::make_unique<tonemap_pass>());
 
   _composite_pass = std::make_unique<present_pass>();
@@ -213,15 +214,10 @@ auto render_module::_build_packet() -> render_packet {
       const auto pipeline_id = material->is_double_sided() ? 1u : 0u;
 
       if (material->alpha() == assets::alpha_mode::blend) {
-        const auto to_camera = packet.camera.position - math::vector3f{world.matrix[3]};
-        const auto depth = to_camera.length_squared();
-
-        if (material->is_double_sided()) {
-          transparent.push_back(transparent_entry{renderer.mesh, index, material, 1u, world.matrix, depth});
-          transparent.push_back(transparent_entry{renderer.mesh, index, material, 0u, world.matrix, depth});
-        } else {
-          transparent.push_back(transparent_entry{renderer.mesh, index, material, 0u, world.matrix, depth});
-        }
+        // WBOIT is order-independent, so unlike the opaque bucket's back-to-front-sensitive
+        // naive blending of old, a double-sided object needs only one draw (pipeline_id 1,
+        // cull_mode::none) instead of a sorted front/back pair.
+        transparent.push_back(transparent_entry{renderer.mesh, index, material, pipeline_id, world.matrix});
       } else {
         auto& bucket = opaque[mesh_key{renderer.mesh->id(), index, material->id()}];
         bucket.mesh = renderer.mesh;
@@ -247,8 +243,6 @@ auto render_module::_build_packet() -> render_packet {
     packet.transforms.insert(packet.transforms.end(), bucket.transforms.begin(), bucket.transforms.end());
     packet.opaque_commands.push_back(std::move(command));
   }
-
-  std::ranges::stable_sort(transparent, std::greater<>{}, &transparent_entry::depth);
 
   packet.transparent_commands.reserve(transparent.size());
 
@@ -374,7 +368,13 @@ auto render_module::_consume_packet(const render_packet& packet) -> void {
         .color_msaa = _color_msaa_image,
         .color_index = _color_index,
         .scene = _scene_image,
-        .scene_index = _scene_index
+        .scene_index = _scene_index,
+        .accum = _accum_image,
+        .accum_msaa = _accum_msaa_image,
+        .accum_index = _accum_index,
+        .reveal = _reveal_image,
+        .reveal_msaa = _reveal_msaa_image,
+        .reveal_index = _reveal_index
       };
 
       _prepare_frame(context);
@@ -441,6 +441,10 @@ auto render_module::_ensure_resources() -> void {
   _color_index = bindless_table.reserve_sampled_image();
 
   _scene_index = bindless_table.reserve_sampled_image();
+
+  _accum_index = bindless_table.reserve_sampled_image();
+
+  _reveal_index = bindless_table.reserve_sampled_image();
 
   _frame_buffer = registry.emplace<graphics::buffer>(graphics::buffer::create_info{
     .size = memory::stride_v<frame_data> * graphics::swapchain::max_frames_in_flight,
@@ -552,6 +556,10 @@ auto render_module::_resize_targets(const math::vector2u extent) -> void {
     registry.retire(_color_image, frame_index);
     registry.retire(_color_msaa_image, frame_index);
     registry.retire(_scene_image, frame_index);
+    registry.retire(_accum_image, frame_index);
+    registry.retire(_accum_msaa_image, frame_index);
+    registry.retire(_reveal_image, frame_index);
+    registry.retire(_reveal_msaa_image, frame_index);
   }
 
   _depth_image = registry.emplace<graphics::image>(graphics::image::create_info{
@@ -579,6 +587,42 @@ auto render_module::_resize_targets(const math::vector2u extent) -> void {
   });
 
   bindless_table.write_sampled_image(_color_index, registry.get<graphics::image>(_color_image).view());
+
+  _accum_msaa_image = registry.emplace<graphics::image>(graphics::image::create_info{
+    .extent = math::vector3u{extent, 1u},
+    .format = graphics::format::r16g16b16a16_sfloat,
+    .usage = graphics::image_usage::color_attachment,
+    .samples = render_pass::sample_count,
+    .name = "Transparent Accum MSAA"
+  });
+
+  _accum_image = registry.emplace<graphics::image>(graphics::image::create_info{
+    .extent = math::vector3u{extent, 1u},
+    .format = graphics::format::r16g16b16a16_sfloat,
+    .usage = graphics::image_usage::color_attachment | graphics::image_usage::sampled,
+    .samples = graphics::samples::count_1,
+    .name = "Transparent Accum Resolve"
+  });
+
+  bindless_table.write_sampled_image(_accum_index, registry.get<graphics::image>(_accum_image).view());
+
+  _reveal_msaa_image = registry.emplace<graphics::image>(graphics::image::create_info{
+    .extent = math::vector3u{extent, 1u},
+    .format = graphics::format::r16_sfloat,
+    .usage = graphics::image_usage::color_attachment,
+    .samples = render_pass::sample_count,
+    .name = "Transparent Reveal MSAA"
+  });
+
+  _reveal_image = registry.emplace<graphics::image>(graphics::image::create_info{
+    .extent = math::vector3u{extent, 1u},
+    .format = graphics::format::r16_sfloat,
+    .usage = graphics::image_usage::color_attachment | graphics::image_usage::sampled,
+    .samples = graphics::samples::count_1,
+    .name = "Transparent Reveal Resolve"
+  });
+
+  bindless_table.write_sampled_image(_reveal_index, registry.get<graphics::image>(_reveal_image).view());
 
   const auto scene_format = static_cast<graphics::format>(surface.format().format);
 

@@ -30,6 +30,55 @@ struct fs_out {
   float4 color : SV_Target0;
 }; // struct fs_out
 
+struct transparent_fs_out {
+  float4 accumulator : SV_Target0;
+  float revealage : SV_Target1;
+}; // struct transparent_fs_out
+
+struct lighting_result {
+  float3 color;
+  float alpha;
+}; // struct lighting_result
+
+interface shading_policy {
+  associatedtype Output;
+  static Output shade(lighting_result lighting, fs_in input);
+}; // interface shading_policy
+
+struct opaque_shading_policy : shading_policy {
+
+  typedef fs_out Output;
+
+  static fs_out shade(lighting_result lighting, fs_in input) {
+    fs_out output;
+
+    output.color = float4(lighting.color, lighting.alpha);
+
+    return output;
+  }
+
+}; // struct opaque_shading_policy
+
+struct transparent_shading_policy : shading_policy {
+
+  typedef transparent_fs_out Output;
+
+  static transparent_fs_out shade(lighting_result lighting, fs_in input) {
+    float alpha = clamp(lighting.alpha, 0.01, 0.99);
+    float weight_alpha = pow(min(1.0, alpha * 10.0) + 0.01, 3.0);
+    float weight_depth = pow(1.0 - input.sv_position.z * 0.9, 3.0);
+    float weight = clamp(weight_alpha * 1e8 * weight_depth, 1e-2, 3e3);
+
+    transparent_fs_out output;
+
+    output.accumulator = float4(lighting.color * alpha, alpha) * weight;
+    output.revealage = alpha;
+
+    return output;
+  }
+
+}; // struct transparent_shading_policy
+
 struct push_data {
   frame_data* frame;
   vertex* vertices;
@@ -96,8 +145,7 @@ vs_out vertex_main(vs_in input) {
   return output;
 }
 
-[shader("fragment")]
-fs_out fragment_main(fs_in input) {
+lighting_result evaluate_lighting(fs_in input) {
   frame_data frame = *push.frame;
   material_data material = frame.materials[push.material_index];
   SamplerState sampler = samplers[push.sampler_index];
@@ -134,8 +182,6 @@ fs_out fragment_main(fs_in input) {
   float3 f0 = lerp(float3(0.04, 0.04, 0.04), albedo, metallic);
   float3 lo = float3(0.0, 0.0, 0.0);
 
-  // Directional lights are screen-wide — can't be usefully clustered — so they're always
-  // evaluated in full. render_module packs them as lights[0, directional_light_count).
   for (uint i = 0u; i < frame.directional_light_count; ++i) {
     light_data light = frame.lights[i];
     float3 l = normalize(-light.direction.xyz);
@@ -143,9 +189,6 @@ fs_out fragment_main(fs_in input) {
     lo += brdf(n, v, l, albedo, f0, roughness, metallic) * radiance;
   }
 
-  // Point/spot lights: only this fragment's own cluster's assigned lights, not the whole scene.
-  // Clustered Forward+ — see build_clusters.slang / cull_lights.slang for how the grid and the
-  // per-cluster light lists this indexes into are built.
   float view_z = mul(frame.view, float4(input.position, 1.0)).z;
   float depth_slice = log2(max(-view_z, 0.0001)) * frame.cluster_scale + frame.cluster_bias;
   uint slice = uint(clamp(depth_slice, 0.0, float(cluster_dim_z - 1u)));
@@ -202,9 +245,17 @@ fs_out fragment_main(fs_in input) {
 
   float3 color = ambient + lo + emissive;
 
-  fs_out output;
+  lighting_result result;
 
-  output.color = float4(color, base.a);
+  result.color = color;
+  result.alpha = base.a;
 
-  return output;
+  return result;
+}
+
+[shader("fragment")]
+Policy::Output fragment_main<Policy : shading_policy>(fs_in input) {
+  lighting_result lighting = evaluate_lighting(input);
+
+  return Policy::shade(lighting, input);
 }

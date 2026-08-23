@@ -28,7 +28,7 @@ opaque_pass::opaque_pass() {
 
   const auto entry_points = std::vector<graphics::shader_compiler::entry_point_request>{
     {VK_SHADER_STAGE_VERTEX_BIT, "vertex_main"},
-    {VK_SHADER_STAGE_FRAGMENT_BIT, "fragment_main"}
+    {VK_SHADER_STAGE_FRAGMENT_BIT, "fragment_main", "opaque_shading_policy"}
   };
 
   const auto& shader = shader_cache.get({"shaders/pbr/geometry.slang", entry_points});

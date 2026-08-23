@@ -18,9 +18,9 @@ namespace sbx::render {
  * render_module::set_grid_enabled. A no-op every frame render_context::show_grid is false, so
  * it's always present in render_module's pass list (demo never enables it).
  *
- * Runs between skybox_pass and transparent_pass, for the same reason skybox_pass does (see its
- * doc comment): it needs the fully-populated opaque depth buffer to be occluded by real geometry,
- * and it must be part of what transparent_pass alpha-blends against.
+ * Runs between skybox_pass and transparent_accumulate_pass, for the same reason skybox_pass does
+ * (see its doc comment): it needs the fully-populated opaque depth buffer to be occluded by real
+ * geometry, and it must be part of what transparent_resolve_pass composites against.
  */
 class grid_pass final : public render_pass {
 

@@ -107,6 +107,13 @@ private:
   graphics::image_handle _color_image{};
   graphics::image_handle _color_msaa_image{};
   std::uint32_t _color_index{0u};
+
+  graphics::image_handle _accum_image{};
+  graphics::image_handle _accum_msaa_image{};
+  std::uint32_t _accum_index{0u};
+  graphics::image_handle _reveal_image{};
+  graphics::image_handle _reveal_msaa_image{};
+  std::uint32_t _reveal_index{0u};
   math::vector2u _target_extent{};
   math::vector2u _viewport_extent{0u, 0u};
 

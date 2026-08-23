@@ -138,7 +138,7 @@ auto light_culling_pass::execute(render_context& context) -> void {
   }
 
   // cull_lights' writes to the range/light-index buffers must land before opaque_pass and
-  // transparent_pass's vertex/fragment shaders read them.
+  // transparent_accumulate_pass's vertex/fragment shaders read them.
   auto lights_ready = VkMemoryBarrier2{};
   lights_ready.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2;
   lights_ready.srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;

@@ -53,7 +53,14 @@ struct render_context {
   graphics::image_handle color_msaa{};
   std::uint32_t color_index{0u};
   graphics::image_handle scene{};
-  std::uint32_t scene_index{0u};  
+  std::uint32_t scene_index{0u};
+
+  graphics::image_handle accum{};
+  graphics::image_handle accum_msaa{};
+  std::uint32_t accum_index{0u};
+  graphics::image_handle reveal{};
+  graphics::image_handle reveal_msaa{};
+  std::uint32_t reveal_index{0u};
 
   graphics::buffer::address_type frame_address{0u};
   graphics::buffer::address_type transform_address{0u};

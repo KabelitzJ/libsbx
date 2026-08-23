@@ -112,7 +112,7 @@ auto draw_material_picker(editor_state& state, const char* popup_id, sbx::assets
   if (slot.is_valid()) {
     ImGui::SameLine();
 
-    if (ImGui::Button((std::string{ICON_MDI_ARROW_RIGHT_BOX} + popup_id + "_edit").c_str())) {
+    if (ImGui::Button(fmt::format("{}{}_edit", std::string{ICON_MDI_FILE_EDIT_OUTLINE}, popup_id).c_str())) {
       state.select_asset(slot->id(), relative_asset_path(assets_module, slot->id()), asset_kind::material);
     }
 
@@ -288,7 +288,7 @@ auto draw_mesh_picker(editor_state& state, const char* popup_id, sbx::assets::me
   if (slot.is_valid()) {
     ImGui::SameLine();
 
-    if (ImGui::Button((std::string{ICON_MDI_ARROW_RIGHT_BOX} + popup_id + "_edit").c_str())) {
+    if (ImGui::Button(fmt::format("{}{}_edit", std::string{ICON_MDI_FILE_EDIT_OUTLINE}, popup_id).c_str())) {
       state.select_asset(slot->id(), relative_asset_path(assets_module, slot->id()), asset_kind::mesh);
     }
 

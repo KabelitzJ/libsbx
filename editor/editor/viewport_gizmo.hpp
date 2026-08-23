@@ -23,6 +23,19 @@ namespace editor {
  */
 auto draw_viewport_gizmo(editor_state& state, const ImVec2& viewport_origin, const ImVec2& viewport_size) -> bool;
 
+/**
+ * @brief Draws a small floating toolbar of translate/rotate/scale buttons over the top-left
+ * corner of the viewport (Blender/Unity-style), as a click alternative to the 1/2/3 shortcuts.
+ * Only drawn when a node is selected. Must be called while the Viewport window is the current
+ * ImGui window, after draw_viewport_gizmo.
+ *
+ * @param viewport_origin Screen-space top-left of the viewport image.
+ *
+ * @return true if the cursor is over the toolbar — callers should skip viewport click-to-pick
+ * this frame when true, the same way they already do for the gizmo itself.
+ */
+auto draw_gizmo_toolbar(editor_state& state, const ImVec2& viewport_origin) -> bool;
+
 } // namespace editor
 
 #endif // EDITOR_VIEWPORT_GIZMO_HPP_

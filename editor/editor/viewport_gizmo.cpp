@@ -6,6 +6,8 @@
 
 #include <ImGuizmo.h>
 
+#include <editor/fonts/material_design_icons.hpp>
+
 #include <libsbx/core/engine.hpp>
 
 #include <libsbx/math/matrix4x4.hpp>
@@ -115,6 +117,52 @@ auto draw_viewport_gizmo(editor_state& state, const ImVec2& viewport_origin, con
   }
 
   return ImGuizmo::IsOver() || ImGuizmo::IsUsing();
+}
+
+auto draw_gizmo_toolbar(editor_state& state, const ImVec2& viewport_origin) -> bool {
+  auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
+  auto& scene = scenes_module.active_scene();
+
+  if (!state.selected_node(scene).is_valid()) {
+    return false;
+  }
+
+  constexpr auto padding = 8.0f;
+  const auto button_size = ImVec2{28.0f, 28.0f};
+
+  ImGui::SetCursorScreenPos(ImVec2{viewport_origin.x + padding, viewport_origin.y + padding});
+
+  ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2{4.0f, 4.0f});
+  ImGui::BeginGroup();
+
+  const auto tool_button = [&](const char* icon, gizmo_operation operation, const char* tooltip) {
+    const auto is_active = state.current_gizmo_operation == operation;
+
+    if (is_active) {
+      ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyle().Colors[ImGuiCol_ButtonActive]);
+    }
+
+    if (ImGui::Button(icon, button_size)) {
+      state.current_gizmo_operation = operation;
+    }
+
+    if (is_active) {
+      ImGui::PopStyleColor();
+    }
+
+    if (ImGui::IsItemHovered()) {
+      ImGui::SetTooltip("%s", tooltip);
+    }
+  };
+
+  tool_button(ICON_MDI_ARROW_ALL, gizmo_operation::translate, "Translate (1)");
+  tool_button(ICON_MDI_ROTATE_3D_VARIANT, gizmo_operation::rotate, "Rotate (2)");
+  tool_button(ICON_MDI_ARROW_EXPAND_ALL, gizmo_operation::scale, "Scale (3)");
+
+  ImGui::EndGroup();
+  ImGui::PopStyleVar();
+
+  return ImGui::IsItemHovered();
 }
 
 } // namespace editor

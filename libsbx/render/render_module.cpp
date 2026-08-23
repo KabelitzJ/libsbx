@@ -37,6 +37,7 @@
 #include <libsbx/scenes/components.hpp>
 
 #include <libsbx/render/depth_pre_pass.hpp>
+#include <libsbx/render/light_culling_pass.hpp>
 #include <libsbx/render/opaque_pass.hpp>
 #include <libsbx/render/present_pass.hpp>
 #include <libsbx/render/skybox_pass.hpp>
@@ -60,7 +61,28 @@ struct frame_data {
   std::uint32_t prefiltered_mip_count;
   std::float_t environment_intensity;
   std::uint32_t pad0;
+  // Clustered Forward+ — mirrors shaders/pbr/frame_data.slang's tail exactly (field order and
+  // types both matter here: there's no shared build step checking the two stay in sync).
+  std::uint32_t directional_light_count;
+  std::float_t cluster_scale;
+  graphics::buffer::address_type cluster_range_address;
+  graphics::buffer::address_type cluster_light_index_address;
+  std::float_t cluster_bias;
+  math::vector2 cluster_tile_size;
 }; // struct frame_data
+
+// Mirrors shaders/pbr/cluster_data.slang's cluster_aabb — compute-to-compute only, never read by
+// the fragment shader, so it isn't part of frame_data.
+struct cluster_aabb {
+  math::vector4 min_view;
+  math::vector4 max_view;
+}; // struct cluster_aabb
+
+// Mirrors shaders/pbr/cluster_data.slang's cluster_range.
+struct cluster_range {
+  std::uint32_t offset;
+  std::uint32_t count;
+}; // struct cluster_range
 
 struct draw_bucket {
   assets::mesh_handle mesh{};
@@ -84,6 +106,9 @@ render_module::render_module() {
 
   // Creation order = execution order in the render thread.
   _passes.push_back(std::make_unique<depth_pre_pass>());
+  // Clustered Forward+: cluster assignment only needs the camera and the light list, both already
+  // known by now — runs before opaque_pass so its light lists are ready when shading needs them.
+  _passes.push_back(std::make_unique<light_culling_pass>());
   _passes.push_back(std::make_unique<opaque_pass>());
   _passes.push_back(std::make_unique<skybox_pass>()); // after opaque, before transparent — see skybox_pass doc comment
   _passes.push_back(std::make_unique<grid_pass>()); // same ordering reasons as skybox_pass — see grid_pass doc comment
@@ -269,6 +294,10 @@ auto render_module::_build_packet() -> render_packet {
     out.color = math::vector4{light.color.r(), light.color.g(), light.color.b(), light.intensity};
     out.direction = math::vector4{math::vector3f::normalized(math::vector3f{-matrix[2].x(), -matrix[2].y(), -matrix[2].z()}), 0.0f};
   }
+
+  // Clustered Forward+ relies on this exact packing order: directional lights first (always
+  // evaluated in full below), then the point/spot tail cull_lights.slang actually clusters.
+  packet.directional_light_count = static_cast<std::uint32_t>(packet.lights.size());
 
   for (auto&& [entity, transform, light] : scene.query<scenes::world_transform, scenes::point_light>().each()) {
     const auto& matrix = transform.matrix;
@@ -478,6 +507,63 @@ auto render_module::_ensure_resources() -> void {
   for (auto slot = std::size_t{0u}; slot < graphics::swapchain::max_frames_in_flight; ++slot) {
     _transform_addresses[slot] = transform_base + slot * transform_capacity * sizeof(math::matrix4x4);
   }
+
+  // Clustered Forward+ buffers. All three are written only by light_culling_pass's compute
+  // dispatches and read only by that same frame's later passes, never by the CPU — device_local,
+  // not host_write, unlike the buffers above.
+  _cluster_aabb_buffer = registry.emplace<graphics::buffer>(graphics::buffer::create_info{
+    .size = memory::stride_v<cluster_aabb> * cluster_count * graphics::swapchain::max_frames_in_flight,
+    .usage = graphics::buffer_usage::device_address | graphics::buffer_usage::storage,
+    .memory = graphics::memory_usage::device_local,
+    .name = "Cluster AABBs"
+  });
+
+  const auto cluster_aabb_base = registry.get<graphics::buffer>(_cluster_aabb_buffer).address();
+
+  for (auto slot = std::size_t{0u}; slot < graphics::swapchain::max_frames_in_flight; ++slot) {
+    _cluster_aabb_addresses[slot] = cluster_aabb_base + slot * cluster_count * memory::stride_v<cluster_aabb>;
+  }
+
+  _cluster_range_buffer = registry.emplace<graphics::buffer>(graphics::buffer::create_info{
+    .size = memory::stride_v<cluster_range> * cluster_count * graphics::swapchain::max_frames_in_flight,
+    .usage = graphics::buffer_usage::device_address | graphics::buffer_usage::storage,
+    .memory = graphics::memory_usage::device_local,
+    .name = "Cluster Ranges"
+  });
+
+  const auto cluster_range_base = registry.get<graphics::buffer>(_cluster_range_buffer).address();
+
+  for (auto slot = std::size_t{0u}; slot < graphics::swapchain::max_frames_in_flight; ++slot) {
+    _cluster_range_addresses[slot] = cluster_range_base + slot * cluster_count * memory::stride_v<cluster_range>;
+  }
+
+  _cluster_light_index_buffer = registry.emplace<graphics::buffer>(graphics::buffer::create_info{
+    .size = memory::stride_v<std::uint32_t> * cluster_light_index_capacity * graphics::swapchain::max_frames_in_flight,
+    .usage = graphics::buffer_usage::device_address | graphics::buffer_usage::storage,
+    .memory = graphics::memory_usage::device_local,
+    .name = "Cluster Light Indices"
+  });
+
+  const auto cluster_light_index_base = registry.get<graphics::buffer>(_cluster_light_index_buffer).address();
+
+  for (auto slot = std::size_t{0u}; slot < graphics::swapchain::max_frames_in_flight; ++slot) {
+    _cluster_light_index_addresses[slot] = cluster_light_index_base + slot * cluster_light_index_capacity * memory::stride_v<std::uint32_t>;
+  }
+
+  // The one cluster buffer the CPU does touch: reset to 0 every frame in _prepare_frame, exactly
+  // like the buffers above, since cull_lights.slang's atomic reserve has to start counting there.
+  _cluster_counter_buffer = registry.emplace<graphics::buffer>(graphics::buffer::create_info{
+    .size = memory::stride_v<std::uint32_t> * graphics::swapchain::max_frames_in_flight,
+    .usage = graphics::buffer_usage::device_address | graphics::buffer_usage::storage,
+    .memory = graphics::memory_usage::host_write,
+    .name = "Cluster Counter"
+  });
+
+  const auto cluster_counter_base = registry.get<graphics::buffer>(_cluster_counter_buffer).address();
+
+  for (auto slot = std::size_t{0u}; slot < graphics::swapchain::max_frames_in_flight; ++slot) {
+    _cluster_counter_addresses[slot] = cluster_counter_base + slot * memory::stride_v<std::uint32_t>;
+  }
 }
 
 auto render_module::_resize_targets(const math::vector2u extent) -> void {
@@ -566,6 +652,27 @@ auto render_module::_prepare_frame(render_context& context) -> void {
     transform_buffer.write(context.packet->transforms.data(), instance_count * sizeof(math::matrix4x4), context.slot * transform_capacity * sizeof(math::matrix4x4));
   }
 
+  // Clustered Forward+: directional lights always precede the point/spot tail (see
+  // _build_packet), clamped the same way light_count is in case the total was itself truncated.
+  const auto directional_light_count = std::min(context.packet->directional_light_count, light_count);
+
+  // Exponential depth-slice formula (see build_clusters.slang): folded into two scalars here so
+  // every fragment doesn't have to redo log2(far/near) and a division of its own.
+  const auto& camera = context.packet->camera;
+  const auto slice_ratio = std::log2(camera.far_plane / camera.near_plane);
+  const auto cluster_scale = static_cast<std::float_t>(cluster_dim_z) / slice_ratio;
+  const auto cluster_bias = -static_cast<std::float_t>(cluster_dim_z) * std::log2(camera.near_plane) / slice_ratio;
+
+  const auto cluster_tile_size = math::vector2{
+    static_cast<std::float_t>(context.extent.x()) / static_cast<std::float_t>(cluster_dim_x),
+    static_cast<std::float_t>(context.extent.y()) / static_cast<std::float_t>(cluster_dim_y)
+  };
+
+  // Reset before this frame's light_culling_pass dispatches its atomic-reserving cull_lights.slang.
+  const auto counter_reset = std::uint32_t{0u};
+  auto& cluster_counter_buffer = registry.get<graphics::buffer>(_cluster_counter_buffer);
+  cluster_counter_buffer.write(&counter_reset, sizeof(counter_reset), context.slot * memory::stride_v<std::uint32_t>);
+
   auto data = frame_data{};
   data.view = context.packet->camera.view;
   data.projection = projection;
@@ -579,6 +686,12 @@ auto render_module::_prepare_frame(render_context& context) -> void {
   data.prefiltered_mip_count = context.prefiltered_mip_count;
   data.environment_intensity = context.environment_intensity;
   data.pad0 = 0u;
+  data.directional_light_count = directional_light_count;
+  data.cluster_scale = cluster_scale;
+  data.cluster_range_address = _cluster_range_addresses[context.slot];
+  data.cluster_light_index_address = _cluster_light_index_addresses[context.slot];
+  data.cluster_bias = cluster_bias;
+  data.cluster_tile_size = cluster_tile_size;
 
   auto& frame_buffer = registry.get<graphics::buffer>(_frame_buffer);
   frame_buffer.write(&data, sizeof(frame_data), context.slot * memory::stride_v<frame_data>);
@@ -590,6 +703,11 @@ auto render_module::_prepare_frame(render_context& context) -> void {
   context.clamp_sampler_index = _clamp_sampler_index;
   context.show_grid = _grid_enabled;
   context.inverse_view_projection = math::matrix4x4::inverted(projection * context.packet->camera.view);
+
+  context.cluster_aabb_address = _cluster_aabb_addresses[context.slot];
+  context.cluster_range_address = data.cluster_range_address;
+  context.cluster_light_index_address = data.cluster_light_index_address;
+  context.cluster_counter_address = _cluster_counter_addresses[context.slot];
 }
 
 } // namespace sbx::render

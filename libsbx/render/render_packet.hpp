@@ -91,6 +91,9 @@ struct render_packet {
   std::vector<draw_command> transparent_commands{};
   std::vector<math::matrix4x4> transforms{};
   std::vector<light_data> lights{};
+  // Lights are packed directional-first (see render_module::_build_packet) — this is where that
+  // prefix ends and the point/spot tail Clustered Forward+ actually culls begins.
+  std::uint32_t directional_light_count{0u};
   assets::environment_map_handle environment{};
   std::float_t environment_intensity{1.0f};
 }; // struct render_packet

@@ -240,6 +240,7 @@ target_sources(
 
     "${CMAKE_SOURCE_DIR}/libsbx/render/depth_pre_pass.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/render/grid_pass.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/render/light_culling_pass.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/render/opaque_pass.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/render/present_pass.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/render/render_module.cpp"
@@ -436,6 +437,7 @@ target_sources(
       "${CMAKE_SOURCE_DIR}/libsbx/reflection/reflection.hpp"
 
       "${CMAKE_SOURCE_DIR}/libsbx/render/depth_pre_pass.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/render/light_culling_pass.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/render/opaque_pass.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/render/present_pass.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/render/render_module.hpp"

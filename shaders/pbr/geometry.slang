@@ -23,6 +23,7 @@ struct fs_in {
   [[vk::location(1)]] float3 normal : NORMAL;
   [[vk::location(2)]] float2 uv : TEXCOORD;
   [[vk::location(3)]] float4 tangent : TANGENT;
+  float4 sv_position : SV_Position;
 }; // struct fs_in
 
 struct fs_out {
@@ -133,27 +134,42 @@ fs_out fragment_main(fs_in input) {
   float3 f0 = lerp(float3(0.04, 0.04, 0.04), albedo, metallic);
   float3 lo = float3(0.0, 0.0, 0.0);
 
-  for (uint i = 0u; i < frame.light_count; ++i) {
+  // Directional lights are screen-wide — can't be usefully clustered — so they're always
+  // evaluated in full. render_module packs them as lights[0, directional_light_count).
+  for (uint i = 0u; i < frame.directional_light_count; ++i) {
     light_data light = frame.lights[i];
+    float3 l = normalize(-light.direction.xyz);
+    float3 radiance = light.color.rgb * light.color.a;
+    lo += brdf(n, v, l, albedo, f0, roughness, metallic) * radiance;
+  }
 
-    float3 l;
-    float attenuation = 1.0;
+  // Point/spot lights: only this fragment's own cluster's assigned lights, not the whole scene.
+  // Clustered Forward+ — see build_clusters.slang / cull_lights.slang for how the grid and the
+  // per-cluster light lists this indexes into are built.
+  float view_z = mul(frame.view, float4(input.position, 1.0)).z;
+  float depth_slice = log2(max(-view_z, 0.0001)) * frame.cluster_scale + frame.cluster_bias;
+  uint slice = uint(clamp(depth_slice, 0.0, float(cluster_dim_z - 1u)));
 
-    if (light.type == light_type::directional) {
-      l = normalize(-light.direction.xyz);
-    } else {
-      float3 to_light = light.position.xyz - input.position;
-      float distance = length(to_light);
-      l = to_light / max(distance, 0.0001);
+  uint2 tile = uint2(input.sv_position.xy / frame.cluster_tile_size);
+  tile = min(tile, uint2(cluster_dim_x - 1u, cluster_dim_y - 1u));
 
-      float range = light.position.w;
-      float falloff = saturate(1.0 - pow(distance / max(range, 0.0001), 4.0));
-      attenuation = (falloff * falloff) / max(distance * distance, 0.0001);
+  uint cluster_id = tile.x + cluster_dim_x * (tile.y + cluster_dim_y * slice);
+  cluster_range range = frame.cluster_ranges[cluster_id];
 
-      if (light.type == light_type::spot) {
-        float cos_angle = dot(-l, normalize(light.direction.xyz));
-        attenuation *= saturate((cos_angle - light.outer_cos) / max(light.inner_cos - light.outer_cos, 0.0001));
-      }
+  for (uint c = 0u; c < range.count; ++c) {
+    light_data light = frame.lights[frame.cluster_light_indices[range.offset + c]];
+
+    float3 to_light = light.position.xyz - input.position;
+    float distance = length(to_light);
+    float3 l = to_light / max(distance, 0.0001);
+
+    float range_falloff = light.position.w;
+    float falloff = saturate(1.0 - pow(distance / max(range_falloff, 0.0001), 4.0));
+    float attenuation = (falloff * falloff) / max(distance * distance, 0.0001);
+
+    if (light.type == light_type::spot) {
+      float cos_angle = dot(-l, normalize(light.direction.xyz));
+      attenuation *= saturate((cos_angle - light.outer_cos) / max(light.inner_cos - light.outer_cos, 0.0001));
     }
 
     float3 radiance = light.color.rgb * light.color.a * attenuation;

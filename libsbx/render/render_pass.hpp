@@ -65,6 +65,15 @@ struct render_context {
   std::uint32_t sampler_index{0u};
   std::uint32_t clamp_sampler_index{0u};
 
+  // Clustered Forward+ (see light_culling_pass): this frame's slot of each cluster buffer.
+  // cluster_range_address/cluster_light_index_address are also copied into frame_data itself,
+  // since geometry.slang's fragment shader reads those two; cluster_aabb_address and
+  // cluster_counter_address are only ever needed by light_culling_pass's own compute dispatches.
+  graphics::buffer::address_type cluster_aabb_address{0u};
+  graphics::buffer::address_type cluster_range_address{0u};
+  graphics::buffer::address_type cluster_light_index_address{0u};
+  graphics::buffer::address_type cluster_counter_address{0u};
+
   // Editor-only reference grid — see render_module::set_grid_enabled. Always false in demo.
   bool show_grid{false};
 }; // struct render_context

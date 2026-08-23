@@ -1,0 +1,13 @@
+name: helmet
+base_color_factor: {r: 1, g: 1, b: 1, a: 1}
+emissive_factor: {x: 1, y: 1, z: 1}
+metallic_factor: 1
+roughness_factor: 1
+alpha_mode: opaque
+alpha_cutoff: 0.5
+is_double_sided: false
+albedo: models/damaged_helmet/textures/albedo.jpg
+normal: models/damaged_helmet/textures/normal.jpg
+metallic_roughness: models/damaged_helmet/textures/orm.png
+occlusion: models/damaged_helmet/textures/orm.png
+emissive: models/damaged_helmet/textures/emissive.jpg

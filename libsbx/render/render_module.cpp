@@ -423,7 +423,10 @@ auto render_module::_ensure_resources() -> void {
   auto& bindless_table = graphics_module.bindless_table();
   auto& registry = graphics_module.resource_registry();
 
-  _sampler_index = bindless_table.sampler_index(graphics::sampler::create_info{});
+  _sampler_index = bindless_table.sampler_index(graphics::sampler::create_info{
+    .max_anisotropy = 16.0f,
+    .name = "Material Sampler"
+  });
 
   _clamp_sampler_index = bindless_table.sampler_index(graphics::sampler::create_info{
     .address_mode_u = graphics::address_mode::clamp_to_edge,

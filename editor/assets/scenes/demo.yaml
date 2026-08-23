@@ -13,6 +13,9 @@ assets_module:
     - key: duck
       name: duck
       uuid: 17482914061356141443
+    - key: cube
+      name: cube
+      uuid: 13674539523814858198
   materials:
     - key: HoseMat
       name: HoseMat
@@ -41,6 +44,9 @@ assets_module:
     - key: Duck_1
       name: Duck
       uuid: 15160336789969913823
+    - key: Material
+      name: Material
+      uuid: 8821735985643789217
   environment_maps:
     - key: sky
       name: sky
@@ -50,8 +56,8 @@ nodes:
     id: 1867269432501270719
     components:
       - type: transform
-        position: {x: 4.03122187, y: 7.73924208, z: 8.22548199}
-        rotation: {x: -0.201732099, y: 0.266686291, z: 0.0571907386, w: 0.940697551}
+        position: {x: 0.90944618, y: 4.99896812, z: 4.6445241}
+        rotation: {x: -0.317502648, y: 0.0592144802, z: 0.0198697858, w: 0.946198165}
         scale: {x: 1, y: 1, z: 1}
       - type: camera
         fov_degrees: 60
@@ -151,3 +157,28 @@ nodes:
       - type: directional_light
         color: {r: 1, g: 1, b: 1, a: 1}
         intensity: 3
+  - tag: Node
+    id: 10299365739581102668
+    components:
+      - type: transform
+        position: {x: 1.20640731, y: 1.9734565, z: -0.358610481}
+        rotation: {x: -0.707106769, y: -0, z: 0, w: 0.707106829}
+        scale: {x: 1, y: 0.999989033, z: 0.999989033}
+      - type: spot_light
+        color: {r: 1, g: 0, b: 0, a: 1}
+        intensity: 100
+        range: 20
+        inner_angle: 0.400000006
+        outer_angle: 0.600000024
+  - tag: Node
+    id: 2162916288673430550
+    components:
+      - type: transform
+        position: {x: 0, y: 0, z: 0}
+        rotation: {x: 0, y: 0, z: 0, w: 1}
+        scale: {x: 10, y: 0.100000001, z: 10}
+      - type: static_mesh
+        mesh: cube
+        submeshes:
+          - index: 0
+            material: Material

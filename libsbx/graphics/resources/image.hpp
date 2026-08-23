@@ -3,6 +3,8 @@
 #ifndef LIBSBX_GRAPHICS_RESOURCES_IMAGE_HPP_
 #define LIBSBX_GRAPHICS_RESOURCES_IMAGE_HPP_
 
+#include <algorithm>
+#include <bit>
 #include <cstdint>
 #include <string>
 
@@ -111,8 +113,14 @@ public:
 
   /**
    * @brief The number of mip levels a full chain would have for @p extent.
+   * 
+   * @param extent The image extent
    */
-  [[nodiscard]] static auto mip_levels_for(const math::vector3u& extent) noexcept -> std::uint32_t;
+  [[nodiscard]] static constexpr auto mip_levels_for(const math::vector3u& extent) noexcept -> std::uint32_t {
+    const auto largest = std::max({extent.x(), extent.y(), extent.z()});
+
+    return static_cast<std::uint32_t>(std::bit_width(largest));
+  }
 
   /**
    * @brief The aspect mask implied by @p format. Depth and stencil formats are recognised, and

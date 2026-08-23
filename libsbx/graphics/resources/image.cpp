@@ -2,9 +2,7 @@
 // Copyright (c) 2026 Jonas Kabelitz
 #include <libsbx/graphics/resources/image.hpp>
 
-#include <algorithm>
 #include <array>
-#include <bit>
 
 #include <libsbx/utility/assert.hpp>
 
@@ -57,12 +55,6 @@ auto image::aspect_for(const graphics::format format) noexcept -> VkImageAspectF
       return VK_IMAGE_ASPECT_COLOR_BIT;
     }
   }
-}
-
-auto image::mip_levels_for(const math::vector3u& extent) noexcept -> std::uint32_t {
-  const auto largest = std::max({extent.x(), extent.y(), extent.z()});
-
-  return static_cast<std::uint32_t>(std::bit_width(largest));
 }
 
 image::image(const create_info& create_info)

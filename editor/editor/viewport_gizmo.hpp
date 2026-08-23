@@ -59,11 +59,17 @@ auto draw_view_gizmo(const ImVec2& viewport_origin, const ImVec2& viewport_size)
  *
  * @param viewport_origin Screen-space top-left of the viewport image.
  * @param viewport_size Screen-space size of the viewport image.
+ * @param gizmo_capturing_input Pass draw_viewport_gizmo's return value for this frame. A selected
+ * light/camera's icon projects to the exact same screen point as the gizmo's own center "move on
+ * screen plane" handle, and the icon's InvisibleButton would otherwise win ImGui's hover
+ * resolution there every frame, permanently blocking ImGuizmo::CanActivate() for that handle. When
+ * true, icon hit-testing (hover/click) is skipped for this frame — the glyph itself still draws —
+ * so the gizmo gets input priority whenever the cursor is already within its own hotspot.
  *
  * @return true if the cursor is over any icon — callers should skip viewport click-to-pick this
  * frame when true, the same way they already do for the other viewport overlays.
  */
-auto draw_node_icons(editor_state& state, const ImVec2& viewport_origin, const ImVec2& viewport_size) -> bool;
+auto draw_node_icons(editor_state& state, const ImVec2& viewport_origin, const ImVec2& viewport_size, bool gizmo_capturing_input) -> bool;
 
 } // namespace editor
 

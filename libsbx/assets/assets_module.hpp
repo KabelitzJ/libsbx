@@ -4,6 +4,7 @@
 #define LIBSBX_ASSETS_ASSETS_MODULE_HPP_
 
 #include <array>
+#include <bit>
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
@@ -189,7 +190,8 @@ private:
   inline static constexpr auto radiance_cube_size = std::uint32_t{512u};
   inline static constexpr auto irradiance_cube_size = std::uint32_t{64u};
   inline static constexpr auto prefiltered_cube_size = std::uint32_t{512u};
-  inline static constexpr auto prefiltered_mip_count = std::uint32_t{5u};
+
+  inline static constexpr auto prefiltered_mip_count = graphics::image::mip_levels_for(math::vector3{prefiltered_cube_size});
   inline static constexpr auto brdf_lut_size = std::uint32_t{512u};
 
   struct cooked_submesh {

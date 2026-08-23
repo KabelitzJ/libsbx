@@ -425,7 +425,7 @@ auto project_to_screen(const sbx::math::matrix4x4& view_projection, const sbx::m
   };
 }
 
-auto draw_node_icons(editor_state& state, const ImVec2& viewport_origin, const ImVec2& viewport_size) -> bool {
+auto draw_node_icons(editor_state& state, const ImVec2& viewport_origin, const ImVec2& viewport_size, bool gizmo_capturing_input) -> bool {
   if (viewport_size.x <= 0.0f || viewport_size.y <= 0.0f) {
     return false;
   }
@@ -467,16 +467,26 @@ auto draw_node_icons(editor_state& state, const ImVec2& viewport_origin, const I
 
     ImGui::SetCursorScreenPos(icon_min);
     ImGui::PushID(static_cast<int>(entity));
-    ImGui::InvisibleButton("##node_icon", text_size);
 
-    const auto hovered = ImGui::IsItemHovered();
     const auto node = scene.node_of(entity);
+    auto hovered = false;
 
-    if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
-      state.select_node(node);
+    // Skip hit-testing (but still draw the glyph below) while the cursor is already inside the
+    // gizmo's own hotspot: a selected light/camera's icon projects to the same screen point as the
+    // gizmo's center handle, and this InvisibleButton would otherwise win ImGui's hover resolution
+    // there every frame, permanently blocking ImGuizmo::CanActivate() for that handle. See the
+    // gizmo_capturing_input doc comment in viewport_gizmo.hpp.
+    if (!gizmo_capturing_input) {
+      ImGui::InvisibleButton("##node_icon", text_size);
+
+      hovered = ImGui::IsItemHovered();
+
+      if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
+        state.select_node(node);
+      }
+
+      any_active |= hovered || ImGui::IsItemActive();
     }
-
-    any_active |= hovered || ImGui::IsItemActive();
 
     ImGui::PopID();
 

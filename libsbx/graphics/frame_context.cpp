@@ -142,8 +142,25 @@ auto frame_context::end_frame() -> void {
 
   const auto image_index = _swapchain->active_image_index();
 
-  const auto wait_semaphores = std::array<VkSemaphore, 1u>{_image_available[_slot()]};
-  const auto wait_stages = std::array<VkPipelineStageFlags, 1u>{VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
+  // _image_available is binary, so it pairs with a dummy 0 value below — valid per spec when a
+  // wait array mixes binary and timeline semaphores. Any producer that queued an add_wait() this
+  // frame (e.g. particle_simulate_pass) is merged in alongside it.
+  auto wait_semaphores = std::vector<VkSemaphore>{_image_available[_slot()]};
+  auto wait_stages = std::vector<VkPipelineStageFlags>{VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
+  auto wait_values = std::vector<std::uint64_t>{0u};
+
+  wait_semaphores.reserve(1u + _extra_waits.size());
+  wait_stages.reserve(1u + _extra_waits.size());
+  wait_values.reserve(1u + _extra_waits.size());
+
+  for (const auto& wait : _extra_waits) {
+    wait_semaphores.push_back(wait.semaphore);
+    wait_stages.push_back(wait.stage);
+    wait_values.push_back(wait.value);
+  }
+
+  _extra_waits.clear();
+
   const auto command_buffers = std::array<VkCommandBuffer, 1u>{command_buffer.handle()};
 
   // The value paired with the binary semaphore is ignored, but the arrays must stay parallel.
@@ -152,6 +169,8 @@ auto frame_context::end_frame() -> void {
 
   auto timeline_submit_info = VkTimelineSemaphoreSubmitInfo{};
   timeline_submit_info.sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO;
+  timeline_submit_info.waitSemaphoreValueCount = static_cast<std::uint32_t>(wait_values.size());
+  timeline_submit_info.pWaitSemaphoreValues = wait_values.data();
   timeline_submit_info.signalSemaphoreValueCount = static_cast<std::uint32_t>(signal_values.size());
   timeline_submit_info.pSignalSemaphoreValues = signal_values.data();
 

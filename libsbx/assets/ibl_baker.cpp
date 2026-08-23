@@ -69,7 +69,7 @@ auto ibl_baker::_ensure_brdf_lut(graphics::command_buffer& command_buffer) -> vo
     {VK_SHADER_STAGE_COMPUTE_BIT, "compute_main"}
   };
 
-  const auto shader = shader_cache.get({"shaders/pbr/brdf_lut.slang", entry_points});
+  const auto shader = shader_cache.get({"shaders/ibl/brdf_lut.slang", entry_points});
 
   auto pipeline = compute_pipeline_cache.get(graphics::compute_pipeline::create_info{
     .shader = shader,
@@ -213,7 +213,7 @@ auto ibl_baker::bake_environment(environment_map& record, const std::vector<std:
     .name = "Environment Radiance Cube (scratch)"
   }};
 
-  const auto equirect_to_cube_shader = shader_cache.get({"shaders/pbr/equirect_to_cubemap.slang", entry_points});
+  const auto equirect_to_cube_shader = shader_cache.get({"shaders/ibl/equirect_to_cubemap.slang", entry_points});
   auto equirect_to_cube_pipeline = compute_pipeline_cache.get(graphics::compute_pipeline::create_info{.shader = equirect_to_cube_shader, .name = "IBL Equirect To Cubemap"});
 
   {
@@ -305,7 +305,7 @@ auto ibl_baker::bake_environment(environment_map& record, const std::vector<std:
 
     bindless_table.flush_writes();
 
-    const auto shader = shader_cache.get({"shaders/pbr/irradiance.slang", entry_points});
+    const auto shader = shader_cache.get({"shaders/ibl/irradiance.slang", entry_points});
     auto pipeline = compute_pipeline_cache.get(graphics::compute_pipeline::create_info{.shader = shader, .name = "IBL Irradiance"});
 
     struct push_data {
@@ -358,7 +358,7 @@ auto ibl_baker::bake_environment(environment_map& record, const std::vector<std:
     to_general.layer_count = 6u;
     command_buffer.transition_image_layout(to_general);
 
-    const auto shader = shader_cache.get({"shaders/pbr/prefilter.slang", entry_points});
+    const auto shader = shader_cache.get({"shaders/ibl/prefilter.slang", entry_points});
     auto pipeline = compute_pipeline_cache.get(graphics::compute_pipeline::create_info{.shader = shader, .name = "IBL Prefilter"});
 
     command_buffer.bind_pipeline(*pipeline);

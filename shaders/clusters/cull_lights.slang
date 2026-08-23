@@ -1,11 +1,14 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Jonas Kabelitz
 
+#include <common.slang>
 #include <frame_data.slang>
+
+#include <clusters/cluster_data.slang>
 
 struct push_data {
   frame_data* frame;
-  cluster_aabb* clusters;
+  aabb* clusters;
   uint* counter;
 }; // struct push_data
 
@@ -37,7 +40,7 @@ void compute_main(cs_in input) {
   uint cluster_id = dispatch_thread_id.x + cluster_dim_x * (dispatch_thread_id.y + cluster_dim_y * dispatch_thread_id.z);
 
   frame_data frame = push.frame[0];
-  cluster_aabb aabb = push.clusters[cluster_id];
+  aabb aabb = push.clusters[cluster_id];
 
   uint local_indices[max_lights_per_cluster];
   uint local_count = 0u;
@@ -48,7 +51,7 @@ void compute_main(cs_in input) {
     float3 view_position = mul(frame.view, float4(light.position.xyz, 1.0)).xyz;
     float radius = light.position.w;
 
-    if (sphere_intersects_aabb(view_position, radius, aabb.min_view.xyz, aabb.max_view.xyz)) {
+    if (sphere_intersects_aabb(view_position, radius, aabb.min.xyz, aabb.max.xyz)) {
       local_indices[local_count] = i;
       ++local_count;
     }

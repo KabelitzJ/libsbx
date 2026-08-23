@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Jonas Kabelitz
 
-#include <cluster_data.slang>
+#include <common.slang>
+
+#include <clusters/cluster_data.slang>
 
 struct push_data {
-  cluster_aabb* clusters;
+  aabb* clusters;
   float tan_half_fov_y;
   float aspect;
   float near_plane;
@@ -58,6 +60,6 @@ void compute_main(cs_in input) {
     aabb_max = max(aabb_max, max(near_point, far_point));
   }
 
-  push.clusters[cluster_id].min_view = float4(aabb_min, 1.0);
-  push.clusters[cluster_id].max_view = float4(aabb_max, 1.0);
+  push.clusters[cluster_id].min = float4(aabb_min, 1.0);
+  push.clusters[cluster_id].max = float4(aabb_max, 1.0);
 }

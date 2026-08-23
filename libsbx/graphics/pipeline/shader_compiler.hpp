@@ -35,10 +35,6 @@ public:
   struct entry_point_request {
     VkShaderStageFlagBits stage;
     std::string name;
-    // Names a type (e.g. a struct conforming to some interface) to bind a generic entry point's
-    // type parameter to via slang::IEntryPoint::specialize() — see shaders/pbr/geometry.slang's
-    // `fragment_main<Policy : shading_policy>` for an example. Leave unset for a non-generic
-    // entry point.
     std::optional<std::string> specialization{};
 
     auto operator==(const entry_point_request&) const -> bool = default;

@@ -21,7 +21,7 @@ namespace sbx::render {
 
 namespace {
 
-// Mirrors shaders/pbr/cluster_data.slang's cluster_dim_x/y/z, which in turn must match
+// Mirrors shaders/cluster_data.slang's cluster_dim_x/y/z, which in turn must match
 // render_module::cluster_dim_x/y/z (render_module.hpp owns the buffer sizing these dimensions
 // imply — see its comment for why all three copies of these numbers have to agree by hand).
 inline constexpr auto cluster_dim_x = std::uint32_t{16u};
@@ -50,14 +50,14 @@ light_culling_pass::light_culling_pass() {
     {VK_SHADER_STAGE_COMPUTE_BIT, "compute_main"}
   };
 
-  const auto build_clusters_shader = shader_cache.get({"shaders/pbr/build_clusters.slang", entry_points});
+  const auto build_clusters_shader = shader_cache.get({"shaders/clusters/build_clusters.slang", entry_points});
 
   _build_clusters_pipeline = compute_pipeline_cache.get(graphics::compute_pipeline::create_info{
     .shader = build_clusters_shader,
     .name = "Build Clusters"
   });
 
-  const auto cull_lights_shader = shader_cache.get({"shaders/pbr/cull_lights.slang", entry_points});
+  const auto cull_lights_shader = shader_cache.get({"shaders/clusters/cull_lights.slang", entry_points});
 
   _cull_lights_pipeline = compute_pipeline_cache.get(graphics::compute_pipeline::create_info{
     .shader = cull_lights_shader,

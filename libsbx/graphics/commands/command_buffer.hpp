@@ -158,6 +158,8 @@ public:
 
   auto dispatch(std::uint32_t group_count_x, std::uint32_t group_count_y, std::uint32_t group_count_z) -> void;
 
+  auto dispatch_indirect(VkBuffer buffer, VkDeviceSize offset = 0u) -> void;
+
   auto draw(std::uint32_t vertex_count, std::uint32_t instance_count, std::uint32_t first_vertex, std::uint32_t first_instance) -> void;
 
   auto draw_indexed(std::uint32_t index_count, std::uint32_t instance_count, std::uint32_t first_index, std::int32_t vertex_offset, std::uint32_t first_instance) -> void;

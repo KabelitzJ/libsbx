@@ -45,6 +45,7 @@
 #include <libsbx/render/tonemap_pass.hpp>
 #include <libsbx/render/transparent_accumulate_pass.hpp>
 #include <libsbx/render/transparent_resolve_pass.hpp>
+#include <libsbx/render/particle_draw_pass.hpp>
 
 namespace sbx::render {
 
@@ -99,12 +100,27 @@ struct transparent_entry {
 render_module::render_module() {
   _ensure_resources();
 
+  _particle_pools[particle_additive_pool_index] = std::make_unique<particle_pool>(particle_pool::create_info{
+    .max_particles = 4096u,
+    .max_emitter_instances = 64u,
+    .name = "Additive Particle Pool"
+  });
+
+  _particle_pools[particle_alpha_pool_index] = std::make_unique<particle_pool>(particle_pool::create_info{
+    .max_particles = 4096u,
+    .max_emitter_instances = 64u,
+    .name = "Alpha Blend Particle Pool"
+  });
+
+  _particle_simulate_pass = std::make_unique<particle_simulate_pass>();
+
   _passes.push_back(std::make_unique<depth_pre_pass>());
   _passes.push_back(std::make_unique<light_culling_pass>());
   _passes.push_back(std::make_unique<opaque_pass>());
   _passes.push_back(std::make_unique<skybox_pass>());
   _passes.push_back(std::make_unique<grid_pass>());
   _passes.push_back(std::make_unique<transparent_accumulate_pass>());
+  _passes.push_back(std::make_unique<particle_draw_pass>());
   _passes.push_back(std::make_unique<transparent_resolve_pass>());
   _passes.push_back(std::make_unique<tonemap_pass>());
 
@@ -303,11 +319,82 @@ auto render_module::_consume_packet(const render_packet& packet) -> void {
   auto& frame_context = graphics_module.frame_context();
   auto& upload_context = graphics_module.upload_context();
 
+  // Particle compute chain: its own command buffer/submission, gated by its own timeline
+  // semaphore, run before this frame's main command buffer even begins recording — see
+  // particle_simulate_pass.hpp for why this can't just be another entry in _passes.
+  {
+    const auto dt = static_cast<std::float_t>(core::engine::delta_time());
+    const auto time = static_cast<std::float_t>(core::engine::time());
+
+    auto& additive_pool = *_particle_pools[particle_additive_pool_index];
+    auto& alpha_pool = *_particle_pools[particle_alpha_pool_index];
+
+    // M1 hardcoded test emitters (no ECS/asset layer yet) — one per pool, slot 0, so the whole
+    // chain (dead-list free-stack, ping-pong alive lists, indirect dispatch/draw, WBOIT-integrated
+    // draw) can be validated on screen before M2 wires up real (world_transform,
+    // particle_effect_instance) extraction.
+    auto additive_emitter = emitter_instance_gpu{};
+    additive_emitter.position = math::vector3{-1.5f, 0.5f, 0.0f};
+    additive_emitter.emission_rate = 200.0f;
+    additive_emitter.velocity_min = math::vector3{-0.5f, 1.5f, -0.5f};
+    additive_emitter.velocity_max = math::vector3{0.5f, 3.0f, 0.5f};
+    additive_emitter.lifetime_min = 0.6f;
+    additive_emitter.lifetime_max = 1.2f;
+    additive_emitter.start_color = math::vector4{1.0f, 0.6f, 0.1f, 1.0f};
+    additive_emitter.end_color = math::vector4{1.0f, 0.1f, 0.0f, 0.0f};
+    additive_emitter.size_min = 0.05f;
+    additive_emitter.size_max = 0.15f;
+    additive_emitter.gravity = -0.5f;
+    additive_emitter.drag = 0.1f;
+    additive_emitter.active = 1u;
+    additive_emitter.seed = 1u;
+
+    auto alpha_emitter = emitter_instance_gpu{};
+    alpha_emitter.position = math::vector3{1.5f, 0.5f, 0.0f};
+    alpha_emitter.emission_rate = 60.0f;
+    alpha_emitter.velocity_min = math::vector3{-0.2f, 0.4f, -0.2f};
+    alpha_emitter.velocity_max = math::vector3{0.2f, 1.0f, 0.2f};
+    alpha_emitter.lifetime_min = 1.5f;
+    alpha_emitter.lifetime_max = 2.5f;
+    alpha_emitter.start_color = math::vector4{0.8f, 0.8f, 0.85f, 0.6f};
+    alpha_emitter.end_color = math::vector4{0.8f, 0.8f, 0.85f, 0.0f};
+    alpha_emitter.size_min = 0.3f;
+    alpha_emitter.size_max = 0.6f;
+    alpha_emitter.gravity = -0.05f;
+    alpha_emitter.drag = 0.3f;
+    alpha_emitter.active = 1u;
+    alpha_emitter.seed = 2u;
+
+    // Fractional emission accumulator so a rate like 200/s doesn't lose particles to per-frame
+    // truncation — same idea the old particle_emitter's emission_accumulator used.
+    _particle_test_emission_accumulator[particle_additive_pool_index] += additive_emitter.emission_rate * dt;
+    _particle_test_emission_accumulator[particle_alpha_pool_index] += alpha_emitter.emission_rate * dt;
+
+    additive_emitter.particles_to_emit = static_cast<std::uint32_t>(_particle_test_emission_accumulator[particle_additive_pool_index]);
+    alpha_emitter.particles_to_emit = static_cast<std::uint32_t>(_particle_test_emission_accumulator[particle_alpha_pool_index]);
+
+    _particle_test_emission_accumulator[particle_additive_pool_index] -= static_cast<std::float_t>(additive_emitter.particles_to_emit);
+    _particle_test_emission_accumulator[particle_alpha_pool_index] -= static_cast<std::float_t>(alpha_emitter.particles_to_emit);
+
+    additive_pool.write_emitter_instance(0u, additive_emitter);
+    alpha_pool.write_emitter_instance(0u, alpha_emitter);
+
+    const auto additive_emits = std::array{particle_simulate_pass::emit_request{0u, additive_emitter.particles_to_emit}};
+    const auto alpha_emits = std::array{particle_simulate_pass::emit_request{0u, alpha_emitter.particles_to_emit}};
+
+    _particle_last_result = _particle_simulate_pass->execute(additive_pool, additive_emits, alpha_pool, alpha_emits, dt, time);
+  }
+
   auto command_buffer = frame_context.begin_frame();
 
   if (!command_buffer) {
     return;
   }
+
+  // The main frame's particle_draw_pass reads the buffers particle_simulate_pass just finished
+  // writing above — this is the wait that actually prevents that read from racing those writes
+  // (same-queue submission order alone doesn't guarantee it; see particle_simulate_pass.hpp).
+  frame_context.add_wait(_particle_simulate_pass->timeline(), _particle_last_result.signaled_value, VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT);
 
   {
     SBX_PROFILE_GPU_SCOPE((*command_buffer), "render_module::render");
@@ -716,6 +803,22 @@ auto render_module::_prepare_frame(render_context& context) -> void {
   context.cluster_range_address = data.cluster_range_address;
   context.cluster_light_index_address = data.cluster_light_index_address;
   context.cluster_counter_address = _cluster_counter_addresses[context.slot];
+
+  // particle_simulate_pass already finished this frame's compute chain by the time this runs (see
+  // _consume_packet) — write_index picks out the alive list it just built.
+  const auto& additive_pool = *_particle_pools[particle_additive_pool_index];
+  const auto& alpha_pool = *_particle_pools[particle_alpha_pool_index];
+  const auto write_index = _particle_last_result.write_index;
+
+  context.particle_additive_particles_address = additive_pool.particles_address();
+  context.particle_additive_alive_list_address = additive_pool.alive_list_address(write_index);
+  context.particle_additive_emitters_address = additive_pool.emitter_instances_address();
+  context.particle_additive_draw_args = additive_pool.draw_args();
+
+  context.particle_alpha_particles_address = alpha_pool.particles_address();
+  context.particle_alpha_alive_list_address = alpha_pool.alive_list_address(write_index);
+  context.particle_alpha_emitters_address = alpha_pool.emitter_instances_address();
+  context.particle_alpha_draw_args = alpha_pool.draw_args();
 }
 
 } // namespace sbx::render

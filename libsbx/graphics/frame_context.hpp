@@ -86,7 +86,28 @@ public:
     return *_swapchain;
   }
 
+  /**
+   * @brief Queues an extra timeline wait for the next @ref end_frame's submit, alongside its
+   * existing binary `_image_available` wait. Consumed and cleared inside @ref end_frame.
+   *
+   * For a producer that writes buffers this frame's main command buffer reads later the same
+   * frame, but that runs on its own command buffer/submission outside the normal pass list (e.g.
+   * particle_simulate_pass) — same-queue submission order alone does not guarantee the main
+   * submission's reads happen after such a producer's writes complete (see
+   * particle_simulate_pass.hpp for the full reasoning). Call once per producer per frame, before
+   * @ref end_frame runs.
+   */
+  auto add_wait(VkSemaphore semaphore, std::uint64_t value, VkPipelineStageFlags stage) -> void {
+    _extra_waits.push_back(extra_wait{semaphore, value, stage});
+  }
+
 private:
+
+  struct extra_wait {
+    VkSemaphore semaphore;
+    std::uint64_t value;
+    VkPipelineStageFlags stage;
+  }; // struct extra_wait
 
   auto _initialize() -> void;
 
@@ -113,6 +134,8 @@ private:
   std::vector<VkSemaphore> _render_finished{};
 
   std::vector<command_buffer> _command_buffers{};
+
+  std::vector<extra_wait> _extra_waits{};
 
 }; // class frame_context
 

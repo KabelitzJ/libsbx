@@ -31,7 +31,7 @@ depth_pre_pass::depth_pre_pass() {
     {VK_SHADER_STAGE_FRAGMENT_BIT, "fragment_main"}
   };
 
-  const auto& shader = shader_cache.get({"shaders/pbr/depth_pre.slang", entry_points});
+  const auto& shader = shader_cache.get({"shaders/depth_pre.slang", entry_points});
 
   const auto make = [&](graphics::cull_mode cull, const std::string& name) {
     return pipeline_cache.get(graphics::graphics_pipeline::create_info{

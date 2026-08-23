@@ -4,6 +4,16 @@
 static const float pi = 3.14159265359;
 static const float firefly_clamp = 30.0f;
 
+struct range {
+  uint offset;
+  uint count;
+}; // struct range
+
+struct aabb {
+  float4 min;
+  float4 max;
+}; // struct aabb
+
 float radical_inverse(uint bits) {
   bits = (bits << 16u) | (bits >> 16u);
   bits = ((bits & 0x55555555u) << 1u) | ((bits & 0xAAAAAAAAu) >> 1u);

@@ -30,6 +30,8 @@
 #include <libsbx/render/render_packet.hpp>
 #include <libsbx/render/render_pass.hpp>
 #include <libsbx/render/render_thread.hpp>
+#include <libsbx/render/particle_pool.hpp>
+#include <libsbx/render/particle_simulate_pass.hpp>
 
 namespace sbx::render {
 
@@ -145,6 +147,22 @@ private:
 
   graphics::buffer_handle _cluster_counter_buffer{};
   std::array<graphics::buffer::address_type, graphics::swapchain::max_frames_in_flight> _cluster_counter_addresses{};
+
+  // pool[0] = additive, pool[1] = alpha blend — see particle_pool.hpp for why the split is by
+  // blend mode rather than one pool per emitter. M1 has no ECS/asset layer yet, so
+  // _consume_packet feeds each pool one hardcoded test emitter instance directly; M2 replaces
+  // that with the real (world_transform, particle_effect_instance) extraction.
+  inline static constexpr auto particle_additive_pool_index = std::uint32_t{0u};
+  inline static constexpr auto particle_alpha_pool_index = std::uint32_t{1u};
+
+  std::array<std::unique_ptr<particle_pool>, 2u> _particle_pools{};
+  std::unique_ptr<particle_simulate_pass> _particle_simulate_pass{};
+  particle_simulate_pass::result _particle_last_result{};
+
+  // M1 has no ECS/asset layer yet: one hardcoded test emitter instance (slot 0) per pool,
+  // exercised every frame to validate the whole compute chain + WBOIT-integrated draw. Replaced by
+  // real (world_transform, particle_effect_instance) extraction in M2.
+  std::array<std::float_t, 2u> _particle_test_emission_accumulator{};
 
 }; // class render_module
 

@@ -427,6 +427,10 @@ auto command_buffer::dispatch(std::uint32_t group_count_x, std::uint32_t group_c
   vkCmdDispatch(_handle, group_count_x, group_count_y, group_count_z);
 }
 
+auto command_buffer::dispatch_indirect(VkBuffer buffer, VkDeviceSize offset) -> void {
+  vkCmdDispatchIndirect(_handle, buffer, offset);
+}
+
 auto command_buffer::draw(std::uint32_t vertex_count, std::uint32_t instance_count, std::uint32_t first_vertex, std::uint32_t first_instance) -> void {
   vkCmdDraw(_handle, vertex_count, instance_count, first_vertex, first_instance);
 }

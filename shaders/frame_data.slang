@@ -1,7 +1,7 @@
 #ifndef FRAME_DATA_SLANG_
 #define FRAME_DATA_SLANG_
 
-#include <cluster_data.slang>
+#include <common.slang>
 
 struct vertex {
   float3 position;
@@ -62,15 +62,9 @@ struct frame_data {
   uint prefiltered_mip_count;
   float environment_intensity;
   uint pad0;
-  // Clustered Forward+: lights[0, directional_light_count) are always evaluated in full (they're
-  // screen-wide and can't be usefully clustered); lights[directional_light_count, light_count) are
-  // the point/spot tail cull_lights.slang actually assigns to clusters. cluster_scale/bias are the
-  // precomputed constants for the exponential depth-slice formula (see build_clusters.slang and
-  // geometry.slang's fragment shader) — folding near/far into two scalars once on the CPU avoids
-  // repeating that division in every fragment.
   uint directional_light_count;
   float cluster_scale;
-  cluster_range* cluster_ranges;
+  range* cluster_ranges;
   uint* cluster_light_indices;
   float cluster_bias;
   float2 cluster_tile_size;

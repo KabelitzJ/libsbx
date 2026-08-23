@@ -73,6 +73,19 @@ struct render_context {
   graphics::buffer::address_type cluster_light_index_address{0u};
   graphics::buffer::address_type cluster_counter_address{0u};
 
+  // Particle draw pass (see particle_draw_pass.hpp): per-pool state for the alive list this
+  // frame's particle_simulate_pass just finished building. draw_args is a VkBuffer handle (not an
+  // address) since it's consumed via draw_indirect, not a shader pointer.
+  graphics::buffer::address_type particle_additive_particles_address{0u};
+  graphics::buffer::address_type particle_additive_alive_list_address{0u};
+  graphics::buffer::address_type particle_additive_emitters_address{0u};
+  graphics::buffer_handle particle_additive_draw_args{};
+
+  graphics::buffer::address_type particle_alpha_particles_address{0u};
+  graphics::buffer::address_type particle_alpha_alive_list_address{0u};
+  graphics::buffer::address_type particle_alpha_emitters_address{0u};
+  graphics::buffer_handle particle_alpha_draw_args{};
+
   bool show_grid{false};
 }; // struct render_context
 

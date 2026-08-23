@@ -15,6 +15,25 @@
 
 namespace sbx::graphics {
 
+/**
+ * @brief The nearest ancestor of @p path named "shaders", or its parent directory if none is
+ * found. Every shader path in this engine is passed in as "shaders/<category>/<file>.slang"
+ * relative to the working directory, so this is always the shader tree's root.
+ */
+auto _shaders_root(const std::filesystem::path& path) -> std::filesystem::path {
+  for (auto directory = path.parent_path(); !directory.empty(); directory = directory.parent_path()) {
+    if (directory.filename() == "shaders") {
+      return directory;
+    }
+
+    if (directory == directory.parent_path()) {
+      break;
+    }
+  }
+
+  return path.parent_path();
+}
+
 auto _read_file(const std::filesystem::path& path) -> std::string {
   auto file = std::ifstream{path, std::ios::binary | std::ios::ate};
 
@@ -92,6 +111,7 @@ auto shader_compiler::_cache_key(const std::string& source, std::span<const entr
 auto shader_compiler::compile(const std::filesystem::path& path, std::span<const entry_point_request> entry_points) -> std::vector<compiled_entry_point> {
   const auto source = _read_file(path);
   const auto parent = path.parent_path().string();
+  const auto root = _shaders_root(path).string();
 
   auto target = slang::TargetDesc{};
   target.format = SLANG_SPIRV;
@@ -120,7 +140,7 @@ auto shader_compiler::compile(const std::filesystem::path& path, std::span<const
 
   utility::logger<"graphics">::debug("Shader cache miss for '{}', compiling", path.generic_string());
 
-  const auto search_paths = std::array<const char*, 1u>{parent.c_str()};
+  const auto search_paths = (root == parent) ? std::vector<const char*>{parent.c_str()} : std::vector<const char*>{parent.c_str(), root.c_str()};
 
   auto session_description = slang::SessionDesc{};
   session_description.targets = &target;
@@ -158,10 +178,6 @@ auto shader_compiler::compile(const std::filesystem::path& path, std::span<const
       throw utility::runtime_error{"Entry point '{}' not found in '{}'", request.name, path.string()};
     }
 
-    // A generic entry point (e.g. `Policy.Output fragment_main<Policy : shading_policy>(...)`)
-    // must be bound to a concrete type argument before it can be linked/compiled — see
-    // shaders/pbr/geometry.slang for an example. `request.specialization` names that type;
-    // module->getLayout() resolves it via reflection.
     auto component = Slang::ComPtr<slang::IComponentType>{entry_point};
 
     if (request.specialization) {

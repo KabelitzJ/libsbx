@@ -2025,10 +2025,6 @@ auto assets_module::_bake_environment(environment_map& record, const std::vector
   // --- Prefiltered specular: a real mip chain now, one dispatch per mip with a roughness push
   // constant, rather than N unrelated discrete images blended in the shader. ---
 
-  // Full auto chain from prefiltered_cube_size (mip_levels_for isn't constexpr, so this can't be
-  // a class constant) — matches the pre-rework engine's mipmap=true behavior at the same 512 base.
-  const auto prefiltered_mip_count = graphics::image::mip_levels_for(math::vector3u{prefiltered_cube_size, prefiltered_cube_size, 1u});
-
   const auto prefiltered_handle = registry.emplace<graphics::image>(graphics::image::create_info{
     .extent = math::vector3u{prefiltered_cube_size, prefiltered_cube_size, 1u},
     .format = graphics::format::r16g16b16a16_sfloat,

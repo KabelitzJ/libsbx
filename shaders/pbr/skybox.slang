@@ -22,6 +22,7 @@ struct push_data {
   float4 camera_position;
   uint environment_index;
   uint sampler_index;
+  float environment_intensity;
 }; // struct push_data
 
 [[vk::push_constant]] ConstantBuffer<push_data> push;
@@ -52,7 +53,7 @@ fs_out fragment_main(fs_in input) {
   const float u = atan2(direction.z, direction.x) / (2.0 * pi) + 0.5;
   const float v = acos(clamp(direction.y, -1.0, 1.0)) / pi;
 
-  float3 color = textures[push.environment_index].SampleLevel(samplers[push.sampler_index], float2(u, v), 0.0).rgb;
+  float3 color = textures[push.environment_index].SampleLevel(samplers[push.sampler_index], float2(u, v), 0.0).rgb * push.environment_intensity;
 
   fs_out output;
 

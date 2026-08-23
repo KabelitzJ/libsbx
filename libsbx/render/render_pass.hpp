@@ -63,6 +63,7 @@ struct render_context {
   graphics::buffer::address_type transform_address{0u};
   std::uint32_t instance_count{0u};
   std::uint32_t sampler_index{0u};
+  std::uint32_t clamp_sampler_index{0u};
 }; // struct render_context
 
 struct push_constants {
@@ -72,6 +73,7 @@ struct push_constants {
   std::uint32_t transform_offset;
   std::uint32_t material_index;
   std::uint32_t sampler_index;
+  std::uint32_t clamp_sampler_index;
 }; // struct push_constants
 
 static_assert(sizeof(push_constants) <= 128u, "Push constants must not exceed 128 bytes.");

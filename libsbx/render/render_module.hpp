@@ -86,6 +86,7 @@ private:
   render_packet _work_packet{};
 
   std::uint32_t _sampler_index{0u};
+  std::uint32_t _clamp_sampler_index{0u};
 
   graphics::image_handle _depth_image{};
   graphics::image_handle _color_image{};

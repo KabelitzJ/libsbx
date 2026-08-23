@@ -419,6 +419,14 @@ auto render_module::_ensure_resources() -> void {
 
   _sampler_index = bindless_table.sampler_index(graphics::sampler::create_info{});
 
+  _clamp_sampler_index = bindless_table.sampler_index(graphics::sampler::create_info{
+    .address_mode_u = graphics::address_mode::clamp_to_edge,
+    .address_mode_v = graphics::address_mode::clamp_to_edge,
+    .address_mode_w = graphics::address_mode::clamp_to_edge,
+    .max_lod = 1.0f,
+    .name = "Clamp Sampler"
+  });
+
   _color_index = bindless_table.reserve_sampled_image();
 
   _scene_index = bindless_table.reserve_sampled_image();
@@ -570,6 +578,7 @@ auto render_module::_prepare_frame(render_context& context) -> void {
   context.transform_address = _transform_addresses[context.slot];
   context.instance_count = instance_count;
   context.sampler_index = _sampler_index;
+  context.clamp_sampler_index = _clamp_sampler_index;
   context.inverse_view_projection = math::matrix4x4::inverted(projection * context.packet->camera.view);
 }
 

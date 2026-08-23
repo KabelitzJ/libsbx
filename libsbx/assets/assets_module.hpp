@@ -189,6 +189,7 @@ private:
   inline static constexpr auto radiance_cube_size = std::uint32_t{512u};
   inline static constexpr auto irradiance_cube_size = std::uint32_t{64u};
   inline static constexpr auto prefiltered_cube_size = std::uint32_t{512u};
+  inline static constexpr auto prefiltered_mip_count = std::uint32_t{5u};
   inline static constexpr auto brdf_lut_size = std::uint32_t{512u};
 
   struct cooked_submesh {

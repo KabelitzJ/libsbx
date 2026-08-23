@@ -57,6 +57,7 @@ auto submit_draw_commands(render_context& context, const std::vector<draw_comman
     values.transform_offset = command.transform_offset;
     values.material_index = command.material->index();
     values.sampler_index = context.sampler_index;
+    values.clamp_sampler_index = context.clamp_sampler_index;
 
     auto range = std::array<std::byte, graphics::bindless_table::push_constant_size>{};
     std::memcpy(range.data(), &values, sizeof(push_constants));

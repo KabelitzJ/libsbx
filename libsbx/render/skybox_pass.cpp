@@ -25,6 +25,7 @@ struct skybox_push {
   math::vector4 camera_position;
   std::uint32_t environment_index;
   std::uint32_t sampler_index;
+  std::float_t environment_intensity;
 }; // struct skybox_push
 
 skybox_pass::skybox_pass() {
@@ -121,7 +122,7 @@ auto skybox_pass::execute(render_context& context) -> void {
 
   context.command_buffer->bind_pipeline(*_pipeline);
 
-  auto values = skybox_push{context.inverse_view_projection, math::vector4{context.packet->camera.position, 1.0f}, context.environment_index, context.sampler_index};
+  auto values = skybox_push{context.inverse_view_projection, math::vector4{context.packet->camera.position, 1.0f}, context.environment_index, context.sampler_index, context.environment_intensity};
 
   auto range = std::array<std::byte, graphics::bindless_table::push_constant_size>{};
   std::memcpy(range.data(), &values, sizeof(values));

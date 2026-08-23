@@ -36,15 +36,10 @@ struct push_data {
   uint transform_offset;
   uint material_index;
   uint sampler_index;
+  uint clamp_sampler_index;
 }; // struct push_data
 
 [[vk::push_constant]] ConstantBuffer<push_data> push;
-
-float3 fresnel_schlick_roughness(float cos_theta, float3 f0, float roughness) {
-  float3 r = max(float3(1.0 - roughness), f0);
-
-  return f0 + (r - f0) * pow(clamp(1.0 - cos_theta, 0.0, 1.0), 5.0);
-}
 
 float distribution_ggx(float3 n, float3 h, float roughness) {
   float a = roughness * roughness;
@@ -166,13 +161,11 @@ fs_out fragment_main(fs_in input) {
   }
 
   float ndv = max(dot(n, v), 0.0);
-  float3 fr = fresnel_schlick_roughness(ndv, f0, roughness);
+  float3 fr = fresnel_schlick(ndv, f0);
   float3 kd = (1.0 - fr) * (1.0 - metallic);
 
-  // irradiance is the full E(n) (cosine-weighted convolution already includes the pi that a
-  // cosine-weighted-PDF Monte Carlo estimator produces) — Lambertian outgoing radiance is E(n)/pi.
   float3 irradiance = (frame.irradiance_index != 0xFFFFFFFF) ? cubes[frame.irradiance_index].Sample(sampler, n).rgb : float3(0.03, 0.03, 0.03);
-  float3 diffuse = irradiance * albedo / pi;
+  float3 diffuse = irradiance * albedo;
 
   float3 specular = float3(0.0, 0.0, 0.0);
 
@@ -182,7 +175,9 @@ fs_out fragment_main(fs_in input) {
     float level = roughness * float(frame.prefiltered_mip_count - 1u);
 
     float3 prefiltered = cubes[frame.prefiltered_index].SampleLevel(sampler, reflection, level).rgb;
-    float2 brdf = textures[frame.brdf_lut_index].Sample(sampler, float2(ndv, roughness)).rg;
+
+    SamplerState clamp_sampler = samplers[push.clamp_sampler_index];
+    float2 brdf = textures[frame.brdf_lut_index].Sample(clamp_sampler, float2(ndv, roughness)).rg;
 
     specular = prefiltered * (fr * brdf.x + brdf.y);
   }

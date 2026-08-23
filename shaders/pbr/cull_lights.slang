@@ -1,14 +1,5 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Jonas Kabelitz
-//
-// Clustered Forward+, step 2 of 2: assigns every point/spot light to the clusters its bounding
-// sphere overlaps. One thread per cluster, same grid as build_clusters.slang. Each thread first
-// tests every point/spot light locally (no atomics needed for that), then reserves its slice of
-// the global light-index list with a single atomic add sized to exactly how many lights it found,
-// and finally writes its indices into that slice — the same "count locally, reserve once, write"
-// shape frustum_culling/compute.slang uses for instance compaction, applied to lights instead.
-// Directional lights (lights[0, directional_light_count)) are skipped entirely here — they're
-// screen-wide and stay in the always-evaluated prefix geometry.slang reads directly.
 
 #include <frame_data.slang>
 
@@ -21,13 +12,7 @@ struct push_data {
 [[vk::push_constant]]
 ConstantBuffer<push_data> push;
 
-// Per-thread scratch capacity before the atomic reserve — generous relative to how many lights
-// are expected to overlap one cluster in practice. A cluster that finds more than this simply
-// drops the excess rather than overflowing; worth revisiting once real scenes exercise this.
 static const uint max_lights_per_cluster = 128u;
-
-// Sized to comfortably outlive light_capacity (256) worth of lights spread across every cluster in
-// a typical scene; see render_module::cluster_light_index_capacity, which this must match.
 static const uint max_light_indices = 65536u;
 
 struct cs_in {
@@ -60,9 +45,6 @@ void compute_main(cs_in input) {
   for (uint i = frame.directional_light_count; i < frame.light_count && local_count < max_lights_per_cluster; ++i) {
     light_data light = frame.lights[i];
 
-    // Spot lights are conservatively bounded by the same sphere as a point light of equal range —
-    // over-inclusive (a spot's actual cone is smaller than its bounding sphere), never
-    // under-inclusive, which is the safe direction for a broad-phase culling test.
     float3 view_position = mul(frame.view, float4(light.position.xyz, 1.0)).xyz;
     float radius = light.position.w;
 

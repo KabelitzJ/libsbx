@@ -61,8 +61,6 @@ struct frame_data {
   std::uint32_t prefiltered_mip_count;
   std::float_t environment_intensity;
   std::uint32_t pad0;
-  // Clustered Forward+ — mirrors shaders/pbr/frame_data.slang's tail exactly (field order and
-  // types both matter here: there's no shared build step checking the two stay in sync).
   std::uint32_t directional_light_count;
   std::float_t cluster_scale;
   graphics::buffer::address_type cluster_range_address;
@@ -71,14 +69,11 @@ struct frame_data {
   math::vector2 cluster_tile_size;
 }; // struct frame_data
 
-// Mirrors shaders/pbr/cluster_data.slang's cluster_aabb — compute-to-compute only, never read by
-// the fragment shader, so it isn't part of frame_data.
 struct cluster_aabb {
   math::vector4 min_view;
   math::vector4 max_view;
 }; // struct cluster_aabb
 
-// Mirrors shaders/pbr/cluster_data.slang's cluster_range.
 struct cluster_range {
   std::uint32_t offset;
   std::uint32_t count;
@@ -104,14 +99,11 @@ struct transparent_entry {
 render_module::render_module() {
   _ensure_resources();
 
-  // Creation order = execution order in the render thread.
   _passes.push_back(std::make_unique<depth_pre_pass>());
-  // Clustered Forward+: cluster assignment only needs the camera and the light list, both already
-  // known by now — runs before opaque_pass so its light lists are ready when shading needs them.
   _passes.push_back(std::make_unique<light_culling_pass>());
   _passes.push_back(std::make_unique<opaque_pass>());
-  _passes.push_back(std::make_unique<skybox_pass>()); // after opaque, before transparent — see skybox_pass doc comment
-  _passes.push_back(std::make_unique<grid_pass>()); // same ordering reasons as skybox_pass — see grid_pass doc comment
+  _passes.push_back(std::make_unique<skybox_pass>());
+  _passes.push_back(std::make_unique<grid_pass>());
   _passes.push_back(std::make_unique<transparent_pass>());
   _passes.push_back(std::make_unique<tonemap_pass>());
 
@@ -132,8 +124,6 @@ render_module::~render_module() {
 auto render_module::render() -> void {
   SBX_PROFILE_SCOPE("render_module::render");
 
-  // The iconified check is a glfw call and must stay on the main thread. When iconified we publish
-  // nothing and the render thread idles.
   auto& platform_module = core::engine::get_module<platform::platform_module>();
 
   auto& window = platform_module.window();
@@ -142,14 +132,10 @@ auto render_module::render() -> void {
     return;
   }
 
-  // Throttle: wait for the previously kicked frame to fully finish before touching _work_packet
-  // or anything ECS-derived again.
   _render_thread->block_until_render_complete();
   _render_thread->next_frame();
 
   if (_pre_render_callback) {
-    // e.g. editor_module's ImGui NewFrame/build/Render — must run before _build_packet() below,
-    // on this same (main) thread, so the composite pass sees this frame's finished draw data.
     std::invoke(_pre_render_callback);
   }
 
@@ -231,10 +217,6 @@ auto render_module::_build_packet() -> render_packet {
         const auto depth = to_camera.length_squared();
 
         if (material->is_double_sided()) {
-          // Two draws, same depth key: back faces (pipeline 1, cull_mode::front) must land
-          // before front faces (pipeline 0, the same pipeline single-sided objects use) so the
-          // shell composites correctly against itself. stable_sort below preserves this push
-          // order once the cross-object depth sort runs.
           transparent.push_back(transparent_entry{renderer.mesh, index, material, 1u, world.matrix, depth});
           transparent.push_back(transparent_entry{renderer.mesh, index, material, 0u, world.matrix, depth});
         } else {
@@ -266,9 +248,6 @@ auto render_module::_build_packet() -> render_packet {
     packet.opaque_commands.push_back(std::move(command));
   }
 
-  // stable_sort: the double-sided pair pushed above shares an identical depth key, and
-  // std::ranges::sort isn't guaranteed stable — an unstable sort could swap them and break the
-  // back-faces-before-front-faces guarantee for that object.
   std::ranges::stable_sort(transparent, std::greater<>{}, &transparent_entry::depth);
 
   packet.transparent_commands.reserve(transparent.size());
@@ -295,8 +274,6 @@ auto render_module::_build_packet() -> render_packet {
     out.direction = math::vector4{math::vector3f::normalized(math::vector3f{-matrix[2].x(), -matrix[2].y(), -matrix[2].z()}), 0.0f};
   }
 
-  // Clustered Forward+ relies on this exact packing order: directional lights first (always
-  // evaluated in full below), then the point/spot tail cull_lights.slang actually clusters.
   packet.directional_light_count = static_cast<std::uint32_t>(packet.lights.size());
 
   for (auto&& [entity, transform, light] : scene.query<scenes::world_transform, scenes::point_light>().each()) {
@@ -344,15 +321,11 @@ auto render_module::_consume_packet(const render_packet& packet) -> void {
     const auto& swapchain = frame_context.swapchain();
     const auto swapchain_extent = swapchain.extent();
 
-    // Falls back to the swapchain extent unless overridden (editor: the Viewport panel's size).
     const auto scene_extent = (_viewport_extent.x() > 0u && _viewport_extent.y() > 0u) ? _viewport_extent : swapchain_extent;
 
     assets_module.process_uploads(frame_context.frame_index());
     upload_context.flush(*command_buffer, frame_context.frame_index());
 
-    // Baked once, synchronously, by assets_module::_bake_environment at load time (via compute
-    // dispatch on the async compute queue) — the render thread just reads the resulting indices
-    // straight off the environment_map asset. No more lazy first-frame bake here.
     auto irradiance_index = 0xFFFFFFFFu;
     auto brdf_lut_index = 0xFFFFFFFFu;
     auto prefiltered_index = 0xFFFFFFFFu;
@@ -508,9 +481,6 @@ auto render_module::_ensure_resources() -> void {
     _transform_addresses[slot] = transform_base + slot * transform_capacity * sizeof(math::matrix4x4);
   }
 
-  // Clustered Forward+ buffers. All three are written only by light_culling_pass's compute
-  // dispatches and read only by that same frame's later passes, never by the CPU — device_local,
-  // not host_write, unlike the buffers above.
   _cluster_aabb_buffer = registry.emplace<graphics::buffer>(graphics::buffer::create_info{
     .size = memory::stride_v<cluster_aabb> * cluster_count * graphics::swapchain::max_frames_in_flight,
     .usage = graphics::buffer_usage::device_address | graphics::buffer_usage::storage,
@@ -550,8 +520,6 @@ auto render_module::_ensure_resources() -> void {
     _cluster_light_index_addresses[slot] = cluster_light_index_base + slot * cluster_light_index_capacity * memory::stride_v<std::uint32_t>;
   }
 
-  // The one cluster buffer the CPU does touch: reset to 0 every frame in _prepare_frame, exactly
-  // like the buffers above, since cull_lights.slang's atomic reserve has to start counting there.
   _cluster_counter_buffer = registry.emplace<graphics::buffer>(graphics::buffer::create_info{
     .size = memory::stride_v<std::uint32_t> * graphics::swapchain::max_frames_in_flight,
     .usage = graphics::buffer_usage::device_address | graphics::buffer_usage::storage,
@@ -652,12 +620,8 @@ auto render_module::_prepare_frame(render_context& context) -> void {
     transform_buffer.write(context.packet->transforms.data(), instance_count * sizeof(math::matrix4x4), context.slot * transform_capacity * sizeof(math::matrix4x4));
   }
 
-  // Clustered Forward+: directional lights always precede the point/spot tail (see
-  // _build_packet), clamped the same way light_count is in case the total was itself truncated.
   const auto directional_light_count = std::min(context.packet->directional_light_count, light_count);
 
-  // Exponential depth-slice formula (see build_clusters.slang): folded into two scalars here so
-  // every fragment doesn't have to redo log2(far/near) and a division of its own.
   const auto& camera = context.packet->camera;
   const auto slice_ratio = std::log2(camera.far_plane / camera.near_plane);
   const auto cluster_scale = static_cast<std::float_t>(cluster_dim_z) / slice_ratio;

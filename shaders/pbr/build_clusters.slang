@@ -1,13 +1,5 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Jonas Kabelitz
-//
-// Clustered Forward+, step 1 of 2: computes every cluster's view-space AABB from the camera's
-// vertical half-FOV/aspect/near/far and this cluster's (x, y, depth-slice) grid coordinate — no
-// inverse-projection matrix needed. One thread per cluster. Clusters are view-space only, not
-// world-space, so this doesn't need to re-run when the camera moves — only when its projection
-// (fov/aspect/near/far) changes; recomputing it unconditionally every frame is the simple, correct
-// starting point (it's cheap — 3,456 threads doing a handful of lerps each), not because it has to
-// run this often.
 
 #include <cluster_data.slang>
 
@@ -27,10 +19,7 @@ struct cs_in {
 }; // struct cs_in
 
 float3 view_ray(float2 ndc) {
-  // Direction from the eye through this NDC point at reference depth z = -1 (camera looks down
-  // -Z, right-handed — see math::matrix4x4::perspective). Scaling by a positive distance along
-  // this ray later lands exactly on that distance's view-space Z.
-  return float3(ndc.x * push.aspect * push.tan_half_fov_y, ndc.y * push.tan_half_fov_y, -1.0);
+  return float3(ndc.x * push.aspect * push.tan_half_fov_y, -ndc.y * push.tan_half_fov_y, -1.0);
 }
 
 [shader("compute")]
@@ -54,9 +43,6 @@ void compute_main(cs_in input) {
     view_ray(float2(ndc_max.x, ndc_max.y))
   };
 
-  // Exponential (not linear) depth slicing keeps clusters roughly cube-shaped near the camera
-  // instead of the near slices being paper-thin and the far ones enormous — the standard
-  // clustered-shading slicing scheme.
   float slice_ratio = push.far_plane / push.near_plane;
   float near_z = push.near_plane * pow(slice_ratio, float(dispatch_thread_id.z) / float(cluster_dim_z));
   float far_z = push.near_plane * pow(slice_ratio, float(dispatch_thread_id.z + 1u) / float(cluster_dim_z));

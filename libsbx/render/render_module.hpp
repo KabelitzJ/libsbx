@@ -79,15 +79,11 @@ private:
   inline static constexpr auto light_capacity = std::uint32_t{256u};
   inline static constexpr auto transform_capacity = std::uint32_t{16384u};
 
-  // Clustered Forward+ grid. Must match shaders/pbr/cluster_data.slang's cluster_dim_x/y/z and
-  // light_culling_pass.cpp's copy of the same three numbers — see cluster_data.slang's comment.
   inline static constexpr auto cluster_dim_x = std::uint32_t{16u};
   inline static constexpr auto cluster_dim_y = std::uint32_t{9u};
   inline static constexpr auto cluster_dim_z = std::uint32_t{24u};
   inline static constexpr auto cluster_count = cluster_dim_x * cluster_dim_y * cluster_dim_z;
 
-  // Capacity of the flat, cluster-assigned point/spot light-index list — must match
-  // shaders/pbr/cull_lights.slang's max_light_indices.
   inline static constexpr auto cluster_light_index_capacity = std::uint32_t{65536u};
 
   auto _ensure_resources() -> void;
@@ -131,10 +127,6 @@ private:
   graphics::buffer_handle _transform_buffer{};
   std::array<graphics::buffer::address_type, graphics::swapchain::max_frames_in_flight> _transform_addresses{};
 
-  // Clustered Forward+ (see light_culling_pass): one persistent, per-frame-in-flight instance of
-  // each buffer, same reason and same shape as the three above — two frames can be in flight at
-  // once, so each needs its own slot rather than sharing one that a compute dispatch might still
-  // be writing while an earlier frame's fragment shader is still reading it.
   graphics::buffer_handle _cluster_aabb_buffer{};
   std::array<graphics::buffer::address_type, graphics::swapchain::max_frames_in_flight> _cluster_aabb_addresses{};
 

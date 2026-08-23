@@ -13,6 +13,9 @@ assets_module:
     - key: duck
       name: duck
       uuid: 1852186197491621037
+    - key: cube
+      name: cube
+      uuid: 13674539523814858198
   materials:
     []
 nodes:
@@ -84,3 +87,723 @@ nodes:
         scale: {x: 0.3, y: 0.3, z: 0.3}
       - type: static_mesh
         mesh: duck
+  - tag: Pillar_0_0
+    id: 1026847926404610461
+    components:
+      - type: transform
+        position: {x: -12.5, y: -0.5, z: -2.0}
+        rotation: {x: 0, y: 0, z: 0, w: 1}
+        scale: {x: 2, y: 2.0, z: 2}
+      - type: static_mesh
+        mesh: cube
+  - tag: Pillar_0_1
+    id: 6839596180442651345
+    components:
+      - type: transform
+        position: {x: -7.5, y: -0.5, z: -2.0}
+        rotation: {x: 0, y: 0, z: 0, w: 1}
+        scale: {x: 2, y: 2.0, z: 2}
+      - type: static_mesh
+        mesh: cube
+  - tag: Pillar_0_2
+    id: 2258728696626565719
+    components:
+      - type: transform
+        position: {x: -2.5, y: -0.5, z: -2.0}
+        rotation: {x: 0, y: 0, z: 0, w: 1}
+        scale: {x: 2, y: 2.0, z: 2}
+      - type: static_mesh
+        mesh: cube
+  - tag: Pillar_0_3
+    id: 1287010195568088798
+    components:
+      - type: transform
+        position: {x: 2.5, y: -0.5, z: -2.0}
+        rotation: {x: 0, y: 0, z: 0, w: 1}
+        scale: {x: 2, y: 2.0, z: 2}
+      - type: static_mesh
+        mesh: cube
+  - tag: Pillar_0_4
+    id: 945351111358374057
+    components:
+      - type: transform
+        position: {x: 7.5, y: -0.5, z: -2.0}
+        rotation: {x: 0, y: 0, z: 0, w: 1}
+        scale: {x: 2, y: 2.0, z: 2}
+      - type: static_mesh
+        mesh: cube
+  - tag: Pillar_0_5
+    id: 6831454145019129197
+    components:
+      - type: transform
+        position: {x: 12.5, y: -0.5, z: -2.0}
+        rotation: {x: 0, y: 0, z: 0, w: 1}
+        scale: {x: 2, y: 2.0, z: 2}
+      - type: static_mesh
+        mesh: cube
+  - tag: Pillar_1_0
+    id: 5030118478018109776
+    components:
+      - type: transform
+        position: {x: -12.5, y: 0.5, z: -8.0}
+        rotation: {x: 0, y: 0, z: 0, w: 1}
+        scale: {x: 2, y: 4.0, z: 2}
+      - type: static_mesh
+        mesh: cube
+  - tag: Pillar_1_1
+    id: 5446332115853614978
+    components:
+      - type: transform
+        position: {x: -7.5, y: 0.5, z: -8.0}
+        rotation: {x: 0, y: 0, z: 0, w: 1}
+        scale: {x: 2, y: 4.0, z: 2}
+      - type: static_mesh
+        mesh: cube
+  - tag: Pillar_1_2
+    id: 293143515607798169
+    components:
+      - type: transform
+        position: {x: -2.5, y: 0.5, z: -8.0}
+        rotation: {x: 0, y: 0, z: 0, w: 1}
+        scale: {x: 2, y: 4.0, z: 2}
+      - type: static_mesh
+        mesh: cube
+  - tag: Pillar_1_3
+    id: 864186096263678574
+    components:
+      - type: transform
+        position: {x: 2.5, y: 0.5, z: -8.0}
+        rotation: {x: 0, y: 0, z: 0, w: 1}
+        scale: {x: 2, y: 4.0, z: 2}
+      - type: static_mesh
+        mesh: cube
+  - tag: Pillar_1_4
+    id: 2145917995920697483
+    components:
+      - type: transform
+        position: {x: 7.5, y: 0.5, z: -8.0}
+        rotation: {x: 0, y: 0, z: 0, w: 1}
+        scale: {x: 2, y: 4.0, z: 2}
+      - type: static_mesh
+        mesh: cube
+  - tag: Pillar_1_5
+    id: 5552642720119322321
+    components:
+      - type: transform
+        position: {x: 12.5, y: 0.5, z: -8.0}
+        rotation: {x: 0, y: 0, z: 0, w: 1}
+        scale: {x: 2, y: 4.0, z: 2}
+      - type: static_mesh
+        mesh: cube
+  - tag: Pillar_2_0
+    id: 5176572018665656243
+    components:
+      - type: transform
+        position: {x: -12.5, y: 0.0, z: -14.0}
+        rotation: {x: 0, y: 0, z: 0, w: 1}
+        scale: {x: 2, y: 3.0, z: 2}
+      - type: static_mesh
+        mesh: cube
+  - tag: Pillar_2_1
+    id: 6604115266222097961
+    components:
+      - type: transform
+        position: {x: -7.5, y: 0.0, z: -14.0}
+        rotation: {x: 0, y: 0, z: 0, w: 1}
+        scale: {x: 2, y: 3.0, z: 2}
+      - type: static_mesh
+        mesh: cube
+  - tag: Pillar_2_2
+    id: 6468581141273039753
+    components:
+      - type: transform
+        position: {x: -2.5, y: 0.0, z: -14.0}
+        rotation: {x: 0, y: 0, z: 0, w: 1}
+        scale: {x: 2, y: 3.0, z: 2}
+      - type: static_mesh
+        mesh: cube
+  - tag: Pillar_2_3
+    id: 3869387381345962230
+    components:
+      - type: transform
+        position: {x: 2.5, y: 0.0, z: -14.0}
+        rotation: {x: 0, y: 0, z: 0, w: 1}
+        scale: {x: 2, y: 3.0, z: 2}
+      - type: static_mesh
+        mesh: cube
+  - tag: Pillar_2_4
+    id: 4143222138124291040
+    components:
+      - type: transform
+        position: {x: 7.5, y: 0.0, z: -14.0}
+        rotation: {x: 0, y: 0, z: 0, w: 1}
+        scale: {x: 2, y: 3.0, z: 2}
+      - type: static_mesh
+        mesh: cube
+  - tag: Pillar_2_5
+    id: 2565856380474498476
+    components:
+      - type: transform
+        position: {x: 12.5, y: 0.0, z: -14.0}
+        rotation: {x: 0, y: 0, z: 0, w: 1}
+        scale: {x: 2, y: 3.0, z: 2}
+      - type: static_mesh
+        mesh: cube
+  - tag: Pillar_3_0
+    id: 8017880294935156107
+    components:
+      - type: transform
+        position: {x: -12.5, y: 1.0, z: -20.0}
+        rotation: {x: 0, y: 0, z: 0, w: 1}
+        scale: {x: 2, y: 5.0, z: 2}
+      - type: static_mesh
+        mesh: cube
+  - tag: Pillar_3_1
+    id: 6998762617471362847
+    components:
+      - type: transform
+        position: {x: -7.5, y: 1.0, z: -20.0}
+        rotation: {x: 0, y: 0, z: 0, w: 1}
+        scale: {x: 2, y: 5.0, z: 2}
+      - type: static_mesh
+        mesh: cube
+  - tag: Pillar_3_2
+    id: 1472597238169086909
+    components:
+      - type: transform
+        position: {x: -2.5, y: 1.0, z: -20.0}
+        rotation: {x: 0, y: 0, z: 0, w: 1}
+        scale: {x: 2, y: 5.0, z: 2}
+      - type: static_mesh
+        mesh: cube
+  - tag: Pillar_3_3
+    id: 3897929836277613434
+    components:
+      - type: transform
+        position: {x: 2.5, y: 1.0, z: -20.0}
+        rotation: {x: 0, y: 0, z: 0, w: 1}
+        scale: {x: 2, y: 5.0, z: 2}
+      - type: static_mesh
+        mesh: cube
+  - tag: Pillar_3_4
+    id: 2562910770574305398
+    components:
+      - type: transform
+        position: {x: 7.5, y: 1.0, z: -20.0}
+        rotation: {x: 0, y: 0, z: 0, w: 1}
+        scale: {x: 2, y: 5.0, z: 2}
+      - type: static_mesh
+        mesh: cube
+  - tag: Pillar_3_5
+    id: 1985918923296309552
+    components:
+      - type: transform
+        position: {x: 12.5, y: 1.0, z: -20.0}
+        rotation: {x: 0, y: 0, z: 0, w: 1}
+        scale: {x: 2, y: 5.0, z: 2}
+      - type: static_mesh
+        mesh: cube
+  - tag: Pillar_4_0
+    id: 7041990410826934883
+    components:
+      - type: transform
+        position: {x: -12.5, y: -0.5, z: -26.0}
+        rotation: {x: 0, y: 0, z: 0, w: 1}
+        scale: {x: 2, y: 2.0, z: 2}
+      - type: static_mesh
+        mesh: cube
+  - tag: Pillar_4_1
+    id: 942723427174387577
+    components:
+      - type: transform
+        position: {x: -7.5, y: -0.5, z: -26.0}
+        rotation: {x: 0, y: 0, z: 0, w: 1}
+        scale: {x: 2, y: 2.0, z: 2}
+      - type: static_mesh
+        mesh: cube
+  - tag: Pillar_4_2
+    id: 3504210894617719057
+    components:
+      - type: transform
+        position: {x: -2.5, y: -0.5, z: -26.0}
+        rotation: {x: 0, y: 0, z: 0, w: 1}
+        scale: {x: 2, y: 2.0, z: 2}
+      - type: static_mesh
+        mesh: cube
+  - tag: Pillar_4_3
+    id: 3311000352010168215
+    components:
+      - type: transform
+        position: {x: 2.5, y: -0.5, z: -26.0}
+        rotation: {x: 0, y: 0, z: 0, w: 1}
+        scale: {x: 2, y: 2.0, z: 2}
+      - type: static_mesh
+        mesh: cube
+  - tag: Pillar_4_4
+    id: 3172431589140685843
+    components:
+      - type: transform
+        position: {x: 7.5, y: -0.5, z: -26.0}
+        rotation: {x: 0, y: 0, z: 0, w: 1}
+        scale: {x: 2, y: 2.0, z: 2}
+      - type: static_mesh
+        mesh: cube
+  - tag: Pillar_4_5
+    id: 2439774329912543747
+    components:
+      - type: transform
+        position: {x: 12.5, y: -0.5, z: -26.0}
+        rotation: {x: 0, y: 0, z: 0, w: 1}
+        scale: {x: 2, y: 2.0, z: 2}
+      - type: static_mesh
+        mesh: cube
+  - tag: Pillar_5_0
+    id: 400759557860619647
+    components:
+      - type: transform
+        position: {x: -12.5, y: 0.5, z: -32.0}
+        rotation: {x: 0, y: 0, z: 0, w: 1}
+        scale: {x: 2, y: 4.0, z: 2}
+      - type: static_mesh
+        mesh: cube
+  - tag: Pillar_5_1
+    id: 4237446567370404816
+    components:
+      - type: transform
+        position: {x: -7.5, y: 0.5, z: -32.0}
+        rotation: {x: 0, y: 0, z: 0, w: 1}
+        scale: {x: 2, y: 4.0, z: 2}
+      - type: static_mesh
+        mesh: cube
+  - tag: Pillar_5_2
+    id: 1151318126898855557
+    components:
+      - type: transform
+        position: {x: -2.5, y: 0.5, z: -32.0}
+        rotation: {x: 0, y: 0, z: 0, w: 1}
+        scale: {x: 2, y: 4.0, z: 2}
+      - type: static_mesh
+        mesh: cube
+  - tag: Pillar_5_3
+    id: 8506673322251918668
+    components:
+      - type: transform
+        position: {x: 2.5, y: 0.5, z: -32.0}
+        rotation: {x: 0, y: 0, z: 0, w: 1}
+        scale: {x: 2, y: 4.0, z: 2}
+      - type: static_mesh
+        mesh: cube
+  - tag: Pillar_5_4
+    id: 726803524325187859
+    components:
+      - type: transform
+        position: {x: 7.5, y: 0.5, z: -32.0}
+        rotation: {x: 0, y: 0, z: 0, w: 1}
+        scale: {x: 2, y: 4.0, z: 2}
+      - type: static_mesh
+        mesh: cube
+  - tag: Pillar_5_5
+    id: 2704092307918063857
+    components:
+      - type: transform
+        position: {x: 12.5, y: 0.5, z: -32.0}
+        rotation: {x: 0, y: 0, z: 0, w: 1}
+        scale: {x: 2, y: 4.0, z: 2}
+      - type: static_mesh
+        mesh: cube
+  - tag: PointLight_0_0
+    id: 5798178739033726258
+    components:
+      - type: transform
+        position: {x: -10.0, y: 3.0, z: -2.0}
+        rotation: {x: 0, y: 0, z: 0, w: 1}
+        scale: {x: 1, y: 1, z: 1}
+      - type: point_light
+        color: {r: 1.0, g: 0.15, b: 0.1, a: 1}
+        intensity: 8.0
+        range: 7.0
+  - tag: PointLight_0_1
+    id: 8166850865409773434
+    components:
+      - type: transform
+        position: {x: -5.0, y: 4.0, z: -2.0}
+        rotation: {x: 0, y: 0, z: 0, w: 1}
+        scale: {x: 1, y: 1, z: 1}
+      - type: point_light
+        color: {r: 1.0, g: 0.55, b: 0.05, a: 1}
+        intensity: 8.0
+        range: 9.0
+  - tag: PointLight_0_2
+    id: 3335494386281140929
+    components:
+      - type: transform
+        position: {x: 0.0, y: 5.0, z: -2.0}
+        rotation: {x: 0, y: 0, z: 0, w: 1}
+        scale: {x: 1, y: 1, z: 1}
+      - type: point_light
+        color: {r: 1.0, g: 0.95, b: 0.1, a: 1}
+        intensity: 8.0
+        range: 7.0
+  - tag: PointLight_0_3
+    id: 1773549186211207615
+    components:
+      - type: transform
+        position: {x: 5.0, y: 3.0, z: -2.0}
+        rotation: {x: 0, y: 0, z: 0, w: 1}
+        scale: {x: 1, y: 1, z: 1}
+      - type: point_light
+        color: {r: 0.15, g: 1.0, b: 0.2, a: 1}
+        intensity: 8.0
+        range: 9.0
+  - tag: PointLight_0_4
+    id: 641533053211955696
+    components:
+      - type: transform
+        position: {x: 10.0, y: 4.0, z: -2.0}
+        rotation: {x: 0, y: 0, z: 0, w: 1}
+        scale: {x: 1, y: 1, z: 1}
+      - type: point_light
+        color: {r: 0.1, g: 0.9, b: 0.9, a: 1}
+        intensity: 8.0
+        range: 7.0
+  - tag: PointLight_0_5
+    id: 6099077637550581145
+    components:
+      - type: transform
+        position: {x: -15.0, y: 5.0, z: -2.0}
+        rotation: {x: 0, y: 0, z: 0, w: 1}
+        scale: {x: 1, y: 1, z: 1}
+      - type: point_light
+        color: {r: 0.15, g: 0.35, b: 1.0, a: 1}
+        intensity: 8.0
+        range: 9.0
+  - tag: PointLight_1_0
+    id: 7130296919575202446
+    components:
+      - type: transform
+        position: {x: -10.0, y: 3.0, z: -8.0}
+        rotation: {x: 0, y: 0, z: 0, w: 1}
+        scale: {x: 1, y: 1, z: 1}
+      - type: point_light
+        color: {r: 0.85, g: 0.1, b: 1.0, a: 1}
+        intensity: 10.0
+        range: 7.0
+  - tag: PointLight_1_1
+    id: 9087064645299426381
+    components:
+      - type: transform
+        position: {x: -5.0, y: 4.0, z: -8.0}
+        rotation: {x: 0, y: 0, z: 0, w: 1}
+        scale: {x: 1, y: 1, z: 1}
+      - type: point_light
+        color: {r: 1.0, g: 1.0, b: 1.0, a: 1}
+        intensity: 10.0
+        range: 9.0
+  - tag: PointLight_1_2
+    id: 7888913547867799345
+    components:
+      - type: transform
+        position: {x: 0.0, y: 5.0, z: -8.0}
+        rotation: {x: 0, y: 0, z: 0, w: 1}
+        scale: {x: 1, y: 1, z: 1}
+      - type: point_light
+        color: {r: 1.0, g: 0.15, b: 0.1, a: 1}
+        intensity: 10.0
+        range: 7.0
+  - tag: PointLight_1_3
+    id: 7991901255055716088
+    components:
+      - type: transform
+        position: {x: 5.0, y: 3.0, z: -8.0}
+        rotation: {x: 0, y: 0, z: 0, w: 1}
+        scale: {x: 1, y: 1, z: 1}
+      - type: point_light
+        color: {r: 1.0, g: 0.55, b: 0.05, a: 1}
+        intensity: 10.0
+        range: 9.0
+  - tag: PointLight_1_4
+    id: 3506045623077649104
+    components:
+      - type: transform
+        position: {x: 10.0, y: 4.0, z: -8.0}
+        rotation: {x: 0, y: 0, z: 0, w: 1}
+        scale: {x: 1, y: 1, z: 1}
+      - type: point_light
+        color: {r: 1.0, g: 0.95, b: 0.1, a: 1}
+        intensity: 10.0
+        range: 7.0
+  - tag: PointLight_1_5
+    id: 4181971900251588409
+    components:
+      - type: transform
+        position: {x: -15.0, y: 5.0, z: -8.0}
+        rotation: {x: 0, y: 0, z: 0, w: 1}
+        scale: {x: 1, y: 1, z: 1}
+      - type: point_light
+        color: {r: 0.15, g: 1.0, b: 0.2, a: 1}
+        intensity: 10.0
+        range: 9.0
+  - tag: PointLight_2_0
+    id: 7693310826810980143
+    components:
+      - type: transform
+        position: {x: -10.0, y: 3.0, z: -14.0}
+        rotation: {x: 0, y: 0, z: 0, w: 1}
+        scale: {x: 1, y: 1, z: 1}
+      - type: point_light
+        color: {r: 0.1, g: 0.9, b: 0.9, a: 1}
+        intensity: 12.0
+        range: 7.0
+  - tag: PointLight_2_1
+    id: 1500219244697461825
+    components:
+      - type: transform
+        position: {x: -5.0, y: 4.0, z: -14.0}
+        rotation: {x: 0, y: 0, z: 0, w: 1}
+        scale: {x: 1, y: 1, z: 1}
+      - type: point_light
+        color: {r: 0.15, g: 0.35, b: 1.0, a: 1}
+        intensity: 12.0
+        range: 9.0
+  - tag: PointLight_2_2
+    id: 3276793867839745544
+    components:
+      - type: transform
+        position: {x: 0.0, y: 5.0, z: -14.0}
+        rotation: {x: 0, y: 0, z: 0, w: 1}
+        scale: {x: 1, y: 1, z: 1}
+      - type: point_light
+        color: {r: 0.85, g: 0.1, b: 1.0, a: 1}
+        intensity: 12.0
+        range: 7.0
+  - tag: PointLight_2_3
+    id: 6181274954292674734
+    components:
+      - type: transform
+        position: {x: 5.0, y: 3.0, z: -14.0}
+        rotation: {x: 0, y: 0, z: 0, w: 1}
+        scale: {x: 1, y: 1, z: 1}
+      - type: point_light
+        color: {r: 1.0, g: 1.0, b: 1.0, a: 1}
+        intensity: 12.0
+        range: 9.0
+  - tag: PointLight_2_4
+    id: 6473149855255013509
+    components:
+      - type: transform
+        position: {x: 10.0, y: 4.0, z: -14.0}
+        rotation: {x: 0, y: 0, z: 0, w: 1}
+        scale: {x: 1, y: 1, z: 1}
+      - type: point_light
+        color: {r: 1.0, g: 0.15, b: 0.1, a: 1}
+        intensity: 12.0
+        range: 7.0
+  - tag: PointLight_2_5
+    id: 6304614435198113865
+    components:
+      - type: transform
+        position: {x: -15.0, y: 5.0, z: -14.0}
+        rotation: {x: 0, y: 0, z: 0, w: 1}
+        scale: {x: 1, y: 1, z: 1}
+      - type: point_light
+        color: {r: 1.0, g: 0.55, b: 0.05, a: 1}
+        intensity: 12.0
+        range: 9.0
+  - tag: PointLight_3_0
+    id: 658571918376805803
+    components:
+      - type: transform
+        position: {x: -10.0, y: 3.0, z: -20.0}
+        rotation: {x: 0, y: 0, z: 0, w: 1}
+        scale: {x: 1, y: 1, z: 1}
+      - type: point_light
+        color: {r: 1.0, g: 0.95, b: 0.1, a: 1}
+        intensity: 8.0
+        range: 7.0
+  - tag: PointLight_3_1
+    id: 5856640982517285491
+    components:
+      - type: transform
+        position: {x: -5.0, y: 4.0, z: -20.0}
+        rotation: {x: 0, y: 0, z: 0, w: 1}
+        scale: {x: 1, y: 1, z: 1}
+      - type: point_light
+        color: {r: 0.15, g: 1.0, b: 0.2, a: 1}
+        intensity: 8.0
+        range: 9.0
+  - tag: PointLight_3_2
+    id: 4926570769079582209
+    components:
+      - type: transform
+        position: {x: 0.0, y: 5.0, z: -20.0}
+        rotation: {x: 0, y: 0, z: 0, w: 1}
+        scale: {x: 1, y: 1, z: 1}
+      - type: point_light
+        color: {r: 0.1, g: 0.9, b: 0.9, a: 1}
+        intensity: 8.0
+        range: 7.0
+  - tag: PointLight_3_3
+    id: 2257982254735691220
+    components:
+      - type: transform
+        position: {x: 5.0, y: 3.0, z: -20.0}
+        rotation: {x: 0, y: 0, z: 0, w: 1}
+        scale: {x: 1, y: 1, z: 1}
+      - type: point_light
+        color: {r: 0.15, g: 0.35, b: 1.0, a: 1}
+        intensity: 8.0
+        range: 9.0
+  - tag: PointLight_3_4
+    id: 4263597925018681071
+    components:
+      - type: transform
+        position: {x: 10.0, y: 4.0, z: -20.0}
+        rotation: {x: 0, y: 0, z: 0, w: 1}
+        scale: {x: 1, y: 1, z: 1}
+      - type: point_light
+        color: {r: 0.85, g: 0.1, b: 1.0, a: 1}
+        intensity: 8.0
+        range: 7.0
+  - tag: PointLight_3_5
+    id: 2489829209256754679
+    components:
+      - type: transform
+        position: {x: -15.0, y: 5.0, z: -20.0}
+        rotation: {x: 0, y: 0, z: 0, w: 1}
+        scale: {x: 1, y: 1, z: 1}
+      - type: point_light
+        color: {r: 1.0, g: 1.0, b: 1.0, a: 1}
+        intensity: 8.0
+        range: 9.0
+  - tag: PointLight_4_0
+    id: 8535227093834884838
+    components:
+      - type: transform
+        position: {x: -10.0, y: 3.0, z: -26.0}
+        rotation: {x: 0, y: 0, z: 0, w: 1}
+        scale: {x: 1, y: 1, z: 1}
+      - type: point_light
+        color: {r: 1.0, g: 0.15, b: 0.1, a: 1}
+        intensity: 10.0
+        range: 7.0
+  - tag: PointLight_4_1
+    id: 6347173737306457640
+    components:
+      - type: transform
+        position: {x: -5.0, y: 4.0, z: -26.0}
+        rotation: {x: 0, y: 0, z: 0, w: 1}
+        scale: {x: 1, y: 1, z: 1}
+      - type: point_light
+        color: {r: 1.0, g: 0.55, b: 0.05, a: 1}
+        intensity: 10.0
+        range: 9.0
+  - tag: PointLight_4_2
+    id: 2025592422697026105
+    components:
+      - type: transform
+        position: {x: 0.0, y: 5.0, z: -26.0}
+        rotation: {x: 0, y: 0, z: 0, w: 1}
+        scale: {x: 1, y: 1, z: 1}
+      - type: point_light
+        color: {r: 1.0, g: 0.95, b: 0.1, a: 1}
+        intensity: 10.0
+        range: 7.0
+  - tag: PointLight_4_3
+    id: 2990980314085646639
+    components:
+      - type: transform
+        position: {x: 5.0, y: 3.0, z: -26.0}
+        rotation: {x: 0, y: 0, z: 0, w: 1}
+        scale: {x: 1, y: 1, z: 1}
+      - type: point_light
+        color: {r: 0.15, g: 1.0, b: 0.2, a: 1}
+        intensity: 10.0
+        range: 9.0
+  - tag: PointLight_4_4
+    id: 7086441943164855461
+    components:
+      - type: transform
+        position: {x: 10.0, y: 4.0, z: -26.0}
+        rotation: {x: 0, y: 0, z: 0, w: 1}
+        scale: {x: 1, y: 1, z: 1}
+      - type: point_light
+        color: {r: 0.1, g: 0.9, b: 0.9, a: 1}
+        intensity: 10.0
+        range: 7.0
+  - tag: PointLight_4_5
+    id: 515936514587749945
+    components:
+      - type: transform
+        position: {x: -15.0, y: 5.0, z: -26.0}
+        rotation: {x: 0, y: 0, z: 0, w: 1}
+        scale: {x: 1, y: 1, z: 1}
+      - type: point_light
+        color: {r: 0.15, g: 0.35, b: 1.0, a: 1}
+        intensity: 10.0
+        range: 9.0
+  - tag: PointLight_5_0
+    id: 7579791085629793529
+    components:
+      - type: transform
+        position: {x: -10.0, y: 3.0, z: -32.0}
+        rotation: {x: 0, y: 0, z: 0, w: 1}
+        scale: {x: 1, y: 1, z: 1}
+      - type: point_light
+        color: {r: 0.85, g: 0.1, b: 1.0, a: 1}
+        intensity: 12.0
+        range: 7.0
+  - tag: PointLight_5_1
+    id: 7425236935745452195
+    components:
+      - type: transform
+        position: {x: -5.0, y: 4.0, z: -32.0}
+        rotation: {x: 0, y: 0, z: 0, w: 1}
+        scale: {x: 1, y: 1, z: 1}
+      - type: point_light
+        color: {r: 1.0, g: 1.0, b: 1.0, a: 1}
+        intensity: 12.0
+        range: 9.0
+  - tag: PointLight_5_2
+    id: 3700092117582972924
+    components:
+      - type: transform
+        position: {x: 0.0, y: 5.0, z: -32.0}
+        rotation: {x: 0, y: 0, z: 0, w: 1}
+        scale: {x: 1, y: 1, z: 1}
+      - type: point_light
+        color: {r: 1.0, g: 0.15, b: 0.1, a: 1}
+        intensity: 12.0
+        range: 7.0
+  - tag: PointLight_5_3
+    id: 610482117117913758
+    components:
+      - type: transform
+        position: {x: 5.0, y: 3.0, z: -32.0}
+        rotation: {x: 0, y: 0, z: 0, w: 1}
+        scale: {x: 1, y: 1, z: 1}
+      - type: point_light
+        color: {r: 1.0, g: 0.55, b: 0.05, a: 1}
+        intensity: 12.0
+        range: 9.0
+  - tag: PointLight_5_4
+    id: 8422194129764808876
+    components:
+      - type: transform
+        position: {x: 10.0, y: 4.0, z: -32.0}
+        rotation: {x: 0, y: 0, z: 0, w: 1}
+        scale: {x: 1, y: 1, z: 1}
+      - type: point_light
+        color: {r: 1.0, g: 0.95, b: 0.1, a: 1}
+        intensity: 12.0
+        range: 7.0
+  - tag: PointLight_5_5
+    id: 5231312634919421924
+    components:
+      - type: transform
+        position: {x: -15.0, y: 5.0, z: -32.0}
+        rotation: {x: 0, y: 0, z: 0, w: 1}
+        scale: {x: 1, y: 1, z: 1}
+      - type: point_light
+        color: {r: 0.15, g: 1.0, b: 0.2, a: 1}
+        intensity: 12.0
+        range: 9.0

@@ -23,7 +23,7 @@ enum class alpha_mode : std::uint8_t {
 
 class material final {
 
-  friend class assets_module;
+  friend class asset_residency;
 
 public:
 

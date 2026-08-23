@@ -1,0 +1,679 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Jonas Kabelitz
+#include <libsbx/assets/asset_residency.hpp>
+
+#include <fstream>
+#include <utility>
+
+#include <yaml-cpp/yaml.h>
+
+#include <libsbx/utility/assert.hpp>
+#include <libsbx/utility/logger.hpp>
+#include <libsbx/utility/timer.hpp>
+
+#include <libsbx/memory/alignment.hpp>
+
+#include <libsbx/core/engine.hpp>
+
+#include <libsbx/math/color.hpp>
+#include <libsbx/math/vector3.hpp>
+#include <libsbx/math/vector4.hpp>
+
+#include <libsbx/graphics/resources/buffer.hpp>
+
+namespace sbx::assets {
+
+inline constexpr auto material_flag_masked = std::uint32_t{1u << 0u};
+
+struct material_data {
+  math::vector4 base_color_factor;
+  math::vector4 emissive_factor;
+  std::uint32_t albedo_index;
+  std::uint32_t normal_index;
+  std::uint32_t metallic_roughness_index;
+  std::uint32_t occlusion_index;
+  std::uint32_t emissive_index;
+  std::float_t metallic_factor;
+  std::float_t roughness_factor;
+  std::float_t alpha_cutoff;
+  std::uint32_t flags;
+  std::uint32_t padding0;
+  std::uint32_t padding1;
+  std::uint32_t padding2;
+}; // struct material_data
+
+// Strips characters a filename can't contain, for turning a gltf material's (freeform) name into
+// a safe file name when extracting it.
+static auto sanitize_file_name(std::string name) -> std::string {
+  for (auto& character : name) {
+    if (character == '/' || character == '\\' || character == ':' || character == '*' || character == '?' || character == '"' || character == '<' || character == '>' || character == '|') {
+      character = '_';
+    }
+  }
+
+  return name;
+}
+
+asset_residency::asset_residency(asset_cooker& cooker, ibl_baker& baker)
+: _cooker{cooker},
+  _ibl{baker} {
+  _white = _create_default_texture({255u, 255u, 255u, 255u});
+  _normal = _create_default_texture({128u, 128u, 255u, 255u}); // (0,0,1) tangent-space normal
+  _black = _create_default_texture({0u, 0u, 0u, 255u});
+  _magenta = _create_default_texture({255u, 0u, 255u, 255u});   // load-error marker
+}
+
+auto asset_residency::load_texture(const math::uuid& id, graphics::format format) -> texture_handle {
+  const auto is_srgb = (format == graphics::format::r8g8b8a8_srgb);
+
+  const auto key = fmt::format("{}:{}", id.value(), (is_srgb ? "#srgb" : "#linear"));
+
+  {
+    auto lock = std::lock_guard{_mutex};
+
+    if (const auto entry = _textures.find(key); entry != _textures.end()) {
+      return texture_handle{entry->second};
+    }
+  }
+
+  auto data = _cooker.resolve_texture(id);
+
+  if (!data) {
+    return texture_handle{};
+  }
+
+  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
+
+  auto& bindless_table = graphics_module.bindless_table();
+
+  const auto index = bindless_table.reserve_sampled_image();
+
+  auto record = std::make_shared<texture>(texture{index});
+  record->_id = id;
+
+  {
+    auto lock = std::lock_guard{_mutex};
+
+    _textures.emplace(key, record);
+    _pending_textures.push_back(pending_texture_upload{index, std::move(data->pixels), data->width, data->height, format});
+  }
+
+  return texture_handle{record};
+}
+
+auto asset_residency::load_texture(const std::filesystem::path& path, graphics::format format) -> texture_handle {
+  const auto& project = core::engine::project();
+
+  const auto assets_directory = project.assets_directory();
+
+  return load_texture(_cooker.import(assets_directory / path), format);
+}
+
+auto asset_residency::load_mesh(const math::uuid& id, const mesh_import_options& options) -> mesh_handle {
+  {
+    auto lock = std::lock_guard{_mutex};
+
+    if (const auto entry = _meshes.find(id); entry != _meshes.end()) {
+      return mesh_handle{entry->second};
+    }
+  }
+
+  auto data = _cooker.resolve_mesh(id, options, [this](const material_description& description, const std::filesystem::path& relative_source) {
+    return _extract_gltf_material(description, relative_source);
+  });
+
+  if (!data) {
+    return mesh_handle{};
+  }
+
+  auto fallback_material = material_handle{};
+
+  auto submeshes = std::vector<mesh::submesh>{};
+  submeshes.reserve(data->submeshes.size());
+
+  for (const auto& cooked_submesh : data->submeshes) {
+    auto material = material_handle{};
+
+    if (cooked_submesh.material != math::uuid::nil()) {
+      material = load_material(cooked_submesh.material);
+    }
+
+    if (!material.is_valid()) {
+      if (!fallback_material.is_valid()) {
+        fallback_material = create_material(material::create_info{ .albedo = _magenta });
+      }
+      material = fallback_material;
+    }
+
+    submeshes.push_back(mesh::submesh{cooked_submesh.index_offset, cooked_submesh.index_count, cooked_submesh.bounds, material});
+  }
+
+  const auto vertex_count = data->vertices.size();
+  const auto index_count = data->indices.size();
+  const auto submesh_count = submeshes.size();
+
+  auto record = std::make_shared<mesh>(std::move(submeshes), data->bounds);
+  record->_id = id;
+
+  {
+    auto lock = std::lock_guard{_mutex};
+
+    _meshes.emplace(id, record);
+    _pending_meshes.push_back(pending_mesh_upload{record, std::move(data->vertices), std::move(data->indices)});
+  }
+
+  utility::logger<"assets">::info("Loaded mesh '{}': {} vertices, {} indices, {} submeshes", _cooker.path_of(id).generic_string(), vertex_count, index_count, submesh_count);
+
+  return mesh_handle{record};
+}
+
+auto asset_residency::load_mesh(const std::filesystem::path& path, const mesh_import_options& options) -> mesh_handle {
+  const auto& project = core::engine::project();
+
+  const auto assets_directory = project.assets_directory();
+
+  return load_mesh(_cooker.import(assets_directory / path), options);
+}
+
+auto asset_residency::load_material(const math::uuid& id) -> material_handle {
+  _cooker.ensure_manifest_loaded();
+
+  {
+    auto lock = std::lock_guard{_mutex};
+    if (const auto entry = _material_files.find(id); entry != _material_files.end()) {
+      return material_handle{entry->second};
+    }
+  }
+
+  const auto source_path = _cooker.path_of(id);
+
+  if (!source_path.empty() && source_path.extension() == ".material") {
+    const auto& path = source_path;
+
+    auto root = YAML::Node{};
+    try {
+      root = YAML::LoadFile(path.string());
+    } catch (const std::exception& exception) {
+      utility::logger<"assets">::warn("Could not parse material '{}' ({})", path.generic_string(), exception.what());
+      return material_handle{};
+    }
+
+    auto info = material::create_info{};
+
+    if (root["name"]) info.name = root["name"].as<std::string>();
+    if (root["base_color_factor"]) info.base_color_factor = root["base_color_factor"].as<math::color>();
+    if (root["emissive_factor"]) info.emissive_factor = root["emissive_factor"].as<math::vector3>();
+    if (root["metallic_factor"]) info.metallic_factor = root["metallic_factor"].as<std::float_t>();
+    if (root["roughness_factor"]) info.roughness_factor = root["roughness_factor"].as<std::float_t>();
+    if (root["alpha_mode"]) {
+      const auto mode = root["alpha_mode"].as<std::string>();
+      info.alpha = (mode == "blend") ? alpha_mode::blend : (mode == "mask") ? alpha_mode::mask : alpha_mode::opaque;
+    }
+    if (root["alpha_cutoff"]) info.alpha_cutoff = root["alpha_cutoff"].as<std::float_t>();
+    if (root["is_double_sided"]) info.is_double_sided = root["is_double_sided"].as<bool>();
+
+    const auto load_slot = [&](const char* key, graphics::format format) -> texture_handle {
+      if (const auto node = root[key]) {
+        return load_texture(std::filesystem::path{node.as<std::string>()}, format);
+      }
+      return texture_handle{};
+    };
+
+    info.albedo = load_slot("albedo", graphics::format::r8g8b8a8_srgb);
+    info.normal = load_slot("normal", graphics::format::r8g8b8a8_unorm);
+    info.metallic_roughness = load_slot("metallic_roughness", graphics::format::r8g8b8a8_unorm);
+    info.occlusion = load_slot("occlusion", graphics::format::r8g8b8a8_unorm);
+    info.emissive = load_slot("emissive", graphics::format::r8g8b8a8_srgb);
+
+    auto record = std::make_shared<material>(info);
+    record->_id = id;
+
+    auto handle = _register_material(record);
+
+    {
+      auto lock = std::lock_guard{_mutex};
+      _material_files.emplace(id, record);
+    }
+
+    utility::logger<"assets">::info("Loaded material '{}'", path.generic_string());
+
+    return handle;
+  }
+
+  // Otherwise a cooked material extracted from a mesh import.
+  if (const auto description = _cooker.resolve_cooked_material(id)) {
+    auto info = material::create_info{};
+    info.name = description->name;
+    info.base_color_factor = description->base_color_factor;
+    info.emissive_factor = description->emissive_factor;
+    info.metallic_factor = description->metallic_factor;
+    info.roughness_factor = description->roughness_factor;
+    info.alpha = description->alpha;
+    info.alpha_cutoff = description->alpha_cutoff;
+    info.is_double_sided = description->is_double_sided;
+
+    const auto load_slot = [&](const math::uuid& uuid, graphics::format format) -> texture_handle {
+      return (uuid == math::uuid::nil()) ? texture_handle{} : load_texture(uuid, format);
+    };
+
+    info.albedo = load_slot(description->albedo, graphics::format::r8g8b8a8_srgb);
+    info.normal = load_slot(description->normal, graphics::format::r8g8b8a8_unorm);
+    info.metallic_roughness = load_slot(description->metallic_roughness, graphics::format::r8g8b8a8_unorm);
+    info.occlusion = load_slot(description->occlusion, graphics::format::r8g8b8a8_unorm);
+    info.emissive = load_slot(description->emissive, graphics::format::r8g8b8a8_srgb);
+
+    auto record = std::make_shared<material>(info);
+    record->_id = id;
+
+    auto handle = _register_material(record);
+
+    {
+      auto lock = std::lock_guard{_mutex};
+      _material_files.emplace(id, record);
+    }
+
+    return handle;
+  }
+
+  utility::logger<"assets">::warn("Unknown material uuid {}", id);
+
+  return material_handle{};
+}
+
+auto asset_residency::load_material(const std::filesystem::path& path) -> material_handle {
+  const auto& project = core::engine::project();
+
+  const auto assets_directory = project.assets_directory();
+
+  return load_material(_cooker.import(assets_directory / path));
+}
+
+auto asset_residency::create_material(const material::create_info& create_info) -> material_handle {
+  return _register_material(std::make_shared<material>(create_info));
+}
+
+auto asset_residency::update_material(material_handle& material, const material::create_info& create_info) -> void {
+  if (!material.is_valid()) {
+    return;
+  }
+
+  material->_base_color_factor = create_info.base_color_factor;
+  material->_emissive_factor = create_info.emissive_factor;
+  material->_metallic_factor = create_info.metallic_factor;
+  material->_roughness_factor = create_info.roughness_factor;
+  material->_alpha = create_info.alpha;
+  material->_alpha_cutoff = create_info.alpha_cutoff;
+  material->_is_double_sided = create_info.is_double_sided;
+  material->_albedo = create_info.albedo;
+  material->_normal = create_info.normal;
+  material->_metallic_roughness = create_info.metallic_roughness;
+  material->_occlusion = create_info.occlusion;
+  material->_emissive = create_info.emissive;
+  material->_name = create_info.name;
+
+  // _register_material only ever queues a GPU buffer upload once, at creation time — without
+  // re-queuing here, an in-place edit updates the CPU-side object but the renderer keeps reading
+  // the stale material_data it already uploaded. _materials is indexed by material::index(), the
+  // same slot _register_material itself pushed to, so this is the same shared_ptr, not a copy.
+  auto lock = std::lock_guard{_mutex};
+
+  if (material->index() < _materials.size()) {
+    _pending_materials.push_back(pending_material_upload{_materials[material->index()]});
+  }
+}
+
+auto asset_residency::save_material(material_handle& material, const std::filesystem::path& path) -> math::uuid {
+  const auto& project = core::engine::project();
+
+  const auto assets_directory = project.assets_directory();
+
+  const auto resolved_path = assets_directory / path;
+
+  if (!material.is_valid()) {
+    utility::logger<"assets">::warn("Cannot save an invalid material to '{}'", resolved_path.generic_string());
+    return math::uuid::nil();
+  }
+
+  const auto path_of = [this](const texture_handle& texture) -> std::optional<std::string> {
+    if (!texture.is_valid()) {
+      return std::nullopt;
+    }
+
+    const auto absolute = _cooker.path_of(texture->id());
+
+    if (absolute.empty()) {
+      return std::nullopt; // default/procedural texture (nil uuid) — omit the slot
+    }
+
+    // absolute is stored fully resolved; the slot needs to hold the assets-relative form (that's
+    // what load_material's own reader passes straight into load_texture(path, ...)).
+    return _cooker.relative(absolute).generic_string();
+  };
+
+  auto node = YAML::Node{};
+
+  node["name"] = material->name();
+  node["base_color_factor"] = material->base_color_factor();
+  node["emissive_factor"] = material->emissive_factor();
+  node["metallic_factor"] = material->metallic_factor();
+  node["roughness_factor"] = material->roughness_factor();
+  node["alpha_mode"] = (material->alpha() == alpha_mode::blend) ? "blend" : (material->alpha() == alpha_mode::mask) ? "mask" : "opaque";
+  node["alpha_cutoff"] = material->alpha_cutoff();
+  node["is_double_sided"] = material->is_double_sided();
+
+  if (const auto slot = path_of(material->albedo())) {
+    node["albedo"] = *slot;
+  }
+
+  if (const auto slot = path_of(material->normal())) {
+    node["normal"] = *slot;
+  }
+
+  if (const auto slot = path_of(material->metallic_roughness())) {
+    node["metallic_roughness"] = *slot;
+  }
+
+  if (const auto slot = path_of(material->occlusion())) {
+    node["occlusion"] = *slot;
+  }
+
+  if (const auto slot = path_of(material->emissive())) {
+    node["emissive"] = *slot;
+  }
+
+  if (!resolved_path.parent_path().empty()) {
+    std::filesystem::create_directories(resolved_path.parent_path());
+  }
+
+  auto out = std::ofstream{resolved_path};
+  out << node;
+
+  const auto id = _cooker.import(resolved_path); // register + create the .meta so it's a first-class asset
+
+  // import() is idempotent (returns the existing uuid from .meta on a re-save), so this is always
+  // the right id to stamp onto the record — including the very first save of a create_material()'d
+  // material, which otherwise keeps a nil id forever.
+  material->_id = id;
+
+  utility::logger<"assets">::info("Saved material '{}'", resolved_path.generic_string());
+
+  return id;
+}
+
+auto asset_residency::load_environment_map(const math::uuid& id) -> environment_map_handle {
+  auto timer = utility::scoped_timer{[&id](const units::seconds& elapsed) {
+    utility::logger<"assets">::info("Loaded environment map {} in {}", id, units::milliseconds{elapsed});
+  }};
+
+  {
+    auto lock = std::lock_guard{_mutex};
+    if (const auto entry = _environment_maps.find(id); entry != _environment_maps.end()) {
+      return environment_map_handle{entry->second};
+    }
+  }
+
+  auto data = _cooker.resolve_environment(id);
+
+  if (!data) {
+    return environment_map_handle{};
+  }
+
+  auto record = std::make_shared<environment_map>();
+  record->_id = id;
+
+  // Bakes irradiance + prefiltered via compute at load time and blocks until the GPU has
+  // finished — the environment is fully usable the moment this call returns, matching the old
+  // engine's load-time bake semantics rather than the render thread's old lazy first-frame bake.
+  _ibl.bake_environment(*record, data->pixels, data->width, data->height);
+
+  {
+    auto lock = std::lock_guard{_mutex};
+    _environment_maps.emplace(id, record);
+  }
+
+  return environment_map_handle{record};
+}
+
+auto asset_residency::load_environment_map(const std::filesystem::path& path) -> environment_map_handle {
+  const auto& project = core::engine::project();
+
+  const auto assets_directory = project.assets_directory();
+
+  return load_environment_map(_cooker.import(assets_directory / path));
+}
+
+auto asset_residency::process_uploads(std::uint64_t frame_index) -> void {
+  auto pending_textures = std::vector<pending_texture_upload>{};
+  auto pending_meshes = std::vector<pending_mesh_upload>{};
+  auto pending_materials = std::vector<pending_material_upload>{};
+
+  {
+    auto lock = std::lock_guard{_mutex};
+    pending_textures.swap(_pending_textures);
+    pending_meshes.swap(_pending_meshes);
+    pending_materials.swap(_pending_materials);
+  }
+
+  if (pending_textures.empty() && pending_meshes.empty() && pending_materials.empty()) {
+    return;
+  }
+
+  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
+
+  auto& registry = graphics_module.resource_registry();
+  auto& upload_context = graphics_module.upload_context();
+  auto& bindless_table = graphics_module.bindless_table();
+
+  for (auto& request : pending_textures) {
+    const auto mip_levels = graphics::image::mip_levels_for(math::vector3u{request.width, request.height, 1u});
+
+    const auto handle = registry.emplace<graphics::image>(graphics::image::create_info{
+      .extent = math::vector3u{request.width, request.height, 1u},
+      .format = request.format,
+      .usage = graphics::image_usage::transfer_destination | graphics::image_usage::transfer_source | graphics::image_usage::sampled,
+      .mip_levels = mip_levels,
+      .name = "Texture"
+    });
+
+    const auto bytes = std::span<const std::byte>{request.pixels.data(), request.pixels.size()};
+
+    upload_context.stage_image(handle, bytes, graphics::image_layout::shader_read_only_optimal);
+
+    bindless_table.write_sampled_image(request.index, registry.get<graphics::image>(handle).view());
+
+    _images.emplace(request.index, handle);
+    _resident_frame.emplace(request.index, frame_index);
+  }
+
+  for (auto& request : pending_meshes) {
+    const auto vertex_bytes = static_cast<graphics::buffer::size_type>(request.vertices.size() * sizeof(vertex));
+    const auto index_bytes = static_cast<graphics::buffer::size_type>(request.indices.size() * sizeof(std::uint32_t));
+
+    const auto vertex_buffer = registry.emplace<graphics::buffer>(graphics::buffer::create_info{
+      .size = vertex_bytes,
+      .usage = graphics::buffer_usage::device_address | graphics::buffer_usage::transfer_destination,
+      .memory = graphics::memory_usage::device_local,
+      .name = "Mesh Vertices"
+    });
+
+    const auto index_buffer = registry.emplace<graphics::buffer>(graphics::buffer::create_info{
+      .size = index_bytes,
+      .usage = graphics::buffer_usage::index | graphics::buffer_usage::transfer_destination,
+      .memory = graphics::memory_usage::device_local,
+      .name = "Mesh Indices"
+    });
+
+    upload_context.stage_buffer(vertex_buffer, std::as_bytes(std::span{request.vertices}));
+    upload_context.stage_buffer(index_buffer, std::as_bytes(std::span{request.indices}));
+
+    const auto vertex_address = registry.get<graphics::buffer>(vertex_buffer).address();
+
+    request.record->_finalize(vertex_buffer, index_buffer, vertex_address, frame_index);
+  }
+
+  // Create the material buffer once, sized for the whole capacity.
+  if (!_material_buffer.is_valid()) {
+    _material_buffer = registry.emplace<graphics::buffer>(graphics::buffer::create_info{
+      .size = material_capacity * memory::stride_v<material_data>,
+      .usage = graphics::buffer_usage::device_address | graphics::buffer_usage::storage,
+      .memory = graphics::memory_usage::host_write,
+      .name = "Material Data"
+    });
+
+    _material_address = registry.get<graphics::buffer>(_material_buffer).address();
+  }
+
+  auto& buffer = registry.get<graphics::buffer>(_material_buffer);
+
+  for (auto& request : pending_materials) {
+    const auto& material = *request.record;
+
+    const auto resolve = [this](const texture_handle& texture, const texture_handle& fallback) {
+      return texture.is_valid() ? texture->index() : fallback->index();
+    };
+
+    const auto& base_color_factor = material.base_color_factor();
+    const auto& emissive_factor = material.emissive_factor();
+
+    auto data = material_data{};
+    data.base_color_factor = math::vector4{base_color_factor.r(), base_color_factor.g(), base_color_factor.b(), base_color_factor.a()};
+    data.emissive_factor = math::vector4{emissive_factor.x(), emissive_factor.y(), emissive_factor.z(), 0.0f};
+    data.albedo_index = resolve(material.albedo(), _white);
+    data.normal_index = resolve(material.normal(), _normal);
+    data.metallic_roughness_index = resolve(material.metallic_roughness(), _white);
+    data.occlusion_index = resolve(material.occlusion(), _white);
+    data.emissive_index = resolve(material.emissive(), _black);
+    data.metallic_factor = material.metallic_factor();
+    data.roughness_factor = material.roughness_factor();
+    data.alpha_cutoff = material.alpha_cutoff();
+    data.flags = (material.alpha() == alpha_mode::mask) ? material_flag_masked : 0u;
+
+    buffer.write(&data, sizeof(material_data), material.index() * memory::stride_v<material_data>);
+  }
+}
+
+auto asset_residency::is_resident(const texture_handle& texture) const -> bool {
+  if (!texture.is_valid()) {
+    return false;
+  }
+
+  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
+
+  auto& frame_context = graphics_module.frame_context();
+
+  const auto completed_value = frame_context.timeline_value();
+
+  auto lock = std::lock_guard{_mutex};
+
+  const auto entry = _resident_frame.find(texture->index());
+
+  return entry != _resident_frame.end() && completed_value >= entry->second;
+}
+
+auto asset_residency::is_resident(const mesh_handle& mesh) const -> bool {
+  if (!mesh.is_valid() || !mesh->is_uploaded()) {
+    return false;
+  }
+
+  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
+
+  const auto value = graphics_module.frame_context().timeline_value();
+
+  return value >= mesh->resident_frame();
+}
+
+auto asset_residency::is_resident(const material_handle& material) const -> bool {
+  if (!material.is_valid()) {
+    return false;
+  }
+
+  const auto is_ready = [this](const texture_handle& texture) -> bool {
+    return !texture.is_valid() || is_resident(texture);
+  };
+
+  return is_ready(material->albedo()) && is_ready(material->normal()) && is_ready(material->metallic_roughness()) && is_ready(material->occlusion()) && is_ready(material->emissive());
+}
+
+auto asset_residency::is_resident(const environment_map_handle& environment) const -> bool {
+  // bake_environment blocks until the GPU has finished, so a valid handle is always fully baked
+  // and resident by the time load_environment_map returns it — no timeline wait needed here,
+  // unlike textures/meshes/materials which still upload through the deferred per-frame path.
+  return environment.is_valid();
+}
+
+auto asset_residency::_create_default_texture(std::array<std::uint8_t, 4u> color) -> texture_handle {
+  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
+
+  const auto index = graphics_module.bindless_table().reserve_sampled_image();
+
+  auto record = std::make_shared<texture>(texture{index});
+
+  auto pixels = std::vector<std::byte>{
+    std::byte{color[0]}, std::byte{color[1]}, std::byte{color[2]}, std::byte{color[3]}
+  };
+
+  {
+    auto lock = std::lock_guard{_mutex};
+    _pending_textures.push_back(pending_texture_upload{index, std::move(pixels), 1u, 1u, graphics::format::r8g8b8a8_unorm});
+  }
+
+  return texture_handle{record};
+}
+
+auto asset_residency::_register_material(std::shared_ptr<material> record) -> material_handle {
+  auto lock = std::lock_guard{_mutex};
+
+  utility::assert_that(_material_count < material_capacity, "Exceeded material capacity");
+
+  record->_index = _material_count++;
+
+  _materials.push_back(record);
+  _pending_materials.push_back(pending_material_upload{record});
+
+  return material_handle{record};
+}
+
+auto asset_residency::_extract_gltf_material(const material_description& description, const std::filesystem::path& relative_source) -> math::uuid {
+  // relative_source (== the mesh's own resolved source path) is already fully resolved —
+  // cwd-openable, with assets_directory() baked in (same convention save_material/load_material's
+  // path overload assume on their *output* side) — but save_material/load_material(path) both
+  // expect a path relative to assets_directory() as *input*, so it has to be re-relativized before
+  // use here, exactly like the editor's extract_material_to_asset does for the same reason.
+  const auto source_relative = _cooker.relative(relative_source);
+
+  const auto directory = source_relative.parent_path() / "materials"; // mirrors textures already landing in models/<name>/textures/
+  const auto relative_path = directory / (sanitize_file_name(description.name.empty() ? "material" : description.name) + ".material");
+
+  // Already extracted (possibly hand-edited since a previous cook) — reuse it as-is, never overwrite.
+  if (std::filesystem::exists(_cooker.absolute(relative_path))) {
+    if (auto existing = load_material(relative_path); existing.is_valid()) {
+      return existing->id();
+    }
+  }
+
+  auto info = material::create_info{};
+  info.name = description.name.empty() ? "material" : description.name;
+  info.base_color_factor = description.base_color_factor;
+  info.emissive_factor = description.emissive_factor;
+  info.metallic_factor = description.metallic_factor;
+  info.roughness_factor = description.roughness_factor;
+  info.alpha = description.alpha;
+  info.alpha_cutoff = description.alpha_cutoff;
+  info.is_double_sided = description.is_double_sided;
+
+  const auto load_slot = [&](const math::uuid& uuid, graphics::format format) -> texture_handle {
+    return (uuid == math::uuid::nil()) ? texture_handle{} : load_texture(uuid, format);
+  };
+
+  info.albedo = load_slot(description.albedo, graphics::format::r8g8b8a8_srgb);
+  info.normal = load_slot(description.normal, graphics::format::r8g8b8a8_unorm);
+  info.metallic_roughness = load_slot(description.metallic_roughness, graphics::format::r8g8b8a8_unorm);
+  info.occlusion = load_slot(description.occlusion, graphics::format::r8g8b8a8_unorm);
+  info.emissive = load_slot(description.emissive, graphics::format::r8g8b8a8_srgb);
+
+  auto handle = create_material(info);
+
+  return save_material(handle, relative_path);
+}
+
+} // namespace sbx::assets

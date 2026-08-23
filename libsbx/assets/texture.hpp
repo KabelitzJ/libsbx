@@ -18,7 +18,7 @@ namespace sbx::assets {
  */
 class texture final {
 
-  friend class assets_module;
+  friend class asset_residency;
 
 public:
 

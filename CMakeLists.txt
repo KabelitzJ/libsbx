@@ -178,7 +178,10 @@ find_package(Python3 REQUIRED COMPONENTS Interpreter)
 target_sources(
   libsbx
   PRIVATE
+    "${CMAKE_SOURCE_DIR}/libsbx/assets/asset_cooker.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/assets/asset_residency.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/assets/assets_module.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/assets/ibl_baker.cpp"
 
     "${CMAKE_SOURCE_DIR}/libsbx/core/core.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/core/engine.cpp"
@@ -277,8 +280,13 @@ target_sources(
     FILE_SET headers TYPE HEADERS
     BASE_DIRS "${CMAKE_SOURCE_DIR}"
     FILES
+      "${CMAKE_SOURCE_DIR}/libsbx/assets/asset_cooker.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/assets/asset_handle.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/assets/asset_residency.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/assets/assets_module.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/assets/environment_map.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/assets/ibl_baker.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/assets/material.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/assets/mesh.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/assets/texture.hpp"
 

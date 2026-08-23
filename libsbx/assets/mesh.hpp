@@ -36,7 +36,7 @@ struct alignas(std::float_t) vertex {
  */
 class mesh final {
 
-  friend class assets_module;
+  friend class asset_residency;
 
 public:
 
@@ -86,7 +86,7 @@ public:
 
 private:
 
-  // Called once by assets_module on the render thread, after the GPU buffers exist.
+  // Called once by asset_residency on the render thread, after the GPU buffers exist.
   auto _finalize(graphics::buffer_handle vertex_buffer, graphics::buffer_handle index_buffer, graphics::buffer::address_type vertex_address, std::uint64_t resident_frame) -> void {
     _vertex_buffer = vertex_buffer;
     _index_buffer = index_buffer;

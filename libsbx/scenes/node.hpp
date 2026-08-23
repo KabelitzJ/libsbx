@@ -78,8 +78,19 @@ public:
     return get_component<world_transform>().matrix;
   }
 
+  /**
+   * @brief Reparents this node, first detaching it from whatever parent it already has (if any) so
+   * it never ends up listed as a child of two nodes at once.
+   */
   auto set_parent(node& parent) -> void {
-    get_component<relationship>().parent = parent._entity;
+    auto& own_relationship = get_component<relationship>();
+
+    if (own_relationship.parent != ecs::null_entity) {
+      auto& siblings = _registry->get<relationship>(own_relationship.parent).children;
+      std::erase(siblings, _entity);
+    }
+
+    own_relationship.parent = parent._entity;
     parent.get_component<relationship>().children.push_back(_entity);
   }
 

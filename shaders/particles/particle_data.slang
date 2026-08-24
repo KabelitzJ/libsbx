@@ -15,11 +15,11 @@ struct particle {
   float4 reserved;
 }; // struct particle
 
-// Byte-mirrors libsbx/render/particle_data.hpp's particle_emission_shape_gpu (and, in turn,
-// assets::particle_emission_shape) — keep all three in sync by hand.
-static const uint particle_emission_shape_point = 0u;
-static const uint particle_emission_shape_sphere = 1u;
-static const uint particle_emission_shape_box = 2u;
+enum emission_shape : uint {
+  point = 0u,
+  sphere = 0u,
+  box = 0u
+}; // enum emission_shape
 
 static const uint particle_texture_index_none = 0xFFFFFFFFu;
 
@@ -39,7 +39,7 @@ struct emitter_instance {
   uint active;
   uint particles_to_emit;
   uint seed;
-  uint shape;
+  emission_shape shape;
   float3 shape_extents;
   uint texture_index;
 }; // struct emitter_instance
@@ -63,31 +63,27 @@ float random_float(inout uint seed) {
   return float(seed) / float(0xFFFFFFFFu);
 }
 
-float random_range(inout uint seed, float min_val, float max_val) {
-  return min_val + random_float(seed) * (max_val - min_val);
+float random_range(inout uint seed, float min, float max) {
+  return min + random_float(seed) * (max - min);
 }
 
-float3 random_range3(inout uint seed, float3 min_val, float3 max_val) {
+float3 random_range3(inout uint seed, float3 min, float3 max) {
   return float3(
-    random_range(seed, min_val.x, max_val.x),
-    random_range(seed, min_val.y, max_val.y),
-    random_range(seed, min_val.z, max_val.z)
+    random_range(seed, min.x, max.x),
+    random_range(seed, min.y, max.y),
+    random_range(seed, min.z, max.z)
   );
 }
 
-// A random offset from the emitter's own position, per emitter_instance.shape — point emitters
-// (the common case) return zero without touching the RNG at all. Sphere is uniform over the
-// sphere's *volume*, not just its surface (the cheap "normalize a random vector" approach biases
-// toward the surface — the cube-root radius scale below corrects for that, since volume grows with
-// r^3).
-float3 sample_emission_shape(inout uint seed, uint shape, float3 extents) {
-  if (shape == particle_emission_shape_sphere) {
+float3 sample_emission_shape(inout uint seed, emission_shape shape, float3 extents) {
+  if (shape == emission_shape::sphere) {
     float3 direction = normalize(random_range3(seed, float3(-1.0, -1.0, -1.0), float3(1.0, 1.0, 1.0)) + float3(1e-5, 1e-5, 1e-5));
     float radius = extents.x * pow(random_float(seed), 1.0 / 3.0);
+
     return direction * radius;
   }
 
-  if (shape == particle_emission_shape_box) {
+  if (shape == emission_shape::box) {
     return random_range3(seed, -extents, extents);
   }
 

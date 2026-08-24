@@ -338,7 +338,7 @@ auto draw_mesh_picker(editor_state& state, const char* popup_id, sbx::assets::me
   }
 }
 
-// Same idea as draw_mesh_picker, for particle_effect_instance.effect — including the same
+// Same idea as draw_mesh_picker, for particle_effect.effect — including the same
 // jump-to-edit button draw_material_picker has, since particle_effect assets are edited in place
 // (see _draw_particle_effect_properties) exactly like materials are.
 auto draw_particle_effect_picker(editor_state& state, const char* popup_id, sbx::assets::particle_effect_handle& slot, sbx::assets::assets_module& assets_module) -> void {
@@ -534,7 +534,7 @@ auto draw_mesh_renderer_section(editor_state& state, sbx::scenes::node& node, sb
   }
 
   for (auto index = std::size_t{0u}; index < renderer.materials.size(); ++index) {
-    ImGui::PushID(static_cast<int>(index));
+    ImGui::PushID(static_cast<std::int32_t>(index));
 
     auto& slot = renderer.materials[index];
     const auto mesh_default = (renderer.mesh.is_valid() && index < renderer.mesh->submeshes().size())
@@ -658,8 +658,8 @@ auto draw_skybox_section(sbx::scenes::node& node, sbx::assets::assets_module& as
 }
 
 // loop and the duration/burst controls the plan for this section originally called for don't have
-// anything to bind to yet — particle_effect_instance::loop is a stub for a future burst/duration
-// model (see its doc comment) and nothing in particle_emitter_definition is duration-bounded
+// anything to bind to yet — particle_effect::loop is a stub for a future burst/duration
+// model (see its doc comment) and nothing in particle_emitter is duration-bounded
 // either (see particle_effect.hpp). Exposed anyway so authoring intent isn't lost once that lands.
 auto draw_particle_effect_instance_section(editor_state& state, sbx::scenes::node& node, sbx::assets::assets_module& assets_module) -> void {
   auto is_open = true;
@@ -667,7 +667,7 @@ auto draw_particle_effect_instance_section(editor_state& state, sbx::scenes::nod
   const auto is_expanded = ImGui::CollapsingHeader(ICON_MDI_FIREWORK " Particle Effect", &is_open, ImGuiTreeNodeFlags_DefaultOpen);
 
   if (!is_open) {
-    node.remove_component<sbx::scenes::particle_effect_instance>();
+    node.remove_component<sbx::scenes::particle_effect>();
     return;
   }
 
@@ -675,7 +675,7 @@ auto draw_particle_effect_instance_section(editor_state& state, sbx::scenes::nod
     return;
   }
 
-  auto& instance = node.get_component<sbx::scenes::particle_effect_instance>();
+  auto& instance = node.get_component<sbx::scenes::particle_effect>();
 
   ImGui::Text("Effect:");
   ImGui::SameLine();
@@ -755,8 +755,8 @@ auto draw_add_component_menu(sbx::scenes::node& node) -> void {
       node.add_component<sbx::scenes::skybox>();
     }
 
-    if (!node.has_component<sbx::scenes::particle_effect_instance>() && ImGui::MenuItem(ICON_MDI_FIREWORK " Particle Effect")) {
-      node.add_component<sbx::scenes::particle_effect_instance>();
+    if (!node.has_component<sbx::scenes::particle_effect>() && ImGui::MenuItem(ICON_MDI_FIREWORK " Particle Effect")) {
+      node.add_component<sbx::scenes::particle_effect>();
     }
 
     ImGui::EndPopup();
@@ -847,7 +847,7 @@ auto properties_panel::_draw_node_properties(editor_state& state, sbx::scenes::n
     draw_skybox_section(node, assets_module);
   }
 
-  if (node.has_component<sbx::scenes::particle_effect_instance>()) {
+  if (node.has_component<sbx::scenes::particle_effect>()) {
     draw_particle_effect_instance_section(state, node, assets_module);
   }
 
@@ -884,9 +884,9 @@ auto properties_panel::_draw_material_properties(const asset_selection& asset, s
   changed |= ImGui::DragFloat("Roughness", &_material_edit.roughness_factor, 0.01f, 0.0f, 1.0f);
 
   static constexpr auto alpha_mode_names = std::array<const char*, 3u>{"Opaque", "Mask", "Blend"};
-  auto alpha_index = static_cast<int>(_material_edit.alpha);
+  auto alpha_index = static_cast<std::int32_t>(_material_edit.alpha);
 
-  if (ImGui::Combo("Alpha Mode", &alpha_index, alpha_mode_names.data(), static_cast<int>(alpha_mode_names.size()))) {
+  if (ImGui::Combo("Alpha Mode", &alpha_index, alpha_mode_names.data(), static_cast<std::int32_t>(alpha_mode_names.size()))) {
     _material_edit.alpha = static_cast<sbx::assets::alpha_mode>(alpha_index);
     changed = true;
   }
@@ -960,7 +960,7 @@ auto properties_panel::_draw_particle_effect_properties(const asset_selection& a
   auto removed_index = std::optional<std::size_t>{};
 
   for (auto index = std::size_t{0u}; index < emitters.size(); ++index) {
-    ImGui::PushID(static_cast<int>(index));
+    ImGui::PushID(static_cast<std::int32_t>(index));
 
     auto& emitter = emitters[index];
 
@@ -988,16 +988,16 @@ auto properties_panel::_draw_particle_effect_properties(const asset_selection& a
         changed = true;
       }
 
-      auto blend_mode_index = static_cast<int>(emitter.blend_mode);
+      auto blend_mode_index = static_cast<std::int32_t>(emitter.blend_mode);
 
-      if (ImGui::Combo("Blend Mode", &blend_mode_index, blend_mode_names.data(), static_cast<int>(blend_mode_names.size()))) {
-        emitter.blend_mode = static_cast<sbx::assets::particle_blend_mode>(blend_mode_index);
+      if (ImGui::Combo("Blend Mode", &blend_mode_index, blend_mode_names.data(), static_cast<std::int32_t>(blend_mode_names.size()))) {
+        emitter.blend_mode = static_cast<sbx::assets::emitter_blend_mode>(blend_mode_index);
         changed = true;
       }
 
       changed |= ImGui::DragFloat("Emission Rate", &emitter.emission_rate, 0.5f, 0.0f, 10000.0f);
 
-      auto burst_count = static_cast<int>(emitter.burst_count);
+      auto burst_count = static_cast<std::int32_t>(emitter.burst_count);
       if (ImGui::DragInt("Burst Count", &burst_count, 1.0f, 0, 100000)) {
         emitter.burst_count = static_cast<std::uint32_t>(std::max(burst_count, 0));
         changed = true;
@@ -1007,16 +1007,16 @@ auto properties_panel::_draw_particle_effect_properties(const asset_selection& a
         ImGui::SetTooltip("Spawned once, on top of Emission Rate, the moment this emitter becomes active.");
       }
 
-      auto shape_index = static_cast<int>(emitter.shape);
+      auto shape_index = static_cast<std::int32_t>(emitter.shape);
 
-      if (ImGui::Combo("Shape", &shape_index, shape_names.data(), static_cast<int>(shape_names.size()))) {
-        emitter.shape = static_cast<sbx::assets::particle_emission_shape>(shape_index);
+      if (ImGui::Combo("Shape", &shape_index, shape_names.data(), static_cast<std::int32_t>(shape_names.size()))) {
+        emitter.shape = static_cast<sbx::assets::emitter_shape>(shape_index);
         changed = true;
       }
 
-      if (emitter.shape == sbx::assets::particle_emission_shape::sphere) {
+      if (emitter.shape == sbx::assets::emitter_shape::sphere) {
         changed |= ImGui::DragFloat("Radius", &emitter.shape_extents.x(), 0.01f, 0.0f, 1000.0f);
-      } else if (emitter.shape == sbx::assets::particle_emission_shape::box) {
+      } else if (emitter.shape == sbx::assets::emitter_shape::box) {
         auto shape_extents = std::array<std::float_t, 3u>{emitter.shape_extents.x(), emitter.shape_extents.y(), emitter.shape_extents.z()};
         if (draw_vector3_control("Half Extents", shape_extents, 0.0f, 0.01f)) {
           emitter.shape_extents = sbx::math::vector3{shape_extents[0], shape_extents[1], shape_extents[2]};
@@ -1065,13 +1065,13 @@ auto properties_panel::_draw_particle_effect_properties(const asset_selection& a
   }
 
   if (ImGui::Button(ICON_MDI_PLUS " Add Emitter")) {
-    emitters.push_back(sbx::assets::particle_emitter_definition{.name = fmt::format("Emitter {}", emitters.size())});
+    emitters.push_back(sbx::assets::particle_emitter{.name = fmt::format("Emitter {}", emitters.size())});
     changed = true;
   }
 
   if (changed) {
     // Live preview: mutates the record in place immediately, so every particle_effect_handle
-    // already pointing at it (e.g. a particle_effect_instance elsewhere in the scene) reflects the
+    // already pointing at it (e.g. a particle_effect elsewhere in the scene) reflects the
     // edit on the very next frame — no Save needed to see it. Persisting to disk stays an explicit
     // action (below), same as _draw_material_properties.
     assets_module.update_particle_effect(_asset_cache.particle_effect, _particle_effect_edit);

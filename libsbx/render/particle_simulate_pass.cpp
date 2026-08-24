@@ -96,7 +96,7 @@ auto particle_simulate_pass::execute(render_context& context) -> void {
   // is enough on its own, with no second semaphore.
   frame_context.add_wait(frame_context.timeline(), frame_context.previous_frame_value(), VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
 
-  const auto dt = static_cast<std::float_t>(core::engine::delta_time());
+  const auto delta_time = static_cast<std::float_t>(core::engine::delta_time());
   const auto time = static_cast<std::float_t>(core::engine::time());
 
   const auto write_index = static_cast<std::uint32_t>(context.frame_index % 2u);
@@ -119,8 +119,8 @@ auto particle_simulate_pass::execute(render_context& context) -> void {
 
   bind_compute_globals(*context.command_buffer);
 
-  _record_pool(context, _additive_pool, additive_emits, dt, time, read_index, write_index);
-  _record_pool(context, _alpha_pool, alpha_emits, dt, time, read_index, write_index);
+  _record_pool(context, _additive_pool, additive_emits, delta_time, time, read_index, write_index);
+  _record_pool(context, _alpha_pool, alpha_emits, delta_time, time, read_index, write_index);
 
   // Hands off to particle_draw_pass later this same command buffer — an ordinary intra-frame
   // barrier, no semaphore needed (unlike the cross-frame wait above). Mirrors exactly how
@@ -129,7 +129,7 @@ auto particle_simulate_pass::execute(render_context& context) -> void {
   context.command_buffer->memory_dependency(barrier_to_draw);
 }
 
-auto particle_simulate_pass::_record_pool(render_context& context, particle_pool& pool, std::span<const emit_request> emits, std::float_t dt, std::float_t time, std::uint32_t read_index, std::uint32_t write_index) -> void {
+auto particle_simulate_pass::_record_pool(render_context& context, particle_pool& pool, std::span<const emit_request> emits, std::float_t delta_time, std::float_t time, std::uint32_t read_index, std::uint32_t write_index) -> void {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
   auto& registry = graphics_module.resource_registry();
 
@@ -165,7 +165,7 @@ auto particle_simulate_pass::_record_pool(render_context& context, particle_pool
       graphics::buffer::address_type alive_list_write;
       graphics::buffer::address_type counters;
       graphics::buffer::address_type emitters;
-      std::float_t dt;
+      std::float_t delta_time;
       std::uint32_t read_index;
       std::uint32_t write_index;
       std::uint32_t max_particles;
@@ -178,7 +178,7 @@ auto particle_simulate_pass::_record_pool(render_context& context, particle_pool
       pool.alive_list_address(write_index),
       pool.counters_address(),
       pool.emitter_instances_address(),
-      dt,
+      delta_time,
       read_index,
       write_index,
       pool.max_particles()

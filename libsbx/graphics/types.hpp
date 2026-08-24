@@ -170,6 +170,10 @@ enum class mipmap_mode : std::int32_t {
   linear = VK_SAMPLER_MIPMAP_MODE_LINEAR
 }; // enum class mipmap_mode
 
+struct lod_clamp {
+  inline static constexpr auto none = std::float_t{VK_LOD_CLAMP_NONE};
+}; // struct lod_clamp
+
 enum class samples : std::int32_t {
   count_1 = VK_SAMPLE_COUNT_1_BIT,
   count_2 = VK_SAMPLE_COUNT_2_BIT,

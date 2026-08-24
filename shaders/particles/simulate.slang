@@ -12,7 +12,7 @@ struct push_data {
   uint* alive_list_write;
   particle_counters* counters;
   emitter_instance* emitters;
-  float dt;
+  float delta_time;
   uint read_index;
   uint write_index;
   uint max_particles;
@@ -24,26 +24,23 @@ struct cs_in {
   uint3 id : SV_DispatchThreadID;
 }; // struct cs_in
 
-// Indirect dispatch sized (by build_dispatch_args.slang) to last frame's alive count, rounded up to
-// a whole group — the last group can run a few threads past the real count, so bail on those.
 [shader("compute")]
 [numthreads(64, 1, 1)]
 void compute_main(cs_in input) {
   uint index = input.id.x;
 
-  if (index >= push.counters[0].alive_count[push.read_index]) {
+  if (index >= push.counters->alive_count[push.read_index]) {
     return;
   }
 
   uint slot = push.alive_list_read[index];
-  particle p = push.particles[slot];
+  particle particle = push.particles[slot];
 
-  p.age += push.dt;
+  particle.age += push.delta_time;
 
-  if (p.age >= p.lifetime) {
-    // Dead: return the slot to the free stack, don't carry it into this frame's alive list.
+  if (particle.age >= particle.lifetime) {
     uint dead_index;
-    InterlockedAdd(push.counters[0].dead_count, 1u, dead_index);
+    InterlockedAdd(push.counters->dead_count, 1u, dead_index);
 
     if (dead_index < push.max_particles) {
       push.dead_list[dead_index] = slot;
@@ -52,16 +49,16 @@ void compute_main(cs_in input) {
     return;
   }
 
-  emitter_instance e = push.emitters[p.emitter_slot];
+  emitter_instance emitter = push.emitters[particle.emitter_slot];
 
-  p.velocity += float3(0.0, -1.0, 0.0) * e.gravity * push.dt;
-  p.velocity *= max(1.0 - e.drag * push.dt, 0.0);
-  p.position += p.velocity * push.dt;
+  particle.velocity += float3(0.0, -1.0, 0.0) * emitter.gravity * push.delta_time;
+  particle.velocity *= max(1.0 - emitter.drag * push.delta_time, 0.0);
+  particle.position += particle.velocity * push.delta_time;
 
-  push.particles[slot] = p;
+  push.particles[slot] = particle;
 
   uint alive_index;
-  InterlockedAdd(push.counters[0].alive_count[push.write_index], 1u, alive_index);
+  InterlockedAdd(push.counters->alive_count[push.write_index], 1u, alive_index);
 
   if (alive_index < push.max_particles) {
     push.alive_list_write[alive_index] = slot;

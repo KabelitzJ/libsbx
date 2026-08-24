@@ -9,6 +9,7 @@
 #include <libsbx/memory/alignment.hpp>
 
 #include <libsbx/utility/logger.hpp>
+#include <libsbx/utility/iterator.hpp>
 
 #include <libsbx/core/engine.hpp>
 
@@ -24,7 +25,7 @@ particle_pool::particle_pool(const create_info& create_info)
   auto& registry = graphics_module.resource_registry();
 
   _particles = registry.emplace<graphics::buffer>(graphics::buffer::create_info{
-    .size = memory::stride_v<particle_gpu> * _max_particles,
+    .size = memory::stride_v<particle> * _max_particles,
     .usage = graphics::buffer_usage::device_address | graphics::buffer_usage::storage,
     .memory = graphics::memory_usage::device_local,
     .name = create_info.name + " Particles"
@@ -47,28 +48,28 @@ particle_pool::particle_pool(const create_info& create_info)
   }
 
   _counters = registry.emplace<graphics::buffer>(graphics::buffer::create_info{
-    .size = sizeof(particle_counters_gpu),
+    .size = sizeof(particle_counters),
     .usage = graphics::buffer_usage::device_address | graphics::buffer_usage::storage,
     .memory = graphics::memory_usage::host_write,
     .name = create_info.name + " Counters"
   });
 
   _dispatch_args = registry.emplace<graphics::buffer>(graphics::buffer::create_info{
-    .size = sizeof(std::uint32_t) * 3u, // VkDispatchIndirectCommand
+    .size = sizeof(VkDispatchIndirectCommand),
     .usage = graphics::buffer_usage::device_address | graphics::buffer_usage::storage | graphics::buffer_usage::indirect,
     .memory = graphics::memory_usage::device_local,
     .name = create_info.name + " Dispatch Args"
   });
 
   _draw_args = registry.emplace<graphics::buffer>(graphics::buffer::create_info{
-    .size = sizeof(std::uint32_t) * 4u, // VkDrawIndirectCommand
+    .size = sizeof(VkDrawIndirectCommand),
     .usage = graphics::buffer_usage::device_address | graphics::buffer_usage::storage | graphics::buffer_usage::indirect,
     .memory = graphics::memory_usage::device_local,
     .name = create_info.name + " Draw Args"
   });
 
   _emitter_instances = registry.emplace<graphics::buffer>(graphics::buffer::create_info{
-    .size = memory::stride_v<emitter_instance_gpu> * _max_emitter_instances,
+    .size = memory::stride_v<emitter_instance> * _max_emitter_instances,
     .usage = graphics::buffer_usage::device_address | graphics::buffer_usage::storage,
     .memory = graphics::memory_usage::host_write,
     .name = create_info.name + " Emitter Instances"
@@ -86,28 +87,20 @@ particle_pool::particle_pool(const create_info& create_info)
   _draw_args_address = registry.get<graphics::buffer>(_draw_args).address();
   _emitter_instances_address = registry.get<graphics::buffer>(_emitter_instances).address();
 
-  // One-time init: every slot starts dead, dead_list holds every index so slot 0 is the first one
-  // handed out. Both buffers are host_write, so this is a direct mapped write — no queue submission
-  // needed, which matters here since particle_simulate_pass's compute chain reads them the very
-  // first time it records, before any upload_context::flush this frame — see particle_pool.hpp's
-  // class comment.
-  auto initial_dead_list = std::vector<std::uint32_t>(_max_particles);
+  auto initial_dead_list = utility::make_vector<std::uint32_t>(_max_particles);
 
   for (auto index = std::uint32_t{0u}; index < _max_particles; ++index) {
     initial_dead_list[index] = index;
   }
 
-  registry.get<graphics::buffer>(_dead_list).write(initial_dead_list.data(), sizeof(std::uint32_t) * _max_particles);
+  registry.get<graphics::buffer>(_dead_list).write(initial_dead_list.data(), sizeof(std::uint32_t) * initial_dead_list.size());
 
-  auto initial_counters = particle_counters_gpu{};
+  auto initial_counters = particle_counters{};
   initial_counters.dead_count = _max_particles;
   initial_counters.alive_count = {0u, 0u};
 
-  registry.get<graphics::buffer>(_counters).write(&initial_counters, sizeof(particle_counters_gpu));
+  registry.get<graphics::buffer>(_counters).write(&initial_counters, sizeof(particle_counters));
 
-  // Emitter-instance slot allocator: every slot starts free, in ascending order (any order is
-  // correct — free_list is a stack — this just makes gpu_slot assignment easier to read while
-  // debugging, same reasoning render_module's old free-list init used before this moved here).
   _free_list.resize(_max_emitter_instances);
 
   for (auto slot = std::uint32_t{0u}; slot < _max_emitter_instances; ++slot) {
@@ -120,11 +113,11 @@ particle_pool::particle_pool(const create_info& create_info)
   _claimed_last_frame.assign(_max_emitter_instances, false);
 }
 
-auto particle_pool::write_emitter_instance(std::uint32_t slot, const emitter_instance_gpu& data) -> void {
+auto particle_pool::write_emitter_instance(std::uint32_t slot, const emitter_instance& data) -> void {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
   auto& registry = graphics_module.resource_registry();
 
-  registry.get<graphics::buffer>(_emitter_instances).write(&data, sizeof(emitter_instance_gpu), slot * memory::stride_v<emitter_instance_gpu>);
+  registry.get<graphics::buffer>(_emitter_instances).write(&data, sizeof(emitter_instance), slot * memory::stride_v<emitter_instance>);
 }
 
 auto particle_pool::claim_slot() -> std::optional<std::uint32_t> {
@@ -148,14 +141,14 @@ auto particle_pool::keep_alive(std::uint32_t slot, std::float_t lifetime_max) ->
   _lifetime_max[slot] = lifetime_max;
 }
 
-auto particle_pool::tick(std::float_t dt) -> void {
+auto particle_pool::tick(std::float_t delta_time) -> void {
   for (auto slot = std::uint32_t{0u}; slot < _max_emitter_instances; ++slot) {
     if (_claimed_last_frame[slot] && !_claimed_this_frame[slot]) {
       _drain_timer[slot] = _lifetime_max[slot];
     }
 
     if (_drain_timer[slot] >= 0.0f) {
-      _drain_timer[slot] -= dt;
+      _drain_timer[slot] -= delta_time;
 
       if (_drain_timer[slot] <= 0.0f) {
         _drain_timer[slot] = -1.0f;

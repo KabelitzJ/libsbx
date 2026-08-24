@@ -34,7 +34,7 @@ emitters:
     drag: 0.0500000007
   - name: smoke
     blend_mode: alpha_blend
-    emission_rate: 35
+    emission_rate: 15
     burst_count: 0
     shape: point
     shape_extents: {x: 0, y: 0, z: 0}
@@ -43,8 +43,8 @@ emitters:
     lifetime_min: 1.79999995
     lifetime_max: 2
     start_color: {r: 0.449999988, g: 0.449999988, b: 0.449999988, a: 0.5}
-    end_color: {r: 0.25, g: 0.25, b: 0.25, a: 0}
+    end_color: {r: 0, g: 0, b: 0, a: 0}
     size_min: 0.400000006
     size_max: 0.899999976
-    gravity: -0.0500000007
+    gravity: -0.5
     drag: 0.400000006

@@ -4,6 +4,8 @@
 
 #include <vulkan/vulkan.h>
 
+#include <libsbx/utility/iterator.hpp>
+
 #include <libsbx/core/engine.hpp>
 
 #include <libsbx/platform/platform_module.hpp>

@@ -33,7 +33,7 @@ public:
     graphics::address_mode address_mode_w{address_mode::repeat};
     std::float_t max_anisotropy{1.0f};
     std::float_t min_lod{0.0f};
-    std::float_t max_lod{VK_LOD_CLAMP_NONE};
+    std::float_t max_lod{lod_clamp::none};
     std::string name{"Sampler"};
   }; // struct create_info
 

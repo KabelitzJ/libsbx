@@ -125,7 +125,7 @@ public:
    * active emitter instance using this pool — same "wholesale CPU rewrite" pattern as
    * render_module's _light_buffer/_transform_buffer.
    */
-  auto write_emitter_instance(std::uint32_t slot, const emitter_instance_gpu& data) -> void;
+  auto write_emitter_instance(std::uint32_t slot, const emitter_instance& data) -> void;
 
   /**
    * @brief Claims a free emitter_instances slot, or std::nullopt if the pool is exhausted (logged
@@ -153,7 +153,7 @@ public:
    * and draw.slang), so handing the slot to a new owner while old particles are still alive would
    * visibly corrupt them mid-flight.
    */
-  auto tick(std::float_t dt) -> void;
+  auto tick(std::float_t delta_time) -> void;
 
 private:
 
@@ -180,8 +180,8 @@ private:
   // Emitter-instance slot allocator — see claim_slot/keep_alive/tick. Sized to
   // _max_emitter_instances at construction.
   std::vector<std::uint32_t> _free_list{};
-  std::vector<std::float_t> _drain_timer{};   // per slot; < 0 = not draining
-  std::vector<std::float_t> _lifetime_max{};  // per slot; last known lifetime_max while claimed
+  std::vector<std::float_t> _drain_timer{};
+  std::vector<std::float_t> _lifetime_max{};
   std::vector<bool> _claimed_this_frame{};
   std::vector<bool> _claimed_last_frame{};
   bool _exhaustion_logged{false};

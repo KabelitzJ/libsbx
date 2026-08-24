@@ -70,7 +70,7 @@ private:
     std::uint32_t particles_to_emit{0u};
   }; // struct emit_request
 
-  auto _record_pool(render_context& context, particle_pool& pool, std::span<const emit_request> emits, std::float_t dt, std::float_t time, std::uint32_t read_index, std::uint32_t write_index) -> void;
+  auto _record_pool(render_context& context, particle_pool& pool, std::span<const emit_request> emits, std::float_t delta_time, std::float_t time, std::uint32_t read_index, std::uint32_t write_index) -> void;
 
   particle_pool& _additive_pool;
   particle_pool& _alpha_pool;

@@ -313,25 +313,25 @@ auto render_module::_build_packet() -> render_packet {
   {
     auto& assets_module = core::engine::get_module<assets::assets_module>();
 
-    const auto dt = static_cast<std::float_t>(core::engine::delta_time());
+    const auto delta_time = static_cast<std::float_t>(core::engine::delta_time());
 
-    for (auto&& [entity, world, instance] : scene.query<scenes::world_transform, scenes::particle_effect_instance>().each()) {
+    for (auto&& [entity, world, instance] : scene.query<scenes::world_transform, scenes::particle_effect>().each()) {
       if (!instance.effect.is_valid()) {
         continue;
       }
 
-      const auto& definitions = instance.effect->emitters();
+      const auto& emitters = instance.effect->emitters();
 
-      if (instance.emitters.size() < definitions.size()) {
-        instance.emitters.resize(definitions.size());
+      if (instance.emitters.size() < emitters.size()) {
+        instance.emitters.resize(emitters.size());
       }
 
-      instance.elapsed += dt;
+      instance.elapsed += delta_time;
 
       const auto is_playing = instance.playback == scenes::particle_playback_state::playing;
 
-      for (auto index = std::size_t{0u}; index < definitions.size(); ++index) {
-        const auto& definition = definitions[index];
+      for (auto index = std::size_t{0u}; index < emitters.size(); ++index) {
+        const auto& emitter = emitters[index];
         auto& runtime = instance.emitters[index];
 
         if (!is_playing) {
@@ -341,16 +341,16 @@ auto render_module::_build_packet() -> render_packet {
           // bookkeeping below, so the runtime doesn't need to remember which slot it had — and
           // dropping it now means resuming playback later claims a fresh slot and re-fires burst,
           // instead of writing into a slot index that may since have been handed to someone else.
-          runtime.gpu_slot = scenes::particle_emitter_runtime::invalid_slot;
+          runtime.gpu_slot = scenes::particle_emitter::invalid_slot;
           runtime.emission_accumulator = 0.0f;
           runtime.burst_fired = false;
           continue;
         }
 
-        const auto pool_index = (definition.blend_mode == assets::particle_blend_mode::alpha_blend) ? particle_pool_alpha_blend : particle_pool_additive;
+        const auto pool_index = (emitter.blend_mode == assets::emitter_blend_mode::alpha_blend) ? particle_pool_alpha_blend : particle_pool_additive;
         auto& pool = *_particle_pools[pool_index];
 
-        if (runtime.gpu_slot == scenes::particle_emitter_runtime::invalid_slot) {
+        if (runtime.gpu_slot == scenes::particle_emitter::invalid_slot) {
           const auto claimed = pool.claim_slot();
 
           if (!claimed) {
@@ -366,44 +366,40 @@ auto render_module::_build_packet() -> render_packet {
         auto burst_this_frame = std::uint32_t{0u};
 
         if (!runtime.burst_fired) {
-          burst_this_frame = definition.burst_count;
+          burst_this_frame = emitter.burst_count;
           runtime.burst_fired = true;
         }
 
-        // Fractional emission accumulator so a rate like 200/s doesn't lose particles to
-        // per-frame truncation.
-        runtime.emission_accumulator += definition.emission_rate * dt;
+        runtime.emission_accumulator += emitter.emission_rate * delta_time;
 
         const auto continuous_to_emit = static_cast<std::uint32_t>(runtime.emission_accumulator);
         runtime.emission_accumulator -= static_cast<std::float_t>(continuous_to_emit);
 
         const auto particles_to_emit = continuous_to_emit + burst_this_frame;
 
-        const auto texture_index = (definition.texture.is_valid() && assets_module.is_resident(definition.texture))
-          ? definition.texture->index()
-          : particle_texture_index_none;
+        const auto texture_index = (emitter.texture.is_valid() && assets_module.is_resident(emitter.texture)) ? emitter.texture->index() : particle_texture_index_none;
 
-        auto data = emitter_instance_gpu{};
+        auto data = emitter_instance{};
         data.position = math::vector3f{world.matrix[3]};
-        data.emission_rate = definition.emission_rate;
-        data.velocity_min = definition.velocity_min;
-        data.velocity_max = definition.velocity_max;
-        data.lifetime_min = definition.lifetime_min;
-        data.lifetime_max = definition.lifetime_max;
-        data.start_color = math::vector4{definition.start_color.r(), definition.start_color.g(), definition.start_color.b(), definition.start_color.a()};
-        data.end_color = math::vector4{definition.end_color.r(), definition.end_color.g(), definition.end_color.b(), definition.end_color.a()};
-        data.size_min = definition.size_min;
-        data.size_max = definition.size_max;
-        data.gravity = definition.gravity;
-        data.drag = definition.drag;
+        data.emission_rate = emitter.emission_rate;
+        data.velocity_min = emitter.velocity_min;
+        data.velocity_max = emitter.velocity_max;
+        data.lifetime_min = emitter.lifetime_min;
+        data.lifetime_max = emitter.lifetime_max;
+        data.start_color = math::vector4{emitter.start_color.r(), emitter.start_color.g(), emitter.start_color.b(), emitter.start_color.a()};
+        data.end_color = math::vector4{emitter.end_color.r(), emitter.end_color.g(), emitter.end_color.b(), emitter.end_color.a()};
+        data.size_min = emitter.size_min;
+        data.size_max = emitter.size_max;
+        data.gravity = emitter.gravity;
+        data.drag = emitter.drag;
         data.active = 1u;
         data.particles_to_emit = particles_to_emit;
         data.seed = (runtime.gpu_slot * 9781u) ^ (static_cast<std::uint32_t>(index) * 6271u) ^ 0x9E3779B9u;
-        data.shape = static_cast<std::uint32_t>(definition.shape);
-        data.shape_extents = definition.shape_extents;
+        data.shape = static_cast<std::uint32_t>(emitter.shape);
+        data.shape_extents = emitter.shape_extents;
         data.texture_index = texture_index;
 
-        pool.keep_alive(runtime.gpu_slot, definition.lifetime_max);
+        pool.keep_alive(runtime.gpu_slot, emitter.lifetime_max);
 
         packet.particle_emitters.push_back(particle_emitter_snapshot{pool_index, runtime.gpu_slot, data});
       }
@@ -413,8 +409,8 @@ auto render_module::_build_packet() -> render_packet {
     // but not kept alive this frame just lost its emitter (stopped, or the owning entity/component
     // was destroyed) and starts draining before it's recycled onto the free-list — see
     // particle_pool::tick's doc comment for why the delay matters.
-    _particle_pools[particle_pool_additive]->tick(dt);
-    _particle_pools[particle_pool_alpha_blend]->tick(dt);
+    _particle_pools[particle_pool_additive]->tick(delta_time);
+    _particle_pools[particle_pool_alpha_blend]->tick(delta_time);
   }
 
   return packet;

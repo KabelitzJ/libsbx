@@ -228,8 +228,8 @@ auto scene_serializer::_build(scene& target) -> YAML::Node {
       }
     }
 
-    if (registry.all_of<particle_effect_instance>(entity)) {
-      const auto& instance = registry.get<particle_effect_instance>(entity);
+    if (registry.all_of<particle_effect>(entity)) {
+      const auto& instance = registry.get<particle_effect>(entity);
 
       if (instance.effect.is_valid()) {
         const auto effect_id = instance.effect->id();
@@ -250,7 +250,7 @@ auto scene_serializer::_build(scene& target) -> YAML::Node {
           }
 
           auto component = YAML::Node{};
-          component["type"] = "particle_effect_instance";
+          component["type"] = "particle_effect";
           component["effect"] = particle_effect_keys.at(effect_id);
           component["loop"] = instance.loop;
           component["playback"] = (instance.playback == particle_playback_state::paused) ? "paused" : (instance.playback == particle_playback_state::stopped) ? "stopped" : "playing";
@@ -425,8 +425,8 @@ auto scene_serializer::load(scene& target, const std::filesystem::path& path) ->
         if (component["intensity"]) {
           sky.intensity = component["intensity"].as<std::float_t>();
         }
-      } else if (type == "particle_effect_instance") {
-        auto& instance = node.add_component<particle_effect_instance>();
+      } else if (type == "particle_effect") {
+        auto& instance = node.add_component<particle_effect>();
 
         instance.effect = assets_module.load_particle_effect(key_to_uuid.at(component["effect"].as<std::string>()));
 

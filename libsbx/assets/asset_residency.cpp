@@ -435,13 +435,13 @@ auto asset_residency::load_particle_effect(const math::uuid& id) -> particle_eff
     info.emitters.reserve(emitters.size());
 
     for (const auto emitter_node : emitters) {
-      auto emitter = particle_emitter_definition{};
+      auto emitter = particle_emitter{};
 
       if (emitter_node["name"]) emitter.name = emitter_node["name"].as<std::string>();
 
       if (emitter_node["blend_mode"]) {
         const auto mode = emitter_node["blend_mode"].as<std::string>();
-        emitter.blend_mode = (mode == "alpha_blend") ? particle_blend_mode::alpha_blend : particle_blend_mode::additive;
+        emitter.blend_mode = (mode == "alpha_blend") ? emitter_blend_mode::alpha_blend : emitter_blend_mode::additive;
       }
 
       if (emitter_node["emission_rate"]) emitter.emission_rate = emitter_node["emission_rate"].as<std::float_t>();
@@ -449,7 +449,7 @@ auto asset_residency::load_particle_effect(const math::uuid& id) -> particle_eff
 
       if (emitter_node["shape"]) {
         const auto shape = emitter_node["shape"].as<std::string>();
-        emitter.shape = (shape == "sphere") ? particle_emission_shape::sphere : (shape == "box") ? particle_emission_shape::box : particle_emission_shape::point;
+        emitter.shape = (shape == "sphere") ? emitter_shape::sphere : (shape == "box") ? emitter_shape::box : emitter_shape::point;
       }
 
       if (emitter_node["shape_extents"]) emitter.shape_extents = emitter_node["shape_extents"].as<math::vector3>();
@@ -546,10 +546,10 @@ auto asset_residency::save_particle_effect(particle_effect_handle& effect, const
     auto emitter_node = YAML::Node{};
 
     emitter_node["name"] = emitter.name;
-    emitter_node["blend_mode"] = (emitter.blend_mode == particle_blend_mode::alpha_blend) ? "alpha_blend" : "additive";
+    emitter_node["blend_mode"] = (emitter.blend_mode == emitter_blend_mode::alpha_blend) ? "alpha_blend" : "additive";
     emitter_node["emission_rate"] = emitter.emission_rate;
     emitter_node["burst_count"] = emitter.burst_count;
-    emitter_node["shape"] = (emitter.shape == particle_emission_shape::sphere) ? "sphere" : (emitter.shape == particle_emission_shape::box) ? "box" : "point";
+    emitter_node["shape"] = (emitter.shape == emitter_shape::sphere) ? "sphere" : (emitter.shape == emitter_shape::box) ? "box" : "point";
     emitter_node["shape_extents"] = emitter.shape_extents;
     emitter_node["velocity_min"] = emitter.velocity_min;
     emitter_node["velocity_max"] = emitter.velocity_max;

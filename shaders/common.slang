@@ -14,6 +14,19 @@ struct aabb {
   float4 max;
 }; // struct aabb
 
+struct dispatch_indirect_command {
+  uint group_count_x;
+  uint group_count_y;
+  uint group_count_z;
+}; // struct dispatch_indirect_command
+
+struct draw_indirect_command {
+  uint vertex_count;
+  uint instance_count;
+  uint first_vertex;
+  uint first_instance;
+}; // struct draw_indirect_command
+
 float radical_inverse(uint bits) {
   bits = (bits << 16u) | (bits >> 16u);
   bits = ((bits & 0x55555555u) << 1u) | ((bits & 0xAAAAAAAAu) >> 1u);

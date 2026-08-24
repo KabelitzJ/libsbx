@@ -39,8 +39,6 @@ interface shading_policy {
   static Output shade(float4 color, fs_in input);
 }; // interface shading_policy
 
-// pool[0] — additive: written straight into the shared color target, so nothing more than the
-// sampled color itself is needed.
 struct additive_shading_policy : shading_policy {
 
   typedef fs_out Output;
@@ -55,10 +53,6 @@ struct additive_shading_policy : shading_policy {
 
 }; // struct additive_shading_policy
 
-// pool[1] — alpha blend: written into the WBOIT accumulator/revealage targets shared with mesh
-// transparency (transparent_accumulate_pass), using the exact same McGuire/Bavoil weight function
-// shaders/pbr/geometry.slang's transparent_shading_policy already implements — kept identical on
-// purpose so both categories composite correctly against each other in one resolve.
 struct alpha_blend_shading_policy : shading_policy {
 
   typedef transparent_fs_out Output;
@@ -108,37 +102,33 @@ float2 rotate(float2 position, float rotation) {
   );
 }
 
-// Procedural camera-facing billboard quad — no vertex/index buffer, same trick opaque/transparent
-// mesh rendering uses SV_VertexID for, just with 6 vertices instead of pulling from a mesh buffer.
 [shader("vertex")]
 vs_out vertex_main(vs_in input) {
   frame_data frame = *push.frame;
 
   uint slot = push.alive_list[input.instance_id];
-  particle p = push.particles[slot];
-  emitter_instance e = push.emitters[p.emitter_slot];
+  particle particle = push.particles[slot];
+  emitter_instance emitter = push.emitters[particle.emitter_slot];
 
-  float t = clamp(p.age / max(p.lifetime, 0.0001), 0.0, 1.0);
-  float4 color = lerp(e.start_color, e.end_color, t);
+  float t = clamp(particle.age / max(particle.lifetime, 0.0001), 0.0, 1.0);
+  float4 color = lerp(emitter.start_color, emitter.end_color, t);
 
   int index = quad_indices[input.vertex_id];
   float2 local_position = quad_vertices[index];
 
-  // Camera-facing billboard: extract the camera's right/up axes from the view matrix's inverse
-  // (== transpose, since it's an orthonormal rotation) instead of carrying a separate camera basis.
   float3x3 inverse_view = transpose((float3x3)frame.view);
   float3 camera_right = normalize(mul(inverse_view, float3(1.0, 0.0, 0.0)));
   float3 camera_up = normalize(mul(inverse_view, float3(0.0, 1.0, 0.0)));
 
-  float2 rotated = rotate(local_position, p.rotation);
-  float3 offset = camera_right * rotated.x * p.size + camera_up * rotated.y * p.size;
-  float3 world_position = p.position + offset;
+  float2 rotated = rotate(local_position, particle.rotation);
+  float3 offset = camera_right * rotated.x * particle.size + camera_up * rotated.y * particle.size;
+  float3 world_position = particle.position + offset;
 
   vs_out output;
   output.sv_position = mul(frame.projection, mul(frame.view, float4(world_position, 1.0)));
   output.uv = local_position * 0.5 + 0.5;
   output.color = color;
-  output.texture_index = e.texture_index;
+  output.texture_index = emitter.texture_index;
 
   return output;
 }
@@ -148,12 +138,9 @@ Policy::Output fragment_main<Policy : shading_policy>(fs_in input) {
   float4 color = input.color;
 
   if (input.texture_index != particle_texture_index_none) {
-    // An authored texture's own alpha defines the sprite's shape — no procedural mask needed.
     SamplerState sampler = samplers[push.sampler_index];
     color *= textures[NonUniformResourceIndex(input.texture_index)].Sample(sampler, input.uv);
   } else {
-    // No texture assigned (the common case for additive fire/spark-style emitters) — fall back to
-    // a soft circular falloff from the quad center.
     float distance_from_center = length(input.uv * 2.0 - 1.0);
     float mask = saturate(1.0 - smoothstep(0.7, 1.0, distance_from_center));
     color.a *= mask;

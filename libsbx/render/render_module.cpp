@@ -10,8 +10,6 @@
 #include <map>
 #include <vector>
 
-#include <libsbx/utility/logger.hpp>
-
 #include <libsbx/memory/alignment.hpp>
 
 #include <libsbx/math/vector3.hpp>
@@ -47,6 +45,7 @@
 #include <libsbx/render/tonemap_pass.hpp>
 #include <libsbx/render/transparent_accumulate_pass.hpp>
 #include <libsbx/render/transparent_resolve_pass.hpp>
+#include <libsbx/render/particle_simulate_pass.hpp>
 #include <libsbx/render/particle_draw_pass.hpp>
 
 namespace sbx::render {
@@ -102,36 +101,17 @@ struct transparent_entry {
 render_module::render_module() {
   _ensure_resources();
 
-  _particle_pools[particle_additive_pool_index] = std::make_unique<particle_pool>(particle_pool::create_info{
+  _particle_pools[particle_pool_additive] = std::make_unique<particle_pool>(particle_pool::create_info{
     .max_particles = 4096u,
     .max_emitter_instances = 64u,
     .name = "Additive Particle Pool"
   });
 
-  _particle_pools[particle_alpha_pool_index] = std::make_unique<particle_pool>(particle_pool::create_info{
+  _particle_pools[particle_pool_alpha_blend] = std::make_unique<particle_pool>(particle_pool::create_info{
     .max_particles = 4096u,
     .max_emitter_instances = 64u,
     .name = "Alpha Blend Particle Pool"
   });
-
-  _particle_simulate_pass = std::make_unique<particle_simulate_pass>();
-
-  for (auto pool_index = std::uint32_t{0u}; pool_index < 2u; ++pool_index) {
-    const auto capacity = _particle_pools[pool_index]->max_emitter_instances();
-
-    auto& pool_state = _particle_slot_pools[pool_index];
-
-    pool_state.free_list.resize(capacity);
-    // Reversed so slot 0 is the first one handed out — purely cosmetic (free_list is a stack,
-    // any order is correct), but makes gpu_slot assignment easier to read while debugging.
-    for (auto slot = std::uint32_t{0u}; slot < capacity; ++slot) {
-      pool_state.free_list[slot] = capacity - 1u - slot;
-    }
-
-    pool_state.drain_timer.assign(capacity, -1.0f);
-    pool_state.lifetime_max.assign(capacity, 0.0f);
-    pool_state.claimed_last_frame.assign(capacity, false);
-  }
 
   _passes.push_back(std::make_unique<depth_pre_pass>());
   _passes.push_back(std::make_unique<light_culling_pass>());
@@ -139,6 +119,7 @@ render_module::render_module() {
   _passes.push_back(std::make_unique<skybox_pass>());
   _passes.push_back(std::make_unique<grid_pass>());
   _passes.push_back(std::make_unique<transparent_accumulate_pass>());
+  _passes.push_back(std::make_unique<particle_simulate_pass>(*_particle_pools[particle_pool_additive], *_particle_pools[particle_pool_alpha_blend]));
   _passes.push_back(std::make_unique<particle_draw_pass>());
   _passes.push_back(std::make_unique<transparent_resolve_pass>());
   _passes.push_back(std::make_unique<tonemap_pass>());
@@ -334,12 +315,6 @@ auto render_module::_build_packet() -> render_packet {
 
     const auto dt = static_cast<std::float_t>(core::engine::delta_time());
 
-    auto claimed_this_frame = std::array<std::vector<bool>, 2u>{};
-
-    for (auto pool_index = std::uint32_t{0u}; pool_index < 2u; ++pool_index) {
-      claimed_this_frame[pool_index].assign(_particle_pools[pool_index]->max_emitter_instances(), false);
-    }
-
     for (auto&& [entity, world, instance] : scene.query<scenes::world_transform, scenes::particle_effect_instance>().each()) {
       if (!instance.effect.is_valid()) {
         continue;
@@ -372,21 +347,17 @@ auto render_module::_build_packet() -> render_packet {
           continue;
         }
 
-        const auto pool_index = (definition.blend_mode == assets::particle_blend_mode::alpha_blend) ? particle_alpha_pool_index : particle_additive_pool_index;
-        auto& pool_state = _particle_slot_pools[pool_index];
+        const auto pool_index = (definition.blend_mode == assets::particle_blend_mode::alpha_blend) ? particle_pool_alpha_blend : particle_pool_additive;
+        auto& pool = *_particle_pools[pool_index];
 
         if (runtime.gpu_slot == scenes::particle_emitter_runtime::invalid_slot) {
-          if (pool_state.free_list.empty()) {
-            if (!pool_state.exhaustion_logged) {
-              utility::logger<"render">::warn("Particle emitter-instance pool {} exhausted ({} slots) — new emitters won't spawn until one frees up", pool_index, _particle_pools[pool_index]->max_emitter_instances());
-              pool_state.exhaustion_logged = true;
-            }
+          const auto claimed = pool.claim_slot();
 
+          if (!claimed) {
             continue;
           }
 
-          runtime.gpu_slot = pool_state.free_list.back();
-          pool_state.free_list.pop_back();
+          runtime.gpu_slot = *claimed;
         }
 
         // burst_count only ever contributes on the first frame of a given activation (the frame a
@@ -432,35 +403,18 @@ auto render_module::_build_packet() -> render_packet {
         data.shape_extents = definition.shape_extents;
         data.texture_index = texture_index;
 
-        claimed_this_frame[pool_index][runtime.gpu_slot] = true;
-        pool_state.lifetime_max[runtime.gpu_slot] = definition.lifetime_max;
+        pool.keep_alive(runtime.gpu_slot, definition.lifetime_max);
 
         packet.particle_emitters.push_back(particle_emitter_snapshot{pool_index, runtime.gpu_slot, data});
       }
     }
 
-    // Slots claimed last frame but not this frame just lost their emitter (stopped, or the
-    // entity/component was destroyed) — drain them for lifetime_max seconds before recycling.
-    for (auto pool_index = std::uint32_t{0u}; pool_index < 2u; ++pool_index) {
-      auto& pool_state = _particle_slot_pools[pool_index];
-
-      for (auto slot = std::uint32_t{0u}; slot < pool_state.claimed_last_frame.size(); ++slot) {
-        if (pool_state.claimed_last_frame[slot] && !claimed_this_frame[pool_index][slot]) {
-          pool_state.drain_timer[slot] = pool_state.lifetime_max[slot];
-        }
-
-        if (pool_state.drain_timer[slot] >= 0.0f) {
-          pool_state.drain_timer[slot] -= dt;
-
-          if (pool_state.drain_timer[slot] <= 0.0f) {
-            pool_state.drain_timer[slot] = -1.0f;
-            pool_state.free_list.push_back(slot);
-          }
-        }
-      }
-
-      pool_state.claimed_last_frame = std::move(claimed_this_frame[pool_index]);
-    }
+    // Once per pool per frame, after every keep_alive() call above: any slot claimed last frame
+    // but not kept alive this frame just lost its emitter (stopped, or the owning entity/component
+    // was destroyed) and starts draining before it's recycled onto the free-list — see
+    // particle_pool::tick's doc comment for why the delay matters.
+    _particle_pools[particle_pool_additive]->tick(dt);
+    _particle_pools[particle_pool_alpha_blend]->tick(dt);
   }
 
   return packet;
@@ -475,48 +429,11 @@ auto render_module::_consume_packet(const render_packet& packet) -> void {
   auto& frame_context = graphics_module.frame_context();
   auto& upload_context = graphics_module.upload_context();
 
-  // Particle compute chain: its own command buffer/submission, gated by its own timeline
-  // semaphore, run before this frame's main command buffer even begins recording — see
-  // particle_simulate_pass.hpp for why this can't just be another entry in _passes.
-  {
-    const auto dt = static_cast<std::float_t>(core::engine::delta_time());
-    const auto time = static_cast<std::float_t>(core::engine::time());
-
-    auto& additive_pool = *_particle_pools[particle_additive_pool_index];
-    auto& alpha_pool = *_particle_pools[particle_alpha_pool_index];
-
-    // packet.particle_emitters was built by _build_packet() on the main thread (the only place
-    // that's allowed to touch the ECS — see this class's doc comment); every slot in it was
-    // already claimed from this pool's free-list there too. This thread just writes the data and
-    // turns each non-zero particles_to_emit into an emit.slang dispatch request.
-    auto additive_emits = std::vector<particle_simulate_pass::emit_request>{};
-    auto alpha_emits = std::vector<particle_simulate_pass::emit_request>{};
-
-    for (const auto& snapshot : packet.particle_emitters) {
-      auto& pool = *_particle_pools[snapshot.pool_index];
-      pool.write_emitter_instance(snapshot.gpu_slot, snapshot.data);
-
-      if (snapshot.data.particles_to_emit == 0u) {
-        continue;
-      }
-
-      auto& emits = (snapshot.pool_index == particle_alpha_pool_index) ? alpha_emits : additive_emits;
-      emits.push_back(particle_simulate_pass::emit_request{snapshot.gpu_slot, snapshot.data.particles_to_emit});
-    }
-
-    _particle_last_result = _particle_simulate_pass->execute(additive_pool, additive_emits, alpha_pool, alpha_emits, dt, time);
-  }
-
   auto command_buffer = frame_context.begin_frame();
 
   if (!command_buffer) {
     return;
   }
-
-  // The main frame's particle_draw_pass reads the buffers particle_simulate_pass just finished
-  // writing above — this is the wait that actually prevents that read from racing those writes
-  // (same-queue submission order alone doesn't guarantee it; see particle_simulate_pass.hpp).
-  frame_context.add_wait(_particle_simulate_pass->timeline(), _particle_last_result.signaled_value, VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT);
 
   {
     SBX_PROFILE_GPU_SCOPE((*command_buffer), "render_module::render");
@@ -926,11 +843,13 @@ auto render_module::_prepare_frame(render_context& context) -> void {
   context.cluster_light_index_address = data.cluster_light_index_address;
   context.cluster_counter_address = _cluster_counter_addresses[context.slot];
 
-  // particle_simulate_pass already finished this frame's compute chain by the time this runs (see
-  // _consume_packet) — write_index picks out the alive list it just built.
-  const auto& additive_pool = *_particle_pools[particle_additive_pool_index];
-  const auto& alpha_pool = *_particle_pools[particle_alpha_pool_index];
-  const auto write_index = _particle_last_result.write_index;
+  // A pure function of the frame index — particle_simulate_pass (which runs later, as part of the
+  // pass list below) derives the exact same write_index the exact same way, so both agree on which
+  // alive_list buffer this frame's compute chain is building without either needing to hand
+  // anything off to the other.
+  const auto& additive_pool = *_particle_pools[particle_pool_additive];
+  const auto& alpha_pool = *_particle_pools[particle_pool_alpha_blend];
+  const auto write_index = static_cast<std::uint32_t>(context.frame_index % 2u);
 
   context.particle_additive_particles_address = additive_pool.particles_address();
   context.particle_additive_alive_list_address = additive_pool.alive_list_address(write_index);

@@ -87,6 +87,28 @@ public:
   }
 
   /**
+   * @brief The frame timeline semaphore itself, for a pass that needs to wait on a *previous*
+   * frame's signalled value from within the current frame's own recording (see particle_simulate_pass
+   * for the motivating case: a persistent GPU buffer read-modify-written across frames, where
+   * same-queue submission order alone doesn't guarantee frame N's reads happen after frame N-1's
+   * writes complete). Pair with @ref add_wait and @ref previous_frame_value.
+   */
+  [[nodiscard]] auto timeline() const noexcept -> VkSemaphore {
+    return _timeline;
+  }
+
+  /**
+   * @brief The timeline value the *previous* frame's submission signalled (or will signal, if
+   * it's still in flight) — the value a same-queue-overlap-sensitive pass should wait on before
+   * touching a resource frame N-1 may still be writing. Always safe: frame_index starts at 1, so
+   * this is never negative, and on the very first frame it evaluates to 0 — the semaphore's own
+   * initial value, so the wait is trivially already satisfied rather than needing a special case.
+   */
+  [[nodiscard]] auto previous_frame_value() const noexcept -> std::uint64_t {
+    return _frame_index - 1u;
+  }
+
+  /**
    * @brief Queues an extra timeline wait for the next @ref end_frame's submit, alongside its
    * existing binary `_image_available` wait. Consumed and cleared inside @ref end_frame.
    *

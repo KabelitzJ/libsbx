@@ -2,10 +2,13 @@
 // Copyright (c) 2026 Jonas Kabelitz
 #include <libsbx/render/particle_pool.hpp>
 
+#include <algorithm>
 #include <string>
 #include <vector>
 
 #include <libsbx/memory/alignment.hpp>
+
+#include <libsbx/utility/logger.hpp>
 
 #include <libsbx/core/engine.hpp>
 
@@ -15,7 +18,8 @@ namespace sbx::render {
 
 particle_pool::particle_pool(const create_info& create_info)
 : _max_particles{create_info.max_particles},
-  _max_emitter_instances{create_info.max_emitter_instances} {
+  _max_emitter_instances{create_info.max_emitter_instances},
+  _name{create_info.name} {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
   auto& registry = graphics_module.resource_registry();
 
@@ -84,9 +88,9 @@ particle_pool::particle_pool(const create_info& create_info)
 
   // One-time init: every slot starts dead, dead_list holds every index so slot 0 is the first one
   // handed out. Both buffers are host_write, so this is a direct mapped write — no queue submission
-  // needed, which matters here since the very first particle_simulate_pass submission runs before
-  // this frame's main command buffer (and its upload_context::flush) even begins — see
-  // particle_pool.hpp's class comment.
+  // needed, which matters here since particle_simulate_pass's compute chain reads them the very
+  // first time it records, before any upload_context::flush this frame — see particle_pool.hpp's
+  // class comment.
   auto initial_dead_list = std::vector<std::uint32_t>(_max_particles);
 
   for (auto index = std::uint32_t{0u}; index < _max_particles; ++index) {
@@ -100,6 +104,20 @@ particle_pool::particle_pool(const create_info& create_info)
   initial_counters.alive_count = {0u, 0u};
 
   registry.get<graphics::buffer>(_counters).write(&initial_counters, sizeof(particle_counters_gpu));
+
+  // Emitter-instance slot allocator: every slot starts free, in ascending order (any order is
+  // correct — free_list is a stack — this just makes gpu_slot assignment easier to read while
+  // debugging, same reasoning render_module's old free-list init used before this moved here).
+  _free_list.resize(_max_emitter_instances);
+
+  for (auto slot = std::uint32_t{0u}; slot < _max_emitter_instances; ++slot) {
+    _free_list[slot] = _max_emitter_instances - 1u - slot;
+  }
+
+  _drain_timer.assign(_max_emitter_instances, -1.0f);
+  _lifetime_max.assign(_max_emitter_instances, 0.0f);
+  _claimed_this_frame.assign(_max_emitter_instances, false);
+  _claimed_last_frame.assign(_max_emitter_instances, false);
 }
 
 auto particle_pool::write_emitter_instance(std::uint32_t slot, const emitter_instance_gpu& data) -> void {
@@ -107,6 +125,47 @@ auto particle_pool::write_emitter_instance(std::uint32_t slot, const emitter_ins
   auto& registry = graphics_module.resource_registry();
 
   registry.get<graphics::buffer>(_emitter_instances).write(&data, sizeof(emitter_instance_gpu), slot * memory::stride_v<emitter_instance_gpu>);
+}
+
+auto particle_pool::claim_slot() -> std::optional<std::uint32_t> {
+  if (_free_list.empty()) {
+    if (!_exhaustion_logged) {
+      utility::logger<"render">::warn("Particle pool '{}' exhausted ({} slots) — new emitters won't spawn until one frees up", _name, _max_emitter_instances);
+      _exhaustion_logged = true;
+    }
+
+    return std::nullopt;
+  }
+
+  const auto slot = _free_list.back();
+  _free_list.pop_back();
+
+  return slot;
+}
+
+auto particle_pool::keep_alive(std::uint32_t slot, std::float_t lifetime_max) -> void {
+  _claimed_this_frame[slot] = true;
+  _lifetime_max[slot] = lifetime_max;
+}
+
+auto particle_pool::tick(std::float_t dt) -> void {
+  for (auto slot = std::uint32_t{0u}; slot < _max_emitter_instances; ++slot) {
+    if (_claimed_last_frame[slot] && !_claimed_this_frame[slot]) {
+      _drain_timer[slot] = _lifetime_max[slot];
+    }
+
+    if (_drain_timer[slot] >= 0.0f) {
+      _drain_timer[slot] -= dt;
+
+      if (_drain_timer[slot] <= 0.0f) {
+        _drain_timer[slot] = -1.0f;
+        _free_list.push_back(slot);
+      }
+    }
+  }
+
+  _claimed_last_frame = _claimed_this_frame;
+  std::fill(_claimed_this_frame.begin(), _claimed_this_frame.end(), false);
 }
 
 } // namespace sbx::render

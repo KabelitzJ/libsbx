@@ -4,7 +4,6 @@
 
 #include <array>
 #include <cstring>
-#include <limits>
 #include <vector>
 
 #include <vulkan/vulkan.h>
@@ -12,10 +11,10 @@
 #include <libsbx/core/engine.hpp>
 
 #include <libsbx/graphics/graphics_module.hpp>
-#include <libsbx/graphics/devices/swapchain.hpp>
+#include <libsbx/graphics/frame_context.hpp>
+#include <libsbx/graphics/commands/command_buffer.hpp>
 #include <libsbx/graphics/resources/buffer.hpp>
 #include <libsbx/graphics/pipeline/shader_compiler.hpp>
-#include <libsbx/graphics/validate.hpp>
 
 namespace sbx::render {
 
@@ -51,22 +50,10 @@ auto compute_to_compute_barrier(VkPipelineStageFlags2 extra_dst_stage = 0u, VkAc
 
 } // namespace
 
-particle_simulate_pass::particle_simulate_pass() {
+particle_simulate_pass::particle_simulate_pass(particle_pool& additive_pool, particle_pool& alpha_pool)
+: _additive_pool{additive_pool},
+  _alpha_pool{alpha_pool} {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
-  auto& logical_device = graphics_module.logical_device();
-
-  auto type_create_info = VkSemaphoreTypeCreateInfo{};
-  type_create_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO;
-  type_create_info.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE;
-  type_create_info.initialValue = 0u;
-
-  auto semaphore_create_info = VkSemaphoreCreateInfo{};
-  semaphore_create_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-  semaphore_create_info.pNext = &type_create_info;
-
-  graphics::validate(vkCreateSemaphore(logical_device, &semaphore_create_info, nullptr, &_timeline), "vkCreateSemaphore");
-
-  logical_device.set_debug_name(_timeline, "Particle Timeline");
 
   auto& shader_cache = graphics_module.shader_cache();
   auto& compute_pipeline_cache = graphics_module.compute_pipeline_cache();
@@ -100,125 +87,53 @@ particle_simulate_pass::particle_simulate_pass() {
   });
 }
 
-particle_simulate_pass::~particle_simulate_pass() {
+auto particle_simulate_pass::execute(render_context& context) -> void {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
-  auto& logical_device = graphics_module.logical_device();
+  auto& frame_context = graphics_module.frame_context();
 
-  logical_device.wait_idle();
+  // The cross-frame guard: waits for last frame's own timeline signal before any COMPUTE_SHADER-
+  // stage work in this submission is allowed to start. See this class's doc comment for why this
+  // is enough on its own, with no second semaphore.
+  frame_context.add_wait(frame_context.timeline(), frame_context.previous_frame_value(), VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
 
-  _command_buffers.clear();
+  const auto dt = static_cast<std::float_t>(core::engine::delta_time());
+  const auto time = static_cast<std::float_t>(core::engine::time());
 
-  vkDestroySemaphore(logical_device, _timeline, nullptr);
-  _timeline = VK_NULL_HANDLE;
-}
-
-auto particle_simulate_pass::_ensure_command_buffers() -> void {
-  if (_command_buffers_initialized) {
-    return;
-  }
-
-  _command_buffers.reserve(graphics::swapchain::max_frames_in_flight);
-
-  for (auto slot = std::uint32_t{0u}; slot < graphics::swapchain::max_frames_in_flight; ++slot) {
-    _command_buffers.emplace_back(graphics::queue::type::graphics, false);
-  }
-
-  _command_buffers_initialized = true;
-}
-
-auto particle_simulate_pass::_wait_timeline(std::uint64_t value) const -> void {
-  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
-  auto& logical_device = graphics_module.logical_device();
-
-  auto wait_info = VkSemaphoreWaitInfo{};
-  wait_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO;
-  wait_info.semaphoreCount = 1u;
-  wait_info.pSemaphores = &_timeline;
-  wait_info.pValues = &value;
-
-  graphics::validate(vkWaitSemaphores(logical_device, &wait_info, std::numeric_limits<std::uint64_t>::max()), "vkWaitSemaphores");
-}
-
-auto particle_simulate_pass::execute(
-  particle_pool& additive_pool, std::span<const emit_request> additive_emits,
-  particle_pool& alpha_pool, std::span<const emit_request> alpha_emits,
-  std::float_t dt, std::float_t time
-) -> result {
-  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
-  auto& logical_device = graphics_module.logical_device();
-
-  // Deferred to here (always the render thread) rather than the constructor (the main thread) —
-  // see the class comment on _ensure_command_buffers in the header for why.
-  _ensure_command_buffers();
-
-  const auto slot = static_cast<std::uint32_t>(_frame_index % graphics::swapchain::max_frames_in_flight);
-  const auto write_index = static_cast<std::uint32_t>(_frame_index % 2u);
+  const auto write_index = static_cast<std::uint32_t>(context.frame_index % 2u);
   const auto read_index = 1u - write_index;
 
-  // Throttle CPU re-recording of a command buffer slot no more than max_frames_in_flight particle
-  // frames ahead of the GPU — same reasoning as frame_context::begin_frame's own throttle, just
-  // against this pass's own timeline instead of the frame timeline.
-  if (_frame_index > graphics::swapchain::max_frames_in_flight) {
-    _wait_timeline(_frame_index - graphics::swapchain::max_frames_in_flight);
+  auto additive_emits = std::vector<emit_request>{};
+  auto alpha_emits = std::vector<emit_request>{};
+
+  for (const auto& snapshot : context.packet->particle_emitters) {
+    auto& pool = (snapshot.pool_index == particle_pool_alpha_blend) ? _alpha_pool : _additive_pool;
+    pool.write_emitter_instance(snapshot.gpu_slot, snapshot.data);
+
+    if (snapshot.data.particles_to_emit == 0u) {
+      continue;
+    }
+
+    auto& emits = (snapshot.pool_index == particle_pool_alpha_blend) ? alpha_emits : additive_emits;
+    emits.push_back(emit_request{snapshot.gpu_slot, snapshot.data.particles_to_emit});
   }
 
-  auto& command_buffer = _command_buffers[slot];
+  bind_compute_globals(*context.command_buffer);
 
-  command_buffer.reset();
-  command_buffer.begin(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
+  _record_pool(context, _additive_pool, additive_emits, dt, time, read_index, write_index);
+  _record_pool(context, _alpha_pool, alpha_emits, dt, time, read_index, write_index);
 
-  bind_compute_globals(command_buffer);
-
-  _record_pool(command_buffer, additive_pool, additive_emits, dt, time, read_index, write_index);
-  _record_pool(command_buffer, alpha_pool, alpha_emits, dt, time, read_index, write_index);
-
-  command_buffer.end();
-
-  // Waiting on (frame_index - 1) before frame_index has ever signalled anything (the very first
-  // call) is trivially satisfied — the semaphore's initial value is 0 and frame_index starts at 1,
-  // so the wait target is 0. No special-casing needed.
-  const auto wait_value = _frame_index - 1u;
-  const auto signal_value = _frame_index;
-
-  const auto wait_semaphores = std::array<VkSemaphore, 1u>{_timeline};
-  const auto wait_values = std::array<std::uint64_t, 1u>{wait_value};
-  const auto wait_stages = std::array<VkPipelineStageFlags, 1u>{VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT};
-
-  const auto signal_semaphores = std::array<VkSemaphore, 1u>{_timeline};
-  const auto signal_values = std::array<std::uint64_t, 1u>{signal_value};
-
-  auto timeline_submit_info = VkTimelineSemaphoreSubmitInfo{};
-  timeline_submit_info.sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO;
-  timeline_submit_info.waitSemaphoreValueCount = static_cast<std::uint32_t>(wait_values.size());
-  timeline_submit_info.pWaitSemaphoreValues = wait_values.data();
-  timeline_submit_info.signalSemaphoreValueCount = static_cast<std::uint32_t>(signal_values.size());
-  timeline_submit_info.pSignalSemaphoreValues = signal_values.data();
-
-  const auto command_buffers = std::array<VkCommandBuffer, 1u>{command_buffer.handle()};
-
-  auto submit_info = VkSubmitInfo{};
-  submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-  submit_info.pNext = &timeline_submit_info;
-  submit_info.waitSemaphoreCount = static_cast<std::uint32_t>(wait_semaphores.size());
-  submit_info.pWaitSemaphores = wait_semaphores.data();
-  submit_info.pWaitDstStageMask = wait_stages.data();
-  submit_info.commandBufferCount = static_cast<std::uint32_t>(command_buffers.size());
-  submit_info.pCommandBuffers = command_buffers.data();
-  submit_info.signalSemaphoreCount = static_cast<std::uint32_t>(signal_semaphores.size());
-  submit_info.pSignalSemaphores = signal_semaphores.data();
-
-  const auto& graphics_queue = logical_device.queue<graphics::queue::type::graphics>();
-
-  graphics::validate(vkQueueSubmit(graphics_queue, 1u, &submit_info, VK_NULL_HANDLE), "vkQueueSubmit");
-
-  ++_frame_index;
-
-  return result{signal_value, write_index};
+  // Hands off to particle_draw_pass later this same command buffer — an ordinary intra-frame
+  // barrier, no semaphore needed (unlike the cross-frame wait above). Mirrors exactly how
+  // light_culling_pass hands its cluster data to opaque_pass/transparent_accumulate_pass.
+  auto barrier_to_draw = compute_to_compute_barrier(VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT, VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT);
+  context.command_buffer->memory_dependency(barrier_to_draw);
 }
 
-auto particle_simulate_pass::_record_pool(graphics::command_buffer& command_buffer, particle_pool& pool, std::span<const emit_request> emits, std::float_t dt, std::float_t time, std::uint32_t read_index, std::uint32_t write_index) -> void {
+auto particle_simulate_pass::_record_pool(render_context& context, particle_pool& pool, std::span<const emit_request> emits, std::float_t dt, std::float_t time, std::uint32_t read_index, std::uint32_t write_index) -> void {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
   auto& registry = graphics_module.resource_registry();
+
+  auto& command_buffer = *context.command_buffer;
 
   // Stage 1: build_dispatch_args — sizes stage 2's indirect dispatch to *last frame's* alive
   // count (not max_particles) and clears this frame's write-side alive counter.

@@ -5,7 +5,9 @@
 
 #include <array>
 #include <cstdint>
+#include <optional>
 #include <string>
+#include <vector>
 
 #include <libsbx/utility/noncopyable.hpp>
 
@@ -125,10 +127,39 @@ public:
    */
   auto write_emitter_instance(std::uint32_t slot, const emitter_instance_gpu& data) -> void;
 
+  /**
+   * @brief Claims a free emitter_instances slot, or std::nullopt if the pool is exhausted (logged
+   * once, not every frame, so a full pool fails loud without spamming). Call once per emitter
+   * instance the first frame it becomes active; hold the returned slot and call @ref keep_alive
+   * every frame it stays active instead of claiming again.
+   */
+  [[nodiscard]] auto claim_slot() -> std::optional<std::uint32_t>;
+
+  /**
+   * @brief Marks `slot` as still in use this frame and refreshes the lifetime @ref tick will drain
+   * it for once it stops being claimed. Call once per frame for every slot an emitter instance is
+   * still actively spawning from.
+   */
+  auto keep_alive(std::uint32_t slot, std::float_t lifetime_max) -> void;
+
+  /**
+   * @brief Call once per frame, after every @ref keep_alive for that frame. A slot claimed last
+   * frame but not this frame just lost its emitter (stopped, or the owning entity/component was
+   * destroyed) and starts draining for its last known lifetime_max seconds — long enough that any
+   * particle it spawned has aged out — before it's recycled onto the free-list. Slots already
+   * draining have their timer decremented and are recycled once it reaches zero.
+   *
+   * The delay matters: particles read `emitters[emitter_slot]` every frame (in both simulate.slang
+   * and draw.slang), so handing the slot to a new owner while old particles are still alive would
+   * visibly corrupt them mid-flight.
+   */
+  auto tick(std::float_t dt) -> void;
+
 private:
 
   std::uint32_t _max_particles;
   std::uint32_t _max_emitter_instances;
+  std::string _name;
 
   graphics::buffer_handle _particles{};
   graphics::buffer_handle _dead_list{};
@@ -145,6 +176,15 @@ private:
   graphics::buffer::address_type _dispatch_args_address{};
   graphics::buffer::address_type _draw_args_address{};
   graphics::buffer::address_type _emitter_instances_address{};
+
+  // Emitter-instance slot allocator — see claim_slot/keep_alive/tick. Sized to
+  // _max_emitter_instances at construction.
+  std::vector<std::uint32_t> _free_list{};
+  std::vector<std::float_t> _drain_timer{};   // per slot; < 0 = not draining
+  std::vector<std::float_t> _lifetime_max{};  // per slot; last known lifetime_max while claimed
+  std::vector<bool> _claimed_this_frame{};
+  std::vector<bool> _claimed_last_frame{};
+  bool _exhaustion_logged{false};
 
 }; // class particle_pool
 

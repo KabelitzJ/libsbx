@@ -31,7 +31,6 @@
 #include <libsbx/render/render_pass.hpp>
 #include <libsbx/render/render_thread.hpp>
 #include <libsbx/render/particle_pool.hpp>
-#include <libsbx/render/particle_simulate_pass.hpp>
 
 namespace sbx::render {
 
@@ -149,36 +148,13 @@ private:
   std::array<graphics::buffer::address_type, graphics::swapchain::max_frames_in_flight> _cluster_counter_addresses{};
 
   // pool[0] = additive, pool[1] = alpha blend — see particle_pool.hpp for why the split is by
-  // blend mode rather than one pool per emitter.
-  inline static constexpr auto particle_additive_pool_index = std::uint32_t{0u};
-  inline static constexpr auto particle_alpha_pool_index = std::uint32_t{1u};
-
+  // blend mode rather than one pool per emitter. Indexed with particle_pool_additive/
+  // particle_pool_alpha_blend (particle_data.hpp) — the same constants particle_simulate_pass uses
+  // to split render_packet::particle_emitters by pool. particle_simulate_pass/particle_draw_pass
+  // (both owned via _passes, not held separately here) own the rest of the particle-specific
+  // per-frame work; render_module's only remaining job is owning the two pools and extracting
+  // particle_emitter_snapshots from the ECS in _build_packet(), same as every other packet field.
   std::array<std::unique_ptr<particle_pool>, 2u> _particle_pools{};
-  std::unique_ptr<particle_simulate_pass> _particle_simulate_pass{};
-  particle_simulate_pass::result _particle_last_result{};
-
-  /**
-   * @brief Owns one pool's emitter_instances free-list — allocation, and a delayed release so a
-   * slot is never handed to a new emitter while particles from its previous owner might still be
-   * alive (they read emitters[emitter_slot] every frame in both simulate.slang and draw.slang, so
-   * an early reuse would visibly corrupt them mid-flight).
-   *
-   * Built entirely from render_module::_build_packet()'s own frame-to-frame bookkeeping: a slot
-   * that was claimed last frame but isn't claimed this frame (its emitter stopped, or the owning
-   * entity/component was destroyed) starts draining for `lifetime_max[slot]` seconds — the longest
-   * a particle it spawned could still be alive — before going back on free_list. No explicit
-   * "on stop"/"on destroy" hook is needed for this: _build_packet just compares this frame's
-   * claimed set against last frame's every time.
-   */
-  struct particle_slot_pool_state {
-    std::vector<std::uint32_t> free_list{};
-    std::vector<std::float_t> drain_timer{};   // per slot; < 0 = not draining
-    std::vector<std::float_t> lifetime_max{};  // per slot; last known lifetime_max while claimed
-    std::vector<bool> claimed_last_frame{};
-    bool exhaustion_logged{false};
-  }; // struct particle_slot_pool_state
-
-  std::array<particle_slot_pool_state, 2u> _particle_slot_pools{};
 
 }; // class render_module
 

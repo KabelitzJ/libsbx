@@ -28,10 +28,12 @@ namespace sbx::render {
  *    the existing, unmodified transparent_resolve_pass in one pass, with no separate resolve step
  *    and no unsorted-order gap between the two categories.
  *
- * Unlike particle_simulate_pass, this *is* a normal render_pass: it only reads the buffers
- * particle_simulate_pass already finished writing earlier this frame (via the timeline wait
- * render_module registers with frame_context::add_wait), so it fits the shared per-frame command
- * buffer like every other pass.
+ * A normal render_pass, like particle_simulate_pass: it only reads the buffers
+ * particle_simulate_pass finished writing earlier this same command buffer, handed off via an
+ * ordinary intra-frame VkMemoryBarrier2 at the end of that pass's execute() — no semaphore
+ * involved for that part. particle_simulate_pass's own cross-*frame* wait (registered on
+ * frame_context's timeline) is what actually keeps this pass's reads from racing the *previous*
+ * frame's writes to the same buffers.
  */
 class particle_draw_pass final : public render_pass {
 

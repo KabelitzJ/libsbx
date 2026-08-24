@@ -11,6 +11,13 @@
 
 namespace sbx::render {
 
+// Which particle_pool (see particle_pool.hpp) an emitter's particles live in. Shared by
+// render_module (which owns the two pools, indexed by these), particle_simulate_pass (which
+// splits render_packet::particle_emitters by this index) and particle_emitter_snapshot::pool_index
+// itself — one definition instead of the same 0/1 convention duplicated in each.
+inline static constexpr auto particle_pool_additive = std::uint32_t{0u};
+inline static constexpr auto particle_pool_alpha_blend = std::uint32_t{1u};
+
 /**
  * @brief One GPU-resident particle. Byte-mirrored in shaders/particles/particle_data.slang —
  * keep both in sync by hand, field for field, whenever either changes.

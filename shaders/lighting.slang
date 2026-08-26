@@ -97,19 +97,21 @@ lighting_output evaluate_lighting(lighting_input input) {
 
   for (uint i = 0u; i < input.frame_data.directional_light_count; ++i) {
     light_data light = input.frame_data.lights[i];
+
     float3 l = normalize(-light.direction.xyz);
     float3 radiance = light.color.rgb * light.color.a;
+
     lo += brdf(n, v, l, albedo, f0, roughness, metallic) * radiance;
   }
 
   float view_z = mul(input.frame_data.view, float4(input.position, 1.0)).z;
   float depth_slice = log2(max(-view_z, 0.0001)) * input.frame_data.cluster_scale + input.frame_data.cluster_bias;
-  uint slice = uint(clamp(depth_slice, 0.0, float(cluster_dim_z - 1u)));
+  uint slice = uint(clamp(depth_slice, 0.0, float(cluster_dimensions.z - 1u)));
 
   uint2 tile = uint2(input.sv_position.xy / input.frame_data.cluster_tile_size);
-  tile = min(tile, uint2(cluster_dim_x - 1u, cluster_dim_y - 1u));
+  tile = min(tile, uint2(cluster_dimensions.x - 1u, cluster_dimensions.y - 1u));
 
-  uint cluster_id = tile.x + cluster_dim_x * (tile.y + cluster_dim_y * slice);
+  uint cluster_id = tile.x + cluster_dimensions.x * (tile.y + cluster_dimensions.y * slice);
   range range = input.frame_data.cluster_ranges[cluster_id];
 
   for (uint c = 0u; c < range.count; ++c) {
@@ -125,10 +127,12 @@ lighting_output evaluate_lighting(lighting_input input) {
 
     if (light.type == light_type::spot) {
       float cos_angle = dot(-l, normalize(light.direction.xyz));
+
       attenuation *= saturate((cos_angle - light.outer_cos) / max(light.inner_cos - light.outer_cos, 0.0001));
     }
 
     float3 radiance = light.color.rgb * light.color.a * attenuation;
+
     lo += brdf(n, v, l, albedo, f0, roughness, metallic) * radiance;
   }
 

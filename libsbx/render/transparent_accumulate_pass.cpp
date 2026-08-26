@@ -89,10 +89,10 @@ auto transparent_accumulate_pass::execute(render_context& context) -> void {
   auto& registry = graphics_module.resource_registry();
 
   auto& depth = registry.get<graphics::image>(context.depth);
-  auto& accum_msaa = registry.get<graphics::image>(context.accum_msaa);
-  auto& accum = registry.get<graphics::image>(context.accum);
-  auto& reveal_msaa = registry.get<graphics::image>(context.reveal_msaa);
-  auto& reveal = registry.get<graphics::image>(context.reveal);
+  auto& accumulator_msaa = registry.get<graphics::image>(context.accumulator_msaa);
+  auto& accumulator = registry.get<graphics::image>(context.accumulator);
+  auto& revealage_msaa = registry.get<graphics::image>(context.revealage_msaa);
+  auto& revealage = registry.get<graphics::image>(context.revealage);
 
   // Fresh-write barriers, not continuation ones — these targets are cleared and written for the
   // first time this frame, same pattern as opaque_pass's color_msaa/color barriers. No depth
@@ -112,36 +112,36 @@ auto transparent_accumulate_pass::execute(render_context& context) -> void {
     context.command_buffer->transition_image_layout(barrier);
   };
 
-  fresh_write_barrier(accum_msaa);
-  fresh_write_barrier(accum);
-  fresh_write_barrier(reveal_msaa);
-  fresh_write_barrier(reveal);
+  fresh_write_barrier(accumulator_msaa);
+  fresh_write_barrier(accumulator);
+  fresh_write_barrier(revealage_msaa);
+  fresh_write_barrier(revealage);
 
   auto accum_attachment = VkRenderingAttachmentInfo{};
   accum_attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-  accum_attachment.imageView = accum_msaa.view();
+  accum_attachment.imageView = accumulator_msaa.view();
   accum_attachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
   accum_attachment.resolveMode = VK_RESOLVE_MODE_AVERAGE_BIT;
-  accum_attachment.resolveImageView = accum.view();
+  accum_attachment.resolveImageView = accumulator.view();
   accum_attachment.resolveImageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
   accum_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
   accum_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
   accum_attachment.clearValue.color = VkClearColorValue{{0.0f, 0.0f, 0.0f, 0.0f}};
 
-  auto reveal_attachment = VkRenderingAttachmentInfo{};
-  reveal_attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-  reveal_attachment.imageView = reveal_msaa.view();
-  reveal_attachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-  reveal_attachment.resolveMode = VK_RESOLVE_MODE_AVERAGE_BIT;
-  reveal_attachment.resolveImageView = reveal.view();
-  reveal_attachment.resolveImageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-  reveal_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-  reveal_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+  auto revealage_attachment = VkRenderingAttachmentInfo{};
+  revealage_attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+  revealage_attachment.imageView = revealage_msaa.view();
+  revealage_attachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+  revealage_attachment.resolveMode = VK_RESOLVE_MODE_AVERAGE_BIT;
+  revealage_attachment.resolveImageView = revealage.view();
+  revealage_attachment.resolveImageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+  revealage_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+  revealage_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
   // Revealage starts at 1 ("fully see-through" / background 100% visible) and decreases
   // multiplicatively as transparent layers accumulate — see the blend state above.
-  reveal_attachment.clearValue.color = VkClearColorValue{{1.0f, 0.0f, 0.0f, 0.0f}};
+  revealage_attachment.clearValue.color = VkClearColorValue{{1.0f, 0.0f, 0.0f, 0.0f}};
 
-  const auto color_attachments = std::array{accum_attachment, reveal_attachment};
+  const auto color_attachments = std::array{accum_attachment, revealage_attachment};
 
   auto depth_attachment = VkRenderingAttachmentInfo{};
   depth_attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;

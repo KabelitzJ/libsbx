@@ -79,12 +79,6 @@ private:
 
   inline static constexpr auto light_capacity = std::uint32_t{256u};
   inline static constexpr auto transform_capacity = std::uint32_t{16384u};
-
-  inline static constexpr auto cluster_dim_x = std::uint32_t{16u};
-  inline static constexpr auto cluster_dim_y = std::uint32_t{9u};
-  inline static constexpr auto cluster_dim_z = std::uint32_t{24u};
-  inline static constexpr auto cluster_count = cluster_dim_x * cluster_dim_y * cluster_dim_z;
-
   inline static constexpr auto cluster_light_index_capacity = std::uint32_t{65536u};
 
   auto _ensure_resources() -> void;
@@ -110,11 +104,11 @@ private:
   std::uint32_t _color_index{0u};
 
   graphics::image_handle _accum_image{};
-  graphics::image_handle _accum_msaa_image{};
-  std::uint32_t _accum_index{0u};
-  graphics::image_handle _reveal_image{};
-  graphics::image_handle _reveal_msaa_image{};
-  std::uint32_t _reveal_index{0u};
+  graphics::image_handle _accumulator_msaa_image{};
+  std::uint32_t _accumulator_index{0u};
+  graphics::image_handle _revealage_image{};
+  graphics::image_handle _revealage_msaa_image{};
+  std::uint32_t _revealage_index{0u};
   math::vector2u _target_extent{};
   math::vector2u _viewport_extent{0u, 0u};
 
@@ -147,13 +141,6 @@ private:
   graphics::buffer_handle _cluster_counter_buffer{};
   std::array<graphics::buffer::address_type, graphics::swapchain::max_frames_in_flight> _cluster_counter_addresses{};
 
-  // pool[0] = additive, pool[1] = alpha blend — see particle_pool.hpp for why the split is by
-  // blend mode rather than one pool per emitter. Indexed with particle_pool_additive/
-  // particle_pool_alpha_blend (particle_data.hpp) — the same constants particle_simulate_pass uses
-  // to split render_packet::particle_emitters by pool. particle_simulate_pass/particle_draw_pass
-  // (both owned via _passes, not held separately here) own the rest of the particle-specific
-  // per-frame work; render_module's only remaining job is owning the two pools and extracting
-  // particle_emitter_snapshots from the ECS in _build_packet(), same as every other packet field.
   std::array<std::unique_ptr<particle_pool>, 2u> _particle_pools{};
 
 }; // class render_module

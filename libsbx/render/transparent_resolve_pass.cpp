@@ -21,8 +21,8 @@
 namespace sbx::render {
 
 struct transparent_resolve_push {
-  std::uint32_t accum_index;
-  std::uint32_t reveal_index;
+  std::uint32_t accumulator_index;
+  std::uint32_t revealage_index;
   std::uint32_t sampler_index;
 }; // struct transparent_resolve_push
 
@@ -71,10 +71,10 @@ auto transparent_resolve_pass::execute(render_context& context) -> void {
   auto& bindless_table = graphics_module.bindless_table();
 
   auto& color = registry.get<graphics::image>(context.color);
-  auto& accum = registry.get<graphics::image>(context.accum);
-  auto& reveal = registry.get<graphics::image>(context.reveal);
+  auto& accumulator = registry.get<graphics::image>(context.accumulator);
+  auto& revealage = registry.get<graphics::image>(context.revealage);
 
-  // accum/reveal: transparent_accumulate_pass's writes -> this pass's sampled reads.
+  // accumulator/revealage: transparent_accumulate_pass's writes -> this pass's sampled reads.
   const auto to_read = [&](graphics::image& image) {
     auto barrier = graphics::command_buffer::image_transition_data{};
     barrier.image = image;
@@ -89,8 +89,8 @@ auto transparent_resolve_pass::execute(render_context& context) -> void {
     context.command_buffer->transition_image_layout(barrier);
   };
 
-  to_read(accum);
-  to_read(reveal);
+  to_read(accumulator);
+  to_read(revealage);
 
   // Continuation barrier, not a fresh transition — color is already color_attachment_optimal
   // (grid_pass wrote it this frame); this pass both blend-reads and writes it.
@@ -125,7 +125,7 @@ auto transparent_resolve_pass::execute(render_context& context) -> void {
 
   context.command_buffer->bind_pipeline(*_pipeline);
 
-  auto values = transparent_resolve_push{context.accum_index, context.reveal_index, context.sampler_index};
+  auto values = transparent_resolve_push{context.accumulator_index, context.revealage_index, context.sampler_index};
   auto range = std::array<std::byte, graphics::bindless_table::push_constant_size>{};
   std::memcpy(range.data(), &values, sizeof(values));
 

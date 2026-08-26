@@ -22,7 +22,7 @@ namespace sbx::render {
  *    ADD blend) — additive content is commutative under blending so it never needs OIT, and this
  *    ordering puts it behind whatever transparent_resolve_pass composites on top next, same as
  *    skybox_pass/grid_pass already do for opaque-ish content.
- *  - pool[1] (alpha blend) draws into the *same* accum/reveal WBOIT targets
+ *  - pool[1] (alpha blend) draws into the *same* accumulator/revealage WBOIT targets
  *    transparent_accumulate_pass just wrote (continuation write, not a fresh clear), reusing its
  *    exact blend state — so mesh transparency and alpha-blend particles get resolved together by
  *    the existing, unmodified transparent_resolve_pass in one pass, with no separate resolve step

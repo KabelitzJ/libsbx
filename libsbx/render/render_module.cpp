@@ -230,9 +230,6 @@ auto render_module::_build_packet() -> render_packet {
       const auto pipeline_id = material->is_double_sided() ? 1u : 0u;
 
       if (material->alpha() == assets::alpha_mode::blend) {
-        // WBOIT is order-independent, so unlike the opaque bucket's back-to-front-sensitive
-        // naive blending of old, a double-sided object needs only one draw (pipeline_id 1,
-        // cull_mode::none) instead of a sorted front/back pair.
         transparent.push_back(transparent_entry{renderer.mesh, index, material, pipeline_id, world.matrix});
       } else {
         auto& bucket = opaque[mesh_key{renderer.mesh->id(), index, material->id()}];
@@ -307,111 +304,94 @@ auto render_module::_build_packet() -> render_packet {
     out.outer_cos = std::cos(light.outer_angle);
   }
 
-  // Particle emitter extraction — ECS access happens only here (main thread), per this class's own
-  // threading contract (see the class doc comment): _consume_packet (render thread) only ever
-  // reads packet.particle_emitters, never the scene itself.
-  {
-    auto& assets_module = core::engine::get_module<assets::assets_module>();
+  auto& assets_module = core::engine::get_module<assets::assets_module>();
 
-    const auto delta_time = static_cast<std::float_t>(core::engine::delta_time());
+  const auto delta_time = static_cast<std::float_t>(core::engine::delta_time());
 
-    for (auto&& [entity, world, instance] : scene.query<scenes::world_transform, scenes::particle_effect>().each()) {
-      if (!instance.effect.is_valid()) {
+  for (auto&& [entity, world, instance] : scene.query<scenes::world_transform, scenes::particle_effect>().each()) {
+    if (!instance.effect.is_valid()) {
+      continue;
+    }
+
+    const auto& emitters = instance.effect->emitters();
+
+    if (instance.emitters.size() < emitters.size()) {
+      instance.emitters.resize(emitters.size());
+    }
+
+    instance.elapsed += delta_time;
+
+    const auto is_playing = instance.playback == scenes::particle_playback_state::playing;
+
+    for (auto index = std::size_t{0u}; index < emitters.size(); ++index) {
+      const auto& emitter = emitters[index];
+      auto& runtime = instance.emitters[index];
+
+      if (!is_playing) {
+        runtime.slot = scenes::particle_emitter::invalid_slot;
+        runtime.emission_accumulator = 0.0f;
+        runtime.burst_fired = false;
+
         continue;
       }
 
-      const auto& emitters = instance.effect->emitters();
+      const auto pool_index = (emitter.blend_mode == assets::emitter_blend_mode::alpha_blend) ? particle_pool_alpha_blend : particle_pool_additive;
+      auto& pool = *_particle_pools[pool_index];
 
-      if (instance.emitters.size() < emitters.size()) {
-        instance.emitters.resize(emitters.size());
-      }
+      if (runtime.slot == scenes::particle_emitter::invalid_slot) {
+        const auto claimed = pool.claim_slot();
 
-      instance.elapsed += delta_time;
-
-      const auto is_playing = instance.playback == scenes::particle_playback_state::playing;
-
-      for (auto index = std::size_t{0u}; index < emitters.size(); ++index) {
-        const auto& emitter = emitters[index];
-        auto& runtime = instance.emitters[index];
-
-        if (!is_playing) {
-          // Not claiming this slot below (if it already has one) is what starts the drain. Also
-          // forget the slot and reset burst_fired right away, not once the drain finishes: the
-          // GPU-side slot recycling is entirely keyed by slot index in render_module's own
-          // bookkeeping below, so the runtime doesn't need to remember which slot it had — and
-          // dropping it now means resuming playback later claims a fresh slot and re-fires burst,
-          // instead of writing into a slot index that may since have been handed to someone else.
-          runtime.slot = scenes::particle_emitter::invalid_slot;
-          runtime.emission_accumulator = 0.0f;
-          runtime.burst_fired = false;
+        if (!claimed) {
           continue;
         }
 
-        const auto pool_index = (emitter.blend_mode == assets::emitter_blend_mode::alpha_blend) ? particle_pool_alpha_blend : particle_pool_additive;
-        auto& pool = *_particle_pools[pool_index];
-
-        if (runtime.slot == scenes::particle_emitter::invalid_slot) {
-          const auto claimed = pool.claim_slot();
-
-          if (!claimed) {
-            continue;
-          }
-
-          runtime.slot = *claimed;
-        }
-
-        // burst_count only ever contributes on the first frame of a given activation (the frame a
-        // slot is freshly claimed, or resumed after having been fully reset above) — it has no
-        // GPU-side field of its own, it's just folded into this one frame's particles_to_emit.
-        auto burst_this_frame = std::uint32_t{0u};
-
-        if (!runtime.burst_fired) {
-          burst_this_frame = emitter.burst_count;
-          runtime.burst_fired = true;
-        }
-
-        runtime.emission_accumulator += emitter.emission_rate * delta_time;
-
-        const auto continuous_to_emit = static_cast<std::uint32_t>(runtime.emission_accumulator);
-        runtime.emission_accumulator -= static_cast<std::float_t>(continuous_to_emit);
-
-        const auto particles_to_emit = continuous_to_emit + burst_this_frame;
-
-        const auto texture_index = (emitter.texture.is_valid() && assets_module.is_resident(emitter.texture)) ? emitter.texture->index() : particle_texture_index_none;
-
-        auto data = emitter_instance{};
-        data.position = math::vector3f{world.matrix[3]};
-        data.emission_rate = emitter.emission_rate;
-        data.velocity_min = emitter.velocity_min;
-        data.velocity_max = emitter.velocity_max;
-        data.lifetime_min = emitter.lifetime_min;
-        data.lifetime_max = emitter.lifetime_max;
-        data.start_color = math::vector4{emitter.start_color.r(), emitter.start_color.g(), emitter.start_color.b(), emitter.start_color.a()};
-        data.end_color = math::vector4{emitter.end_color.r(), emitter.end_color.g(), emitter.end_color.b(), emitter.end_color.a()};
-        data.size_min = emitter.size_min;
-        data.size_max = emitter.size_max;
-        data.gravity = emitter.gravity;
-        data.drag = emitter.drag;
-        data.active = 1u;
-        data.particles_to_emit = particles_to_emit;
-        data.seed = (runtime.slot * 9781u) ^ (static_cast<std::uint32_t>(index) * 6271u) ^ 0x9E3779B9u;
-        data.shape = static_cast<std::uint32_t>(emitter.shape);
-        data.shape_extents = emitter.shape_extents;
-        data.texture_index = texture_index;
-
-        pool.keep_alive(runtime.slot, emitter.lifetime_max);
-
-        packet.particle_emitters.push_back(particle_emitter_snapshot{pool_index, runtime.slot, data});
+        runtime.slot = *claimed;
       }
-    }
 
-    // Once per pool per frame, after every keep_alive() call above: any slot claimed last frame
-    // but not kept alive this frame just lost its emitter (stopped, or the owning entity/component
-    // was destroyed) and starts draining before it's recycled onto the free-list — see
-    // particle_pool::tick's doc comment for why the delay matters.
-    _particle_pools[particle_pool_additive]->tick(delta_time);
-    _particle_pools[particle_pool_alpha_blend]->tick(delta_time);
+      auto burst_this_frame = std::uint32_t{0u};
+
+      if (!runtime.burst_fired) {
+        burst_this_frame = emitter.burst_count;
+        runtime.burst_fired = true;
+      }
+
+      runtime.emission_accumulator += emitter.emission_rate * delta_time;
+
+      const auto continuous_to_emit = static_cast<std::uint32_t>(runtime.emission_accumulator);
+      runtime.emission_accumulator -= static_cast<std::float_t>(continuous_to_emit);
+
+      const auto particles_to_emit = continuous_to_emit + burst_this_frame;
+
+      const auto texture_index = (emitter.texture.is_valid() && assets_module.is_resident(emitter.texture)) ? emitter.texture->index() : particle_texture_index_none;
+
+      auto data = emitter_instance{};
+      data.position = math::vector3f{world.matrix[3]};
+      data.emission_rate = emitter.emission_rate;
+      data.velocity_min = emitter.velocity_min;
+      data.velocity_max = emitter.velocity_max;
+      data.lifetime_min = emitter.lifetime_min;
+      data.lifetime_max = emitter.lifetime_max;
+      data.start_color = math::vector4{emitter.start_color.r(), emitter.start_color.g(), emitter.start_color.b(), emitter.start_color.a()};
+      data.end_color = math::vector4{emitter.end_color.r(), emitter.end_color.g(), emitter.end_color.b(), emitter.end_color.a()};
+      data.size_min = emitter.size_min;
+      data.size_max = emitter.size_max;
+      data.gravity = emitter.gravity;
+      data.drag = emitter.drag;
+      data.active = 1u;
+      data.particles_to_emit = particles_to_emit;
+      data.seed = (runtime.slot * 9781u) ^ (static_cast<std::uint32_t>(index) * 6271u) ^ 0x9E3779B9u;
+      data.shape = static_cast<std::uint32_t>(emitter.shape);
+      data.shape_extents = emitter.shape_extents;
+      data.texture_index = texture_index;
+
+      pool.keep_alive(runtime.slot, emitter.lifetime_max);
+
+      packet.particle_emitters.push_back(particle_emitter_snapshot{pool_index, runtime.slot, data});
+    }
   }
+
+  _particle_pools[particle_pool_additive]->tick(delta_time);
+  _particle_pools[particle_pool_alpha_blend]->tick(delta_time);
 
   return packet;
 }
@@ -491,12 +471,12 @@ auto render_module::_consume_packet(const render_packet& packet) -> void {
         .color_index = _color_index,
         .scene = _scene_image,
         .scene_index = _scene_index,
-        .accum = _accum_image,
-        .accum_msaa = _accum_msaa_image,
-        .accum_index = _accum_index,
-        .reveal = _reveal_image,
-        .reveal_msaa = _reveal_msaa_image,
-        .reveal_index = _reveal_index
+        .accumulator = _accum_image,
+        .accumulator_msaa = _accumulator_msaa_image,
+        .accumulator_index = _accumulator_index,
+        .revealage = _revealage_image,
+        .revealage_msaa = _revealage_msaa_image,
+        .revealage_index = _revealage_index
       };
 
       _prepare_frame(context);
@@ -564,9 +544,9 @@ auto render_module::_ensure_resources() -> void {
 
   _scene_index = bindless_table.reserve_sampled_image();
 
-  _accum_index = bindless_table.reserve_sampled_image();
+  _accumulator_index = bindless_table.reserve_sampled_image();
 
-  _reveal_index = bindless_table.reserve_sampled_image();
+  _revealage_index = bindless_table.reserve_sampled_image();
 
   _frame_buffer = registry.emplace<graphics::buffer>(graphics::buffer::create_info{
     .size = memory::stride_v<frame_data> * graphics::swapchain::max_frames_in_flight,
@@ -608,7 +588,7 @@ auto render_module::_ensure_resources() -> void {
   }
 
   _cluster_aabb_buffer = registry.emplace<graphics::buffer>(graphics::buffer::create_info{
-    .size = memory::stride_v<cluster_aabb> * cluster_count * graphics::swapchain::max_frames_in_flight,
+    .size = memory::stride_v<cluster_aabb> * light_culling_pass::cluster_count * graphics::swapchain::max_frames_in_flight,
     .usage = graphics::buffer_usage::device_address | graphics::buffer_usage::storage,
     .memory = graphics::memory_usage::device_local,
     .name = "Cluster AABBs"
@@ -617,11 +597,11 @@ auto render_module::_ensure_resources() -> void {
   const auto cluster_aabb_base = registry.get<graphics::buffer>(_cluster_aabb_buffer).address();
 
   for (auto slot = std::size_t{0u}; slot < graphics::swapchain::max_frames_in_flight; ++slot) {
-    _cluster_aabb_addresses[slot] = cluster_aabb_base + slot * cluster_count * memory::stride_v<cluster_aabb>;
+    _cluster_aabb_addresses[slot] = cluster_aabb_base + slot * light_culling_pass::cluster_count * memory::stride_v<cluster_aabb>;
   }
 
   _cluster_range_buffer = registry.emplace<graphics::buffer>(graphics::buffer::create_info{
-    .size = memory::stride_v<cluster_range> * cluster_count * graphics::swapchain::max_frames_in_flight,
+    .size = memory::stride_v<cluster_range> * light_culling_pass::cluster_count * graphics::swapchain::max_frames_in_flight,
     .usage = graphics::buffer_usage::device_address | graphics::buffer_usage::storage,
     .memory = graphics::memory_usage::device_local,
     .name = "Cluster Ranges"
@@ -630,7 +610,7 @@ auto render_module::_ensure_resources() -> void {
   const auto cluster_range_base = registry.get<graphics::buffer>(_cluster_range_buffer).address();
 
   for (auto slot = std::size_t{0u}; slot < graphics::swapchain::max_frames_in_flight; ++slot) {
-    _cluster_range_addresses[slot] = cluster_range_base + slot * cluster_count * memory::stride_v<cluster_range>;
+    _cluster_range_addresses[slot] = cluster_range_base + slot * light_culling_pass::cluster_count * memory::stride_v<cluster_range>;
   }
 
   _cluster_light_index_buffer = registry.emplace<graphics::buffer>(graphics::buffer::create_info{
@@ -679,9 +659,9 @@ auto render_module::_resize_targets(const math::vector2u extent) -> void {
     registry.retire(_color_msaa_image, frame_index);
     registry.retire(_scene_image, frame_index);
     registry.retire(_accum_image, frame_index);
-    registry.retire(_accum_msaa_image, frame_index);
-    registry.retire(_reveal_image, frame_index);
-    registry.retire(_reveal_msaa_image, frame_index);
+    registry.retire(_accumulator_msaa_image, frame_index);
+    registry.retire(_revealage_image, frame_index);
+    registry.retire(_revealage_msaa_image, frame_index);
   }
 
   _depth_image = registry.emplace<graphics::image>(graphics::image::create_info{
@@ -710,12 +690,12 @@ auto render_module::_resize_targets(const math::vector2u extent) -> void {
 
   bindless_table.write_sampled_image(_color_index, registry.get<graphics::image>(_color_image).view());
 
-  _accum_msaa_image = registry.emplace<graphics::image>(graphics::image::create_info{
+  _accumulator_msaa_image = registry.emplace<graphics::image>(graphics::image::create_info{
     .extent = math::vector3u{extent, 1u},
     .format = graphics::format::r16g16b16a16_sfloat,
     .usage = graphics::image_usage::color_attachment,
     .samples = render_pass::sample_count,
-    .name = "Transparent Accum MSAA"
+    .name = "Transparent Accumulator MSAA"
   });
 
   _accum_image = registry.emplace<graphics::image>(graphics::image::create_info{
@@ -723,28 +703,28 @@ auto render_module::_resize_targets(const math::vector2u extent) -> void {
     .format = graphics::format::r16g16b16a16_sfloat,
     .usage = graphics::image_usage::color_attachment | graphics::image_usage::sampled,
     .samples = graphics::samples::count_1,
-    .name = "Transparent Accum Resolve"
+    .name = "Transparent Accumulator Resolve"
   });
 
-  bindless_table.write_sampled_image(_accum_index, registry.get<graphics::image>(_accum_image).view());
+  bindless_table.write_sampled_image(_accumulator_index, registry.get<graphics::image>(_accum_image).view());
 
-  _reveal_msaa_image = registry.emplace<graphics::image>(graphics::image::create_info{
+  _revealage_msaa_image = registry.emplace<graphics::image>(graphics::image::create_info{
     .extent = math::vector3u{extent, 1u},
     .format = graphics::format::r16_sfloat,
     .usage = graphics::image_usage::color_attachment,
     .samples = render_pass::sample_count,
-    .name = "Transparent Reveal MSAA"
+    .name = "Transparent Revealage MSAA"
   });
 
-  _reveal_image = registry.emplace<graphics::image>(graphics::image::create_info{
+  _revealage_image = registry.emplace<graphics::image>(graphics::image::create_info{
     .extent = math::vector3u{extent, 1u},
     .format = graphics::format::r16_sfloat,
     .usage = graphics::image_usage::color_attachment | graphics::image_usage::sampled,
     .samples = graphics::samples::count_1,
-    .name = "Transparent Reveal Resolve"
+    .name = "Transparent Revealage Resolve"
   });
 
-  bindless_table.write_sampled_image(_reveal_index, registry.get<graphics::image>(_reveal_image).view());
+  bindless_table.write_sampled_image(_revealage_index, registry.get<graphics::image>(_revealage_image).view());
 
   const auto scene_format = static_cast<graphics::format>(surface.format().format);
 
@@ -790,12 +770,12 @@ auto render_module::_prepare_frame(render_context& context) -> void {
 
   const auto& camera = context.packet->camera;
   const auto slice_ratio = std::log2(camera.far_plane / camera.near_plane);
-  const auto cluster_scale = static_cast<std::float_t>(cluster_dim_z) / slice_ratio;
-  const auto cluster_bias = -static_cast<std::float_t>(cluster_dim_z) * std::log2(camera.near_plane) / slice_ratio;
+  const auto cluster_scale = static_cast<std::float_t>(light_culling_pass::cluster_dimensions.z()) / slice_ratio;
+  const auto cluster_bias = -static_cast<std::float_t>(light_culling_pass::cluster_dimensions.z()) * std::log2(camera.near_plane) / slice_ratio;
 
   const auto cluster_tile_size = math::vector2{
-    static_cast<std::float_t>(context.extent.x()) / static_cast<std::float_t>(cluster_dim_x),
-    static_cast<std::float_t>(context.extent.y()) / static_cast<std::float_t>(cluster_dim_y)
+    static_cast<std::float_t>(context.extent.x()) / static_cast<std::float_t>(light_culling_pass::cluster_dimensions.x()),
+    static_cast<std::float_t>(context.extent.y()) / static_cast<std::float_t>(light_culling_pass::cluster_dimensions.y())
   };
 
   // Reset before this frame's light_culling_pass dispatches its atomic-reserving cull_lights.slang.

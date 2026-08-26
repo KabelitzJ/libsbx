@@ -3,6 +3,8 @@
 #ifndef LIBSBX_RENDER_LIGHT_CULLING_PASS_HPP_
 #define LIBSBX_RENDER_LIGHT_CULLING_PASS_HPP_
 
+#include <libsbx/math/vector3.hpp>
+
 #include <libsbx/memory/observer_ptr.hpp>
 
 #include <libsbx/graphics/pipeline/compute_pipeline.hpp>
@@ -31,6 +33,9 @@ namespace sbx::render {
 class light_culling_pass final : public render_pass {
 
 public:
+
+  inline static constexpr auto cluster_dimensions = math::vector3u{16u, 9u, 24u};
+  inline static constexpr auto cluster_count = cluster_dimensions.x() * cluster_dimensions.y() * cluster_dimensions.z();
 
   light_culling_pass();
 

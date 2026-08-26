@@ -73,6 +73,7 @@ vertex_output vertex_main(vertex_input input) {
   float3 world_position = particle.position + offset;
 
   vertex_output output;
+
   output.sv_position = mul(frame.projection, mul(frame.view, float4(world_position, 1.0)));
   output.uv = local_position * 0.5 + 0.5;
   output.color = color;

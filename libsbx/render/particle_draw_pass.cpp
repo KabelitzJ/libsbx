@@ -21,8 +21,6 @@
 
 namespace sbx::render {
 
-namespace {
-
 struct push_data {
   graphics::buffer::address_type frame;
   graphics::buffer::address_type particles;
@@ -31,18 +29,6 @@ struct push_data {
   std::uint32_t sampler_index;
 }; // struct push_data
 
-auto push(render_context& context, const push_data& data) -> void {
-  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
-  auto& bindless_table = graphics_module.bindless_table();
-
-  auto range = std::array<std::byte, graphics::bindless_table::push_constant_size>{};
-  std::memcpy(range.data(), &data, sizeof(data));
-
-  context.command_buffer->push_constants(bindless_table.pipeline_layout(), graphics::bindless_table::push_constant_stages, 0u, range);
-}
-
-// Continuation barrier, not a fresh transition — the target already holds this frame's content
-// (color: skybox/grid; accum/reveal: transparent_accumulate_pass) and this pass adds to it.
 auto continuation_write_barrier(graphics::image& image) -> graphics::command_buffer::image_transition_data {
   auto barrier = graphics::command_buffer::image_transition_data{};
   barrier.image = image;
@@ -56,8 +42,6 @@ auto continuation_write_barrier(graphics::image& image) -> graphics::command_buf
   barrier.layer_count = 1u;
   return barrier;
 }
-
-} // namespace
 
 particle_draw_pass::particle_draw_pass() {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
@@ -101,10 +85,6 @@ particle_draw_pass::particle_draw_pass() {
 
   const auto& alpha_shader = shader_cache.get({"shaders/particles/draw.slang", alpha_entry_points});
 
-  // Exactly transparent_accumulate_pass's blend state — same accumulator/revealage targets, same
-  // McGuire/Bavoil weight function (see draw.slang's alpha_blend_shading_policy), so
-  // transparent_resolve_pass composites mesh transparency and alpha-blend particles together
-  // without needing to know they came from different passes.
   _alpha_blend_pipeline = pipeline_cache.get(graphics::graphics_pipeline::create_info{
     .shader = alpha_shader,
     .color_formats = {render_pass::hdr_format, graphics::format::r16_sfloat},
@@ -157,8 +137,6 @@ auto particle_draw_pass::execute(render_context& context) -> void {
   depth_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
   depth_attachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
 
-  // pool[0] additive — straight into the shared color target, ahead of transparent_resolve_pass so
-  // it composites underneath whatever mesh/particle transparency resolves on top next.
   if (context.particle_additive_draw_args.is_valid()) {
     auto& color = registry.get<graphics::image>(context.color);
     auto& color_msaa = registry.get<graphics::image>(context.color_msaa);
@@ -188,7 +166,16 @@ auto particle_draw_pass::execute(render_context& context) -> void {
     bind_globals(context);
 
     context.command_buffer->bind_pipeline(*_additive_pipeline);
-    push(context, push_data{context.frame_address, context.particle_additive_particles_address, context.particle_additive_alive_list_address, context.particle_additive_emitters_address, context.sampler_index});
+
+    auto data = push_data{
+      context.frame_address, 
+      context.particle_additive_particles_address, 
+      context.particle_additive_alive_list_address, 
+      context.particle_additive_emitters_address, 
+      context.sampler_index
+    };
+
+    write_push_constants(context, data);
 
     auto& draw_args = registry.get<graphics::buffer>(context.particle_additive_draw_args);
     context.command_buffer->draw_indirect(draw_args, 0u, 1u);
@@ -196,42 +183,39 @@ auto particle_draw_pass::execute(render_context& context) -> void {
     context.command_buffer->end_rendering();
   }
 
-  // pool[1] alpha blend — into the same WBOIT accum/reveal targets transparent_accumulate_pass just
-  // wrote, as a continuation (loadOp LOAD, not CLEAR): mesh transparency and particles share one
-  // accumulator/revealage pair, resolved together by transparent_resolve_pass right after this pass.
   if (context.particle_alpha_draw_args.is_valid()) {
-    auto& accum = registry.get<graphics::image>(context.accum);
-    auto& accum_msaa = registry.get<graphics::image>(context.accum_msaa);
-    auto& reveal = registry.get<graphics::image>(context.reveal);
-    auto& reveal_msaa = registry.get<graphics::image>(context.reveal_msaa);
+    auto& accumulator = registry.get<graphics::image>(context.accumulator);
+    auto& accumulator_msaa = registry.get<graphics::image>(context.accumulator_msaa);
+    auto& revealage = registry.get<graphics::image>(context.revealage);
+    auto& revealage_msaa = registry.get<graphics::image>(context.revealage_msaa);
 
-    auto to_accum_msaa = continuation_write_barrier(accum_msaa);
+    auto to_accum_msaa = continuation_write_barrier(accumulator_msaa);
     context.command_buffer->transition_image_layout(to_accum_msaa);
 
-    auto to_reveal_msaa = continuation_write_barrier(reveal_msaa);
-    context.command_buffer->transition_image_layout(to_reveal_msaa);
+    auto to_revealage_msaa = continuation_write_barrier(revealage_msaa);
+    context.command_buffer->transition_image_layout(to_revealage_msaa);
 
     auto accum_attachment = VkRenderingAttachmentInfo{};
     accum_attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-    accum_attachment.imageView = accum_msaa.view();
+    accum_attachment.imageView = accumulator_msaa.view();
     accum_attachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
     accum_attachment.resolveMode = VK_RESOLVE_MODE_AVERAGE_BIT;
-    accum_attachment.resolveImageView = accum.view();
+    accum_attachment.resolveImageView = accumulator.view();
     accum_attachment.resolveImageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
     accum_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
     accum_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
 
-    auto reveal_attachment = VkRenderingAttachmentInfo{};
-    reveal_attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-    reveal_attachment.imageView = reveal_msaa.view();
-    reveal_attachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-    reveal_attachment.resolveMode = VK_RESOLVE_MODE_AVERAGE_BIT;
-    reveal_attachment.resolveImageView = reveal.view();
-    reveal_attachment.resolveImageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-    reveal_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
-    reveal_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    auto revealage_attachment = VkRenderingAttachmentInfo{};
+    revealage_attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+    revealage_attachment.imageView = revealage_msaa.view();
+    revealage_attachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    revealage_attachment.resolveMode = VK_RESOLVE_MODE_AVERAGE_BIT;
+    revealage_attachment.resolveImageView = revealage.view();
+    revealage_attachment.resolveImageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    revealage_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+    revealage_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
 
-    const auto color_attachments = std::array{accum_attachment, reveal_attachment};
+    const auto color_attachments = std::array{accum_attachment, revealage_attachment};
 
     auto rendering_info = VkRenderingInfo{};
     rendering_info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
@@ -245,7 +229,16 @@ auto particle_draw_pass::execute(render_context& context) -> void {
     bind_globals(context);
 
     context.command_buffer->bind_pipeline(*_alpha_blend_pipeline);
-    push(context, push_data{context.frame_address, context.particle_alpha_particles_address, context.particle_alpha_alive_list_address, context.particle_alpha_emitters_address, context.sampler_index});
+
+    auto data = push_data{
+      context.frame_address, 
+      context.particle_alpha_particles_address, 
+      context.particle_alpha_alive_list_address, 
+      context.particle_alpha_emitters_address, 
+      context.sampler_index
+    };
+
+    write_push_constants(context, data);
 
     auto& draw_args = registry.get<graphics::buffer>(context.particle_alpha_draw_args);
     context.command_buffer->draw_indirect(draw_args, 0u, 1u);

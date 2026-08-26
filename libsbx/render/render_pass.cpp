@@ -82,4 +82,13 @@ auto bind_globals(render_context& context) -> void {
   context.command_buffer->set_scissor(scissor);
 }
 
+auto bind_compute_globals(render_context& context) -> void {
+  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
+  auto& bindless_table = graphics_module.bindless_table();
+
+  const auto descriptor_set = bindless_table.descriptor_set();
+
+  vkCmdBindDescriptorSets(*context.command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, bindless_table.pipeline_layout(), 0u, 1u, &descriptor_set, 0u, nullptr);
+}
+
 } // namespace sbx::render

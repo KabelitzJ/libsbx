@@ -33,11 +33,11 @@ bool sphere_intersects_aabb(float3 center, float radius, float3 box_min, float3 
 void compute_main(compute_input input) {
   uint3 dispatch_thread_id = input.id;
 
-  if (dispatch_thread_id.x >= cluster_dim_x || dispatch_thread_id.y >= cluster_dim_y || dispatch_thread_id.z >= cluster_dim_z) {
+  if (dispatch_thread_id.x >= cluster_dimensions.x || dispatch_thread_id.y >= cluster_dimensions.y || dispatch_thread_id.z >= cluster_dimensions.z) {
     return;
   }
 
-  uint cluster_id = dispatch_thread_id.x + cluster_dim_x * (dispatch_thread_id.y + cluster_dim_y * dispatch_thread_id.z);
+  uint cluster_id = dispatch_thread_id.x + cluster_dimensions.x * (dispatch_thread_id.y + cluster_dimensions.y * dispatch_thread_id.z);
 
   frame_data frame = push.frame[0];
   aabb aabb = push.clusters[cluster_id];

@@ -55,12 +55,12 @@ struct render_context {
   graphics::image_handle scene{};
   std::uint32_t scene_index{0u};
 
-  graphics::image_handle accum{};
-  graphics::image_handle accum_msaa{};
-  std::uint32_t accum_index{0u};
-  graphics::image_handle reveal{};
-  graphics::image_handle reveal_msaa{};
-  std::uint32_t reveal_index{0u};
+  graphics::image_handle accumulator{};
+  graphics::image_handle accumulator_msaa{};
+  std::uint32_t accumulator_index{0u};
+  graphics::image_handle revealage{};
+  graphics::image_handle revealage_msaa{};
+  std::uint32_t revealage_index{0u};
 
   graphics::buffer::address_type frame_address{0u};
   graphics::buffer::address_type transform_address{0u};
@@ -73,9 +73,6 @@ struct render_context {
   graphics::buffer::address_type cluster_light_index_address{0u};
   graphics::buffer::address_type cluster_counter_address{0u};
 
-  // Particle draw pass (see particle_draw_pass.hpp): per-pool state for the alive list this
-  // frame's particle_simulate_pass just finished building. draw_args is a VkBuffer handle (not an
-  // address) since it's consumed via draw_indirect, not a shader pointer.
   graphics::buffer::address_type particle_additive_particles_address{0u};
   graphics::buffer::address_type particle_additive_alive_list_address{0u};
   graphics::buffer::address_type particle_additive_emitters_address{0u};
@@ -120,14 +117,22 @@ public:
 
 }; // class render_pass
 
-/**
- * @brief Walks a coalesced draw list: binds the pipeline on pipeline_id change and the index buffer
- * on mesh change, pushes per-draw constants, and issues instanced draws. Residency-gates each
- * command. Assumes the bindless descriptor set + viewport/scissor are already bound.
- */
 auto submit_draw_commands(render_context& context, const std::vector<draw_command>& commands, const std::array<memory::observer_ptr<graphics::graphics_pipeline>, 2u>& pipelines) -> void;
 
 auto bind_globals(render_context& context) -> void;
+
+auto bind_compute_globals(render_context& context) -> void;
+
+template<typename Type>
+auto write_push_constants(render_context& context, const Type& data) -> void {
+  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
+  auto& bindless_table = graphics_module.bindless_table();
+
+  auto range = std::array<std::byte, graphics::bindless_table::push_constant_size>{};
+  std::memcpy(range.data(), std::addressof(data), sizeof(data));
+
+  context.command_buffer->push_constants(bindless_table.pipeline_layout(), graphics::bindless_table::push_constant_stages, 0u, range);
+}
 
 } // namespace sbx::render
 

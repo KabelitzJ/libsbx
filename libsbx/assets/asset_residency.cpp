@@ -791,7 +791,9 @@ auto asset_residency::is_resident(const environment_map_handle& environment) con
 auto asset_residency::_create_default_texture(std::array<std::uint8_t, 4u> color) -> texture_handle {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 
-  const auto index = graphics_module.bindless_table().reserve_sampled_image();
+  auto& bindless_table = graphics_module.bindless_table();
+
+  const auto index = bindless_table.reserve_sampled_image();
 
   auto record = std::make_shared<texture>(texture{index});
 

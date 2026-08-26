@@ -21,8 +21,8 @@ struct fragment_output {
 }; // struct fragment_output
 
 struct push_data {
-  uint accum_index;
-  uint reveal_index;
+  uint accumulator_index;
+  uint revealage_index;
   uint sampler_index;
 }; // struct push_data
 
@@ -44,8 +44,8 @@ vertex_output vertex_main(vertex_input input) {
 fragment_output fragment_main(fragment_input input) {
   SamplerState sampler = samplers[push.sampler_index];
 
-  float4 accumulator = textures[push.accum_index].Sample(sampler, input.uv);
-  float revealage = textures[push.reveal_index].Sample(sampler, input.uv).r;
+  float4 accumulator = textures[push.accumulator_index].Sample(sampler, input.uv);
+  float revealage = textures[push.revealage_index].Sample(sampler, input.uv).r;
 
   float3 average = accumulator.rgb / max(accumulator.a, 1e-5);
 

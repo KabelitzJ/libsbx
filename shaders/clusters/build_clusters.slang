@@ -29,14 +29,14 @@ float3 view_ray(float2 ndc) {
 void compute_main(compute_input input) {
   uint3 dispatch_thread_id = input.id;
 
-  if (dispatch_thread_id.x >= cluster_dim_x || dispatch_thread_id.y >= cluster_dim_y || dispatch_thread_id.z >= cluster_dim_z) {
+  if (dispatch_thread_id.x >= cluster_dimensions.x || dispatch_thread_id.y >= cluster_dimensions.y || dispatch_thread_id.z >= cluster_dimensions.z) {
     return;
   }
 
-  uint cluster_id = dispatch_thread_id.x + cluster_dim_x * (dispatch_thread_id.y + cluster_dim_y * dispatch_thread_id.z);
+  uint cluster_id = dispatch_thread_id.x + cluster_dimensions.x * (dispatch_thread_id.y + cluster_dimensions.y * dispatch_thread_id.z);
 
-  float2 ndc_min = (float2(dispatch_thread_id.xy) / float2(cluster_dim_x, cluster_dim_y)) * 2.0 - 1.0;
-  float2 ndc_max = (float2(dispatch_thread_id.xy + uint2(1u, 1u)) / float2(cluster_dim_x, cluster_dim_y)) * 2.0 - 1.0;
+  float2 ndc_min = (float2(dispatch_thread_id.xy) / float2(cluster_dimensions.x, cluster_dimensions.y)) * 2.0 - 1.0;
+  float2 ndc_max = (float2(dispatch_thread_id.xy + uint2(1u, 1u)) / float2(cluster_dimensions.x, cluster_dimensions.y)) * 2.0 - 1.0;
 
   float3 rays[4] = {
     view_ray(float2(ndc_min.x, ndc_min.y)),
@@ -46,8 +46,8 @@ void compute_main(compute_input input) {
   };
 
   float slice_ratio = push.far_plane / push.near_plane;
-  float near_z = push.near_plane * pow(slice_ratio, float(dispatch_thread_id.z) / float(cluster_dim_z));
-  float far_z = push.near_plane * pow(slice_ratio, float(dispatch_thread_id.z + 1u) / float(cluster_dim_z));
+  float near_z = push.near_plane * pow(slice_ratio, float(dispatch_thread_id.z) / float(cluster_dimensions.z));
+  float far_z = push.near_plane * pow(slice_ratio, float(dispatch_thread_id.z + 1u) / float(cluster_dimensions.z));
 
   float3 aabb_min = float3(3.402823466e+38, 3.402823466e+38, 3.402823466e+38);
   float3 aabb_max = -aabb_min;

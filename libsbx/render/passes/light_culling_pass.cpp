@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Jonas Kabelitz
-#include <libsbx/render/light_culling_pass.hpp>
+#include <libsbx/render/passes/light_culling_pass.hpp>
 
 #include <array>
 #include <cmath>

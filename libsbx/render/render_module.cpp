@@ -36,17 +36,17 @@
 #include <libsbx/scenes/scene.hpp>
 #include <libsbx/scenes/components.hpp>
 
-#include <libsbx/render/depth_pre_pass.hpp>
-#include <libsbx/render/light_culling_pass.hpp>
-#include <libsbx/render/opaque_pass.hpp>
-#include <libsbx/render/present_pass.hpp>
-#include <libsbx/render/skybox_pass.hpp>
-#include <libsbx/render/grid_pass.hpp>
-#include <libsbx/render/tonemap_pass.hpp>
-#include <libsbx/render/transparent_accumulate_pass.hpp>
-#include <libsbx/render/transparent_resolve_pass.hpp>
-#include <libsbx/render/particle_simulate_pass.hpp>
-#include <libsbx/render/particle_draw_pass.hpp>
+#include <libsbx/render/passes/depth_pre_pass.hpp>
+#include <libsbx/render/passes/light_culling_pass.hpp>
+#include <libsbx/render/passes/opaque_pass.hpp>
+#include <libsbx/render/passes/present_pass.hpp>
+#include <libsbx/render/passes/skybox_pass.hpp>
+#include <libsbx/render/passes/grid_pass.hpp>
+#include <libsbx/render/passes/tonemap_pass.hpp>
+#include <libsbx/render/passes/transparent_accumulate_pass.hpp>
+#include <libsbx/render/passes/transparent_resolve_pass.hpp>
+#include <libsbx/render/particles/particle_simulate_pass.hpp>
+#include <libsbx/render/particles/particle_draw_pass.hpp>
 
 namespace sbx::render {
 

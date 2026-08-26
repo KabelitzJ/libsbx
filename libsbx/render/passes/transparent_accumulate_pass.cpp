@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Jonas Kabelitz
-#include <libsbx/render/transparent_accumulate_pass.hpp>
+#include <libsbx/render/passes/transparent_accumulate_pass.hpp>
 
 #include <array>
 #include <cstddef>

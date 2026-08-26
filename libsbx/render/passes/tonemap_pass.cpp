@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Jonas Kabelitz
-#include <libsbx/render/tonemap_pass.hpp>
+#include <libsbx/render/passes/tonemap_pass.hpp>
 
 #include <array>
 #include <cstddef>

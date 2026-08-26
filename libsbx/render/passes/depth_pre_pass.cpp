@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Jonas Kabelitz
-#include <libsbx/render/depth_pre_pass.hpp>
+#include <libsbx/render/passes/depth_pre_pass.hpp>
 
 #include <array>
 #include <cstddef>

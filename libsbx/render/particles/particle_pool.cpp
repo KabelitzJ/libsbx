@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Jonas Kabelitz
-#include <libsbx/render/particle_pool.hpp>
+#include <libsbx/render/particles/particle_pool.hpp>
 
 #include <algorithm>
 #include <string>

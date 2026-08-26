@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Jonas Kabelitz
-#include <libsbx/render/particle_simulate_pass.hpp>
+#include <libsbx/render/particles/particle_simulate_pass.hpp>
 
 #include <array>
 #include <cstring>

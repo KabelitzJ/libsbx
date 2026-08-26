@@ -39,7 +39,7 @@
 
 #include <libsbx/render/render_pass.hpp>
 #include <libsbx/render/render_packet.hpp>
-#include <libsbx/render/present_pass.hpp>
+#include <libsbx/render/passes/present_pass.hpp>
 
 namespace editor {
 

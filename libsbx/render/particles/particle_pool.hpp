@@ -13,7 +13,7 @@
 
 #include <libsbx/graphics/resources/buffer.hpp>
 
-#include <libsbx/render/particle_data.hpp>
+#include <libsbx/render/particles/particle_data.hpp>
 
 namespace sbx::render {
 

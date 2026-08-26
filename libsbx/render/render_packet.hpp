@@ -16,7 +16,7 @@
 #include <libsbx/assets/texture.hpp>
 #include <libsbx/assets/environment_map.hpp>
 
-#include <libsbx/render/particle_data.hpp>
+#include <libsbx/render/particles/particle_data.hpp>
 
 namespace sbx::render {
 

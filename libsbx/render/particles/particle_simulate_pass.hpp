@@ -14,7 +14,7 @@
 #include <libsbx/graphics/pipeline/compute_pipeline.hpp>
 
 #include <libsbx/render/render_pass.hpp>
-#include <libsbx/render/particle_pool.hpp>
+#include <libsbx/render/particles/particle_pool.hpp>
 
 namespace sbx::render {
 

@@ -15,10 +15,10 @@ namespace sbx::render {
 
 /**
  * @brief Clustered Forward+ light culling: partitions the view frustum into a fixed 16x9x24 grid
- * of view-space clusters (see shaders/cluster_data.slang) and assigns every point/spot light
+ * of view-space clusters (see shaders/clusters/cluster_data.slang) and assigns every point/spot light
  * to each cluster its bounding sphere overlaps, via two compute dispatches
- * (shaders/build_clusters.slang, shaders/cull_lights.slang). opaque_pass and
- * transparent_accumulate_pass share the same lighting code (shaders/geometry.slang's
+ * (shaders/clusters/build_clusters.slang, shaders/clusters/cull_lights.slang). opaque_pass and
+ * transparent_accumulate_pass share the same lighting code (shaders/pbr/geometry.slang's
  * evaluate_lit) and each only look up their own fragment's cluster instead of looping every light
  * in the scene.
  *

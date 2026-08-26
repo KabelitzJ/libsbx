@@ -713,7 +713,7 @@ auto draw_particle_effect_instance_section(editor_state& state, sbx::scenes::nod
   if (ImGui::Button(ICON_MDI_STOP " Stop")) {
     // Only flips playback — render_module notices its emitter slots stopped being claimed next
     // frame and drains them on its own (waits out lifetime_max before recycling); nothing here
-    // needs to touch gpu_slot/emission_accumulator directly. See particle_slot_pool_state's doc
+    // needs to touch slot/emission_accumulator directly. See particle_slot_pool_state's doc
     // comment in render_module.hpp for the full mechanism.
     instance.playback = sbx::scenes::particle_playback_state::stopped;
     instance.elapsed = 0.0f;

@@ -3,75 +3,39 @@
 
 #include <frame_data.slang>
 #include <descriptors.slang>
+#include <shading_policy.slang>
+#include <quad.slang>
+#include <math.slang>
 
 #include <particles/particle_data.slang>
 
-struct vs_in {
+struct vertex_input {
   [[vk::location(0)]] uint vertex_id : SV_VertexID;
   [[vk::location(1)]] uint instance_id : SV_InstanceID;
-}; // struct vs_in
+}; // struct vertex_input
 
-struct vs_out {
+struct vertex_output {
   [[vk::location(0)]] float2 uv : TEXCOORD;
   [[vk::location(1)]] float4 color : COLOR;
   [[vk::location(2)]] nointerpolation uint texture_index : TEXTURE_INDEX;
   float4 sv_position : SV_Position;
-}; // struct vs_out
+}; // struct vertex_output
 
-struct fs_in {
+struct fragment_input {
   [[vk::location(0)]] float2 uv : TEXCOORD;
   [[vk::location(1)]] float4 color : COLOR;
   [[vk::location(2)]] nointerpolation uint texture_index : TEXTURE_INDEX;
   float4 sv_position : SV_Position;
-}; // struct fs_in
+}; // struct fragment_input
 
-struct fs_out {
+struct additive_fragment_output : color_target {
   float4 color : SV_Target0;
-}; // struct fs_out
+}; // struct additive_fragment_output
 
-struct transparent_fs_out {
+struct alpha_blend_fragment_output : alpha_blend_target {
   float4 accumulator : SV_Target0;
   float revealage : SV_Target1;
-}; // struct transparent_fs_out
-
-interface shading_policy {
-  associatedtype Output;
-  static Output shade(float4 color, fs_in input);
-}; // interface shading_policy
-
-struct additive_shading_policy : shading_policy {
-
-  typedef fs_out Output;
-
-  static fs_out shade(float4 color, fs_in input) {
-    fs_out output;
-
-    output.color = color;
-
-    return output;
-  }
-
-}; // struct additive_shading_policy
-
-struct alpha_blend_shading_policy : shading_policy {
-
-  typedef transparent_fs_out Output;
-
-  static transparent_fs_out shade(float4 color, fs_in input) {
-    float alpha = clamp(color.a, 0.01, 0.99);
-    float weight_alpha = pow(min(1.0, alpha * 10.0) + 0.01, 3.0);
-    float weight_depth = pow(1.0 - input.sv_position.z * 0.9, 3.0);
-    float weight = clamp(weight_alpha * 1e8 * weight_depth, 1e-2, 3e3);
-
-    transparent_fs_out output;
-
-    output.accumulator = float4(color.rgb * alpha, alpha) * weight;
-    output.revealage = alpha;
-
-    return output;
-  }
-
-}; // struct alpha_blend_shading_policy
+}; // struct alpha_blend_fragment_output
 
 struct push_data {
   frame_data* frame;
@@ -83,27 +47,11 @@ struct push_data {
 
 [[vk::push_constant]] ConstantBuffer<push_data> push;
 
-static const float2 quad_vertices[4] = {
-  float2(-1.0, -1.0),
-  float2( 1.0, -1.0),
-  float2( 1.0,  1.0),
-  float2(-1.0,  1.0)
-};
-
-static const int quad_indices[6] = { 0, 1, 2, 2, 3, 0 };
-
-float2 rotate(float2 position, float rotation) {
-  float c = cos(rotation);
-  float s = sin(rotation);
-
-  return float2(
-    position.x * c - position.y * s,
-    position.x * s + position.y * c
-  );
-}
+typedef basic_color_shading_policy<additive_fragment_output> additive_shading_policy;
+typedef basic_alpha_blend_shading_policy<alpha_blend_fragment_output> alpha_blend_shading_policy;
 
 [shader("vertex")]
-vs_out vertex_main(vs_in input) {
+vertex_output vertex_main(vertex_input input) {
   frame_data frame = *push.frame;
 
   uint slot = push.alive_list[input.instance_id];
@@ -113,8 +61,8 @@ vs_out vertex_main(vs_in input) {
   float t = clamp(particle.age / max(particle.lifetime, 0.0001), 0.0, 1.0);
   float4 color = lerp(emitter.start_color, emitter.end_color, t);
 
-  int index = quad_indices[input.vertex_id];
-  float2 local_position = quad_vertices[index];
+  int index = quad::indices[input.vertex_id];
+  float2 local_position = quad::vertices[index];
 
   float3x3 inverse_view = transpose((float3x3)frame.view);
   float3 camera_right = normalize(mul(inverse_view, float3(1.0, 0.0, 0.0)));
@@ -124,7 +72,7 @@ vs_out vertex_main(vs_in input) {
   float3 offset = camera_right * rotated.x * particle.size + camera_up * rotated.y * particle.size;
   float3 world_position = particle.position + offset;
 
-  vs_out output;
+  vertex_output output;
   output.sv_position = mul(frame.projection, mul(frame.view, float4(world_position, 1.0)));
   output.uv = local_position * 0.5 + 0.5;
   output.color = color;
@@ -134,7 +82,7 @@ vs_out vertex_main(vs_in input) {
 }
 
 [shader("fragment")]
-Policy::Output fragment_main<Policy : shading_policy>(fs_in input) {
+Policy::Output fragment_main<Policy : shading_policy>(fragment_input input) {
   float4 color = input.color;
 
   if (input.texture_index != particle_texture_index_none) {
@@ -146,5 +94,9 @@ Policy::Output fragment_main<Policy : shading_policy>(fs_in input) {
     color.a *= mask;
   }
 
-  return Policy::shade(color, input);
+  shading_input shading_in;
+  shading_in.lighting.color = color.rgb;
+  shading_in.lighting.alpha = color.a;
+
+  return Policy::shade(shading_in);
 }

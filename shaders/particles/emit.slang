@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Jonas Kabelitz
 
+#include <common.slang>
+
 #include <particles/particle_data.slang>
 
 struct push_data {
@@ -17,13 +19,13 @@ struct push_data {
 
 [[vk::push_constant]] ConstantBuffer<push_data> push;
 
-struct cs_in {
+struct compute_input {
   uint3 id : SV_DispatchThreadID;
-}; // struct cs_in
+}; // struct compute_input
 
 [shader("compute")]
 [numthreads(64, 1, 1)]
-void compute_main(cs_in input) {
+void compute_main(compute_input input) {
   uint local_index = input.id.x;
 
   emitter_instance emitter = push.emitters[push.emitter_index];
@@ -50,7 +52,7 @@ void compute_main(cs_in input) {
   particle.age = 0.0;
   particle.lifetime = random_range(seed, emitter.lifetime_min, emitter.lifetime_max);
   particle.size = random_range(seed, emitter.size_min, emitter.size_max);
-  particle.rotation = random_range(seed, 0.0, 6.28318530718);
+  particle.rotation = random_range(seed, 0.0, two_pi);
   particle.emitter_slot = push.emitter_index;
   particle.seed = seed;
   particle.reserved = float4(0.0, 0.0, 0.0, 0.0);

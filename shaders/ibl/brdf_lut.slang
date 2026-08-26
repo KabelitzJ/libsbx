@@ -10,9 +10,9 @@ struct push_data {
 
 [[vk::push_constant]] ConstantBuffer<push_data> push;
 
-struct cs_in {
+struct compute_input {
   uint3 id : SV_DispatchThreadID;
-}; // struct cs_in
+}; // struct compute_input
 
 static const uint sample_count = 1024u;
 
@@ -46,7 +46,7 @@ float2 integrate_brdf(float ndv, float roughness) {
 
 [shader("compute")]
 [numthreads(8, 8, 1)]
-void compute_main(cs_in input) {
+void compute_main(compute_input input) {
   uint width, height;
   storage_images[push.output_index].GetDimensions(width, height);
 

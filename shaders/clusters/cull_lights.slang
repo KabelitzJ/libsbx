@@ -18,9 +18,9 @@ ConstantBuffer<push_data> push;
 static const uint max_lights_per_cluster = 128u;
 static const uint max_light_indices = 65536u;
 
-struct cs_in {
+struct compute_input {
   uint3 id : SV_DispatchThreadID;
-}; // struct cs_in
+}; // struct compute_input
 
 bool sphere_intersects_aabb(float3 center, float radius, float3 box_min, float3 box_max) {
   float3 closest = clamp(center, box_min, box_max);
@@ -30,7 +30,7 @@ bool sphere_intersects_aabb(float3 center, float radius, float3 box_min, float3 
 
 [shader("compute")]
 [numthreads(8, 8, 1)]
-void compute_main(cs_in input) {
+void compute_main(compute_input input) {
   uint3 dispatch_thread_id = input.id;
 
   if (dispatch_thread_id.x >= cluster_dim_x || dispatch_thread_id.y >= cluster_dim_y || dispatch_thread_id.z >= cluster_dim_z) {

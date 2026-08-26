@@ -107,14 +107,14 @@ auto particle_simulate_pass::execute(render_context& context) -> void {
 
   for (const auto& snapshot : context.packet->particle_emitters) {
     auto& pool = (snapshot.pool_index == particle_pool_alpha_blend) ? _alpha_pool : _additive_pool;
-    pool.write_emitter_instance(snapshot.gpu_slot, snapshot.data);
+    pool.write_emitter_instance(snapshot.slot, snapshot.data);
 
     if (snapshot.data.particles_to_emit == 0u) {
       continue;
     }
 
     auto& emits = (snapshot.pool_index == particle_pool_alpha_blend) ? alpha_emits : additive_emits;
-    emits.push_back(emit_request{snapshot.gpu_slot, snapshot.data.particles_to_emit});
+    emits.push_back(emit_request{snapshot.slot, snapshot.data.particles_to_emit});
   }
 
   bind_compute_globals(*context.command_buffer);

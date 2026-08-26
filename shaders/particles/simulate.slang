@@ -20,13 +20,13 @@ struct push_data {
 
 [[vk::push_constant]] ConstantBuffer<push_data> push;
 
-struct cs_in {
+struct compute_input {
   uint3 id : SV_DispatchThreadID;
-}; // struct cs_in
+}; // struct compute_input
 
 [shader("compute")]
 [numthreads(64, 1, 1)]
-void compute_main(cs_in input) {
+void compute_main(compute_input input) {
   uint index = input.id.x;
 
   if (index >= push.counters->alive_count[push.read_index]) {

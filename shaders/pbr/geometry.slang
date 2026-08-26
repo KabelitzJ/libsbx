@@ -4,83 +4,41 @@
 #include <common.slang>
 #include <descriptors.slang>
 #include <frame_data.slang>
+#include <shading_policy.slang>
+#include <lighting.slang>
 
-struct vs_in {
+struct vertex_input {
   [[vk::location(0)]] uint vertex_id : SV_VertexID;
   [[vk::location(1)]] uint instance_id : SV_InstanceID;
-}; // struct vs_in
+}; // struct vertex_input
 
-struct vs_out {
+struct vertex_output {
   [[vk::location(0)]] float3 position : POSITION;
   [[vk::location(1)]] float3 normal : NORMAL;
   [[vk::location(2)]] float2 uv : TEXCOORD;
   [[vk::location(3)]] float4 tangent : TANGENT;
   float4 sv_position : SV_Position;
-}; // struct vs_out
+}; // struct vertex_output
 
-struct fs_in {
+struct fragment_input {
   [[vk::location(0)]] float3 position : POSITION;
   [[vk::location(1)]] float3 normal : NORMAL;
   [[vk::location(2)]] float2 uv : TEXCOORD;
   [[vk::location(3)]] float4 tangent : TANGENT;
   float4 sv_position : SV_Position;
-}; // struct fs_in
+}; // struct fragment_input
 
-struct fs_out {
+struct opaque_fragment_output : color_target {
   float4 color : SV_Target0;
-}; // struct fs_out
+}; // struct fragment_output
 
-struct transparent_fs_out {
+struct alpha_blend_fragment_output : alpha_blend_target {
   float4 accumulator : SV_Target0;
   float revealage : SV_Target1;
-}; // struct transparent_fs_out
-
-struct lighting_result {
-  float3 color;
-  float alpha;
-}; // struct lighting_result
-
-interface shading_policy {
-  associatedtype Output;
-  static Output shade(lighting_result lighting, fs_in input);
-}; // interface shading_policy
-
-struct opaque_shading_policy : shading_policy {
-
-  typedef fs_out Output;
-
-  static fs_out shade(lighting_result lighting, fs_in input) {
-    fs_out output;
-
-    output.color = float4(lighting.color, lighting.alpha);
-
-    return output;
-  }
-
-}; // struct opaque_shading_policy
-
-struct transparent_shading_policy : shading_policy {
-
-  typedef transparent_fs_out Output;
-
-  static transparent_fs_out shade(lighting_result lighting, fs_in input) {
-    float alpha = clamp(lighting.alpha, 0.01, 0.99);
-    float weight_alpha = pow(min(1.0, alpha * 10.0) + 0.01, 3.0);
-    float weight_depth = pow(1.0 - input.sv_position.z * 0.9, 3.0);
-    float weight = clamp(weight_alpha * 1e8 * weight_depth, 1e-2, 3e3);
-
-    transparent_fs_out output;
-
-    output.accumulator = float4(lighting.color * alpha, alpha) * weight;
-    output.revealage = alpha;
-
-    return output;
-  }
-
-}; // struct transparent_shading_policy
+}; // struct alpha_blend_fragment_output
 
 struct push_data {
-  frame_data* frame;
+  frame_data* frame_data;
   vertex* vertices;
   float4x4* transforms;
   uint transform_offset;
@@ -91,171 +49,47 @@ struct push_data {
 
 [[vk::push_constant]] ConstantBuffer<push_data> push;
 
-float distribution_ggx(float3 n, float3 h, float roughness) {
-  float a = roughness * roughness;
-  float a2 = a * a;
-  float ndh = max(dot(n, h), 0.0);
-  float d = ndh * ndh * (a2 - 1.0) + 1.0;
-  return a2 / (pi * d * d);
-}
-
-float geometry_schlick_ggx(float ndv, float roughness) {
-  float r = roughness + 1.0;
-  float k = (r * r) / 8.0;
-  return ndv / (ndv * (1.0 - k) + k);
-}
-
-float geometry_smith(float3 n, float3 v, float3 l, float roughness) {
-  return geometry_schlick_ggx(max(dot(n, v), 0.0), roughness) * geometry_schlick_ggx(max(dot(n, l), 0.0), roughness);
-}
-
-float3 fresnel_schlick(float cos_theta, float3 f0) {
-  return f0 + (1.0 - f0) * pow(clamp(1.0 - cos_theta, 0.0, 1.0), 5.0);
-}
-
-float3 brdf(float3 n, float3 v, float3 l, float3 albedo, float3 f0, float roughness, float metallic) {
-  float3 h = normalize(v + l);
-  float ndf = distribution_ggx(n, h, roughness);
-  float g = geometry_smith(n, v, l, roughness);
-  float3 f = fresnel_schlick(max(dot(h, v), 0.0), f0);
-
-  float3 specular = (ndf * g * f) / max(4.0 * max(dot(n, v), 0.0) * max(dot(n, l), 0.0), 0.0001);
-  float3 kd = (1.0 - f) * (1.0 - metallic);
-
-  return (kd * albedo / pi + specular) * max(dot(n, l), 0.0);
-}
+typedef basic_color_shading_policy<opaque_fragment_output> opaque_shading_policy;
+typedef basic_alpha_blend_shading_policy<alpha_blend_fragment_output> alpha_blend_shading_policy;
 
 [shader("vertex")]
-vs_out vertex_main(vs_in input) {
+vertex_output vertex_main(vertex_input input) {
   vertex v = push.vertices[input.vertex_id];
-  frame_data frame = *push.frame;
+  frame_data frame_data = *push.frame_data;
 
   float4x4 model = push.transforms[push.transform_offset + input.instance_id];
 
   float4 world = mul(model, float4(v.position, 1.0));
   float3x3 normal_matrix = (float3x3)model;
 
-  vs_out output;
+  vertex_output output;
   output.position = world.xyz;
   output.normal = normalize(mul(normal_matrix, v.normal));
   output.tangent = float4(normalize(mul(normal_matrix, v.tangent.xyz)), v.tangent.w);
   output.uv = v.uv;
-  output.sv_position = mul(frame.projection, mul(frame.view, world));
+  output.sv_position = mul(frame_data.projection, mul(frame_data.view, world));
 
   return output;
 }
 
-lighting_result evaluate_lighting(fs_in input) {
-  frame_data frame = *push.frame;
-  material_data material = frame.materials[push.material_index];
-  SamplerState sampler = samplers[push.sampler_index];
-
-  float4 base = material.base_color_factor * textures[material.albedo_index].Sample(sampler, input.uv);
-
-  uint is_alpha_masked = (material.flags & material_flags::alpha_masked) != 0u;
-
-  clip(is_alpha_masked * (base.a - material.alpha_cutoff));
-
-  float3 albedo = base.rgb;
-
-  float4 mr = textures[material.metallic_roughness_index].Sample(sampler, input.uv);
-  float metallic = mr.b * material.metallic_factor;
-  float roughness = mr.g * material.roughness_factor;
-
-  float ao = textures[material.occlusion_index].Sample(sampler, input.uv).r;
-  float3 emissive = material.emissive_factor.rgb * textures[material.emissive_index].Sample(sampler, input.uv).rgb;
-
-  float3 n = normalize(input.normal);
-  float3 t = normalize(input.tangent.xyz);
-
-  // Gram-Schmidt re-orthogonalize after interpolation
-  t = normalize(t - dot(t, n) * n);              
-
-  // handedness
-  float3 b = cross(n, t) * input.tangent.w; 
-
-  float3 tangent_normal = textures[material.normal_index].Sample(sampler, input.uv).rgb * 2.0 - 1.0;
-  n = normalize(tangent_normal.x * t + tangent_normal.y * b + tangent_normal.z * n);
-
-  float3 v = normalize(frame.camera_position.xyz - input.position);
-
-  float3 f0 = lerp(float3(0.04, 0.04, 0.04), albedo, metallic);
-  float3 lo = float3(0.0, 0.0, 0.0);
-
-  for (uint i = 0u; i < frame.directional_light_count; ++i) {
-    light_data light = frame.lights[i];
-    float3 l = normalize(-light.direction.xyz);
-    float3 radiance = light.color.rgb * light.color.a;
-    lo += brdf(n, v, l, albedo, f0, roughness, metallic) * radiance;
-  }
-
-  float view_z = mul(frame.view, float4(input.position, 1.0)).z;
-  float depth_slice = log2(max(-view_z, 0.0001)) * frame.cluster_scale + frame.cluster_bias;
-  uint slice = uint(clamp(depth_slice, 0.0, float(cluster_dim_z - 1u)));
-
-  uint2 tile = uint2(input.sv_position.xy / frame.cluster_tile_size);
-  tile = min(tile, uint2(cluster_dim_x - 1u, cluster_dim_y - 1u));
-
-  uint cluster_id = tile.x + cluster_dim_x * (tile.y + cluster_dim_y * slice);
-  cluster_range range = frame.cluster_ranges[cluster_id];
-
-  for (uint c = 0u; c < range.count; ++c) {
-    light_data light = frame.lights[frame.cluster_light_indices[range.offset + c]];
-
-    float3 to_light = light.position.xyz - input.position;
-    float distance = length(to_light);
-    float3 l = to_light / max(distance, 0.0001);
-
-    float range_falloff = light.position.w;
-    float falloff = saturate(1.0 - pow(distance / max(range_falloff, 0.0001), 4.0));
-    float attenuation = (falloff * falloff) / max(distance * distance, 0.0001);
-
-    if (light.type == light_type::spot) {
-      float cos_angle = dot(-l, normalize(light.direction.xyz));
-      attenuation *= saturate((cos_angle - light.outer_cos) / max(light.inner_cos - light.outer_cos, 0.0001));
-    }
-
-    float3 radiance = light.color.rgb * light.color.a * attenuation;
-    lo += brdf(n, v, l, albedo, f0, roughness, metallic) * radiance;
-  }
-
-  float ndv = max(dot(n, v), 0.0);
-  float3 fr = fresnel_schlick(ndv, f0);
-  float3 kd = (1.0 - fr) * (1.0 - metallic);
-
-  float3 irradiance = (frame.irradiance_index != 0xFFFFFFFF) ? cubes[frame.irradiance_index].Sample(sampler, n).rgb : float3(0.03, 0.03, 0.03);
-  float3 diffuse = irradiance * albedo;
-
-  float3 specular = float3(0.0, 0.0, 0.0);
-
-  if (frame.prefiltered_mip_count > 0u && frame.brdf_lut_index != 0xFFFFFFFF) {
-    float3 reflection = reflect(-v, n);
-
-    float level = roughness * float(frame.prefiltered_mip_count - 1u);
-
-    float3 prefiltered = cubes[frame.prefiltered_index].SampleLevel(sampler, reflection, level).rgb;
-
-    SamplerState clamp_sampler = samplers[push.clamp_sampler_index];
-    float2 brdf = textures[frame.brdf_lut_index].Sample(clamp_sampler, float2(ndv, roughness)).rg;
-
-    specular = prefiltered * (fr * brdf.x + brdf.y);
-  }
-
-  float3 ambient = (kd * diffuse + specular) * ao * frame.environment_intensity;
-
-  float3 color = ambient + lo + emissive;
-
-  lighting_result result;
-
-  result.color = color;
-  result.alpha = base.a;
-
-  return result;
-}
-
 [shader("fragment")]
-Policy::Output fragment_main<Policy : shading_policy>(fs_in input) {
-  lighting_result lighting = evaluate_lighting(input);
+Policy::Output fragment_main<Policy : shading_policy>(fragment_input input) {
+  lighting_input lighting_input;
+  lighting_input.position = input.position;
+  lighting_input.normal = input.normal;
+  lighting_input.uv = input.uv;
+  lighting_input.tangent = input.tangent;
+  lighting_input.sv_position = input.sv_position;
+  lighting_input.frame_data = *push.frame_data;
+  lighting_input.material_index = push.material_index;
+  lighting_input.sampler_index = push.sampler_index;
+  lighting_input.clamp_sampler_index = push.clamp_sampler_index;
 
-  return Policy::shade(lighting, input);
+  lighting_output lighting_output = evaluate_lighting(lighting_input);
+
+  shading_input shading_input;
+  shading_input.lighting = lighting_output;
+  shading_input.depth = input.sv_position.z;
+
+  return Policy::shade(shading_input);
 }

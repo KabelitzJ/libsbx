@@ -3,22 +3,22 @@
 
 #include <descriptors.slang>
 
-struct vs_in {
+struct vertex_input {
   uint id : SV_VertexID;
-}; // struct vs_in
+}; // struct vertex_input
 
-struct vs_out {
+struct vertex_output {
   [[vk::location(0)]] float2 uv : TEXCOORD;
   float4 sv_position : SV_Position;
-}; // struct vs_out
+}; // struct vertex_output
 
-struct fs_in {
+struct fragment_input {
   [[vk::location(0)]] float2 uv : TEXCOORD;
-}; // struct fs_in
+}; // struct fragment_input
 
-struct fs_out {
+struct fragment_output {
   float4 color : SV_Target0;
-}; // struct fs_out
+}; // struct fragment_output
 
 struct push_data { 
   uint color_index; 
@@ -28,10 +28,10 @@ struct push_data {
 [[vk::push_constant]] ConstantBuffer<push_data> push;
 
 [shader("vertex")]
-vs_out vertex_main(vs_in input) {
+vertex_output vertex_main(vertex_input input) {
   float2 uv = float2((input.id << 1) & 2, input.id & 2);
 
-  vs_out output;
+  vertex_output output;
 
   output.uv = uv;
   output.sv_position = float4(uv * 2.0 - 1.0, 0.0, 1.0);
@@ -40,8 +40,8 @@ vs_out vertex_main(vs_in input) {
 }
 
 [shader("fragment")]
-fs_out fragment_main(fs_in input) {
-  fs_out output;
+fragment_output fragment_main(fragment_input input) {
+  fragment_output output;
 
   output.color = float4(textures[push.color_index].Sample(samplers[push.sampler_index], input.uv).rgb, 1.0);
   

@@ -164,7 +164,7 @@ struct skybox {
 struct particle_emitter {
   inline static constexpr auto invalid_slot = std::numeric_limits<std::uint32_t>::max();
 
-  std::uint32_t gpu_slot{invalid_slot};
+  std::uint32_t slot{invalid_slot};
   std::float_t emission_accumulator{0.0f};
   bool burst_fired{false};
 }; // struct particle_emitter

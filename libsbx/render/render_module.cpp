@@ -341,7 +341,7 @@ auto render_module::_build_packet() -> render_packet {
           // bookkeeping below, so the runtime doesn't need to remember which slot it had — and
           // dropping it now means resuming playback later claims a fresh slot and re-fires burst,
           // instead of writing into a slot index that may since have been handed to someone else.
-          runtime.gpu_slot = scenes::particle_emitter::invalid_slot;
+          runtime.slot = scenes::particle_emitter::invalid_slot;
           runtime.emission_accumulator = 0.0f;
           runtime.burst_fired = false;
           continue;
@@ -350,14 +350,14 @@ auto render_module::_build_packet() -> render_packet {
         const auto pool_index = (emitter.blend_mode == assets::emitter_blend_mode::alpha_blend) ? particle_pool_alpha_blend : particle_pool_additive;
         auto& pool = *_particle_pools[pool_index];
 
-        if (runtime.gpu_slot == scenes::particle_emitter::invalid_slot) {
+        if (runtime.slot == scenes::particle_emitter::invalid_slot) {
           const auto claimed = pool.claim_slot();
 
           if (!claimed) {
             continue;
           }
 
-          runtime.gpu_slot = *claimed;
+          runtime.slot = *claimed;
         }
 
         // burst_count only ever contributes on the first frame of a given activation (the frame a
@@ -394,14 +394,14 @@ auto render_module::_build_packet() -> render_packet {
         data.drag = emitter.drag;
         data.active = 1u;
         data.particles_to_emit = particles_to_emit;
-        data.seed = (runtime.gpu_slot * 9781u) ^ (static_cast<std::uint32_t>(index) * 6271u) ^ 0x9E3779B9u;
+        data.seed = (runtime.slot * 9781u) ^ (static_cast<std::uint32_t>(index) * 6271u) ^ 0x9E3779B9u;
         data.shape = static_cast<std::uint32_t>(emitter.shape);
         data.shape_extents = emitter.shape_extents;
         data.texture_index = texture_index;
 
-        pool.keep_alive(runtime.gpu_slot, emitter.lifetime_max);
+        pool.keep_alive(runtime.slot, emitter.lifetime_max);
 
-        packet.particle_emitters.push_back(particle_emitter_snapshot{pool_index, runtime.gpu_slot, data});
+        packet.particle_emitters.push_back(particle_emitter_snapshot{pool_index, runtime.slot, data});
       }
     }
 

@@ -16,9 +16,9 @@ struct push_data {
 [[vk::push_constant]]
 ConstantBuffer<push_data> push;
 
-struct cs_in {
+struct compute_input {
   uint3 id : SV_DispatchThreadID;
-}; // struct cs_in
+}; // struct compute_input
 
 float3 view_ray(float2 ndc) {
   return float3(ndc.x * push.aspect * push.tan_half_fov_y, -ndc.y * push.tan_half_fov_y, -1.0);
@@ -26,7 +26,7 @@ float3 view_ray(float2 ndc) {
 
 [shader("compute")]
 [numthreads(8, 8, 1)]
-void compute_main(cs_in input) {
+void compute_main(compute_input input) {
   uint3 dispatch_thread_id = input.id;
 
   if (dispatch_thread_id.x >= cluster_dim_x || dispatch_thread_id.y >= cluster_dim_y || dispatch_thread_id.z >= cluster_dim_z) {

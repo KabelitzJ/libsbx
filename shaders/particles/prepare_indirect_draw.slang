@@ -17,7 +17,7 @@ struct push_data {
 [numthreads(1, 1, 1)]
 void compute_main() {
   push.command->vertex_count = 6u;
-  push.command->instance_count = push.counters[0].alive_count[push.write_index];
+  push.command->instance_count = push.counters->alive_count[push.write_index];
   push.command->first_vertex = 0u;
   push.command->first_instance = 0u;
 }

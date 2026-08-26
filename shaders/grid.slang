@@ -19,24 +19,24 @@ struct push_data {
 
 [[vk::push_constant]] ConstantBuffer<push_data> push;
 
-struct vs_in {
+struct vertex_input {
   uint vertex_id : SV_VertexID;
-}; // struct vs_in
+}; // struct vertex_input
 
-struct vs_out {
+struct vertex_output {
   [[vk::location(0)]] float2 uv : TEXCOORD0;
   [[vk::location(1)]] float2 camera_position : TEXCOORD1;
   float4 sv_position : SV_Position;
-}; // struct vs_out
+}; // struct vertex_output
 
-struct fs_in {
+struct fragment_input {
   [[vk::location(0)]] float2 uv : TEXCOORD0;
   [[vk::location(1)]] float2 camera_position : TEXCOORD1;
-}; // struct fs_in
+}; // struct fragment_input
 
-struct fs_out {
+struct fragment_output {
   float4 color : SV_Target0;
-}; // struct fs_out
+}; // struct fragment_output
 
 static const float3 grid_vertices[4] = {
   float3(-1.0, 0.0, -1.0),
@@ -48,14 +48,14 @@ static const float3 grid_vertices[4] = {
 static const uint grid_indices[6] = { 0u, 1u, 2u, 2u, 3u, 0u };
 
 [shader("vertex")]
-vs_out vertex_main(vs_in input) {
+vertex_output vertex_main(vertex_input input) {
   frame_data frame = *push.frame;
 
   float3 position = grid_vertices[grid_indices[input.vertex_id]] * grid_size;
   position.x += frame.camera_position.x;
   position.z += frame.camera_position.z;
 
-  vs_out output;
+  vertex_output output;
 
   output.camera_position = frame.camera_position.xz;
   output.uv = position.xz;
@@ -119,8 +119,8 @@ float4 grid_color(float2 uv, float2 camera_position) {
 }
 
 [shader("fragment")]
-fs_out fragment_main(fs_in input) {
-  fs_out output;
+fragment_output fragment_main(fragment_input input) {
+  fragment_output output;
 
   output.color = grid_color(input.uv, input.camera_position);
 

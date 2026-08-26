@@ -1,8 +1,7 @@
 #ifndef COMMON_SLANG_
 #define COMMON_SLANG_
 
-static const float pi = 3.14159265359;
-static const float firefly_clamp = 30.0f;
+#include <math.slang>
 
 struct range {
   uint offset;
@@ -43,7 +42,7 @@ float2 hammersley(uint i, uint n) {
 
 float3 importance_sample_ggx(float2 xi, float3 n, float roughness) {
   float a = roughness * roughness;
-  float phi = 2.0 * pi * xi.x;
+  float phi = two_pi * xi.x;
   float cos_theta = sqrt((1.0 - xi.y) / (1.0 + (a * a - 1.0) * xi.y));
   float sin_theta = sqrt(1.0 - cos_theta * cos_theta);
 

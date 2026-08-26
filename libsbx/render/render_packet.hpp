@@ -88,7 +88,7 @@ struct light_data {
 
 struct particle_emitter_snapshot {
   std::uint32_t pool_index{0u};
-  std::uint32_t gpu_slot{0u};
+  std::uint32_t slot{0u};
   emitter_instance data{};
 }; // struct particle_emitter_snapshot
 

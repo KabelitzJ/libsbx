@@ -3,7 +3,7 @@
 
 #include <common.slang>
 
-#include <particle_data.slang>
+#include <particles/particle_data.slang>
 
 static const uint simulate_threads_per_group = 64u;
 

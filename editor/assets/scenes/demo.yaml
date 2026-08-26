@@ -62,7 +62,7 @@ nodes:
       - type: transform
         position: {x: 0, y: 0, z: 0}
         rotation: {x: 0, y: 0, z: 0, w: 1}
-        scale: {x: 10, y: 0.100000001, z: 10}
+        scale: {x: 40, y: 0.100000001, z: 40}
       - type: static_mesh
         mesh: cube
         submeshes:
@@ -85,9 +85,9 @@ nodes:
     id: 914089331969664293
     components:
       - type: transform
-        position: {x: 0, y: 6.15887451, z: 0}
-        rotation: {x: 0.189842552, y: 0.704515457, z: 0.677780032, w: -0.0907305479}
-        scale: {x: 0.9999879, y: 0.999989688, z: 0.999988019}
+        position: {x: 0, y: 5.32163954, z: 0}
+        rotation: {x: 0.608986974, y: 0.661132514, z: 0.414565384, w: -0.142035261}
+        scale: {x: 0.999994993, y: 0.999992192, z: 0.999998093}
       - type: directional_light
         color: {r: 1, g: 1, b: 1, a: 1}
         intensity: 3
@@ -143,7 +143,7 @@ nodes:
     id: 7853293024889737634
     components:
       - type: transform
-        position: {x: 0.292918324, y: 0, z: -2.24465728}
+        position: {x: 0.115001105, y: 1.456604, z: -3.77670121}
         rotation: {x: 0, y: 0.365675211, z: 0, w: 0.930742502}
         scale: {x: 2.99999785, y: 2.99999905, z: 3}
       - type: static_mesh
@@ -166,8 +166,8 @@ nodes:
     components:
       - type: transform
         position: {x: -1.44358444, y: 2.81216931, z: -1.18974483}
-        rotation: {x: -3.32581152e-07, y: 0.234547794, z: 1.37867033e-07, w: 0.972104609}
-        scale: {x: 0.999996901, y: 1, z: 0.999996901}
+        rotation: {x: -0.030682886, y: 0.232532114, z: 0.127166167, w: 0.963751137}
+        scale: {x: 0.999995172, y: 0.999998391, z: 0.99999702}
       - type: point_light
         color: {r: 1, g: 0, b: 1, a: 1}
         intensity: 30
@@ -176,8 +176,8 @@ nodes:
     id: 1867269432501270719
     components:
       - type: transform
-        position: {x: 7.1970129, y: 5.46568823, z: -2.14532518}
-        rotation: {x: -0.17167151, y: 0.747610271, z: 0.211946383, w: 0.605546415}
+        position: {x: 6.11725426, y: 8.63059616, z: 2.08015275}
+        rotation: {x: -0.250958055, y: 0.465526491, z: 0.139552996, w: 0.837155938}
         scale: {x: 1, y: 1, z: 1}
       - type: camera
         fov_degrees: 60

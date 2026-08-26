@@ -10,7 +10,7 @@
 
 namespace sbx::render {
 
-auto submit_draw_commands(render_context& context, const std::vector<draw_command>& commands, const std::array<memory::observer_ptr<graphics::graphics_pipeline>, 2u>& pipelines) -> void {
+auto submit_draw_commands(render_context& context, const std::vector<draw_command>& commands, const std::array<memory::observer_ptr<graphics::graphics_pipeline>, 2u>& pipelines, std::uint32_t cascade_index) -> void {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
   auto& assets_module = core::engine::get_module<assets::assets_module>();
 
@@ -58,6 +58,7 @@ auto submit_draw_commands(render_context& context, const std::vector<draw_comman
     values.material_index = command.material->index();
     values.sampler_index = context.sampler_index;
     values.clamp_sampler_index = context.clamp_sampler_index;
+    values.cascade_index = cascade_index;
 
     auto range = std::array<std::byte, graphics::bindless_table::push_constant_size>{};
     std::memcpy(range.data(), &values, sizeof(push_constants));
@@ -69,16 +70,20 @@ auto submit_draw_commands(render_context& context, const std::vector<draw_comman
 }
 
 auto bind_globals(render_context& context) -> void {
+  bind_globals(context, context.extent);
+}
+
+auto bind_globals(render_context& context, const math::vector2u& extent) -> void {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
   auto& bindless_table = graphics_module.bindless_table();
 
   const auto descriptor_set = bindless_table.descriptor_set();
   vkCmdBindDescriptorSets(*context.command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, bindless_table.pipeline_layout(), 0u, 1u, &descriptor_set, 0u, nullptr);
 
-  const auto viewport = VkViewport{0.0f, 0.0f, static_cast<std::float_t>(context.extent.x()), static_cast<std::float_t>(context.extent.y()), 0.0f, 1.0f};
+  const auto viewport = VkViewport{0.0f, 0.0f, static_cast<std::float_t>(extent.x()), static_cast<std::float_t>(extent.y()), 0.0f, 1.0f};
   context.command_buffer->set_viewport(viewport);
 
-  const auto scissor = VkRect2D{VkOffset2D{0, 0}, VkExtent2D{context.extent.x(), context.extent.y()}};
+  const auto scissor = VkRect2D{VkOffset2D{0, 0}, VkExtent2D{extent.x(), extent.y()}};
   context.command_buffer->set_scissor(scissor);
 }
 

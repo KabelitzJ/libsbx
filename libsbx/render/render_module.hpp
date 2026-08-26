@@ -141,6 +141,9 @@ private:
   graphics::buffer_handle _cluster_counter_buffer{};
   std::array<graphics::buffer::address_type, graphics::swapchain::max_frames_in_flight> _cluster_counter_addresses{};
 
+  std::array<graphics::image_handle, shadow_cascade_count> _shadow_map_images{};
+  std::array<std::uint32_t, shadow_cascade_count> _shadow_map_indices{};
+
   std::array<std::unique_ptr<particle_pool>, 2u> _particle_pools{};
 
 }; // class render_module

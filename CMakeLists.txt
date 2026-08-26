@@ -246,6 +246,7 @@ target_sources(
     "${CMAKE_SOURCE_DIR}/libsbx/render/passes/light_culling_pass.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/render/passes/opaque_pass.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/render/passes/present_pass.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/render/passes/shadow_pass.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/render/passes/skybox_pass.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/render/passes/tonemap_pass.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/render/passes/transparent_accumulate_pass.cpp"
@@ -253,6 +254,7 @@ target_sources(
     "${CMAKE_SOURCE_DIR}/libsbx/render/render_module.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/render/render_pass.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/render/render_thread.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/render/shadow/cascade.cpp"
 
     "${CMAKE_SOURCE_DIR}/libsbx/scenes/scene_serializer.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/scenes/scene.cpp"

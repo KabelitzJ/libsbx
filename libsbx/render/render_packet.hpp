@@ -100,6 +100,8 @@ struct render_packet {
   std::vector<math::matrix4x4> transforms{};
   std::vector<light_data> lights{};
   std::uint32_t directional_light_count{0u};
+  bool has_shadow_caster{false}; // When true, lights[0] is the cascaded-shadow-mapped sun.
+  std::float_t shadow_distance{75.0f};
   assets::environment_map_handle environment{};
   std::float_t environment_intensity{1.0f};
   std::vector<particle_emitter_snapshot> particle_emitters{};

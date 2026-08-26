@@ -1,7 +1,12 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Jonas Kabelitz
 #ifndef FRAME_DATA_SLANG_
 #define FRAME_DATA_SLANG_
 
 #include <common.slang>
+#include <descriptors.slang>
+
+static const uint shadow_cascade_count = 4;
 
 struct vertex {
   float3 position;
@@ -31,6 +36,19 @@ struct material_data {
   uint pad1;
   uint pad2;
 }; // struct material_data
+
+/**
+ * @brief Discards the current fragment when @p material is alpha-masked and its sampled albedo
+ * alpha falls below the cutoff; a no-op multiply otherwise. Shared by every depth-only pass
+ * (depth_pre_pass, shadow_pass) and the lit fragment shaders (lighting.slang) so the cutout test
+ * can't drift between them.
+ */
+void apply_alpha_cutout(material_data material, float2 uv, uint sampler_index) {
+  float alpha = material.base_color_factor.a * textures[material.albedo_index].Sample(samplers[sampler_index], uv).a;
+  uint is_alpha_masked = (material.flags & material_flags::alpha_masked) != 0u;
+
+  clip(is_alpha_masked * (alpha - material.alpha_cutoff));
+}
 
 enum class light_type : uint {
   directional = 0,
@@ -68,6 +86,10 @@ struct frame_data {
   uint* cluster_light_indices;
   float cluster_bias;
   float2 cluster_tile_size;
+  float4 cascade_splits;
+  float4x4 light_view_projections[shadow_cascade_count];
+  uint shadow_map_indices[shadow_cascade_count];
+  uint shadow_enabled;
 }; // struct frame_data
 
 #endif // FRAME_DATA_SLANG_

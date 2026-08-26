@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Jonas Kabelitz
 #ifndef SHADING_POLICY_SLANG_
 #define SHADING_POLICY_SLANG_
 

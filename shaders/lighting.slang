@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Jonas Kabelitz
 #ifndef LIGHTING_SLANG_
 #define LIGHTING_SLANG_
 
@@ -5,6 +7,7 @@
 #include <descriptors.slang>
 
 #include <clusters/cluster_data.slang>
+#include <shadows/csm.slang>
 
 struct lighting_input {
   float3 position;
@@ -65,9 +68,7 @@ lighting_output evaluate_lighting(lighting_input input) {
 
   float4 base = material.base_color_factor * textures[material.albedo_index].Sample(sampler, input.uv);
 
-  uint is_alpha_masked = (material.flags & material_flags::alpha_masked) != 0u;
-
-  clip(is_alpha_masked * (base.a - material.alpha_cutoff));
+  apply_alpha_cutout(material, input.uv, input.sampler_index);
 
   float3 albedo = base.rgb;
 
@@ -95,11 +96,19 @@ lighting_output evaluate_lighting(lighting_input input) {
   float3 f0 = lerp(float3(0.04, 0.04, 0.04), albedo, metallic);
   float3 lo = float3(0.0, 0.0, 0.0);
 
+  float sun_shadow = 1.0;
+
   for (uint i = 0u; i < input.frame_data.directional_light_count; ++i) {
     light_data light = input.frame_data.lights[i];
 
     float3 l = normalize(-light.direction.xyz);
     float3 radiance = light.color.rgb * light.color.a;
+
+    if (i == 0u && input.frame_data.shadow_enabled != 0u) {
+      sun_shadow = calculate_shadow(input.frame_data, input.position, n, input.clamp_sampler_index);
+
+      radiance *= sun_shadow;
+    }
 
     lo += brdf(n, v, l, albedo, f0, roughness, metallic) * radiance;
   }
@@ -159,6 +168,10 @@ lighting_output evaluate_lighting(lighting_input input) {
   }
 
   float3 ambient = (kd * diffuse + specular) * ao * input.frame_data.environment_intensity;
+
+  static const float ambient_shadow_floor = 0.6;
+
+  ambient *= lerp(ambient_shadow_floor, 1.0, sun_shadow);
 
   float3 color = ambient + lo + emissive;
 

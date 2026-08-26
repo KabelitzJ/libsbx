@@ -579,6 +579,8 @@ auto draw_directional_light_section(sbx::scenes::node& node) -> void {
 
   draw_color_field("Color", light.color);
   ImGui::DragFloat("Intensity", &light.intensity, 0.05f, 0.0f, 1000.0f);
+  ImGui::Checkbox("Casts Shadows", &light.casts_shadows);
+  ImGui::DragFloat("Shadow Distance", &light.shadow_distance, 0.5f, 1.0f, 1000.0f);
 }
 
 auto draw_point_light_section(sbx::scenes::node& node) -> void {

@@ -8,6 +8,8 @@
 #include <cstddef>
 #include <cstring>
 #include <map>
+#include <string>
+#include <utility>
 #include <vector>
 
 #include <libsbx/memory/alignment.hpp>
@@ -38,6 +40,7 @@
 
 #include <libsbx/render/passes/depth_pre_pass.hpp>
 #include <libsbx/render/passes/light_culling_pass.hpp>
+#include <libsbx/render/passes/shadow_pass.hpp>
 #include <libsbx/render/passes/opaque_pass.hpp>
 #include <libsbx/render/passes/present_pass.hpp>
 #include <libsbx/render/passes/skybox_pass.hpp>
@@ -47,6 +50,7 @@
 #include <libsbx/render/passes/transparent_resolve_pass.hpp>
 #include <libsbx/render/particles/particle_simulate_pass.hpp>
 #include <libsbx/render/particles/particle_draw_pass.hpp>
+#include <libsbx/render/shadow/cascade.hpp>
 
 namespace sbx::render {
 
@@ -70,6 +74,10 @@ struct frame_data {
   graphics::buffer::address_type cluster_light_index_address;
   std::float_t cluster_bias;
   math::vector2 cluster_tile_size;
+  math::vector4 cascade_splits;
+  std::array<math::matrix4x4, shadow_cascade_count> light_view_projections;
+  std::array<std::uint32_t, shadow_cascade_count> shadow_map_indices;
+  std::uint32_t shadow_enabled;
 }; // struct frame_data
 
 struct cluster_aabb {
@@ -115,6 +123,7 @@ render_module::render_module() {
 
   _passes.push_back(std::make_unique<depth_pre_pass>());
   _passes.push_back(std::make_unique<light_culling_pass>());
+  _passes.push_back(std::make_unique<shadow_pass>());
   _passes.push_back(std::make_unique<opaque_pass>());
   _passes.push_back(std::make_unique<skybox_pass>());
   _passes.push_back(std::make_unique<grid_pass>());
@@ -272,14 +281,36 @@ auto render_module::_build_packet() -> render_packet {
     packet.transparent_commands.push_back(std::move(command));
   }
 
+  // Collected separately (rather than emplaced straight into packet.lights) so the shadow-casting
+  // light — the first one with casts_shadows set — can be swapped to the front: shadow_pass and
+  // the lighting shaders both assume "the caster" is always lights[0] when has_shadow_caster is set.
+  auto directional_lights = std::vector<light_data>{};
+  auto shadow_caster_found = false;
+  auto shadow_caster_index = std::size_t{0u};
+
   for (auto&& [entity, transform, light] : scene.query<scenes::world_transform, scenes::directional_light>().each()) {
     const auto& matrix = transform.matrix;
-    auto& out = packet.lights.emplace_back();
-  
-    out.type = light_type::directional;
-    out.color = math::vector4{light.color.r(), light.color.g(), light.color.b(), light.intensity};
-    out.direction = math::vector4{math::vector3f::normalized(math::vector3f{-matrix[2].x(), -matrix[2].y(), -matrix[2].z()}), 0.0f};
+
+    auto data = light_data{};
+    data.type = light_type::directional;
+    data.color = math::vector4{light.color.r(), light.color.g(), light.color.b(), light.intensity};
+    data.direction = math::vector4{math::vector3f::normalized(math::vector3f{-matrix[2].x(), -matrix[2].y(), -matrix[2].z()}), 0.0f};
+
+    if (!shadow_caster_found && light.casts_shadows) {
+      shadow_caster_found = true;
+      shadow_caster_index = directional_lights.size();
+      packet.has_shadow_caster = true;
+      packet.shadow_distance = light.shadow_distance;
+    }
+
+    directional_lights.push_back(data);
   }
+
+  if (shadow_caster_found && shadow_caster_index != 0u) {
+    std::swap(directional_lights.front(), directional_lights[shadow_caster_index]);
+  }
+
+  packet.lights.insert(packet.lights.end(), directional_lights.begin(), directional_lights.end());
 
   packet.directional_light_count = static_cast<std::uint32_t>(packet.lights.size());
 
@@ -638,6 +669,21 @@ auto render_module::_ensure_resources() -> void {
   for (auto slot = std::size_t{0u}; slot < graphics::swapchain::max_frames_in_flight; ++slot) {
     _cluster_counter_addresses[slot] = cluster_counter_base + slot * memory::stride_v<std::uint32_t>;
   }
+
+  // Fixed resolution, independent of viewport size, so these are created once here rather than in
+  // _resize_targets — see shadow_pass.
+  for (auto cascade = std::size_t{0u}; cascade < shadow_cascade_count; ++cascade) {
+    _shadow_map_images[cascade] = registry.emplace<graphics::image>(graphics::image::create_info{
+      .extent = math::vector3u{shadow_map_resolution, shadow_map_resolution, 1u},
+      .format = graphics::format::d32_sfloat,
+      .usage = graphics::image_usage::depth_stencil_attachment | graphics::image_usage::sampled,
+      .samples = graphics::samples::count_1,
+      .name = "Shadow Cascade " + std::to_string(cascade)
+    });
+
+    _shadow_map_indices[cascade] = bindless_table.reserve_sampled_image();
+    bindless_table.write_sampled_image(_shadow_map_indices[cascade], registry.get<graphics::image>(_shadow_map_images[cascade]).view());
+  }
 }
 
 auto render_module::_resize_targets(const math::vector2u extent) -> void {
@@ -783,6 +829,28 @@ auto render_module::_prepare_frame(render_context& context) -> void {
   auto& cluster_counter_buffer = registry.get<graphics::buffer>(_cluster_counter_buffer);
   cluster_counter_buffer.write(&counter_reset, sizeof(counter_reset), context.slot * memory::stride_v<std::uint32_t>);
 
+  // shadow_pass and lighting.slang both assume lights[0] is the caster whenever has_shadow_caster
+  // is set — see the reordering in _build_packet.
+  auto shadow_enabled = std::uint32_t{0u};
+  auto cascade_splits = math::vector4{0.0f, 0.0f, 0.0f, 0.0f};
+  auto light_view_projections = std::array<math::matrix4x4, shadow_cascade_count>{};
+
+  if (context.packet->has_shadow_caster && directional_light_count > 0u) {
+    const auto light_direction = math::vector3f{context.packet->lights[0].direction};
+    const auto cascades = compute_cascades(camera, aspect, light_direction, context.packet->shadow_distance);
+
+    for (auto i = std::size_t{0u}; i < shadow_cascade_count; ++i) {
+      light_view_projections[i] = cascades[i].view_projection;
+    }
+
+    cascade_splits = math::vector4{cascades[0].split_distance, cascades[1].split_distance, cascades[2].split_distance, cascades[3].split_distance};
+    shadow_enabled = 1u;
+  }
+
+  context.has_shadow_caster = shadow_enabled != 0u;
+  context.shadow_maps = _shadow_map_images;
+  context.shadow_map_indices = _shadow_map_indices;
+
   auto data = frame_data{};
   data.view = context.packet->camera.view;
   data.projection = projection;
@@ -802,6 +870,10 @@ auto render_module::_prepare_frame(render_context& context) -> void {
   data.cluster_light_index_address = _cluster_light_index_addresses[context.slot];
   data.cluster_bias = cluster_bias;
   data.cluster_tile_size = cluster_tile_size;
+  data.cascade_splits = cascade_splits;
+  data.light_view_projections = light_view_projections;
+  data.shadow_map_indices = _shadow_map_indices;
+  data.shadow_enabled = shadow_enabled;
 
   auto& frame_buffer = registry.get<graphics::buffer>(_frame_buffer);
   frame_buffer.write(&data, sizeof(frame_data), context.slot * memory::stride_v<frame_data>);

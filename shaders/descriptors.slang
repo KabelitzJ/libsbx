@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Jonas Kabelitz
 #ifndef DESCRIPTORS_SLANG_
 #define DESCRIPTORS_SLANG_
 

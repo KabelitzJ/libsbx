@@ -140,6 +140,8 @@ inline auto sync_materials_with_mesh(mesh_renderer& renderer) -> void {
 struct directional_light {
   math::color color{1.0f, 1.0f, 1.0f, 1.0f};
   std::float_t intensity{1.0f};
+  bool casts_shadows{true};
+  std::float_t shadow_distance{75.0f}; // How far from the camera cascaded shadow maps extend.
 }; // struct directional_light
 
 struct point_light {

@@ -25,6 +25,8 @@ struct push_data {
   uint transform_offset;
   uint material_index;
   uint sampler_index;
+  uint clamp_sampler_index;
+  uint cascade_index;
 }; // struct push_data
 
 [[vk::push_constant]] ConstantBuffer<push_data> push;
@@ -40,7 +42,7 @@ vertex_output vertex_main(vertex_input input) {
   vertex_output output;
 
   output.uv = vertex.uv;
-  output.sv_position = mul(frame.projection, mul(frame.view, world));
+  output.sv_position = mul(frame.light_view_projections[push.cascade_index], world);
 
   return output;
 }

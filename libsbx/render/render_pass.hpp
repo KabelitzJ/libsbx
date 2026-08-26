@@ -25,6 +25,13 @@
 
 namespace sbx::render {
 
+// Cascaded shadow map sizing shared between render_module (target/buffer creation),
+// shadow_pass (rendering the cascades) and render_context (holding this frame's handles).
+// Namespace-scope rather than render_pass members so render_context, declared below, can use
+// them before render_pass itself is defined.
+inline constexpr auto shadow_cascade_count = std::uint32_t{4u};
+inline constexpr auto shadow_map_resolution = std::uint32_t{2048u};
+
 /**
  * @brief Per-frame state handed to every pass. The module fills the scene bindings (addresses,
  * counts, targets) once in its prepare step before running the pass list.
@@ -84,6 +91,13 @@ struct render_context {
   graphics::buffer_handle particle_alpha_draw_args{};
 
   bool show_grid{false};
+
+  // Cascaded shadow maps for the sun (see shadow_pass). Populated every frame regardless of
+  // whether a shadow caster is present; has_shadow_caster gates whether shadow_pass renders into
+  // them and whether the lighting shaders sample them.
+  bool has_shadow_caster{false};
+  std::array<graphics::image_handle, shadow_cascade_count> shadow_maps{};
+  std::array<std::uint32_t, shadow_cascade_count> shadow_map_indices{};
 }; // struct render_context
 
 struct push_constants {
@@ -94,6 +108,7 @@ struct push_constants {
   std::uint32_t material_index;
   std::uint32_t sampler_index;
   std::uint32_t clamp_sampler_index;
+  std::uint32_t cascade_index{0xFFFFFFFFu}; // shadow_pass overrides this per cascade; ignored otherwise.
 }; // struct push_constants
 
 static_assert(sizeof(push_constants) <= 128u, "Push constants must not exceed 128 bytes.");
@@ -117,9 +132,11 @@ public:
 
 }; // class render_pass
 
-auto submit_draw_commands(render_context& context, const std::vector<draw_command>& commands, const std::array<memory::observer_ptr<graphics::graphics_pipeline>, 2u>& pipelines) -> void;
+auto submit_draw_commands(render_context& context, const std::vector<draw_command>& commands, const std::array<memory::observer_ptr<graphics::graphics_pipeline>, 2u>& pipelines, std::uint32_t cascade_index = 0xFFFFFFFFu) -> void;
 
 auto bind_globals(render_context& context) -> void;
+
+auto bind_globals(render_context& context, const math::vector2u& extent) -> void;
 
 auto bind_compute_globals(render_context& context) -> void;
 

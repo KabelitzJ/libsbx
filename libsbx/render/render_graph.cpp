@@ -335,7 +335,7 @@ auto render_graph::compile(const graph_resources& resources) -> void {
         entry.groups[group_index].extent = builder.group_extent(group_index);
       }
 
-      for (const auto& op : builder.ops()) {
+      for (const auto& op : builder.operations()) {
         apply_op(entry, op);
       }
     } else {
@@ -344,7 +344,7 @@ auto render_graph::compile(const graph_resources& resources) -> void {
 
       entry.groups.resize(1u);
 
-      for (const auto& op : builder.ops()) {
+      for (const auto& op : builder.operations()) {
         apply_op(entry, op);
       }
     }

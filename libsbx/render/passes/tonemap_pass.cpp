@@ -49,59 +49,31 @@ tonemap_pass::tonemap_pass() {
   });
 }
 
-auto tonemap_pass::execute(render_context& context) -> void {
+auto tonemap_pass::declare(graphics_pass_builder& builder, const graph_resources& resources) -> void {
+  // HDR target: geometry's writes -> this pass's sampled reads.
+  builder.reads_image(resources.color, graphics::pipeline_stage::fragment_shader, graphics::access::shader_sampled_read, graphics::image_layout::shader_read_only_optimal);
+
+  auto group = render_attachment_group{.extent = resources.extent};
+
+  // final_image's first (and only, this compile) touch, so the compiler clears it — a fullscreen
+  // triangle overwrites every pixel regardless, so the clear's contents never actually show.
+  group.colors.push_back(color_attachment_slot{
+    .image = resources.final_image,
+    .store_op = graphics::attachment_store_op::store
+  });
+
+  builder.add_group(group);
+}
+
+auto tonemap_pass::execute(render_context& context, std::uint32_t /*group*/) -> void {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 
   if (!context.packet->camera.is_active) {
     return;
   }
 
-  auto& registry = graphics_module.resource_registry();
   auto& bindless_table = graphics_module.bindless_table();
 
-  auto& color = registry.get<graphics::image>(context.color);
-  auto& final_image = registry.get<graphics::image>(context.final_image);
-
-  // HDR target: geometry's writes -> this pass's sampled reads.
-  auto to_read = graphics::command_buffer::image_transition_data{};
-  to_read.image = color;
-  to_read.src_stage_mask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
-  to_read.src_access_mask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
-  to_read.dst_stage_mask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
-  to_read.dst_access_mask = VK_ACCESS_2_SHADER_SAMPLED_READ_BIT;
-  to_read.old_layout = graphics::image_layout::color_attachment_optimal;
-  to_read.new_layout = graphics::image_layout::shader_read_only_optimal;
-  to_read.aspect_mask = color.aspect();
-  to_read.layer_count = 1u;
-  context.command_buffer->transition_image_layout(to_read);
-
-  auto to_write = graphics::command_buffer::image_transition_data{};
-  to_write.image = final_image;
-  to_write.src_stage_mask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
-  to_write.src_access_mask = VK_ACCESS_2_SHADER_SAMPLED_READ_BIT;
-  to_write.dst_stage_mask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
-  to_write.dst_access_mask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
-  to_write.old_layout = graphics::image_layout::undefined;
-  to_write.new_layout = graphics::image_layout::color_attachment_optimal;
-  to_write.aspect_mask = final_image.aspect();
-  to_write.layer_count = 1u;
-  context.command_buffer->transition_image_layout(to_write);
-
-  auto color_attachment = VkRenderingAttachmentInfo{};
-  color_attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-  color_attachment.imageView = final_image.view();
-  color_attachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-  color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE; // fullscreen triangle overwrites everything
-  color_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-
-  auto rendering_info = VkRenderingInfo{};
-  rendering_info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
-  rendering_info.renderArea = VkRect2D{VkOffset2D{0, 0}, VkExtent2D{context.extent.x(), context.extent.y()}};
-  rendering_info.layerCount = 1u;
-  rendering_info.colorAttachmentCount = 1u;
-  rendering_info.pColorAttachments = &color_attachment;
-
-  context.command_buffer->begin_rendering(rendering_info);
   bind_globals(context);
 
   context.command_buffer->bind_pipeline(*_pipeline);
@@ -113,8 +85,6 @@ auto tonemap_pass::execute(render_context& context) -> void {
   context.command_buffer->push_constants(bindless_table.pipeline_layout(), graphics::bindless_table::push_constant_stages, 0u, range);
 
   context.command_buffer->draw(3u, 1u, 0u, 0u);
-
-  context.command_buffer->end_rendering();
 }
 
 } // namespace sbx::render

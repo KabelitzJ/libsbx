@@ -10,6 +10,7 @@
 #include <libsbx/graphics/pipeline/compute_pipeline.hpp>
 
 #include <libsbx/render/render_pass.hpp>
+#include <libsbx/render/render_graph.hpp>
 
 namespace sbx::render {
 
@@ -30,7 +31,7 @@ namespace sbx::render {
  * camera and the light list, both already known by then, not on anything opaque_pass or
  * transparent_accumulate_pass produce.
  */
-class light_culling_pass final : public render_pass {
+class light_culling_pass final : public compute_pass {
 
 public:
 
@@ -42,6 +43,8 @@ public:
   [[nodiscard]] auto name() const -> std::string_view override {
     return "Light Culling";
   }
+
+  auto declare(compute_pass_builder& builder, const graph_resources& resources) -> void override;
 
   auto execute(render_context& context) -> void override;
 

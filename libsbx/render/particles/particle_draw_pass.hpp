@@ -8,6 +8,7 @@
 #include <libsbx/graphics/pipeline/graphics_pipeline.hpp>
 
 #include <libsbx/render/render_pass.hpp>
+#include <libsbx/render/render_graph.hpp>
 
 namespace sbx::render {
 
@@ -35,9 +36,14 @@ namespace sbx::render {
  * frame_context's timeline) is what actually keeps this pass's reads from racing the *previous*
  * frame's writes to the same buffers.
  */
-class particle_draw_pass final : public render_pass {
+class particle_draw_pass final : public graphics_pass {
 
 public:
+
+  // Group indices returned by declare()'s add_group calls, in order — used by should_execute/
+  // execute to know which pool's draw_args gate/feed a given group.
+  inline static constexpr auto additive_group = std::uint32_t{0u};
+  inline static constexpr auto alpha_blend_group = std::uint32_t{1u};
 
   particle_draw_pass();
 
@@ -45,7 +51,11 @@ public:
     return "Particle Draw";
   }
 
-  auto execute(render_context& context) -> void override;
+  auto declare(graphics_pass_builder& builder, const graph_resources& resources) -> void override;
+
+  auto execute(render_context& context, std::uint32_t group) -> void override;
+
+  [[nodiscard]] auto should_execute(const render_context& context, std::uint32_t group) const -> bool override;
 
 private:
 

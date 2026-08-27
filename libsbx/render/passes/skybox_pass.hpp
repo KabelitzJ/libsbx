@@ -11,6 +11,7 @@
 #include <libsbx/graphics/pipeline/graphics_pipeline.hpp>
 
 #include <libsbx/render/render_pass.hpp>
+#include <libsbx/render/render_graph.hpp>
 
 namespace sbx::render {
 
@@ -27,7 +28,7 @@ namespace sbx::render {
  * invisible wherever only sky was behind them. Drawing it before transparent instead makes it
  * part of what transparent_resolve_pass composites against.
  */
-class skybox_pass final : public render_pass {
+class skybox_pass final : public graphics_pass {
 
 public:
 
@@ -37,7 +38,9 @@ public:
     return "Skybox";
   }
 
-  auto execute(render_context& context) -> void override;
+  auto declare(graphics_pass_builder& builder, const graph_resources& resources) -> void override;
+
+  auto execute(render_context& context, std::uint32_t group) -> void override;
 
 private:
 

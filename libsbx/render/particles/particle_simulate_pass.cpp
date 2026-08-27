@@ -18,14 +18,14 @@
 
 namespace sbx::render {
 
-auto compute_to_compute_barrier(VkPipelineStageFlags2 extra_dst_stage = 0u, VkAccessFlags2 extra_dst_access = 0u) -> VkMemoryBarrier2 {
+auto compute_to_compute_barrier(graphics::pipeline_stage extra_dst_stage = graphics::pipeline_stage::none, graphics::access extra_dst_access = graphics::access::none) -> VkMemoryBarrier2 {
   auto barrier = VkMemoryBarrier2{};
 
   barrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2;
-  barrier.srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
-  barrier.srcAccessMask = VK_ACCESS_2_SHADER_WRITE_BIT;
-  barrier.dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT | extra_dst_stage;
-  barrier.dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT | VK_ACCESS_2_SHADER_WRITE_BIT | extra_dst_access;
+  barrier.srcStageMask = graphics::to_vk_enum<VkPipelineStageFlags2>(graphics::pipeline_stage::compute_shader);
+  barrier.srcAccessMask = graphics::to_vk_enum<VkAccessFlags2>(graphics::access::shader_write);
+  barrier.dstStageMask = graphics::to_vk_enum<VkPipelineStageFlags2>(graphics::pipeline_stage::compute_shader | extra_dst_stage);
+  barrier.dstAccessMask = graphics::to_vk_enum<VkAccessFlags2>(graphics::access::shader_read | graphics::access::shader_write | extra_dst_access);
 
   return barrier;
 }
@@ -69,6 +69,13 @@ particle_simulate_pass::particle_simulate_pass(particle_pool& additive_pool, par
   });
 }
 
+auto particle_simulate_pass::declare(compute_pass_builder&, const graph_resources&) -> void {
+  // No cross-pass declaration needed: the hand-off to particle_draw_pass is a plain VkMemoryBarrier2
+  // (not tied to a specific buffer identity) written by hand at the end of execute() below, exactly
+  // like light_culling_pass's. It's the only option here anyway — alive_list ping-pongs by
+  // frame_index % 2, so there's no single buffer_handle a compile-time declaration could even name.
+}
+
 auto particle_simulate_pass::execute(render_context& context) -> void {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
   auto& frame_context = graphics_module.frame_context();
@@ -101,7 +108,7 @@ auto particle_simulate_pass::execute(render_context& context) -> void {
   _record_pool(context, _additive_pool, additive_emits, delta_time, time, read_index, write_index);
   _record_pool(context, _alpha_pool, alpha_emits, delta_time, time, read_index, write_index);
 
-  auto barrier_to_draw = compute_to_compute_barrier(VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT, VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT);
+  auto barrier_to_draw = compute_to_compute_barrier(graphics::pipeline_stage::vertex_shader | graphics::pipeline_stage::fragment_shader | graphics::pipeline_stage::draw_indirect, graphics::access::indirect_command_read);
 
   context.command_buffer->memory_dependency(barrier_to_draw);
 }
@@ -164,7 +171,7 @@ auto particle_simulate_pass::_record_pool(render_context& context, particle_pool
 
   command_buffer.dispatch(1u, 1u, 1u);
 
-  auto barrier_to_simulate = compute_to_compute_barrier(VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT, VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT);
+  auto barrier_to_simulate = compute_to_compute_barrier(graphics::pipeline_stage::draw_indirect, graphics::access::indirect_command_read);
   command_buffer.memory_dependency(barrier_to_simulate);
 
   // Stage 2: simulate — indirect dispatch over last frame's alive list. Ages particles out (push to dead_list), integrates survivors, appends them to this frame's alive list.

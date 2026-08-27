@@ -10,6 +10,7 @@
 #include <libsbx/graphics/pipeline/graphics_pipeline.hpp>
 
 #include <libsbx/render/render_pass.hpp>
+#include <libsbx/render/render_graph.hpp>
 
 namespace sbx::render {
 
@@ -22,7 +23,7 @@ namespace sbx::render {
  * (see its doc comment): it needs the fully-populated opaque depth buffer to be occluded by real
  * geometry, and it must be part of what transparent_resolve_pass composites against.
  */
-class grid_pass final : public render_pass {
+class grid_pass final : public graphics_pass {
 
 public:
 
@@ -32,7 +33,11 @@ public:
     return "Grid";
   }
 
-  auto execute(render_context& context) -> void override;
+  auto declare(graphics_pass_builder& builder, const graph_resources& resources) -> void override;
+
+  auto execute(render_context& context, std::uint32_t group) -> void override;
+
+  [[nodiscard]] auto should_execute(const render_context& context, std::uint32_t group) const -> bool override;
 
 private:
 

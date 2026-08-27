@@ -14,6 +14,7 @@
 #include <libsbx/graphics/pipeline/compute_pipeline.hpp>
 
 #include <libsbx/render/render_pass.hpp>
+#include <libsbx/render/render_graph.hpp>
 #include <libsbx/render/particles/particle_pool.hpp>
 
 namespace sbx::render {
@@ -46,7 +47,7 @@ namespace sbx::render {
  * (including why this used to be a bespoke non-render_pass subsystem, and why that turned out to
  * be unnecessary).
  */
-class particle_simulate_pass final : public render_pass {
+class particle_simulate_pass final : public compute_pass {
 
 public:
 
@@ -55,6 +56,8 @@ public:
   [[nodiscard]] auto name() const -> std::string_view override {
     return "Particle Simulate";
   }
+
+  auto declare(compute_pass_builder& builder, const graph_resources& resources) -> void override;
 
   auto execute(render_context& context) -> void override;
 

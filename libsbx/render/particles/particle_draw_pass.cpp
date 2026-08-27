@@ -29,20 +29,6 @@ struct push_data {
   std::uint32_t sampler_index;
 }; // struct push_data
 
-auto continuation_write_barrier(graphics::image& image) -> graphics::command_buffer::image_transition_data {
-  auto barrier = graphics::command_buffer::image_transition_data{};
-  barrier.image = image;
-  barrier.src_stage_mask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
-  barrier.src_access_mask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
-  barrier.dst_stage_mask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
-  barrier.dst_access_mask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT;
-  barrier.old_layout = graphics::image_layout::color_attachment_optimal;
-  barrier.new_layout = graphics::image_layout::color_attachment_optimal;
-  barrier.aspect_mask = image.aspect();
-  barrier.layer_count = 1u;
-  return barrier;
-}
-
 particle_draw_pass::particle_draw_pass() {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 
@@ -119,59 +105,66 @@ particle_draw_pass::particle_draw_pass() {
   });
 }
 
-auto particle_draw_pass::execute(render_context& context) -> void {
-  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
+auto particle_draw_pass::declare(graphics_pass_builder& builder, const graph_resources& resources) -> void {
+  // Continuation writes, not fresh transitions — transparent_accumulate_pass (accumulator/
+  // revealage) and opaque_pass (color) already wrote this frame; both groups blend onto existing
+  // content (WRITE|READ), same reasoning as skybox_pass/grid_pass.
+  auto additive = render_attachment_group{.extent = resources.extent};
 
+  additive.colors.push_back(color_attachment_slot{
+    .image = resources.color_msaa,
+    .access_mask = graphics::access::color_attachment_write | graphics::access::color_attachment_read,
+    .store_op = graphics::attachment_store_op::store,
+    .resolve_image = resources.color
+  });
+
+  additive.depth = depth_attachment_slot{.image = resources.depth};
+
+  builder.add_group(additive);
+
+  auto alpha_blend = render_attachment_group{.extent = resources.extent};
+
+  alpha_blend.colors.push_back(color_attachment_slot{
+    .image = resources.accumulator_msaa,
+    .access_mask = graphics::access::color_attachment_write | graphics::access::color_attachment_read,
+    .store_op = graphics::attachment_store_op::store,
+    .resolve_image = resources.accumulator
+  });
+
+  alpha_blend.colors.push_back(color_attachment_slot{
+    .image = resources.revealage_msaa,
+    .access_mask = graphics::access::color_attachment_write | graphics::access::color_attachment_read,
+    .store_op = graphics::attachment_store_op::store,
+    .resolve_image = resources.revealage
+  });
+
+  alpha_blend.depth = depth_attachment_slot{.image = resources.depth};
+
+  builder.add_group(alpha_blend);
+}
+
+auto particle_draw_pass::should_execute(const render_context& context, std::uint32_t group) const -> bool {
   if (!context.packet->camera.is_active) {
-    return;
+    return false;
   }
 
+  return group == additive_group ? context.particle_additive_draw_args.is_valid() : context.particle_alpha_draw_args.is_valid();
+}
+
+auto particle_draw_pass::execute(render_context& context, std::uint32_t group) -> void {
+  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
   auto& registry = graphics_module.resource_registry();
 
-  auto& depth = registry.get<graphics::image>(context.depth);
+  bind_globals(context);
 
-  auto depth_attachment = VkRenderingAttachmentInfo{};
-  depth_attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-  depth_attachment.imageView = depth.view();
-  depth_attachment.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
-  depth_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
-  depth_attachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-
-  if (context.particle_additive_draw_args.is_valid()) {
-    auto& color = registry.get<graphics::image>(context.color);
-    auto& color_msaa = registry.get<graphics::image>(context.color_msaa);
-
-    auto to_color_msaa = continuation_write_barrier(color_msaa);
-    context.command_buffer->transition_image_layout(to_color_msaa);
-
-    auto color_attachment = VkRenderingAttachmentInfo{};
-    color_attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-    color_attachment.imageView = color_msaa.view();
-    color_attachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-    color_attachment.resolveMode = VK_RESOLVE_MODE_AVERAGE_BIT;
-    color_attachment.resolveImageView = color.view();
-    color_attachment.resolveImageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-    color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
-    color_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-
-    auto rendering_info = VkRenderingInfo{};
-    rendering_info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
-    rendering_info.renderArea = VkRect2D{VkOffset2D{0, 0}, VkExtent2D{context.extent.x(), context.extent.y()}};
-    rendering_info.layerCount = 1u;
-    rendering_info.colorAttachmentCount = 1u;
-    rendering_info.pColorAttachments = &color_attachment;
-    rendering_info.pDepthAttachment = &depth_attachment;
-
-    context.command_buffer->begin_rendering(rendering_info);
-    bind_globals(context);
-
+  if (group == additive_group) {
     context.command_buffer->bind_pipeline(*_additive_pipeline);
 
     auto data = push_data{
-      context.frame_address, 
-      context.particle_additive_particles_address, 
-      context.particle_additive_alive_list_address, 
-      context.particle_additive_emitters_address, 
+      context.frame_address,
+      context.particle_additive_particles_address,
+      context.particle_additive_alive_list_address,
+      context.particle_additive_emitters_address,
       context.sampler_index
     };
 
@@ -179,62 +172,14 @@ auto particle_draw_pass::execute(render_context& context) -> void {
 
     auto& draw_args = registry.get<graphics::buffer>(context.particle_additive_draw_args);
     context.command_buffer->draw_indirect(draw_args, 0u, 1u);
-
-    context.command_buffer->end_rendering();
-  }
-
-  if (context.particle_alpha_draw_args.is_valid()) {
-    auto& accumulator = registry.get<graphics::image>(context.accumulator);
-    auto& accumulator_msaa = registry.get<graphics::image>(context.accumulator_msaa);
-    auto& revealage = registry.get<graphics::image>(context.revealage);
-    auto& revealage_msaa = registry.get<graphics::image>(context.revealage_msaa);
-
-    auto to_accum_msaa = continuation_write_barrier(accumulator_msaa);
-    context.command_buffer->transition_image_layout(to_accum_msaa);
-
-    auto to_revealage_msaa = continuation_write_barrier(revealage_msaa);
-    context.command_buffer->transition_image_layout(to_revealage_msaa);
-
-    auto accum_attachment = VkRenderingAttachmentInfo{};
-    accum_attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-    accum_attachment.imageView = accumulator_msaa.view();
-    accum_attachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-    accum_attachment.resolveMode = VK_RESOLVE_MODE_AVERAGE_BIT;
-    accum_attachment.resolveImageView = accumulator.view();
-    accum_attachment.resolveImageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-    accum_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
-    accum_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-
-    auto revealage_attachment = VkRenderingAttachmentInfo{};
-    revealage_attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-    revealage_attachment.imageView = revealage_msaa.view();
-    revealage_attachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-    revealage_attachment.resolveMode = VK_RESOLVE_MODE_AVERAGE_BIT;
-    revealage_attachment.resolveImageView = revealage.view();
-    revealage_attachment.resolveImageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-    revealage_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
-    revealage_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-
-    const auto color_attachments = std::array{accum_attachment, revealage_attachment};
-
-    auto rendering_info = VkRenderingInfo{};
-    rendering_info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
-    rendering_info.renderArea = VkRect2D{VkOffset2D{0, 0}, VkExtent2D{context.extent.x(), context.extent.y()}};
-    rendering_info.layerCount = 1u;
-    rendering_info.colorAttachmentCount = static_cast<std::uint32_t>(color_attachments.size());
-    rendering_info.pColorAttachments = color_attachments.data();
-    rendering_info.pDepthAttachment = &depth_attachment;
-
-    context.command_buffer->begin_rendering(rendering_info);
-    bind_globals(context);
-
+  } else {
     context.command_buffer->bind_pipeline(*_alpha_blend_pipeline);
 
     auto data = push_data{
-      context.frame_address, 
-      context.particle_alpha_particles_address, 
-      context.particle_alpha_alive_list_address, 
-      context.particle_alpha_emitters_address, 
+      context.frame_address,
+      context.particle_alpha_particles_address,
+      context.particle_alpha_alive_list_address,
+      context.particle_alpha_emitters_address,
       context.sampler_index
     };
 
@@ -242,8 +187,6 @@ auto particle_draw_pass::execute(render_context& context) -> void {
 
     auto& draw_args = registry.get<graphics::buffer>(context.particle_alpha_draw_args);
     context.command_buffer->draw_indirect(draw_args, 0u, 1u);
-
-    context.command_buffer->end_rendering();
   }
 }
 

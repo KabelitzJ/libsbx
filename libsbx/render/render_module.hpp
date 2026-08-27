@@ -29,6 +29,7 @@
 
 #include <libsbx/render/render_packet.hpp>
 #include <libsbx/render/render_pass.hpp>
+#include <libsbx/render/render_graph.hpp>
 #include <libsbx/render/render_thread.hpp>
 #include <libsbx/render/particles/particle_pool.hpp>
 
@@ -90,6 +91,8 @@ private:
 
   auto _resize_targets(const math::vector2u extent) -> void;
 
+  [[nodiscard]] auto _build_graph_resources() const -> graph_resources;
+
   auto _prepare_frame(render_context& context) -> void;
 
   [[nodiscard]] auto _build_packet() -> render_packet;
@@ -119,7 +122,7 @@ private:
 
   core::delegate<void()> _pre_render_callback{};
 
-  std::vector<std::unique_ptr<render_pass>> _passes{};
+  render_graph _graph{};
   std::unique_ptr<render_pass> _composite_pass{};
 
   graphics::image_handle _final_image{};

@@ -52,50 +52,26 @@ depth_pre_pass::depth_pre_pass() {
   _pipelines[1] = make(graphics::cull_mode::none, "Depth Pre Double-Sided");
 }
 
-auto depth_pre_pass::execute(render_context& context) -> void {
-  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
+auto depth_pre_pass::declare(graphics_pass_builder& builder, const graph_resources& resources) -> void {
+  auto group = render_attachment_group{.extent = resources.extent};
 
+  group.depth = depth_attachment_slot{
+    .image = resources.depth,
+    .access_mask = graphics::access::depth_stencil_attachment_write | graphics::access::depth_stencil_attachment_read,
+    .store_op = graphics::attachment_store_op::store,
+    .clear_value = graphics::depth_stencil_clear_value{1.0f, 0u}
+  };
+
+  builder.add_group(group);
+}
+
+auto depth_pre_pass::execute(render_context& context, std::uint32_t /*group*/) -> void {
   if (!context.packet->camera.is_active) {
     return;
   }
 
-  auto& registry = graphics_module.resource_registry();
-  auto& depth = registry.get<graphics::image>(context.depth);
-
-  auto to_depth = graphics::command_buffer::image_transition_data{};
-  to_depth.image = depth.handle();
-  to_depth.src_stage_mask = VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT;
-  to_depth.src_access_mask = VK_ACCESS_2_NONE;
-  to_depth.dst_stage_mask = VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT;
-  to_depth.dst_access_mask = VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT | VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
-  to_depth.old_layout = graphics::image_layout::undefined;
-  to_depth.new_layout = graphics::image_layout::depth_attachment_optimal;
-  to_depth.aspect_mask = depth.aspect();
-  to_depth.layer_count = 1u;
-  context.command_buffer->transition_image_layout(to_depth);
-
-  auto depth_attachment = VkRenderingAttachmentInfo{};
-  depth_attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-  depth_attachment.imageView = depth.view();
-  depth_attachment.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
-  depth_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-  depth_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-  depth_attachment.clearValue.depthStencil = VkClearDepthStencilValue{1.0f, 0u};
-
-  auto rendering_info = VkRenderingInfo{};
-  rendering_info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
-  rendering_info.renderArea = VkRect2D{VkOffset2D{0, 0}, VkExtent2D{context.extent.x(), context.extent.y()}};
-  rendering_info.layerCount = 1u;
-  rendering_info.colorAttachmentCount = 0u;
-  rendering_info.pColorAttachments = nullptr;
-  rendering_info.pDepthAttachment = &depth_attachment;
-
-  context.command_buffer->begin_rendering(rendering_info);
-
   bind_globals(context);
   submit_draw_commands(context, context.packet->opaque_commands, _pipelines);
-
-  context.command_buffer->end_rendering();
 }
 
 } // namespace sbx::render

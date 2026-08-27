@@ -53,66 +53,37 @@ shadow_pass::shadow_pass() {
   _pipelines[1] = make(graphics::cull_mode::none, "Shadow Cascade Double-Sided");
 }
 
-auto shadow_pass::execute(render_context& context) -> void {
-  if (!context.has_shadow_caster) {
-    return;
-  }
-
-  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
-  auto& registry = graphics_module.resource_registry();
-
+auto shadow_pass::declare(graphics_pass_builder& builder, const graph_resources& resources) -> void {
   const auto shadow_extent = math::vector2u{shadow_map_resolution, shadow_map_resolution};
 
   for (auto cascade = std::uint32_t{0u}; cascade < shadow_cascade_count; ++cascade) {
-    auto& shadow_map = registry.get<graphics::image>(context.shadow_maps[cascade]);
+    auto group = render_attachment_group{.extent = shadow_extent};
 
-    auto to_depth = graphics::command_buffer::image_transition_data{};
-    to_depth.image = shadow_map.handle();
-    to_depth.src_stage_mask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
-    to_depth.src_access_mask = VK_ACCESS_2_SHADER_READ_BIT;
-    to_depth.dst_stage_mask = VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT;
-    to_depth.dst_access_mask = VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT | VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
-    to_depth.old_layout = graphics::image_layout::undefined;
-    to_depth.new_layout = graphics::image_layout::depth_attachment_optimal;
-    to_depth.aspect_mask = shadow_map.aspect();
-    to_depth.layer_count = 1u;
-    context.command_buffer->transition_image_layout(to_depth);
+    group.depth = depth_attachment_slot{
+      .image = resources.shadow_maps[cascade],
+      .access_mask = graphics::access::depth_stencil_attachment_write | graphics::access::depth_stencil_attachment_read,
+      .store_op = graphics::attachment_store_op::store,
+      .clear_value = graphics::depth_stencil_clear_value{1.0f, 0u}
+    };
 
-    auto depth_attachment = VkRenderingAttachmentInfo{};
-    depth_attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-    depth_attachment.imageView = shadow_map.view();
-    depth_attachment.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
-    depth_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-    depth_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-    depth_attachment.clearValue.depthStencil = VkClearDepthStencilValue{1.0f, 0u};
+    const auto group_index = builder.add_group(group);
 
-    auto rendering_info = VkRenderingInfo{};
-    rendering_info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
-    rendering_info.renderArea = VkRect2D{VkOffset2D{0, 0}, VkExtent2D{shadow_extent.x(), shadow_extent.y()}};
-    rendering_info.layerCount = 1u;
-    rendering_info.colorAttachmentCount = 0u;
-    rendering_info.pColorAttachments = nullptr;
-    rendering_info.pDepthAttachment = &depth_attachment;
-
-    context.command_buffer->begin_rendering(rendering_info);
-
-    bind_globals(context, shadow_extent);
-    submit_draw_commands(context, context.packet->shadow_caster_commands, _pipelines, cascade);
-
-    context.command_buffer->end_rendering();
-
-    auto to_read = graphics::command_buffer::image_transition_data{};
-    to_read.image = shadow_map.handle();
-    to_read.src_stage_mask = VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT;
-    to_read.src_access_mask = VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-    to_read.dst_stage_mask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
-    to_read.dst_access_mask = VK_ACCESS_2_SHADER_READ_BIT;
-    to_read.old_layout = graphics::image_layout::depth_attachment_optimal;
-    to_read.new_layout = graphics::image_layout::shader_read_only_optimal;
-    to_read.aspect_mask = shadow_map.aspect();
-    to_read.layer_count = 1u;
-    context.command_buffer->transition_image_layout(to_read);
+    // No consumer declares a shadow-map read (bindless sample, same as the cluster buffers) — this
+    // pass must self-transition after its own end_rendering() (Vulkan forbids transitioning an
+    // attachment while still inside its own render scope).
+    builder.transitions_after(group_index, resources.shadow_maps[cascade], graphics::pipeline_stage::fragment_shader, graphics::access::shader_read, graphics::image_layout::shader_read_only_optimal);
   }
+}
+
+auto shadow_pass::should_execute(const render_context& context, std::uint32_t /*cascade*/) const -> bool {
+  return context.has_shadow_caster;
+}
+
+auto shadow_pass::execute(render_context& context, std::uint32_t cascade) -> void {
+  const auto shadow_extent = math::vector2u{shadow_map_resolution, shadow_map_resolution};
+
+  bind_globals(context, shadow_extent);
+  submit_draw_commands(context, context.packet->shadow_caster_commands, _pipelines, cascade);
 }
 
 } // namespace sbx::render

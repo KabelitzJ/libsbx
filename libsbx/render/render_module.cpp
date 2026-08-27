@@ -121,17 +121,17 @@ render_module::render_module() {
     .name = "Alpha Blend Particle Pool"
   });
 
-  _passes.push_back(std::make_unique<depth_pre_pass>());
-  _passes.push_back(std::make_unique<light_culling_pass>());
-  _passes.push_back(std::make_unique<shadow_pass>());
-  _passes.push_back(std::make_unique<opaque_pass>());
-  _passes.push_back(std::make_unique<skybox_pass>());
-  _passes.push_back(std::make_unique<grid_pass>());
-  _passes.push_back(std::make_unique<transparent_accumulate_pass>());
-  _passes.push_back(std::make_unique<particle_simulate_pass>(*_particle_pools[particle_pool_additive], *_particle_pools[particle_pool_alpha_blend]));
-  _passes.push_back(std::make_unique<particle_draw_pass>());
-  _passes.push_back(std::make_unique<transparent_resolve_pass>());
-  _passes.push_back(std::make_unique<tonemap_pass>());
+  _graph.add_pass<depth_pre_pass>();
+  _graph.add_pass<light_culling_pass>();
+  _graph.add_pass<shadow_pass>();
+  _graph.add_pass<opaque_pass>();
+  _graph.add_pass<skybox_pass>();
+  _graph.add_pass<grid_pass>();
+  _graph.add_pass<transparent_accumulate_pass>();
+  _graph.add_pass<particle_simulate_pass>(*_particle_pools[particle_pool_additive], *_particle_pools[particle_pool_alpha_blend]);
+  _graph.add_pass<particle_draw_pass>();
+  _graph.add_pass<transparent_resolve_pass>();
+  _graph.add_pass<tonemap_pass>();
 
   _composite_pass = std::make_unique<present_pass>();
 
@@ -520,10 +520,7 @@ auto render_module::_consume_packet(const render_packet& packet) -> void {
 
     if (packet.camera.is_active) {
       _prepare_frame(context);
-
-      for (auto& pass : _passes) {
-        pass->execute(context);
-      }
+      _graph.execute(context);
     }
 
     // Always runs, camera or not: presenting *something* to the swapchain — the tonemapped scene
@@ -783,6 +780,32 @@ auto render_module::_resize_targets(const math::vector2u extent) -> void {
   bindless_table.write_sampled_image(_final_image_index, registry.get<graphics::image>(_final_image).view());
 
   _target_extent = extent;
+
+  // Every extent-dependent image above just got a brand new resource_handle (a real resize, not
+  // the first-ever call) — the graph's compiled barriers/VkRenderingInfo reference concrete handles
+  // and are only valid for this one "resource generation", so it must recompile here, and nowhere
+  // else (buffers and shadow maps never change handle, so they don't force a recompile on their own).
+  _graph.compile(_build_graph_resources());
+}
+
+auto render_module::_build_graph_resources() const -> graph_resources {
+  return graph_resources{
+    .extent = _target_extent,
+    .depth = _depth_image,
+    .color = _color_image,
+    .color_msaa = _color_msaa_image,
+    .final_image = _final_image,
+    .accumulator = _accum_image,
+    .accumulator_msaa = _accumulator_msaa_image,
+    .revealage = _revealage_image,
+    .revealage_msaa = _revealage_msaa_image,
+    .shadow_maps = _shadow_map_images,
+    .frame_buffer = _frame_buffer,
+    .cluster_aabb_buffer = _cluster_aabb_buffer,
+    .cluster_range_buffer = _cluster_range_buffer,
+    .cluster_light_index_buffer = _cluster_light_index_buffer,
+    .cluster_counter_buffer = _cluster_counter_buffer
+  };
 }
 
 auto render_module::_prepare_frame(render_context& context) -> void {

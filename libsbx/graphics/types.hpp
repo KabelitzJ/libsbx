@@ -52,7 +52,7 @@ enum class memory_usage : std::uint8_t {
   host_read
 }; // enum class memory_usage
 
-enum class [[=reflection::bit_field]] buffer_usage : std::int32_t {
+enum class [[=reflection::bit_field]] buffer_usage : std::uint32_t {
   transfer_source = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
   transfer_destination = VK_BUFFER_USAGE_TRANSFER_DST_BIT,
   uniform = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
@@ -63,7 +63,7 @@ enum class [[=reflection::bit_field]] buffer_usage : std::int32_t {
   device_address = VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
 }; // enum class buffer_usage
 
-enum class [[=reflection::bit_field]] image_usage : std::int32_t {
+enum class [[=reflection::bit_field]] image_usage : std::uint32_t {
   transfer_source = VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
   transfer_destination = VK_IMAGE_USAGE_TRANSFER_DST_BIT,
   sampled = VK_IMAGE_USAGE_SAMPLED_BIT,
@@ -119,7 +119,7 @@ enum class blend_factor : std::int32_t {
   source_alpha_saturate = VK_BLEND_FACTOR_SRC_ALPHA_SATURATE
 }; // enum class blend_factor
 
-enum class [[=reflection::bit_field]] color_component : std::int32_t {
+enum class [[=reflection::bit_field]] color_component : std::uint32_t {
   r = VK_COLOR_COMPONENT_R_BIT,
   g = VK_COLOR_COMPONENT_G_BIT,
   b = VK_COLOR_COMPONENT_B_BIT,
@@ -226,6 +226,51 @@ enum class [[=reflection::named]] primitive_topology : std::int32_t {
   patch_list = VK_PRIMITIVE_TOPOLOGY_PATCH_LIST
 }; // enum class primitive_topology
 
+
+enum class [[=reflection::bit_field]] pipeline_stage : std::uint64_t {
+  none = VK_PIPELINE_STAGE_2_NONE,
+  draw_indirect = VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT,
+  vertex_shader = VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT,
+  early_fragment_tests = VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT,
+  fragment_shader = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+  late_fragment_tests = VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
+  color_attachment_output = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+  compute_shader = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+  transfer = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+  bottom_of_pipe = VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT,
+  all_commands = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT
+}; // enum class pipeline_stage
+
+/**
+ * @brief Synchronization2 access flags (`VkAccessFlags2`/`VkAccessFlagBits2`) — same 64-bit
+ * rationale as @ref pipeline_stage.
+ */
+enum class [[=reflection::bit_field]] access : std::uint64_t {
+  none = VK_ACCESS_2_NONE,
+  indirect_command_read = VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT,
+  shader_read = VK_ACCESS_2_SHADER_READ_BIT,
+  shader_write = VK_ACCESS_2_SHADER_WRITE_BIT,
+  color_attachment_read = VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT,
+  color_attachment_write = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+  depth_stencil_attachment_read = VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT,
+  depth_stencil_attachment_write = VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+  transfer_read = VK_ACCESS_2_TRANSFER_READ_BIT,
+  transfer_write = VK_ACCESS_2_TRANSFER_WRITE_BIT,
+  host_write = VK_ACCESS_2_HOST_WRITE_BIT,
+  memory_read = VK_ACCESS_2_MEMORY_READ_BIT,
+  memory_write = VK_ACCESS_2_MEMORY_WRITE_BIT,
+  shader_sampled_read = VK_ACCESS_2_SHADER_SAMPLED_READ_BIT,
+  shader_storage_write = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT
+}; // enum class access
+
+/** @brief A depth/stencil attachment's clear value — the render-side equivalent of
+ * `VkClearDepthStencilValue`, kept Vulkan-free like the rest of this header. Color clears use
+ * math::color instead, there being no need for a dedicated wrapper. */
+struct depth_stencil_clear_value {
+  std::float_t depth{1.0f};
+  std::uint32_t stencil{0u};
+}; // struct depth_stencil_clear_value
+
 enum class compare_operation : std::int32_t {
   never = VK_COMPARE_OP_NEVER,
   less = VK_COMPARE_OP_LESS,
@@ -237,8 +282,22 @@ enum class compare_operation : std::int32_t {
   always = VK_COMPARE_OP_ALWAYS
 }; // enum class compare_operation
 
+/**
+ * @brief Converts one of this header's wrapper enums to its Vulkan counterpart, pairing each
+ * target kind with the underlying type that actually matches it: a plain Vulkan C enum (VkFormat,
+ * VkImageLayout, ...) always has underlying type `int`, so its wrapper is `std::int32_t`-backed;
+ * `VkFlags` (used for 32-bit bitmasks like VkBufferUsageFlags) is `std::uint32_t`; `VkFlags64`
+ * (used for synchronization2's wider bitmasks like VkPipelineStageFlags2) is `std::uint64_t`.
+ */
 template<typename VkEnum, typename Enum>
-requires ((std::is_enum_v<VkEnum> || std::is_same_v<VkEnum, VkFlags>) && std::is_enum_v<Enum> && std::is_same_v<std::underlying_type_t<Enum>, std::int32_t>)
+requires (
+  std::is_enum_v<Enum> &&
+  (
+    (std::is_enum_v<VkEnum> && std::is_same_v<std::underlying_type_t<Enum>, std::int32_t>) ||
+    (std::is_same_v<VkEnum, VkFlags> && std::is_same_v<std::underlying_type_t<Enum>, std::uint32_t>) ||
+    (std::is_same_v<VkEnum, VkFlags64> && std::is_same_v<std::underlying_type_t<Enum>, std::uint64_t>)
+  )
+)
 constexpr auto to_vk_enum(Enum value) -> VkEnum {
   return static_cast<VkEnum>(value);
 }

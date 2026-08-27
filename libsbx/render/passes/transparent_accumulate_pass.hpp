@@ -11,6 +11,7 @@
 #include <libsbx/graphics/pipeline/graphics_pipeline.hpp>
 
 #include <libsbx/render/render_pass.hpp>
+#include <libsbx/render/render_graph.hpp>
 
 namespace sbx::render {
 
@@ -28,7 +29,7 @@ namespace sbx::render {
  *
  * Pipeline slots: [0] cull_mode::back — single-sided. [1] cull_mode::none — double-sided.
  */
-class transparent_accumulate_pass final : public render_pass {
+class transparent_accumulate_pass final : public graphics_pass {
 
 public:
 
@@ -38,7 +39,9 @@ public:
     return "Transparent Accumulate";
   }
 
-  auto execute(render_context& context) -> void override;
+  auto declare(graphics_pass_builder& builder, const graph_resources& resources) -> void override;
+
+  auto execute(render_context& context, std::uint32_t group) -> void override;
 
 private:
 

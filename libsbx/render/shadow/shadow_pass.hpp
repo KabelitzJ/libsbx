@@ -11,6 +11,7 @@
 #include <libsbx/graphics/pipeline/graphics_pipeline.hpp>
 
 #include <libsbx/render/render_pass.hpp>
+#include <libsbx/render/render_graph.hpp>
 
 namespace sbx::render {
 
@@ -23,7 +24,7 @@ namespace sbx::render {
  * Runs after light_culling_pass and before opaque_pass/transparent_accumulate_pass, which sample
  * the resulting maps (see shaders/shadows/csm.slang) while shading the sun's contribution.
  */
-class shadow_pass final : public render_pass {
+class shadow_pass final : public graphics_pass {
 
 public:
 
@@ -33,7 +34,11 @@ public:
     return "Shadow";
   }
 
-  auto execute(render_context& context) -> void override;
+  auto declare(graphics_pass_builder& builder, const graph_resources& resources) -> void override;
+
+  auto execute(render_context& context, std::uint32_t cascade) -> void override;
+
+  [[nodiscard]] auto should_execute(const render_context& context, std::uint32_t cascade) const -> bool override;
 
 private:
 

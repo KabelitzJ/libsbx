@@ -54,70 +54,34 @@ skybox_pass::skybox_pass() {
   });
 }
 
-auto skybox_pass::execute(render_context& context) -> void {
+auto skybox_pass::declare(graphics_pass_builder& builder, const graph_resources& resources) -> void {
+  auto group = render_attachment_group{.extent = resources.extent};
+
+  // Continuation write, not a fresh transition — opaque_pass already wrote color_msaa/color this
+  // frame.
+  group.colors.push_back(color_attachment_slot{
+    .image = resources.color_msaa,
+    .access_mask = graphics::access::color_attachment_write | graphics::access::color_attachment_read,
+    .store_op = graphics::attachment_store_op::store,
+    .resolve_image = resources.color
+  });
+
+  // No depth barrier needed: depth has stayed in depth_attachment_optimal since opaque_pass, and
+  // this is a read-only use — the compiler elides it automatically (read-after-read).
+  group.depth = depth_attachment_slot{.image = resources.depth};
+
+  builder.add_group(group);
+}
+
+auto skybox_pass::execute(render_context& context, std::uint32_t /*group*/) -> void {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 
   if (!context.packet->camera.is_active) {
     return;
   }
 
-  auto& registry = graphics_module.resource_registry();
   auto& bindless_table = graphics_module.bindless_table();
 
-  auto& color = registry.get<graphics::image>(context.color);
-  auto& depth = registry.get<graphics::image>(context.depth);
-  auto& color_msaa = registry.get<graphics::image>(context.color_msaa);
-
-  auto to_color = graphics::command_buffer::image_transition_data{};
-  to_color.image = color_msaa;
-  to_color.src_stage_mask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
-  to_color.src_access_mask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
-  to_color.dst_stage_mask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
-  to_color.dst_access_mask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT;
-  to_color.old_layout = graphics::image_layout::color_attachment_optimal;
-  to_color.new_layout = graphics::image_layout::color_attachment_optimal;
-  to_color.aspect_mask = color_msaa.aspect();
-  to_color.layer_count = 1u;
-  context.command_buffer->transition_image_layout(to_color);
-
-  auto to_resolve = graphics::command_buffer::image_transition_data{};
-  to_resolve.image = color;
-  to_resolve.src_stage_mask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
-  to_resolve.src_access_mask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
-  to_resolve.dst_stage_mask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
-  to_resolve.dst_access_mask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
-  to_resolve.old_layout = graphics::image_layout::color_attachment_optimal;
-  to_resolve.new_layout = graphics::image_layout::color_attachment_optimal;
-  to_resolve.aspect_mask = color.aspect();
-  to_resolve.layer_count = 1u;
-  context.command_buffer->transition_image_layout(to_resolve);
-
-  auto color_attachment = VkRenderingAttachmentInfo{};
-  color_attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-  color_attachment.imageView = color_msaa.view();
-  color_attachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-  color_attachment.resolveMode = VK_RESOLVE_MODE_AVERAGE_BIT;
-  color_attachment.resolveImageView = color.view();
-  color_attachment.resolveImageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-  color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
-  color_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-
-  auto depth_attachment = VkRenderingAttachmentInfo{};
-  depth_attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-  depth_attachment.imageView = depth.view();
-  depth_attachment.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
-  depth_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
-  depth_attachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-
-  auto rendering_info = VkRenderingInfo{};
-  rendering_info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
-  rendering_info.renderArea = VkRect2D{VkOffset2D{0, 0}, VkExtent2D{context.extent.x(), context.extent.y()}};
-  rendering_info.layerCount = 1u;
-  rendering_info.colorAttachmentCount = 1u;
-  rendering_info.pColorAttachments = &color_attachment;
-  rendering_info.pDepthAttachment = &depth_attachment;
-
-  context.command_buffer->begin_rendering(rendering_info);
   bind_globals(context);
 
   context.command_buffer->bind_pipeline(*_pipeline);
@@ -130,8 +94,6 @@ auto skybox_pass::execute(render_context& context) -> void {
   context.command_buffer->push_constants(bindless_table.pipeline_layout(), graphics::bindless_table::push_constant_stages, 0u, range);
 
   context.command_buffer->draw(3u, 1u, 0u, 0u);
-
-  context.command_buffer->end_rendering();
 }
 
 } // namespace sbx::render

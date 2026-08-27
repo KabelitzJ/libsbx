@@ -62,13 +62,15 @@ struct cull_lights_push_data {
   graphics::buffer::address_type counter;
 }; // struct cull_lights_push_data
 
+auto light_culling_pass::declare(compute_pass_builder& builder, const graph_resources& resources) -> void {
+  builder.declares_buffer_ready(resources.cluster_range_buffer, graphics::pipeline_stage::vertex_shader | graphics::pipeline_stage::fragment_shader, graphics::access::shader_read);
+  builder.declares_buffer_ready(resources.cluster_light_index_buffer, graphics::pipeline_stage::vertex_shader | graphics::pipeline_stage::fragment_shader, graphics::access::shader_read);
+}
+
 auto light_culling_pass::execute(render_context& context) -> void {
   if (!context.packet->camera.is_active) {
     return;
   }
-
-  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
-  auto& bindless_table = graphics_module.bindless_table();
 
   bind_compute_globals(context);
 
@@ -96,10 +98,10 @@ auto light_culling_pass::execute(render_context& context) -> void {
   // build_clusters' writes to the AABB buffer must land before cull_lights reads them.
   auto aabb_ready = VkMemoryBarrier2{};
   aabb_ready.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2;
-  aabb_ready.srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
-  aabb_ready.srcAccessMask = VK_ACCESS_2_SHADER_WRITE_BIT;
-  aabb_ready.dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
-  aabb_ready.dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT;
+  aabb_ready.srcStageMask = graphics::to_vk_enum<VkPipelineStageFlags2>(graphics::pipeline_stage::compute_shader);
+  aabb_ready.srcAccessMask = graphics::to_vk_enum<VkAccessFlags2>(graphics::access::shader_write);
+  aabb_ready.dstStageMask = graphics::to_vk_enum<VkPipelineStageFlags2>(graphics::pipeline_stage::compute_shader);
+  aabb_ready.dstAccessMask = graphics::to_vk_enum<VkAccessFlags2>(graphics::access::shader_read);
   context.command_buffer->memory_dependency(aabb_ready);
 
   context.command_buffer->bind_pipeline(*_cull_lights_pipeline);
@@ -116,10 +118,10 @@ auto light_culling_pass::execute(render_context& context) -> void {
 
   auto lights_ready = VkMemoryBarrier2{};
   lights_ready.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2;
-  lights_ready.srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
-  lights_ready.srcAccessMask = VK_ACCESS_2_SHADER_WRITE_BIT;
-  lights_ready.dstStageMask = VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
-  lights_ready.dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT;
+  lights_ready.srcStageMask = graphics::to_vk_enum<VkPipelineStageFlags2>(graphics::pipeline_stage::compute_shader);
+  lights_ready.srcAccessMask = graphics::to_vk_enum<VkAccessFlags2>(graphics::access::shader_write);
+  lights_ready.dstStageMask = graphics::to_vk_enum<VkPipelineStageFlags2>(graphics::pipeline_stage::vertex_shader | graphics::pipeline_stage::fragment_shader);
+  lights_ready.dstAccessMask = graphics::to_vk_enum<VkAccessFlags2>(graphics::access::shader_read);
   context.command_buffer->memory_dependency(lights_ready);
 }
 

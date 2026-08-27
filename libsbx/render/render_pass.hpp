@@ -92,9 +92,6 @@ struct render_context {
 
   bool show_grid{false};
 
-  // Cascaded shadow maps for the sun (see shadow_pass). Populated every frame regardless of
-  // whether a shadow caster is present; has_shadow_caster gates whether shadow_pass renders into
-  // them and whether the lighting shaders sample them.
   bool has_shadow_caster{false};
   std::array<graphics::image_handle, shadow_cascade_count> shadow_maps{};
   std::array<std::uint32_t, shadow_cascade_count> shadow_map_indices{};

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Jonas Kabelitz
-#include <libsbx/render/passes/shadow_pass.hpp>
+#include <libsbx/render/shadow/shadow_pass.hpp>
 
 #include <array>
 #include <string>

@@ -130,6 +130,8 @@ find_package(Vulkan REQUIRED)
 find_package(fastgltf CONFIG REQUIRED)
 find_package(fmt CONFIG REQUIRED)
 find_package(glfw3 CONFIG REQUIRED)
+find_package(imgui CONFIG REQUIRED)
+find_package(imguizmo CONFIG REQUIRED)
 find_package(lz4 CONFIG REQUIRED)
 find_package(meshoptimizer CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
@@ -155,25 +157,6 @@ endif()
 add_library(libsbx::libsbx ALIAS libsbx)
 
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
-
-# add_custom_target(
-#   compiled_shaders_libsbx ALL
-#   COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/scripts/compile_shaders.py
-#     ${SBX_SHADER_SRC_DIR}
-#     --output ${SBX_SHADER_OUT_DIR}
-#     --manifest ${SBX_SHADER_SRC_DIR}/manifest.txt
-#   COMMENT "Compiling shaders for ${PROJECT_NAME}..."
-# )
-
-# add_custom_target(
-#   staged_shaders_libsbx ALL
-#   COMMAND ${CMAKE_COMMAND} -E copy_directory
-#     ${SBX_SHADER_SRC_DIR} ${SBX_SHADER_OUT_DIR}
-#   DEPENDS compiled_shaders_libsbx
-#   COMMENT "Staging shader sources for ${PROJECT_NAME}..."
-# )
-
-# add_dependencies(${PROJECT_NAME} staged_shaders_libsbx)
 
 target_sources(
   libsbx
@@ -246,7 +229,6 @@ target_sources(
     "${CMAKE_SOURCE_DIR}/libsbx/render/passes/light_culling_pass.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/render/passes/opaque_pass.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/render/passes/present_pass.cpp"
-    "${CMAKE_SOURCE_DIR}/libsbx/render/passes/shadow_pass.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/render/passes/skybox_pass.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/render/passes/tonemap_pass.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/render/passes/transparent_accumulate_pass.cpp"
@@ -255,6 +237,7 @@ target_sources(
     "${CMAKE_SOURCE_DIR}/libsbx/render/render_pass.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/render/render_thread.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/render/shadow/cascade.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/render/shadow/shadow_pass.cpp"
 
     "${CMAKE_SOURCE_DIR}/libsbx/scenes/scene_serializer.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/scenes/scene.cpp"
@@ -564,6 +547,8 @@ target_link_libraries(
     fmt::fmt
     glfw
     GPUOpen::VulkanMemoryAllocator
+    imgui::imgui
+    imguizmo::imguizmo
     lz4::lz4
     meshoptimizer::meshoptimizer
     Nethost::nethost

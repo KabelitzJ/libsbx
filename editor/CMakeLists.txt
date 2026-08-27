@@ -51,8 +51,6 @@ target_include_directories(
 target_link_libraries(
   ${PROJECT_NAME}
   PUBLIC
-    imgui::imgui
-    imguizmo::imguizmo
     libsbx::libsbx
 )
 

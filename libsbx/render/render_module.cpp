@@ -40,7 +40,6 @@
 
 #include <libsbx/render/passes/depth_pre_pass.hpp>
 #include <libsbx/render/passes/light_culling_pass.hpp>
-#include <libsbx/render/passes/shadow_pass.hpp>
 #include <libsbx/render/passes/opaque_pass.hpp>
 #include <libsbx/render/passes/present_pass.hpp>
 #include <libsbx/render/passes/skybox_pass.hpp>
@@ -50,6 +49,7 @@
 #include <libsbx/render/passes/transparent_resolve_pass.hpp>
 #include <libsbx/render/particles/particle_simulate_pass.hpp>
 #include <libsbx/render/particles/particle_draw_pass.hpp>
+#include <libsbx/render/shadow/shadow_pass.hpp>
 #include <libsbx/render/shadow/cascade.hpp>
 
 namespace sbx::render {

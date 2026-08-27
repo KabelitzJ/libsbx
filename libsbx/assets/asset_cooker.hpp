@@ -41,11 +41,19 @@ struct pixel_data {
   std::uint32_t height{0u};
 }; // struct pixel_data
 
+/** @brief One coarser level in a submesh's LOD chain — an index range into the same shared vertex buffer as its LOD0. */
+struct mesh_lod {
+  std::uint32_t index_offset;
+  std::uint32_t index_count;
+  std::float_t error; // meshopt_simplify's relative error metric for this level
+}; // struct mesh_lod
+
 struct cooked_submesh {
   std::uint32_t index_offset;
   std::uint32_t index_count;
   math::volume bounds;
   math::uuid material;
+  std::vector<mesh_lod> lods{}; // progressively coarser levels beyond index_offset/index_count (LOD0); may be empty
 }; // struct cooked_submesh
 
 struct cooked_mesh_data {
@@ -176,6 +184,15 @@ private:
    * triangle indices, already offset by vertex_start.
    */
   static auto _generate_tangents(std::vector<vertex>& vertices, const std::vector<std::uint32_t>& indices, std::size_t vertex_start, std::size_t vertex_count, std::size_t index_start, std::size_t index_count) -> void;
+
+  /**
+   * @brief Reorders one submesh's slice of the shared vertex/index arrays for GPU cache efficiency
+   * (vertex cache, overdraw, vertex fetch — meshoptimizer's standard trio), in place, then derives a
+   * coarser LOD chain from the result via meshopt_simplify. Each generated LOD's indices are appended
+   * to `indices` (which grows); the returned levels reference `vertex_start`'s (now reordered) vertex
+   * range, same as index_offset/index_count on the submesh they belong to.
+   */
+  static auto _optimize_and_generate_lods(std::vector<vertex>& vertices, std::vector<std::uint32_t>& indices, std::size_t vertex_start, std::size_t vertex_count, std::size_t index_start, std::size_t index_count) -> std::vector<mesh_lod>;
 
   auto _cook_mesh(const std::filesystem::path& source, const math::uuid& id, const std::filesystem::path& cooked, const mesh_import_options& options, const material_resolver& resolve_material) -> bool;
 

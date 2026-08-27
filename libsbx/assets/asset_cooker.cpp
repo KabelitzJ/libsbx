@@ -19,6 +19,8 @@
 #include <fastgltf/types.hpp>
 #include <fastgltf/math.hpp>
 
+#include <meshoptimizer.h>
+
 #include <libsbx/utility/iterator.hpp>
 #include <libsbx/utility/fourcc.hpp>
 #include <libsbx/utility/logger.hpp>
@@ -31,7 +33,7 @@ inline constexpr auto texture_magic = utility::fourcc_v<"SBTX">;  // 'SBTX'
 inline constexpr auto texture_version = std::uint32_t{1u};
 
 inline constexpr auto mesh_magic = utility::fourcc_v<"SBSH">;   // 'SBSH'
-inline constexpr auto mesh_version = std::uint32_t{5u};
+inline constexpr auto mesh_version = std::uint32_t{6u}; // v6: meshopt-optimized vertex/index order, LOD chain, meshopt-compressed on-disk buffers
 
 inline constexpr auto material_magic = utility::fourcc_v<"SBMT">; // 'SBMT'
 inline constexpr auto material_version = std::uint32_t{2u};
@@ -78,11 +80,13 @@ struct texture_header {
 struct mesh_file_header {
   std::uint32_t magic;
   std::uint32_t version;
-  std::uint32_t vertex_count;
-  std::uint32_t index_count;
+  std::uint32_t vertex_count;      // logical count after decoding vertex_data
+  std::uint32_t index_count;       // logical count after decoding index_data (spans every submesh's LOD chain, not just LOD0)
   std::uint32_t submesh_count;
   std::float_t bounds_min[3];
   std::float_t bounds_max[3];
+  std::uint32_t vertex_data_size;  // bytes of meshopt-encoded vertex buffer following the header
+  std::uint32_t index_data_size;   // bytes of meshopt-encoded index buffer following the vertex data
 }; // struct mesh_file_header
 
 struct submesh_file_record {
@@ -91,7 +95,14 @@ struct submesh_file_record {
   std::float_t bounds_min[3];
   std::float_t bounds_max[3];
   std::uint64_t material_uuid; // 0 = none
+  std::uint32_t lod_count;     // submesh_lod_record entries immediately following this record
 }; // struct submesh_file_record
+
+struct submesh_lod_record {
+  std::uint32_t index_offset;
+  std::uint32_t index_count;
+  std::float_t error;
+}; // struct submesh_lod_record
 
 struct material_file_header {
   std::uint32_t magic;
@@ -675,6 +686,81 @@ auto asset_cooker::_generate_tangents(std::vector<vertex>& vertices, const std::
   }
 }
 
+auto asset_cooker::_optimize_and_generate_lods(std::vector<vertex>& vertices, std::vector<std::uint32_t>& indices, std::size_t vertex_start, std::size_t vertex_count, std::size_t index_start, std::size_t index_count) -> std::vector<mesh_lod> {
+  auto lods = std::vector<mesh_lod>{};
+
+  if (index_count == 0u || vertex_count == 0u) {
+    return lods;
+  }
+
+  // meshopt's index/vertex functions work in a 0-based local index space, not the mesh-global one
+  // `indices` stores (offsets already folded in) — translate this submesh's slice down to local
+  // indices, optimize, then translate back before writing into the shared arrays.
+  auto local = std::vector<std::uint32_t>(index_count);
+
+  for (auto i = std::size_t{0u}; i < index_count; ++i) {
+    local[i] = indices[index_start + i] - static_cast<std::uint32_t>(vertex_start);
+  }
+
+  // Standard GPU-friendly ordering trio: vertex cache (post-transform reuse), overdraw (front-to-back
+  // triangle order), vertex fetch (pre-transform cache locality — reorders the vertex buffer itself).
+  meshopt_optimizeVertexCache(local.data(), local.data(), index_count, vertex_count);
+  meshopt_optimizeOverdraw(local.data(), local.data(), index_count, &vertices[vertex_start].position.x(), vertex_count, sizeof(vertex), 1.05f);
+
+  auto reordered = std::vector<vertex>(vertex_count);
+  meshopt_optimizeVertexFetch(reordered.data(), local.data(), index_count, &vertices[vertex_start], vertex_count, sizeof(vertex));
+  std::ranges::copy(reordered, vertices.begin() + static_cast<std::ptrdiff_t>(vertex_start));
+
+  for (auto i = std::size_t{0u}; i < index_count; ++i) {
+    indices[index_start + i] = local[i] + static_cast<std::uint32_t>(vertex_start);
+  }
+
+  // Coarser LOD chain, each level targeting half the previous one's triangle budget. Generated from
+  // the now cache/fetch-optimized LOD0; stops once meshopt_simplify can no longer make meaningful
+  // progress (topology-locked) or the mesh is already too small to bother.
+  auto previous = local;
+  constexpr auto max_levels = std::size_t{4u};
+  constexpr auto min_triangle_count = std::size_t{8u};
+
+  for (auto level = std::size_t{0u}; level < max_levels; ++level) {
+    const auto target_index_count = std::max((previous.size() / 2u) / 3u * 3u, min_triangle_count * 3u);
+
+    if (target_index_count >= previous.size()) {
+      break;
+    }
+
+    auto simplified = std::vector<std::uint32_t>(previous.size());
+    auto result_error = 0.0f;
+
+    const auto simplified_count = meshopt_simplify(
+      simplified.data(), previous.data(), previous.size(),
+      &vertices[vertex_start].position.x(), vertex_count, sizeof(vertex),
+      target_index_count, 1e-2f, 0u, &result_error
+    );
+
+    // Less than ~10% reduction means the chain has bottomed out (topology constraints, etc).
+    if (simplified_count == 0u || simplified_count >= (previous.size() * 9u) / 10u) {
+      break;
+    }
+
+    simplified.resize(simplified_count);
+    meshopt_optimizeVertexCache(simplified.data(), simplified.data(), simplified_count, vertex_count);
+
+    const auto lod_offset = indices.size();
+    indices.reserve(lod_offset + simplified_count);
+
+    for (const auto index : simplified) {
+      indices.push_back(index + static_cast<std::uint32_t>(vertex_start));
+    }
+
+    lods.push_back(mesh_lod{static_cast<std::uint32_t>(lod_offset), static_cast<std::uint32_t>(simplified_count), result_error});
+
+    previous = std::move(simplified);
+  }
+
+  return lods;
+}
+
 auto asset_cooker::_cook_mesh(const std::filesystem::path& source, const math::uuid& id, const std::filesystem::path& cooked, const mesh_import_options& options, const material_resolver& resolve_material) -> bool {
   auto data = fastgltf::GltfDataBuffer::FromPath(source);
 
@@ -844,11 +930,14 @@ auto asset_cooker::_cook_mesh(const std::filesystem::path& source, const math::u
         _generate_tangents(vertices, indices, vertex_start, position_accessor.count, index_start, index_accessor.count);
       }
 
+      auto lods = _optimize_and_generate_lods(vertices, indices, vertex_start, position_accessor.count, index_start, index_accessor.count);
+
       submeshes.push_back(cooked_submesh{
         static_cast<std::uint32_t>(index_start),
         static_cast<std::uint32_t>(index_accessor.count),
         submesh_volume,
-        material_uuid_for(primitive.materialIndex)
+        material_uuid_for(primitive.materialIndex),
+        std::move(lods)
       });
     }
   };
@@ -882,6 +971,17 @@ auto asset_cooker::_cook_mesh(const std::filesystem::path& source, const math::u
     return false;
   }
 
+  // meshopt-compress both buffers for the on-disk cache — smaller cooked files, less I/O on load.
+  // Purely a storage-format concern: decoded back into the same flat vertex/index vectors on read,
+  // transparent to everything downstream of _load_cooked_mesh.
+  auto encoded_vertices = std::vector<unsigned char>(meshopt_encodeVertexBufferBound(vertices.size(), sizeof(vertex)));
+  const auto vertex_data_size = meshopt_encodeVertexBuffer(encoded_vertices.data(), encoded_vertices.size(), vertices.data(), vertices.size(), sizeof(vertex));
+  encoded_vertices.resize(vertex_data_size);
+
+  auto encoded_indices = std::vector<unsigned char>(meshopt_encodeIndexBufferBound(indices.size(), vertices.size()));
+  const auto index_data_size = meshopt_encodeIndexBuffer(encoded_indices.data(), encoded_indices.size(), indices.data(), indices.size());
+  encoded_indices.resize(index_data_size);
+
   auto header = mesh_file_header{};
   header.magic = mesh_magic;
   header.version = mesh_version;
@@ -894,10 +994,12 @@ auto asset_cooker::_cook_mesh(const std::filesystem::path& source, const math::u
   header.bounds_max[0] = mesh_volume.max().x();
   header.bounds_max[1] = mesh_volume.max().y();
   header.bounds_max[2] = mesh_volume.max().z();
+  header.vertex_data_size = static_cast<std::uint32_t>(vertex_data_size);
+  header.index_data_size = static_cast<std::uint32_t>(index_data_size);
 
   out.write(reinterpret_cast<const char*>(&header), sizeof(header));
-  out.write(reinterpret_cast<const char*>(vertices.data()), static_cast<std::streamsize>(vertices.size() * sizeof(vertex)));
-  out.write(reinterpret_cast<const char*>(indices.data()), static_cast<std::streamsize>(indices.size() * sizeof(std::uint32_t)));
+  out.write(reinterpret_cast<const char*>(encoded_vertices.data()), static_cast<std::streamsize>(vertex_data_size));
+  out.write(reinterpret_cast<const char*>(encoded_indices.data()), static_cast<std::streamsize>(index_data_size));
 
   for (const auto& submesh : submeshes) {
     auto record = submesh_file_record{};
@@ -910,8 +1012,14 @@ auto asset_cooker::_cook_mesh(const std::filesystem::path& source, const math::u
     record.bounds_max[1] = submesh.bounds.max().y();
     record.bounds_max[2] = submesh.bounds.max().z();
     record.material_uuid = submesh.material.value();
+    record.lod_count = static_cast<std::uint32_t>(submesh.lods.size());
 
     out.write(reinterpret_cast<const char*>(&record), sizeof(record));
+
+    for (const auto& lod : submesh.lods) {
+      auto lod_record = submesh_lod_record{lod.index_offset, lod.index_count, lod.error};
+      out.write(reinterpret_cast<const char*>(&lod_record), sizeof(lod_record));
+    }
   }
 
   utility::logger<"assets">::debug("Cooked mesh '{}' -> '{}'", source.generic_string(), cooked.generic_string());
@@ -933,11 +1041,23 @@ auto asset_cooker::_load_cooked_mesh(const std::filesystem::path& cooked, std::v
     return false; // missing / corrupt / stale format -> caller recooks
   }
 
+  auto encoded_vertices = std::vector<unsigned char>(header.vertex_data_size);
+  in.read(reinterpret_cast<char*>(encoded_vertices.data()), static_cast<std::streamsize>(header.vertex_data_size));
+
   vertices.resize(header.vertex_count);
-  in.read(reinterpret_cast<char*>(vertices.data()), static_cast<std::streamsize>(header.vertex_count * sizeof(vertex)));
+
+  if (!in || meshopt_decodeVertexBuffer(vertices.data(), header.vertex_count, sizeof(vertex), encoded_vertices.data(), encoded_vertices.size()) != 0) {
+    return false; // corrupt / truncated -> caller recooks
+  }
+
+  auto encoded_indices = std::vector<unsigned char>(header.index_data_size);
+  in.read(reinterpret_cast<char*>(encoded_indices.data()), static_cast<std::streamsize>(header.index_data_size));
 
   indices.resize(header.index_count);
-  in.read(reinterpret_cast<char*>(indices.data()), static_cast<std::streamsize>(header.index_count * sizeof(std::uint32_t)));
+
+  if (!in || meshopt_decodeIndexBuffer(indices.data(), header.index_count, sizeof(std::uint32_t), encoded_indices.data(), encoded_indices.size()) != 0) {
+    return false;
+  }
 
   submeshes.clear();
   submeshes.reserve(header.submesh_count);
@@ -950,11 +1070,26 @@ auto asset_cooker::_load_cooked_mesh(const std::filesystem::path& cooked, std::v
       return false;
     }
 
+    auto lods = std::vector<mesh_lod>{};
+    lods.reserve(record.lod_count);
+
+    for (auto l = std::uint32_t{0u}; l < record.lod_count; ++l) {
+      auto lod_record = submesh_lod_record{};
+      in.read(reinterpret_cast<char*>(&lod_record), sizeof(lod_record));
+
+      if (!in) {
+        return false;
+      }
+
+      lods.push_back(mesh_lod{lod_record.index_offset, lod_record.index_count, lod_record.error});
+    }
+
     submeshes.push_back(cooked_submesh{
       record.index_offset,
       record.index_count,
       math::volume{math::vector3{record.bounds_min[0], record.bounds_min[1], record.bounds_min[2]}, math::vector3{record.bounds_max[0], record.bounds_max[1], record.bounds_max[2]}},
-      math::uuid::from_value(record.material_uuid)
+      math::uuid::from_value(record.material_uuid),
+      std::move(lods)
     });
   }
 

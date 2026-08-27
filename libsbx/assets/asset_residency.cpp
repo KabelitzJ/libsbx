@@ -146,7 +146,14 @@ auto asset_residency::load_mesh(const math::uuid& id, const mesh_import_options&
       material = fallback_material;
     }
 
-    submeshes.push_back(mesh::submesh{cooked_submesh.index_offset, cooked_submesh.index_count, cooked_submesh.bounds, material});
+    auto lods = std::vector<mesh::lod_level>{};
+    lods.reserve(cooked_submesh.lods.size());
+
+    for (const auto& lod : cooked_submesh.lods) {
+      lods.push_back(mesh::lod_level{lod.index_offset, lod.index_count, lod.error});
+    }
+
+    submeshes.push_back(mesh::submesh{cooked_submesh.index_offset, cooked_submesh.index_count, cooked_submesh.bounds, material, std::move(lods)});
   }
 
   const auto vertex_count = data->vertices.size();

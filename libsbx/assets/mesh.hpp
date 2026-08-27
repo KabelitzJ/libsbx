@@ -40,11 +40,19 @@ class mesh final {
 
 public:
 
+  /** @brief One coarser level in a submesh's LOD chain — an index range into the same vertex buffer as its LOD0. */
+  struct lod_level {
+    std::uint32_t index_offset;
+    std::uint32_t index_count;
+    std::float_t error; // meshopt_simplify's relative error metric for this level
+  }; // struct lod_level
+
   struct submesh {
     std::uint32_t index_offset;
     std::uint32_t index_count;
     math::volume bounds;
     material_handle material;
+    std::vector<lod_level> lods{}; // progressively coarser levels beyond index_offset/index_count (LOD0); may be empty. Not yet consumed by the renderer — always drawn at LOD0.
   }; // struct submesh
 
   mesh() = default;

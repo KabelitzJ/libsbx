@@ -4,19 +4,31 @@ metadata:
   primary_light: 914089331969664293
 assets_module:
   static_meshes:
-    - key: flight_helmet
-      name: flight_helmet
-      uuid: 14461802237679278954
-    - key: damaged_helmet
-      name: damaged_helmet
-      uuid: 13561706357635767432
-    - key: duck
-      name: duck
-      uuid: 17482914061356141443
     - key: cube
       name: cube
       uuid: 13674539523814858198
+    - key: duck
+      name: duck
+      uuid: 17482914061356141443
+    - key: damaged_helmet
+      name: damaged_helmet
+      uuid: 13561706357635767432
+    - key: flight_helmet
+      name: flight_helmet
+      uuid: 14461802237679278954
   materials:
+    - key: Material
+      name: Material
+      uuid: 8821735985643789217
+    - key: Duck
+      name: Duck
+      uuid: 15160336789969913823
+    - key: Duck_1
+      name: Duck
+      uuid: 3116193129268789910
+    - key: damaged_helmet_1
+      name: damaged_helmet
+      uuid: 7529548745142294463
     - key: HoseMat
       name: HoseMat
       uuid: 13001827256491783798
@@ -35,63 +47,84 @@ assets_module:
     - key: LensesMat
       name: LensesMat
       uuid: 11180536956528813088
-    - key: damaged_helmet_1
-      name: damaged_helmet
-      uuid: 7529548745142294463
-    - key: Duck
-      name: Duck
-      uuid: 3116193129268789910
-    - key: Duck_1
-      name: Duck
-      uuid: 15160336789969913823
-    - key: Material
-      name: Material
-      uuid: 8821735985643789217
   environment_maps:
     - key: sky
       name: sky
       uuid: 16235111279438891485
   particle_effects:
-    - key: explosion
-      name: explosion
-      uuid: 4451871067383123407
+    []
 nodes:
-  - tag: Explosion
-    id: 8837949490007657714
+  - tag: Node
+    id: 10299365739581102668
     components:
       - type: transform
-        position: {x: 1.33414388, y: 1, z: 2.19679928}
-        rotation: {x: 0, y: 0, z: 0, w: 1}
-        scale: {x: 1, y: 1, z: 1}
-      - type: particle_effect
-        effect: explosion
-        loop: true
-        playback: playing
-  - tag: Camera
-    id: 1867269432501270719
-    components:
-      - type: transform
-        position: {x: 6.40552616, y: 6.66551876, z: 5.4645524}
-        rotation: {x: -0.36800307, y: 0.278124601, z: 0.116361707, w: 0.879590988}
-        scale: {x: 1, y: 1, z: 1}
-      - type: camera
-        fov_degrees: 60
-        near_plane: 0.00999999978
-        far_plane: 1000
-      - type: skybox
-        environment: sky
-        intensity: 1
-  - tag: Light
-    id: 9852644092818528630
-    components:
-      - type: transform
-        position: {x: -1.44358444, y: 2.81216931, z: -1.18974483}
-        rotation: {x: -0.030682886, y: 0.232532114, z: 0.127166167, w: 0.963751137}
-        scale: {x: 0.999995172, y: 0.999998391, z: 0.99999702}
-      - type: point_light
-        color: {r: 1, g: 0, b: 1, a: 1}
-        intensity: 30
+        position: {x: 1.20640731, y: 1.9734565, z: -0.358610481}
+        rotation: {x: -0.707106769, y: -0, z: 0, w: 0.707106829}
+        scale: {x: 1, y: 0.999989033, z: 0.999989033}
+      - type: spot_light
+        color: {r: 1, g: 0, b: 0, a: 1}
+        intensity: 100
         range: 20
+        inner_angle: 0.400000006
+        outer_angle: 0.600000024
+  - tag: Sun
+    id: 914089331969664293
+    components:
+      - type: transform
+        position: {x: 0, y: 5.32163954, z: 0}
+        rotation: {x: 0.608986974, y: 0.661132514, z: 0.414565384, w: -0.142035261}
+        scale: {x: 0.999994993, y: 0.999992192, z: 0.999998093}
+      - type: directional_light
+        color: {r: 1, g: 1, b: 1, a: 1}
+        intensity: 3
+  - tag: Node
+    id: 5275514898628331403
+    components:
+      - type: transform
+        position: {x: 1.20543933, y: 0, z: 0.00316208601}
+        rotation: {x: 0, y: -0.493597358, z: 0, w: 0.869690537}
+        scale: {x: 0.499999672, y: 0.5, z: 0.499999672}
+      - type: static_mesh
+        mesh: duck
+        submeshes:
+          - index: 0
+            material: Duck
+  - tag: Duck2
+    id: 4123480847172013213
+    components:
+      - type: transform
+        position: {x: 0.5, y: 0, z: 0}
+        rotation: {x: 0, y: 0, z: 0, w: 1}
+        scale: {x: 0.299999833, y: 0.299999982, z: 0.299999863}
+      - type: static_mesh
+        mesh: duck
+        submeshes:
+          - index: 0
+            material: Duck
+  - tag: Duck
+    id: 18192380847172016805
+    components:
+      - type: transform
+        position: {x: 2.04940629, y: 0, z: 0}
+        rotation: {x: 0, y: 0, z: 0, w: 1}
+        scale: {x: 0.300000012, y: 0.300000012, z: 0.300000012}
+      - type: static_mesh
+        mesh: duck
+        submeshes:
+          - index: 0
+            material: Duck_1
+  - tag: DamagedHelmet
+    id: 5387185583104597123
+    components:
+      - type: transform
+        position: {x: -2.26088619, y: 1.17917264, z: 0}
+        rotation: {x: 2.60464503e-06, y: 0.551322103, z: -1.46121658e-06, w: 0.834292471}
+        scale: {x: 0.999984384, y: 0.999995708, z: 0.999981999}
+      - type: static_mesh
+        mesh: damaged_helmet
+        submeshes:
+          - index: 0
+            material: damaged_helmet_1
   - tag: FlightHelmet
     id: 7853293024889737634
     components:
@@ -114,77 +147,31 @@ nodes:
             material: LeatherPartsMat
           - index: 5
             material: LensesMat
-  - tag: DamagedHelmet
-    id: 5387185583104597123
+  - tag: Light
+    id: 9852644092818528630
     components:
       - type: transform
-        position: {x: -2.26088619, y: 1.17917264, z: 0}
-        rotation: {x: 2.60464503e-06, y: 0.551322103, z: -1.46121658e-06, w: 0.834292471}
-        scale: {x: 0.999984384, y: 0.999995708, z: 0.999981999}
-      - type: static_mesh
-        mesh: damaged_helmet
-        submeshes:
-          - index: 0
-            material: damaged_helmet_1
-  - tag: Duck
-    id: 18192380847172016805
-    components:
-      - type: transform
-        position: {x: 2.04940629, y: 0, z: 0}
-        rotation: {x: 0, y: 0, z: 0, w: 1}
-        scale: {x: 0.300000012, y: 0.300000012, z: 0.300000012}
-      - type: static_mesh
-        mesh: duck
-        submeshes:
-          - index: 0
-            material: Duck
-  - tag: Duck2
-    id: 4123480847172013213
-    components:
-      - type: transform
-        position: {x: 0.5, y: 0, z: 0}
-        rotation: {x: 0, y: 0, z: 0, w: 1}
-        scale: {x: 0.299999833, y: 0.299999982, z: 0.299999863}
-      - type: static_mesh
-        mesh: duck
-        submeshes:
-          - index: 0
-            material: Duck_1
-  - tag: Node
-    id: 5275514898628331403
-    components:
-      - type: transform
-        position: {x: 1.20543933, y: 0, z: 0.00316208601}
-        rotation: {x: 0, y: -0.493597358, z: 0, w: 0.869690537}
-        scale: {x: 0.499999672, y: 0.5, z: 0.499999672}
-      - type: static_mesh
-        mesh: duck
-        submeshes:
-          - index: 0
-            material: Duck_1
-  - tag: Sun
-    id: 914089331969664293
-    components:
-      - type: transform
-        position: {x: 0, y: 5.32163954, z: 0}
-        rotation: {x: 0.608986974, y: 0.661132514, z: 0.414565384, w: -0.142035261}
-        scale: {x: 0.999994993, y: 0.999992192, z: 0.999998093}
-      - type: directional_light
-        color: {r: 1, g: 1, b: 1, a: 1}
-        intensity: 3
-  - tag: Node
-    id: 10299365739581102668
-    components:
-      - type: transform
-        position: {x: 1.20640731, y: 1.9734565, z: -0.358610481}
-        rotation: {x: -0.707106769, y: -0, z: 0, w: 0.707106829}
-        scale: {x: 1, y: 0.999989033, z: 0.999989033}
-      - type: spot_light
-        color: {r: 1, g: 0, b: 0, a: 1}
-        intensity: 100
+        position: {x: -1.44358444, y: 2.81216931, z: -1.18974483}
+        rotation: {x: -0.030682886, y: 0.232532114, z: 0.127166167, w: 0.963751137}
+        scale: {x: 0.999995172, y: 0.999998391, z: 0.99999702}
+      - type: point_light
+        color: {r: 1, g: 0, b: 1, a: 1}
+        intensity: 30
         range: 20
-        inner_angle: 0.400000006
-        outer_angle: 0.600000024
+  - tag: Camera
+    id: 1867269432501270719
+    components:
+      - type: transform
+        position: {x: 6.70026636, y: 6.52072191, z: 0.668136299}
+        rotation: {x: -0.28373152, y: 0.531135559, z: 0.194632292, w: 0.774280131}
+        scale: {x: 1, y: 1, z: 1}
+      - type: camera
+        fov_degrees: 60
+        near_plane: 0.00999999978
+        far_plane: 1000
+      - type: skybox
+        environment: sky
+        intensity: 1
   - tag: Node
     id: 2162916288673430550
     components:

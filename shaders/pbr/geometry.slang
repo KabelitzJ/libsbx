@@ -73,7 +73,7 @@ vertex_output vertex_main(vertex_input input) {
 }
 
 [shader("fragment")]
-Policy::Output fragment_main<Policy : shading_policy>(fragment_input input) {
+Policy::output fragment_main<Policy : shading_policy>(fragment_input input) {
   lighting_input lighting_input;
   lighting_input.position = input.position;
   lighting_input.normal = input.normal;
@@ -85,7 +85,7 @@ Policy::Output fragment_main<Policy : shading_policy>(fragment_input input) {
   lighting_input.sampler_index = push.sampler_index;
   lighting_input.clamp_sampler_index = push.clamp_sampler_index;
 
-  lighting_output lighting_output = evaluate_lighting(lighting_input);
+  lighting_output lighting_output = evaluate_lighting<Policy::receives_shadows>(lighting_input);
 
   shading_input shading_input;
   shading_input.lighting = lighting_output;

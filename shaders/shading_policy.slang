@@ -35,8 +35,9 @@ alpha_blend_result compute_alpha_blend(shading_input input) {
 }
 
 interface shading_policy {
-  associatedtype Output;
-  static Output shade(shading_input input);
+  associatedtype output;
+  static const bool receives_shadows;
+  static output shade(shading_input input);
 }; // interface shading_policy
 
 interface color_target {
@@ -45,10 +46,12 @@ interface color_target {
 
 struct basic_color_shading_policy<Target: color_target> : shading_policy {
 
-  typedef Target Output;
+  typedef Target output;
 
-  static Output shade(shading_input input) {
-    Output output;
+  static const bool receives_shadows = true;
+
+  static output shade(shading_input input) {
+    output output;
 
     output.color = compute_color(input);
 
@@ -64,10 +67,12 @@ interface alpha_blend_target {
 
 struct basic_alpha_blend_shading_policy<Target: alpha_blend_target> : shading_policy {
 
-  typedef Target Output;
+  typedef Target output;
 
-  static Output shade(shading_input input) {
-    Output output;
+  static const bool receives_shadows = false;
+
+  static output shade(shading_input input) {
+    output output;
 
     alpha_blend_result result = compute_alpha_blend(input);
 

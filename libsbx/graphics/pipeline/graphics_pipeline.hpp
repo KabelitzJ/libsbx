@@ -3,6 +3,7 @@
 #ifndef LIBSBX_GRAPHICS_PIPELINE_GRAPHICS_PIPELINE_HPP_
 #define LIBSBX_GRAPHICS_PIPELINE_GRAPHICS_PIPELINE_HPP_
 
+#include <cstdint>
 #include <optional>
 #include <string>
 #include <vector>
@@ -35,6 +36,18 @@ struct blend_attachment {
 }; // struct blend_attachment
 
 /**
+ * @brief A single Vulkan specialization constant, applied to every stage of the pipeline's shader.
+ * Constant ids not declared by a given stage are ignored by Vulkan, so the same set can safely be
+ * shared across all stages. Currently uint32-only — that's all the engine has needed so far.
+ */
+struct specialization_constant {
+  std::uint32_t constant_id;
+  std::uint32_t value;
+
+  auto operator==(const specialization_constant&) const -> bool = default;
+}; // struct specialization_constant
+
+/**
  * @brief A graphics pipeline for dynamic rendering, built against the shared bindless pipeline
  * layout. Viewport and scissor are dynamic, so a resize needs no rebuild. No vertex input state —
  * geometry comes from SV_VertexID or vertex pulling via buffer device address.
@@ -62,6 +75,7 @@ public:
     graphics::compare_operation depth_compare{compare_operation::less_or_equal};
     graphics::samples samples{samples::count_1};
     std::vector<graphics::blend_attachment> color_blend_attachments{};
+    std::vector<graphics::specialization_constant> specialization_constants{};
     std::string name{"Pipeline"};
   }; // struct create_info
 

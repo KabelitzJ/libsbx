@@ -23,7 +23,37 @@ graphics_pipeline::graphics_pipeline(const create_info& create_info) {
   const auto& bindless_table = graphics_module.bindless_table();
   const auto& pipeline_binary_cache = graphics_module.pipeline_binary_cache();
 
-  const auto stages = create_info.shader->stage_create_infos();
+  auto stages = create_info.shader->stage_create_infos();
+
+  auto specialization_map_entries = std::vector<VkSpecializationMapEntry>{};
+  auto specialization_data = std::vector<std::uint32_t>{};
+  auto specialization_info = VkSpecializationInfo{};
+
+  if (!create_info.specialization_constants.empty()) {
+    specialization_map_entries.reserve(create_info.specialization_constants.size());
+    specialization_data.reserve(create_info.specialization_constants.size());
+
+    for (const auto& constant : create_info.specialization_constants) {
+      specialization_data.push_back(constant.value);
+
+      specialization_map_entries.push_back(VkSpecializationMapEntry{
+        constant.constant_id,
+        static_cast<std::uint32_t>((specialization_data.size() - 1u) * sizeof(std::uint32_t)),
+        sizeof(std::uint32_t)
+      });
+    }
+
+    specialization_info.mapEntryCount = static_cast<std::uint32_t>(specialization_map_entries.size());
+    specialization_info.pMapEntries = specialization_map_entries.data();
+    specialization_info.dataSize = specialization_data.size() * sizeof(std::uint32_t);
+    specialization_info.pData = specialization_data.data();
+
+    // Constant ids not declared by a given stage are ignored by Vulkan, so it's safe to attach the
+    // same specialization info to every stage rather than tracking which ids belong to which one.
+    for (auto& stage : stages) {
+      stage.pSpecializationInfo = &specialization_info;
+    }
+  }
 
   auto vertex_input_state = VkPipelineVertexInputStateCreateInfo{};
   vertex_input_state.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;

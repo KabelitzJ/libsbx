@@ -25,12 +25,12 @@
 
 namespace sbx::render {
 
-// Cascaded shadow map sizing shared between render_module (target/buffer creation),
-// shadow_pass (rendering the cascades) and render_context (holding this frame's handles).
-// Namespace-scope rather than render_pass members so render_context, declared below, can use
-// them before render_pass itself is defined.
 inline constexpr auto shadow_cascade_count = std::uint32_t{4u};
 inline constexpr auto shadow_map_resolution = std::uint32_t{2048u};
+
+// PCF quality for cascaded shadow sampling (shaders/shadows/csm.slang) — must match the
+// shadow_pcf_quality tiers declared there (0 = low/4 taps, 1 = medium/8 taps, 2 = high/16 taps).
+inline constexpr auto shadow_pcf_quality = std::uint32_t{2u};
 
 /**
  * @brief Per-frame state handed to every pass. The module fills the scene bindings (addresses,

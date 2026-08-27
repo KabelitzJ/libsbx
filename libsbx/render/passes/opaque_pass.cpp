@@ -44,6 +44,7 @@ opaque_pass::opaque_pass() {
       .depth_write = false,
       .depth_compare = graphics::compare_operation::less_or_equal,
       .samples = render_pass::sample_count,
+      .specialization_constants = {{0u, shadow_pcf_quality}},
       .name = name
     });
   };

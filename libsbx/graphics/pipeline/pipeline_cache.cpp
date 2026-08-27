@@ -44,6 +44,8 @@ auto _build_state_from_create_info(const graphics_pipeline::create_info& create_
         : blend_attachment{});
   }
 
+  state.specialization_constants = create_info.specialization_constants;
+
   return state;
 }
 
@@ -62,6 +64,10 @@ auto pipeline_state_hash::operator()(const pipeline_state& state) const noexcept
 
   for (const auto& blend : state.color_blend_attachments) {
     utility::hash_combine(seed, blend.enable, blend.source_color, blend.destination_color, blend.color_operation, blend.source_alpha, blend.destination_alpha, blend.alpha_operation, blend.color_write_mask);
+  }
+
+  for (const auto& constant : state.specialization_constants) {
+    utility::hash_combine(seed, constant.constant_id, constant.value);
   }
 
   return seed;

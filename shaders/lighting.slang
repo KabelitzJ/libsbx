@@ -62,7 +62,7 @@ float3 brdf(float3 n, float3 v, float3 l, float3 albedo, float3 f0, float roughn
   return (kd * albedo / pi + specular) * max(dot(n, l), 0.0);
 }
 
-lighting_output evaluate_lighting(lighting_input input) {
+lighting_output evaluate_lighting<let receives_shadows : bool>(lighting_input input) {
   material_data material = input.frame_data.materials[input.material_index];
   SamplerState sampler = samplers[input.sampler_index];
 
@@ -104,7 +104,7 @@ lighting_output evaluate_lighting(lighting_input input) {
     float3 l = normalize(-light.direction.xyz);
     float3 radiance = light.color.rgb * light.color.a;
 
-    if (i == 0u && input.frame_data.shadow_enabled != 0u && (material.flags & material_flags::receives_shadow) != 0u) {
+    if (receives_shadows && i == 0u && input.frame_data.shadow_enabled != 0u && (material.flags & material_flags::receives_shadow) != 0u) {
       sun_shadow = calculate_shadow(input.frame_data, input.position, n, input.clamp_sampler_index);
 
       radiance *= sun_shadow;

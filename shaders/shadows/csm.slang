@@ -7,7 +7,28 @@
 #include <descriptors.slang>
 #include <math.slang>
 
-static const float2 poisson_disk[16] = {
+[[vk::constant_id(0)]]
+const uint shadow_pcf_quality = 2u;
+
+static const float2 poisson_disk_low[4] = {
+  float2( 0.97484398,  0.75648379),
+  float2(-0.81409955,  0.91437590),
+  float2(-0.81544232, -0.87912464),
+  float2( 0.94558609, -0.76890725)
+};
+
+static const float2 poisson_disk_medium[8] = {
+  float2( 0.79197514,  0.19090188),
+  float2( 0.19984126,  0.78641367),
+  float2(-0.24188840,  0.99706507),
+  float2(-0.91588581,  0.45771432),
+  float2(-0.94201624, -0.39906216),
+  float2(-0.81544232, -0.87912464),
+  float2(-0.094184101, -0.92938870),
+  float2( 0.94558609, -0.76890725)
+};
+
+static const float2 poisson_disk_high[16] = {
   float2(-0.94201624, -0.39906216),
   float2( 0.94558609, -0.76890725),
   float2(-0.094184101, -0.92938870),
@@ -116,17 +137,44 @@ float sample_cascade_pcf(frame_data frame, uint cascade, float3 world_position, 
   SamplerState shadow_sampler = samplers[sampler_index];
 
   float shadow = 0.0;
+  float sample_count;
 
-  [unroll]
-  for (int i = 0; i < 16; ++i) {
-    float2 offset = mul(rotation, poisson_disk[i]);
-    float2 sample_uv = uv + offset * texel_size * radius;
-    float sample_depth = textures[shadow_index].Sample(shadow_sampler, sample_uv).r;
+  if (shadow_pcf_quality == 0) {
+    sample_count = 4.0;
 
-    shadow += (depth - bias <= sample_depth) ? 1.0 : 0.0;
+    [unroll]
+    for (int i = 0; i < 4; ++i) {
+      float2 offset = mul(rotation, poisson_disk_low[i]);
+      float2 sample_uv = uv + offset * texel_size * radius;
+      float sample_depth = textures[shadow_index].Sample(shadow_sampler, sample_uv).r;
+
+      shadow += (depth - bias <= sample_depth) ? 1.0 : 0.0;
+    }
+  } else if (shadow_pcf_quality == 1) {
+    sample_count = 8.0;
+
+    [unroll]
+    for (int i = 0; i < 8; ++i) {
+      float2 offset = mul(rotation, poisson_disk_medium[i]);
+      float2 sample_uv = uv + offset * texel_size * radius;
+      float sample_depth = textures[shadow_index].Sample(shadow_sampler, sample_uv).r;
+
+      shadow += (depth - bias <= sample_depth) ? 1.0 : 0.0;
+    }
+  } else {
+    sample_count = 16.0;
+
+    [unroll]
+    for (int i = 0; i < 16; ++i) {
+      float2 offset = mul(rotation, poisson_disk_high[i]);
+      float2 sample_uv = uv + offset * texel_size * radius;
+      float sample_depth = textures[shadow_index].Sample(shadow_sampler, sample_uv).r;
+
+      shadow += (depth - bias <= sample_depth) ? 1.0 : 0.0;
+    }
   }
 
-  return shadow / 16.0;
+  return shadow / sample_count;
 }
 
 float calculate_shadow(frame_data frame, float3 world_position, float3 world_normal, uint sampler_index) {

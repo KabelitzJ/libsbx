@@ -45,6 +45,7 @@ struct pipeline_state {
   graphics::compare_operation depth_compare{compare_operation::less_or_equal};
   graphics::samples samples{samples::count_1};
   std::vector<graphics::blend_attachment> color_blend_attachments{};
+  std::vector<graphics::specialization_constant> specialization_constants{};
 
   auto operator==(const pipeline_state&) const -> bool = default;
 

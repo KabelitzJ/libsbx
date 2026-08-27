@@ -97,6 +97,7 @@ struct render_packet {
   camera_data camera{};
   std::vector<draw_command> opaque_commands{};
   std::vector<draw_command> transparent_commands{};
+  std::vector<draw_command> shadow_caster_commands{};
   std::vector<math::matrix4x4> transforms{};
   std::vector<light_data> lights{};
   std::uint32_t directional_light_count{0u};

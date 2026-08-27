@@ -252,6 +252,7 @@ auto render_module::_build_packet() -> render_packet {
   }
 
   packet.opaque_commands.reserve(opaque.size());
+  packet.shadow_caster_commands.reserve(opaque.size());
 
   for (auto& [key, bucket] : opaque) {
     auto command = draw_command{};
@@ -263,6 +264,11 @@ auto render_module::_build_packet() -> render_packet {
     command.pipeline_id = bucket.pipeline_id;
 
     packet.transforms.insert(packet.transforms.end(), bucket.transforms.begin(), bucket.transforms.end());
+
+    if (bucket.material->casts_shadow()) {
+      packet.shadow_caster_commands.push_back(command);
+    }
+
     packet.opaque_commands.push_back(std::move(command));
   }
 

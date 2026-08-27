@@ -187,6 +187,8 @@ auto extract_material_to_asset(sbx::assets::assets_module& assets_module, const 
   info.alpha = source->alpha();
   info.alpha_cutoff = source->alpha_cutoff();
   info.is_double_sided = source->is_double_sided();
+  info.casts_shadow = source->casts_shadow();
+  info.receives_shadow = source->receives_shadow();
   info.albedo = source->albedo();
   info.normal = source->normal();
   info.metallic_roughness = source->metallic_roughness();
@@ -898,6 +900,8 @@ auto properties_panel::_draw_material_properties(const asset_selection& asset, s
   }
 
   changed |= ImGui::Checkbox("Double Sided", &_material_edit.is_double_sided);
+  changed |= ImGui::Checkbox("Casts Shadow", &_material_edit.casts_shadow);
+  changed |= ImGui::Checkbox("Receives Shadow", &_material_edit.receives_shadow);
 
   ImGui::SeparatorText("Textures");
 
@@ -1120,6 +1124,8 @@ auto properties_panel::_draw_asset_properties(const asset_selection& asset, sbx:
       _material_edit.alpha = material.alpha();
       _material_edit.alpha_cutoff = material.alpha_cutoff();
       _material_edit.is_double_sided = material.is_double_sided();
+      _material_edit.casts_shadow = material.casts_shadow();
+      _material_edit.receives_shadow = material.receives_shadow();
       _material_edit.albedo = material.albedo();
       _material_edit.normal = material.normal();
       _material_edit.metallic_roughness = material.metallic_roughness();

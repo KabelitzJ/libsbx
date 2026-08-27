@@ -38,6 +38,8 @@ public:
     assets::alpha_mode alpha{alpha_mode::opaque};
     std::float_t alpha_cutoff{0.5f};
     bool is_double_sided{false};
+    bool casts_shadow{true};
+    bool receives_shadow{true};
     texture_handle albedo{};
     texture_handle normal{};
     texture_handle metallic_roughness{};
@@ -55,6 +57,8 @@ public:
     _alpha{create_info.alpha},
     _alpha_cutoff{create_info.alpha_cutoff},
     _is_double_sided{create_info.is_double_sided},
+    _casts_shadow{create_info.casts_shadow},
+    _receives_shadow{create_info.receives_shadow},
     _albedo{create_info.albedo},
     _normal{create_info.normal},
     _metallic_roughness{create_info.metallic_roughness},
@@ -98,6 +102,14 @@ public:
     return _is_double_sided;
   }
 
+  [[nodiscard]] auto casts_shadow() const noexcept -> bool {
+    return _casts_shadow;
+  }
+
+  [[nodiscard]] auto receives_shadow() const noexcept -> bool {
+    return _receives_shadow;
+  }
+
   [[nodiscard]] auto albedo() const noexcept -> const texture_handle& {
     return _albedo;
   }
@@ -135,6 +147,8 @@ private:
   alpha_mode _alpha{alpha_mode::opaque};
   std::float_t _alpha_cutoff{0.5f};
   bool _is_double_sided{false};
+  bool _casts_shadow{true};
+  bool _receives_shadow{true};
   texture_handle _albedo{};
   texture_handle _normal{};
   texture_handle _metallic_roughness{};

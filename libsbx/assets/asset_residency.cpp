@@ -24,6 +24,7 @@
 namespace sbx::assets {
 
 inline constexpr auto material_flag_masked = std::uint32_t{1u << 0u};
+inline constexpr auto material_flag_receives_shadow = std::uint32_t{1u << 1u};
 
 struct material_data {
   math::vector4 base_color_factor;
@@ -211,6 +212,8 @@ auto asset_residency::load_material(const math::uuid& id) -> material_handle {
     }
     if (root["alpha_cutoff"]) info.alpha_cutoff = root["alpha_cutoff"].as<std::float_t>();
     if (root["is_double_sided"]) info.is_double_sided = root["is_double_sided"].as<bool>();
+    if (root["casts_shadow"]) info.casts_shadow = root["casts_shadow"].as<bool>();
+    if (root["receives_shadow"]) info.receives_shadow = root["receives_shadow"].as<bool>();
 
     const auto load_slot = [&](const char* key, graphics::format format) -> texture_handle {
       if (const auto node = root[key]) {
@@ -304,6 +307,8 @@ auto asset_residency::update_material(material_handle& material, const material:
   material->_alpha = create_info.alpha;
   material->_alpha_cutoff = create_info.alpha_cutoff;
   material->_is_double_sided = create_info.is_double_sided;
+  material->_casts_shadow = create_info.casts_shadow;
+  material->_receives_shadow = create_info.receives_shadow;
   material->_albedo = create_info.albedo;
   material->_normal = create_info.normal;
   material->_metallic_roughness = create_info.metallic_roughness;
@@ -360,6 +365,8 @@ auto asset_residency::save_material(material_handle& material, const std::filesy
   node["alpha_mode"] = (material->alpha() == alpha_mode::blend) ? "blend" : (material->alpha() == alpha_mode::mask) ? "mask" : "opaque";
   node["alpha_cutoff"] = material->alpha_cutoff();
   node["is_double_sided"] = material->is_double_sided();
+  node["casts_shadow"] = material->casts_shadow();
+  node["receives_shadow"] = material->receives_shadow();
 
   if (const auto slot = path_of(material->albedo())) {
     node["albedo"] = *slot;
@@ -733,7 +740,8 @@ auto asset_residency::process_uploads(std::uint64_t frame_index) -> void {
     data.metallic_factor = material.metallic_factor();
     data.roughness_factor = material.roughness_factor();
     data.alpha_cutoff = material.alpha_cutoff();
-    data.flags = (material.alpha() == alpha_mode::mask) ? material_flag_masked : 0u;
+    data.flags = ((material.alpha() == alpha_mode::mask) ? material_flag_masked : 0u)
+      | (material.receives_shadow() ? material_flag_receives_shadow : 0u);
 
     buffer.write(&data, sizeof(material_data), material.index() * memory::stride_v<material_data>);
   }

@@ -104,7 +104,7 @@ lighting_output evaluate_lighting(lighting_input input) {
     float3 l = normalize(-light.direction.xyz);
     float3 radiance = light.color.rgb * light.color.a;
 
-    if (i == 0u && input.frame_data.shadow_enabled != 0u) {
+    if (i == 0u && input.frame_data.shadow_enabled != 0u && (material.flags & material_flags::receives_shadow) != 0u) {
       sun_shadow = calculate_shadow(input.frame_data, input.position, n, input.clamp_sampler_index);
 
       radiance *= sun_shadow;

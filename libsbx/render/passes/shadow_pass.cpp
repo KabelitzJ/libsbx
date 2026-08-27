@@ -97,7 +97,7 @@ auto shadow_pass::execute(render_context& context) -> void {
     context.command_buffer->begin_rendering(rendering_info);
 
     bind_globals(context, shadow_extent);
-    submit_draw_commands(context, context.packet->opaque_commands, _pipelines, cascade);
+    submit_draw_commands(context, context.packet->shadow_caster_commands, _pipelines, cascade);
 
     context.command_buffer->end_rendering();
 

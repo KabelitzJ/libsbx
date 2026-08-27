@@ -17,7 +17,8 @@ struct vertex {
 
 enum class material_flags : uint {
   none = 0,
-  alpha_masked = 1 << 0
+  alpha_masked = 1 << 0,
+  receives_shadow = 1 << 1
 }; // enum material_flags
 
 struct material_data {

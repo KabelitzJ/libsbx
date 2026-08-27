@@ -41,8 +41,6 @@ auto compute_cascades(const camera_data& camera, std::float_t aspect, const math
 
   const auto splits = compute_splits(near_plane, far_plane);
 
-  // camera.view is the inverse of the camera's world matrix; recover world-space forward the same
-  // way render_module::_build_packet turns a node's world matrix into a light direction.
   const auto camera_world = math::matrix4x4::inverted(camera.view);
   const auto camera_forward = math::vector3f::normalized(math::vector3f{-camera_world[2].x(), -camera_world[2].y(), -camera_world[2].z()});
 
@@ -59,8 +57,6 @@ auto compute_cascades(const camera_data& camera, std::float_t aspect, const math
     up = math::vector3f{1.0f, 0.0f, 0.0f};
   }
 
-  // Objects behind/beside a slice's tight bounds can still cast into it; push the light back and
-  // extend its far plane by a fixed margin so casters just outside the sphere aren't clipped.
   constexpr auto caster_padding = 100.0f;
 
   auto result = std::array<cascade_info, shadow_cascade_count>{};
@@ -82,8 +78,6 @@ auto compute_cascades(const camera_data& camera, std::float_t aspect, const math
 
     auto shadow_matrix = light_projection * light_view;
 
-    // Texel-snap: round the world origin's projected position to whole shadow-map texels so the
-    // cascade doesn't shimmer as the camera (and therefore the cascade's bounds) translates.
     const auto resolution = static_cast<std::float_t>(shadow_map_resolution);
     const auto shadow_origin = (shadow_matrix * math::vector4{0.0f, 0.0f, 0.0f, 1.0f}) * (resolution * 0.5f);
 

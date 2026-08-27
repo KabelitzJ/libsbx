@@ -64,8 +64,13 @@ public:
    */
   auto set_viewport_extent(math::vector2u extent) -> void;
 
-  [[nodiscard]] auto scene_image() const noexcept -> graphics::image_handle {
-    return _scene_image;
+  /**
+   * @brief The final viewport image — the fully tonemapped, presentable color result (see
+   * render_context::final_image). Valid from the first frame onward; the editor samples this to
+   * display the scene inside its Viewport panel instead of presenting it directly.
+   */
+  [[nodiscard]] auto final_image() const noexcept -> graphics::image_handle {
+    return _final_image;
   }
 
   /**
@@ -117,8 +122,8 @@ private:
   std::vector<std::unique_ptr<render_pass>> _passes{};
   std::unique_ptr<render_pass> _composite_pass{};
 
-  graphics::image_handle _scene_image{};
-  std::uint32_t _scene_index{0u};
+  graphics::image_handle _final_image{};
+  std::uint32_t _final_image_index{0u};
 
   graphics::buffer_handle _frame_buffer{};
   std::array<graphics::buffer::address_type, graphics::swapchain::max_frames_in_flight> _frame_addresses{};

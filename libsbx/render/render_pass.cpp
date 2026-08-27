@@ -96,4 +96,27 @@ auto bind_compute_globals(render_context& context) -> void {
   vkCmdBindDescriptorSets(*context.command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, bindless_table.pipeline_layout(), 0u, 1u, &descriptor_set, 0u, nullptr);
 }
 
+auto clear_swapchain(render_context& context) -> void {
+  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
+  auto& swapchain = graphics_module.frame_context().swapchain();
+
+  auto color_attachment = VkRenderingAttachmentInfo{};
+  color_attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+  color_attachment.imageView = swapchain.active_image_view();
+  color_attachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+  color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+  color_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+  color_attachment.clearValue.color = VkClearColorValue{{context.packet->clear_color.r(), context.packet->clear_color.g(), context.packet->clear_color.b(), context.packet->clear_color.a()}};
+
+  auto rendering_info = VkRenderingInfo{};
+  rendering_info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
+  rendering_info.renderArea = VkRect2D{VkOffset2D{0, 0}, VkExtent2D{context.swapchain_extent.x(), context.swapchain_extent.y()}};
+  rendering_info.layerCount = 1u;
+  rendering_info.colorAttachmentCount = 1u;
+  rendering_info.pColorAttachments = &color_attachment;
+
+  context.command_buffer->begin_rendering(rendering_info);
+  context.command_buffer->end_rendering();
+}
+
 } // namespace sbx::render

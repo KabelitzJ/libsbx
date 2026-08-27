@@ -484,65 +484,57 @@ auto render_module::_consume_packet(const render_packet& packet) -> void {
     to_color.new_layout = graphics::image_layout::color_attachment_optimal;
     command_buffer->transition_image_layout(to_color);
 
+    const auto slot = utility::fast_mod(frame_context.frame_index(), graphics::swapchain::max_frames_in_flight);
+
+    const auto environment_index = (packet.camera.is_active && packet.environment.is_valid() && assets_module.is_resident(packet.environment)) ? packet.environment->radiance_index() : 0xFFFFFFFFu;
+
+    // Built unconditionally — the composite pass below always runs, whether or not the scene pass
+    // list ran this frame (see its call site), so it always needs a valid context to read
+    // final_image/swapchain_extent/packet from, even with no active camera.
+    auto context = render_context{
+      .command_buffer = command_buffer,
+      .packet = memory::make_observer<const render_packet>(packet),
+      .frame_index = frame_context.frame_index(),
+      .slot = static_cast<std::uint32_t>(slot),
+      .extent = scene_extent,
+      .swapchain_extent = swapchain_extent,
+      .environment_index = environment_index,
+      .environment_intensity = packet.environment_intensity,
+      .irradiance_index = irradiance_index,
+      .brdf_lut_index = brdf_lut_index,
+      .prefiltered_index = prefiltered_index,
+      .prefiltered_mip_count = prefiltered_mip_count,
+      .depth = _depth_image,
+      .color = _color_image,
+      .color_msaa = _color_msaa_image,
+      .color_index = _color_index,
+      .final_image = _final_image,
+      .final_image_index = _final_image_index,
+      .accumulator = _accum_image,
+      .accumulator_msaa = _accumulator_msaa_image,
+      .accumulator_index = _accumulator_index,
+      .revealage = _revealage_image,
+      .revealage_msaa = _revealage_msaa_image,
+      .revealage_index = _revealage_index
+    };
+
     if (packet.camera.is_active) {
-      const auto slot = utility::fast_mod(frame_context.frame_index(), graphics::swapchain::max_frames_in_flight);
-
-      const auto environment_index = (packet.environment.is_valid() && assets_module.is_resident(packet.environment)) ? packet.environment->radiance_index() : 0xFFFFFFFFu;
-
-      auto context = render_context{
-        .command_buffer = command_buffer,
-        .packet = memory::make_observer<const render_packet>(packet),
-        .frame_index = frame_context.frame_index(),
-        .slot = static_cast<std::uint32_t>(slot),
-        .extent = scene_extent,
-        .swapchain_extent = swapchain_extent,
-        .environment_index = environment_index,
-        .environment_intensity = packet.environment_intensity,
-        .irradiance_index = irradiance_index,
-        .brdf_lut_index = brdf_lut_index,
-        .prefiltered_index = prefiltered_index,
-        .prefiltered_mip_count = prefiltered_mip_count,
-        .depth = _depth_image,
-        .color = _color_image,
-        .color_msaa = _color_msaa_image,
-        .color_index = _color_index,
-        .scene = _scene_image,
-        .scene_index = _scene_index,
-        .accumulator = _accum_image,
-        .accumulator_msaa = _accumulator_msaa_image,
-        .accumulator_index = _accumulator_index,
-        .revealage = _revealage_image,
-        .revealage_msaa = _revealage_msaa_image,
-        .revealage_index = _revealage_index
-      };
-
       _prepare_frame(context);
 
       for (auto& pass : _passes) {
         pass->execute(context);
       }
+    }
 
-      if (_composite_pass) {
-        _composite_pass->execute(context);
-      }
+    // Always runs, camera or not: presenting *something* to the swapchain — the tonemapped scene
+    // directly (present_pass), the scene embedded in an ImGui viewport panel, or ImGui alone with
+    // no scene (the editor's viewport_composite_pass) — is never optional, even when the scene pass
+    // list above didn't run. Each composite pass is responsible for handling a stale/never-written
+    // final_image on its own (present_pass clears the swapchain instead of sampling it).
+    if (_composite_pass) {
+      _composite_pass->execute(context);
     } else {
-      auto color_attachment = VkRenderingAttachmentInfo{};
-      color_attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-      color_attachment.imageView = swapchain.active_image_view();
-      color_attachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-      color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-      color_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-      color_attachment.clearValue.color = VkClearColorValue{{packet.clear_color.r(), packet.clear_color.g(), packet.clear_color.b(), packet.clear_color.a()}};
-
-      auto rendering_info = VkRenderingInfo{};
-      rendering_info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
-      rendering_info.renderArea = VkRect2D{VkOffset2D{0, 0}, VkExtent2D{swapchain_extent.x(), swapchain_extent.y()}};
-      rendering_info.layerCount = 1u;
-      rendering_info.colorAttachmentCount = 1u;
-      rendering_info.pColorAttachments = &color_attachment;
-
-      command_buffer->begin_rendering(rendering_info);
-      command_buffer->end_rendering();
+      clear_swapchain(context);
     }
 
     auto to_present = graphics::command_buffer::image_transition_data{};
@@ -579,7 +571,7 @@ auto render_module::_ensure_resources() -> void {
 
   _color_index = bindless_table.reserve_sampled_image();
 
-  _scene_index = bindless_table.reserve_sampled_image();
+  _final_image_index = bindless_table.reserve_sampled_image();
 
   _accumulator_index = bindless_table.reserve_sampled_image();
 
@@ -709,7 +701,7 @@ auto render_module::_resize_targets(const math::vector2u extent) -> void {
     registry.retire(_depth_image, frame_index);
     registry.retire(_color_image, frame_index);
     registry.retire(_color_msaa_image, frame_index);
-    registry.retire(_scene_image, frame_index);
+    registry.retire(_final_image, frame_index);
     registry.retire(_accum_image, frame_index);
     registry.retire(_accumulator_msaa_image, frame_index);
     registry.retire(_revealage_image, frame_index);
@@ -778,17 +770,17 @@ auto render_module::_resize_targets(const math::vector2u extent) -> void {
 
   bindless_table.write_sampled_image(_revealage_index, registry.get<graphics::image>(_revealage_image).view());
 
-  const auto scene_format = static_cast<graphics::format>(surface.format().format);
+  const auto final_image_format = static_cast<graphics::format>(surface.format().format);
 
-  _scene_image = registry.emplace<graphics::image>(graphics::image::create_info{
+  _final_image = registry.emplace<graphics::image>(graphics::image::create_info{
     .extent = math::vector3u{extent, 1u},
-    .format = scene_format,
+    .format = final_image_format,
     .usage = graphics::image_usage::color_attachment | graphics::image_usage::sampled,
     .samples = graphics::samples::count_1,
-    .name = "Scene Color"
+    .name = "Final Viewport Image"
   });
 
-  bindless_table.write_sampled_image(_scene_index, registry.get<graphics::image>(_scene_image).view());
+  bindless_table.write_sampled_image(_final_image_index, registry.get<graphics::image>(_final_image).view());
 
   _target_extent = extent;
 }

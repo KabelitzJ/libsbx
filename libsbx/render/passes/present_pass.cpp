@@ -54,6 +54,9 @@ auto present_pass::execute(render_context& context) -> void {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 
   if (!context.packet->camera.is_active) {
+    // No scene rendered this frame (final_image may be stale or never written) — clear and present
+    // the swapchain as-is rather than leaving it undefined.
+    clear_swapchain(context);
     return;
   }
 
@@ -62,9 +65,9 @@ auto present_pass::execute(render_context& context) -> void {
   auto& frame_context = graphics_module.frame_context();
   auto& swapchain = frame_context.swapchain();
 
-  auto& scene = registry.get<graphics::image>(context.scene);
+  auto& scene = registry.get<graphics::image>(context.final_image);
 
-  // Scene image: tonemap's color writes -> this pass's sampled reads.
+  // Final viewport image: tonemap's color writes -> this pass's sampled reads.
   auto to_read = graphics::command_buffer::image_transition_data{};
   to_read.image = scene;
   to_read.src_stage_mask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
@@ -96,7 +99,7 @@ auto present_pass::execute(render_context& context) -> void {
 
   context.command_buffer->bind_pipeline(*_pipeline);
 
-  auto values = present_push{context.scene_index, context.sampler_index};
+  auto values = present_push{context.final_image_index, context.sampler_index};
   auto range = std::array<std::byte, graphics::bindless_table::push_constant_size>{};
   std::memcpy(range.data(), &values, sizeof(values));
 

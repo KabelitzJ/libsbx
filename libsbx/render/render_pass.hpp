@@ -59,8 +59,14 @@ struct render_context {
   graphics::image_handle color{};
   graphics::image_handle color_msaa{};
   std::uint32_t color_index{0u};
-  graphics::image_handle scene{};
-  std::uint32_t scene_index{0u};
+
+  // The fully tonemapped, presentable color result — the contract every composite/presentation
+  // stage (present_pass, the editor's viewport_composite_pass) consumes. Produced once per frame by
+  // tonemap_pass, the last stage of the internal pass list; valid from the very first frame onward
+  // (created alongside the other extent-dependent targets), though its content is only fresh for
+  // frames where a camera was active — see render_module::_consume_packet.
+  graphics::image_handle final_image{};
+  std::uint32_t final_image_index{0u};
 
   graphics::image_handle accumulator{};
   graphics::image_handle accumulator_msaa{};
@@ -136,6 +142,15 @@ auto bind_globals(render_context& context) -> void;
 auto bind_globals(render_context& context, const math::vector2u& extent) -> void;
 
 auto bind_compute_globals(render_context& context) -> void;
+
+/**
+ * @brief Clears the active swapchain image and presents it as-is, with no scene content. The
+ * fallback end-of-frame for a composite pass reached with no active camera (final_image may be
+ * stale or never written) — present_pass uses this instead of leaving the swapchain image
+ * undefined; the editor's viewport_composite_pass reaches the equivalent state on its own by
+ * rendering ImGui straight onto a cleared swapchain.
+ */
+auto clear_swapchain(render_context& context) -> void;
 
 template<typename Type>
 auto write_push_constants(render_context& context, const Type& data) -> void {

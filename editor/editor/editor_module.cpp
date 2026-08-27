@@ -71,17 +71,17 @@ public:
     auto& swapchain = graphics_module.frame_context().swapchain();
 
     if (context.packet->camera.is_active) {
-      auto& scene = registry.get<sbx::graphics::image>(context.scene);
+      auto& final_image = registry.get<sbx::graphics::image>(context.final_image);
 
       auto to_read = sbx::graphics::command_buffer::image_transition_data{};
-      to_read.image = scene;
+      to_read.image = final_image;
       to_read.src_stage_mask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
       to_read.src_access_mask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
       to_read.dst_stage_mask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
       to_read.dst_access_mask = VK_ACCESS_2_SHADER_SAMPLED_READ_BIT;
       to_read.old_layout = sbx::graphics::image_layout::color_attachment_optimal;
       to_read.new_layout = sbx::graphics::image_layout::shader_read_only_optimal;
-      to_read.aspect_mask = scene.aspect();
+      to_read.aspect_mask = final_image.aspect();
       to_read.layer_count = 1u;
       context.command_buffer->transition_image_layout(to_read);
     }
@@ -199,12 +199,12 @@ auto editor_module::_build_ui_frame() -> void {
 
   auto& render_module = sbx::core::engine::get_module<sbx::render::render_module>();
 
-  const auto scene_image = render_module.scene_image();
+  const auto final_image = render_module.final_image();
 
-  if (scene_image.is_valid() && available.x > 0.0f && available.y > 0.0f) {
+  if (final_image.is_valid() && available.x > 0.0f && available.y > 0.0f) {
     render_module.set_viewport_extent(sbx::math::vector2u{width, height});
 
-    _update_texture(scene_image);
+    _update_texture(final_image);
 
     if (_texture_id != VK_NULL_HANDLE) {
       ImGui::Image(reinterpret_cast<ImTextureID>(_texture_id), available);

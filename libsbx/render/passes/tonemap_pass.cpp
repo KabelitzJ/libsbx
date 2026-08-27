@@ -60,7 +60,7 @@ auto tonemap_pass::execute(render_context& context) -> void {
   auto& bindless_table = graphics_module.bindless_table();
 
   auto& color = registry.get<graphics::image>(context.color);
-  auto& scene = registry.get<graphics::image>(context.scene);
+  auto& final_image = registry.get<graphics::image>(context.final_image);
 
   // HDR target: geometry's writes -> this pass's sampled reads.
   auto to_read = graphics::command_buffer::image_transition_data{};
@@ -76,20 +76,20 @@ auto tonemap_pass::execute(render_context& context) -> void {
   context.command_buffer->transition_image_layout(to_read);
 
   auto to_write = graphics::command_buffer::image_transition_data{};
-  to_write.image = scene;
+  to_write.image = final_image;
   to_write.src_stage_mask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
   to_write.src_access_mask = VK_ACCESS_2_SHADER_SAMPLED_READ_BIT;
   to_write.dst_stage_mask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
   to_write.dst_access_mask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
   to_write.old_layout = graphics::image_layout::undefined;
   to_write.new_layout = graphics::image_layout::color_attachment_optimal;
-  to_write.aspect_mask = scene.aspect();
+  to_write.aspect_mask = final_image.aspect();
   to_write.layer_count = 1u;
   context.command_buffer->transition_image_layout(to_write);
 
   auto color_attachment = VkRenderingAttachmentInfo{};
   color_attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-  color_attachment.imageView = scene.view();
+  color_attachment.imageView = final_image.view();
   color_attachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
   color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE; // fullscreen triangle overwrites everything
   color_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;

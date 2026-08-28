@@ -9,8 +9,10 @@
 namespace editor {
 
 editor_module::editor_module()
-: _ini_file{ini_file} {
-  // ImGui::GetIO().IniFilename = _ini_file.data();
+: _ini_file{(sbx::core::engine::project().root() / ".sbx" / "editor" / "imgui.ini").string()} {
+  std::filesystem::create_directories(std::filesystem::path{_ini_file}.parent_path());
+
+  ImGui::GetIO().IniFilename = nullptr;
 
   ImGui::LoadIniSettingsFromDisk(_ini_file.data());
 
@@ -26,7 +28,6 @@ editor_module::~editor_module() {
   render_module.ui().remove_layer(&_ui_layer);
 
   ImGui::SaveIniSettingsToDisk(_ini_file.c_str());
-  // ImGui::GetIO().IniFilename = nullptr;
 }
 
 } // namespace editor

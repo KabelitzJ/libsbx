@@ -5,7 +5,6 @@
 
 #include <filesystem>
 #include <string>
-#include <string_view>
 #include <utility>
 
 #include <libsbx/utility/noncopyable.hpp>
@@ -32,8 +31,6 @@ namespace editor {
  * grid_enabled, both one-time engine-level settings rather than per-frame UI.
  */
 class editor_module final : public sbx::utility::noncopyable {
-
-  inline static constexpr auto ini_file = std::string_view{"editor/assets/data/editor.ini"};
 
 public:
 

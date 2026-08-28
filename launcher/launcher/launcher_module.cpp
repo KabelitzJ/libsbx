@@ -92,8 +92,9 @@ launcher_module::launcher_module() {
   auto& render_module = sbx::core::engine::get_module<sbx::render::render_module>();
   auto& ui = render_module.ui();
 
+  ImGui::GetIO().IniFilename = nullptr;
+
   ui.add_default_fonts(16.0f);
-  // Shared with editor (see ui_system::apply_default_style) so both windows look consistent.
   ui.apply_default_style();
   ui.add_layer(this);
 }

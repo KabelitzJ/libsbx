@@ -8,6 +8,8 @@
 
 #include <libsbx/utility/profiler.hpp>
 
+#include <libsbx/core/engine.hpp>
+
 namespace sbx::platform {
 
 platform_module::context::context() {
@@ -26,7 +28,7 @@ platform_module::context::~context() {
 
 platform_module::platform_module()
 : _context{},
-  _window{window::windowed_create_info{"libsbx", {1920, 1080}}} { }
+  _window{window::windowed_create_info{"libsbx", core::engine::config().window_size.value_or(math::vector2u{1920u, 1080u})}} { }
 
 platform_module::~platform_module() {
 

@@ -2,11 +2,14 @@
 // Copyright (c) 2026 Jonas Kabelitz
 #include <launcher/launcher_module.hpp>
 
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <utility>
 
 #include <imgui.h>
+
+#include <libsbx/render/ui/fonts/material_design_icons.hpp>
 
 #include <libsbx/utility/logger.hpp>
 #include <libsbx/utility/target.hpp>
@@ -124,7 +127,11 @@ auto launcher_module::build() -> void {
 
   if (ImGui::Button("Open Project...")) {
     _pending_pick = pending_pick::open_project;
-    _file_dialog.open("Open Project", sbx::render::widgets::file_dialog_mode::select_folder);
+
+    auto extensions = std::vector<std::string>{};
+    extensions.push_back(".sbxproj");
+
+    _file_dialog.open("Open Project", sbx::render::widgets::file_dialog_mode::open_file, {}, extensions);
   }
 
   ImGui::Separator();
@@ -136,20 +143,13 @@ auto launcher_module::build() -> void {
   _file_dialog.draw();
 
   if (auto picked = _file_dialog.result(); picked && !picked->empty()) {
-    const auto folder = picked->front();
+    const auto picked_path = picked->front();
     const auto pending = std::exchange(_pending_pick, pending_pick::none);
 
     if (pending == pending_pick::open_project) {
-      if (std::filesystem::exists(folder / sbx::core::project::file_name)) {
-        _launch_editor(folder);
-      } else {
-        // No project.sbxproj here — fall through to New Project for this folder, same as §3
-        // of the project plan calls for.
-        _new_project_parent = folder;
-        _show_new_project_name_dialog = true;
-      }
+      _launch_editor(picked_path.parent_path());
     } else if (pending == pending_pick::new_project_parent) {
-      _new_project_parent = folder;
+      _new_project_parent = picked_path;
       _show_new_project_name_dialog = true;
     }
   }
@@ -167,16 +167,44 @@ auto launcher_module::_draw_recent_projects() -> void {
     return;
   }
 
-  for (const auto& recent : recents) {
-    ImGui::PushID(recent.file.string().c_str());
+  // Deferred rather than called mid-loop: remove_recent() mutates the very vector `recents`
+  // references, which would invalidate the loop underneath it.
+  auto to_remove = std::optional<std::filesystem::path>{};
 
-    if (ImGui::Selectable(recent.name.c_str())) {
-      _launch_editor(recent.file.parent_path());
+  if (ImGui::BeginTable("##recent_projects", 3, ImGuiTableFlags_RowBg)) {
+    ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthFixed, 220.0f);
+    ImGui::TableSetupColumn("Path", ImGuiTableColumnFlags_WidthStretch);
+    ImGui::TableSetupColumn("##remove", ImGuiTableColumnFlags_WidthFixed, 32.0f);
+
+    for (const auto& recent : recents) {
+      ImGui::PushID(recent.file.string().c_str());
+      ImGui::TableNextRow();
+
+      ImGui::TableSetColumnIndex(0);
+
+      // Spans the whole row so clicking anywhere in it opens the project, not just the name
+      // cell; AllowOverlap keeps that from stealing the trash-can button's own click in column 2.
+      if (ImGui::Selectable(recent.name.c_str(), false, ImGuiSelectableFlags_SpanAllColumns | ImGuiSelectableFlags_AllowOverlap)) {
+        _launch_editor(recent.file.parent_path());
+      }
+
+      ImGui::TableSetColumnIndex(1);
+      ImGui::TextDisabled("%s", recent.file.parent_path().string().c_str());
+
+      ImGui::TableSetColumnIndex(2);
+
+      if (ImGui::SmallButton(ICON_MDI_TRASH_CAN_OUTLINE)) {
+        to_remove = recent.file;
+      }
+
+      ImGui::PopID();
     }
 
-    ImGui::TextDisabled("%s", recent.file.string().c_str());
+    ImGui::EndTable();
+  }
 
-    ImGui::PopID();
+  if (to_remove) {
+    projects_module.remove_recent(*to_remove);
   }
 }
 

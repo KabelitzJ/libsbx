@@ -5,6 +5,8 @@
 
 #include <libsbx/utility/logger.hpp>
 
+#include <libsbx/math/vector2.hpp>
+
 #include <libsbx/core/engine.hpp>
 #include <libsbx/core/engine_config.hpp>
 #include <libsbx/core/exit.hpp>
@@ -45,7 +47,10 @@ auto main(int argc, const char** argv) -> int {
       .threading = sbx::core::threading_policy::single_threaded,
       // Projectless — the launcher never holds a project open itself; it just picks/creates one
       // and hands off to a fresh `editor --project <root>` process.
-      .project = std::nullopt
+      .project = std::nullopt,
+      // A project picker, not a 3D viewport — platform_module's own default (~1920x1080) would
+      // make it fill the screen for no reason; half that is a much more reasonable launcher size.
+      .window_size = sbx::math::vector2u{960u, 540u}
     };
 
     auto engine = sbx::core::basic_engine<module_list>{args, config};

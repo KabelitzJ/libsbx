@@ -90,6 +90,16 @@ public:
   }
 
   /**
+   * @brief Applies the engine's default ImGui style (a dark Catppuccin-Mocha-based theme,
+   * srgb-to-linear corrected) to the current ImGui context. Opt-in, same reasoning as
+   * add_default_fonts() — an app with no UI at all (demo) never needs to call it. Every app that
+   * does draw UI should, so editor and launcher look consistent rather than each rolling their
+   * own theme; call it once, any time after construction, before the first frame you want it
+   * visible in.
+   */
+  auto apply_default_style() -> void;
+
+  /**
    * @brief Main-thread build step, called from render_module::_build_packet: collects textures
    * retired by previous frames, primes the backends, ImGui::NewFrame(), every registered layer's
    * build() in order, ImGui::Render(), then deep-copies the result — see ui_draw_data.

@@ -70,8 +70,6 @@ private:
 
   auto _upload_fonts() -> void;
 
-  auto _apply_style() -> void;
-
   auto _draw_dockspace() -> void;
 
   auto _create_panels() -> void;

@@ -8,6 +8,8 @@
 
 #include <libsbx/math/uuid.hpp>
 
+#include <libsbx/render/ui/widgets/file_dialog.hpp>
+
 #include <editor/panels/editor_panel.hpp>
 
 namespace editor {
@@ -39,6 +41,12 @@ private:
   auto _refresh_entries() -> void;
   auto _draw_directory_tree(editor_state& state, const std::filesystem::path& absolute_assets_root, const std::filesystem::path& relative_directory) -> void;
 
+  /** @brief Drains _import_dialog's result (if any) into _pending_asset_imports, then works through that queue until it's empty or a name clash needs a decision. */
+  auto _process_pending_asset_imports(editor_state& state) -> void;
+
+  /** @brief Copies @p source to @p destination (already resolved, clash already handled by the caller) and imports/cooks it — the "Import Asset..." counterpart to the per-entry Import path in draw(). */
+  auto _import_asset_file(editor_state& state, const std::filesystem::path& source, const std::filesystem::path& destination) -> void;
+
   std::filesystem::path _current_directory{}; // project-relative; empty = assets root
   std::vector<asset_browser_entry> _cached_entries{};
   bool _needs_refresh{true};
@@ -47,10 +55,24 @@ private:
   // clicked, to surface mesh_import_options::extract_materials before the mesh is actually cooked.
   // _show_import_mesh_dialog is consumed (and ImGui::OpenPopup called) outside the per-entry
   // PushID scope it's set from — OpenPopup/BeginPopupModal must see the same ID stack, and the
-  // click happens inside PushID(entry.path...).
+  // click happens inside PushID(entry.path...). Also reused by _import_asset_file for a freshly
+  // copied-in mesh, same reasoning.
   bool _show_import_mesh_dialog{false};
   std::filesystem::path _pending_import_path{};
   bool _import_extract_materials{true};
+
+  // "Import Asset..." — pulls a file in from anywhere on disk (toolbar button + right-click menu
+  // entry), as opposed to the per-entry Import above, which only ever sees files already inside
+  // assets/. _import_dialog is the shared, engine-level file picker (see libsbx/render/ui/widgets);
+  // _pending_asset_imports is the queue of picked absolute paths still to copy in, processed one
+  // at a time so a name clash can pause it for a decision without losing the rest of a multi-select.
+  sbx::render::widgets::file_dialog _import_dialog{};
+  std::vector<std::filesystem::path> _pending_asset_imports{};
+
+  bool _import_conflict_unresolved{false}; // true from the clash being found until Overwrite/Skip/Cancel.
+  bool _show_import_conflict_dialog{false}; // one-shot OpenPopup trigger, same pattern as _show_import_mesh_dialog.
+  std::filesystem::path _import_conflict_source{};      // absolute
+  std::filesystem::path _import_conflict_destination{}; // absolute
 
 }; // class asset_browser_panel
 

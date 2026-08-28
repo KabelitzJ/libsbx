@@ -12,6 +12,8 @@
 #include <libsbx/platform/platform_module.hpp>
 #include <libsbx/platform/input.hpp>
 
+#include <libsbx/filesystem/filesystem_module.hpp>
+
 #include <libsbx/graphics/graphics_module.hpp>
 #include <libsbx/graphics/types.hpp>
 
@@ -47,22 +49,28 @@ application::application()
   auto& assets_module = sbx::core::engine::get_module<sbx::assets::assets_module>();
   assets_module.import_directory(project.assets_directory());
 
-  const auto duck_mesh = assets_module.load_mesh("models/duck/duck.gltf");
-  const auto damaged_helmet_mesh = assets_module.load_mesh("models/damaged_helmet/damaged_helmet.gltf");
-  const auto flight_helmet_mesh = assets_module.load_mesh("models/flight_helmet/flight_helmet.gltf");
-
   auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
   auto& scene = scenes_module.active_scene();
 
-  sbx::scenes::scene_serializer::load(scene, "scenes/demo.yaml");
-
   auto& editor_module = sbx::core::engine::get_module<editor::editor_module>();
-  editor_module.set_scene_path("scenes/demo.yaml");
 
-  _camera = scene.find("Camera");
-  _duck = scene.find("Duck");
-  _damaged_helmet = scene.find("DamagedHelmet");
-  _flight_helmet = scene.find("FlightHelmet");
+  // A fresh/projectless-launcher-created project has no startup_scene — start from whatever
+  // empty scene scenes_module already handed us instead of assuming one exists on disk.
+  if (const auto& startup_scene = project.startup_scene()) {
+    sbx::scenes::scene_serializer::load(scene, *startup_scene);
+    editor_module.set_scene_path(*startup_scene);
+  }
+
+  _camera = scene.active_camera();
+
+  // scene_serializer::load only sets an active camera if the loaded scene had one (see its
+  // "camera" metadata handling); neither that nor a genuinely empty scene guarantees one, so a
+  // fresh project needs a default camera + controller rather than assuming a "Camera" node exists.
+  if (!_camera.is_valid()) {
+    _camera = scene.create_node("Camera");
+    _camera.add_component<sbx::scenes::camera>();
+    scene.set_active_camera(_camera);
+  }
 
   _camera_controller = fly_camera{_camera};
 
@@ -73,9 +81,13 @@ application::application()
   }
 
   auto& scripting_module = sbx::core::engine::get_module<sbx::scripting::scripting_module>();
-  
-  scripting_module.load_assembly("build/x86_64/gcc/debug/dotnet/editor/Editor.dll");
 
+  // Relative to the executable's own directory (see editor/CMakeLists.txt's EDITOR_DOTNET_OUT_DIR,
+  // a sibling of RUNTIME_OUTPUT_DIRECTORY under the build dir), not the process's CWD — the old
+  // hardcoded "build/.../Editor.dll" only worked when launched from the repo root.
+  const auto assembly_path = sbx::filesystem::executable_directory() / ".." / "dotnet" / "editor" / "Editor.dll";
+
+  scripting_module.load_assembly(assembly_path);
 
   scripting_module.instantiate(_camera, "Editor.Test");
 }

@@ -22,7 +22,12 @@
 
 namespace editor {
 
-auto classify_extension(const std::filesystem::path& extension) -> asset_kind {
+namespace {
+
+// Single source of truth for both classify_extension (below) and importable_extensions, so the
+// "Import Asset..." file dialog's filter (see asset_browser_panel::draw) can never drift from
+// what a dropped-in file would actually be classified as.
+auto extension_table() -> const std::unordered_map<std::string, asset_kind>& {
   static const auto table = std::unordered_map<std::string, asset_kind>{
     {".png", asset_kind::texture},
     {".jpg", asset_kind::texture},
@@ -35,9 +40,35 @@ auto classify_extension(const std::filesystem::path& extension) -> asset_kind {
     {".yaml", asset_kind::scene},
   };
 
+  return table;
+}
+
+[[nodiscard]] auto is_importable_kind(asset_kind kind) -> bool {
+  return kind == asset_kind::texture || kind == asset_kind::mesh ||
+         kind == asset_kind::material || kind == asset_kind::environment_map ||
+         kind == asset_kind::particle_effect;
+}
+
+} // namespace
+
+auto classify_extension(const std::filesystem::path& extension) -> asset_kind {
+  const auto& table = extension_table();
   const auto entry = table.find(extension.string());
 
   return entry != table.end() ? entry->second : asset_kind::unknown;
+}
+
+/** @brief Every extension "Import Asset..."'s file dialog should offer — everything classify_extension routes through assets_module::import (i.e. every importable kind; .yaml/scene is excluded, same as the per-entry Import path). */
+auto importable_extensions() -> std::vector<std::string> {
+  auto extensions = std::vector<std::string>{};
+
+  for (const auto& [extension, kind] : extension_table()) {
+    if (is_importable_kind(kind)) {
+      extensions.push_back(extension);
+    }
+  }
+
+  return extensions;
 }
 
 auto icon_for(const asset_browser_entry& entry) -> const char* {
@@ -81,9 +112,7 @@ auto asset_browser_panel::_refresh_entries() -> void {
 
     if (!entry.is_directory) {
       entry.kind = classify_extension(dir_entry.path().extension());
-      entry.is_importable = entry.kind == asset_kind::texture || entry.kind == asset_kind::mesh ||
-                             entry.kind == asset_kind::material || entry.kind == asset_kind::environment_map ||
-                             entry.kind == asset_kind::particle_effect;
+      entry.is_importable = is_importable_kind(entry.kind);
     }
 
     _cached_entries.push_back(std::move(entry));
@@ -144,6 +173,18 @@ auto asset_browser_panel::draw(editor_state& state) -> void {
 
   auto& project = sbx::core::engine::project();
   auto& assets_module = sbx::core::engine::get_module<sbx::assets::assets_module>();
+
+  if (auto picked = _import_dialog.result()) {
+    _pending_asset_imports.insert(_pending_asset_imports.end(), picked->begin(), picked->end());
+  }
+
+  _process_pending_asset_imports(state);
+
+  if (ImGui::Button(ICON_MDI_FILE_IMPORT " Import Asset...")) {
+    _import_dialog.open("Import Asset", sbx::render::widgets::file_dialog_mode::open_files, project.assets_directory() / _current_directory, importable_extensions());
+  }
+
+  ImGui::SameLine();
 
   if (ImGui::Button("Import All in This Folder")) {
     // import_directory (like import()) needs a path resolvable from cwd, not one merely
@@ -274,6 +315,16 @@ auto asset_browser_panel::draw(editor_state& state) -> void {
       ImGui::PopID();
     }
 
+    // Right-click the empty area of the contents pane (not an entry — see NoOpenOverItems) for
+    // the same "Import Asset..." action as the toolbar button above.
+    if (ImGui::BeginPopupContextWindow("##asset_browser_context", ImGuiPopupFlags_MouseButtonRight | ImGuiPopupFlags_NoOpenOverItems)) {
+      if (ImGui::MenuItem(ICON_MDI_FILE_IMPORT " Import Asset...")) {
+        _import_dialog.open("Import Asset", sbx::render::widgets::file_dialog_mode::open_files, project.assets_directory() / _current_directory, importable_extensions());
+      }
+
+      ImGui::EndPopup();
+    }
+
     ImGui::EndTable();
   }
 
@@ -304,7 +355,93 @@ auto asset_browser_panel::draw(editor_state& state) -> void {
     ImGui::EndPopup();
   }
 
+  _import_dialog.draw();
+
+  if (_show_import_conflict_dialog) {
+    ImGui::OpenPopup("Import Conflict");
+    _show_import_conflict_dialog = false;
+  }
+
+  if (ImGui::BeginPopupModal("Import Conflict", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+    ImGui::Text("'%s' already exists in this folder.", _import_conflict_destination.filename().string().c_str());
+
+    if (ImGui::Button("Overwrite")) {
+      _import_asset_file(state, _import_conflict_source, _import_conflict_destination);
+      _import_conflict_unresolved = false;
+      ImGui::CloseCurrentPopup();
+    }
+
+    ImGui::SameLine();
+
+    if (ImGui::Button("Skip")) {
+      _import_conflict_unresolved = false;
+      ImGui::CloseCurrentPopup();
+    }
+
+    ImGui::SameLine();
+
+    if (ImGui::Button("Cancel Remaining")) {
+      _pending_asset_imports.clear();
+      _import_conflict_unresolved = false;
+      ImGui::CloseCurrentPopup();
+    }
+
+    ImGui::EndPopup();
+  }
+
   ImGui::End();
+}
+
+auto asset_browser_panel::_process_pending_asset_imports(editor_state& state) -> void {
+  auto& project = sbx::core::engine::project();
+
+  while (!_pending_asset_imports.empty() && !_import_conflict_unresolved) {
+    const auto source = _pending_asset_imports.front();
+    _pending_asset_imports.erase(_pending_asset_imports.begin());
+
+    const auto destination = project.assets_directory() / _current_directory / source.filename();
+
+    if (std::filesystem::exists(destination)) {
+      _import_conflict_source = source;
+      _import_conflict_destination = destination;
+      _import_conflict_unresolved = true;
+      _show_import_conflict_dialog = true;
+
+      break;
+    }
+
+    _import_asset_file(state, source, destination);
+  }
+}
+
+auto asset_browser_panel::_import_asset_file(editor_state& state, const std::filesystem::path& source, const std::filesystem::path& destination) -> void {
+  auto& project = sbx::core::engine::project();
+  auto& assets_module = sbx::core::engine::get_module<sbx::assets::assets_module>();
+
+  std::filesystem::create_directories(destination.parent_path());
+
+  // copy_file throws if source and destination are the same file (e.g. picking a file already
+  // inside the current folder via the dialog) — nothing to copy in that case, just (re-)import it.
+  auto ec = std::error_code{};
+  if (!std::filesystem::equivalent(source, destination, ec)) {
+    std::filesystem::copy_file(source, destination, std::filesystem::copy_options::overwrite_existing);
+  }
+
+  const auto relative_path = std::filesystem::relative(destination, project.assets_directory());
+  const auto kind = classify_extension(destination.extension());
+
+  if (kind == asset_kind::mesh && !std::filesystem::exists(std::filesystem::path{destination}.concat(".meta"))) {
+    // First time this mesh has ever been seen — same "let the user choose extract_materials"
+    // detour the per-entry Import path takes, and the same modal handles both (see draw()).
+    _pending_import_path = relative_path;
+    _import_extract_materials = true;
+    _show_import_mesh_dialog = true;
+  } else {
+    const auto id = assets_module.import(destination);
+    state.select_asset(id, relative_path, kind);
+  }
+
+  _needs_refresh = true;
 }
 
 } // namespace editor

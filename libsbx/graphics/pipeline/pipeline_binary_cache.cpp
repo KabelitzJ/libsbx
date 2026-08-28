@@ -10,6 +10,7 @@
 #include <libsbx/utility/logger.hpp>
 
 #include <libsbx/core/engine.hpp>
+#include <libsbx/core/user_data_directory.hpp>
 
 #include <libsbx/graphics/graphics_module.hpp>
 #include <libsbx/graphics/devices/logical_device.hpp>
@@ -18,6 +19,13 @@
 namespace sbx::graphics {
 
 auto cache_file() -> std::filesystem::path {
+  // A projectless app (the launcher — see core::engine_config::project's doc comment) has
+  // nowhere project-relative to cache this; fall back to a per-user location instead of
+  // core::engine::project() asserting.
+  if (!core::engine::has_project()) {
+    return core::user_data_directory() / "cache" / "pipeline_cache.bin";
+  }
+
   return core::engine::project().library_directory() / "pipeline_cache.bin";
 }
 

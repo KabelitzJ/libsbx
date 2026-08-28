@@ -70,6 +70,7 @@ endif()
 
 option(SBX_BUILD_DEMO "Build demo" ON)
 option(SBX_BUILD_EDITOR "Build editor" ON)
+option(SBX_BUILD_LAUNCHER "Build launcher" ON)
 option(SBX_BUILD_TESTS "Build tests" ON)
 option(SBX_BUILD_SHARED "Build shared library" OFF)
 option(SBX_ENABLE_PROFILING "Enable tracy profiling" ${_SBX_ENABLE_PROFILING_DEFAULT})
@@ -77,6 +78,7 @@ option(SBX_PREFER_CPU_DEVICE "Prefer CPU device" OFF)
 
 message(STATUS "SBX_BUILD_DEMO: ${SBX_BUILD_DEMO}")
 message(STATUS "SBX_BUILD_EDITOR: ${SBX_BUILD_EDITOR}")
+message(STATUS "SBX_BUILD_LAUNCHER: ${SBX_BUILD_LAUNCHER}")
 message(STATUS "SBX_BUILD_TESTS: ${SBX_BUILD_TESTS}")
 message(STATUS "SBX_BUILD_SHARED: ${SBX_BUILD_SHARED}")
 message(STATUS "SBX_ENABLE_PROFILING: ${SBX_ENABLE_PROFILING}")
@@ -169,6 +171,8 @@ target_sources(
     "${CMAKE_SOURCE_DIR}/libsbx/core/core.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/core/engine.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/core/project.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/core/projects_module.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/core/user_data_directory.cpp"
 
     "${CMAKE_SOURCE_DIR}/libsbx/ecs/ecs.cpp"
 
@@ -244,6 +248,7 @@ target_sources(
     "${CMAKE_SOURCE_DIR}/libsbx/render/ui/backends/v1.92.9-docking/imgui_impl_glfw.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/render/ui/backends/v1.92.9-docking/imgui_impl_vulkan.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/render/ui/fonts/embedded_fonts.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/render/ui/widgets/file_dialog.cpp"
 
     "${CMAKE_SOURCE_DIR}/libsbx/scenes/scene_serializer.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/scenes/scene.cpp"
@@ -304,7 +309,10 @@ target_sources(
       "${CMAKE_SOURCE_DIR}/libsbx/core/engine_config.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/core/exit.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/core/module.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/core/project.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/core/projects_module.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/core/threading_policy.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/core/user_data_directory.hpp"
 
       "${CMAKE_SOURCE_DIR}/libsbx/ecs/component.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/ecs/ecs.hpp"
@@ -453,6 +461,7 @@ target_sources(
       "${CMAKE_SOURCE_DIR}/libsbx/render/ui/ui_layer.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/render/ui/fonts/material_design_icons.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/render/ui/ui_system.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/render/ui/widgets/file_dialog.hpp"
 
       "${CMAKE_SOURCE_DIR}/libsbx/scenes/components.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/scenes/scene_serializer.hpp"
@@ -760,4 +769,8 @@ endif()
 
 if (SBX_BUILD_EDITOR AND EXISTS "${CMAKE_SOURCE_DIR}/editor")
   add_subdirectory(editor)
+endif()
+
+if (SBX_BUILD_LAUNCHER AND EXISTS "${CMAKE_SOURCE_DIR}/launcher")
+  add_subdirectory(launcher)
 endif()

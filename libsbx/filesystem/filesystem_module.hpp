@@ -18,6 +18,16 @@
 
 namespace sbx::filesystem {
 
+/**
+ * @brief The directory containing the currently running executable — resolved via the OS
+ * (`GetModuleFileNameW` on Windows, `_NSGetExecutablePath` on macOS, `/proc/self/exe` on Linux),
+ * not derived from `argv[0]` or the process's current working directory, so it's correct
+ * regardless of how or from where the executable was launched. Used for locating files that
+ * ship alongside the binary rather than inside any project (e.g. the editor's own scripting
+ * assembly, or a launcher locating the `editor` binary next to itself).
+ */
+[[nodiscard]] auto executable_directory() -> std::filesystem::path;
+
 class filesystem_module final : public utility::noncopyable {
     
 public:

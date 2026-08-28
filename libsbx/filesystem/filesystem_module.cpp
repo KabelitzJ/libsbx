@@ -21,7 +21,7 @@
 
 namespace sbx::filesystem {
 
-auto _executable_directory() -> std::filesystem::path {
+auto executable_directory() -> std::filesystem::path {
 #if defined(SBX_PLATFORM_WIN32)
   auto buffer = std::vector<wchar_t>(MAX_PATH);
 
@@ -64,7 +64,7 @@ auto _data_directory() -> std::filesystem::path {
   static const auto root = []() -> std::filesystem::path {
     if (auto* env = std::getenv("SBX_DATA_DIR")) return env;
 
-    const auto exe_dir = _executable_directory();
+    const auto exe_dir = executable_directory();
 
     if (auto candidate = exe_dir / ".." / "data"; _has_marker(candidate)) {
       return std::filesystem::canonical(candidate);

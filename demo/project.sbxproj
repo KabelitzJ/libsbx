@@ -1,4 +1,6 @@
 project:
+  format_version: 1
   name: Demo
   assets: assets
   library: .sbx/library
+  logs: logs

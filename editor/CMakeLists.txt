@@ -2,9 +2,6 @@ project(editor VERSION 0.1.0 LANGUAGES CXX)
 
 message(STATUS "Configuring ${PROJECT_NAME}...")
 
-find_package(imgui CONFIG REQUIRED)
-find_package(imguizmo CONFIG REQUIRED)
-
 add_executable(${PROJECT_NAME})
 
 target_sources(

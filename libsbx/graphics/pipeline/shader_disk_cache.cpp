@@ -7,6 +7,7 @@
 #include <fstream>
 
 #include <libsbx/core/engine.hpp>
+#include <libsbx/core/user_data_directory.hpp>
 
 #include <libsbx/utility/logger.hpp>
 #include <libsbx/utility/fourcc.hpp>
@@ -30,6 +31,11 @@ struct entry_record_header {
 }; // struct entry_record_header
 
 auto cache_path(const std::string& key) -> std::filesystem::path {
+  // See pipeline_binary_cache.cpp's cache_file() — same projectless (launcher) fallback.
+  if (!core::engine::has_project()) {
+    return core::user_data_directory() / "cache" / "shaders" / (key + ".spvcache");
+  }
+
   return core::engine::project().library_directory() / "shaders" / (key + ".spvcache");
 }
 

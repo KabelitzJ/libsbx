@@ -1,4 +1,7 @@
 project:
+  format_version: 1
   name: Editor
   assets: assets
   library: .sbx/library
+  logs: logs
+  startup_scene: scenes/demo.yaml

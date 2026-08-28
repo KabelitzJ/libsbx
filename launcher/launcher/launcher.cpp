@@ -1,7 +1,5 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Jonas Kabelitz
-#include <cstddef>
-#include <filesystem>
 #include <span>
 #include <vector>
 
@@ -10,7 +8,7 @@
 #include <libsbx/core/engine.hpp>
 #include <libsbx/core/engine_config.hpp>
 #include <libsbx/core/exit.hpp>
-#include <libsbx/core/project.hpp>
+#include <libsbx/core/projects_module.hpp>
 #include <libsbx/core/threading_policy.hpp>
 
 #include <libsbx/platform/platform_module.hpp>
@@ -23,14 +21,10 @@
 
 #include <libsbx/scenes/scenes_module.hpp>
 
-#include <libsbx/scripting/scripting_module.hpp>
-
 #include <libsbx/render/render_module.hpp>
 
-#include <libsbx/ecs/registry.hpp>
-
-#include <editor/application.hpp>
-#include <editor/editor_module.hpp>
+#include <launcher/launcher_application.hpp>
+#include <launcher/launcher_module.hpp>
 
 using module_list = sbx::core::module_list<
   sbx::platform::platform_module,
@@ -38,9 +32,9 @@ using module_list = sbx::core::module_list<
   sbx::graphics::graphics_module,
   sbx::assets::assets_module,
   sbx::scenes::scenes_module,
-  sbx::scripting::scripting_module,
   sbx::render::render_module,
-  editor::editor_module
+  sbx::core::projects_module,
+  launcher::launcher_module
 >;
 
 auto main(int argc, const char** argv) -> int {
@@ -49,33 +43,15 @@ auto main(int argc, const char** argv) -> int {
   try {
     auto config = sbx::core::engine_config{
       .threading = sbx::core::threading_policy::single_threaded,
-      .project = sbx::core::project_config{
-        .root = "editor",
-        .name = "Editor"
-      }
+      // Projectless — the launcher's whole reason to exist (see engine_config's doc comment on
+      // this field, and core::engine::has_project()). It never holds a project open itself; it
+      // just picks/creates one and hands off to a fresh `editor --project <root>` process.
+      .project = std::nullopt
     };
-
-    // --project <root directory>: opens the project rooted there instead of the built-in dev
-    // project above (editor/project.sbxproj) — e.g. when spawned by the launcher (see
-    // launcher_module). Loaded (not open_or_create'd) so a bad path fails fast with a clear
-    // error, instead of silently scaffolding an empty project next to a typo.
-    for (auto index = std::size_t{0u}; index < args.size(); ++index) {
-      if (args[index] == "--project" && index + 1u < args.size()) {
-        const auto root = std::filesystem::path{args[index + 1u]};
-        const auto loaded = sbx::core::project::load(root / sbx::core::project::file_name);
-
-        config.project = sbx::core::project_config{
-          .root = loaded.root(),
-          .name = loaded.name()
-        };
-
-        break;
-      }
-    }
 
     auto engine = sbx::core::basic_engine<module_list>{args, config};
 
-    engine.run<editor::application>();
+    engine.run<launcher::launcher_application>();
   } catch (const std::exception& exception) {
     sbx::utility::logger<"core">::error("{}", exception.what());
 

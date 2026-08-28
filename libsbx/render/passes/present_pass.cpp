@@ -15,7 +15,6 @@
 #include <libsbx/graphics/frame_context.hpp>
 #include <libsbx/graphics/devices/swapchain.hpp>
 #include <libsbx/graphics/commands/command_buffer.hpp>
-#include <libsbx/graphics/resources/image.hpp>
 #include <libsbx/graphics/pipeline/shader.hpp>
 #include <libsbx/graphics/pipeline/shader_compiler.hpp>
 
@@ -60,25 +59,12 @@ auto present_pass::execute(render_context& context) -> void {
     return;
   }
 
-  auto& registry = graphics_module.resource_registry();
   auto& bindless_table = graphics_module.bindless_table();
   auto& frame_context = graphics_module.frame_context();
   auto& swapchain = frame_context.swapchain();
 
-  auto& scene = registry.get<graphics::image>(context.final_image);
-
-  // Final viewport image: tonemap's color writes -> this pass's sampled reads.
-  auto to_read = graphics::command_buffer::image_transition_data{};
-  to_read.image = scene;
-  to_read.src_stage_mask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
-  to_read.src_access_mask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
-  to_read.dst_stage_mask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
-  to_read.dst_access_mask = VK_ACCESS_2_SHADER_SAMPLED_READ_BIT;
-  to_read.old_layout = graphics::image_layout::color_attachment_optimal;
-  to_read.new_layout = graphics::image_layout::shader_read_only_optimal;
-  to_read.aspect_mask = scene.aspect();
-  to_read.layer_count = 1u;
-  context.command_buffer->transition_image_layout(to_read);
+  // final_image is already shader_read_only_optimal by the time any composite pass runs — see
+  // render_module::_consume_packet.
 
   auto color_attachment = VkRenderingAttachmentInfo{};
   color_attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;

@@ -12,6 +12,7 @@ target_sources(
   PRIVATE
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/application.cpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/editor_module.cpp"
+    "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/editor_ui_layer.cpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/editor_state.cpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/editor.cpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/fly_camera.cpp"
@@ -23,10 +24,9 @@ target_sources(
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/viewport_camera.cpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/viewport_gizmo.cpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/viewport_picking.cpp"
-    "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/backends/v1.92.9-docking/imgui_impl_glfw.cpp"
-    "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/backends/v1.92.9-docking/imgui_impl_vulkan.cpp"
   PUBLIC
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/application.hpp"
+    "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/editor_ui_layer.hpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/editor_state.hpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/fly_camera.hpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/panels/editor_panel.hpp"
@@ -37,8 +37,6 @@ target_sources(
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/viewport_camera.hpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/viewport_gizmo.hpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/viewport_picking.hpp"
-    "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/backends/v1.92.9-docking/imgui_impl_glfw.h"
-    "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/backends/v1.92.9-docking/imgui_impl_vulkan.h"
 )
 
 target_include_directories(

@@ -4,7 +4,7 @@
 
 #include <libsbx/utility/logger.hpp>
 
-#include <editor/fonts/material_design_icons.hpp>
+#include <libsbx/render/ui/fonts/material_design_icons.hpp>
 
 namespace editor {
 

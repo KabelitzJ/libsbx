@@ -161,10 +161,6 @@ auto render_module::render() -> void {
   _render_thread->block_until_render_complete();
   _render_thread->next_frame();
 
-  if (_pre_render_callback) {
-    std::invoke(_pre_render_callback);
-  }
-
   _work_packet = _build_packet();
 
   _render_thread->kick();
@@ -172,10 +168,6 @@ auto render_module::render() -> void {
 
 auto render_module::set_composite_pass(std::unique_ptr<render_pass> pass) -> void {
   _composite_pass = std::move(pass);
-}
-
-auto render_module::set_pre_render_callback(core::delegate<void()> callback) -> void {
-  _pre_render_callback = std::move(callback);
 }
 
 auto render_module::set_viewport_extent(math::vector2u extent) -> void {
@@ -430,6 +422,8 @@ auto render_module::_build_packet() -> render_packet {
   _particle_pools[particle_pool_additive]->tick(delta_time);
   _particle_pools[particle_pool_alpha_blend]->tick(delta_time);
 
+  packet.ui = _ui.build_frame();
+
   return packet;
 }
 
@@ -521,18 +515,42 @@ auto render_module::_consume_packet(const render_packet& packet) -> void {
     if (packet.camera.is_active) {
       _prepare_frame(context);
       _graph.execute(context);
+
+      // final_image's last writer is always tonemap_pass, the graph's final step — so this is the
+      // one place, not every composite pass or ui_system, that needs to know when it's safe to
+      // sample: present_pass's fullscreen blit and any ImGui::Image() call sampling it (see
+      // ui_system::texture_id) both just need it already in shader_read_only_optimal by now.
+      auto& registry = graphics_module.resource_registry();
+      auto& final_image = registry.get<graphics::image>(context.final_image);
+
+      auto to_read = graphics::command_buffer::image_transition_data{};
+      to_read.image = final_image;
+      to_read.src_stage_mask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
+      to_read.src_access_mask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
+      to_read.dst_stage_mask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
+      to_read.dst_access_mask = VK_ACCESS_2_SHADER_SAMPLED_READ_BIT;
+      to_read.old_layout = graphics::image_layout::color_attachment_optimal;
+      to_read.new_layout = graphics::image_layout::shader_read_only_optimal;
+      to_read.aspect_mask = final_image.aspect();
+      to_read.layer_count = 1u;
+      command_buffer->transition_image_layout(to_read);
     }
 
     // Always runs, camera or not: presenting *something* to the swapchain — the tonemapped scene
-    // directly (present_pass), the scene embedded in an ImGui viewport panel, or ImGui alone with
-    // no scene (the editor's viewport_composite_pass) — is never optional, even when the scene pass
-    // list above didn't run. Each composite pass is responsible for handling a stale/never-written
-    // final_image on its own (present_pass clears the swapchain instead of sampling it).
+    // directly (present_pass) or ImGui alone with no scene (an app with no composite pass set) — is
+    // never optional, even when the scene pass list above didn't run. A composite pass only needs to
+    // handle a stale/never-written final_image on its own if it wants to show it at all (present_pass
+    // clears the swapchain instead of sampling it); it never needs to transition it first.
     if (_composite_pass) {
       _composite_pass->execute(context);
     } else {
       clear_swapchain(context);
     }
+
+    // Drawn on top of whatever the composite pass just wrote, always — every application gets UI
+    // uniformly (present_pass's plain scene-to-swapchain composite included), and ui_system stays a
+    // cheap no-op read of render_packet::ui rather than every composite pass having to know about it.
+    _ui.render(context, packet.ui);
 
     auto to_present = graphics::command_buffer::image_transition_data{};
     to_present.image = swapchain.active_image();

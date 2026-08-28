@@ -12,7 +12,7 @@
 
 #include <ImGuizmo.h>
 
-#include <editor/fonts/material_design_icons.hpp>
+#include <libsbx/render/ui/fonts/material_design_icons.hpp>
 
 #include <libsbx/core/engine.hpp>
 

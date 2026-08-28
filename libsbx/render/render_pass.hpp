@@ -61,10 +61,11 @@ struct render_context {
   std::uint32_t color_index{0u};
 
   // The fully tonemapped, presentable color result — the contract every composite/presentation
-  // stage (present_pass, the editor's viewport_composite_pass) consumes. Produced once per frame by
-  // tonemap_pass, the last stage of the internal pass list; valid from the very first frame onward
-  // (created alongside the other extent-dependent targets), though its content is only fresh for
-  // frames where a camera was active — see render_module::_consume_packet.
+  // stage (present_pass, or an app's own ImGui::Image() call — see ui_system::texture_id) consumes.
+  // Produced once per frame by tonemap_pass, the last stage of the internal pass list, and already
+  // shader_read_only_optimal by the time any composite pass runs — see render_module::_consume_packet.
+  // Valid from the very first frame onward (created alongside the other extent-dependent targets),
+  // though its content is only fresh for frames where a camera was active.
   graphics::image_handle final_image{};
   std::uint32_t final_image_index{0u};
 
@@ -147,8 +148,10 @@ auto bind_compute_globals(render_context& context) -> void;
  * @brief Clears the active swapchain image and presents it as-is, with no scene content. The
  * fallback end-of-frame for a composite pass reached with no active camera (final_image may be
  * stale or never written) — present_pass uses this instead of leaving the swapchain image
- * undefined; the editor's viewport_composite_pass reaches the equivalent state on its own by
- * rendering ImGui straight onto a cleared swapchain.
+ * undefined. Also render_module's own fallback when no composite pass is set at all (an app whose
+ * scene never goes straight to the swapchain — e.g. the editor, which embeds it in a docked
+ * ImGui::Image() panel instead — has no reason to set one; ui_system::render draws over this
+ * unconditionally either way).
  */
 auto clear_swapchain(render_context& context) -> void;
 

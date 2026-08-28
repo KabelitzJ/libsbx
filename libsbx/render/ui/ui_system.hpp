@@ -1,0 +1,136 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Jonas Kabelitz
+#ifndef LIBSBX_RENDER_UI_UI_SYSTEM_HPP_
+#define LIBSBX_RENDER_UI_UI_SYSTEM_HPP_
+
+#include <cstdint>
+#include <filesystem>
+#include <memory>
+#include <type_traits>
+#include <unordered_map>
+#include <utility>
+#include <vector>
+
+#include <vulkan/vulkan.h>
+
+#include <imgui.h>
+
+#include <libsbx/utility/noncopyable.hpp>
+
+#include <libsbx/memory/observer_ptr.hpp>
+
+#include <libsbx/render/ui/ui_layer.hpp>
+#include <libsbx/render/ui/ui_draw_data.hpp>
+
+namespace sbx::render {
+
+struct render_context;
+
+/**
+ * @brief Owns ImGui end to end: context, the vendored GLFW + Vulkan backends (moved here from
+ * editor/, see libsbx/render/ui/backends), fonts, the registered ui_layer list, and the two halves
+ * of a frame's UI — build_frame() (main thread) and render() (render thread, consuming the deep
+ * copy build_frame() produced — see ui_draw_data).
+ *
+ * Owned by render_module (see render_module::ui()) the same way particle_pool is — a render-adjacent
+ * subsystem, not a separate core::module — so nothing needs to change in demo's or editor's
+ * module_list to use it.
+ */
+class ui_system final : public utility::noncopyable {
+
+public:
+
+  ui_system();
+
+  ~ui_system();
+
+  /**
+   * @brief Registers a layer this ui_system owns outright — mirrors render_graph::add_pass<Pass>.
+   * build() order is registration order, across both this and the observer_ptr overload below.
+   */
+  template<typename Layer, typename... Args>
+  requires (std::is_base_of_v<ui_layer, Layer> && std::is_constructible_v<Layer, Args...>)
+  auto add_layer(Args&&... args) -> Layer& {
+    auto owned = std::make_unique<Layer>(std::forward<Args>(args)...);
+    auto& ref = *owned;
+
+    _layers.push_back(memory::observer_ptr<ui_layer>{&ref});
+    _owned_layers.push_back(std::move(owned));
+
+    return ref;
+  }
+
+  /**
+   * @brief Registers a layer owned elsewhere (e.g. editor_module, itself owned by the engine's
+   * module system) — pair with remove_layer before @p layer is destroyed.
+   */
+  auto add_layer(memory::observer_ptr<ui_layer> layer) -> void;
+
+  auto remove_layer(memory::observer_ptr<ui_layer> layer) -> void;
+
+  /**
+   * @brief Loads a font from @p path at @p size_pixels. For anything beyond that (merged icon
+   * fonts, custom glyph ranges, ...) use fonts() directly, same as you would with any ImFontAtlas.
+   */
+  auto add_font(const std::filesystem::path& path, std::float_t size_pixels) -> ImFont*;
+
+  /**
+   * @brief Loads the engine's built-in font — Roboto Regular merged with the Material Design Icons
+   * glyph range — as io.FontDefault, at @p size_pixels. The font data is compiled into libsbx (see
+   * libsbx/render/ui/fonts), not read from disk, so this works with no assets deployed alongside the
+   * app; it's opt-in (defined in its own translation unit — fonts/embedded_fonts.cpp — precisely so
+   * an app that never calls this, e.g. demo, doesn't pay for the ~1.5MB of embedded font data in its
+   * binary either). Safe to call more than once (e.g. at different sizes); each call adds another
+   * ImFont and makes it the new default.
+   */
+  auto add_default_fonts(std::float_t size_pixels = 16.0f) -> void;
+
+  [[nodiscard]] auto fonts() noexcept -> ImFontAtlas* {
+    return ImGui::GetIO().Fonts;
+  }
+
+  /**
+   * @brief Main-thread build step, called from render_module::_build_packet: collects textures
+   * retired by previous frames, primes the backends, ImGui::NewFrame(), every registered layer's
+   * build() in order, ImGui::Render(), then deep-copies the result — see ui_draw_data.
+   */
+  [[nodiscard]] auto build_frame() -> ui_draw_data;
+
+  /**
+   * @brief Render-thread render step, called from render_module::_consume_packet right after the
+   * composite pass. A no-op if !data.is_valid(). Draws onto the swapchain with VK_ATTACHMENT_LOAD_OP_LOAD
+   * — the composite pass (or render_module's clear_swapchain fallback) is responsible for giving it
+   * a defined background first.
+   */
+  auto render(render_context& context, const ui_draw_data& data) -> void;
+
+  /**
+   * @brief Memoized ImGui_ImplVulkan_AddTexture, for e.g. sampling a render target inside an
+   * ImGui::Image() call. Call every frame with the *current* view/sampler; a texture is only
+   * (re)registered when the pair actually changes (e.g. a render target resize), and the
+   * descriptor set it replaces is retired once the GPU has caught up (see _collect_pending_textures).
+   */
+  [[nodiscard]] auto texture_id(VkImageView view, VkSampler sampler) -> ImTextureID;
+
+private:
+
+  struct texture_entry {
+    VkDescriptorSet descriptor_set;
+    VkSampler sampler;
+  }; // struct texture_entry
+
+  auto _retire_texture(VkDescriptorSet descriptor_set) -> void;
+
+  auto _collect_pending_textures() -> void;
+
+  std::vector<std::unique_ptr<ui_layer>> _owned_layers{};
+  std::vector<memory::observer_ptr<ui_layer>> _layers{};
+
+  std::unordered_map<VkImageView, texture_entry> _textures{};
+  std::vector<std::pair<VkDescriptorSet, std::uint64_t>> _pending_texture_frees{};
+
+}; // class ui_system
+
+} // namespace sbx::render
+
+#endif // LIBSBX_RENDER_UI_UI_SYSTEM_HPP_

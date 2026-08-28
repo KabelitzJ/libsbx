@@ -5,14 +5,12 @@
 
 #include <array>
 #include <cstdint>
-#include <functional>
 #include <memory>
 #include <utility>
 
 #include <libsbx/utility/noncopyable.hpp>
 
 #include <libsbx/core/module.hpp>
-#include <libsbx/core/delegate.hpp>
 
 #include <libsbx/assets/assets_module.hpp>
 
@@ -32,6 +30,7 @@
 #include <libsbx/render/render_graph.hpp>
 #include <libsbx/render/render_thread.hpp>
 #include <libsbx/render/particles/particle_pool.hpp>
+#include <libsbx/render/ui/ui_system.hpp>
 
 namespace sbx::render {
 
@@ -55,7 +54,10 @@ public:
 
   auto set_composite_pass(std::unique_ptr<render_pass> pass) -> void;
 
-  auto set_pre_render_callback(core::delegate<void()> callback) -> void;
+  /** @brief The engine's ImGui system — context, backend, fonts, layer registration. See ui_system. */
+  [[nodiscard]] auto ui() noexcept -> ui_system& {
+    return _ui;
+  }
 
   /**
    * @brief The extent the scene/offscreen render targets (and the projection's aspect ratio) should
@@ -102,6 +104,8 @@ private:
   std::unique_ptr<render_thread> _render_thread{};
   render_packet _work_packet{};
 
+  ui_system _ui{};
+
   std::uint32_t _sampler_index{0u};
   std::uint32_t _clamp_sampler_index{0u};
   bool _grid_enabled{false};
@@ -119,8 +123,6 @@ private:
   std::uint32_t _revealage_index{0u};
   math::vector2u _target_extent{};
   math::vector2u _viewport_extent{0u, 0u};
-
-  core::delegate<void()> _pre_render_callback{};
 
   render_graph _graph{};
   std::unique_ptr<render_pass> _composite_pass{};

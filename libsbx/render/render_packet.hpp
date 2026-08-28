@@ -17,6 +17,7 @@
 #include <libsbx/assets/environment_map.hpp>
 
 #include <libsbx/render/particles/particle_data.hpp>
+#include <libsbx/render/ui/ui_draw_data.hpp>
 
 namespace sbx::render {
 
@@ -106,6 +107,9 @@ struct render_packet {
   assets::environment_map_handle environment{};
   std::float_t environment_intensity{1.0f};
   std::vector<particle_emitter_snapshot> particle_emitters{};
+
+  /** @brief This frame's ImGui output, deep-copied on the main thread — see ui_system::build_frame. */
+  ui_draw_data ui{};
 }; // struct render_packet
 
 } // namespace sbx::render

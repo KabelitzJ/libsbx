@@ -239,6 +239,11 @@ target_sources(
     "${CMAKE_SOURCE_DIR}/libsbx/render/render_thread.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/render/shadow/cascade.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/render/shadow/shadow_pass.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/render/ui/ui_draw_data.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/render/ui/ui_system.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/render/ui/backends/v1.92.9-docking/imgui_impl_glfw.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/render/ui/backends/v1.92.9-docking/imgui_impl_vulkan.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/render/ui/fonts/embedded_fonts.cpp"
 
     "${CMAKE_SOURCE_DIR}/libsbx/scenes/scene_serializer.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/scenes/scene.cpp"
@@ -444,6 +449,10 @@ target_sources(
       "${CMAKE_SOURCE_DIR}/libsbx/render/render_packet.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/render/render_pass.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/render/render_thread.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/render/ui/ui_draw_data.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/render/ui/ui_layer.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/render/ui/fonts/material_design_icons.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/render/ui/ui_system.hpp"
 
       "${CMAKE_SOURCE_DIR}/libsbx/scenes/components.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/scenes/scene_serializer.hpp"

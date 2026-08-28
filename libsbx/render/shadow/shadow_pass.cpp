@@ -68,9 +68,8 @@ auto shadow_pass::declare(graphics_pass_builder& builder, const graph_resources&
 
     const auto group_index = builder.add_group(group);
 
-    // No consumer declares a shadow-map read (bindless sample, same as the cluster buffers) — this
-    // pass must self-transition after its own end_rendering() (Vulkan forbids transitioning an
-    // attachment while still inside its own render scope).
+    // No consumer declares a shadow-map read (bindless sample) — must self-transition after
+    // end_rendering() since Vulkan forbids transitioning an attachment inside its own render scope.
     builder.transitions_after(group_index, resources.shadow_maps[cascade], graphics::pipeline_stage::fragment_shader, graphics::access::shader_read, graphics::image_layout::shader_read_only_optimal);
   }
 }

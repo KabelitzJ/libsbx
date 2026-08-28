@@ -21,31 +21,14 @@ namespace sbx::render {
 
 /**
  * @brief Drives the 4-stage GPU particle compute chain (build_dispatch_args -> simulate -> emit ->
- * prepare_indirect_draw) for both pools, once per render frame. A normal render_pass, recording
- * into the same shared per-frame command buffer as everything else — inserted into render_module's
- * _passes right before particle_draw_pass, its only same-frame consumer.
+ * prepare_indirect_draw) for both pools, once per frame — placed right before particle_draw_pass,
+ * its only same-frame consumer.
  *
- * The particle pool's core buffers (particles/dead_list/alive_list/counters) are genuinely
- * read-modify-written *across* frames — unlike every other pass's buffers, which are either
- * host-rewritten or fully GPU-recomputed fresh every frame — and same-queue submission order alone
- * does not guarantee frame N's reads happen after frame N-1's writes complete (GPUs are free to
- * overlap consecutive submissions for throughput, which is the entire point of frames-in-flight).
- * That hazard is real, but solving it doesn't need a second command buffer or a second timeline
- * semaphore: frame_context already has one, and its own add_wait() hook is generic. execute()
- * registers a wait on frame_context's own timeline at `frame_index - 1`, scoped to COMPUTE_SHADER
- * stage, before touching the pool buffers — that's what actually prevents the cross-frame race.
- * Scoping the wait to COMPUTE_SHADER means unrelated same-frame work (opaque, lighting, ...) isn't
- * gated behind the previous frame's completion, just the parts that touch the particle pool — see
- * this pass's placement (right before particle_draw_pass, not early in _passes) for why that holds
- * even if a given driver treats a stage-scoped wait more coarsely than the spec's best case allows.
- *
- * The same-frame handoff to particle_draw_pass needs no semaphore at all — it's an ordinary
- * trailing VkMemoryBarrier2 at the end of execute(), the same pattern light_culling_pass already
- * uses to hand its cluster data off to opaque_pass/transparent_accumulate_pass.
- *
- * See /home/kaj/.claude/plans/i-want-to-implement-memoized-journal.md for the full reasoning
- * (including why this used to be a bespoke non-render_pass subsystem, and why that turned out to
- * be unnecessary).
+ * Unlike other passes' buffers, the pool buffers are read-modify-written *across* frames, so
+ * same-queue submission order alone doesn't prevent frame N's reads racing frame N-1's writes:
+ * execute() waits on frame_context's own timeline at `frame_index - 1`, scoped to COMPUTE_SHADER,
+ * before touching them. The handoff to particle_draw_pass needs no semaphore — just a trailing
+ * VkMemoryBarrier2, the same pattern light_culling_pass uses for its own consumers.
  */
 class particle_simulate_pass final : public compute_pass {
 
@@ -63,11 +46,9 @@ public:
 
 private:
 
-  // One emit.slang dispatch's worth of work: an active emitter instance slot and how many
-  // particles it should spawn this frame. particles_to_emit must already be written into the
-  // pool's emitter_instances buffer at emitter_index (this pass does both, from the same
-  // render_packet::particle_emitters snapshot) — it's repeated here only so the dispatch can be
-  // sized without reading it back.
+  // One emit.slang dispatch's work: emitter_index + spawn count. particles_to_emit is duplicated
+  // here (also written into the pool's emitter_instances buffer) only so the dispatch can be sized
+  // without reading it back.
   struct emit_request {
     std::uint32_t emitter_index{0u};
     std::uint32_t particles_to_emit{0u};

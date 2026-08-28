@@ -211,9 +211,7 @@ auto ui_system::apply_default_style() -> void {
   style.FrameBorderSize   = 0.0f;
   style.TabBorderSize     = 0.0f;
 
-  // Go through every colour and convert it to linear
-  // This is because ImGui uses linear colours but we are using sRGB
-  // This is a simple approximation of the conversion
+  // Convert sRGB colours to linear (approximate) since ImGui expects linear.
   for (auto i = 0; i < ImGuiCol_COUNT; ++i) {
     auto& color = style.Colors[i];
     color.x = color.x <= 0.04045f ? color.x / 12.92f : std::pow((color.x + 0.055f) / 1.055f, 2.4f);
@@ -266,10 +264,8 @@ auto ui_system::render(render_context& context, const ui_draw_data& data) -> voi
 
   context.command_buffer->begin_rendering(rendering_info);
 
-  // Reconstruct a real ImDrawData over the deep copy. CmdLists is a plain ImVector whose
-  // destructor unconditionally IM_FREE()s its Data pointer; pointing entry straight at ui_draw_data's
-  // own storage (no copy) is safe only because Data/Size/Capacity are detached again below, before
-  // this local's destructor can run on memory entry never allocated.
+  // Reconstruct ImDrawData over the deep copy without copying CmdLists — safe only because
+  // Data/Size/Capacity are detached again below, before IM_FREE() would run on memory this local never allocated.
   auto draw_data = ImDrawData{};
   draw_data.Valid = true;
   draw_data.CmdListsCount = static_cast<int>(data.draw_lists().size());

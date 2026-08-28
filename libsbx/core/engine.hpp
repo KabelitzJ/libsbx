@@ -124,9 +124,7 @@ protected:
 
   std::unique_ptr<core::application> _application{};
 
-  // deque, not vector: project() hands out references into this container, and a later
-  // set_project() call (e.g. a runtime project switch) must not invalidate references any
-  // caller is still holding — deque keeps push-back-stable references.
+  // deque, not vector: project() hands out references, and a later set_project() call must not invalidate references callers still hold.
   std::deque<core::project> _projects{};
   std::optional<std::size_t> _active_project{};
 

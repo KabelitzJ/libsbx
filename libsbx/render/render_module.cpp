@@ -279,9 +279,8 @@ auto render_module::_build_packet() -> render_packet {
     packet.transparent_commands.push_back(std::move(command));
   }
 
-  // Collected separately (rather than emplaced straight into packet.lights) so the shadow-casting
-  // light — the first one with casts_shadows set — can be swapped to the front: shadow_pass and
-  // the lighting shaders both assume "the caster" is always lights[0] when has_shadow_caster is set.
+  // Collected separately so the shadow-casting light can be swapped to lights[0] — shadow_pass and
+  // the lighting shaders assume the caster is always index 0 when has_shadow_caster is set.
   auto directional_lights = std::vector<light_data>{};
   auto shadow_caster_found = false;
   auto shadow_caster_index = std::size_t{0u};
@@ -482,9 +481,8 @@ auto render_module::_consume_packet(const render_packet& packet) -> void {
 
     const auto environment_index = (packet.camera.is_active && packet.environment.is_valid() && assets_module.is_resident(packet.environment)) ? packet.environment->radiance_index() : 0xFFFFFFFFu;
 
-    // Built unconditionally — the composite pass below always runs, whether or not the scene pass
-    // list ran this frame (see its call site), so it always needs a valid context to read
-    // final_image/swapchain_extent/packet from, even with no active camera.
+    // Built unconditionally: the composite pass below always runs and needs a valid context even
+    // with no active camera.
     auto context = render_context{
       .command_buffer = command_buffer,
       .packet = memory::make_observer<const render_packet>(packet),
@@ -516,10 +514,8 @@ auto render_module::_consume_packet(const render_packet& packet) -> void {
       _prepare_frame(context);
       _graph.execute(context);
 
-      // final_image's last writer is always tonemap_pass, the graph's final step — so this is the
-      // one place, not every composite pass or ui_system, that needs to know when it's safe to
-      // sample: present_pass's fullscreen blit and any ImGui::Image() call sampling it (see
-      // ui_system::texture_id) both just need it already in shader_read_only_optimal by now.
+      // Transition final_image to shader_read_only_optimal here, once — tonemap_pass is always its
+      // last writer, and present_pass/ui_system::texture_id both sample it afterward.
       auto& registry = graphics_module.resource_registry();
       auto& final_image = registry.get<graphics::image>(context.final_image);
 
@@ -536,20 +532,15 @@ auto render_module::_consume_packet(const render_packet& packet) -> void {
       command_buffer->transition_image_layout(to_read);
     }
 
-    // Always runs, camera or not: presenting *something* to the swapchain — the tonemapped scene
-    // directly (present_pass) or ImGui alone with no scene (an app with no composite pass set) — is
-    // never optional, even when the scene pass list above didn't run. A composite pass only needs to
-    // handle a stale/never-written final_image on its own if it wants to show it at all (present_pass
-    // clears the swapchain instead of sampling it); it never needs to transition it first.
+    // Always runs, camera or not — presenting something to the swapchain is never optional.
     if (_composite_pass) {
       _composite_pass->execute(context);
     } else {
       clear_swapchain(context);
     }
 
-    // Drawn on top of whatever the composite pass just wrote, always — every application gets UI
-    // uniformly (present_pass's plain scene-to-swapchain composite included), and ui_system stays a
-    // cheap no-op read of render_packet::ui rather than every composite pass having to know about it.
+    // Always drawn on top of whatever the composite pass wrote; ui_system stays a cheap no-op when
+    // render_packet::ui is empty, so composite passes don't need to know about UI.
     _ui.render(context, packet.ui);
 
     auto to_present = graphics::command_buffer::image_transition_data{};
@@ -683,8 +674,7 @@ auto render_module::_ensure_resources() -> void {
     _cluster_counter_addresses[slot] = cluster_counter_base + slot * memory::stride_v<std::uint32_t>;
   }
 
-  // Fixed resolution, independent of viewport size, so these are created once here rather than in
-  // _resize_targets — see shadow_pass.
+  // Fixed resolution independent of viewport size — created once here, not in _resize_targets (see shadow_pass).
   for (auto cascade = std::size_t{0u}; cascade < shadow_cascade_count; ++cascade) {
     _shadow_map_images[cascade] = registry.emplace<graphics::image>(graphics::image::create_info{
       .extent = math::vector3u{shadow_map_resolution, shadow_map_resolution, 1u},
@@ -799,10 +789,8 @@ auto render_module::_resize_targets(const math::vector2u extent) -> void {
 
   _target_extent = extent;
 
-  // Every extent-dependent image above just got a brand new resource_handle (a real resize, not
-  // the first-ever call) — the graph's compiled barriers/VkRenderingInfo reference concrete handles
-  // and are only valid for this one "resource generation", so it must recompile here, and nowhere
-  // else (buffers and shadow maps never change handle, so they don't force a recompile on their own).
+  // Extent-dependent images above just got new resource_handles; the graph's compiled barriers
+  // reference concrete handles, so it must recompile here (buffers/shadow maps never change handle).
   _graph.compile(_build_graph_resources());
 }
 
@@ -868,8 +856,7 @@ auto render_module::_prepare_frame(render_context& context) -> void {
   auto& cluster_counter_buffer = registry.get<graphics::buffer>(_cluster_counter_buffer);
   cluster_counter_buffer.write(&counter_reset, sizeof(counter_reset), context.slot * memory::stride_v<std::uint32_t>);
 
-  // shadow_pass and lighting.slang both assume lights[0] is the caster whenever has_shadow_caster
-  // is set — see the reordering in _build_packet.
+  // shadow_pass and lighting.slang assume lights[0] is the caster when has_shadow_caster is set (see reordering in _build_packet).
   auto shadow_enabled = std::uint32_t{0u};
   auto cascade_splits = math::vector4{0.0f, 0.0f, 0.0f, 0.0f};
   auto light_view_projections = std::array<math::matrix4x4, shadow_cascade_count>{};
@@ -930,10 +917,8 @@ auto render_module::_prepare_frame(render_context& context) -> void {
   context.cluster_light_index_address = data.cluster_light_index_address;
   context.cluster_counter_address = _cluster_counter_addresses[context.slot];
 
-  // A pure function of the frame index — particle_simulate_pass (which runs later, as part of the
-  // pass list below) derives the exact same write_index the exact same way, so both agree on which
-  // alive_list buffer this frame's compute chain is building without either needing to hand
-  // anything off to the other.
+  // write_index is a pure function of frame_index — particle_simulate_pass derives it identically
+  // later, so both agree on the alive_list buffer without any handoff.
   const auto& additive_pool = *_particle_pools[particle_pool_additive];
   const auto& alpha_pool = *_particle_pools[particle_pool_alpha_blend];
   const auto write_index = static_cast<std::uint32_t>(context.frame_index % 2u);

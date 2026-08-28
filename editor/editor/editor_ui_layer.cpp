@@ -101,8 +101,7 @@ auto editor_ui_layer::build() -> void {
     const auto icons_active = draw_node_icons(_state, image_origin, available, gizmo_active);
 
     // Left-click picks the node under the cursor, unless it landed on the gizmo, its toolbar, the
-    // view-orientation cube, or a light/camera icon (right-drag is already the fly camera, so
-    // there's no input conflict there either).
+    // view-orientation cube, or a light/camera icon.
     if (image_clicked && !gizmo_active && !toolbar_active && !view_gizmo_active && !icons_active) {
       const auto mouse_position = ImGui::GetMousePos();
 
@@ -123,9 +122,7 @@ auto editor_ui_layer::build() -> void {
 }
 
 auto editor_ui_layer::_upload_fonts() -> void {
-  // Roboto Regular + Material Design Icons (matches ICON_MIN_MDI/ICON_MAX_MDI in
-  // <libsbx/render/ui/fonts/material_design_icons.hpp>, used throughout the panels below),
-  // embedded in the engine itself — see ui_system::add_default_fonts.
+  // Roboto Regular + Material Design Icons, embedded in the engine — see ui_system::add_default_fonts.
   auto& render_module = sbx::core::engine::get_module<sbx::render::render_module>();
 
   render_module.ui().add_default_fonts(16.0f);

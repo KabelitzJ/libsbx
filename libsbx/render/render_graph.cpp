@@ -89,9 +89,8 @@ namespace {
 
 /**
  * @brief Per-resource state the linear compiler tracks while walking the fixed pass list in order.
- * "touched=false" means this is the resource's first declared access this compile — every barrier
- * synthesized from that state is a fresh-write one (old_layout=undefined, src_access=none),
- * matching every hand-written "fresh write" barrier in the pre-graph code exactly.
+ * touched=false means first declared access this compile, so the synthesized barrier is a fresh
+ * write (old_layout=undefined, src_access=none).
  */
 struct image_state {
   graphics::image_layout layout{graphics::image_layout::undefined};
@@ -132,10 +131,9 @@ auto render_graph::compile(const graph_resources& resources) -> void {
   auto image_states = std::unordered_map<graphics::image_handle, image_state>{};
   auto buffer_states = std::unordered_map<graphics::buffer_handle, buffer_state>{};
 
-  // Emits a barrier from this image's tracked state to (stage, access, layout) whenever the access
-  // is a write, the layout changes, the previous access was a write, or this is the resource's
-  // first declared touch — and skips it otherwise (the read-after-read elision that lets e.g.
-  // transparent_accumulate_pass's depth read stay barrier-free, exactly as it is today).
+  // Emits a barrier when access is a write, layout changes, the previous access was a write, or
+  // this is the first touch; otherwise skips it (read-after-read elision, e.g. keeps
+  // transparent_accumulate_pass's depth read barrier-free).
   const auto touch_image = [&](graphics::image_handle image, graphics::pipeline_stage stage, graphics::access access, graphics::image_layout layout) -> std::optional<graphics::command_buffer::image_transition_data> {
     auto& state = image_states[image];
 
@@ -205,9 +203,8 @@ auto render_graph::compile(const graph_resources& resources) -> void {
         auto& group = entry.groups[op.group_index];
         group.has_rendering = true;
 
-        // The resource's first declared touch this compile clears (to op.clear_color); every
-        // later touch loads whatever the previous writer left. Peeked before touch_image below,
-        // which is what actually marks it touched.
+        // First touch this compile clears (to op.clear_color); later touches load. Peeked before
+        // touch_image, which is what actually marks it touched.
         const auto is_first_use = !image_states[op.image].touched;
 
         if (const auto barrier = touch_image(op.image, op.stage, op.access, op.layout)) {

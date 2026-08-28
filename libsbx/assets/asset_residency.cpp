@@ -323,10 +323,8 @@ auto asset_residency::update_material(material_handle& material, const material:
   material->_emissive = create_info.emissive;
   material->_name = create_info.name;
 
-  // _register_material only ever queues a GPU buffer upload once, at creation time — without
-  // re-queuing here, an in-place edit updates the CPU-side object but the renderer keeps reading
-  // the stale material_data it already uploaded. _materials is indexed by material::index(), the
-  // same slot _register_material itself pushed to, so this is the same shared_ptr, not a copy.
+  // Re-queue the upload: _register_material only queues one at creation time, so without this an
+  // in-place edit updates the CPU object but the renderer keeps reading the stale uploaded data.
   auto lock = std::lock_guard{_mutex};
 
   if (material->index() < _materials.size()) {
@@ -404,9 +402,8 @@ auto asset_residency::save_material(material_handle& material, const std::filesy
 
   const auto id = _cooker.import(resolved_path); // register + create the .meta so it's a first-class asset
 
-  // import() is idempotent (returns the existing uuid from .meta on a re-save), so this is always
-  // the right id to stamp onto the record — including the very first save of a create_material()'d
-  // material, which otherwise keeps a nil id forever.
+  // import() is idempotent (returns the existing uuid from .meta on a re-save), so this always
+  // stamps the right id — including a create_material()'d material's first save (nil id otherwise).
   material->_id = id;
 
   utility::logger<"assets">::info("Saved material '{}'", resolved_path.generic_string());
@@ -539,9 +536,8 @@ auto asset_residency::save_particle_effect(particle_effect_handle& effect, const
 
   auto emitters_node = YAML::Node{YAML::NodeType::Sequence};
 
-  // Same idea as save_material's path_of lambda: a texture slot's absolute import()-ed path has to
-  // be turned back into the assets-relative form load_texture(path, ...) expects. Empty/nil-uuid
-  // (no texture assigned — the common case) omits the key entirely.
+  // Same idea as save_material's path_of lambda: re-relativize the import()-ed path for
+  // load_texture(path, ...); nil-uuid (no texture assigned) omits the key entirely.
   const auto texture_path_of = [this](const texture_handle& texture) -> std::optional<std::string> {
     if (!texture.is_valid()) {
       return std::nullopt;
@@ -622,9 +618,8 @@ auto asset_residency::load_environment_map(const math::uuid& id) -> environment_
   auto record = std::make_shared<environment_map>();
   record->_id = id;
 
-  // Bakes irradiance + prefiltered via compute at load time and blocks until the GPU has
-  // finished — the environment is fully usable the moment this call returns, matching the old
-  // engine's load-time bake semantics rather than the render thread's old lazy first-frame bake.
+  // Bakes irradiance + prefiltered via compute and blocks until the GPU finishes, so the
+  // environment is fully usable the moment this call returns (load-time bake, not lazy first-frame).
   _ibl.bake_environment(*record, data->pixels, data->width, data->height);
 
   {
@@ -797,9 +792,8 @@ auto asset_residency::is_resident(const material_handle& material) const -> bool
 }
 
 auto asset_residency::is_resident(const environment_map_handle& environment) const -> bool {
-  // bake_environment blocks until the GPU has finished, so a valid handle is always fully baked
-  // and resident by the time load_environment_map returns it — no timeline wait needed here,
-  // unlike textures/meshes/materials which still upload through the deferred per-frame path.
+  // bake_environment blocks until the GPU finishes, so a valid handle is always fully resident —
+  // no timeline wait needed here, unlike textures/meshes/materials' deferred per-frame upload.
   return environment.is_valid();
 }
 
@@ -838,11 +832,8 @@ auto asset_residency::_register_material(std::shared_ptr<material> record) -> ma
 }
 
 auto asset_residency::_extract_gltf_material(const material_description& description, const std::filesystem::path& relative_source) -> math::uuid {
-  // relative_source (== the mesh's own resolved source path) is already fully resolved —
-  // cwd-openable, with assets_directory() baked in (same convention save_material/load_material's
-  // path overload assume on their *output* side) — but save_material/load_material(path) both
-  // expect a path relative to assets_directory() as *input*, so it has to be re-relativized before
-  // use here, exactly like the editor's extract_material_to_asset does for the same reason.
+  // relative_source is fully resolved; save_material/load_material(path) expect an assets-relative
+  // input, so re-relativize it here (same as the editor's extract_material_to_asset).
   const auto source_relative = _cooker.relative(relative_source);
 
   const auto directory = source_relative.parent_path() / "materials"; // mirrors textures already landing in models/<name>/textures/

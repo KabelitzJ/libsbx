@@ -582,14 +582,16 @@ private:
   }
 
   auto _move_and_pop(const size_type position) -> void {
+    auto& dense = _dense.first();
+
     if (const auto last = size() - 1u; position != last) {
-      auto* current = &_sparse.first()[_key_to_bucket(_dense.first().back().element.first)];
-      _dense.first()[position] = std::move(_dense.first().back());
-      for (; *current != last; current = &_dense.first()[*current].next) {}
+      auto* current = &_sparse.first()[_key_to_bucket(dense.back().element.first)];
+      dense[position] = std::move(dense.back());
+      for (; *current != last; current = &dense[*current].next) {}
       *current = position;
     }
 
-    _dense.first().pop_back();
+    dense.pop_back();
   }
 
   auto _rehash_if_required() -> void {

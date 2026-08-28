@@ -198,10 +198,8 @@ struct axis_gizmo_handle {
   sbx::math::vector3f look_from_direction;
 }; // struct axis_gizmo_handle
 
-// In-flight camera-snap transition. File-local (function-static) rather than in editor_state: it's
-// purely an implementation detail of draw_view_gizmo's corner widget, not something any other
-// panel needs to see — see editor_state.hpp's doc comment on only holding what crosses panel
-// boundaries.
+// In-flight camera-snap transition. File-local rather than in editor_state — purely an
+// implementation detail of draw_view_gizmo's corner widget, not a cross-panel concern.
 struct camera_snap_animation {
   bool active{false};
   sbx::math::vector3f start_position{};
@@ -213,11 +211,9 @@ struct camera_snap_animation {
 
 constexpr auto camera_snap_duration = 0.25f; // seconds
 
-// Computes the local position/rotation camera_node would end up at looking at the world origin
-// from `direction * length`, without writing it — the interpolation target for
-// camera_snap_animation. Same decompose-with-parent-conversion pattern draw_viewport_gizmo uses
-// for the selected object's transform gizmo, just built from a fresh look_at instead of a matrix
-// ImGuizmo handed back.
+// Computes (without writing) the local position/rotation for camera_node looking at the world
+// origin from `direction * length` — the interpolation target for camera_snap_animation. Same
+// decompose-with-parent-conversion pattern as draw_viewport_gizmo, built from a look_at instead.
 auto compute_camera_snap_target(sbx::scenes::scene& scene, sbx::scenes::node& camera_node, const sbx::math::vector3f& direction, std::float_t length) -> std::pair<sbx::math::vector3f, sbx::math::quaternion> {
   const auto up = std::fabs(direction.y()) > 0.99f ? sbx::math::vector3f{0.0f, 0.0f, 1.0f} : sbx::math::vector3f{0.0f, 1.0f, 0.0f};
 
@@ -471,11 +467,8 @@ auto draw_node_icons(editor_state& state, const ImVec2& viewport_origin, const I
     const auto node = scene.node_of(entity);
     auto hovered = false;
 
-    // Skip hit-testing (but still draw the glyph below) while the cursor is already inside the
-    // gizmo's own hotspot: a selected light/camera's icon projects to the same screen point as the
-    // gizmo's center handle, and this InvisibleButton would otherwise win ImGui's hover resolution
-    // there every frame, permanently blocking ImGuizmo::CanActivate() for that handle. See the
-    // gizmo_capturing_input doc comment in viewport_gizmo.hpp.
+    // Skip hit-testing (glyph still draws) when the gizmo already has the cursor — see
+    // gizmo_capturing_input's doc comment in viewport_gizmo.hpp.
     if (!gizmo_capturing_input) {
       ImGui::InvisibleButton("##node_icon", text_size);
 
@@ -507,9 +500,8 @@ auto draw_node_icons(editor_state& state, const ImVec2& viewport_origin, const I
     draw_icon(entity, sbx::math::vector3f{transform.matrix[3]}, ICON_MDI_WHITE_BALANCE_SUNNY);
   }
 
-  // The active viewport camera is excluded from its own icon: the icon would sit essentially at
-  // the eye position, i.e. right on/behind the near plane in its own view — a degenerate
-  // projection (clip.w hovering around zero) that flickered the icon on and off every other frame.
+  // The active camera is excluded from its own icon — it would sit at the eye position, a
+  // degenerate projection (clip.w near zero) that flickered on and off every other frame.
   const auto active_camera_id = camera_node.id();
 
   for (auto&& [entity, transform, node_camera] : scene.query<sbx::scenes::world_transform, sbx::scenes::camera>(sbx::ecs::exclude<sbx::scenes::mesh_renderer>).each()) {

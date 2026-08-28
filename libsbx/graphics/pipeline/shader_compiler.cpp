@@ -63,10 +63,9 @@ shader_compiler::~shader_compiler() {
 
 }
 
-// Content hash over everything that affects the emitted SPIR-V: the source itself, the requested
-// entry points, the fixed compiler options below and the target profile, plus the Slang toolchain's
-// own build tag so a Slang version bump invalidates every cache entry automatically. Deliberately
-// not mtime-based — that isn't stable across a fresh checkout or a different machine.
+// Content hash over the source, entry points, compiler options, target profile, and the Slang
+// toolchain's build tag (so a Slang version bump invalidates the cache). Not mtime-based — unstable
+// across a fresh checkout or a different machine.
 auto shader_compiler::_cache_key(const std::string& source, std::span<const entry_point_request> entry_points, std::span<const slang::CompilerOptionEntry> options, const char* profile) const -> std::string {
   auto buffer = std::string{};
   buffer.reserve(source.size() + 256u);

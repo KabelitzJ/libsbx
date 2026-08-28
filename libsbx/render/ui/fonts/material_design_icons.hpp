@@ -2,11 +2,9 @@
 // from codepoints https://github.com/Templarian/MaterialDesign-Webfont/raw/master/css/materialdesignicons.css
 // for use with font https://github.com/Templarian/MaterialDesign-Webfont/raw/master/fonts/materialdesignicons-webfont.ttf
 //
-// The glyph *name* macros (ICON_MDI_*, e.g. ICON_MDI_CONTENT_SAVE) below — the font's actual bytes
-// are embedded separately, see material_design_icons_ttf.hpp and ui_system::add_default_fonts. If
-// this ever needs regenerating from a newer Material Design Icons release, the font bytes must be
-// regenerated together with it (see fonts/generate_embedded_fonts.py) — ICON_MIN_MDI/ICON_MAX_MDI
-// below have to keep matching the glyph range add_default_fonts() merges in.
+// Glyph name macros only — font bytes are embedded separately (material_design_icons_ttf.hpp,
+// ui_system::add_default_fonts). Regenerate both together (fonts/generate_embedded_fonts.py);
+// ICON_MIN_MDI/ICON_MAX_MDI must keep matching the glyph range add_default_fonts() merges in.
 
 #ifndef LIBSBX_RENDER_UI_FONTS_MATERIAL_DESIGN_ICONS_HPP_
 #define LIBSBX_RENDER_UI_FONTS_MATERIAL_DESIGN_ICONS_HPP_

@@ -75,35 +75,38 @@ class octree {
         return std::nullopt;
       }
 
-      if (inner.max().x() <= center.x() && inner.max().y() <= center.y() && inner.max().z() <= center.z()) {
+      const auto& inner_min = inner.min();
+      const auto& inner_max = inner.max();
+
+      if (inner_max.x() <= center.x() && inner_max.y() <= center.y() && inner_max.z() <= center.z()) {
         return 0u;
       }
 
-      if (inner.min().x() >= center.x() && inner.max().y() <= center.y() && inner.max().z() <= center.z()) {
+      if (inner_min.x() >= center.x() && inner_max.y() <= center.y() && inner_max.z() <= center.z()) {
         return 1u;
       }
 
-      if (inner.max().x() <= center.x() && inner.min().y() >= center.y() && inner.max().z() <= center.z()) {
+      if (inner_max.x() <= center.x() && inner_min.y() >= center.y() && inner_max.z() <= center.z()) {
         return 2u;
       }
 
-      if (inner.min().x() >= center.x() && inner.min().y() >= center.y() && inner.max().z() <= center.z()) {
+      if (inner_min.x() >= center.x() && inner_min.y() >= center.y() && inner_max.z() <= center.z()) {
         return 3u;
       }
 
-      if (inner.max().x() <= center.x() && inner.max().y() <= center.y() && inner.min().z() >= center.z()) {
+      if (inner_max.x() <= center.x() && inner_max.y() <= center.y() && inner_min.z() >= center.z()) {
         return 4u;
       }
 
-      if (inner.min().x() >= center.x() && inner.max().y() <= center.y() && inner.min().z() >= center.z()) {
+      if (inner_min.x() >= center.x() && inner_max.y() <= center.y() && inner_min.z() >= center.z()) {
         return 5u;
       }
 
-      if (inner.max().x() <= center.x() && inner.min().y() >= center.y() && inner.min().z() >= center.z()) {
+      if (inner_max.x() <= center.x() && inner_min.y() >= center.y() && inner_min.z() >= center.z()) {
         return 6u;
       }
 
-      if (inner.min().x() >= center.x() && inner.min().y() >= center.y() && inner.min().z() >= center.z()) {
+      if (inner_min.x() >= center.x() && inner_min.y() >= center.y() && inner_min.z() >= center.z()) {
         return 7u;
       }
 

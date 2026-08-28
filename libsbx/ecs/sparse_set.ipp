@@ -262,10 +262,12 @@ auto basic_sparse_set<Entity, Allocator>::swap_and_pop(const basic_iterator iter
   auto& self = _sparse_reference(*iterator);
   const auto entity = entity_traits::to_entity(self);
 
-  _sparse_reference(_dense.back()) = entity_traits::combine(entity, entity_traits::to_integral(_dense.back()));
-  _dense[static_cast<size_type>(entity)] = _dense.back();
+  auto& back = _dense.back();
 
-  utility::assert_that((_dense.back() = null_entity, true), "unnecessary but entry helps to detect nasty bugs");
+  _sparse_reference(back) = entity_traits::combine(entity, entity_traits::to_integral(back));
+  _dense[static_cast<size_type>(entity)] = back;
+
+  utility::assert_that((back = null_entity, true), "unnecessary but entry helps to detect nasty bugs");
 
   self = null_entity;
   _dense.pop_back();

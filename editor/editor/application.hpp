@@ -44,9 +44,8 @@ private:
 
   fly_camera _camera_controller;
 
-  // Click-to-engage: right-mouse-down only starts driving the camera if the press began while the
-  // Viewport panel was hovered; once engaged, input keeps driving it (even if the cursor leaves the
-  // panel bounds mid-drag) until right-mouse is released.
+  // Click-to-engage: right-mouse-down only starts driving the camera while the Viewport panel is
+  // hovered; once engaged it keeps driving until right-mouse is released, even off-panel.
   bool _camera_is_engaged{false};
 
 }; // class application

@@ -90,10 +90,12 @@ launcher_module::launcher_module() {
   };
 
   auto& render_module = sbx::core::engine::get_module<sbx::render::render_module>();
-  render_module.ui().add_default_fonts(16.0f);
+  auto& ui = render_module.ui();
+
+  ui.add_default_fonts(16.0f);
   // Shared with editor (see ui_system::apply_default_style) so both windows look consistent.
-  render_module.ui().apply_default_style();
-  render_module.ui().add_layer(this);
+  ui.apply_default_style();
+  ui.add_layer(this);
 }
 
 launcher_module::~launcher_module() {

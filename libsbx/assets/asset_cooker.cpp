@@ -213,10 +213,8 @@ auto asset_cooker::absolute(const std::filesystem::path& relative) -> std::files
   return project.assets_directory() / relative;
 }
 
-// The inverse of absolute() — an already-resolved (cwd-openable) path back to one relative to
-// assets_directory(), for writing into a place (like a .material file's texture slots) that's
-// meant to hold the assets-relative form. _paths entries are stored fully resolved, so anything
-// read from them needs this before being handed to something that expects assets-relative input.
+// Inverse of absolute(): converts a resolved path back to one relative to assets_directory(),
+// for storing assets-relative paths (e.g. in a .material file's texture slots).
 auto asset_cooker::relative(const std::filesystem::path& absolute) -> std::filesystem::path {
   const auto& project = core::engine::project();
 
@@ -634,10 +632,8 @@ auto asset_cooker::_load_cooked_texture(const std::filesystem::path& cooked, std
 }
 
 auto asset_cooker::_generate_tangents(std::vector<vertex>& vertices, const std::vector<std::uint32_t>& indices, std::size_t vertex_start, std::size_t vertex_count, std::size_t index_start, std::size_t index_count) -> void {
-  // Lengyel's per-triangle method: accumulate a tangent and bitangent per vertex from every
-  // triangle referencing it, then orthogonalize against the (already-populated) normal and derive
-  // handedness from the accumulated bitangent. Standard fallback used by essentially every glTF
-  // importer for primitives that omit their own TANGENT attribute.
+  // Lengyel's method: accumulate tangent/bitangent per vertex from referencing triangles, then
+  // orthogonalize against the normal and derive handedness from the bitangent sum.
   auto tangent_sum = std::vector<math::vector3f>(vertex_count, math::vector3f::zero);
   auto bitangent_sum = std::vector<math::vector3f>(vertex_count, math::vector3f::zero);
 
@@ -693,9 +689,8 @@ auto asset_cooker::_optimize_and_generate_lods(std::vector<vertex>& vertices, st
     return lods;
   }
 
-  // meshopt's index/vertex functions work in a 0-based local index space, not the mesh-global one
-  // `indices` stores (offsets already folded in) — translate this submesh's slice down to local
-  // indices, optimize, then translate back before writing into the shared arrays.
+  // meshopt works in a 0-based local index space, not indices' mesh-global one — translate this
+  // submesh's slice down to local, optimize, then translate back before writing to the shared arrays.
   auto local = std::vector<std::uint32_t>(index_count);
 
   for (auto i = std::size_t{0u}; i < index_count; ++i) {
@@ -715,9 +710,8 @@ auto asset_cooker::_optimize_and_generate_lods(std::vector<vertex>& vertices, st
     indices[index_start + i] = local[i] + static_cast<std::uint32_t>(vertex_start);
   }
 
-  // Coarser LOD chain, each level targeting half the previous one's triangle budget. Generated from
-  // the now cache/fetch-optimized LOD0; stops once meshopt_simplify can no longer make meaningful
-  // progress (topology-locked) or the mesh is already too small to bother.
+  // Coarser LOD chain, each level targeting half the previous one's triangle budget; stops once
+  // meshopt_simplify stalls (topology-locked) or the mesh is already too small to bother.
   auto previous = local;
   constexpr auto max_levels = std::size_t{4u};
   constexpr auto min_triangle_count = std::size_t{8u};
@@ -971,9 +965,8 @@ auto asset_cooker::_cook_mesh(const std::filesystem::path& source, const math::u
     return false;
   }
 
-  // meshopt-compress both buffers for the on-disk cache — smaller cooked files, less I/O on load.
-  // Purely a storage-format concern: decoded back into the same flat vertex/index vectors on read,
-  // transparent to everything downstream of _load_cooked_mesh.
+  // meshopt-compress both buffers for the on-disk cache (smaller files, less I/O); decoded back to
+  // flat vertex/index vectors on read, transparent to everything downstream of _load_cooked_mesh.
   auto encoded_vertices = std::vector<unsigned char>(meshopt_encodeVertexBufferBound(vertices.size(), sizeof(vertex)));
   const auto vertex_data_size = meshopt_encodeVertexBuffer(encoded_vertices.data(), encoded_vertices.size(), vertices.data(), vertices.size(), sizeof(vertex));
   encoded_vertices.resize(vertex_data_size);

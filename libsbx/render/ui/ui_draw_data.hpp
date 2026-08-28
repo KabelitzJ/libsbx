@@ -18,13 +18,10 @@ namespace sbx::render {
  * @brief Main-thread-owned deep copy of one frame's ImGui draw output.
  *
  * ImGui::GetDrawData() returns pointers into the context's own per-window ImDrawList buffers,
- * which the very next ImGui::NewFrame() (built while ui_system::render may still be reading the
- * previous frame's data on the render thread) reuses. render_pass implementations never reach into
- * ImGui's global context directly, same as they never reach into the ECS (see render_module's doc
- * comment) — they only ever read render_context::packet. This is the piece of the packet that
- * carries UI: built once per frame, on the main thread, from ImGui::GetDrawData() (see
- * ui_system::build_frame), using ImDrawList::CloneOutput() — Dear ImGui's own documented mechanism
- * for consuming one frame's draw data from a thread other than the one that built it.
+ * which the next ImGui::NewFrame() reuses — possibly while ui_system::render is still reading the
+ * previous frame's data on the render thread. Built once per frame on the main thread via
+ * ImDrawList::CloneOutput() (see ui_system::build_frame), Dear ImGui's own documented mechanism for
+ * cross-thread draw data consumption.
  *
  * Move-only: owns the cloned ImDrawList objects outright.
  */

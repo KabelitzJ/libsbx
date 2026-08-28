@@ -25,11 +25,7 @@
 
 namespace sbx::assets {
 
-/**
- * @brief Extracts every material a cooked mesh embeds into a standalone, editable `.material`
- * asset next to the mesh (reusing one already there rather than overwriting it) instead of a
- * hidden, unregistered cook-cache blob. On by default.
- */
+/** @brief Extracts a cooked mesh's embedded materials into standalone, editable `.material` assets (reusing an existing one rather than overwriting it). On by default. */
 struct mesh_import_options {
   bool extract_materials{true};
 }; // struct mesh_import_options
@@ -80,21 +76,10 @@ struct material_description {
   math::uuid emissive{math::uuid::nil()};
 }; // struct material_description
 
-/**
- * @brief Given an embedded glTF material and the mesh's own path, decides its uuid — either by
- * extracting it into a standalone, GPU-backed `.material` asset (residency's job) or some other
- * strategy the caller supplies. Only invoked when `mesh_import_options::extract_materials` is set;
- * the cooker has a pure, dependency-free fallback of its own otherwise.
- */
+/** @brief Resolves an embedded glTF material's uuid (e.g. by extracting it to a standalone `.material` asset); invoked only when `mesh_import_options::extract_materials` is set. */
 using material_resolver = std::function<math::uuid(const material_description&, const std::filesystem::path&)>;
 
-/**
- * @brief Turns source assets (glTF meshes, images, HDR equirects, hand-authored `.material` YAML)
- * into versioned, on-disk cooked caches, and owns the asset database (uuid <-> path, the
- * import manifest, staleness tracking). Pure file I/O — no dependency on `graphics::` or any
- * GPU-side type; @ref asset_residency is what turns what this class produces into GPU-resident
- * resources.
- */
+/** @brief Cooks source assets (glTF, images, HDR, `.material` YAML) into versioned on-disk caches and owns the asset database (uuid<->path, manifest, staleness). Pure file I/O; @ref asset_residency turns cooked output into GPU-resident resources. */
 class asset_cooker final : public utility::noncopyable {
 
 public:
@@ -177,21 +162,10 @@ private:
 
   [[nodiscard]] static auto _derive_material_uuid(const math::uuid& mesh, std::size_t index) -> math::uuid;
 
-  /**
-   * @brief Fills in vertices[vertex_start, vertex_start + vertex_count)'s tangents from scratch,
-   * for a glTF primitive that didn't provide its own TANGENT attribute (its normals and UVs must
-   * already be populated). indices[index_start, index_start + index_count) are that primitive's
-   * triangle indices, already offset by vertex_start.
-   */
+  /** @brief Computes tangents from scratch for vertices[vertex_start, vertex_start + vertex_count) of a primitive lacking TANGENT (normals/UVs must already be populated); indices are that primitive's triangle indices, offset by vertex_start. */
   static auto _generate_tangents(std::vector<vertex>& vertices, const std::vector<std::uint32_t>& indices, std::size_t vertex_start, std::size_t vertex_count, std::size_t index_start, std::size_t index_count) -> void;
 
-  /**
-   * @brief Reorders one submesh's slice of the shared vertex/index arrays for GPU cache efficiency
-   * (vertex cache, overdraw, vertex fetch — meshoptimizer's standard trio), in place, then derives a
-   * coarser LOD chain from the result via meshopt_simplify. Each generated LOD's indices are appended
-   * to `indices` (which grows); the returned levels reference `vertex_start`'s (now reordered) vertex
-   * range, same as index_offset/index_count on the submesh they belong to.
-   */
+  /** @brief Reorders a submesh's vertex/index slice in place for GPU cache efficiency (meshoptimizer's vertex-cache/overdraw/vertex-fetch trio), then derives a coarser LOD chain via meshopt_simplify, appending each level's indices to `indices`. */
   static auto _optimize_and_generate_lods(std::vector<vertex>& vertices, std::vector<std::uint32_t>& indices, std::size_t vertex_start, std::size_t vertex_count, std::size_t index_start, std::size_t index_count) -> std::vector<mesh_lod>;
 
   auto _cook_mesh(const std::filesystem::path& source, const math::uuid& id, const std::filesystem::path& cooked, const mesh_import_options& options, const material_resolver& resolve_material) -> bool;

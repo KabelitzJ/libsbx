@@ -56,9 +56,8 @@ auto main(int argc, const char** argv) -> int {
     };
 
     // --project <root directory>: opens the project rooted there instead of the built-in dev
-    // project above (editor/project.sbxproj) — e.g. when spawned by the launcher (see
-    // launcher_module). Loaded (not open_or_create'd) so a bad path fails fast with a clear
-    // error, instead of silently scaffolding an empty project next to a typo.
+    // project above (e.g. when spawned by launcher_module). Loaded, not open_or_create'd, so a
+    // bad path fails fast rather than scaffolding an empty project next to a typo.
     for (auto index = std::size_t{0u}; index < args.size(); ++index) {
       if (args[index] == "--project" && index + 1u < args.size()) {
         const auto root = std::filesystem::path{args[index + 1u]};

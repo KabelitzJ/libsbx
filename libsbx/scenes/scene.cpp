@@ -94,8 +94,7 @@ auto scene::_set_parent(ecs::entity child, ecs::entity parent) -> void {
 }
 
 auto scene::_destroy_node_recursive(ecs::entity entity) -> void {
-  // Copy out first — children are destroyed (and thus erased from this very vector, one level up)
-  // while we're still iterating it otherwise.
+  // Copy out first — destroying a child erases it from this same vector, so iterating it directly would invalidate the iteration.
   const auto children = _registry.get<relationship>(entity).children;
 
   for (const auto child : children) {

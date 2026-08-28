@@ -1,10 +1,8 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Jonas Kabelitz
 //
-// Deliberately its own translation unit — see ui_system::add_default_fonts's doc comment. Nothing
-// in ui_system.cpp (or anywhere else always linked into every app) references anything defined
-// here, so an app that never calls add_default_fonts() (e.g. demo) never pulls this .o, and hence
-// never pulls the ~1.5MB of embedded font data below, into its binary at all.
+// Deliberately its own translation unit (see ui_system::add_default_fonts) so apps that never call
+// it don't pull the ~1.5MB of embedded font data below into their binary.
 #include <libsbx/render/ui/ui_system.hpp>
 
 #include <array>

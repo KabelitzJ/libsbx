@@ -31,22 +31,15 @@
 namespace sbx::assets {
 
 /**
- * @brief Owns the asset database and GPU residency.
+ * @brief Owns the asset database and GPU residency; a thin facade over @ref asset_cooker
+ * (import/cook/manifest), @ref asset_residency (GPU-resident uploads), and @ref ibl_baker
+ * (IBL cubemap bakes) — kept as a single registered module with an identical public surface.
  *
- * A thin facade over three focused components: @ref asset_cooker (import/cook/manifest, pure file
- * I/O), @ref asset_residency (GPU-resident textures/meshes/materials/environment-maps, upload
- * queues), and @ref ibl_baker (IBL cubemap compute bakes). Kept as a single registered module —
- * and its public surface kept identical — so nothing outside `libsbx/assets/` has to know it's
- * three classes underneath; see the three components' own doc comments for what they actually do.
- *
- * Every path argument to the `load_*` overloads is interpreted **relative to the active project's
- * assets directory** (core::engine::project()) — they resolve it internally before doing anything
- * else. @ref import and @ref import_directory do **not**: despite registering assets under a
- * project-relative key, the path/root they're given must already be resolvable from the process's
- * current working directory (typically `project.assets_directory() / relative` — see any `load_*`
- * overload's implementation for the exact pattern). Passing a bare assets-relative path straight
- * to import()/import_directory() silently mints a second, broken uuid rather than failing loudly.
- * A project is required — asset access asserts one is set.
+ * `load_*` path overloads resolve relative to the active project's assets directory. @ref import
+ * and @ref import_directory do not: their path/root must already be resolvable from the process's
+ * cwd (typically `project.assets_directory() / relative`) — passing a bare assets-relative path
+ * directly to them silently mints a second, broken uuid rather than failing loudly. A project is
+ * required — asset access asserts one is set.
  */
 class assets_module final : public utility::noncopyable {
 
@@ -107,9 +100,8 @@ public:
   auto create_material(const material::create_info& create_info) -> material_handle;
 
   /**
-   * @brief Overwrites an existing material's fields in place. Every material_handle already
-   * pointing at this record (e.g. a mesh_renderer's material slot) observes the change
-   * immediately, since they all share the same underlying object. Does not touch identity
+   * @brief Overwrites an existing material's fields in place; every material_handle already
+   * pointing at it (shared object) observes the change immediately. Does not touch identity
    * (index/uuid) or persist to disk — pair with save_material to do that.
    */
   auto update_material(material_handle& material, const material::create_info& create_info) -> void;
@@ -183,9 +175,8 @@ public:
 
 private:
 
-  // Declaration order is construction order: residency is constructed from references to the
-  // other two, so it comes last; destruction (reverse order) tears residency down first, which is
-  // also what we want, since it's the one still holding live GPU-facing state.
+  // Declaration order is construction order: residency depends on the other two so it's declared
+  // last, and destroyed first — the one still holding live GPU-facing state.
   asset_cooker _cooker{};
   ibl_baker _ibl{};
   asset_residency _residency;

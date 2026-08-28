@@ -58,9 +58,8 @@ auto ibl_baker::_ensure_brdf_lut(graphics::command_buffer& command_buffer) -> vo
   to_general.aspect_mask = brdf_lut.aspect();
   command_buffer.transition_image_layout(to_general);
 
-  // Leaked forever, on purpose: this runs exactly once per program lifetime, so recovering this
-  // one bindless storage-image slot after the bake isn't worth the added bookkeeping — see
-  // bake_environment, which does defer cleanup, since that one runs on every environment load.
+  // Leaked forever, on purpose: runs once per program lifetime, so recovering this bindless slot
+  // isn't worth the bookkeeping (unlike bake_environment, which runs per load and does clean up).
   const auto output_index = bindless_table.register_storage_image(brdf_lut.view());
 
   bindless_table.flush_writes();
@@ -113,11 +112,9 @@ auto ibl_baker::_ensure_brdf_lut(graphics::command_buffer& command_buffer) -> vo
 auto ibl_baker::bake_environment(environment_map& record, const std::vector<std::byte>& pixels, std::uint32_t width, std::uint32_t height) -> void {
   constexpr auto threads_per_group = std::uint32_t{8u};
 
-  // Bindless indices that must stay untouched until this whole command buffer has actually
-  // finished on the GPU: vkUpdateDescriptorSets takes effect immediately on the host, not at
-  // GPU-execution time, so reusing one of these slots for something else before submit_idle()
-  // returns could make an *earlier* dispatch in this same buffer see the *later* write once the
-  // GPU finally gets around to executing it.
+  // Bindless indices that must stay untouched until this command buffer finishes on the GPU:
+  // vkUpdateDescriptorSets applies immediately on the host, so reusing a slot before submit_idle()
+  // returns could make an earlier dispatch in this buffer see a later write.
   struct transient_storage {
     std::uint32_t index;
     VkImageView view;
@@ -198,11 +195,10 @@ auto ibl_baker::bake_environment(environment_map& record, const std::vector<std:
 
   const auto radiance_index = bindless_table.register_sampled_image(radiance.view());
 
-  // --- Equirect -> cubemap: a transient, single-mip cube used only as convolution input below;
-  // never touched by the graphics queue, so plain exclusive sharing (the image default) is fine.
-  // Single mip, not a chain: both irradiance.slang and prefilter.slang always sample this at mip
-  // 0 (see prefilter.slang's doc comment on why it stopped doing solid-angle-driven mip
-  // selection), so building a mip chain here would just be wasted bake-time work. ---
+  // --- Equirect -> cubemap: transient single-mip scratch input for the convolutions below; never
+  // touched by the graphics queue, so exclusive sharing (default) is fine. Both irradiance.slang
+  // and prefilter.slang always sample mip 0 (see prefilter.slang's doc comment), so a mip chain
+  // here would be wasted work. ---
 
   auto radiance_cube = graphics::image{graphics::image::create_info{
     .extent = math::vector3u{radiance_cube_size, radiance_cube_size, 1u},

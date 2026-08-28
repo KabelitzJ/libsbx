@@ -70,10 +70,9 @@ particle_simulate_pass::particle_simulate_pass(particle_pool& additive_pool, par
 }
 
 auto particle_simulate_pass::declare(compute_pass_builder&, const graph_resources&) -> void {
-  // No cross-pass declaration needed: the hand-off to particle_draw_pass is a plain VkMemoryBarrier2
-  // (not tied to a specific buffer identity) written by hand at the end of execute() below, exactly
-  // like light_culling_pass's. It's the only option here anyway — alive_list ping-pongs by
-  // frame_index % 2, so there's no single buffer_handle a compile-time declaration could even name.
+  // No cross-pass declaration needed — hand-off to particle_draw_pass is a plain VkMemoryBarrier2
+  // at the end of execute() (like light_culling_pass's); alive_list ping-pongs by frame_index % 2,
+  // so there's no single buffer_handle a compile-time declaration could even name.
 }
 
 auto particle_simulate_pass::execute(render_context& context) -> void {

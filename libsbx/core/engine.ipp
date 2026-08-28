@@ -71,9 +71,7 @@ requires (utility::are_unique_v<Modules...> && detail::dependencies_ordered_v<Mo
 inline auto basic_engine<module_list<Modules...>>::_loop() -> void {
   using clock_type = std::chrono::steady_clock;
 
-  // Longest frame the simulation will try to catch up on. Anything above
-  // this (breakpoints, window drags, hitches) is dropped instead of
-  // triggering a fixed update burst.
+  // Cap on frame time to catch up on; larger spikes (breakpoints, hitches) are dropped rather than triggering a fixed-update burst.
   constexpr auto max_delta_time = 0.25f;
 
   _is_running = true;

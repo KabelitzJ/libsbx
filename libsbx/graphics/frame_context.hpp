@@ -22,17 +22,9 @@ namespace sbx::graphics {
 /**
  * @brief Owns the frame loop: the timeline semaphore, the swapchain, and everything sized by it.
  *
- * Frame pacing runs on a single timeline semaphore rather than per frame fences. The frame index
- * is monotonic and starts at one, and the submit for frame N signals the timeline value N. That
- * makes "has the GPU finished frame N" a comparison against
- * @ref completed_value, which is what the deferred destruction in `resource_pool` needs and what
- * a fence cannot provide without being tracked per submit.
+ * Frame pacing uses one monotonic timeline semaphore (starts at 1, submit for frame N signals value N) instead of per-frame fences, so "has the GPU finished frame N" is a value comparison. Binary semaphores are used only where the swapchain extension requires them (acquire, present).
  *
- * Binary semaphores survive only where the swapchain extension requires them, which is the image
- * acquire and the present.
- *
- * The frame index must never be reset. A timeline signal has to strictly increase, so restarting
- * the counter on a swapchain recreation would make the next submit invalid and hang the throttle.
+ * The frame index must never be reset — a timeline signal must strictly increase, so resetting it on swapchain recreation would hang the throttle.
  */
 class frame_context : public utility::noncopyable {
 
@@ -87,22 +79,19 @@ public:
   }
 
   /**
-   * @brief The frame timeline semaphore itself, for a pass that needs to wait on a *previous*
-   * frame's signalled value from within the current frame's own recording (see particle_simulate_pass
-   * for the motivating case: a persistent GPU buffer read-modify-written across frames, where
-   * same-queue submission order alone doesn't guarantee frame N's reads happen after frame N-1's
-   * writes complete). Pair with @ref add_wait and @ref previous_frame_value.
+   * @brief The frame timeline semaphore, for a pass that needs to wait on a *previous* frame's
+   * signalled value from within the current frame's own recording — same-queue order alone does
+   * not guarantee frame N's reads happen after frame N-1's writes (see particle_simulate_pass).
+   * Pair with @ref add_wait and @ref previous_frame_value.
    */
   [[nodiscard]] auto timeline() const noexcept -> VkSemaphore {
     return _timeline;
   }
 
   /**
-   * @brief The timeline value the *previous* frame's submission signalled (or will signal, if
-   * it's still in flight) — the value a same-queue-overlap-sensitive pass should wait on before
-   * touching a resource frame N-1 may still be writing. Always safe: frame_index starts at 1, so
-   * this is never negative, and on the very first frame it evaluates to 0 — the semaphore's own
-   * initial value, so the wait is trivially already satisfied rather than needing a special case.
+   * @brief The timeline value the *previous* frame's submission signalled (or will signal) — wait
+   * on this before touching a resource frame N-1 may still be writing. Safe on the first frame too:
+   * frame_index starts at 1, so this evaluates to 0, the semaphore's own initial value.
    */
   [[nodiscard]] auto previous_frame_value() const noexcept -> std::uint64_t {
     return _frame_index - 1u;
@@ -112,12 +101,10 @@ public:
    * @brief Queues an extra timeline wait for the next @ref end_frame's submit, alongside its
    * existing binary `_image_available` wait. Consumed and cleared inside @ref end_frame.
    *
-   * For a producer that writes buffers this frame's main command buffer reads later the same
-   * frame, but that runs on its own command buffer/submission outside the normal pass list (e.g.
-   * particle_simulate_pass) — same-queue submission order alone does not guarantee the main
-   * submission's reads happen after such a producer's writes complete (see
-   * particle_simulate_pass.hpp for the full reasoning). Call once per producer per frame, before
-   * @ref end_frame runs.
+   * For a producer that submits on its own command buffer outside the normal pass list (e.g.
+   * particle_simulate_pass) whose writes the main command buffer reads later the same frame —
+   * same-queue order alone does not guarantee that ordering. Call once per producer per frame,
+   * before @ref end_frame runs.
    */
   auto add_wait(VkSemaphore semaphore, std::uint64_t value, VkPipelineStageFlags stage) -> void {
     _extra_waits.push_back(extra_wait{semaphore, value, stage});

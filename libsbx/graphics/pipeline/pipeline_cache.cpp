@@ -6,9 +6,8 @@
 
 namespace sbx::graphics {
 
-// Build the cache key from a create-info. The blend list is normalized to one entry per color
-// format (default-disabled where absent) so it matches exactly what graphics_pipeline builds —
-// otherwise two create-infos that produce the same pipeline could key differently.
+// Blend list is normalized to one entry per color format (default-disabled where absent) to match
+// what graphics_pipeline builds — otherwise identical pipelines could key differently.
 auto _build_state_from_create_info(const graphics_pipeline::create_info& create_info) -> pipeline_state {
   auto state = pipeline_state{};
 

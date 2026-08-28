@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Jonas Kabelitz
-#ifndef LAUNCHER_LAUNCHER_APPLICATION_HPP_
-#define LAUNCHER_LAUNCHER_APPLICATION_HPP_
+#ifndef LAUNCHER_APPLICATION_HPP_
+#define LAUNCHER_APPLICATION_HPP_
 
 #include <libsbx/core/application.hpp>
 
@@ -13,7 +13,7 @@ namespace launcher {
  * between NewFrame() and Render(). This exists only because basic_engine::run<Application>()
  * requires a concrete core::application; every hook is a no-op.
  */
-class launcher_application final : public sbx::core::application {
+class application final : public sbx::core::application {
 
 public:
 
@@ -25,8 +25,8 @@ public:
     return false;
   }
 
-}; // class launcher_application
+}; // class application
 
 } // namespace launcher
 
-#endif // LAUNCHER_LAUNCHER_APPLICATION_HPP_
+#endif // LAUNCHER_APPLICATION_HPP_

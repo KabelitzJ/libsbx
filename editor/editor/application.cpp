@@ -63,9 +63,8 @@ application::application()
 
   _camera = scene.active_camera();
 
-  // scene_serializer::load only sets an active camera if the loaded scene had one (see its
-  // "camera" metadata handling); neither that nor a genuinely empty scene guarantees one, so a
-  // fresh project needs a default camera + controller rather than assuming a "Camera" node exists.
+  // scene_serializer::load only sets an active camera if the loaded scene had one, so a fresh
+  // project can't assume a "Camera" node exists — create a default one.
   if (!_camera.is_valid()) {
     _camera = scene.create_node("Camera");
     _camera.add_component<sbx::scenes::camera>();
@@ -82,9 +81,8 @@ application::application()
 
   auto& scripting_module = sbx::core::engine::get_module<sbx::scripting::scripting_module>();
 
-  // Relative to the executable's own directory (see editor/CMakeLists.txt's EDITOR_DOTNET_OUT_DIR,
-  // a sibling of RUNTIME_OUTPUT_DIRECTORY under the build dir), not the process's CWD — the old
-  // hardcoded "build/.../Editor.dll" only worked when launched from the repo root.
+  // Relative to the executable's own directory (see EDITOR_DOTNET_OUT_DIR in editor/CMakeLists.txt),
+  // not the process's CWD — a hardcoded path only worked when launched from the repo root.
   const auto assembly_path = sbx::filesystem::executable_directory() / ".." / "dotnet" / "editor" / "Editor.dll";
 
   scripting_module.load_assembly(assembly_path);

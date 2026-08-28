@@ -45,10 +45,8 @@ auto short_label(const sbx::assets::assets_module& assets_module, const sbx::mat
   return path.empty() ? std::string{"(unknown)"} : path.filename().string();
 }
 
-// path_of() returns whatever path an asset was originally import()-ed with, which is already
-// fully resolved (assets_directory() baked in) — not relative to assets_directory() the way
-// asset_selection::path and every load_*(path)/save_material destination argument need. Empty
-// (unknown asset, or somehow outside assets_directory() entirely) maps to an empty path.
+// path_of() is fully resolved, not relative to assets_directory() like asset_selection::path and
+// load_*/save_material need. Empty on unknown/outside-assets_directory() ids.
 auto relative_asset_path(const sbx::assets::assets_module& assets_module, const sbx::math::uuid& id) -> std::filesystem::path {
   const auto path = assets_module.path_of(id);
 
@@ -66,9 +64,7 @@ auto relative_asset_path(const sbx::assets::assets_module& assets_module, const 
   return relative;
 }
 
-// Recursively collects every file under root whose extension matches. Used by the asset pickers
-// below — rescanned fresh each time a popup opens (the lists are small; this only runs while a
-// popup is open, never per-frame).
+// Used by the asset pickers below — rescanned fresh each time a popup opens (lists are small).
 auto collect_files_with_extension(const std::filesystem::path& root, std::string_view extension, std::vector<std::filesystem::path>& out) -> void {
   if (!std::filesystem::exists(root)) {
     return;
@@ -92,12 +88,9 @@ auto contains_ignore_case(std::string_view haystack, std::string_view needle) ->
   return to_lower(haystack).find(to_lower(needle)) != std::string::npos;
 }
 
-// A button showing the slot's current material's file name (full path on hover — see short_label)
-// — mesh_renderer.materials is the source of truth, so there's no "override vs default"
-// distinction to display. Opens a popup with a filter box, "Reset to Mesh Default" (when
-// mesh_default is valid — reseeds the slot from the mesh's own submesh material), and every
-// ".material" file under the project's assets directory. A second small button next to it jumps
-// Properties straight to that material's own editable view.
+// Button shows the slot's material file name; opens a popup with a filter, an optional
+// "Reset to Mesh Default" (reseeds from the mesh's own submesh material), and every .material
+// file under assets. Second button jumps Properties to that material's editable view.
 auto draw_material_picker(editor_state& state, const char* popup_id, sbx::assets::material_handle& slot, sbx::assets::assets_module& assets_module, const sbx::assets::material_handle& mesh_default = {}) -> void {
   // popup_id (e.g. "##albedo_picker") appended so multiple pickers showing the same label — most
   // commonly several empty "(none)" slots at once — don't collide on ImGui's label-derived ID.
@@ -168,11 +161,8 @@ auto draw_material_picker(editor_state& state, const char* popup_id, sbx::assets
   }
 }
 
-// Forks a material into a new, independent .material asset next to the mesh — so editing the copy
-// doesn't affect every other node sharing the original (materials are otherwise shared by
-// reference: mesh_renderer.materials[i] usually starts out pointing at the exact same asset every
-// other instance of that mesh does). Mirrors asset_browser_panel's "New Material" dedup-by-suffix
-// naming; mesh_id may be nil (falls back to the assets root as the destination directory).
+// Forks a material into a new, independent .material asset next to the mesh, so editing the copy
+// doesn't affect other nodes sharing the original. mesh_id may be nil (falls back to assets root).
 auto extract_material_to_asset(sbx::assets::assets_module& assets_module, const sbx::assets::material_handle& source, const sbx::math::uuid& mesh_id) -> sbx::assets::material_handle {
   auto& project = sbx::core::engine::project();
 
@@ -208,9 +198,8 @@ auto extract_material_to_asset(sbx::assets::assets_module& assets_module, const 
   return handle;
 }
 
-// Same idea as draw_material_picker, for a material's texture slots. format matches the same
-// per-slot convention assets_module::load_material already uses (srgb for albedo/emissive, unorm
-// for normal/metallic_roughness/occlusion).
+// Same idea as draw_material_picker, for texture slots. format follows load_material's per-slot
+// convention (srgb for albedo/emissive, unorm for normal/metallic_roughness/occlusion).
 auto draw_texture_picker(const char* popup_id, sbx::assets::texture_handle& slot, sbx::assets::assets_module& assets_module, sbx::graphics::format format) -> bool {
   auto changed = false;
 
@@ -275,9 +264,8 @@ auto draw_texture_picker(const char* popup_id, sbx::assets::texture_handle& slot
 }
 
 // Same idea as draw_material_picker, for mesh_renderer.mesh. Doesn't touch renderer.materials
-// itself when a different mesh is picked — draw_mesh_renderer_section detects the change and
-// clears it so sync_materials_with_mesh reseeds cleanly from the new mesh's own submeshes, rather
-// than keeping stale entries left over from whatever mesh was assigned before.
+// itself — draw_mesh_renderer_section detects the change and clears it so sync_materials_with_mesh
+// reseeds cleanly from the new mesh's submeshes.
 auto draw_mesh_picker(editor_state& state, const char* popup_id, sbx::assets::mesh_handle& slot, sbx::assets::assets_module& assets_module) -> void {
   const auto label = (slot.is_valid() ? short_label(assets_module, slot->id()) : std::string{"(none)"}) + popup_id;
 
@@ -340,9 +328,8 @@ auto draw_mesh_picker(editor_state& state, const char* popup_id, sbx::assets::me
   }
 }
 
-// Same idea as draw_mesh_picker, for particle_effect.effect — including the same
-// jump-to-edit button draw_material_picker has, since particle_effect assets are edited in place
-// (see _draw_particle_effect_properties) exactly like materials are.
+// Same idea as draw_mesh_picker, for particle_effect.effect — same jump-to-edit button, since
+// particle_effect assets are edited in place (see _draw_particle_effect_properties) like materials.
 auto draw_particle_effect_picker(editor_state& state, const char* popup_id, sbx::assets::particle_effect_handle& slot, sbx::assets::assets_module& assets_module) -> void {
   const auto label = (slot.is_valid() ? short_label(assets_module, slot->id()) : std::string{"(none)"}) + popup_id;
 
@@ -408,9 +395,8 @@ auto draw_particle_effect_picker(editor_state& state, const char* popup_id, sbx:
   }
 }
 
-// A compact, color-coded X/Y/Z row: a label, then three tinted axis buttons (click to reset that
-// axis to reset_value) each immediately followed by its own drag field. Returns true if any axis
-// changed this frame.
+// Color-coded X/Y/Z row: click an axis button to reset it to reset_value, followed by its drag
+// field. Returns true if any axis changed this frame.
 auto draw_vector3_control(const char* label, std::array<std::float_t, 3u>& values, std::float_t reset_value, std::float_t speed) -> bool {
   static constexpr auto axis_labels = std::array<const char*, 3u>{"X", "Y", "Z"};
   static constexpr auto axis_ids = std::array<const char*, 3u>{"##X", "##Y", "##Z"};
@@ -661,10 +647,8 @@ auto draw_skybox_section(sbx::scenes::node& node, sbx::assets::assets_module& as
   ImGui::DragFloat("Intensity", &sky.intensity, 0.05f, 0.0f, 100.0f);
 }
 
-// loop and the duration/burst controls the plan for this section originally called for don't have
-// anything to bind to yet — particle_effect::loop is a stub for a future burst/duration
-// model (see its doc comment) and nothing in particle_emitter is duration-bounded
-// either (see particle_effect.hpp). Exposed anyway so authoring intent isn't lost once that lands.
+// particle_effect::loop is a stub for a future burst/duration model (see its doc comment); exposed
+// anyway so authoring intent isn't lost once that lands.
 auto draw_particle_effect_instance_section(editor_state& state, sbx::scenes::node& node, sbx::assets::assets_module& assets_module) -> void {
   auto is_open = true;
 
@@ -715,10 +699,8 @@ auto draw_particle_effect_instance_section(editor_state& state, sbx::scenes::nod
   ImGui::BeginDisabled(is_stopped);
 
   if (ImGui::Button(ICON_MDI_STOP " Stop")) {
-    // Only flips playback — render_module notices its emitter slots stopped being claimed next
-    // frame and drains them on its own (waits out lifetime_max before recycling); nothing here
-    // needs to touch slot/emission_accumulator directly. See particle_slot_pool_state's doc
-    // comment in render_module.hpp for the full mechanism.
+    // Only flips playback — render_module notices next frame and drains slots on its own (see
+    // particle_slot_pool_state's doc comment in render_module.hpp).
     instance.playback = sbx::scenes::particle_playback_state::stopped;
     instance.elapsed = 0.0f;
   }
@@ -783,9 +765,8 @@ auto properties_panel::_draw_name_field(sbx::scenes::node& node) -> void {
   }
 
   if (ImGui::IsItemDeactivatedAfterEdit()) {
-    // Renaming here does not update scene::_entities_by_name (populated at creation only), so
-    // scene::find(name) can go stale for renamed nodes. Fine: selection/hierarchy key on
-    // entity/id, never name.
+    // scene::find(name) can go stale after this (scene::_entities_by_name is populated at creation
+    // only) — fine, selection/hierarchy key on entity/id, never name.
     node.name() = sbx::scenes::tag{std::string{_name_buffer.data()}};
   }
 
@@ -926,10 +907,8 @@ auto properties_panel::_draw_material_properties(const asset_selection& asset, s
   changed |= draw_texture_picker("##emissive_picker", _material_edit.emissive, assets_module, sbx::graphics::format::r8g8b8a8_srgb);
 
   if (changed) {
-    // Live preview: mutates the material in place immediately, so every material_handle already
-    // pointing at it (e.g. a mesh_renderer slot elsewhere in the scene) reflects the edit on the
-    // very next frame — no Save needed to see it. Persisting to disk stays an explicit action
-    // (below): writing the file on every drag tick/keystroke would be wasteful.
+    // Live preview: mutates in place so every material_handle pointing at it reflects the edit
+    // next frame. Disk persistence stays an explicit Save (below).
     assets_module.update_material(_asset_cache.material, _material_edit);
   }
 
@@ -1076,10 +1055,8 @@ auto properties_panel::_draw_particle_effect_properties(const asset_selection& a
   }
 
   if (changed) {
-    // Live preview: mutates the record in place immediately, so every particle_effect_handle
-    // already pointing at it (e.g. a particle_effect elsewhere in the scene) reflects the
-    // edit on the very next frame — no Save needed to see it. Persisting to disk stays an explicit
-    // action (below), same as _draw_material_properties.
+    // Live preview, same as _draw_material_properties — mutates in place; disk persistence stays
+    // an explicit Save (below).
     assets_module.update_particle_effect(_asset_cache.particle_effect, _particle_effect_edit);
   }
 

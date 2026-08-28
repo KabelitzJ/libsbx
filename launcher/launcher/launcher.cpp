@@ -23,17 +23,17 @@
 
 #include <libsbx/render/render_module.hpp>
 
-#include <launcher/launcher_application.hpp>
+#include <launcher/application.hpp>
 #include <launcher/launcher_module.hpp>
 
 using module_list = sbx::core::module_list<
   sbx::platform::platform_module,
   sbx::filesystem::filesystem_module,
+  sbx::core::projects_module,
   sbx::graphics::graphics_module,
   sbx::assets::assets_module,
   sbx::scenes::scenes_module,
   sbx::render::render_module,
-  sbx::core::projects_module,
   launcher::launcher_module
 >;
 
@@ -43,15 +43,14 @@ auto main(int argc, const char** argv) -> int {
   try {
     auto config = sbx::core::engine_config{
       .threading = sbx::core::threading_policy::single_threaded,
-      // Projectless — the launcher's whole reason to exist (see engine_config's doc comment on
-      // this field, and core::engine::has_project()). It never holds a project open itself; it
-      // just picks/creates one and hands off to a fresh `editor --project <root>` process.
+      // Projectless — the launcher never holds a project open itself; it just picks/creates one
+      // and hands off to a fresh `editor --project <root>` process.
       .project = std::nullopt
     };
 
     auto engine = sbx::core::basic_engine<module_list>{args, config};
 
-    engine.run<launcher::launcher_application>();
+    engine.run<launcher::application>();
   } catch (const std::exception& exception) {
     sbx::utility::logger<"core">::error("{}", exception.what());
 

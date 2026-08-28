@@ -25,9 +25,7 @@ engine::engine(std::span<std::string_view> args, engine_config config)
     }
   }
 
-  // Resolved here, before any module constructs, so every module — including ones that
-  // eagerly build project-relative state in their own constructor (e.g. graphics_module's
-  // shader/pipeline disk caches) — always sees an active project.
+  // Resolved before any module constructs, since some modules (e.g. graphics_module) build project-relative state in their own constructor.
   if (_config.project.has_value()) {
     const auto& initial = *_config.project;
 

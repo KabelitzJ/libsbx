@@ -75,13 +75,11 @@ public:
   auto add_font(const std::filesystem::path& path, std::float_t size_pixels) -> ImFont*;
 
   /**
-   * @brief Loads the engine's built-in font — Roboto Regular merged with the Material Design Icons
-   * glyph range — as io.FontDefault, at @p size_pixels. The font data is compiled into libsbx (see
-   * libsbx/render/ui/fonts), not read from disk, so this works with no assets deployed alongside the
-   * app; it's opt-in (defined in its own translation unit — fonts/embedded_fonts.cpp — precisely so
-   * an app that never calls this, e.g. demo, doesn't pay for the ~1.5MB of embedded font data in its
-   * binary either). Safe to call more than once (e.g. at different sizes); each call adds another
-   * ImFont and makes it the new default.
+   * @brief Loads the engine's built-in font (Roboto Regular + Material Design Icons glyph range) as
+   * io.FontDefault, at @p size_pixels. Compiled into libsbx, not read from disk; defined in its own
+   * translation unit (fonts/embedded_fonts.cpp) so apps that never call this don't pay for the
+   * ~1.5MB of font data. Safe to call more than once — each call adds another ImFont and becomes
+   * the new default.
    */
   auto add_default_fonts(std::float_t size_pixels = 16.0f) -> void;
 
@@ -90,12 +88,9 @@ public:
   }
 
   /**
-   * @brief Applies the engine's default ImGui style (a dark Catppuccin-Mocha-based theme,
-   * srgb-to-linear corrected) to the current ImGui context. Opt-in, same reasoning as
-   * add_default_fonts() — an app with no UI at all (demo) never needs to call it. Every app that
-   * does draw UI should, so editor and launcher look consistent rather than each rolling their
-   * own theme; call it once, any time after construction, before the first frame you want it
-   * visible in.
+   * @brief Applies the engine's default ImGui style (dark Catppuccin-Mocha, srgb-to-linear
+   * corrected). Opt-in, like add_default_fonts() — call once, any time after construction, before
+   * the first frame you want it visible in.
    */
   auto apply_default_style() -> void;
 

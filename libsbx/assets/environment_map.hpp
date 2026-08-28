@@ -13,10 +13,9 @@
 namespace sbx::assets {
 
 /**
- * @brief An HDR image-based-lighting source: the equirectangular radiance map plus the irradiance
- * and prefiltered-specular cubemaps baked from it via compute shaders at load time (see
- * ibl_baker::bake_environment). By the time load_environment_map returns a valid handle,
- * every index here is already resident — there is no separate async bake step to wait on.
+ * @brief HDR image-based-lighting source: an equirect radiance map plus irradiance/prefiltered
+ * cubemaps baked via compute at load time (see ibl_baker::bake_environment). Already fully
+ * resident by the time load_environment_map returns — no async bake step to wait on.
  */
 class environment_map final {
 

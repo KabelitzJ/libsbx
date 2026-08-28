@@ -11,10 +11,12 @@ namespace sbx::graphics {
 
 auto debug_messenger::create(const instance& target, const VkAllocationCallbacks* allocator) -> VkResult {
   if constexpr (utility::is_build_type_debug_v) {
-    auto* function = reinterpret_cast<PFN_vkCreateDebugUtilsMessengerEXT>(vkGetInstanceProcAddr(target.handle(), "vkCreateDebugUtilsMessengerEXT"));
+    const auto& handle = target.handle();
+
+    auto* function = reinterpret_cast<PFN_vkCreateDebugUtilsMessengerEXT>(vkGetInstanceProcAddr(handle, "vkCreateDebugUtilsMessengerEXT"));
 
     if (function) {
-      return std::invoke(function, target.handle(), create_info(), allocator, &_handle);
+      return std::invoke(function, handle, create_info(), allocator, &_handle);
     }
 
     return VK_ERROR_EXTENSION_NOT_PRESENT;
@@ -25,10 +27,12 @@ auto debug_messenger::create(const instance& target, const VkAllocationCallbacks
 
  auto debug_messenger::destroy(const instance& target, const VkAllocationCallbacks* allocator) -> void {
   if constexpr (utility::is_build_type_debug_v) {
-    auto* function = reinterpret_cast<PFN_vkDestroyDebugUtilsMessengerEXT>(vkGetInstanceProcAddr(target.handle(), "vkDestroyDebugUtilsMessengerEXT"));
+    const auto& handle = target.handle();
+
+    auto* function = reinterpret_cast<PFN_vkDestroyDebugUtilsMessengerEXT>(vkGetInstanceProcAddr(handle, "vkDestroyDebugUtilsMessengerEXT"));
 
     if (function) {
-      std::invoke(function, target.handle(), _handle, allocator);
+      std::invoke(function, handle, _handle, allocator);
     }
   }
 }

@@ -33,10 +33,8 @@ public:
 
 private:
 
-  // Caches the handle for whichever asset was selected most recently, so a load is only attempted
-  // once per distinct selection rather than every frame — repeatedly calling load_*() per frame is
-  // wasteful even when it hits assets_module's cache, and is actively harmful if a load ever fails:
-  // without this, a failed load retries the full cook pipeline every single frame, forever.
+  // Caches the handle for the most recently selected asset so load_*() is only attempted once per
+  // selection, not every frame — without this a failed load retries the full cook pipeline forever.
   struct asset_property_cache {
     sbx::math::uuid id{sbx::math::uuid::nil()};
     sbx::assets::texture_handle texture{};
@@ -58,18 +56,17 @@ private:
   std::array<char, 128u> _name_buffer{};
   sbx::math::uuid _name_buffer_id{sbx::math::uuid::nil()};
 
-  // Rotation is a quaternion, edited as Euler degrees. Re-deriving Euler from the quaternion every
-  // frame is unstable near gimbal lock, so the working triplet is cached and only re-synced when
-  // something other than this widget changed the quaternion (a reselect, or e.g. the gizmo).
+  // Rotation is a quaternion edited as Euler degrees; re-deriving Euler every frame is unstable
+  // near gimbal lock, so the triplet is cached and only re-synced when something else (reselect,
+  // the gizmo) changed the quaternion.
   sbx::math::uuid _rotation_node_id{sbx::math::uuid::nil()};
   sbx::math::quaternion _rotation_cache{sbx::math::quaternion::identity};
   std::array<std::float_t, 3u> _rotation{0.0f, 0.0f, 0.0f};
 
   asset_property_cache _asset_cache{};
 
-  // Staged edits for the selected material asset (case asset_kind::material in
-  // _draw_asset_properties). Seeded from the loaded material whenever _asset_cache.id changes;
-  // committed to the material record (and disk) only by an explicit Save button.
+  // Staged edits for the selected material (asset_kind::material). Seeded from the loaded material
+  // whenever _asset_cache.id changes; committed only by an explicit Save button.
   sbx::assets::material::create_info _material_edit{};
 
   // Same idea as _material_edit, for asset_kind::particle_effect.

@@ -16,9 +16,8 @@
 namespace editor {
 
 
-// Matches the same glyphs Properties uses as each component's section-header icon, so a node's
-// row here and its component sections there always agree. Checked in a fixed priority order —
-// a node with more than one of these just shows the first match.
+// Matches Properties' component section-header icons. Checked in a fixed priority order — a node
+// with more than one of these just shows the first match.
 auto icon_for(const sbx::scenes::node& node) -> const char* {
   if (node.has_component<sbx::scenes::camera>()) return ICON_MDI_CAMERA_OUTLINE;
   if (node.has_component<sbx::scenes::directional_light>()) return ICON_MDI_WHITE_BALANCE_SUNNY;

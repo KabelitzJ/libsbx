@@ -22,9 +22,8 @@
 namespace editor {
 
 // Unprojects a viewport-relative pixel position into a world-space ray through camera_node.
-// perspective() bakes in Vulkan's y-flip (see its implementation), so Vulkan's own NDC-to-pixel
-// mapping applies unchanged here: pixel (0,0) at the viewport's top-left maps to NDC (-1,-1), no
-// extra flip needed.
+// perspective() already bakes in Vulkan's y-flip, so pixel (0,0) top-left maps to NDC (-1,-1)
+// with no extra flip needed here.
 auto ray_from_viewport_position(sbx::scenes::node& camera_node, const sbx::scenes::camera& camera, const sbx::math::vector2& position, const sbx::math::vector2u& viewport_size) -> sbx::math::ray {
   const auto aspect = viewport_size.y() > 0u ? static_cast<std::float_t>(viewport_size.x()) / static_cast<std::float_t>(viewport_size.y()) : 1.0f;
 

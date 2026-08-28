@@ -22,15 +22,11 @@ enum class file_dialog_mode : std::uint8_t {
 
 /**
  * @brief A Blender-style, ImGui-only file/folder picker — no native OS dialog, no third-party
- * dependency, so it works identically wherever ImGui itself does. Lives here (rather than in
- * `editor/`) because it's shared: both `editor::asset_browser_panel` ("Import Asset...") and a
- * future launcher's "New/Open Project..." need the same picker.
+ * dependency. Lives here (not in `editor/`) because it's shared between
+ * `editor::asset_browser_panel` and a future launcher's project picker.
  *
- * Not a `ui_layer` itself — a plain widget any layer's `build()` (or a panel it draws) calls
- * into, the same relationship `editor_ui_layer` already has with `draw_viewport_gizmo()`. Usage:
- * `open(...)` to trigger it, `draw()` once per frame while `is_open()`, and poll `result()` —
- * the same "call `draw()` every frame, poll for a result" shape the engine's existing modal
- * popups already use (e.g. `asset_browser_panel`'s "Import Mesh" dialog).
+ * Not a `ui_layer` — a plain widget any layer's `build()` calls into. Usage: `open(...)` to
+ * trigger it, `draw()` once per frame while `is_open()`, poll `result()`.
  */
 class file_dialog final : public utility::noncopyable {
 

@@ -10,7 +10,7 @@ target_sources(
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/launcher.cpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/launcher_module.cpp"
   PUBLIC
-    "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/launcher_application.hpp"
+    "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/application.hpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/launcher_module.hpp"
 )
 

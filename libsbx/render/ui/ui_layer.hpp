@@ -10,11 +10,9 @@ namespace sbx::render {
 /**
  * @brief One independent contributor to a frame's ImGui output. Register with
  * ui_system::add_layer; build() runs on the main thread, in registration order, once per frame,
- * between ui_system's ImGui::NewFrame() and ImGui::Render() — the same relationship graph_pass's
- * execute() has to render_graph's begin/end-rendering bookends, and add_layer<Layer>(args...)
- * mirrors render_graph::add_pass<Pass>(args...) deliberately, for the same reason: several
- * independent things (editor panels today, a future in-game debug overlay, ...) each contribute a
- * fixed slice of one frame, in a fixed order, and nothing about that needs to be a callback.
+ * between ImGui::NewFrame() and ImGui::Render() — mirrors render_graph::add_pass<Pass>/
+ * graphics_pass::execute() for the same reason: several independent contributors, fixed order, no
+ * callback needed.
  */
 class ui_layer {
 

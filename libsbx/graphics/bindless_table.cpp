@@ -276,11 +276,7 @@ auto bindless_table::flush_writes() -> void {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
   auto& logical_device = graphics_module.logical_device();
 
-  // Held across vkUpdateDescriptorSets itself, not just the pending-write bookkeeping: Vulkan
-  // requires external synchronization of a VkDescriptorSet across threads, and this table's
-  // single descriptor set can now be flushed from more than one thread (the render thread every
-  // frame, and an asset-loading thread doing a one-shot compute bake) — swapping the pending
-  // vector under the lock and then updating outside it would let two flushes race on the same set.
+  // Held across vkUpdateDescriptorSets itself: the set can be flushed from multiple threads and Vulkan requires external sync per VkDescriptorSet.
   auto lock = std::lock_guard{_mutex};
 
   if (_pending_writes.empty()) {

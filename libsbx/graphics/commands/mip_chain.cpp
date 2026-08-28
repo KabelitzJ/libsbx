@@ -33,11 +33,11 @@ auto generate_mip_chain(command_buffer& commands, const image& target, const mip
 
   const auto layer_count = target.array_layers();
   const auto aspect = target.aspect();
+  const auto handle = target.handle();
 
-  // Mip 0 already holds valid data, in whatever scope the caller wrote it in — make it a valid
-  // blit source.
+  // Mip 0 already holds valid data; make it a valid blit source.
   auto base_to_source = command_buffer::image_transition_data{};
-  base_to_source.image = target.handle();
+  base_to_source.image = handle;
   base_to_source.src_stage_mask = source.stage_mask;
   base_to_source.src_access_mask = source.access_mask;
   base_to_source.dst_stage_mask = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
@@ -59,7 +59,7 @@ auto generate_mip_chain(command_buffer& commands, const image& target, const mip
     height = std::max(height / 2, 1);
 
     auto to_destination = command_buffer::image_transition_data{};
-    to_destination.image = target.handle();
+    to_destination.image = handle;
     to_destination.src_stage_mask = VK_PIPELINE_STAGE_2_NONE;
     to_destination.src_access_mask = VK_ACCESS_2_NONE;
     to_destination.dst_stage_mask = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
@@ -77,10 +77,10 @@ auto generate_mip_chain(command_buffer& commands, const image& target, const mip
     blit.dstSubresource = VkImageSubresourceLayers{aspect, mip, 0u, layer_count};
     blit.dstOffsets[1] = VkOffset3D{width, height, 1};
 
-    vkCmdBlitImage(commands.handle(), target.handle(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, target.handle(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1u, &blit, VK_FILTER_LINEAR);
+    vkCmdBlitImage(commands.handle(), handle, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, handle, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1u, &blit, VK_FILTER_LINEAR);
 
     auto to_source = command_buffer::image_transition_data{};
-    to_source.image = target.handle();
+    to_source.image = handle;
     to_source.src_stage_mask = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
     to_source.src_access_mask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
     to_source.dst_stage_mask = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
@@ -97,7 +97,7 @@ auto generate_mip_chain(command_buffer& commands, const image& target, const mip
   const auto final_scope = scope_for_layout(final_layout);
 
   auto to_final = command_buffer::image_transition_data{};
-  to_final.image = target.handle();
+  to_final.image = handle;
   to_final.src_stage_mask = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
   to_final.src_access_mask = VK_ACCESS_2_TRANSFER_READ_BIT;
   to_final.dst_stage_mask = final_scope.stage;

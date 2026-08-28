@@ -14,27 +14,16 @@ namespace sbx::render {
 
 /**
  * @brief Draws both particle pools as camera-facing billboards (procedural quad, no vertex/index
- * buffer — shaders/particles/draw.slang's vertex_main), one draw_indirect each, sized by
- * particle_simulate_pass's prepare_indirect_draw stage to that pool's alive count.
+ * buffer), one draw_indirect each sized by particle_simulate_pass's prepare_indirect_draw stage.
  *
- * Runs between transparent_accumulate_pass and transparent_resolve_pass in render_module's
- * _passes list:
- *  - pool[0] (additive) draws straight into the shared color target (continuation write, ONE, ONE,
- *    ADD blend) — additive content is commutative under blending so it never needs OIT, and this
- *    ordering puts it behind whatever transparent_resolve_pass composites on top next, same as
- *    skybox_pass/grid_pass already do for opaque-ish content.
- *  - pool[1] (alpha blend) draws into the *same* accumulator/revealage WBOIT targets
- *    transparent_accumulate_pass just wrote (continuation write, not a fresh clear), reusing its
- *    exact blend state — so mesh transparency and alpha-blend particles get resolved together by
- *    the existing, unmodified transparent_resolve_pass in one pass, with no separate resolve step
- *    and no unsorted-order gap between the two categories.
+ * Runs between transparent_accumulate_pass and transparent_resolve_pass: pool[0] (additive) draws
+ * straight into the shared color target (ONE, ONE, ADD blend — commutative, needs no OIT); pool[1]
+ * (alpha blend) draws into the same WBOIT accumulator/revealage targets transparent_accumulate_pass
+ * just wrote, so both get resolved together by the unmodified transparent_resolve_pass.
  *
- * A normal render_pass, like particle_simulate_pass: it only reads the buffers
- * particle_simulate_pass finished writing earlier this same command buffer, handed off via an
- * ordinary intra-frame VkMemoryBarrier2 at the end of that pass's execute() — no semaphore
- * involved for that part. particle_simulate_pass's own cross-*frame* wait (registered on
- * frame_context's timeline) is what actually keeps this pass's reads from racing the *previous*
- * frame's writes to the same buffers.
+ * Reads the buffers particle_simulate_pass wrote earlier this frame via an intra-frame
+ * VkMemoryBarrier2; particle_simulate_pass's own cross-frame wait is what keeps reads from racing
+ * the previous frame's writes.
  */
 class particle_draw_pass final : public graphics_pass {
 

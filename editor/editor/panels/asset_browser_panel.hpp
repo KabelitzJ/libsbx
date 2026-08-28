@@ -51,21 +51,17 @@ private:
   std::vector<asset_browser_entry> _cached_entries{};
   bool _needs_refresh{true};
 
-  // "Import Mesh" modal state — shown once, the first time a .gltf/.glb without a .meta yet is
-  // clicked, to surface mesh_import_options::extract_materials before the mesh is actually cooked.
-  // _show_import_mesh_dialog is consumed (and ImGui::OpenPopup called) outside the per-entry
-  // PushID scope it's set from — OpenPopup/BeginPopupModal must see the same ID stack, and the
-  // click happens inside PushID(entry.path...). Also reused by _import_asset_file for a freshly
-  // copied-in mesh, same reasoning.
+  // "Import Mesh" modal state — shown the first time a .gltf/.glb without a .meta yet is clicked,
+  // to surface mesh_import_options::extract_materials before cooking. _show_import_mesh_dialog is
+  // consumed outside the per-entry PushID scope it's set from, since OpenPopup/BeginPopupModal must
+  // see the same ID stack; also reused by _import_asset_file for a freshly copied-in mesh.
   bool _show_import_mesh_dialog{false};
   std::filesystem::path _pending_import_path{};
   bool _import_extract_materials{true};
 
-  // "Import Asset..." — pulls a file in from anywhere on disk (toolbar button + right-click menu
-  // entry), as opposed to the per-entry Import above, which only ever sees files already inside
-  // assets/. _import_dialog is the shared, engine-level file picker (see libsbx/render/ui/widgets);
-  // _pending_asset_imports is the queue of picked absolute paths still to copy in, processed one
-  // at a time so a name clash can pause it for a decision without losing the rest of a multi-select.
+  // "Import Asset..." pulls a file in from anywhere on disk, unlike the per-entry Import above
+  // which only sees files already inside assets/. _pending_asset_imports queues picked absolute
+  // paths, processed one at a time so a name clash can pause without losing the rest of a multi-select.
   sbx::render::widgets::file_dialog _import_dialog{};
   std::vector<std::filesystem::path> _pending_asset_imports{};
 

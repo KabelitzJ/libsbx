@@ -136,16 +136,16 @@ auto frame_context::end_frame() -> void {
 
   const auto& logical_device = graphics_module.logical_device();
 
-  auto& command_buffer = _command_buffers[_slot()];
+  const auto slot = _slot();
+
+  auto& command_buffer = _command_buffers[slot];
 
   command_buffer.end();
 
   const auto image_index = _swapchain->active_image_index();
 
-  // _image_available is binary, so it pairs with a dummy 0 value below — valid per spec when a
-  // wait array mixes binary and timeline semaphores. Any producer that queued an add_wait() this
-  // frame (e.g. particle_simulate_pass) is merged in alongside it.
-  auto wait_semaphores = std::vector<VkSemaphore>{_image_available[_slot()]};
+  // _image_available is binary, paired with dummy value 0 — valid per spec to mix binary and timeline semaphores in one wait array. Producers that queued add_wait() this frame are merged in below.
+  auto wait_semaphores = std::vector<VkSemaphore>{_image_available[slot]};
   auto wait_stages = std::vector<VkPipelineStageFlags>{VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
   auto wait_values = std::vector<std::uint64_t>{0u};
 

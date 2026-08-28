@@ -31,11 +31,9 @@ public:
 
   /**
    * @brief Uploads the equirectangular radiance and bakes the irradiance + prefiltered cubemaps
-   * for @p record via compute dispatch, blocking until the GPU has finished. Runs entirely on the
-   * async compute queue via a one-shot command buffer, so it never touches the graphics queue the
-   * render thread submits to every frame — see the plan's threading section for why.
-   *
-   * By the time this returns, record's indices are resident and safe to read from any thread.
+   * for @p record via compute dispatch, blocking until the GPU finishes. Runs on the async compute
+   * queue via a one-shot command buffer, never touching the graphics queue's per-frame submissions.
+   * record's indices are resident and safe to read from any thread once this returns.
    */
   auto bake_environment(environment_map& record, const std::vector<std::byte>& pixels, std::uint32_t width, std::uint32_t height) -> void;
 

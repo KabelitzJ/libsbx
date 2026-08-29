@@ -68,7 +68,7 @@ endif()
 
 # Options
 
-option(SBX_BUILD_DEMO "Build demo" ON)
+option(SBX_BUILD_RUNTIME "Build runtime" ON)
 option(SBX_BUILD_EDITOR "Build editor" ON)
 option(SBX_BUILD_LAUNCHER "Build launcher" ON)
 option(SBX_BUILD_TESTS "Build tests" ON)
@@ -76,7 +76,7 @@ option(SBX_BUILD_SHARED "Build shared library" OFF)
 option(SBX_ENABLE_PROFILING "Enable tracy profiling" ${_SBX_ENABLE_PROFILING_DEFAULT})
 option(SBX_PREFER_CPU_DEVICE "Prefer CPU device" OFF)
 
-message(STATUS "SBX_BUILD_DEMO: ${SBX_BUILD_DEMO}")
+message(STATUS "SBX_BUILD_RUNTIME: ${SBX_BUILD_RUNTIME}")
 message(STATUS "SBX_BUILD_EDITOR: ${SBX_BUILD_EDITOR}")
 message(STATUS "SBX_BUILD_LAUNCHER: ${SBX_BUILD_LAUNCHER}")
 message(STATUS "SBX_BUILD_TESTS: ${SBX_BUILD_TESTS}")
@@ -232,18 +232,21 @@ target_sources(
     "${CMAKE_SOURCE_DIR}/libsbx/render/passes/grid_pass.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/render/passes/light_culling_pass.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/render/passes/opaque_pass.cpp"
-    "${CMAKE_SOURCE_DIR}/libsbx/render/passes/present_pass.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/render/passes/skybox_pass.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/render/passes/tonemap_pass.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/render/passes/transparent_accumulate_pass.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/render/passes/transparent_resolve_pass.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/render/compositor.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/render/presentation_module.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/render/render_graph.cpp"
-    "${CMAKE_SOURCE_DIR}/libsbx/render/render_module.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/render/render_pass.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/render/render_thread.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/render/scene_blit_compositor.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/render/scene_renderer_module.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/render/shadow/cascade.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/render/shadow/shadow_pass.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/render/ui/ui_draw_data.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/render/ui/ui_module.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/render/ui/ui_system.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/render/ui/backends/v1.92.9-docking/imgui_impl_glfw.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/render/ui/backends/v1.92.9-docking/imgui_impl_vulkan.cpp"
@@ -447,18 +450,23 @@ target_sources(
       "${CMAKE_SOURCE_DIR}/libsbx/render/passes/depth_pre_pass.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/render/passes/light_culling_pass.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/render/passes/opaque_pass.hpp"
-      "${CMAKE_SOURCE_DIR}/libsbx/render/passes/present_pass.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/render/passes/skybox_pass.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/render/passes/tonemap_pass.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/render/passes/transparent_accumulate_pass.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/render/passes/transparent_resolve_pass.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/render/compositor.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/render/presentation_module.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/render/render_graph.hpp"
-      "${CMAKE_SOURCE_DIR}/libsbx/render/render_module.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/render/render_packet.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/render/render_pass.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/render/render_thread.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/render/scene_blit_compositor.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/render/scene_renderer.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/render/scene_renderer_module.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/render/ui_renderer.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/render/ui/ui_draw_data.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/render/ui/ui_layer.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/render/ui/ui_module.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/render/ui/fonts/material_design_icons.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/render/ui/ui_system.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/render/ui/widgets/file_dialog.hpp"
@@ -763,8 +771,8 @@ install(
 
 # Demo
 
-if(SBX_BUILD_DEMO AND EXISTS "${CMAKE_SOURCE_DIR}/demo")
-  add_subdirectory(demo)
+if(SBX_BUILD_RUNTIME AND EXISTS "${CMAKE_SOURCE_DIR}/runtime")
+  add_subdirectory(runtime)
 endif()
 
 if (SBX_BUILD_EDITOR AND EXISTS "${CMAKE_SOURCE_DIR}/editor")

@@ -24,8 +24,6 @@
 #include <libsbx/graphics/devices/swapchain.hpp>
 #include <libsbx/graphics/commands/command_buffer.hpp>
 
-#include <libsbx/render/render_pass.hpp>
-
 namespace sbx::render {
 
 ui_system::ui_system() {
@@ -238,7 +236,7 @@ auto ui_system::build_frame() -> ui_draw_data {
   return ui_draw_data{ImGui::GetDrawData()};
 }
 
-auto ui_system::render(render_context& context, const ui_draw_data& data) -> void {
+auto ui_system::render(graphics::command_buffer& command_buffer, math::vector2u extent, const ui_draw_data& data) -> void {
   if (!data.is_valid()) {
     return;
   }
@@ -252,17 +250,17 @@ auto ui_system::render(render_context& context, const ui_draw_data& data) -> voi
   color_attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
   color_attachment.imageView = swapchain.active_image_view();
   color_attachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-  color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD; // the composite pass already gave this frame a background.
+  color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD; // the compositor already gave this frame a background.
   color_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
 
   auto rendering_info = VkRenderingInfo{};
   rendering_info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
-  rendering_info.renderArea = VkRect2D{VkOffset2D{0, 0}, VkExtent2D{context.swapchain_extent.x(), context.swapchain_extent.y()}};
+  rendering_info.renderArea = VkRect2D{VkOffset2D{0, 0}, VkExtent2D{extent.x(), extent.y()}};
   rendering_info.layerCount = 1u;
   rendering_info.colorAttachmentCount = 1u;
   rendering_info.pColorAttachments = &color_attachment;
 
-  context.command_buffer->begin_rendering(rendering_info);
+  command_buffer.begin_rendering(rendering_info);
 
   // Reconstruct ImDrawData over the deep copy without copying CmdLists — safe only because
   // Data/Size/Capacity are detached again below, before IM_FREE() would run on memory this local never allocated.
@@ -280,13 +278,13 @@ auto ui_system::render(render_context& context, const ui_draw_data& data) -> voi
   draw_data.OwnerViewport = ImGui::GetMainViewport();
   draw_data.Textures = data.textures();
 
-  ImGui_ImplVulkan_RenderDrawData(&draw_data, *context.command_buffer);
+  ImGui_ImplVulkan_RenderDrawData(&draw_data, command_buffer);
 
   draw_data.CmdLists.Data = nullptr;
   draw_data.CmdLists.Size = 0;
   draw_data.CmdLists.Capacity = 0;
 
-  context.command_buffer->end_rendering();
+  command_buffer.end_rendering();
 }
 
 auto ui_system::texture_id(VkImageView view, VkSampler sampler) -> ImTextureID {

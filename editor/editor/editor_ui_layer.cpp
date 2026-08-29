@@ -30,7 +30,8 @@
 
 #include <libsbx/graphics/graphics_module.hpp>
 
-#include <libsbx/render/render_module.hpp>
+#include <libsbx/render/scene_renderer_module.hpp>
+#include <libsbx/render/ui/ui_module.hpp>
 
 namespace editor {
 
@@ -54,7 +55,7 @@ editor_ui_layer::editor_ui_layer()
 
   // Shared with launcher (see ui_system::apply_default_style) so both windows look consistent
   // rather than each rolling its own theme.
-  sbx::core::engine::get_module<sbx::render::render_module>().ui().apply_default_style();
+  sbx::core::engine::get_module<sbx::render::ui_module>().apply_default_style();
 
   _create_panels();
 }
@@ -77,17 +78,18 @@ auto editor_ui_layer::build() -> void {
   auto width = static_cast<std::uint32_t>(available.x > 0.0f ? available.x : 1.0f);
   auto height = static_cast<std::uint32_t>(available.y > 0.0f ? available.y : 1.0f);
 
-  auto& render_module = sbx::core::engine::get_module<sbx::render::render_module>();
+  auto& scene_renderer_module = sbx::core::engine::get_module<sbx::render::scene_renderer_module>();
+  auto& ui_module = sbx::core::engine::get_module<sbx::render::ui_module>();
 
-  const auto final_image = render_module.final_image();
+  const auto final_image = scene_renderer_module.final_image();
 
   if (final_image.is_valid() && available.x > 0.0f && available.y > 0.0f) {
-    render_module.set_viewport_extent(sbx::math::vector2u{width, height});
+    scene_renderer_module.set_viewport_extent(sbx::math::vector2u{width, height});
 
     auto& graphics_module = sbx::core::engine::get_module<sbx::graphics::graphics_module>();
     auto& registry = graphics_module.resource_registry();
 
-    const auto texture_id = render_module.ui().texture_id(registry.get<sbx::graphics::image>(final_image).view(), _sampler);
+    const auto texture_id = ui_module.texture_id(registry.get<sbx::graphics::image>(final_image).view(), _sampler);
 
     ImGui::Image(texture_id, available);
 
@@ -124,9 +126,9 @@ auto editor_ui_layer::build() -> void {
 
 auto editor_ui_layer::_upload_fonts() -> void {
   // Roboto Regular + Material Design Icons, embedded in the engine — see ui_system::add_default_fonts.
-  auto& render_module = sbx::core::engine::get_module<sbx::render::render_module>();
+  auto& ui_module = sbx::core::engine::get_module<sbx::render::ui_module>();
 
-  render_module.ui().add_default_fonts(16.0f);
+  ui_module.add_default_fonts(16.0f);
 }
 
 auto editor_ui_layer::_create_panels() -> void {

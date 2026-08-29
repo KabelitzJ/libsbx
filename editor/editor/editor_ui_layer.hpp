@@ -25,13 +25,13 @@ namespace editor {
 
 /**
  * @brief The editor's contribution to the engine's ImGui frame: dockspace, menu bar, the Viewport
- * panel (embeds render_module::final_image via ImGui::Image() — see render_module::ui().texture_id),
+ * panel (embeds scene_renderer_module::final_image via ImGui::Image() — see ui_module::texture_id),
  * the Stats window, every registered editor_panel, and the scene save/quit flow's dialogs.
  *
- * Registered with render_module::ui() by editor_module, which owns this and otherwise stays a thin
- * module shell — see editor_module.hpp. Splitting it out keeps "the sbx::render::ui_layer
- * implementation" and "the core::module lifecycle" as two separate concerns instead of one class
- * doing both, the same reasoning that keeps render passes out of render_module itself.
+ * Registered with ui_module by editor_module, which owns this and otherwise stays a thin module
+ * shell — see editor_module.hpp. Splitting it out keeps "the sbx::render::ui_layer implementation"
+ * and "the core::module lifecycle" as two separate concerns instead of one class doing both, the
+ * same reasoning that keeps render passes out of scene_renderer_module itself.
  */
 class editor_ui_layer final : public sbx::utility::noncopyable, public sbx::render::ui_layer {
 
@@ -91,8 +91,8 @@ private:
   auto _draw_unsaved_changes_dialog() -> void;
 
   // Viewport panel's sampler for ImGui::Image()-sampling final_image — see
-  // render_module::ui().texture_id(). Not a backend concern (that lives in ui_system), just how
-  // this one image should be filtered.
+  // ui_module::texture_id(). Not a backend concern (that lives in ui_system), just how this one
+  // image should be filtered.
   sbx::graphics::sampler _sampler;
 
   bool _viewport_is_hovered{false};

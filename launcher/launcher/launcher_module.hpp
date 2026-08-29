@@ -16,31 +16,31 @@
 
 #include <libsbx/graphics/graphics_module.hpp>
 
-#include <libsbx/render/render_module.hpp>
 #include <libsbx/render/ui/ui_layer.hpp>
+#include <libsbx/render/ui/ui_module.hpp>
 #include <libsbx/render/ui/widgets/file_dialog.hpp>
 
 namespace launcher {
 
 /**
  * @brief The Project Manager window: title, the recent-projects list (sbx::core::projects_module),
- * and New/Open Project — draws it all as one sbx::render::ui_layer, registered with
- * render_module::ui() the same way editor_ui_layer is (see the project plan's §1/§3). Picking or
- * creating a project spawns the editor as a new process (`--project <root>`, see
- * filesystem::executable_directory) and quits the launcher — it never actually opens the project
- * itself, projects_module::open()/create() here exist only to update the recents list.
+ * and New/Open Project — draws it all as one sbx::render::ui_layer, registered with ui_module the
+ * same way editor_ui_layer is. Picking or creating a project spawns the editor as a new process
+ * (`--project <root>`, see filesystem::executable_directory) and quits the launcher — it never
+ * actually opens the project itself, projects_module::open()/create() here exist only to update
+ * the recents list.
  *
- * Instantiates render_module (and, transitively, assets_module/scenes_module — see
- * render_module::dependencies) purely to reach ui_system via render_module::ui(); it never
- * renders a 3D scene (no camera is ever created). This is the "cheapest, zero rework" option the
- * project plan's §1 left open when it promoted ImGui/render_graph into libsbx — see there before
- * changing this.
+ * Depends only on ui_module for its ImGui access, not scene_renderer_module — launcher never
+ * renders a 3D scene, so scene_renderer_module (and, transitively, assets_module/scenes_module —
+ * see its dependencies) is never constructed at all. See presentation_module's doc comment for
+ * why ui_module and scene_renderer_module can each independently be present or absent from an
+ * app's module_list like this.
  */
 class launcher_module final : public sbx::utility::noncopyable, public sbx::render::ui_layer {
 
 public:
 
-  using dependencies = sbx::core::dependency_list<sbx::platform::platform_module, sbx::graphics::graphics_module, sbx::render::render_module, sbx::core::projects_module>;
+  using dependencies = sbx::core::dependency_list<sbx::platform::platform_module, sbx::graphics::graphics_module, sbx::render::ui_module, sbx::core::projects_module>;
 
   launcher_module();
 

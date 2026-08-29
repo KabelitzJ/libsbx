@@ -1,4 +1,4 @@
-project(demo VERSION 0.1.0 LANGUAGES CXX)
+project(runtime VERSION 0.1.0 LANGUAGES CXX)
 
 message(STATUS "Configuring ${PROJECT_NAME}...")
 
@@ -7,7 +7,7 @@ add_executable(${PROJECT_NAME})
 target_sources(
   ${PROJECT_NAME}
   PRIVATE
-    "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/demo.cpp"
+    "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/runtime.cpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/application.cpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/fly_camera.cpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/memory.cpp"

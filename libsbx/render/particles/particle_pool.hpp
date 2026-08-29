@@ -19,12 +19,12 @@ namespace sbx::render {
 
 /**
  * @brief One shared GPU particle pool for the whole scene, serving every emitter of one blend
- * mode — see render_module (pool[0] = additive, pool[1] = alpha blend).
+ * mode — see scene_renderer_module (pool[0] = additive, pool[1] = alpha blend).
  *
  * `particles`/`alive_list[2]` are device_local, pure GPU-to-GPU state needing no CPU init.
  * `dead_list`/`counters` (one-time CPU init: dead_list = 0..max_particles-1, dead_count =
  * max_particles) and `emitter_instances` (rewritten wholesale every frame) are host_write
- * (persistently mapped, HOST_COHERENT) — same choice as render_module's
+ * (persistently mapped, HOST_COHERENT) — same choice as scene_renderer_module's
  * _light_buffer/_transform_buffer — to avoid the upload_context staging path, which would
  * otherwise race the first particle_simulate_pass submission (it runs before this frame's
  * upload_context::flush; see particle_simulate_pass.hpp).
@@ -108,9 +108,9 @@ public:
   }
 
   /**
-   * @brief Rewrites one emitter instance slot. Called every frame from render_module for every
+   * @brief Rewrites one emitter instance slot. Called every frame from scene_renderer_module for every
    * active emitter instance using this pool — same "wholesale CPU rewrite" pattern as
-   * render_module's _light_buffer/_transform_buffer.
+   * scene_renderer_module's _light_buffer/_transform_buffer.
    */
   auto write_emitter_instance(std::uint32_t slot, const emitter_instance& data) -> void;
 

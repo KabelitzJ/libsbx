@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Jonas Kabelitz
-#ifndef LIBSBX_RENDER_RENDER_MODULE_HPP_
-#define LIBSBX_RENDER_RENDER_MODULE_HPP_
+#ifndef LIBSBX_RENDER_SCENE_RENDERER_MODULE_HPP_
+#define LIBSBX_RENDER_SCENE_RENDERER_MODULE_HPP_
 
 #include <array>
 #include <cstdint>
@@ -28,42 +28,45 @@
 #include <libsbx/render/render_packet.hpp>
 #include <libsbx/render/render_pass.hpp>
 #include <libsbx/render/render_graph.hpp>
-#include <libsbx/render/render_thread.hpp>
 #include <libsbx/render/particles/particle_pool.hpp>
-#include <libsbx/render/ui/ui_system.hpp>
+#include <libsbx/render/presentation_module.hpp>
+#include <libsbx/render/scene_renderer.hpp>
+#include <libsbx/render/compositor.hpp>
 
 namespace sbx::render {
 
 /**
- * @brief Drives the frame loop via a render_thread (see render_thread.hpp), whose threading policy
- * comes from core::engine::config(). The calling (main) thread always extracts the active scene
- * into a render_packet; whichever thread ends up consuming it (itself, or a dedicated render
- * thread, depending on policy) never touches the ECS.
+ * @brief Renders the active scene's 3D content (the render_graph and its eleven passes,
+ * particle pools, shadow maps) into an offscreen final_image every frame — nothing else. Knows
+ * nothing about the swapchain or ImGui; registers itself as presentation_module's scene_renderer
+ * (see scene_renderer.hpp) and, via scene_blit_compositor, as its default compositor, so an app
+ * that wants the scene actually presented (demo/runtime) gets that with no code of its own, while
+ * one that embeds final_image itself (editor's Viewport panel) or doesn't want a 3D scene at all
+ * (launcher, which simply never constructs this module) both just work.
+ *
+ * The calling (main) thread always extracts the active scene into a render_packet in prepare();
+ * whichever thread ends up consuming it in record() (itself, or a dedicated render thread,
+ * depending on presentation_module's threading_policy) never touches the ECS.
  */
-class render_module final : public utility::noncopyable {
+class scene_renderer_module final : public utility::noncopyable, public scene_renderer {
 
 public:
 
-  using dependencies = core::dependency_list<graphics::graphics_module, assets::assets_module, scenes::scenes_module>;
+  using dependencies = core::dependency_list<graphics::graphics_module, assets::assets_module, scenes::scenes_module, presentation_module>;
 
-  render_module();
+  scene_renderer_module();
 
-  ~render_module();
+  ~scene_renderer_module();
 
-  auto render() -> void;
+  auto prepare() -> void override;
 
-  auto set_composite_pass(std::unique_ptr<render_pass> pass) -> void;
-
-  /** @brief The engine's ImGui system — context, backend, fonts, layer registration. See ui_system. */
-  [[nodiscard]] auto ui() noexcept -> ui_system& {
-    return _ui;
-  }
+  auto record(graphics::command_buffer& command_buffer, math::vector2u extent) -> void override;
 
   /**
    * @brief The extent the scene/offscreen render targets (and the projection's aspect ratio) should
    * use, overriding the default of the swapchain's extent — e.g. the editor's Viewport panel size,
    * which can differ from the OS window. Pass {0, 0} (the default) to fall back to the swapchain
-   * extent; demo never calls this, so it always renders at window resolution as before.
+   * extent; runtime never calls this, so it always renders at window resolution as before.
    */
   auto set_viewport_extent(math::vector2u extent) -> void;
 
@@ -76,10 +79,29 @@ public:
     return _final_image;
   }
 
+  /** @brief final_image's bindless sampled-image index — for a compositor sampling it directly (see scene_blit_compositor). */
+  [[nodiscard]] auto final_image_index() const noexcept -> std::uint32_t {
+    return _final_image_index;
+  }
+
+  /** @brief The general-purpose material sampler's bindless index — same one final_image itself should be sampled with. */
+  [[nodiscard]] auto sampler_index() const noexcept -> std::uint32_t {
+    return _sampler_index;
+  }
+
   /**
-   * @brief Shows/hides the world-space reference grid (see grid_pass). Off by default; demo never
-   * calls this, so the grid pass — always present in the fixed pass list — stays a no-op there.
-   * editor_module calls this once to turn it on.
+   * @brief Whether the most recent record() actually rendered something (an active camera was
+   * present) — final_image may be stale or never written otherwise. scene_blit_compositor checks
+   * this instead of sampling final_image unconditionally.
+   */
+  [[nodiscard]] auto has_rendered() const noexcept -> bool {
+    return _has_rendered;
+  }
+
+  /**
+   * @brief Shows/hides the world-space reference grid (see grid_pass). Off by default; runtime
+   * never calls this, so the grid pass — always present in the fixed pass list — stays a no-op
+   * there. editor_module calls this once to turn it on.
    */
   auto set_grid_enabled(bool enabled) -> void;
 
@@ -99,12 +121,8 @@ private:
 
   [[nodiscard]] auto _build_packet() -> render_packet;
 
-  auto _consume_packet(const render_packet& packet) -> void;
-
-  std::unique_ptr<render_thread> _render_thread{};
   render_packet _work_packet{};
-
-  ui_system _ui{};
+  bool _has_rendered{false};
 
   std::uint32_t _sampler_index{0u};
   std::uint32_t _clamp_sampler_index{0u};
@@ -125,7 +143,6 @@ private:
   math::vector2u _viewport_extent{0u, 0u};
 
   render_graph _graph{};
-  std::unique_ptr<render_pass> _composite_pass{};
 
   graphics::image_handle _final_image{};
   std::uint32_t _final_image_index{0u};
@@ -156,8 +173,8 @@ private:
 
   std::array<std::unique_ptr<particle_pool>, 2u> _particle_pools{};
 
-}; // class render_module
+}; // class scene_renderer_module
 
 } // namespace sbx::render
 
-#endif // LIBSBX_RENDER_RENDER_MODULE_HPP_
+#endif // LIBSBX_RENDER_SCENE_RENDERER_MODULE_HPP_

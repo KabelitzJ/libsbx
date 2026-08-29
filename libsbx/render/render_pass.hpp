@@ -141,14 +141,6 @@ auto bind_globals(render_context& context, const math::vector2u& extent) -> void
 
 auto bind_compute_globals(render_context& context) -> void;
 
-/**
- * @brief Clears the active swapchain image and presents it as-is, with no scene content. The
- * fallback when a composite pass has no valid final_image to show (no active camera), and
- * render_module's own fallback when no composite pass is set at all; ui_system::render still
- * draws over this unconditionally.
- */
-auto clear_swapchain(render_context& context) -> void;
-
 template<typename Type>
 auto write_push_constants(render_context& context, const Type& data) -> void {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();

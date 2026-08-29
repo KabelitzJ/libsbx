@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Jonas Kabelitz
-#ifndef DEMO_FLY_CAMERA_HPP_
-#define DEMO_FLY_CAMERA_HPP_
+#ifndef RUNTIME_FLY_CAMERA_HPP_
+#define RUNTIME_FLY_CAMERA_HPP_
 
 #include <algorithm>
 #include <cmath>
@@ -17,7 +17,7 @@
 
 #include <libsbx/scenes/scene.hpp>
 
-namespace demo {
+namespace runtime {
 
 /**
  * @brief Free-fly viewport camera. WASD to move, Q/E down/up, hold right mouse to look, shift to
@@ -49,6 +49,6 @@ private:
 
 }; // class fly_camera
 
-} // namespace demo
+} // namespace runtime
 
-#endif // DEMO_FLY_CAMERA_HPP_
+#endif // RUNTIME_FLY_CAMERA_HPP_

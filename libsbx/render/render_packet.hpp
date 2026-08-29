@@ -6,7 +6,6 @@
 #include <cstdint>
 #include <vector>
 
-#include <libsbx/math/color.hpp>
 #include <libsbx/math/matrix4x4.hpp>
 #include <libsbx/math/vector3.hpp>
 #include <libsbx/math/uuid.hpp>
@@ -17,7 +16,6 @@
 #include <libsbx/assets/environment_map.hpp>
 
 #include <libsbx/render/particles/particle_data.hpp>
-#include <libsbx/render/ui/ui_draw_data.hpp>
 
 namespace sbx::render {
 
@@ -94,7 +92,6 @@ struct particle_emitter_snapshot {
 }; // struct particle_emitter_snapshot
 
 struct render_packet {
-  math::color clear_color{0.05f, 0.05f, 0.08f, 1.0f};
   camera_data camera{};
   std::vector<draw_command> opaque_commands{};
   std::vector<draw_command> transparent_commands{};
@@ -107,9 +104,6 @@ struct render_packet {
   assets::environment_map_handle environment{};
   std::float_t environment_intensity{1.0f};
   std::vector<particle_emitter_snapshot> particle_emitters{};
-
-  /** @brief This frame's ImGui output, deep-copied on the main thread — see ui_system::build_frame. */
-  ui_draw_data ui{};
 }; // struct render_packet
 
 } // namespace sbx::render

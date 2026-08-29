@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Jonas Kabelitz
-#include <libsbx/render/render_module.hpp>
+#include <libsbx/render/scene_renderer_module.hpp>
 
 #include <algorithm>
 #include <array>
@@ -19,10 +19,6 @@
 #include <libsbx/math/angle.hpp>
 
 #include <libsbx/core/engine.hpp>
-#include <libsbx/core/delegate.hpp>
-
-#include <libsbx/platform/platform_module.hpp>
-#include <libsbx/platform/window.hpp>
 
 #include <libsbx/graphics/frame_context.hpp>
 #include <libsbx/graphics/devices/swapchain.hpp>
@@ -41,7 +37,6 @@
 #include <libsbx/render/passes/depth_pre_pass.hpp>
 #include <libsbx/render/passes/light_culling_pass.hpp>
 #include <libsbx/render/passes/opaque_pass.hpp>
-#include <libsbx/render/passes/present_pass.hpp>
 #include <libsbx/render/passes/skybox_pass.hpp>
 #include <libsbx/render/passes/grid_pass.hpp>
 #include <libsbx/render/passes/tonemap_pass.hpp>
@@ -51,6 +46,7 @@
 #include <libsbx/render/particles/particle_draw_pass.hpp>
 #include <libsbx/render/shadow/shadow_pass.hpp>
 #include <libsbx/render/shadow/cascade.hpp>
+#include <libsbx/render/scene_blit_compositor.hpp>
 
 namespace sbx::render {
 
@@ -106,7 +102,7 @@ struct transparent_entry {
   math::matrix4x4 transform{math::matrix4x4::identity};
 }; // struct transparent_entry
 
-render_module::render_module() {
+scene_renderer_module::scene_renderer_module() {
   _ensure_resources();
 
   _particle_pools[particle_pool_additive] = std::make_unique<particle_pool>(particle_pool::create_info{
@@ -133,53 +129,32 @@ render_module::render_module() {
   _graph.add_pass<transparent_resolve_pass>();
   _graph.add_pass<tonemap_pass>();
 
-  _composite_pass = std::make_unique<present_pass>();
+  auto& presentation_module = core::engine::get_module<render::presentation_module>();
 
-  _render_thread = std::make_unique<render::render_thread>(
-    core::engine::config().threading,
-    [this]() { _consume_packet(_work_packet); }
-  );
-
-  _render_thread->run();
+  presentation_module.set_scene_renderer(this);
+  presentation_module.set_compositor(std::make_unique<scene_blit_compositor>(*this));
 }
 
-render_module::~render_module() {
-  _render_thread->terminate();
+scene_renderer_module::~scene_renderer_module() {
+  auto& presentation_module = core::engine::get_module<render::presentation_module>();
+
+  presentation_module.set_scene_renderer(nullptr);
 }
 
-auto render_module::render() -> void {
-  SBX_PROFILE_SCOPE("render_module::render");
-
-  auto& platform_module = core::engine::get_module<platform::platform_module>();
-
-  auto& window = platform_module.window();
-
-  if (window.is_iconified()) {
-    return;
-  }
-
-  _render_thread->block_until_render_complete();
-  _render_thread->next_frame();
-
+auto scene_renderer_module::prepare() -> void {
   _work_packet = _build_packet();
-
-  _render_thread->kick();
 }
 
-auto render_module::set_composite_pass(std::unique_ptr<render_pass> pass) -> void {
-  _composite_pass = std::move(pass);
-}
-
-auto render_module::set_viewport_extent(math::vector2u extent) -> void {
+auto scene_renderer_module::set_viewport_extent(math::vector2u extent) -> void {
   _viewport_extent = extent;
 }
 
-auto render_module::set_grid_enabled(bool enabled) -> void {
+auto scene_renderer_module::set_grid_enabled(bool enabled) -> void {
   _grid_enabled = enabled;
 }
 
-auto render_module::_build_packet() -> render_packet {
-  SBX_PROFILE_SCOPE("render_module::build_packet");
+auto scene_renderer_module::_build_packet() -> render_packet {
+  SBX_PROFILE_SCOPE("scene_renderer_module::build_packet");
 
   auto packet = render_packet{};
 
@@ -314,7 +289,7 @@ auto render_module::_build_packet() -> render_packet {
   for (auto&& [entity, transform, light] : scene.query<scenes::world_transform, scenes::point_light>().each()) {
     const auto& matrix = transform.matrix;
     auto& out = packet.lights.emplace_back();
-  
+
     out.type = light_type::point;
     out.color = math::vector4{light.color.r(), light.color.g(), light.color.b(), light.intensity};
     out.position = math::vector4{matrix[3].x(), matrix[3].y(), matrix[3].z(), light.range};
@@ -323,7 +298,7 @@ auto render_module::_build_packet() -> render_packet {
   for (auto&& [entity, transform, light] : scene.query<scenes::world_transform, scenes::spot_light>().each()) {
     const auto& matrix = transform.matrix;
     auto& out = packet.lights.emplace_back();
-  
+
     out.type = light_type::spot;
     out.color = math::vector4{light.color.r(), light.color.g(), light.color.b(), light.intensity};
     out.position = math::vector4{matrix[3].x(), matrix[3].y(), matrix[3].z(), light.range};
@@ -421,13 +396,12 @@ auto render_module::_build_packet() -> render_packet {
   _particle_pools[particle_pool_additive]->tick(delta_time);
   _particle_pools[particle_pool_alpha_blend]->tick(delta_time);
 
-  packet.ui = _ui.build_frame();
-
   return packet;
 }
 
-auto render_module::_consume_packet(const render_packet& packet) -> void {
-  SBX_PROFILE_SCOPE("render_module::consume");
+auto scene_renderer_module::record(graphics::command_buffer& command_buffer, math::vector2u extent) -> void {
+  SBX_PROFILE_SCOPE("scene_renderer_module::record");
+  SBX_PROFILE_GPU_SCOPE(command_buffer, "scene_renderer_module::record");
 
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
   auto& assets_module = core::engine::get_module<assets::assets_module>();
@@ -435,129 +409,86 @@ auto render_module::_consume_packet(const render_packet& packet) -> void {
   auto& frame_context = graphics_module.frame_context();
   auto& upload_context = graphics_module.upload_context();
 
-  auto command_buffer = frame_context.begin_frame();
+  const auto& packet = _work_packet;
 
-  if (!command_buffer) {
+  const auto scene_extent = (_viewport_extent.x() > 0u && _viewport_extent.y() > 0u) ? _viewport_extent : extent;
+
+  assets_module.process_uploads(frame_context.frame_index());
+  upload_context.flush(command_buffer, frame_context.frame_index());
+
+  auto irradiance_index = 0xFFFFFFFFu;
+  auto brdf_lut_index = 0xFFFFFFFFu;
+  auto prefiltered_index = 0xFFFFFFFFu;
+  auto prefiltered_mip_count = 0u;
+
+  if (packet.camera.is_active && packet.environment.is_valid() && assets_module.is_resident(packet.environment)) {
+    irradiance_index = packet.environment->irradiance_index();
+    brdf_lut_index = assets_module.brdf_lut_index();
+    prefiltered_index = packet.environment->prefiltered_index();
+    prefiltered_mip_count = packet.environment->prefiltered_mip_count();
+  }
+
+  _resize_targets(scene_extent);
+
+  _has_rendered = packet.camera.is_active;
+
+  if (!packet.camera.is_active) {
     return;
   }
 
-  {
-    SBX_PROFILE_GPU_SCOPE((*command_buffer), "render_module::render");
+  const auto slot = utility::fast_mod(frame_context.frame_index(), graphics::swapchain::max_frames_in_flight);
 
-    const auto& swapchain = frame_context.swapchain();
-    const auto swapchain_extent = swapchain.extent();
+  const auto environment_index = (packet.environment.is_valid() && assets_module.is_resident(packet.environment)) ? packet.environment->radiance_index() : 0xFFFFFFFFu;
 
-    const auto scene_extent = (_viewport_extent.x() > 0u && _viewport_extent.y() > 0u) ? _viewport_extent : swapchain_extent;
+  auto context = render_context{
+    .command_buffer = memory::make_observer(command_buffer),
+    .packet = memory::make_observer<const render_packet>(packet),
+    .frame_index = frame_context.frame_index(),
+    .slot = static_cast<std::uint32_t>(slot),
+    .extent = scene_extent,
+    .swapchain_extent = extent,
+    .environment_index = environment_index,
+    .environment_intensity = packet.environment_intensity,
+    .irradiance_index = irradiance_index,
+    .brdf_lut_index = brdf_lut_index,
+    .prefiltered_index = prefiltered_index,
+    .prefiltered_mip_count = prefiltered_mip_count,
+    .depth = _depth_image,
+    .color = _color_image,
+    .color_msaa = _color_msaa_image,
+    .color_index = _color_index,
+    .final_image = _final_image,
+    .final_image_index = _final_image_index,
+    .accumulator = _accum_image,
+    .accumulator_msaa = _accumulator_msaa_image,
+    .accumulator_index = _accumulator_index,
+    .revealage = _revealage_image,
+    .revealage_msaa = _revealage_msaa_image,
+    .revealage_index = _revealage_index
+  };
 
-    assets_module.process_uploads(frame_context.frame_index());
-    upload_context.flush(*command_buffer, frame_context.frame_index());
+  _prepare_frame(context);
+  _graph.execute(context);
 
-    auto irradiance_index = 0xFFFFFFFFu;
-    auto brdf_lut_index = 0xFFFFFFFFu;
-    auto prefiltered_index = 0xFFFFFFFFu;
-    auto prefiltered_mip_count = 0u;
+  // Transition final_image to shader_read_only_optimal here, once — tonemap_pass is always its
+  // last writer, and scene_blit_compositor/ui_system::texture_id both sample it afterward.
+  auto& registry = graphics_module.resource_registry();
+  auto& final_image = registry.get<graphics::image>(context.final_image);
 
-    if (packet.camera.is_active && packet.environment.is_valid() && assets_module.is_resident(packet.environment)) {
-      irradiance_index = packet.environment->irradiance_index();
-      brdf_lut_index = assets_module.brdf_lut_index();
-      prefiltered_index = packet.environment->prefiltered_index();
-      prefiltered_mip_count = packet.environment->prefiltered_mip_count();
-    }
-
-    _resize_targets(scene_extent);
-
-    // Frame wrapper owns the swapchain transitions: acquire -> color attachment.
-    auto to_color = graphics::command_buffer::image_transition_data{};
-    to_color.image = swapchain.active_image();
-    to_color.src_stage_mask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
-    to_color.src_access_mask = VK_ACCESS_2_NONE;
-    to_color.dst_stage_mask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
-    to_color.dst_access_mask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
-    to_color.old_layout = graphics::image_layout::undefined;
-    to_color.new_layout = graphics::image_layout::color_attachment_optimal;
-    command_buffer->transition_image_layout(to_color);
-
-    const auto slot = utility::fast_mod(frame_context.frame_index(), graphics::swapchain::max_frames_in_flight);
-
-    const auto environment_index = (packet.camera.is_active && packet.environment.is_valid() && assets_module.is_resident(packet.environment)) ? packet.environment->radiance_index() : 0xFFFFFFFFu;
-
-    // Built unconditionally: the composite pass below always runs and needs a valid context even
-    // with no active camera.
-    auto context = render_context{
-      .command_buffer = command_buffer,
-      .packet = memory::make_observer<const render_packet>(packet),
-      .frame_index = frame_context.frame_index(),
-      .slot = static_cast<std::uint32_t>(slot),
-      .extent = scene_extent,
-      .swapchain_extent = swapchain_extent,
-      .environment_index = environment_index,
-      .environment_intensity = packet.environment_intensity,
-      .irradiance_index = irradiance_index,
-      .brdf_lut_index = brdf_lut_index,
-      .prefiltered_index = prefiltered_index,
-      .prefiltered_mip_count = prefiltered_mip_count,
-      .depth = _depth_image,
-      .color = _color_image,
-      .color_msaa = _color_msaa_image,
-      .color_index = _color_index,
-      .final_image = _final_image,
-      .final_image_index = _final_image_index,
-      .accumulator = _accum_image,
-      .accumulator_msaa = _accumulator_msaa_image,
-      .accumulator_index = _accumulator_index,
-      .revealage = _revealage_image,
-      .revealage_msaa = _revealage_msaa_image,
-      .revealage_index = _revealage_index
-    };
-
-    if (packet.camera.is_active) {
-      _prepare_frame(context);
-      _graph.execute(context);
-
-      // Transition final_image to shader_read_only_optimal here, once — tonemap_pass is always its
-      // last writer, and present_pass/ui_system::texture_id both sample it afterward.
-      auto& registry = graphics_module.resource_registry();
-      auto& final_image = registry.get<graphics::image>(context.final_image);
-
-      auto to_read = graphics::command_buffer::image_transition_data{};
-      to_read.image = final_image;
-      to_read.src_stage_mask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
-      to_read.src_access_mask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
-      to_read.dst_stage_mask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
-      to_read.dst_access_mask = VK_ACCESS_2_SHADER_SAMPLED_READ_BIT;
-      to_read.old_layout = graphics::image_layout::color_attachment_optimal;
-      to_read.new_layout = graphics::image_layout::shader_read_only_optimal;
-      to_read.aspect_mask = final_image.aspect();
-      to_read.layer_count = 1u;
-      command_buffer->transition_image_layout(to_read);
-    }
-
-    // Always runs, camera or not — presenting something to the swapchain is never optional.
-    if (_composite_pass) {
-      _composite_pass->execute(context);
-    } else {
-      clear_swapchain(context);
-    }
-
-    // Always drawn on top of whatever the composite pass wrote; ui_system stays a cheap no-op when
-    // render_packet::ui is empty, so composite passes don't need to know about UI.
-    _ui.render(context, packet.ui);
-
-    auto to_present = graphics::command_buffer::image_transition_data{};
-    to_present.image = swapchain.active_image();
-    to_present.src_stage_mask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
-    to_present.src_access_mask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
-    to_present.dst_stage_mask = VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT;
-    to_present.dst_access_mask = VK_ACCESS_2_NONE;
-    to_present.old_layout = graphics::image_layout::color_attachment_optimal;
-    to_present.new_layout = graphics::image_layout::present_source;
-    command_buffer->transition_image_layout(to_present);
-  }
-
-  frame_context.end_frame();
+  auto to_read = graphics::command_buffer::image_transition_data{};
+  to_read.image = final_image;
+  to_read.src_stage_mask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
+  to_read.src_access_mask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
+  to_read.dst_stage_mask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
+  to_read.dst_access_mask = VK_ACCESS_2_SHADER_SAMPLED_READ_BIT;
+  to_read.old_layout = graphics::image_layout::color_attachment_optimal;
+  to_read.new_layout = graphics::image_layout::shader_read_only_optimal;
+  to_read.aspect_mask = final_image.aspect();
+  to_read.layer_count = 1u;
+  command_buffer.transition_image_layout(to_read);
 }
 
-auto render_module::_ensure_resources() -> void {
+auto scene_renderer_module::_ensure_resources() -> void {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
   auto& bindless_table = graphics_module.bindless_table();
   auto& registry = graphics_module.resource_registry();
@@ -689,7 +620,7 @@ auto render_module::_ensure_resources() -> void {
   }
 }
 
-auto render_module::_resize_targets(const math::vector2u extent) -> void {
+auto scene_renderer_module::_resize_targets(const math::vector2u extent) -> void {
   if (_target_extent == extent) {
     return;
   }
@@ -794,7 +725,7 @@ auto render_module::_resize_targets(const math::vector2u extent) -> void {
   _graph.compile(_build_graph_resources());
 }
 
-auto render_module::_build_graph_resources() const -> graph_resources {
+auto scene_renderer_module::_build_graph_resources() const -> graph_resources {
   return graph_resources{
     .extent = _target_extent,
     .depth = _depth_image,
@@ -814,7 +745,7 @@ auto render_module::_build_graph_resources() const -> graph_resources {
   };
 }
 
-auto render_module::_prepare_frame(render_context& context) -> void {
+auto scene_renderer_module::_prepare_frame(render_context& context) -> void {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
   auto& assets_module = core::engine::get_module<assets::assets_module>();
 

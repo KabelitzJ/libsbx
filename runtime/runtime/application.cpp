@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Jonas Kabelitz
-#include <demo/application.hpp>
+#include <runtime/application.hpp>
 
 #include <libsbx/utility/logger.hpp>
 
@@ -21,9 +21,9 @@
 #include <libsbx/scenes/scene_serializer.hpp>
 #include <libsbx/scenes/components.hpp>
 
-#include <libsbx/render/render_module.hpp>
+#include <libsbx/render/scene_renderer_module.hpp>
 
-namespace demo {
+namespace runtime {
 
 application::application()
 : sbx::core::application{}, _is_paused{false}, _time{0}, _fps{0} {
@@ -91,4 +91,4 @@ auto application::is_paused() const -> bool {
   return _is_paused;
 }
 
-} // namespace demo
+} // namespace runtime

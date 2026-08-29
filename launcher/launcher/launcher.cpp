@@ -19,11 +19,8 @@
 
 #include <libsbx/graphics/graphics_module.hpp>
 
-#include <libsbx/assets/assets_module.hpp>
-
-#include <libsbx/scenes/scenes_module.hpp>
-
-#include <libsbx/render/render_module.hpp>
+#include <libsbx/render/presentation_module.hpp>
+#include <libsbx/render/ui/ui_module.hpp>
 
 #include <launcher/application.hpp>
 #include <launcher/launcher_module.hpp>
@@ -31,11 +28,10 @@
 using module_list = sbx::core::module_list<
   sbx::platform::platform_module,
   sbx::filesystem::filesystem_module,
-  sbx::core::projects_module,
   sbx::graphics::graphics_module,
-  sbx::assets::assets_module,
-  sbx::scenes::scenes_module,
-  sbx::render::render_module,
+  sbx::render::presentation_module,
+  sbx::render::ui_module,
+  sbx::core::projects_module,
   launcher::launcher_module
 >;
 

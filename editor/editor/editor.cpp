@@ -25,7 +25,9 @@
 
 #include <libsbx/scripting/scripting_module.hpp>
 
-#include <libsbx/render/render_module.hpp>
+#include <libsbx/render/presentation_module.hpp>
+#include <libsbx/render/scene_renderer_module.hpp>
+#include <libsbx/render/ui/ui_module.hpp>
 
 #include <libsbx/ecs/registry.hpp>
 
@@ -36,10 +38,12 @@ using module_list = sbx::core::module_list<
   sbx::platform::platform_module,
   sbx::filesystem::filesystem_module,
   sbx::graphics::graphics_module,
+  sbx::render::presentation_module,
   sbx::assets::assets_module,
   sbx::scenes::scenes_module,
   sbx::scripting::scripting_module,
-  sbx::render::render_module,
+  sbx::render::scene_renderer_module,
+  sbx::render::ui_module,
   editor::editor_module
 >;
 

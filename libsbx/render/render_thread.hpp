@@ -18,13 +18,13 @@
 namespace sbx::render {
 
 /**
- * @brief Drives render_module's frame handoff. One concrete
+ * @brief Drives scene_renderer_module's frame handoff. One concrete
  * class, an explicit idle/busy/kick state machine instead of ad hoc condition variables, and a
  * threading policy that decides whether `kick()` wakes a background worker or just runs the work
  * inline, on the calling thread.
  *
  * `render_thread` has no rendering knowledge of its own — `work` (given at construction) is
- * whatever the owner wants run every time it's kicked. This lets the calling code (render_module)
+ * whatever the owner wants run every time it's kicked. This lets the calling code (scene_renderer_module)
  * stay identical regardless of policy; only what happens inside `render_thread` differs.
  */
 class render_thread final : public utility::noncopyable {

@@ -92,19 +92,18 @@ launcher_module::launcher_module() {
     sbx::core::engine::quit();
   };
 
-  auto& render_module = sbx::core::engine::get_module<sbx::render::render_module>();
-  auto& ui = render_module.ui();
+  auto& ui_module = sbx::core::engine::get_module<sbx::render::ui_module>();
 
   ImGui::GetIO().IniFilename = nullptr;
 
-  ui.add_default_fonts(16.0f);
-  ui.apply_default_style();
-  ui.add_layer(this);
+  ui_module.add_default_fonts(16.0f);
+  ui_module.apply_default_style();
+  ui_module.add_layer(this);
 }
 
 launcher_module::~launcher_module() {
-  auto& render_module = sbx::core::engine::get_module<sbx::render::render_module>();
-  render_module.ui().remove_layer(this);
+  auto& ui_module = sbx::core::engine::get_module<sbx::render::ui_module>();
+  ui_module.remove_layer(this);
 }
 
 auto launcher_module::build() -> void {

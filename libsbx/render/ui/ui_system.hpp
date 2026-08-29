@@ -19,12 +19,14 @@
 
 #include <libsbx/memory/observer_ptr.hpp>
 
+#include <libsbx/math/vector2.hpp>
+
+#include <libsbx/graphics/commands/command_buffer.hpp>
+
 #include <libsbx/render/ui/ui_layer.hpp>
 #include <libsbx/render/ui/ui_draw_data.hpp>
 
 namespace sbx::render {
-
-struct render_context;
 
 /**
  * @brief Owns ImGui end to end: context, the vendored GLFW + Vulkan backends (moved here from
@@ -32,9 +34,9 @@ struct render_context;
  * of a frame's UI — build_frame() (main thread) and render() (render thread, consuming the deep
  * copy build_frame() produced — see ui_draw_data).
  *
- * Owned by render_module (see render_module::ui()) the same way particle_pool is — a render-adjacent
- * subsystem, not a separate core::module — so nothing needs to change in demo's or editor's
- * module_list to use it.
+ * Owned by ui_module (see ui_module.hpp), which implements ui_renderer and registers with
+ * presentation_module — ui_system itself knows nothing about core::module or presentation_module
+ * at all, only ImGui.
  */
 class ui_system final : public utility::noncopyable {
 
@@ -95,19 +97,21 @@ public:
   auto apply_default_style() -> void;
 
   /**
-   * @brief Main-thread build step, called from render_module::_build_packet: collects textures
-   * retired by previous frames, primes the backends, ImGui::NewFrame(), every registered layer's
-   * build() in order, ImGui::Render(), then deep-copies the result — see ui_draw_data.
+   * @brief Main-thread build step, called from ui_module::build_frame (in turn called from
+   * presentation_module::render): collects textures retired by previous frames, primes the
+   * backends, ImGui::NewFrame(), every registered layer's build() in order, ImGui::Render(), then
+   * deep-copies the result — see ui_draw_data.
    */
   [[nodiscard]] auto build_frame() -> ui_draw_data;
 
   /**
-   * @brief Render-thread render step, called from render_module::_consume_packet right after the
-   * composite pass. A no-op if !data.is_valid(). Draws onto the swapchain with VK_ATTACHMENT_LOAD_OP_LOAD
-   * — the composite pass (or render_module's clear_swapchain fallback) is responsible for giving it
-   * a defined background first.
+   * @brief Render-thread render step, called from ui_module::render (in turn called from
+   * presentation_module's kicked work, right after the compositor step). A no-op if
+   * !data.is_valid(). Draws onto the swapchain with VK_ATTACHMENT_LOAD_OP_LOAD — the compositor
+   * (or presentation_module's own clear_swapchain fallback) is responsible for giving it a
+   * defined background first.
    */
-  auto render(render_context& context, const ui_draw_data& data) -> void;
+  auto render(graphics::command_buffer& command_buffer, math::vector2u extent, const ui_draw_data& data) -> void;
 
   /**
    * @brief Memoized ImGui_ImplVulkan_AddTexture, for e.g. sampling a render target inside an

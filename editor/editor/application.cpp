@@ -25,7 +25,7 @@
 
 #include <libsbx/scripting/scripting_module.hpp>
 
-#include <libsbx/render/render_module.hpp>
+#include <libsbx/render/scene_renderer_module.hpp>
 
 #include <editor/editor_module.hpp>
 

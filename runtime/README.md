@@ -1,3 +1,3 @@
-# demo
+# runtime
 
 C++ executable

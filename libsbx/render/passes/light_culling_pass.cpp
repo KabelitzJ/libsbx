@@ -17,7 +17,7 @@
 #include <libsbx/graphics/commands/command_buffer.hpp>
 #include <libsbx/graphics/pipeline/shader_compiler.hpp>
 
-#include <libsbx/render/render_module.hpp>
+#include <libsbx/render/scene_renderer_module.hpp>
 
 namespace sbx::render {
 

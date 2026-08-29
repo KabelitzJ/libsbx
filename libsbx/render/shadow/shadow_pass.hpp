@@ -19,7 +19,7 @@ namespace sbx::render {
  * @brief Renders the sun's cascaded shadow maps: depth-only, alpha-cutout-aware (same
  * material-driven clip as depth_pre_pass), one cascade at a time into its own
  * shadow_map_resolution² target. A no-op when render_context::has_shadow_caster is false (no
- * shadow-casting directional light this frame — see render_module::_build_packet).
+ * shadow-casting directional light this frame — see scene_renderer_module::_build_packet).
  *
  * Runs after light_culling_pass and before opaque_pass/transparent_accumulate_pass, which sample
  * the resulting maps (see shaders/shadows/csm.slang) while shading the sun's contribution.

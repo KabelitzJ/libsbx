@@ -24,7 +24,7 @@ namespace sbx::render {
  * in the scene.
  *
  * Directional lights aren't clustered — they're screen-wide, so they stay in the small,
- * always-evaluated prefix of the light array exactly as render_module packs them
+ * always-evaluated prefix of the light array exactly as scene_renderer_module packs them
  * (render_packet::directional_light_count).
  *
  * Runs right after depth_pre_pass and before opaque_pass: cluster assignment depends only on the

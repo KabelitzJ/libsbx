@@ -16,16 +16,17 @@ editor_module::editor_module()
 
   ImGui::LoadIniSettingsFromDisk(_ini_file.data());
 
-  auto& render_module = sbx::core::engine::get_module<sbx::render::render_module>();
+  auto& ui_module = sbx::core::engine::get_module<sbx::render::ui_module>();
+  auto& scene_renderer_module = sbx::core::engine::get_module<sbx::render::scene_renderer_module>();
 
-  render_module.ui().add_layer(&_ui_layer);
-  render_module.set_grid_enabled(true);
+  ui_module.add_layer(&_ui_layer);
+  scene_renderer_module.set_grid_enabled(true);
 }
 
 editor_module::~editor_module() {
-  auto& render_module = sbx::core::engine::get_module<sbx::render::render_module>();
+  auto& ui_module = sbx::core::engine::get_module<sbx::render::ui_module>();
 
-  render_module.ui().remove_layer(&_ui_layer);
+  ui_module.remove_layer(&_ui_layer);
 
   ImGui::SaveIniSettingsToDisk(_ini_file.c_str());
 }

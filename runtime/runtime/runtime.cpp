@@ -25,22 +25,24 @@
 
 #include <libsbx/scripting/scripting_module.hpp>
 
-#include <libsbx/render/render_module.hpp>
+#include <libsbx/render/presentation_module.hpp>
+#include <libsbx/render/scene_renderer_module.hpp>
 
 #include <libsbx/ecs/registry.hpp>
 
 #include <libsbx/memory/memory.hpp>
 
-#include <demo/application.hpp>
+#include <runtime/application.hpp>
 
 using module_list = sbx::core::module_list<
   sbx::platform::platform_module,
   sbx::filesystem::filesystem_module,
   sbx::graphics::graphics_module,
+  sbx::render::presentation_module,
   sbx::assets::assets_module,
   sbx::scenes::scenes_module,
   sbx::scripting::scripting_module,
-  sbx::render::render_module
+  sbx::render::scene_renderer_module
 >;
 
 auto main(int argc, const char** argv) -> int {
@@ -50,14 +52,17 @@ auto main(int argc, const char** argv) -> int {
     auto config = sbx::core::engine_config{
       .threading = sbx::core::threading_policy::multi_threaded,
       .project = sbx::core::project_config{
-        .root = "demo", 
-        .name = "Demo"
+        .root = "runtime",
+        .name = "Runtime"
       }
     };
 
     auto engine = sbx::core::basic_engine<module_list>{args, config};
 
-    engine.run<demo::application>();
+    // No sbx::render::ui_module in the module_list at all — that omission alone is what makes
+    // runtime UI-less, the Hazel-Runtime-equivalent ("disables ImGui") tier. presentation_module
+    // still owns the swapchain and scene_renderer_module still renders/presents the scene.
+    engine.run<runtime::application>();
   } catch (const std::exception& exception) {
     sbx::utility::logger<"core">::error("{}", exception.what());
 

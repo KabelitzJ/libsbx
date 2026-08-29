@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Jonas Kabelitz
-#include <demo/fly_camera.hpp>
+#include <runtime/fly_camera.hpp>
 
-namespace demo {
+namespace runtime {
 
 fly_camera::fly_camera(const sbx::scenes::node& node)
 : _node{node} { }
@@ -76,4 +76,4 @@ auto fly_camera::set_look_sensitivity(std::float_t sensitivity) -> void {
   _look_sensitivity = sensitivity; 
 }
 
-} // namespace demo
+} // namespace runtime

@@ -699,8 +699,8 @@ auto draw_particle_effect_instance_section(editor_state& state, sbx::scenes::nod
   ImGui::BeginDisabled(is_stopped);
 
   if (ImGui::Button(ICON_MDI_STOP " Stop")) {
-    // Only flips playback — render_module notices next frame and drains slots on its own (see
-    // particle_slot_pool_state's doc comment in render_module.hpp).
+    // Only flips playback — scene_renderer_module notices next frame and drains slots on its own (see
+    // particle_slot_pool_state's doc comment in scene_renderer_module.hpp).
     instance.playback = sbx::scenes::particle_playback_state::stopped;
     instance.elapsed = 0.0f;
   }

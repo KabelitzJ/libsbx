@@ -44,7 +44,7 @@ inline static constexpr auto particle_texture_index_none = std::uint32_t{0xFFFFF
 
 /**
  * @brief Per-emitter-instance data, rewritten wholesale from the CPU every frame (same pattern as
- * render_module's _transform_buffer/_light_buffer). One pool-local array of these per particle_pool
+ * scene_renderer_module's _transform_buffer/_light_buffer). One pool-local array of these per particle_pool
  * — an instance's blend mode is fixed by which pool's array it lives in, so no blend-mode field is
  * needed here. Byte-mirrored in shaders/particles/particle_data.slang.
  */

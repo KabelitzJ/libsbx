@@ -17,7 +17,8 @@
 
 #include <libsbx/scenes/scenes_module.hpp>
 
-#include <libsbx/render/render_module.hpp>
+#include <libsbx/render/scene_renderer_module.hpp>
+#include <libsbx/render/ui/ui_module.hpp>
 
 #include <editor/editor_ui_layer.hpp>
 
@@ -26,15 +27,15 @@ namespace editor {
 /**
  * @brief The editor's core::module — lifecycle only. Owns editor_ui_layer (see there for
  * everything ImGui-related: dockspace, panels, the viewport, scene save/quit dialogs) and registers
- * it with render_module::ui(); the only things left here are IniFilename (needs the ImGui context,
- * which exists by construction time, but is otherwise not a "what does the UI draw" concern) and
+ * it with ui_module; the only things left here are IniFilename (needs the ImGui context, which
+ * exists by construction time, but is otherwise not a "what does the UI draw" concern) and
  * grid_enabled, both one-time engine-level settings rather than per-frame UI.
  */
 class editor_module final : public sbx::utility::noncopyable {
 
 public:
 
-  using dependencies = sbx::core::dependency_list<sbx::graphics::graphics_module, sbx::assets::assets_module, sbx::scenes::scenes_module, sbx::render::render_module>;
+  using dependencies = sbx::core::dependency_list<sbx::graphics::graphics_module, sbx::assets::assets_module, sbx::scenes::scenes_module, sbx::render::scene_renderer_module, sbx::render::ui_module>;
 
   editor_module();
 

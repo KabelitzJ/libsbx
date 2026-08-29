@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Jonas Kabelitz
-#ifndef DEMO_APPLICATION_HPP_
-#define DEMO_APPLICATION_HPP_
+#ifndef RUNTIME_APPLICATION_HPP_
+#define RUNTIME_APPLICATION_HPP_
 
 #include <stb_image.h>
 
@@ -13,9 +13,9 @@
 
 #include <libsbx/scenes/scene.hpp>
 
-#include <demo/fly_camera.hpp>
+#include <runtime/fly_camera.hpp>
 
-namespace demo {
+namespace runtime {
 
 class application : public sbx::core::application {
 
@@ -49,6 +49,6 @@ private:
 
 }; // class application
 
-} // namespace demo
+} // namespace runtime
 
-#endif // DEMO_APPLICATION_HPP_
+#endif // RUNTIME_APPLICATION_HPP_

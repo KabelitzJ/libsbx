@@ -6,8 +6,9 @@ namespace Sbx.Core.Attributes
   [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
   public class ShowInEditorAttribute : Attribute
   {
-    public string DisplayName = "";
-    public bool IsReadOnly = false;
+    public string DisplayName { get; set; } = "";
+    public bool IsReadOnly { get; set; } = false;
+
 
     public ShowInEditorAttribute(string displayName)
     {

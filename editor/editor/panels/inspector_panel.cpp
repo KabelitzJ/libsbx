@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Jonas Kabelitz
-#include <editor/panels/properties_panel.hpp>
+#include <editor/panels/inspector_panel.hpp>
 
 #include <algorithm>
 #include <array>
@@ -750,7 +750,7 @@ auto draw_add_component_menu(sbx::scenes::node& node) -> void {
 }
 
 
-auto properties_panel::_draw_name_field(sbx::scenes::node& node) -> void {
+auto inspector_panel::_draw_name_field(sbx::scenes::node& node) -> void {
   const auto id = node.id();
 
   if (id.value() != _name_buffer_id.value()) {
@@ -773,7 +773,7 @@ auto properties_panel::_draw_name_field(sbx::scenes::node& node) -> void {
   ImGui::Text("UUID: %llu", static_cast<unsigned long long>(id.value()));
 }
 
-auto properties_panel::_draw_transform_section(sbx::scenes::node& node) -> void {
+auto inspector_panel::_draw_transform_section(sbx::scenes::node& node) -> void {
   ImGui::SeparatorText("Transform");
 
   auto& transform = node.transform();
@@ -804,7 +804,7 @@ auto properties_panel::_draw_transform_section(sbx::scenes::node& node) -> void 
   }
 }
 
-auto properties_panel::_draw_node_properties(editor_state& state, sbx::scenes::node& node, sbx::assets::assets_module& assets_module) -> void {
+auto inspector_panel::_draw_node_properties(editor_state& state, sbx::scenes::node& node, sbx::assets::assets_module& assets_module) -> void {
   _draw_name_field(node);
   _draw_transform_section(node);
 
@@ -840,7 +840,7 @@ auto properties_panel::_draw_node_properties(editor_state& state, sbx::scenes::n
   draw_add_component_menu(node);
 }
 
-auto properties_panel::_draw_material_properties(const asset_selection& asset, sbx::assets::assets_module& assets_module) -> void {
+auto inspector_panel::_draw_material_properties(const asset_selection& asset, sbx::assets::assets_module& assets_module) -> void {
   if (!_asset_cache.material.is_valid()) {
     ImGui::TextDisabled("Could not load this material.");
     return;
@@ -919,7 +919,7 @@ auto properties_panel::_draw_material_properties(const asset_selection& asset, s
   }
 }
 
-auto properties_panel::_draw_particle_effect_properties(const asset_selection& asset, sbx::assets::assets_module& assets_module) -> void {
+auto inspector_panel::_draw_particle_effect_properties(const asset_selection& asset, sbx::assets::assets_module& assets_module) -> void {
   if (!_asset_cache.particle_effect.is_valid()) {
     ImGui::TextDisabled("Could not load this particle effect.");
     return;
@@ -1067,7 +1067,7 @@ auto properties_panel::_draw_particle_effect_properties(const asset_selection& a
   }
 }
 
-auto properties_panel::_draw_asset_properties(const asset_selection& asset, sbx::assets::assets_module& assets_module) -> void {
+auto inspector_panel::_draw_asset_properties(const asset_selection& asset, sbx::assets::assets_module& assets_module) -> void {
   if (_asset_cache.id.value() != asset.id.value()) {
     _asset_cache = asset_property_cache{};
     _asset_cache.id = asset.id;
@@ -1171,7 +1171,7 @@ auto properties_panel::_draw_asset_properties(const asset_selection& asset, sbx:
   }
 }
 
-auto properties_panel::draw(editor_state& state) -> void {
+auto inspector_panel::draw(editor_state& state) -> void {
   ImGui::Begin(window_name);
 
   auto& assets_module = sbx::core::engine::get_module<sbx::assets::assets_module>();

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Jonas Kabelitz
-#ifndef EDITOR_PANELS_PROPERTIES_PANEL_HPP_
-#define EDITOR_PANELS_PROPERTIES_PANEL_HPP_
+#ifndef EDITOR_PANELS_INSPECTOR_PANEL_HPP_
+#define EDITOR_PANELS_INSPECTOR_PANEL_HPP_
 
 #include <array>
 #include <cstddef>
@@ -22,17 +22,17 @@
 namespace editor {
 
 /**
- * @brief The "Properties" panel: an inspector for whatever editor_state's current selection is —
+ * @brief The "Inspector" panel: an inspector for whatever editor_state's current selection is —
  * a scene node's name/transform/components (with add/remove-component controls), a material
  * asset's editable fields, other asset kinds' read-only summaries, or an empty-state message if
  * nothing is selected.
  */
-class properties_panel final : public editor_panel {
+class inspector_panel final : public editor_panel {
 
 public:
 
   /** @see hierarchy_panel::window_name */
-  inline static constexpr auto window_name = ICON_MDI_TUNE " Properties###properties_panel";
+  inline static constexpr auto window_name = ICON_MDI_TUNE " Inspector###inspector_panel";
 
   auto draw(editor_state& state) -> void override;
 
@@ -77,8 +77,8 @@ private:
   // Same idea as _material_edit, for asset_kind::particle_effect.
   sbx::assets::particle_effect::create_info _particle_effect_edit{};
 
-}; // class properties_panel
+}; // class inspector_panel
 
 } // namespace editor
 
-#endif // EDITOR_PANELS_PROPERTIES_PANEL_HPP_
+#endif // EDITOR_PANELS_INSPECTOR_PANEL_HPP_

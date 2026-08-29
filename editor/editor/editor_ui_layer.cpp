@@ -16,7 +16,7 @@
 #include <editor/panels/asset_browser_panel.hpp>
 #include <editor/panels/hierarchy_panel.hpp>
 #include <editor/panels/logger_panel.hpp>
-#include <editor/panels/properties_panel.hpp>
+#include <editor/panels/inspector_panel.hpp>
 
 #include <editor/viewport_gizmo.hpp>
 #include <editor/viewport_picking.hpp>
@@ -137,7 +137,7 @@ auto editor_ui_layer::_upload_fonts() -> void {
 
 auto editor_ui_layer::_create_panels() -> void {
   _panels.push_back(std::make_unique<hierarchy_panel>());
-  _panels.push_back(std::make_unique<properties_panel>());
+  _panels.push_back(std::make_unique<inspector_panel>());
   _panels.push_back(std::make_unique<asset_browser_panel>());
   _panels.push_back(std::make_unique<logger_panel>());
 }
@@ -199,7 +199,7 @@ auto editor_ui_layer::_draw_dockspace() -> void {
     ImGui::DockBuilderDockWindow(viewport_window_name, center);
     ImGui::DockBuilderDockWindow(asset_browser_panel::window_name, bottom_left);
     ImGui::DockBuilderDockWindow(logger_panel::window_name, bottom_right);
-    ImGui::DockBuilderDockWindow(properties_panel::window_name, right);
+    ImGui::DockBuilderDockWindow(inspector_panel::window_name, right);
     ImGui::DockBuilderDockWindow(stats_window_name, right);
 
     ImGui::DockBuilderFinish(dockspace_id);
@@ -236,7 +236,7 @@ auto editor_ui_layer::_draw_dockspace() -> void {
 
       // Saving while playing would write play-mutated (and script-stripped, see
       // scripting::scripts) state over the user's file — block it, same as the disabled particle
-      // transport buttons in properties_panel.cpp.
+      // transport buttons in inspector_panel.cpp.
       ImGui::BeginDisabled(editor_module.play_state() != editor::play_state::edit);
 
       if (ImGui::MenuItem(ICON_MDI_CONTENT_SAVE " Save")) {

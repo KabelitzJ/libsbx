@@ -4,7 +4,7 @@ namespace Sbx.Core.Attributes
 {
 
 	[AttributeUsage(AttributeTargets.Class, AllowMultiple = false, Inherited = true)]
-  internal class EditorAssignableAttribute : Attribute
+  public class EditorAssignableAttribute : Attribute
   {
     
   } // class EditorAssignableAttribute

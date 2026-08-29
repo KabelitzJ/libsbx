@@ -6,10 +6,15 @@ namespace Sbx.Core.Attributes
 	[AttributeUsage(AttributeTargets.Field)]
 	public class ClampValueAttribute : Attribute
 	{
-		public readonly float Min;
-		public readonly float Max;
+		public double Min { get; set; }
+    public double Max { get; set; }
 
-    public ClampValueAttribute(float min, float max)
+    public ClampValueAttribute()
+    {
+      
+    }
+
+    public ClampValueAttribute(double min, double max)
     {
       Min = min;
       Max = max;

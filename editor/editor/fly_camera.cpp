@@ -76,4 +76,9 @@ auto fly_camera::set_look_sensitivity(std::float_t sensitivity) -> void {
   _look_sensitivity = sensitivity; 
 }
 
+auto fly_camera::set_node(const sbx::scenes::node& node) -> void {
+  _node = node;
+  _is_looking = false;
+}
+
 } // namespace editor

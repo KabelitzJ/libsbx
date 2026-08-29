@@ -55,6 +55,16 @@ public:
 
   auto instantiate(scenes::node& node, std::string_view class_name) -> managed::object;
 
+  /**
+   * @brief Invokes "OnDestroy" on every script instance in @p target, the mirror of
+   * instantiate()'s "OnCreate" call. Scene reloads (scene_serializer::load()) clear the ECS
+   * registry with no lifecycle callback of their own, which would otherwise silently drop any
+   * script instances created during a session (e.g. the editor's play-mode snapshot restore on
+   * Stop) without ever notifying them — call this first whenever a scene's registry is about to
+   * be wiped out from under live script instances.
+   */
+  auto run_on_destroy(scenes::scene& target) -> void;
+
 private:
 
   static auto _exception_callback(std::string_view message) -> void;

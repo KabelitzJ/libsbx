@@ -21,6 +21,8 @@
 #include <editor/viewport_gizmo.hpp>
 #include <editor/viewport_picking.hpp>
 
+#include <editor/editor_module.hpp>
+
 #include <libsbx/core/engine.hpp>
 #include <libsbx/core/project.hpp>
 
@@ -201,6 +203,12 @@ auto editor_ui_layer::_draw_dockspace() -> void {
     ImGui::DockBuilderFinish(dockspace_id);
   }
 
+  // Reserves its own strip of vertical space (ordinary content, drawn top-down) before DockSpace()
+  // below claims whatever's left via its ImVec2{0,0} "fill remaining" size — mirroring how the
+  // real menu bar's height is already excluded from that same remaining region via the
+  // ImGuiWindowFlags_MenuBar flag on this window.
+  _draw_toolbar();
+
   ImGui::DockSpace(dockspace_id, ImVec2{0.0f, 0.0f});
 
   if (ImGui::BeginMenuBar()) {
@@ -222,6 +230,13 @@ auto editor_ui_layer::_draw_dockspace() -> void {
 
       ImGui::Separator();
 
+      auto& editor_module = sbx::core::engine::get_module<editor::editor_module>();
+
+      // Saving while playing would write play-mutated (and script-stripped, see
+      // scripting::scripts) state over the user's file — block it, same as the disabled particle
+      // transport buttons in properties_panel.cpp.
+      ImGui::BeginDisabled(editor_module.play_state() != editor::play_state::edit);
+
       if (ImGui::MenuItem(ICON_MDI_CONTENT_SAVE " Save")) {
         if (_scene_path.empty()) {
           std::strncpy(_save_as_buffer.data(), "scenes/new_scene.yaml", _save_as_buffer.size() - 1u);
@@ -239,6 +254,8 @@ auto editor_ui_layer::_draw_dockspace() -> void {
         _show_save_as_dialog = true;
       }
 
+      ImGui::EndDisabled();
+
       ImGui::EndMenu();
     }
 
@@ -249,6 +266,104 @@ auto editor_ui_layer::_draw_dockspace() -> void {
   _draw_unsaved_changes_dialog();
 
   ImGui::End();
+}
+
+auto editor_ui_layer::_draw_toolbar() -> void {
+  auto& editor_module = sbx::core::engine::get_module<editor::editor_module>();
+
+  const auto state = editor_module.play_state();
+  const auto is_paused = state == editor::play_state::paused;
+
+  constexpr auto button_size = ImVec2{28.0f, 28.0f};
+  constexpr auto button_count = 3;
+  const auto spacing = ImGui::GetStyle().ItemSpacing.x;
+  const auto group_width = button_count * button_size.x + (button_count - 1) * spacing;
+
+  ImGui::BeginChild("##toolbar", ImVec2{0.0f, button_size.y + 8.0f}, true);
+
+  ImGui::SetCursorPos(ImVec2{
+    (ImGui::GetContentRegionAvail().x - group_width) * 0.5f,
+    (ImGui::GetWindowHeight() - button_size.y) * 0.5f
+  });
+
+  ImGui::BeginGroup();
+
+  // Play: starts a fresh session from edit, or resumes one that's paused. Disabled while already
+  // playing; tinted while it's the state that's currently active (playing).
+  {
+    const auto can_play = state != editor::play_state::playing;
+
+    if (state == editor::play_state::playing) {
+      ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyle().Colors[ImGuiCol_ButtonActive]);
+    }
+
+    ImGui::BeginDisabled(!can_play);
+
+    if (ImGui::Button(ICON_MDI_PLAY, button_size)) {
+      if (state == editor::play_state::edit) {
+        _state.clear_selection();
+        editor_module.enter_play_mode();
+      } else {
+        editor_module.toggle_pause();
+      }
+    }
+
+    ImGui::EndDisabled();
+
+    if (state == editor::play_state::playing) {
+      ImGui::PopStyleColor();
+    }
+
+    if (ImGui::IsItemHovered()) {
+      ImGui::SetTooltip(is_paused ? "Resume" : "Play");
+    }
+  }
+
+  ImGui::SameLine();
+
+  // Pause: only meaningful while actively playing. Tinted while it's the current state (paused).
+  {
+    if (is_paused) {
+      ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyle().Colors[ImGuiCol_ButtonActive]);
+    }
+
+    ImGui::BeginDisabled(state != editor::play_state::playing);
+
+    if (ImGui::Button(ICON_MDI_PAUSE, button_size)) {
+      editor_module.toggle_pause();
+    }
+
+    ImGui::EndDisabled();
+
+    if (is_paused) {
+      ImGui::PopStyleColor();
+    }
+
+    if (ImGui::IsItemHovered()) {
+      ImGui::SetTooltip("Pause");
+    }
+  }
+
+  ImGui::SameLine();
+
+  // Stop: only meaningful once a play session (playing or paused) exists.
+  {
+    ImGui::BeginDisabled(state == editor::play_state::edit);
+
+    if (ImGui::Button(ICON_MDI_STOP, button_size)) {
+      _state.clear_selection();
+      editor_module.exit_play_mode();
+    }
+
+    ImGui::EndDisabled();
+
+    if (ImGui::IsItemHovered()) {
+      ImGui::SetTooltip("Stop");
+    }
+  }
+
+  ImGui::EndGroup();
+  ImGui::EndChild();
 }
 
 auto editor_ui_layer::request_quit() -> void {

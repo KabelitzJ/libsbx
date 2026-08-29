@@ -83,11 +83,18 @@ application::~application() {
 auto application::update() -> void {
   using namespace sbx::units::literals;
 
+  auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
+
+  if (!_camera.is_valid()) {
+    _camera = scenes_module.active_scene().active_camera();
+    _camera_controller.set_node(_camera);
+  }
+
   _rotation += sbx::math::degree{90.0f} * sbx::core::engine::delta_time();
 
   auto& editor_module = sbx::core::engine::get_module<editor::editor_module>();
 
-  if (sbx::platform::input::is_mouse_button_pressed(sbx::platform::mouse_button::right) && editor_module.is_viewport_hovered()) {
+  if (sbx::platform::input::is_mouse_button_pressed(sbx::platform::mouse_button::right) && editor_module.is_viewport_hovered() && editor_module.play_state() == editor::play_state::edit) {
     _camera_is_engaged = true;
   }
 

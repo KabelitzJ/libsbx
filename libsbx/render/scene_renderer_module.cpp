@@ -309,7 +309,10 @@ auto scene_renderer_module::_build_packet() -> render_packet {
 
   auto& assets_module = core::engine::get_module<assets::assets_module>();
 
-  const auto delta_time = static_cast<std::float_t>(core::engine::delta_time());
+  // simulation_delta_time(), not core::engine::delta_time() directly: zero while the scene isn't
+  // simulating (editor Edit/Pause), so effects stop advancing instead of animating continuously
+  // while just editing — see scenes_module::is_simulating's doc comment.
+  const auto delta_time = static_cast<std::float_t>(scenes_module.simulation_delta_time().value());
 
   for (auto&& [entity, world, instance] : scene.query<scenes::world_transform, scenes::particle_effect>().each()) {
     if (!instance.effect.is_valid()) {

@@ -104,6 +104,12 @@ auto scripting_module::update() -> void {
 
   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
 
+  // Scripts only tick while the scene is actually simulating — see scenes_module::is_simulating's
+  // doc comment. Without this, OnUpdate would run continuously in the editor while just editing.
+  if (!scenes_module.is_simulating()) {
+    return;
+  }
+
   auto& scene = scenes_module.active_scene();
 
   auto scripts_query = scene.query<scripting::scripts>();
@@ -149,6 +155,16 @@ auto scripting_module::instantiate(scenes::node& node, std::string_view class_na
   scripts.instances.push_back(instance);
 
   return instance;
+}
+
+auto scripting_module::run_on_destroy(scenes::scene& target) -> void {
+  auto scripts_query = target.query<scripting::scripts>();
+
+  for (auto&& [node, scripts] : scripts_query.each()) {
+    for (auto& instance : scripts.instances) {
+      instance.invoke("OnDestroy");
+    }
+  }
 }
 
 auto scripting_module::_exception_callback(std::string_view message) -> void {

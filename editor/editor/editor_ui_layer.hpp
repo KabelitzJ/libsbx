@@ -79,6 +79,9 @@ private:
 
   auto _draw_dockspace() -> void;
 
+  /** @brief The centered Play/Pause/Stop toolbar strip drawn directly under the main menu bar. */
+  auto _draw_toolbar() -> void;
+
   auto _create_panels() -> void;
 
   auto _save_scene(const std::filesystem::path& path) -> void;

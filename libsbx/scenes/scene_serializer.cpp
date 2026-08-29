@@ -300,7 +300,9 @@ auto scene_serializer::serialize(scene& target) -> std::string {
 auto scene_serializer::save(scene& target, const std::filesystem::path& path) -> void {
   auto& project = core::engine::project();
 
-  const auto resolved_path = project.assets_directory() / path;
+  // An absolute path (e.g. the editor's play-mode snapshot, living under .sbx/ rather than
+  // assets/) is already fully resolved — only prefix relative, asset-directory-relative paths.
+  const auto resolved_path = path.is_absolute() ? path : project.assets_directory() / path;
   const auto content = serialize(target);
 
   if (!resolved_path.parent_path().empty()) {
@@ -318,7 +320,8 @@ auto scene_serializer::load(scene& target, const std::filesystem::path& path) ->
 
   const auto assets_directory = project.assets_directory();
 
-  const auto resolved_path = assets_directory / path;
+  // See the matching comment in save() — an absolute path is already fully resolved.
+  const auto resolved_path = path.is_absolute() ? path : assets_directory / path;
 
   if (!std::filesystem::exists(resolved_path)) {
     utility::logger<"scenes">::warn("Scene '{}' does not exist", resolved_path.generic_string());

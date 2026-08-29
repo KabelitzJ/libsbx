@@ -33,6 +33,13 @@ public:
 
   auto update() -> void;
 
+  /**
+   * @brief Re-points this controller at @p node without resetting yaw/pitch/speed/sensitivity —
+   * used to recover after the underlying node's handle goes stale (e.g. a scene reload wiped the
+   * registry out from under it). See application::update()'s self-heal check.
+   */
+  auto set_node(const sbx::scenes::node& node) -> void;
+
   auto set_move_speed(std::float_t speed) -> void;
 
   auto set_look_sensitivity(std::float_t sensitivity) -> void;

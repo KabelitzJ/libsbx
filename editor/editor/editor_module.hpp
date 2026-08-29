@@ -21,6 +21,7 @@
 #include <libsbx/render/ui/ui_module.hpp>
 
 #include <editor/editor_ui_layer.hpp>
+#include <editor/play_mode_controller.hpp>
 
 namespace editor {
 
@@ -56,10 +57,28 @@ public:
     _ui_layer.request_quit();
   }
 
+  /** @see play_mode_controller */
+  [[nodiscard]] auto play_state() const noexcept -> editor::play_state {
+    return _play_mode.state();
+  }
+
+  auto enter_play_mode() -> void {
+    _play_mode.enter_play_mode();
+  }
+
+  auto exit_play_mode() -> void {
+    _play_mode.exit_play_mode();
+  }
+
+  auto toggle_pause() -> void {
+    _play_mode.toggle_pause();
+  }
+
 private:
 
   std::string _ini_file;
   editor_ui_layer _ui_layer{};
+  play_mode_controller _play_mode{};
 
 }; // class editor_module
 

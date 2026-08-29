@@ -161,6 +161,7 @@ auto scene_serializer::_build(scene& target) -> YAML::Node {
       component["fov_degrees"] = c.fov_degrees;
       component["near_plane"] = c.near_plane;
       component["far_plane"] = c.far_plane;
+      component["exposure"] = c.exposure;
 
       components.push_back(component);
     }
@@ -224,6 +225,7 @@ auto scene_serializer::_build(scene& target) -> YAML::Node {
         component["type"] = "skybox";
         component["environment"] = environment_keys.at(id);
         component["intensity"] = sky.intensity;
+        component["ambient_intensity"] = sky.ambient_intensity;
         components.push_back(component);
       }
     }
@@ -433,6 +435,10 @@ auto scene_serializer::load(scene& target, const std::filesystem::path& path) ->
         c.fov_degrees = component["fov_degrees"].as<std::float_t>();
         c.near_plane = component["near_plane"].as<std::float_t>();
         c.far_plane = component["far_plane"].as<std::float_t>();
+
+        if (component["exposure"]) {
+          c.exposure = component["exposure"].as<std::float_t>();
+        }
       } else if (type == "directional_light") {
         auto& light = node.add_component<directional_light>();
         light.color = component["color"].as<math::color>();
@@ -453,10 +459,15 @@ auto scene_serializer::load(scene& target, const std::filesystem::path& path) ->
         auto& sky = node.add_component<skybox>();
 
         sky.environment = assets_module.load_environment_map(key_to_uuid.at(component["environment"].as<std::string>()));
-        
+
         if (component["intensity"]) {
           sky.intensity = component["intensity"].as<std::float_t>();
         }
+
+        // Older scene files predate the ambient/background split and only wrote "intensity",
+        // which used to drive both — fall back to that value so those scenes keep rendering the
+        // same instead of silently losing ambient brightness to the 1.0f struct default.
+        sky.ambient_intensity = component["ambient_intensity"] ? component["ambient_intensity"].as<std::float_t>() : sky.intensity;
       } else if (type == "particle_effect") {
         auto& instance = node.add_component<particle_effect>();
 

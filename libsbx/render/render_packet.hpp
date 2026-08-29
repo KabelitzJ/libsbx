@@ -66,6 +66,7 @@ struct camera_data {
   std::float_t fov_degrees{60.0f};
   std::float_t near_plane{0.1f};
   std::float_t far_plane{1000.0f};
+  std::float_t exposure{0.0f};
   bool is_active{false};
 }; // struct camera_data
 
@@ -103,6 +104,7 @@ struct render_packet {
   std::float_t shadow_distance{75.0f};
   assets::environment_map_handle environment{};
   std::float_t environment_intensity{1.0f};
+  std::float_t ambient_intensity{1.0f};
   std::vector<particle_emitter_snapshot> particle_emitters{};
 }; // struct render_packet
 

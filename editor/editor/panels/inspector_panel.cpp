@@ -486,6 +486,7 @@ auto draw_camera_section(sbx::scenes::node& node) -> void {
   ImGui::DragFloat("FOV (degrees)", &camera.fov_degrees, 0.5f, 1.0f, 179.0f);
   ImGui::DragFloat("Near Plane", &camera.near_plane, 0.01f, 0.001f, camera.far_plane);
   ImGui::DragFloat("Far Plane", &camera.far_plane, 1.0f, camera.near_plane, 100000.0f);
+  ImGui::DragFloat("Exposure", &camera.exposure, 0.05f, -8.0f, 8.0f);
 }
 
 auto draw_mesh_renderer_section(editor_state& state, sbx::scenes::node& node, sbx::assets::assets_module& assets_module) -> void {
@@ -649,7 +650,8 @@ auto draw_skybox_section(sbx::scenes::node& node, sbx::assets::assets_module& as
     ImGui::TextDisabled("Environment: (none)");
   }
 
-  ImGui::DragFloat("Intensity", &sky.intensity, 0.05f, 0.0f, 100.0f);
+  ImGui::DragFloat("Background Intensity", &sky.intensity, 0.05f, 0.0f, 100.0f);
+  ImGui::DragFloat("Ambient Intensity", &sky.ambient_intensity, 0.05f, 0.0f, 100.0f);
 }
 
 // particle_effect::loop is a stub for a future burst/duration model (see its doc comment); exposed

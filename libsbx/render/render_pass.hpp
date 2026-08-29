@@ -49,6 +49,7 @@ struct render_context {
 
   std::uint32_t environment_index{0xFFFFFFFFu};
   std::float_t environment_intensity{1.0f};
+  std::float_t ambient_intensity{1.0f};
   std::uint32_t irradiance_index{0xFFFFFFFFu};
   std::uint32_t brdf_lut_index{0xFFFFFFFFu};
   std::uint32_t prefiltered_index{0xFFFFFFFFu};

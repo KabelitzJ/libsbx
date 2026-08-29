@@ -149,8 +149,8 @@ lighting_output evaluate_lighting<let receives_shadows : bool>(lighting_input in
   float3 fr = fresnel_schlick(ndv, f0);
   float3 kd = (1.0 - fr) * (1.0 - metallic);
 
-  float3 irradiance = (input.frame_data.irradiance_index != 0xFFFFFFFF) ? cubes[input.frame_data.irradiance_index].Sample(sampler, n).rgb : float3(0.03, 0.03, 0.03);
-  float3 diffuse = irradiance * albedo;
+  float3 irradiance = (input.frame_data.irradiance_index != 0xFFFFFFFF) ? cubes[input.frame_data.irradiance_index].Sample(sampler, n).rgb : float3(0.03);
+  float3 diffuse = irradiance * albedo / pi;
 
   float3 specular = float3(0.0, 0.0, 0.0);
 
@@ -167,7 +167,7 @@ lighting_output evaluate_lighting<let receives_shadows : bool>(lighting_input in
     specular = prefiltered * (fr * brdf.x + brdf.y);
   }
 
-  float3 ambient = (kd * diffuse + specular) * ao * input.frame_data.environment_intensity;
+  float3 ambient = (kd * diffuse + specular) * ao * input.frame_data.ambient_intensity;
 
   static const float ambient_shadow_floor = 0.6;
 

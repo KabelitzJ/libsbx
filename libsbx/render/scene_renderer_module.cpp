@@ -63,7 +63,7 @@ struct frame_data {
   std::uint32_t prefiltered_index;
   std::uint32_t prefiltered_mip_count;
   std::float_t environment_intensity;
-  std::uint32_t pad0;
+  std::float_t ambient_intensity;
   std::uint32_t directional_light_count;
   std::float_t cluster_scale;
   graphics::buffer::address_type cluster_range_address;
@@ -172,6 +172,7 @@ auto scene_renderer_module::_build_packet() -> render_packet {
     packet.camera.fov_degrees = camera.fov_degrees;
     packet.camera.near_plane = camera.near_plane;
     packet.camera.far_plane = camera.far_plane;
+    packet.camera.exposure = camera.exposure;
     packet.camera.is_active = true;
 
     if (camera_node.has_component<scenes::skybox>()) {
@@ -179,6 +180,7 @@ auto scene_renderer_module::_build_packet() -> render_packet {
 
       packet.environment = sky.environment;
       packet.environment_intensity = sky.intensity;
+      packet.ambient_intensity = sky.ambient_intensity;
     }
   }
 
@@ -452,6 +454,7 @@ auto scene_renderer_module::record(graphics::command_buffer& command_buffer, mat
     .swapchain_extent = extent,
     .environment_index = environment_index,
     .environment_intensity = packet.environment_intensity,
+    .ambient_intensity = packet.ambient_intensity,
     .irradiance_index = irradiance_index,
     .brdf_lut_index = brdf_lut_index,
     .prefiltered_index = prefiltered_index,
@@ -823,7 +826,7 @@ auto scene_renderer_module::_prepare_frame(render_context& context) -> void {
   data.prefiltered_index = context.prefiltered_index;
   data.prefiltered_mip_count = context.prefiltered_mip_count;
   data.environment_intensity = context.environment_intensity;
-  data.pad0 = 0u;
+  data.ambient_intensity = context.ambient_intensity;
   data.directional_light_count = directional_light_count;
   data.cluster_scale = cluster_scale;
   data.cluster_range_address = _cluster_range_addresses[context.slot];

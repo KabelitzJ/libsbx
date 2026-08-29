@@ -100,6 +100,7 @@ struct camera {
   std::float_t fov_degrees{60.0f};
   std::float_t near_plane{0.1f};
   std::float_t far_plane{1000.0f};
+  std::float_t exposure{0.0f}; // EV stops applied as exp2(exposure) before tonemapping; 0 = unchanged.
 }; // struct camera
 
 /**
@@ -147,13 +148,13 @@ struct directional_light {
 
 struct point_light {
   math::color color{1.0f, 1.0f, 1.0f, 1.0f};
-  std::float_t intensity{1.0f};
+  std::float_t intensity{25.0f}; // Higher than directional's 1.0: shader applies inverse-square falloff to this, so it needs headroom to still read at a few units' distance.
   std::float_t range{10.0f};
 }; // struct point_light
 
 struct spot_light {
   math::color color{1.0f, 1.0f, 1.0f, 1.0f};
-  std::float_t intensity{1.0f};
+  std::float_t intensity{25.0f}; // See point_light::intensity.
   std::float_t range{10.0f};
   std::float_t inner_angle{0.4f}; // radians
   std::float_t outer_angle{0.6f}; // radians
@@ -161,7 +162,8 @@ struct spot_light {
 
 struct skybox {
   assets::environment_map_handle environment{};
-  std::float_t intensity{1.0f};
+  std::float_t intensity{1.0f}; // Visible sky background brightness only.
+  std::float_t ambient_intensity{1.0f}; // Scales the IBL diffuse+specular ambient term added to every surface, independent of the background's own brightness.
 }; // struct skybox
 
 struct particle_emitter {

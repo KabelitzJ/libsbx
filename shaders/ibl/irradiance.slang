@@ -53,8 +53,6 @@ void compute_main(compute_input input) {
     sum += min(cubes[push.source_index].SampleLevel(samplers[push.sampler_index], direction, 0.0).rgb, float3(firefly_clamp));
   }
 
-  // Cosine-weighted importance sampling: the cos(theta)/pi PDF cancels the BRDF's cosine term,
-  // leaving E(n) = pi * mean(L) rather than a plain average.
   float3 irradiance = pi * sum / float(sample_count);
 
   storage_cubes[push.output_index][input.id] = float4(irradiance, 1.0);

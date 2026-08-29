@@ -3,6 +3,7 @@
 #include <libsbx/render/passes/tonemap_pass.hpp>
 
 #include <array>
+#include <cmath>
 #include <cstddef>
 #include <cstring>
 #include <string>
@@ -23,6 +24,7 @@ namespace sbx::render {
 struct tonemap_push {
   std::uint32_t color_index;
   std::uint32_t sampler_index;
+  std::float_t exposure;
 }; // struct tonemap_push
 
 tonemap_pass::tonemap_pass() {
@@ -78,7 +80,7 @@ auto tonemap_pass::execute(render_context& context, std::uint32_t /*group*/) -> 
 
   context.command_buffer->bind_pipeline(*_pipeline);
 
-  auto values = tonemap_push{context.color_index, context.sampler_index};
+  auto values = tonemap_push{context.color_index, context.sampler_index, context.packet->camera.exposure};
   auto range = std::array<std::byte, graphics::bindless_table::push_constant_size>{};
   std::memcpy(range.data(), &values, sizeof(values));
 

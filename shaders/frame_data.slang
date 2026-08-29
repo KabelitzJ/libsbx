@@ -80,7 +80,7 @@ struct frame_data {
   uint prefiltered_index;
   uint prefiltered_mip_count;
   float environment_intensity;
-  uint pad0;
+  float ambient_intensity;
   uint directional_light_count;
   float cluster_scale;
   range* cluster_ranges;

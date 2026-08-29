@@ -23,6 +23,7 @@ struct fragment_output {
 struct push_data {
   uint color_index;
   uint sampler_index;
+  float exposure;
 }; // struct push_data
 
 [[vk::push_constant]] ConstantBuffer<push_data> push;
@@ -64,6 +65,8 @@ vertex_output vertex_main(vertex_input input) {
 [shader("fragment")]
 fragment_output fragment_main(fragment_input input) {
   float3 hdr = textures[push.color_index].Sample(samplers[push.sampler_index], input.uv).rgb;
+
+  hdr *= exp2(push.exposure);
 
   fragment_output output;
 

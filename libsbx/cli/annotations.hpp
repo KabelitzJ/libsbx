@@ -10,6 +10,10 @@
 
 namespace sbx::cli {
 
+struct args_t { };
+
+inline constexpr auto args = args_t{};
+
 struct required_t { };
 
 inline constexpr auto required = required_t{};

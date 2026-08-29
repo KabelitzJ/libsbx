@@ -47,7 +47,7 @@ struct [[=sbx::reflection::named]] test {
   [[=sbx::reflection::rename("d")]] int c;
 }; // struct test
 
-struct cli_args {
+struct [[=sbx::cli::args]] cli_args {
   [[=sbx::cli::help("path to the project to open")]]
   std::optional<std::filesystem::path> project;
 }; // struct cli_args

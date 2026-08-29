@@ -51,9 +51,10 @@ using module_list = sbx::core::module_list<
   sbx::render::scene_renderer_module
 >;
 
-struct cli_args {
+struct [[=sbx::cli::args]] cli_args {
+  [[=sbx::cli::required]]
   [[=sbx::cli::help("path to the project to open")]]
-  std::optional<std::filesystem::path> project;
+  std::filesystem::path project;
 }; // struct cli_args
 
 auto main(int argc, const char** argv) -> int {
@@ -64,23 +65,16 @@ auto main(int argc, const char** argv) -> int {
   const auto parsed = sbx::cli::parse_or_exit<cli_args>(args);
 
   try {
+    const auto project_file = std::filesystem::path{parsed.project};
+    const auto loaded = sbx::core::project::load(project_file);
+
     auto config = sbx::core::engine_config{
-      .threading = sbx::core::threading_policy::multi_threaded,
+      .threading = sbx::core::threading_policy::single_threaded,
       .project = sbx::core::project_config{
-        .root = sbx::core::user_home_directory() / "Development" / "Game1",
-        .name = "Game1"
+        .root = project_file.parent_path(),
+        .name = loaded.name()
       }
     };
-
-    if (parsed.project) {
-      const auto root = std::filesystem::path{*parsed.project};
-      const auto loaded = sbx::core::project::load(root / sbx::core::project::file_name);
-
-      config.project = sbx::core::project_config{
-        .root = loaded.root(),
-        .name = loaded.name()
-      };
-    }
 
     auto engine = sbx::core::basic_engine<module_list>{config};
 

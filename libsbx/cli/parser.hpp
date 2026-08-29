@@ -29,7 +29,7 @@
 namespace sbx::cli {
 
 template<typename Type>
-concept args_struct = std::meta::is_class_type(^^Type);
+concept args_struct = std::meta::is_class_type(^^Type) && reflection::has_annotation<Type, args>();
 
 struct parse_error {
 
@@ -181,6 +181,10 @@ auto parse(std::span<const std::string_view> args) -> std::expected<Type, parse_
     constexpr auto member = members[i];
 
     if constexpr (detail::is_required(member)) {
+      using member_type = [:std::meta::type_of(member):];
+
+      static_assert(!is_optional_v<member_type>, "sbx::cli: a field cannot be both required and std::optional<T> — use plain T");
+
       if (!seen[i]) {
         errors.push_back(fmt::format("missing required argument '{}'", detail::flag_name_of(member)));
       }

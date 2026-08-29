@@ -1,6 +1,6 @@
 using System;
 
-namespace Sbx.Attributes
+namespace Sbx.Core.Attributes
 {
 
   [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]

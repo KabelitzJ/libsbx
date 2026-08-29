@@ -6,6 +6,8 @@
 #include <string>
 #include <functional>
 #include <filesystem>
+#include <span>
+#include <vector>
 
 #include <libsbx/scripting/managed/core.hpp>
 #include <libsbx/scripting/managed/object.hpp>
@@ -16,6 +18,20 @@ namespace sbx::scripting::managed {
 
 using message_callback_fn = std::function<void(std::string_view, message_level)>;
 using exception_callback_fn = std::function<void(std::string_view)>;
+
+/** @brief One diagnostic from a compile_scripts() call — a Roslyn error/warning. */
+struct compiler_diagnostic {
+  bool is_error;
+  std::string file;
+  std::int32_t line;
+  std::int32_t column;
+  std::string message;
+}; // struct compiler_diagnostic
+
+struct compile_result {
+  bool success;
+  std::vector<compiler_diagnostic> diagnostics;
+}; // struct compile_result
 
 struct rumtime_config {
   std::string backend_path;
@@ -47,6 +63,15 @@ public:
 
   auto unload_assembly_load_context(assembly_load_context& load_context) -> void;
 
+  /**
+   * @brief Compiles @p source_paths into a DLL at @p output_path via Sbx.Compiler (in-process
+   * Roslyn — see Sbx.Compiler/Compiler.cs), referencing @p reference_paths plus whatever the
+   * installed .NET shared framework provides. Resolved lazily on first call, from the same
+   * backend_path directory Sbx.Managed.dll was loaded from — see Sbx.Compiler's own CMake publish
+   * target, which places it alongside Sbx.Managed.dll/Sbx.Core.dll.
+   */
+  auto compile_scripts(std::span<const std::string> source_paths, std::span<const std::string> reference_paths, const std::filesystem::path& output_path) -> compile_result;
+
 private:
 
   auto load_host_fxr() const -> bool;
@@ -68,6 +93,11 @@ private:
   std::filesystem::path _managed_assembly_path;
   void* _host_fxr_context = nullptr;
   bool _initialized = false;
+
+  // Sbx.Compiler.dll's Compile entry point — a separate component from Sbx.Managed (see
+  // compile_scripts's doc comment), resolved lazily since nothing needs it until a script is
+  // actually compiled.
+  void* _compile_scripts_fn = nullptr;
 
 }; // class runtime
 

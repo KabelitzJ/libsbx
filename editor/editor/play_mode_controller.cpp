@@ -10,6 +10,8 @@
 
 #include <libsbx/scripting/scripting_module.hpp>
 
+#include <libsbx/utility/logger.hpp>
+
 namespace editor {
 
 play_mode_controller::play_mode_controller() {
@@ -23,6 +25,16 @@ auto play_mode_controller::_snapshot_path() const -> std::filesystem::path {
 
 auto play_mode_controller::enter_play_mode() -> void {
   if (_state != play_state::edit) {
+    return;
+  }
+
+  auto& scripting_module = sbx::core::engine::get_module<sbx::scripting::scripting_module>();
+
+  // Mirrors Unity: refuse to enter Play with compile errors rather than run stale/missing code.
+  // The editor's "Recompile Scripts" menu item (Scene menu) is what clears this.
+  if (!scripting_module.last_compile_succeeded()) {
+    sbx::utility::logger<"scripting">::error("Cannot enter Play mode — scripts have compile errors. See the Console for details.");
+
     return;
   }
 

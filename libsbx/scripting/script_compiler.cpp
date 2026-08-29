@@ -1,0 +1,244 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Jonas Kabelitz
+#include <libsbx/scripting/script_compiler.hpp>
+
+#include <array>
+#include <fstream>
+#include <system_error>
+
+#include <yaml-cpp/yaml.h>
+
+#include <fmt/format.h>
+
+#include <libsbx/utility/logger.hpp>
+
+#include <libsbx/core/engine.hpp>
+#include <libsbx/core/project.hpp>
+
+namespace sbx::scripting {
+
+// Compiled format of script_compiler's own manifest schema — bumped whenever that schema (or
+// what a recompile should be sensitive to) changes, forcing a one-time recompile on upgrade.
+// Mirrors asset_cooker's per-cooker cooker_version, see this class's doc comment.
+inline constexpr auto compiler_version = std::uint32_t{1u};
+
+// FNV-1a over the file's bytes — mirrors asset_cooker.cpp's file-local hash_file(), not shared
+// across translation units there either.
+static auto hash_file(const std::filesystem::path& path) -> std::uint64_t {
+  auto in = std::ifstream{path, std::ios::binary};
+
+  if (!in) {
+    return 0u;
+  }
+
+  auto hash = std::uint64_t{14695981039346656037ull};
+  auto buffer = std::array<char, std::size_t{1u} << 16>{};
+
+  while (in) {
+    in.read(buffer.data(), static_cast<std::streamsize>(buffer.size()));
+    const auto count = static_cast<std::size_t>(in.gcount());
+
+    for (auto i = std::size_t{0u}; i < count; ++i) {
+      hash ^= static_cast<std::uint8_t>(buffer[i]);
+      hash *= 1099511628211ull;
+    }
+  }
+
+  return hash;
+}
+
+auto script_compiler::output_path() const -> std::filesystem::path {
+  return core::engine::project().library_directory() / "scripts" / "Game.dll";
+}
+
+auto script_compiler::_manifest_path() const -> std::filesystem::path {
+  return core::engine::project().library_directory() / "scripts" / "manifest.yaml";
+}
+
+auto script_compiler::_is_stale(const std::vector<std::filesystem::path>& sources, std::uint64_t core_assembly_hash) -> bool {
+  if (!std::filesystem::exists(output_path())) {
+    return true;
+  }
+
+  if (!_manifest_loaded) {
+    const auto path = _manifest_path();
+
+    if (std::filesystem::exists(path)) {
+      try {
+        const auto root = YAML::LoadFile(path.string());
+
+        _manifest_compiler_version = root["compiler_version"].as<std::uint32_t>(0u);
+        _manifest_core_assembly_hash = root["sbx_core_hash"].as<std::uint64_t>(0u);
+
+        if (const auto sources_node = root["sources"]; sources_node) {
+          for (const auto entry : sources_node) {
+            auto source = source_entry{};
+            source.hash = entry["hash"].as<std::uint64_t>(0u);
+            source.mtime = entry["mtime"].as<std::int64_t>(0);
+
+            _manifest_sources.emplace(entry["path"].as<std::string>(), source);
+          }
+        }
+      } catch (const std::exception& exception) {
+        utility::logger<"scripting">::warn("Could not read script manifest '{}' ({})", path.generic_string(), exception.what());
+      }
+    }
+
+    _manifest_loaded = true;
+  }
+
+  if (_manifest_compiler_version != compiler_version || _manifest_core_assembly_hash != core_assembly_hash) {
+    return true;
+  }
+
+  const auto& assets_directory = core::engine::project().assets_directory();
+
+  if (sources.size() != _manifest_sources.size()) {
+    return true;
+  }
+
+  for (const auto& source : sources) {
+    const auto key = std::filesystem::relative(source, assets_directory).generic_string();
+
+    const auto entry = _manifest_sources.find(key);
+
+    if (entry == _manifest_sources.end()) {
+      return true; // new file
+    }
+
+    auto error = std::error_code{};
+    const auto mtime = std::filesystem::last_write_time(source, error);
+
+    if (error) {
+      return true;
+    }
+
+    const auto mtime_count = static_cast<std::int64_t>(mtime.time_since_epoch().count());
+
+    if (entry->second.mtime == mtime_count) {
+      continue; // fast path: unchanged since last compile
+    }
+
+    if (entry->second.hash != hash_file(source)) {
+      return true; // touched and actually changed
+    }
+  }
+
+  return false;
+}
+
+auto script_compiler::_record_manifest(const std::vector<std::filesystem::path>& sources, std::uint64_t core_assembly_hash) -> void {
+  const auto& assets_directory = core::engine::project().assets_directory();
+
+  _manifest_compiler_version = compiler_version;
+  _manifest_core_assembly_hash = core_assembly_hash;
+  _manifest_sources.clear();
+
+  auto root = YAML::Node{};
+  root["compiler_version"] = compiler_version;
+  root["sbx_core_hash"] = core_assembly_hash;
+
+  auto sources_node = YAML::Node{YAML::NodeType::Sequence};
+
+  for (const auto& source : sources) {
+    const auto key = std::filesystem::relative(source, assets_directory).generic_string();
+
+    auto error = std::error_code{};
+    const auto mtime = std::filesystem::last_write_time(source, error);
+    const auto mtime_count = error ? std::int64_t{0} : static_cast<std::int64_t>(mtime.time_since_epoch().count());
+    const auto hash = hash_file(source);
+
+    _manifest_sources.emplace(key, source_entry{.hash = hash, .mtime = mtime_count});
+
+    auto entry_node = YAML::Node{};
+    entry_node["path"] = key;
+    entry_node["hash"] = hash;
+    entry_node["mtime"] = mtime_count;
+    sources_node.push_back(entry_node);
+  }
+
+  root["sources"] = sources_node;
+
+  const auto path = _manifest_path();
+  std::filesystem::create_directories(path.parent_path());
+
+  auto out = std::ofstream{path};
+  out << root;
+}
+
+auto script_compiler::compile_if_stale(managed::runtime& runtime, const std::filesystem::path& core_assembly_path) -> void {
+  auto& project = core::engine::project();
+
+  auto sources = std::vector<std::filesystem::path>{};
+  auto ec = std::error_code{};
+
+  for (const auto& entry : std::filesystem::recursive_directory_iterator{project.assets_directory(), ec}) {
+    if (!entry.is_regular_file()) {
+      continue;
+    }
+
+    if (entry.path().extension() != ".cs") {
+      continue;
+    }
+
+    sources.push_back(entry.path());
+  }
+
+  if (sources.empty()) {
+    _last_compile_succeeded = true;
+    return;
+  }
+
+  const auto core_assembly_hash = hash_file(core_assembly_path);
+
+  if (!_is_stale(sources, core_assembly_hash)) {
+    _last_compile_succeeded = true; // manifest only ever records a successful compile
+    return;
+  }
+
+  const auto final_path = output_path();
+  std::filesystem::create_directories(final_path.parent_path());
+
+  auto scratch_path = final_path;
+  scratch_path += ".compiling";
+
+  auto source_strings = std::vector<std::string>{};
+  source_strings.reserve(sources.size());
+  for (const auto& source : sources) {
+    source_strings.push_back(source.string());
+  }
+
+  const auto reference_strings = std::vector<std::string>{core_assembly_path.string()};
+
+  const auto result = runtime.compile_scripts(source_strings, reference_strings, scratch_path);
+
+  for (const auto& diagnostic : result.diagnostics) {
+    const auto location = diagnostic.file.empty() ? std::string{} : fmt::format("{}({},{}): ", diagnostic.file, diagnostic.line, diagnostic.column);
+
+    if (diagnostic.is_error) {
+      utility::logger<"scripting">::error("{}{}", location, diagnostic.message);
+    } else {
+      utility::logger<"scripting">::warn("{}{}", location, diagnostic.message);
+    }
+  }
+
+  if (result.success) {
+    // Atomic-ish replace: only ever overwrite the last-good assembly once a new one has fully
+    // compiled — a failure below never touches final_path.
+    std::filesystem::rename(scratch_path, final_path);
+
+    _record_manifest(sources, core_assembly_hash);
+
+    utility::logger<"scripting">::info("Compiled {} script(s) into '{}'", sources.size(), final_path.generic_string());
+
+    _last_compile_succeeded = true;
+  } else {
+    std::filesystem::remove(scratch_path, ec);
+
+    utility::logger<"scripting">::error("Script compilation failed — keeping the previous build (if any)");
+
+    _last_compile_succeeded = false;
+  }
+}
+
+} // namespace sbx::scripting

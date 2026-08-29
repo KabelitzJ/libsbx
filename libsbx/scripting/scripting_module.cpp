@@ -21,11 +21,7 @@
 namespace sbx::scripting {
 
 scripting_module::scripting_module() {
-  // auto& filesystem_module = core::engine::get_module<filesystem::filesystem_module>();
-
-  // const auto dotnet_dir = filesystem_module.native_path_of(std::string{"engine://dotnet"});
-
-  const auto dotnet_dir = std::filesystem::path{"build/x86_64/gcc/debug/dotnet"};
+  const auto dotnet_dir = _dotnet_directory();
 
   auto config = scripting::managed::rumtime_config{
 		.backend_path = dotnet_dir.generic_string(),
@@ -93,6 +89,8 @@ scripting_module::scripting_module() {
   // interop::register_managed_component<physics::character_controller>("CharacterController", _core_assembly);
 
   _core_assembly.upload_internal_calls();
+
+  _load_game_assembly();
 }
 
 scripting_module::~scripting_module() {
@@ -136,13 +134,13 @@ auto scripting_module::load_assembly(const std::filesystem::path& assembly_path,
 }
 
 auto scripting_module::instantiate(scenes::node& node, std::string_view class_name) -> managed::object {
-  auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
+  if (!_has_game_assembly) {
+    utility::logger<"scripting">::error("Cannot instantiate '{}' — no compiled game assembly is loaded (see last_compile_succeeded())", class_name);
 
-  auto& scene = scenes_module.active_scene();
+    return managed::object{};
+  }
 
-  auto& assembly = _context.get_or_load_assembly(_assembly_path.string());
-
-  auto type = assembly.get_type(class_name);
+  auto type = _game_assembly.get_type(class_name);
 
   auto instance = type.create_instance();
 
@@ -167,8 +165,43 @@ auto scripting_module::run_on_destroy(scenes::scene& target) -> void {
   }
 }
 
+auto scripting_module::recompile_scripts() -> void {
+  _load_game_assembly();
+}
+
+auto scripting_module::_dotnet_directory() const -> std::filesystem::path {
+  // Sibling of the running executable's directory — both bin/ and dotnet/ land directly under
+  // the build root (see SBX_DOTNET_OUT_DIR/RUNTIME_OUTPUT_DIRECTORY in the root CMakeLists.txt),
+  // regardless of cwd or Debug/Release config.
+  return sbx::filesystem::executable_directory() / ".." / "dotnet";
+}
+
+auto scripting_module::_load_game_assembly() -> void {
+  const auto core_assembly_path = _dotnet_directory() / "Sbx.Core.dll";
+
+  _script_compiler.compile_if_stale(_runtime, core_assembly_path);
+
+  if (!_script_compiler.last_compile_succeeded()) {
+    // Never discard a working game assembly (if any) out from under live script instances just
+    // because a *new* recompile attempt failed — keep whatever was previously loaded.
+    return;
+  }
+
+  if (_has_game_assembly) {
+    _runtime.unload_assembly_load_context(_game_context);
+    _has_game_assembly = false;
+  }
+
+  _game_context = _runtime.create_assembly_load_context("GameScripts");
+
+  if (std::filesystem::exists(_script_compiler.output_path())) {
+    _game_assembly = _game_context.load_assembly(_script_compiler.output_path().string());
+    _has_game_assembly = true;
+  }
+}
+
 auto scripting_module::_exception_callback(std::string_view message) -> void {
-  utility::logger<"scripting">::error("Script runtime error: {}", message); 
+  utility::logger<"scripting">::error("Script runtime error: {}", message);
 
   throw script_runtime_error{std::string{message}};
 }

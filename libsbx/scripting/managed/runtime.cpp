@@ -162,6 +162,84 @@ auto runtime::unload_assembly_load_context(assembly_load_context& load_context) 
   std::invoke(detail::backend.unload_assembly_load_context, load_context._context_id);
   load_context._context_id = -1;
   load_context._loaded_assemblies.clear();
+
+  // type_cache is a single process-wide singleton (not partitioned per context), so this also
+  // drops Sbx.Core/Sbx.Managed's cached types — harmless, they're lazily re-cached on next
+  // lookup. Without this, a type* from the unloaded context's assemblies would dangle.
+  detail::type_cache::get().clear();
+}
+
+namespace {
+
+// [UnmanagedCallersOnly] callbacks can't capture C++ state, so compile_scripts() points this at
+// its local diagnostics vector for the duration of one (synchronous) compile call.
+thread_local std::vector<compiler_diagnostic>* compile_diagnostic_sink = nullptr;
+
+auto compile_diagnostic_thunk(bool32 is_error, string file, std::int32_t line, std::int32_t column, string message) -> void {
+  if (compile_diagnostic_sink == nullptr) {
+    return;
+  }
+
+  compile_diagnostic_sink->push_back(compiler_diagnostic{
+    .is_error = static_cast<bool>(is_error),
+    .file = std::string{file},
+    .line = line,
+    .column = column,
+    .message = std::string{message},
+  });
+}
+
+} // namespace
+
+auto runtime::compile_scripts(std::span<const std::string> source_paths, std::span<const std::string> reference_paths, const std::filesystem::path& output_path) -> compile_result {
+  using compile_fn = bool32(*)(const string*, std::int32_t, const string*, std::int32_t, string, void(*)(bool32, string, std::int32_t, std::int32_t, string));
+
+  if (_compile_scripts_fn == nullptr) {
+    const auto compiler_assembly_path = std::filesystem::path{_settings.backend_path} / "Sbx.Compiler.dll";
+
+    _compile_scripts_fn = load_managed_function_ptr(compiler_assembly_path, SBX_SCRIPTING_STR("Sbx.Compiler.Compiler, Sbx.Compiler"), SBX_SCRIPTING_STR("Compile"));
+  }
+
+  if (_compile_scripts_fn == nullptr) {
+    return compile_result{
+      .success = false,
+      .diagnostics = {compiler_diagnostic{.is_error = true, .file = {}, .line = 0, .column = 0, .message = "Sbx.Compiler.dll not found or missing its Compile entry point"}},
+    };
+  }
+
+  auto sources = std::vector<string>{};
+  sources.reserve(source_paths.size());
+  for (const auto& path : source_paths) {
+    sources.push_back(string::create(path));
+  }
+
+  auto references = std::vector<string>{};
+  references.reserve(reference_paths.size());
+  for (const auto& path : reference_paths) {
+    references.push_back(string::create(path));
+  }
+
+  auto output = string::create(output_path.string());
+
+  auto diagnostics = std::vector<compiler_diagnostic>{};
+  compile_diagnostic_sink = &diagnostics;
+
+  const auto compile = reinterpret_cast<compile_fn>(_compile_scripts_fn);
+  const auto success = std::invoke(compile, sources.data(), static_cast<std::int32_t>(sources.size()), references.data(), static_cast<std::int32_t>(references.size()), output, &compile_diagnostic_thunk);
+
+  compile_diagnostic_sink = nullptr;
+
+  for (auto& source : sources) {
+    string::destroy(source);
+  }
+
+  for (auto& reference : references) {
+    string::destroy(reference);
+  }
+
+  string::destroy(output);
+
+  return compile_result{.success = static_cast<bool>(success), .diagnostics = std::move(diagnostics)};
 }
 
 template<typename Function>

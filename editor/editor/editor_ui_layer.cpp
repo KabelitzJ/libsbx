@@ -30,6 +30,8 @@
 #include <libsbx/scenes/scene_serializer.hpp>
 #include <libsbx/scenes/scenes_module.hpp>
 
+#include <libsbx/scripting/scripting_module.hpp>
+
 #include <libsbx/graphics/graphics_module.hpp>
 
 #include <libsbx/render/scene_renderer_module.hpp>
@@ -252,6 +254,15 @@ auto editor_ui_layer::_draw_dockspace() -> void {
         std::strncpy(_save_as_buffer.data(), seed.c_str(), _save_as_buffer.size() - 1u);
         _save_as_buffer[_save_as_buffer.size() - 1u] = '\0';
         _show_save_as_dialog = true;
+      }
+
+      ImGui::Separator();
+
+      // Same Edit-mode-only guard as Save above: reloading the game assembly while something is
+      // instantiate()'d from it (i.e. while playing/paused) isn't safe — see
+      // scripting_module::recompile_scripts's doc comment.
+      if (ImGui::MenuItem(ICON_MDI_REFRESH " Recompile Scripts")) {
+        sbx::core::engine::get_module<sbx::scripting::scripting_module>().recompile_scripts();
       }
 
       ImGui::EndDisabled();

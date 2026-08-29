@@ -1079,6 +1079,7 @@ auto properties_panel::_draw_asset_properties(const asset_selection& asset, sbx:
       case asset_kind::environment_map: _asset_cache.environment_map = assets_module.load_environment_map(asset.id); break;
       case asset_kind::particle_effect: _asset_cache.particle_effect = assets_module.load_particle_effect(asset.id); break;
       case asset_kind::scene:
+      case asset_kind::script:
       case asset_kind::unknown:
         break;
     }
@@ -1157,6 +1158,10 @@ auto properties_panel::_draw_asset_properties(const asset_selection& asset, sbx:
     }
     case asset_kind::scene: {
       ImGui::Text("Type: Scene (not imported)");
+      break;
+    }
+    case asset_kind::script: {
+      ImGui::Text("Type: Script (not imported)");
       break;
     }
     case asset_kind::unknown: {

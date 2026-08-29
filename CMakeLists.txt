@@ -261,6 +261,7 @@ target_sources(
     "${CMAKE_SOURCE_DIR}/libsbx/scripting/interop.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/scripting/scripting.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/scripting/scripting_module.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/scripting/script_compiler.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/scripting/managed/assembly.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/scripting/managed/attribute.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/scripting/managed/detail/type_cache.cpp"
@@ -481,6 +482,7 @@ target_sources(
       "${CMAKE_SOURCE_DIR}/libsbx/scripting/interop.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/scripting/scripting.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/scripting/scripting_module.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/scripting/script_compiler.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/scripting/managed/assembly.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/scripting/managed/attribute.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/scripting/managed/core.hpp"
@@ -706,6 +708,24 @@ add_custom_target(
 
 add_dependencies(sbx_scripting_core sbx_scripting_managed)
 add_dependencies(libsbx sbx_scripting_core)
+
+set(SBX_COMPILER_DIR ${CMAKE_SOURCE_DIR}/dotnet/Sbx.Compiler)
+set(SBX_COMPILER_PROJECT ${SBX_COMPILER_DIR}/Sbx.Compiler.csproj)
+
+add_custom_target(
+  sbx_scripting_compiler ALL
+  COMMAND ${CMAKE_COMMAND} -E make_directory ${SBX_DOTNET_OUT_DIR}
+  COMMAND dotnet publish ${SBX_COMPILER_PROJECT}
+    -c $<CONFIG>
+    --self-contained false
+    -p:UseAppHost=false
+    -o ${SBX_DOTNET_OUT_DIR}
+  WORKING_DIRECTORY ${SBX_COMPILER_DIR}
+  COMMENT "Publishing Sbx.Compiler assembly (framework-dependent)"
+)
+
+add_dependencies(sbx_scripting_compiler sbx_scripting_managed sbx_scripting_core)
+add_dependencies(libsbx sbx_scripting_compiler)
 
 # Install
 

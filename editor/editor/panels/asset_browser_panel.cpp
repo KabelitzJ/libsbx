@@ -38,6 +38,7 @@ auto extension_table() -> const std::unordered_map<std::string, asset_kind>& {
     {".hdr", asset_kind::environment_map},
     {".particle_effect", asset_kind::particle_effect},
     {".yaml", asset_kind::scene},
+    {".cs", asset_kind::script},
   };
 
   return table;
@@ -83,6 +84,7 @@ auto icon_for(const asset_browser_entry& entry) -> const char* {
     case asset_kind::environment_map: return ICON_MDI_EARTH;
     case asset_kind::particle_effect: return ICON_MDI_FIREWORK;
     case asset_kind::scene: return ICON_MDI_FILE_TREE;
+    case asset_kind::script: return ICON_MDI_LANGUAGE_CSHARP;
     case asset_kind::unknown: return ICON_MDI_FILE_OUTLINE;
   }
 

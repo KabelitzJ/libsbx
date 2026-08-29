@@ -10,20 +10,11 @@ namespace sbx::core {
 
 engine* engine::_instance{nullptr};
 
-engine::engine(std::span<std::string_view> args, engine_config config)
-: _args{args.begin(), args.end()},
-  _config{config} {
+engine::engine(const engine_config& config)
+: _config{config} {
   utility::assert_that(_instance == nullptr, "Engine instance already exists");
 
   _instance = this;
-
-  if constexpr (utility::is_build_type_debug_v) {
-    utility::logger<"core">::debug("Cli args:");
-
-    for (const auto& arg : _args) {
-      utility::logger<"core">::debug("  {}", arg);
-    }
-  }
 
   // Resolved before any module constructs, since some modules (e.g. graphics_module) build project-relative state in their own constructor.
   if (_config.project.has_value()) {
@@ -51,12 +42,6 @@ auto engine::time() -> units::seconds {
   utility::assert_that(_instance != nullptr, "Engine instance does not exist");
 
   return _instance->_time;
-}
-
-auto engine::args() -> const std::vector<std::string_view>& {
-  utility::assert_that(_instance != nullptr, "Engine instance does not exist");
-
-  return _instance->_args;
 }
 
 auto engine::config() -> const engine_config& {

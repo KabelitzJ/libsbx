@@ -5,6 +5,8 @@
 #include <span>
 #include <vector>
 
+#include <libsbx/cli/cli.hpp>
+
 #include <libsbx/utility/logger.hpp>
 
 #include <libsbx/core/engine.hpp>
@@ -48,12 +50,19 @@ using module_list = sbx::core::module_list<
   editor::editor_module
 >;
 
+struct cli_args {
+  [[=sbx::cli::help("path to the project to open")]]
+  std::optional<std::filesystem::path> project;
+}; // struct cli_args
+
 auto main(int argc, const char** argv) -> int {
+  using namespace sbx::units::literals;
+
   auto args = std::vector<std::string_view>{argv, argv + argc};
 
+  const auto parsed = sbx::cli::parse_or_exit<cli_args>(args);
+
   try {
-    // editor is an app, not a project — it has no assets/.sbx of its own. Absent --project (e.g.
-    // a bare debugger run), it defaults to a real external test project instead.
     auto config = sbx::core::engine_config{
       .threading = sbx::core::threading_policy::single_threaded,
       .project = sbx::core::project_config{
@@ -62,24 +71,17 @@ auto main(int argc, const char** argv) -> int {
       }
     };
 
-    // --project <root directory>: opens the project rooted there instead of the default dev
-    // project above (e.g. when spawned by launcher_module). Loaded, not open_or_create'd, so a
-    // bad path fails fast rather than scaffolding an empty project next to a typo.
-    for (auto index = std::size_t{0u}; index < args.size(); ++index) {
-      if (args[index] == "--project" && index + 1u < args.size()) {
-        const auto root = std::filesystem::path{args[index + 1u]};
-        const auto loaded = sbx::core::project::load(root / sbx::core::project::file_name);
+    if (parsed.project) {
+      const auto root = std::filesystem::path{*parsed.project};
+      const auto loaded = sbx::core::project::load(root / sbx::core::project::file_name);
 
-        config.project = sbx::core::project_config{
-          .root = loaded.root(),
-          .name = loaded.name()
-        };
-
-        break;
-      }
+      config.project = sbx::core::project_config{
+        .root = loaded.root(),
+        .name = loaded.name()
+      };
     }
 
-    auto engine = sbx::core::basic_engine<module_list>{args, config};
+    auto engine = sbx::core::basic_engine<module_list>{config};
 
     engine.run<editor::application>();
   } catch (const std::exception& exception) {

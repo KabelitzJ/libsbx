@@ -18,7 +18,6 @@
 #include <libsbx/utility/compression.hpp>
 #include <libsbx/utility/concepts.hpp>
 #include <libsbx/utility/enable_private_constructor.hpp>
-#include <libsbx/utility/expected.hpp>
 #include <libsbx/utility/fast_mod.hpp>
 #include <libsbx/utility/hash.hpp>
 #include <libsbx/utility/hashed_string.hpp>

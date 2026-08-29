@@ -40,8 +40,6 @@ public:
 
   [[nodiscard]] static auto time() -> units::seconds;
 
-  [[nodiscard]] static auto args() -> const std::vector<std::string_view>&;
-
   /** @brief Engine-wide settings, set once at construction. See @ref engine_config. */
   [[nodiscard]] static auto config() -> const engine_config&;
 
@@ -107,7 +105,7 @@ public:
 
 protected:
 
-  explicit engine(std::span<std::string_view> args, engine_config config = {});
+  explicit engine(const engine_config& config = {});
 
   ~engine();
 
@@ -117,8 +115,6 @@ protected:
   units::seconds _time{};
 
   bool _is_running{};
-
-  std::vector<std::string_view> _args{};
 
   engine_config _config{};
 
@@ -151,7 +147,7 @@ class basic_engine<module_list<Modules...>> final : public engine {
 
 public:
 
-  explicit basic_engine(std::span<std::string_view> args, engine_config config = {});
+  explicit basic_engine(const engine_config& config = {});
 
   ~basic_engine() = default;
 

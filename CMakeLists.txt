@@ -530,7 +530,6 @@ target_sources(
       "${CMAKE_SOURCE_DIR}/libsbx/utility/crc32.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/utility/enable_private_constructor.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/utility/exception.hpp"
-      "${CMAKE_SOURCE_DIR}/libsbx/utility/expected.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/utility/fast_mod.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/utility/fourcc.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/utility/hashed_string.hpp"

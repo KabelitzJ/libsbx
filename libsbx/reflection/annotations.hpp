@@ -24,40 +24,62 @@ struct expose_t { };
 
 inline constexpr auto expose = expose_t{};
 
-struct rename {
+template<typename Type>
+struct string_annotation {
 
   const char* data;
   std::size_t size;
 
-  consteval rename(std::string_view value)
+  consteval string_annotation()
+  : data{nullptr},
+    size{0} {}
+
+  consteval string_annotation(std::string_view value)
   : data{std::define_static_string(value)},
     size{value.size()} { }
+
+  consteval auto operator()(std::string_view value) const -> Type {
+    return Type{value};
+  }
 
   constexpr auto view() const noexcept -> std::string_view {
     return std::string_view{data, size};
   }
 
-}; // struct rename
+}; // struct annotation
 
-struct format {
+struct rename_t : string_annotation<rename_t> {
+  using string_annotation<rename_t>::string_annotation;
+}; // struct rename_t
 
-  const char* data;
-  std::size_t size;
+inline constexpr auto rename = rename_t{};
 
-  consteval format(std::string_view value)
-  : data{std::define_static_string(value)},
-    size{value.size()} { }
+struct format_t : string_annotation<format_t> {
+  using string_annotation<format_t>::string_annotation;
+}; // struct format_t
 
-  constexpr auto view() const noexcept -> std::string_view {
-    return std::string_view{data, size};
-  }
+inline constexpr auto format = format_t{};
 
-}; // struct rename
+struct range_t {
 
-struct range {
   std::size_t min;
   std::size_t max;
-}; // struct range
+
+  consteval range_t()
+  : min{0},
+    max{0} {}
+
+  consteval range_t(std::size_t min, std::size_t max)
+  : min{min},
+    max{max} { }
+
+  consteval auto operator()(std::size_t min, std::size_t max) const -> range_t {
+    return range_t{min, max};
+  }
+
+}; // struct range_t
+
+inline constexpr auto range = range_t{};
 
 template<typename Type, typename Annotation>
 consteval auto has_annotation() -> bool {

@@ -3,7 +3,11 @@
 #include <span>
 #include <vector>
 
+#include <libsbx/reflection/struct.hpp>
+
 #include <libsbx/units/units.hpp>
+
+#include <libsbx/cli/cli.hpp>
 
 #include <libsbx/utility/logger.hpp>
 
@@ -37,30 +41,31 @@ using module_list = sbx::core::module_list<
   launcher::launcher_module
 >;
 
-auto main(int argc, const char** argv) -> int {
-  auto args = std::vector<std::string_view>{argv, argv + argc};
+struct [[=sbx::reflection::named]] test {
+  [[=sbx::reflection::skip]] int a;
+  [[=sbx::reflection::format(".3f")]] float b;
+  [[=sbx::reflection::rename("d")]] int c;
+}; // struct test
 
+struct cli_args {
+  [[=sbx::cli::help("path to the project to open")]]
+  std::optional<std::filesystem::path> project;
+}; // struct cli_args
+
+auto main(int argc, const char** argv) -> int {
   using namespace sbx::units::literals;
 
-  auto foo = 10_ms;
-  auto bar = 1_s;
+  auto args = std::vector<std::string_view>{argv, argv + argc};
 
-  auto tmp = foo + bar;
-
-  sbx::utility::logger<"launcher">::info("tmp: {}", tmp);
+  const auto parsed = sbx::cli::parse_or_exit<cli_args>(args);
 
   try {
     auto config = sbx::core::engine_config{
       .threading = sbx::core::threading_policy::single_threaded,
-      // Projectless — the launcher never holds a project open itself; it just picks/creates one
-      // and hands off to a fresh `editor --project <root>` process.
-      .project = std::nullopt,
-      // A project picker, not a 3D viewport — platform_module's own default (~1920x1080) would
-      // make it fill the screen for no reason; half that is a much more reasonable launcher size.
       .window_size = sbx::math::vector2u{960u, 540u}
     };
 
-    auto engine = sbx::core::basic_engine<module_list>{args, config};
+    auto engine = sbx::core::basic_engine<module_list>{config};
 
     engine.run<launcher::application>();
   } catch (const std::exception& exception) {

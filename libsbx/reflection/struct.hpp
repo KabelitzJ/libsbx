@@ -7,21 +7,22 @@
 #include <string_view>
 
 #include <libsbx/reflection/annotations.hpp>
+#include <libsbx/reflection/enum.hpp>
 
 namespace sbx::reflection {
 
 namespace detail {
 
 consteval auto display_name_of(std::meta::info member) -> std::string_view {
-  auto renames = std::meta::annotations_of_with_type(member, ^^rename);
+  auto renames = std::meta::annotations_of_with_type(member, ^^rename_t);
 
-  return (!renames.empty()) ? std::meta::extract<rename>(renames.front()).view() : std::meta::identifier_of(member);
+  return (!renames.empty()) ? std::meta::extract<rename_t>(renames.front()).view() : std::meta::identifier_of(member);
 }
 
 consteval auto format_specifier_of(std::meta::info member) -> std::optional<std::string_view> {
-  auto formats = std::meta::annotations_of_with_type(member, ^^rename);
+  auto formats = std::meta::annotations_of_with_type(member, ^^format_t);
 
-  return (!formats.empty()) ? std::optional{std::meta::extract<format>(formats.front()).view()} : std::nullopt;
+  return (!formats.empty()) ? std::optional{std::meta::extract<format_t>(formats.front()).view()} : std::nullopt;
 }
 
 } // namespace detail

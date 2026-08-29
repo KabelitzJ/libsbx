@@ -218,7 +218,7 @@ auto launcher_module::_launch(launch_target target, const std::filesystem::path&
     return;
   }
 
-  sbx::platform::spawn(executable_path(target), {.arguments = {"--project", root.string()}});
+  sbx::platform::spawn(executable_path(target), {.arguments = {"--project", (root / sbx::core::project::file_name).string()}});
 
   sbx::core::engine::quit();
 }

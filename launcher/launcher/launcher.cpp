@@ -41,23 +41,10 @@ using module_list = sbx::core::module_list<
   launcher::launcher_module
 >;
 
-struct [[=sbx::reflection::named]] test {
-  [[=sbx::reflection::skip]] int a;
-  [[=sbx::reflection::format(".3f")]] float b;
-  [[=sbx::reflection::rename("d")]] int c;
-}; // struct test
-
-struct [[=sbx::cli::args]] cli_args {
-  [[=sbx::cli::help("path to the project to open")]]
-  std::optional<std::filesystem::path> project;
-}; // struct cli_args
-
 auto main(int argc, const char** argv) -> int {
   using namespace sbx::units::literals;
 
   auto args = std::vector<std::string_view>{argv, argv + argc};
-
-  const auto parsed = sbx::cli::parse_or_exit<cli_args>(args);
 
   try {
     auto config = sbx::core::engine_config{

@@ -12,6 +12,7 @@
 #include <libsbx/core/exit.hpp>
 #include <libsbx/core/project.hpp>
 #include <libsbx/core/threading_policy.hpp>
+#include <libsbx/core/user_data_directory.hpp>
 
 #include <libsbx/platform/platform_module.hpp>
 
@@ -51,15 +52,17 @@ auto main(int argc, const char** argv) -> int {
   auto args = std::vector<std::string_view>{argv, argv + argc};
 
   try {
+    // editor is an app, not a project — it has no assets/.sbx of its own. Absent --project (e.g.
+    // a bare debugger run), it defaults to a real external test project instead.
     auto config = sbx::core::engine_config{
       .threading = sbx::core::threading_policy::single_threaded,
       .project = sbx::core::project_config{
-        .root = "editor",
-        .name = "Editor"
+        .root = sbx::core::user_home_directory() / "Development" / "Game1",
+        .name = "Game1"
       }
     };
 
-    // --project <root directory>: opens the project rooted there instead of the built-in dev
+    // --project <root directory>: opens the project rooted there instead of the default dev
     // project above (e.g. when spawned by launcher_module). Loaded, not open_or_create'd, so a
     // bad path fails fast rather than scaffolding an empty project next to a typo.
     for (auto index = std::size_t{0u}; index < args.size(); ++index) {

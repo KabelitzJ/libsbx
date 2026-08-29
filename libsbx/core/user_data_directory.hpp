@@ -17,6 +17,14 @@ namespace sbx::core {
  */
 [[nodiscard]] auto user_data_directory() -> std::filesystem::path;
 
+/**
+ * @brief The current user's home directory (`%USERPROFILE%` on Windows, `$HOME` elsewhere) —
+ * unlike @ref user_data_directory, this is the plain home directory itself, not an
+ * application-specific subfolder of it. Used to resolve dev-time default project locations
+ * (e.g. `<home>/Development/<project>`) without hardcoding a path.
+ */
+[[nodiscard]] auto user_home_directory() -> std::filesystem::path;
+
 } // namespace sbx::core
 
 #endif // LIBSBX_CORE_USER_DATA_DIRECTORY_HPP_

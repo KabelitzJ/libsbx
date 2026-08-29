@@ -1,8 +1,0 @@
-name: Material
-base_color_factor: {r: 0.800000012, g: 0.800000012, b: 0.800000012, a: 1}
-emissive_factor: {x: 0, y: 0, z: 0}
-metallic_factor: 0
-roughness_factor: 0.5
-alpha_mode: opaque
-alpha_cutoff: 0.5
-is_double_sided: true

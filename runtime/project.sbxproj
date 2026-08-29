@@ -1,6 +1,0 @@
-project:
-  format_version: 1
-  name: Runtime
-  assets: assets
-  library: .sbx/library
-  logs: logs

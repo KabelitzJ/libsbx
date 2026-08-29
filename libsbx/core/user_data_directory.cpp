@@ -46,4 +46,20 @@ auto user_data_directory() -> std::filesystem::path {
 #endif
 }
 
+auto user_home_directory() -> std::filesystem::path {
+#if defined(SBX_PLATFORM_WIN32)
+  if (auto* profile = std::getenv("USERPROFILE")) {
+    return std::filesystem::path{profile};
+  }
+
+  throw std::runtime_error{"USERPROFILE environment variable not set"};
+#else
+  if (auto* home = std::getenv("HOME")) {
+    return std::filesystem::path{home};
+  }
+
+  throw std::runtime_error{"HOME environment variable not set"};
+#endif
+}
+
 } // namespace sbx::core

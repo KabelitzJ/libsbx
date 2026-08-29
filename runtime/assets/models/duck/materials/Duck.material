@@ -1,9 +1,0 @@
-name: Duck
-base_color_factor: {r: 1, g: 1, b: 1, a: 1}
-emissive_factor: {x: 0, y: 0, z: 0}
-metallic_factor: 0
-roughness_factor: 1
-alpha_mode: opaque
-alpha_cutoff: 0.5
-is_double_sided: false
-albedo: models/duck/textures/albedo.png

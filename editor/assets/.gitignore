@@ -1,6 +1,0 @@
-# Ignore shader cache and meta files
-.shader_cache/
-**/*.meta
-
-scripts/**/obj/
-scripts/**/bin/

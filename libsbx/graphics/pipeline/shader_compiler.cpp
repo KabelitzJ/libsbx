@@ -124,7 +124,7 @@ auto shader_compiler::compile(const std::filesystem::path& path, std::span<const
 
   const auto key = _cache_key(source, entry_points, options, "spirv_1_5");
 
-  if (auto cached = _disk_cache.try_load(key)) {
+  if (auto cached = _disk_cache.try_load(key, path)) {
     auto results = std::vector<compiled_entry_point>{};
     results.reserve(cached->size());
 
@@ -245,7 +245,7 @@ auto shader_compiler::compile(const std::filesystem::path& path, std::span<const
     to_store.push_back(shader_binary_entry{entry.stage, entry.name, entry.spirv});
   }
 
-  _disk_cache.store(key, to_store);
+  _disk_cache.store(key, path, to_store);
 
   return results;
 }

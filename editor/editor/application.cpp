@@ -12,8 +12,6 @@
 #include <libsbx/platform/platform_module.hpp>
 #include <libsbx/platform/input.hpp>
 
-#include <libsbx/filesystem/filesystem_module.hpp>
-
 #include <libsbx/graphics/graphics_module.hpp>
 #include <libsbx/graphics/types.hpp>
 
@@ -22,8 +20,6 @@
 #include <libsbx/scenes/scenes_module.hpp>
 #include <libsbx/scenes/scene_serializer.hpp>
 #include <libsbx/scenes/components.hpp>
-
-#include <libsbx/scripting/scripting_module.hpp>
 
 #include <libsbx/render/scene_renderer_module.hpp>
 
@@ -78,16 +74,6 @@ application::application()
     skybox.environment = assets_module.load_environment_map("environments/sky.hdr");
     skybox.intensity = 1.0f;
   }
-
-  auto& scripting_module = sbx::core::engine::get_module<sbx::scripting::scripting_module>();
-
-  // Relative to the executable's own directory (see EDITOR_DOTNET_OUT_DIR in editor/CMakeLists.txt),
-  // not the process's CWD — a hardcoded path only worked when launched from the repo root.
-  const auto assembly_path = sbx::filesystem::executable_directory() / ".." / "dotnet" / "editor" / "Editor.dll";
-
-  scripting_module.load_assembly(assembly_path);
-
-  scripting_module.instantiate(_camera, "Editor.Test");
 }
 
 application::~application() {

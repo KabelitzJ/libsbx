@@ -30,17 +30,52 @@ struct entry_record_header {
   std::uint32_t spirv_word_count;
 }; // struct entry_record_header
 
-auto cache_path(const std::string& key) -> std::filesystem::path {
-  // See pipeline_binary_cache.cpp's cache_file() — same projectless (launcher) fallback.
+/**
+ * @brief True if @p source (a shader's own source file) lives inside the active project's
+ * assets_directory() — i.e. it's a project-authored shader, not an engine-shipped one. No
+ * project-authored shaders exist yet (every call site today passes a path under the engine's own
+ * fixed shaders/ tree), so this is always false in practice for now; the check exists so the
+ * split is already correct once that changes. weakly_canonical + lexically_relative rather than a
+ * string-prefix compare, so it can't be fooled by a sibling directory sharing a name prefix
+ * (e.g. "assets2") and correctly rejects a ".."-escape out of the assets tree.
+ */
+auto _is_project_shader(const std::filesystem::path& source) -> bool {
   if (!core::engine::has_project()) {
-    return core::user_data_directory() / "cache" / "shaders" / (key + ".spvcache");
+    return false;
   }
 
-  return core::engine::project().library_directory() / "shaders" / (key + ".spvcache");
+  auto error = std::error_code{};
+
+  const auto canonical_source = std::filesystem::weakly_canonical(source, error);
+
+  if (error) {
+    return false;
+  }
+
+  const auto canonical_assets = std::filesystem::weakly_canonical(core::engine::project().assets_directory(), error);
+
+  if (error) {
+    return false;
+  }
+
+  const auto relative = canonical_source.lexically_relative(canonical_assets);
+
+  return !relative.empty() && *relative.begin() != "..";
 }
 
-auto shader_disk_cache::try_load(const std::string& key) const -> std::optional<std::vector<shader_binary_entry>> {
-  auto in = std::ifstream{cache_path(key), std::ios::binary};
+auto cache_path(const std::string& key, const std::filesystem::path& source) -> std::filesystem::path {
+  if (_is_project_shader(source)) {
+    return core::engine::project().library_directory() / "shaders" / (key + ".spvcache");
+  }
+
+  // Engine-shipped shader (today, every shader) — shared globally across every app/project.
+  // See shader_compiler.cpp's cache key: content-hashed, so a shared cache can only ever hit for
+  // byte-identical source, never serve something stale.
+  return core::user_data_directory() / "cache" / "shaders" / (key + ".spvcache");
+}
+
+auto shader_disk_cache::try_load(const std::string& key, const std::filesystem::path& source) const -> std::optional<std::vector<shader_binary_entry>> {
+  auto in = std::ifstream{cache_path(key, source), std::ios::binary};
 
   if (!in) {
     return std::nullopt;
@@ -87,8 +122,8 @@ auto shader_disk_cache::try_load(const std::string& key) const -> std::optional<
   return results;
 }
 
-auto shader_disk_cache::store(const std::string& key, const std::vector<shader_binary_entry>& compiled) const -> void {
-  const auto path = cache_path(key);
+auto shader_disk_cache::store(const std::string& key, const std::filesystem::path& source, const std::vector<shader_binary_entry>& compiled) const -> void {
+  const auto path = cache_path(key, source);
 
   auto error = std::error_code{};
   std::filesystem::create_directories(path.parent_path(), error);

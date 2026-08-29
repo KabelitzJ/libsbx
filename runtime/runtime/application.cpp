@@ -53,9 +53,13 @@ application::application()
 
   _camera_controller = fly_camera{_camera};
 
-  auto& skybox = _camera.add_component<sbx::scenes::skybox>();
-  skybox.environment = assets_module.load_environment_map("environments/sky.hdr");
-  skybox.intensity = 1.0f;
+  // demo.yaml already gives Camera a skybox (see scene_serializer::load above) — adding another
+  // unconditionally would try to emplace into an already-occupied component slot and assert.
+  if (!_camera.has_component<sbx::scenes::skybox>()) {
+    auto& skybox = _camera.add_component<sbx::scenes::skybox>();
+    skybox.environment = assets_module.load_environment_map("environments/sky.hdr");
+    skybox.intensity = 1.0f;
+  }
 }
 
 application::~application() {

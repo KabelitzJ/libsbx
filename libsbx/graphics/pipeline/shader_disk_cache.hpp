@@ -4,6 +4,7 @@
 #define LIBSBX_GRAPHICS_PIPELINE_SHADER_DISK_CACHE_HPP_
 
 #include <cstdint>
+#include <filesystem>
 #include <optional>
 #include <string>
 #include <vector>
@@ -28,9 +29,14 @@ public:
 
   ~shader_disk_cache() = default;
 
-  [[nodiscard]] auto try_load(const std::string& key) const -> std::optional<std::vector<shader_binary_entry>>;
+  /**
+   * @brief @p source is the shader's own source file — used only to decide *where* to look
+   * (the engine's shared cache, or the active project's own), never part of @p key itself. See
+   * shader_disk_cache.cpp's cache_path().
+   */
+  [[nodiscard]] auto try_load(const std::string& key, const std::filesystem::path& source) const -> std::optional<std::vector<shader_binary_entry>>;
 
-  auto store(const std::string& key, const std::vector<shader_binary_entry>& compiled) const -> void;
+  auto store(const std::string& key, const std::filesystem::path& source, const std::vector<shader_binary_entry>& compiled) const -> void;
 
 }; // class shader_disk_cache
 

@@ -9,6 +9,8 @@
 
 #include <libsbx/scenes/scene.hpp>
 
+#include <libsbx/render/ui/fonts/material_design_icons.hpp>
+
 #include <editor/panels/editor_panel.hpp>
 
 namespace editor {
@@ -21,6 +23,9 @@ namespace editor {
 class hierarchy_panel final : public editor_panel {
 
 public:
+
+  /** @brief The exact string passed to ImGui::Begin() — the window's identity (icon + label + ###id, all significant). Single source of truth: also referenced by editor_ui_layer's default dock layout, so a rename here can't silently desync it. */
+  inline static constexpr auto window_name = ICON_MDI_FILE_TREE " Hierarchy###hierarchy_panel";
 
   auto draw(editor_state& state) -> void override;
 

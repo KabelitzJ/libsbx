@@ -9,6 +9,7 @@
 #include <libsbx/math/uuid.hpp>
 
 #include <libsbx/render/ui/widgets/file_dialog.hpp>
+#include <libsbx/render/ui/fonts/material_design_icons.hpp>
 
 #include <editor/panels/editor_panel.hpp>
 
@@ -33,6 +34,9 @@ struct asset_browser_entry {
 class asset_browser_panel final : public editor_panel {
 
 public:
+
+  /** @see hierarchy_panel::window_name */
+  inline static constexpr auto window_name = ICON_MDI_FOLDER_MULTIPLE_IMAGE " Asset Browser###asset_browser_panel";
 
   auto draw(editor_state& state) -> void override;
 

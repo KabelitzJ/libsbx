@@ -82,7 +82,7 @@ auto hierarchy_panel::_draw_node_row(editor_state& state, sbx::scenes::scene& sc
 }
 
 auto hierarchy_panel::draw(editor_state& state) -> void {
-  ImGui::Begin(ICON_MDI_FILE_TREE " Hierarchy###hierarchy_panel");
+  ImGui::Begin(window_name);
 
   auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
   auto& scene = scenes_module.active_scene();

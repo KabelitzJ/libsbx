@@ -8,6 +8,7 @@
 #include <string>
 
 #include <imgui.h>
+#include <imgui_internal.h> // DockBuilder* — see _draw_dockspace's first-run default layout.
 #include <ImGuizmo.h>
 
 #include <libsbx/render/ui/fonts/material_design_icons.hpp>
@@ -66,7 +67,7 @@ auto editor_ui_layer::build() -> void {
   _draw_dockspace();
 
   ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{0.0f, 0.0f});
-  ImGui::Begin(ICON_MDI_GAMEPAD_VARIANT " Viewport###viewport_panel", nullptr, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+  ImGui::Begin(viewport_window_name, nullptr, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
   // ImGui::PopStyleVar();
 
   _viewport_is_hovered = ImGui::IsWindowHovered();
@@ -112,7 +113,7 @@ auto editor_ui_layer::build() -> void {
   ImGui::End();
   ImGui::PopStyleVar();
 
-  ImGui::Begin("Stats");
+  ImGui::Begin(stats_window_name);
   ImGui::Text("%.1f FPS (%.3f ms)", static_cast<double>(ImGui::GetIO().Framerate), 1000.0 / static_cast<double>(ImGui::GetIO().Framerate));
   ImGui::End();
 
@@ -150,7 +151,55 @@ auto editor_ui_layer::_draw_dockspace() -> void {
   ImGui::Begin("##dockspace", nullptr, window_flags);
   ImGui::PopStyleVar(3);
 
-  ImGui::DockSpace(ImGui::GetID("editor_dockspace"), ImVec2{0.0f, 0.0f});
+  const auto dockspace_id = ImGui::GetID("editor_dockspace");
+
+  if (ImGui::DockBuilderGetNode(dockspace_id) == nullptr) {
+    // First time this project has ever opened (no imgui.ini yet, or it had nothing for this
+    // dockspace) — lay out a sane default instead of leaving every panel undocked and stacked
+    // in one corner. Only runs once per node id: after this, or after a saved layout is loaded
+    // from disk, the node already exists and this is skipped every subsequent frame.
+    ImGui::DockBuilderRemoveNode(dockspace_id);
+    ImGui::DockBuilderAddNode(dockspace_id, ImGuiDockNodeFlags_DockSpace);
+    ImGui::DockBuilderSetNodeSize(dockspace_id, viewport->WorkSize);
+
+    // Right column (Properties + Stats) split off first, full height; then the remainder split
+    // into a bottom strip (Asset Browser + Console) and a top strip, which is itself split into
+    // Hierarchy (left) and Viewport (center, marked as the central node) — same shape/order as
+    // the reference layout this was matched against, not just the same end result.
+    auto remaining = dockspace_id;
+    auto right = ImGuiID{};
+    auto bottom = ImGuiID{};
+    auto left = ImGuiID{};
+    auto center = ImGuiID{};
+
+    ImGui::DockBuilderSplitNode(remaining, ImGuiDir_Right, 0.20f, &right, &remaining);
+    ImGui::DockBuilderSplitNode(remaining, ImGuiDir_Down, 0.25f, &bottom, &remaining);
+    ImGui::DockBuilderSplitNode(remaining, ImGuiDir_Left, 0.25f, &left, &center);
+
+    // Side by side, not tabbed: Asset Browser left (45%), Console right (55%).
+    auto bottom_left = ImGuiID{};
+    auto bottom_right = ImGuiID{};
+
+    ImGui::DockBuilderSplitNode(bottom, ImGuiDir_Left, 0.45f, &bottom_left, &bottom_right);
+
+    if (auto* center_node = ImGui::DockBuilderGetNode(center)) {
+      center_node->SetLocalFlags(center_node->LocalFlags | ImGuiDockNodeFlags_CentralNode);
+    }
+
+    // Each name here is the same window_name constant its own panel's ImGui::Begin() uses (see
+    // hierarchy_panel::window_name and friends) — never a re-typed literal, so a renamed panel
+    // can't silently desync from this layout.
+    ImGui::DockBuilderDockWindow(hierarchy_panel::window_name, left);
+    ImGui::DockBuilderDockWindow(viewport_window_name, center);
+    ImGui::DockBuilderDockWindow(asset_browser_panel::window_name, bottom_left);
+    ImGui::DockBuilderDockWindow(logger_panel::window_name, bottom_right);
+    ImGui::DockBuilderDockWindow(properties_panel::window_name, right);
+    ImGui::DockBuilderDockWindow(stats_window_name, right);
+
+    ImGui::DockBuilderFinish(dockspace_id);
+  }
+
+  ImGui::DockSpace(dockspace_id, ImVec2{0.0f, 0.0f});
 
   if (ImGui::BeginMenuBar()) {
     if (ImGui::BeginMenu("File")) {

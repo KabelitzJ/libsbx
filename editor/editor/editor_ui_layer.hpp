@@ -16,6 +16,7 @@
 #include <libsbx/graphics/resources/sampler.hpp>
 
 #include <libsbx/render/ui/ui_layer.hpp>
+#include <libsbx/render/ui/fonts/material_design_icons.hpp>
 
 #include <editor/editor_state.hpp>
 #include <editor/panels/editor_panel.hpp>
@@ -35,6 +36,12 @@ namespace editor {
 class editor_ui_layer final : public sbx::utility::noncopyable, public sbx::render::ui_layer {
 
 public:
+
+  // Not a separate editor_panel (see panels/), so these two windows' constants live here instead
+  // of on a panel class — same "single source of truth for ImGui::Begin()'s exact string" reasoning
+  // as hierarchy_panel::window_name and friends; referenced by both build() and _draw_dockspace().
+  inline static constexpr auto viewport_window_name = ICON_MDI_GAMEPAD_VARIANT " Viewport###viewport_panel";
+  inline static constexpr auto stats_window_name = "Stats";
 
   editor_ui_layer();
 

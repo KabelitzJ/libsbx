@@ -10,6 +10,8 @@
 
 #include <spdlog/common.h>
 
+#include <libsbx/render/ui/fonts/material_design_icons.hpp>
+
 #include <editor/panels/editor_panel.hpp>
 
 namespace editor {
@@ -23,6 +25,9 @@ namespace editor {
 class logger_panel final : public editor_panel {
 
 public:
+
+  /** @see hierarchy_panel::window_name */
+  inline static constexpr auto window_name = ICON_MDI_CONSOLE " Console###logger_panel";
 
   auto draw(editor_state& state) -> void override;
 

@@ -1167,7 +1167,7 @@ auto properties_panel::_draw_asset_properties(const asset_selection& asset, sbx:
 }
 
 auto properties_panel::draw(editor_state& state) -> void {
-  ImGui::Begin(ICON_MDI_TUNE " Properties###properties_panel");
+  ImGui::Begin(window_name);
 
   auto& assets_module = sbx::core::engine::get_module<sbx::assets::assets_module>();
 

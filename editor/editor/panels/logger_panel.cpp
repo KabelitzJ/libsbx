@@ -46,7 +46,7 @@ auto trim_eol(const std::string& text) -> std::string_view {
 
 
 auto logger_panel::draw(editor_state&) -> void {
-  ImGui::Begin(ICON_MDI_CONSOLE " Console###logger_panel");
+  ImGui::Begin(window_name);
 
   if (ImGui::Button(ICON_MDI_TRASH_CAN " Clear")) {
     sbx::utility::clear_logged_lines();

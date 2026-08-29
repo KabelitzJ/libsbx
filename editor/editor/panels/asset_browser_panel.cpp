@@ -169,7 +169,7 @@ auto asset_browser_panel::_draw_directory_tree(editor_state& state, const std::f
 }
 
 auto asset_browser_panel::draw(editor_state& state) -> void {
-  ImGui::Begin(ICON_MDI_FOLDER_MULTIPLE_IMAGE " Asset Browser###asset_browser_panel");
+  ImGui::Begin(window_name);
 
   auto& project = sbx::core::engine::project();
   auto& assets_module = sbx::core::engine::get_module<sbx::assets::assets_module>();

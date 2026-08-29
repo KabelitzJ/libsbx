@@ -45,4 +45,30 @@ auto attribute::get_field_value<bool>(std::string_view field_name) -> bool {
   return result;
 }
 
+auto attribute::_get_property_value_internal(std::string_view property_name, void* value) const -> void {
+  auto name = string::create(property_name);
+
+  std::invoke(detail::backend.get_attribute_property_value, _handle, name, value);
+
+  string::destroy(name);
+}
+
+template<>
+auto attribute::get_property_value<std::string>(std::string_view property_name) -> std::string {
+  auto result = string{};
+
+  _get_property_value_internal(property_name, &result);
+
+  return std::string{result};
+}
+
+template<>
+auto attribute::get_property_value<bool>(std::string_view property_name) -> bool {
+  auto result = bool32{};
+
+  _get_property_value_internal(property_name, &result);
+
+  return result;
+}
+
 }; // namespace sbx::scripting::managed

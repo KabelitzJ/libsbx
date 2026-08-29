@@ -21,6 +21,8 @@
 #include <libsbx/scenes/scene_serializer.hpp>
 #include <libsbx/scenes/components.hpp>
 
+#include <libsbx/scripting/scripting_module.hpp>
+
 #include <libsbx/render/scene_renderer_module.hpp>
 
 namespace runtime {
@@ -47,6 +49,12 @@ application::application()
   // empty scene scenes_module already handed us instead of assuming one exists on disk.
   if (const auto& startup_scene = project.startup_scene()) {
     sbx::scenes::scene_serializer::load(scene, *startup_scene);
+
+    // The scene simulates from frame 0 at runtime (scenes_module::is_simulating() defaults to
+    // true and nothing here ever calls set_simulating(false)) — so every script already attached
+    // to a node fires OnCreate immediately, with no explicit "Play" step.
+    auto& scripting_module = sbx::core::engine::get_module<sbx::scripting::scripting_module>();
+    scripting_module.instantiate_scene_scripts(scene);
   }
 
   _camera = scene.active_camera();

@@ -54,6 +54,7 @@ struct backend_functions {
 	using get_property_info_attributes_fn = void(*)(handle, type_id*, std::int32_t*);
 
 	using get_attribute_field_value_fn = void(*)(handle, string, void*);
+	using get_attribute_property_value_fn = void(*)(handle, string, void*);
 	using get_attribute_type_fn = void(*)(handle, type_id*);
 
 	using create_object_fn = void*(*)(type_id, bool32, const void**, const managed_type*, std::int32_t);
@@ -112,6 +113,7 @@ struct backend_functions {
   get_property_info_attributes_fn get_property_info_attributes{nullptr};
 
   get_attribute_field_value_fn get_attribute_field_value{nullptr};
+  get_attribute_property_value_fn get_attribute_property_value{nullptr};
   get_attribute_type_fn get_attribute_type{nullptr};
 
   create_object_fn create_object{nullptr};

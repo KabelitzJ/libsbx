@@ -6,6 +6,7 @@
 namespace sbx::scripting::managed {
 
 class type;
+class field_info;
 class assembly;
 class runtime;
 

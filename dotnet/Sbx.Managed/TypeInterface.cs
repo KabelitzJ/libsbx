@@ -824,6 +824,31 @@ namespace Sbx.Managed
     }
 
     [UnmanagedCallersOnly]
+    internal static unsafe void GetAttributePropertyValue(int InAttribute, NativeString InFieldName, IntPtr OutValue)
+    {
+      try
+      {
+        if (!_cachedAttributes.TryGetValue(InAttribute, out var attribute))
+          return;
+
+        var targetType = attribute.GetType();
+        var propertyInfo = targetType.GetProperty(InFieldName!, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+
+        if (propertyInfo == null)
+        {
+          LogMessage($"Failed to find property with name '{InFieldName}' in attribute {targetType.FullName}.", MessageLevel.Error);
+          return;
+        }
+
+        Marshalling.MarshalReturnValue(attribute, propertyInfo.GetValue(attribute), propertyInfo, OutValue);
+      }
+      catch (Exception ex)
+      {
+        HandleException(ex);
+      }
+    }
+
+    [UnmanagedCallersOnly]
     internal static unsafe void GetAttributeType(int InAttribute, int* OutType)
     {
       try

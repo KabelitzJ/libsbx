@@ -53,6 +53,34 @@ auto assembly::get_types() const -> const std::vector<type*>& {
   return _types;
 }
 
+auto assembly::_populate_types() -> void {
+  _types.clear();
+
+  auto type_count = std::int32_t{0};
+
+  std::invoke(detail::backend.get_assembly_types, _assembly_id, nullptr, &type_count);
+
+  auto type_ids = std::vector<type_id>{};
+  type_ids.resize(static_cast<std::size_t>(type_count));
+
+  std::invoke(detail::backend.get_assembly_types, _assembly_id, type_ids.data(), &type_count);
+
+  for (auto id : type_ids) {
+    auto new_type = type{};
+    new_type._id = id;
+
+    _types.push_back(detail::type_cache::get().cache_type(std::move(new_type)));
+  }
+}
+
+auto assembly::reload_types() -> void {
+  if (_assembly_id == -1) {
+    return; // never successfully loaded — nothing to refresh
+  }
+
+  _populate_types();
+}
+
 auto assembly_load_context::load_assembly(std::string_view file_path) -> assembly& {
   auto filepath = string::create(file_path);
 
@@ -71,21 +99,7 @@ auto assembly_load_context::load_assembly(std::string_view file_path) -> assembl
 
     string::destroy(assembly_name);
 
-    auto type_count = std::int32_t{0};
-
-    std::invoke(detail::backend.get_assembly_types, result._assembly_id, nullptr, &type_count);
-
-    auto type_ids = std::vector<type_id>{};
-    type_ids.resize(static_cast<std::size_t>(type_count));
-
-    std::invoke(detail::backend.get_assembly_types, result._assembly_id, type_ids.data(), &type_count);
-
-    for (auto type_id : type_ids) {
-      auto new_type = type{};
-      new_type._id = type_id;
-
-      result._types.push_back(detail::type_cache::get().cache_type(std::move(new_type)));
-    }
+    result._populate_types();
   }
 
   string::destroy(filepath);
@@ -107,21 +121,7 @@ auto assembly_load_context::load_assembly_from_memory(const std::byte* data, std
 
     string::destroy(assembly_name);
 
-    auto type_count = std::int32_t{0};
-
-    std::invoke(detail::backend.get_assembly_types, result._assembly_id, nullptr, &type_count);
-
-    auto type_ids = std::vector<type_id>{};
-    type_ids.resize(static_cast<std::size_t>(type_count));
-
-    std::invoke(detail::backend.get_assembly_types, result._assembly_id, type_ids.data(), &type_count);
-
-    for (auto type_id : type_ids) {
-      auto new_type = type{};
-      new_type._id = type_id;
-
-      result._types.push_back(detail::type_cache::get().cache_type(std::move(new_type)));
-    }
+    result._populate_types();
   }
 
   return result;

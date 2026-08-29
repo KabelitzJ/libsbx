@@ -29,9 +29,22 @@ public:
     return result;
   }
 
+  // Attribute members declared as `{ get; set; }` auto-properties (as opposed to plain fields)
+  // have no field named e.g. "DisplayName" to look up via get_field_value — use this instead.
+  template<typename Return>
+  auto get_property_value(std::string_view property_name) -> Return {
+    auto result = Return{};
+
+    _get_property_value_internal(property_name, &result);
+
+    return result;
+  }
+
 private:
 
   auto _get_field_value_internal(std::string_view field_name, void* value) const -> void;
+
+  auto _get_property_value_internal(std::string_view property_name, void* value) const -> void;
 
   handle _handle = -1;
   type* _type = nullptr;
@@ -43,6 +56,12 @@ auto attribute::get_field_value<std::string>(std::string_view field_name) -> std
 
 template<>
 auto attribute::get_field_value<bool>(std::string_view field_name) -> bool;
+
+template<>
+auto attribute::get_property_value<std::string>(std::string_view property_name) -> std::string;
+
+template<>
+auto attribute::get_property_value<bool>(std::string_view property_name) -> bool;
 
 }; // namespace sbx::scripting::managed
 

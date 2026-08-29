@@ -3,9 +3,12 @@
 #ifndef LIBSBX_SCRIPTING_MANAGED_TYPE_HPP_
 #define LIBSBX_SCRIPTING_MANAGED_TYPE_HPP_
 
+#include <vector>
+
 #include <libsbx/scripting/managed/core.hpp>
 #include <libsbx/scripting/managed/string.hpp>
 #include <libsbx/scripting/managed/object.hpp>
+#include <libsbx/scripting/managed/fwd.hpp>
 
 namespace sbx::scripting::managed {
 
@@ -28,6 +31,10 @@ public:
   auto get_base_type() -> type&;
 
   auto get_type_id() const -> type_id;
+
+  auto get_fields() -> std::vector<field_info>;
+
+  auto is_subclass_of(type& other) -> bool;
 
   auto operator==(const type& other) const -> bool;
 

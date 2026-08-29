@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <filesystem>
+#include <fstream>
 #include <string>
 #include <unordered_map>
 
@@ -234,6 +235,44 @@ auto asset_browser_panel::draw(editor_state& state) -> void {
   }
 
   ImGui::SameLine();
+
+  if (ImGui::Button(ICON_MDI_LANGUAGE_CSHARP " New Script")) {
+    auto file_name = std::string{"NewScript.cs"};
+    auto suffix = 1;
+
+    while (std::filesystem::exists(project.assets_directory() / _current_directory / file_name)) {
+      file_name = fmt::format("NewScript{}.cs", suffix++);
+    }
+
+    const auto relative_path = _current_directory / file_name;
+    const auto absolute_path = project.assets_directory() / relative_path;
+    const auto class_name = std::filesystem::path{file_name}.stem().string();
+
+    std::filesystem::create_directories(absolute_path.parent_path());
+
+    auto out = std::ofstream{absolute_path};
+    out << fmt::format(
+      "using Sbx.Core;\n\n"
+      "public class {} : Behavior\n"
+      "{{\n"
+      "    public override void OnCreate()\n"
+      "    {{\n"
+      "    }}\n\n"
+      "    public override void OnUpdate()\n"
+      "    {{\n"
+      "    }}\n\n"
+      "    public override void OnDestroy()\n"
+      "    {{\n"
+      "    }}\n"
+      "}}\n",
+      class_name
+    );
+
+    _needs_refresh = true;
+    state.select_asset(sbx::math::uuid::nil(), relative_path, asset_kind::script);
+  }
+
+  ImGui::SameLine();
   ImGui::TextDisabled("assets/%s", _current_directory.string().c_str());
 
   if (_needs_refresh) {
@@ -309,6 +348,10 @@ auto asset_browser_panel::draw(editor_state& state) -> void {
       } else if (entry.kind == asset_kind::scene) {
         if (ImGui::Selectable(label.c_str(), is_entry_selected(state, entry.path))) {
           state.select_asset(sbx::math::uuid::nil(), entry.path, asset_kind::scene);
+        }
+      } else if (entry.kind == asset_kind::script) {
+        if (ImGui::Selectable(label.c_str(), is_entry_selected(state, entry.path))) {
+          state.select_asset(sbx::math::uuid::nil(), entry.path, asset_kind::script);
         }
       } else {
         ImGui::TextDisabled("%s", label.c_str());

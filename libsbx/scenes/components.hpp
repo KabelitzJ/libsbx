@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <limits>
 #include <optional>
+#include <string>
 #include <vector>
 
 #include <libsbx/math/color.hpp>
@@ -184,6 +185,39 @@ struct particle_effect {
   std::float_t elapsed{0.0f};
   std::vector<particle_emitter> emitters{};
 }; // struct particle_effect
+
+enum class script_field_type : std::uint8_t {
+  float32,
+  int32,
+  boolean,
+  string
+}; // enum class script_field_type
+
+struct script_field_override {
+  std::string name;
+  script_field_type type{script_field_type::float32};
+  std::float_t float_value{0.0f};
+  std::int32_t int_value{0};
+  bool bool_value{false};
+  std::string string_value{};
+}; // struct script_field_override
+
+/**
+ * @brief One C# Behavior-derived script attached to a node, by class name plus any per-field
+ * overrides authored in the editor. This is the persisted authoring record — separate from the
+ * runtime-only scripting::scripts component (a live std::vector<managed::object>), which
+ * scripting_module::instantiate() populates from this list whenever the scene starts simulating.
+ * Kept separate because a managed object handle can't be serialized, and a node's live instances
+ * must always be rebuildable from this list alone.
+ */
+struct script_entry {
+  std::string class_name;
+  std::vector<script_field_override> field_overrides{};
+}; // struct script_entry
+
+struct script_component {
+  std::vector<script_entry> scripts{};
+}; // struct script_component
 
 } // namespace sbx::scenes
 

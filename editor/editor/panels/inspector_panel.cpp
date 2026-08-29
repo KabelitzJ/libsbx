@@ -30,6 +30,11 @@
 #include <libsbx/scenes/scene.hpp>
 #include <libsbx/scenes/scenes_module.hpp>
 
+#include <libsbx/scripting/scripting_module.hpp>
+#include <libsbx/scripting/managed/type.hpp>
+#include <libsbx/scripting/managed/field_info.hpp>
+#include <libsbx/scripting/managed/attribute.hpp>
+
 namespace editor {
 
 
@@ -749,6 +754,220 @@ auto draw_add_component_menu(sbx::scenes::node& node) -> void {
   }
 }
 
+// v1 supports only float/int/bool/string — the only types managed::object::get_field_value<T>/
+// set_field_value<T> explicitly support. Anything else renders as a disabled, unsupported label.
+// Editing while the scene is simulating writes straight to the live managed::object and does NOT
+// touch the persisted override — play_mode_controller::exit_play_mode() always reloads the
+// pre-play snapshot, so persisting mid-Play edits would have no observable effect once Stopped.
+// Editing while not simulating writes directly to the persisted override instead.
+auto draw_script_field_inspector(sbx::scenes::node& node, sbx::scenes::script_entry& entry) -> void {
+  auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
+  auto& scripting_module = sbx::core::engine::get_module<sbx::scripting::scripting_module>();
+
+  auto& type = scripting_module.game_assembly().get_type(entry.class_name);
+
+  if (!type) {
+    ImGui::TextDisabled("(script class not found in the compiled assembly — recompile?)");
+    return;
+  }
+
+  sbx::scripting::managed::object* live_instance = nullptr;
+
+  if (scenes_module.is_simulating() && node.has_component<sbx::scripting::scripts>()) {
+    for (auto& instance : node.get_component<sbx::scripting::scripts>().instances) {
+      if (instance.get_type().get_full_name() == entry.class_name) {
+        live_instance = &instance;
+        break;
+      }
+    }
+  }
+
+  for (auto& field : type.get_fields()) {
+    if (field.get_accessibility() != sbx::scripting::managed::type_accessibility::public_access) {
+      continue;
+    }
+
+    const auto field_name = std::string{field.get_name()};
+
+    auto hidden = false;
+    auto display_name = field_name;
+    auto is_read_only = false;
+    auto has_clamp = false;
+    auto clamp_min = 0.0f;
+    auto clamp_max = 0.0f;
+
+    for (auto& field_attribute : field.get_attributes()) {
+      const auto attribute_type_name = std::string{field_attribute.get_type().get_full_name()};
+
+      if (attribute_type_name == "Sbx.Core.Attributes.HideFromEditorAttribute") {
+        hidden = true;
+      } else if (attribute_type_name == "Sbx.Core.Attributes.ShowInEditorAttribute") {
+        // ShowInEditorAttribute exposes DisplayName/IsReadOnly as auto-properties, not plain
+        // fields — read via get_property_value, not get_field_value.
+        display_name = field_attribute.get_property_value<std::string>("DisplayName");
+        is_read_only = field_attribute.get_property_value<bool>("IsReadOnly");
+      } else if (attribute_type_name == "Sbx.Core.Attributes.ClampValueAttribute") {
+        has_clamp = true;
+        clamp_min = static_cast<std::float_t>(field_attribute.get_property_value<double>("Min"));
+        clamp_max = static_cast<std::float_t>(field_attribute.get_property_value<double>("Max"));
+      }
+    }
+
+    if (hidden) {
+      continue;
+    }
+
+    sbx::scenes::script_field_override* override_slot = nullptr;
+
+    for (auto& existing : entry.field_overrides) {
+      if (existing.name == field_name) {
+        override_slot = &existing;
+        break;
+      }
+    }
+
+    const auto ensure_override_slot = [&]() -> sbx::scenes::script_field_override& {
+      if (!override_slot) {
+        entry.field_overrides.push_back(sbx::scenes::script_field_override{.name = field_name});
+        override_slot = &entry.field_overrides.back();
+      }
+
+      return *override_slot;
+    };
+
+    ImGui::PushID(field_name.c_str());
+    ImGui::BeginDisabled(is_read_only);
+
+    const auto field_type_name = std::string{field.get_type().get_full_name()};
+
+    if (field_type_name == "System.Single") {
+      auto value = live_instance ? live_instance->get_field_value<std::float_t>(field_name)
+                                  : override_slot ? override_slot->float_value : 0.0f;
+
+      const auto changed = has_clamp
+        ? ImGui::SliderFloat(display_name.c_str(), &value, clamp_min, clamp_max)
+        : ImGui::DragFloat(display_name.c_str(), &value, 0.05f);
+
+      if (changed) {
+        if (live_instance) {
+          live_instance->set_field_value(field_name, value);
+        } else {
+          auto& slot = ensure_override_slot();
+          slot.type = sbx::scenes::script_field_type::float32;
+          slot.float_value = value;
+        }
+      }
+    } else if (field_type_name == "System.Int32") {
+      auto value = live_instance ? live_instance->get_field_value<std::int32_t>(field_name)
+                                  : override_slot ? override_slot->int_value : 0;
+
+      const auto changed = has_clamp
+        ? ImGui::SliderInt(display_name.c_str(), &value, static_cast<int>(clamp_min), static_cast<int>(clamp_max))
+        : ImGui::DragInt(display_name.c_str(), &value);
+
+      if (changed) {
+        if (live_instance) {
+          live_instance->set_field_value(field_name, value);
+        } else {
+          auto& slot = ensure_override_slot();
+          slot.type = sbx::scenes::script_field_type::int32;
+          slot.int_value = value;
+        }
+      }
+    } else if (field_type_name == "System.Boolean") {
+      auto value = live_instance ? live_instance->get_field_value<bool>(field_name)
+                                  : override_slot ? override_slot->bool_value : false;
+
+      if (ImGui::Checkbox(display_name.c_str(), &value)) {
+        if (live_instance) {
+          live_instance->set_field_value(field_name, value);
+        } else {
+          auto& slot = ensure_override_slot();
+          slot.type = sbx::scenes::script_field_type::boolean;
+          slot.bool_value = value;
+        }
+      }
+    } else if (field_type_name == "System.String") {
+      const auto current = live_instance ? live_instance->get_field_value<std::string>(field_name)
+                                          : override_slot ? override_slot->string_value : std::string{};
+
+      auto buffer = std::array<char, 256u>{};
+      std::strncpy(buffer.data(), current.c_str(), buffer.size() - 1u);
+      buffer[buffer.size() - 1u] = '\0';
+
+      if (ImGui::InputText(display_name.c_str(), buffer.data(), buffer.size())) {
+        auto value = std::string{buffer.data()};
+
+        if (live_instance) {
+          live_instance->set_field_value(field_name, value);
+        } else {
+          auto& slot = ensure_override_slot();
+          slot.type = sbx::scenes::script_field_type::string;
+          slot.string_value = value;
+        }
+      }
+    } else {
+      ImGui::TextDisabled("%s: (unsupported type %s)", display_name.c_str(), field_type_name.c_str());
+    }
+
+    ImGui::EndDisabled();
+    ImGui::PopID();
+  }
+}
+
+auto draw_scripts_section(sbx::scenes::node& node, sbx::scripting::scripting_module& scripting_module) -> void {
+  ImGui::SeparatorText("Scripts");
+
+  if (ImGui::Button(ICON_MDI_PLUS " Add Script")) {
+    ImGui::OpenPopup("##add_script_popup");
+  }
+
+  if (ImGui::BeginPopup("##add_script_popup")) {
+    auto& behavior_type = scripting_module.game_assembly().get_type("Sbx.Core.Behavior");
+
+    for (auto* candidate : scripting_module.game_assembly().get_types()) {
+      if (*candidate == behavior_type) {
+        continue; // don't offer the base class itself
+      }
+
+      const auto full_name = std::string{candidate->get_full_name()};
+
+      if (candidate->is_subclass_of(behavior_type) && ImGui::MenuItem(full_name.c_str())) {
+        scripting_module.attach_script(node, full_name);
+      }
+    }
+
+    ImGui::EndPopup();
+  }
+
+  if (!node.has_component<sbx::scenes::script_component>()) {
+    return;
+  }
+
+  auto& scripts = node.get_component<sbx::scenes::script_component>();
+  auto pending_removal = std::optional<std::string>{};
+
+  for (auto index = std::size_t{0u}; index < scripts.scripts.size(); ++index) {
+    auto& entry = scripts.scripts[index];
+
+    ImGui::PushID(static_cast<int>(index));
+
+    auto keep_open = true;
+    const auto is_expanded = ImGui::CollapsingHeader(entry.class_name.c_str(), &keep_open, ImGuiTreeNodeFlags_DefaultOpen);
+
+    if (!keep_open) {
+      pending_removal = entry.class_name; // defer erase until after the loop — scripts.scripts must not shrink mid-iteration
+    } else if (is_expanded) {
+      draw_script_field_inspector(node, entry);
+    }
+
+    ImGui::PopID();
+  }
+
+  if (pending_removal) {
+    scripting_module.detach_script(node, *pending_removal);
+  }
+}
 
 auto inspector_panel::_draw_name_field(sbx::scenes::node& node) -> void {
   const auto id = node.id();
@@ -835,6 +1054,8 @@ auto inspector_panel::_draw_node_properties(editor_state& state, sbx::scenes::no
   if (node.has_component<sbx::scenes::particle_effect>()) {
     draw_particle_effect_instance_section(state, node, assets_module);
   }
+
+  draw_scripts_section(node, sbx::core::engine::get_module<sbx::scripting::scripting_module>());
 
   ImGui::Separator();
   draw_add_component_menu(node);
@@ -1161,7 +1382,9 @@ auto inspector_panel::_draw_asset_properties(const asset_selection& asset, sbx::
       break;
     }
     case asset_kind::script: {
-      ImGui::Text("Type: Script (not imported)");
+      ImGui::Text("Type: Script");
+      ImGui::Text("Class: %s", asset.path.stem().string().c_str());
+      ImGui::TextDisabled("Attach via the Properties panel's \"Add Script\" button on a node.");
       break;
     }
     case asset_kind::unknown: {

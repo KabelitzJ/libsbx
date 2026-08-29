@@ -260,6 +260,35 @@ auto scene_serializer::_build(scene& target) -> YAML::Node {
       }
     }
 
+    if (registry.all_of<script_component>(entity)) {
+      const auto& scripts = registry.get<script_component>(entity);
+
+      for (const auto& entry : scripts.scripts) {
+        auto component = YAML::Node{};
+        component["type"] = "script";
+        component["class_name"] = entry.class_name;
+
+        auto fields = YAML::Node{YAML::NodeType::Sequence};
+
+        for (const auto& field : entry.field_overrides) {
+          auto field_node = YAML::Node{};
+          field_node["name"] = field.name;
+
+          switch (field.type) {
+            case script_field_type::float32: field_node["kind"] = "float"; field_node["value"] = field.float_value; break;
+            case script_field_type::int32:   field_node["kind"] = "int";   field_node["value"] = field.int_value; break;
+            case script_field_type::boolean: field_node["kind"] = "bool";  field_node["value"] = field.bool_value; break;
+            case script_field_type::string:  field_node["kind"] = "string"; field_node["value"] = field.string_value; break;
+          }
+
+          fields.push_back(field_node);
+        }
+
+        component["fields"] = fields;
+        components.push_back(component);
+      }
+    }
+
     node_yaml["components"] = components;
     nodes_node.push_back(node_yaml);
   }
@@ -441,6 +470,38 @@ auto scene_serializer::load(scene& target, const std::filesystem::path& path) ->
           const auto value = playback.as<std::string>();
           instance.playback = (value == "paused") ? particle_playback_state::paused : (value == "stopped") ? particle_playback_state::stopped : particle_playback_state::playing;
         }
+      } else if (type == "script") {
+        auto& scripts = node.get_or_add_component<script_component>();
+
+        auto entry = script_entry{};
+        entry.class_name = component["class_name"].as<std::string>();
+
+        if (const auto fields = component["fields"]) {
+          for (const auto field_yaml : fields) {
+            auto field = script_field_override{};
+            field.name = field_yaml["name"].as<std::string>();
+
+            const auto kind = field_yaml["kind"].as<std::string>();
+
+            if (kind == "float") {
+              field.type = script_field_type::float32;
+              field.float_value = field_yaml["value"].as<std::float_t>();
+            } else if (kind == "int") {
+              field.type = script_field_type::int32;
+              field.int_value = field_yaml["value"].as<std::int32_t>();
+            } else if (kind == "bool") {
+              field.type = script_field_type::boolean;
+              field.bool_value = field_yaml["value"].as<bool>();
+            } else if (kind == "string") {
+              field.type = script_field_type::string;
+              field.string_value = field_yaml["value"].as<std::string>();
+            }
+
+            entry.field_overrides.push_back(std::move(field));
+          }
+        }
+
+        scripts.scripts.push_back(std::move(entry));
       } else {
         utility::logger<"scenes">::warn("Unknown component type '{}'", type);
       }

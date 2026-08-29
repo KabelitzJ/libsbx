@@ -70,6 +70,13 @@ auto project::open_or_create(const std::filesystem::path& root, std::string name
   if (!std::filesystem::exists(gitignore)) {
     auto stream = std::ofstream{gitignore};
     stream << ".sbx/\n";
+    // scripting::script_compiler regenerates this on every engine start purely so an IDE can
+    // resolve Sbx.Core for autocomplete — it's machine-specific (an absolute HintPath) and never
+    // built by the engine, so it (and any bin/obj an IDE might create from it) don't belong in
+    // source control.
+    stream << "assets/Game.csproj\n";
+    stream << "assets/bin/\n";
+    stream << "assets/obj/\n";
   }
 
   created.save();

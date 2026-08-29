@@ -44,6 +44,10 @@ auto play_mode_controller::enter_play_mode() -> void {
 
   scenes_module.set_simulating(true);
 
+  // Every script already attached to a node in the scene fires OnCreate now that we're playing —
+  // see scripting_module::instantiate_scene_scripts's doc comment.
+  scripting_module.instantiate_scene_scripts(scenes_module.active_scene());
+
   _state = play_state::playing;
 }
 

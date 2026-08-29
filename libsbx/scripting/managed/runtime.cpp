@@ -426,6 +426,7 @@ auto runtime::load_functions() -> void {
   detail::backend.get_property_info_attributes = load_managed_function_ptr<detail::backend_functions::get_property_info_attributes_fn>(SBX_SCRIPTING_STR("Sbx.Managed.TypeInterface, Sbx.Managed"), SBX_SCRIPTING_STR("GetPropertyInfoAttributes"));
 
   detail::backend.get_attribute_field_value = load_managed_function_ptr<detail::backend_functions::get_attribute_field_value_fn>(SBX_SCRIPTING_STR("Sbx.Managed.TypeInterface, Sbx.Managed"), SBX_SCRIPTING_STR("GetAttributeFieldValue"));
+  detail::backend.get_attribute_property_value = load_managed_function_ptr<detail::backend_functions::get_attribute_property_value_fn>(SBX_SCRIPTING_STR("Sbx.Managed.TypeInterface, Sbx.Managed"), SBX_SCRIPTING_STR("GetAttributePropertyValue"));
   detail::backend.get_attribute_type = load_managed_function_ptr<detail::backend_functions::get_attribute_type_fn>(SBX_SCRIPTING_STR("Sbx.Managed.TypeInterface, Sbx.Managed"), SBX_SCRIPTING_STR("GetAttributeType"));
 
   detail::backend.set_internal_calls = load_managed_function_ptr<detail::backend_functions::set_internal_calls_fn>(SBX_SCRIPTING_STR("Sbx.Managed.Interop.InternalCallsManager, Sbx.Managed"), SBX_SCRIPTING_STR("SetInternalCalls"));

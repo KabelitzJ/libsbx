@@ -45,8 +45,24 @@ public:
   auto get_type(std::string_view class_name) const -> type&;
 
   auto get_types() const -> const std::vector<type*>&;
-  
+
+  /**
+   * @brief Re-fetches this assembly's types from the backend and re-registers them with
+   * detail::type_cache — without reloading the assembly itself (get_assembly_id() is unchanged).
+   *
+   * type_cache is a single process-wide cache (see its doc comment), so unloading any one
+   * assembly_load_context wipes every assembly's cached types, including ones that were never
+   * unloaded — leaving their get_types()/get_type() results stale (dangling type* / not-found).
+   * Call this on every assembly that stays alive across such an unload (e.g. scripting_module's
+   * long-lived Sbx.Core assembly, right after unloading the separate game-scripts context) to
+   * repair it. A no-op-ish refresh otherwise: the underlying CLR Type objects are unchanged, so
+   * this restores the exact same type ids/names, just re-cached.
+   */
+  auto reload_types() -> void;
+
 private:
+
+  auto _populate_types() -> void;
 
   runtime* _runtime = nullptr;
   std::int32_t _assembly_id = -1;

@@ -56,6 +56,16 @@ private:
     std::int64_t mtime{0};
   }; // struct source_entry
 
+  /**
+   * @brief (Re)writes assets_directory/Game.csproj — an SDK-style project referencing
+   * core_assembly_path (Sbx.Core.dll) purely so an IDE (VS Code/OmniSharp, Rider, Visual Studio)
+   * resolves the Sbx.Core namespace for autocomplete. Never built by the engine — it globs the
+   * same *.cs sources compile_if_stale() itself walks and compiles in-process via Roslyn. Skips
+   * the write if the file's content wouldn't change, so an IDE watching its mtime isn't nudged
+   * into reloading the project on every engine start.
+   */
+  auto _write_ide_project(const std::filesystem::path& assets_directory, const std::filesystem::path& core_assembly_path) -> void;
+
   [[nodiscard]] auto _manifest_path() const -> std::filesystem::path;
 
   [[nodiscard]] auto _is_stale(const std::vector<std::filesystem::path>& sources, std::uint64_t core_assembly_hash) -> bool;

@@ -2,6 +2,7 @@
 // Copyright (c) 2026 Jonas Kabelitz
 #include <libsbx/scripting/managed/type.hpp>
 
+#include <libsbx/scripting/managed/field_info.hpp>
 #include <libsbx/scripting/managed/detail/backend.hpp>
 #include <libsbx/scripting/managed/detail/type_cache.hpp>
 
@@ -25,6 +26,30 @@ auto type::get_base_type() -> type& {
   
 auto type::get_type_id() const -> type_id {
   return _id;
+}
+
+auto type::get_fields() -> std::vector<field_info> {
+  auto field_count = std::int32_t{};
+
+  std::invoke(detail::backend.get_type_fields, _id, nullptr, &field_count);
+
+  auto field_handles = std::vector<handle>{};
+  field_handles.resize(static_cast<std::size_t>(field_count));
+
+  std::invoke(detail::backend.get_type_fields, _id, field_handles.data(), &field_count);
+
+  auto result = std::vector<field_info>{};
+  result.resize(field_handles.size());
+
+  for (auto i = 0u; i < field_handles.size(); ++i) {
+    result[i]._handle = field_handles[i];
+  }
+
+  return result;
+}
+
+auto type::is_subclass_of(type& other) -> bool {
+  return std::invoke(detail::backend.is_type_subclass_of, _id, other._id);
 }
 
 auto type::operator==(const type& other) const -> bool {

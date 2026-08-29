@@ -14,7 +14,7 @@ namespace sbx::scripting::managed {
 
 class field_info {
 
-  friend class Type;
+  friend class type;
 
 public:
 

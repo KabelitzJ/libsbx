@@ -2,6 +2,8 @@
 // Copyright (c) 2026 Jonas Kabelitz
 #include <libsbx/scripting/scripting_module.hpp>
 
+#include <algorithm>
+
 #include <fmt/core.h>
 #include <fmt/args.h>
 #include <fmt/format.h>
@@ -146,6 +148,19 @@ auto scripting_module::instantiate(scenes::node& node, std::string_view class_na
 
   instance.set_field_value("UUID", static_cast<std::uint64_t>(node.get_component<scenes::id>().value()));
 
+  // Apply any persisted field overrides before OnCreate, so scripted logic in OnCreate sees
+  // author-set values immediately (mirrors Unity applying serialized fields before Awake/Start).
+  if (node.has_component<scenes::script_component>()) {
+    const auto& persisted = node.get_component<scenes::script_component>();
+
+    for (const auto& entry : persisted.scripts) {
+      if (entry.class_name == class_name) {
+        _apply_field_overrides(instance, entry);
+        break;
+      }
+    }
+  }
+
   instance.invoke("OnCreate");
 
   auto& scripts = node.get_or_add_component<scripting::scripts>();
@@ -153,6 +168,76 @@ auto scripting_module::instantiate(scenes::node& node, std::string_view class_na
   scripts.instances.push_back(instance);
 
   return instance;
+}
+
+auto scripting_module::instantiate_scene_scripts(scenes::scene& target) -> void {
+  auto query = target.query<scenes::script_component>();
+
+  for (auto&& [entity, list] : query.each()) {
+    auto node = target.node_of(entity);
+
+    for (const auto& entry : list.scripts) {
+      instantiate(node, entry.class_name);
+    }
+  }
+}
+
+auto scripting_module::attach_script(scenes::node& node, std::string_view class_name) -> void {
+  auto& scripts = node.get_or_add_component<scenes::script_component>();
+
+  const auto already_attached = std::ranges::any_of(scripts.scripts, [&](const auto& entry) {
+    return entry.class_name == class_name;
+  });
+
+  if (already_attached) {
+    return;
+  }
+
+  scripts.scripts.push_back(scenes::script_entry{.class_name = std::string{class_name}});
+
+  auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
+
+  if (scenes_module.is_simulating()) {
+    instantiate(node, class_name);
+  }
+}
+
+auto scripting_module::detach_script(scenes::node& node, std::string_view class_name) -> void {
+  if (!node.has_component<scenes::script_component>()) {
+    return;
+  }
+
+  auto& persisted = node.get_component<scenes::script_component>();
+
+  std::erase_if(persisted.scripts, [&](const auto& entry) {
+    return entry.class_name == class_name;
+  });
+
+  auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
+
+  if (scenes_module.is_simulating() && node.has_component<scripting::scripts>()) {
+    auto& runtime_scripts = node.get_component<scripting::scripts>();
+
+    std::erase_if(runtime_scripts.instances, [&](auto& instance) {
+      if (instance.get_type().get_full_name() == class_name) {
+        instance.invoke("OnDestroy");
+        return true;
+      }
+
+      return false;
+    });
+  }
+}
+
+auto scripting_module::_apply_field_overrides(managed::object& instance, const scenes::script_entry& entry) -> void {
+  for (const auto& field : entry.field_overrides) {
+    switch (field.type) {
+      case scenes::script_field_type::float32: instance.set_field_value(field.name, field.float_value); break;
+      case scenes::script_field_type::int32:   instance.set_field_value(field.name, field.int_value); break;
+      case scenes::script_field_type::boolean: instance.set_field_value(field.name, field.bool_value); break;
+      case scenes::script_field_type::string:  instance.set_field_value(field.name, field.string_value); break;
+    }
+  }
 }
 
 auto scripting_module::run_on_destroy(scenes::scene& target) -> void {
@@ -190,6 +275,13 @@ auto scripting_module::_load_game_assembly() -> void {
   if (_has_game_assembly) {
     _runtime.unload_assembly_load_context(_game_context);
     _has_game_assembly = false;
+
+    // unload_assembly_load_context() clears the process-wide managed::detail::type_cache (see its
+    // doc comment) — including _core_assembly's cached types, even though _context/_core_assembly
+    // (Sbx.Core.dll) was never unloaded. Without this, every _core_assembly.get_type(name)/
+    // get_types() call after the first recompile would come back empty/not-found (e.g. the
+    // Properties panel's "Add Script" picker resolving "Sbx.Core.Behavior" to look up subclasses).
+    _core_assembly.reload_types();
   }
 
   _game_context = _runtime.create_assembly_load_context("GameScripts");

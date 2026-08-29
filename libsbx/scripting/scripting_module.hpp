@@ -54,7 +54,47 @@ public:
 
   auto load_assembly(const std::filesystem::path& assembly_path, std::initializer_list<internal_call> bindings = {}) -> void;
 
+  /**
+   * @brief Creates one managed instance for @p class_name on @p node — a fresh CLR allocation
+   * every call, applies any persisted field overrides for this node+class (see scenes::script_entry),
+   * invokes "OnCreate", and appends the instance to node's runtime scripting::scripts component.
+   *
+   * INVARIANT: one create_instance() call per (node, class_name) pair — never cache/reuse a
+   * managed::object across nodes. Two nodes referencing the same script class must always end up
+   * with two independent instances; only the resolved managed::type (not an instance) is safe to
+   * cache/share. A future "avoid repeated get_type lookups" optimization is fine; memoizing
+   * instances by class name is not.
+   */
   auto instantiate(scenes::node& node, std::string_view class_name) -> managed::object;
+
+  /**
+   * @brief Instantiates every script in @p target's persisted scenes::script_component entries —
+   * one instantiate() call per entry (see instantiate()'s invariant). Called once when a scene
+   * starts playing: play_mode_controller::enter_play_mode() (editor) and
+   * runtime::application::application() (standalone — the scene is simulating from frame 0 there).
+   * Editor startup deliberately never calls this.
+   */
+  auto instantiate_scene_scripts(scenes::scene& target) -> void;
+
+  /**
+   * @brief Attaches @p class_name to @p node's persisted scenes::script_component (creating it if
+   * needed; no-ops if that exact class is already attached — at most one instance of a given class
+   * per node). If the scene is already simulating, also instantiate()s this one entry immediately
+   * so OnCreate fires right away instead of waiting for the next play-mode entry. The single entry
+   * point the editor's "Add Script" action should go through.
+   */
+  auto attach_script(scenes::node& node, std::string_view class_name) -> void;
+
+  /**
+   * @brief Removes @p class_name from @p node's persisted scenes::script_component. If the scene
+   * is simulating and a live instance exists, invokes OnDestroy on it first and erases it from the
+   * runtime scripting::scripts component before erasing the persisted entry.
+   */
+  auto detach_script(scenes::node& node, std::string_view class_name) -> void;
+
+  [[nodiscard]] auto game_assembly() const -> const managed::assembly& {
+    return _game_assembly;
+  }
 
   /**
    * @brief Invokes "OnDestroy" on every script instance in @p target, the mirror of
@@ -88,6 +128,8 @@ private:
   [[nodiscard]] auto _dotnet_directory() const -> std::filesystem::path;
 
   auto _load_game_assembly() -> void;
+
+  auto _apply_field_overrides(managed::object& instance, const scenes::script_entry& entry) -> void;
 
   std::filesystem::path _assembly_path;
 

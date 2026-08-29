@@ -3,10 +3,8 @@ using Sbx.Managed.Interop;
 
 namespace Sbx.Core
 {
-
   public abstract class Behavior
   {
-
     protected ulong UUID;
     private Dictionary<Type, Component> componentCache = new Dictionary<Type, Component>();
 
@@ -24,7 +22,6 @@ namespace Sbx.Core
 		public virtual void OnFixedUpdate() { }
 
 		public virtual void OnDestroy() { }
-
 
 		public T? AddComponent<T>() where T : Component, new()
 		{

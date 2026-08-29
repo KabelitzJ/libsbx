@@ -41,7 +41,7 @@ public:
   // of on a panel class — same "single source of truth for ImGui::Begin()'s exact string" reasoning
   // as hierarchy_panel::window_name and friends; referenced by both build() and _draw_dockspace().
   inline static constexpr auto viewport_window_name = ICON_MDI_GAMEPAD_VARIANT " Viewport###viewport_panel";
-  inline static constexpr auto stats_window_name = "Stats";
+  inline static constexpr auto stats_window_name = ICON_MDI_CHART_BAR " Statistics###statistics_panel";
 
   editor_ui_layer();
 

@@ -716,8 +716,16 @@ auto draw_particle_effect_instance_section(editor_state& state, sbx::scenes::nod
   ImGui::TextDisabled("(%s)", is_playing ? "Playing" : is_stopped ? "Stopped" : "Paused");
 }
 
-auto draw_add_component_menu(sbx::scenes::node& node) -> void {
-  if (ImGui::Button(ICON_MDI_PLUS " Add Component")) {
+auto draw_add_component_menu(sbx::scenes::node& node, sbx::scripting::scripting_module& scripting_module) -> void {
+  static constexpr auto label = ICON_MDI_PLUS " Add Component";
+
+  // Centered horizontally in the panel, rather than left-aligned like a regular control.
+  const auto button_width = ImGui::CalcTextSize(label).x + ImGui::GetStyle().FramePadding.x * 2.0f;
+  const auto available_width = ImGui::GetContentRegionAvail().x;
+
+  ImGui::SetCursorPosX(ImGui::GetCursorPosX() + std::max(0.0f, (available_width - button_width) * 0.5f));
+
+  if (ImGui::Button(label)) {
     ImGui::OpenPopup("##add_component_popup");
   }
 
@@ -750,18 +758,43 @@ auto draw_add_component_menu(sbx::scenes::node& node) -> void {
       node.add_component<sbx::scenes::particle_effect>();
     }
 
+    if (ImGui::BeginMenu(ICON_MDI_LANGUAGE_CSHARP " Script")) {
+      auto& behavior_type = scripting_module.game_assembly().get_type("Sbx.Core.Behavior");
+      auto any_available = false;
+
+      for (auto* candidate : scripting_module.game_assembly().get_types()) {
+        if (*candidate == behavior_type || !candidate->is_subclass_of(behavior_type)) {
+          continue; // skip the base class itself and anything that isn't a Behavior
+        }
+
+        any_available = true;
+
+        const auto full_name = std::string{candidate->get_full_name()};
+
+        if (ImGui::MenuItem(full_name.c_str())) {
+          scripting_module.attach_script(node, full_name);
+        }
+      }
+
+      if (!any_available) {
+        ImGui::TextDisabled("No compiled scripts found.");
+      }
+
+      ImGui::EndMenu();
+    }
+
     ImGui::EndPopup();
   }
 }
 
 // v1 supports only float/int/bool/string — the only types managed::object::get_field_value<T>/
 // set_field_value<T> explicitly support. Anything else renders as a disabled, unsupported label.
-// Editing while the scene is simulating writes straight to the live managed::object and does NOT
-// touch the persisted override — play_mode_controller::exit_play_mode() always reloads the
-// pre-play snapshot, so persisting mid-Play edits would have no observable effect once Stopped.
-// Editing while not simulating writes directly to the persisted override instead.
+// Editing while a live instance exists (playing or paused) writes straight to the live
+// managed::object and does NOT touch the persisted override — play_mode_controller::
+// exit_play_mode() always reloads the pre-play snapshot, so persisting mid-Play edits would have
+// no observable effect once Stopped. Editing with no live instance (Edit mode) writes directly to
+// the persisted override instead.
 auto draw_script_field_inspector(sbx::scenes::node& node, sbx::scenes::script_entry& entry) -> void {
-  auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
   auto& scripting_module = sbx::core::engine::get_module<sbx::scripting::scripting_module>();
 
   auto& type = scripting_module.game_assembly().get_type(entry.class_name);
@@ -771,9 +804,15 @@ auto draw_script_field_inspector(sbx::scenes::node& node, sbx::scenes::script_en
     return;
   }
 
+  // A live instance exists exactly while the node is part of a playing-or-paused session — it's
+  // created by instantiate() on Play and only ever torn down by run_on_destroy() on Stop (which
+  // then reloads the pre-play snapshot, wiping the component entirely). Keying this off
+  // scenes_module.is_simulating() instead would miss the Paused case (is_simulating() is false
+  // while paused, but the instance is still alive) and edits would go to the persisted override
+  // instead of the live object — i.e. exactly "the value doesn't get picked up" while paused.
   sbx::scripting::managed::object* live_instance = nullptr;
 
-  if (scenes_module.is_simulating() && node.has_component<sbx::scripting::scripts>()) {
+  if (node.has_component<sbx::scripting::scripts>()) {
     for (auto& instance : node.get_component<sbx::scripting::scripts>().instances) {
       if (instance.get_type().get_full_name() == entry.class_name) {
         live_instance = &instance;
@@ -915,57 +954,25 @@ auto draw_script_field_inspector(sbx::scenes::node& node, sbx::scenes::script_en
   }
 }
 
-auto draw_scripts_section(sbx::scenes::node& node, sbx::scripting::scripting_module& scripting_module) -> void {
-  ImGui::SeparatorText("Scripts");
+// One standalone collapsible per attached script — same shape as draw_camera_section and the
+// other single-component sections (a CollapsingHeader whose close button removes it), just called
+// once per entry in node's script_component instead of guarded by has_component<T>(). Title shows
+// the source file name convention ("<ClassName>.cs", matching what "New Script" generates and what
+// class_name is assumed to equal) with the C# glyph, not the bare class name.
+auto draw_script_section(sbx::scenes::node& node, sbx::scenes::script_entry& entry, std::optional<std::string>& pending_removal) -> void {
+  auto is_open = true;
 
-  if (ImGui::Button(ICON_MDI_PLUS " Add Script")) {
-    ImGui::OpenPopup("##add_script_popup");
-  }
+  const auto title = fmt::format(ICON_MDI_LANGUAGE_CSHARP " {}.cs", entry.class_name);
 
-  if (ImGui::BeginPopup("##add_script_popup")) {
-    auto& behavior_type = scripting_module.game_assembly().get_type("Sbx.Core.Behavior");
+  const auto is_expanded = ImGui::CollapsingHeader(title.c_str(), &is_open, ImGuiTreeNodeFlags_DefaultOpen);
 
-    for (auto* candidate : scripting_module.game_assembly().get_types()) {
-      if (*candidate == behavior_type) {
-        continue; // don't offer the base class itself
-      }
-
-      const auto full_name = std::string{candidate->get_full_name()};
-
-      if (candidate->is_subclass_of(behavior_type) && ImGui::MenuItem(full_name.c_str())) {
-        scripting_module.attach_script(node, full_name);
-      }
-    }
-
-    ImGui::EndPopup();
-  }
-
-  if (!node.has_component<sbx::scenes::script_component>()) {
+  if (!is_open) {
+    pending_removal = entry.class_name; // defer to after the caller's loop — script_component.scripts must not shrink mid-iteration
     return;
   }
 
-  auto& scripts = node.get_component<sbx::scenes::script_component>();
-  auto pending_removal = std::optional<std::string>{};
-
-  for (auto index = std::size_t{0u}; index < scripts.scripts.size(); ++index) {
-    auto& entry = scripts.scripts[index];
-
-    ImGui::PushID(static_cast<int>(index));
-
-    auto keep_open = true;
-    const auto is_expanded = ImGui::CollapsingHeader(entry.class_name.c_str(), &keep_open, ImGuiTreeNodeFlags_DefaultOpen);
-
-    if (!keep_open) {
-      pending_removal = entry.class_name; // defer erase until after the loop — scripts.scripts must not shrink mid-iteration
-    } else if (is_expanded) {
-      draw_script_field_inspector(node, entry);
-    }
-
-    ImGui::PopID();
-  }
-
-  if (pending_removal) {
-    scripting_module.detach_script(node, *pending_removal);
+  if (is_expanded) {
+    draw_script_field_inspector(node, entry);
   }
 }
 
@@ -1024,41 +1031,73 @@ auto inspector_panel::_draw_transform_section(sbx::scenes::node& node) -> void {
 }
 
 auto inspector_panel::_draw_node_properties(editor_state& state, sbx::scenes::node& node, sbx::assets::assets_module& assets_module) -> void {
+  auto& scripting_module = sbx::core::engine::get_module<sbx::scripting::scripting_module>();
+
+  // A little vertical breathing room between each section, on top of the frame/item padding
+  // pushed in draw() — keeps a node with several components/scripts from reading as one dense
+  // unbroken block of controls.
+  const auto section_gap = [] { ImGui::Dummy(ImVec2{0.0f, 6.0f}); };
+
   _draw_name_field(node);
+  section_gap();
   _draw_transform_section(node);
 
   if (node.has_component<sbx::scenes::camera>()) {
+    section_gap();
     draw_camera_section(node);
   }
 
   if (node.has_component<sbx::scenes::mesh_renderer>()) {
+    section_gap();
     draw_mesh_renderer_section(state, node, assets_module);
   }
 
   if (node.has_component<sbx::scenes::directional_light>()) {
+    section_gap();
     draw_directional_light_section(node);
   }
 
   if (node.has_component<sbx::scenes::point_light>()) {
+    section_gap();
     draw_point_light_section(node);
   }
 
   if (node.has_component<sbx::scenes::spot_light>()) {
+    section_gap();
     draw_spot_light_section(node);
   }
 
   if (node.has_component<sbx::scenes::skybox>()) {
+    section_gap();
     draw_skybox_section(node, assets_module);
   }
 
   if (node.has_component<sbx::scenes::particle_effect>()) {
+    section_gap();
     draw_particle_effect_instance_section(state, node, assets_module);
   }
 
-  draw_scripts_section(node, sbx::core::engine::get_module<sbx::scripting::scripting_module>());
+  if (node.has_component<sbx::scenes::script_component>()) {
+    auto& scripts = node.get_component<sbx::scenes::script_component>();
+    auto pending_removal = std::optional<std::string>{};
 
+    for (auto index = std::size_t{0u}; index < scripts.scripts.size(); ++index) {
+      section_gap();
+
+      ImGui::PushID(static_cast<int>(index));
+      draw_script_section(node, scripts.scripts[index], pending_removal);
+      ImGui::PopID();
+    }
+
+    if (pending_removal) {
+      scripting_module.detach_script(node, *pending_removal);
+    }
+  }
+
+  section_gap();
   ImGui::Separator();
-  draw_add_component_menu(node);
+  ImGui::Spacing();
+  draw_add_component_menu(node, scripting_module);
 }
 
 auto inspector_panel::_draw_material_properties(const asset_selection& asset, sbx::assets::assets_module& assets_module) -> void {
@@ -1384,7 +1423,7 @@ auto inspector_panel::_draw_asset_properties(const asset_selection& asset, sbx::
     case asset_kind::script: {
       ImGui::Text("Type: Script");
       ImGui::Text("Class: %s", asset.path.stem().string().c_str());
-      ImGui::TextDisabled("Attach via the Properties panel's \"Add Script\" button on a node.");
+      ImGui::TextDisabled("Attach to a node via its \"Add Component > Script\" menu.");
       break;
     }
     case asset_kind::unknown: {
@@ -1395,7 +1434,16 @@ auto inspector_panel::_draw_asset_properties(const asset_selection& asset, sbx::
 }
 
 auto inspector_panel::draw(editor_state& state) -> void {
+  // A bit more breathing room around every control in this panel (frame padding inside widgets,
+  // spacing between them, and a margin against the window edge) than ImGui's tight defaults —
+  // applies uniformly to every section/component drawn below, not just newly-added ones.
+  // WindowPadding must be pushed before Begin() — it's read while laying out the window itself.
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{10.0f, 10.0f});
+
   ImGui::Begin(window_name);
+
+  ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2{6.0f, 4.0f});
+  ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2{8.0f, 6.0f});
 
   auto& assets_module = sbx::core::engine::get_module<sbx::assets::assets_module>();
 
@@ -1415,7 +1463,11 @@ auto inspector_panel::draw(editor_state& state) -> void {
     ImGui::TextDisabled("Nothing selected.");
   }
 
+  ImGui::PopStyleVar(2); // FramePadding, ItemSpacing
+
   ImGui::End();
+
+  ImGui::PopStyleVar(); // WindowPadding
 }
 
 } // namespace editor

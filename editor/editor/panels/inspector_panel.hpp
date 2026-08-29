@@ -32,7 +32,7 @@ class inspector_panel final : public editor_panel {
 public:
 
   /** @see hierarchy_panel::window_name */
-  inline static constexpr auto window_name = ICON_MDI_TUNE " Inspector###inspector_panel";
+  inline static constexpr auto window_name = ICON_MDI_INFORMATION " Inspector###inspector_panel";
 
   auto draw(editor_state& state) -> void override;
 

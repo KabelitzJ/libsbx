@@ -35,16 +35,7 @@ private:
 
   bool _is_paused;
 
-  sbx::units::seconds _time;
-  std::uint32_t _fps;
-
-  sbx::math::angle _rotation;
-
   sbx::scenes::node _camera;
-  sbx::scenes::node _duck;
-  sbx::scenes::node _damaged_helmet;
-  sbx::scenes::node _flight_helmet;
-
   fly_camera _camera_controller;
 
 }; // class application

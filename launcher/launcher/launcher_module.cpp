@@ -18,60 +18,14 @@
 #include <libsbx/core/project.hpp>
 
 #include <libsbx/platform/platform_module.hpp>
+#include <libsbx/platform/process.hpp>
 #include <libsbx/platform/window.hpp>
 
 #include <libsbx/filesystem/filesystem_module.hpp>
 
-#if defined(SBX_PLATFORM_WIN32)
-  #define WIN32_LEAN_AND_MEAN
-  #include <windows.h>
-#else
-  #include <unistd.h>
-#endif
-
 namespace launcher {
 
 namespace {
-
-#if defined(SBX_PLATFORM_WIN32)
-
-auto spawn_process(const std::filesystem::path& executable, const std::filesystem::path& project_root) -> void {
-  auto command_line = std::wstring{L"\""} + executable.wstring() + L"\" --project \"" + project_root.wstring() + L"\"";
-
-  auto startup_info = STARTUPINFOW{};
-  startup_info.cb = sizeof(startup_info);
-
-  auto process_info = PROCESS_INFORMATION{};
-
-  const auto succeeded = ::CreateProcessW(executable.c_str(), command_line.data(), nullptr, nullptr, FALSE, 0, nullptr, nullptr, &startup_info, &process_info);
-
-  if (!succeeded) {
-    sbx::utility::logger<"launcher">::error("Failed to launch '{}'", executable.string());
-    return;
-  }
-
-  ::CloseHandle(process_info.hProcess);
-  ::CloseHandle(process_info.hThread);
-}
-
-#else
-
-auto spawn_process(const std::filesystem::path& executable, const std::filesystem::path& project_root) -> void {
-  const auto pid = ::fork();
-
-  if (pid < 0) {
-    sbx::utility::logger<"launcher">::error("fork() failed while launching '{}'", executable.string());
-    return;
-  }
-
-  if (pid == 0) {
-    // Child: replace this process image entirely. execl only returns on failure.
-    ::execl(executable.c_str(), executable.c_str(), "--project", project_root.c_str(), static_cast<char*>(nullptr));
-    ::_exit(127);
-  }
-}
-
-#endif
 
 /** @brief Resolved next to the launcher's own binary — editor/runtime/launcher all share RUNTIME_OUTPUT_DIRECTORY (see their respective CMakeLists.txt). */
 [[nodiscard]] auto executable_path(launcher_module::launch_target target) -> std::filesystem::path {
@@ -264,7 +218,7 @@ auto launcher_module::_launch(launch_target target, const std::filesystem::path&
     return;
   }
 
-  spawn_process(executable_path(target), root);
+  sbx::platform::spawn(executable_path(target), {.arguments = {"--project", root.string()}});
 
   sbx::core::engine::quit();
 }

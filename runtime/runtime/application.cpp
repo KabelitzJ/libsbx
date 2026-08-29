@@ -26,9 +26,12 @@
 namespace runtime {
 
 application::application()
-: sbx::core::application{}, _is_paused{false}, _time{0}, _fps{0} {
+: sbx::core::application{}, _is_paused{false} {
   auto& platform_module = sbx::core::engine::get_module<sbx::platform::platform_module>();
-  platform_module.window().on_window_closed() += []([[maybe_unused]] const auto& event) {
+
+  auto& window = platform_module.window();
+
+  window.on_window_closed() += []([[maybe_unused]] const auto& event) {
     sbx::core::engine::quit();
   };
 
@@ -37,24 +40,27 @@ application::application()
   auto& assets_module = sbx::core::engine::get_module<sbx::assets::assets_module>();
   assets_module.import_directory(project.assets_directory());
 
-  const auto duck_mesh = assets_module.load_mesh("models/duck/duck.gltf");
-  const auto damaged_helmet_mesh = assets_module.load_mesh("models/damaged_helmet/damaged_helmet.gltf");
-  const auto flight_helmet_mesh = assets_module.load_mesh("models/flight_helmet/flight_helmet.gltf");
-
   auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
   auto& scene = scenes_module.active_scene();
 
-  sbx::scenes::scene_serializer::load(scene, "scenes/demo.yaml");
+  // A fresh/projectless-launcher-created project has no startup_scene — start from whatever
+  // empty scene scenes_module already handed us instead of assuming one exists on disk.
+  if (const auto& startup_scene = project.startup_scene()) {
+    sbx::scenes::scene_serializer::load(scene, *startup_scene);
+  }
 
-  _camera = scene.find("Camera");
-  _duck = scene.find("Duck");
-  _damaged_helmet = scene.find("DamagedHelmet");
-  _flight_helmet = scene.find("FlightHelmet");
+  _camera = scene.active_camera();
+
+  // scene_serializer::load only sets an active camera if the loaded scene had one, so a fresh
+  // project can't assume a "Camera" node exists — create a default one.
+  if (!_camera.is_valid()) {
+    _camera = scene.create_node("Camera");
+    _camera.add_component<sbx::scenes::camera>();
+    scene.set_active_camera(_camera);
+  }
 
   _camera_controller = fly_camera{_camera};
 
-  // demo.yaml already gives Camera a skybox (see scene_serializer::load above) — adding another
-  // unconditionally would try to emplace into an already-occupied component slot and assert.
   if (!_camera.has_component<sbx::scenes::skybox>()) {
     auto& skybox = _camera.add_component<sbx::scenes::skybox>();
     skybox.environment = assets_module.load_environment_map("environments/sky.hdr");
@@ -67,23 +73,6 @@ application::~application() {
 }
 
 auto application::update() -> void {
-  using namespace sbx::units::literals;
-
-  if (sbx::platform::input::is_key_pressed(sbx::platform::key::escape)) {
-    sbx::core::engine::quit();
-  }
-
-  _rotation += sbx::math::degree{90.0f} * sbx::core::engine::delta_time();
-
-  auto& duck_transform = _duck.transform();
-  duck_transform.rotation = sbx::math::quaternion{sbx::math::vector3f{0.0f, 1.0f, 0.0f}, _rotation};
-
-  auto& damaged_helmet_transform = _damaged_helmet.transform();
-  damaged_helmet_transform.rotation = sbx::math::quaternion{sbx::math::vector3f{0.0f, 1.0f, 0.0f}, _rotation};
-
-  // auto& flight_helmet_transform = _flight_helmet.transform();
-  // flight_helmet_transform.rotation = sbx::math::quaternion{sbx::math::vector3f{0.0f, 1.0f, 0.0f}, _rotation};
-
   _camera_controller.update();
 }
 

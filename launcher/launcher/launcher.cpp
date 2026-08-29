@@ -3,6 +3,8 @@
 #include <span>
 #include <vector>
 
+#include <libsbx/units/units.hpp>
+
 #include <libsbx/utility/logger.hpp>
 
 #include <libsbx/math/vector2.hpp>
@@ -37,6 +39,15 @@ using module_list = sbx::core::module_list<
 
 auto main(int argc, const char** argv) -> int {
   auto args = std::vector<std::string_view>{argv, argv + argc};
+
+  using namespace sbx::units::literals;
+
+  auto foo = 10_ms;
+  auto bar = 1_s;
+
+  auto tmp = foo + bar;
+
+  sbx::utility::logger<"launcher">::info("tmp: {}", tmp);
 
   try {
     auto config = sbx::core::engine_config{

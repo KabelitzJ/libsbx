@@ -17,7 +17,7 @@
 namespace sbx::reflection {
 
 template<typename Enum>
-concept named_enum = std::meta::is_enum_type(^^Enum) && !std::meta::annotations_of_with_type(^^Enum, std::meta::remove_cv(^^decltype(named))).empty();
+concept named_enum = std::meta::is_enum_type(^^Enum) && has_annotation<Enum, named>();
 
 template<typename Enum>
 requires (std::is_enum_v<Enum>)

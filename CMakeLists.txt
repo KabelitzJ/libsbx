@@ -221,6 +221,7 @@ target_sources(
 
     "${CMAKE_SOURCE_DIR}/libsbx/platform/input.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/platform/platform_module.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/platform/process.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/platform/window.cpp"
 
     "${CMAKE_SOURCE_DIR}/libsbx/reflection/reflection.cpp"
@@ -438,6 +439,7 @@ target_sources(
       "${CMAKE_SOURCE_DIR}/libsbx/platform/key.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/platform/mouse_button.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/platform/platform_module.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/platform/process.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/platform/window.hpp"
 
       "${CMAKE_SOURCE_DIR}/libsbx/reflection/enum.hpp"

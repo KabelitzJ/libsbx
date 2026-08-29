@@ -284,7 +284,7 @@ auto editor_ui_layer::_draw_toolbar() -> void {
   ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 0.0f);
   ImGui::PushStyleVar(ImGuiStyleVar_ChildBorderSize, 0.0f);
 
-  ImGui::BeginChild("##toolbar", ImVec2{0.0f, button_size.y + 8.0f}, ImGuiChildFlags_None, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+  ImGui::BeginChild("##toolbar", ImVec2{0.0f, button_size.y + 2.0f}, ImGuiChildFlags_None, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
   ImGui::SetCursorPos(ImVec2{
     (ImGui::GetContentRegionAvail().x - group_width) * 0.5f,

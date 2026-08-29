@@ -69,6 +69,10 @@ struct material_description {
   alpha_mode alpha{alpha_mode::opaque};
   std::float_t alpha_cutoff{0.5f};
   bool is_double_sided{false};
+  std::float_t normal_scale{1.0f};
+  std::float_t occlusion_strength{1.0f};
+  std::float_t emissive_strength{1.0f};
+  std::float_t ior{1.5f};
   math::uuid albedo{math::uuid::nil()};
   math::uuid normal{math::uuid::nil()};
   math::uuid metallic_roughness{math::uuid::nil()};

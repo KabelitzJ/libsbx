@@ -760,7 +760,7 @@ auto draw_add_component_menu(sbx::scenes::node& node, sbx::scripting::scripting_
       node.add_component<sbx::scenes::particle_effect>();
     }
 
-    if (ImGui::BeginMenu(ICON_MDI_LANGUAGE_CSHARP " Script")) {
+    if (ImGui::BeginMenu(ICON_MDI_FILE_CODE_OUTLINE " Script")) {
       auto& behavior_type = scripting_module.game_assembly().get_type("Sbx.Core.Behavior");
       auto any_available = false;
 
@@ -964,7 +964,7 @@ auto draw_script_field_inspector(sbx::scenes::node& node, sbx::scenes::script_en
 auto draw_script_section(sbx::scenes::node& node, sbx::scenes::script_entry& entry, std::optional<std::string>& pending_removal) -> void {
   auto is_open = true;
 
-  const auto title = fmt::format(ICON_MDI_LANGUAGE_CSHARP " {}.cs", entry.class_name);
+  const auto title = fmt::format(ICON_MDI_FILE_CODE_OUTLINE " {}.cs", entry.class_name);
 
   const auto is_expanded = ImGui::CollapsingHeader(title.c_str(), &is_open, ImGuiTreeNodeFlags_DefaultOpen);
 

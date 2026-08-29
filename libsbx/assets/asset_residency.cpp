@@ -38,9 +38,10 @@ struct material_data {
   std::float_t roughness_factor;
   std::float_t alpha_cutoff;
   std::uint32_t flags;
-  std::uint32_t padding0;
-  std::uint32_t padding1;
-  std::uint32_t padding2;
+  std::float_t normal_scale;
+  std::float_t occlusion_strength;
+  std::float_t emissive_strength;
+  std::float_t ior;
 }; // struct material_data
 
 // Strips characters a filename can't contain, for turning a gltf material's (freeform) name into
@@ -221,6 +222,10 @@ auto asset_residency::load_material(const math::uuid& id) -> material_handle {
     if (root["is_double_sided"]) info.is_double_sided = root["is_double_sided"].as<bool>();
     if (root["casts_shadow"]) info.casts_shadow = root["casts_shadow"].as<bool>();
     if (root["receives_shadow"]) info.receives_shadow = root["receives_shadow"].as<bool>();
+    if (root["normal_scale"]) info.normal_scale = root["normal_scale"].as<std::float_t>();
+    if (root["occlusion_strength"]) info.occlusion_strength = root["occlusion_strength"].as<std::float_t>();
+    if (root["emissive_strength"]) info.emissive_strength = root["emissive_strength"].as<std::float_t>();
+    if (root["ior"]) info.ior = root["ior"].as<std::float_t>();
 
     const auto load_slot = [&](const char* key, graphics::format format) -> texture_handle {
       if (const auto node = root[key]) {
@@ -261,6 +266,10 @@ auto asset_residency::load_material(const math::uuid& id) -> material_handle {
     info.alpha = description->alpha;
     info.alpha_cutoff = description->alpha_cutoff;
     info.is_double_sided = description->is_double_sided;
+    info.normal_scale = description->normal_scale;
+    info.occlusion_strength = description->occlusion_strength;
+    info.emissive_strength = description->emissive_strength;
+    info.ior = description->ior;
 
     const auto load_slot = [&](const math::uuid& uuid, graphics::format format) -> texture_handle {
       return (uuid == math::uuid::nil()) ? texture_handle{} : load_texture(uuid, format);
@@ -744,6 +753,10 @@ auto asset_residency::process_uploads(std::uint64_t frame_index) -> void {
     data.alpha_cutoff = material.alpha_cutoff();
     data.flags = ((material.alpha() == alpha_mode::mask) ? material_flag_masked : 0u)
       | (material.receives_shadow() ? material_flag_receives_shadow : 0u);
+    data.normal_scale = material.normal_scale();
+    data.occlusion_strength = material.occlusion_strength();
+    data.emissive_strength = material.emissive_strength();
+    data.ior = material.ior();
 
     buffer.write(&data, sizeof(material_data), material.index() * memory::stride_v<material_data>);
   }

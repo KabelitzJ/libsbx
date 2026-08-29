@@ -85,7 +85,7 @@ auto icon_for(const asset_browser_entry& entry) -> const char* {
     case asset_kind::environment_map: return ICON_MDI_EARTH;
     case asset_kind::particle_effect: return ICON_MDI_FIREWORK;
     case asset_kind::scene: return ICON_MDI_FILE_TREE;
-    case asset_kind::script: return ICON_MDI_LANGUAGE_CSHARP;
+    case asset_kind::script: return ICON_MDI_FILE_CODE_OUTLINE;
     case asset_kind::unknown: return ICON_MDI_FILE_OUTLINE;
   }
 
@@ -236,7 +236,7 @@ auto asset_browser_panel::draw(editor_state& state) -> void {
 
   ImGui::SameLine();
 
-  if (ImGui::Button(ICON_MDI_LANGUAGE_CSHARP " New Script")) {
+  if (ImGui::Button(ICON_MDI_FILE_CODE_OUTLINE " New Script")) {
     auto file_name = std::string{"NewScript.cs"};
     auto suffix = 1;
 

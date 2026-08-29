@@ -15,6 +15,7 @@ struct lighting_input {
   float2 uv;
   float4 tangent;
   float4 sv_position;
+  bool is_front_face;
   frame_data frame_data;
   uint material_index;
   uint sampler_index;
@@ -76,24 +77,36 @@ lighting_output evaluate_lighting<let receives_shadows : bool>(lighting_input in
   float metallic = mr.b * material.metallic_factor;
   float roughness = mr.g * material.roughness_factor;
 
-  float ao = textures[material.occlusion_index].Sample(sampler, input.uv).r;
-  float3 emissive = material.emissive_factor.rgb * textures[material.emissive_index].Sample(sampler, input.uv).rgb;
+  // occlusionTexture.strength: lerp(1, sampled_ao, strength) so strength=0 leaves AO fully unapplied.
+  float ao = lerp(1.0, textures[material.occlusion_index].Sample(sampler, input.uv).r, material.occlusion_strength);
+  float3 emissive = material.emissive_factor.rgb * material.emissive_strength * textures[material.emissive_index].Sample(sampler, input.uv).rgb;
 
   float3 n = normalize(input.normal);
+
+  // Double-sided materials disable backface culling (opaque_pass.cpp) but keep the same
+  // interpolated (front-facing) normal — flip it for the backface so it still points toward the
+  // viewer. Single-sided materials are backface-culled, so is_front_face is always true there.
+  if (!input.is_front_face) {
+    n = -n;
+  }
+
   float3 t = normalize(input.tangent.xyz);
 
   // Gram-Schmidt re-orthogonalize after interpolation
-  t = normalize(t - dot(t, n) * n);              
+  t = normalize(t - dot(t, n) * n);
 
   // handedness
-  float3 b = cross(n, t) * input.tangent.w; 
+  float3 b = cross(n, t) * input.tangent.w;
 
   float3 tangent_normal = textures[material.normal_index].Sample(sampler, input.uv).rgb * 2.0 - 1.0;
+  tangent_normal.xy *= material.normal_scale;
   n = normalize(tangent_normal.x * t + tangent_normal.y * b + tangent_normal.z * n);
 
   float3 v = normalize(input.frame_data.camera_position.xyz - input.position);
 
-  float3 f0 = lerp(float3(0.04, 0.04, 0.04), albedo, metallic);
+  // KHR_materials_ior: F0 = ((ior-1)/(ior+1))^2; default ior 1.5 reproduces the standard 0.04.
+  float dielectric_f0 = pow((material.ior - 1.0) / max(material.ior + 1.0, 0.0001), 2.0);
+  float3 f0 = lerp(float3(dielectric_f0, dielectric_f0, dielectric_f0), albedo, metallic);
   float3 lo = float3(0.0, 0.0, 0.0);
 
   float sun_shadow = 1.0;

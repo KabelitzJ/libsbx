@@ -36,7 +36,7 @@ inline constexpr auto mesh_magic = utility::fourcc_v<"SBSH">;   // 'SBSH'
 inline constexpr auto mesh_version = std::uint32_t{6u}; // v6: meshopt-optimized vertex/index order, LOD chain, meshopt-compressed on-disk buffers
 
 inline constexpr auto material_magic = utility::fourcc_v<"SBMT">; // 'SBMT'
-inline constexpr auto material_version = std::uint32_t{2u};
+inline constexpr auto material_version = std::uint32_t{3u};
 
 inline constexpr auto environment_magic = utility::fourcc_v<"SBEN">; // 'SBEN'
 inline constexpr auto environment_version = std::uint32_t{1u};
@@ -114,6 +114,10 @@ struct material_file_header {
   std::uint32_t alpha_mode;
   std::float_t alpha_cutoff;
   std::uint32_t is_double_sided;
+  std::float_t normal_scale;
+  std::float_t occlusion_strength;
+  std::float_t emissive_strength;
+  std::float_t ior;
   std::uint64_t albedo_uuid;
   std::uint64_t normal_uuid;
   std::uint64_t metallic_roughness_uuid;
@@ -384,6 +388,10 @@ auto asset_cooker::resolve_cooked_material(const math::uuid& id) -> std::optiona
   description.alpha = static_cast<alpha_mode>(header.alpha_mode);
   description.alpha_cutoff = header.alpha_cutoff;
   description.is_double_sided = header.is_double_sided != 0u;
+  description.normal_scale = header.normal_scale;
+  description.occlusion_strength = header.occlusion_strength;
+  description.emissive_strength = header.emissive_strength;
+  description.ior = header.ior;
   description.albedo = math::uuid::from_value(header.albedo_uuid);
   description.normal = math::uuid::from_value(header.normal_uuid);
   description.metallic_roughness = math::uuid::from_value(header.metallic_roughness_uuid);
@@ -763,7 +771,7 @@ auto asset_cooker::_cook_mesh(const std::filesystem::path& source, const math::u
     return false;
   }
 
-  auto parser = fastgltf::Parser{};
+  auto parser = fastgltf::Parser{fastgltf::Extensions::KHR_materials_emissive_strength | fastgltf::Extensions::KHR_materials_ior};
 
   auto loaded = parser.loadGltf(data.get(), source.parent_path(), fastgltf::Options::LoadExternalBuffers | fastgltf::Options::GenerateMeshIndices);
 
@@ -806,6 +814,10 @@ auto asset_cooker::_cook_mesh(const std::filesystem::path& source, const math::u
     description.alpha = (gltf_material.alphaMode == fastgltf::AlphaMode::Blend) ? alpha_mode::blend : (gltf_material.alphaMode == fastgltf::AlphaMode::Mask) ? alpha_mode::mask : alpha_mode::opaque;
     description.alpha_cutoff = gltf_material.alphaCutoff;
     description.is_double_sided = gltf_material.doubleSided;
+    description.normal_scale = gltf_material.normalTexture.has_value() ? gltf_material.normalTexture->scale : 1.0f;
+    description.occlusion_strength = gltf_material.occlusionTexture.has_value() ? gltf_material.occlusionTexture->strength : 1.0f;
+    description.emissive_strength = gltf_material.emissiveStrength;
+    description.ior = gltf_material.ior;
 
     if (pbr.baseColorTexture.has_value())         description.albedo             = texture_uuid(pbr.baseColorTexture->textureIndex);
     if (pbr.metallicRoughnessTexture.has_value()) description.metallic_roughness = texture_uuid(pbr.metallicRoughnessTexture->textureIndex);
@@ -1123,6 +1135,10 @@ auto asset_cooker::_cook_material(const math::uuid& id, const material_descripti
   header.alpha_mode = static_cast<std::uint32_t>(description.alpha);
   header.alpha_cutoff = description.alpha_cutoff;
   header.is_double_sided = description.is_double_sided ? 1u : 0u;
+  header.normal_scale = description.normal_scale;
+  header.occlusion_strength = description.occlusion_strength;
+  header.emissive_strength = description.emissive_strength;
+  header.ior = description.ior;
   header.albedo_uuid = description.albedo.value();
   header.normal_uuid = description.normal.value();
   header.metallic_roughness_uuid = description.metallic_roughness.value();

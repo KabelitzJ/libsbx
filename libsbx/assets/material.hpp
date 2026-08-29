@@ -40,6 +40,10 @@ public:
     bool is_double_sided{false};
     bool casts_shadow{true};
     bool receives_shadow{true};
+    std::float_t normal_scale{1.0f};
+    std::float_t occlusion_strength{1.0f};
+    std::float_t emissive_strength{1.0f};
+    std::float_t ior{1.5f}; // KHR_materials_ior default; F0 = ((ior-1)/(ior+1))^2 = 0.04
     texture_handle albedo{};
     texture_handle normal{};
     texture_handle metallic_roughness{};
@@ -59,6 +63,10 @@ public:
     _is_double_sided{create_info.is_double_sided},
     _casts_shadow{create_info.casts_shadow},
     _receives_shadow{create_info.receives_shadow},
+    _normal_scale{create_info.normal_scale},
+    _occlusion_strength{create_info.occlusion_strength},
+    _emissive_strength{create_info.emissive_strength},
+    _ior{create_info.ior},
     _albedo{create_info.albedo},
     _normal{create_info.normal},
     _metallic_roughness{create_info.metallic_roughness},
@@ -110,6 +118,22 @@ public:
     return _receives_shadow;
   }
 
+  [[nodiscard]] auto normal_scale() const noexcept -> std::float_t {
+    return _normal_scale;
+  }
+
+  [[nodiscard]] auto occlusion_strength() const noexcept -> std::float_t {
+    return _occlusion_strength;
+  }
+
+  [[nodiscard]] auto emissive_strength() const noexcept -> std::float_t {
+    return _emissive_strength;
+  }
+
+  [[nodiscard]] auto ior() const noexcept -> std::float_t {
+    return _ior;
+  }
+
   [[nodiscard]] auto albedo() const noexcept -> const texture_handle& {
     return _albedo;
   }
@@ -149,6 +173,10 @@ private:
   bool _is_double_sided{false};
   bool _casts_shadow{true};
   bool _receives_shadow{true};
+  std::float_t _normal_scale{1.0f};
+  std::float_t _occlusion_strength{1.0f};
+  std::float_t _emissive_strength{1.0f};
+  std::float_t _ior{1.5f};
   texture_handle _albedo{};
   texture_handle _normal{};
   texture_handle _metallic_roughness{};

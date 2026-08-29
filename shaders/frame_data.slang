@@ -33,9 +33,10 @@ struct material_data {
   float roughness_factor;
   float alpha_cutoff;
   uint flags;
-  uint pad0;
-  uint pad1;
-  uint pad2;
+  float normal_scale;
+  float occlusion_strength;
+  float emissive_strength;
+  float ior;
 }; // struct material_data
 
 /**

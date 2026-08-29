@@ -26,6 +26,7 @@ struct fragment_input {
   [[vk::location(2)]] float2 uv : TEXCOORD;
   [[vk::location(3)]] float4 tangent : TANGENT;
   float4 sv_position : SV_Position;
+  bool is_front_face : SV_IsFrontFace;
 }; // struct fragment_input
 
 struct opaque_fragment_output : color_target {
@@ -80,6 +81,7 @@ Policy::Output fragment_main<Policy : shading_policy>(fragment_input input) {
   lighting_input.uv = input.uv;
   lighting_input.tangent = input.tangent;
   lighting_input.sv_position = input.sv_position;
+  lighting_input.is_front_face = input.is_front_face;
   lighting_input.frame_data = *push.frame_data;
   lighting_input.material_index = push.material_index;
   lighting_input.sampler_index = push.sampler_index;

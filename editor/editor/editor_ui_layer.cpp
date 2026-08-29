@@ -279,7 +279,12 @@ auto editor_ui_layer::_draw_toolbar() -> void {
   const auto spacing = ImGui::GetStyle().ItemSpacing.x;
   const auto group_width = button_count * button_size.x + (button_count - 1) * spacing;
 
-  ImGui::BeginChild("##toolbar", ImVec2{0.0f, button_size.y + 8.0f}, true);
+  // Flat strip flush with the menu bar above it — no rounded box outline, no scrollbar (the group
+  // is sized to fit exactly, but a stray sub-pixel overflow shouldn't ever spawn one).
+  ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 0.0f);
+  ImGui::PushStyleVar(ImGuiStyleVar_ChildBorderSize, 0.0f);
+
+  ImGui::BeginChild("##toolbar", ImVec2{0.0f, button_size.y + 8.0f}, ImGuiChildFlags_None, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
   ImGui::SetCursorPos(ImVec2{
     (ImGui::GetContentRegionAvail().x - group_width) * 0.5f,
@@ -364,6 +369,8 @@ auto editor_ui_layer::_draw_toolbar() -> void {
 
   ImGui::EndGroup();
   ImGui::EndChild();
+
+  ImGui::PopStyleVar(2);
 }
 
 auto editor_ui_layer::request_quit() -> void {

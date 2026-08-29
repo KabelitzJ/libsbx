@@ -32,12 +32,12 @@
 #include <launcher/launcher_module.hpp>
 
 using module_list = sbx::core::module_list<
+  sbx::core::projects_module,
   sbx::platform::platform_module,
   sbx::filesystem::filesystem_module,
   sbx::graphics::graphics_module,
   sbx::render::presentation_module,
   sbx::render::ui_module,
-  sbx::core::projects_module,
   launcher::launcher_module
 >;
 

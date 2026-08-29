@@ -11,11 +11,12 @@
 
 #include <libsbx/utility/logger.hpp>
 
-#include <libsbx/core/engine.hpp>
+#include <libsbx/core/command_queue.hpp>
 #include <libsbx/core/engine_config.hpp>
+#include <libsbx/core/engine.hpp>
 #include <libsbx/core/exit.hpp>
 #include <libsbx/core/project.hpp>
-#include <libsbx/core/command_queue.hpp>
+#include <libsbx/core/projects_module.hpp>
 #include <libsbx/core/threading_policy.hpp>
 #include <libsbx/core/user_data_directory.hpp>
 
@@ -41,6 +42,7 @@
 #include <runtime/application.hpp>
 
 using module_list = sbx::core::module_list<
+  sbx::core::projects_module,
   sbx::platform::platform_module,
   sbx::filesystem::filesystem_module,
   sbx::graphics::graphics_module,

@@ -124,7 +124,7 @@ auto draw_viewport_gizmo(editor_state& state, const ImVec2& viewport_origin, con
     auto local_matrix = world_matrix;
 
     if (relationship.parent != sbx::ecs::null_entity) {
-      if (auto parent_node = scene.node_of(relationship.parent); parent_node.is_valid()) {
+      if (auto parent_node = scene.node_of(relationship.parent); parent_node.is_valid() && parent_node.has_component<sbx::scenes::world_transform>()) {
         local_matrix = sbx::math::matrix4x4::inverted(parent_node.world_matrix()) * world_matrix;
       }
     }
@@ -227,7 +227,7 @@ auto compute_camera_snap_target(sbx::scenes::scene& scene, sbx::scenes::node& ca
   auto local_matrix = camera_world_matrix;
 
   if (relationship.parent != sbx::ecs::null_entity) {
-    if (auto parent_node = scene.node_of(relationship.parent); parent_node.is_valid()) {
+    if (auto parent_node = scene.node_of(relationship.parent); parent_node.is_valid() && parent_node.has_component<sbx::scenes::world_transform>()) {
       local_matrix = sbx::math::matrix4x4::inverted(parent_node.world_matrix()) * camera_world_matrix;
     }
   }

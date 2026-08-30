@@ -25,8 +25,7 @@ class scene {
 
 public:
 
-  scene(const std::string& name = "Scene")
-  : _name{name} { }
+  scene(const std::string& name = "Scene");
 
   auto create_node(const utility::hashed_string& name = "Node", const scenes::local_transform& transform = scenes::local_transform{}) -> node;
 
@@ -40,6 +39,12 @@ public:
    * node::is_valid() before using it.
    */
   [[nodiscard]] auto node_of(ecs::entity entity) -> node;
+
+  /**
+   * @brief Sentinel entity whose relationship::children is the ordered list of top-level nodes.
+   * Not a real node — never pass it to find(), destroy_node(), or the serializer.
+   */
+  [[nodiscard]] auto root() -> node;
 
   /**
    * @brief Destroys @p target and its entire subtree, unlinking it from its parent's
@@ -100,6 +105,7 @@ private:
   ecs::registry _registry{};
   std::unordered_map<math::uuid, ecs::entity> _entities_by_id{};
   std::unordered_multimap<utility::hashed_string, ecs::entity> _entities_by_name{};
+  ecs::entity _root{ecs::null_entity};
   ecs::entity _active_camera{ecs::null_entity};
   ecs::entity _primary_light{ecs::null_entity};
 

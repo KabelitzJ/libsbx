@@ -87,16 +87,13 @@ auto hierarchy_panel::draw(editor_state& state) -> void {
   auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
   auto& scene = scenes_module.active_scene();
 
-  auto has_any = false;
+  const auto& top_level = scene.root().get_component<sbx::scenes::relationship>().children;
 
-  for (const auto entity : scene.query<sbx::scenes::relationship>()) {
-    if (scene.node_of(entity).get_component<sbx::scenes::relationship>().parent == sbx::ecs::null_entity) {
-      has_any = true;
-      _draw_node_row(state, scene, entity);
-    }
+  for (const auto entity : top_level) {
+    _draw_node_row(state, scene, entity);
   }
 
-  if (!has_any) {
+  if (top_level.empty()) {
     ImGui::TextDisabled("No nodes in the active scene.");
   }
 

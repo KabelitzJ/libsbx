@@ -6,6 +6,7 @@
 #include <sstream>
 #include <unordered_map>
 #include <unordered_set>
+#include <vector>
 
 #include <fmt/format.h>
 
@@ -49,7 +50,29 @@ auto scene_serializer::_build(scene& target) -> YAML::Node {
   auto environments_table = YAML::Node{YAML::NodeType::Sequence};
   auto particle_effects_table = YAML::Node{YAML::NodeType::Sequence};
 
-  for (const auto entity : registry.view<mesh_renderer>()) {
+  // Registry/view iteration order is unspecified (and reshuffles across create/destroy churn), so
+  // every node-order-sensitive pass below walks this single depth-first traversal of the scene
+  // graph instead — rooted at target._root, whose relationship::children is the one place
+  // top-level order is actually persisted.
+  auto ordered_nodes = std::vector<ecs::entity>{};
+
+  const auto collect = [&](this const auto& self, ecs::entity entity) -> void {
+    ordered_nodes.push_back(entity);
+
+    for (const auto child : registry.get<relationship>(entity).children) {
+      self(child);
+    }
+  };
+
+  for (const auto entity : registry.get<relationship>(target._root).children) {
+    collect(entity);
+  }
+
+  for (const auto entity : ordered_nodes) {
+    if (!registry.all_of<mesh_renderer>(entity)) {
+      continue;
+    }
+
     const auto& renderer = registry.get<mesh_renderer>(entity);
 
     if (renderer.mesh.is_valid() && !mesh_keys.contains(renderer.mesh->id())) {
@@ -97,7 +120,7 @@ auto scene_serializer::_build(scene& target) -> YAML::Node {
   // Nodes
   auto nodes_node = YAML::Node{YAML::NodeType::Sequence};
 
-  for (const auto entity : registry.view<id>()) {
+  for (const auto entity : ordered_nodes) {
     auto node_yaml = YAML::Node{};
 
     node_yaml["tag"] = registry.get<tag>(entity).str();
@@ -105,7 +128,9 @@ auto scene_serializer::_build(scene& target) -> YAML::Node {
 
     const auto& relationship_component = registry.get<relationship>(entity);
 
-    if (relationship_component.parent != ecs::null_entity) {
+    // parent is target._root for a top-level node — that's the sentinel, not a real node, so it
+    // has no id to write (and no "parent" key means "top-level" on load).
+    if (relationship_component.parent != ecs::null_entity && registry.all_of<id>(relationship_component.parent)) {
       node_yaml["parent"] = registry.get<id>(relationship_component.parent).value();
     }
 
@@ -361,8 +386,11 @@ auto scene_serializer::load(scene& target, const std::filesystem::path& path) ->
 
   const auto root = YAML::LoadFile(resolved_path.string());
 
-  target._registry.clear();
+  target._registry.clear(); // also destroys target._root — recreate it before anything else runs
+  target._root = target._registry.create();
+  target._registry.emplace<relationship>(target._root);
   target._entities_by_id.clear();
+  target._entities_by_name.clear();
   target._active_camera = ecs::null_entity;
   target._primary_light = ecs::null_entity;
 

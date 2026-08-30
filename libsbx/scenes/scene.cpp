@@ -6,6 +6,12 @@
 
 namespace sbx::scenes {
 
+scene::scene(const std::string& name)
+: _name{name} {
+  _root = _registry.create();
+  _registry.emplace<relationship>(_root);
+}
+
 auto scene::create_node(const utility::hashed_string& name, const scenes::local_transform& transform) -> node {
   return _create_node(name, transform, math::uuid::create());
 }
@@ -30,8 +36,12 @@ auto scene::node_of(ecs::entity entity) -> node {
   return node{memory::make_observer(_registry), entity};
 }
 
+auto scene::root() -> node {
+  return node{memory::make_observer(_registry), _root};
+}
+
 auto scene::destroy_node(node target) -> void {
-  if (!target.is_valid()) {
+  if (!target.is_valid() || target._entity == _root) {
     return;
   }
 
@@ -64,12 +74,8 @@ auto scene::primary_light() -> node {
 auto scene::update() -> void {
   SBX_PROFILE_SCOPE("scene::update");
 
-  auto view = _registry.view<local_transform, relationship, world_transform>();
-
-  for (const auto entity : view) {
-    if (_registry.get<relationship>(entity).parent == ecs::null_entity) {
-      _update_node(entity, math::matrix4x4::identity);
-    }
+  for (const auto child : _registry.get<relationship>(_root).children) {
+    _update_node(child, math::matrix4x4::identity);
   }
 }
 
@@ -84,6 +90,8 @@ auto scene::_create_node(const utility::hashed_string& name, const scenes::local
 
   _entities_by_id.emplace(id, entity);
   _entities_by_name.emplace(name, entity);
+
+  _set_parent(entity, _root);
 
   return node{memory::make_observer(_registry), entity};
 }

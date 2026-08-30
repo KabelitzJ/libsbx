@@ -3,6 +3,7 @@
 #include <editor/panels/asset_browser_panel.hpp>
 
 #include <algorithm>
+#include <cctype>
 #include <filesystem>
 #include <fstream>
 #include <string>
@@ -49,6 +50,18 @@ auto extension_table() -> const std::unordered_map<std::string, asset_kind>& {
   return kind == asset_kind::texture || kind == asset_kind::mesh ||
          kind == asset_kind::material || kind == asset_kind::environment_map ||
          kind == asset_kind::particle_effect;
+}
+
+// Case-insensitive alphabetical order, shared by the folder tree and the contents pane so both
+// panes read as "sorted" the same way.
+[[nodiscard]] auto filename_less(const std::filesystem::path& lhs, const std::filesystem::path& rhs) -> bool {
+  const auto to_lower = [](const std::filesystem::path& path) {
+    auto name = path.filename().string();
+    std::ranges::transform(name, name.begin(), [](unsigned char c) { return std::tolower(c); });
+    return name;
+  };
+
+  return to_lower(lhs) < to_lower(rhs);
 }
 
 } // namespace
@@ -126,7 +139,7 @@ auto asset_browser_panel::_refresh_entries() -> void {
       return lhs.is_directory > rhs.is_directory;
     }
 
-    return lhs.path.filename() < rhs.path.filename();
+    return filename_less(lhs.path, rhs.path);
   });
 
   _needs_refresh = false;
@@ -140,13 +153,19 @@ auto asset_browser_panel::_draw_directory_tree(editor_state& state, const std::f
     return;
   }
 
-  for (const auto& dir_entry : std::filesystem::directory_iterator{absolute_directory}) {
-    if (!dir_entry.is_directory()) {
-      continue;
-    }
+  auto subdirectories = std::vector<std::filesystem::path>{};
 
-    const auto relative_child = relative_directory / dir_entry.path().filename();
-    const auto child_name = dir_entry.path().filename().string();
+  for (const auto& dir_entry : std::filesystem::directory_iterator{absolute_directory}) {
+    if (dir_entry.is_directory()) {
+      subdirectories.push_back(dir_entry.path());
+    }
+  }
+
+  std::ranges::sort(subdirectories, filename_less);
+
+  for (const auto& subdirectory : subdirectories) {
+    const auto relative_child = relative_directory / subdirectory.filename();
+    const auto child_name = subdirectory.filename().string();
 
     auto flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAvailWidth;
     if (_current_directory == relative_child) {
@@ -172,7 +191,8 @@ auto asset_browser_panel::_draw_directory_tree(editor_state& state, const std::f
 }
 
 auto asset_browser_panel::draw(editor_state& state) -> void {
-  ImGui::Begin(window_name);
+  // The two panes below scroll on their own (see panes_height) — the panel itself never needs to.
+  ImGui::Begin(window_name, nullptr, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
   auto& project = sbx::core::engine::project();
   auto& assets_module = sbx::core::engine::get_module<sbx::assets::assets_module>();
@@ -279,6 +299,11 @@ auto asset_browser_panel::draw(editor_state& state) -> void {
     _refresh_entries();
   }
 
+  // Space left below the toolbar, minus the table's own per-cell padding (added around each
+  // child below on top of whatever height we give it) — both panes get exactly this height, so
+  // the table's one row never grows past what's actually left and the panel never overflows.
+  const auto panes_height = ImGui::GetContentRegionAvail().y - ImGui::GetStyle().CellPadding.y * 2.0f;
+
   // Folder tree gets a narrow fixed-width column (user-resizable); contents gets the rest.
   if (ImGui::BeginTable("asset_browser_columns", 2, ImGuiTableFlags_Resizable | ImGuiTableFlags_BordersInnerV)) {
     ImGui::TableSetupColumn("Folders", ImGuiTableColumnFlags_WidthFixed, 180.0f);
@@ -286,6 +311,7 @@ auto asset_browser_panel::draw(editor_state& state) -> void {
     ImGui::TableNextRow();
 
     ImGui::TableSetColumnIndex(0);
+    ImGui::BeginChild("##asset_browser_tree_scroll", ImVec2(0.0f, panes_height));
 
     auto root_flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_DefaultOpen;
     if (_current_directory.empty()) {
@@ -304,7 +330,10 @@ auto asset_browser_panel::draw(editor_state& state) -> void {
       ImGui::TreePop();
     }
 
+    ImGui::EndChild();
+
     ImGui::TableSetColumnIndex(1);
+    ImGui::BeginChild("##asset_browser_contents_scroll", ImVec2(0.0f, panes_height));
 
     // Current directory's immediate contents.
     if (!_current_directory.empty()) {
@@ -369,6 +398,8 @@ auto asset_browser_panel::draw(editor_state& state) -> void {
 
       ImGui::EndPopup();
     }
+
+    ImGui::EndChild();
 
     ImGui::EndTable();
   }

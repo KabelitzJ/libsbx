@@ -7,6 +7,7 @@
 #include <cfloat>
 #include <cmath>
 #include <cstring>
+#include <memory>
 #include <optional>
 #include <utility>
 
@@ -28,6 +29,8 @@
 #include <libsbx/scenes/scenes_module.hpp>
 
 #include <editor/viewport_camera.hpp>
+
+#include <editor/commands/component_commands.hpp>
 
 namespace editor {
 
@@ -116,7 +119,25 @@ auto draw_viewport_gizmo(editor_state& state, const ImVec2& viewport_origin, con
     }
   }
 
+  // Captured before Manipulate() runs this frame, so it's the true pre-drag value even on the
+  // exact frame IsUsing() first flips true (see the false->true check below).
+  const auto pre_manipulate = node.transform();
+
   const auto changed = ImGuizmo::Manipulate(matrices.view.data(), gizmo_projection.data(), operation, mode, world_matrix.data(), nullptr, snap);
+
+  // Cross-frame gizmo-drag state — one shared instance is enough since only one node can have an
+  // active gizmo drag at a time. Bracket around the existing per-frame write below (unchanged: it
+  // keeps writing every frame for live visual feedback) so exactly one undo entry is pushed per
+  // completed drag instead of one per frame.
+  static auto drag_active = false;
+  static auto drag_node_id = sbx::math::uuid::nil();
+  static auto drag_before = sbx::scenes::local_transform{};
+
+  if (ImGuizmo::IsUsing() && !drag_active) {
+    drag_active = true;
+    drag_node_id = node.id();
+    drag_before = pre_manipulate;
+  }
 
   if (changed) {
     const auto& relationship = node.get_component<sbx::scenes::relationship>();
@@ -139,6 +160,14 @@ auto draw_viewport_gizmo(editor_state& state, const ImVec2& viewport_origin, con
     transform.position = sbx::math::vector3f{translation[0], translation[1], translation[2]};
     transform.rotation = sbx::math::quaternion{sbx::math::vector3f{rotation[0], rotation[1], rotation[2]}};
     transform.scale = sbx::math::vector3f{scale[0], scale[1], scale[2]};
+  }
+
+  if (!ImGuizmo::IsUsing() && drag_active) {
+    drag_active = false;
+
+    if (auto dragged_node = scene.find(drag_node_id); dragged_node.is_valid()) {
+      state.push_command(std::make_unique<modify_component_command<sbx::scenes::local_transform>>(drag_node_id, drag_before, dragged_node.transform(), "Edit Transform"));
+    }
   }
 
   return ImGuizmo::IsOver() || ImGuizmo::IsUsing();

@@ -3,6 +3,7 @@
 #ifndef LIBSBX_SCENES_SCENE_HPP_
 #define LIBSBX_SCENES_SCENE_HPP_
 
+#include <cstddef>
 #include <utility>
 #include <unordered_map>
 
@@ -29,6 +30,12 @@ public:
 
   auto create_node(const utility::hashed_string& name = "Node", const scenes::local_transform& transform = scenes::local_transform{}) -> node;
 
+  /**
+   * @brief Creates a node with an explicit id instead of minting a fresh one — for recreating a
+   * node undo/redo already knows the id of (e.g. redoing a create, or restoring a deleted node).
+   */
+  auto create_node(const utility::hashed_string& name, const scenes::local_transform& transform, const math::uuid& id) -> node;
+
   [[nodiscard]] auto find(math::uuid id) -> node;
 
   [[nodiscard]] auto find(const utility::hashed_string& name) -> node;
@@ -45,6 +52,13 @@ public:
    * Not a real node — never pass it to find(), destroy_node(), or the serializer.
    */
   [[nodiscard]] auto root() -> node;
+
+  /**
+   * @brief Detaches child from its current parent and inserts it at index (clamped) among
+   * parent's children — pass root() as parent for a top-level position. General-purpose
+   * reordering, not just undo/redo: node::set_parent() only ever appends at the end.
+   */
+  auto insert_child(node parent, node child, std::size_t index) -> void;
 
   /**
    * @brief Destroys @p target and its entire subtree, unlinking it from its parent's
@@ -65,7 +79,7 @@ public:
   [[nodiscard]] auto primary_light() -> node;
 
   [[nodiscard]] auto has_primary_light() const noexcept -> bool {
-    return _active_camera != ecs::null_entity;
+    return _primary_light != ecs::null_entity;
   }
 
   /**

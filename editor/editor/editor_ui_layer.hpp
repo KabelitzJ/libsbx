@@ -73,6 +73,11 @@ public:
    */
   auto request_quit() -> void;
 
+  /** @brief Drops the undo/redo history — call whenever previously-pushed commands can no longer be safely replayed (see editor_module::exit_play_mode()). */
+  auto clear_command_stack() -> void {
+    _state.clear_command_stack();
+  }
+
 private:
 
   auto _upload_fonts() -> void;

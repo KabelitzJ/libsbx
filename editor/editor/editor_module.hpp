@@ -68,6 +68,12 @@ public:
 
   auto exit_play_mode() -> void {
     _play_mode.exit_play_mode();
+
+    // The reload above rebuilds the whole registry — any command pushed during the play session
+    // referenced entities/state that no longer exists in a replayable way, so drop them. Entering
+    // Play deliberately does NOT clear (see play_mode_controller.hpp's doc comment): it never
+    // touches node identity or the registry, so pre-Play history stays perfectly valid while playing.
+    _ui_layer.clear_command_stack();
   }
 
   auto toggle_pause() -> void {

@@ -5,7 +5,10 @@
 #include <array>
 #include <cstring>
 #include <fstream>
+#include <memory>
 #include <string>
+
+#include <fmt/format.h>
 
 #include <imgui.h>
 #include <imgui_internal.h> // DockBuilder* — see _draw_dockspace's first-run default layout.
@@ -22,6 +25,8 @@
 #include <editor/viewport_picking.hpp>
 
 #include <editor/editor_module.hpp>
+
+#include <editor/commands/scene_commands.hpp>
 
 #include <libsbx/core/engine.hpp>
 #include <libsbx/core/project.hpp>
@@ -68,6 +73,17 @@ auto editor_ui_layer::build() -> void {
   // Not owned by ui_system (ImGuizmo is editor-only), so it's this layer's job to prime it — must
   // run before any ImGuizmo:: call below.
   ImGuizmo::BeginFrame();
+
+  // Checked once per frame here (not scoped to any one panel's hover state) so it fires regardless
+  // of which window has focus. WantTextInput (not the broader WantCaptureKeyboard) so Ctrl+Z still
+  // edits a focused text field (the node-name field, a script string field) instead of the stack.
+  if (!ImGui::GetIO().WantTextInput && ImGui::GetIO().KeyCtrl) {
+    if (ImGui::IsKeyPressed(ImGuiKey_Z, false)) {
+      _state.undo();
+    } else if (ImGui::IsKeyPressed(ImGuiKey_Y, false)) {
+      _state.redo();
+    }
+  }
 
   _draw_dockspace();
 
@@ -222,12 +238,34 @@ auto editor_ui_layer::_draw_dockspace() -> void {
       ImGui::EndMenu();
     }
 
+    if (ImGui::BeginMenu("Edit")) {
+      ImGui::BeginDisabled(!_state.can_undo());
+
+      if (ImGui::MenuItem(fmt::format(ICON_MDI_UNDO " Undo {}", _state.undo_label()).c_str(), "Ctrl+Z")) {
+        _state.undo();
+      }
+
+      ImGui::EndDisabled();
+
+      ImGui::BeginDisabled(!_state.can_redo());
+
+      if (ImGui::MenuItem(fmt::format(ICON_MDI_REDO " Redo {}", _state.redo_label()).c_str(), "Ctrl+Y")) {
+        _state.redo();
+      }
+
+      ImGui::EndDisabled();
+
+      ImGui::EndMenu();
+    }
+
     if (ImGui::BeginMenu("Scene")) {
       if (ImGui::MenuItem(ICON_MDI_PLUS " Add Node")) {
         auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
-        auto& scene = scenes_module.active_scene();
 
-        _state.select_node(scene.create_node());
+        auto command = std::make_unique<create_node_command>();
+        auto* created = command.get();
+        _state.push_command(std::move(command));
+        _state.select_node(scenes_module.active_scene().find(created->id()));
       }
 
       ImGui::Separator();

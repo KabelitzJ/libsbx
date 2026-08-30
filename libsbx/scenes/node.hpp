@@ -14,6 +14,7 @@ namespace sbx::scenes {
 class node {
 
   friend class scene;
+  friend class scene_serializer;
 
 public:
 

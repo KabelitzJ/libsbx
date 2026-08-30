@@ -5,9 +5,12 @@
 
 #include <array>
 #include <cstddef>
+#include <optional>
 
 #include <libsbx/math/quaternion.hpp>
 #include <libsbx/math/uuid.hpp>
+
+#include <libsbx/scenes/components.hpp>
 
 #include <libsbx/assets/assets_module.hpp>
 #include <libsbx/assets/material.hpp>
@@ -50,8 +53,8 @@ private:
   }; // struct asset_property_cache
 
   auto _draw_node_properties(editor_state& state, sbx::scenes::node& node, sbx::assets::assets_module& assets_module) -> void;
-  auto _draw_name_field(sbx::scenes::node& node) -> void;
-  auto _draw_transform_section(sbx::scenes::node& node) -> void;
+  auto _draw_name_field(editor_state& state, sbx::scenes::node& node) -> void;
+  auto _draw_transform_section(editor_state& state, sbx::scenes::node& node) -> void;
   auto _draw_asset_properties(const asset_selection& asset, sbx::assets::assets_module& assets_module) -> void;
   auto _draw_material_properties(const asset_selection& asset, sbx::assets::assets_module& assets_module) -> void;
   auto _draw_particle_effect_properties(const asset_selection& asset, sbx::assets::assets_module& assets_module) -> void;
@@ -60,6 +63,7 @@ private:
   // changes (so mid-edit keystrokes aren't clobbered by re-reading the committed name).
   std::array<char, 128u> _name_buffer{};
   sbx::math::uuid _name_buffer_id{sbx::math::uuid::nil()};
+  std::optional<sbx::scenes::tag> _pending_name_before{};
 
   // Rotation is a quaternion edited as Euler degrees; re-deriving Euler every frame is unstable
   // near gimbal lock, so the triplet is cached and only re-synced when something else (reselect,
@@ -67,6 +71,10 @@ private:
   sbx::math::uuid _rotation_node_id{sbx::math::uuid::nil()};
   sbx::math::quaternion _rotation_cache{sbx::math::quaternion::identity};
   std::array<std::float_t, 3u> _rotation{0.0f, 0.0f, 0.0f};
+
+  // Captured when a Position/Rotation/Scale drag starts, pushed as one modify_component_command
+  // when it ends — one shared field covers all three since only one can be mid-drag at a time.
+  std::optional<sbx::scenes::local_transform> _pending_transform_before{};
 
   asset_property_cache _asset_cache{};
 

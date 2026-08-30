@@ -7,10 +7,16 @@
 #include <utility>
 #include <variant>
 
+#include <memory>
+#include <string>
+
 #include <libsbx/math/uuid.hpp>
 
 #include <libsbx/scenes/node.hpp>
 #include <libsbx/scenes/scene.hpp>
+
+#include <editor/commands/command.hpp>
+#include <editor/commands/command_stack.hpp>
 
 namespace editor {
 
@@ -83,6 +89,43 @@ struct editor_state {
   auto select_asset(sbx::math::uuid id, std::filesystem::path path, asset_kind kind) -> void;
 
   auto clear_selection() -> void;
+
+  // The scene-graph undo/redo history — shared across every panel via this struct for the same
+  // reason current_selection is (see the class doc comment). Prefer the pass-throughs below over
+  // reaching into this directly, so every call site reads the same "push, don't mutate directly" convention.
+  command_stack commands{};
+
+  auto push_command(std::unique_ptr<command> cmd) -> void {
+    commands.push(std::move(cmd));
+  }
+
+  auto undo() -> void {
+    commands.undo();
+  }
+
+  auto redo() -> void {
+    commands.redo();
+  }
+
+  [[nodiscard]] auto can_undo() const noexcept -> bool {
+    return commands.can_undo();
+  }
+
+  [[nodiscard]] auto can_redo() const noexcept -> bool {
+    return commands.can_redo();
+  }
+
+  [[nodiscard]] auto undo_label() const -> std::string {
+    return commands.undo_label();
+  }
+
+  [[nodiscard]] auto redo_label() const -> std::string {
+    return commands.redo_label();
+  }
+
+  auto clear_command_stack() -> void {
+    commands.clear();
+  }
 
 }; // struct editor_state
 

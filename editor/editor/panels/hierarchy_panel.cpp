@@ -2,6 +2,8 @@
 // Copyright (c) 2026 Jonas Kabelitz
 #include <editor/panels/hierarchy_panel.hpp>
 
+#include <memory>
+
 #include <imgui.h>
 
 #include <libsbx/render/ui/fonts/material_design_icons.hpp>
@@ -12,6 +14,8 @@
 #include <libsbx/scenes/node.hpp>
 #include <libsbx/scenes/scene.hpp>
 #include <libsbx/scenes/scenes_module.hpp>
+
+#include <editor/commands/scene_commands.hpp>
 
 namespace editor {
 
@@ -105,7 +109,10 @@ auto hierarchy_panel::draw(editor_state& state) -> void {
   // ##node_context popup) adds a new top-level node.
   if (ImGui::BeginPopupContextWindow("##hierarchy_context", ImGuiPopupFlags_MouseButtonRight | ImGuiPopupFlags_NoOpenOverItems)) {
     if (ImGui::MenuItem(ICON_MDI_PLUS " Add Node")) {
-      state.select_node(scene.create_node());
+      auto command = std::make_unique<create_node_command>();
+      auto* created = command.get();
+      state.push_command(std::move(command));
+      state.select_node(scene.find(created->id()));
     }
 
     ImGui::EndPopup();
@@ -119,7 +126,7 @@ auto hierarchy_panel::draw(editor_state& state) -> void {
 
   if (_pending_delete_id != sbx::math::uuid::nil()) {
     if (auto target = scene.find(_pending_delete_id); target.is_valid()) {
-      scene.destroy_node(target);
+      state.push_command(std::make_unique<delete_node_command>(target));
     }
 
     _pending_delete_id = sbx::math::uuid::nil();
@@ -127,9 +134,10 @@ auto hierarchy_panel::draw(editor_state& state) -> void {
 
   if (_pending_add_child_parent_id != sbx::math::uuid::nil()) {
     if (auto parent = scene.find(_pending_add_child_parent_id); parent.is_valid()) {
-      auto child = scene.create_node();
-      child.set_parent(parent);
-      state.select_node(child);
+      auto command = std::make_unique<create_node_command>(parent.id());
+      auto* created = command.get();
+      state.push_command(std::move(command));
+      state.select_node(scene.find(created->id()));
     }
 
     _pending_add_child_parent_id = sbx::math::uuid::nil();

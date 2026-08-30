@@ -7,6 +7,7 @@
 #include <cctype>
 #include <cstring>
 #include <filesystem>
+#include <memory>
 #include <optional>
 #include <string_view>
 #include <vector>
@@ -35,7 +36,30 @@
 #include <libsbx/scripting/managed/field_info.hpp>
 #include <libsbx/scripting/managed/attribute.hpp>
 
+#include <editor/commands/component_commands.hpp>
+#include <editor/commands/script_commands.hpp>
+
 namespace editor {
+
+// Brackets a continuous-drag-style edit (DragFloat, ColorEdit4, SliderAngle, InputText, ...) into
+// exactly one undo entry per completed edit, instead of one per changed-frame: call right after
+// the widget, every frame, regardless of whether it changed this frame. The widget itself keeps
+// writing the live value straight through as before — this only decides when to snapshot/push.
+// `pending` must outlive one full activate/deactivate cycle (a caller's function-local static,
+// matching this file's existing cross-frame UI state convention — see draw_material_picker's
+// filter_buffer) — one shared instance per section is enough since ImGui only has one active item
+// at a time.
+template<typename Component>
+auto bracket_edit(editor_state& state, const sbx::scenes::node& node, const Component& component, std::optional<Component>& pending, const char* label) -> void {
+  if (ImGui::IsItemActivated() && !pending) {
+    pending = component;
+  }
+
+  if (ImGui::IsItemDeactivatedAfterEdit() && pending) {
+    state.push_command(std::make_unique<modify_component_command<Component>>(node.id(), *pending, component, label));
+    pending.reset();
+  }
+}
 
 
 auto path_text(const sbx::assets::assets_module& assets_module, const sbx::math::uuid& id) -> std::string {
@@ -96,7 +120,9 @@ auto contains_ignore_case(std::string_view haystack, std::string_view needle) ->
 // Button shows the slot's material file name; opens a popup with a filter, an optional
 // "Reset to Mesh Default" (reseeds from the mesh's own submesh material), and every .material
 // file under assets. Second button jumps Properties to that material's editable view.
-auto draw_material_picker(editor_state& state, const char* popup_id, sbx::assets::material_handle& slot, sbx::assets::assets_module& assets_module, const sbx::assets::material_handle& mesh_default = {}) -> void {
+auto draw_material_picker(editor_state& state, const char* popup_id, sbx::assets::material_handle& slot, sbx::assets::assets_module& assets_module, const sbx::assets::material_handle& mesh_default = {}) -> bool {
+  auto changed = false;
+
   // popup_id (e.g. "##albedo_picker") appended so multiple pickers showing the same label — most
   // commonly several empty "(none)" slots at once — don't collide on ImGui's label-derived ID.
   const auto label = (slot.is_valid() ? short_label(assets_module, slot->id()) : std::string{"(none)"}) + popup_id;
@@ -140,6 +166,7 @@ auto draw_material_picker(editor_state& state, const char* popup_id, sbx::assets
 
     if (mesh_default.is_valid() && ImGui::MenuItem("Reset to Mesh Default")) {
       slot = mesh_default;
+      changed = true;
     }
 
     auto& project = sbx::core::engine::project();
@@ -159,11 +186,14 @@ auto draw_material_picker(editor_state& state, const char* popup_id, sbx::assets
         // reuses the file's real uuid if it's already imported — calling import(relative)
         // directly here would mint a second, broken uuid keyed on an unresolved path.
         slot = assets_module.load_material(relative);
+        changed = true;
       }
     }
 
     ImGui::EndPopup();
   }
+
+  return changed;
 }
 
 // Forks a material into a new, independent .material asset next to the mesh, so editing the copy
@@ -271,7 +301,9 @@ auto draw_texture_picker(const char* popup_id, sbx::assets::texture_handle& slot
 // Same idea as draw_material_picker, for mesh_renderer.mesh. Doesn't touch renderer.materials
 // itself — draw_mesh_renderer_section detects the change and clears it so sync_materials_with_mesh
 // reseeds cleanly from the new mesh's submeshes.
-auto draw_mesh_picker(editor_state& state, const char* popup_id, sbx::assets::mesh_handle& slot, sbx::assets::assets_module& assets_module) -> void {
+auto draw_mesh_picker(editor_state& state, const char* popup_id, sbx::assets::mesh_handle& slot, sbx::assets::assets_module& assets_module) -> bool {
+  auto changed = false;
+
   const auto label = (slot.is_valid() ? short_label(assets_module, slot->id()) : std::string{"(none)"}) + popup_id;
 
   if (ImGui::Button(label.c_str())) {
@@ -326,16 +358,21 @@ auto draw_mesh_picker(editor_state& state, const char* popup_id, sbx::assets::me
 
       if (ImGui::MenuItem(relative_string.c_str())) {
         slot = assets_module.load_mesh(relative);
+        changed = true;
       }
     }
 
     ImGui::EndPopup();
   }
+
+  return changed;
 }
 
 // Same idea as draw_mesh_picker, for particle_effect.effect — same jump-to-edit button, since
 // particle_effect assets are edited in place (see _draw_particle_effect_properties) like materials.
-auto draw_particle_effect_picker(editor_state& state, const char* popup_id, sbx::assets::particle_effect_handle& slot, sbx::assets::assets_module& assets_module) -> void {
+auto draw_particle_effect_picker(editor_state& state, const char* popup_id, sbx::assets::particle_effect_handle& slot, sbx::assets::assets_module& assets_module) -> bool {
+  auto changed = false;
+
   const auto label = (slot.is_valid() ? short_label(assets_module, slot->id()) : std::string{"(none)"}) + popup_id;
 
   if (ImGui::Button(label.c_str())) {
@@ -377,6 +414,7 @@ auto draw_particle_effect_picker(editor_state& state, const char* popup_id, sbx:
 
     if (ImGui::MenuItem("(None)")) {
       slot = sbx::assets::particle_effect_handle{};
+      changed = true;
     }
 
     auto& project = sbx::core::engine::project();
@@ -393,16 +431,27 @@ auto draw_particle_effect_picker(editor_state& state, const char* popup_id, sbx:
 
       if (ImGui::MenuItem(relative_string.c_str())) {
         slot = assets_module.load_particle_effect(relative);
+        changed = true;
       }
     }
 
     ImGui::EndPopup();
   }
+
+  return changed;
 }
 
-// Color-coded X/Y/Z row: click an axis button to reset it to reset_value, followed by its drag
-// field. Returns true if any axis changed this frame.
-auto draw_vector3_control(const char* label, std::array<std::float_t, 3u>& values, std::float_t reset_value, std::float_t speed) -> bool {
+// changed: any axis changed this frame. started/committed: whether a drag (or a same-frame reset
+// button click, which is its own complete started+committed gesture) began/finished this frame —
+// callers use these to bracket the whole X/Y/Z row into one undo entry instead of one per frame.
+struct vector3_edit_result {
+  bool changed{false};
+  bool started{false};
+  bool committed{false};
+}; // struct vector3_edit_result
+
+// Color-coded X/Y/Z row: click an axis button to reset it to reset_value, followed by its drag field.
+auto draw_vector3_control(const char* label, std::array<std::float_t, 3u>& values, std::float_t reset_value, std::float_t speed) -> vector3_edit_result {
   static constexpr auto axis_labels = std::array<const char*, 3u>{"X", "Y", "Z"};
   static constexpr auto axis_ids = std::array<const char*, 3u>{"##X", "##Y", "##Z"};
   static constexpr auto axis_colors = std::array<ImVec4, 3u>{
@@ -411,7 +460,7 @@ auto draw_vector3_control(const char* label, std::array<std::float_t, 3u>& value
     ImVec4{0.20f, 0.45f, 0.80f, 1.0f}, // Z - blue
   };
 
-  auto changed = false;
+  auto result = vector3_edit_result{};
 
   ImGui::PushID(label);
 
@@ -436,20 +485,24 @@ auto draw_vector3_control(const char* label, std::array<std::float_t, 3u>& value
 
     if (ImGui::Button(axis_labels[axis], button_size)) {
       values[axis] = reset_value;
-      changed = true;
+      result.changed = true;
+      result.started = true;
+      result.committed = true;
     }
 
     ImGui::PopStyleColor(3);
     ImGui::SameLine();
 
     ImGui::SetNextItemWidth(item_width);
-    changed |= ImGui::DragFloat(axis_ids[axis], &values[axis], speed);
+    result.changed |= ImGui::DragFloat(axis_ids[axis], &values[axis], speed);
+    result.started |= ImGui::IsItemActivated();
+    result.committed |= ImGui::IsItemDeactivatedAfterEdit();
   }
 
   ImGui::PopStyleVar();
   ImGui::PopID();
 
-  return changed;
+  return result;
 }
 
 auto draw_color_field(const char* label, sbx::math::color& color) -> bool {
@@ -467,13 +520,13 @@ auto draw_color_field(const char* label, sbx::math::color& color) -> bool {
   return true;
 }
 
-auto draw_camera_section(sbx::scenes::node& node) -> void {
+auto draw_camera_section(editor_state& state, sbx::scenes::node& node) -> void {
   auto is_open = true;
 
   const auto is_expanded = ImGui::CollapsingHeader(ICON_MDI_CAMERA_OUTLINE " Camera", &is_open, ImGuiTreeNodeFlags_DefaultOpen);
 
   if (!is_open) {
-    node.remove_component<sbx::scenes::camera>();
+    state.push_command(std::make_unique<remove_component_command<sbx::scenes::camera>>(node.id(), node.get_component<sbx::scenes::camera>(), "Remove Camera"));
     return;
   }
 
@@ -482,11 +535,16 @@ auto draw_camera_section(sbx::scenes::node& node) -> void {
   }
 
   auto& camera = node.get_component<sbx::scenes::camera>();
+  static auto pending = std::optional<sbx::scenes::camera>{};
 
   ImGui::DragFloat("FOV (degrees)", &camera.fov_degrees, 0.5f, 1.0f, 179.0f);
+  bracket_edit(state, node, camera, pending, "Edit Camera");
   ImGui::DragFloat("Near Plane", &camera.near_plane, 0.01f, 0.001f, camera.far_plane);
+  bracket_edit(state, node, camera, pending, "Edit Camera");
   ImGui::DragFloat("Far Plane", &camera.far_plane, 1.0f, camera.near_plane, 100000.0f);
+  bracket_edit(state, node, camera, pending, "Edit Camera");
   ImGui::DragFloat("Exposure", &camera.exposure, 0.05f, -8.0f, 8.0f);
+  bracket_edit(state, node, camera, pending, "Edit Camera");
 }
 
 auto draw_mesh_renderer_section(editor_state& state, sbx::scenes::node& node, sbx::assets::assets_module& assets_module) -> void {
@@ -495,7 +553,7 @@ auto draw_mesh_renderer_section(editor_state& state, sbx::scenes::node& node, sb
   const auto is_expanded = ImGui::CollapsingHeader(ICON_MDI_CUBE_OUTLINE " Mesh Renderer", &is_open, ImGuiTreeNodeFlags_DefaultOpen);
 
   if (!is_open) {
-    node.remove_component<sbx::scenes::mesh_renderer>();
+    state.push_command(std::make_unique<remove_component_command<sbx::scenes::mesh_renderer>>(node.id(), node.get_component<sbx::scenes::mesh_renderer>(), "Remove Mesh Renderer"));
     return;
   }
 
@@ -505,11 +563,16 @@ auto draw_mesh_renderer_section(editor_state& state, sbx::scenes::node& node, sb
 
   auto& renderer = node.get_component<sbx::scenes::mesh_renderer>();
 
+  // Resolved within this single frame (popup-based pickers, not a multi-frame drag) — snapshot
+  // once up front and push at most one command at the end if anything below actually changed.
+  const auto before = renderer;
+  auto changed = false;
+
   const auto previous_mesh_id = renderer.mesh.is_valid() ? renderer.mesh->id() : sbx::math::uuid::nil();
 
   ImGui::Text("Mesh:");
   ImGui::SameLine();
-  draw_mesh_picker(state, "##mesh_picker_popup", renderer.mesh, assets_module);
+  changed |= draw_mesh_picker(state, "##mesh_picker_popup", renderer.mesh, assets_module);
 
   const auto new_mesh_id = renderer.mesh.is_valid() ? renderer.mesh->id() : sbx::math::uuid::nil();
 
@@ -537,13 +600,14 @@ auto draw_mesh_renderer_section(editor_state& state, sbx::scenes::node& node, sb
 
     ImGui::Text("Material %zu:", index);
     ImGui::SameLine();
-    draw_material_picker(state, "##material_picker_popup", slot, assets_module, mesh_default);
+    changed |= draw_material_picker(state, "##material_picker_popup", slot, assets_module, mesh_default);
 
     if (slot.is_valid()) {
       ImGui::SameLine();
 
       if (ImGui::Button(ICON_MDI_EXPORT_VARIANT " Duplicate")) {
         slot = extract_material_to_asset(assets_module, slot, renderer.mesh.is_valid() ? renderer.mesh->id() : sbx::math::uuid::nil());
+        changed = true;
       }
 
       if (ImGui::IsItemHovered()) {
@@ -553,15 +617,19 @@ auto draw_mesh_renderer_section(editor_state& state, sbx::scenes::node& node, sb
 
     ImGui::PopID();
   }
+
+  if (changed) {
+    state.push_command(std::make_unique<modify_component_command<sbx::scenes::mesh_renderer>>(node.id(), before, renderer, "Edit Mesh Renderer"));
+  }
 }
 
-auto draw_directional_light_section(sbx::scenes::node& node) -> void {
+auto draw_directional_light_section(editor_state& state, sbx::scenes::node& node) -> void {
   auto is_open = true;
 
   const auto is_expanded = ImGui::CollapsingHeader(ICON_MDI_WHITE_BALANCE_SUNNY " Directional Light", &is_open, ImGuiTreeNodeFlags_DefaultOpen);
 
   if (!is_open) {
-    node.remove_component<sbx::scenes::directional_light>();
+    state.push_command(std::make_unique<remove_component_command<sbx::scenes::directional_light>>(node.id(), node.get_component<sbx::scenes::directional_light>(), "Remove Directional Light"));
     return;
   }
 
@@ -570,20 +638,31 @@ auto draw_directional_light_section(sbx::scenes::node& node) -> void {
   }
 
   auto& light = node.get_component<sbx::scenes::directional_light>();
+  static auto pending = std::optional<sbx::scenes::directional_light>{};
 
   draw_color_field("Color", light.color);
+  bracket_edit(state, node, light, pending, "Edit Directional Light");
   ImGui::DragFloat("Intensity", &light.intensity, 0.05f, 0.0f, 1000.0f);
-  ImGui::Checkbox("Casts Shadows", &light.casts_shadows);
+  bracket_edit(state, node, light, pending, "Edit Directional Light");
+
+  {
+    const auto before = light;
+    if (ImGui::Checkbox("Casts Shadows", &light.casts_shadows)) {
+      state.push_command(std::make_unique<modify_component_command<sbx::scenes::directional_light>>(node.id(), before, light, "Edit Directional Light"));
+    }
+  }
+
   ImGui::DragFloat("Shadow Distance", &light.shadow_distance, 0.5f, 1.0f, 1000.0f);
+  bracket_edit(state, node, light, pending, "Edit Directional Light");
 }
 
-auto draw_point_light_section(sbx::scenes::node& node) -> void {
+auto draw_point_light_section(editor_state& state, sbx::scenes::node& node) -> void {
   auto is_open = true;
 
   const auto is_expanded = ImGui::CollapsingHeader(ICON_MDI_LIGHTBULB_OUTLINE " Point Light", &is_open, ImGuiTreeNodeFlags_DefaultOpen);
 
   if (!is_open) {
-    node.remove_component<sbx::scenes::point_light>();
+    state.push_command(std::make_unique<remove_component_command<sbx::scenes::point_light>>(node.id(), node.get_component<sbx::scenes::point_light>(), "Remove Point Light"));
     return;
   }
 
@@ -592,19 +671,23 @@ auto draw_point_light_section(sbx::scenes::node& node) -> void {
   }
 
   auto& light = node.get_component<sbx::scenes::point_light>();
+  static auto pending = std::optional<sbx::scenes::point_light>{};
 
   draw_color_field("Color", light.color);
+  bracket_edit(state, node, light, pending, "Edit Point Light");
   ImGui::DragFloat("Intensity", &light.intensity, 0.05f, 0.0f, 1000.0f);
+  bracket_edit(state, node, light, pending, "Edit Point Light");
   ImGui::DragFloat("Range", &light.range, 0.05f, 0.0f, 10000.0f);
+  bracket_edit(state, node, light, pending, "Edit Point Light");
 }
 
-auto draw_spot_light_section(sbx::scenes::node& node) -> void {
+auto draw_spot_light_section(editor_state& state, sbx::scenes::node& node) -> void {
   auto is_open = true;
 
   const auto is_expanded = ImGui::CollapsingHeader(ICON_MDI_FLASHLIGHT " Spot Light", &is_open, ImGuiTreeNodeFlags_DefaultOpen);
 
   if (!is_open) {
-    node.remove_component<sbx::scenes::spot_light>();
+    state.push_command(std::make_unique<remove_component_command<sbx::scenes::spot_light>>(node.id(), node.get_component<sbx::scenes::spot_light>(), "Remove Spot Light"));
     return;
   }
 
@@ -613,24 +696,30 @@ auto draw_spot_light_section(sbx::scenes::node& node) -> void {
   }
 
   auto& light = node.get_component<sbx::scenes::spot_light>();
+  static auto pending = std::optional<sbx::scenes::spot_light>{};
 
   draw_color_field("Color", light.color);
+  bracket_edit(state, node, light, pending, "Edit Spot Light");
   ImGui::DragFloat("Intensity", &light.intensity, 0.05f, 0.0f, 1000.0f);
+  bracket_edit(state, node, light, pending, "Edit Spot Light");
   ImGui::DragFloat("Range", &light.range, 0.05f, 0.0f, 10000.0f);
+  bracket_edit(state, node, light, pending, "Edit Spot Light");
 
   // inner_angle/outer_angle are stored in radians; SliderAngle operates on a radians pointer
   // while displaying/editing in degrees, so these bind directly — no manual conversion.
   ImGui::SliderAngle("Inner Angle", &light.inner_angle, 0.0f, 90.0f);
+  bracket_edit(state, node, light, pending, "Edit Spot Light");
   ImGui::SliderAngle("Outer Angle", &light.outer_angle, 0.0f, 90.0f);
+  bracket_edit(state, node, light, pending, "Edit Spot Light");
 }
 
-auto draw_skybox_section(sbx::scenes::node& node, sbx::assets::assets_module& assets_module) -> void {
+auto draw_skybox_section(editor_state& state, sbx::scenes::node& node, sbx::assets::assets_module& assets_module) -> void {
   auto is_open = true;
 
   const auto is_expanded = ImGui::CollapsingHeader(ICON_MDI_EARTH " Skybox", &is_open, ImGuiTreeNodeFlags_DefaultOpen);
 
   if (!is_open) {
-    node.remove_component<sbx::scenes::skybox>();
+    state.push_command(std::make_unique<remove_component_command<sbx::scenes::skybox>>(node.id(), node.get_component<sbx::scenes::skybox>(), "Remove Skybox"));
     return;
   }
 
@@ -639,6 +728,7 @@ auto draw_skybox_section(sbx::scenes::node& node, sbx::assets::assets_module& as
   }
 
   auto& sky = node.get_component<sbx::scenes::skybox>();
+  static auto pending = std::optional<sbx::scenes::skybox>{};
 
   if (sky.environment.is_valid()) {
     ImGui::Text("Environment: %s", path_text(assets_module, sky.environment->id()).c_str());
@@ -651,7 +741,9 @@ auto draw_skybox_section(sbx::scenes::node& node, sbx::assets::assets_module& as
   }
 
   ImGui::DragFloat("Background Intensity", &sky.intensity, 0.05f, 0.0f, 100.0f);
+  bracket_edit(state, node, sky, pending, "Edit Skybox");
   ImGui::DragFloat("Ambient Intensity", &sky.ambient_intensity, 0.05f, 0.0f, 100.0f);
+  bracket_edit(state, node, sky, pending, "Edit Skybox");
 }
 
 // particle_effect::loop is a stub for a future burst/duration model (see its doc comment); exposed
@@ -662,7 +754,7 @@ auto draw_particle_effect_instance_section(editor_state& state, sbx::scenes::nod
   const auto is_expanded = ImGui::CollapsingHeader(ICON_MDI_FIREWORK " Particle Effect", &is_open, ImGuiTreeNodeFlags_DefaultOpen);
 
   if (!is_open) {
-    node.remove_component<sbx::scenes::particle_effect>();
+    state.push_command(std::make_unique<remove_component_command<sbx::scenes::particle_effect>>(node.id(), node.get_component<sbx::scenes::particle_effect>(), "Remove Particle Effect"));
     return;
   }
 
@@ -674,7 +766,14 @@ auto draw_particle_effect_instance_section(editor_state& state, sbx::scenes::nod
 
   ImGui::Text("Effect:");
   ImGui::SameLine();
-  draw_particle_effect_picker(state, "##particle_effect_picker_popup", instance.effect, assets_module);
+
+  {
+    const auto before = instance;
+
+    if (draw_particle_effect_picker(state, "##particle_effect_picker_popup", instance.effect, assets_module)) {
+      state.push_command(std::make_unique<modify_component_command<sbx::scenes::particle_effect>>(node.id(), before, instance, "Edit Particle Effect"));
+    }
+  }
 
   if (instance.effect.is_valid()) {
     ImGui::Text("Emitters: %zu", instance.effect->emitters().size());
@@ -682,9 +781,18 @@ auto draw_particle_effect_instance_section(editor_state& state, sbx::scenes::nod
     ImGui::TextDisabled("No effect assigned.");
   }
 
-  ImGui::Checkbox("Loop", &instance.loop);
+  {
+    const auto before = instance;
+
+    if (ImGui::Checkbox("Loop", &instance.loop)) {
+      state.push_command(std::make_unique<modify_component_command<sbx::scenes::particle_effect>>(node.id(), before, instance, "Edit Particle Effect"));
+    }
+  }
 
   ImGui::SeparatorText("Playback");
+
+  // Play/Pause/Stop below are transport controls, not authored data — deliberately excluded from
+  // undo/redo (only Loop above is tracked).
 
   const auto is_playing = instance.playback == sbx::scenes::particle_playback_state::playing;
   const auto is_stopped = instance.playback == sbx::scenes::particle_playback_state::stopped;
@@ -718,7 +826,7 @@ auto draw_particle_effect_instance_section(editor_state& state, sbx::scenes::nod
   ImGui::TextDisabled("(%s)", is_playing ? "Playing" : is_stopped ? "Stopped" : "Paused");
 }
 
-auto draw_add_component_menu(sbx::scenes::node& node, sbx::scripting::scripting_module& scripting_module) -> void {
+auto draw_add_component_menu(editor_state& state, sbx::scenes::node& node, sbx::scripting::scripting_module& scripting_module) -> void {
   static constexpr auto label = ICON_MDI_PLUS " Add Component";
 
   // Centered horizontally in the panel, rather than left-aligned like a regular control.
@@ -733,31 +841,31 @@ auto draw_add_component_menu(sbx::scenes::node& node, sbx::scripting::scripting_
 
   if (ImGui::BeginPopup("##add_component_popup")) {
     if (!node.has_component<sbx::scenes::camera>() && ImGui::MenuItem(ICON_MDI_CAMERA_OUTLINE " Camera")) {
-      node.add_component<sbx::scenes::camera>();
+      state.push_command(std::make_unique<add_component_command<sbx::scenes::camera>>(node.id(), "Add Camera"));
     }
 
     if (!node.has_component<sbx::scenes::mesh_renderer>() && ImGui::MenuItem(ICON_MDI_CUBE_OUTLINE " Mesh Renderer")) {
-      node.add_component<sbx::scenes::mesh_renderer>();
+      state.push_command(std::make_unique<add_component_command<sbx::scenes::mesh_renderer>>(node.id(), "Add Mesh Renderer"));
     }
 
     if (!node.has_component<sbx::scenes::directional_light>() && ImGui::MenuItem(ICON_MDI_WHITE_BALANCE_SUNNY " Directional Light")) {
-      node.add_component<sbx::scenes::directional_light>();
+      state.push_command(std::make_unique<add_component_command<sbx::scenes::directional_light>>(node.id(), "Add Directional Light"));
     }
 
     if (!node.has_component<sbx::scenes::point_light>() && ImGui::MenuItem(ICON_MDI_LIGHTBULB_OUTLINE " Point Light")) {
-      node.add_component<sbx::scenes::point_light>();
+      state.push_command(std::make_unique<add_component_command<sbx::scenes::point_light>>(node.id(), "Add Point Light"));
     }
 
     if (!node.has_component<sbx::scenes::spot_light>() && ImGui::MenuItem(ICON_MDI_FLASHLIGHT " Spot Light")) {
-      node.add_component<sbx::scenes::spot_light>();
+      state.push_command(std::make_unique<add_component_command<sbx::scenes::spot_light>>(node.id(), "Add Spot Light"));
     }
 
     if (!node.has_component<sbx::scenes::skybox>() && ImGui::MenuItem(ICON_MDI_EARTH " Skybox")) {
-      node.add_component<sbx::scenes::skybox>();
+      state.push_command(std::make_unique<add_component_command<sbx::scenes::skybox>>(node.id(), "Add Skybox"));
     }
 
     if (!node.has_component<sbx::scenes::particle_effect>() && ImGui::MenuItem(ICON_MDI_FIREWORK " Particle Effect")) {
-      node.add_component<sbx::scenes::particle_effect>();
+      state.push_command(std::make_unique<add_component_command<sbx::scenes::particle_effect>>(node.id(), "Add Particle Effect"));
     }
 
     if (ImGui::BeginMenu(ICON_MDI_FILE_CODE_OUTLINE " Script")) {
@@ -774,7 +882,7 @@ auto draw_add_component_menu(sbx::scenes::node& node, sbx::scripting::scripting_
         const auto full_name = std::string{candidate->get_full_name()};
 
         if (ImGui::MenuItem(full_name.c_str())) {
-          scripting_module.attach_script(node, full_name);
+          state.push_command(std::make_unique<attach_script_command>(node.id(), full_name));
         }
       }
 
@@ -796,7 +904,7 @@ auto draw_add_component_menu(sbx::scenes::node& node, sbx::scripting::scripting_
 // exit_play_mode() always reloads the pre-play snapshot, so persisting mid-Play edits would have
 // no observable effect once Stopped. Editing with no live instance (Edit mode) writes directly to
 // the persisted override instead.
-auto draw_script_field_inspector(sbx::scenes::node& node, sbx::scenes::script_entry& entry) -> void {
+auto draw_script_field_inspector(editor_state& state, sbx::scenes::node& node, sbx::scenes::script_entry& entry) -> void {
   auto& scripting_module = sbx::core::engine::get_module<sbx::scripting::scripting_module>();
 
   auto& type = scripting_module.game_assembly().get_type(entry.class_name);
@@ -822,6 +930,26 @@ auto draw_script_field_inspector(sbx::scenes::node& node, sbx::scenes::script_en
       }
     }
   }
+
+  // Shared across every field below — snapshots the whole script_component (not just this one
+  // field) so undo/redo restores it via modify_component_command<script_component>, matching every
+  // other section's "snapshot the component, not the field" convention. Never touched while
+  // live_instance is set — those edits write straight to the live managed object and are never
+  // tracked (play-session edits have no effect once Stopped anyway, see this function's doc comment).
+  static auto pending = std::optional<sbx::scenes::script_component>{};
+
+  const auto capture_before = [&] {
+    if (!live_instance && !pending) {
+      pending = node.get_component<sbx::scenes::script_component>();
+    }
+  };
+
+  const auto commit_after = [&] {
+    if (!live_instance && pending) {
+      state.push_command(std::make_unique<modify_component_command<sbx::scenes::script_component>>(node.id(), *pending, node.get_component<sbx::scenes::script_component>(), "Edit Script Field"));
+      pending.reset();
+    }
+  };
 
   for (auto& field : type.get_fields()) {
     if (field.get_accessibility() != sbx::scripting::managed::type_accessibility::public_access) {
@@ -889,6 +1017,8 @@ auto draw_script_field_inspector(sbx::scenes::node& node, sbx::scenes::script_en
         ? ImGui::SliderFloat(display_name.c_str(), &value, clamp_min, clamp_max)
         : ImGui::DragFloat(display_name.c_str(), &value, 0.05f);
 
+      capture_before();
+
       if (changed) {
         if (live_instance) {
           live_instance->set_field_value(field_name, value);
@@ -898,6 +1028,8 @@ auto draw_script_field_inspector(sbx::scenes::node& node, sbx::scenes::script_en
           slot.float_value = value;
         }
       }
+
+      commit_after();
     } else if (field_type_name == "System.Int32") {
       auto value = live_instance ? live_instance->get_field_value<std::int32_t>(field_name)
                                   : override_slot ? override_slot->int_value : 0;
@@ -905,6 +1037,8 @@ auto draw_script_field_inspector(sbx::scenes::node& node, sbx::scenes::script_en
       const auto changed = has_clamp
         ? ImGui::SliderInt(display_name.c_str(), &value, static_cast<int>(clamp_min), static_cast<int>(clamp_max))
         : ImGui::DragInt(display_name.c_str(), &value);
+
+      capture_before();
 
       if (changed) {
         if (live_instance) {
@@ -915,11 +1049,17 @@ auto draw_script_field_inspector(sbx::scenes::node& node, sbx::scenes::script_en
           slot.int_value = value;
         }
       }
+
+      commit_after();
     } else if (field_type_name == "System.Boolean") {
       auto value = live_instance ? live_instance->get_field_value<bool>(field_name)
                                   : override_slot ? override_slot->bool_value : false;
 
-      if (ImGui::Checkbox(display_name.c_str(), &value)) {
+      const auto changed = ImGui::Checkbox(display_name.c_str(), &value);
+
+      capture_before();
+
+      if (changed) {
         if (live_instance) {
           live_instance->set_field_value(field_name, value);
         } else {
@@ -928,6 +1068,8 @@ auto draw_script_field_inspector(sbx::scenes::node& node, sbx::scenes::script_en
           slot.bool_value = value;
         }
       }
+
+      commit_after();
     } else if (field_type_name == "System.String") {
       const auto current = live_instance ? live_instance->get_field_value<std::string>(field_name)
                                           : override_slot ? override_slot->string_value : std::string{};
@@ -936,7 +1078,11 @@ auto draw_script_field_inspector(sbx::scenes::node& node, sbx::scenes::script_en
       std::strncpy(buffer.data(), current.c_str(), buffer.size() - 1u);
       buffer[buffer.size() - 1u] = '\0';
 
-      if (ImGui::InputText(display_name.c_str(), buffer.data(), buffer.size())) {
+      const auto changed = ImGui::InputText(display_name.c_str(), buffer.data(), buffer.size());
+
+      capture_before();
+
+      if (changed) {
         auto value = std::string{buffer.data()};
 
         if (live_instance) {
@@ -947,6 +1093,8 @@ auto draw_script_field_inspector(sbx::scenes::node& node, sbx::scenes::script_en
           slot.string_value = value;
         }
       }
+
+      commit_after();
     } else {
       ImGui::TextDisabled("%s: (unsupported type %s)", display_name.c_str(), field_type_name.c_str());
     }
@@ -961,7 +1109,7 @@ auto draw_script_field_inspector(sbx::scenes::node& node, sbx::scenes::script_en
 // once per entry in node's script_component instead of guarded by has_component<T>(). Title shows
 // the source file name convention ("<ClassName>.cs", matching what "New Script" generates and what
 // class_name is assumed to equal) with the C# glyph, not the bare class name.
-auto draw_script_section(sbx::scenes::node& node, sbx::scenes::script_entry& entry, std::optional<std::string>& pending_removal) -> void {
+auto draw_script_section(editor_state& state, sbx::scenes::node& node, sbx::scenes::script_entry& entry, std::optional<std::string>& pending_removal) -> void {
   auto is_open = true;
 
   const auto title = fmt::format(ICON_MDI_FILE_CODE_OUTLINE " {}.cs", entry.class_name);
@@ -974,11 +1122,11 @@ auto draw_script_section(sbx::scenes::node& node, sbx::scenes::script_entry& ent
   }
 
   if (is_expanded) {
-    draw_script_field_inspector(node, entry);
+    draw_script_field_inspector(state, node, entry);
   }
 }
 
-auto inspector_panel::_draw_name_field(sbx::scenes::node& node) -> void {
+auto inspector_panel::_draw_name_field(editor_state& state, sbx::scenes::node& node) -> void {
   const auto id = node.id();
 
   if (id.value() != _name_buffer_id.value()) {
@@ -992,25 +1140,55 @@ auto inspector_panel::_draw_name_field(sbx::scenes::node& node) -> void {
     // Live-edited into the buffer; committed below once editing finishes.
   }
 
+  if (ImGui::IsItemActivated() && !_pending_name_before) {
+    _pending_name_before = node.name();
+  }
+
   if (ImGui::IsItemDeactivatedAfterEdit()) {
     // scene::find(name) can go stale after this (scene::_entities_by_name is populated at creation
     // only) — fine, selection/hierarchy key on entity/id, never name.
     node.name() = sbx::scenes::tag{std::string{_name_buffer.data()}};
+
+    if (_pending_name_before) {
+      state.push_command(std::make_unique<modify_component_command<sbx::scenes::tag>>(id, *_pending_name_before, node.name(), "Rename Node"));
+      _pending_name_before.reset();
+    }
   }
 
   ImGui::Text("UUID: %llu", static_cast<unsigned long long>(id.value()));
 }
 
-auto inspector_panel::_draw_transform_section(sbx::scenes::node& node) -> void {
+auto inspector_panel::_draw_transform_section(editor_state& state, sbx::scenes::node& node) -> void {
   ImGui::SeparatorText("Transform");
 
   auto& transform = node.transform();
 
-  auto position = std::array<std::float_t, 3u>{transform.position.x(), transform.position.y(), transform.position.z()};
+  // started captures the pre-mutation snapshot (must run before this frame's change, if any, is
+  // applied below — the same frame can both start and finish a drag, via the reset button).
+  // committed pushes it once the drag (or reset click) is done.
+  const auto capture_before = [&](const vector3_edit_result& result) {
+    if (result.started && !_pending_transform_before) {
+      _pending_transform_before = transform;
+    }
+  };
 
-  if (draw_vector3_control("Position", position, 0.0f, 0.05f)) {
+  const auto commit_after = [&](const vector3_edit_result& result) {
+    if (result.committed && _pending_transform_before) {
+      state.push_command(std::make_unique<modify_component_command<sbx::scenes::local_transform>>(node.id(), *_pending_transform_before, transform, "Edit Transform"));
+      _pending_transform_before.reset();
+    }
+  };
+
+  auto position = std::array<std::float_t, 3u>{transform.position.x(), transform.position.y(), transform.position.z()};
+  const auto position_result = draw_vector3_control("Position", position, 0.0f, 0.05f);
+
+  capture_before(position_result);
+
+  if (position_result.changed) {
     transform.position = sbx::math::vector3f{position[0], position[1], position[2]};
   }
+
+  commit_after(position_result);
 
   // See _rotation_node_id/_rotation_cache/_rotation's declarations for why this is cached rather
   // than re-derived from the quaternion every frame.
@@ -1021,15 +1199,27 @@ auto inspector_panel::_draw_transform_section(sbx::scenes::node& node) -> void {
     _rotation_cache = transform.rotation;
   }
 
-  if (draw_vector3_control("Rotation", _rotation, 0.0f, 0.5f)) {
+  const auto rotation_result = draw_vector3_control("Rotation", _rotation, 0.0f, 0.5f);
+
+  capture_before(rotation_result);
+
+  if (rotation_result.changed) {
     transform.rotation = sbx::math::quaternion{sbx::math::vector3f{_rotation[0], _rotation[1], _rotation[2]}};
     _rotation_cache = transform.rotation;
   }
 
+  commit_after(rotation_result);
+
   auto scale = std::array<std::float_t, 3u>{transform.scale.x(), transform.scale.y(), transform.scale.z()};
-  if (draw_vector3_control("Scale", scale, 1.0f, 0.05f)) {
+  const auto scale_result = draw_vector3_control("Scale", scale, 1.0f, 0.05f);
+
+  capture_before(scale_result);
+
+  if (scale_result.changed) {
     transform.scale = sbx::math::vector3f{scale[0], scale[1], scale[2]};
   }
+
+  commit_after(scale_result);
 }
 
 auto inspector_panel::_draw_node_properties(editor_state& state, sbx::scenes::node& node, sbx::assets::assets_module& assets_module) -> void {
@@ -1040,13 +1230,13 @@ auto inspector_panel::_draw_node_properties(editor_state& state, sbx::scenes::no
   // unbroken block of controls.
   const auto section_gap = [] { ImGui::Dummy(ImVec2{0.0f, 6.0f}); };
 
-  _draw_name_field(node);
+  _draw_name_field(state, node);
   section_gap();
-  _draw_transform_section(node);
+  _draw_transform_section(state, node);
 
   if (node.has_component<sbx::scenes::camera>()) {
     section_gap();
-    draw_camera_section(node);
+    draw_camera_section(state, node);
   }
 
   if (node.has_component<sbx::scenes::mesh_renderer>()) {
@@ -1056,22 +1246,22 @@ auto inspector_panel::_draw_node_properties(editor_state& state, sbx::scenes::no
 
   if (node.has_component<sbx::scenes::directional_light>()) {
     section_gap();
-    draw_directional_light_section(node);
+    draw_directional_light_section(state, node);
   }
 
   if (node.has_component<sbx::scenes::point_light>()) {
     section_gap();
-    draw_point_light_section(node);
+    draw_point_light_section(state, node);
   }
 
   if (node.has_component<sbx::scenes::spot_light>()) {
     section_gap();
-    draw_spot_light_section(node);
+    draw_spot_light_section(state, node);
   }
 
   if (node.has_component<sbx::scenes::skybox>()) {
     section_gap();
-    draw_skybox_section(node, assets_module);
+    draw_skybox_section(state, node, assets_module);
   }
 
   if (node.has_component<sbx::scenes::particle_effect>()) {
@@ -1087,19 +1277,24 @@ auto inspector_panel::_draw_node_properties(editor_state& state, sbx::scenes::no
       section_gap();
 
       ImGui::PushID(static_cast<int>(index));
-      draw_script_section(node, scripts.scripts[index], pending_removal);
+      draw_script_section(state, node, scripts.scripts[index], pending_removal);
       ImGui::PopID();
     }
 
     if (pending_removal) {
-      scripting_module.detach_script(node, *pending_removal);
+      for (const auto& entry : scripts.scripts) {
+        if (entry.class_name == *pending_removal) {
+          state.push_command(std::make_unique<detach_script_command>(node.id(), entry));
+          break;
+        }
+      }
     }
   }
 
   section_gap();
   ImGui::Separator();
   ImGui::Spacing();
-  draw_add_component_menu(node, scripting_module);
+  draw_add_component_menu(state, node, scripting_module);
 }
 
 auto inspector_panel::_draw_material_properties(const asset_selection& asset, sbx::assets::assets_module& assets_module) -> void {
@@ -1265,20 +1460,20 @@ auto inspector_panel::_draw_particle_effect_properties(const asset_selection& as
         changed |= ImGui::DragFloat("Radius", &emitter.shape_extents.x(), 0.01f, 0.0f, 1000.0f);
       } else if (emitter.shape == sbx::assets::emitter_shape::box) {
         auto shape_extents = std::array<std::float_t, 3u>{emitter.shape_extents.x(), emitter.shape_extents.y(), emitter.shape_extents.z()};
-        if (draw_vector3_control("Half Extents", shape_extents, 0.0f, 0.01f)) {
+        if (draw_vector3_control("Half Extents", shape_extents, 0.0f, 0.01f).changed) {
           emitter.shape_extents = sbx::math::vector3{shape_extents[0], shape_extents[1], shape_extents[2]};
           changed = true;
         }
       }
 
       auto velocity_min = std::array<std::float_t, 3u>{emitter.velocity_min.x(), emitter.velocity_min.y(), emitter.velocity_min.z()};
-      if (draw_vector3_control("Velocity Min", velocity_min, 0.0f, 0.05f)) {
+      if (draw_vector3_control("Velocity Min", velocity_min, 0.0f, 0.05f).changed) {
         emitter.velocity_min = sbx::math::vector3{velocity_min[0], velocity_min[1], velocity_min[2]};
         changed = true;
       }
 
       auto velocity_max = std::array<std::float_t, 3u>{emitter.velocity_max.x(), emitter.velocity_max.y(), emitter.velocity_max.z()};
-      if (draw_vector3_control("Velocity Max", velocity_max, 0.0f, 0.05f)) {
+      if (draw_vector3_control("Velocity Max", velocity_max, 0.0f, 0.05f).changed) {
         emitter.velocity_max = sbx::math::vector3{velocity_max[0], velocity_max[1], velocity_max[2]};
         changed = true;
       }

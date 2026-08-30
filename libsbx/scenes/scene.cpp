@@ -2,6 +2,8 @@
 // Copyright (c) 2026 Jonas Kabelitz
 #include <libsbx/scenes/scene.hpp>
 
+#include <algorithm>
+
 #include <libsbx/utility/profiler.hpp>
 
 namespace sbx::scenes {
@@ -14,6 +16,10 @@ scene::scene(const std::string& name)
 
 auto scene::create_node(const utility::hashed_string& name, const scenes::local_transform& transform) -> node {
   return _create_node(name, transform, math::uuid::create());
+}
+
+auto scene::create_node(const utility::hashed_string& name, const scenes::local_transform& transform, const math::uuid& id) -> node {
+  return _create_node(name, transform, id);
 }
 
 auto scene::find(math::uuid id) -> node {
@@ -38,6 +44,20 @@ auto scene::node_of(ecs::entity entity) -> node {
 
 auto scene::root() -> node {
   return node{memory::make_observer(_registry), _root};
+}
+
+auto scene::insert_child(node parent, node child, std::size_t index) -> void {
+  auto& child_relationship = _registry.get<relationship>(child._entity);
+
+  if (child_relationship.parent != ecs::null_entity) {
+    auto& old_siblings = _registry.get<relationship>(child_relationship.parent).children;
+    std::erase(old_siblings, child._entity);
+  }
+
+  child_relationship.parent = parent._entity;
+
+  auto& siblings = _registry.get<relationship>(parent._entity).children;
+  siblings.insert(siblings.begin() + std::min(index, siblings.size()), child._entity);
 }
 
 auto scene::destroy_node(node target) -> void {

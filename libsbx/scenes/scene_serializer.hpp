@@ -25,6 +25,12 @@ public:
 
   static auto load(scene& target, const std::filesystem::path& path) -> void;
 
+  /** @brief Snapshots subtree_root and its whole descendant subtree — components, structure, ids — self-contained (own asset table), for undo/redo. */
+  [[nodiscard]] static auto serialize_subtree(scene& target, node subtree_root) -> YAML::Node;
+
+  /** @brief Recreates a serialize_subtree() snapshot under target._root; caller repositions it (see scene::insert_child). Returns the recreated root. */
+  static auto deserialize_subtree(scene& target, const YAML::Node& snapshot) -> node;
+
 private:
 
   [[nodiscard]] static auto _build(scene& target) -> YAML::Node;

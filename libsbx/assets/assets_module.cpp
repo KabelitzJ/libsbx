@@ -31,6 +31,10 @@ auto assets_module::load_mesh(const std::filesystem::path& path, const mesh_impo
   return _residency.load_mesh(path, options);
 }
 
+auto assets_module::resolve_mesh_collision_data(const math::uuid& id) -> std::optional<cooked_mesh_data> {
+  return _cooker.resolve_mesh(id, mesh_import_options{.extract_materials = false}, material_resolver{});
+}
+
 auto assets_module::load_material(const math::uuid& id) -> material_handle {
   return _residency.load_material(id);
 }

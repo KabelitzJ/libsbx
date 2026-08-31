@@ -93,6 +93,15 @@ public:
 
   auto load_mesh(const std::filesystem::path& path, const mesh_import_options& options = {}) -> mesh_handle;
 
+  /**
+   * @brief Resolves a mesh's raw cooked vertex/index data (see @ref cooked_mesh_data) independent
+   * of GPU residency — the mesh need not be, and does not become, loaded via @ref load_mesh.
+   * Never extracts materials (physics has no use for them), so it's safe to pass an empty
+   * material_resolver. Intended for physics::mesh_collision_cache to build a static mesh
+   * collider's triangle BVH without touching the renderer's mesh lifecycle at all.
+   */
+  auto resolve_mesh_collision_data(const math::uuid& id) -> std::optional<cooked_mesh_data>;
+
   auto load_material(const math::uuid& id) -> material_handle;
 
   auto load_material(const std::filesystem::path& path) -> material_handle;

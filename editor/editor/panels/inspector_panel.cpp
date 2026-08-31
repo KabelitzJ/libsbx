@@ -31,6 +31,9 @@
 #include <libsbx/scenes/scene.hpp>
 #include <libsbx/scenes/scenes_module.hpp>
 
+#include <libsbx/physics/collider.hpp>
+#include <libsbx/physics/rigidbody.hpp>
+
 #include <libsbx/scripting/scripting_module.hpp>
 #include <libsbx/scripting/managed/type.hpp>
 #include <libsbx/scripting/managed/field_info.hpp>
@@ -826,6 +829,207 @@ auto draw_particle_effect_instance_section(editor_state& state, sbx::scenes::nod
   ImGui::TextDisabled("(%s)", is_playing ? "Playing" : is_stopped ? "Stopped" : "Paused");
 }
 
+auto draw_rigidbody_section(editor_state& state, sbx::scenes::node& node) -> void {
+  auto is_open = true;
+
+  const auto is_expanded = ImGui::CollapsingHeader(ICON_MDI_SOCCER " Rigidbody", &is_open, ImGuiTreeNodeFlags_DefaultOpen);
+
+  if (!is_open) {
+    state.push_command(std::make_unique<remove_component_command<sbx::physics::rigidbody>>(node.id(), node.get_component<sbx::physics::rigidbody>(), "Remove Rigidbody"));
+    return;
+  }
+
+  if (!is_expanded) {
+    return;
+  }
+
+  auto& body = node.get_component<sbx::physics::rigidbody>();
+  static auto pending = std::optional<sbx::physics::rigidbody>{};
+
+  static constexpr auto body_type_names = std::array<const char*, 3u>{"Dynamic", "Kinematic", "Static"};
+  const auto current_index = static_cast<std::size_t>(body.type);
+
+  if (ImGui::BeginCombo("Body Type", body_type_names[current_index])) {
+    for (auto index = std::size_t{0u}; index < body_type_names.size(); ++index) {
+      const auto is_selected = (index == current_index);
+
+      if (ImGui::Selectable(body_type_names[index], is_selected) && index != current_index) {
+        const auto before = body;
+        body.type = static_cast<sbx::physics::body_type>(index);
+        state.push_command(std::make_unique<modify_component_command<sbx::physics::rigidbody>>(node.id(), before, body, "Edit Rigidbody"));
+      }
+
+      if (is_selected) {
+        ImGui::SetItemDefaultFocus();
+      }
+    }
+
+    ImGui::EndCombo();
+  }
+
+  // inverse_mass is the stored source of truth (see rigidbody's doc comment) — the field here
+  // just presents/edits its reciprocal.
+  auto mass = (body.inverse_mass > 0.0f) ? (1.0f / body.inverse_mass) : 0.0f;
+
+  if (ImGui::DragFloat("Mass (kg)", &mass, 0.05f, 0.0f, 100000.0f)) {
+    body.inverse_mass = (mass > 0.0f) ? (1.0f / mass) : 0.0f;
+  }
+
+  bracket_edit(state, node, body, pending, "Edit Rigidbody");
+
+  ImGui::DragFloat("Linear Damping", &body.linear_damping, 0.005f, 0.0f, 10.0f);
+  bracket_edit(state, node, body, pending, "Edit Rigidbody");
+  ImGui::DragFloat("Angular Damping", &body.angular_damping, 0.005f, 0.0f, 10.0f);
+  bracket_edit(state, node, body, pending, "Edit Rigidbody");
+  ImGui::DragFloat("Gravity Scale", &body.gravity_scale, 0.05f, -10.0f, 10.0f);
+  bracket_edit(state, node, body, pending, "Edit Rigidbody");
+
+  auto linear_velocity = std::array<std::float_t, 3u>{body.linear_velocity.x(), body.linear_velocity.y(), body.linear_velocity.z()};
+
+  if (ImGui::DragFloat3("Linear Velocity", linear_velocity.data(), 0.05f)) {
+    body.linear_velocity = sbx::math::vector3f{linear_velocity[0], linear_velocity[1], linear_velocity[2]};
+  }
+
+  bracket_edit(state, node, body, pending, "Edit Rigidbody");
+
+  auto angular_velocity = std::array<std::float_t, 3u>{body.angular_velocity.x(), body.angular_velocity.y(), body.angular_velocity.z()};
+
+  if (ImGui::DragFloat3("Angular Velocity", angular_velocity.data(), 0.05f)) {
+    body.angular_velocity = sbx::math::vector3f{angular_velocity[0], angular_velocity[1], angular_velocity[2]};
+  }
+
+  bracket_edit(state, node, body, pending, "Edit Rigidbody");
+}
+
+// offset/rotation are shared by shape_collider and mesh_collider — same fields, same widgets.
+template<typename Collider>
+auto draw_collider_offset_rotation_friction(editor_state& state, sbx::scenes::node& node, Collider& collider, std::optional<Collider>& pending, const char* label) -> void {
+  auto offset = std::array<std::float_t, 3u>{collider.offset.x(), collider.offset.y(), collider.offset.z()};
+
+  if (ImGui::DragFloat3("Offset", offset.data(), 0.05f)) {
+    collider.offset = sbx::math::vector3f{offset[0], offset[1], offset[2]};
+  }
+
+  bracket_edit(state, node, collider, pending, label);
+
+  const auto euler = sbx::math::quaternion::euler_angles(collider.rotation);
+  auto rotation_degrees = std::array<std::float_t, 3u>{euler.x(), euler.y(), euler.z()};
+
+  if (ImGui::DragFloat3("Rotation", rotation_degrees.data(), 0.5f)) {
+    collider.rotation = sbx::math::quaternion{sbx::math::vector3f{rotation_degrees[0], rotation_degrees[1], rotation_degrees[2]}};
+  }
+
+  bracket_edit(state, node, collider, pending, label);
+
+  ImGui::DragFloat("Friction", &collider.friction, 0.01f, 0.0f, 10.0f);
+  bracket_edit(state, node, collider, pending, label);
+  ImGui::DragFloat("Restitution", &collider.restitution, 0.01f, 0.0f, 1.0f);
+  bracket_edit(state, node, collider, pending, label);
+}
+
+auto draw_shape_collider_section(editor_state& state, sbx::scenes::node& node) -> void {
+  auto is_open = true;
+
+  const auto is_expanded = ImGui::CollapsingHeader(ICON_MDI_SHAPE_OUTLINE " Shape Collider", &is_open, ImGuiTreeNodeFlags_DefaultOpen);
+
+  if (!is_open) {
+    state.push_command(std::make_unique<remove_component_command<sbx::physics::shape_collider>>(node.id(), node.get_component<sbx::physics::shape_collider>(), "Remove Shape Collider"));
+    return;
+  }
+
+  if (!is_expanded) {
+    return;
+  }
+
+  auto& collider = node.get_component<sbx::physics::shape_collider>();
+  static auto pending = std::optional<sbx::physics::shape_collider>{};
+
+  static constexpr auto shape_names = std::array<const char*, 4u>{"Sphere", "Cylinder", "Capsule", "Box"};
+  const auto current_index = std::min(collider.shape.index(), std::size_t{3u}); // clamp: index 4 (triangle) never legitimately appears here
+
+  if (ImGui::BeginCombo("Shape", shape_names[current_index])) {
+    for (auto index = std::size_t{0u}; index < shape_names.size(); ++index) {
+      const auto is_selected = (index == current_index);
+
+      if (ImGui::Selectable(shape_names[index], is_selected) && index != current_index) {
+        const auto before = collider;
+
+        switch (index) {
+          case 0u: collider.shape = sbx::physics::sphere{}; break;
+          case 1u: collider.shape = sbx::physics::cylinder{}; break;
+          case 2u: collider.shape = sbx::physics::capsule{}; break;
+          case 3u: collider.shape = sbx::physics::box{}; break;
+          default: break;
+        }
+
+        state.push_command(std::make_unique<modify_component_command<sbx::physics::shape_collider>>(node.id(), before, collider, "Change Collider Shape"));
+      }
+
+      if (is_selected) {
+        ImGui::SetItemDefaultFocus();
+      }
+    }
+
+    ImGui::EndCombo();
+  }
+
+  if (auto* sphere = std::get_if<sbx::physics::sphere>(&collider.shape)) {
+    ImGui::DragFloat("Radius", &sphere->radius, 0.05f, 0.001f, 1000.0f);
+    bracket_edit(state, node, collider, pending, "Edit Shape Collider");
+  } else if (auto* cylinder = std::get_if<sbx::physics::cylinder>(&collider.shape)) {
+    ImGui::DragFloat("Radius", &cylinder->radius, 0.05f, 0.001f, 1000.0f);
+    bracket_edit(state, node, collider, pending, "Edit Shape Collider");
+    ImGui::DragFloat("Half Height", &cylinder->half_height, 0.05f, 0.001f, 1000.0f);
+    bracket_edit(state, node, collider, pending, "Edit Shape Collider");
+  } else if (auto* capsule = std::get_if<sbx::physics::capsule>(&collider.shape)) {
+    ImGui::DragFloat("Radius", &capsule->radius, 0.05f, 0.001f, 1000.0f);
+    bracket_edit(state, node, collider, pending, "Edit Shape Collider");
+    ImGui::DragFloat("Half Height", &capsule->half_height, 0.05f, 0.001f, 1000.0f);
+    bracket_edit(state, node, collider, pending, "Edit Shape Collider");
+  } else if (auto* box = std::get_if<sbx::physics::box>(&collider.shape)) {
+    auto half_extents = std::array<std::float_t, 3u>{box->half_extents.x(), box->half_extents.y(), box->half_extents.z()};
+
+    if (ImGui::DragFloat3("Half Extents", half_extents.data(), 0.05f, 0.001f, 1000.0f)) {
+      box->half_extents = sbx::math::vector3f{half_extents[0], half_extents[1], half_extents[2]};
+    }
+
+    bracket_edit(state, node, collider, pending, "Edit Shape Collider");
+  }
+
+  draw_collider_offset_rotation_friction(state, node, collider, pending, "Edit Shape Collider");
+}
+
+auto draw_mesh_collider_section(editor_state& state, sbx::scenes::node& node, sbx::assets::assets_module& assets_module) -> void {
+  auto is_open = true;
+
+  const auto is_expanded = ImGui::CollapsingHeader(ICON_MDI_TERRAIN " Mesh Collider", &is_open, ImGuiTreeNodeFlags_DefaultOpen);
+
+  if (!is_open) {
+    state.push_command(std::make_unique<remove_component_command<sbx::physics::mesh_collider>>(node.id(), node.get_component<sbx::physics::mesh_collider>(), "Remove Mesh Collider"));
+    return;
+  }
+
+  if (!is_expanded) {
+    return;
+  }
+
+  auto& collider = node.get_component<sbx::physics::mesh_collider>();
+  static auto pending = std::optional<sbx::physics::mesh_collider>{};
+
+  {
+    const auto before = collider;
+
+    ImGui::Text("Mesh:");
+    ImGui::SameLine();
+
+    if (draw_mesh_picker(state, "##mesh_collider_picker_popup", collider.mesh, assets_module)) {
+      state.push_command(std::make_unique<modify_component_command<sbx::physics::mesh_collider>>(node.id(), before, collider, "Edit Mesh Collider"));
+    }
+  }
+
+  draw_collider_offset_rotation_friction(state, node, collider, pending, "Edit Mesh Collider");
+}
+
 auto draw_add_component_menu(editor_state& state, sbx::scenes::node& node, sbx::scripting::scripting_module& scripting_module) -> void {
   static constexpr auto label = ICON_MDI_PLUS " Add Component";
 
@@ -866,6 +1070,18 @@ auto draw_add_component_menu(editor_state& state, sbx::scenes::node& node, sbx::
 
     if (!node.has_component<sbx::scenes::particle_effect>() && ImGui::MenuItem(ICON_MDI_FIREWORK " Particle Effect")) {
       state.push_command(std::make_unique<add_component_command<sbx::scenes::particle_effect>>(node.id(), "Add Particle Effect"));
+    }
+
+    if (!node.has_component<sbx::physics::rigidbody>() && ImGui::MenuItem(ICON_MDI_SOCCER " Rigidbody")) {
+      state.push_command(std::make_unique<add_component_command<sbx::physics::rigidbody>>(node.id(), "Add Rigidbody"));
+    }
+
+    if (!node.has_component<sbx::physics::shape_collider>() && ImGui::MenuItem(ICON_MDI_SHAPE_OUTLINE " Shape Collider")) {
+      state.push_command(std::make_unique<add_component_command<sbx::physics::shape_collider>>(node.id(), "Add Shape Collider"));
+    }
+
+    if (!node.has_component<sbx::physics::mesh_collider>() && ImGui::MenuItem(ICON_MDI_TERRAIN " Mesh Collider")) {
+      state.push_command(std::make_unique<add_component_command<sbx::physics::mesh_collider>>(node.id(), "Add Mesh Collider"));
     }
 
     if (ImGui::BeginMenu(ICON_MDI_FILE_CODE_OUTLINE " Script")) {
@@ -1267,6 +1483,21 @@ auto inspector_panel::_draw_node_properties(editor_state& state, sbx::scenes::no
   if (node.has_component<sbx::scenes::particle_effect>()) {
     section_gap();
     draw_particle_effect_instance_section(state, node, assets_module);
+  }
+
+  if (node.has_component<sbx::physics::rigidbody>()) {
+    section_gap();
+    draw_rigidbody_section(state, node);
+  }
+
+  if (node.has_component<sbx::physics::shape_collider>()) {
+    section_gap();
+    draw_shape_collider_section(state, node);
+  }
+
+  if (node.has_component<sbx::physics::mesh_collider>()) {
+    section_gap();
+    draw_mesh_collider_section(state, node, assets_module);
   }
 
   if (node.has_component<sbx::scenes::script_component>()) {

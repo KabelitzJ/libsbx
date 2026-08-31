@@ -17,7 +17,13 @@
 
 #include <libsbx/core/engine.hpp>
 
+#include <libsbx/utility/overload.hpp>
+
 #include <libsbx/assets/assets_module.hpp>
+
+#include <libsbx/physics/rigidbody.hpp>
+#include <libsbx/physics/collider.hpp>
+#include <libsbx/physics/shapes.hpp>
 
 namespace sbx::scenes {
 
@@ -100,6 +106,31 @@ auto collect_mesh_material_keys(ecs::registry& registry, const std::vector<ecs::
 
         keys.materials_table.push_back(entry);
       }
+    }
+  }
+
+  // A mesh_collider references the same kind of asset a mesh_renderer does — share one table
+  // entry/key if a node (or another node) already registered the same mesh via either component.
+  for (const auto entity : entities) {
+    if (!registry.all_of<physics::mesh_collider>(entity)) {
+      continue;
+    }
+
+    const auto& collider = registry.get<physics::mesh_collider>(entity);
+
+    if (collider.mesh.is_valid() && !keys.mesh_keys.contains(collider.mesh->id())) {
+      const auto id = collider.mesh->id();
+      const auto name = assets_module.path_of(id).stem().string();
+      const auto key = make_asset_key(keys, name);
+
+      keys.mesh_keys.emplace(id, key);
+
+      auto entry = YAML::Node{};
+      entry["key"] = key;
+      entry["name"] = name;
+      entry["uuid"] = id.value();
+
+      keys.meshes_table.push_back(entry);
     }
   }
 }
@@ -301,6 +332,76 @@ auto write_node(YAML::Node& node_yaml, ecs::registry& registry, ecs::entity enti
     }
   }
 
+  if (registry.all_of<physics::rigidbody>(entity)) {
+    const auto& body = registry.get<physics::rigidbody>(entity);
+
+    auto component = YAML::Node{};
+    component["type"] = "rigidbody";
+    component["body_type"] = (body.type == physics::body_type::dynamic_body) ? "dynamic" : (body.type == physics::body_type::kinematic) ? "kinematic" : "static";
+    component["inverse_mass"] = body.inverse_mass;
+    component["linear_velocity"] = body.linear_velocity;
+    component["angular_velocity"] = body.angular_velocity;
+    component["linear_damping"] = body.linear_damping;
+    component["angular_damping"] = body.angular_damping;
+    component["gravity_scale"] = body.gravity_scale;
+
+    components.push_back(component);
+  }
+
+  if (registry.all_of<physics::shape_collider>(entity)) {
+    const auto& collider = registry.get<physics::shape_collider>(entity);
+
+    auto component = YAML::Node{};
+    component["type"] = "shape_collider";
+    component["offset"] = collider.offset;
+    component["rotation"] = collider.rotation;
+    component["friction"] = collider.friction;
+    component["restitution"] = collider.restitution;
+
+    std::visit(utility::overload(
+      [&](const physics::sphere& shape) {
+        component["shape"] = "sphere";
+        component["radius"] = shape.radius;
+      },
+      [&](const physics::cylinder& shape) {
+        component["shape"] = "cylinder";
+        component["radius"] = shape.radius;
+        component["half_height"] = shape.half_height;
+      },
+      [&](const physics::capsule& shape) {
+        component["shape"] = "capsule";
+        component["radius"] = shape.radius;
+        component["half_height"] = shape.half_height;
+      },
+      [&](const physics::box& shape) {
+        component["shape"] = "box";
+        component["half_extents"] = shape.half_extents;
+      },
+      [&]([[maybe_unused]] const physics::triangle& shape) {
+        // Never authored directly on a shape_collider — only appears internally as a
+        // mesh_collider narrowphase candidate — so there's nothing meaningful to write.
+      }
+    ), collider.shape);
+
+    components.push_back(component);
+  }
+
+  if (registry.all_of<physics::mesh_collider>(entity)) {
+    const auto& collider = registry.get<physics::mesh_collider>(entity);
+
+    if (collider.mesh.is_valid()) {
+      auto component = YAML::Node{};
+      component["type"] = "mesh_collider";
+      component["mesh"] = keys.mesh_keys.at(collider.mesh->id());
+      component["offset"] = collider.offset;
+      component["rotation"] = collider.rotation;
+      component["friction"] = collider.friction;
+      component["restitution"] = collider.restitution;
+
+      components.push_back(component);
+    }
+  }
+
   node_yaml["components"] = components;
 }
 
@@ -434,9 +535,61 @@ auto read_node_components(node& target_node, const YAML::Node& node_yaml, assets
       }
 
       scripts.scripts.push_back(std::move(entry));
+    } else if (type == "rigidbody") {
+      auto& body = target_node.add_component<physics::rigidbody>();
+
+      const auto body_type_string = component["body_type"].as<std::string>();
+      body.type = (body_type_string == "kinematic") ? physics::body_type::kinematic : (body_type_string == "static") ? physics::body_type::static_body : physics::body_type::dynamic_body;
+
+      body.inverse_mass = component["inverse_mass"].as<std::float_t>();
+      body.linear_velocity = component["linear_velocity"].as<math::vector3f>();
+      body.angular_velocity = component["angular_velocity"].as<math::vector3f>();
+      body.linear_damping = component["linear_damping"].as<std::float_t>();
+      body.angular_damping = component["angular_damping"].as<std::float_t>();
+      body.gravity_scale = component["gravity_scale"].as<std::float_t>();
+    } else if (type == "shape_collider") {
+      auto& collider = target_node.add_component<physics::shape_collider>();
+
+      const auto shape_kind = component["shape"].as<std::string>();
+
+      if (shape_kind == "sphere") {
+        collider.shape = physics::sphere{component["radius"].as<std::float_t>()};
+      } else if (shape_kind == "cylinder") {
+        collider.shape = physics::cylinder{component["radius"].as<std::float_t>(), component["half_height"].as<std::float_t>()};
+      } else if (shape_kind == "capsule") {
+        collider.shape = physics::capsule{component["radius"].as<std::float_t>(), component["half_height"].as<std::float_t>()};
+      } else if (shape_kind == "box") {
+        collider.shape = physics::box{component["half_extents"].as<math::vector3f>()};
+      } else {
+        utility::logger<"scenes">::warn("Unknown shape_collider shape '{}'", shape_kind);
+      }
+
+      collider.offset = component["offset"].as<math::vector3f>();
+      collider.rotation = component["rotation"].as<math::quaternion>();
+      collider.friction = component["friction"].as<std::float_t>();
+      collider.restitution = component["restitution"].as<std::float_t>();
+    } else if (type == "mesh_collider") {
+      auto& collider = target_node.add_component<physics::mesh_collider>();
+
+      collider.mesh = assets_module.load_mesh(key_to_uuid.at(component["mesh"].as<std::string>()));
+      collider.offset = component["offset"].as<math::vector3f>();
+      collider.rotation = component["rotation"].as<math::quaternion>();
+      collider.friction = component["friction"].as<std::float_t>();
+      collider.restitution = component["restitution"].as<std::float_t>();
     } else {
       utility::logger<"scenes">::warn("Unknown component type '{}'", type);
     }
+  }
+
+  // local_inverse_inertia is transient (not serialized — see write_node) and depends on both the
+  // body's mass and its collider's shape, so it's only computable once every component on this
+  // node has been read, regardless of which order they appeared in the YAML.
+  if (target_node.has_component<physics::rigidbody>() && target_node.has_component<physics::shape_collider>()) {
+    auto& body = target_node.get_component<physics::rigidbody>();
+    const auto& collider = target_node.get_component<physics::shape_collider>();
+
+    const auto mass = (body.inverse_mass > 0.0f) ? (1.0f / body.inverse_mass) : 0.0f;
+    body.local_inverse_inertia = physics::local_inverse_inertia(collider.shape, mass);
   }
 }
 

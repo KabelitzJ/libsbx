@@ -25,6 +25,7 @@ enum class [[=reflection::named]] stage : std::uint8_t {
   update,
   post_update,
   fixed_update,
+  late_update,
   render
 }; // enum class stage
 

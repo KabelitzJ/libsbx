@@ -118,6 +118,11 @@ inline auto basic_engine<module_list<Modules...>>::_loop() -> void {
     }
 
     {
+      SBX_PROFILE_SCOPE("stage::late_update");
+      _dispatch<stage::late_update>();
+    }
+
+    {
       SBX_PROFILE_SCOPE("stage::render");
       _dispatch<stage::render>();
     }

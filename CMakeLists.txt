@@ -219,6 +219,13 @@ target_sources(
 
     "${CMAKE_SOURCE_DIR}/libsbx/memory/memory.cpp"
 
+    "${CMAKE_SOURCE_DIR}/libsbx/physics/epa.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/physics/gjk.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/physics/mesh_collision_cache.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/physics/narrowphase.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/physics/physics_module.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/physics/solver.cpp"
+
     "${CMAKE_SOURCE_DIR}/libsbx/platform/input.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/platform/platform_module.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/platform/process.cpp"
@@ -300,6 +307,7 @@ target_sources(
       "${CMAKE_SOURCE_DIR}/libsbx/containers/compressed_pair.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/containers/containers.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/containers/dense_map.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/containers/dynamic_tree.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/containers/octree.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/containers/ring_buffer.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/containers/stable_vector.hpp"
@@ -432,6 +440,17 @@ target_sources(
       "${CMAKE_SOURCE_DIR}/libsbx/memory/iterable_adaptor.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/memory/memory.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/memory/observer_ptr.hpp"
+
+      "${CMAKE_SOURCE_DIR}/libsbx/physics/collider.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/physics/contact.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/physics/epa.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/physics/gjk.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/physics/mesh_collision_cache.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/physics/narrowphase.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/physics/physics_module.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/physics/rigidbody.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/physics/shapes.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/physics/solver.hpp"
 
       "${CMAKE_SOURCE_DIR}/libsbx/platform/events.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/platform/input.hpp"

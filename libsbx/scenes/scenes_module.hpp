@@ -26,7 +26,7 @@ public:
 
   ~scenes_module();
 
-  auto update() -> void;
+  auto late_update() -> void;
 
   [[nodiscard]] auto active_scene() noexcept -> scene& {
     return _scene;

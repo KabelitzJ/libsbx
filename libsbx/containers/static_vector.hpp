@@ -116,11 +116,11 @@ public:
   }
 
   constexpr auto end() noexcept -> iterator {
-    return _ptr(_size);
+    return _end_ptr();
   }
 
   constexpr auto end() const noexcept -> const_iterator {
-    return _ptr(_size);
+    return _end_ptr();
   }
 
   constexpr auto cend() const noexcept -> const_iterator {
@@ -236,6 +236,14 @@ private:
     utility::assert_that(index < Capacity, "index is out of range");
 
     return std::launder(reinterpret_cast<const_pointer>(_buffer.data() + index));
+  }
+
+  constexpr auto _end_ptr() noexcept -> pointer {
+    return std::launder(reinterpret_cast<pointer>(_buffer.data() + _size));
+  }
+
+  constexpr auto _end_ptr() const noexcept -> const_pointer {
+    return std::launder(reinterpret_cast<const_pointer>(_buffer.data() + _size));
   }
 
   size_type _size;

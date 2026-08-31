@@ -404,7 +404,7 @@ public:
   }
 
   auto erase(const key_type& key) -> bool {
-    for (auto* current = &_sparse.first()[key_to_bucket(key)]; *current != (std::numeric_limits<size_type>::max)(); current = &_dense.first()[*current].next) {
+    for (auto* current = &_sparse.first()[_key_to_bucket(key)]; *current != (std::numeric_limits<size_type>::max)(); current = &_dense.first()[*current].next) {
       if (_dense.second()(_dense.first()[*current].element.first, key)) {
         const auto index = *current;
         *current = _dense.first()[*current].next;

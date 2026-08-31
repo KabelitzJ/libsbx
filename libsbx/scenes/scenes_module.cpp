@@ -14,8 +14,8 @@ scenes_module::~scenes_module() {
 
 }
 
-auto scenes_module::update() -> void {
-  SBX_PROFILE_SCOPE("scenes_module::update");
+auto scenes_module::late_update() -> void {
+  SBX_PROFILE_SCOPE("scenes_module::late_update");
 
   _scene.update();
 }

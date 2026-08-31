@@ -16,6 +16,8 @@ class node {
   friend class scene;
   friend class scene_serializer;
 
+  friend auto operator==(const node& lhs, const node& rhs) noexcept -> bool;
+
 public:
 
   node() = default;
@@ -84,15 +86,15 @@ public:
    * it never ends up listed as a child of two nodes at once.
    */
   auto set_parent(node& parent) -> void {
-    auto& own_relationship = get_component<relationship>();
+    auto& relationship = get_component<scenes::relationship>();
 
-    if (own_relationship.parent != ecs::null_entity) {
-      auto& siblings = _registry->get<relationship>(own_relationship.parent).children;
+    if (relationship.parent != ecs::null_entity) {
+      auto& siblings = _registry->get<scenes::relationship>(relationship.parent).children;
       std::erase(siblings, _entity);
     }
 
-    own_relationship.parent = parent._entity;
-    parent.get_component<relationship>().children.push_back(_entity);
+    relationship.parent = parent._entity;
+    parent.get_component<scenes::relationship>().children.push_back(_entity);
   }
 
 private:
@@ -105,6 +107,19 @@ private:
 
 }; // class node
 
+[[nodiscard]] inline auto operator==(const node& lhs, const node& rhs) noexcept -> bool {
+  return lhs._registry == rhs._registry && lhs._entity == rhs._entity;
+}
+
 } // namespace sbx::scenes
+
+template<>
+struct std::hash<sbx::scenes::node> {
+  
+  auto operator()(const sbx::scenes::node& node) const noexcept -> std::size_t {
+    return node.id().value();
+  }
+
+}; // struct std::hash
 
 #endif // LIBSBX_SCENES_NODE_HPP_

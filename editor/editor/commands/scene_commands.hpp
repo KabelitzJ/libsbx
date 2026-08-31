@@ -54,7 +54,7 @@ class delete_node_command final : public command {
 
 public:
 
-  explicit delete_node_command(sbx::scenes::node target);
+  explicit delete_node_command(const sbx::scenes::node& target);
 
   auto execute() -> void override;
 

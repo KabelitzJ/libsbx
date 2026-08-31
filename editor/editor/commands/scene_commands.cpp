@@ -34,7 +34,7 @@ auto create_node_command::undo() -> void {
   scene.destroy_node(scene.find(_id));
 }
 
-delete_node_command::delete_node_command(sbx::scenes::node target)
+delete_node_command::delete_node_command(const sbx::scenes::node& target)
 : _id{target.id()} {
   auto& scene = active_scene();
 
@@ -60,7 +60,7 @@ delete_node_command::delete_node_command(sbx::scenes::node target)
 
   // A descendant, not just target itself, can hold either binding — scene::destroy_node clears
   // both wherever they occur in the subtree, so undo needs to know which node(s) to restore them to.
-  const auto check = [&](this const auto& self, sbx::scenes::node current) -> void {
+  const auto check = [&](this const auto& self, const sbx::scenes::node& current) -> void {
     if (auto camera = scene.active_camera(); camera.is_valid() && camera.id() == current.id()) {
       _was_active_camera = current.id();
     }

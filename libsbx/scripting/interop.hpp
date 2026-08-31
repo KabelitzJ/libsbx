@@ -132,7 +132,7 @@ struct interop {
       _has_component_functions[type.get_type_id()] = [&scenes_module](const scenes::node& node) -> bool {
         return node.has_component<Type>();
       };
-      // _remove_component_functions[type.get_type_id()] = [&scenes_module](scenes::node node) { 
+      // _remove_component_functions[type.get_type_id()] = [&scenes_module](scenes::node& node) { 
       //   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
       //   auto& scene = scenes_module.active_scene();
       //   auto& environment = scene.environment();

@@ -30,6 +30,7 @@
 #include <libsbx/physics/collider.hpp>
 #include <libsbx/physics/rigidbody.hpp>
 #include <libsbx/physics/contact.hpp>
+#include <libsbx/physics/physics_debug.hpp>
 
 namespace sbx::physics {
 
@@ -56,6 +57,23 @@ public:
   ~physics_module();
 
   auto fixed_update() -> void;
+
+  /**
+   * @brief Submits this frame's enabled debug-draw layers (see debug_draw_flags()) into
+   * render::scene_renderer_module::debug_draw() -- picked up automatically as the
+   * core::stage::late_update hook, which runs after every fixed_update() step this frame and right
+   * before core::stage::render, so submissions reflect this frame's final transforms exactly once,
+   * never a stale previous-frame pose and never duplicated across sub-stepping.
+   */
+  auto late_update() -> void;
+
+  [[nodiscard]] auto debug_draw_flags() const noexcept -> const sbx::physics::debug_draw_flags& {
+    return _debug_draw_flags;
+  }
+
+  auto set_debug_draw_flags(const sbx::physics::debug_draw_flags& flags) noexcept -> void {
+    _debug_draw_flags = flags;
+  }
 
   [[nodiscard]] auto gravity() const noexcept -> const math::vector3& {
     return _gravity;
@@ -121,7 +139,13 @@ private:
   // starts from an empty broadphase instead of dereferencing those stale nodes.
   auto _reset() -> void;
 
+  // Reads current collider transforms plus whatever _dynamic_tree/_static_tree/_manifolds the last
+  // fixed_update() step left cached; see physics_debug.hpp for the actual wireframe generation.
+  auto _submit_debug_draw(scenes::scene& scene) -> void;
+
   bool _was_simulating{false};
+
+  physics::debug_draw_flags _debug_draw_flags{};
 
   math::vector3 _gravity{0.0f, -9.81f, 0.0f};
   std::uint32_t _velocity_iterations{8u};

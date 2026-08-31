@@ -39,6 +39,7 @@
 #include <libsbx/render/passes/opaque_pass.hpp>
 #include <libsbx/render/passes/skybox_pass.hpp>
 #include <libsbx/render/passes/grid_pass.hpp>
+#include <libsbx/render/passes/debug_draw_pass.hpp>
 #include <libsbx/render/passes/tonemap_pass.hpp>
 #include <libsbx/render/passes/transparent_accumulate_pass.hpp>
 #include <libsbx/render/passes/transparent_resolve_pass.hpp>
@@ -123,6 +124,7 @@ scene_renderer_module::scene_renderer_module() {
   _graph.add_pass<opaque_pass>();
   _graph.add_pass<skybox_pass>();
   _graph.add_pass<grid_pass>();
+  _graph.add_pass<debug_draw_pass>();
   _graph.add_pass<transparent_accumulate_pass>();
   _graph.add_pass<particle_simulate_pass>(*_particle_pools[particle_pool_additive], *_particle_pools[particle_pool_alpha_blend]);
   _graph.add_pass<particle_draw_pass>();

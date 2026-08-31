@@ -32,6 +32,7 @@
 #include <libsbx/render/presentation_module.hpp>
 #include <libsbx/render/scene_renderer.hpp>
 #include <libsbx/render/compositor.hpp>
+#include <libsbx/render/debug/debug_draw.hpp>
 
 namespace sbx::render {
 
@@ -105,6 +106,15 @@ public:
    */
   auto set_grid_enabled(bool enabled) -> void;
 
+  /**
+   * @brief The shared immediate-mode line accumulator -- physics colliders (see
+   * physics::physics_module::late_update()) and, later, script-driven gizmos submit into this every
+   * frame; debug_draw_pass uploads and draws whatever's accumulated, then clears it.
+   */
+  [[nodiscard]] auto debug_draw() noexcept -> render::debug_draw& {
+    return _debug_draw;
+  }
+
 private:
 
   inline static constexpr auto light_capacity = std::uint32_t{256u};
@@ -172,6 +182,8 @@ private:
   std::array<std::uint32_t, shadow_cascade_count> _shadow_map_indices{};
 
   std::array<std::unique_ptr<particle_pool>, 2u> _particle_pools{};
+
+  render::debug_draw _debug_draw{};
 
 }; // class scene_renderer_module
 

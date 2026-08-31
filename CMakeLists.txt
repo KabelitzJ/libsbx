@@ -223,6 +223,7 @@ target_sources(
     "${CMAKE_SOURCE_DIR}/libsbx/physics/gjk.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/physics/mesh_collision_cache.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/physics/narrowphase.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/physics/physics_debug.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/physics/physics_module.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/physics/solver.cpp"
 
@@ -233,9 +234,12 @@ target_sources(
 
     "${CMAKE_SOURCE_DIR}/libsbx/reflection/reflection.cpp"
 
+    "${CMAKE_SOURCE_DIR}/libsbx/render/debug/debug_draw.cpp"
+
     "${CMAKE_SOURCE_DIR}/libsbx/render/particles/particle_draw_pass.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/render/particles/particle_pool.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/render/particles/particle_simulate_pass.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/render/passes/debug_draw_pass.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/render/passes/depth_pre_pass.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/render/passes/grid_pass.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/render/passes/light_culling_pass.cpp"
@@ -447,6 +451,7 @@ target_sources(
       "${CMAKE_SOURCE_DIR}/libsbx/physics/gjk.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/physics/mesh_collision_cache.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/physics/narrowphase.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/physics/physics_debug.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/physics/physics_module.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/physics/rigidbody.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/physics/shapes.hpp"
@@ -465,10 +470,13 @@ target_sources(
       "${CMAKE_SOURCE_DIR}/libsbx/reflection/enum.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/reflection/reflection.hpp"
 
+      "${CMAKE_SOURCE_DIR}/libsbx/render/debug/debug_draw.hpp"
+
       "${CMAKE_SOURCE_DIR}/libsbx/render/particles/particle_data.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/render/particles/particle_draw_pass.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/render/particles/particle_pool.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/render/particles/particle_simulate_pass.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/render/passes/debug_draw_pass.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/render/passes/depth_pre_pass.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/render/passes/light_culling_pass.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/render/passes/opaque_pass.hpp"

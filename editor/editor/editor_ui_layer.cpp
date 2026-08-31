@@ -37,6 +37,8 @@
 
 #include <libsbx/scripting/scripting_module.hpp>
 
+#include <libsbx/physics/physics_module.hpp>
+
 #include <libsbx/graphics/graphics_module.hpp>
 
 #include <libsbx/render/scene_renderer_module.hpp>
@@ -304,6 +306,23 @@ auto editor_ui_layer::_draw_dockspace() -> void {
       }
 
       ImGui::EndDisabled();
+
+      ImGui::EndMenu();
+    }
+
+    if (ImGui::BeginMenu("View")) {
+      auto& physics_module = sbx::core::engine::get_module<sbx::physics::physics_module>();
+
+      auto flags = physics_module.debug_draw_flags();
+      auto changed = false;
+
+      changed |= ImGui::MenuItem("Physics Colliders", nullptr, &flags.colliders);
+      changed |= ImGui::MenuItem("Physics Broadphase", nullptr, &flags.broadphase);
+      changed |= ImGui::MenuItem("Physics Contacts", nullptr, &flags.contacts);
+
+      if (changed) {
+        physics_module.set_debug_draw_flags(flags);
+      }
 
       ImGui::EndMenu();
     }

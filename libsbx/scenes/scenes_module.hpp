@@ -36,14 +36,6 @@ public:
     return _scene;
   }
 
-  /**
-   * @brief Whether time-driven scene systems (script `OnUpdate`, particle `elapsed`
-   * accumulation, ...) should advance this frame. Defaults to true, so runtime/launcher — which
-   * never call @ref set_simulating — behave exactly as before this existed. Deliberately generic:
-   * this module knows nothing about "editor" or "play mode", only whether the scene is currently
-   * simulating; the editor's play/pause/stop state machine (see editor::play_mode_controller)
-   * drives this through @ref set_simulating instead of living here.
-   */
   [[nodiscard]] auto is_simulating() const noexcept -> bool {
     return _is_simulating;
   }

@@ -15,8 +15,12 @@
 
 #include <libsbx/utility/profiler.hpp>
 
+#include <libsbx/render/scene_renderer_module.hpp>
+#include <libsbx/render/debug/debug_draw.hpp>
+
 #include <libsbx/physics/narrowphase.hpp>
 #include <libsbx/physics/solver.hpp>
+#include <libsbx/physics/physics_debug.hpp>
 
 namespace sbx::physics {
 
@@ -226,6 +230,61 @@ auto physics_module::fixed_update() -> void {
   update_sleep_timers(scene, dt, _linear_sleep_threshold, _angular_sleep_threshold, _time_to_sleep);
 
   _update_manifold_cache();
+}
+
+auto physics_module::late_update() -> void {
+  SBX_PROFILE_SCOPE("physics_module::late_update");
+
+  if (!_debug_draw_flags.colliders && !_debug_draw_flags.broadphase && !_debug_draw_flags.contacts) {
+    return;
+  }
+
+  auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
+
+  _submit_debug_draw(scenes_module.active_scene());
+}
+
+auto physics_module::_submit_debug_draw(scenes::scene& scene) -> void {
+  auto& scene_renderer_module = core::engine::get_module<render::scene_renderer_module>();
+  auto& debug_draw = scene_renderer_module.debug_draw();
+
+  if (_debug_draw_flags.colliders) {
+    // Same query _sync_broadphase uses -- a shape_collider without a rigidbody never enters the
+    // broadphase either, so drawing anything for it here would be misleading.
+    for (auto&& [entity, body, collider, local] : scene.query<rigidbody, shape_collider, scenes::local_transform>().each()) {
+      const auto pose_position = local.position + local.rotation * collider.offset;
+      const auto pose_rotation = math::quaternion::normalized(local.rotation * collider.rotation);
+      const auto matrix = world_pose_matrix(pose_position, pose_rotation);
+
+      draw_convex_shape(debug_draw, collider.shape, matrix, debug_color_for(body.type, body.is_sleeping));
+    }
+  }
+
+  if (_debug_draw_flags.broadphase) {
+    const auto dynamic_color = math::color{1.0f, 1.0f, 0.0f, 1.0f};
+    const auto static_color = math::color{0.6f, 0.6f, 0.0f, 1.0f};
+
+    _dynamic_tree.for_each_leaf([&](broadphase_tree_type::id, const scenes::node&, const math::volume& fat_aabb) {
+      debug_draw.add_wire_aabb(fat_aabb, dynamic_color);
+    });
+
+    _static_tree.for_each_leaf([&](broadphase_tree_type::id, const scenes::node&, const math::volume& fat_aabb) {
+      debug_draw.add_wire_aabb(fat_aabb, static_color);
+    });
+  }
+
+  if (_debug_draw_flags.contacts) {
+    const auto contact_color = math::color{1.0f, 0.1f, 0.1f, 1.0f};
+    constexpr auto normal_length = 0.3f;
+    constexpr auto cross_size = 0.1f;
+
+    for (const auto& manifold : _manifolds) {
+      for (const auto& point : manifold.points) {
+        debug_draw.add_cross(point.point, cross_size, contact_color);
+        debug_draw.add_line(point.point, point.point + manifold.normal * normal_length, contact_color);
+      }
+    }
+  }
 }
 
 } // namespace sbx::physics

@@ -63,11 +63,11 @@ auto integrate_forces(scenes::scene& scene, const math::vector3& gravity, std::f
   }
 }
 
-auto prepare_velocity_constraints(const std::vector<contact_manifold>& manifolds) -> std::vector<velocity_constraint> {
+auto prepare_velocity_constraints(std::vector<contact_manifold>& manifolds) -> std::vector<velocity_constraint> {
   auto constraints = std::vector<velocity_constraint>{};
   constraints.reserve(manifolds.size());
 
-  for (const auto& manifold : manifolds) {
+  for (auto& manifold : manifolds) {
     auto& body_a = manifold.node_a.get_component<rigidbody>();
     auto& body_b = manifold.node_b.get_component<rigidbody>();
 
@@ -90,10 +90,18 @@ auto prepare_velocity_constraints(const std::vector<contact_manifold>& manifolds
     constraint.tangent_1 = math::vector3::normalized(math::vector3::orthogonal(manifold.normal));
     constraint.tangent_2 = math::vector3::cross(manifold.normal, constraint.tangent_1);
 
-    for (const auto& point : manifold.points) {
+    const auto apply_impulse = [&](const math::vector3& impulse, const math::vector3& anchor_a, const math::vector3& anchor_b) {
+      body_a.linear_velocity = body_a.linear_velocity - impulse * inv_mass_a;
+      body_a.angular_velocity = body_a.angular_velocity - inv_inertia_a * math::vector3::cross(anchor_a, impulse);
+      body_b.linear_velocity = body_b.linear_velocity + impulse * inv_mass_b;
+      body_b.angular_velocity = body_b.angular_velocity + inv_inertia_b * math::vector3::cross(anchor_b, impulse);
+    };
+
+    for (auto& point : manifold.points) {
       auto constraint_point = velocity_constraint_point{};
       constraint_point.anchor_a = point.anchor_a;
       constraint_point.anchor_b = point.anchor_b;
+      constraint_point.contact = &point;
 
       const auto compute_mass = [&](const math::vector3& direction) -> std::float_t {
         const auto ra_x_d = math::vector3::cross(point.anchor_a, direction);
@@ -114,6 +122,22 @@ auto prepare_velocity_constraints(const std::vector<contact_manifold>& manifolds
       const auto closing_speed = math::vector3::dot(relative_velocity, manifold.normal);
 
       constraint_point.velocity_bias = (closing_speed < -restitution_velocity_threshold) ? (-constraint.restitution * closing_speed) : 0.0f;
+
+      // Warm start: point.{normal,tangent_1,tangent_2}_impulse is either still zero (a point with
+      // no match in the previous step's cached manifold) or was just seeded by
+      // physics_module::_warm_start_manifolds from the matching point last step. Either way, carry
+      // it into the constraint and apply it once now, before the caller's iterative solve even
+      // starts -- that's what lets a resting stack's supporting impulse persist instead of being
+      // rebuilt from zero every step.
+      constraint_point.normal_impulse = point.normal_impulse;
+      constraint_point.tangent_impulse_1 = point.tangent_impulse_1;
+      constraint_point.tangent_impulse_2 = point.tangent_impulse_2;
+
+      const auto warm_impulse = constraint.normal * constraint_point.normal_impulse
+        + constraint.tangent_1 * constraint_point.tangent_impulse_1
+        + constraint.tangent_2 * constraint_point.tangent_impulse_2;
+
+      apply_impulse(warm_impulse, point.anchor_a, point.anchor_b);
 
       constraint.points.push_back(constraint_point);
     }
@@ -180,6 +204,20 @@ auto solve_velocity_constraints(std::vector<velocity_constraint>& constraints, s
           apply_impulse(constraint.tangent_2 * delta, point.anchor_a, point.anchor_b);
         }
       }
+    }
+  }
+}
+
+auto store_impulses(std::vector<velocity_constraint>& constraints) -> void {
+  for (auto& constraint : constraints) {
+    for (auto& point : constraint.points) {
+      if (point.contact == nullptr) {
+        continue;
+      }
+
+      point.contact->normal_impulse = point.normal_impulse;
+      point.contact->tangent_impulse_1 = point.tangent_impulse_1;
+      point.contact->tangent_impulse_2 = point.tangent_impulse_2;
     }
   }
 }

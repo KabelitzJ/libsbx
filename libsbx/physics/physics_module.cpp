@@ -101,6 +101,55 @@ auto physics_module::_generate_candidate_pairs() -> void {
   });
 }
 
+auto physics_module::_warm_start_manifolds() -> void {
+  // Points closer together than this, between this step's fresh geometry and the previous step's
+  // cached manifold for the same pair, are considered "the same contact" for impulse carry-over.
+  constexpr auto match_distance_squared = 0.05f * 0.05f;
+
+  for (auto& manifold : _manifolds) {
+    const auto cached = _manifold_cache.find(make_manifold_key(manifold.node_a, manifold.node_b));
+
+    if (cached == _manifold_cache.end()) {
+      continue;
+    }
+
+    const auto& cached_points = cached->second.points;
+
+    for (auto& point : manifold.points) {
+      auto best_index = std::optional<std::size_t>{};
+      auto best_distance_squared = match_distance_squared;
+
+      for (auto index = std::size_t{0}; index < cached_points.size(); ++index) {
+        const auto distance_squared = math::vector3::distance_squared(point.point, cached_points[index].point);
+
+        if (distance_squared <= best_distance_squared) {
+          best_distance_squared = distance_squared;
+          best_index = index;
+        }
+      }
+
+      if (!best_index) {
+        continue; // no match within range -- this point starts cold, same as before
+      }
+
+      const auto& matched = cached_points[*best_index];
+      point.normal_impulse = matched.normal_impulse;
+      point.tangent_impulse_1 = matched.tangent_impulse_1;
+      point.tangent_impulse_2 = matched.tangent_impulse_2;
+    }
+  }
+}
+
+auto physics_module::_update_manifold_cache() -> void {
+  auto next_cache = containers::dense_map<manifold_key, contact_manifold>{};
+
+  for (const auto& manifold : _manifolds) {
+    next_cache.emplace(make_manifold_key(manifold.node_a, manifold.node_b), manifold);
+  }
+
+  _manifold_cache = std::move(next_cache);
+}
+
 auto physics_module::_reset() -> void {
   _dynamic_tree.clear();
   _static_tree.clear();
@@ -108,6 +157,7 @@ auto physics_module::_reset() -> void {
   _static_leaves.clear();
   _candidate_pairs.clear();
   _manifolds.clear();
+  _manifold_cache.clear();
 }
 
 auto physics_module::_narrowphase() -> void {
@@ -163,15 +213,19 @@ auto physics_module::fixed_update() -> void {
 
   _manifolds.clear();
   _narrowphase();
+  _warm_start_manifolds();
 
   integrate_forces(scene, _gravity, dt);
 
   auto constraints = prepare_velocity_constraints(_manifolds);
   solve_velocity_constraints(constraints, _velocity_iterations);
+  store_impulses(constraints);
 
   integrate_velocities(scene, dt);
   apply_positional_correction(_manifolds, _position_correction_percent, _position_correction_slop);
   update_sleep_timers(scene, dt, _linear_sleep_threshold, _angular_sleep_threshold, _time_to_sleep);
+
+  _update_manifold_cache();
 }
 
 } // namespace sbx::physics

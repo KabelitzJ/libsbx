@@ -105,6 +105,15 @@ private:
 
   auto _narrowphase() -> void;
 
+  // Seeds each of this step's fresh (cold) manifold points from the nearest same-pair point in
+  // _manifold_cache (last step's manifolds, after solving), so prepare_velocity_constraints has a
+  // real impulse to warm-start from instead of always starting at zero.
+  auto _warm_start_manifolds() -> void;
+
+  // Rebuilds _manifold_cache from this step's _manifolds (whose impulse fields store_impulses has
+  // by now filled in with the final solved values) -- naturally drops any pair no longer in contact.
+  auto _update_manifold_cache() -> void;
+
   // Drops every broadphase leaf/pair/manifold. Play mode's "stop" reloads the scene in place from
   // a snapshot (scene_serializer::load over the same registry), which destroys and recreates every
   // entity -- any scenes::node this module is still holding onto from before that becomes a stale
@@ -133,6 +142,9 @@ private:
 
   std::vector<std::pair<scenes::node, scenes::node>> _candidate_pairs{};
   std::vector<contact_manifold> _manifolds{};
+
+  // Last step's solved manifolds, keyed by pair, for _warm_start_manifolds to seed impulses from.
+  containers::dense_map<manifold_key, contact_manifold> _manifold_cache{};
 
 }; // class physics_module
 

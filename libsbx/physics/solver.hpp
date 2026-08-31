@@ -17,6 +17,8 @@
 #include <cstdint>
 #include <vector>
 
+#include <libsbx/memory/observer_ptr.hpp>
+
 #include <libsbx/math/vector3.hpp>
 
 #include <libsbx/containers/static_vector.hpp>
@@ -38,6 +40,7 @@ struct velocity_constraint_point {
   std::float_t normal_impulse{0.0f};
   std::float_t tangent_impulse_1{0.0f};
   std::float_t tangent_impulse_2{0.0f};
+  memory::observer_ptr<contact_point> contact{nullptr}; // the manifold point this was built from -- see store_impulses
 }; // struct velocity_constraint_point
 
 struct velocity_constraint {
@@ -60,15 +63,26 @@ auto integrate_forces(scenes::scene& scene, const math::vector3& gravity, std::f
 
 /**
  * @brief Builds one velocity_constraint per manifold (effective mass terms, tangent basis,
- * restitution bias), skipping manifolds between two immovable bodies.
+ * restitution bias), skipping manifolds between two immovable bodies. Each point's impulse
+ * accumulators are seeded from its (already warm-started, see physics_module::_warm_start_manifolds)
+ * contact_point and immediately applied once -- the actual "warm start" -- before the caller runs
+ * the iterative solve. @p manifolds is mutated: each velocity_constraint_point keeps a pointer back
+ * into it so @ref store_impulses can write the final impulses back after solving.
  */
-[[nodiscard]] auto prepare_velocity_constraints(const std::vector<contact_manifold>& manifolds) -> std::vector<velocity_constraint>;
+[[nodiscard]] auto prepare_velocity_constraints(std::vector<contact_manifold>& manifolds) -> std::vector<velocity_constraint>;
 
 /**
  * @brief Runs @p iterations passes of sequential-impulse (projected Gauss-Seidel) resolution over
  * @p constraints: a clamped normal impulse per point, then two Coulomb-clamped tangent impulses.
  */
 auto solve_velocity_constraints(std::vector<velocity_constraint>& constraints, std::uint32_t iterations) -> void;
+
+/**
+ * @brief Writes each constraint point's final impulse accumulators back into the contact_point
+ * prepare_velocity_constraints built it from, so physics_module can cache them for next step's
+ * warm start.
+ */
+auto store_impulses(std::vector<velocity_constraint>& constraints) -> void;
 
 /**
  * @brief Semi-implicit Euler position/rotation integration for every non-static, non-sleeping body.

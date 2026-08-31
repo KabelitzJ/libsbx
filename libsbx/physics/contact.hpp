@@ -21,14 +21,16 @@
 
 #include <libsbx/scenes/node.hpp>
 
+#include <libsbx/utility/hash.hpp>
+
 namespace sbx::physics {
 
 inline constexpr auto max_manifold_points = std::size_t{4};
 
 /**
- * @brief One contact point. The impulse accumulator fields are provisioned for a future
- * warm-starting pass (persisting/matching manifolds frame-to-frame) but unused by the v1 solver,
- * which starts every point cold each step.
+ * @brief One contact point. The impulse accumulator fields are seeded from the previous step's
+ * matching point (see physics_module::_warm_start_manifolds) and read/written by the solver each
+ * step; a point with no previous-step match starts cold at zero.
  */
 struct contact_point {
   math::vector3 point{math::vector3::zero};        // world space
@@ -54,6 +56,36 @@ struct contact_manifold {
   containers::static_vector<contact_point, max_manifold_points> points{};
 }; // struct contact_manifold
 
+/**
+ * @brief Identifies a colliding pair for the warm-start manifold cache, independent of which side
+ * narrowphase happened to call "A" and which "B" this step. Only ever construct through
+ * @ref make_manifold_key -- its equality/hash are order-sensitive, and that's the function that
+ * puts the two nodes into a canonical order.
+ */
+struct manifold_key {
+  scenes::node node_a;
+  scenes::node node_b;
+}; // struct manifold_key
+
+[[nodiscard]] inline auto make_manifold_key(const scenes::node& a, const scenes::node& b) -> manifold_key {
+  return (a.id().value() < b.id().value()) ? manifold_key{a, b} : manifold_key{b, a};
+}
+
+[[nodiscard]] inline auto operator==(const manifold_key& lhs, const manifold_key& rhs) -> bool {
+  return lhs.node_a == rhs.node_a && lhs.node_b == rhs.node_b;
+}
+
 } // namespace sbx::physics
+
+template<>
+struct std::hash<sbx::physics::manifold_key> {
+
+  auto operator()(const sbx::physics::manifold_key& key) const noexcept -> std::size_t {
+    auto seed = std::size_t{0};
+    sbx::utility::hash_combine(seed, key.node_a, key.node_b);
+    return seed;
+  }
+
+}; // struct std::hash<sbx::physics::manifold_key>
 
 #endif // LIBSBX_PHYSICS_CONTACT_HPP_

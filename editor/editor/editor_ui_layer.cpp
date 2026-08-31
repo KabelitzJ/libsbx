@@ -138,7 +138,7 @@ auto editor_ui_layer::build() -> void {
   ImGui::PopStyleVar();
 
   ImGui::Begin(stats_window_name);
-  ImGui::Text("%.1f FPS (%.3f ms)", static_cast<double>(ImGui::GetIO().Framerate), 1000.0 / static_cast<double>(ImGui::GetIO().Framerate));
+  ImGui::Text("%.1f FPS (%.3f ms)", static_cast<std::double_t>(ImGui::GetIO().Framerate), 1000.0 / static_cast<std::double_t>(ImGui::GetIO().Framerate));
   ImGui::End();
 
   for (auto& panel : _panels) {

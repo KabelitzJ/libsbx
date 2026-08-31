@@ -44,13 +44,13 @@ window::window(const create_info& create_info)
       _width = info.size.x();
       _height = info.size.y();
 
-      _handle = glfwCreateWindow(static_cast<int>(_width), static_cast<int>(_height), _title.c_str(), nullptr, nullptr);
+      _handle = glfwCreateWindow(static_cast<std::int32_t>(_width), static_cast<std::int32_t>(_height), _title.c_str(), nullptr, nullptr);
     },
     [this, monitor, video_mode](const fullscreen_create_info& info) {
       _width = info.size.x();
       _height = info.size.y();
 
-      _handle = glfwCreateWindow(static_cast<int>(_width), static_cast<int>(_height), _title.c_str(), monitor, nullptr);
+      _handle = glfwCreateWindow(static_cast<std::int32_t>(_width), static_cast<std::int32_t>(_height), _title.c_str(), monitor, nullptr);
     },
     [this, monitor, video_mode]([[maybe_unused]] const borderless_create_info& info) {
       _width = static_cast<std::uint32_t>(video_mode->width);
@@ -61,7 +61,7 @@ window::window(const create_info& create_info)
       glfwWindowHint(GLFW_BLUE_BITS, video_mode->blueBits);
       glfwWindowHint(GLFW_REFRESH_RATE, video_mode->refreshRate);
 
-      _handle = glfwCreateWindow(static_cast<int>(_width), static_cast<int>(_height), _title.c_str(), monitor, nullptr);
+      _handle = glfwCreateWindow(static_cast<std::int32_t>(_width), static_cast<std::int32_t>(_height), _title.c_str(), monitor, nullptr);
     }
   ), create_info);
 
@@ -70,7 +70,7 @@ window::window(const create_info& create_info)
   }
   
   if (std::holds_alternative<windowed_create_info>(create_info)) {
-    glfwSetWindowPos(_handle, (video_mode->width - static_cast<int>(_width)) / 2, (video_mode->height - static_cast<int>(_height)) / 2);
+    glfwSetWindowPos(_handle, (video_mode->width - static_cast<std::int32_t>(_width)) / 2, (video_mode->height - static_cast<std::int32_t>(_height)) / 2);
   }
     
   glfwFocusWindow(_handle);

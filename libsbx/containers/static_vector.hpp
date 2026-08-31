@@ -63,9 +63,9 @@ public:
   }
 
   constexpr static_vector(std::initializer_list<value_type> values) noexcept
-  : _size{values.size()} {
-    utility::assert_that(_size <= Capacity, "initializer list size exceeds capacity");
-    
+  : _size{0u} {
+    utility::assert_that(values.size() <= Capacity, "initializer list size exceeds capacity");
+
     for (auto value : values) {
       if constexpr (std::is_move_constructible_v<Type>) {
         push_back(std::move(value));

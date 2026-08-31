@@ -51,6 +51,7 @@ class LibsbxConan(ConanFile):
         self.requires("fastgltf/0.9.0")
         self.requires("fmt/12.1.0", transitive_headers=True)
         self.requires("glfw/3.3.8", transitive_headers=True)
+        self.requires("gtest/1.17.0")
         self.requires("imgui/1.92.8-docking", transitive_headers=True)
         self.requires("imguizmo/1.10-docking", transitive_headers=True)
         self.requires("lz4/1.10.0")

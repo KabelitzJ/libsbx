@@ -370,7 +370,7 @@ auto draw_view_gizmo(const ImVec2& viewport_origin, const ImVec2& viewport_size)
     }
 
     ImGui::SetCursorScreenPos(ImVec2{handle.position.x - handle_size, handle.position.y - handle_size});
-    ImGui::PushID(static_cast<int>(index));
+    ImGui::PushID(static_cast<std::int32_t>(index));
     ImGui::InvisibleButton("##axis_handle", ImVec2{handle_size * 2.0f, handle_size * 2.0f});
 
     const auto hovered = ImGui::IsItemHovered();
@@ -491,7 +491,7 @@ auto draw_node_icons(editor_state& state, const ImVec2& viewport_origin, const I
     const auto icon_min = ImVec2{projected.screen_position.x - text_size.x * 0.5f, projected.screen_position.y - text_size.y * 0.5f};
 
     ImGui::SetCursorScreenPos(icon_min);
-    ImGui::PushID(static_cast<int>(entity));
+    ImGui::PushID(static_cast<std::int32_t>(entity));
 
     const auto node = scene.node_of(entity);
     auto hovered = false;

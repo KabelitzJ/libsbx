@@ -1193,8 +1193,8 @@ auto draw_script_field_inspector(editor_state& state, sbx::scenes::node& node, s
         is_read_only = field_attribute.get_property_value<bool>("IsReadOnly");
       } else if (attribute_type_name == "Sbx.Core.Attributes.ClampValueAttribute") {
         has_clamp = true;
-        clamp_min = static_cast<std::float_t>(field_attribute.get_property_value<double>("Min"));
-        clamp_max = static_cast<std::float_t>(field_attribute.get_property_value<double>("Max"));
+        clamp_min = static_cast<std::float_t>(field_attribute.get_property_value<std::double_t>("Min"));
+        clamp_max = static_cast<std::float_t>(field_attribute.get_property_value<std::double_t>("Max"));
       }
     }
 
@@ -1251,7 +1251,7 @@ auto draw_script_field_inspector(editor_state& state, sbx::scenes::node& node, s
                                   : override_slot ? override_slot->int_value : 0;
 
       const auto changed = has_clamp
-        ? ImGui::SliderInt(display_name.c_str(), &value, static_cast<int>(clamp_min), static_cast<int>(clamp_max))
+        ? ImGui::SliderInt(display_name.c_str(), &value, static_cast<std::int32_t>(clamp_min), static_cast<std::int32_t>(clamp_max))
         : ImGui::DragInt(display_name.c_str(), &value);
 
       capture_before();
@@ -1507,7 +1507,7 @@ auto inspector_panel::_draw_node_properties(editor_state& state, sbx::scenes::no
     for (auto index = std::size_t{0u}; index < scripts.scripts.size(); ++index) {
       section_gap();
 
-      ImGui::PushID(static_cast<int>(index));
+      ImGui::PushID(static_cast<std::int32_t>(index));
       draw_script_section(state, node, scripts.scripts[index], pending_removal);
       ImGui::PopID();
     }

@@ -266,7 +266,7 @@ auto ui_system::render(graphics::command_buffer& command_buffer, math::vector2u 
   // Data/Size/Capacity are detached again below, before IM_FREE() would run on memory this local never allocated.
   auto draw_data = ImDrawData{};
   draw_data.Valid = true;
-  draw_data.CmdListsCount = static_cast<int>(data.draw_lists().size());
+  draw_data.CmdListsCount = static_cast<std::int32_t>(data.draw_lists().size());
   draw_data.CmdLists.Data = const_cast<ImDrawList**>(data.draw_lists().data());
   draw_data.CmdLists.Size = draw_data.CmdListsCount;
   draw_data.CmdLists.Capacity = draw_data.CmdListsCount;

@@ -53,7 +53,7 @@ auto hierarchy_panel::_draw_node_row(editor_state& state, sbx::scenes::scene& sc
     flags |= ImGuiTreeNodeFlags_Selected;
   }
 
-  ImGui::PushID(static_cast<int>(entity));
+  ImGui::PushID(static_cast<std::int32_t>(entity));
 
   const auto is_open = ImGui::TreeNodeEx("##node_row", flags, "%s %s", icon_for(node), tag.c_str());
 

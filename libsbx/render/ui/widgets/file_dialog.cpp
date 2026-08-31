@@ -179,7 +179,7 @@ auto file_dialog::draw() -> void {
     for (auto index = std::size_t{0u}; index < _cached_entries.size() && _is_open; ++index) {
       auto& item = _cached_entries[index];
 
-      ImGui::PushID(static_cast<int>(index));
+      ImGui::PushID(static_cast<std::int32_t>(index));
 
       const auto label = std::string{item.is_directory ? ICON_MDI_FOLDER : ICON_MDI_FILE_OUTLINE} + " " + item.path.filename().string();
       const auto is_selected = !item.is_directory && index < _entry_selected.size() && _entry_selected[index];

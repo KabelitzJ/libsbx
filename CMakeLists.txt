@@ -144,6 +144,10 @@ find_package(VulkanMemoryAllocator CONFIG REQUIRED)
 find_package(yaml-cpp CONFIG REQUIRED)
 find_package(zstd CONFIG REQUIRED)
 
+if(SBX_BUILD_TESTS)
+  find_package(GTest CONFIG REQUIRED)
+endif()
+
 # Configure version header
 
 configure_file("${CMAKE_SOURCE_DIR}/libsbx/version.hpp.in" "${CMAKE_BINARY_DIR}/generated/libsbx/version.hpp" @ONLY)
@@ -829,4 +833,11 @@ endif()
 
 if (SBX_BUILD_LAUNCHER AND EXISTS "${CMAKE_SOURCE_DIR}/launcher")
   add_subdirectory(launcher)
+endif()
+
+# Tests
+
+if(SBX_BUILD_TESTS AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
+  enable_testing()
+  add_subdirectory(tests)
 endif()

@@ -113,10 +113,10 @@ auto string::data() const -> const char_type* {
 
 auto string_helper::convert_utf8_to_wide(std::string_view str) -> string_type {
 #if defined(SBX_SCRIPTING_WIDE_CHARS)
-  auto length = MultiByteToWideChar(CP_UTF8, 0, str.data(), static_cast<int>(str.length()), nullptr, 0);
+  auto length = MultiByteToWideChar(CP_UTF8, 0, str.data(), static_cast<std::int32_t>(str.length()), nullptr, 0);
   auto result = std::wstring(length, wchar_t(0));
 
-  MultiByteToWideChar(CP_UTF8, 0, str.data(), static_cast<int>(str.length()), result.data(), length);
+  MultiByteToWideChar(CP_UTF8, 0, str.data(), static_cast<std::int32_t>(str.length()), result.data(), length);
 
   return result;
 #else
@@ -126,10 +126,10 @@ auto string_helper::convert_utf8_to_wide(std::string_view str) -> string_type {
 
 auto string_helper::convert_wide_to_utf8(string_view_type str) -> std::string {
 #if defined(SBX_SCRIPTING_WIDE_CHARS)
-  auto required_length = WideCharToMultiByte(CP_UTF8, 0, str.data(), static_cast<int>(str.length()), nullptr, 0, nullptr, nullptr);
+  auto required_length = WideCharToMultiByte(CP_UTF8, 0, str.data(), static_cast<std::int32_t>(str.length()), nullptr, 0, nullptr, nullptr);
   auto result = std::string(required_length, 0);
 
-  (void)WideCharToMultiByte(CP_UTF8, 0, str.data(), static_cast<int>(str.length()), result.data(), required_length, nullptr, nullptr);
+  (void)WideCharToMultiByte(CP_UTF8, 0, str.data(), static_cast<std::int32_t>(str.length()), result.data(), required_length, nullptr, nullptr);
 
   return result;
 #else

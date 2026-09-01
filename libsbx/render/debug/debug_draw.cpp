@@ -93,7 +93,7 @@ auto debug_draw::add_wire_cylinder(const math::matrix4x4& matrix, std::float_t r
 
 auto debug_draw::add_wire_capsule(const math::matrix4x4& matrix, std::float_t radius, std::float_t half_height, const math::color& color, std::uint32_t segments) -> void {
   constexpr auto tau = 2.0f * std::numbers::pi_v<std::float_t>;
-  constexpr auto half_pi = std::numbers::pi_v<std::float_t> / 2.0f;
+  constexpr auto pi = std::numbers::pi_v<std::float_t>;
 
   const auto center = math::vector3{matrix[3]};
   const auto axis_x = math::vector3::normalized(math::vector3{matrix[0]});
@@ -116,14 +116,15 @@ auto debug_draw::add_wire_capsule(const math::matrix4x4& matrix, std::float_t ra
   }
 
   // Hemisphere caps -- two half-circle silhouettes per cap, in the axis_x/axis_y and axis_z/axis_y
-  // planes, sweeping from the ring outward to the pole (matches the ring + verticals + cap-arcs
-  // gizmo most physics debug-drawers use for capsules).
+  // planes, each running from the ring's equator point, through the pole, to the diametrically
+  // opposite equator point (matches the ring + verticals + cap-arcs gizmo most physics
+  // debug-drawers use for capsules).
   const auto cap_segments = std::max(segments / 2u, 4u);
 
-  _add_arc(top, axis_x, axis_y, radius, -half_pi, half_pi, color, cap_segments);
-  _add_arc(top, axis_z, axis_y, radius, -half_pi, half_pi, color, cap_segments);
-  _add_arc(bottom, axis_x, axis_y, radius, half_pi, half_pi + std::numbers::pi_v<std::float_t>, color, cap_segments);
-  _add_arc(bottom, axis_z, axis_y, radius, half_pi, half_pi + std::numbers::pi_v<std::float_t>, color, cap_segments);
+  _add_arc(top, axis_x, axis_y, radius, 0.0f, pi, color, cap_segments);
+  _add_arc(top, axis_z, axis_y, radius, 0.0f, pi, color, cap_segments);
+  _add_arc(bottom, axis_x, -axis_y, radius, 0.0f, pi, color, cap_segments);
+  _add_arc(bottom, axis_z, -axis_y, radius, 0.0f, pi, color, cap_segments);
 }
 
 auto debug_draw::add_cross(const math::vector3& point, std::float_t size, const math::color& color) -> void {

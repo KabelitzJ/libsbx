@@ -189,6 +189,27 @@ auto closest_points_segment_segment(const math::vector3& p1, const math::vector3
   return sphere_sphere(closest, capsule_radius, sphere_center, sphere_radius);
 }
 
+// Returns a normal pointing from the box toward the capsule (same convention as sphere_box).
+[[nodiscard]] auto capsule_box(const math::vector3& capsule_center, const math::quaternion& capsule_rotation, std::float_t capsule_radius, std::float_t capsule_half_height, const math::vector3& box_center, const math::quaternion& box_rotation, const math::vector3& half_extents) -> std::optional<narrow_result> {
+  const auto axis = capsule_rotation * math::vector3{0.0f, 1.0f, 0.0f};
+  const auto p0 = capsule_center - axis * capsule_half_height;
+  const auto p1 = capsule_center + axis * capsule_half_height;
+
+  // Closest point on the capsule's core segment to the box: alternate "clamp into the box" and
+  // "closest point on the segment to that clamped point" -- both steps are projections onto a
+  // convex set, so this converges to the true closest pair after a handful of iterations.
+  auto closest = capsule_center;
+
+  for (auto i = 0; i < 4; ++i) {
+    const auto local = math::quaternion::conjugate(box_rotation) * (closest - box_center);
+    const auto clamped_local = math::vector3::max(-half_extents, math::vector3::min(local, half_extents));
+    const auto clamped_world = box_center + box_rotation * clamped_local;
+    closest = closest_point_on_segment(clamped_world, p0, p1);
+  }
+
+  return sphere_box(closest, capsule_radius, box_center, box_rotation, half_extents);
+}
+
 [[nodiscard]] auto capsule_capsule(const math::vector3& center_a, const math::quaternion& rotation_a, std::float_t radius_a, std::float_t half_height_a, const math::vector3& center_b, const math::quaternion& rotation_b, std::float_t radius_b, std::float_t half_height_b) -> std::optional<narrow_result> {
   const auto axis_a = rotation_a * math::vector3{0.0f, 1.0f, 0.0f};
   const auto axis_b = rotation_b * math::vector3{0.0f, 1.0f, 0.0f};
@@ -523,6 +544,18 @@ struct clip_plane {
     const auto& capsule_a = std::get<capsule>(shape_a);
     const auto& capsule_b = std::get<capsule>(shape_b);
     return capsule_capsule(pose_a.position, pose_a.rotation, capsule_a.radius, capsule_a.half_height, pose_b.position, pose_b.rotation, capsule_b.radius, capsule_b.half_height);
+  }
+
+  if (index_a == capsule_index && index_b == box_index) {
+    const auto& capsule_shape = std::get<capsule>(shape_a);
+    auto result = capsule_box(pose_a.position, pose_a.rotation, capsule_shape.radius, capsule_shape.half_height, pose_b.position, pose_b.rotation, std::get<box>(shape_b).half_extents);
+    if (result) { result->normal = -result->normal; }
+    return result;
+  }
+
+  if (index_a == box_index && index_b == capsule_index) {
+    const auto& capsule_shape = std::get<capsule>(shape_b);
+    return capsule_box(pose_b.position, pose_b.rotation, capsule_shape.radius, capsule_shape.half_height, pose_a.position, pose_a.rotation, std::get<box>(shape_a).half_extents);
   }
 
   if (index_a == box_index && index_b == box_index) {

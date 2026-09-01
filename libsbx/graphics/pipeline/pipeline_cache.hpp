@@ -36,6 +36,7 @@ struct pipeline_state {
   graphics::polygon_mode polygon_mode{polygon_mode::fill};
   graphics::cull_mode cull_mode{cull_mode::none};
   graphics::front_face front_face{front_face::counter_clockwise};
+  std::float_t line_width{1.0f};
   bool depth_bias_enable{false};
   std::float_t depth_bias_constant{0.0f};
   std::float_t depth_bias_slope{0.0f};

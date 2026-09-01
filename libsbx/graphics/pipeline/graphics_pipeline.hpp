@@ -69,6 +69,7 @@ public:
     graphics::polygon_mode polygon_mode{polygon_mode::fill};
     graphics::cull_mode cull_mode{cull_mode::none};
     graphics::front_face front_face{front_face::counter_clockwise};
+    std::float_t line_width{1.0f};
     std::optional<graphics::depth_bias> depth_bias{};
     bool depth_test{false};
     bool depth_write{false};

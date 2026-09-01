@@ -2,6 +2,7 @@
 // Copyright (c) 2026 Jonas Kabelitz
 #include <libsbx/graphics/pipeline/graphics_pipeline.hpp>
 
+#include <algorithm>
 #include <array>
 #include <vector>
 
@@ -20,6 +21,7 @@ graphics_pipeline::graphics_pipeline(const create_info& create_info) {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 
   const auto& logical_device = graphics_module.logical_device();
+  const auto& physical_device = graphics_module.physical_device();
   const auto& bindless_table = graphics_module.bindless_table();
   const auto& pipeline_binary_cache = graphics_module.pipeline_binary_cache();
 
@@ -48,8 +50,6 @@ graphics_pipeline::graphics_pipeline(const create_info& create_info) {
     specialization_info.dataSize = specialization_data.size() * sizeof(std::uint32_t);
     specialization_info.pData = specialization_data.data();
 
-    // Constant ids not declared by a given stage are ignored by Vulkan, so it's safe to attach the
-    // same specialization info to every stage rather than tracking which ids belong to which one.
     for (auto& stage : stages) {
       stage.pSpecializationInfo = &specialization_info;
     }
@@ -58,7 +58,7 @@ graphics_pipeline::graphics_pipeline(const create_info& create_info) {
   auto vertex_input_state = VkPipelineVertexInputStateCreateInfo{};
   vertex_input_state.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
 
-    auto input_assembly_state = VkPipelineInputAssemblyStateCreateInfo{};
+  auto input_assembly_state = VkPipelineInputAssemblyStateCreateInfo{};
   input_assembly_state.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
   input_assembly_state.topology = to_vk_enum<VkPrimitiveTopology>(create_info.topology);
   input_assembly_state.primitiveRestartEnable = create_info.primitive_restart ? VK_TRUE : VK_FALSE;
@@ -73,7 +73,9 @@ graphics_pipeline::graphics_pipeline(const create_info& create_info) {
   rasterization_state.polygonMode = to_vk_enum<VkPolygonMode>(create_info.polygon_mode);
   rasterization_state.cullMode = static_cast<VkCullModeFlags>(create_info.cull_mode);
   rasterization_state.frontFace = to_vk_enum<VkFrontFace>(create_info.front_face);
-  rasterization_state.lineWidth = 1.0f;
+
+  const auto& line_width_range = physical_device.properties().limits.lineWidthRange;
+  rasterization_state.lineWidth = std::clamp(create_info.line_width, line_width_range[0], line_width_range[1]);
 
   if (create_info.depth_bias.has_value()) {
     rasterization_state.depthBiasEnable = VK_TRUE;

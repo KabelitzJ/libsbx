@@ -56,6 +56,7 @@ debug_draw_pass::debug_draw_pass() {
     .depth_format = graphics::format::d32_sfloat,
     .topology = graphics::primitive_topology::line_list,
     .cull_mode = graphics::cull_mode::none,
+    .line_width = 3.0f,
     .depth_test = true,
     .depth_write = false,
     .depth_compare = graphics::compare_operation::less_or_equal,

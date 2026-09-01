@@ -21,6 +21,7 @@ auto _build_state_from_create_info(const graphics_pipeline::create_info& create_
   state.polygon_mode = create_info.polygon_mode;
   state.cull_mode = create_info.cull_mode;
   state.front_face = create_info.front_face;
+  state.line_width = create_info.line_width;
 
   if (create_info.depth_bias.has_value()) {
     state.depth_bias_enable = true;
@@ -57,7 +58,7 @@ auto pipeline_state_hash::operator()(const pipeline_state& state) const noexcept
     utility::hash_combine(seed, format);
   }
 
-  utility::hash_combine(seed, state.depth_format, state.topology, state.primitive_restart, state.polygon_mode, state.cull_mode, state.front_face);
+  utility::hash_combine(seed, state.depth_format, state.topology, state.primitive_restart, state.polygon_mode, state.cull_mode, state.front_face, state.line_width);
   utility::hash_combine(seed, state.depth_bias_enable, state.depth_bias_constant, state.depth_bias_slope, state.depth_bias_clamp);
   utility::hash_combine(seed, state.depth_test, state.depth_write, state.depth_compare, state.samples);
 

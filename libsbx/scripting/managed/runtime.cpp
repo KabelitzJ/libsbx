@@ -169,8 +169,6 @@ auto runtime::unload_assembly_load_context(assembly_load_context& load_context) 
   detail::type_cache::get().clear();
 }
 
-namespace {
-
 // [UnmanagedCallersOnly] callbacks can't capture C++ state, so compile_scripts() points this at
 // its local diagnostics vector for the duration of one (synchronous) compile call.
 thread_local std::vector<compiler_diagnostic>* compile_diagnostic_sink = nullptr;
@@ -188,8 +186,6 @@ auto compile_diagnostic_thunk(bool32 is_error, string file, std::int32_t line, s
     .message = std::string{message},
   });
 }
-
-} // namespace
 
 auto runtime::compile_scripts(std::span<const std::string> source_paths, std::span<const std::string> reference_paths, const std::filesystem::path& output_path) -> compile_result {
   using compile_fn = bool32(*)(const string*, std::int32_t, const string*, std::int32_t, string, void(*)(bool32, string, std::int32_t, std::int32_t, string));

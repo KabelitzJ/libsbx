@@ -60,11 +60,22 @@ auto debug_draw::_add_arc(const math::vector3& center, const math::vector3& axis
 auto debug_draw::add_wire_sphere(const math::vector3& center, std::float_t radius, const math::color& color, std::uint32_t segments) -> void {
   constexpr auto tau = 2.0f * std::numbers::pi_v<std::float_t>;
 
-  // Three orthogonal world-axis-aligned great circles -- a sphere reads the same under any
-  // rotation, so there's no need to orient these to the collider's actual transform.
   _add_arc(center, math::vector3::right, math::vector3::forward, radius, 0.0f, tau, color, segments);
   _add_arc(center, math::vector3::right, math::vector3::up, radius, 0.0f, tau, color, segments);
   _add_arc(center, math::vector3::forward, math::vector3::up, radius, 0.0f, tau, color, segments);
+}
+
+auto debug_draw::add_wire_sphere(const math::matrix4x4& matrix, std::float_t radius, const math::color& color, std::uint32_t segments) -> void {
+  constexpr auto tau = 2.0f * std::numbers::pi_v<std::float_t>;
+
+  const auto center = math::vector3{matrix[3]};
+  const auto axis_x = math::vector3::normalized(math::vector3{matrix[0]});
+  const auto axis_y = math::vector3::normalized(math::vector3{matrix[1]});
+  const auto axis_z = math::vector3::normalized(math::vector3{matrix[2]});
+
+  _add_arc(center, axis_x, axis_z, radius, 0.0f, tau, color, segments);
+  _add_arc(center, axis_x, axis_y, radius, 0.0f, tau, color, segments);
+  _add_arc(center, axis_z, axis_y, radius, 0.0f, tau, color, segments);
 }
 
 auto debug_draw::add_wire_cylinder(const math::matrix4x4& matrix, std::float_t radius, std::float_t half_height, const math::color& color, std::uint32_t segments) -> void {

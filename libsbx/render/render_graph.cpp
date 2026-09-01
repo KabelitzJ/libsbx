@@ -85,8 +85,6 @@ auto graphics_pass_builder::transitions_after(std::uint32_t group_index, graphic
   });
 }
 
-namespace {
-
 /**
  * @brief Per-resource state the linear compiler tracks while walking the fixed pass list in order.
  * touched=false means first declared access this compile, so the synthesized barrier is a fresh
@@ -119,8 +117,6 @@ inline constexpr auto write_access_mask =
 [[nodiscard]] auto is_write_access(graphics::access access) noexcept -> bool {
   return (access & write_access_mask) != graphics::access::none;
 }
-
-} // namespace
 
 auto render_graph::compile(const graph_resources& resources) -> void {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();

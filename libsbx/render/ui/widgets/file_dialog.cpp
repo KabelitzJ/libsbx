@@ -14,8 +14,6 @@
 
 namespace sbx::render::widgets {
 
-namespace {
-
 [[nodiscard]] auto home_directory() -> std::filesystem::path {
 #if defined(SBX_PLATFORM_WIN32)
   if (auto* profile = std::getenv("USERPROFILE")) {
@@ -29,8 +27,6 @@ namespace {
 
   return std::filesystem::current_path();
 }
-
-} // namespace
 
 auto file_dialog::open(std::string title, file_dialog_mode mode, const std::filesystem::path& start_dir, std::vector<std::string> extensions) -> void {
   _title = std::move(title);

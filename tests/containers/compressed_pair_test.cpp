@@ -11,12 +11,8 @@
 
 using namespace sbx::containers;
 
-namespace {
-
 // An empty, non-final type: eligible for the empty-base-class optimization.
 struct empty_type { };
-
-} // namespace
 
 TEST(compressed_pair_test, first_and_second_return_the_stored_values) {
   auto pair = compressed_pair<std::int32_t, std::double_t>{1, 2.5};

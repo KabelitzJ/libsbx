@@ -12,8 +12,6 @@
 
 using namespace sbx::math;
 
-namespace {
-
 auto expect_quaternion_near(const quaternion& lhs, const quaternion& rhs, std::float_t epsilon = 1e-3f) -> void {
   EXPECT_NEAR(lhs.x(), rhs.x(), epsilon);
   EXPECT_NEAR(lhs.y(), rhs.y(), epsilon);
@@ -26,8 +24,6 @@ auto expect_vector3_near(const vector3& lhs, const vector3& rhs, std::float_t ep
   EXPECT_NEAR(lhs.y(), rhs.y(), epsilon);
   EXPECT_NEAR(lhs.z(), rhs.z(), epsilon);
 }
-
-} // namespace
 
 TEST(quaternion_test, identity_does_not_rotate_a_vector) {
   const auto rotated = quaternion::identity * vector3::right;

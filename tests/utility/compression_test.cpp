@@ -11,15 +11,11 @@
 
 using namespace sbx::utility;
 
-namespace {
-
 const auto sample_text = std::string{
   "The quick brown fox jumps over the lazy dog. "
   "The quick brown fox jumps over the lazy dog. "
   "The quick brown fox jumps over the lazy dog."
 };
-
-} // namespace
 
 TEST(compression_test, lz4_round_trip_recovers_the_original_data) {
   const auto compressed = lz4_compressor::compress({sample_text.data(), sample_text.size()});

@@ -18,8 +18,6 @@
 
 namespace sbx::physics {
 
-namespace {
-
 // One narrowphase point before it's turned into a full contact_point (anchors/feature id are
 // filled in by generate_contact, which is the only place that knows about the owning nodes).
 struct narrow_point {
@@ -566,8 +564,6 @@ struct clip_plane {
 
   return generic_gjk_epa(shape_a, pose_a, shape_b, pose_b);
 }
-
-} // namespace
 
 auto generate_contact(const sbx::scenes::node& node_a, const sbx::scenes::node& node_b) -> std::optional<contact_manifold> {
   const auto& collider_a = node_a.get_component<shape_collider>();

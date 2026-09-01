@@ -11,8 +11,6 @@
 
 using namespace sbx::math;
 
-namespace {
-
 auto expect_matrix_near(const matrix4x4& lhs, const matrix4x4& rhs, std::float_t epsilon = 1e-4f) -> void {
   for (auto column = std::size_t{0u}; column < 4u; ++column) {
     for (auto row = std::size_t{0u}; row < 4u; ++row) {
@@ -20,8 +18,6 @@ auto expect_matrix_near(const matrix4x4& lhs, const matrix4x4& rhs, std::float_t
     }
   }
 }
-
-} // namespace
 
 TEST(matrix4x4_test, identity_leaves_a_point_unchanged) {
   const auto point = vector4{1.0f, 2.0f, 3.0f, 1.0f};

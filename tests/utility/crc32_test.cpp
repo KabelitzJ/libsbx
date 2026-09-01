@@ -12,13 +12,9 @@
 
 using namespace sbx::utility;
 
-namespace {
-
 auto crc32_of(std::string_view text) -> std::uint32_t {
   return crc32(std::span{reinterpret_cast<const std::uint8_t*>(text.data()), text.size()});
 }
-
-} // namespace
 
 TEST(crc32_test, empty_input_matches_the_known_zero_length_checksum) {
   EXPECT_EQ(crc32_of(""), 0x00000000u);

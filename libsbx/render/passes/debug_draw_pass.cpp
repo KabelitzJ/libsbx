@@ -24,13 +24,9 @@
 
 namespace sbx::render {
 
-namespace {
-
 // New buffers are sized at this multiple of what's actually needed, so a slot that grows once
 // tends not to grow again next frame.
 constexpr auto growth_factor = 1.5f;
-
-} // namespace
 
 struct debug_draw_push {
   graphics::buffer::address_type frame_address;

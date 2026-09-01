@@ -27,8 +27,6 @@
 
 namespace sbx::scenes {
 
-namespace {
-
 // Assigns each referenced mesh/material/environment-map/particle-effect a short, unique, stable
 // (within one serialize) name, so nodes referencing the same asset just repeat its key instead of
 // its full uuid — shared by both the whole-scene build and a single-subtree snapshot.
@@ -592,8 +590,6 @@ auto read_node_components(node& target_node, const YAML::Node& node_yaml, assets
     body.local_inverse_inertia = physics::local_inverse_inertia(collider.shape, mass);
   }
 }
-
-} // namespace
 
 auto scene_serializer::_build(scene& target) -> YAML::Node {
   auto& registry = target._registry;

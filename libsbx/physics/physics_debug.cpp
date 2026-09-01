@@ -25,7 +25,7 @@ auto debug_color_for(body_type type, bool is_sleeping) -> math::color {
 auto draw_convex_shape(render::debug_draw& debug_draw, const convex_shape& shape, const math::matrix4x4& matrix, const math::color& color) -> void {
   std::visit(utility::overload(
     [&](const sphere& shape) {
-      debug_draw.add_wire_sphere(math::vector3{matrix[3]}, shape.radius, color);
+      debug_draw.add_wire_sphere(matrix, shape.radius, color);
     },
     [&](const cylinder& shape) {
       debug_draw.add_wire_cylinder(matrix, shape.radius, shape.half_height, color);

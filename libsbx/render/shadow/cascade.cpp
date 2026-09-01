@@ -10,8 +10,6 @@
 
 namespace sbx::render {
 
-namespace {
-
 inline constexpr auto cascade_lambda = 0.85f;
 
 [[nodiscard]] auto lerp_float(std::float_t a, std::float_t b, std::float_t t) noexcept -> std::float_t {
@@ -32,8 +30,6 @@ inline constexpr auto cascade_lambda = 0.85f;
 
   return splits;
 }
-
-} // namespace
 
 auto compute_cascades(const camera_data& camera, std::float_t aspect, const math::vector3f& light_direction, std::float_t shadow_distance) -> std::array<cascade_info, shadow_cascade_count> {
   const auto near_plane = camera.near_plane;

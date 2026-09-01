@@ -24,8 +24,6 @@
 
 namespace sbx::physics {
 
-namespace {
-
 auto prune_stale_leaves(containers::dynamic_tree<scenes::node>& tree, containers::dense_map<scenes::node, containers::dynamic_tree<scenes::node>::id>& leaves, const containers::dense_map<scenes::node, bool>& touched) -> void {
   auto stale = std::vector<scenes::node>{};
 
@@ -44,8 +42,6 @@ auto prune_stale_leaves(containers::dynamic_tree<scenes::node>& tree, containers
 [[nodiscard]] auto world_pose_matrix(const math::vector3& position, const math::quaternion& rotation) -> math::matrix4x4 {
   return math::matrix4x4::translated(math::matrix4x4::identity, position) * math::matrix_cast<math::matrix4x4>(rotation);
 }
-
-} // namespace
 
 physics_module::physics_module() { }
 
@@ -165,11 +161,34 @@ auto physics_module::_reset() -> void {
 }
 
 auto physics_module::_narrowphase() -> void {
+  // A body permanently "at rest" for this pair's purposes: static bodies (never sleep, never move)
+  // and sleeping dynamic bodies. Skip the pair entirely when both sides are -- there's nothing
+  // that could ever wake either one from this contact alone, so it's not just an optimization: it's
+  // what guarantees that once we do reach the wake checks below, the *other* body is an awake mover.
+  const auto is_at_rest = [](const rigidbody& body) {
+    return body.type == body_type::static_body || (body.type == body_type::dynamic_body && body.is_sleeping);
+  };
+
+  // "Genuinely moving", by the same thresholds update_sleep_timers uses to decide something is slow
+  // enough to sleep. This -- not merely "not marked sleeping yet" -- is what's allowed to wake a
+  // sleeping neighbor: two bodies resting against each other (e.g. a stack of boxes) almost never
+  // cross their own individual sleep_timer threshold on the exact same step, so if "any awake
+  // neighbor" were enough to wake a sleeper, whichever one falls asleep first would immediately get
+  // rewoken by the other one still finishing its own countdown -- and then they'd swap roles and do
+  // it again, forever. Gating on real motion instead means a neighbor that's merely idling through
+  // the last fraction of a second before its own timer completes never wakes anything; effective_
+  // inverse_mass/_inertia (solver.cpp) treating a sleeping body as immovable is what makes this safe
+  // -- it still solves correctly as an anchor for whatever rests on it either way.
+  const auto is_moving = [this](const rigidbody& body) {
+    return body.linear_velocity.length_squared() >= _linear_sleep_threshold * _linear_sleep_threshold
+      || body.angular_velocity.length_squared() >= _angular_sleep_threshold * _angular_sleep_threshold;
+  };
+
   for (auto [node_a, node_b] : _candidate_pairs) {
     auto& body_a = node_a.get_component<rigidbody>();
     auto& body_b = node_b.get_component<rigidbody>();
 
-    if (body_a.is_sleeping && body_b.is_sleeping) {
+    if (is_at_rest(body_a) && is_at_rest(body_b)) {
       continue;
     }
 
@@ -179,12 +198,12 @@ auto physics_module::_narrowphase() -> void {
       continue;
     }
 
-    if (body_a.is_sleeping && body_a.type == body_type::dynamic_body) {
+    if (body_a.is_sleeping && is_moving(body_b)) {
       body_a.is_sleeping = false;
       body_a.sleep_timer = 0.0f;
     }
 
-    if (body_b.is_sleeping && body_b.type == body_type::dynamic_body) {
+    if (body_b.is_sleeping && is_moving(body_a)) {
       body_b.is_sleeping = false;
       body_b.sleep_timer = 0.0f;
     }

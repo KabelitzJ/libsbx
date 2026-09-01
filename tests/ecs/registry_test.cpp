@@ -7,8 +7,6 @@
 
 using namespace sbx::ecs;
 
-namespace {
-
 struct position {
   std::float_t x{};
   std::float_t y{};
@@ -18,8 +16,6 @@ struct velocity {
   std::float_t dx{};
   std::float_t dy{};
 };
-
-} // namespace
 
 TEST(registry_test, create_returns_distinct_valid_entities) {
   auto registry = sbx::ecs::registry{};

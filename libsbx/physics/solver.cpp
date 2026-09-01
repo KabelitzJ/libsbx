@@ -17,14 +17,17 @@
 
 namespace sbx::physics {
 
-namespace {
-
+// A sleeping dynamic body is treated exactly like a static one here -- infinite mass, immovable --
+// so anything resting on it solves correctly without ever perturbing its (frozen, exactly-zero)
+// velocity. That in turn is what lets physics_module::_narrowphase() wake a sleeping body only on a
+// genuinely moving contact instead of any contact at all: a still-sleeping neighbor just acts as
+// solid ground for whatever's touching it, the same as the static floor would.
 [[nodiscard]] auto effective_inverse_mass(const rigidbody& body) -> std::float_t {
-  return (body.type == body_type::dynamic_body) ? body.inverse_mass : 0.0f;
+  return (body.type == body_type::dynamic_body && !body.is_sleeping) ? body.inverse_mass : 0.0f;
 }
 
 [[nodiscard]] auto effective_inverse_inertia(const rigidbody& body) -> math::matrix3x3 {
-  return (body.type == body_type::dynamic_body) ? body.world_inverse_inertia : math::matrix3x3::zero;
+  return (body.type == body_type::dynamic_body && !body.is_sleeping) ? body.world_inverse_inertia : math::matrix3x3::zero;
 }
 
 [[nodiscard]] auto point_velocity(const rigidbody& body, const math::vector3& anchor) -> math::vector3 {
@@ -34,8 +37,6 @@ namespace {
 // Below this closing speed, restitution is treated as zero -- kills the endless micro-bounce a
 // resting body would otherwise pick up from float noise in the normal impulse.
 inline constexpr auto restitution_velocity_threshold = std::float_t{1.0f};
-
-} // namespace
 
 auto integrate_forces(scenes::scene& scene, const math::vector3& gravity, std::float_t dt) -> void {
   for (auto&& [entity, body, local] : scene.query<rigidbody, scenes::local_transform>().each()) {

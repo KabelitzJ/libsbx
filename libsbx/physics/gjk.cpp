@@ -22,8 +22,6 @@ auto minkowski_support(const convex_shape& a, const transform& pose_a, const con
   return support_point{point_on_a - point_on_b, point_on_a, point_on_b};
 }
 
-namespace {
-
 using simplex_type = containers::static_vector<support_point, gjk_max_simplex_points>;
 
 [[nodiscard]] auto same_direction(const math::vector3& a, const math::vector3& b) noexcept -> bool {
@@ -126,8 +124,6 @@ auto do_simplex(simplex_type& simplex, math::vector3& direction) -> bool {
     default: return false;
   }
 }
-
-} // namespace
 
 auto gjk_intersect(const convex_shape& a, const transform& pose_a, const convex_shape& b, const transform& pose_b) -> gjk_result {
   constexpr auto max_iterations = std::uint32_t{32};

@@ -25,8 +25,6 @@
 
 namespace launcher {
 
-namespace {
-
 /** @brief Resolved next to the launcher's own binary — editor/runtime/launcher all share RUNTIME_OUTPUT_DIRECTORY (see their respective CMakeLists.txt). */
 [[nodiscard]] auto executable_path(launcher_module::launch_target target) -> std::filesystem::path {
   const auto* name =
@@ -38,8 +36,6 @@ namespace {
 
   return sbx::filesystem::executable_directory() / name;
 }
-
-} // namespace
 
 launcher_module::launcher_module() {
   auto& platform_module = sbx::core::engine::get_module<sbx::platform::platform_module>();

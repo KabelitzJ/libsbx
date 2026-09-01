@@ -56,8 +56,16 @@ public:
   /** @brief 12-edge wireframe box directly from a world-space AABB -- no transform involved. */
   auto add_wire_aabb(const math::volume& volume, const math::color& color) -> void;
 
-  /** @brief Three orthogonal world-axis-aligned rings -- a sphere reads the same from any rotation, so `center` is all that's needed. */
+  /** @brief Three orthogonal world-axis-aligned rings. The sphere's own silhouette reads the same
+   * from any rotation, but this ignores it entirely -- use this overload only when there's no
+   * meaningful orientation to show (e.g. no transform at hand); prefer the matrix overload below
+   * whenever a rotation exists, so the rings visibly track it. */
   auto add_wire_sphere(const math::vector3& center, std::float_t radius, const math::color& color, std::uint32_t segments = 20u) -> void;
+
+  /** @brief Three orthogonal rings following `matrix`'s local axes instead of world axes, so the
+   * wireframe visibly tracks the object's rotation (e.g. to see a rolling ball actually spinning) --
+   * matches add_wire_box/add_wire_cylinder/add_wire_capsule's convention. */
+  auto add_wire_sphere(const math::matrix4x4& matrix, std::float_t radius, const math::color& color, std::uint32_t segments = 20u) -> void;
 
   /** @brief Capsule axis along `matrix`'s local +Y, matching physics::capsule's convention. `half_height` measures the cylindrical segment only, not the caps. */
   auto add_wire_capsule(const math::matrix4x4& matrix, std::float_t radius, std::float_t half_height, const math::color& color, std::uint32_t segments = 20u) -> void;

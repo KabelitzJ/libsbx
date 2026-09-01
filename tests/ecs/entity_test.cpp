@@ -7,11 +7,7 @@
 
 using namespace sbx::ecs;
 
-namespace {
-
 using traits = entity_traits<sbx::ecs::entity>;
-
-} // namespace
 
 TEST(entity_test, construct_and_decompose_round_trips_id_and_version) {
   const auto value = traits::construct(traits::entity_type{42u}, traits::version_type{7u});

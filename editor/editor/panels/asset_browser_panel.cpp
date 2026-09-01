@@ -24,8 +24,6 @@
 
 namespace editor {
 
-namespace {
-
 // Single source of truth for both classify_extension (below) and importable_extensions, so the
 // "Import Asset..." file dialog's filter (see asset_browser_panel::draw) can never drift from
 // what a dropped-in file would actually be classified as.
@@ -63,8 +61,6 @@ auto extension_table() -> const std::unordered_map<std::string, asset_kind>& {
 
   return to_lower(lhs) < to_lower(rhs);
 }
-
-} // namespace
 
 auto classify_extension(const std::filesystem::path& extension) -> asset_kind {
   const auto& table = extension_table();

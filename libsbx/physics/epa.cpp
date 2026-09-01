@@ -13,8 +13,6 @@
 
 namespace sbx::physics {
 
-namespace {
-
 struct epa_face {
   std::array<std::uint32_t, 3> indices{};
   math::vector3 normal{math::vector3::up};
@@ -84,8 +82,6 @@ auto reconstruct_result(const std::vector<support_point>& vertices, const epa_fa
     v0.point_on_b * u + v1.point_on_b * v + v2.point_on_b * w
   };
 }
-
-} // namespace
 
 auto epa_penetration(
   const convex_shape& a, const transform& pose_a,

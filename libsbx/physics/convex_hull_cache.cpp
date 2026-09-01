@@ -4,13 +4,111 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <cstring>
 #include <limits>
 #include <optional>
+#include <string_view>
 #include <vector>
 
+#include <libsbx/utility/fourcc.hpp>
+#include <libsbx/utility/hash.hpp>
+
+#include <libsbx/physics/collision_cache_io.hpp>
 #include <libsbx/physics/quickhull.hpp>
 
 namespace sbx::physics {
+
+constexpr auto cache_magic = utility::fourcc_v<"SBCH">; // 'SBCH' -- SBx Collision Hull
+constexpr auto cache_format_version = std::uint32_t{1};
+constexpr auto cache_extension = std::string_view{".sbxhull"};
+
+// Unlike mesh_collision_cache's BVH, points/faces here *are* the expensive-to-derive result (the
+// whole reason this cache exists) -- there's no cheap source to reconstruct them from, so both get
+// persisted, not just geometry built on top of them.
+[[nodiscard]] auto compute_source_hash(const std::vector<math::vector3>& positions) -> std::uint64_t {
+  auto bytes = std::vector<std::uint8_t>{};
+  bytes.resize(positions.size() * sizeof(math::vector3));
+
+  std::memcpy(bytes.data(), positions.data(), bytes.size());
+
+  return utility::djb2_hash<std::uint64_t>{}(bytes);
+}
+
+[[nodiscard]] auto try_read_disk_cache(const math::uuid& mesh_id, std::uint64_t source_hash) -> std::optional<convex_hull_data> {
+  auto stream = open_collision_cache_for_read(collision_cache_path(cache_extension, mesh_id), cache_magic, cache_format_version, source_hash);
+
+  if (!stream) {
+    return std::nullopt;
+  }
+
+  auto data = convex_hull_data{};
+
+  auto point_count = std::uint32_t{0};
+  stream->read(reinterpret_cast<char*>(&point_count), sizeof(point_count));
+
+  if (!*stream || point_count > convex_hull_max_points) {
+    return std::nullopt;
+  }
+
+  for (auto index = std::uint32_t{0}; index < point_count; ++index) {
+    auto point = math::vector3{};
+    stream->read(reinterpret_cast<char*>(&point), sizeof(point));
+    data.points.push_back(point);
+  }
+
+  auto face_count = std::uint32_t{0};
+  stream->read(reinterpret_cast<char*>(&face_count), sizeof(face_count));
+
+  if (!*stream || face_count > convex_hull_max_faces) {
+    return std::nullopt;
+  }
+
+  for (auto index = std::uint32_t{0}; index < face_count; ++index) {
+    auto face = convex_hull_face{};
+    stream->read(reinterpret_cast<char*>(&face), sizeof(face));
+    data.faces.push_back(face);
+  }
+
+  auto bounds_min = math::vector3{};
+  auto bounds_max = math::vector3{};
+  stream->read(reinterpret_cast<char*>(&bounds_min), sizeof(bounds_min));
+  stream->read(reinterpret_cast<char*>(&bounds_max), sizeof(bounds_max));
+
+  if (!*stream) {
+    return std::nullopt;
+  }
+
+  data.local_bounds = math::volume{bounds_min, bounds_max};
+
+  return data;
+}
+
+auto write_disk_cache(const math::uuid& mesh_id, const convex_hull_data& data, std::uint64_t source_hash) -> void {
+  auto stream = open_collision_cache_for_write(collision_cache_path(cache_extension, mesh_id), cache_magic, cache_format_version, source_hash);
+
+  if (!stream) {
+    return;
+  }
+
+  const auto point_count = static_cast<std::uint32_t>(data.points.size());
+  stream->write(reinterpret_cast<const char*>(&point_count), sizeof(point_count));
+
+  for (const auto& point : data.points) {
+    stream->write(reinterpret_cast<const char*>(&point), sizeof(point));
+  }
+
+  const auto face_count = static_cast<std::uint32_t>(data.faces.size());
+  stream->write(reinterpret_cast<const char*>(&face_count), sizeof(face_count));
+
+  for (const auto& face : data.faces) {
+    stream->write(reinterpret_cast<const char*>(&face), sizeof(face));
+  }
+
+  const auto bounds_min = data.local_bounds.min();
+  const auto bounds_max = data.local_bounds.max();
+  stream->write(reinterpret_cast<const char*>(&bounds_min), sizeof(bounds_min));
+  stream->write(reinterpret_cast<const char*>(&bounds_max), sizeof(bounds_max));
+}
 
 // Picks up to max_count well-spread points from `points`: seeded with the 6 axis-extremal points,
 // then greedily adding whichever remaining point maximizes its minimum distance to everything
@@ -117,6 +215,12 @@ auto convex_hull_cache::_build(assets::assets_module& assets_module, const math:
     positions.push_back(vertex.position);
   }
 
+  const auto source_hash = compute_source_hash(positions);
+
+  if (auto cached = try_read_disk_cache(mesh_id, source_hash)) {
+    return std::move(*cached);
+  }
+
   auto hull = compute_convex_hull(positions);
 
   if (hull.vertices.size() > convex_hull_max_points) {
@@ -140,6 +244,8 @@ auto convex_hull_cache::_build(assets::assets_module& assets_module, const math:
   }
 
   data.local_bounds = math::volume::construct(data.points);
+
+  write_disk_cache(mesh_id, data, source_hash);
 
   return data;
 }

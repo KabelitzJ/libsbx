@@ -223,6 +223,7 @@ target_sources(
 
     "${CMAKE_SOURCE_DIR}/libsbx/memory/memory.cpp"
 
+    "${CMAKE_SOURCE_DIR}/libsbx/physics/collision_cache_io.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/physics/convex_hull_cache.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/physics/epa.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/physics/gjk.cpp"
@@ -453,6 +454,7 @@ target_sources(
       "${CMAKE_SOURCE_DIR}/libsbx/memory/observer_ptr.hpp"
 
       "${CMAKE_SOURCE_DIR}/libsbx/physics/collider.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/physics/collision_cache_io.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/physics/contact.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/physics/convex_hull_cache.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/physics/epa.hpp"

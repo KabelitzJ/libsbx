@@ -40,6 +40,23 @@ public:
 
   inline static constexpr auto null = static_cast<id>(-1);
 
+  /**
+   * @brief One node's full internal state -- exposed read-only (see node_count()/node_at()) purely
+   * as bulk structural access, the same kind of thing for_each_leaf()/query() already are. This
+   * type has no notion of files or byte layout; a caller that wants to persist a tree (e.g. to skip
+   * rebuilding it from scratch) owns that serialization itself, entirely outside this class -- see
+   * rebuild() for the other half of that round trip.
+   */
+  struct node {
+    math::volume aabb{};
+    id parent{null};
+    id child1{null};
+    id child2{null};
+    Type payload{};
+    bool is_leaf{false};
+    std::int32_t height{-1}; // -1 = on freelist
+  }; // struct node
+
   dynamic_tree() noexcept = default;
 
   /**
@@ -182,17 +199,35 @@ public:
     }
   }
 
-private:
+  /** @brief Number of node slots, including any currently on the free list -- node_at(i) is valid for every i < node_count(). */
+  [[nodiscard]] auto node_count() const noexcept -> std::size_t {
+    return _nodes.size();
+  }
 
-  struct node {
-    math::volume aabb{};
-    id parent{null};
-    id child1{null};
-    id child2{null};
-    Type payload{};
-    bool is_leaf{false};
-    std::int32_t height{-1}; // -1 = on freelist
-  }; // struct node
+  /** @brief Read-only access to one node slot by its raw index (not necessarily a leaf, and not necessarily live -- height == -1 means it's on the free list). See node_count()/root_id() for bulk-exporting the whole tree. */
+  [[nodiscard]] auto node_at(id index) const -> const node& {
+    return _nodes[index];
+  }
+
+  [[nodiscard]] auto root_id() const noexcept -> id {
+    return _root;
+  }
+
+  /**
+   * @brief Replaces this tree's entire contents with a previously-exported node array (see
+   * node_count()/node_at()/root_id()) and its root, resetting the free list empty. For rebuilding a
+   * tree that was insert-only when exported (remove() never called on it) directly from stored
+   * data -- e.g. a disk-cached BVH -- skipping normal incremental insert()-based construction
+   * entirely. `nodes` must already be in this exact internal layout (parent/child links, heights,
+   * fattened AABBs and all) -- this does no validation or rebalancing of its own.
+   */
+  auto rebuild(std::vector<node> nodes, id root) -> void {
+    _nodes = std::move(nodes);
+    _root = root;
+    _free_list = null;
+  }
+
+private:
 
   inline static constexpr auto fatten_margin = std::float_t{0.1f};
 

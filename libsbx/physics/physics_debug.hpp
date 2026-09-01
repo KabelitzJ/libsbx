@@ -46,7 +46,9 @@ struct debug_draw_flags {
  * @brief Dispatches on @p shape's active alternative and appends its wireframe into @p debug_draw.
  * @p matrix is the collider's full world pose (the body's transform composed with the collider's
  * own local offset/rotation) -- see shape_collider::offset/rotation. No-op for `triangle` (a
- * mesh_collider narrowphase candidate, never itself drawn).
+ * mesh_collider narrowphase candidate, never itself drawn); `convex_hull` draws its actual hull
+ * faces as a wireframe, falling back to its bare point set as small crosses if it has none (a
+ * degenerate source mesh -- see quickhull.hpp's compute_convex_hull).
  */
 auto draw_convex_shape(render::debug_draw& debug_draw, const convex_shape& shape, const math::matrix4x4& matrix, const math::color& color) -> void;
 

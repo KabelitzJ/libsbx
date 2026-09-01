@@ -3,7 +3,9 @@
 #ifndef LIBSBX_PHYSICS_SHAPES_HPP_
 #define LIBSBX_PHYSICS_SHAPES_HPP_
 
+#include <array>
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
 #include <numbers>
 #include <variant>
@@ -11,6 +13,8 @@
 #include <libsbx/math/constants.hpp>
 #include <libsbx/math/vector3.hpp>
 #include <libsbx/math/volume.hpp>
+
+#include <libsbx/containers/static_vector.hpp>
 
 #include <libsbx/utility/overload.hpp>
 
@@ -58,7 +62,46 @@ struct triangle {
   math::vector3 v2;
 }; // struct triangle
 
-using convex_shape = std::variant<sphere, cylinder, capsule, box, triangle>;
+/**
+ * @brief Maximum vertex count for @ref convex_hull. A budget, not a precise limit tied to any one
+ * mesh's geometry: convex_hull_cache (libsbx/physics/convex_hull_cache.hpp) computes the *exact*
+ * convex hull of the source mesh via quickhull.hpp, and only falls back to coarsening it (resampling
+ * the true hull's own vertices down to this count, then re-hulling that) on the rare mesh whose
+ * exact hull already exceeds the budget -- most reasonably-modeled convex-ish props never hit that
+ * fallback at all. Also the largest convex_shape alternative by far, so it dominates every
+ * convex_shape's size (including ordinary shape_collider primitives, which never use this
+ * alternative) -- a deliberate size/accuracy trade-off, not an oversight.
+ */
+inline constexpr auto convex_hull_max_points = std::size_t{64};
+
+/**
+ * @brief Euler's formula bound (F = 2V - 4) for a fully-triangulated convex polyhedron with up to
+ * convex_hull_max_points vertices -- quickhull.hpp always produces a fully triangulated hull (no
+ * coplanar face merging), so this is an exact cap given that vertex budget, not a heuristic.
+ */
+inline constexpr auto convex_hull_max_faces = 2u * convex_hull_max_points - 4u;
+
+struct convex_hull_face {
+  std::array<std::uint16_t, 3> indices; // into convex_hull::points; uint16_t comfortably covers convex_hull_max_points
+}; // struct convex_hull_face
+
+/**
+ * @brief A convex hull, approximated within the budgets above. `points` is all find_furthest_point
+ * (the GJK support function) ever needs -- the furthest point of a convex hull along any direction
+ * is always one of its own vertices, so a hull and its vertex set share exactly the same support
+ * function; `faces` exists purely so there's a real wireframe to debug-draw (see physics_debug.cpp)
+ * instead of just a point cloud, and may be empty for a degenerate source mesh (see
+ * quickhull.hpp's compute_convex_hull) without affecting collision correctness at all.
+ * Internal-only, like triangle: never authored directly on a shape_collider, only ever constructed
+ * transiently by narrowphase for a mesh_collider with is_convex == true, from convex_hull_cache's
+ * per-mesh cached data.
+ */
+struct convex_hull {
+  containers::static_vector<math::vector3, convex_hull_max_points> points;
+  containers::static_vector<convex_hull_face, convex_hull_max_faces> faces;
+}; // struct convex_hull
+
+using convex_shape = std::variant<sphere, cylinder, capsule, box, triangle, convex_hull>;
 
 /**
  * @brief The GJK support-mapping function: the point on @p shape (in its own local space) furthest along @p local_direction.
@@ -108,6 +151,25 @@ using convex_shape = std::variant<sphere, cylinder, capsule, box, triangle>;
       }
 
       return (d1 >= d2) ? shape.v1 : shape.v2;
+    },
+    [&](const convex_hull& shape) -> math::vector3 {
+      if (shape.points.is_empty()) {
+        return math::vector3::zero;
+      }
+
+      auto best_point = shape.points[0];
+      auto best_dot = math::vector3::dot(best_point, local_direction);
+
+      for (auto index = std::size_t{1}; index < shape.points.size(); ++index) {
+        const auto dot = math::vector3::dot(shape.points[index], local_direction);
+
+        if (dot > best_dot) {
+          best_dot = dot;
+          best_point = shape.points[index];
+        }
+      }
+
+      return best_point;
     }
   ), shape);
 }
@@ -139,6 +201,13 @@ using convex_shape = std::variant<sphere, cylinder, capsule, box, triangle>;
       volume.include(shape.v1);
       volume.include(shape.v2);
       return volume;
+    },
+    [](const convex_hull& shape) -> math::volume {
+      if (shape.points.is_empty()) {
+        return math::volume{};
+      }
+
+      return math::volume::construct(shape.points);
     }
   ), shape);
 }
@@ -216,6 +285,24 @@ using convex_shape = std::variant<sphere, cylinder, capsule, box, triangle>;
     },
     [&]([[maybe_unused]] const triangle& shape) -> math::vector3 {
       return math::vector3::zero;
+    },
+    [&](const convex_hull& shape) -> math::vector3 {
+      // No hull mass-property integration -- approximated from the point set's own AABB via the
+      // same box formula above, same as every other shape here assumes the collider's local origin
+      // is roughly its center (shape_collider's authored primitives are all centered by
+      // construction; a mesh-derived hull is only approximately so, a known v1 simplification).
+      if (shape.points.is_empty()) {
+        return math::vector3::zero;
+      }
+
+      const auto bounds = math::volume::construct(shape.points);
+      const auto half_extents = bounds.extend() * 0.5f;
+
+      const auto i_x = (mass / 3.0f) * (half_extents.y() * half_extents.y() + half_extents.z() * half_extents.z());
+      const auto i_y = (mass / 3.0f) * (half_extents.x() * half_extents.x() + half_extents.z() * half_extents.z());
+      const auto i_z = (mass / 3.0f) * (half_extents.x() * half_extents.x() + half_extents.y() * half_extents.y());
+
+      return invert_diagonal(math::vector3{i_x, i_y, i_z});
     }
   ), shape);
 }

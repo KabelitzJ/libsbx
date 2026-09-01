@@ -24,6 +24,7 @@
 #include <libsbx/utility/iterator.hpp>
 #include <libsbx/utility/fourcc.hpp>
 #include <libsbx/utility/logger.hpp>
+#include <libsbx/utility/hash.hpp>
 
 #include <libsbx/core/engine.hpp>
 
@@ -43,30 +44,6 @@ inline constexpr auto environment_version = std::uint32_t{1u};
 
 // A mesh cook also emits its materials, so a mesh blob's freshness depends on both cookers.
 inline constexpr auto mesh_cooker_version = mesh_version * 1000u + material_version;
-
-// FNV-1a over the file's bytes. Returns 0 on failure (treated as "changed" -> recook).
-static auto hash_file(const std::filesystem::path& path) -> std::uint64_t {
-  auto in = std::ifstream{path, std::ios::binary};
-
-  if (!in) {
-    return 0u;
-  }
-
-  auto hash = std::uint64_t{14695981039346656037ull};
-  auto buffer = std::array<char, std::size_t{1u} << 16>{};
-
-  while (in) {
-    in.read(buffer.data(), static_cast<std::streamsize>(buffer.size()));
-    const auto count = static_cast<std::size_t>(in.gcount());
-
-    for (auto i = std::size_t{0u}; i < count; ++i) {
-      hash ^= static_cast<std::uint8_t>(buffer[i]);
-      hash *= 1099511628211ull;
-    }
-  }
-
-  return hash;
-}
 
 struct texture_header {
   std::uint32_t magic;
@@ -460,7 +437,7 @@ auto asset_cooker::_is_cooked_stale(const math::uuid& id, const std::filesystem:
   }
 
   // mtime moved — confirm with a content hash before recooking.
-  if (entry->second.source_hash == hash_file(source)) {
+  if (entry->second.source_hash == utility::hash_file(source)) {
     entry->second.source_mtime = mtime_count; // touched, not changed
     _manifest_dirty = true;
     return false;
@@ -473,7 +450,7 @@ auto asset_cooker::_record_cook(const math::uuid& id, std::uint32_t cooker_versi
   auto error = std::error_code{};
   const auto mtime = std::filesystem::last_write_time(source, error);
   const auto mtime_count = error ? std::int64_t{0} : static_cast<std::int64_t>(mtime.time_since_epoch().count());
-  const auto hash = hash_file(source);
+  const auto hash = utility::hash_file(source);
 
   {
     auto lock = std::lock_guard{_mutex};

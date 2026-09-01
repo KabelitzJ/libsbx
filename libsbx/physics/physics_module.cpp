@@ -9,6 +9,7 @@
 #include <libsbx/math/matrix4x4.hpp>
 #include <libsbx/math/matrix_cast.hpp>
 #include <libsbx/math/quaternion.hpp>
+#include <libsbx/math/vector4.hpp>
 #include <libsbx/math/volume.hpp>
 
 #include <libsbx/scenes/node.hpp>
@@ -48,17 +49,15 @@ physics_module::physics_module() { }
 physics_module::~physics_module() { }
 
 auto physics_module::_sync_broadphase(scenes::scene& scene) -> void {
+  auto& assets_module = core::engine::get_module<assets::assets_module>();
+
   auto touched_dynamic = containers::dense_map<scenes::node, bool>{};
   auto touched_static = containers::dense_map<scenes::node, bool>{};
 
-  for (auto&& [entity, body, collider, local] : scene.query<rigidbody, shape_collider, scenes::local_transform>().each()) {
-    auto node = scene.node_of(entity);
-
-    const auto pose_position = local.position + local.rotation * collider.offset;
-    const auto pose_rotation = math::quaternion::normalized(local.rotation * collider.rotation);
-    const auto world_box = math::volume::transformed(local_aabb(collider.shape), world_pose_matrix(pose_position, pose_rotation));
-
-    if (body.type == body_type::static_body) {
+  // Shared by both queries below: static bodies go into _static_tree once and are never refit;
+  // everything else (dynamic, kinematic) is refit every step in _dynamic_tree.
+  const auto route = [&](const scenes::node& node, body_type type, const math::volume& world_box) {
+    if (type == body_type::static_body) {
       touched_static.emplace(node, true);
 
       if (!_static_leaves.contains(node)) {
@@ -73,6 +72,42 @@ auto physics_module::_sync_broadphase(scenes::scene& scene) -> void {
         _dynamic_leaves.emplace(node, _dynamic_tree.insert(node, world_box));
       }
     }
+  };
+
+  for (auto&& [entity, body, collider, local] : scene.query<rigidbody, shape_collider, scenes::local_transform>().each()) {
+    auto node = scene.node_of(entity);
+
+    const auto pose_position = local.position + local.rotation * collider.offset;
+    const auto pose_rotation = math::quaternion::normalized(local.rotation * collider.rotation);
+    const auto world_box = math::volume::transformed(local_aabb(collider.shape), world_pose_matrix(pose_position, pose_rotation));
+
+    route(node, body.type, world_box);
+  }
+
+  // mesh_collider: a non-convex one can only ever be the non-simulated side of a contact (no
+  // support mapping for a concave shape), so a dynamic_body carrying one is silently excluded from
+  // the broadphase entirely -- see collider.hpp's doc comment. A convex one is an ordinary
+  // convex_shape as far as narrowphase is concerned and gets no such restriction.
+  for (auto&& [entity, body, collider, local] : scene.query<rigidbody, mesh_collider, scenes::local_transform>().each()) {
+    if (!collider.mesh.is_valid()) {
+      continue;
+    }
+
+    if (body.type == body_type::dynamic_body && !collider.is_convex) {
+      continue;
+    }
+
+    auto node = scene.node_of(entity);
+
+    const auto pose_position = local.position + local.rotation * collider.offset;
+    const auto pose_rotation = math::quaternion::normalized(local.rotation * collider.rotation);
+    const auto matrix = world_pose_matrix(pose_position, pose_rotation);
+
+    const auto local_bounds = collider.is_convex
+      ? _hull_cache.get_or_build(assets_module, collider.mesh->id()).local_bounds
+      : _mesh_cache.get_or_build(assets_module, collider.mesh->id()).local_bounds;
+
+    route(node, body.type, math::volume::transformed(local_bounds, matrix));
   }
 
   prune_stale_leaves(_dynamic_tree, _dynamic_leaves, touched_dynamic);
@@ -161,6 +196,8 @@ auto physics_module::_reset() -> void {
 }
 
 auto physics_module::_narrowphase() -> void {
+  auto& assets_module = core::engine::get_module<assets::assets_module>();
+
   // A body permanently "at rest" for this pair's purposes: static bodies (never sleep, never move)
   // and sleeping dynamic bodies. Skip the pair entirely when both sides are -- there's nothing
   // that could ever wake either one from this contact alone, so it's not just an optimization: it's
@@ -192,7 +229,7 @@ auto physics_module::_narrowphase() -> void {
       continue;
     }
 
-    auto manifold = generate_contact(node_a, node_b);
+    auto manifold = generate_pair_contact(node_a, node_b, _mesh_cache, _hull_cache, assets_module);
 
     if (!manifold) {
       continue;
@@ -276,6 +313,42 @@ auto physics_module::_submit_debug_draw(scenes::scene& scene) -> void {
       const auto matrix = world_pose_matrix(pose_position, pose_rotation);
 
       draw_convex_shape(debug_draw, collider.shape, matrix, debug_color_for(body.type, body.is_sleeping));
+    }
+
+    auto& assets_module = core::engine::get_module<assets::assets_module>();
+
+    for (auto&& [entity, body, collider, local] : scene.query<rigidbody, mesh_collider, scenes::local_transform>().each()) {
+      if (!collider.mesh.is_valid()) {
+        continue;
+      }
+
+      const auto pose_position = local.position + local.rotation * collider.offset;
+      const auto pose_rotation = math::quaternion::normalized(local.rotation * collider.rotation);
+      const auto matrix = world_pose_matrix(pose_position, pose_rotation);
+      const auto color = debug_color_for(body.type, body.is_sleeping);
+
+      if (collider.is_convex) {
+        const auto& hull_data = _hull_cache.get_or_build(assets_module, collider.mesh->id());
+
+        draw_convex_shape(debug_draw, convex_shape{convex_hull{hull_data.points, hull_data.faces}}, matrix, color);
+      } else {
+        const auto& mesh_data = _mesh_cache.get_or_build(assets_module, collider.mesh->id());
+        const auto triangle_count = mesh_data.indices.size() / 3u;
+
+        for (auto triangle_index = std::size_t{0}; triangle_index < triangle_count; ++triangle_index) {
+          const auto i0 = mesh_data.indices[triangle_index * 3u + 0u];
+          const auto i1 = mesh_data.indices[triangle_index * 3u + 1u];
+          const auto i2 = mesh_data.indices[triangle_index * 3u + 2u];
+
+          const auto v0 = math::vector3{matrix * math::vector4{mesh_data.vertices[i0], 1.0f}};
+          const auto v1 = math::vector3{matrix * math::vector4{mesh_data.vertices[i1], 1.0f}};
+          const auto v2 = math::vector3{matrix * math::vector4{mesh_data.vertices[i2], 1.0f}};
+
+          debug_draw.add_line(v0, v1, color);
+          debug_draw.add_line(v1, v2, color);
+          debug_draw.add_line(v2, v0, color);
+        }
+      }
     }
   }
 

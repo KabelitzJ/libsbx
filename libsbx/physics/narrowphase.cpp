@@ -7,6 +7,7 @@
 #include <cmath>
 #include <cstdint>
 #include <limits>
+#include <utility>
 #include <variant>
 #include <vector>
 
@@ -15,6 +16,8 @@
 #include <libsbx/physics/collider.hpp>
 #include <libsbx/physics/epa.hpp>
 #include <libsbx/physics/gjk.hpp>
+#include <libsbx/physics/mesh_collision_cache.hpp>
+#include <libsbx/physics/convex_hull_cache.hpp>
 
 namespace sbx::physics {
 
@@ -565,29 +568,18 @@ struct clip_plane {
   return generic_gjk_epa(shape_a, pose_a, shape_b, pose_b);
 }
 
-auto generate_contact(const sbx::scenes::node& node_a, const sbx::scenes::node& node_b) -> std::optional<contact_manifold> {
-  const auto& collider_a = node_a.get_component<shape_collider>();
-  const auto& collider_b = node_b.get_component<shape_collider>();
-  const auto& local_a = node_a.get_component<scenes::local_transform>();
-  const auto& local_b = node_b.get_component<scenes::local_transform>();
-
-  const auto pose_a = compose_pose(local_a, collider_a.offset, collider_a.rotation);
-  const auto pose_b = compose_pose(local_b, collider_b.offset, collider_b.rotation);
-
-  const auto raw = dispatch(collider_a.shape, pose_a, collider_b.shape, pose_b);
-
-  if (!raw) {
-    return std::nullopt;
-  }
-
+// Shared by every generate_*_contact below: turns a raw dispatch()/combined mesh result into the
+// contact_manifold the solver expects, deriving each point's torque anchors from node_a/node_b's
+// own local_transform::position.
+[[nodiscard]] auto build_manifold(const scenes::node& node_a, const scenes::node& node_b, const scenes::local_transform& local_a, const scenes::local_transform& local_b, std::float_t friction_a, std::float_t friction_b, std::float_t restitution_a, std::float_t restitution_b, const narrow_result& raw) -> std::optional<contact_manifold> {
   auto manifold = contact_manifold{};
   manifold.node_a = node_a;
   manifold.node_b = node_b;
-  manifold.normal = raw->normal;
-  manifold.combined_friction = std::sqrt(std::max(collider_a.friction, 0.0f) * std::max(collider_b.friction, 0.0f));
-  manifold.combined_restitution = std::max(collider_a.restitution, collider_b.restitution);
+  manifold.normal = raw.normal;
+  manifold.combined_friction = std::sqrt(std::max(friction_a, 0.0f) * std::max(friction_b, 0.0f));
+  manifold.combined_restitution = std::max(restitution_a, restitution_b);
 
-  for (const auto& point : raw->points) {
+  for (const auto& point : raw.points) {
     if (manifold.points.is_full()) {
       break;
     }
@@ -607,6 +599,217 @@ auto generate_contact(const sbx::scenes::node& node_a, const sbx::scenes::node& 
   }
 
   return manifold;
+}
+
+auto generate_contact(const sbx::scenes::node& node_a, const sbx::scenes::node& node_b) -> std::optional<contact_manifold> {
+  const auto& collider_a = node_a.get_component<shape_collider>();
+  const auto& collider_b = node_b.get_component<shape_collider>();
+  const auto& local_a = node_a.get_component<scenes::local_transform>();
+  const auto& local_b = node_b.get_component<scenes::local_transform>();
+
+  const auto pose_a = compose_pose(local_a, collider_a.offset, collider_a.rotation);
+  const auto pose_b = compose_pose(local_b, collider_b.offset, collider_b.rotation);
+
+  const auto raw = dispatch(collider_a.shape, pose_a, collider_b.shape, pose_b);
+
+  if (!raw) {
+    return std::nullopt;
+  }
+
+  return build_manifold(node_a, node_b, local_a, local_b, collider_a.friction, collider_b.friction, collider_a.restitution, collider_b.restitution, *raw);
+}
+
+// -- Mesh colliders ------------------------------------------------------------------------------
+
+struct resolved_convex {
+  convex_shape shape;
+  transform pose;
+  std::float_t friction;
+  std::float_t restitution;
+}; // struct resolved_convex
+
+// A node participates in narrowphase as an ordinary convex_shape either by authoring one directly
+// (shape_collider) or, for a mesh_collider with convex == true, via its cached hull point set --
+// from here on the two are indistinguishable to dispatch()/GJK/EPA. Returns nullopt for a
+// non-convex mesh_collider (it can never stand in as a single convex_shape -- see
+// generate_mesh_contact) or an unresolvable one (no mesh assigned, or an empty cached hull).
+[[nodiscard]] auto resolve_convex(const scenes::node& node, convex_hull_cache& hull_cache, assets::assets_module& assets_module) -> std::optional<resolved_convex> {
+  const auto& local = node.get_component<scenes::local_transform>();
+
+  if (node.has_component<shape_collider>()) {
+    const auto& collider = node.get_component<shape_collider>();
+    return resolved_convex{collider.shape, compose_pose(local, collider.offset, collider.rotation), collider.friction, collider.restitution};
+  }
+
+  if (node.has_component<mesh_collider>()) {
+    const auto& collider = node.get_component<mesh_collider>();
+
+    if (!collider.is_convex || !collider.mesh.is_valid()) {
+      return std::nullopt;
+    }
+
+    const auto& hull_data = hull_cache.get_or_build(assets_module, collider.mesh->id());
+
+    if (hull_data.points.is_empty()) {
+      return std::nullopt;
+    }
+
+    return resolved_convex{convex_shape{convex_hull{hull_data.points}}, compose_pose(local, collider.offset, collider.rotation), collider.friction, collider.restitution};
+  }
+
+  return std::nullopt;
+}
+
+// Both sides resolve to an ordinary convex_shape (shape_collider or a convex mesh_collider, in any
+// combination) -- a single ordinary GJK/EPA-or-closed-form call via dispatch(), same as
+// generate_contact but for whichever of the two collider kinds each side turns out to be.
+[[nodiscard]] auto generate_convex_pair_contact(const scenes::node& node_a, const scenes::node& node_b, convex_hull_cache& hull_cache, assets::assets_module& assets_module) -> std::optional<contact_manifold> {
+  const auto resolved_a = resolve_convex(node_a, hull_cache, assets_module);
+  const auto resolved_b = resolve_convex(node_b, hull_cache, assets_module);
+
+  if (!resolved_a || !resolved_b) {
+    return std::nullopt;
+  }
+
+  const auto raw = dispatch(resolved_a->shape, resolved_a->pose, resolved_b->shape, resolved_b->pose);
+
+  if (!raw) {
+    return std::nullopt;
+  }
+
+  const auto& local_a = node_a.get_component<scenes::local_transform>();
+  const auto& local_b = node_b.get_component<scenes::local_transform>();
+
+  return build_manifold(node_a, node_b, local_a, local_b, resolved_a->friction, resolved_b->friction, resolved_a->restitution, resolved_b->restitution, *raw);
+}
+
+// shape_node resolves as an ordinary convex_shape (via resolve_convex -- so this also covers a
+// convex mesh_collider landing on a non-convex one); mesh_node is a non-convex mesh_collider, tested
+// per-candidate-triangle against its mesh_collision_cache BVH. Builds one combined manifold for the
+// pair: the deepest touching triangle's normal becomes the manifold's normal (exact when the
+// touched triangles are coplanar, e.g. a flat floor region -- the common case; an approximation
+// otherwise, the same "internal edge" v1 limitation noted when mesh narrowphase was first added),
+// and up to max_manifold_points deepest points across every touching triangle become its points.
+[[nodiscard]] auto generate_mesh_contact(const scenes::node& shape_node, const scenes::node& mesh_node, mesh_collision_cache& mesh_cache, convex_hull_cache& hull_cache, assets::assets_module& assets_module) -> std::optional<contact_manifold> {
+  const auto resolved_shape = resolve_convex(shape_node, hull_cache, assets_module);
+
+  if (!resolved_shape) {
+    return std::nullopt;
+  }
+
+  const auto& mesh_collider_component = mesh_node.get_component<mesh_collider>();
+
+  if (!mesh_collider_component.mesh.is_valid()) {
+    return std::nullopt;
+  }
+
+  const auto& local_mesh = mesh_node.get_component<scenes::local_transform>();
+  const auto pose_mesh = compose_pose(local_mesh, mesh_collider_component.offset, mesh_collider_component.rotation);
+
+  const auto& mesh_data = mesh_cache.get_or_build(assets_module, mesh_collider_component.mesh->id());
+
+  if (mesh_data.indices.empty()) {
+    return std::nullopt;
+  }
+
+  // The shape's world AABB, transformed into the mesh's local space (rotation+translation only, so
+  // the inverse is just conjugate-rotate-then-translate) to query the triangle BVH.
+  auto shape_world_aabb = math::volume{};
+
+  for (const auto& corner : local_aabb(resolved_shape->shape).corners()) {
+    shape_world_aabb.include(resolved_shape->pose.position + resolved_shape->pose.rotation * corner);
+  }
+
+  auto local_query_aabb = math::volume{};
+
+  for (const auto& corner : shape_world_aabb.corners()) {
+    local_query_aabb.include(math::quaternion::conjugate(pose_mesh.rotation) * (corner - pose_mesh.position));
+  }
+
+  auto triangle_results = std::vector<narrow_result>{};
+
+  mesh_data.triangle_bvh.query(local_query_aabb, [&](std::uint32_t triangle_index) {
+    const auto i0 = mesh_data.indices[triangle_index * 3u + 0u];
+    const auto i1 = mesh_data.indices[triangle_index * 3u + 1u];
+    const auto i2 = mesh_data.indices[triangle_index * 3u + 2u];
+
+    const auto candidate_triangle = convex_shape{triangle{mesh_data.vertices[i0], mesh_data.vertices[i1], mesh_data.vertices[i2]}};
+
+    if (const auto result = dispatch(resolved_shape->shape, resolved_shape->pose, candidate_triangle, pose_mesh)) {
+      triangle_results.push_back(*result);
+    }
+  });
+
+  if (triangle_results.empty()) {
+    return std::nullopt;
+  }
+
+  struct mesh_candidate {
+    math::vector3 normal;
+    narrow_point point;
+  }; // struct mesh_candidate
+
+  auto candidates = std::vector<mesh_candidate>{};
+
+  for (const auto& result : triangle_results) {
+    for (const auto& point : result.points) {
+      candidates.push_back(mesh_candidate{result.normal, point});
+    }
+  }
+
+  std::ranges::sort(candidates, [](const mesh_candidate& lhs, const mesh_candidate& rhs) {
+    return lhs.point.depth > rhs.point.depth;
+  });
+
+  if (candidates.size() > max_manifold_points) {
+    candidates.resize(max_manifold_points);
+  }
+
+  auto combined = narrow_result{candidates.front().normal, {}};
+
+  for (const auto& candidate : candidates) {
+    combined.points.push_back(candidate.point);
+  }
+
+  const auto& local_shape = shape_node.get_component<scenes::local_transform>();
+
+  return build_manifold(shape_node, mesh_node, local_shape, local_mesh, resolved_shape->friction, mesh_collider_component.friction, resolved_shape->restitution, mesh_collider_component.restitution, combined);
+}
+
+[[nodiscard]] auto flip_manifold(contact_manifold manifold, const scenes::node& node_a, const scenes::node& node_b) -> contact_manifold {
+  manifold.node_a = node_a;
+  manifold.node_b = node_b;
+  manifold.normal = -manifold.normal;
+
+  for (auto& point : manifold.points) {
+    std::swap(point.anchor_a, point.anchor_b);
+  }
+
+  return manifold;
+}
+
+auto generate_pair_contact(const sbx::scenes::node& node_a, const sbx::scenes::node& node_b, mesh_collision_cache& mesh_cache, convex_hull_cache& hull_cache, assets::assets_module& assets_module) -> std::optional<contact_manifold> {
+  const auto a_is_raw_mesh = node_a.has_component<mesh_collider>() && !node_a.get_component<mesh_collider>().is_convex;
+  const auto b_is_raw_mesh = node_b.has_component<mesh_collider>() && !node_b.get_component<mesh_collider>().is_convex;
+
+  if (a_is_raw_mesh && b_is_raw_mesh) {
+    return std::nullopt; // two non-convex mesh colliders never collide, matching Unity
+  }
+
+  if (a_is_raw_mesh) {
+    const auto result = generate_mesh_contact(node_b, node_a, mesh_cache, hull_cache, assets_module);
+    return result ? std::optional{flip_manifold(*result, node_a, node_b)} : std::nullopt;
+  }
+
+  if (b_is_raw_mesh) {
+    return generate_mesh_contact(node_a, node_b, mesh_cache, hull_cache, assets_module);
+  }
+
+  if (!node_a.has_component<mesh_collider>() && !node_b.has_component<mesh_collider>()) {
+    return generate_contact(node_a, node_b); // common hot path: neither side is a mesh at all
+  }
+
+  return generate_convex_pair_contact(node_a, node_b, hull_cache, assets_module);
 }
 
 } // namespace sbx::physics

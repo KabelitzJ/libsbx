@@ -12,6 +12,7 @@
 #include <fmt/format.h>
 
 #include <libsbx/utility/logger.hpp>
+#include <libsbx/utility/hash.hpp>
 
 #include <libsbx/core/engine.hpp>
 #include <libsbx/core/project.hpp>
@@ -22,31 +23,6 @@ namespace sbx::scripting {
 // what a recompile should be sensitive to) changes, forcing a one-time recompile on upgrade.
 // Mirrors asset_cooker's per-cooker cooker_version, see this class's doc comment.
 inline constexpr auto compiler_version = std::uint32_t{1u};
-
-// FNV-1a over the file's bytes — mirrors asset_cooker.cpp's file-local hash_file(), not shared
-// across translation units there either.
-static auto hash_file(const std::filesystem::path& path) -> std::uint64_t {
-  auto in = std::ifstream{path, std::ios::binary};
-
-  if (!in) {
-    return 0u;
-  }
-
-  auto hash = std::uint64_t{14695981039346656037ull};
-  auto buffer = std::array<char, std::size_t{1u} << 16>{};
-
-  while (in) {
-    in.read(buffer.data(), static_cast<std::streamsize>(buffer.size()));
-    const auto count = static_cast<std::size_t>(in.gcount());
-
-    for (auto i = std::size_t{0u}; i < count; ++i) {
-      hash ^= static_cast<std::uint8_t>(buffer[i]);
-      hash *= 1099511628211ull;
-    }
-  }
-
-  return hash;
-}
 
 auto script_compiler::_write_ide_project(const std::filesystem::path& assets_directory, const std::filesystem::path& core_assembly_path) -> void {
   const auto path = assets_directory / "Game.csproj";
@@ -173,7 +149,7 @@ auto script_compiler::_is_stale(const std::vector<std::filesystem::path>& source
       continue; // fast path: unchanged since last compile
     }
 
-    if (entry->second.hash != hash_file(source)) {
+    if (entry->second.hash != utility::hash_file(source)) {
       return true; // touched and actually changed
     }
   }
@@ -200,7 +176,7 @@ auto script_compiler::_record_manifest(const std::vector<std::filesystem::path>&
     auto error = std::error_code{};
     const auto mtime = std::filesystem::last_write_time(source, error);
     const auto mtime_count = error ? std::int64_t{0} : static_cast<std::int64_t>(mtime.time_since_epoch().count());
-    const auto hash = hash_file(source);
+    const auto hash = utility::hash_file(source);
 
     _manifest_sources.emplace(key, source_entry{.hash = hash, .mtime = mtime_count});
 
@@ -247,7 +223,7 @@ auto script_compiler::compile_if_stale(managed::runtime& runtime, const std::fil
     return;
   }
 
-  const auto core_assembly_hash = hash_file(core_assembly_path);
+  const auto core_assembly_hash = utility::hash_file(core_assembly_path);
 
   if (!_is_stale(sources, core_assembly_hash)) {
     _last_compile_succeeded = true; // manifest only ever records a successful compile

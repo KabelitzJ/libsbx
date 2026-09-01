@@ -24,6 +24,7 @@
 #include <libsbx/physics/rigidbody.hpp>
 #include <libsbx/physics/collider.hpp>
 #include <libsbx/physics/shapes.hpp>
+#include <libsbx/physics/convex_hull_cache.hpp>
 
 namespace sbx::scenes {
 
@@ -378,6 +379,10 @@ auto write_node(YAML::Node& node_yaml, ecs::registry& registry, ecs::entity enti
       [&]([[maybe_unused]] const physics::triangle& shape) {
         // Never authored directly on a shape_collider — only appears internally as a
         // mesh_collider narrowphase candidate — so there's nothing meaningful to write.
+      },
+      [&]([[maybe_unused]] const physics::convex_hull& shape) {
+        // Never authored directly on a shape_collider either — only ever constructed transiently
+        // by narrowphase for a mesh_collider with convex == true — nothing meaningful to write.
       }
     ), collider.shape);
 
@@ -395,6 +400,7 @@ auto write_node(YAML::Node& node_yaml, ecs::registry& registry, ecs::entity enti
       component["rotation"] = collider.rotation;
       component["friction"] = collider.friction;
       component["restitution"] = collider.restitution;
+      component["convex"] = collider.is_convex;
 
       components.push_back(component);
     }
@@ -574,6 +580,7 @@ auto read_node_components(node& target_node, const YAML::Node& node_yaml, assets
       collider.rotation = component["rotation"].as<math::quaternion>();
       collider.friction = component["friction"].as<std::float_t>();
       collider.restitution = component["restitution"].as<std::float_t>();
+      collider.is_convex = component["convex"].as<bool>(false); // absent in scenes saved before convex mesh colliders existed
     } else {
       utility::logger<"scenes">::warn("Unknown component type '{}'", type);
     }
@@ -588,6 +595,23 @@ auto read_node_components(node& target_node, const YAML::Node& node_yaml, assets
 
     const auto mass = (body.inverse_mass > 0.0f) ? (1.0f / body.inverse_mass) : 0.0f;
     body.local_inverse_inertia = physics::local_inverse_inertia(collider.shape, mass);
+  }
+
+  // Same idea, for a dynamic convex mesh_collider (see collider.hpp's doc comment: only a convex
+  // one can ever be dynamic). A throwaway convex_hull_cache is fine here -- this only runs once per
+  // node per scene load, and physics_module builds its own cache for the same mesh independently
+  // the first time it actually processes this node.
+  if (target_node.has_component<physics::rigidbody>() && target_node.has_component<physics::mesh_collider>()) {
+    auto& body = target_node.get_component<physics::rigidbody>();
+    const auto& collider = target_node.get_component<physics::mesh_collider>();
+
+    if (collider.is_convex && collider.mesh.is_valid()) {
+      auto hull_cache = physics::convex_hull_cache{};
+      const auto& hull_data = hull_cache.get_or_build(assets_module, collider.mesh->id());
+
+      const auto mass = (body.inverse_mass > 0.0f) ? (1.0f / body.inverse_mass) : 0.0f;
+      body.local_inverse_inertia = physics::local_inverse_inertia(physics::convex_shape{physics::convex_hull{hull_data.points}}, mass);
+    }
   }
 }
 

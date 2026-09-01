@@ -26,9 +26,17 @@ struct shape_collider {
 }; // struct shape_collider
 
 /**
- * @brief A static triangle-mesh collider. Mesh nodes carrying this must be authored without
- * non-uniform scale (their triangle data and BVH are built once, in the mesh's own local space,
- * and narrowphase assumes a rotation+translation-only world transform).
+ * @brief A triangle-mesh collider. Mesh nodes carrying this must be authored without non-uniform
+ * scale (their collision data is built once, in the mesh's own local space, and narrowphase assumes
+ * a rotation+translation-only world transform).
+ *
+ * Unity MeshCollider parity: with `convex == false` (the default), the raw triangle mesh is used
+ * directly and this can only be the non-simulated side of a contact -- valid on a static_body or a
+ * kinematic body (e.g. a moving platform), never a dynamic_body (physics_module silently excludes
+ * that combination from the broadphase, since there's no support-mapping for a concave shape).
+ * With `convex == true`, a capped point-set approximation of the mesh's convex hull is used instead
+ * (see convex_hull_cache.hpp) -- an ordinary convex_shape as far as narrowphase is concerned, so it
+ * can be authored on any rigidbody type, dynamic included.
  */
 struct mesh_collider {
   assets::mesh_handle mesh{};
@@ -36,6 +44,7 @@ struct mesh_collider {
   math::quaternion rotation{math::quaternion::identity};
   std::float_t friction{0.5f};
   std::float_t restitution{0.0f};
+  bool is_convex{false};
 }; // struct mesh_collider
 
 } // namespace sbx::physics

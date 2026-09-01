@@ -19,6 +19,8 @@
 #include <iostream>
 #include <concepts>
 #include <cinttypes>
+#include <filesystem>
+#include <fstream>
 
 namespace sbx::utility {
 
@@ -103,29 +105,30 @@ struct fnv1a_traits<std::uint64_t> {
  */
 template<character Char, std::unsigned_integral Hash = std::uint64_t, typename HashTraits = fnv1a_traits<Hash>>
 struct fnv1a_hash {
+
   using char_type = Char;
   using size_type = std::size_t;
   using hash_type = Hash;
   using hash_traits = HashTraits;
 
-  /**
-   * @brief Hashes the given string.
-   * 
-   * @param string The string to hash. 
-   * @param size The size of the string.
-   * 
-   * @return hash_type The hash of the string.
-   */
-  inline constexpr auto operator()(std::basic_string_view<Char> string) const noexcept -> hash_type {
-    auto hash = hash_traits::basis;
+  inline static constexpr auto basis = hash_traits::basis;
+  inline static constexpr auto prime = hash_traits::prime;
 
+  inline constexpr auto operator()(hash_type& hash, std::basic_string_view<Char> string) const noexcept -> void {
     for (const auto& character : string) {
       hash ^= static_cast<hash_type>(character);
-      hash *= hash_traits::prime;
+      hash *= prime;
     }
+  }
+
+  inline constexpr auto operator()(std::basic_string_view<Char> string) const noexcept -> hash_type {
+    auto hash = basis;
+
+    operator()(hash, string);
 
     return hash;
   }
+
 }; // struct fnv1a_hash
 
 template<std::unsigned_integral Hash = std::uint64_t>
@@ -151,6 +154,8 @@ struct djb2_hash {
   }
 
 }; // struct djb2_hash
+
+auto hash_file(const std::filesystem::path& path) -> std::uint64_t;
 
 } // namespace sbx::utility
 

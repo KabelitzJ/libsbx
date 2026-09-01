@@ -18,7 +18,11 @@
 
 #include <libsbx/scenes/node.hpp>
 
+#include <libsbx/assets/assets_module.hpp>
+
 #include <libsbx/physics/contact.hpp>
+#include <libsbx/physics/mesh_collision_cache.hpp>
+#include <libsbx/physics/convex_hull_cache.hpp>
 
 namespace sbx::physics {
 
@@ -27,6 +31,17 @@ namespace sbx::physics {
  * shape_collider. Returns nullopt if the shapes don't actually overlap.
  */
 [[nodiscard]] auto generate_contact(const sbx::scenes::node& node_a, const sbx::scenes::node& node_b) -> std::optional<contact_manifold>;
+
+/**
+ * @brief Runs narrowphase for any broadphase-candidate pair -- shape_collider vs shape_collider
+ * (delegates to generate_contact), shape_collider vs a non-convex mesh_collider (per-triangle,
+ * against its mesh_collision_cache BVH), or shape_collider/mesh_collider vs a convex mesh_collider
+ * (its convex_hull_cache point set, an ordinary GJK/EPA call). Returns nullopt for a pair of two
+ * mesh_colliders (never a supported pairing) or if either shape doesn't actually overlap. The
+ * returned manifold's node_a/node_b always match the order they were passed in, regardless of which
+ * side (if either) turned out to be the mesh.
+ */
+[[nodiscard]] auto generate_pair_contact(const sbx::scenes::node& node_a, const sbx::scenes::node& node_b, mesh_collision_cache& mesh_cache, convex_hull_cache& hull_cache, assets::assets_module& assets_module) -> std::optional<contact_manifold>;
 
 } // namespace sbx::physics
 

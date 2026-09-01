@@ -223,12 +223,14 @@ target_sources(
 
     "${CMAKE_SOURCE_DIR}/libsbx/memory/memory.cpp"
 
+    "${CMAKE_SOURCE_DIR}/libsbx/physics/convex_hull_cache.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/physics/epa.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/physics/gjk.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/physics/mesh_collision_cache.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/physics/narrowphase.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/physics/physics_debug.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/physics/physics_module.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/physics/quickhull.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/physics/solver.cpp"
 
     "${CMAKE_SOURCE_DIR}/libsbx/platform/input.cpp"
@@ -294,6 +296,7 @@ target_sources(
 
     "${CMAKE_SOURCE_DIR}/libsbx/utility/compression.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/utility/crc32.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/utility/hash.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/utility/timer.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/utility/utility.cpp"
 
@@ -451,12 +454,14 @@ target_sources(
 
       "${CMAKE_SOURCE_DIR}/libsbx/physics/collider.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/physics/contact.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/physics/convex_hull_cache.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/physics/epa.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/physics/gjk.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/physics/mesh_collision_cache.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/physics/narrowphase.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/physics/physics_debug.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/physics/physics_module.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/physics/quickhull.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/physics/rigidbody.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/physics/shapes.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/physics/solver.hpp"

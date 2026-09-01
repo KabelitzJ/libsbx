@@ -1027,6 +1027,13 @@ auto draw_mesh_collider_section(editor_state& state, sbx::scenes::node& node, sb
     }
   }
 
+  ImGui::Checkbox("Convex", &collider.is_convex);
+  bracket_edit(state, node, collider, pending, "Edit Mesh Collider");
+
+  if (!collider.is_convex) {
+    ImGui::TextDisabled("Non-convex: only valid on a static or kinematic rigidbody.");
+  }
+
   draw_collider_offset_rotation_friction(state, node, collider, pending, "Edit Mesh Collider");
 }
 

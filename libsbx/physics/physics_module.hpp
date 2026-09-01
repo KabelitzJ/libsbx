@@ -31,6 +31,8 @@
 #include <libsbx/physics/rigidbody.hpp>
 #include <libsbx/physics/contact.hpp>
 #include <libsbx/physics/physics_debug.hpp>
+#include <libsbx/physics/mesh_collision_cache.hpp>
+#include <libsbx/physics/convex_hull_cache.hpp>
 
 namespace sbx::physics {
 
@@ -39,10 +41,12 @@ namespace sbx::physics {
  * pipeline for every rigidbody+shape_collider in the active scene. Mirrors scenes::scenes_module's
  * shape: a fixed_update() method, picked up automatically as the core::stage::fixed_update hook.
  *
- * v1 scope: shape_collider (convex primitive) bodies only -- mesh_collider narrowphase is not yet
- * wired in (mesh_collision_cache exists and works standalone, just unused here for now). Physics
- * only correctly supports root-level (unparented) nodes: it reads/writes scenes::local_transform
- * directly rather than the once-per-frame-stale world_transform, and ignores local_transform::scale.
+ * Supports both shape_collider (convex primitives) and mesh_collider (triangle mesh, or -- with
+ * mesh_collider::convex -- a cached point-set hull approximation usable by dynamic bodies too; see
+ * collider.hpp's doc comment for the Unity-MeshCollider-parity rules on which body types each mode
+ * allows). Physics only correctly supports root-level (unparented) nodes: it reads/writes
+ * scenes::local_transform directly rather than the once-per-frame-stale world_transform, and ignores
+ * local_transform::scale.
  */
 class physics_module final : public utility::noncopyable {
 
@@ -50,7 +54,7 @@ class physics_module final : public utility::noncopyable {
 
 public:
 
-  using dependencies = core::dependency_list<scenes::scenes_module>;
+  using dependencies = core::dependency_list<scenes::scenes_module, assets::assets_module>;
 
   physics_module();
 
@@ -169,6 +173,9 @@ private:
 
   // Last step's solved manifolds, keyed by pair, for _warm_start_manifolds to seed impulses from.
   containers::dense_map<manifold_key, contact_manifold> _manifold_cache{};
+
+  mesh_collision_cache _mesh_cache{};
+  convex_hull_cache _hull_cache{};
 
 }; // class physics_module
 

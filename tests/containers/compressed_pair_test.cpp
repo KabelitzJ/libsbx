@@ -25,6 +25,13 @@ TEST(compressed_pair_test, first_and_second_return_the_stored_values) {
   EXPECT_DOUBLE_EQ(pair.second(), 2.5);
 }
 
+TEST(compressed_pair_test, access_values_through_get) {
+  auto pair = compressed_pair<std::int32_t, std::double_t>{1, 2.5};
+
+  EXPECT_EQ(pair.get<0>(), 1);
+  EXPECT_DOUBLE_EQ(pair.get<1>(), 2.5);
+}
+
 TEST(compressed_pair_test, first_and_second_are_mutable) {
   auto pair = compressed_pair<std::int32_t, std::int32_t>{1, 2};
 

@@ -25,7 +25,10 @@ struct is_ebco_eligible : std::bool_constant<std::is_empty_v<Type> && !std::is_f
 template<typename Type>
 inline constexpr bool is_ebco_eligible_v = is_ebco_eligible<Type>::value;
 
-template<typename Type, std::size_t, typename = void>
+template<typename Type>
+concept ebco_eligible = is_ebco_eligible_v<Type>;
+
+template<typename Type, std::size_t>
 class compressed_pair_element {
 
 public:
@@ -34,10 +37,11 @@ public:
   using reference = value_type&;
   using const_reference = const value_type&;
 
-  template<typename Dummy = value_type, typename = std::enable_if_t<std::is_default_constructible_v<Dummy>>>
-  constexpr compressed_pair_element() noexcept(std::is_nothrow_default_constructible_v<value_type>) {}
+  constexpr compressed_pair_element() noexcept(std::is_nothrow_default_constructible_v<value_type>) requires (std::is_default_constructible_v<value_type>)
+  : _value{} { }
 
-  template<typename Arg, typename = std::enable_if_t<!std::is_same_v<std::remove_cv_t<std::remove_reference_t<Arg>>, compressed_pair_element>>>
+  template<typename Arg>
+  requires (!std::same_as<std::remove_cvref_t<Arg>, compressed_pair_element>)
   constexpr compressed_pair_element(Arg&& arg) noexcept(std::is_nothrow_constructible_v<value_type, Arg>)
   : _value{std::forward<Arg>(arg)} { }
 
@@ -59,8 +63,8 @@ private:
 
 }; // struct compressed_pair_element
 
-template<typename Type, std::size_t Tag>
-class compressed_pair_element<Type, Tag, std::enable_if_t<is_ebco_eligible_v<Type>>> : public Type {
+template<ebco_eligible Type, std::size_t Tag>
+class compressed_pair_element<Type, Tag> : public Type {
 
 public:
 
@@ -68,28 +72,36 @@ public:
   using reference = value_type&;
   using const_reference = const value_type&;
   using base_type = Type;
-
-  template<typename Dummy = value_type, typename = std::enable_if_t<std::is_default_constructible_v<Dummy>>>
-  constexpr compressed_pair_element() noexcept(std::is_nothrow_default_constructible_v<base_type>)
+ 
+  constexpr compressed_pair_element() noexcept(std::is_nothrow_default_constructible_v<base_type>) requires (std::is_default_constructible_v<base_type>)
   : base_type{} { }
 
-  template<typename Arg, typename = std::enable_if_t<!std::is_same_v<std::remove_cv_t<std::remove_reference_t<Arg>>, compressed_pair_element>>>
+  template<typename Arg>
+  requires (!std::same_as<std::remove_cvref_t<Arg>, compressed_pair_element>)
   constexpr compressed_pair_element(Arg&& arg) noexcept(std::is_nothrow_constructible_v<base_type, Arg>)
   : base_type{std::forward<Arg>(arg)} { }
 
   template<typename... Args, std::size_t... Index>
   constexpr compressed_pair_element(std::tuple<Args...> args, std::index_sequence<Index...>) noexcept(std::is_nothrow_constructible_v<base_type, Args...>)
-  : base_type{std::forward<Args>(std::get<Index>(args))...} {}
+  : base_type{std::forward<Args>(std::get<Index>(args))...} { }
 
   [[nodiscard]] constexpr auto get() noexcept -> reference {
     return *this;
   }
-
+ 
   [[nodiscard]] constexpr auto get() const noexcept -> const_reference {
     return *this;
   }
 
 }; // struct compressed_pair_element
+
+template<auto Value, decltype(Value) Min, decltype(Value) Max>
+struct is_in_range {
+  static constexpr auto value = Value <= Max && Value >= Min;
+}; // struct is_in_range
+
+template<auto Value, decltype(Value) Min, decltype(Value) Max>
+inline constexpr auto is_in_range_v = is_in_range<Value, Min, Max>::value;
 
 } // namespace detail
 
@@ -104,20 +116,19 @@ public:
   using first_type = First;
   using second_type = Second;
 
-  template<bool Dummy = true, typename = std::enable_if_t<Dummy && std::is_default_constructible_v<first_type> && std::is_default_constructible_v<second_type>>>
-  constexpr compressed_pair() noexcept(std::is_nothrow_default_constructible_v<first_base> && std::is_nothrow_default_constructible_v<second_base>)
+  constexpr compressed_pair() noexcept(std::is_nothrow_default_constructible_v<first_base> && std::is_nothrow_default_constructible_v<second_base>) requires (std::is_default_constructible_v<first_type> && std::is_default_constructible_v<second_type>)
   : first_base{},
     second_base{} { }
 
-  constexpr compressed_pair(const compressed_pair &other) = default;
+  constexpr compressed_pair(const compressed_pair& other) = default;
 
-  constexpr compressed_pair(compressed_pair &&other) noexcept = default;
+  constexpr compressed_pair(compressed_pair&& other) noexcept = default;
 
   template<typename Arg, typename Other>
   constexpr compressed_pair(Arg&& arg, Other&& other) noexcept(std::is_nothrow_constructible_v<first_base, Arg> && std::is_nothrow_constructible_v<second_base, Other>)
   : first_base{std::forward<Arg>(arg)},
     second_base{std::forward<Other>(other)} { }
-  
+
   template<typename... Args, typename... Other>
   constexpr compressed_pair(std::piecewise_construct_t, std::tuple<Args...> args, std::tuple<Other...> other) noexcept(std::is_nothrow_constructible_v<first_base, Args...> && std::is_nothrow_constructible_v<second_base, Other...>)
   : first_base{std::move(args), std::index_sequence_for<Args...>{}},
@@ -125,14 +136,14 @@ public:
 
   ~compressed_pair() = default;
 
-  constexpr compressed_pair &operator=(const compressed_pair &other) = default;
+  constexpr compressed_pair& operator=(const compressed_pair& other) = default;
 
-  constexpr compressed_pair &operator=(compressed_pair &&other) noexcept = default;
+  constexpr compressed_pair& operator=(compressed_pair&& other) noexcept = default;
 
   [[nodiscard]] constexpr auto first() noexcept -> first_type& {
     return static_cast<first_base&>(*this).get();
   }
-
+ 
   [[nodiscard]] constexpr auto first() const noexcept -> const first_type& {
     return static_cast<const first_base&>(*this).get();
   }
@@ -145,31 +156,23 @@ public:
     return static_cast<const second_base&>(*this).get();
   }
 
-  constexpr void swap(compressed_pair &other) noexcept {
+  constexpr auto swap(compressed_pair& other) noexcept -> void {
     using std::swap;
     swap(first(), other.first());
     swap(second(), other.second());
   }
 
   template<std::size_t Index>
+  requires (detail::is_in_range_v<Index, 0u, 1u>)
   [[nodiscard]] constexpr auto get() noexcept -> decltype(auto) {
-    if constexpr (Index == 0u) {
-      return first();
-    } else {
-      static_assert(Index == 1u, "Index out of bounds");
-      return second();
-    }
+    return (Index == 0u) ? first() : second();
   }
 
   /*! @copydoc get */
   template<std::size_t Index>
+  requires (detail::is_in_range_v<Index, 0u, 1u>)
   [[nodiscard]] constexpr auto get() const noexcept -> decltype(auto) {
-    if constexpr (Index == 0u) {
-      return first();
-    } else {
-      static_assert(Index == 1u, "Index out of bounds");
-      return second();
-    }
+    return (Index == 0u) ? first() : second();
   }
 
 }; // class compressed_pair

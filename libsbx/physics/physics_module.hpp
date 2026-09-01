@@ -44,9 +44,12 @@ namespace sbx::physics {
  * Supports both shape_collider (convex primitives) and mesh_collider (triangle mesh, or -- with
  * mesh_collider::convex -- a cached point-set hull approximation usable by dynamic bodies too; see
  * collider.hpp's doc comment for the Unity-MeshCollider-parity rules on which body types each mode
- * allows). Physics only correctly supports root-level (unparented) nodes: it reads/writes
- * scenes::local_transform directly rather than the once-per-frame-stale world_transform, and ignores
- * local_transform::scale.
+ * allows), a rigidbody's colliders spread across its subtree (compound colliders -- see
+ * narrowphase.hpp's resolve_body_shapes) at any (uniform) local_transform::scale, and a bare
+ * shape_collider/mesh_collider with no rigidbody at all as its own implicit-static body (matching
+ * Unity: a Collider alone is a static one). A rigidbody itself, though, must still be a root-level
+ * (unparented) node: physics reads/writes its scenes::local_transform directly as if it were already
+ * world space, rather than the once-per-frame-stale world_transform or a live composed one.
  */
 class physics_module final : public utility::noncopyable {
 
@@ -125,7 +128,7 @@ private:
 
   auto _generate_candidate_pairs() -> void;
 
-  auto _narrowphase() -> void;
+  auto _narrowphase(scenes::scene& scene) -> void;
 
   // Seeds each of this step's fresh (cold) manifold points from the nearest same-pair point in
   // _manifold_cache (last step's manifolds, after solving), so prepare_velocity_constraints has a

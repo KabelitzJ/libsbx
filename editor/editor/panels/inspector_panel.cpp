@@ -944,6 +944,14 @@ auto draw_shape_collider_section(editor_state& state, sbx::scenes::node& node) -
   auto& collider = node.get_component<sbx::physics::shape_collider>();
   static auto pending = std::optional<sbx::physics::shape_collider>{};
 
+  if (node.has_component<sbx::physics::mesh_collider>()) {
+    // Narrowphase only ever resolves one collider per node (shape_collider wins, see
+    // narrowphase.cpp's resolve_convex) -- a node carrying both is never a deliberate setup, just
+    // leftover state (e.g. from an older scene file), so this is surfaced rather than silently
+    // ignored. The Add Component menu itself already refuses to create this combination.
+    ImGui::TextColored(ImVec4{1.0f, 0.7f, 0.2f, 1.0f}, ICON_MDI_ALERT_OUTLINE " Also has a Mesh Collider -- it will be ignored.");
+  }
+
   static constexpr auto shape_names = std::array<const char*, 4u>{"Sphere", "Cylinder", "Capsule", "Box"};
   const auto current_index = std::min(collider.shape.index(), std::size_t{3u}); // clamp: index 4 (triangle) never legitimately appears here
 
@@ -1016,6 +1024,14 @@ auto draw_mesh_collider_section(editor_state& state, sbx::scenes::node& node, sb
   auto& collider = node.get_component<sbx::physics::mesh_collider>();
   static auto pending = std::optional<sbx::physics::mesh_collider>{};
 
+  if (node.has_component<sbx::physics::shape_collider>()) {
+    // Narrowphase only ever resolves one collider per node (shape_collider wins, see
+    // narrowphase.cpp's resolve_convex) -- a node carrying both is never a deliberate setup, just
+    // leftover state (e.g. from an older scene file), so this is surfaced rather than silently
+    // ignored. The Add Component menu itself already refuses to create this combination.
+    ImGui::TextColored(ImVec4{1.0f, 0.7f, 0.2f, 1.0f}, ICON_MDI_ALERT_OUTLINE " Also has a Shape Collider -- this one will be ignored.");
+  }
+
   {
     const auto before = collider;
 
@@ -1037,6 +1053,25 @@ auto draw_mesh_collider_section(editor_state& state, sbx::scenes::node& node, sb
   draw_collider_offset_rotation_friction(state, node, collider, pending, "Edit Mesh Collider");
 }
 
+// Every script class name matching `filter` (case-insensitive substring, see contains_ignore_case) --
+// used only to decide whether the Script submenu below has anything to show for the active filter,
+// so it can hide itself along with every other entry instead of opening onto an empty list.
+auto any_script_matches(sbx::scripting::scripting_module& scripting_module, std::string_view filter) -> bool {
+  auto& behavior_type = scripting_module.game_assembly().get_type("Sbx.Core.Behavior");
+
+  for (auto* candidate : scripting_module.game_assembly().get_types()) {
+    if (*candidate == behavior_type || !candidate->is_subclass_of(behavior_type)) {
+      continue; // skip the base class itself and anything that isn't a Behavior
+    }
+
+    if (contains_ignore_case(std::string{candidate->get_full_name()}, filter)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 auto draw_add_component_menu(editor_state& state, sbx::scenes::node& node, sbx::scripting::scripting_module& scripting_module) -> void {
   static constexpr auto label = ICON_MDI_PLUS " Add Component";
 
@@ -1050,70 +1085,138 @@ auto draw_add_component_menu(editor_state& state, sbx::scenes::node& node, sbx::
     ImGui::OpenPopup("##add_component_popup");
   }
 
+  // Anchored under the button itself -- which is already centered in the panel -- rather than
+  // wherever the mouse happened to be when it was clicked (BeginPopup's default), and a fixed width
+  // regardless of how narrow the current filter's matches are, so the popup doesn't jump around or
+  // resize out from under the cursor as the search text changes. Set every frame the popup could be
+  // open, not just the one it's clicked on: ImGui only applies a pending SetNextWindowPos/Size to
+  // the very next Begin call, and this button is redrawn (at the same position) every frame anyway.
+  constexpr auto popup_width = 260.0f;
+  const auto button_min = ImGui::GetItemRectMin();
+  const auto button_max = ImGui::GetItemRectMax();
+  const auto button_center_x = (button_min.x + button_max.x) * 0.5f;
+
+  // A tall Inspector (many components already on the node) can leave the button sitting low enough
+  // that opening straight downward, unconditionally, would push the popup off the bottom of the
+  // window entirely -- SetNextWindowPos overrides ImGui's own default popup placement, which is the
+  // only thing that would otherwise keep it on screen. Flip to opening upward from the button instead
+  // whenever there isn't roughly enough room below in the main viewport's work area; the estimate
+  // only has to be good enough to pick a side -- the upward case's own pivot anchors to the popup's
+  // real (auto-sized) height exactly, not to this estimate.
+  constexpr auto estimated_popup_height = 320.0f;
+
+  const auto work_min = ImGui::GetMainViewport()->WorkPos;
+  const auto work_max = ImVec2{work_min.x + ImGui::GetMainViewport()->WorkSize.x, work_min.y + ImGui::GetMainViewport()->WorkSize.y};
+
+  const auto opens_upward = (button_max.y + estimated_popup_height) > work_max.y;
+  const auto popup_x = std::clamp(button_center_x - popup_width * 0.5f, work_min.x, std::max(work_min.x, work_max.x - popup_width));
+
+  if (opens_upward) {
+    // pivot {0, 1}: the given pos is the window's bottom-left corner instead of its top-left, so it
+    // grows upward from the button using its own true content height, not the estimate above.
+    ImGui::SetNextWindowPos(ImVec2{popup_x, button_min.y}, ImGuiCond_Always, ImVec2{0.0f, 1.0f});
+  } else {
+    ImGui::SetNextWindowPos(ImVec2{popup_x, button_max.y}, ImGuiCond_Always);
+  }
+
+  ImGui::SetNextWindowSize(ImVec2{popup_width, 0.0f}, ImGuiCond_Always);
+
   if (ImGui::BeginPopup("##add_component_popup")) {
-    if (!node.has_component<sbx::scenes::camera>() && ImGui::MenuItem(ICON_MDI_CAMERA_OUTLINE " Camera")) {
+    // A single always-the-same popup id (unlike the asset pickers above, which juggle several under
+    // different ids) -- IsWindowAppearing() alone is enough to know this is a fresh open, so the
+    // search term never carries over from the last time this same popup was open, and the field
+    // starts focused every time, letting the button click go straight into typing a filter.
+    static auto filter_buffer = std::array<char, 128u>{};
+
+    if (ImGui::IsWindowAppearing()) {
+      filter_buffer[0] = '\0';
+      ImGui::SetKeyboardFocusHere();
+    }
+
+    ImGui::SetNextItemWidth(-1.0f);
+    ImGui::InputTextWithHint("##add_component_filter", ICON_MDI_MAGNIFY " Filter components...", filter_buffer.data(), filter_buffer.size());
+
+    const auto passes = [&](std::string_view name) {
+      return filter_buffer[0] == '\0' || contains_ignore_case(name, filter_buffer.data());
+    };
+
+    ImGui::Separator();
+
+    if (!node.has_component<sbx::scenes::camera>() && passes("Camera") && ImGui::MenuItem(ICON_MDI_CAMERA_OUTLINE " Camera")) {
       state.push_command(std::make_unique<add_component_command<sbx::scenes::camera>>(node.id(), "Add Camera"));
     }
 
-    if (!node.has_component<sbx::scenes::mesh_renderer>() && ImGui::MenuItem(ICON_MDI_CUBE_OUTLINE " Mesh Renderer")) {
+    if (!node.has_component<sbx::scenes::mesh_renderer>() && passes("Mesh Renderer") && ImGui::MenuItem(ICON_MDI_CUBE_OUTLINE " Mesh Renderer")) {
       state.push_command(std::make_unique<add_component_command<sbx::scenes::mesh_renderer>>(node.id(), "Add Mesh Renderer"));
     }
 
-    if (!node.has_component<sbx::scenes::directional_light>() && ImGui::MenuItem(ICON_MDI_WHITE_BALANCE_SUNNY " Directional Light")) {
+    if (!node.has_component<sbx::scenes::directional_light>() && passes("Directional Light") && ImGui::MenuItem(ICON_MDI_WHITE_BALANCE_SUNNY " Directional Light")) {
       state.push_command(std::make_unique<add_component_command<sbx::scenes::directional_light>>(node.id(), "Add Directional Light"));
     }
 
-    if (!node.has_component<sbx::scenes::point_light>() && ImGui::MenuItem(ICON_MDI_LIGHTBULB_OUTLINE " Point Light")) {
+    if (!node.has_component<sbx::scenes::point_light>() && passes("Point Light") && ImGui::MenuItem(ICON_MDI_LIGHTBULB_OUTLINE " Point Light")) {
       state.push_command(std::make_unique<add_component_command<sbx::scenes::point_light>>(node.id(), "Add Point Light"));
     }
 
-    if (!node.has_component<sbx::scenes::spot_light>() && ImGui::MenuItem(ICON_MDI_FLASHLIGHT " Spot Light")) {
+    if (!node.has_component<sbx::scenes::spot_light>() && passes("Spot Light") && ImGui::MenuItem(ICON_MDI_FLASHLIGHT " Spot Light")) {
       state.push_command(std::make_unique<add_component_command<sbx::scenes::spot_light>>(node.id(), "Add Spot Light"));
     }
 
-    if (!node.has_component<sbx::scenes::skybox>() && ImGui::MenuItem(ICON_MDI_EARTH " Skybox")) {
+    if (!node.has_component<sbx::scenes::skybox>() && passes("Skybox") && ImGui::MenuItem(ICON_MDI_EARTH " Skybox")) {
       state.push_command(std::make_unique<add_component_command<sbx::scenes::skybox>>(node.id(), "Add Skybox"));
     }
 
-    if (!node.has_component<sbx::scenes::particle_effect>() && ImGui::MenuItem(ICON_MDI_FIREWORK " Particle Effect")) {
+    if (!node.has_component<sbx::scenes::particle_effect>() && passes("Particle Effect") && ImGui::MenuItem(ICON_MDI_FIREWORK " Particle Effect")) {
       state.push_command(std::make_unique<add_component_command<sbx::scenes::particle_effect>>(node.id(), "Add Particle Effect"));
     }
 
-    if (!node.has_component<sbx::physics::rigidbody>() && ImGui::MenuItem(ICON_MDI_SOCCER " Rigidbody")) {
+    if (!node.has_component<sbx::physics::rigidbody>() && passes("Rigidbody") && ImGui::MenuItem(ICON_MDI_SOCCER " Rigidbody")) {
       state.push_command(std::make_unique<add_component_command<sbx::physics::rigidbody>>(node.id(), "Add Rigidbody"));
     }
 
-    if (!node.has_component<sbx::physics::shape_collider>() && ImGui::MenuItem(ICON_MDI_SHAPE_OUTLINE " Shape Collider")) {
+    // A node only ever gets one collider kind -- narrowphase only ever resolves one per node anyway
+    // (see narrowphase.cpp's resolve_convex), so having both is never useful, just confusing.
+    if (!node.has_component<sbx::physics::shape_collider>() && !node.has_component<sbx::physics::mesh_collider>() && passes("Shape Collider") && ImGui::MenuItem(ICON_MDI_SHAPE_OUTLINE " Shape Collider")) {
       state.push_command(std::make_unique<add_component_command<sbx::physics::shape_collider>>(node.id(), "Add Shape Collider"));
     }
 
-    if (!node.has_component<sbx::physics::mesh_collider>() && ImGui::MenuItem(ICON_MDI_TERRAIN " Mesh Collider")) {
+    if (!node.has_component<sbx::physics::mesh_collider>() && !node.has_component<sbx::physics::shape_collider>() && passes("Mesh Collider") && ImGui::MenuItem(ICON_MDI_TERRAIN " Mesh Collider")) {
       state.push_command(std::make_unique<add_component_command<sbx::physics::mesh_collider>>(node.id(), "Add Mesh Collider"));
     }
 
-    if (ImGui::BeginMenu(ICON_MDI_FILE_CODE_OUTLINE " Script")) {
-      auto& behavior_type = scripting_module.game_assembly().get_type("Sbx.Core.Behavior");
-      auto any_available = false;
+    // The Script submenu covers a whole open-ended, dynamically-discovered category rather than one
+    // fixed name, so it passes the filter either when "Script" itself matches or when at least one
+    // script inside it would -- otherwise a search for a script's own name (which never matches the
+    // literal word "Script") would hide the one submenu that could actually satisfy it.
+    if (passes("Script") || (filter_buffer[0] != '\0' && any_script_matches(scripting_module, filter_buffer.data()))) {
+      if (ImGui::BeginMenu(ICON_MDI_FILE_CODE_OUTLINE " Script")) {
+        auto& behavior_type = scripting_module.game_assembly().get_type("Sbx.Core.Behavior");
+        auto any_available = false;
 
-      for (auto* candidate : scripting_module.game_assembly().get_types()) {
-        if (*candidate == behavior_type || !candidate->is_subclass_of(behavior_type)) {
-          continue; // skip the base class itself and anything that isn't a Behavior
+        for (auto* candidate : scripting_module.game_assembly().get_types()) {
+          if (*candidate == behavior_type || !candidate->is_subclass_of(behavior_type)) {
+            continue; // skip the base class itself and anything that isn't a Behavior
+          }
+
+          const auto full_name = std::string{candidate->get_full_name()};
+
+          if (!passes(full_name)) {
+            continue;
+          }
+
+          any_available = true;
+
+          if (ImGui::MenuItem(full_name.c_str())) {
+            state.push_command(std::make_unique<attach_script_command>(node.id(), full_name));
+          }
         }
 
-        any_available = true;
-
-        const auto full_name = std::string{candidate->get_full_name()};
-
-        if (ImGui::MenuItem(full_name.c_str())) {
-          state.push_command(std::make_unique<attach_script_command>(node.id(), full_name));
+        if (!any_available) {
+          ImGui::TextDisabled(filter_buffer[0] != '\0' ? "No scripts match." : "No compiled scripts found.");
         }
-      }
 
-      if (!any_available) {
-        ImGui::TextDisabled("No compiled scripts found.");
+        ImGui::EndMenu();
       }
-
-      ImGui::EndMenu();
     }
 
     ImGui::EndPopup();

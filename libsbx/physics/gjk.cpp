@@ -9,10 +9,18 @@
 namespace sbx::physics {
 
 auto support_world(const convex_shape& shape, const transform& pose, const math::vector3& world_direction) -> math::vector3 {
+  // Exact for any diagonal (per-axis) scale S, not just a uniform one -- not an approximation. For a
+  // local point set K, world shape = position + rotation * (S * K), so
+  //   support_{S*K}(d) = max_{p in K} dot(d, rotation * S * p)
+  //                    = max_p dot(Sᵀ * rotation⁻¹ * d, p)     [dot(d, M*p) == dot(Mᵀ*d, p)]
+  //                    = max_p dot(S ⊙ local_direction, p)      [S diagonal: Sᵀ == S == componentwise]
+  // so the *search direction* needs the same componentwise scale the *found point* does (S is its
+  // own transpose) -- one extra multiply, no per-shape special-casing, and it degenerates to the old
+  // uniform-only formula exactly when scale.x() == scale.y() == scale.z().
   const auto local_direction = math::quaternion::conjugate(pose.rotation) * world_direction;
-  const auto local_point = find_furthest_point(shape, local_direction);
+  const auto local_point = find_furthest_point(shape, local_direction * pose.scale);
 
-  return pose.position + pose.rotation * local_point;
+  return pose.position + pose.rotation * (local_point * pose.scale);
 }
 
 auto minkowski_support(const convex_shape& a, const transform& pose_a, const convex_shape& b, const transform& pose_b, const math::vector3& world_direction) -> support_point {

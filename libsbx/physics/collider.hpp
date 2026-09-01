@@ -14,8 +14,11 @@
 namespace sbx::physics {
 
 /**
- * @brief A single convex primitive collider. One per body in v1 — compound (multi-collider)
- * bodies are not supported.
+ * @brief A single convex primitive collider. A rigidbody picks up every shape_collider/convex
+ * mesh_collider in its own subtree, not just one on its exact same node (compound colliders -- see
+ * narrowphase.hpp's resolve_body_shapes); a shape_collider with no rigidbody anywhere in its
+ * ancestor chain is its own implicit-static body instead (matching Unity: a Collider alone, no
+ * Rigidbody, is a static one).
  */
 struct shape_collider {
   convex_shape shape{sphere{}};
@@ -26,9 +29,10 @@ struct shape_collider {
 }; // struct shape_collider
 
 /**
- * @brief A triangle-mesh collider. Mesh nodes carrying this must be authored without non-uniform
- * scale (their collision data is built once, in the mesh's own local space, and narrowphase assumes
- * a rotation+translation-only world transform).
+ * @brief A triangle-mesh collider. Its collision data (a triangle BVH or convex hull) is built once,
+ * in the mesh's own local space; narrowphase applies scale -- uniform or not -- as part of the
+ * support mapping itself (see gjk.hpp's transform::scale doc comment) rather than warping the cached
+ * geometry, so a non-uniform local_transform::scale works correctly here too.
  *
  * Unity MeshCollider parity: with `convex == false` (the default), the raw triangle mesh is used
  * directly and this can only be the non-simulated side of a contact -- valid on a static_body or a

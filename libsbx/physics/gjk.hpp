@@ -14,6 +14,8 @@
 #ifndef LIBSBX_PHYSICS_GJK_HPP_
 #define LIBSBX_PHYSICS_GJK_HPP_
 
+#include <cmath>
+
 #include <libsbx/math/quaternion.hpp>
 #include <libsbx/math/vector3.hpp>
 
@@ -24,12 +26,23 @@
 namespace sbx::physics {
 
 /**
- * @brief A convex shape's pose in world space. Composed from a node's local_transform and its
- * collider's own offset/rotation before narrowphase runs.
+ * @brief A convex shape's pose in world space. Composed from a node's local_transform (and every
+ * ancestor's, live -- see narrowphase.cpp's compose_world_pose) and its collider's own
+ * offset/rotation before narrowphase runs.
+ *
+ * `scale` is a full per-axis (diagonal-matrix) factor, applied in the shape's own local frame
+ * *before* rotation -- see support_world for why a per-axis scale costs GJK nothing extra over a
+ * uniform one (it needs the search *direction* scaled the same way the point is, which a uniform
+ * scale can skip since it doesn't change which point wins). A shape that can't represent an
+ * anisotropic scale as itself (a sphere/cylinder/capsule would become a genuinely different shape --
+ * an ellipsoid, a stretched capsule) still collides correctly through this general path; only
+ * dispatch()'s closed-form fast paths (narrowphase.cpp) fall back to it instead of assuming an
+ * unscaled shape.
  */
 struct transform {
   math::vector3 position{math::vector3::zero};
   math::quaternion rotation{math::quaternion::identity};
+  math::vector3 scale{math::vector3::one};
 }; // struct transform
 
 /**

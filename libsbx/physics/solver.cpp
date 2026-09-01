@@ -69,8 +69,14 @@ auto prepare_velocity_constraints(std::vector<contact_manifold>& manifolds) -> s
   constraints.reserve(manifolds.size());
 
   for (auto& manifold : manifolds) {
-    auto& body_a = manifold.node_a.get_component<rigidbody>();
-    auto& body_b = manifold.node_b.get_component<rigidbody>();
+    // Fresh per manifold, not shared/static: harmless even so (every write to a fallback is a
+    // mathematical no-op, see rigidbody.hpp's effective_rigidbody doc comment), but this avoids any
+    // aliasing question between two different implicit-static manifolds entirely.
+    auto fallback_a = rigidbody{body_type::static_body};
+    auto fallback_b = rigidbody{body_type::static_body};
+
+    auto& body_a = effective_rigidbody(manifold.node_a, fallback_a);
+    auto& body_b = effective_rigidbody(manifold.node_b, fallback_b);
 
     const auto inv_mass_a = effective_inverse_mass(body_a);
     const auto inv_mass_b = effective_inverse_mass(body_b);
@@ -152,8 +158,11 @@ auto prepare_velocity_constraints(std::vector<contact_manifold>& manifolds) -> s
 auto solve_velocity_constraints(std::vector<velocity_constraint>& constraints, std::uint32_t iterations) -> void {
   for (auto iteration = std::uint32_t{0}; iteration < iterations; ++iteration) {
     for (auto& constraint : constraints) {
-      auto& body_a = constraint.node_a.get_component<rigidbody>();
-      auto& body_b = constraint.node_b.get_component<rigidbody>();
+      auto fallback_a = rigidbody{body_type::static_body};
+      auto fallback_b = rigidbody{body_type::static_body};
+
+      auto& body_a = effective_rigidbody(constraint.node_a, fallback_a);
+      auto& body_b = effective_rigidbody(constraint.node_b, fallback_b);
 
       const auto inv_mass_a = effective_inverse_mass(body_a);
       const auto inv_mass_b = effective_inverse_mass(body_b);
@@ -253,8 +262,11 @@ auto apply_positional_correction(std::vector<contact_manifold>& manifolds, std::
     auto node_a = manifold.node_a;
     auto node_b = manifold.node_b;
 
-    auto& body_a = node_a.get_component<rigidbody>();
-    auto& body_b = node_b.get_component<rigidbody>();
+    auto fallback_a = rigidbody{body_type::static_body};
+    auto fallback_b = rigidbody{body_type::static_body};
+
+    auto& body_a = effective_rigidbody(node_a, fallback_a);
+    auto& body_b = effective_rigidbody(node_b, fallback_b);
 
     const auto inv_mass_a = effective_inverse_mass(body_a);
     const auto inv_mass_b = effective_inverse_mass(body_b);

@@ -7,6 +7,7 @@
 #include <cmath>
 #include <cstdint>
 #include <limits>
+#include <tuple>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -18,11 +19,58 @@
 #include <libsbx/physics/gjk.hpp>
 #include <libsbx/physics/mesh_collision_cache.hpp>
 #include <libsbx/physics/convex_hull_cache.hpp>
+#include <libsbx/physics/rigidbody.hpp>
+
+#include <libsbx/utility/overload.hpp>
 
 namespace sbx::physics {
 
+// True when every axis of `scale` agrees (within tolerance) -- the dividing line between a
+// primitive that can still be represented exactly by its own convex_shape alternative after baking
+// (a uniformly-scaled sphere is still a sphere) and one that can't (a non-uniformly-scaled sphere is
+// really an ellipsoid, a non-uniformly-scaled capsule a stretched one -- shapes this variant has no
+// alternative for).
+[[nodiscard]] auto is_uniform_scale(const math::vector3& scale) -> bool {
+  constexpr auto tolerance = 1e-4f;
+  return std::abs(scale.x() - scale.y()) <= tolerance && std::abs(scale.y() - scale.z()) <= tolerance;
+}
+
+// Bakes as much of `scale` as possible directly into a primitive's own dimensions -- radius,
+// half_extents, half_height -- so dispatch()'s closed-form pairs (sphere_sphere, box_box, ...) can
+// keep reading a shape's fields directly instead of going through support_world's general (but
+// costlier, single-point-manifold) GJK/EPA path. A box always bakes fully and exactly, uniform or
+// not -- its own local axes *are* the scale's axes, so per-axis half_extents scaling is exact
+// regardless. A sphere/cylinder/capsule only bakes when scale is uniform (see is_uniform_scale); a
+// non-uniform one is left unscaled here, with the real scale returned instead of transform::one, so
+// the caller can carry it in the shape's pose for support_world (gjk.cpp) to apply exactly instead --
+// dispatch() checks for exactly this to skip its closed forms for such a shape. triangle/convex_hull
+// (never authored on a shape_collider, resolve_convex's only caller for this) always pass through
+// unbaked either way, for the same reason.
+[[nodiscard]] auto bake_scale(const convex_shape& shape, const math::vector3& scale) -> std::pair<convex_shape, math::vector3> {
+  return std::visit(utility::overload(
+    [&](const sphere& s) -> std::pair<convex_shape, math::vector3> {
+      if (!is_uniform_scale(scale)) { return {convex_shape{s}, scale}; }
+      return {convex_shape{sphere{s.radius * scale.x()}}, math::vector3::one};
+    },
+    [&](const cylinder& s) -> std::pair<convex_shape, math::vector3> {
+      if (!is_uniform_scale(scale)) { return {convex_shape{s}, scale}; }
+      return {convex_shape{cylinder{s.radius * scale.x(), s.half_height * scale.x()}}, math::vector3::one};
+    },
+    [&](const capsule& s) -> std::pair<convex_shape, math::vector3> {
+      if (!is_uniform_scale(scale)) { return {convex_shape{s}, scale}; }
+      return {convex_shape{capsule{s.radius * scale.x(), s.half_height * scale.x()}}, math::vector3::one};
+    },
+    [&](const box& s) -> std::pair<convex_shape, math::vector3> {
+      return {convex_shape{box{s.half_extents * scale}}, math::vector3::one};
+    },
+    [&](const auto& s) -> std::pair<convex_shape, math::vector3> {
+      return {convex_shape{s}, scale};
+    }
+  ), shape);
+}
+
 // One narrowphase point before it's turned into a full contact_point (anchors/feature id are
-// filled in by generate_contact, which is the only place that knows about the owning nodes).
+// filled in by build_manifold, which is the only place that knows about the owning nodes).
 struct narrow_point {
   math::vector3 point{math::vector3::zero};
   std::float_t depth{0.0f};
@@ -33,11 +81,127 @@ struct narrow_result {
   containers::static_vector<narrow_point, max_manifold_points> points{};
 }; // struct narrow_result
 
-[[nodiscard]] auto compose_pose(const scenes::local_transform& local, const math::vector3& offset, const math::quaternion& rotation) -> transform {
+auto compose_world_pose(scenes::scene& scene, const scenes::node& node) -> transform {
+  // Collect node's own chain of ancestors first (cheapest to walk upward, parent pointers only),
+  // then compose top-down -- root's local_transform folds in first, node's own last -- since a
+  // parent's position/rotation/scale all need to already be known before its child's local offset
+  // can be projected through them.
+  auto chain = std::vector<scenes::node>{};
+  auto current = node;
+  const auto root = scene.root();
+
+  while (!(current == root)) {
+    chain.push_back(current);
+    const auto& relationship = current.get_component<scenes::relationship>();
+    current = scene.node_of(relationship.parent);
+  }
+
+  auto pose = transform{};
+
+  for (auto it = chain.rbegin(); it != chain.rend(); ++it) {
+    const auto& local = it->get_component<scenes::local_transform>();
+
+    pose.position = pose.position + pose.rotation * (local.position * pose.scale);
+    pose.rotation = math::quaternion::normalized(pose.rotation * local.rotation);
+    pose.scale = pose.scale * local.scale; // componentwise -- see physics::transform::scale
+  }
+
+  return pose;
+}
+
+auto compose_pose(const transform& world_pose, const math::vector3& offset, const math::quaternion& rotation) -> transform {
   return transform{
-    local.position + local.rotation * offset,
-    math::quaternion::normalized(local.rotation * rotation)
+    world_pose.position + world_pose.rotation * (offset * world_pose.scale),
+    math::quaternion::normalized(world_pose.rotation * rotation),
+    world_pose.scale
   };
+}
+
+auto resolve_convex(scenes::scene& scene, const scenes::node& node, convex_hull_cache& hull_cache, assets::assets_module& assets_module) -> std::optional<body_shape> {
+  if (node.has_component<shape_collider>()) {
+    const auto& collider = node.get_component<shape_collider>();
+    const auto world_pose = compose_world_pose(scene, node);
+    const auto pose = compose_pose(world_pose, collider.offset, collider.rotation);
+
+    // Scale is baked as far as it can be straight into the shape's own dimensions here (see
+    // bake_scale) -- whatever's left over (only ever non-1 for a non-uniformly-scaled
+    // sphere/cylinder/capsule) stays in the returned pose for support_world to apply instead.
+    auto [baked_shape, residual_scale] = bake_scale(collider.shape, pose.scale);
+
+    return body_shape{std::move(baked_shape), transform{pose.position, pose.rotation, residual_scale}, collider.friction, collider.restitution};
+  }
+
+  if (node.has_component<mesh_collider>()) {
+    const auto& collider = node.get_component<mesh_collider>();
+
+    if (!collider.is_convex || !collider.mesh.is_valid()) {
+      return std::nullopt;
+    }
+
+    const auto& hull_data = hull_cache.get_or_build(assets_module, collider.mesh->id());
+
+    if (hull_data.points.is_empty()) {
+      return std::nullopt;
+    }
+
+    const auto world_pose = compose_world_pose(scene, node);
+
+    return body_shape{convex_shape{convex_hull{hull_data.points}}, compose_pose(world_pose, collider.offset, collider.rotation), collider.friction, collider.restitution};
+  }
+
+  return std::nullopt;
+}
+
+auto resolve_body_shapes(scenes::scene& scene, const scenes::node& rigidbody_node, convex_hull_cache& hull_cache, assets::assets_module& assets_module) -> std::vector<body_shape> {
+  auto shapes = std::vector<body_shape>{};
+
+  const auto& relationship = rigidbody_node.get_component<scenes::relationship>();
+
+  // Fast path: no children at all -- this can only ever be an ordinary single-shape body (or a bare
+  // rigidbody with no collider), so skip the recursive walk entirely.
+  if (relationship.children.empty()) {
+    if (auto resolved = resolve_convex(scene, rigidbody_node, hull_cache, assets_module)) {
+      shapes.push_back(std::move(*resolved));
+    }
+
+    return shapes;
+  }
+
+  const auto collect = [&](this const auto& self, const scenes::node& node) -> void {
+    if (auto resolved = resolve_convex(scene, node, hull_cache, assets_module)) {
+      shapes.push_back(std::move(*resolved));
+    }
+
+    for (const auto child_entity : node.get_component<scenes::relationship>().children) {
+      const auto child = scene.node_of(child_entity);
+
+      if (child.has_component<rigidbody>()) {
+        continue; // independent body -- not part of this compound
+      }
+
+      self(child);
+    }
+  };
+
+  collect(rigidbody_node);
+
+  return shapes;
+}
+
+auto find_owning_rigidbody(scenes::scene& scene, const scenes::node& node) -> std::optional<scenes::node> {
+  auto current = node;
+  const auto root = scene.root();
+
+  while (!(current == root)) {
+    if (current.has_component<rigidbody>()) {
+      return current;
+    }
+
+    const auto& relationship = current.get_component<scenes::relationship>();
+    current = scene.node_of(relationship.parent);
+  }
+
+  return std::nullopt;
 }
 
 [[nodiscard]] auto closest_point_on_segment(const math::vector3& point, const math::vector3& a, const math::vector3& b) -> math::vector3 {
@@ -515,69 +679,136 @@ struct clip_plane {
   constexpr auto capsule_index = std::size_t{2};
   constexpr auto box_index = std::size_t{3};
 
-  if (index_a == sphere_index && index_b == sphere_index) {
-    return sphere_sphere(pose_a.position, std::get<sphere>(shape_a).radius, pose_b.position, std::get<sphere>(shape_b).radius);
-  }
+  // Every closed form below reads a shape's fields (radius, half_extents, ...) directly rather than
+  // going through support_world, so it needs that shape already unscaled -- true for a resolved
+  // shape_collider's shape unless it's a non-uniformly-scaled sphere/cylinder/capsule, which
+  // bake_scale (narrowphase.cpp's resolve_convex) leaves unbaked, with the real scale left in its
+  // pose specifically so it lands here instead: closed_form_safe is false and every branch below is
+  // skipped in favor of generic_gjk_epa, whose support_world (gjk.cpp) applies that scale exactly.
+  // A box's own scale is always already fully baked (uniform or not -- see bake_scale), so this never
+  // spuriously disables box_box; it only ever matters for the sphere/capsule branches.
+  const auto closed_form_safe = pose_a.scale == math::vector3::one && pose_b.scale == math::vector3::one;
 
-  if (index_a == sphere_index && index_b == box_index) {
-    auto result = sphere_box(pose_a.position, std::get<sphere>(shape_a).radius, pose_b.position, pose_b.rotation, std::get<box>(shape_b).half_extents);
-    if (result) { result->normal = -result->normal; }
-    return result;
-  }
+  if (closed_form_safe) {
+    if (index_a == sphere_index && index_b == sphere_index) {
+      return sphere_sphere(pose_a.position, std::get<sphere>(shape_a).radius, pose_b.position, std::get<sphere>(shape_b).radius);
+    }
 
-  if (index_a == box_index && index_b == sphere_index) {
-    return sphere_box(pose_b.position, std::get<sphere>(shape_b).radius, pose_a.position, pose_a.rotation, std::get<box>(shape_a).half_extents);
-  }
+    if (index_a == sphere_index && index_b == box_index) {
+      auto result = sphere_box(pose_a.position, std::get<sphere>(shape_a).radius, pose_b.position, pose_b.rotation, std::get<box>(shape_b).half_extents);
+      if (result) { result->normal = -result->normal; }
+      return result;
+    }
 
-  if (index_a == sphere_index && index_b == capsule_index) {
-    const auto& capsule_shape = std::get<capsule>(shape_b);
-    auto result = sphere_capsule(pose_a.position, std::get<sphere>(shape_a).radius, pose_b.position, pose_b.rotation, capsule_shape.radius, capsule_shape.half_height);
-    if (result) { result->normal = -result->normal; }
-    return result;
-  }
+    if (index_a == box_index && index_b == sphere_index) {
+      return sphere_box(pose_b.position, std::get<sphere>(shape_b).radius, pose_a.position, pose_a.rotation, std::get<box>(shape_a).half_extents);
+    }
 
-  if (index_a == capsule_index && index_b == sphere_index) {
-    const auto& capsule_shape = std::get<capsule>(shape_a);
-    return sphere_capsule(pose_b.position, std::get<sphere>(shape_b).radius, pose_a.position, pose_a.rotation, capsule_shape.radius, capsule_shape.half_height);
-  }
+    if (index_a == sphere_index && index_b == capsule_index) {
+      const auto& capsule_shape = std::get<capsule>(shape_b);
+      auto result = sphere_capsule(pose_a.position, std::get<sphere>(shape_a).radius, pose_b.position, pose_b.rotation, capsule_shape.radius, capsule_shape.half_height);
+      if (result) { result->normal = -result->normal; }
+      return result;
+    }
 
-  if (index_a == capsule_index && index_b == capsule_index) {
-    const auto& capsule_a = std::get<capsule>(shape_a);
-    const auto& capsule_b = std::get<capsule>(shape_b);
-    return capsule_capsule(pose_a.position, pose_a.rotation, capsule_a.radius, capsule_a.half_height, pose_b.position, pose_b.rotation, capsule_b.radius, capsule_b.half_height);
-  }
+    if (index_a == capsule_index && index_b == sphere_index) {
+      const auto& capsule_shape = std::get<capsule>(shape_a);
+      return sphere_capsule(pose_b.position, std::get<sphere>(shape_b).radius, pose_a.position, pose_a.rotation, capsule_shape.radius, capsule_shape.half_height);
+    }
 
-  if (index_a == capsule_index && index_b == box_index) {
-    const auto& capsule_shape = std::get<capsule>(shape_a);
-    auto result = capsule_box(pose_a.position, pose_a.rotation, capsule_shape.radius, capsule_shape.half_height, pose_b.position, pose_b.rotation, std::get<box>(shape_b).half_extents);
-    if (result) { result->normal = -result->normal; }
-    return result;
-  }
+    if (index_a == capsule_index && index_b == capsule_index) {
+      const auto& capsule_a = std::get<capsule>(shape_a);
+      const auto& capsule_b = std::get<capsule>(shape_b);
+      return capsule_capsule(pose_a.position, pose_a.rotation, capsule_a.radius, capsule_a.half_height, pose_b.position, pose_b.rotation, capsule_b.radius, capsule_b.half_height);
+    }
 
-  if (index_a == box_index && index_b == capsule_index) {
-    const auto& capsule_shape = std::get<capsule>(shape_b);
-    return capsule_box(pose_b.position, pose_b.rotation, capsule_shape.radius, capsule_shape.half_height, pose_a.position, pose_a.rotation, std::get<box>(shape_a).half_extents);
-  }
+    if (index_a == capsule_index && index_b == box_index) {
+      const auto& capsule_shape = std::get<capsule>(shape_a);
+      auto result = capsule_box(pose_a.position, pose_a.rotation, capsule_shape.radius, capsule_shape.half_height, pose_b.position, pose_b.rotation, std::get<box>(shape_b).half_extents);
+      if (result) { result->normal = -result->normal; }
+      return result;
+    }
 
-  if (index_a == box_index && index_b == box_index) {
-    const auto& box_a = std::get<box>(shape_a);
-    const auto& box_b = std::get<box>(shape_b);
-    return box_box(pose_a.position, pose_a.rotation, box_a.half_extents, pose_b.position, pose_b.rotation, box_b.half_extents);
+    if (index_a == box_index && index_b == capsule_index) {
+      const auto& capsule_shape = std::get<capsule>(shape_b);
+      return capsule_box(pose_b.position, pose_b.rotation, capsule_shape.radius, capsule_shape.half_height, pose_a.position, pose_a.rotation, std::get<box>(shape_a).half_extents);
+    }
+
+    if (index_a == box_index && index_b == box_index) {
+      const auto& box_a = std::get<box>(shape_a);
+      const auto& box_b = std::get<box>(shape_b);
+      return box_box(pose_a.position, pose_a.rotation, box_a.half_extents, pose_b.position, pose_b.rotation, box_b.half_extents);
+    }
   }
 
   return generic_gjk_epa(shape_a, pose_a, shape_b, pose_b);
 }
 
-// Shared by every generate_*_contact below: turns a raw dispatch()/combined mesh result into the
-// contact_manifold the solver expects, deriving each point's torque anchors from node_a/node_b's
-// own local_transform::position.
-[[nodiscard]] auto build_manifold(const scenes::node& node_a, const scenes::node& node_b, const scenes::local_transform& local_a, const scenes::local_transform& local_b, std::float_t friction_a, std::float_t friction_b, std::float_t restitution_a, std::float_t restitution_b, const narrow_result& raw) -> std::optional<contact_manifold> {
+// One shape-pair or shape-triangle touch, with the material this specific pairing combines to --
+// materials can vary per shape within a compound body, so this is tracked per touch rather than once
+// per body pair the way it was before compound colliders existed.
+struct narrow_touch {
+  narrow_result result;
+  std::float_t combined_friction{0.0f};
+  std::float_t combined_restitution{0.0f};
+}; // struct narrow_touch
+
+// Combines every touch between two bodies' full shape lists into a single narrow_result plus the
+// material of whichever touch produced the single deepest point: up to max_manifold_points points,
+// kept globally deepest-first, with the deepest point's own normal/material representing the whole
+// manifold (exact when the deepest touch's surface is locally flat -- the common case; an
+// approximation otherwise, same "internal edge" v1 limitation mesh narrowphase always had).
+[[nodiscard]] auto combine_narrow_results(const std::vector<narrow_touch>& touches) -> std::optional<std::tuple<narrow_result, std::float_t, std::float_t>> {
+  struct candidate {
+    math::vector3 normal;
+    narrow_point point;
+    std::float_t friction;
+    std::float_t restitution;
+  }; // struct candidate
+
+  auto candidates = std::vector<candidate>{};
+
+  for (const auto& touch : touches) {
+    for (const auto& point : touch.result.points) {
+      candidates.push_back(candidate{touch.result.normal, point, touch.combined_friction, touch.combined_restitution});
+    }
+  }
+
+  if (candidates.empty()) {
+    return std::nullopt;
+  }
+
+  std::ranges::sort(candidates, [](const candidate& lhs, const candidate& rhs) {
+    return lhs.point.depth > rhs.point.depth;
+  });
+
+  if (candidates.size() > max_manifold_points) {
+    candidates.resize(max_manifold_points);
+  }
+
+  auto combined = narrow_result{candidates.front().normal, {}};
+
+  for (const auto& picked : candidates) {
+    combined.points.push_back(picked.point);
+  }
+
+  return std::tuple{combined, candidates.front().friction, candidates.front().restitution};
+}
+
+// Shared by every generate_*_contact below: turns a combined narrow_result into the contact_manifold
+// the solver expects, deriving each point's torque anchors from node_a/node_b's own world position
+// (compose_world_pose -- not just local_transform::position, since either side may itself be nested
+// under an organizational parent, e.g. an implicit-static collider under a scaled group node).
+[[nodiscard]] auto build_manifold(scenes::scene& scene, const scenes::node& node_a, const scenes::node& node_b, std::float_t friction, std::float_t restitution, const narrow_result& raw) -> std::optional<contact_manifold> {
   auto manifold = contact_manifold{};
   manifold.node_a = node_a;
   manifold.node_b = node_b;
   manifold.normal = raw.normal;
-  manifold.combined_friction = std::sqrt(std::max(friction_a, 0.0f) * std::max(friction_b, 0.0f));
-  manifold.combined_restitution = std::max(restitution_a, restitution_b);
+  manifold.combined_friction = friction;
+  manifold.combined_restitution = restitution;
+
+  const auto world_position_a = compose_world_pose(scene, node_a).position;
+  const auto world_position_b = compose_world_pose(scene, node_b).position;
 
   for (const auto& point : raw.points) {
     if (manifold.points.is_full()) {
@@ -587,8 +818,8 @@ struct clip_plane {
     manifold.points.push_back(contact_point{
       point.point,
       point.depth,
-      point.point - local_a.position,
-      point.point - local_b.position,
+      point.point - world_position_a,
+      point.point - world_position_b,
       0.0f, 0.0f, 0.0f,
       static_cast<std::uint32_t>(manifold.points.size())
     });
@@ -601,99 +832,51 @@ struct clip_plane {
   return manifold;
 }
 
-auto generate_contact(const sbx::scenes::node& node_a, const sbx::scenes::node& node_b) -> std::optional<contact_manifold> {
-  const auto& collider_a = node_a.get_component<shape_collider>();
-  const auto& collider_b = node_b.get_component<shape_collider>();
-  const auto& local_a = node_a.get_component<scenes::local_transform>();
-  const auto& local_b = node_b.get_component<scenes::local_transform>();
+[[nodiscard]] auto combined_material(const body_shape& a, const body_shape& b) -> std::pair<std::float_t, std::float_t> {
+  return {std::sqrt(std::max(a.friction, 0.0f) * std::max(b.friction, 0.0f)), std::max(a.restitution, b.restitution)};
+}
 
-  const auto pose_a = compose_pose(local_a, collider_a.offset, collider_a.rotation);
-  const auto pose_b = compose_pose(local_b, collider_b.offset, collider_b.rotation);
+// Both sides resolve to a list of one or more ordinary convex_shapes (resolve_body_shapes -- a
+// single-entry list for an ordinary non-compound body, several for a compound one), cross-tested
+// shape x shape via dispatch() and folded into one manifold for the pair via combine_narrow_results.
+[[nodiscard]] auto generate_convex_pair_contact(scenes::scene& scene, const scenes::node& node_a, const scenes::node& node_b, convex_hull_cache& hull_cache, assets::assets_module& assets_module) -> std::optional<contact_manifold> {
+  const auto shapes_a = resolve_body_shapes(scene, node_a, hull_cache, assets_module);
+  const auto shapes_b = resolve_body_shapes(scene, node_b, hull_cache, assets_module);
 
-  const auto raw = dispatch(collider_a.shape, pose_a, collider_b.shape, pose_b);
-
-  if (!raw) {
+  if (shapes_a.empty() || shapes_b.empty()) {
     return std::nullopt;
   }
 
-  return build_manifold(node_a, node_b, local_a, local_b, collider_a.friction, collider_b.friction, collider_a.restitution, collider_b.restitution, *raw);
-}
+  auto touches = std::vector<narrow_touch>{};
 
-// -- Mesh colliders ------------------------------------------------------------------------------
-
-struct resolved_convex {
-  convex_shape shape;
-  transform pose;
-  std::float_t friction;
-  std::float_t restitution;
-}; // struct resolved_convex
-
-// A node participates in narrowphase as an ordinary convex_shape either by authoring one directly
-// (shape_collider) or, for a mesh_collider with convex == true, via its cached hull point set --
-// from here on the two are indistinguishable to dispatch()/GJK/EPA. Returns nullopt for a
-// non-convex mesh_collider (it can never stand in as a single convex_shape -- see
-// generate_mesh_contact) or an unresolvable one (no mesh assigned, or an empty cached hull).
-[[nodiscard]] auto resolve_convex(const scenes::node& node, convex_hull_cache& hull_cache, assets::assets_module& assets_module) -> std::optional<resolved_convex> {
-  const auto& local = node.get_component<scenes::local_transform>();
-
-  if (node.has_component<shape_collider>()) {
-    const auto& collider = node.get_component<shape_collider>();
-    return resolved_convex{collider.shape, compose_pose(local, collider.offset, collider.rotation), collider.friction, collider.restitution};
-  }
-
-  if (node.has_component<mesh_collider>()) {
-    const auto& collider = node.get_component<mesh_collider>();
-
-    if (!collider.is_convex || !collider.mesh.is_valid()) {
-      return std::nullopt;
+  for (const auto& shape_a : shapes_a) {
+    for (const auto& shape_b : shapes_b) {
+      if (auto raw = dispatch(shape_a.shape, shape_a.pose, shape_b.shape, shape_b.pose)) {
+        const auto [friction, restitution] = combined_material(shape_a, shape_b);
+        touches.push_back(narrow_touch{std::move(*raw), friction, restitution});
+      }
     }
-
-    const auto& hull_data = hull_cache.get_or_build(assets_module, collider.mesh->id());
-
-    if (hull_data.points.is_empty()) {
-      return std::nullopt;
-    }
-
-    return resolved_convex{convex_shape{convex_hull{hull_data.points}}, compose_pose(local, collider.offset, collider.rotation), collider.friction, collider.restitution};
   }
 
-  return std::nullopt;
-}
+  const auto combined = combine_narrow_results(touches);
 
-// Both sides resolve to an ordinary convex_shape (shape_collider or a convex mesh_collider, in any
-// combination) -- a single ordinary GJK/EPA-or-closed-form call via dispatch(), same as
-// generate_contact but for whichever of the two collider kinds each side turns out to be.
-[[nodiscard]] auto generate_convex_pair_contact(const scenes::node& node_a, const scenes::node& node_b, convex_hull_cache& hull_cache, assets::assets_module& assets_module) -> std::optional<contact_manifold> {
-  const auto resolved_a = resolve_convex(node_a, hull_cache, assets_module);
-  const auto resolved_b = resolve_convex(node_b, hull_cache, assets_module);
-
-  if (!resolved_a || !resolved_b) {
+  if (!combined) {
     return std::nullopt;
   }
 
-  const auto raw = dispatch(resolved_a->shape, resolved_a->pose, resolved_b->shape, resolved_b->pose);
+  const auto& [raw, friction, restitution] = *combined;
 
-  if (!raw) {
-    return std::nullopt;
-  }
-
-  const auto& local_a = node_a.get_component<scenes::local_transform>();
-  const auto& local_b = node_b.get_component<scenes::local_transform>();
-
-  return build_manifold(node_a, node_b, local_a, local_b, resolved_a->friction, resolved_b->friction, resolved_a->restitution, resolved_b->restitution, *raw);
+  return build_manifold(scene, node_a, node_b, friction, restitution, raw);
 }
 
-// shape_node resolves as an ordinary convex_shape (via resolve_convex -- so this also covers a
-// convex mesh_collider landing on a non-convex one); mesh_node is a non-convex mesh_collider, tested
-// per-candidate-triangle against its mesh_collision_cache BVH. Builds one combined manifold for the
-// pair: the deepest touching triangle's normal becomes the manifold's normal (exact when the
-// touched triangles are coplanar, e.g. a flat floor region -- the common case; an approximation
-// otherwise, the same "internal edge" v1 limitation noted when mesh narrowphase was first added),
-// and up to max_manifold_points deepest points across every touching triangle become its points.
-[[nodiscard]] auto generate_mesh_contact(const scenes::node& shape_node, const scenes::node& mesh_node, mesh_collision_cache& mesh_cache, convex_hull_cache& hull_cache, assets::assets_module& assets_module) -> std::optional<contact_manifold> {
-  const auto resolved_shape = resolve_convex(shape_node, hull_cache, assets_module);
+// shape_node resolves as one or more ordinary convex_shapes (resolve_body_shapes -- so this also
+// covers a compound body and a convex mesh_collider landing on a non-convex one); mesh_node is a
+// non-convex mesh_collider, each of shape_node's shapes tested per-candidate-triangle against its
+// mesh_collision_cache BVH. Builds one combined manifold for the pair via combine_narrow_results.
+[[nodiscard]] auto generate_mesh_contact(scenes::scene& scene, const scenes::node& shape_node, const scenes::node& mesh_node, mesh_collision_cache& mesh_cache, convex_hull_cache& hull_cache, assets::assets_module& assets_module) -> std::optional<contact_manifold> {
+  const auto shapes = resolve_body_shapes(scene, shape_node, hull_cache, assets_module);
 
-  if (!resolved_shape) {
+  if (shapes.empty()) {
     return std::nullopt;
   }
 
@@ -703,8 +886,7 @@ struct resolved_convex {
     return std::nullopt;
   }
 
-  const auto& local_mesh = mesh_node.get_component<scenes::local_transform>();
-  const auto pose_mesh = compose_pose(local_mesh, mesh_collider_component.offset, mesh_collider_component.rotation);
+  const auto mesh_pose = compose_pose(compose_world_pose(scene, mesh_node), mesh_collider_component.offset, mesh_collider_component.rotation);
 
   const auto& mesh_data = mesh_cache.get_or_build(assets_module, mesh_collider_component.mesh->id());
 
@@ -712,68 +894,53 @@ struct resolved_convex {
     return std::nullopt;
   }
 
-  // The shape's world AABB, transformed into the mesh's local space (rotation+translation only, so
-  // the inverse is just conjugate-rotate-then-translate) to query the triangle BVH.
-  auto shape_world_aabb = math::volume{};
+  const auto inverse_scale = math::vector3{
+    (mesh_pose.scale.x() > math::epsilonf) ? (1.0f / mesh_pose.scale.x()) : 0.0f,
+    (mesh_pose.scale.y() > math::epsilonf) ? (1.0f / mesh_pose.scale.y()) : 0.0f,
+    (mesh_pose.scale.z() > math::epsilonf) ? (1.0f / mesh_pose.scale.z()) : 0.0f
+  };
 
-  for (const auto& corner : local_aabb(resolved_shape->shape).corners()) {
-    shape_world_aabb.include(resolved_shape->pose.position + resolved_shape->pose.rotation * corner);
-  }
+  auto touches = std::vector<narrow_touch>{};
 
-  auto local_query_aabb = math::volume{};
+  for (const auto& shape : shapes) {
+    // The shape's world AABB, transformed into the mesh's local (unscaled -- the BVH was built from
+    // mesh_data's own raw local vertices) space to query the triangle BVH.
+    auto shape_world_aabb = math::volume{};
 
-  for (const auto& corner : shape_world_aabb.corners()) {
-    local_query_aabb.include(math::quaternion::conjugate(pose_mesh.rotation) * (corner - pose_mesh.position));
-  }
-
-  auto triangle_results = std::vector<narrow_result>{};
-
-  mesh_data.triangle_bvh.query(local_query_aabb, [&](std::uint32_t triangle_index) {
-    const auto i0 = mesh_data.indices[triangle_index * 3u + 0u];
-    const auto i1 = mesh_data.indices[triangle_index * 3u + 1u];
-    const auto i2 = mesh_data.indices[triangle_index * 3u + 2u];
-
-    const auto candidate_triangle = convex_shape{triangle{mesh_data.vertices[i0], mesh_data.vertices[i1], mesh_data.vertices[i2]}};
-
-    if (const auto result = dispatch(resolved_shape->shape, resolved_shape->pose, candidate_triangle, pose_mesh)) {
-      triangle_results.push_back(*result);
+    for (const auto& corner : local_aabb(shape.shape).corners()) {
+      shape_world_aabb.include(shape.pose.position + shape.pose.rotation * (corner * shape.pose.scale));
     }
-  });
 
-  if (triangle_results.empty()) {
+    auto local_query_aabb = math::volume{};
+
+    for (const auto& corner : shape_world_aabb.corners()) {
+      local_query_aabb.include((math::quaternion::conjugate(mesh_pose.rotation) * (corner - mesh_pose.position)) * inverse_scale);
+    }
+
+    mesh_data.triangle_bvh.query(local_query_aabb, [&](std::uint32_t triangle_index) {
+      const auto i0 = mesh_data.indices[triangle_index * 3u + 0u];
+      const auto i1 = mesh_data.indices[triangle_index * 3u + 1u];
+      const auto i2 = mesh_data.indices[triangle_index * 3u + 2u];
+
+      const auto candidate_triangle = convex_shape{triangle{mesh_data.vertices[i0], mesh_data.vertices[i1], mesh_data.vertices[i2]}};
+
+      if (auto raw = dispatch(shape.shape, shape.pose, candidate_triangle, mesh_pose)) {
+        const auto friction = std::sqrt(std::max(shape.friction, 0.0f) * std::max(mesh_collider_component.friction, 0.0f));
+        const auto restitution = std::max(shape.restitution, mesh_collider_component.restitution);
+        touches.push_back(narrow_touch{std::move(*raw), friction, restitution});
+      }
+    });
+  }
+
+  const auto combined = combine_narrow_results(touches);
+
+  if (!combined) {
     return std::nullopt;
   }
 
-  struct mesh_candidate {
-    math::vector3 normal;
-    narrow_point point;
-  }; // struct mesh_candidate
+  const auto& [raw, friction, restitution] = *combined;
 
-  auto candidates = std::vector<mesh_candidate>{};
-
-  for (const auto& result : triangle_results) {
-    for (const auto& point : result.points) {
-      candidates.push_back(mesh_candidate{result.normal, point});
-    }
-  }
-
-  std::ranges::sort(candidates, [](const mesh_candidate& lhs, const mesh_candidate& rhs) {
-    return lhs.point.depth > rhs.point.depth;
-  });
-
-  if (candidates.size() > max_manifold_points) {
-    candidates.resize(max_manifold_points);
-  }
-
-  auto combined = narrow_result{candidates.front().normal, {}};
-
-  for (const auto& candidate : candidates) {
-    combined.points.push_back(candidate.point);
-  }
-
-  const auto& local_shape = shape_node.get_component<scenes::local_transform>();
-
-  return build_manifold(shape_node, mesh_node, local_shape, local_mesh, resolved_shape->friction, mesh_collider_component.friction, resolved_shape->restitution, mesh_collider_component.restitution, combined);
+  return build_manifold(scene, shape_node, mesh_node, friction, restitution, raw);
 }
 
 [[nodiscard]] auto flip_manifold(contact_manifold manifold, const scenes::node& node_a, const scenes::node& node_b) -> contact_manifold {
@@ -788,7 +955,7 @@ struct resolved_convex {
   return manifold;
 }
 
-auto generate_pair_contact(const sbx::scenes::node& node_a, const sbx::scenes::node& node_b, mesh_collision_cache& mesh_cache, convex_hull_cache& hull_cache, assets::assets_module& assets_module) -> std::optional<contact_manifold> {
+auto generate_pair_contact(scenes::scene& scene, const sbx::scenes::node& node_a, const sbx::scenes::node& node_b, mesh_collision_cache& mesh_cache, convex_hull_cache& hull_cache, assets::assets_module& assets_module) -> std::optional<contact_manifold> {
   const auto a_is_raw_mesh = node_a.has_component<mesh_collider>() && !node_a.get_component<mesh_collider>().is_convex;
   const auto b_is_raw_mesh = node_b.has_component<mesh_collider>() && !node_b.get_component<mesh_collider>().is_convex;
 
@@ -797,19 +964,15 @@ auto generate_pair_contact(const sbx::scenes::node& node_a, const sbx::scenes::n
   }
 
   if (a_is_raw_mesh) {
-    const auto result = generate_mesh_contact(node_b, node_a, mesh_cache, hull_cache, assets_module);
+    const auto result = generate_mesh_contact(scene, node_b, node_a, mesh_cache, hull_cache, assets_module);
     return result ? std::optional{flip_manifold(*result, node_a, node_b)} : std::nullopt;
   }
 
   if (b_is_raw_mesh) {
-    return generate_mesh_contact(node_a, node_b, mesh_cache, hull_cache, assets_module);
+    return generate_mesh_contact(scene, node_a, node_b, mesh_cache, hull_cache, assets_module);
   }
 
-  if (!node_a.has_component<mesh_collider>() && !node_b.has_component<mesh_collider>()) {
-    return generate_contact(node_a, node_b); // common hot path: neither side is a mesh at all
-  }
-
-  return generate_convex_pair_contact(node_a, node_b, hull_cache, assets_module);
+  return generate_convex_pair_contact(scene, node_a, node_b, hull_cache, assets_module);
 }
 
 } // namespace sbx::physics

@@ -44,6 +44,18 @@ auto prune_stale_leaves(containers::dynamic_tree<scenes::node>& tree, containers
   return math::matrix4x4::translated(math::matrix4x4::identity, position) * math::matrix_cast<math::matrix4x4>(rotation);
 }
 
+// A pose's local_aabb-derived bounding volume, scaled then transformed into world space -- shared by
+// every AABB physics_module ever hands the broadphase, whether the shape came from a body_shape
+// (resolve_body_shapes/resolve_convex) or a mesh/hull's own cached local_bounds.
+[[nodiscard]] auto world_bounds_aabb(const transform& pose, const math::volume& local_bounds) -> math::volume {
+  const auto scaled = math::volume{local_bounds.min() * pose.scale, local_bounds.max() * pose.scale};
+  return math::volume::transformed(scaled, world_pose_matrix(pose.position, pose.rotation));
+}
+
+[[nodiscard]] auto world_shape_aabb(const body_shape& shape) -> math::volume {
+  return world_bounds_aabb(shape.pose, local_aabb(shape.shape));
+}
+
 physics_module::physics_module() { }
 
 physics_module::~physics_module() { }
@@ -54,7 +66,7 @@ auto physics_module::_sync_broadphase(scenes::scene& scene) -> void {
   auto touched_dynamic = containers::dense_map<scenes::node, bool>{};
   auto touched_static = containers::dense_map<scenes::node, bool>{};
 
-  // Shared by both queries below: static bodies go into _static_tree once and are never refit;
+  // Shared by every route below: static bodies go into _static_tree once and are never refit;
   // everything else (dynamic, kinematic) is refit every step in _dynamic_tree.
   const auto route = [&](const scenes::node& node, body_type type, const math::volume& world_box) {
     if (type == body_type::static_body) {
@@ -74,12 +86,26 @@ auto physics_module::_sync_broadphase(scenes::scene& scene) -> void {
     }
   };
 
-  for (auto&& [entity, body, collider, local] : scene.query<rigidbody, shape_collider, scenes::local_transform>().each()) {
+  // Rigidbody-driven: every shape a rigidbody owns anywhere in its subtree (compound colliders),
+  // unioned into one broadphase leaf keyed by the rigidbody's own node. Excludes a rigidbody that
+  // carries a mesh_collider directly on itself -- that's handled by the dedicated mesh_collider pass
+  // below unchanged (mixing a mesh_collider with shape_collider compound children on the same body
+  // is out of scope for v1). A bare rigidbody with no collider anywhere in its subtree resolves to
+  // an empty shape list and is skipped, same as always.
+  for (auto&& [entity, body] : scene.query<rigidbody>(ecs::exclude<mesh_collider>).each()) {
     auto node = scene.node_of(entity);
 
-    const auto pose_position = local.position + local.rotation * collider.offset;
-    const auto pose_rotation = math::quaternion::normalized(local.rotation * collider.rotation);
-    const auto world_box = math::volume::transformed(local_aabb(collider.shape), world_pose_matrix(pose_position, pose_rotation));
+    const auto shapes = resolve_body_shapes(scene, node, _hull_cache, assets_module);
+
+    if (shapes.empty()) {
+      continue;
+    }
+
+    auto world_box = math::volume{};
+
+    for (const auto& shape : shapes) {
+      world_box.include(world_shape_aabb(shape));
+    }
 
     route(node, body.type, world_box);
   }
@@ -88,7 +114,7 @@ auto physics_module::_sync_broadphase(scenes::scene& scene) -> void {
   // support mapping for a concave shape), so a dynamic_body carrying one is silently excluded from
   // the broadphase entirely -- see collider.hpp's doc comment. A convex one is an ordinary
   // convex_shape as far as narrowphase is concerned and gets no such restriction.
-  for (auto&& [entity, body, collider, local] : scene.query<rigidbody, mesh_collider, scenes::local_transform>().each()) {
+  for (auto&& [entity, body, collider] : scene.query<rigidbody, mesh_collider>().each()) {
     if (!collider.mesh.is_valid()) {
       continue;
     }
@@ -99,15 +125,49 @@ auto physics_module::_sync_broadphase(scenes::scene& scene) -> void {
 
     auto node = scene.node_of(entity);
 
-    const auto pose_position = local.position + local.rotation * collider.offset;
-    const auto pose_rotation = math::quaternion::normalized(local.rotation * collider.rotation);
-    const auto matrix = world_pose_matrix(pose_position, pose_rotation);
+    const auto pose = compose_pose(compose_world_pose(scene, node), collider.offset, collider.rotation);
 
     const auto local_bounds = collider.is_convex
       ? _hull_cache.get_or_build(assets_module, collider.mesh->id()).local_bounds
       : _mesh_cache.get_or_build(assets_module, collider.mesh->id()).local_bounds;
 
-    route(node, body.type, math::volume::transformed(local_bounds, matrix));
+    route(node, body.type, world_bounds_aabb(pose, local_bounds));
+  }
+
+  // Implicit-static: a shape_collider/mesh_collider with no rigidbody anywhere in its own ancestor
+  // chain is its own independent static body (matching Unity: a Collider alone, no Rigidbody, is a
+  // static one) -- unless it's really a compound child of some ancestor's rigidbody, already
+  // collected by the rigidbody-driven pass above, in which case it's skipped here.
+  for (auto&& [entity, collider] : scene.query<shape_collider>(ecs::exclude<rigidbody>).each()) {
+    auto node = scene.node_of(entity);
+
+    if (find_owning_rigidbody(scene, node)) {
+      continue;
+    }
+
+    if (auto resolved = resolve_convex(scene, node, _hull_cache, assets_module)) {
+      route(node, body_type::static_body, world_shape_aabb(*resolved));
+    }
+  }
+
+  for (auto&& [entity, collider] : scene.query<mesh_collider>(ecs::exclude<rigidbody>).each()) {
+    if (!collider.mesh.is_valid()) {
+      continue;
+    }
+
+    auto node = scene.node_of(entity);
+
+    if (find_owning_rigidbody(scene, node)) {
+      continue;
+    }
+
+    const auto pose = compose_pose(compose_world_pose(scene, node), collider.offset, collider.rotation);
+
+    const auto local_bounds = collider.is_convex
+      ? _hull_cache.get_or_build(assets_module, collider.mesh->id()).local_bounds
+      : _mesh_cache.get_or_build(assets_module, collider.mesh->id()).local_bounds;
+
+    route(node, body_type::static_body, world_bounds_aabb(pose, local_bounds));
   }
 
   prune_stale_leaves(_dynamic_tree, _dynamic_leaves, touched_dynamic);
@@ -195,13 +255,15 @@ auto physics_module::_reset() -> void {
   _manifold_cache.clear();
 }
 
-auto physics_module::_narrowphase() -> void {
+auto physics_module::_narrowphase(scenes::scene& scene) -> void {
   auto& assets_module = core::engine::get_module<assets::assets_module>();
 
-  // A body permanently "at rest" for this pair's purposes: static bodies (never sleep, never move)
-  // and sleeping dynamic bodies. Skip the pair entirely when both sides are -- there's nothing
-  // that could ever wake either one from this contact alone, so it's not just an optimization: it's
-  // what guarantees that once we do reach the wake checks below, the *other* body is an awake mover.
+  // A body permanently "at rest" for this pair's purposes: static bodies (never sleep, never move,
+  // including a fallback body standing in for an implicit-static collider node -- see
+  // effective_rigidbody) and sleeping dynamic bodies. Skip the pair entirely when both sides are --
+  // there's nothing that could ever wake either one from this contact alone, so it's not just an
+  // optimization: it's what guarantees that once we do reach the wake checks below, the *other*
+  // body is an awake mover.
   const auto is_at_rest = [](const rigidbody& body) {
     return body.type == body_type::static_body || (body.type == body_type::dynamic_body && body.is_sleeping);
   };
@@ -222,14 +284,20 @@ auto physics_module::_narrowphase() -> void {
   };
 
   for (auto [node_a, node_b] : _candidate_pairs) {
-    auto& body_a = node_a.get_component<rigidbody>();
-    auto& body_b = node_b.get_component<rigidbody>();
+    // Fresh per pair, not shared/static: harmless even so (every write to a fallback is a
+    // mathematical no-op, see rigidbody.hpp's effective_rigidbody doc comment), but this avoids any
+    // aliasing question between two different implicit-static pairs entirely.
+    auto fallback_a = rigidbody{body_type::static_body};
+    auto fallback_b = rigidbody{body_type::static_body};
+
+    auto& body_a = effective_rigidbody(node_a, fallback_a);
+    auto& body_b = effective_rigidbody(node_b, fallback_b);
 
     if (is_at_rest(body_a) && is_at_rest(body_b)) {
       continue;
     }
 
-    auto manifold = generate_pair_contact(node_a, node_b, _mesh_cache, _hull_cache, assets_module);
+    auto manifold = generate_pair_contact(scene, node_a, node_b, _mesh_cache, _hull_cache, assets_module);
 
     if (!manifold) {
       continue;
@@ -272,7 +340,7 @@ auto physics_module::fixed_update() -> void {
   _generate_candidate_pairs();
 
   _manifolds.clear();
-  _narrowphase();
+  _narrowphase(scene);
   _warm_start_manifolds();
 
   integrate_forces(scene, _gravity, dt);
@@ -305,32 +373,33 @@ auto physics_module::_submit_debug_draw(scenes::scene& scene) -> void {
   auto& debug_draw = scene_renderer_module.debug_draw();
 
   if (_debug_draw_flags.colliders) {
-    // Same query _sync_broadphase uses -- a shape_collider without a rigidbody never enters the
-    // broadphase either, so drawing anything for it here would be misleading.
-    for (auto&& [entity, body, collider, local] : scene.query<rigidbody, shape_collider, scenes::local_transform>().each()) {
-      const auto pose_position = local.position + local.rotation * collider.offset;
-      const auto pose_rotation = math::quaternion::normalized(local.rotation * collider.rotation);
-      const auto matrix = world_pose_matrix(pose_position, pose_rotation);
-
-      draw_convex_shape(debug_draw, collider.shape, matrix, debug_color_for(body.type, body.is_sleeping));
-    }
-
     auto& assets_module = core::engine::get_module<assets::assets_module>();
 
-    for (auto&& [entity, body, collider, local] : scene.query<rigidbody, mesh_collider, scenes::local_transform>().each()) {
+    // Rigidbody-driven: every shape owned anywhere in a rigidbody's subtree (compound colliders),
+    // same split _sync_broadphase uses -- a rigidbody with a mesh_collider on its own node is drawn
+    // by the mesh_collider loop below instead.
+    for (auto&& [entity, body] : scene.query<rigidbody>(ecs::exclude<mesh_collider>).each()) {
+      auto node = scene.node_of(entity);
+      const auto color = debug_color_for(body.type, body.is_sleeping);
+
+      for (const auto& shape : resolve_body_shapes(scene, node, _hull_cache, assets_module)) {
+        draw_convex_shape(debug_draw, shape.shape, world_pose_matrix(shape.pose.position, shape.pose.rotation), shape.pose.scale, color);
+      }
+    }
+
+    // Shared by the rigidbody-owned and implicit-static mesh_collider loops below.
+    const auto draw_mesh_collider = [&](const scenes::node& node, const mesh_collider& collider, const math::color& color) {
       if (!collider.mesh.is_valid()) {
-        continue;
+        return;
       }
 
-      const auto pose_position = local.position + local.rotation * collider.offset;
-      const auto pose_rotation = math::quaternion::normalized(local.rotation * collider.rotation);
-      const auto matrix = world_pose_matrix(pose_position, pose_rotation);
-      const auto color = debug_color_for(body.type, body.is_sleeping);
+      const auto pose = compose_pose(compose_world_pose(scene, node), collider.offset, collider.rotation);
+      const auto matrix = world_pose_matrix(pose.position, pose.rotation);
 
       if (collider.is_convex) {
         const auto& hull_data = _hull_cache.get_or_build(assets_module, collider.mesh->id());
 
-        draw_convex_shape(debug_draw, convex_shape{convex_hull{hull_data.points, hull_data.faces}}, matrix, color);
+        draw_convex_shape(debug_draw, convex_shape{convex_hull{hull_data.points, hull_data.faces}}, matrix, pose.scale, color);
       } else {
         const auto& mesh_data = _mesh_cache.get_or_build(assets_module, collider.mesh->id());
         const auto triangle_count = mesh_data.indices.size() / 3u;
@@ -340,15 +409,45 @@ auto physics_module::_submit_debug_draw(scenes::scene& scene) -> void {
           const auto i1 = mesh_data.indices[triangle_index * 3u + 1u];
           const auto i2 = mesh_data.indices[triangle_index * 3u + 2u];
 
-          const auto v0 = math::vector3{matrix * math::vector4{mesh_data.vertices[i0], 1.0f}};
-          const auto v1 = math::vector3{matrix * math::vector4{mesh_data.vertices[i1], 1.0f}};
-          const auto v2 = math::vector3{matrix * math::vector4{mesh_data.vertices[i2], 1.0f}};
+          const auto v0 = math::vector3{matrix * math::vector4{mesh_data.vertices[i0] * pose.scale, 1.0f}};
+          const auto v1 = math::vector3{matrix * math::vector4{mesh_data.vertices[i1] * pose.scale, 1.0f}};
+          const auto v2 = math::vector3{matrix * math::vector4{mesh_data.vertices[i2] * pose.scale, 1.0f}};
 
           debug_draw.add_line(v0, v1, color);
           debug_draw.add_line(v1, v2, color);
           debug_draw.add_line(v2, v0, color);
         }
       }
+    };
+
+    for (auto&& [entity, body, collider] : scene.query<rigidbody, mesh_collider>().each()) {
+      draw_mesh_collider(scene.node_of(entity), collider, debug_color_for(body.type, body.is_sleeping));
+    }
+
+    // Implicit-static: same "skip if a compound child of some ancestor's rigidbody" rule
+    // _sync_broadphase uses, so debug draw shows exactly what's actually simulated.
+    const auto implicit_static_color = debug_color_for(body_type::static_body, false);
+
+    for (auto&& [entity, collider] : scene.query<shape_collider>(ecs::exclude<rigidbody>).each()) {
+      auto node = scene.node_of(entity);
+
+      if (find_owning_rigidbody(scene, node)) {
+        continue;
+      }
+
+      if (auto resolved = resolve_convex(scene, node, _hull_cache, assets_module)) {
+        draw_convex_shape(debug_draw, resolved->shape, world_pose_matrix(resolved->pose.position, resolved->pose.rotation), resolved->pose.scale, implicit_static_color);
+      }
+    }
+
+    for (auto&& [entity, collider] : scene.query<mesh_collider>(ecs::exclude<rigidbody>).each()) {
+      auto node = scene.node_of(entity);
+
+      if (find_owning_rigidbody(scene, node)) {
+        continue;
+      }
+
+      draw_mesh_collider(node, collider, implicit_static_color);
     }
   }
 
@@ -356,12 +455,24 @@ auto physics_module::_submit_debug_draw(scenes::scene& scene) -> void {
     const auto dynamic_color = math::color{1.0f, 1.0f, 0.0f, 1.0f};
     const auto static_color = math::color{0.6f, 0.6f, 0.0f, 1.0f};
 
-    _dynamic_tree.for_each_leaf([&](broadphase_tree_type::id, const scenes::node&, const math::volume& fat_aabb) {
-      debug_draw.add_wire_aabb(fat_aabb, dynamic_color);
+    // _dynamic_tree/_static_tree are only ever touched inside fixed_update(), which only ever runs
+    // while simulating (Play) -- Stop reloads the scene in place (see physics_module.hpp's _reset()
+    // doc comment), destroying and recreating every entity, so every leaf still sitting here from
+    // before that is now keyed by a stale node. Rather than needing to know Stop happened at all
+    // (physics_module deliberately has no notion of the editor's play/pause/stop states -- see
+    // scenes_module's own doc comment), just skip drawing anything whose node isn't valid any more:
+    // exactly nothing while stopped (every leaf is stale by then), everything while playing or
+    // paused (the registry is untouched either way, so every leaf stays genuinely valid).
+    _dynamic_tree.for_each_leaf([&](broadphase_tree_type::id, const scenes::node& node, const math::volume& fat_aabb) {
+      if (node.is_valid()) {
+        debug_draw.add_wire_aabb(fat_aabb, dynamic_color);
+      }
     });
 
-    _static_tree.for_each_leaf([&](broadphase_tree_type::id, const scenes::node&, const math::volume& fat_aabb) {
-      debug_draw.add_wire_aabb(fat_aabb, static_color);
+    _static_tree.for_each_leaf([&](broadphase_tree_type::id, const scenes::node& node, const math::volume& fat_aabb) {
+      if (node.is_valid()) {
+        debug_draw.add_wire_aabb(fat_aabb, static_color);
+      }
     });
   }
 
@@ -370,7 +481,13 @@ auto physics_module::_submit_debug_draw(scenes::scene& scene) -> void {
     constexpr auto normal_length = 0.3f;
     constexpr auto cross_size = 0.1f;
 
+    // Same staleness guard as the broadphase layer above -- _manifolds is likewise only ever
+    // refreshed inside fixed_update().
     for (const auto& manifold : _manifolds) {
+      if (!manifold.node_a.is_valid() || !manifold.node_b.is_valid()) {
+        continue;
+      }
+
       for (const auto& point : manifold.points) {
         debug_draw.add_cross(point.point, cross_size, contact_color);
         debug_draw.add_line(point.point, point.point + manifold.normal * normal_length, contact_color);

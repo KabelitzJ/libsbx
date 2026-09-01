@@ -10,6 +10,8 @@
 
 #include <libsbx/scripting/scripting_module.hpp>
 
+#include <libsbx/render/scene_renderer_module.hpp>
+
 #include <libsbx/utility/logger.hpp>
 
 namespace editor {
@@ -70,6 +72,12 @@ auto play_mode_controller::exit_play_mode() -> void {
   sbx::scenes::scene_serializer::load(scenes_module.active_scene(), _snapshot_path());
 
   std::filesystem::remove(_snapshot_path());
+
+  // The reload above resets each entity's particle_effect/particle_emitter components, but the
+  // GPU-owned particle_pool lives outside the scene and wouldn't otherwise notice — without this,
+  // particles alive at the moment of Stop would just linger and fade out over their remaining
+  // lifetime instead of resetting immediately.
+  sbx::core::engine::get_module<sbx::render::scene_renderer_module>().reset_particles();
 
   _state = play_state::edit;
 }

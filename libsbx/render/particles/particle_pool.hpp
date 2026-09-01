@@ -137,7 +137,21 @@ public:
    */
   auto tick(std::float_t delta_time) -> void;
 
+  /**
+   * @brief Immediately discards every live particle and emitter-instance slot, resetting the pool
+   * to its just-constructed state. For the editor's Stop button: unlike @ref tick's lifetime-based
+   * drain (which lets old particles age out gracefully to avoid corrupting a new claimant's still-
+   * in-flight particles), this is an instant hard reset — there is no new claimant to race, Stop
+   * just wants the pool empty right away instead of fading out over each particle's remaining
+   * lifetime.
+   */
+  auto clear() -> void;
+
 private:
+
+  // Writes dead_list = 0..max_particles-1 and counters = {dead_count: max_particles, alive_count:
+  // {0, 0}} — the pool's "nothing alive yet" state, shared by the constructor and clear().
+  auto _write_initial_state() -> void;
 
   std::uint32_t _max_particles;
   std::uint32_t _max_emitter_instances;

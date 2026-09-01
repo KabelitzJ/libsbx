@@ -107,6 +107,16 @@ public:
   auto set_grid_enabled(bool enabled) -> void;
 
   /**
+   * @brief Instantly discards every live particle in both pools, applied at the start of the next
+   * _build_packet() (the same per-frame call site/timing every other host-visible write to these
+   * pools already uses) rather than written directly from here. For the editor's Stop button: scene
+   * reload resets the ECS particle_effect/particle_emitter components, but the GPU-owned
+   * particle_pool lives outside the scene and would otherwise just let stray particles decay
+   * naturally instead of resetting immediately.
+   */
+  auto reset_particles() -> void;
+
+  /**
    * @brief The shared immediate-mode line accumulator -- physics colliders (see
    * physics::physics_module::late_update()) and, later, script-driven gizmos submit into this every
    * frame; debug_draw_pass uploads and draws whatever's accumulated, then clears it.
@@ -182,6 +192,7 @@ private:
   std::array<std::uint32_t, shadow_cascade_count> _shadow_map_indices{};
 
   std::array<std::unique_ptr<particle_pool>, 2u> _particle_pools{};
+  bool _pending_particle_reset{false};
 
   render::debug_draw _debug_draw{};
 

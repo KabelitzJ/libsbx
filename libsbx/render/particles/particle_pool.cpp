@@ -87,6 +87,24 @@ particle_pool::particle_pool(const create_info& create_info)
   _draw_args_address = registry.get<graphics::buffer>(_draw_args).address();
   _emitter_instances_address = registry.get<graphics::buffer>(_emitter_instances).address();
 
+  _write_initial_state();
+
+  _free_list.resize(_max_emitter_instances);
+
+  for (auto slot = std::uint32_t{0u}; slot < _max_emitter_instances; ++slot) {
+    _free_list[slot] = _max_emitter_instances - 1u - slot;
+  }
+
+  _drain_timer.assign(_max_emitter_instances, -1.0f);
+  _lifetime_max.assign(_max_emitter_instances, 0.0f);
+  _claimed_this_frame.assign(_max_emitter_instances, false);
+  _claimed_last_frame.assign(_max_emitter_instances, false);
+}
+
+auto particle_pool::_write_initial_state() -> void {
+  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
+  auto& registry = graphics_module.resource_registry();
+
   auto initial_dead_list = utility::make_vector<std::uint32_t>(_max_particles);
 
   for (auto index = std::uint32_t{0u}; index < _max_particles; ++index) {
@@ -100,17 +118,6 @@ particle_pool::particle_pool(const create_info& create_info)
   initial_counters.alive_count = {0u, 0u};
 
   registry.get<graphics::buffer>(_counters).write(&initial_counters, sizeof(particle_counters));
-
-  _free_list.resize(_max_emitter_instances);
-
-  for (auto slot = std::uint32_t{0u}; slot < _max_emitter_instances; ++slot) {
-    _free_list[slot] = _max_emitter_instances - 1u - slot;
-  }
-
-  _drain_timer.assign(_max_emitter_instances, -1.0f);
-  _lifetime_max.assign(_max_emitter_instances, 0.0f);
-  _claimed_this_frame.assign(_max_emitter_instances, false);
-  _claimed_last_frame.assign(_max_emitter_instances, false);
 }
 
 auto particle_pool::write_emitter_instance(std::uint32_t slot, const emitter_instance& data) -> void {
@@ -159,6 +166,22 @@ auto particle_pool::tick(std::float_t delta_time) -> void {
 
   _claimed_last_frame = _claimed_this_frame;
   std::fill(_claimed_this_frame.begin(), _claimed_this_frame.end(), false);
+}
+
+auto particle_pool::clear() -> void {
+  _write_initial_state();
+
+  _free_list.resize(_max_emitter_instances);
+
+  for (auto slot = std::uint32_t{0u}; slot < _max_emitter_instances; ++slot) {
+    _free_list[slot] = _max_emitter_instances - 1u - slot;
+  }
+
+  _drain_timer.assign(_max_emitter_instances, -1.0f);
+  _lifetime_max.assign(_max_emitter_instances, 0.0f);
+  _claimed_this_frame.assign(_max_emitter_instances, false);
+  _claimed_last_frame.assign(_max_emitter_instances, false);
+  _exhaustion_logged = false;
 }
 
 } // namespace sbx::render

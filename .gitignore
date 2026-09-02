@@ -40,3 +40,5 @@ patches/
 .sbx/
 
 *.cap
+
+.cppm/

@@ -41,4 +41,4 @@ patches/
 
 *.cap
 
-.cppm/
+cppm.lock

@@ -511,7 +511,7 @@ auto draw_node_icons(editor_state& state, const ImVec2& viewport_origin, const I
   }
 
   for (auto&& [entity, transform, light] : scene.query<sbx::scenes::world_transform, sbx::scenes::spot_light>(sbx::ecs::exclude<sbx::scenes::mesh_renderer>).each()) {
-    draw_icon(entity, sbx::math::vector3f{transform.matrix[3]}, ICON_MDI_SPOTLIGHT);
+    draw_icon(entity, sbx::math::vector3f{transform.matrix[3]}, ICON_MDI_FLASHLIGHT);
   }
 
   for (auto&& [entity, transform, light] : scene.query<sbx::scenes::world_transform, sbx::scenes::directional_light>(sbx::ecs::exclude<sbx::scenes::mesh_renderer>).each()) {

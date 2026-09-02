@@ -66,19 +66,18 @@ public:
     return _play_mode.state();
   }
 
-  auto enter_play_mode() -> void {
-    _play_mode.enter_play_mode();
-  }
+  /**
+   * @brief Enters Play mode and immediately hands the viewport over to the scene's own play
+   * camera — pushes the render override itself rather than waiting for application::update()'s
+   * next per-frame poll, so there's no stale editor-camera frame while Play spins up.
+   */
+  auto enter_play_mode() -> void;
 
-  auto exit_play_mode() -> void {
-    _play_mode.exit_play_mode();
-
-    // The reload above rebuilds the whole registry — any command pushed during the play session
-    // referenced entities/state that no longer exists in a replayable way, so drop them. Entering
-    // Play deliberately does NOT clear (see play_mode_controller.hpp's doc comment): it never
-    // touches node identity or the registry, so pre-Play history stays perfectly valid while playing.
-    _ui_layer.clear_command_stack();
-  }
+  /**
+   * @brief Exits Play mode and immediately switches the viewport back to the editor camera — see
+   * enter_play_mode()'s doc comment on why this pushes the override itself instead of waiting.
+   */
+  auto exit_play_mode() -> void;
 
   auto toggle_pause() -> void {
     _play_mode.toggle_pause();

@@ -92,7 +92,7 @@ struct draw_bucket {
   std::uint32_t submesh_index{0u};
   assets::material_handle material{};
   std::uint32_t pipeline_id{0u};
-  std::vector<math::matrix4x4> transforms{};
+  std::vector<transform_data> transforms{};
 }; // struct draw_bucket
 
 struct transparent_entry {
@@ -100,7 +100,7 @@ struct transparent_entry {
   std::uint32_t submesh_index{0u};
   assets::material_handle material{};
   std::uint32_t pipeline_id{0u};
-  math::matrix4x4 transform{math::matrix4x4::identity};
+  transform_data transform{};
 }; // struct transparent_entry
 
 scene_renderer_module::scene_renderer_module() {
@@ -229,15 +229,19 @@ auto scene_renderer_module::_build_packet() -> render_packet {
 
       const auto pipeline_id = material->is_double_sided() ? 1u : 0u;
 
+      // Inverse-transpose, computed once here rather than re-derived per-vertex on the GPU, so
+      // normals stay correct under non-uniform scale/skew anywhere in the entity's ancestor chain.
+      const auto instance = transform_data{world.matrix, math::matrix4x4::transposed(math::matrix4x4::inverted(world.matrix))};
+
       if (material->alpha() == assets::alpha_mode::blend) {
-        transparent.push_back(transparent_entry{renderer.mesh, index, material, pipeline_id, world.matrix});
+        transparent.push_back(transparent_entry{renderer.mesh, index, material, pipeline_id, instance});
       } else {
         auto& bucket = opaque[mesh_key{renderer.mesh->id(), index, material->id()}];
         bucket.mesh = renderer.mesh;
         bucket.submesh_index = index;
         bucket.material = material;
         bucket.pipeline_id = pipeline_id;
-        bucket.transforms.push_back(world.matrix);
+        bucket.transforms.push_back(instance);
       }
     }
   }
@@ -569,7 +573,7 @@ auto scene_renderer_module::_ensure_resources() -> void {
   }
 
   _transform_buffer = registry.emplace<graphics::buffer>(graphics::buffer::create_info{
-    .size = sizeof(math::matrix4x4) * transform_capacity * graphics::swapchain::max_frames_in_flight,
+    .size = sizeof(transform_data) * transform_capacity * graphics::swapchain::max_frames_in_flight,
     .usage = graphics::buffer_usage::device_address | graphics::buffer_usage::storage,
     .memory = graphics::memory_usage::host_write,
     .name = "Instance Transforms"
@@ -578,7 +582,7 @@ auto scene_renderer_module::_ensure_resources() -> void {
   const auto transform_base = registry.get<graphics::buffer>(_transform_buffer).address();
 
   for (auto slot = std::size_t{0u}; slot < graphics::swapchain::max_frames_in_flight; ++slot) {
-    _transform_addresses[slot] = transform_base + slot * transform_capacity * sizeof(math::matrix4x4);
+    _transform_addresses[slot] = transform_base + slot * transform_capacity * sizeof(transform_data);
   }
 
   _cluster_aabb_buffer = registry.emplace<graphics::buffer>(graphics::buffer::create_info{
@@ -795,7 +799,7 @@ auto scene_renderer_module::_prepare_frame(render_context& context) -> void {
   if (instance_count > 0u) {
     auto& transform_buffer = registry.get<graphics::buffer>(_transform_buffer);
 
-    transform_buffer.write(context.packet->transforms.data(), instance_count * sizeof(math::matrix4x4), context.slot * transform_capacity * sizeof(math::matrix4x4));
+    transform_buffer.write(context.packet->transforms.data(), instance_count * sizeof(transform_data), context.slot * transform_capacity * sizeof(transform_data));
   }
 
   const auto directional_light_count = std::min(context.packet->directional_light_count, light_count);

@@ -36,9 +36,11 @@ class LibsbxConan(ConanFile):
         self.options["imgui/*"].use_wchar32 = True
 
     def layout(self):
-        cmake_layout(self)
-
         is_multi_config = self.settings.compiler == "msvc"
+
+        self.folders.build_folder_vars = ["settings.arch", "settings.compiler"]
+
+        cmake_layout(self)
 
         self.folders.build = os.path.join("build", str(self.settings.arch), str(self.settings.compiler))
 
@@ -66,6 +68,7 @@ class LibsbxConan(ConanFile):
 
     def generate(self):
         toolchain = CMakeToolchain(self)
+        toolchain.presets_prefix = ""
         toolchain.generate()
 
         deps = CMakeDeps(self)
@@ -73,6 +76,6 @@ class LibsbxConan(ConanFile):
 
     def build(self):
         cmake = CMake(self)
-        cmake.configure(build_script_folder=self.source_path.parent)
+        cmake.configure()
         cmake.build()
 

@@ -163,16 +163,24 @@ public:
   }
 
   template<std::size_t Index>
-  requires (detail::is_in_range_v<Index, 0u, 1u>)
+  requires (Index < 2u)
   [[nodiscard]] constexpr auto get() noexcept -> decltype(auto) {
-    return (Index == 0u) ? first() : second();
+    if constexpr (Index == 0u) {
+      return first();
+    } else {
+      return second();
+    }
   }
 
   /*! @copydoc get */
   template<std::size_t Index>
-  requires (detail::is_in_range_v<Index, 0u, 1u>)
+  requires (Index < 2u)
   [[nodiscard]] constexpr auto get() const noexcept -> decltype(auto) {
-    return (Index == 0u) ? first() : second();
+    if constexpr (Index == 0u) {
+      return first();
+    } else {
+      return second();
+    }
   }
 
 }; // class compressed_pair
@@ -191,8 +199,7 @@ template<typename First, typename Second>
 struct std::tuple_size<sbx::containers::compressed_pair<First, Second>> : std::integral_constant<std::size_t, 2u> { };
 
 template<std::size_t Index, typename First, typename Second>
-struct std::tuple_element<Index, sbx::containers::compressed_pair<First, Second>> : std::conditional<Index == 0u, First, Second> {
-  static_assert(Index < 2u, "Index out of bounds");
-}; // struct std::tuple_element
+requires (Index < 2u)
+struct std::tuple_element<Index, sbx::containers::compressed_pair<First, Second>> : std::conditional<Index == 0u, First, Second> { };
 
 #endif // LIBSBX_CONTAINERS_COMPRESSED_PAIR_HPP_

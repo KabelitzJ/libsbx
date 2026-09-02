@@ -41,7 +41,7 @@ struct alpha_blend_fragment_output : alpha_blend_target {
 struct push_data {
   frame_data* frame_data;
   vertex* vertices;
-  float4x4* transforms;
+  transform_data* transforms;
   uint transform_offset;
   uint material_index;
   uint sampler_index;
@@ -58,17 +58,16 @@ vertex_output vertex_main(vertex_input input) {
   vertex v = push.vertices[input.vertex_id];
   frame_data frame_data = *push.frame_data;
 
-  float4x4 model = push.transforms[push.transform_offset + input.instance_id];
+  transform_data instance = push.transforms[push.transform_offset + input.instance_id];
 
-  float4 world = mul(model, float4(v.position, 1.0));
-  float3x3 normal_matrix = (float3x3)model;
+  float4 world_position = mul(instance.model, float4(v.position, 1.0));
 
   vertex_output output;
-  output.position = world.xyz;
-  output.normal = normalize(mul(normal_matrix, v.normal));
-  output.tangent = float4(normalize(mul(normal_matrix, v.tangent.xyz)), v.tangent.w);
+  output.position = world_position.xyz;
+  output.normal = normalize(mul(instance.normal, float4(v.normal, 0.0)).xyz);
+  output.tangent = float4(normalize(mul(instance.normal, float4(v.tangent.xyz, 0.0)).xyz), v.tangent.w);
   output.uv = v.uv;
-  output.sv_position = mul(frame_data.projection, mul(frame_data.view, world));
+  output.sv_position = mul(frame_data.projection, mul(frame_data.view, world_position));
 
   return output;
 }

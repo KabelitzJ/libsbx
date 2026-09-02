@@ -15,6 +15,11 @@ struct vertex {
   float4 tangent;
 }; // struct vertex
 
+struct transform_data {
+  float4x4 model;
+  float4x4 normal;
+}; // struct transform_data
+
 enum class material_flags : uint {
   none = 0,
   alpha_masked = 1 << 0,

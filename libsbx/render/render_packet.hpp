@@ -60,6 +60,16 @@ struct draw_command {
   std::uint32_t pipeline_id{0u};
 }; // struct draw_command
 
+/**
+ * @brief Per-instance world matrix paired with its inverse-transpose normal matrix, computed once
+ * on the CPU (libsbx::math::matrix4x4::inverted/transposed) rather than re-derived on the GPU, so
+ * normals stay correct under non-uniform scale/skew. The two float4x4s pack with no padding.
+ */
+struct transform_data {
+  math::matrix4x4 model{math::matrix4x4::identity};
+  math::matrix4x4 normal{math::matrix4x4::identity};
+}; // struct transform_data
+
 struct camera_data {
   math::matrix4x4 view{math::matrix4x4::identity};
   math::vector3f position{0.0f, 0.0f, 0.0f};
@@ -97,7 +107,7 @@ struct render_packet {
   std::vector<draw_command> opaque_commands{};
   std::vector<draw_command> transparent_commands{};
   std::vector<draw_command> shadow_caster_commands{};
-  std::vector<math::matrix4x4> transforms{};
+  std::vector<transform_data> transforms{};
   std::vector<light_data> lights{};
   std::uint32_t directional_light_count{0u};
   bool has_shadow_caster{false}; // When true, lights[0] is the cascaded-shadow-mapped sun.

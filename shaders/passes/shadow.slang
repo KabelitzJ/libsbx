@@ -21,7 +21,7 @@ struct fragment_input {
 struct push_data {
   frame_data* frame;
   vertex* vertices;
-  float4x4* transforms;
+  transform_data* transforms;
   uint transform_offset;
   uint material_index;
   uint sampler_index;
@@ -36,7 +36,7 @@ vertex_output vertex_main(vertex_input input) {
   vertex vertex = push.vertices[input.vertex_id];
   frame_data frame = push.frame[0];
 
-  float4x4 model = push.transforms[push.transform_offset + input.instance_id];
+  float4x4 model = push.transforms[push.transform_offset + input.instance_id].model;
   float4 world = mul(model, float4(vertex.position, 1.0));
 
   vertex_output output;

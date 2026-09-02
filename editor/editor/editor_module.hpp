@@ -4,6 +4,7 @@
 #define EDITOR_EDITOR_MODULE_HPP_
 
 #include <filesystem>
+#include <optional>
 #include <string>
 #include <utility>
 
@@ -15,13 +16,16 @@
 
 #include <libsbx/graphics/graphics_module.hpp>
 
+#include <libsbx/scenes/scene.hpp>
 #include <libsbx/scenes/scenes_module.hpp>
 
 #include <libsbx/render/scene_renderer_module.hpp>
 #include <libsbx/render/ui/ui_module.hpp>
 
+#include <editor/editor_camera.hpp>
 #include <editor/editor_ui_layer.hpp>
 #include <editor/play_mode_controller.hpp>
+#include <editor/viewport_camera.hpp>
 
 namespace editor {
 
@@ -80,9 +84,25 @@ public:
     _play_mode.toggle_pause();
   }
 
+  /** @brief The editor's own free-fly viewport camera — see editor_camera's doc comment. Mutable so application::update() can drive it from input. */
+  [[nodiscard]] auto editor_camera() noexcept -> editor::editor_camera& {
+    return _editor_camera;
+  }
+
+  /**
+   * @brief The world matrix + camera params the viewport should currently render/pick/gizmo
+   * through: the editor camera while play_state()==edit, otherwise the scene's own active (play)
+   * camera if it has one. Shared by scene_renderer_module's per-frame override (application.cpp),
+   * viewport picking, and the gizmo so all three always agree on what's actually on screen.
+   */
+  [[nodiscard]] auto viewport_camera(sbx::scenes::scene& scene) const -> std::optional<editor::viewport_camera_pose>;
+
 private:
 
+  [[nodiscard]] auto _camera_state_path() const -> std::filesystem::path;
+
   std::string _ini_file;
+  editor::editor_camera _editor_camera;
   editor_ui_layer _ui_layer{};
   play_mode_controller _play_mode{};
 

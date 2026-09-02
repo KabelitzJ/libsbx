@@ -40,6 +40,7 @@
 #include <libsbx/scripting/managed/attribute.hpp>
 
 #include <editor/commands/component_commands.hpp>
+#include <editor/commands/scene_commands.hpp>
 #include <editor/commands/script_commands.hpp>
 
 namespace editor {
@@ -548,6 +549,19 @@ auto draw_camera_section(editor_state& state, sbx::scenes::node& node) -> void {
   bracket_edit(state, node, camera, pending, "Edit Camera");
   ImGui::DragFloat("Exposure", &camera.exposure, 0.05f, -8.0f, 8.0f);
   bracket_edit(state, node, camera, pending, "Edit Camera");
+
+  auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
+  auto& scene = scenes_module.active_scene();
+
+  const auto is_active_camera = scene.has_active_camera() && scene.active_camera().id() == node.id();
+
+  if (is_active_camera) {
+    ImGui::BeginDisabled();
+    ImGui::Button("Active Camera");
+    ImGui::EndDisabled();
+  } else if (ImGui::Button("Set as Active Camera")) {
+    state.push_command(std::make_unique<set_active_camera_command>(node));
+  }
 }
 
 auto draw_mesh_renderer_section(editor_state& state, sbx::scenes::node& node, sbx::assets::assets_module& assets_module) -> void {

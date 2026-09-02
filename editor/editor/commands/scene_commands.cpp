@@ -105,4 +105,33 @@ auto delete_node_command::undo() -> void {
   }
 }
 
+set_active_camera_command::set_active_camera_command(const sbx::scenes::node& target)
+: _id{target.id()} {
+  auto& scene = active_scene();
+
+  if (auto current = scene.active_camera(); current.is_valid()) {
+    _previous_id = current.id();
+  }
+}
+
+auto set_active_camera_command::execute() -> void {
+  auto& scene = active_scene();
+
+  if (auto node = scene.find(_id); node.is_valid()) {
+    scene.set_active_camera(node);
+  }
+}
+
+auto set_active_camera_command::undo() -> void {
+  auto& scene = active_scene();
+
+  if (_previous_id) {
+    if (auto node = scene.find(*_previous_id); node.is_valid()) {
+      scene.set_active_camera(node);
+    }
+  } else {
+    scene.set_active_camera(sbx::scenes::node{});
+  }
+}
+
 } // namespace editor

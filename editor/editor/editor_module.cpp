@@ -11,7 +11,8 @@
 namespace editor {
 
 editor_module::editor_module()
-: _ini_file{(sbx::core::engine::project().root() / ".sbx" / "editor" / "imgui.ini").string()} {
+: _ini_file{(sbx::core::engine::project().root() / ".sbx" / "editor" / "imgui.ini").string()},
+  _editor_camera{editor::editor_camera::load(_camera_state_path())} {
   std::filesystem::create_directories(std::filesystem::path{_ini_file}.parent_path());
 
   ImGui::GetIO().IniFilename = nullptr;
@@ -33,6 +34,30 @@ editor_module::~editor_module() {
   ui_module.remove_layer(&_ui_layer);
 
   ImGui::SaveIniSettingsToDisk(_ini_file.c_str());
+
+  _editor_camera.save(_camera_state_path());
+}
+
+auto editor_module::viewport_camera(sbx::scenes::scene& scene) const -> std::optional<editor::viewport_camera_pose> {
+  if (_play_mode.state() == play_state::edit) {
+    return editor::viewport_camera_pose{_editor_camera.world_matrix(), _editor_camera.params()};
+  }
+
+  if (!scene.has_active_camera()) {
+    return std::nullopt;
+  }
+
+  auto camera_node = scene.active_camera();
+
+  if (!camera_node.is_valid() || !camera_node.has_component<sbx::scenes::camera>()) {
+    return std::nullopt;
+  }
+
+  return editor::viewport_camera_pose{camera_node.world_matrix(), camera_node.get_component<sbx::scenes::camera>()};
+}
+
+auto editor_module::_camera_state_path() const -> std::filesystem::path {
+  return sbx::core::engine::project().root() / ".sbx" / "editor" / "camera.yaml";
 }
 
 } // namespace editor

@@ -17,17 +17,18 @@
 #include <libsbx/scenes/scene.hpp>
 #include <libsbx/scenes/scenes_module.hpp>
 
+#include <editor/editor_module.hpp>
 #include <editor/viewport_camera.hpp>
 
 namespace editor {
 
-// Unprojects a viewport-relative pixel position into a world-space ray through camera_node.
-// perspective() already bakes in Vulkan's y-flip, so pixel (0,0) top-left maps to NDC (-1,-1)
-// with no extra flip needed here.
-auto ray_from_viewport_position(sbx::scenes::node& camera_node, const sbx::scenes::camera& camera, const sbx::math::vector2& position, const sbx::math::vector2u& viewport_size) -> sbx::math::ray {
+// Unprojects a viewport-relative pixel position into a world-space ray through the camera at
+// camera_world_matrix. perspective() already bakes in Vulkan's y-flip, so pixel (0,0) top-left
+// maps to NDC (-1,-1) with no extra flip needed here.
+auto ray_from_viewport_position(const sbx::math::matrix4x4& camera_world_matrix, const sbx::scenes::camera& camera, const sbx::math::vector2& position, const sbx::math::vector2u& viewport_size) -> sbx::math::ray {
   const auto aspect = viewport_size.y() > 0u ? static_cast<std::float_t>(viewport_size.x()) / static_cast<std::float_t>(viewport_size.y()) : 1.0f;
 
-  const auto [view, projection] = compute_viewport_camera_matrices(camera_node, camera, aspect);
+  const auto [view, projection] = compute_viewport_camera_matrices(camera_world_matrix, camera, aspect);
   const auto inverse_view_projection = sbx::math::matrix4x4::inverted(projection * view);
 
   const auto ndc_x = viewport_size.x() > 0u ? (position.x() / static_cast<std::float_t>(viewport_size.x())) * 2.0f - 1.0f : 0.0f;
@@ -49,20 +50,16 @@ auto pick_node_at_viewport_position(editor_state& state, const sbx::math::vector
   auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
   auto& scene = scenes_module.active_scene();
 
-  if (!scene.has_active_camera()) {
+  auto& editor_module = sbx::core::engine::get_module<editor::editor_module>();
+
+  const auto pose = editor_module.viewport_camera(scene);
+
+  if (!pose) {
     state.clear_selection();
     return;
   }
 
-  auto camera_node = scene.active_camera();
-
-  if (!camera_node.is_valid() || !camera_node.has_component<sbx::scenes::camera>()) {
-    state.clear_selection();
-    return;
-  }
-
-  const auto& camera = camera_node.get_component<sbx::scenes::camera>();
-  const auto ray = ray_from_viewport_position(camera_node, camera, position, viewport_size);
+  const auto ray = ray_from_viewport_position(pose->world_matrix, pose->params, position, viewport_size);
 
   auto closest_node = sbx::scenes::node{};
   auto closest_t = std::numeric_limits<std::float_t>::max();

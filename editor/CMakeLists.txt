@@ -8,11 +8,11 @@ target_sources(
   ${PROJECT_NAME}
   PRIVATE
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/application.cpp"
+    "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/editor_camera.cpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/editor_module.cpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/editor_ui_layer.cpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/editor_state.cpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/editor.cpp"
-    "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/fly_camera.cpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/memory.cpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/play_mode_controller.cpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/commands/command_stack.cpp"
@@ -27,9 +27,9 @@ target_sources(
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/viewport_picking.cpp"
   PUBLIC
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/application.hpp"
+    "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/editor_camera.hpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/editor_ui_layer.hpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/editor_state.hpp"
-    "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/fly_camera.hpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/play_mode_controller.hpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/commands/command.hpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/commands/scene_access.hpp"

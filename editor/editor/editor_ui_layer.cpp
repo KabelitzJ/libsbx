@@ -124,6 +124,7 @@ auto editor_ui_layer::build() -> void {
     const auto toolbar_active = draw_gizmo_toolbar(_state, image_origin);
     const auto view_gizmo_active = draw_view_gizmo(image_origin, available);
     const auto icons_active = draw_node_icons(_state, image_origin, available, gizmo_active);
+    draw_camera_frustum_gizmo(_state, available);
 
     // Left-click picks the node under the cursor, unless it landed on the gizmo, its toolbar, the
     // view-orientation cube, or a light/camera icon.

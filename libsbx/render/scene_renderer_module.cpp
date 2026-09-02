@@ -174,7 +174,9 @@ auto scene_renderer_module::_build_packet() -> render_packet {
   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
   auto& scene = scenes_module.active_scene();
 
-  if (scene.has_active_camera()) {
+  if (_camera_override) {
+    packet.camera = *_camera_override;
+  } else if (scene.has_active_camera()) {
     auto camera_node = scene.active_camera();
 
     const auto& camera = camera_node.get_component<scenes::camera>();
@@ -187,6 +189,13 @@ auto scene_renderer_module::_build_packet() -> render_packet {
     packet.camera.far_plane = camera.far_plane;
     packet.camera.exposure = camera.exposure;
     packet.camera.is_active = true;
+  }
+
+  // Environment/skybox stays scene-authored regardless of which camera_data is actually being
+  // rendered with — an editor flying around with the override active should still see the level's
+  // own sky/ambient, not go dark just because there's no active-camera skybox to derive from.
+  if (scene.has_active_camera()) {
+    auto camera_node = scene.active_camera();
 
     if (camera_node.has_component<scenes::skybox>()) {
       const auto& sky = camera_node.get_component<scenes::skybox>();

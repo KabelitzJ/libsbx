@@ -11,10 +11,6 @@
 
 #include <libsbx/core/application.hpp>
 
-#include <libsbx/scenes/scene.hpp>
-
-#include <editor/fly_camera.hpp>
-
 namespace editor {
 
 class application : public sbx::core::application {
@@ -40,12 +36,9 @@ private:
 
   sbx::math::angle _rotation;
 
-  sbx::scenes::node _camera;
-
-  fly_camera _camera_controller;
-
-  // Click-to-engage: right-mouse-down only starts driving the camera while the Viewport panel is
-  // hovered; once engaged it keeps driving until right-mouse is released, even off-panel.
+  // Click-to-engage: right-mouse-down only starts driving the editor camera (editor_module::editor_camera())
+  // while the Viewport panel is hovered; once engaged it keeps driving until right-mouse is
+  // released, even off-panel.
   bool _camera_is_engaged{false};
 
 }; // class application

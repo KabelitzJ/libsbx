@@ -2,6 +2,8 @@
 // Copyright (c) 2026 Jonas Kabelitz
 #include <editor/application.hpp>
 
+#include <optional>
+
 #include <libsbx/utility/logger.hpp>
 
 #include <libsbx/math/matrix4x4.hpp>
@@ -57,20 +59,21 @@ application::application()
     editor_module.set_scene_path(*startup_scene);
   }
 
-  _camera = scene.active_camera();
-
   // scene_serializer::load only sets an active camera if the loaded scene had one, so a fresh
-  // project can't assume a "Camera" node exists — create a default one.
-  if (!_camera.is_valid()) {
-    _camera = scene.create_node("Camera");
-    _camera.add_component<sbx::scenes::camera>();
-    scene.set_active_camera(_camera);
+  // project can't assume a "Camera" node exists — create a default one. This is the scene's *play*
+  // camera (used by Play mode here, and always used by a standalone runtime build, which has its
+  // own independent copy of this same fallback) — the editor itself no longer renders through it;
+  // see editor_module::editor_camera / viewport_camera.
+  auto play_camera = scene.active_camera();
+
+  if (!play_camera.is_valid()) {
+    play_camera = scene.create_node("Camera");
+    play_camera.add_component<sbx::scenes::camera>();
+    scene.set_active_camera(play_camera);
   }
 
-  _camera_controller = fly_camera{_camera};
-
-  if (!_camera.has_component<sbx::scenes::skybox>()) {
-    auto& skybox = _camera.add_component<sbx::scenes::skybox>();
+  if (!play_camera.has_component<sbx::scenes::skybox>()) {
+    auto& skybox = play_camera.add_component<sbx::scenes::skybox>();
     skybox.environment = assets_module.load_environment_map("environments/sky.hdr");
     skybox.intensity = 1.0f;
   }
@@ -82,13 +85,6 @@ application::~application() {
 
 auto application::update() -> void {
   using namespace sbx::units::literals;
-
-  auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
-
-  if (!_camera.is_valid()) {
-    _camera = scenes_module.active_scene().active_camera();
-    _camera_controller.set_node(_camera);
-  }
 
   _rotation += sbx::math::degree{90.0f} * sbx::core::engine::delta_time();
 
@@ -103,7 +99,18 @@ auto application::update() -> void {
   }
 
   if (_camera_is_engaged) {
-    _camera_controller.update();
+    editor_module.editor_camera().update();
+  }
+
+  // Render/pick/gizmo through the editor camera while editing, and through the scene's own play
+  // camera otherwise (scene_renderer_module's normal scene.active_camera() fallback) — see
+  // scene_renderer_module::set_camera_override's doc comment.
+  auto& scene_renderer_module = sbx::core::engine::get_module<sbx::render::scene_renderer_module>();
+
+  if (editor_module.play_state() == editor::play_state::edit) {
+    scene_renderer_module.set_camera_override(editor_module.editor_camera().to_camera_data());
+  } else {
+    scene_renderer_module.set_camera_override(std::nullopt);
   }
 }
 

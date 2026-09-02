@@ -6,6 +6,7 @@
 #include <array>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <utility>
 
 #include <libsbx/utility/noncopyable.hpp>
@@ -70,6 +71,18 @@ public:
    * extent; runtime never calls this, so it always renders at window resolution as before.
    */
   auto set_viewport_extent(math::vector2u extent) -> void;
+
+  /**
+   * @brief Overrides the camera_data _build_packet() would otherwise derive from the scene's
+   * active camera — e.g. the editor's own fly-camera while its play_state is "edit". Pass
+   * std::nullopt (the default) to fall back to the scene's active camera; runtime never calls
+   * this, so it always renders through the scene's own camera exactly as before. Environment/
+   * skybox is unaffected by this either way — it's always read from the scene's active camera
+   * (if any) regardless of which camera_data is actually rendered with.
+   */
+  auto set_camera_override(std::optional<camera_data> override) -> void {
+    _camera_override = override;
+  }
 
   /**
    * @brief The final viewport image — the fully tonemapped, presentable color result (see
@@ -143,6 +156,7 @@ private:
 
   render_packet _work_packet{};
   bool _has_rendered{false};
+  std::optional<camera_data> _camera_override{};
 
   std::uint32_t _sampler_index{0u};
   std::uint32_t _clamp_sampler_index{0u};

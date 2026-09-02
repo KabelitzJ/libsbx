@@ -75,6 +75,28 @@ private:
 
 }; // class delete_node_command
 
+/** @brief Sets the scene's active (play) camera to target, restoring whatever it was before on undo. */
+class set_active_camera_command final : public command {
+
+public:
+
+  explicit set_active_camera_command(const sbx::scenes::node& target);
+
+  auto execute() -> void override;
+
+  auto undo() -> void override;
+
+  [[nodiscard]] auto label() const -> std::string override {
+    return "Set Active Camera";
+  }
+
+private:
+
+  sbx::math::uuid _id;
+  std::optional<sbx::math::uuid> _previous_id{}; // nullopt = there was no active camera before
+
+}; // class set_active_camera_command
+
 } // namespace editor
 
 #endif // EDITOR_COMMANDS_SCENE_COMMANDS_HPP_

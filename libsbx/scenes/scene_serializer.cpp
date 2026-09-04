@@ -436,9 +436,9 @@ auto read_node_components(node& target_node, const YAML::Node& node_yaml, assets
 
     if (type == "transform") {
       auto& transform = target_node.transform();
-      transform.position = component["position"].as<math::vector3f>();
+      transform.position = component["position"].as<math::vector3>();
       transform.rotation = component["rotation"].as<math::quaternion>();
-      transform.scale = component["scale"].as<math::vector3f>();
+      transform.scale = component["scale"].as<math::vector3>();
     } else if (type == "static_mesh") {
       auto& renderer = target_node.add_component<mesh_renderer>();
       renderer.mesh = assets_module.load_mesh(key_to_uuid.at(component["mesh"].as<std::string>()));
@@ -546,8 +546,8 @@ auto read_node_components(node& target_node, const YAML::Node& node_yaml, assets
       body.type = (body_type_string == "kinematic") ? physics::body_type::kinematic : (body_type_string == "static") ? physics::body_type::static_body : physics::body_type::dynamic_body;
 
       body.inverse_mass = component["inverse_mass"].as<std::float_t>();
-      body.linear_velocity = component["linear_velocity"].as<math::vector3f>();
-      body.angular_velocity = component["angular_velocity"].as<math::vector3f>();
+      body.linear_velocity = component["linear_velocity"].as<math::vector3>();
+      body.angular_velocity = component["angular_velocity"].as<math::vector3>();
       body.linear_damping = component["linear_damping"].as<std::float_t>();
       body.angular_damping = component["angular_damping"].as<std::float_t>();
       body.gravity_scale = component["gravity_scale"].as<std::float_t>();
@@ -563,12 +563,12 @@ auto read_node_components(node& target_node, const YAML::Node& node_yaml, assets
       } else if (shape_kind == "capsule") {
         collider.shape = physics::capsule{component["radius"].as<std::float_t>(), component["half_height"].as<std::float_t>()};
       } else if (shape_kind == "box") {
-        collider.shape = physics::box{component["half_extents"].as<math::vector3f>()};
+        collider.shape = physics::box{component["half_extents"].as<math::vector3>()};
       } else {
         utility::logger<"scenes">::warn("Unknown shape_collider shape '{}'", shape_kind);
       }
 
-      collider.offset = component["offset"].as<math::vector3f>();
+      collider.offset = component["offset"].as<math::vector3>();
       collider.rotation = component["rotation"].as<math::quaternion>();
       collider.friction = component["friction"].as<std::float_t>();
       collider.restitution = component["restitution"].as<std::float_t>();
@@ -576,7 +576,7 @@ auto read_node_components(node& target_node, const YAML::Node& node_yaml, assets
       auto& collider = target_node.add_component<physics::mesh_collider>();
 
       collider.mesh = assets_module.load_mesh(key_to_uuid.at(component["mesh"].as<std::string>()));
-      collider.offset = component["offset"].as<math::vector3f>();
+      collider.offset = component["offset"].as<math::vector3>();
       collider.rotation = component["rotation"].as<math::quaternion>();
       collider.friction = component["friction"].as<std::float_t>();
       collider.restitution = component["restitution"].as<std::float_t>();

@@ -243,9 +243,6 @@ target_sources(
 
     "${CMAKE_SOURCE_DIR}/libsbx/render/debug/debug_draw.cpp"
 
-    "${CMAKE_SOURCE_DIR}/libsbx/render/particles/particle_draw_pass.cpp"
-    "${CMAKE_SOURCE_DIR}/libsbx/render/particles/particle_pool.cpp"
-    "${CMAKE_SOURCE_DIR}/libsbx/render/particles/particle_simulate_pass.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/render/passes/debug_draw_pass.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/render/passes/depth_pre_pass.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/render/passes/grid_pass.cpp"
@@ -483,10 +480,6 @@ target_sources(
 
       "${CMAKE_SOURCE_DIR}/libsbx/render/debug/debug_draw.hpp"
 
-      "${CMAKE_SOURCE_DIR}/libsbx/render/particles/particle_data.hpp"
-      "${CMAKE_SOURCE_DIR}/libsbx/render/particles/particle_draw_pass.hpp"
-      "${CMAKE_SOURCE_DIR}/libsbx/render/particles/particle_pool.hpp"
-      "${CMAKE_SOURCE_DIR}/libsbx/render/particles/particle_simulate_pass.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/render/passes/debug_draw_pass.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/render/passes/depth_pre_pass.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/render/passes/light_culling_pass.hpp"

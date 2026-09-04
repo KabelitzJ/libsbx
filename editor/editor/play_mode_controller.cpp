@@ -17,7 +17,6 @@
 namespace editor {
 
 play_mode_controller::play_mode_controller() {
-  // scenes_module defaults to simulating (the correct default for runtime) but the editor always starts stopped.
   sbx::core::engine::get_module<sbx::scenes::scenes_module>().set_simulating(false);
 }
 
@@ -32,8 +31,6 @@ auto play_mode_controller::enter_play_mode() -> void {
 
   auto& scripting_module = sbx::core::engine::get_module<sbx::scripting::scripting_module>();
 
-  // Mirrors Unity: refuse to enter Play with compile errors rather than run stale/missing code.
-  // The editor's "Recompile Scripts" menu item (Scene menu) is what clears this.
   if (!scripting_module.last_compile_succeeded()) {
     sbx::utility::logger<"scripting">::error("Cannot enter Play mode — scripts have compile errors. See the Console for details.");
 
@@ -46,8 +43,6 @@ auto play_mode_controller::enter_play_mode() -> void {
 
   scenes_module.set_simulating(true);
 
-  // Every script already attached to a node in the scene fires OnCreate now that we're playing —
-  // see scripting_module::instantiate_scene_scripts's doc comment.
   scripting_module.instantiate_scene_scripts(scenes_module.active_scene());
 
   _state = play_state::playing;
@@ -61,23 +56,13 @@ auto play_mode_controller::exit_play_mode() -> void {
   auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
   auto& scripting_module = sbx::core::engine::get_module<sbx::scripting::scripting_module>();
 
-  // Before the reload below wipes the registry: any script instance created during the play
-  // session (e.g. a script spawning something) gets a proper OnDestroy instead of silently
-  // vanishing — see scripting_module::run_on_destroy's doc comment.
   scripting_module.run_on_destroy(scenes_module.active_scene());
 
   scenes_module.set_simulating(false);
 
-  // Reloads in place, over the same registry, back to exactly the pre-play snapshot.
   sbx::scenes::scene_serializer::load(scenes_module.active_scene(), _snapshot_path());
 
   std::filesystem::remove(_snapshot_path());
-
-  // The reload above resets each entity's particle_effect/particle_emitter components, but the
-  // GPU-owned particle_pool lives outside the scene and wouldn't otherwise notice — without this,
-  // particles alive at the moment of Stop would just linger and fade out over their remaining
-  // lifetime instead of resetting immediately.
-  sbx::core::engine::get_module<sbx::render::scene_renderer_module>().reset_particles();
 
   _state = play_state::edit;
 }
@@ -87,8 +72,6 @@ auto play_mode_controller::set_paused(bool value) -> void {
     return;
   }
 
-  // Just freezes simulation in place — no snapshot I/O, the scene is left exactly as it was when
-  // paused.
   sbx::core::engine::get_module<sbx::scenes::scenes_module>().set_simulating(!value);
 
   _state = value ? play_state::paused : play_state::playing;

@@ -88,16 +88,6 @@ struct render_context {
   graphics::buffer::address_type cluster_light_index_address{0u};
   graphics::buffer::address_type cluster_counter_address{0u};
 
-  graphics::buffer::address_type particle_additive_particles_address{0u};
-  graphics::buffer::address_type particle_additive_alive_list_address{0u};
-  graphics::buffer::address_type particle_additive_emitters_address{0u};
-  graphics::buffer_handle particle_additive_draw_args{};
-
-  graphics::buffer::address_type particle_alpha_particles_address{0u};
-  graphics::buffer::address_type particle_alpha_alive_list_address{0u};
-  graphics::buffer::address_type particle_alpha_emitters_address{0u};
-  graphics::buffer_handle particle_alpha_draw_args{};
-
   bool show_grid{false};
 
   bool has_shadow_caster{false};

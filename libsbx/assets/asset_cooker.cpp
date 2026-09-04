@@ -619,8 +619,8 @@ auto asset_cooker::_load_cooked_texture(const std::filesystem::path& cooked, std
 auto asset_cooker::_generate_tangents(std::vector<vertex>& vertices, const std::vector<std::uint32_t>& indices, std::size_t vertex_start, std::size_t vertex_count, std::size_t index_start, std::size_t index_count) -> void {
   // Lengyel's method: accumulate tangent/bitangent per vertex from referencing triangles, then
   // orthogonalize against the normal and derive handedness from the bitangent sum.
-  auto tangent_sum = std::vector<math::vector3f>(vertex_count, math::vector3f::zero);
-  auto bitangent_sum = std::vector<math::vector3f>(vertex_count, math::vector3f::zero);
+  auto tangent_sum = std::vector<math::vector3>(vertex_count, math::vector3::zero);
+  auto bitangent_sum = std::vector<math::vector3>(vertex_count, math::vector3::zero);
 
   for (auto i = std::size_t{0u}; i + 2u < index_count; i += 3u) {
     const auto i0 = indices[index_start + i];
@@ -654,11 +654,11 @@ auto asset_cooker::_generate_tangents(std::vector<vertex>& vertices, const std::
     auto& current = vertices[vertex_start + local];
 
     const auto n = current.normal;
-    auto t = tangent_sum[local] - n * math::vector3f::dot(n, tangent_sum[local]);
+    auto t = tangent_sum[local] - n * math::vector3::dot(n, tangent_sum[local]);
 
-    t = (t.length_squared() < 1e-12f) ? math::vector3f::orthogonal(n) : math::vector3f::normalized(t);
+    t = (t.length_squared() < 1e-12f) ? math::vector3::orthogonal(n) : math::vector3::normalized(t);
 
-    const auto handedness = (math::vector3f::dot(math::vector3f::cross(n, t), bitangent_sum[local]) < 0.0f) ? -1.0f : 1.0f;
+    const auto handedness = (math::vector3::dot(math::vector3::cross(n, t), bitangent_sum[local]) < 0.0f) ? -1.0f : 1.0f;
 
     current.tangent[0] = t.x();
     current.tangent[1] = t.y();
@@ -847,7 +847,7 @@ auto asset_cooker::_cook_mesh(const std::filesystem::path& source, const math::u
 
       fastgltf::iterateAccessorWithIndex<fastgltf::math::fvec3>(gltf, position_accessor, [&](fastgltf::math::fvec3 value, std::size_t index) {
         const auto world_position = world * fastgltf::math::fvec4{value[0], value[1], value[2], 1.0f};
-        const auto point = math::vector3f{world_position[0], world_position[1], world_position[2]};
+        const auto point = math::vector3{world_position[0], world_position[1], world_position[2]};
 
         auto& current = vertices[vertex_start + index];
         current.position[0] = point.x();

@@ -34,9 +34,9 @@ namespace sbx::scenes {
  */
 struct local_transform {
 
-  math::vector3f position{0.0f, 0.0f, 0.0f};
+  math::vector3 position{0.0f, 0.0f, 0.0f};
   math::quaternion rotation{math::quaternion::identity};
-  math::vector3f scale{1.0f, 1.0f, 1.0f};
+  math::vector3 scale{1.0f, 1.0f, 1.0f};
 
   [[nodiscard]] auto matrix() const -> math::matrix4x4 {
     const auto translation_matrix = math::matrix4x4::translated(math::matrix4x4::identity, position);
@@ -45,16 +45,16 @@ struct local_transform {
     return translation_matrix * math::matrix_cast<math::matrix4x4>(rotation) * scale_matrix;
   }
 
-  [[nodiscard]] auto right() const -> math::vector3f {
-    return rotation * math::vector3f{1.0f, 0.0f, 0.0f};
+  [[nodiscard]] auto right() const -> math::vector3 {
+    return rotation * math::vector3{1.0f, 0.0f, 0.0f};
   }
 
-  [[nodiscard]] auto up() const -> math::vector3f {
-    return rotation * math::vector3f{0.0f, 1.0f, 0.0f};
+  [[nodiscard]] auto up() const -> math::vector3 {
+    return rotation * math::vector3{0.0f, 1.0f, 0.0f};
   }
 
-  [[nodiscard]] auto forward() const -> math::vector3f {
-    return rotation * math::vector3f{0.0f, 0.0f, -1.0f};
+  [[nodiscard]] auto forward() const -> math::vector3 {
+    return rotation * math::vector3{0.0f, 0.0f, -1.0f};
   }
 
 }; // struct local_transform

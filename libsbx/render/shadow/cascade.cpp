@@ -31,26 +31,26 @@ inline constexpr auto cascade_lambda = 0.85f;
   return splits;
 }
 
-auto compute_cascades(const camera_data& camera, std::float_t aspect, const math::vector3f& light_direction, std::float_t shadow_distance) -> std::array<cascade_info, shadow_cascade_count> {
+auto compute_cascades(const camera_data& camera, std::float_t aspect, const math::vector3& light_direction, std::float_t shadow_distance) -> std::array<cascade_info, shadow_cascade_count> {
   const auto near_plane = camera.near_plane;
   const auto far_plane = std::min(camera.far_plane, shadow_distance);
 
   const auto splits = compute_splits(near_plane, far_plane);
 
   const auto camera_world = math::matrix4x4::inverted(camera.view);
-  const auto camera_forward = math::vector3f::normalized(math::vector3f{-camera_world[2].x(), -camera_world[2].y(), -camera_world[2].z()});
+  const auto camera_forward = math::vector3::normalized(math::vector3{-camera_world[2].x(), -camera_world[2].y(), -camera_world[2].z()});
 
   const auto fov_y = math::to_radians(math::degree{camera.fov_degrees}).value();
   const auto tan_half_y = std::tan(fov_y * 0.5f);
   const auto tan_half_x = tan_half_y * aspect;
   const auto tan_sq = tan_half_x * tan_half_x + tan_half_y * tan_half_y;
 
-  const auto light_dir = math::vector3f::normalized(light_direction);
+  const auto light_dir = math::vector3::normalized(light_direction);
 
-  auto up = math::vector3f{0.0f, 1.0f, 0.0f};
+  auto up = math::vector3{0.0f, 1.0f, 0.0f};
 
-  if (std::abs(math::vector3f::dot(light_dir, up)) > 0.99f) {
-    up = math::vector3f{1.0f, 0.0f, 0.0f};
+  if (std::abs(math::vector3::dot(light_dir, up)) > 0.99f) {
+    up = math::vector3{1.0f, 0.0f, 0.0f};
   }
 
   constexpr auto caster_padding = 100.0f;

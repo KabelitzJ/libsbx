@@ -43,8 +43,6 @@
 #include <libsbx/render/passes/tonemap_pass.hpp>
 #include <libsbx/render/passes/transparent_accumulate_pass.hpp>
 #include <libsbx/render/passes/transparent_resolve_pass.hpp>
-#include <libsbx/render/particles/particle_simulate_pass.hpp>
-#include <libsbx/render/particles/particle_draw_pass.hpp>
 #include <libsbx/render/shadow/shadow_pass.hpp>
 #include <libsbx/render/shadow/cascade.hpp>
 #include <libsbx/render/scene_blit_compositor.hpp>
@@ -106,18 +104,6 @@ struct transparent_entry {
 scene_renderer_module::scene_renderer_module() {
   _ensure_resources();
 
-  _particle_pools[particle_pool_additive] = std::make_unique<particle_pool>(particle_pool::create_info{
-    .max_particles = 4096u,
-    .max_emitter_instances = 64u,
-    .name = "Additive Particle Pool"
-  });
-
-  _particle_pools[particle_pool_alpha_blend] = std::make_unique<particle_pool>(particle_pool::create_info{
-    .max_particles = 4096u,
-    .max_emitter_instances = 64u,
-    .name = "Alpha Blend Particle Pool"
-  });
-
   _graph.add_pass<depth_pre_pass>();
   _graph.add_pass<light_culling_pass>();
   _graph.add_pass<shadow_pass>();
@@ -126,8 +112,6 @@ scene_renderer_module::scene_renderer_module() {
   _graph.add_pass<grid_pass>();
   _graph.add_pass<debug_draw_pass>();
   _graph.add_pass<transparent_accumulate_pass>();
-  _graph.add_pass<particle_simulate_pass>(*_particle_pools[particle_pool_additive], *_particle_pools[particle_pool_alpha_blend]);
-  _graph.add_pass<particle_draw_pass>();
   _graph.add_pass<transparent_resolve_pass>();
   _graph.add_pass<tonemap_pass>();
 
@@ -155,19 +139,8 @@ auto scene_renderer_module::set_grid_enabled(bool enabled) -> void {
   _grid_enabled = enabled;
 }
 
-auto scene_renderer_module::reset_particles() -> void {
-  _pending_particle_reset = true;
-}
-
 auto scene_renderer_module::_build_packet() -> render_packet {
   SBX_PROFILE_SCOPE("scene_renderer_module::build_packet");
-
-  if (_pending_particle_reset) {
-    _particle_pools[particle_pool_additive]->clear();
-    _particle_pools[particle_pool_alpha_blend]->clear();
-
-    _pending_particle_reset = false;
-  }
 
   auto packet = render_packet{};
 
@@ -183,7 +156,7 @@ auto scene_renderer_module::_build_packet() -> render_packet {
     const auto& world = camera_node.world_matrix();
 
     packet.camera.view = math::matrix4x4::inverted(world);
-    packet.camera.position = math::vector3f{world[3]};
+    packet.camera.position = math::vector3{world[3]};
     packet.camera.fov_degrees = camera.fov_degrees;
     packet.camera.near_plane = camera.near_plane;
     packet.camera.far_plane = camera.far_plane;
@@ -294,7 +267,7 @@ auto scene_renderer_module::_build_packet() -> render_packet {
     auto data = light_data{};
     data.type = light_type::directional;
     data.color = math::vector4{light.color.r(), light.color.g(), light.color.b(), light.intensity};
-    data.direction = math::vector4{math::vector3f::normalized(math::vector3f{-matrix[2].x(), -matrix[2].y(), -matrix[2].z()}), 0.0f};
+    data.direction = math::vector4{math::vector3::normalized(math::vector3{-matrix[2].x(), -matrix[2].y(), -matrix[2].z()}), 0.0f};
 
     if (!shadow_caster_found && light.casts_shadows) {
       shadow_caster_found = true;
@@ -329,18 +302,14 @@ auto scene_renderer_module::_build_packet() -> render_packet {
 
     out.type = light_type::spot;
     out.color = math::vector4{light.color.r(), light.color.g(), light.color.b(), light.intensity};
-    out.position = math::vector4{matrix[3].x(), matrix[3].y(), matrix[3].z(), light.range};
-    out.direction = math::vector4{math::vector3f::normalized(math::vector3f{-matrix[2].x(), -matrix[2].y(), -matrix[2].z()}), 0.0f};
+    out.position = math::vector4{math::vector3{matrix[3]}, light.range};
+    out.direction = math::vector4{math::vector3::normalized(math::vector3{-matrix[2].x(), -matrix[2].y(), -matrix[2].z()}), 0.0f};
     out.inner_cos = std::cos(light.inner_angle);
     out.outer_cos = std::cos(light.outer_angle);
   }
 
   auto& assets_module = core::engine::get_module<assets::assets_module>();
 
-  // simulation_delta_time()/simulation_time(), not core::engine's directly: both hold at their
-  // pre-pause value while the scene isn't simulating (editor Edit/Pause), so effects stop advancing
-  // instead of animating continuously while just editing — see scenes_module::is_simulating's doc
-  // comment.
   const auto delta_time = static_cast<std::float_t>(scenes_module.simulation_delta_time().value());
   const auto time = static_cast<std::float_t>(scenes_module.simulation_time().value());
 
@@ -348,89 +317,8 @@ auto scene_renderer_module::_build_packet() -> render_packet {
   packet.time = time;
 
   for (auto&& [entity, world, instance] : scene.query<scenes::world_transform, scenes::particle_effect>().each()) {
-    if (!instance.effect.is_valid()) {
-      continue;
-    }
-
-    const auto& emitters = instance.effect->emitters();
-
-    if (instance.emitters.size() < emitters.size()) {
-      instance.emitters.resize(emitters.size());
-    }
-
-    instance.elapsed += delta_time;
-
-    const auto is_playing = instance.playback == scenes::particle_playback_state::playing;
-
-    for (auto index = std::size_t{0u}; index < emitters.size(); ++index) {
-      const auto& emitter = emitters[index];
-      auto& runtime = instance.emitters[index];
-
-      if (!is_playing) {
-        runtime.slot = scenes::particle_emitter::invalid_slot;
-        runtime.emission_accumulator = 0.0f;
-        runtime.burst_fired = false;
-
-        continue;
-      }
-
-      const auto pool_index = (emitter.blend_mode == assets::emitter_blend_mode::alpha_blend) ? particle_pool_alpha_blend : particle_pool_additive;
-      auto& pool = *_particle_pools[pool_index];
-
-      if (runtime.slot == scenes::particle_emitter::invalid_slot) {
-        const auto claimed = pool.claim_slot();
-
-        if (!claimed) {
-          continue;
-        }
-
-        runtime.slot = *claimed;
-      }
-
-      auto burst_this_frame = std::uint32_t{0u};
-
-      if (!runtime.burst_fired) {
-        burst_this_frame = emitter.burst_count;
-        runtime.burst_fired = true;
-      }
-
-      runtime.emission_accumulator += emitter.emission_rate * delta_time;
-
-      const auto continuous_to_emit = static_cast<std::uint32_t>(runtime.emission_accumulator);
-      runtime.emission_accumulator -= static_cast<std::float_t>(continuous_to_emit);
-
-      const auto particles_to_emit = continuous_to_emit + burst_this_frame;
-
-      const auto texture_index = (emitter.texture.is_valid() && assets_module.is_resident(emitter.texture)) ? emitter.texture->index() : particle_texture_index_none;
-
-      auto data = emitter_instance{};
-      data.position = math::vector3f{world.matrix[3]};
-      data.emission_rate = emitter.emission_rate;
-      data.velocity_min = emitter.velocity_min;
-      data.velocity_max = emitter.velocity_max;
-      data.lifetime_min = emitter.lifetime_min;
-      data.lifetime_max = emitter.lifetime_max;
-      data.start_color = math::vector4{emitter.start_color.r(), emitter.start_color.g(), emitter.start_color.b(), emitter.start_color.a()};
-      data.end_color = math::vector4{emitter.end_color.r(), emitter.end_color.g(), emitter.end_color.b(), emitter.end_color.a()};
-      data.size_min = emitter.size_min;
-      data.size_max = emitter.size_max;
-      data.gravity = emitter.gravity;
-      data.drag = emitter.drag;
-      data.active = 1u;
-      data.particles_to_emit = particles_to_emit;
-      data.seed = (runtime.slot * 9781u) ^ (static_cast<std::uint32_t>(index) * 6271u) ^ 0x9E3779B9u;
-      data.shape = static_cast<std::uint32_t>(emitter.shape);
-      data.shape_extents = emitter.shape_extents;
-      data.texture_index = texture_index;
-
-      pool.keep_alive(runtime.slot, emitter.lifetime_max);
-
-      packet.particle_emitters.push_back(particle_emitter_snapshot{pool_index, runtime.slot, data});
-    }
+    
   }
-
-  _particle_pools[particle_pool_additive]->tick(delta_time);
-  _particle_pools[particle_pool_alpha_blend]->tick(delta_time);
 
   return packet;
 }
@@ -832,7 +720,7 @@ auto scene_renderer_module::_prepare_frame(render_context& context) -> void {
   auto light_view_projections = std::array<math::matrix4x4, shadow_cascade_count>{};
 
   if (context.packet->has_shadow_caster && directional_light_count > 0u) {
-    const auto light_direction = math::vector3f{context.packet->lights[0].direction};
+    const auto light_direction = math::vector3{context.packet->lights[0].direction};
     const auto cascades = compute_cascades(camera, aspect, light_direction, context.packet->shadow_distance);
 
     for (auto i = std::size_t{0u}; i < shadow_cascade_count; ++i) {
@@ -886,22 +774,6 @@ auto scene_renderer_module::_prepare_frame(render_context& context) -> void {
   context.cluster_range_address = data.cluster_range_address;
   context.cluster_light_index_address = data.cluster_light_index_address;
   context.cluster_counter_address = _cluster_counter_addresses[context.slot];
-
-  // write_index is a pure function of frame_index — particle_simulate_pass derives it identically
-  // later, so both agree on the alive_list buffer without any handoff.
-  const auto& additive_pool = *_particle_pools[particle_pool_additive];
-  const auto& alpha_pool = *_particle_pools[particle_pool_alpha_blend];
-  const auto write_index = static_cast<std::uint32_t>(context.frame_index % 2u);
-
-  context.particle_additive_particles_address = additive_pool.particles_address();
-  context.particle_additive_alive_list_address = additive_pool.alive_list_address(write_index);
-  context.particle_additive_emitters_address = additive_pool.emitter_instances_address();
-  context.particle_additive_draw_args = additive_pool.draw_args();
-
-  context.particle_alpha_particles_address = alpha_pool.particles_address();
-  context.particle_alpha_alive_list_address = alpha_pool.alive_list_address(write_index);
-  context.particle_alpha_emitters_address = alpha_pool.emitter_instances_address();
-  context.particle_alpha_draw_args = alpha_pool.draw_args();
 }
 
 } // namespace sbx::render

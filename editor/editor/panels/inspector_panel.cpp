@@ -901,7 +901,7 @@ auto draw_rigidbody_section(editor_state& state, sbx::scenes::node& node) -> voi
   auto linear_velocity = std::array<std::float_t, 3u>{body.linear_velocity.x(), body.linear_velocity.y(), body.linear_velocity.z()};
 
   if (ImGui::DragFloat3("Linear Velocity", linear_velocity.data(), 0.05f)) {
-    body.linear_velocity = sbx::math::vector3f{linear_velocity[0], linear_velocity[1], linear_velocity[2]};
+    body.linear_velocity = sbx::math::vector3{linear_velocity[0], linear_velocity[1], linear_velocity[2]};
   }
 
   bracket_edit(state, node, body, pending, "Edit Rigidbody");
@@ -909,7 +909,7 @@ auto draw_rigidbody_section(editor_state& state, sbx::scenes::node& node) -> voi
   auto angular_velocity = std::array<std::float_t, 3u>{body.angular_velocity.x(), body.angular_velocity.y(), body.angular_velocity.z()};
 
   if (ImGui::DragFloat3("Angular Velocity", angular_velocity.data(), 0.05f)) {
-    body.angular_velocity = sbx::math::vector3f{angular_velocity[0], angular_velocity[1], angular_velocity[2]};
+    body.angular_velocity = sbx::math::vector3{angular_velocity[0], angular_velocity[1], angular_velocity[2]};
   }
 
   bracket_edit(state, node, body, pending, "Edit Rigidbody");
@@ -921,7 +921,7 @@ auto draw_collider_offset_rotation_friction(editor_state& state, sbx::scenes::no
   auto offset = std::array<std::float_t, 3u>{collider.offset.x(), collider.offset.y(), collider.offset.z()};
 
   if (ImGui::DragFloat3("Offset", offset.data(), 0.05f)) {
-    collider.offset = sbx::math::vector3f{offset[0], offset[1], offset[2]};
+    collider.offset = sbx::math::vector3{offset[0], offset[1], offset[2]};
   }
 
   bracket_edit(state, node, collider, pending, label);
@@ -930,7 +930,7 @@ auto draw_collider_offset_rotation_friction(editor_state& state, sbx::scenes::no
   auto rotation_degrees = std::array<std::float_t, 3u>{euler.x(), euler.y(), euler.z()};
 
   if (ImGui::DragFloat3("Rotation", rotation_degrees.data(), 0.5f)) {
-    collider.rotation = sbx::math::quaternion{sbx::math::vector3f{rotation_degrees[0], rotation_degrees[1], rotation_degrees[2]}};
+    collider.rotation = sbx::math::quaternion{sbx::math::vector3{rotation_degrees[0], rotation_degrees[1], rotation_degrees[2]}};
   }
 
   bracket_edit(state, node, collider, pending, label);
@@ -1012,7 +1012,7 @@ auto draw_shape_collider_section(editor_state& state, sbx::scenes::node& node) -
     auto half_extents = std::array<std::float_t, 3u>{box->half_extents.x(), box->half_extents.y(), box->half_extents.z()};
 
     if (ImGui::DragFloat3("Half Extents", half_extents.data(), 0.05f, 0.001f, 1000.0f)) {
-      box->half_extents = sbx::math::vector3f{half_extents[0], half_extents[1], half_extents[2]};
+      box->half_extents = sbx::math::vector3{half_extents[0], half_extents[1], half_extents[2]};
     }
 
     bracket_edit(state, node, collider, pending, "Edit Shape Collider");
@@ -1525,7 +1525,7 @@ auto inspector_panel::_draw_transform_section(editor_state& state, sbx::scenes::
   capture_before(position_result);
 
   if (position_result.changed) {
-    transform.position = sbx::math::vector3f{position[0], position[1], position[2]};
+    transform.position = sbx::math::vector3{position[0], position[1], position[2]};
   }
 
   commit_after(position_result);
@@ -1544,7 +1544,7 @@ auto inspector_panel::_draw_transform_section(editor_state& state, sbx::scenes::
   capture_before(rotation_result);
 
   if (rotation_result.changed) {
-    transform.rotation = sbx::math::quaternion{sbx::math::vector3f{_rotation[0], _rotation[1], _rotation[2]}};
+    transform.rotation = sbx::math::quaternion{sbx::math::vector3{_rotation[0], _rotation[1], _rotation[2]}};
     _rotation_cache = transform.rotation;
   }
 
@@ -1556,7 +1556,7 @@ auto inspector_panel::_draw_transform_section(editor_state& state, sbx::scenes::
   capture_before(scale_result);
 
   if (scale_result.changed) {
-    transform.scale = sbx::math::vector3f{scale[0], scale[1], scale[2]};
+    transform.scale = sbx::math::vector3{scale[0], scale[1], scale[2]};
   }
 
   commit_after(scale_result);

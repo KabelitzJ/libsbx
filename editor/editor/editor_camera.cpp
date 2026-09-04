@@ -43,15 +43,15 @@ auto editor_camera::update() -> void {
     _pitch = std::clamp(_pitch, -limit, limit);
   }
 
-  const auto yaw_rotation = sbx::math::quaternion{sbx::math::vector3f{0.0f, 1.0f, 0.0f}, sbx::math::angle{sbx::math::radian{_yaw}}};
-  const auto pitch_rotation = sbx::math::quaternion{sbx::math::vector3f{1.0f, 0.0f, 0.0f}, sbx::math::angle{sbx::math::radian{_pitch}}};
+  const auto yaw_rotation = sbx::math::quaternion{sbx::math::vector3{0.0f, 1.0f, 0.0f}, sbx::math::angle{sbx::math::radian{_yaw}}};
+  const auto pitch_rotation = sbx::math::quaternion{sbx::math::vector3{1.0f, 0.0f, 0.0f}, sbx::math::angle{sbx::math::radian{_pitch}}};
   const auto rotation = yaw_rotation * pitch_rotation;
 
-  const auto forward = rotation * sbx::math::vector3f{0.0f, 0.0f, -1.0f};
-  const auto right = rotation * sbx::math::vector3f{1.0f, 0.0f, 0.0f};
-  const auto up = sbx::math::vector3f{0.0f, 1.0f, 0.0f};
+  const auto forward = rotation * sbx::math::vector3{0.0f, 0.0f, -1.0f};
+  const auto right = rotation * sbx::math::vector3{1.0f, 0.0f, 0.0f};
+  const auto up = sbx::math::vector3{0.0f, 1.0f, 0.0f};
 
-  auto direction = sbx::math::vector3f{0.0f, 0.0f, 0.0f};
+  auto direction = sbx::math::vector3{0.0f, 0.0f, 0.0f};
 
   if (sbx::platform::input::is_key_down(sbx::platform::key::w)) { direction += forward; }
   if (sbx::platform::input::is_key_down(sbx::platform::key::s)) { direction -= forward; }
@@ -67,7 +67,7 @@ auto editor_camera::update() -> void {
   }
 
   if (direction.length_squared() > 0.0f) {
-    _transform.position += sbx::math::vector3f::normalized(direction) * speed * delta_time.value();
+    _transform.position += sbx::math::vector3::normalized(direction) * speed * delta_time.value();
   }
 
   _transform.rotation = rotation;
@@ -97,7 +97,7 @@ auto editor_camera::load(const std::filesystem::path& path) -> editor_camera {
   const auto root = YAML::LoadFile(path.string());
 
   if (root["position"]) {
-    result._transform.position = root["position"].as<sbx::math::vector3f>();
+    result._transform.position = root["position"].as<sbx::math::vector3>();
   }
 
   if (root["rotation"]) {
@@ -133,7 +133,7 @@ auto editor_camera::load(const std::filesystem::path& path) -> editor_camera {
   // above, the very first update() would silently snap back to yaw=pitch=0 instead of keeping the
   // orientation saved to disk. Inverts update()'s own forward = Ry(yaw) * Rx(pitch) * (0,0,-1)
   // composition, so it must stay in sync with that function if it ever changes.
-  const auto forward = result._transform.rotation * sbx::math::vector3f{0.0f, 0.0f, -1.0f};
+  const auto forward = result._transform.rotation * sbx::math::vector3{0.0f, 0.0f, -1.0f};
 
   result._pitch = std::asin(std::clamp(forward.y(), -1.0f, 1.0f));
   result._yaw = std::atan2(-forward.x(), -forward.z());

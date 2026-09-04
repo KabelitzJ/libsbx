@@ -36,15 +36,15 @@ auto fly_camera::update() -> void {
     _pitch = std::clamp(_pitch, -limit, limit);
   }
 
-  const auto yaw_rotation = sbx::math::quaternion{sbx::math::vector3f{0.0f, 1.0f, 0.0f}, sbx::math::angle{sbx::math::radian{_yaw}}};
-  const auto pitch_rotation = sbx::math::quaternion{sbx::math::vector3f{1.0f, 0.0f, 0.0f}, sbx::math::angle{sbx::math::radian{_pitch}}};
+  const auto yaw_rotation = sbx::math::quaternion{sbx::math::vector3{0.0f, 1.0f, 0.0f}, sbx::math::angle{sbx::math::radian{_yaw}}};
+  const auto pitch_rotation = sbx::math::quaternion{sbx::math::vector3{1.0f, 0.0f, 0.0f}, sbx::math::angle{sbx::math::radian{_pitch}}};
   const auto rotation = yaw_rotation * pitch_rotation;
 
-  const auto forward = rotation * sbx::math::vector3f{0.0f, 0.0f, -1.0f};
-  const auto right = rotation * sbx::math::vector3f{1.0f, 0.0f, 0.0f};
-  const auto up = sbx::math::vector3f{0.0f, 1.0f, 0.0f};
+  const auto forward = rotation * sbx::math::vector3{0.0f, 0.0f, -1.0f};
+  const auto right = rotation * sbx::math::vector3{1.0f, 0.0f, 0.0f};
+  const auto up = sbx::math::vector3{0.0f, 1.0f, 0.0f};
 
-  auto direction = sbx::math::vector3f{0.0f, 0.0f, 0.0f};
+  auto direction = sbx::math::vector3{0.0f, 0.0f, 0.0f};
 
   if (sbx::platform::input::is_key_down(sbx::platform::key::w)) { direction += forward; }
   if (sbx::platform::input::is_key_down(sbx::platform::key::s)) { direction -= forward; }
@@ -62,7 +62,7 @@ auto fly_camera::update() -> void {
   auto& transform = _node.transform();
 
   if (direction.length_squared() > 0.0f) {
-    transform.position += sbx::math::vector3f::normalized(direction) * speed * delta_time.value();
+    transform.position += sbx::math::vector3::normalized(direction) * speed * delta_time.value();
   }
 
   transform.rotation = rotation;

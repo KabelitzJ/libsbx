@@ -29,7 +29,7 @@ struct cascade_info {
  * @param light_direction The direction the (sun) light travels, i.e. surface-to-light is -light_direction.
  * @param shadow_distance How far from the camera the cascades should reach; the light's shadow_distance component field.
  */
-[[nodiscard]] auto compute_cascades(const camera_data& camera, std::float_t aspect, const math::vector3f& light_direction, std::float_t shadow_distance) -> std::array<cascade_info, shadow_cascade_count>;
+[[nodiscard]] auto compute_cascades(const camera_data& camera, std::float_t aspect, const math::vector3& light_direction, std::float_t shadow_distance) -> std::array<cascade_info, shadow_cascade_count>;
 
 } // namespace sbx::render
 

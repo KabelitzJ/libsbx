@@ -15,8 +15,6 @@
 #include <libsbx/assets/texture.hpp>
 #include <libsbx/assets/environment_map.hpp>
 
-#include <libsbx/render/particles/particle_data.hpp>
-
 namespace sbx::render {
 
 /**
@@ -72,7 +70,7 @@ struct transform_data {
 
 struct camera_data {
   math::matrix4x4 view{math::matrix4x4::identity};
-  math::vector3f position{0.0f, 0.0f, 0.0f};
+  math::vector3 position{0.0f, 0.0f, 0.0f};
   std::float_t fov_degrees{60.0f};
   std::float_t near_plane{0.1f};
   std::float_t far_plane{1000.0f};
@@ -96,12 +94,6 @@ struct light_data {
   std::uint32_t padding{0u};
 }; // struct light_data
 
-struct particle_emitter_snapshot {
-  std::uint32_t pool_index{0u};
-  std::uint32_t slot{0u};
-  emitter_instance data{};
-}; // struct particle_emitter_snapshot
-
 struct render_packet {
   camera_data camera{};
   std::vector<draw_command> opaque_commands{};
@@ -115,7 +107,6 @@ struct render_packet {
   assets::environment_map_handle environment{};
   std::float_t environment_intensity{1.0f};
   std::float_t ambient_intensity{1.0f};
-  std::vector<particle_emitter_snapshot> particle_emitters{};
   std::float_t time{0.0f};
   std::float_t delta_time{0.0f};
 }; // struct render_packet

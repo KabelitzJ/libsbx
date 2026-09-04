@@ -34,13 +34,13 @@ auto ray_from_viewport_position(const sbx::math::matrix4x4& camera_world_matrix,
   const auto ndc_x = viewport_size.x() > 0u ? (position.x() / static_cast<std::float_t>(viewport_size.x())) * 2.0f - 1.0f : 0.0f;
   const auto ndc_y = viewport_size.y() > 0u ? (position.y() / static_cast<std::float_t>(viewport_size.y())) * 2.0f - 1.0f : 0.0f;
 
-  const auto unproject = [&inverse_view_projection](const sbx::math::vector3f& ndc) -> sbx::math::vector3f {
+  const auto unproject = [&inverse_view_projection](const sbx::math::vector3& ndc) -> sbx::math::vector3 {
     const auto point = inverse_view_projection * sbx::math::vector4{ndc, 1.0f};
-    return sbx::math::vector3f{point.x(), point.y(), point.z()} / point.w();
+    return sbx::math::vector3{point.x(), point.y(), point.z()} / point.w();
   };
 
-  const auto near_point = unproject(sbx::math::vector3f{ndc_x, ndc_y, 0.0f});
-  const auto far_point = unproject(sbx::math::vector3f{ndc_x, ndc_y, 1.0f});
+  const auto near_point = unproject(sbx::math::vector3{ndc_x, ndc_y, 0.0f});
+  const auto far_point = unproject(sbx::math::vector3{ndc_x, ndc_y, 1.0f});
 
   return sbx::math::ray{near_point, far_point - near_point};
 }

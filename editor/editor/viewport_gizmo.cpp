@@ -163,9 +163,9 @@ auto draw_viewport_gizmo(editor_state& state, const ImVec2& viewport_origin, con
     ImGuizmo::DecomposeMatrixToComponents(local_matrix.data(), translation.data(), rotation.data(), scale.data());
 
     auto& transform = node.transform();
-    transform.position = sbx::math::vector3f{translation[0], translation[1], translation[2]};
-    transform.rotation = sbx::math::quaternion{sbx::math::vector3f{rotation[0], rotation[1], rotation[2]}};
-    transform.scale = sbx::math::vector3f{scale[0], scale[1], scale[2]};
+    transform.position = sbx::math::vector3{translation[0], translation[1], translation[2]};
+    transform.rotation = sbx::math::quaternion{sbx::math::vector3{rotation[0], rotation[1], rotation[2]}};
+    transform.scale = sbx::math::vector3{scale[0], scale[1], scale[2]};
   }
 
   if (!ImGuizmo::IsUsing() && drag_active) {
@@ -230,16 +230,16 @@ struct axis_gizmo_handle {
   std::float_t depth;
   ImU32 color;
   const char* label; // nullptr for the negative end (drawn as a hollow ring, no letter)
-  sbx::math::vector3f look_from_direction;
+  sbx::math::vector3 look_from_direction;
 }; // struct axis_gizmo_handle
 
 // In-flight camera-snap transition. File-local rather than in editor_state — purely an
 // implementation detail of draw_view_gizmo's corner widget, not a cross-panel concern.
 struct camera_snap_animation {
   bool active{false};
-  sbx::math::vector3f start_position{};
+  sbx::math::vector3 start_position{};
   sbx::math::quaternion start_rotation{sbx::math::quaternion::identity};
-  sbx::math::vector3f target_position{};
+  sbx::math::vector3 target_position{};
   sbx::math::quaternion target_rotation{sbx::math::quaternion::identity};
   std::float_t elapsed{0.0f};
 }; // struct camera_snap_animation
@@ -249,11 +249,11 @@ constexpr auto camera_snap_duration = 0.25f; // seconds
 // Computes the world position/rotation for the editor camera looking at the world origin from
 // `direction * length` — the interpolation target for camera_snap_animation. Plain world space,
 // no parent-relative conversion needed: the editor camera isn't a scene node, so it never has one.
-auto compute_camera_snap_target(const sbx::math::vector3f& direction, std::float_t length) -> std::pair<sbx::math::vector3f, sbx::math::quaternion> {
-  const auto up = std::fabs(direction.y()) > 0.99f ? sbx::math::vector3f{0.0f, 0.0f, 1.0f} : sbx::math::vector3f{0.0f, 1.0f, 0.0f};
+auto compute_camera_snap_target(const sbx::math::vector3& direction, std::float_t length) -> std::pair<sbx::math::vector3, sbx::math::quaternion> {
+  const auto up = std::fabs(direction.y()) > 0.99f ? sbx::math::vector3{0.0f, 0.0f, 1.0f} : sbx::math::vector3{0.0f, 1.0f, 0.0f};
 
   const auto eye = direction * length;
-  const auto new_view = sbx::math::matrix4x4::look_at(eye, sbx::math::vector3f{0.0f, 0.0f, 0.0f}, up);
+  const auto new_view = sbx::math::matrix4x4::look_at(eye, sbx::math::vector3{0.0f, 0.0f, 0.0f}, up);
 
   const auto camera_world_matrix = sbx::math::matrix4x4::inverted(new_view);
 
@@ -264,8 +264,8 @@ auto compute_camera_snap_target(const sbx::math::vector3f& direction, std::float
   ImGuizmo::DecomposeMatrixToComponents(camera_world_matrix.data(), translation.data(), rotation.data(), scale.data());
 
   return {
-    sbx::math::vector3f{translation[0], translation[1], translation[2]},
-    sbx::math::quaternion{sbx::math::vector3f{rotation[0], rotation[1], rotation[2]}}
+    sbx::math::vector3{translation[0], translation[1], translation[2]},
+    sbx::math::quaternion{sbx::math::vector3{rotation[0], rotation[1], rotation[2]}}
   };
 }
 
@@ -305,15 +305,15 @@ auto draw_view_gizmo(const ImVec2& viewport_origin, const ImVec2& viewport_size)
   constexpr auto label_size = 13.0f;
 
   struct axis_definition {
-    sbx::math::vector3f direction;
+    sbx::math::vector3 direction;
     ImU32 color;
     const char* label;
   }; // struct axis_definition
 
   static constexpr auto axes = std::array<axis_definition, 3u>{
-    axis_definition{sbx::math::vector3f{1.0f, 0.0f, 0.0f}, IM_COL32(219, 61, 61, 255), "X"},
-    axis_definition{sbx::math::vector3f{0.0f, 1.0f, 0.0f}, IM_COL32(90, 191, 90, 255), "Y"},
-    axis_definition{sbx::math::vector3f{0.0f, 0.0f, 1.0f}, IM_COL32(64, 120, 219, 255), "Z"}
+    axis_definition{sbx::math::vector3{1.0f, 0.0f, 0.0f}, IM_COL32(219, 61, 61, 255), "X"},
+    axis_definition{sbx::math::vector3{0.0f, 1.0f, 0.0f}, IM_COL32(90, 191, 90, 255), "Y"},
+    axis_definition{sbx::math::vector3{0.0f, 0.0f, 1.0f}, IM_COL32(64, 120, 219, 255), "Z"}
   };
 
   auto handles = std::array<axis_gizmo_handle, 6u>{};
@@ -336,7 +336,7 @@ auto draw_view_gizmo(const ImVec2& viewport_origin, const ImVec2& viewport_size)
       -view_direction.z(),
       axis.color,
       nullptr,
-      sbx::math::vector3f{-axis.direction.x(), -axis.direction.y(), -axis.direction.z()}
+      sbx::math::vector3{-axis.direction.x(), -axis.direction.y(), -axis.direction.z()}
     };
   }
 
@@ -349,7 +349,7 @@ auto draw_view_gizmo(const ImVec2& viewport_origin, const ImVec2& viewport_size)
 
   draw_list->AddCircleFilled(center, radius + handle_radius, IM_COL32(26, 26, 26, 60));
 
-  auto snapped_direction = std::optional<sbx::math::vector3f>{};
+  auto snapped_direction = std::optional<sbx::math::vector3>{};
   auto active = false;
 
   for (const auto index : order) {
@@ -404,7 +404,7 @@ auto draw_view_gizmo(const ImVec2& viewport_origin, const ImVec2& viewport_size)
     const auto t = std::clamp(animation.elapsed / camera_snap_duration, 0.0f, 1.0f);
 
     auto& transform = camera.transform();
-    transform.position = sbx::math::vector3f::lerp(animation.start_position, animation.target_position, t);
+    transform.position = sbx::math::vector3::lerp(animation.start_position, animation.target_position, t);
     transform.rotation = sbx::math::quaternion::slerp(animation.start_rotation, animation.target_rotation, t);
 
     if (t >= 1.0f) {
@@ -422,7 +422,7 @@ struct icon_projection {
 
 // Forward version of viewport_picking.cpp's ray_from_viewport_position: world position -> clip ->
 // NDC -> pixel, rejecting anything behind the camera or outside the frustum.
-auto project_to_screen(const sbx::math::matrix4x4& view_projection, const sbx::math::vector3f& world_position, const ImVec2& viewport_origin, const ImVec2& viewport_size) -> icon_projection {
+auto project_to_screen(const sbx::math::matrix4x4& view_projection, const sbx::math::vector3& world_position, const ImVec2& viewport_origin, const ImVec2& viewport_size) -> icon_projection {
   const auto clip = view_projection * sbx::math::vector4{world_position, 1.0f};
 
   if (clip.w() <= 0.0f) {
@@ -469,7 +469,7 @@ auto draw_node_icons(editor_state& state, const ImVec2& viewport_origin, const I
 
   auto any_active = false;
 
-  const auto draw_icon = [&](sbx::ecs::entity entity, const sbx::math::vector3f& world_position, const char* icon) {
+  const auto draw_icon = [&](sbx::ecs::entity entity, const sbx::math::vector3& world_position, const char* icon) {
     const auto projected = project_to_screen(view_projection, world_position, viewport_origin, viewport_size);
 
     if (!projected.visible) {
@@ -507,15 +507,15 @@ auto draw_node_icons(editor_state& state, const ImVec2& viewport_origin, const I
   };
 
   for (auto&& [entity, transform, light] : scene.query<sbx::scenes::world_transform, sbx::scenes::point_light>(sbx::ecs::exclude<sbx::scenes::mesh_renderer>).each()) {
-    draw_icon(entity, sbx::math::vector3f{transform.matrix[3]}, ICON_MDI_LIGHTBULB);
+    draw_icon(entity, sbx::math::vector3{transform.matrix[3]}, ICON_MDI_LIGHTBULB);
   }
 
   for (auto&& [entity, transform, light] : scene.query<sbx::scenes::world_transform, sbx::scenes::spot_light>(sbx::ecs::exclude<sbx::scenes::mesh_renderer>).each()) {
-    draw_icon(entity, sbx::math::vector3f{transform.matrix[3]}, ICON_MDI_FLASHLIGHT);
+    draw_icon(entity, sbx::math::vector3{transform.matrix[3]}, ICON_MDI_FLASHLIGHT);
   }
 
   for (auto&& [entity, transform, light] : scene.query<sbx::scenes::world_transform, sbx::scenes::directional_light>(sbx::ecs::exclude<sbx::scenes::mesh_renderer>).each()) {
-    draw_icon(entity, sbx::math::vector3f{transform.matrix[3]}, ICON_MDI_WHITE_BALANCE_SUNNY);
+    draw_icon(entity, sbx::math::vector3{transform.matrix[3]}, ICON_MDI_WHITE_BALANCE_SUNNY);
   }
 
   // The scene's own active/play camera is excluded from its own icon only while it's actually
@@ -531,7 +531,7 @@ auto draw_node_icons(editor_state& state, const ImVec2& viewport_origin, const I
       continue;
     }
 
-    draw_icon(entity, sbx::math::vector3f{transform.matrix[3]}, ICON_MDI_CAMERA);
+    draw_icon(entity, sbx::math::vector3{transform.matrix[3]}, ICON_MDI_CAMERA);
   }
 
   return any_active;
@@ -562,23 +562,23 @@ auto draw_camera_frustum_gizmo(editor_state& state, const ImVec2& viewport_size)
   const auto half_width_far = half_height_far * aspect;
 
   // Camera-local space, forward along -Z (matches the engine's convention elsewhere, e.g. lighting/view matrices).
-  const auto near_corners = std::array<sbx::math::vector3f, 4u>{
-    sbx::math::vector3f{-half_width_near,  half_height_near, -camera.near_plane},
-    sbx::math::vector3f{ half_width_near,  half_height_near, -camera.near_plane},
-    sbx::math::vector3f{ half_width_near, -half_height_near, -camera.near_plane},
-    sbx::math::vector3f{-half_width_near, -half_height_near, -camera.near_plane}
+  const auto near_corners = std::array<sbx::math::vector3, 4u>{
+    sbx::math::vector3{-half_width_near,  half_height_near, -camera.near_plane},
+    sbx::math::vector3{ half_width_near,  half_height_near, -camera.near_plane},
+    sbx::math::vector3{ half_width_near, -half_height_near, -camera.near_plane},
+    sbx::math::vector3{-half_width_near, -half_height_near, -camera.near_plane}
   };
 
-  const auto far_corners = std::array<sbx::math::vector3f, 4u>{
-    sbx::math::vector3f{-half_width_far,  half_height_far, -camera.far_plane},
-    sbx::math::vector3f{ half_width_far,  half_height_far, -camera.far_plane},
-    sbx::math::vector3f{ half_width_far, -half_height_far, -camera.far_plane},
-    sbx::math::vector3f{-half_width_far, -half_height_far, -camera.far_plane}
+  const auto far_corners = std::array<sbx::math::vector3, 4u>{
+    sbx::math::vector3{-half_width_far,  half_height_far, -camera.far_plane},
+    sbx::math::vector3{ half_width_far,  half_height_far, -camera.far_plane},
+    sbx::math::vector3{ half_width_far, -half_height_far, -camera.far_plane},
+    sbx::math::vector3{-half_width_far, -half_height_far, -camera.far_plane}
   };
 
-  const auto to_world = [&world](const sbx::math::vector3f& local) -> sbx::math::vector3f {
+  const auto to_world = [&world](const sbx::math::vector3& local) -> sbx::math::vector3 {
     const auto point = world * sbx::math::vector4{local, 1.0f};
-    return sbx::math::vector3f{point.x(), point.y(), point.z()};
+    return sbx::math::vector3{point.x(), point.y(), point.z()};
   };
 
   auto& debug_draw = sbx::core::engine::get_module<sbx::render::scene_renderer_module>().debug_draw();

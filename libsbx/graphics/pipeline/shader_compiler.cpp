@@ -63,15 +63,20 @@ shader_compiler::~shader_compiler() {
 
 }
 
-// Content hash over the source, entry points, compiler options, target profile, and the Slang
-// toolchain's build tag (so a Slang version bump invalidates the cache). Not mtime-based — unstable
-// across a fresh checkout or a different machine.
-auto shader_compiler::_cache_key(const std::string& source, std::span<const entry_point_request> entry_points, std::span<const slang::CompilerOptionEntry> options, const char* profile) const -> std::string {
+// Content hash over every file the module depends on (entry file plus transitive #includes),
+// entry points, compiler options, target profile, and the Slang toolchain's build tag (so a Slang
+// version bump invalidates the cache). Not mtime-based — unstable across a fresh checkout or a
+// different machine. Hashing every dependency (not just the entry file) means editing a shared
+// header like shading_policy.slang changes every including shader's key too, instead of leaving a
+// stale pre-edit binary in the disk cache under an unchanged key.
+auto shader_compiler::_cache_key(std::span<const std::string> dependencies, std::span<const entry_point_request> entry_points, std::span<const slang::CompilerOptionEntry> options, const char* profile) const -> std::string {
   auto buffer = std::string{};
-  buffer.reserve(source.size() + 256u);
+  buffer.reserve(256u);
 
-  buffer.append(source);
-  buffer.push_back('\0');
+  for (const auto& dependency : dependencies) {
+    buffer.append(dependency);
+    buffer.push_back('\0');
+  }
 
   for (const auto& entry_point : entry_points) {
     buffer.append(entry_point.name);
@@ -122,23 +127,6 @@ auto shader_compiler::compile(const std::filesystem::path& path, std::span<const
     slang::CompilerOptionEntry{slang::CompilerOptionName::VulkanUseEntryPointName, {slang::CompilerOptionValueKind::Int, 1, 0, nullptr, nullptr}}
   };
 
-  const auto key = _cache_key(source, entry_points, options, "spirv_1_5");
-
-  if (auto cached = _disk_cache.try_load(key, path)) {
-    auto results = std::vector<compiled_entry_point>{};
-    results.reserve(cached->size());
-
-    for (auto& entry : *cached) {
-      results.push_back(compiled_entry_point{entry.stage, std::move(entry.name), std::move(entry.spirv)});
-    }
-
-    utility::logger<"graphics">::debug("Shader cache hit for '{}'", path.generic_string());
-
-    return results;
-  }
-
-  utility::logger<"graphics">::debug("Shader cache miss for '{}', compiling", path.generic_string());
-
   const auto search_paths = (root == parent) ? std::vector<const char*>{parent.c_str()} : std::vector<const char*>{parent.c_str(), root.c_str()};
 
   auto session_description = slang::SessionDesc{};
@@ -166,6 +154,43 @@ auto shader_compiler::compile(const std::filesystem::path& path, std::span<const
   if (module == nullptr) {
     throw utility::runtime_error{"Failed to load shader module '{}'", path.string()};
   }
+
+  // Every file the module actually parsed — the entry file itself plus every #include it
+  // transitively pulled in — so the cache key below tracks the full dependency set, not just the
+  // one file named in `path`.
+  auto dependencies = std::vector<std::string>{};
+  dependencies.reserve(static_cast<std::size_t>(module->getDependencyFileCount()));
+
+  for (auto index = SlangInt32{0}; index < module->getDependencyFileCount(); ++index) {
+    const auto* dependency_path = module->getDependencyFilePath(index);
+
+    if (dependency_path == nullptr) {
+      continue;
+    }
+
+    auto blob = std::string{dependency_path};
+    blob.push_back('\0');
+    blob.append(_read_file(dependency_path));
+
+    dependencies.push_back(std::move(blob));
+  }
+
+  const auto key = _cache_key(dependencies, entry_points, options, "spirv_1_5");
+
+  if (auto cached = _disk_cache.try_load(key, path)) {
+    auto results = std::vector<compiled_entry_point>{};
+    results.reserve(cached->size());
+
+    for (auto& entry : *cached) {
+      results.push_back(compiled_entry_point{entry.stage, std::move(entry.name), std::move(entry.spirv)});
+    }
+
+    utility::logger<"graphics">::debug("Shader cache hit for '{}'", path.generic_string());
+
+    return results;
+  }
+
+  utility::logger<"graphics">::debug("Shader cache miss for '{}', compiling", path.generic_string());
 
   auto results = std::vector<compiled_entry_point>{};
   results.reserve(entry_points.size());

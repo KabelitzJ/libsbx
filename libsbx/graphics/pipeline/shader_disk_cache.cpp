@@ -2,9 +2,19 @@
 // Copyright (c) 2026 Jonas Kabelitz
 #include <libsbx/graphics/pipeline/shader_disk_cache.hpp>
 
+#include <atomic>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
+
+#include <libsbx/utility/target.hpp>
+
+#if defined(SBX_PLATFORM_WIN32)
+  #define WIN32_LEAN_AND_MEAN
+  #include <windows.h>
+#else
+  #include <unistd.h>
+#endif
 
 #include <libsbx/core/engine.hpp>
 #include <libsbx/core/user_data_directory.hpp>
@@ -16,6 +26,22 @@ namespace sbx::graphics {
 
 inline constexpr auto shader_cache_magic = utility::fourcc_v<"SBSC">; // 'SBSC'
 inline constexpr auto shader_cache_format_version = std::uint32_t{1u};
+
+// Process id plus an in-process atomic counter: unique enough per store() call — across
+// processes (debug/release binaries, or two instances) and across concurrent threads within one —
+// to give every temp file its own name, so racing writers of the same key never touch each
+// other's file.
+auto _unique_suffix() -> std::string {
+#if defined(SBX_PLATFORM_WIN32)
+  const auto process_id = static_cast<std::uint64_t>(::GetCurrentProcessId());
+#else
+  const auto process_id = static_cast<std::uint64_t>(::getpid());
+#endif
+
+  static auto counter = std::atomic<std::uint64_t>{0u};
+
+  return std::to_string(process_id) + "." + std::to_string(counter.fetch_add(1u, std::memory_order_relaxed));
+}
 
 struct shader_cache_header {
   std::uint32_t magic;
@@ -128,33 +154,54 @@ auto shader_disk_cache::store(const std::string& key, const std::filesystem::pat
   auto error = std::error_code{};
   std::filesystem::create_directories(path.parent_path(), error);
 
-  auto out = std::ofstream{path, std::ios::binary};
+  // Write to a per-process temp file, then rename over the final path — a same-directory rename is
+  // atomic on the target filesystem, so a concurrent try_load() either sees the old complete file
+  // or the new complete one, never a torn write from two processes racing the same key (e.g. a
+  // debug and a release binary compiling the same shader at once).
+  const auto temp_path = path.string() + ".tmp." + _unique_suffix();
 
-  if (!out) {
-    utility::logger<"graphics">::warn("Shader disk cache: could not write '{}'", path.generic_string());
-    return;
-  }
+  {
+    auto out = std::ofstream{temp_path, std::ios::binary};
 
-  const auto header = shader_cache_header{
-    shader_cache_magic,
-    shader_cache_format_version,
-    static_cast<std::uint32_t>(key.size()),
-    static_cast<std::uint32_t>(compiled.size())
-  };
+    if (!out) {
+      utility::logger<"graphics">::warn("Shader disk cache: could not write '{}'", temp_path);
+      return;
+    }
 
-  out.write(reinterpret_cast<const char*>(&header), sizeof(header));
-  out.write(key.data(), static_cast<std::streamsize>(key.size()));
-
-  for (const auto& entry : compiled) {
-    const auto entry_header = entry_record_header{
-      static_cast<std::uint32_t>(entry.stage),
-      static_cast<std::uint32_t>(entry.name.size()),
-      static_cast<std::uint32_t>(entry.spirv.size())
+    const auto header = shader_cache_header{
+      shader_cache_magic,
+      shader_cache_format_version,
+      static_cast<std::uint32_t>(key.size()),
+      static_cast<std::uint32_t>(compiled.size())
     };
 
-    out.write(reinterpret_cast<const char*>(&entry_header), sizeof(entry_header));
-    out.write(entry.name.data(), static_cast<std::streamsize>(entry.name.size()));
-    out.write(reinterpret_cast<const char*>(entry.spirv.data()), static_cast<std::streamsize>(entry.spirv.size() * sizeof(std::uint32_t)));
+    out.write(reinterpret_cast<const char*>(&header), sizeof(header));
+    out.write(key.data(), static_cast<std::streamsize>(key.size()));
+
+    for (const auto& entry : compiled) {
+      const auto entry_header = entry_record_header{
+        static_cast<std::uint32_t>(entry.stage),
+        static_cast<std::uint32_t>(entry.name.size()),
+        static_cast<std::uint32_t>(entry.spirv.size())
+      };
+
+      out.write(reinterpret_cast<const char*>(&entry_header), sizeof(entry_header));
+      out.write(entry.name.data(), static_cast<std::streamsize>(entry.name.size()));
+      out.write(reinterpret_cast<const char*>(entry.spirv.data()), static_cast<std::streamsize>(entry.spirv.size() * sizeof(std::uint32_t)));
+    }
+
+    if (!out) {
+      utility::logger<"graphics">::warn("Shader disk cache: write failed for '{}'", temp_path);
+      std::filesystem::remove(temp_path, error);
+      return;
+    }
+  }
+
+  std::filesystem::rename(temp_path, path, error);
+
+  if (error) {
+    utility::logger<"graphics">::warn("Shader disk cache: could not publish '{}' ({})", path.generic_string(), error.message());
+    std::filesystem::remove(temp_path, error);
   }
 }
 

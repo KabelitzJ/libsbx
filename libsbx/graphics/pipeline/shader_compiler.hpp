@@ -55,7 +55,12 @@ public:
 
 private:
 
-  [[nodiscard]] auto _cache_key(const std::string& source, std::span<const entry_point_request> entry_points, std::span<const slang::CompilerOptionEntry> options, const char* profile) const -> std::string;
+  // dependencies: one entry per file the loaded module actually parsed (the requested entry file
+  // plus everything transitively reached via #include, per slang::IModule::getDependencyFile*),
+  // each already packed as "<path>\0<content>" by the caller — not just the entry file's own text,
+  // so editing a shared header the module includes changes the key too instead of leaving a stale
+  // cache entry in place.
+  [[nodiscard]] auto _cache_key(std::span<const std::string> dependencies, std::span<const entry_point_request> entry_points, std::span<const slang::CompilerOptionEntry> options, const char* profile) const -> std::string;
 
   Slang::ComPtr<slang::IGlobalSession> _global_session{};
   shader_disk_cache _disk_cache{};

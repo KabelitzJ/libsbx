@@ -126,9 +126,7 @@ float sample_cascade_pcf(frame_data frame, uint cascade, float3 world_position, 
   float3 light_direction = normalize(-frame.lights[0].direction.xyz);
   float ndl = dot(world_normal, light_direction);
 
-  static const float min_bias = 0.0005;
-  static const float max_bias = 0.003;
-  float bias = lerp(max_bias, min_bias, saturate(ndl));
+  float bias = 0.0005 * (1.0 - ndl);
 
   float resolution_scale = float(width) / 2048.0;
   float radius = (1.0 / resolution_scale) * (1.0 + float(cascade) * 0.3);

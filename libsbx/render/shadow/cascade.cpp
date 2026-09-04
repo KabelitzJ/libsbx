@@ -32,7 +32,7 @@ inline constexpr auto cascade_lambda = 0.85f;
 }
 
 auto compute_cascades(const camera_data& camera, std::float_t aspect, const math::vector3& light_direction, std::float_t shadow_distance) -> std::array<cascade_info, shadow_cascade_count> {
-  const auto near_plane = camera.near_plane;
+  const auto near_plane = std::max(camera.near_plane, 0.5f);
   const auto far_plane = std::min(camera.far_plane, shadow_distance);
 
   const auto splits = compute_splits(near_plane, far_plane);

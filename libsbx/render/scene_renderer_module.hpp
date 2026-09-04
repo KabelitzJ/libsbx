@@ -118,6 +118,8 @@ public:
    */
   auto set_grid_enabled(bool enabled) -> void;
 
+  auto grid_enabled() const -> bool;
+
   /**
    * @brief The shared immediate-mode line accumulator -- physics colliders (see
    * physics::physics_module::late_update()) and, later, script-driven gizmos submit into this every

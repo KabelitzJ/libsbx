@@ -321,6 +321,15 @@ auto editor_ui_layer::_draw_dockspace() -> void {
       changed |= ImGui::MenuItem("Physics Broadphase", nullptr, &flags.broadphase);
       changed |= ImGui::MenuItem("Physics Contacts", nullptr, &flags.contacts);
 
+      ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
+
+      auto& scene_renderer_module = sbx::core::engine::get_module<sbx::render::scene_renderer_module>();
+      auto grid_enabled = scene_renderer_module.grid_enabled();
+
+      changed |= ImGui::MenuItem("Show Grid", nullptr, &grid_enabled);
+
+      scene_renderer_module.set_grid_enabled(grid_enabled);
+
       if (changed) {
         physics_module.set_debug_draw_flags(flags);
       }

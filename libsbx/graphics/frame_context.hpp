@@ -19,13 +19,6 @@
 
 namespace sbx::graphics {
 
-/**
- * @brief Owns the frame loop: the timeline semaphore, the swapchain, and everything sized by it.
- *
- * Frame pacing uses one monotonic timeline semaphore (starts at 1, submit for frame N signals value N) instead of per-frame fences, so "has the GPU finished frame N" is a value comparison. Binary semaphores are used only where the swapchain extension requires them (acquire, present).
- *
- * The frame index must never be reset — a timeline signal must strictly increase, so resetting it on swapchain recreation would hang the throttle.
- */
 class frame_context : public utility::noncopyable {
 
 public:
@@ -34,38 +27,14 @@ public:
 
   ~frame_context();
 
-  /**
-   * @brief Waits for the GPU to catch up, reclaims retired resources, acquires an image and opens
-   * the frame's command buffer.
-   *
-   * @return The command buffer to record into, or null when the frame must be skipped because the
-   * window is iconified or the swapchain went out of date during the acquire. When null is
-   * returned @ref end_frame must not be called, since nothing was submitted and the frame index
-   * must not advance past a value the GPU will never signal.
-   */
   [[nodiscard]] auto begin_frame() -> memory::observer_ptr<command_buffer>;
 
-  /**
-   * @brief Closes the command buffer, submits it signalling the timeline, and presents.
-   *
-   * Only valid after a @ref begin_frame that returned a command buffer.
-   */
   auto end_frame() -> void;
 
-  /**
-   * @brief The value the frame currently being recorded will signal once its submit completes.
-   *
-   * This is the value to pass to `resource_pool::retire`. A resource retired during frame N can
-   * only have been referenced by frame N or earlier, so waiting for N is always safe.
-   */
   [[nodiscard]] auto frame_index() const noexcept -> std::uint64_t {
     return _frame_index;
   }
 
-  /**
-   * @brief The highest timeline value the GPU has signalled, sampled once at the start of the
-   * current frame so that every pool observes the same value.
-   */
   [[nodiscard]] auto timeline_value() const noexcept -> std::uint64_t {
     return _timeline_value;
   }
@@ -78,34 +47,14 @@ public:
     return *_swapchain;
   }
 
-  /**
-   * @brief The frame timeline semaphore, for a pass that needs to wait on a *previous* frame's
-   * signalled value from within the current frame's own recording — same-queue order alone does
-   * not guarantee frame N's reads happen after frame N-1's writes (see particle_simulate_pass).
-   * Pair with @ref add_wait and @ref previous_frame_value.
-   */
   [[nodiscard]] auto timeline() const noexcept -> VkSemaphore {
     return _timeline;
   }
 
-  /**
-   * @brief The timeline value the *previous* frame's submission signalled (or will signal) — wait
-   * on this before touching a resource frame N-1 may still be writing. Safe on the first frame too:
-   * frame_index starts at 1, so this evaluates to 0, the semaphore's own initial value.
-   */
   [[nodiscard]] auto previous_frame_value() const noexcept -> std::uint64_t {
     return _frame_index - 1u;
   }
 
-  /**
-   * @brief Queues an extra timeline wait for the next @ref end_frame's submit, alongside its
-   * existing binary `_image_available` wait. Consumed and cleared inside @ref end_frame.
-   *
-   * For a producer that submits on its own command buffer outside the normal pass list (e.g.
-   * particle_simulate_pass) whose writes the main command buffer reads later the same frame —
-   * same-queue order alone does not guarantee that ordering. Call once per producer per frame,
-   * before @ref end_frame runs.
-   */
   auto add_wait(VkSemaphore semaphore, std::uint64_t value, VkPipelineStageFlags stage) -> void {
     _extra_waits.push_back(extra_wait{semaphore, value, stage});
   }

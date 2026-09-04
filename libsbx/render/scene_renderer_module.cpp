@@ -139,6 +139,10 @@ auto scene_renderer_module::set_grid_enabled(bool enabled) -> void {
   _grid_enabled = enabled;
 }
 
+auto scene_renderer_module::grid_enabled() const -> bool {
+  return _grid_enabled;
+}
+
 auto scene_renderer_module::_build_packet() -> render_packet {
   SBX_PROFILE_SCOPE("scene_renderer_module::build_packet");
 

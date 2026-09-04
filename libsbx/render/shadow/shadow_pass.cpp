@@ -36,11 +36,6 @@ shadow_pass::shadow_pass() {
       .depth_format = graphics::format::d32_sfloat,
       .cull_mode = cull,
       .front_face = graphics::front_face::counter_clockwise,
-      .depth_bias = graphics::depth_bias{
-        .constant_factor = 1.5f, 
-        .slope_factor = 2.5f, 
-        .clamp = 0.0f
-      },
       .depth_test = true,
       .depth_write = true,
       .depth_compare = graphics::compare_operation::less_or_equal,
@@ -49,7 +44,7 @@ shadow_pass::shadow_pass() {
     });
   };
 
-  _pipelines[0] = make(graphics::cull_mode::back, "Shadow Cascade");
+  _pipelines[0] = make(graphics::cull_mode::front, "Shadow Cascade");
   _pipelines[1] = make(graphics::cull_mode::none, "Shadow Cascade Double-Sided");
 }
 

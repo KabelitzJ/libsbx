@@ -51,9 +51,11 @@ void compute_main(compute_input input) {
 
   emitter_instance emitter = push.emitters[particle.emitter_slot];
 
+  float3 old_velocity = particle.velocity;
+
   particle.velocity += float3(0.0, -1.0, 0.0) * emitter.gravity * push.delta_time;
-  particle.velocity *= max(1.0 - emitter.drag * push.delta_time, 0.0);
-  particle.position += particle.velocity * push.delta_time;
+  particle.velocity *= exp(-emitter.drag * push.delta_time);
+  particle.position += 0.5 * (old_velocity + particle.velocity) * push.delta_time;
 
   push.particles[slot] = particle;
 

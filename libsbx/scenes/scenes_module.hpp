@@ -54,10 +54,22 @@ public:
     return _is_simulating ? core::engine::delta_time() : units::seconds{};
   }
 
+  /**
+   * @brief Accumulated simulation_delta_time() — i.e. core::engine::time() with pauses subtracted
+   * out. Unlike core::engine::time(), this stops advancing whenever simulation is paused, so
+   * anything deriving absolute-time animation (shader noise/scroll, procedural motion, ...) freezes
+   * in sync with simulation_delta_time() instead of continuing to animate while paused. Updated once
+   * per frame in late_update(), before render reads it.
+   */
+  [[nodiscard]] auto simulation_time() const -> units::seconds {
+    return _simulation_time;
+  }
+
 private:
 
   scene _scene{};
   bool _is_simulating{true};
+  units::seconds _simulation_time{};
 
 }; // class scenes_module
 

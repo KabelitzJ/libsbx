@@ -17,8 +17,8 @@ struct particle {
 
 enum emission_shape : uint {
   point = 0u,
-  sphere = 0u,
-  box = 0u
+  sphere = 1u,
+  box = 2u
 }; // enum emission_shape
 
 static const uint particle_texture_index_none = 0xFFFFFFFFu;

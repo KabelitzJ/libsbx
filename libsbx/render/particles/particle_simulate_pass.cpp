@@ -10,8 +10,6 @@
 
 #include <libsbx/core/engine.hpp>
 
-#include <libsbx/scenes/scenes_module.hpp>
-
 #include <libsbx/graphics/graphics_module.hpp>
 #include <libsbx/graphics/frame_context.hpp>
 #include <libsbx/graphics/commands/command_buffer.hpp>
@@ -83,13 +81,8 @@ auto particle_simulate_pass::execute(render_context& context) -> void {
 
   frame_context.add_wait(frame_context.timeline(), frame_context.previous_frame_value(), VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
 
-  // simulation_delta_time(), not core::engine::delta_time() directly: zero while the scene isn't
-  // simulating (editor Edit/Pause), so already-alive particles freeze in place — position, age,
-  // and everything derived from age (size/color) — instead of continuing to integrate while
-  // paused. See scenes_module::is_simulating's doc comment.
-  auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
-  const auto delta_time = static_cast<std::float_t>(scenes_module.simulation_delta_time().value());
-  const auto time = static_cast<std::float_t>(core::engine::time());
+  const auto delta_time = context.delta_time;
+  const auto time = context.time;
 
   const auto write_index = static_cast<std::uint32_t>(context.frame_index % 2u);
   const auto read_index = 1u - write_index;

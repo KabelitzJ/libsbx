@@ -17,6 +17,8 @@ scenes_module::~scenes_module() {
 auto scenes_module::late_update() -> void {
   SBX_PROFILE_SCOPE("scenes_module::late_update");
 
+  _simulation_time += simulation_delta_time();
+
   _scene.update();
 }
 

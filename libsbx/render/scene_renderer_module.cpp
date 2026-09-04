@@ -337,10 +337,15 @@ auto scene_renderer_module::_build_packet() -> render_packet {
 
   auto& assets_module = core::engine::get_module<assets::assets_module>();
 
-  // simulation_delta_time(), not core::engine::delta_time() directly: zero while the scene isn't
-  // simulating (editor Edit/Pause), so effects stop advancing instead of animating continuously
-  // while just editing — see scenes_module::is_simulating's doc comment.
+  // simulation_delta_time()/simulation_time(), not core::engine's directly: both hold at their
+  // pre-pause value while the scene isn't simulating (editor Edit/Pause), so effects stop advancing
+  // instead of animating continuously while just editing — see scenes_module::is_simulating's doc
+  // comment.
   const auto delta_time = static_cast<std::float_t>(scenes_module.simulation_delta_time().value());
+  const auto time = static_cast<std::float_t>(scenes_module.simulation_time().value());
+
+  packet.delta_time = delta_time;
+  packet.time = time;
 
   for (auto&& [entity, world, instance] : scene.query<scenes::world_transform, scenes::particle_effect>().each()) {
     if (!instance.effect.is_valid()) {
@@ -476,6 +481,8 @@ auto scene_renderer_module::record(graphics::command_buffer& command_buffer, mat
     .packet = memory::make_observer<const render_packet>(packet),
     .frame_index = frame_context.frame_index(),
     .slot = static_cast<std::uint32_t>(slot),
+    .time = packet.time,
+    .delta_time = packet.delta_time,
     .extent = scene_extent,
     .swapchain_extent = extent,
     .environment_index = environment_index,

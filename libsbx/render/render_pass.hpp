@@ -43,6 +43,9 @@ struct render_context {
   std::uint64_t frame_index{0u};
   std::uint32_t slot{0u};
 
+  std::float_t time{0.0f};
+  std::float_t delta_time{0.0f};
+
   math::vector2u extent{};
 
   math::vector2u swapchain_extent{};

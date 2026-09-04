@@ -116,6 +116,8 @@ struct render_packet {
   std::float_t environment_intensity{1.0f};
   std::float_t ambient_intensity{1.0f};
   std::vector<particle_emitter_snapshot> particle_emitters{};
+  std::float_t time{0.0f};
+  std::float_t delta_time{0.0f};
 }; // struct render_packet
 
 } // namespace sbx::render

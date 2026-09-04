@@ -126,12 +126,12 @@ float sample_cascade_pcf(frame_data frame, uint cascade, float3 world_position, 
   float3 light_direction = normalize(-frame.lights[0].direction.xyz);
   float ndl = dot(world_normal, light_direction);
 
-  float bias = 0.0005 * (1.0 - ndl);
+  float bias = 0.0005 * (1.0 - ndl) * (1.0 + float(cascade) * 1.0);
 
   float resolution_scale = float(width) / 2048.0;
   float radius = (1.0 / resolution_scale) * (1.0 + float(cascade) * 0.3);
 
-  float angle = shadow_hash21(uv) * two_pi;
+  float angle = shadow_hash21(world_position.xz + world_position.y * 0.6180339887) * two_pi;
   float2x2 rotation = shadow_rotation_2d(angle);
 
   SamplerState shadow_sampler = samplers[sampler_index];

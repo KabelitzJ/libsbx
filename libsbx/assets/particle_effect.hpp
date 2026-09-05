@@ -170,8 +170,8 @@ class particle_effect;
 struct sub_emitter_binding {
   sub_emitter_event event{sub_emitter_event::birth};
   asset_handle<particle_effect> effect{};
-  std::float_t probability{1.0f}; // 0..1 chance per event
-  bool inherit_velocity{false}; // adds the triggering particle's velocity to every particle the child spawns
+  std::float_t probability{1.0f};
+  bool inherit_velocity{false};
 }; // struct sub_emitter_binding
 
 inline constexpr auto trail_max_points = std::size_t{20};

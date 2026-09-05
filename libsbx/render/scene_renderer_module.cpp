@@ -42,6 +42,7 @@
 #include <libsbx/render/passes/debug_draw_pass.hpp>
 #include <libsbx/render/passes/tonemap_pass.hpp>
 #include <libsbx/render/passes/transparent_accumulate_pass.hpp>
+#include <libsbx/render/passes/particle_pass.hpp>
 #include <libsbx/render/passes/transparent_resolve_pass.hpp>
 #include <libsbx/render/shadow/shadow_pass.hpp>
 #include <libsbx/render/shadow/cascade.hpp>
@@ -112,6 +113,7 @@ scene_renderer_module::scene_renderer_module() {
   _graph.add_pass<grid_pass>();
   _graph.add_pass<debug_draw_pass>();
   _graph.add_pass<transparent_accumulate_pass>();
+  _graph.add_pass<particle_pass>();
   _graph.add_pass<transparent_resolve_pass>();
   _graph.add_pass<tonemap_pass>();
 
@@ -320,8 +322,54 @@ auto scene_renderer_module::_build_packet() -> render_packet {
   packet.delta_time = delta_time;
   packet.time = time;
 
+  auto billboard_buckets = std::map<std::pair<std::uint32_t, assets::emitter_blend_mode>, std::vector<particle_billboard_instance>>{};
+
   for (auto&& [entity, world, instance] : scene.query<scenes::world_transform, scenes::particle_effect>().each()) {
-    
+    if (!instance.effect.is_valid()) {
+      continue;
+    }
+
+    const auto& configs = instance.effect->emitters();
+    const auto emitter_count = std::min(configs.size(), instance.emitters.size());
+
+    for (auto index = std::size_t{0u}; index < emitter_count; ++index) {
+      const auto& config = configs[index];
+      const auto& runtime = instance.emitters[index];
+
+      if (!config.texture.is_valid() || !assets_module.is_resident(config.texture)) {
+        continue;
+      }
+
+      auto& bucket = billboard_buckets[{config.texture->index(), config.blend_mode}];
+
+      for (const auto& particle : runtime.particles) {
+        bucket.push_back(particle_billboard_instance{
+          .position = particle.position,
+          .size = particle.size,
+          .color = particle.color,
+          .rotation = particle.rotation,
+          .texture_index = config.texture->index()
+        });
+      }
+    }
+  }
+
+  for (auto& [key, instances] : billboard_buckets) {
+    // A texture+blend key can end up in the map with zero particles (operator[] default-constructs
+    // the bucket before anything is known to push into it) -- skip it, so particle_pass never sees a
+    // command with instance_count == 0 and mistakes an empty particle_billboard_instances for "no
+    // buffer needed yet".
+    if (instances.empty()) {
+      continue;
+    }
+
+    packet.particle_billboard_commands.push_back(particle_billboard_command{
+      .blend_mode = key.second,
+      .instance_count = static_cast<std::uint32_t>(instances.size()),
+      .instance_offset = static_cast<std::uint32_t>(packet.particle_billboard_instances.size())
+    });
+
+    packet.particle_billboard_instances.insert(packet.particle_billboard_instances.end(), instances.begin(), instances.end());
   }
 
   return packet;

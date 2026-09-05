@@ -32,6 +32,8 @@
 
 #include <libsbx/physics/physics_module.hpp>
 
+#include <libsbx/particles/particles_module.hpp>
+
 #include <libsbx/scripting/scripting_module.hpp>
 
 #include <libsbx/render/presentation_module.hpp>
@@ -52,6 +54,7 @@ using module_list = sbx::core::module_list<
   sbx::assets::assets_module,
   sbx::scenes::scenes_module,
   sbx::physics::physics_module,
+  sbx::particles::particles_module,
   sbx::scripting::scripting_module,
   sbx::render::scene_renderer_module
 >;

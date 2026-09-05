@@ -295,6 +295,7 @@ auto write_node(YAML::Node& node_yaml, ecs::registry& registry, ecs::entity enti
         component["type"] = "particle_effect";
         component["effect"] = keys.particle_effect_keys.at(effect_id);
         component["loop"] = instance.loop;
+        component["duration"] = instance.duration;
         component["playback"] = (instance.playback == particle_playback_state::paused) ? "paused" : (instance.playback == particle_playback_state::stopped) ? "stopped" : "playing";
 
         components.push_back(component);
@@ -501,6 +502,10 @@ auto read_node_components(node& target_node, const YAML::Node& node_yaml, assets
 
       if (component["loop"]) {
         instance.loop = component["loop"].as<bool>();
+      }
+
+      if (component["duration"]) {
+        instance.duration = component["duration"].as<std::float_t>();
       }
 
       if (const auto playback = component["playback"]) {

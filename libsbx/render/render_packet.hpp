@@ -7,6 +7,7 @@
 #include <vector>
 
 #include <libsbx/math/matrix4x4.hpp>
+#include <libsbx/math/vector2.hpp>
 #include <libsbx/math/vector3.hpp>
 #include <libsbx/math/uuid.hpp>
 
@@ -14,6 +15,7 @@
 #include <libsbx/assets/mesh.hpp>
 #include <libsbx/assets/texture.hpp>
 #include <libsbx/assets/environment_map.hpp>
+#include <libsbx/assets/particle_effect.hpp>
 
 namespace sbx::render {
 
@@ -94,6 +96,27 @@ struct light_data {
   std::uint32_t padding{0u};
 }; // struct light_data
 
+/**
+ * @brief One camera-facing quad, vertex-pulled by particle_pass (see shaders/particles/particle_billboard.slang).
+ */
+struct particle_billboard_instance {
+  math::vector3 position{0.0f, 0.0f, 0.0f};
+  std::float_t size{0.0f};
+  math::color color{1.0f, 1.0f, 1.0f, 1.0f};
+  std::float_t rotation{0.0f};
+  std::uint32_t texture_index{0xFFFFFFFFu};
+  math::vector2 padding{0.0f, 0.0f};
+}; // struct particle_billboard_instance
+
+/**
+ * @brief One coalesced instanced draw of particle_billboard_instances sharing a texture and blend mode.
+ */
+struct particle_billboard_command {
+  assets::emitter_blend_mode blend_mode{assets::emitter_blend_mode::additive};
+  std::uint32_t instance_count{0u};
+  std::uint32_t instance_offset{0u};
+}; // struct particle_billboard_command
+
 struct render_packet {
   camera_data camera{};
   std::vector<draw_command> opaque_commands{};
@@ -102,6 +125,8 @@ struct render_packet {
   std::vector<transform_data> transforms{};
   std::vector<light_data> lights{};
   std::uint32_t directional_light_count{0u};
+  std::vector<particle_billboard_instance> particle_billboard_instances{};
+  std::vector<particle_billboard_command> particle_billboard_commands{};
   bool has_shadow_caster{false}; // When true, lights[0] is the cascaded-shadow-mapped sun.
   std::float_t shadow_distance{75.0f};
   assets::environment_map_handle environment{};

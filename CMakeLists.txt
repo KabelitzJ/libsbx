@@ -223,6 +223,9 @@ target_sources(
 
     "${CMAKE_SOURCE_DIR}/libsbx/memory/memory.cpp"
 
+    "${CMAKE_SOURCE_DIR}/libsbx/particles/particles_module.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/particles/spawn.cpp"
+
     "${CMAKE_SOURCE_DIR}/libsbx/physics/collision_cache_io.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/physics/convex_hull_cache.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/physics/epa.cpp"
@@ -248,6 +251,7 @@ target_sources(
     "${CMAKE_SOURCE_DIR}/libsbx/render/passes/grid_pass.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/render/passes/light_culling_pass.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/render/passes/opaque_pass.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/render/passes/particle_pass.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/render/passes/skybox_pass.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/render/passes/tonemap_pass.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/render/passes/transparent_accumulate_pass.cpp"
@@ -450,6 +454,10 @@ target_sources(
       "${CMAKE_SOURCE_DIR}/libsbx/memory/memory.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/memory/observer_ptr.hpp"
 
+      "${CMAKE_SOURCE_DIR}/libsbx/particles/particle.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/particles/particles_module.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/particles/spawn.hpp"
+
       "${CMAKE_SOURCE_DIR}/libsbx/physics/collider.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/physics/collision_cache_io.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/physics/contact.hpp"
@@ -484,6 +492,7 @@ target_sources(
       "${CMAKE_SOURCE_DIR}/libsbx/render/passes/depth_pre_pass.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/render/passes/light_culling_pass.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/render/passes/opaque_pass.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/render/passes/particle_pass.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/render/passes/skybox_pass.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/render/passes/tonemap_pass.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/render/passes/transparent_accumulate_pass.hpp"

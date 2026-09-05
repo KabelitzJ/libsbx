@@ -469,10 +469,16 @@ auto asset_residency::load_particle_effect(const math::uuid& id) -> particle_eff
 
       if (emitter_node["shape"]) {
         const auto shape = emitter_node["shape"].as<std::string>();
-        emitter.shape = (shape == "sphere") ? emitter_shape::sphere : (shape == "box") ? emitter_shape::box : emitter_shape::point;
+        emitter.shape = (shape == "sphere") ? emitter_shape::sphere : (shape == "box") ? emitter_shape::box : (shape == "cone") ? emitter_shape::cone : emitter_shape::point;
       }
 
       if (emitter_node["shape_extents"]) emitter.shape_extents = emitter_node["shape_extents"].as<math::vector3>();
+
+      if (const auto cone_node = emitter_node["cone"]) {
+        if (cone_node["angle_degrees"]) emitter.cone.angle = math::degree{cone_node["angle_degrees"].as<std::float_t>()};
+        if (cone_node["radius"]) emitter.cone.radius = cone_node["radius"].as<std::float_t>();
+        if (cone_node["emit_from_volume"]) emitter.cone.emit_from_volume = cone_node["emit_from_volume"].as<std::float_t>();
+      }
 
       if (emitter_node["velocity_min"]) emitter.velocity_min = emitter_node["velocity_min"].as<math::vector3>();
       if (emitter_node["velocity_max"]) emitter.velocity_max = emitter_node["velocity_max"].as<math::vector3>();
@@ -482,6 +488,8 @@ auto asset_residency::load_particle_effect(const math::uuid& id) -> particle_eff
       if (emitter_node["end_color"]) emitter.end_color = emitter_node["end_color"].as<math::color>();
       if (emitter_node["size_min"]) emitter.size_min = emitter_node["size_min"].as<std::float_t>();
       if (emitter_node["size_max"]) emitter.size_max = emitter_node["size_max"].as<std::float_t>();
+      if (emitter_node["rotation_min"]) emitter.rotation_min = emitter_node["rotation_min"].as<std::float_t>();
+      if (emitter_node["rotation_max"]) emitter.rotation_max = emitter_node["rotation_max"].as<std::float_t>();
       if (emitter_node["gravity"]) emitter.gravity = emitter_node["gravity"].as<std::float_t>();
       if (emitter_node["drag"]) emitter.drag = emitter_node["drag"].as<std::float_t>();
 
@@ -568,8 +576,15 @@ auto asset_residency::save_particle_effect(particle_effect_handle& effect, const
     emitter_node["blend_mode"] = (emitter.blend_mode == emitter_blend_mode::alpha_blend) ? "alpha_blend" : "additive";
     emitter_node["emission_rate"] = emitter.emission_rate;
     emitter_node["burst_count"] = emitter.burst_count;
-    emitter_node["shape"] = (emitter.shape == emitter_shape::sphere) ? "sphere" : (emitter.shape == emitter_shape::box) ? "box" : "point";
+    emitter_node["shape"] = (emitter.shape == emitter_shape::sphere) ? "sphere" : (emitter.shape == emitter_shape::box) ? "box" : (emitter.shape == emitter_shape::cone) ? "cone" : "point";
     emitter_node["shape_extents"] = emitter.shape_extents;
+
+    auto cone_node = YAML::Node{};
+    cone_node["angle_degrees"] = emitter.cone.angle.to_degrees().value();
+    cone_node["radius"] = emitter.cone.radius;
+    cone_node["emit_from_volume"] = emitter.cone.emit_from_volume;
+    emitter_node["cone"] = cone_node;
+
     emitter_node["velocity_min"] = emitter.velocity_min;
     emitter_node["velocity_max"] = emitter.velocity_max;
     emitter_node["lifetime_min"] = emitter.lifetime_min;
@@ -578,6 +593,8 @@ auto asset_residency::save_particle_effect(particle_effect_handle& effect, const
     emitter_node["end_color"] = emitter.end_color;
     emitter_node["size_min"] = emitter.size_min;
     emitter_node["size_max"] = emitter.size_max;
+    emitter_node["rotation_min"] = emitter.rotation_min;
+    emitter_node["rotation_max"] = emitter.rotation_max;
     emitter_node["gravity"] = emitter.gravity;
     emitter_node["drag"] = emitter.drag;
 

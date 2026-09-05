@@ -763,8 +763,6 @@ auto draw_skybox_section(editor_state& state, sbx::scenes::node& node, sbx::asse
   bracket_edit(state, node, sky, pending, "Edit Skybox");
 }
 
-// particle_effect::loop is a stub for a future burst/duration model (see its doc comment); exposed
-// anyway so authoring intent isn't lost once that lands.
 auto draw_particle_effect_instance_section(editor_state& state, sbx::scenes::node& node, sbx::assets::assets_module& assets_module) -> void {
   auto is_open = true;
 
@@ -804,6 +802,14 @@ auto draw_particle_effect_instance_section(editor_state& state, sbx::scenes::nod
     if (ImGui::Checkbox("Loop", &instance.loop)) {
       state.push_command(std::make_unique<modify_component_command<sbx::scenes::particle_effect>>(node.id(), before, instance, "Edit Particle Effect"));
     }
+
+    ImGui::BeginDisabled(instance.loop);
+
+    if (ImGui::DragFloat("Duration", &instance.duration, 0.05f, 0.01f, 3600.0f)) {
+      state.push_command(std::make_unique<modify_component_command<sbx::scenes::particle_effect>>(node.id(), before, instance, "Edit Particle Effect"));
+    }
+
+    ImGui::EndDisabled();
   }
 
   ImGui::SeparatorText("Playback");
@@ -831,8 +837,8 @@ auto draw_particle_effect_instance_section(editor_state& state, sbx::scenes::nod
   ImGui::BeginDisabled(is_stopped);
 
   if (ImGui::Button(ICON_MDI_STOP " Stop")) {
-    // Only flips playback — scene_renderer_module notices next frame and drains slots on its own (see
-    // particle_slot_pool_state's doc comment in scene_renderer_module.hpp).
+    // Only flips playback -- particles_module::fixed_update() notices next frame and clears every
+    // emitter's particle array on its own.
     instance.playback = sbx::scenes::particle_playback_state::stopped;
     instance.elapsed = 0.0f;
   }
@@ -1751,7 +1757,7 @@ auto inspector_panel::_draw_particle_effect_properties(const asset_selection& as
   ImGui::SeparatorText("Emitters");
 
   static constexpr auto blend_mode_names = std::array<const char*, 2u>{"Additive", "Alpha Blend"};
-  static constexpr auto shape_names = std::array<const char*, 3u>{"Point", "Sphere", "Box"};
+  static constexpr auto shape_names = std::array<const char*, 4u>{"Point", "Sphere", "Box", "Cone"};
 
   auto& emitters = _particle_effect_edit.emitters;
   auto removed_index = std::optional<std::size_t>{};
@@ -1819,6 +1825,19 @@ auto inspector_panel::_draw_particle_effect_properties(const asset_selection& as
           emitter.shape_extents = sbx::math::vector3{shape_extents[0], shape_extents[1], shape_extents[2]};
           changed = true;
         }
+      } else if (emitter.shape == sbx::assets::emitter_shape::cone) {
+        auto cone_angle_degrees = emitter.cone.angle.to_degrees().value();
+        if (ImGui::DragFloat("Cone Angle", &cone_angle_degrees, 0.1f, 0.1f, 89.0f)) {
+          emitter.cone.angle = sbx::math::degree{cone_angle_degrees};
+          changed = true;
+        }
+
+        changed |= ImGui::DragFloat("Cone Radius", &emitter.cone.radius, 0.01f, 0.001f, 1000.0f);
+        changed |= ImGui::SliderFloat("Cone Emit From Volume", &emitter.cone.emit_from_volume, 0.0f, 1.0f);
+
+        if (ImGui::IsItemHovered()) {
+          ImGui::SetTooltip("0 = spawn on the base disc (Unity's \"Emit from: Base\"), 1 = fill the whole cone volume.");
+        }
       }
 
       auto velocity_min = std::array<std::float_t, 3u>{emitter.velocity_min.x(), emitter.velocity_min.y(), emitter.velocity_min.z()};
@@ -1841,6 +1860,9 @@ auto inspector_panel::_draw_particle_effect_properties(const asset_selection& as
 
       changed |= ImGui::DragFloat("Size Min", &emitter.size_min, 0.005f, 0.0f, 1000.0f);
       changed |= ImGui::DragFloat("Size Max", &emitter.size_max, 0.005f, emitter.size_min, 1000.0f);
+
+      changed |= ImGui::DragFloat("Rotation Min", &emitter.rotation_min, 0.01f, -6.2832f, 6.2832f);
+      changed |= ImGui::DragFloat("Rotation Max", &emitter.rotation_max, 0.01f, emitter.rotation_min, 6.2832f);
 
       changed |= ImGui::DragFloat("Gravity", &emitter.gravity, 0.05f, -1000.0f, 1000.0f);
       changed |= ImGui::DragFloat("Drag", &emitter.drag, 0.01f, 0.0f, 100.0f);

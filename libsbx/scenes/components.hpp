@@ -4,7 +4,6 @@
 #define LIBSBX_SCENES_COMPONENTS_HPP_
 
 #include <cstdint>
-#include <limits>
 #include <optional>
 #include <string>
 #include <vector>
@@ -25,6 +24,8 @@
 #include <libsbx/assets/texture.hpp>
 #include <libsbx/assets/environment_map.hpp>
 #include <libsbx/assets/particle_effect.hpp>
+
+#include <libsbx/particles/particle.hpp>
 
 namespace sbx::scenes {
 
@@ -166,12 +167,17 @@ struct skybox {
   std::float_t ambient_intensity{1.0f}; // Scales the IBL diffuse+specular ambient term added to every surface, independent of the background's own brightness.
 }; // struct skybox
 
+/**
+ * @brief Per-instance runtime state for one of the asset's emitters -- one of these per entry in
+ * assets::particle_effect::emitters(), index-paired. Never serialized: a loaded scene always starts
+ * with an empty `particles` array and re-simulates from whatever `particle_effect::elapsed` was
+ * saved, the same way physics_module treats its broadphase as non-persisted rebuilt-on-load state.
+ */
 struct particle_emitter {
-  inline static constexpr auto invalid_slot = std::numeric_limits<std::uint32_t>::max();
-
-  std::uint32_t slot{invalid_slot};
   std::float_t emission_accumulator{0.0f};
   bool burst_fired{false};
+  std::uint32_t next_particle_id{0u};
+  std::vector<particles::particle> particles{};
 }; // struct particle_emitter
 
 enum class particle_playback_state : std::uint8_t {
@@ -185,6 +191,7 @@ struct particle_effect {
   particle_playback_state playback{particle_playback_state::playing};
   bool loop{true};
   std::float_t elapsed{0.0f};
+  std::float_t duration{5.0f}; // Ignored while looping; otherwise emission stops once elapsed reaches this.
   std::vector<particle_emitter> emitters{};
 }; // struct particle_effect
 

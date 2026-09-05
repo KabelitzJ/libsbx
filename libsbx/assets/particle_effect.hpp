@@ -7,6 +7,7 @@
 #include <string>
 #include <vector>
 
+#include <libsbx/math/angle.hpp>
 #include <libsbx/math/color.hpp>
 #include <libsbx/math/uuid.hpp>
 #include <libsbx/math/vector3.hpp>
@@ -24,8 +25,21 @@ enum class emitter_blend_mode : std::uint8_t {
 enum class emitter_shape : std::uint8_t {
   point,
   sphere,
-  box
+  box,
+  cone
 }; // enum class emitter_shape
+
+/**
+ * @brief Params for emitter_shape::cone. Apex at the emitter's origin, axis along local -Z. `radius`
+ * is the base circle's radius at the angle's implied height. `emit_from_volume` is the probability a
+ * given particle samples from inside the cone's volume instead of from its base disc (0 = always the
+ * base, matching Unity's "Emit from: Base"; 1 = always the volume).
+ */
+struct cone_shape_params {
+  math::angle angle{math::degree{25.0f}};
+  std::float_t radius{1.0f};
+  std::float_t emit_from_volume{0.0f};
+}; // struct cone_shape_params
 
 struct particle_emitter {
   std::string name{"emitter"};
@@ -34,6 +48,7 @@ struct particle_emitter {
   std::uint32_t burst_count{0u};
   emitter_shape shape{emitter_shape::point};
   math::vector3 shape_extents{0.0f, 0.0f, 0.0f};
+  cone_shape_params cone{};
   math::vector3 velocity_min{-1.0f, 1.0f, -1.0f};
   math::vector3 velocity_max{1.0f, 2.0f, 1.0f};
   std::float_t lifetime_min{1.0f};
@@ -42,6 +57,8 @@ struct particle_emitter {
   math::color end_color{1.0f, 1.0f, 1.0f, 0.0f};
   std::float_t size_min{0.1f};
   std::float_t size_max{0.2f};
+  std::float_t rotation_min{0.0f};
+  std::float_t rotation_max{0.0f};
   std::float_t gravity{0.0f};
   std::float_t drag{0.0f};
   texture_handle texture{};

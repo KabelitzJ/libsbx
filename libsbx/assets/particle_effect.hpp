@@ -12,6 +12,8 @@
 #include <libsbx/math/uuid.hpp>
 #include <libsbx/math/vector3.hpp>
 
+#include <libsbx/containers/static_vector.hpp>
+
 #include <libsbx/assets/asset_handle.hpp>
 #include <libsbx/assets/texture.hpp>
 
@@ -41,6 +43,40 @@ struct cone_shape_params {
   std::float_t emit_from_volume{0.0f};
 }; // struct cone_shape_params
 
+enum class particle_collision_mode : std::uint8_t {
+  none,
+  planes,
+  world
+}; // enum class particle_collision_mode
+
+/**
+ * @brief One explicit collision plane, for particle_collision_mode::planes. `normal` points away
+ * from the plane's surface (the side particles bounce off of); `distance` is the plane's offset
+ * along `normal` from the world origin, i.e. a particle is behind the plane when
+ * `dot(normal, position) - distance < 0`.
+ */
+struct collision_plane {
+  math::vector3 normal{0.0f, 1.0f, 0.0f};
+  std::float_t distance{0.0f};
+}; // struct collision_plane
+
+inline constexpr auto collision_max_planes = std::size_t{4};
+
+/**
+ * @brief Particle collision, matching Unity's Collision module's two modes: an explicit plane list
+ * (cheap, no broadphase involved) or the real physics world (queries physics_module's broadphase +
+ * GJK/EPA, treating each particle as a small sphere -- see physics_module::query_sphere_contacts).
+ */
+struct collision_config {
+  particle_collision_mode mode{particle_collision_mode::none};
+  containers::static_vector<collision_plane, collision_max_planes> planes{};
+  std::float_t bounce{0.5f};
+  std::float_t lifetime_loss{0.0f};
+  std::float_t dampen{0.0f};
+  std::float_t radius_scale{1.0f};
+  std::uint32_t max_collisions_per_particle{0u}; // 0 = unlimited
+}; // struct collision_config
+
 struct particle_emitter {
   std::string name{"emitter"};
   emitter_blend_mode blend_mode{emitter_blend_mode::additive};
@@ -62,6 +98,7 @@ struct particle_emitter {
   std::float_t gravity{0.0f};
   std::float_t drag{0.0f};
   texture_handle texture{};
+  collision_config collision{};
 }; // struct particle_emitter
 
 class particle_effect final {

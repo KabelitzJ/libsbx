@@ -497,6 +497,36 @@ auto asset_residency::load_particle_effect(const math::uuid& id) -> particle_eff
         emitter.texture = load_texture(std::filesystem::path{emitter_node["texture"].as<std::string>()}, graphics::format::r8g8b8a8_srgb);
       }
 
+      if (const auto collision_node = emitter_node["collision"]) {
+        auto& collision = emitter.collision;
+
+        if (collision_node["mode"]) {
+          const auto mode = collision_node["mode"].as<std::string>();
+          collision.mode = (mode == "planes") ? particle_collision_mode::planes : (mode == "world") ? particle_collision_mode::world : particle_collision_mode::none;
+        }
+
+        if (collision_node["bounce"]) collision.bounce = collision_node["bounce"].as<std::float_t>();
+        if (collision_node["lifetime_loss"]) collision.lifetime_loss = collision_node["lifetime_loss"].as<std::float_t>();
+        if (collision_node["dampen"]) collision.dampen = collision_node["dampen"].as<std::float_t>();
+        if (collision_node["radius_scale"]) collision.radius_scale = collision_node["radius_scale"].as<std::float_t>();
+        if (collision_node["max_collisions_per_particle"]) collision.max_collisions_per_particle = collision_node["max_collisions_per_particle"].as<std::uint32_t>();
+
+        if (const auto planes_node = collision_node["planes"]) {
+          for (const auto plane_node : planes_node) {
+            if (collision.planes.size() >= collision_max_planes) {
+              break;
+            }
+
+            auto plane = collision_plane{};
+
+            if (plane_node["normal"]) plane.normal = plane_node["normal"].as<math::vector3>();
+            if (plane_node["distance"]) plane.distance = plane_node["distance"].as<std::float_t>();
+
+            collision.planes.push_back(plane);
+          }
+        }
+      }
+
       info.emitters.push_back(emitter);
     }
   }
@@ -601,6 +631,26 @@ auto asset_residency::save_particle_effect(particle_effect_handle& effect, const
     if (const auto slot = texture_path_of(emitter.texture)) {
       emitter_node["texture"] = *slot;
     }
+
+    auto collision_node = YAML::Node{};
+    collision_node["mode"] = (emitter.collision.mode == particle_collision_mode::planes) ? "planes" : (emitter.collision.mode == particle_collision_mode::world) ? "world" : "none";
+    collision_node["bounce"] = emitter.collision.bounce;
+    collision_node["lifetime_loss"] = emitter.collision.lifetime_loss;
+    collision_node["dampen"] = emitter.collision.dampen;
+    collision_node["radius_scale"] = emitter.collision.radius_scale;
+    collision_node["max_collisions_per_particle"] = emitter.collision.max_collisions_per_particle;
+
+    auto planes_node = YAML::Node{YAML::NodeType::Sequence};
+
+    for (const auto& plane : emitter.collision.planes) {
+      auto plane_node = YAML::Node{};
+      plane_node["normal"] = plane.normal;
+      plane_node["distance"] = plane.distance;
+      planes_node.push_back(plane_node);
+    }
+
+    collision_node["planes"] = planes_node;
+    emitter_node["collision"] = collision_node;
 
     emitters_node.push_back(emitter_node);
   }

@@ -37,6 +37,16 @@
 namespace sbx::physics {
 
 /**
+ * @brief One collider found overlapping a query_sphere_contacts() sphere.
+ */
+struct sphere_query_hit {
+  scenes::node node{};
+  math::vector3 point{};             // world-space contact point, on the collider's surface
+  math::vector3 normal{};            // world space, points from the collider's surface toward the sphere's center
+  std::float_t penetration_depth{0.0f};
+}; // struct sphere_query_hit
+
+/**
  * @brief Owns the world broadphase and the fixed-step integrate/broadphase/narrowphase/solve
  * pipeline for every rigidbody+shape_collider in the active scene. Mirrors scenes::scenes_module's
  * shape: a fixed_update() method, picked up automatically as the core::stage::fixed_update hook.
@@ -121,6 +131,17 @@ public:
   auto set_time_to_sleep(std::float_t seconds) noexcept -> void {
     _time_to_sleep = seconds;
   }
+
+  /**
+   * @brief Every collider (static or dynamic) whose surface currently overlaps a sphere of @p radius
+   * centered at @p center, appended to @p out_hits (cleared first). Treats the sphere as an ad-hoc
+   * convex_shape and reuses gjk_intersect + epa_penetration -- the same machinery
+   * generate_pair_contact already runs for ordinary body pairs -- so this adds no new collision math,
+   * only a new entry point into it. A non-convex mesh_collider candidate (resolve_convex returns
+   * nullopt for one) is silently skipped -- particles don't yet collide against raw triangle meshes,
+   * only convex shape_colliders and mesh_colliders authored with is_convex == true.
+   */
+  auto query_sphere_contacts(scenes::scene& scene, const math::vector3& center, std::float_t radius, std::vector<sphere_query_hit>& out_hits) -> void;
 
 private:
 

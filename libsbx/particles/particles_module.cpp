@@ -33,11 +33,11 @@ auto particles_module::fixed_update() -> void {
   const auto dt = core::engine::fixed_delta_time().value();
 
   for (auto&& [entity, world, effect] : scene.query<scenes::world_transform, scenes::particle_effect>().each()) {
-    _simulate_effect(effect, world.matrix, dt);
+    _simulate_effect(scene, effect, world.matrix, dt);
   }
 }
 
-auto particles_module::_simulate_effect(scenes::particle_effect& effect, const math::matrix4x4& world, std::float_t dt) -> void {
+auto particles_module::_simulate_effect(scenes::scene& scene, scenes::particle_effect& effect, const math::matrix4x4& world, std::float_t dt) -> void {
   if (effect.playback == scenes::particle_playback_state::stopped) {
     for (auto& runtime : effect.emitters) {
       runtime.particles.clear();
@@ -81,6 +81,7 @@ auto particles_module::_simulate_effect(scenes::particle_effect& effect, const m
   for (auto index = std::size_t{0u}; index < configs.size(); ++index) {
     _spawn(configs[index], effect.emitters[index], world, emitting, dt);
     _integrate(configs[index], effect.emitters[index], dt);
+    _resolve_collisions(scene, configs[index], effect.emitters[index]);
   }
 
   if (!effect.loop && effect.elapsed >= effect.duration) {
@@ -121,12 +122,66 @@ auto particles_module::_integrate(const assets::particle_emitter& config, scenes
 
     p.velocity += math::vector3{0.0f, -config.gravity, 0.0f} * dt;
     p.velocity *= std::max(0.0f, 1.0f - config.drag * dt);
+    p.previous_position = p.position;
     p.position += p.velocity * dt;
 
     p.color = lerp_color(config.start_color, config.end_color, t);
   }
 
   std::erase_if(runtime.particles, [](const particle& p) { return p.age >= p.lifetime; });
+}
+
+auto particles_module::_resolve_collisions(scenes::scene& scene, const assets::particle_emitter& config, scenes::particle_emitter& runtime) -> void {
+  const auto& collision = config.collision;
+
+  if (collision.mode == assets::particle_collision_mode::none) {
+    return;
+  }
+
+  // Bounce/dampen/lifetime_loss response shared by both modes; forces death (picked up by the next
+  // _integrate's recycle pass, one tick later) once max_collisions_per_particle is reached.
+  const auto respond = [&](particle& p, const math::vector3& normal, std::float_t push_out) {
+    p.position += normal * push_out;
+    p.velocity = math::vector3::reflect(p.velocity, normal) * collision.bounce;
+    p.velocity *= (1.0f - collision.dampen);
+    p.lifetime -= p.lifetime * collision.lifetime_loss;
+    p.collision_count += 1u;
+
+    if (collision.max_collisions_per_particle > 0u && p.collision_count >= collision.max_collisions_per_particle) {
+      p.age = p.lifetime;
+    }
+  };
+
+  if (collision.mode == assets::particle_collision_mode::planes) {
+    for (auto& p : runtime.particles) {
+      const auto radius = p.size * collision.radius_scale;
+
+      for (const auto& plane : collision.planes) {
+        const auto distance = math::vector3::dot(plane.normal, p.position) - plane.distance;
+
+        if (distance < radius) {
+          respond(p, plane.normal, radius - distance);
+        }
+      }
+    }
+
+    return;
+  }
+
+  // world: a real broadphase+narrowphase query per particle, so keep the hit buffer alive across the
+  // loop instead of reallocating it every call.
+  auto& physics_module = core::engine::get_module<physics::physics_module>();
+  auto hits = std::vector<physics::sphere_query_hit>{};
+
+  for (auto& p : runtime.particles) {
+    const auto radius = p.size * collision.radius_scale;
+
+    physics_module.query_sphere_contacts(scene, p.position, radius, hits);
+
+    for (const auto& hit : hits) {
+      respond(p, hit.normal, hit.penetration_depth);
+    }
+  }
 }
 
 } // namespace sbx::particles

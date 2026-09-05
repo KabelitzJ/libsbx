@@ -20,6 +20,7 @@
 #include <libsbx/render/debug/debug_draw.hpp>
 
 #include <libsbx/physics/narrowphase.hpp>
+#include <libsbx/physics/epa.hpp>
 #include <libsbx/physics/solver.hpp>
 #include <libsbx/physics/physics_debug.hpp>
 
@@ -354,6 +355,46 @@ auto physics_module::fixed_update() -> void {
   update_sleep_timers(scene, dt, _linear_sleep_threshold, _angular_sleep_threshold, _time_to_sleep);
 
   _update_manifold_cache();
+}
+
+auto physics_module::query_sphere_contacts(scenes::scene& scene, const math::vector3& center, std::float_t radius, std::vector<sphere_query_hit>& out_hits) -> void {
+  out_hits.clear();
+
+  auto& assets_module = core::engine::get_module<assets::assets_module>();
+
+  const auto sphere_shape = convex_shape{physics::sphere{radius}};
+  const auto sphere_pose = transform{center, math::quaternion::identity, math::vector3::one};
+
+  const auto extent = math::vector3{radius, radius, radius};
+  const auto query_aabb = math::volume{center - extent, center + extent};
+
+  const auto visit = [&](const scenes::node& candidate) {
+    const auto resolved = resolve_convex(scene, candidate, _hull_cache, assets_module);
+
+    if (!resolved) {
+      return;
+    }
+
+    const auto gjk = gjk_intersect(sphere_shape, sphere_pose, resolved->shape, resolved->pose);
+
+    if (!gjk.intersecting) {
+      return;
+    }
+
+    const auto epa = epa_penetration(sphere_shape, sphere_pose, resolved->shape, resolved->pose, gjk.simplex);
+
+    if (!epa.valid) {
+      return;
+    }
+
+    // epa_penetration's normal points from the sphere (a, the first shape passed above) into the
+    // candidate (b) -- flip it so callers get "away from the surface", the direction they actually
+    // want to push a particle or reflect its velocity along.
+    out_hits.push_back(sphere_query_hit{candidate, epa.point_on_b, -epa.normal, epa.penetration_depth});
+  };
+
+  _static_tree.query(query_aabb, visit);
+  _dynamic_tree.query(query_aabb, visit);
 }
 
 auto physics_module::late_update() -> void {

@@ -1872,6 +1872,79 @@ auto inspector_panel::_draw_particle_effect_properties(const asset_selection& as
 
       changed |= draw_texture_picker("##particle_texture_picker", emitter.texture, assets_module, sbx::graphics::format::r8g8b8a8_srgb);
 
+      ImGui::SeparatorText("Collision");
+
+      static constexpr auto collision_mode_names = std::array<const char*, 3u>{"None", "Planes", "World"};
+      auto collision_mode_index = static_cast<std::int32_t>(emitter.collision.mode);
+
+      if (ImGui::Combo("Collision Mode", &collision_mode_index, collision_mode_names.data(), static_cast<std::int32_t>(collision_mode_names.size()))) {
+        emitter.collision.mode = static_cast<sbx::assets::particle_collision_mode>(collision_mode_index);
+        changed = true;
+      }
+
+      if (emitter.collision.mode != sbx::assets::particle_collision_mode::none) {
+        changed |= ImGui::DragFloat("Bounce", &emitter.collision.bounce, 0.01f, 0.0f, 2.0f);
+        changed |= ImGui::SliderFloat("Lifetime Loss", &emitter.collision.lifetime_loss, 0.0f, 1.0f);
+        changed |= ImGui::SliderFloat("Dampen", &emitter.collision.dampen, 0.0f, 1.0f);
+        changed |= ImGui::DragFloat("Radius Scale", &emitter.collision.radius_scale, 0.01f, 0.01f, 10.0f);
+
+        auto max_collisions = static_cast<std::int32_t>(emitter.collision.max_collisions_per_particle);
+        if (ImGui::DragInt("Max Collisions", &max_collisions, 1.0f, 0, 100)) {
+          emitter.collision.max_collisions_per_particle = static_cast<std::uint32_t>(std::max(max_collisions, 0));
+          changed = true;
+        }
+
+        if (ImGui::IsItemHovered()) {
+          ImGui::SetTooltip("0 = unlimited");
+        }
+      }
+
+      if (emitter.collision.mode == sbx::assets::particle_collision_mode::planes) {
+        auto& planes = emitter.collision.planes;
+
+        ImGui::Text("Planes (%zu / %zu)", planes.size(), sbx::assets::collision_max_planes);
+
+        auto removed_plane_index = std::optional<std::size_t>{};
+
+        for (auto plane_index = std::size_t{0u}; plane_index < planes.size(); ++plane_index) {
+          ImGui::PushID(static_cast<std::int32_t>(plane_index));
+
+          auto& plane = planes[plane_index];
+
+          auto normal = std::array<std::float_t, 3u>{plane.normal.x(), plane.normal.y(), plane.normal.z()};
+          if (draw_vector3_control("Normal", normal, 0.0f, 0.01f).changed) {
+            plane.normal = sbx::math::vector3::normalized(sbx::math::vector3{normal[0], normal[1], normal[2]});
+            changed = true;
+          }
+
+          changed |= ImGui::DragFloat("Distance", &plane.distance, 0.05f, -1000.0f, 1000.0f);
+
+          if (ImGui::SmallButton(ICON_MDI_DELETE " Remove Plane")) {
+            removed_plane_index = plane_index;
+            changed = true;
+          }
+
+          ImGui::PopID();
+        }
+
+        if (removed_plane_index) {
+          for (auto i = *removed_plane_index; i + 1u < planes.size(); ++i) {
+            planes[i] = planes[i + 1u];
+          }
+
+          planes.pop_back();
+        }
+
+        ImGui::BeginDisabled(planes.size() >= sbx::assets::collision_max_planes);
+
+        if (ImGui::Button(ICON_MDI_PLUS " Add Plane")) {
+          planes.push_back(sbx::assets::collision_plane{});
+          changed = true;
+        }
+
+        ImGui::EndDisabled();
+      }
+
       ImGui::TreePop();
     }
 

@@ -404,6 +404,10 @@ auto asset_residency::update_material(material_handle& material, const material:
   material->_is_double_sided = create_info.is_double_sided;
   material->_casts_shadow = create_info.casts_shadow;
   material->_receives_shadow = create_info.receives_shadow;
+  material->_normal_scale = create_info.normal_scale;
+  material->_occlusion_strength = create_info.occlusion_strength;
+  material->_emissive_strength = create_info.emissive_strength;
+  material->_ior = create_info.ior;
   material->_albedo = create_info.albedo;
   material->_normal = create_info.normal;
   material->_metallic_roughness = create_info.metallic_roughness;
@@ -460,6 +464,10 @@ auto asset_residency::save_material(material_handle& material, const std::filesy
   node["is_double_sided"] = material->is_double_sided();
   node["casts_shadow"] = material->casts_shadow();
   node["receives_shadow"] = material->receives_shadow();
+  node["normal_scale"] = material->normal_scale();
+  node["occlusion_strength"] = material->occlusion_strength();
+  node["emissive_strength"] = material->emissive_strength();
+  node["ior"] = material->ior();
 
   if (const auto slot = path_of(material->albedo())) {
     node["albedo"] = *slot;
@@ -1141,12 +1149,11 @@ auto asset_residency::process_uploads(std::uint64_t frame_index) -> void {
     data.normal_index = resolve(material.normal(), _normal);
     data.metallic_roughness_index = resolve(material.metallic_roughness(), _white);
     data.occlusion_index = resolve(material.occlusion(), _white);
-    data.emissive_index = resolve(material.emissive(), _black);
+    data.emissive_index = resolve(material.emissive(), _white);
     data.metallic_factor = material.metallic_factor();
     data.roughness_factor = material.roughness_factor();
     data.alpha_cutoff = material.alpha_cutoff();
-    data.flags = ((material.alpha() == alpha_mode::mask) ? material_flag_masked : 0u)
-      | (material.receives_shadow() ? material_flag_receives_shadow : 0u);
+    data.flags = ((material.alpha() == alpha_mode::mask) ? material_flag_masked : 0u) | (material.receives_shadow() ? material_flag_receives_shadow : 0u);
     data.normal_scale = material.normal_scale();
     data.occlusion_strength = material.occlusion_strength();
     data.emissive_strength = material.emissive_strength();

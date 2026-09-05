@@ -36,6 +36,7 @@
 #include <libsbx/scenes/scene.hpp>
 #include <libsbx/scenes/components.hpp>
 
+#include <libsbx/render/passes/bloom_pass.hpp>
 #include <libsbx/render/passes/depth_pre_pass.hpp>
 #include <libsbx/render/passes/light_culling_pass.hpp>
 #include <libsbx/render/passes/opaque_pass.hpp>
@@ -200,6 +201,7 @@ scene_renderer_module::scene_renderer_module() {
   _graph.add_pass<particle_simulate_pass>(*_particle_pool_additive, *_particle_pool_alpha_blend);
   _graph.add_pass<particle_pass>();
   _graph.add_pass<transparent_resolve_pass>();
+  _graph.add_pass<bloom_pass>();
   _graph.add_pass<tonemap_pass>();
 
   auto& presentation_module = core::engine::get_module<render::presentation_module>();
@@ -391,6 +393,10 @@ auto scene_renderer_module::_build_packet() -> render_packet {
     packet.camera.near_plane = camera.near_plane;
     packet.camera.far_plane = camera.far_plane;
     packet.camera.exposure = camera.exposure;
+    packet.camera.bloom_enabled = camera.bloom_enabled;
+    packet.camera.bloom_intensity = camera.bloom_intensity;
+    packet.camera.bloom_threshold = camera.bloom_threshold;
+    packet.camera.bloom_knee = camera.bloom_knee;
     packet.camera.is_active = true;
   }
 
@@ -406,6 +412,18 @@ auto scene_renderer_module::_build_packet() -> render_packet {
       packet.environment = sky.environment;
       packet.environment_intensity = sky.intensity;
       packet.ambient_intensity = sky.ambient_intensity;
+    }
+
+    // Bloom, same reasoning as environment/skybox above: it's a scene-authored look, not something
+    // that should silently reset to editor_camera's own (likely stale/default) copy just because
+    // the editor's fly-camera is standing in for view/projection while play_state is "edit".
+    if (_camera_override) {
+      const auto& camera = camera_node.get_component<scenes::camera>();
+
+      packet.camera.bloom_enabled = camera.bloom_enabled;
+      packet.camera.bloom_intensity = camera.bloom_intensity;
+      packet.camera.bloom_threshold = camera.bloom_threshold;
+      packet.camera.bloom_knee = camera.bloom_knee;
     }
   }
 
@@ -916,7 +934,9 @@ auto scene_renderer_module::record(graphics::command_buffer& command_buffer, mat
     .accumulator_index = _accumulator_index,
     .revealage = _revealage_image,
     .revealage_msaa = _revealage_msaa_image,
-    .revealage_index = _revealage_index
+    .revealage_index = _revealage_index,
+    .bloom_upsample = _bloom_upsample_image,
+    .bloom_upsample_index = _bloom_upsample_index
   };
 
   _prepare_frame(context);
@@ -965,6 +985,8 @@ auto scene_renderer_module::_ensure_resources() -> void {
   _accumulator_index = bindless_table.reserve_sampled_image();
 
   _revealage_index = bindless_table.reserve_sampled_image();
+
+  _bloom_upsample_index = bindless_table.reserve_sampled_image();
 
   _frame_buffer = registry.emplace<graphics::buffer>(graphics::buffer::create_info{
     .size = memory::stride_v<frame_data> * graphics::swapchain::max_frames_in_flight,
@@ -1116,6 +1138,8 @@ auto scene_renderer_module::_resize_targets(const math::vector2u extent) -> void
     registry.retire(_accumulator_msaa_image, frame_index);
     registry.retire(_revealage_image, frame_index);
     registry.retire(_revealage_msaa_image, frame_index);
+    registry.retire(_bloom_downsample_image, frame_index);
+    registry.retire(_bloom_upsample_image, frame_index);
   }
 
   _depth_image = registry.emplace<graphics::image>(graphics::image::create_info{
@@ -1180,6 +1204,29 @@ auto scene_renderer_module::_resize_targets(const math::vector2u extent) -> void
 
   bindless_table.write_sampled_image(_revealage_index, registry.get<graphics::image>(_revealage_image).view());
 
+  const auto bloom_extent = bloom_pass::extent_for(extent);
+  const auto bloom_mip_count = bloom_pass::mip_count_for(extent);
+
+  _bloom_downsample_image = registry.emplace<graphics::image>(graphics::image::create_info{
+    .extent = math::vector3u{bloom_extent, 1u},
+    .format = graphics::format::r16g16b16a16_sfloat,
+    .usage = graphics::image_usage::storage | graphics::image_usage::sampled,
+    .mip_levels = bloom_mip_count,
+    .samples = graphics::samples::count_1,
+    .name = "Bloom Downsample"
+  });
+
+  _bloom_upsample_image = registry.emplace<graphics::image>(graphics::image::create_info{
+    .extent = math::vector3u{bloom_extent, 1u},
+    .format = graphics::format::r16g16b16a16_sfloat,
+    .usage = graphics::image_usage::storage | graphics::image_usage::sampled,
+    .mip_levels = bloom_mip_count - 1u,
+    .samples = graphics::samples::count_1,
+    .name = "Bloom Upsample"
+  });
+
+  bindless_table.write_sampled_image(_bloom_upsample_index, registry.get<graphics::image>(_bloom_upsample_image).view());
+
   const auto final_image_format = static_cast<graphics::format>(surface.format().format);
 
   _final_image = registry.emplace<graphics::image>(graphics::image::create_info{
@@ -1210,6 +1257,8 @@ auto scene_renderer_module::_build_graph_resources() const -> graph_resources {
     .accumulator_msaa = _accumulator_msaa_image,
     .revealage = _revealage_image,
     .revealage_msaa = _revealage_msaa_image,
+    .bloom_downsample = _bloom_downsample_image,
+    .bloom_upsample = _bloom_upsample_image,
     .shadow_maps = _shadow_map_images,
     .frame_buffer = _frame_buffer,
     .cluster_aabb_buffer = _cluster_aabb_buffer,

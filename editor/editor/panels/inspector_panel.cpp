@@ -214,6 +214,10 @@ auto extract_material_to_asset(sbx::assets::assets_module& assets_module, const 
   info.is_double_sided = source->is_double_sided();
   info.casts_shadow = source->casts_shadow();
   info.receives_shadow = source->receives_shadow();
+  info.normal_scale = source->normal_scale();
+  info.occlusion_strength = source->occlusion_strength();
+  info.emissive_strength = source->emissive_strength();
+  info.ior = source->ior();
   info.albedo = source->albedo();
   info.normal = source->normal();
   info.metallic_roughness = source->metallic_roughness();
@@ -691,6 +695,14 @@ auto draw_camera_section(editor_state& state, sbx::scenes::node& node) -> void {
   ImGui::DragFloat("Far Plane", &camera.far_plane, 1.0f, camera.near_plane, 100000.0f);
   bracket_edit(state, node, camera, pending, "Edit Camera");
   ImGui::DragFloat("Exposure", &camera.exposure, 0.05f, -8.0f, 8.0f);
+  bracket_edit(state, node, camera, pending, "Edit Camera");
+  ImGui::Checkbox("Bloom", &camera.bloom_enabled);
+  bracket_edit(state, node, camera, pending, "Edit Camera");
+  ImGui::DragFloat("Bloom Intensity", &camera.bloom_intensity, 0.005f, 0.0f, 2.0f);
+  bracket_edit(state, node, camera, pending, "Edit Camera");
+  ImGui::DragFloat("Bloom Threshold", &camera.bloom_threshold, 0.02f, 0.0f, 10.0f);
+  bracket_edit(state, node, camera, pending, "Edit Camera");
+  ImGui::DragFloat("Bloom Knee", &camera.bloom_knee, 0.01f, 0.0f, 2.0f);
   bracket_edit(state, node, camera, pending, "Edit Camera");
 
   auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
@@ -1889,8 +1901,15 @@ auto inspector_panel::_draw_material_properties(const asset_selection& asset, sb
     changed = true;
   }
 
+  // Multiplies emissive_factor unbounded (shaders/lighting.slang) -- the usual way to push a
+  // material's own output past bloom_pass's threshold without touching any light in the scene.
+  changed |= ImGui::DragFloat("Emissive Strength", &_material_edit.emissive_strength, 0.05f, 0.0f, 100.0f);
+
   changed |= ImGui::DragFloat("Metallic", &_material_edit.metallic_factor, 0.01f, 0.0f, 1.0f);
   changed |= ImGui::DragFloat("Roughness", &_material_edit.roughness_factor, 0.01f, 0.0f, 1.0f);
+  changed |= ImGui::DragFloat("IOR", &_material_edit.ior, 0.01f, 1.0f, 3.0f);
+  changed |= ImGui::DragFloat("Normal Scale", &_material_edit.normal_scale, 0.01f, 0.0f, 2.0f);
+  changed |= ImGui::DragFloat("Occlusion Strength", &_material_edit.occlusion_strength, 0.01f, 0.0f, 1.0f);
 
   static constexpr auto alpha_mode_names = std::array<const char*, 3u>{"Opaque", "Mask", "Blend"};
   auto alpha_index = static_cast<std::int32_t>(_material_edit.alpha);

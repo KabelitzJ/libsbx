@@ -24,6 +24,8 @@ struct push_data {
   uint color_index;
   uint sampler_index;
   float exposure;
+  uint bloom_index;
+  float bloom_intensity;
 }; // struct push_data
 
 [[vk::push_constant]] ConstantBuffer<push_data> push;
@@ -65,6 +67,12 @@ vertex_output vertex_main(vertex_input input) {
 [shader("fragment")]
 fragment_output fragment_main(fragment_input input) {
   float3 hdr = textures[push.color_index].Sample(samplers[push.sampler_index], input.uv).rgb;
+
+  // Locked to mip 0 (SampleLevel, not Sample) -- bloom_upsample_index is bound against the whole
+  // mip chain's default view, and this fullscreen triangle's UV derivatives shouldn't be trusted to
+  // pick mip 0 on their own.
+  float3 bloom = textures[push.bloom_index].SampleLevel(samplers[push.sampler_index], input.uv, 0.0).rgb;
+  hdr += bloom * push.bloom_intensity;
 
   hdr *= exp2(push.exposure);
 

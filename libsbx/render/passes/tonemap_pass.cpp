@@ -25,6 +25,8 @@ struct tonemap_push {
   std::uint32_t color_index;
   std::uint32_t sampler_index;
   std::float_t exposure;
+  std::uint32_t bloom_index;
+  std::float_t bloom_intensity;
 }; // struct tonemap_push
 
 tonemap_pass::tonemap_pass() {
@@ -55,6 +57,9 @@ auto tonemap_pass::declare(graphics_pass_builder& builder, const graph_resources
   // HDR target: geometry's writes -> this pass's sampled reads.
   builder.reads_image(resources.color, graphics::pipeline_stage::fragment_shader, graphics::access::shader_sampled_read, graphics::image_layout::shader_read_only_optimal);
 
+  // bloom_pass declares this ready every frame, bloom_enabled or not -- see its doc comment.
+  builder.reads_image(resources.bloom_upsample, graphics::pipeline_stage::fragment_shader, graphics::access::shader_sampled_read, graphics::image_layout::shader_read_only_optimal);
+
   auto group = render_attachment_group{.extent = resources.extent};
 
   // final_image's first (and only, this compile) touch, so the compiler clears it — a fullscreen
@@ -80,7 +85,10 @@ auto tonemap_pass::execute(render_context& context, std::uint32_t /*group*/) -> 
 
   context.command_buffer->bind_pipeline(*_pipeline);
 
-  auto values = tonemap_push{context.color_index, context.sampler_index, context.packet->camera.exposure};
+  const auto& camera = context.packet->camera;
+  const auto bloom_intensity = camera.bloom_enabled ? camera.bloom_intensity : 0.0f;
+
+  auto values = tonemap_push{context.color_index, context.sampler_index, camera.exposure, context.bloom_upsample_index, bloom_intensity};
   auto range = std::array<std::byte, graphics::bindless_table::push_constant_size>{};
   std::memcpy(range.data(), &values, sizeof(values));
 

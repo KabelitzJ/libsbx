@@ -252,6 +252,7 @@ target_sources(
 
     "${CMAKE_SOURCE_DIR}/libsbx/render/skinning/skin_pass.cpp"
 
+    "${CMAKE_SOURCE_DIR}/libsbx/render/passes/bloom_pass.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/render/passes/debug_draw_pass.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/render/passes/depth_pre_pass.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/render/passes/grid_pass.cpp"
@@ -502,6 +503,7 @@ target_sources(
 
       "${CMAKE_SOURCE_DIR}/libsbx/render/skinning/skin_pass.hpp"
 
+      "${CMAKE_SOURCE_DIR}/libsbx/render/passes/bloom_pass.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/render/passes/debug_draw_pass.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/render/passes/depth_pre_pass.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/render/passes/light_culling_pass.hpp"

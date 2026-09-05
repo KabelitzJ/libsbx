@@ -82,6 +82,10 @@ auto editor_camera::to_camera_data() const -> sbx::render::camera_data {
   data.near_plane = _params.near_plane;
   data.far_plane = _params.far_plane;
   data.exposure = _params.exposure;
+  data.bloom_enabled = _params.bloom_enabled;
+  data.bloom_intensity = _params.bloom_intensity;
+  data.bloom_threshold = _params.bloom_threshold;
+  data.bloom_knee = _params.bloom_knee;
   data.is_active = true;
 
   return data;

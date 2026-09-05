@@ -25,7 +25,7 @@ editor_module::editor_module()
 
   ui_module.add_layer(&_ui_layer);
   scene_renderer_module.set_grid_enabled(true);
-  physics_module.set_debug_draw_flags(sbx::physics::debug_draw_flags{.colliders = true});
+  physics_module.set_debug_draw_flags(sbx::physics::debug_draw_flags{});
 }
 
 editor_module::~editor_module() {

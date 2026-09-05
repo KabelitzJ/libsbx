@@ -76,6 +76,11 @@ struct render_context {
   graphics::image_handle revealage_msaa{};
   std::uint32_t revealage_index{0u};
 
+  // Half-resolution, fully-blurred bloom result (bloom_pass). Always shader_read_only_optimal by
+  // the time tonemap_pass runs, even if bloom_enabled is off this frame -- see bloom_pass::execute.
+  graphics::image_handle bloom_upsample{};
+  std::uint32_t bloom_upsample_index{0u};
+
   graphics::buffer::address_type frame_address{0u};
   graphics::buffer::address_type transform_address{0u};
   std::uint32_t instance_count{0u};

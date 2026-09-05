@@ -190,6 +190,16 @@ private:
   graphics::image_handle _revealage_image{};
   graphics::image_handle _revealage_msaa_image{};
   std::uint32_t _revealage_index{0u};
+
+  // Private mip chains bloom_pass reads/writes -- see bloom_pass.hpp. _bloom_upsample_index is the
+  // one slot the rest of the module (tonemap_pass) needs, written against the image's own default
+  // (whole-chain) view like _color_index is; tonemap.slang locks its bloom sample to mip 0 via
+  // SampleLevel rather than needing a dedicated single-mip view. The internal per-mip views/indices
+  // bloom_pass uses to build the chain are entirely private to bloom_pass itself.
+  graphics::image_handle _bloom_downsample_image{};
+  graphics::image_handle _bloom_upsample_image{};
+  std::uint32_t _bloom_upsample_index{0u};
+
   math::vector2u _target_extent{};
   math::vector2u _viewport_extent{0u, 0u};
 

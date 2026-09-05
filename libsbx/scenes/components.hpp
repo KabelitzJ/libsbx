@@ -107,6 +107,10 @@ struct camera {
   std::float_t near_plane{0.1f};
   std::float_t far_plane{1000.0f};
   std::float_t exposure{0.0f}; // EV stops applied as exp2(exposure) before tonemapping; 0 = unchanged.
+  bool bloom_enabled{true};
+  std::float_t bloom_intensity{0.04f};
+  std::float_t bloom_threshold{1.0f};
+  std::float_t bloom_knee{0.1f};
 }; // struct camera
 
 /**

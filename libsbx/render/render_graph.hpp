@@ -40,6 +40,8 @@ struct graph_resources {
   graphics::image_handle accumulator_msaa{};
   graphics::image_handle revealage{};
   graphics::image_handle revealage_msaa{};
+  graphics::image_handle bloom_downsample{};
+  graphics::image_handle bloom_upsample{};
   std::array<graphics::image_handle, shadow_cascade_count> shadow_maps{};
 
   graphics::buffer_handle frame_buffer{};

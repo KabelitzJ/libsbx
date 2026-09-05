@@ -218,6 +218,10 @@ auto write_node(YAML::Node& node_yaml, ecs::registry& registry, ecs::entity enti
     component["near_plane"] = c.near_plane;
     component["far_plane"] = c.far_plane;
     component["exposure"] = c.exposure;
+    component["bloom_enabled"] = c.bloom_enabled;
+    component["bloom_intensity"] = c.bloom_intensity;
+    component["bloom_threshold"] = c.bloom_threshold;
+    component["bloom_knee"] = c.bloom_knee;
 
     components.push_back(component);
   }
@@ -510,6 +514,22 @@ auto read_node_components(node& target_node, const YAML::Node& node_yaml, assets
 
       if (component["exposure"]) {
         c.exposure = component["exposure"].as<std::float_t>();
+      }
+
+      if (component["bloom_enabled"]) {
+        c.bloom_enabled = component["bloom_enabled"].as<bool>();
+      }
+
+      if (component["bloom_intensity"]) {
+        c.bloom_intensity = component["bloom_intensity"].as<std::float_t>();
+      }
+
+      if (component["bloom_threshold"]) {
+        c.bloom_threshold = component["bloom_threshold"].as<std::float_t>();
+      }
+
+      if (component["bloom_knee"]) {
+        c.bloom_knee = component["bloom_knee"].as<std::float_t>();
       }
     } else if (type == "directional_light") {
       auto& light = target_node.add_component<directional_light>();

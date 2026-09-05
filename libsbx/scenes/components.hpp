@@ -4,6 +4,7 @@
 #define LIBSBX_SCENES_COMPONENTS_HPP_
 
 #include <cstdint>
+#include <limits>
 #include <optional>
 #include <string>
 #include <vector>
@@ -175,8 +176,21 @@ struct skybox {
  * saved, the same way physics_module treats its broadphase as non-persisted rebuilt-on-load state.
  */
 struct particle_emitter {
+  // Shared by both simulation modes, but on two different clocks: for assets::particle_emitter::
+  // simulation_mode == cpu these advance at particles_module's fixed timestep; for == gpu
+  // they're owned and advanced by scene_renderer_module's extraction loop at render (frame) rate
+  // instead, since GPU emission must run at the same cadence particle_simulate_pass dispatches at.
+  // Don't "unify" this onto one clock -- see the particle-system plan doc for why.
   std::float_t emission_accumulator{0.0f};
   bool burst_fired{false};
+
+  // GPU-path only: this emitter's claimed slot in the render::particle_pool matching its
+  // assets::particle_emitter::blend_mode, or invalid_slot if unclaimed. Owned by scene_renderer_
+  // module's extraction loop (claim_slot/keep_alive/tick), reset to invalid_slot by particles_
+  // module on stop.
+  inline static constexpr auto invalid_slot = std::numeric_limits<std::uint32_t>::max();
+  std::uint32_t slot{invalid_slot};
+
   std::uint32_t next_particle_id{0u};
   std::vector<particles::particle> particles{};
   std::vector<particles::trail> trails{}; // only populated when the matching assets::particle_emitter::trail.enabled

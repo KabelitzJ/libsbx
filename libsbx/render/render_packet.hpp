@@ -17,6 +17,8 @@
 #include <libsbx/assets/environment_map.hpp>
 #include <libsbx/assets/particle_effect.hpp>
 
+#include <libsbx/render/particles/particle_data.hpp>
+
 namespace sbx::render {
 
 /**
@@ -160,6 +162,19 @@ struct particle_trail_command {
   std::uint32_t vertex_offset{0u};
 }; // struct particle_trail_command
 
+/**
+ * @brief One GPU-path emitter's per-frame data, extracted from scenes::particle_emitter::slot
+ * (already-claimed pool slot) + the owning assets::particle_emitter config. pool_index selects
+ * which render::particle_pool (particle_pool_additive/particle_pool_alpha_blend) owns `slot`.
+ * Consumed by particle_simulate_pass, which writes it wholesale into the pool's emitter_instances
+ * buffer every frame -- see particle_pool::write_emitter_instance.
+ */
+struct particle_emitter_snapshot {
+  std::uint32_t pool_index{0u};
+  std::uint32_t slot{0u};
+  emitter_instance data{};
+}; // struct particle_emitter_snapshot
+
 struct render_packet {
   camera_data camera{};
   std::vector<draw_command> opaque_commands{};
@@ -174,6 +189,7 @@ struct render_packet {
   std::vector<particle_mesh_command> particle_mesh_commands{};
   std::vector<trail_vertex> trail_vertices{};
   std::vector<particle_trail_command> trail_commands{};
+  std::vector<particle_emitter_snapshot> particle_emitters{}; // GPU-path emitters only.
   bool has_shadow_caster{false}; // When true, lights[0] is the cascaded-shadow-mapped sun.
   std::float_t shadow_distance{75.0f};
   assets::environment_map_handle environment{};

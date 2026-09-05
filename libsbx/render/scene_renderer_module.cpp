@@ -44,6 +44,8 @@
 #include <libsbx/render/passes/transparent_accumulate_pass.hpp>
 #include <libsbx/render/passes/particle_pass.hpp>
 #include <libsbx/render/passes/transparent_resolve_pass.hpp>
+#include <libsbx/render/particles/particle_pool.hpp>
+#include <libsbx/render/particles/particle_simulate_pass.hpp>
 #include <libsbx/render/shadow/shadow_pass.hpp>
 #include <libsbx/render/shadow/cascade.hpp>
 #include <libsbx/render/scene_blit_compositor.hpp>
@@ -105,6 +107,20 @@ struct transparent_entry {
 scene_renderer_module::scene_renderer_module() {
   _ensure_resources();
 
+  // Sized well above particles_module's CPU-path defaults -- the GPU path exists specifically
+  // for emitters wanting far more live particles than a per-particle CPU loop can afford.
+  _particle_pool_additive = std::make_unique<particle_pool>(particle_pool::create_info{
+    .max_particles = 65536u,
+    .max_emitter_instances = 64u,
+    .name = "Particle Pool Additive"
+  });
+
+  _particle_pool_alpha_blend = std::make_unique<particle_pool>(particle_pool::create_info{
+    .max_particles = 65536u,
+    .max_emitter_instances = 64u,
+    .name = "Particle Pool Alpha Blend"
+  });
+
   _graph.add_pass<depth_pre_pass>();
   _graph.add_pass<light_culling_pass>();
   _graph.add_pass<shadow_pass>();
@@ -113,6 +129,7 @@ scene_renderer_module::scene_renderer_module() {
   _graph.add_pass<grid_pass>();
   _graph.add_pass<debug_draw_pass>();
   _graph.add_pass<transparent_accumulate_pass>();
+  _graph.add_pass<particle_simulate_pass>(*_particle_pool_additive, *_particle_pool_alpha_blend);
   _graph.add_pass<particle_pass>();
   _graph.add_pass<transparent_resolve_pass>();
   _graph.add_pass<tonemap_pass>();
@@ -143,6 +160,82 @@ auto scene_renderer_module::set_grid_enabled(bool enabled) -> void {
 
 auto scene_renderer_module::grid_enabled() const -> bool {
   return _grid_enabled;
+}
+
+auto scene_renderer_module::reset_particles() -> void {
+  _particle_pool_additive->clear();
+  _particle_pool_alpha_blend->clear();
+}
+
+auto scene_renderer_module::_extract_gpu_particle_emitter(render_packet& packet, const assets::particle_emitter& config, scenes::particle_emitter& runtime, const scenes::particle_effect& instance, const math::matrix4x4& world, std::float_t delta_time) -> void {
+  if (instance.playback != scenes::particle_playback_state::playing) {
+    // Not playing: leave any already-claimed slot alone -- not calling keep_alive below lets
+    // particle_pool::tick() drain it gracefully over its own lifetime_max window rather than an
+    // abrupt cut, the same "let it finish" spirit as the CPU path's particles aging out on their
+    // own. Known v1 quirk: since particle_simulate_pass has no pause concept (it always integrates
+    // every alive particle every frame), a *paused* effect's GPU particles keep drifting and will
+    // start draining rather than truly freezing -- only particles_module's CPU path can freeze.
+    return;
+  }
+
+  const auto pool_index = config.blend_mode == assets::emitter_blend_mode::alpha_blend ? particle_pool_alpha_blend : particle_pool_additive;
+  auto& pool = pool_index == particle_pool_alpha_blend ? *_particle_pool_alpha_blend : *_particle_pool_additive;
+
+  if (runtime.slot == scenes::particle_emitter::invalid_slot) {
+    const auto claimed = pool.claim_slot();
+
+    if (!claimed) {
+      return; // Pool exhausted; claim_slot already logged this once.
+    }
+
+    runtime.slot = *claimed;
+  }
+
+  const auto emitting = instance.loop || instance.elapsed < instance.duration;
+
+  auto particles_to_emit = std::uint32_t{0u};
+
+  if (emitting) {
+    runtime.emission_accumulator += config.emission_rate * delta_time;
+
+    while (runtime.emission_accumulator >= 1.0f) {
+      runtime.emission_accumulator -= 1.0f;
+      ++particles_to_emit;
+    }
+
+    if (config.burst_count > 0u && !runtime.burst_fired) {
+      particles_to_emit += config.burst_count;
+      runtime.burst_fired = true;
+    }
+  }
+
+  pool.keep_alive(runtime.slot, config.lifetime_max);
+
+  auto& assets_module = core::engine::get_module<assets::assets_module>();
+
+  const auto texture_index = (config.texture.is_valid() && assets_module.is_resident(config.texture)) ? config.texture->index() : particle_texture_index_none;
+
+  auto data = emitter_instance{};
+  data.position = math::vector3{world[3]};
+  data.emission_rate = config.emission_rate;
+  data.velocity_min = config.velocity_min;
+  data.lifetime_min = config.lifetime_min;
+  data.velocity_max = config.velocity_max;
+  data.lifetime_max = config.lifetime_max;
+  data.start_color = math::vector4{config.start_color.r(), config.start_color.g(), config.start_color.b(), config.start_color.a()};
+  data.end_color = math::vector4{config.end_color.r(), config.end_color.g(), config.end_color.b(), config.end_color.a()};
+  data.size_min = config.size_min;
+  data.size_max = config.size_max;
+  data.gravity = config.gravity;
+  data.drag = config.drag;
+  data.active = 1u;
+  data.particles_to_emit = particles_to_emit;
+  data.seed = runtime.slot * 2654435761u; // combined with push.time in emit.slang -- doesn't need to change frame to frame.
+  data.shape = static_cast<std::uint32_t>(config.shape);
+  data.shape_extents = config.shape_extents;
+  data.texture_index = texture_index;
+
+  packet.particle_emitters.push_back(particle_emitter_snapshot{pool_index, runtime.slot, data});
 }
 
 auto scene_renderer_module::_build_packet() -> render_packet {
@@ -365,6 +458,12 @@ auto scene_renderer_module::_build_packet() -> render_packet {
 
     for (auto index = std::size_t{0u}; index < emitter_count; ++index) {
       const auto& config = configs[index];
+
+      if (config.simulation_mode == assets::particle_simulation_mode::gpu) {
+        _extract_gpu_particle_emitter(packet, config, instance.emitters[index], instance, world.matrix, delta_time);
+        continue;
+      }
+
       const auto& runtime = instance.emitters[index];
 
       if (config.trail.enabled && !runtime.trails.empty()) {
@@ -527,6 +626,12 @@ auto scene_renderer_module::_build_packet() -> render_packet {
 
     packet.trail_vertices.insert(packet.trail_vertices.end(), vertices.begin(), vertices.end());
   }
+
+  // Once per frame, after every _extract_gpu_particle_emitter's keep_alive call above -- a slot
+  // that was claimed but not kept alive this frame (emitter stopped/paused, or its node removed)
+  // starts draining here instead of being recycled immediately. See particle_pool::tick's doc comment.
+  _particle_pool_additive->tick(delta_time);
+  _particle_pool_alpha_blend->tick(delta_time);
 
   return packet;
 }
@@ -982,6 +1087,24 @@ auto scene_renderer_module::_prepare_frame(render_context& context) -> void {
   context.cluster_range_address = data.cluster_range_address;
   context.cluster_light_index_address = data.cluster_light_index_address;
   context.cluster_counter_address = _cluster_counter_addresses[context.slot];
+
+  // GPU-path particles: alive_list is ping-pong, keyed by the same frame_index % 2 parity
+  // particle_simulate_pass uses as its write_index this frame -- that's the list stage 2/3 just
+  // finished building, matching draw_args' instance_count. draw_args itself is a device_local
+  // buffer that's always valid from pool construction onward (its instance count, not its
+  // existence, is what tells particle_pass whether there's anything to actually draw -- reading
+  // that back on the CPU would defeat the point of driving the draw via draw_indirect).
+  const auto particle_write_index = static_cast<std::uint32_t>(context.frame_index % 2u);
+
+  context.particle_additive_particles_address = _particle_pool_additive->particles_address();
+  context.particle_additive_alive_list_address = _particle_pool_additive->alive_list_address(particle_write_index);
+  context.particle_additive_emitters_address = _particle_pool_additive->emitter_instances_address();
+  context.particle_additive_draw_args = _particle_pool_additive->draw_args();
+
+  context.particle_alpha_particles_address = _particle_pool_alpha_blend->particles_address();
+  context.particle_alpha_alive_list_address = _particle_pool_alpha_blend->alive_list_address(particle_write_index);
+  context.particle_alpha_emitters_address = _particle_pool_alpha_blend->emitter_instances_address();
+  context.particle_alpha_draw_args = _particle_pool_alpha_blend->draw_args();
 }
 
 } // namespace sbx::render

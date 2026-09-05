@@ -1905,6 +1905,7 @@ auto inspector_panel::_draw_particle_effect_properties(editor_state& state, cons
 
   static constexpr auto blend_mode_names = std::array<const char*, 2u>{"Additive", "Alpha Blend"};
   static constexpr auto shape_names = std::array<const char*, 4u>{"Point", "Sphere", "Box", "Cone"};
+  static constexpr auto simulation_mode_names = std::array<const char*, 2u>{"CPU", "GPU"};
 
   auto& emitters = _particle_effect_edit.emitters;
   auto removed_index = std::optional<std::size_t>{};
@@ -1943,6 +1944,26 @@ auto inspector_panel::_draw_particle_effect_properties(editor_state& state, cons
       if (ImGui::Combo("Blend Mode", &blend_mode_index, blend_mode_names.data(), static_cast<std::int32_t>(blend_mode_names.size()))) {
         emitter.blend_mode = static_cast<sbx::assets::emitter_blend_mode>(blend_mode_index);
         changed = true;
+      }
+
+      auto simulation_mode_index = static_cast<std::int32_t>(emitter.simulation_mode);
+
+      if (ImGui::Combo("Simulation Mode", &simulation_mode_index, simulation_mode_names.data(), static_cast<std::int32_t>(simulation_mode_names.size()))) {
+        emitter.simulation_mode = static_cast<sbx::assets::particle_simulation_mode>(simulation_mode_index);
+        changed = true;
+      }
+
+      // GPU doesn't enforce its constraints by disabling the combo above -- a user picking it
+      // while iterating on a config (e.g. about to remove a collision module) shouldn't be blocked --
+      // but an unsupported config is a real, silent-looking mismatch (billboard-only, no collision/
+      // sub-emitters/trails, no cone shape; see assets::particle_emitter::supports_gpu_simulation()),
+      // so warn inline instead.
+      if (emitter.simulation_mode == sbx::assets::particle_simulation_mode::gpu && !emitter.supports_gpu_simulation()) {
+        ImGui::TextColored(ImVec4{1.0f, 0.7f, 0.2f, 1.0f}, ICON_MDI_ALERT " GPU doesn't support this emitter's current config");
+
+        if (ImGui::IsItemHovered()) {
+          ImGui::SetTooltip("GPU is billboard-only, has no collision, sub-emitters, trails, or cone shape support. Unsupported settings are silently ignored while this mode is selected.");
+        }
       }
 
       changed |= ImGui::DragFloat("Emission Rate", &emitter.emission_rate, 0.5f, 0.0f, 10000.0f);

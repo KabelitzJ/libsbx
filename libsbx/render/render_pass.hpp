@@ -88,6 +88,19 @@ struct render_context {
   graphics::buffer::address_type cluster_light_index_address{0u};
   graphics::buffer::address_type cluster_counter_address{0u};
 
+  // GPU-path particles (libsbx/render/particles/particle_pool.hpp): populated once per frame
+  // from the two pools, keyed off frame_index % 2 for the ping-pong alive_list. draw_args is only
+  // valid once particle_simulate_pass has run this frame -- particle_pass checks .is_valid() rather
+  // than assuming these are always ready.
+  graphics::buffer::address_type particle_additive_particles_address{0u};
+  graphics::buffer::address_type particle_additive_alive_list_address{0u};
+  graphics::buffer::address_type particle_additive_emitters_address{0u};
+  graphics::buffer_handle particle_additive_draw_args{};
+  graphics::buffer::address_type particle_alpha_particles_address{0u};
+  graphics::buffer::address_type particle_alpha_alive_list_address{0u};
+  graphics::buffer::address_type particle_alpha_emitters_address{0u};
+  graphics::buffer_handle particle_alpha_draw_args{};
+
   bool show_grid{false};
 
   bool has_shadow_caster{false};

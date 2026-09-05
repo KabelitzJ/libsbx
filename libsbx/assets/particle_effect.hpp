@@ -191,8 +191,14 @@ struct trail_config {
   bool die_with_particle{false};
 }; // struct trail_config
 
+enum class particle_simulation_mode : std::uint8_t {
+  cpu,
+  gpu
+}; // enum class particle_simulation_mode
+
 struct particle_emitter {
   std::string name{"emitter"};
+  particle_simulation_mode simulation_mode{particle_simulation_mode::cpu};
   emitter_blend_mode blend_mode{emitter_blend_mode::additive};
   std::float_t emission_rate{10.0f};
   std::uint32_t burst_count{0u};
@@ -224,6 +230,19 @@ struct particle_emitter {
   collision_config collision{};
   std::vector<sub_emitter_binding> sub_emitters{};
   trail_config trail{};
+
+  /**
+   * @brief Whether this emitter's current config can run on the GPU path (simulation_mode
+   * == gpu). That path is billboard-only, has no collision, no sub-emitters/trails, and no
+   * cone shape support -- see libsbx/render/particles/particle_data.hpp's emission_shape enum.
+   */
+  [[nodiscard]] auto supports_gpu_simulation() const -> bool {
+    return shape != emitter_shape::cone
+        && collision.mode == particle_collision_mode::none
+        && sub_emitters.empty()
+        && !trail.enabled
+        && render_mode == particle_render_mode::billboard;
+  }
 }; // struct particle_emitter
 
 class particle_effect final {

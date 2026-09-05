@@ -28,6 +28,10 @@ public:
   static auto next(Type min = std::numeric_limits<Type>::min(), Type max = std::numeric_limits<Type>::max()) -> Type {
     using distribution_type = std::conditional_t<std::floating_point<Type>, std::uniform_real_distribution<Type>, std::uniform_int_distribution<Type>>;
 
+    if (min > max) {
+      std::swap(min, max);
+    }
+
     auto distribution = distribution_type{min, max};
 
     return distribution(_generator());

@@ -33,6 +33,7 @@
 #include <libsbx/render/scene_renderer.hpp>
 #include <libsbx/render/compositor.hpp>
 #include <libsbx/render/debug/debug_draw.hpp>
+#include <libsbx/render/particles/particle_pool.hpp>
 
 namespace sbx::render {
 
@@ -129,6 +130,14 @@ public:
     return _debug_draw;
   }
 
+  /**
+   * @brief Immediately discards every live GPU-path particle (assets::particle_simulation_mode
+   * ::gpu) in both pools -- a hard reset, unlike particle_pool::tick()'s normal lifetime-based
+   * drain. editor_module's play_mode_controller calls this on Stop so GPU particles don't linger
+   * after CPU-mode ones are cleared by particles_module's own stopped-cleanup in the same frame.
+   */
+  auto reset_particles() -> void;
+
 private:
 
   inline static constexpr auto light_capacity = std::uint32_t{256u};
@@ -144,6 +153,12 @@ private:
   auto _prepare_frame(render_context& context) -> void;
 
   [[nodiscard]] auto _build_packet() -> render_packet;
+
+  // GPU-path only (assets::particle_simulation_mode::gpu) -- claims/keeps-alive this
+  // emitter's particle_pool slot and appends a particle_emitter_snapshot to packet.particle_emitters
+  // if it's currently playing. See scenes::particle_emitter::slot's doc comment for why this
+  // bookkeeping lives here (render cadence) rather than particles_module (fixed-step cadence).
+  auto _extract_gpu_particle_emitter(render_packet& packet, const assets::particle_emitter& config, scenes::particle_emitter& runtime, const scenes::particle_effect& instance, const math::matrix4x4& world, std::float_t delta_time) -> void;
 
   render_packet _work_packet{};
   bool _has_rendered{false};
@@ -197,6 +212,14 @@ private:
   std::array<std::uint32_t, shadow_cascade_count> _shadow_map_indices{};
 
   render::debug_draw _debug_draw{};
+
+  // GPU-path particles (see libsbx/render/particles/particle_pool.hpp) -- one pool per blend
+  // mode, shared by every assets::particle_simulation_mode::gpu emitter in the scene.
+  // unique_ptr rather than a by-value member: particle_pool is noncopyable and constructed after
+  // _ensure_resources() so particle_simulate_pass can take stable references to both in the pass
+  // list built by this constructor.
+  std::unique_ptr<particle_pool> _particle_pool_additive{};
+  std::unique_ptr<particle_pool> _particle_pool_alpha_blend{};
 
 }; // class scene_renderer_module
 

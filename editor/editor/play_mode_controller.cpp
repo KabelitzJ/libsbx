@@ -64,6 +64,11 @@ auto play_mode_controller::exit_play_mode() -> void {
 
   std::filesystem::remove(_snapshot_path());
 
+  // GPU-path particles aren't part of the reloaded scene snapshot (they're pure render-side
+  // pool state, see scenes::particle_emitter::slot) -- particles_module's own stopped-cleanup only
+  // clears the CPU path, so any still-live GPU particles would otherwise linger into edit mode.
+  sbx::core::engine::get_module<sbx::render::scene_renderer_module>().reset_particles();
+
   _state = play_state::edit;
 }
 

@@ -47,6 +47,11 @@ namespace sbx::render {
  * plain (non-instanced) vertex-pulled triangle lists (shaders/particles/trail.slang) -- the ribbon
  * width extrusion is already baked into each vertex's position at extraction time, so this shader
  * needs no per-instance data at all, unlike the billboard/mesh paths.
+ *
+ * Also draws GPU-path particles (assets::particle_simulation_mode::gpu emitters,
+ * shaders/particles/draw.slang) into the same two groups, one draw_indirect per group sized by
+ * particle_simulate_pass's prepare_indirect_draw stage rather than a CPU-known instance count --
+ * see context.particle_additive_draw_args / context.particle_alpha_draw_args.
  */
 class particle_pass final : public graphics_pass {
 
@@ -71,6 +76,11 @@ private:
   std::array<memory::observer_ptr<graphics::graphics_pipeline>, 2u> _mesh_pipelines{};
   std::array<memory::observer_ptr<graphics::graphics_pipeline>, 2u> _trail_pipelines{};
 
+  // GPU-path particles (shaders/particles/draw.slang), same two groups as the arrays above --
+  // draws context.particle_{additive,alpha}_draw_args via draw_indirect instead of a CPU-known
+  // instance count. See libsbx/render/particles/particle_simulate_pass.hpp for what fills these in.
+  std::array<memory::observer_ptr<graphics::graphics_pipeline>, 2u> _gpu_particle_pipelines{};
+
   // One buffer per frame-in-flight slot, grown geometrically as the live particle count grows --
   // same reasoning as debug_draw_pass's buffers (the instance count varies frame to frame). Shared
   // by both groups; uploaded at most once per frame regardless of which group's execute() runs first.
@@ -89,6 +99,8 @@ private:
   auto _draw_meshes(render_context& context, std::uint32_t group) -> void;
 
   auto _draw_trails(render_context& context, std::uint32_t group) -> void;
+
+  auto _draw_gpu_particles(render_context& context, std::uint32_t group) -> void;
 
 }; // class particle_pass
 

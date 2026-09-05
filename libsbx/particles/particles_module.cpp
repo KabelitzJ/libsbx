@@ -49,6 +49,10 @@ auto particles_module::_simulate_effect(scenes::scene& scene, scenes::particle_e
       runtime.trails.clear();
       runtime.emission_accumulator = 0.0f;
       runtime.burst_fired = false;
+      // GPU-path only: mark the pool slot unclaimed so scene_renderer_module's extraction
+      // stops calling keep_alive on it and the pool's own tick() drains it -- no explicit release
+      // call needed, this mirrors how the CPU path's runtime.particles.clear() above works.
+      runtime.slot = scenes::particle_emitter::invalid_slot;
     }
 
     effect.elapsed = 0.0f;
@@ -87,6 +91,17 @@ auto particles_module::_simulate_effect(scenes::scene& scene, scenes::particle_e
   for (auto index = std::size_t{0u}; index < configs.size(); ++index) {
     const auto& config = configs[index];
     auto& runtime = effect.emitters[index];
+
+    if (config.simulation_mode == assets::particle_simulation_mode::gpu) {
+      // Simulated entirely on the GPU (see libsbx/render/particles/particle_simulate_pass.hpp);
+      // scene_renderer_module's extraction loop owns this emitter's slot claim/keep_alive/tick and
+      // emission-rate bookkeeping at render cadence instead of this fixed-step loop. Note runtime.
+      // particles stays empty for gpu emitters, so the non-looping "all_empty" stop check below
+      // can flip playback to stopped as soon as elapsed >= duration, before the GPU pool has actually
+      // drained -- harmless (the pool drains claimed slots on its own timeline regardless), just not
+      // reflected back into playback state.
+      continue;
+    }
 
     _spawn(scene, config, runtime, world, effect.inherited_velocity, emitting, dt);
     _integrate(scene, config, runtime, dt);

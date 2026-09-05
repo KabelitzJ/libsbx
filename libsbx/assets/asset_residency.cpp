@@ -527,6 +527,11 @@ auto asset_residency::load_particle_effect(const math::uuid& id) -> particle_eff
         emitter.blend_mode = (mode == "alpha_blend") ? emitter_blend_mode::alpha_blend : emitter_blend_mode::additive;
       }
 
+      if (emitter_node["simulation_mode"]) {
+        const auto mode = emitter_node["simulation_mode"].as<std::string>();
+        emitter.simulation_mode = (mode == "gpu") ? particle_simulation_mode::gpu : particle_simulation_mode::cpu;
+      }
+
       if (emitter_node["emission_rate"]) emitter.emission_rate = emitter_node["emission_rate"].as<std::float_t>();
       if (emitter_node["burst_count"]) emitter.burst_count = emitter_node["burst_count"].as<std::uint32_t>();
 
@@ -780,6 +785,7 @@ auto asset_residency::save_particle_effect(particle_effect_handle& effect, const
 
     emitter_node["name"] = emitter.name;
     emitter_node["blend_mode"] = (emitter.blend_mode == emitter_blend_mode::alpha_blend) ? "alpha_blend" : "additive";
+    emitter_node["simulation_mode"] = (emitter.simulation_mode == particle_simulation_mode::gpu) ? "gpu" : "cpu";
     emitter_node["emission_rate"] = emitter.emission_rate;
     emitter_node["burst_count"] = emitter.burst_count;
     emitter_node["shape"] = (emitter.shape == emitter_shape::sphere) ? "sphere" : (emitter.shape == emitter_shape::box) ? "box" : (emitter.shape == emitter_shape::cone) ? "cone" : "point";

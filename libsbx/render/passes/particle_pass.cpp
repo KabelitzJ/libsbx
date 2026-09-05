@@ -56,6 +56,15 @@ struct particle_trail_push {
   std::uint32_t vertex_offset;
 }; // struct particle_trail_push
 
+// Matches shaders/particles/draw.slang's push_data field-for-field.
+struct particle_gpu_push {
+  graphics::buffer::address_type frame_address;
+  graphics::buffer::address_type particles_address;
+  graphics::buffer::address_type alive_list_address;
+  graphics::buffer::address_type emitters_address;
+  std::uint32_t sampler_index;
+}; // struct particle_gpu_push
+
 namespace {
 
 // Shared by both the billboard and mesh pipelines: group 0's weighted-OIT pair for alpha_blend, and
@@ -123,6 +132,19 @@ particle_pass::particle_pass() {
   const auto& trail_alpha_blend_shader = shader_cache.get({"shaders/particles/trail.slang", alpha_blend_entry_points});
   const auto& trail_additive_shader = shader_cache.get({"shaders/particles/trail.slang", additive_entry_points});
 
+  const auto gpu_alpha_blend_entry_points = std::vector<graphics::shader_compiler::entry_point_request>{
+    {VK_SHADER_STAGE_VERTEX_BIT, "vertex_main"},
+    {VK_SHADER_STAGE_FRAGMENT_BIT, "fragment_main_alpha_blend"}
+  };
+
+  const auto gpu_additive_entry_points = std::vector<graphics::shader_compiler::entry_point_request>{
+    {VK_SHADER_STAGE_VERTEX_BIT, "vertex_main"},
+    {VK_SHADER_STAGE_FRAGMENT_BIT, "fragment_main_additive"}
+  };
+
+  const auto& gpu_alpha_blend_shader = shader_cache.get({"shaders/particles/draw.slang", gpu_alpha_blend_entry_points});
+  const auto& gpu_additive_shader = shader_cache.get({"shaders/particles/draw.slang", gpu_additive_entry_points});
+
   // Group 0 pipeline: two color attachments (accumulator + revealage), the weighted-OIT pair,
   // identical to transparent_accumulate_pass's blend state.
   auto billboard_alpha_blend_info = graphics::graphics_pipeline::create_info{
@@ -177,12 +199,25 @@ particle_pass::particle_pass() {
   trail_additive_info.topology = graphics::primitive_topology::triangle_list;
   trail_additive_info.name = "Particles Trail Additive";
 
+  // GPU-path pipelines mirror the billboard ones exactly (same two groups, same blend states,
+  // same billboard quad vertex-pulling) -- only the shader (and its instance source: the GPU pool's
+  // particles/alive_list/emitters buffers instead of a CPU-uploaded instance buffer) differs.
+  auto gpu_alpha_blend_info = billboard_alpha_blend_info;
+  gpu_alpha_blend_info.shader = gpu_alpha_blend_shader;
+  gpu_alpha_blend_info.name = "Particles GPU Alpha Blend";
+
+  auto gpu_additive_info = billboard_additive_info;
+  gpu_additive_info.shader = gpu_additive_shader;
+  gpu_additive_info.name = "Particles GPU Additive";
+
   _billboard_pipelines[alpha_blend_group] = pipeline_cache.get(billboard_alpha_blend_info);
   _billboard_pipelines[additive_group] = pipeline_cache.get(billboard_additive_info);
   _mesh_pipelines[alpha_blend_group] = pipeline_cache.get(mesh_alpha_blend_info);
   _mesh_pipelines[additive_group] = pipeline_cache.get(mesh_additive_info);
   _trail_pipelines[alpha_blend_group] = pipeline_cache.get(trail_alpha_blend_info);
   _trail_pipelines[additive_group] = pipeline_cache.get(trail_additive_info);
+  _gpu_particle_pipelines[alpha_blend_group] = pipeline_cache.get(gpu_alpha_blend_info);
+  _gpu_particle_pipelines[additive_group] = pipeline_cache.get(gpu_additive_info);
 }
 
 auto particle_pass::declare(graphics_pass_builder& builder, const graph_resources& resources) -> void {
@@ -239,7 +274,9 @@ auto particle_pass::should_execute(const render_context& context, std::uint32_t 
     return command.blend_mode == target_mode;
   });
 
-  return has_billboards || has_meshes || has_trails;
+  const auto has_gpu_particles = group == alpha_blend_group ? context.particle_alpha_draw_args.is_valid() : context.particle_additive_draw_args.is_valid();
+
+  return has_billboards || has_meshes || has_trails || has_gpu_particles;
 }
 
 auto particle_pass::_ensure_uploaded(render_context& context) -> void {
@@ -443,6 +480,36 @@ auto particle_pass::_draw_trails(render_context& context, std::uint32_t group) -
   }
 }
 
+auto particle_pass::_draw_gpu_particles(render_context& context, std::uint32_t group) -> void {
+  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
+  auto& registry = graphics_module.resource_registry();
+
+  const auto& draw_args_handle = group == alpha_blend_group ? context.particle_alpha_draw_args : context.particle_additive_draw_args;
+
+  if (!draw_args_handle.is_valid()) {
+    return;
+  }
+
+  const auto particles_address = group == alpha_blend_group ? context.particle_alpha_particles_address : context.particle_additive_particles_address;
+  const auto alive_list_address = group == alpha_blend_group ? context.particle_alpha_alive_list_address : context.particle_additive_alive_list_address;
+  const auto emitters_address = group == alpha_blend_group ? context.particle_alpha_emitters_address : context.particle_additive_emitters_address;
+
+  context.command_buffer->bind_pipeline(*_gpu_particle_pipelines[group]);
+
+  auto values = particle_gpu_push{
+    context.frame_address,
+    particles_address,
+    alive_list_address,
+    emitters_address,
+    context.sampler_index
+  };
+
+  write_push_constants(context, values);
+
+  auto& draw_args = registry.get<graphics::buffer>(draw_args_handle);
+  context.command_buffer->draw_indirect(draw_args, 0u, 1u);
+}
+
 auto particle_pass::execute(render_context& context, std::uint32_t group) -> void {
   _ensure_uploaded(context);
 
@@ -451,6 +518,7 @@ auto particle_pass::execute(render_context& context, std::uint32_t group) -> voi
   _draw_billboards(context, group);
   _draw_meshes(context, group);
   _draw_trails(context, group);
+  _draw_gpu_particles(context, group);
 }
 
 } // namespace sbx::render

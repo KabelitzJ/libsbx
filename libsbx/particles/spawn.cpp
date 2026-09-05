@@ -12,8 +12,6 @@
 
 namespace sbx::particles {
 
-namespace {
-
 [[nodiscard]] auto sample_local_position(const assets::particle_emitter& config) -> math::vector3 {
   switch (config.shape) {
     case assets::emitter_shape::sphere: {
@@ -29,16 +27,10 @@ namespace {
       };
     }
     case assets::emitter_shape::cone: {
-      // Apex at the origin, axis along local -Z (the engine's forward), matching
-      // local_transform::forward(). A cross-section at parametric height t has radius t * radius;
-      // sampling t = cbrt(uniform) rather than uniform gives a volume-uniform fill, the same trick
-      // random_point_in_sphere uses.
       const auto half_angle = std::max(config.cone.angle.to_radians().value(), 0.001f);
       const auto height = config.cone.radius / std::tan(half_angle);
 
-      const auto t = (math::random::next<std::float_t>(0.0f, 1.0f) < config.cone.emit_from_volume)
-        ? std::cbrt(math::random::next<std::float_t>(0.0f, 1.0f))
-        : 1.0f;
+      const auto t = (math::random::next<std::float_t>(0.0f, 1.0f) < config.cone.emit_from_volume) ? std::cbrt(math::random::next<std::float_t>(0.0f, 1.0f)) : 1.0f;
 
       const auto disc = math::random_point_in_circle(math::vector2{0.0f, 0.0f}, config.cone.radius * t);
 
@@ -49,8 +41,6 @@ namespace {
     }
   }
 }
-
-} // namespace
 
 auto roll_particle(const assets::particle_emitter& config, const math::matrix4x4& world, std::uint32_t id) -> particle {
   const auto local_position = sample_local_position(config);

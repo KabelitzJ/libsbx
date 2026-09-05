@@ -82,10 +82,25 @@ vertex_output vertex_main(vertex_input input) {
   return output;
 }
 
+float4 sample_particle_color(fragment_input input) {
+  float4 sampled;
+
+  if (input.texture_index == 0xFFFFFFFFu) {
+    float2 centered = input.uv * 2.0 - 1.0;
+    float dist = length(centered);
+    float falloff = exp(-dist * dist * 4.0) * (dist <= 1.0 ? 1.0 : 0.0);
+
+    sampled = float4(1.0, 1.0, 1.0, falloff);
+  } else {
+    sampled = textures[input.texture_index].Sample(samplers[push.sampler_index], input.uv);
+  }
+
+  return sampled * input.color;
+}
+
 [shader("fragment")]
 additive_fragment_output fragment_main_additive(fragment_input input) {
-  float4 sampled = textures[input.texture_index].Sample(samplers[push.sampler_index], input.uv);
-  float4 color = sampled * input.color;
+  float4 color = sample_particle_color(input);
 
   additive_fragment_output output;
   output.color = float4(color.rgb * color.a, color.a);
@@ -95,8 +110,7 @@ additive_fragment_output fragment_main_additive(fragment_input input) {
 
 [shader("fragment")]
 alpha_blend_fragment_output fragment_main_alpha_blend(fragment_input input) {
-  float4 sampled = textures[input.texture_index].Sample(samplers[push.sampler_index], input.uv);
-  float4 color = sampled * input.color;
+  float4 color = sample_particle_color(input);
 
   shading_input shading_input;
   shading_input.lighting.color = color.rgb;

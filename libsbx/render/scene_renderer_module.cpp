@@ -336,11 +336,16 @@ auto scene_renderer_module::_build_packet() -> render_packet {
       const auto& config = configs[index];
       const auto& runtime = instance.emitters[index];
 
-      if (!config.texture.is_valid() || !assets_module.is_resident(config.texture)) {
+      // An assigned-but-not-yet-resident texture has nothing valid to sample -- skip until it loads.
+      // No texture at all is a real, supported choice: particle_billboard_instance::texture_index
+      // keeps its 0xFFFFFFFFu default, and the shader draws a procedural circular falloff instead.
+      if (config.texture.is_valid() && !assets_module.is_resident(config.texture)) {
         continue;
       }
 
-      auto& bucket = billboard_buckets[{config.texture->index(), config.blend_mode}];
+      const auto texture_index = config.texture.is_valid() ? config.texture->index() : 0xFFFFFFFFu;
+
+      auto& bucket = billboard_buckets[{texture_index, config.blend_mode}];
 
       for (const auto& particle : runtime.particles) {
         bucket.push_back(particle_billboard_instance{
@@ -348,7 +353,7 @@ auto scene_renderer_module::_build_packet() -> render_packet {
           .size = particle.size,
           .color = particle.color,
           .rotation = particle.rotation,
-          .texture_index = config.texture->index()
+          .texture_index = texture_index
         });
       }
     }

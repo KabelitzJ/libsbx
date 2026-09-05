@@ -10,8 +10,6 @@
 
 namespace sbx::particles {
 
-namespace {
-
 [[nodiscard]] auto lerp_color(const math::color& start, const math::color& end, std::float_t t) -> math::color {
   return math::color{
     math::mix(start.r(), end.r(), t),
@@ -20,8 +18,6 @@ namespace {
     math::mix(start.a(), end.a(), t)
   };
 }
-
-} // namespace
 
 auto particles_module::fixed_update() -> void {
   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();

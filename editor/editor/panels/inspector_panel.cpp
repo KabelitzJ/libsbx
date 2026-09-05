@@ -1869,8 +1869,7 @@ auto inspector_panel::_draw_particle_effect_properties(const asset_selection& as
 
       ImGui::Text("Texture");
       ImGui::SameLine();
-      // Leaving this unset (the default) keeps draw.slang's procedural circular-falloff look —
-      // the common case for additive fire/spark-style emitters.
+
       changed |= draw_texture_picker("##particle_texture_picker", emitter.texture, assets_module, sbx::graphics::format::r8g8b8a8_srgb);
 
       ImGui::TreePop();

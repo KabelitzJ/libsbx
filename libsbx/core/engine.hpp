@@ -66,6 +66,8 @@ public:
 
     auto& active = projects[*_instance->_active_project];
 
+    utility::set_log_directory(active.logs_directory());
+
     utility::logger<"core">::info("Active project '{}' at '{}'", active.name(), active.root().string());
 
     return active;

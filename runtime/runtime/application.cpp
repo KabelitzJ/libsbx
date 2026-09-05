@@ -28,7 +28,8 @@
 namespace runtime {
 
 application::application()
-: sbx::core::application{}, _is_paused{false} {
+: sbx::core::application{}, 
+  _is_paused{false} {
   auto& platform_module = sbx::core::engine::get_module<sbx::platform::platform_module>();
 
   auto& window = platform_module.window();
@@ -45,34 +46,11 @@ application::application()
   auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
   auto& scene = scenes_module.active_scene();
 
-  // A fresh/projectless-launcher-created project has no startup_scene — start from whatever
-  // empty scene scenes_module already handed us instead of assuming one exists on disk.
   if (const auto& startup_scene = project.startup_scene()) {
     sbx::scenes::scene_serializer::load(scene, *startup_scene);
 
-    // The scene simulates from frame 0 at runtime (scenes_module::is_simulating() defaults to
-    // true and nothing here ever calls set_simulating(false)) — so every script already attached
-    // to a node fires OnCreate immediately, with no explicit "Play" step.
     auto& scripting_module = sbx::core::engine::get_module<sbx::scripting::scripting_module>();
     scripting_module.instantiate_scene_scripts(scene);
-  }
-
-  _camera = scene.active_camera();
-
-  // scene_serializer::load only sets an active camera if the loaded scene had one, so a fresh
-  // project can't assume a "Camera" node exists — create a default one.
-  if (!_camera.is_valid()) {
-    _camera = scene.create_node("Camera");
-    _camera.add_component<sbx::scenes::camera>();
-    scene.set_active_camera(_camera);
-  }
-
-  _camera_controller = fly_camera{_camera};
-
-  if (!_camera.has_component<sbx::scenes::skybox>()) {
-    auto& skybox = _camera.add_component<sbx::scenes::skybox>();
-    skybox.environment = assets_module.load_environment_map("environments/sky.hdr");
-    skybox.intensity = 1.0f;
   }
 }
 
@@ -81,7 +59,7 @@ application::~application() {
 }
 
 auto application::update() -> void {
-  _camera_controller.update();
+
 }
 
 auto application::fixed_update() -> void {

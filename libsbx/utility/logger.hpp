@@ -107,10 +107,31 @@ public:
     return _level;
   }
 
+  /**
+   * @brief Overrides the log directory used once this context is actually constructed.
+   *
+   * Safe to call at any time — this context is a lazily-constructed magic static (built on the
+   * first real log call), so as long as nothing has logged yet, calling this first (e.g. from
+   * core::engine::set_project, as soon as the project — and its own logs_directory — is known)
+   * makes the very first log line already land in the right place. Calling it after the context
+   * already exists has no effect: spdlog's file sink can't be relocated once opened, so the log
+   * file for a running process stays wherever the first log call put it.
+   */
+  static auto set_log_directory(std::filesystem::path directory) -> void {
+    _pending_log_directory() = std::move(directory);
+  }
+
 private:
 
+  // A separate magic static from instance() itself — set_log_directory must be safely callable
+  // before logger_context is ever constructed, without constructing it as a side effect.
+  static auto _pending_log_directory() -> std::filesystem::path& {
+    static auto directory = std::filesystem::path{"logs"};
+    return directory;
+  }
+
   logger_context() {
-    const auto log_path = std::filesystem::path{"logs/sbx.log"};
+    const auto log_path = _pending_log_directory() / "sbx.log";
 
     if (log_path.has_parent_path()) {
       std::filesystem::create_directories(log_path.parent_path());
@@ -162,6 +183,18 @@ inline auto make_logger(std::string name) -> spdlog::logger {
  */
 inline auto clear_logged_lines() -> void {
   detail::logger_context::instance().ring_buffer()->clear();
+}
+
+/**
+ * @brief Directs future log output to `<directory>/sbx.log` instead of the default `./logs/sbx.log`.
+ *
+ * Must be called before the first log call of the process to have any effect — see
+ * @ref detail::logger_context::set_log_directory. core::engine::set_project calls this with the
+ * newly active project's own logs_directory() as soon as a project is known, which is early enough
+ * in every current entry point (nothing logs before a project is set).
+ */
+inline auto set_log_directory(std::filesystem::path directory) -> void {
+  detail::logger_context::set_log_directory(std::move(directory));
 }
 
 /**

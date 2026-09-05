@@ -13,8 +13,6 @@
 
 #include <libsbx/scenes/scene.hpp>
 
-#include <runtime/fly_camera.hpp>
-
 namespace runtime {
 
 class application : public sbx::core::application {
@@ -34,9 +32,6 @@ public:
 private:
 
   bool _is_paused;
-
-  sbx::scenes::node _camera;
-  fly_camera _camera_controller;
 
 }; // class application
 

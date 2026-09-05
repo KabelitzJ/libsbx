@@ -324,6 +324,36 @@ auto scene_renderer_module::_build_packet() -> render_packet {
 
   auto billboard_buckets = std::map<std::pair<std::uint32_t, assets::emitter_blend_mode>, std::vector<particle_billboard_instance>>{};
 
+  // mesh_key doesn't carry a blend mode (ordinary meshes are either fully opaque or fully
+  // transparent, never author-chosen additive/alpha_blend) -- particles need one, so pair it here
+  // rather than extending the shared key type for a case only particles have.
+  struct particle_mesh_key {
+    mesh_key key;
+    assets::emitter_blend_mode blend_mode;
+
+    auto operator<(const particle_mesh_key& other) const -> bool {
+      if (key < other.key) {
+        return true;
+      }
+
+      if (other.key < key) {
+        return false;
+      }
+
+      return blend_mode < other.blend_mode;
+    }
+  };
+
+  struct particle_mesh_bucket {
+    assets::mesh_handle mesh;
+    std::uint32_t submesh_index{0u};
+    assets::material_handle material;
+    assets::emitter_blend_mode blend_mode{};
+    std::vector<particle_mesh_instance> instances;
+  };
+
+  auto mesh_buckets = std::map<particle_mesh_key, particle_mesh_bucket>{};
+
   for (auto&& [entity, world, instance] : scene.query<scenes::world_transform, scenes::particle_effect>().each()) {
     if (!instance.effect.is_valid()) {
       continue;
@@ -335,6 +365,43 @@ auto scene_renderer_module::_build_packet() -> render_packet {
     for (auto index = std::size_t{0u}; index < emitter_count; ++index) {
       const auto& config = configs[index];
       const auto& runtime = instance.emitters[index];
+
+      if (config.render_mode == assets::particle_render_mode::mesh) {
+        if (!config.render_mesh.is_valid() || !assets_module.is_resident(config.render_mesh)) {
+          continue;
+        }
+
+        const auto& submeshes = config.render_mesh->submeshes();
+
+        for (auto submesh_index = std::uint32_t{0u}; submesh_index < submeshes.size(); ++submesh_index) {
+          const auto& submesh = submeshes[submesh_index];
+          const auto& material = config.render_material.is_valid() ? config.render_material : submesh.material;
+
+          if (!material.is_valid() || !assets_module.is_resident(material)) {
+            continue;
+          }
+
+          auto& bucket = mesh_buckets[particle_mesh_key{mesh_key{config.render_mesh->id(), submesh_index, material->id()}, config.blend_mode}];
+          bucket.mesh = config.render_mesh;
+          bucket.submesh_index = submesh_index;
+          bucket.material = material;
+          bucket.blend_mode = config.blend_mode;
+
+          for (const auto& particle : runtime.particles) {
+            // A single rotation float has no natural 3D axis of its own -- yaw around world/local Y
+            // is a simple, well-scoped default (matches how most simple mesh-particle setups look),
+            // not an attempt at Unity's full 3D particle rotation.
+            const auto model =
+              math::matrix4x4::translated(math::matrix4x4::identity, particle.position) *
+              math::matrix4x4::rotated(math::matrix4x4::identity, math::vector3{0.0f, 1.0f, 0.0f}, math::radian{particle.rotation}) *
+              math::matrix4x4::scaled(math::matrix4x4::identity, math::vector3{particle.size, particle.size, particle.size});
+
+            bucket.instances.push_back(particle_mesh_instance{.model = model, .color = particle.color});
+          }
+        }
+
+        continue;
+      }
 
       // An assigned-but-not-yet-resident texture has nothing valid to sample -- skip until it loads.
       // No texture at all is a real, supported choice: particle_billboard_instance::texture_index
@@ -375,6 +442,23 @@ auto scene_renderer_module::_build_packet() -> render_packet {
     });
 
     packet.particle_billboard_instances.insert(packet.particle_billboard_instances.end(), instances.begin(), instances.end());
+  }
+
+  for (auto& [key, bucket] : mesh_buckets) {
+    if (bucket.instances.empty()) {
+      continue;
+    }
+
+    packet.particle_mesh_commands.push_back(particle_mesh_command{
+      .blend_mode = bucket.blend_mode,
+      .mesh = bucket.mesh,
+      .submesh_index = bucket.submesh_index,
+      .material = bucket.material,
+      .instance_count = static_cast<std::uint32_t>(bucket.instances.size()),
+      .instance_offset = static_cast<std::uint32_t>(packet.particle_mesh_instances.size())
+    });
+
+    packet.particle_mesh_instances.insert(packet.particle_mesh_instances.end(), bucket.instances.begin(), bucket.instances.end());
   }
 
   return packet;

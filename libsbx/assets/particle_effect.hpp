@@ -15,6 +15,8 @@
 #include <libsbx/containers/static_vector.hpp>
 
 #include <libsbx/assets/asset_handle.hpp>
+#include <libsbx/assets/material.hpp>
+#include <libsbx/assets/mesh.hpp>
 #include <libsbx/assets/texture.hpp>
 
 namespace sbx::assets {
@@ -77,6 +79,78 @@ struct collision_config {
   std::uint32_t max_collisions_per_particle{0u}; // 0 = unlimited
 }; // struct collision_config
 
+inline constexpr auto curve_max_keys = std::size_t{8};
+
+/** @brief One keyframe of a curve. `time` is normalized lifetime in [0, 1]. */
+struct curve_key {
+  std::float_t time{0.0f};
+  std::float_t value{0.0f};
+}; // struct curve_key
+
+/**
+ * @brief A small fixed-capacity keyframed curve over normalized particle lifetime, linearly
+ * interpolated between the two keys bracketing a given `t` (clamped at the ends). Keys don't need to
+ * be authored in time order -- evaluate() finds the bracketing pair by scanning all of them, cheap
+ * given the tiny capacity. An empty curve means "no curve authored"; every over-lifetime field this
+ * type is used for defines its own fallback for that case (see particle_emitter's fields below).
+ */
+struct curve {
+  containers::static_vector<curve_key, curve_max_keys> keys{};
+
+  [[nodiscard]] auto evaluate(std::float_t t) const -> std::float_t;
+
+  [[nodiscard]] auto has_keys() const noexcept -> bool {
+    return !keys.is_empty();
+  }
+}; // struct curve
+
+/** @brief Three independent curve channels, one per axis -- for velocity/force-over-lifetime. */
+struct vector3_curve {
+  curve x{};
+  curve y{};
+  curve z{};
+
+  [[nodiscard]] auto evaluate(std::float_t t) const -> math::vector3;
+
+  [[nodiscard]] auto has_keys() const noexcept -> bool {
+    return x.has_keys() || y.has_keys() || z.has_keys();
+  }
+}; // struct vector3_curve
+
+inline constexpr auto gradient_max_keys = std::size_t{8};
+
+struct gradient_color_key {
+  std::float_t time{0.0f};
+  math::color color{1.0f, 1.0f, 1.0f, 1.0f}; // only rgb is read; alpha comes from alpha_keys instead
+}; // struct gradient_color_key
+
+struct gradient_alpha_key {
+  std::float_t time{0.0f};
+  std::float_t alpha{1.0f};
+}; // struct gradient_alpha_key
+
+/**
+ * @brief A Unity-Gradient-style color ramp over normalized lifetime: color and alpha are keyed and
+ * interpolated independently, then recombined by evaluate(). Empty (no color_keys) means "no gradient
+ * authored" -- particle_emitter::color_over_lifetime falls back to the plain start_color/end_color
+ * lerp in that case, so every existing .particle_effect file keeps its old look.
+ */
+struct gradient {
+  containers::static_vector<gradient_color_key, gradient_max_keys> color_keys{};
+  containers::static_vector<gradient_alpha_key, gradient_max_keys> alpha_keys{};
+
+  [[nodiscard]] auto evaluate(std::float_t t) const -> math::color;
+
+  [[nodiscard]] auto has_keys() const noexcept -> bool {
+    return !color_keys.is_empty();
+  }
+}; // struct gradient
+
+enum class particle_render_mode : std::uint8_t {
+  billboard,
+  mesh
+}; // enum class particle_render_mode
+
 struct particle_emitter {
   std::string name{"emitter"};
   emitter_blend_mode blend_mode{emitter_blend_mode::additive};
@@ -91,13 +165,22 @@ struct particle_emitter {
   std::float_t lifetime_max{2.0f};
   math::color start_color{1.0f, 1.0f, 1.0f, 1.0f};
   math::color end_color{1.0f, 1.0f, 1.0f, 0.0f};
+  gradient color_over_lifetime{}; // empty => falls back to the start_color/end_color lerp above
   std::float_t size_min{0.1f};
   std::float_t size_max{0.2f};
+  curve size_over_lifetime{}; // empty => constant 1.0, i.e. size stays at its rolled base_size
   std::float_t rotation_min{0.0f};
   std::float_t rotation_max{0.0f};
+  curve rotation_over_lifetime{}; // angular velocity in radians/sec, evaluated directly each step; empty => no spin
+  vector3_curve velocity_over_lifetime{}; // world-space m/s, added on top of integrated velocity; empty => no contribution
+  math::vector3 force_over_lifetime_min{0.0f, 0.0f, 0.0f}; // rolled once per particle at spawn, like velocity_min/max
+  math::vector3 force_over_lifetime_max{0.0f, 0.0f, 0.0f};
   std::float_t gravity{0.0f};
   std::float_t drag{0.0f};
-  texture_handle texture{};
+  texture_handle texture{}; // billboard mode
+  particle_render_mode render_mode{particle_render_mode::billboard};
+  mesh_handle render_mesh{}; // mesh mode
+  material_handle render_material{}; // mesh mode; invalid => each submesh keeps its own authored material
   collision_config collision{};
 }; // struct particle_emitter
 

@@ -115,12 +115,23 @@ auto particles_module::_integrate(const assets::particle_emitter& config, scenes
 
     const auto t = p.lifetime > 0.0f ? std::clamp(p.age / p.lifetime, 0.0f, 1.0f) : 1.0f;
 
-    p.velocity += math::vector3{0.0f, -config.gravity, 0.0f} * dt;
+    p.velocity += (math::vector3{0.0f, -config.gravity, 0.0f} + p.constant_force) * dt;
     p.velocity *= std::max(0.0f, 1.0f - config.drag * dt);
-    p.previous_position = p.position;
-    p.position += p.velocity * dt;
 
-    p.color = lerp_color(config.start_color, config.end_color, t);
+    // velocity_over_lifetime is an additive world-space layer on top of the integrated velocity, not
+    // itself integrated -- matches Unity's "Velocity over Lifetime" module, which re-evaluates fresh
+    // every step rather than accumulating.
+    const auto effective_velocity = config.velocity_over_lifetime.has_keys() ? p.velocity + config.velocity_over_lifetime.evaluate(t) : p.velocity;
+
+    p.previous_position = p.position;
+    p.position += effective_velocity * dt;
+
+    if (config.rotation_over_lifetime.has_keys()) {
+      p.rotation += config.rotation_over_lifetime.evaluate(t) * dt;
+    }
+
+    p.color = config.color_over_lifetime.has_keys() ? config.color_over_lifetime.evaluate(t) : lerp_color(config.start_color, config.end_color, t);
+    p.size = p.base_size * (config.size_over_lifetime.has_keys() ? config.size_over_lifetime.evaluate(t) : 1.0f);
   }
 
   std::erase_if(runtime.particles, [](const particle& p) { return p.age >= p.lifetime; });

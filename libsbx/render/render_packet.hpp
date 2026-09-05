@@ -117,6 +117,29 @@ struct particle_billboard_command {
   std::uint32_t instance_offset{0u};
 }; // struct particle_billboard_command
 
+/**
+ * @brief One particle rendered as an instanced mesh instead of a billboard -- unlit (texture * color,
+ * no lighting), matching the billboard particle's own unlit style, vertex-pulled from the mesh's own
+ * buffer like an ordinary transform_data instance but with a per-particle color instead of a normal
+ * matrix (there's no lighting to correct normals for).
+ */
+struct particle_mesh_instance {
+  math::matrix4x4 model{math::matrix4x4::identity};
+  math::color color{1.0f, 1.0f, 1.0f, 1.0f};
+}; // struct particle_mesh_instance
+
+/**
+ * @brief One coalesced instanced draw of particle_mesh_instances sharing a mesh, submesh, material and blend mode.
+ */
+struct particle_mesh_command {
+  assets::emitter_blend_mode blend_mode{assets::emitter_blend_mode::additive};
+  assets::mesh_handle mesh{};
+  std::uint32_t submesh_index{0u};
+  assets::material_handle material{};
+  std::uint32_t instance_count{0u};
+  std::uint32_t instance_offset{0u};
+}; // struct particle_mesh_command
+
 struct render_packet {
   camera_data camera{};
   std::vector<draw_command> opaque_commands{};
@@ -127,6 +150,8 @@ struct render_packet {
   std::uint32_t directional_light_count{0u};
   std::vector<particle_billboard_instance> particle_billboard_instances{};
   std::vector<particle_billboard_command> particle_billboard_commands{};
+  std::vector<particle_mesh_instance> particle_mesh_instances{};
+  std::vector<particle_mesh_command> particle_mesh_commands{};
   bool has_shadow_caster{false}; // When true, lights[0] is the cascaded-shadow-mapped sun.
   std::float_t shadow_distance{75.0f};
   assets::environment_map_handle environment{};

@@ -20,6 +20,7 @@ struct particle {
   math::vector3 position{};
   math::vector3 previous_position{};
   math::vector3 velocity{};
+  math::vector3 constant_force{}; // rolled once at spawn from force_over_lifetime_min/max
   std::float_t rotation{0.0f};
   std::float_t age{0.0f};
   std::float_t lifetime{1.0f};

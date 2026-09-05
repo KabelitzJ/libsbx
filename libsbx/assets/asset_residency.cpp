@@ -451,6 +451,69 @@ auto asset_residency::load_particle_effect(const math::uuid& id) -> particle_eff
 
   if (root["name"]) info.name = root["name"].as<std::string>();
 
+  const auto load_curve = [](const YAML::Node& node) -> curve {
+    auto result = curve{};
+
+    if (!node) {
+      return result;
+    }
+
+    for (const auto key_node : node) {
+      if (result.keys.is_full()) {
+        break;
+      }
+
+      auto key = curve_key{};
+
+      if (key_node["time"]) key.time = key_node["time"].as<std::float_t>();
+      if (key_node["value"]) key.value = key_node["value"].as<std::float_t>();
+
+      result.keys.push_back(key);
+    }
+
+    return result;
+  };
+
+  const auto load_gradient = [](const YAML::Node& node) -> gradient {
+    auto result = gradient{};
+
+    if (!node) {
+      return result;
+    }
+
+    if (const auto color_keys_node = node["color_keys"]) {
+      for (const auto key_node : color_keys_node) {
+        if (result.color_keys.is_full()) {
+          break;
+        }
+
+        auto key = gradient_color_key{};
+
+        if (key_node["time"]) key.time = key_node["time"].as<std::float_t>();
+        if (key_node["color"]) key.color = key_node["color"].as<math::color>();
+
+        result.color_keys.push_back(key);
+      }
+    }
+
+    if (const auto alpha_keys_node = node["alpha_keys"]) {
+      for (const auto key_node : alpha_keys_node) {
+        if (result.alpha_keys.is_full()) {
+          break;
+        }
+
+        auto key = gradient_alpha_key{};
+
+        if (key_node["time"]) key.time = key_node["time"].as<std::float_t>();
+        if (key_node["alpha"]) key.alpha = key_node["alpha"].as<std::float_t>();
+
+        result.alpha_keys.push_back(key);
+      }
+    }
+
+    return result;
+  };
+
   if (const auto emitters = root["emitters"]) {
     info.emitters.reserve(emitters.size());
 
@@ -486,15 +549,40 @@ auto asset_residency::load_particle_effect(const math::uuid& id) -> particle_eff
       if (emitter_node["lifetime_max"]) emitter.lifetime_max = emitter_node["lifetime_max"].as<std::float_t>();
       if (emitter_node["start_color"]) emitter.start_color = emitter_node["start_color"].as<math::color>();
       if (emitter_node["end_color"]) emitter.end_color = emitter_node["end_color"].as<math::color>();
+      if (emitter_node["color_over_lifetime"]) emitter.color_over_lifetime = load_gradient(emitter_node["color_over_lifetime"]);
       if (emitter_node["size_min"]) emitter.size_min = emitter_node["size_min"].as<std::float_t>();
       if (emitter_node["size_max"]) emitter.size_max = emitter_node["size_max"].as<std::float_t>();
+      if (emitter_node["size_over_lifetime"]) emitter.size_over_lifetime = load_curve(emitter_node["size_over_lifetime"]);
       if (emitter_node["rotation_min"]) emitter.rotation_min = emitter_node["rotation_min"].as<std::float_t>();
       if (emitter_node["rotation_max"]) emitter.rotation_max = emitter_node["rotation_max"].as<std::float_t>();
+      if (emitter_node["rotation_over_lifetime"]) emitter.rotation_over_lifetime = load_curve(emitter_node["rotation_over_lifetime"]);
+
+      if (const auto velocity_curve_node = emitter_node["velocity_over_lifetime"]) {
+        emitter.velocity_over_lifetime.x = load_curve(velocity_curve_node["x"]);
+        emitter.velocity_over_lifetime.y = load_curve(velocity_curve_node["y"]);
+        emitter.velocity_over_lifetime.z = load_curve(velocity_curve_node["z"]);
+      }
+
+      if (emitter_node["force_over_lifetime_min"]) emitter.force_over_lifetime_min = emitter_node["force_over_lifetime_min"].as<math::vector3>();
+      if (emitter_node["force_over_lifetime_max"]) emitter.force_over_lifetime_max = emitter_node["force_over_lifetime_max"].as<math::vector3>();
+
       if (emitter_node["gravity"]) emitter.gravity = emitter_node["gravity"].as<std::float_t>();
       if (emitter_node["drag"]) emitter.drag = emitter_node["drag"].as<std::float_t>();
 
       if (emitter_node["texture"]) {
         emitter.texture = load_texture(std::filesystem::path{emitter_node["texture"].as<std::string>()}, graphics::format::r8g8b8a8_srgb);
+      }
+
+      if (emitter_node["render_mode"]) {
+        emitter.render_mode = (emitter_node["render_mode"].as<std::string>() == "mesh") ? particle_render_mode::mesh : particle_render_mode::billboard;
+      }
+
+      if (emitter_node["render_mesh"]) {
+        emitter.render_mesh = load_mesh(std::filesystem::path{emitter_node["render_mesh"].as<std::string>()});
+      }
+
+      if (emitter_node["render_material"]) {
+        emitter.render_material = load_material(std::filesystem::path{emitter_node["render_material"].as<std::string>()});
       }
 
       if (const auto collision_node = emitter_node["collision"]) {
@@ -599,6 +687,63 @@ auto asset_residency::save_particle_effect(particle_effect_handle& effect, const
     return _cooker.relative(absolute).generic_string();
   };
 
+  // Same idea as texture_path_of, generalized -- mesh_handle/material_handle share the same
+  // is_valid()/->id() shape.
+  const auto asset_path_of = [this](const auto& handle) -> std::optional<std::string> {
+    if (!handle.is_valid()) {
+      return std::nullopt;
+    }
+
+    const auto absolute = _cooker.path_of(handle->id());
+
+    if (absolute.empty()) {
+      return std::nullopt;
+    }
+
+    return _cooker.relative(absolute).generic_string();
+  };
+
+  const auto save_curve = [](const curve& value) -> YAML::Node {
+    auto node = YAML::Node{YAML::NodeType::Sequence};
+
+    for (const auto& key : value.keys) {
+      auto key_node = YAML::Node{};
+      key_node["time"] = key.time;
+      key_node["value"] = key.value;
+      node.push_back(key_node);
+    }
+
+    return node;
+  };
+
+  const auto save_gradient = [](const gradient& value) -> YAML::Node {
+    auto node = YAML::Node{};
+
+    auto color_keys_node = YAML::Node{YAML::NodeType::Sequence};
+
+    for (const auto& key : value.color_keys) {
+      auto key_node = YAML::Node{};
+      key_node["time"] = key.time;
+      key_node["color"] = key.color;
+      color_keys_node.push_back(key_node);
+    }
+
+    node["color_keys"] = color_keys_node;
+
+    auto alpha_keys_node = YAML::Node{YAML::NodeType::Sequence};
+
+    for (const auto& key : value.alpha_keys) {
+      auto key_node = YAML::Node{};
+      key_node["time"] = key.time;
+      key_node["alpha"] = key.alpha;
+      alpha_keys_node.push_back(key_node);
+    }
+
+    node["alpha_keys"] = alpha_keys_node;
+
+    return node;
+  };
+
   for (const auto& emitter : effect->emitters()) {
     auto emitter_node = YAML::Node{};
 
@@ -621,15 +766,38 @@ auto asset_residency::save_particle_effect(particle_effect_handle& effect, const
     emitter_node["lifetime_max"] = emitter.lifetime_max;
     emitter_node["start_color"] = emitter.start_color;
     emitter_node["end_color"] = emitter.end_color;
+    emitter_node["color_over_lifetime"] = save_gradient(emitter.color_over_lifetime);
     emitter_node["size_min"] = emitter.size_min;
     emitter_node["size_max"] = emitter.size_max;
+    emitter_node["size_over_lifetime"] = save_curve(emitter.size_over_lifetime);
     emitter_node["rotation_min"] = emitter.rotation_min;
     emitter_node["rotation_max"] = emitter.rotation_max;
+    emitter_node["rotation_over_lifetime"] = save_curve(emitter.rotation_over_lifetime);
+
+    auto velocity_curve_node = YAML::Node{};
+    velocity_curve_node["x"] = save_curve(emitter.velocity_over_lifetime.x);
+    velocity_curve_node["y"] = save_curve(emitter.velocity_over_lifetime.y);
+    velocity_curve_node["z"] = save_curve(emitter.velocity_over_lifetime.z);
+    emitter_node["velocity_over_lifetime"] = velocity_curve_node;
+
+    emitter_node["force_over_lifetime_min"] = emitter.force_over_lifetime_min;
+    emitter_node["force_over_lifetime_max"] = emitter.force_over_lifetime_max;
+
     emitter_node["gravity"] = emitter.gravity;
     emitter_node["drag"] = emitter.drag;
 
     if (const auto slot = texture_path_of(emitter.texture)) {
       emitter_node["texture"] = *slot;
+    }
+
+    emitter_node["render_mode"] = (emitter.render_mode == particle_render_mode::mesh) ? "mesh" : "billboard";
+
+    if (const auto slot = asset_path_of(emitter.render_mesh)) {
+      emitter_node["render_mesh"] = *slot;
+    }
+
+    if (const auto slot = asset_path_of(emitter.render_material)) {
+      emitter_node["render_material"] = *slot;
     }
 
     auto collision_node = YAML::Node{};

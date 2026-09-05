@@ -171,6 +171,7 @@ target_sources(
     "${CMAKE_SOURCE_DIR}/libsbx/assets/asset_residency.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/assets/assets_module.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/assets/ibl_baker.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/assets/particle_effect.cpp"
 
     "${CMAKE_SOURCE_DIR}/libsbx/core/core.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/core/engine.cpp"

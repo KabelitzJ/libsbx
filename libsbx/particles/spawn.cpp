@@ -51,12 +51,21 @@ auto roll_particle(const assets::particle_emitter& config, const math::matrix4x4
     math::random::next<std::float_t>(config.velocity_min.z(), config.velocity_max.z())
   };
 
+  // Rolled the same way as velocity_min/max -- a local-space direction, rotated (not translated) by
+  // the emitter's world orientation.
+  const auto local_force = math::vector3{
+    math::random::next<std::float_t>(config.force_over_lifetime_min.x(), config.force_over_lifetime_max.x()),
+    math::random::next<std::float_t>(config.force_over_lifetime_min.y(), config.force_over_lifetime_max.y()),
+    math::random::next<std::float_t>(config.force_over_lifetime_min.z(), config.force_over_lifetime_max.z())
+  };
+
   auto result = particle{};
 
   result.id = id;
   result.position = math::vector3{world * math::vector4{local_position, 1.0f}};
   result.previous_position = result.position;
   result.velocity = math::vector3{world * math::vector4{local_velocity, 0.0f}};
+  result.constant_force = math::vector3{world * math::vector4{local_force, 0.0f}};
   result.rotation = math::random::next<std::float_t>(config.rotation_min, config.rotation_max);
   result.age = 0.0f;
   result.lifetime = math::random::next<std::float_t>(config.lifetime_min, config.lifetime_max);

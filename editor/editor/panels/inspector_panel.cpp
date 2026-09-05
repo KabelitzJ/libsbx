@@ -524,6 +524,153 @@ auto draw_color_field(const char* label, sbx::math::color& color) -> bool {
   return true;
 }
 
+// A plain key-list editor rather than an interactive curve graph -- keys don't need to be authored
+// in time order (assets::curve::evaluate() finds the bracketing pair regardless), so this is enough
+// to author any curve the graph widget would produce, just less visual.
+auto draw_curve_editor(const char* label, sbx::assets::curve& curve, std::float_t value_min, std::float_t value_max) -> bool {
+  auto changed = false;
+
+  if (!ImGui::TreeNodeEx(label, ImGuiTreeNodeFlags_Framed)) {
+    return false;
+  }
+
+  auto& keys = curve.keys;
+  auto removed_index = std::optional<std::size_t>{};
+
+  for (auto index = std::size_t{0u}; index < keys.size(); ++index) {
+    ImGui::PushID(static_cast<std::int32_t>(index));
+
+    auto& key = keys[index];
+
+    changed |= ImGui::SliderFloat("Time", &key.time, 0.0f, 1.0f);
+    changed |= ImGui::DragFloat("Value", &key.value, 0.01f, value_min, value_max);
+
+    if (ImGui::SmallButton(ICON_MDI_DELETE " Remove Key")) {
+      removed_index = index;
+      changed = true;
+    }
+
+    ImGui::Separator();
+    ImGui::PopID();
+  }
+
+  if (removed_index) {
+    // static_vector has no erase() -- shift the tail down by hand, same as the collision plane list.
+    for (auto i = *removed_index; i + 1u < keys.size(); ++i) {
+      keys[i] = keys[i + 1u];
+    }
+
+    keys.pop_back();
+  }
+
+  ImGui::BeginDisabled(keys.size() >= sbx::assets::curve_max_keys);
+
+  if (ImGui::Button(ICON_MDI_PLUS " Add Key")) {
+    keys.push_back(sbx::assets::curve_key{});
+    changed = true;
+  }
+
+  ImGui::EndDisabled();
+
+  ImGui::TreePop();
+
+  return changed;
+}
+
+auto draw_gradient_editor(const char* label, sbx::assets::gradient& gradient) -> bool {
+  auto changed = false;
+
+  if (!ImGui::TreeNodeEx(label, ImGuiTreeNodeFlags_Framed)) {
+    return false;
+  }
+
+  ImGui::Text("Color Keys");
+  ImGui::PushID("color_keys");
+
+  auto& color_keys = gradient.color_keys;
+  auto removed_color_index = std::optional<std::size_t>{};
+
+  for (auto index = std::size_t{0u}; index < color_keys.size(); ++index) {
+    ImGui::PushID(static_cast<std::int32_t>(index));
+
+    auto& key = color_keys[index];
+
+    changed |= ImGui::SliderFloat("Time", &key.time, 0.0f, 1.0f);
+    changed |= draw_color_field("Color", key.color);
+
+    if (ImGui::SmallButton(ICON_MDI_DELETE " Remove Color Key")) {
+      removed_color_index = index;
+      changed = true;
+    }
+
+    ImGui::Separator();
+    ImGui::PopID();
+  }
+
+  if (removed_color_index) {
+    for (auto i = *removed_color_index; i + 1u < color_keys.size(); ++i) {
+      color_keys[i] = color_keys[i + 1u];
+    }
+
+    color_keys.pop_back();
+  }
+
+  ImGui::BeginDisabled(color_keys.size() >= sbx::assets::gradient_max_keys);
+
+  if (ImGui::Button(ICON_MDI_PLUS " Add Color Key")) {
+    color_keys.push_back(sbx::assets::gradient_color_key{});
+    changed = true;
+  }
+
+  ImGui::EndDisabled();
+  ImGui::PopID();
+
+  ImGui::Text("Alpha Keys");
+  ImGui::PushID("alpha_keys");
+
+  auto& alpha_keys = gradient.alpha_keys;
+  auto removed_alpha_index = std::optional<std::size_t>{};
+
+  for (auto index = std::size_t{0u}; index < alpha_keys.size(); ++index) {
+    ImGui::PushID(static_cast<std::int32_t>(index));
+
+    auto& key = alpha_keys[index];
+
+    changed |= ImGui::SliderFloat("Time", &key.time, 0.0f, 1.0f);
+    changed |= ImGui::SliderFloat("Alpha", &key.alpha, 0.0f, 1.0f);
+
+    if (ImGui::SmallButton(ICON_MDI_DELETE " Remove Alpha Key")) {
+      removed_alpha_index = index;
+      changed = true;
+    }
+
+    ImGui::Separator();
+    ImGui::PopID();
+  }
+
+  if (removed_alpha_index) {
+    for (auto i = *removed_alpha_index; i + 1u < alpha_keys.size(); ++i) {
+      alpha_keys[i] = alpha_keys[i + 1u];
+    }
+
+    alpha_keys.pop_back();
+  }
+
+  ImGui::BeginDisabled(alpha_keys.size() >= sbx::assets::gradient_max_keys);
+
+  if (ImGui::Button(ICON_MDI_PLUS " Add Alpha Key")) {
+    alpha_keys.push_back(sbx::assets::gradient_alpha_key{});
+    changed = true;
+  }
+
+  ImGui::EndDisabled();
+  ImGui::PopID();
+
+  ImGui::TreePop();
+
+  return changed;
+}
+
 auto draw_camera_section(editor_state& state, sbx::scenes::node& node) -> void {
   auto is_open = true;
 
@@ -1737,7 +1884,7 @@ auto inspector_panel::_draw_material_properties(const asset_selection& asset, sb
   }
 }
 
-auto inspector_panel::_draw_particle_effect_properties(const asset_selection& asset, sbx::assets::assets_module& assets_module) -> void {
+auto inspector_panel::_draw_particle_effect_properties(editor_state& state, const asset_selection& asset, sbx::assets::assets_module& assets_module) -> void {
   if (!_asset_cache.particle_effect.is_valid()) {
     ImGui::TextDisabled("Could not load this particle effect.");
     return;
@@ -1857,20 +2004,68 @@ auto inspector_panel::_draw_particle_effect_properties(const asset_selection& as
 
       changed |= draw_color_field("Start Color", emitter.start_color);
       changed |= draw_color_field("End Color", emitter.end_color);
+      changed |= draw_gradient_editor("Color Over Lifetime (overrides Start/End Color if it has keys)", emitter.color_over_lifetime);
 
       changed |= ImGui::DragFloat("Size Min", &emitter.size_min, 0.005f, 0.0f, 1000.0f);
       changed |= ImGui::DragFloat("Size Max", &emitter.size_max, 0.005f, emitter.size_min, 1000.0f);
+      changed |= draw_curve_editor("Size Over Lifetime (multiplier)", emitter.size_over_lifetime, 0.0f, 10.0f);
 
       changed |= ImGui::DragFloat("Rotation Min", &emitter.rotation_min, 0.01f, -6.2832f, 6.2832f);
       changed |= ImGui::DragFloat("Rotation Max", &emitter.rotation_max, 0.01f, emitter.rotation_min, 6.2832f);
+      changed |= draw_curve_editor("Rotation Over Lifetime (rad/s)", emitter.rotation_over_lifetime, -20.0f, 20.0f);
 
       changed |= ImGui::DragFloat("Gravity", &emitter.gravity, 0.05f, -1000.0f, 1000.0f);
       changed |= ImGui::DragFloat("Drag", &emitter.drag, 0.01f, 0.0f, 100.0f);
 
-      ImGui::Text("Texture");
-      ImGui::SameLine();
+      if (ImGui::TreeNodeEx("Velocity Over Lifetime (m/s, added on top of Velocity Min/Max)", ImGuiTreeNodeFlags_Framed)) {
+        changed |= draw_curve_editor("X", emitter.velocity_over_lifetime.x, -100.0f, 100.0f);
+        changed |= draw_curve_editor("Y", emitter.velocity_over_lifetime.y, -100.0f, 100.0f);
+        changed |= draw_curve_editor("Z", emitter.velocity_over_lifetime.z, -100.0f, 100.0f);
+        ImGui::TreePop();
+      }
 
-      changed |= draw_texture_picker("##particle_texture_picker", emitter.texture, assets_module, sbx::graphics::format::r8g8b8a8_srgb);
+      auto force_min = std::array<std::float_t, 3u>{emitter.force_over_lifetime_min.x(), emitter.force_over_lifetime_min.y(), emitter.force_over_lifetime_min.z()};
+      if (draw_vector3_control("Force Min", force_min, 0.0f, 0.05f).changed) {
+        emitter.force_over_lifetime_min = sbx::math::vector3{force_min[0], force_min[1], force_min[2]};
+        changed = true;
+      }
+
+      auto force_max = std::array<std::float_t, 3u>{emitter.force_over_lifetime_max.x(), emitter.force_over_lifetime_max.y(), emitter.force_over_lifetime_max.z()};
+      if (draw_vector3_control("Force Max", force_max, 0.0f, 0.05f).changed) {
+        emitter.force_over_lifetime_max = sbx::math::vector3{force_max[0], force_max[1], force_max[2]};
+        changed = true;
+      }
+
+      ImGui::SeparatorText("Rendering");
+
+      static constexpr auto render_mode_names = std::array<const char*, 2u>{"Billboard", "Mesh"};
+      auto render_mode_index = static_cast<std::int32_t>(emitter.render_mode);
+
+      if (ImGui::Combo("Render Mode", &render_mode_index, render_mode_names.data(), static_cast<std::int32_t>(render_mode_names.size()))) {
+        emitter.render_mode = static_cast<sbx::assets::particle_render_mode>(render_mode_index);
+        changed = true;
+      }
+
+      if (emitter.render_mode == sbx::assets::particle_render_mode::billboard) {
+        ImGui::Text("Texture");
+        ImGui::SameLine();
+
+        changed |= draw_texture_picker("##particle_texture_picker", emitter.texture, assets_module, sbx::graphics::format::r8g8b8a8_srgb);
+      } else {
+        ImGui::Text("Mesh");
+        ImGui::SameLine();
+
+        changed |= draw_mesh_picker(state, "##particle_render_mesh_picker", emitter.render_mesh, assets_module);
+
+        ImGui::Text("Material Override");
+        ImGui::SameLine();
+
+        changed |= draw_material_picker(state, "##particle_render_material_picker", emitter.render_material, assets_module);
+
+        if (ImGui::IsItemHovered()) {
+          ImGui::SetTooltip("Leave unset to use each submesh's own authored material.");
+        }
+      }
 
       ImGui::SeparatorText("Collision");
 
@@ -1973,7 +2168,7 @@ auto inspector_panel::_draw_particle_effect_properties(const asset_selection& as
   }
 }
 
-auto inspector_panel::_draw_asset_properties(const asset_selection& asset, sbx::assets::assets_module& assets_module) -> void {
+auto inspector_panel::_draw_asset_properties(editor_state& state, const asset_selection& asset, sbx::assets::assets_module& assets_module) -> void {
   if (_asset_cache.id.value() != asset.id.value()) {
     _asset_cache = asset_property_cache{};
     _asset_cache.id = asset.id;
@@ -2059,7 +2254,7 @@ auto inspector_panel::_draw_asset_properties(const asset_selection& asset, sbx::
     }
     case asset_kind::particle_effect: {
       ImGui::Text("Type: Particle Effect");
-      _draw_particle_effect_properties(asset, assets_module);
+      _draw_particle_effect_properties(state, asset, assets_module);
       break;
     }
     case asset_kind::scene: {
@@ -2104,7 +2299,7 @@ auto inspector_panel::draw(editor_state& state) -> void {
       ImGui::TextDisabled("Nothing selected.");
     }
   } else if (const auto* asset = std::get_if<asset_selection>(&state.current_selection); asset != nullptr) {
-    _draw_asset_properties(*asset, assets_module);
+    _draw_asset_properties(state, *asset, assets_module);
   } else {
     ImGui::TextDisabled("Nothing selected.");
   }

@@ -16,6 +16,8 @@
 
 #include <libsbx/math/vector3.hpp>
 #include <libsbx/math/matrix4x4.hpp>
+#include <libsbx/math/matrix_cast.hpp>
+#include <libsbx/math/algorithm.hpp>
 #include <libsbx/math/angle.hpp>
 
 #include <libsbx/core/engine.hpp>
@@ -46,6 +48,7 @@
 #include <libsbx/render/passes/transparent_resolve_pass.hpp>
 #include <libsbx/render/particles/particle_pool.hpp>
 #include <libsbx/render/particles/particle_simulate_pass.hpp>
+#include <libsbx/render/skinning/skin_pass.hpp>
 #include <libsbx/render/shadow/shadow_pass.hpp>
 #include <libsbx/render/shadow/cascade.hpp>
 #include <libsbx/render/scene_blit_compositor.hpp>
@@ -104,6 +107,70 @@ struct transparent_entry {
   transform_data transform{};
 }; // struct transparent_entry
 
+namespace {
+
+// Linear scan over a joint channel's keyframes -- clip sizes are small (tens of keys), so this
+// isn't worth a binary search. Returns the same index twice when time falls outside the track
+// (clamped to the first/last key) or the track has only one key.
+template<typename Key>
+auto bracket_keys(const std::vector<Key>& keys, std::float_t time) -> std::pair<std::size_t, std::size_t> {
+  if (keys.size() == 1u || time <= keys.front().time) {
+    return {0u, 0u};
+  }
+
+  if (time >= keys.back().time) {
+    const auto last = keys.size() - 1u;
+    return {last, last};
+  }
+
+  for (auto index = std::size_t{0u}; index + 1u < keys.size(); ++index) {
+    if (time >= keys[index].time && time <= keys[index + 1u].time) {
+      return {index, index + 1u};
+    }
+  }
+
+  return {0u, 0u};
+}
+
+auto sample_vector3_track(const std::vector<assets::animation_key<math::vector3>>& keys, std::float_t time) -> math::vector3 {
+  const auto [a, b] = bracket_keys(keys, time);
+
+  if (a == b) {
+    return keys[a].value;
+  }
+
+  const auto span = keys[b].time - keys[a].time;
+  const auto t = (span > 0.0f) ? (time - keys[a].time) / span : 0.0f;
+
+  return math::vector3{
+    math::mix(keys[a].value.x(), keys[b].value.x(), t),
+    math::mix(keys[a].value.y(), keys[b].value.y(), t),
+    math::mix(keys[a].value.z(), keys[b].value.z(), t)
+  };
+}
+
+auto sample_rotation_track(const std::vector<assets::animation_key<math::quaternion>>& keys, std::float_t time) -> math::quaternion {
+  const auto [a, b] = bracket_keys(keys, time);
+
+  if (a == b) {
+    return keys[a].value;
+  }
+
+  const auto span = keys[b].time - keys[a].time;
+  const auto t = (span > 0.0f) ? (time - keys[a].time) / span : 0.0f;
+
+  return math::quaternion::slerp(keys[a].value, keys[b].value, t);
+}
+
+auto compose_trs(const math::vector3& translation, const math::quaternion& rotation, const math::vector3& scale) -> math::matrix4x4 {
+  const auto translation_matrix = math::matrix4x4::translated(math::matrix4x4::identity, translation);
+  const auto scale_matrix = math::matrix4x4::scaled(math::matrix4x4::identity, scale);
+
+  return translation_matrix * math::matrix_cast<math::matrix4x4>(rotation) * scale_matrix;
+}
+
+} // namespace
+
 scene_renderer_module::scene_renderer_module() {
   _ensure_resources();
 
@@ -121,6 +188,7 @@ scene_renderer_module::scene_renderer_module() {
     .name = "Particle Pool Alpha Blend"
   });
 
+  _graph.add_pass<skin_pass>();
   _graph.add_pass<depth_pre_pass>();
   _graph.add_pass<light_culling_pass>();
   _graph.add_pass<shadow_pass>();
@@ -235,6 +303,72 @@ auto scene_renderer_module::_extract_gpu_particle_emitter(render_packet& packet,
   packet.particle_emitters.push_back(particle_emitter_snapshot{pool_index, runtime.slot, data});
 }
 
+auto scene_renderer_module::_evaluate_skeleton_pose(const assets::skeleton& skeleton, scenes::animator* animator, scenes::skeleton_pose& pose, std::float_t delta_time) -> void {
+  const auto& joints = skeleton.joints();
+  const auto joint_count = joints.size();
+
+  pose.joint_world_matrices.resize(joint_count);
+  pose.skinning_matrices.resize(joint_count);
+
+  const auto* clip = (animator != nullptr && animator->clip.is_valid()) ? animator->clip.get() : nullptr;
+
+  if (clip != nullptr && animator->playing) {
+    animator->time += delta_time * animator->speed;
+
+    const auto duration = clip->duration();
+
+    if (duration <= 0.0f) {
+      animator->time = 0.0f;
+    } else if (animator->loop) {
+      animator->time = std::fmod(animator->time, duration);
+
+      if (animator->time < 0.0f) {
+        animator->time += duration;
+      }
+    } else {
+      animator->time = std::clamp(animator->time, 0.0f, duration);
+    }
+  }
+
+  // Seed every joint at bind pose first -- a clip's channels are sparse, so joints it doesn't
+  // animate (and the whole skeleton, when there's no playing clip at all) fall back to this.
+  auto locals = std::vector<math::matrix4x4>(joint_count);
+
+  for (auto index = std::size_t{0u}; index < joint_count; ++index) {
+    const auto& joint = joints[index];
+    locals[index] = compose_trs(joint.bind_local_translation, joint.bind_local_rotation, joint.bind_local_scale);
+  }
+
+  if (clip != nullptr) {
+    for (const auto& channel : clip->channels()) {
+      if (channel.joint_index >= joint_count) {
+        continue;
+      }
+
+      const auto& joint = joints[channel.joint_index];
+
+      const auto translation = channel.translation_keys.empty() ? joint.bind_local_translation : sample_vector3_track(channel.translation_keys, animator->time);
+      const auto rotation = channel.rotation_keys.empty() ? joint.bind_local_rotation : sample_rotation_track(channel.rotation_keys, animator->time);
+      const auto scale = channel.scale_keys.empty() ? joint.bind_local_scale : sample_vector3_track(channel.scale_keys, animator->time);
+
+      locals[channel.joint_index] = compose_trs(translation, rotation, scale);
+    }
+  }
+
+  // Joints are cook-time topologically sorted (parent_index < own index), so a single forward
+  // pass suffices -- no recursion needed, unlike scene::_update_node's entity-tree walk this
+  // otherwise mirrors.
+  for (auto index = std::size_t{0u}; index < joint_count; ++index) {
+    const auto parent_index = joints[index].parent_index;
+
+    pose.joint_world_matrices[index] = (parent_index < 0)
+      ? locals[index]
+      : pose.joint_world_matrices[static_cast<std::size_t>(parent_index)] * locals[index];
+
+    pose.skinning_matrices[index] = pose.joint_world_matrices[index] * joints[index].inverse_bind_matrix;
+  }
+}
+
 auto scene_renderer_module::_build_packet() -> render_packet {
   SBX_PROFILE_SCOPE("scene_renderer_module::build_packet");
 
@@ -278,7 +412,10 @@ auto scene_renderer_module::_build_packet() -> render_packet {
   auto opaque = std::map<mesh_key, draw_bucket>{};
   auto transparent = std::vector<transparent_entry>{};
 
-  for (const auto [entity, world, renderer] : scene.query<scenes::world_transform, scenes::mesh_renderer>().each()) {
+  // Skinned instances (mesh_renderer + skeleton_pose) are handled in a separate pass below --
+  // each needs its own compute-skinned scratch vertex range, so they can't share this bucket's
+  // cross-instance coalescing.
+  for (const auto [entity, world, renderer] : scene.query<scenes::world_transform, scenes::mesh_renderer>(ecs::exclude<scenes::skeleton_pose>).each()) {
     if (!renderer.mesh.is_valid()) {
       continue;
     }
@@ -349,6 +486,84 @@ auto scene_renderer_module::_build_packet() -> render_packet {
 
     packet.transforms.push_back(entry.transform);
     packet.transparent_commands.push_back(std::move(command));
+  }
+
+  // Skinned meshes: each instance skins independently into its own scratch vertex range (no
+  // cross-instance coalescing, unlike the static bucket above), and its pose is sampled/evaluated
+  // here -- render cadence, feeding straight into this frame's packet -- rather than in a separate
+  // fixed-tick system (see scenes::skeleton_pose's doc comment).
+  auto skin_scratch_cursor = std::uint32_t{0u};
+  const auto animation_delta_time = static_cast<std::float_t>(scenes_module.simulation_delta_time().value());
+
+  for (const auto [entity, world, renderer, pose] : scene.query<scenes::world_transform, scenes::mesh_renderer, scenes::skeleton_pose>().each()) {
+    if (!renderer.mesh.is_valid() || !pose.skeleton.is_valid()) {
+      continue;
+    }
+
+    auto* animator_component = static_cast<scenes::animator*>(nullptr);
+    auto node = scene.node_of(entity);
+
+    if (node.has_component<scenes::animator>()) {
+      animator_component = &node.get_component<scenes::animator>();
+    }
+
+    _evaluate_skeleton_pose(*pose.skeleton, animator_component, pose, animation_delta_time);
+
+    const auto instance_vertex_count = renderer.mesh->vertex_count();
+
+    if (instance_vertex_count == 0u || !renderer.mesh->has_skin_data() || (skin_scratch_cursor + instance_vertex_count) > skin_scratch_vertex_capacity) {
+      continue; // no skin data cooked, or this frame's scratch buffer is already full -- skip rather than overrun
+    }
+
+    const auto joint_offset = static_cast<std::uint32_t>(packet.joint_matrices.size());
+    packet.joint_matrices.insert(packet.joint_matrices.end(), pose.skinning_matrices.begin(), pose.skinning_matrices.end());
+
+    const auto output_vertex_address = _skin_scratch_address + static_cast<graphics::buffer::address_type>(skin_scratch_cursor) * sizeof(assets::vertex);
+
+    packet.skin_dispatches.push_back(skin_dispatch{
+      renderer.mesh->vertex_address(),
+      renderer.mesh->skin_vertex_address(),
+      output_vertex_address,
+      joint_offset,
+      instance_vertex_count
+    });
+
+    skin_scratch_cursor += instance_vertex_count;
+
+    const auto& submeshes = renderer.mesh->submeshes();
+
+    for (auto index = std::uint32_t{0u}; index < submeshes.size(); ++index) {
+      if (index >= renderer.materials.size()) {
+        continue;
+      }
+
+      const auto& material = renderer.materials[index];
+
+      if (!material.is_valid()) {
+        continue;
+      }
+
+      auto command = draw_command{};
+      command.mesh = renderer.mesh;
+      command.submesh_index = index;
+      command.material = material;
+      command.instance_count = 1u;
+      command.transform_offset = static_cast<std::uint32_t>(packet.transforms.size());
+      command.pipeline_id = material->is_double_sided() ? 1u : 0u;
+      command.vertex_address_override = output_vertex_address;
+
+      packet.transforms.push_back(transform_data{world.matrix, math::matrix4x4::transposed(math::matrix4x4::inverted(world.matrix))});
+
+      if (material->alpha() == assets::alpha_mode::blend) {
+        packet.transparent_commands.push_back(command);
+      } else {
+        if (material->casts_shadow()) {
+          packet.shadow_caster_commands.push_back(command);
+        }
+
+        packet.opaque_commands.push_back(command);
+      }
+    }
   }
 
   // Collected separately so the shadow-casting light can be swapped to lights[0] — shadow_pass and
@@ -790,6 +1005,28 @@ auto scene_renderer_module::_ensure_resources() -> void {
     _transform_addresses[slot] = transform_base + slot * transform_capacity * sizeof(transform_data);
   }
 
+  _joint_palette_buffer = registry.emplace<graphics::buffer>(graphics::buffer::create_info{
+    .size = sizeof(math::matrix4x4) * joint_palette_capacity * graphics::swapchain::max_frames_in_flight,
+    .usage = graphics::buffer_usage::device_address | graphics::buffer_usage::storage,
+    .memory = graphics::memory_usage::host_write,
+    .name = "Skin Joint Palette"
+  });
+
+  const auto joint_palette_base = registry.get<graphics::buffer>(_joint_palette_buffer).address();
+
+  for (auto slot = std::size_t{0u}; slot < graphics::swapchain::max_frames_in_flight; ++slot) {
+    _joint_palette_addresses[slot] = joint_palette_base + slot * joint_palette_capacity * sizeof(math::matrix4x4);
+  }
+
+  _skin_scratch_buffer = registry.emplace<graphics::buffer>(graphics::buffer::create_info{
+    .size = sizeof(assets::vertex) * skin_scratch_vertex_capacity,
+    .usage = graphics::buffer_usage::device_address | graphics::buffer_usage::storage,
+    .memory = graphics::memory_usage::device_local,
+    .name = "Skin Scratch Vertices"
+  });
+
+  _skin_scratch_address = registry.get<graphics::buffer>(_skin_scratch_buffer).address();
+
   _cluster_aabb_buffer = registry.emplace<graphics::buffer>(graphics::buffer::create_info{
     .size = memory::stride_v<cluster_aabb> * light_culling_pass::cluster_count * graphics::swapchain::max_frames_in_flight,
     .usage = graphics::buffer_usage::device_address | graphics::buffer_usage::storage,
@@ -1007,6 +1244,14 @@ auto scene_renderer_module::_prepare_frame(render_context& context) -> void {
     transform_buffer.write(context.packet->transforms.data(), instance_count * sizeof(transform_data), context.slot * transform_capacity * sizeof(transform_data));
   }
 
+  const auto joint_count = std::min(static_cast<std::uint32_t>(context.packet->joint_matrices.size()), joint_palette_capacity);
+
+  if (joint_count > 0u) {
+    auto& joint_palette_buffer = registry.get<graphics::buffer>(_joint_palette_buffer);
+
+    joint_palette_buffer.write(context.packet->joint_matrices.data(), joint_count * sizeof(math::matrix4x4), context.slot * joint_palette_capacity * sizeof(math::matrix4x4));
+  }
+
   const auto directional_light_count = std::min(context.packet->directional_light_count, light_count);
 
   const auto& camera = context.packet->camera;
@@ -1074,6 +1319,7 @@ auto scene_renderer_module::_prepare_frame(render_context& context) -> void {
 
   context.frame_address = _frame_addresses[context.slot];
   context.transform_address = _transform_addresses[context.slot];
+  context.joint_palette_address = _joint_palette_addresses[context.slot];
   context.instance_count = instance_count;
   context.sampler_index = _sampler_index;
   context.clamp_sampler_index = _clamp_sampler_index;

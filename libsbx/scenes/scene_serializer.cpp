@@ -193,6 +193,22 @@ auto write_node(YAML::Node& node_yaml, ecs::registry& registry, ecs::entity enti
     }
   }
 
+  // skeleton_pose isn't written -- it's fully auto-derived from mesh_renderer.mesh->skeleton() on
+  // load (see read_node_components' "static_mesh" branch) and holds nothing but per-frame scratch
+  // state otherwise.
+  if (registry.all_of<animator>(entity)) {
+    const auto& anim = registry.get<animator>(entity);
+
+    auto component = YAML::Node{};
+    component["type"] = "animator";
+    component["clip_name"] = anim.clip.is_valid() ? anim.clip->name() : std::string{};
+    component["speed"] = anim.speed;
+    component["loop"] = anim.loop;
+    component["playing"] = anim.playing;
+
+    components.push_back(component);
+  }
+
   if (registry.all_of<camera>(entity)) {
     const auto& c = registry.get<camera>(entity);
 
@@ -446,6 +462,12 @@ auto read_node_components(node& target_node, const YAML::Node& node_yaml, assets
 
       sync_materials_with_mesh(renderer);
 
+      // Auto-derived, not read from the file -- see the writer's comment above "animator" for why
+      // skeleton_pose itself is never serialized.
+      if (renderer.mesh.is_valid() && renderer.mesh->skeleton().is_valid()) {
+        target_node.get_or_add_component<skeleton_pose>().skeleton = renderer.mesh->skeleton();
+      }
+
       if (const auto submeshes = component["submeshes"]) {
         for (const auto submesh : submeshes) {
           const auto index = submesh["index"].as<std::size_t>();
@@ -455,6 +477,29 @@ auto read_node_components(node& target_node, const YAML::Node& node_yaml, assets
           }
 
           renderer.materials[index] = assets_module.load_material(key_to_uuid.at(submesh["material"].as<std::string>()));
+        }
+      }
+    } else if (type == "animator") {
+      auto& anim = target_node.add_component<animator>();
+      anim.speed = component["speed"] ? component["speed"].as<std::float_t>() : 1.0f;
+      anim.loop = component["loop"] ? component["loop"].as<bool>() : true;
+      anim.playing = component["playing"] ? component["playing"].as<bool>() : true;
+
+      // clip is resolved by name against the mesh_renderer's already-loaded mesh (written earlier
+      // in this same node's component list) rather than by uuid -- clips aren't independently
+      // tracked assets, just a specific mesh's cooked side effects.
+      if (target_node.has_component<mesh_renderer>()) {
+        const auto& renderer = target_node.get_component<mesh_renderer>();
+
+        if (renderer.mesh.is_valid() && component["clip_name"]) {
+          const auto clip_name = component["clip_name"].as<std::string>();
+
+          for (const auto& clip : renderer.mesh->animation_clips()) {
+            if (clip->name() == clip_name) {
+              anim.clip = clip;
+              break;
+            }
+          }
         }
       }
     } else if (type == "camera") {

@@ -57,7 +57,21 @@ struct cooked_mesh_data {
   std::vector<std::uint32_t> indices;
   std::vector<cooked_submesh> submeshes;
   math::volume bounds;
+
+  // Skinning -- empty/nil when the source mesh has no glTF skin. skin_vertices is parallel to
+  // vertices (same count); skeleton/animation_clips are derived uuids ready to pass to
+  // resolve_skeleton/resolve_animation_clip.
+  std::vector<skin_vertex> skin_vertices{};
+  math::uuid skeleton{math::uuid::nil()};
+  std::vector<math::uuid> animation_clips{};
 }; // struct cooked_mesh_data
+
+/** @brief Raw (uuid-free -- a skeleton's joints hold no asset references) cooked animation data, keyed by resolve_animation_clip's uuid. */
+struct animation_clip_data {
+  std::string name;
+  std::float_t duration{0.0f};
+  std::vector<animation_joint_channel> channels;
+}; // struct animation_clip_data
 
 /** @brief A material's fields with texture *uuids*, not resolved handles — same shape whether it came from a glTF embed or a cooked blob. */
 struct material_description {
@@ -132,6 +146,12 @@ public:
   /** @brief Reads a material cooked as a side effect of a mesh import (not a hand-authored `.material` file). */
   [[nodiscard]] auto resolve_cooked_material(const math::uuid& id) -> std::optional<material_description>;
 
+  /** @brief Reads a skeleton cooked as a side effect of a mesh import. @p id comes from @ref cooked_mesh_data::skeleton. */
+  [[nodiscard]] auto resolve_skeleton(const math::uuid& id) -> std::optional<std::vector<skeleton::joint>>;
+
+  /** @brief Reads an animation clip cooked as a side effect of a mesh import. @p id comes from @ref cooked_mesh_data::animation_clips. */
+  [[nodiscard]] auto resolve_animation_clip(const math::uuid& id) -> std::optional<animation_clip_data>;
+
 private:
 
   // One row of the asset manifest: the durable uuid -> source path index plus the staleness data
@@ -167,17 +187,33 @@ private:
 
   [[nodiscard]] static auto _derive_material_uuid(const math::uuid& mesh, std::size_t index) -> math::uuid;
 
+  [[nodiscard]] static auto _derive_skeleton_uuid(const math::uuid& mesh) -> math::uuid;
+
+  [[nodiscard]] static auto _derive_animation_clip_uuid(const math::uuid& mesh, std::size_t index) -> math::uuid;
+
   /** @brief Computes tangents from scratch for vertices[vertex_start, vertex_start + vertex_count) of a primitive lacking TANGENT (normals/UVs must already be populated); indices are that primitive's triangle indices, offset by vertex_start. */
+  /** @brief Computes flat-shaded, area-weighted vertex normals from scratch for vertices[vertex_start, vertex_start + vertex_count) of a primitive lacking NORMAL (positions must already be populated); indices are that primitive's triangle indices, offset by vertex_start. */
+  static auto _generate_normals(std::vector<vertex>& vertices, const std::vector<std::uint32_t>& indices, std::size_t vertex_start, std::size_t vertex_count, std::size_t index_start, std::size_t index_count) -> void;
+
   static auto _generate_tangents(std::vector<vertex>& vertices, const std::vector<std::uint32_t>& indices, std::size_t vertex_start, std::size_t vertex_count, std::size_t index_start, std::size_t index_count) -> void;
 
   /** @brief Reorders a submesh's vertex/index slice in place for GPU cache efficiency (meshoptimizer's vertex-cache/overdraw/vertex-fetch trio), then derives a coarser LOD chain via meshopt_simplify, appending each level's indices to `indices`. */
-  static auto _optimize_and_generate_lods(std::vector<vertex>& vertices, std::vector<std::uint32_t>& indices, std::size_t vertex_start, std::size_t vertex_count, std::size_t index_start, std::size_t index_count) -> std::vector<mesh_lod>;
+  /** @brief @p skin_vertices, when non-null, is kept parallel to @p vertices through the same vertex-fetch reorder (see meshopt_optimizeVertexFetchRemap's "multiple vertex streams" note). */
+  static auto _optimize_and_generate_lods(std::vector<vertex>& vertices, std::vector<std::uint32_t>& indices, std::size_t vertex_start, std::size_t vertex_count, std::size_t index_start, std::size_t index_count, std::vector<skin_vertex>* skin_vertices = nullptr) -> std::vector<mesh_lod>;
 
   auto _cook_mesh(const std::filesystem::path& source, const math::uuid& id, const std::filesystem::path& cooked, const mesh_import_options& options, const material_resolver& resolve_material) -> bool;
 
-  auto _load_cooked_mesh(const std::filesystem::path& cooked, std::vector<vertex>& vertices, std::vector<std::uint32_t>& indices, std::vector<cooked_submesh>& submeshes, math::volume& bounds) -> bool;
+  auto _load_cooked_mesh(const std::filesystem::path& cooked, std::vector<vertex>& vertices, std::vector<std::uint32_t>& indices, std::vector<cooked_submesh>& submeshes, math::volume& bounds, std::vector<skin_vertex>& skin_vertices, std::uint32_t& animation_clip_count) -> bool;
 
   auto _cook_material(const math::uuid& id, const material_description& description) -> bool;
+
+  auto _cook_skeleton(const math::uuid& id, const std::vector<skeleton::joint>& joints) -> bool;
+
+  auto _load_cooked_skeleton(const math::uuid& id, std::vector<skeleton::joint>& joints) -> bool;
+
+  auto _cook_animation_clip(const math::uuid& id, const animation_clip_data& data) -> bool;
+
+  auto _load_cooked_animation_clip(const math::uuid& id, animation_clip_data& data) -> bool;
 
   mutable std::mutex _mutex{};
 

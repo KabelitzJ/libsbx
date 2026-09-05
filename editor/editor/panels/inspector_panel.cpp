@@ -744,6 +744,15 @@ auto draw_mesh_renderer_section(editor_state& state, sbx::scenes::node& node, sb
 
   sbx::scenes::sync_materials_with_mesh(renderer);
 
+  // skeleton_pose is fully auto-managed, not user-addable/removable (see scenes::skeleton_pose's
+  // doc comment) -- its presence tracks whether the assigned mesh actually has a skeleton, exactly
+  // like sync_materials_with_mesh backfilling material slots above.
+  if (renderer.mesh.is_valid() && renderer.mesh->skeleton().is_valid()) {
+    node.get_or_add_component<sbx::scenes::skeleton_pose>().skeleton = renderer.mesh->skeleton();
+  } else if (node.has_component<sbx::scenes::skeleton_pose>()) {
+    node.remove_component<sbx::scenes::skeleton_pose>();
+  }
+
   if (renderer.mesh.is_valid()) {
     ImGui::Text("Submeshes: %zu", renderer.mesh->submeshes().size());
   } else {
@@ -781,6 +790,73 @@ auto draw_mesh_renderer_section(editor_state& state, sbx::scenes::node& node, sb
   if (changed) {
     state.push_command(std::make_unique<modify_component_command<sbx::scenes::mesh_renderer>>(node.id(), before, renderer, "Edit Mesh Renderer"));
   }
+}
+
+auto draw_animator_section(editor_state& state, sbx::scenes::node& node) -> void {
+  auto is_open = true;
+
+  const auto is_expanded = ImGui::CollapsingHeader(ICON_MDI_ANIMATION_PLAY " Animator", &is_open, ImGuiTreeNodeFlags_DefaultOpen);
+
+  if (!is_open) {
+    state.push_command(std::make_unique<remove_component_command<sbx::scenes::animator>>(node.id(), node.get_component<sbx::scenes::animator>(), "Remove Animator"));
+    return;
+  }
+
+  if (!is_expanded) {
+    return;
+  }
+
+  auto& anim = node.get_component<sbx::scenes::animator>();
+  static auto pending = std::optional<sbx::scenes::animator>{};
+
+  const auto* mesh = (node.has_component<sbx::scenes::mesh_renderer>() && node.get_component<sbx::scenes::mesh_renderer>().mesh.is_valid())
+    ? node.get_component<sbx::scenes::mesh_renderer>().mesh.get()
+    : nullptr;
+
+  if (mesh == nullptr || !mesh->skeleton().is_valid()) {
+    ImGui::TextDisabled("Assign a skinned mesh (Mesh Renderer) to this node first.");
+    return;
+  }
+
+  const auto& clips = mesh->animation_clips();
+  const auto current_label = anim.clip.is_valid() ? anim.clip->name() : std::string{"(none)"};
+
+  if (ImGui::BeginCombo("Clip", current_label.c_str())) {
+    for (const auto& clip : clips) {
+      const auto is_selected = anim.clip.is_valid() && anim.clip.get() == clip.get();
+
+      if (ImGui::Selectable(clip->name().c_str(), is_selected)) {
+        const auto before = anim;
+        anim.clip = clip;
+        state.push_command(std::make_unique<modify_component_command<sbx::scenes::animator>>(node.id(), before, anim, "Edit Animator"));
+      }
+    }
+
+    ImGui::EndCombo();
+  }
+
+  if (clips.empty()) {
+    ImGui::TextDisabled("This mesh's glTF file had no animations.");
+  }
+
+  {
+    const auto before = anim;
+
+    if (ImGui::Checkbox("Playing", &anim.playing)) {
+      state.push_command(std::make_unique<modify_component_command<sbx::scenes::animator>>(node.id(), before, anim, "Edit Animator"));
+    }
+  }
+
+  {
+    const auto before = anim;
+
+    if (ImGui::Checkbox("Loop", &anim.loop)) {
+      state.push_command(std::make_unique<modify_component_command<sbx::scenes::animator>>(node.id(), before, anim, "Edit Animator"));
+    }
+  }
+
+  ImGui::DragFloat("Speed", &anim.speed, 0.05f, 0.0f, 10.0f);
+  bracket_edit(state, node, anim, pending, "Edit Animator");
 }
 
 auto draw_directional_light_section(editor_state& state, sbx::scenes::node& node) -> void {
@@ -1300,6 +1376,12 @@ auto draw_add_component_menu(editor_state& state, sbx::scenes::node& node, sbx::
       state.push_command(std::make_unique<add_component_command<sbx::scenes::mesh_renderer>>(node.id(), "Add Mesh Renderer"));
     }
 
+    // skeleton_pose isn't listed here -- it's fully auto-managed by draw_mesh_renderer_section
+    // (see scenes::skeleton_pose's doc comment).
+    if (!node.has_component<sbx::scenes::animator>() && passes("Animator") && ImGui::MenuItem(ICON_MDI_ANIMATION_PLAY " Animator")) {
+      state.push_command(std::make_unique<add_component_command<sbx::scenes::animator>>(node.id(), "Add Animator"));
+    }
+
     if (!node.has_component<sbx::scenes::directional_light>() && passes("Directional Light") && ImGui::MenuItem(ICON_MDI_WHITE_BALANCE_SUNNY " Directional Light")) {
       state.push_command(std::make_unique<add_component_command<sbx::scenes::directional_light>>(node.id(), "Add Directional Light"));
     }
@@ -1707,6 +1789,11 @@ auto inspector_panel::_draw_node_properties(editor_state& state, sbx::scenes::no
   if (node.has_component<sbx::scenes::mesh_renderer>()) {
     section_gap();
     draw_mesh_renderer_section(state, node, assets_module);
+  }
+
+  if (node.has_component<sbx::scenes::animator>()) {
+    section_gap();
+    draw_animator_section(state, node);
   }
 
   if (node.has_component<sbx::scenes::directional_light>()) {

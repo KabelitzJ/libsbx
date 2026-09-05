@@ -52,7 +52,7 @@ auto submit_draw_commands(render_context& context, const std::vector<draw_comman
 
     auto values = push_constants{};
     values.frame_address = context.frame_address;
-    values.vertex_address = mesh.vertex_address();
+    values.vertex_address = command.vertex_address_override ? command.vertex_address_override : mesh.vertex_address();
     values.transform_address = context.transform_address;
     values.transform_offset = command.transform_offset;
     values.material_index = command.material->index();

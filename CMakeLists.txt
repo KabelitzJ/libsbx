@@ -250,6 +250,8 @@ target_sources(
     "${CMAKE_SOURCE_DIR}/libsbx/render/particles/particle_pool.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/render/particles/particle_simulate_pass.cpp"
 
+    "${CMAKE_SOURCE_DIR}/libsbx/render/skinning/skin_pass.cpp"
+
     "${CMAKE_SOURCE_DIR}/libsbx/render/passes/debug_draw_pass.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/render/passes/depth_pre_pass.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/render/passes/grid_pass.cpp"
@@ -316,9 +318,11 @@ target_sources(
       "${CMAKE_SOURCE_DIR}/libsbx/assets/assets_module.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/assets/environment_map.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/assets/ibl_baker.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/assets/animation_clip.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/assets/material.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/assets/mesh.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/assets/particle_effect.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/assets/skeleton.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/assets/texture.hpp"
 
       "${CMAKE_SOURCE_DIR}/libsbx/containers/compressed_pair.hpp"
@@ -495,6 +499,8 @@ target_sources(
       "${CMAKE_SOURCE_DIR}/libsbx/render/particles/particle_data.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/render/particles/particle_pool.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/render/particles/particle_simulate_pass.hpp"
+
+      "${CMAKE_SOURCE_DIR}/libsbx/render/skinning/skin_pass.hpp"
 
       "${CMAKE_SOURCE_DIR}/libsbx/render/passes/debug_draw_pass.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/render/passes/depth_pre_pass.hpp"

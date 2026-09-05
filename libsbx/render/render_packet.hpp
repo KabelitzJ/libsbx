@@ -61,6 +61,12 @@ struct draw_command {
   std::uint32_t instance_count{0u};
   std::uint32_t transform_offset{0u};
   std::uint32_t pipeline_id{0u};
+
+  // 0 = read the mesh's own static vertex_address() (every non-skinned draw). Otherwise the BDA of
+  // a skinned instance's already-skinned scratch buffer, resolved once in
+  // scene_renderer_module::_build_packet (see skin_dispatch::output_vertex_address, which this is
+  // always a copy of) -- submit_draw_commands needs no other change to draw from it.
+  graphics::buffer::address_type vertex_address_override{0u};
 }; // struct draw_command
 
 /**
@@ -73,6 +79,25 @@ struct transform_data {
   math::matrix4x4 model{math::matrix4x4::identity};
   math::matrix4x4 normal{math::matrix4x4::identity};
 }; // struct transform_data
+
+/**
+ * @brief One skinned-mesh instance's compute dispatch (skin_pass, shaders/skinning/skin_vertices.slang).
+ *
+ * Skins the instance's *whole* vertex range once -- submeshes are index ranges into one shared
+ * vertex buffer already, so one dispatch and one output_vertex_address cover every submesh draw
+ * command belonging to this instance. joint_offset indexes into this frame's joint palette
+ * (render_context::joint_palette_address), which is frame-in-flight multiplexed like
+ * transform_address since it's written fresh from the CPU every frame; output_vertex_address is
+ * not (see scene_renderer_module's skin scratch buffer doc comment) so it's resolved to a final
+ * BDA directly here, copied verbatim into the matching draw_command::vertex_address_override.
+ */
+struct skin_dispatch {
+  graphics::buffer::address_type source_vertex_address{0u};
+  graphics::buffer::address_type source_skin_vertex_address{0u};
+  graphics::buffer::address_type output_vertex_address{0u};
+  std::uint32_t joint_offset{0u};
+  std::uint32_t vertex_count{0u};
+}; // struct skin_dispatch
 
 struct camera_data {
   math::matrix4x4 view{math::matrix4x4::identity};
@@ -191,6 +216,8 @@ struct render_packet {
   std::vector<trail_vertex> trail_vertices{};
   std::vector<particle_trail_command> trail_commands{};
   std::vector<particle_emitter_snapshot> particle_emitters{}; // GPU-path emitters only.
+  std::vector<math::matrix4x4> joint_matrices{}; // flat, all skinned instances' skinning matrices this frame, concatenated (mirrors transforms)
+  std::vector<skin_dispatch> skin_dispatches{};
   bool has_shadow_caster{false}; // When true, lights[0] is the cascaded-shadow-mapped sun.
   std::float_t shadow_distance{75.0f};
   assets::environment_map_handle environment{};

@@ -140,6 +140,13 @@ private:
   inline static constexpr auto transform_capacity = std::uint32_t{16384u};
   inline static constexpr auto cluster_light_index_capacity = std::uint32_t{65536u};
 
+  // Skinning: joint_palette_capacity is a total across every skinned instance drawn this frame
+  // (packet.joint_matrices), not per-instance; skin_scratch_vertex_capacity likewise sums every
+  // skinned instance's vertex_count. Both are fixed upper bounds for v1 -- a frame exceeding either
+  // just skips drawing the overflow (see _build_packet), no dynamic regrow.
+  inline static constexpr auto joint_palette_capacity = std::uint32_t{4096u};
+  inline static constexpr auto skin_scratch_vertex_capacity = std::uint32_t{65536u};
+
   auto _ensure_resources() -> void;
 
   auto _resize_targets(const math::vector2u extent) -> void;
@@ -155,6 +162,14 @@ private:
   // if it's currently playing. See scenes::particle_emitter::slot's doc comment for why this
   // bookkeeping lives here (render cadence) rather than particles_module (fixed-step cadence).
   auto _extract_gpu_particle_emitter(render_packet& packet, const assets::particle_emitter& config, scenes::particle_emitter& runtime, const scenes::particle_effect& instance, const math::matrix4x4& world, std::float_t delta_time) -> void;
+
+  /**
+   * @brief Advances @p animator (if not null) and samples @p skeleton's clip into @p pose's
+   * joint_world_matrices/skinning_matrices. Called once per skinned instance from _build_packet,
+   * at render cadence -- see scenes::skeleton_pose's doc comment for why this isn't a fixed_update.
+   * A null @p animator (or one with an invalid/paused clip) evaluates the skeleton's bind pose.
+   */
+  auto _evaluate_skeleton_pose(const assets::skeleton& skeleton, scenes::animator* animator, scenes::skeleton_pose& pose, std::float_t delta_time) -> void;
 
   render_packet _work_packet{};
   bool _has_rendered{false};
@@ -191,6 +206,19 @@ private:
 
   graphics::buffer_handle _transform_buffer{};
   std::array<graphics::buffer::address_type, graphics::swapchain::max_frames_in_flight> _transform_addresses{};
+
+  // CPU-written every frame from packet.joint_matrices (skeleton_pose evaluation happens in
+  // _build_packet, on the main thread) -- frame-in-flight multiplexed exactly like _transform_buffer,
+  // for the same reason (a single-buffered host-visible buffer would race a still-in-flight
+  // previous frame's GPU read).
+  graphics::buffer_handle _joint_palette_buffer{};
+  std::array<graphics::buffer::address_type, graphics::swapchain::max_frames_in_flight> _joint_palette_addresses{};
+
+  // GPU-written (skin_pass) and GPU-read (depth_pre_pass/shadow_pass/opaque_pass) only, entirely
+  // within one frame's submission -- unlike the palette above, a single buffer (not per-frame-slot)
+  // is safe here, protected by skin_pass's own cross-frame wait (see skin_pass.cpp).
+  graphics::buffer_handle _skin_scratch_buffer{};
+  graphics::buffer::address_type _skin_scratch_address{0u};
 
   graphics::buffer_handle _cluster_aabb_buffer{};
   std::array<graphics::buffer::address_type, graphics::swapchain::max_frames_in_flight> _cluster_aabb_addresses{};

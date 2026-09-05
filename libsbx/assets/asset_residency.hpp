@@ -23,6 +23,8 @@
 #include <libsbx/assets/asset_handle.hpp>
 #include <libsbx/assets/texture.hpp>
 #include <libsbx/assets/mesh.hpp>
+#include <libsbx/assets/skeleton.hpp>
+#include <libsbx/assets/animation_clip.hpp>
 #include <libsbx/assets/material.hpp>
 #include <libsbx/assets/environment_map.hpp>
 #include <libsbx/assets/particle_effect.hpp>
@@ -52,6 +54,12 @@ public:
   auto load_mesh(const math::uuid& id, const mesh_import_options& options = {}) -> mesh_handle;
 
   auto load_mesh(const std::filesystem::path& path, const mesh_import_options& options = {}) -> mesh_handle;
+
+  /** @brief Loads a skeleton cooked as a side effect of a mesh import; returns the existing handle if already loaded. Pure CPU data -- resolves immediately, no upload queue involved. */
+  auto load_skeleton(const math::uuid& id) -> skeleton_handle;
+
+  /** @brief Loads an animation clip cooked as a side effect of a mesh import; returns the existing handle if already loaded. Pure CPU data -- resolves immediately, no upload queue involved. */
+  auto load_animation_clip(const math::uuid& id) -> animation_clip_handle;
 
   auto load_material(const math::uuid& id) -> material_handle;
 
@@ -148,6 +156,7 @@ private:
     std::shared_ptr<mesh> record;
     std::vector<vertex> vertices;
     std::vector<std::uint32_t> indices;
+    std::vector<skin_vertex> skin_vertices{}; // empty when the mesh has no skin data
   }; // struct pending_mesh_upload
 
   struct pending_material_upload {
@@ -178,6 +187,10 @@ private:
 
   std::unordered_map<math::uuid, std::shared_ptr<mesh>> _meshes{};
   std::vector<pending_mesh_upload> _pending_meshes{};
+
+  // Pure CPU data -- no GPU buffer/index, unlike _meshes above.
+  std::unordered_map<math::uuid, std::shared_ptr<skeleton>> _skeletons{};
+  std::unordered_map<math::uuid, std::shared_ptr<animation_clip>> _animation_clips{};
 
   std::vector<std::shared_ptr<material>> _materials{};
   std::vector<pending_material_upload> _pending_materials{};

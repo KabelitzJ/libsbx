@@ -82,6 +82,11 @@ struct render_context {
   std::uint32_t sampler_index{0u};
   std::uint32_t clamp_sampler_index{0u};
 
+  // This frame's slot in the joint-palette buffer (CPU-written every frame from
+  // packet->joint_matrices, so it's frame-in-flight multiplexed like transform_address); read by
+  // skin_pass, combined with each skin_dispatch::joint_offset.
+  graphics::buffer::address_type joint_palette_address{0u};
+
   graphics::buffer::address_type cluster_aabb_address{0u};
   graphics::buffer::address_type cluster_range_address{0u};
   graphics::buffer::address_type cluster_light_index_address{0u};

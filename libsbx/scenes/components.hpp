@@ -26,6 +26,8 @@
 #include <libsbx/assets/texture.hpp>
 #include <libsbx/assets/environment_map.hpp>
 #include <libsbx/assets/particle_effect.hpp>
+#include <libsbx/assets/skeleton.hpp>
+#include <libsbx/assets/animation_clip.hpp>
 
 #include <libsbx/particles/particle.hpp>
 
@@ -141,6 +143,36 @@ inline auto sync_materials_with_mesh(mesh_renderer& renderer) -> void {
     }
   }
 }
+
+/**
+ * @brief Drives a skinned mesh_renderer's pose by sampling one animation_clip over time.
+ *
+ * Sampled and evaluated once per frame by render::scene_renderer_module (render cadence, not
+ * fixed_update -- it feeds render_packet directly and needs no physics-step determinism, the same
+ * reasoning that keeps GPU-path particle_emitter bookkeeping there instead of particles_module).
+ */
+struct animator {
+  assets::animation_clip_handle clip{};
+  std::float_t time{0.0f};
+  std::float_t speed{1.0f};
+  bool playing{true};
+  bool loop{true};
+}; // struct animator
+
+/**
+ * @brief The evaluated joint pose of a skinned mesh_renderer, recomputed every frame.
+ *
+ * joint_world_matrices/skinning_matrices are scratch storage -- scene_renderer_module owns both
+ * the evaluation (walking @ref skeleton's topologically-sorted joints) and the upload of
+ * skinning_matrices into that frame's render_packet::joint_matrices, from which skin_pass reads
+ * via a shared per-frame palette buffer (see render_packet::skin_dispatch). A skeleton_pose with
+ * no animator (or a paused one) still needs evaluating once to seed the bind pose.
+ */
+struct skeleton_pose {
+  assets::skeleton_handle skeleton{};
+  std::vector<math::matrix4x4> joint_world_matrices{};
+  std::vector<math::matrix4x4> skinning_matrices{};
+}; // struct skeleton_pose
 
 struct directional_light {
   math::color color{1.0f, 1.0f, 1.0f, 1.0f};

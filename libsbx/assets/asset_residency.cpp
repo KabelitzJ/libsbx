@@ -161,19 +161,98 @@ auto asset_residency::load_mesh(const math::uuid& id, const mesh_import_options&
   const auto index_count = data->indices.size();
   const auto submesh_count = submeshes.size();
 
-  auto record = std::make_shared<mesh>(std::move(submeshes), data->bounds);
+  auto record = std::make_shared<mesh>(std::move(submeshes), data->bounds, static_cast<std::uint32_t>(vertex_count));
   record->_id = id;
+
+  if (!data->skin_vertices.empty()) {
+    auto skeleton_handle_value = load_skeleton(data->skeleton);
+
+    auto animation_clip_handles = std::vector<animation_clip_handle>{};
+    animation_clip_handles.reserve(data->animation_clips.size());
+
+    for (const auto& clip_id : data->animation_clips) {
+      animation_clip_handles.push_back(load_animation_clip(clip_id));
+    }
+
+    record->_set_skeletal_data(skeleton_handle_value, std::move(animation_clip_handles));
+  }
 
   {
     auto lock = std::lock_guard{_mutex};
 
     _meshes.emplace(id, record);
-    _pending_meshes.push_back(pending_mesh_upload{record, std::move(data->vertices), std::move(data->indices)});
+    _pending_meshes.push_back(pending_mesh_upload{record, std::move(data->vertices), std::move(data->indices), std::move(data->skin_vertices)});
   }
 
-  utility::logger<"assets">::info("Loaded mesh '{}': {} vertices, {} indices, {} submeshes", _cooker.path_of(id).generic_string(), vertex_count, index_count, submesh_count);
+  if (record->skeleton().is_valid()) {
+    utility::logger<"assets">::info("Loaded mesh '{}': {} vertices, {} indices, {} submeshes, {} joints, {} animation clips", _cooker.path_of(id).generic_string(), vertex_count, index_count, submesh_count, record->skeleton()->joints().size(), record->animation_clips().size());
+  } else {
+    utility::logger<"assets">::info("Loaded mesh '{}': {} vertices, {} indices, {} submeshes", _cooker.path_of(id).generic_string(), vertex_count, index_count, submesh_count);
+  }
 
   return mesh_handle{record};
+}
+
+auto asset_residency::load_skeleton(const math::uuid& id) -> skeleton_handle {
+  if (id == math::uuid::nil()) {
+    return skeleton_handle{};
+  }
+
+  {
+    auto lock = std::lock_guard{_mutex};
+
+    if (const auto entry = _skeletons.find(id); entry != _skeletons.end()) {
+      return skeleton_handle{entry->second};
+    }
+  }
+
+  auto joints = _cooker.resolve_skeleton(id);
+
+  if (!joints) {
+    utility::logger<"assets">::warn("Could not load skeleton {}", id);
+    return skeleton_handle{};
+  }
+
+  auto record = std::make_shared<skeleton>(std::move(*joints));
+  record->_id = id;
+
+  {
+    auto lock = std::lock_guard{_mutex};
+    _skeletons.emplace(id, record);
+  }
+
+  return skeleton_handle{record};
+}
+
+auto asset_residency::load_animation_clip(const math::uuid& id) -> animation_clip_handle {
+  if (id == math::uuid::nil()) {
+    return animation_clip_handle{};
+  }
+
+  {
+    auto lock = std::lock_guard{_mutex};
+
+    if (const auto entry = _animation_clips.find(id); entry != _animation_clips.end()) {
+      return animation_clip_handle{entry->second};
+    }
+  }
+
+  auto data = _cooker.resolve_animation_clip(id);
+
+  if (!data) {
+    utility::logger<"assets">::warn("Could not load animation clip {}", id);
+    return animation_clip_handle{};
+  }
+
+  auto record = std::make_shared<animation_clip>(std::move(data->name), data->duration, std::move(data->channels));
+  record->_id = id;
+
+  {
+    auto lock = std::lock_guard{_mutex};
+    _animation_clips.emplace(id, record);
+  }
+
+  return animation_clip_handle{record};
 }
 
 auto asset_residency::load_mesh(const std::filesystem::path& path, const mesh_import_options& options) -> mesh_handle {
@@ -1011,7 +1090,24 @@ auto asset_residency::process_uploads(std::uint64_t frame_index) -> void {
 
     const auto vertex_address = registry.get<graphics::buffer>(vertex_buffer).address();
 
-    request.record->_finalize(vertex_buffer, index_buffer, vertex_address, frame_index);
+    if (!request.skin_vertices.empty()) {
+      const auto skin_vertex_bytes = static_cast<graphics::buffer::size_type>(request.skin_vertices.size() * sizeof(skin_vertex));
+
+      const auto skin_vertex_buffer = registry.emplace<graphics::buffer>(graphics::buffer::create_info{
+        .size = skin_vertex_bytes,
+        .usage = graphics::buffer_usage::device_address | graphics::buffer_usage::transfer_destination,
+        .memory = graphics::memory_usage::device_local,
+        .name = "Mesh Skin Vertices"
+      });
+
+      upload_context.stage_buffer(skin_vertex_buffer, std::as_bytes(std::span{request.skin_vertices}));
+
+      const auto skin_vertex_address = registry.get<graphics::buffer>(skin_vertex_buffer).address();
+
+      request.record->_finalize(vertex_buffer, index_buffer, vertex_address, frame_index, skin_vertex_buffer, skin_vertex_address);
+    } else {
+      request.record->_finalize(vertex_buffer, index_buffer, vertex_address, frame_index);
+    }
   }
 
   // Create the material buffer once, sized for the whole capacity.

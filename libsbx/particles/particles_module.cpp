@@ -22,9 +22,6 @@ namespace sbx::particles {
 auto particles_module::fixed_update() -> void {
   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
 
-  // Mirrors physics_module::fixed_update()'s gate: particles freeze in edit mode, same as bodies do,
-  // so "world" collision (which reads physics_module's broadphase, also empty outside Play) and
-  // particle motion stay consistent with each other.
   if (!scenes_module.is_simulating()) {
     return;
   }
@@ -54,8 +51,6 @@ auto particles_module::_simulate_effect(scenes::scene& scene, scenes::particle_e
     return;
   }
 
-  // The runtime vector is index-paired with the asset's emitters(); keep it in step whenever the
-  // effect handle changes or emitters are added/removed in the editor.
   if (effect.emitters.size() != effect.effect->emitters().size()) {
     effect.emitters.resize(effect.effect->emitters().size());
   }
@@ -138,8 +133,6 @@ auto particles_module::_resolve_collisions(scenes::scene& scene, const assets::p
     return;
   }
 
-  // Bounce/dampen/lifetime_loss response shared by both modes; forces death (picked up by the next
-  // _integrate's recycle pass, one tick later) once max_collisions_per_particle is reached.
   const auto respond = [&](particle& p, const math::vector3& normal, std::float_t push_out) {
     p.position += normal * push_out;
     p.velocity = math::vector3::reflect(p.velocity, normal) * collision.bounce;
@@ -168,8 +161,6 @@ auto particles_module::_resolve_collisions(scenes::scene& scene, const assets::p
     return;
   }
 
-  // world: a real broadphase+narrowphase query per particle, so keep the hit buffer alive across the
-  // loop instead of reallocating it every call.
   auto& physics_module = core::engine::get_module<physics::physics_module>();
   auto hits = std::vector<physics::sphere_query_hit>{};
 

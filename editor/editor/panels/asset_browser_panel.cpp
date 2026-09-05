@@ -4,9 +4,12 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstddef>
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 
 #include <fmt/format.h>
@@ -14,6 +17,7 @@
 #include <imgui.h>
 
 #include <libsbx/render/ui/fonts/material_design_icons.hpp>
+#include <libsbx/render/ui/widgets/asset_tile.hpp>
 
 #include <libsbx/core/engine.hpp>
 #include <libsbx/core/project.hpp>
@@ -104,6 +108,52 @@ auto icon_for(const asset_browser_entry& entry) -> const char* {
 auto is_entry_selected(const editor_state& state, const std::filesystem::path& path) -> bool {
   const auto* selected = std::get_if<asset_selection>(&state.current_selection);
   return selected != nullptr && selected->path == path;
+}
+
+// Which drag_drop_payload_* (asset_tile.hpp) a tile of this kind carries -- nullptr for kinds no
+// Inspector picker ever accepts (environment_map, scene, script), which just aren't draggable.
+auto drag_payload_type_for(asset_kind kind) -> const char* {
+  switch (kind) {
+    case asset_kind::texture: return sbx::render::widgets::drag_drop_payload_texture;
+    case asset_kind::mesh: return sbx::render::widgets::drag_drop_payload_mesh;
+    case asset_kind::material: return sbx::render::widgets::drag_drop_payload_material;
+    case asset_kind::particle_effect: return sbx::render::widgets::drag_drop_payload_particle_effect;
+    default: return nullptr;
+  }
+}
+
+// Truncates (with an ellipsis) rather than wrapping, so a long filename never grows a grid row
+// taller than the fixed height ImGuiListClipper below assumes, and never overflows sideways into
+// the next tile's column.
+auto truncate_to_width(const std::string& text, std::float_t max_width) -> std::string {
+  if (ImGui::CalcTextSize(text.c_str()).x <= max_width) {
+    return text;
+  }
+
+  static constexpr auto ellipsis = std::string_view{"..."};
+
+  auto truncated = text;
+
+  while (!truncated.empty() && ImGui::CalcTextSize((truncated + std::string{ellipsis}).c_str()).x > max_width) {
+    truncated.pop_back();
+  }
+
+  return truncated + std::string{ellipsis};
+}
+
+// Case-insensitive substring test for the search box -- an empty filter matches everything.
+auto filter_matches(std::string_view name, std::string_view filter) -> bool {
+  if (filter.empty()) {
+    return true;
+  }
+
+  const auto to_lower = [](std::string_view text) {
+    auto result = std::string{text};
+    std::ranges::transform(result, result.begin(), [](unsigned char character) { return static_cast<char>(std::tolower(character)); });
+    return result;
+  };
+
+  return to_lower(name).find(to_lower(filter)) != std::string::npos;
 }
 
 auto asset_browser_panel::_refresh_entries() -> void {
@@ -288,8 +338,40 @@ auto asset_browser_panel::draw(editor_state& state) -> void {
     state.select_asset(sbx::math::uuid::nil(), relative_path, asset_kind::script);
   }
 
+  ImGui::Separator();
+
+  // Breadcrumb bar: "assets" root button, then one clickable button per path segment.
+  if (ImGui::Button(ICON_MDI_FOLDER_OPEN " assets")) {
+    _current_directory.clear();
+    _needs_refresh = true;
+  }
+
+  auto breadcrumb_path = std::filesystem::path{};
+
+  for (const auto& segment : _current_directory) {
+    breadcrumb_path /= segment;
+
+    ImGui::SameLine(0.0f, 4.0f);
+    ImGui::TextDisabled("%s", ICON_MDI_CHEVRON_RIGHT);
+    ImGui::SameLine(0.0f, 4.0f);
+
+    ImGui::PushID(breadcrumb_path.string().c_str());
+
+    if (ImGui::Button(segment.string().c_str())) {
+      _current_directory = breadcrumb_path;
+      _needs_refresh = true;
+    }
+
+    ImGui::PopID();
+  }
+
   ImGui::SameLine();
-  ImGui::TextDisabled("assets/%s", _current_directory.string().c_str());
+  ImGui::SetNextItemWidth(160.0f);
+  ImGui::InputTextWithHint("##asset_browser_search", ICON_MDI_MAGNIFY " Search...", _search_filter.data(), _search_filter.size());
+
+  ImGui::SameLine();
+  ImGui::SetNextItemWidth(120.0f);
+  ImGui::SliderFloat("##asset_browser_tile_size", &_tile_size, 48.0f, 128.0f, "%.0f px");
 
   if (_needs_refresh) {
     _refresh_entries();
@@ -331,58 +413,107 @@ auto asset_browser_panel::draw(editor_state& state) -> void {
     ImGui::TableSetColumnIndex(1);
     ImGui::BeginChild("##asset_browser_contents_scroll", ImVec2(0.0f, panes_height));
 
-    // Current directory's immediate contents.
-    if (!_current_directory.empty()) {
-      if (ImGui::Selectable(ICON_MDI_ARROW_LEFT " ..")) {
-        _current_directory = _current_directory.parent_path();
-        _needs_refresh = true;
+    // Entries matching the search box, keeping _cached_entries' existing order (directories
+    // first, then case-insensitive alphabetical).
+    auto visible = std::vector<std::size_t>{};
+
+    for (auto index = std::size_t{0u}; index < _cached_entries.size(); ++index) {
+      if (filter_matches(_cached_entries[index].path.filename().string(), _search_filter.data())) {
+        visible.push_back(index);
       }
     }
 
-    if (_cached_entries.empty()) {
+    if (visible.empty()) {
       ImGui::TextDisabled("Nothing here.");
     }
 
-    for (auto& entry : _cached_entries) {
-      ImGui::PushID(entry.path.string().c_str());
+    const auto avail_width = ImGui::GetContentRegionAvail().x;
+    const auto cell_width = _tile_size + 8.0f;
+    const auto columns = std::max(std::int32_t{1}, static_cast<std::int32_t>(avail_width / cell_width));
 
-      const auto label = std::string{icon_for(entry)} + " " + entry.path.filename().string();
+    const auto row_height = _tile_size + ImGui::GetTextLineHeight() + ImGui::GetStyle().ItemSpacing.y;
+    const auto row_count = (static_cast<std::int32_t>(visible.size()) + columns - 1) / columns;
 
-      if (entry.is_directory) {
-        if (ImGui::Selectable(label.c_str())) {
-          _current_directory = entry.path;
-          _needs_refresh = true;
-        }
-      } else if (entry.is_importable) {
-        if (ImGui::Selectable(label.c_str(), is_entry_selected(state, entry.path))) {
-          const auto meta_path = std::filesystem::path{project.assets_directory() / entry.path}.concat(".meta");
+    // Clipped by grid row so a folder full of textures only ever loads/thumbnails the tiles
+    // actually on screen, instead of every texture in it every frame the panel is open.
+    auto clipper = ImGuiListClipper{};
+    clipper.Begin(row_count, row_height);
 
-          if (entry.kind == asset_kind::mesh && !std::filesystem::exists(meta_path)) {
-            // First time this mesh has ever been seen — let the user decide whether to extract
-            // its materials before it's actually cooked (deferring would mean the choice has
-            // nowhere to be remembered until something else needs the mesh).
-            _pending_import_path = entry.path;
-            _import_extract_materials = true;
-            _show_import_mesh_dialog = true;
-          } else {
-            // Same resolution requirement as above — entry.path is relative to assets_directory().
-            entry.id = assets_module.import(project.assets_directory() / entry.path);
-            state.select_asset(entry.id, entry.path, entry.kind);
+    while (clipper.Step()) {
+      for (auto row = clipper.DisplayStart; row < clipper.DisplayEnd; ++row) {
+        for (auto column = std::int32_t{0}; column < columns; ++column) {
+          const auto visible_index = static_cast<std::size_t>(row) * static_cast<std::size_t>(columns) + static_cast<std::size_t>(column);
+
+          if (visible_index >= visible.size()) {
+            break;
           }
-        }
-      } else if (entry.kind == asset_kind::scene) {
-        if (ImGui::Selectable(label.c_str(), is_entry_selected(state, entry.path))) {
-          state.select_asset(sbx::math::uuid::nil(), entry.path, asset_kind::scene);
-        }
-      } else if (entry.kind == asset_kind::script) {
-        if (ImGui::Selectable(label.c_str(), is_entry_selected(state, entry.path))) {
-          state.select_asset(sbx::math::uuid::nil(), entry.path, asset_kind::script);
-        }
-      } else {
-        ImGui::TextDisabled("%s", label.c_str());
-      }
 
-      ImGui::PopID();
+          if (column > 0) {
+            ImGui::SameLine();
+          }
+
+          auto& entry = _cached_entries[visible[visible_index]];
+
+          ImGui::PushID(entry.path.string().c_str());
+          ImGui::BeginGroup();
+
+          auto tile_desc = sbx::render::widgets::asset_tile_desc{};
+          tile_desc.icon_glyph = icon_for(entry);
+          tile_desc.is_directory = entry.is_directory;
+          tile_desc.is_selected = is_entry_selected(state, entry.path);
+          tile_desc.size = ImVec2{_tile_size, _tile_size};
+          tile_desc.display_name = entry.path.filename().string();
+          tile_desc.drag_payload_type = drag_payload_type_for(entry.kind);
+          tile_desc.drag_id = entry.id;
+          tile_desc.drag_path = entry.path;
+
+          if (entry.kind == asset_kind::texture) {
+            tile_desc.is_texture_thumbnail = true;
+            tile_desc.texture = assets_module.load_texture(entry.path);
+          }
+
+          const auto tile_result = sbx::render::widgets::draw_asset_tile("##tile", tile_desc);
+
+          const auto label = truncate_to_width(entry.path.filename().string(), _tile_size);
+          const auto label_width = ImGui::CalcTextSize(label.c_str()).x;
+          ImGui::SetCursorPosX(ImGui::GetCursorPosX() + std::max(0.0f, (_tile_size - label_width) * 0.5f));
+          ImGui::TextUnformatted(label.c_str());
+
+          ImGui::EndGroup();
+
+          if (tile_result.hovered) {
+            ImGui::SetTooltip("%s", entry.path.string().c_str());
+          }
+
+          if (tile_result.clicked) {
+            if (entry.is_directory) {
+              _current_directory = entry.path;
+              _needs_refresh = true;
+            } else if (entry.is_importable) {
+              const auto meta_path = std::filesystem::path{project.assets_directory() / entry.path}.concat(".meta");
+
+              if (entry.kind == asset_kind::mesh && !std::filesystem::exists(meta_path)) {
+                // First time this mesh has ever been seen — let the user decide whether to extract
+                // its materials before it's actually cooked (deferring would mean the choice has
+                // nowhere to be remembered until something else needs the mesh).
+                _pending_import_path = entry.path;
+                _import_extract_materials = true;
+                _show_import_mesh_dialog = true;
+              } else {
+                // Same resolution requirement as above — entry.path is relative to assets_directory().
+                entry.id = assets_module.import(project.assets_directory() / entry.path);
+                state.select_asset(entry.id, entry.path, entry.kind);
+              }
+            } else if (entry.kind == asset_kind::scene) {
+              state.select_asset(sbx::math::uuid::nil(), entry.path, asset_kind::scene);
+            } else if (entry.kind == asset_kind::script) {
+              state.select_asset(sbx::math::uuid::nil(), entry.path, asset_kind::script);
+            }
+          }
+
+          ImGui::PopID();
+        }
+      }
     }
 
     // Right-click the empty area of the contents pane (not an entry — see NoOpenOverItems) for

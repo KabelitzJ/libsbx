@@ -145,6 +145,11 @@ public:
 
   [[nodiscard]] auto is_resident(const environment_map_handle& environment) const -> bool;
 
+  /** @ref asset_residency::image_view_of */
+  [[nodiscard]] auto image_view_of(const texture_handle& texture) const -> VkImageView {
+    return _residency.image_view_of(texture);
+  }
+
   [[nodiscard]] auto white_texture() const noexcept -> texture_handle {
     return _residency.white_texture();
   }

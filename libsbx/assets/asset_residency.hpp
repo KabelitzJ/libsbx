@@ -120,6 +120,14 @@ public:
 
   [[nodiscard]] auto is_resident(const environment_map_handle& environment) const -> bool;
 
+  /**
+   * @brief The image view backing a resident texture's bindless slot, or VK_NULL_HANDLE if the
+   * texture isn't valid or its upload hasn't been processed yet (see is_resident). Used by the
+   * editor/UI layer to blit a real preview into ImGui (see ui_module::texture_id), the same way
+   * the viewport blits the scene's final image.
+   */
+  [[nodiscard]] auto image_view_of(const texture_handle& texture) const -> VkImageView;
+
   [[nodiscard]] auto white_texture() const noexcept -> texture_handle {
     return _white;
   }

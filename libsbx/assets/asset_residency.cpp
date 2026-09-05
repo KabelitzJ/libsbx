@@ -1211,6 +1211,25 @@ auto asset_residency::is_resident(const environment_map_handle& environment) con
   return environment.is_valid();
 }
 
+auto asset_residency::image_view_of(const texture_handle& texture) const -> VkImageView {
+  if (!texture.is_valid()) {
+    return VK_NULL_HANDLE;
+  }
+
+  auto lock = std::lock_guard{_mutex};
+
+  const auto entry = _images.find(texture->index());
+
+  if (entry == _images.end()) {
+    return VK_NULL_HANDLE;
+  }
+
+  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
+  auto& registry = graphics_module.resource_registry();
+
+  return registry.get<graphics::image>(entry->second).view();
+}
+
 auto asset_residency::_create_default_texture(std::array<std::uint8_t, 4u> color) -> texture_handle {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 

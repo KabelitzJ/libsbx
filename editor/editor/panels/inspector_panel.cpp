@@ -17,6 +17,7 @@
 #include <imgui.h>
 
 #include <libsbx/render/ui/fonts/material_design_icons.hpp>
+#include <libsbx/render/ui/widgets/asset_picker.hpp>
 
 #include <libsbx/core/engine.hpp>
 #include <libsbx/core/project.hpp>
@@ -67,13 +68,6 @@ auto path_text(const sbx::assets::assets_module& assets_module, const sbx::math:
   return path.empty() ? std::string{"(unknown)"} : path.string();
 }
 
-// Just the file name — for compact picker-button labels; path_text's full path is one hover away
-// via a tooltip instead.
-auto short_label(const sbx::assets::assets_module& assets_module, const sbx::math::uuid& id) -> std::string {
-  const auto path = assets_module.path_of(id);
-  return path.empty() ? std::string{"(unknown)"} : path.filename().string();
-}
-
 // path_of() is fully resolved, not relative to assets_directory() like asset_selection::path and
 // load_*/save_material need. Empty on unknown/outside-assets_directory() ids.
 auto relative_asset_path(const sbx::assets::assets_module& assets_module, const sbx::math::uuid& id) -> std::filesystem::path {
@@ -93,17 +87,13 @@ auto relative_asset_path(const sbx::assets::assets_module& assets_module, const 
   return relative;
 }
 
-// Used by the asset pickers below — rescanned fresh each time a popup opens (lists are small).
-auto collect_files_with_extension(const std::filesystem::path& root, std::string_view extension, std::vector<std::filesystem::path>& out) -> void {
-  if (!std::filesystem::exists(root)) {
-    return;
+// Bridges a handle's uuid to the generic asset_picker widget's item type (uuid + project-relative path).
+auto to_picker_item(const sbx::assets::assets_module& assets_module, const sbx::math::uuid& id) -> sbx::render::widgets::asset_picker_item {
+  if (id == sbx::math::uuid::nil()) {
+    return {};
   }
 
-  for (const auto& entry : std::filesystem::recursive_directory_iterator{root}) {
-    if (!entry.is_directory() && entry.path().extension() == extension) {
-      out.push_back(entry.path());
-    }
-  }
+  return sbx::render::widgets::asset_picker_item{id, relative_asset_path(assets_module, id)};
 }
 
 // Case-insensitive substring test, for the picker popups' filter boxes below.
@@ -117,83 +107,36 @@ auto contains_ignore_case(std::string_view haystack, std::string_view needle) ->
   return to_lower(haystack).find(to_lower(needle)) != std::string::npos;
 }
 
-// Button shows the slot's material file name; opens a popup with a filter, an optional
-// "Reset to Mesh Default" (reseeds from the mesh's own submesh material), and every .material
-// file under assets. Second button jumps Properties to that material's editable view.
+// Thumbnail/icon button + searchable, thumbnail-rendered popup (sbx::render::widgets::asset_picker),
+// plus an optional "Reset to Mesh Default" (reseeds from the mesh's own submesh material). Also a
+// drag-and-drop target for a .material tile dragged straight from the Asset Browser. Second button
+// jumps Properties to that material's editable view.
 auto draw_material_picker(editor_state& state, const char* popup_id, sbx::assets::material_handle& slot, sbx::assets::assets_module& assets_module, const sbx::assets::material_handle& mesh_default = {}) -> bool {
-  auto changed = false;
+  const auto current = slot.is_valid() ? to_picker_item(assets_module, slot->id()) : sbx::render::widgets::asset_picker_item{};
+  const auto default_item = mesh_default.is_valid() ? to_picker_item(assets_module, mesh_default->id()) : sbx::render::widgets::asset_picker_item{};
 
-  // popup_id (e.g. "##albedo_picker") appended so multiple pickers showing the same label — most
-  // commonly several empty "(none)" slots at once — don't collide on ImGui's label-derived ID.
-  const auto label = (slot.is_valid() ? short_label(assets_module, slot->id()) : std::string{"(none)"}) + popup_id;
+  const auto options = sbx::render::widgets::asset_picker_options{
+    .kind = sbx::render::widgets::asset_picker_kind::material,
+    .extensions = {".material"},
+    .show_edit_button = true,
+  };
 
-  if (ImGui::Button(label.c_str())) {
-    ImGui::OpenPopup(popup_id);
+  const auto result = sbx::render::widgets::draw_asset_picker(popup_id, current, default_item, options);
+
+  if (result.reset_to_default) {
+    slot = mesh_default;
+  } else if (result.changed) {
+    // load_material(path) resolves relative against assets_directory() internally and reuses the
+    // file's real uuid if it's already imported — calling import(relative) directly here would
+    // mint a second, broken uuid keyed on an unresolved path.
+    slot = assets_module.load_material(result.picked.path);
   }
 
-  if (slot.is_valid() && ImGui::IsItemHovered()) {
-    ImGui::SetTooltip("%s", path_text(assets_module, slot->id()).c_str());
+  if (result.edit_requested && slot.is_valid()) {
+    state.select_asset(slot->id(), relative_asset_path(assets_module, slot->id()), asset_kind::material);
   }
 
-  if (slot.is_valid()) {
-    ImGui::SameLine();
-
-    if (ImGui::Button(fmt::format("{}{}_edit", std::string{ICON_MDI_FILE_EDIT_OUTLINE}, popup_id).c_str())) {
-      state.select_asset(slot->id(), relative_asset_path(assets_module, slot->id()), asset_kind::material);
-    }
-
-    if (ImGui::IsItemHovered()) {
-      ImGui::SetTooltip("Edit this material");
-    }
-  }
-
-  // Fixed width so the popup doesn't reflow (and the filter box along with it) as filtering
-  // changes which entries — and therefore how wide the widest visible one is — are shown.
-  ImGui::SetNextWindowSize(ImVec2{320.0f, 0.0f}, ImGuiCond_Always);
-
-  if (ImGui::BeginPopup(popup_id)) {
-    // Reset whenever a *different* picker's popup opens, so leftover text doesn't carry over.
-    static auto filter_buffer = std::array<char, 128u>{};
-    static auto last_popup_id = std::string{};
-
-    if (last_popup_id != popup_id) {
-      filter_buffer[0] = '\0';
-      last_popup_id = popup_id;
-    }
-
-    ImGui::SetNextItemWidth(-1.0f);
-    ImGui::InputTextWithHint("##filter", "Filter...", filter_buffer.data(), filter_buffer.size());
-
-    if (mesh_default.is_valid() && ImGui::MenuItem("Reset to Mesh Default")) {
-      slot = mesh_default;
-      changed = true;
-    }
-
-    auto& project = sbx::core::engine::project();
-    auto files = std::vector<std::filesystem::path>{};
-    collect_files_with_extension(project.assets_directory(), ".material", files);
-
-    for (const auto& file : files) {
-      const auto relative = std::filesystem::relative(file, project.assets_directory());
-      const auto relative_string = relative.string();
-
-      if (filter_buffer[0] != '\0' && !contains_ignore_case(relative_string, filter_buffer.data())) {
-        continue;
-      }
-
-      if (ImGui::MenuItem(relative_string.c_str())) {
-        // load_material(path) resolves relative against assets_directory() internally and
-        // reuses the file's real uuid if it's already imported — calling import(relative)
-        // directly here would mint a second, broken uuid keyed on an unresolved path.
-        slot = assets_module.load_material(relative);
-        changed = true;
-      }
-    }
-
-    ImGui::EndPopup();
-  }
-
-  return changed;
+  return result.changed;
 }
 
 // Forks a material into a new, independent .material asset next to the mesh, so editing the copy
@@ -237,212 +180,80 @@ auto extract_material_to_asset(sbx::assets::assets_module& assets_module, const 
   return handle;
 }
 
-// Same idea as draw_material_picker, for texture slots. format follows load_material's per-slot
+// Same idea as draw_material_picker, for texture slots -- real GPU thumbnails in both the closed
+// button and the popup list (see asset_tile.hpp). format follows load_material's per-slot
 // convention (srgb for albedo/emissive, unorm for normal/metallic_roughness/occlusion).
 auto draw_texture_picker(const char* popup_id, sbx::assets::texture_handle& slot, sbx::assets::assets_module& assets_module, sbx::graphics::format format) -> bool {
-  auto changed = false;
+  const auto current = slot.is_valid() ? to_picker_item(assets_module, slot->id()) : sbx::render::widgets::asset_picker_item{};
 
-  // popup_id appended so multiple pickers showing the same label (most commonly several empty
-  // "(none)" slots at once) don't collide on ImGui's label-derived ID.
-  const auto label = (slot.is_valid() ? short_label(assets_module, slot->id()) : std::string{"(none)"}) + popup_id;
+  const auto options = sbx::render::widgets::asset_picker_options{
+    .kind = sbx::render::widgets::asset_picker_kind::texture,
+    .extensions = {".png", ".jpg", ".jpeg"},
+    .allow_none = true,
+    .load_format = format,
+  };
 
-  if (ImGui::Button(label.c_str())) {
-    ImGui::OpenPopup(popup_id);
+  const auto result = sbx::render::widgets::draw_asset_picker(popup_id, current, {}, options);
+
+  if (result.cleared) {
+    slot = sbx::assets::texture_handle{};
+  } else if (result.changed) {
+    slot = assets_module.load_texture(result.picked.path, format);
   }
 
-  if (slot.is_valid() && ImGui::IsItemHovered()) {
-    ImGui::SetTooltip("%s", path_text(assets_module, slot->id()).c_str());
-  }
-
-  // Fixed width so the popup doesn't reflow (and the filter box along with it) as filtering
-  // changes which entries — and therefore how wide the widest visible one is — are shown.
-  ImGui::SetNextWindowSize(ImVec2{320.0f, 0.0f}, ImGuiCond_Always);
-
-  if (ImGui::BeginPopup(popup_id)) {
-    // Reset whenever a *different* picker's popup opens, so leftover text doesn't carry over.
-    static auto filter_buffer = std::array<char, 128u>{};
-    static auto last_popup_id = std::string{};
-
-    if (last_popup_id != popup_id) {
-      filter_buffer[0] = '\0';
-      last_popup_id = popup_id;
-    }
-
-    ImGui::SetNextItemWidth(-1.0f);
-    ImGui::InputTextWithHint("##filter", "Filter...", filter_buffer.data(), filter_buffer.size());
-
-    if (ImGui::MenuItem("(None)")) {
-      slot = sbx::assets::texture_handle{};
-      changed = true;
-    }
-
-    auto& project = sbx::core::engine::project();
-    auto files = std::vector<std::filesystem::path>{};
-    collect_files_with_extension(project.assets_directory(), ".png", files);
-    collect_files_with_extension(project.assets_directory(), ".jpg", files);
-    collect_files_with_extension(project.assets_directory(), ".jpeg", files);
-
-    for (const auto& file : files) {
-      const auto relative = std::filesystem::relative(file, project.assets_directory());
-      const auto relative_string = relative.string();
-
-      if (filter_buffer[0] != '\0' && !contains_ignore_case(relative_string, filter_buffer.data())) {
-        continue;
-      }
-
-      if (ImGui::MenuItem(relative_string.c_str())) {
-        slot = assets_module.load_texture(relative, format);
-        changed = true;
-      }
-    }
-
-    ImGui::EndPopup();
-  }
-
-  return changed;
+  return result.changed;
 }
 
 // Same idea as draw_material_picker, for mesh_renderer.mesh. Doesn't touch renderer.materials
 // itself — draw_mesh_renderer_section detects the change and clears it so sync_materials_with_mesh
 // reseeds cleanly from the new mesh's submeshes.
 auto draw_mesh_picker(editor_state& state, const char* popup_id, sbx::assets::mesh_handle& slot, sbx::assets::assets_module& assets_module) -> bool {
-  auto changed = false;
+  const auto current = slot.is_valid() ? to_picker_item(assets_module, slot->id()) : sbx::render::widgets::asset_picker_item{};
 
-  const auto label = (slot.is_valid() ? short_label(assets_module, slot->id()) : std::string{"(none)"}) + popup_id;
+  const auto options = sbx::render::widgets::asset_picker_options{
+    .kind = sbx::render::widgets::asset_picker_kind::mesh,
+    .extensions = {".gltf", ".glb"},
+    .show_edit_button = true,
+  };
 
-  if (ImGui::Button(label.c_str())) {
-    ImGui::OpenPopup(popup_id);
+  const auto result = sbx::render::widgets::draw_asset_picker(popup_id, current, {}, options);
+
+  if (result.changed) {
+    slot = assets_module.load_mesh(result.picked.path);
   }
 
-  if (slot.is_valid() && ImGui::IsItemHovered()) {
-    ImGui::SetTooltip("%s", path_text(assets_module, slot->id()).c_str());
+  if (result.edit_requested && slot.is_valid()) {
+    state.select_asset(slot->id(), relative_asset_path(assets_module, slot->id()), asset_kind::mesh);
   }
 
-  if (slot.is_valid()) {
-    ImGui::SameLine();
-
-    if (ImGui::Button(fmt::format("{}{}_edit", std::string{ICON_MDI_FILE_EDIT_OUTLINE}, popup_id).c_str())) {
-      state.select_asset(slot->id(), relative_asset_path(assets_module, slot->id()), asset_kind::mesh);
-    }
-
-    if (ImGui::IsItemHovered()) {
-      ImGui::SetTooltip("Edit this mesh");
-    }
-  }
-
-  // Fixed width so the popup doesn't reflow (and the filter box along with it) as filtering
-  // changes which entries — and therefore how wide the widest visible one is — are shown.
-  ImGui::SetNextWindowSize(ImVec2{320.0f, 0.0f}, ImGuiCond_Always);
-
-  if (ImGui::BeginPopup(popup_id)) {
-    // Reset whenever a *different* picker's popup opens, so leftover text doesn't carry over.
-    static auto filter_buffer = std::array<char, 128u>{};
-    static auto last_popup_id = std::string{};
-
-    if (last_popup_id != popup_id) {
-      filter_buffer[0] = '\0';
-      last_popup_id = popup_id;
-    }
-
-    ImGui::SetNextItemWidth(-1.0f);
-    ImGui::InputTextWithHint("##filter", "Filter...", filter_buffer.data(), filter_buffer.size());
-
-    auto& project = sbx::core::engine::project();
-    auto files = std::vector<std::filesystem::path>{};
-    collect_files_with_extension(project.assets_directory(), ".gltf", files);
-    collect_files_with_extension(project.assets_directory(), ".glb", files);
-
-    for (const auto& file : files) {
-      const auto relative = std::filesystem::relative(file, project.assets_directory());
-      const auto relative_string = relative.string();
-
-      if (filter_buffer[0] != '\0' && !contains_ignore_case(relative_string, filter_buffer.data())) {
-        continue;
-      }
-
-      if (ImGui::MenuItem(relative_string.c_str())) {
-        slot = assets_module.load_mesh(relative);
-        changed = true;
-      }
-    }
-
-    ImGui::EndPopup();
-  }
-
-  return changed;
+  return result.changed;
 }
 
 // Same idea as draw_mesh_picker, for particle_effect.effect — same jump-to-edit button, since
 // particle_effect assets are edited in place (see _draw_particle_effect_properties) like materials.
 auto draw_particle_effect_picker(editor_state& state, const char* popup_id, sbx::assets::particle_effect_handle& slot, sbx::assets::assets_module& assets_module) -> bool {
-  auto changed = false;
+  const auto current = slot.is_valid() ? to_picker_item(assets_module, slot->id()) : sbx::render::widgets::asset_picker_item{};
 
-  const auto label = (slot.is_valid() ? short_label(assets_module, slot->id()) : std::string{"(none)"}) + popup_id;
+  const auto options = sbx::render::widgets::asset_picker_options{
+    .kind = sbx::render::widgets::asset_picker_kind::particle_effect,
+    .extensions = {".particle_effect"},
+    .allow_none = true,
+    .show_edit_button = true,
+  };
 
-  if (ImGui::Button(label.c_str())) {
-    ImGui::OpenPopup(popup_id);
+  const auto result = sbx::render::widgets::draw_asset_picker(popup_id, current, {}, options);
+
+  if (result.cleared) {
+    slot = sbx::assets::particle_effect_handle{};
+  } else if (result.changed) {
+    slot = assets_module.load_particle_effect(result.picked.path);
   }
 
-  if (slot.is_valid() && ImGui::IsItemHovered()) {
-    ImGui::SetTooltip("%s", path_text(assets_module, slot->id()).c_str());
+  if (result.edit_requested && slot.is_valid()) {
+    state.select_asset(slot->id(), relative_asset_path(assets_module, slot->id()), asset_kind::particle_effect);
   }
 
-  if (slot.is_valid()) {
-    ImGui::SameLine();
-
-    if (ImGui::Button(fmt::format("{}{}_edit", std::string{ICON_MDI_FILE_EDIT_OUTLINE}, popup_id).c_str())) {
-      state.select_asset(slot->id(), relative_asset_path(assets_module, slot->id()), asset_kind::particle_effect);
-    }
-
-    if (ImGui::IsItemHovered()) {
-      ImGui::SetTooltip("Edit this particle effect");
-    }
-  }
-
-  // Fixed width so the popup doesn't reflow (and the filter box along with it) as filtering
-  // changes which entries — and therefore how wide the widest visible one is — are shown.
-  ImGui::SetNextWindowSize(ImVec2{320.0f, 0.0f}, ImGuiCond_Always);
-
-  if (ImGui::BeginPopup(popup_id)) {
-    // Reset whenever a *different* picker's popup opens, so leftover text doesn't carry over.
-    static auto filter_buffer = std::array<char, 128u>{};
-    static auto last_popup_id = std::string{};
-
-    if (last_popup_id != popup_id) {
-      filter_buffer[0] = '\0';
-      last_popup_id = popup_id;
-    }
-
-    ImGui::SetNextItemWidth(-1.0f);
-    ImGui::InputTextWithHint("##filter", "Filter...", filter_buffer.data(), filter_buffer.size());
-
-    if (ImGui::MenuItem("(None)")) {
-      slot = sbx::assets::particle_effect_handle{};
-      changed = true;
-    }
-
-    auto& project = sbx::core::engine::project();
-    auto files = std::vector<std::filesystem::path>{};
-    collect_files_with_extension(project.assets_directory(), ".particle_effect", files);
-
-    for (const auto& file : files) {
-      const auto relative = std::filesystem::relative(file, project.assets_directory());
-      const auto relative_string = relative.string();
-
-      if (filter_buffer[0] != '\0' && !contains_ignore_case(relative_string, filter_buffer.data())) {
-        continue;
-      }
-
-      if (ImGui::MenuItem(relative_string.c_str())) {
-        slot = assets_module.load_particle_effect(relative);
-        changed = true;
-      }
-    }
-
-    ImGui::EndPopup();
-  }
-
-  return changed;
+  return result.changed;
 }
 
 // changed: any axis changed this frame. started/committed: whether a drag (or a same-frame reset

@@ -3,6 +3,8 @@
 #ifndef EDITOR_PANELS_ASSET_BROWSER_PANEL_HPP_
 #define EDITOR_PANELS_ASSET_BROWSER_PANEL_HPP_
 
+#include <array>
+#include <cmath>
 #include <filesystem>
 #include <vector>
 
@@ -54,6 +56,11 @@ private:
   std::filesystem::path _current_directory{}; // project-relative; empty = assets root
   std::vector<asset_browser_entry> _cached_entries{};
   bool _needs_refresh{true};
+
+  // Tile grid state: size is user-adjustable (toolbar slider), search filters _cached_entries by
+  // filename substring before layout.
+  std::float_t _tile_size{72.0f};
+  std::array<char, 128u> _search_filter{};
 
   // "Import Mesh" modal state, shown the first time an un-imported .gltf/.glb is clicked.
   // _show_import_mesh_dialog is consumed outside the per-entry PushID scope it's set from, since

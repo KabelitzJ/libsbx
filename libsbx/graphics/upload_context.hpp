@@ -35,8 +35,10 @@ public:
   ~upload_context() = default;
 
   /**
-   * @brief Queues @p pixels to be copied into @p destination (mip 0), ending in @p final_layout. The destination must have `image_usage::transfer_destination`.
-   * 
+   * @brief Queues @p pixels to be copied into @p destination (mip 0), ending in @p final_layout.
+   *
+   * @p destination must have `image_usage::transfer_destination`.
+   *
    * @param destination The destination image.
    * @param pixels The pixel data to copy.
    * @param final_layout The layout the destination image should be transitioned to after the copy.
@@ -44,8 +46,10 @@ public:
   auto stage_image(image_handle destination, std::span<const std::byte> pixels, image_layout final_layout = image_layout::shader_read_only_optimal) -> void;
 
   /**
-   * @brief Queues @p data to be copied into @p destination at @p destination_offset. The destination must have `buffer_usage::transfer_destination`.
-   * 
+   * @brief Queues @p data to be copied into @p destination at @p destination_offset.
+   *
+   * @p destination must have `buffer_usage::transfer_destination`.
+   *
    * @param destination The destination buffer.
    * @param data The data to copy.
    * @param destination_offset The offset into the destination buffer to copy to.

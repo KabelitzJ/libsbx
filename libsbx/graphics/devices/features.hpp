@@ -8,8 +8,7 @@
 namespace sbx::graphics {
 
 /**
- * @brief The vulkan feature chain (core + 1.1 + 1.2 + 1.3 + extensions) used to test physical 
- * devices and to enable features at device creation, so the two can never drift apart.
+ * @brief The vulkan feature chain (core + 1.1 + 1.2 + 1.3 + extensions) used to test physical devices and to enable features at device creation.
  *
  * The structs link to each other via pNext, so copying relinks the chain.
  */
@@ -24,8 +23,7 @@ public:
   auto operator=(const features& other) -> features&;
 
   /**
-   * @brief The hard minimum the engine refuses to run without (bindless, dynamic rendering, BDA, timeline semaphores).
-   * Device selection filters on this set.
+   * @brief The hard minimum the engine refuses to run without (bindless, dynamic rendering, BDA, timeline semaphores); device selection filters on this set.
    */
   [[nodiscard]] static auto required() -> const features&;
 

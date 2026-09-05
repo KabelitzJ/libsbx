@@ -38,9 +38,8 @@ namespace sbx::graphics {
 /**
  * @brief Owns the device and everything that lives for the whole run.
  *
- * The module participates in no engine stage. It holds the device objects, the resource pools and
- * the frame context, and hands them out. Driving the frame is the render module's job, which calls
- * `frame().begin_frame()` and `frame().end_frame()` during the render stage.
+ * Holds the device objects, resource pools, and frame context, and hands them out. The render
+ * module drives the frame via `frame_context().begin_frame()`/`end_frame()`.
  */
 class graphics_module final : public utility::noncopyable {
 
@@ -84,8 +83,9 @@ public:
   }
 
   /**
-   * @brief The resource pools. Retire with `frame().frame_index()`; collection happens in
-   * `frame_context::begin_frame`.
+   * @brief The resource pools.
+   *
+   * Retire with `frame().frame_index()`; collected in `frame_context::begin_frame`.
    */
   [[nodiscard]] auto resource_registry() noexcept -> graphics::resource_registry& {
     return _resource_registry;

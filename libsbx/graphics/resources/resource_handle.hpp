@@ -13,10 +13,9 @@ namespace sbx::graphics {
 /**
  * @brief A generational reference to a resource owned by a @ref resource_pool.
  *
- * The index doubles as the resource's slot in the bindless descriptor table, so it must stay
- * stable for as long as the resource lives. The generation is bumped when a slot is retired,
- * which makes every outstanding copy of a handle to that slot compare invalid immediately,
- * even before the slot is reused.
+ * The index doubles as the resource's bindless descriptor slot, so it stays stable for the
+ * resource's lifetime. The generation is bumped on retire, invalidating outstanding handles to
+ * that slot immediately, even before the slot is reused.
  *
  * @tparam Type The resource type the handle refers to.
  */

@@ -24,14 +24,12 @@
 namespace editor {
 
 /**
- * @brief The editor's contribution to the engine's ImGui frame: dockspace, menu bar, the Viewport
- * panel (embeds scene_renderer_module::final_image via ImGui::Image() — see ui_module::texture_id),
- * the Stats window, every registered editor_panel, and the scene save/quit flow's dialogs.
+ * @brief The editor's contribution to the engine's ImGui frame: dockspace, menu bar, the
+ * Viewport panel (embeds scene_renderer_module::final_image via ImGui::Image()), the Stats
+ * window, every registered editor_panel, and the scene save/quit dialogs.
  *
- * Registered with ui_module by editor_module, which owns this and otherwise stays a thin module
- * shell — see editor_module.hpp. Splitting it out keeps "the sbx::render::ui_layer implementation"
- * and "the core::module lifecycle" as two separate concerns instead of one class doing both, the
- * same reasoning that keeps render passes out of scene_renderer_module itself.
+ * Registered with ui_module by editor_module, which owns this and stays a thin lifecycle
+ * shell (see editor_module.hpp).
  */
 class editor_ui_layer final : public sbx::utility::noncopyable, public sbx::render::ui_layer {
 
@@ -51,11 +49,7 @@ public:
 
   auto build() -> void override;
 
-  /**
-   * @brief Whether the mouse was over the Viewport panel as of the last frame's UI pass. A plain
-   * UI-layer fact (ImGui::IsWindowHovered) — the editor app uses it to gate viewport-only input
-   * like the dev fly-camera, keeping that gameplay-adjacent logic out of the module layer.
-   */
+  /** @brief Whether the mouse was over the Viewport panel as of the last frame's UI pass. */
   [[nodiscard]] auto is_viewport_hovered() const noexcept -> bool {
     return _viewport_is_hovered;
   }
@@ -66,10 +60,11 @@ public:
   }
 
   /**
-   * @brief Quits immediately if the scene has no unsaved changes; otherwise shows a confirmation
-   * dialog (Save / Don't Save / Cancel) instead of quitting right away. Use this instead of
-   * sbx::core::engine::quit() directly for anything that can originate outside an explicit
-   * in-editor "I'm done, discard everything" action (the window's close button, File > Quit).
+   * @brief Quits immediately if the scene has no unsaved changes; otherwise shows a
+   * confirmation dialog (Save / Don't Save / Cancel).
+   *
+   * Use instead of sbx::core::engine::quit() directly for anything that can originate outside
+   * an explicit in-editor "discard everything" action (window close, File > Quit).
    */
   auto request_quit() -> void;
 

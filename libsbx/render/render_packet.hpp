@@ -22,8 +22,9 @@
 namespace sbx::render {
 
 /**
- * @brief Identity of a coalesced draw. Draws sharing a key (same mesh, submesh and material) differ only by transform and collapse into one instanced draw. 
- * Ordered mesh -> submesh -> material so a mesh's submeshes stay adjacent (its index buffer binds once).
+ * @brief Identity of a coalesced draw; draws sharing a key collapse into one instanced draw.
+ *
+ * Ordered mesh -> submesh -> material so a mesh's submeshes stay adjacent (index buffer binds once).
  */
 struct mesh_key {
 
@@ -63,9 +64,10 @@ struct draw_command {
 }; // struct draw_command
 
 /**
- * @brief Per-instance world matrix paired with its inverse-transpose normal matrix, computed once
- * on the CPU (libsbx::math::matrix4x4::inverted/transposed) rather than re-derived on the GPU, so
- * normals stay correct under non-uniform scale/skew. The two float4x4s pack with no padding.
+ * @brief Per-instance world matrix and its inverse-transpose normal matrix.
+ *
+ * Computed once on the CPU so normals stay correct under non-uniform scale/skew; the two
+ * float4x4s pack with no padding.
  */
 struct transform_data {
   math::matrix4x4 model{math::matrix4x4::identity};
@@ -120,10 +122,10 @@ struct particle_billboard_command {
 }; // struct particle_billboard_command
 
 /**
- * @brief One particle rendered as an instanced mesh instead of a billboard -- unlit (texture * color,
- * no lighting), matching the billboard particle's own unlit style, vertex-pulled from the mesh's own
- * buffer like an ordinary transform_data instance but with a per-particle color instead of a normal
- * matrix (there's no lighting to correct normals for).
+ * @brief One particle rendered as an instanced mesh instead of a billboard; unlit (texture * color).
+ *
+ * Vertex-pulled like a transform_data instance, but carries a per-particle color instead of a
+ * normal matrix since there's no lighting to correct normals for.
  */
 struct particle_mesh_instance {
   math::matrix4x4 model{math::matrix4x4::identity};
@@ -143,9 +145,10 @@ struct particle_mesh_command {
 }; // struct particle_mesh_command
 
 /**
- * @brief One vertex of a CPU-expanded trail ribbon (see shaders/particles/trail.slang) -- the width
- * extrusion and camera-facing orientation are already baked in at extraction time
- * (scene_renderer_module.cpp), so the shader itself only needs to transform position to clip space.
+ * @brief One vertex of a CPU-expanded trail ribbon (shaders/particles/trail.slang).
+ *
+ * Width extrusion and camera-facing orientation are baked in at extraction time
+ * (scene_renderer_module.cpp); the shader only transforms position to clip space.
  */
 struct trail_vertex {
   math::vector3 position{0.0f, 0.0f, 0.0f};
@@ -153,8 +156,7 @@ struct trail_vertex {
 }; // struct trail_vertex
 
 /**
- * @brief One coalesced non-indexed triangle-list draw of trail_vertices sharing a blend mode --
- * trails render with the same blend mode as their owning emitter.
+ * @brief One coalesced non-indexed triangle-list draw of trail_vertices sharing the owning emitter's blend mode.
  */
 struct particle_trail_command {
   assets::emitter_blend_mode blend_mode{assets::emitter_blend_mode::additive};
@@ -163,11 +165,10 @@ struct particle_trail_command {
 }; // struct particle_trail_command
 
 /**
- * @brief One GPU-path emitter's per-frame data, extracted from scenes::particle_emitter::slot
- * (already-claimed pool slot) + the owning assets::particle_emitter config. pool_index selects
- * which render::particle_pool (particle_pool_additive/particle_pool_alpha_blend) owns `slot`.
- * Consumed by particle_simulate_pass, which writes it wholesale into the pool's emitter_instances
- * buffer every frame -- see particle_pool::write_emitter_instance.
+ * @brief One GPU-path emitter's per-frame data, extracted for particle_simulate_pass.
+ *
+ * pool_index selects which render::particle_pool (additive/alpha_blend) owns `slot`; the pass
+ * writes this wholesale into that pool's emitter_instances buffer every frame.
  */
 struct particle_emitter_snapshot {
   std::uint32_t pool_index{0u};

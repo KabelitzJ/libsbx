@@ -9,7 +9,9 @@
 namespace sbx::assets {
 
 /**
- * @brief A ref-counted handle to a loaded asset. Holding one keeps the asset alive.
+ * @brief A ref-counted handle to a loaded asset.
+ *
+ * Holding one keeps the asset alive.
  */
 template<typename Type>
 class asset_handle {

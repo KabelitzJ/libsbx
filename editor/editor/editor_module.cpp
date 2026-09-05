@@ -49,10 +49,9 @@ auto editor_module::exit_play_mode() -> void {
 
   sbx::core::engine::get_module<sbx::render::scene_renderer_module>().set_camera_override(_editor_camera.to_camera_data());
 
-  // The reload above rebuilds the whole registry — any command pushed during the play session
-  // referenced entities/state that no longer exists in a replayable way, so drop them. Entering
-  // Play deliberately does NOT clear (see play_mode_controller.hpp's doc comment): it never
-  // touches node identity or the registry, so pre-Play history stays perfectly valid while playing.
+  // The reload above rebuilds the whole registry, so any command pushed during the play session
+  // now references stale entities/state — drop them. Entering Play does not clear (@ref
+  // play_mode_controller), since it never touches node identity or the registry.
   _ui_layer.clear_command_stack();
 }
 

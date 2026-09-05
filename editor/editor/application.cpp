@@ -60,10 +60,8 @@ application::application()
   }
 
   // scene_serializer::load only sets an active camera if the loaded scene had one, so a fresh
-  // project can't assume a "Camera" node exists — create a default one. This is the scene's *play*
-  // camera (used by Play mode here, and always used by a standalone runtime build, which has its
-  // own independent copy of this same fallback) — the editor itself no longer renders through it;
-  // see editor_module::editor_camera / viewport_camera.
+  // project needs a default. This is the scene's play camera; the editor itself renders through
+  // its own editor_camera instead (see viewport_camera).
   auto play_camera = scene.active_camera();
 
   if (!play_camera.is_valid()) {

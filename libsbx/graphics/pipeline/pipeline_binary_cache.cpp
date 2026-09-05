@@ -19,11 +19,9 @@
 namespace sbx::graphics {
 
 /**
- * @brief Always the shared, per-user location — never project-relative. Unlike the shader disk
- * cache (shader_disk_cache.cpp), a VkPipelineCache blob is one opaque object for the whole
- * process, not attributable to any single shader/project, and the driver already validates its
- * own vendor/device/driverVersion/UUID header and silently ignores it if incompatible — so
- * sharing it globally across every app/project is always safe, with no extra bookkeeping needed.
+ * @brief Always the shared, per-user location — never project-relative (unlike shader_disk_cache.cpp).
+ *
+ * A VkPipelineCache blob is one opaque object for the whole process; the driver validates its own vendor/device/driverVersion/UUID header and ignores it if incompatible, so sharing it globally needs no extra bookkeeping.
  */
 auto cache_file() -> std::filesystem::path {
   return core::user_data_directory() / "cache" / "pipeline_cache.bin";

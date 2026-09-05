@@ -33,13 +33,11 @@ namespace sbx::assets {
 /**
  * @brief Owns the asset database and GPU residency; a thin facade over @ref asset_cooker
  * (import/cook/manifest), @ref asset_residency (GPU-resident uploads), and @ref ibl_baker
- * (IBL cubemap bakes) — kept as a single registered module with an identical public surface.
+ * (IBL cubemap bakes).
  *
- * `load_*` path overloads resolve relative to the active project's assets directory. @ref import
- * and @ref import_directory do not: their path/root must already be resolvable from the process's
- * cwd (typically `project.assets_directory() / relative`) — passing a bare assets-relative path
- * directly to them silently mints a second, broken uuid rather than failing loudly. A project is
- * required — asset access asserts one is set.
+ * `load_*` path overloads resolve relative to the assets directory; @ref import and
+ * @ref import_directory require an already-cwd-resolvable path instead — passing a bare
+ * assets-relative path to them silently mints a second, broken uuid. A project must be set.
  */
 class assets_module final : public utility::noncopyable {
 
@@ -54,51 +52,47 @@ public:
   /**
    * @brief Registers an asset by its path and returns its stable UUID.
    * @param path Must be resolvable from the current working directory (see class doc comment) —
-   * not merely relative to the assets directory. Prefer a `load_*(path)` overload where possible;
-   * it resolves for you.
+   * not merely relative to the assets directory. Prefer a `load_*(path)` overload where possible.
    */
   auto import(const std::filesystem::path& path) -> math::uuid;
 
   /**
    * @brief Imports every supported asset under a subdirectory.
-   * @param root Must be resolvable from the current working directory (see class doc comment).
-   * Empty (default) is *not* "the whole assets tree" here — pass `project.assets_directory()`
-   * explicitly for that.
+   * @param root Must be resolvable from the current working directory. Empty (default) is *not*
+   * "the whole assets tree" here — pass `project.assets_directory()` explicitly for that.
    */
   auto import_directory(const std::filesystem::path& root = {}) -> void;
 
   /**
-   * @brief Loads a texture from a UUID or project-relative path. If already loaded, returns the existing handle.
+   * @brief Loads a texture from a UUID or project-relative path; returns the existing handle if already loaded.
    *
-   * @param id The UUID of the texture to load.
-   * @param format The format to load the texture as. Defaults to sRGB.
+   * @param id UUID of the texture to load.
+   * @param format Pixel format to load as (defaults to sRGB).
    *
-   * @return A handle to the loaded texture. Valid
+   * @return Handle to the loaded texture.
    */
   auto load_texture(const math::uuid& id, graphics::format format = graphics::format::r8g8b8a8_srgb) -> texture_handle;
 
   auto load_texture(const std::filesystem::path& path, graphics::format format = graphics::format::r8g8b8a8_srgb) -> texture_handle;
 
   /**
-   * @brief Loads a mesh from a UUID or project-relative path. If already loaded, returns the existing handle.
+   * @brief Loads a mesh from a UUID or project-relative path; returns the existing handle if already loaded.
    *
-   * @param id The UUID of the mesh to load.
-   * @param path The path (relative to the assets directory) to the mesh file to load.
-   * @param options Only consulted the first time this mesh is actually cooked (a cache hit ignores
-   * it) — see @ref mesh_import_options.
+   * @param id UUID of the mesh to load.
+   * @param options Only consulted the first time this mesh is actually cooked; a cache hit ignores it. See @ref mesh_import_options.
    *
-   * @return A handle to the loaded mesh. Valid if the mesh was successfully loaded.
+   * @return Handle to the loaded mesh, valid only if it loaded successfully.
    */
   auto load_mesh(const math::uuid& id, const mesh_import_options& options = {}) -> mesh_handle;
 
   auto load_mesh(const std::filesystem::path& path, const mesh_import_options& options = {}) -> mesh_handle;
 
   /**
-   * @brief Resolves a mesh's raw cooked vertex/index data (see @ref cooked_mesh_data) independent
+   * @brief Resolves a mesh's raw cooked vertex/index data (see @ref cooked_mesh_data), independent
    * of GPU residency — the mesh need not be, and does not become, loaded via @ref load_mesh.
-   * Never extracts materials (physics has no use for them), so it's safe to pass an empty
-   * material_resolver. Intended for physics::mesh_collision_cache to build a static mesh
-   * collider's triangle BVH without touching the renderer's mesh lifecycle at all.
+   *
+   * Never extracts materials, so it's safe to pass an empty material_resolver. Used by
+   * physics::mesh_collision_cache to build a collider's triangle BVH.
    */
   auto resolve_mesh_collision_data(const math::uuid& id) -> std::optional<cooked_mesh_data>;
 
@@ -110,8 +104,8 @@ public:
 
   /**
    * @brief Overwrites an existing material's fields in place; every material_handle already
-   * pointing at it (shared object) observes the change immediately. Does not touch identity
-   * (index/uuid) or persist to disk — pair with save_material to do that.
+   * pointing at it observes the change immediately. Does not touch identity (index/uuid) or
+   * persist to disk — pair with @ref save_material for that.
    */
   auto update_material(material_handle& material, const material::create_info& create_info) -> void;
 
@@ -137,8 +131,9 @@ public:
   auto save_particle_effect(particle_effect_handle& effect, const std::filesystem::path& path) -> math::uuid;
 
   /**
-   * @brief Render thread. Turns queued texture loads into GPU images + bindless writes. Copies are
-   * recorded by the caller's subsequent upload_context::flush.
+   * @brief Turns queued texture loads into GPU images and bindless writes.
+   *
+   * Runs on the render thread; copies are recorded by the caller's subsequent @ref upload_context::flush.
    */
   auto process_uploads(std::uint64_t frame_index) -> void;
 

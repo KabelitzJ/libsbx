@@ -16,13 +16,9 @@
 namespace sbx::graphics {
 
 /**
- * @brief Owns every compute pipeline for the run, deduplicated by shader id — a compute pipeline
- * has no rasterizer state to key on, unlike @ref pipeline_cache.
+ * @brief Owns every compute pipeline for the run, deduplicated by shader id, unlike @ref pipeline_cache which also keys on rasterizer state.
  *
- * Not thread-safe, same as @ref pipeline_cache — currently fine because compute pipelines are
- * only ever created by whichever single thread drives the environment-map IBL bake at load time.
- * If a render-thread compute pass (skinning, GPU culling, particles) starts using this too, it
- * will need a mutex, the same way resource_registry got one.
+ * Not thread-safe: safe today only because compute pipelines are created solely by the thread driving the environment-map IBL bake at load time.
  */
 class compute_pipeline_cache : public utility::noncopyable {
 

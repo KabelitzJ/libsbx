@@ -45,9 +45,9 @@ public:
   }
 
   /**
-   * @brief Builds the pipeline stage create-infos. The returned pName pointers reference this
-   * shader's storage, so it must outlive pipeline creation (it does — the pipeline is built from
-   * it synchronously).
+   * @brief Builds the pipeline stage create-infos.
+   *
+   * The returned pName pointers reference this shader's storage, so it must outlive pipeline creation (guaranteed since the pipeline is built from it synchronously).
    */
   [[nodiscard]] auto stage_create_infos() const -> std::vector<VkPipelineShaderStageCreateInfo>;
 

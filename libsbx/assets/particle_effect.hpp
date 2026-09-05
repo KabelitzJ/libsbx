@@ -34,10 +34,11 @@ enum class emitter_shape : std::uint8_t {
 }; // enum class emitter_shape
 
 /**
- * @brief Params for emitter_shape::cone. Apex at the emitter's origin, axis along local -Z. `radius`
- * is the base circle's radius at the angle's implied height. `emit_from_volume` is the probability a
- * given particle samples from inside the cone's volume instead of from its base disc (0 = always the
- * base, matching Unity's "Emit from: Base"; 1 = always the volume).
+ * @brief Params for emitter_shape::cone; apex at origin, axis along local -Z.
+ *
+ * @param angle Cone half-angle.
+ * @param radius Base circle radius.
+ * @param emit_from_volume Probability of sampling from the cone volume instead of the base disc (0 = base, 1 = volume).
  */
 struct cone_shape_params {
   math::angle angle{math::degree{25.0f}};
@@ -52,10 +53,10 @@ enum class particle_collision_mode : std::uint8_t {
 }; // enum class particle_collision_mode
 
 /**
- * @brief One explicit collision plane, for particle_collision_mode::planes. `normal` points away
- * from the plane's surface (the side particles bounce off of); `distance` is the plane's offset
- * along `normal` from the world origin, i.e. a particle is behind the plane when
- * `dot(normal, position) - distance < 0`.
+ * @brief One explicit collision plane, for particle_collision_mode::planes.
+ *
+ * @param normal Points toward the side particles bounce off of.
+ * @param distance Plane offset along `normal` from the world origin; a particle is behind the plane when `dot(normal, position) - distance < 0`.
  */
 struct collision_plane {
   math::vector3 normal{0.0f, 1.0f, 0.0f};
@@ -65,9 +66,9 @@ struct collision_plane {
 inline constexpr auto collision_max_planes = std::size_t{4};
 
 /**
- * @brief Particle collision, matching Unity's Collision module's two modes: an explicit plane list
- * (cheap, no broadphase involved) or the real physics world (queries physics_module's broadphase +
- * GJK/EPA, treating each particle as a small sphere -- see physics_module::query_sphere_contacts).
+ * @brief Particle collision: an explicit plane list, or the physics world's broadphase + GJK/EPA treating each particle as a small sphere.
+ *
+ * @ref physics_module::query_sphere_contacts is used for the world mode.
  */
 struct collision_config {
   particle_collision_mode mode{particle_collision_mode::none};
@@ -81,9 +82,7 @@ struct collision_config {
 
 inline constexpr auto curve_max_keys = std::size_t{8};
 
-/** 
- * @brief One keyframe of a curve. `time` is normalized lifetime in [0, 1]. 
- */
+/** @brief One keyframe of a curve; `time` is normalized lifetime in [0, 1]. */
 struct curve_key {
   std::float_t time{0.0f};
   std::float_t value{0.0f};

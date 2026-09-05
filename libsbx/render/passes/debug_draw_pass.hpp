@@ -19,13 +19,11 @@
 namespace sbx::render {
 
 /**
- * @brief Draws whatever scene_renderer_module::debug_draw() has accumulated this frame -- one
- * upload, one line_list draw call for every source (physics colliders today, script gizmos later)
- * -- then clears it. See libsbx/render/debug/debug_draw.hpp for the accumulator itself.
+ * @brief Draws whatever @ref scene_renderer_module::debug_draw has accumulated this frame as one
+ * line_list draw, then clears it.
  *
- * Runs right after grid_pass, for the same reason grid_pass runs where it does (see its doc
- * comment): it needs the fully-populated opaque depth buffer to occlude correctly, and it must be
- * part of what transparent_resolve_pass composites against.
+ * Runs after grid_pass for the same reason: needs the finished opaque depth buffer to occlude
+ * correctly, and must be part of what transparent_resolve_pass composites against.
  */
 class debug_draw_pass final : public graphics_pass {
 

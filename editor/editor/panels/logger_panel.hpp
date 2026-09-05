@@ -18,9 +18,7 @@ namespace editor {
 
 /**
  * @brief Draws the Console panel: a live view of the engine's in-memory log ring buffer
- * (sbx::utility::logged_lines()), with per-level toggles, a text filter, and auto-scroll. Doesn't
- * use editor_state — the log stream isn't part of the shared selection/panel state, and no other
- * panel needs to read it.
+ * (sbx::utility::logged_lines()), with per-level toggles, a text filter, and auto-scroll.
  */
 class logger_panel final : public editor_panel {
 

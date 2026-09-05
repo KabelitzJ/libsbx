@@ -17,15 +17,13 @@ enum class play_state {
 }; // enum class play_state
 
 /**
- * @brief Drives the editor's Play/Pause/Stop workflow. On Play, snapshots the active scene to a
- * scratch file under the project's `.sbx/` directory and turns scene simulation on; on Stop,
- * tears down any live script instances, turns simulation back off, and reloads the snapshot over
- * the same scene in place — restoring exactly the pre-play state without ever holding a second
- * copy of the scene in memory.
+ * @brief Drives the editor's Play/Pause/Stop workflow.
  *
- * This class owns "play state" because scenes::scenes_module deliberately doesn't — it's linked
- * into runtime/launcher too, neither of which has any notion of editor/play/edit. scenes_module
- * only exposes a generic is_simulating()/set_simulating() gate; this is what drives it.
+ * On Play, snapshots the active scene to a scratch file under `.sbx/` and turns simulation on;
+ * on Stop, tears down live script instances, turns simulation off, and reloads the snapshot over
+ * the same scene in place — restoring pre-play state without holding a second copy in memory.
+ * Owns "play state" itself since scenes::scenes_module (linked into runtime/launcher too) only
+ * exposes a generic is_simulating()/set_simulating() gate.
  */
 class play_mode_controller final : public sbx::utility::noncopyable {
 

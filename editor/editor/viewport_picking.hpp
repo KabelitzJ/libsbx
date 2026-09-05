@@ -10,11 +10,10 @@
 namespace editor {
 
 /**
- * @brief Picks the scene node under a viewport-relative pixel position (0,0 at the viewport
- * image's top-left) and selects it in @p state, mirroring how the Hierarchy panel selects a node.
+ * @brief Picks the scene node under a viewport-relative pixel position and selects it in @p state.
+ *
  * Casts a ray from the active camera through the clicked pixel and tests it against every mesh
- * renderer's world-space bounds, keeping the nearest hit. A miss (nothing hit, or no active
- * camera) clears the selection, same as clicking empty space in the Hierarchy.
+ * renderer's world-space bounds, keeping the nearest hit. A miss clears the selection.
  */
 auto pick_node_at_viewport_position(editor_state& state, const sbx::math::vector2& position, const sbx::math::vector2u& viewport_size) -> void;
 

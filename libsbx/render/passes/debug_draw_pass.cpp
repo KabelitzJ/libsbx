@@ -53,14 +53,9 @@ debug_draw_pass::debug_draw_pass() {
     .topology = graphics::primitive_topology::line_list,
     .cull_mode = graphics::cull_mode::none,
     .line_width = 3.0f,
-    // Debug geometry (a mesh collider's wireframe especially) is frequently drawn exactly
-    // coincident with the render mesh it corresponds to, reconstructed via a completely separate
-    // vertex/transform path -- without a bias the two z-fight rather than the overlay reading as
-    // cleanly "always visible" through its own object. A small negative bias pushes every
-    // debug-drawn fragment slightly toward the camera (matrix4x4::perspective() is a standard
-    // right-handed zero-to-one depth range here, i.e. smaller = nearer), so it reliably wins that
-    // tie while still being correctly hidden behind anything genuinely nearer. Depth test/compare
-    // below are otherwise unchanged -- this only nudges which side of a near-tie wins.
+    // Debug wireframes (e.g. a mesh collider's) are often coincident with the render mesh they
+    // correspond to and would otherwise z-fight it. A small negative bias pushes debug fragments
+    // slightly toward the camera (smaller = nearer) so ties resolve in the overlay's favor.
     .depth_bias = graphics::depth_bias{.constant_factor = -2.0f, .slope_factor = -2.0f},
     .depth_test = true,
     .depth_write = false,

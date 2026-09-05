@@ -90,9 +90,8 @@ struct editor_state {
 
   auto clear_selection() -> void;
 
-  // The scene-graph undo/redo history — shared across every panel via this struct for the same
-  // reason current_selection is (see the class doc comment). Prefer the pass-throughs below over
-  // reaching into this directly, so every call site reads the same "push, don't mutate directly" convention.
+  // The scene-graph undo/redo history, shared across panels like current_selection. Prefer the
+  // pass-throughs below over reaching into this directly.
   command_stack commands{};
 
   auto push_command(std::unique_ptr<command> cmd) -> void {

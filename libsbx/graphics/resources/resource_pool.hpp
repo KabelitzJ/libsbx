@@ -25,14 +25,12 @@ namespace sbx::graphics {
 /**
  * @brief Owns resources of a single type in slots that never move.
  *
- * Slot indices are handed out through @ref resource_handle and are reused only after the GPU has
- * caught up, which makes an index safe to publish to the bindless descriptor table for the whole
- * lifetime of the resource it points at.
+ * Slot indices, handed out via @ref resource_handle, are reused only after the GPU has caught up,
+ * so an index is safe to publish to the bindless table for the resource's whole lifetime.
  *
- * Destruction is deferred: @ref retire marks a slot unreachable and records the timeline value the
- * GPU must reach before the resource may be destroyed, and @ref collect performs the destruction
- * once that value has been signalled. This is the only destruction path, so no resource is ever
- * torn down while it is still referenced by an in flight command buffer.
+ * Destruction is deferred: @ref retire records the timeline value the GPU must reach, and
+ * @ref collect destroys once that value is signalled — the only destruction path, so nothing is
+ * torn down while still referenced by an in-flight command buffer.
  *
  * @tparam Type The resource type. Needs neither a default constructor nor a move constructor.
  * @tparam PageSize The number of slots per allocation.

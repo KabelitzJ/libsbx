@@ -33,7 +33,8 @@ namespace sbx::scenes {
 
 /**
  * @brief The authored transform of a node, relative to its parent.
- * Its derived from the world transform each frame by scene::update() and written to the world_transform component.
+ *
+ * Derived into world_transform each frame by @ref scene::update.
  */
 struct local_transform {
 
@@ -107,10 +108,10 @@ struct camera {
 }; // struct camera
 
 /**
- * @brief What a node draws. Holds runtime handles for now; becomes asset uuids in F3.
+ * @brief What a node draws.
  *
  * materials is the sole source of truth for what each submesh renders with — there is no
- * render-time fallback to the mesh's own per-submesh material. See sync_materials_with_mesh().
+ * render-time fallback to the mesh's own per-submesh material. See @ref sync_materials_with_mesh.
  */
 struct mesh_renderer {
   assets::mesh_handle mesh{};
@@ -118,11 +119,10 @@ struct mesh_renderer {
 }; // struct mesh_renderer
 
 /**
- * @brief Resizes materials to match the mesh's current submesh count and seeds any slot that's
- * still unset (default-constructed/invalid) from that submesh's own material. Never touches a
- * slot that already has a value — mesh_renderer.materials is the source of truth once set; this
- * only fills in gaps (a freshly assigned mesh, or a mesh whose submesh count grew). No-op if no
- * mesh is assigned yet.
+ * @brief Fills unset material slots from the mesh's per-submesh materials.
+ *
+ * Resizes materials to the mesh's submesh count. Never overwrites an already-set slot.
+ * No-op if no mesh is assigned.
  */
 inline auto sync_materials_with_mesh(mesh_renderer& renderer) -> void {
   if (!renderer.mesh.is_valid()) {
@@ -170,24 +170,21 @@ struct skybox {
 }; // struct skybox
 
 /**
- * @brief Per-instance runtime state for one of the asset's emitters -- one of these per entry in
- * assets::particle_effect::emitters(), index-paired. Never serialized: a loaded scene always starts
- * with an empty `particles` array and re-simulates from whatever `particle_effect::elapsed` was
- * saved, the same way physics_module treats its broadphase as non-persisted rebuilt-on-load state.
+ * @brief Per-instance runtime state for one emitter, index-paired with assets::particle_effect::emitters().
+ *
+ * Never serialized: a loaded scene starts with an empty particles array and re-simulates from
+ * the saved particle_effect::elapsed.
  */
 struct particle_emitter {
-  // Shared by both simulation modes, but on two different clocks: for assets::particle_emitter::
-  // simulation_mode == cpu these advance at particles_module's fixed timestep; for == gpu
-  // they're owned and advanced by scene_renderer_module's extraction loop at render (frame) rate
-  // instead, since GPU emission must run at the same cadence particle_simulate_pass dispatches at.
-  // Don't "unify" this onto one clock -- see the particle-system plan doc for why.
+  // Two clocks by assets::particle_emitter::simulation_mode: cpu advances at particles_module's
+  // fixed timestep; gpu advances via scene_renderer_module's extraction loop at render rate to
+  // match particle_simulate_pass's dispatch cadence. Don't unify — see particle-system plan doc.
   std::float_t emission_accumulator{0.0f};
   bool burst_fired{false};
 
-  // GPU-path only: this emitter's claimed slot in the render::particle_pool matching its
-  // assets::particle_emitter::blend_mode, or invalid_slot if unclaimed. Owned by scene_renderer_
-  // module's extraction loop (claim_slot/keep_alive/tick), reset to invalid_slot by particles_
-  // module on stop.
+  // GPU-path only: claimed slot in render::particle_pool for this emitter's blend_mode, or
+  // invalid_slot if unclaimed. Owned by scene_renderer_module's extraction loop; reset to
+  // invalid_slot by particles_module on stop.
   inline static constexpr auto invalid_slot = std::numeric_limits<std::uint32_t>::max();
   std::uint32_t slot{invalid_slot};
 
@@ -234,12 +231,11 @@ struct script_field_override {
 }; // struct script_field_override
 
 /**
- * @brief One C# Behavior-derived script attached to a node, by class name plus any per-field
- * overrides authored in the editor. This is the persisted authoring record — separate from the
- * runtime-only scripting::scripts component (a live std::vector<managed::object>), which
- * scripting_module::instantiate() populates from this list whenever the scene starts simulating.
- * Kept separate because a managed object handle can't be serialized, and a node's live instances
- * must always be rebuildable from this list alone.
+ * @brief One C# Behavior-derived script attached to a node, by class name and per-field overrides.
+ *
+ * This is the persisted authoring record, separate from the runtime-only scripting::scripts
+ * component (populated from this list by scripting_module::instantiate() when simulation starts).
+ * Kept separate because a managed object handle can't be serialized.
  */
 struct script_entry {
   std::string class_name;

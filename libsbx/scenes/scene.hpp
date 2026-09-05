@@ -41,28 +41,31 @@ public:
   [[nodiscard]] auto find(const utility::hashed_string& name) -> node;
 
   /**
-   * @brief Wraps an arbitrary entity (e.g. from scene::query<>() or relationship::children) in a
-   * node handle. The returned node's validity still depends on the entity being alive — check
-   * node::is_valid() before using it.
+   * @brief Wraps an arbitrary entity in a node handle.
+   *
+   * Validity still depends on the entity being alive — check @ref node::is_valid before use.
    */
   [[nodiscard]] auto node_of(ecs::entity entity) -> node;
 
   /**
    * @brief Sentinel entity whose relationship::children is the ordered list of top-level nodes.
-   * Not a real node — never pass it to find(), destroy_node(), or the serializer.
+   *
+   * Not a real node — never pass it to @ref find, @ref destroy_node, or the serializer.
    */
   [[nodiscard]] auto root() -> node;
 
   /**
-   * @brief Detaches child from its current parent and inserts it at index (clamped) among
-   * parent's children — pass root() as parent for a top-level position. General-purpose
-   * reordering, not just undo/redo: node::set_parent() only ever appends at the end.
+   * @brief Detaches child from its current parent and inserts it at the (clamped) index among parent's children.
+   *
+   * Pass root() as parent for a top-level position. Unlike @ref node::set_parent, which only
+   * appends, this supports arbitrary reordering.
    */
   auto insert_child(node parent, node child, std::size_t index) -> void;
 
   /**
-   * @brief Destroys @p target and its entire subtree, unlinking it from its parent's
-   * relationship.children first. No-op if target is already invalid.
+   * @brief Destroys @p target and its subtree, unlinking it from its parent's relationship.children.
+   *
+   * No-op if target is already invalid.
    */
   auto destroy_node(node target) -> void;
 
@@ -83,7 +86,9 @@ public:
   }
 
   /**
-   * @brief Recomputes every node's world_transform from the hierarchy. Once per frame before extract.
+   * @brief Recomputes every node's world_transform from the hierarchy.
+   *
+   * Once per frame, before extract.
    */
   auto update() -> void;
 

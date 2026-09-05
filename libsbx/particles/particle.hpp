@@ -15,9 +15,9 @@
 namespace sbx::particles {
 
 /**
- * @brief One live particle, simulated on the CPU each fixed_update() by particles_module. `id` is a
- * per-emitter monotonic spawn counter, stable across the array's swap-and-pop recycling — later
- * features (collision, trails, sub-emitters) key off it rather than an array index.
+ * @brief One live particle, simulated on the CPU each fixed_update() by particles_module.
+ *
+ * `id` is a per-emitter monotonic counter, stable across swap-and-pop recycling; key off it, not array index.
  */
 struct particle {
   std::uint32_t id{0u};
@@ -34,7 +34,7 @@ struct particle {
   std::uint32_t collision_count{0u};
 }; // struct particle
 
-/** @brief One recorded point of a trail (see assets::trail_config). */
+/** @brief One recorded point of a trail (@ref assets::trail_config). */
 struct trail_point {
   math::vector3 position{};
   math::color color{1.0f, 1.0f, 1.0f, 1.0f}; // the owning particle's color when this point was recorded
@@ -42,10 +42,9 @@ struct trail_point {
 }; // struct trail_point
 
 /**
- * @brief A ribbon of recorded points trailing one particle, keyed by its particle::id (survives the
- * particle array's swap-and-pop recycling). `points.front()` is the head (newest, closest to the
- * particle); `points.back()` is the tail (oldest). Not itself removed the instant its particle dies --
- * see assets::trail_config::die_with_particle.
+ * @brief A ribbon of recorded points trailing one particle, keyed by particle::id to survive swap-and-pop recycling.
+ *
+ * `points.front()` is the head (newest); `points.back()` is the tail (oldest). Removal on particle death is gated by @ref assets::trail_config::die_with_particle.
  */
 struct trail {
   std::uint32_t particle_id{0u};

@@ -8,11 +8,11 @@
 namespace editor {
 
 /**
- * @brief Base for a top-level editor window. Each concrete panel is instantiated once by
- * editor_module and owns whatever per-panel state it needs (filters, edit caches, ...) as
- * ordinary members instead of function-local statics. Panels never reference each other directly
- * — the only thing they share is editor_state, and only for genuinely cross-panel concerns
- * (selection, the viewport gizmo's operation/mode).
+ * @brief Base for a top-level editor window.
+ *
+ * Each concrete panel is instantiated once by editor_module and owns its per-panel state
+ * (filters, edit caches, ...) as ordinary members. Panels never reference each other directly —
+ * the only shared state is editor_state, for cross-panel concerns like selection.
  */
 class editor_panel {
 

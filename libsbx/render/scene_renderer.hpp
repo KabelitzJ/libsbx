@@ -10,16 +10,12 @@
 namespace sbx::render {
 
 /**
- * @brief What presentation_module calls into, at most one registered at a time
- * (presentation_module::set_scene_renderer), to have a 3D scene rendered into the frame's shared
- * command buffer. scene_renderer_module is the only real implementer — named to pair with it the
- * same way ui_layer already pairs with editor_ui_layer.
+ * @brief 3D-scene half of presentation_module's renderer interfaces; at most one registered at a
+ * time (presentation_module::set_scene_renderer).
  *
- * Two phases, mirroring ui_renderer's shape, for the same reason: prepare() is the only place
- * touching the ECS is safe (main thread, called once per frame before the frame is kicked off);
- * record() does the actual pass-list work, and may run on a separate render thread depending on
- * the configured threading_policy — it must never reach into the ECS itself, only whatever
- * prepare() already extracted and stashed.
+ * Two phases: prepare() is the only place touching the ECS is safe (main thread, before the frame
+ * is kicked); record() does the actual pass-list work and may run on a separate render thread, so
+ * it must only use what prepare() already extracted and stashed.
  */
 class scene_renderer {
 

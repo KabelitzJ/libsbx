@@ -23,18 +23,11 @@ namespace sbx::graphics {
 /**
  * @brief One @ref resource_pool per resource type, selected at compile time.
  *
- * Adding a resource type is a single entry in the type list. There is no runtime dispatch:
- * @ref pool resolves to a `std::get` on a tuple, so the indirection disappears entirely.
+ * @ref collect_all is called once per frame from `frame_context::begin_frame`, after the timeline
+ * wait and before any descriptor writes, so a slot is never reused while still referenced.
  *
- * The registry owns the collection point for deferred destruction. @ref collect_all is called
- * once per frame from `frame_context::begin_frame`, after the timeline wait and before any
- * descriptor writes, so that a slot is never reused while a command buffer still references it.
- *
- * Guarded by a single mutex: the render thread and an asset-loading thread (e.g. the compute IBL
- * bake at environment-map load time) may call into this concurrently. Resource storage itself is
- * page-stable (see resource_pool), so a reference returned by @ref get stays valid after the lock
- * is released — only the pool's own bookkeeping (slots/free-list/pages/retired-queue) needs
- * protecting from concurrent mutation.
+ * Guarded by a single mutex against concurrent render/asset-loading threads. Resource storage is
+ * page-stable, so a reference from @ref get stays valid after the lock is released.
  *
  * @tparam Types The resource types the registry owns. Must be unique.
  */
@@ -94,9 +87,8 @@ public:
   /**
    * @brief Marks a resource unreachable and schedules its destruction for @p timeline_value.
    *
-   * Always pass `frame_context::frame_index()`. Retiring during the update stage of frame N is
-   * conservative but never wrong, since the resource can only have been referenced by frame N
-   * or earlier, and frame N signals the value N.
+   * Pass `frame_context::frame_index()`. Conservative but safe: the resource can only have been
+   * referenced by frame N or earlier when frame N retires it.
    */
   template<typename Type>
   auto retire(const resource_handle<Type> handle, const std::uint64_t timeline_value) -> void {
@@ -119,7 +111,9 @@ public:
   }
 
   /**
-   * @brief Destroys everything every pool owns, retired or not. Only safe once the device is idle.
+   * @brief Destroys everything every pool owns, retired or not.
+   *
+   * Only safe once the device is idle.
    */
   auto clear_all() -> void {
     auto lock = std::lock_guard{_mutex};

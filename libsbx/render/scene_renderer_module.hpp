@@ -38,17 +38,13 @@
 namespace sbx::render {
 
 /**
- * @brief Renders the active scene's 3D content (the render_graph and its eleven passes,
- * particle pools, shadow maps) into an offscreen final_image every frame — nothing else. Knows
- * nothing about the swapchain or ImGui; registers itself as presentation_module's scene_renderer
- * (see scene_renderer.hpp) and, via scene_blit_compositor, as its default compositor, so an app
- * that wants the scene actually presented (demo/runtime) gets that with no code of its own, while
- * one that embeds final_image itself (editor's Viewport panel) or doesn't want a 3D scene at all
- * (launcher, which simply never constructs this module) both just work.
+ * @brief Renders the active scene's 3D content into an offscreen final_image every frame.
  *
- * The calling (main) thread always extracts the active scene into a render_packet in prepare();
- * whichever thread ends up consuming it in record() (itself, or a dedicated render thread,
- * depending on presentation_module's threading_policy) never touches the ECS.
+ * Knows nothing about the swapchain or ImGui; registers itself as presentation_module's
+ * scene_renderer and, via scene_blit_compositor, as its default compositor.
+ *
+ * prepare() (main thread) extracts the active scene into a render_packet; record() — which may
+ * run on a dedicated render thread — never touches the ECS.
  */
 class scene_renderer_module final : public utility::noncopyable, public scene_renderer {
 

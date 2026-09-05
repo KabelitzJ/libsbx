@@ -21,37 +21,22 @@
 namespace sbx::render {
 
 /**
- * @brief Draws context.packet->particle_billboard_commands as camera-facing, vertex-pulled quads
- * (see shaders/particles/particle_billboard.slang). Declares two attachment groups, mirroring how
- * shadow_pass declares one per cascade:
+ * @brief Draws particle billboards, meshes, trails, and GPU-path particles, bucketed into two
+ * attachment groups by blend mode.
  *
- * - Group 0 (alpha_blend particles): the same weighted-OIT accumulator/revealage pair
- *   transparent_accumulate_pass writes, so transparent_resolve_pass composites them together with
- *   ordinary transparent meshes with no resolve code of its own.
- * - Group 1 (additive particles): writes directly onto the real scene color target
- *   (resources.color_msaa, resolved into resources.color), blended (one, one, add) -- true additive
- *   glow, not routed through the OIT accumulator. Weighted-OIT's accumulator/revealage math computes
- *   an *averaged* color before compositing it with the standard OVER operator; overlapping additive
- *   particles fed through it converge on their own color instead of adding up brighter, which is
- *   exactly backwards for a glow effect. Unity's particle renderer has the same reasoning: additive
- *   particles blend straight onto the camera target with a literal `Blend One One`.
+ * Group 0 (alpha_blend) writes into the weighted-OIT accumulator/revealage pair so
+ * transparent_resolve_pass composites it with ordinary transparent meshes. Group 1 (additive)
+ * blends (one, one) directly onto resources.color_msaa, since weighted-OIT averages overlapping
+ * colors instead of summing them -- backwards for additive glow.
  *
- * Runs between transparent_accumulate_pass and transparent_resolve_pass, so alpha_blend particles
- * land in the OIT accumulator before it resolves, and additive particles are already sitting in
- * resources.color by the time transparent_resolve_pass composites ordinary transparent geometry over
- * it -- additive glow reads as "behind" translucent surfaces like glass, which is the common choice.
+ * Runs between transparent_accumulate_pass and transparent_resolve_pass: alpha_blend output must
+ * land in the accumulator before it resolves, and additive output must already be in
+ * resources.color before transparent_resolve_pass composites over it.
  *
- * Also draws context.packet->particle_mesh_commands as ordinary instanced meshes (unlit -- texture *
- * color, no lighting, matching the billboard particles' own unlit style) into the same two groups,
- * bucketed by blend mode the same way the billboards are; and context.packet->trail_commands as
- * plain (non-instanced) vertex-pulled triangle lists (shaders/particles/trail.slang) -- the ribbon
- * width extrusion is already baked into each vertex's position at extraction time, so this shader
- * needs no per-instance data at all, unlike the billboard/mesh paths.
- *
- * Also draws GPU-path particles (assets::particle_simulation_mode::gpu emitters,
- * shaders/particles/draw.slang) into the same two groups, one draw_indirect per group sized by
- * particle_simulate_pass's prepare_indirect_draw stage rather than a CPU-known instance count --
- * see context.particle_additive_draw_args / context.particle_alpha_draw_args.
+ * Mesh particles (instanced, unlit) and trail particles (non-instanced, vertex-pulled, width baked
+ * into vertex position) share the same two groups, as do GPU-path particles
+ * (assets::particle_simulation_mode::gpu), drawn via draw_indirect sized by
+ * particle_simulate_pass's prepare_indirect_draw stage.
  */
 class particle_pass final : public graphics_pass {
 

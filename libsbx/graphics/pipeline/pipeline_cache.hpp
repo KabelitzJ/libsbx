@@ -23,9 +23,8 @@ namespace sbx::graphics {
 /**
  * @brief The complete set of non-dynamic state that defines a graphics pipeline's identity.
  *
- * Everything that affects `vkCreateGraphicsPipelines` and is not dynamic state (viewport/scissor)
- * and not constant across the engine (the shared bindless layout, absence of vertex input). Two
- * pipelines are the same iff their pipeline_state compares equal — this is the cache key.
+ * Excludes dynamic state (viewport/scissor) and engine constants (bindless layout, no vertex
+ * input). Two pipelines are the same iff their pipeline_state compares equal — this is the cache key.
  */
 struct pipeline_state {
   graphics::shader::id_type shader{0u};
@@ -59,9 +58,8 @@ struct pipeline_state_hash {
 /**
  * @brief Owns every graphics pipeline for the run, deduplicated by @ref pipeline_state.
  *
- * Not thread-safe — pipeline creation is a render-thread operation, like the resource pool. The
- * renderer holds the returned reference (non-owning); the cache and its pipelines live and die with
- * the graphics module, whose destructor waits for the device to idle first.
+ * Not thread-safe — pipeline creation is a render-thread operation. Returned references are
+ * non-owning; pipelines live and die with the graphics module, which waits for device idle first.
  */
 class pipeline_cache : public utility::noncopyable {
 

@@ -15,9 +15,7 @@
 namespace sbx::render {
 
 /**
- * @brief Everything a compositor needs — deliberately leaner than the 3D pass list's
- * render_context, which carries depth/color/shadow/cluster buffers and camera data that have no
- * business leaking into presentation_module (which knows nothing about 3D rendering at all).
+ * @brief Minimal per-frame context a compositor needs: command buffer plus swapchain view/extent.
  */
 struct compositor_context {
   memory::observer_ptr<graphics::command_buffer> command_buffer;
@@ -26,11 +24,10 @@ struct compositor_context {
 }; // struct compositor_context
 
 /**
- * @brief The one final step deciding what ends up in the swapchain image, registered with
- * presentation_module::set_compositor (at most one). Successor to render_module's old
- * set_composite_pass/render_pass-based composite pass — scene_renderer_module registers
- * scene_blit_compositor as its default; presentation_module clears the swapchain instead if
- * nothing is registered at all.
+ * @brief The final step deciding what ends up in the swapchain image.
+ *
+ * Registered via presentation_module::set_compositor (at most one); presentation_module clears
+ * the swapchain instead if nothing is registered.
  */
 class compositor : public utility::noncopyable {
 
@@ -43,11 +40,10 @@ public:
 }; // class compositor
 
 /**
- * @brief Clears @p swapchain_view to a plain dark color and nothing else. Used both as
- * presentation_module's own fallback when no compositor is registered at all, and by
- * scene_blit_compositor when there's nothing fresh to show yet (no active camera this frame) —
- * the same two call sites render_pass.hpp's old clear_swapchain served, just no longer tied to
- * the 3D pass list's render_context.
+ * @brief Clears @p swapchain_view to a plain dark color.
+ *
+ * Used as presentation_module's fallback when no compositor is registered, and by
+ * scene_blit_compositor when nothing was rendered this frame (no active camera).
  */
 auto clear_swapchain(graphics::command_buffer& command_buffer, VkImageView swapchain_view, math::vector2u extent) -> void;
 

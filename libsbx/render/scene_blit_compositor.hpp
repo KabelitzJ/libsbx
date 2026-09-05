@@ -13,13 +13,11 @@
 namespace sbx::render {
 
 /**
- * @brief Default compositor: samples scene_renderer_module::final_image() and writes it to the
- * swapchain — or, if nothing was rendered this frame (see scene_renderer_module::has_rendered),
- * just clears it, same as the old present_pass did for "no active camera". Successor to the old
- * render_pass-based present_pass, built against the leaner compositor_context instead.
- * scene_renderer_module registers one of these with presentation_module::set_compositor
- * automatically in its own constructor, so an app that wants the scene actually presented
- * (demo/runtime) needs no code of its own for that.
+ * @brief Default compositor: blits scene_renderer_module::final_image() to the swapchain.
+ *
+ * Clears the swapchain instead if nothing was rendered this frame (@ref
+ * scene_renderer_module::has_rendered). Registered automatically by scene_renderer_module's
+ * constructor, so apps need no code of their own to present the scene.
  */
 class scene_blit_compositor final : public compositor {
 

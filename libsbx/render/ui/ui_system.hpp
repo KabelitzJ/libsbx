@@ -29,14 +29,13 @@
 namespace sbx::render {
 
 /**
- * @brief Owns ImGui end to end: context, the vendored GLFW + Vulkan backends (moved here from
- * editor/, see libsbx/render/ui/backends), fonts, the registered ui_layer list, and the two halves
- * of a frame's UI — build_frame() (main thread) and render() (render thread, consuming the deep
- * copy build_frame() produced — see ui_draw_data).
+ * @brief Owns ImGui end to end: context, the vendored GLFW + Vulkan backends
+ * (libsbx/render/ui/backends), fonts, the registered ui_layer list, and the two halves of a
+ * frame's UI -- build_frame() (main thread) and render() (render thread, consuming the deep copy
+ * build_frame() produced; see @ref ui_draw_data).
  *
- * Owned by ui_module (see ui_module.hpp), which implements ui_renderer and registers with
- * presentation_module — ui_system itself knows nothing about core::module or presentation_module
- * at all, only ImGui.
+ * Owned by @ref ui_module, which registers with presentation_module; ui_system itself knows
+ * nothing about core::module or presentation_module, only ImGui.
  */
 class ui_system final : public utility::noncopyable {
 
@@ -47,8 +46,8 @@ public:
   ~ui_system();
 
   /**
-   * @brief Registers a layer this ui_system owns outright — mirrors render_graph::add_pass<Pass>.
-   * build() order is registration order, across both this and the observer_ptr overload below.
+   * @brief Registers a layer this ui_system owns outright. build() order is registration order,
+   * across both this and the observer_ptr overload below.
    */
   template<typename Layer, typename... Args>
   requires (std::is_base_of_v<ui_layer, Layer> && std::is_constructible_v<Layer, Args...>)

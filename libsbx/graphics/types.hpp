@@ -263,9 +263,7 @@ enum class [[=reflection::bit_field]] access : std::uint64_t {
   shader_storage_write = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT
 }; // enum class access
 
-/** @brief A depth/stencil attachment's clear value — the render-side equivalent of
- * `VkClearDepthStencilValue`, kept Vulkan-free like the rest of this header. Color clears use
- * math::color instead, there being no need for a dedicated wrapper. */
+/** @brief Depth/stencil attachment clear value, the Vulkan-free equivalent of `VkClearDepthStencilValue`. */
 struct depth_stencil_clear_value {
   std::float_t depth{1.0f};
   std::uint32_t stencil{0u};
@@ -283,11 +281,7 @@ enum class compare_operation : std::int32_t {
 }; // enum class compare_operation
 
 /**
- * @brief Converts one of this header's wrapper enums to its Vulkan counterpart, pairing each
- * target kind with the underlying type that actually matches it: a plain Vulkan C enum (VkFormat,
- * VkImageLayout, ...) always has underlying type `int`, so its wrapper is `std::int32_t`-backed;
- * `VkFlags` (used for 32-bit bitmasks like VkBufferUsageFlags) is `std::uint32_t`; `VkFlags64`
- * (used for synchronization2's wider bitmasks like VkPipelineStageFlags2) is `std::uint64_t`.
+ * @brief Converts one of this header's wrapper enums to its Vulkan counterpart.
  */
 template<typename VkEnum, typename Enum>
 requires (

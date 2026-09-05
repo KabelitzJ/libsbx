@@ -8,22 +8,19 @@
 namespace editor {
 
 /**
- * @brief One undoable editor action. Construct a command that hasn't mutated anything yet, then
- * hand it to editor_state::push_command() (or command_stack::push()), which calls execute() —
- * never call execute()/undo() directly.
+ * @brief One undoable editor action.
  *
- * Every command stores only math::uuids, never scene&/ecs::entity — it re-resolves via
- * scene::find() inside execute()/undo() (re-fetching the active scene itself, see
- * commands/scene_access.hpp), tolerating a lookup miss as a safe no-op. This is what keeps a
- * command safe to hold across the full registry rebuild scene_serializer::load() does on
- * Play -> Stop.
+ * Construct without mutating, then push via editor_state::push_command() (or
+ * command_stack::push()), which calls execute() — never call execute()/undo() directly.
  *
- * modify_component_command/add_component_command are naturally idempotent (plain overwrite /
- * get_or_add_component) — execute() re-applying an already-current value is harmless, which is
- * what lets a continuous drag edit keep writing live every frame and only push one command at the
- * end. create_node_command/delete_node_command/attach_script_command/detach_script_command are
- * strictly-alternated toggles instead: command_stack's own push/undo/redo contract never calls
- * either twice in a row against the same state, so they don't need extra idempotency guards.
+ * Stores only math::uuids, never scene&/ecs::entity; re-resolves via scene::find() inside
+ * execute()/undo() (@ref active_scene), treating a lookup miss as a no-op. This keeps a command
+ * valid across the registry rebuild scene_serializer::load() does on Play -> Stop.
+ *
+ * modify_component_command/add_component_command are idempotent (plain overwrite /
+ * get_or_add_component), so a continuous drag can re-execute every frame. Node/script commands
+ * are strict alternating toggles instead, since command_stack never calls execute()/undo() twice
+ * in a row on the same state.
  */
 class command {
 

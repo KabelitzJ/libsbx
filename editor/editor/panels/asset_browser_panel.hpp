@@ -26,10 +26,10 @@ struct asset_browser_entry {
 
 /**
  * @brief Draws the "Asset Browser" panel: a two-pane view of the active project's assets
- * directory (folder tree left, current folder's contents right). Clicking an importable file
- * registers it with assets_module and selects it in the shared editor_state; clicking a folder
- * navigates into it. Which directory is browsed and its cached listing are this panel's own
- * state — no other panel needs them.
+ * directory (folder tree left, current folder's contents right).
+ *
+ * Clicking an importable file registers it with assets_module and selects it in editor_state;
+ * clicking a folder navigates into it.
  */
 class asset_browser_panel final : public editor_panel {
 
@@ -55,10 +55,9 @@ private:
   std::vector<asset_browser_entry> _cached_entries{};
   bool _needs_refresh{true};
 
-  // "Import Mesh" modal state — shown the first time a .gltf/.glb without a .meta yet is clicked,
-  // to surface mesh_import_options::extract_materials before cooking. _show_import_mesh_dialog is
-  // consumed outside the per-entry PushID scope it's set from, since OpenPopup/BeginPopupModal must
-  // see the same ID stack; also reused by _import_asset_file for a freshly copied-in mesh.
+  // "Import Mesh" modal state, shown the first time an un-imported .gltf/.glb is clicked.
+  // _show_import_mesh_dialog is consumed outside the per-entry PushID scope it's set from, since
+  // OpenPopup/BeginPopupModal must see the same ID stack.
   bool _show_import_mesh_dialog{false};
   std::filesystem::path _pending_import_path{};
   bool _import_extract_materials{true};

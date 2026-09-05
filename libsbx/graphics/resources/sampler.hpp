@@ -15,8 +15,10 @@
 namespace sbx::graphics {
 
 /**
- * @brief A single sampler type. Deduplicated by the bindless table's sampler cache, so callers
- * describe what they want and get a shared handle rather than owning one each.
+ * @brief A single sampler type.
+ *
+ * Deduplicated by the bindless table's sampler cache: callers describe what they want and get a
+ * shared handle rather than owning one each.
  */
 class sampler : public utility::noncopyable {
 

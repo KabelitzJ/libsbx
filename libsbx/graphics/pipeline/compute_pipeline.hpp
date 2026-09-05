@@ -17,9 +17,7 @@
 namespace sbx::graphics {
 
 /**
- * @brief A compute pipeline built against the shared bindless pipeline layout — the same one
- * @ref graphics_pipeline uses. No bespoke descriptor sets or pools (unlike the pre-bindless
- * engine's compute_pipeline): one VK_SHADER_STAGE_COMPUTE_BIT stage, no rasterizer state at all.
+ * @brief A compute pipeline built against the shared bindless pipeline layout, with a single VK_SHADER_STAGE_COMPUTE_BIT stage and no rasterizer state.
  *
  * Owned by @ref compute_pipeline_cache; construct via the cache, not directly.
  */

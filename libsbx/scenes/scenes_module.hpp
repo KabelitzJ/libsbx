@@ -45,21 +45,21 @@ public:
   }
 
   /**
-   * @brief core::engine::delta_time() while simulating, else zero. The one place every
-   * time-integrating system (particle `elapsed`, future animation clips, ...) should pull its dt
-   * from instead of core::engine::delta_time() directly, so they all uniformly freeze together
-   * whenever simulation is paused.
+   * @brief core::engine::delta_time() while simulating, else zero.
+   *
+   * Every time-integrating system should pull dt from here instead of core::engine::delta_time()
+   * directly, so they all freeze together when simulation pauses.
    */
   [[nodiscard]] auto simulation_delta_time() const -> units::seconds {
     return _is_simulating ? core::engine::delta_time() : units::seconds{};
   }
 
   /**
-   * @brief Accumulated simulation_delta_time() — i.e. core::engine::time() with pauses subtracted
-   * out. Unlike core::engine::time(), this stops advancing whenever simulation is paused, so
-   * anything deriving absolute-time animation (shader noise/scroll, procedural motion, ...) freezes
-   * in sync with simulation_delta_time() instead of continuing to animate while paused. Updated once
-   * per frame in late_update(), before render reads it.
+   * @brief Accumulated simulation_delta_time() — core::engine::time() with pauses subtracted out.
+   *
+   * Stops advancing while simulation is paused, so absolute-time animation (shader scroll,
+   * procedural motion, ...) freezes in sync instead of continuing. Updated once per frame in
+   * late_update(), before render reads it.
    */
   [[nodiscard]] auto simulation_time() const -> units::seconds {
     return _simulation_time;

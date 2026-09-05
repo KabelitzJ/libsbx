@@ -196,9 +196,8 @@ auto ibl_baker::bake_environment(environment_map& record, const std::vector<std:
   const auto radiance_index = bindless_table.register_sampled_image(radiance.view());
 
   // --- Equirect -> cubemap: transient single-mip scratch input for the convolutions below; never
-  // touched by the graphics queue, so exclusive sharing (default) is fine. Both irradiance.slang
-  // and prefilter.slang always sample mip 0 (see prefilter.slang's doc comment), so a mip chain
-  // here would be wasted work. ---
+  // touched by the graphics queue, so exclusive sharing (default) is fine. Both convolution shaders
+  // always sample mip 0, so a mip chain here would be wasted work. ---
 
   auto radiance_cube = graphics::image{graphics::image::create_info{
     .extent = math::vector3u{radiance_cube_size, radiance_cube_size, 1u},

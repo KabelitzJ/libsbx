@@ -25,10 +25,10 @@ struct viewport_camera_pose {
 }; // struct viewport_camera_pose
 
 /**
- * @brief Builds the view/projection matrices for a camera at camera_world_matrix, for a given
- * viewport aspect ratio. Shared by viewport picking and the gizmo (fed from
- * editor_module::viewport_camera) and mirrors what scene_renderer_module::set_camera_override
- * renders with, so all three always agree on what's actually on screen.
+ * @brief Builds the view/projection matrices for a camera at @p camera_world_matrix.
+ *
+ * Shared by viewport picking and the gizmo and mirrors what
+ * scene_renderer_module::set_camera_override renders with, so all three agree on screen state.
  */
 [[nodiscard]] auto compute_viewport_camera_matrices(const sbx::math::matrix4x4& camera_world_matrix, const sbx::scenes::camera& camera, std::float_t aspect) -> viewport_camera_matrices;
 

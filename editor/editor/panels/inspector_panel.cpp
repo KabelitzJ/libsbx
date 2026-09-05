@@ -46,13 +46,9 @@
 namespace editor {
 
 // Brackets a continuous-drag-style edit (DragFloat, ColorEdit4, SliderAngle, InputText, ...) into
-// exactly one undo entry per completed edit, instead of one per changed-frame: call right after
-// the widget, every frame, regardless of whether it changed this frame. The widget itself keeps
-// writing the live value straight through as before — this only decides when to snapshot/push.
-// `pending` must outlive one full activate/deactivate cycle (a caller's function-local static,
-// matching this file's existing cross-frame UI state convention — see draw_material_picker's
-// filter_buffer) — one shared instance per section is enough since ImGui only has one active item
-// at a time.
+// one undo entry per completed edit rather than one per frame: call every frame right after the
+// widget. `pending` must outlive one full activate/deactivate cycle (a caller's function-local
+// static) — one shared instance per section is enough since ImGui only has one active item at a time.
 template<typename Component>
 auto bracket_edit(editor_state& state, const sbx::scenes::node& node, const Component& component, std::optional<Component>& pending, const char* label) -> void {
   if (ImGui::IsItemActivated() && !pending) {
@@ -1112,10 +1108,8 @@ auto draw_shape_collider_section(editor_state& state, sbx::scenes::node& node) -
   static auto pending = std::optional<sbx::physics::shape_collider>{};
 
   if (node.has_component<sbx::physics::mesh_collider>()) {
-    // Narrowphase only ever resolves one collider per node (shape_collider wins, see
-    // narrowphase.cpp's resolve_convex) -- a node carrying both is never a deliberate setup, just
-    // leftover state (e.g. from an older scene file), so this is surfaced rather than silently
-    // ignored. The Add Component menu itself already refuses to create this combination.
+    // Narrowphase only resolves one collider per node (shape_collider wins; see
+    // narrowphase.cpp's resolve_convex) — Add Component already blocks creating both.
     ImGui::TextColored(ImVec4{1.0f, 0.7f, 0.2f, 1.0f}, ICON_MDI_ALERT_OUTLINE " Also has a Mesh Collider -- it will be ignored.");
   }
 
@@ -1192,10 +1186,8 @@ auto draw_mesh_collider_section(editor_state& state, sbx::scenes::node& node, sb
   static auto pending = std::optional<sbx::physics::mesh_collider>{};
 
   if (node.has_component<sbx::physics::shape_collider>()) {
-    // Narrowphase only ever resolves one collider per node (shape_collider wins, see
-    // narrowphase.cpp's resolve_convex) -- a node carrying both is never a deliberate setup, just
-    // leftover state (e.g. from an older scene file), so this is surfaced rather than silently
-    // ignored. The Add Component menu itself already refuses to create this combination.
+    // Narrowphase only resolves one collider per node (shape_collider wins; see
+    // narrowphase.cpp's resolve_convex) — Add Component already blocks creating both.
     ImGui::TextColored(ImVec4{1.0f, 0.7f, 0.2f, 1.0f}, ICON_MDI_ALERT_OUTLINE " Also has a Shape Collider -- this one will be ignored.");
   }
 
@@ -1252,24 +1244,17 @@ auto draw_add_component_menu(editor_state& state, sbx::scenes::node& node, sbx::
     ImGui::OpenPopup("##add_component_popup");
   }
 
-  // Anchored under the button itself -- which is already centered in the panel -- rather than
-  // wherever the mouse happened to be when it was clicked (BeginPopup's default), and a fixed width
-  // regardless of how narrow the current filter's matches are, so the popup doesn't jump around or
-  // resize out from under the cursor as the search text changes. Set every frame the popup could be
-  // open, not just the one it's clicked on: ImGui only applies a pending SetNextWindowPos/Size to
-  // the very next Begin call, and this button is redrawn (at the same position) every frame anyway.
+  // Anchored under the button (centered, not wherever the mouse clicked) with a fixed width so it
+  // doesn't jump or resize as the filter text changes. Must be set every frame the popup could
+  // open -- ImGui only applies a pending SetNextWindowPos/Size to the very next Begin call.
   constexpr auto popup_width = 260.0f;
   const auto button_min = ImGui::GetItemRectMin();
   const auto button_max = ImGui::GetItemRectMax();
   const auto button_center_x = (button_min.x + button_max.x) * 0.5f;
 
-  // A tall Inspector (many components already on the node) can leave the button sitting low enough
-  // that opening straight downward, unconditionally, would push the popup off the bottom of the
-  // window entirely -- SetNextWindowPos overrides ImGui's own default popup placement, which is the
-  // only thing that would otherwise keep it on screen. Flip to opening upward from the button instead
-  // whenever there isn't roughly enough room below in the main viewport's work area; the estimate
-  // only has to be good enough to pick a side -- the upward case's own pivot anchors to the popup's
-  // real (auto-sized) height exactly, not to this estimate.
+  // Opens upward instead whenever there isn't roughly enough room below in the viewport's work
+  // area, so a tall Inspector doesn't push the popup off the bottom of the window. The estimate
+  // only has to pick the right side -- the upward case's pivot anchors to the popup's real height.
   constexpr auto estimated_popup_height = 320.0f;
 
   const auto work_min = ImGui::GetMainViewport()->WorkPos;
@@ -1289,10 +1274,8 @@ auto draw_add_component_menu(editor_state& state, sbx::scenes::node& node, sbx::
   ImGui::SetNextWindowSize(ImVec2{popup_width, 0.0f}, ImGuiCond_Always);
 
   if (ImGui::BeginPopup("##add_component_popup")) {
-    // A single always-the-same popup id (unlike the asset pickers above, which juggle several under
-    // different ids) -- IsWindowAppearing() alone is enough to know this is a fresh open, so the
-    // search term never carries over from the last time this same popup was open, and the field
-    // starts focused every time, letting the button click go straight into typing a filter.
+    // A single always-the-same popup id, so IsWindowAppearing() alone tells us this is a fresh
+    // open -- reset the filter and refocus it each time.
     static auto filter_buffer = std::array<char, 128u>{};
 
     if (ImGui::IsWindowAppearing()) {
@@ -1351,10 +1334,8 @@ auto draw_add_component_menu(editor_state& state, sbx::scenes::node& node, sbx::
       state.push_command(std::make_unique<add_component_command<sbx::physics::mesh_collider>>(node.id(), "Add Mesh Collider"));
     }
 
-    // The Script submenu covers a whole open-ended, dynamically-discovered category rather than one
-    // fixed name, so it passes the filter either when "Script" itself matches or when at least one
-    // script inside it would -- otherwise a search for a script's own name (which never matches the
-    // literal word "Script") would hide the one submenu that could actually satisfy it.
+    // Open-ended category, not a fixed name -- passes when "Script" matches or any script inside
+    // it would, so a search for a script's own name doesn't hide the one submenu that satisfies it.
     if (passes("Script") || (filter_buffer[0] != '\0' && any_script_matches(scripting_module, filter_buffer.data()))) {
       if (ImGui::BeginMenu(ICON_MDI_FILE_CODE_OUTLINE " Script")) {
         auto& behavior_type = scripting_module.game_assembly().get_type("Sbx.Core.Behavior");
@@ -1390,13 +1371,11 @@ auto draw_add_component_menu(editor_state& state, sbx::scenes::node& node, sbx::
   }
 }
 
-// v1 supports only float/int/bool/string — the only types managed::object::get_field_value<T>/
-// set_field_value<T> explicitly support. Anything else renders as a disabled, unsupported label.
-// Editing while a live instance exists (playing or paused) writes straight to the live
-// managed::object and does NOT touch the persisted override — play_mode_controller::
-// exit_play_mode() always reloads the pre-play snapshot, so persisting mid-Play edits would have
-// no observable effect once Stopped. Editing with no live instance (Edit mode) writes directly to
-// the persisted override instead.
+// v1 supports only float/int/bool/string (the only types get/set_field_value<T> explicitly
+// support); anything else renders as a disabled, unsupported label. Edits go straight to the live
+// managed::object while a live instance exists (playing/paused), since play_mode_controller
+// reloads the pre-play snapshot on Stop and mid-Play edits would never persist; otherwise they
+// write to the persisted override.
 auto draw_script_field_inspector(editor_state& state, sbx::scenes::node& node, sbx::scenes::script_entry& entry) -> void {
   auto& scripting_module = sbx::core::engine::get_module<sbx::scripting::scripting_module>();
 
@@ -1407,12 +1386,9 @@ auto draw_script_field_inspector(editor_state& state, sbx::scenes::node& node, s
     return;
   }
 
-  // A live instance exists exactly while the node is part of a playing-or-paused session — it's
-  // created by instantiate() on Play and only ever torn down by run_on_destroy() on Stop (which
-  // then reloads the pre-play snapshot, wiping the component entirely). Keying this off
-  // scenes_module.is_simulating() instead would miss the Paused case (is_simulating() is false
-  // while paused, but the instance is still alive) and edits would go to the persisted override
-  // instead of the live object — i.e. exactly "the value doesn't get picked up" while paused.
+  // A live instance exists exactly while playing or paused: instantiate() creates it on Play,
+  // run_on_destroy() tears it down on Stop. Must key off instance existence, not
+  // scenes_module.is_simulating() (false while paused), or paused edits would target the wrong side.
   sbx::scripting::managed::object* live_instance = nullptr;
 
   if (node.has_component<sbx::scripting::scripts>()) {
@@ -1424,11 +1400,9 @@ auto draw_script_field_inspector(editor_state& state, sbx::scenes::node& node, s
     }
   }
 
-  // Shared across every field below — snapshots the whole script_component (not just this one
-  // field) so undo/redo restores it via modify_component_command<script_component>, matching every
-  // other section's "snapshot the component, not the field" convention. Never touched while
-  // live_instance is set — those edits write straight to the live managed object and are never
-  // tracked (play-session edits have no effect once Stopped anyway, see this function's doc comment).
+  // Shared across every field below — snapshots the whole script_component so undo/redo restores
+  // it via modify_component_command<script_component>. Untouched while live_instance is set, since
+  // those edits target the live object directly and are never tracked (see the comment above).
   static auto pending = std::optional<sbx::scenes::script_component>{};
 
   const auto capture_before = [&] {
@@ -1597,11 +1571,9 @@ auto draw_script_field_inspector(editor_state& state, sbx::scenes::node& node, s
   }
 }
 
-// One standalone collapsible per attached script — same shape as draw_camera_section and the
-// other single-component sections (a CollapsingHeader whose close button removes it), just called
-// once per entry in node's script_component instead of guarded by has_component<T>(). Title shows
-// the source file name convention ("<ClassName>.cs", matching what "New Script" generates and what
-// class_name is assumed to equal) with the C# glyph, not the bare class name.
+// One standalone collapsible per attached script, same shape as draw_camera_section and friends,
+// but called once per script_component entry rather than guarded by has_component<T>(). Title
+// assumes the "<ClassName>.cs" file-name convention "New Script" generates.
 auto draw_script_section(editor_state& state, sbx::scenes::node& node, sbx::scenes::script_entry& entry, std::optional<std::string>& pending_removal) -> void {
   auto is_open = true;
 
@@ -1953,11 +1925,8 @@ auto inspector_panel::_draw_particle_effect_properties(editor_state& state, cons
         changed = true;
       }
 
-      // GPU doesn't enforce its constraints by disabling the combo above -- a user picking it
-      // while iterating on a config (e.g. about to remove a collision module) shouldn't be blocked --
-      // but an unsupported config is a real, silent-looking mismatch (billboard-only, no collision/
-      // sub-emitters/trails, no cone shape; see assets::particle_emitter::supports_gpu_simulation()),
-      // so warn inline instead.
+      // GPU silently ignores unsupported emitter configs (billboard-only, no
+      // collision/sub-emitters/trails/cone) rather than rejecting them; warn inline.
       if (emitter.simulation_mode == sbx::assets::particle_simulation_mode::gpu && !emitter.supports_gpu_simulation()) {
         ImGui::TextColored(ImVec4{1.0f, 0.7f, 0.2f, 1.0f}, ICON_MDI_ALERT " GPU doesn't support this emitter's current config");
 
@@ -2357,10 +2326,8 @@ auto inspector_panel::_draw_asset_properties(editor_state& state, const asset_se
 }
 
 auto inspector_panel::draw(editor_state& state) -> void {
-  // A bit more breathing room around every control in this panel (frame padding inside widgets,
-  // spacing between them, and a margin against the window edge) than ImGui's tight defaults —
-  // applies uniformly to every section/component drawn below, not just newly-added ones.
-  // WindowPadding must be pushed before Begin() — it's read while laying out the window itself.
+  // A bit more breathing room than ImGui's tight defaults. WindowPadding must be pushed before
+  // Begin() -- it's read while laying out the window itself.
   ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{10.0f, 10.0f});
 
   ImGui::Begin(window_name);

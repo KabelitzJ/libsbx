@@ -64,9 +64,8 @@ struct render_context {
   graphics::image_handle color_msaa{};
   std::uint32_t color_index{0u};
 
-  // Fully tonemapped, presentable color result — produced by tonemap_pass (last in the pass list)
-  // and already shader_read_only_optimal by the time any composite pass runs. Valid from frame 1,
-  // but only fresh for frames where a camera was active.
+  // Fully tonemapped, presentable result (tonemap_pass output), already shader_read_only_optimal
+  // by the time any compositor runs. Valid from frame 1, but only fresh when a camera was active.
   graphics::image_handle final_image{};
   std::uint32_t final_image_index{0u};
 
@@ -88,10 +87,9 @@ struct render_context {
   graphics::buffer::address_type cluster_light_index_address{0u};
   graphics::buffer::address_type cluster_counter_address{0u};
 
-  // GPU-path particles (libsbx/render/particles/particle_pool.hpp): populated once per frame
-  // from the two pools, keyed off frame_index % 2 for the ping-pong alive_list. draw_args is only
-  // valid once particle_simulate_pass has run this frame -- particle_pass checks .is_valid() rather
-  // than assuming these are always ready.
+  // GPU-path particles (libsbx/render/particles/particle_pool.hpp), keyed off frame_index % 2 for
+  // the ping-pong alive_list. draw_args is only valid once particle_simulate_pass has run this
+  // frame; particle_pass checks .is_valid() rather than assuming it's ready.
   graphics::buffer::address_type particle_additive_particles_address{0u};
   graphics::buffer::address_type particle_additive_alive_list_address{0u};
   graphics::buffer::address_type particle_additive_emitters_address{0u};
@@ -122,8 +120,10 @@ struct push_constants {
 static_assert(sizeof(push_constants) <= 128u, "Push constants must not exceed 128 bytes.");
 
 /**
- * @brief A logical render stage (dynamic rendering — not a VkRenderPass). Owns its own pipelines and
- * targets, and does its own resource barriers; the module owns only the swapchain transitions.
+ * @brief A logical render stage using dynamic rendering (not a VkRenderPass).
+ *
+ * Owns its own pipelines, targets, and resource barriers; the module owns only the swapchain
+ * transitions.
  */
 class render_pass : public utility::noncopyable {
 

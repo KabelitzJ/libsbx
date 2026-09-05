@@ -30,10 +30,9 @@ public:
   ibl_baker() = default;
 
   /**
-   * @brief Uploads the equirectangular radiance and bakes the irradiance + prefiltered cubemaps
-   * for @p record via compute dispatch, blocking until the GPU finishes. Runs on the async compute
-   * queue via a one-shot command buffer, never touching the graphics queue's per-frame submissions.
-   * record's indices are resident and safe to read from any thread once this returns.
+   * @brief Uploads the equirectangular radiance and bakes irradiance + prefiltered cubemaps for
+   * @p record via compute dispatch, blocking until the GPU finishes. Runs on the async compute queue
+   * (never the graphics queue); indices are resident and safe to read from any thread once this returns.
    */
   auto bake_environment(environment_map& record, const std::vector<std::byte>& pixels, std::uint32_t width, std::uint32_t height) -> void;
 

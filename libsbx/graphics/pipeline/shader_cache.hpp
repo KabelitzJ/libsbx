@@ -20,10 +20,9 @@
 namespace sbx::graphics {
 
 /**
- * @brief Owns every compiled shader for the run, deduplicated by source path + requested entry
- * points. Each distinct shader gets a stable @ref shader_id that pipelines key on.
+ * @brief Owns every compiled shader for the run, deduplicated by source path and requested entry points.
  *
- * Not thread-safe — compilation is a render-thread operation, like the resource pool.
+ * Each distinct shader gets a stable @ref shader::id_type that pipelines key on. Not thread-safe — compilation is a render-thread operation, like the resource pool.
  */
 class shader_cache : public utility::noncopyable {
 

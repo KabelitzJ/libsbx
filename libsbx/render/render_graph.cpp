@@ -86,9 +86,10 @@ auto graphics_pass_builder::transitions_after(std::uint32_t group_index, graphic
 }
 
 /**
- * @brief Per-resource state the linear compiler tracks while walking the fixed pass list in order.
- * touched=false means first declared access this compile, so the synthesized barrier is a fresh
- * write (old_layout=undefined, src_access=none).
+ * @brief Per-resource state the linear compiler tracks while walking the pass list in order.
+ *
+ * touched=false means the first declared access this compile, so the synthesized barrier is a
+ * fresh write (old_layout=undefined, src_access=none).
  */
 struct image_state {
   graphics::image_layout layout{graphics::image_layout::undefined};

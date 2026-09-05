@@ -20,12 +20,9 @@
 namespace sbx::particles {
 
 /**
- * @brief Owns the fixed-step spawn/integrate/collide/recycle pipeline for every
- * scenes::particle_effect in the active scene. Mirrors physics::physics_module's shape: a
- * fixed_update() method, picked up automatically as the core::stage::fixed_update hook, gated on
- * scenes_module::is_simulating() the same way physics_module is, so particles freeze in edit mode
- * and only run during Play -- which also keeps "world" collision consistent with physics itself,
- * since physics_module's own broadphase is likewise only populated while simulating.
+ * @brief Owns the fixed-step spawn/integrate/collide/recycle pipeline for every @ref scenes::particle_effect in the active scene.
+ *
+ * Gated on @ref scenes::scenes_module::is_simulating() like @ref physics::physics_module, so particles freeze outside Play, matching physics' broadphase (also populated only while simulating).
  */
 class particles_module final : public utility::noncopyable {
 
@@ -48,11 +45,9 @@ private:
   auto _record_trails(const assets::particle_emitter& config, scenes::particle_emitter& runtime, std::float_t dt) -> void;
 
   /**
-   * @brief Fires every config.sub_emitters binding matching @p event: rolls its probability, then
-   * spawns (or reuses a pooled, stopped) child scenes::particle_effect node at @p particle's world
-   * position pointing at binding.effect, non-looping. runtime.sub_emitter_pool identifies pooled
-   * children by scenes::id rather than ecs::entity, since scenes::node doesn't expose its raw entity
-   * outside scene/scene_serializer -- scene::find() resolves a pool entry back to a node.
+   * @brief Fires every config.sub_emitters binding matching @p event, spawning (or reusing a pooled, stopped) child @ref scenes::particle_effect node at @p p's world position.
+   *
+   * Pool entries are tracked by math::uuid, not ecs::entity, since @ref scenes::node doesn't expose its raw entity outside scene/scene_serializer; @ref scenes::scene::find resolves an id back to a node.
    */
   auto _trigger_sub_emitters(scenes::scene& scene, scenes::particle_emitter& runtime, const assets::particle_emitter& config, assets::sub_emitter_event event, const particles::particle& p) -> void;
 

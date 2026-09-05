@@ -17,9 +17,10 @@
 namespace editor {
 
 /**
- * @brief Adds a default-constructed Component to a node. execute()/undo() are both safe to call
- * even if the component is already in the state they're heading to (get_or_add_component / a
- * remove of an already-absent component are both no-ops).
+ * @brief Adds a default-constructed Component to a node.
+ *
+ * execute()/undo() are safe when already in the target state — get_or_add_component and
+ * removing an absent component are both no-ops.
  */
 template<typename Component>
 class add_component_command final : public command {
@@ -53,8 +54,10 @@ private:
 }; // class add_component_command
 
 /**
- * @brief Removes a Component from a node. Construct this BEFORE removing anything — pass the
- * component's current value as before; execute() performs the actual removal.
+ * @brief Removes a Component from a node.
+ *
+ * Construct before removing anything — pass the component's current value as @p before;
+ * execute() performs the actual removal.
  */
 template<typename Component>
 class remove_component_command final : public command {
@@ -89,10 +92,11 @@ private:
 }; // class remove_component_command
 
 /**
- * @brief Overwrites a node's Component with after, restorable back to before. The general-purpose
- * property-edit command — covers any "edit a value in place" widget (transform, camera, lights,
- * skybox, particle-effect instance, script field overrides, node rename via tag) by snapshotting
- * the whole component rather than one field.
+ * @brief Overwrites a node's Component with @p after, restorable back to @p before.
+ *
+ * The general-purpose property-edit command for any "edit in place" widget (transform, camera,
+ * lights, skybox, particle-effect instance, script fields, node rename), snapshotting the whole
+ * component rather than one field.
  */
 template<typename Component>
 class modify_component_command final : public command {

@@ -21,14 +21,11 @@ namespace sbx::render {
 
 /**
  * @brief Drives the 4-stage GPU particle compute chain (build_dispatch_args -> simulate -> emit ->
- * prepare_indirect_draw) for both pools, once per frame — placed right before particle_draw_pass,
- * its only same-frame consumer.
+ * prepare_indirect_draw) for both pools once per frame, immediately before particle_draw_pass.
  *
- * Unlike other passes' buffers, the pool buffers are read-modify-written *across* frames, so
- * same-queue submission order alone doesn't prevent frame N's reads racing frame N-1's writes:
- * execute() waits on frame_context's own timeline at `frame_index - 1`, scoped to COMPUTE_SHADER,
- * before touching them. The handoff to particle_draw_pass needs no semaphore — just a trailing
- * VkMemoryBarrier2, the same pattern light_culling_pass uses for its own consumers.
+ * Pool buffers are read-modify-written across frames, so execute() waits on frame_context's timeline
+ * at `frame_index - 1` (COMPUTE_SHADER scope) before touching them. Hand-off to particle_draw_pass
+ * needs only a trailing VkMemoryBarrier2, same pattern as light_culling_pass.
  */
 class particle_simulate_pass final : public compute_pass {
 

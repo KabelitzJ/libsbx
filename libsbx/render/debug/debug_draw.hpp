@@ -33,13 +33,10 @@ struct debug_vertex {
 }; // struct debug_vertex
 
 /**
- * @brief Immediate-mode line accumulator. Anything that wants debug geometry on screen -- physics
- * colliders today (see physics::physics_module::late_update()), script-driven gizmos later -- calls
- * add_*() every frame it wants that geometry visible. debug_draw_pass uploads and draws whatever's
- * accumulated each frame, then clear()s it, so nothing needs to be told to stop drawing -- a caller
- * just stops calling add_*().
+ * @brief Immediate-mode line accumulator: callers (physics colliders, script gizmos) call add_*()
+ * every frame they want geometry visible; debug_draw_pass uploads, draws, and clears it each frame.
  *
- * Fetch the shared instance via `core::engine::get_module<render::scene_renderer_module>().debug_draw()`.
+ * Fetch the shared instance via @ref scene_renderer_module::debug_draw.
  */
 class debug_draw final {
 

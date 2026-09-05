@@ -16,17 +16,13 @@
 namespace editor {
 
 /**
- * @brief The editor's own free-fly viewport camera. Deliberately NOT a scenes::node/ECS entity —
- * unlike the scene's own camera it can never be written into a scene file (scene_serializer only
- * ever walks the registry) and never gets swept up in play_mode_controller's scene
- * snapshot/restore. Persists per-project (not per-scene, and independent of whatever the scene's
- * own play camera is doing) at `<project_root>/.sbx/editor/camera.yaml` — see load()/save(),
- * called by editor_module alongside its imgui.ini load/save.
+ * @brief The editor's own free-fly viewport camera.
  *
- * Reuses scenes::local_transform/scenes::camera by value purely as plain data — this camera is
- * never attached to an entity, so their ECS associations don't apply here. Owns its own free-fly
- * input handling directly (WASD move, Q/E down/up, hold right mouse to look, shift to sprint) —
- * there's nothing else this input drives, so there's no reason for it to live in a separate class.
+ * Not a scenes::node/ECS entity — never written into a scene file and never swept up in
+ * play_mode_controller's snapshot/restore. Persists per-project at
+ * `<project_root>/.sbx/editor/camera.yaml` (see load()/save()). Reuses scenes::local_transform
+ * and scenes::camera as plain data, with no ECS association. Owns its own free-fly input (WASD
+ * move, Q/E down/up, hold right mouse to look, shift to sprint).
  */
 class editor_camera {
 

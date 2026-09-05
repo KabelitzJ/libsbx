@@ -132,9 +132,7 @@ auto draw_viewport_gizmo(editor_state& state, const ImVec2& viewport_origin, con
   const auto changed = ImGuizmo::Manipulate(matrices.view.data(), gizmo_projection.data(), operation, mode, world_matrix.data(), nullptr, snap);
 
   // Cross-frame gizmo-drag state — one shared instance is enough since only one node can have an
-  // active gizmo drag at a time. Bracket around the existing per-frame write below (unchanged: it
-  // keeps writing every frame for live visual feedback) so exactly one undo entry is pushed per
-  // completed drag instead of one per frame.
+  // active gizmo drag at a time. Brackets the per-frame write below into one undo entry per drag.
   static auto drag_active = false;
   static auto drag_node_id = sbx::math::uuid::nil();
   static auto drag_before = sbx::scenes::local_transform{};
@@ -518,11 +516,9 @@ auto draw_node_icons(editor_state& state, const ImVec2& viewport_origin, const I
     draw_icon(entity, sbx::math::vector3{transform.matrix[3]}, ICON_MDI_WHITE_BALANCE_SUNNY);
   }
 
-  // The scene's own active/play camera is excluded from its own icon only while it's actually
-  // being viewed through (Play/Paused) — there it would sit right at the eye position, a
-  // degenerate projection (clip.w near zero) that flickered on and off every other frame. In edit
-  // mode the viewport looks through the editor camera instead, so the play camera is just an
-  // ordinary object from that viewpoint and should get an icon like any other camera/light.
+  // Excluded from its own icon only while actually being viewed through (Play/Paused) — there it
+  // sits at the eye position, a degenerate projection (clip.w near zero) that flickered on and
+  // off every other frame. In edit mode the viewport looks through the editor camera instead.
   const auto is_viewing_through_active_camera = editor_module.play_state() != editor::play_state::edit;
   const auto active_camera_id = (is_viewing_through_active_camera && scene.has_active_camera()) ? static_cast<sbx::math::uuid>(scene.active_camera().id()) : sbx::math::uuid::nil();
 

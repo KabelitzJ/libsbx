@@ -169,12 +169,9 @@ auto scene_renderer_module::reset_particles() -> void {
 
 auto scene_renderer_module::_extract_gpu_particle_emitter(render_packet& packet, const assets::particle_emitter& config, scenes::particle_emitter& runtime, const scenes::particle_effect& instance, const math::matrix4x4& world, std::float_t delta_time) -> void {
   if (instance.playback != scenes::particle_playback_state::playing) {
-    // Not playing: leave any already-claimed slot alone -- not calling keep_alive below lets
-    // particle_pool::tick() drain it gracefully over its own lifetime_max window rather than an
-    // abrupt cut, the same "let it finish" spirit as the CPU path's particles aging out on their
-    // own. Known v1 quirk: since particle_simulate_pass has no pause concept (it always integrates
-    // every alive particle every frame), a *paused* effect's GPU particles keep drifting and will
-    // start draining rather than truly freezing -- only particles_module's CPU path can freeze.
+    // Not playing: leave any claimed slot alone so particle_pool::tick() drains it gracefully
+    // rather than an abrupt cut. Known v1 quirk: particle_simulate_pass has no pause concept, so a
+    // *paused* effect's GPU particles keep drifting and draining instead of truly freezing.
     return;
   }
 
@@ -1088,12 +1085,9 @@ auto scene_renderer_module::_prepare_frame(render_context& context) -> void {
   context.cluster_light_index_address = data.cluster_light_index_address;
   context.cluster_counter_address = _cluster_counter_addresses[context.slot];
 
-  // GPU-path particles: alive_list is ping-pong, keyed by the same frame_index % 2 parity
-  // particle_simulate_pass uses as its write_index this frame -- that's the list stage 2/3 just
-  // finished building, matching draw_args' instance_count. draw_args itself is a device_local
-  // buffer that's always valid from pool construction onward (its instance count, not its
-  // existence, is what tells particle_pass whether there's anything to actually draw -- reading
-  // that back on the CPU would defeat the point of driving the draw via draw_indirect).
+  // GPU-path particles: alive_list is ping-pong, keyed by frame_index % 2 (matching
+  // particle_simulate_pass's write_index this frame). draw_args is always valid once the pool is
+  // constructed; particle_pass checks its instance_count, not its existence, to know what to draw.
   const auto particle_write_index = static_cast<std::uint32_t>(context.frame_index % 2u);
 
   context.particle_additive_particles_address = _particle_pool_additive->particles_address();

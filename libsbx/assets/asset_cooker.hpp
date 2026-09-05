@@ -123,8 +123,9 @@ public:
   [[nodiscard]] auto resolve_environment(const math::uuid& id) -> std::optional<pixel_data>;
 
   /**
-   * @brief Staleness-gated cook + read for a mesh. @p resolve_material is only invoked when
-   * `options.extract_materials` is set — cooking with it off never calls it.
+   * @brief Staleness-gated cook + read for a mesh.
+   *
+   * @p resolve_material is only invoked when `options.extract_materials` is set.
    */
   [[nodiscard]] auto resolve_mesh(const math::uuid& id, const mesh_import_options& options, const material_resolver& resolve_material) -> std::optional<cooked_mesh_data>;
 

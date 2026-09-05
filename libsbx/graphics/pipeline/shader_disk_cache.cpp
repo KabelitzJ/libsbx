@@ -27,10 +27,8 @@ namespace sbx::graphics {
 inline constexpr auto shader_cache_magic = utility::fourcc_v<"SBSC">; // 'SBSC'
 inline constexpr auto shader_cache_format_version = std::uint32_t{1u};
 
-// Process id plus an in-process atomic counter: unique enough per store() call — across
-// processes (debug/release binaries, or two instances) and across concurrent threads within one —
-// to give every temp file its own name, so racing writers of the same key never touch each
-// other's file.
+// Process id plus an in-process atomic counter — unique enough across processes and concurrent
+// threads within one — so racing writers of the same key never touch each other's temp file.
 auto _unique_suffix() -> std::string {
 #if defined(SBX_PLATFORM_WIN32)
   const auto process_id = static_cast<std::uint64_t>(::GetCurrentProcessId());
@@ -57,13 +55,9 @@ struct entry_record_header {
 }; // struct entry_record_header
 
 /**
- * @brief True if @p source (a shader's own source file) lives inside the active project's
- * assets_directory() — i.e. it's a project-authored shader, not an engine-shipped one. No
- * project-authored shaders exist yet (every call site today passes a path under the engine's own
- * fixed shaders/ tree), so this is always false in practice for now; the check exists so the
- * split is already correct once that changes. weakly_canonical + lexically_relative rather than a
- * string-prefix compare, so it can't be fooled by a sibling directory sharing a name prefix
- * (e.g. "assets2") and correctly rejects a ".."-escape out of the assets tree.
+ * @brief True if @p source lives inside the active project's assets_directory(), i.e. it's a project-authored shader rather than an engine-shipped one.
+ *
+ * Always false today — no call site yet passes a path outside the engine's shaders/ tree — but the check is correct once that changes. Uses weakly_canonical + lexically_relative rather than a string-prefix compare, so a sibling directory sharing a name prefix (e.g. "assets2") can't fool it, and a ".."-escape out of the assets tree is correctly rejected.
  */
 auto _is_project_shader(const std::filesystem::path& source) -> bool {
   if (!core::engine::has_project()) {
@@ -155,9 +149,8 @@ auto shader_disk_cache::store(const std::string& key, const std::filesystem::pat
   std::filesystem::create_directories(path.parent_path(), error);
 
   // Write to a per-process temp file, then rename over the final path — a same-directory rename is
-  // atomic on the target filesystem, so a concurrent try_load() either sees the old complete file
-  // or the new complete one, never a torn write from two processes racing the same key (e.g. a
-  // debug and a release binary compiling the same shader at once).
+  // atomic on the target filesystem, so a concurrent try_load() sees either the old complete file
+  // or the new one, never a torn write from two processes racing the same key.
   const auto temp_path = path.string() + ".tmp." + _unique_suffix();
 
   {

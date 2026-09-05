@@ -179,18 +179,14 @@ auto editor_ui_layer::_draw_dockspace() -> void {
   const auto dockspace_id = ImGui::GetID("editor_dockspace");
 
   if (ImGui::DockBuilderGetNode(dockspace_id) == nullptr) {
-    // First time this project has ever opened (no imgui.ini yet, or it had nothing for this
-    // dockspace) — lay out a sane default instead of leaving every panel undocked and stacked
-    // in one corner. Only runs once per node id: after this, or after a saved layout is loaded
-    // from disk, the node already exists and this is skipped every subsequent frame.
+    // No saved layout for this dockspace yet — lay out a sane default. Runs once per node id;
+    // once it exists (here or from a loaded layout on disk), this is skipped every frame after.
     ImGui::DockBuilderRemoveNode(dockspace_id);
     ImGui::DockBuilderAddNode(dockspace_id, ImGuiDockNodeFlags_DockSpace);
     ImGui::DockBuilderSetNodeSize(dockspace_id, viewport->WorkSize);
 
-    // Right column (Properties + Stats) split off first, full height; then the remainder split
-    // into a bottom strip (Asset Browser + Console) and a top strip, which is itself split into
-    // Hierarchy (left) and Viewport (center, marked as the central node) — same shape/order as
-    // the reference layout this was matched against, not just the same end result.
+    // Right column (Properties + Stats) split off first, full height; remainder splits into a
+    // bottom strip (Asset Browser + Console) and a top strip (Hierarchy left, Viewport center).
     auto remaining = dockspace_id;
     auto right = ImGuiID{};
     auto bottom = ImGuiID{};
@@ -224,10 +220,9 @@ auto editor_ui_layer::_draw_dockspace() -> void {
     ImGui::DockBuilderFinish(dockspace_id);
   }
 
-  // Reserves its own strip of vertical space (ordinary content, drawn top-down) before DockSpace()
-  // below claims whatever's left via its ImVec2{0,0} "fill remaining" size — mirroring how the
-  // real menu bar's height is already excluded from that same remaining region via the
-  // ImGuiWindowFlags_MenuBar flag on this window.
+  // Reserves its own strip of vertical space before DockSpace() below claims whatever's left via
+  // its ImVec2{0,0} "fill remaining" size, the same way the menu bar's height is excluded via
+  // ImGuiWindowFlags_MenuBar on this window.
   _draw_toolbar();
 
   ImGui::DockSpace(dockspace_id, ImVec2{0.0f, 0.0f});

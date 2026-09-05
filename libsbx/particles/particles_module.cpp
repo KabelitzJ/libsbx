@@ -93,13 +93,9 @@ auto particles_module::_simulate_effect(scenes::scene& scene, scenes::particle_e
     auto& runtime = effect.emitters[index];
 
     if (config.simulation_mode == assets::particle_simulation_mode::gpu) {
-      // Simulated entirely on the GPU (see libsbx/render/particles/particle_simulate_pass.hpp);
-      // scene_renderer_module's extraction loop owns this emitter's slot claim/keep_alive/tick and
-      // emission-rate bookkeeping at render cadence instead of this fixed-step loop. Note runtime.
-      // particles stays empty for gpu emitters, so the non-looping "all_empty" stop check below
-      // can flip playback to stopped as soon as elapsed >= duration, before the GPU pool has actually
-      // drained -- harmless (the pool drains claimed slots on its own timeline regardless), just not
-      // reflected back into playback state.
+      // GPU path (render/particles/particle_simulate_pass.hpp): scene_renderer_module's extraction loop
+      // owns this emitter's slot/keep_alive/tick and emission timing instead of this loop. runtime.
+      // particles stays empty, so playback can flip to stopped before the GPU pool has actually drained -- harmless.
       continue;
     }
 
@@ -354,10 +350,8 @@ auto particles_module::_trigger_sub_emitters(scenes::scene& scene, scenes::parti
       child.transform().position = p.position;
     }
 
-    // Root-level nodes don't inherit anything from a parent's world_transform, but that's only
-    // recomputed by scenes_module::late_update() once per frame -- write it directly here too, so a
-    // freshly (re)positioned sub-emitter's own particles spawn at the right place this same frame
-    // instead of lagging one frame behind.
+    // world_transform isn't recomputed until scenes_module::late_update(); write it directly here too,
+    // so a freshly (re)positioned sub-emitter's particles spawn at the right place this same frame.
     child.get_component<scenes::world_transform>().matrix = math::matrix4x4::translated(math::matrix4x4::identity, p.position);
 
     auto& child_effect = child.get_or_add_component<scenes::particle_effect>();

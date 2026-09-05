@@ -30,9 +30,9 @@ public:
   ~shader_disk_cache() = default;
 
   /**
-   * @brief @p source is the shader's own source file — used only to decide *where* to look
-   * (the engine's shared cache, or the active project's own), never part of @p key itself. See
-   * shader_disk_cache.cpp's cache_path().
+   * @brief @p source is the shader's own source file, used only to pick which cache (engine-shared, or the active project's own) to look in — never part of @p key itself.
+   *
+   * See @ref cache_path.
    */
   [[nodiscard]] auto try_load(const std::string& key, const std::filesystem::path& source) const -> std::optional<std::vector<shader_binary_entry>>;
 

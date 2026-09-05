@@ -22,10 +22,8 @@ namespace sbx::graphics {
 /**
  * @brief The single global descriptor set (set 0) and the one pipeline layout every pipeline uses.
  *
- * Three update-after-bind, partially-bound arrays: sampled images, samplers, storage images.
- * A resource's array index is its bindless handle and the uint32 a shader indexes with. Indices are
- * handed out by per-array allocators. Descriptor writes are batched by register_* and applied by
- * flush_writes(), which frame_context calls once per frame after collect and before the passes.
+ * A resource's array index is its bindless handle, the uint32 a shader indexes with. Writes are
+ * batched by register_* and applied by @ref flush_writes.
  */
 class bindless_table : public utility::noncopyable {
 

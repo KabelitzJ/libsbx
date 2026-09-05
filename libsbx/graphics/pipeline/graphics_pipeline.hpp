@@ -37,8 +37,8 @@ struct blend_attachment {
 
 /**
  * @brief A single Vulkan specialization constant, applied to every stage of the pipeline's shader.
- * Constant ids not declared by a given stage are ignored by Vulkan, so the same set can safely be
- * shared across all stages. Currently uint32-only — that's all the engine has needed so far.
+ *
+ * Constant ids not declared by a given stage are ignored by Vulkan, so the same set can safely be shared across all stages.
  */
 struct specialization_constant {
   std::uint32_t constant_id;
@@ -48,9 +48,9 @@ struct specialization_constant {
 }; // struct specialization_constant
 
 /**
- * @brief A graphics pipeline for dynamic rendering, built against the shared bindless pipeline
- * layout. Viewport and scissor are dynamic, so a resize needs no rebuild. No vertex input state —
- * geometry comes from SV_VertexID or vertex pulling via buffer device address.
+ * @brief A graphics pipeline for dynamic rendering, built against the shared bindless pipeline layout.
+ *
+ * Viewport and scissor are dynamic, so a resize needs no rebuild. No vertex input state — geometry comes from SV_VertexID or vertex pulling via buffer device address.
  *
  * Owned by @ref pipeline_cache; construct via the cache, not directly.
  */

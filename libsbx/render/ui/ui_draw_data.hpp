@@ -17,11 +17,9 @@ namespace sbx::render {
 /**
  * @brief Main-thread-owned deep copy of one frame's ImGui draw output.
  *
- * ImGui::GetDrawData() returns pointers into the context's own per-window ImDrawList buffers,
- * which the next ImGui::NewFrame() reuses — possibly while ui_system::render is still reading the
- * previous frame's data on the render thread. Built once per frame on the main thread via
- * ImDrawList::CloneOutput() (see ui_system::build_frame), Dear ImGui's own documented mechanism for
- * cross-thread draw data consumption.
+ * ImGui::GetDrawData() returns pointers into buffers the next ImGui::NewFrame() reuses -- possibly
+ * while @ref ui_system::render still reads the previous frame's data on the render thread. Built via
+ * ImDrawList::CloneOutput() in @ref ui_system::build_frame.
  *
  * Move-only: owns the cloned ImDrawList objects outright.
  */
@@ -71,10 +69,9 @@ public:
   }
 
   /**
-   * @brief The texture update-request list ImGui_ImplVulkan_RenderDrawData needs to process the
-   * font atlas's create/update requests (ImGuiBackendFlags_RendererHasTextures). A pointer shared
-   * across every frame — ImGui::GetPlatformIO().Textures, owned by the context, not reallocated
-   * per frame — so this is forwarded, never deep-copied.
+   * @brief Texture update-request list ImGui_ImplVulkan_RenderDrawData needs for the font atlas's
+   * create/update requests. Shared across every frame (ImGui::GetPlatformIO().Textures, owned by
+   * the context) so it's forwarded here, never deep-copied.
    */
   [[nodiscard]] auto textures() const noexcept -> ImVector<ImTextureData*>* {
     return _textures;

@@ -602,10 +602,8 @@ auto read_node_components(node& target_node, const YAML::Node& node_yaml, assets
     body.local_inverse_inertia = physics::local_inverse_inertia(collider.shape, mass);
   }
 
-  // Same idea, for a dynamic convex mesh_collider (see collider.hpp's doc comment: only a convex
-  // one can ever be dynamic). A throwaway convex_hull_cache is fine here -- this only runs once per
-  // node per scene load, and physics_module builds its own cache for the same mesh independently
-  // the first time it actually processes this node.
+  // Mirrors the shape_collider case above; only a convex mesh_collider can be dynamic (see
+  // collider.hpp).
   if (target_node.has_component<physics::rigidbody>() && target_node.has_component<physics::mesh_collider>()) {
     auto& body = target_node.get_component<physics::rigidbody>();
     const auto& collider = target_node.get_component<physics::mesh_collider>();
@@ -624,10 +622,9 @@ auto scene_serializer::_build(scene& target) -> YAML::Node {
   auto& registry = target._registry;
   auto& assets_module = core::engine::get_module<assets::assets_module>();
 
-  // Registry/view iteration order is unspecified (and reshuffles across create/destroy churn), so
-  // every node-order-sensitive pass below walks this single depth-first traversal of the scene
-  // graph instead — rooted at target._root, whose relationship::children is the one place
-  // top-level order is actually persisted.
+  // Registry/view iteration order is unspecified, so node-order-sensitive passes below walk this
+  // depth-first traversal instead, rooted at target._root (relationship::children is where
+  // top-level order is persisted).
   auto ordered_nodes = std::vector<ecs::entity>{};
 
   const auto collect = [&](this const auto& self, ecs::entity entity) -> void {

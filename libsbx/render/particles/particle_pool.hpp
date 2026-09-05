@@ -18,18 +18,12 @@
 namespace sbx::render {
 
 /**
- * @brief One shared GPU particle pool for the whole scene, serving every emitter of one blend
- * mode — see scene_renderer_module (pool[0] = additive, pool[1] = alpha blend).
+ * @brief One shared GPU particle pool for the whole scene, serving every emitter of one blend mode.
  *
- * `particles`/`alive_list[2]` are device_local, pure GPU-to-GPU state needing no CPU init.
- * `dead_list`/`counters` (one-time CPU init: dead_list = 0..max_particles-1, dead_count =
- * max_particles) and `emitter_instances` (rewritten wholesale every frame) are host_write
- * (persistently mapped, HOST_COHERENT) — same choice as scene_renderer_module's
- * _light_buffer/_transform_buffer — to avoid the upload_context staging path, which would
- * otherwise race the first particle_simulate_pass submission (it runs before this frame's
- * upload_context::flush; see particle_simulate_pass.hpp).
- * `dispatch_args`/`draw_args` are device_local, rewritten by build_dispatch_args.slang /
- * prepare_indirect_draw.slang every frame.
+ * `particles`/`alive_list` are device_local. `dead_list`/`counters`/`emitter_instances` are host_write
+ * (persistently mapped) to avoid the upload_context staging path, which would race the first
+ * @ref particle_simulate_pass submission. `dispatch_args`/`draw_args` are device_local, rewritten
+ * every frame by build_dispatch_args.slang/prepare_indirect_draw.slang.
  */
 class particle_pool : public utility::noncopyable {
 
@@ -108,42 +102,38 @@ public:
   }
 
   /**
-   * @brief Rewrites one emitter instance slot. Called every frame from scene_renderer_module for every
-   * active emitter instance using this pool — same "wholesale CPU rewrite" pattern as
-   * scene_renderer_module's _light_buffer/_transform_buffer.
+   * @brief Overwrites one emitter instance slot with a full record; call every frame while the slot is active.
    */
   auto write_emitter_instance(std::uint32_t slot, const emitter_instance& data) -> void;
 
   /**
-   * @brief Claims a free emitter_instances slot, or std::nullopt if the pool is exhausted (logged
-   * once, not every frame, so a full pool fails loud without spamming). Call once per emitter
-   * instance the first frame it becomes active; hold the returned slot and call @ref keep_alive
-   * every frame it stays active instead of claiming again.
+   * @brief Claims a free emitter_instances slot, or std::nullopt if the pool is exhausted.
+   *
+   * Call once per instance on its first active frame; reuse the slot via @ref keep_alive afterward
+   * instead of claiming again. Exhaustion is logged once, not every frame.
    */
   [[nodiscard]] auto claim_slot() -> std::optional<std::uint32_t>;
 
   /**
-   * @brief Marks `slot` as still in use this frame and refreshes the lifetime @ref tick will drain
-   * it for once it stops being claimed. Call once per frame for every slot an emitter instance is
-   * still actively spawning from.
+   * @brief Marks `slot` as in use this frame and refreshes the lifetime @ref tick drains it over once released.
+   *
+   * Call once per frame for every slot still actively spawning.
    */
   auto keep_alive(std::uint32_t slot, std::float_t lifetime_max) -> void;
 
   /**
-   * @brief Call once per frame, after every @ref keep_alive for that frame. A slot claimed last
-   * frame but not this frame starts draining for its lifetime_max seconds (so any particle it
-   * spawned ages out) before recycling — reused too soon, simulate.slang/draw.slang would read a
-   * new owner's `emitters[emitter_slot]` for still-alive old particles and corrupt them mid-flight.
+   * @brief Recycles emitter-instance slots that stopped being claimed this frame.
+   *
+   * Call after every @ref keep_alive each frame. An unclaimed slot drains for its lifetime_max
+   * seconds before reuse — recycling sooner would let simulate.slang/draw.slang read a new owner's
+   * `emitters[emitter_slot]` for still in-flight old particles, corrupting them.
    */
   auto tick(std::float_t delta_time) -> void;
 
   /**
-   * @brief Immediately discards every live particle and emitter-instance slot, resetting the pool
-   * to its just-constructed state. For the editor's Stop button: unlike @ref tick's lifetime-based
-   * drain (which lets old particles age out gracefully to avoid corrupting a new claimant's still-
-   * in-flight particles), this is an instant hard reset — there is no new claimant to race, Stop
-   * just wants the pool empty right away instead of fading out over each particle's remaining
-   * lifetime.
+   * @brief Immediately discards every live particle and emitter-instance slot, resetting the pool to its just-constructed state.
+   *
+   * Used by the editor's Stop button; unlike @ref tick, this is an instant reset with no drain.
    */
   auto clear() -> void;
 

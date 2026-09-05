@@ -128,11 +128,9 @@ auto editor_camera::load(const std::filesystem::path& path) -> editor_camera {
     result._look_sensitivity = root["look_sensitivity"].as<std::float_t>();
   }
 
-  // update() rebuilds _transform.rotation from _yaw/_pitch every call (even before the user has
-  // looked around this session) — without re-deriving them here from the rotation just loaded
-  // above, the very first update() would silently snap back to yaw=pitch=0 instead of keeping the
-  // orientation saved to disk. Inverts update()'s own forward = Ry(yaw) * Rx(pitch) * (0,0,-1)
-  // composition, so it must stay in sync with that function if it ever changes.
+  // update() rebuilds rotation from _yaw/_pitch every call, so they must be re-derived from the
+  // loaded rotation here or the first update() snaps back to yaw=pitch=0. Inverts update()'s
+  // forward = Ry(yaw) * Rx(pitch) * (0,0,-1); keep in sync with that composition.
   const auto forward = result._transform.rotation * sbx::math::vector3{0.0f, 0.0f, -1.0f};
 
   result._pitch = std::asin(std::clamp(forward.y(), -1.0f, 1.0f));

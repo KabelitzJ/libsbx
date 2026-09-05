@@ -21,13 +21,9 @@ namespace sbx::graphics {
 /**
  * @brief A single buffer type covering vertex, index, uniform, storage, indirect and staging use.
  *
- * There are no subclasses. What a buffer is for is expressed by @ref buffer_create_info::usage,
- * and where its memory lives by @ref buffer_create_info::memory.
- *
- * If the usage flags include `VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT` the device address is
- * queried on construction and available through @ref address. Passing that address in a push
- * constant is the intended way to reach buffer contents from a shader, which is why there is no
- * descriptor binding involved anywhere in this type.
+ * Usage is expressed by @ref buffer_create_info::usage, memory placement by
+ * @ref buffer_create_info::memory. If usage includes `VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT`,
+ * the device address is queried on construction and available via @ref address.
  */
 class buffer : public utility::noncopyable {
 

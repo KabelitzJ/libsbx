@@ -43,16 +43,12 @@ public:
 
   asset_residency(asset_cooker& cooker, ibl_baker& baker);
 
-  /**
-   * @brief Loads a texture from a UUID or project-relative path. If already loaded, returns the existing handle.
-   */
+  /** @brief Loads a texture from a UUID or project-relative path; returns the existing handle if already loaded. */
   auto load_texture(const math::uuid& id, graphics::format format = graphics::format::r8g8b8a8_srgb) -> texture_handle;
 
   auto load_texture(const std::filesystem::path& path, graphics::format format = graphics::format::r8g8b8a8_srgb) -> texture_handle;
 
-  /**
-   * @brief Loads a mesh from a UUID or project-relative path. If already loaded, returns the existing handle.
-   */
+  /** @brief Loads a mesh from a UUID or project-relative path; returns the existing handle if already loaded. */
   auto load_mesh(const math::uuid& id, const mesh_import_options& options = {}) -> mesh_handle;
 
   auto load_mesh(const std::filesystem::path& path, const mesh_import_options& options = {}) -> mesh_handle;
@@ -95,16 +91,16 @@ public:
   auto update_particle_effect(particle_effect_handle& effect, const particle_effect::create_info& create_info) -> void;
 
   /**
-   * @brief Writes a particle_effect to a `.particle_effect` file and (re-)registers it as a
-   * first-class asset.
+   * @brief Writes a particle_effect to a `.particle_effect` file and (re-)registers it as a first-class asset.
    * @param path Destination path relative to the active project's assets directory.
    * @return The effect's canonical uuid (also written back onto the record itself).
    */
   auto save_particle_effect(particle_effect_handle& effect, const std::filesystem::path& path) -> math::uuid;
 
   /**
-   * @brief Render thread. Turns queued texture loads into GPU images + bindless writes. Copies are
-   * recorded by the caller's subsequent upload_context::flush.
+   * @brief Turns queued texture loads into GPU images and bindless writes.
+   *
+   * Runs on the render thread; copies are recorded by the caller's subsequent @ref upload_context::flush.
    */
   auto process_uploads(std::uint64_t frame_index) -> void;
 

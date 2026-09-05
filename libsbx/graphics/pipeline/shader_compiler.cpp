@@ -16,9 +16,9 @@
 namespace sbx::graphics {
 
 /**
- * @brief The nearest ancestor of @p path named "shaders", or its parent directory if none is
- * found. Every shader path in this engine is passed in as "shaders/<category>/<file>.slang"
- * relative to the working directory, so this is always the shader tree's root.
+ * @brief The nearest ancestor of @p path named "shaders", or its parent directory if none is found.
+ *
+ * Every shader path in this engine is passed in as "shaders/<category>/<file>.slang" relative to the working directory, so this is always the shader tree's root.
  */
 auto _shaders_root(const std::filesystem::path& path) -> std::filesystem::path {
   for (auto directory = path.parent_path(); !directory.empty(); directory = directory.parent_path()) {
@@ -63,12 +63,10 @@ shader_compiler::~shader_compiler() {
 
 }
 
-// Content hash over every file the module depends on (entry file plus transitive #includes),
-// entry points, compiler options, target profile, and the Slang toolchain's build tag (so a Slang
-// version bump invalidates the cache). Not mtime-based — unstable across a fresh checkout or a
-// different machine. Hashing every dependency (not just the entry file) means editing a shared
-// header like shading_policy.slang changes every including shader's key too, instead of leaving a
-// stale pre-edit binary in the disk cache under an unchanged key.
+// Content hash over every dependency file, entry points, compiler options, target profile, and the
+// Slang build tag (so a version bump invalidates the cache). Not mtime-based — unstable across a
+// fresh checkout or a different machine — and hashes every dependency, not just the entry file, so
+// editing a shared header changes every including shader's key too.
 auto shader_compiler::_cache_key(std::span<const std::string> dependencies, std::span<const entry_point_request> entry_points, std::span<const slang::CompilerOptionEntry> options, const char* profile) const -> std::string {
   auto buffer = std::string{};
   buffer.reserve(256u);

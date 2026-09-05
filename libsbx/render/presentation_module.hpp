@@ -24,20 +24,12 @@
 namespace sbx::render {
 
 /**
- * @brief Sole owner of the swapchain frame cycle. Knows about neither 3D scene rendering nor
- * ImGui by type — only two small, symmetric, optional interfaces (scene_renderer, ui_renderer),
- * each independently registered by whichever module implements it (scene_renderer_module,
- * ui_module), each independently present or absent depending on whether that module is in an
- * app's module_list at all. This is what lets `launcher` get a window + swapchain + ImGui with
- * zero 3D rendering machinery ever constructed, and `runtime` get a window + swapchain + a
- * rendered scene with zero ImGui ever constructed.
+ * @brief Sole owner of the swapchain frame cycle.
  *
- * Drives the frame loop via its own render_thread (see render_thread.hpp), whose threading
- * policy comes from core::engine::config() — same mechanism render_module used to own directly.
- * scene_renderer::prepare() (main thread — the only place ECS access is safe) and
- * ui_renderer::build_frame() (main thread) both run before the frame is kicked off;
- * scene_renderer::record() and ui_renderer::render() both run as part of the kicked work, which
- * runs on a separate render thread or inline depending on threading_policy.
+ * Scene rendering and UI are known only through two optional interfaces (scene_renderer,
+ * ui_renderer), each registered independently by whichever module implements it. Drives the frame
+ * loop via its own render_thread; prepare()/build_frame() run on the main thread before the frame
+ * is kicked, record()/render() run as part of the kicked work.
  */
 class presentation_module final : public utility::noncopyable {
 
@@ -72,8 +64,7 @@ private:
   std::unique_ptr<compositor> _compositor{};
 
   // Built by ui_renderer::build_frame() (main thread, in render()), consumed by
-  // ui_renderer::render() (kicked work, in _consume()) — same "stash between the two phases"
-  // shape render_module's own _work_packet member already uses for the scene side.
+  // ui_renderer::render() (kicked work, in _consume()).
   ui_draw_data _ui_data{};
 
 }; // class presentation_module

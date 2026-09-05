@@ -17,14 +17,10 @@ inline static constexpr auto particle_pool_additive = std::uint32_t{0u};
 inline static constexpr auto particle_pool_alpha_blend = std::uint32_t{1u};
 
 /**
- * @brief One GPU-resident particle. Byte-mirrored in shaders/particles/particle_data.slang —
- * keep both in sync by hand, field for field, whenever either changes.
+ * @brief One GPU-resident particle, byte-mirrored field-for-field with shaders/particles/particle_data.slang.
  *
- * Color is deliberately not stored here: it's derived every frame in the vertex shader from
- * `age / lifetime` and the owning emitter_instance's start_color/end_color, so every particle
- * spawned by the same emitter reads the same two colors instead of duplicating them per particle.
- * `reserved` pads the struct to 64 bytes and is free for a future per-particle payload (e.g. a
- * texture-atlas UV rect) without changing the stride.
+ * Color is not stored here — derived per-frame from age/lifetime and the owning emitter's start/end color.
+ * `reserved` pads the struct to 64 bytes for a future per-particle payload.
  */
 struct particle {
   math::vector3 position{math::vector3::zero};
@@ -43,10 +39,9 @@ static_assert(sizeof(particle) == 64u, "particle must stay byte-mirrored with sh
 inline static constexpr auto particle_texture_index_none = std::uint32_t{0xFFFFFFFFu};
 
 /**
- * @brief Per-emitter-instance data, rewritten wholesale from the CPU every frame (same pattern as
- * scene_renderer_module's _transform_buffer/_light_buffer). One pool-local array of these per particle_pool
- * — an instance's blend mode is fixed by which pool's array it lives in, so no blend-mode field is
- * needed here. Byte-mirrored in shaders/particles/particle_data.slang.
+ * @brief Per-emitter-instance data, rewritten wholesale from the CPU every frame, byte-mirrored with shaders/particles/particle_data.slang.
+ *
+ * One pool-local array per particle_pool; blend mode is fixed by which pool's array an instance lives in, so no blend-mode field here.
  */
 struct emitter_instance {
   math::vector3 position{math::vector3::zero};
@@ -72,9 +67,10 @@ struct emitter_instance {
 static_assert(sizeof(emitter_instance) == 128u, "emitter_instance must stay byte-mirrored with shaders/particles/particle_data.slang's emitter_instance struct");
 
 /**
- * @brief The pool's persistent free-stack/alive-list bookkeeping. Entirely GPU read-modify-write
- * except for the one-time init upload in particle_pool's constructor (dead_count = max_particles).
- * `alive_count[2]` is indexed by "read"/"write" parity that flips every frame — see particle_pool.
+ * @brief Pool bookkeeping for the free stack and alive lists.
+ *
+ * Entirely GPU read-modify-write except the one-time init in @ref particle_pool's constructor.
+ * `alive_count[2]` is indexed by read/write parity that flips every frame.
  */
 struct particle_counters {
   std::uint32_t dead_count{0u};

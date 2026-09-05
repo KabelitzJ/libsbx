@@ -30,11 +30,11 @@
 namespace editor {
 
 /**
- * @brief The editor's core::module — lifecycle only. Owns editor_ui_layer (see there for
- * everything ImGui-related: dockspace, panels, the viewport, scene save/quit dialogs) and registers
- * it with ui_module; the only things left here are IniFilename (needs the ImGui context, which
- * exists by construction time, but is otherwise not a "what does the UI draw" concern) and
- * grid_enabled, both one-time engine-level settings rather than per-frame UI.
+ * @brief The editor's core::module — lifecycle only.
+ *
+ * Owns @ref editor_ui_layer (dockspace, panels, viewport, save/quit dialogs) and registers it
+ * with ui_module. Everything else here is one-time engine-level setup (IniFilename,
+ * grid_enabled) rather than per-frame UI.
  */
 class editor_module final : public sbx::utility::noncopyable {
 
@@ -90,9 +90,10 @@ public:
 
   /**
    * @brief The world matrix + camera params the viewport should currently render/pick/gizmo
-   * through: the editor camera while play_state()==edit, otherwise the scene's own active (play)
-   * camera if it has one. Shared by scene_renderer_module's per-frame override (application.cpp),
-   * viewport picking, and the gizmo so all three always agree on what's actually on screen.
+   * through: the editor camera while play_state()==edit, otherwise the scene's active camera.
+   *
+   * Shared by scene_renderer_module's per-frame override, viewport picking, and the gizmo so
+   * all three agree on what's on screen.
    */
   [[nodiscard]] auto viewport_camera(sbx::scenes::scene& scene) const -> std::optional<editor::viewport_camera_pose>;
 

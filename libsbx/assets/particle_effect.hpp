@@ -76,12 +76,14 @@ struct collision_config {
   std::float_t lifetime_loss{0.0f};
   std::float_t dampen{0.0f};
   std::float_t radius_scale{1.0f};
-  std::uint32_t max_collisions_per_particle{0u}; // 0 = unlimited
+  std::uint32_t max_collisions_per_particle{0u};
 }; // struct collision_config
 
 inline constexpr auto curve_max_keys = std::size_t{8};
 
-/** @brief One keyframe of a curve. `time` is normalized lifetime in [0, 1]. */
+/** 
+ * @brief One keyframe of a curve. `time` is normalized lifetime in [0, 1]. 
+ */
 struct curve_key {
   std::float_t time{0.0f};
   std::float_t value{0.0f};
@@ -121,7 +123,7 @@ inline constexpr auto gradient_max_keys = std::size_t{8};
 
 struct gradient_color_key {
   std::float_t time{0.0f};
-  math::color color{1.0f, 1.0f, 1.0f, 1.0f}; // only rgb is read; alpha comes from alpha_keys instead
+  math::color color{1.0f, 1.0f, 1.0f, 1.0f};
 }; // struct gradient_color_key
 
 struct gradient_alpha_key {
@@ -151,6 +153,44 @@ enum class particle_render_mode : std::uint8_t {
   mesh
 }; // enum class particle_render_mode
 
+enum class sub_emitter_event : std::uint8_t {
+  birth,
+  death,
+  collision
+}; // enum class sub_emitter_event
+
+class particle_effect;
+
+/**
+ * @brief Spawns a child particle_effect instance (non-looping, one-shot) whenever a particle from
+ * this emitter fires @p event. Child instances are pooled per emitter (see
+ * scenes::particle_emitter::sub_emitter_pool) rather than spawning a fresh scene node every time, so
+ * a high-frequency event (birth at a fast emission rate, or collision) doesn't churn nodes unbounded.
+ */
+struct sub_emitter_binding {
+  sub_emitter_event event{sub_emitter_event::birth};
+  asset_handle<particle_effect> effect{};
+  std::float_t probability{1.0f}; // 0..1 chance per event
+  bool inherit_velocity{false}; // adds the triggering particle's velocity to every particle the child spawns
+}; // struct sub_emitter_binding
+
+inline constexpr auto trail_max_points = std::size_t{20};
+
+/**
+ * @brief A ribbon trail following each particle, camera-facing like the billboards (see
+ * shaders/particles/trail.slang). `color_over_trail` is evaluated per point by its position along the
+ * ribbon (0 = head/newest, 1 = tail/oldest) at render-extraction time, not baked in when the point was
+ * recorded, so it always reflects the ribbon's current length as points age out.
+ */
+struct trail_config {
+  bool enabled{false};
+  std::float_t min_vertex_distance{0.1f};
+  std::float_t lifetime{0.5f};
+  std::float_t width{0.1f};
+  gradient color_over_trail{};
+  bool die_with_particle{false};
+}; // struct trail_config
+
 struct particle_emitter {
   std::string name{"emitter"};
   emitter_blend_mode blend_mode{emitter_blend_mode::additive};
@@ -165,23 +205,25 @@ struct particle_emitter {
   std::float_t lifetime_max{2.0f};
   math::color start_color{1.0f, 1.0f, 1.0f, 1.0f};
   math::color end_color{1.0f, 1.0f, 1.0f, 0.0f};
-  gradient color_over_lifetime{}; // empty => falls back to the start_color/end_color lerp above
+  gradient color_over_lifetime{};
   std::float_t size_min{0.1f};
   std::float_t size_max{0.2f};
-  curve size_over_lifetime{}; // empty => constant 1.0, i.e. size stays at its rolled base_size
+  curve size_over_lifetime{};
   std::float_t rotation_min{0.0f};
   std::float_t rotation_max{0.0f};
-  curve rotation_over_lifetime{}; // angular velocity in radians/sec, evaluated directly each step; empty => no spin
-  vector3_curve velocity_over_lifetime{}; // world-space m/s, added on top of integrated velocity; empty => no contribution
-  math::vector3 force_over_lifetime_min{0.0f, 0.0f, 0.0f}; // rolled once per particle at spawn, like velocity_min/max
+  curve rotation_over_lifetime{};
+  vector3_curve velocity_over_lifetime{};
+  math::vector3 force_over_lifetime_min{0.0f, 0.0f, 0.0f};
   math::vector3 force_over_lifetime_max{0.0f, 0.0f, 0.0f};
   std::float_t gravity{0.0f};
   std::float_t drag{0.0f};
-  texture_handle texture{}; // billboard mode
+  texture_handle texture{};
   particle_render_mode render_mode{particle_render_mode::billboard};
-  mesh_handle render_mesh{}; // mesh mode
-  material_handle render_material{}; // mesh mode; invalid => each submesh keeps its own authored material
+  mesh_handle render_mesh{};
+  material_handle render_material{};
   collision_config collision{};
+  std::vector<sub_emitter_binding> sub_emitters{};
+  trail_config trail{};
 }; // struct particle_emitter
 
 class particle_effect final {

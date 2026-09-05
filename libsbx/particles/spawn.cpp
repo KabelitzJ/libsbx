@@ -42,7 +42,7 @@ namespace sbx::particles {
   }
 }
 
-auto roll_particle(const assets::particle_emitter& config, const math::matrix4x4& world, std::uint32_t id) -> particle {
+auto roll_particle(const assets::particle_emitter& config, const math::matrix4x4& world, std::uint32_t id, const math::vector3& inherited_velocity) -> particle {
   const auto local_position = sample_local_position(config);
 
   const auto local_velocity = math::vector3{
@@ -64,7 +64,7 @@ auto roll_particle(const assets::particle_emitter& config, const math::matrix4x4
   result.id = id;
   result.position = math::vector3{world * math::vector4{local_position, 1.0f}};
   result.previous_position = result.position;
-  result.velocity = math::vector3{world * math::vector4{local_velocity, 0.0f}};
+  result.velocity = math::vector3{world * math::vector4{local_velocity, 0.0f}} + inherited_velocity;
   result.constant_force = math::vector3{world * math::vector4{local_force, 0.0f}};
   result.rotation = math::random::next<std::float_t>(config.rotation_min, config.rotation_max);
   result.age = 0.0f;

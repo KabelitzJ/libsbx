@@ -15,6 +15,8 @@
 
 #include <libsbx/physics/physics_module.hpp>
 
+#include <libsbx/particles/particle.hpp>
+
 namespace sbx::particles {
 
 /**
@@ -37,11 +39,22 @@ private:
 
   auto _simulate_effect(scenes::scene& scene, scenes::particle_effect& effect, const math::matrix4x4& world, std::float_t dt) -> void;
 
-  auto _spawn(const assets::particle_emitter& config, scenes::particle_emitter& runtime, const math::matrix4x4& world, bool emitting, std::float_t dt) -> void;
+  auto _spawn(scenes::scene& scene, const assets::particle_emitter& config, scenes::particle_emitter& runtime, const math::matrix4x4& world, const math::vector3& inherited_velocity, bool emitting, std::float_t dt) -> void;
 
-  auto _integrate(const assets::particle_emitter& config, scenes::particle_emitter& runtime, std::float_t dt) -> void;
+  auto _integrate(scenes::scene& scene, const assets::particle_emitter& config, scenes::particle_emitter& runtime, std::float_t dt) -> void;
 
   auto _resolve_collisions(scenes::scene& scene, const assets::particle_emitter& config, scenes::particle_emitter& runtime) -> void;
+
+  auto _record_trails(const assets::particle_emitter& config, scenes::particle_emitter& runtime, std::float_t dt) -> void;
+
+  /**
+   * @brief Fires every config.sub_emitters binding matching @p event: rolls its probability, then
+   * spawns (or reuses a pooled, stopped) child scenes::particle_effect node at @p particle's world
+   * position pointing at binding.effect, non-looping. runtime.sub_emitter_pool identifies pooled
+   * children by scenes::id rather than ecs::entity, since scenes::node doesn't expose its raw entity
+   * outside scene/scene_serializer -- scene::find() resolves a pool entry back to a node.
+   */
+  auto _trigger_sub_emitters(scenes::scene& scene, scenes::particle_emitter& runtime, const assets::particle_emitter& config, assets::sub_emitter_event event, const particles::particle& p) -> void;
 
 }; // class particles_module
 

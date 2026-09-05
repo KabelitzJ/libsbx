@@ -353,6 +353,7 @@ auto scene_renderer_module::_build_packet() -> render_packet {
   };
 
   auto mesh_buckets = std::map<particle_mesh_key, particle_mesh_bucket>{};
+  auto trail_buckets = std::map<assets::emitter_blend_mode, std::vector<trail_vertex>>{};
 
   for (auto&& [entity, world, instance] : scene.query<scenes::world_transform, scenes::particle_effect>().each()) {
     if (!instance.effect.is_valid()) {
@@ -365,6 +366,58 @@ auto scene_renderer_module::_build_packet() -> render_packet {
     for (auto index = std::size_t{0u}; index < emitter_count; ++index) {
       const auto& config = configs[index];
       const auto& runtime = instance.emitters[index];
+
+      if (config.trail.enabled && !runtime.trails.empty()) {
+        auto& bucket = trail_buckets[config.blend_mode];
+
+        for (const auto& trail : runtime.trails) {
+          const auto point_count = trail.points.size();
+
+          if (point_count < 2u) {
+            continue;
+          }
+
+          auto left = std::array<trail_vertex, assets::trail_max_points>{};
+          auto right = std::array<trail_vertex, assets::trail_max_points>{};
+
+          for (auto i = std::size_t{0u}; i < point_count; ++i) {
+            const auto& point = trail.points[i];
+
+            // points.front() is the tail (oldest, ribbon_t = 1), points.back() the head (newest,
+            // ribbon_t = 0) -- see particles::trail's doc comment.
+            const auto ribbon_t = 1.0f - static_cast<std::float_t>(i) / static_cast<std::float_t>(point_count - 1u);
+
+            auto color = config.trail.color_over_trail.has_keys() ? config.trail.color_over_trail.evaluate(ribbon_t) : point.color;
+
+            const auto fade = config.trail.lifetime > 0.0f ? std::clamp(1.0f - point.age / config.trail.lifetime, 0.0f, 1.0f) : 1.0f;
+            color.a() *= fade;
+
+            // Local tangent along the ribbon, always pointing tail -> head (increasing i).
+            const auto direction = (i + 1u < point_count)
+              ? math::vector3::normalized(trail.points[i + 1u].position - point.position)
+              : math::vector3::normalized(point.position - trail.points[i - 1u].position);
+
+            const auto view_direction = math::vector3::normalized(packet.camera.position - point.position);
+
+            auto side = math::vector3::cross(direction, view_direction);
+            const auto side_length = side.length();
+            side = (side_length > 1e-5f) ? side * (config.trail.width * 0.5f / side_length) : math::vector3{0.0f, 0.0f, 0.0f};
+
+            left[i] = trail_vertex{point.position - side, color};
+            right[i] = trail_vertex{point.position + side, color};
+          }
+
+          for (auto i = std::size_t{0u}; i + 1u < point_count; ++i) {
+            bucket.push_back(left[i]);
+            bucket.push_back(right[i]);
+            bucket.push_back(left[i + 1u]);
+
+            bucket.push_back(right[i]);
+            bucket.push_back(right[i + 1u]);
+            bucket.push_back(left[i + 1u]);
+          }
+        }
+      }
 
       if (config.render_mode == assets::particle_render_mode::mesh) {
         if (!config.render_mesh.is_valid() || !assets_module.is_resident(config.render_mesh)) {
@@ -459,6 +512,20 @@ auto scene_renderer_module::_build_packet() -> render_packet {
     });
 
     packet.particle_mesh_instances.insert(packet.particle_mesh_instances.end(), bucket.instances.begin(), bucket.instances.end());
+  }
+
+  for (auto& [blend_mode, vertices] : trail_buckets) {
+    if (vertices.empty()) {
+      continue;
+    }
+
+    packet.trail_commands.push_back(particle_trail_command{
+      .blend_mode = blend_mode,
+      .vertex_count = static_cast<std::uint32_t>(vertices.size()),
+      .vertex_offset = static_cast<std::uint32_t>(packet.trail_vertices.size())
+    });
+
+    packet.trail_vertices.insert(packet.trail_vertices.end(), vertices.begin(), vertices.end());
   }
 
   return packet;

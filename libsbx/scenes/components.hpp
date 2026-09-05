@@ -12,6 +12,7 @@
 #include <libsbx/math/matrix_cast.hpp>
 #include <libsbx/math/matrix4x4.hpp>
 #include <libsbx/math/quaternion.hpp>
+#include <libsbx/math/uuid.hpp>
 #include <libsbx/math/vector3.hpp>
 #include <libsbx/math/vector4.hpp>
 
@@ -178,6 +179,10 @@ struct particle_emitter {
   bool burst_fired{false};
   std::uint32_t next_particle_id{0u};
   std::vector<particles::particle> particles{};
+  std::vector<particles::trail> trails{}; // only populated when the matching assets::particle_emitter::trail.enabled
+  // Pooled child nodes for sub_emitters, identified by scenes::id (not ecs::entity) so a pool entry
+  // can be resolved back to a node via scene::find() without scenes::node exposing its raw entity.
+  std::vector<math::uuid> sub_emitter_pool{};
 }; // struct particle_emitter
 
 enum class particle_playback_state : std::uint8_t {
@@ -193,6 +198,9 @@ struct particle_effect {
   std::float_t elapsed{0.0f};
   std::float_t duration{5.0f}; // Ignored while looping; otherwise emission stops once elapsed reaches this.
   std::vector<particle_emitter> emitters{};
+  // Runtime-only, not persisted: set once by a sub_emitter_binding with inherit_velocity, added to
+  // every particle this effect's emitters roll for as long as it exists.
+  math::vector3 inherited_velocity{0.0f, 0.0f, 0.0f};
 }; // struct particle_effect
 
 enum class script_field_type : std::uint8_t {

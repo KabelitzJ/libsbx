@@ -8,6 +8,10 @@
 #include <libsbx/math/color.hpp>
 #include <libsbx/math/vector3.hpp>
 
+#include <libsbx/containers/static_vector.hpp>
+
+#include <libsbx/assets/particle_effect.hpp>
+
 namespace sbx::particles {
 
 /**
@@ -29,6 +33,25 @@ struct particle {
   math::color color{1.0f, 1.0f, 1.0f, 1.0f};
   std::uint32_t collision_count{0u};
 }; // struct particle
+
+/** @brief One recorded point of a trail (see assets::trail_config). */
+struct trail_point {
+  math::vector3 position{};
+  math::color color{1.0f, 1.0f, 1.0f, 1.0f}; // the owning particle's color when this point was recorded
+  std::float_t age{0.0f}; // this point's own age, not the particle's -- drives trail_config::lifetime fade-out
+}; // struct trail_point
+
+/**
+ * @brief A ribbon of recorded points trailing one particle, keyed by its particle::id (survives the
+ * particle array's swap-and-pop recycling). `points.front()` is the head (newest, closest to the
+ * particle); `points.back()` is the tail (oldest). Not itself removed the instant its particle dies --
+ * see assets::trail_config::die_with_particle.
+ */
+struct trail {
+  std::uint32_t particle_id{0u};
+  bool particle_alive{true};
+  containers::static_vector<trail_point, assets::trail_max_points> points{};
+}; // struct trail
 
 } // namespace sbx::particles
 

@@ -50,6 +50,12 @@ struct particle_mesh_push {
   std::uint32_t sampler_index;
 }; // struct particle_mesh_push
 
+struct particle_trail_push {
+  graphics::buffer::address_type frame_address;
+  graphics::buffer::address_type vertex_address;
+  std::uint32_t vertex_offset;
+}; // struct particle_trail_push
+
 namespace {
 
 // Shared by both the billboard and mesh pipelines: group 0's weighted-OIT pair for alpha_blend, and
@@ -114,6 +120,8 @@ particle_pass::particle_pass() {
   const auto& billboard_additive_shader = shader_cache.get({"shaders/particles/particle_billboard.slang", additive_entry_points});
   const auto& mesh_alpha_blend_shader = shader_cache.get({"shaders/particles/particle_mesh.slang", alpha_blend_entry_points});
   const auto& mesh_additive_shader = shader_cache.get({"shaders/particles/particle_mesh.slang", additive_entry_points});
+  const auto& trail_alpha_blend_shader = shader_cache.get({"shaders/particles/trail.slang", alpha_blend_entry_points});
+  const auto& trail_additive_shader = shader_cache.get({"shaders/particles/trail.slang", additive_entry_points});
 
   // Group 0 pipeline: two color attachments (accumulator + revealage), the weighted-OIT pair,
   // identical to transparent_accumulate_pass's blend state.
@@ -157,10 +165,24 @@ particle_pass::particle_pass() {
   mesh_additive_info.shader = mesh_additive_shader;
   mesh_additive_info.name = "Particles Mesh Additive";
 
+  // Trail pipelines mirror the billboard ones too, but as a triangle_list (the ribbon is already
+  // triangulated CPU-side at extraction) instead of the billboard's baked-quad vertex-pulling.
+  auto trail_alpha_blend_info = billboard_alpha_blend_info;
+  trail_alpha_blend_info.shader = trail_alpha_blend_shader;
+  trail_alpha_blend_info.topology = graphics::primitive_topology::triangle_list;
+  trail_alpha_blend_info.name = "Particles Trail Alpha Blend";
+
+  auto trail_additive_info = billboard_additive_info;
+  trail_additive_info.shader = trail_additive_shader;
+  trail_additive_info.topology = graphics::primitive_topology::triangle_list;
+  trail_additive_info.name = "Particles Trail Additive";
+
   _billboard_pipelines[alpha_blend_group] = pipeline_cache.get(billboard_alpha_blend_info);
   _billboard_pipelines[additive_group] = pipeline_cache.get(billboard_additive_info);
   _mesh_pipelines[alpha_blend_group] = pipeline_cache.get(mesh_alpha_blend_info);
   _mesh_pipelines[additive_group] = pipeline_cache.get(mesh_additive_info);
+  _trail_pipelines[alpha_blend_group] = pipeline_cache.get(trail_alpha_blend_info);
+  _trail_pipelines[additive_group] = pipeline_cache.get(trail_additive_info);
 }
 
 auto particle_pass::declare(graphics_pass_builder& builder, const graph_resources& resources) -> void {
@@ -213,7 +235,11 @@ auto particle_pass::should_execute(const render_context& context, std::uint32_t 
     return command.blend_mode == target_mode;
   });
 
-  return has_billboards || has_meshes;
+  const auto has_trails = std::ranges::any_of(context.packet->trail_commands, [target_mode](const auto& command) {
+    return command.blend_mode == target_mode;
+  });
+
+  return has_billboards || has_meshes || has_trails;
 }
 
 auto particle_pass::_ensure_uploaded(render_context& context) -> void {
@@ -267,6 +293,27 @@ auto particle_pass::_ensure_uploaded(render_context& context) -> void {
   }
 
   registry.get<graphics::buffer>(_mesh_buffers[slot]).write(std::span{mesh_instances});
+
+  const auto& trail_vertices = context.packet->trail_vertices;
+
+  if (!_trail_buffers[slot].is_valid() || trail_vertices.size() > _trail_capacities[slot]) {
+    if (_trail_buffers[slot].is_valid()) {
+      registry.retire<graphics::buffer>(_trail_buffers[slot], context.frame_index);
+    }
+
+    const auto new_capacity = static_cast<std::size_t>(static_cast<std::float_t>(trail_vertices.size()) * growth_factor) + 1u;
+
+    _trail_buffers[slot] = registry.emplace<graphics::buffer>(graphics::buffer::create_info{
+      .size = static_cast<graphics::buffer::size_type>(new_capacity * sizeof(trail_vertex)),
+      .usage = graphics::buffer_usage::device_address | graphics::buffer_usage::storage,
+      .memory = graphics::memory_usage::host_write,
+      .name = "Particle Trail Vertices"
+    });
+
+    _trail_capacities[slot] = new_capacity;
+  }
+
+  registry.get<graphics::buffer>(_trail_buffers[slot]).write(std::span{trail_vertices});
 
   _uploaded_frame = context.frame_index;
 }
@@ -369,6 +416,33 @@ auto particle_pass::_draw_meshes(render_context& context, std::uint32_t group) -
   }
 }
 
+auto particle_pass::_draw_trails(render_context& context, std::uint32_t group) -> void {
+  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
+  auto& bindless_table = graphics_module.bindless_table();
+  auto& registry = graphics_module.resource_registry();
+
+  const auto& buffer = registry.get<graphics::buffer>(_trail_buffers[context.slot]);
+
+  context.command_buffer->bind_pipeline(*_trail_pipelines[group]);
+
+  const auto target_mode = group == alpha_blend_group ? assets::emitter_blend_mode::alpha_blend : assets::emitter_blend_mode::additive;
+
+  for (const auto& command : context.packet->trail_commands) {
+    if (command.blend_mode != target_mode) {
+      continue;
+    }
+
+    auto values = particle_trail_push{context.frame_address, buffer.address(), command.vertex_offset};
+
+    auto range = std::array<std::byte, graphics::bindless_table::push_constant_size>{};
+    std::memcpy(range.data(), &values, sizeof(values));
+
+    context.command_buffer->push_constants(bindless_table.pipeline_layout(), graphics::bindless_table::push_constant_stages, 0u, range);
+
+    context.command_buffer->draw(command.vertex_count, 1u, 0u, 0u);
+  }
+}
+
 auto particle_pass::execute(render_context& context, std::uint32_t group) -> void {
   _ensure_uploaded(context);
 
@@ -376,6 +450,7 @@ auto particle_pass::execute(render_context& context, std::uint32_t group) -> voi
 
   _draw_billboards(context, group);
   _draw_meshes(context, group);
+  _draw_trails(context, group);
 }
 
 } // namespace sbx::render

@@ -2140,6 +2140,67 @@ auto inspector_panel::_draw_particle_effect_properties(editor_state& state, cons
         ImGui::EndDisabled();
       }
 
+      ImGui::SeparatorText("Sub-Emitters");
+
+      static constexpr auto sub_emitter_event_names = std::array<const char*, 3u>{"Birth", "Death", "Collision"};
+
+      auto& sub_emitters = emitter.sub_emitters;
+      auto removed_sub_emitter_index = std::optional<std::size_t>{};
+
+      for (auto sub_emitter_index = std::size_t{0u}; sub_emitter_index < sub_emitters.size(); ++sub_emitter_index) {
+        ImGui::PushID(static_cast<std::int32_t>(sub_emitter_index));
+
+        auto& binding = sub_emitters[sub_emitter_index];
+
+        auto event_index = static_cast<std::int32_t>(binding.event);
+
+        if (ImGui::Combo("Event", &event_index, sub_emitter_event_names.data(), static_cast<std::int32_t>(sub_emitter_event_names.size()))) {
+          binding.event = static_cast<sbx::assets::sub_emitter_event>(event_index);
+          changed = true;
+        }
+
+        ImGui::Text("Effect");
+        ImGui::SameLine();
+
+        changed |= draw_particle_effect_picker(state, "##sub_emitter_effect_picker", binding.effect, assets_module);
+
+        changed |= ImGui::SliderFloat("Probability", &binding.probability, 0.0f, 1.0f);
+        changed |= ImGui::Checkbox("Inherit Velocity", &binding.inherit_velocity);
+
+        if (ImGui::SmallButton(ICON_MDI_DELETE " Remove Sub-Emitter")) {
+          removed_sub_emitter_index = sub_emitter_index;
+          changed = true;
+        }
+
+        ImGui::Separator();
+        ImGui::PopID();
+      }
+
+      if (removed_sub_emitter_index) {
+        sub_emitters.erase(sub_emitters.begin() + static_cast<std::ptrdiff_t>(*removed_sub_emitter_index));
+      }
+
+      if (ImGui::Button(ICON_MDI_PLUS " Add Sub-Emitter")) {
+        sub_emitters.push_back(sbx::assets::sub_emitter_binding{});
+        changed = true;
+      }
+
+      ImGui::SeparatorText("Trail");
+
+      changed |= ImGui::Checkbox("Enabled", &emitter.trail.enabled);
+
+      if (emitter.trail.enabled) {
+        changed |= ImGui::DragFloat("Min Vertex Distance", &emitter.trail.min_vertex_distance, 0.005f, 0.001f, 100.0f);
+        changed |= ImGui::DragFloat("Trail Lifetime", &emitter.trail.lifetime, 0.01f, 0.01f, 3600.0f);
+        changed |= ImGui::DragFloat("Trail Width", &emitter.trail.width, 0.005f, 0.001f, 1000.0f);
+        changed |= draw_gradient_editor("Color Over Trail (0 = head, 1 = tail; overrides the particle's own color if it has keys)", emitter.trail.color_over_trail);
+        changed |= ImGui::Checkbox("Die With Particle", &emitter.trail.die_with_particle);
+
+        if (ImGui::IsItemHovered()) {
+          ImGui::SetTooltip("Off (Unity's default): the trail lingers and fades after its particle dies. On: it vanishes immediately.");
+        }
+      }
+
       ImGui::TreePop();
     }
 

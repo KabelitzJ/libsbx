@@ -140,6 +140,26 @@ struct particle_mesh_command {
   std::uint32_t instance_offset{0u};
 }; // struct particle_mesh_command
 
+/**
+ * @brief One vertex of a CPU-expanded trail ribbon (see shaders/particles/trail.slang) -- the width
+ * extrusion and camera-facing orientation are already baked in at extraction time
+ * (scene_renderer_module.cpp), so the shader itself only needs to transform position to clip space.
+ */
+struct trail_vertex {
+  math::vector3 position{0.0f, 0.0f, 0.0f};
+  math::color color{1.0f, 1.0f, 1.0f, 1.0f};
+}; // struct trail_vertex
+
+/**
+ * @brief One coalesced non-indexed triangle-list draw of trail_vertices sharing a blend mode --
+ * trails render with the same blend mode as their owning emitter.
+ */
+struct particle_trail_command {
+  assets::emitter_blend_mode blend_mode{assets::emitter_blend_mode::additive};
+  std::uint32_t vertex_count{0u};
+  std::uint32_t vertex_offset{0u};
+}; // struct particle_trail_command
+
 struct render_packet {
   camera_data camera{};
   std::vector<draw_command> opaque_commands{};
@@ -152,6 +172,8 @@ struct render_packet {
   std::vector<particle_billboard_command> particle_billboard_commands{};
   std::vector<particle_mesh_instance> particle_mesh_instances{};
   std::vector<particle_mesh_command> particle_mesh_commands{};
+  std::vector<trail_vertex> trail_vertices{};
+  std::vector<particle_trail_command> trail_commands{};
   bool has_shadow_caster{false}; // When true, lights[0] is the cascaded-shadow-mapped sun.
   std::float_t shadow_distance{75.0f};
   assets::environment_map_handle environment{};

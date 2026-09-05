@@ -615,6 +615,37 @@ auto asset_residency::load_particle_effect(const math::uuid& id) -> particle_eff
         }
       }
 
+      if (const auto sub_emitters_node = emitter_node["sub_emitters"]) {
+        for (const auto binding_node : sub_emitters_node) {
+          auto binding = sub_emitter_binding{};
+
+          if (binding_node["event"]) {
+            const auto event = binding_node["event"].as<std::string>();
+            binding.event = (event == "death") ? sub_emitter_event::death : (event == "collision") ? sub_emitter_event::collision : sub_emitter_event::birth;
+          }
+
+          if (binding_node["effect"]) {
+            binding.effect = load_particle_effect(std::filesystem::path{binding_node["effect"].as<std::string>()});
+          }
+
+          if (binding_node["probability"]) binding.probability = binding_node["probability"].as<std::float_t>();
+          if (binding_node["inherit_velocity"]) binding.inherit_velocity = binding_node["inherit_velocity"].as<bool>();
+
+          emitter.sub_emitters.push_back(binding);
+        }
+      }
+
+      if (const auto trail_node = emitter_node["trail"]) {
+        auto& trail = emitter.trail;
+
+        if (trail_node["enabled"]) trail.enabled = trail_node["enabled"].as<bool>();
+        if (trail_node["min_vertex_distance"]) trail.min_vertex_distance = trail_node["min_vertex_distance"].as<std::float_t>();
+        if (trail_node["lifetime"]) trail.lifetime = trail_node["lifetime"].as<std::float_t>();
+        if (trail_node["width"]) trail.width = trail_node["width"].as<std::float_t>();
+        if (trail_node["color_over_trail"]) trail.color_over_trail = load_gradient(trail_node["color_over_trail"]);
+        if (trail_node["die_with_particle"]) trail.die_with_particle = trail_node["die_with_particle"].as<bool>();
+      }
+
       info.emitters.push_back(emitter);
     }
   }
@@ -819,6 +850,32 @@ auto asset_residency::save_particle_effect(particle_effect_handle& effect, const
 
     collision_node["planes"] = planes_node;
     emitter_node["collision"] = collision_node;
+
+    auto sub_emitters_node = YAML::Node{YAML::NodeType::Sequence};
+
+    for (const auto& binding : emitter.sub_emitters) {
+      auto binding_node = YAML::Node{};
+      binding_node["event"] = (binding.event == sub_emitter_event::death) ? "death" : (binding.event == sub_emitter_event::collision) ? "collision" : "birth";
+
+      if (const auto slot = asset_path_of(binding.effect)) {
+        binding_node["effect"] = *slot;
+      }
+
+      binding_node["probability"] = binding.probability;
+      binding_node["inherit_velocity"] = binding.inherit_velocity;
+      sub_emitters_node.push_back(binding_node);
+    }
+
+    emitter_node["sub_emitters"] = sub_emitters_node;
+
+    auto trail_node = YAML::Node{};
+    trail_node["enabled"] = emitter.trail.enabled;
+    trail_node["min_vertex_distance"] = emitter.trail.min_vertex_distance;
+    trail_node["lifetime"] = emitter.trail.lifetime;
+    trail_node["width"] = emitter.trail.width;
+    trail_node["color_over_trail"] = save_gradient(emitter.trail.color_over_trail);
+    trail_node["die_with_particle"] = emitter.trail.die_with_particle;
+    emitter_node["trail"] = trail_node;
 
     emitters_node.push_back(emitter_node);
   }

@@ -8,35 +8,11 @@
 
 #include <libsbx/core/engine.hpp>
 
-#include <libsbx/graphics/resources/sampler.hpp>
-
 #include <libsbx/assets/assets_module.hpp>
 
 #include <libsbx/render/ui/ui_module.hpp>
 
 namespace sbx::render::widgets {
-
-namespace {
-
-// Lazily constructed on first use, same idiom as editor_ui_layer's own viewport sampler — shared
-// by every tile's thumbnail for the process's lifetime.
-[[nodiscard]] auto thumbnail_sampler() -> VkSampler {
-  static auto sampler = graphics::sampler{graphics::sampler::create_info{
-    .mag_filter = graphics::filter::linear,
-    .min_filter = graphics::filter::linear,
-    .mipmap_mode = graphics::mipmap_mode::linear,
-    .address_mode_u = graphics::address_mode::clamp_to_edge,
-    .address_mode_v = graphics::address_mode::clamp_to_edge,
-    .address_mode_w = graphics::address_mode::clamp_to_edge,
-    .max_anisotropy = 1.0f,
-    .max_lod = graphics::lod_clamp::none,
-    .name = "Asset Tile Thumbnail Sampler",
-  }};
-
-  return sampler.handle();
-}
-
-} // namespace
 
 auto draw_asset_tile(const char* id, const asset_tile_desc& desc) -> asset_tile_result {
   auto result = asset_tile_result{};
@@ -81,7 +57,7 @@ auto draw_asset_tile(const char* id, const asset_tile_desc& desc) -> asset_tile_
 
       if (view != VK_NULL_HANDLE) {
         auto& ui_module = core::engine::get_module<render::ui_module>();
-        const auto texture_id = ui_module.texture_id(view, thumbnail_sampler());
+        const auto texture_id = ui_module.texture_id(view, ui_module.thumbnail_sampler());
 
         const auto padding = desc.size.x * 0.06f;
         draw_list->AddImage(texture_id, ImVec2{tile_min.x + padding, tile_min.y + padding}, ImVec2{tile_max.x - padding, tile_max.y - padding});

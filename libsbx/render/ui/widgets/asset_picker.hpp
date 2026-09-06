@@ -19,6 +19,7 @@ enum class asset_picker_kind : std::uint8_t {
   mesh,
   material,
   particle_effect,
+  animation_graph,
 }; // enum class asset_picker_kind
 
 /** @brief The drag_drop_payload_* string (asset_tile.hpp) a dragged tile must carry to be droppable onto a picker of this kind. */

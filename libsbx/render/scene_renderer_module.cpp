@@ -9,7 +9,9 @@
 #include <cstring>
 #include <map>
 #include <string>
+#include <type_traits>
 #include <utility>
+#include <variant>
 #include <vector>
 
 #include <libsbx/memory/alignment.hpp>
@@ -31,6 +33,7 @@
 #include <libsbx/graphics/profiler.hpp>
 
 #include <libsbx/assets/particle_effect.hpp>
+#include <libsbx/assets/animation_graph.hpp>
 
 #include <libsbx/scenes/scenes_module.hpp>
 #include <libsbx/scenes/scene.hpp>
@@ -170,6 +173,112 @@ auto compose_trs(const math::vector3& translation, const math::quaternion& rotat
   return translation_matrix * math::matrix_cast<math::matrix4x4>(rotation) * scale_matrix;
 }
 
+// vector3 has no lerp of its own (math/vector3.hpp's is commented out) -- same per-component
+// math::mix pattern sample_vector3_track above already uses.
+auto mix_vector3(const math::vector3& start, const math::vector3& end, std::float_t t) -> math::vector3 {
+  return math::vector3{
+    math::mix(start.x(), end.x(), t),
+    math::mix(start.y(), end.y(), t),
+    math::mix(start.z(), end.z(), t)
+  };
+}
+
+// Seeds every joint at bind pose, then overwrites the (sparse) joints @p clip actually animates --
+// same two-step shape scene_renderer_module::_evaluate_skeleton_pose used to do inline for its one
+// clip, factored out so it can be called once per side of a crossfade.
+auto sample_clip_trs(const assets::animation_clip& clip, std::float_t time, const std::vector<assets::skeleton::joint>& joints, std::vector<math::vector3>& translations, std::vector<math::quaternion>& rotations, std::vector<math::vector3>& scales) -> void {
+  for (const auto& channel : clip.channels()) {
+    if (channel.joint_index >= joints.size()) {
+      continue;
+    }
+
+    if (!channel.translation_keys.empty()) {
+      translations[channel.joint_index] = sample_vector3_track(channel.translation_keys, time);
+    }
+
+    if (!channel.rotation_keys.empty()) {
+      rotations[channel.joint_index] = sample_rotation_track(channel.rotation_keys, time);
+    }
+
+    if (!channel.scale_keys.empty()) {
+      scales[channel.joint_index] = sample_vector3_track(channel.scale_keys, time);
+    }
+  }
+}
+
+// Advances a local clip time by delta_time*speed and wraps/clamps it against duration -- same
+// clamp-vs-loop logic the single-clip animator used to apply to its one time value, shared here
+// between the current state and (mid-transition) the transition target, each of which has its own
+// clip/speed/loop.
+auto advance_local_time(std::float_t time, std::float_t delta_time, std::float_t speed, std::float_t duration, bool loop) -> std::float_t {
+  time += delta_time * speed;
+
+  if (duration <= 0.0f) {
+    return 0.0f;
+  }
+
+  if (loop) {
+    time = std::fmod(time, duration);
+
+    if (time < 0.0f) {
+      time += duration;
+    }
+
+    return time;
+  }
+
+  return std::clamp(time, 0.0f, duration);
+}
+
+[[nodiscard]] auto find_animation_state(const assets::animation_graph& graph, std::uint32_t state_id) -> const assets::animation_state* {
+  const auto& states = graph.states();
+  const auto entry = std::ranges::find(states, state_id, &assets::animation_state::id);
+  return (entry != states.end()) ? &*entry : nullptr;
+}
+
+// All of a transition's conditions are ANDed by the caller; this checks one. An unknown parameter
+// name or a condition authored against a different alternative than the parameter's current one
+// both fail closed (return false) rather than throwing -- a misauthored graph just never takes
+// that transition.
+[[nodiscard]] auto evaluate_animation_condition(const assets::animation_condition& condition, const std::vector<std::pair<std::string, assets::animation_parameter_value>>& parameters) -> bool {
+  const auto entry = std::ranges::find(parameters, condition.parameter_name, [](const auto& pair) { return std::string_view{pair.first}; });
+
+  if (entry == parameters.end()) {
+    return false;
+  }
+
+  const auto& value = entry->second;
+
+  if (const auto* trigger = std::get_if<assets::animation_trigger>(&value)) {
+    return trigger->set; // comparator/expected are meaningless for a trigger -- its presence having fired is the whole condition
+  }
+
+  return std::visit([&condition](const auto& current) -> bool {
+    using current_type = std::decay_t<decltype(current)>;
+
+    if constexpr (std::is_same_v<current_type, assets::animation_trigger>) {
+      return false; // unreachable -- handled above
+    } else {
+      const auto* expected = std::get_if<current_type>(&condition.expected);
+
+      if (expected == nullptr) {
+        return false;
+      }
+
+      switch (condition.comparator) {
+        case assets::animation_condition_comparator::equals: return current == *expected;
+        case assets::animation_condition_comparator::not_equals: return !(current == *expected);
+        case assets::animation_condition_comparator::greater: return current > *expected;
+        case assets::animation_condition_comparator::greater_or_equal: return current >= *expected;
+        case assets::animation_condition_comparator::less: return current < *expected;
+        case assets::animation_condition_comparator::less_or_equal: return current <= *expected;
+      }
+
+      return false;
+    }
+  }, value);
+}
+
 } // namespace
 
 scene_renderer_module::scene_renderer_module() {
@@ -305,56 +414,165 @@ auto scene_renderer_module::_extract_gpu_particle_emitter(render_packet& packet,
   packet.particle_emitters.push_back(particle_emitter_snapshot{pool_index, runtime.slot, data});
 }
 
-auto scene_renderer_module::_evaluate_skeleton_pose(const assets::skeleton& skeleton, scenes::animator* animator, scenes::skeleton_pose& pose, std::float_t delta_time) -> void {
+auto scene_renderer_module::_resolve_state_clip(const scenes::mesh_renderer& renderer, const assets::animation_state* state) const -> assets::animation_clip_handle {
+  if (state == nullptr || !renderer.mesh.is_valid()) {
+    return assets::animation_clip_handle{};
+  }
+
+  for (const auto& clip : renderer.mesh->animation_clips()) {
+    if (clip.is_valid() && clip->name() == state->clip_name) {
+      return clip;
+    }
+  }
+
+  return assets::animation_clip_handle{};
+}
+
+auto scene_renderer_module::_advance_animator_state(const scenes::mesh_renderer& renderer, const assets::animation_graph& graph, scenes::animator& animator, std::float_t delta_time) -> void {
+  const auto* current_state = find_animation_state(graph, animator.current_state_id);
+
+  // Freshly assigned graph (set_graph can't resolve clips itself -- it has no mesh_renderer to
+  // resolve names against), or a clip that failed to resolve last time (mesh not loaded yet):
+  // keep retrying every frame until it sticks.
+  if (!animator.current_clip.is_valid()) {
+    animator.current_clip = _resolve_state_clip(renderer, current_state);
+  }
+
+  if (!animator.transition_target_state_id.has_value()) {
+    if (animator.playing && current_state != nullptr) {
+      const auto duration = animator.current_clip.is_valid() ? animator.current_clip->duration() : 0.0f;
+      animator.current_time = advance_local_time(animator.current_time, delta_time, current_state->speed, duration, current_state->loop);
+    }
+
+    // Transitions are checked in authoring order -- the first whose conditions all pass wins,
+    // same priority convention as Unity's Animator Controller.
+    for (const auto& transition : graph.transitions()) {
+      if (transition.from_state.has_value() && *transition.from_state != animator.current_state_id) {
+        continue;
+      }
+
+      if (transition.has_exit_time) {
+        const auto duration = animator.current_clip.is_valid() ? animator.current_clip->duration() : 0.0f;
+        const auto normalized_time = (duration > 0.0f) ? (animator.current_time / duration) : 0.0f;
+
+        if (normalized_time < transition.exit_time) {
+          continue;
+        }
+      }
+
+      const auto conditions_pass = std::ranges::all_of(transition.conditions, [&animator](const auto& condition) {
+        return evaluate_animation_condition(condition, animator.parameters);
+      });
+
+      if (!conditions_pass) {
+        continue;
+      }
+
+      animator.transition_target_state_id = transition.to_state;
+      animator.transition_time = 0.0f;
+      animator.transition_target_time = 0.0f;
+      animator.transition_duration = transition.duration;
+      animator.transition_target_clip = _resolve_state_clip(renderer, find_animation_state(graph, transition.to_state));
+
+      break;
+    }
+  } else {
+    const auto* target_state = find_animation_state(graph, *animator.transition_target_state_id);
+
+    if (animator.playing) {
+      const auto source_duration = animator.current_clip.is_valid() ? animator.current_clip->duration() : 0.0f;
+      const auto target_duration = animator.transition_target_clip.is_valid() ? animator.transition_target_clip->duration() : 0.0f;
+
+      animator.current_time = advance_local_time(animator.current_time, delta_time, current_state != nullptr ? current_state->speed : 1.0f, source_duration, current_state == nullptr || current_state->loop);
+      animator.transition_target_time = advance_local_time(animator.transition_target_time, delta_time, target_state != nullptr ? target_state->speed : 1.0f, target_duration, target_state == nullptr || target_state->loop);
+      animator.transition_time += delta_time;
+    }
+
+    const auto alpha = (animator.transition_duration > 0.0f) ? std::clamp(animator.transition_time / animator.transition_duration, 0.0f, 1.0f) : 1.0f;
+
+    if (alpha >= 1.0f) {
+      animator.current_state_id = *animator.transition_target_state_id;
+      animator.current_time = animator.transition_target_time;
+      animator.current_clip = animator.transition_target_clip;
+
+      animator.transition_target_state_id.reset();
+      animator.transition_time = 0.0f;
+      animator.transition_target_time = 0.0f;
+      animator.transition_duration = 0.0f;
+      animator.transition_target_clip = assets::animation_clip_handle{};
+    }
+  }
+
+  // Triggers are single-frame pulses -- consumed once this frame's transition checks have run,
+  // whether or not one of them actually fired because of it.
+  for (auto& [name, value] : animator.parameters) {
+    if (auto* trigger = std::get_if<assets::animation_trigger>(&value)) {
+      trigger->set = false;
+    }
+  }
+}
+
+auto scene_renderer_module::_evaluate_skeleton_pose(const assets::skeleton& skeleton, const scenes::mesh_renderer& renderer, scenes::animator* animator, scenes::skeleton_pose& pose, std::float_t delta_time) -> void {
   const auto& joints = skeleton.joints();
   const auto joint_count = joints.size();
 
   pose.joint_world_matrices.resize(joint_count);
   pose.skinning_matrices.resize(joint_count);
 
-  const auto* clip = (animator != nullptr && animator->clip.is_valid()) ? animator->clip.get() : nullptr;
+  const auto* graph = (animator != nullptr && animator->graph.is_valid()) ? animator->graph.get() : nullptr;
 
-  if (clip != nullptr && animator->playing) {
-    animator->time += delta_time * animator->speed;
-
-    const auto duration = clip->duration();
-
-    if (duration <= 0.0f) {
-      animator->time = 0.0f;
-    } else if (animator->loop) {
-      animator->time = std::fmod(animator->time, duration);
-
-      if (animator->time < 0.0f) {
-        animator->time += duration;
-      }
-    } else {
-      animator->time = std::clamp(animator->time, 0.0f, duration);
-    }
+  if (graph != nullptr) {
+    _advance_animator_state(renderer, *graph, *animator, delta_time);
   }
 
   // Seed every joint at bind pose first -- a clip's channels are sparse, so joints it doesn't
-  // animate (and the whole skeleton, when there's no playing clip at all) fall back to this.
-  auto locals = std::vector<math::matrix4x4>(joint_count);
+  // animate (and the whole skeleton, when there's no playing state at all) fall back to this.
+  auto translations = std::vector<math::vector3>(joint_count);
+  auto rotations = std::vector<math::quaternion>(joint_count);
+  auto scales = std::vector<math::vector3>(joint_count);
 
   for (auto index = std::size_t{0u}; index < joint_count; ++index) {
     const auto& joint = joints[index];
-    locals[index] = compose_trs(joint.bind_local_translation, joint.bind_local_rotation, joint.bind_local_scale);
+    translations[index] = joint.bind_local_translation;
+    rotations[index] = joint.bind_local_rotation;
+    scales[index] = joint.bind_local_scale;
   }
 
+  const auto* clip = (graph != nullptr && animator->current_clip.is_valid()) ? animator->current_clip.get() : nullptr;
+
   if (clip != nullptr) {
-    for (const auto& channel : clip->channels()) {
-      if (channel.joint_index >= joint_count) {
-        continue;
-      }
+    sample_clip_trs(*clip, animator->current_time, joints, translations, rotations, scales);
+  }
 
-      const auto& joint = joints[channel.joint_index];
+  // Mid-transition: sample the incoming state into its own bind-pose-seeded buffers and crossfade
+  // per joint (lerp translation/scale, slerp rotation) by how far through the transition we are.
+  if (graph != nullptr && animator->transition_target_state_id.has_value() && animator->transition_target_clip.is_valid()) {
+    const auto alpha = (animator->transition_duration > 0.0f) ? std::clamp(animator->transition_time / animator->transition_duration, 0.0f, 1.0f) : 1.0f;
 
-      const auto translation = channel.translation_keys.empty() ? joint.bind_local_translation : sample_vector3_track(channel.translation_keys, animator->time);
-      const auto rotation = channel.rotation_keys.empty() ? joint.bind_local_rotation : sample_rotation_track(channel.rotation_keys, animator->time);
-      const auto scale = channel.scale_keys.empty() ? joint.bind_local_scale : sample_vector3_track(channel.scale_keys, animator->time);
+    auto target_translations = std::vector<math::vector3>(joint_count);
+    auto target_rotations = std::vector<math::quaternion>(joint_count);
+    auto target_scales = std::vector<math::vector3>(joint_count);
 
-      locals[channel.joint_index] = compose_trs(translation, rotation, scale);
+    for (auto index = std::size_t{0u}; index < joint_count; ++index) {
+      const auto& joint = joints[index];
+      target_translations[index] = joint.bind_local_translation;
+      target_rotations[index] = joint.bind_local_rotation;
+      target_scales[index] = joint.bind_local_scale;
     }
+
+    sample_clip_trs(*animator->transition_target_clip, animator->transition_target_time, joints, target_translations, target_rotations, target_scales);
+
+    for (auto index = std::size_t{0u}; index < joint_count; ++index) {
+      translations[index] = mix_vector3(translations[index], target_translations[index], alpha);
+      rotations[index] = math::quaternion::slerp(rotations[index], target_rotations[index], alpha);
+      scales[index] = mix_vector3(scales[index], target_scales[index], alpha);
+    }
+  }
+
+  auto locals = std::vector<math::matrix4x4>(joint_count);
+
+  for (auto index = std::size_t{0u}; index < joint_count; ++index) {
+    locals[index] = compose_trs(translations[index], rotations[index], scales[index]);
   }
 
   // Joints are cook-time topologically sorted (parent_index < own index), so a single forward
@@ -525,7 +743,7 @@ auto scene_renderer_module::_build_packet() -> render_packet {
       animator_component = &node.get_component<scenes::animator>();
     }
 
-    _evaluate_skeleton_pose(*pose.skeleton, animator_component, pose, animation_delta_time);
+    _evaluate_skeleton_pose(*pose.skeleton, renderer, animator_component, pose, animation_delta_time);
 
     const auto instance_vertex_count = renderer.mesh->vertex_count();
 

@@ -25,6 +25,7 @@
 #include <libsbx/assets/assets_module.hpp>
 #include <libsbx/assets/material.hpp>
 #include <libsbx/assets/particle_effect.hpp>
+#include <libsbx/assets/animation_graph.hpp>
 
 namespace editor {
 
@@ -41,6 +42,7 @@ auto extension_table() -> const std::unordered_map<std::string, asset_kind>& {
     {".material", asset_kind::material},
     {".hdr", asset_kind::environment_map},
     {".particle_effect", asset_kind::particle_effect},
+    {".animation_graph", asset_kind::animation_graph},
     {".yaml", asset_kind::scene},
     {".cs", asset_kind::script},
   };
@@ -51,7 +53,7 @@ auto extension_table() -> const std::unordered_map<std::string, asset_kind>& {
 [[nodiscard]] auto is_importable_kind(asset_kind kind) -> bool {
   return kind == asset_kind::texture || kind == asset_kind::mesh ||
          kind == asset_kind::material || kind == asset_kind::environment_map ||
-         kind == asset_kind::particle_effect;
+         kind == asset_kind::particle_effect || kind == asset_kind::animation_graph;
 }
 
 // Case-insensitive alphabetical order, shared by the folder tree and the contents pane so both
@@ -97,6 +99,7 @@ auto icon_for(const asset_browser_entry& entry) -> const char* {
     case asset_kind::material: return ICON_MDI_PALETTE_SWATCH;
     case asset_kind::environment_map: return ICON_MDI_EARTH;
     case asset_kind::particle_effect: return ICON_MDI_FIREWORK;
+    case asset_kind::animation_graph: return ICON_MDI_STATE_MACHINE;
     case asset_kind::scene: return ICON_MDI_FILE_TREE;
     case asset_kind::script: return ICON_MDI_FILE_CODE_OUTLINE;
     case asset_kind::unknown: return ICON_MDI_FILE_OUTLINE;
@@ -118,6 +121,7 @@ auto drag_payload_type_for(asset_kind kind) -> const char* {
     case asset_kind::mesh: return sbx::render::widgets::drag_drop_payload_mesh;
     case asset_kind::material: return sbx::render::widgets::drag_drop_payload_material;
     case asset_kind::particle_effect: return sbx::render::widgets::drag_drop_payload_particle_effect;
+    case asset_kind::animation_graph: return sbx::render::widgets::drag_drop_payload_animation_graph;
     default: return nullptr;
   }
 }
@@ -371,6 +375,32 @@ auto asset_browser_panel::draw(editor_state& state) -> void {
 
     _needs_refresh = true;
     state.select_asset(id, relative_path, asset_kind::particle_effect);
+  }
+
+  ImGui::SameLine();
+
+  if (ImGui::Button(ICON_MDI_STATE_MACHINE " New Animation Graph")) {
+    auto file_name = std::string{"New Animation Graph.animation_graph"};
+    auto suffix = 1;
+
+    while (std::filesystem::exists(project.assets_directory() / _current_directory / file_name)) {
+      file_name = fmt::format("New Animation Graph {}.animation_graph", suffix++);
+    }
+
+    const auto relative_path = _current_directory / file_name;
+
+    // A single entry state so the graph is already is_valid() -- states/transitions beyond this
+    // are hand-authored in the saved .animation_graph file until the visual graph editor lands
+    // (see the animator's Inspector section, which only edits parameters, not graph structure).
+    auto create_info = sbx::assets::animation_graph::create_info{.name = "New Animation Graph"};
+    create_info.states.push_back(sbx::assets::animation_state{.id = 0u, .name = "Idle"});
+    create_info.entry_state_id = 0u;
+
+    auto handle = assets_module.create_animation_graph(create_info);
+    const auto id = assets_module.save_animation_graph(handle, relative_path);
+
+    _needs_refresh = true;
+    state.select_asset(id, relative_path, asset_kind::animation_graph);
   }
 
   ImGui::SameLine();

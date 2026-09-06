@@ -10,6 +10,8 @@
 #include <memory>
 #include <optional>
 #include <string_view>
+#include <type_traits>
+#include <variant>
 #include <vector>
 
 #include <fmt/format.h>
@@ -267,6 +269,39 @@ auto draw_particle_effect_picker(editor_state& state, const char* popup_id, sbx:
 
   if (result.edit_requested && slot.is_valid()) {
     state.select_asset(slot->id(), relative_asset_path(assets_module, slot->id()), asset_kind::particle_effect);
+  }
+
+  if (result.reveal_requested && slot.is_valid()) {
+    state.request_reveal_in_browser(relative_asset_path(assets_module, slot->id()));
+  }
+
+  return result.changed;
+}
+
+// Same idea as draw_particle_effect_picker, for animator.graph.
+auto draw_animation_graph_picker(editor_state& state, const char* popup_id, sbx::assets::animation_graph_handle& slot) -> bool {
+  auto& assets_module = sbx::core::engine::get_module<sbx::assets::assets_module>();
+
+  const auto current = slot.is_valid() ? to_picker_item(assets_module, slot->id()) : sbx::render::widgets::asset_picker_item{};
+
+  const auto options = sbx::render::widgets::asset_picker_options{
+    .kind = sbx::render::widgets::asset_picker_kind::animation_graph,
+    .extensions = {".animation_graph"},
+    .allow_none = true,
+    .show_edit_button = true,
+    .show_reveal_button = true,
+  };
+
+  const auto result = sbx::render::widgets::draw_asset_picker(popup_id, current, {}, options);
+
+  if (result.cleared) {
+    slot = sbx::assets::animation_graph_handle{};
+  } else if (result.changed) {
+    slot = assets_module.load_animation_graph(result.picked.path);
+  }
+
+  if (result.edit_requested && slot.is_valid()) {
+    state.select_asset(slot->id(), relative_asset_path(assets_module, slot->id()), asset_kind::animation_graph);
   }
 
   if (result.reveal_requested && slot.is_valid()) {
@@ -661,25 +696,20 @@ auto draw_animator_section(editor_state& state, sbx::scenes::node& node) -> void
     return;
   }
 
-  const auto& clips = mesh->animation_clips();
-  const auto current_label = anim.clip.is_valid() ? anim.clip->name() : std::string{"(none)"};
+  ImGui::Text("Graph:");
+  ImGui::SameLine();
 
-  if (ImGui::BeginCombo("Clip", current_label.c_str())) {
-    for (const auto& clip : clips) {
-      const auto is_selected = anim.clip.is_valid() && anim.clip.get() == clip.get();
+  auto graph_handle = anim.graph;
 
-      if (ImGui::Selectable(clip->name().c_str(), is_selected)) {
-        const auto before = anim;
-        anim.clip = clip;
-        state.push_command(std::make_unique<modify_component_command<sbx::scenes::animator>>(node.id(), before, anim, "Edit Animator"));
-      }
-    }
-
-    ImGui::EndCombo();
+  if (draw_animation_graph_picker(state, "##animation_graph_picker_popup", graph_handle)) {
+    const auto before = anim;
+    anim.set_graph(graph_handle); // not a plain assignment -- reseeds parameters/current_state_id from the new graph's own defaults
+    state.push_command(std::make_unique<modify_component_command<sbx::scenes::animator>>(node.id(), before, anim, "Edit Animator"));
   }
 
-  if (clips.empty()) {
-    ImGui::TextDisabled("This mesh's glTF file had no animations.");
+  if (!anim.graph.is_valid()) {
+    ImGui::TextDisabled("Assign an Animation Graph asset to drive this mesh.");
+    return;
   }
 
   {
@@ -690,16 +720,57 @@ auto draw_animator_section(editor_state& state, sbx::scenes::node& node) -> void
     }
   }
 
-  {
-    const auto before = anim;
+  const auto& states = anim.graph->states();
 
-    if (ImGui::Checkbox("Loop", &anim.loop)) {
-      state.push_command(std::make_unique<modify_component_command<sbx::scenes::animator>>(node.id(), before, anim, "Edit Animator"));
-    }
+  const auto current_state_it = std::ranges::find(states, anim.current_state_id, &sbx::assets::animation_state::id);
+  ImGui::Text("Current State: %s", current_state_it != states.end() ? current_state_it->name.c_str() : "(none)");
+
+  if (anim.transition_target_state_id.has_value()) {
+    const auto target_state_it = std::ranges::find(states, *anim.transition_target_state_id, &sbx::assets::animation_state::id);
+    const auto alpha = (anim.transition_duration > 0.0f) ? std::clamp(anim.transition_time / anim.transition_duration, 0.0f, 1.0f) : 1.0f;
+    ImGui::Text("Transitioning to: %s (%.0f%%)", target_state_it != states.end() ? target_state_it->name.c_str() : "(none)", alpha * 100.0f);
   }
 
-  ImGui::DragFloat("Speed", &anim.speed, 0.05f, 0.0f, 10.0f);
-  bracket_edit(state, node, anim, pending, "Edit Animator");
+  // States/transitions themselves are hand-authored in the .animation_graph file until the visual
+  // graph editor lands (see plan) -- this section is only for testing them: assigning parameter
+  // values live, the same way gameplay code would via animator::set_float/set_bool/set_trigger.
+  if (!anim.parameters.empty() && ImGui::TreeNodeEx("Parameters", ImGuiTreeNodeFlags_DefaultOpen)) {
+    for (auto& [name, value] : anim.parameters) {
+      ImGui::PushID(name.c_str());
+
+      std::visit([&](auto& current) {
+        using value_type = std::decay_t<decltype(current)>;
+
+        if constexpr (std::is_same_v<value_type, std::float_t>) {
+          ImGui::DragFloat(name.c_str(), &current, 0.05f);
+          bracket_edit(state, node, anim, pending, "Edit Animator");
+        } else if constexpr (std::is_same_v<value_type, bool>) {
+          const auto before = anim;
+
+          if (ImGui::Checkbox(name.c_str(), &current)) {
+            state.push_command(std::make_unique<modify_component_command<sbx::scenes::animator>>(node.id(), before, anim, "Edit Animator"));
+          }
+        } else if constexpr (std::is_same_v<value_type, std::int32_t>) {
+          ImGui::DragInt(name.c_str(), &current);
+          bracket_edit(state, node, anim, pending, "Edit Animator");
+        } else {
+          ImGui::AlignTextToFramePadding();
+          ImGui::TextUnformatted(name.c_str());
+          ImGui::SameLine();
+
+          if (ImGui::Button("Fire")) {
+            const auto before = anim;
+            current.set = true;
+            state.push_command(std::make_unique<modify_component_command<sbx::scenes::animator>>(node.id(), before, anim, "Edit Animator"));
+          }
+        }
+      }, value);
+
+      ImGui::PopID();
+    }
+
+    ImGui::TreePop();
+  }
 }
 
 auto draw_directional_light_section(editor_state& state, sbx::scenes::node& node) -> void {
@@ -2171,6 +2242,7 @@ auto inspector_panel::_draw_asset_properties(editor_state& state, const asset_se
       case asset_kind::material: _asset_cache.material = assets_module.load_material(asset.id); break;
       case asset_kind::environment_map: _asset_cache.environment_map = assets_module.load_environment_map(asset.id); break;
       case asset_kind::particle_effect: _asset_cache.particle_effect = assets_module.load_particle_effect(asset.id); break;
+      case asset_kind::animation_graph: _asset_cache.animation_graph = assets_module.load_animation_graph(asset.id); break;
       case asset_kind::scene:
       case asset_kind::script:
       case asset_kind::unknown:
@@ -2251,6 +2323,44 @@ auto inspector_panel::_draw_asset_properties(editor_state& state, const asset_se
     case asset_kind::particle_effect: {
       ImGui::Text("Type: Particle Effect");
       _draw_particle_effect_properties(state, asset, assets_module);
+      break;
+    }
+    case asset_kind::animation_graph: {
+      ImGui::Text("Type: Animation Graph");
+
+      // Read-only for now -- states/transitions are hand-authored in the .animation_graph file
+      // until the visual graph editor lands; this just shows what's there.
+      const auto& handle = _asset_cache.animation_graph;
+
+      if (handle.is_valid()) {
+        ImGui::Text("States: %zu", handle->states().size());
+        ImGui::Text("Transitions: %zu", handle->transitions().size());
+
+        const auto& states = handle->states();
+        const auto entry_state_it = std::ranges::find(states, handle->entry_state_id(), &sbx::assets::animation_state::id);
+        ImGui::Text("Entry State: %s", entry_state_it != states.end() ? entry_state_it->name.c_str() : "(none)");
+
+        if (!handle->parameters().empty() && ImGui::TreeNodeEx("Parameters", ImGuiTreeNodeFlags_DefaultOpen)) {
+          for (const auto& parameter : handle->parameters()) {
+            std::visit([&parameter](const auto& value) {
+              using value_type = std::decay_t<decltype(value)>;
+
+              if constexpr (std::is_same_v<value_type, std::float_t>) {
+                ImGui::Text("%s (Float): %.3f", parameter.name.c_str(), value);
+              } else if constexpr (std::is_same_v<value_type, bool>) {
+                ImGui::Text("%s (Bool): %s", parameter.name.c_str(), value ? "true" : "false");
+              } else if constexpr (std::is_same_v<value_type, std::int32_t>) {
+                ImGui::Text("%s (Int): %d", parameter.name.c_str(), value);
+              } else {
+                ImGui::Text("%s (Trigger)", parameter.name.c_str());
+              }
+            }, parameter.default_value);
+          }
+
+          ImGui::TreePop();
+        }
+      }
+
       break;
     }
     case asset_kind::scene: {

@@ -37,10 +37,12 @@ struct asset_key_table {
   std::unordered_set<std::string> used_keys{};
   std::unordered_map<math::uuid, std::string> environment_keys{};
   std::unordered_map<math::uuid, std::string> particle_effect_keys{};
+  std::unordered_map<math::uuid, std::string> animation_graph_keys{};
   YAML::Node meshes_table{YAML::NodeType::Sequence};
   YAML::Node materials_table{YAML::NodeType::Sequence};
   YAML::Node environments_table{YAML::NodeType::Sequence};
   YAML::Node particle_effects_table{YAML::NodeType::Sequence};
+  YAML::Node animation_graphs_table{YAML::NodeType::Sequence};
 }; // struct asset_key_table
 
 auto make_asset_key(asset_key_table& keys, const std::string& base) -> std::string {
@@ -199,14 +201,34 @@ auto write_node(YAML::Node& node_yaml, ecs::registry& registry, ecs::entity enti
   if (registry.all_of<animator>(entity)) {
     const auto& anim = registry.get<animator>(entity);
 
-    auto component = YAML::Node{};
-    component["type"] = "animator";
-    component["clip_name"] = anim.clip.is_valid() ? anim.clip->name() : std::string{};
-    component["speed"] = anim.speed;
-    component["loop"] = anim.loop;
-    component["playing"] = anim.playing;
+    if (anim.graph.is_valid()) {
+      const auto graph_id = anim.graph->id();
 
-    components.push_back(component);
+      if (graph_id == math::uuid::nil()) {
+        utility::logger<"scenes">::warn("Skipping a transient animation_graph override (no file asset — save it first)");
+      } else {
+        if (!keys.animation_graph_keys.contains(graph_id)) {
+          const auto name = assets_module.path_of(graph_id).stem().string();
+          const auto key = make_asset_key(keys, name);
+          keys.animation_graph_keys.emplace(graph_id, key);
+
+          auto entry = YAML::Node{};
+          entry["key"] = key;
+          entry["name"] = name;
+          entry["uuid"] = graph_id.value();
+          keys.animation_graphs_table.push_back(entry);
+        }
+
+        auto component = YAML::Node{};
+        component["type"] = "animator";
+        component["graph"] = keys.animation_graph_keys.at(graph_id);
+        component["playing"] = anim.playing;
+
+        // Parameter values aren't persisted per-instance -- every scene load starts from the
+        // graph's own defaults (see animator::set_graph).
+        components.push_back(component);
+      }
+    }
   }
 
   if (registry.all_of<camera>(entity)) {
@@ -446,6 +468,7 @@ auto register_asset_keys(const YAML::Node& assets_node) -> std::unordered_map<st
   register_category("materials");
   register_category("environment_maps");
   register_category("particle_effects");
+  register_category("animation_graphs");
 
   return key_to_uuid;
 }
@@ -485,27 +508,12 @@ auto read_node_components(node& target_node, const YAML::Node& node_yaml, assets
       }
     } else if (type == "animator") {
       auto& anim = target_node.add_component<animator>();
-      anim.speed = component["speed"] ? component["speed"].as<std::float_t>() : 1.0f;
-      anim.loop = component["loop"] ? component["loop"].as<bool>() : true;
-      anim.playing = component["playing"] ? component["playing"].as<bool>() : true;
 
-      // clip is resolved by name against the mesh_renderer's already-loaded mesh (written earlier
-      // in this same node's component list) rather than by uuid -- clips aren't independently
-      // tracked assets, just a specific mesh's cooked side effects.
-      if (target_node.has_component<mesh_renderer>()) {
-        const auto& renderer = target_node.get_component<mesh_renderer>();
-
-        if (renderer.mesh.is_valid() && component["clip_name"]) {
-          const auto clip_name = component["clip_name"].as<std::string>();
-
-          for (const auto& clip : renderer.mesh->animation_clips()) {
-            if (clip->name() == clip_name) {
-              anim.clip = clip;
-              break;
-            }
-          }
-        }
+      if (component["graph"]) {
+        anim.set_graph(assets_module.load_animation_graph(key_to_uuid.at(component["graph"].as<std::string>())));
       }
+
+      anim.playing = component["playing"] ? component["playing"].as<bool>() : true;
     } else if (type == "camera") {
       auto& c = target_node.add_component<camera>();
       c.fov_degrees = component["fov_degrees"].as<std::float_t>();
@@ -733,6 +741,7 @@ auto scene_serializer::_build(scene& target) -> YAML::Node {
   assets_node["materials"] = keys.materials_table;
   assets_node["environment_maps"] = keys.environments_table;
   assets_node["particle_effects"] = keys.particle_effects_table;
+  assets_node["animation_graphs"] = keys.animation_graphs_table;
 
   auto root = YAML::Node{};
   root["metadata"] = metadata;
@@ -862,6 +871,7 @@ auto scene_serializer::serialize_subtree(scene& target, node subtree_root) -> YA
   assets_node["materials"] = keys.materials_table;
   assets_node["environment_maps"] = keys.environments_table;
   assets_node["particle_effects"] = keys.particle_effects_table;
+  assets_node["animation_graphs"] = keys.animation_graphs_table;
 
   auto root = YAML::Node{};
   root["assets_module"] = assets_node;

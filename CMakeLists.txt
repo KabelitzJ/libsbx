@@ -133,6 +133,7 @@ find_package(fastgltf CONFIG REQUIRED)
 find_package(fmt CONFIG REQUIRED)
 find_package(glfw3 CONFIG REQUIRED)
 find_package(imgui CONFIG REQUIRED)
+find_package(imgui-node-editor CONFIG REQUIRED)
 find_package(imguizmo CONFIG REQUIRED)
 find_package(lz4 CONFIG REQUIRED)
 find_package(meshoptimizer CONFIG REQUIRED)
@@ -322,6 +323,7 @@ target_sources(
       "${CMAKE_SOURCE_DIR}/libsbx/assets/environment_map.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/assets/ibl_baker.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/assets/animation_clip.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/assets/animation_graph.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/assets/material.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/assets/mesh.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/assets/particle_effect.hpp"
@@ -638,6 +640,7 @@ target_link_libraries(
     fmt::fmt
     glfw
     GPUOpen::VulkanMemoryAllocator
+    imgui-node-editor::imgui-node-editor
     imgui::imgui
     imguizmo::imguizmo
     lz4::lz4

@@ -28,6 +28,7 @@
 #include <libsbx/assets/material.hpp>
 #include <libsbx/assets/environment_map.hpp>
 #include <libsbx/assets/particle_effect.hpp>
+#include <libsbx/assets/animation_graph.hpp>
 #include <libsbx/assets/asset_cooker.hpp>
 #include <libsbx/assets/ibl_baker.hpp>
 
@@ -104,6 +105,27 @@ public:
    * @return The effect's canonical uuid (also written back onto the record itself).
    */
   auto save_particle_effect(particle_effect_handle& effect, const std::filesystem::path& path) -> math::uuid;
+
+  auto load_animation_graph(const math::uuid& id) -> animation_graph_handle;
+
+  auto load_animation_graph(const std::filesystem::path& path) -> animation_graph_handle;
+
+  auto create_animation_graph(const animation_graph::create_info& create_info) -> animation_graph_handle;
+
+  /**
+   * @brief Overwrites an existing animation_graph's states/transitions/parameters in place. Every
+   * animation_graph_handle already pointing at this record observes the change immediately. Does
+   * not touch identity (uuid) or persist to disk.
+   */
+  auto update_animation_graph(animation_graph_handle& graph, const animation_graph::create_info& create_info) -> void;
+
+  /**
+   * @brief Writes an animation_graph to a `.animation_graph` file and (re-)registers it as a
+   * first-class asset.
+   * @param path Destination path relative to the active project's assets directory.
+   * @return The graph's canonical uuid (also written back onto the record itself).
+   */
+  auto save_animation_graph(animation_graph_handle& graph, const std::filesystem::path& path) -> math::uuid;
 
   /**
    * @brief Turns queued texture loads into GPU images and bindless writes.
@@ -211,6 +233,7 @@ private:
 
   // Pure CPU data — no GPU buffer/index, unlike _materials above.
   std::unordered_map<math::uuid, std::shared_ptr<particle_effect>> _particle_effect_files{};
+  std::unordered_map<math::uuid, std::shared_ptr<animation_graph>> _animation_graph_files{};
 
   texture_handle _white{};
   texture_handle _normal{};

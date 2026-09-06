@@ -164,12 +164,21 @@ private:
   auto _extract_gpu_particle_emitter(render_packet& packet, const assets::particle_emitter& config, scenes::particle_emitter& runtime, const scenes::particle_effect& instance, const math::matrix4x4& world, std::float_t delta_time) -> void;
 
   /**
-   * @brief Advances @p animator (if not null) and samples @p skeleton's clip into @p pose's
+   * @brief Advances @p animator's graph state machine (if not null) and samples the resulting
+   * pose -- crossfading between the outgoing/incoming clip when mid-transition -- into @p pose's
    * joint_world_matrices/skinning_matrices. Called once per skinned instance from _build_packet,
    * at render cadence -- see scenes::skeleton_pose's doc comment for why this isn't a fixed_update.
-   * A null @p animator (or one with an invalid/paused clip) evaluates the skeleton's bind pose.
+   * A null @p animator (or one with no graph assigned) evaluates the skeleton's bind pose.
+   * @p renderer is the same instance's mesh_renderer -- needed to resolve an
+   * assets::animation_state::clip_name against its mesh's clip list.
    */
-  auto _evaluate_skeleton_pose(const assets::skeleton& skeleton, scenes::animator* animator, scenes::skeleton_pose& pose, std::float_t delta_time) -> void;
+  auto _evaluate_skeleton_pose(const assets::skeleton& skeleton, const scenes::mesh_renderer& renderer, scenes::animator* animator, scenes::skeleton_pose& pose, std::float_t delta_time) -> void;
+
+  /** @brief Pure state-machine bookkeeping (current/transition-target state, local clip time, transition progress) -- no joint/vertex math. Resolves current_clip/transition_target_clip against @p renderer's mesh by name as states are (re-)entered. */
+  auto _advance_animator_state(const scenes::mesh_renderer& renderer, const assets::animation_graph& graph, scenes::animator& animator, std::float_t delta_time) -> void;
+
+  /** @brief The clip named by @p state's clip_name, resolved against @p renderer's mesh->animation_clips(); an invalid handle if @p state is null, the mesh has no such clip, or the mesh itself isn't assigned. */
+  [[nodiscard]] auto _resolve_state_clip(const scenes::mesh_renderer& renderer, const assets::animation_state* state) const -> assets::animation_clip_handle;
 
   render_packet _work_packet{};
   bool _has_rendered{false};

@@ -6,7 +6,26 @@
 
 namespace sbx::render {
 
-ui_module::ui_module() {
+namespace {
+
+auto thumbnail_sampler_create_info() -> graphics::sampler::create_info {
+  return graphics::sampler::create_info{
+    .mag_filter = graphics::filter::linear,
+    .min_filter = graphics::filter::linear,
+    .mipmap_mode = graphics::mipmap_mode::linear,
+    .address_mode_u = graphics::address_mode::clamp_to_edge,
+    .address_mode_v = graphics::address_mode::clamp_to_edge,
+    .address_mode_w = graphics::address_mode::clamp_to_edge,
+    .max_anisotropy = 1.0f,
+    .max_lod = graphics::lod_clamp::none,
+    .name = "Asset Tile Thumbnail Sampler",
+  };
+}
+
+} // namespace
+
+ui_module::ui_module()
+: _thumbnail_sampler{thumbnail_sampler_create_info()} {
   auto& presentation_module = core::engine::get_module<render::presentation_module>();
 
   presentation_module.set_ui_renderer(this);

@@ -17,6 +17,7 @@
 #include <libsbx/platform/platform_module.hpp>
 
 #include <libsbx/graphics/graphics_module.hpp>
+#include <libsbx/graphics/resources/sampler.hpp>
 
 #include <libsbx/render/presentation_module.hpp>
 #include <libsbx/render/ui_renderer.hpp>
@@ -81,9 +82,17 @@ public:
     return _system.texture_id(view, sampler);
   }
 
+  // Shared sampler for texture-thumbnail previews (e.g. asset_tile) — owned here rather than by
+  // the caller so it's destroyed while graphics_module (a dependency of this module) is still
+  // alive, instead of at static-storage-duration teardown after the engine is already gone.
+  [[nodiscard]] auto thumbnail_sampler() const noexcept -> VkSampler {
+    return _thumbnail_sampler.handle();
+  }
+
 private:
 
   ui_system _system{};
+  graphics::sampler _thumbnail_sampler;
 
 }; // class ui_module
 

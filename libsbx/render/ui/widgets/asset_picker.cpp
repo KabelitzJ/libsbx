@@ -30,6 +30,7 @@ namespace {
     case asset_picker_kind::mesh: return ICON_MDI_CUBE_OUTLINE;
     case asset_picker_kind::material: return ICON_MDI_PALETTE_SWATCH;
     case asset_picker_kind::particle_effect: return ICON_MDI_FIREWORK;
+    case asset_picker_kind::animation_graph: return ICON_MDI_STATE_MACHINE;
   }
 
   return ICON_MDI_FILE_OUTLINE;
@@ -70,6 +71,7 @@ auto drag_payload_type_for(asset_picker_kind kind) -> const char* {
     case asset_picker_kind::mesh: return drag_drop_payload_mesh;
     case asset_picker_kind::material: return drag_drop_payload_material;
     case asset_picker_kind::particle_effect: return drag_drop_payload_particle_effect;
+    case asset_picker_kind::animation_graph: return drag_drop_payload_animation_graph;
   }
 
   return drag_drop_payload_texture;

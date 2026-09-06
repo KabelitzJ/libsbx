@@ -83,6 +83,26 @@ auto assets_module::save_particle_effect(particle_effect_handle& effect, const s
   return _residency.save_particle_effect(effect, path);
 }
 
+auto assets_module::load_animation_graph(const math::uuid& id) -> animation_graph_handle {
+  return _residency.load_animation_graph(id);
+}
+
+auto assets_module::load_animation_graph(const std::filesystem::path& path) -> animation_graph_handle {
+  return _residency.load_animation_graph(path);
+}
+
+auto assets_module::create_animation_graph(const animation_graph::create_info& create_info) -> animation_graph_handle {
+  return _residency.create_animation_graph(create_info);
+}
+
+auto assets_module::update_animation_graph(animation_graph_handle& graph, const animation_graph::create_info& create_info) -> void {
+  _residency.update_animation_graph(graph, create_info);
+}
+
+auto assets_module::save_animation_graph(animation_graph_handle& graph, const std::filesystem::path& path) -> math::uuid {
+  return _residency.save_animation_graph(graph, path);
+}
+
 auto assets_module::process_uploads(std::uint64_t frame_index) -> void {
   _residency.process_uploads(frame_index);
 }

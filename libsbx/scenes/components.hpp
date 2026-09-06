@@ -3,10 +3,13 @@
 #ifndef LIBSBX_SCENES_COMPONENTS_HPP_
 #define LIBSBX_SCENES_COMPONENTS_HPP_
 
+#include <algorithm>
 #include <cstdint>
 #include <limits>
 #include <optional>
 #include <string>
+#include <string_view>
+#include <variant>
 #include <vector>
 
 #include <libsbx/math/color.hpp>
@@ -28,6 +31,7 @@
 #include <libsbx/assets/particle_effect.hpp>
 #include <libsbx/assets/skeleton.hpp>
 #include <libsbx/assets/animation_clip.hpp>
+#include <libsbx/assets/animation_graph.hpp>
 
 #include <libsbx/particles/particle.hpp>
 
@@ -155,12 +159,91 @@ inline auto sync_materials_with_mesh(mesh_renderer& renderer) -> void {
  * fixed_update -- it feeds render_packet directly and needs no physics-step determinism, the same
  * reasoning that keeps GPU-path particle_emitter bookkeeping there instead of particles_module).
  */
+/**
+ * @brief A live instance of an assets::animation_graph: which state is currently playing (and,
+ * mid-transition, which one it's crossfading into), plus this instance's own parameter values
+ * (seeded from the graph's defaults by set_graph, then driven by gameplay/the Inspector).
+ *
+ * current_clip/transition_target_clip are resolved once, by name, against the owning node's
+ * mesh_renderer -- not re-resolved every frame (see assets::animation_state::clip_name's doc
+ * comment). render::scene_renderer_module owns advancing/sampling this, at render cadence, same
+ * as it owns skeleton_pose evaluation.
+ */
 struct animator {
-  assets::animation_clip_handle clip{};
-  std::float_t time{0.0f};
-  std::float_t speed{1.0f};
+  assets::animation_graph_handle graph{};
+  std::vector<std::pair<std::string, assets::animation_parameter_value>> parameters{}; // small N -> linear scan, same convention as static_vector-sized data elsewhere in the engine
   bool playing{true};
-  bool loop{true};
+
+  std::uint32_t current_state_id{0u};
+  std::float_t current_time{0.0f};
+  assets::animation_clip_handle current_clip{};
+
+  std::optional<std::uint32_t> transition_target_state_id{};
+  std::float_t transition_time{0.0f};
+  std::float_t transition_target_time{0.0f};
+  std::float_t transition_duration{0.0f};
+  assets::animation_clip_handle transition_target_clip{};
+
+  /**
+   * @brief Points this instance at a new graph, resetting to its entry state and reseeding
+   * parameters from the graph's own defaults. Clips are re-resolved lazily (see current_clip's
+   * doc comment above) the next time render::scene_renderer_module evaluates this instance, since
+   * that needs the owning node's mesh_renderer, which this component doesn't have access to.
+   */
+  auto set_graph(assets::animation_graph_handle new_graph) -> void {
+    graph = std::move(new_graph);
+    parameters.clear();
+
+    if (graph.is_valid()) {
+      parameters.reserve(graph->parameters().size());
+
+      for (const auto& parameter : graph->parameters()) {
+        parameters.emplace_back(parameter.name, parameter.default_value);
+      }
+
+      current_state_id = graph->entry_state_id();
+    } else {
+      current_state_id = 0u;
+    }
+
+    current_time = 0.0f;
+    current_clip = assets::animation_clip_handle{};
+    transition_target_state_id.reset();
+    transition_time = 0.0f;
+    transition_target_time = 0.0f;
+    transition_duration = 0.0f;
+    transition_target_clip = assets::animation_clip_handle{};
+  }
+
+  [[nodiscard]] auto find_parameter(std::string_view name) -> assets::animation_parameter_value* {
+    const auto entry = std::ranges::find(parameters, name, [](const auto& pair) { return std::string_view{pair.first}; });
+    return (entry != parameters.end()) ? &entry->second : nullptr;
+  }
+
+  auto set_float(std::string_view name, std::float_t value) -> void {
+    if (auto* found = find_parameter(name)) {
+      *found = value;
+    }
+  }
+
+  auto set_bool(std::string_view name, bool value) -> void {
+    if (auto* found = find_parameter(name)) {
+      *found = value;
+    }
+  }
+
+  auto set_int(std::string_view name, std::int32_t value) -> void {
+    if (auto* found = find_parameter(name)) {
+      *found = value;
+    }
+  }
+
+  /** @brief Fires a trigger parameter -- consumed (reset) by the evaluator at the end of the frame it's checked, whether or not it caused a transition. */
+  auto set_trigger(std::string_view name) -> void {
+    if (auto* found = find_parameter(name); found != nullptr && std::holds_alternative<assets::animation_trigger>(*found)) {
+      std::get<assets::animation_trigger>(*found).set = true;
+    }
+  }
 }; // struct animator
 
 /**

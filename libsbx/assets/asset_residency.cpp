@@ -3,7 +3,9 @@
 #include <libsbx/assets/asset_residency.hpp>
 
 #include <fstream>
+#include <type_traits>
 #include <utility>
+#include <variant>
 
 #include <yaml-cpp/yaml.h>
 
@@ -987,6 +989,300 @@ auto asset_residency::save_particle_effect(particle_effect_handle& effect, const
   effect->_id = id;
 
   utility::logger<"assets">::info("Saved particle_effect '{}'", resolved_path.generic_string());
+
+  return id;
+}
+
+namespace {
+
+// "type"+"value" tag pair -- animation_parameter_value's alternative *is* its type, so this is
+// purely a persistence detail (the runtime API never switches on a type enum, see
+// animation_graph.hpp's doc comment).
+auto save_animation_parameter_value(const animation_parameter_value& value) -> YAML::Node {
+  auto node = YAML::Node{};
+
+  std::visit([&node](const auto& alternative) {
+    using alternative_type = std::decay_t<decltype(alternative)>;
+
+    if constexpr (std::is_same_v<alternative_type, std::float_t>) {
+      node["type"] = "float";
+      node["value"] = alternative;
+    } else if constexpr (std::is_same_v<alternative_type, bool>) {
+      node["type"] = "bool";
+      node["value"] = alternative;
+    } else if constexpr (std::is_same_v<alternative_type, std::int32_t>) {
+      node["type"] = "int";
+      node["value"] = alternative;
+    } else {
+      static_assert(std::is_same_v<alternative_type, animation_trigger>);
+      node["type"] = "trigger"; // no value -- a trigger only ever carries a live "fired" flag, which isn't authored
+    }
+  }, value);
+
+  return node;
+}
+
+auto load_animation_parameter_value(const YAML::Node& node) -> animation_parameter_value {
+  const auto type = node["type"] ? node["type"].as<std::string>() : std::string{"float"};
+
+  if (type == "bool") {
+    return animation_parameter_value{node["value"] ? node["value"].as<bool>() : false};
+  }
+
+  if (type == "int") {
+    return animation_parameter_value{node["value"] ? node["value"].as<std::int32_t>() : std::int32_t{0}};
+  }
+
+  if (type == "trigger") {
+    return animation_parameter_value{animation_trigger{}};
+  }
+
+  return animation_parameter_value{node["value"] ? node["value"].as<std::float_t>() : 0.0f};
+}
+
+auto save_animation_condition_comparator(animation_condition_comparator comparator) -> std::string {
+  switch (comparator) {
+    case animation_condition_comparator::not_equals: return "not_equals";
+    case animation_condition_comparator::greater: return "greater";
+    case animation_condition_comparator::greater_or_equal: return "greater_or_equal";
+    case animation_condition_comparator::less: return "less";
+    case animation_condition_comparator::less_or_equal: return "less_or_equal";
+    default: return "equals";
+  }
+}
+
+auto load_animation_condition_comparator(const std::string& value) -> animation_condition_comparator {
+  if (value == "not_equals") return animation_condition_comparator::not_equals;
+  if (value == "greater") return animation_condition_comparator::greater;
+  if (value == "greater_or_equal") return animation_condition_comparator::greater_or_equal;
+  if (value == "less") return animation_condition_comparator::less;
+  if (value == "less_or_equal") return animation_condition_comparator::less_or_equal;
+  return animation_condition_comparator::equals;
+}
+
+} // namespace
+
+auto asset_residency::load_animation_graph(const math::uuid& id) -> animation_graph_handle {
+  _cooker.ensure_manifest_loaded();
+
+  {
+    auto lock = std::lock_guard{_mutex};
+    if (const auto entry = _animation_graph_files.find(id); entry != _animation_graph_files.end()) {
+      return animation_graph_handle{entry->second};
+    }
+  }
+
+  const auto source_path = _cooker.path_of(id);
+
+  if (source_path.empty() || source_path.extension() != ".animation_graph") {
+    utility::logger<"assets">::warn("Unknown animation_graph uuid {}", id);
+    return animation_graph_handle{};
+  }
+
+  const auto& path = source_path;
+
+  auto root = YAML::Node{};
+  try {
+    root = YAML::LoadFile(path.string());
+  } catch (const std::exception& exception) {
+    utility::logger<"assets">::warn("Could not parse animation_graph '{}' ({})", path.generic_string(), exception.what());
+    return animation_graph_handle{};
+  }
+
+  auto info = animation_graph::create_info{};
+
+  if (root["name"]) info.name = root["name"].as<std::string>();
+  if (root["entry_state_id"]) info.entry_state_id = root["entry_state_id"].as<std::uint32_t>();
+
+  if (const auto parameters = root["parameters"]) {
+    info.parameters.reserve(parameters.size());
+
+    for (const auto parameter_node : parameters) {
+      auto parameter = animation_parameter{};
+
+      if (parameter_node["name"]) parameter.name = parameter_node["name"].as<std::string>();
+      parameter.default_value = load_animation_parameter_value(parameter_node);
+
+      info.parameters.push_back(parameter);
+    }
+  }
+
+  if (const auto states = root["states"]) {
+    info.states.reserve(states.size());
+
+    for (const auto state_node : states) {
+      auto state = animation_state{};
+
+      if (state_node["id"]) state.id = state_node["id"].as<std::uint32_t>();
+      if (state_node["name"]) state.name = state_node["name"].as<std::string>();
+      if (state_node["clip_name"]) state.clip_name = state_node["clip_name"].as<std::string>();
+      if (state_node["speed"]) state.speed = state_node["speed"].as<std::float_t>();
+      if (state_node["loop"]) state.loop = state_node["loop"].as<bool>();
+
+      if (const auto position_node = state_node["editor_position"]) {
+        if (position_node["x"]) state.editor_position.x() = position_node["x"].as<std::float_t>();
+        if (position_node["y"]) state.editor_position.y() = position_node["y"].as<std::float_t>();
+      }
+
+      info.states.push_back(state);
+    }
+  }
+
+  if (const auto transitions = root["transitions"]) {
+    info.transitions.reserve(transitions.size());
+
+    for (const auto transition_node : transitions) {
+      auto transition = animation_transition{};
+
+      if (transition_node["from_state"]) transition.from_state = transition_node["from_state"].as<std::uint32_t>();
+      if (transition_node["to_state"]) transition.to_state = transition_node["to_state"].as<std::uint32_t>();
+      if (transition_node["duration"]) transition.duration = transition_node["duration"].as<std::float_t>();
+      if (transition_node["has_exit_time"]) transition.has_exit_time = transition_node["has_exit_time"].as<bool>();
+      if (transition_node["exit_time"]) transition.exit_time = transition_node["exit_time"].as<std::float_t>();
+
+      if (const auto conditions_node = transition_node["conditions"]) {
+        for (const auto condition_node : conditions_node) {
+          auto condition = animation_condition{};
+
+          if (condition_node["parameter_name"]) condition.parameter_name = condition_node["parameter_name"].as<std::string>();
+          if (condition_node["comparator"]) condition.comparator = load_animation_condition_comparator(condition_node["comparator"].as<std::string>());
+          condition.expected = load_animation_parameter_value(condition_node);
+
+          transition.conditions.push_back(condition);
+        }
+      }
+
+      info.transitions.push_back(transition);
+    }
+  }
+
+  auto record = std::make_shared<animation_graph>(info);
+  record->_id = id;
+
+  {
+    auto lock = std::lock_guard{_mutex};
+    _animation_graph_files.emplace(id, record);
+  }
+
+  utility::logger<"assets">::info("Loaded animation_graph '{}'", path.generic_string());
+
+  return animation_graph_handle{record};
+}
+
+auto asset_residency::load_animation_graph(const std::filesystem::path& path) -> animation_graph_handle {
+  const auto& project = core::engine::project();
+
+  const auto assets_directory = project.assets_directory();
+
+  return load_animation_graph(_cooker.import(assets_directory / path));
+}
+
+auto asset_residency::create_animation_graph(const animation_graph::create_info& create_info) -> animation_graph_handle {
+  return animation_graph_handle{std::make_shared<animation_graph>(create_info)};
+}
+
+auto asset_residency::update_animation_graph(animation_graph_handle& graph, const animation_graph::create_info& create_info) -> void {
+  if (!graph.is_valid()) {
+    return;
+  }
+
+  graph->_name = create_info.name;
+  graph->_parameters = create_info.parameters;
+  graph->_states = create_info.states;
+  graph->_transitions = create_info.transitions;
+  graph->_entry_state_id = create_info.entry_state_id;
+}
+
+auto asset_residency::save_animation_graph(animation_graph_handle& graph, const std::filesystem::path& path) -> math::uuid {
+  const auto& project = core::engine::project();
+
+  const auto assets_directory = project.assets_directory();
+
+  const auto resolved_path = assets_directory / path;
+
+  if (!graph.is_valid()) {
+    utility::logger<"assets">::warn("Cannot save an invalid animation_graph to '{}'", resolved_path.generic_string());
+    return math::uuid::nil();
+  }
+
+  auto node = YAML::Node{};
+
+  node["name"] = graph->name();
+  node["entry_state_id"] = graph->entry_state_id();
+
+  auto parameters_node = YAML::Node{YAML::NodeType::Sequence};
+
+  for (const auto& parameter : graph->parameters()) {
+    auto parameter_node = save_animation_parameter_value(parameter.default_value);
+    parameter_node["name"] = parameter.name;
+    parameters_node.push_back(parameter_node);
+  }
+
+  node["parameters"] = parameters_node;
+
+  auto states_node = YAML::Node{YAML::NodeType::Sequence};
+
+  for (const auto& state : graph->states()) {
+    auto state_node = YAML::Node{};
+
+    state_node["id"] = state.id;
+    state_node["name"] = state.name;
+    state_node["clip_name"] = state.clip_name;
+    state_node["speed"] = state.speed;
+    state_node["loop"] = state.loop;
+
+    auto position_node = YAML::Node{};
+    position_node["x"] = state.editor_position.x();
+    position_node["y"] = state.editor_position.y();
+    state_node["editor_position"] = position_node;
+
+    states_node.push_back(state_node);
+  }
+
+  node["states"] = states_node;
+
+  auto transitions_node = YAML::Node{YAML::NodeType::Sequence};
+
+  for (const auto& transition : graph->transitions()) {
+    auto transition_node = YAML::Node{};
+
+    if (transition.from_state) {
+      transition_node["from_state"] = *transition.from_state;
+    }
+
+    transition_node["to_state"] = transition.to_state;
+    transition_node["duration"] = transition.duration;
+    transition_node["has_exit_time"] = transition.has_exit_time;
+    transition_node["exit_time"] = transition.exit_time;
+
+    auto conditions_node = YAML::Node{YAML::NodeType::Sequence};
+
+    for (const auto& condition : transition.conditions) {
+      auto condition_node = save_animation_parameter_value(condition.expected);
+      condition_node["parameter_name"] = condition.parameter_name;
+      condition_node["comparator"] = save_animation_condition_comparator(condition.comparator);
+      conditions_node.push_back(condition_node);
+    }
+
+    transition_node["conditions"] = conditions_node;
+
+    transitions_node.push_back(transition_node);
+  }
+
+  node["transitions"] = transitions_node;
+
+  if (!resolved_path.parent_path().empty()) {
+    std::filesystem::create_directories(resolved_path.parent_path());
+  }
+
+  auto out = std::ofstream{resolved_path};
+  out << node;
+
+  const auto id = _cooker.import(resolved_path);
+
+  graph->_id = id;
+
+  utility::logger<"assets">::info("Saved animation_graph '{}'", resolved_path.generic_string());
 
   return id;
 }

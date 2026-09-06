@@ -25,6 +25,7 @@ inline constexpr auto drag_drop_payload_texture = "SBX_ASSET_TEXTURE";
 inline constexpr auto drag_drop_payload_mesh = "SBX_ASSET_MESH";
 inline constexpr auto drag_drop_payload_material = "SBX_ASSET_MATERIAL";
 inline constexpr auto drag_drop_payload_particle_effect = "SBX_ASSET_PARTICLE_EFFECT";
+inline constexpr auto drag_drop_payload_animation_graph = "SBX_ASSET_ANIM_GRAPH";
 
 /** @brief What a tile's drag source carries; ImGui payloads are memcpy'd, so this stays trivially copyable. */
 struct asset_drag_payload {

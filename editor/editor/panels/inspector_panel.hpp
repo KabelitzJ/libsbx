@@ -15,6 +15,7 @@
 #include <libsbx/assets/assets_module.hpp>
 #include <libsbx/assets/material.hpp>
 #include <libsbx/assets/particle_effect.hpp>
+#include <libsbx/assets/animation_graph.hpp>
 
 #include <libsbx/scenes/node.hpp>
 
@@ -50,6 +51,7 @@ private:
     sbx::assets::material_handle material{};
     sbx::assets::environment_map_handle environment_map{};
     sbx::assets::particle_effect_handle particle_effect{};
+    sbx::assets::animation_graph_handle animation_graph{};
   }; // struct asset_property_cache
 
   auto _draw_node_properties(editor_state& state, sbx::scenes::node& node, sbx::assets::assets_module& assets_module) -> void;

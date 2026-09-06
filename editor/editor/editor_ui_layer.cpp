@@ -13,6 +13,7 @@
 #include <imgui.h>
 #include <imgui_internal.h> // DockBuilder* — see _draw_dockspace's first-run default layout.
 #include <ImGuizmo.h>
+#include <imgui_node_editor.h>
 
 #include <libsbx/render/ui/fonts/material_design_icons.hpp>
 

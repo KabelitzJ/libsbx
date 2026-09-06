@@ -630,6 +630,12 @@ auto asset_browser_panel::draw(editor_state& state) -> void {
             } else if (entry.kind == asset_kind::script) {
               state.select_asset(sbx::math::uuid::nil(), entry.path, asset_kind::script);
             }
+
+            // A regular click already ran above (double_clicked implies clicked -- see
+            // asset_tile.cpp), so entry.id is already resolved by the importable-kind branch.
+            if (tile_result.double_clicked && entry.kind == asset_kind::animation_graph) {
+              state.request_open_animation_graph_editor(entry.id, entry.path);
+            }
           }
 
           ImGui::PopID();

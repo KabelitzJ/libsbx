@@ -993,8 +993,6 @@ auto asset_residency::save_particle_effect(particle_effect_handle& effect, const
   return id;
 }
 
-namespace {
-
 // "type"+"value" tag pair -- animation_parameter_value's alternative *is* its type, so this is
 // purely a persistence detail (the runtime API never switches on a type enum, see
 // animation_graph.hpp's doc comment).
@@ -1059,8 +1057,6 @@ auto load_animation_condition_comparator(const std::string& value) -> animation_
   if (value == "less_or_equal") return animation_condition_comparator::less_or_equal;
   return animation_condition_comparator::equals;
 }
-
-} // namespace
 
 auto asset_residency::load_animation_graph(const math::uuid& id) -> animation_graph_handle {
   _cooker.ensure_manifest_loaded();

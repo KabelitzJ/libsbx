@@ -282,6 +282,7 @@ target_sources(
     "${CMAKE_SOURCE_DIR}/libsbx/render/ui/widgets/file_dialog.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/render/ui/widgets/asset_tile.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/render/ui/widgets/asset_picker.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/render/ui/widgets/animation_parameter_widgets.cpp"
 
     "${CMAKE_SOURCE_DIR}/libsbx/scenes/scene_serializer.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/scenes/scene.cpp"
@@ -535,6 +536,7 @@ target_sources(
       "${CMAKE_SOURCE_DIR}/libsbx/render/ui/widgets/file_dialog.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/render/ui/widgets/asset_tile.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/render/ui/widgets/asset_picker.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/render/ui/widgets/animation_parameter_widgets.hpp"
 
       "${CMAKE_SOURCE_DIR}/libsbx/scenes/components.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/scenes/scene_serializer.hpp"

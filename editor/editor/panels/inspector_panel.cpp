@@ -278,8 +278,10 @@ auto draw_particle_effect_picker(editor_state& state, const char* popup_id, sbx:
   return result.changed;
 }
 
-// Same idea as draw_particle_effect_picker, for animator.graph.
-auto draw_animation_graph_picker(editor_state& state, const char* popup_id, sbx::assets::animation_graph_handle& slot) -> bool {
+// Same idea as draw_particle_effect_picker, for animator.graph. preview_mesh_id (nil if unknown)
+// is forwarded to the graph editor so it can list the mesh's real clip names instead of leaving
+// animation_state::clip_name a free-text field -- see animation_graph_panel's doc comment.
+auto draw_animation_graph_picker(editor_state& state, const char* popup_id, sbx::assets::animation_graph_handle& slot, sbx::math::uuid preview_mesh_id) -> bool {
   auto& assets_module = sbx::core::engine::get_module<sbx::assets::assets_module>();
 
   const auto current = slot.is_valid() ? to_picker_item(assets_module, slot->id()) : sbx::render::widgets::asset_picker_item{};
@@ -301,7 +303,9 @@ auto draw_animation_graph_picker(editor_state& state, const char* popup_id, sbx:
   }
 
   if (result.edit_requested && slot.is_valid()) {
-    state.select_asset(slot->id(), relative_asset_path(assets_module, slot->id()), asset_kind::animation_graph);
+    // Jumps straight into the visual graph editor rather than just selecting it (select_asset's
+    // read-only Inspector summary) -- the common case here is "assigned a graph, now go build it".
+    state.request_open_animation_graph_editor(slot->id(), relative_asset_path(assets_module, slot->id()), preview_mesh_id);
   }
 
   if (result.reveal_requested && slot.is_valid()) {
@@ -701,7 +705,7 @@ auto draw_animator_section(editor_state& state, sbx::scenes::node& node) -> void
 
   auto graph_handle = anim.graph;
 
-  if (draw_animation_graph_picker(state, "##animation_graph_picker_popup", graph_handle)) {
+  if (draw_animation_graph_picker(state, "##animation_graph_picker_popup", graph_handle, mesh->id())) {
     const auto before = anim;
     anim.set_graph(graph_handle); // not a plain assignment -- reseeds parameters/current_state_id from the new graph's own defaults
     state.push_command(std::make_unique<modify_component_command<sbx::scenes::animator>>(node.id(), before, anim, "Edit Animator"));
@@ -725,11 +729,19 @@ auto draw_animator_section(editor_state& state, sbx::scenes::node& node) -> void
   const auto current_state_it = std::ranges::find(states, anim.current_state_id, &sbx::assets::animation_state::id);
   ImGui::Text("Current State: %s", current_state_it != states.end() ? current_state_it->name.c_str() : "(none)");
 
-  if (anim.transition_target_state_id.has_value()) {
+  // Always drawn (a progress bar rather than text that only appears mid-transition) so this row's
+  // height never changes as transitions start/stop -- nothing below it should ever jump.
+  const auto is_transitioning = anim.transition_target_state_id.has_value();
+  auto overlay = std::string{"Not transitioning"};
+  auto alpha = 0.0f;
+
+  if (is_transitioning) {
     const auto target_state_it = std::ranges::find(states, *anim.transition_target_state_id, &sbx::assets::animation_state::id);
-    const auto alpha = (anim.transition_duration > 0.0f) ? std::clamp(anim.transition_time / anim.transition_duration, 0.0f, 1.0f) : 1.0f;
-    ImGui::Text("Transitioning to: %s (%.0f%%)", target_state_it != states.end() ? target_state_it->name.c_str() : "(none)", alpha * 100.0f);
+    alpha = (anim.transition_duration > 0.0f) ? std::clamp(anim.transition_time / anim.transition_duration, 0.0f, 1.0f) : 1.0f;
+    overlay = fmt::format("-> {} ({:.0f}%)", target_state_it != states.end() ? target_state_it->name.c_str() : "(none)", alpha * 100.0f);
   }
+
+  ImGui::ProgressBar(alpha, ImVec2{-1.0f, 0.0f}, overlay.c_str());
 
   // States/transitions themselves are hand-authored in the .animation_graph file until the visual
   // graph editor lands (see plan) -- this section is only for testing them: assigning parameter
@@ -2328,8 +2340,12 @@ auto inspector_panel::_draw_asset_properties(editor_state& state, const asset_se
     case asset_kind::animation_graph: {
       ImGui::Text("Type: Animation Graph");
 
-      // Read-only for now -- states/transitions are hand-authored in the .animation_graph file
-      // until the visual graph editor lands; this just shows what's there.
+      if (ImGui::Button(ICON_MDI_STATE_MACHINE " Open Graph Editor")) {
+        state.request_open_animation_graph_editor(asset.id, asset.path);
+      }
+
+      // The rest of this section is read-only -- states/transitions are edited in the graph
+      // editor opened above, this is just a quick-glance summary.
       const auto& handle = _asset_cache.animation_graph;
 
       if (handle.is_valid()) {

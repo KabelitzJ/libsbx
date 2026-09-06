@@ -11,7 +11,7 @@
 #include <fmt/format.h>
 
 #include <imgui.h>
-#include <imgui_internal.h> // DockBuilder* — see _draw_dockspace's first-run default layout.
+#include <imgui_internal.h>
 #include <ImGuizmo.h>
 #include <imgui_node_editor.h>
 
@@ -21,6 +21,7 @@
 #include <editor/panels/hierarchy_panel.hpp>
 #include <editor/panels/logger_panel.hpp>
 #include <editor/panels/inspector_panel.hpp>
+#include <editor/panels/animation_graph_panel.hpp>
 
 #include <editor/viewport_gizmo.hpp>
 #include <editor/viewport_picking.hpp>
@@ -160,6 +161,7 @@ auto editor_ui_layer::_create_panels() -> void {
   _panels.push_back(std::make_unique<inspector_panel>());
   _panels.push_back(std::make_unique<asset_browser_panel>());
   _panels.push_back(std::make_unique<logger_panel>());
+  _panels.push_back(std::make_unique<animation_graph_panel>()); // on-demand, not part of the default dock layout -- see its own doc comment
 }
 
 auto editor_ui_layer::_draw_dockspace() -> void {

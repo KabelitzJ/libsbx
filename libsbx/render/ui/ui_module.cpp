@@ -6,8 +6,6 @@
 
 namespace sbx::render {
 
-namespace {
-
 auto thumbnail_sampler_create_info() -> graphics::sampler::create_info {
   return graphics::sampler::create_info{
     .mag_filter = graphics::filter::linear,
@@ -21,8 +19,6 @@ auto thumbnail_sampler_create_info() -> graphics::sampler::create_info {
     .name = "Asset Tile Thumbnail Sampler",
   };
 }
-
-} // namespace
 
 ui_module::ui_module()
 : _thumbnail_sampler{thumbnail_sampler_create_info()} {

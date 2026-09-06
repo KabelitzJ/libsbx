@@ -65,8 +65,6 @@ struct particle_gpu_push {
   std::uint32_t sampler_index;
 }; // struct particle_gpu_push
 
-namespace {
-
 // Shared by both the billboard and mesh pipelines: group 0's weighted-OIT pair for alpha_blend, and
 // group 1's single-attachment true-additive blend (see particle_pass's doc comment for why additive
 // bypasses OIT). Only the shader differs between billboard and mesh variants.
@@ -106,8 +104,6 @@ auto make_additive_blend_attachments() -> std::vector<graphics::blend_attachment
     }
   };
 }
-
-} // namespace
 
 particle_pass::particle_pass() {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();

@@ -104,6 +104,19 @@ struct editor_state {
 
   std::optional<std::filesystem::path> reveal_in_browser_request{};
 
+  /** @brief One-shot "open the visual graph editor" request, same shape as reveal_in_browser_request — consumed by animation_graph_panel once it acts on it. */
+  struct animation_graph_edit_request {
+    sbx::math::uuid id{sbx::math::uuid::nil()};
+    std::filesystem::path path{}; // project-relative
+    sbx::math::uuid preview_mesh_id{sbx::math::uuid::nil()}; // nil = unknown -- caller had no mesh in context (opened from the Asset Browser rather than a node's Animator component)
+  }; // struct animation_graph_edit_request
+
+  auto request_open_animation_graph_editor(sbx::math::uuid id, std::filesystem::path path, sbx::math::uuid preview_mesh_id = sbx::math::uuid::nil()) -> void {
+    open_animation_graph_request = animation_graph_edit_request{id, std::move(path), preview_mesh_id};
+  }
+
+  std::optional<animation_graph_edit_request> open_animation_graph_request{};
+
   // The scene-graph undo/redo history, shared across panels like current_selection. Prefer the
   // pass-throughs below over reaching into this directly.
   command_stack commands{};

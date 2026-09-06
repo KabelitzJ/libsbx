@@ -111,8 +111,6 @@ struct transparent_entry {
   transform_data transform{};
 }; // struct transparent_entry
 
-namespace {
-
 // Linear scan over a joint channel's keyframes -- clip sizes are small (tens of keys), so this
 // isn't worth a binary search. Returns the same index twice when time falls outside the track
 // (clamped to the first/last key) or the track has only one key.
@@ -279,7 +277,26 @@ auto advance_local_time(std::float_t time, std::float_t delta_time, std::float_t
   }, value);
 }
 
-} // namespace
+// Reconciles animator.parameters against graph.parameters() by name: adds any the graph defines
+// that the instance doesn't have yet (seeded from the graph's default), and drops any the instance
+// has that the graph no longer defines. Existing entries' current values are left untouched, so
+// this doesn't clobber a live/test value while the graph is being edited. Needed because
+// set_graph() only snapshots the parameter list once, at assignment time -- editing a graph's
+// parameter list afterwards (e.g. live in animation_graph_panel) would otherwise never reach
+// entities that already called set_graph() with it.
+auto reconcile_animator_parameters(const assets::animation_graph& graph, scenes::animator& animator) -> void {
+  for (const auto& parameter : graph.parameters()) {
+    const auto exists = std::ranges::any_of(animator.parameters, [&parameter](const auto& entry) { return entry.first == parameter.name; });
+
+    if (!exists) {
+      animator.parameters.emplace_back(parameter.name, parameter.default_value);
+    }
+  }
+
+  std::erase_if(animator.parameters, [&graph](const auto& entry) {
+    return !std::ranges::any_of(graph.parameters(), [&entry](const auto& parameter) { return parameter.name == entry.first; });
+  });
+}
 
 scene_renderer_module::scene_renderer_module() {
   _ensure_resources();
@@ -429,6 +446,8 @@ auto scene_renderer_module::_resolve_state_clip(const scenes::mesh_renderer& ren
 }
 
 auto scene_renderer_module::_advance_animator_state(const scenes::mesh_renderer& renderer, const assets::animation_graph& graph, scenes::animator& animator, std::float_t delta_time) -> void {
+  reconcile_animator_parameters(graph, animator);
+
   const auto* current_state = find_animation_state(graph, animator.current_state_id);
 
   // Freshly assigned graph (set_graph can't resolve clips itself -- it has no mesh_renderer to

@@ -231,8 +231,6 @@ auto particles_module::_resolve_collisions(scenes::scene& scene, const assets::p
   }
 }
 
-namespace {
-
 // static_vector has no push_front()/erase() -- points.front() is the tail (oldest), points.back()
 // the head (newest); once full, the oldest is dropped by shifting everyone down one slot and
 // overwriting the last (a plain push_back would just fail/no-op once at capacity).
@@ -247,8 +245,6 @@ auto push_trail_point(trail& trail, const trail_point& point) -> void {
     trail.points.push_back(point);
   }
 }
-
-} // namespace
 
 auto particles_module::_record_trails(const assets::particle_emitter& config, scenes::particle_emitter& runtime, std::float_t dt) -> void {
   for (auto& p : runtime.particles) {

@@ -16,8 +16,6 @@
 
 namespace sbx::render {
 
-namespace {
-
 // Compute-write (this pass) -> vertex-read (depth_pre_pass/shadow_pass/opaque_pass), all within
 // the same frame's submission -- the *cross-frame* hazard (this frame's dispatch racing the
 // previous frame's still-in-flight vertex fetch of the same scratch buffer) is instead handled by
@@ -33,8 +31,6 @@ auto skin_to_vertex_barrier() -> VkMemoryBarrier2 {
 
   return barrier;
 }
-
-} // namespace
 
 skin_pass::skin_pass() {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();

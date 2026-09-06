@@ -22,8 +22,6 @@
 
 namespace sbx::render::widgets {
 
-namespace {
-
 [[nodiscard]] auto icon_for(asset_picker_kind kind) -> const char* {
   switch (kind) {
     case asset_picker_kind::texture: return ICON_MDI_IMAGE;
@@ -62,8 +60,6 @@ namespace {
 
   return files;
 }
-
-} // namespace
 
 auto drag_payload_type_for(asset_picker_kind kind) -> const char* {
   switch (kind) {

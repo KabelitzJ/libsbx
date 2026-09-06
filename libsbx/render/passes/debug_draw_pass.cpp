@@ -108,7 +108,7 @@ auto debug_draw_pass::execute(render_context& context, std::uint32_t /*group*/) 
     const auto new_capacity = static_cast<std::size_t>(static_cast<std::float_t>(vertices.size()) * growth_factor) + 1u;
 
     _buffers[slot] = registry.emplace<graphics::buffer>(graphics::buffer::create_info{
-      .size = static_cast<graphics::buffer::size_type>(new_capacity * sizeof(render::debug_vertex)),
+      .size = new_capacity * sizeof(render::debug_vertex),
       .usage = graphics::buffer_usage::device_address | graphics::buffer_usage::storage,
       .memory = graphics::memory_usage::host_write,
       .name = "Debug Draw Vertices"

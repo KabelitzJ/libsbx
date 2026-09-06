@@ -27,6 +27,7 @@ scripting_module::scripting_module() {
 
   auto config = scripting::managed::rumtime_config{
 		.backend_path = dotnet_dir.generic_string(),
+		.message_callback = nullptr,
 		.exception_callback = _exception_callback
 	};
 
@@ -146,7 +147,7 @@ auto scripting_module::instantiate(scenes::node& node, std::string_view class_na
 
   auto instance = type.create_instance();
 
-  instance.set_field_value("UUID", static_cast<std::uint64_t>(node.get_component<scenes::id>().value()));
+  instance.set_field_value("UUID", node.get_component<scenes::id>().value());
 
   // Apply any persisted field overrides before OnCreate, so scripted logic in OnCreate sees
   // author-set values immediately (mirrors Unity applying serialized fields before Awake/Start).

@@ -146,7 +146,7 @@ auto resolve_convex(scenes::scene& scene, const scenes::node& node, convex_hull_
 
     const auto world_pose = compose_world_pose(scene, node);
 
-    return body_shape{convex_shape{convex_hull{hull_data.points}}, compose_pose(world_pose, collider.offset, collider.rotation), collider.friction, collider.restitution};
+    return body_shape{convex_shape{convex_hull{hull_data.points, hull_data.faces}}, compose_pose(world_pose, collider.offset, collider.rotation), collider.friction, collider.restitution};
   }
 
   return std::nullopt;

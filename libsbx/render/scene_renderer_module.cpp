@@ -748,7 +748,7 @@ auto scene_renderer_module::_build_packet() -> render_packet {
   // here -- render cadence, feeding straight into this frame's packet -- rather than in a separate
   // fixed-tick system (see scenes::skeleton_pose's doc comment).
   auto skin_scratch_cursor = std::uint32_t{0u};
-  const auto animation_delta_time = static_cast<std::float_t>(scenes_module.simulation_delta_time().value());
+  const auto animation_delta_time = scenes_module.simulation_delta_time().value();
 
   for (const auto [entity, world, renderer, pose] : scene.query<scenes::world_transform, scenes::mesh_renderer, scenes::skeleton_pose>().each()) {
     if (!renderer.mesh.is_valid() || !pose.skeleton.is_valid()) {
@@ -876,8 +876,8 @@ auto scene_renderer_module::_build_packet() -> render_packet {
 
   auto& assets_module = core::engine::get_module<assets::assets_module>();
 
-  const auto delta_time = static_cast<std::float_t>(scenes_module.simulation_delta_time().value());
-  const auto time = static_cast<std::float_t>(scenes_module.simulation_time().value());
+  const auto delta_time = scenes_module.simulation_delta_time().value();
+  const auto time = scenes_module.simulation_time().value();
 
   packet.delta_time = delta_time;
   packet.time = time;

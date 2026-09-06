@@ -57,7 +57,7 @@ auto scene::insert_child(node parent, node child, std::size_t index) -> void {
   child_relationship.parent = parent._entity;
 
   auto& siblings = _registry.get<relationship>(parent._entity).children;
-  siblings.insert(siblings.begin() + std::min(index, siblings.size()), child._entity);
+  siblings.insert(siblings.begin() + static_cast<std::ptrdiff_t>(std::min(index, siblings.size())), child._entity);
 }
 
 auto scene::destroy_node(node target) -> void {

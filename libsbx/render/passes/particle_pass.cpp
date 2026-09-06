@@ -295,7 +295,7 @@ auto particle_pass::_ensure_uploaded(render_context& context) -> void {
     const auto new_capacity = static_cast<std::size_t>(static_cast<std::float_t>(billboard_instances.size()) * growth_factor) + 1u;
 
     _billboard_buffers[slot] = registry.emplace<graphics::buffer>(graphics::buffer::create_info{
-      .size = static_cast<graphics::buffer::size_type>(new_capacity * sizeof(particle_billboard_instance)),
+      .size = new_capacity * sizeof(particle_billboard_instance),
       .usage = graphics::buffer_usage::device_address | graphics::buffer_usage::storage,
       .memory = graphics::memory_usage::host_write,
       .name = "Particle Billboard Instances"
@@ -316,7 +316,7 @@ auto particle_pass::_ensure_uploaded(render_context& context) -> void {
     const auto new_capacity = static_cast<std::size_t>(static_cast<std::float_t>(mesh_instances.size()) * growth_factor) + 1u;
 
     _mesh_buffers[slot] = registry.emplace<graphics::buffer>(graphics::buffer::create_info{
-      .size = static_cast<graphics::buffer::size_type>(new_capacity * sizeof(particle_mesh_instance)),
+      .size = new_capacity * sizeof(particle_mesh_instance),
       .usage = graphics::buffer_usage::device_address | graphics::buffer_usage::storage,
       .memory = graphics::memory_usage::host_write,
       .name = "Particle Mesh Instances"
@@ -337,7 +337,7 @@ auto particle_pass::_ensure_uploaded(render_context& context) -> void {
     const auto new_capacity = static_cast<std::size_t>(static_cast<std::float_t>(trail_vertices.size()) * growth_factor) + 1u;
 
     _trail_buffers[slot] = registry.emplace<graphics::buffer>(graphics::buffer::create_info{
-      .size = static_cast<graphics::buffer::size_type>(new_capacity * sizeof(trail_vertex)),
+      .size = new_capacity * sizeof(trail_vertex),
       .usage = graphics::buffer_usage::device_address | graphics::buffer_usage::storage,
       .memory = graphics::memory_usage::host_write,
       .name = "Particle Trail Vertices"

@@ -155,13 +155,13 @@ auto ibl_baker::bake_environment(environment_map& record, const std::vector<std:
   auto& radiance = registry.get<graphics::image>(radiance_handle);
 
   auto staging = graphics::buffer{graphics::buffer::create_info{
-    .size = static_cast<graphics::buffer::size_type>(pixels.size()),
+    .size = pixels.size(),
     .usage = graphics::buffer_usage::transfer_source,
     .memory = graphics::memory_usage::host_write,
     .name = "Environment Staging"
   }};
 
-  staging.write(pixels.data(), static_cast<graphics::buffer::size_type>(pixels.size()));
+  staging.write(pixels.data(), pixels.size());
 
   {
     auto to_transfer = graphics::command_buffer::image_transition_data{};

@@ -686,7 +686,7 @@ auto read_node_components(node& target_node, const YAML::Node& node_yaml, assets
       const auto& hull_data = hull_cache.get_or_build(assets_module, collider.mesh->id());
 
       const auto mass = (body.inverse_mass > 0.0f) ? (1.0f / body.inverse_mass) : 0.0f;
-      body.local_inverse_inertia = physics::local_inverse_inertia(physics::convex_shape{physics::convex_hull{hull_data.points}}, mass);
+      body.local_inverse_inertia = physics::local_inverse_inertia(physics::convex_shape{physics::convex_hull{hull_data.points, hull_data.faces}}, mass);
     }
   }
 }

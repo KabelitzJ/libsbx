@@ -156,7 +156,7 @@ auto script_compiler::_is_stale(const std::vector<std::filesystem::path>& source
       return true;
     }
 
-    const auto mtime_count = static_cast<std::int64_t>(mtime.time_since_epoch().count());
+    const auto mtime_count = mtime.time_since_epoch().count();
 
     if (entry->second.mtime == mtime_count) {
       continue;
@@ -188,7 +188,7 @@ auto script_compiler::_record_manifest(const std::vector<std::filesystem::path>&
 
     auto error = std::error_code{};
     const auto mtime = std::filesystem::last_write_time(source, error);
-    const auto mtime_count = error ? std::int64_t{0} : static_cast<std::int64_t>(mtime.time_since_epoch().count());
+    const auto mtime_count = error ? std::int64_t{0} : mtime.time_since_epoch().count();
     const auto hash = utility::hash_file(source);
 
     _manifest_sources.emplace(key, source_entry{.hash = hash, .mtime = mtime_count});

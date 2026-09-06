@@ -29,7 +29,7 @@ inline constexpr auto basic_vector3<Type>::cross(const basic_vector3& lhs, const
 
 template<scalar Type>
 inline constexpr auto basic_vector3<Type>::dot(const basic_vector3& lhs, const basic_vector3& rhs) noexcept -> length_type {
-  return lhs.x() * rhs.x() + lhs.y() * rhs.y() + lhs.z() * rhs.z();
+  return static_cast<length_type>(lhs.x() * rhs.x() + lhs.y() * rhs.y() + lhs.z() * rhs.z());
 }
 
 template<scalar Type>

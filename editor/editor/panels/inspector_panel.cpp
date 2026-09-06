@@ -2362,7 +2362,7 @@ auto inspector_panel::_draw_asset_properties(editor_state& state, const asset_se
               using value_type = std::decay_t<decltype(value)>;
 
               if constexpr (std::is_same_v<value_type, std::float_t>) {
-                ImGui::Text("%s (Float): %.3f", parameter.name.c_str(), value);
+                ImGui::Text("%s (Float): %.3f", parameter.name.c_str(), static_cast<std::double_t>(value));
               } else if constexpr (std::is_same_v<value_type, bool>) {
                 ImGui::Text("%s (Bool): %s", parameter.name.c_str(), value ? "true" : "false");
               } else if constexpr (std::is_same_v<value_type, std::int32_t>) {

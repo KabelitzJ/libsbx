@@ -37,7 +37,7 @@ public:
     _generation{0u} { }
 
   constexpr resource_handle(const std::uint32_t index, const std::uint8_t generation) noexcept
-  : _index{index},
+  : _index{index & invalid_index},
     _generation{generation} { }
 
   [[nodiscard]] constexpr auto index() const noexcept -> std::uint32_t {

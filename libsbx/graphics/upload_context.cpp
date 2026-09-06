@@ -18,13 +18,13 @@ auto upload_context::stage_image(image_handle destination, std::span<const std::
   const auto& destination_image = registry.get<image>(destination);
 
   const auto staging = registry.emplace<buffer>(buffer::create_info{
-    .size = static_cast<buffer::size_type>(pixels.size()),
+    .size = pixels.size(),
     .usage = buffer_usage::transfer_source,
     .memory = memory_usage::host_write,
     .name = "Staging"
   });
 
-  registry.get<buffer>(staging).write(pixels.data(), static_cast<buffer::size_type>(pixels.size()));
+  registry.get<buffer>(staging).write(pixels.data(), pixels.size());
 
   _pending_images.push_back(pending_image{
     .destination = destination,
@@ -43,18 +43,18 @@ auto upload_context::stage_buffer(buffer_handle destination, std::span<const std
   auto& registry = graphics_module.resource_registry();
 
   const auto staging = registry.emplace<buffer>(buffer::create_info{
-    .size = static_cast<buffer::size_type>(data.size()),
+    .size = data.size(),
     .usage = buffer_usage::transfer_source,
     .memory = memory_usage::host_write,
     .name = "Staging"
   });
 
-  registry.get<buffer>(staging).write(data.data(), static_cast<buffer::size_type>(data.size()));
+  registry.get<buffer>(staging).write(data.data(), data.size());
 
   _pending_buffers.push_back(pending_buffer{
     .destination = destination,
     .staging = staging,
-    .size = static_cast<buffer::size_type>(data.size()),
+    .size = data.size(),
     .destination_offset = destination_offset
   });
 }

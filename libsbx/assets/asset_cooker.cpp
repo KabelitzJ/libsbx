@@ -523,7 +523,7 @@ auto asset_cooker::_is_cooked_stale(const math::uuid& id, const std::filesystem:
     return true;
   }
 
-  const auto mtime_count = static_cast<std::int64_t>(mtime.time_since_epoch().count());
+  const auto mtime_count = mtime.time_since_epoch().count();
 
   if (entry->second.source_mtime == mtime_count) {
     return false; // fast path: unchanged since last cook
@@ -542,7 +542,7 @@ auto asset_cooker::_is_cooked_stale(const math::uuid& id, const std::filesystem:
 auto asset_cooker::_record_cook(const math::uuid& id, std::uint32_t cooker_version, const std::filesystem::path& source) -> void {
   auto error = std::error_code{};
   const auto mtime = std::filesystem::last_write_time(source, error);
-  const auto mtime_count = error ? std::int64_t{0} : static_cast<std::int64_t>(mtime.time_since_epoch().count());
+  const auto mtime_count = error ? std::int64_t{0} : mtime.time_since_epoch().count();
   const auto hash = utility::hash_file(source);
 
   {

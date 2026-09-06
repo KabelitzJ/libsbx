@@ -30,7 +30,7 @@ auto method_info::get_parameter_types() -> const std::vector<type*>& {
     std::invoke(detail::backend.get_method_info_parameter_types, _handle, nullptr, &parameter_count);
 
     auto parameter_types = std::vector<type_id>{};
-    parameter_types.resize(parameter_count);
+    parameter_types.resize(static_cast<std::size_t>(parameter_count));
 
     std::invoke(detail::backend.get_method_info_parameter_types, _handle, parameter_types.data(), &parameter_count);
 
@@ -56,7 +56,7 @@ auto method_info::get_attributes() const -> std::vector<attribute> {
   std::invoke(detail::backend.get_method_info_attributes, _handle, nullptr, &attribute_count);
 
   auto attribute_handles = std::vector<handle>{};
-  attribute_handles.resize(attribute_count);
+  attribute_handles.resize(static_cast<std::size_t>(attribute_count));
 
   std::invoke(detail::backend.get_method_info_attributes, _handle, attribute_handles.data(), &attribute_count);
 

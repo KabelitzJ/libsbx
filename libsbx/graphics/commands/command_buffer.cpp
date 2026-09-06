@@ -489,7 +489,7 @@ auto command_buffer::execute_commands(const std::vector<command_buffer>& command
     handles.push_back(command);
   }
 
-  vkCmdExecuteCommands(_handle, handles.size(), handles.data());
+  vkCmdExecuteCommands(_handle, static_cast<std::uint32_t>(handles.size()), handles.data());
 }
 
 } // namespace sbx::graphics

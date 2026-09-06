@@ -1368,8 +1368,8 @@ auto asset_residency::process_uploads(std::uint64_t frame_index) -> void {
   }
 
   for (auto& request : pending_meshes) {
-    const auto vertex_bytes = static_cast<graphics::buffer::size_type>(request.vertices.size() * sizeof(vertex));
-    const auto index_bytes = static_cast<graphics::buffer::size_type>(request.indices.size() * sizeof(std::uint32_t));
+    const auto vertex_bytes = graphics::buffer::size_type{request.vertices.size() * sizeof(vertex)};
+    const auto index_bytes = graphics::buffer::size_type{request.indices.size() * sizeof(std::uint32_t)};
 
     const auto vertex_buffer = registry.emplace<graphics::buffer>(graphics::buffer::create_info{
       .size = vertex_bytes,
@@ -1391,7 +1391,7 @@ auto asset_residency::process_uploads(std::uint64_t frame_index) -> void {
     const auto vertex_address = registry.get<graphics::buffer>(vertex_buffer).address();
 
     if (!request.skin_vertices.empty()) {
-      const auto skin_vertex_bytes = static_cast<graphics::buffer::size_type>(request.skin_vertices.size() * sizeof(skin_vertex));
+      const auto skin_vertex_bytes = graphics::buffer::size_type{request.skin_vertices.size() * sizeof(skin_vertex)};
 
       const auto skin_vertex_buffer = registry.emplace<graphics::buffer>(graphics::buffer::create_info{
         .size = skin_vertex_bytes,

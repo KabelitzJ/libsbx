@@ -107,7 +107,7 @@ public:
     const auto y2 = y0 - 1.0f + 2.0f * G2;
 
     const auto gi0 = hash(i + hash(j));
-    const auto gi1 = hash(i + i1 + hash(j + j1));
+    const auto gi1 = hash(static_cast<std::float_t>(i) + i1 + hash(static_cast<std::float_t>(j) + j1));
     const auto gi2 = hash(i + 1 + hash(j + 1));
 
     auto t0 = 0.5f - x0 * x0 - y0 * y0;
@@ -155,10 +155,10 @@ public:
     auto i = fast_floor(x + s);
     auto j = fast_floor(y + s);
     auto k = fast_floor(z + s);
-    auto t = (i + j + k) * G3;
-    auto X0 = i - t; // Unskew the cell origin back to (x,y,z) space
-    auto Y0 = j - t;
-    auto Z0 = k - t;
+    auto t = static_cast<std::float_t>(i + j + k) * G3;
+    auto X0 = static_cast<std::float_t>(i) - t; // Unskew the cell origin back to (x,y,z) space
+    auto Y0 = static_cast<std::float_t>(j) - t;
+    auto Z0 = static_cast<std::float_t>(k) - t;
     auto x0 = x - X0; // The x,y,z distances from the cell origin
     auto y0 = y - Y0;
     auto z0 = z - Z0;
@@ -236,8 +236,8 @@ public:
 
     // Work out the hashed gradient indices of the four simplex corners
     auto gi0 = hash(i + hash(j + hash(k)));
-    auto gi1 = hash(i + i1 + hash(j + j1 + hash(k + k1)));
-    auto gi2 = hash(i + i2 + hash(j + j2 + hash(k + k2)));
+    auto gi1 = hash(static_cast<std::float_t>(i) + i1 + hash(static_cast<std::float_t>(j) + j1 + hash(static_cast<std::float_t>(k) + k1)));
+    auto gi2 = hash(static_cast<std::float_t>(i) + i2 + hash(static_cast<std::float_t>(j) + j2 + hash(static_cast<std::float_t>(k) + k2)));
     auto gi3 = hash(i + 1 + hash(j + 1 + hash(k + 1)));
 
     // Calculate the contribution from the four corners
@@ -286,7 +286,7 @@ private:
 
   static constexpr auto fast_floor(std::float_t fp) -> std::int32_t {
     auto i = static_cast<std::int32_t>(fp);
-    return (fp < i) ? (i - 1) : (i);
+    return (fp < static_cast<std::float_t>(i)) ? (i - 1) : (i);
   }
 
   template<typename Type>

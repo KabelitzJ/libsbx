@@ -56,7 +56,43 @@ scripting_module::scripting_module() {
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Transform_GetRight", reinterpret_cast<void*>(&interop::transform_get_right));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Transform_GetForward", reinterpret_cast<void*>(&interop::transform_get_forward));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Transform_GetUp", reinterpret_cast<void*>(&interop::transform_get_up));
-  // _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Transform_LookAt", reinterpret_cast<void*>(&interop::transform_look_at));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Transform_GetScale", reinterpret_cast<void*>(&interop::transform_get_scale));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Transform_SetScale", reinterpret_cast<void*>(&interop::transform_set_scale));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Transform_LookAt", reinterpret_cast<void*>(&interop::transform_look_at));
+
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Animator_GetPlaying", reinterpret_cast<void*>(&interop::animator_get_playing));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Animator_SetPlaying", reinterpret_cast<void*>(&interop::animator_set_playing));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Animator_GetCurrentStateName", reinterpret_cast<void*>(&interop::animator_get_current_state_name));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Animator_SetFloat", reinterpret_cast<void*>(&interop::animator_set_float));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Animator_SetBool", reinterpret_cast<void*>(&interop::animator_set_bool));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Animator_SetInt", reinterpret_cast<void*>(&interop::animator_set_int));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Animator_SetTrigger", reinterpret_cast<void*>(&interop::animator_set_trigger));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Animator_GetFloat", reinterpret_cast<void*>(&interop::animator_get_float));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Animator_GetBool", reinterpret_cast<void*>(&interop::animator_get_bool));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Animator_GetInt", reinterpret_cast<void*>(&interop::animator_get_int));
+
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Rigidbody_GetLinearVelocity", reinterpret_cast<void*>(&interop::rigidbody_get_linear_velocity));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Rigidbody_SetLinearVelocity", reinterpret_cast<void*>(&interop::rigidbody_set_linear_velocity));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Rigidbody_GetAngularVelocity", reinterpret_cast<void*>(&interop::rigidbody_get_angular_velocity));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Rigidbody_SetAngularVelocity", reinterpret_cast<void*>(&interop::rigidbody_set_angular_velocity));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Rigidbody_GetMass", reinterpret_cast<void*>(&interop::rigidbody_get_mass));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Rigidbody_SetMass", reinterpret_cast<void*>(&interop::rigidbody_set_mass));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Rigidbody_GetGravityScale", reinterpret_cast<void*>(&interop::rigidbody_get_gravity_scale));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Rigidbody_SetGravityScale", reinterpret_cast<void*>(&interop::rigidbody_set_gravity_scale));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Rigidbody_AddForce", reinterpret_cast<void*>(&interop::rigidbody_add_force));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Rigidbody_AddTorque", reinterpret_cast<void*>(&interop::rigidbody_add_torque));
+
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Node_FindByName", reinterpret_cast<void*>(&interop::node_find_by_name));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Node_Create", reinterpret_cast<void*>(&interop::node_create));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Node_Destroy", reinterpret_cast<void*>(&interop::node_destroy));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Node_SetParent", reinterpret_cast<void*>(&interop::node_set_parent));
+
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "ParticleEffect_Play", reinterpret_cast<void*>(&interop::particle_effect_play));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "ParticleEffect_Pause", reinterpret_cast<void*>(&interop::particle_effect_pause));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "ParticleEffect_Stop", reinterpret_cast<void*>(&interop::particle_effect_stop));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "ParticleEffect_GetLoop", reinterpret_cast<void*>(&interop::particle_effect_get_loop));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "ParticleEffect_SetLoop", reinterpret_cast<void*>(&interop::particle_effect_set_loop));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "ParticleEffect_GetIsPlaying", reinterpret_cast<void*>(&interop::particle_effect_get_is_playing));
 
   // _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "CharacterController_GetHeight", reinterpret_cast<void*>(&interop::character_controller_get_height));
   // _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "CharacterController_GetRadius", reinterpret_cast<void*>(&interop::character_controller_get_radius));
@@ -75,23 +111,45 @@ scripting_module::scripting_module() {
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Input_MousePosition", reinterpret_cast<void*>(&interop::input_mouse_position));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Input_ScrollDelta", reinterpret_cast<void*>(&interop::input_scroll_delta));
 
-  // _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Camera_ScreenPointToRay", reinterpret_cast<void*>(&interop::camera_screen_point_to_ray));
-  // _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Camera_GetPosition", reinterpret_cast<void*>(&interop::camera_get_position));
-  // _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Camera_SetPosition", reinterpret_cast<void*>(&interop::camera_set_position));
-  // _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Camera_GetRotation", reinterpret_cast<void*>(&interop::camera_get_rotation));
-  // _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Camera_SetRotation", reinterpret_cast<void*>(&interop::camera_set_rotation));
-  // _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Camera_GetForward", reinterpret_cast<void*>(&interop::camera_get_forward));
-  // _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Camera_GetRight", reinterpret_cast<void*>(&interop::camera_get_right));
-  // _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Camera_GetUp", reinterpret_cast<void*>(&interop::camera_get_up));
-  // _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Camera_GetViewport", reinterpret_cast<void*>(&interop::camera_get_viewport));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Camera_ScreenPointToRay", reinterpret_cast<void*>(&interop::camera_screen_point_to_ray));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Camera_MainGetPosition", reinterpret_cast<void*>(&interop::camera_main_get_position));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Camera_MainSetPosition", reinterpret_cast<void*>(&interop::camera_main_set_position));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Camera_MainGetRotation", reinterpret_cast<void*>(&interop::camera_main_get_rotation));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Camera_MainSetRotation", reinterpret_cast<void*>(&interop::camera_main_set_rotation));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Camera_MainGetForward", reinterpret_cast<void*>(&interop::camera_main_get_forward));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Camera_MainGetRight", reinterpret_cast<void*>(&interop::camera_main_get_right));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Camera_MainGetUp", reinterpret_cast<void*>(&interop::camera_main_get_up));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Camera_GetViewport", reinterpret_cast<void*>(&interop::camera_get_viewport));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Camera_GetFovDegrees", reinterpret_cast<void*>(&interop::camera_get_fov_degrees));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Camera_SetFovDegrees", reinterpret_cast<void*>(&interop::camera_set_fov_degrees));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Camera_GetNearPlane", reinterpret_cast<void*>(&interop::camera_get_near_plane));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Camera_SetNearPlane", reinterpret_cast<void*>(&interop::camera_set_near_plane));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Camera_GetFarPlane", reinterpret_cast<void*>(&interop::camera_get_far_plane));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Camera_SetFarPlane", reinterpret_cast<void*>(&interop::camera_set_far_plane));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Camera_GetExposure", reinterpret_cast<void*>(&interop::camera_get_exposure));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Camera_SetExposure", reinterpret_cast<void*>(&interop::camera_set_exposure));
 
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Time_DeltaTime", reinterpret_cast<void*>(&interop::time_delta_time));
 
   interop::register_managed_component<scenes::tag>("Tag", _core_assembly);
   interop::register_managed_component<scenes::local_transform>("Transform", _core_assembly);
+  interop::register_managed_component<scenes::animator>("Animator", _core_assembly);
+  interop::register_managed_component<scenes::particle_effect>("ParticleEffect", _core_assembly);
+  // "CameraSettings", not "Camera" -- Sbx.Core.Camera is the Camera.Main singleton wrapper
+  // (always resolves scene.active_camera() natively, no uuid involved at all); this is the
+  // separate per-node scenes::camera field access (fov/near/far/exposure) for GetComponent<CameraSettings>()
+  // on whichever node a script actually sits on, which needs a real uuid -- keeping them as two
+  // distinct C# types avoids Main's properties silently ignoring which node they were fetched from.
+  interop::register_managed_component<scenes::camera>("CameraSettings", _core_assembly);
+  interop::register_managed_component<physics::rigidbody>("Rigidbody", _core_assembly);
   // interop::register_managed_component<physics::character_controller>("CharacterController", _core_assembly);
 
   _core_assembly.upload_internal_calls();
+
+  auto& physics_module = core::engine::get_module<physics::physics_module>();
+
+  physics_module.on_contact_began().connect([this](const physics::collision_event& event) { _dispatch_collision_event(event, true); });
+  physics_module.on_contact_ended().connect([this](const physics::collision_event& event) { _dispatch_collision_event(event, false); });
 
   _load_game_assembly();
 }
@@ -239,6 +297,34 @@ auto scripting_module::_apply_field_overrides(managed::object& instance, const s
       case scenes::script_field_type::string:  instance.set_field_value(field.name, field.string_value); break;
     }
   }
+}
+
+auto scripting_module::_invoke_collision_handler(scenes::node& self, const scenes::node& other, const physics::collision_event& event, bool began) -> void {
+  if (!self.is_valid() || !self.has_component<scripting::scripts>()) {
+    return;
+  }
+
+  const auto other_uuid = other.is_valid() ? other.get_component<scenes::id>().value() : std::uint64_t{0u};
+
+  const auto* method = event.is_trigger
+    ? (began ? "__DispatchTriggerEnter" : "__DispatchTriggerExit")
+    : (began ? "__DispatchCollisionEnter" : "__DispatchCollisionExit");
+
+  auto& scripts = self.get_component<scripting::scripts>();
+
+  for (auto& instance : scripts.instances) {
+    instance.invoke(method, other_uuid, event.normal.x(), event.normal.y(), event.normal.z(), event.point.x(), event.point.y(), event.point.z());
+  }
+}
+
+auto scripting_module::_dispatch_collision_event(const physics::collision_event& event, bool began) -> void {
+  // Copies, not references into event -- get_component() needs its non-const overload (see
+  // solver.cpp's apply_positional_correction for the same reasoning).
+  auto node_a = event.node_a;
+  auto node_b = event.node_b;
+
+  _invoke_collision_handler(node_a, node_b, event, began);
+  _invoke_collision_handler(node_b, node_a, event, began);
 }
 
 auto scripting_module::run_on_destroy(scenes::scene& target) -> void {

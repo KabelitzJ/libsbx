@@ -1090,6 +1090,18 @@ auto draw_collider_offset_rotation_friction(editor_state& state, sbx::scenes::no
   bracket_edit(state, node, collider, pending, label);
   ImGui::DragFloat("Restitution", &collider.restitution, 0.01f, 0.0f, 1.0f);
   bracket_edit(state, node, collider, pending, label);
+
+  {
+    const auto before = collider;
+
+    if (ImGui::Checkbox("Is Trigger", &collider.is_trigger)) {
+      state.push_command(std::make_unique<modify_component_command<Collider>>(node.id(), before, collider, label));
+    }
+  }
+
+  if (collider.is_trigger) {
+    ImGui::TextDisabled("Detected (physics_module::on_contact_began/on_contact_ended) but never physically pushes anything.");
+  }
 }
 
 auto draw_shape_collider_section(editor_state& state, sbx::scenes::node& node) -> void {

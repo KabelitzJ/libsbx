@@ -69,6 +69,15 @@ public:
   auto set_viewport_extent(math::vector2u extent) -> void;
 
   /**
+   * @brief The extent actually being rendered at this frame -- set_viewport_extent()'s override
+   * when one is active, otherwise the swapchain's own extent. What Sbx.Core.Camera.Viewport/
+   * ScreenPointToRay derive their aspect ratio from (see interop::camera_get_viewport).
+   */
+  [[nodiscard]] auto target_extent() const noexcept -> math::vector2u {
+    return _target_extent;
+  }
+
+  /**
    * @brief Overrides the camera_data _build_packet() would otherwise derive from the scene's
    * active camera — e.g. the editor's own fly-camera while its play_state is "edit". Pass
    * std::nullopt (the default) to fall back to the scene's active camera; runtime never calls

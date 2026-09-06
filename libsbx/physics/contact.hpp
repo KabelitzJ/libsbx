@@ -54,7 +54,30 @@ struct contact_manifold {
   std::float_t combined_friction{0.0f};
   std::float_t combined_restitution{0.0f};
   containers::static_vector<contact_point, max_manifold_points> points{};
+
+  // True when either side's collider is a trigger (shape_collider::is_trigger/mesh_collider::
+  // is_trigger) -- set by physics_module::_narrowphase right after generate_pair_contact returns,
+  // not by narrowphase itself (checking only each node's own top-level collider, not a compound
+  // rigidbody's full subtree -- a known v1 simplification). physics_module::fixed_update excludes
+  // every manifold with this set from the velocity solver/positional correction entirely, so a
+  // trigger pair is detected (and still fires on_contact_began/on_contact_ended) but never
+  // physically pushes anything apart.
+  bool is_trigger{false};
 }; // struct contact_manifold
+
+/**
+ * @brief Payload for physics_module::on_contact_began/on_contact_ended -- one begin/end
+ * transition of a colliding (or overlapping, if is_trigger) pair. normal/point are only meaningful
+ * on a "began" event (copied from the manifold's first point); an "ended" event's pair is no
+ * longer touching, so there's no contact geometry left to report.
+ */
+struct collision_event {
+  scenes::node node_a;
+  scenes::node node_b;
+  math::vector3 normal{math::vector3::up};
+  math::vector3 point{math::vector3::zero};
+  bool is_trigger{false};
+}; // struct collision_event
 
 /**
  * @brief Identifies a colliding pair for the warm-start manifold cache, independent of which side

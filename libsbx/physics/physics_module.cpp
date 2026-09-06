@@ -3,7 +3,9 @@
 #include <libsbx/physics/physics_module.hpp>
 
 #include <algorithm>
+#include <span>
 #include <tuple>
+#include <unordered_set>
 #include <utility>
 
 #include <libsbx/math/matrix4x4.hpp>
@@ -55,6 +57,21 @@ auto prune_stale_leaves(containers::dynamic_tree<scenes::node>& tree, containers
 
 [[nodiscard]] auto world_shape_aabb(const body_shape& shape) -> math::volume {
   return world_bounds_aabb(shape.pose, local_aabb(shape.shape));
+}
+
+// Whether generate_pair_contact should be treated as a trigger overlap for @p node -- checks only
+// node's own collider, not a compound rigidbody's full subtree (see contact_manifold::is_trigger's
+// doc comment for why that's an accepted v1 simplification).
+[[nodiscard]] auto node_has_trigger_collider(const scenes::node& node) -> bool {
+  if (node.has_component<shape_collider>()) {
+    return node.get_component<shape_collider>().is_trigger;
+  }
+
+  if (node.has_component<mesh_collider>()) {
+    return node.get_component<mesh_collider>().is_trigger;
+  }
+
+  return false;
 }
 
 physics_module::physics_module() { }
@@ -236,6 +253,45 @@ auto physics_module::_warm_start_manifolds() -> void {
   }
 }
 
+auto physics_module::_dispatch_contact_events() -> void {
+  auto seen_this_step = std::unordered_set<manifold_key>{};
+
+  for (const auto& manifold : _manifolds) {
+    const auto key = make_manifold_key(manifold.node_a, manifold.node_b);
+    seen_this_step.insert(key);
+
+    if (_manifold_cache.contains(key)) {
+      continue; // already touching as of last step -- not a "began" transition
+    }
+
+    const auto event = collision_event{
+      manifold.node_a,
+      manifold.node_b,
+      manifold.normal,
+      manifold.points.is_empty() ? math::vector3::zero : manifold.points.front().point,
+      manifold.is_trigger
+    };
+
+    _on_contact_began(event);
+  }
+
+  for (const auto& [key, cached_manifold] : _manifold_cache) {
+    if (seen_this_step.contains(key)) {
+      continue; // still touching this step
+    }
+
+    // Same staleness guard as _submit_debug_draw's contacts layer -- a node either side of a
+    // cached pair could have been destroyed (by a script, e.g.) since last step.
+    if (!cached_manifold.node_a.is_valid() || !cached_manifold.node_b.is_valid()) {
+      continue;
+    }
+
+    const auto event = collision_event{cached_manifold.node_a, cached_manifold.node_b, cached_manifold.normal, math::vector3::zero, cached_manifold.is_trigger};
+
+    _on_contact_ended(event);
+  }
+}
+
 auto physics_module::_update_manifold_cache() -> void {
   auto next_cache = containers::dense_map<manifold_key, contact_manifold>{};
 
@@ -304,6 +360,8 @@ auto physics_module::_narrowphase(scenes::scene& scene) -> void {
       continue;
     }
 
+    manifold->is_trigger = node_has_trigger_collider(node_a) || node_has_trigger_collider(node_b);
+
     if (body_a.is_sleeping && is_moving(body_b)) {
       body_a.is_sleeping = false;
       body_a.sleep_timer = 0.0f;
@@ -346,14 +404,23 @@ auto physics_module::fixed_update() -> void {
 
   integrate_forces(scene, _gravity, dt);
 
-  auto constraints = prepare_velocity_constraints(_manifolds);
+  // Triggers are pushed to the back (stable, so solid-vs-solid relative order is otherwise
+  // untouched) and excluded from both solver calls below via the span -- they still sit in
+  // _manifolds for _dispatch_contact_events/_update_manifold_cache right after, just never get an
+  // impulse response. See contact_manifold::is_trigger's doc comment.
+  const auto trigger_begin = std::ranges::stable_partition(_manifolds, [](const auto& manifold) { return !manifold.is_trigger; }).begin();
+  const auto solid_count = static_cast<std::size_t>(trigger_begin - _manifolds.begin());
+  const auto solid_manifolds = std::span<contact_manifold>{_manifolds.data(), solid_count};
+
+  auto constraints = prepare_velocity_constraints(solid_manifolds);
   solve_velocity_constraints(constraints, _velocity_iterations);
   store_impulses(constraints);
 
   integrate_velocities(scene, dt);
-  apply_positional_correction(_manifolds, _position_correction_percent, _position_correction_slop);
+  apply_positional_correction(solid_manifolds, _position_correction_percent, _position_correction_slop);
   update_sleep_timers(scene, dt, _linear_sleep_threshold, _angular_sleep_threshold, _time_to_sleep);
 
+  _dispatch_contact_events();
   _update_manifold_cache();
 }
 

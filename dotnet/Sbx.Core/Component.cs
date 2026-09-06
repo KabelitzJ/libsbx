@@ -103,7 +103,19 @@ namespace Sbx.Core
       }
     }
 
-		public Vector3 Scale;
+    public Vector3 Scale
+    {
+      get
+      {
+        Vector3 scale;
+        unsafe { InternalCalls.Transform_GetScale(UUID, &scale); }
+        return scale;
+      }
+      set
+      {
+        unsafe { InternalCalls.Transform_SetScale(UUID, &value); }
+      }
+    }
 
     public void LookAt(Vector3 target)
     {

@@ -23,7 +23,43 @@ namespace Sbx.Core
     internal static delegate* unmanaged<ulong, Vector3*, void> Transform_GetRight;
     internal static delegate* unmanaged<ulong, Vector3*, void> Transform_GetForward;
     internal static delegate* unmanaged<ulong, Vector3*, void> Transform_GetUp;
+    internal static delegate* unmanaged<ulong, Vector3*, void> Transform_GetScale;
+    internal static delegate* unmanaged<ulong, Vector3*, void> Transform_SetScale;
     internal static delegate* unmanaged<ulong, Vector3*, void> Transform_LookAt;
+
+    internal static delegate* unmanaged<ulong, bool> Animator_GetPlaying;
+    internal static delegate* unmanaged<ulong, bool, void> Animator_SetPlaying;
+    internal static delegate* unmanaged<ulong, NativeString> Animator_GetCurrentStateName;
+    internal static delegate* unmanaged<ulong, NativeString, float, void> Animator_SetFloat;
+    internal static delegate* unmanaged<ulong, NativeString, bool, void> Animator_SetBool;
+    internal static delegate* unmanaged<ulong, NativeString, int, void> Animator_SetInt;
+    internal static delegate* unmanaged<ulong, NativeString, void> Animator_SetTrigger;
+    internal static delegate* unmanaged<ulong, NativeString, float> Animator_GetFloat;
+    internal static delegate* unmanaged<ulong, NativeString, bool> Animator_GetBool;
+    internal static delegate* unmanaged<ulong, NativeString, int> Animator_GetInt;
+
+    internal static delegate* unmanaged<ulong, Vector3*, void> Rigidbody_GetLinearVelocity;
+    internal static delegate* unmanaged<ulong, Vector3*, void> Rigidbody_SetLinearVelocity;
+    internal static delegate* unmanaged<ulong, Vector3*, void> Rigidbody_GetAngularVelocity;
+    internal static delegate* unmanaged<ulong, Vector3*, void> Rigidbody_SetAngularVelocity;
+    internal static delegate* unmanaged<ulong, float*, void> Rigidbody_GetMass;
+    internal static delegate* unmanaged<ulong, float, void> Rigidbody_SetMass;
+    internal static delegate* unmanaged<ulong, float*, void> Rigidbody_GetGravityScale;
+    internal static delegate* unmanaged<ulong, float, void> Rigidbody_SetGravityScale;
+    internal static delegate* unmanaged<ulong, Vector3*, void> Rigidbody_AddForce;
+    internal static delegate* unmanaged<ulong, Vector3*, void> Rigidbody_AddTorque;
+
+    internal static delegate* unmanaged<NativeString, ulong> Node_FindByName;
+    internal static delegate* unmanaged<NativeString, ulong> Node_Create;
+    internal static delegate* unmanaged<ulong, void> Node_Destroy;
+    internal static delegate* unmanaged<ulong, ulong, void> Node_SetParent;
+
+    internal static delegate* unmanaged<ulong, void> ParticleEffect_Play;
+    internal static delegate* unmanaged<ulong, void> ParticleEffect_Pause;
+    internal static delegate* unmanaged<ulong, void> ParticleEffect_Stop;
+    internal static delegate* unmanaged<ulong, bool> ParticleEffect_GetLoop;
+    internal static delegate* unmanaged<ulong, bool, void> ParticleEffect_SetLoop;
+    internal static delegate* unmanaged<ulong, bool> ParticleEffect_GetIsPlaying;
 
     internal static delegate* unmanaged<ulong, float*, void> CharacterController_GetHeight;
     internal static delegate* unmanaged<ulong, float*, void> CharacterController_GetRadius;
@@ -43,15 +79,24 @@ namespace Sbx.Core
     internal static delegate* unmanaged<Vector2*, void> Input_ScrollDelta;
 
     internal static delegate* unmanaged<Ray*, Vector2*, void> Camera_ScreenPointToRay;
-    internal static delegate* unmanaged<Vector3*, void> Camera_GetPosition;
-    internal static delegate* unmanaged<Vector3*, void> Camera_SetPosition;
-    internal static delegate* unmanaged<Quaternion*, void> Camera_GetRotation;
-    internal static delegate* unmanaged<Quaternion*, void> Camera_SetRotation;
-    internal static delegate* unmanaged<Vector3*, void> Camera_GetForward;
-    internal static delegate* unmanaged<Vector3*, void> Camera_GetRight;
-    internal static delegate* unmanaged<Vector3*, void> Camera_GetUp;
+    internal static delegate* unmanaged<Vector3*, void> Camera_MainGetPosition;
+    internal static delegate* unmanaged<Vector3*, void> Camera_MainSetPosition;
+    internal static delegate* unmanaged<Quaternion*, void> Camera_MainGetRotation;
+    internal static delegate* unmanaged<Quaternion*, void> Camera_MainSetRotation;
+    internal static delegate* unmanaged<Vector3*, void> Camera_MainGetForward;
+    internal static delegate* unmanaged<Vector3*, void> Camera_MainGetRight;
+    internal static delegate* unmanaged<Vector3*, void> Camera_MainGetUp;
 
     internal static delegate* unmanaged<Vector2*, void> Camera_GetViewport;
+
+    internal static delegate* unmanaged<ulong, float*, void> Camera_GetFovDegrees;
+    internal static delegate* unmanaged<ulong, float, void> Camera_SetFovDegrees;
+    internal static delegate* unmanaged<ulong, float*, void> Camera_GetNearPlane;
+    internal static delegate* unmanaged<ulong, float, void> Camera_SetNearPlane;
+    internal static delegate* unmanaged<ulong, float*, void> Camera_GetFarPlane;
+    internal static delegate* unmanaged<ulong, float, void> Camera_SetFarPlane;
+    internal static delegate* unmanaged<ulong, float*, void> Camera_GetExposure;
+    internal static delegate* unmanaged<ulong, float, void> Camera_SetExposure;
 
     internal static delegate* unmanaged<float*, void> Time_DeltaTime;
 

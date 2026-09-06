@@ -19,6 +19,9 @@
 // #include <libsbx/scenes/node.hpp>
 #include <libsbx/scenes/scenes_module.hpp>
 
+#include <libsbx/physics/physics_module.hpp>
+#include <libsbx/physics/contact.hpp>
+
 #include <libsbx/filesystem/filesystem_module.hpp>
 
 #include <libsbx/scripting/managed/runtime.hpp>
@@ -44,7 +47,7 @@ class scripting_module final : public utility::noncopyable {
   
 public:
 
-  using dependencies = core::dependency_list<filesystem::filesystem_module, scenes::scenes_module>;
+  using dependencies = core::dependency_list<filesystem::filesystem_module, scenes::scenes_module, physics::physics_module>;
 
   scripting_module();
 
@@ -130,6 +133,17 @@ private:
   auto _load_game_assembly() -> void;
 
   auto _apply_field_overrides(managed::object& instance, const scenes::script_entry& entry) -> void;
+
+  /**
+   * @brief physics::physics_module::on_contact_began/on_contact_ended handler -- delivers
+   * OnCollisionEnter/OnCollisionExit (or OnTriggerEnter/OnTriggerExit, per event.is_trigger) to
+   * every script instance on both event.node_a and event.node_b, in both directions (each side
+   * gets the *other* side as its "otherUuid" argument).
+   */
+  auto _dispatch_collision_event(const physics::collision_event& event, bool began) -> void;
+
+  /** @brief One direction of _dispatch_collision_event -- invokes on self's own script instances (if any), passing other's uuid. */
+  auto _invoke_collision_handler(scenes::node& self, const scenes::node& other, const physics::collision_event& event, bool began) -> void;
 
   std::filesystem::path _assembly_path;
 

@@ -17,6 +17,8 @@
 
 #include <libsbx/utility/noncopyable.hpp>
 
+#include <libsbx/signals/signal.hpp>
+
 #include <libsbx/core/module.hpp>
 #include <libsbx/core/engine.hpp>
 
@@ -143,6 +145,20 @@ public:
    */
   auto query_sphere_contacts(scenes::scene& scene, const math::vector3& center, std::float_t radius, std::vector<sphere_query_hit>& out_hits) -> void;
 
+  /**
+   * @brief Fires once per pair on the fixed_update() step a (solid) contact or (is_trigger)
+   * overlap first appears -- see collision_event's doc comment. scripting_module connects here to
+   * deliver OnCollisionEnter/OnTriggerEnter to any script on either side.
+   */
+  auto on_contact_began() -> signals::signal<const collision_event&>& {
+    return _on_contact_began;
+  }
+
+  /** @brief Fires once per pair on the step it stops touching -- see collision_event's doc comment. */
+  auto on_contact_ended() -> signals::signal<const collision_event&>& {
+    return _on_contact_ended;
+  }
+
 private:
 
   auto _sync_broadphase(scenes::scene& scene) -> void;
@@ -159,6 +175,11 @@ private:
   // Rebuilds _manifold_cache from this step's _manifolds (whose impulse fields store_impulses has
   // by now filled in with the final solved values) -- naturally drops any pair no longer in contact.
   auto _update_manifold_cache() -> void;
+
+  // Diffs this step's _manifolds against _manifold_cache (the previous step's, not yet overwritten
+  // -- must run before _update_manifold_cache) and fires on_contact_began/on_contact_ended for
+  // every pair that started or stopped touching this step.
+  auto _dispatch_contact_events() -> void;
 
   // Drops every broadphase leaf/pair/manifold. Play mode's "stop" reloads the scene in place from
   // a snapshot (scene_serializer::load over the same registry), which destroys and recreates every
@@ -200,6 +221,9 @@ private:
 
   mesh_collision_cache _mesh_cache{};
   convex_hull_cache _hull_cache{};
+
+  signals::signal<const collision_event&> _on_contact_began{};
+  signals::signal<const collision_event&> _on_contact_ended{};
 
 }; // class physics_module
 

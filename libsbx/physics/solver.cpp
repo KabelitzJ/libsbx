@@ -64,7 +64,7 @@ auto integrate_forces(scenes::scene& scene, const math::vector3& gravity, std::f
   }
 }
 
-auto prepare_velocity_constraints(std::vector<contact_manifold>& manifolds) -> std::vector<velocity_constraint> {
+auto prepare_velocity_constraints(std::span<contact_manifold> manifolds) -> std::vector<velocity_constraint> {
   auto constraints = std::vector<velocity_constraint>{};
   constraints.reserve(manifolds.size());
 
@@ -251,7 +251,7 @@ auto integrate_velocities(scenes::scene& scene, std::float_t dt) -> void {
   }
 }
 
-auto apply_positional_correction(std::vector<contact_manifold>& manifolds, std::float_t percent, std::float_t slop) -> void {
+auto apply_positional_correction(std::span<contact_manifold> manifolds, std::float_t percent, std::float_t slop) -> void {
   for (const auto& manifold : manifolds) {
     if (manifold.points.is_empty()) {
       continue;

@@ -65,7 +65,71 @@ struct interop {
 
   static auto transform_get_up(std::uint64_t uuid, math::vector3* up) -> void;
 
-  // static auto transform_look_at(std::uint64_t uuid, math::vector3* target) -> void;
+  static auto transform_get_scale(std::uint64_t uuid, math::vector3* scale) -> void;
+
+  static auto transform_set_scale(std::uint64_t uuid, math::vector3* scale) -> void;
+
+  static auto transform_look_at(std::uint64_t uuid, math::vector3* target) -> void;
+
+  static auto animator_get_playing(std::uint64_t uuid) -> bool;
+
+  static auto animator_set_playing(std::uint64_t uuid, bool value) -> void;
+
+  static auto animator_get_current_state_name(std::uint64_t uuid) -> managed::string;
+
+  static auto animator_set_float(std::uint64_t uuid, managed::string name, std::float_t value) -> void;
+
+  static auto animator_set_bool(std::uint64_t uuid, managed::string name, bool value) -> void;
+
+  static auto animator_set_int(std::uint64_t uuid, managed::string name, std::int32_t value) -> void;
+
+  static auto animator_set_trigger(std::uint64_t uuid, managed::string name) -> void;
+
+  static auto animator_get_float(std::uint64_t uuid, managed::string name) -> std::float_t;
+
+  static auto animator_get_bool(std::uint64_t uuid, managed::string name) -> bool;
+
+  static auto animator_get_int(std::uint64_t uuid, managed::string name) -> std::int32_t;
+
+  static auto rigidbody_get_linear_velocity(std::uint64_t uuid, math::vector3* velocity) -> void;
+
+  static auto rigidbody_set_linear_velocity(std::uint64_t uuid, math::vector3* velocity) -> void;
+
+  static auto rigidbody_get_angular_velocity(std::uint64_t uuid, math::vector3* velocity) -> void;
+
+  static auto rigidbody_set_angular_velocity(std::uint64_t uuid, math::vector3* velocity) -> void;
+
+  static auto rigidbody_get_mass(std::uint64_t uuid, std::float_t* mass) -> void;
+
+  static auto rigidbody_set_mass(std::uint64_t uuid, std::float_t mass) -> void;
+
+  static auto rigidbody_get_gravity_scale(std::uint64_t uuid, std::float_t* scale) -> void;
+
+  static auto rigidbody_set_gravity_scale(std::uint64_t uuid, std::float_t scale) -> void;
+
+  static auto rigidbody_add_force(std::uint64_t uuid, math::vector3* force) -> void;
+
+  static auto rigidbody_add_torque(std::uint64_t uuid, math::vector3* torque) -> void;
+
+  static auto node_find_by_name(managed::string name) -> std::uint64_t;
+
+  static auto node_create(managed::string name) -> std::uint64_t;
+
+  static auto node_destroy(std::uint64_t uuid) -> void;
+
+  static auto node_set_parent(std::uint64_t uuid, std::uint64_t parent_uuid) -> void;
+
+  static auto particle_effect_play(std::uint64_t uuid) -> void;
+
+  static auto particle_effect_pause(std::uint64_t uuid) -> void;
+
+  static auto particle_effect_stop(std::uint64_t uuid) -> void;
+
+  static auto particle_effect_get_loop(std::uint64_t uuid) -> bool;
+
+  static auto particle_effect_set_loop(std::uint64_t uuid, bool value) -> void;
+
+  static auto particle_effect_get_is_playing(std::uint64_t uuid) -> bool;
 
   // static auto character_controller_get_height(std::uint64_t uuid, std::float_t* height) -> void;
 
@@ -97,23 +161,43 @@ struct interop {
 
   static auto input_scroll_delta(math::vector2* scroll_delta) -> void;
 
-  // static auto camera_screen_point_to_ray(math::ray* ray, math::vector2* position) -> void;
+  // Main*: derived from scenes::scene::active_camera()'s own world_transform -- same source
+  // Transform's getters use for an arbitrary node, just always resolved against whichever node is
+  // the active camera instead of the calling script's own uuid.
+  static auto camera_screen_point_to_ray(math::ray* ray, math::vector2* position) -> void;
 
-  // static auto camera_get_position(math::vector3* position) -> void;
+  static auto camera_main_get_position(math::vector3* position) -> void;
 
-  // static auto camera_set_position(math::vector3* position) -> void;
+  static auto camera_main_set_position(math::vector3* position) -> void;
 
-  // static auto camera_get_rotation(math::quaternion* rotation) -> void;
+  static auto camera_main_get_rotation(math::quaternion* rotation) -> void;
 
-  // static auto camera_set_rotation(math::quaternion* rotation) -> void;
+  static auto camera_main_set_rotation(math::quaternion* rotation) -> void;
 
-  // static auto camera_get_forward(math::vector3* forward) -> void;
+  static auto camera_main_get_forward(math::vector3* forward) -> void;
 
-  // static auto camera_get_right(math::vector3* right) -> void;
+  static auto camera_main_get_right(math::vector3* right) -> void;
 
-  // static auto camera_get_up(math::vector3* up) -> void;
+  static auto camera_main_get_up(math::vector3* up) -> void;
 
-  // static auto camera_get_viewport(math::vector2* viewport) -> void;
+  static auto camera_get_viewport(math::vector2* viewport) -> void;
+
+  // Per-node scenes::camera field access, for a script sitting on a camera node itself (GetComponent<CameraSettings>()) -- distinct from the Main-prefixed functions above, which always target scene.active_camera() regardless of which node the calling script is on.
+  static auto camera_get_fov_degrees(std::uint64_t uuid, std::float_t* fov_degrees) -> void;
+
+  static auto camera_set_fov_degrees(std::uint64_t uuid, std::float_t fov_degrees) -> void;
+
+  static auto camera_get_near_plane(std::uint64_t uuid, std::float_t* near_plane) -> void;
+
+  static auto camera_set_near_plane(std::uint64_t uuid, std::float_t near_plane) -> void;
+
+  static auto camera_get_far_plane(std::uint64_t uuid, std::float_t* far_plane) -> void;
+
+  static auto camera_set_far_plane(std::uint64_t uuid, std::float_t far_plane) -> void;
+
+  static auto camera_get_exposure(std::uint64_t uuid, std::float_t* exposure) -> void;
+
+  static auto camera_set_exposure(std::uint64_t uuid, std::float_t exposure) -> void;
 
   static auto time_delta_time(std::float_t* delta_time) -> void;
 

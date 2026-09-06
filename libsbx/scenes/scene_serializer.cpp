@@ -399,6 +399,7 @@ auto write_node(YAML::Node& node_yaml, ecs::registry& registry, ecs::entity enti
     component["rotation"] = collider.rotation;
     component["friction"] = collider.friction;
     component["restitution"] = collider.restitution;
+    component["is_trigger"] = collider.is_trigger;
 
     std::visit(utility::overload(
       [&](const physics::sphere& shape) {
@@ -444,6 +445,7 @@ auto write_node(YAML::Node& node_yaml, ecs::registry& registry, ecs::entity enti
       component["friction"] = collider.friction;
       component["restitution"] = collider.restitution;
       component["convex"] = collider.is_convex;
+      component["is_trigger"] = collider.is_trigger;
 
       components.push_back(component);
     }
@@ -650,6 +652,7 @@ auto read_node_components(node& target_node, const YAML::Node& node_yaml, assets
       collider.rotation = component["rotation"].as<math::quaternion>();
       collider.friction = component["friction"].as<std::float_t>();
       collider.restitution = component["restitution"].as<std::float_t>();
+      collider.is_trigger = component["is_trigger"].as<bool>(false); // absent in scenes saved before triggers existed
     } else if (type == "mesh_collider") {
       auto& collider = target_node.add_component<physics::mesh_collider>();
 
@@ -659,6 +662,7 @@ auto read_node_components(node& target_node, const YAML::Node& node_yaml, assets
       collider.friction = component["friction"].as<std::float_t>();
       collider.restitution = component["restitution"].as<std::float_t>();
       collider.is_convex = component["convex"].as<bool>(false); // absent in scenes saved before convex mesh colliders existed
+      collider.is_trigger = component["is_trigger"].as<bool>(false); // absent in scenes saved before triggers existed
     } else {
       utility::logger<"scenes">::warn("Unknown component type '{}'", type);
     }

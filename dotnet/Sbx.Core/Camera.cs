@@ -4,6 +4,11 @@ using Sbx.Math;
 namespace Sbx.Core
 {
 
+  /**
+   * Always resolves scenes::scene::active_camera() natively -- a singleton convenience wrapper,
+   * not a per-node component (see CameraSettings for that: fov_degrees/near_plane/far_plane/
+   * exposure on whichever camera node a script actually sits on, via GetComponent<CameraSettings>()).
+   */
   public class Camera
   {
 
@@ -20,27 +25,27 @@ namespace Sbx.Core
     {
       get {
         Vector3 position;
-        unsafe { InternalCalls.Camera_GetPosition(&position); }
+        unsafe { InternalCalls.Camera_MainGetPosition(&position); }
         return position;
       }
-      set { unsafe { InternalCalls.Camera_SetPosition(&value); } }
+      set { unsafe { InternalCalls.Camera_MainSetPosition(&value); } }
     }
 
     public Quaternion Rotation
     {
       get {
         Quaternion rotation;
-        unsafe { InternalCalls.Camera_GetRotation(&rotation); }
+        unsafe { InternalCalls.Camera_MainGetRotation(&rotation); }
         return rotation;
       }
-      set { unsafe { InternalCalls.Camera_SetRotation(&value); } }
+      set { unsafe { InternalCalls.Camera_MainSetRotation(&value); } }
     }
 
     public Vector3 Forward
     {
       get {
         Vector3 forward;
-        unsafe { InternalCalls.Camera_GetForward(&forward); }
+        unsafe { InternalCalls.Camera_MainGetForward(&forward); }
         return forward;
       }
     }
@@ -59,7 +64,7 @@ namespace Sbx.Core
     {
       get {
         Vector3 forward;
-        unsafe { InternalCalls.Camera_GetRight(&forward); }
+        unsafe { InternalCalls.Camera_MainGetRight(&forward); }
         return forward;
       }
     }
@@ -78,7 +83,7 @@ namespace Sbx.Core
     {
       get {
         Vector3 up;
-        unsafe { InternalCalls.Camera_GetUp(&up); }
+        unsafe { InternalCalls.Camera_MainGetUp(&up); }
         return up;
       }
     }

@@ -15,6 +15,7 @@
 #define LIBSBX_PHYSICS_SOLVER_HPP_
 
 #include <cstdint>
+#include <span>
 #include <vector>
 
 #include <libsbx/memory/observer_ptr.hpp>
@@ -68,8 +69,12 @@ auto integrate_forces(scenes::scene& scene, const math::vector3& gravity, std::f
  * contact_point and immediately applied once -- the actual "warm start" -- before the caller runs
  * the iterative solve. @p manifolds is mutated: each velocity_constraint_point keeps a pointer back
  * into it so @ref store_impulses can write the final impulses back after solving.
+ *
+ * Takes a span (rather than the whole vector) so physics_module::fixed_update can solve only the
+ * non-trigger prefix of its manifolds in place -- the pointers store_impulses/next step's warm
+ * start rely on stay valid either way, since a span never copies the underlying contact_manifolds.
  */
-[[nodiscard]] auto prepare_velocity_constraints(std::vector<contact_manifold>& manifolds) -> std::vector<velocity_constraint>;
+[[nodiscard]] auto prepare_velocity_constraints(std::span<contact_manifold> manifolds) -> std::vector<velocity_constraint>;
 
 /**
  * @brief Runs @p iterations passes of sequential-impulse (projected Gauss-Seidel) resolution over
@@ -92,9 +97,10 @@ auto integrate_velocities(scenes::scene& scene, std::float_t dt) -> void;
 /**
  * @brief Non-linear Gauss-Seidel positional correction: nudges each manifold's bodies apart along
  * its normal by `percent` of the remaining penetration beyond `slop`, split by inverse-mass ratio.
- * Translation only -- no angular correction in v1.
+ * Translation only -- no angular correction in v1. Same span rationale as
+ * @ref prepare_velocity_constraints -- excludes trigger manifolds from ever being pushed apart.
  */
-auto apply_positional_correction(std::vector<contact_manifold>& manifolds, std::float_t percent, std::float_t slop) -> void;
+auto apply_positional_correction(std::span<contact_manifold> manifolds, std::float_t percent, std::float_t slop) -> void;
 
 /**
  * @brief Advances (or resets) each dynamic body's sleep_timer based on whether its velocities are

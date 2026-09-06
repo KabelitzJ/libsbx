@@ -26,6 +26,12 @@ struct shape_collider {
   math::quaternion rotation{math::quaternion::identity};
   std::float_t friction{0.5f};
   std::float_t restitution{0.0f};
+
+  // A trigger still generates contacts (broadphase/narrowphase run exactly as normal, and
+  // physics_module::on_contact_began/on_contact_ended still fire for it -- see contact_manifold::
+  // is_trigger's doc comment) but the solver never applies an impulse response for it, matching
+  // Unity's "Is Trigger" checkbox.
+  bool is_trigger{false};
 }; // struct shape_collider
 
 /**
@@ -49,6 +55,9 @@ struct mesh_collider {
   std::float_t friction{0.5f};
   std::float_t restitution{0.0f};
   bool is_convex{false};
+
+  // See shape_collider::is_trigger's doc comment.
+  bool is_trigger{false};
 }; // struct mesh_collider
 
 } // namespace sbx::physics

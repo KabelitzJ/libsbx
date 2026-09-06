@@ -24,7 +24,7 @@ namespace sbx::scripting {
 // Mirrors asset_cooker's per-cooker cooker_version, see this class's doc comment.
 inline constexpr auto compiler_version = std::uint32_t{1u};
 
-auto script_compiler::_write_ide_project(const std::filesystem::path& assets_directory, const std::filesystem::path& core_assembly_path) -> void {
+auto script_compiler::_write_ide_project(const std::filesystem::path& assets_directory, const std::filesystem::path& ide_output_directory, const std::filesystem::path& core_assembly_path) -> void {
   const auto path = assets_directory / "Game.csproj";
 
   auto absolute_core_assembly_path = core_assembly_path;
@@ -33,6 +33,11 @@ auto script_compiler::_write_ide_project(const std::filesystem::path& assets_dir
   if (!ec) {
     absolute_core_assembly_path = canonical;
   }
+
+  // BaseOutputPath/BaseIntermediateOutputPath need a trailing slash and an absolute path here
+  // works regardless of where dotnet/the IDE's OmniSharp process considers its own cwd to be.
+  const auto bin_path = (ide_output_directory / "bin").generic_string() + "/";
+  const auto obj_path = (ide_output_directory / "obj").generic_string() + "/";
 
   // TargetFramework must track Sbx.Core.csproj's own <TargetFramework> — bump both together.
   const auto content = fmt::format(
@@ -49,6 +54,9 @@ auto script_compiler::_write_ide_project(const std::filesystem::path& assets_dir
     "    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>\n"
     "    <EnableDefaultCompileItems>true</EnableDefaultCompileItems>\n"
     "    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>\n"
+    "    <!-- Keeps the IDE's own restore/build (for IntelliSense) out of the Asset Browser's tree. -->\n"
+    "    <BaseOutputPath>{}</BaseOutputPath>\n"
+    "    <BaseIntermediateOutputPath>{}</BaseIntermediateOutputPath>\n"
     "  </PropertyGroup>\n"
     "\n"
     "  <ItemGroup>\n"
@@ -59,6 +67,8 @@ auto script_compiler::_write_ide_project(const std::filesystem::path& assets_dir
     "  </ItemGroup>\n"
     "\n"
     "</Project>\n",
+    bin_path,
+    obj_path,
     absolute_core_assembly_path.generic_string()
   );
 
@@ -201,7 +211,7 @@ auto script_compiler::compile_if_stale(managed::runtime& runtime, const std::fil
 
   // Independent of staleness below — an IDE needs this the moment a project has any scripts (or
   // even before), and regenerating it doesn't touch the compiled Game.dll/manifest at all.
-  _write_ide_project(project.assets_directory(), core_assembly_path);
+  _write_ide_project(project.assets_directory(), project.library_directory() / "scripts" / "ide", core_assembly_path);
 
   auto sources = std::vector<std::filesystem::path>{};
   auto ec = std::error_code{};

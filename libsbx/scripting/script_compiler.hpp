@@ -63,8 +63,12 @@ private:
    * same *.cs sources compile_if_stale() itself walks and compiles in-process via Roslyn. Skips
    * the write if the file's content wouldn't change, so an IDE watching its mtime isn't nudged
    * into reloading the project on every engine start.
+   *
+   * Points the project's BaseOutputPath/BaseIntermediateOutputPath at @p ide_output_directory
+   * (outside assets_directory, under .sbx/) so an IDE's own restore/build for IntelliSense
+   * doesn't litter bin/ and obj/ back into the Asset Browser's tree.
    */
-  auto _write_ide_project(const std::filesystem::path& assets_directory, const std::filesystem::path& core_assembly_path) -> void;
+  auto _write_ide_project(const std::filesystem::path& assets_directory, const std::filesystem::path& ide_output_directory, const std::filesystem::path& core_assembly_path) -> void;
 
   [[nodiscard]] auto _manifest_path() const -> std::filesystem::path;
 

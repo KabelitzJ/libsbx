@@ -141,6 +141,54 @@ auto truncate_to_width(const std::string& text, std::float_t max_width) -> std::
   return truncated + std::string{ellipsis};
 }
 
+// Internal/tooling entries the Asset Browser should never surface, regardless of the search
+// filter: .meta sidecars (asset_cooker's per-source uuid, not content of their own), the IDE-only
+// Game.csproj the engine regenerates every start (see script_compiler::_write_ide_project) purely
+// for IntelliSense, its bin/obj build output, and any dotfile/hidden entry (.git, .vs, .vscode, ...).
+auto is_hidden_from_browser(const std::filesystem::path& name, bool is_directory) -> bool {
+  const auto name_string = name.string();
+  const auto name_extension = name.extension();
+
+  if (!name_string.empty() && name_string.front() == '.') {
+    return true;
+  }
+
+  if (is_directory) {
+    return name_string == "bin" || name_string == "obj";
+  }
+
+  return name_extension == ".meta" || name_extension == ".csproj";
+}
+
+// Whether `directory` contains at least one subdirectory the tree would actually show -- used to
+// suppress the expand arrow on leaf directories, since there's nothing for it to expand into.
+[[nodiscard]] auto has_visible_subdirectories(const std::filesystem::path& directory) -> bool {
+  auto ec = std::error_code{};
+
+  for (const auto& entry : std::filesystem::directory_iterator{directory, ec}) {
+    if (entry.is_directory(ec) && !is_hidden_from_browser(entry.path().filename(), true)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+// True if `candidate` is `target` itself or one of its ancestors (path-component prefix) -- used
+// to decide which nodes along a "reveal" target's chain need to be forced open.
+[[nodiscard]] auto is_ancestor_or_self(const std::filesystem::path& candidate, const std::filesystem::path& target) -> bool {
+  auto candidate_it = candidate.begin();
+  auto target_it = target.begin();
+
+  for (; candidate_it != candidate.end(); ++candidate_it, ++target_it) {
+    if (target_it == target.end() || *candidate_it != *target_it) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 // Case-insensitive substring test for the search box -- an empty filter matches everything.
 auto filter_matches(std::string_view name, std::string_view filter) -> bool {
   if (filter.empty()) {
@@ -168,6 +216,10 @@ auto asset_browser_panel::_refresh_entries() -> void {
   }
 
   for (const auto& dir_entry : std::filesystem::directory_iterator{absolute_directory}) {
+    if (is_hidden_from_browser(dir_entry.path().filename(), dir_entry.is_directory())) {
+      continue;
+    }
+
     auto entry = asset_browser_entry{};
     entry.path = _current_directory / dir_entry.path().filename();
     entry.is_directory = dir_entry.is_directory();
@@ -202,7 +254,7 @@ auto asset_browser_panel::_draw_directory_tree(editor_state& state, const std::f
   auto subdirectories = std::vector<std::filesystem::path>{};
 
   for (const auto& dir_entry : std::filesystem::directory_iterator{absolute_directory}) {
-    if (dir_entry.is_directory()) {
+    if (dir_entry.is_directory() && !is_hidden_from_browser(dir_entry.path().filename(), true)) {
       subdirectories.push_back(dir_entry.path());
     }
   }
@@ -212,22 +264,35 @@ auto asset_browser_panel::_draw_directory_tree(editor_state& state, const std::f
   for (const auto& subdirectory : subdirectories) {
     const auto relative_child = relative_directory / subdirectory.filename();
     const auto child_name = subdirectory.filename().string();
+    const auto is_leaf = !has_visible_subdirectories(subdirectory);
 
     auto flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAvailWidth;
     if (_current_directory == relative_child) {
       flags |= ImGuiTreeNodeFlags_Selected;
     }
+    if (is_leaf) {
+      // Nothing to expand into -- no arrow, no toggle, and no separate TreePop (it's pushed and
+      // popped in one go by TreeNodeEx itself when this flag is set).
+      flags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
+    }
 
     ImGui::PushID(relative_child.string().c_str());
 
-    const auto is_open = ImGui::TreeNodeEx("##dir", flags, "%s %s", ICON_MDI_FOLDER, child_name.c_str());
-
-    if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
-      _current_directory = relative_child;
-      _needs_refresh = true;
+    if (_pending_reveal && is_ancestor_or_self(relative_child, *_pending_reveal)) {
+      ImGui::SetNextItemOpen(true);
     }
 
-    if (is_open) {
+    const auto is_open = ImGui::TreeNodeEx("##dir", flags, "%s %s", ICON_MDI_FOLDER, child_name.c_str());
+
+    if (_pending_reveal && relative_child == *_pending_reveal) {
+      ImGui::SetScrollHereY(0.5f);
+    }
+
+    if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
+      _navigate_to(relative_child);
+    }
+
+    if (is_open && !is_leaf) {
       _draw_directory_tree(state, absolute_assets_root, relative_child);
       ImGui::TreePop();
     }
@@ -242,6 +307,14 @@ auto asset_browser_panel::draw(editor_state& state) -> void {
 
   auto& project = sbx::core::engine::project();
   auto& assets_module = sbx::core::engine::get_module<sbx::assets::assets_module>();
+
+  // "Show in Browser" (Inspector's picker slots / asset properties view) -- one-shot, unlike
+  // editor_state::current_selection, so it never fights the user for navigating this panel on
+  // their own afterward.
+  if (state.reveal_in_browser_request) {
+    _navigate_to(state.reveal_in_browser_request->parent_path());
+    state.reveal_in_browser_request.reset();
+  }
 
   if (auto picked = _import_dialog.result()) {
     _pending_asset_imports.insert(_pending_asset_imports.end(), picked->begin(), picked->end());
@@ -340,15 +413,18 @@ auto asset_browser_panel::draw(editor_state& state) -> void {
 
   ImGui::Separator();
 
-  // Breadcrumb bar: "assets" root button, then one clickable button per path segment.
+  // Breadcrumb bar: "assets" root button, then one clickable button per path segment. Iterates a
+  // snapshot of the path rather than _current_directory itself, since a segment's own click below
+  // reassigns _current_directory mid-loop (via _navigate_to), which would otherwise invalidate
+  // this loop's iterators.
   if (ImGui::Button(ICON_MDI_FOLDER_OPEN " assets")) {
-    _current_directory.clear();
-    _needs_refresh = true;
+    _navigate_to(std::filesystem::path{});
   }
 
+  const auto breadcrumb_directory = _current_directory;
   auto breadcrumb_path = std::filesystem::path{};
 
-  for (const auto& segment : _current_directory) {
+  for (const auto& segment : breadcrumb_directory) {
     breadcrumb_path /= segment;
 
     ImGui::SameLine(0.0f, 4.0f);
@@ -358,8 +434,7 @@ auto asset_browser_panel::draw(editor_state& state) -> void {
     ImGui::PushID(breadcrumb_path.string().c_str());
 
     if (ImGui::Button(segment.string().c_str())) {
-      _current_directory = breadcrumb_path;
-      _needs_refresh = true;
+      _navigate_to(breadcrumb_path);
     }
 
     ImGui::PopID();
@@ -391,22 +466,39 @@ auto asset_browser_panel::draw(editor_state& state) -> void {
     ImGui::TableSetColumnIndex(0);
     ImGui::BeginChild("##asset_browser_tree_scroll", ImVec2(0.0f, panes_height));
 
+    const auto root_is_leaf = !has_visible_subdirectories(project.assets_directory());
+
     auto root_flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_DefaultOpen;
     if (_current_directory.empty()) {
       root_flags |= ImGuiTreeNodeFlags_Selected;
     }
+    if (root_is_leaf) {
+      root_flags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
+    }
+
+    // Any reveal target lives somewhere under the root by definition.
+    if (_pending_reveal) {
+      ImGui::SetNextItemOpen(true);
+    }
 
     const auto is_root_open = ImGui::TreeNodeEx("##assets_root", root_flags, "%s assets", ICON_MDI_FOLDER_OPEN);
 
-    if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
-      _current_directory.clear();
-      _needs_refresh = true;
+    if (_pending_reveal && _pending_reveal->empty()) {
+      ImGui::SetScrollHereY(0.5f);
     }
 
-    if (is_root_open) {
+    if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
+      _navigate_to(std::filesystem::path{});
+    }
+
+    if (is_root_open && !root_is_leaf) {
       _draw_directory_tree(state, project.assets_directory(), std::filesystem::path{});
       ImGui::TreePop();
     }
+
+    // Consumed for exactly the one frame the reveal target's chain needed forcing open -- lets
+    // the tree be collapsed by hand afterward instead of snapping back open every frame.
+    _pending_reveal.reset();
 
     ImGui::EndChild();
 
@@ -487,8 +579,7 @@ auto asset_browser_panel::draw(editor_state& state) -> void {
 
           if (tile_result.clicked) {
             if (entry.is_directory) {
-              _current_directory = entry.path;
-              _needs_refresh = true;
+              _navigate_to(entry.path);
             } else if (entry.is_importable) {
               const auto meta_path = std::filesystem::path{project.assets_directory() / entry.path}.concat(".meta");
 

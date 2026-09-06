@@ -119,6 +119,7 @@ auto draw_material_picker(editor_state& state, const char* popup_id, sbx::assets
     .kind = sbx::render::widgets::asset_picker_kind::material,
     .extensions = {".material"},
     .show_edit_button = true,
+    .show_reveal_button = true,
   };
 
   const auto result = sbx::render::widgets::draw_asset_picker(popup_id, current, default_item, options);
@@ -134,6 +135,10 @@ auto draw_material_picker(editor_state& state, const char* popup_id, sbx::assets
 
   if (result.edit_requested && slot.is_valid()) {
     state.select_asset(slot->id(), relative_asset_path(assets_module, slot->id()), asset_kind::material);
+  }
+
+  if (result.reveal_requested && slot.is_valid()) {
+    state.request_reveal_in_browser(relative_asset_path(assets_module, slot->id()));
   }
 
   return result.changed;
@@ -183,13 +188,14 @@ auto extract_material_to_asset(sbx::assets::assets_module& assets_module, const 
 // Same idea as draw_material_picker, for texture slots -- real GPU thumbnails in both the closed
 // button and the popup list (see asset_tile.hpp). format follows load_material's per-slot
 // convention (srgb for albedo/emissive, unorm for normal/metallic_roughness/occlusion).
-auto draw_texture_picker(const char* popup_id, sbx::assets::texture_handle& slot, sbx::assets::assets_module& assets_module, sbx::graphics::format format) -> bool {
+auto draw_texture_picker(editor_state& state, const char* popup_id, sbx::assets::texture_handle& slot, sbx::assets::assets_module& assets_module, sbx::graphics::format format) -> bool {
   const auto current = slot.is_valid() ? to_picker_item(assets_module, slot->id()) : sbx::render::widgets::asset_picker_item{};
 
   const auto options = sbx::render::widgets::asset_picker_options{
     .kind = sbx::render::widgets::asset_picker_kind::texture,
     .extensions = {".png", ".jpg", ".jpeg"},
     .allow_none = true,
+    .show_reveal_button = true,
     .load_format = format,
   };
 
@@ -199,6 +205,10 @@ auto draw_texture_picker(const char* popup_id, sbx::assets::texture_handle& slot
     slot = sbx::assets::texture_handle{};
   } else if (result.changed) {
     slot = assets_module.load_texture(result.picked.path, format);
+  }
+
+  if (result.reveal_requested && slot.is_valid()) {
+    state.request_reveal_in_browser(relative_asset_path(assets_module, slot->id()));
   }
 
   return result.changed;
@@ -214,6 +224,7 @@ auto draw_mesh_picker(editor_state& state, const char* popup_id, sbx::assets::me
     .kind = sbx::render::widgets::asset_picker_kind::mesh,
     .extensions = {".gltf", ".glb"},
     .show_edit_button = true,
+    .show_reveal_button = true,
   };
 
   const auto result = sbx::render::widgets::draw_asset_picker(popup_id, current, {}, options);
@@ -224,6 +235,10 @@ auto draw_mesh_picker(editor_state& state, const char* popup_id, sbx::assets::me
 
   if (result.edit_requested && slot.is_valid()) {
     state.select_asset(slot->id(), relative_asset_path(assets_module, slot->id()), asset_kind::mesh);
+  }
+
+  if (result.reveal_requested && slot.is_valid()) {
+    state.request_reveal_in_browser(relative_asset_path(assets_module, slot->id()));
   }
 
   return result.changed;
@@ -239,6 +254,7 @@ auto draw_particle_effect_picker(editor_state& state, const char* popup_id, sbx:
     .extensions = {".particle_effect"},
     .allow_none = true,
     .show_edit_button = true,
+    .show_reveal_button = true,
   };
 
   const auto result = sbx::render::widgets::draw_asset_picker(popup_id, current, {}, options);
@@ -251,6 +267,10 @@ auto draw_particle_effect_picker(editor_state& state, const char* popup_id, sbx:
 
   if (result.edit_requested && slot.is_valid()) {
     state.select_asset(slot->id(), relative_asset_path(assets_module, slot->id()), asset_kind::particle_effect);
+  }
+
+  if (result.reveal_requested && slot.is_valid()) {
+    state.request_reveal_in_browser(relative_asset_path(assets_module, slot->id()));
   }
 
   return result.changed;
@@ -1687,7 +1707,7 @@ auto inspector_panel::_draw_node_properties(editor_state& state, sbx::scenes::no
   draw_add_component_menu(state, node, scripting_module);
 }
 
-auto inspector_panel::_draw_material_properties(const asset_selection& asset, sbx::assets::assets_module& assets_module) -> void {
+auto inspector_panel::_draw_material_properties(editor_state& state, const asset_selection& asset, sbx::assets::assets_module& assets_module) -> void {
   if (!_asset_cache.material.is_valid()) {
     ImGui::TextDisabled("Could not load this material.");
     return;
@@ -1740,25 +1760,29 @@ auto inspector_panel::_draw_material_properties(const asset_selection& asset, sb
 
   ImGui::SeparatorText("Textures");
 
-  ImGui::Text("Albedo");
-  ImGui::SameLine();
-  changed |= draw_texture_picker("##albedo_picker", _material_edit.albedo, assets_module, sbx::graphics::format::r8g8b8a8_srgb);
+  // A fixed-width label column so every picker button lines up regardless of its label's length
+  // ("Metallic/Roughness" vs. "Normal") -- a plain Text+SameLine per row left them staggered.
+  if (ImGui::BeginTable("##material_texture_grid", 2, ImGuiTableFlags_SizingFixedFit)) {
+    ImGui::TableSetupColumn("##label", ImGuiTableColumnFlags_WidthFixed, 150.0f);
+    ImGui::TableSetupColumn("##picker", ImGuiTableColumnFlags_WidthStretch);
 
-  ImGui::Text("Normal");
-  ImGui::SameLine();
-  changed |= draw_texture_picker("##normal_picker", _material_edit.normal, assets_module, sbx::graphics::format::r8g8b8a8_unorm);
+    const auto texture_row = [&](const char* label, const char* popup_id, sbx::assets::texture_handle& slot, sbx::graphics::format format) {
+      ImGui::TableNextRow();
+      ImGui::TableSetColumnIndex(0);
+      ImGui::AlignTextToFramePadding();
+      ImGui::TextUnformatted(label);
+      ImGui::TableSetColumnIndex(1);
+      changed |= draw_texture_picker(state, popup_id, slot, assets_module, format);
+    };
 
-  ImGui::Text("Metallic/Roughness");
-  ImGui::SameLine();
-  changed |= draw_texture_picker("##metallic_roughness_picker", _material_edit.metallic_roughness, assets_module, sbx::graphics::format::r8g8b8a8_unorm);
+    texture_row("Albedo", "##albedo_picker", _material_edit.albedo, sbx::graphics::format::r8g8b8a8_srgb);
+    texture_row("Normal", "##normal_picker", _material_edit.normal, sbx::graphics::format::r8g8b8a8_unorm);
+    texture_row("Metallic/Roughness", "##metallic_roughness_picker", _material_edit.metallic_roughness, sbx::graphics::format::r8g8b8a8_unorm);
+    texture_row("Occlusion", "##occlusion_picker", _material_edit.occlusion, sbx::graphics::format::r8g8b8a8_unorm);
+    texture_row("Emissive", "##emissive_picker", _material_edit.emissive, sbx::graphics::format::r8g8b8a8_srgb);
 
-  ImGui::Text("Occlusion");
-  ImGui::SameLine();
-  changed |= draw_texture_picker("##occlusion_picker", _material_edit.occlusion, assets_module, sbx::graphics::format::r8g8b8a8_unorm);
-
-  ImGui::Text("Emissive");
-  ImGui::SameLine();
-  changed |= draw_texture_picker("##emissive_picker", _material_edit.emissive, assets_module, sbx::graphics::format::r8g8b8a8_srgb);
+    ImGui::EndTable();
+  }
 
   if (changed) {
     // Live preview: mutates in place so every material_handle pointing at it reflects the edit
@@ -1957,7 +1981,7 @@ auto inspector_panel::_draw_particle_effect_properties(editor_state& state, cons
         ImGui::Text("Texture");
         ImGui::SameLine();
 
-        changed |= draw_texture_picker("##particle_texture_picker", emitter.texture, assets_module, sbx::graphics::format::r8g8b8a8_srgb);
+        changed |= draw_texture_picker(state, "##particle_texture_picker", emitter.texture, assets_module, sbx::graphics::format::r8g8b8a8_srgb);
       } else {
         ImGui::Text("Mesh");
         ImGui::SameLine();
@@ -2184,6 +2208,10 @@ auto inspector_panel::_draw_asset_properties(editor_state& state, const asset_se
   ImGui::Text("Path: %s", asset.path.string().c_str());
   ImGui::Text("UUID: %llu", static_cast<unsigned long long>(asset.id.value()));
 
+  if (ImGui::Button(ICON_MDI_FOLDER_SEARCH_OUTLINE " Show in Browser")) {
+    state.request_reveal_in_browser(asset.path);
+  }
+
   switch (asset.kind) {
     case asset_kind::texture: {
       ImGui::Text("Type: Texture");
@@ -2205,7 +2233,7 @@ auto inspector_panel::_draw_asset_properties(editor_state& state, const asset_se
     }
     case asset_kind::material: {
       ImGui::Text("Type: Material");
-      _draw_material_properties(asset, assets_module);
+      _draw_material_properties(state, asset, assets_module);
       break;
     }
     case asset_kind::environment_map: {

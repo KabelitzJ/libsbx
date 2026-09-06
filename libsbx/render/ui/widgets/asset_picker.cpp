@@ -121,7 +121,11 @@ auto draw_asset_picker(const char* popup_id, const asset_picker_item& current, c
 
   const auto label = has_current ? current.path.filename().string() : std::string{"(None)"};
 
-  if (ImGui::Selectable(label.c_str(), false, 0, ImVec2{0.0f, button_size.y})) {
+  // A plain Button (auto-sized to its text) rather than a width-stretching Selectable -- a
+  // Selectable with size.x == 0 fills the *entire* remaining window width, which would swallow
+  // the edit button right after it (and anything the caller places after the whole picker, like
+  // mesh_renderer's "Duplicate" button) into its own click area.
+  if (ImGui::Button(label.c_str())) {
     ImGui::OpenPopup(popup_id);
   }
 
@@ -138,6 +142,18 @@ auto draw_asset_picker(const char* popup_id, const asset_picker_item& current, c
 
     if (ImGui::IsItemHovered()) {
       ImGui::SetTooltip("Edit this asset");
+    }
+  }
+
+  if (options.show_reveal_button && has_current) {
+    ImGui::SameLine();
+
+    if (ImGui::Button(ICON_MDI_FOLDER_SEARCH_OUTLINE)) {
+      result.reveal_requested = true;
+    }
+
+    if (ImGui::IsItemHovered()) {
+      ImGui::SetTooltip("Show in Asset Browser");
     }
   }
 

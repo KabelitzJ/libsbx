@@ -6,6 +6,8 @@
 #include <array>
 #include <cmath>
 #include <filesystem>
+#include <optional>
+#include <utility>
 #include <vector>
 
 #include <libsbx/math/uuid.hpp>
@@ -47,6 +49,13 @@ private:
   auto _refresh_entries() -> void;
   auto _draw_directory_tree(editor_state& state, const std::filesystem::path& absolute_assets_root, const std::filesystem::path& relative_directory) -> void;
 
+  /** @brief Switches the browsed folder to @p directory (project-relative) and has the tree expand to reveal it -- the single place every navigation (breadcrumb, tree click, grid folder tile) should go through, so the tree never falls out of sync with what's being browsed. */
+  auto _navigate_to(std::filesystem::path directory) -> void {
+    _current_directory = directory;
+    _needs_refresh = true;
+    _pending_reveal = std::move(directory);
+  }
+
   /** @brief Drains _import_dialog's result (if any) into _pending_asset_imports, then works through that queue until it's empty or a name clash needs a decision. */
   auto _process_pending_asset_imports(editor_state& state) -> void;
 
@@ -61,6 +70,11 @@ private:
   // filename substring before layout.
   std::float_t _tile_size{72.0f};
   std::array<char, 128u> _search_filter{};
+
+  // Directory (and its ancestors) the tree should force open for exactly the one frame it's next
+  // drawn, set by _navigate_to() -- keeps the tree in sync with whatever folder navigation (a
+  // breadcrumb, a tree click, a grid folder tile) just switched _current_directory to.
+  std::optional<std::filesystem::path> _pending_reveal{};
 
   // "Import Mesh" modal state, shown the first time an un-imported .gltf/.glb is clicked.
   // _show_import_mesh_dialog is consumed outside the per-entry PushID scope it's set from, since

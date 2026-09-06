@@ -47,11 +47,17 @@ auto draw_asset_tile(const char* id, const asset_tile_desc& desc) -> asset_tile_
   const auto tile_min = ImGui::GetCursorScreenPos();
   const auto tile_max = ImVec2{tile_min.x + desc.size.x, tile_min.y + desc.size.y};
 
-  ImGui::InvisibleButton("##tile", desc.size);
+  // InvisibleButton's own return value (true on mouse-release while still hovered/active) rather
+  // than IsItemClicked (true on mouse-*press*, before BeginDragDropSource below ever gets a
+  // chance to see the drag): with the press-based check, starting a drag from this tile fired
+  // "clicked" the instant the mouse went down, changing the selection out from under the drag
+  // before the drop could land anywhere. Releasing away from this tile (an actual drag-and-drop)
+  // now correctly never registers as a click here.
+  const auto pressed = ImGui::InvisibleButton("##tile", desc.size);
 
   result.hovered = ImGui::IsItemHovered();
 
-  if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
+  if (pressed) {
     result.clicked = true;
     result.double_clicked = ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left);
   }

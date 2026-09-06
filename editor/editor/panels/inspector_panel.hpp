@@ -56,10 +56,7 @@ private:
   auto _draw_name_field(editor_state& state, sbx::scenes::node& node) -> void;
   auto _draw_transform_section(editor_state& state, sbx::scenes::node& node) -> void;
   auto _draw_asset_properties(editor_state& state, const asset_selection& asset, sbx::assets::assets_module& assets_module) -> void;
-  auto _draw_material_properties(const asset_selection& asset, sbx::assets::assets_module& assets_module) -> void;
-  // Takes editor_state (unlike _draw_material_properties) because an emitter's Mesh render mode
-  // references mesh/material assets via draw_mesh_picker/draw_material_picker, both of which need it
-  // for their jump-to-edit button.
+  auto _draw_material_properties(editor_state& state, const asset_selection& asset, sbx::assets::assets_module& assets_module) -> void;
   auto _draw_particle_effect_properties(editor_state& state, const asset_selection& asset, sbx::assets::assets_module& assets_module) -> void;
 
   // Editable name field: staged into a buffer, only re-synced from the node when the selection

@@ -4,6 +4,7 @@
 #define EDITOR_EDITOR_STATE_HPP_
 
 #include <filesystem>
+#include <optional>
 #include <utility>
 #include <variant>
 
@@ -89,6 +90,18 @@ struct editor_state {
   auto select_asset(sbx::math::uuid id, std::filesystem::path path, asset_kind kind) -> void;
 
   auto clear_selection() -> void;
+
+  /**
+   * @brief One-shot "show in Asset Browser" request: asks the Asset Browser to navigate to and
+   * expand the folder containing @p path (project-relative), without changing what's currently
+   * selected/shown in the Inspector. Consumed (reset to nullopt) once asset_browser_panel acts on
+   * it, so it fires exactly once per request rather than pinning the browser to that folder.
+   */
+  auto request_reveal_in_browser(std::filesystem::path path) -> void {
+    reveal_in_browser_request = std::move(path);
+  }
+
+  std::optional<std::filesystem::path> reveal_in_browser_request{};
 
   // The scene-graph undo/redo history, shared across panels like current_selection. Prefer the
   // pass-throughs below over reaching into this directly.

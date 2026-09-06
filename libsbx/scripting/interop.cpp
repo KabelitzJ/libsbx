@@ -19,6 +19,13 @@
 #include <libsbx/physics/rigidbody.hpp>
 #include <libsbx/physics/physics_module.hpp>
 
+#include <libsbx/terrain/terrain_module.hpp>
+
+#include <libsbx/canvas/canvas_module.hpp>
+#include <libsbx/canvas/components.hpp>
+
+#include <libsbx/scenes/components.hpp>
+
 #include <libsbx/render/scene_renderer_module.hpp>
 
 #include <libsbx/scripting/scripting_module.hpp>
@@ -1386,6 +1393,435 @@ auto interop::time_delta_time(std::float_t* delta_time) -> void {
   }
 
   *delta_time = core::engine::delta_time().value();
+}
+
+auto interop::physics_raycast(math::ray* ray, std::float_t max_distance, std::uint64_t* out_node_uuid, math::vector3* out_point, math::vector3* out_normal, std::float_t* out_distance) -> bool {
+  if (!ray) {
+    utility::logger<"scripting">::error("Attempting to call physics_raycast with a null ray");
+
+    return false;
+  }
+
+  auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
+  auto& scene = scenes_module.active_scene();
+  auto& physics_module = core::engine::get_module<physics::physics_module>();
+
+  const auto hit = physics_module.raycast(scene, *ray, max_distance);
+
+  if (!hit) {
+    return false;
+  }
+
+  if (out_node_uuid) { *out_node_uuid = hit->node.id().value(); }
+  if (out_point) { *out_point = hit->point; }
+  if (out_normal) { *out_normal = hit->normal; }
+  if (out_distance) { *out_distance = hit->distance; }
+
+  return true;
+}
+
+auto interop::terrain_generate(std::uint32_t width, std::uint32_t depth, std::float_t cell_size, std::float_t frequency, std::float_t amplitude, std::uint32_t octaves) -> void {
+  auto& terrain_module = core::engine::get_module<terrain::terrain_module>();
+
+  terrain_module.generate(terrain::heightmap_generator_settings{width, depth, cell_size, frequency, amplitude, octaves});
+}
+
+auto interop::terrain_sample_height(math::vector2* world_xz, std::float_t* out_height) -> void {
+  if (!world_xz || !out_height) {
+    utility::logger<"scripting">::error("Attempting to call terrain_sample_height with a null pointer");
+
+    return;
+  }
+
+  auto& terrain_module = core::engine::get_module<terrain::terrain_module>();
+
+  *out_height = terrain_module.sample_height(*world_xz);
+}
+
+auto interop::terrain_sample_normal(math::vector2* world_xz, math::vector3* out_normal) -> void {
+  if (!world_xz || !out_normal) {
+    utility::logger<"scripting">::error("Attempting to call terrain_sample_normal with a null pointer");
+
+    return;
+  }
+
+  auto& terrain_module = core::engine::get_module<terrain::terrain_module>();
+
+  *out_normal = terrain_module.sample_normal(*world_xz);
+}
+
+auto interop::mesh_renderer_set_geometry(std::uint64_t uuid, math::vector3* positions, math::vector3* normals, math::vector2* uvs, std::uint32_t vertex_count, std::uint32_t* indices, std::uint32_t index_count, math::color* tint) -> void {
+  if (!positions || !normals || !uvs || !indices || vertex_count == 0u || index_count == 0u) {
+    utility::logger<"scripting">::error("Attempting to call mesh_renderer_set_geometry with invalid geometry");
+
+    return;
+  }
+
+  auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
+  auto& scene = scenes_module.active_scene();
+  auto node = scene.find(math::uuid::from_value(uuid));
+
+  if (!node.is_valid()) {
+    utility::logger<"scripting">::error("Attempting to call mesh_renderer_set_geometry on an invalid node");
+
+    return;
+  }
+
+  auto& assets_module = core::engine::get_module<assets::assets_module>();
+
+  auto vertices = std::vector<assets::vertex>{};
+  vertices.reserve(vertex_count);
+
+  auto bounds = math::volume{};
+
+  for (auto index = std::uint32_t{0}; index < vertex_count; ++index) {
+    vertices.push_back(assets::vertex{positions[index], normals[index], uvs[index], math::vector4{1.0f, 0.0f, 0.0f, 1.0f}});
+    bounds.include(positions[index]);
+  }
+
+  auto index_vector = std::vector<std::uint32_t>{indices, indices + index_count};
+
+  auto& renderer = node.get_or_add_component<scenes::mesh_renderer>();
+
+  // Reused across calls rather than created fresh every time -- see this method's own doc comment
+  // in interop.hpp (create_material has a fixed capacity a live-edited mesh's per-frame calls would
+  // otherwise exhaust). tint on a reused material is applied via update_material instead, which has
+  // no such capacity cost.
+  auto material = assets::material_handle{};
+
+  if (!renderer.materials.empty() && renderer.materials.front().is_valid()) {
+    material = renderer.materials.front();
+
+    if (tint) {
+      assets_module.update_material(material, assets::material::create_info{
+        .base_color_factor = *tint,
+        .metallic_factor = 0.0f,
+        .roughness_factor = 0.8f
+      });
+    }
+  } else {
+    material = assets_module.create_material(assets::material::create_info{
+      .name = "Script Mesh",
+      .base_color_factor = tint ? *tint : math::color::white(),
+      .metallic_factor = 0.0f,
+      .roughness_factor = 0.8f
+    });
+  }
+
+  auto submeshes = std::vector<assets::mesh::submesh>{assets::mesh::submesh{0u, index_count, bounds, material}};
+
+  renderer.mesh = assets_module.create_mesh(std::move(vertices), std::move(index_vector), std::move(submeshes), bounds);
+  renderer.materials = std::vector<assets::material_handle>{material};
+}
+
+// Shared by every Canvas_*/RectTransform_*/UIImage_*/UIText_*/UIButton_* binding below -- the same
+// uuid-resolve step Transform_*/Rigidbody_* already do inline, factored out here since there are
+// enough of these bindings that repeating it each time would dwarf the actual field access.
+auto resolve_node(std::uint64_t uuid) -> scenes::node {
+  auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
+  auto& scene = scenes_module.active_scene();
+
+  return scene.find(math::uuid::from_value(uuid));
+}
+
+auto interop::canvas_get_sort_order(std::uint64_t uuid, std::int32_t* out_value) -> void {
+  auto node = resolve_node(uuid);
+
+  if (!out_value || !node.is_valid() || !node.has_component<canvas::canvas>()) {
+    return;
+  }
+
+  *out_value = node.get_component<canvas::canvas>().sort_order;
+}
+
+auto interop::canvas_set_sort_order(std::uint64_t uuid, std::int32_t value) -> void {
+  auto node = resolve_node(uuid);
+
+  if (!node.is_valid() || !node.has_component<canvas::canvas>()) {
+    return;
+  }
+
+  node.get_component<canvas::canvas>().sort_order = value;
+}
+
+auto interop::rect_transform_get_anchor_min(std::uint64_t uuid, math::vector2* out_value) -> void {
+  auto node = resolve_node(uuid);
+
+  if (!out_value || !node.is_valid() || !node.has_component<canvas::rect_transform>()) {
+    return;
+  }
+
+  *out_value = node.get_component<canvas::rect_transform>().anchor_min;
+}
+
+auto interop::rect_transform_set_anchor_min(std::uint64_t uuid, math::vector2* value) -> void {
+  auto node = resolve_node(uuid);
+
+  if (!value || !node.is_valid() || !node.has_component<canvas::rect_transform>()) {
+    return;
+  }
+
+  node.get_component<canvas::rect_transform>().anchor_min = *value;
+}
+
+auto interop::rect_transform_get_anchor_max(std::uint64_t uuid, math::vector2* out_value) -> void {
+  auto node = resolve_node(uuid);
+
+  if (!out_value || !node.is_valid() || !node.has_component<canvas::rect_transform>()) {
+    return;
+  }
+
+  *out_value = node.get_component<canvas::rect_transform>().anchor_max;
+}
+
+auto interop::rect_transform_set_anchor_max(std::uint64_t uuid, math::vector2* value) -> void {
+  auto node = resolve_node(uuid);
+
+  if (!value || !node.is_valid() || !node.has_component<canvas::rect_transform>()) {
+    return;
+  }
+
+  node.get_component<canvas::rect_transform>().anchor_max = *value;
+}
+
+auto interop::rect_transform_get_anchored_position(std::uint64_t uuid, math::vector2* out_value) -> void {
+  auto node = resolve_node(uuid);
+
+  if (!out_value || !node.is_valid() || !node.has_component<canvas::rect_transform>()) {
+    return;
+  }
+
+  *out_value = node.get_component<canvas::rect_transform>().anchored_position;
+}
+
+auto interop::rect_transform_set_anchored_position(std::uint64_t uuid, math::vector2* value) -> void {
+  auto node = resolve_node(uuid);
+
+  if (!value || !node.is_valid() || !node.has_component<canvas::rect_transform>()) {
+    return;
+  }
+
+  node.get_component<canvas::rect_transform>().anchored_position = *value;
+}
+
+auto interop::rect_transform_get_size_delta(std::uint64_t uuid, math::vector2* out_value) -> void {
+  auto node = resolve_node(uuid);
+
+  if (!out_value || !node.is_valid() || !node.has_component<canvas::rect_transform>()) {
+    return;
+  }
+
+  *out_value = node.get_component<canvas::rect_transform>().size_delta;
+}
+
+auto interop::rect_transform_set_size_delta(std::uint64_t uuid, math::vector2* value) -> void {
+  auto node = resolve_node(uuid);
+
+  if (!value || !node.is_valid() || !node.has_component<canvas::rect_transform>()) {
+    return;
+  }
+
+  node.get_component<canvas::rect_transform>().size_delta = *value;
+}
+
+auto interop::rect_transform_get_pivot(std::uint64_t uuid, math::vector2* out_value) -> void {
+  auto node = resolve_node(uuid);
+
+  if (!out_value || !node.is_valid() || !node.has_component<canvas::rect_transform>()) {
+    return;
+  }
+
+  *out_value = node.get_component<canvas::rect_transform>().pivot;
+}
+
+auto interop::rect_transform_set_pivot(std::uint64_t uuid, math::vector2* value) -> void {
+  auto node = resolve_node(uuid);
+
+  if (!value || !node.is_valid() || !node.has_component<canvas::rect_transform>()) {
+    return;
+  }
+
+  node.get_component<canvas::rect_transform>().pivot = *value;
+}
+
+auto interop::ui_image_get_tint(std::uint64_t uuid, math::color* out_value) -> void {
+  auto node = resolve_node(uuid);
+
+  if (!out_value || !node.is_valid() || !node.has_component<canvas::ui_image>()) {
+    return;
+  }
+
+  *out_value = node.get_component<canvas::ui_image>().tint;
+}
+
+auto interop::ui_image_set_tint(std::uint64_t uuid, math::color* value) -> void {
+  auto node = resolve_node(uuid);
+
+  if (!value || !node.is_valid() || !node.has_component<canvas::ui_image>()) {
+    return;
+  }
+
+  node.get_component<canvas::ui_image>().tint = *value;
+}
+
+auto interop::ui_text_get_text(std::uint64_t uuid) -> managed::string {
+  auto node = resolve_node(uuid);
+
+  if (!node.is_valid() || !node.has_component<canvas::ui_text>()) {
+    return managed::string::create("");
+  }
+
+  return managed::string::create(node.get_component<canvas::ui_text>().text);
+}
+
+auto interop::ui_text_set_text(std::uint64_t uuid, managed::string value) -> void {
+  auto node = resolve_node(uuid);
+
+  if (!node.is_valid() || !node.has_component<canvas::ui_text>()) {
+    return;
+  }
+
+  node.get_component<canvas::ui_text>().text = std::string{value};
+}
+
+auto interop::ui_text_get_font_size(std::uint64_t uuid, std::float_t* out_value) -> void {
+  auto node = resolve_node(uuid);
+
+  if (!out_value || !node.is_valid() || !node.has_component<canvas::ui_text>()) {
+    return;
+  }
+
+  *out_value = node.get_component<canvas::ui_text>().font_size;
+}
+
+auto interop::ui_text_set_font_size(std::uint64_t uuid, std::float_t value) -> void {
+  auto node = resolve_node(uuid);
+
+  if (!node.is_valid() || !node.has_component<canvas::ui_text>()) {
+    return;
+  }
+
+  node.get_component<canvas::ui_text>().font_size = value;
+}
+
+auto interop::ui_text_get_color(std::uint64_t uuid, math::color* out_value) -> void {
+  auto node = resolve_node(uuid);
+
+  if (!out_value || !node.is_valid() || !node.has_component<canvas::ui_text>()) {
+    return;
+  }
+
+  *out_value = node.get_component<canvas::ui_text>().color;
+}
+
+auto interop::ui_text_set_color(std::uint64_t uuid, math::color* value) -> void {
+  auto node = resolve_node(uuid);
+
+  if (!value || !node.is_valid() || !node.has_component<canvas::ui_text>()) {
+    return;
+  }
+
+  node.get_component<canvas::ui_text>().color = *value;
+}
+
+auto interop::ui_button_get_interactable(std::uint64_t uuid) -> bool {
+  auto node = resolve_node(uuid);
+
+  return node.is_valid() && node.has_component<canvas::ui_button>() && node.get_component<canvas::ui_button>().interactable;
+}
+
+auto interop::ui_button_set_interactable(std::uint64_t uuid, bool value) -> void {
+  auto node = resolve_node(uuid);
+
+  if (!node.is_valid() || !node.has_component<canvas::ui_button>()) {
+    return;
+  }
+
+  node.get_component<canvas::ui_button>().interactable = value;
+}
+
+auto interop::ui_button_get_normal_color(std::uint64_t uuid, math::color* out_value) -> void {
+  auto node = resolve_node(uuid);
+
+  if (!out_value || !node.is_valid() || !node.has_component<canvas::ui_button>()) {
+    return;
+  }
+
+  *out_value = node.get_component<canvas::ui_button>().normal_color;
+}
+
+auto interop::ui_button_set_normal_color(std::uint64_t uuid, math::color* value) -> void {
+  auto node = resolve_node(uuid);
+
+  if (!value || !node.is_valid() || !node.has_component<canvas::ui_button>()) {
+    return;
+  }
+
+  node.get_component<canvas::ui_button>().normal_color = *value;
+}
+
+auto interop::ui_button_get_hovered_color(std::uint64_t uuid, math::color* out_value) -> void {
+  auto node = resolve_node(uuid);
+
+  if (!out_value || !node.is_valid() || !node.has_component<canvas::ui_button>()) {
+    return;
+  }
+
+  *out_value = node.get_component<canvas::ui_button>().hovered_color;
+}
+
+auto interop::ui_button_set_hovered_color(std::uint64_t uuid, math::color* value) -> void {
+  auto node = resolve_node(uuid);
+
+  if (!value || !node.is_valid() || !node.has_component<canvas::ui_button>()) {
+    return;
+  }
+
+  node.get_component<canvas::ui_button>().hovered_color = *value;
+}
+
+auto interop::ui_button_get_pressed_color(std::uint64_t uuid, math::color* out_value) -> void {
+  auto node = resolve_node(uuid);
+
+  if (!out_value || !node.is_valid() || !node.has_component<canvas::ui_button>()) {
+    return;
+  }
+
+  *out_value = node.get_component<canvas::ui_button>().pressed_color;
+}
+
+auto interop::ui_button_set_pressed_color(std::uint64_t uuid, math::color* value) -> void {
+  auto node = resolve_node(uuid);
+
+  if (!value || !node.is_valid() || !node.has_component<canvas::ui_button>()) {
+    return;
+  }
+
+  node.get_component<canvas::ui_button>().pressed_color = *value;
+}
+
+auto interop::ui_button_get_is_hovered(std::uint64_t uuid) -> bool {
+  auto node = resolve_node(uuid);
+
+  return node.is_valid() && node.has_component<canvas::ui_button>() && node.get_component<canvas::ui_button>().is_hovered;
+}
+
+auto interop::ui_button_get_is_pressed(std::uint64_t uuid) -> bool {
+  auto node = resolve_node(uuid);
+
+  return node.is_valid() && node.has_component<canvas::ui_button>() && node.get_component<canvas::ui_button>().is_pressed;
+}
+
+auto interop::ui_button_get_was_clicked(std::uint64_t uuid) -> bool {
+  auto node = resolve_node(uuid);
+
+  return node.is_valid() && node.has_component<canvas::ui_button>() && node.get_component<canvas::ui_button>().was_clicked;
+}
+
+auto interop::canvas_wants_pointer_capture() -> bool {
+  auto& canvas_module = core::engine::get_module<canvas::canvas_module>();
+
+  return canvas_module.wants_pointer_capture();
 }
 
 } // namespace sbx::scripting

@@ -101,6 +101,51 @@ namespace Sbx.Core
 
     internal static delegate* unmanaged<float*, void> Time_DeltaTime;
 
+    internal static delegate* unmanaged<Ray*, float, ulong*, Vector3*, Vector3*, float*, bool> Physics_Raycast;
+
+    internal static delegate* unmanaged<uint, uint, float, float, float, uint, void> Terrain_Generate;
+    internal static delegate* unmanaged<Vector2*, float*, void> Terrain_SampleHeight;
+    internal static delegate* unmanaged<Vector2*, Vector3*, void> Terrain_SampleNormal;
+
+    internal static delegate* unmanaged<ulong, Vector3*, Vector3*, Vector2*, uint, uint*, uint, Color*, void> MeshRenderer_SetGeometry;
+
+    internal static delegate* unmanaged<ulong, int*, void> Canvas_GetSortOrder;
+    internal static delegate* unmanaged<ulong, int, void> Canvas_SetSortOrder;
+    internal static delegate* unmanaged<bool> Canvas_WantsPointerCapture;
+
+    internal static delegate* unmanaged<ulong, Vector2*, void> RectTransform_GetAnchorMin;
+    internal static delegate* unmanaged<ulong, Vector2*, void> RectTransform_SetAnchorMin;
+    internal static delegate* unmanaged<ulong, Vector2*, void> RectTransform_GetAnchorMax;
+    internal static delegate* unmanaged<ulong, Vector2*, void> RectTransform_SetAnchorMax;
+    internal static delegate* unmanaged<ulong, Vector2*, void> RectTransform_GetAnchoredPosition;
+    internal static delegate* unmanaged<ulong, Vector2*, void> RectTransform_SetAnchoredPosition;
+    internal static delegate* unmanaged<ulong, Vector2*, void> RectTransform_GetSizeDelta;
+    internal static delegate* unmanaged<ulong, Vector2*, void> RectTransform_SetSizeDelta;
+    internal static delegate* unmanaged<ulong, Vector2*, void> RectTransform_GetPivot;
+    internal static delegate* unmanaged<ulong, Vector2*, void> RectTransform_SetPivot;
+
+    internal static delegate* unmanaged<ulong, Color*, void> UIImage_GetTint;
+    internal static delegate* unmanaged<ulong, Color*, void> UIImage_SetTint;
+
+    internal static delegate* unmanaged<ulong, NativeString> UIText_GetText;
+    internal static delegate* unmanaged<ulong, NativeString, void> UIText_SetText;
+    internal static delegate* unmanaged<ulong, float*, void> UIText_GetFontSize;
+    internal static delegate* unmanaged<ulong, float, void> UIText_SetFontSize;
+    internal static delegate* unmanaged<ulong, Color*, void> UIText_GetColor;
+    internal static delegate* unmanaged<ulong, Color*, void> UIText_SetColor;
+
+    internal static delegate* unmanaged<ulong, bool> UIButton_GetInteractable;
+    internal static delegate* unmanaged<ulong, bool, void> UIButton_SetInteractable;
+    internal static delegate* unmanaged<ulong, Color*, void> UIButton_GetNormalColor;
+    internal static delegate* unmanaged<ulong, Color*, void> UIButton_SetNormalColor;
+    internal static delegate* unmanaged<ulong, Color*, void> UIButton_GetHoveredColor;
+    internal static delegate* unmanaged<ulong, Color*, void> UIButton_SetHoveredColor;
+    internal static delegate* unmanaged<ulong, Color*, void> UIButton_GetPressedColor;
+    internal static delegate* unmanaged<ulong, Color*, void> UIButton_SetPressedColor;
+    internal static delegate* unmanaged<ulong, bool> UIButton_GetIsHovered;
+    internal static delegate* unmanaged<ulong, bool> UIButton_GetIsPressed;
+    internal static delegate* unmanaged<ulong, bool> UIButton_GetWasClicked;
+
   } // class InternalCalls
 
 } // namespace Sbx.Core

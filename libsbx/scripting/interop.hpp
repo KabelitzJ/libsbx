@@ -14,6 +14,7 @@
 #include <libsbx/math/ray.hpp>
 #include <libsbx/math/vector2.hpp>
 #include <libsbx/math/vector3.hpp>
+#include <libsbx/math/color.hpp>
 
 #include <libsbx/platform/input.hpp>
 
@@ -203,6 +204,76 @@ struct interop {
   static auto camera_set_exposure(std::uint64_t uuid, std::float_t exposure) -> void;
 
   static auto time_delta_time(std::float_t* delta_time) -> void;
+
+  /**
+   * @brief Raycasts against the active scene's broadphase -- shape_collider/convex mesh_collider
+   * primitives and heightfield_collider terrain (see physics::physics_module::raycast). Returns
+   * false, leaving every out parameter untouched, when nothing was hit within max_distance.
+   */
+  static auto physics_raycast(math::ray* ray, std::float_t max_distance, std::uint64_t* out_node_uuid, math::vector3* out_point, math::vector3* out_normal, std::float_t* out_distance) -> bool;
+
+  /** @brief (Re)generates the active scene's terrain -- see terrain::terrain_module::generate. Replaces any terrain a previous call generated. */
+  static auto terrain_generate(std::uint32_t width, std::uint32_t depth, std::float_t cell_size, std::float_t frequency, std::float_t amplitude, std::uint32_t octaves) -> void;
+
+  /** @brief Elevation sampling against the active scene's terrain_module heightmap -- 0 if no terrain has been generated yet (see terrain::heightmap::sample_bilinear's own empty-map fallback). */
+  static auto terrain_sample_height(math::vector2* world_xz, std::float_t* out_height) -> void;
+
+  /** @brief Surface normal sampling against the active scene's terrain_module heightmap -- +Y if no terrain has been generated yet (see terrain::heightmap::sample_normal's own empty-map fallback). */
+  static auto terrain_sample_normal(math::vector2* world_xz, math::vector3* out_normal) -> void;
+
+  /**
+   * @brief Builds a mesh from raw vertex/index data and assigns it to this node's mesh_renderer
+   * component (creating the component, and a backing material, the first time this is called for a
+   * given node). See assets::asset_residency::create_mesh -- the mesh renders through the ordinary
+   * mesh_renderer/opaque_pass path, no bespoke rendering system involved.
+   *
+   * Reuses the node's already-assigned material across repeated calls instead of creating a new
+   * one every time: a live-edited mesh (e.g. a road network's ghost preview while dragging) may
+   * call this every frame, and asset_residency::create_material has a fixed material_capacity that
+   * a fresh material per call would exhaust in short order.
+   */
+  static auto mesh_renderer_set_geometry(std::uint64_t uuid, math::vector3* positions, math::vector3* normals, math::vector2* uvs, std::uint32_t vertex_count, std::uint32_t* indices, std::uint32_t index_count, math::color* tint) -> void;
+
+  // Canvas: node uuid -> canvas::canvas/rect_transform/ui_image/ui_text/ui_button field access,
+  // same uuid-resolve-then-get/set convention as Transform_*/Rigidbody_* above.
+  static auto canvas_get_sort_order(std::uint64_t uuid, std::int32_t* out_value) -> void;
+  static auto canvas_set_sort_order(std::uint64_t uuid, std::int32_t value) -> void;
+
+  static auto rect_transform_get_anchor_min(std::uint64_t uuid, math::vector2* out_value) -> void;
+  static auto rect_transform_set_anchor_min(std::uint64_t uuid, math::vector2* value) -> void;
+  static auto rect_transform_get_anchor_max(std::uint64_t uuid, math::vector2* out_value) -> void;
+  static auto rect_transform_set_anchor_max(std::uint64_t uuid, math::vector2* value) -> void;
+  static auto rect_transform_get_anchored_position(std::uint64_t uuid, math::vector2* out_value) -> void;
+  static auto rect_transform_set_anchored_position(std::uint64_t uuid, math::vector2* value) -> void;
+  static auto rect_transform_get_size_delta(std::uint64_t uuid, math::vector2* out_value) -> void;
+  static auto rect_transform_set_size_delta(std::uint64_t uuid, math::vector2* value) -> void;
+  static auto rect_transform_get_pivot(std::uint64_t uuid, math::vector2* out_value) -> void;
+  static auto rect_transform_set_pivot(std::uint64_t uuid, math::vector2* value) -> void;
+
+  static auto ui_image_get_tint(std::uint64_t uuid, math::color* out_value) -> void;
+  static auto ui_image_set_tint(std::uint64_t uuid, math::color* value) -> void;
+
+  static auto ui_text_get_text(std::uint64_t uuid) -> managed::string;
+  static auto ui_text_set_text(std::uint64_t uuid, managed::string value) -> void;
+  static auto ui_text_get_font_size(std::uint64_t uuid, std::float_t* out_value) -> void;
+  static auto ui_text_set_font_size(std::uint64_t uuid, std::float_t value) -> void;
+  static auto ui_text_get_color(std::uint64_t uuid, math::color* out_value) -> void;
+  static auto ui_text_set_color(std::uint64_t uuid, math::color* value) -> void;
+
+  static auto ui_button_get_interactable(std::uint64_t uuid) -> bool;
+  static auto ui_button_set_interactable(std::uint64_t uuid, bool value) -> void;
+  static auto ui_button_get_normal_color(std::uint64_t uuid, math::color* out_value) -> void;
+  static auto ui_button_set_normal_color(std::uint64_t uuid, math::color* value) -> void;
+  static auto ui_button_get_hovered_color(std::uint64_t uuid, math::color* out_value) -> void;
+  static auto ui_button_set_hovered_color(std::uint64_t uuid, math::color* value) -> void;
+  static auto ui_button_get_pressed_color(std::uint64_t uuid, math::color* out_value) -> void;
+  static auto ui_button_set_pressed_color(std::uint64_t uuid, math::color* value) -> void;
+  static auto ui_button_get_is_hovered(std::uint64_t uuid) -> bool;
+  static auto ui_button_get_is_pressed(std::uint64_t uuid) -> bool;
+  static auto ui_button_get_was_clicked(std::uint64_t uuid) -> bool;
+
+  /** @brief Whether the cursor is currently over any interactable UI element -- see canvas::canvas_module's own doc comment. Any world-picking code (a road tool) should check this before casting its own ray. */
+  static auto canvas_wants_pointer_capture() -> bool;
 
   template<typename Type>
   static auto register_managed_component(std::string_view name, managed::assembly& core_assembly) -> void {

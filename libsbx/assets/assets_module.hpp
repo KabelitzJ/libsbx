@@ -88,6 +88,9 @@ public:
 
   auto load_mesh(const std::filesystem::path& path, const mesh_import_options& options = {}) -> mesh_handle;
 
+  /** @ref asset_residency::create_mesh */
+  auto create_mesh(std::vector<vertex> vertices, std::vector<std::uint32_t> indices, std::vector<mesh::submesh> submeshes, const math::volume& bounds) -> mesh_handle;
+
   /**
    * @brief Resolves a mesh's raw cooked vertex/index data (see @ref cooked_mesh_data), independent
    * of GPU residency — the mesh need not be, and does not become, loaded via @ref load_mesh.

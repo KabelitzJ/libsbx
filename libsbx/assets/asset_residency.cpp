@@ -265,6 +265,20 @@ auto asset_residency::load_mesh(const std::filesystem::path& path, const mesh_im
   return load_mesh(_cooker.import(assets_directory / path), options);
 }
 
+auto asset_residency::create_mesh(std::vector<vertex> vertices, std::vector<std::uint32_t> indices, std::vector<mesh::submesh> submeshes, const math::volume& bounds) -> mesh_handle {
+  const auto vertex_count = static_cast<std::uint32_t>(vertices.size());
+
+  auto record = std::make_shared<mesh>(std::move(submeshes), bounds, vertex_count);
+  record->_id = math::uuid::create();
+
+  {
+    auto lock = std::lock_guard{_mutex};
+    _pending_meshes.push_back(pending_mesh_upload{record, std::move(vertices), std::move(indices), {}});
+  }
+
+  return mesh_handle{record};
+}
+
 auto asset_residency::load_material(const math::uuid& id) -> material_handle {
   _cooker.ensure_manifest_loaded();
 

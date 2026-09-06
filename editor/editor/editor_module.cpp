@@ -41,13 +41,19 @@ editor_module::~editor_module() {
 auto editor_module::enter_play_mode() -> void {
   _play_mode.enter_play_mode();
 
-  sbx::core::engine::get_module<sbx::render::scene_renderer_module>().set_camera_override(std::nullopt);
+  auto& scene_renderer_module = sbx::core::engine::get_module<sbx::render::scene_renderer_module>();
+
+  scene_renderer_module.set_camera_override(std::nullopt);
+  scene_renderer_module.set_grid_enabled(false);
 }
 
 auto editor_module::exit_play_mode() -> void {
   _play_mode.exit_play_mode();
 
-  sbx::core::engine::get_module<sbx::render::scene_renderer_module>().set_camera_override(_editor_camera.to_camera_data());
+  auto& scene_renderer_module = sbx::core::engine::get_module<sbx::render::scene_renderer_module>();
+
+  scene_renderer_module.set_camera_override(_editor_camera.to_camera_data());
+  scene_renderer_module.set_grid_enabled(true);
 
   // The reload above rebuilds the whole registry, so any command pushed during the play session
   // now references stale entities/state — drop them. Entering Play does not clear (@ref

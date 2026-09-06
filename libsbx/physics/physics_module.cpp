@@ -25,6 +25,7 @@
 #include <libsbx/physics/epa.hpp>
 #include <libsbx/physics/solver.hpp>
 #include <libsbx/physics/physics_debug.hpp>
+#include <libsbx/physics/raycast.hpp>
 
 namespace sbx::physics {
 
@@ -188,6 +189,19 @@ auto physics_module::_sync_broadphase(scenes::scene& scene) -> void {
     route(node, body_type::static_body, world_bounds_aabb(pose, local_bounds));
   }
 
+  // heightfield_collider: kept in its own small list, not routed through _static_tree/route() --
+  // raycast() is the only consumer (see the component's own v1-scope doc comment), and a heightfield's
+  // necessarily-huge AABB would otherwise match nearly every dynamic body's fat AABB in
+  // _generate_candidate_pairs, spending narrowphase time on pairs that always resolve to zero shapes
+  // on the heightfield side. Rebuilt fresh every sync -- typically 0 or 1 entries, so this is cheap.
+  _heightfield_nodes.clear();
+
+  for (auto&& [entity, collider] : scene.query<heightfield_collider>().each()) {
+    if (collider.data) {
+      _heightfield_nodes.push_back(scene.node_of(entity));
+    }
+  }
+
   prune_stale_leaves(_dynamic_tree, _dynamic_leaves, touched_dynamic);
   prune_stale_leaves(_static_tree, _static_leaves, touched_static);
 }
@@ -307,6 +321,7 @@ auto physics_module::_reset() -> void {
   _static_tree.clear();
   _dynamic_leaves.clear();
   _static_leaves.clear();
+  _heightfield_nodes.clear();
   _candidate_pairs.clear();
   _manifolds.clear();
   _manifold_cache.clear();
@@ -462,6 +477,45 @@ auto physics_module::query_sphere_contacts(scenes::scene& scene, const math::vec
 
   _static_tree.query(query_aabb, visit);
   _dynamic_tree.query(query_aabb, visit);
+}
+
+auto physics_module::raycast(scenes::scene& scene, const math::ray& ray, std::float_t max_distance) -> std::optional<raycast_hit> {
+  auto& assets_module = core::engine::get_module<assets::assets_module>();
+
+  auto nearest = std::optional<raycast_hit>{};
+
+  const auto consider = [&](const scenes::node& candidate, const shape_raycast_hit& hit) {
+    if (!nearest || hit.distance < nearest->distance) {
+      nearest = raycast_hit{candidate, hit.point, hit.normal, hit.distance};
+    }
+  };
+
+  // Not routed through _static_tree -- see the doc comment on _heightfield_nodes' population in
+  // _sync_broadphase for why. Typically 0 or 1 entries, so a linear scan costs nothing here.
+  for (const auto& node : _heightfield_nodes) {
+    if (const auto& collider = node.get_component<heightfield_collider>(); collider.data) {
+      if (const auto hit = raycast_heightfield(*collider.data, ray, max_distance)) {
+        consider(node, *hit);
+      }
+    }
+  }
+
+  const auto visit = [&](const scenes::node& candidate, [[maybe_unused]] std::float_t entry_t) {
+    const auto resolved = resolve_convex(scene, candidate, _hull_cache, assets_module);
+
+    if (!resolved) {
+      return; // no collider, or a non-convex mesh_collider -- see this method's own doc comment
+    }
+
+    if (const auto hit = raycast_convex_shape(resolved->shape, resolved->pose, ray, max_distance)) {
+      consider(candidate, *hit);
+    }
+  };
+
+  _static_tree.query(ray, visit);
+  _dynamic_tree.query(ray, visit);
+
+  return nearest;
 }
 
 auto physics_module::late_update() -> void {

@@ -56,6 +56,14 @@ public:
 
   auto load_mesh(const std::filesystem::path& path, const mesh_import_options& options = {}) -> mesh_handle;
 
+  /**
+   * @brief Builds a mesh directly from in-memory vertex/index data instead of a glTF import --
+   * for procedurally generated geometry (terrain chunks, a runtime-authored road network mesh).
+   * Uploaded the same way as a cooked mesh, via the next process_uploads() call. Not registered
+   * in the uuid-keyed load_mesh cache -- each call always creates a new mesh record.
+   */
+  auto create_mesh(std::vector<vertex> vertices, std::vector<std::uint32_t> indices, std::vector<mesh::submesh> submeshes, const math::volume& bounds) -> mesh_handle;
+
   /** @brief Loads a skeleton cooked as a side effect of a mesh import; returns the existing handle if already loaded. Pure CPU data -- resolves immediately, no upload queue involved. */
   auto load_skeleton(const math::uuid& id) -> skeleton_handle;
 

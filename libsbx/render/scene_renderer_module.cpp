@@ -47,6 +47,7 @@
 #include <libsbx/render/passes/grid_pass.hpp>
 #include <libsbx/render/passes/debug_draw_pass.hpp>
 #include <libsbx/render/passes/tonemap_pass.hpp>
+#include <libsbx/render/passes/canvas_pass.hpp>
 #include <libsbx/render/passes/transparent_accumulate_pass.hpp>
 #include <libsbx/render/passes/particle_pass.hpp>
 #include <libsbx/render/passes/transparent_resolve_pass.hpp>
@@ -329,6 +330,7 @@ scene_renderer_module::scene_renderer_module() {
   _graph.add_pass<transparent_resolve_pass>();
   _graph.add_pass<bloom_pass>();
   _graph.add_pass<tonemap_pass>();
+  _graph.add_pass<canvas_pass>();
 
   auto& presentation_module = core::engine::get_module<render::presentation_module>();
 

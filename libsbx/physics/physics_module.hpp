@@ -8,6 +8,7 @@
 #include <utility>
 #include <vector>
 
+#include <libsbx/math/ray.hpp>
 #include <libsbx/math/vector3.hpp>
 
 #include <libsbx/ecs/entity.hpp>
@@ -47,6 +48,14 @@ struct sphere_query_hit {
   math::vector3 normal{};            // world space, points from the collider's surface toward the sphere's center
   std::float_t penetration_depth{0.0f};
 }; // struct sphere_query_hit
+
+/** @brief The nearest collider a physics_module::raycast() ray hit. */
+struct raycast_hit {
+  scenes::node node{};
+  math::vector3 point{};   // world-space
+  math::vector3 normal{};  // world space, outward from the collider's surface
+  std::float_t distance{0.0f};
+}; // struct raycast_hit
 
 /**
  * @brief Owns the world broadphase and the fixed-step integrate/broadphase/narrowphase/solve
@@ -146,6 +155,16 @@ public:
   auto query_sphere_contacts(scenes::scene& scene, const math::vector3& center, std::float_t radius, std::vector<sphere_query_hit>& out_hits) -> void;
 
   /**
+   * @brief The nearest collider (static or dynamic) @p ray hits within @p max_distance, or
+   * nullopt. Broadphase candidates come from both trees' ray queries (containers::dynamic_tree
+   * already supports this -- see dynamic_tree.hpp); each candidate resolves to either a
+   * heightfield_collider (raycast_heightfield) or an ordinary convex primitive (resolve_convex +
+   * raycast_convex_shape) -- see raycast.hpp. A non-convex mesh_collider candidate is silently
+   * skipped, same accepted v1 gap query_sphere_contacts already has (no triangle-BVH raycast yet).
+   */
+  [[nodiscard]] auto raycast(scenes::scene& scene, const math::ray& ray, std::float_t max_distance) -> std::optional<raycast_hit>;
+
+  /**
    * @brief Fires once per pair on the fixed_update() step a (solid) contact or (is_trigger)
    * overlap first appears -- see collision_event's doc comment. scripting_module connects here to
    * deliver OnCollisionEnter/OnTriggerEnter to any script on either side.
@@ -212,6 +231,10 @@ private:
   broadphase_tree_type _static_tree{};
   containers::dense_map<scenes::node, broadphase_tree_type::id> _dynamic_leaves{};
   containers::dense_map<scenes::node, broadphase_tree_type::id> _static_leaves{};
+
+  // heightfield_collider nodes -- kept out of _static_tree entirely; see the doc comment where
+  // this is populated in _sync_broadphase.
+  std::vector<scenes::node> _heightfield_nodes{};
 
   std::vector<std::pair<scenes::node, scenes::node>> _candidate_pairs{};
   std::vector<contact_manifold> _manifolds{};

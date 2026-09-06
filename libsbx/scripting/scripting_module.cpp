@@ -18,6 +18,8 @@
 #include <libsbx/scenes/scenes_module.hpp>
 #include <libsbx/scenes/components.hpp>
 
+#include <libsbx/canvas/components.hpp>
+
 #include <libsbx/scripting/interop.hpp>
 
 namespace sbx::scripting {
@@ -132,6 +134,51 @@ scripting_module::scripting_module() {
 
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Time_DeltaTime", reinterpret_cast<void*>(&interop::time_delta_time));
 
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Physics_Raycast", reinterpret_cast<void*>(&interop::physics_raycast));
+
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Terrain_Generate", reinterpret_cast<void*>(&interop::terrain_generate));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Terrain_SampleHeight", reinterpret_cast<void*>(&interop::terrain_sample_height));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Terrain_SampleNormal", reinterpret_cast<void*>(&interop::terrain_sample_normal));
+
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "MeshRenderer_SetGeometry", reinterpret_cast<void*>(&interop::mesh_renderer_set_geometry));
+
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Canvas_GetSortOrder", reinterpret_cast<void*>(&interop::canvas_get_sort_order));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Canvas_SetSortOrder", reinterpret_cast<void*>(&interop::canvas_set_sort_order));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Canvas_WantsPointerCapture", reinterpret_cast<void*>(&interop::canvas_wants_pointer_capture));
+
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "RectTransform_GetAnchorMin", reinterpret_cast<void*>(&interop::rect_transform_get_anchor_min));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "RectTransform_SetAnchorMin", reinterpret_cast<void*>(&interop::rect_transform_set_anchor_min));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "RectTransform_GetAnchorMax", reinterpret_cast<void*>(&interop::rect_transform_get_anchor_max));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "RectTransform_SetAnchorMax", reinterpret_cast<void*>(&interop::rect_transform_set_anchor_max));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "RectTransform_GetAnchoredPosition", reinterpret_cast<void*>(&interop::rect_transform_get_anchored_position));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "RectTransform_SetAnchoredPosition", reinterpret_cast<void*>(&interop::rect_transform_set_anchored_position));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "RectTransform_GetSizeDelta", reinterpret_cast<void*>(&interop::rect_transform_get_size_delta));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "RectTransform_SetSizeDelta", reinterpret_cast<void*>(&interop::rect_transform_set_size_delta));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "RectTransform_GetPivot", reinterpret_cast<void*>(&interop::rect_transform_get_pivot));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "RectTransform_SetPivot", reinterpret_cast<void*>(&interop::rect_transform_set_pivot));
+
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "UIImage_GetTint", reinterpret_cast<void*>(&interop::ui_image_get_tint));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "UIImage_SetTint", reinterpret_cast<void*>(&interop::ui_image_set_tint));
+
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "UIText_GetText", reinterpret_cast<void*>(&interop::ui_text_get_text));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "UIText_SetText", reinterpret_cast<void*>(&interop::ui_text_set_text));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "UIText_GetFontSize", reinterpret_cast<void*>(&interop::ui_text_get_font_size));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "UIText_SetFontSize", reinterpret_cast<void*>(&interop::ui_text_set_font_size));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "UIText_GetColor", reinterpret_cast<void*>(&interop::ui_text_get_color));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "UIText_SetColor", reinterpret_cast<void*>(&interop::ui_text_set_color));
+
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "UIButton_GetInteractable", reinterpret_cast<void*>(&interop::ui_button_get_interactable));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "UIButton_SetInteractable", reinterpret_cast<void*>(&interop::ui_button_set_interactable));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "UIButton_GetNormalColor", reinterpret_cast<void*>(&interop::ui_button_get_normal_color));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "UIButton_SetNormalColor", reinterpret_cast<void*>(&interop::ui_button_set_normal_color));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "UIButton_GetHoveredColor", reinterpret_cast<void*>(&interop::ui_button_get_hovered_color));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "UIButton_SetHoveredColor", reinterpret_cast<void*>(&interop::ui_button_set_hovered_color));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "UIButton_GetPressedColor", reinterpret_cast<void*>(&interop::ui_button_get_pressed_color));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "UIButton_SetPressedColor", reinterpret_cast<void*>(&interop::ui_button_set_pressed_color));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "UIButton_GetIsHovered", reinterpret_cast<void*>(&interop::ui_button_get_is_hovered));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "UIButton_GetIsPressed", reinterpret_cast<void*>(&interop::ui_button_get_is_pressed));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "UIButton_GetWasClicked", reinterpret_cast<void*>(&interop::ui_button_get_was_clicked));
+
   interop::register_managed_component<scenes::tag>("Tag", _core_assembly);
   interop::register_managed_component<scenes::local_transform>("Transform", _core_assembly);
   interop::register_managed_component<scenes::animator>("Animator", _core_assembly);
@@ -143,6 +190,12 @@ scripting_module::scripting_module() {
   // distinct C# types avoids Main's properties silently ignoring which node they were fetched from.
   interop::register_managed_component<scenes::camera>("CameraSettings", _core_assembly);
   interop::register_managed_component<physics::rigidbody>("Rigidbody", _core_assembly);
+  interop::register_managed_component<scenes::mesh_renderer>("MeshRenderer", _core_assembly);
+  interop::register_managed_component<canvas::canvas>("Canvas", _core_assembly);
+  interop::register_managed_component<canvas::rect_transform>("RectTransform", _core_assembly);
+  interop::register_managed_component<canvas::ui_image>("UIImage", _core_assembly);
+  interop::register_managed_component<canvas::ui_text>("UIText", _core_assembly);
+  interop::register_managed_component<canvas::ui_button>("UIButton", _core_assembly);
   // interop::register_managed_component<physics::character_controller>("CharacterController", _core_assembly);
 
   _core_assembly.upload_internal_calls();

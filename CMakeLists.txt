@@ -174,6 +174,9 @@ target_sources(
     "${CMAKE_SOURCE_DIR}/libsbx/assets/ibl_baker.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/assets/particle_effect.cpp"
 
+    "${CMAKE_SOURCE_DIR}/libsbx/canvas/canvas_draw_list.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/canvas/canvas_module.cpp"
+
     "${CMAKE_SOURCE_DIR}/libsbx/core/core.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/core/engine.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/core/project.cpp"
@@ -237,6 +240,7 @@ target_sources(
     "${CMAKE_SOURCE_DIR}/libsbx/physics/physics_debug.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/physics/physics_module.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/physics/quickhull.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/physics/raycast.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/physics/solver.cpp"
 
     "${CMAKE_SOURCE_DIR}/libsbx/platform/input.cpp"
@@ -254,6 +258,7 @@ target_sources(
     "${CMAKE_SOURCE_DIR}/libsbx/render/skinning/skin_pass.cpp"
 
     "${CMAKE_SOURCE_DIR}/libsbx/render/passes/bloom_pass.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/render/passes/canvas_pass.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/render/passes/debug_draw_pass.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/render/passes/depth_pre_pass.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/render/passes/grid_pass.cpp"
@@ -307,6 +312,8 @@ target_sources(
 
     "${CMAKE_SOURCE_DIR}/libsbx/signals/signals.cpp"
 
+    "${CMAKE_SOURCE_DIR}/libsbx/terrain/terrain_module.cpp"
+
     "${CMAKE_SOURCE_DIR}/libsbx/utility/compression.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/utility/crc32.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/utility/hash.cpp"
@@ -330,6 +337,11 @@ target_sources(
       "${CMAKE_SOURCE_DIR}/libsbx/assets/particle_effect.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/assets/skeleton.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/assets/texture.hpp"
+
+      "${CMAKE_SOURCE_DIR}/libsbx/canvas/canvas_draw_list.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/canvas/canvas_module.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/canvas/components.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/canvas/rect_resolve.hpp"
 
       "${CMAKE_SOURCE_DIR}/libsbx/containers/compressed_pair.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/containers/containers.hpp"
@@ -483,6 +495,7 @@ target_sources(
       "${CMAKE_SOURCE_DIR}/libsbx/physics/physics_debug.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/physics/physics_module.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/physics/quickhull.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/physics/raycast.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/physics/rigidbody.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/physics/shapes.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/physics/solver.hpp"
@@ -509,6 +522,7 @@ target_sources(
       "${CMAKE_SOURCE_DIR}/libsbx/render/skinning/skin_pass.hpp"
 
       "${CMAKE_SOURCE_DIR}/libsbx/render/passes/bloom_pass.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/render/passes/canvas_pass.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/render/passes/debug_draw_pass.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/render/passes/depth_pre_pass.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/render/passes/light_culling_pass.hpp"
@@ -576,6 +590,11 @@ target_sources(
       "${CMAKE_SOURCE_DIR}/libsbx/signals/slot.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/signals/slot_state.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/signals/to_weak.hpp"
+
+      "${CMAKE_SOURCE_DIR}/libsbx/terrain/heightmap.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/terrain/heightmap_generator.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/terrain/terrain_chunking.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/terrain/terrain_module.hpp"
 
       "${CMAKE_SOURCE_DIR}/libsbx/units/area.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/units/dimension.hpp"

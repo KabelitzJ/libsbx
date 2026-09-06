@@ -3,11 +3,15 @@
 #ifndef LIBSBX_PHYSICS_COLLIDER_HPP_
 #define LIBSBX_PHYSICS_COLLIDER_HPP_
 
+#include <memory>
+
 #include <libsbx/math/matrix3x3.hpp>
 #include <libsbx/math/quaternion.hpp>
 #include <libsbx/math/vector3.hpp>
 
 #include <libsbx/assets/mesh.hpp>
+
+#include <libsbx/terrain/heightmap.hpp>
 
 #include <libsbx/physics/shapes.hpp>
 
@@ -59,6 +63,23 @@ struct mesh_collider {
   // See shape_collider::is_trigger's doc comment.
   bool is_trigger{false};
 }; // struct mesh_collider
+
+/**
+ * @brief A terrain heightfield collider, world-axis-aligned (no offset/rotation -- a heightmap is
+ * already defined in world space, unlike shape_collider/mesh_collider's node-local primitives).
+ * Always an implicit-static body (see physics_module::_sync_broadphase): a heightfield never
+ * carries a rigidbody, so a dynamic body can never be authored on top of one.
+ *
+ * v1 scope: participates only in physics_module::raycast() (picking), not narrowphase contact
+ * generation -- a rigidbody resting/walking on procedural terrain needs a separate, larger piece
+ * of work (heightfield-vs-convex-shape contact manifolds) not built yet. See raycast.hpp's
+ * raycast_heightfield for the query this collider actually serves today.
+ */
+struct heightfield_collider {
+  std::shared_ptr<const terrain::heightmap> data{};
+  std::float_t friction{0.5f};
+  std::float_t restitution{0.0f};
+}; // struct heightfield_collider
 
 } // namespace sbx::physics
 

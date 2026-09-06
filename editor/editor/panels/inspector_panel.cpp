@@ -1459,8 +1459,12 @@ auto draw_script_field_inspector(editor_state& state, sbx::scenes::node& node, s
         hidden = true;
       } else if (attribute_type_name == "Sbx.Core.Attributes.ShowInEditorAttribute") {
         // ShowInEditorAttribute exposes DisplayName/IsReadOnly as auto-properties, not plain
-        // fields — read via get_property_value, not get_field_value.
-        display_name = field_attribute.get_property_value<std::string>("DisplayName");
+        // fields — read via get_property_value, not get_field_value. An empty DisplayName means
+        // the attribute was used without an override (e.g. plain [ShowInEditor]) -- keep the
+        // field-name default from above rather than clobbering it with "".
+        if (const auto name = field_attribute.get_property_value<std::string>("DisplayName"); !name.empty()) {
+          display_name = name;
+        }
         is_read_only = field_attribute.get_property_value<bool>("IsReadOnly");
       } else if (attribute_type_name == "Sbx.Core.Attributes.ClampValueAttribute") {
         has_clamp = true;

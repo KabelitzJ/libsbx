@@ -4,6 +4,12 @@ namespace Sbx.Core
   public class ParticleEffect : Component
   {
 
+    /** Assigns (or reassigns) which .particle_effect asset this component plays. path is project-relative, e.g. "particles/impact_spark.particle_effect". */
+    public void Load(string path)
+    {
+      unsafe { InternalCalls.ParticleEffect_Load(UUID, path); }
+    }
+
     public void Play()
     {
       unsafe { InternalCalls.ParticleEffect_Play(UUID); }

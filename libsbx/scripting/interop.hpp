@@ -119,6 +119,9 @@ struct interop {
 
   static auto node_set_parent(std::uint64_t uuid, std::uint64_t parent_uuid) -> void;
 
+  /** @brief Loads (or reassigns) which .particle_effect asset this node's ParticleEffect component plays -- @p path is project-relative, same convention as every other asset path taken from script/YAML. */
+  static auto particle_effect_load(std::uint64_t uuid, managed::string path) -> void;
+
   static auto particle_effect_play(std::uint64_t uuid) -> void;
 
   static auto particle_effect_pause(std::uint64_t uuid) -> void;

@@ -87,6 +87,7 @@ scripting_module::scripting_module() {
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Node_Destroy", reinterpret_cast<void*>(&interop::node_destroy));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Node_SetParent", reinterpret_cast<void*>(&interop::node_set_parent));
 
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "ParticleEffect_Load", reinterpret_cast<void*>(&interop::particle_effect_load));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "ParticleEffect_Play", reinterpret_cast<void*>(&interop::particle_effect_play));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "ParticleEffect_Pause", reinterpret_cast<void*>(&interop::particle_effect_pause));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "ParticleEffect_Stop", reinterpret_cast<void*>(&interop::particle_effect_stop));

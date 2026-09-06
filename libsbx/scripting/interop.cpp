@@ -3,6 +3,7 @@
 #include <libsbx/scripting/interop.hpp>
 
 #include <algorithm>
+#include <filesystem>
 
 #include <libsbx/utility/logger.hpp>
 
@@ -13,6 +14,7 @@
 #include <libsbx/math/vector4.hpp>
 
 #include <libsbx/assets/animation_graph.hpp>
+#include <libsbx/assets/assets_module.hpp>
 
 #include <libsbx/physics/rigidbody.hpp>
 #include <libsbx/physics/physics_module.hpp>
@@ -784,6 +786,33 @@ auto interop::node_set_parent(std::uint64_t uuid, std::uint64_t parent_uuid) -> 
   }
 
   node.set_parent(parent);
+}
+
+auto interop::particle_effect_load(std::uint64_t uuid, managed::string path) -> void {
+  auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
+
+  auto& scene = scenes_module.active_scene();
+
+  auto node = scene.find(math::uuid::from_value(uuid));
+
+  if (!node.is_valid()) {
+    utility::logger<"scripting">::error("Attempting to load particle effect on invalid node");
+
+    return;
+  }
+
+  auto& assets_module = core::engine::get_module<assets::assets_module>();
+
+  // particles_module::_simulate_effect already resizes/re-pairs runtime emitters against
+  // whatever effect->emitters() the assigned handle has (it does this every step, to also cover
+  // the editor swapping the asset out from under an already-playing instance) -- nothing else
+  // needs resetting here.
+  auto& effect = node.get_component<scenes::particle_effect>().effect;
+  effect = assets_module.load_particle_effect(std::filesystem::path{std::string{path}});
+
+  if (!effect.is_valid()) {
+    utility::logger<"scripting">::error("ParticleEffect.Load('{}') on node '{}' resolved to an invalid handle", std::string{path}, node.name());
+  }
 }
 
 auto interop::particle_effect_play(std::uint64_t uuid) -> void {

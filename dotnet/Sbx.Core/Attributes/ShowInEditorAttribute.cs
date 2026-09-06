@@ -9,6 +9,7 @@ namespace Sbx.Core.Attributes
     public string DisplayName { get; set; } = "";
     public bool IsReadOnly { get; set; } = false;
 
+    public ShowInEditorAttribute() { }
 
     public ShowInEditorAttribute(string displayName)
     {

@@ -126,19 +126,25 @@ namespace Sbx.Core
       return obj is Transform other && Equals(other);
     }
 
-		public bool Equals(Transform other)     {
+		// Null-checked -- this is what "transform != null" (a plain reference null-check, not a value
+		// comparison) actually calls via operator!= below, and Transform is a reference type (a
+		// Component subclass), so a null "other" here is an expected, ordinary case, not a bug.
+		public bool Equals(Transform? other)     {
+      if (other is null) { return false; }
       return Position == other.Position && Rotation == other.Rotation && Scale == other.Scale;
     }
-    
+
 		public override int GetHashCode()     {
       return (Position, Rotation, Scale).GetHashCode();
     }
-    
-		public static bool operator ==(Transform left, Transform right)     {
+
+		public static bool operator ==(Transform? left, Transform? right)     {
+      if (ReferenceEquals(left, right)) { return true; }
+      if (left is null || right is null) { return false; }
       return left.Equals(right);
     }
-    
-		public static bool operator !=(Transform left, Transform right)     {
+
+		public static bool operator !=(Transform? left, Transform? right)     {
       return !(left == right);
     }
 

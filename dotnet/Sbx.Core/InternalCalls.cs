@@ -54,6 +54,7 @@ namespace Sbx.Core
     internal static delegate* unmanaged<ulong, void> Node_Destroy;
     internal static delegate* unmanaged<ulong, ulong, void> Node_SetParent;
 
+    internal static delegate* unmanaged<ulong, NativeString, void> ParticleEffect_Load;
     internal static delegate* unmanaged<ulong, void> ParticleEffect_Play;
     internal static delegate* unmanaged<ulong, void> ParticleEffect_Pause;
     internal static delegate* unmanaged<ulong, void> ParticleEffect_Stop;

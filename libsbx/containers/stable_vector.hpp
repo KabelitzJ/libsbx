@@ -103,127 +103,27 @@ public:
   }
 
   auto insert(value_type&& element) -> std::pair<std::uint32_t, reference> {
-    const auto page_index = _element_count / page_size;
+    const auto [index, page_index] = _claim_slot();
 
-    if (_element_count >= _capacity) {
-      auto lock = std::scoped_lock{_mutex};
-
-      if (_element_count >= _capacity) {
-        auto* new_page = new page();
-
-        if (page_index >= _page_count) {
-          auto old_pages = _page_count;
-
-          _page_count = (std::max)(std::uint64_t(16), _page_count * 2);
-
-          auto new_page_table = std::make_unique<page*[]>(_page_count);
-
-          std::memcpy(new_page_table.get(), _page_table.load(), old_pages * pointer_size);
-
-          _page_table.exchange(new_page_table.get());
-          _page_tables.push_back(std::move(new_page_table));
-        }
-
-        _page_table[page_index] = new_page;
-
-        _capacity += page_size;
-      }
-    }
-
-    std::uint32_t index = (++_element_count - 1);
     _page_table[page_index]->elements[index - (page_index * page_size)] = std::move(element);
     return { index, _page_table[page_index]->elements[index - (page_index * page_size)] };
   }
 
   auto insert_no_lock(value_type&& element) -> std::pair<std::uint32_t, reference> {
-    const auto page_index = _element_count / page_size;
-
-    if (_element_count >= _capacity) {
-      auto lock = std::scoped_lock{_mutex};
-
-      if (_element_count >= _capacity) {
-        auto* new_page = new page();
-
-        if (page_index >= _page_count) {
-          auto old_pages = _page_count;
-
-          _page_count = (std::max)(std::uint64_t(16), _page_count * 2);
-
-          auto new_page_table = std::make_unique<page*[]>(_page_count);
-
-          std::memcpy(new_page_table.get(), _page_table.load(), old_pages * pointer_size);
-
-          _page_table.exchange(new_page_table.get());
-          _page_tables.push_back(std::move(new_page_table));
-        }
-
-        _page_table[page_index] = new_page;
-
-        _capacity += page_size;
-      }
-    }
-
-    const auto index = (++_element_count - 1);
+    const auto [index, page_index] = _claim_slot();
 
     _page_table[page_index]->elements[index - (page_index * page_size)] = std::move(element);
-
     return { index, _page_table[page_index]->elements[index - (page_index * page_size)] };
   }
 
   auto emplace_back() -> std::pair<std::uint32_t, reference> {
-    const auto page_index = _element_count / page_size;
-
-    if (_element_count >= _capacity) {
-      auto* new_page = new page();
-
-      if (page_index >= _page_count) {
-        auto old_pages = _page_count;
-
-        _page_count = (std::max)(std::uint64_t(16), _page_count * 2);
-
-        auto new_page_table = std::make_unique<page*[]>(_page_count);
-
-        std::memcpy(new_page_table.get(), _page_table.load(), old_pages * pointer_size);
-
-        _page_table.exchange(new_page_table.get());
-        _page_tables.push_back(std::move(new_page_table));
-      }
-
-      _page_table[page_index] = new_page;
-
-      _capacity += page_size;
-    }
-
-    const auto index = (++_element_count - 1);
+    const auto [index, page_index] = _claim_slot();
 
     return { index, _page_table[page_index]->elements[index - (page_index * page_size)] };
   }
 
   auto emplace_back_no_lock() -> std::pair<std::uint32_t, reference> {
-    const auto page_index = _element_count / page_size;
-
-    if (_element_count >= _capacity) {
-      auto* new_page = new page();
-
-      if (page_index >= _page_count) {
-        auto old_pages = _page_count;
-
-        _page_count = std::max(std::uint64_t{16}, _page_count * 2u);
-
-        auto new_page_table = std::make_unique<page*[]>(_page_count);
-
-        std::memcpy(new_page_table.get(), _page_table.load(), old_pages * pointer_size);
-
-        _page_table.exchange(new_page_table.get());
-        _page_tables.push_back(std::move(new_page_table));
-      }
-
-      _page_table[page_index] = new_page;
-
-      _capacity += page_size;
-    }
-
-    const auto index = (++_element_count - 1);
+    const auto [index, page_index] = _claim_slot_no_lock();
 
     return { index, _page_table[page_index]->elements[index - (page_index * page_size)] };
   }
@@ -249,6 +149,78 @@ private:
   struct page {
     std::array<value_type, page_size> elements;
   }; // struct page
+
+  /**
+   * @brief Reserves the next slot and grows the page table (under _mutex) to cover it if needed,
+   * returning {index, page_index}. index is claimed via an atomic fetch-add *before* page_index is
+   * derived from it -- deriving page_index from a pre-increment read of _element_count instead (as
+   * this used to do) lets a concurrent claim crossing a page boundary between that read and the
+   * increment land index in a different page than page_index names, writing past the end of that
+   * page's std::array. The growth check is a `while`, not an `if`, so a claim landing far beyond
+   * the current capacity (e.g. this thread lost a long race) grows one page at a time until covered.
+   */
+  auto _claim_slot() -> std::pair<std::uint32_t, std::uint64_t> {
+    const auto index = _element_count.fetch_add(1);
+    const auto page_index = static_cast<std::uint64_t>(index) / page_size;
+
+    if (index >= _capacity) {
+      auto lock = std::scoped_lock{_mutex};
+
+      while (index >= _capacity) {
+        auto* new_page = new page();
+        const auto new_page_index = static_cast<std::uint64_t>(_capacity.load()) / page_size;
+
+        if (new_page_index >= _page_count) {
+          const auto old_pages = _page_count;
+
+          _page_count = (std::max)(std::uint64_t(16), _page_count * 2);
+
+          auto new_page_table = std::make_unique<page*[]>(_page_count);
+
+          std::memcpy(new_page_table.get(), _page_table.load(), old_pages * pointer_size);
+
+          _page_table.exchange(new_page_table.get());
+          _page_tables.push_back(std::move(new_page_table));
+        }
+
+        _page_table[new_page_index] = new_page;
+
+        _capacity += page_size;
+      }
+    }
+
+    return { index, page_index };
+  }
+
+  /** @brief Same claim/grow logic as _claim_slot, without taking _mutex -- the caller is responsible for external synchronization (see emplace_back_no_lock). */
+  auto _claim_slot_no_lock() -> std::pair<std::uint32_t, std::uint64_t> {
+    const auto index = _element_count.fetch_add(1);
+    const auto page_index = static_cast<std::uint64_t>(index) / page_size;
+
+    while (index >= _capacity) {
+      auto* new_page = new page();
+      const auto new_page_index = static_cast<std::uint64_t>(_capacity.load()) / page_size;
+
+      if (new_page_index >= _page_count) {
+        const auto old_pages = _page_count;
+
+        _page_count = (std::max)(std::uint64_t(16), _page_count * 2);
+
+        auto new_page_table = std::make_unique<page*[]>(_page_count);
+
+        std::memcpy(new_page_table.get(), _page_table.load(), old_pages * pointer_size);
+
+        _page_table.exchange(new_page_table.get());
+        _page_tables.push_back(std::move(new_page_table));
+      }
+
+      _page_table[new_page_index] = new_page;
+
+      _capacity += page_size;
+    }
+
+    return { index, page_index };
+  }
 
   std::shared_mutex _mutex;
   std::list<std::unique_ptr<page*[]>> _page_tables;

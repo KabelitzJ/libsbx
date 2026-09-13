@@ -68,12 +68,14 @@ particle_pool::particle_pool(const create_info& create_info)
     .name = create_info.name + " Draw Args"
   });
 
-  _emitter_instances = registry.emplace<graphics::buffer>(graphics::buffer::create_info{
-    .size = memory::stride_v<emitter_instance> * _max_emitter_instances,
-    .usage = graphics::buffer_usage::device_address | graphics::buffer_usage::storage,
-    .memory = graphics::memory_usage::host_write,
-    .name = create_info.name + " Emitter Instances"
-  });
+  for (auto index = std::uint32_t{0u}; index < graphics::swapchain::max_frames_in_flight; ++index) {
+    _emitter_instances[index] = registry.emplace<graphics::buffer>(graphics::buffer::create_info{
+      .size = memory::stride_v<emitter_instance> * _max_emitter_instances,
+      .usage = graphics::buffer_usage::device_address | graphics::buffer_usage::storage,
+      .memory = graphics::memory_usage::host_write,
+      .name = create_info.name + " Emitter Instances " + std::to_string(index)
+    });
+  }
 
   _particles_address = registry.get<graphics::buffer>(_particles).address();
   _dead_list_address = registry.get<graphics::buffer>(_dead_list).address();
@@ -85,7 +87,10 @@ particle_pool::particle_pool(const create_info& create_info)
   _counters_address = registry.get<graphics::buffer>(_counters).address();
   _dispatch_args_address = registry.get<graphics::buffer>(_dispatch_args).address();
   _draw_args_address = registry.get<graphics::buffer>(_draw_args).address();
-  _emitter_instances_address = registry.get<graphics::buffer>(_emitter_instances).address();
+
+  for (auto index = std::uint32_t{0u}; index < graphics::swapchain::max_frames_in_flight; ++index) {
+    _emitter_instances_addresses[index] = registry.get<graphics::buffer>(_emitter_instances[index]).address();
+  }
 
   _write_initial_state();
 
@@ -120,11 +125,11 @@ auto particle_pool::_write_initial_state() -> void {
   registry.get<graphics::buffer>(_counters).write(&initial_counters, sizeof(particle_counters));
 }
 
-auto particle_pool::write_emitter_instance(std::uint32_t slot, const emitter_instance& data) -> void {
+auto particle_pool::write_emitter_instance(std::uint32_t frame_slot, std::uint32_t slot, const emitter_instance& data) -> void {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
   auto& registry = graphics_module.resource_registry();
 
-  registry.get<graphics::buffer>(_emitter_instances).write(&data, sizeof(emitter_instance), slot * memory::stride_v<emitter_instance>);
+  registry.get<graphics::buffer>(_emitter_instances[frame_slot]).write(&data, sizeof(emitter_instance), slot * memory::stride_v<emitter_instance>);
 }
 
 auto particle_pool::claim_slot() -> std::optional<std::uint32_t> {

@@ -11,6 +11,7 @@
 
 #include <libsbx/utility/noncopyable.hpp>
 
+#include <libsbx/graphics/devices/swapchain.hpp>
 #include <libsbx/graphics/resources/buffer.hpp>
 
 #include <libsbx/render/particles/particle_data.hpp>
@@ -69,8 +70,8 @@ public:
     return _draw_args;
   }
 
-  [[nodiscard]] auto emitter_instances() const noexcept -> graphics::buffer_handle {
-    return _emitter_instances;
+  [[nodiscard]] auto emitter_instances(std::uint32_t frame_slot) const noexcept -> graphics::buffer_handle {
+    return _emitter_instances[frame_slot];
   }
 
   [[nodiscard]] auto particles_address() const noexcept -> graphics::buffer::address_type {
@@ -97,14 +98,18 @@ public:
     return _draw_args_address;
   }
 
-  [[nodiscard]] auto emitter_instances_address() const noexcept -> graphics::buffer::address_type {
-    return _emitter_instances_address;
+  /** @brief frame_slot is the current frame-in-flight index (render_context::slot) -- see the per-frame-slot buffering note on _emitter_instances below. */
+  [[nodiscard]] auto emitter_instances_address(std::uint32_t frame_slot) const noexcept -> graphics::buffer::address_type {
+    return _emitter_instances_addresses[frame_slot];
   }
 
   /**
-   * @brief Overwrites one emitter instance slot with a full record; call every frame while the slot is active.
+   * @brief Overwrites one emitter instance slot with a full record; call every frame while the slot
+   * is active. frame_slot (render_context::slot) selects which of the per-frame-in-flight buffers
+   * this write targets -- see _emitter_instances' doc comment for why a single shared buffer isn't
+   * safe here.
    */
-  auto write_emitter_instance(std::uint32_t slot, const emitter_instance& data) -> void;
+  auto write_emitter_instance(std::uint32_t frame_slot, std::uint32_t slot, const emitter_instance& data) -> void;
 
   /**
    * @brief Claims a free emitter_instances slot, or std::nullopt if the pool is exhausted.
@@ -153,7 +158,14 @@ private:
   graphics::buffer_handle _counters{};
   graphics::buffer_handle _dispatch_args{};
   graphics::buffer_handle _draw_args{};
-  graphics::buffer_handle _emitter_instances{};
+
+  // One buffer per frame-in-flight slot (indexed by render_context::slot), not a single shared
+  // buffer: write_emitter_instance is a direct CPU memcpy into host-visible memory, called every
+  // frame during command-buffer recording, while the compute shaders reading this same data
+  // (simulate.slang/emit.slang) may still be executing for a previous, still-in-flight frame at
+  // that point -- a plain GPU-side wait (frame_context::add_wait) only orders GPU-vs-GPU work, not
+  // this earlier CPU write, so a single buffer here would let frame N's write race frame N-1's read.
+  std::array<graphics::buffer_handle, graphics::swapchain::max_frames_in_flight> _emitter_instances{};
 
   graphics::buffer::address_type _particles_address{};
   graphics::buffer::address_type _dead_list_address{};
@@ -161,7 +173,7 @@ private:
   graphics::buffer::address_type _counters_address{};
   graphics::buffer::address_type _dispatch_args_address{};
   graphics::buffer::address_type _draw_args_address{};
-  graphics::buffer::address_type _emitter_instances_address{};
+  std::array<graphics::buffer::address_type, graphics::swapchain::max_frames_in_flight> _emitter_instances_addresses{};
 
   // Emitter-instance slot allocator — see claim_slot/keep_alive/tick. Sized to
   // _max_emitter_instances at construction.

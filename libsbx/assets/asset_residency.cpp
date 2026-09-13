@@ -501,6 +501,14 @@ auto asset_residency::save_material(material_handle& material, const std::filesy
   // stamps the right id — including a create_material()'d material's first save (nil id otherwise).
   material->_id = id;
 
+  {
+    // Without this, a later load_material(id) (e.g. dragging the same material tile again) finds
+    // no cache entry and mints a second, independent record for the same uuid — a duplicate GPU
+    // material-buffer slot that never reflects edits made through this handle.
+    auto lock = std::lock_guard{_mutex};
+    _material_files[id] = material.shared();
+  }
+
   utility::logger<"assets">::info("Saved material '{}'", resolved_path.generic_string());
 
   return id;
@@ -768,6 +776,13 @@ auto asset_residency::save_particle_effect(particle_effect_handle& effect, const
 
   effect->_id = id;
 
+  {
+    // See save_material's identical fix -- without this a later load_particle_effect(id) mints a
+    // second, independent in-memory record for the same uuid instead of finding this one.
+    auto lock = std::lock_guard{_mutex};
+    _particle_effect_files[id] = effect.shared();
+  }
+
   utility::logger<"assets">::info("Saved particle_effect '{}'", resolved_path.generic_string());
 
   return id;
@@ -916,6 +931,13 @@ auto asset_residency::save_animation_graph(animation_graph_handle& graph, const 
   const auto id = _manifest.import(resolved_path);
 
   graph->_id = id;
+
+  {
+    // See save_material's identical fix -- without this a later load_animation_graph(id) mints a
+    // second, independent in-memory record for the same uuid instead of finding this one.
+    auto lock = std::lock_guard{_mutex};
+    _animation_graph_files[id] = graph.shared();
+  }
 
   utility::logger<"assets">::info("Saved animation_graph '{}'", resolved_path.generic_string());
 

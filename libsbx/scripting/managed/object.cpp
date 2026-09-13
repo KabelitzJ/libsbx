@@ -176,12 +176,15 @@ void object::_invoke_method_return_internal(std::string_view name, const void** 
 }
 
 auto object::_validate_handle(std::string_view message, std::string_view name) const noexcept -> bool {
-  if constexpr (utility::is_build_type_debug_v) {
-    if (!_handle) {
+  // Must run in every build configuration, not just debug: this is the only thing standing between
+  // a null/invalid handle (a failed construction, or a use after destroy()) and forwarding it
+  // straight into the CLR host via GCHandle.FromIntPtr(...).Target on the C# side.
+  if (!_handle) {
+    if constexpr (utility::is_build_type_debug_v) {
       utility::logger<"scripting">::error("Cannot {} '{}' on an object with no handle (construction likely failed — see the earlier C# log/exception)", message, name);
-
-      return false;
     }
+
+    return false;
   }
 
   return true;

@@ -846,11 +846,23 @@ auto interop::node_destroy(std::uint64_t uuid) -> void {
     return;
   }
 
-  if (auto scripts = node.try_get_component<scripting::scripts>()) {
-    for (auto& instance : scripts->instances) {
-      instance.invoke("OnDestroy");
+  // scene.destroy_node below recurses over the whole subtree, so OnDestroy/destroy() must too --
+  // otherwise a descendant's script instance never runs its cleanup and leaks its GCHandle (same
+  // walk shape as instantiate_subtree_scripts' construction-side counterpart).
+  const auto destroy_scripts = [](this const auto& self, scenes::scene& scene, scenes::node current) -> void {
+    if (auto* scripts = current.try_get_component<scripting::scripts>().get()) {
+      for (auto& instance : scripts->instances) {
+        instance.invoke("OnDestroy");
+        instance.destroy();
+      }
     }
-  }
+
+    for (const auto child : current.get_component<scenes::relationship>().children) {
+      self(scene, scene.node_of(child));
+    }
+  };
+
+  destroy_scripts(scene, node);
 
   scene.destroy_node(node);
 }

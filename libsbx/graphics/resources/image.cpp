@@ -116,7 +116,15 @@ image::image(const create_info& create_info)
   view_info.format = to_vk_enum<VkFormat>(create_info.format);
   view_info.subresourceRange = subresource_range();
 
-  validate(vkCreateImageView(logical_device, &view_info, nullptr, &_view), "vkCreateImageView");
+  try {
+    validate(vkCreateImageView(logical_device, &view_info, nullptr, &_view), "vkCreateImageView");
+  } catch (...) {
+    // validate() throws on failure, unwinding out of this constructor before the object exists --
+    // ~image() never runs, so the VkImage/VmaAllocation vmaCreateImage already succeeded in
+    // creating above would otherwise leak. Free it here and let the exception keep propagating.
+    vmaDestroyImage(allocator, _handle, _allocation);
+    throw;
+  }
 
   if (!create_info.name.empty()) {
     logical_device.set_debug_name(_handle, create_info.name);

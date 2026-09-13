@@ -95,9 +95,17 @@ public:
 
   /**
    * @brief Reparents this node, first detaching it from whatever parent it already has (if any) so
-   * it never ends up listed as a child of two nodes at once.
+   * it never ends up listed as a child of two nodes at once. No-op if @p parent is this node or one
+   * of its own descendants -- accepting that would create a cycle in relationship::parent/children,
+   * and every recursive hierarchy walk (scene update/destroy, serialization) would recurse forever.
    */
   auto set_parent(node& parent) -> void {
+    for (auto ancestor = parent._entity; ancestor != ecs::null_entity; ancestor = _registry->get<scenes::relationship>(ancestor).parent) {
+      if (ancestor == _entity) {
+        return;
+      }
+    }
+
     auto& relationship = get_component<scenes::relationship>();
 
     if (relationship.parent != ecs::null_entity) {

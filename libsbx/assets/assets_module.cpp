@@ -335,6 +335,11 @@ auto assets_module::save_prefab(prefab_handle& prefab, const std::filesystem::pa
 
   prefab->_id = id;
 
+  // Without this, a later load_prefab(id) (e.g. dragging the same prefab tile again) finds no
+  // cache entry and mints a second, independent handle whose generation never reflects edits
+  // applied through this one -- that second instance then silently stops resyncing forever.
+  _prefabs[id] = prefab;
+
   utility::logger<"assets">::info("Saved prefab '{}'", resolved_path.generic_string());
 
   return id;

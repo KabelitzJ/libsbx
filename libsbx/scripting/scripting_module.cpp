@@ -517,6 +517,7 @@ auto scripting_module::detach_script(scenes::node& node, std::string_view class_
     std::erase_if(runtime_scripts.instances, [&](auto& instance) {
       if (instance.get_type().get_full_name() == class_name) {
         instance.invoke("OnDestroy");
+        instance.destroy();
         return true;
       }
 
@@ -615,6 +616,7 @@ auto scripting_module::run_on_destroy(scenes::scene& target) -> void {
   for (auto&& [node, scripts] : scripts_query.each()) {
     for (auto& instance : scripts.instances) {
       instance.invoke("OnDestroy");
+      instance.destroy();
     }
   }
 }
@@ -655,9 +657,12 @@ auto scripting_module::_load_game_assembly() -> void {
 }
 
 auto scripting_module::_exception_callback(std::string_view message) -> void {
+  // Never throw here: this runs synchronously inside a native function pointer that managed code
+  // (Sbx.Managed's Host.HandleException, itself inside a C# catch block) calls directly -- a C++
+  // exception would have to unwind back out through that CLR-JIT-compiled frame, which the .NET
+  // native hosting interop does not support and will crash the process instead of surfacing the
+  // error. Log and return; a script fault is reported this way, not by throwing.
   utility::logger<"scripting">::error("Script runtime error: {}", message);
-
-  throw script_runtime_error{std::string{message}};
 }
 
 } // namespace sbx::scripting

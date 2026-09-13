@@ -98,7 +98,7 @@ auto particle_simulate_pass::execute(render_context& context) -> void {
 
   for (const auto& snapshot : context.packet->particle_emitters) {
     auto& pool = (snapshot.pool_index == particle_pool_alpha_blend) ? _alpha_pool : _additive_pool;
-    pool.write_emitter_instance(snapshot.slot, snapshot.data);
+    pool.write_emitter_instance(context.slot, snapshot.slot, snapshot.data);
 
     if (snapshot.data.particles_to_emit == 0u) {
       continue;
@@ -188,7 +188,7 @@ auto particle_simulate_pass::_record_pool(render_context& context, particle_pool
     pool.alive_list_address(read_index),
     pool.alive_list_address(write_index),
     pool.counters_address(),
-    pool.emitter_instances_address(),
+    pool.emitter_instances_address(context.slot),
     delta_time,
     read_index,
     write_index,
@@ -221,7 +221,7 @@ auto particle_simulate_pass::_record_pool(render_context& context, particle_pool
         pool.dead_list_address(),
         pool.alive_list_address(write_index),
         pool.counters_address(),
-        pool.emitter_instances_address(),
+        pool.emitter_instances_address(context.slot),
         request.emitter_index,
         write_index,
         pool.max_particles(),

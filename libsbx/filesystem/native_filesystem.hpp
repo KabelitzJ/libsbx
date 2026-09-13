@@ -79,12 +79,7 @@ public:
   [[nodiscard]] auto is_read_only() const -> bool override {
     auto lock = std::scoped_lock{_mutex};
 
-    if (!_is_initialized) {
-      return true;
-    }
-
-    auto permissions = std::filesystem::status(_base_path).permissions();
-    return (permissions & std::filesystem::perms::owner_write) == std::filesystem::perms::none;
+    return _is_read_only_locked();
   }
 
   auto open_file(const std::string& path, file_base::mode mode) -> std::shared_ptr<file_base> override {
@@ -138,7 +133,7 @@ public:
   auto remove_file(const std::string& path) -> bool override {
     auto lock = std::scoped_lock{_mutex};
 
-    if (is_read_only()) {
+    if (_is_read_only_locked()) {
       return false;
     }
 
@@ -183,7 +178,7 @@ public:
   auto copy_file(const std::string& source, const std::string& destination, const bool overwrite = false) -> bool override {
     auto lock = std::scoped_lock{_mutex};
 
-    if (is_read_only()) {
+    if (_is_read_only_locked()) {
       return false;
     }
 
@@ -212,7 +207,7 @@ public:
   auto rename_file(const std::string& source, const std::string& destination) -> bool override {
     auto lock = std::scoped_lock{_mutex};
 
-    if (is_read_only()) {
+    if (_is_read_only_locked()) {
       return false;
     }
 
@@ -239,6 +234,16 @@ public:
   }
 
 private:
+
+  /** @brief Same check as is_read_only(), without taking _mutex -- for callers that already hold it (is_read_only() itself, and remove_file/copy_file/rename_file, which would otherwise self-deadlock on the non-recursive _mutex by calling is_read_only()). */
+  [[nodiscard]] auto _is_read_only_locked() const -> bool {
+    if (!_is_initialized) {
+      return true;
+    }
+
+    auto permissions = std::filesystem::status(_base_path).permissions();
+    return (permissions & std::filesystem::perms::owner_write) == std::filesystem::perms::none;
+  }
 
   struct file_entry {
 

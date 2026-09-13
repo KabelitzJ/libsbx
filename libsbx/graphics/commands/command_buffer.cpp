@@ -58,26 +58,21 @@ command_buffer::~command_buffer() {
 
 auto command_buffer::operator=(command_buffer&& other) noexcept -> command_buffer& {
   if (this != &other) {
-    auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
-    auto& logical_device = graphics_module.logical_device();
+    // Same guarded free as the destructor -- freeing unconditionally here (as this used to, right
+    // after the guarded free above it) double-frees the handle when the guard was true, and
+    // dereferences a null _command_pool when it was false (default-constructed/already-moved-from).
+    if (_command_pool && _handle != VK_NULL_HANDLE) {
+      auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
+      auto& logical_device = graphics_module.logical_device();
 
-    if (_command_pool != nullptr && _handle != VK_NULL_HANDLE) {
       vkFreeCommandBuffers(logical_device, *_command_pool, 1u, &_handle);
     }
 
-  
-    if (_is_recording) {
-      end();
-    }
-  
-    vkFreeCommandBuffers(logical_device, *_command_pool, 1, &_handle);
-  
     _command_pool = std::move(other._command_pool);
     _handle = std::exchange(other._handle, nullptr);
     _queue_type = other._queue_type;
     _is_recording = std::exchange(other._is_recording, false);
   }
-
 
   return *this;
 }

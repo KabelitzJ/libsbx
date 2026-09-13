@@ -1785,12 +1785,12 @@ auto scene_renderer_module::_prepare_frame(render_context& context) -> void {
 
   context.particle_additive_particles_address = _particle_pool_additive->particles_address();
   context.particle_additive_alive_list_address = _particle_pool_additive->alive_list_address(particle_write_index);
-  context.particle_additive_emitters_address = _particle_pool_additive->emitter_instances_address();
+  context.particle_additive_emitters_address = _particle_pool_additive->emitter_instances_address(context.slot);
   context.particle_additive_draw_args = _particle_pool_additive->draw_args();
 
   context.particle_alpha_particles_address = _particle_pool_alpha_blend->particles_address();
   context.particle_alpha_alive_list_address = _particle_pool_alpha_blend->alive_list_address(particle_write_index);
-  context.particle_alpha_emitters_address = _particle_pool_alpha_blend->emitter_instances_address();
+  context.particle_alpha_emitters_address = _particle_pool_alpha_blend->emitter_instances_address(context.slot);
   context.particle_alpha_draw_args = _particle_pool_alpha_blend->draw_args();
 }
 

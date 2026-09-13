@@ -47,6 +47,14 @@ auto scene::root() -> node {
 }
 
 auto scene::insert_child(node parent, node child, std::size_t index) -> void {
+  // No-op if parent is child itself or one of child's own descendants -- see node::set_parent's
+  // identical guard for why (a cycle here recurses forever in every hierarchy walk).
+  for (auto ancestor = parent._entity; ancestor != ecs::null_entity; ancestor = _registry.get<relationship>(ancestor).parent) {
+    if (ancestor == child._entity) {
+      return;
+    }
+  }
+
   auto& child_relationship = _registry.get<relationship>(child._entity);
 
   if (child_relationship.parent != ecs::null_entity) {

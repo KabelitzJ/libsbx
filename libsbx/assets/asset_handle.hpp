@@ -89,6 +89,11 @@ public:
     return _record.get();
   }
 
+  /** @brief The underlying shared_ptr itself, e.g. to re-insert this handle's record into a uuid-keyed cache map that stores shared_ptr<Type> directly rather than a handle. */
+  [[nodiscard]] auto shared() const noexcept -> std::shared_ptr<value_type> {
+    return _record;
+  }
+
 private:
 
   std::shared_ptr<value_type> _record{};

@@ -43,13 +43,13 @@ auto unique_prefab_relative_path(const std::string& tag) -> std::filesystem::pat
 }
 
 auto try_instantiate_prefab_drop(editor_state& state, sbx::scenes::scene& scene, std::optional<sbx::math::uuid> parent_id) -> void {
-  const auto* payload = ImGui::AcceptDragDropPayload(sbx::render::widgets::drag_drop_payload_prefab, ImGuiDragDropFlags_AcceptNoDrawDefaultRect);
+  const auto* payload = ImGui::AcceptDragDropPayload(sbx::render::drag_drop_payload_prefab, ImGuiDragDropFlags_AcceptNoDrawDefaultRect);
 
   if (!payload) {
     return;
   }
 
-  const auto& drag = *static_cast<const sbx::render::widgets::asset_drag_payload*>(payload->Data);
+  const auto& drag = *static_cast<const sbx::render::asset_drag_payload*>(payload->Data);
   auto& assets_module = sbx::core::engine::get_module<sbx::assets::assets_module>();
 
   auto prefab = assets_module.load_prefab(drag.id);

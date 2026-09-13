@@ -6,7 +6,7 @@
 #include <optional>
 #include <utility>
 
-namespace editor::widgets {
+namespace editor {
 
 /**
  * @brief Cross-frame "capture before, apply live, commit as one undo entry" bookkeeping shared by
@@ -51,6 +51,6 @@ private:
 
 }; // class drag_session
 
-} // namespace editor::widgets
+} // namespace editor
 
 #endif // EDITOR_WIDGETS_DRAG_SESSION_HPP_

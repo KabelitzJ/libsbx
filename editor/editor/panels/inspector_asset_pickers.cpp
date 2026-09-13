@@ -17,32 +17,30 @@
 
 namespace editor {
 
-using widgets::relative_asset_path;
-
-auto to_picker_item(const sbx::assets::assets_module& assets_module, const sbx::math::uuid& id) -> sbx::render::widgets::asset_picker_item {
+auto to_picker_item(const sbx::assets::assets_module& assets_module, const sbx::math::uuid& id) -> sbx::render::asset_picker_item {
   if (id == sbx::math::uuid::nil()) {
     return {};
   }
 
   if (const auto kind = sbx::assets::primitive_mesh_kind_of(id); kind.has_value()) {
-    return sbx::render::widgets::asset_picker_item{id, std::filesystem::path{sbx::assets::primitive_mesh_name(*kind)}};
+    return sbx::render::asset_picker_item{id, std::filesystem::path{sbx::assets::primitive_mesh_name(*kind)}};
   }
 
-  return sbx::render::widgets::asset_picker_item{id, relative_asset_path(assets_module, id)};
+  return sbx::render::asset_picker_item{id, relative_asset_path(assets_module, id)};
 }
 
 auto draw_material_picker(editor_state& state, const char* popup_id, sbx::assets::material_handle& slot, sbx::assets::assets_module& assets_module, const sbx::assets::material_handle& mesh_default) -> bool {
-  const auto current = slot.is_valid() ? to_picker_item(assets_module, slot->id()) : sbx::render::widgets::asset_picker_item{};
-  const auto default_item = mesh_default.is_valid() ? to_picker_item(assets_module, mesh_default->id()) : sbx::render::widgets::asset_picker_item{};
+  const auto current = slot.is_valid() ? to_picker_item(assets_module, slot->id()) : sbx::render::asset_picker_item{};
+  const auto default_item = mesh_default.is_valid() ? to_picker_item(assets_module, mesh_default->id()) : sbx::render::asset_picker_item{};
 
-  const auto options = sbx::render::widgets::asset_picker_options{
-    .kind = sbx::render::widgets::asset_picker_kind::material,
+  const auto options = sbx::render::asset_picker_options{
+    .kind = sbx::render::asset_picker_kind::material,
     .extensions = {".material"},
     .show_edit_button = true,
     .show_reveal_button = true,
   };
 
-  const auto result = sbx::render::widgets::draw_asset_picker(popup_id, current, default_item, options);
+  const auto result = sbx::render::draw_asset_picker(popup_id, current, default_item, options);
 
   if (result.reset_to_default) {
     slot = mesh_default;
@@ -104,17 +102,17 @@ auto extract_material_to_asset(sbx::assets::assets_module& assets_module, const 
 }
 
 auto draw_texture_picker(editor_state& state, const char* popup_id, sbx::assets::texture_handle& slot, sbx::assets::assets_module& assets_module, sbx::graphics::format format) -> bool {
-  const auto current = slot.is_valid() ? to_picker_item(assets_module, slot->id()) : sbx::render::widgets::asset_picker_item{};
+  const auto current = slot.is_valid() ? to_picker_item(assets_module, slot->id()) : sbx::render::asset_picker_item{};
 
-  const auto options = sbx::render::widgets::asset_picker_options{
-    .kind = sbx::render::widgets::asset_picker_kind::texture,
+  const auto options = sbx::render::asset_picker_options{
+    .kind = sbx::render::asset_picker_kind::texture,
     .extensions = {".png", ".jpg", ".jpeg"},
     .allow_none = true,
     .show_reveal_button = true,
     .load_format = format,
   };
 
-  const auto result = sbx::render::widgets::draw_asset_picker(popup_id, current, {}, options);
+  const auto result = sbx::render::draw_asset_picker(popup_id, current, {}, options);
 
   if (result.cleared) {
     slot = sbx::assets::texture_handle{};
@@ -132,16 +130,16 @@ auto draw_texture_picker(editor_state& state, const char* popup_id, sbx::assets:
 auto draw_font_picker(editor_state& state, const char* popup_id, sbx::assets::font_handle& slot) -> bool {
   auto& assets_module = sbx::core::engine::get_module<sbx::assets::assets_module>();
 
-  const auto current = slot.is_valid() ? to_picker_item(assets_module, slot->id()) : sbx::render::widgets::asset_picker_item{};
+  const auto current = slot.is_valid() ? to_picker_item(assets_module, slot->id()) : sbx::render::asset_picker_item{};
 
-  const auto options = sbx::render::widgets::asset_picker_options{
-    .kind = sbx::render::widgets::asset_picker_kind::font,
+  const auto options = sbx::render::asset_picker_options{
+    .kind = sbx::render::asset_picker_kind::font,
     .extensions = {".ttf"},
     .allow_none = true,
     .show_reveal_button = true,
   };
 
-  const auto result = sbx::render::widgets::draw_asset_picker(popup_id, current, {}, options);
+  const auto result = sbx::render::draw_asset_picker(popup_id, current, {}, options);
 
   if (result.cleared) {
     slot = sbx::assets::font_handle{};
@@ -157,17 +155,17 @@ auto draw_font_picker(editor_state& state, const char* popup_id, sbx::assets::fo
 }
 
 auto draw_mesh_picker(editor_state& state, const char* popup_id, sbx::assets::mesh_handle& slot, sbx::assets::assets_module& assets_module) -> bool {
-  const auto current = slot.is_valid() ? to_picker_item(assets_module, slot->id()) : sbx::render::widgets::asset_picker_item{};
+  const auto current = slot.is_valid() ? to_picker_item(assets_module, slot->id()) : sbx::render::asset_picker_item{};
 
-  const auto options = sbx::render::widgets::asset_picker_options{
-    .kind = sbx::render::widgets::asset_picker_kind::mesh,
+  const auto options = sbx::render::asset_picker_options{
+    .kind = sbx::render::asset_picker_kind::mesh,
     .extensions = {".gltf", ".glb"},
     .show_edit_button = true,
     .show_reveal_button = true,
     .show_builtin_primitives = true,
   };
 
-  const auto result = sbx::render::widgets::draw_asset_picker(popup_id, current, {}, options);
+  const auto result = sbx::render::draw_asset_picker(popup_id, current, {}, options);
 
   if (result.changed) {
     if (const auto kind = sbx::assets::primitive_mesh_kind_of(result.picked.id); kind.has_value()) {
@@ -189,17 +187,17 @@ auto draw_mesh_picker(editor_state& state, const char* popup_id, sbx::assets::me
 }
 
 auto draw_particle_effect_picker(editor_state& state, const char* popup_id, sbx::assets::particle_effect_handle& slot, sbx::assets::assets_module& assets_module) -> bool {
-  const auto current = slot.is_valid() ? to_picker_item(assets_module, slot->id()) : sbx::render::widgets::asset_picker_item{};
+  const auto current = slot.is_valid() ? to_picker_item(assets_module, slot->id()) : sbx::render::asset_picker_item{};
 
-  const auto options = sbx::render::widgets::asset_picker_options{
-    .kind = sbx::render::widgets::asset_picker_kind::particle_effect,
+  const auto options = sbx::render::asset_picker_options{
+    .kind = sbx::render::asset_picker_kind::particle_effect,
     .extensions = {".particle_effect"},
     .allow_none = true,
     .show_edit_button = true,
     .show_reveal_button = true,
   };
 
-  const auto result = sbx::render::widgets::draw_asset_picker(popup_id, current, {}, options);
+  const auto result = sbx::render::draw_asset_picker(popup_id, current, {}, options);
 
   if (result.cleared) {
     slot = sbx::assets::particle_effect_handle{};
@@ -221,17 +219,17 @@ auto draw_particle_effect_picker(editor_state& state, const char* popup_id, sbx:
 auto draw_animation_graph_picker(editor_state& state, const char* popup_id, sbx::assets::animation_graph_handle& slot, sbx::math::uuid preview_mesh_id) -> bool {
   auto& assets_module = sbx::core::engine::get_module<sbx::assets::assets_module>();
 
-  const auto current = slot.is_valid() ? to_picker_item(assets_module, slot->id()) : sbx::render::widgets::asset_picker_item{};
+  const auto current = slot.is_valid() ? to_picker_item(assets_module, slot->id()) : sbx::render::asset_picker_item{};
 
-  const auto options = sbx::render::widgets::asset_picker_options{
-    .kind = sbx::render::widgets::asset_picker_kind::animation_graph,
+  const auto options = sbx::render::asset_picker_options{
+    .kind = sbx::render::asset_picker_kind::animation_graph,
     .extensions = {".animation_graph"},
     .allow_none = true,
     .show_edit_button = true,
     .show_reveal_button = true,
   };
 
-  const auto result = sbx::render::widgets::draw_asset_picker(popup_id, current, {}, options);
+  const auto result = sbx::render::draw_asset_picker(popup_id, current, {}, options);
 
   if (result.cleared) {
     slot = sbx::assets::animation_graph_handle{};

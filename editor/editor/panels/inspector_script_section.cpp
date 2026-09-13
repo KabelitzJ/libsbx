@@ -29,13 +29,6 @@
 
 namespace editor {
 
-using widgets::draw_vector3_control;
-
-// v1 supports only float/int/bool/string (the only types get/set_field_value<T> explicitly
-// support); anything else renders as a disabled, unsupported label. Edits go straight to the live
-// managed::object while a live instance exists (playing/paused), since play_mode_controller
-// reloads the pre-play snapshot on Stop and mid-Play edits would never persist; otherwise they
-// write to the persisted override.
 auto draw_script_field_inspector(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node, sbx::scenes::script_entry& entry) -> void {
   auto& scripting_module = sbx::core::engine::get_module<sbx::scripting::scripting_module>();
 

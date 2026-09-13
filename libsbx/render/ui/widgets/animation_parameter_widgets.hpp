@@ -5,7 +5,7 @@
 
 #include <libsbx/assets/animation_graph.hpp>
 
-namespace sbx::render::widgets {
+namespace sbx::render {
 
 /**
  * @brief Draws the right control for @p value's current alternative -- a DragFloat, a Checkbox, a
@@ -23,6 +23,6 @@ namespace sbx::render::widgets {
  */
 [[nodiscard]] auto default_for_same_alternative(const sbx::assets::animation_parameter_value& like) -> sbx::assets::animation_parameter_value;
 
-} // namespace sbx::render::widgets
+} // namespace sbx::render
 
 #endif // LIBSBX_RENDER_UI_WIDGETS_ANIMATION_PARAMETER_WIDGETS_HPP_

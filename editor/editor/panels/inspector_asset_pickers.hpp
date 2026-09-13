@@ -22,13 +22,13 @@ namespace editor {
 /**
  * @brief Bridges a handle's uuid to the generic asset_picker widget's item type (uuid +
  * project-relative path). A built-in primitive mesh has no manifest entry --
- * widgets::relative_asset_path would come back empty and the picker button would show "(None)"
+ * relative_asset_path would come back empty and the picker button would show "(None)"
  * for an assigned primitive -- so its display "path" is just its name instead.
  */
-auto to_picker_item(const sbx::assets::assets_module& assets_module, const sbx::math::uuid& id) -> sbx::render::widgets::asset_picker_item;
+auto to_picker_item(const sbx::assets::assets_module& assets_module, const sbx::math::uuid& id) -> sbx::render::asset_picker_item;
 
 /**
- * @brief Thumbnail/icon button + searchable, thumbnail-rendered popup (sbx::render::widgets::asset_picker),
+ * @brief Thumbnail/icon button + searchable, thumbnail-rendered popup (sbx::render::asset_picker),
  * plus an optional "Reset to Mesh Default" (reseeds from the mesh's own submesh material). Also a
  * drag-and-drop target for a .material tile dragged straight from the Asset Browser. Second button
  * jumps Properties to that material's editable view.

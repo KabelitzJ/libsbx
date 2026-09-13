@@ -151,7 +151,13 @@ auto asset_browser_panel::_draw_create_menu(editor_state& state, const std::file
   if (ImGui::MenuItem(ICON_MDI_FILE_IMPORT " Import from Disk...")) {
     auto& project = sbx::core::engine::project();
     _import_destination_directory = target_directory;
-    _import_dialog.open("Import Asset", sbx::render::widgets::file_dialog_mode::open_files, project.assets_directory() / target_directory, importable_extensions());
+    _import_dialog.open({
+      .title = "Import Asset",
+      .mode = sbx::render::file_dialog_mode::open_files,
+      .start_dir = project.assets_directory() / target_directory,
+      .extensions = importable_extensions(),
+      .shortcuts = {{.label = "Assets", .path = project.assets_directory()}},
+    });
   }
 
   if (ImGui::MenuItem(ICON_MDI_REFRESH " Reimport All in This Folder")) {

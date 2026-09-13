@@ -15,7 +15,7 @@
 #include <libsbx/assets/asset_handle.hpp>
 #include <libsbx/assets/texture.hpp>
 
-namespace sbx::render::widgets {
+namespace sbx::render {
 
 // One drag-and-drop payload type string per asset kind a picker exists for — ImGui only matches a
 // drop target against a payload registered under the exact same type string, so this is also what
@@ -89,6 +89,6 @@ struct asset_tile_result {
  */
 [[nodiscard]] auto draw_asset_tile(const char* id, const asset_tile_desc& desc) -> asset_tile_result;
 
-} // namespace sbx::render::widgets
+} // namespace sbx::render
 
 #endif // LIBSBX_RENDER_UI_WIDGETS_ASSET_TILE_HPP_

@@ -12,7 +12,7 @@
 
 #include <libsbx/graphics/types.hpp>
 
-namespace sbx::render::widgets {
+namespace sbx::render {
 
 enum class asset_picker_kind : std::uint8_t {
   texture,
@@ -66,6 +66,6 @@ struct asset_picker_result {
  */
 [[nodiscard]] auto draw_asset_picker(const char* popup_id, const asset_picker_item& current, const asset_picker_item& default_item, const asset_picker_options& options) -> asset_picker_result;
 
-} // namespace sbx::render::widgets
+} // namespace sbx::render
 
 #endif // LIBSBX_RENDER_UI_WIDGETS_ASSET_PICKER_HPP_

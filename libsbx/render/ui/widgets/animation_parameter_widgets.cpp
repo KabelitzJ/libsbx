@@ -9,7 +9,7 @@
 
 #include <imgui.h>
 
-namespace sbx::render::widgets {
+namespace sbx::render {
 
 auto draw_animation_parameter_value(const char* label, sbx::assets::animation_parameter_value& value) -> bool {
   auto changed = false;
@@ -52,4 +52,4 @@ auto default_for_same_alternative(const sbx::assets::animation_parameter_value& 
   }, like);
 }
 
-} // namespace sbx::render::widgets
+} // namespace sbx::render

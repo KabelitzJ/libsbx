@@ -38,9 +38,6 @@
 
 namespace editor {
 
-using widgets::draw_vector3_control;
-using widgets::vector3_edit_result;
-
 auto inspector_panel::_draw_name_field(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node) -> void {
   const auto id = node.id();
 

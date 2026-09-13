@@ -98,13 +98,13 @@ auto is_entry_selected(const editor_state& state, const std::filesystem::path& p
 
 auto drag_payload_type_for(asset_kind kind) -> const char* {
   switch (kind) {
-    case asset_kind::texture: return sbx::render::widgets::drag_drop_payload_texture;
-    case asset_kind::mesh: return sbx::render::widgets::drag_drop_payload_mesh;
-    case asset_kind::material: return sbx::render::widgets::drag_drop_payload_material;
-    case asset_kind::particle_effect: return sbx::render::widgets::drag_drop_payload_particle_effect;
-    case asset_kind::animation_graph: return sbx::render::widgets::drag_drop_payload_animation_graph;
-    case asset_kind::font: return sbx::render::widgets::drag_drop_payload_font;
-    case asset_kind::prefab: return sbx::render::widgets::drag_drop_payload_prefab;
+    case asset_kind::texture: return sbx::render::drag_drop_payload_texture;
+    case asset_kind::mesh: return sbx::render::drag_drop_payload_mesh;
+    case asset_kind::material: return sbx::render::drag_drop_payload_material;
+    case asset_kind::particle_effect: return sbx::render::drag_drop_payload_particle_effect;
+    case asset_kind::animation_graph: return sbx::render::drag_drop_payload_animation_graph;
+    case asset_kind::font: return sbx::render::drag_drop_payload_font;
+    case asset_kind::prefab: return sbx::render::drag_drop_payload_prefab;
     default: return nullptr;
   }
 }

@@ -6,7 +6,6 @@
 #include <cstdint>
 #include <filesystem>
 #include <memory>
-#include <string>
 #include <string_view>
 #include <utility>
 #include <vector>
@@ -17,6 +16,7 @@
 
 #include <libsbx/render/ui/ui_layer.hpp>
 #include <libsbx/render/ui/fonts/material_design_icons.hpp>
+#include <libsbx/render/ui/widgets/file_dialog.hpp>
 
 #include <editor/editor_state.hpp>
 #include <editor/panels/editor_panel.hpp>
@@ -90,6 +90,10 @@ private:
   /** @brief Compares the scene's current serialize() output against what's on disk at _scene_path. */
   [[nodiscard]] auto _is_scene_dirty() -> bool;
 
+  /** @brief Opens _save_dialog seeded from the current _scene_path (or a fresh "new_scene.yaml" if none yet). @p quit_after is stashed into _quit_after_save_as for _draw_save_as_dialog() to act on once the dialog resolves. */
+  auto _open_save_as_dialog(bool quit_after) -> void;
+
+  /** @brief Polls _save_dialog and, on a confirmed pick, saves there and resolves _quit_after_save_as (quitting, or just clearing it on a cancel). */
   auto _draw_save_as_dialog() -> void;
 
   auto _draw_unsaved_changes_dialog() -> void;
@@ -112,8 +116,7 @@ private:
   // until application.cpp calls set_scene_path() after its own initial load.
   std::filesystem::path _scene_path{};
 
-  bool _show_save_as_dialog{false};
-  std::string _save_as_path{};
+  sbx::render::file_dialog _save_dialog{};
 
   bool _show_unsaved_changes_dialog{false};
 

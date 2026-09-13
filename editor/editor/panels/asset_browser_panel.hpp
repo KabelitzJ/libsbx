@@ -107,7 +107,7 @@ private:
   std::filesystem::path _pending_import_path{};
   bool _import_extract_materials{true};
 
-  sbx::render::widgets::file_dialog _import_dialog{};
+  sbx::render::file_dialog _import_dialog{};
   std::filesystem::path _import_destination_directory{};
   std::vector<std::filesystem::path> _pending_asset_imports{};
 

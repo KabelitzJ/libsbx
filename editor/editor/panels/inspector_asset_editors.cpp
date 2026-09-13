@@ -24,18 +24,13 @@
 
 namespace editor {
 
-using widgets::draw_color_field;
-using widgets::draw_curve_editor;
-using widgets::draw_gradient_editor;
-using widgets::draw_vector3_control;
-
 auto inspector_panel::_draw_material_properties(editor_state& state, const asset_selection& asset, sbx::assets::assets_module& assets_module) -> void {
   if (!_asset_cache.material.is_valid()) {
     ImGui::TextDisabled("Could not load this material.");
     return;
   }
 
-  auto changed = widgets::draw_text_field("Name", _material_edit.name);
+  auto changed = draw_text_field("Name", _material_edit.name);
 
   changed |= draw_color_field("Base Color", _material_edit.base_color_factor);
 
@@ -116,7 +111,7 @@ auto inspector_panel::_draw_particle_effect_properties(editor_state& state, cons
     return;
   }
 
-  auto changed = widgets::draw_text_field("Name", _particle_effect_edit.name);
+  auto changed = draw_text_field("Name", _particle_effect_edit.name);
 
   ImGui::SeparatorText("Emitters");
 
@@ -147,7 +142,7 @@ auto inspector_panel::_draw_particle_effect_properties(editor_state& state, cons
     }
 
     if (is_expanded) {
-      if (widgets::draw_text_field("Name", emitter.name)) {
+      if (draw_text_field("Name", emitter.name)) {
         changed = true;
       }
 

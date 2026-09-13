@@ -10,7 +10,7 @@
 
 #include <imgui.h>
 
-namespace editor::widgets {
+namespace editor {
 
 /**
  * @brief Seeds a rename session's scratch buffer from @p current_name and arms @p focus_pending so
@@ -57,6 +57,6 @@ auto draw_rename_field(std::array<char, N>& buffer, bool& focus_pending, std::fl
   };
 }
 
-} // namespace editor::widgets
+} // namespace editor
 
 #endif // EDITOR_WIDGETS_INLINE_RENAME_HPP_

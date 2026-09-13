@@ -72,7 +72,10 @@ auto launcher_module::build() -> void {
 
   if (ImGui::Button("New Project...")) {
     _pending_pick = pending_pick::new_project_parent;
-    _file_dialog.open("New Project - Choose a Location", sbx::render::widgets::file_dialog_mode::select_folder);
+    _file_dialog.open({
+      .title = "New Project - Choose a Location",
+      .mode = sbx::render::file_dialog_mode::select_folder,
+    });
   }
 
   ImGui::SameLine();
@@ -80,10 +83,11 @@ auto launcher_module::build() -> void {
   if (ImGui::Button("Open Project...")) {
     _pending_pick = pending_pick::open_project;
 
-    auto extensions = std::vector<std::string>{};
-    extensions.push_back(".sbxproj");
-
-    _file_dialog.open("Open Project", sbx::render::widgets::file_dialog_mode::open_file, {}, extensions);
+    _file_dialog.open({
+      .title = "Open Project",
+      .mode = sbx::render::file_dialog_mode::open_file,
+      .extensions = {".sbxproj"},
+    });
   }
 
   ImGui::Separator();

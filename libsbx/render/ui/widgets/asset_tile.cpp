@@ -12,7 +12,7 @@
 
 #include <libsbx/render/ui/ui_module.hpp>
 
-namespace sbx::render::widgets {
+namespace sbx::render {
 
 auto draw_asset_tile(const char* id, const asset_tile_desc& desc) -> asset_tile_result {
   auto result = asset_tile_result{};
@@ -108,4 +108,4 @@ auto draw_asset_tile(const char* id, const asset_tile_desc& desc) -> asset_tile_
   return result;
 }
 
-} // namespace sbx::render::widgets
+} // namespace sbx::render

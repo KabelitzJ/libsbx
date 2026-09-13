@@ -82,7 +82,7 @@ auto asset_browser_panel::_draw_asset_grid(editor_state& state) -> void {
           entry.id = assets_module.import(project.assets_directory() / entry.path);
         }
 
-        auto tile_desc = sbx::render::widgets::asset_tile_desc{};
+        auto tile_desc = sbx::render::asset_tile_desc{};
         tile_desc.icon_glyph = icon_for(entry);
         tile_desc.is_directory = entry.is_directory;
         tile_desc.is_selected = is_entry_selected(state, entry.path);
@@ -102,7 +102,7 @@ auto asset_browser_panel::_draw_asset_grid(editor_state& state) -> void {
           tile_desc.texture = assets_module.load_texture(entry.path);
         }
 
-        const auto tile_result = sbx::render::widgets::draw_asset_tile("##tile", tile_desc);
+        const auto tile_result = sbx::render::draw_asset_tile("##tile", tile_desc);
 
         if (tile_result.hovered) {
           ImGui::SetTooltip("%s", entry.path.string().c_str());

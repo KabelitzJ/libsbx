@@ -98,7 +98,7 @@ auto apply_manipulated_world_matrix(sbx::scenes::scene& scene, sbx::scenes::node
 // than state.current_gizmo_mode directly is what keeps that Scale quirk intact for groups too) and
 // applies the resulting rigid delta transform to every selected node, one undo entry per drag.
 //
-// Its own hand-rolled cross-frame statics (rather than widgets::drag_session, unlike the
+// Its own hand-rolled cross-frame statics (rather than drag_session, unlike the
 // single-node path below) -- it reads its "before" snapshot every frame while still dragging (to
 // compute the running delta from the pivot's pre-drag pose), not just once at the end, and its
 // IsUsing() checks are deliberately split across two different points in the frame (once before
@@ -276,7 +276,7 @@ auto draw_viewport_gizmo(editor_state& state, const ImVec2& viewport_origin, con
     sbx::scenes::local_transform transform;
   };
 
-  static auto drag = widgets::drag_session<node_drag_before>{};
+  static auto drag = drag_session<node_drag_before>{};
 
   if (const auto ended = drag.tick(ImGuizmo::IsUsing(), [&] { return node_drag_before{node.id(), pre_manipulate}; })) {
     if (auto dragged_node = scene.find(ended->node_id); dragged_node.is_valid()) {

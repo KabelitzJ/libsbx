@@ -38,13 +38,9 @@
 #include <editor/panels/inspector_asset_pickers.hpp>
 
 #include <editor/widgets/vector_fields.hpp>
+#include <editor/widgets/asset_path.hpp>
 
 namespace editor {
-
-using widgets::bracket_edit;
-using widgets::draw_color_field;
-using widgets::draw_vector2_control;
-using widgets::vector2_edit_result;
 
 auto draw_camera_section(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node) -> void {
   auto is_open = true;
@@ -398,7 +394,7 @@ auto draw_skybox_section(editor_state& state, sbx::scenes::scene& target, sbx::s
   static auto pending = std::optional<sbx::scenes::skybox>{};
 
   if (sky.environment.is_valid()) {
-    ImGui::Text("Environment: %s", widgets::asset_path_text(assets_module, sky.environment->id()).c_str());
+    ImGui::Text("Environment: %s", asset_path_text(assets_module, sky.environment->id()).c_str());
 
     const auto* environment = sky.environment.get();
     const auto is_baked = environment->radiance_index() != sbx::assets::environment_map::invalid_index && environment->irradiance_index() != sbx::assets::environment_map::invalid_index && environment->prefiltered_index() != sbx::assets::environment_map::invalid_index;

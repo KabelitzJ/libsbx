@@ -73,7 +73,7 @@ private:
   /** @brief Records @p root as opened (updates recents), spawns `<target> --project <root>` next to this binary, then quits. */
   auto _launch(launch_target target, const std::filesystem::path& root) -> void;
 
-  sbx::render::widgets::file_dialog _file_dialog{};
+  sbx::render::file_dialog _file_dialog{};
   pending_pick _pending_pick{pending_pick::none};
 
   bool _show_new_project_name_dialog{false};

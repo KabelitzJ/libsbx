@@ -21,7 +21,7 @@
 #include <libsbx/render/ui/fonts/material_design_icons.hpp>
 #include <libsbx/render/ui/widgets/asset_tile.hpp>
 
-namespace sbx::render::widgets {
+namespace sbx::render {
 
 [[nodiscard]] auto icon_for(asset_picker_kind kind) -> const char* {
   switch (kind) {
@@ -285,4 +285,4 @@ auto draw_asset_picker(const char* popup_id, const asset_picker_item& current, c
   return result;
 }
 
-} // namespace sbx::render::widgets
+} // namespace sbx::render

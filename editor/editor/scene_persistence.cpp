@@ -6,6 +6,7 @@
 #include <fstream>
 #include <iterator>
 #include <string>
+#include <system_error>
 
 #include <imgui.h>
 
@@ -16,8 +17,6 @@
 
 #include <libsbx/scenes/scene_serializer.hpp>
 #include <libsbx/scenes/scenes_module.hpp>
-
-#include <editor/widgets/text_field.hpp>
 
 namespace editor {
 
@@ -56,36 +55,55 @@ auto editor_ui_layer::_is_scene_dirty() -> bool {
   return on_disk != sbx::scenes::scene_serializer::serialize(scenes_module.active_scene());
 }
 
+auto editor_ui_layer::_open_save_as_dialog(bool quit_after) -> void {
+  auto& project = sbx::core::engine::project();
+
+  _quit_after_save_as = quit_after;
+
+  const auto start_dir = _scene_path.empty() ? project.assets_directory() : (project.assets_directory() / _scene_path).parent_path();
+  const auto default_name = _scene_path.empty() ? std::string{"new_scene.yaml"} : _scene_path.filename().string();
+
+  _save_dialog.open({
+    .title = "Save Scene As",
+    .mode = sbx::render::file_dialog_mode::save_file,
+    .start_dir = start_dir,
+    .extensions = {".yaml"},
+    .shortcuts = {{.label = "Assets", .path = project.assets_directory()}},
+    .default_file_name = default_name,
+  });
+}
+
 auto editor_ui_layer::_draw_save_as_dialog() -> void {
-  if (_show_save_as_dialog) {
-    ImGui::OpenPopup("Save Scene As");
-    _show_save_as_dialog = false;
+  _save_dialog.draw();
+
+  auto picked = _save_dialog.result();
+
+  if (!picked) {
+    return;
   }
 
-  if (ImGui::BeginPopupModal("Save Scene As", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
-    ImGui::TextDisabled("Relative to the project's assets directory.");
-    widgets::draw_text_field<256u>("##save_as_path", _save_as_path);
+  if (picked->empty()) {
+    // Cancelled -- don't let a stale "quit once this save-as completes" leak into some unrelated
+    // later save (see _quit_after_save_as's doc comment).
+    _quit_after_save_as = false;
+    return;
+  }
 
-    if (ImGui::Button(ICON_MDI_CONTENT_SAVE " Save")) {
-      if (!_save_as_path.empty()) {
-        _save_scene(std::filesystem::path{_save_as_path});
+  auto& project = sbx::core::engine::project();
 
-        if (_quit_after_save_as) {
-          _quit_after_save_as = false;
-          sbx::core::engine::quit();
-        }
+  auto ec = std::error_code{};
+  const auto relative = std::filesystem::relative(picked->front(), project.assets_directory(), ec);
 
-        ImGui::CloseCurrentPopup();
-      }
-    }
+  // Kept relative to the assets directory (the convention _scene_path documents) whenever the
+  // picked location actually resolves under it; left absolute otherwise -- scene_serializer::save
+  // accepts either.
+  const auto scene_path = (!ec && !relative.empty() && relative.begin()->string() != "..") ? relative : picked->front();
 
-    ImGui::SameLine();
+  _save_scene(scene_path);
 
-    if (ImGui::Button("Cancel")) {
-      ImGui::CloseCurrentPopup();
-    }
-
-    ImGui::EndPopup();
+  if (_quit_after_save_as) {
+    _quit_after_save_as = false;
+    sbx::core::engine::quit();
   }
 }
 
@@ -100,9 +118,7 @@ auto editor_ui_layer::_draw_unsaved_changes_dialog() -> void {
 
     if (ImGui::Button(ICON_MDI_CONTENT_SAVE " Save")) {
       if (_scene_path.empty()) {
-        _save_as_path = "scenes/new_scene.yaml";
-        _show_save_as_dialog = true;
-        _quit_after_save_as = true;
+        _open_save_as_dialog(true);
       } else {
         _save_scene(_scene_path);
         sbx::core::engine::quit();

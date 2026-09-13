@@ -226,15 +226,15 @@ auto animation_graph_panel::_draw_toolbar() -> void {
 
   // Editor-only, not part of the asset -- lets Clip Name (below) list real clip names instead of
   // being free text. Seeded from whatever mesh was in scope when this editor was opened.
-  const auto current = _preview_mesh.is_valid() ? sbx::render::widgets::asset_picker_item{_preview_mesh->id(), widgets::relative_asset_path(assets_module, _preview_mesh->id())} : sbx::render::widgets::asset_picker_item{};
+  const auto current = _preview_mesh.is_valid() ? sbx::render::asset_picker_item{_preview_mesh->id(), relative_asset_path(assets_module, _preview_mesh->id())} : sbx::render::asset_picker_item{};
 
-  const auto options = sbx::render::widgets::asset_picker_options{
-    .kind = sbx::render::widgets::asset_picker_kind::mesh,
+  const auto options = sbx::render::asset_picker_options{
+    .kind = sbx::render::asset_picker_kind::mesh,
     .extensions = {".gltf", ".glb"},
     .allow_none = true,
   };
 
-  const auto result = sbx::render::widgets::draw_asset_picker("##animation_graph_preview_mesh", current, {}, options);
+  const auto result = sbx::render::draw_asset_picker("##animation_graph_preview_mesh", current, {}, options);
 
   if (result.cleared) {
     _preview_mesh = sbx::assets::mesh_handle{};
@@ -258,7 +258,7 @@ auto animation_graph_panel::_draw_parameters() -> void {
     auto& parameter = _edit.parameters[index];
 
     ImGui::SetNextItemWidth(140.0f);
-    if (widgets::draw_text_field("##name", parameter.name)) {
+    if (draw_text_field("##name", parameter.name)) {
       _apply_live();
     }
 
@@ -281,7 +281,7 @@ auto animation_graph_panel::_draw_parameters() -> void {
     ImGui::SameLine();
     ImGui::SetNextItemWidth(120.0f);
 
-    if (sbx::render::widgets::draw_animation_parameter_value("##value", parameter.default_value)) {
+    if (sbx::render::draw_animation_parameter_value("##value", parameter.default_value)) {
       _apply_live();
     }
 
@@ -586,7 +586,7 @@ auto animation_graph_panel::_draw_selection_inspector() -> void {
 
     ImGui::SeparatorText("State");
 
-    if (widgets::draw_text_field("Name", selected_state.name)) {
+    if (draw_text_field("Name", selected_state.name)) {
       _apply_live();
     }
 
@@ -613,7 +613,7 @@ auto animation_graph_panel::_draw_selection_inspector() -> void {
         ImGui::EndCombo();
       }
     } else {
-      if (widgets::draw_text_field("Clip Name", selected_state.clip_name)) {
+      if (draw_text_field("Clip Name", selected_state.clip_name)) {
         _apply_live();
       }
 
@@ -704,7 +704,7 @@ auto animation_graph_panel::_draw_selection_inspector() -> void {
 
           if (ImGui::Selectable(_edit.parameters[p].name.c_str(), is_selected)) {
             condition.parameter_name = _edit.parameters[p].name;
-            condition.expected = sbx::render::widgets::default_for_same_alternative(_edit.parameters[p].default_value);
+            condition.expected = sbx::render::default_for_same_alternative(_edit.parameters[p].default_value);
             _apply_live();
           }
         }
@@ -735,7 +735,7 @@ auto animation_graph_panel::_draw_selection_inspector() -> void {
           }
         }
 
-        if (sbx::render::widgets::draw_animation_parameter_value("Value", condition.expected)) {
+        if (sbx::render::draw_animation_parameter_value("Value", condition.expected)) {
           _apply_live();
         }
       } else {
@@ -760,7 +760,7 @@ auto animation_graph_panel::_draw_selection_inspector() -> void {
     if (ImGui::Button(ICON_MDI_PLUS " Add Condition")) {
       transition.conditions.push_back(sbx::assets::animation_condition{
         .parameter_name = _edit.parameters.front().name,
-        .expected = sbx::render::widgets::default_for_same_alternative(_edit.parameters.front().default_value)
+        .expected = sbx::render::default_for_same_alternative(_edit.parameters.front().default_value)
       });
 
       _apply_live();

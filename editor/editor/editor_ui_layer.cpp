@@ -222,16 +222,14 @@ auto editor_ui_layer::_draw_dockspace() -> void {
 
       if (ImGui::MenuItem(ICON_MDI_CONTENT_SAVE " Save")) {
         if (_scene_path.empty()) {
-          _save_as_path = "scenes/new_scene.yaml";
-          _show_save_as_dialog = true;
+          _open_save_as_dialog(false);
         } else {
           _save_scene(_scene_path);
         }
       }
 
       if (ImGui::MenuItem(ICON_MDI_CONTENT_SAVE_EDIT " Save As...")) {
-        _save_as_path = _scene_path.empty() ? std::string{"scenes/new_scene.yaml"} : _scene_path.string();
-        _show_save_as_dialog = true;
+        _open_save_as_dialog(false);
       }
 
       ImGui::EndDisabled();

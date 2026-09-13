@@ -8,7 +8,7 @@
 
 #include <libsbx/render/ui/fonts/material_design_icons.hpp>
 
-namespace editor::widgets {
+namespace editor {
 
 auto draw_vector3_control(const char* label, std::array<std::float_t, 3u>& values, std::float_t reset_value, std::float_t speed) -> vector3_edit_result {
   static constexpr auto axis_labels = std::array<const char*, 3u>{"X", "Y", "Z"};
@@ -276,4 +276,4 @@ auto draw_gradient_editor(const char* label, sbx::assets::gradient& gradient) ->
   return changed;
 }
 
-} // namespace editor::widgets
+} // namespace editor

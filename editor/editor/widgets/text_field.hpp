@@ -10,7 +10,7 @@
 
 #include <imgui.h>
 
-namespace editor::widgets {
+namespace editor {
 
 /**
  * @brief Bounces @p value through a bounded scratch buffer for ImGui::InputText (which needs a raw
@@ -32,6 +32,6 @@ auto draw_text_field(const char* label, std::string& value) -> bool {
   return false;
 }
 
-} // namespace editor::widgets
+} // namespace editor
 
 #endif // EDITOR_WIDGETS_TEXT_FIELD_HPP_

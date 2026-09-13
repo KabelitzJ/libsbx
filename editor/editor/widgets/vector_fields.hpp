@@ -8,6 +8,8 @@
 #include <memory>
 #include <optional>
 
+#include <imgui.h>
+
 #include <libsbx/math/color.hpp>
 
 #include <libsbx/assets/particle_effect.hpp>
@@ -18,7 +20,7 @@
 #include <editor/editor_state.hpp>
 #include <editor/commands/component_commands.hpp>
 
-namespace editor::widgets {
+namespace editor {
 
 /**
  * @brief Brackets a continuous-drag-style edit (DragFloat, ColorEdit4, SliderAngle, InputText, ...)
@@ -70,6 +72,6 @@ auto draw_curve_editor(const char* label, sbx::assets::curve& curve, std::float_
 
 auto draw_gradient_editor(const char* label, sbx::assets::gradient& gradient) -> bool;
 
-} // namespace editor::widgets
+} // namespace editor
 
 #endif // EDITOR_WIDGETS_VECTOR_FIELDS_HPP_

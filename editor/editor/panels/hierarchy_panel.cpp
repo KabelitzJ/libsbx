@@ -192,7 +192,7 @@ auto hierarchy_panel::_draw_node_row(editor_state& state, sbx::scenes::scene& sc
   if (is_renaming) {
     ImGui::SameLine();
 
-    const auto rename_result = widgets::draw_rename_field(_rename_buffer, _rename_focus_pending, std::numeric_limits<std::float_t>::lowest());
+    const auto rename_result = draw_rename_field(_rename_buffer, _rename_focus_pending, std::numeric_limits<std::float_t>::lowest());
 
     if (rename_result.committed) {
       _commit_rename(state, scene, node);
@@ -254,7 +254,7 @@ auto hierarchy_panel::_draw_child_rows(editor_state& state, sbx::scenes::scene& 
 
 auto hierarchy_panel::_begin_rename(const sbx::scenes::node& node) -> void {
   _renaming_id = node.id();
-  widgets::begin_rename(_rename_buffer, _rename_focus_pending, node.name().c_str());
+  begin_rename(_rename_buffer, _rename_focus_pending, node.name().c_str());
 }
 
 auto hierarchy_panel::_commit_rename(editor_state& state, sbx::scenes::scene& scene, sbx::scenes::node& node) -> void {

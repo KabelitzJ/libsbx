@@ -69,11 +69,11 @@ auto asset_browser_panel::_begin_rename(const std::filesystem::path& relative_pa
   _renaming_is_directory = is_directory;
 
   const auto name = is_directory ? relative_path.filename().string() : relative_path.stem().string();
-  widgets::begin_rename(_rename_buffer, _rename_focus_pending, name);
+  begin_rename(_rename_buffer, _rename_focus_pending, name);
 }
 
 auto asset_browser_panel::_draw_rename_field(editor_state& state, std::float_t width) -> void {
-  const auto result = widgets::draw_rename_field(_rename_buffer, _rename_focus_pending, width);
+  const auto result = draw_rename_field(_rename_buffer, _rename_focus_pending, width);
 
   if (result.committed) {
     _commit_rename(state);

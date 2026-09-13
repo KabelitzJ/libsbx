@@ -408,7 +408,7 @@ auto particle_pass::_draw_meshes(render_context& context, std::uint32_t group) -
   const auto target_mode = group == alpha_blend_group ? assets::emitter_blend_mode::alpha_blend : assets::emitter_blend_mode::additive;
 
   auto bound = false;
-  const auto* current_mesh = static_cast<const assets::mesh*>(nullptr);
+  auto current_mesh = memory::make_observer<const assets::mesh>(nullptr);
 
   for (const auto& command : context.packet->particle_mesh_commands) {
     if (command.blend_mode != target_mode) {
@@ -426,7 +426,7 @@ auto particle_pass::_draw_meshes(render_context& context, std::uint32_t group) -
 
     const auto& mesh = *command.mesh;
 
-    if (current_mesh != &mesh) {
+    if (current_mesh.get() != &mesh) {
       auto& index_buffer = registry.get<graphics::buffer>(mesh.index_buffer());
       context.command_buffer->bind_index_buffer(index_buffer, 0u, VK_INDEX_TYPE_UINT32);
       current_mesh = &mesh;

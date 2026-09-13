@@ -42,7 +42,7 @@ auto draw_script_field_inspector(editor_state& state, sbx::scenes::scene& target
   // A live instance exists exactly while playing or paused: instantiate() creates it on Play,
   // run_on_destroy() tears it down on Stop. Must key off instance existence, not
   // scenes_module.is_simulating() (false while paused), or paused edits would target the wrong side.
-  sbx::scripting::managed::object* live_instance = nullptr;
+  auto live_instance = sbx::memory::make_observer<sbx::scripting::managed::object>(nullptr);
 
   if (node.has_component<sbx::scripting::scripts>()) {
     for (auto& instance : node.get_component<sbx::scripting::scripts>().instances) {

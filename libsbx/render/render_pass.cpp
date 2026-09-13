@@ -16,7 +16,7 @@ auto submit_draw_commands(render_context& context, const std::vector<draw_comman
 
   auto bound = false;
   auto current_pipeline = std::uint32_t{0u};
-  const auto* current_mesh = static_cast<const assets::mesh*>(nullptr);
+  auto current_mesh = memory::make_observer<const assets::mesh>(nullptr);
 
   for (const auto& command : commands) {
     if (!command.mesh.is_valid() || !command.material.is_valid() || !command.resident) {
@@ -35,7 +35,7 @@ auto submit_draw_commands(render_context& context, const std::vector<draw_comman
 
     const auto& mesh = *command.mesh;
 
-    if (current_mesh != &mesh) {
+    if (current_mesh.get() != &mesh) {
       auto& index_buffer = registry.get<graphics::buffer>(mesh.index_buffer());
       context.command_buffer->bind_index_buffer(index_buffer, 0u, VK_INDEX_TYPE_UINT32);
       current_mesh = &mesh;
@@ -68,7 +68,7 @@ auto submit_draw_commands_indirect(render_context& context, const std::vector<dr
 
   auto bound = false;
   auto current_pipeline = std::uint32_t{0u};
-  const auto* current_mesh = static_cast<const assets::mesh*>(nullptr);
+  auto current_mesh = memory::make_observer<const assets::mesh>(nullptr);
 
   for (auto index = std::size_t{0u}; index < commands.size(); ++index) {
     const auto& command = commands[index];
@@ -89,7 +89,7 @@ auto submit_draw_commands_indirect(render_context& context, const std::vector<dr
 
     const auto& mesh = *command.mesh;
 
-    if (current_mesh != &mesh) {
+    if (current_mesh.get() != &mesh) {
       auto& index_buffer = registry.get<graphics::buffer>(mesh.index_buffer());
       context.command_buffer->bind_index_buffer(index_buffer, 0u, VK_INDEX_TYPE_UINT32);
       current_mesh = &mesh;

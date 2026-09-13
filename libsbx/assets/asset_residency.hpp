@@ -73,10 +73,18 @@ public:
 
   auto load_font(const std::filesystem::path& path) -> font_handle;
 
-  /** @brief Loads a mesh from a UUID or project-relative path; returns the existing handle if already loaded. */
-  auto load_mesh(const math::uuid& id, const mesh_import_options& options = {}) -> mesh_handle;
+  /**
+   * @brief Loads a mesh from a UUID or project-relative path; returns the existing handle if
+   * already loaded, unless @p force_recook -- used only by the editor's mesh import-settings
+   * dialog, since primitive/animation-clip selection changes what's actually *in* the cooked blob
+   * (unlike extract_materials, which only affects finalize-time behavior on an already-cooked,
+   * always-complete blob and is fine to stay ephemeral). @p force_recook against an
+   * already-resident mesh re-cooks and re-finalizes it in place -- the existing handle stays
+   * valid, its content just changes once the reload completes.
+   */
+  auto load_mesh(const math::uuid& id, const mesh_import_options& options = {}, bool force_recook = false) -> mesh_handle;
 
-  auto load_mesh(const std::filesystem::path& path, const mesh_import_options& options = {}) -> mesh_handle;
+  auto load_mesh(const std::filesystem::path& path, const mesh_import_options& options = {}, bool force_recook = false) -> mesh_handle;
 
   /**
    * @brief Builds a mesh directly from in-memory vertex/index data instead of a glTF import --

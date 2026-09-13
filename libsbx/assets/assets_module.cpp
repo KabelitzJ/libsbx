@@ -116,12 +116,12 @@ auto assets_module::load_font(const std::filesystem::path& path) -> font_handle 
   return _residency.load_font(path);
 }
 
-auto assets_module::load_mesh(const math::uuid& id, const mesh_import_options& options) -> mesh_handle {
-  return _residency.load_mesh(id, options);
+auto assets_module::load_mesh(const math::uuid& id, const mesh_import_options& options, bool force_recook) -> mesh_handle {
+  return _residency.load_mesh(id, options, force_recook);
 }
 
-auto assets_module::load_mesh(const std::filesystem::path& path, const mesh_import_options& options) -> mesh_handle {
-  return _residency.load_mesh(path, options);
+auto assets_module::load_mesh(const std::filesystem::path& path, const mesh_import_options& options, bool force_recook) -> mesh_handle {
+  return _residency.load_mesh(path, options, force_recook);
 }
 
 auto assets_module::create_mesh(std::vector<vertex> vertices, std::vector<std::uint32_t> indices, std::vector<mesh::submesh> submeshes, const math::volume& bounds) -> mesh_handle {
@@ -139,7 +139,7 @@ auto assets_module::resolve_mesh_collision_data(const math::uuid& id) -> std::op
   const auto needs_cook = _manifest.is_cooked_stale(id, source, cooked, mesh_cooker_version);
 
   auto did_cook = false;
-  auto data = asset_cooker::resolve_mesh(source, id, cooked, needs_cook, did_cook);
+  auto data = asset_cooker::resolve_mesh(source, id, cooked, mesh_import_options{}, needs_cook, did_cook);
 
   if (did_cook) {
     _manifest.record_cook(id, mesh_cooker_version, source);

@@ -30,7 +30,7 @@ inline constexpr auto environment_cook_version = std::uint32_t{1u};
 inline constexpr auto material_cook_version = std::uint32_t{4u}; // v4: texture slots store assets-relative paths, not uuids (see material_description's doc comment)
 inline constexpr auto skeleton_cook_version = std::uint32_t{1u};
 inline constexpr auto animation_cook_version = std::uint32_t{1u};
-inline constexpr auto mesh_cook_version = std::uint32_t{8u};
+inline constexpr auto mesh_cook_version = std::uint32_t{9u}; // v9: mesh_import_options-driven primitive/animation-clip selection at cook time; cooked animation clips now keep their *original* source index (not a renumbered count) -- see _load_cooked_mesh's doc comment
 
 // A mesh cook also emits its materials and, for a skinned mesh, its skeleton/animation clips -- so
 // a mesh blob's freshness depends on all four cookers. Exposed (not file-local, unlike the cooked
@@ -39,10 +39,46 @@ inline constexpr auto mesh_cook_version = std::uint32_t{8u};
 // collision_data's direct bypass of asset_residency.
 inline constexpr auto mesh_cooker_version = mesh_cook_version * 1000000u + material_cook_version * 10000u + skeleton_cook_version * 100u + animation_cook_version;
 
-/** @brief Extracts a cooked mesh's embedded materials into standalone, editable `.material` assets (reusing an existing one rather than overwriting it). On by default. Consulted only by asset_residency's mesh finalize step -- cooking itself always produces a self-contained, resolvable material regardless of this flag (see cooked_submesh::material's doc comment). */
+/**
+ * @brief Editor import-time choices for a mesh. `extract_materials` is consulted only by
+ * asset_residency's mesh finalize step -- cooking itself always produces a self-contained,
+ * resolvable material regardless of this flag (see cooked_submesh::material's doc comment).
+ * `import_skeleton`/`included_primitives`/`included_animations` are consulted by the cook itself
+ * (asset_cooker::resolve_mesh/_cook_mesh) -- they change what's actually *in* the cooked blob, so
+ * (unlike extract_materials) a change to any of these requires a fresh cook of the same source to
+ * take effect (see asset_residency::load_mesh's force_recook parameter).
+ */
 struct mesh_import_options {
+  /** @brief Extracts a cooked mesh's embedded materials into standalone, editable `.material` assets (reusing an existing one rather than overwriting it). On by default. */
   bool extract_materials{true};
+
+  /** @brief Cooks and resolves a skinned source mesh's skin data, skeleton, and animation clips at all. On by default. Off skips all three entirely -- the loaded mesh behaves as fully unskinned, with `included_animations` below moot. */
+  bool import_skeleton{true};
+
+  /** @brief Which primitives (in mesh_source_summary::primitives' order -- the Nth primitive _cook_mesh's own scene/mesh traversal encounters) become submeshes. Empty means every primitive. */
+  std::vector<std::size_t> included_primitives{};
+
+  /** @brief Which animation clips (by their *original* index into the source's animation list, not a renumbered "Nth selected" count -- see derive_animation_clip_uuid's doc comment) get cooked. Empty means every clip. Moot when import_skeleton is off. */
+  std::vector<std::size_t> included_animations{};
 }; // struct mesh_import_options
+
+/** @brief One selectable primitive in a mesh_source_summary -- a preview of what asset_cooker::inspect_mesh_source found, before any cooking. */
+struct mesh_source_primitive_summary {
+  std::string mesh_name;        // the source glTF mesh's name, or "Mesh {index}" if it has none
+  std::size_t primitive_index;  // this primitive's position within that glTF mesh (a glTF mesh can have more than one primitive)
+}; // struct mesh_source_primitive_summary
+
+/**
+ * @brief What asset_cooker::inspect_mesh_source finds in a `.gltf`/`.glb` source file without
+ * cooking anything -- the editor's mesh import-settings dialog's data source. `primitives`' and
+ * `animation_names`' indices are exactly mesh_import_options::included_primitives'/
+ * included_animations' index spaces (see those fields' doc comments for what each index means).
+ */
+struct mesh_source_summary {
+  std::vector<mesh_source_primitive_summary> primitives{};
+  bool has_skeleton{false};
+  std::vector<std::string> animation_names{};
+}; // struct mesh_source_summary
 
 /** @brief Decoded, GPU-independent pixel data — the shared shape resolve_texture/resolve_environment hand back. */
 struct pixel_data {
@@ -249,9 +285,21 @@ public:
   /**
    * @brief Same shape as @ref resolve_texture, for a glTF mesh. Every embedded material, and (for
    * a skinned mesh) its skeleton/animation clips, are cooked as self-contained side-effect blobs --
-   * see cooked_submesh::material's doc comment; `id` is needed to derive their uuids.
+   * see cooked_submesh::material's doc comment; `id` is needed to derive their uuids. @p options
+   * selects which primitives/animation clips actually get cooked (see mesh_import_options' fields'
+   * doc comments) -- unlike extract_materials, these change the cooked blob itself, so a caller
+   * changing them must also force `needs_cook`, not rely on ordinary staleness detection.
    */
-  [[nodiscard]] static auto resolve_mesh(const std::filesystem::path& source, const math::uuid& id, const std::filesystem::path& cooked, bool needs_cook, bool& did_cook) -> std::optional<cooked_mesh_data>;
+  [[nodiscard]] static auto resolve_mesh(const std::filesystem::path& source, const math::uuid& id, const std::filesystem::path& cooked, const mesh_import_options& options, bool needs_cook, bool& did_cook) -> std::optional<cooked_mesh_data>;
+
+  /**
+   * @brief Reads a `.gltf`/`.glb` source file's top-level structure -- its primitives, whether it
+   * has a skeleton, its animation clip names -- without decoding any vertex/keyframe data or
+   * cooking anything. Stateless, safe from any thread, same as every other member here. The
+   * editor's mesh import-settings dialog calls this directly to build its checkbox lists before
+   * the user picks what to actually cook via @ref resolve_mesh.
+   */
+  [[nodiscard]] static auto inspect_mesh_source(const std::filesystem::path& source) -> std::optional<mesh_source_summary>;
 
   /** @brief Reads a skeleton cooked as a side effect of a mesh import. @p id comes from @ref cooked_mesh_data::skeleton / @ref derive_skeleton_uuid. Pure read, no staleness tracking of its own (it's only ever produced alongside its owning mesh). */
   [[nodiscard]] static auto resolve_skeleton(const math::uuid& id) -> std::optional<std::vector<skeleton::joint>>;
@@ -292,9 +340,10 @@ private:
   /** @brief @p skin_vertices, when non-null, is kept parallel to @p vertices through the same vertex-fetch reorder (see meshopt_optimizeVertexFetchRemap's "multiple vertex streams" note). */
   static auto _optimize_and_generate_lods(std::vector<vertex>& vertices, std::vector<std::uint32_t>& indices, std::size_t vertex_start, std::size_t vertex_count, std::size_t index_start, std::size_t index_count, std::vector<skin_vertex>* skin_vertices = nullptr) -> std::vector<mesh_lod>;
 
-  static auto _cook_mesh(const std::filesystem::path& source, const math::uuid& id, const std::filesystem::path& cooked) -> bool;
+  static auto _cook_mesh(const std::filesystem::path& source, const math::uuid& id, const std::filesystem::path& cooked, const mesh_import_options& options) -> bool;
 
-  static auto _load_cooked_mesh(const std::filesystem::path& cooked, std::vector<vertex>& vertices, std::vector<std::uint32_t>& indices, std::vector<cooked_submesh>& submeshes, math::volume& bounds, std::vector<skin_vertex>& skin_vertices, std::uint32_t& animation_clip_count) -> bool;
+  /** @brief @p animation_clip_original_indices comes back one entry per cooked clip, each clip's *original* position in the source's animation list (not a renumbered "Nth cooked" count) -- see derive_animation_clip_uuid's doc comment for why that distinction matters when only some clips were selected at cook time. */
+  static auto _load_cooked_mesh(const std::filesystem::path& cooked, std::vector<vertex>& vertices, std::vector<std::uint32_t>& indices, std::vector<cooked_submesh>& submeshes, math::volume& bounds, std::vector<skin_vertex>& skin_vertices, std::vector<std::uint32_t>& animation_clip_original_indices) -> bool;
 
   static auto _cook_material(const math::uuid& id, const material_description& description) -> bool;
 

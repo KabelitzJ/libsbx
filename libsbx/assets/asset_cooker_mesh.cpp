@@ -2,6 +2,7 @@
 // Copyright (c) 2026 Jonas Kabelitz
 #include <libsbx/assets/asset_cooker.hpp>
 
+#include <algorithm>
 #include <cmath>
 #include <fstream>
 #include <numeric>
@@ -38,7 +39,7 @@ struct mesh_file_header {
   std::uint32_t index_data_size;   // bytes of meshopt-encoded index buffer following the vertex data
   std::uint32_t flags;             // bit 0 = has_skin_data
   std::uint32_t skin_vertex_data_size; // bytes of *raw* (unencoded) skin_vertex array following the index data; 0 when unskinned
-  std::uint32_t animation_clip_count;  // clips cooked as a side effect, resolvable via derive_animation_clip_uuid(id, 0..count)
+  std::uint32_t animation_clip_count;  // how many uint32 original-gltf-animation-index entries immediately follow the submesh records -- each resolvable via derive_animation_clip_uuid(id, that_index)
 }; // struct mesh_file_header
 
 inline constexpr auto mesh_flag_has_skin_data = std::uint32_t{1u << 0u};
@@ -58,21 +59,21 @@ struct submesh_lod_record {
   std::float_t error;
 }; // struct submesh_lod_record
 
-auto asset_cooker::resolve_mesh(const std::filesystem::path& source, const math::uuid& id, const std::filesystem::path& cooked, bool needs_cook, bool& did_cook) -> std::optional<cooked_mesh_data> {
+auto asset_cooker::resolve_mesh(const std::filesystem::path& source, const math::uuid& id, const std::filesystem::path& cooked, const mesh_import_options& options, bool needs_cook, bool& did_cook) -> std::optional<cooked_mesh_data> {
   did_cook = false;
 
   if (needs_cook) {
-    if (!_cook_mesh(source, id, cooked)) {
+    if (!_cook_mesh(source, id, cooked, options)) {
       return std::nullopt;
     }
     did_cook = true;
   }
 
   auto data = cooked_mesh_data{};
-  auto animation_clip_count = std::uint32_t{0u};
+  auto animation_clip_original_indices = std::vector<std::uint32_t>{};
 
-  if (!_load_cooked_mesh(cooked, data.vertices, data.indices, data.submeshes, data.bounds, data.skin_vertices, animation_clip_count)) {
-    if (!_cook_mesh(source, id, cooked) || !_load_cooked_mesh(cooked, data.vertices, data.indices, data.submeshes, data.bounds, data.skin_vertices, animation_clip_count)) {
+  if (!_load_cooked_mesh(cooked, data.vertices, data.indices, data.submeshes, data.bounds, data.skin_vertices, animation_clip_original_indices)) {
+    if (!_cook_mesh(source, id, cooked, options) || !_load_cooked_mesh(cooked, data.vertices, data.indices, data.submeshes, data.bounds, data.skin_vertices, animation_clip_original_indices)) {
       utility::logger<"assets">::warn("Could not load cooked mesh '{}'", cooked.generic_string());
       return std::nullopt;
     }
@@ -87,14 +88,87 @@ auto asset_cooker::resolve_mesh(const std::filesystem::path& source, const math:
   if (!data.skin_vertices.empty()) {
     data.skeleton = derive_skeleton_uuid(id);
 
-    data.animation_clips.reserve(animation_clip_count);
+    data.animation_clips.reserve(animation_clip_original_indices.size());
 
-    for (auto index = std::uint32_t{0u}; index < animation_clip_count; ++index) {
-      data.animation_clips.push_back(derive_animation_clip_uuid(id, index));
+    for (const auto original_index : animation_clip_original_indices) {
+      data.animation_clips.push_back(derive_animation_clip_uuid(id, original_index));
     }
   }
 
   return data;
+}
+
+auto asset_cooker::inspect_mesh_source(const std::filesystem::path& source) -> std::optional<mesh_source_summary> {
+  auto data = fastgltf::GltfDataBuffer::FromPath(source);
+
+  if (data.error() != fastgltf::Error::None) {
+    utility::logger<"assets">::warn("Inspect: could not open mesh '{}'", source.generic_string());
+    return std::nullopt;
+  }
+
+  auto parser = fastgltf::Parser{fastgltf::Extensions::KHR_materials_emissive_strength | fastgltf::Extensions::KHR_materials_ior};
+
+  // Same Options _cook_mesh uses -- a different flag set could change what's visible in
+  // gltf.scenes/gltf.meshes/gltf.animations, and the two must stay in lockstep for
+  // mesh_import_options::included_primitives/included_animations' indices to mean the same thing
+  // here as they do at cook time.
+  auto loaded = parser.loadGltf(data.get(), source.parent_path(), fastgltf::Options::LoadExternalBuffers | fastgltf::Options::GenerateMeshIndices);
+
+  if (loaded.error() != fastgltf::Error::None) {
+    utility::logger<"assets">::warn("Inspect: could not parse mesh '{}'", source.generic_string());
+    return std::nullopt;
+  }
+
+  auto& gltf = loaded.get();
+
+  auto summary = mesh_source_summary{};
+
+  const auto append_primitive_summaries = [&](const fastgltf::Mesh& gltf_mesh) {
+    const auto mesh_name = gltf_mesh.name.empty() ? std::string{"Mesh"} : std::string{gltf_mesh.name.begin(), gltf_mesh.name.end()};
+
+    for (auto primitive_index = std::size_t{0u}; primitive_index < gltf_mesh.primitives.size(); ++primitive_index) {
+      summary.primitives.push_back(mesh_source_primitive_summary{mesh_name, primitive_index});
+    }
+  };
+
+  // Same traversal shape as _cook_mesh's append() call sites -- an instanced mesh (referenced by
+  // more than one node) is listed once per node, matching that cooking will also produce separate
+  // submeshes for each instance (see mesh_source_summary's doc comment).
+  if (!gltf.scenes.empty()) {
+    const auto scene_index = gltf.defaultScene.value_or(std::size_t{0});
+
+    fastgltf::iterateSceneNodes(gltf, scene_index, fastgltf::math::fmat4x4{}, [&](const fastgltf::Node& node, const fastgltf::math::fmat4x4&) {
+      if (!node.meshIndex.has_value()) {
+        return;
+      }
+
+      append_primitive_summaries(gltf.meshes[node.meshIndex.value()]);
+    });
+  } else {
+    for (const auto& gltf_mesh : gltf.meshes) {
+      append_primitive_summaries(gltf_mesh);
+    }
+  }
+
+  // Same "first skin referenced wins" detection _cook_mesh uses -- on/off is all this reports,
+  // since this cooker never supports more than one skeleton per mesh either way.
+  if (!gltf.scenes.empty()) {
+    const auto scene_index = gltf.defaultScene.value_or(std::size_t{0});
+
+    fastgltf::iterateSceneNodes(gltf, scene_index, fastgltf::math::fmat4x4{}, [&](const fastgltf::Node& node, const fastgltf::math::fmat4x4&) {
+      if (node.meshIndex.has_value() && node.skinIndex.has_value()) {
+        summary.has_skeleton = true;
+      }
+    });
+  }
+
+  summary.animation_names.reserve(gltf.animations.size());
+
+  for (const auto& gltf_animation : gltf.animations) {
+    summary.animation_names.push_back(gltf_animation.name.empty() ? std::string{"(unnamed)"} : std::string{gltf_animation.name.begin(), gltf_animation.name.end()});
+  }
+
+  return summary;
 }
 
 auto asset_cooker::_generate_normals(std::vector<vertex>& vertices, const std::vector<std::uint32_t>& indices, std::size_t vertex_start, std::size_t vertex_count, std::size_t index_start, std::size_t index_count) -> void {
@@ -271,7 +345,7 @@ auto asset_cooker::_optimize_and_generate_lods(std::vector<vertex>& vertices, st
   return lods;
 }
 
-auto asset_cooker::_cook_mesh(const std::filesystem::path& source, const math::uuid& id, const std::filesystem::path& cooked) -> bool {
+auto asset_cooker::_cook_mesh(const std::filesystem::path& source, const math::uuid& id, const std::filesystem::path& cooked, const mesh_import_options& options) -> bool {
   auto data = fastgltf::GltfDataBuffer::FromPath(source);
 
   if (data.error() != fastgltf::Error::None) {
@@ -499,10 +573,23 @@ auto asset_cooker::_cook_mesh(const std::filesystem::path& source, const math::u
     }
   }
 
-  const auto has_skin_data = !joints.empty();
+  const auto has_skin_data = options.import_skeleton && !joints.empty();
+
+  // Shared across every append() call below (once per scene node, or once per gltf.meshes entry
+  // for a scene-less file) -- the Nth primitive encountered overall is what
+  // mesh_import_options::included_primitives/mesh_source_summary::primitives index by, so this
+  // must increment exactly once per primitive regardless of which mesh/node it belongs to, matching
+  // inspect_mesh_source's own traversal below.
+  auto global_primitive_index = std::size_t{0u};
 
   const auto append = [&](const fastgltf::Mesh& gltf_mesh, const fastgltf::math::fmat4x4& world, bool is_skinned) {
     for (const auto& primitive : gltf_mesh.primitives) {
+      const auto this_primitive_index = global_primitive_index++;
+
+      if (!options.included_primitives.empty() && std::ranges::find(options.included_primitives, this_primitive_index) == options.included_primitives.end()) {
+        continue;
+      }
+
       const auto* position = primitive.findAttribute("POSITION");
 
       if (position == primitive.attributes.end()) {
@@ -662,14 +749,24 @@ auto asset_cooker::_cook_mesh(const std::filesystem::path& source, const math::u
     return false;
   }
 
-  auto animation_clip_count = std::uint32_t{0u};
+  auto animation_clip_original_indices = std::vector<std::uint32_t>{};
 
   if (has_skin_data) {
     if (!_cook_skeleton(derive_skeleton_uuid(id), joints)) {
       return false;
     }
 
-    for (const auto& gltf_animation : gltf.animations) {
+    for (auto gltf_animation_index = std::size_t{0u}; gltf_animation_index < gltf.animations.size(); ++gltf_animation_index) {
+      // included_animations (when non-empty) selects by *original* gltf.animations position, not
+      // a renumbered "Nth cooked" count -- derive_animation_clip_uuid below depends on that same
+      // original index staying stable across two different future selections of this file (see its
+      // doc comment).
+      if (!options.included_animations.empty() && std::ranges::find(options.included_animations, gltf_animation_index) == options.included_animations.end()) {
+        continue;
+      }
+
+      const auto& gltf_animation = gltf.animations[gltf_animation_index];
+
       auto channels = std::vector<animation_joint_channel>{};
 
       const auto find_or_create_channel = [&](std::uint32_t joint_index) -> animation_joint_channel& {
@@ -765,15 +862,15 @@ auto asset_cooker::_cook_mesh(const std::filesystem::path& source, const math::u
       }
 
       auto clip_data = animation_clip_data{};
-      clip_data.name = gltf_animation.name.empty() ? fmt::format("clip_{}", animation_clip_count) : std::string{gltf_animation.name.begin(), gltf_animation.name.end()};
+      clip_data.name = gltf_animation.name.empty() ? fmt::format("clip_{}", gltf_animation_index) : std::string{gltf_animation.name.begin(), gltf_animation.name.end()};
       clip_data.duration = duration;
       clip_data.channels = std::move(channels);
 
-      if (!_cook_animation_clip(derive_animation_clip_uuid(id, animation_clip_count), clip_data)) {
+      if (!_cook_animation_clip(derive_animation_clip_uuid(id, static_cast<std::uint32_t>(gltf_animation_index)), clip_data)) {
         return false;
       }
 
-      ++animation_clip_count;
+      animation_clip_original_indices.push_back(static_cast<std::uint32_t>(gltf_animation_index));
     }
   }
 
@@ -813,7 +910,7 @@ auto asset_cooker::_cook_mesh(const std::filesystem::path& source, const math::u
   header.index_data_size = static_cast<std::uint32_t>(index_data_size);
   header.flags = has_skin_data ? mesh_flag_has_skin_data : 0u;
   header.skin_vertex_data_size = static_cast<std::uint32_t>(skin_vertices.size() * sizeof(skin_vertex));
-  header.animation_clip_count = animation_clip_count;
+  header.animation_clip_count = static_cast<std::uint32_t>(animation_clip_original_indices.size());
 
   out.write(reinterpret_cast<const char*>(&header), sizeof(header));
   out.write(reinterpret_cast<const char*>(encoded_vertices.data()), static_cast<std::streamsize>(vertex_data_size));
@@ -845,8 +942,16 @@ auto asset_cooker::_cook_mesh(const std::filesystem::path& source, const math::u
     }
   }
 
+  // One uint32 per cooked clip, its *original* gltf.animations index -- see this file's own doc
+  // comment on _load_cooked_mesh for why a bare count isn't enough once clips can be selectively
+  // cooked (derive_animation_clip_uuid needs the original index back on every subsequent load, not
+  // a renumbered 0..count).
+  if (!animation_clip_original_indices.empty()) {
+    out.write(reinterpret_cast<const char*>(animation_clip_original_indices.data()), static_cast<std::streamsize>(animation_clip_original_indices.size() * sizeof(std::uint32_t)));
+  }
+
   if (has_skin_data) {
-    utility::logger<"assets">::debug("Cooked mesh '{}' -> '{}' ({} joints, {} animation clips)", source.generic_string(), cooked.generic_string(), joints.size(), animation_clip_count);
+    utility::logger<"assets">::debug("Cooked mesh '{}' -> '{}' ({} joints, {} animation clips)", source.generic_string(), cooked.generic_string(), joints.size(), animation_clip_original_indices.size());
   } else {
     utility::logger<"assets">::debug("Cooked mesh '{}' -> '{}'", source.generic_string(), cooked.generic_string());
   }
@@ -854,7 +959,7 @@ auto asset_cooker::_cook_mesh(const std::filesystem::path& source, const math::u
   return true;
 }
 
-auto asset_cooker::_load_cooked_mesh(const std::filesystem::path& cooked, std::vector<vertex>& vertices, std::vector<std::uint32_t>& indices, std::vector<cooked_submesh>& submeshes, math::volume& bounds, std::vector<skin_vertex>& skin_vertices, std::uint32_t& animation_clip_count) -> bool {
+auto asset_cooker::_load_cooked_mesh(const std::filesystem::path& cooked, std::vector<vertex>& vertices, std::vector<std::uint32_t>& indices, std::vector<cooked_submesh>& submeshes, math::volume& bounds, std::vector<skin_vertex>& skin_vertices, std::vector<std::uint32_t>& animation_clip_original_indices) -> bool {
   auto in = std::ifstream{cooked, std::ios::binary};
 
   if (!in) {
@@ -939,7 +1044,17 @@ auto asset_cooker::_load_cooked_mesh(const std::filesystem::path& cooked, std::v
 
   bounds = math::volume{math::vector3{header.bounds_min[0], header.bounds_min[1], header.bounds_min[2]}, math::vector3{header.bounds_max[0], header.bounds_max[1], header.bounds_max[2]}};
 
-  animation_clip_count = header.animation_clip_count;
+  // One uint32 per cooked clip, its original gltf.animations index -- see _cook_mesh's write side.
+  animation_clip_original_indices.clear();
+  animation_clip_original_indices.resize(header.animation_clip_count);
+
+  if (header.animation_clip_count > 0u) {
+    in.read(reinterpret_cast<char*>(animation_clip_original_indices.data()), static_cast<std::streamsize>(header.animation_clip_count) * static_cast<std::streamsize>(sizeof(std::uint32_t)));
+
+    if (!in) {
+      return false;
+    }
+  }
 
   return true;
 }

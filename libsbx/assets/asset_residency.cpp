@@ -218,8 +218,8 @@ auto asset_residency::load_font(const std::filesystem::path& path) -> font_handl
   return load_font(_manifest.import(assets_directory / path));
 }
 
-auto asset_residency::load_mesh(const math::uuid& id, const mesh_import_options& options) -> mesh_handle {
-  {
+auto asset_residency::load_mesh(const math::uuid& id, const mesh_import_options& options, bool force_recook) -> mesh_handle {
+  if (!force_recook) {
     auto lock = std::lock_guard{_mutex};
 
     if (const auto entry = _meshes.find(id); entry != _meshes.end()) {
@@ -253,14 +253,24 @@ auto asset_residency::load_mesh(const math::uuid& id, const mesh_import_options&
   }
 
   const auto cooked = _manifest.cooked_path(id, ".sbxmsh");
-  const auto needs_cook = _manifest.is_cooked_stale(id, source, cooked, mesh_cooker_version);
+  const auto needs_cook = force_recook || _manifest.is_cooked_stale(id, source, cooked, mesh_cooker_version);
 
-  auto record = std::make_shared<mesh>();
-  record->_id = id;
+  // Reuses the already-resident record on a force_recook (emplace() below would otherwise be a
+  // no-op against an existing key, silently stranding this freshly-made-but-never-submitted record
+  // while _finalize_mesh keeps repopulating the *old* one by id) -- otherwise, same as always, a
+  // fresh placeholder record for a mesh not yet seen this session.
+  auto record = std::shared_ptr<mesh>{};
 
   {
     auto lock = std::lock_guard{_mutex};
-    _meshes.emplace(id, record);
+
+    if (const auto entry = _meshes.find(id); entry != _meshes.end()) {
+      record = entry->second;
+    } else {
+      record = std::make_shared<mesh>();
+      record->_id = id;
+      _meshes.emplace(id, record);
+    }
   }
 
   _loader.submit(asset_loader::mesh_request{id, options, source, cooked, needs_cook});
@@ -268,12 +278,12 @@ auto asset_residency::load_mesh(const math::uuid& id, const mesh_import_options&
   return mesh_handle{record};
 }
 
-auto asset_residency::load_mesh(const std::filesystem::path& path, const mesh_import_options& options) -> mesh_handle {
+auto asset_residency::load_mesh(const std::filesystem::path& path, const mesh_import_options& options, bool force_recook) -> mesh_handle {
   const auto& project = core::engine::project();
 
   const auto assets_directory = project.assets_directory();
 
-  return load_mesh(_manifest.import(assets_directory / path), options);
+  return load_mesh(_manifest.import(assets_directory / path), options, force_recook);
 }
 
 auto asset_residency::create_mesh(std::vector<vertex> vertices, std::vector<std::uint32_t> indices, std::vector<mesh::submesh> submeshes, const math::volume& bounds) -> mesh_handle {

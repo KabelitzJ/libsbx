@@ -12,6 +12,7 @@
 
 #include <libsbx/math/uuid.hpp>
 
+#include <libsbx/assets/asset_cooker.hpp>
 #include <libsbx/render/ui/widgets/file_dialog.hpp>
 #include <libsbx/render/ui/fonts/material_design_icons.hpp>
 
@@ -94,6 +95,12 @@ private:
   /** @brief The import-mesh, import-conflict, and delete-confirmation modals -- each opens itself from its own _show_*_dialog flag, set elsewhere. */
   auto _draw_import_and_delete_dialogs(editor_state& state) -> void;
 
+  /** @brief Queues @p relative_path for the mesh import-settings dialog if it has no `.meta` yet (arming the dialog immediately if the queue was empty), returning true if it was queued. Returns false -- caller should import it immediately instead -- if it's already known. The single place both the grid's tile click and "Import from Disk..." register a not-yet-imported mesh, so a multi-file pick queues one dialog per file instead of only the last one winning. */
+  auto _defer_mesh_import_if_unseen(const std::filesystem::path& relative_path) -> bool;
+
+  /** @brief Runs asset_cooker::inspect_mesh_source on _pending_mesh_imports.front(), resets _mesh_import_options to defaults, sizes both check-vectors to all-true, and arms _show_import_mesh_dialog. No-op if the queue is empty. */
+  auto _begin_mesh_import_dialog() -> void;
+
   std::filesystem::path _current_directory{};
   std::vector<asset_browser_entry> _cached_entries{};
   bool _needs_refresh{true};
@@ -103,9 +110,12 @@ private:
 
   std::optional<std::filesystem::path> _pending_reveal{};
 
+  std::vector<std::filesystem::path> _pending_mesh_imports{};
   bool _show_import_mesh_dialog{false};
-  std::filesystem::path _pending_import_path{};
-  bool _import_extract_materials{true};
+  std::optional<sbx::assets::mesh_source_summary> _mesh_import_summary{};
+  sbx::assets::mesh_import_options _mesh_import_options{};
+  std::vector<bool> _mesh_import_primitive_checks{};
+  std::vector<bool> _mesh_import_animation_checks{};
 
   sbx::render::file_dialog _import_dialog{};
   std::filesystem::path _import_destination_directory{};

@@ -184,7 +184,7 @@ auto asset_loader::_resolve(const mesh_request& request) -> void {
   SBX_PROFILE_SCOPE("asset_loader::_resolve mesh");
 
   auto did_cook = false;
-  auto data = asset_cooker::resolve_mesh(request.source, request.id, request.cooked, request.needs_cook, did_cook);
+  auto data = asset_cooker::resolve_mesh(request.source, request.id, request.cooked, request.options, request.needs_cook, did_cook);
 
   if (_aborted.load(std::memory_order_relaxed)) {
     return;

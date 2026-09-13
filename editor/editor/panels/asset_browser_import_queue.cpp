@@ -2,6 +2,7 @@
 // Copyright (c) 2026 Jonas Kabelitz
 #include <editor/panels/asset_browser_panel.hpp>
 
+#include <algorithm>
 #include <filesystem>
 #include <system_error>
 
@@ -15,6 +16,25 @@
 #include <libsbx/assets/assets_module.hpp>
 
 namespace editor {
+
+// Builds the sparse "explicitly included" index list from a parallel checkbox vector -- empty
+// when every box is checked, mirroring this codebase's "empty means include everything" convention
+// (see mesh_import_options' fields).
+auto all_checked_indices(const std::vector<bool>& checks) -> std::vector<std::size_t> {
+  if (std::ranges::all_of(checks, [](bool checked) { return checked; })) {
+    return {};
+  }
+
+  auto indices = std::vector<std::size_t>{};
+
+  for (auto index = std::size_t{0u}; index < checks.size(); ++index) {
+    if (checks[index]) {
+      indices.push_back(index);
+    }
+  }
+
+  return indices;
+}
 
 // Drains _import_dialog's result (if any) into _pending_asset_imports, then works through that
 // queue until it's empty or a name clash needs a decision.
@@ -59,19 +79,53 @@ auto asset_browser_panel::_import_asset_file(editor_state& state, const std::fil
   const auto relative_path = std::filesystem::relative(destination, project.assets_directory());
   const auto kind = classify_extension(destination.extension());
 
-  if (kind == asset_kind::mesh && !std::filesystem::exists(std::filesystem::path{destination}.concat(".meta"))) {
-    // First time this mesh has ever been seen — same "let the user choose extract_materials"
-    // detour the per-entry Import path takes, and the same modal handles both (see
-    // _draw_import_and_delete_dialogs).
-    _pending_import_path = relative_path;
-    _import_extract_materials = true;
-    _show_import_mesh_dialog = true;
-  } else {
+  if (kind != asset_kind::mesh || !_defer_mesh_import_if_unseen(relative_path)) {
     const auto id = assets_module.import(destination);
     state.select_asset(id, relative_path, kind);
   }
 
   _needs_refresh = true;
+}
+
+// Queues @p relative_path for the mesh import-settings dialog if it has no `.meta` yet (arming the
+// dialog immediately if the queue was empty), returning true if it was queued. Returns false --
+// caller should import it immediately instead -- if it's already known. The single place both the
+// grid's tile click and "Import from Disk..." register a not-yet-imported mesh, so a multi-file
+// pick queues one dialog per file instead of only the last one winning.
+auto asset_browser_panel::_defer_mesh_import_if_unseen(const std::filesystem::path& relative_path) -> bool {
+  auto& project = sbx::core::engine::project();
+
+  const auto meta_path = std::filesystem::path{project.assets_directory() / relative_path}.concat(".meta");
+
+  if (std::filesystem::exists(meta_path)) {
+    return false;
+  }
+
+  const auto was_empty = _pending_mesh_imports.empty();
+  _pending_mesh_imports.push_back(relative_path);
+
+  if (was_empty) {
+    _begin_mesh_import_dialog();
+  }
+
+  return true;
+}
+
+// Runs asset_cooker::inspect_mesh_source on _pending_mesh_imports.front(), resets
+// _mesh_import_options to defaults, sizes both check-vectors to all-true, and arms
+// _show_import_mesh_dialog. No-op if the queue is empty.
+auto asset_browser_panel::_begin_mesh_import_dialog() -> void {
+  if (_pending_mesh_imports.empty()) {
+    return;
+  }
+
+  auto& project = sbx::core::engine::project();
+
+  _mesh_import_summary = sbx::assets::asset_cooker::inspect_mesh_source(project.assets_directory() / _pending_mesh_imports.front());
+  _mesh_import_options = sbx::assets::mesh_import_options{};
+  _mesh_import_primitive_checks.assign(_mesh_import_summary.has_value() ? _mesh_import_summary->primitives.size() : 0u, true);
+  _mesh_import_animation_checks.assign(_mesh_import_summary.has_value() ? _mesh_import_summary->animation_names.size() : 0u, true);
+  _show_import_mesh_dialog = true;
 }
 
 // The import-mesh, import-conflict, and delete-confirmation modals -- each opens itself from its
@@ -87,22 +141,95 @@ auto asset_browser_panel::_draw_import_and_delete_dialogs(editor_state& state) -
   }
 
   if (ImGui::BeginPopupModal("Import Mesh", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
-    ImGui::Text("Import '%s'", _pending_import_path.filename().string().c_str());
-    ImGui::Checkbox("Extract materials to editable .material assets", &_import_extract_materials);
-    ImGui::TextDisabled("Recommended. When off, materials are cooked read-only and won't appear in the Asset Browser.");
-
-    if (ImGui::Button("Import")) {
-      const auto id = assets_module.import(project.assets_directory() / _pending_import_path);
-      assets_module.load_mesh(id, sbx::assets::mesh_import_options{.extract_materials = _import_extract_materials});
-      state.select_asset(id, _pending_import_path, asset_kind::mesh);
-      _needs_refresh = true; // newly extracted .material files may now be visible in this folder
+    if (_pending_mesh_imports.empty()) {
+      // Closed via Escape/the OS close gesture rather than Import/Skip -- nothing left to show.
       ImGui::CloseCurrentPopup();
-    }
+    } else {
+      const auto& pending_path = _pending_mesh_imports.front();
 
-    ImGui::SameLine();
+      ImGui::Text("Import '%s'", pending_path.filename().string().c_str());
 
-    if (ImGui::Button("Cancel")) {
-      ImGui::CloseCurrentPopup();
+      if (_pending_mesh_imports.size() > 1u) {
+        ImGui::TextDisabled("%zu more mesh(es) queued after this one.", _pending_mesh_imports.size() - 1u);
+      }
+
+      ImGui::Separator();
+
+      if (!_mesh_import_summary.has_value()) {
+        ImGui::TextColored(ImVec4{1.0f, 0.6f, 0.2f, 1.0f}, "Could not read this file's contents.");
+      } else {
+        const auto& summary = *_mesh_import_summary;
+
+        ImGui::TextUnformatted("Primitives");
+
+        for (auto index = std::size_t{0u}; index < summary.primitives.size(); ++index) {
+          const auto& primitive = summary.primitives[index];
+
+          ImGui::PushID(static_cast<int>(index));
+          auto checked = static_cast<bool>(_mesh_import_primitive_checks[index]);
+          ImGui::Checkbox("##primitive_check", &checked);
+          _mesh_import_primitive_checks[index] = checked;
+          ImGui::SameLine();
+          ImGui::Text("%s [%zu]", primitive.mesh_name.c_str(), primitive.primitive_index);
+          ImGui::PopID();
+        }
+
+        ImGui::Separator();
+
+        ImGui::Checkbox("Extract materials to editable .material assets", &_mesh_import_options.extract_materials);
+        ImGui::TextDisabled("Recommended. When off, materials are cooked read-only and won't appear in the Asset Browser.");
+
+        ImGui::BeginDisabled(!summary.has_skeleton);
+        ImGui::Checkbox("Import skeleton", &_mesh_import_options.import_skeleton);
+        ImGui::EndDisabled();
+
+        if (!summary.has_skeleton) {
+          ImGui::TextDisabled("This file has no skeleton.");
+        } else if (!summary.animation_names.empty()) {
+          ImGui::BeginDisabled(!_mesh_import_options.import_skeleton);
+          ImGui::TextUnformatted("Animation clips");
+
+          for (auto index = std::size_t{0u}; index < summary.animation_names.size(); ++index) {
+            ImGui::PushID(static_cast<int>(index));
+            auto checked = static_cast<bool>(_mesh_import_animation_checks[index]);
+            ImGui::Checkbox("##animation_check", &checked);
+            _mesh_import_animation_checks[index] = checked;
+            ImGui::SameLine();
+            ImGui::TextUnformatted(summary.animation_names[index].c_str());
+            ImGui::PopID();
+          }
+
+          ImGui::EndDisabled();
+        }
+      }
+
+      ImGui::Separator();
+
+      if (ImGui::Button("Import")) {
+        auto options = _mesh_import_options;
+
+        if (_mesh_import_summary.has_value()) {
+          options.included_primitives = all_checked_indices(_mesh_import_primitive_checks);
+          options.included_animations = all_checked_indices(_mesh_import_animation_checks);
+        }
+
+        const auto id = assets_module.import(project.assets_directory() / pending_path);
+        assets_module.load_mesh(id, options, /*force_recook=*/true);
+        state.select_asset(id, pending_path, asset_kind::mesh);
+        _needs_refresh = true; // newly extracted .material files may now be visible in this folder
+
+        _pending_mesh_imports.erase(_pending_mesh_imports.begin());
+        ImGui::CloseCurrentPopup();
+        _begin_mesh_import_dialog();
+      }
+
+      ImGui::SameLine();
+
+      if (ImGui::Button("Skip")) {
+        _pending_mesh_imports.erase(_pending_mesh_imports.begin());
+        ImGui::CloseCurrentPopup();
+        _begin_mesh_import_dialog();
+      }
     }
 
     ImGui::EndPopup();

@@ -112,16 +112,7 @@ auto asset_browser_panel::_draw_asset_grid(editor_state& state) -> void {
           if (entry.is_directory) {
             _navigate_to(entry.path);
           } else if (entry.is_importable) {
-            const auto meta_path = std::filesystem::path{project.assets_directory() / entry.path}.concat(".meta");
-
-            if (entry.kind == asset_kind::mesh && !std::filesystem::exists(meta_path)) {
-              // First time this mesh has ever been seen — let the user decide whether to extract
-              // its materials before it's actually cooked (deferring would mean the choice has
-              // nowhere to be remembered until something else needs the mesh).
-              _pending_import_path = entry.path;
-              _import_extract_materials = true;
-              _show_import_mesh_dialog = true;
-            } else {
+            if (entry.kind != asset_kind::mesh || !_defer_mesh_import_if_unseen(entry.path)) {
               // Same resolution requirement as above — entry.path is relative to assets_directory().
               entry.id = assets_module.import(project.assets_directory() / entry.path);
               state.select_asset(entry.id, entry.path, entry.kind);

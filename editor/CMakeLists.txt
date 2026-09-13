@@ -46,6 +46,7 @@ target_sources(
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/viewport_overlays.cpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/viewport_picking.cpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/widgets/vector_fields.cpp"
+    "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/widgets/layer_fields.cpp"
   PUBLIC
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/application.hpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/editor_camera.hpp"
@@ -82,6 +83,7 @@ target_sources(
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/widgets/text_field.hpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/widgets/inline_rename.hpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/widgets/vector_fields.hpp"
+    "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/widgets/layer_fields.hpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/widgets/drag_session.hpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/widgets/asset_path.hpp"
 )

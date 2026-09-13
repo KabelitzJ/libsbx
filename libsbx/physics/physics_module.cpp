@@ -209,8 +209,18 @@ auto physics_module::_sync_broadphase(scenes::scene& scene) -> void {
 auto physics_module::_generate_candidate_pairs() -> void {
   _candidate_pairs.clear();
 
-  _dynamic_tree.for_each_leaf([this](broadphase_tree_type::id leaf_id, const scenes::node& node, const math::volume& fat_aabb) {
-    _dynamic_tree.query(fat_aabb, [this, leaf_id, &node](const scenes::node& other) {
+  // The Layer Collision Matrix: a pair whose layers aren't marked as colliding (core::project,
+  // configured via the editor's "Edit Layers..." popup) never becomes a candidate, so it never
+  // reaches narrowphase/the solver -- the cheapest possible place to gate it, since every
+  // simulated pair already funnels through here.
+  auto& project = core::engine::project();
+
+  const auto layers_collide = [&project](const scenes::node& a, const scenes::node& b) {
+    return project.layers_collide(a.get_component<scenes::layer>().index, b.get_component<scenes::layer>().index);
+  };
+
+  _dynamic_tree.for_each_leaf([this, &layers_collide](broadphase_tree_type::id leaf_id, const scenes::node& node, const math::volume& fat_aabb) {
+    _dynamic_tree.query(fat_aabb, [this, leaf_id, &node, &layers_collide](const scenes::node& other) {
       if (other == node) {
         return;
       }
@@ -219,10 +229,18 @@ auto physics_module::_generate_candidate_pairs() -> void {
         return;
       }
 
+      if (!layers_collide(node, other)) {
+        return;
+      }
+
       _candidate_pairs.emplace_back(node, other);
     });
 
-    _static_tree.query(fat_aabb, [this, &node](const scenes::node& other) {
+    _static_tree.query(fat_aabb, [this, &node, &layers_collide](const scenes::node& other) {
+      if (!layers_collide(node, other)) {
+        return;
+      }
+
       _candidate_pairs.emplace_back(node, other);
     });
   });
@@ -482,7 +500,7 @@ auto physics_module::fixed_update() -> void {
   }
 }
 
-auto physics_module::query_sphere_contacts(scenes::scene& scene, const math::vector3& center, std::float_t radius, std::vector<sphere_query_hit>& out_hits) -> void {
+auto physics_module::query_sphere_contacts(scenes::scene& scene, const math::vector3& center, std::float_t radius, std::vector<sphere_query_hit>& out_hits, const scenes::layer_mask& mask) -> void {
   out_hits.clear();
 
   auto& assets_module = core::engine::get_module<assets::assets_module>();
@@ -498,6 +516,10 @@ auto physics_module::query_sphere_contacts(scenes::scene& scene, const math::vec
   auto cache = pose_cache{};
 
   const auto visit = [&](const scenes::node& candidate) {
+    if (!mask.test(candidate.get_component<scenes::layer>().index)) {
+      return;
+    }
+
     const auto resolved = resolve_convex(scene, candidate, _hull_cache, assets_module, cache);
 
     if (!resolved) {
@@ -526,7 +548,7 @@ auto physics_module::query_sphere_contacts(scenes::scene& scene, const math::vec
   _dynamic_tree.query(query_aabb, visit);
 }
 
-auto physics_module::raycast(scenes::scene& scene, const math::ray& ray, std::float_t max_distance) -> std::optional<raycast_hit> {
+auto physics_module::raycast(scenes::scene& scene, const math::ray& ray, std::float_t max_distance, const scenes::layer_mask& mask) -> std::optional<raycast_hit> {
   auto& assets_module = core::engine::get_module<assets::assets_module>();
 
   auto nearest = std::optional<raycast_hit>{};
@@ -540,6 +562,10 @@ auto physics_module::raycast(scenes::scene& scene, const math::ray& ray, std::fl
   // Not routed through _static_tree -- see the doc comment on _heightfield_nodes' population in
   // _sync_broadphase for why. Typically 0 or 1 entries, so a linear scan costs nothing here.
   for (const auto& node : _heightfield_nodes) {
+    if (!mask.test(node.get_component<scenes::layer>().index)) {
+      continue;
+    }
+
     if (const auto& collider = node.get_component<heightfield_collider>(); collider.data) {
       if (const auto hit = raycast_heightfield(*collider.data, ray, max_distance)) {
         consider(node, *hit);
@@ -552,6 +578,10 @@ auto physics_module::raycast(scenes::scene& scene, const math::ray& ray, std::fl
   auto cache = pose_cache{};
 
   const auto visit = [&](const scenes::node& candidate, [[maybe_unused]] std::float_t entry_t) {
+    if (!mask.test(candidate.get_component<scenes::layer>().index)) {
+      return;
+    }
+
     const auto resolved = resolve_convex(scene, candidate, _hull_cache, assets_module, cache);
 
     if (!resolved) {

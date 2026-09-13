@@ -171,6 +171,49 @@ auto asset_cooker::inspect_mesh_source(const std::filesystem::path& source) -> s
   return summary;
 }
 
+auto asset_cooker::gltf_external_file_references(const std::filesystem::path& source) -> std::vector<std::filesystem::path> {
+  auto references = std::vector<std::filesystem::path>{};
+
+  if (source.extension() != ".gltf") {
+    return references; // .glb is one self-contained binary blob -- nothing external to find
+  }
+
+  auto data = fastgltf::GltfDataBuffer::FromPath(source);
+
+  if (data.error() != fastgltf::Error::None) {
+    return references;
+  }
+
+  auto parser = fastgltf::Parser{fastgltf::Extensions::KHR_materials_emissive_strength | fastgltf::Extensions::KHR_materials_ior};
+
+  // Options::None -- unlike inspect_mesh_source/_cook_mesh, this only ever wants the raw uri
+  // strings, never the referenced bytes, so there's nothing to gain from (and no reason to require
+  // the files already existing for) an eager load.
+  auto loaded = parser.loadGltf(data.get(), source.parent_path(), fastgltf::Options::None);
+
+  if (loaded.error() != fastgltf::Error::None) {
+    return references;
+  }
+
+  const auto& gltf = loaded.get();
+
+  const auto collect = [&references](const auto& data_source) {
+    if (const auto* uri = std::get_if<fastgltf::sources::URI>(&data_source)) {
+      references.push_back(std::filesystem::path{std::string{uri->uri.path()}});
+    }
+  };
+
+  for (const auto& buffer : gltf.buffers) {
+    collect(buffer.data);
+  }
+
+  for (const auto& image : gltf.images) {
+    collect(image.data);
+  }
+
+  return references;
+}
+
 auto asset_cooker::_generate_normals(std::vector<vertex>& vertices, const std::vector<std::uint32_t>& indices, std::size_t vertex_start, std::size_t vertex_count, std::size_t index_start, std::size_t index_count) -> void {
   // Area-weighted face-normal accumulation: a cross product's length is proportional to twice its
   // triangle's area, so summing it directly (before normalizing) naturally weights larger

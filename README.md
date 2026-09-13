@@ -1,7 +1,7 @@
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="images/logo-dark.png" width="400">
   <source media="(prefers-color-scheme: light)" srcset="images/logo-light.png" width="400">
-  <img alt="Fallback image description" src="images/logo-dark.png" width="400">
+  <img alt="libsbx logo" src="images/logo-dark.png" width="400">
 </picture>
 
 A modular, Vulkan-based game engine built with modern C++26
@@ -11,292 +11,128 @@ A modular, Vulkan-based game engine built with modern C++26
 ![MIT License](https://img.shields.io/badge/License-MIT-green?logo=opensourceinitiative&logoColor=green)
 ![Docs Build](https://img.shields.io/github/actions/workflow/status/KabelitzJ/sandbox/gh_pages.yml?logo=github&label=Deploy%20docs)
 
-Sandbox is a game engine written from the ground up in **C++26**, designed as both a learning tool and a practical framework for real-time 3D applications. It features a Vulkan-based deferred PBR rendering pipeline, a render graph architecture, and a modular design built around an Entity-Component-System core.
-
-> **Note:** Active development happens on the [`development`](https://github.com/KabelitzJ/sandbox/tree/development) branch.
+Sandbox (`libsbx`) is a game engine written from the ground up in **C++26**. It ships as a single static library plus three applications built on top of it: an in-game **runtime**, a full **editor**, and a **launcher** for picking and starting projects. Scripting is done in C# via a custom .NET host.
 
 ## Features
 
 **Rendering**
 
-- Vulkan-based Forward+ PBR shading pipeline
-- Image-Based Lighting (IBL) — compute-generated BRDF LUT, irradiance, and prefiltered environment maps
-- Cascaded Shadow Maps (4 cascades at varying resolutions)
-- Weighted Blended Order-Independent Transparency (WBOIT)
-- Skybox rendering with HDR cube maps
-- Post-processing chain: tonemapping, FXAA, bloom (WIP)
-- Render graph with automatic dependency resolution and pass ordering
-- GPU compute passes for skinning and particle simulation
+- Vulkan render graph with automatic pass ordering (depth pre-pass, opaque, transparent accumulate/resolve, shadows, bloom, tonemap)
+- Cascaded shadow maps
+- Skinned mesh rendering with GPU compute skinning
+- GPU particle simulation and rendering
+- IBL baking (BRDF LUT, irradiance, prefiltered environment maps)
+- Immediate-mode debug draw and editor grid overlay
+- ImGui-based editor UI, plus an in-house retained-mode canvas UI (SDF text, widgets, screen- and world-space canvases)
 
 **Engine**
 
-- Entity-Component-System architecture
-- Scene graph with YAML-based scene loading
-- Skeletal animation system with state machines and blend transitions
-- GPU-driven particle system with configurable emitters
-- C# scripting via .NET integration
-- Audio engine
-- Debug rendering and grid overlay
-- Profiling support (tracy integration)
+- Entity-Component-System core (`ecs`)
+- Scene graph with node/component model and YAML scene serialization
+- Asset pipeline: cooking, manifests, residency/streaming, prefabs
+- Physics: GJK/EPA collision, contact solver, and a Recast/Detour-style navmesh + crowd-agent system (`physics/nav`)
+- Terrain module with heightmap generation and chunking
+- C# scripting via a custom .NET (nethost) integration, with a source-generated interop layer
+- Reflection system for structs/enums, used by the inspector and serializer
+- Cross-platform input, windowing, and process handling (`platform`)
+- Tracy profiling integration
 
-**In progress:** SSAO, bloom, physics engine, networking, AI systems
+## Layout
 
-## Architecture
+```
+libsbx/     engine library (see module table below)
+runtime/    standalone player application
+editor/     full scene/asset editor application
+launcher/   project picker / launcher application
+dotnet/     C# side: Sbx.Managed (native interop), Sbx.Core (user-facing API), Sbx.Compiler
+shaders/    Slang shader sources
+tests/      GTest unit tests
+```
 
-The engine is split into independent modules, each prefixed with `libsbx-`:
+### Engine modules (`libsbx/`)
+
+All modules compile into one `libsbx` static (or shared, via `SBX_BUILD_SHARED`) library target.
 
 | Module | Purpose |
 |---|---|
-| `animations` | Skeletal animation, GPU skinning, state machines |
-| `assets` | Asset pipeline and management |
-| `audio` | Audio playback |
-| `bitmaps` | Image loading and manipulation |
-| `containers` | Custom container types |
-| `core` | Engine lifecycle, application base class, CLI, module system |
-| `devices` | Window management and input handling |
+| `assets` | Asset cooking, loading, manifests, residency, materials, meshes, prefabs, IBL baking |
+| `canvas` | Retained-mode UI: layout, draw lists, screen/world canvases |
+| `cli` | Command-line argument parsing |
+| `containers` | Custom containers: dense_map, octree, dynamic_tree, ring/stable/static vector |
+| `core` | Engine lifecycle, application base class, module system, project handling |
 | `ecs` | Entity-Component-System framework |
-| `gizmos` | Debug visualization |
-| `graphics` | Vulkan rendering, pipelines, render graph, compute passes |
-| `io` | File I/O and resource loading |
-| `math` | Vectors, matrices, transforms, noise, colors |
-| `memory` | Custom allocators, observer pointers |
-| `models` | Static mesh loading, materials, draw lists |
-| `particles` | GPU particle simulation and rendering |
-| `physics` | Physics simulation |
-| `post` | Post-processing filters (tonemap, FXAA, blur, SSAO, bloom) |
-| `scenes` | Scene graph, transforms, skybox, debug/grid rendering |
-| `scripting` | C# scripting via .NET |
-| `signals` | Event / signal system |
-| `sprites` | 2D sprite rendering |
-| `ui` | User interface rendering |
-| `units` | Type-safe unit system |
-| `utility` | Logging, timers, string IDs, general utilities |
+| `filesystem` | Virtual filesystem abstraction over disk/archive sources |
+| `graphics` | Vulkan device/pipeline/resource layer, render graph primitives, bindless resources |
+| `math` | Vectors, matrices, transforms, color, noise, UUIDs |
+| `memory` | Allocators, aligned storage, memory tracking |
+| `particles` | CPU-side particle spawning/simulation |
+| `physics` | Collision (GJK/EPA), contact solving, raycasting, navmesh + crowd navigation |
+| `platform` | Windowing, input, process spawning |
+| `reflection` | Struct/enum reflection used by the editor and serializer |
+| `render` | Compositor, render passes, shadow/skinning/particle rendering, ImGui backend, UI system |
+| `scenes` | Scene graph, node/component storage, YAML scene serialization |
+| `scripting` | C# hosting (.NET/nethost), managed object marshalling, script compiler |
+| `signals` | Event/signal/connection system |
+| `terrain` | Heightmap generation and terrain chunking |
+| `units` | Type-safe physical units (length, mass, time, velocity, ...) |
+| `utility` | Logging, hashing, compression, timers, general helpers |
+
+### Applications
+
+- **`runtime/`** — minimal executable that boots the engine and runs a cooked project.
+- **`editor/`** — ImGui-based editor: hierarchy, inspector, asset browser, animation graph, navigation baking, play-mode preview, prefab editing, and more (`editor/editor/panels/`).
+- **`launcher/`** — lightweight project selector that launches the editor or runtime for a chosen project.
 
 ## Getting Started
 
 ### Prerequisites
 
-- A **C++20** compatible compiler (MinGW via [MSYS2](https://www.msys2.org/) recommended on Windows)
-- [CMake](https://cmake.org/) 3.x+
-- [Conan](https://conan.io/) (C++ package manager)
+- A C++26-capable compiler (GCC or Clang on Linux; MSVC on Windows)
+- [CMake](https://cmake.org/) 3.25+
+- [Conan](https://conan.io/) 2.x
 - [Vulkan SDK](https://vulkan.lunarg.com/)
-- [.NET SDK](https://dotnet.microsoft.com/) (for C# scripting)
-
-### Clone
-
-```bash
-git clone -b development https://github.com/KabelitzJ/sandbox.git
-cd sandbox
-```
-
-### Install Dependencies
-
-```bash
-conan install . --profile=default --build=missing
-```
+- [Slang](https://github.com/shader-slang/slang) shader compiler
+- .NET SDK (net9.0) for the C# scripting side
 
 ### Build
 
 ```bash
-cmake . -B build/debug -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Debug
-cmake --build build/debug
+git clone git@github.com:KabelitzJ/sandbox.git
+cd sandbox
+
+conan install . --build=missing -s build_type=Debug
+cmake --preset x86_64-gcc-debug   # name is <arch>-<compiler>-<build_type>, from CMakeUserPresets.json
+cmake --build --preset x86_64-gcc-debug
 ```
 
-> Adjust the generator (`-G`) and build type to match your toolchain.
+Useful CMake options (all default to `ON` except where noted):
 
-### Run the Demo
+| Option | Purpose |
+|---|---|
+| `SBX_BUILD_RUNTIME` | Build the runtime executable |
+| `SBX_BUILD_EDITOR` | Build the editor executable |
+| `SBX_BUILD_LAUNCHER` | Build the launcher executable |
+| `SBX_BUILD_TESTS` | Build GTest unit tests |
+| `SBX_BUILD_SHARED` | Build `libsbx` as a shared library (default `OFF`) |
+| `SBX_ENABLE_PROFILING` | Enable Tracy profiling (default `ON` in Debug) |
 
-```bash
-./build/debug/bin/demo.exe
-```
+### Entry point
 
-## Usage Examples
-
-The project includes a full demo application in [`demo/demo/`](https://github.com/KabelitzJ/sandbox/tree/development/demo/demo) that showcases the engine's capabilities.
-
-### Creating an Application
-
-Derive from `sbx::core::application` to set up modules, load assets, and build your scene:
-
-```cpp
-// demo/demo/application.hpp
-
-#include <libsbx/core/core.hpp>
-#include <libsbx/devices/devices.hpp>
-#include <libsbx/graphics/graphics.hpp>
-#include <libsbx/scenes/scenes.hpp>
-#include <libsbx/animations/animations_module.hpp>
-#include <libsbx/particles/particle_emitter.hpp>
-
-namespace demo {
-
-class application : public sbx::core::application {
-
-public:
-
-  application();
-  ~application() override = default;
-
-  auto update() -> void override;
-  auto fixed_update() -> void override;
-  auto is_paused() const -> bool override;
-
-private:
-
-  auto _generate_brdf(const std::uint32_t size) -> void;
-  auto _generate_irradiance(const std::uint32_t size) -> void;
-  auto _generate_prefiltered(const std::uint32_t size) -> void;
-
-  bool _is_paused;
-  sbx::math::angle _rotation;
-
-  sbx::graphics::image2d_handle _brdf;
-  sbx::graphics::cube_image2d_handle _irradiance;
-  sbx::graphics::cube_image2d_handle _prefiltered;
-
-}; // class application
-
-} // namespace demo
-```
-
-The constructor sets up the full scene — loading meshes, textures, and materials; generating IBL maps via compute shaders; configuring skeletal animations with state machine transitions; spawning particle emitters; and instantiating C# scripts on scene nodes:
-
-```cpp
-application::application() {
-  // ...
-
-  // Set up the renderer
-  auto& graphics_module = sbx::core::engine::get_module<sbx::graphics::graphics_module>();
-
-  graphics_module.set_renderer<demo::renderer>();
-
-  // Load the scene from YAML
-  auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
-
-  auto& scene = scenes_module.load_scene("res://scenes/scene.yaml");
-
-  // Load PBR textures
-  assets.add_image("helmet_albedo", "res://textures/helmet/albedo.jpg", sbx::graphics::format::r8g8b8a8_srgb);
-  assets.add_image("helmet_normal", "res://textures/helmet/normal.jpg", sbx::graphics::format::r8g8b8a8_unorm);
-  assets.add_image("helmet_mrao", "res://textures/helmet/mrao2.jpg", sbx::graphics::format::r8g8b8a8_unorm);
-  assets.add_image("helmet_emissive", "res://textures/helmet/emissive.jpg", sbx::graphics::format::r8g8b8a8_srgb);
-
-  // Generate IBL maps on the GPU
-  _generate_brdf(512);
-  _generate_irradiance(64);
-  _generate_prefiltered(512);
-
-  // Configure a PBR material
-  auto& helmet_material = assets.add_material<sbx::models::material>("helmet");
-  helmet_material.albedo.image = assets.get_image("helmet_albedo");
-  helmet_material.normal.image = assets.get_image("helmet_normal");
-  helmet_material.mrao.image = assets.get_image("helmet_mrao");
-  helmet_material.emissive.image = assets.get_image("helmet_emissive");
-  helmet_material.emissive_strength = 16.0f;
-
-  // Set up skeletal animation with state transitions
-  auto& fox_animator = graph.add_component<sbx::animations::animator>(fox);
-  fox_animator.add_state({"Walk", assets.get_animation("Walk"), true, 0.5f});
-  fox_animator.add_state({"Survey", assets.get_animation("Survey"), true, 0.5f});
-  fox_animator.add_state({"Run", assets.get_animation("Run"), true, 0.5f});
-
-  fox_animator.add_transition({"Walk", "Run", 0.15f, [](const auto& a) {
-    if (auto v = a.float_parameter("speed"); v) return *v >= 2.0f;
-    return false;
-  }});
-
-  // Attach a particle emitter to the fox's tail bone
-  auto tail = animations_module.find_skeleton_node(fox, "b_Tail03_014");
-
-  auto tail_emitter = graph.create_child_node(tail, "TailEmitter");
-
-  auto& particles = graph.add_component<sbx::particles::particle_emitter>(tail_emitter);
-  particles.max_particles = 1000;
-  particles.emission_rate = 100.0f;
-  particles.initial_color = sbx::math::color{255u, 140u, 0u, 250u};
-  particles.end_color = sbx::math::color{255u, 69u, 0u, 0u};
-
-  // Create a skybox
-  auto camera_node = environment.camera();
-
-  graph.add_component<sbx::scenes::skybox>(camera_node, assets.get_cube_image("skybox"), _brdf, _irradiance, _prefiltered);
-
-  // Attach a C# script to the camera
-  auto& scripting_module = sbx::core::engine::get_module<sbx::scripting::scripting_module>();
-
-  scripting_module.instantiate(camera_anchor, "build/.../Demo.dll", "Demo.CameraController");
-
-  // ...
-}
-```
-
-### Setting Up the Renderer
-
-The renderer defines the full render graph — shadow passes, deferred G-buffer, transparency, resolve, and post-processing:
-
-```cpp
-renderer::renderer() {
-  // G-buffer attachments
-  auto depth = create_attachment("depth", attachment::type::depth);
-  auto albedo = create_attachment("albedo", attachment::type::image, ...);
-  auto position = create_attachment("position", attachment::type::image, ...);
-  auto normal = create_attachment("normal", attachment::type::image, ...);
-  auto material = create_attachment("material", attachment::type::image, ...);
-  auto emissive = create_attachment("emissive", attachment::type::image, ...);
-
-  // 4-cascade shadow maps
-  auto shadow0 = create_attachment("shadow0", ...);
-  // ...
-
-  // Compute passes
-  auto skinning_pass = create_pass([&](auto& ctx) { return ctx.compute_pass("skinning"); });
-  auto particles_pass = create_pass([&](auto& ctx) { return ctx.compute_pass("particles"); });
-
-  // Graphics passes with explicit dependencies
-  auto deferred_pass = create_pass([&](auto& ctx) {
-    auto pass = ctx.graphics_pass("deferred");
-    pass.depends_on(skinning_pass);
-    pass.writes(depth, albedo, position, normal, material, emissive, ...);
-    return pass;
-  });
-
-  // ... shadow passes, transparency pass, resolve pass ...
-
-  build_render_graph();
-
-  // Bind subrenderers to passes
-  add_subrenderer<static_mesh_material_subrenderer>(deferred_pass, ...);
-  add_subrenderer<skinned_mesh_material_subrenderer>(deferred_pass, ...);
-  add_subrenderer<particle_subrenderer>(transparency_pass, ...);
-  add_subrenderer<resolve_opaque_filter>(resolve_pass, ...);
-  add_subrenderer<skybox_subrenderer>(resolve_pass, ...);
-  add_subrenderer<tonemap_filter>(tonemap_pass, ...);
-  add_subrenderer<fxaa_filter>(fxaa_pass, ...);
-  add_subrenderer<editor_subrenderer>(editor_pass, ...);
-}
-```
-
-### Entry Point
-
-The engine is bootstrapped from a simple `main` that creates the engine instance and runs the application:
+Both the runtime and editor derive an application from `sbx::core::application` and boot it through `sbx::core::engine`:
 
 ```cpp
 #include <libsbx/core/core.hpp>
 #include <libsbx/core/engine.hpp>
-
-#include <demo/application.hpp>
 
 auto main(int argc, const char** argv) -> int {
   auto args = std::vector<std::string_view>{argv, argv + argc};
 
   try {
     auto engine = std::make_unique<sbx::core::engine>(args);
-
-    engine->run<demo::application>();
-  } catch(const std::exception& exception) {
-    sbx::utility::logger<"demo">::error("{}", exception.what());
-
-    return sbx::core::exit::failure; 
+    engine->run<my::application>();
+  } catch (const std::exception& exception) {
+    sbx::utility::logger<"app">::error("{}", exception.what());
+    return sbx::core::exit::failure;
   }
 
   return sbx::core::exit::success;
@@ -305,10 +141,8 @@ auto main(int argc, const char** argv) -> int {
 
 ## Contributing
 
-Contributions are welcome! To get involved:
-
 1. Fork the repository
-2. Create a feature branch off `development`
+2. Create a feature branch
 3. Make your changes
 4. Open a pull request
 
@@ -317,8 +151,6 @@ Found a bug or have a suggestion? [Open an issue](https://github.com/KabelitzJ/s
 ## License
 
 This project is licensed under the [MIT License](LICENSE).
-
-Feel free to use this project for your own purposes. If you do, send me a message — I'd love to see what you've built with it.
 
 ## Contact
 

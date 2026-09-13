@@ -44,6 +44,14 @@ public:
     return get_component<scenes::tag>();
   }
 
+  [[nodiscard]] auto layer() -> scenes::layer& {
+    return get_component<scenes::layer>();
+  }
+
+  [[nodiscard]] auto layer() const -> const scenes::layer& {
+    return get_component<scenes::layer>();
+  }
+
   template<typename Component, typename... Args>
   auto add_component(Args&&... args) -> Component& {
     return _registry->emplace<Component>(_entity, std::forward<Args>(args)...);

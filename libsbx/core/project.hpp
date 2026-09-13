@@ -3,6 +3,7 @@
 #ifndef LIBSBX_CORE_PROJECT_HPP_
 #define LIBSBX_CORE_PROJECT_HPP_
 
+#include <array>
 #include <cstdint>
 #include <filesystem>
 #include <optional>
@@ -11,6 +12,9 @@
 #include <utility>
 
 namespace sbx::core {
+
+/** @brief How many named layers a project has (0-31) — the same 32-bit budget a @ref sbx::scenes::layer_mask spends one bit per layer on. */
+inline constexpr auto layer_count = std::size_t{32u};
 
 /**
  * @brief A project defines where content and the cooked-asset cache live, plus project-wide
@@ -30,12 +34,18 @@ public:
   inline static constexpr auto file_name = std::string_view{"project.sbxproj"};
 
   /** @brief Bumped whenever the on-disk format changes; written by @ref save, checked by @ref load. */
-  inline static constexpr auto current_format_version = std::uint32_t{1u};
+  inline static constexpr auto current_format_version = std::uint32_t{2u}; // v2: added layers/layer_collision_matrix
 
-  project() = default;
+  project() {
+    _layers[0] = "Default";
+    _layer_collision_matrix.fill(0xFFFFFFFFu); // everything collides with everything until the user says otherwise
+  }
 
   explicit project(const std::filesystem::path& root, const std::string& name = "Untitled")
-  : _root{root}, _name{name} { }
+  : project{} {
+    _root = root;
+    _name = name;
+  }
 
   /** @brief Load a project from its `project.sbxproj` file. Throws if the file is missing, invalid, or from a newer format version than this engine understands. */
   [[nodiscard]] static auto load(const std::filesystem::path& file) -> project;
@@ -106,6 +116,38 @@ public:
     _startup_scene = std::move(relative);
   }
 
+  /** @brief The project's 32 named layers, index 0 ("Default") onward — an empty entry is an unnamed/unused layer. */
+  [[nodiscard]] auto layers() const noexcept -> const std::array<std::string, layer_count>& {
+    return _layers;
+  }
+
+  [[nodiscard]] auto layer_name(std::uint8_t index) const -> const std::string& {
+    return _layers.at(index);
+  }
+
+  auto set_layer_name(std::uint8_t index, std::string name) -> void {
+    _layers.at(index) = std::move(name);
+  }
+
+  /** @brief Whether layer @p a and layer @p b are allowed to physically collide at all — checked once per broadphase candidate pair (see physics_module::_generate_candidate_pairs). Always symmetric: only ever set through @ref set_layers_collide. */
+  [[nodiscard]] auto layers_collide(std::uint8_t a, std::uint8_t b) const -> bool {
+    return (_layer_collision_matrix.at(a) & (std::uint32_t{1u} << b)) != 0u;
+  }
+
+  /** @brief Sets whether layer @p a and layer @p b collide, keeping the matrix symmetric (both [a] bit b and [b] bit a are written). */
+  auto set_layers_collide(std::uint8_t a, std::uint8_t b, bool collide) -> void {
+    auto set_bit = [collide](std::uint32_t& row, std::uint8_t bit) {
+      if (collide) {
+        row |= (std::uint32_t{1u} << bit);
+      } else {
+        row &= ~(std::uint32_t{1u} << bit);
+      }
+    };
+
+    set_bit(_layer_collision_matrix.at(a), b);
+    set_bit(_layer_collision_matrix.at(b), a);
+  }
+
 private:
 
   std::filesystem::path _root{};
@@ -114,6 +156,9 @@ private:
   std::filesystem::path _library{".sbx/library"};
   std::filesystem::path _logs{"logs"};
   std::optional<std::filesystem::path> _startup_scene{};
+
+  std::array<std::string, layer_count> _layers{};
+  std::array<std::uint32_t, layer_count> _layer_collision_matrix{};
 
 }; // class project
 

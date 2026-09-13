@@ -67,6 +67,7 @@ struct script_runtime_error : public std::runtime_error {
   if (managed_type_full_name == "System.String") { return scenes::script_field_type::string; }
   if (managed_type_full_name == "Sbx.Core.Math.Vector3") { return scenes::script_field_type::vector3; }
   if (managed_type_full_name == "Sbx.Core.Node") { return scenes::script_field_type::node; }
+  if (managed_type_full_name == "Sbx.Core.Physics.LayerMask") { return scenes::script_field_type::layer_mask; }
   return std::nullopt;
 }
 

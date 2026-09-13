@@ -159,6 +159,13 @@ struct editor_state {
 
   std::optional<animation_graph_edit_request> open_animation_graph_request{};
 
+  /** @brief One-shot "open the Edit Layers... popup" request -- fired from the node Layer dropdown or a LayerMask field's popup, consumed by editor_ui_layer once it draws the popup. */
+  auto request_open_edit_layers_popup() -> void {
+    open_edit_layers_popup_request = true;
+  }
+
+  bool open_edit_layers_popup_request{false};
+
   // The scene-graph undo/redo history, shared across panels like current_selection. Prefer the
   // pass-throughs below over reaching into this directly.
   command_stack commands{};

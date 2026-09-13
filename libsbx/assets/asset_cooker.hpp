@@ -301,6 +301,18 @@ public:
    */
   [[nodiscard]] static auto inspect_mesh_source(const std::filesystem::path& source) -> std::optional<mesh_source_summary>;
 
+  /**
+   * @brief A loose (non-binary) `.gltf`'s external buffer (`.bin`) and image files, as paths
+   * relative to @p source's own parent directory -- empty for a `.glb` (self-contained, nothing
+   * external) or if @p source can't be parsed. Doesn't load any of their bytes (`fastgltf::Options::
+   * None`, unlike @ref resolve_mesh's `LoadExternalBuffers`) -- just the reference list. The
+   * editor's "Import from Disk..." needs this to copy those sibling files alongside the `.gltf`
+   * itself; without them, both @ref inspect_mesh_source and @ref resolve_mesh fail outright, since
+   * fastgltf can't resolve a buffer/image URI that was never copied to sit next to the imported
+   * file's new location.
+   */
+  [[nodiscard]] static auto gltf_external_file_references(const std::filesystem::path& source) -> std::vector<std::filesystem::path>;
+
   /** @brief Reads a skeleton cooked as a side effect of a mesh import. @p id comes from @ref cooked_mesh_data::skeleton / @ref derive_skeleton_uuid. Pure read, no staleness tracking of its own (it's only ever produced alongside its owning mesh). */
   [[nodiscard]] static auto resolve_skeleton(const math::uuid& id) -> std::optional<std::vector<skeleton::joint>>;
 

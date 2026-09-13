@@ -156,8 +156,11 @@ public:
    * only a new entry point into it. A non-convex mesh_collider candidate (resolve_convex returns
    * nullopt for one) is silently skipped -- particles don't yet collide against raw triangle meshes,
    * only convex shape_colliders and mesh_colliders authored with is_convex == true.
+   *
+   * @p mask filters candidates by their own node's scenes::layer -- a candidate whose layer isn't
+   * in @p mask is skipped before any shape math runs, same "everything" default as raycast().
    */
-  auto query_sphere_contacts(scenes::scene& scene, const math::vector3& center, std::float_t radius, std::vector<sphere_query_hit>& out_hits) -> void;
+  auto query_sphere_contacts(scenes::scene& scene, const math::vector3& center, std::float_t radius, std::vector<sphere_query_hit>& out_hits, const scenes::layer_mask& mask = scenes::layer_mask::everything()) -> void;
 
   /**
    * @brief The nearest collider (static or dynamic) @p ray hits within @p max_distance, or
@@ -166,8 +169,10 @@ public:
    * heightfield_collider (raycast_heightfield) or an ordinary convex primitive (resolve_convex +
    * raycast_convex_shape) -- see raycast.hpp. A non-convex mesh_collider candidate is silently
    * skipped, same accepted v1 gap query_sphere_contacts already has (no triangle-BVH raycast yet).
+   *
+   * @p mask filters candidates by their own node's scenes::layer, same as query_sphere_contacts.
    */
-  [[nodiscard]] auto raycast(scenes::scene& scene, const math::ray& ray, std::float_t max_distance) -> std::optional<raycast_hit>;
+  [[nodiscard]] auto raycast(scenes::scene& scene, const math::ray& ray, std::float_t max_distance, const scenes::layer_mask& mask = scenes::layer_mask::everything()) -> std::optional<raycast_hit>;
 
   /**
    * @brief Fires once per pair on the fixed_update() step a (solid) contact or (is_trigger)

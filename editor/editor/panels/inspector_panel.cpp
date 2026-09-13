@@ -35,6 +35,7 @@
 #include <editor/panels/inspector_script_section.hpp>
 
 #include <editor/widgets/vector_fields.hpp>
+#include <editor/widgets/layer_fields.hpp>
 
 namespace editor {
 
@@ -68,6 +69,16 @@ auto inspector_panel::_draw_name_field(editor_state& state, sbx::scenes::scene& 
   }
 
   ImGui::Text("UUID: %llu", static_cast<unsigned long long>(id.value()));
+}
+
+auto inspector_panel::_draw_layer_field(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node) -> void {
+  const auto before = node.layer();
+  auto index = before.index;
+
+  if (draw_layer_combo(state, "Layer", index)) {
+    node.layer().index = index;
+    state.push_command(target, std::make_unique<modify_component_command<sbx::scenes::layer>>(node.id(), before, node.layer(), "Change Layer"));
+  }
 }
 
 auto inspector_panel::_draw_transform_section(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node) -> void {
@@ -144,6 +155,7 @@ auto inspector_panel::_draw_node_properties(editor_state& state, sbx::scenes::sc
 
   if (draw_identity) {
     _draw_name_field(state, target, node);
+    _draw_layer_field(state, target, node);
     section_gap();
   }
 

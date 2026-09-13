@@ -105,7 +105,7 @@ namespace Sbx.Core
 
     internal static delegate* unmanaged<float*, void> Time_DeltaTime;
 
-    internal static delegate* unmanaged<Ray*, float, ulong*, Vector3*, Vector3*, float*, bool> Physics_Raycast;
+    internal static delegate* unmanaged<Ray*, float, uint, ulong*, Vector3*, Vector3*, float*, bool> Physics_Raycast;
 
     internal static delegate* unmanaged<float, float, float, float, float, float, float, float, float, int, bool> Nav_Bake;
     internal static delegate* unmanaged<bool> Nav_HasNavMesh;

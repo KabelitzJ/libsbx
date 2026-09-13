@@ -44,6 +44,11 @@ struct file_dialog_options {
 
   // save_file mode only -- seeds the filename field.
   std::string default_file_name{};
+
+  // Overrides the confirm button's label (default: "Open"/"Select"/"Save", by mode) -- e.g. the
+  // Asset Browser's "Import from Disk..." picker uses "Import" so the button reads right for
+  // what it actually does, without a caller having to double-click just to proceed.
+  std::string confirm_label{};
 }; // struct file_dialog_options
 
 /**

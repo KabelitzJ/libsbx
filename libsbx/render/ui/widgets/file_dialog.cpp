@@ -594,9 +594,10 @@ auto file_dialog::draw() -> void {
 
   ImGui::BeginDisabled(!_can_confirm());
 
-  const auto* confirm_label = _options.mode == file_dialog_mode::select_folder ? "Select" : _options.mode == file_dialog_mode::save_file ? "Save" : "Open";
+  const auto* default_label = _options.mode == file_dialog_mode::select_folder ? "Select" : _options.mode == file_dialog_mode::save_file ? "Save" : "Open";
+  const auto confirm_label = _options.confirm_label.empty() ? std::string{default_label} : _options.confirm_label;
 
-  if (ImGui::Button(confirm_label)) {
+  if (ImGui::Button(confirm_label.c_str())) {
     if (_options.mode == file_dialog_mode::save_file) {
       _try_confirm_save();
     } else {

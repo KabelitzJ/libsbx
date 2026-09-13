@@ -19,7 +19,11 @@ auto inspector_panel::_draw_prefab_instance_header(sbx::scenes::scene& target, s
 
   ImGui::SameLine();
 
-  if (ImGui::SmallButton(ICON_MDI_CONTENT_SAVE " Update Prefab")) {
+  // "##instance" -- distinct from _draw_prefab_edit's own "Update Prefab" button below: if this
+  // instance's own prefab asset is itself a nested instance of another prefab, _draw_prefab_edit
+  // draws _draw_node_properties (and thus this header) for its root too, and two same-labeled
+  // buttons with no ID suffix would otherwise collide in the same ID scope.
+  if (ImGui::SmallButton(ICON_MDI_CONTENT_SAVE " Update Prefab##instance")) {
     sbx::scenes::scene_serializer::update_prefab_from_node(target, node);
   }
 }
@@ -62,7 +66,7 @@ auto inspector_panel::_draw_prefab_edit(editor_state& state, const asset_selecti
   ImGui::TextColored(ImVec4{0.5f, 0.8f, 1.0f, 1.0f}, "%s %s", ICON_MDI_CUBE_SCAN, session.prefab->name().c_str());
   ImGui::TextDisabled("Editing the prefab asset directly -- no instance in the scene.");
 
-  if (ImGui::Button(ICON_MDI_CONTENT_SAVE " Update Prefab")) {
+  if (ImGui::Button(ICON_MDI_CONTENT_SAVE " Update Prefab##asset")) {
     if (auto root = session.scene.find(session.root_id); root.is_valid()) {
       auto snapshot = sbx::scenes::scene_serializer::serialize_subtree(session.scene, root);
       assets_module.update_prefab(session.prefab, snapshot);

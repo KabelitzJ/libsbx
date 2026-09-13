@@ -220,10 +220,11 @@ struct interop {
 
   /**
    * @brief Raycasts against the active scene's broadphase -- shape_collider/convex mesh_collider
-   * primitives and heightfield_collider terrain (see physics::physics_module::raycast). Returns
-   * false, leaving every out parameter untouched, when nothing was hit within max_distance.
+   * primitives and heightfield_collider terrain (see physics::physics_module::raycast). @p
+   * layer_mask is the raw bits of a Sbx.Core.Physics.LayerMask (0xFFFFFFFF = every layer).
+   * Returns false, leaving every out parameter untouched, when nothing was hit within max_distance.
    */
-  static auto physics_raycast(math::ray* ray, std::float_t max_distance, std::uint64_t* out_node_uuid, math::vector3* out_point, math::vector3* out_normal, std::float_t* out_distance) -> bool;
+  static auto physics_raycast(math::ray* ray, std::float_t max_distance, std::uint32_t layer_mask, std::uint64_t* out_node_uuid, math::vector3* out_point, math::vector3* out_normal, std::float_t* out_distance) -> bool;
 
   /** @brief Bakes the navmesh from the active scene's static geometry right now (physics::physics_module::bake_navmesh). Returns whether the bake produced any usable polygons. */
   static auto nav_bake(std::float_t agent_radius, std::float_t agent_height, std::float_t agent_max_slope, std::float_t agent_max_climb, std::float_t cell_size, std::float_t cell_height, std::float_t region_min_size, std::float_t edge_max_length, std::float_t edge_max_error, std::int32_t verts_per_poly) -> bool;

@@ -49,6 +49,18 @@ auto project::load(const std::filesystem::path& file) -> project {
     result._startup_scene = std::filesystem::path{node["startup_scene"].as<std::string>()};
   }
 
+  if (const auto layers_node = node["layers"]) {
+    for (auto index = std::size_t{0u}; index < layer_count && index < layers_node.size(); ++index) {
+      result._layers[index] = layers_node[index].as<std::string>();
+    }
+  }
+
+  if (const auto matrix_node = node["layer_collision_matrix"]) {
+    for (auto index = std::size_t{0u}; index < layer_count && index < matrix_node.size(); ++index) {
+      result._layer_collision_matrix[index] = matrix_node[index].as<std::uint32_t>();
+    }
+  }
+
   return result;
 }
 
@@ -102,6 +114,18 @@ auto project::save(const std::filesystem::path& file) const -> void {
   if (_startup_scene) {
     emitter << YAML::Key << "startup_scene" << YAML::Value << _startup_scene->generic_string();
   }
+
+  emitter << YAML::Key << "layers" << YAML::Value << YAML::BeginSeq;
+  for (const auto& layer_name : _layers) {
+    emitter << layer_name;
+  }
+  emitter << YAML::EndSeq;
+
+  emitter << YAML::Key << "layer_collision_matrix" << YAML::Value << YAML::BeginSeq;
+  for (const auto row : _layer_collision_matrix) {
+    emitter << row;
+  }
+  emitter << YAML::EndSeq;
 
   emitter << YAML::EndMap;
   emitter << YAML::EndMap;

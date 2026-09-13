@@ -1,32 +1,32 @@
-using System;
-
 namespace Sbx.Core.Physics
 {
 
-  public class LayerMask
+  /**
+   * A 32-bit set of layers, one bit per index -- matches the native scenes::layer_mask. A
+   * blittable struct (a single uint field) so it marshals to/from a scripted field exactly like
+   * Vector3 does, with no special-casing on the native side.
+   */
+  public struct LayerMask
   {
 
-    private uint value;
+    public uint Value;
 
-    LayerMask(uint value)
+    public LayerMask(uint value)
     {
-      this.value = value;
+      Value = value;
     }
 
-    public void Set(uint layer)
-    {
-      value |= layer;
-    }
+    public static LayerMask Everything => new LayerMask(0xFFFFFFFFu);
 
-    public void Clear(uint layer)
-    {
-      value &= ~layer;
-    }
+    public static LayerMask Nothing => new LayerMask(0u);
 
-    public bool Test(uint layer)
-    {
-      return (value & layer) != 0;
-    }
+    public static LayerMask FromLayer(int layer) => new LayerMask(1u << layer);
 
-  } // class LayerMask
+    public readonly bool Test(int layer) => (Value & (1u << layer)) != 0u;
+
+    public void Set(int layer) => Value |= (1u << layer);
+
+    public void Clear(int layer) => Value &= ~(1u << layer);
+
+  } // struct LayerMask
 } // namespace Sbx.Core.Physics

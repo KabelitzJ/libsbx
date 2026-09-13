@@ -115,6 +115,7 @@ auto scene::_create_node(const utility::hashed_string& name, const scenes::local
   _registry.emplace<relationship>(entity);
   _registry.emplace<scenes::id>(entity, id);
   _registry.emplace<scenes::tag>(entity, name);
+  _registry.emplace<scenes::layer>(entity);
 
   _entities_by_id.emplace(id, entity);
   _entities_by_name.emplace(name, entity);

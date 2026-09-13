@@ -188,6 +188,18 @@ auto write_node(YAML::Node& node_yaml, ecs::registry& registry, ecs::entity enti
     components.push_back(component);
   }
 
+  {
+    // A real trackable component (not a bare top-level key like tag/id/parent) so a prefab's
+    // layer propagates to its instances -- and can be per-instance overridden/reverted -- through
+    // the exact same mark_prefab_override/apply_component_key machinery every other component
+    // uses (see prefab_override.hpp's component_key<layer>).
+    auto component = YAML::Node{};
+    component["type"] = "layer";
+    component["index"] = static_cast<std::uint32_t>(registry.get<layer>(entity).index);
+
+    components.push_back(component);
+  }
+
   if (registry.all_of<mesh_renderer>(entity)) {
     const auto& renderer = registry.get<mesh_renderer>(entity);
 
@@ -665,6 +677,7 @@ auto write_node(YAML::Node& node_yaml, ecs::registry& registry, ecs::entity enti
           case script_field_type::string:  field_node["kind"] = "string"; field_node["value"] = field.string_value; break;
           case script_field_type::vector3: field_node["kind"] = "vector3"; field_node["value"] = field.vector3_value; break;
           case script_field_type::node:    field_node["kind"] = "node"; field_node["value"] = field.node_value.value(); break;
+          case script_field_type::layer_mask: field_node["kind"] = "layer_mask"; field_node["value"] = field.layer_mask_value; break;
         }
 
         fields.push_back(field_node);
@@ -859,7 +872,11 @@ auto read_node_components(node& target_node, const YAML::Node& node_yaml, assets
   for (const auto component : node_yaml["components"]) {
     const auto type = component["type"].as<std::string>();
 
-    if (type == "transform") {
+    if (type == "layer") {
+      // Older scene/prefab files have no "layer" entry -- the node keeps the default layer 0
+      // ("Default") scene::_create_node already gave it.
+      target_node.get_component<scenes::layer>().index = static_cast<std::uint8_t>(component["index"].as<std::uint32_t>());
+    } else if (type == "transform") {
       auto& transform = target_node.transform();
       transform.position = component["position"].as<math::vector3>();
       transform.rotation = component["rotation"].as<math::quaternion>();
@@ -1228,6 +1245,9 @@ auto read_node_components(node& target_node, const YAML::Node& node_yaml, assets
           } else if (kind == "node") {
             field.type = script_field_type::node;
             field.node_value = field_yaml["value"].as<math::uuid>();
+          } else if (kind == "layer_mask") {
+            field.type = script_field_type::layer_mask;
+            field.layer_mask_value = field_yaml["value"].as<std::uint32_t>();
           }
 
           entry.field_overrides.push_back(std::move(field));

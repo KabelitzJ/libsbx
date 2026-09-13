@@ -11,9 +11,16 @@ namespace Sbx.Core.Physics
     /**
      * Raycasts against the active scene's broadphase: shape_collider/convex mesh_collider
      * primitives and terrain (see the native physics_module::raycast). Returns false (hit left
-     * default) if nothing was hit within maxDistance.
+     * default) if nothing was hit within maxDistance. Hits every layer -- see the overload below
+     * to filter by layerMask.
      */
     public static bool Raycast(Ray ray, float maxDistance, out RaycastHit hit)
+    {
+      return Raycast(ray, maxDistance, out hit, LayerMask.Everything);
+    }
+
+    /** Same as the other Raycast overload, but only considers colliders on a layer included in layerMask. */
+    public static bool Raycast(Ray ray, float maxDistance, out RaycastHit hit, LayerMask layerMask)
     {
       unsafe
       {
@@ -22,7 +29,7 @@ namespace Sbx.Core.Physics
         Vector3 normal;
         float distance;
 
-        var didHit = InternalCalls.Physics_Raycast(&ray, maxDistance, &nodeUuid, &point, &normal, &distance);
+        var didHit = InternalCalls.Physics_Raycast(&ray, maxDistance, layerMask.Value, &nodeUuid, &point, &normal, &distance);
 
         hit = didHit ? new RaycastHit(new Node(nodeUuid), point, normal, distance) : default;
 

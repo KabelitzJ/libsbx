@@ -1494,7 +1494,7 @@ auto interop::time_delta_time(std::float_t* delta_time) -> void {
   *delta_time = core::engine::delta_time().value();
 }
 
-auto interop::physics_raycast(math::ray* ray, std::float_t max_distance, std::uint64_t* out_node_uuid, math::vector3* out_point, math::vector3* out_normal, std::float_t* out_distance) -> bool {
+auto interop::physics_raycast(math::ray* ray, std::float_t max_distance, std::uint32_t layer_mask, std::uint64_t* out_node_uuid, math::vector3* out_point, math::vector3* out_normal, std::float_t* out_distance) -> bool {
   if (!ray) {
     utility::logger<"scripting">::error("Attempting to call physics_raycast with a null ray");
 
@@ -1505,7 +1505,7 @@ auto interop::physics_raycast(math::ray* ray, std::float_t max_distance, std::ui
   auto& scene = scenes_module.active_scene();
   auto& physics_module = core::engine::get_module<physics::physics_module>();
 
-  const auto hit = physics_module.raycast(scene, *ray, max_distance);
+  const auto hit = physics_module.raycast(scene, *ray, max_distance, scenes::layer_mask{layer_mask});
 
   if (!hit) {
     return false;

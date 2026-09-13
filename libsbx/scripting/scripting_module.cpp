@@ -490,6 +490,7 @@ auto scripting_module::seed_missing_field_defaults(scenes::node& node, scenes::s
       case scenes::script_field_type::string:  default_value.string_value = scratch.get_field_value<std::string>(field_name); break;
       case scenes::script_field_type::vector3: default_value.vector3_value = scratch.get_field_value<math::vector3>(field_name); break;
       case scenes::script_field_type::node:    default_value.node_value = math::uuid::from_value(scratch.get_field_value<std::uint64_t>(field_name)); break;
+      case scenes::script_field_type::layer_mask: default_value.layer_mask_value = scratch.get_field_value<std::uint32_t>(field_name); break;
     }
 
     entry.field_overrides.push_back(std::move(default_value));
@@ -538,6 +539,8 @@ auto scripting_module::_apply_field_overrides(managed::object& instance, const s
       // (it's a managed reference) -- both directions cross as a raw uuid instead, via Node's own
       // INativeHandle implementation (see Sbx.Managed's SetFieldValue).
       case scenes::script_field_type::node:    instance.set_field_value(field.name, field.node_value.value()); break;
+      // A Sbx.Core.Physics.LayerMask field is a blittable struct (one uint) -- same direct path as vector3.
+      case scenes::script_field_type::layer_mask: instance.set_field_value(field.name, field.layer_mask_value); break;
     }
   }
 }

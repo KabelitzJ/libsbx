@@ -98,6 +98,9 @@ private:
 
   auto _draw_unsaved_changes_dialog() -> void;
 
+  /** @brief Opens (from _state.open_edit_layers_popup_request) and draws the project-wide "Edit Layers..." popup: the 32 layer names plus the Layer Collision Matrix among the currently-named ones. Every edit calls project.save() immediately -- no dirty-tracking, no separate Apply. */
+  auto _draw_edit_layers_popup() -> void;
+
   // Viewport panel's sampler for ImGui::Image()-sampling final_image — see
   // ui_module::texture_id(). Not a backend concern (that lives in ui_system), just how this one
   // image should be filtered.
@@ -107,6 +110,13 @@ private:
 
   editor_state _state{};
   std::vector<std::unique_ptr<editor_panel>> _panels{};
+
+  // Which layer indices _draw_edit_layers_popup shows a row for, in display order -- resynced from
+  // core::project::layers() whenever the popup (re)opens, then mutated only by that popup's own Add
+  // (appended -- always at the bottom) and the row's own "x" (erased). Deliberately NOT recomputed
+  // from project state every frame: renaming a layer to a transient empty string while retyping
+  // must not make its own row disappear mid-edit.
+  std::vector<std::uint8_t> _edit_layer_rows{};
 
   // Non-owning -- _panels owns it. Kept separately so the View menu can toggle its is_open flag
   // without a dynamic_cast over every registered panel.

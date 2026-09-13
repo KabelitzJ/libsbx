@@ -109,6 +109,41 @@ struct basic_tag final : utility::basic_hashed_string<Char> {
 
 using tag = basic_tag<char>;
 
+/**
+ * @brief Which of the project's 32 named layers (see core::project::layers) a node belongs to.
+ * Always present -- every node gets one at creation (see scene::_create_node), defaulting to
+ * layer 0 ("Default"), the same way every node always has a tag/id.
+ */
+struct layer {
+  std::uint8_t index{0u};
+}; // struct layer
+
+/**
+ * @brief A 32-bit set of layers, one bit per index -- used to filter physics queries
+ * (physics_module::raycast/query_sphere_contacts) and as an inspector/scripting-editable field
+ * type. Deliberately not on core::project (which must stay free of a scenes dependency) --
+ * project's own layer_collision_matrix works on raw std::uint32_t rows instead.
+ */
+struct layer_mask {
+  std::uint32_t bits{0xFFFFFFFFu}; // default: everything
+
+  [[nodiscard]] static auto none() noexcept -> layer_mask { return layer_mask{0u}; }
+  [[nodiscard]] static auto everything() noexcept -> layer_mask { return layer_mask{0xFFFFFFFFu}; }
+  [[nodiscard]] static auto only(std::uint8_t layer_index) noexcept -> layer_mask { return layer_mask{std::uint32_t{1u} << layer_index}; }
+
+  [[nodiscard]] auto test(std::uint8_t layer_index) const noexcept -> bool {
+    return (bits & (std::uint32_t{1u} << layer_index)) != 0u;
+  }
+
+  auto set(std::uint8_t layer_index) noexcept -> void {
+    bits |= (std::uint32_t{1u} << layer_index);
+  }
+
+  auto clear(std::uint8_t layer_index) noexcept -> void {
+    bits &= ~(std::uint32_t{1u} << layer_index);
+  }
+}; // struct layer_mask
+
 struct camera {
   std::float_t fov_degrees{60.0f};
   std::float_t near_plane{0.1f};
@@ -342,7 +377,8 @@ enum class script_field_type : std::uint8_t {
   boolean,
   string,
   vector3,
-  node // a Sbx.Core.Node-typed field, stored as the referenced node's own scenes::id uuid (nil = unassigned)
+  node, // a Sbx.Core.Node-typed field, stored as the referenced node's own scenes::id uuid (nil = unassigned)
+  layer_mask // a Sbx.Core.Physics.LayerMask-typed field -- blittable (one uint), so it round-trips through get/set_field_value directly, same as vector3
 }; // enum class script_field_type
 
 struct script_field_override {
@@ -354,6 +390,7 @@ struct script_field_override {
   std::string string_value{};
   math::vector3 vector3_value{0.0f, 0.0f, 0.0f};
   math::uuid node_value{math::uuid::nil()};
+  std::uint32_t layer_mask_value{0xFFFFFFFFu};
 }; // struct script_field_override
 
 /**

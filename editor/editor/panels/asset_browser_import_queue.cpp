@@ -74,6 +74,22 @@ auto asset_browser_panel::_import_asset_file(editor_state& state, const std::fil
   auto ec = std::error_code{};
   if (!std::filesystem::equivalent(source, destination, ec)) {
     std::filesystem::copy_file(source, destination, std::filesystem::copy_options::overwrite_existing);
+
+    // A loose (non-binary) .gltf references its .bin buffer and its image textures by relative
+    // path -- copying only the picked file leaves those missing at the new location, and both
+    // inspect_mesh_source and the actual cook fail outright without them (fastgltf can't resolve
+    // the reference). Bring every referenced sibling file along too.
+    if (destination.extension() == ".gltf") {
+      for (const auto& reference : sbx::assets::asset_cooker::gltf_external_file_references(source)) {
+        const auto reference_source = source.parent_path() / reference;
+        const auto reference_destination = destination.parent_path() / reference;
+
+        if (std::filesystem::exists(reference_source)) {
+          std::filesystem::create_directories(reference_destination.parent_path());
+          std::filesystem::copy_file(reference_source, reference_destination, std::filesystem::copy_options::overwrite_existing);
+        }
+      }
+    }
   }
 
   const auto relative_path = std::filesystem::relative(destination, project.assets_directory());

@@ -157,6 +157,7 @@ auto asset_browser_panel::_draw_create_menu(editor_state& state, const std::file
       .start_dir = project.assets_directory() / target_directory,
       .extensions = importable_extensions(),
       .shortcuts = {{.label = "Assets", .path = project.assets_directory()}},
+      .confirm_label = "Import",
     });
   }
 

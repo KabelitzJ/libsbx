@@ -26,6 +26,7 @@
 #include <editor/commands/component_commands.hpp>
 
 #include <editor/widgets/vector_fields.hpp>
+#include <editor/widgets/layer_fields.hpp>
 
 namespace editor {
 
@@ -247,6 +248,27 @@ auto draw_script_field_inspector(editor_state& state, sbx::scenes::scene& target
           auto& slot = ensure_override_slot();
           slot.type = sbx::scenes::script_field_type::vector3;
           slot.vector3_value = value;
+        }
+      }
+
+      commit_after();
+    } else if (field_type_name == "Sbx.Core.Physics.LayerMask") {
+      // A blittable struct (one uint) -- same direct get/set_field_value path as Vector3 above,
+      // no reference-type special-casing needed (see components.hpp's script_field_type::layer_mask).
+      auto mask = sbx::scenes::layer_mask{live_instance ? live_instance->get_field_value<std::uint32_t>(field_name)
+                                                         : override_slot ? override_slot->layer_mask_value : 0xFFFFFFFFu};
+
+      const auto changed = draw_layer_mask_field(state, display_name.c_str(), mask);
+
+      capture_before();
+
+      if (changed) {
+        if (live_instance) {
+          live_instance->set_field_value(field_name, mask.bits);
+        } else {
+          auto& slot = ensure_override_slot();
+          slot.type = sbx::scenes::script_field_type::layer_mask;
+          slot.layer_mask_value = mask.bits;
         }
       }
 

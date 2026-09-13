@@ -67,12 +67,18 @@ private:
   /** @brief Keeps only the ids in @p ids whose parent isn't itself also in @p ids — moving/deleting an ancestor already carries its selected descendants along, so they'd otherwise be handled twice. */
   [[nodiscard]] auto _filter_to_selection_roots(sbx::scenes::scene& scene, const std::vector<sbx::math::uuid>& ids) const -> std::vector<sbx::math::uuid>;
 
+  /** @brief Applies _pending_reparent (if any), as one reparent_node_command or, for a multi-drag, one composite_command batching a reparent_node_command per dragged root -- see _try_reparent's doc comment for why this can't happen mid-traversal. No-op if nothing is pending. */
+  auto _apply_pending_reparent(editor_state& state, sbx::scenes::scene& scene) -> void;
+
   auto _begin_rename(const sbx::scenes::node& node) -> void;
 
   auto _commit_rename(editor_state& state, sbx::scenes::scene& scene, sbx::scenes::node& node) -> void;
 
   /** @brief "Apply to Prefab"/"Revert to Prefab" submenus, one entry per component node's own overrides (see scene_serializer::prefab_overrides_of), plus Apply All/Revert All. No-op (draws nothing) if node isn't part of a prefab instance or has no overrides. */
   auto _draw_prefab_override_menu(sbx::scenes::scene& scene, const sbx::scenes::node& node) -> void;
+
+  /** @brief "Add Node" + the 3D Object submenu, shared by the empty-space InvisibleButton's context menu and the window background's context menu -- the two places a click lands on nothing in particular. */
+  auto _draw_empty_space_context_menu(editor_state& state, sbx::scenes::scene& scene) -> void;
 
   sbx::math::uuid _pending_delete_id{sbx::math::uuid::nil()};
   std::vector<sbx::math::uuid> _pending_delete_ids{}; // multi-select delete; _pending_delete_id above still handles the single-node case unchanged

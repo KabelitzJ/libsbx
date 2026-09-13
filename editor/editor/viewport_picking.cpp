@@ -48,6 +48,29 @@ auto ray_from_viewport_position(const sbx::math::matrix4x4& camera_world_matrix,
 }
 
 
+auto project_to_viewport_position(const sbx::math::matrix4x4& view_projection, const sbx::math::vector3& world_position, const sbx::math::vector2u& viewport_size) -> viewport_projection {
+  const auto clip = view_projection * sbx::math::vector4{world_position, 1.0f};
+
+  if (clip.w() <= 0.0f) {
+    return viewport_projection{};
+  }
+
+  const auto ndc_x = clip.x() / clip.w();
+  const auto ndc_y = clip.y() / clip.w();
+
+  if (ndc_x < -1.0f || ndc_x > 1.0f || ndc_y < -1.0f || ndc_y > 1.0f) {
+    return viewport_projection{};
+  }
+
+  return viewport_projection{
+    true,
+    sbx::math::vector2{
+      (ndc_x + 1.0f) * 0.5f * static_cast<std::float_t>(viewport_size.x()),
+      (ndc_y + 1.0f) * 0.5f * static_cast<std::float_t>(viewport_size.y())
+    }
+  };
+}
+
 auto pick_node_at_viewport_position(editor_state& state, const sbx::math::vector2& position, const sbx::math::vector2u& viewport_size) -> void {
   auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
   auto& scene = scenes_module.active_scene();

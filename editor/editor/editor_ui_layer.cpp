@@ -2,9 +2,6 @@
 // Copyright (c) 2026 Jonas Kabelitz
 #include <editor/editor_ui_layer.hpp>
 
-#include <array>
-#include <cstring>
-#include <fstream>
 #include <memory>
 #include <string>
 
@@ -24,25 +21,20 @@
 #include <editor/panels/animation_graph_panel.hpp>
 #include <editor/panels/navigation_panel.hpp>
 
-#include <editor/viewport_gizmo.hpp>
-#include <editor/viewport_picking.hpp>
+#include <editor/viewport_window.hpp>
 
 #include <editor/editor_module.hpp>
 
 #include <editor/commands/scene_commands.hpp>
 
 #include <libsbx/core/engine.hpp>
-#include <libsbx/core/project.hpp>
 
 #include <libsbx/scenes/scene.hpp>
-#include <libsbx/scenes/scene_serializer.hpp>
 #include <libsbx/scenes/scenes_module.hpp>
 
 #include <libsbx/scripting/scripting_module.hpp>
 
 #include <libsbx/physics/physics_module.hpp>
-
-#include <libsbx/graphics/graphics_module.hpp>
 
 #include <libsbx/render/scene_renderer_module.hpp>
 #include <libsbx/render/ui/ui_module.hpp>
@@ -87,62 +79,7 @@ auto editor_ui_layer::build() -> void {
 
   _draw_dockspace();
 
-  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{0.0f, 0.0f});
-  ImGui::Begin(viewport_window_name, nullptr, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
-  // ImGui::PopStyleVar();
-
-  _viewport_is_hovered = ImGui::IsWindowHovered();
-
-  auto available = ImGui::GetContentRegionAvail();
-
-  auto width = static_cast<std::uint32_t>(available.x > 0.0f ? available.x : 1.0f);
-  auto height = static_cast<std::uint32_t>(available.y > 0.0f ? available.y : 1.0f);
-
-  auto& scene_renderer_module = sbx::core::engine::get_module<sbx::render::scene_renderer_module>();
-  auto& ui_module = sbx::core::engine::get_module<sbx::render::ui_module>();
-
-  const auto final_image = scene_renderer_module.final_image();
-
-  if (final_image.is_valid() && available.x > 0.0f && available.y > 0.0f) {
-    scene_renderer_module.set_viewport_extent(sbx::math::vector2u{width, height});
-
-    auto& graphics_module = sbx::core::engine::get_module<sbx::graphics::graphics_module>();
-    auto& registry = graphics_module.resource_registry();
-
-    const auto texture_id = ui_module.texture_id(registry.get<sbx::graphics::image>(final_image).view(), _sampler);
-
-    ImGui::Image(texture_id, available);
-
-    const auto image_clicked = ImGui::IsItemClicked(ImGuiMouseButton_Left);
-    const auto image_origin = ImGui::GetItemRectMin();
-
-    scene_renderer_module.set_viewport_offset(sbx::math::vector2{image_origin.x, image_origin.y});
-
-    auto& editor_module = sbx::core::engine::get_module<editor::editor_module>();
-    const auto is_editing = editor_module.play_state() == editor::play_state::edit;
-
-    auto gizmo_active = false;
-    auto toolbar_active = false;
-    auto view_gizmo_active = false;
-    auto icons_active = false;
-
-    if (is_editing) {
-      gizmo_active = draw_viewport_gizmo(_state, image_origin, available);
-      toolbar_active = draw_gizmo_toolbar(_state, image_origin);
-      view_gizmo_active = draw_view_gizmo(image_origin, available);
-      icons_active = draw_node_icons(_state, image_origin, available, gizmo_active);
-      draw_camera_frustum_gizmo(_state, available);
-    }
-
-    if (is_editing && image_clicked && !gizmo_active && !toolbar_active && !view_gizmo_active && !icons_active) {
-      const auto mouse_position = ImGui::GetMousePos();
-
-      pick_node_at_viewport_position(_state, sbx::math::vector2{mouse_position.x - image_origin.x, mouse_position.y - image_origin.y}, sbx::math::vector2u{width, height});
-    }
-  }
-
-  ImGui::End();
-  ImGui::PopStyleVar();
+  _viewport_is_hovered = draw_viewport_window(_state, _sampler);
 
   ImGui::Begin(stats_window_name);
   ImGui::Text("%.1f FPS (%.3f ms)", static_cast<std::double_t>(ImGui::GetIO().Framerate), 1000.0 / static_cast<std::double_t>(ImGui::GetIO().Framerate));
@@ -285,8 +222,7 @@ auto editor_ui_layer::_draw_dockspace() -> void {
 
       if (ImGui::MenuItem(ICON_MDI_CONTENT_SAVE " Save")) {
         if (_scene_path.empty()) {
-          std::strncpy(_save_as_buffer.data(), "scenes/new_scene.yaml", _save_as_buffer.size() - 1u);
-          _save_as_buffer[_save_as_buffer.size() - 1u] = '\0';
+          _save_as_path = "scenes/new_scene.yaml";
           _show_save_as_dialog = true;
         } else {
           _save_scene(_scene_path);
@@ -294,9 +230,7 @@ auto editor_ui_layer::_draw_dockspace() -> void {
       }
 
       if (ImGui::MenuItem(ICON_MDI_CONTENT_SAVE_EDIT " Save As...")) {
-        const auto& seed = _scene_path.empty() ? std::string{"scenes/new_scene.yaml"} : _scene_path.string();
-        std::strncpy(_save_as_buffer.data(), seed.c_str(), _save_as_buffer.size() - 1u);
-        _save_as_buffer[_save_as_buffer.size() - 1u] = '\0';
+        _save_as_path = _scene_path.empty() ? std::string{"scenes/new_scene.yaml"} : _scene_path.string();
         _show_save_as_dialog = true;
       }
 
@@ -463,117 +397,6 @@ auto editor_ui_layer::_draw_toolbar() -> void {
   ImGui::EndChild();
 
   ImGui::PopStyleVar(2);
-}
-
-auto editor_ui_layer::request_quit() -> void {
-  if (_is_scene_dirty()) {
-    _show_unsaved_changes_dialog = true;
-  } else {
-    sbx::core::engine::quit();
-  }
-}
-
-auto editor_ui_layer::_save_scene(const std::filesystem::path& path) -> void {
-  auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
-
-  sbx::scenes::scene_serializer::save(scenes_module.active_scene(), path);
-
-  _scene_path = path;
-}
-
-auto editor_ui_layer::_is_scene_dirty() -> bool {
-  if (_scene_path.empty()) {
-    return true; // never saved — anything at all counts as unsaved
-  }
-
-  auto& project = sbx::core::engine::project();
-  auto file = std::ifstream{project.assets_directory() / _scene_path, std::ios::binary};
-
-  if (!file) {
-    return true; // no file at that path (yet)
-  }
-
-  const auto on_disk = std::string{std::istreambuf_iterator<char>{file}, std::istreambuf_iterator<char>{}};
-
-  auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
-
-  return on_disk != sbx::scenes::scene_serializer::serialize(scenes_module.active_scene());
-}
-
-auto editor_ui_layer::_draw_save_as_dialog() -> void {
-  if (_show_save_as_dialog) {
-    ImGui::OpenPopup("Save Scene As");
-    _show_save_as_dialog = false;
-  }
-
-  if (ImGui::BeginPopupModal("Save Scene As", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
-    ImGui::TextDisabled("Relative to the project's assets directory.");
-    ImGui::InputText("##save_as_path", _save_as_buffer.data(), _save_as_buffer.size());
-
-    if (ImGui::Button(ICON_MDI_CONTENT_SAVE " Save")) {
-      if (_save_as_buffer[0] != '\0') {
-        _save_scene(std::filesystem::path{_save_as_buffer.data()});
-
-        if (_quit_after_save_as) {
-          _quit_after_save_as = false;
-          sbx::core::engine::quit();
-        }
-
-        ImGui::CloseCurrentPopup();
-      }
-    }
-
-    ImGui::SameLine();
-
-    if (ImGui::Button("Cancel")) {
-      ImGui::CloseCurrentPopup();
-    }
-
-    ImGui::EndPopup();
-  }
-}
-
-auto editor_ui_layer::_draw_unsaved_changes_dialog() -> void {
-  if (_show_unsaved_changes_dialog) {
-    ImGui::OpenPopup("Unsaved Changes");
-    _show_unsaved_changes_dialog = false;
-  }
-
-  if (ImGui::BeginPopupModal("Unsaved Changes", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
-    ImGui::Text(ICON_MDI_CONTENT_SAVE_ALERT " The current scene has unsaved changes.");
-
-    if (ImGui::Button(ICON_MDI_CONTENT_SAVE " Save")) {
-      if (_scene_path.empty()) {
-        std::strncpy(_save_as_buffer.data(), "scenes/new_scene.yaml", _save_as_buffer.size() - 1u);
-        _save_as_buffer[_save_as_buffer.size() - 1u] = '\0';
-        _show_save_as_dialog = true;
-        _quit_after_save_as = true;
-      } else {
-        _save_scene(_scene_path);
-        sbx::core::engine::quit();
-      }
-
-      _show_unsaved_changes_dialog = false;
-      ImGui::CloseCurrentPopup();
-    }
-
-    ImGui::SameLine();
-
-    if (ImGui::Button("Don't Save")) {
-      _show_unsaved_changes_dialog = false;
-      ImGui::CloseCurrentPopup();
-      sbx::core::engine::quit();
-    }
-
-    ImGui::SameLine();
-
-    if (ImGui::Button("Cancel")) {
-      _show_unsaved_changes_dialog = false;
-      ImGui::CloseCurrentPopup();
-    }
-
-    ImGui::EndPopup();
-  }
 }
 
 } // namespace editor

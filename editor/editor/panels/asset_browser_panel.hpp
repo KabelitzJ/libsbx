@@ -7,7 +7,6 @@
 #include <cmath>
 #include <filesystem>
 #include <optional>
-#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -17,17 +16,9 @@
 #include <libsbx/render/ui/fonts/material_design_icons.hpp>
 
 #include <editor/panels/editor_panel.hpp>
+#include <editor/panels/asset_metadata.hpp>
 
 namespace editor {
-
-/** @brief One row cached by the Asset Browser for the currently browsed directory. */
-struct asset_browser_entry {
-  std::filesystem::path path{}; // project-relative
-  bool is_directory{false};
-  asset_kind kind{asset_kind::unknown};
-  bool is_importable{false};
-  sbx::math::uuid id{sbx::math::uuid::nil()}; // resolved lazily, on click
-}; // struct asset_browser_entry
 
 /**
  * @brief Draws the "Asset Browser" panel: a two-pane, file-explorer-style view of the active
@@ -69,9 +60,6 @@ private:
   /** @brief Draws the shared "Create" menu items (New Material/Particle Effect/Animation Graph/Script/Folder, Import from Disk..., Reimport All in This Folder) against @p target_directory (project-relative) — shared by the toolbar dropdown, the empty-space context menu, and every per-entry "Create" submenu, so there's exactly one place that knows how to create each asset kind. */
   auto _draw_create_menu(editor_state& state, const std::filesystem::path& target_directory) -> void;
 
-  /** @brief Finds a filename not already present in @p absolute_directory: "stem.ext", then "stem 1.ext", "stem 2.ext", ... . @p extension may be empty (folders). */
-  [[nodiscard]] auto _unique_name(const std::filesystem::path& absolute_directory, std::string_view stem, std::string_view extension) const -> std::string;
-
   auto _create_material(editor_state& state, const std::filesystem::path& target_directory) -> void;
   auto _create_particle_effect(editor_state& state, const std::filesystem::path& target_directory) -> void;
   auto _create_animation_graph(editor_state& state, const std::filesystem::path& target_directory) -> void;
@@ -93,6 +81,18 @@ private:
 
   /** @brief Validates and performs a drag-and-drop (or drop-target) move of @p source_relative into @p destination_directory_relative -- refuses a no-op move, a name clash at the destination, and dropping a folder onto itself or one of its own descendants. */
   auto _try_move(editor_state& state, const std::filesystem::path& source_relative, const std::filesystem::path& destination_directory_relative) -> void;
+
+  /** @brief The tile grid pane: search-filtered, clipped by row, drawn into whatever child window the caller already opened. */
+  auto _draw_asset_grid(editor_state& state) -> void;
+
+  /** @brief Wraps the BeginDragDropTarget/AcceptDragDropPayload(asset_move_drag_payload_type)/EndDragDropTarget boilerplate shared by every move-drop target (breadcrumbs, tree nodes, grid folder tiles) -- must be called right after the widget that should act as the target. */
+  auto _draw_move_drop_target(editor_state& state, const std::filesystem::path& destination_directory_relative) -> void;
+
+  /** @brief The Create/Rename/Duplicate/Delete context menu shared by a tree node and a grid tile -- an "Instantiate in Scene" item is prepended for a prefab entry. Must be called from inside an already-open ImGui::BeginPopupContextItem() block. */
+  auto _draw_entry_context_menu(editor_state& state, const asset_browser_entry& entry) -> void;
+
+  /** @brief The import-mesh, import-conflict, and delete-confirmation modals -- each opens itself from its own _show_*_dialog flag, set elsewhere. */
+  auto _draw_import_and_delete_dialogs(editor_state& state) -> void;
 
   std::filesystem::path _current_directory{};
   std::vector<asset_browser_entry> _cached_entries{};

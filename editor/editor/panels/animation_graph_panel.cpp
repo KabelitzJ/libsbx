@@ -4,7 +4,6 @@
 
 #include <algorithm>
 #include <array>
-#include <cstring>
 #include <optional>
 #include <string>
 #include <unordered_set>
@@ -21,6 +20,9 @@
 #include <libsbx/render/ui/fonts/material_design_icons.hpp>
 #include <libsbx/render/ui/widgets/animation_parameter_widgets.hpp>
 #include <libsbx/render/ui/widgets/asset_picker.hpp>
+
+#include <editor/widgets/asset_path.hpp>
+#include <editor/widgets/text_field.hpp>
 
 namespace editor {
 
@@ -106,38 +108,6 @@ auto transition_index_from_link(ax::NodeEditor::LinkId id) -> std::optional<std:
   }
 
   return raw - link_band - 1u;
-}
-
-// Same idea as inspector_panel.cpp's relative_asset_path, kept local here rather than shared --
-// this file's only use of it is the preview-mesh picker below.
-auto relative_mesh_path(sbx::assets::assets_module& assets_module, const sbx::math::uuid& id) -> std::filesystem::path {
-  const auto path = assets_module.path_of(id);
-
-  if (path.empty()) {
-    return {};
-  }
-
-  auto& project = sbx::core::engine::project();
-  const auto relative = std::filesystem::relative(path, project.assets_directory());
-
-  if (relative.empty() || relative.begin()->string() == "..") {
-    return {};
-  }
-
-  return relative;
-}
-
-auto sync_text_field(const char* label, std::string& value) -> bool {
-  auto buffer = std::array<char, 128u>{};
-  std::strncpy(buffer.data(), value.c_str(), buffer.size() - 1u);
-  buffer[buffer.size() - 1u] = '\0';
-
-  if (ImGui::InputText(label, buffer.data(), buffer.size())) {
-    value = buffer.data();
-    return true;
-  }
-
-  return false;
 }
 
 animation_graph_panel::animation_graph_panel() {
@@ -256,7 +226,7 @@ auto animation_graph_panel::_draw_toolbar() -> void {
 
   // Editor-only, not part of the asset -- lets Clip Name (below) list real clip names instead of
   // being free text. Seeded from whatever mesh was in scope when this editor was opened.
-  const auto current = _preview_mesh.is_valid() ? sbx::render::widgets::asset_picker_item{_preview_mesh->id(), relative_mesh_path(assets_module, _preview_mesh->id())} : sbx::render::widgets::asset_picker_item{};
+  const auto current = _preview_mesh.is_valid() ? sbx::render::widgets::asset_picker_item{_preview_mesh->id(), widgets::relative_asset_path(assets_module, _preview_mesh->id())} : sbx::render::widgets::asset_picker_item{};
 
   const auto options = sbx::render::widgets::asset_picker_options{
     .kind = sbx::render::widgets::asset_picker_kind::mesh,
@@ -288,7 +258,7 @@ auto animation_graph_panel::_draw_parameters() -> void {
     auto& parameter = _edit.parameters[index];
 
     ImGui::SetNextItemWidth(140.0f);
-    if (sync_text_field("##name", parameter.name)) {
+    if (widgets::draw_text_field("##name", parameter.name)) {
       _apply_live();
     }
 
@@ -616,7 +586,7 @@ auto animation_graph_panel::_draw_selection_inspector() -> void {
 
     ImGui::SeparatorText("State");
 
-    if (sync_text_field("Name", selected_state.name)) {
+    if (widgets::draw_text_field("Name", selected_state.name)) {
       _apply_live();
     }
 
@@ -643,7 +613,7 @@ auto animation_graph_panel::_draw_selection_inspector() -> void {
         ImGui::EndCombo();
       }
     } else {
-      if (sync_text_field("Clip Name", selected_state.clip_name)) {
+      if (widgets::draw_text_field("Clip Name", selected_state.clip_name)) {
         _apply_live();
       }
 

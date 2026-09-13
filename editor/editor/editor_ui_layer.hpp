@@ -3,10 +3,10 @@
 #ifndef EDITOR_EDITOR_UI_LAYER_HPP_
 #define EDITOR_EDITOR_UI_LAYER_HPP_
 
-#include <array>
 #include <cstdint>
 #include <filesystem>
 #include <memory>
+#include <string>
 #include <string_view>
 #include <utility>
 #include <vector>
@@ -113,7 +113,7 @@ private:
   std::filesystem::path _scene_path{};
 
   bool _show_save_as_dialog{false};
-  std::array<char, 256u> _save_as_buffer{};
+  std::string _save_as_path{};
 
   bool _show_unsaved_changes_dialog{false};
 

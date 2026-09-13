@@ -4,8 +4,6 @@
 
 #include <algorithm>
 #include <cstdint>
-#include <cstring>
-#include <filesystem>
 #include <limits>
 #include <memory>
 #include <optional>
@@ -19,10 +17,8 @@
 #include <libsbx/reflection/enum.hpp>
 
 #include <libsbx/render/ui/fonts/material_design_icons.hpp>
-#include <libsbx/render/ui/widgets/asset_tile.hpp>
 
 #include <libsbx/core/engine.hpp>
-#include <libsbx/core/project.hpp>
 
 #include <libsbx/scenes/components.hpp>
 #include <libsbx/scenes/node.hpp>
@@ -37,14 +33,18 @@
 #include <editor/commands/composite_command.hpp>
 #include <editor/commands/scene_commands.hpp>
 
+#include <editor/panels/hierarchy_prefab_menu.hpp>
+
+#include <editor/widgets/inline_rename.hpp>
+
 namespace editor {
 
 // node_drag_drop_payload_type lives in editor_state.hpp now -- shared with the Inspector's
 // Node-typed script field slot.
 
 enum class drop_zone {
-  before, 
-  into, 
+  before,
+  into,
   after
 }; // enum class drop_zone
 
@@ -58,46 +58,12 @@ auto icon_for(const sbx::scenes::node& node) -> const char* {
   return ICON_MDI_AXIS_ARROW;
 }
 
-// A dedicated Prefabs/ folder next to the rest of the assets directory, auto-named from the
-// source node's own tag with a numeric suffix on collision -- "Create Prefab..." has no target
-// directory of its own to work from (unlike the Asset Browser's own Create menu), so this picks
-// one instead of prompting for a save location every time.
-auto unique_prefab_relative_path(const std::string& tag) -> std::filesystem::path {
-  auto& project = sbx::core::engine::project();
-  const auto directory = project.assets_directory() / "prefabs";
-
-  std::filesystem::create_directories(directory);
-
-  const auto stem = tag.empty() ? std::string{"Prefab"} : tag;
-  auto candidate = stem;
-
-  for (auto suffix = 1; std::filesystem::exists(directory / (candidate + ".prefab")); ++suffix) {
-    candidate = fmt::format("{} {}", stem, suffix);
-  }
-
-  return std::filesystem::path{"prefabs"} / (candidate + ".prefab");
-}
-
-// Shared by every prefab drop target below -- must be called from inside an already-open
-// ImGui::BeginDragDropTarget()/EndDragDropTarget() block, same convention as the plain
-// AcceptDragDropPayload(node_drag_drop_payload_type, ...) calls right next to each call site.
-auto try_instantiate_prefab_drop(editor_state& state, sbx::scenes::scene& scene, std::optional<sbx::math::uuid> parent_id) -> void {
-  const auto* payload = ImGui::AcceptDragDropPayload(sbx::render::widgets::drag_drop_payload_prefab, ImGuiDragDropFlags_AcceptNoDrawDefaultRect);
-
-  if (!payload) {
-    return;
-  }
-
-  const auto& drag = *static_cast<const sbx::render::widgets::asset_drag_payload*>(payload->Data);
-  auto& assets_module = sbx::core::engine::get_module<sbx::assets::assets_module>();
-
-  auto prefab = assets_module.load_prefab(drag.id);
-
-  if (!prefab.is_valid()) {
-    return;
-  }
-
-  auto command = std::make_unique<instantiate_prefab_command>(prefab, parent_id);
+// Shared by every "create a node and make it the selection" call site (Add Node, Add Child, each
+// 3D Object primitive) -- Command is whichever create_*_command type, constructed from args,
+// pushed, and its freshly-created node selected.
+template<typename Command, typename... Args>
+auto create_and_select_node(editor_state& state, sbx::scenes::scene& scene, Args&&... args) -> void {
+  auto command = std::make_unique<Command>(std::forward<Args>(args)...);
   auto* created = command.get();
 
   state.push_command(scene, std::move(command));
@@ -111,11 +77,7 @@ auto draw_3d_object_submenu(editor_state& state, sbx::scenes::scene& scene, std:
 
   for (const auto kind : sbx::reflection::enum_values<sbx::assets::primitive_mesh_kind>()) {
     if (ImGui::MenuItem(std::string{sbx::reflection::to_string(kind)}.c_str())) {
-      auto command = std::make_unique<create_primitive_node_command>(kind, parent_id);
-      auto* created = command.get();
-
-      state.push_command(scene, std::move(command));
-      state.select_node(scene.find(created->id()));
+      create_and_select_node<create_primitive_node_command>(state, scene, kind, parent_id);
     }
   }
 
@@ -229,22 +191,14 @@ auto hierarchy_panel::_draw_node_row(editor_state& state, sbx::scenes::scene& sc
 
   if (is_renaming) {
     ImGui::SameLine();
-    ImGui::SetNextItemWidth(std::numeric_limits<std::float_t>::lowest());
 
-    if (_rename_focus_pending) {
-      ImGui::SetKeyboardFocusHere();
-      _rename_focus_pending = false;
-    }
+    const auto rename_result = widgets::draw_rename_field(_rename_buffer, _rename_focus_pending, std::numeric_limits<std::float_t>::lowest());
 
-    const auto submitted = ImGui::InputText("##rename", _rename_buffer.data(), _rename_buffer.size(), ImGuiInputTextFlags_AutoSelectAll | ImGuiInputTextFlags_EnterReturnsTrue);
-    const auto deactivated = ImGui::IsItemDeactivated();
-    const auto cancelled = deactivated && ImGui::IsKeyPressed(ImGuiKey_Escape, false);
-
-    if (submitted || (deactivated && !cancelled)) {
+    if (rename_result.committed) {
       _commit_rename(state, scene, node);
     }
 
-    if (submitted || deactivated) {
+    if (rename_result.ended) {
       _renaming_id = sbx::math::uuid::nil();
     }
   }
@@ -298,76 +252,9 @@ auto hierarchy_panel::_draw_child_rows(editor_state& state, sbx::scenes::scene& 
   }
 }
 
-auto hierarchy_panel::_try_reparent(editor_state& state, sbx::scenes::scene& scene, sbx::math::uuid payload_id, std::optional<sbx::math::uuid> new_parent_id, std::size_t new_index) -> void {
-  const auto& selected = state.selected_node_ids();
-
-  const auto has_selected = (selected.size() > 1u && std::find(selected.begin(), selected.end(), payload_id) != selected.end());
-
-  auto dragged_ids = has_selected ? selected : std::vector<sbx::math::uuid>{payload_id};
-
-  if (new_parent_id) {
-    if (std::find(dragged_ids.begin(), dragged_ids.end(), *new_parent_id) != dragged_ids.end()) {
-      return;
-    }
-
-    auto ancestor = scene.find(*new_parent_id);
-
-    while (ancestor.is_valid()) {
-      if (std::find(dragged_ids.begin(), dragged_ids.end(), ancestor.id()) != dragged_ids.end()) {
-        return;
-      }
-
-      auto next = scene.node_of(ancestor.get_component<sbx::scenes::relationship>().parent);
-
-      if (!next.has_component<sbx::scenes::id>()) {
-        break;
-      }
-
-      ancestor = next;
-    }
-  }
-
-  _pending_reparent = pending_reparent{std::move(dragged_ids), new_parent_id, new_index};
-}
-
-auto hierarchy_panel::_current_parent_id(sbx::scenes::scene& scene, sbx::math::uuid id) const -> std::optional<sbx::math::uuid> {
-  auto node = scene.find(id);
-
-  if (!node.is_valid()) {
-    return std::nullopt;
-  }
-
-  auto parent = scene.node_of(node.get_component<sbx::scenes::relationship>().parent);
-
-  if (!parent.has_component<sbx::scenes::id>()) {
-    return std::nullopt;
-  }
-
-  return parent.id();
-}
-
-auto hierarchy_panel::_filter_to_selection_roots(sbx::scenes::scene& scene, const std::vector<sbx::math::uuid>& ids) const -> std::vector<sbx::math::uuid> {
-  auto roots = std::vector<sbx::math::uuid>{};
-
-  for (const auto id : ids) {
-    const auto parent_id = _current_parent_id(scene, id);
-
-    if (!parent_id || std::find(ids.begin(), ids.end(), *parent_id) == ids.end()) {
-      roots.push_back(id);
-    }
-  }
-
-  return roots;
-}
-
 auto hierarchy_panel::_begin_rename(const sbx::scenes::node& node) -> void {
   _renaming_id = node.id();
-
-  const auto& current_name = node.name();
-  std::strncpy(_rename_buffer.data(), current_name.c_str(), _rename_buffer.size() - 1u);
-  _rename_buffer[_rename_buffer.size() - 1u] = '\0';
-
-  _rename_focus_pending = true;
+  widgets::begin_rename(_rename_buffer, _rename_focus_pending, node.name().c_str());
 }
 
 auto hierarchy_panel::_commit_rename(editor_state& state, sbx::scenes::scene& scene, sbx::scenes::node& node) -> void {
@@ -383,44 +270,12 @@ auto hierarchy_panel::_commit_rename(editor_state& state, sbx::scenes::scene& sc
   state.push_command(scene, std::make_unique<modify_component_command<sbx::scenes::tag>>(node.id(), before, after, "Rename Node"));
 }
 
-auto hierarchy_panel::_draw_prefab_override_menu(sbx::scenes::scene& scene, const sbx::scenes::node& node) -> void {
-  const auto overrides = sbx::scenes::scene_serializer::prefab_overrides_of(scene, node);
-
-  if (overrides.empty()) {
-    return;
+auto hierarchy_panel::_draw_empty_space_context_menu(editor_state& state, sbx::scenes::scene& scene) -> void {
+  if (ImGui::MenuItem(ICON_MDI_PLUS " Add Node")) {
+    create_and_select_node<create_node_command>(state, scene);
   }
 
-  if (ImGui::BeginMenu(ICON_MDI_SOURCE_MERGE " Apply to Prefab")) {
-    for (const auto& override_entry : overrides) {
-      if (ImGui::MenuItem(override_entry.component_key.c_str())) {
-        sbx::scenes::scene_serializer::apply_prefab_override(scene, node, override_entry.component_key);
-      }
-    }
-
-    if (overrides.size() > 1u && ImGui::MenuItem("Apply All")) {
-      for (const auto& override_entry : overrides) {
-        sbx::scenes::scene_serializer::apply_prefab_override(scene, node, override_entry.component_key);
-      }
-    }
-
-    ImGui::EndMenu();
-  }
-
-  if (ImGui::BeginMenu(ICON_MDI_BACKUP_RESTORE " Revert to Prefab")) {
-    for (const auto& override_entry : overrides) {
-      if (ImGui::MenuItem(override_entry.component_key.c_str())) {
-        sbx::scenes::scene_serializer::revert_prefab_override(scene, node, override_entry.component_key);
-      }
-    }
-
-    if (overrides.size() > 1u && ImGui::MenuItem("Revert All")) {
-      for (const auto& override_entry : overrides) {
-        sbx::scenes::scene_serializer::revert_prefab_override(scene, node, override_entry.component_key);
-      }
-    }
-
-    ImGui::EndMenu();
-  }
+  draw_3d_object_submenu(state, scene, std::nullopt);
 }
 
 auto hierarchy_panel::draw(editor_state& state) -> void {
@@ -463,16 +318,7 @@ auto hierarchy_panel::draw(editor_state& state) -> void {
       }
 
       if (ImGui::BeginPopupContextItem("##hierarchy_context_empty")) {
-        if (ImGui::MenuItem(ICON_MDI_PLUS " Add Node")) {
-          auto command = std::make_unique<create_node_command>();
-          auto* created = command.get();
-
-          state.push_command(scene, std::move(command));
-          state.select_node(scene.find(created->id()));
-        }
-
-        draw_3d_object_submenu(state, scene, std::nullopt);
-
+        _draw_empty_space_context_menu(state, scene);
         ImGui::EndPopup();
       }
     }
@@ -483,16 +329,7 @@ auto hierarchy_panel::draw(editor_state& state) -> void {
   }
 
   if (ImGui::BeginPopupContextWindow("##hierarchy_context", ImGuiPopupFlags_MouseButtonRight | ImGuiPopupFlags_NoOpenOverItems)) {
-    if (ImGui::MenuItem(ICON_MDI_PLUS " Add Node")) {
-      auto command = std::make_unique<create_node_command>();
-      auto* created = command.get();
-
-      state.push_command(scene, std::move(command));
-      state.select_node(scene.find(created->id()));
-    }
-
-    draw_3d_object_submenu(state, scene, std::nullopt);
-
+    _draw_empty_space_context_menu(state, scene);
     ImGui::EndPopup();
   }
 
@@ -512,49 +349,7 @@ auto hierarchy_panel::draw(editor_state& state) -> void {
     }
   }
 
-  if (_pending_reparent) {
-    auto ordered = _filter_to_selection_roots(scene, _pending_reparent->dragged_ids);
-
-    std::stable_sort(ordered.begin(), ordered.end(), [this](sbx::math::uuid a, sbx::math::uuid b) {
-      const auto index_of = [this](sbx::math::uuid id) {
-        const auto entry = std::find(_visible_row_order.begin(), _visible_row_order.end(), id);
-        return entry == _visible_row_order.end() ? _visible_row_order.size() : static_cast<std::size_t>(entry - _visible_row_order.begin());
-      };
-
-      return index_of(a) < index_of(b);
-    });
-
-    if (ordered.size() == 1u) {
-      if (auto target = scene.find(ordered.front()); target.is_valid()) {
-        state.push_command(scene, std::make_unique<reparent_node_command>(scene, target, _pending_reparent->new_parent_id, _pending_reparent->new_index));
-      }
-    } else if (ordered.size() > 1u) {
-      auto sub_commands = std::vector<std::unique_ptr<command>>{};
-      auto foreign_count = std::size_t{0u};
-
-      for (const auto id : ordered) {
-        auto target = scene.find(id);
-
-        if (!target.is_valid()) {
-          continue;
-        }
-
-        const auto was_already_sibling = _current_parent_id(scene, id) == _pending_reparent->new_parent_id;
-
-        sub_commands.push_back(std::make_unique<reparent_node_command>(scene, target, _pending_reparent->new_parent_id, _pending_reparent->new_index + foreign_count));
-
-        if (!was_already_sibling) {
-          foreign_count += 1u;
-        }
-      }
-
-      if (!sub_commands.empty()) {
-        state.push_command(scene, std::make_unique<composite_command>(std::move(sub_commands), fmt::format("Move {} Nodes", sub_commands.size())));
-      }
-    }
-
-    _pending_reparent.reset();
-  }
+  _apply_pending_reparent(state, scene);
 
   if (_pending_range_select) {
     const auto begin_entry = std::find(_visible_row_order.begin(), _visible_row_order.end(), _pending_range_select->anchor_id);
@@ -598,11 +393,7 @@ auto hierarchy_panel::draw(editor_state& state) -> void {
 
   if (_pending_add_child_parent_id != sbx::math::uuid::nil()) {
     if (auto parent = scene.find(_pending_add_child_parent_id); parent.is_valid()) {
-      auto command = std::make_unique<create_node_command>(parent.id());
-      auto* created = command.get();
-
-      state.push_command(scene, std::move(command));
-      state.select_node(scene.find(created->id()));
+      create_and_select_node<create_node_command>(state, scene, parent.id());
     }
 
     _pending_add_child_parent_id = sbx::math::uuid::nil();

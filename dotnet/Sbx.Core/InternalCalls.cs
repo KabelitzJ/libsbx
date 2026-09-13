@@ -57,6 +57,8 @@ namespace Sbx.Core
     internal static delegate* unmanaged<NativeString, ulong, ulong> Node_InstantiatePrefab;
     internal static delegate* unmanaged<ulong, void> Node_Destroy;
     internal static delegate* unmanaged<ulong, ulong, void> Node_SetParent;
+    internal static delegate* unmanaged<ulong, bool, void> Node_SetActive;
+    internal static delegate* unmanaged<ulong, bool> Node_GetIsActive;
 
     internal static delegate* unmanaged<ulong, NativeString, void> ParticleEffect_Load;
     internal static delegate* unmanaged<ulong, void> ParticleEffect_Play;
@@ -84,6 +86,7 @@ namespace Sbx.Core
     internal static delegate* unmanaged<Vector2*, void> Input_ScrollDelta;
 
     internal static delegate* unmanaged<Ray*, Vector2*, void> Camera_ScreenPointToRay;
+    internal static delegate* unmanaged<Vector3*, Vector2*, bool> Camera_WorldToScreenPoint;
     internal static delegate* unmanaged<Vector3*, void> Camera_MainGetPosition;
     internal static delegate* unmanaged<Vector3*, void> Camera_MainSetPosition;
     internal static delegate* unmanaged<Quaternion*, void> Camera_MainGetRotation;
@@ -93,6 +96,7 @@ namespace Sbx.Core
     internal static delegate* unmanaged<Vector3*, void> Camera_MainGetUp;
 
     internal static delegate* unmanaged<Vector2*, void> Camera_GetViewport;
+    internal static delegate* unmanaged<Vector2*, void> Camera_GetViewportOffset;
 
     internal static delegate* unmanaged<ulong, float*, void> Camera_GetFovDegrees;
     internal static delegate* unmanaged<ulong, float, void> Camera_SetFovDegrees;
@@ -151,6 +155,7 @@ namespace Sbx.Core
 
     internal static delegate* unmanaged<ulong, Color*, void> UIImage_GetTint;
     internal static delegate* unmanaged<ulong, Color*, void> UIImage_SetTint;
+    internal static delegate* unmanaged<ulong, NativeString, void> UIImage_LoadSprite;
 
     internal static delegate* unmanaged<ulong, NativeString> UIText_GetText;
     internal static delegate* unmanaged<ulong, NativeString, void> UIText_SetText;

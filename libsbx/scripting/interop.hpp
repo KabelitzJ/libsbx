@@ -133,6 +133,10 @@ struct interop {
 
   static auto node_set_parent(std::uint64_t uuid, std::uint64_t parent_uuid) -> void;
 
+  static auto node_set_active(std::uint64_t uuid, bool active) -> void;
+
+  static auto node_get_is_active(std::uint64_t uuid) -> bool;
+
   /** @brief Loads (or reassigns) which .particle_effect asset this node's ParticleEffect component plays -- @p path is project-relative, same convention as every other asset path taken from script/YAML. */
   static auto particle_effect_load(std::uint64_t uuid, managed::string path) -> void;
 
@@ -183,6 +187,9 @@ struct interop {
   // the active camera instead of the calling script's own uuid.
   static auto camera_screen_point_to_ray(math::ray* ray, math::vector2* position) -> void;
 
+  /** @brief Inverse of camera_screen_point_to_ray -- returns false (out_position left untouched) if world_position projects behind the camera (clip.w <= 0). */
+  static auto camera_world_to_screen_point(math::vector3* world_position, math::vector2* out_position) -> bool;
+
   static auto camera_main_get_position(math::vector3* position) -> void;
 
   static auto camera_main_set_position(math::vector3* position) -> void;
@@ -198,6 +205,8 @@ struct interop {
   static auto camera_main_get_up(math::vector3* up) -> void;
 
   static auto camera_get_viewport(math::vector2* viewport) -> void;
+
+  static auto camera_get_viewport_offset(math::vector2* offset) -> void;
 
   // Per-node scenes::camera field access, for a script sitting on a camera node itself (GetComponent<CameraSettings>()) -- distinct from the Main-prefixed functions above, which always target scene.active_camera() regardless of which node the calling script is on.
   static auto camera_get_fov_degrees(std::uint64_t uuid, std::float_t* fov_degrees) -> void;
@@ -303,6 +312,9 @@ struct interop {
 
   static auto ui_image_get_tint(std::uint64_t uuid, math::color* out_value) -> void;
   static auto ui_image_set_tint(std::uint64_t uuid, math::color* value) -> void;
+
+  /** @brief Project-relative path, same convention as particle_effect_load/node_instantiate_prefab. */
+  static auto ui_image_load_sprite(std::uint64_t uuid, managed::string path) -> void;
 
   static auto ui_text_get_text(std::uint64_t uuid) -> managed::string;
   static auto ui_text_set_text(std::uint64_t uuid, managed::string value) -> void;

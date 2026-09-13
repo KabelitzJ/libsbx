@@ -712,7 +712,7 @@ auto scene_renderer_module::_build_packet() -> render_packet {
 
   auto transparent = std::vector<transparent_entry>{};
 
-  for (const auto [entity, world, renderer] : scene.query<scenes::world_transform, scenes::mesh_renderer>(ecs::exclude<scenes::skeleton_pose>).each()) {
+  for (const auto [entity, world, renderer] : scene.query<scenes::world_transform, scenes::mesh_renderer>(ecs::exclude<scenes::skeleton_pose, scenes::inactive>).each()) {
     if (!renderer.mesh.is_valid()) {
       continue;
     }
@@ -805,7 +805,7 @@ auto scene_renderer_module::_build_packet() -> render_packet {
   auto skin_scratch_cursor = std::uint32_t{0u};
   const auto animation_delta_time = scenes_module.simulation_delta_time().value();
 
-  for (const auto [entity, world, renderer, pose] : scene.query<scenes::world_transform, scenes::mesh_renderer, scenes::skeleton_pose>().each()) {
+  for (const auto [entity, world, renderer, pose] : scene.query<scenes::world_transform, scenes::mesh_renderer, scenes::skeleton_pose>(ecs::exclude<scenes::inactive>).each()) {
     if (!renderer.mesh.is_valid() || !pose.skeleton.is_valid()) {
       continue;
     }
@@ -880,7 +880,7 @@ auto scene_renderer_module::_build_packet() -> render_packet {
   auto shadow_caster_found = false;
   auto shadow_caster_index = std::size_t{0u};
 
-  for (auto&& [entity, transform, light] : scene.query<scenes::world_transform, scenes::directional_light>().each()) {
+  for (auto&& [entity, transform, light] : scene.query<scenes::world_transform, scenes::directional_light>(ecs::exclude<scenes::inactive>).each()) {
     const auto& matrix = transform.matrix;
 
     auto data = light_data{};
@@ -906,7 +906,7 @@ auto scene_renderer_module::_build_packet() -> render_packet {
 
   packet.directional_light_count = static_cast<std::uint32_t>(packet.lights.size());
 
-  for (auto&& [entity, transform, light] : scene.query<scenes::world_transform, scenes::point_light>().each()) {
+  for (auto&& [entity, transform, light] : scene.query<scenes::world_transform, scenes::point_light>(ecs::exclude<scenes::inactive>).each()) {
     const auto& matrix = transform.matrix;
     auto& out = packet.lights.emplace_back();
 
@@ -915,7 +915,7 @@ auto scene_renderer_module::_build_packet() -> render_packet {
     out.position = math::vector4{matrix[3].x(), matrix[3].y(), matrix[3].z(), light.range};
   }
 
-  for (auto&& [entity, transform, light] : scene.query<scenes::world_transform, scenes::spot_light>().each()) {
+  for (auto&& [entity, transform, light] : scene.query<scenes::world_transform, scenes::spot_light>(ecs::exclude<scenes::inactive>).each()) {
     const auto& matrix = transform.matrix;
     auto& out = packet.lights.emplace_back();
 
@@ -993,7 +993,7 @@ auto scene_renderer_module::_build_packet() -> render_packet {
   auto mesh_buckets = std::unordered_map<particle_mesh_key, particle_mesh_bucket, particle_mesh_key_hash>{};
   auto trail_buckets = std::unordered_map<assets::emitter_blend_mode, std::vector<trail_vertex>>{};
 
-  for (auto&& [entity, world, instance] : scene.query<scenes::world_transform, scenes::particle_effect>().each()) {
+  for (auto&& [entity, world, instance] : scene.query<scenes::world_transform, scenes::particle_effect>(ecs::exclude<scenes::inactive>).each()) {
     if (!instance.effect.is_valid()) {
       continue;
     }

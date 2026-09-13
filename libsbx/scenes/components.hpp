@@ -84,6 +84,15 @@ struct relationship {
   std::vector<ecs::entity> children{};
 }; // struct relationship
 
+/**
+ * @brief Marks a node as inactive -- absence of this component means active, the same
+ * add/remove-a-tag convention @ref scenes::node::set_active uses (driven by the C# Node.SetActive
+ * binding). Every query that should skip a disabled node/subtree excludes this component rather
+ * than checking a bool field, so adding a system that needs to respect active state is just
+ * adding `ecs::exclude<inactive>` to its own scene::query call.
+ */
+struct inactive {}; // struct inactive
+
 struct id final : math::uuid {
 
   using base_type = math::uuid;

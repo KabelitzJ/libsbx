@@ -68,7 +68,7 @@ auto canvas_module::update() -> void {
 
   auto canvases = std::vector<std::pair<scenes::node, canvas>>{};
 
-  for (auto&& [entity, root] : scene.query<canvas>().each()) {
+  for (auto&& [entity, root] : scene.query<canvas>(ecs::exclude<scenes::inactive>).each()) {
     canvases.emplace_back(scene.node_of(entity), root);
   }
 
@@ -279,6 +279,13 @@ auto canvas_module::_visit(scenes::scene& scene, scenes::node node, const resolv
   auto rect_transform_component = node.try_get_component<rect_transform>();
 
   if (!rect_transform_component) {
+    return;
+  }
+
+  // An inactive node draws nothing and blocks nothing -- and since children are only ever reached
+  // by recursing further down in this same function, returning here skips its whole subtree too,
+  // same as Unity's SetActive(false) on a parent.
+  if (node.has_component<scenes::inactive>()) {
     return;
   }
 

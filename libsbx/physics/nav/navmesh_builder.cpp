@@ -232,7 +232,7 @@ auto gather_convex_shape(const convex_shape& shape, const transform& pose, std::
 }
 
 auto gather_walkable_triangles(scenes::scene& scene, mesh_collision_cache& mesh_cache, convex_hull_cache& hull_cache, assets::assets_module& assets_module, pose_cache& cache, std::pmr::vector<math::vector3>& vertices, std::pmr::vector<std::uint32_t>& indices) -> void {
-  for (auto&& [entity, collider] : scene.query<mesh_collider>(ecs::exclude<rigidbody>).each()) {
+  for (auto&& [entity, collider] : scene.query<mesh_collider>(ecs::exclude<rigidbody, scenes::inactive>).each()) {
     auto node = scene.node_of(entity);
 
     if (find_owning_rigidbody(scene, node) || !collider.mesh.is_valid()) {
@@ -245,7 +245,7 @@ auto gather_walkable_triangles(scenes::scene& scene, mesh_collision_cache& mesh_
     append_triangle_mesh(data.vertices, data.indices, pose, vertices, indices);
   }
 
-  for (auto&& [entity, body, collider] : scene.query<rigidbody, mesh_collider>().each()) {
+  for (auto&& [entity, body, collider] : scene.query<rigidbody, mesh_collider>(ecs::exclude<scenes::inactive>).each()) {
     if (body.type != body_type::static_body || !collider.mesh.is_valid()) {
       continue;
     }
@@ -258,7 +258,7 @@ auto gather_walkable_triangles(scenes::scene& scene, mesh_collision_cache& mesh_
     append_triangle_mesh(data.vertices, data.indices, pose, vertices, indices);
   }
 
-  for (auto&& [entity, collider] : scene.query<shape_collider>(ecs::exclude<rigidbody>).each()) {
+  for (auto&& [entity, collider] : scene.query<shape_collider>(ecs::exclude<rigidbody, scenes::inactive>).each()) {
     static_cast<void>(collider);
 
     auto node = scene.node_of(entity);
@@ -272,7 +272,7 @@ auto gather_walkable_triangles(scenes::scene& scene, mesh_collision_cache& mesh_
     }
   }
 
-  for (auto&& [entity, body] : scene.query<rigidbody>(ecs::exclude<mesh_collider>).each()) {
+  for (auto&& [entity, body] : scene.query<rigidbody>(ecs::exclude<mesh_collider, scenes::inactive>).each()) {
     if (body.type != body_type::static_body) {
       continue;
     }

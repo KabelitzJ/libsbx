@@ -66,7 +66,7 @@ auto crowd::update(scenes::scene& scene, const navmesh& mesh, std::float_t dt) -
 
   auto agents = std::vector<agent_frame_state>{};
 
-  for (auto&& [entity, agent, transform] : scene.query<nav_agent, scenes::local_transform>().each()) {
+  for (auto&& [entity, agent, transform] : scene.query<nav_agent, scenes::local_transform>(ecs::exclude<scenes::inactive>).each()) {
     auto node = scene.node_of(entity);
 
     _grid.insert(node, transform.position);

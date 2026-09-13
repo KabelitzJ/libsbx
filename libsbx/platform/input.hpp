@@ -16,8 +16,11 @@
 namespace sbx::platform {
 
 struct key_state {
-  // input_action::release == 0, so a default/zero-initialized key_state already reads as "not
-  // pressed" -- exactly what a never-touched array slot needs to mean.
+  // action is glfw's raw last-reported level (press or release; a key/button never actually gets
+  // written to repeat here -- see window.cpp's callbacks). last_action is that same value as of the
+  // start of the previous frame (see input::_snapshot_key_states/_snapshot_mouse_button_states),
+  // letting is_key_pressed/is_key_released edge-detect by comparing the two instead of needing a
+  // decaying state machine of their own.
   input_action action{input_action::release};
   input_action last_action{input_action::release};
 }; // struct key_state
@@ -45,8 +48,8 @@ public:
 
 private:
 
-  static auto _transition_pressed_keys() -> void;
-  static auto _transition_pressed_mouse_buttons() -> void;
+  static auto _snapshot_key_states() -> void;
+  static auto _snapshot_mouse_button_states() -> void;
   static auto _transition_scroll_delta() -> void;
 
   static auto _update_key_state(key key, input_action action) -> void;
@@ -65,6 +68,10 @@ private:
 
   [[nodiscard]] static auto _mouse_button_index(mouse_button value) noexcept -> std::size_t {
     return static_cast<std::size_t>(value);
+  }
+
+  [[nodiscard]] static constexpr auto _is_down(input_action action) noexcept -> bool {
+    return action == input_action::press || action == input_action::repeat;
   }
 
   static std::array<key_state, key_count> _key_states;

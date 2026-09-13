@@ -7,7 +7,7 @@
 
 namespace sbx::platform {
 
-// Values match the glfw actions; verified by static_asserts in window.cpp.
+// Values match the glfw actions.
 enum class input_action : std::int32_t {
   release = 0,
   press = 1,

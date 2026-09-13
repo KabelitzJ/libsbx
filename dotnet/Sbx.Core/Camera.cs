@@ -21,6 +21,19 @@ namespace Sbx.Core
       return ray;
     }
 
+    /**
+     * Inverse of ScreenPointToRay. Returns false (screenPosition left at default) if worldPosition
+     * sits at or behind the camera -- there's no well-defined screen point for it.
+     */
+    public bool WorldToScreenPoint(Vector3 worldPosition, out Vector2 screenPosition)
+    {
+      Vector2 position;
+      bool didProject;
+      unsafe { didProject = InternalCalls.Camera_WorldToScreenPoint(&worldPosition, &position); }
+      screenPosition = position;
+      return didProject;
+    }
+
     public Vector3 Position
     {
       get {
@@ -94,6 +107,21 @@ namespace Sbx.Core
         Vector2 viewport;
         unsafe { InternalCalls.Camera_GetViewport(&viewport); }
         return viewport;
+      }
+    }
+
+    /**
+     * Where the viewport's top-left corner sits within the window -- always zero in a standalone
+     * build, nonzero in the editor (the game view is a docked panel inset within the window).
+     * Input.MousePosition() is raw window space, but RectTransform/canvas coordinates are viewport
+     * space -- subtract this before feeding a mouse position into UI positioning.
+     */
+    public Vector2 ViewportOffset
+    {
+      get {
+        Vector2 offset;
+        unsafe { InternalCalls.Camera_GetViewportOffset(&offset); }
+        return offset;
       }
     }
 

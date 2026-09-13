@@ -111,7 +111,7 @@ auto physics_module::_sync_broadphase(scenes::scene& scene) -> void {
   // below unchanged (mixing a mesh_collider with shape_collider compound children on the same body
   // is out of scope for v1). A bare rigidbody with no collider anywhere in its subtree resolves to
   // an empty shape list and is skipped, same as always.
-  for (auto&& [entity, body] : scene.query<rigidbody>(ecs::exclude<mesh_collider>).each()) {
+  for (auto&& [entity, body] : scene.query<rigidbody>(ecs::exclude<mesh_collider, scenes::inactive>).each()) {
     auto node = scene.node_of(entity);
 
     const auto shapes = resolve_body_shapes(scene, node, _hull_cache, assets_module, _pose_cache);
@@ -133,7 +133,7 @@ auto physics_module::_sync_broadphase(scenes::scene& scene) -> void {
   // support mapping for a concave shape), so a dynamic_body carrying one is silently excluded from
   // the broadphase entirely -- see collider.hpp's doc comment. A convex one is an ordinary
   // convex_shape as far as narrowphase is concerned and gets no such restriction.
-  for (auto&& [entity, body, collider] : scene.query<rigidbody, mesh_collider>().each()) {
+  for (auto&& [entity, body, collider] : scene.query<rigidbody, mesh_collider>(ecs::exclude<scenes::inactive>).each()) {
     if (!collider.mesh.is_valid()) {
       continue;
     }
@@ -157,7 +157,7 @@ auto physics_module::_sync_broadphase(scenes::scene& scene) -> void {
   // chain is its own independent static body (matching Unity: a Collider alone, no Rigidbody, is a
   // static one) -- unless it's really a compound child of some ancestor's rigidbody, already
   // collected by the rigidbody-driven pass above, in which case it's skipped here.
-  for (auto&& [entity, collider] : scene.query<shape_collider>(ecs::exclude<rigidbody>).each()) {
+  for (auto&& [entity, collider] : scene.query<shape_collider>(ecs::exclude<rigidbody, scenes::inactive>).each()) {
     auto node = scene.node_of(entity);
 
     if (find_owning_rigidbody(scene, node)) {
@@ -169,7 +169,7 @@ auto physics_module::_sync_broadphase(scenes::scene& scene) -> void {
     }
   }
 
-  for (auto&& [entity, collider] : scene.query<mesh_collider>(ecs::exclude<rigidbody>).each()) {
+  for (auto&& [entity, collider] : scene.query<mesh_collider>(ecs::exclude<rigidbody, scenes::inactive>).each()) {
     if (!collider.mesh.is_valid()) {
       continue;
     }
@@ -196,7 +196,7 @@ auto physics_module::_sync_broadphase(scenes::scene& scene) -> void {
   // on the heightfield side. Rebuilt fresh every sync -- typically 0 or 1 entries, so this is cheap.
   _heightfield_nodes.clear();
 
-  for (auto&& [entity, collider] : scene.query<heightfield_collider>().each()) {
+  for (auto&& [entity, collider] : scene.query<heightfield_collider>(ecs::exclude<scenes::inactive>).each()) {
     if (collider.data) {
       _heightfield_nodes.push_back(scene.node_of(entity));
     }

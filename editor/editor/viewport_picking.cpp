@@ -92,7 +92,7 @@ auto pick_node_at_viewport_position(editor_state& state, const sbx::math::vector
   auto closest_node = sbx::scenes::node{};
   auto closest_t = std::numeric_limits<std::float_t>::max();
 
-  for (const auto entity : scene.query<sbx::scenes::mesh_renderer, sbx::scenes::world_transform>()) {
+  for (const auto entity : scene.query<sbx::scenes::mesh_renderer, sbx::scenes::world_transform>(sbx::ecs::exclude<sbx::scenes::inactive>)) {
     auto node = scene.node_of(entity);
 
     const auto& renderer = node.get_component<sbx::scenes::mesh_renderer>();

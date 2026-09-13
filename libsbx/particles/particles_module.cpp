@@ -41,7 +41,7 @@ auto particles_module::fixed_update() -> void {
   auto& scene = scenes_module.active_scene();
   const auto dt = core::engine::fixed_delta_time().value();
 
-  for (auto&& [entity, world, effect] : scene.query<scenes::world_transform, scenes::particle_effect>().each()) {
+  for (auto&& [entity, world, effect] : scene.query<scenes::world_transform, scenes::particle_effect>(ecs::exclude<scenes::inactive>).each()) {
     _simulate_effect(scene, effect, world.matrix, dt);
   }
 }

@@ -52,8 +52,13 @@ public:
     return get_component<scenes::layer>();
   }
 
+  // add_component/get_or_add_component below return decltype(auto), not Component&, matching the
+  // registry's own emplace/get_or_emplace -- an empty (tag) Component like scenes::inactive gets a
+  // storage specialization that tracks presence only, with no per-entity value, so these come back
+  // void for it instead of a reference. get_component keeps an explicit Component& since nothing
+  // calls it with an empty type yet.
   template<typename Component, typename... Args>
-  auto add_component(Args&&... args) -> Component& {
+  auto add_component(Args&&... args) -> decltype(auto) {
     return _registry->emplace<Component>(_entity, std::forward<Args>(args)...);
   }
 
@@ -68,7 +73,7 @@ public:
   }
 
   template<typename Component, typename... Args>
-  [[nodiscard]] auto get_or_add_component(Args&&... args) -> Component& {
+  [[nodiscard]] auto get_or_add_component(Args&&... args) -> decltype(auto) {
     return _registry->get_or_emplace<Component>(_entity, std::forward<Args>(args)...);
   }
 
@@ -91,6 +96,19 @@ public:
   template<typename Component>
   auto remove_component() -> bool {
     return _registry->remove<Component>(_entity) == 1u;
+  }
+
+  /** @brief Active by default; false adds an @ref inactive tag, true removes it. See that component's own doc comment for which systems respect it. */
+  auto set_active(bool active) -> void {
+    if (active) {
+      static_cast<void>(remove_component<scenes::inactive>());
+    } else {
+      static_cast<void>(get_or_add_component<scenes::inactive>());
+    }
+  }
+
+  [[nodiscard]] auto is_active() const -> bool {
+    return !has_component<scenes::inactive>();
   }
 
   [[nodiscard]] auto transform() -> local_transform& {

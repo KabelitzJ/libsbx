@@ -105,15 +105,15 @@ auto draw_node_icons(editor_state& state, const ImVec2& viewport_origin, const I
     draw_list->AddText(font, icon_size, icon_min, color, icon);
   };
 
-  for (auto&& [entity, transform, light] : scene.query<sbx::scenes::world_transform, sbx::scenes::point_light>(sbx::ecs::exclude<sbx::scenes::mesh_renderer>).each()) {
+  for (auto&& [entity, transform, light] : scene.query<sbx::scenes::world_transform, sbx::scenes::point_light>(sbx::ecs::exclude<sbx::scenes::mesh_renderer, sbx::scenes::inactive>).each()) {
     draw_icon(entity, sbx::math::vector3{transform.matrix[3]}, ICON_MDI_LIGHTBULB);
   }
 
-  for (auto&& [entity, transform, light] : scene.query<sbx::scenes::world_transform, sbx::scenes::spot_light>(sbx::ecs::exclude<sbx::scenes::mesh_renderer>).each()) {
+  for (auto&& [entity, transform, light] : scene.query<sbx::scenes::world_transform, sbx::scenes::spot_light>(sbx::ecs::exclude<sbx::scenes::mesh_renderer, sbx::scenes::inactive>).each()) {
     draw_icon(entity, sbx::math::vector3{transform.matrix[3]}, ICON_MDI_FLASHLIGHT);
   }
 
-  for (auto&& [entity, transform, light] : scene.query<sbx::scenes::world_transform, sbx::scenes::directional_light>(sbx::ecs::exclude<sbx::scenes::mesh_renderer>).each()) {
+  for (auto&& [entity, transform, light] : scene.query<sbx::scenes::world_transform, sbx::scenes::directional_light>(sbx::ecs::exclude<sbx::scenes::mesh_renderer, sbx::scenes::inactive>).each()) {
     draw_icon(entity, sbx::math::vector3{transform.matrix[3]}, ICON_MDI_WHITE_BALANCE_SUNNY);
   }
 
@@ -123,7 +123,7 @@ auto draw_node_icons(editor_state& state, const ImVec2& viewport_origin, const I
   const auto is_viewing_through_active_camera = editor_module.play_state() != editor::play_state::edit;
   const auto active_camera_id = (is_viewing_through_active_camera && scene.has_active_camera()) ? static_cast<sbx::math::uuid>(scene.active_camera().id()) : sbx::math::uuid::nil();
 
-  for (auto&& [entity, transform, node_camera] : scene.query<sbx::scenes::world_transform, sbx::scenes::camera>(sbx::ecs::exclude<sbx::scenes::mesh_renderer>).each()) {
+  for (auto&& [entity, transform, node_camera] : scene.query<sbx::scenes::world_transform, sbx::scenes::camera>(sbx::ecs::exclude<sbx::scenes::mesh_renderer, sbx::scenes::inactive>).each()) {
     if (scene.node_of(entity).id() == active_camera_id) {
       continue;
     }

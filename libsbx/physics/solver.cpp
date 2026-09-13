@@ -39,7 +39,7 @@ namespace sbx::physics {
 inline constexpr auto restitution_velocity_threshold = std::float_t{1.0f};
 
 auto integrate_forces(scenes::scene& scene, const math::vector3& gravity, std::float_t dt) -> void {
-  for (auto&& [entity, body, local] : scene.query<rigidbody, scenes::local_transform>().each()) {
+  for (auto&& [entity, body, local] : scene.query<rigidbody, scenes::local_transform>(ecs::exclude<scenes::inactive>).each()) {
     if (body.type != body_type::dynamic_body || body.is_sleeping) {
       continue;
     }
@@ -233,7 +233,7 @@ auto store_impulses(std::vector<velocity_constraint>& constraints) -> void {
 }
 
 auto integrate_velocities(scenes::scene& scene, std::float_t dt) -> void {
-  for (auto&& [entity, body, local] : scene.query<rigidbody, scenes::local_transform>().each()) {
+  for (auto&& [entity, body, local] : scene.query<rigidbody, scenes::local_transform>(ecs::exclude<scenes::inactive>).each()) {
     if (body.type == body_type::static_body || (body.type == body_type::dynamic_body && body.is_sleeping)) {
       continue;
     }

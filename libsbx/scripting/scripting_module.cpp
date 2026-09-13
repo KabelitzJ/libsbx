@@ -94,6 +94,8 @@ scripting_module::scripting_module() {
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Node_InstantiatePrefab", reinterpret_cast<void*>(&interop::node_instantiate_prefab));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Node_Destroy", reinterpret_cast<void*>(&interop::node_destroy));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Node_SetParent", reinterpret_cast<void*>(&interop::node_set_parent));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Node_SetActive", reinterpret_cast<void*>(&interop::node_set_active));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Node_GetIsActive", reinterpret_cast<void*>(&interop::node_get_is_active));
 
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "ParticleEffect_Load", reinterpret_cast<void*>(&interop::particle_effect_load));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "ParticleEffect_Play", reinterpret_cast<void*>(&interop::particle_effect_play));
@@ -121,6 +123,7 @@ scripting_module::scripting_module() {
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Input_ScrollDelta", reinterpret_cast<void*>(&interop::input_scroll_delta));
 
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Camera_ScreenPointToRay", reinterpret_cast<void*>(&interop::camera_screen_point_to_ray));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Camera_WorldToScreenPoint", reinterpret_cast<void*>(&interop::camera_world_to_screen_point));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Camera_MainGetPosition", reinterpret_cast<void*>(&interop::camera_main_get_position));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Camera_MainSetPosition", reinterpret_cast<void*>(&interop::camera_main_set_position));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Camera_MainGetRotation", reinterpret_cast<void*>(&interop::camera_main_get_rotation));
@@ -129,6 +132,7 @@ scripting_module::scripting_module() {
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Camera_MainGetRight", reinterpret_cast<void*>(&interop::camera_main_get_right));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Camera_MainGetUp", reinterpret_cast<void*>(&interop::camera_main_get_up));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Camera_GetViewport", reinterpret_cast<void*>(&interop::camera_get_viewport));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Camera_GetViewportOffset", reinterpret_cast<void*>(&interop::camera_get_viewport_offset));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Camera_GetFovDegrees", reinterpret_cast<void*>(&interop::camera_get_fov_degrees));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Camera_SetFovDegrees", reinterpret_cast<void*>(&interop::camera_set_fov_degrees));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Camera_GetNearPlane", reinterpret_cast<void*>(&interop::camera_get_near_plane));
@@ -186,6 +190,7 @@ scripting_module::scripting_module() {
 
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "UIImage_GetTint", reinterpret_cast<void*>(&interop::ui_image_get_tint));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "UIImage_SetTint", reinterpret_cast<void*>(&interop::ui_image_set_tint));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "UIImage_LoadSprite", reinterpret_cast<void*>(&interop::ui_image_load_sprite));
 
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "UIText_GetText", reinterpret_cast<void*>(&interop::ui_text_get_text));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "UIText_SetText", reinterpret_cast<void*>(&interop::ui_text_set_text));
@@ -299,7 +304,9 @@ auto scripting_module::update() -> void {
 
   auto& scene = scenes_module.active_scene();
 
-  auto scripts_query = scene.query<scripting::scripts>();
+  // Mirrors Unity: a disabled node's scripts stop receiving OnUpdate (OnCreate/OnDestroy still
+  // fire regardless -- see instantiate_scene_scripts/node_destroy, which never check active state).
+  auto scripts_query = scene.query<scripting::scripts>(ecs::exclude<scenes::inactive>);
 
   for (auto&& [node, scripts] : scripts_query.each()) {
     for (auto& instance : scripts.instances) {

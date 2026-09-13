@@ -893,6 +893,38 @@ auto interop::node_set_parent(std::uint64_t uuid, std::uint64_t parent_uuid) -> 
   node.set_parent(parent);
 }
 
+auto interop::node_set_active(std::uint64_t uuid, bool active) -> void {
+  auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
+
+  auto& scene = scenes_module.active_scene();
+
+  auto node = scene.find(math::uuid::from_value(uuid));
+
+  if (!node.is_valid()) {
+    utility::logger<"scripting">::error("Attempting to set active of invalid node");
+
+    return;
+  }
+
+  node.set_active(active);
+}
+
+auto interop::node_get_is_active(std::uint64_t uuid) -> bool {
+  auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
+
+  auto& scene = scenes_module.active_scene();
+
+  auto node = scene.find(math::uuid::from_value(uuid));
+
+  if (!node.is_valid()) {
+    utility::logger<"scripting">::error("Attempting to get active of invalid node");
+
+    return false;
+  }
+
+  return node.is_active();
+}
+
 auto interop::particle_effect_load(std::uint64_t uuid, managed::string path) -> void {
   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
 
@@ -1187,6 +1219,26 @@ auto interop::camera_get_viewport(math::vector2* viewport) -> void {
   *viewport = math::vector2{static_cast<std::float_t>(extent.x()), static_cast<std::float_t>(extent.y())};
 }
 
+/**
+ * How far the viewport's top-left corner sits from the window's -- zero in a standalone build,
+ * nonzero in the editor where the game view is a docked panel inset within the window (see
+ * viewport_window's set_viewport_offset). Input.MousePosition() is raw window space; every
+ * UI/canvas coordinate (RectTransform included) is viewport space -- a script positioning UI
+ * from the mouse needs to subtract this itself, the same correction camera_screen_point_to_ray/
+ * camera_world_to_screen_point already apply internally for their own (world-facing) purposes.
+ */
+auto interop::camera_get_viewport_offset(math::vector2* offset) -> void {
+  if (!offset) {
+    utility::logger<"scripting">::error("Attempting to get null viewport offset of camera");
+
+    return;
+  }
+
+  auto& scene_renderer_module = core::engine::get_module<render::scene_renderer_module>();
+
+  *offset = scene_renderer_module.viewport_offset();
+}
+
 auto interop::camera_screen_point_to_ray(math::ray* ray, math::vector2* position) -> void {
   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
 
@@ -1230,6 +1282,54 @@ auto interop::camera_screen_point_to_ray(math::ray* ray, math::vector2* position
   const auto far_point = unproject(1.0f);
 
   *ray = math::ray{near_point, far_point - near_point};
+}
+
+auto interop::camera_world_to_screen_point(math::vector3* world_position, math::vector2* out_position) -> bool {
+  auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
+
+  auto& scene = scenes_module.active_scene();
+
+  auto node = scene.active_camera();
+
+  if (!node.is_valid()) {
+    utility::logger<"scripting">::error("Attempting to call world_to_screen_point with no active camera");
+
+    return false;
+  }
+
+  if (!world_position || !out_position) {
+    utility::logger<"scripting">::error("Attempting to call world_to_screen_point with null world/screen position of node '{}'", node.name());
+
+    return false;
+  }
+
+  const auto& camera = node.get_component<scenes::camera>();
+
+  auto& scene_renderer_module = core::engine::get_module<render::scene_renderer_module>();
+  const auto extent = scene_renderer_module.target_extent();
+  const auto offset = scene_renderer_module.viewport_offset();
+
+  const auto aspect = (extent.y() > 0u) ? (static_cast<std::float_t>(extent.x()) / static_cast<std::float_t>(extent.y())) : 1.0f;
+
+  const auto view = math::matrix4x4::inverted(node.world_matrix());
+  const auto projection = math::matrix4x4::perspective(math::degree{camera.fov_degrees}, aspect, camera.near_plane, camera.far_plane);
+
+  const auto clip = projection * view * math::vector4{*world_position, 1.0f};
+
+  // w <= 0 means world_position sits at or behind the camera's eye plane -- there's no well-defined
+  // screen point for it (the same case camera_screen_point_to_ray never has to handle, since it
+  // only ever projects outward from the camera).
+  if (clip.w() <= 0.0f) {
+    return false;
+  }
+
+  const auto ndc_x = clip.x() / clip.w();
+  const auto ndc_y = clip.y() / clip.w();
+
+  out_position->x() = (ndc_x * 0.5f + 0.5f) * static_cast<std::float_t>(extent.x()) + offset.x();
+  out_position->y() = (ndc_y * 0.5f + 0.5f) * static_cast<std::float_t>(extent.y()) + offset.y();
+
+  return true;
 }
 
 auto interop::camera_main_get_position(math::vector3* position) -> void {
@@ -2059,6 +2159,19 @@ auto interop::ui_image_set_tint(std::uint64_t uuid, math::color* value) -> void 
   }
 
   component->tint = *value;
+}
+
+auto interop::ui_image_load_sprite(std::uint64_t uuid, managed::string path) -> void {
+  auto node = resolve_node(uuid);
+  auto component = node.try_get_component<canvas::ui_image>();
+
+  if (!node.is_valid() || !component) {
+    return;
+  }
+
+  auto& assets_module = core::engine::get_module<assets::assets_module>();
+
+  component->sprite = assets_module.load_texture(std::filesystem::path{std::string{path}});
 }
 
 auto interop::ui_text_get_text(std::uint64_t uuid) -> managed::string {

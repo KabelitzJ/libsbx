@@ -190,7 +190,12 @@ namespace Sbx.Core
 
     public void SetActive(bool active)
     {
-      // Needs to be implemented
+      unsafe { InternalCalls.Node_SetActive(_uuid, active); }
+    }
+
+    public bool IsActive
+    {
+      get { unsafe { return InternalCalls.Node_GetIsActive(_uuid); } }
     }
 
   } // class Node

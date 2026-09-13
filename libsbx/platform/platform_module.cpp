@@ -37,8 +37,8 @@ platform_module::~platform_module() {
 auto platform_module::pre_update() -> void {
   SBX_PROFILE_SCOPE("platform_module::update");
 
-  input::_transition_pressed_keys();
-  input::_transition_pressed_mouse_buttons();
+  input::_snapshot_key_states();
+  input::_snapshot_mouse_button_states();
   input::_transition_scroll_delta();
 
   glfwPollEvents();

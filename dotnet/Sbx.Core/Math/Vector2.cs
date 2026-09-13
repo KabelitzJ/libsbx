@@ -84,6 +84,16 @@ namespace Sbx.Core.Math
       return lhs.X * rhs.X + lhs.Y * rhs.Y; 
     }
 
+    public static Vector2 Min(Vector2 lhs, Vector2 rhs)
+    {
+      return new Vector2(MathF.Min(lhs.X, rhs.X), MathF.Min(lhs.Y, rhs.Y));
+    }
+
+    public static Vector2 Max(Vector2 lhs, Vector2 rhs)
+    {
+      return new Vector2(MathF.Max(lhs.X, rhs.X), MathF.Max(lhs.Y, rhs.Y));
+    }
+
     public static Vector2 operator *(Vector2 left, float scalar)
     {
       return new Vector2(left.X * scalar, left.Y * scalar);

@@ -9,10 +9,8 @@ namespace Sbx.Core
 
     private ulong _uuid { get; }
 
-    /// <summary>This node's underlying scenes::id uuid — public since Component.UUID already is (see AddComponent).</summary>
     public ulong UUID => _uuid;
 
-    /// <summary>Explicit -- INativeHandle is only how Sbx.Managed's generic field marshaling reads a Node field, not part of Node's own public API (that's UUID above).</summary>
     ulong Sbx.Managed.INativeHandle.Handle => _uuid;
 
     internal Node(ulong uuid)
@@ -37,14 +35,6 @@ namespace Sbx.Core
       return node;
     }
 
-    /// <summary>
-    /// INativeHandle's static factory, implemented implicitly (a plain public static method, not
-    /// an explicit interface implementation) -- Sbx.Managed's SetFieldValue finds this by
-    /// Type.GetMethod("FromHandle", ...) on the field's runtime type, not through the interface's
-    /// static-abstract dispatch (that path needs a compile-time generic type parameter, which
-    /// Sbx.Managed's marshaling code doesn't have here). Delegates to Get so the _nodeCache
-    /// identity/reuse behavior is unchanged from every other way of obtaining a Node.
-    /// </summary>
     public static object? FromHandle(ulong handle) => Get(handle);
 
     public string? Name
@@ -186,11 +176,6 @@ namespace Sbx.Core
       return Get(uuid);
     }
 
-    /// <summary>
-    /// Instantiates the prefab at <paramref name="path"/> (project-relative, same convention as
-    /// e.g. ParticleEffect.Load) as a new node subtree, optionally parented under
-    /// <paramref name="parent"/>. Returns null if the path doesn't resolve to a valid prefab.
-    /// </summary>
     public static Node? Instantiate(string path, Node? parent = null)
     {
       ulong uuid;
@@ -201,6 +186,11 @@ namespace Sbx.Core
       }
 
       return Get(uuid);
+    }
+
+    public void SetActive(bool active)
+    {
+      // Needs to be implemented
     }
 
   } // class Node

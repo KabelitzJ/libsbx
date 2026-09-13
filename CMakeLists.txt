@@ -194,6 +194,13 @@ target_sources(
   libsbx
   PRIVATE
     "${CMAKE_SOURCE_DIR}/libsbx/assets/asset_cooker.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/assets/asset_cooker_texture.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/assets/asset_cooker_font.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/assets/asset_cooker_mesh.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/assets/asset_cooker_material.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/assets/asset_cooker_skeletal.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/assets/asset_cooker_particle_effect.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/assets/asset_cooker_animation_graph.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/assets/asset_loader.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/assets/asset_manifest.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/assets/asset_residency.cpp"

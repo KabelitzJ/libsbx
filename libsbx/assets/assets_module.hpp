@@ -263,9 +263,6 @@ private:
    */
   auto _fixup_material_texture_references(const std::filesystem::path& old_relative, const std::filesystem::path& new_relative) -> void;
 
-  // [TODO] KAJ 2026-09-08 : asset_cooker all methods static so we dont need two instances
-  asset_cooker _cooker{};
-
   asset_manifest _manifest{};
   ibl_baker _ibl{};
   asset_residency _residency;

@@ -64,7 +64,7 @@ static auto sanitize_file_name(std::string name) -> std::string {
 // "type"+"value" tag pair -- animation_parameter_value's alternative *is* its type, so this is
 // purely a persistence detail (the runtime API never switches on a type enum, see
 // animation_graph.hpp's doc comment). Mirrored by load_animation_parameter_value in
-// asset_cooker.cpp -- parsing moved there with the rest of the background-loadable YAML files;
+// asset_cooker_animation_graph.cpp -- parsing moved there with the rest of that asset kind's cooking;
 // saving stays here since it's a synchronous, editor-only write path.
 static auto save_animation_parameter_value(const animation_parameter_value& value) -> YAML::Node {
   auto node = YAML::Node{};
@@ -967,7 +967,7 @@ auto asset_residency::load_environment_map(const math::uuid& id) -> environment_
   const auto needs_cook = _manifest.is_cooked_stale(id, source, cooked, environment_cook_version);
 
   auto did_cook = false;
-  auto data = _cooker.resolve_environment(source, cooked, needs_cook, did_cook);
+  auto data = asset_cooker::resolve_environment(source, cooked, needs_cook, did_cook);
 
   if (did_cook) {
     _manifest.record_cook(id, environment_cook_version, source);

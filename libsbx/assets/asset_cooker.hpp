@@ -11,8 +11,6 @@
 #include <string_view>
 #include <vector>
 
-#include <libsbx/utility/noncopyable.hpp>
-
 #include <libsbx/math/uuid.hpp>
 #include <libsbx/math/color.hpp>
 #include <libsbx/math/vector3.hpp>
@@ -196,12 +194,10 @@ struct particle_effect_description {
   std::vector<particle_emitter_description> emitters{};
 }; // struct particle_effect_description
 
-/** @brief Cooks source assets (glTF, images, HDR) and hand-authored YAML assets (`.material`, `.particle_effect`, `.animation_graph`) into decoded data or versioned on-disk caches. Holds no shared mutable state -- every resolve_ and parse_ call is self-contained given the inputs it's passed, so a single instance is safe to call from any thread and multiple call sites can each own their own instance with no coordination needed (asset_loader owns one for the background thread; assets_module owns a separate one for its synchronous resolve_mesh_collision_data bypass). Path/uuid/staleness bookkeeping lives in @ref asset_manifest instead -- resolve_ and parse_ calls take already-resolved source/cooked paths and a needs_cook flag rather than looking them up. */
-class asset_cooker final : public utility::noncopyable {
+/** @brief Cooks source assets (glTF, images, HDR) and hand-authored YAML assets (`.material`, `.particle_effect`, `.animation_graph`) into decoded data or versioned on-disk caches. Holds no state and is never instantiated -- every member is static, self-contained given the inputs it's passed, so any thread can call e.g. asset_cooker::resolve_mesh(...) directly with no instance or coordination needed. Path/uuid/staleness bookkeeping lives in @ref asset_manifest instead -- resolve_ and parse_ calls take already-resolved source/cooked paths and a needs_cook flag rather than looking them up. */
+class asset_cooker final {
 
 public:
-
-  asset_cooker() = default;
 
   /** @brief Where a given asset's cooked cache blob lives, regardless of whether it exists yet. */
   [[nodiscard]] static auto cooked_path(const math::uuid& id, std::string_view extension) -> std::filesystem::path;
@@ -242,49 +238,49 @@ public:
    * or the cached blob was unreadable and had to be regenerated) -- the caller should
    * asset_manifest::record_cook when this comes back true.
    */
-  [[nodiscard]] auto resolve_texture(const std::filesystem::path& source, const std::filesystem::path& cooked, bool needs_cook, bool& did_cook) -> std::optional<pixel_data>;
+  [[nodiscard]] static auto resolve_texture(const std::filesystem::path& source, const std::filesystem::path& cooked, bool needs_cook, bool& did_cook) -> std::optional<pixel_data>;
 
   /** @brief Same shape as @ref resolve_texture, for an equirectangular HDR environment map. */
-  [[nodiscard]] auto resolve_environment(const std::filesystem::path& source, const std::filesystem::path& cooked, bool needs_cook, bool& did_cook) -> std::optional<pixel_data>;
+  [[nodiscard]] static auto resolve_environment(const std::filesystem::path& source, const std::filesystem::path& cooked, bool needs_cook, bool& did_cook) -> std::optional<pixel_data>;
 
   /** @brief Same shape as @ref resolve_texture, for a TTF -> SDF glyph atlas. */
-  [[nodiscard]] auto resolve_font(const std::filesystem::path& source, const std::filesystem::path& cooked, bool needs_cook, bool& did_cook) -> std::optional<cooked_font_data>;
+  [[nodiscard]] static auto resolve_font(const std::filesystem::path& source, const std::filesystem::path& cooked, bool needs_cook, bool& did_cook) -> std::optional<cooked_font_data>;
 
   /**
    * @brief Same shape as @ref resolve_texture, for a glTF mesh. Every embedded material, and (for
    * a skinned mesh) its skeleton/animation clips, are cooked as self-contained side-effect blobs --
    * see cooked_submesh::material's doc comment; `id` is needed to derive their uuids.
    */
-  [[nodiscard]] auto resolve_mesh(const std::filesystem::path& source, const math::uuid& id, const std::filesystem::path& cooked, bool needs_cook, bool& did_cook) -> std::optional<cooked_mesh_data>;
+  [[nodiscard]] static auto resolve_mesh(const std::filesystem::path& source, const math::uuid& id, const std::filesystem::path& cooked, bool needs_cook, bool& did_cook) -> std::optional<cooked_mesh_data>;
 
   /** @brief Reads a skeleton cooked as a side effect of a mesh import. @p id comes from @ref cooked_mesh_data::skeleton / @ref derive_skeleton_uuid. Pure read, no staleness tracking of its own (it's only ever produced alongside its owning mesh). */
-  [[nodiscard]] auto resolve_skeleton(const math::uuid& id) -> std::optional<std::vector<skeleton::joint>>;
+  [[nodiscard]] static auto resolve_skeleton(const math::uuid& id) -> std::optional<std::vector<skeleton::joint>>;
 
   /** @brief Reads an animation clip cooked as a side effect of a mesh import. @p id comes from @ref cooked_mesh_data::animation_clips / @ref derive_animation_clip_uuid. */
-  [[nodiscard]] auto resolve_animation_clip(const math::uuid& id) -> std::optional<animation_clip_data>;
+  [[nodiscard]] static auto resolve_animation_clip(const math::uuid& id) -> std::optional<animation_clip_data>;
 
   /** @brief Parses a hand-authored `.material` YAML file into asset-path-referencing (not uuid- or handle-referencing) form -- see material_description's doc comment. */
-  [[nodiscard]] auto parse_material_file(const std::filesystem::path& source) -> std::optional<material_description>;
+  [[nodiscard]] static auto parse_material_file(const std::filesystem::path& source) -> std::optional<material_description>;
 
   /** @brief Same shape as @ref parse_material_file, for a `.particle_effect` YAML file. */
-  [[nodiscard]] auto parse_particle_effect_file(const std::filesystem::path& source) -> std::optional<particle_effect_description>;
+  [[nodiscard]] static auto parse_particle_effect_file(const std::filesystem::path& source) -> std::optional<particle_effect_description>;
 
   /** @brief Same shape as @ref parse_material_file, for an `.animation_graph` YAML file -- has no asset references at all today, so its create_info can be used as-is, no path/uuid indirection needed. */
-  [[nodiscard]] auto parse_animation_graph_file(const std::filesystem::path& source) -> std::optional<animation_graph::create_info>;
+  [[nodiscard]] static auto parse_animation_graph_file(const std::filesystem::path& source) -> std::optional<animation_graph::create_info>;
 
 private:
 
-  auto _cook_texture(const std::filesystem::path& source, const std::filesystem::path& cooked) -> bool;
+  static auto _cook_texture(const std::filesystem::path& source, const std::filesystem::path& cooked) -> bool;
 
-  auto _load_cooked_texture(const std::filesystem::path& cooked, std::vector<std::byte>& pixels, std::uint32_t& width, std::uint32_t& height) -> bool;
+  static auto _load_cooked_texture(const std::filesystem::path& cooked, std::vector<std::byte>& pixels, std::uint32_t& width, std::uint32_t& height) -> bool;
 
-  auto _cook_environment_map(const std::filesystem::path& source, const std::filesystem::path& cooked) -> bool;
+  static auto _cook_environment_map(const std::filesystem::path& source, const std::filesystem::path& cooked) -> bool;
 
-  auto _load_cooked_environment_map(const std::filesystem::path& cooked, std::vector<std::byte>& pixels, std::uint32_t& width, std::uint32_t& height) -> bool;
+  static auto _load_cooked_environment_map(const std::filesystem::path& cooked, std::vector<std::byte>& pixels, std::uint32_t& width, std::uint32_t& height) -> bool;
 
-  auto _cook_font(const std::filesystem::path& source, const std::filesystem::path& cooked) -> bool;
+  static auto _cook_font(const std::filesystem::path& source, const std::filesystem::path& cooked) -> bool;
 
-  auto _load_cooked_font(const std::filesystem::path& cooked, cooked_font_data& data) -> bool;
+  static auto _load_cooked_font(const std::filesystem::path& cooked, cooked_font_data& data) -> bool;
 
   /** @brief Computes tangents from scratch for vertices[vertex_start, vertex_start + vertex_count) of a primitive lacking TANGENT (normals/UVs must already be populated); indices are that primitive's triangle indices, offset by vertex_start. */
   /** @brief Computes flat-shaded, area-weighted vertex normals from scratch for vertices[vertex_start, vertex_start + vertex_count) of a primitive lacking NORMAL (positions must already be populated); indices are that primitive's triangle indices, offset by vertex_start. */
@@ -296,19 +292,19 @@ private:
   /** @brief @p skin_vertices, when non-null, is kept parallel to @p vertices through the same vertex-fetch reorder (see meshopt_optimizeVertexFetchRemap's "multiple vertex streams" note). */
   static auto _optimize_and_generate_lods(std::vector<vertex>& vertices, std::vector<std::uint32_t>& indices, std::size_t vertex_start, std::size_t vertex_count, std::size_t index_start, std::size_t index_count, std::vector<skin_vertex>* skin_vertices = nullptr) -> std::vector<mesh_lod>;
 
-  auto _cook_mesh(const std::filesystem::path& source, const math::uuid& id, const std::filesystem::path& cooked) -> bool;
+  static auto _cook_mesh(const std::filesystem::path& source, const math::uuid& id, const std::filesystem::path& cooked) -> bool;
 
-  auto _load_cooked_mesh(const std::filesystem::path& cooked, std::vector<vertex>& vertices, std::vector<std::uint32_t>& indices, std::vector<cooked_submesh>& submeshes, math::volume& bounds, std::vector<skin_vertex>& skin_vertices, std::uint32_t& animation_clip_count) -> bool;
+  static auto _load_cooked_mesh(const std::filesystem::path& cooked, std::vector<vertex>& vertices, std::vector<std::uint32_t>& indices, std::vector<cooked_submesh>& submeshes, math::volume& bounds, std::vector<skin_vertex>& skin_vertices, std::uint32_t& animation_clip_count) -> bool;
 
-  auto _cook_material(const math::uuid& id, const material_description& description) -> bool;
+  static auto _cook_material(const math::uuid& id, const material_description& description) -> bool;
 
-  auto _cook_skeleton(const math::uuid& id, const std::vector<skeleton::joint>& joints) -> bool;
+  static auto _cook_skeleton(const math::uuid& id, const std::vector<skeleton::joint>& joints) -> bool;
 
-  auto _load_cooked_skeleton(const math::uuid& id, std::vector<skeleton::joint>& joints) -> bool;
+  static auto _load_cooked_skeleton(const math::uuid& id, std::vector<skeleton::joint>& joints) -> bool;
 
-  auto _cook_animation_clip(const math::uuid& id, const animation_clip_data& data) -> bool;
+  static auto _cook_animation_clip(const math::uuid& id, const animation_clip_data& data) -> bool;
 
-  auto _load_cooked_animation_clip(const math::uuid& id, animation_clip_data& data) -> bool;
+  static auto _load_cooked_animation_clip(const math::uuid& id, animation_clip_data& data) -> bool;
 
 }; // class asset_cooker
 

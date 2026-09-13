@@ -274,11 +274,6 @@ private:
   asset_manifest& _manifest;
   ibl_baker& _ibl;
 
-  // Own, private, synchronous-use instance -- asset_cooker is stateless (see its own doc comment),
-  // so this needs no coordination with asset_loader's separate instance. Used only by
-  // load_environment_map's fully-synchronous main-thread resolve_environment call.
-  asset_cooker _cooker{};
-
   mutable std::mutex _mutex{};
 
   std::unordered_map<std::string, std::shared_ptr<texture>> _textures{};

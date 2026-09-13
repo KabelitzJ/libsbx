@@ -170,7 +170,7 @@ auto asset_loader::_resolve(const texture_request& request) -> void {
   SBX_PROFILE_SCOPE("asset_loader::_resolve texture");
 
   auto did_cook = false;
-  auto data = _cooker.resolve_texture(request.source, request.cooked, request.needs_cook, did_cook);
+  auto data = asset_cooker::resolve_texture(request.source, request.cooked, request.needs_cook, did_cook);
 
   if (_aborted.load(std::memory_order_relaxed)) {
     return; // shutting down -- nothing will ever drain this, discard rather than push it
@@ -184,7 +184,7 @@ auto asset_loader::_resolve(const mesh_request& request) -> void {
   SBX_PROFILE_SCOPE("asset_loader::_resolve mesh");
 
   auto did_cook = false;
-  auto data = _cooker.resolve_mesh(request.source, request.id, request.cooked, request.needs_cook, did_cook);
+  auto data = asset_cooker::resolve_mesh(request.source, request.id, request.cooked, request.needs_cook, did_cook);
 
   if (_aborted.load(std::memory_order_relaxed)) {
     return;
@@ -198,7 +198,7 @@ auto asset_loader::_resolve(const font_request& request) -> void {
   SBX_PROFILE_SCOPE("asset_loader::_resolve font");
 
   auto did_cook = false;
-  auto data = _cooker.resolve_font(request.source, request.cooked, request.needs_cook, did_cook);
+  auto data = asset_cooker::resolve_font(request.source, request.cooked, request.needs_cook, did_cook);
 
   if (_aborted.load(std::memory_order_relaxed)) {
     return;
@@ -211,7 +211,7 @@ auto asset_loader::_resolve(const font_request& request) -> void {
 auto asset_loader::_resolve(const material_request& request) -> void {
   SBX_PROFILE_SCOPE("asset_loader::_resolve material");
 
-  auto data = (!request.source.empty() && request.source.extension() == ".material") ? _cooker.parse_material_file(request.source) : asset_cooker::resolve_cooked_material(request.id);
+  auto data = (!request.source.empty() && request.source.extension() == ".material") ? asset_cooker::parse_material_file(request.source) : asset_cooker::resolve_cooked_material(request.id);
 
   if (_aborted.load(std::memory_order_relaxed)) {
     return;
@@ -224,7 +224,7 @@ auto asset_loader::_resolve(const material_request& request) -> void {
 auto asset_loader::_resolve(const particle_effect_request& request) -> void {
   SBX_PROFILE_SCOPE("asset_loader::_resolve particle_effect");
 
-  auto data = _cooker.parse_particle_effect_file(request.source);
+  auto data = asset_cooker::parse_particle_effect_file(request.source);
 
   if (_aborted.load(std::memory_order_relaxed)) {
     return;
@@ -237,7 +237,7 @@ auto asset_loader::_resolve(const particle_effect_request& request) -> void {
 auto asset_loader::_resolve(const animation_graph_request& request) -> void {
   SBX_PROFILE_SCOPE("asset_loader::_resolve animation_graph");
 
-  auto data = _cooker.parse_animation_graph_file(request.source);
+  auto data = asset_cooker::parse_animation_graph_file(request.source);
 
   if (_aborted.load(std::memory_order_relaxed)) {
     return;
@@ -250,7 +250,7 @@ auto asset_loader::_resolve(const animation_graph_request& request) -> void {
 auto asset_loader::_resolve(const skeleton_request& request) -> void {
   SBX_PROFILE_SCOPE("asset_loader::_resolve skeleton");
 
-  auto data = _cooker.resolve_skeleton(request.id);
+  auto data = asset_cooker::resolve_skeleton(request.id);
 
   if (_aborted.load(std::memory_order_relaxed)) {
     return;
@@ -263,7 +263,7 @@ auto asset_loader::_resolve(const skeleton_request& request) -> void {
 auto asset_loader::_resolve(const animation_clip_request& request) -> void {
   SBX_PROFILE_SCOPE("asset_loader::_resolve animation_clip");
 
-  auto data = _cooker.resolve_animation_clip(request.id);
+  auto data = asset_cooker::resolve_animation_clip(request.id);
 
   if (_aborted.load(std::memory_order_relaxed)) {
     return;

@@ -177,8 +177,6 @@ private:
 
   auto _resolve(const animation_clip_request& request) -> void;
 
-  asset_cooker _cooker{};
-
   std::atomic<bool> _aborted{false};
 
   std::mutex _request_mutex{};

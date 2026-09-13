@@ -139,7 +139,7 @@ auto assets_module::resolve_mesh_collision_data(const math::uuid& id) -> std::op
   const auto needs_cook = _manifest.is_cooked_stale(id, source, cooked, mesh_cooker_version);
 
   auto did_cook = false;
-  auto data = _cooker.resolve_mesh(source, id, cooked, needs_cook, did_cook);
+  auto data = asset_cooker::resolve_mesh(source, id, cooked, needs_cook, did_cook);
 
   if (did_cook) {
     _manifest.record_cook(id, mesh_cooker_version, source);

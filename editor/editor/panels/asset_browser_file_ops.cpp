@@ -20,6 +20,7 @@
 #include <libsbx/assets/material.hpp>
 #include <libsbx/assets/particle_effect.hpp>
 #include <libsbx/assets/animation_graph.hpp>
+#include <libsbx/assets/shader_graph.hpp>
 
 namespace editor {
 
@@ -78,6 +79,42 @@ auto asset_browser_panel::_create_animation_graph(editor_state& state, const std
   state.select_asset(id, relative_path, asset_kind::animation_graph);
 }
 
+auto asset_browser_panel::_create_shader_graph(editor_state& state, const std::filesystem::path& target_directory) -> void {
+  auto& project = sbx::core::engine::project();
+  auto& assets_module = sbx::core::engine::get_module<sbx::assets::assets_module>();
+
+  const auto absolute_directory = project.assets_directory() / target_directory;
+  std::filesystem::create_directories(absolute_directory);
+
+  const auto relative_path = target_directory / unique_name(absolute_directory, "New Shader Graph", ".shadergraph");
+
+  // A flat mid-gray feeding Direct Output -- degenerate (every light contributes the same flat
+  // color) but cook-clean and is_valid() immediately, same reasoning _create_animation_graph's
+  // single Idle state gives a fresh animation graph. Real content is the point of the graph editor
+  // this creates, not this seed.
+  auto create_info = sbx::assets::shader_graph::create_info{.name = "New Shader Graph"};
+
+  auto color_node = sbx::assets::shader_graph_node{};
+  color_node.id = 0u;
+  color_node.type = sbx::assets::shader_node_type::constant_color;
+  color_node.editor_position = sbx::math::vector2{0.0f, 0.0f};
+  color_node.value = sbx::math::color{0.5f, 0.5f, 0.5f, 1.0f};
+
+  auto output_node = sbx::assets::shader_graph_node{};
+  output_node.id = 1u;
+  output_node.type = sbx::assets::shader_node_type::output_direct;
+  output_node.editor_position = sbx::math::vector2{300.0f, 0.0f};
+
+  create_info.nodes = {color_node, output_node};
+  create_info.edges = {sbx::assets::shader_graph_edge{.from_node = 0u, .from_pin = 0u, .to_node = 1u, .to_pin = 0u}};
+
+  auto handle = assets_module.create_shader_graph(create_info);
+  const auto id = assets_module.save_shader_graph(handle, relative_path);
+
+  _navigate_to(target_directory);
+  state.select_asset(id, relative_path, asset_kind::shader_graph);
+}
+
 auto asset_browser_panel::_create_script(editor_state& state, const std::filesystem::path& target_directory) -> void {
   auto& project = sbx::core::engine::project();
 
@@ -134,6 +171,10 @@ auto asset_browser_panel::_draw_create_menu(editor_state& state, const std::file
 
   if (ImGui::MenuItem(ICON_MDI_STATE_MACHINE " Animation Graph")) {
     _create_animation_graph(state, target_directory);
+  }
+
+  if (ImGui::MenuItem(ICON_MDI_VECTOR_POLYLINE " Shader Graph")) {
+    _create_shader_graph(state, target_directory);
   }
 
   if (ImGui::MenuItem(ICON_MDI_FILE_CODE_OUTLINE " C# Script")) {

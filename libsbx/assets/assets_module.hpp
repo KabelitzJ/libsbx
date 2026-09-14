@@ -29,6 +29,7 @@
 #include <libsbx/assets/environment_map.hpp>
 #include <libsbx/assets/particle_effect.hpp>
 #include <libsbx/assets/animation_graph.hpp>
+#include <libsbx/assets/shader_graph.hpp>
 #include <libsbx/assets/prefab.hpp>
 #include <libsbx/assets/asset_cooker.hpp>
 #include <libsbx/assets/asset_manifest.hpp>
@@ -171,6 +172,16 @@ public:
   auto update_animation_graph(animation_graph_handle& graph, const animation_graph::create_info& create_info) -> void;
 
   auto save_animation_graph(animation_graph_handle& graph, const std::filesystem::path& path) -> math::uuid;
+
+  auto load_shader_graph(const math::uuid& id) -> shader_graph_handle;
+
+  auto load_shader_graph(const std::filesystem::path& path) -> shader_graph_handle;
+
+  auto create_shader_graph(const shader_graph::create_info& create_info) -> shader_graph_handle;
+
+  auto update_shader_graph(shader_graph_handle& graph, const shader_graph::create_info& create_info) -> void;
+
+  auto save_shader_graph(shader_graph_handle& graph, const std::filesystem::path& path) -> math::uuid;
 
   /**
    * @brief Wraps an already-serialized subtree snapshot (see scenes::scene_serializer::

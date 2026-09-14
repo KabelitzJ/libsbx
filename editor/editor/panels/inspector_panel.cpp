@@ -233,6 +233,7 @@ auto inspector_panel::_draw_asset_properties(editor_state& state, const asset_se
       case asset_kind::environment_map: _asset_cache.environment_map = assets_module.load_environment_map(asset.id); break;
       case asset_kind::particle_effect: _asset_cache.particle_effect = assets_module.load_particle_effect(asset.id); break;
       case asset_kind::animation_graph: _asset_cache.animation_graph = assets_module.load_animation_graph(asset.id); break;
+      case asset_kind::shader_graph: _asset_cache.shader_graph = assets_module.load_shader_graph(asset.id); break;
       case asset_kind::font: _asset_cache.font = assets_module.load_font(asset.id); break;
       case asset_kind::prefab:
       case asset_kind::scene:
@@ -273,6 +274,9 @@ auto inspector_panel::_draw_asset_properties(editor_state& state, const asset_se
       _material_edit.metallic_roughness = material.metallic_roughness();
       _material_edit.occlusion = material.occlusion();
       _material_edit.emissive = material.emissive();
+      _material_edit.shader_graph = material.shader_graph();
+      _material_edit.generic_params = material.generic_params();
+      _material_edit.generic_textures = material.generic_textures();
     }
   }
 
@@ -358,6 +362,43 @@ auto inspector_panel::_draw_asset_properties(editor_state& state, const asset_se
                 ImGui::Text("%s (Trigger)", parameter.name.c_str());
               }
             }, parameter.default_value);
+          }
+
+          ImGui::TreePop();
+        }
+      }
+
+      break;
+    }
+    case asset_kind::shader_graph: {
+      ImGui::Text("Type: Shader Graph");
+
+      if (ImGui::Button(ICON_MDI_VECTOR_POLYLINE " Open Graph Editor")) {
+        state.request_open_shader_graph_editor(asset.id, asset.path);
+      }
+
+      // Read-only summary -- nodes/edges are edited in the graph editor opened above.
+      const auto& handle = _asset_cache.shader_graph;
+
+      if (handle.is_valid()) {
+        ImGui::Text("Nodes: %zu", handle->nodes().size());
+        ImGui::Text("Edges: %zu", handle->edges().size());
+
+        const auto parameters = handle->parameters();
+
+        if (!parameters.empty() && ImGui::TreeNodeEx("Parameters", ImGuiTreeNodeFlags_DefaultOpen)) {
+          for (const auto& parameter : parameters) {
+            const auto* type_name = [&] {
+              switch (parameter.type) {
+                case sbx::assets::shader_graph_parameter_type::float_value: return "Float";
+                case sbx::assets::shader_graph_parameter_type::vector3_value: return "Vector3";
+                case sbx::assets::shader_graph_parameter_type::color_value: return "Color";
+                case sbx::assets::shader_graph_parameter_type::texture_value: return "Texture";
+              }
+              return "?";
+            }();
+
+            ImGui::Text("%s (%s)", parameter.name.empty() ? "(unnamed)" : parameter.name.c_str(), type_name);
           }
 
           ImGui::TreePop();

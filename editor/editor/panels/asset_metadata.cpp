@@ -24,6 +24,7 @@ auto extension_table() -> const std::unordered_map<std::string, asset_kind>& {
     {".hdr", asset_kind::environment_map},
     {".particle_effect", asset_kind::particle_effect},
     {".animation_graph", asset_kind::animation_graph},
+    {".shadergraph", asset_kind::shader_graph},
     {".ttf", asset_kind::font},
     {".prefab", asset_kind::prefab},
     {".yaml", asset_kind::scene},
@@ -37,7 +38,7 @@ auto is_importable_kind(asset_kind kind) -> bool {
   return kind == asset_kind::texture || kind == asset_kind::mesh ||
          kind == asset_kind::material || kind == asset_kind::environment_map ||
          kind == asset_kind::particle_effect || kind == asset_kind::animation_graph ||
-         kind == asset_kind::font;
+         kind == asset_kind::shader_graph || kind == asset_kind::font;
 }
 
 auto filename_less(const std::filesystem::path& lhs, const std::filesystem::path& rhs) -> bool {
@@ -81,6 +82,7 @@ auto icon_for(const asset_browser_entry& entry) -> const char* {
     case asset_kind::environment_map: return ICON_MDI_EARTH;
     case asset_kind::particle_effect: return ICON_MDI_FIREWORK;
     case asset_kind::animation_graph: return ICON_MDI_STATE_MACHINE;
+    case asset_kind::shader_graph: return ICON_MDI_VECTOR_POLYLINE;
     case asset_kind::font: return ICON_MDI_FORMAT_FONT;
     case asset_kind::prefab: return ICON_MDI_CUBE_SCAN;
     case asset_kind::scene: return ICON_MDI_FILE_TREE;
@@ -103,6 +105,7 @@ auto drag_payload_type_for(asset_kind kind) -> const char* {
     case asset_kind::material: return sbx::render::drag_drop_payload_material;
     case asset_kind::particle_effect: return sbx::render::drag_drop_payload_particle_effect;
     case asset_kind::animation_graph: return sbx::render::drag_drop_payload_animation_graph;
+    case asset_kind::shader_graph: return sbx::render::drag_drop_payload_shader_graph;
     case asset_kind::font: return sbx::render::drag_drop_payload_font;
     case asset_kind::prefab: return sbx::render::drag_drop_payload_prefab;
     default: return nullptr;

@@ -2,6 +2,7 @@
 // Copyright (c) 2026 Jonas Kabelitz
 #include <libsbx/assets/asset_residency.hpp>
 
+#include <algorithm>
 #include <fstream>
 #include <type_traits>
 #include <utility>
@@ -50,6 +51,17 @@ struct material_data {
   std::float_t ior;
   math::vector2 uv_tiling;
   math::vector2 uv_offset;
+
+  // Shader-graph-exposed parameters -- unused (always zero) until a material actually references a
+  // shader_graph (material opt-in, still future work; see the shader graph plan's "Material
+  // opt-in"/"GPU parameter storage" sections). Added now so a hand-authored graph using an exposed
+  // constant_* or texture_sample node compiles today, not only once that wiring lands -- codegen
+  // (shader_graph_codegen.cpp) already emits `material.generic_params[N]`/`generic_textures[N]`
+  // reads for those node types. One uniform float4 slot per param regardless of its actual type
+  // (scalar/vector3/color use .x/.xyz/.rgba of their slot) avoids sub-float packing/alignment
+  // footguns for a handful of extra bytes per material.
+  math::vector4 generic_params[shader_graph_max_params];
+  std::uint32_t generic_textures[shader_graph_max_textures];
 }; // struct material_data
 
 // Strips characters a filename can't contain, for turning a gltf material's (freeform) name into
@@ -424,6 +436,9 @@ auto asset_residency::update_material(material_handle& material, const material:
   material->_metallic_roughness = create_info.metallic_roughness;
   material->_occlusion = create_info.occlusion;
   material->_emissive = create_info.emissive;
+  material->_shader_graph = create_info.shader_graph;
+  material->_generic_params = create_info.generic_params;
+  material->_generic_textures = create_info.generic_textures;
   material->_name = create_info.name;
 
   // Covers both the async-finalize path (_finalize_material calling this) and a live editor edit
@@ -506,6 +521,30 @@ auto asset_residency::save_material(material_handle& material, const std::filesy
   if (const auto slot = path_of(material->emissive())) {
     node["emissive"] = *slot;
   }
+
+  if (material->shader_graph().is_valid()) {
+    const auto absolute = _manifest.path_of(material->shader_graph()->id());
+
+    if (!absolute.empty()) {
+      node["shader_graph"] = _manifest.relative(absolute).generic_string();
+    }
+  }
+
+  auto generic_params_node = YAML::Node{YAML::NodeType::Sequence};
+
+  for (const auto& value : material->generic_params()) {
+    generic_params_node.push_back(value);
+  }
+
+  node["generic_params"] = generic_params_node;
+
+  auto generic_textures_node = YAML::Node{YAML::NodeType::Sequence};
+
+  for (const auto& texture : material->generic_textures()) {
+    generic_textures_node.push_back(path_of(texture).value_or(std::string{}));
+  }
+
+  node["generic_textures"] = generic_textures_node;
 
   if (!resolved_path.parent_path().empty()) {
     std::filesystem::create_directories(resolved_path.parent_path());
@@ -963,6 +1002,162 @@ auto asset_residency::save_animation_graph(animation_graph_handle& graph, const 
   return id;
 }
 
+auto asset_residency::load_shader_graph(const math::uuid& id) -> shader_graph_handle {
+  _manifest.ensure_loaded();
+
+  {
+    auto lock = std::lock_guard{_mutex};
+    if (const auto entry = _shader_graph_files.find(id); entry != _shader_graph_files.end()) {
+      return shader_graph_handle{entry->second};
+    }
+  }
+
+  const auto source_path = _manifest.path_of(id);
+
+  if (source_path.empty() || source_path.extension() != ".shadergraph") {
+    utility::logger<"assets">::warn("Unknown shader_graph uuid {}", id);
+    return shader_graph_handle{};
+  }
+
+  auto record = std::make_shared<shader_graph>();
+  record->_id = id;
+
+  {
+    auto lock = std::lock_guard{_mutex};
+    _shader_graph_files.emplace(id, record);
+  }
+
+  _loader.submit(asset_loader::shader_graph_request{id, source_path});
+
+  return shader_graph_handle{record};
+}
+
+auto asset_residency::load_shader_graph(const std::filesystem::path& path) -> shader_graph_handle {
+  const auto& project = core::engine::project();
+
+  const auto assets_directory = project.assets_directory();
+
+  return load_shader_graph(_manifest.import(assets_directory / path));
+}
+
+auto asset_residency::create_shader_graph(const shader_graph::create_info& create_info) -> shader_graph_handle {
+  return shader_graph_handle{std::make_shared<shader_graph>(create_info)};
+}
+
+auto asset_residency::update_shader_graph(shader_graph_handle& graph, const shader_graph::create_info& create_info) -> void {
+  if (!graph.is_valid()) {
+    return;
+  }
+
+  graph->_name = create_info.name;
+  graph->_nodes = create_info.nodes;
+  graph->_edges = create_info.edges;
+  graph->_bump_generation();
+}
+
+auto asset_residency::save_shader_graph(shader_graph_handle& graph, const std::filesystem::path& path) -> math::uuid {
+  const auto& project = core::engine::project();
+
+  const auto assets_directory = project.assets_directory();
+
+  const auto resolved_path = assets_directory / path;
+
+  if (!graph.is_valid()) {
+    utility::logger<"assets">::warn("Cannot save an invalid shader_graph to '{}'", resolved_path.generic_string());
+    return math::uuid::nil();
+  }
+
+  const auto path_of = [this](const texture_handle& texture) -> std::optional<std::string> {
+    if (!texture.is_valid()) {
+      return std::nullopt;
+    }
+
+    const auto absolute = _manifest.path_of(texture->id());
+
+    if (absolute.empty()) {
+      return std::nullopt;
+    }
+
+    return _manifest.relative(absolute).generic_string();
+  };
+
+  auto node = YAML::Node{};
+
+  node["name"] = graph->name();
+
+  auto nodes_node = YAML::Node{YAML::NodeType::Sequence};
+
+  for (const auto& graph_node : graph->nodes()) {
+    auto node_yaml = YAML::Node{};
+
+    node_yaml["id"] = graph_node.id;
+    node_yaml["type"] = shader_node_type_to_string(graph_node.type);
+    node_yaml["position"] = graph_node.editor_position;
+    node_yaml["name"] = graph_node.name;
+    node_yaml["exposed"] = graph_node.exposed;
+
+    if (const auto* value = std::get_if<std::float_t>(&graph_node.value)) {
+      node_yaml["value"] = *value;
+    } else if (const auto* value = std::get_if<math::vector3>(&graph_node.value)) {
+      node_yaml["value"] = *value;
+    } else if (const auto* value = std::get_if<math::color>(&graph_node.value)) {
+      node_yaml["value"] = *value;
+    } else if (const auto* value = std::get_if<texture_handle>(&graph_node.value)) {
+      if (const auto slot = path_of(*value)) {
+        node_yaml["texture"] = *slot;
+      }
+    }
+
+    nodes_node.push_back(node_yaml);
+  }
+
+  node["nodes"] = nodes_node;
+
+  auto edges_node = YAML::Node{YAML::NodeType::Sequence};
+
+  for (const auto& edge : graph->edges()) {
+    auto edge_yaml = YAML::Node{};
+
+    edge_yaml["from_node"] = edge.from_node;
+    edge_yaml["from_pin"] = edge.from_pin;
+    edge_yaml["to_node"] = edge.to_node;
+    edge_yaml["to_pin"] = edge.to_pin;
+
+    edges_node.push_back(edge_yaml);
+  }
+
+  node["edges"] = edges_node;
+
+  if (!resolved_path.parent_path().empty()) {
+    std::filesystem::create_directories(resolved_path.parent_path());
+  }
+
+  auto out = std::ofstream{resolved_path};
+  out << node;
+
+  const auto id = _manifest.import(resolved_path);
+
+  graph->_id = id;
+
+  {
+    auto lock = std::lock_guard{_mutex};
+    _shader_graph_files[id] = graph.shared();
+  }
+
+  auto info = shader_graph::create_info{};
+  info.name = graph->name();
+  info.nodes = graph->nodes();
+  info.edges = graph->edges();
+
+  if (!asset_cooker::cook_shader_graph(id, info)) {
+    utility::logger<"assets">::warn("shader_graph '{}' saved but failed to cook -- see the warning above for why", resolved_path.generic_string());
+  }
+
+  utility::logger<"assets">::info("Saved shader_graph '{}'", resolved_path.generic_string());
+
+  return id;
+}
+
 auto asset_residency::load_environment_map(const math::uuid& id) -> environment_map_handle {
   auto timer = utility::scoped_timer{[&id](const units::seconds& elapsed) {
     utility::logger<"assets">::info("Loaded environment map {} in {}", id, units::milliseconds{elapsed});
@@ -1087,6 +1282,17 @@ auto asset_residency::_drain_loader_results() -> void {
 
   for (auto& result : animation_graphs) {
     _finalize_animation_graph(result);
+  }
+
+  if (remaining == 0u) {
+    return;
+  }
+
+  auto shader_graphs = _loader.take_resolved_shader_graphs(remaining);
+  remaining -= shader_graphs.size();
+
+  for (auto& result : shader_graphs) {
+    _finalize_shader_graph(result);
   }
 
   if (remaining == 0u) {
@@ -1299,6 +1505,13 @@ auto asset_residency::_finalize_material(asset_loader::material_result& result) 
   info.occlusion = load_slot(description.occlusion, graphics::format::r8g8b8a8_unorm);
   info.emissive = load_slot(description.emissive, graphics::format::r8g8b8a8_srgb);
 
+  info.shader_graph = description.shader_graph.empty() ? shader_graph_handle{} : load_shader_graph(std::filesystem::path{description.shader_graph});
+  info.generic_params = description.generic_params;
+
+  for (auto i = std::size_t{0u}; i < description.generic_texture_paths.size(); ++i) {
+    info.generic_textures[i] = load_slot(description.generic_texture_paths[i], graphics::format::r8g8b8a8_srgb);
+  }
+
   auto handle = material_handle{};
 
   {
@@ -1432,6 +1645,64 @@ auto asset_residency::_finalize_animation_graph(asset_loader::animation_graph_re
   update_animation_graph(handle, *result.data);
 
   utility::logger<"assets">::info("Loaded animation_graph '{}'", request.source.generic_string());
+}
+
+auto asset_residency::_finalize_shader_graph(asset_loader::shader_graph_result& result) -> void {
+  const auto& request = result.request;
+
+  if (!result.data) {
+    utility::logger<"assets">::warn("Could not parse shader_graph '{}'", request.source.generic_string());
+    return;
+  }
+
+  const auto& description = *result.data;
+
+  auto info = shader_graph::create_info{};
+  info.name = description.name;
+  info.edges = description.edges;
+
+  info.nodes.reserve(description.nodes.size());
+
+  for (const auto& node_description : description.nodes) {
+    auto node = shader_graph_node{};
+    node.id = node_description.id;
+    node.type = node_description.type;
+    node.editor_position = node_description.editor_position;
+    node.name = node_description.name;
+    node.exposed = node_description.exposed;
+
+    if (const auto* path = std::get_if<std::string>(&node_description.value)) {
+      node.value = path->empty() ? texture_handle{} : load_texture(std::filesystem::path{*path}, graphics::format::r8g8b8a8_srgb);
+    } else if (const auto* value = std::get_if<std::float_t>(&node_description.value)) {
+      node.value = *value;
+    } else if (const auto* value = std::get_if<math::vector3>(&node_description.value)) {
+      node.value = *value;
+    } else if (const auto* value = std::get_if<math::color>(&node_description.value)) {
+      node.value = *value;
+    }
+    // monostate (math/input/output nodes) -- default-constructed monostate, nothing to resolve
+
+    info.nodes.push_back(node);
+  }
+
+  auto handle = shader_graph_handle{};
+
+  {
+    auto lock = std::lock_guard{_mutex};
+    const auto entry = _shader_graph_files.find(request.id);
+    if (entry == _shader_graph_files.end()) {
+      return; // defensive -- load_shader_graph always inserts the placeholder before submitting
+    }
+    handle = shader_graph_handle{entry->second};
+  }
+
+  update_shader_graph(handle, info);
+
+  if (!asset_cooker::cook_shader_graph(request.id, info)) {
+    utility::logger<"assets">::warn("shader_graph '{}' loaded but failed to cook -- see the warning above for why", request.source.generic_string());
+  }
+
+  utility::logger<"assets">::info("Loaded shader_graph '{}'", request.source.generic_string());
 }
 
 auto asset_residency::_finalize_skeleton(asset_loader::skeleton_result& result) -> void {
@@ -1623,6 +1894,14 @@ auto asset_residency::process_uploads(std::uint64_t frame_index) -> void {
     data.ior = material.ior();
     data.uv_tiling = material.uv_tiling();
     data.uv_offset = material.uv_offset();
+
+    const auto& generic_params = material.generic_params();
+    std::ranges::copy(generic_params, data.generic_params);
+
+    const auto& generic_textures = material.generic_textures();
+    for (auto i = std::size_t{0u}; i < generic_textures.size(); ++i) {
+      data.generic_textures[i] = resolve(generic_textures[i], _white);
+    }
 
     buffer.write(&data, sizeof(material_data), material.index() * memory::stride_v<material_data>);
   }

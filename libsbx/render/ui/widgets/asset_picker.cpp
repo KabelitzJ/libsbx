@@ -30,6 +30,7 @@ namespace sbx::render {
     case asset_picker_kind::material: return ICON_MDI_PALETTE_SWATCH;
     case asset_picker_kind::particle_effect: return ICON_MDI_FIREWORK;
     case asset_picker_kind::animation_graph: return ICON_MDI_STATE_MACHINE;
+    case asset_picker_kind::shader_graph: return ICON_MDI_VECTOR_POLYLINE;
     case asset_picker_kind::font: return ICON_MDI_FORMAT_FONT;
   }
 
@@ -82,6 +83,7 @@ auto drag_payload_type_for(asset_picker_kind kind) -> const char* {
     case asset_picker_kind::material: return drag_drop_payload_material;
     case asset_picker_kind::particle_effect: return drag_drop_payload_particle_effect;
     case asset_picker_kind::animation_graph: return drag_drop_payload_animation_graph;
+    case asset_picker_kind::shader_graph: return drag_drop_payload_shader_graph;
     case asset_picker_kind::font: return drag_drop_payload_font;
   }
 

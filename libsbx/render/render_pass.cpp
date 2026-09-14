@@ -8,14 +8,14 @@
 
 namespace sbx::render {
 
-auto submit_draw_commands(render_context& context, const std::vector<draw_command>& commands, const std::array<memory::observer_ptr<graphics::graphics_pipeline>, 4u>& pipelines, std::uint32_t cascade_index) -> void {
+auto submit_draw_commands(render_context& context, const std::vector<draw_command>& commands, const std::array<memory::observer_ptr<graphics::graphics_pipeline>, 4u>& pipelines, std::uint32_t cascade_index, const graph_pipeline_resolver& resolve_graph_pipeline) -> void {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 
   auto& registry = graphics_module.resource_registry();
   auto& bindless_table = graphics_module.bindless_table();
 
   auto bound = false;
-  auto current_pipeline = std::uint32_t{0u};
+  auto current_pipeline = static_cast<const graphics::graphics_pipeline*>(nullptr);
   auto current_mesh = memory::make_observer<const assets::mesh>(nullptr);
 
   for (const auto& command : commands) {
@@ -27,9 +27,25 @@ auto submit_draw_commands(render_context& context, const std::vector<draw_comman
       continue;
     }
 
-    if (!bound || current_pipeline != command.pipeline_id) {
-      context.command_buffer->bind_pipeline(*pipelines[command.pipeline_id]);
-      current_pipeline = command.pipeline_id;
+    // A graph-driven material bypasses pipeline_id's fixed 4-slot table entirely -- there's no
+    // fixed slot for "however many distinct graphs a scene uses" -- and defers to the pass's own
+    // resolver instead (empty for passes that don't care about shading model, e.g. depth-only ones,
+    // which then fall through to the built-in table exactly like an unlit material already does).
+    auto pipeline = memory::observer_ptr<graphics::graphics_pipeline>{};
+
+    if (command.material->shader_graph().is_valid() && resolve_graph_pipeline) {
+      pipeline = resolve_graph_pipeline(command.material->shader_graph(), command.material->is_double_sided());
+
+      if (!pipeline) {
+        continue; // no usable pipeline yet for this graph -- skip the draw rather than misrender
+      }
+    } else {
+      pipeline = pipelines[command.pipeline_id];
+    }
+
+    if (!bound || current_pipeline != pipeline.get()) {
+      context.command_buffer->bind_pipeline(*pipeline);
+      current_pipeline = pipeline.get();
       bound = true;
     }
 
@@ -59,7 +75,7 @@ auto submit_draw_commands(render_context& context, const std::vector<draw_comman
   }
 }
 
-auto submit_draw_commands_indirect(render_context& context, const std::vector<draw_command>& commands, const std::array<memory::observer_ptr<graphics::graphics_pipeline>, 4u>& pipelines) -> void {
+auto submit_draw_commands_indirect(render_context& context, const std::vector<draw_command>& commands, const std::array<memory::observer_ptr<graphics::graphics_pipeline>, 4u>& pipelines, const graph_pipeline_resolver& resolve_graph_pipeline) -> void {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 
   auto& registry = graphics_module.resource_registry();
@@ -67,7 +83,7 @@ auto submit_draw_commands_indirect(render_context& context, const std::vector<dr
   auto& indirect_args_buffer = registry.get<graphics::buffer>(context.culled_indirect_args_buffer);
 
   auto bound = false;
-  auto current_pipeline = std::uint32_t{0u};
+  auto current_pipeline = static_cast<const graphics::graphics_pipeline*>(nullptr);
   auto current_mesh = memory::make_observer<const assets::mesh>(nullptr);
 
   for (auto index = std::size_t{0u}; index < commands.size(); ++index) {
@@ -81,9 +97,21 @@ auto submit_draw_commands_indirect(render_context& context, const std::vector<dr
       continue;
     }
 
-    if (!bound || current_pipeline != command.pipeline_id) {
-      context.command_buffer->bind_pipeline(*pipelines[command.pipeline_id]);
-      current_pipeline = command.pipeline_id;
+    auto pipeline = memory::observer_ptr<graphics::graphics_pipeline>{};
+
+    if (command.material->shader_graph().is_valid() && resolve_graph_pipeline) {
+      pipeline = resolve_graph_pipeline(command.material->shader_graph(), command.material->is_double_sided());
+
+      if (!pipeline) {
+        continue; // no usable pipeline yet for this graph -- skip the draw rather than misrender
+      }
+    } else {
+      pipeline = pipelines[command.pipeline_id];
+    }
+
+    if (!bound || current_pipeline != pipeline.get()) {
+      context.command_buffer->bind_pipeline(*pipeline);
+      current_pipeline = pipeline.get();
       bound = true;
     }
 

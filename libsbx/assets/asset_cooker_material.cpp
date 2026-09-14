@@ -174,6 +174,20 @@ auto asset_cooker::parse_material_file(const std::filesystem::path& source) -> s
   description.occlusion = path_slot("occlusion");
   description.emissive = path_slot("emissive");
 
+  description.shader_graph = path_slot("shader_graph");
+
+  if (const auto generic_params = root["generic_params"]) {
+    for (auto i = std::size_t{0u}; i < generic_params.size() && i < description.generic_params.size(); ++i) {
+      description.generic_params[i] = generic_params[i].as<math::vector4>();
+    }
+  }
+
+  if (const auto generic_textures = root["generic_textures"]) {
+    for (auto i = std::size_t{0u}; i < generic_textures.size() && i < description.generic_texture_paths.size(); ++i) {
+      description.generic_texture_paths[i] = generic_textures[i].as<std::string>();
+    }
+  }
+
   return description;
 }
 

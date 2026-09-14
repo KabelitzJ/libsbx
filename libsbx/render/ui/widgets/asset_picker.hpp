@@ -20,6 +20,7 @@ enum class asset_picker_kind : std::uint8_t {
   material,
   particle_effect,
   animation_graph,
+  shader_graph,
   font,
 }; // enum class asset_picker_kind
 

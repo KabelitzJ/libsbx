@@ -5,6 +5,7 @@
 
 #include <array>
 #include <cstdint>
+#include <functional>
 #include <span>
 #include <string_view>
 #include <vector>
@@ -22,6 +23,7 @@
 #include <libsbx/graphics/pipeline/graphics_pipeline.hpp>
 
 #include <libsbx/assets/assets_module.hpp>
+#include <libsbx/assets/shader_graph.hpp>
 
 #include <libsbx/render/render_packet.hpp>
 
@@ -167,7 +169,21 @@ public:
 
 }; // class render_pass
 
-auto submit_draw_commands(render_context& context, const std::vector<draw_command>& commands, const std::array<memory::observer_ptr<graphics::graphics_pipeline>, 4u>& pipelines, std::uint32_t cascade_index = 0xFFFFFFFFu) -> void;
+/**
+ * @brief Resolves a graph-driven material's pipeline on demand -- given the pass already owns a
+ * pass-specific graphics_pipeline::create_info template (formats, blend/depth state, shading_policy
+ * specialization), this just swaps in that shader_graph's own compiled shader and cull mode. Every
+ * lookup goes through shader_cache/pipeline_cache, both already content-keyed caches, so the
+ * resolver itself needs no cache of its own. Returns a null observer_ptr if the graph has no usable
+ * pipeline yet (still compiling, or codegen/compilation failed) -- the caller skips that draw rather
+ * than crash or bind something wrong. Left empty (the default) by passes that don't care about
+ * shading model at all (depth_pre_pass, shadow_pass) -- a graph-driven material there just falls
+ * back to pipeline_id's built-in slots, same as it already does for unlit (see compute_pipeline_id
+ * in scene_renderer_module.cpp; shading model is irrelevant to depth-only output either way).
+ */
+using graph_pipeline_resolver = std::function<memory::observer_ptr<graphics::graphics_pipeline>(const assets::shader_graph_handle&, bool is_double_sided)>;
+
+auto submit_draw_commands(render_context& context, const std::vector<draw_command>& commands, const std::array<memory::observer_ptr<graphics::graphics_pipeline>, 4u>& pipelines, std::uint32_t cascade_index = 0xFFFFFFFFu, const graph_pipeline_resolver& resolve_graph_pipeline = {}) -> void;
 
 /**
  * @brief Same as submit_draw_commands, but for a command list frustum_cull_pass has already culled
@@ -177,7 +193,7 @@ auto submit_draw_commands(render_context& context, const std::vector<draw_comman
  * at context.culled_transform_address (the GPU-compacted, visible-only transforms) instead of
  * context.transform_address.
  */
-auto submit_draw_commands_indirect(render_context& context, const std::vector<draw_command>& commands, const std::array<memory::observer_ptr<graphics::graphics_pipeline>, 4u>& pipelines) -> void;
+auto submit_draw_commands_indirect(render_context& context, const std::vector<draw_command>& commands, const std::array<memory::observer_ptr<graphics::graphics_pipeline>, 4u>& pipelines, const graph_pipeline_resolver& resolve_graph_pipeline = {}) -> void;
 
 auto bind_globals(render_context& context) -> void;
 

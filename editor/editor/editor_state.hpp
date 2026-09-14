@@ -42,6 +42,7 @@ enum class asset_kind {
   environment_map,
   particle_effect,
   animation_graph,
+  shader_graph,
   font,
   prefab,
   scene, // .yaml, reference-only: not routed through assets_module::import
@@ -158,6 +159,18 @@ struct editor_state {
   }
 
   std::optional<animation_graph_edit_request> open_animation_graph_request{};
+
+  /** @brief Same idea as animation_graph_edit_request, consumed by shader_graph_panel. */
+  struct shader_graph_edit_request {
+    sbx::math::uuid id{sbx::math::uuid::nil()};
+    std::filesystem::path path{}; // project-relative
+  }; // struct shader_graph_edit_request
+
+  auto request_open_shader_graph_editor(sbx::math::uuid id, std::filesystem::path path) -> void {
+    open_shader_graph_request = shader_graph_edit_request{id, std::move(path)};
+  }
+
+  std::optional<shader_graph_edit_request> open_shader_graph_request{};
 
   /** @brief One-shot "open the Edit Layers... popup" request -- fired from the node Layer dropdown or a LayerMask field's popup, consumed by editor_ui_layer once it draws the popup. */
   auto request_open_edit_layers_popup() -> void {

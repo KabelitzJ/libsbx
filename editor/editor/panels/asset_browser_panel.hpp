@@ -64,6 +64,7 @@ private:
   auto _create_material(editor_state& state, const std::filesystem::path& target_directory) -> void;
   auto _create_particle_effect(editor_state& state, const std::filesystem::path& target_directory) -> void;
   auto _create_animation_graph(editor_state& state, const std::filesystem::path& target_directory) -> void;
+  auto _create_shader_graph(editor_state& state, const std::filesystem::path& target_directory) -> void;
   auto _create_script(editor_state& state, const std::filesystem::path& target_directory) -> void;
   auto _create_folder(const std::filesystem::path& target_directory) -> void;
 

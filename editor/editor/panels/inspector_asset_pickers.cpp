@@ -250,4 +250,36 @@ auto draw_animation_graph_picker(editor_state& state, const char* popup_id, sbx:
   return result.changed;
 }
 
+auto draw_shader_graph_picker(editor_state& state, const char* popup_id, sbx::assets::shader_graph_handle& slot) -> bool {
+  auto& assets_module = sbx::core::engine::get_module<sbx::assets::assets_module>();
+
+  const auto current = slot.is_valid() ? to_picker_item(assets_module, slot->id()) : sbx::render::asset_picker_item{};
+
+  const auto options = sbx::render::asset_picker_options{
+    .kind = sbx::render::asset_picker_kind::shader_graph,
+    .extensions = {".shadergraph"},
+    .allow_none = true,
+    .show_edit_button = true,
+    .show_reveal_button = true,
+  };
+
+  const auto result = sbx::render::draw_asset_picker(popup_id, current, {}, options);
+
+  if (result.cleared) {
+    slot = sbx::assets::shader_graph_handle{};
+  } else if (result.changed) {
+    slot = assets_module.load_shader_graph(result.picked.path);
+  }
+
+  if (result.edit_requested && slot.is_valid()) {
+    state.request_open_shader_graph_editor(slot->id(), relative_asset_path(assets_module, slot->id()));
+  }
+
+  if (result.reveal_requested && slot.is_valid()) {
+    state.request_reveal_in_browser(relative_asset_path(assets_module, slot->id()));
+  }
+
+  return result.changed;
+}
+
 } // namespace editor

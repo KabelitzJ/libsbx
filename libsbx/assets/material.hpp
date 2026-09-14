@@ -3,6 +3,7 @@
 #ifndef LIBSBX_ASSETS_MATERIAL_HPP_
 #define LIBSBX_ASSETS_MATERIAL_HPP_
 
+#include <array>
 #include <cstdint>
 #include <limits>
 #include <string>
@@ -10,10 +11,12 @@
 #include <libsbx/math/color.hpp>
 #include <libsbx/math/vector2.hpp>
 #include <libsbx/math/vector3.hpp>
+#include <libsbx/math/vector4.hpp>
 
 #include <libsbx/assets/asset_handle.hpp>
 #include <libsbx/assets/loadable.hpp>
 #include <libsbx/assets/texture.hpp>
+#include <libsbx/assets/shader_graph.hpp>
 
 namespace sbx::assets {
 
@@ -61,6 +64,15 @@ public:
     texture_handle metallic_roughness{};
     texture_handle occlusion{};
     texture_handle emissive{};
+
+    // Non-nil routes rendering to this graph's own generated shader instead of the built-in
+    // pbr/unlit path (`shading` above becomes irrelevant once this is set). generic_params/
+    // generic_textures hold this material's own values for that graph's exposed parameters --
+    // see shader_graph::parameters() for their declared name/type/slot, in the same order these
+    // arrays are indexed by (slot 0 first, etc.).
+    shader_graph_handle shader_graph{};
+    std::array<math::vector4, shader_graph_max_params> generic_params{};
+    std::array<texture_handle, shader_graph_max_textures> generic_textures{};
   }; // struct create_info
 
   material() = default;
@@ -87,6 +99,9 @@ public:
     _metallic_roughness{create_info.metallic_roughness},
     _occlusion{create_info.occlusion},
     _emissive{create_info.emissive},
+    _shader_graph{create_info.shader_graph},
+    _generic_params{create_info.generic_params},
+    _generic_textures{create_info.generic_textures},
     _name{create_info.name} { }
 
   [[nodiscard]] auto is_valid() const noexcept -> bool {
@@ -181,6 +196,18 @@ public:
     return _emissive;
   }
 
+  [[nodiscard]] auto shader_graph() const noexcept -> const shader_graph_handle& {
+    return _shader_graph;
+  }
+
+  [[nodiscard]] auto generic_params() const noexcept -> const std::array<math::vector4, shader_graph_max_params>& {
+    return _generic_params;
+  }
+
+  [[nodiscard]] auto generic_textures() const noexcept -> const std::array<texture_handle, shader_graph_max_textures>& {
+    return _generic_textures;
+  }
+
   [[nodiscard]] auto id() const noexcept -> const math::uuid& {
     return _id;
   }
@@ -212,6 +239,9 @@ private:
   texture_handle _metallic_roughness{};
   texture_handle _occlusion{};
   texture_handle _emissive{};
+  shader_graph_handle _shader_graph{};
+  std::array<math::vector4, shader_graph_max_params> _generic_params{};
+  std::array<texture_handle, shader_graph_max_textures> _generic_textures{};
   std::uint32_t _index{invalid_index};
   math::uuid _id{math::uuid::nil()};
   std::string _name{"material"};

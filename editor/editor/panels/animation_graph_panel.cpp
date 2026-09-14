@@ -39,21 +39,21 @@ constexpr auto output_pin_band = std::uintptr_t{2'000'000};
 constexpr auto any_state_band = std::uintptr_t{3'000'000};
 constexpr auto link_band = std::uintptr_t{4'000'000};
 
-auto any_state_node_id() -> ax::NodeEditor::NodeId {
+static auto any_state_node_id() -> ax::NodeEditor::NodeId {
   return ax::NodeEditor::NodeId{any_state_band + 1u};
 }
 
-auto any_state_output_pin() -> ax::NodeEditor::PinId {
+static auto any_state_output_pin() -> ax::NodeEditor::PinId {
   return ax::NodeEditor::PinId{any_state_band + 2u};
 }
 
 // +1 on every band keeps every real id >= 1 (0 is imgui-node-editor's "invalid" sentinel).
-auto node_id_for_state(std::uint32_t state_id) -> ax::NodeEditor::NodeId {
+static auto node_id_for_state(std::uint32_t state_id) -> ax::NodeEditor::NodeId {
   return ax::NodeEditor::NodeId{node_band + static_cast<std::uintptr_t>(state_id) + 1u};
 }
 
 // nullopt = the Any State pseudo-node (or an invalid/stale id).
-auto state_id_from_node(ax::NodeEditor::NodeId id) -> std::optional<std::uint32_t> {
+static auto state_id_from_node(ax::NodeEditor::NodeId id) -> std::optional<std::uint32_t> {
   const auto raw = id.Get();
 
   if (raw <= node_band || raw >= input_pin_band) {
@@ -63,11 +63,11 @@ auto state_id_from_node(ax::NodeEditor::NodeId id) -> std::optional<std::uint32_
   return static_cast<std::uint32_t>(raw - node_band - 1u);
 }
 
-auto input_pin_for_state(std::uint32_t state_id) -> ax::NodeEditor::PinId {
+static auto input_pin_for_state(std::uint32_t state_id) -> ax::NodeEditor::PinId {
   return ax::NodeEditor::PinId{input_pin_band + static_cast<std::uintptr_t>(state_id) + 1u};
 }
 
-auto output_pin_for_state(std::uint32_t state_id) -> ax::NodeEditor::PinId {
+static auto output_pin_for_state(std::uint32_t state_id) -> ax::NodeEditor::PinId {
   return ax::NodeEditor::PinId{output_pin_band + static_cast<std::uintptr_t>(state_id) + 1u};
 }
 
@@ -77,7 +77,7 @@ struct resolved_pin {
   std::uint32_t state_id{0u};
 }; // struct resolved_pin
 
-auto resolve_pin(ax::NodeEditor::PinId pin) -> resolved_pin {
+static auto resolve_pin(ax::NodeEditor::PinId pin) -> resolved_pin {
   const auto raw = pin.Get();
 
   if (raw >= any_state_band) {
@@ -96,11 +96,11 @@ auto resolve_pin(ax::NodeEditor::PinId pin) -> resolved_pin {
 }
 
 // transition index -> LinkId and back; +1 keeps every link id >= 1 (0 is "invalid").
-auto link_id_for_transition(std::size_t index) -> ax::NodeEditor::LinkId {
+static auto link_id_for_transition(std::size_t index) -> ax::NodeEditor::LinkId {
   return ax::NodeEditor::LinkId{link_band + index + 1u};
 }
 
-auto transition_index_from_link(ax::NodeEditor::LinkId id) -> std::optional<std::size_t> {
+static auto transition_index_from_link(ax::NodeEditor::LinkId id) -> std::optional<std::size_t> {
   const auto raw = id.Get();
 
   if (raw <= link_band) {
@@ -326,7 +326,7 @@ constexpr auto output_pin_color = IM_COL32(255, 176, 79, 255);
 
 // Unreal-Blueprint-style pin: a small circle, filled once at least one transition is attached to
 // it and hollow (outline only) otherwise -- replaces the plain arrow glyph the pins used to be.
-auto draw_pin_icon(bool connected, ImU32 color) -> void {
+static auto draw_pin_icon(bool connected, ImU32 color) -> void {
   constexpr auto diameter = 11.0f;
 
   // Reserved box is diameter wide but text-line-height tall, and the circle is centered within

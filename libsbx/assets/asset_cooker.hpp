@@ -3,18 +3,21 @@
 #ifndef LIBSBX_ASSETS_ASSET_COOKER_HPP_
 #define LIBSBX_ASSETS_ASSET_COOKER_HPP_
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
 #include <optional>
 #include <string>
 #include <string_view>
+#include <variant>
 #include <vector>
 
 #include <libsbx/math/uuid.hpp>
 #include <libsbx/math/color.hpp>
 #include <libsbx/math/vector2.hpp>
 #include <libsbx/math/vector3.hpp>
+#include <libsbx/math/vector4.hpp>
 #include <libsbx/math/volume.hpp>
 
 #include <libsbx/assets/mesh.hpp>
@@ -22,6 +25,7 @@
 #include <libsbx/assets/font.hpp>
 #include <libsbx/assets/animation_graph.hpp>
 #include <libsbx/assets/particle_effect.hpp>
+#include <libsbx/assets/shader_graph.hpp>
 
 namespace sbx::assets {
 
@@ -175,6 +179,15 @@ struct material_description {
   std::string metallic_roughness{};
   std::string occlusion{};
   std::string emissive{};
+
+  // Path to a `.shadergraph` asset (empty = built-in pbr/unlit via `shading`); see shader_graph.hpp
+  // for the graph's own declared parameter list this material's generic_params/
+  // generic_texture_paths supply values for, in slot order. Not carried by the cooked binary
+  // format (.sbxmat) -- a glTF-embedded material has no meaningful way to reference one, unlike
+  // every other field here.
+  std::string shader_graph{};
+  std::array<math::vector4, shader_graph_max_params> generic_params{};
+  std::array<std::string, shader_graph_max_textures> generic_texture_paths{};
 }; // struct material_description
 
 /**
@@ -233,6 +246,30 @@ struct particle_effect_description {
   std::string name{"particle_effect"};
   std::vector<particle_emitter_description> emitters{};
 }; // struct particle_effect_description
+
+/**
+ * @brief A shader_graph_node's fields with a texture *path* (empty = none) instead of a resolved
+ * handle for its texture_sample payload -- see material_description's doc comment for why paths,
+ * not handles, are what a background-thread parse can produce. Every other node type carries no
+ * asset reference at all, so this only differs from shader_graph_node in that one variant
+ * alternative.
+ */
+using shader_graph_node_value_description = std::variant<std::monostate, std::float_t, math::vector3, math::color, std::string>;
+
+struct shader_graph_node_description {
+  std::uint32_t id{0u};
+  shader_node_type type{shader_node_type::constant_float};
+  math::vector2 editor_position{0.0f, 0.0f};
+  std::string name{};
+  bool exposed{false};
+  shader_graph_node_value_description value{};
+}; // struct shader_graph_node_description
+
+struct shader_graph_description {
+  std::string name{"shader_graph"};
+  std::vector<shader_graph_node_description> nodes{};
+  std::vector<shader_graph_edge> edges{}; // no path-dependent fields -- reused as-is from shader_graph.hpp
+}; // struct shader_graph_description
 
 /** @brief Cooks source assets (glTF, images, HDR) and hand-authored YAML assets (`.material`, `.particle_effect`, `.animation_graph`) into decoded data or versioned on-disk caches. Holds no state and is never instantiated -- every member is static, self-contained given the inputs it's passed, so any thread can call e.g. asset_cooker::resolve_mesh(...) directly with no instance or coordination needed. Path/uuid/staleness bookkeeping lives in @ref asset_manifest instead -- resolve_ and parse_ calls take already-resolved source/cooked paths and a needs_cook flag rather than looking them up. */
 class asset_cooker final {
@@ -331,6 +368,22 @@ public:
 
   /** @brief Same shape as @ref parse_material_file, for an `.animation_graph` YAML file -- has no asset references at all today, so its create_info can be used as-is, no path/uuid indirection needed. */
   [[nodiscard]] static auto parse_animation_graph_file(const std::filesystem::path& source) -> std::optional<animation_graph::create_info>;
+
+  /** @brief Same shape as @ref parse_material_file, for a `.shadergraph` YAML file -- see shader_graph_description's doc comment for why texture_sample nodes need the path indirection. */
+  [[nodiscard]] static auto parse_shader_graph_file(const std::filesystem::path& source) -> std::optional<shader_graph_description>;
+
+  /**
+   * @brief Translates @p create_info to Slang (shader_graph_codegen.hpp) and writes it to
+   * `<engine shaders root>/generated/<id>.slang`, *not* the usual `cooked_path`/library-directory
+   * convention every other cooker uses -- `shader_compiler` resolves a compiled file's `#include`s
+   * relative to the nearest "shaders" ancestor directory (see shader_compiler.cpp's `_shaders_root`),
+   * so the generated file has to actually live inside that tree (alongside `geometry_common.slang`
+   * etc.) for its `#include <geometry_common.slang>` to resolve at all. No staleness tracking --
+   * codegen is cheap pure string generation (no external tool), so this always regenerates; the
+   * *expensive* step (Slang -> SPIR-V) still goes through shader_compiler's own content-hash cache
+   * once something actually compiles the result.
+   */
+  [[nodiscard]] static auto cook_shader_graph(const math::uuid& id, const shader_graph::create_info& create_info) -> bool;
 
 private:
 

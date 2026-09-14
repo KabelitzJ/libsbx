@@ -8,6 +8,10 @@
 
 static const uint shadow_cascade_count = 4;
 
+// Must match shader_graph_max_params/shader_graph_max_textures in libsbx/assets/shader_graph.hpp.
+static const uint shader_graph_max_params = 8;
+static const uint shader_graph_max_textures = 4;
+
 struct vertex {
   float3 position;
   float3 normal;
@@ -44,6 +48,12 @@ struct material_data {
   float ior;
   float2 uv_tiling;
   float2 uv_offset;
+
+  // Shader-graph-exposed parameters -- unused (always zero) until material opt-in lands. One
+  // uniform float4 slot per param regardless of type (scalar/vector3/color use .x/.xyz/.rgba of
+  // their slot); see the matching C++ struct in asset_residency.cpp for the full reasoning.
+  float4 generic_params[shader_graph_max_params];
+  uint generic_textures[shader_graph_max_textures];
 }; // struct material_data
 
 /**

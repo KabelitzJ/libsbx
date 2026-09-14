@@ -27,6 +27,30 @@ struct lighting_output {
   float alpha;
 }; // struct lighting_output
 
+struct surface {
+  float3 albedo;
+  float3 n;
+  float3 v;
+  float3 f0;
+  float roughness;
+  float metallic;
+  float2 uv;
+  uint sampler_index;
+
+  // Copied once here (not looked up via a material_index -- a lighting_model's direct()/extra()
+  // only ever receive `surface`, never `frame_data`, so there's no `input.frame_data.materials[...]`
+  // available inside them to index into) so shader-graph-generated lighting_models can read an
+  // exposed parameter or texture-sample node's value as `s.generic_params[N]`/
+  // `s.generic_textures[N]` directly. See shader_graph_codegen.cpp's emitted expressions.
+  float4 generic_params[shader_graph_max_params];
+  uint generic_textures[shader_graph_max_textures];
+}; // struct surface
+
+interface lighting_model {
+  static float3 direct(surface s, float3 l, float3 radiance);
+  static float3 extra(surface s);
+}; // interface lighting_model
+
 float distribution_ggx(float3 n, float3 h, float roughness) {
   float a = roughness * roughness;
   float a2 = a * a;
@@ -63,14 +87,24 @@ float3 brdf(float3 n, float3 v, float3 l, float3 albedo, float3 f0, float roughn
   return (kd * albedo / pi + specular) * max(dot(n, l), 0.0);
 }
 
-lighting_output evaluate_lighting<let ReceivesShadows : bool>(lighting_input input) {
+struct pbr_lighting_model : lighting_model {
+  static float3 direct(surface s, float3 l, float3 radiance) {
+    return brdf(s.n, s.v, l, s.albedo, s.f0, s.roughness, s.metallic) * radiance;
+  }
+
+  static float3 extra(surface s) {
+    return float3(0.0, 0.0, 0.0);
+  }
+}; // struct pbr_lighting_model
+
+lighting_output evaluate_lighting<let ReceivesShadows : bool, LightingModel : lighting_model>(lighting_input input) {
   material_data material = input.frame_data.materials[input.material_index];
   SamplerState sampler = samplers[input.sampler_index];
   float2 uv = apply_uv_transform(material, input.uv);
 
   float4 base = material.base_color_factor * textures[material.albedo_index].Sample(sampler, uv);
 
-  apply_alpha_cutout(material, input.uv, input.sampler_index); // raw uv -- transforms internally
+  apply_alpha_cutout(material, input.uv, input.sampler_index);
 
   float3 albedo = base.rgb;
 
@@ -108,6 +142,25 @@ lighting_output evaluate_lighting<let ReceivesShadows : bool>(lighting_input inp
   // KHR_materials_ior: F0 = ((ior-1)/(ior+1))^2; default ior 1.5 reproduces the standard 0.04.
   float dielectric_f0 = pow((material.ior - 1.0) / max(material.ior + 1.0, 0.0001), 2.0);
   float3 f0 = lerp(float3(dielectric_f0, dielectric_f0, dielectric_f0), albedo, metallic);
+
+  surface surf;
+  surf.albedo = albedo;
+  surf.n = n;
+  surf.v = v;
+  surf.f0 = f0;
+  surf.roughness = roughness;
+  surf.metallic = metallic;
+  surf.uv = uv;
+  surf.sampler_index = input.sampler_index;
+
+  for (uint generic_param_index = 0u; generic_param_index < shader_graph_max_params; ++generic_param_index) {
+    surf.generic_params[generic_param_index] = material.generic_params[generic_param_index];
+  }
+
+  for (uint generic_texture_index = 0u; generic_texture_index < shader_graph_max_textures; ++generic_texture_index) {
+    surf.generic_textures[generic_texture_index] = material.generic_textures[generic_texture_index];
+  }
+
   float3 lo = float3(0.0, 0.0, 0.0);
 
   float sun_shadow = 1.0;
@@ -124,7 +177,7 @@ lighting_output evaluate_lighting<let ReceivesShadows : bool>(lighting_input inp
       radiance *= sun_shadow;
     }
 
-    lo += brdf(n, v, l, albedo, f0, roughness, metallic) * radiance;
+    lo += LightingModel::direct(surf, l, radiance);
   }
 
   float view_z = mul(input.frame_data.view, float4(input.position, 1.0)).z;
@@ -156,8 +209,10 @@ lighting_output evaluate_lighting<let ReceivesShadows : bool>(lighting_input inp
 
     float3 radiance = light.color.rgb * light.color.a * attenuation;
 
-    lo += brdf(n, v, l, albedo, f0, roughness, metallic) * radiance;
+    lo += LightingModel::direct(surf, l, radiance);
   }
+
+  lo += LightingModel::extra(surf);
 
   float ndv = max(dot(n, v), 0.0);
   float3 fr = fresnel_schlick(ndv, f0);
@@ -204,7 +259,7 @@ lighting_output evaluate_unlit(lighting_input input) {
 
   float4 base = material.base_color_factor * textures[material.albedo_index].Sample(sampler, uv);
 
-  apply_alpha_cutout(material, input.uv, input.sampler_index); // raw uv -- transforms internally
+  apply_alpha_cutout(material, input.uv, input.sampler_index);
 
   float3 emissive = material.emissive_factor.rgb * material.emissive_strength * textures[material.emissive_index].Sample(sampler, uv).rgb;
 

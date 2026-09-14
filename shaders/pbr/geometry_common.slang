@@ -1,7 +1,19 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Jonas Kabelitz
+#ifndef GEOMETRY_COMMON_SLANG_
+#define GEOMETRY_COMMON_SLANG_
 
+#include <common.slang>
+#include <descriptors.slang>
+#include <frame_data.slang>
+#include <lighting.slang>
 #include <shading_policy.slang>
+
+// Everything a shader-graph-generated fragment_main<Policy> needs besides its own lighting_model:
+// vertex stage, push constants, the fragment_input -> lighting_input adapter, and the two output
+// targets/policy typedefs -- identical to geometry.slang's own copies (kept separate/self-contained
+// there by choice) so a generated file only needs `#include <geometry_common.slang>` plus its own
+// small lighting_model + fragment_main.
 
 struct vertex_input {
   [[vk::location(0)]] uint vertex_id : SV_VertexID;
@@ -27,12 +39,15 @@ struct fragment_input {
 
 struct opaque_fragment_output : color_target {
   float4 color : SV_Target0;
-}; // struct fragment_output
+}; // struct opaque_fragment_output
 
 struct alpha_blend_fragment_output : alpha_blend_target {
   float4 accumulator : SV_Target0;
   float revealage : SV_Target1;
 }; // struct alpha_blend_fragment_output
+
+typedef basic_color_shading_policy<opaque_fragment_output> opaque_shading_policy;
+typedef basic_alpha_blend_shading_policy<alpha_blend_fragment_output> alpha_blend_shading_policy;
 
 struct push_data {
   frame_data* frame_data;
@@ -45,9 +60,6 @@ struct push_data {
 }; // struct push_data
 
 [[vk::push_constant]] ConstantBuffer<push_data> push;
-
-typedef basic_color_shading_policy<opaque_fragment_output> opaque_shading_policy;
-typedef basic_alpha_blend_shading_policy<alpha_blend_fragment_output> alpha_blend_shading_policy;
 
 [shader("vertex")]
 vertex_output vertex_main(vertex_input input) {
@@ -84,28 +96,4 @@ lighting_input build_lighting_input(fragment_input input) {
   return result;
 }
 
-[shader("fragment")]
-Policy::Output fragment_main_pbr<Policy : shading_policy>(fragment_input input) {
-  lighting_input lighting_input = build_lighting_input(input);
-
-  lighting_output lighting_output = evaluate_lighting<Policy::receives_shadows, pbr_lighting_model>(lighting_input);
-
-  shading_input shading_input;
-  shading_input.lighting = lighting_output;
-  shading_input.depth = input.sv_position.z;
-
-  return Policy::shade(shading_input);
-}
-
-[shader("fragment")]
-Policy::Output fragment_main_unlit<Policy : shading_policy>(fragment_input input) {
-  lighting_input lighting_input = build_lighting_input(input);
-
-  lighting_output lighting_output = evaluate_unlit(lighting_input);
-
-  shading_input shading_input;
-  shading_input.lighting = lighting_output;
-  shading_input.depth = input.sv_position.z;
-
-  return Policy::shade(shading_input);
-}
+#endif // GEOMETRY_COMMON_SLANG_

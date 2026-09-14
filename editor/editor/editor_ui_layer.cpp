@@ -23,6 +23,7 @@
 #include <editor/panels/logger_panel.hpp>
 #include <editor/panels/inspector_panel.hpp>
 #include <editor/panels/animation_graph_panel.hpp>
+#include <editor/panels/shader_graph_panel.hpp>
 #include <editor/panels/navigation_panel.hpp>
 
 #include <editor/widgets/layer_fields.hpp>
@@ -109,6 +110,7 @@ auto editor_ui_layer::_create_panels() -> void {
   _panels.push_back(std::make_unique<asset_browser_panel>());
   _panels.push_back(std::make_unique<logger_panel>());
   _panels.push_back(std::make_unique<animation_graph_panel>()); // on-demand, not part of the default dock layout -- see its own doc comment
+  _panels.push_back(std::make_unique<shader_graph_panel>()); // on-demand, same reasoning as animation_graph_panel above
 
   auto navigation = std::make_unique<navigation_panel>();
   _navigation_panel = navigation.get();

@@ -26,6 +26,7 @@ inline constexpr auto drag_drop_payload_mesh = "SBX_ASSET_MESH";
 inline constexpr auto drag_drop_payload_material = "SBX_ASSET_MATERIAL";
 inline constexpr auto drag_drop_payload_particle_effect = "SBX_ASSET_PARTICLE_EFFECT";
 inline constexpr auto drag_drop_payload_animation_graph = "SBX_ASSET_ANIM_GRAPH";
+inline constexpr auto drag_drop_payload_shader_graph = "SBX_ASSET_SHADER_GRAPH";
 inline constexpr auto drag_drop_payload_font = "SBX_ASSET_FONT";
 inline constexpr auto drag_drop_payload_prefab = "SBX_ASSET_PREFAB";
 

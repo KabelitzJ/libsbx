@@ -4,11 +4,15 @@
 #define LIBSBX_RENDER_TRANSPARENT_ACCUMULATE_PASS_HPP_
 
 #include <array>
+#include <string>
 #include <string_view>
 
 #include <libsbx/memory/observer_ptr.hpp>
 
 #include <libsbx/graphics/pipeline/graphics_pipeline.hpp>
+#include <libsbx/graphics/pipeline/shader.hpp>
+
+#include <libsbx/assets/shader_graph.hpp>
 
 #include <libsbx/render/render_pass.hpp>
 #include <libsbx/render/render_graph.hpp>
@@ -44,6 +48,11 @@ public:
   auto execute(render_context& context, std::uint32_t group) -> void override;
 
 private:
+
+  auto _make_pipeline(memory::observer_ptr<const graphics::shader> shader, graphics::cull_mode cull, const std::string& name) -> memory::observer_ptr<graphics::graphics_pipeline>;
+
+  /** @brief Same as opaque_pass's -- see its doc comment. */
+  auto _resolve_graph_pipeline(const assets::shader_graph_handle& graph, bool is_double_sided) -> memory::observer_ptr<graphics::graphics_pipeline>;
 
   std::array<memory::observer_ptr<graphics::graphics_pipeline>, 4u> _pipelines{};
 

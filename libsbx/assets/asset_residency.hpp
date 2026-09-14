@@ -31,6 +31,7 @@
 #include <libsbx/assets/environment_map.hpp>
 #include <libsbx/assets/particle_effect.hpp>
 #include <libsbx/assets/animation_graph.hpp>
+#include <libsbx/assets/shader_graph.hpp>
 #include <libsbx/assets/asset_cooker.hpp>
 #include <libsbx/assets/asset_manifest.hpp>
 #include <libsbx/assets/asset_loader.hpp>
@@ -172,6 +173,29 @@ public:
    */
   auto save_animation_graph(animation_graph_handle& graph, const std::filesystem::path& path) -> math::uuid;
 
+  auto load_shader_graph(const math::uuid& id) -> shader_graph_handle;
+
+  auto load_shader_graph(const std::filesystem::path& path) -> shader_graph_handle;
+
+  auto create_shader_graph(const shader_graph::create_info& create_info) -> shader_graph_handle;
+
+  /**
+   * @brief Overwrites an existing shader_graph's nodes/edges in place. Every shader_graph_handle
+   * already pointing at this record observes the change immediately. Does not touch identity
+   * (uuid) or persist to disk.
+   */
+  auto update_shader_graph(shader_graph_handle& graph, const shader_graph::create_info& create_info) -> void;
+
+  /**
+   * @brief Writes a shader_graph to a `.shadergraph` file, (re-)registers it as a first-class
+   * asset, and cooks it (runs codegen, writes the generated `.slang` -- see
+   * asset_cooker::cook_shader_graph's doc comment for why that lands inside the engine's shaders
+   * tree rather than the usual per-project cooked-cache directory).
+   * @param path Destination path relative to the active project's assets directory.
+   * @return The graph's canonical uuid (also written back onto the record itself).
+   */
+  auto save_shader_graph(shader_graph_handle& graph, const std::filesystem::path& path) -> math::uuid;
+
   /**
    * @brief Drains the background loader's per-type result queues (budgeted) and turns queued
    * texture loads into GPU images and bindless writes (also budgeted).
@@ -264,7 +288,7 @@ private:
   /**
    * @brief Pops up to max_uploads_per_frame entries combined across every asset_loader result
    * queue (roughly cost/frequency order: textures, meshes, fonts, materials, particle_effects,
-   * animation_graphs, skeletons, animation_clips) and runs each one's _finalize_* -- the one place
+   * animation_graphs, shader_graphs, skeletons, animation_clips) and runs each one's _finalize_* -- the one place
    * nested asset references (paths -> uuids -> handles) get resolved and GPU uploads get queued.
    * Called first thing inside process_uploads.
    */
@@ -276,6 +300,7 @@ private:
   auto _finalize_material(asset_loader::material_result& result) -> void;
   auto _finalize_particle_effect(asset_loader::particle_effect_result& result) -> void;
   auto _finalize_animation_graph(asset_loader::animation_graph_result& result) -> void;
+  auto _finalize_shader_graph(asset_loader::shader_graph_result& result) -> void;
   auto _finalize_skeleton(asset_loader::skeleton_result& result) -> void;
   auto _finalize_animation_clip(asset_loader::animation_clip_result& result) -> void;
 
@@ -310,6 +335,7 @@ private:
   // Pure CPU data — no GPU buffer/index, unlike _materials above.
   std::unordered_map<math::uuid, std::shared_ptr<particle_effect>> _particle_effect_files{};
   std::unordered_map<math::uuid, std::shared_ptr<animation_graph>> _animation_graph_files{};
+  std::unordered_map<math::uuid, std::shared_ptr<shader_graph>> _shader_graph_files{};
 
   texture_handle _white{};
   texture_handle _normal{};

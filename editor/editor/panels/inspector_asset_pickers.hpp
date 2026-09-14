@@ -11,6 +11,7 @@
 #include <libsbx/assets/material.hpp>
 #include <libsbx/assets/particle_effect.hpp>
 #include <libsbx/assets/animation_graph.hpp>
+#include <libsbx/assets/shader_graph.hpp>
 #include <libsbx/assets/font.hpp>
 
 #include <libsbx/render/ui/widgets/asset_picker.hpp>
@@ -68,6 +69,13 @@ auto draw_particle_effect_picker(editor_state& state, const char* popup_id, sbx:
  * leaving animation_state::clip_name a free-text field -- see animation_graph_panel's doc comment.
  */
 auto draw_animation_graph_picker(editor_state& state, const char* popup_id, sbx::assets::animation_graph_handle& slot, sbx::math::uuid preview_mesh_id) -> bool;
+
+/**
+ * @brief Same idea as draw_animation_graph_picker, for material::shader_graph -- jumps into
+ * shader_graph_panel instead. No preview_mesh_id equivalent (a shader graph carries no mesh-shaped
+ * reference the way a state's clip_name does).
+ */
+auto draw_shader_graph_picker(editor_state& state, const char* popup_id, sbx::assets::shader_graph_handle& slot) -> bool;
 
 } // namespace editor
 

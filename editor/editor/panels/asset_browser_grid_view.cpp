@@ -135,6 +135,10 @@ auto asset_browser_panel::_draw_asset_grid(editor_state& state) -> void {
           if (tile_result.double_clicked && entry.kind == asset_kind::animation_graph) {
             state.request_open_animation_graph_editor(entry.id, entry.path);
           }
+
+          if (tile_result.double_clicked && entry.kind == asset_kind::shader_graph) {
+            state.request_open_shader_graph_editor(entry.id, entry.path);
+          }
         }
 
         if (entry.is_directory) {

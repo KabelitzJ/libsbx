@@ -16,6 +16,7 @@
 #include <libsbx/assets/material.hpp>
 #include <libsbx/assets/particle_effect.hpp>
 #include <libsbx/assets/animation_graph.hpp>
+#include <libsbx/assets/shader_graph.hpp>
 #include <libsbx/assets/font.hpp>
 
 #include <libsbx/scenes/node.hpp>
@@ -54,6 +55,7 @@ private:
     sbx::assets::environment_map_handle environment_map{};
     sbx::assets::particle_effect_handle particle_effect{};
     sbx::assets::animation_graph_handle animation_graph{};
+    sbx::assets::shader_graph_handle shader_graph{};
     sbx::assets::font_handle font{};
   }; // struct asset_property_cache
 

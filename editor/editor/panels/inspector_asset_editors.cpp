@@ -17,6 +17,7 @@
 #include <libsbx/math/vector3.hpp>
 
 #include <libsbx/assets/particle_effect.hpp>
+#include <libsbx/assets/shader_graph.hpp>
 
 #include <editor/panels/inspector_asset_pickers.hpp>
 
@@ -33,7 +34,7 @@ auto inspector_panel::_draw_material_properties(editor_state& state, const asset
 
   auto changed = draw_text_field("Name", _material_edit.name);
 
-  static constexpr auto shading_model_names = std::array<const char*, 2u>{"Pbr", "Unlit"};
+  static constexpr auto shading_model_names = std::array<const char*, 2u>{"PBR", "Unlit"};
   auto shading_model_index = static_cast<std::int32_t>(_material_edit.shading);
 
   if (ImGui::Combo("Shading Model", &shading_model_index, shading_model_names.data(), static_cast<std::int32_t>(shading_model_names.size()))) {
@@ -119,6 +120,74 @@ auto inspector_panel::_draw_material_properties(editor_state& state, const asset
     texture_row("Emissive", "##emissive_picker", _material_edit.emissive, sbx::graphics::format::r8g8b8a8_srgb);
 
     ImGui::EndTable();
+  }
+
+  ImGui::SeparatorText("Shader Graph");
+
+  changed |= draw_shader_graph_picker(state, "##shader_graph_picker", _material_edit.shader_graph);
+
+  if (_material_edit.shader_graph.is_valid()) {
+    // Not is_pbr-gated -- a graph replaces the built-in pbr/unlit path entirely regardless of
+    // `shading`'s current value (see material.hpp's create_info::shader_graph doc comment).
+    const auto parameters = _material_edit.shader_graph->parameters();
+
+    for (const auto& parameter : parameters) {
+      ImGui::PushID(static_cast<std::int32_t>(parameter.type) * 100 + static_cast<std::int32_t>(parameter.slot));
+
+      const auto label = parameter.name.empty() ? fmt::format("Param {}", parameter.slot) : parameter.name;
+
+      switch (parameter.type) {
+        case sbx::assets::shader_graph_parameter_type::float_value: {
+          if (parameter.slot < _material_edit.generic_params.size()) {
+            auto& value = _material_edit.generic_params[parameter.slot];
+            changed |= ImGui::DragFloat(label.c_str(), &value.x(), 0.01f);
+          }
+          break;
+        }
+        case sbx::assets::shader_graph_parameter_type::vector3_value: {
+          if (parameter.slot < _material_edit.generic_params.size()) {
+            auto& value = _material_edit.generic_params[parameter.slot];
+            auto components = std::array<std::float_t, 3u>{value.x(), value.y(), value.z()};
+            if (draw_vector3_control(label.c_str(), components, 0.0f, 0.01f).changed) {
+              value.x() = components[0];
+              value.y() = components[1];
+              value.z() = components[2];
+              changed = true;
+            }
+          }
+          break;
+        }
+        case sbx::assets::shader_graph_parameter_type::color_value: {
+          if (parameter.slot < _material_edit.generic_params.size()) {
+            auto& value = _material_edit.generic_params[parameter.slot];
+            auto components = std::array<std::float_t, 4u>{value.x(), value.y(), value.z(), value.w()};
+            if (ImGui::ColorEdit4(label.c_str(), components.data())) {
+              value.x() = components[0];
+              value.y() = components[1];
+              value.z() = components[2];
+              value.w() = components[3];
+              changed = true;
+            }
+          }
+          break;
+        }
+        case sbx::assets::shader_graph_parameter_type::texture_value: {
+          if (parameter.slot < _material_edit.generic_textures.size()) {
+            ImGui::AlignTextToFramePadding();
+            ImGui::TextUnformatted(label.c_str());
+            ImGui::SameLine(150.0f);
+            changed |= draw_texture_picker(state, "##generic_texture_picker", _material_edit.generic_textures[parameter.slot], assets_module, sbx::graphics::format::r8g8b8a8_srgb);
+          }
+          break;
+        }
+      }
+
+      ImGui::PopID();
+    }
+
+    if (parameters.empty()) {
+      ImGui::TextDisabled("This graph exposes no parameters.");
+    }
   }
 
   if (changed) {

@@ -242,10 +242,17 @@ auto inspector_panel::_draw_asset_properties(editor_state& state, const asset_se
       _material_edit.metallic_factor = material.metallic_factor();
       _material_edit.roughness_factor = material.roughness_factor();
       _material_edit.alpha = material.alpha();
+      _material_edit.shading = material.shading();
       _material_edit.alpha_cutoff = material.alpha_cutoff();
       _material_edit.is_double_sided = material.is_double_sided();
       _material_edit.casts_shadow = material.casts_shadow();
       _material_edit.receives_shadow = material.receives_shadow();
+      _material_edit.normal_scale = material.normal_scale();
+      _material_edit.occlusion_strength = material.occlusion_strength();
+      _material_edit.emissive_strength = material.emissive_strength();
+      _material_edit.ior = material.ior();
+      _material_edit.uv_tiling = material.uv_tiling();
+      _material_edit.uv_offset = material.uv_offset();
       _material_edit.albedo = material.albedo();
       _material_edit.normal = material.normal();
       _material_edit.metallic_roughness = material.metallic_roughness();

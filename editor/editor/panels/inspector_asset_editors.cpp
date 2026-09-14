@@ -13,6 +13,7 @@
 
 #include <libsbx/render/ui/fonts/material_design_icons.hpp>
 
+#include <libsbx/math/vector2.hpp>
 #include <libsbx/math/vector3.hpp>
 
 #include <libsbx/assets/particle_effect.hpp>
@@ -32,6 +33,16 @@ auto inspector_panel::_draw_material_properties(editor_state& state, const asset
 
   auto changed = draw_text_field("Name", _material_edit.name);
 
+  static constexpr auto shading_model_names = std::array<const char*, 2u>{"Pbr", "Unlit"};
+  auto shading_model_index = static_cast<std::int32_t>(_material_edit.shading);
+
+  if (ImGui::Combo("Shading Model", &shading_model_index, shading_model_names.data(), static_cast<std::int32_t>(shading_model_names.size()))) {
+    _material_edit.shading = static_cast<sbx::assets::shading_model>(shading_model_index);
+    changed = true;
+  }
+
+  const auto is_pbr = _material_edit.shading == sbx::assets::shading_model::pbr;
+
   changed |= draw_color_field("Base Color", _material_edit.base_color_factor);
 
   auto emissive = std::array<std::float_t, 3u>{_material_edit.emissive_factor.x(), _material_edit.emissive_factor.y(), _material_edit.emissive_factor.z()};
@@ -44,11 +55,13 @@ auto inspector_panel::_draw_material_properties(editor_state& state, const asset
   // material's own output past bloom_pass's threshold without touching any light in the scene.
   changed |= ImGui::DragFloat("Emissive Strength", &_material_edit.emissive_strength, 0.05f, 0.0f, 100.0f);
 
-  changed |= ImGui::DragFloat("Metallic", &_material_edit.metallic_factor, 0.01f, 0.0f, 1.0f);
-  changed |= ImGui::DragFloat("Roughness", &_material_edit.roughness_factor, 0.01f, 0.0f, 1.0f);
-  changed |= ImGui::DragFloat("IOR", &_material_edit.ior, 0.01f, 1.0f, 3.0f);
-  changed |= ImGui::DragFloat("Normal Scale", &_material_edit.normal_scale, 0.01f, 0.0f, 2.0f);
-  changed |= ImGui::DragFloat("Occlusion Strength", &_material_edit.occlusion_strength, 0.01f, 0.0f, 1.0f);
+  if (is_pbr) {
+    changed |= ImGui::DragFloat("Metallic", &_material_edit.metallic_factor, 0.01f, 0.0f, 1.0f);
+    changed |= ImGui::DragFloat("Roughness", &_material_edit.roughness_factor, 0.01f, 0.0f, 1.0f);
+    changed |= ImGui::DragFloat("IOR", &_material_edit.ior, 0.01f, 1.0f, 3.0f);
+    changed |= ImGui::DragFloat("Normal Scale", &_material_edit.normal_scale, 0.01f, 0.0f, 2.0f);
+    changed |= ImGui::DragFloat("Occlusion Strength", &_material_edit.occlusion_strength, 0.01f, 0.0f, 1.0f);
+  }
 
   static constexpr auto alpha_mode_names = std::array<const char*, 3u>{"Opaque", "Mask", "Blend"};
   auto alpha_index = static_cast<std::int32_t>(_material_edit.alpha);
@@ -65,6 +78,18 @@ auto inspector_panel::_draw_material_properties(editor_state& state, const asset
   changed |= ImGui::Checkbox("Double Sided", &_material_edit.is_double_sided);
   changed |= ImGui::Checkbox("Casts Shadow", &_material_edit.casts_shadow);
   changed |= ImGui::Checkbox("Receives Shadow", &_material_edit.receives_shadow);
+
+  auto uv_tiling = std::array<std::float_t, 2u>{_material_edit.uv_tiling.x(), _material_edit.uv_tiling.y()};
+  if (draw_vector2_control("UV Tiling", uv_tiling, 1.0f, 0.01f).changed) {
+    _material_edit.uv_tiling = sbx::math::vector2{uv_tiling[0], uv_tiling[1]};
+    changed = true;
+  }
+
+  auto uv_offset = std::array<std::float_t, 2u>{_material_edit.uv_offset.x(), _material_edit.uv_offset.y()};
+  if (draw_vector2_control("UV Offset", uv_offset, 0.0f, 0.01f).changed) {
+    _material_edit.uv_offset = sbx::math::vector2{uv_offset[0], uv_offset[1]};
+    changed = true;
+  }
 
   ImGui::SeparatorText("Textures");
 
@@ -84,9 +109,13 @@ auto inspector_panel::_draw_material_properties(editor_state& state, const asset
     };
 
     texture_row("Albedo", "##albedo_picker", _material_edit.albedo, sbx::graphics::format::r8g8b8a8_srgb);
-    texture_row("Normal", "##normal_picker", _material_edit.normal, sbx::graphics::format::r8g8b8a8_unorm);
-    texture_row("Metallic/Roughness", "##metallic_roughness_picker", _material_edit.metallic_roughness, sbx::graphics::format::r8g8b8a8_unorm);
-    texture_row("Occlusion", "##occlusion_picker", _material_edit.occlusion, sbx::graphics::format::r8g8b8a8_unorm);
+
+    if (is_pbr) {
+      texture_row("Normal", "##normal_picker", _material_edit.normal, sbx::graphics::format::r8g8b8a8_unorm);
+      texture_row("Metallic/Roughness", "##metallic_roughness_picker", _material_edit.metallic_roughness, sbx::graphics::format::r8g8b8a8_unorm);
+      texture_row("Occlusion", "##occlusion_picker", _material_edit.occlusion, sbx::graphics::format::r8g8b8a8_unorm);
+    }
+
     texture_row("Emissive", "##emissive_picker", _material_edit.emissive, sbx::graphics::format::r8g8b8a8_srgb);
 
     ImGui::EndTable();

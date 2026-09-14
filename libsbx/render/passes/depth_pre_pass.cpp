@@ -53,6 +53,8 @@ depth_pre_pass::depth_pre_pass() {
 
   _pipelines[0] = make(graphics::cull_mode::back, "Depth Pre");
   _pipelines[1] = make(graphics::cull_mode::none, "Depth Pre Double-Sided");
+  _pipelines[2] = _pipelines[0]; // shading model doesn't affect depth-only output
+  _pipelines[3] = _pipelines[1];
 }
 
 auto depth_pre_pass::declare(graphics_pass_builder& builder, const graph_resources& resources) -> void {

@@ -66,20 +66,21 @@ float3 brdf(float3 n, float3 v, float3 l, float3 albedo, float3 f0, float roughn
 lighting_output evaluate_lighting<let ReceivesShadows : bool>(lighting_input input) {
   material_data material = input.frame_data.materials[input.material_index];
   SamplerState sampler = samplers[input.sampler_index];
+  float2 uv = apply_uv_transform(material, input.uv);
 
-  float4 base = material.base_color_factor * textures[material.albedo_index].Sample(sampler, input.uv);
+  float4 base = material.base_color_factor * textures[material.albedo_index].Sample(sampler, uv);
 
-  apply_alpha_cutout(material, input.uv, input.sampler_index);
+  apply_alpha_cutout(material, input.uv, input.sampler_index); // raw uv -- transforms internally
 
   float3 albedo = base.rgb;
 
-  float4 mr = textures[material.metallic_roughness_index].Sample(sampler, input.uv);
+  float4 mr = textures[material.metallic_roughness_index].Sample(sampler, uv);
   float metallic = mr.b * material.metallic_factor;
   float roughness = mr.g * material.roughness_factor;
 
   // occlusionTexture.strength: lerp(1, sampled_ao, strength) so strength=0 leaves AO fully unapplied.
-  float ao = lerp(1.0, textures[material.occlusion_index].Sample(sampler, input.uv).r, material.occlusion_strength);
-  float3 emissive = material.emissive_factor.rgb * material.emissive_strength * textures[material.emissive_index].Sample(sampler, input.uv).rgb;
+  float ao = lerp(1.0, textures[material.occlusion_index].Sample(sampler, uv).r, material.occlusion_strength);
+  float3 emissive = material.emissive_factor.rgb * material.emissive_strength * textures[material.emissive_index].Sample(sampler, uv).rgb;
 
   float3 n = normalize(input.normal);
 
@@ -98,7 +99,7 @@ lighting_output evaluate_lighting<let ReceivesShadows : bool>(lighting_input inp
   // handedness
   float3 b = cross(n, t) * input.tangent.w;
 
-  float3 tangent_normal = textures[material.normal_index].Sample(sampler, input.uv).rgb * 2.0 - 1.0;
+  float3 tangent_normal = textures[material.normal_index].Sample(sampler, uv).rgb * 2.0 - 1.0;
   tangent_normal.xy *= material.normal_scale;
   n = normalize(tangent_normal.x * t + tangent_normal.y * b + tangent_normal.z * n);
 
@@ -191,6 +192,25 @@ lighting_output evaluate_lighting<let ReceivesShadows : bool>(lighting_input inp
   lighting_output output;
 
   output.color = color;
+  output.alpha = base.a;
+
+  return output;
+}
+
+lighting_output evaluate_unlit(lighting_input input) {
+  material_data material = input.frame_data.materials[input.material_index];
+  SamplerState sampler = samplers[input.sampler_index];
+  float2 uv = apply_uv_transform(material, input.uv);
+
+  float4 base = material.base_color_factor * textures[material.albedo_index].Sample(sampler, uv);
+
+  apply_alpha_cutout(material, input.uv, input.sampler_index); // raw uv -- transforms internally
+
+  float3 emissive = material.emissive_factor.rgb * material.emissive_strength * textures[material.emissive_index].Sample(sampler, uv).rgb;
+
+  lighting_output output;
+
+  output.color = base.rgb + emissive;
   output.alpha = base.a;
 
   return output;

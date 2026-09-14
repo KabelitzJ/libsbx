@@ -26,12 +26,15 @@ struct material_file_header {
   std::float_t metallic_factor;
   std::float_t roughness_factor;
   std::uint32_t alpha_mode;
+  std::uint32_t shading_model;
   std::float_t alpha_cutoff;
   std::uint32_t is_double_sided;
   std::float_t normal_scale;
   std::float_t occlusion_strength;
   std::float_t emissive_strength;
   std::float_t ior;
+  std::float_t uv_tiling[2];
+  std::float_t uv_offset[2];
   std::uint32_t name_length;
   std::uint32_t albedo_path_length;
   std::uint32_t normal_path_length;
@@ -94,12 +97,15 @@ auto asset_cooker::resolve_cooked_material(const math::uuid& id) -> std::optiona
   description.metallic_factor = header.metallic_factor;
   description.roughness_factor = header.roughness_factor;
   description.alpha = static_cast<alpha_mode>(header.alpha_mode);
+  description.shading = static_cast<shading_model>(header.shading_model);
   description.alpha_cutoff = header.alpha_cutoff;
   description.is_double_sided = header.is_double_sided != 0u;
   description.normal_scale = header.normal_scale;
   description.occlusion_strength = header.occlusion_strength;
   description.emissive_strength = header.emissive_strength;
   description.ior = header.ior;
+  description.uv_tiling = math::vector2{header.uv_tiling[0], header.uv_tiling[1]};
+  description.uv_offset = math::vector2{header.uv_offset[0], header.uv_offset[1]};
   description.albedo = *albedo;
   description.normal = *normal;
   description.metallic_roughness = *metallic_roughness;
@@ -140,6 +146,10 @@ auto asset_cooker::parse_material_file(const std::filesystem::path& source) -> s
     const auto mode = root["alpha_mode"].as<std::string>();
     description.alpha = (mode == "blend") ? alpha_mode::blend : (mode == "mask") ? alpha_mode::mask : alpha_mode::opaque;
   }
+  if (root["shading_model"]) {
+    const auto model = root["shading_model"].as<std::string>();
+    description.shading = (model == "unlit") ? shading_model::unlit : shading_model::pbr;
+  }
   if (root["alpha_cutoff"]) description.alpha_cutoff = root["alpha_cutoff"].as<std::float_t>();
   if (root["is_double_sided"]) description.is_double_sided = root["is_double_sided"].as<bool>();
   if (root["casts_shadow"]) description.casts_shadow = root["casts_shadow"].as<bool>();
@@ -148,6 +158,8 @@ auto asset_cooker::parse_material_file(const std::filesystem::path& source) -> s
   if (root["occlusion_strength"]) description.occlusion_strength = root["occlusion_strength"].as<std::float_t>();
   if (root["emissive_strength"]) description.emissive_strength = root["emissive_strength"].as<std::float_t>();
   if (root["ior"]) description.ior = root["ior"].as<std::float_t>();
+  if (root["uv_tiling"]) description.uv_tiling = root["uv_tiling"].as<math::vector2>();
+  if (root["uv_offset"]) description.uv_offset = root["uv_offset"].as<math::vector2>();
 
   const auto path_slot = [&](const char* key) -> std::string {
     if (const auto node = root[key]) {
@@ -191,12 +203,17 @@ auto asset_cooker::write_cooked_material(const math::uuid& id, const material_de
   header.metallic_factor = description.metallic_factor;
   header.roughness_factor = description.roughness_factor;
   header.alpha_mode = static_cast<std::uint32_t>(description.alpha);
+  header.shading_model = static_cast<std::uint32_t>(description.shading);
   header.alpha_cutoff = description.alpha_cutoff;
   header.is_double_sided = description.is_double_sided ? 1u : 0u;
   header.normal_scale = description.normal_scale;
   header.occlusion_strength = description.occlusion_strength;
   header.emissive_strength = description.emissive_strength;
   header.ior = description.ior;
+  header.uv_tiling[0] = description.uv_tiling.x();
+  header.uv_tiling[1] = description.uv_tiling.y();
+  header.uv_offset[0] = description.uv_offset.x();
+  header.uv_offset[1] = description.uv_offset.y();
   header.name_length = static_cast<std::uint32_t>(description.name.size());
   header.albedo_path_length = static_cast<std::uint32_t>(description.albedo.size());
   header.normal_path_length = static_cast<std::uint32_t>(description.normal.size());
@@ -243,12 +260,17 @@ auto asset_cooker::_cook_material(const math::uuid& id, const material_descripti
   header.metallic_factor = description.metallic_factor;
   header.roughness_factor = description.roughness_factor;
   header.alpha_mode = static_cast<std::uint32_t>(description.alpha);
+  header.shading_model = static_cast<std::uint32_t>(description.shading);
   header.alpha_cutoff = description.alpha_cutoff;
   header.is_double_sided = description.is_double_sided ? 1u : 0u;
   header.normal_scale = description.normal_scale;
   header.occlusion_strength = description.occlusion_strength;
   header.emissive_strength = description.emissive_strength;
   header.ior = description.ior;
+  header.uv_tiling[0] = description.uv_tiling.x();
+  header.uv_tiling[1] = description.uv_tiling.y();
+  header.uv_offset[0] = description.uv_offset.x();
+  header.uv_offset[1] = description.uv_offset.y();
   header.name_length = static_cast<std::uint32_t>(description.name.size());
   header.albedo_path_length = static_cast<std::uint32_t>(description.albedo.size());
   header.normal_path_length = static_cast<std::uint32_t>(description.normal.size());

@@ -130,6 +130,13 @@ struct transparent_entry {
   transform_data transform{};
 }; // struct transparent_entry
 
+// bit 0: double-sided (cull_mode::none vs back). bit 1: unlit shading model. Every draw-emitting
+// pass's _pipelines array is laid out in this same order (see opaque_pass/transparent_accumulate_
+// pass's constructors) so draw_command::pipeline_id indexes it directly with no further lookup.
+auto compute_pipeline_id(const assets::material& material) -> std::uint32_t {
+  return (material.is_double_sided() ? 1u : 0u) | (material.shading() == assets::shading_model::unlit ? 2u : 0u);
+}
+
 // Linear scan over a joint channel's keyframes -- clip sizes are small (tens of keys), so this
 // isn't worth a binary search. Returns the same index twice when time falls outside the track
 // (clamped to the first/last key) or the track has only one key.
@@ -735,7 +742,7 @@ auto scene_renderer_module::_build_packet() -> render_packet {
         continue;
       }
 
-      const auto pipeline_id = material->is_double_sided() ? 1u : 0u;
+      const auto pipeline_id = compute_pipeline_id(*material);
 
       // Inverse-transpose, computed once here rather than re-derived per-vertex on the GPU, so
       // normals stay correct under non-uniform scale/skew anywhere in the entity's ancestor chain.
@@ -855,7 +862,7 @@ auto scene_renderer_module::_build_packet() -> render_packet {
       command.material = material;
       command.instance_count = 1u;
       command.transform_offset = static_cast<std::uint32_t>(packet.transforms.size());
-      command.pipeline_id = material->is_double_sided() ? 1u : 0u;
+      command.pipeline_id = compute_pipeline_id(*material);
       command.vertex_address_override = output_vertex_address;
       command.resident = assets_module.is_resident(renderer.mesh) && assets_module.is_resident(material);
       command.local_bounds = submeshes[index].bounds.inflated(skinned_bounds_padding_factor);

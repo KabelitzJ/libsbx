@@ -34,7 +34,7 @@ public:
 
 private:
 
-  std::array<memory::observer_ptr<graphics::graphics_pipeline>, 2u> _pipelines{};
+  std::array<memory::observer_ptr<graphics::graphics_pipeline>, 4u> _pipelines{};
 
 }; // class depth_pre_pass
 

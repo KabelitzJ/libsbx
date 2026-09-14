@@ -49,6 +49,8 @@ shadow_pass::shadow_pass() {
 
   _pipelines[0] = make(graphics::cull_mode::front, "Shadow Cascade");
   _pipelines[1] = make(graphics::cull_mode::none, "Shadow Cascade Double-Sided");
+  _pipelines[2] = _pipelines[0]; // shading model doesn't affect depth-only output
+  _pipelines[3] = _pipelines[1];
 }
 
 auto shadow_pass::declare(graphics_pass_builder& builder, const graph_resources& resources) -> void {

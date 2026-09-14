@@ -29,14 +29,20 @@ opaque_pass::opaque_pass() {
   auto& shader_cache = graphics_module.shader_cache();
   auto& pipeline_cache = graphics_module.pipeline_cache();
 
-  const auto entry_points = std::vector<graphics::shader_compiler::entry_point_request>{
+  const auto pbr_entry_points = std::vector<graphics::shader_compiler::entry_point_request>{
     {VK_SHADER_STAGE_VERTEX_BIT, "vertex_main"},
-    {VK_SHADER_STAGE_FRAGMENT_BIT, "fragment_main", "opaque_shading_policy"}
+    {VK_SHADER_STAGE_FRAGMENT_BIT, "fragment_main_pbr", "opaque_shading_policy"}
   };
 
-  const auto& shader = shader_cache.get({"engine://shaders/pbr/geometry.slang", entry_points});
+  const auto unlit_entry_points = std::vector<graphics::shader_compiler::entry_point_request>{
+    {VK_SHADER_STAGE_VERTEX_BIT, "vertex_main"},
+    {VK_SHADER_STAGE_FRAGMENT_BIT, "fragment_main_unlit", "opaque_shading_policy"}
+  };
 
-  const auto make = [&](graphics::cull_mode cull, const std::string& name) {
+  const auto& pbr_shader = shader_cache.get({"engine://shaders/pbr/geometry.slang", pbr_entry_points});
+  const auto& unlit_shader = shader_cache.get({"engine://shaders/pbr/geometry.slang", unlit_entry_points});
+
+  const auto make = [&](memory::observer_ptr<const graphics::shader> shader, graphics::cull_mode cull, const std::string& name) {
     return pipeline_cache.get(graphics::graphics_pipeline::create_info{
       .shader = shader,
       .color_formats = {render_pass::hdr_format},
@@ -52,8 +58,10 @@ opaque_pass::opaque_pass() {
     });
   };
 
-  _pipelines[0] = make(graphics::cull_mode::back, "Mesh Opaque");
-  _pipelines[1] = make(graphics::cull_mode::none, "Mesh Opaque Double-Sided");
+  _pipelines[0] = make(pbr_shader, graphics::cull_mode::back, "Mesh Opaque");
+  _pipelines[1] = make(pbr_shader, graphics::cull_mode::none, "Mesh Opaque Double-Sided");
+  _pipelines[2] = make(unlit_shader, graphics::cull_mode::back, "Mesh Opaque Unlit");
+  _pipelines[3] = make(unlit_shader, graphics::cull_mode::none, "Mesh Opaque Unlit Double-Sided");
 }
 
 auto opaque_pass::declare(graphics_pass_builder& builder, const graph_resources& resources) -> void {

@@ -42,6 +42,8 @@ struct material_data {
   float occlusion_strength;
   float emissive_strength;
   float ior;
+  float2 uv_tiling;
+  float2 uv_offset;
 }; // struct material_data
 
 /**
@@ -50,8 +52,13 @@ struct material_data {
  * (depth_pre_pass, shadow_pass) and the lit fragment shaders (lighting.slang) so the cutout test
  * can't drift between them.
  */
+float2 apply_uv_transform(material_data material, float2 uv) {
+  return uv * material.uv_tiling + material.uv_offset;
+}
+
 void apply_alpha_cutout(material_data material, float2 uv, uint sampler_index) {
-  float alpha = material.base_color_factor.a * textures[material.albedo_index].Sample(samplers[sampler_index], uv).a;
+  float2 transformed_uv = apply_uv_transform(material, uv);
+  float alpha = material.base_color_factor.a * textures[material.albedo_index].Sample(samplers[sampler_index], transformed_uv).a;
   uint is_alpha_masked = (material.flags & material_flags::alpha_masked) != 0u;
 
   clip(is_alpha_masked * (alpha - material.alpha_cutoff));

@@ -27,7 +27,7 @@ namespace sbx::render {
  * affect the result — so context.packet->transparent_commands needs no sorting, and a double-sided
  * object needs only one draw (pipeline 1, cull_mode::none) instead of a sorted front/back pair.
  *
- * Pipeline slots: [0] cull_mode::back — single-sided. [1] cull_mode::none — double-sided.
+ * Pipeline slots: [0] pbr/back-cull. [1] pbr/double-sided. [2] unlit/back-cull. [3] unlit/double-sided.
  */
 class transparent_accumulate_pass final : public graphics_pass {
 
@@ -45,7 +45,7 @@ public:
 
 private:
 
-  std::array<memory::observer_ptr<graphics::graphics_pipeline>, 2u> _pipelines{};
+  std::array<memory::observer_ptr<graphics::graphics_pipeline>, 4u> _pipelines{};
 
 }; // class transparent_accumulate_pass
 

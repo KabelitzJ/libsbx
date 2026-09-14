@@ -72,21 +72,40 @@ vertex_output vertex_main(vertex_input input) {
   return output;
 }
 
+lighting_input build_lighting_input(fragment_input input) {
+  lighting_input result;
+  result.position = input.position;
+  result.normal = input.normal;
+  result.uv = input.uv;
+  result.tangent = input.tangent;
+  result.sv_position = input.sv_position;
+  result.is_front_face = input.is_front_face;
+  result.frame_data = *push.frame_data;
+  result.material_index = push.material_index;
+  result.sampler_index = push.sampler_index;
+  result.clamp_sampler_index = push.clamp_sampler_index;
+
+  return result;
+}
+
 [shader("fragment")]
-Policy::Output fragment_main<Policy : shading_policy>(fragment_input input) {
-  lighting_input lighting_input;
-  lighting_input.position = input.position;
-  lighting_input.normal = input.normal;
-  lighting_input.uv = input.uv;
-  lighting_input.tangent = input.tangent;
-  lighting_input.sv_position = input.sv_position;
-  lighting_input.is_front_face = input.is_front_face;
-  lighting_input.frame_data = *push.frame_data;
-  lighting_input.material_index = push.material_index;
-  lighting_input.sampler_index = push.sampler_index;
-  lighting_input.clamp_sampler_index = push.clamp_sampler_index;
+Policy::Output fragment_main_pbr<Policy : shading_policy>(fragment_input input) {
+  lighting_input lighting_input = build_lighting_input(input);
 
   lighting_output lighting_output = evaluate_lighting<Policy::receives_shadows>(lighting_input);
+
+  shading_input shading_input;
+  shading_input.lighting = lighting_output;
+  shading_input.depth = input.sv_position.z;
+
+  return Policy::shade(shading_input);
+}
+
+[shader("fragment")]
+Policy::Output fragment_main_unlit<Policy : shading_policy>(fragment_input input) {
+  lighting_input lighting_input = build_lighting_input(input);
+
+  lighting_output lighting_output = evaluate_unlit(lighting_input);
 
   shading_input shading_input;
   shading_input.lighting = lighting_output;

@@ -167,7 +167,7 @@ public:
 
 }; // class render_pass
 
-auto submit_draw_commands(render_context& context, const std::vector<draw_command>& commands, const std::array<memory::observer_ptr<graphics::graphics_pipeline>, 2u>& pipelines, std::uint32_t cascade_index = 0xFFFFFFFFu) -> void;
+auto submit_draw_commands(render_context& context, const std::vector<draw_command>& commands, const std::array<memory::observer_ptr<graphics::graphics_pipeline>, 4u>& pipelines, std::uint32_t cascade_index = 0xFFFFFFFFu) -> void;
 
 /**
  * @brief Same as submit_draw_commands, but for a command list frustum_cull_pass has already culled
@@ -177,7 +177,7 @@ auto submit_draw_commands(render_context& context, const std::vector<draw_comman
  * at context.culled_transform_address (the GPU-compacted, visible-only transforms) instead of
  * context.transform_address.
  */
-auto submit_draw_commands_indirect(render_context& context, const std::vector<draw_command>& commands, const std::array<memory::observer_ptr<graphics::graphics_pipeline>, 2u>& pipelines) -> void;
+auto submit_draw_commands_indirect(render_context& context, const std::vector<draw_command>& commands, const std::array<memory::observer_ptr<graphics::graphics_pipeline>, 4u>& pipelines) -> void;
 
 auto bind_globals(render_context& context) -> void;
 

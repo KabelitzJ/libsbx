@@ -8,6 +8,7 @@
 #include <string>
 
 #include <libsbx/math/color.hpp>
+#include <libsbx/math/vector2.hpp>
 #include <libsbx/math/vector3.hpp>
 
 #include <libsbx/assets/asset_handle.hpp>
@@ -21,6 +22,13 @@ enum class alpha_mode : std::uint8_t {
   mask,   // alpha-tested against alpha_cutoff (discard), still opaque pass
   blend   // order-dependent transparency, transparent pass
 }; // enum class alpha_mode
+
+// The engine's only two built-in shading models. Anything else (toon/cel, etc.) is composed with a
+// shader graph material, never a built-in the engine ships -- see the shader graph roadmap.
+enum class shading_model : std::uint8_t {
+  pbr,
+  unlit
+}; // enum class shading_model
 
 class material final : public loadable {
 
@@ -37,6 +45,7 @@ public:
     std::float_t metallic_factor{1.0f};
     std::float_t roughness_factor{1.0f};
     assets::alpha_mode alpha{alpha_mode::opaque};
+    assets::shading_model shading{shading_model::pbr};
     std::float_t alpha_cutoff{0.5f};
     bool is_double_sided{false};
     bool casts_shadow{true};
@@ -45,6 +54,8 @@ public:
     std::float_t occlusion_strength{1.0f};
     std::float_t emissive_strength{1.0f};
     std::float_t ior{1.5f}; // KHR_materials_ior default; F0 = ((ior-1)/(ior+1))^2 = 0.04
+    math::vector2 uv_tiling{1.0f, 1.0f};
+    math::vector2 uv_offset{0.0f, 0.0f};
     texture_handle albedo{};
     texture_handle normal{};
     texture_handle metallic_roughness{};
@@ -60,6 +71,7 @@ public:
     _metallic_factor{create_info.metallic_factor},
     _roughness_factor{create_info.roughness_factor},
     _alpha{create_info.alpha},
+    _shading{create_info.shading},
     _alpha_cutoff{create_info.alpha_cutoff},
     _is_double_sided{create_info.is_double_sided},
     _casts_shadow{create_info.casts_shadow},
@@ -68,6 +80,8 @@ public:
     _occlusion_strength{create_info.occlusion_strength},
     _emissive_strength{create_info.emissive_strength},
     _ior{create_info.ior},
+    _uv_tiling{create_info.uv_tiling},
+    _uv_offset{create_info.uv_offset},
     _albedo{create_info.albedo},
     _normal{create_info.normal},
     _metallic_roughness{create_info.metallic_roughness},
@@ -103,6 +117,10 @@ public:
     return _alpha;
   }
 
+  [[nodiscard]] auto shading() const noexcept -> shading_model {
+    return _shading;
+  }
+
   [[nodiscard]] auto alpha_cutoff() const noexcept -> std::float_t {
     return _alpha_cutoff;
   }
@@ -133,6 +151,14 @@ public:
 
   [[nodiscard]] auto ior() const noexcept -> std::float_t {
     return _ior;
+  }
+
+  [[nodiscard]] auto uv_tiling() const noexcept -> const math::vector2& {
+    return _uv_tiling;
+  }
+
+  [[nodiscard]] auto uv_offset() const noexcept -> const math::vector2& {
+    return _uv_offset;
   }
 
   [[nodiscard]] auto albedo() const noexcept -> const texture_handle& {
@@ -170,6 +196,7 @@ private:
   std::float_t _metallic_factor{1.0f};
   std::float_t _roughness_factor{1.0f};
   alpha_mode _alpha{alpha_mode::opaque};
+  shading_model _shading{shading_model::pbr};
   std::float_t _alpha_cutoff{0.5f};
   bool _is_double_sided{false};
   bool _casts_shadow{true};
@@ -178,6 +205,8 @@ private:
   std::float_t _occlusion_strength{1.0f};
   std::float_t _emissive_strength{1.0f};
   std::float_t _ior{1.5f};
+  math::vector2 _uv_tiling{1.0f, 1.0f};
+  math::vector2 _uv_offset{0.0f, 0.0f};
   texture_handle _albedo{};
   texture_handle _normal{};
   texture_handle _metallic_roughness{};

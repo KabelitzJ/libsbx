@@ -13,6 +13,7 @@
 
 #include <libsbx/math/uuid.hpp>
 #include <libsbx/math/color.hpp>
+#include <libsbx/math/vector2.hpp>
 #include <libsbx/math/vector3.hpp>
 #include <libsbx/math/volume.hpp>
 
@@ -27,7 +28,7 @@ namespace sbx::assets {
 inline constexpr auto texture_cook_version = std::uint32_t{1u};
 inline constexpr auto font_cook_version = std::uint32_t{1u};
 inline constexpr auto environment_cook_version = std::uint32_t{1u};
-inline constexpr auto material_cook_version = std::uint32_t{4u}; // v4: texture slots store assets-relative paths, not uuids (see material_description's doc comment)
+inline constexpr auto material_cook_version = std::uint32_t{6u}; // v6: adds shading_model (pbr/unlit) to the binary header
 inline constexpr auto skeleton_cook_version = std::uint32_t{1u};
 inline constexpr auto animation_cook_version = std::uint32_t{1u};
 inline constexpr auto mesh_cook_version = std::uint32_t{9u}; // v9: mesh_import_options-driven primitive/animation-clip selection at cook time; cooked animation clips now keep their *original* source index (not a renumbered count) -- see _load_cooked_mesh's doc comment
@@ -150,6 +151,7 @@ struct material_description {
   std::float_t metallic_factor{1.0f};
   std::float_t roughness_factor{1.0f};
   alpha_mode alpha{alpha_mode::opaque};
+  shading_model shading{shading_model::pbr};
   std::float_t alpha_cutoff{0.5f};
   bool is_double_sided{false};
   bool casts_shadow{true};
@@ -158,6 +160,8 @@ struct material_description {
   std::float_t occlusion_strength{1.0f};
   std::float_t emissive_strength{1.0f};
   std::float_t ior{1.5f};
+  math::vector2 uv_tiling{1.0f, 1.0f};
+  math::vector2 uv_offset{0.0f, 0.0f};
 
   // Assets-directory-relative paths (empty = no slot), *not* uuids -- resolving a path to a stable
   // uuid is asset_manifest::import's job, and asset_manifest is main-thread-only (see asset_

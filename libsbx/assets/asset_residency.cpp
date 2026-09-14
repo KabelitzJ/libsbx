@@ -19,6 +19,7 @@
 #include <libsbx/core/engine.hpp>
 
 #include <libsbx/math/color.hpp>
+#include <libsbx/math/vector2.hpp>
 #include <libsbx/math/vector3.hpp>
 #include <libsbx/math/vector4.hpp>
 
@@ -47,6 +48,8 @@ struct material_data {
   std::float_t occlusion_strength;
   std::float_t emissive_strength;
   std::float_t ior;
+  math::vector2 uv_tiling;
+  math::vector2 uv_offset;
 }; // struct material_data
 
 // Strips characters a filename can't contain, for turning a gltf material's (freeform) name into
@@ -405,6 +408,7 @@ auto asset_residency::update_material(material_handle& material, const material:
   material->_metallic_factor = create_info.metallic_factor;
   material->_roughness_factor = create_info.roughness_factor;
   material->_alpha = create_info.alpha;
+  material->_shading = create_info.shading;
   material->_alpha_cutoff = create_info.alpha_cutoff;
   material->_is_double_sided = create_info.is_double_sided;
   material->_casts_shadow = create_info.casts_shadow;
@@ -413,6 +417,8 @@ auto asset_residency::update_material(material_handle& material, const material:
   material->_occlusion_strength = create_info.occlusion_strength;
   material->_emissive_strength = create_info.emissive_strength;
   material->_ior = create_info.ior;
+  material->_uv_tiling = create_info.uv_tiling;
+  material->_uv_offset = create_info.uv_offset;
   material->_albedo = create_info.albedo;
   material->_normal = create_info.normal;
   material->_metallic_roughness = create_info.metallic_roughness;
@@ -469,6 +475,7 @@ auto asset_residency::save_material(material_handle& material, const std::filesy
   node["metallic_factor"] = material->metallic_factor();
   node["roughness_factor"] = material->roughness_factor();
   node["alpha_mode"] = (material->alpha() == alpha_mode::blend) ? "blend" : (material->alpha() == alpha_mode::mask) ? "mask" : "opaque";
+  node["shading_model"] = (material->shading() == shading_model::unlit) ? "unlit" : "pbr";
   node["alpha_cutoff"] = material->alpha_cutoff();
   node["is_double_sided"] = material->is_double_sided();
   node["casts_shadow"] = material->casts_shadow();
@@ -477,6 +484,8 @@ auto asset_residency::save_material(material_handle& material, const std::filesy
   node["occlusion_strength"] = material->occlusion_strength();
   node["emissive_strength"] = material->emissive_strength();
   node["ior"] = material->ior();
+  node["uv_tiling"] = material->uv_tiling();
+  node["uv_offset"] = material->uv_offset();
 
   if (const auto slot = path_of(material->albedo())) {
     node["albedo"] = *slot;
@@ -1268,10 +1277,17 @@ auto asset_residency::_finalize_material(asset_loader::material_result& result) 
   info.metallic_factor = description.metallic_factor;
   info.roughness_factor = description.roughness_factor;
   info.alpha = description.alpha;
+  info.shading = description.shading;
   info.alpha_cutoff = description.alpha_cutoff;
   info.is_double_sided = description.is_double_sided;
   info.casts_shadow = description.casts_shadow;
   info.receives_shadow = description.receives_shadow;
+  info.normal_scale = description.normal_scale;
+  info.occlusion_strength = description.occlusion_strength;
+  info.emissive_strength = description.emissive_strength;
+  info.ior = description.ior;
+  info.uv_tiling = description.uv_tiling;
+  info.uv_offset = description.uv_offset;
 
   const auto load_slot = [this](const std::string& path, graphics::format format) -> texture_handle {
     return path.empty() ? texture_handle{} : load_texture(std::filesystem::path{path}, format);
@@ -1605,6 +1621,8 @@ auto asset_residency::process_uploads(std::uint64_t frame_index) -> void {
     data.occlusion_strength = material.occlusion_strength();
     data.emissive_strength = material.emissive_strength();
     data.ior = material.ior();
+    data.uv_tiling = material.uv_tiling();
+    data.uv_offset = material.uv_offset();
 
     buffer.write(&data, sizeof(material_data), material.index() * memory::stride_v<material_data>);
   }

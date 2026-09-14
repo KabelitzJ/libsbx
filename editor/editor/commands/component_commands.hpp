@@ -33,7 +33,7 @@ public:
 
   auto execute(sbx::scenes::scene& target) -> void override {
     if (auto node = target.find(_node_id); node.is_valid()) {
-      std::ignore = node.get_or_add_component<Component>();
+      node.get_or_add_component<Component>();
       mark_prefab_override<Component>(target, node, sbx::scenes::prefab_override_kind::component_value);
     }
   }

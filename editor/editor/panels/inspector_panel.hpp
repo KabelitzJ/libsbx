@@ -63,6 +63,7 @@ private:
    * never prefab-shared content. Every other call site leaves it at the default.
    */
   auto _draw_node_properties(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node, sbx::assets::assets_module& assets_module, bool draw_identity = true) -> void;
+  auto _draw_active_checkbox(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node) -> void;
   auto _draw_name_field(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node) -> void;
   auto _draw_layer_field(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node) -> void;
   auto _draw_transform_section(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node) -> void;

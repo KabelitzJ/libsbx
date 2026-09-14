@@ -200,6 +200,13 @@ auto write_node(YAML::Node& node_yaml, ecs::registry& registry, ecs::entity enti
     components.push_back(component);
   }
 
+  if (registry.all_of<inactive>(entity)) {
+    auto component = YAML::Node{};
+    component["type"] = "inactive";
+
+    components.push_back(component);
+  }
+
   if (registry.all_of<mesh_renderer>(entity)) {
     const auto& renderer = registry.get<mesh_renderer>(entity);
 
@@ -881,6 +888,10 @@ auto read_node_components(node& target_node, const YAML::Node& node_yaml, assets
       transform.position = component["position"].as<math::vector3>();
       transform.rotation = component["rotation"].as<math::quaternion>();
       transform.scale = component["scale"].as<math::vector3>();
+    } else if (type == "inactive") {
+      // Absence means active -- scene::_create_node's freshly-created node already starts active,
+      // so there's nothing to do for a node without this entry.
+      target_node.set_active(false);
     } else if (type == "static_mesh") {
       auto& renderer = target_node.get_or_add_component<mesh_renderer>();
       renderer.mesh = assets_module.load_mesh(key_to_uuid.at(component["mesh"].as<std::string>()));

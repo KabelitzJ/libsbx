@@ -27,6 +27,7 @@ template<typename Component>
 constexpr auto component_key() -> std::string_view {
   if constexpr (std::same_as<Component, sbx::scenes::local_transform>) { return "transform"; }
   else if constexpr (std::same_as<Component, sbx::scenes::layer>) { return "layer"; }
+  else if constexpr (std::same_as<Component, sbx::scenes::inactive>) { return "inactive"; }
   else if constexpr (std::same_as<Component, sbx::scenes::mesh_renderer>) { return "static_mesh"; }
   else if constexpr (std::same_as<Component, sbx::scenes::animator>) { return "animator"; }
   else if constexpr (std::same_as<Component, sbx::scenes::camera>) { return "camera"; }

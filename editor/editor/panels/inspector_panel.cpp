@@ -39,6 +39,20 @@
 
 namespace editor {
 
+auto inspector_panel::_draw_active_checkbox(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node) -> void {
+  auto active = node.is_active();
+
+  if (ImGui::Checkbox("##Active", &active)) {
+    if (active) {
+      state.push_command(target, std::make_unique<remove_component_command<sbx::scenes::inactive>>(node.id(), sbx::scenes::inactive{}, "Activate Node"));
+    } else {
+      state.push_command(target, std::make_unique<add_component_command<sbx::scenes::inactive>>(node.id(), "Deactivate Node"));
+    }
+  }
+
+  ImGui::SameLine();
+}
+
 auto inspector_panel::_draw_name_field(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node) -> void {
   const auto id = node.id();
 
@@ -154,6 +168,7 @@ auto inspector_panel::_draw_node_properties(editor_state& state, sbx::scenes::sc
   const auto section_gap = [] { ImGui::Dummy(ImVec2{0.0f, 6.0f}); };
 
   if (draw_identity) {
+    _draw_active_checkbox(state, target, node);
     _draw_name_field(state, target, node);
     _draw_layer_field(state, target, node);
     section_gap();

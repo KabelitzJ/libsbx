@@ -17,6 +17,7 @@ struct nav_settings {
   std::float_t cell_size{0.2f};
   std::float_t cell_height{0.2f};
   std::float_t region_min_size{8.0f};
+  std::float_t region_merge_size{20.0f};
   std::float_t edge_max_length{12.0f};
   std::float_t edge_max_error{1.3f};
   std::int32_t verts_per_poly{6};

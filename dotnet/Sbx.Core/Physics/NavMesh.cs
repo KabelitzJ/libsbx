@@ -21,13 +21,14 @@ namespace Sbx.Core.Physics
       float cellSize = 0.2f,
       float cellHeight = 0.2f,
       float regionMinSize = 8.0f,
+      float regionMergeSize = 20.0f,
       float edgeMaxLength = 12.0f,
       float edgeMaxError = 1.3f,
       int vertsPerPoly = 6)
     {
       unsafe
       {
-        return InternalCalls.Nav_Bake(agentRadius, agentHeight, agentMaxSlope, agentMaxClimb, cellSize, cellHeight, regionMinSize, edgeMaxLength, edgeMaxError, vertsPerPoly);
+        return InternalCalls.Nav_Bake(agentRadius, agentHeight, agentMaxSlope, agentMaxClimb, cellSize, cellHeight, regionMinSize, regionMergeSize, edgeMaxLength, edgeMaxError, vertsPerPoly);
       }
     }
 

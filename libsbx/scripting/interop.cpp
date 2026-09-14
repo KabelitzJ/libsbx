@@ -1630,7 +1630,7 @@ auto interop::physics_raycast(math::ray* ray, std::float_t max_distance, std::ui
   return true;
 }
 
-auto interop::nav_bake(std::float_t agent_radius, std::float_t agent_height, std::float_t agent_max_slope, std::float_t agent_max_climb, std::float_t cell_size, std::float_t cell_height, std::float_t region_min_size, std::float_t edge_max_length, std::float_t edge_max_error, std::int32_t verts_per_poly) -> bool {
+auto interop::nav_bake(std::float_t agent_radius, std::float_t agent_height, std::float_t agent_max_slope, std::float_t agent_max_climb, std::float_t cell_size, std::float_t cell_height, std::float_t region_min_size, std::float_t region_merge_size, std::float_t edge_max_length, std::float_t edge_max_error, std::int32_t verts_per_poly) -> bool {
   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
   auto& scene = scenes_module.active_scene();
   auto& physics_module = core::engine::get_module<physics::physics_module>();
@@ -1643,6 +1643,7 @@ auto interop::nav_bake(std::float_t agent_radius, std::float_t agent_height, std
   settings.cell_size = cell_size;
   settings.cell_height = cell_height;
   settings.region_min_size = region_min_size;
+  settings.region_merge_size = region_merge_size;
   settings.edge_max_length = edge_max_length;
   settings.edge_max_error = edge_max_error;
   settings.verts_per_poly = verts_per_poly;

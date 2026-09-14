@@ -38,7 +38,7 @@ struct compact_heightfield {
 
 auto erode_walkable_area(std::int32_t erosion_radius, compact_heightfield& chf, bake_arena& arena) -> void;
 
-[[nodiscard]] auto build_regions_monotone(compact_heightfield& chf, std::int32_t border_size, std::int32_t min_region_area, bake_arena& arena) -> bool;
+[[nodiscard]] auto build_regions_monotone(compact_heightfield& chf, std::int32_t border_size, std::int32_t min_region_area, std::int32_t merge_region_area, bake_arena& arena) -> bool;
 
 } // namespace sbx::physics
 

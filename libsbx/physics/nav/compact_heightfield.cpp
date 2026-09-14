@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 
 namespace sbx::physics {
 
@@ -249,7 +250,122 @@ struct sweep_span {
   std::uint16_t neighbor_id{0};
 }; // struct sweep_span
 
-[[nodiscard]] auto build_regions_monotone(compact_heightfield& chf, std::int32_t border_size, std::int32_t min_region_area, bake_arena& arena) -> bool {
+auto add_unique_neighbor(std::pmr::vector<std::uint16_t>& neighbors, std::uint16_t region_id) -> void {
+  if (std::find(neighbors.begin(), neighbors.end(), region_id) == neighbors.end()) {
+    neighbors.push_back(region_id);
+  }
+}
+
+auto merge_and_filter_regions(compact_heightfield& chf, std::int32_t min_region_area, std::int32_t merge_region_area, std::pmr::vector<std::uint16_t>& src_regions, std::uint16_t region_count, bake_arena& arena) -> void {
+  const auto width = chf.width;
+  const auto height = chf.height;
+
+  auto region_span_counts = std::pmr::vector<std::int32_t>(static_cast<std::size_t>(region_count), 0, arena.temp());
+
+  for (const auto value : src_regions) {
+    if (value != 0) {
+      ++region_span_counts[value];
+    }
+  }
+
+  for (auto id = std::uint16_t{1}; id < region_count; ++id) {
+    if (region_span_counts[static_cast<std::size_t>(id)] < min_region_area) {
+      region_span_counts[static_cast<std::size_t>(id)] = 0;
+    }
+  }
+
+  for (auto& value : src_regions) {
+    if (value != 0 && region_span_counts[static_cast<std::size_t>(value)] == 0) {
+      value = 0;
+    }
+  }
+
+  auto region_neighbors = std::pmr::vector<std::pmr::vector<std::uint16_t>>(static_cast<std::size_t>(region_count), arena.temp());
+
+  for (auto z = std::int32_t{0}; z < height; ++z) {
+    for (auto x = std::int32_t{0}; x < width; ++x) {
+      const auto& cell = chf.cells[static_cast<std::size_t>(x + z * width)];
+
+      for (auto i = static_cast<std::int32_t>(cell.index), ni = static_cast<std::int32_t>(cell.index + cell.count); i < ni; ++i) {
+        const auto region = src_regions[static_cast<std::size_t>(i)];
+
+        if (region == 0) {
+          continue;
+        }
+
+        const auto& span = chf.spans[static_cast<std::size_t>(i)];
+
+        for (auto direction = std::int32_t{0}; direction < 4; ++direction) {
+          const auto connection = get_connection(span, direction);
+
+          if (connection == static_cast<std::int32_t>(not_connected)) {
+            continue;
+          }
+
+          const auto neighbor_x = x + direction_offset_x(direction);
+          const auto neighbor_z = z + direction_offset_z(direction);
+          const auto neighbor_index = static_cast<std::int32_t>(chf.cells[static_cast<std::size_t>(neighbor_x + neighbor_z * width)].index) + connection;
+          const auto neighbor_region = src_regions[static_cast<std::size_t>(neighbor_index)];
+
+          if (neighbor_region == 0 || neighbor_region == region) {
+            continue;
+          }
+
+          add_unique_neighbor(region_neighbors[region], neighbor_region);
+          add_unique_neighbor(region_neighbors[neighbor_region], region);
+        }
+      }
+    }
+  }
+
+  auto merged_any = true;
+
+  while (merged_any) {
+    merged_any = false;
+
+    for (auto id = std::uint16_t{1}; id < region_count; ++id) {
+      if (region_span_counts[static_cast<std::size_t>(id)] == 0 || region_span_counts[static_cast<std::size_t>(id)] > merge_region_area) {
+        continue;
+      }
+
+      auto best_neighbor = std::uint16_t{0};
+      auto best_count = std::numeric_limits<std::int32_t>::max();
+
+      for (const auto neighbor_id : region_neighbors[id]) {
+        const auto neighbor_count = region_span_counts[static_cast<std::size_t>(neighbor_id)];
+
+        if (neighbor_count > 0 && neighbor_count < best_count) {
+          best_count = neighbor_count;
+          best_neighbor = neighbor_id;
+        }
+      }
+
+      if (best_neighbor == 0) {
+        continue;
+      }
+
+      region_span_counts[static_cast<std::size_t>(best_neighbor)] += region_span_counts[static_cast<std::size_t>(id)];
+      region_span_counts[static_cast<std::size_t>(id)] = 0;
+
+      for (const auto other : region_neighbors[id]) {
+        if (other != best_neighbor) {
+          add_unique_neighbor(region_neighbors[best_neighbor], other);
+          add_unique_neighbor(region_neighbors[other], best_neighbor);
+        }
+      }
+
+      for (auto& value : src_regions) {
+        if (value == id) {
+          value = best_neighbor;
+        }
+      }
+
+      merged_any = true;
+    }
+  }
+}
+
+[[nodiscard]] auto build_regions_monotone(compact_heightfield& chf, std::int32_t border_size, std::int32_t min_region_area, std::int32_t merge_region_area, bake_arena& arena) -> bool {
   constexpr auto null_neighbor = std::uint16_t{0xffff};
 
   const auto width = chf.width;
@@ -353,19 +469,7 @@ struct sweep_span {
 
   chf.max_regions = region_id;
 
-  auto region_span_counts = std::pmr::vector<std::int32_t>(static_cast<std::size_t>(region_id), 0, arena.temp());
-
-  for (const auto value : src_regions) {
-    if (value != 0) {
-      ++region_span_counts[value];
-    }
-  }
-
-  for (auto& value : src_regions) {
-    if (value != 0 && (value & border_region) == 0 && region_span_counts[value] < min_region_area) {
-      value = 0;
-    }
-  }
+  merge_and_filter_regions(chf, min_region_area, merge_region_area, src_regions, region_id, arena);
 
   for (auto i = std::size_t{0}; i < chf.spans.size(); ++i) {
     chf.spans[i].region_id = src_regions[i];

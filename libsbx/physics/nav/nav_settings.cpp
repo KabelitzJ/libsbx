@@ -20,7 +20,7 @@ namespace sbx::physics {
   cfg.max_edge_length = static_cast<std::int32_t>(settings.edge_max_length / settings.cell_size);
   cfg.max_simplification_error = settings.edge_max_error;
   cfg.min_region_area = static_cast<std::int32_t>(settings.region_min_size * settings.region_min_size);
-  cfg.merge_region_area = 0;
+  cfg.merge_region_area = static_cast<std::int32_t>(settings.region_merge_size * settings.region_merge_size);
   cfg.max_verts_per_poly = settings.verts_per_poly;
   cfg.detail_sample_distance = settings.cell_size * 6.0f;
   cfg.detail_sample_max_error = settings.cell_height;

@@ -327,7 +327,7 @@ auto gather_walkable_triangles(scenes::scene& scene, mesh_collision_cache& mesh_
 
   arena.reset_temp();
 
-  if (!build_regions_monotone(chf, 0, cfg.min_region_area, arena)) {
+  if (!build_regions_monotone(chf, 0, cfg.min_region_area, cfg.merge_region_area, arena)) {
     return navmesh_build_result{};
   }
 

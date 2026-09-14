@@ -37,6 +37,7 @@ auto navigation_panel::draw(editor_state& state) -> void {
 
   ImGui::SeparatorText("Regions & Contours");
   ImGui::DragFloat("Min Region Size", &_settings.region_min_size, 0.5f, 0.0f, 200.0f);
+  ImGui::DragFloat("Merge Region Size", &_settings.region_merge_size, 0.5f, 0.0f, 200.0f);
   ImGui::DragFloat("Max Edge Length", &_settings.edge_max_length, 0.5f, 0.0f, 100.0f);
   ImGui::DragFloat("Max Edge Error", &_settings.edge_max_error, 0.1f, 0.1f, 10.0f);
   ImGui::InputInt("Verts Per Poly", &_settings.verts_per_poly);

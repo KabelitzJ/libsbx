@@ -73,7 +73,7 @@ auto shadow_pass::_resolve_graph_pipeline(const assets::shader_graph_handle& gra
       {VK_SHADER_STAGE_FRAGMENT_BIT, "depth_fragment_main"}
     };
 
-    const auto& shader = shader_cache.get({assets::shader_graph_generated_path(graph->id()), entry_points});
+    const auto& shader = shader_cache.get({assets::shader_graph_generated_path(graph->id(), graph->generation()), entry_points});
 
     return pipeline_cache.get(graphics::graphics_pipeline::create_info{
       .shader = shader,
@@ -85,7 +85,7 @@ auto shadow_pass::_resolve_graph_pipeline(const assets::shader_graph_handle& gra
       .depth_write = true,
       .depth_compare = graphics::compare_operation::less_or_equal,
       .samples = graphics::samples::count_1,
-      .name = fmt::format("Shadow Cascade Graph {}", assets::shader_graph_generated_name(graph->id()))
+      .name = fmt::format("Shadow Cascade Graph {}", assets::shader_graph_generated_name(graph->id(), graph->generation()))
     });
   } catch (const std::exception& exception) {
     utility::logger<"render">::warn("shader_graph {} failed to compile ({}) -- skipping shadow cascade for it until it's fixed", graph->id(), exception.what());

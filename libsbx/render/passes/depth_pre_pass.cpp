@@ -77,7 +77,7 @@ auto depth_pre_pass::_resolve_graph_pipeline(const assets::shader_graph_handle& 
       {VK_SHADER_STAGE_FRAGMENT_BIT, "depth_fragment_main"}
     };
 
-    const auto& shader = shader_cache.get({assets::shader_graph_generated_path(graph->id()), entry_points});
+    const auto& shader = shader_cache.get({assets::shader_graph_generated_path(graph->id(), graph->generation()), entry_points});
 
     return pipeline_cache.get(graphics::graphics_pipeline::create_info{
       .shader = shader,
@@ -89,7 +89,7 @@ auto depth_pre_pass::_resolve_graph_pipeline(const assets::shader_graph_handle& 
       .depth_write = true,
       .depth_compare = graphics::compare_operation::less_or_equal,
       .samples = render_pass::sample_count,
-      .name = fmt::format("Depth Pre Graph {}", assets::shader_graph_generated_name(graph->id()))
+      .name = fmt::format("Depth Pre Graph {}", assets::shader_graph_generated_name(graph->id(), graph->generation()))
     });
   } catch (const std::exception& exception) {
     utility::logger<"render">::warn("shader_graph {} failed to compile ({}) -- skipping depth pre-pass for it until it's fixed", graph->id(), exception.what());

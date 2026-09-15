@@ -91,6 +91,12 @@ enum class shader_node_type : std::uint8_t {
   input_vertex_position, // valid only reachable from output_vertex -- vertex-stage (object-space), not fragment
   input_vertex_normal,   // same restriction
   input_vertex_tangent,  // same restriction
+  camera_position,       // world-space camera position (frame_data.camera_position) -- valid in either stage
+  main_light_direction,  // directional light 0's own travel direction (light -> surface, matching Unity
+                          // Shader Graph's own node -- negate it for N.L), or (0,-1,0) if the scene has none
+  main_light_color,      // that same light's color*intensity (radiance), or black if the scene has none
+  time,                  // seconds since the engine started
+  delta_time,            // seconds since the previous frame
   constant_float,
   constant_vector3,
   constant_color,
@@ -107,6 +113,24 @@ enum class shader_node_type : std::uint8_t {
   pow,
   step,
   smoothstep,
+  negate,         // 1 input (any width), -x
+  one_minus,      // 1 input (any width), 1-x
+  absolute,       // 1 input (any width), abs(x)
+  floor,          // 1 input (any width), floor(x)
+  ceiling,        // 1 input (any width), ceil(x)
+  round,          // 1 input (any width), round(x)
+  fraction,       // 1 input (any width), frac(x)
+  sign,           // 1 input (any width), sign(x)
+  minimum,        // 2 inputs (any matching width, or a scalar broadcast against the other), min(a,b)
+  maximum,        // same shape, max(a,b)
+  clamp,          // In (any width) + Min/Max (that same width, or a scalar broadcast), clamp(in,min,max)
+  length,         // 1 input (any width) -> scalar, length(x)
+  distance,       // 2 inputs (any matching width) -> scalar, distance(a,b)
+  reflect,        // In + Normal (both fixed float3) -> float3, reflect(in,normal)
+  remap,          // In (any width, dynamic) + In Min/In Max/Out Min/Out Max (each a scalar, each optional --
+                   // default 0/1/0/1) -> that same width, linearly remaps In from [InMin,InMax] to [OutMin,OutMax]
+  fresnel_effect, // Normal/View Dir (both fixed float3, each optional -- default this fragment's own N/V) +
+                   // Power (scalar, optional -- default 1) -> scalar, pow(saturate(1-dot(N,V)), power). Fragment-only.
   swizzle, // 1 input (any width), 1 output the SAME width as the input -- each of its up to 4 output
            // components independently picks which input component (R/G/B/A) feeds it, e.g. "bgra"
   split,   // 1 input (any width), always 4 outputs (R/G/B/A, always scalar) -- a component beyond the
@@ -134,6 +158,11 @@ enum class shader_node_type : std::uint8_t {
     case shader_node_type::input_vertex_position: return "input_vertex_position";
     case shader_node_type::input_vertex_normal: return "input_vertex_normal";
     case shader_node_type::input_vertex_tangent: return "input_vertex_tangent";
+    case shader_node_type::camera_position: return "camera_position";
+    case shader_node_type::main_light_direction: return "main_light_direction";
+    case shader_node_type::main_light_color: return "main_light_color";
+    case shader_node_type::time: return "time";
+    case shader_node_type::delta_time: return "delta_time";
     case shader_node_type::constant_float: return "constant_float";
     case shader_node_type::constant_vector3: return "constant_vector3";
     case shader_node_type::constant_color: return "constant_color";
@@ -150,6 +179,22 @@ enum class shader_node_type : std::uint8_t {
     case shader_node_type::pow: return "pow";
     case shader_node_type::step: return "step";
     case shader_node_type::smoothstep: return "smoothstep";
+    case shader_node_type::negate: return "negate";
+    case shader_node_type::one_minus: return "one_minus";
+    case shader_node_type::absolute: return "absolute";
+    case shader_node_type::floor: return "floor";
+    case shader_node_type::ceiling: return "ceiling";
+    case shader_node_type::round: return "round";
+    case shader_node_type::fraction: return "fraction";
+    case shader_node_type::sign: return "sign";
+    case shader_node_type::minimum: return "minimum";
+    case shader_node_type::maximum: return "maximum";
+    case shader_node_type::clamp: return "clamp";
+    case shader_node_type::length: return "length";
+    case shader_node_type::distance: return "distance";
+    case shader_node_type::reflect: return "reflect";
+    case shader_node_type::remap: return "remap";
+    case shader_node_type::fresnel_effect: return "fresnel_effect";
     case shader_node_type::swizzle: return "swizzle";
     case shader_node_type::split: return "split";
     case shader_node_type::combine: return "combine";
@@ -168,6 +213,11 @@ enum class shader_node_type : std::uint8_t {
   if (value == "input_vertex_position") return shader_node_type::input_vertex_position;
   if (value == "input_vertex_normal") return shader_node_type::input_vertex_normal;
   if (value == "input_vertex_tangent") return shader_node_type::input_vertex_tangent;
+  if (value == "camera_position") return shader_node_type::camera_position;
+  if (value == "main_light_direction") return shader_node_type::main_light_direction;
+  if (value == "main_light_color") return shader_node_type::main_light_color;
+  if (value == "time") return shader_node_type::time;
+  if (value == "delta_time") return shader_node_type::delta_time;
   if (value == "constant_float") return shader_node_type::constant_float;
   if (value == "constant_vector3") return shader_node_type::constant_vector3;
   if (value == "constant_color") return shader_node_type::constant_color;
@@ -184,6 +234,22 @@ enum class shader_node_type : std::uint8_t {
   if (value == "pow") return shader_node_type::pow;
   if (value == "step") return shader_node_type::step;
   if (value == "smoothstep") return shader_node_type::smoothstep;
+  if (value == "negate") return shader_node_type::negate;
+  if (value == "one_minus") return shader_node_type::one_minus;
+  if (value == "absolute") return shader_node_type::absolute;
+  if (value == "floor") return shader_node_type::floor;
+  if (value == "ceiling") return shader_node_type::ceiling;
+  if (value == "round") return shader_node_type::round;
+  if (value == "fraction") return shader_node_type::fraction;
+  if (value == "sign") return shader_node_type::sign;
+  if (value == "minimum") return shader_node_type::minimum;
+  if (value == "maximum") return shader_node_type::maximum;
+  if (value == "clamp") return shader_node_type::clamp;
+  if (value == "length") return shader_node_type::length;
+  if (value == "distance") return shader_node_type::distance;
+  if (value == "reflect") return shader_node_type::reflect;
+  if (value == "remap") return shader_node_type::remap;
+  if (value == "fresnel_effect") return shader_node_type::fresnel_effect;
   if (value == "swizzle") return shader_node_type::swizzle;
   if (value == "split") return shader_node_type::split;
   if (value == "combine") return shader_node_type::combine;
@@ -204,6 +270,11 @@ enum class shader_node_type : std::uint8_t {
     case shader_node_type::input_vertex_position: return "Vertex Position";
     case shader_node_type::input_vertex_normal: return "Vertex Normal";
     case shader_node_type::input_vertex_tangent: return "Vertex Tangent";
+    case shader_node_type::camera_position: return "Camera Position";
+    case shader_node_type::main_light_direction: return "Main Light Direction";
+    case shader_node_type::main_light_color: return "Main Light Color";
+    case shader_node_type::time: return "Time";
+    case shader_node_type::delta_time: return "Delta Time";
     case shader_node_type::constant_float: return "Float";
     case shader_node_type::constant_vector3: return "Vector3";
     case shader_node_type::constant_color: return "Color";
@@ -220,6 +291,22 @@ enum class shader_node_type : std::uint8_t {
     case shader_node_type::pow: return "Power";
     case shader_node_type::step: return "Step";
     case shader_node_type::smoothstep: return "Smoothstep";
+    case shader_node_type::negate: return "Negate";
+    case shader_node_type::one_minus: return "One Minus";
+    case shader_node_type::absolute: return "Absolute";
+    case shader_node_type::floor: return "Floor";
+    case shader_node_type::ceiling: return "Ceiling";
+    case shader_node_type::round: return "Round";
+    case shader_node_type::fraction: return "Fraction";
+    case shader_node_type::sign: return "Sign";
+    case shader_node_type::minimum: return "Minimum";
+    case shader_node_type::maximum: return "Maximum";
+    case shader_node_type::clamp: return "Clamp";
+    case shader_node_type::length: return "Length";
+    case shader_node_type::distance: return "Distance";
+    case shader_node_type::reflect: return "Reflect";
+    case shader_node_type::remap: return "Remap";
+    case shader_node_type::fresnel_effect: return "Fresnel Effect";
     case shader_node_type::swizzle: return "Swizzle";
     case shader_node_type::split: return "Split";
     case shader_node_type::combine: return "Combine";
@@ -249,6 +336,11 @@ enum class shader_node_category : std::uint8_t {
     case shader_node_type::input_vertex_position:
     case shader_node_type::input_vertex_normal:
     case shader_node_type::input_vertex_tangent:
+    case shader_node_type::camera_position:
+    case shader_node_type::main_light_direction:
+    case shader_node_type::main_light_color:
+    case shader_node_type::time:
+    case shader_node_type::delta_time:
       return shader_node_category::input;
     case shader_node_type::constant_float:
     case shader_node_type::constant_vector3:
@@ -268,6 +360,22 @@ enum class shader_node_category : std::uint8_t {
     case shader_node_type::pow:
     case shader_node_type::step:
     case shader_node_type::smoothstep:
+    case shader_node_type::negate:
+    case shader_node_type::one_minus:
+    case shader_node_type::absolute:
+    case shader_node_type::floor:
+    case shader_node_type::ceiling:
+    case shader_node_type::round:
+    case shader_node_type::fraction:
+    case shader_node_type::sign:
+    case shader_node_type::minimum:
+    case shader_node_type::maximum:
+    case shader_node_type::clamp:
+    case shader_node_type::length:
+    case shader_node_type::distance:
+    case shader_node_type::reflect:
+    case shader_node_type::remap:
+    case shader_node_type::fresnel_effect:
     case shader_node_type::swizzle:
     case shader_node_type::split:
     case shader_node_type::combine:
@@ -336,6 +444,11 @@ enum class shader_node_category : std::uint8_t {
     case shader_node_type::input_vertex_position:
     case shader_node_type::input_vertex_normal:
     case shader_node_type::input_vertex_tangent:
+    case shader_node_type::camera_position:
+    case shader_node_type::main_light_direction:
+    case shader_node_type::main_light_color:
+    case shader_node_type::time:
+    case shader_node_type::delta_time:
     case shader_node_type::constant_float:
     case shader_node_type::constant_vector3:
     case shader_node_type::constant_color:
@@ -343,6 +456,15 @@ enum class shader_node_category : std::uint8_t {
     case shader_node_type::texture_sample:
     case shader_node_type::normalize:
     case shader_node_type::saturate:
+    case shader_node_type::negate:
+    case shader_node_type::one_minus:
+    case shader_node_type::absolute:
+    case shader_node_type::floor:
+    case shader_node_type::ceiling:
+    case shader_node_type::round:
+    case shader_node_type::fraction:
+    case shader_node_type::sign:
+    case shader_node_type::length:
     case shader_node_type::swizzle:
     case shader_node_type::split:
       return 1u;
@@ -354,14 +476,22 @@ enum class shader_node_category : std::uint8_t {
     case shader_node_type::cross:
     case shader_node_type::pow:
     case shader_node_type::step:
+    case shader_node_type::minimum:
+    case shader_node_type::maximum:
+    case shader_node_type::distance:
+    case shader_node_type::reflect:
       return 2u;
     case shader_node_type::lerp:
     case shader_node_type::smoothstep:
+    case shader_node_type::clamp: // In, Min, Max
+    case shader_node_type::fresnel_effect: // Normal, View Dir, Power
     case shader_node_type::output_vertex: // Position, Normal, Tangent
     case shader_node_type::output_fragment_unlit: // Color, Alpha, Alpha Clip Threshold
       return 3u;
     case shader_node_type::combine: // R, G, B, A -- each optional, defaulting to 0
       return 4u;
+    case shader_node_type::remap: // In, In Min, In Max, Out Min, Out Max
+      return 5u;
     case shader_node_type::output_fragment_lit: // Albedo, Normal, Metallic, Roughness, Emission, Occlusion, Alpha, Alpha Clip Threshold
       return 8u;
   }
@@ -410,6 +540,9 @@ enum class shader_node_category : std::uint8_t {
     case shader_node_type::dot:
     case shader_node_type::cross:
     case shader_node_type::pow:
+    case shader_node_type::minimum:
+    case shader_node_type::maximum:
+    case shader_node_type::distance:
       return pin == 0u ? "A" : "B";
     case shader_node_type::step:
       return pin == 0u ? "Edge" : "X";
@@ -421,6 +554,23 @@ enum class shader_node_category : std::uint8_t {
       if (pin == 0u) return "Edge0";
       if (pin == 1u) return "Edge1";
       return "X";
+    case shader_node_type::clamp:
+      if (pin == 0u) return "In";
+      return pin == 1u ? "Min" : "Max";
+    case shader_node_type::reflect:
+      return pin == 0u ? "In" : "Normal";
+    case shader_node_type::remap:
+      switch (pin) {
+        case 0u: return "In";
+        case 1u: return "In Min";
+        case 2u: return "In Max";
+        case 3u: return "Out Min";
+        default: return "Out Max";
+      }
+    case shader_node_type::fresnel_effect:
+      if (pin == 0u) return "Normal";
+      if (pin == 1u) return "View Dir";
+      return "Power";
     default:
       return "In";
   }
@@ -460,12 +610,21 @@ struct shader_graph_edge {
     case shader_node_type::input_vertex_position:
     case shader_node_type::input_vertex_normal:
     case shader_node_type::input_vertex_tangent:
+    case shader_node_type::camera_position:
+    case shader_node_type::main_light_direction:
+    case shader_node_type::main_light_color:
     case shader_node_type::constant_vector3:
     case shader_node_type::cross:
+    case shader_node_type::reflect:
       return shader_value_type::vector3;
     case shader_node_type::constant_float:
     case shader_node_type::dot:
     case shader_node_type::split: // every Split output (R/G/B/A) is a scalar, regardless of pin
+    case shader_node_type::time:
+    case shader_node_type::delta_time:
+    case shader_node_type::length:
+    case shader_node_type::distance:
+    case shader_node_type::fresnel_effect:
       return shader_value_type::scalar;
     case shader_node_type::constant_color:
     case shader_node_type::texture_sample:
@@ -473,7 +632,8 @@ struct shader_graph_edge {
     case shader_node_type::combine: // RG / RGB / RGBA
       return pin == 0u ? shader_value_type::vector2 : pin == 1u ? shader_value_type::vector3 : shader_value_type::vector4;
     default:
-      // add/subtract/multiply/divide/lerp/normalize/saturate/swizzle/pow/step/smoothstep -- dynamic
+      // add/subtract/multiply/divide/lerp/normalize/saturate/swizzle/pow/step/smoothstep/negate/
+      // one_minus/absolute/floor/ceiling/round/fraction/sign/minimum/maximum/clamp/remap -- dynamic
       return std::nullopt;
   }
 }
@@ -486,9 +646,15 @@ struct shader_graph_edge {
     case shader_node_type::texture_sample:
       return shader_value_type::vector2; // uv
     case shader_node_type::cross:
+    case shader_node_type::reflect:
       return shader_value_type::vector3; // both pins
     case shader_node_type::combine:
       return shader_value_type::scalar; // R/G/B/A, every pin
+    case shader_node_type::remap:
+      if (pin == 0u) return std::nullopt; // In -- dynamic
+      return shader_value_type::scalar; // In Min/In Max/Out Min/Out Max
+    case shader_node_type::fresnel_effect:
+      return pin == 2u ? shader_value_type::scalar : shader_value_type::vector3; // Normal/View Dir (vector3) / Power (scalar)
     case shader_node_type::output_vertex:
       return shader_value_type::vector3; // Position/Normal/Tangent
     case shader_node_type::output_fragment_unlit:
@@ -504,9 +670,10 @@ struct shader_graph_edge {
         default: return shader_value_type::scalar;  // Alpha / Alpha Clip Threshold
       }
     default:
-      // add/subtract/multiply/divide/lerp/dot/normalize/saturate/swizzle/pow/step/smoothstep/split
-      // -- fully dynamic, no restriction (Split and Swizzle included -- Unity's own Split/Swizzle
-      // nodes both accept "a vector of any dimension", scalar included).
+      // add/subtract/multiply/divide/lerp/dot/normalize/saturate/swizzle/pow/step/smoothstep/split/
+      // negate/one_minus/absolute/floor/ceiling/round/fraction/sign/minimum/maximum/clamp/length/
+      // distance -- fully dynamic, no restriction (Split and Swizzle included -- Unity's own Split/
+      // Swizzle nodes both accept "a vector of any dimension", scalar included).
       return std::nullopt;
   }
 }
@@ -685,12 +852,26 @@ private:
       case shader_node_type::lerp:       // T (pin 2) never drives the type
       case shader_node_type::smoothstep: // x (pin 2) never drives the type
       case shader_node_type::dot:        // fixed scalar output, but its 2 inputs must still dynamically match each other
+      case shader_node_type::minimum:
+      case shader_node_type::maximum:
+      case shader_node_type::distance:   // fixed scalar output, same reasoning as Dot
         return {0u, 1u};
       case shader_node_type::pow:        // exponent (pin 1) never drives the type
       case shader_node_type::normalize:
       case shader_node_type::saturate:
       case shader_node_type::swizzle:
       case shader_node_type::split:
+      case shader_node_type::negate:
+      case shader_node_type::one_minus:
+      case shader_node_type::absolute:
+      case shader_node_type::floor:
+      case shader_node_type::ceiling:
+      case shader_node_type::round:
+      case shader_node_type::fraction:
+      case shader_node_type::sign:
+      case shader_node_type::clamp:  // Min/Max (pins 1,2) never drive the type
+      case shader_node_type::length: // fixed scalar output, but In's own width still needs to be displayable/re-checkable
+      case shader_node_type::remap:  // In Min/In Max/Out Min/Out Max (pins 1-4) never drive the type
         return {0u};
       default:
         return {};
@@ -829,12 +1010,29 @@ using shader_graph_handle = asset_handle<shader_graph>;
 // asset_cooker::cook_shader_graph (writes the file there) and every render pass that needs to
 // compile/bind a graph-driven material's pipeline (looks it up there), so the convention can't
 // drift between the two.
-[[nodiscard]] inline auto shader_graph_generated_name(const math::uuid& id) -> std::string {
-  return fmt::format("shader_graph_{}", id.value());
+//
+// `generation` (shader_graph::generation(), bumped by every asset_residency::update_shader_graph
+// live edit -- see loadable.hpp) is folded into both so an edit's path never collides with the
+// previous one: shader_cache/pipeline_cache are plain path-keyed maps with no invalidation/re-check
+// of their own (see their own doc comments), so re-cooking the SAME path after an edit would just
+// keep serving the stale already-compiled shader until the app restarted. A generation-suffixed
+// path instead makes every edit a cache MISS, so it always gets freshly compiled -- at the cost of
+// the previous generation's now-unreachable shader/pipeline objects just sitting in those caches
+// unused for the rest of the run, rather than being torn down (tearing down a GPU shader/pipeline
+// that a previous frame's still-in-flight command buffer might reference needs the same frame-
+// retirement machinery resource_registry already has for buffers/images -- shader_cache/
+// pipeline_cache don't have it, and adding it is real scope beyond "make live edits apply").
+// ponytail: this leaks one shader+pipeline object per edit for the process's lifetime -- fine for
+// an editor session iterating on a handful of graphs, not fine if that ever becomes hundreds of
+// edits without a restart. Upgrade path: give shader_cache/pipeline_cache real eviction with
+// frame-safe deferred destruction (mirroring resource_registry's retirement), then drop the
+// generation suffix and evict-and-recompile the stable path in place instead.
+[[nodiscard]] inline auto shader_graph_generated_name(const math::uuid& id, std::uint64_t generation) -> std::string {
+  return fmt::format("shader_graph_{}_{}", id.value(), generation);
 }
 
-[[nodiscard]] inline auto shader_graph_generated_path(const math::uuid& id) -> std::string {
-  return fmt::format("engine://shaders/generated/{}.slang", shader_graph_generated_name(id));
+[[nodiscard]] inline auto shader_graph_generated_path(const math::uuid& id, std::uint64_t generation) -> std::string {
+  return fmt::format("engine://shaders/generated/{}.slang", shader_graph_generated_name(id, generation));
 }
 
 } // namespace sbx::assets

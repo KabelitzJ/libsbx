@@ -1053,6 +1053,38 @@ auto asset_residency::update_shader_graph(shader_graph_handle& graph, const shad
   graph->_nodes = create_info.nodes;
   graph->_edges = create_info.edges;
   graph->_bump_generation();
+
+  // Re-cooks on every live edit, not just an explicit Save -- shader_graph_panel's _apply_live goes
+  // through here on every node/edge change, and without this the render passes kept resolving
+  // whatever pipeline they'd already resolved for this graph's (now-stale) generated file until the
+  // whole editor was restarted (shader_cache/pipeline_cache have no invalidation of their own; the
+  // generation-suffixed path from shader_graph_generated_path is what makes a re-cook actually take
+  // effect -- see its own doc comment). Codegen is cheap pure string generation, so cooking on every
+  // edit (rather than debouncing) is fine -- unlike a node drag (update_shader_graph_node_position),
+  // every caller through here is a real content edit (add/delete/connect/property change), not
+  // something that fires every frame.
+  auto info = shader_graph::create_info{};
+  info.name = graph->name();
+  info.nodes = graph->nodes();
+  info.edges = graph->edges();
+
+  if (!asset_cooker::cook_shader_graph(graph->id(), graph->generation(), info)) {
+    utility::logger<"assets">::warn("shader_graph {} edited but failed to cook -- see the warning above for why", graph->id());
+  }
+}
+
+auto asset_residency::update_shader_graph_node_position(shader_graph_handle& graph, std::uint32_t node_id, math::vector2 position) -> void {
+  if (!graph.is_valid()) {
+    return;
+  }
+
+  const auto it = std::ranges::find(graph->_nodes, node_id, &shader_graph_node::id);
+
+  if (it == graph->_nodes.end()) {
+    return;
+  }
+
+  it->editor_position = position;
 }
 
 auto asset_residency::save_shader_graph(shader_graph_handle& graph, const std::filesystem::path& path) -> math::uuid {
@@ -1151,7 +1183,7 @@ auto asset_residency::save_shader_graph(shader_graph_handle& graph, const std::f
   info.nodes = graph->nodes();
   info.edges = graph->edges();
 
-  if (!asset_cooker::cook_shader_graph(id, info)) {
+  if (!asset_cooker::cook_shader_graph(id, graph->generation(), info)) {
     utility::logger<"assets">::warn("shader_graph '{}' saved but failed to cook -- see the warning above for why", resolved_path.generic_string());
   }
 
@@ -1700,11 +1732,9 @@ auto asset_residency::_finalize_shader_graph(asset_loader::shader_graph_result& 
     handle = shader_graph_handle{entry->second};
   }
 
+  // update_shader_graph itself cooks now (see its own doc comment) -- no separate cook_shader_graph
+  // call needed here anymore.
   update_shader_graph(handle, info);
-
-  if (!asset_cooker::cook_shader_graph(request.id, info)) {
-    utility::logger<"assets">::warn("shader_graph '{}' loaded but failed to cook -- see the warning above for why", request.source.generic_string());
-  }
 
   utility::logger<"assets">::info("Loaded shader_graph '{}'", request.source.generic_string());
 }

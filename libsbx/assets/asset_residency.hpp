@@ -180,11 +180,22 @@ public:
   auto create_shader_graph(const shader_graph::create_info& create_info) -> shader_graph_handle;
 
   /**
-   * @brief Overwrites an existing shader_graph's nodes/edges in place. Every shader_graph_handle
-   * already pointing at this record observes the change immediately. Does not touch identity
-   * (uuid) or persist to disk.
+   * @brief Overwrites an existing shader_graph's nodes/edges in place, bumps its generation, and
+   * re-cooks it (so the render passes pick up the change -- see shader_graph_generated_path's doc
+   * comment for why the generation bump is what makes that actually happen). Every
+   * shader_graph_handle already pointing at this record observes the change immediately. Does not
+   * touch identity (uuid) or persist to disk.
    */
   auto update_shader_graph(shader_graph_handle& graph, const shader_graph::create_info& create_info) -> void;
+
+  /**
+   * @brief Moves one node within an already-open shader_graph, without the generation bump/re-cook
+   * update_shader_graph does -- editor_position never affects the generated Slang (codegen never
+   * reads it), so a node drag (which calls this every frame the position differs, same as any
+   * dragged ImGui widget) would otherwise force a full re-cook + shader recompile + new pipeline on
+   * every single frame of the drag for no visible effect. A no-op if @p node_id doesn't exist.
+   */
+  auto update_shader_graph_node_position(shader_graph_handle& graph, std::uint32_t node_id, math::vector2 position) -> void;
 
   /**
    * @brief Writes a shader_graph to a `.shadergraph` file, (re-)registers it as a first-class

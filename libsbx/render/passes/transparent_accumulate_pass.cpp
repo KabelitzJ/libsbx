@@ -88,9 +88,9 @@ auto transparent_accumulate_pass::_resolve_graph_pipeline(const assets::shader_g
       {VK_SHADER_STAGE_FRAGMENT_BIT, "fragment_main", "alpha_blend_shading_policy"}
     };
 
-    const auto& shader = shader_cache.get({assets::shader_graph_generated_path(graph->id()), entry_points});
+    const auto& shader = shader_cache.get({assets::shader_graph_generated_path(graph->id(), graph->generation()), entry_points});
 
-    return _make_pipeline(shader, is_double_sided ? graphics::cull_mode::none : graphics::cull_mode::back, fmt::format("Transparent Accumulate Graph {}", assets::shader_graph_generated_name(graph->id())));
+    return _make_pipeline(shader, is_double_sided ? graphics::cull_mode::none : graphics::cull_mode::back, fmt::format("Transparent Accumulate Graph {}", assets::shader_graph_generated_name(graph->id(), graph->generation())));
   } catch (const std::exception& exception) {
     utility::logger<"render">::warn("shader_graph {} failed to compile ({}) -- skipping draws using it until it's fixed", graph->id(), exception.what());
     return {};

@@ -144,6 +144,13 @@ struct push_constants {
   std::uint32_t sampler_index;
   std::uint32_t clamp_sampler_index;
   std::uint32_t cascade_index{0xFFFFFFFFu}; // shadow_pass overrides this per cascade; ignored otherwise.
+
+  // Shader-graph Time/Delta Time nodes only (shaders/pbr/geometry_common.slang's push_data) -- the
+  // built-in PBR/Unlit shader and the depth-only passes don't declare these trailing fields at all,
+  // which is fine: a shader's own push_data struct only needs to be a prefix of this one (see
+  // shaders/passes/depth_pre.slang, which already stops short of clamp_sampler_index/cascade_index).
+  std::float_t time{0.0f};
+  std::float_t delta_time{0.0f};
 }; // struct push_constants
 
 static_assert(sizeof(push_constants) <= 128u, "Push constants must not exceed 128 bytes.");

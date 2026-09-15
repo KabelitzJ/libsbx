@@ -374,16 +374,20 @@ public:
 
   /**
    * @brief Translates @p create_info to Slang (shader_graph_codegen.hpp) and writes it to
-   * `<engine shaders root>/generated/<id>.slang`, *not* the usual `cooked_path`/library-directory
-   * convention every other cooker uses -- `shader_compiler` resolves a compiled file's `#include`s
-   * relative to the nearest "shaders" ancestor directory (see shader_compiler.cpp's `_shaders_root`),
-   * so the generated file has to actually live inside that tree (alongside `geometry_common.slang`
-   * etc.) for its `#include <geometry_common.slang>` to resolve at all. No staleness tracking --
-   * codegen is cheap pure string generation (no external tool), so this always regenerates; the
-   * *expensive* step (Slang -> SPIR-V) still goes through shader_compiler's own content-hash cache
-   * once something actually compiles the result.
+   * `<engine shaders root>/generated/<id>_<generation>.slang` (shader_graph_generated_path), *not*
+   * the usual `cooked_path`/library-directory convention every other cooker uses -- `shader_compiler`
+   * resolves a compiled file's `#include`s relative to the nearest "shaders" ancestor directory (see
+   * shader_compiler.cpp's `_shaders_root`), so the generated file has to actually live inside that
+   * tree (alongside `geometry_common.slang` etc.) for its `#include <geometry_common.slang>` to
+   * resolve at all. No staleness tracking on the codegen itself -- it's cheap pure string generation
+   * (no external tool), so this always regenerates -- but @p generation IS what makes a re-cook after
+   * a live edit actually take effect: shader_cache/pipeline_cache are plain path-keyed maps with no
+   * invalidation of their own (see shader_graph_generated_name's doc comment), so cooking to the same
+   * path twice would just keep serving the first compile. Deletes any other generation's leftover
+   * file for this same @p id before writing the new one, so at most one ever exists on disk per graph
+   * even though several have existed in the run's shader_cache/pipeline_cache by then.
    */
-  [[nodiscard]] static auto cook_shader_graph(const math::uuid& id, const shader_graph::create_info& create_info) -> bool;
+  [[nodiscard]] static auto cook_shader_graph(const math::uuid& id, std::uint64_t generation, const shader_graph::create_info& create_info) -> bool;
 
 private:
 

@@ -181,6 +181,10 @@ public:
 
   auto update_shader_graph(shader_graph_handle& graph, const shader_graph::create_info& create_info) -> void;
 
+  // See asset_residency::update_shader_graph_node_position's doc comment -- the lightweight,
+  // no-recompile sibling of update_shader_graph, for a node drag's every-frame position update.
+  auto update_shader_graph_node_position(shader_graph_handle& graph, std::uint32_t node_id, math::vector2 position) -> void;
+
   auto save_shader_graph(shader_graph_handle& graph, const std::filesystem::path& path) -> math::uuid;
 
   /**

@@ -71,6 +71,14 @@ struct push_data {
   // push_constants struct (render_pass.hpp) always writes it at, regardless of which entry point
   // in this file ends up bound.
   uint cascade_index;
+
+  // Backing shader_node_type::time/delta_time (render_pass.hpp's push_constants::time/delta_time,
+  // written every draw in render_pass.cpp) -- read directly as `push.time`/`push.delta_time` by
+  // codegen (shader_graph_codegen.cpp's _emit), not through this struct's own field access path
+  // used elsewhere in this file, since those two node types have no vertex/uv/normal prologue to
+  // piggyback on the way input_uv/input_normal do.
+  float time;
+  float delta_time;
 }; // struct push_data
 
 [[vk::push_constant]] ConstantBuffer<push_data> push;

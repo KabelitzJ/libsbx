@@ -74,6 +74,8 @@ auto submit_draw_commands(render_context& context, const std::vector<draw_comman
     values.sampler_index = context.sampler_index;
     values.clamp_sampler_index = context.clamp_sampler_index;
     values.cascade_index = cascade_index;
+    values.time = context.time;
+    values.delta_time = context.delta_time;
 
     context.command_buffer->push_constants(bindless_table.pipeline_layout(), graphics::bindless_table::push_constant_stages, 0u, memory::as_bytes(values));
 
@@ -141,6 +143,8 @@ auto submit_draw_commands_indirect(render_context& context, const std::vector<dr
     values.material_index = command.material->index();
     values.sampler_index = context.sampler_index;
     values.clamp_sampler_index = context.clamp_sampler_index;
+    values.time = context.time;
+    values.delta_time = context.delta_time;
 
     context.command_buffer->push_constants(bindless_table.pipeline_layout(), graphics::bindless_table::push_constant_stages, 0u, memory::as_bytes(values));
 

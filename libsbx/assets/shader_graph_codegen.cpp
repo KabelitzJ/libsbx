@@ -16,7 +16,7 @@
 namespace sbx::assets {
 
 // Which stage a graph is being walked for -- see codegen_context_of below. Every node but the
-// three vertex-only/three fragment-only input nodes is valid in either.
+// three vertex-only/four fragment-only input nodes is valid in either.
 enum class codegen_context : std::uint8_t {
   vertex,
   fragment
@@ -31,9 +31,15 @@ static auto codegen_context_of(shader_node_type type) -> std::optional<codegen_c
     case shader_node_type::input_uv:
     case shader_node_type::input_normal:
     case shader_node_type::input_view_dir:
+    // Fresnel Effect's unconnected Normal/View Dir default to this fragment's own `n`/`view_dir`
+    // locals (see _emit's fresnel_effect case) -- those only exist in fragment_main's scope, so the
+    // whole node is fragment-only, same restriction as input_normal/input_view_dir themselves.
+    case shader_node_type::fresnel_effect:
       return codegen_context::fragment;
     default:
-      return std::nullopt; // valid in either context
+      return std::nullopt; // valid in either context -- camera_position/main_light_direction/
+                            // main_light_color/time/delta_time included: they read straight off the
+                            // global `push` pointer, which every generated function has access to.
   }
 }
 
@@ -176,11 +182,15 @@ public:
 private:
 
   // A pin allowed to be left unconnected without that being an error -- texture_sample's uv (falls
-  // back to the calling stage's own uv) and every one of Combine's R/G/B/A (defaults to a literal
-  // 0, matching Unity Shader Graph's own Combine node).
+  // back to the calling stage's own uv), every one of Combine's R/G/B/A (defaults to a literal 0,
+  // matching Unity Shader Graph's own Combine node), Remap's In Min/In Max/Out Min/Out Max (default
+  // 0/1/0/1 -- pin 0, In, is still required), and Fresnel Effect's Normal/View Dir/Power (default
+  // to this fragment's own N/V and a power of 1).
   [[nodiscard]] static auto _allows_unconnected(shader_node_type type, std::uint32_t pin) -> bool {
     if (type == shader_node_type::texture_sample && pin == 0u) return true;
     if (type == shader_node_type::combine) return true;
+    if (type == shader_node_type::remap && pin != 0u) return true;
+    if (type == shader_node_type::fresnel_effect) return true;
     return false;
   }
 
@@ -267,6 +277,25 @@ private:
       case shader_node_type::input_vertex_normal: return {"v.normal", "float3"};
       case shader_node_type::input_vertex_tangent: return {"v.tangent.xyz", "float3"};
 
+      case shader_node_type::camera_position: return {"(*push.frame_data).camera_position.xyz", "float3"};
+
+      // Directional light 0 is "the main light" -- matches evaluate_lit_surface's own convention
+      // (lighting.slang: `for (i < directional_light_count) ... if (i == 0u) { shadow... }`), so a
+      // graph reading this gets the exact same light a Fragment (Lit) graph is already implicitly
+      // shaded by. This is the light's own travel direction (light -> surface), matching Unity
+      // Shader Graph's Main Light Direction node exactly -- NOT the surface-to-light vector
+      // lighting.slang's own `l` uses internally (that's this, negated); a graph wanting N.L wires
+      // this through a Negate node first, same as a Unity toon-shader graph ported over would
+      // already do. (0,-1,0) (a sun shining straight down) when the scene has no directional light,
+      // rather than an out-of-bounds lights[0] read.
+      case shader_node_type::main_light_direction:
+        return {"((*push.frame_data).directional_light_count > 0u ? normalize((*push.frame_data).lights[0].direction.xyz) : float3(0.0, -1.0, 0.0))", "float3"};
+      case shader_node_type::main_light_color:
+        return {"((*push.frame_data).directional_light_count > 0u ? (*push.frame_data).lights[0].color.rgb * (*push.frame_data).lights[0].color.a : float3(0.0, 0.0, 0.0))", "float3"};
+
+      case shader_node_type::time: return {"push.time", "float"};
+      case shader_node_type::delta_time: return {"push.delta_time", "float"};
+
       case shader_node_type::constant_float: {
         if (node.exposed) {
           return {fmt::format("material.generic_params[{}].x", _float_slot_of.at(node.id)), "float"};
@@ -340,6 +369,64 @@ private:
       case shader_node_type::smoothstep: {
         const auto& t = binary_type(inputs[0], inputs[1]);
         return {fmt::format("smoothstep({}, {}, {})", coerce_to(inputs[0], t), coerce_to(inputs[1], t), coerce_to(inputs[2], t)), t};
+      }
+
+      case shader_node_type::negate: return {fmt::format("(-{})", inputs[0].expression), inputs[0].type};
+      case shader_node_type::one_minus: return {fmt::format("(1.0 - {})", inputs[0].expression), inputs[0].type};
+      case shader_node_type::absolute: return {fmt::format("abs({})", inputs[0].expression), inputs[0].type};
+      case shader_node_type::floor: return {fmt::format("floor({})", inputs[0].expression), inputs[0].type};
+      case shader_node_type::ceiling: return {fmt::format("ceil({})", inputs[0].expression), inputs[0].type};
+      case shader_node_type::round: return {fmt::format("round({})", inputs[0].expression), inputs[0].type};
+      case shader_node_type::fraction: return {fmt::format("frac({})", inputs[0].expression), inputs[0].type};
+      case shader_node_type::sign: return {fmt::format("sign({})", inputs[0].expression), inputs[0].type};
+
+      case shader_node_type::minimum: {
+        const auto& t = binary_type(inputs[0], inputs[1]);
+        return {fmt::format("min({}, {})", coerce_to(inputs[0], t), coerce_to(inputs[1], t)), t};
+      }
+
+      case shader_node_type::maximum: {
+        const auto& t = binary_type(inputs[0], inputs[1]);
+        return {fmt::format("max({}, {})", coerce_to(inputs[0], t), coerce_to(inputs[1], t)), t};
+      }
+
+      case shader_node_type::clamp: {
+        const auto& t = inputs[0].type; // In alone drives the type (dominant_pins={0}, same as Pow)
+        return {fmt::format("clamp({}, {}, {})", inputs[0].expression, coerce_to(inputs[1], t), coerce_to(inputs[2], t)), t};
+      }
+
+      case shader_node_type::length:
+        return {fmt::format("length({})", inputs[0].expression), "float"};
+
+      case shader_node_type::distance: {
+        const auto& t = binary_type(inputs[0], inputs[1]);
+        return {fmt::format("distance({}, {})", coerce_to(inputs[0], t), coerce_to(inputs[1], t)), "float"};
+      }
+
+      case shader_node_type::reflect:
+        return {fmt::format("reflect({}, {})", inputs[0].expression, inputs[1].expression), "float3"};
+
+      case shader_node_type::remap: {
+        // In Min/In Max/Out Min/Out Max each independently default to 0/1/0/1 when unconnected
+        // (_allows_unconnected) -- no divide-by-zero guard on (InMax - InMin), matching Unity Shader
+        // Graph's own Remap node, which doesn't guard it either (an equal min/max is the graph
+        // author's own mistake to fix, same as it would be there).
+        const auto& t = inputs[0].type; // In alone drives the type (dominant_pins={0})
+        const auto in_min = inputs[1].expression.empty() ? std::string{"0.0"} : inputs[1].expression;
+        const auto in_max = inputs[2].expression.empty() ? std::string{"1.0"} : inputs[2].expression;
+        const auto out_min = inputs[3].expression.empty() ? std::string{"0.0"} : inputs[3].expression;
+        const auto out_max = inputs[4].expression.empty() ? std::string{"1.0"} : inputs[4].expression;
+        return {fmt::format("({0} + ({1} - {2}) * ({3} - {0}) / ({4} - {2}))", out_min, inputs[0].expression, in_min, out_max, in_max), t};
+      }
+
+      case shader_node_type::fresnel_effect: {
+        // Unconnected Normal/View Dir default to this fragment's own N/V (codegen_context_of
+        // restricts this node to the fragment stage specifically so these locals are always in
+        // scope); unconnected Power defaults to 1 -- matching Unity Shader Graph's own Fresnel node.
+        const auto normal = inputs[0].expression.empty() ? std::string{"n"} : inputs[0].expression;
+        const auto view_dir = inputs[1].expression.empty() ? std::string{"view_dir"} : inputs[1].expression;
+        const auto power = inputs[2].expression.empty() ? std::string{"1.0"} : inputs[2].expression;
+        return {fmt::format("pow(saturate(1.0 - dot(normalize({}), normalize({}))), {})", normal, view_dir, power), "float"};
       }
 
       case shader_node_type::swizzle: {

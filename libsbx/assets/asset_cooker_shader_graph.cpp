@@ -85,8 +85,8 @@ auto asset_cooker::parse_shader_graph_file(const std::filesystem::path& source) 
   return description;
 }
 
-auto asset_cooker::cook_shader_graph(const math::uuid& id, const shader_graph::create_info& create_info) -> bool {
-  const auto graph_name = shader_graph_generated_name(id);
+auto asset_cooker::cook_shader_graph(const math::uuid& id, std::uint64_t generation, const shader_graph::create_info& create_info) -> bool {
+  const auto graph_name = shader_graph_generated_name(id, generation);
   const auto result = generate_shader_graph_source(graph_name, create_info);
 
   if (!result.success) {
@@ -103,10 +103,31 @@ auto asset_cooker::cook_shader_graph(const math::uuid& id, const shader_graph::c
   // Named after graph_name (not a bare uuid) since shader_compiler loads a module using the file's
   // stem as its Slang module name (path.stem() in shader_compiler.cpp) -- a purely-numeric stem
   // risks not being a valid module identifier, so this matches the generated struct's own name.
-  const auto path = filesystem::engine_data_directory() / "shaders" / "generated" / fmt::format("{}.slang", graph_name);
+  const auto directory = filesystem::engine_data_directory() / "shaders" / "generated";
+  const auto path = directory / fmt::format("{}.slang", graph_name);
 
   auto error = std::error_code{};
-  std::filesystem::create_directories(path.parent_path(), error);
+  std::filesystem::create_directories(directory, error);
+
+  // Every earlier generation's file for this same graph is unreachable the moment this one's
+  // written (shader_graph_generated_path always asks for the CURRENT generation) -- clean it up so
+  // a long editing session doesn't leave one stale .slang file behind per edit. Only the file on
+  // disk; the shader_cache/pipeline_cache entries that earlier generation already compiled into
+  // still exist in memory (see shader_graph_generated_name's doc comment for why that's left alone).
+  const auto stale_prefix = fmt::format("shader_graph_{}_", id.value());
+
+  if (std::filesystem::exists(directory, error) && !error) {
+    for (const auto& entry : std::filesystem::directory_iterator{directory, error}) {
+      if (entry.path() == path) {
+        continue;
+      }
+
+      if (const auto filename = entry.path().filename().string(); filename.starts_with(stale_prefix) && entry.path().extension() == ".slang") {
+        auto remove_error = std::error_code{};
+        std::filesystem::remove(entry.path(), remove_error);
+      }
+    }
+  }
 
   auto out = std::ofstream{path, std::ios::binary};
 

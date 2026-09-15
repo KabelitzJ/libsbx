@@ -197,13 +197,18 @@ static auto input_column_width(const sbx::assets::shader_graph_node& node, sbx::
 // Every shader_node_type, for the Add Node palette -- grouped by shader_node_category_of at draw
 // time rather than kept pre-sorted here, so adding a new enumerator to shader_graph.hpp only ever
 // needs updating in one place (this list) to appear in the palette too.
-constexpr auto all_node_types = std::array<sbx::assets::shader_node_type, 28u>{
+constexpr auto all_node_types = std::array<sbx::assets::shader_node_type, 49u>{
   sbx::assets::shader_node_type::input_uv,
   sbx::assets::shader_node_type::input_normal,
   sbx::assets::shader_node_type::input_view_dir,
   sbx::assets::shader_node_type::input_vertex_position,
   sbx::assets::shader_node_type::input_vertex_normal,
   sbx::assets::shader_node_type::input_vertex_tangent,
+  sbx::assets::shader_node_type::camera_position,
+  sbx::assets::shader_node_type::main_light_direction,
+  sbx::assets::shader_node_type::main_light_color,
+  sbx::assets::shader_node_type::time,
+  sbx::assets::shader_node_type::delta_time,
   sbx::assets::shader_node_type::constant_float,
   sbx::assets::shader_node_type::constant_vector3,
   sbx::assets::shader_node_type::constant_color,
@@ -220,6 +225,22 @@ constexpr auto all_node_types = std::array<sbx::assets::shader_node_type, 28u>{
   sbx::assets::shader_node_type::pow,
   sbx::assets::shader_node_type::step,
   sbx::assets::shader_node_type::smoothstep,
+  sbx::assets::shader_node_type::negate,
+  sbx::assets::shader_node_type::one_minus,
+  sbx::assets::shader_node_type::absolute,
+  sbx::assets::shader_node_type::floor,
+  sbx::assets::shader_node_type::ceiling,
+  sbx::assets::shader_node_type::round,
+  sbx::assets::shader_node_type::fraction,
+  sbx::assets::shader_node_type::sign,
+  sbx::assets::shader_node_type::minimum,
+  sbx::assets::shader_node_type::maximum,
+  sbx::assets::shader_node_type::clamp,
+  sbx::assets::shader_node_type::length,
+  sbx::assets::shader_node_type::distance,
+  sbx::assets::shader_node_type::reflect,
+  sbx::assets::shader_node_type::remap,
+  sbx::assets::shader_node_type::fresnel_effect,
   sbx::assets::shader_node_type::swizzle,
   sbx::assets::shader_node_type::split,
   sbx::assets::shader_node_type::combine,
@@ -659,7 +680,15 @@ auto shader_graph_panel::_draw_canvas() -> void {
 
     if (position.x != node.editor_position.x() || position.y != node.editor_position.y()) {
       node.editor_position = sbx::math::vector2{position.x, position.y};
-      _apply_live();
+
+      // Not _apply_live(): this fires every single frame a node's position differs (continuously
+      // while dragging), and editor_position never affects the generated Slang (codegen never reads
+      // it) -- going through the full update_shader_graph (generation bump + re-cook + recompile +
+      // new pipeline) here would make dragging a node stutter for no visible effect.
+      if (_graph.is_valid()) {
+        auto& assets_module = sbx::core::engine::get_module<sbx::assets::assets_module>();
+        assets_module.update_shader_graph_node_position(_graph, node.id, node.editor_position);
+      }
     }
   }
 

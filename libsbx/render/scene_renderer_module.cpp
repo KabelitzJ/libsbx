@@ -87,6 +87,7 @@ struct frame_data {
   std::float_t cluster_bias;
   math::vector2 cluster_tile_size;
   math::vector4 cascade_splits;
+  math::vector4 cascade_depth_bias_per_texel;
   std::array<math::matrix4x4, shadow_cascade_count> light_view_projections;
   std::array<std::uint32_t, shadow_cascade_count> shadow_map_indices;
   std::uint32_t shadow_enabled;
@@ -1717,6 +1718,7 @@ auto scene_renderer_module::_prepare_frame(render_context& context) -> void {
   // shadow_pass and lighting.slang assume lights[0] is the caster when has_shadow_caster is set (see reordering in _build_packet).
   auto shadow_enabled = std::uint32_t{0u};
   auto cascade_splits = math::vector4{0.0f, 0.0f, 0.0f, 0.0f};
+  auto cascade_depth_bias_per_texel = math::vector4{0.0f, 0.0f, 0.0f, 0.0f};
   auto light_view_projections = std::array<math::matrix4x4, shadow_cascade_count>{};
 
   if (context.packet->has_shadow_caster && directional_light_count > 0u) {
@@ -1728,6 +1730,7 @@ auto scene_renderer_module::_prepare_frame(render_context& context) -> void {
     }
 
     cascade_splits = math::vector4{cascades[0].split_distance, cascades[1].split_distance, cascades[2].split_distance, cascades[3].split_distance};
+    cascade_depth_bias_per_texel = math::vector4{cascades[0].depth_bias_per_texel, cascades[1].depth_bias_per_texel, cascades[2].depth_bias_per_texel, cascades[3].depth_bias_per_texel};
     shadow_enabled = 1u;
   }
 
@@ -1755,6 +1758,7 @@ auto scene_renderer_module::_prepare_frame(render_context& context) -> void {
   data.cluster_bias = cluster_bias;
   data.cluster_tile_size = cluster_tile_size;
   data.cascade_splits = cascade_splits;
+  data.cascade_depth_bias_per_texel = cascade_depth_bias_per_texel;
   data.light_view_projections = light_view_projections;
   data.shadow_map_indices = _shadow_map_indices;
   data.shadow_enabled = shadow_enabled;

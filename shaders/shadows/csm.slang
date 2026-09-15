@@ -109,6 +109,9 @@ float sample_cascade_pcf(frame_data frame, uint cascade, float3 world_position, 
 
   float2 texel_size = 1.0 / float2(width, height);
 
+  float3 light_direction = normalize(-frame.lights[0].direction.xyz);
+  float ndl = dot(world_normal, light_direction);
+
   float4 clip = mul(frame.light_view_projections[cascade], float4(world_position, 1.0));
   float3 ndc = clip.xyz / clip.w;
   float2 uv = shadow_ndc_to_uv(ndc.xy);
@@ -123,10 +126,14 @@ float sample_cascade_pcf(frame_data frame, uint cascade, float3 world_position, 
     return 1.0;
   }
 
-  float3 light_direction = normalize(-frame.lights[0].direction.xyz);
-  float ndl = dot(world_normal, light_direction);
-
-  float bias = 0.0005 * (1.0 - ndl) * (1.0 + float(cascade) * 1.0);
+  // Depth-space bias, scaled per-cascade via cascade_depth_bias_per_texel so the world-space slack
+  // it represents stays correct regardless of scene scale or which cascade (its own doc comment has
+  // the full reasoning) -- a single flat NDC bias (Hazel's own GetDirShadowBias uses 0.002) was
+  // tried here and reverted: it's tuned for Hazel's own typical scene scale, and translated to a
+  // wildly different (much larger) world-space bias for a small nearby cascade here, causing a
+  // visible gap around small casters. 1 to 2.5 texels of slack, scaled up at grazing angles (low
+  // ndl) where a texel's footprint on the receiving surface is largest and acne is worst.
+  float bias = frame.cascade_depth_bias_per_texel[cascade] * (1.0 + 1.5 * saturate(1.0 - ndl));
 
   float resolution_scale = float(width) / 2048.0;
   float radius = (1.0 / resolution_scale) * (1.0 + float(cascade) * 0.3);

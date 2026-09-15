@@ -17,6 +17,17 @@ namespace sbx::render {
 struct cascade_info {
   math::matrix4x4 view_projection{math::matrix4x4::identity};
   std::float_t split_distance{0.0f}; // View-space (positive, camera-forward) far edge of this cascade's slice.
+
+  // NDC-depth-space equivalent of one shadow-map texel's world-space size in this cascade --
+  // (2*radius/shadow_map_resolution) / (this cascade's own near-far depth range, 2*radius +
+  // caster_padding). Every cascade shares one texture resolution but a very different world-space
+  // area AND a very different depth range (caster_padding=100 alone can dominate a near cascade's
+  // small radius), so a single flat NDC bias (tried, reverted -- e.g. Hazel's own 0.002) translates
+  // to wildly different world-space slack depending on which cascade and how the scene happens to be
+  // scaled: for a small near-cascade radius, 0.002 NDC came out to ~0.24 world units, a quarter of a
+  // 1-unit test cube. csm.slang's bias is this * however many texels of slack it wants, giving
+  // correctly-scaled world-space bias regardless of scene scale or which cascade.
+  std::float_t depth_bias_per_texel{0.0f};
 }; // struct cascade_info
 
 /**

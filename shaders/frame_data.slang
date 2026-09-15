@@ -111,6 +111,13 @@ struct frame_data {
   float cluster_bias;
   float2 cluster_tile_size;
   float4 cascade_splits;
+
+  // NDC-depth-space equivalent of one shadow-map texel's world-space size in cascade N (cascade.cpp's
+  // own doc comment on cascade_info::depth_bias_per_texel has the full reasoning) -- csm.slang's
+  // shadow bias uses this to get correctly-scaled world-space slack regardless of scene scale or
+  // which cascade, rather than one flat NDC bias (tried, reverted -- see csm.slang's own comment).
+  float4 cascade_depth_bias_per_texel;
+
   float4x4 light_view_projections[shadow_cascade_count];
   uint shadow_map_indices[shadow_cascade_count];
   uint shadow_enabled;

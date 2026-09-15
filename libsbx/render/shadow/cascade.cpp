@@ -12,6 +12,10 @@ namespace sbx::render {
 
 inline constexpr auto cascade_lambda = 0.85f;
 
+// Must match shaders/shadows/csm.slang's own cascade_blend_threshold exactly -- see this loop's use
+// of it below for why.
+inline constexpr auto cascade_blend_threshold = 0.9f;
+
 [[nodiscard]] auto lerp_float(std::float_t a, std::float_t b, std::float_t t) noexcept -> std::float_t {
   return a + (b - a) * t;
 }
@@ -62,10 +66,20 @@ auto compute_cascades(const camera_data& camera, std::float_t aspect, const math
   for (auto i = std::uint32_t{0u}; i < shadow_cascade_count; ++i) {
     const auto slice_far = splits[i];
 
-    const auto half_length = (slice_far - slice_near) * 0.5f;
+    // csm.slang's calculate_shadow blends cascade i into cascade i+1 starting at view_depth ==
+    // splits[i] * cascade_blend_threshold (still classified as cascade i, but already sampling
+    // cascade i+1 too) -- so cascade i+1's own frustum, built here, has to reach back past its
+    // nominal slice_near (== splits[i]) to actually cover that zone. Without this, that blend
+    // samples cascade i+1's shadow map for a point just outside its tightly-fit frustum,
+    // sample_cascade_pcf's out-of-bounds check returns 1.0 (fully lit), and the blend punches an
+    // unshaded line straight through the shadow exactly where the two cascades meet. Cascade 0 has
+    // no previous cascade blending into it, so it keeps its own tight near bound.
+    const auto frustum_near = i == 0u ? slice_near : slice_near * cascade_blend_threshold;
+
+    const auto half_length = (slice_far - frustum_near) * 0.5f;
     const auto radius = std::sqrt(half_length * half_length + slice_far * slice_far * tan_sq);
 
-    const auto center_world = camera.position + camera_forward * ((slice_near + slice_far) * 0.5f);
+    const auto center_world = camera.position + camera_forward * ((frustum_near + slice_far) * 0.5f);
 
     const auto light_position = center_world - light_dir * (radius + caster_padding);
     const auto light_view = math::matrix4x4::look_at(light_position, center_world, up);
@@ -86,8 +100,12 @@ auto compute_cascades(const camera_data& camera, std::float_t aspect, const math
     shadow_matrix[3].x() += offset_x;
     shadow_matrix[3].y() += offset_y;
 
+    const auto depth_range = 2.0f * radius + caster_padding; // matches the orthographic() near/far span above
+    const auto texel_world_size = (2.0f * radius) / resolution;
+
     result[i].view_projection = shadow_matrix;
     result[i].split_distance = slice_far;
+    result[i].depth_bias_per_texel = texel_world_size / depth_range;
 
     slice_near = slice_far;
   }

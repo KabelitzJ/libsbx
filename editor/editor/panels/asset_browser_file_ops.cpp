@@ -79,20 +79,20 @@ auto asset_browser_panel::_create_animation_graph(editor_state& state, const std
   state.select_asset(id, relative_path, asset_kind::animation_graph);
 }
 
-auto asset_browser_panel::_create_shader_graph(editor_state& state, const std::filesystem::path& target_directory) -> void {
+auto asset_browser_panel::_create_shader_graph(editor_state& state, const std::filesystem::path& target_directory, bool is_lit) -> void {
   auto& project = sbx::core::engine::project();
   auto& assets_module = sbx::core::engine::get_module<sbx::assets::assets_module>();
 
   const auto absolute_directory = project.assets_directory() / target_directory;
   std::filesystem::create_directories(absolute_directory);
 
-  const auto relative_path = target_directory / unique_name(absolute_directory, "New Shader Graph", ".shadergraph");
+  const auto name = is_lit ? "New Lit Shader Graph" : "New Unlit Shader Graph";
+  const auto relative_path = target_directory / unique_name(absolute_directory, name, ".shadergraph");
 
-  // A flat mid-gray feeding Direct Output -- degenerate (every light contributes the same flat
-  // color) but cook-clean and is_valid() immediately, same reasoning _create_animation_graph's
-  // single Idle state gives a fresh animation graph. Real content is the point of the graph editor
-  // this creates, not this seed.
-  auto create_info = sbx::assets::shader_graph::create_info{.name = "New Shader Graph"};
+  // A flat mid-gray feeding the Fragment output's Albedo/Color -- degenerate but cook-clean and
+  // is_valid() immediately, same reasoning _create_animation_graph's single Idle state gives a
+  // fresh animation graph. Real content is the point of the graph editor this creates, not this seed.
+  auto create_info = sbx::assets::shader_graph::create_info{.name = name};
 
   auto color_node = sbx::assets::shader_graph_node{};
   color_node.id = 0u;
@@ -102,10 +102,12 @@ auto asset_browser_panel::_create_shader_graph(editor_state& state, const std::f
 
   auto output_node = sbx::assets::shader_graph_node{};
   output_node.id = 1u;
-  output_node.type = sbx::assets::shader_node_type::output_direct;
+  output_node.type = is_lit ? sbx::assets::shader_node_type::output_fragment_lit : sbx::assets::shader_node_type::output_fragment_unlit;
   output_node.editor_position = sbx::math::vector2{300.0f, 0.0f};
 
   create_info.nodes = {color_node, output_node};
+  // Constant Color (float4) -> Albedo/Color (float3) -- the one implicit narrowing shader graphs
+  // still allow (dropping alpha), so this seed is valid without an extra Split/Combine node.
   create_info.edges = {sbx::assets::shader_graph_edge{.from_node = 0u, .from_pin = 0u, .to_node = 1u, .to_pin = 0u}};
 
   auto handle = assets_module.create_shader_graph(create_info);
@@ -173,8 +175,16 @@ auto asset_browser_panel::_draw_create_menu(editor_state& state, const std::file
     _create_animation_graph(state, target_directory);
   }
 
-  if (ImGui::MenuItem(ICON_MDI_VECTOR_POLYLINE " Shader Graph")) {
-    _create_shader_graph(state, target_directory);
+  if (ImGui::BeginMenu(ICON_MDI_VECTOR_POLYLINE " Shader Graph")) {
+    if (ImGui::MenuItem("Lit")) {
+      _create_shader_graph(state, target_directory, true);
+    }
+
+    if (ImGui::MenuItem("Unlit")) {
+      _create_shader_graph(state, target_directory, false);
+    }
+
+    ImGui::EndMenu();
   }
 
   if (ImGui::MenuItem(ICON_MDI_FILE_CODE_OUTLINE " C# Script")) {

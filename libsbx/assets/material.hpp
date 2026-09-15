@@ -26,11 +26,17 @@ enum class alpha_mode : std::uint8_t {
   blend   // order-dependent transparency, transparent pass
 }; // enum class alpha_mode
 
-// The engine's only two built-in shading models. Anything else (toon/cel, etc.) is composed with a
-// shader graph material, never a built-in the engine ships -- see the shader graph roadmap.
+// A material's type -- exactly one of these three, exposed as one dropdown in the inspector
+// (Material Type: Unlit/PBR/Shader Graph) rather than the built-in pbr/unlit fields and the
+// shader_graph handle being independently toggleable. `shader_graph` means the material's actual
+// look comes entirely from create_info::shader_graph below -- every other create_info field
+// (base_color_factor, metallic_factor, the built-in texture slots, ...) is then irrelevant, and a
+// material typed shader_graph with no graph assigned is invalid (see submit_draw_commands's own
+// skip check in render_pass.cpp) rather than silently falling back to looking like a pbr material.
 enum class shading_model : std::uint8_t {
   pbr,
-  unlit
+  unlit,
+  shader_graph
 }; // enum class shading_model
 
 class material final : public loadable {

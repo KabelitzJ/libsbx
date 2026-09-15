@@ -8,6 +8,8 @@
 
 #include <libsbx/memory/observer_ptr.hpp>
 
+#include <libsbx/assets/shader_graph.hpp>
+
 #include <libsbx/graphics/pipeline/graphics_pipeline.hpp>
 
 #include <libsbx/render/render_pass.hpp>
@@ -41,6 +43,10 @@ public:
   [[nodiscard]] auto should_execute(const render_context& context, std::uint32_t cascade) const -> bool override;
 
 private:
+
+  // Same shape as depth_pre_pass::_resolve_graph_pipeline -- a graph's depth_vertex_main/
+  // depth_fragment_main pair, just with the shadow cascade's own cull/sample state.
+  [[nodiscard]] auto _resolve_graph_pipeline(const assets::shader_graph_handle& graph, bool is_double_sided) -> memory::observer_ptr<graphics::graphics_pipeline>;
 
   std::array<memory::observer_ptr<graphics::graphics_pipeline>, 4u> _pipelines{};
 

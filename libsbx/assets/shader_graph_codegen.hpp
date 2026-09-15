@@ -16,10 +16,14 @@ struct shader_graph_codegen_result {
 }; // struct shader_graph_codegen_result
 
 /**
- * @brief Translates a shader_graph into a self-contained Slang source file: a `<graph_name>_
- * lighting_model` implementing shaders/lighting.slang's `lighting_model` interface, plus a small
- * `fragment_main<Policy>` wired to it (see shader_graph_codegen.cpp's doc comment for the
- * generated file's exact shape). Pure function, no Vulkan/Slang-API dependency -- callable and
+ * @brief Translates a shader_graph into a self-contained Slang source file: its optional Vertex
+ * block (Position/Normal/Tangent, defaulting to pass-through) feeding `vertex_main` and
+ * `depth_vertex_main`, and its required Fragment block (Lit -- metallic-roughness surface
+ * properties, modeled on Unity Shader Graph's PBR Master Node, feeding shaders/lighting.slang's
+ * `evaluate_lit_surface`, or Unlit -- a flat color/alpha with no lighting at all; both also carry
+ * an Alpha + Alpha Clip Threshold pair that `clip()`s the fragment when the material is alpha-
+ * masked) feeding `fragment_main<Policy>`. See shader_graph_codegen.cpp's doc comment for the
+ * generated file's exact shape. Pure function, no Vulkan/Slang-API dependency -- callable and
  * testable without a real shader compiler present.
  *
  * @param graph_name Becomes part of the generated type/entry-point names -- must already be a

@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cctype>
 #include <optional>
 #include <string>
 #include <unordered_set>
@@ -28,13 +29,13 @@ namespace editor {
 // Same id-banding reasoning as animation_graph_panel.cpp's own comment -- imgui-node-editor's
 // hit-testing collapses NodeId/PinId/LinkId back to a bare pointer value with no per-kind
 // scoping, so every id here lives in its own disjoint numeric band. A node can have several input
-// pins (unlike animation_graph's one-input/one-output shape), so input pin ids are additionally
-// spaced by max_inputs_per_node within their band.
+// AND several output pins (Split has 4 outputs), so both bands space ids by a fixed stride.
 constexpr auto node_band = std::uintptr_t{0};
 constexpr auto input_pin_band = std::uintptr_t{1'000'000};
 constexpr auto output_pin_band = std::uintptr_t{2'000'000};
 constexpr auto link_band = std::uintptr_t{3'000'000};
-constexpr auto max_inputs_per_node = std::uintptr_t{4}; // shader_node_input_count never exceeds 3 today -- one spare
+constexpr auto max_inputs_per_node = std::uintptr_t{8};  // shader_node_input_count never exceeds 7 today (Fragment (Lit)) -- one spare
+constexpr auto max_outputs_per_node = std::uintptr_t{4}; // shader_node_output_count never exceeds 4 today (Split) -- exact, no spare needed
 
 static auto node_id_for(std::uint32_t id) -> ax::NodeEditor::NodeId {
   return ax::NodeEditor::NodeId{node_band + static_cast<std::uintptr_t>(id) + 1u};
@@ -54,8 +55,8 @@ static auto input_pin_for(std::uint32_t node_id, std::uint32_t pin) -> ax::NodeE
   return ax::NodeEditor::PinId{input_pin_band + static_cast<std::uintptr_t>(node_id) * max_inputs_per_node + pin + 1u};
 }
 
-static auto output_pin_for(std::uint32_t node_id) -> ax::NodeEditor::PinId {
-  return ax::NodeEditor::PinId{output_pin_band + static_cast<std::uintptr_t>(node_id) + 1u};
+static auto output_pin_for(std::uint32_t node_id, std::uint32_t pin) -> ax::NodeEditor::PinId {
+  return ax::NodeEditor::PinId{output_pin_band + static_cast<std::uintptr_t>(node_id) * max_outputs_per_node + pin + 1u};
 }
 
 struct resolved_pin {
@@ -68,7 +69,8 @@ static auto resolve_pin(ax::NodeEditor::PinId id) -> std::optional<resolved_pin>
   const auto raw = id.Get();
 
   if (raw > output_pin_band && raw < link_band) {
-    return resolved_pin{.is_output = true, .node_id = static_cast<std::uint32_t>(raw - output_pin_band - 1u), .pin = 0u};
+    const auto value = raw - output_pin_band - 1u;
+    return resolved_pin{.is_output = true, .node_id = static_cast<std::uint32_t>(value / max_outputs_per_node), .pin = static_cast<std::uint32_t>(value % max_outputs_per_node)};
   }
 
   if (raw > input_pin_band && raw < output_pin_band) {
@@ -93,21 +95,38 @@ static auto edge_index_from_link(ax::NodeEditor::LinkId id) -> std::optional<std
   return raw - link_band - 1u;
 }
 
-constexpr auto input_pin_color = IM_COL32(94, 174, 255, 255);
-constexpr auto output_pin_color = IM_COL32(255, 176, 79, 255);
+constexpr auto pin_icon_diameter = 11.0f;
+
+// Pin/link color by value type -- Unity Shader Graph's own convention (a pin's color says what
+// flows through it, the same regardless of which side of the node it's on), rather than the
+// previous fixed input-blue/output-orange. Catppuccin Mocha teal/green/yellow/mauve (matching
+// shader_graph_panel's own node-editor theme), one per shader_value_type; a dynamic pin with
+// nothing wired up yet to resolve it falls back to a neutral grey.
+static auto pin_color_for(std::optional<sbx::assets::shader_value_type> type) -> ImVec4 {
+  if (!type) {
+    return ImVec4(0.576f, 0.584f, 0.654f, 1.0f); // overlay2 #9399b2
+  }
+
+  switch (*type) {
+    case sbx::assets::shader_value_type::scalar:  return ImVec4(0.580f, 0.886f, 0.819f, 1.0f); // teal   #94e2d5 -- float
+    case sbx::assets::shader_value_type::vector2: return ImVec4(0.650f, 0.890f, 0.631f, 1.0f); // green  #a6e3a1 -- float2 (UV, ...)
+    case sbx::assets::shader_value_type::vector3: return ImVec4(0.980f, 0.913f, 0.596f, 1.0f); // yellow #f9e2af -- float3 (position, normal, ...)
+    case sbx::assets::shader_value_type::vector4: return ImVec4(0.796f, 0.698f, 0.972f, 1.0f); // mauve  #cba6f7 -- float4 / color
+  }
+
+  return ImVec4(0.576f, 0.584f, 0.654f, 1.0f);
+}
 
 // Same Unreal-Blueprint-style filled/hollow pin icon as animation_graph_panel.cpp's own
 // draw_pin_icon -- duplicated rather than shared since the two panels don't otherwise depend on
 // each other and this is a handful of lines.
 static auto draw_pin_icon(bool connected, ImU32 color) -> void {
-  constexpr auto diameter = 11.0f;
-
   const auto line_height = ImGui::GetTextLineHeight();
 
   auto* draw_list = ImGui::GetWindowDrawList();
   const auto cursor = ImGui::GetCursorScreenPos();
-  const auto center = ImVec2{cursor.x + diameter * 0.5f, cursor.y + line_height * 0.5f};
-  const auto radius = diameter * 0.5f - 1.0f;
+  const auto center = ImVec2{cursor.x + pin_icon_diameter * 0.5f, cursor.y + line_height * 0.5f};
+  const auto radius = pin_icon_diameter * 0.5f - 1.0f;
 
   if (connected) {
     draw_list->AddCircleFilled(center, radius, color, 12);
@@ -115,18 +134,76 @@ static auto draw_pin_icon(bool connected, ImU32 color) -> void {
     draw_list->AddCircle(center, radius, color, 12, 1.5f);
   }
 
-  ImGui::Dummy(ImVec2{diameter, line_height});
+  ImGui::Dummy(ImVec2{pin_icon_diameter, line_height});
+}
+
+// A pin row's text, e.g. "Albedo(3)" or just "Albedo" while unresolved -- label and width bracket
+// pushed directly together with no space, matching Unity Shader Graph's own pin labels. Shared by
+// the width-measuring and actual-drawing code below so the two can never disagree about what text
+// a row actually contains; also by output rows with no label of their own (most nodes' single,
+// unlabeled output), where this is just the bracket alone, or empty until resolved.
+static auto pin_row_text(const char* label, std::optional<sbx::assets::shader_value_type> resolved) -> std::string {
+  auto text = std::string{label};
+
+  if (resolved) {
+    text += fmt::format("({})", sbx::assets::shader_value_type_component_count(*resolved));
+  }
+
+  return text;
+}
+
+// A single row's own width -- pin icon plus its text (see pin_row_text), if any. Used both to find
+// a column's widest row (output_column_width/input_column_width below, for sizing the node and the
+// gap between columns) and, per output row, to right-align THAT row's own pin against the node's
+// right edge rather than every row's text against a shared column width (Combine's RG/RGB/RGBA
+// rows are three different widths -- flushing their shared LEFT edge instead, as a single node-wide
+// out_width used for every row's SetCursorPosX used to, left their pins at three different X's).
+static auto pin_row_width(const std::string& text) -> float {
+  return pin_icon_diameter + (text.empty() ? 0.0f : ImGui::GetStyle().ItemSpacing.x + ImGui::CalcTextSize(text.c_str()).x);
+}
+
+// Content width (in the same local coordinate space as ImGui::GetCursorPosX() inside a node) of a
+// node's output column -- the widest row's own pin_row_width -- used together with
+// input_column_width below to size the node and the gap between columns.
+static auto output_column_width(const sbx::assets::shader_graph_node& node, sbx::assets::shader_graph_type_resolver& types) -> float {
+  const auto output_count = sbx::assets::shader_node_output_count(node.type);
+
+  auto width = 0.0f;
+
+  for (auto pin = std::uint32_t{0u}; pin < output_count; ++pin) {
+    width = std::max(width, pin_row_width(pin_row_text(sbx::assets::shader_node_output_label(node.type, pin), types.output_type(node.id, pin))));
+  }
+
+  return width;
+}
+
+// Content width of a node's input column -- mirrors output_column_width above; used together with
+// it to figure out how wide the two-column pin section naturally wants to be, entirely from this
+// frame's own measurements (see the node-drawing loop for why that matters -- anything reading a
+// previous frame's rendered size back to decide this frame's layout risks a runaway feedback loop
+// if the two don't converge to the same value).
+static auto input_column_width(const sbx::assets::shader_graph_node& node, sbx::assets::shader_graph_type_resolver& types) -> float {
+  const auto input_count = sbx::assets::shader_node_input_count(node.type);
+
+  auto width = 0.0f;
+
+  for (auto pin = std::uint32_t{0u}; pin < input_count; ++pin) {
+    width = std::max(width, pin_row_width(pin_row_text(sbx::assets::shader_node_input_label(node.type, pin), types.input_type(node.id, pin))));
+  }
+
+  return width;
 }
 
 // Every shader_node_type, for the Add Node palette -- grouped by shader_node_category_of at draw
 // time rather than kept pre-sorted here, so adding a new enumerator to shader_graph.hpp only ever
 // needs updating in one place (this list) to appear in the palette too.
-constexpr auto all_node_types = std::array<sbx::assets::shader_node_type, 23u>{
+constexpr auto all_node_types = std::array<sbx::assets::shader_node_type, 28u>{
   sbx::assets::shader_node_type::input_uv,
   sbx::assets::shader_node_type::input_normal,
   sbx::assets::shader_node_type::input_view_dir,
-  sbx::assets::shader_node_type::input_light_dir,
-  sbx::assets::shader_node_type::input_light_color,
+  sbx::assets::shader_node_type::input_vertex_position,
+  sbx::assets::shader_node_type::input_vertex_normal,
+  sbx::assets::shader_node_type::input_vertex_tangent,
   sbx::assets::shader_node_type::constant_float,
   sbx::assets::shader_node_type::constant_vector3,
   sbx::assets::shader_node_type::constant_color,
@@ -143,8 +220,12 @@ constexpr auto all_node_types = std::array<sbx::assets::shader_node_type, 23u>{
   sbx::assets::shader_node_type::pow,
   sbx::assets::shader_node_type::step,
   sbx::assets::shader_node_type::smoothstep,
-  sbx::assets::shader_node_type::output_direct,
-  sbx::assets::shader_node_type::output_extra,
+  sbx::assets::shader_node_type::swizzle,
+  sbx::assets::shader_node_type::split,
+  sbx::assets::shader_node_type::combine,
+  sbx::assets::shader_node_type::output_vertex,
+  sbx::assets::shader_node_type::output_fragment_lit,
+  sbx::assets::shader_node_type::output_fragment_unlit,
 };
 
 static auto category_name(sbx::assets::shader_node_category category) -> const char* {
@@ -159,17 +240,25 @@ static auto category_name(sbx::assets::shader_node_category category) -> const c
   return "?";
 }
 
-// Only one output_direct is meaningful per graph (codegen requires exactly one); output_extra is
-// optional but still only makes sense once. Both still show in the palette if the graph doesn't
-// already have one -- adding a second is harmless (codegen just uses whichever it finds), but the
-// palette hides the redundant choice once satisfied rather than let a graph quietly end up with
-// two direct-output roots that'd need reconciling later.
+// Each of the three output sinks only makes sense once per graph (codegen requires exactly one
+// Vertex, and exactly one of Fragment Lit/Unlit); Lit and Unlit are also mutually exclusive with
+// each other. All three still show in the palette if the graph doesn't already have one -- the
+// palette just hides the redundant/conflicting choice once a graph is already committed to one,
+// rather than let it quietly end up with two output roots that'd need reconciling later.
 static auto node_type_already_present(const sbx::assets::shader_graph::create_info& edit, sbx::assets::shader_node_type type) -> bool {
-  if (type != sbx::assets::shader_node_type::output_direct && type != sbx::assets::shader_node_type::output_extra) {
-    return false;
+  if (!sbx::assets::shader_node_has_output(type)) {
+    // shader_node_has_output is false only for the three sink types -- reuse it instead of
+    // hand-listing them again here.
+    if (type == sbx::assets::shader_node_type::output_vertex) {
+      return std::ranges::any_of(edit.nodes, [](const auto& node) { return node.type == sbx::assets::shader_node_type::output_vertex; });
+    }
+
+    // Fragment (Lit) and Fragment (Unlit) are mutually exclusive -- either one already present
+    // hides both palette entries.
+    return std::ranges::any_of(edit.nodes, [](const auto& node) { return sbx::assets::shader_node_is_fragment_output(node.type); });
   }
 
-  return std::ranges::any_of(edit.nodes, [type](const auto& node) { return node.type == type; });
+  return false;
 }
 
 // Default payload for a freshly created node of this type -- matches shader_graph_node_value's
@@ -180,6 +269,7 @@ static auto default_value_for(sbx::assets::shader_node_type type) -> sbx::assets
     case sbx::assets::shader_node_type::constant_vector3: return sbx::math::vector3{0.0f, 0.0f, 0.0f};
     case sbx::assets::shader_node_type::constant_color: return sbx::math::color{1.0f, 1.0f, 1.0f, 1.0f};
     case sbx::assets::shader_node_type::texture_sample: return sbx::assets::texture_handle{};
+    case sbx::assets::shader_node_type::swizzle: return std::string{"rgba"}; // identity -- the user then edits it
     default: return std::monostate{};
   }
 }
@@ -189,6 +279,33 @@ shader_graph_panel::shader_graph_panel() {
   config.SettingsFile = nullptr; // node positions round-trip through shader_graph_node::editor_position instead
 
   _context = ax::NodeEditor::CreateEditor(&config);
+
+  // imgui-node-editor's own default palette (blue-grey canvas, near-black nodes, blue/orange
+  // accents) is unrelated to and clashes with the rest of the editor's Catppuccin Mocha theme
+  // (libsbx/render/ui/ui_system.cpp's apply_default_style) -- retint it to match. Same hex values
+  // as apply_default_style's own palette comment, duplicated rather than shared since that palette
+  // is local to apply_default_style and this is the only other place that needs it.
+  ax::NodeEditor::SetCurrentEditor(_context);
+  auto& style = ax::NodeEditor::GetStyle();
+  style.Colors[ax::NodeEditor::StyleColor_Bg]                  = ImColor(0.109f, 0.109f, 0.156f, 1.0f); // mantle #181825
+  style.Colors[ax::NodeEditor::StyleColor_Grid]                = ImColor(0.247f, 0.254f, 0.337f, 0.35f); // surface1 #3f4056
+  style.Colors[ax::NodeEditor::StyleColor_NodeBg]              = ImColor(0.200f, 0.207f, 0.286f, 0.94f); // surface0 #313244
+  style.Colors[ax::NodeEditor::StyleColor_NodeBorder]          = ImColor(0.290f, 0.301f, 0.388f, 1.0f); // surface2 #4a4d63
+  style.Colors[ax::NodeEditor::StyleColor_HovNodeBorder]       = ImColor(0.458f, 0.784f, 0.878f, 1.0f); // sapphire #74c7ec
+  style.Colors[ax::NodeEditor::StyleColor_SelNodeBorder]       = ImColor(0.796f, 0.698f, 0.972f, 1.0f); // mauve #cba6f7
+  style.Colors[ax::NodeEditor::StyleColor_NodeSelRect]         = ImColor(0.796f, 0.698f, 0.972f, 0.15f);
+  style.Colors[ax::NodeEditor::StyleColor_NodeSelRectBorder]   = ImColor(0.796f, 0.698f, 0.972f, 0.60f);
+  style.Colors[ax::NodeEditor::StyleColor_HovLinkBorder]       = ImColor(0.458f, 0.784f, 0.878f, 1.0f); // sapphire
+  style.Colors[ax::NodeEditor::StyleColor_SelLinkBorder]       = ImColor(0.796f, 0.698f, 0.972f, 1.0f); // mauve
+  style.Colors[ax::NodeEditor::StyleColor_HighlightLinkBorder] = ImColor(0.980f, 0.709f, 0.572f, 1.0f); // peach #fab387
+  style.Colors[ax::NodeEditor::StyleColor_LinkSelRect]         = ImColor(0.796f, 0.698f, 0.972f, 0.15f);
+  style.Colors[ax::NodeEditor::StyleColor_LinkSelRectBorder]   = ImColor(0.796f, 0.698f, 0.972f, 0.60f);
+  style.Colors[ax::NodeEditor::StyleColor_PinRect]             = ImColor(0.533f, 0.698f, 0.976f, 0.40f); // blue #89b4fa
+  style.Colors[ax::NodeEditor::StyleColor_PinRectBorder]       = ImColor(0.533f, 0.698f, 0.976f, 0.60f);
+  style.Colors[ax::NodeEditor::StyleColor_Flow]                = ImColor(0.980f, 0.709f, 0.572f, 1.0f); // peach
+  style.Colors[ax::NodeEditor::StyleColor_FlowMarker]          = ImColor(0.980f, 0.709f, 0.572f, 1.0f);
+  style.Colors[ax::NodeEditor::StyleColor_GroupBg]             = ImColor(0.109f, 0.109f, 0.156f, 0.60f); // mantle
+  style.Colors[ax::NodeEditor::StyleColor_GroupBorder]         = ImColor(0.247f, 0.254f, 0.337f, 1.0f); // surface1
 }
 
 shader_graph_panel::~shader_graph_panel() {
@@ -288,16 +405,92 @@ auto shader_graph_panel::_draw_toolbar() -> void {
 
   ImGui::SameLine();
 
-  const auto has_output_direct = std::ranges::any_of(_edit.nodes, [](const auto& node) { return node.type == sbx::assets::shader_node_type::output_direct; });
+  const auto has_fragment_output = std::ranges::any_of(_edit.nodes, [](const auto& node) { return sbx::assets::shader_node_is_fragment_output(node.type); });
 
-  if (!has_output_direct) {
-    ImGui::TextColored(ImVec4{1.0f, 0.6f, 0.2f, 1.0f}, ICON_MDI_ALERT " No Direct Output node -- this graph won't compile until one is added and connected.");
+  if (!has_fragment_output) {
+    ImGui::TextColored(ImVec4{1.0f, 0.6f, 0.2f, 1.0f}, ICON_MDI_ALERT " No Fragment (Lit) or Fragment (Unlit) node -- this graph won't compile until one is added and connected.");
   } else {
     ImGui::TextDisabled("Right-click the canvas to add a node.");
   }
 }
 
+auto shader_graph_panel::_spawn_node(sbx::assets::shader_node_type type, sbx::math::vector2 position) -> std::uint32_t {
+  auto node = sbx::assets::shader_graph_node{};
+  node.id = _next_node_id();
+  node.type = type;
+  node.editor_position = position;
+  node.value = default_value_for(type);
+
+  _edit.nodes.push_back(node);
+
+  return node.id;
+}
+
+auto shader_graph_panel::_add_node(sbx::assets::shader_node_type type, sbx::math::vector2 spawn_position) -> void {
+  const auto id = _spawn_node(type, spawn_position);
+
+  // No implicit defaults: a node whose obvious/only useful wiring is otherwise invisible
+  // (codegen's own unconnected-pin fallback in shader_graph_codegen.cpp) gets that wiring spawned
+  // as real, visible, editable nodes instead -- the user can rewire or delete them freely, this is
+  // just what a fresh instance starts with.
+  static constexpr auto offset_x = 220.0f;
+
+  if (type == sbx::assets::shader_node_type::texture_sample) {
+    const auto uv_id = _spawn_node(sbx::assets::shader_node_type::input_uv, spawn_position - sbx::math::vector2{offset_x, 0.0f});
+    _edit.edges.push_back(sbx::assets::shader_graph_edge{.from_node = uv_id, .from_pin = 0u, .to_node = id, .to_pin = 0u});
+  } else if (type == sbx::assets::shader_node_type::output_vertex) {
+    const auto position_id = _spawn_node(sbx::assets::shader_node_type::input_vertex_position, spawn_position - sbx::math::vector2{offset_x, 80.0f});
+    const auto normal_id = _spawn_node(sbx::assets::shader_node_type::input_vertex_normal, spawn_position - sbx::math::vector2{offset_x, 0.0f});
+    const auto tangent_id = _spawn_node(sbx::assets::shader_node_type::input_vertex_tangent, spawn_position - sbx::math::vector2{offset_x, -80.0f});
+
+    _edit.edges.push_back(sbx::assets::shader_graph_edge{.from_node = position_id, .from_pin = 0u, .to_node = id, .to_pin = 0u});
+    _edit.edges.push_back(sbx::assets::shader_graph_edge{.from_node = normal_id, .from_pin = 0u, .to_node = id, .to_pin = 1u});
+    _edit.edges.push_back(sbx::assets::shader_graph_edge{.from_node = tangent_id, .from_pin = 0u, .to_node = id, .to_pin = 2u});
+  }
+
+  _selection = id;
+  _apply_live();
+}
+
 auto shader_graph_panel::_draw_add_node_menu(sbx::math::vector2 spawn_position) -> void {
+  ImGui::SetNextItemWidth(240.0f);
+
+  if (_add_node_search_focus_pending) {
+    ImGui::SetKeyboardFocusHere();
+    _add_node_search_focus_pending = false;
+  }
+
+  draw_text_field_with_hint("##shader_graph_node_search", ICON_MDI_MAGNIFY " Search nodes...", _add_node_search);
+
+  // Typing a search collapses the categorized submenus into one flat, filtered list -- clicking
+  // through Math > ... to find "Lerp" defeats the point of a search box.
+  if (!_add_node_search.empty()) {
+    auto query = _add_node_search;
+    std::ranges::transform(query, query.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+
+    ImGui::Separator();
+
+    for (const auto type : all_node_types) {
+      if (node_type_already_present(_edit, type)) {
+        continue;
+      }
+
+      auto label = std::string{sbx::assets::shader_node_display_name(type)};
+      auto lowered = label;
+      std::ranges::transform(lowered, lowered.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+
+      if (lowered.find(query) == std::string::npos) {
+        continue;
+      }
+
+      if (ImGui::MenuItem(label.c_str())) {
+        _add_node(type, spawn_position);
+      }
+    }
+
+    return;
+  }
+
   for (const auto category : {sbx::assets::shader_node_category::input, sbx::assets::shader_node_category::constant, sbx::assets::shader_node_category::texture, sbx::assets::shader_node_category::math, sbx::assets::shader_node_category::output}) {
     if (!ImGui::BeginMenu(category_name(category))) {
       continue;
@@ -311,15 +504,7 @@ auto shader_graph_panel::_draw_add_node_menu(sbx::math::vector2 spawn_position) 
       const auto label = std::string{sbx::assets::shader_node_display_name(type)};
 
       if (ImGui::MenuItem(label.c_str())) {
-        auto node = sbx::assets::shader_graph_node{};
-        node.id = _next_node_id();
-        node.type = type;
-        node.editor_position = spawn_position;
-        node.value = default_value_for(type);
-
-        _edit.nodes.push_back(node);
-        _selection = node.id;
-        _apply_live();
+        _add_node(type, spawn_position);
       }
     }
 
@@ -331,16 +516,19 @@ auto shader_graph_panel::_draw_canvas() -> void {
   ax::NodeEditor::SetCurrentEditor(_context);
   ax::NodeEditor::Begin("##shader_graph_node_canvas", ImVec2{0.0f, 0.0f});
 
-  // Which input pins currently have an edge attached -- drives draw_pin_icon's filled/hollow look.
-  // Every node has at most one output, so an output pin's "connected" state is just "any edge
-  // starts here" (a set is still needed since the same output can feed several inputs).
-  auto connected_inputs = std::unordered_set<std::uint64_t>{}; // (node_id << 32) | pin
-  auto connected_outputs = std::unordered_set<std::uint32_t>{};
+  // Which pins currently have an edge attached -- drives draw_pin_icon's filled/hollow look. Both
+  // keyed by (node_id << 32 | pin) since either side can have several (a node can have several
+  // input pins, and Split has several output pins too; an output can additionally feed more than
+  // one input, hence a set rather than a single flag either way).
+  auto connected_inputs = std::unordered_set<std::uint64_t>{};
+  auto connected_outputs = std::unordered_set<std::uint64_t>{};
 
   for (const auto& edge : _edit.edges) {
     connected_inputs.insert((static_cast<std::uint64_t>(edge.to_node) << 32u) | edge.to_pin);
-    connected_outputs.insert(edge.from_node);
+    connected_outputs.insert((static_cast<std::uint64_t>(edge.from_node) << 32u) | edge.from_pin);
   }
+
+  auto types = sbx::assets::shader_graph_type_resolver{_edit.nodes, _edit.edges};
 
   for (auto& node : _edit.nodes) {
     const auto id = node_id_for(node.id);
@@ -352,29 +540,117 @@ auto shader_graph_panel::_draw_canvas() -> void {
 
     ax::NodeEditor::BeginNode(id);
 
+    // Every node in the canvas shares the same underlying ImGui window (imgui-node-editor just
+    // repositions the cursor to each node's own bounds before drawing its content, rather than
+    // giving each node a separate window) -- so ImGui::GetCursorPosX()/SetCursorPos(x, ...) are
+    // WINDOW-relative, not node-relative. A literal 0.0f for "this node's own left edge" (as the
+    // input column below briefly used) put every node's input column at the same absolute canvas
+    // X instead of its own; content_start_x is this node's actual left edge in that same window-
+    // relative space, same as title_row_end_x below.
+    const auto content_start_x = ImGui::GetCursorPosX();
+
     ImGui::TextUnformatted(sbx::assets::shader_node_display_name(node.type));
+
+    const auto output_count = sbx::assets::shader_node_output_count(node.type);
+    const auto input_count = sbx::assets::shader_node_input_count(node.type);
 
     if (!node.name.empty() && (node.type == sbx::assets::shader_node_type::constant_float || node.type == sbx::assets::shader_node_type::constant_vector3 || node.type == sbx::assets::shader_node_type::constant_color || node.type == sbx::assets::shader_node_type::texture_sample)) {
       ImGui::SameLine();
       ImGui::TextDisabled("(%s)", node.name.c_str());
     }
 
-    if (sbx::assets::shader_node_has_output(node.type)) {
+    if (input_count > 0u || output_count > 0u) {
+      // Where the title row's own content ends, in the same local coordinate space
+      // ImGui::GetCursorPosX() uses throughout a node -- one of the two candidates for how wide
+      // the pin section below needs to be to keep its output column flush against the actual
+      // right edge (whichever row -- title, or the pin section itself -- turns out wider). All
+      // measured fresh this frame (CalcTextSize, not a previous frame's rendered size fed back
+      // in), so there's no risk of the layout compounding/growing across frames.
+      //
+      // The extra SameLine() before reading it matters: without a pending "same line" request,
+      // GetCursorPosX() reports where the *next* row would start (back at the left margin), not
+      // how far right the row that was just drawn actually extended -- asking for one more,
+      // undrawn same-line item is the standard way to read a finished row's trailing edge.
       ImGui::SameLine();
-      ax::NodeEditor::BeginPin(output_pin_for(node.id), ax::NodeEditor::PinKind::Output);
-      draw_pin_icon(connected_outputs.contains(node.id), output_pin_color);
-      ax::NodeEditor::EndPin();
-    }
+      const auto title_row_end_x = ImGui::GetCursorPosX();
 
-    const auto input_count = sbx::assets::shader_node_input_count(node.type);
+      ImGui::Spacing();
 
-    for (auto pin = std::uint32_t{0u}; pin < input_count; ++pin) {
-      ax::NodeEditor::BeginPin(input_pin_for(node.id, pin), ax::NodeEditor::PinKind::Input);
-      draw_pin_icon(connected_inputs.contains((static_cast<std::uint64_t>(node.id) << 32u) | pin), input_pin_color);
-      ax::NodeEditor::EndPin();
+      // Inputs hug the left edge, outputs the right -- two columns, each vertically stacked one
+      // pin per row, and centered against each other when their row counts differ (e.g. Fragment
+      // (Lit)'s 8 inputs against its 0 outputs, or Split's 1 input against its 4) rather than both
+      // top-aligned. No gap is reserved between them when one column is entirely absent (a pure
+      // source node's lone output, or a sink's inputs with nothing coming out) -- there's nothing
+      // to separate it from.
+      //
+      // Every row's position (both X and Y) is set explicitly via SetCursorPos rather than left to
+      // ImGui's own same-line/auto-wrap bookkeeping (what BeginGroup + SameLine + a per-row
+      // SetCursorPosX used to do here): a BeginGroup only remembers where ITS OWN content started,
+      // for computing its final bounding box at EndGroup -- it does not change where ImGui auto-
+      // wraps a new line back to, or reliably preserve row height once more than a couple of rows
+      // and an X override are mixed in the same group (Split's 4-row and Combine's 3-row output
+      // columns visibly compressed into each other under that approach). Driving both axes
+      // ourselves, one row_height step at a time, has no such row-count-dependent surprises.
+      const auto row_height = ImGui::GetTextLineHeightWithSpacing();
+      const auto in_width = input_column_width(node, types);
+      const auto out_width = output_column_width(node, types);
+      constexpr auto column_gap = 48.0f;
+      const auto natural_width = in_width + ((input_count > 0u && output_count > 0u) ? column_gap : 0.0f) + out_width;
+      // natural_width is a pure width (relative to this node's own left edge); title_row_end_x is
+      // an absolute window-relative X (content_start_x plus the title's own width) -- content_start_x
+      // + natural_width puts both candidates in that same absolute space before comparing them.
+      const auto content_width = std::max(title_row_end_x, content_start_x + natural_width);
 
-      ImGui::SameLine();
-      ImGui::TextUnformatted(sbx::assets::shader_node_input_label(node.type, pin));
+      const auto pins_top = ImGui::GetCursorPosY();
+
+      if (input_count > 0u) {
+        auto row_y = pins_top + (output_count > input_count ? static_cast<float>(output_count - input_count) * row_height * 0.5f : 0.0f);
+
+        for (auto pin = std::uint32_t{0u}; pin < input_count; ++pin) {
+          ImGui::SetCursorPos(ImVec2{content_start_x, row_y});
+
+          const auto pin_color = ImGui::ColorConvertFloat4ToU32(pin_color_for(types.input_type(node.id, pin)));
+
+          ax::NodeEditor::BeginPin(input_pin_for(node.id, pin), ax::NodeEditor::PinKind::Input);
+          draw_pin_icon(connected_inputs.contains((static_cast<std::uint64_t>(node.id) << 32u) | pin), pin_color);
+          ax::NodeEditor::EndPin();
+
+          // "Albedo(3)": width directly against the label, no space -- Unity Shader Graph's own
+          // pin-label convention (see pin_row_text).
+          ImGui::SameLine();
+          ImGui::TextUnformatted(pin_row_text(sbx::assets::shader_node_input_label(node.type, pin), types.input_type(node.id, pin)).c_str());
+
+          row_y += row_height;
+        }
+      }
+
+      if (output_count > 0u) {
+        auto row_y = pins_top + (input_count > output_count ? static_cast<float>(input_count - output_count) * row_height * 0.5f : 0.0f);
+
+        for (auto pin = std::uint32_t{0u}; pin < output_count; ++pin) {
+          // Right-aligned against THIS row's own width, not the column's widest -- Split/Combine's
+          // several output rows (the only nodes with more than one) are different widths ("RG" vs.
+          // "RGBA"), so flushing them all to the same out_width-based X left their pins at three
+          // different X's; each row's pin needs to land at content_width regardless of its own text.
+          const auto text = pin_row_text(sbx::assets::shader_node_output_label(node.type, pin), types.output_type(node.id, pin));
+          ImGui::SetCursorPos(ImVec2{content_width - pin_row_width(text), row_y});
+
+          // "Opacity(1)": Split/Combine's row label (R/G/B/A, RG/RGB/RGBA), if any, with its width
+          // directly against it, no space -- every other node's single output defaults to "Out".
+          if (!text.empty()) {
+            ImGui::TextUnformatted(text.c_str());
+            ImGui::SameLine();
+          }
+
+          const auto pin_color = ImGui::ColorConvertFloat4ToU32(pin_color_for(types.output_type(node.id, pin)));
+
+          ax::NodeEditor::BeginPin(output_pin_for(node.id, pin), ax::NodeEditor::PinKind::Output);
+          draw_pin_icon(connected_outputs.contains((static_cast<std::uint64_t>(node.id) << 32u) | pin), pin_color);
+          ax::NodeEditor::EndPin();
+
+          row_y += row_height;
+        }
+      }
     }
 
     ax::NodeEditor::EndNode();
@@ -389,7 +665,8 @@ auto shader_graph_panel::_draw_canvas() -> void {
 
   for (auto index = std::size_t{0u}; index < _edit.edges.size(); ++index) {
     const auto& edge = _edit.edges[index];
-    ax::NodeEditor::Link(link_id_for(index), output_pin_for(edge.from_node), input_pin_for(edge.to_node, edge.to_pin));
+    // Colored by the value flowing through it (its source pin's type), same as the pins themselves.
+    ax::NodeEditor::Link(link_id_for(index), output_pin_for(edge.from_node, edge.from_pin), input_pin_for(edge.to_node, edge.to_pin), pin_color_for(types.output_type(edge.from_node, edge.from_pin)));
   }
 
   if (ax::NodeEditor::BeginCreate()) {
@@ -403,7 +680,12 @@ auto shader_graph_panel::_draw_canvas() -> void {
       const auto source = (start && start->is_output) ? start : ((end && end->is_output) ? end : std::nullopt);
       const auto target = (start && !start->is_output) ? start : ((end && !end->is_output) ? end : std::nullopt);
 
-      if (!source || !target || source->node_id == target->node_id) {
+      // Strict pin typing: a connection is only legal when the source's resolved type satisfies
+      // the target pin's requirement (shader_graph_type_resolver::accepts -- fixed pins need an
+      // exact match, dynamic pins match the node's own resolved operating type or accept a scalar).
+      const auto type_ok = source && target && types.accepts(target->node_id, target->pin, types.output_type(source->node_id, source->pin));
+
+      if (!source || !target || source->node_id == target->node_id || !type_ok) {
         ax::NodeEditor::RejectNewItem(ImVec4{1.0f, 0.3f, 0.3f, 1.0f});
       } else if (ax::NodeEditor::AcceptNewItem()) {
         // An input pin accepts one connection -- a new drag onto an already-connected pin replaces
@@ -412,7 +694,7 @@ auto shader_graph_panel::_draw_canvas() -> void {
         // _incoming map, keyed by (to_node, to_pin), last-write-wins today for exactly this reason).
         std::erase_if(_edit.edges, [&target](const auto& edge) { return edge.to_node == target->node_id && edge.to_pin == target->pin; });
 
-        _edit.edges.push_back(sbx::assets::shader_graph_edge{.from_node = source->node_id, .from_pin = 0u, .to_node = target->node_id, .to_pin = target->pin});
+        _edit.edges.push_back(sbx::assets::shader_graph_edge{.from_node = source->node_id, .from_pin = source->pin, .to_node = target->node_id, .to_pin = target->pin});
         _selection = _edit.edges.size() - 1u;
         _apply_live();
       }
@@ -455,17 +737,41 @@ auto shader_graph_panel::_draw_canvas() -> void {
 
   ax::NodeEditor::EndDelete();
 
-  const auto spawn_position = ImGui::GetMousePos(); // screen-space, captured before Suspend -- same convention animation_graph_panel/imgui-node-editor's blueprints example use
-
   ax::NodeEditor::Suspend();
 
-  if (ax::NodeEditor::ShowBackgroundContextMenu()) {
+  // ShowNodeContextMenu only writes the right-clicked node's id on the exact frame it detects the
+  // right-click -- OpenPopup makes the popup stay open over however many subsequent frames the
+  // user takes deciding what to click, and on every one of those, ShowNodeContextMenu returns
+  // false (no new right-click that frame). A same-frame local here would silently reset to an
+  // invalid id on all of them, so DeleteNode below would be called with nothing to delete on any
+  // click after the very first frame the popup was open -- hence _context_node_id persists as a
+  // member, updated only when a right-click actually happened.
+  if (auto context_node_id = ax::NodeEditor::NodeId{}; ax::NodeEditor::ShowNodeContextMenu(&context_node_id)) {
+    _context_node_id = context_node_id;
+    ImGui::OpenPopup("##shader_graph_node_context");
+  } else if (ax::NodeEditor::ShowBackgroundContextMenu()) {
     ImGui::OpenPopup("##shader_graph_background_context");
+    _add_node_search.clear();
+    _add_node_search_focus_pending = true;
+
+    // Captured once, exactly when the menu opens -- not every frame it stays open (the popup keeps
+    // rendering, and thus keeps re-evaluating GetMousePos(), for as long as the user browses
+    // submenus or types a search), or a node would spawn wherever the mouse ended up hovering the
+    // popup itself rather than where it was actually right-clicked to open it.
+    const auto canvas_position = ax::NodeEditor::ScreenToCanvas(ImGui::GetMousePos());
+    _add_node_spawn_position = sbx::math::vector2{canvas_position.x, canvas_position.y};
+  }
+
+  if (ImGui::BeginPopup("##shader_graph_node_context")) {
+    if (ImGui::MenuItem(ICON_MDI_TRASH_CAN " Delete Node")) {
+      ax::NodeEditor::DeleteNode(_context_node_id); // reconciled by BeginDelete/QueryDeletedNode next frame
+    }
+
+    ImGui::EndPopup();
   }
 
   if (ImGui::BeginPopup("##shader_graph_background_context")) {
-    const auto canvas_position = ax::NodeEditor::ScreenToCanvas(spawn_position);
-    _draw_add_node_menu(sbx::math::vector2{canvas_position.x, canvas_position.y});
+    _draw_add_node_menu(_add_node_spawn_position);
 
     ImGui::EndPopup();
   }
@@ -557,9 +863,62 @@ auto shader_graph_panel::_draw_selection_inspector() -> void {
         ImGui::TextDisabled("Texture value is set per-material once this graph is assigned (Material Inspector's Shader Graph section) -- this node only declares the slot and its UV input.");
         break;
       }
+      case sbx::assets::shader_node_type::swizzle: {
+        // 4 independent dropdowns (matching Unity Shader Graph's own Swizzle node -- "Red out,
+        // Green out, Blue out, Alpha out", each picking which input channel feeds it), not a free-
+        // text field: a plain InputText re-syncs from node.value every frame (draw_text_field's own
+        // doc comment), and since codegen/the resolver both need the stored pattern to always be
+        // exactly 4 characters, editing it as text meant every keystroke got immediately re-padded
+        // out to 4 characters, stomping whatever the user was still in the middle of typing.
+        auto pattern = std::holds_alternative<std::string>(node.value) ? std::get<std::string>(node.value) : std::string{"rgba"};
+
+        if (pattern.size() != 4u) {
+          pattern = "rgba";
+        }
+
+        static constexpr auto channel_names = std::array<const char*, 4u>{"R", "G", "B", "A"};
+        static constexpr auto row_labels = std::array<const char*, 4u>{"Output R", "Output G", "Output B", "Output A"};
+
+        auto edited = false;
+
+        for (auto slot = 0u; slot < 4u; ++slot) {
+          auto index = pattern[slot] == 'r' ? 0 : pattern[slot] == 'g' ? 1 : pattern[slot] == 'b' ? 2 : 3;
+
+          ImGui::PushID(static_cast<int>(slot));
+
+          if (ImGui::Combo(row_labels[slot], &index, channel_names.data(), static_cast<int>(channel_names.size()))) {
+            pattern[slot] = "rgba"[index];
+            edited = true;
+          }
+
+          ImGui::PopID();
+        }
+
+        if (edited) {
+          node.value = pattern;
+          _apply_live();
+        }
+
+        ImGui::TextDisabled("Each output component independently picks which input component feeds it; only as many as the input actually has are used, e.g. swap Output R and Output B to swap red and blue.");
+        break;
+      }
       default:
         ImGui::TextDisabled("This node has no editable properties.");
         break;
+    }
+
+    ImGui::Separator();
+
+    if (ImGui::Button(ICON_MDI_TRASH_CAN " Delete Node")) {
+      const auto deleted_id = node.id;
+
+      std::erase_if(_edit.nodes, [deleted_id](const auto& n) { return n.id == deleted_id; });
+      std::erase_if(_edit.edges, [deleted_id](const auto& e) { return e.from_node == deleted_id || e.to_node == deleted_id; });
+
+      _seeded_positions.erase(deleted_id);
+      _selection = std::monostate{};
+      _apply_live();
+      return;
     }
   } else if (std::holds_alternative<std::size_t>(_selection)) {
     const auto index = std::get<std::size_t>(_selection);
@@ -583,6 +942,15 @@ auto shader_graph_panel::_draw_selection_inspector() -> void {
     const auto to_input_label = (to_it != _edit.nodes.end()) ? std::string{sbx::assets::shader_node_input_label(to_it->type, edge.to_pin)} : std::string{"?"};
 
     ImGui::Text("To: %s (%s)", node_label(edge.to_node).c_str(), to_input_label.c_str());
+
+    ImGui::Separator();
+
+    if (ImGui::Button(ICON_MDI_TRASH_CAN " Delete Edge")) {
+      _edit.edges.erase(_edit.edges.begin() + static_cast<std::ptrdiff_t>(index));
+      _selection = std::monostate{};
+      _apply_live();
+      return;
+    }
   } else {
     ImGui::TextDisabled("Select a node or edge.");
     ImGui::Spacing();

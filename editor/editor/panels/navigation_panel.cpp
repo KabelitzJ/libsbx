@@ -26,7 +26,7 @@ auto navigation_panel::draw(editor_state& state) -> void {
   }
 
   ImGui::SeparatorText("Agent");
-  ImGui::DragFloat("Radius", &_settings.agent_radius, 0.01f, 0.01f, 5.0f);
+  ImGui::DragFloat("Radius##navpanel_agent_radius", &_settings.agent_radius, 0.01f, 0.01f, 5.0f);
   ImGui::DragFloat("Height", &_settings.agent_height, 0.01f, 0.01f, 5.0f);
   ImGui::DragFloat("Max Slope (deg)", &_settings.agent_max_slope, 0.5f, 0.0f, 89.0f);
   ImGui::DragFloat("Max Climb", &_settings.agent_max_climb, 0.01f, 0.0f, 5.0f);

@@ -27,13 +27,19 @@ auto submit_draw_commands(render_context& context, const std::vector<draw_comman
       continue;
     }
 
-    // A graph-driven material bypasses pipeline_id's fixed 4-slot table entirely -- there's no
-    // fixed slot for "however many distinct graphs a scene uses" -- and defers to the pass's own
-    // resolver instead (empty for passes that don't care about shading model, e.g. depth-only ones,
-    // which then fall through to the built-in table exactly like an unlit material already does).
+    // A material typed "Shader Graph" (material inspector's Material Type dropdown) bypasses
+    // pipeline_id's fixed 4-slot table entirely -- there's no fixed slot for "however many
+    // distinct graphs a scene uses" -- and defers to the pass's own resolver instead (every pass
+    // supplies one; see graph_pipeline_resolver's doc comment). One with no graph assigned is
+    // invalid by definition (material.hpp's shading_model doc comment) and skipped outright, same
+    // as one whose graph exists but failed to compile.
     auto pipeline = memory::observer_ptr<graphics::graphics_pipeline>{};
 
-    if (command.material->shader_graph().is_valid() && resolve_graph_pipeline) {
+    if (command.material->shading() == assets::shading_model::shader_graph) {
+      if (!command.material->shader_graph().is_valid() || !resolve_graph_pipeline) {
+        continue;
+      }
+
       pipeline = resolve_graph_pipeline(command.material->shader_graph(), command.material->is_double_sided());
 
       if (!pipeline) {
@@ -99,7 +105,11 @@ auto submit_draw_commands_indirect(render_context& context, const std::vector<dr
 
     auto pipeline = memory::observer_ptr<graphics::graphics_pipeline>{};
 
-    if (command.material->shader_graph().is_valid() && resolve_graph_pipeline) {
+    if (command.material->shading() == assets::shading_model::shader_graph) {
+      if (!command.material->shader_graph().is_valid() || !resolve_graph_pipeline) {
+        continue;
+      }
+
       pipeline = resolve_graph_pipeline(command.material->shader_graph(), command.material->is_double_sided());
 
       if (!pipeline) {

@@ -9,11 +9,15 @@
 #include <lighting.slang>
 #include <shading_policy.slang>
 
-// Everything a shader-graph-generated fragment_main<Policy> needs besides its own lighting_model:
-// vertex stage, push constants, the fragment_input -> lighting_input adapter, and the two output
-// targets/policy typedefs -- identical to geometry.slang's own copies (kept separate/self-contained
-// there by choice) so a generated file only needs `#include <geometry_common.slang>` plus its own
-// small lighting_model + fragment_main.
+// Everything a shader-graph-generated file needs besides its own vertex/fragment graph logic:
+// shared structs, push constants, and the fragment_input -> lighting_input adapter -- identical to
+// geometry.slang's own copies (kept separate/self-contained there by choice) so a generated file
+// only needs `#include <geometry_common.slang>` plus its own graph_vertex_*/fragment_main.
+//
+// vertex_main itself is NOT shared here (unlike the rest of this file) -- every generated graph
+// file emits its own (shader_graph_codegen.cpp), since it needs to route through that graph's own
+// Vertex block (Position/Normal/Tangent, defaulting to pass-through). Keeping it here would collide
+// with the generated file's own definition.
 
 struct vertex_input {
   [[vk::location(0)]] uint vertex_id : SV_VertexID;
@@ -57,28 +61,19 @@ struct push_data {
   uint material_index;
   uint sampler_index;
   uint clamp_sampler_index;
+
+  // 0xFFFFFFFF outside shadow_pass (render_pass.hpp's push_constants::cascade_index default,
+  // matching shaders/passes/shadow.slang's own field) -- a generated file's depth_vertex_main
+  // reads this to pick between camera-space (depth_pre_pass) and this cascade's light-space
+  // (shadow_pass) transform, since both passes share that one entry point. vertex_main/
+  // fragment_main<Policy> never reference it (always camera-space, always this default) --
+  // shared here purely because it must occupy the same push-constant byte offset the engine's own
+  // push_constants struct (render_pass.hpp) always writes it at, regardless of which entry point
+  // in this file ends up bound.
+  uint cascade_index;
 }; // struct push_data
 
 [[vk::push_constant]] ConstantBuffer<push_data> push;
-
-[shader("vertex")]
-vertex_output vertex_main(vertex_input input) {
-  vertex v = push.vertices[input.vertex_id];
-  frame_data frame_data = *push.frame_data;
-
-  transform_data instance = push.transforms[push.transform_offset + input.instance_id];
-
-  float4 world_position = mul(instance.model, float4(v.position, 1.0));
-
-  vertex_output output;
-  output.position = world_position.xyz;
-  output.normal = normalize(mul(instance.normal, float4(v.normal, 0.0)).xyz);
-  output.tangent = float4(normalize(mul(instance.normal, float4(v.tangent.xyz, 0.0)).xyz), v.tangent.w);
-  output.uv = v.uv;
-  output.sv_position = mul(frame_data.projection, mul(frame_data.view, world_position));
-
-  return output;
-}
 
 lighting_input build_lighting_input(fragment_input input) {
   lighting_input result;

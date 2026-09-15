@@ -584,7 +584,7 @@ auto draw_nav_agent_section(editor_state& state, sbx::scenes::scene& target, sbx
   auto& agent = node.get_component<sbx::physics::nav_agent>();
   static auto pending = std::optional<sbx::physics::nav_agent>{};
 
-  ImGui::DragFloat("Radius", &agent.radius, 0.01f, 0.01f, 5.0f);
+  ImGui::DragFloat("Radius##agent_radius", &agent.radius, 0.01f, 0.01f, 5.0f);
   bracket_edit(state, target, node, agent, pending, "Edit Nav Agent");
   ImGui::DragFloat("Height", &agent.height, 0.01f, 0.01f, 5.0f);
   bracket_edit(state, target, node, agent, pending, "Edit Nav Agent");
@@ -722,15 +722,15 @@ auto draw_shape_collider_section(editor_state& state, sbx::scenes::scene& target
   }
 
   if (auto* sphere = std::get_if<sbx::physics::sphere>(&collider.shape)) {
-    ImGui::DragFloat("Radius", &sphere->radius, 0.05f, 0.001f, 1000.0f);
+    ImGui::DragFloat("Radius##shape_sphere_radius", &sphere->radius, 0.05f, 0.001f, 1000.0f);
     bracket_edit(state, target, node, collider, pending, "Edit Shape Collider");
   } else if (auto* cylinder = std::get_if<sbx::physics::cylinder>(&collider.shape)) {
-    ImGui::DragFloat("Radius", &cylinder->radius, 0.05f, 0.001f, 1000.0f);
+    ImGui::DragFloat("Radius##shape_cylinder_radius", &cylinder->radius, 0.05f, 0.001f, 1000.0f);
     bracket_edit(state, target, node, collider, pending, "Edit Shape Collider");
     ImGui::DragFloat("Half Height", &cylinder->half_height, 0.05f, 0.001f, 1000.0f);
     bracket_edit(state, target, node, collider, pending, "Edit Shape Collider");
   } else if (auto* capsule = std::get_if<sbx::physics::capsule>(&collider.shape)) {
-    ImGui::DragFloat("Radius", &capsule->radius, 0.05f, 0.001f, 1000.0f);
+    ImGui::DragFloat("Radius##shape_capsule_radius", &capsule->radius, 0.05f, 0.001f, 1000.0f);
     bracket_edit(state, target, node, collider, pending, "Edit Shape Collider");
     ImGui::DragFloat("Half Height", &capsule->half_height, 0.05f, 0.001f, 1000.0f);
     bracket_edit(state, target, node, collider, pending, "Edit Shape Collider");

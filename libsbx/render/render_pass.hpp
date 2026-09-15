@@ -176,10 +176,12 @@ public:
  * lookup goes through shader_cache/pipeline_cache, both already content-keyed caches, so the
  * resolver itself needs no cache of its own. Returns a null observer_ptr if the graph has no usable
  * pipeline yet (still compiling, or codegen/compilation failed) -- the caller skips that draw rather
- * than crash or bind something wrong. Left empty (the default) by passes that don't care about
- * shading model at all (depth_pre_pass, shadow_pass) -- a graph-driven material there just falls
- * back to pipeline_id's built-in slots, same as it already does for unlit (see compute_pipeline_id
- * in scene_renderer_module.cpp; shading model is irrelevant to depth-only output either way).
+ * than crash or bind something wrong. Every depth-writing/color-writing pass supplies one
+ * (opaque_pass, transparent_accumulate_pass, depth_pre_pass, shadow_pass) -- a graph's Vertex block
+ * can displace the mesh, so depth_pre_pass/shadow_pass need their own graph-specific pipeline too
+ * (requesting depth_vertex_main/depth_fragment_main instead of vertex_main/fragment_main<Policy>)
+ * for their depth/shadow output to actually match the displaced color-pass geometry. Left empty
+ * (the default) only where the parameter doesn't apply at all.
  */
 using graph_pipeline_resolver = std::function<memory::observer_ptr<graphics::graphics_pipeline>(const assets::shader_graph_handle&, bool is_double_sided)>;
 

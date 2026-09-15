@@ -4,9 +4,12 @@
 #define LIBSBX_RENDER_DEPTH_PRE_PASS_HPP_
 
 #include <array>
+#include <string>
 #include <string_view>
 
 #include <libsbx/memory/observer_ptr.hpp>
+
+#include <libsbx/assets/shader_graph.hpp>
 
 #include <libsbx/graphics/pipeline/graphics_pipeline.hpp>
 
@@ -33,6 +36,11 @@ public:
   auto execute(render_context& context, std::uint32_t group) -> void override;
 
 private:
+
+  // Requests a graph's own depth_vertex_main/depth_fragment_main pair -- always present in a
+  // generated graph file regardless of whether it has a Vertex block (shader_graph_codegen.cpp),
+  // so a vertex-displacing graph gets a depth pre-pass that actually matches its own color pass.
+  [[nodiscard]] auto _resolve_graph_pipeline(const assets::shader_graph_handle& graph, bool is_double_sided) -> memory::observer_ptr<graphics::graphics_pipeline>;
 
   std::array<memory::observer_ptr<graphics::graphics_pipeline>, 4u> _pipelines{};
 

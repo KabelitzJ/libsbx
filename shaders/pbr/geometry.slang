@@ -88,7 +88,7 @@ lighting_input build_lighting_input(fragment_input input) {
 Policy::Output fragment_main_pbr<Policy : shading_policy>(fragment_input input) {
   lighting_input lighting_input = build_lighting_input(input);
 
-  lighting_output lighting_output = evaluate_lighting<Policy::receives_shadows, pbr_lighting_model>(lighting_input);
+  lighting_output lighting_output = evaluate_lighting<Policy::receives_shadows>(lighting_input);
 
   shading_input shading_input;
   shading_input.lighting = lighting_output;

@@ -490,7 +490,7 @@ auto asset_residency::save_material(material_handle& material, const std::filesy
   node["metallic_factor"] = material->metallic_factor();
   node["roughness_factor"] = material->roughness_factor();
   node["alpha_mode"] = (material->alpha() == alpha_mode::blend) ? "blend" : (material->alpha() == alpha_mode::mask) ? "mask" : "opaque";
-  node["shading_model"] = (material->shading() == shading_model::unlit) ? "unlit" : "pbr";
+  node["shading_model"] = (material->shading() == shading_model::unlit) ? "unlit" : (material->shading() == shading_model::shader_graph) ? "shader_graph" : "pbr";
   node["alpha_cutoff"] = material->alpha_cutoff();
   node["is_double_sided"] = material->is_double_sided();
   node["casts_shadow"] = material->casts_shadow();
@@ -1106,6 +1106,8 @@ auto asset_residency::save_shader_graph(shader_graph_handle& graph, const std::f
       if (const auto slot = path_of(*value)) {
         node_yaml["texture"] = *slot;
       }
+    } else if (const auto* value = std::get_if<std::string>(&graph_node.value)) {
+      node_yaml["pattern"] = *value; // Swizzle only -- the one node type whose value is a plain string
     }
 
     nodes_node.push_back(node_yaml);
@@ -1671,7 +1673,9 @@ auto asset_residency::_finalize_shader_graph(asset_loader::shader_graph_result& 
     node.name = node_description.name;
     node.exposed = node_description.exposed;
 
-    if (const auto* path = std::get_if<std::string>(&node_description.value)) {
+    if (const auto* pattern = std::get_if<std::string>(&node_description.value); pattern && node_description.type == shader_node_type::swizzle) {
+      node.value = *pattern;
+    } else if (const auto* path = std::get_if<std::string>(&node_description.value)) {
       node.value = path->empty() ? texture_handle{} : load_texture(std::filesystem::path{*path}, graphics::format::r8g8b8a8_srgb);
     } else if (const auto* value = std::get_if<std::float_t>(&node_description.value)) {
       node.value = *value;

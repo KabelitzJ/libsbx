@@ -34,36 +34,42 @@ auto inspector_panel::_draw_material_properties(editor_state& state, const asset
 
   auto changed = draw_text_field("Name", _material_edit.name);
 
-  static constexpr auto shading_model_names = std::array<const char*, 2u>{"PBR", "Unlit"};
-  auto shading_model_index = static_cast<std::int32_t>(_material_edit.shading);
+  // One dropdown picks the material's actual type -- Unlit/PBR draw the built-in field set below;
+  // Shader Graph shows only the picker + that graph's own exposed parameters (material.hpp's
+  // shading_model doc comment: every built-in field is otherwise dead once a material is typed
+  // Shader Graph, and one with no graph assigned is invalid, not a silent fallback to PBR).
+  static constexpr auto material_type_names = std::array<const char*, 3u>{"Unlit", "PBR", "Shader Graph"};
 
-  if (ImGui::Combo("Shading Model", &shading_model_index, shading_model_names.data(), static_cast<std::int32_t>(shading_model_names.size()))) {
-    _material_edit.shading = static_cast<sbx::assets::shading_model>(shading_model_index);
+  const auto material_type_index = [](sbx::assets::shading_model shading) -> std::int32_t {
+    switch (shading) {
+      case sbx::assets::shading_model::unlit: return 0;
+      case sbx::assets::shading_model::shader_graph: return 2;
+      default: return 1; // pbr
+    }
+  };
+
+  const auto material_type_from_index = [](std::int32_t index) -> sbx::assets::shading_model {
+    if (index == 0) return sbx::assets::shading_model::unlit;
+    if (index == 2) return sbx::assets::shading_model::shader_graph;
+    return sbx::assets::shading_model::pbr;
+  };
+
+  auto material_type_selection = material_type_index(_material_edit.shading);
+
+  if (ImGui::Combo("Material Type", &material_type_selection, material_type_names.data(), static_cast<std::int32_t>(material_type_names.size()))) {
+    _material_edit.shading = material_type_from_index(material_type_selection);
     changed = true;
   }
 
-  const auto is_pbr = _material_edit.shading == sbx::assets::shading_model::pbr;
+  const auto is_shader_graph = _material_edit.shading == sbx::assets::shading_model::shader_graph;
 
-  changed |= draw_color_field("Base Color", _material_edit.base_color_factor);
-
-  auto emissive = std::array<std::float_t, 3u>{_material_edit.emissive_factor.x(), _material_edit.emissive_factor.y(), _material_edit.emissive_factor.z()};
-  if (ImGui::ColorEdit3("Emissive", emissive.data())) {
-    _material_edit.emissive_factor = sbx::math::vector3{emissive[0], emissive[1], emissive[2]};
-    changed = true;
-  }
-
-  // Multiplies emissive_factor unbounded (shaders/lighting.slang) -- the usual way to push a
-  // material's own output past bloom_pass's threshold without touching any light in the scene.
-  changed |= ImGui::DragFloat("Emissive Strength", &_material_edit.emissive_strength, 0.05f, 0.0f, 100.0f);
-
-  if (is_pbr) {
-    changed |= ImGui::DragFloat("Metallic", &_material_edit.metallic_factor, 0.01f, 0.0f, 1.0f);
-    changed |= ImGui::DragFloat("Roughness", &_material_edit.roughness_factor, 0.01f, 0.0f, 1.0f);
-    changed |= ImGui::DragFloat("IOR", &_material_edit.ior, 0.01f, 1.0f, 3.0f);
-    changed |= ImGui::DragFloat("Normal Scale", &_material_edit.normal_scale, 0.01f, 0.0f, 2.0f);
-    changed |= ImGui::DragFloat("Occlusion Strength", &_material_edit.occlusion_strength, 0.01f, 0.0f, 1.0f);
-  }
-
+  // Alpha mode/cull/shadow/UV transform are all orthogonal to shading type -- a Shader Graph
+  // material still goes through the same opaque-vs-blend pass routing, cull mode, shadow casting/
+  // receiving, and apply_uv_transform as a built-in one (shader_graph_codegen.cpp's generated
+  // fragment_main applies uv_tiling/uv_offset itself, and every pass's graph_pipeline_resolver
+  // reads is_double_sided the same way it reads it for a built-in material). These used to be
+  // built-in-only fields here, which meant a Shader Graph material couldn't have "Casts Shadow"
+  // (etc.) seen or changed in the inspector at all.
   static constexpr auto alpha_mode_names = std::array<const char*, 3u>{"Opaque", "Mask", "Blend"};
   auto alpha_index = static_cast<std::int32_t>(_material_edit.alpha);
 
@@ -92,44 +98,16 @@ auto inspector_panel::_draw_material_properties(editor_state& state, const asset
     changed = true;
   }
 
-  ImGui::SeparatorText("Textures");
+  if (is_shader_graph) {
+    ImGui::SeparatorText("Shader Graph");
 
-  // A fixed-width label column so every picker button lines up regardless of its label's length
-  // ("Metallic/Roughness" vs. "Normal") -- a plain Text+SameLine per row left them staggered.
-  if (ImGui::BeginTable("##material_texture_grid", 2, ImGuiTableFlags_SizingFixedFit)) {
-    ImGui::TableSetupColumn("##label", ImGuiTableColumnFlags_WidthFixed, 150.0f);
-    ImGui::TableSetupColumn("##picker", ImGuiTableColumnFlags_WidthStretch);
+    changed |= draw_shader_graph_picker(state, "##shader_graph_picker", _material_edit.shader_graph);
 
-    const auto texture_row = [&](const char* label, const char* popup_id, sbx::assets::texture_handle& slot, sbx::graphics::format format) {
-      ImGui::TableNextRow();
-      ImGui::TableSetColumnIndex(0);
-      ImGui::AlignTextToFramePadding();
-      ImGui::TextUnformatted(label);
-      ImGui::TableSetColumnIndex(1);
-      changed |= draw_texture_picker(state, popup_id, slot, assets_module, format);
-    };
-
-    texture_row("Albedo", "##albedo_picker", _material_edit.albedo, sbx::graphics::format::r8g8b8a8_srgb);
-
-    if (is_pbr) {
-      texture_row("Normal", "##normal_picker", _material_edit.normal, sbx::graphics::format::r8g8b8a8_unorm);
-      texture_row("Metallic/Roughness", "##metallic_roughness_picker", _material_edit.metallic_roughness, sbx::graphics::format::r8g8b8a8_unorm);
-      texture_row("Occlusion", "##occlusion_picker", _material_edit.occlusion, sbx::graphics::format::r8g8b8a8_unorm);
+    if (!_material_edit.shader_graph.is_valid()) {
+      ImGui::TextColored(ImVec4{1.0f, 0.6f, 0.2f, 1.0f}, ICON_MDI_ALERT " No graph assigned -- this material is invalid and won't render until one is.");
     }
 
-    texture_row("Emissive", "##emissive_picker", _material_edit.emissive, sbx::graphics::format::r8g8b8a8_srgb);
-
-    ImGui::EndTable();
-  }
-
-  ImGui::SeparatorText("Shader Graph");
-
-  changed |= draw_shader_graph_picker(state, "##shader_graph_picker", _material_edit.shader_graph);
-
-  if (_material_edit.shader_graph.is_valid()) {
-    // Not is_pbr-gated -- a graph replaces the built-in pbr/unlit path entirely regardless of
-    // `shading`'s current value (see material.hpp's create_info::shader_graph doc comment).
-    const auto parameters = _material_edit.shader_graph->parameters();
+    const auto parameters = _material_edit.shader_graph.is_valid() ? _material_edit.shader_graph->parameters() : std::vector<sbx::assets::shader_graph_parameter>{};
 
     for (const auto& parameter : parameters) {
       ImGui::PushID(static_cast<std::int32_t>(parameter.type) * 100 + static_cast<std::int32_t>(parameter.slot));
@@ -185,8 +163,60 @@ auto inspector_panel::_draw_material_properties(editor_state& state, const asset
       ImGui::PopID();
     }
 
-    if (parameters.empty()) {
+    if (_material_edit.shader_graph.is_valid() && parameters.empty()) {
       ImGui::TextDisabled("This graph exposes no parameters.");
+    }
+  } else {
+    const auto is_pbr = _material_edit.shading == sbx::assets::shading_model::pbr;
+
+    changed |= draw_color_field("Base Color", _material_edit.base_color_factor);
+
+    auto emissive = std::array<std::float_t, 3u>{_material_edit.emissive_factor.x(), _material_edit.emissive_factor.y(), _material_edit.emissive_factor.z()};
+    if (ImGui::ColorEdit3("Emissive", emissive.data())) {
+      _material_edit.emissive_factor = sbx::math::vector3{emissive[0], emissive[1], emissive[2]};
+      changed = true;
+    }
+
+    // Multiplies emissive_factor unbounded (shaders/lighting.slang) -- the usual way to push a
+    // material's own output past bloom_pass's threshold without touching any light in the scene.
+    changed |= ImGui::DragFloat("Emissive Strength", &_material_edit.emissive_strength, 0.05f, 0.0f, 100.0f);
+
+    if (is_pbr) {
+      changed |= ImGui::DragFloat("Metallic", &_material_edit.metallic_factor, 0.01f, 0.0f, 1.0f);
+      changed |= ImGui::DragFloat("Roughness", &_material_edit.roughness_factor, 0.01f, 0.0f, 1.0f);
+      changed |= ImGui::DragFloat("IOR", &_material_edit.ior, 0.01f, 1.0f, 3.0f);
+      changed |= ImGui::DragFloat("Normal Scale", &_material_edit.normal_scale, 0.01f, 0.0f, 2.0f);
+      changed |= ImGui::DragFloat("Occlusion Strength", &_material_edit.occlusion_strength, 0.01f, 0.0f, 1.0f);
+    }
+
+    ImGui::SeparatorText("Textures");
+
+    // A fixed-width label column so every picker button lines up regardless of its label's length
+    // ("Metallic/Roughness" vs. "Normal") -- a plain Text+SameLine per row left them staggered.
+    if (ImGui::BeginTable("##material_texture_grid", 2, ImGuiTableFlags_SizingFixedFit)) {
+      ImGui::TableSetupColumn("##label", ImGuiTableColumnFlags_WidthFixed, 150.0f);
+      ImGui::TableSetupColumn("##picker", ImGuiTableColumnFlags_WidthStretch);
+
+      const auto texture_row = [&](const char* label, const char* popup_id, sbx::assets::texture_handle& slot, sbx::graphics::format format) {
+        ImGui::TableNextRow();
+        ImGui::TableSetColumnIndex(0);
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextUnformatted(label);
+        ImGui::TableSetColumnIndex(1);
+        changed |= draw_texture_picker(state, popup_id, slot, assets_module, format);
+      };
+
+      texture_row("Albedo", "##albedo_picker", _material_edit.albedo, sbx::graphics::format::r8g8b8a8_srgb);
+
+      if (is_pbr) {
+        texture_row("Normal", "##normal_picker", _material_edit.normal, sbx::graphics::format::r8g8b8a8_unorm);
+        texture_row("Metallic/Roughness", "##metallic_roughness_picker", _material_edit.metallic_roughness, sbx::graphics::format::r8g8b8a8_unorm);
+        texture_row("Occlusion", "##occlusion_picker", _material_edit.occlusion, sbx::graphics::format::r8g8b8a8_unorm);
+      }
+
+      texture_row("Emissive", "##emissive_picker", _material_edit.emissive, sbx::graphics::format::r8g8b8a8_srgb);
+
+      ImGui::EndTable();
     }
   }
 
@@ -288,7 +318,7 @@ auto inspector_panel::_draw_particle_effect_properties(editor_state& state, cons
       }
 
       if (emitter.shape == sbx::assets::emitter_shape::sphere) {
-        changed |= ImGui::DragFloat("Radius", &emitter.shape_extents.x(), 0.01f, 0.0f, 1000.0f);
+        changed |= ImGui::DragFloat("Radius##particle_effect_properties", &emitter.shape_extents.x(), 0.01f, 0.0f, 1000.0f);
       } else if (emitter.shape == sbx::assets::emitter_shape::box) {
         auto shape_extents = std::array<std::float_t, 3u>{emitter.shape_extents.x(), emitter.shape_extents.y(), emitter.shape_extents.z()};
         if (draw_vector3_control("Half Extents", shape_extents, 0.0f, 0.01f).changed) {

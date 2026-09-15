@@ -148,7 +148,7 @@ auto asset_cooker::parse_material_file(const std::filesystem::path& source) -> s
   }
   if (root["shading_model"]) {
     const auto model = root["shading_model"].as<std::string>();
-    description.shading = (model == "unlit") ? shading_model::unlit : shading_model::pbr;
+    description.shading = (model == "unlit") ? shading_model::unlit : (model == "shader_graph") ? shading_model::shader_graph : shading_model::pbr;
   }
   if (root["alpha_cutoff"]) description.alpha_cutoff = root["alpha_cutoff"].as<std::float_t>();
   if (root["is_double_sided"]) description.is_double_sided = root["is_double_sided"].as<bool>();

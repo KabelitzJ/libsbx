@@ -32,6 +32,24 @@ auto draw_text_field(const char* label, std::string& value) -> bool {
   return false;
 }
 
+/**
+ * @brief Same as draw_text_field, but shows @p hint (greyed placeholder text) while @p value is
+ * empty instead of a visible label -- for a search/filter box, not a named field.
+ */
+template<std::size_t N = 128u>
+auto draw_text_field_with_hint(const char* label, const char* hint, std::string& value) -> bool {
+  auto buffer = std::array<char, N>{};
+  std::strncpy(buffer.data(), value.c_str(), buffer.size() - 1u);
+  buffer[buffer.size() - 1u] = '\0';
+
+  if (ImGui::InputTextWithHint(label, hint, buffer.data(), buffer.size())) {
+    value = buffer.data();
+    return true;
+  }
+
+  return false;
+}
+
 } // namespace editor
 
 #endif // EDITOR_WIDGETS_TEXT_FIELD_HPP_

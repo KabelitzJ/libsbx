@@ -34,17 +34,33 @@ struct surface {
   float3 f0;
   float roughness;
   float metallic;
-  float2 uv;
-  uint sampler_index;
-
-  // Copied once here (not looked up via a material_index -- a lighting_model's direct()/extra()
-  // only ever receive `surface`, never `frame_data`, so there's no `input.frame_data.materials[...]`
-  // available inside them to index into) so shader-graph-generated lighting_models can read an
-  // exposed parameter or texture-sample node's value as `s.generic_params[N]`/
-  // `s.generic_textures[N]` directly. See shader_graph_codegen.cpp's emitted expressions.
-  float4 generic_params[shader_graph_max_params];
-  uint generic_textures[shader_graph_max_textures];
 }; // struct surface
+
+// A pre-computed set of PBR surface properties, already in the metallic-roughness workflow --
+// the shape a shader-graph "Fragment (Lit)" output produces, and what the built-in PBR material's
+// own texture-sampling prologue produces too. See evaluate_lit_surface below: both paths funnel
+// into the exact same lighting math from here on, so a graph-driven Lit material is lit exactly
+// like a normal PBR material, ambient/IBL included.
+struct lit_surface {
+  float3 albedo;
+  float3 tangent_space_normal; // (0, 0, 1) = unperturbed
+  float metallic;
+  float roughness;
+  float3 emissive;
+  float ao;
+  float alpha;
+
+  // KHR_materials_ior: F0 = ((ior-1)/(ior+1))^2; the built-in PBR material derives this from its
+  // own per-material ior factor. A graph doesn't expose an IOR socket (for now), so codegen always
+  // sets this to the standard dielectric 0.04 (IOR 1.5).
+  float dielectric_f0;
+
+  // The built-in PBR material gates cascaded-shadow receipt on a per-material flag
+  // (material_flags::receives_shadow); a shader graph has no such flag today, so codegen always
+  // sets this true. Kept as a field (not folded into the ReceivesShadows generic parameter) so
+  // evaluate_lighting can preserve that exact per-material behavior after this refactor.
+  bool receives_shadow;
+}; // struct lit_surface
 
 interface lighting_model {
   static float3 direct(surface s, float3 l, float3 radiance);
@@ -97,25 +113,13 @@ struct pbr_lighting_model : lighting_model {
   }
 }; // struct pbr_lighting_model
 
-lighting_output evaluate_lighting<let ReceivesShadows : bool, LightingModel : lighting_model>(lighting_input input) {
-  material_data material = input.frame_data.materials[input.material_index];
-  SamplerState sampler = samplers[input.sampler_index];
-  float2 uv = apply_uv_transform(material, input.uv);
-
-  float4 base = material.base_color_factor * textures[material.albedo_index].Sample(sampler, uv);
-
-  apply_alpha_cutout(material, input.uv, input.sampler_index);
-
-  float3 albedo = base.rgb;
-
-  float4 mr = textures[material.metallic_roughness_index].Sample(sampler, uv);
-  float metallic = mr.b * material.metallic_factor;
-  float roughness = mr.g * material.roughness_factor;
-
-  // occlusionTexture.strength: lerp(1, sampled_ao, strength) so strength=0 leaves AO fully unapplied.
-  float ao = lerp(1.0, textures[material.occlusion_index].Sample(sampler, uv).r, material.occlusion_strength);
-  float3 emissive = material.emissive_factor.rgb * material.emissive_strength * textures[material.emissive_index].Sample(sampler, uv).rgb;
-
+// Shared by the built-in PBR material (evaluate_lighting below, which samples a lit_surface from
+// material textures) and every shader-graph "Fragment (Lit)" output (which computes one directly,
+// see shader_graph_codegen.cpp) -- Cook-Torrance direct lighting + ambient/IBL, always via
+// pbr_lighting_model since Lit is always metallic-roughness workflow (for now). This is exactly
+// the second half of the old evaluate_lighting, factored out so a graph-driven Lit material is lit
+// exactly like a normal PBR material -- same ambient, same light loops, no per-graph opt-out needed.
+lighting_output evaluate_lit_surface<let ReceivesShadows : bool>(lighting_input input, lit_surface s) {
   float3 n = normalize(input.normal);
 
   // Double-sided materials disable backface culling (opaque_pass.cpp) but keep the same
@@ -133,33 +137,20 @@ lighting_output evaluate_lighting<let ReceivesShadows : bool, LightingModel : li
   // handedness
   float3 b = cross(n, t) * input.tangent.w;
 
-  float3 tangent_normal = textures[material.normal_index].Sample(sampler, uv).rgb * 2.0 - 1.0;
-  tangent_normal.xy *= material.normal_scale;
+  float3 tangent_normal = s.tangent_space_normal;
   n = normalize(tangent_normal.x * t + tangent_normal.y * b + tangent_normal.z * n);
 
   float3 v = normalize(input.frame_data.camera_position.xyz - input.position);
 
-  // KHR_materials_ior: F0 = ((ior-1)/(ior+1))^2; default ior 1.5 reproduces the standard 0.04.
-  float dielectric_f0 = pow((material.ior - 1.0) / max(material.ior + 1.0, 0.0001), 2.0);
-  float3 f0 = lerp(float3(dielectric_f0, dielectric_f0, dielectric_f0), albedo, metallic);
+  float3 f0 = lerp(float3(s.dielectric_f0, s.dielectric_f0, s.dielectric_f0), s.albedo, s.metallic);
 
   surface surf;
-  surf.albedo = albedo;
+  surf.albedo = s.albedo;
   surf.n = n;
   surf.v = v;
   surf.f0 = f0;
-  surf.roughness = roughness;
-  surf.metallic = metallic;
-  surf.uv = uv;
-  surf.sampler_index = input.sampler_index;
-
-  for (uint generic_param_index = 0u; generic_param_index < shader_graph_max_params; ++generic_param_index) {
-    surf.generic_params[generic_param_index] = material.generic_params[generic_param_index];
-  }
-
-  for (uint generic_texture_index = 0u; generic_texture_index < shader_graph_max_textures; ++generic_texture_index) {
-    surf.generic_textures[generic_texture_index] = material.generic_textures[generic_texture_index];
-  }
+  surf.roughness = s.roughness;
+  surf.metallic = s.metallic;
 
   float3 lo = float3(0.0, 0.0, 0.0);
 
@@ -171,13 +162,13 @@ lighting_output evaluate_lighting<let ReceivesShadows : bool, LightingModel : li
     float3 l = normalize(-light.direction.xyz);
     float3 radiance = light.color.rgb * light.color.a;
 
-    if (ReceivesShadows && i == 0u && input.frame_data.shadow_enabled != 0u && (material.flags & material_flags::receives_shadow) != 0u) {
+    if (ReceivesShadows && i == 0u && input.frame_data.shadow_enabled != 0u && s.receives_shadow) {
       sun_shadow = calculate_shadow(input.frame_data, input.position, n, input.clamp_sampler_index);
 
       radiance *= sun_shadow;
     }
 
-    lo += LightingModel::direct(surf, l, radiance);
+    lo += pbr_lighting_model::direct(surf, l, radiance);
   }
 
   float view_z = mul(input.frame_data.view, float4(input.position, 1.0)).z;
@@ -209,47 +200,80 @@ lighting_output evaluate_lighting<let ReceivesShadows : bool, LightingModel : li
 
     float3 radiance = light.color.rgb * light.color.a * attenuation;
 
-    lo += LightingModel::direct(surf, l, radiance);
+    lo += pbr_lighting_model::direct(surf, l, radiance);
   }
 
-  lo += LightingModel::extra(surf);
+  lo += pbr_lighting_model::extra(surf);
+
+  SamplerState sampler = samplers[input.sampler_index];
 
   float ndv = max(dot(n, v), 0.0);
   float3 fr = fresnel_schlick(ndv, f0);
-  float3 kd = (1.0 - fr) * (1.0 - metallic);
+  float3 kd = (1.0 - fr) * (1.0 - s.metallic);
 
   float3 irradiance = (input.frame_data.irradiance_index != 0xFFFFFFFF) ? cubes[input.frame_data.irradiance_index].Sample(sampler, n).rgb : float3(0.03);
-  float3 diffuse = irradiance * albedo / pi;
+  float3 diffuse = irradiance * s.albedo / pi;
 
   float3 specular = float3(0.0, 0.0, 0.0);
 
   if (input.frame_data.prefiltered_mip_count > 0u && input.frame_data.brdf_lut_index != 0xFFFFFFFF) {
     float3 reflection = reflect(-v, n);
 
-    float level = roughness * float(input.frame_data.prefiltered_mip_count - 1u);
+    float level = s.roughness * float(input.frame_data.prefiltered_mip_count - 1u);
 
     float3 prefiltered = cubes[input.frame_data.prefiltered_index].SampleLevel(sampler, reflection, level).rgb;
 
     SamplerState clamp_sampler = samplers[input.clamp_sampler_index];
-    float2 brdf = textures[input.frame_data.brdf_lut_index].Sample(clamp_sampler, float2(ndv, roughness)).rg;
+    float2 brdf = textures[input.frame_data.brdf_lut_index].Sample(clamp_sampler, float2(ndv, s.roughness)).rg;
 
     specular = prefiltered * (fr * brdf.x + brdf.y);
   }
 
-  float3 ambient = (kd * diffuse + specular) * ao * input.frame_data.ambient_intensity;
+  float3 ambient = (kd * diffuse + specular) * s.ao * input.frame_data.ambient_intensity;
 
   static const float ambient_shadow_floor = 0.6;
 
   ambient *= lerp(ambient_shadow_floor, 1.0, sun_shadow);
 
-  float3 color = ambient + lo + emissive;
+  float3 color = ambient + lo + s.emissive;
 
   lighting_output output;
 
   output.color = color;
-  output.alpha = base.a;
+  output.alpha = s.alpha;
 
   return output;
+}
+
+lighting_output evaluate_lighting<let ReceivesShadows : bool>(lighting_input input) {
+  material_data material = input.frame_data.materials[input.material_index];
+  SamplerState sampler = samplers[input.sampler_index];
+  float2 uv = apply_uv_transform(material, input.uv);
+
+  float4 base = material.base_color_factor * textures[material.albedo_index].Sample(sampler, uv);
+
+  apply_alpha_cutout(material, input.uv, input.sampler_index);
+
+  float4 mr = textures[material.metallic_roughness_index].Sample(sampler, uv);
+
+  // occlusionTexture.strength: lerp(1, sampled_ao, strength) so strength=0 leaves AO fully unapplied.
+  float ao = lerp(1.0, textures[material.occlusion_index].Sample(sampler, uv).r, material.occlusion_strength);
+
+  float3 tangent_normal = textures[material.normal_index].Sample(sampler, uv).rgb * 2.0 - 1.0;
+  tangent_normal.xy *= material.normal_scale;
+
+  lit_surface s;
+  s.albedo = base.rgb;
+  s.tangent_space_normal = tangent_normal;
+  s.metallic = mr.b * material.metallic_factor;
+  s.roughness = mr.g * material.roughness_factor;
+  s.emissive = material.emissive_factor.rgb * material.emissive_strength * textures[material.emissive_index].Sample(sampler, uv).rgb;
+  s.ao = ao;
+  s.alpha = base.a;
+  s.dielectric_f0 = pow((material.ior - 1.0) / max(material.ior + 1.0, 0.0001), 2.0);
+  s.receives_shadow = (material.flags & material_flags::receives_shadow) != 0u;
+
+  return evaluate_lit_surface<ReceivesShadows>(input, s);
 }
 
 lighting_output evaluate_unlit(lighting_input input) {

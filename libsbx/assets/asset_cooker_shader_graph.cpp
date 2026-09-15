@@ -56,6 +56,9 @@ auto asset_cooker::parse_shader_graph_file(const std::filesystem::path& source) 
         case shader_node_type::texture_sample:
           node.value = node_yaml["texture"] ? node_yaml["texture"].as<std::string>() : std::string{};
           break;
+        case shader_node_type::swizzle:
+          node.value = node_yaml["pattern"] ? node_yaml["pattern"].as<std::string>() : std::string{"rgba"};
+          break;
         default:
           break; // monostate -- math/input/output nodes carry no payload
       }

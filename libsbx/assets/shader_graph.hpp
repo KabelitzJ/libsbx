@@ -6,8 +6,11 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <initializer_list>
+#include <optional>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <variant>
 #include <vector>
 
@@ -31,6 +34,53 @@ namespace sbx::assets {
 inline constexpr auto shader_graph_max_params = std::uint32_t{8u};
 inline constexpr auto shader_graph_max_textures = std::uint32_t{4u};
 
+// A pin's value shape. Every pin has one, either fixed (a plain function of its node's type -- see
+// shader_node_fixed_output_type/shader_node_fixed_input_type) or dynamic, resolved from whatever's
+// actually wired up (shader_graph_type_resolver below) -- but never both, and never anything in
+// between: a connection is only ever legal when the source's resolved type equals the target pin's,
+// full stop, except that any pin whose requirement isn't fixed also always accepts a scalar (Slang's
+// own native, lossless scalar<->vector broadcast -- not the silent truncation this system exists to
+// prevent). Width conversion beyond that is what the Split/Combine nodes are for, explicitly.
+enum class shader_value_type : std::uint8_t {
+  scalar,
+  vector2,
+  vector3,
+  vector4
+}; // enum class shader_value_type
+
+[[nodiscard]] inline auto shader_value_type_component_count(shader_value_type type) -> std::uint32_t {
+  switch (type) {
+    case shader_value_type::scalar: return 1u;
+    case shader_value_type::vector2: return 2u;
+    case shader_value_type::vector3: return 3u;
+    case shader_value_type::vector4: return 4u;
+  }
+
+  return 1u;
+}
+
+[[nodiscard]] inline auto shader_value_type_to_slang(shader_value_type type) -> const char* {
+  switch (type) {
+    case shader_value_type::scalar: return "float";
+    case shader_value_type::vector2: return "float2";
+    case shader_value_type::vector3: return "float3";
+    case shader_value_type::vector4: return "float4";
+  }
+
+  return "float";
+}
+
+[[nodiscard]] inline auto shader_value_type_display_name(shader_value_type type) -> const char* {
+  switch (type) {
+    case shader_value_type::scalar: return "Float";
+    case shader_value_type::vector2: return "Float2";
+    case shader_value_type::vector3: return "Float3";
+    case shader_value_type::vector4: return "Float4";
+  }
+
+  return "Float";
+}
+
 // The engine's only built-in shading models are pbr/unlit (material::shading_model) -- everything
 // else, a user composes as a shader_graph material. This is the node library a graph can be built
 // from; see shader_graph_codegen.hpp for how each of these turns into Slang.
@@ -38,12 +88,13 @@ enum class shader_node_type : std::uint8_t {
   input_uv,
   input_normal,
   input_view_dir,
-  input_light_dir,   // valid only when reachable from output_direct -- direct() has `l`, extra() doesn't
-  input_light_color, // same restriction -- direct() has `radiance`, extra() doesn't
+  input_vertex_position, // valid only reachable from output_vertex -- vertex-stage (object-space), not fragment
+  input_vertex_normal,   // same restriction
+  input_vertex_tangent,  // same restriction
   constant_float,
   constant_vector3,
   constant_color,
-  texture_sample,     // 1 input (uv, optional -- falls back to surface.uv if unconnected)
+  texture_sample,     // 1 input (uv, optional -- falls back to the calling stage's own uv if unconnected)
   add,
   subtract,
   multiply,
@@ -56,9 +107,21 @@ enum class shader_node_type : std::uint8_t {
   pow,
   step,
   smoothstep,
-  output_direct, // sink: this graph's direct()-lighting result. Exactly one required per graph.
-  output_extra   // sink: this graph's extra() (view-dependent, e.g. rim) result. Optional.
+  swizzle, // 1 input (any width), 1 output the SAME width as the input -- each of its up to 4 output
+           // components independently picks which input component (R/G/B/A) feeds it, e.g. "bgra"
+  split,   // 1 input (any width), always 4 outputs (R/G/B/A, always scalar) -- a component beyond the
+           // input's own width reads as a literal 0, matching Unity Shader Graph's Split node exactly
+  combine, // up to 4 inputs (R/G/B/A, always scalar, each defaulting to 0 if unconnected), always 3
+           // outputs (RG/RGB/RGBA, fixed vector2/vector3/vector4) -- matching Unity's Combine node
+  output_vertex,        // sink: Position/Normal/Tangent. Optional -- unconnected pins pass the vertex through unchanged.
+  output_fragment_lit,   // sink: Albedo/Normal/Metallic/Roughness/Emission/Occlusion/Alpha/Alpha Clip Threshold -- feeds the standard PBR lighting.
+  output_fragment_unlit  // sink: Color/Alpha/Alpha Clip Threshold, written out with no lighting at all.
 }; // enum class shader_node_type
+
+// Exactly one of these two is required per graph -- generalizes "which fragment output mode".
+[[nodiscard]] inline auto shader_node_is_fragment_output(shader_node_type type) -> bool {
+  return type == shader_node_type::output_fragment_lit || type == shader_node_type::output_fragment_unlit;
+}
 
 // Canonical string form, shared by YAML parse (asset_cooker_shader_graph.cpp), YAML save
 // (asset_residency.cpp), and codegen's error messages (shader_graph_codegen.cpp) -- one mapping
@@ -68,8 +131,9 @@ enum class shader_node_type : std::uint8_t {
     case shader_node_type::input_uv: return "input_uv";
     case shader_node_type::input_normal: return "input_normal";
     case shader_node_type::input_view_dir: return "input_view_dir";
-    case shader_node_type::input_light_dir: return "input_light_dir";
-    case shader_node_type::input_light_color: return "input_light_color";
+    case shader_node_type::input_vertex_position: return "input_vertex_position";
+    case shader_node_type::input_vertex_normal: return "input_vertex_normal";
+    case shader_node_type::input_vertex_tangent: return "input_vertex_tangent";
     case shader_node_type::constant_float: return "constant_float";
     case shader_node_type::constant_vector3: return "constant_vector3";
     case shader_node_type::constant_color: return "constant_color";
@@ -86,8 +150,12 @@ enum class shader_node_type : std::uint8_t {
     case shader_node_type::pow: return "pow";
     case shader_node_type::step: return "step";
     case shader_node_type::smoothstep: return "smoothstep";
-    case shader_node_type::output_direct: return "output_direct";
-    case shader_node_type::output_extra: return "output_extra";
+    case shader_node_type::swizzle: return "swizzle";
+    case shader_node_type::split: return "split";
+    case shader_node_type::combine: return "combine";
+    case shader_node_type::output_vertex: return "output_vertex";
+    case shader_node_type::output_fragment_lit: return "output_fragment_lit";
+    case shader_node_type::output_fragment_unlit: return "output_fragment_unlit";
   }
 
   return "constant_float";
@@ -97,8 +165,9 @@ enum class shader_node_type : std::uint8_t {
   if (value == "input_uv") return shader_node_type::input_uv;
   if (value == "input_normal") return shader_node_type::input_normal;
   if (value == "input_view_dir") return shader_node_type::input_view_dir;
-  if (value == "input_light_dir") return shader_node_type::input_light_dir;
-  if (value == "input_light_color") return shader_node_type::input_light_color;
+  if (value == "input_vertex_position") return shader_node_type::input_vertex_position;
+  if (value == "input_vertex_normal") return shader_node_type::input_vertex_normal;
+  if (value == "input_vertex_tangent") return shader_node_type::input_vertex_tangent;
   if (value == "constant_float") return shader_node_type::constant_float;
   if (value == "constant_vector3") return shader_node_type::constant_vector3;
   if (value == "constant_color") return shader_node_type::constant_color;
@@ -115,8 +184,12 @@ enum class shader_node_type : std::uint8_t {
   if (value == "pow") return shader_node_type::pow;
   if (value == "step") return shader_node_type::step;
   if (value == "smoothstep") return shader_node_type::smoothstep;
-  if (value == "output_direct") return shader_node_type::output_direct;
-  if (value == "output_extra") return shader_node_type::output_extra;
+  if (value == "swizzle") return shader_node_type::swizzle;
+  if (value == "split") return shader_node_type::split;
+  if (value == "combine") return shader_node_type::combine;
+  if (value == "output_vertex") return shader_node_type::output_vertex;
+  if (value == "output_fragment_lit") return shader_node_type::output_fragment_lit;
+  if (value == "output_fragment_unlit") return shader_node_type::output_fragment_unlit;
   return shader_node_type::constant_float; // default -- also constant_float's own name, matching the enum's first/default value
 }
 
@@ -128,8 +201,9 @@ enum class shader_node_type : std::uint8_t {
     case shader_node_type::input_uv: return "UV";
     case shader_node_type::input_normal: return "Normal";
     case shader_node_type::input_view_dir: return "View Direction";
-    case shader_node_type::input_light_dir: return "Light Direction";
-    case shader_node_type::input_light_color: return "Light Color";
+    case shader_node_type::input_vertex_position: return "Vertex Position";
+    case shader_node_type::input_vertex_normal: return "Vertex Normal";
+    case shader_node_type::input_vertex_tangent: return "Vertex Tangent";
     case shader_node_type::constant_float: return "Float";
     case shader_node_type::constant_vector3: return "Vector3";
     case shader_node_type::constant_color: return "Color";
@@ -146,8 +220,12 @@ enum class shader_node_type : std::uint8_t {
     case shader_node_type::pow: return "Power";
     case shader_node_type::step: return "Step";
     case shader_node_type::smoothstep: return "Smoothstep";
-    case shader_node_type::output_direct: return "Direct Output";
-    case shader_node_type::output_extra: return "Extra Output";
+    case shader_node_type::swizzle: return "Swizzle";
+    case shader_node_type::split: return "Split";
+    case shader_node_type::combine: return "Combine";
+    case shader_node_type::output_vertex: return "Vertex";
+    case shader_node_type::output_fragment_lit: return "Fragment (Lit)";
+    case shader_node_type::output_fragment_unlit: return "Fragment (Unlit)";
   }
 
   return "?";
@@ -168,8 +246,9 @@ enum class shader_node_category : std::uint8_t {
     case shader_node_type::input_uv:
     case shader_node_type::input_normal:
     case shader_node_type::input_view_dir:
-    case shader_node_type::input_light_dir:
-    case shader_node_type::input_light_color:
+    case shader_node_type::input_vertex_position:
+    case shader_node_type::input_vertex_normal:
+    case shader_node_type::input_vertex_tangent:
       return shader_node_category::input;
     case shader_node_type::constant_float:
     case shader_node_type::constant_vector3:
@@ -189,19 +268,62 @@ enum class shader_node_category : std::uint8_t {
     case shader_node_type::pow:
     case shader_node_type::step:
     case shader_node_type::smoothstep:
+    case shader_node_type::swizzle:
+    case shader_node_type::split:
+    case shader_node_type::combine:
       return shader_node_category::math;
-    case shader_node_type::output_direct:
-    case shader_node_type::output_extra:
+    case shader_node_type::output_vertex:
+    case shader_node_type::output_fragment_lit:
+    case shader_node_type::output_fragment_unlit:
       return shader_node_category::output;
   }
 
   return shader_node_category::math;
 }
 
-// Every node type but the two output sinks has exactly one (untyped -- Slang's own implicit
-// scalar<->vector broadcast covers mismatches) output pin.
+// Every node type but the three output sinks produces at least one output pin.
 [[nodiscard]] inline auto shader_node_has_output(shader_node_type type) -> bool {
-  return type != shader_node_type::output_direct && type != shader_node_type::output_extra;
+  return type != shader_node_type::output_vertex && type != shader_node_type::output_fragment_lit && type != shader_node_type::output_fragment_unlit;
+}
+
+// How many output pins a node has -- 1 for almost everything, 4 for Split (R/G/B/A, always
+// scalar -- a component beyond the input's own width just reads 0, not an error) and 3 for Combine
+// (RG/RGB/RGBA, each a different fixed width), 0 for the three sinks. Matches Unity Shader Graph's
+// own Split/Combine nodes exactly. Shared by the editor's canvas (how many output pins to draw) and
+// codegen (which output pin a downstream edge's from_pin actually reads).
+[[nodiscard]] inline auto shader_node_output_count(shader_node_type type) -> std::size_t {
+  if (!shader_node_has_output(type)) {
+    return 0u;
+  }
+
+  if (type == shader_node_type::split) return 4u;
+  if (type == shader_node_type::combine) return 3u;
+  return 1u;
+}
+
+// Editor-only label for a node's Nth output pin -- purely descriptive, codegen doesn't consult
+// this. Split's four are R/G/B/A, Combine's three are RG/RGB/RGBA; every other node has a single
+// output, generically named "Out" (matching Unity Shader Graph's own convention for a node with
+// nothing more specific to call it).
+[[nodiscard]] inline auto shader_node_output_label(shader_node_type type, std::size_t pin) -> const char* {
+  if (type == shader_node_type::split) {
+    switch (pin) {
+      case 0u: return "R";
+      case 1u: return "G";
+      case 2u: return "B";
+      default: return "A";
+    }
+  }
+
+  if (type == shader_node_type::combine) {
+    switch (pin) {
+      case 0u: return "RG";
+      case 1u: return "RGB";
+      default: return "RGBA";
+    }
+  }
+
+  return "Out";
 }
 
 // Shared by shader_graph_codegen.cpp (how many input pins to read) and the editor's node canvas
@@ -211,8 +333,9 @@ enum class shader_node_category : std::uint8_t {
     case shader_node_type::input_uv:
     case shader_node_type::input_normal:
     case shader_node_type::input_view_dir:
-    case shader_node_type::input_light_dir:
-    case shader_node_type::input_light_color:
+    case shader_node_type::input_vertex_position:
+    case shader_node_type::input_vertex_normal:
+    case shader_node_type::input_vertex_tangent:
     case shader_node_type::constant_float:
     case shader_node_type::constant_vector3:
     case shader_node_type::constant_color:
@@ -220,8 +343,8 @@ enum class shader_node_category : std::uint8_t {
     case shader_node_type::texture_sample:
     case shader_node_type::normalize:
     case shader_node_type::saturate:
-    case shader_node_type::output_direct:
-    case shader_node_type::output_extra:
+    case shader_node_type::swizzle:
+    case shader_node_type::split:
       return 1u;
     case shader_node_type::add:
     case shader_node_type::subtract:
@@ -234,7 +357,13 @@ enum class shader_node_category : std::uint8_t {
       return 2u;
     case shader_node_type::lerp:
     case shader_node_type::smoothstep:
+    case shader_node_type::output_vertex: // Position, Normal, Tangent
+    case shader_node_type::output_fragment_unlit: // Color, Alpha, Alpha Clip Threshold
       return 3u;
+    case shader_node_type::combine: // R, G, B, A -- each optional, defaulting to 0
+      return 4u;
+    case shader_node_type::output_fragment_lit: // Albedo, Normal, Metallic, Roughness, Emission, Occlusion, Alpha, Alpha Clip Threshold
+      return 8u;
   }
 
   return 0u;
@@ -246,8 +375,34 @@ enum class shader_node_category : std::uint8_t {
     case shader_node_type::texture_sample: return "UV";
     case shader_node_type::normalize: return "In";
     case shader_node_type::saturate: return "In";
-    case shader_node_type::output_direct: return "Color";
-    case shader_node_type::output_extra: return "Color";
+    case shader_node_type::swizzle: return "In";
+    case shader_node_type::split: return "In";
+    case shader_node_type::combine:
+      switch (pin) {
+        case 0u: return "R";
+        case 1u: return "G";
+        case 2u: return "B";
+        default: return "A";
+      }
+    case shader_node_type::output_vertex:
+      if (pin == 0u) return "Position";
+      if (pin == 1u) return "Normal";
+      return "Tangent";
+    case shader_node_type::output_fragment_unlit:
+      if (pin == 0u) return "Color";
+      if (pin == 1u) return "Alpha";
+      return "Alpha Clip Threshold";
+    case shader_node_type::output_fragment_lit:
+      switch (pin) {
+        case 0u: return "Albedo";
+        case 1u: return "Normal";
+        case 2u: return "Metallic";
+        case 3u: return "Roughness";
+        case 4u: return "Emission";
+        case 5u: return "Occlusion";
+        case 6u: return "Alpha";
+        default: return "Alpha Clip Threshold";
+      }
     case shader_node_type::add:
     case shader_node_type::subtract:
     case shader_node_type::multiply:
@@ -271,7 +426,10 @@ enum class shader_node_category : std::uint8_t {
   }
 }
 
-using shader_graph_node_value = std::variant<std::monostate, std::float_t, math::vector3, math::color, texture_handle>;
+// The 6th alternative (std::string) is Swizzle's pattern only -- up to 4 characters from
+// {r,g,b,a}, one per output component, each naming which of the input's own components feeds it
+// (e.g. "bgra" swaps red and blue; "rrr" splats red across a float3). Unused by every other type.
+using shader_graph_node_value = std::variant<std::monostate, std::float_t, math::vector3, math::color, texture_handle, std::string>;
 
 struct shader_graph_node {
   std::uint32_t id{0u};
@@ -284,10 +442,266 @@ struct shader_graph_node {
 
 struct shader_graph_edge {
   std::uint32_t from_node{0u};
-  std::uint32_t from_pin{0u}; // always 0 today -- every node type has exactly one output
+  std::uint32_t from_pin{0u}; // index into the source node type's output list -- 0 except Split's/Combine's several
   std::uint32_t to_node{0u};
   std::uint32_t to_pin{0u};   // index into the target node type's fixed input list
 }; // struct shader_graph_edge
+
+// The type a node's Nth output pin has regardless of how it's wired -- nullopt means "dynamic",
+// see shader_graph_type_resolver::output_type. Every node's own doc comment in shader_node_type
+// lists its shape; this and shader_node_fixed_input_type are that shape's authoritative source.
+// Only Combine varies by pin (RG/RGB/RGBA); every other fixed node answers the same regardless.
+[[nodiscard]] inline auto shader_node_fixed_output_type(shader_node_type type, std::size_t pin) -> std::optional<shader_value_type> {
+  switch (type) {
+    case shader_node_type::input_uv:
+      return shader_value_type::vector2;
+    case shader_node_type::input_normal:
+    case shader_node_type::input_view_dir:
+    case shader_node_type::input_vertex_position:
+    case shader_node_type::input_vertex_normal:
+    case shader_node_type::input_vertex_tangent:
+    case shader_node_type::constant_vector3:
+    case shader_node_type::cross:
+      return shader_value_type::vector3;
+    case shader_node_type::constant_float:
+    case shader_node_type::dot:
+    case shader_node_type::split: // every Split output (R/G/B/A) is a scalar, regardless of pin
+      return shader_value_type::scalar;
+    case shader_node_type::constant_color:
+    case shader_node_type::texture_sample:
+      return shader_value_type::vector4;
+    case shader_node_type::combine: // RG / RGB / RGBA
+      return pin == 0u ? shader_value_type::vector2 : pin == 1u ? shader_value_type::vector3 : shader_value_type::vector4;
+    default:
+      // add/subtract/multiply/divide/lerp/normalize/saturate/swizzle/pow/step/smoothstep -- dynamic
+      return std::nullopt;
+  }
+}
+
+// The type a node's input pin requires regardless of how it's wired -- nullopt means "dynamic"
+// (matches the node's own resolved operating type once one exists, or accepts anything until then;
+// see shader_graph_type_resolver::accepts).
+[[nodiscard]] inline auto shader_node_fixed_input_type(shader_node_type type, std::size_t pin) -> std::optional<shader_value_type> {
+  switch (type) {
+    case shader_node_type::texture_sample:
+      return shader_value_type::vector2; // uv
+    case shader_node_type::cross:
+      return shader_value_type::vector3; // both pins
+    case shader_node_type::combine:
+      return shader_value_type::scalar; // R/G/B/A, every pin
+    case shader_node_type::output_vertex:
+      return shader_value_type::vector3; // Position/Normal/Tangent
+    case shader_node_type::output_fragment_unlit:
+      return pin == 0u ? shader_value_type::vector3 : shader_value_type::scalar; // Color / Alpha / Alpha Clip Threshold
+    case shader_node_type::output_fragment_lit:
+      switch (pin) {
+        case 0u: return shader_value_type::vector3; // Albedo
+        case 1u: return shader_value_type::vector3; // Normal
+        case 2u: return shader_value_type::scalar;  // Metallic
+        case 3u: return shader_value_type::scalar;  // Roughness
+        case 4u: return shader_value_type::vector3; // Emission
+        case 5u: return shader_value_type::scalar;  // Occlusion
+        default: return shader_value_type::scalar;  // Alpha / Alpha Clip Threshold
+      }
+    default:
+      // add/subtract/multiply/divide/lerp/dot/normalize/saturate/swizzle/pow/step/smoothstep/split
+      // -- fully dynamic, no restriction (Split and Swizzle included -- Unity's own Split/Swizzle
+      // nodes both accept "a vector of any dimension", scalar included).
+      return std::nullopt;
+  }
+}
+
+// Infers every dynamic node's actual current type from how the graph is wired, and validates
+// prospective connections against it -- the single source of truth for both the editor's
+// connect-time rejection and codegen's own pass over a possibly hand-edited/legacy graph. Same
+// backward-DFS-with-memo shape as shader_graph_codegen_walker (shader_graph_codegen.cpp), just
+// inferring types instead of emitting expressions.
+class shader_graph_type_resolver {
+
+public:
+
+  shader_graph_type_resolver(const std::vector<shader_graph_node>& nodes, const std::vector<shader_graph_edge>& edges) {
+    for (const auto& node : nodes) {
+      _nodes_by_id.emplace(node.id, &node);
+    }
+
+    for (const auto& edge : edges) {
+      _incoming.emplace(_key(edge.to_node, edge.to_pin), _key(edge.from_node, edge.from_pin));
+    }
+  }
+
+  // The type (node_id, pin)'s output currently produces -- nullopt if that can't be determined yet
+  // (nothing wired up to establish it) or the node has no output at all. Only Split's four pins and
+  // Combine's three are cases where different pins of the same node answer differently; `pin`
+  // defaults to 0 for every single-output node.
+  [[nodiscard]] auto output_type(std::uint32_t node_id, std::uint32_t pin = 0u) -> std::optional<shader_value_type> {
+    const auto key = _key(node_id, pin);
+
+    if (const auto cached = _memo.find(key); cached != _memo.end()) {
+      return cached->second;
+    }
+
+    _memo.emplace(key, std::nullopt); // break cycles: a (node, pin) re-entered mid-resolution reads as unresolved
+
+    const auto result = _resolve(node_id, pin);
+    _memo[key] = result;
+    return result;
+  }
+
+  // The type (node_id, pin)'s input pin currently expects -- nullopt if it's dynamic and nothing
+  // has wired up an operating type for the node yet. Editor-display only (the width shown next to
+  // an input pin in the canvas): shader_node_fixed_input_type's answer where the pin is fixed,
+  // otherwise the node's own resolved operating type (same value accepts() already falls back to
+  // for a dynamic pin), which for a node's own dominant/only input pin (Split, Swizzle, Normalize,
+  // ...) is exactly the width of whatever's plugged into it.
+  [[nodiscard]] auto input_type(std::uint32_t node_id, std::uint32_t pin) -> std::optional<shader_value_type> {
+    const auto entry = _nodes_by_id.find(node_id);
+
+    if (entry == _nodes_by_id.end()) {
+      return std::nullopt;
+    }
+
+    if (const auto fixed = shader_node_fixed_input_type(entry->second->type, pin)) {
+      return fixed;
+    }
+
+    return _operating_type(node_id, std::nullopt);
+  }
+
+  // Does connecting a value of `source_type` into (node_id, pin) satisfy that pin's requirement?
+  // Fixed pins require an exact match, with one deliberate exception: a float4 (Color, Sample
+  // Texture, Combine's RGBA) always satisfies a float3-typed pin by dropping alpha -- as lossless/
+  // expected a narrowing as the scalar broadcast below (every color has an obvious "drop alpha"
+  // reading), so treated the same way; Split/Swizzle/Combine are still what you reach for beyond
+  // that. Dynamic pins require an exact match (or that same float4->float3 exception) to the
+  // node's own resolved operating type once one exists, or accept anything before one does, and
+  // additionally always accept a plain scalar regardless (native, lossless broadcast).
+  [[nodiscard]] auto accepts(std::uint32_t node_id, std::uint32_t pin, std::optional<shader_value_type> source_type) -> bool {
+    const auto entry = _nodes_by_id.find(node_id);
+
+    if (entry == _nodes_by_id.end() || !source_type) {
+      return entry != _nodes_by_id.end(); // unresolved source -- nothing to validate against yet, allow
+    }
+
+    const auto type = entry->second->type;
+
+    if (const auto fixed = shader_node_fixed_input_type(type, pin)) {
+      return *fixed == *source_type || (*fixed == shader_value_type::vector3 && *source_type == shader_value_type::vector4);
+    }
+
+    if (*source_type == shader_value_type::scalar) {
+      return true;
+    }
+
+    // Excludes `pin` itself from establishing the operating type: this validates what's allowed to
+    // REPLACE whatever's currently connected to `pin`, so that stale connection shouldn't be what
+    // the new candidate gets measured against (otherwise you could never independently rewire one
+    // side of e.g. an Add node to a different width without first deleting its other side too).
+    const auto operating = _operating_type(node_id, pin);
+
+    return !operating || *operating == *source_type || (*operating == shader_value_type::vector3 && *source_type == shader_value_type::vector4);
+  }
+
+private:
+
+  [[nodiscard]] static auto _key(std::uint32_t node_id, std::uint32_t pin) -> std::uint64_t {
+    return (static_cast<std::uint64_t>(node_id) << 32u) | pin;
+  }
+
+  [[nodiscard]] auto _resolve(std::uint32_t node_id, std::uint32_t pin) -> std::optional<shader_value_type> {
+    const auto entry = _nodes_by_id.find(node_id);
+
+    if (entry == _nodes_by_id.end()) {
+      return std::nullopt;
+    }
+
+    if (const auto fixed = shader_node_fixed_output_type(entry->second->type, pin)) {
+      return fixed;
+    }
+
+    return _operating_type(node_id, std::nullopt);
+  }
+
+  // The width whichever "dominant" input pin(s) establish -- add/subtract/multiply/divide/lerp/
+  // normalize/saturate/swizzle/pow/step/smoothstep's output IS this width (used by _resolve), and
+  // Dot's two inputs must dynamically match at this width too even though its own output is fixed
+  // scalar (used directly by accepts(), bypassing _resolve() for exactly that reason). Pins the
+  // dominant-pins list excludes are always allowed to be a plain scalar regardless (Lerp's T,
+  // Pow's exponent, Step/Smoothstep's x). `exclude_pin`, when set, skips that one pin entirely --
+  // see accepts()'s own doc comment for why. A non-scalar dominant pin wins immediately; a scalar
+  // one is remembered as a fallback rather than discarded outright -- e.g. Pow has only one
+  // dominant pin (its base), so if that alone is connected and scalar, the node's operating type
+  // genuinely IS scalar, not "still unconstrained" (which would wrongly let its exponent pin
+  // accept a non-scalar later).
+  [[nodiscard]] auto _operating_type(std::uint32_t node_id, std::optional<std::uint32_t> exclude_pin) -> std::optional<shader_value_type> {
+    const auto entry = _nodes_by_id.find(node_id);
+
+    if (entry == _nodes_by_id.end()) {
+      return std::nullopt;
+    }
+
+    auto scalar_fallback = false;
+
+    for (const auto pin : _dominant_pins(entry->second->type)) {
+      if (exclude_pin && pin == *exclude_pin) {
+        continue;
+      }
+
+      const auto source = _incoming.find(_key(node_id, pin));
+
+      if (source == _incoming.end()) {
+        continue;
+      }
+
+      const auto resolved = output_type(static_cast<std::uint32_t>(source->second >> 32u), static_cast<std::uint32_t>(source->second));
+
+      if (!resolved) {
+        continue;
+      }
+
+      if (*resolved != shader_value_type::scalar) {
+        return resolved;
+      }
+
+      scalar_fallback = true;
+    }
+
+    return scalar_fallback ? std::optional{shader_value_type::scalar} : std::nullopt;
+  }
+
+  // Split and Swizzle each have exactly one dominant pin (their own single input) purely so
+  // _operating_type can resolve THEIR output width from it (Swizzle's output IS its input's width;
+  // Split's is separately fixed-scalar-per-pin, so this list is never actually consulted for its
+  // own output -- only by accepts() validating a replacement connection into that same pin, where
+  // excluding it via exclude_pin correctly leaves nothing to compare against, i.e. "accepts
+  // anything", matching Unity's own Split/Swizzle behavior).
+  [[nodiscard]] static auto _dominant_pins(shader_node_type type) -> std::initializer_list<std::uint32_t> {
+    switch (type) {
+      case shader_node_type::add:
+      case shader_node_type::subtract:
+      case shader_node_type::multiply:
+      case shader_node_type::divide:
+      case shader_node_type::step:
+      case shader_node_type::lerp:       // T (pin 2) never drives the type
+      case shader_node_type::smoothstep: // x (pin 2) never drives the type
+      case shader_node_type::dot:        // fixed scalar output, but its 2 inputs must still dynamically match each other
+        return {0u, 1u};
+      case shader_node_type::pow:        // exponent (pin 1) never drives the type
+      case shader_node_type::normalize:
+      case shader_node_type::saturate:
+      case shader_node_type::swizzle:
+      case shader_node_type::split:
+        return {0u};
+      default:
+        return {};
+    }
+  }
+
+  std::unordered_map<std::uint32_t, const shader_graph_node*> _nodes_by_id{};
+  std::unordered_map<std::uint64_t, std::uint64_t> _incoming{}; // (to_node<<32|to_pin) -> (from_node<<32|from_pin)
+  std::unordered_map<std::uint64_t, std::optional<shader_value_type>> _memo{}; // (node<<32|pin) -> type
+
+}; // class shader_graph_type_resolver
 
 enum class shader_graph_parameter_type : std::uint8_t {
   float_value,

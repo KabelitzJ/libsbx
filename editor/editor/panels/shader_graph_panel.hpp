@@ -19,11 +19,15 @@
 namespace editor {
 
 /**
- * @brief The visual shader-graph editor: nodes as draggable boxes with typed input pins (0-3,
- * per shader_node_input_count) and at most one output pin, edges as links between them, built on
+ * @brief The visual shader-graph editor: nodes as draggable boxes with typed input pins (0-7, per
+ * shader_node_input_count) and one or more typed output pins (0-4, per shader_node_output_count --
+ * every node but Split, which has X/Y/Z/W, has exactly one), edges as links between them, built on
  * imgui-node-editor -- structurally the same tool animation_graph_panel already uses, just for a
- * dataflow graph instead of a state machine (multiple typed input pins per node, rather than one
- * input/one output). On-demand rather than a fixed dockspace fixture, same reasoning as
+ * dataflow graph instead of a state machine (multiple typed pins per node, rather than one input/
+ * one output). Every pin has a fixed or wiring-resolved shader_value_type (shader_graph.hpp's
+ * shader_graph_type_resolver); a connection is only legal when the source's type exactly matches
+ * the target's -- no implicit narrowing/widening, Split/Combine are the explicit tools for that. On-
+ * demand rather than a fixed dockspace fixture, same reasoning as
  * animation_graph_panel's own doc comment: opened for a specific `.shadergraph` asset via
  * editor_state::request_open_shader_graph_editor, not part of the default dock layout.
  *
@@ -61,6 +65,17 @@ private:
 
   [[nodiscard]] auto _next_node_id() const -> std::uint32_t;
 
+  // Pushes a new node into _edit.nodes and returns its id -- shared by _draw_add_node_menu's own
+  // palette entries and the source nodes it auto-spawns alongside certain node types (Texture
+  // Sample, Vertex) so a freshly added node isn't left with an implicit/no-op default; see its call
+  // sites for exactly which types trigger that and why.
+  auto _spawn_node(sbx::assets::shader_node_type type, sbx::math::vector2 position) -> std::uint32_t;
+
+  // Spawns `type` at `spawn_position` via _spawn_node, wires in its auto-wired defaults if it has
+  // any (see _spawn_node's own doc comment), and selects it -- the one path both the Add Node
+  // menu's categorized browsing and its text search commit through, so they can never drift.
+  auto _add_node(sbx::assets::shader_node_type type, sbx::math::vector2 spawn_position) -> void;
+
   bool _is_open{false};
   sbx::assets::shader_graph_handle _graph{};
   std::filesystem::path _path{};
@@ -71,6 +86,22 @@ private:
   // shader_graph_node::editor_position since the last _open() -- same reasoning as
   // animation_graph_panel's own _seeded_positions.
   std::unordered_set<std::uint32_t> _seeded_positions{};
+
+  // Add Node popup's search box -- cleared (and keyboard focus requested) each time the popup
+  // freshly opens, see the ShowBackgroundContextMenu call site in _draw_canvas.
+  std::string _add_node_search{};
+  bool _add_node_search_focus_pending{false};
+
+  // Where a node picked from the Add Node popup spawns -- captured once, at the exact moment the
+  // popup opens (the canvas position under the right-click that triggered it), not re-read every
+  // frame the popup stays open while the user browses or searches.
+  sbx::math::vector2 _add_node_spawn_position{};
+
+  // Which node the right-click node context menu ("Delete Node") applies to -- captured once, the
+  // frame ShowNodeContextMenu actually detects the right-click, and kept for however many
+  // subsequent frames the popup stays open (ShowNodeContextMenu itself only reports a node on that
+  // one triggering frame). See the ShowNodeContextMenu call site in _draw_canvas.
+  ax::NodeEditor::NodeId _context_node_id{};
 
   ax::NodeEditor::EditorContext* _context{nullptr};
 

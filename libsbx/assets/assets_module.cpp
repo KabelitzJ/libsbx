@@ -232,6 +232,10 @@ auto assets_module::update_shader_graph(shader_graph_handle& graph, const shader
   _residency.update_shader_graph(graph, create_info);
 }
 
+auto assets_module::update_shader_graph_data(shader_graph_handle& graph, const shader_graph::create_info& create_info) -> void {
+  _residency.update_shader_graph_data(graph, create_info);
+}
+
 auto assets_module::update_shader_graph_node_position(shader_graph_handle& graph, std::uint32_t node_id, math::vector2 position) -> void {
   _residency.update_shader_graph_node_position(graph, node_id, position);
 }

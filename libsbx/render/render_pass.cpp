@@ -2,11 +2,102 @@
 // Copyright (c) 2026 Jonas Kabelitz
 #include <libsbx/render/render_pass.hpp>
 
+#include <vector>
+
+#include <fmt/format.h>
+
+#include <libsbx/utility/logger.hpp>
+
 #include <libsbx/core/engine.hpp>
 
 #include <libsbx/graphics/graphics_module.hpp>
 
 namespace sbx::render {
+
+auto resolve_graph_pipeline(const assets::shader_graph_handle& graph, std::span<const graphics::shader_compiler::entry_point_request> entry_points, graphics::graphics_pipeline::create_info pipeline_template, std::string_view pass_label) -> memory::observer_ptr<graphics::graphics_pipeline> {
+  if (!graph.is_valid()) {
+    return {};
+  }
+
+  // A graph's generated .slang is only as good as whatever the user last wired up on the canvas --
+  // shader_compiler throws on a failed compile (missing/invalid entry point, Slang type error,
+  // etc.), and this runs mid-frame inside a pass's own graph_pipeline_resolver callback with nothing
+  // upstream catching it. A bad graph should skip that draw, not take the whole app down.
+  try {
+    auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
+    auto& shader_cache = graphics_module.shader_cache();
+    auto& pipeline_cache = graphics_module.pipeline_cache();
+
+    const auto requests = std::vector<graphics::shader_compiler::entry_point_request>{entry_points.begin(), entry_points.end()};
+
+    pipeline_template.shader = shader_cache.get({assets::shader_graph_generated_path(graph->id(), graph->generation()), requests});
+    pipeline_template.name = fmt::format("{} Graph {}", pass_label, assets::shader_graph_generated_name(graph->id(), graph->generation()));
+
+    return pipeline_cache.get(pipeline_template);
+  } catch (const std::exception& exception) {
+    utility::logger<"render">::warn("shader_graph {} failed to compile ({}) -- skipping {} for it until it's fixed", graph->id(), exception.what(), pass_label);
+    return {};
+  }
+}
+
+// Shared per-command prologue for submit_draw_commands/_indirect: validity checks, the
+// shader-graph-vs-fixed-slot pipeline resolution (see graph_pipeline_resolver's own doc comment),
+// pipeline/mesh bind-state tracking (bound/current_pipeline/current_mesh persist across calls for
+// the same command list, so a run of commands sharing a pipeline or mesh only rebinds once), and
+// every push_constants field except transform_address and cascade_index -- the two fields the
+// direct and indirect draw paths disagree on, left for the caller to fill in afterward. Returns
+// false (skip this command entirely) for an invalid command, an out-of-range instance range, or a
+// shader-graph material with no usable pipeline yet.
+static auto prepare_draw_command(graphics::resource_registry& registry, render_context& context, const draw_command& command, const std::array<memory::observer_ptr<graphics::graphics_pipeline>, 4u>& pipelines, const graph_pipeline_resolver& resolve_graph_pipeline, bool& bound, const graphics::graphics_pipeline*& current_pipeline, memory::observer_ptr<const assets::mesh>& current_mesh, push_constants& values) -> bool {
+  if (!command.mesh.is_valid() || !command.material.is_valid() || !command.resident) {
+    return false;
+  }
+
+  if (command.transform_offset + command.instance_count > context.instance_count) {
+    return false;
+  }
+
+  auto pipeline = memory::observer_ptr<graphics::graphics_pipeline>{};
+
+  if (command.material->shading() == assets::shading_model::shader_graph) {
+    if (!command.material->shader_graph().is_valid() || !resolve_graph_pipeline) {
+      return false;
+    }
+
+    pipeline = resolve_graph_pipeline(command.material->shader_graph(), command.material->is_double_sided());
+
+    if (!pipeline) {
+      return false; // no usable pipeline yet for this graph -- skip the draw rather than misrender
+    }
+  } else {
+    pipeline = pipelines[command.pipeline_id];
+  }
+
+  if (!bound || current_pipeline != pipeline.get()) {
+    context.command_buffer->bind_pipeline(*pipeline);
+    current_pipeline = pipeline.get();
+    bound = true;
+  }
+
+  const auto& mesh = *command.mesh;
+
+  if (current_mesh.get() != &mesh) {
+    auto& index_buffer = registry.get<graphics::buffer>(mesh.index_buffer());
+    context.command_buffer->bind_index_buffer(index_buffer, 0u, VK_INDEX_TYPE_UINT32);
+    current_mesh = &mesh;
+  }
+
+  values.frame_address = context.frame_address;
+  values.vertex_address = command.vertex_address_override ? command.vertex_address_override : mesh.vertex_address();
+  values.transform_offset = command.transform_offset;
+  values.material_index = command.material->index();
+  values.sampler_index = context.sampler_index;
+  values.clamp_sampler_index = context.clamp_sampler_index;
+  values.time = context.time;
+  values.delta_time = context.delta_time;
+
+  return true;
+}
 
 auto submit_draw_commands(render_context& context, const std::vector<draw_command>& commands, const std::array<memory::observer_ptr<graphics::graphics_pipeline>, 4u>& pipelines, std::uint32_t cascade_index, const graph_pipeline_resolver& resolve_graph_pipeline) -> void {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
@@ -19,66 +110,18 @@ auto submit_draw_commands(render_context& context, const std::vector<draw_comman
   auto current_mesh = memory::make_observer<const assets::mesh>(nullptr);
 
   for (const auto& command : commands) {
-    if (!command.mesh.is_valid() || !command.material.is_valid() || !command.resident) {
-      continue;
-    }
-
-    if (command.transform_offset + command.instance_count > context.instance_count) {
-      continue;
-    }
-
-    // A material typed "Shader Graph" (material inspector's Material Type dropdown) bypasses
-    // pipeline_id's fixed 4-slot table entirely -- there's no fixed slot for "however many
-    // distinct graphs a scene uses" -- and defers to the pass's own resolver instead (every pass
-    // supplies one; see graph_pipeline_resolver's doc comment). One with no graph assigned is
-    // invalid by definition (material.hpp's shading_model doc comment) and skipped outright, same
-    // as one whose graph exists but failed to compile.
-    auto pipeline = memory::observer_ptr<graphics::graphics_pipeline>{};
-
-    if (command.material->shading() == assets::shading_model::shader_graph) {
-      if (!command.material->shader_graph().is_valid() || !resolve_graph_pipeline) {
-        continue;
-      }
-
-      pipeline = resolve_graph_pipeline(command.material->shader_graph(), command.material->is_double_sided());
-
-      if (!pipeline) {
-        continue; // no usable pipeline yet for this graph -- skip the draw rather than misrender
-      }
-    } else {
-      pipeline = pipelines[command.pipeline_id];
-    }
-
-    if (!bound || current_pipeline != pipeline.get()) {
-      context.command_buffer->bind_pipeline(*pipeline);
-      current_pipeline = pipeline.get();
-      bound = true;
-    }
-
-    const auto& mesh = *command.mesh;
-
-    if (current_mesh.get() != &mesh) {
-      auto& index_buffer = registry.get<graphics::buffer>(mesh.index_buffer());
-      context.command_buffer->bind_index_buffer(index_buffer, 0u, VK_INDEX_TYPE_UINT32);
-      current_mesh = &mesh;
-    }
-
-    const auto& submesh = mesh.submeshes()[command.submesh_index];
-
     auto values = push_constants{};
-    values.frame_address = context.frame_address;
-    values.vertex_address = command.vertex_address_override ? command.vertex_address_override : mesh.vertex_address();
-    values.transform_address = context.transform_address;
-    values.transform_offset = command.transform_offset;
-    values.material_index = command.material->index();
-    values.sampler_index = context.sampler_index;
-    values.clamp_sampler_index = context.clamp_sampler_index;
     values.cascade_index = cascade_index;
-    values.time = context.time;
-    values.delta_time = context.delta_time;
+
+    if (!prepare_draw_command(registry, context, command, pipelines, resolve_graph_pipeline, bound, current_pipeline, current_mesh, values)) {
+      continue;
+    }
+
+    values.transform_address = context.transform_address;
 
     context.command_buffer->push_constants(bindless_table.pipeline_layout(), graphics::bindless_table::push_constant_stages, 0u, memory::as_bytes(values));
 
+    const auto& submesh = command.mesh->submeshes()[command.submesh_index];
     context.command_buffer->draw_indexed(submesh.index_count, command.instance_count, submesh.index_offset, 0, 0u);
   }
 }
@@ -97,54 +140,13 @@ auto submit_draw_commands_indirect(render_context& context, const std::vector<dr
   for (auto index = std::size_t{0u}; index < commands.size(); ++index) {
     const auto& command = commands[index];
 
-    if (!command.mesh.is_valid() || !command.material.is_valid() || !command.resident) {
-      continue;
-    }
-
-    if (command.transform_offset + command.instance_count > context.instance_count) {
-      continue;
-    }
-
-    auto pipeline = memory::observer_ptr<graphics::graphics_pipeline>{};
-
-    if (command.material->shading() == assets::shading_model::shader_graph) {
-      if (!command.material->shader_graph().is_valid() || !resolve_graph_pipeline) {
-        continue;
-      }
-
-      pipeline = resolve_graph_pipeline(command.material->shader_graph(), command.material->is_double_sided());
-
-      if (!pipeline) {
-        continue; // no usable pipeline yet for this graph -- skip the draw rather than misrender
-      }
-    } else {
-      pipeline = pipelines[command.pipeline_id];
-    }
-
-    if (!bound || current_pipeline != pipeline.get()) {
-      context.command_buffer->bind_pipeline(*pipeline);
-      current_pipeline = pipeline.get();
-      bound = true;
-    }
-
-    const auto& mesh = *command.mesh;
-
-    if (current_mesh.get() != &mesh) {
-      auto& index_buffer = registry.get<graphics::buffer>(mesh.index_buffer());
-      context.command_buffer->bind_index_buffer(index_buffer, 0u, VK_INDEX_TYPE_UINT32);
-      current_mesh = &mesh;
-    }
-
     auto values = push_constants{};
-    values.frame_address = context.frame_address;
-    values.vertex_address = command.vertex_address_override ? command.vertex_address_override : mesh.vertex_address();
+
+    if (!prepare_draw_command(registry, context, command, pipelines, resolve_graph_pipeline, bound, current_pipeline, current_mesh, values)) {
+      continue;
+    }
+
     values.transform_address = context.culled_transform_address;
-    values.transform_offset = command.transform_offset;
-    values.material_index = command.material->index();
-    values.sampler_index = context.sampler_index;
-    values.clamp_sampler_index = context.clamp_sampler_index;
-    values.time = context.time;
-    values.delta_time = context.delta_time;
 
     context.command_buffer->push_constants(bindless_table.pipeline_layout(), graphics::bindless_table::push_constant_stages, 0u, memory::as_bytes(values));
 

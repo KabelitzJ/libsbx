@@ -42,7 +42,7 @@ private:
 
   auto _make_pipeline(memory::observer_ptr<const graphics::shader> shader, graphics::cull_mode cull, const std::string& name) -> memory::observer_ptr<graphics::graphics_pipeline>;
 
-  /** @brief Builds (or, on any later call for the same graph, fetches via shader_cache/pipeline_cache's own dedup) the pipeline for a shader-graph-driven material. Passed to submit_draw_commands_indirect as its graph_pipeline_resolver. */
+  /** @brief This pass's own entry points/pipeline state for render::resolve_graph_pipeline. Passed to submit_draw_commands_indirect as its graph_pipeline_resolver. */
   auto _resolve_graph_pipeline(const assets::shader_graph_handle& graph, bool is_double_sided) -> memory::observer_ptr<graphics::graphics_pipeline>;
 
   std::array<memory::observer_ptr<graphics::graphics_pipeline>, 4u> _pipelines{};

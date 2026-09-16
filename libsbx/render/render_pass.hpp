@@ -21,6 +21,7 @@
 #include <libsbx/graphics/resources/buffer.hpp>
 #include <libsbx/graphics/resources/image.hpp>
 #include <libsbx/graphics/pipeline/graphics_pipeline.hpp>
+#include <libsbx/graphics/pipeline/shader_compiler.hpp>
 
 #include <libsbx/assets/assets_module.hpp>
 #include <libsbx/assets/shader_graph.hpp>
@@ -191,6 +192,21 @@ public:
  * (the default) only where the parameter doesn't apply at all.
  */
 using graph_pipeline_resolver = std::function<memory::observer_ptr<graphics::graphics_pipeline>(const assets::shader_graph_handle&, bool is_double_sided)>;
+
+/**
+ * @brief Shared body behind every pass's own _resolve_graph_pipeline (opaque_pass,
+ * transparent_accumulate_pass, depth_pre_pass, shadow_pass): looks up (compiling on first use) @p
+ * graph's own generated shader for @p entry_points, fills it and a @p pass_label-derived name into
+ * @p pipeline_template, and fetches or builds the pipeline via pipeline_cache. Every other field of
+ * @p pipeline_template (formats, blend/depth state, cull mode, specialization) is the caller's own
+ * pass-specific state, already set before calling this.
+ *
+ * Returns a null observer_ptr, after logging a @p pass_label-tagged warning, if @p graph is invalid
+ * or its shader fails to compile -- see graph_pipeline_resolver's own doc comment for why a null
+ * result (skip this draw) is the right outcome rather than letting the exception escape into the
+ * frame.
+ */
+[[nodiscard]] auto resolve_graph_pipeline(const assets::shader_graph_handle& graph, std::span<const graphics::shader_compiler::entry_point_request> entry_points, graphics::graphics_pipeline::create_info pipeline_template, std::string_view pass_label) -> memory::observer_ptr<graphics::graphics_pipeline>;
 
 auto submit_draw_commands(render_context& context, const std::vector<draw_command>& commands, const std::array<memory::observer_ptr<graphics::graphics_pipeline>, 4u>& pipelines, std::uint32_t cascade_index = 0xFFFFFFFFu, const graph_pipeline_resolver& resolve_graph_pipeline = {}) -> void;
 

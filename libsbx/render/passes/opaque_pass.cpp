@@ -13,10 +13,6 @@
 
 #include <vulkan/vulkan.h>
 
-#include <fmt/format.h>
-
-#include <libsbx/utility/logger.hpp>
-
 #include <libsbx/graphics/frame_context.hpp>
 #include <libsbx/graphics/devices/swapchain.hpp>
 #include <libsbx/graphics/commands/command_buffer.hpp>
@@ -47,30 +43,22 @@ auto opaque_pass::_make_pipeline(memory::observer_ptr<const graphics::shader> sh
 }
 
 auto opaque_pass::_resolve_graph_pipeline(const assets::shader_graph_handle& graph, bool is_double_sided) -> memory::observer_ptr<graphics::graphics_pipeline> {
-  if (!graph.is_valid()) {
-    return {};
-  }
+  const auto entry_points = std::array<graphics::shader_compiler::entry_point_request, 2u>{
+    graphics::shader_compiler::entry_point_request{VK_SHADER_STAGE_VERTEX_BIT, "vertex_main"},
+    graphics::shader_compiler::entry_point_request{VK_SHADER_STAGE_FRAGMENT_BIT, "fragment_main", "opaque_shading_policy"}
+  };
 
-  // A graph's generated .slang is only as good as whatever the user last wired up on the canvas --
-  // shader_compiler throws on a failed compile (missing/invalid entry point, Slang type error,
-  // etc.), and this runs mid-frame inside submit_draw_commands_indirect's resolver callback with
-  // nothing upstream catching it. A bad graph should skip that draw, not take the whole app down.
-  try {
-    auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
-    auto& shader_cache = graphics_module.shader_cache();
-
-    const auto entry_points = std::vector<graphics::shader_compiler::entry_point_request>{
-      {VK_SHADER_STAGE_VERTEX_BIT, "vertex_main"},
-      {VK_SHADER_STAGE_FRAGMENT_BIT, "fragment_main", "opaque_shading_policy"}
-    };
-
-    const auto& shader = shader_cache.get({assets::shader_graph_generated_path(graph->id(), graph->generation()), entry_points});
-
-    return _make_pipeline(shader, is_double_sided ? graphics::cull_mode::none : graphics::cull_mode::back, fmt::format("Mesh Opaque Graph {}", assets::shader_graph_generated_name(graph->id(), graph->generation())));
-  } catch (const std::exception& exception) {
-    utility::logger<"render">::warn("shader_graph {} failed to compile ({}) -- skipping draws using it until it's fixed", graph->id(), exception.what());
-    return {};
-  }
+  return resolve_graph_pipeline(graph, entry_points, graphics::graphics_pipeline::create_info{
+    .color_formats = {render_pass::hdr_format},
+    .depth_format = graphics::format::d32_sfloat,
+    .cull_mode = is_double_sided ? graphics::cull_mode::none : graphics::cull_mode::back,
+    .front_face = graphics::front_face::counter_clockwise,
+    .depth_test = true,
+    .depth_write = false,
+    .depth_compare = graphics::compare_operation::less_or_equal,
+    .samples = render_pass::sample_count,
+    .specialization_constants = {{0u, shadow_pcf_quality}},
+  }, "Mesh Opaque");
 }
 
 opaque_pass::opaque_pass() {

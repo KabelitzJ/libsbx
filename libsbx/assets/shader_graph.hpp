@@ -590,6 +590,15 @@ struct shader_graph_node {
   shader_graph_node_value value{};
 }; // struct shader_graph_node
 
+// A Swizzle node's stored pattern -- always exactly 4 characters from {r,g,b,a} once the editor's
+// touched it, but this is the one place every reader (codegen, the node-inspector dropdowns, the
+// canvas node's own inline label) falls back to the identity "rgba" for a hand-edited/legacy
+// .shadergraph file's node.value, instead of each duplicating that same fallback separately.
+[[nodiscard]] inline auto shader_node_swizzle_pattern(const shader_graph_node& node) -> std::string {
+  const auto pattern = std::holds_alternative<std::string>(node.value) ? std::get<std::string>(node.value) : std::string{};
+  return pattern.size() == 4u ? pattern : std::string{"rgba"};
+}
+
 struct shader_graph_edge {
   std::uint32_t from_node{0u};
   std::uint32_t from_pin{0u}; // index into the source node type's output list -- 0 except Split's/Combine's several
@@ -1011,20 +1020,22 @@ using shader_graph_handle = asset_handle<shader_graph>;
 // compile/bind a graph-driven material's pipeline (looks it up there), so the convention can't
 // drift between the two.
 //
-// `generation` (shader_graph::generation(), bumped by every asset_residency::update_shader_graph
-// live edit -- see loadable.hpp) is folded into both so an edit's path never collides with the
-// previous one: shader_cache/pipeline_cache are plain path-keyed maps with no invalidation/re-check
-// of their own (see their own doc comments), so re-cooking the SAME path after an edit would just
-// keep serving the stale already-compiled shader until the app restarted. A generation-suffixed
-// path instead makes every edit a cache MISS, so it always gets freshly compiled -- at the cost of
-// the previous generation's now-unreachable shader/pipeline objects just sitting in those caches
-// unused for the rest of the run, rather than being torn down (tearing down a GPU shader/pipeline
-// that a previous frame's still-in-flight command buffer might reference needs the same frame-
-// retirement machinery resource_registry already has for buffers/images -- shader_cache/
-// pipeline_cache don't have it, and adding it is real scope beyond "make live edits apply").
-// ponytail: this leaks one shader+pipeline object per edit for the process's lifetime -- fine for
+// `generation` (shader_graph::generation(), bumped by asset_residency::update_shader_graph -- see
+// loadable.hpp -- which only runs on Save and on the initial async load, not on every editor
+// keystroke; see shader_graph_panel's own doc comment for why) is folded into both so a saved
+// edit's path never collides with the previous one: shader_cache/pipeline_cache are plain
+// path-keyed maps with no invalidation/re-check of their own (see their own doc comments), so
+// re-cooking the SAME path after an edit would just keep serving the stale already-compiled shader
+// until the app restarted. A generation-suffixed path instead makes every Save a cache MISS, so it
+// always gets freshly compiled -- at the cost of the previous generation's now-unreachable
+// shader/pipeline objects just sitting in those caches unused for the rest of the run, rather than
+// being torn down (tearing down a GPU shader/pipeline that a previous frame's still-in-flight
+// command buffer might reference needs the same frame-retirement machinery resource_registry
+// already has for buffers/images -- shader_cache/pipeline_cache don't have it, and adding it is
+// real scope beyond "make saved edits apply").
+// ponytail: this leaks one shader+pipeline object per Save for the process's lifetime -- fine for
 // an editor session iterating on a handful of graphs, not fine if that ever becomes hundreds of
-// edits without a restart. Upgrade path: give shader_cache/pipeline_cache real eviction with
+// saves without a restart. Upgrade path: give shader_cache/pipeline_cache real eviction with
 // frame-safe deferred destruction (mirroring resource_registry's retirement), then drop the
 // generation suffix and evict-and-recompile the stable path in place instead.
 [[nodiscard]] inline auto shader_graph_generated_name(const math::uuid& id, std::uint64_t generation) -> std::string {

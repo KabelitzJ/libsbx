@@ -3,17 +3,12 @@
 #ifndef LIBSBX_ASSETS_SHADER_GRAPH_CODEGEN_HPP_
 #define LIBSBX_ASSETS_SHADER_GRAPH_CODEGEN_HPP_
 
+#include <expected>
 #include <string>
 
 #include <libsbx/assets/shader_graph.hpp>
 
 namespace sbx::assets {
-
-struct shader_graph_codegen_result {
-  bool success{false};
-  std::string source{}; // generated Slang source -- valid only if success
-  std::string error{};  // human-readable reason -- valid only if !success
-}; // struct shader_graph_codegen_result
 
 /**
  * @brief Translates a shader_graph into a self-contained Slang source file: its optional Vertex
@@ -28,8 +23,9 @@ struct shader_graph_codegen_result {
  *
  * @param graph_name Becomes part of the generated type/entry-point names -- must already be a
  * valid Slang identifier fragment (the caller's job, e.g. derived from the asset's uuid).
+ * @return The generated Slang source, or a human-readable reason it couldn't be generated.
  */
-[[nodiscard]] auto generate_shader_graph_source(const std::string& graph_name, const shader_graph::create_info& graph) -> shader_graph_codegen_result;
+[[nodiscard]] auto generate_shader_graph_source(const std::string& graph_name, const shader_graph::create_info& graph) -> std::expected<std::string, std::string>;
 
 } // namespace sbx::assets
 

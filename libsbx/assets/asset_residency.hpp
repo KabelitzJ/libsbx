@@ -185,8 +185,24 @@ public:
    * comment for why the generation bump is what makes that actually happen). Every
    * shader_graph_handle already pointing at this record observes the change immediately. Does not
    * touch identity (uuid) or persist to disk.
+   *
+   * Only called from @ref save_shader_graph and the initial async-load finalize path -- a live edit
+   * in the graph editor no longer routes through here (see shader_graph_panel's own doc comment for
+   * why: a re-cook on every edit meant every node/edge change forced a synchronous Slang recompile
+   * on the render thread, freezing the editor for however long that took). Live edits call @ref
+   * update_shader_graph_data instead, which this itself calls before bumping/cooking.
    */
   auto update_shader_graph(shader_graph_handle& graph, const shader_graph::create_info& create_info) -> void;
+
+  /**
+   * @brief Overwrites an existing shader_graph's nodes/edges in place -- the cheap, no-recompile
+   * half of @ref update_shader_graph (no generation bump, no re-cook), safe to call on every editor
+   * keystroke/node-add/edge-connect. Keeps the resident graph in sync with the editor's staged edits
+   * so @ref update_shader_graph_node_position can still find a freshly-added node, and so @ref
+   * save_shader_graph (which reads the resident graph's own nodes/edges, not a separate parameter)
+   * persists and cooks the latest edit rather than whatever was last saved.
+   */
+  auto update_shader_graph_data(shader_graph_handle& graph, const shader_graph::create_info& create_info) -> void;
 
   /**
    * @brief Moves one node within an already-open shader_graph, without the generation bump/re-cook
@@ -199,9 +215,11 @@ public:
 
   /**
    * @brief Writes a shader_graph to a `.shadergraph` file, (re-)registers it as a first-class
-   * asset, and cooks it (runs codegen, writes the generated `.slang` -- see
-   * asset_cooker::cook_shader_graph's doc comment for why that lands inside the engine's shaders
-   * tree rather than the usual per-project cooked-cache directory).
+   * asset, and -- via @ref update_shader_graph -- bumps its generation and re-cooks it (runs
+   * codegen, writes the generated `.slang` -- see asset_cooker::cook_shader_graph's doc comment for
+   * why that lands inside the engine's shaders tree rather than the usual per-project cooked-cache
+   * directory). This is the one point an editor session's edits actually take effect in the
+   * render passes -- see update_shader_graph's own doc comment.
    * @param path Destination path relative to the active project's assets directory.
    * @return The graph's canonical uuid (also written back onto the record itself).
    */

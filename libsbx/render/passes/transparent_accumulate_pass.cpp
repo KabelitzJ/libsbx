@@ -13,10 +13,6 @@
 
 #include <vulkan/vulkan.h>
 
-#include <fmt/format.h>
-
-#include <libsbx/utility/logger.hpp>
-
 #include <libsbx/graphics/frame_context.hpp>
 #include <libsbx/graphics/devices/swapchain.hpp>
 #include <libsbx/graphics/commands/command_buffer.hpp>
@@ -73,28 +69,45 @@ auto transparent_accumulate_pass::_make_pipeline(memory::observer_ptr<const grap
 }
 
 auto transparent_accumulate_pass::_resolve_graph_pipeline(const assets::shader_graph_handle& graph, bool is_double_sided) -> memory::observer_ptr<graphics::graphics_pipeline> {
-  if (!graph.is_valid()) {
-    return {};
-  }
+  const auto entry_points = std::array<graphics::shader_compiler::entry_point_request, 2u>{
+    graphics::shader_compiler::entry_point_request{VK_SHADER_STAGE_VERTEX_BIT, "vertex_main"},
+    graphics::shader_compiler::entry_point_request{VK_SHADER_STAGE_FRAGMENT_BIT, "fragment_main", "alpha_blend_shading_policy"}
+  };
 
-  // See opaque_pass::_resolve_graph_pipeline's identical try/catch for why: shader_compiler throws
-  // on a failed compile, and a bad graph should skip its draws, not take the whole app down.
-  try {
-    auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
-    auto& shader_cache = graphics_module.shader_cache();
-
-    const auto entry_points = std::vector<graphics::shader_compiler::entry_point_request>{
-      {VK_SHADER_STAGE_VERTEX_BIT, "vertex_main"},
-      {VK_SHADER_STAGE_FRAGMENT_BIT, "fragment_main", "alpha_blend_shading_policy"}
-    };
-
-    const auto& shader = shader_cache.get({assets::shader_graph_generated_path(graph->id(), graph->generation()), entry_points});
-
-    return _make_pipeline(shader, is_double_sided ? graphics::cull_mode::none : graphics::cull_mode::back, fmt::format("Transparent Accumulate Graph {}", assets::shader_graph_generated_name(graph->id(), graph->generation())));
-  } catch (const std::exception& exception) {
-    utility::logger<"render">::warn("shader_graph {} failed to compile ({}) -- skipping draws using it until it's fixed", graph->id(), exception.what());
-    return {};
-  }
+  return resolve_graph_pipeline(graph, entry_points, graphics::graphics_pipeline::create_info{
+    .color_formats = {render_pass::hdr_format, graphics::format::r16_sfloat},
+    .depth_format = graphics::format::d32_sfloat,
+    .cull_mode = is_double_sided ? graphics::cull_mode::none : graphics::cull_mode::back,
+    .front_face = graphics::front_face::counter_clockwise,
+    .depth_test = true,
+    .depth_write = false,
+    .depth_compare = graphics::compare_operation::less_or_equal,
+    .samples = render_pass::sample_count,
+    .color_blend_attachments = {
+      // Accumulator: additive — sum of weight * premultiplied(color, alpha) across every
+      // fragment that lands here, order-independent.
+      graphics::blend_attachment{
+        .enable = true,
+        .source_color = graphics::blend_factor::one,
+        .destination_color = graphics::blend_factor::one,
+        .color_operation = graphics::blend_operation::add,
+        .source_alpha = graphics::blend_factor::one,
+        .destination_alpha = graphics::blend_factor::one,
+        .alpha_operation = graphics::blend_operation::add
+      },
+      // Revealage: multiplicative — dst *= (1 - alpha), the classic
+      // glBlendFunc(GL_ZERO, GL_ONE_MINUS_SRC_COLOR) McGuire/Bavoil recipe.
+      graphics::blend_attachment{
+        .enable = true,
+        .source_color = graphics::blend_factor::zero,
+        .destination_color = graphics::blend_factor::one_minus_source_color,
+        .color_operation = graphics::blend_operation::add,
+        .source_alpha = graphics::blend_factor::zero,
+        .destination_alpha = graphics::blend_factor::one_minus_source_color,
+        .alpha_operation = graphics::blend_operation::add
+      }
+    },
+  }, "Transparent Accumulate");
 }
 
 transparent_accumulate_pass::transparent_accumulate_pass() {

@@ -16,6 +16,7 @@
 #include <libsbx/core/engine.hpp>
 
 #include <libsbx/assets/assets_module.hpp>
+#include <libsbx/assets/shader_graph_codegen.hpp>
 
 #include <libsbx/render/ui/fonts/material_design_icons.hpp>
 
@@ -347,6 +348,8 @@ auto shader_graph_panel::_open(sbx::assets::shader_graph_handle graph, std::file
   } else {
     _edit = sbx::assets::shader_graph::create_info{};
   }
+
+  _apply_live();
 }
 
 auto shader_graph_panel::_apply_live() -> void {
@@ -355,7 +358,14 @@ auto shader_graph_panel::_apply_live() -> void {
   }
 
   auto& assets_module = sbx::core::engine::get_module<sbx::assets::assets_module>();
-  assets_module.update_shader_graph(_graph, _edit);
+  assets_module.update_shader_graph_data(_graph, _edit);
+
+  // Reuses the real compiler's own validation rather than duplicating it -- generate_shader_graph_source
+  // is pure/cheap (no file I/O, no Slang), so calling it here just to read the result and discarding
+  // the generated source on success is fine to do on every edit; see the class doc comment for why
+  // cooking the result (which Save does) is not.
+  const auto result = sbx::assets::generate_shader_graph_source("shader_graph_preview", _edit);
+  _validation_error = result ? std::string{} : result.error();
 }
 
 auto shader_graph_panel::_next_node_id() const -> std::uint32_t {
@@ -426,10 +436,8 @@ auto shader_graph_panel::_draw_toolbar() -> void {
 
   ImGui::SameLine();
 
-  const auto has_fragment_output = std::ranges::any_of(_edit.nodes, [](const auto& node) { return sbx::assets::shader_node_is_fragment_output(node.type); });
-
-  if (!has_fragment_output) {
-    ImGui::TextColored(ImVec4{1.0f, 0.6f, 0.2f, 1.0f}, ICON_MDI_ALERT " No Fragment (Lit) or Fragment (Unlit) node -- this graph won't compile until one is added and connected.");
+  if (!_validation_error.empty()) {
+    ImGui::TextColored(ImVec4{1.0f, 0.6f, 0.2f, 1.0f}, ICON_MDI_ALERT " %s", _validation_error.c_str());
   } else {
     ImGui::TextDisabled("Right-click the canvas to add a node.");
   }
@@ -578,6 +586,12 @@ auto shader_graph_panel::_draw_canvas() -> void {
     if (!node.name.empty() && (node.type == sbx::assets::shader_node_type::constant_float || node.type == sbx::assets::shader_node_type::constant_vector3 || node.type == sbx::assets::shader_node_type::constant_color || node.type == sbx::assets::shader_node_type::texture_sample)) {
       ImGui::SameLine();
       ImGui::TextDisabled("(%s)", node.name.c_str());
+    } else if (node.type == sbx::assets::shader_node_type::swizzle) {
+      // Shown unconditionally (unlike the name label above) -- a Swizzle node's whole purpose is
+      // its pattern, so it needs to be visible without selecting the node, same as Unity Shader
+      // Graph shows its own Swizzle node's channels right on the node.
+      ImGui::SameLine();
+      ImGui::TextDisabled(".%s", sbx::assets::shader_node_swizzle_pattern(node).c_str());
     }
 
     if (input_count > 0u || output_count > 0u) {
@@ -899,11 +913,7 @@ auto shader_graph_panel::_draw_selection_inspector() -> void {
         // doc comment), and since codegen/the resolver both need the stored pattern to always be
         // exactly 4 characters, editing it as text meant every keystroke got immediately re-padded
         // out to 4 characters, stomping whatever the user was still in the middle of typing.
-        auto pattern = std::holds_alternative<std::string>(node.value) ? std::get<std::string>(node.value) : std::string{"rgba"};
-
-        if (pattern.size() != 4u) {
-          pattern = "rgba";
-        }
+        auto pattern = sbx::assets::shader_node_swizzle_pattern(node);
 
         static constexpr auto channel_names = std::array<const char*, 4u>{"R", "G", "B", "A"};
         static constexpr auto row_labels = std::array<const char*, 4u>{"Output R", "Output G", "Output B", "Output A"};

@@ -5,8 +5,10 @@
 #include <algorithm>
 #include <array>
 #include <cstddef>
+#include <expected>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -50,27 +52,52 @@ static auto component_count(const std::string& slang_type) -> std::size_t {
   return 1u; // "float", or anything unrecognized
 }
 
-// Swizzle's stored node.value: always exactly 4 characters from {r,g,b,a} (the editor keeps it
-// padded/sanitized to that; this is just the defensive fallback for a hand-edited/legacy graph).
-static auto swizzle_pattern_of(const shader_graph_node& node) -> std::string {
-  const auto pattern = std::holds_alternative<std::string>(node.value) ? std::get<std::string>(node.value) : std::string{};
-  return pattern.size() == 4u ? pattern : std::string{"rgba"};
+// Returns the reason the graph is over budget, or nullopt if it isn't.
+static auto validate_shader_graph_parameter_counts(const shader_graph::create_info& graph) -> std::optional<std::string> {
+  auto float_slots = std::uint32_t{0u};
+  auto texture_slots = std::uint32_t{0u};
+
+  for (const auto& parameter : compute_shader_graph_parameters(graph.nodes)) {
+    if (parameter.type == shader_graph_parameter_type::texture_value) {
+      ++texture_slots;
+    } else {
+      ++float_slots;
+    }
+  }
+
+  // compute_shader_graph_parameters itself never caps these -- an over-budget graph would otherwise
+  // silently emit an out-of-bounds material.generic_params[]/generic_textures[] index into the
+  // generated Slang (undefined GPU behavior, not caught anywhere downstream), so this is the one
+  // place that actually enforces the shader_graph_max_params/shader_graph_max_textures budget.
+  if (float_slots > shader_graph_max_params) {
+    return fmt::format("graph exposes {} float/vector3/color parameters, more than the {} allowed", float_slots, shader_graph_max_params);
+  }
+
+  if (texture_slots > shader_graph_max_textures) {
+    return fmt::format("graph has {} Texture Sample nodes, more than the {} allowed", texture_slots, shader_graph_max_textures);
+  }
+
+  return std::nullopt;
 }
 
 // Validates every edge in the graph against shader_graph_type_resolver, plus Swizzle's own stored
-// pattern -- the editor already rejects a mistyped connection/malformed pattern, but a hand-edited
-// or older-format .shadergraph file on disk isn't guaranteed to have gone through that, so codegen
+// pattern and the exposed-parameter budget (validate_shader_graph_parameter_counts) -- the editor
+// already rejects a mistyped connection/malformed pattern/over-budget graph, but a hand-edited or
+// older-format .shadergraph file on disk isn't guaranteed to have gone through that, so codegen
 // re-checks rather than trusting it (and emitting Slang that either doesn't compile or, worse,
-// silently does the wrong thing).
-static auto validate_shader_graph_types(const shader_graph::create_info& graph, std::string& out_error) -> bool {
+// silently does the wrong thing). Returns the first problem found, or nullopt if the graph is clean.
+static auto validate_shader_graph_types(const shader_graph::create_info& graph) -> std::optional<std::string> {
+  if (auto error = validate_shader_graph_parameter_counts(graph)) {
+    return error;
+  }
+
   auto resolver = shader_graph_type_resolver{graph.nodes, graph.edges};
 
   for (const auto& edge : graph.edges) {
     const auto source_type = resolver.output_type(edge.from_node, edge.from_pin);
 
     if (!resolver.accepts(edge.to_node, edge.to_pin, source_type)) {
-      out_error = fmt::format("node {} input {} does not accept the type wired into it from node {}", edge.to_node, edge.to_pin, edge.from_node);
-      return false;
+      return fmt::format("node {} input {} does not accept the type wired into it from node {}", edge.to_node, edge.to_pin, edge.from_node);
     }
   }
 
@@ -82,19 +109,17 @@ static auto validate_shader_graph_types(const shader_graph::create_info& graph, 
     const auto pattern = std::holds_alternative<std::string>(node.value) ? std::get<std::string>(node.value) : std::string{};
 
     if (pattern.size() != 4u) {
-      out_error = fmt::format("node {} (Swizzle) pattern must be exactly 4 characters (r/g/b/a)", node.id);
-      return false;
+      return fmt::format("node {} (Swizzle) pattern must be exactly 4 characters (r/g/b/a)", node.id);
     }
 
     for (const auto c : pattern) {
       if (c != 'r' && c != 'g' && c != 'b' && c != 'a') {
-        out_error = fmt::format("node {} (Swizzle) pattern may only contain r/g/b/a", node.id);
-        return false;
+        return fmt::format("node {} (Swizzle) pattern may only contain r/g/b/a", node.id);
       }
     }
   }
 
-  return true;
+  return std::nullopt;
 }
 
 struct emitted_value {
@@ -136,9 +161,13 @@ static auto coerce_to(const emitted_value& value, const std::string& target_type
 // never appear in the output -- dead-code elimination as a side effect of the walk, not a separate
 // pass) and cycle detection (a node re-entered while still on the visiting stack is a cycle).
 //
-// Every node's expression is inlined directly (no intermediate local variables) -- a node
-// referenced from two different sockets is simply re-evaluated in both, which is fine for the pure
-// math/sampling this node library does.
+// Every node's expression is inlined directly (no intermediate local variables), but `_emitted`
+// memoizes by (node, pin) for the lifetime of one walker instance -- a node referenced from two
+// sockets this same walker visits (e.g. one Texture Sample feeding both Albedo and Alpha) is walked
+// and emitted exactly once, not once per socket. generate_shader_graph_source shares one walker
+// across all of a stage's sockets for exactly this reason; a node visited from two DIFFERENT
+// walkers (i.e. crossing the vertex/fragment stage boundary) is still evaluated separately in each,
+// which is unavoidable -- they compile to two different Slang functions.
 class shader_graph_codegen_walker {
 
 public:
@@ -430,7 +459,7 @@ private:
       }
 
       case shader_node_type::swizzle: {
-        const auto pattern = swizzle_pattern_of(node);
+        const auto pattern = shader_node_swizzle_pattern(node);
         const auto width = component_count(inputs[0].type);
         return {fmt::format("{}.{}", inputs[0].expression, pattern.substr(0u, width)), std::array<const char*, 4u>{"float", "float2", "float3", "float4"}[width - 1u]};
       }
@@ -481,17 +510,19 @@ private:
 // consistent depth/shadow. No `output_vertex` node, or an unconnected pin, is not an error -- it
 // just passes the corresponding attribute through unchanged, matching the engine's previous fixed
 // vertex stage exactly.
-static auto emit_vertex_component(const shader_graph::create_info& graph, const shader_graph_node* vertex_node, std::uint32_t pin, const std::string& fn_name, const std::string& default_expression, std::string& out_error) -> std::string {
+//
+// `walker` is shared across all three vertex-component calls (see generate_shader_graph_source) so
+// a node feeding more than one of Position/Normal/Tangent is only walked and emitted once -- its
+// `_emitted` cache dedups across sockets, not just within one socket's own dependency tree.
+static auto emit_vertex_component(const shader_graph_node* vertex_node, std::uint32_t pin, shader_graph_codegen_walker& walker, const std::string& fn_name, const std::string& default_expression) -> std::expected<std::string, std::string> {
   if (vertex_node == nullptr) {
     return fmt::format("float3 {}(vertex v) {{\n  return {};\n}}\n", fn_name, default_expression);
   }
 
-  auto walker = shader_graph_codegen_walker{graph, codegen_context::vertex};
   const auto value = walker.visit_pin(vertex_node->id, pin);
 
   if (!walker.error().empty()) {
-    out_error = walker.error();
-    return {};
+    return std::unexpected{walker.error()};
   }
 
   if (!value) {
@@ -513,21 +544,25 @@ static auto emit_vertex_component(const shader_graph::create_info& graph, const 
 // One Fragment block socket (Albedo, Metallic, Color, ...), evaluated in codegen_context::fragment
 // where `material`/`uv`/`n`/`view_dir` are already in scope (fragment_main's own prologue -- see
 // generate_shader_graph_source). Unconnected falls back to `default_expression`; pass an empty
-// default to make the socket required instead (out_error is set if it's left unconnected). A
-// connected value is coerced with coerce_to against `required_type` -- every Fragment socket is a
-// fixed type, so this only ever actually changes anything for the float4-Color-into-float3 case.
-static auto emit_fragment_socket(const shader_graph::create_info& graph, std::uint32_t sink_node_id, std::uint32_t pin, const std::string& required_type, const std::string& default_expression, std::string& out_error) -> std::string {
-  auto walker = shader_graph_codegen_walker{graph, codegen_context::fragment};
+// default to make the socket required instead (the returned std::expected holds the "not connected"
+// error if it's left unconnected). A connected value is coerced with coerce_to against
+// `required_type` -- every Fragment socket is a fixed type, so this only ever actually changes
+// anything for the float4-Color-into-float3 case.
+//
+// `walker` is shared across every fragment-socket call for this graph (see
+// generate_shader_graph_source) -- all of Lit's 8 sockets (or Unlit's 3) land in the same
+// fragment_main function body, so a node feeding two of them (e.g. one Texture Sample driving both
+// Albedo and Alpha) is walked and emitted exactly once instead of once per consuming socket.
+static auto emit_fragment_socket(std::uint32_t sink_node_id, std::uint32_t pin, shader_graph_codegen_walker& walker, const std::string& required_type, const std::string& default_expression) -> std::expected<std::string, std::string> {
   const auto value = walker.visit_pin(sink_node_id, pin);
 
   if (!walker.error().empty()) {
-    out_error = walker.error();
-    return {};
+    return std::unexpected{walker.error()};
   }
 
   if (!value) {
     if (default_expression.empty()) {
-      out_error = fmt::format("node {} input {} is not connected", sink_node_id, pin);
+      return std::unexpected{fmt::format("node {} input {} is not connected", sink_node_id, pin)};
     }
     return default_expression;
   }
@@ -535,66 +570,77 @@ static auto emit_fragment_socket(const shader_graph::create_info& graph, std::ui
   return coerce_to(*value, required_type);
 }
 
-auto generate_shader_graph_source(const std::string& graph_name, const shader_graph::create_info& graph) -> shader_graph_codegen_result {
+// Prefixes `emitted`'s error (if any) with `label` -- every emit_vertex_component/
+// emit_fragment_socket call site needs its own label so a validation error names the socket it
+// actually came from ("Fragment (Lit) Albedo: ...") rather than just the underlying node/pin.
+static auto labeled(std::expected<std::string, std::string> emitted, std::string_view label) -> std::expected<std::string, std::string> {
+  if (!emitted) {
+    return std::unexpected{fmt::format("{}: {}", label, emitted.error())};
+  }
+  return emitted;
+}
+
+auto generate_shader_graph_source(const std::string& graph_name, const shader_graph::create_info& graph) -> std::expected<std::string, std::string> {
   const auto lit_it = std::ranges::find_if(graph.nodes, [](const shader_graph_node& node) { return node.type == shader_node_type::output_fragment_lit; });
   const auto unlit_it = std::ranges::find_if(graph.nodes, [](const shader_graph_node& node) { return node.type == shader_node_type::output_fragment_unlit; });
   const auto has_lit = lit_it != graph.nodes.end();
   const auto has_unlit = unlit_it != graph.nodes.end();
 
   if (!has_lit && !has_unlit) {
-    return shader_graph_codegen_result{false, {}, "graph has no Fragment output -- add a Fragment (Lit) or Fragment (Unlit) node"};
+    return std::unexpected{"graph has no Fragment output -- add a Fragment (Lit) or Fragment (Unlit) node"};
   }
 
   if (has_lit && has_unlit) {
-    return shader_graph_codegen_result{false, {}, "graph has both a Fragment (Lit) and a Fragment (Unlit) output -- exactly one is required"};
+    return std::unexpected{"graph has both a Fragment (Lit) and a Fragment (Unlit) output -- exactly one is required"};
   }
 
-  auto error = std::string{};
-
-  if (!validate_shader_graph_types(graph, error)) {
-    return shader_graph_codegen_result{false, {}, error};
+  if (const auto error = validate_shader_graph_types(graph)) {
+    return std::unexpected{*error};
   }
 
   const auto vertex_it = std::ranges::find_if(graph.nodes, [](const shader_graph_node& node) { return node.type == shader_node_type::output_vertex; });
   const auto* vertex_node = vertex_it != graph.nodes.end() ? &*vertex_it : nullptr;
 
-  const auto vertex_position_fn = emit_vertex_component(graph, vertex_node, 0u, "graph_vertex_position", "v.position", error);
-  if (!error.empty()) return shader_graph_codegen_result{false, {}, fmt::format("Vertex Position: {}", error)};
+  auto vertex_walker = shader_graph_codegen_walker{graph, codegen_context::vertex};
 
-  const auto vertex_normal_fn = emit_vertex_component(graph, vertex_node, 1u, "graph_vertex_normal", "v.normal", error);
-  if (!error.empty()) return shader_graph_codegen_result{false, {}, fmt::format("Vertex Normal: {}", error)};
+  const auto vertex_position_fn = labeled(emit_vertex_component(vertex_node, 0u, vertex_walker, "graph_vertex_position", "v.position"), "Vertex Position");
+  if (!vertex_position_fn) return std::unexpected{vertex_position_fn.error()};
 
-  const auto vertex_tangent_fn = emit_vertex_component(graph, vertex_node, 2u, "graph_vertex_tangent", "v.tangent.xyz", error);
-  if (!error.empty()) return shader_graph_codegen_result{false, {}, fmt::format("Vertex Tangent: {}", error)};
+  const auto vertex_normal_fn = labeled(emit_vertex_component(vertex_node, 1u, vertex_walker, "graph_vertex_normal", "v.normal"), "Vertex Normal");
+  if (!vertex_normal_fn) return std::unexpected{vertex_normal_fn.error()};
 
+  const auto vertex_tangent_fn = labeled(emit_vertex_component(vertex_node, 2u, vertex_walker, "graph_vertex_tangent", "v.tangent.xyz"), "Vertex Tangent");
+  if (!vertex_tangent_fn) return std::unexpected{vertex_tangent_fn.error()};
+
+  auto fragment_walker = shader_graph_codegen_walker{graph, codegen_context::fragment};
   auto fragment_body = std::string{};
 
   if (has_lit) {
     const auto id = lit_it->id;
 
-    const auto albedo = emit_fragment_socket(graph, id, 0u, "float3", "float3(1.0, 1.0, 1.0)", error);
-    if (!error.empty()) return shader_graph_codegen_result{false, {}, fmt::format("Fragment (Lit) Albedo: {}", error)};
+    const auto albedo = labeled(emit_fragment_socket(id, 0u, fragment_walker, "float3", "float3(1.0, 1.0, 1.0)"), "Fragment (Lit) Albedo");
+    if (!albedo) return std::unexpected{albedo.error()};
 
-    const auto normal = emit_fragment_socket(graph, id, 1u, "float3", "float3(0.0, 0.0, 1.0)", error);
-    if (!error.empty()) return shader_graph_codegen_result{false, {}, fmt::format("Fragment (Lit) Normal: {}", error)};
+    const auto normal = labeled(emit_fragment_socket(id, 1u, fragment_walker, "float3", "float3(0.0, 0.0, 1.0)"), "Fragment (Lit) Normal");
+    if (!normal) return std::unexpected{normal.error()};
 
-    const auto metallic = emit_fragment_socket(graph, id, 2u, "float", "0.0", error);
-    if (!error.empty()) return shader_graph_codegen_result{false, {}, fmt::format("Fragment (Lit) Metallic: {}", error)};
+    const auto metallic = labeled(emit_fragment_socket(id, 2u, fragment_walker, "float", "0.0"), "Fragment (Lit) Metallic");
+    if (!metallic) return std::unexpected{metallic.error()};
 
-    const auto roughness = emit_fragment_socket(graph, id, 3u, "float", "0.5", error);
-    if (!error.empty()) return shader_graph_codegen_result{false, {}, fmt::format("Fragment (Lit) Roughness: {}", error)};
+    const auto roughness = labeled(emit_fragment_socket(id, 3u, fragment_walker, "float", "0.5"), "Fragment (Lit) Roughness");
+    if (!roughness) return std::unexpected{roughness.error()};
 
-    const auto emission = emit_fragment_socket(graph, id, 4u, "float3", "float3(0.0, 0.0, 0.0)", error);
-    if (!error.empty()) return shader_graph_codegen_result{false, {}, fmt::format("Fragment (Lit) Emission: {}", error)};
+    const auto emission = labeled(emit_fragment_socket(id, 4u, fragment_walker, "float3", "float3(0.0, 0.0, 0.0)"), "Fragment (Lit) Emission");
+    if (!emission) return std::unexpected{emission.error()};
 
-    const auto occlusion = emit_fragment_socket(graph, id, 5u, "float", "1.0", error);
-    if (!error.empty()) return shader_graph_codegen_result{false, {}, fmt::format("Fragment (Lit) Occlusion: {}", error)};
+    const auto occlusion = labeled(emit_fragment_socket(id, 5u, fragment_walker, "float", "1.0"), "Fragment (Lit) Occlusion");
+    if (!occlusion) return std::unexpected{occlusion.error()};
 
-    const auto alpha = emit_fragment_socket(graph, id, 6u, "float", "1.0", error);
-    if (!error.empty()) return shader_graph_codegen_result{false, {}, fmt::format("Fragment (Lit) Alpha: {}", error)};
+    const auto alpha = labeled(emit_fragment_socket(id, 6u, fragment_walker, "float", "1.0"), "Fragment (Lit) Alpha");
+    if (!alpha) return std::unexpected{alpha.error()};
 
-    const auto alpha_clip_threshold = emit_fragment_socket(graph, id, 7u, "float", "material.alpha_cutoff", error);
-    if (!error.empty()) return shader_graph_codegen_result{false, {}, fmt::format("Fragment (Lit) Alpha Clip Threshold: {}", error)};
+    const auto alpha_clip_threshold = labeled(emit_fragment_socket(id, 7u, fragment_walker, "float", "material.alpha_cutoff"), "Fragment (Lit) Alpha Clip Threshold");
+    if (!alpha_clip_threshold) return std::unexpected{alpha_clip_threshold.error()};
 
     fragment_body = fmt::format(
       "  lit_surface surf;\n"
@@ -612,19 +658,19 @@ auto generate_shader_graph_source(const std::string& graph_name, const shader_gr
       "\n"
       "  uint is_alpha_masked = (material.flags & material_flags::alpha_masked) != 0u;\n"
       "  clip(is_alpha_masked * ({6} - {7}));\n",
-      albedo, normal, metallic, roughness, emission, occlusion, alpha, alpha_clip_threshold
+      *albedo, *normal, *metallic, *roughness, *emission, *occlusion, *alpha, *alpha_clip_threshold
     );
   } else {
     const auto id = unlit_it->id;
 
-    const auto color = emit_fragment_socket(graph, id, 0u, "float3", "", error);
-    if (!error.empty()) return shader_graph_codegen_result{false, {}, fmt::format("Fragment (Unlit) Color: {}", error)};
+    const auto color = labeled(emit_fragment_socket(id, 0u, fragment_walker, "float3", ""), "Fragment (Unlit) Color");
+    if (!color) return std::unexpected{color.error()};
 
-    const auto alpha = emit_fragment_socket(graph, id, 1u, "float", "1.0", error);
-    if (!error.empty()) return shader_graph_codegen_result{false, {}, fmt::format("Fragment (Unlit) Alpha: {}", error)};
+    const auto alpha = labeled(emit_fragment_socket(id, 1u, fragment_walker, "float", "1.0"), "Fragment (Unlit) Alpha");
+    if (!alpha) return std::unexpected{alpha.error()};
 
-    const auto alpha_clip_threshold = emit_fragment_socket(graph, id, 2u, "float", "material.alpha_cutoff", error);
-    if (!error.empty()) return shader_graph_codegen_result{false, {}, fmt::format("Fragment (Unlit) Alpha Clip Threshold: {}", error)};
+    const auto alpha_clip_threshold = labeled(emit_fragment_socket(id, 2u, fragment_walker, "float", "material.alpha_cutoff"), "Fragment (Unlit) Alpha Clip Threshold");
+    if (!alpha_clip_threshold) return std::unexpected{alpha_clip_threshold.error()};
 
     fragment_body = fmt::format(
       "  lighting_output lighting_output;\n"
@@ -633,7 +679,7 @@ auto generate_shader_graph_source(const std::string& graph_name, const shader_gr
       "\n"
       "  uint is_alpha_masked = (material.flags & material_flags::alpha_masked) != 0u;\n"
       "  clip(is_alpha_masked * ({1} - {2}));\n",
-      color, alpha, alpha_clip_threshold
+      *color, *alpha, *alpha_clip_threshold
     );
   }
 
@@ -745,10 +791,10 @@ auto generate_shader_graph_source(const std::string& graph_name, const shader_gr
     "\n"
     "  return Policy::shade(shading_input);\n"
     "}}\n",
-    graph_name, vertex_position_fn, vertex_normal_fn, vertex_tangent_fn, fragment_body
+    graph_name, *vertex_position_fn, *vertex_normal_fn, *vertex_tangent_fn, fragment_body
   );
 
-  return shader_graph_codegen_result{true, source, {}};
+  return source;
 }
 
 } // namespace sbx::assets

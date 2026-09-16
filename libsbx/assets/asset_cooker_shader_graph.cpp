@@ -89,8 +89,8 @@ auto asset_cooker::cook_shader_graph(const math::uuid& id, std::uint64_t generat
   const auto graph_name = shader_graph_generated_name(id, generation);
   const auto result = generate_shader_graph_source(graph_name, create_info);
 
-  if (!result.success) {
-    utility::logger<"assets">::warn("Could not cook shader_graph {} ({})", id, result.error);
+  if (!result) {
+    utility::logger<"assets">::warn("Could not cook shader_graph {} ({})", id, result.error());
     return false;
   }
 
@@ -136,7 +136,7 @@ auto asset_cooker::cook_shader_graph(const math::uuid& id, std::uint64_t generat
     return false;
   }
 
-  out << result.source;
+  out << *result;
 
   utility::logger<"assets">::debug("Cooked shader_graph {} -> '{}'", id, path.generic_string());
 

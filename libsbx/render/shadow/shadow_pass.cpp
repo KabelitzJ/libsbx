@@ -11,10 +11,6 @@
 
 #include <vulkan/vulkan.h>
 
-#include <fmt/format.h>
-
-#include <libsbx/utility/logger.hpp>
-
 #include <libsbx/graphics/frame_context.hpp>
 #include <libsbx/graphics/commands/command_buffer.hpp>
 #include <libsbx/graphics/resources/image.hpp>
@@ -58,39 +54,21 @@ shadow_pass::shadow_pass() {
 }
 
 auto shadow_pass::_resolve_graph_pipeline(const assets::shader_graph_handle& graph, bool is_double_sided) -> memory::observer_ptr<graphics::graphics_pipeline> {
-  if (!graph.is_valid()) {
-    return {};
-  }
+  const auto entry_points = std::array<graphics::shader_compiler::entry_point_request, 2u>{
+    graphics::shader_compiler::entry_point_request{VK_SHADER_STAGE_VERTEX_BIT, "depth_vertex_main"},
+    graphics::shader_compiler::entry_point_request{VK_SHADER_STAGE_FRAGMENT_BIT, "depth_fragment_main"}
+  };
 
-  // See opaque_pass::_resolve_graph_pipeline's identical try/catch for why.
-  try {
-    auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
-    auto& shader_cache = graphics_module.shader_cache();
-    auto& pipeline_cache = graphics_module.pipeline_cache();
-
-    const auto entry_points = std::vector<graphics::shader_compiler::entry_point_request>{
-      {VK_SHADER_STAGE_VERTEX_BIT, "depth_vertex_main"},
-      {VK_SHADER_STAGE_FRAGMENT_BIT, "depth_fragment_main"}
-    };
-
-    const auto& shader = shader_cache.get({assets::shader_graph_generated_path(graph->id(), graph->generation()), entry_points});
-
-    return pipeline_cache.get(graphics::graphics_pipeline::create_info{
-      .shader = shader,
-      .color_formats = {},
-      .depth_format = graphics::format::d32_sfloat,
-      .cull_mode = is_double_sided ? graphics::cull_mode::none : graphics::cull_mode::front,
-      .front_face = graphics::front_face::counter_clockwise,
-      .depth_test = true,
-      .depth_write = true,
-      .depth_compare = graphics::compare_operation::less_or_equal,
-      .samples = graphics::samples::count_1,
-      .name = fmt::format("Shadow Cascade Graph {}", assets::shader_graph_generated_name(graph->id(), graph->generation()))
-    });
-  } catch (const std::exception& exception) {
-    utility::logger<"render">::warn("shader_graph {} failed to compile ({}) -- skipping shadow cascade for it until it's fixed", graph->id(), exception.what());
-    return {};
-  }
+  return resolve_graph_pipeline(graph, entry_points, graphics::graphics_pipeline::create_info{
+    .color_formats = {},
+    .depth_format = graphics::format::d32_sfloat,
+    .cull_mode = is_double_sided ? graphics::cull_mode::none : graphics::cull_mode::front,
+    .front_face = graphics::front_face::counter_clockwise,
+    .depth_test = true,
+    .depth_write = true,
+    .depth_compare = graphics::compare_operation::less_or_equal,
+    .samples = graphics::samples::count_1,
+  }, "Shadow Cascade");
 }
 
 auto shadow_pass::declare(graphics_pass_builder& builder, const graph_resources& resources) -> void {

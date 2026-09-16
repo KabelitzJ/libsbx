@@ -1044,7 +1044,7 @@ auto asset_residency::create_shader_graph(const shader_graph::create_info& creat
   return shader_graph_handle{std::make_shared<shader_graph>(create_info)};
 }
 
-auto asset_residency::update_shader_graph(shader_graph_handle& graph, const shader_graph::create_info& create_info) -> void {
+auto asset_residency::update_shader_graph_data(shader_graph_handle& graph, const shader_graph::create_info& create_info) -> void {
   if (!graph.is_valid()) {
     return;
   }
@@ -1052,24 +1052,26 @@ auto asset_residency::update_shader_graph(shader_graph_handle& graph, const shad
   graph->_name = create_info.name;
   graph->_nodes = create_info.nodes;
   graph->_edges = create_info.edges;
+}
+
+auto asset_residency::update_shader_graph(shader_graph_handle& graph, const shader_graph::create_info& create_info) -> void {
+  if (!graph.is_valid()) {
+    return;
+  }
+
+  update_shader_graph_data(graph, create_info);
   graph->_bump_generation();
 
-  // Re-cooks on every live edit, not just an explicit Save -- shader_graph_panel's _apply_live goes
-  // through here on every node/edge change, and without this the render passes kept resolving
-  // whatever pipeline they'd already resolved for this graph's (now-stale) generated file until the
-  // whole editor was restarted (shader_cache/pipeline_cache have no invalidation of their own; the
-  // generation-suffixed path from shader_graph_generated_path is what makes a re-cook actually take
-  // effect -- see its own doc comment). Codegen is cheap pure string generation, so cooking on every
-  // edit (rather than debouncing) is fine -- unlike a node drag (update_shader_graph_node_position),
-  // every caller through here is a real content edit (add/delete/connect/property change), not
-  // something that fires every frame.
+  // shader_cache/pipeline_cache have no invalidation of their own -- the generation-suffixed path
+  // from shader_graph_generated_path is what makes a re-cook actually take effect (see its own doc
+  // comment), so the bump above has to happen before this cook, not after.
   auto info = shader_graph::create_info{};
   info.name = graph->name();
   info.nodes = graph->nodes();
   info.edges = graph->edges();
 
   if (!asset_cooker::cook_shader_graph(graph->id(), graph->generation(), info)) {
-    utility::logger<"assets">::warn("shader_graph {} edited but failed to cook -- see the warning above for why", graph->id());
+    utility::logger<"assets">::warn("shader_graph {} failed to cook -- see the warning above for why", graph->id());
   }
 }
 
@@ -1183,9 +1185,10 @@ auto asset_residency::save_shader_graph(shader_graph_handle& graph, const std::f
   info.nodes = graph->nodes();
   info.edges = graph->edges();
 
-  if (!asset_cooker::cook_shader_graph(id, graph->generation(), info)) {
-    utility::logger<"assets">::warn("shader_graph '{}' saved but failed to cook -- see the warning above for why", resolved_path.generic_string());
-  }
+  // Bumps the generation and re-cooks -- live editing no longer does either (see
+  // update_shader_graph's own doc comment), so this is the one point a saved edit's shading result
+  // actually starts taking effect.
+  update_shader_graph(graph, info);
 
   utility::logger<"assets">::info("Saved shader_graph '{}'", resolved_path.generic_string());
 

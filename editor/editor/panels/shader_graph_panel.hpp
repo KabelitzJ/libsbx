@@ -32,10 +32,19 @@ namespace editor {
  * editor_state::request_open_shader_graph_editor, not part of the default dock layout.
  *
  * Edits the same way animation_graph_panel/_draw_particle_effect_properties do: a staged
- * create_info (_edit) applied live via assets_module::update_shader_graph on every change (which
- * also re-cooks the generated `.slang`, see asset_residency::update_shader_graph), with an
- * explicit Save button for disk persistence -- no undo/redo (asset edits never go through
- * editor_state's command_stack).
+ * create_info (_edit), with an explicit Save button for disk persistence -- no undo/redo (asset
+ * edits never go through editor_state's command_stack). Unlike those two, a change here does NOT
+ * recompile live: every node/edge edit used to route through assets_module::update_shader_graph,
+ * which bumps the graph's generation and re-cooks -- cheap codegen, but the very next frame's
+ * render-pass pipeline lookup then guaranteed-misses shader_cache and blocks the render thread on a
+ * full synchronous Slang compile, freezing the editor for however long that takes. Editing now only
+ * runs cheap, in-memory validation (_apply_live, reusing generate_shader_graph_source itself --
+ * discarding its generated source, keeping only success/error) and syncs _edit into the resident
+ * graph (assets_module::update_shader_graph_data, no recompile) so a node drag
+ * (update_shader_graph_node_position) can still find a freshly-added node; the actual re-cook only
+ * happens on Save (asset_residency::save_shader_graph). The tradeoff: the live-preview viewport
+ * shows the last-Saved shading result, not the in-progress edit -- unlike Unity's own node
+ * previews, which do recompile live, just asynchronously off the UI thread.
  */
 class shader_graph_panel final : public editor_panel {
 
@@ -56,6 +65,10 @@ private:
   using selection = std::variant<std::monostate, std::uint32_t, std::size_t>;
 
   auto _open(sbx::assets::shader_graph_handle graph, std::filesystem::path path) -> void;
+
+  // Called after every edit (and once from _open): syncs _edit into the resident graph (no
+  // recompile -- see the class doc comment) and revalidates it, updating _validation_error for the
+  // toolbar. Does not cook/recompile; see _draw_toolbar's Save button for that.
   auto _apply_live() -> void;
 
   auto _draw_toolbar() -> void;
@@ -81,6 +94,12 @@ private:
   std::filesystem::path _path{};
   sbx::assets::shader_graph::create_info _edit{};
   selection _selection{};
+
+  // Set by _apply_live from generate_shader_graph_source's own error message -- empty means _edit
+  // would cook cleanly right now. Shown in the toolbar in place of the old, narrower
+  // "no Fragment output" check it replaced (a strict superset: missing-Fragment-output is one of
+  // the errors generate_shader_graph_source itself already reports).
+  std::string _validation_error{};
 
   // Which node ids have already had ax::NodeEditor::SetNodePosition seeded from
   // shader_graph_node::editor_position since the last _open() -- same reasoning as

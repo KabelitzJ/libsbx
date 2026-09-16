@@ -15,6 +15,8 @@
 #include <libsbx/assets/shader_graph.hpp>
 
 #include <editor/panels/editor_panel.hpp>
+#include <editor/panels/shader_graph_preview_renderer.hpp>
+#include <editor/panels/shader_graph_node_preview_manager.hpp>
 
 namespace editor {
 
@@ -42,9 +44,15 @@ namespace editor {
  * discarding its generated source, keeping only success/error) and syncs _edit into the resident
  * graph (assets_module::update_shader_graph_data, no recompile) so a node drag
  * (update_shader_graph_node_position) can still find a freshly-added node; the actual re-cook only
- * happens on Save (asset_residency::save_shader_graph). The tradeoff: the live-preview viewport
- * shows the last-Saved shading result, not the in-progress edit -- unlike Unity's own node
- * previews, which do recompile live, just asynchronously off the UI thread.
+ * happens on Save (asset_residency::save_shader_graph) -- the *scene* viewport, that is: the
+ * panel's own master preview (_preview, shader_graph_preview_renderer) does recompile live, the
+ * way Unity's own node previews do, but asynchronously (shader_graph_preview_renderer owns its own
+ * async_shader_compiler) so it never blocks the render thread the way the scene path used to.
+ * _apply_live's `structural` parameter is what tells it when that's actually needed: a structural
+ * edit (add/delete a node or edge, rewire a swizzle pattern, toggle Exposed) enqueues a preview
+ * recompile; a value-only edit (dragging a Constant's own value) doesn't -- the preview shader
+ * already reads exposed values through its own small per-frame-refreshed buffer (mirroring how a
+ * real material's generic_params work), so a value change just needs a redraw, not a recompile.
  */
 class shader_graph_panel final : public editor_panel {
 
@@ -68,12 +76,15 @@ private:
 
   // Called after every edit (and once from _open): syncs _edit into the resident graph (no
   // recompile -- see the class doc comment) and revalidates it, updating _validation_error for the
-  // toolbar. Does not cook/recompile; see _draw_toolbar's Save button for that.
-  auto _apply_live() -> void;
+  // toolbar. Does not cook/recompile the real asset; see _draw_toolbar's Save button for that. @p
+  // structural additionally enqueues a master-preview recompile (see the class doc comment) --
+  // pass false from a value-only editor (a Constant's own DragFloat/color field/vector3 control).
+  auto _apply_live(bool structural = true) -> void;
 
   auto _draw_toolbar() -> void;
   auto _draw_canvas() -> void;
   auto _draw_add_node_menu(sbx::math::vector2 spawn_position) -> void;
+  auto _draw_master_preview() -> void;
   auto _draw_selection_inspector() -> void;
 
   [[nodiscard]] auto _next_node_id() const -> std::uint32_t;
@@ -95,11 +106,15 @@ private:
   sbx::assets::shader_graph::create_info _edit{};
   selection _selection{};
 
+  shader_graph_node_preview_manager _node_previews{};
+
   // Set by _apply_live from generate_shader_graph_source's own error message -- empty means _edit
   // would cook cleanly right now. Shown in the toolbar in place of the old, narrower
   // "no Fragment output" check it replaced (a strict superset: missing-Fragment-output is one of
   // the errors generate_shader_graph_source itself already reports).
   std::string _validation_error{};
+
+  shader_graph_preview_renderer _preview{};
 
   // Which node ids have already had ax::NodeEditor::SetNodePosition seeded from
   // shader_graph_node::editor_position since the last _open() -- same reasoning as

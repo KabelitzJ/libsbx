@@ -172,8 +172,13 @@ class shader_graph_codegen_walker {
 
 public:
 
-  shader_graph_codegen_walker(const shader_graph::create_info& graph, codegen_context context)
-  : _context{context} {
+  // `sampler_index_expression` is the one piece of texture_sample's emitted text that differs
+  // between the real path (`push.sampler_index`, the default) and the master preview (which packs
+  // its sampler index into a push-constant vec4's otherwise-unused .w component instead of its own
+  // field, to fit its push_data in the same 128-byte budget -- see
+  // generate_shader_graph_preview_source). Every other node type's emission is identical either way.
+  shader_graph_codegen_walker(const shader_graph::create_info& graph, codegen_context context, std::string sampler_index_expression = "push.sampler_index")
+  : _context{context}, _sampler_index_expression{std::move(sampler_index_expression)} {
     for (const auto& node : graph.nodes) {
       _nodes_by_id.emplace(node.id, &node);
     }
@@ -357,7 +362,7 @@ private:
         const auto slot = _texture_slot_of.at(node.id);
         const auto default_uv = _context == codegen_context::fragment ? std::string{"uv"} : std::string{"v.uv"};
         const auto& uv = inputs[0].expression.empty() ? default_uv : inputs[0].expression;
-        return {fmt::format("textures[material.generic_textures[{}]].Sample(samplers[push.sampler_index], {})", slot, uv), "float4"};
+        return {fmt::format("textures[material.generic_textures[{}]].Sample(samplers[{}], {})", slot, _sampler_index_expression, uv), "float4"};
       }
 
       case shader_node_type::add:
@@ -495,6 +500,7 @@ private:
   }
 
   codegen_context _context;
+  std::string _sampler_index_expression;
   std::unordered_map<std::uint32_t, const shader_graph_node*> _nodes_by_id{};
   std::unordered_map<std::uint64_t, std::uint64_t> _incoming{}; // pin_key(to) -> pin_key(from)
   std::unordered_map<std::uint32_t, std::uint32_t> _float_slot_of{};
@@ -514,7 +520,14 @@ private:
 // `walker` is shared across all three vertex-component calls (see generate_shader_graph_source) so
 // a node feeding more than one of Position/Normal/Tangent is only walked and emitted once -- its
 // `_emitted` cache dedups across sockets, not just within one socket's own dependency tree.
-static auto emit_vertex_component(const shader_graph_node* vertex_node, std::uint32_t pin, shader_graph_codegen_walker& walker, const std::string& fn_name, const std::string& default_expression) -> std::expected<std::string, std::string> {
+//
+// `material_declaration` is the one line that differs between the real path and the preview path
+// (see generate_shader_graph_preview_source) -- both declare a local named `material` (so `_emit`'s
+// own "material.generic_params[...]"/"material.generic_textures[...]" text needs no mode-awareness
+// at all), just from a different expression (the real per-draw material buffer vs. the preview's
+// own single-entry one). Only emitted when there's an actual expression to return -- an
+// unconnected/no-Vertex-block function has nothing that could reference `material` anyway.
+static auto emit_vertex_component(const shader_graph_node* vertex_node, std::uint32_t pin, shader_graph_codegen_walker& walker, const std::string& fn_name, const std::string& default_expression, const std::string& material_declaration) -> std::expected<std::string, std::string> {
   if (vertex_node == nullptr) {
     return fmt::format("float3 {}(vertex v) {{\n  return {};\n}}\n", fn_name, default_expression);
   }
@@ -534,10 +547,10 @@ static auto emit_vertex_component(const shader_graph_node* vertex_node, std::uin
   // dropping its alpha.
   return fmt::format(
     "float3 {}(vertex v) {{\n"
-    "  material_data material = (*push.frame_data).materials[push.material_index];\n"
+    "{}"
     "  return {};\n"
     "}}\n",
-    fn_name, coerce_to(*value, "float3")
+    fn_name, material_declaration, coerce_to(*value, "float3")
   );
 }
 
@@ -603,13 +616,15 @@ auto generate_shader_graph_source(const std::string& graph_name, const shader_gr
 
   auto vertex_walker = shader_graph_codegen_walker{graph, codegen_context::vertex};
 
-  const auto vertex_position_fn = labeled(emit_vertex_component(vertex_node, 0u, vertex_walker, "graph_vertex_position", "v.position"), "Vertex Position");
+  static constexpr auto real_material_declaration = "  material_data material = (*push.frame_data).materials[push.material_index];\n";
+
+  const auto vertex_position_fn = labeled(emit_vertex_component(vertex_node, 0u, vertex_walker, "graph_vertex_position", "v.position", real_material_declaration), "Vertex Position");
   if (!vertex_position_fn) return std::unexpected{vertex_position_fn.error()};
 
-  const auto vertex_normal_fn = labeled(emit_vertex_component(vertex_node, 1u, vertex_walker, "graph_vertex_normal", "v.normal"), "Vertex Normal");
+  const auto vertex_normal_fn = labeled(emit_vertex_component(vertex_node, 1u, vertex_walker, "graph_vertex_normal", "v.normal", real_material_declaration), "Vertex Normal");
   if (!vertex_normal_fn) return std::unexpected{vertex_normal_fn.error()};
 
-  const auto vertex_tangent_fn = labeled(emit_vertex_component(vertex_node, 2u, vertex_walker, "graph_vertex_tangent", "v.tangent.xyz"), "Vertex Tangent");
+  const auto vertex_tangent_fn = labeled(emit_vertex_component(vertex_node, 2u, vertex_walker, "graph_vertex_tangent", "v.tangent.xyz", real_material_declaration), "Vertex Tangent");
   if (!vertex_tangent_fn) return std::unexpected{vertex_tangent_fn.error()};
 
   auto fragment_walker = shader_graph_codegen_walker{graph, codegen_context::fragment};
@@ -792,6 +807,246 @@ auto generate_shader_graph_source(const std::string& graph_name, const shader_gr
     "  return Policy::shade(shading_input);\n"
     "}}\n",
     graph_name, *vertex_position_fn, *vertex_normal_fn, *vertex_tangent_fn, fragment_body
+  );
+
+  return source;
+}
+
+auto generate_shader_graph_preview_source(const std::string& graph_name, const shader_graph::create_info& graph) -> std::expected<std::string, std::string> {
+  const auto lit_it = std::ranges::find_if(graph.nodes, [](const shader_graph_node& node) { return node.type == shader_node_type::output_fragment_lit; });
+  const auto unlit_it = std::ranges::find_if(graph.nodes, [](const shader_graph_node& node) { return node.type == shader_node_type::output_fragment_unlit; });
+  const auto has_lit = lit_it != graph.nodes.end();
+  const auto has_unlit = unlit_it != graph.nodes.end();
+
+  if (!has_lit && !has_unlit) {
+    return std::unexpected{"graph has no Fragment output -- add a Fragment (Lit) or Fragment (Unlit) node"};
+  }
+
+  if (has_lit && has_unlit) {
+    return std::unexpected{"graph has both a Fragment (Lit) and a Fragment (Unlit) output -- exactly one is required"};
+  }
+
+  if (const auto error = validate_shader_graph_types(graph)) {
+    return std::unexpected{*error};
+  }
+
+  const auto vertex_it = std::ranges::find_if(graph.nodes, [](const shader_graph_node& node) { return node.type == shader_node_type::output_vertex; });
+  const auto* vertex_node = vertex_it != graph.nodes.end() ? &*vertex_it : nullptr;
+
+  // See generate_shader_graph_source's own vertex_walker -- same shape, just the preview's own
+  // sampler-index expression (see shader_graph_codegen_walker's constructor doc comment) and
+  // material declaration (below) instead of the real path's.
+  auto vertex_walker = shader_graph_codegen_walker{graph, codegen_context::vertex, "uint(push.light_direction.w)"};
+
+  static constexpr auto preview_material_declaration = "  material_data material = *push.material;\n";
+
+  const auto vertex_position_fn = labeled(emit_vertex_component(vertex_node, 0u, vertex_walker, "graph_vertex_position", "v.position", preview_material_declaration), "Vertex Position");
+  if (!vertex_position_fn) return std::unexpected{vertex_position_fn.error()};
+
+  const auto vertex_normal_fn = labeled(emit_vertex_component(vertex_node, 1u, vertex_walker, "graph_vertex_normal", "v.normal", preview_material_declaration), "Vertex Normal");
+  if (!vertex_normal_fn) return std::unexpected{vertex_normal_fn.error()};
+
+  const auto vertex_tangent_fn = labeled(emit_vertex_component(vertex_node, 2u, vertex_walker, "graph_vertex_tangent", "v.tangent.xyz", preview_material_declaration), "Vertex Tangent");
+  if (!vertex_tangent_fn) return std::unexpected{vertex_tangent_fn.error()};
+
+  auto fragment_walker = shader_graph_codegen_walker{graph, codegen_context::fragment, "uint(push.light_direction.w)"};
+  auto fragment_body = std::string{};
+
+  if (has_lit) {
+    const auto id = lit_it->id;
+
+    // ponytail: only Albedo/Normal/Emission feed the preview's shading -- Metallic/Roughness/
+    // Occlusion/Alpha are real Fragment (Lit) sockets (still validated as part of the graph) but
+    // this function never evaluates them, since doing anything with them needs a BRDF
+    // (evaluate_lit_surface), which needs a fully-populated frame_data this preview deliberately
+    // doesn't have (see this function's own doc comment). Revisit with a small Blinn-Phong term
+    // if the flat-diffuse-only look turns out to matter in practice.
+    const auto albedo = labeled(emit_fragment_socket(id, 0u, fragment_walker, "float3", "float3(1.0, 1.0, 1.0)"), "Fragment (Lit) Albedo");
+    if (!albedo) return std::unexpected{albedo.error()};
+
+    const auto normal = labeled(emit_fragment_socket(id, 1u, fragment_walker, "float3", "float3(0.0, 0.0, 1.0)"), "Fragment (Lit) Normal");
+    if (!normal) return std::unexpected{normal.error()};
+
+    const auto emission = labeled(emit_fragment_socket(id, 4u, fragment_walker, "float3", "float3(0.0, 0.0, 0.0)"), "Fragment (Lit) Emission");
+    if (!emission) return std::unexpected{emission.error()};
+
+    fragment_body = fmt::format(
+      "  float3 tangent_space_normal = {0};\n"
+      "  float3 bitangent = cross(n, input.tangent.xyz) * input.tangent.w;\n"
+      "  float3 world_normal = normalize(mul(tangent_space_normal, float3x3(input.tangent.xyz, bitangent, n)));\n"
+      "\n"
+      "  float3 light_dir = normalize(-push.light_direction.xyz);\n"
+      "  float n_dot_l = max(dot(world_normal, light_dir), 0.0);\n"
+      "\n"
+      "  float3 albedo = {1};\n"
+      "  float3 color = albedo * 0.15 + albedo * push.light_color.rgb * push.light_color.a * n_dot_l + {2};\n",
+      *normal, *albedo, *emission
+    );
+  } else {
+    const auto id = unlit_it->id;
+
+    const auto color = labeled(emit_fragment_socket(id, 0u, fragment_walker, "float3", ""), "Fragment (Unlit) Color");
+    if (!color) return std::unexpected{color.error()};
+
+    // ponytail: Alpha isn't evaluated -- the preview always shows a fully opaque sphere (real Alpha
+    // Clip/blend behavior is a materials-system concern, not something a shading preview needs).
+    fragment_body = fmt::format("  float3 color = {0};\n", *color);
+  }
+
+  auto source = fmt::format(
+    "// AUTO-GENERATED shader graph preview (shader_graph: {0}). Do not hand-edit.\n"
+    "#include <frame_data.slang>\n"
+    "\n"
+    // Declared before the graph_vertex_*/fragment_main below (unlike the real path's push_data,
+    // which arrives already-declared via geometry_common.slang's own #include, ahead of anything
+    // this file itself emits) -- graph_vertex_position/normal/tangent's own material_data
+    // declaration (preview_material_declaration, above) already references `push.material`, so
+    // `push_data`/`push` have to exist before those functions do, not after.
+    "struct push_data {{\n"
+    "  float4x4 model_view_projection;\n"
+    "  float4 light_direction; // xyz = direction, w = float(sampler_index)\n"
+    "  float4 light_color;     // rgb = color, a = intensity\n"
+    "  float4 camera_position; // xyz, w unused\n"
+    "  vertex* vertices;\n"
+    "  material_data* material;\n"
+    "}}; // struct push_data\n"
+    "\n"
+    "[[vk::push_constant]] ConstantBuffer<push_data> push;\n"
+    "\n"
+    "{1}"
+    "\n"
+    "{2}"
+    "\n"
+    "{3}"
+    "\n"
+    "struct vertex_input {{\n"
+    "  [[vk::location(0)]] uint vertex_id : SV_VertexID;\n"
+    "}}; // struct vertex_input\n"
+    "\n"
+    "struct vertex_output {{\n"
+    "  [[vk::location(0)]] float3 position : POSITION;\n"
+    "  [[vk::location(1)]] float3 normal : NORMAL;\n"
+    "  [[vk::location(2)]] float2 uv : TEXCOORD;\n"
+    "  [[vk::location(3)]] float4 tangent : TANGENT;\n"
+    "  float4 sv_position : SV_Position;\n"
+    "}}; // struct vertex_output\n"
+    "\n"
+    "[shader(\"vertex\")]\n"
+    "vertex_output vertex_main(vertex_input input) {{\n"
+    "  vertex v = push.vertices[input.vertex_id];\n"
+    "\n"
+    "  float3 object_position = graph_vertex_position(v);\n"
+    "  float3 object_normal = graph_vertex_normal(v);\n"
+    "  float3 object_tangent = graph_vertex_tangent(v);\n"
+    "\n"
+    "  vertex_output output;\n"
+    "  output.position = object_position;\n" // preview mesh sits at the origin, unscaled -- no model matrix needed
+    "  output.normal = normalize(object_normal);\n"
+    "  output.tangent = float4(normalize(object_tangent), v.tangent.w);\n"
+    "  output.uv = v.uv;\n"
+    "  output.sv_position = mul(push.model_view_projection, float4(object_position, 1.0));\n"
+    "\n"
+    "  return output;\n"
+    "}}\n"
+    "\n"
+    "struct fragment_input {{\n"
+    "  [[vk::location(0)]] float3 position : POSITION;\n"
+    "  [[vk::location(1)]] float3 normal : NORMAL;\n"
+    "  [[vk::location(2)]] float2 uv : TEXCOORD;\n"
+    "  [[vk::location(3)]] float4 tangent : TANGENT;\n"
+    "  float4 sv_position : SV_Position;\n"
+    "}}; // struct fragment_input\n"
+    "\n"
+    "[shader(\"fragment\")]\n"
+    "float4 fragment_main(fragment_input input) : SV_Target0 {{\n"
+    "  material_data material = *push.material;\n"
+    "\n"
+    "  float2 uv = apply_uv_transform(material, input.uv);\n"
+    "  float3 n = normalize(input.normal);\n"
+    "  float3 view_dir = normalize(push.camera_position.xyz - input.position);\n"
+    "\n"
+    "{4}"
+    "\n"
+    "  return float4(color, 1.0);\n"
+    "}}\n",
+    graph_name, *vertex_position_fn, *vertex_normal_fn, *vertex_tangent_fn, fragment_body
+  );
+
+  return source;
+}
+
+auto generate_node_preview_source(const std::string& graph_name, const shader_graph::create_info& graph, std::uint32_t node_id, std::uint32_t output_pin) -> std::expected<std::string, std::string> {
+  if (const auto error = validate_shader_graph_types(graph)) {
+    return std::unexpected{*error};
+  }
+
+  auto walker = shader_graph_codegen_walker{graph, codegen_context::fragment, "uint(push.sampler_index)"};
+
+  const auto value = walker.visit_pin(node_id, output_pin);
+
+  if (!walker.error().empty()) {
+    return std::unexpected{walker.error()};
+  }
+
+  if (!value) {
+    return std::unexpected{fmt::format("node {} pin {} has nothing connected", node_id, output_pin)};
+  }
+
+  // Scalar previews as grayscale, vector2 as (x,y,0,1), vector3 as (x,y,z,1), vector4 as-is --
+  // matches Unity Shader Graph's own node-preview convention.
+  const auto color_expression = [&]() -> std::string {
+    if (value->type == "float") return fmt::format("float4({0}, {0}, {0}, 1.0)", value->expression);
+    if (value->type == "float2") return fmt::format("float4(({0}).x, ({0}).y, 0.0, 1.0)", value->expression);
+    if (value->type == "float3") return fmt::format("float4({0}, 1.0)", value->expression);
+    return value->expression; // float4
+  }();
+
+  auto source = fmt::format(
+    "// AUTO-GENERATED shader graph node preview (shader_graph: {0}, node: {1}, pin: {2}). Do not hand-edit.\n"
+    "#include <frame_data.slang>\n"
+    "\n"
+    "struct push_data {{\n"
+    "  material_data* material;\n"
+    "  float sampler_index; // small non-negative index, stored as a plain float (see push_data's C++ mirror)\n"
+    "}}; // struct push_data\n"
+    "\n"
+    "[[vk::push_constant]] ConstantBuffer<push_data> push;\n"
+    "\n"
+    "struct vertex_output {{\n"
+    "  [[vk::location(0)]] float2 uv : TEXCOORD;\n"
+    "  float4 sv_position : SV_Position;\n"
+    "}}; // struct vertex_output\n"
+    "\n"
+    // Classic single-triangle-covers-the-screen trick -- no vertex buffer/mesh needed at all: for
+    // vertex_id 0/1/2, (position.x, position.y) is (0,0)/(2,0)/(0,2), so `position * 2 - 1` puts
+    // its 3 corners at (-1,-1)/(3,-1)/(-1,3) -- a triangle that fully covers the [-1,1] NDC square
+    // the actual viewport clips down to.
+    "[shader(\"vertex\")]\n"
+    "vertex_output vertex_main(uint vertex_id : SV_VertexID) {{\n"
+    "  float2 position = float2(float((vertex_id << 1) & 2), float(vertex_id & 2));\n"
+    "\n"
+    "  vertex_output output;\n"
+    "  output.uv = position;\n"
+    "  output.sv_position = float4(position * 2.0 - 1.0, 0.0, 1.0);\n"
+    "\n"
+    "  return output;\n"
+    "}}\n"
+    "\n"
+    "struct fragment_input {{\n"
+    "  [[vk::location(0)]] float2 uv : TEXCOORD;\n"
+    "  float4 sv_position : SV_Position;\n"
+    "}}; // struct fragment_input\n"
+    "\n"
+    "[shader(\"fragment\")]\n"
+    "float4 fragment_main(fragment_input input) : SV_Target0 {{\n"
+    "  material_data material = *push.material;\n"
+    "  float2 uv = input.uv;\n"
+    "  float3 n = float3(0.0, 0.0, 1.0);\n"
+    "  float3 view_dir = float3(0.0, 0.0, 1.0);\n"
+    "\n"
+    "  return {3};\n"
+    "}}\n",
+    graph_name, node_id, output_pin, color_expression
   );
 
   return source;

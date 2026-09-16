@@ -35,6 +35,29 @@ shader::shader(const std::filesystem::path& path, std::span<const shader_compile
   }
 }
 
+shader::shader(std::vector<shader_compiler::compiled_entry_point> compiled, id_type id)
+: _id{id} {
+  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
+
+  auto& logical_device = graphics_module.logical_device();
+
+  _stages.reserve(compiled.size());
+
+  for (auto& entry : compiled) {
+    auto module_create_info = VkShaderModuleCreateInfo{};
+    module_create_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+    module_create_info.codeSize = entry.spirv.size() * sizeof(std::uint32_t);
+    module_create_info.pCode = entry.spirv.data();
+
+    auto module = VkShaderModule{};
+    validate(vkCreateShaderModule(logical_device, &module_create_info, nullptr, &module), "vkCreateShaderModule");
+
+    logical_device.set_debug_name(module, fmt::format("preview [{}]", entry.name));
+
+    _stages.push_back(stage{entry.stage, module, std::move(entry.name)});
+  }
+}
+
 shader::~shader() {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 

@@ -262,6 +262,7 @@ struct shader_graph_node_description {
   math::vector2 editor_position{0.0f, 0.0f};
   std::string name{};
   bool exposed{false};
+  bool preview{false};
   shader_graph_node_value_description value{};
 }; // struct shader_graph_node_description
 

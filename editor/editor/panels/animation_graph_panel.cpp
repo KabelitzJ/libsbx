@@ -151,8 +151,8 @@ auto animation_graph_panel::_apply_live() -> void {
 }
 
 auto animation_graph_panel::_state_name(std::uint32_t state_id) const -> std::string {
-  const auto it = std::ranges::find(_edit.states, state_id, &sbx::assets::animation_state::id);
-  return (it != _edit.states.end()) ? it->name : std::string{"(unknown)"};
+  const auto entry = std::ranges::find(_edit.states, state_id, &sbx::assets::animation_state::id);
+  return (entry != _edit.states.end()) ? entry->name : std::string{"(unknown)"};
 }
 
 auto animation_graph_panel::draw(editor_state& state) -> void {
@@ -575,14 +575,14 @@ auto animation_graph_panel::_draw_canvas() -> void {
 auto animation_graph_panel::_draw_selection_inspector() -> void {
   if (std::holds_alternative<std::uint32_t>(_selection)) {
     const auto state_id = std::get<std::uint32_t>(_selection);
-    const auto it = std::ranges::find(_edit.states, state_id, &sbx::assets::animation_state::id);
+    const auto entry = std::ranges::find(_edit.states, state_id, &sbx::assets::animation_state::id);
 
-    if (it == _edit.states.end()) {
+    if (entry == _edit.states.end()) {
       _selection = std::monostate{};
       return;
     }
 
-    auto& selected_state = *it;
+    auto& selected_state = *entry;
 
     ImGui::SeparatorText("State");
 

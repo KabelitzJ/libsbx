@@ -16,8 +16,8 @@ auto composite_command::execute(sbx::scenes::scene& target) -> void {
 }
 
 auto composite_command::undo(sbx::scenes::scene& target) -> void {
-  for (auto it = _commands.rbegin(); it != _commands.rend(); ++it) {
-    (*it)->undo(target);
+  for (auto entry = _commands.rbegin(); entry != _commands.rend(); ++entry) {
+    (*entry)->undo(target);
   }
 }
 

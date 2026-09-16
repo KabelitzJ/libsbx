@@ -34,6 +34,15 @@ public:
 
   shader(const std::filesystem::path& path, std::span<const shader_compiler::entry_point_request> entry_points, id_type id);
 
+  /**
+   * @brief Wraps already-compiled SPIR-V directly into VkShaderModules -- no shader_compiler
+   * involved, so no Slang/render-thread dependency at all. For a caller (shader-graph previews)
+   * that compiled off the render thread via async_shader_compiler and just needs the fast,
+   * Vulkan-only remainder (module creation) done here on the render thread. Consumes @p compiled
+   * (moves each entry's spirv/name out of it) -- pass an rvalue.
+   */
+  shader(std::vector<shader_compiler::compiled_entry_point> compiled, id_type id);
+
   ~shader();
 
   [[nodiscard]] auto id() const noexcept -> id_type {

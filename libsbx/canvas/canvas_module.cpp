@@ -45,11 +45,11 @@ auto canvas_module::update() -> void {
     _text_shape_cache.clear();
     _last_scene = &scene;
   } else {
-    for (auto it = _text_shape_cache.begin(); it != _text_shape_cache.end();) {
-      if (!scene.find(it->first).is_valid()) {
-        it = _text_shape_cache.erase(it);
+    for (auto entry = _text_shape_cache.begin(); entry != _text_shape_cache.end();) {
+      if (!scene.find(entry->first).is_valid()) {
+        entry = _text_shape_cache.erase(entry);
       } else {
-        ++it;
+        ++entry;
       }
     }
   }

@@ -107,15 +107,16 @@ auto compose_world_pose(scenes::scene& scene, const scenes::node& node, pose_cac
     current = scene.node_of(relationship.parent);
   }
 
-  for (auto it = chain.rbegin(); it != chain.rend(); ++it) {
-    const auto& local = it->get_component<scenes::local_transform>();
+  for (const auto& entry : std::views::reverse(chain)) {
+    const auto& local = entry.get_component<scenes::local_transform>();
 
     pose.position = pose.position + pose.rotation * (local.position * pose.scale);
     pose.rotation = math::quaternion::normalized(pose.rotation * local.rotation);
-    pose.scale = pose.scale * local.scale; // componentwise -- see physics::transform::scale
+    pose.scale = pose.scale * local.scale;
 
-    cache[it->id()] = pose;
+    cache[entry.id()] = pose;
   }
+
 
   return pose;
 }

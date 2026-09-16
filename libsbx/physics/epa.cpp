@@ -143,15 +143,15 @@ auto epa_penetration(
       }
     };
 
-    for (auto it = faces.begin(); it != faces.end(); ) {
-      if (math::vector3::dot(it->normal, support.point - vertices[it->indices[0]].point) > 0.0f) {
-        toggle_edge(it->indices[0], it->indices[1]);
-        toggle_edge(it->indices[1], it->indices[2]);
-        toggle_edge(it->indices[2], it->indices[0]);
+    for (auto entry = faces.begin(); entry != faces.end(); ) {
+      if (math::vector3::dot(entry->normal, support.point - vertices[entry->indices[0]].point) > 0.0f) {
+        toggle_edge(entry->indices[0], entry->indices[1]);
+        toggle_edge(entry->indices[1], entry->indices[2]);
+        toggle_edge(entry->indices[2], entry->indices[0]);
 
-        it = faces.erase(it);
+        entry = faces.erase(entry);
       } else {
-        ++it;
+        ++entry;
       }
     }
 

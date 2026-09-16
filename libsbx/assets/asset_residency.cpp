@@ -1080,13 +1080,13 @@ auto asset_residency::update_shader_graph_node_position(shader_graph_handle& gra
     return;
   }
 
-  const auto it = std::ranges::find(graph->_nodes, node_id, &shader_graph_node::id);
+  const auto entry = std::ranges::find(graph->_nodes, node_id, &shader_graph_node::id);
 
-  if (it == graph->_nodes.end()) {
+  if (entry == graph->_nodes.end()) {
     return;
   }
 
-  it->editor_position = position;
+  entry->editor_position = position;
 }
 
 auto asset_residency::save_shader_graph(shader_graph_handle& graph, const std::filesystem::path& path) -> math::uuid {
@@ -1129,6 +1129,7 @@ auto asset_residency::save_shader_graph(shader_graph_handle& graph, const std::f
     node_yaml["position"] = graph_node.editor_position;
     node_yaml["name"] = graph_node.name;
     node_yaml["exposed"] = graph_node.exposed;
+    node_yaml["preview"] = graph_node.preview;
 
     if (const auto* value = std::get_if<std::float_t>(&graph_node.value)) {
       node_yaml["value"] = *value;
@@ -1707,6 +1708,7 @@ auto asset_residency::_finalize_shader_graph(asset_loader::shader_graph_result& 
     node.editor_position = node_description.editor_position;
     node.name = node_description.name;
     node.exposed = node_description.exposed;
+    node.preview = node_description.preview;
 
     if (const auto* pattern = std::get_if<std::string>(&node_description.value); pattern && node_description.type == shader_node_type::swizzle) {
       node.value = *pattern;

@@ -37,8 +37,8 @@ auto editor_state::toggle_node_selection(const sbx::scenes::node& node) -> void 
   auto* selected = std::get_if<node_selection>(&current_selection);
   auto updated = selected != nullptr ? std::move(*selected) : node_selection{};
 
-  if (const auto it = std::find(updated.ids.begin(), updated.ids.end(), node.id()); it != updated.ids.end()) {
-    updated.ids.erase(it);
+  if (const auto entry = std::find(updated.ids.begin(), updated.ids.end(), node.id()); entry != updated.ids.end()) {
+    updated.ids.erase(entry);
   } else {
     updated.ids.push_back(node.id());
   }

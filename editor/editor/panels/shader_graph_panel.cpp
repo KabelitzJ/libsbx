@@ -341,6 +341,10 @@ auto shader_graph_panel::_open(sbx::assets::shader_graph_handle graph, std::file
   _selection = std::monostate{};
   _seeded_positions.clear();
 
+  // Node ids are graph-local -- a stale entry surviving from whatever graph was open before would
+  // otherwise sit there orphaned under the new graph's own (possibly colliding) node ids.
+  _node_previews.clear();
+
   if (_graph.is_valid()) {
     _edit.name = _graph->name();
     _edit.nodes = _graph->nodes();
@@ -352,7 +356,7 @@ auto shader_graph_panel::_open(sbx::assets::shader_graph_handle graph, std::file
   _apply_live();
 }
 
-auto shader_graph_panel::_apply_live() -> void {
+auto shader_graph_panel::_apply_live(bool structural) -> void {
   if (!_graph.is_valid()) {
     return;
   }
@@ -366,6 +370,20 @@ auto shader_graph_panel::_apply_live() -> void {
   // cooking the result (which Save does) is not.
   const auto result = sbx::assets::generate_shader_graph_source("shader_graph_preview", _edit);
   _validation_error = result ? std::string{} : result.error();
+
+  // Only a structural change needs the master preview's own (async, see its own doc comment)
+  // recompile -- a value-only change (a Constant's own value) is picked up for free the next time
+  // _draw_master_preview calls _preview.update, no recompile involved. Same reasoning for every
+  // currently-previewed node -- a structural edit anywhere could affect any of their own subgraphs.
+  if (structural && result) {
+    _preview.request_recompile(_edit);
+
+    for (const auto& node : _edit.nodes) {
+      if (node.preview) {
+        _node_previews.request_recompile(_edit, node.id);
+      }
+    }
+  }
 }
 
 auto shader_graph_panel::_next_node_id() const -> std::uint32_t {
@@ -420,8 +438,16 @@ auto shader_graph_panel::draw(editor_state& state) -> void {
 
   ImGui::SameLine();
 
+  ImGui::BeginChild("##shader_graph_right_column", ImVec2{0.0f, 0.0f});
+
+  ImGui::BeginChild("##shader_graph_preview_region", ImVec2{0.0f, 220.0f}, ImGuiChildFlags_Borders);
+  _draw_master_preview();
+  ImGui::EndChild();
+
   ImGui::BeginChild("##shader_graph_selection_region", ImVec2{0.0f, 0.0f}, ImGuiChildFlags_Borders);
   _draw_selection_inspector();
+  ImGui::EndChild();
+
   ImGui::EndChild();
 
   ImGui::End();
@@ -688,6 +714,23 @@ auto shader_graph_panel::_draw_canvas() -> void {
       }
     }
 
+    if (node.preview) {
+      // ImGui's cursor-max tracking already accounts for the pin section's own absolutely-
+      // positioned rows above (same mechanism draw_pin_icon's Dummy calls already rely on) --
+      // SetCursorPosX + the next item is enough to land below all of them, no manual Y tracking
+      // needed to know where the pin rows actually ended.
+      ImGui::SetCursorPosX(content_start_x);
+      ImGui::Spacing();
+
+      constexpr auto swatch_size = ImVec2{64.0f, 64.0f};
+
+      if (const auto texture_id = _node_previews.texture_id(node.id)) {
+        ImGui::Image(*texture_id, swatch_size);
+      } else {
+        ImGui::Dummy(swatch_size);
+      }
+    }
+
     ax::NodeEditor::EndNode();
 
     const auto position = ax::NodeEditor::GetNodePosition(id);
@@ -772,6 +815,7 @@ auto shader_graph_panel::_draw_canvas() -> void {
         std::erase_if(_edit.edges, [&deleted_id](const auto& e) { return e.from_node == *deleted_id || e.to_node == *deleted_id; });
 
         _seeded_positions.erase(*deleted_id);
+        _node_previews.forget(*deleted_id);
         _selection = std::monostate{};
         _apply_live();
       }
@@ -806,6 +850,30 @@ auto shader_graph_panel::_draw_canvas() -> void {
   }
 
   if (ImGui::BeginPopup("##shader_graph_node_context")) {
+    if (const auto context_id = node_id_from_node(_context_node_id)) {
+      const auto entry = std::ranges::find(_edit.nodes, *context_id, &sbx::assets::shader_graph_node::id);
+
+      if (entry != _edit.nodes.end()) {
+        if (ImGui::MenuItem(entry->preview ? ICON_MDI_EYE_OFF " Hide Preview" : ICON_MDI_EYE " Show Preview")) {
+          entry->preview = !entry->preview;
+
+          // Persists the flag like a position drag would (no recompile -- see _apply_live's own
+          // doc comment for why that matters) -- the master graph's own shading never depends on
+          // it, only whether this one node's swatch is shown at all.
+          auto& assets_module = sbx::core::engine::get_module<sbx::assets::assets_module>();
+          assets_module.update_shader_graph_data(_graph, _edit);
+
+          if (entry->preview) {
+            _node_previews.request_recompile(_edit, entry->id);
+          } else {
+            _node_previews.forget(entry->id);
+          }
+        }
+
+        ImGui::Separator();
+      }
+    }
+
     if (ImGui::MenuItem(ICON_MDI_TRASH_CAN " Delete Node")) {
       ax::NodeEditor::DeleteNode(_context_node_id); // reconciled by BeginDelete/QueryDeletedNode next frame
     }
@@ -839,17 +907,42 @@ auto shader_graph_panel::_draw_canvas() -> void {
   ax::NodeEditor::End();
 }
 
+auto shader_graph_panel::_draw_master_preview() -> void {
+  ImGui::SeparatorText(ICON_MDI_EYE " Preview");
+
+  const auto texture_id = _preview.update(_edit);
+
+  // Drives every currently-tracked node preview too -- same material buffer, refreshed by the
+  // call just above, so a value-only edit updates node swatches exactly as live as the master one.
+  _node_previews.update(_preview.material_address(), _preview.sampler_index(), _preview.material_changed_last_update());
+
+  const auto preview_size = ImVec2{180.0f, 180.0f};
+
+  if (texture_id) {
+    ImGui::Image(*texture_id, preview_size);
+  } else {
+    // Nothing compiled yet -- no graph, a graph that doesn't compile, or the first background
+    // compile hasn't landed yet. Reserve the same footprint either way so the layout doesn't jump
+    // once it does.
+    ImGui::Dummy(preview_size);
+  }
+
+  if (!_preview.error().empty()) {
+    ImGui::TextColored(ImVec4{1.0f, 0.6f, 0.2f, 1.0f}, ICON_MDI_ALERT " %s", _preview.error().c_str());
+  }
+}
+
 auto shader_graph_panel::_draw_selection_inspector() -> void {
   if (std::holds_alternative<std::uint32_t>(_selection)) {
     const auto node_id = std::get<std::uint32_t>(_selection);
-    const auto it = std::ranges::find(_edit.nodes, node_id, &sbx::assets::shader_graph_node::id);
+    const auto entry = std::ranges::find(_edit.nodes, node_id, &sbx::assets::shader_graph_node::id);
 
-    if (it == _edit.nodes.end()) {
+    if (entry == _edit.nodes.end()) {
       _selection = std::monostate{};
       return;
     }
 
-    auto& node = *it;
+    auto& node = *entry;
 
     ImGui::SeparatorText(sbx::assets::shader_node_display_name(node.type));
 
@@ -858,7 +951,7 @@ auto shader_graph_panel::_draw_selection_inspector() -> void {
 
     if (is_constant || is_texture) {
       if (draw_text_field(is_texture ? "Texture Name" : "Parameter Name", node.name)) {
-        _apply_live();
+        _apply_live(false); // display-only -- never appears in generated Slang
       }
 
       if (is_constant) {
@@ -876,7 +969,7 @@ auto shader_graph_panel::_draw_selection_inspector() -> void {
 
         if (ImGui::DragFloat("Value", &value, 0.01f)) {
           node.value = value;
-          _apply_live();
+          _apply_live(false); // value-only -- the master preview reads this live, no recompile needed
         }
 
         break;
@@ -887,7 +980,7 @@ auto shader_graph_panel::_draw_selection_inspector() -> void {
 
         if (draw_vector3_control("Value", components, 0.0f, 0.01f).changed) {
           node.value = sbx::math::vector3{components[0], components[1], components[2]};
-          _apply_live();
+          _apply_live(false); // value-only -- see constant_float's own case
         }
 
         break;
@@ -897,7 +990,7 @@ auto shader_graph_panel::_draw_selection_inspector() -> void {
 
         if (draw_color_field("Value", value)) {
           node.value = value;
-          _apply_live();
+          _apply_live(false); // value-only -- see constant_float's own case
         }
 
         break;
@@ -955,6 +1048,7 @@ auto shader_graph_panel::_draw_selection_inspector() -> void {
       std::erase_if(_edit.edges, [deleted_id](const auto& e) { return e.from_node == deleted_id || e.to_node == deleted_id; });
 
       _seeded_positions.erase(deleted_id);
+      _node_previews.forget(deleted_id);
       _selection = std::monostate{};
       _apply_live();
       return;
@@ -970,8 +1064,8 @@ auto shader_graph_panel::_draw_selection_inspector() -> void {
     const auto& edge = _edit.edges[index];
 
     const auto node_label = [this](std::uint32_t id) {
-      const auto it = std::ranges::find(_edit.nodes, id, &sbx::assets::shader_graph_node::id);
-      return it != _edit.nodes.end() ? std::string{sbx::assets::shader_node_display_name(it->type)} : std::string{"(unknown)"};
+      const auto entry = std::ranges::find(_edit.nodes, id, &sbx::assets::shader_graph_node::id);
+      return entry != _edit.nodes.end() ? std::string{sbx::assets::shader_node_display_name(entry->type)} : std::string{"(unknown)"};
     };
 
     ImGui::SeparatorText("Edge");

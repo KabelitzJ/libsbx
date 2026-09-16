@@ -42,6 +42,7 @@ auto asset_cooker::parse_shader_graph_file(const std::filesystem::path& source) 
       if (node_yaml["position"]) node.editor_position = node_yaml["position"].as<math::vector2>();
       if (node_yaml["name"]) node.name = node_yaml["name"].as<std::string>();
       if (node_yaml["exposed"]) node.exposed = node_yaml["exposed"].as<bool>();
+      if (node_yaml["preview"]) node.preview = node_yaml["preview"].as<bool>();
 
       switch (node.type) {
         case shader_node_type::constant_float:

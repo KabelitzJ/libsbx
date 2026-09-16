@@ -587,6 +587,8 @@ struct shader_graph_node {
   math::vector2 editor_position{0.0f, 0.0f};
   std::string name{};       // exposed-parameter / texture-slot display name
   bool exposed{false};      // constant_* only -- becomes a material-tunable generic_params slot
+  bool preview{false};      // editor-only, like editor_position -- codegen never reads this; shows
+                             // an inline 2D preview swatch on this node in the graph editor
   shader_graph_node_value value{};
 }; // struct shader_graph_node
 

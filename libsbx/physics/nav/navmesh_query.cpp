@@ -59,11 +59,11 @@ namespace sbx::physics {
 
     if (current == end) {
       auto polys = std::vector<poly_reference>{current};
-      auto it = came_from.find(current);
+      auto entry = came_from.find(current);
 
-      while (it != came_from.end()) {
-        polys.push_back(it->second);
-        it = came_from.find(it->second);
+      while (entry != came_from.end()) {
+        polys.push_back(entry->second);
+        entry = came_from.find(entry->second);
       }
 
       std::reverse(polys.begin(), polys.end());
@@ -343,12 +343,12 @@ namespace sbx::physics {
   auto node = best_ref;
   result.visited.push_back(node);
 
-  auto it = came_from.find(node);
+  auto entry = came_from.find(node);
 
-  while (it != came_from.end()) {
-    node = it->second;
+  while (entry != came_from.end()) {
+    node = entry->second;
     result.visited.push_back(node);
-    it = came_from.find(node);
+    entry = came_from.find(node);
   }
 
   std::reverse(result.visited.begin(), result.visited.end());

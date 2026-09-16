@@ -180,9 +180,9 @@ auto file_dialog::_select_range(std::size_t anchor, std::size_t clicked, const s
 
   const auto [low, high] = std::minmax(anchor_it, clicked_it);
 
-  for (auto it = low; it != high + 1; ++it) {
-    if (*it < _entry_selected.size()) {
-      _entry_selected[*it] = true;
+  for (auto entry = low; entry != high + 1; ++entry) {
+    if (*entry < _entry_selected.size()) {
+      _entry_selected[*entry] = true;
     }
   }
 }
@@ -344,8 +344,8 @@ auto file_dialog::_handle_keyboard_navigation(const std::vector<std::size_t>& vi
   auto position = std::optional<std::size_t>{};
 
   if (_focused_index) {
-    if (const auto it = std::ranges::find(visible, *_focused_index); it != visible.end()) {
-      position = static_cast<std::size_t>(it - visible.begin());
+    if (const auto entry = std::ranges::find(visible, *_focused_index); entry != visible.end()) {
+      position = static_cast<std::size_t>(entry - visible.begin());
     }
   }
 

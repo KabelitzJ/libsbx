@@ -226,8 +226,7 @@ public:
 
       const auto& list = entry->second;
 
-      for (auto entry = list.rbegin(); entry != list.rend(); ++entry) {
-        auto filesystem = *entry;
+      for (const auto& filesystem : std::ranges::views::reverse(list)) {
         const auto& files = filesystem->files();
 
         for (const auto& info : files) {

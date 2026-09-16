@@ -16,8 +16,8 @@ auto composite_command::execute(sbx::scenes::scene& target) -> void {
 }
 
 auto composite_command::undo(sbx::scenes::scene& target) -> void {
-  for (auto entry = _commands.rbegin(); entry != _commands.rend(); ++entry) {
-    (*entry)->undo(target);
+  for (const auto& entry : std::ranges::views::reverse(_commands)) {
+    entry->undo(target);
   }
 }
 

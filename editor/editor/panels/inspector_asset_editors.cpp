@@ -122,6 +122,18 @@ auto inspector_panel::_draw_material_properties(editor_state& state, const asset
           }
           break;
         }
+        case sbx::assets::shader_graph_parameter_type::vector2_value: {
+          if (parameter.slot < _material_edit.generic_params.size()) {
+            auto& value = _material_edit.generic_params[parameter.slot];
+            auto components = std::array<std::float_t, 2u>{value.x(), value.y()};
+            if (draw_vector2_control(label.c_str(), components, 0.0f, 0.01f).changed) {
+              value.x() = components[0];
+              value.y() = components[1];
+              changed = true;
+            }
+          }
+          break;
+        }
         case sbx::assets::shader_graph_parameter_type::vector3_value: {
           if (parameter.slot < _material_edit.generic_params.size()) {
             auto& value = _material_edit.generic_params[parameter.slot];
@@ -130,6 +142,33 @@ auto inspector_panel::_draw_material_properties(editor_state& state, const asset
               value.x() = components[0];
               value.y() = components[1];
               value.z() = components[2];
+              changed = true;
+            }
+          }
+          break;
+        }
+        case sbx::assets::shader_graph_parameter_type::vector4_value: {
+          // See shader_graph_panel.cpp's own constant_vector4 case -- no draw_vector4_control
+          // widget exists, so a plain labeled X/Y/Z/W row of DragFloats here too. The enclosing
+          // loop's own PushID(parameter.type/slot) above already scopes "X"/"Y"/"Z"/"W" against
+          // any other exposed parameter's own same-named rows.
+          if (parameter.slot < _material_edit.generic_params.size()) {
+            auto& value = _material_edit.generic_params[parameter.slot];
+            auto components = std::array<std::float_t, 4u>{value.x(), value.y(), value.z(), value.w()};
+
+            ImGui::TextUnformatted(label.c_str());
+
+            auto vector4_changed = false;
+            vector4_changed |= ImGui::DragFloat("X", &components[0], 0.01f);
+            vector4_changed |= ImGui::DragFloat("Y", &components[1], 0.01f);
+            vector4_changed |= ImGui::DragFloat("Z", &components[2], 0.01f);
+            vector4_changed |= ImGui::DragFloat("W", &components[3], 0.01f);
+
+            if (vector4_changed) {
+              value.x() = components[0];
+              value.y() = components[1];
+              value.z() = components[2];
+              value.w() = components[3];
               changed = true;
             }
           }

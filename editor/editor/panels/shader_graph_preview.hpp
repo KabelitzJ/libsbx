@@ -34,7 +34,7 @@ struct shader_graph_preview_push_constants {
   sbx::math::matrix4x4 model_view_projection;
   sbx::math::vector4 light_direction; // xyz = direction (surface <- light), w = float(sampler_index)
   sbx::math::vector4 light_color;     // rgb = color, a = intensity
-  sbx::math::vector4 camera_position; // xyz used; w unused
+  sbx::math::vector4 camera_position; // xyz used; w = float(elapsed seconds) for the Time node -- Delta Time is a fixed literal in the generated shader instead, no field needed for it
   sbx::graphics::buffer::address_type vertex_address;
   sbx::graphics::buffer::address_type material_address;
 }; // struct shader_graph_preview_push_constants
@@ -84,6 +84,8 @@ struct shader_graph_preview_material_data {
 struct shader_graph_node_preview_push_constants {
   sbx::graphics::buffer::address_type material_address;
   std::float_t sampler_index; // small non-negative index, stored as a plain float -- see sampler_index's own doc comment on shader_graph_preview_push_constants
+  std::float_t time;
+  std::float_t delta_time;
 }; // struct shader_graph_node_preview_push_constants
 
 } // namespace editor

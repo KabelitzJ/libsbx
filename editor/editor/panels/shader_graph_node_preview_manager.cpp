@@ -122,6 +122,8 @@ auto shader_graph_node_preview_manager::_render(entry& state, sbx::graphics::buf
   auto push = shader_graph_node_preview_push_constants{};
   push.material_address = material_address;
   push.sampler_index = static_cast<std::float_t>(sampler_index);
+  push.time = static_cast<std::float_t>(sbx::core::engine::time().value());
+  push.delta_time = static_cast<std::float_t>(sbx::core::engine::delta_time().value());
 
   auto command_buffer = sbx::graphics::command_buffer{sbx::graphics::queue::type::graphics, true};
 

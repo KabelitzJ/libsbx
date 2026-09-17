@@ -198,7 +198,7 @@ static auto input_column_width(const sbx::assets::shader_graph_node& node, sbx::
 // Every shader_node_type, for the Add Node palette -- grouped by shader_node_category_of at draw
 // time rather than kept pre-sorted here, so adding a new enumerator to shader_graph.hpp only ever
 // needs updating in one place (this list) to appear in the palette too.
-constexpr auto all_node_types = std::array<sbx::assets::shader_node_type, 49u>{
+constexpr auto all_node_types = std::array<sbx::assets::shader_node_type, 53u>{
   sbx::assets::shader_node_type::input_uv,
   sbx::assets::shader_node_type::input_normal,
   sbx::assets::shader_node_type::input_view_dir,
@@ -211,7 +211,9 @@ constexpr auto all_node_types = std::array<sbx::assets::shader_node_type, 49u>{
   sbx::assets::shader_node_type::time,
   sbx::assets::shader_node_type::delta_time,
   sbx::assets::shader_node_type::constant_float,
+  sbx::assets::shader_node_type::constant_vector2,
   sbx::assets::shader_node_type::constant_vector3,
+  sbx::assets::shader_node_type::constant_vector4,
   sbx::assets::shader_node_type::constant_color,
   sbx::assets::shader_node_type::texture_sample,
   sbx::assets::shader_node_type::add,
@@ -234,6 +236,8 @@ constexpr auto all_node_types = std::array<sbx::assets::shader_node_type, 49u>{
   sbx::assets::shader_node_type::round,
   sbx::assets::shader_node_type::fraction,
   sbx::assets::shader_node_type::sign,
+  sbx::assets::shader_node_type::sine,
+  sbx::assets::shader_node_type::cosine,
   sbx::assets::shader_node_type::minimum,
   sbx::assets::shader_node_type::maximum,
   sbx::assets::shader_node_type::clamp,
@@ -255,7 +259,13 @@ static auto category_name(sbx::assets::shader_node_category category) -> const c
     case sbx::assets::shader_node_category::input: return ICON_MDI_IMPORT " Input";
     case sbx::assets::shader_node_category::constant: return ICON_MDI_NUMERIC " Constant";
     case sbx::assets::shader_node_category::texture: return ICON_MDI_IMAGE " Texture";
-    case sbx::assets::shader_node_category::math: return ICON_MDI_FUNCTION_VARIANT " Math";
+    case sbx::assets::shader_node_category::basic: return ICON_MDI_FUNCTION_VARIANT " Basic";
+    case sbx::assets::shader_node_category::round: return ICON_MDI_CIRCLE_HALF_FULL " Round";
+    case sbx::assets::shader_node_category::interpolation: return ICON_MDI_TRANSITION " Interpolation";
+    case sbx::assets::shader_node_category::range: return ICON_MDI_ARROW_EXPAND_HORIZONTAL " Range";
+    case sbx::assets::shader_node_category::trigonometry: return ICON_MDI_ANGLE_ACUTE " Trigonometry";
+    case sbx::assets::shader_node_category::vector: return ICON_MDI_VECTOR_LINE " Vector";
+    case sbx::assets::shader_node_category::channel: return ICON_MDI_SHUFFLE_VARIANT " Channel";
     case sbx::assets::shader_node_category::output: return ICON_MDI_EXPORT " Output";
   }
 
@@ -288,7 +298,9 @@ static auto node_type_already_present(const sbx::assets::shader_graph::create_in
 static auto default_value_for(sbx::assets::shader_node_type type) -> sbx::assets::shader_graph_node_value {
   switch (type) {
     case sbx::assets::shader_node_type::constant_float: return 0.0f;
+    case sbx::assets::shader_node_type::constant_vector2: return sbx::math::vector2{0.0f, 0.0f};
     case sbx::assets::shader_node_type::constant_vector3: return sbx::math::vector3{0.0f, 0.0f, 0.0f};
+    case sbx::assets::shader_node_type::constant_vector4: return sbx::math::vector4{0.0f, 0.0f, 0.0f, 0.0f};
     case sbx::assets::shader_node_type::constant_color: return sbx::math::color{1.0f, 1.0f, 1.0f, 1.0f};
     case sbx::assets::shader_node_type::texture_sample: return sbx::assets::texture_handle{};
     case sbx::assets::shader_node_type::swizzle: return std::string{"rgba"}; // identity -- the user then edits it
@@ -445,7 +457,7 @@ auto shader_graph_panel::draw(editor_state& state) -> void {
   ImGui::EndChild();
 
   ImGui::BeginChild("##shader_graph_selection_region", ImVec2{0.0f, 0.0f}, ImGuiChildFlags_Borders);
-  _draw_selection_inspector();
+  _draw_selection_inspector(state);
   ImGui::EndChild();
 
   ImGui::EndChild();
@@ -546,7 +558,19 @@ auto shader_graph_panel::_draw_add_node_menu(sbx::math::vector2 spawn_position) 
     return;
   }
 
-  for (const auto category : {sbx::assets::shader_node_category::input, sbx::assets::shader_node_category::constant, sbx::assets::shader_node_category::texture, sbx::assets::shader_node_category::math, sbx::assets::shader_node_category::output}) {
+  for (const auto category : {
+    sbx::assets::shader_node_category::input,
+    sbx::assets::shader_node_category::constant,
+    sbx::assets::shader_node_category::texture,
+    sbx::assets::shader_node_category::basic,
+    sbx::assets::shader_node_category::round,
+    sbx::assets::shader_node_category::interpolation,
+    sbx::assets::shader_node_category::range,
+    sbx::assets::shader_node_category::trigonometry,
+    sbx::assets::shader_node_category::vector,
+    sbx::assets::shader_node_category::channel,
+    sbx::assets::shader_node_category::output
+  }) {
     if (!ImGui::BeginMenu(category_name(category))) {
       continue;
     }
@@ -609,7 +633,7 @@ auto shader_graph_panel::_draw_canvas() -> void {
     const auto output_count = sbx::assets::shader_node_output_count(node.type);
     const auto input_count = sbx::assets::shader_node_input_count(node.type);
 
-    if (!node.name.empty() && (node.type == sbx::assets::shader_node_type::constant_float || node.type == sbx::assets::shader_node_type::constant_vector3 || node.type == sbx::assets::shader_node_type::constant_color || node.type == sbx::assets::shader_node_type::texture_sample)) {
+    if (!node.name.empty() && (node.type == sbx::assets::shader_node_type::constant_float || node.type == sbx::assets::shader_node_type::constant_vector2 || node.type == sbx::assets::shader_node_type::constant_vector3 || node.type == sbx::assets::shader_node_type::constant_vector4 || node.type == sbx::assets::shader_node_type::constant_color || node.type == sbx::assets::shader_node_type::texture_sample)) {
       ImGui::SameLine();
       ImGui::TextDisabled("(%s)", node.name.c_str());
     } else if (node.type == sbx::assets::shader_node_type::swizzle) {
@@ -619,6 +643,12 @@ auto shader_graph_panel::_draw_canvas() -> void {
       ImGui::SameLine();
       ImGui::TextDisabled(".%s", sbx::assets::shader_node_swizzle_pattern(node).c_str());
     }
+
+    // Set below, inside the pin section, to this node's actual content width -- needed again
+    // afterward to center the preview swatch under it. Left at 0 for a node with no pins at all
+    // (never actually previewable -- previewing needs an output pin to read -- so the swatch code
+    // below never sees this un-set), rather than duplicating the pin section's own width math.
+    auto node_content_width = 0.0f;
 
     if (input_count > 0u || output_count > 0u) {
       // Where the title row's own content ends, in the same local coordinate space
@@ -661,6 +691,7 @@ auto shader_graph_panel::_draw_canvas() -> void {
       // an absolute window-relative X (content_start_x plus the title's own width) -- content_start_x
       // + natural_width puts both candidates in that same absolute space before comparing them.
       const auto content_width = std::max(title_row_end_x, content_start_x + natural_width);
+      node_content_width = content_width - content_start_x;
 
       const auto pins_top = ImGui::GetCursorPosY();
 
@@ -718,11 +749,19 @@ auto shader_graph_panel::_draw_canvas() -> void {
       // ImGui's cursor-max tracking already accounts for the pin section's own absolutely-
       // positioned rows above (same mechanism draw_pin_icon's Dummy calls already rely on) --
       // SetCursorPosX + the next item is enough to land below all of them, no manual Y tracking
-      // needed to know where the pin rows actually ended.
+      // needed to know where the pin rows actually ended. A full row_height's worth of gap (not
+      // just ImGui::Spacing()'s few pixels) so the swatch doesn't visually crowd the pin row right
+      // above it.
       ImGui::SetCursorPosX(content_start_x);
-      ImGui::Spacing();
+      ImGui::Dummy(ImVec2{0.0f, ImGui::GetTextLineHeightWithSpacing() * 0.5f});
 
       constexpr auto swatch_size = ImVec2{64.0f, 64.0f};
+
+      // Centered under the node's own content width (title/pin section, whichever is wider) rather
+      // than flush against the left edge -- content_start_x is that left edge in this same
+      // window-relative space title_row_end_x/content_width above are already measured in.
+      const auto swatch_x = content_start_x + std::max(0.0f, (node_content_width - swatch_size.x) * 0.5f);
+      ImGui::SetCursorPosX(swatch_x);
 
       if (const auto texture_id = _node_previews.texture_id(node.id)) {
         ImGui::Image(*texture_id, swatch_size);
@@ -932,7 +971,7 @@ auto shader_graph_panel::_draw_master_preview() -> void {
   }
 }
 
-auto shader_graph_panel::_draw_selection_inspector() -> void {
+auto shader_graph_panel::_draw_selection_inspector(editor_state& state) -> void {
   if (std::holds_alternative<std::uint32_t>(_selection)) {
     const auto node_id = std::get<std::uint32_t>(_selection);
     const auto entry = std::ranges::find(_edit.nodes, node_id, &sbx::assets::shader_graph_node::id);
@@ -946,7 +985,7 @@ auto shader_graph_panel::_draw_selection_inspector() -> void {
 
     ImGui::SeparatorText(sbx::assets::shader_node_display_name(node.type));
 
-    const auto is_constant = node.type == sbx::assets::shader_node_type::constant_float || node.type == sbx::assets::shader_node_type::constant_vector3 || node.type == sbx::assets::shader_node_type::constant_color;
+    const auto is_constant = node.type == sbx::assets::shader_node_type::constant_float || node.type == sbx::assets::shader_node_type::constant_vector2 || node.type == sbx::assets::shader_node_type::constant_vector3 || node.type == sbx::assets::shader_node_type::constant_vector4 || node.type == sbx::assets::shader_node_type::constant_color;
     const auto is_texture = node.type == sbx::assets::shader_node_type::texture_sample;
 
     if (is_constant || is_texture) {
@@ -969,7 +1008,22 @@ auto shader_graph_panel::_draw_selection_inspector() -> void {
 
         if (ImGui::DragFloat("Value", &value, 0.01f)) {
           node.value = value;
-          _apply_live(false); // value-only -- the master preview reads this live, no recompile needed
+          // Only value-only when Exposed -- an exposed constant reads material.generic_params[]
+          // at runtime (the live-refreshed preview material buffer, no recompile needed), but a
+          // non-exposed one gets its value baked as a literal straight into the generated Slang
+          // text (shader_graph_codegen.cpp's _emit), so changing it has to regenerate/recompile.
+          _apply_live(!node.exposed);
+        }
+
+        break;
+      }
+      case sbx::assets::shader_node_type::constant_vector2: {
+        auto value = std::holds_alternative<sbx::math::vector2>(node.value) ? std::get<sbx::math::vector2>(node.value) : sbx::math::vector2{};
+        auto components = std::array<std::float_t, 2u>{value.x(), value.y()};
+
+        if (draw_vector2_control("Value", components, 0.0f, 0.01f).changed) {
+          node.value = sbx::math::vector2{components[0], components[1]};
+          _apply_live(!node.exposed); // see constant_float's own case
         }
 
         break;
@@ -980,7 +1034,27 @@ auto shader_graph_panel::_draw_selection_inspector() -> void {
 
         if (draw_vector3_control("Value", components, 0.0f, 0.01f).changed) {
           node.value = sbx::math::vector3{components[0], components[1], components[2]};
-          _apply_live(false); // value-only -- see constant_float's own case
+          _apply_live(!node.exposed); // see constant_float's own case
+        }
+
+        break;
+      }
+      case sbx::assets::shader_node_type::constant_vector4: {
+        // No draw_vector4_control widget exists (only 2/3-component ones do) -- a plain X/Y/Z/W row
+        // of DragFloats rather than adding one just for this single call site; a real one would be
+        // worth factoring out if a second use ever needs it (see draw_vector3_control's own shape).
+        auto value = std::holds_alternative<sbx::math::vector4>(node.value) ? std::get<sbx::math::vector4>(node.value) : sbx::math::vector4{};
+        auto components = std::array<std::float_t, 4u>{value.x(), value.y(), value.z(), value.w()};
+
+        auto changed = false;
+        changed |= ImGui::DragFloat("X", &components[0], 0.01f);
+        changed |= ImGui::DragFloat("Y", &components[1], 0.01f);
+        changed |= ImGui::DragFloat("Z", &components[2], 0.01f);
+        changed |= ImGui::DragFloat("W", &components[3], 0.01f);
+
+        if (changed) {
+          node.value = sbx::math::vector4{components[0], components[1], components[2], components[3]};
+          _apply_live(!node.exposed); // see constant_float's own case
         }
 
         break;
@@ -990,13 +1064,36 @@ auto shader_graph_panel::_draw_selection_inspector() -> void {
 
         if (draw_color_field("Value", value)) {
           node.value = value;
-          _apply_live(false); // value-only -- see constant_float's own case
+          _apply_live(!node.exposed); // see constant_float's own case
         }
 
         break;
       }
       case sbx::assets::shader_node_type::texture_sample: {
-        ImGui::TextDisabled("Texture value is set per-material once this graph is assigned (Material Inspector's Shader Graph section) -- this node only declares the slot and its UV input.");
+        // The graph's own default -- every material assigned this graph starts its own
+        // generic_textures slot unset (material_flags/generic_params/generic_textures default to
+        // zero until a material explicitly overrides them, see the Material Inspector's Shader
+        // Graph section), so this is also the ONLY texture the graph's own preview has any value
+        // to sample -- there's no "the" material to read from while just editing the graph.
+        auto value = std::holds_alternative<sbx::assets::texture_handle>(node.value) ? std::get<sbx::assets::texture_handle>(node.value) : sbx::assets::texture_handle{};
+
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextUnformatted("Default Texture");
+        ImGui::SameLine(150.0f);
+
+        auto& assets_module = sbx::core::engine::get_module<sbx::assets::assets_module>();
+
+        if (draw_texture_picker(state, "##shader_graph_default_texture_picker", value, assets_module, sbx::graphics::format::r8g8b8a8_srgb)) {
+          node.value = value;
+          _apply_live(false); // texture_sample always reads material.generic_textures[] at runtime, exposed or not -- no recompile needed
+        }
+
+        // ponytail: only feeds this graph's own preview -- a new material assigned this graph
+        // does NOT start from this default (its own generic_textures slot starts unset/zero, same
+        // as today). Seeding a fresh material's slots from here would be a reasonable follow-up,
+        // just a separate concern (asset_cooker_material.cpp's material creation path) from what
+        // was actually asked for.
+        ImGui::TextDisabled("Used by this graph's own preview -- a material using this graph still sets its own texture in the Material Inspector.");
         break;
       }
       case sbx::assets::shader_node_type::swizzle: {

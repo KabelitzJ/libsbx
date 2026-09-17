@@ -180,7 +180,7 @@ auto shader_graph_preview_renderer::_render() -> void {
   push.model_view_projection = projection * view;
   push.light_direction = sbx::math::vector4{-0.4f, -0.7f, -0.6f, static_cast<std::float_t>(_sampler_index)};
   push.light_color = sbx::math::vector4{1.0f, 1.0f, 1.0f, 3.0f};
-  push.camera_position = sbx::math::vector4{1.5f, 1.2f, 2.5f, 0.0f};
+  push.camera_position = sbx::math::vector4{1.5f, 1.2f, 2.5f, static_cast<std::float_t>(sbx::core::engine::time().value())};
   push.vertex_address = mesh.vertex_address();
   push.material_address = material_buffer.address();
 

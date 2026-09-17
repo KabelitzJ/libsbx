@@ -254,7 +254,7 @@ struct particle_effect_description {
  * asset reference at all, so this only differs from shader_graph_node in that one variant
  * alternative.
  */
-using shader_graph_node_value_description = std::variant<std::monostate, std::float_t, math::vector3, math::color, std::string>;
+using shader_graph_node_value_description = std::variant<std::monostate, std::float_t, math::vector2, math::vector3, math::vector4, math::color, std::string>;
 
 struct shader_graph_node_description {
   std::uint32_t id{0u};

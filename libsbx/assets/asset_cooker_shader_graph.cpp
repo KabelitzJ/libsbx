@@ -48,8 +48,14 @@ auto asset_cooker::parse_shader_graph_file(const std::filesystem::path& source) 
         case shader_node_type::constant_float:
           node.value = node_yaml["value"] ? node_yaml["value"].as<std::float_t>() : 0.0f;
           break;
+        case shader_node_type::constant_vector2:
+          node.value = node_yaml["value"] ? node_yaml["value"].as<math::vector2>() : math::vector2{};
+          break;
         case shader_node_type::constant_vector3:
           node.value = node_yaml["value"] ? node_yaml["value"].as<math::vector3>() : math::vector3{};
+          break;
+        case shader_node_type::constant_vector4:
+          node.value = node_yaml["value"] ? node_yaml["value"].as<math::vector4>() : math::vector4{};
           break;
         case shader_node_type::constant_color:
           node.value = node_yaml["value"] ? node_yaml["value"].as<math::color>() : math::color{};

@@ -20,6 +20,7 @@
 #include <libsbx/math/uuid.hpp>
 #include <libsbx/math/vector2.hpp>
 #include <libsbx/math/vector3.hpp>
+#include <libsbx/math/vector4.hpp>
 
 #include <libsbx/assets/asset_handle.hpp>
 #include <libsbx/assets/loadable.hpp>
@@ -98,7 +99,9 @@ enum class shader_node_type : std::uint8_t {
   time,                  // seconds since the engine started
   delta_time,            // seconds since the previous frame
   constant_float,
+  constant_vector2,
   constant_vector3,
+  constant_vector4,
   constant_color,
   texture_sample,     // 1 input (uv, optional -- falls back to the calling stage's own uv if unconnected)
   add,
@@ -121,14 +124,17 @@ enum class shader_node_type : std::uint8_t {
   round,          // 1 input (any width), round(x)
   fraction,       // 1 input (any width), frac(x)
   sign,           // 1 input (any width), sign(x)
+  sine,           // 1 input (any width, radians), sin(x)
+  cosine,         // 1 input (any width, radians), cos(x)
   minimum,        // 2 inputs (any matching width, or a scalar broadcast against the other), min(a,b)
   maximum,        // same shape, max(a,b)
   clamp,          // In (any width) + Min/Max (that same width, or a scalar broadcast), clamp(in,min,max)
   length,         // 1 input (any width) -> scalar, length(x)
   distance,       // 2 inputs (any matching width) -> scalar, distance(a,b)
   reflect,        // In + Normal (both fixed float3) -> float3, reflect(in,normal)
-  remap,          // In (any width, dynamic) + In Min/In Max/Out Min/Out Max (each a scalar, each optional --
-                   // default 0/1/0/1) -> that same width, linearly remaps In from [InMin,InMax] to [OutMin,OutMax]
+  remap,          // In (any width, dynamic) + In Min Max/Out Min Max (each a float2 range -- .x/.y, not
+                   // two separate scalars, since they're always a matched pair -- each optional, default
+                   // (0,1)) -> that same width, linearly remaps In from In Min Max to Out Min Max
   fresnel_effect, // Normal/View Dir (both fixed float3, each optional -- default this fragment's own N/V) +
                    // Power (scalar, optional -- default 1) -> scalar, pow(saturate(1-dot(N,V)), power). Fragment-only.
   swizzle, // 1 input (any width), 1 output the SAME width as the input -- each of its up to 4 output
@@ -164,7 +170,9 @@ enum class shader_node_type : std::uint8_t {
     case shader_node_type::time: return "time";
     case shader_node_type::delta_time: return "delta_time";
     case shader_node_type::constant_float: return "constant_float";
+    case shader_node_type::constant_vector2: return "constant_vector2";
     case shader_node_type::constant_vector3: return "constant_vector3";
+    case shader_node_type::constant_vector4: return "constant_vector4";
     case shader_node_type::constant_color: return "constant_color";
     case shader_node_type::texture_sample: return "texture_sample";
     case shader_node_type::add: return "add";
@@ -187,6 +195,8 @@ enum class shader_node_type : std::uint8_t {
     case shader_node_type::round: return "round";
     case shader_node_type::fraction: return "fraction";
     case shader_node_type::sign: return "sign";
+    case shader_node_type::sine: return "sine";
+    case shader_node_type::cosine: return "cosine";
     case shader_node_type::minimum: return "minimum";
     case shader_node_type::maximum: return "maximum";
     case shader_node_type::clamp: return "clamp";
@@ -219,7 +229,9 @@ enum class shader_node_type : std::uint8_t {
   if (value == "time") return shader_node_type::time;
   if (value == "delta_time") return shader_node_type::delta_time;
   if (value == "constant_float") return shader_node_type::constant_float;
+  if (value == "constant_vector2") return shader_node_type::constant_vector2;
   if (value == "constant_vector3") return shader_node_type::constant_vector3;
+  if (value == "constant_vector4") return shader_node_type::constant_vector4;
   if (value == "constant_color") return shader_node_type::constant_color;
   if (value == "texture_sample") return shader_node_type::texture_sample;
   if (value == "add") return shader_node_type::add;
@@ -242,6 +254,8 @@ enum class shader_node_type : std::uint8_t {
   if (value == "round") return shader_node_type::round;
   if (value == "fraction") return shader_node_type::fraction;
   if (value == "sign") return shader_node_type::sign;
+  if (value == "sine") return shader_node_type::sine;
+  if (value == "cosine") return shader_node_type::cosine;
   if (value == "minimum") return shader_node_type::minimum;
   if (value == "maximum") return shader_node_type::maximum;
   if (value == "clamp") return shader_node_type::clamp;
@@ -276,7 +290,9 @@ enum class shader_node_type : std::uint8_t {
     case shader_node_type::time: return "Time";
     case shader_node_type::delta_time: return "Delta Time";
     case shader_node_type::constant_float: return "Float";
+    case shader_node_type::constant_vector2: return "Vector2";
     case shader_node_type::constant_vector3: return "Vector3";
+    case shader_node_type::constant_vector4: return "Vector4";
     case shader_node_type::constant_color: return "Color";
     case shader_node_type::texture_sample: return "Sample Texture";
     case shader_node_type::add: return "Add";
@@ -299,6 +315,8 @@ enum class shader_node_type : std::uint8_t {
     case shader_node_type::round: return "Round";
     case shader_node_type::fraction: return "Fraction";
     case shader_node_type::sign: return "Sign";
+    case shader_node_type::sine: return "Sine";
+    case shader_node_type::cosine: return "Cosine";
     case shader_node_type::minimum: return "Minimum";
     case shader_node_type::maximum: return "Maximum";
     case shader_node_type::clamp: return "Clamp";
@@ -319,12 +337,21 @@ enum class shader_node_type : std::uint8_t {
 }
 
 // Node palette grouping, for the editor's "Add Node" menu -- purely a UI concern, no effect on
-// codegen or serialization.
+// codegen or serialization. What used to be one flat "Math" bucket is now split the way Unity
+// Shader Graph's own node library splits it (Basic/Round/Interpolation/Range/Trigonometry/Vector/
+// Channel), just trimmed to the subset of node kinds this graph actually has -- a single "Math"
+// category stopped being browsable once there were 30+ node kinds in it.
 enum class shader_node_category : std::uint8_t {
   input,
   constant,
   texture,
-  math,
+  basic,         // Add, Subtract, Multiply, Divide, Power, Negate, One Minus, Absolute
+  round,         // Floor, Ceiling, Round, Fraction, Sign, Step
+  interpolation, // Lerp, Smoothstep, Remap
+  range,         // Clamp, Saturate, Minimum, Maximum
+  trigonometry,  // Sine, Cosine
+  vector,        // Dot, Cross, Normalize, Length, Distance, Reflect, Fresnel Effect
+  channel,       // Swizzle, Split, Combine
   output
 }; // enum class shader_node_category
 
@@ -343,7 +370,9 @@ enum class shader_node_category : std::uint8_t {
     case shader_node_type::delta_time:
       return shader_node_category::input;
     case shader_node_type::constant_float:
+    case shader_node_type::constant_vector2:
     case shader_node_type::constant_vector3:
+    case shader_node_type::constant_vector4:
     case shader_node_type::constant_color:
       return shader_node_category::constant;
     case shader_node_type::texture_sample:
@@ -352,41 +381,49 @@ enum class shader_node_category : std::uint8_t {
     case shader_node_type::subtract:
     case shader_node_type::multiply:
     case shader_node_type::divide:
-    case shader_node_type::lerp:
-    case shader_node_type::dot:
-    case shader_node_type::cross:
-    case shader_node_type::normalize:
-    case shader_node_type::saturate:
     case shader_node_type::pow:
-    case shader_node_type::step:
-    case shader_node_type::smoothstep:
     case shader_node_type::negate:
     case shader_node_type::one_minus:
     case shader_node_type::absolute:
+      return shader_node_category::basic;
     case shader_node_type::floor:
     case shader_node_type::ceiling:
     case shader_node_type::round:
     case shader_node_type::fraction:
     case shader_node_type::sign:
+    case shader_node_type::step:
+      return shader_node_category::round;
+    case shader_node_type::lerp:
+    case shader_node_type::smoothstep:
+    case shader_node_type::remap:
+      return shader_node_category::interpolation;
+    case shader_node_type::clamp:
+    case shader_node_type::saturate:
     case shader_node_type::minimum:
     case shader_node_type::maximum:
-    case shader_node_type::clamp:
+      return shader_node_category::range;
+    case shader_node_type::sine:
+    case shader_node_type::cosine:
+      return shader_node_category::trigonometry;
+    case shader_node_type::dot:
+    case shader_node_type::cross:
+    case shader_node_type::normalize:
     case shader_node_type::length:
     case shader_node_type::distance:
     case shader_node_type::reflect:
-    case shader_node_type::remap:
     case shader_node_type::fresnel_effect:
+      return shader_node_category::vector;
     case shader_node_type::swizzle:
     case shader_node_type::split:
     case shader_node_type::combine:
-      return shader_node_category::math;
+      return shader_node_category::channel;
     case shader_node_type::output_vertex:
     case shader_node_type::output_fragment_lit:
     case shader_node_type::output_fragment_unlit:
       return shader_node_category::output;
   }
 
-  return shader_node_category::math;
+  return shader_node_category::basic;
 }
 
 // Every node type but the three output sinks produces at least one output pin.
@@ -450,7 +487,9 @@ enum class shader_node_category : std::uint8_t {
     case shader_node_type::time:
     case shader_node_type::delta_time:
     case shader_node_type::constant_float:
+    case shader_node_type::constant_vector2:
     case shader_node_type::constant_vector3:
+    case shader_node_type::constant_vector4:
     case shader_node_type::constant_color:
       return 0u;
     case shader_node_type::texture_sample:
@@ -464,6 +503,8 @@ enum class shader_node_category : std::uint8_t {
     case shader_node_type::round:
     case shader_node_type::fraction:
     case shader_node_type::sign:
+    case shader_node_type::sine:
+    case shader_node_type::cosine:
     case shader_node_type::length:
     case shader_node_type::swizzle:
     case shader_node_type::split:
@@ -484,14 +525,13 @@ enum class shader_node_category : std::uint8_t {
     case shader_node_type::lerp:
     case shader_node_type::smoothstep:
     case shader_node_type::clamp: // In, Min, Max
+    case shader_node_type::remap: // In, In Min Max, Out Min Max
     case shader_node_type::fresnel_effect: // Normal, View Dir, Power
     case shader_node_type::output_vertex: // Position, Normal, Tangent
     case shader_node_type::output_fragment_unlit: // Color, Alpha, Alpha Clip Threshold
       return 3u;
     case shader_node_type::combine: // R, G, B, A -- each optional, defaulting to 0
       return 4u;
-    case shader_node_type::remap: // In, In Min, In Max, Out Min, Out Max
-      return 5u;
     case shader_node_type::output_fragment_lit: // Albedo, Normal, Metallic, Roughness, Emission, Occlusion, Alpha, Alpha Clip Threshold
       return 8u;
   }
@@ -562,10 +602,8 @@ enum class shader_node_category : std::uint8_t {
     case shader_node_type::remap:
       switch (pin) {
         case 0u: return "In";
-        case 1u: return "In Min";
-        case 2u: return "In Max";
-        case 3u: return "Out Min";
-        default: return "Out Max";
+        case 1u: return "In Min Max";
+        default: return "Out Min Max";
       }
     case shader_node_type::fresnel_effect:
       if (pin == 0u) return "Normal";
@@ -576,10 +614,14 @@ enum class shader_node_category : std::uint8_t {
   }
 }
 
-// The 6th alternative (std::string) is Swizzle's pattern only -- up to 4 characters from
+// The last alternative (std::string) is Swizzle's pattern only -- up to 4 characters from
 // {r,g,b,a}, one per output component, each naming which of the input's own components feeds it
 // (e.g. "bgra" swaps red and blue; "rrr" splats red across a float3). Unused by every other type.
-using shader_graph_node_value = std::variant<std::monostate, std::float_t, math::vector3, math::color, texture_handle, std::string>;
+// math::vector4 (Vector4) is deliberately its own alternative from math::color (Color) even though
+// both are 4 plain floats -- same reasoning Unity Shader Graph's own separate Vector4/Color nodes
+// have: a Color's 4th component is conventionally alpha with color-picker UI/semantics, a Vector4's
+// isn't necessarily either.
+using shader_graph_node_value = std::variant<std::monostate, std::float_t, math::vector2, math::vector3, math::vector4, math::color, texture_handle, std::string>;
 
 struct shader_graph_node {
   std::uint32_t id{0u};
@@ -615,6 +657,7 @@ struct shader_graph_edge {
 [[nodiscard]] inline auto shader_node_fixed_output_type(shader_node_type type, std::size_t pin) -> std::optional<shader_value_type> {
   switch (type) {
     case shader_node_type::input_uv:
+    case shader_node_type::constant_vector2:
       return shader_value_type::vector2;
     case shader_node_type::input_normal:
     case shader_node_type::input_view_dir:
@@ -637,6 +680,7 @@ struct shader_graph_edge {
     case shader_node_type::distance:
     case shader_node_type::fresnel_effect:
       return shader_value_type::scalar;
+    case shader_node_type::constant_vector4:
     case shader_node_type::constant_color:
     case shader_node_type::texture_sample:
       return shader_value_type::vector4;
@@ -663,7 +707,7 @@ struct shader_graph_edge {
       return shader_value_type::scalar; // R/G/B/A, every pin
     case shader_node_type::remap:
       if (pin == 0u) return std::nullopt; // In -- dynamic
-      return shader_value_type::scalar; // In Min/In Max/Out Min/Out Max
+      return shader_value_type::vector2; // In Min Max / Out Min Max, each a matched (min,max) pair
     case shader_node_type::fresnel_effect:
       return pin == 2u ? shader_value_type::scalar : shader_value_type::vector3; // Normal/View Dir (vector3) / Power (scalar)
     case shader_node_type::output_vertex:
@@ -806,11 +850,19 @@ private:
   // scalar (used directly by accepts(), bypassing _resolve() for exactly that reason). Pins the
   // dominant-pins list excludes are always allowed to be a plain scalar regardless (Lerp's T,
   // Pow's exponent, Step/Smoothstep's x). `exclude_pin`, when set, skips that one pin entirely --
-  // see accepts()'s own doc comment for why. A non-scalar dominant pin wins immediately; a scalar
-  // one is remembered as a fallback rather than discarded outright -- e.g. Pow has only one
-  // dominant pin (its base), so if that alone is connected and scalar, the node's operating type
-  // genuinely IS scalar, not "still unconstrained" (which would wrongly let its exponent pin
-  // accept a non-scalar later).
+  // see accepts()'s own doc comment for why. A non-scalar dominant pin wins immediately.
+  //
+  // A scalar dominant pin is only ever a real, node-wide "operating type" once EVERY dominant pin
+  // has actually been examined (none excluded, none simply unconnected) and every one of them
+  // resolved scalar -- a scalar never constrains anything on its own (it broadcasts against any
+  // width), so a single-dominant-pin node (Pow, Normalize, ...) connected scalar genuinely IS
+  // scalar (its one pin *is* every dominant pin), but a two-dominant-pin node (Add, Multiply, Dot,
+  // ...) with only ONE side connected scalar is NOT yet scalar-locked: the still-unconnected or
+  // currently-being-replaced other side could still turn out non-scalar, and the scalar side would
+  // just broadcast against it, exactly as it does when the connection order is reversed. Getting
+  // this wrong is exactly why multiply(float, float4) used to be rejected while
+  // multiply(float4, float) (float4 connected first, establishing the type outright before the
+  // scalar side that never contests it) was accepted -- both must be equally valid.
   [[nodiscard]] auto _operating_type(std::uint32_t node_id, std::optional<std::uint32_t> exclude_pin) -> std::optional<shader_value_type> {
     const auto entry = _nodes_by_id.find(node_id);
 
@@ -818,9 +870,12 @@ private:
       return std::nullopt;
     }
 
-    auto scalar_fallback = false;
+    const auto dominant_pins = _dominant_pins(entry->second->type);
 
-    for (const auto pin : _dominant_pins(entry->second->type)) {
+    auto examined_count = std::size_t{0u};
+    auto scalar_count = std::size_t{0u};
+
+    for (const auto pin : dominant_pins) {
       if (exclude_pin && pin == *exclude_pin) {
         continue;
       }
@@ -837,14 +892,20 @@ private:
         continue;
       }
 
+      ++examined_count;
+
       if (*resolved != shader_value_type::scalar) {
         return resolved;
       }
 
-      scalar_fallback = true;
+      ++scalar_count;
     }
 
-    return scalar_fallback ? std::optional{shader_value_type::scalar} : std::nullopt;
+    if (examined_count > 0u && examined_count == dominant_pins.size() && scalar_count == examined_count) {
+      return shader_value_type::scalar;
+    }
+
+    return std::nullopt;
   }
 
   // Split and Swizzle each have exactly one dominant pin (their own single input) purely so
@@ -880,9 +941,11 @@ private:
       case shader_node_type::round:
       case shader_node_type::fraction:
       case shader_node_type::sign:
+      case shader_node_type::sine:
+      case shader_node_type::cosine:
       case shader_node_type::clamp:  // Min/Max (pins 1,2) never drive the type
       case shader_node_type::length: // fixed scalar output, but In's own width still needs to be displayable/re-checkable
-      case shader_node_type::remap:  // In Min/In Max/Out Min/Out Max (pins 1-4) never drive the type
+      case shader_node_type::remap:  // In Min Max/Out Min Max (pins 1,2) never drive the type
         return {0u};
       default:
         return {};
@@ -897,7 +960,9 @@ private:
 
 enum class shader_graph_parameter_type : std::uint8_t {
   float_value,
+  vector2_value,
   vector3_value,
+  vector4_value,
   color_value,
   texture_value
 }; // enum class shader_graph_parameter_type
@@ -910,7 +975,7 @@ struct shader_graph_parameter {
   std::uint32_t node_id{0u};
   std::string name{};
   shader_graph_parameter_type type{shader_graph_parameter_type::float_value};
-  std::uint32_t slot{0u}; // index into generic_params[] (float/vector3/color) or generic_textures[]
+  std::uint32_t slot{0u}; // index into generic_params[] (float/vector2/vector3/vector4/color) or generic_textures[]
 }; // struct shader_graph_parameter
 
 // Free function (not a shader_graph method) so codegen can call it directly against a
@@ -939,8 +1004,14 @@ struct shader_graph_parameter {
       case shader_node_type::constant_float:
         result.push_back(shader_graph_parameter{node.id, node.name, shader_graph_parameter_type::float_value, float_slot++});
         break;
+      case shader_node_type::constant_vector2:
+        result.push_back(shader_graph_parameter{node.id, node.name, shader_graph_parameter_type::vector2_value, float_slot++});
+        break;
       case shader_node_type::constant_vector3:
         result.push_back(shader_graph_parameter{node.id, node.name, shader_graph_parameter_type::vector3_value, float_slot++});
+        break;
+      case shader_node_type::constant_vector4:
+        result.push_back(shader_graph_parameter{node.id, node.name, shader_graph_parameter_type::vector4_value, float_slot++});
         break;
       case shader_node_type::constant_color:
         result.push_back(shader_graph_parameter{node.id, node.name, shader_graph_parameter_type::color_value, float_slot++});

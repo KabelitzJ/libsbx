@@ -155,19 +155,39 @@ static auto coerce_to(const emitted_value& value, const std::string& target_type
   return value.expression;
 }
 
+// Concatenates a walker's accumulated `float3 add_12 = (...);`-style local-variable declarations
+// (see shader_graph_codegen_walker::statements) into the preamble block a generated function body
+// prepends before actually using any of them.
+static auto join_statements(const std::vector<std::string>& statements) -> std::string {
+  auto joined = std::string{};
+  for (const auto& statement : statements) {
+    joined += statement;
+  }
+  return joined;
+}
+
 // Walks a graph backward from one socket's input pin, producing a single self-contained Slang
 // expression for it (a post-order DFS -- a node's dependencies are always resolved, and so
 // inlined, before the node itself references them). Doubles as reachability (nodes never visited
 // never appear in the output -- dead-code elimination as a side effect of the walk, not a separate
 // pass) and cycle detection (a node re-entered while still on the visiting stack is a cycle).
 //
-// Every node's expression is inlined directly (no intermediate local variables), but `_emitted`
-// memoizes by (node, pin) for the lifetime of one walker instance -- a node referenced from two
-// sockets this same walker visits (e.g. one Texture Sample feeding both Albedo and Alpha) is walked
-// and emitted exactly once, not once per socket. generate_shader_graph_source shares one walker
-// across all of a stage's sockets for exactly this reason; a node visited from two DIFFERENT
-// walkers (i.e. crossing the vertex/fragment stage boundary) is still evaluated separately in each,
-// which is unavoidable -- they compile to two different Slang functions.
+// Every emitted node gets its own named local variable (e.g. `float3 add_12 = (...);`) rather than
+// being inlined into one giant nested expression -- this is what makes the generated Slang readable
+// enough to actually debug (matches Unity Shader Graph's own generated-code style), and it's also
+// how a node referenced from two sockets this same walker visits (e.g. one Texture Sample feeding
+// both Albedo and Alpha) ends up genuinely computed once at runtime, not just deduplicated in the
+// generated text: both sockets' expressions just reference the same variable name. `_emitted`
+// memoizes by (node, pin) for the lifetime of one walker instance to make that sharing happen;
+// `statements()` returns the declarations in dependency order (post-order DFS guarantees every
+// variable is declared before anything references it) for the caller to prepend as a preamble.
+// generate_shader_graph_source shares one walker across all of a stage's sockets that land in the
+// SAME Slang function (all of Fragment's sockets do) for exactly this reason; the 3 Vertex block
+// sockets compile to 3 SEPARATE functions, so each gets its own walker instead -- sharing local
+// variables across function boundaries isn't possible, and per-function statement lists keep each
+// function self-contained and independently readable. A node visited from two DIFFERENT walkers
+// (i.e. crossing the vertex/fragment stage boundary, or between two Vertex-block sockets) is still
+// evaluated separately in each, which is unavoidable.
 class shader_graph_codegen_walker {
 
 public:
@@ -176,9 +196,14 @@ public:
   // between the real path (`push.sampler_index`, the default) and the master preview (which packs
   // its sampler index into a push-constant vec4's otherwise-unused .w component instead of its own
   // field, to fit its push_data in the same 128-byte budget -- see
-  // generate_shader_graph_preview_source). Every other node type's emission is identical either way.
-  shader_graph_codegen_walker(const shader_graph::create_info& graph, codegen_context context, std::string sampler_index_expression = "push.sampler_index")
-  : _context{context}, _sampler_index_expression{std::move(sampler_index_expression)} {
+  // generate_shader_graph_preview_source). `time_expression`/`delta_time_expression` are the same
+  // idea for the Time/Delta Time nodes -- the master preview's push_data is too tight on its
+  // 128-byte budget to spend a whole field on Delta Time (a fixed literal instead -- see
+  // generate_shader_graph_preview_source's own doc comment for why that's an acceptable
+  // simplification for a preview specifically) and packs Time into another otherwise-unused .w.
+  // Every other node type's emission is identical either way.
+  shader_graph_codegen_walker(const shader_graph::create_info& graph, codegen_context context, std::string sampler_index_expression = "push.sampler_index", std::string time_expression = "push.time", std::string delta_time_expression = "push.delta_time")
+  : _context{context}, _sampler_index_expression{std::move(sampler_index_expression)}, _time_expression{std::move(time_expression)}, _delta_time_expression{std::move(delta_time_expression)} {
     for (const auto& node : graph.nodes) {
       _nodes_by_id.emplace(node.id, &node);
     }
@@ -213,12 +238,19 @@ public:
     return _error;
   }
 
+  // Every emitted node's `  {type} {name} = {expression};\n` declaration, in dependency order --
+  // the caller prepends these, joined, as a preamble before the function body that actually
+  // references them (see this class's own doc comment).
+  [[nodiscard]] auto statements() const -> const std::vector<std::string>& {
+    return _statements;
+  }
+
 private:
 
   // A pin allowed to be left unconnected without that being an error -- texture_sample's uv (falls
   // back to the calling stage's own uv), every one of Combine's R/G/B/A (defaults to a literal 0,
-  // matching Unity Shader Graph's own Combine node), Remap's In Min/In Max/Out Min/Out Max (default
-  // 0/1/0/1 -- pin 0, In, is still required), and Fresnel Effect's Normal/View Dir/Power (default
+  // matching Unity Shader Graph's own Combine node), Remap's In Min Max/Out Min Max (each defaults
+  // to (0,1) -- pin 0, In, is still required), and Fresnel Effect's Normal/View Dir/Power (default
   // to this fragment's own N/V and a power of 1).
   [[nodiscard]] static auto _allows_unconnected(shader_node_type type, std::uint32_t pin) -> bool {
     if (type == shader_node_type::texture_sample && pin == 0u) return true;
@@ -297,9 +329,21 @@ private:
       return std::nullopt;
     }
 
-    _emitted.emplace(key, result);
+    // Named after the node's type + id (plus the output pin, for a multi-output node like Split/
+    // Combine where pin 0 alone wouldn't disambiguate) rather than a bare counter, so the generated
+    // Slang reads as e.g. `float3 add_12 = (...)` instead of `float3 tmp7 = (...)` -- the whole
+    // point of this is to make the output debuggable.
+    const auto var_name = pin == 0u
+      ? fmt::format("{}_{}", shader_node_type_to_string(node.type), node_id)
+      : fmt::format("{}_{}_{}", shader_node_type_to_string(node.type), node_id, pin);
 
-    return result;
+    _statements.push_back(fmt::format("  {} {} = {};\n", result.type, var_name, result.expression));
+
+    const auto materialized = emitted_value{var_name, result.type};
+
+    _emitted.emplace(key, materialized);
+
+    return materialized;
   }
 
   [[nodiscard]] auto _emit(const shader_graph_node& node, std::uint32_t output_pin, const std::vector<emitted_value>& inputs) -> emitted_value {
@@ -311,7 +355,7 @@ private:
       case shader_node_type::input_vertex_normal: return {"v.normal", "float3"};
       case shader_node_type::input_vertex_tangent: return {"v.tangent.xyz", "float3"};
 
-      case shader_node_type::camera_position: return {"(*push.frame_data).camera_position.xyz", "float3"};
+      case shader_node_type::camera_position: return {"push.frame_data->camera_position.xyz", "float3"};
 
       // Directional light 0 is "the main light" -- matches evaluate_lit_surface's own convention
       // (lighting.slang: `for (i < directional_light_count) ... if (i == 0u) { shadow... }`), so a
@@ -323,12 +367,12 @@ private:
       // already do. (0,-1,0) (a sun shining straight down) when the scene has no directional light,
       // rather than an out-of-bounds lights[0] read.
       case shader_node_type::main_light_direction:
-        return {"((*push.frame_data).directional_light_count > 0u ? normalize((*push.frame_data).lights[0].direction.xyz) : float3(0.0, -1.0, 0.0))", "float3"};
+        return {"(push.frame_data->directional_light_count > 0u ? normalize(push.frame_data->lights[0].direction.xyz) : float3(0.0, -1.0, 0.0))", "float3"};
       case shader_node_type::main_light_color:
-        return {"((*push.frame_data).directional_light_count > 0u ? (*push.frame_data).lights[0].color.rgb * (*push.frame_data).lights[0].color.a : float3(0.0, 0.0, 0.0))", "float3"};
+        return {"(push.frame_data->directional_light_count > 0u ? push.frame_data->lights[0].color.rgb * push.frame_data->lights[0].color.a : float3(0.0, 0.0, 0.0))", "float3"};
 
-      case shader_node_type::time: return {"push.time", "float"};
-      case shader_node_type::delta_time: return {"push.delta_time", "float"};
+      case shader_node_type::time: return {_time_expression, "float"};
+      case shader_node_type::delta_time: return {_delta_time_expression, "float"};
 
       case shader_node_type::constant_float: {
         if (node.exposed) {
@@ -338,12 +382,28 @@ private:
         return {fmt::format("float({})", value), "float"};
       }
 
+      case shader_node_type::constant_vector2: {
+        if (node.exposed) {
+          return {fmt::format("material.generic_params[{}].xy", _float_slot_of.at(node.id)), "float2"};
+        }
+        const auto value = std::holds_alternative<math::vector2>(node.value) ? std::get<math::vector2>(node.value) : math::vector2{};
+        return {fmt::format("float2({}, {})", value.x(), value.y()), "float2"};
+      }
+
       case shader_node_type::constant_vector3: {
         if (node.exposed) {
           return {fmt::format("material.generic_params[{}].xyz", _float_slot_of.at(node.id)), "float3"};
         }
         const auto value = std::holds_alternative<math::vector3>(node.value) ? std::get<math::vector3>(node.value) : math::vector3{};
         return {fmt::format("float3({}, {}, {})", value.x(), value.y(), value.z()), "float3"};
+      }
+
+      case shader_node_type::constant_vector4: {
+        if (node.exposed) {
+          return {fmt::format("material.generic_params[{}]", _float_slot_of.at(node.id)), "float4"};
+        }
+        const auto value = std::holds_alternative<math::vector4>(node.value) ? std::get<math::vector4>(node.value) : math::vector4{};
+        return {fmt::format("float4({}, {}, {}, {})", value.x(), value.y(), value.z(), value.w()), "float4"};
       }
 
       case shader_node_type::constant_color: {
@@ -413,6 +473,8 @@ private:
       case shader_node_type::round: return {fmt::format("round({})", inputs[0].expression), inputs[0].type};
       case shader_node_type::fraction: return {fmt::format("frac({})", inputs[0].expression), inputs[0].type};
       case shader_node_type::sign: return {fmt::format("sign({})", inputs[0].expression), inputs[0].type};
+      case shader_node_type::sine: return {fmt::format("sin({})", inputs[0].expression), inputs[0].type};
+      case shader_node_type::cosine: return {fmt::format("cos({})", inputs[0].expression), inputs[0].type};
 
       case shader_node_type::minimum: {
         const auto& t = binary_type(inputs[0], inputs[1]);
@@ -441,16 +503,17 @@ private:
         return {fmt::format("reflect({}, {})", inputs[0].expression, inputs[1].expression), "float3"};
 
       case shader_node_type::remap: {
-        // In Min/In Max/Out Min/Out Max each independently default to 0/1/0/1 when unconnected
-        // (_allows_unconnected) -- no divide-by-zero guard on (InMax - InMin), matching Unity Shader
-        // Graph's own Remap node, which doesn't guard it either (an equal min/max is the graph
-        // author's own mistake to fix, same as it would be there).
+        // In Min Max/Out Min Max each independently default to (0,1) when unconnected
+        // (_allows_unconnected) -- a float2 range rather than two separate scalars since they're
+        // always a matched pair, same reasoning Unity Shader Graph's own Remap node already has
+        // its In Min Max/Out Min Max as single Vector2 ports rather than 4 separate float fields.
+        // No divide-by-zero guard on (in_range.y - in_range.x) -- matching Unity's own Remap node,
+        // which doesn't guard it either (an equal min/max is the graph author's own mistake to fix,
+        // same as it would be there).
         const auto& t = inputs[0].type; // In alone drives the type (dominant_pins={0})
-        const auto in_min = inputs[1].expression.empty() ? std::string{"0.0"} : inputs[1].expression;
-        const auto in_max = inputs[2].expression.empty() ? std::string{"1.0"} : inputs[2].expression;
-        const auto out_min = inputs[3].expression.empty() ? std::string{"0.0"} : inputs[3].expression;
-        const auto out_max = inputs[4].expression.empty() ? std::string{"1.0"} : inputs[4].expression;
-        return {fmt::format("({0} + ({1} - {2}) * ({3} - {0}) / ({4} - {2}))", out_min, inputs[0].expression, in_min, out_max, in_max), t};
+        const auto in_range = inputs[1].expression.empty() ? std::string{"float2(0.0, 1.0)"} : inputs[1].expression;
+        const auto out_range = inputs[2].expression.empty() ? std::string{"float2(0.0, 1.0)"} : inputs[2].expression;
+        return {fmt::format("({0}.x + ({1} - {2}.x) * ({0}.y - {0}.x) / ({2}.y - {2}.x))", out_range, inputs[0].expression, in_range), t};
       }
 
       case shader_node_type::fresnel_effect: {
@@ -501,12 +564,15 @@ private:
 
   codegen_context _context;
   std::string _sampler_index_expression;
+  std::string _time_expression;
+  std::string _delta_time_expression;
   std::unordered_map<std::uint32_t, const shader_graph_node*> _nodes_by_id{};
   std::unordered_map<std::uint64_t, std::uint64_t> _incoming{}; // pin_key(to) -> pin_key(from)
   std::unordered_map<std::uint32_t, std::uint32_t> _float_slot_of{};
   std::unordered_map<std::uint32_t, std::uint32_t> _texture_slot_of{};
   std::unordered_map<std::uint64_t, emitted_value> _emitted{};
   std::unordered_set<std::uint64_t> _visiting{};
+  std::vector<std::string> _statements{};
   std::string _error{};
 
 }; // class shader_graph_codegen_walker
@@ -517,9 +583,13 @@ private:
 // just passes the corresponding attribute through unchanged, matching the engine's previous fixed
 // vertex stage exactly.
 //
-// `walker` is shared across all three vertex-component calls (see generate_shader_graph_source) so
-// a node feeding more than one of Position/Normal/Tangent is only walked and emitted once -- its
-// `_emitted` cache dedups across sockets, not just within one socket's own dependency tree.
+// `walker` gets its own fresh instance per call (see generate_shader_graph_source) rather than being
+// shared across all three vertex-component sockets -- each compiles to a SEPARATE Slang function, so
+// a shared walker's local-variable declarations (see shader_graph_codegen_walker's own doc comment)
+// couldn't be referenced across all three anyway. A node feeding more than one of Position/Normal/
+// Tangent is walked, emitted, and declared once per function instead of truly once overall -- a
+// deliberate simplification over merging all three into one function (which would need
+// depth_vertex_main/shadow to needlessly compute Normal/Tangent alongside Position too).
 //
 // `material_declaration` is the one line that differs between the real path and the preview path
 // (see generate_shader_graph_preview_source) -- both declare a local named `material` (so `_emit`'s
@@ -548,9 +618,10 @@ static auto emit_vertex_component(const shader_graph_node* vertex_node, std::uin
   return fmt::format(
     "float3 {}(vertex v) {{\n"
     "{}"
+    "{}"
     "  return {};\n"
     "}}\n",
-    fn_name, material_declaration, coerce_to(*value, "float3")
+    fn_name, material_declaration, join_statements(walker.statements()), coerce_to(*value, "float3")
   );
 }
 
@@ -614,17 +685,18 @@ auto generate_shader_graph_source(const std::string& graph_name, const shader_gr
   const auto vertex_it = std::ranges::find_if(graph.nodes, [](const shader_graph_node& node) { return node.type == shader_node_type::output_vertex; });
   const auto* vertex_node = vertex_it != graph.nodes.end() ? &*vertex_it : nullptr;
 
-  auto vertex_walker = shader_graph_codegen_walker{graph, codegen_context::vertex};
+  static constexpr auto real_material_declaration = "  material_data material = push.frame_data->materials[push.material_index];\n";
 
-  static constexpr auto real_material_declaration = "  material_data material = (*push.frame_data).materials[push.material_index];\n";
-
-  const auto vertex_position_fn = labeled(emit_vertex_component(vertex_node, 0u, vertex_walker, "graph_vertex_position", "v.position", real_material_declaration), "Vertex Position");
+  auto vertex_position_walker = shader_graph_codegen_walker{graph, codegen_context::vertex};
+  const auto vertex_position_fn = labeled(emit_vertex_component(vertex_node, 0u, vertex_position_walker, "graph_vertex_position", "v.position", real_material_declaration), "Vertex Position");
   if (!vertex_position_fn) return std::unexpected{vertex_position_fn.error()};
 
-  const auto vertex_normal_fn = labeled(emit_vertex_component(vertex_node, 1u, vertex_walker, "graph_vertex_normal", "v.normal", real_material_declaration), "Vertex Normal");
+  auto vertex_normal_walker = shader_graph_codegen_walker{graph, codegen_context::vertex};
+  const auto vertex_normal_fn = labeled(emit_vertex_component(vertex_node, 1u, vertex_normal_walker, "graph_vertex_normal", "v.normal", real_material_declaration), "Vertex Normal");
   if (!vertex_normal_fn) return std::unexpected{vertex_normal_fn.error()};
 
-  const auto vertex_tangent_fn = labeled(emit_vertex_component(vertex_node, 2u, vertex_walker, "graph_vertex_tangent", "v.tangent.xyz", real_material_declaration), "Vertex Tangent");
+  auto vertex_tangent_walker = shader_graph_codegen_walker{graph, codegen_context::vertex};
+  const auto vertex_tangent_fn = labeled(emit_vertex_component(vertex_node, 2u, vertex_tangent_walker, "graph_vertex_tangent", "v.tangent.xyz", real_material_declaration), "Vertex Tangent");
   if (!vertex_tangent_fn) return std::unexpected{vertex_tangent_fn.error()};
 
   auto fragment_walker = shader_graph_codegen_walker{graph, codegen_context::fragment};
@@ -657,7 +729,7 @@ auto generate_shader_graph_source(const std::string& graph_name, const shader_gr
     const auto alpha_clip_threshold = labeled(emit_fragment_socket(id, 7u, fragment_walker, "float", "material.alpha_cutoff"), "Fragment (Lit) Alpha Clip Threshold");
     if (!alpha_clip_threshold) return std::unexpected{alpha_clip_threshold.error()};
 
-    fragment_body = fmt::format(
+    fragment_body = join_statements(fragment_walker.statements()) + fmt::format(
       "  lit_surface surf;\n"
       "  surf.albedo = {0};\n"
       "  surf.tangent_space_normal = {1};\n"
@@ -687,7 +759,7 @@ auto generate_shader_graph_source(const std::string& graph_name, const shader_gr
     const auto alpha_clip_threshold = labeled(emit_fragment_socket(id, 2u, fragment_walker, "float", "material.alpha_cutoff"), "Fragment (Unlit) Alpha Clip Threshold");
     if (!alpha_clip_threshold) return std::unexpected{alpha_clip_threshold.error()};
 
-    fragment_body = fmt::format(
+    fragment_body = join_statements(fragment_walker.statements()) + fmt::format(
       "  lighting_output lighting_output;\n"
       "  lighting_output.color = {0};\n"
       "  lighting_output.alpha = {1};\n"
@@ -784,7 +856,7 @@ auto generate_shader_graph_source(const std::string& graph_name, const shader_gr
     "\n"
     "[shader(\"fragment\")]\n"
     "void depth_fragment_main(depth_fragment_input input) {{\n"
-    "  material_data material = (*push.frame_data).materials[push.material_index];\n"
+    "  material_data material = push.frame_data->materials[push.material_index];\n"
     "\n"
     "  apply_alpha_cutout(material, input.uv, push.sampler_index);\n"
     "}}\n"
@@ -792,7 +864,7 @@ auto generate_shader_graph_source(const std::string& graph_name, const shader_gr
     "[shader(\"fragment\")]\n"
     "Policy::Output fragment_main<Policy : shading_policy>(fragment_input input) {{\n"
     "  lighting_input lighting_input = build_lighting_input(input);\n"
-    "  material_data material = (*push.frame_data).materials[push.material_index];\n"
+    "  material_data material = push.frame_data->materials[push.material_index];\n"
     "\n"
     "  float2 uv = apply_uv_transform(material, input.uv);\n"
     "  float3 n = normalize(lighting_input.normal);\n"
@@ -833,23 +905,29 @@ auto generate_shader_graph_preview_source(const std::string& graph_name, const s
   const auto vertex_it = std::ranges::find_if(graph.nodes, [](const shader_graph_node& node) { return node.type == shader_node_type::output_vertex; });
   const auto* vertex_node = vertex_it != graph.nodes.end() ? &*vertex_it : nullptr;
 
-  // See generate_shader_graph_source's own vertex_walker -- same shape, just the preview's own
-  // sampler-index expression (see shader_graph_codegen_walker's constructor doc comment) and
-  // material declaration (below) instead of the real path's.
-  auto vertex_walker = shader_graph_codegen_walker{graph, codegen_context::vertex, "uint(push.light_direction.w)"};
+  // See generate_shader_graph_source's own per-component vertex walkers -- same shape, just the
+  // preview's own sampler-index/time/delta-time expressions (see shader_graph_codegen_walker's
+  // constructor doc comment) and material declaration (below) instead of the real path's. Time is
+  // packed into camera_position's own otherwise-unused .w (same budget-fitting trick as the sampler
+  // index); Delta Time is a fixed literal -- see this function's own doc comment for why that's fine
+  // here.
+  static constexpr auto preview_delta_time_expression = "(1.0 / 60.0)";
 
   static constexpr auto preview_material_declaration = "  material_data material = *push.material;\n";
 
-  const auto vertex_position_fn = labeled(emit_vertex_component(vertex_node, 0u, vertex_walker, "graph_vertex_position", "v.position", preview_material_declaration), "Vertex Position");
+  auto vertex_position_walker = shader_graph_codegen_walker{graph, codegen_context::vertex, "uint(push.light_direction.w)", "push.camera_position.w", preview_delta_time_expression};
+  const auto vertex_position_fn = labeled(emit_vertex_component(vertex_node, 0u, vertex_position_walker, "graph_vertex_position", "v.position", preview_material_declaration), "Vertex Position");
   if (!vertex_position_fn) return std::unexpected{vertex_position_fn.error()};
 
-  const auto vertex_normal_fn = labeled(emit_vertex_component(vertex_node, 1u, vertex_walker, "graph_vertex_normal", "v.normal", preview_material_declaration), "Vertex Normal");
+  auto vertex_normal_walker = shader_graph_codegen_walker{graph, codegen_context::vertex, "uint(push.light_direction.w)", "push.camera_position.w", preview_delta_time_expression};
+  const auto vertex_normal_fn = labeled(emit_vertex_component(vertex_node, 1u, vertex_normal_walker, "graph_vertex_normal", "v.normal", preview_material_declaration), "Vertex Normal");
   if (!vertex_normal_fn) return std::unexpected{vertex_normal_fn.error()};
 
-  const auto vertex_tangent_fn = labeled(emit_vertex_component(vertex_node, 2u, vertex_walker, "graph_vertex_tangent", "v.tangent.xyz", preview_material_declaration), "Vertex Tangent");
+  auto vertex_tangent_walker = shader_graph_codegen_walker{graph, codegen_context::vertex, "uint(push.light_direction.w)", "push.camera_position.w", preview_delta_time_expression};
+  const auto vertex_tangent_fn = labeled(emit_vertex_component(vertex_node, 2u, vertex_tangent_walker, "graph_vertex_tangent", "v.tangent.xyz", preview_material_declaration), "Vertex Tangent");
   if (!vertex_tangent_fn) return std::unexpected{vertex_tangent_fn.error()};
 
-  auto fragment_walker = shader_graph_codegen_walker{graph, codegen_context::fragment, "uint(push.light_direction.w)"};
+  auto fragment_walker = shader_graph_codegen_walker{graph, codegen_context::fragment, "uint(push.light_direction.w)", "push.camera_position.w", preview_delta_time_expression};
   auto fragment_body = std::string{};
 
   if (has_lit) {
@@ -870,7 +948,7 @@ auto generate_shader_graph_preview_source(const std::string& graph_name, const s
     const auto emission = labeled(emit_fragment_socket(id, 4u, fragment_walker, "float3", "float3(0.0, 0.0, 0.0)"), "Fragment (Lit) Emission");
     if (!emission) return std::unexpected{emission.error()};
 
-    fragment_body = fmt::format(
+    fragment_body = join_statements(fragment_walker.statements()) + fmt::format(
       "  float3 tangent_space_normal = {0};\n"
       "  float3 bitangent = cross(n, input.tangent.xyz) * input.tangent.w;\n"
       "  float3 world_normal = normalize(mul(tangent_space_normal, float3x3(input.tangent.xyz, bitangent, n)));\n"
@@ -890,7 +968,7 @@ auto generate_shader_graph_preview_source(const std::string& graph_name, const s
 
     // ponytail: Alpha isn't evaluated -- the preview always shows a fully opaque sphere (real Alpha
     // Clip/blend behavior is a materials-system concern, not something a shading preview needs).
-    fragment_body = fmt::format("  float3 color = {0};\n", *color);
+    fragment_body = join_statements(fragment_walker.statements()) + fmt::format("  float3 color = {0};\n", *color);
   }
 
   auto source = fmt::format(
@@ -906,7 +984,7 @@ auto generate_shader_graph_preview_source(const std::string& graph_name, const s
     "  float4x4 model_view_projection;\n"
     "  float4 light_direction; // xyz = direction, w = float(sampler_index)\n"
     "  float4 light_color;     // rgb = color, a = intensity\n"
-    "  float4 camera_position; // xyz, w unused\n"
+    "  float4 camera_position; // xyz used; w = time (Delta Time is a fixed literal, see below)\n"
     "  vertex* vertices;\n"
     "  material_data* material;\n"
     "}}; // struct push_data\n"
@@ -1008,6 +1086,8 @@ auto generate_node_preview_source(const std::string& graph_name, const shader_gr
     "struct push_data {{\n"
     "  material_data* material;\n"
     "  float sampler_index; // small non-negative index, stored as a plain float (see push_data's C++ mirror)\n"
+    "  float time;\n"
+    "  float delta_time;\n"
     "}}; // struct push_data\n"
     "\n"
     "[[vk::push_constant]] ConstantBuffer<push_data> push;\n"
@@ -1044,9 +1124,10 @@ auto generate_node_preview_source(const std::string& graph_name, const shader_gr
     "  float3 n = float3(0.0, 0.0, 1.0);\n"
     "  float3 view_dir = float3(0.0, 0.0, 1.0);\n"
     "\n"
-    "  return {3};\n"
+    "{3}"
+    "  return {4};\n"
     "}}\n",
-    graph_name, node_id, output_pin, color_expression
+    graph_name, node_id, output_pin, join_statements(walker.statements()), color_expression
   );
 
   return source;

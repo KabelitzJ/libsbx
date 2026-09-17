@@ -1133,7 +1133,11 @@ auto asset_residency::save_shader_graph(shader_graph_handle& graph, const std::f
 
     if (const auto* value = std::get_if<std::float_t>(&graph_node.value)) {
       node_yaml["value"] = *value;
+    } else if (const auto* value = std::get_if<math::vector2>(&graph_node.value)) {
+      node_yaml["value"] = *value;
     } else if (const auto* value = std::get_if<math::vector3>(&graph_node.value)) {
+      node_yaml["value"] = *value;
+    } else if (const auto* value = std::get_if<math::vector4>(&graph_node.value)) {
       node_yaml["value"] = *value;
     } else if (const auto* value = std::get_if<math::color>(&graph_node.value)) {
       node_yaml["value"] = *value;
@@ -1716,7 +1720,11 @@ auto asset_residency::_finalize_shader_graph(asset_loader::shader_graph_result& 
       node.value = path->empty() ? texture_handle{} : load_texture(std::filesystem::path{*path}, graphics::format::r8g8b8a8_srgb);
     } else if (const auto* value = std::get_if<std::float_t>(&node_description.value)) {
       node.value = *value;
+    } else if (const auto* value = std::get_if<math::vector2>(&node_description.value)) {
+      node.value = *value;
     } else if (const auto* value = std::get_if<math::vector3>(&node_description.value)) {
+      node.value = *value;
+    } else if (const auto* value = std::get_if<math::vector4>(&node_description.value)) {
       node.value = *value;
     } else if (const auto* value = std::get_if<math::color>(&node_description.value)) {
       node.value = *value;

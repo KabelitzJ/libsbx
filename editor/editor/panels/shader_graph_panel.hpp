@@ -85,7 +85,7 @@ private:
   auto _draw_canvas() -> void;
   auto _draw_add_node_menu(sbx::math::vector2 spawn_position) -> void;
   auto _draw_master_preview() -> void;
-  auto _draw_selection_inspector() -> void;
+  auto _draw_selection_inspector(editor_state& state) -> void;
 
   [[nodiscard]] auto _next_node_id() const -> std::uint32_t;
 

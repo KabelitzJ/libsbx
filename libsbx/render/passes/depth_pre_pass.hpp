@@ -11,6 +11,7 @@
 
 #include <libsbx/assets/shader_graph.hpp>
 
+#include <libsbx/graphics/types.hpp>
 #include <libsbx/graphics/pipeline/graphics_pipeline.hpp>
 
 #include <libsbx/render/render_pass.hpp>
@@ -19,7 +20,11 @@
 namespace sbx::render {
 
 /**
- * @brief Depth-only pre-pass: clears + writes the shared depth target from the opaque list.
+ * @brief Depth-only pre-pass: clears + writes the shared (4x MSAA) depth target from the opaque
+ * list, and resolves it into resources.scene_depth as a byproduct of that same draw -- a plain,
+ * single-sample, bindless-sampleable whole-scene depth the Scene Depth shader graph node reads
+ * (scene_renderer_module.cpp owns the actual image/bindless index; see its own doc comment). Chosen
+ * over a second depth-only draw specifically to avoid paying for the opaque silhouette twice.
  */
 class depth_pre_pass final : public graphics_pass {
 
@@ -44,6 +49,12 @@ private:
   [[nodiscard]] auto _resolve_graph_pipeline(const assets::shader_graph_handle& graph, bool is_double_sided) -> memory::observer_ptr<graphics::graphics_pipeline>;
 
   std::array<memory::observer_ptr<graphics::graphics_pipeline>, 4u> _pipelines{};
+
+  // Queried once from the physical device at construction (see depth_pre_pass.cpp) -- only
+  // sample_zero is spec-guaranteed for a DEPTH resolve, so this is min when the device actually
+  // supports it, sample_zero otherwise. Never re-queried; a device's supported resolve modes don't
+  // change at runtime.
+  graphics::resolve_mode _scene_depth_resolve_mode{graphics::resolve_mode::sample_zero};
 
 }; // class depth_pre_pass
 

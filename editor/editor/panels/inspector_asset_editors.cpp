@@ -101,7 +101,24 @@ auto inspector_panel::_draw_material_properties(editor_state& state, const asset
   if (is_shader_graph) {
     ImGui::SeparatorText("Shader Graph");
 
-    changed |= draw_shader_graph_picker(state, "##shader_graph_picker", _material_edit.shader_graph);
+    if (draw_shader_graph_picker(state, "##shader_graph_picker", _material_edit.shader_graph)) {
+      changed = true;
+      _shader_graph_seed_pending = _material_edit.shader_graph.is_valid();
+    }
+
+    // The graph a picker pick just assigned loads asynchronously, so its nodes/parameters() are
+    // still empty on the very frame it's picked -- deferred until it's actually resident (see
+    // _shader_graph_seed_pending's own doc comment). A freshly (re)assigned graph's exposed
+    // parameters start at each node's own authored default (see
+    // shader_graph_default_generic_params) instead of silently zero -- picking a new graph is
+    // exactly the moment those old slot values stop meaning anything anyway (a different graph's
+    // own slots), so overwriting here doesn't clobber anything the user meant to keep.
+    if (_shader_graph_seed_pending && _material_edit.shader_graph.is_valid() && !_material_edit.shader_graph->nodes().empty()) {
+      _material_edit.generic_params = sbx::assets::shader_graph_default_generic_params(*_material_edit.shader_graph);
+      _material_edit.generic_textures = sbx::assets::shader_graph_default_generic_textures(*_material_edit.shader_graph);
+      _shader_graph_seed_pending = false;
+      changed = true;
+    }
 
     if (!_material_edit.shader_graph.is_valid()) {
       ImGui::TextColored(ImVec4{1.0f, 0.6f, 0.2f, 1.0f}, ICON_MDI_ALERT " No graph assigned -- this material is invalid and won't render until one is.");

@@ -4,12 +4,14 @@
 #define LIBSBX_ASSETS_SHADER_GRAPH_HPP_
 
 #include <algorithm>
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <initializer_list>
 #include <optional>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <unordered_map>
 #include <variant>
 #include <vector>
@@ -98,6 +100,11 @@ enum class shader_node_type : std::uint8_t {
   main_light_color,      // that same light's color*intensity (radiance), or black if the scene has none
   time,                  // seconds since the engine started
   delta_time,            // seconds since the previous frame
+  scene_depth,           // UV (float2, optional -- default this fragment's own screen UV) -> scalar,
+                          // whole-scene depth (matches Unity Shader Graph's own Scene Depth node);
+                          // Raw/Eye/Linear01 sampling mode is a per-node setting (node.value, a
+                          // string -- see shader_node_scene_depth_mode), not a pin. Fragment-only:
+                          // there's no meaningful screen position in the vertex stage.
   constant_float,
   constant_vector2,
   constant_vector3,
@@ -137,6 +144,12 @@ enum class shader_node_type : std::uint8_t {
                    // (0,1)) -> that same width, linearly remaps In from In Min Max to Out Min Max
   fresnel_effect, // Normal/View Dir (both fixed float3, each optional -- default this fragment's own N/V) +
                    // Power (scalar, optional -- default 1) -> scalar, pow(saturate(1-dot(N,V)), power). Fragment-only.
+  simple_noise,   // UV (float2, optional -- default this stage's own uv) + Scale (scalar, optional, default 500) ->
+                   // scalar, 3-octave value noise (matches Unity Shader Graph's own Simple Noise node)
+  voronoi,        // UV (float2, optional -- default this stage's own uv) + Angle Offset (scalar, optional,
+                   // default 2) + Cell Density (scalar, optional, default 5) -> 2 outputs, Out (nearest cell's
+                   // distance) and Cells (that cell's random offset.x -- NOT a true per-cell id; matches Unity
+                   // Shader Graph's own Voronoi node exactly, including that quirk)
   swizzle, // 1 input (any width), 1 output the SAME width as the input -- each of its up to 4 output
            // components independently picks which input component (R/G/B/A) feeds it, e.g. "bgra"
   split,   // 1 input (any width), always 4 outputs (R/G/B/A, always scalar) -- a component beyond the
@@ -169,6 +182,7 @@ enum class shader_node_type : std::uint8_t {
     case shader_node_type::main_light_color: return "main_light_color";
     case shader_node_type::time: return "time";
     case shader_node_type::delta_time: return "delta_time";
+    case shader_node_type::scene_depth: return "scene_depth";
     case shader_node_type::constant_float: return "constant_float";
     case shader_node_type::constant_vector2: return "constant_vector2";
     case shader_node_type::constant_vector3: return "constant_vector3";
@@ -205,6 +219,8 @@ enum class shader_node_type : std::uint8_t {
     case shader_node_type::reflect: return "reflect";
     case shader_node_type::remap: return "remap";
     case shader_node_type::fresnel_effect: return "fresnel_effect";
+    case shader_node_type::simple_noise: return "simple_noise";
+    case shader_node_type::voronoi: return "voronoi";
     case shader_node_type::swizzle: return "swizzle";
     case shader_node_type::split: return "split";
     case shader_node_type::combine: return "combine";
@@ -228,6 +244,7 @@ enum class shader_node_type : std::uint8_t {
   if (value == "main_light_color") return shader_node_type::main_light_color;
   if (value == "time") return shader_node_type::time;
   if (value == "delta_time") return shader_node_type::delta_time;
+  if (value == "scene_depth") return shader_node_type::scene_depth;
   if (value == "constant_float") return shader_node_type::constant_float;
   if (value == "constant_vector2") return shader_node_type::constant_vector2;
   if (value == "constant_vector3") return shader_node_type::constant_vector3;
@@ -264,6 +281,8 @@ enum class shader_node_type : std::uint8_t {
   if (value == "reflect") return shader_node_type::reflect;
   if (value == "remap") return shader_node_type::remap;
   if (value == "fresnel_effect") return shader_node_type::fresnel_effect;
+  if (value == "simple_noise") return shader_node_type::simple_noise;
+  if (value == "voronoi") return shader_node_type::voronoi;
   if (value == "swizzle") return shader_node_type::swizzle;
   if (value == "split") return shader_node_type::split;
   if (value == "combine") return shader_node_type::combine;
@@ -289,6 +308,7 @@ enum class shader_node_type : std::uint8_t {
     case shader_node_type::main_light_color: return "Main Light Color";
     case shader_node_type::time: return "Time";
     case shader_node_type::delta_time: return "Delta Time";
+    case shader_node_type::scene_depth: return "Scene Depth";
     case shader_node_type::constant_float: return "Float";
     case shader_node_type::constant_vector2: return "Vector2";
     case shader_node_type::constant_vector3: return "Vector3";
@@ -325,6 +345,8 @@ enum class shader_node_type : std::uint8_t {
     case shader_node_type::reflect: return "Reflect";
     case shader_node_type::remap: return "Remap";
     case shader_node_type::fresnel_effect: return "Fresnel Effect";
+    case shader_node_type::simple_noise: return "Simple Noise";
+    case shader_node_type::voronoi: return "Voronoi";
     case shader_node_type::swizzle: return "Swizzle";
     case shader_node_type::split: return "Split";
     case shader_node_type::combine: return "Combine";
@@ -351,6 +373,7 @@ enum class shader_node_category : std::uint8_t {
   range,         // Clamp, Saturate, Minimum, Maximum
   trigonometry,  // Sine, Cosine
   vector,        // Dot, Cross, Normalize, Length, Distance, Reflect, Fresnel Effect
+  noise,         // Simple Noise, Voronoi
   channel,       // Swizzle, Split, Combine
   output
 }; // enum class shader_node_category
@@ -368,6 +391,7 @@ enum class shader_node_category : std::uint8_t {
     case shader_node_type::main_light_color:
     case shader_node_type::time:
     case shader_node_type::delta_time:
+    case shader_node_type::scene_depth:
       return shader_node_category::input;
     case shader_node_type::constant_float:
     case shader_node_type::constant_vector2:
@@ -413,6 +437,9 @@ enum class shader_node_category : std::uint8_t {
     case shader_node_type::reflect:
     case shader_node_type::fresnel_effect:
       return shader_node_category::vector;
+    case shader_node_type::simple_noise:
+    case shader_node_type::voronoi:
+      return shader_node_category::noise;
     case shader_node_type::swizzle:
     case shader_node_type::split:
     case shader_node_type::combine:
@@ -431,26 +458,40 @@ enum class shader_node_category : std::uint8_t {
   return type != shader_node_type::output_vertex && type != shader_node_type::output_fragment_lit && type != shader_node_type::output_fragment_unlit;
 }
 
-// How many output pins a node has -- 1 for almost everything, 4 for Split (R/G/B/A, always
-// scalar -- a component beyond the input's own width just reads 0, not an error) and 3 for Combine
-// (RG/RGB/RGBA, each a different fixed width), 0 for the three sinks. Matches Unity Shader Graph's
-// own Split/Combine nodes exactly. Shared by the editor's canvas (how many output pins to draw) and
-// codegen (which output pin a downstream edge's from_pin actually reads).
+// How many output pins a node has -- 1 for almost everything, 5 for Sample Texture (RGBA + R/G/B/A
+// individually, matching Unity Shader Graph's own Sample Texture 2D node so a plain channel doesn't
+// always need a Split node right after it), 4 for Split (R/G/B/A, always scalar -- a component
+// beyond the input's own width just reads 0, not an error), 3 for Combine (RG/RGB/RGBA, each a
+// different fixed width), 2 for Voronoi (Out, Cells), 0 for the three sinks. Shared by the editor's
+// canvas (how many output pins to draw) and codegen (which output pin a downstream edge's from_pin
+// actually reads).
 [[nodiscard]] inline auto shader_node_output_count(shader_node_type type) -> std::size_t {
   if (!shader_node_has_output(type)) {
     return 0u;
   }
 
+  if (type == shader_node_type::texture_sample) return 5u;
   if (type == shader_node_type::split) return 4u;
   if (type == shader_node_type::combine) return 3u;
+  if (type == shader_node_type::voronoi) return 2u; // Out, Cells
   return 1u;
 }
 
 // Editor-only label for a node's Nth output pin -- purely descriptive, codegen doesn't consult
-// this. Split's four are R/G/B/A, Combine's three are RG/RGB/RGBA; every other node has a single
-// output, generically named "Out" (matching Unity Shader Graph's own convention for a node with
-// nothing more specific to call it).
+// this. Sample Texture's five are RGBA/R/G/B/A, Split's four are R/G/B/A, Combine's three are
+// RG/RGB/RGBA; every other node has a single output, generically named "Out" (matching Unity Shader
+// Graph's own convention for a node with nothing more specific to call it).
 [[nodiscard]] inline auto shader_node_output_label(shader_node_type type, std::size_t pin) -> const char* {
+  if (type == shader_node_type::texture_sample) {
+    switch (pin) {
+      case 0u: return "RGBA";
+      case 1u: return "R";
+      case 2u: return "G";
+      case 3u: return "B";
+      default: return "A";
+    }
+  }
+
   if (type == shader_node_type::split) {
     switch (pin) {
       case 0u: return "R";
@@ -466,6 +507,10 @@ enum class shader_node_category : std::uint8_t {
       case 1u: return "RGB";
       default: return "RGBA";
     }
+  }
+
+  if (type == shader_node_type::voronoi) {
+    return pin == 0u ? "Out" : "Cells";
   }
 
   return "Out";
@@ -493,6 +538,7 @@ enum class shader_node_category : std::uint8_t {
     case shader_node_type::constant_color:
       return 0u;
     case shader_node_type::texture_sample:
+    case shader_node_type::scene_depth:
     case shader_node_type::normalize:
     case shader_node_type::saturate:
     case shader_node_type::negate:
@@ -521,12 +567,14 @@ enum class shader_node_category : std::uint8_t {
     case shader_node_type::maximum:
     case shader_node_type::distance:
     case shader_node_type::reflect:
+    case shader_node_type::simple_noise: // UV, Scale
       return 2u;
     case shader_node_type::lerp:
     case shader_node_type::smoothstep:
     case shader_node_type::clamp: // In, Min, Max
     case shader_node_type::remap: // In, In Min Max, Out Min Max
     case shader_node_type::fresnel_effect: // Normal, View Dir, Power
+    case shader_node_type::voronoi: // UV, Angle Offset, Cell Density
     case shader_node_type::output_vertex: // Position, Normal, Tangent
     case shader_node_type::output_fragment_unlit: // Color, Alpha, Alpha Clip Threshold
       return 3u;
@@ -543,6 +591,7 @@ enum class shader_node_category : std::uint8_t {
 [[nodiscard]] inline auto shader_node_input_label(shader_node_type type, std::size_t pin) -> const char* {
   switch (type) {
     case shader_node_type::texture_sample: return "UV";
+    case shader_node_type::scene_depth: return "UV";
     case shader_node_type::normalize: return "In";
     case shader_node_type::saturate: return "In";
     case shader_node_type::swizzle: return "In";
@@ -609,6 +658,12 @@ enum class shader_node_category : std::uint8_t {
       if (pin == 0u) return "Normal";
       if (pin == 1u) return "View Dir";
       return "Power";
+    case shader_node_type::simple_noise:
+      return pin == 0u ? "UV" : "Scale";
+    case shader_node_type::voronoi:
+      if (pin == 0u) return "UV";
+      if (pin == 1u) return "Angle Offset";
+      return "Cell Density";
     default:
       return "In";
   }
@@ -641,6 +696,14 @@ struct shader_graph_node {
 [[nodiscard]] inline auto shader_node_swizzle_pattern(const shader_graph_node& node) -> std::string {
   const auto pattern = std::holds_alternative<std::string>(node.value) ? std::get<std::string>(node.value) : std::string{};
   return pattern.size() == 4u ? pattern : std::string{"rgba"};
+}
+
+// A Scene Depth node's stored sampling mode ("raw"/"eye"/"linear01") -- same fallback reasoning as
+// shader_node_swizzle_pattern above, for a hand-edited/legacy file whose node.value isn't one of the
+// three recognized strings. "linear01" (matches Unity Shader Graph's own default) is the fallback.
+[[nodiscard]] inline auto shader_node_scene_depth_mode(const shader_graph_node& node) -> std::string {
+  const auto mode = std::holds_alternative<std::string>(node.value) ? std::get<std::string>(node.value) : std::string{};
+  return (mode == "raw" || mode == "eye" || mode == "linear01") ? mode : std::string{"linear01"};
 }
 
 struct shader_graph_edge {
@@ -676,14 +739,18 @@ struct shader_graph_edge {
     case shader_node_type::split: // every Split output (R/G/B/A) is a scalar, regardless of pin
     case shader_node_type::time:
     case shader_node_type::delta_time:
+    case shader_node_type::scene_depth:
     case shader_node_type::length:
     case shader_node_type::distance:
     case shader_node_type::fresnel_effect:
+    case shader_node_type::simple_noise:
+    case shader_node_type::voronoi: // Out and Cells are both scalar, regardless of pin
       return shader_value_type::scalar;
     case shader_node_type::constant_vector4:
     case shader_node_type::constant_color:
-    case shader_node_type::texture_sample:
       return shader_value_type::vector4;
+    case shader_node_type::texture_sample: // pin 0 (RGBA) is vector4; R/G/B/A (pins 1-4) are each scalar
+      return pin == 0u ? shader_value_type::vector4 : shader_value_type::scalar;
     case shader_node_type::combine: // RG / RGB / RGBA
       return pin == 0u ? shader_value_type::vector2 : pin == 1u ? shader_value_type::vector3 : shader_value_type::vector4;
     default:
@@ -699,6 +766,7 @@ struct shader_graph_edge {
 [[nodiscard]] inline auto shader_node_fixed_input_type(shader_node_type type, std::size_t pin) -> std::optional<shader_value_type> {
   switch (type) {
     case shader_node_type::texture_sample:
+    case shader_node_type::scene_depth:
       return shader_value_type::vector2; // uv
     case shader_node_type::cross:
     case shader_node_type::reflect:
@@ -710,6 +778,9 @@ struct shader_graph_edge {
       return shader_value_type::vector2; // In Min Max / Out Min Max, each a matched (min,max) pair
     case shader_node_type::fresnel_effect:
       return pin == 2u ? shader_value_type::scalar : shader_value_type::vector3; // Normal/View Dir (vector3) / Power (scalar)
+    case shader_node_type::simple_noise:
+    case shader_node_type::voronoi:
+      return pin == 0u ? shader_value_type::vector2 : shader_value_type::scalar; // UV (vector2) / everything else (scalar)
     case shader_node_type::output_vertex:
       return shader_value_type::vector3; // Position/Normal/Tangent
     case shader_node_type::output_fragment_unlit:
@@ -1087,6 +1158,65 @@ private:
 }; // class shader_graph
 
 using shader_graph_handle = asset_handle<shader_graph>;
+
+// A fresh material's own generic_params/generic_textures (material.hpp) start zero-initialized --
+// nothing else copies a graph's own authored node defaults (the same values shown in the graph
+// editor's node inspector and used for its 2D/3D preview) into them. Without this, a material that
+// exposes e.g. a white "Albedo" tint silently starts multiplying everything by black until someone
+// manually sets every exposed row in the Material Inspector -- exactly what looks like a broken/
+// black shader graph material until you know to look there. Called once when a material's shader
+// graph is (re)assigned (see inspector_asset_editors.cpp's draw_shader_graph_picker call site) --
+// not on every frame, so a value the user already edited in the Material Inspector is never
+// silently overwritten by this.
+[[nodiscard]] inline auto shader_graph_default_generic_params(const shader_graph& graph) -> std::array<math::vector4, shader_graph_max_params> {
+  auto result = std::array<math::vector4, shader_graph_max_params>{};
+
+  for (const auto& parameter : graph.parameters()) {
+    if (parameter.type == shader_graph_parameter_type::texture_value || parameter.slot >= result.size()) {
+      continue;
+    }
+
+    const auto node = std::ranges::find(graph.nodes(), parameter.node_id, &shader_graph_node::id);
+
+    if (node == graph.nodes().end()) {
+      continue;
+    }
+
+    result[parameter.slot] = std::visit([]<typename T>(const T& value) -> math::vector4 {
+      if constexpr (std::is_same_v<T, std::float_t>) return math::vector4{value, 0.0f, 0.0f, 0.0f};
+      else if constexpr (std::is_same_v<T, math::vector2>) return math::vector4{value.x(), value.y(), 0.0f, 0.0f};
+      else if constexpr (std::is_same_v<T, math::vector3>) return math::vector4{value.x(), value.y(), value.z(), 0.0f};
+      else if constexpr (std::is_same_v<T, math::vector4>) return value;
+      else if constexpr (std::is_same_v<T, math::color>) return math::vector4{value.r(), value.g(), value.b(), value.a()};
+      else return math::vector4{0.0f, 0.0f, 0.0f, 0.0f};
+    }, node->value);
+  }
+
+  return result;
+}
+
+// Same reasoning as shader_graph_default_generic_params, for exposed Sample Texture nodes -- each
+// one's own node.value (its "Default Texture" picker, see shader_graph_panel.cpp) becomes the
+// material's initial slot instead of an unset/white fallback.
+[[nodiscard]] inline auto shader_graph_default_generic_textures(const shader_graph& graph) -> std::array<texture_handle, shader_graph_max_textures> {
+  auto result = std::array<texture_handle, shader_graph_max_textures>{};
+
+  for (const auto& parameter : graph.parameters()) {
+    if (parameter.type != shader_graph_parameter_type::texture_value || parameter.slot >= result.size()) {
+      continue;
+    }
+
+    const auto node = std::ranges::find(graph.nodes(), parameter.node_id, &shader_graph_node::id);
+
+    if (node == graph.nodes().end() || !std::holds_alternative<texture_handle>(node->value)) {
+      continue;
+    }
+
+    result[parameter.slot] = std::get<texture_handle>(node->value);
+  }
+
+  return result;
+}
 
 // The generated Slang type/module name for a graph, and its virtual shader_cache path -- shared by
 // asset_cooker::cook_shader_graph (writes the file there) and every render pass that needs to

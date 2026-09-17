@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
+#include <optional>
 #include <string>
 #include <unordered_set>
 #include <variant>
@@ -136,6 +137,18 @@ private:
   // subsequent frames the popup stays open (ShowNodeContextMenu itself only reports a node on that
   // one triggering frame). See the ShowNodeContextMenu call site in _draw_canvas.
   ax::NodeEditor::NodeId _context_node_id{};
+
+  // Which node's inline color swatch / Scene Depth mode combo a popup-based picker currently
+  // targets -- same "captured once, kept across however many frames the popup stays open" reasoning
+  // as _context_node_id above, and for the same underlying cause: imgui-node-editor applies its own
+  // pan/zoom coordinate transform inside BeginNode/EndNode, so a popup (Combo's dropdown, a color
+  // picker) opened directly from inside a node renders at the wrong screen position/doesn't receive
+  // input -- the library's own "widgets" example (relevant upstream bug: thedmd/imgui-node-editor#48)
+  // works around this by only recording that a popup was requested INSIDE the node, then actually
+  // calling OpenPopup/BeginPopup OUTSIDE BeginNode/EndNode entirely, wrapped in Suspend()/Resume()
+  // (see _draw_canvas's own Suspend/Resume block, shared with the node/background context menus).
+  std::optional<std::uint32_t> _color_popup_node_id{};
+  std::optional<std::uint32_t> _scene_depth_mode_popup_node_id{};
 
   ax::NodeEditor::EditorContext* _context{nullptr};
 

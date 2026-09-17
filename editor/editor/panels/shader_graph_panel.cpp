@@ -36,7 +36,7 @@ constexpr auto input_pin_band = std::uintptr_t{1'000'000};
 constexpr auto output_pin_band = std::uintptr_t{2'000'000};
 constexpr auto link_band = std::uintptr_t{3'000'000};
 constexpr auto max_inputs_per_node = std::uintptr_t{8};  // shader_node_input_count never exceeds 7 today (Fragment (Lit)) -- one spare
-constexpr auto max_outputs_per_node = std::uintptr_t{4}; // shader_node_output_count never exceeds 4 today (Split) -- exact, no spare needed
+constexpr auto max_outputs_per_node = std::uintptr_t{5}; // shader_node_output_count never exceeds 5 today (Sample Texture) -- exact, no spare needed
 
 static auto node_id_for(std::uint32_t id) -> ax::NodeEditor::NodeId {
   return ax::NodeEditor::NodeId{node_band + static_cast<std::uintptr_t>(id) + 1u};
@@ -97,6 +97,34 @@ static auto edge_index_from_link(ax::NodeEditor::LinkId id) -> std::optional<std
 }
 
 constexpr auto pin_icon_diameter = 11.0f;
+
+// Width of one inline value-editor field on a constant_*'s own node body (see the node-drawing
+// loop's inline editor block) -- also consulted by inline_editor_natural_width below so the pin
+// section's own content_width calculation knows about it too, keeping the output column flush
+// against the actual (possibly inline-editor-widened) right edge instead of the pin section's own
+// width alone.
+constexpr auto inline_field_width = 52.0f;
+
+// Width of Scene Depth's own inline Raw/Eye/Linear01 mode combo -- same "content_width needs to
+// know about it too" reasoning as inline_field_width above.
+constexpr auto scene_depth_combo_width = 110.0f;
+
+// How wide a constant_*'s inline value editor needs, so the node-drawing loop's content_width
+// calculation can treat it as a third width candidate alongside the title row and the pin columns
+// (natural_width) -- exactly the same reasoning those two already get maxed against each other for.
+// constant_color deliberately returns 0 here: its editor is a small fixed-size clickable swatch,
+// not something that should stretch the node to fit it -- it gets centered under whatever width the
+// title/pins already established instead (see the node-drawing loop's swatch_x-style centering).
+[[nodiscard]] static auto inline_editor_natural_width(sbx::assets::shader_node_type type) -> float {
+  switch (type) {
+    case sbx::assets::shader_node_type::constant_float: return inline_field_width * 2.0f;
+    case sbx::assets::shader_node_type::constant_vector2: return inline_field_width * 2.0f + ImGui::GetStyle().ItemSpacing.x;
+    case sbx::assets::shader_node_type::constant_vector3: return inline_field_width * 3.0f + ImGui::GetStyle().ItemSpacing.x * 2.0f;
+    case sbx::assets::shader_node_type::constant_vector4: return inline_field_width * 4.0f + ImGui::GetStyle().ItemSpacing.x * 3.0f;
+    case sbx::assets::shader_node_type::scene_depth: return scene_depth_combo_width;
+    default: return 0.0f;
+  }
+}
 
 // Pin/link color by value type -- Unity Shader Graph's own convention (a pin's color says what
 // flows through it, the same regardless of which side of the node it's on), rather than the
@@ -198,7 +226,7 @@ static auto input_column_width(const sbx::assets::shader_graph_node& node, sbx::
 // Every shader_node_type, for the Add Node palette -- grouped by shader_node_category_of at draw
 // time rather than kept pre-sorted here, so adding a new enumerator to shader_graph.hpp only ever
 // needs updating in one place (this list) to appear in the palette too.
-constexpr auto all_node_types = std::array<sbx::assets::shader_node_type, 53u>{
+constexpr auto all_node_types = std::array<sbx::assets::shader_node_type, 56u>{
   sbx::assets::shader_node_type::input_uv,
   sbx::assets::shader_node_type::input_normal,
   sbx::assets::shader_node_type::input_view_dir,
@@ -210,6 +238,7 @@ constexpr auto all_node_types = std::array<sbx::assets::shader_node_type, 53u>{
   sbx::assets::shader_node_type::main_light_color,
   sbx::assets::shader_node_type::time,
   sbx::assets::shader_node_type::delta_time,
+  sbx::assets::shader_node_type::scene_depth,
   sbx::assets::shader_node_type::constant_float,
   sbx::assets::shader_node_type::constant_vector2,
   sbx::assets::shader_node_type::constant_vector3,
@@ -246,6 +275,8 @@ constexpr auto all_node_types = std::array<sbx::assets::shader_node_type, 53u>{
   sbx::assets::shader_node_type::reflect,
   sbx::assets::shader_node_type::remap,
   sbx::assets::shader_node_type::fresnel_effect,
+  sbx::assets::shader_node_type::simple_noise,
+  sbx::assets::shader_node_type::voronoi,
   sbx::assets::shader_node_type::swizzle,
   sbx::assets::shader_node_type::split,
   sbx::assets::shader_node_type::combine,
@@ -265,6 +296,7 @@ static auto category_name(sbx::assets::shader_node_category category) -> const c
     case sbx::assets::shader_node_category::range: return ICON_MDI_ARROW_EXPAND_HORIZONTAL " Range";
     case sbx::assets::shader_node_category::trigonometry: return ICON_MDI_ANGLE_ACUTE " Trigonometry";
     case sbx::assets::shader_node_category::vector: return ICON_MDI_VECTOR_LINE " Vector";
+    case sbx::assets::shader_node_category::noise: return ICON_MDI_WAVES " Noise";
     case sbx::assets::shader_node_category::channel: return ICON_MDI_SHUFFLE_VARIANT " Channel";
     case sbx::assets::shader_node_category::output: return ICON_MDI_EXPORT " Output";
   }
@@ -304,6 +336,7 @@ static auto default_value_for(sbx::assets::shader_node_type type) -> sbx::assets
     case sbx::assets::shader_node_type::constant_color: return sbx::math::color{1.0f, 1.0f, 1.0f, 1.0f};
     case sbx::assets::shader_node_type::texture_sample: return sbx::assets::texture_handle{};
     case sbx::assets::shader_node_type::swizzle: return std::string{"rgba"}; // identity -- the user then edits it
+    case sbx::assets::shader_node_type::scene_depth: return std::string{"linear01"}; // matches Unity Shader Graph's own default mode
     default: return std::monostate{};
   }
 }
@@ -568,6 +601,7 @@ auto shader_graph_panel::_draw_add_node_menu(sbx::math::vector2 spawn_position) 
     sbx::assets::shader_node_category::range,
     sbx::assets::shader_node_category::trigonometry,
     sbx::assets::shader_node_category::vector,
+    sbx::assets::shader_node_category::noise,
     sbx::assets::shader_node_category::channel,
     sbx::assets::shader_node_category::output
   }) {
@@ -608,6 +642,13 @@ auto shader_graph_panel::_draw_canvas() -> void {
   }
 
   auto types = sbx::assets::shader_graph_type_resolver{_edit.nodes, _edit.edges};
+
+  // Set the one frame a color/Scene-Depth-mode popup trigger (below, inside the node loop) is
+  // clicked; consumed once, right after the loop, to call ImGui::OpenPopup exactly that one frame --
+  // see _color_popup_node_id's own doc comment for why the popups themselves can't just be opened
+  // directly from inside the loop.
+  auto color_popup_requested = false;
+  auto scene_depth_mode_popup_requested = false;
 
   for (auto& node : _edit.nodes) {
     const auto id = node_id_for(node.id);
@@ -689,8 +730,13 @@ auto shader_graph_panel::_draw_canvas() -> void {
       const auto natural_width = in_width + ((input_count > 0u && output_count > 0u) ? column_gap : 0.0f) + out_width;
       // natural_width is a pure width (relative to this node's own left edge); title_row_end_x is
       // an absolute window-relative X (content_start_x plus the title's own width) -- content_start_x
-      // + natural_width puts both candidates in that same absolute space before comparing them.
-      const auto content_width = std::max(title_row_end_x, content_start_x + natural_width);
+      // + natural_width puts both candidates in that same absolute space before comparing them. The
+      // inline value editor (see inline_editor_natural_width) is a third candidate for the same
+      // reason -- e.g. constant_vector4's 4-field row is wider than its lone "Out" pin, so without
+      // this the output pin used to end up positioned against the pin section's own (narrower)
+      // width while the node itself visibly grew wider to fit the editor underneath, leaving the
+      // pin looking centered instead of flush against the actual right edge.
+      const auto content_width = std::max({title_row_end_x, content_start_x + natural_width, content_start_x + inline_editor_natural_width(node.type)});
       node_content_width = content_width - content_start_x;
 
       const auto pins_top = ImGui::GetCursorPosY();
@@ -744,6 +790,122 @@ auto shader_graph_panel::_draw_canvas() -> void {
         }
       }
     }
+
+    // Inline value editor -- constant_*'s whole purpose is the value it holds, so (like Unity
+    // Shader Graph's own Float/Vector/Color nodes) it's editable directly on the node, not just via
+    // the Selection Inspector on the right. Deliberately its own small fixed-width layout rather
+    // than reusing draw_vector2_control/draw_vector3_control/draw_color_field (widgets sized for
+    // the much wider side panel -- their SameLine(90.0f) label offset alone would overflow a node
+    // this narrow) -- plain DragFloats/a compact color swatch instead, same shape the Selection
+    // Inspector's own constant_vector4 case already uses for the same "no shared widget exists yet"
+    // reason. ImGui::PushID scopes every field's "##..." id to this node, since multiple constant
+    // nodes on the same canvas would otherwise collide on the same bare id.
+    ImGui::PushID(static_cast<std::int32_t>(node.id));
+
+    switch (node.type) {
+      case sbx::assets::shader_node_type::constant_float: {
+        auto value = std::holds_alternative<std::float_t>(node.value) ? std::get<std::float_t>(node.value) : 0.0f;
+
+        ImGui::SetCursorPosX(content_start_x);
+        ImGui::SetNextItemWidth(inline_field_width * 2.0f);
+
+        if (ImGui::DragFloat("##value", &value, 0.01f)) {
+          node.value = value;
+          _apply_live(!node.exposed); // see the Selection Inspector's own constant_float case
+        }
+
+        break;
+      }
+      case sbx::assets::shader_node_type::constant_vector2:
+      case sbx::assets::shader_node_type::constant_vector3:
+      case sbx::assets::shader_node_type::constant_vector4: {
+        const auto width = node.type == sbx::assets::shader_node_type::constant_vector2 ? 2u : node.type == sbx::assets::shader_node_type::constant_vector3 ? 3u : 4u;
+        static constexpr auto axis_labels = std::array<const char*, 4u>{"##x", "##y", "##z", "##w"};
+
+        auto components = std::array<std::float_t, 4u>{0.0f, 0.0f, 0.0f, 0.0f};
+
+        if (node.type == sbx::assets::shader_node_type::constant_vector2) {
+          const auto value = std::holds_alternative<sbx::math::vector2>(node.value) ? std::get<sbx::math::vector2>(node.value) : sbx::math::vector2{};
+          components[0] = value.x();
+          components[1] = value.y();
+        } else if (node.type == sbx::assets::shader_node_type::constant_vector3) {
+          const auto value = std::holds_alternative<sbx::math::vector3>(node.value) ? std::get<sbx::math::vector3>(node.value) : sbx::math::vector3{};
+          components[0] = value.x();
+          components[1] = value.y();
+          components[2] = value.z();
+        } else {
+          const auto value = std::holds_alternative<sbx::math::vector4>(node.value) ? std::get<sbx::math::vector4>(node.value) : sbx::math::vector4{};
+          components[0] = value.x();
+          components[1] = value.y();
+          components[2] = value.z();
+          components[3] = value.w();
+        }
+
+        ImGui::SetCursorPosX(content_start_x);
+
+        auto changed = false;
+
+        for (auto axis = std::uint32_t{0u}; axis < width; ++axis) {
+          if (axis != 0u) {
+            ImGui::SameLine();
+          }
+
+          ImGui::SetNextItemWidth(inline_field_width);
+          changed |= ImGui::DragFloat(axis_labels[axis], &components[axis], 0.01f);
+        }
+
+        if (changed) {
+          if (node.type == sbx::assets::shader_node_type::constant_vector2) node.value = sbx::math::vector2{components[0], components[1]};
+          else if (node.type == sbx::assets::shader_node_type::constant_vector3) node.value = sbx::math::vector3{components[0], components[1], components[2]};
+          else node.value = sbx::math::vector4{components[0], components[1], components[2], components[3]};
+
+          _apply_live(!node.exposed); // see the Selection Inspector's own constant_vector*/constant_color case
+        }
+
+        break;
+      }
+      case sbx::assets::shader_node_type::constant_color: {
+        auto value = std::holds_alternative<sbx::math::color>(node.value) ? std::get<sbx::math::color>(node.value) : sbx::math::color{1.0f, 1.0f, 1.0f, 1.0f};
+
+        // Swatch is a small fixed square (ImGui::GetFrameHeight() on a side) -- centered under
+        // node_content_width rather than left-hugging content_start_x, same treatment the preview
+        // image swatch below gets and for the same reason (it doesn't stretch to fill the row the
+        // way the numeric editors above do).
+        const auto swatch_width = ImGui::GetFrameHeight();
+        ImGui::SetCursorPosX(content_start_x + std::max(0.0f, (node_content_width - swatch_width) * 0.5f));
+
+        // A plain ColorButton, not ColorEdit4 -- it only ever reports "was clicked", never opens a
+        // popup itself. The actual color-picker popup is drawn once, after every node this frame is
+        // done (see _color_popup_node_id's own doc comment for why it can't be opened from here).
+        if (ImGui::ColorButton("##value_swatch", ImVec4{value.r(), value.g(), value.b(), value.a()}, ImGuiColorEditFlags_None, ImVec2{swatch_width, swatch_width})) {
+          _color_popup_node_id = node.id;
+          color_popup_requested = true;
+        }
+
+        break;
+      }
+      case sbx::assets::shader_node_type::scene_depth: {
+        const auto current_mode = sbx::assets::shader_node_scene_depth_mode(node);
+        const auto current_label = current_mode == "raw" ? "Raw" : current_mode == "eye" ? "Eye" : "Linear01";
+
+        ImGui::SetCursorPosX(content_start_x);
+
+        // A plain Button, not Combo -- Combo opens its dropdown as a popup internally, which suffers
+        // the exact same "wrong screen position inside a zoomed/panned node" problem a bare Combo
+        // call had here before; see _scene_depth_mode_popup_node_id's own doc comment. The actual
+        // mode list is drawn once, after every node this frame is done, as a plain popup instead.
+        if (ImGui::Button(current_label, ImVec2{scene_depth_combo_width, 0.0f})) {
+          _scene_depth_mode_popup_node_id = node.id;
+          scene_depth_mode_popup_requested = true;
+        }
+
+        break;
+      }
+      default:
+        break;
+    }
+
+    ImGui::PopID();
 
     if (node.preview) {
       // ImGui's cursor-max tracking already accounts for the pin section's own absolutely-
@@ -922,6 +1084,61 @@ auto shader_graph_panel::_draw_canvas() -> void {
 
   if (ImGui::BeginPopup("##shader_graph_background_context")) {
     _draw_add_node_menu(_add_node_spawn_position);
+
+    ImGui::EndPopup();
+  }
+
+  // Deferred color-picker / Scene-Depth-mode popups -- see _color_popup_node_id's own doc comment
+  // for why these can't just be opened directly from inside the node loop above. OpenPopup is called
+  // only the one frame its swatch/button was actually clicked (color_popup_requested/
+  // scene_depth_mode_popup_requested are locals, reset every frame); BeginPopup is called every
+  // frame regardless so an already-open popup keeps rendering across however many frames the user
+  // spends picking a value, exactly like the node/background context menus above.
+  if (color_popup_requested) {
+    ImGui::OpenPopup("##shader_graph_color_popup");
+  }
+
+  if (ImGui::BeginPopup("##shader_graph_color_popup")) {
+    if (_color_popup_node_id) {
+      const auto entry = std::ranges::find(_edit.nodes, *_color_popup_node_id, &sbx::assets::shader_graph_node::id);
+
+      if (entry != _edit.nodes.end()) {
+        auto value = std::holds_alternative<sbx::math::color>(entry->value) ? std::get<sbx::math::color>(entry->value) : sbx::math::color{1.0f, 1.0f, 1.0f, 1.0f};
+        auto components = std::array<std::float_t, 4u>{value.r(), value.g(), value.b(), value.a()};
+
+        if (ImGui::ColorPicker4("##value", components.data())) {
+          entry->value = sbx::math::color{components[0], components[1], components[2], components[3]};
+          _apply_live(!entry->exposed); // see the Selection Inspector's own constant_color case
+        }
+      }
+    }
+
+    ImGui::EndPopup();
+  }
+
+  if (scene_depth_mode_popup_requested) {
+    ImGui::OpenPopup("##shader_graph_scene_depth_popup");
+  }
+
+  if (ImGui::BeginPopup("##shader_graph_scene_depth_popup")) {
+    if (_scene_depth_mode_popup_node_id) {
+      const auto entry = std::ranges::find(_edit.nodes, *_scene_depth_mode_popup_node_id, &sbx::assets::shader_graph_node::id);
+
+      if (entry != _edit.nodes.end()) {
+        static constexpr auto mode_labels = std::array<const char*, 3u>{"Raw", "Eye", "Linear01"};
+        static constexpr auto mode_values = std::array<const char*, 3u>{"raw", "eye", "linear01"};
+
+        const auto current_mode = sbx::assets::shader_node_scene_depth_mode(*entry);
+
+        for (auto i = std::size_t{0u}; i < mode_values.size(); ++i) {
+          if (ImGui::Selectable(mode_labels[i], current_mode == mode_values[i])) {
+            entry->value = std::string{mode_values[i]};
+            _apply_live(); // the mode is baked as a literal into the generated Slang -- always a structural recompile
+            ImGui::CloseCurrentPopup();
+          }
+        }
+      }
+    }
 
     ImGui::EndPopup();
   }

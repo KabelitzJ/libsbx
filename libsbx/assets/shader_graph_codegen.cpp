@@ -37,6 +37,9 @@ static auto codegen_context_of(shader_node_type type) -> std::optional<codegen_c
     // locals (see _emit's fresnel_effect case) -- those only exist in fragment_main's scope, so the
     // whole node is fragment-only, same restriction as input_normal/input_view_dir themselves.
     case shader_node_type::fresnel_effect:
+    // Scene Depth's unconnected UV defaults to this fragment's own screen position -- there's no
+    // meaningful screen-space UV in the vertex stage.
+    case shader_node_type::scene_depth:
       return codegen_context::fragment;
     default:
       return std::nullopt; // valid in either context -- camera_position/main_light_direction/
@@ -166,6 +169,81 @@ static auto join_statements(const std::vector<std::string>& statements) -> std::
   return joined;
 }
 
+// Shared library functions Simple Noise/Voronoi both compile down to a call into -- spliced into a
+// generated file's preamble (see noise_helper_source_for) only when the graph actually has one of
+// those two node types, so a graph that doesn't use noise gets no unused-function bloat/warnings.
+// Ported from Unity Shader Graph's own Simple Noise/Voronoi nodes, with their dead code (an unused
+// `uv = abs(frac(uv) - 0.5)` in Value Noise, an unused third res component in Voronoi) dropped and
+// their hand-rolled lerp replaced with Slang's own builtin (same as every other node in this file
+// already uses). Voronoi's Cells output is NOT a true per-cell id -- it reads the winning cell's
+// random offset.x, matching a real quirk in Unity's own generated HLSL exactly.
+static constexpr auto noise_helper_source =
+  "float shader_graph_noise_random(float2 uv) {\n"
+  "  return frac(sin(dot(uv, float2(12.9898, 78.233))) * 43758.5453);\n"
+  "}\n"
+  "\n"
+  "float shader_graph_noise_value(float2 uv) {\n"
+  "  float2 i = floor(uv);\n"
+  "  float2 f = frac(uv);\n"
+  "  f = f * f * (3.0 - 2.0 * f);\n"
+  "\n"
+  "  float r0 = shader_graph_noise_random(i + float2(0.0, 0.0));\n"
+  "  float r1 = shader_graph_noise_random(i + float2(1.0, 0.0));\n"
+  "  float r2 = shader_graph_noise_random(i + float2(0.0, 1.0));\n"
+  "  float r3 = shader_graph_noise_random(i + float2(1.0, 1.0));\n"
+  "\n"
+  "  float bottom = lerp(r0, r1, f.x);\n"
+  "  float top = lerp(r2, r3, f.x);\n"
+  "  return lerp(bottom, top, f.y);\n"
+  "}\n"
+  "\n"
+  "float shader_graph_simple_noise(float2 uv, float scale) {\n"
+  "  float t = 0.0;\n"
+  "\n"
+  "  for (uint octave = 0u; octave < 3u; ++octave) {\n"
+  "    float freq = pow(2.0, float(octave));\n"
+  "    float amp = pow(0.5, float(3u - octave));\n"
+  "    t += shader_graph_noise_value(float2(uv.x * scale / freq, uv.y * scale / freq)) * amp;\n"
+  "  }\n"
+  "\n"
+  "  return t;\n"
+  "}\n"
+  "\n"
+  "float2 shader_graph_voronoi_random(float2 uv, float angle_offset) {\n"
+  "  float2x2 m = float2x2(15.27, 47.63, 99.41, 89.98);\n"
+  "  uv = frac(sin(mul(uv, m)) * 46839.32);\n"
+  "  return float2(sin(uv.y * angle_offset) * 0.5 + 0.5, cos(uv.x * angle_offset) * 0.5 + 0.5);\n"
+  "}\n"
+  "\n"
+  "float2 shader_graph_voronoi(float2 uv, float angle_offset, float cell_density) {\n"
+  "  float2 g = floor(uv * cell_density);\n"
+  "  float2 f = frac(uv * cell_density);\n"
+  "\n"
+  "  float2 closest = float2(8.0, 0.0); // x = nearest distance, y = that cell's offset.x (\"Cells\")\n"
+  "\n"
+  "  for (int y = -1; y <= 1; ++y) {\n"
+  "    for (int x = -1; x <= 1; ++x) {\n"
+  "      float2 lattice = float2(float(x), float(y));\n"
+  "      float2 offset = shader_graph_voronoi_random(lattice + g, angle_offset);\n"
+  "      float d = distance(lattice + offset, f);\n"
+  "\n"
+  "      if (d < closest.x) {\n"
+  "        closest = float2(d, offset.x);\n"
+  "      }\n"
+  "    }\n"
+  "  }\n"
+  "\n"
+  "  return closest;\n"
+  "}\n"
+  "\n";
+
+static auto noise_helper_source_for(const shader_graph::create_info& graph) -> std::string {
+  const auto uses_noise = std::ranges::any_of(graph.nodes, [](const shader_graph_node& node) {
+    return node.type == shader_node_type::simple_noise || node.type == shader_node_type::voronoi;
+  });
+  return uses_noise ? std::string{noise_helper_source} : std::string{};
+}
+
 // Walks a graph backward from one socket's input pin, producing a single self-contained Slang
 // expression for it (a post-order DFS -- a node's dependencies are always resolved, and so
 // inlined, before the node itself references them). Doubles as reachability (nodes never visited
@@ -201,9 +279,15 @@ public:
   // 128-byte budget to spend a whole field on Delta Time (a fixed literal instead -- see
   // generate_shader_graph_preview_source's own doc comment for why that's an acceptable
   // simplification for a preview specifically) and packs Time into another otherwise-unused .w.
-  // Every other node type's emission is identical either way.
-  shader_graph_codegen_walker(const shader_graph::create_info& graph, codegen_context context, std::string sampler_index_expression = "push.sampler_index", std::string time_expression = "push.time", std::string delta_time_expression = "push.delta_time")
-  : _context{context}, _sampler_index_expression{std::move(sampler_index_expression)}, _time_expression{std::move(time_expression)}, _delta_time_expression{std::move(delta_time_expression)} {
+  // `scene_depth_preview_value`, when non-empty, replaces Scene Depth's ENTIRE real sample+linearize
+  // computation with that literal expression -- neither preview kind has a real per-frame frame_data
+  // (the master preview's own push_data is a small standalone struct, not a frame_data*; the node
+  // preview has no frame_data at all), so there is no whole-scene depth to sample in the first
+  // place, not just a differently-named field. A fixed midpoint value is a reasonable placeholder,
+  // matching the same "no real surface" tradeoff generate_node_preview_source already makes for
+  // Normal/View Dir. Every other node type's emission is identical either way.
+  shader_graph_codegen_walker(const shader_graph::create_info& graph, codegen_context context, std::string sampler_index_expression = "push.sampler_index", std::string time_expression = "push.time", std::string delta_time_expression = "push.delta_time", std::string scene_depth_preview_value = "")
+  : _context{context}, _sampler_index_expression{std::move(sampler_index_expression)}, _time_expression{std::move(time_expression)}, _delta_time_expression{std::move(delta_time_expression)}, _scene_depth_preview_value{std::move(scene_depth_preview_value)} {
     for (const auto& node : graph.nodes) {
       _nodes_by_id.emplace(node.id, &node);
     }
@@ -250,13 +334,18 @@ private:
   // A pin allowed to be left unconnected without that being an error -- texture_sample's uv (falls
   // back to the calling stage's own uv), every one of Combine's R/G/B/A (defaults to a literal 0,
   // matching Unity Shader Graph's own Combine node), Remap's In Min Max/Out Min Max (each defaults
-  // to (0,1) -- pin 0, In, is still required), and Fresnel Effect's Normal/View Dir/Power (default
-  // to this fragment's own N/V and a power of 1).
+  // to (0,1) -- pin 0, In, is still required), Fresnel Effect's Normal/View Dir/Power (default
+  // to this fragment's own N/V and a power of 1), and every one of Simple Noise's/Voronoi's own pins
+  // (UV falls back the same way texture_sample's does; Scale/Angle Offset/Cell Density each default
+  // to a literal).
   [[nodiscard]] static auto _allows_unconnected(shader_node_type type, std::uint32_t pin) -> bool {
     if (type == shader_node_type::texture_sample && pin == 0u) return true;
     if (type == shader_node_type::combine) return true;
     if (type == shader_node_type::remap && pin != 0u) return true;
     if (type == shader_node_type::fresnel_effect) return true;
+    if (type == shader_node_type::simple_noise) return true;
+    if (type == shader_node_type::voronoi) return true;
+    if (type == shader_node_type::scene_depth) return true; // UV defaults to this fragment's own screen position
     return false;
   }
 
@@ -374,6 +463,35 @@ private:
       case shader_node_type::time: return {_time_expression, "float"};
       case shader_node_type::delta_time: return {_delta_time_expression, "float"};
 
+      case shader_node_type::scene_depth: {
+        // Neither preview has a real frame_data to sample from -- see this class's own doc comment
+        // on scene_depth_preview_value.
+        if (!_scene_depth_preview_value.empty()) {
+          return {_scene_depth_preview_value, "float"};
+        }
+
+        const auto default_uv = std::string{"(input.sv_position.xy / push.frame_data->render_target_size)"};
+        const auto& uv = inputs[0].expression.empty() ? default_uv : inputs[0].expression;
+        const auto raw = fmt::format("textures[push.frame_data->scene_depth_index].Sample(samplers[{}], {}).r", _sampler_index_expression, uv);
+
+        const auto mode = shader_node_scene_depth_mode(node);
+
+        if (mode == "raw") {
+          return {raw, "float"};
+        }
+
+        // Standard (non-reversed-Z) [0,1]-depth-range linearization -- matches this engine's own
+        // perspective projection convention exactly (see math::matrix4x4::perspective's own doc
+        // comment).
+        const auto eye = fmt::format("((push.frame_data->near_plane * push.frame_data->far_plane) / (push.frame_data->far_plane - ({}) * (push.frame_data->far_plane - push.frame_data->near_plane)))", raw);
+
+        if (mode == "eye") {
+          return {eye, "float"};
+        }
+
+        return {fmt::format("(({}) / push.frame_data->far_plane)", eye), "float"}; // linear01
+      }
+
       case shader_node_type::constant_float: {
         if (node.exposed) {
           return {fmt::format("material.generic_params[{}].x", _float_slot_of.at(node.id)), "float"};
@@ -419,10 +537,35 @@ private:
         // node inspector) is never read here -- an unset material slot always samples
         // asset_residency's plain white fallback, not this node's default. Revisit if a graph
         // author actually needs a per-graph default.
+        //
+        // 5 output pins (RGBA, R, G, B, A -- see shader_node_output_count) all read the SAME
+        // underlying texture fetch, so the actual `.Sample(...)` call is cached per NODE (not per
+        // pin, unlike every other node type) in _texture_sample_variable and only emitted once, the
+        // first time any of this node's pins is visited -- every other pin then just swizzles that
+        // one already-materialized float4 variable. Without this, wiring e.g. both RGB (Albedo) and
+        // A (Alpha) from one Sample Texture node -- exactly the case this feature exists for --
+        // would silently re-sample the same texture twice.
         const auto slot = _texture_slot_of.at(node.id);
         const auto default_uv = _context == codegen_context::fragment ? std::string{"uv"} : std::string{"v.uv"};
         const auto& uv = inputs[0].expression.empty() ? default_uv : inputs[0].expression;
-        return {fmt::format("textures[material.generic_textures[{}]].Sample(samplers[{}], {})", slot, _sampler_index_expression, uv), "float4"};
+
+        const auto cached = _texture_sample_variable.find(node.id);
+        auto rgba_variable = std::string{};
+
+        if (cached != _texture_sample_variable.end()) {
+          rgba_variable = cached->second;
+        } else {
+          rgba_variable = fmt::format("texture_sample_{}_rgba", node.id);
+          _statements.push_back(fmt::format("  float4 {} = textures[material.generic_textures[{}]].Sample(samplers[{}], {});\n", rgba_variable, slot, _sampler_index_expression, uv));
+          _texture_sample_variable.emplace(node.id, rgba_variable);
+        }
+
+        if (output_pin == 0u) {
+          return {rgba_variable, "float4"};
+        }
+
+        static constexpr auto swizzles = std::array<const char*, 4u>{"r", "g", "b", "a"};
+        return {fmt::format("{}.{}", rgba_variable, swizzles[output_pin - 1u]), "float"};
       }
 
       case shader_node_type::add:
@@ -526,6 +669,26 @@ private:
         return {fmt::format("pow(saturate(1.0 - dot(normalize({}), normalize({}))), {})", normal, view_dir, power), "float"};
       }
 
+      case shader_node_type::simple_noise: {
+        const auto default_uv = _context == codegen_context::fragment ? std::string{"uv"} : std::string{"v.uv"};
+        const auto& uv = inputs[0].expression.empty() ? default_uv : inputs[0].expression;
+        const auto scale = inputs[1].expression.empty() ? std::string{"500.0"} : inputs[1].expression;
+        return {fmt::format("shader_graph_simple_noise({}, {})", uv, scale), "float"};
+      }
+
+      case shader_node_type::voronoi: {
+        // Out and Cells share the same underlying search, so a graph wiring up both recomputes it
+        // twice (once per output pin's own local variable) -- see shader_graph_codegen_walker's own
+        // doc comment on per-(node,pin) variables. Fine in practice: wiring up both is rare, and the
+        // search itself is only 9 taps.
+        const auto default_uv = _context == codegen_context::fragment ? std::string{"uv"} : std::string{"v.uv"};
+        const auto& uv = inputs[0].expression.empty() ? default_uv : inputs[0].expression;
+        const auto angle_offset = inputs[1].expression.empty() ? std::string{"2.0"} : inputs[1].expression;
+        const auto cell_density = inputs[2].expression.empty() ? std::string{"5.0"} : inputs[2].expression;
+        const auto call = fmt::format("shader_graph_voronoi({}, {}, {})", uv, angle_offset, cell_density);
+        return {fmt::format("{}.{}", call, output_pin == 0u ? "x" : "y"), "float"};
+      }
+
       case shader_node_type::swizzle: {
         const auto pattern = shader_node_swizzle_pattern(node);
         const auto width = component_count(inputs[0].type);
@@ -566,6 +729,7 @@ private:
   std::string _sampler_index_expression;
   std::string _time_expression;
   std::string _delta_time_expression;
+  std::string _scene_depth_preview_value;
   std::unordered_map<std::uint32_t, const shader_graph_node*> _nodes_by_id{};
   std::unordered_map<std::uint64_t, std::uint64_t> _incoming{}; // pin_key(to) -> pin_key(from)
   std::unordered_map<std::uint32_t, std::uint32_t> _float_slot_of{};
@@ -573,6 +737,7 @@ private:
   std::unordered_map<std::uint64_t, emitted_value> _emitted{};
   std::unordered_set<std::uint64_t> _visiting{};
   std::vector<std::string> _statements{};
+  std::unordered_map<std::uint32_t, std::string> _texture_sample_variable{}; // node id -> its one shared RGBA sample variable, see _emit's texture_sample case
   std::string _error{};
 
 }; // class shader_graph_codegen_walker
@@ -702,6 +867,16 @@ auto generate_shader_graph_source(const std::string& graph_name, const shader_gr
   auto fragment_walker = shader_graph_codegen_walker{graph, codegen_context::fragment};
   auto fragment_body = std::string{};
 
+  // depth_fragment_main (below) needs the graph's own Alpha/Alpha Clip Threshold too, to actually
+  // clip the same silhouette fragment_main does -- re-walked through a SEPARATE fresh walker (same
+  // reasoning as the per-vertex-component walkers above: it's a different Slang function, so a
+  // local variable declared for fragment_walker's own statements() isn't in scope there). Only
+  // Alpha/Alpha Clip Threshold are needed; the rest of the socket set (Albedo, Normal, ...) never
+  // affects whether a fragment survives, so re-evaluating just these two is enough.
+  auto depth_fragment_walker = shader_graph_codegen_walker{graph, codegen_context::fragment};
+  auto depth_alpha = std::string{};
+  auto depth_alpha_clip_threshold = std::string{};
+
   if (has_lit) {
     const auto id = lit_it->id;
 
@@ -747,6 +922,14 @@ auto generate_shader_graph_source(const std::string& graph_name, const shader_gr
       "  clip(is_alpha_masked * ({6} - {7}));\n",
       *albedo, *normal, *metallic, *roughness, *emission, *occlusion, *alpha, *alpha_clip_threshold
     );
+
+    const auto depth_alpha_result = labeled(emit_fragment_socket(id, 6u, depth_fragment_walker, "float", "1.0"), "Fragment (Lit) Alpha");
+    if (!depth_alpha_result) return std::unexpected{depth_alpha_result.error()};
+    depth_alpha = *depth_alpha_result;
+
+    const auto depth_alpha_clip_result = labeled(emit_fragment_socket(id, 7u, depth_fragment_walker, "float", "material.alpha_cutoff"), "Fragment (Lit) Alpha Clip Threshold");
+    if (!depth_alpha_clip_result) return std::unexpected{depth_alpha_clip_result.error()};
+    depth_alpha_clip_threshold = *depth_alpha_clip_result;
   } else {
     const auto id = unlit_it->id;
 
@@ -768,7 +951,17 @@ auto generate_shader_graph_source(const std::string& graph_name, const shader_gr
       "  clip(is_alpha_masked * ({1} - {2}));\n",
       *color, *alpha, *alpha_clip_threshold
     );
+
+    const auto depth_alpha_result = labeled(emit_fragment_socket(id, 1u, depth_fragment_walker, "float", "1.0"), "Fragment (Unlit) Alpha");
+    if (!depth_alpha_result) return std::unexpected{depth_alpha_result.error()};
+    depth_alpha = *depth_alpha_result;
+
+    const auto depth_alpha_clip_result = labeled(emit_fragment_socket(id, 2u, depth_fragment_walker, "float", "material.alpha_cutoff"), "Fragment (Unlit) Alpha Clip Threshold");
+    if (!depth_alpha_clip_result) return std::unexpected{depth_alpha_clip_result.error()};
+    depth_alpha_clip_threshold = *depth_alpha_clip_result;
   }
+
+  const auto depth_fragment_body = join_statements(depth_fragment_walker.statements());
 
   auto source = fmt::format(
     "// AUTO-GENERATED by shader graph codegen (shader_graph: {0}). Do not hand-edit -- edit the .shadergraph source and re-cook.\n"
@@ -778,6 +971,7 @@ auto generate_shader_graph_source(const std::string& graph_name, const shader_gr
     // regardless of which subdirectory the generated file ends up in.
     "#include <pbr/geometry_common.slang>\n"
     "\n"
+    "{5}"
     "{1}"
     "\n"
     "{2}"
@@ -811,12 +1005,17 @@ auto generate_shader_graph_source(const std::string& graph_name, const shader_gr
     // Vertex block) so both passes can unconditionally use this graph's own pipeline instead of
     // special-casing "does this graph touch vertices"; a graph with no Vertex block just gets the
     // same pass-through position here as vertex_main does above, matching the built-in depth
-    // shaders exactly. See shaders/passes/depth_pre.slang / shadow.slang for the shape this
-    // mirrors. Deliberately kept on the simple material-texture-based apply_alpha_cutout rather
-    // than re-deriving the graph's own (possibly much more expensive, and here not yet in scope --
-    // uv/n/view_dir aren't declared) Alpha expression a second time; a graph author relying on
-    // alpha clipping purely from graph math (not a texture) will see a depth pre-pass/shadow
-    // mismatch on the clipped silhouette until this gets revisited.
+    // shaders exactly. See shaders/passes/depth_pre.slang / shadow.slang for the shape this mirrors.
+    // depth_fragment_main re-derives the graph's own Alpha/Alpha Clip Threshold (depth_alpha/
+    // depth_alpha_clip_threshold, computed above alongside fragment_main's own) rather than the
+    // real material's fixed apply_alpha_cutout -- opaque_pass runs with depth_write=false and a
+    // less_or_equal compare against this depth pre-pass (see opaque_pass.cpp), so a mismatch here
+    // used to leave fragment_main's own clip() correctly discarding a masked pixel's COLOR while
+    // this pass had already written its DEPTH, occluding whatever should have shown through the
+    // hole (background/other geometry) with nothing -- the "mask renders as an opaque black hole"
+    // bug. `n`/`view_dir` are fixed placeholders (no real surface normal is available this cheaply
+    // in a depth-only pass) -- fine for the overwhelmingly common case (Alpha driven by a Texture
+    // Sample/constant), same tradeoff generate_node_preview_source already makes for the same reason.
     "struct depth_vertex_output {{\n"
     "  float2 uv : TEXCOORD;\n"
     "  float4 sv_position : SV_Position;\n"
@@ -858,7 +1057,13 @@ auto generate_shader_graph_source(const std::string& graph_name, const shader_gr
     "void depth_fragment_main(depth_fragment_input input) {{\n"
     "  material_data material = push.frame_data->materials[push.material_index];\n"
     "\n"
-    "  apply_alpha_cutout(material, input.uv, push.sampler_index);\n"
+    "  float2 uv = apply_uv_transform(material, input.uv);\n"
+    "  float3 n = float3(0.0, 0.0, 1.0);\n"
+    "  float3 view_dir = float3(0.0, 0.0, 1.0);\n"
+    "\n"
+    "{6}"
+    "  uint is_alpha_masked = (material.flags & material_flags::alpha_masked) != 0u;\n"
+    "  clip(is_alpha_masked * ({7} - {8}));\n"
     "}}\n"
     "\n"
     "[shader(\"fragment\")]\n"
@@ -878,7 +1083,8 @@ auto generate_shader_graph_source(const std::string& graph_name, const shader_gr
     "\n"
     "  return Policy::shade(shading_input);\n"
     "}}\n",
-    graph_name, *vertex_position_fn, *vertex_normal_fn, *vertex_tangent_fn, fragment_body
+    graph_name, *vertex_position_fn, *vertex_normal_fn, *vertex_tangent_fn, fragment_body, noise_helper_source_for(graph),
+    depth_fragment_body, depth_alpha, depth_alpha_clip_threshold
   );
 
   return source;
@@ -927,7 +1133,7 @@ auto generate_shader_graph_preview_source(const std::string& graph_name, const s
   const auto vertex_tangent_fn = labeled(emit_vertex_component(vertex_node, 2u, vertex_tangent_walker, "graph_vertex_tangent", "v.tangent.xyz", preview_material_declaration), "Vertex Tangent");
   if (!vertex_tangent_fn) return std::unexpected{vertex_tangent_fn.error()};
 
-  auto fragment_walker = shader_graph_codegen_walker{graph, codegen_context::fragment, "uint(push.light_direction.w)", "push.camera_position.w", preview_delta_time_expression};
+  auto fragment_walker = shader_graph_codegen_walker{graph, codegen_context::fragment, "uint(push.light_direction.w)", "push.camera_position.w", preview_delta_time_expression, "0.5"};
   auto fragment_body = std::string{};
 
   if (has_lit) {
@@ -991,6 +1197,7 @@ auto generate_shader_graph_preview_source(const std::string& graph_name, const s
     "\n"
     "[[vk::push_constant]] ConstantBuffer<push_data> push;\n"
     "\n"
+    "{5}"
     "{1}"
     "\n"
     "{2}"
@@ -1047,7 +1254,7 @@ auto generate_shader_graph_preview_source(const std::string& graph_name, const s
     "\n"
     "  return float4(color, 1.0);\n"
     "}}\n",
-    graph_name, *vertex_position_fn, *vertex_normal_fn, *vertex_tangent_fn, fragment_body
+    graph_name, *vertex_position_fn, *vertex_normal_fn, *vertex_tangent_fn, fragment_body, noise_helper_source_for(graph)
   );
 
   return source;
@@ -1058,7 +1265,7 @@ auto generate_node_preview_source(const std::string& graph_name, const shader_gr
     return std::unexpected{*error};
   }
 
-  auto walker = shader_graph_codegen_walker{graph, codegen_context::fragment, "uint(push.sampler_index)"};
+  auto walker = shader_graph_codegen_walker{graph, codegen_context::fragment, "uint(push.sampler_index)", "push.time", "push.delta_time", "0.5"};
 
   const auto value = walker.visit_pin(node_id, output_pin);
 
@@ -1092,6 +1299,7 @@ auto generate_node_preview_source(const std::string& graph_name, const shader_gr
     "\n"
     "[[vk::push_constant]] ConstantBuffer<push_data> push;\n"
     "\n"
+    "{5}"
     "struct vertex_output {{\n"
     "  [[vk::location(0)]] float2 uv : TEXCOORD;\n"
     "  float4 sv_position : SV_Position;\n"
@@ -1127,7 +1335,7 @@ auto generate_node_preview_source(const std::string& graph_name, const shader_gr
     "{3}"
     "  return {4};\n"
     "}}\n",
-    graph_name, node_id, output_pin, join_statements(walker.statements()), color_expression
+    graph_name, node_id, output_pin, join_statements(walker.statements()), color_expression, noise_helper_source_for(graph)
   );
 
   return source;

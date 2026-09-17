@@ -63,6 +63,8 @@ auto graphics_pass_builder::add_group(const render_attachment_group& group) -> s
       .kind = detail::operation_kind::depth_attachment,
       .group_index = index,
       .image = group.depth->image,
+      .resolve_image = group.depth->resolve_image,
+      .resolve_mode = group.depth->resolve_mode,
       .stage = group.depth->stage_mask,
       .access = group.depth->access_mask,
       .layout = graphics::image_layout::depth_attachment_optimal,
@@ -254,6 +256,18 @@ auto render_graph::compile(const graph_resources& resources) -> void {
         info.loadOp = is_first_use ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD;
         info.storeOp = graphics::to_vk_enum<VkAttachmentStoreOp>(op.store_op);
         info.clearValue.depthStencil = VkClearDepthStencilValue{op.clear_depth.depth, op.clear_depth.stencil};
+
+        if (op.resolve_image.is_valid()) {
+          if (const auto resolve_barrier = touch_image(op.resolve_image, op.stage, op.access, op.layout)) {
+            group.entry_image_barriers.push_back(*resolve_barrier);
+          }
+
+          auto& resolve_image = registry.get<graphics::image>(op.resolve_image);
+
+          info.resolveMode = graphics::to_vk_enum<VkResolveModeFlagBits>(op.resolve_mode);
+          info.resolveImageView = resolve_image.view();
+          info.resolveImageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
+        }
 
         group.depth_attachment = info;
         group.has_depth = true;

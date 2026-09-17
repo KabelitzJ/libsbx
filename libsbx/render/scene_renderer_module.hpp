@@ -241,6 +241,10 @@ private:
   bool _grid_enabled{false};
 
   graphics::image_handle _depth_image{};
+  // _depth_image's own MSAA resolve target (depth_pre_pass.hpp's own doc comment) -- single-sample,
+  // bindless-sampleable, read by the shader graph Scene Depth node via _scene_depth_index below.
+  graphics::image_handle _scene_depth_image{};
+  std::uint32_t _scene_depth_index{0u};
   graphics::image_handle _color_image{};
   graphics::image_handle _color_msaa_image{};
   std::uint32_t _color_index{0u};

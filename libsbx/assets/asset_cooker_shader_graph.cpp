@@ -66,6 +66,9 @@ auto asset_cooker::parse_shader_graph_file(const std::filesystem::path& source) 
         case shader_node_type::swizzle:
           node.value = node_yaml["pattern"] ? node_yaml["pattern"].as<std::string>() : std::string{"rgba"};
           break;
+        case shader_node_type::scene_depth:
+          node.value = node_yaml["mode"] ? node_yaml["mode"].as<std::string>() : std::string{"linear01"};
+          break;
         default:
           break; // monostate -- math/input/output nodes carry no payload
       }

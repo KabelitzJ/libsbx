@@ -33,6 +33,7 @@ struct graph_resources {
   math::vector2u extent{};
 
   graphics::image_handle depth{};
+  graphics::image_handle scene_depth{};
   graphics::image_handle color{};
   graphics::image_handle color_msaa{};
   graphics::image_handle final_image{};
@@ -68,6 +69,8 @@ struct depth_attachment_slot {
   graphics::access access_mask{graphics::access::depth_stencil_attachment_read};
   graphics::attachment_store_op store_op{graphics::attachment_store_op::dont_care};
   graphics::depth_stencil_clear_value clear_value{1.0f, 0u};
+  graphics::image_handle resolve_image{}; // invalid => no MSAA resolve -- see color_attachment_slot's own
+  graphics::resolve_mode resolve_mode{graphics::resolve_mode::sample_zero}; // only consulted when resolve_image is valid
 }; // struct depth_attachment_slot
 
 struct render_attachment_group {
@@ -96,6 +99,7 @@ struct recorded_operation {
 
   graphics::image_handle image{};
   graphics::image_handle resolve_image{};
+  graphics::resolve_mode resolve_mode{graphics::resolve_mode::sample_zero}; // color always resolves average (see apply_op); only depth_attachment reads this
   graphics::buffer_handle buffer{};
 
   graphics::pipeline_stage stage{graphics::pipeline_stage::none};

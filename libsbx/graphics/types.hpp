@@ -147,6 +147,19 @@ enum class attachment_store_op : std::int32_t {
   none = VK_ATTACHMENT_STORE_OP_NONE
 }; // enum class attachment_store_op
 
+// An MSAA attachment's resolve operation -- see color_attachment_slot/depth_attachment_slot's own
+// resolve_image (render_graph.hpp). Only sample_zero is Vulkan-spec-guaranteed for a DEPTH resolve
+// (VkPhysicalDeviceDepthStencilResolveProperties::supportedDepthResolveModes always includes it;
+// min/max/average are all equally hardware-optional there) -- color's own resolve is always average
+// and never needs this capability-checked fallback dance, so only depth_pre_pass (the one place that
+// resolves depth) actually queries hardware support before choosing between these.
+enum class resolve_mode : std::int32_t {
+  sample_zero = VK_RESOLVE_MODE_SAMPLE_ZERO_BIT,
+  min = VK_RESOLVE_MODE_MIN_BIT,
+  max = VK_RESOLVE_MODE_MAX_BIT,
+  average = VK_RESOLVE_MODE_AVERAGE_BIT
+}; // enum class resolve_mode
+
 enum class pipeline_bind_point : std::int32_t {
   graphics = VK_PIPELINE_BIND_POINT_GRAPHICS,
   compute = VK_PIPELINE_BIND_POINT_COMPUTE,

@@ -225,6 +225,7 @@ auto inspector_panel::_draw_asset_properties(editor_state& state, const asset_se
   if (_asset_cache.id.value() != asset.id.value()) {
     _asset_cache = asset_property_cache{};
     _asset_cache.id = asset.id;
+    _shader_graph_seed_pending = false; // this material's own generic_params, loaded below, are already meaningful
 
     switch (asset.kind) {
       case asset_kind::texture: _asset_cache.texture = assets_module.load_texture(asset.id); break;

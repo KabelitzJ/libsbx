@@ -95,6 +95,12 @@ struct frame_data {
   // from view/projection above -- see math::extract_frustum_planes -- and read by
   // frustum_cull_pass.slang for its per-instance AABB test.
   std::array<math::vector4, 6u> frustum_planes;
+
+  // See shaders/frame_data.slang's own doc comment on this same trailing block.
+  std::uint32_t scene_depth_index;
+  std::float_t near_plane;
+  std::float_t far_plane;
+  math::vector2 render_target_size;
 }; // struct frame_data
 
 // frustum_cull_pass tests a skinned draw_command's rest-pose local_bounds, not its actual animated
@@ -1314,6 +1320,8 @@ auto scene_renderer_module::_ensure_resources() -> void {
 
   _bloom_upsample_index = bindless_table.reserve_sampled_image();
 
+  _scene_depth_index = bindless_table.reserve_sampled_image();
+
   _frame_buffer = registry.emplace<graphics::buffer>(graphics::buffer::create_info{
     .size = memory::stride_v<frame_data> * graphics::swapchain::max_frames_in_flight,
     .usage = graphics::buffer_usage::device_address | graphics::buffer_usage::storage,
@@ -1492,6 +1500,7 @@ auto scene_renderer_module::_resize_targets(const math::vector2u extent) -> void
 
   if (_target_extent != math::vector2u{0u, 0u}) {
     registry.retire(_depth_image, frame_index);
+    registry.retire(_scene_depth_image, frame_index);
     registry.retire(_color_image, frame_index);
     registry.retire(_color_msaa_image, frame_index);
     registry.retire(_final_image, frame_index);
@@ -1510,6 +1519,21 @@ auto scene_renderer_module::_resize_targets(const math::vector2u extent) -> void
     .samples = render_pass::sample_count,
     .name = "Depth"
   });
+
+  // depth_pre_pass's own _depth_image is 4x MSAA -- not directly sampleable as a plain Texture2D --
+  // so this single-sample image is depth_pre_pass's own MSAA resolve target (depth_attachment_slot's
+  // resolve_image/resolve_mode, set in depth_pre_pass::declare(), mirroring how color's own resolve
+  // already works), populated as a byproduct of that one draw rather than a second depth-only redraw
+  // of the opaque silhouette. See depth_pre_pass.hpp's own doc comment.
+  _scene_depth_image = registry.emplace<graphics::image>(graphics::image::create_info{
+    .extent = math::vector3u{extent, 1u},
+    .format = graphics::format::d32_sfloat,
+    .usage = graphics::image_usage::depth_stencil_attachment | graphics::image_usage::sampled,
+    .samples = graphics::samples::count_1,
+    .name = "Scene Depth"
+  });
+
+  bindless_table.write_sampled_image(_scene_depth_index, registry.get<graphics::image>(_scene_depth_image).view());
 
   _color_msaa_image = registry.emplace<graphics::image>(graphics::image::create_info{
     .extent = math::vector3u{extent, 1u},
@@ -1611,6 +1635,7 @@ auto scene_renderer_module::_build_graph_resources() const -> graph_resources {
   return graph_resources{
     .extent = _target_extent,
     .depth = _depth_image,
+    .scene_depth = _scene_depth_image,
     .color = _color_image,
     .color_msaa = _color_msaa_image,
     .final_image = _final_image,
@@ -1763,6 +1788,10 @@ auto scene_renderer_module::_prepare_frame(render_context& context) -> void {
   data.shadow_map_indices = _shadow_map_indices;
   data.shadow_enabled = shadow_enabled;
   data.frustum_planes = math::extract_frustum_planes(projection * context.packet->camera.view);
+  data.scene_depth_index = _scene_depth_index;
+  data.near_plane = camera.near_plane;
+  data.far_plane = camera.far_plane;
+  data.render_target_size = math::vector2{static_cast<std::float_t>(context.extent.x()), static_cast<std::float_t>(context.extent.y())};
 
   auto& frame_buffer = registry.get<graphics::buffer>(_frame_buffer);
   frame_buffer.write(&data, sizeof(frame_data), context.slot * memory::stride_v<frame_data>);

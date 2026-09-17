@@ -14,6 +14,7 @@
 #include <vulkan/vulkan.h>
 
 #include <libsbx/graphics/frame_context.hpp>
+#include <libsbx/graphics/devices/physical_device.hpp>
 #include <libsbx/graphics/devices/swapchain.hpp>
 #include <libsbx/graphics/commands/command_buffer.hpp>
 #include <libsbx/graphics/resources/buffer.hpp>
@@ -55,6 +56,23 @@ depth_pre_pass::depth_pre_pass() {
   _pipelines[1] = make(graphics::cull_mode::none, "Depth Pre Double-Sided");
   _pipelines[2] = _pipelines[0]; // shading model doesn't affect depth-only output
   _pipelines[3] = _pipelines[1];
+
+  // Queried once here rather than every declare() -- a device's supported resolve modes are fixed
+  // for its lifetime. Only sample_zero is Vulkan-spec-guaranteed for a depth resolve; min/max/average
+  // are all equally hardware-optional (VkPhysicalDeviceDepthStencilResolveProperties), so min is
+  // used only when this specific device actually reports it.
+  auto resolve_properties = VkPhysicalDeviceDepthStencilResolveProperties{};
+  resolve_properties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DEPTH_STENCIL_RESOLVE_PROPERTIES;
+
+  auto properties = VkPhysicalDeviceProperties2{};
+  properties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
+  properties.pNext = &resolve_properties;
+
+  vkGetPhysicalDeviceProperties2(graphics_module.physical_device().handle(), &properties);
+
+  _scene_depth_resolve_mode = (resolve_properties.supportedDepthResolveModes & VK_RESOLVE_MODE_MIN_BIT) != 0u
+    ? graphics::resolve_mode::min
+    : graphics::resolve_mode::sample_zero;
 }
 
 auto depth_pre_pass::_resolve_graph_pipeline(const assets::shader_graph_handle& graph, bool is_double_sided) -> memory::observer_ptr<graphics::graphics_pipeline> {
@@ -82,10 +100,17 @@ auto depth_pre_pass::declare(graphics_pass_builder& builder, const graph_resourc
     .image = resources.depth,
     .access_mask = graphics::access::depth_stencil_attachment_write | graphics::access::depth_stencil_attachment_read,
     .store_op = graphics::attachment_store_op::store,
-    .clear_value = graphics::depth_stencil_clear_value{1.0f, 0u}
+    .clear_value = graphics::depth_stencil_clear_value{1.0f, 0u},
+    .resolve_image = resources.scene_depth,
+    .resolve_mode = _scene_depth_resolve_mode
   };
 
-  builder.add_group(group);
+  const auto group_index = builder.add_group(group);
+
+  // No consumer declares a scene-depth read (bindless sample, by whichever arbitrary shader-graph
+  // material's Scene Depth node happens to use it) -- must self-transition after end_rendering(),
+  // same reasoning shadow_pass's own identical comment on its own private attachment has.
+  builder.transitions_after(group_index, resources.scene_depth, graphics::pipeline_stage::fragment_shader, graphics::access::shader_read, graphics::image_layout::shader_read_only_optimal);
 }
 
 auto depth_pre_pass::execute(render_context& context, std::uint32_t /*group*/) -> void {

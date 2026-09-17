@@ -122,6 +122,20 @@ struct frame_data {
   uint shadow_map_indices[shadow_cascade_count];
   uint shadow_enabled;
   float4 frustum_planes[6];
+
+  // Scene Depth shader graph node (shader_graph_codegen.cpp's scene_depth case) -- scene_depth_index
+  // points at depth_pre_pass's own MSAA resolve of the whole opaque silhouette's depth (a plain
+  // single-sample Texture2D, safe to sample from any later fragment shader, opaque or transparent --
+  // see depth_pre_pass.hpp's own doc comment for why this isn't just _depth_image, which stays 4x
+  // MSAA and attachment-only). near_plane/far_plane linearize Eye/Linear01 modes (this engine's
+  // perspective projection is a
+  // standard right-handed [0,1] depth range, NOT reversed-Z -- see math::matrix4x4::perspective's
+  // own comment); render_target_size turns SV_Position.xy into a screen UV for the node's own
+  // default (unconnected) UV input.
+  uint scene_depth_index;
+  float near_plane;
+  float far_plane;
+  float2 render_target_size;
 }; // struct frame_data
 
 #endif // FRAME_DATA_SLANG_

@@ -120,6 +120,13 @@ private:
   // whenever _asset_cache.id changes; committed only by an explicit Save button.
   sbx::assets::material::create_info _material_edit{};
 
+  // Set when the Material Inspector's shader graph picker just (re)assigned a new graph -- that
+  // graph loads asynchronously (see asset_residency::load_shader_graph), so its nodes/parameters()
+  // are still empty on the very frame it's picked. Re-checked every frame afterward; once the graph
+  // has actually finished loading, _material_edit's generic_params/generic_textures get seeded from
+  // its own node defaults exactly once, then this clears (see _draw_material_properties).
+  bool _shader_graph_seed_pending{false};
+
   // Same idea as _material_edit, for asset_kind::particle_effect.
   sbx::assets::particle_effect::create_info _particle_effect_edit{};
 

@@ -3,6 +3,7 @@
 #include <libsbx/render/passes/transparent_resolve_pass.hpp>
 
 #include <libsbx/utility/profiler.hpp>
+#include <libsbx/utility/stats_registry.hpp>
 #include <libsbx/graphics/profiler.hpp>
 
 #include <array>
@@ -86,6 +87,7 @@ auto transparent_resolve_pass::declare(graphics_pass_builder& builder, const gra
 
 auto transparent_resolve_pass::execute(render_context& context, std::uint32_t /*group*/) -> void {
   SBX_PROFILE_SCOPE("transparent_resolve_pass::execute");
+  SBX_STATS_SCOPE("transparent_resolve_pass::execute");
   SBX_PROFILE_GPU_SCOPE((*context.command_buffer), "transparent_resolve_pass::execute");
 
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();

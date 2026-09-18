@@ -25,6 +25,8 @@
 #include <editor/panels/animation_graph_panel.hpp>
 #include <editor/panels/shader_graph_panel.hpp>
 #include <editor/panels/navigation_panel.hpp>
+#include <editor/panels/statistics_panel.hpp>
+#include <editor/panels/scene_renderer_panel.hpp>
 
 #include <editor/widgets/layer_fields.hpp>
 
@@ -88,10 +90,6 @@ auto editor_ui_layer::build() -> void {
 
   _viewport_is_hovered = draw_viewport_window(_state, _sampler);
 
-  ImGui::Begin(stats_window_name);
-  ImGui::Text("%.1f FPS (%.3f ms)", static_cast<std::double_t>(ImGui::GetIO().Framerate), 1000.0 / static_cast<std::double_t>(ImGui::GetIO().Framerate));
-  ImGui::End();
-
   for (auto& panel : _panels) {
     panel->draw(_state);
   }
@@ -111,10 +109,15 @@ auto editor_ui_layer::_create_panels() -> void {
   _panels.push_back(std::make_unique<logger_panel>());
   _panels.push_back(std::make_unique<animation_graph_panel>()); // on-demand, not part of the default dock layout -- see its own doc comment
   _panels.push_back(std::make_unique<shader_graph_panel>()); // on-demand, same reasoning as animation_graph_panel above
+  _panels.push_back(std::make_unique<statistics_panel>()); // always-open, replaces the old inline FPS-only Stats window
 
   auto navigation = std::make_unique<navigation_panel>();
   _navigation_panel = navigation.get();
   _panels.push_back(std::move(navigation)); // on-demand, same reasoning as animation_graph_panel above
+
+  auto scene_renderer = std::make_unique<scene_renderer_panel>();
+  _scene_renderer_panel = scene_renderer.get();
+  _panels.push_back(std::move(scene_renderer)); // on-demand, same reasoning as animation_graph_panel above
 }
 
 auto editor_ui_layer::_draw_dockspace() -> void {
@@ -174,7 +177,7 @@ auto editor_ui_layer::_draw_dockspace() -> void {
     ImGui::DockBuilderDockWindow(asset_browser_panel::window_name, bottom_left);
     ImGui::DockBuilderDockWindow(logger_panel::window_name, bottom_right);
     ImGui::DockBuilderDockWindow(inspector_panel::window_name, right);
-    ImGui::DockBuilderDockWindow(stats_window_name, right);
+    ImGui::DockBuilderDockWindow(statistics_panel::window_name, right);
 
     ImGui::DockBuilderFinish(dockspace_id);
   }
@@ -287,6 +290,7 @@ auto editor_ui_layer::_draw_dockspace() -> void {
 
     if (ImGui::BeginMenu("Window")) {
       ImGui::MenuItem(navigation_panel::window_name, nullptr, &_navigation_panel->is_open);
+      ImGui::MenuItem(scene_renderer_panel::window_name, nullptr, &_scene_renderer_panel->is_open);
 
       ImGui::EndMenu();
     }

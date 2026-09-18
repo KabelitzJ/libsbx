@@ -3,6 +3,7 @@
 #include <libsbx/render/passes/grid_pass.hpp>
 
 #include <libsbx/utility/profiler.hpp>
+#include <libsbx/utility/stats_registry.hpp>
 #include <libsbx/graphics/profiler.hpp>
 
 #include <array>
@@ -88,6 +89,7 @@ auto grid_pass::should_execute(const render_context& context, std::uint32_t /*gr
 
 auto grid_pass::execute(render_context& context, std::uint32_t /*group*/) -> void {
   SBX_PROFILE_SCOPE("grid_pass::execute");
+  SBX_STATS_SCOPE("grid_pass::execute");
   SBX_PROFILE_GPU_SCOPE((*context.command_buffer), "grid_pass::execute");
 
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();

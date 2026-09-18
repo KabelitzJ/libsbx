@@ -2010,6 +2010,25 @@ auto asset_residency::is_resident(const font_handle& font) const -> bool {
   return font.is_valid() && is_resident(font->atlas());
 }
 
+auto asset_residency::resident_asset_counts() const -> assets::resident_asset_counts {
+  auto lock = std::lock_guard{_mutex};
+
+  auto counts = assets::resident_asset_counts{};
+
+  counts.textures = _textures.size();
+  counts.meshes = _meshes.size();
+  counts.fonts = _fonts.size();
+  counts.materials = _materials.size();
+  counts.environment_maps = _environment_maps.size();
+  counts.particle_effects = _particle_effect_files.size();
+  counts.animation_graphs = _animation_graph_files.size();
+  counts.shader_graphs = _shader_graph_files.size();
+  counts.skeletons = _skeletons.size();
+  counts.animation_clips = _animation_clips.size();
+
+  return counts;
+}
+
 auto asset_residency::image_view_of(const texture_handle& texture) const -> VkImageView {
   if (!texture.is_valid()) {
     return VK_NULL_HANDLE;

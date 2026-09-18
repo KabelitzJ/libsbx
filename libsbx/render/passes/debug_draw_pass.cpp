@@ -3,6 +3,7 @@
 #include <libsbx/render/passes/debug_draw_pass.hpp>
 
 #include <libsbx/utility/profiler.hpp>
+#include <libsbx/utility/stats_registry.hpp>
 #include <libsbx/graphics/profiler.hpp>
 
 #include <array>
@@ -95,6 +96,7 @@ auto debug_draw_pass::should_execute(const render_context& context, std::uint32_
 
 auto debug_draw_pass::execute(render_context& context, std::uint32_t /*group*/) -> void {
   SBX_PROFILE_SCOPE("debug_draw_pass::execute");
+  SBX_STATS_SCOPE("debug_draw_pass::execute");
   SBX_PROFILE_GPU_SCOPE((*context.command_buffer), "debug_draw_pass::execute");
 
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();

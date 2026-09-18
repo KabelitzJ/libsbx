@@ -3,6 +3,7 @@
 #include <libsbx/render/skinning/skin_pass.hpp>
 
 #include <libsbx/utility/profiler.hpp>
+#include <libsbx/utility/stats_registry.hpp>
 #include <libsbx/graphics/profiler.hpp>
 
 #include <vector>
@@ -70,6 +71,7 @@ struct skin_push_data {
 
 auto skin_pass::execute(render_context& context) -> void {
   SBX_PROFILE_SCOPE("skin_pass::execute");
+  SBX_STATS_SCOPE("skin_pass::execute");
   SBX_PROFILE_GPU_SCOPE((*context.command_buffer), "skin_pass::execute");
 
   if (context.packet->skin_dispatches.empty()) {

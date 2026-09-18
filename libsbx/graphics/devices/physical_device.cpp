@@ -14,6 +14,27 @@
 
 namespace sbx::graphics {
 
+auto device_type_name(VkPhysicalDeviceType type) -> std::string_view {
+  switch (type) {
+    case VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU: return "discrete";
+    case VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU: return "integrated";
+    case VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU: return "virtual";
+    case VK_PHYSICAL_DEVICE_TYPE_CPU: return "cpu";
+    default: return "other";
+  }
+}
+
+auto vendor_name(std::uint32_t vendor_id) -> std::string_view {
+  switch (vendor_id) {
+    case 0x10DEu: return "NVIDIA";
+    case 0x1002u: return "AMD";
+    case 0x8086u: return "Intel";
+    case 0x13B5u: return "ARM";
+    case 0x5143u: return "Qualcomm";
+    default: return "Unknown";
+  }
+}
+
 static auto _score(const VkPhysicalDeviceProperties& properties) -> std::uint32_t {
   auto score = std::uint32_t{0};
 

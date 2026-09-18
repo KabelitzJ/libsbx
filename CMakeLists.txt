@@ -80,6 +80,7 @@ option(SBX_BUILD_LAUNCHER "Build launcher" ON)
 option(SBX_BUILD_TESTS "Build tests" ON)
 option(SBX_BUILD_SHARED "Build shared library" OFF)
 option(SBX_ENABLE_PROFILING "Enable tracy profiling" ${_SBX_ENABLE_PROFILING_DEFAULT})
+option(SBX_TRACK_MEMORY "Track global new/delete allocation statistics" OFF)
 option(SBX_PREFER_CPU_DEVICE "Prefer CPU device" OFF)
 
 message(STATUS "SBX_BUILD_RUNTIME: ${SBX_BUILD_RUNTIME}")
@@ -88,6 +89,7 @@ message(STATUS "SBX_BUILD_LAUNCHER: ${SBX_BUILD_LAUNCHER}")
 message(STATUS "SBX_BUILD_TESTS: ${SBX_BUILD_TESTS}")
 message(STATUS "SBX_BUILD_SHARED: ${SBX_BUILD_SHARED}")
 message(STATUS "SBX_ENABLE_PROFILING: ${SBX_ENABLE_PROFILING}")
+message(STATUS "SBX_TRACK_MEMORY: ${SBX_TRACK_MEMORY}")
 message(STATUS "SBX_PREFER_CPU_DEVICE: ${SBX_PREFER_CPU_DEVICE}")
 
 # Build metadata
@@ -237,6 +239,7 @@ target_sources(
     "${CMAKE_SOURCE_DIR}/libsbx/graphics/devices/layers.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/graphics/devices/logical_device.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/graphics/devices/physical_device.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/graphics/devices/query_pool.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/graphics/devices/surface.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/graphics/devices/swapchain.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/graphics/pipeline/async_shader_compiler.cpp"
@@ -374,6 +377,7 @@ target_sources(
     "${CMAKE_SOURCE_DIR}/libsbx/utility/compression.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/utility/crc32.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/utility/hash.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/utility/stats_registry.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/utility/timer.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/utility/utility.cpp"
 
@@ -475,6 +479,7 @@ target_sources(
       "${CMAKE_SOURCE_DIR}/libsbx/graphics/devices/logical_device.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/graphics/devices/object_type.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/graphics/devices/physical_device.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/graphics/devices/query_pool.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/graphics/devices/surface.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/graphics/devices/swapchain.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/graphics/pipeline/async_shader_compiler.hpp"
@@ -719,6 +724,7 @@ target_sources(
       "${CMAKE_SOURCE_DIR}/libsbx/utility/profiler.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/utility/small_string.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/utility/static_string.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/utility/stats_registry.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/utility/string_literal.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/utility/target.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/utility/timer.hpp"
@@ -793,6 +799,7 @@ target_compile_definitions(
     SBX_COMPILER_${SBX_COMPILER}
     SBX_BUILD_TYPE_${SBX_BUILD_TYPE}
     $<$<BOOL:${SBX_ENABLE_PROFILING}>:SBX_ENABLE_PROFILING>
+    $<$<BOOL:${SBX_TRACK_MEMORY}>:SBX_TRACK_MEMORY>
     $<$<BOOL:${SBX_PREFER_CPU_DEVICE}>:SBX_PREFER_CPU_DEVICE>
   PRIVATE
     $<$<BOOL:${SBX_ENABLE_PROFILING}>:TRACY_ENABLE>

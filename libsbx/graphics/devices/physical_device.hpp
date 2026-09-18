@@ -3,7 +3,9 @@
 #ifndef LIBSBX_GRAPHICS_DEVICES_PHYSICAL_DEVICE_HPP_
 #define LIBSBX_GRAPHICS_DEVICES_PHYSICAL_DEVICE_HPP_
 
+#include <string_view>
 #include <vector>
+#include <cstdint>
 
 #include <vulkan/vulkan.h>
 
@@ -12,6 +14,12 @@
 #include <libsbx/graphics/devices/instance.hpp>
 
 namespace sbx::graphics {
+
+/** @brief "discrete"/"integrated"/"virtual"/"cpu"/"other" -- also used for the physical_device selection log line. */
+[[nodiscard]] auto device_type_name(VkPhysicalDeviceType type) -> std::string_view;
+
+/** @brief PCI vendor id (VkPhysicalDeviceProperties::vendorID) to a human-readable name, e.g. "NVIDIA". "Unknown" for anything not in the small known-vendor table. */
+[[nodiscard]] auto vendor_name(std::uint32_t vendor_id) -> std::string_view;
 
 class physical_device : public utility::noncopyable {
 

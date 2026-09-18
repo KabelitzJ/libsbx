@@ -3,6 +3,7 @@
 #include <libsbx/render/passes/particle_pass.hpp>
 
 #include <libsbx/utility/profiler.hpp>
+#include <libsbx/utility/stats_registry.hpp>
 #include <libsbx/graphics/profiler.hpp>
 
 #include <algorithm>
@@ -507,6 +508,7 @@ auto particle_pass::_draw_gpu_particles(render_context& context, std::uint32_t g
 
 auto particle_pass::execute(render_context& context, std::uint32_t group) -> void {
   SBX_PROFILE_SCOPE("particle_pass::execute");
+  SBX_STATS_SCOPE("particle_pass::execute");
   SBX_PROFILE_GPU_SCOPE((*context.command_buffer), "particle_pass::execute");
 
   _ensure_uploaded(context);

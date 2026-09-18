@@ -35,6 +35,7 @@
 #include <libsbx/graphics/resources/image.hpp>
 
 #include <libsbx/graphics/profiler.hpp>
+#include <libsbx/utility/stats_registry.hpp>
 
 #include <libsbx/assets/particle_effect.hpp>
 #include <libsbx/assets/animation_graph.hpp>
@@ -366,6 +367,9 @@ scene_renderer_module::scene_renderer_module() {
   _graph.add_pass<tonemap_pass>();
   _graph.add_pass<canvas_pass>();
 
+  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
+  _graph.initialize_gpu_queries(graphics_module.physical_device(), graphics_module.logical_device());
+
   auto& presentation_module = core::engine::get_module<render::presentation_module>();
 
   presentation_module.set_scene_renderer(this);
@@ -380,6 +384,22 @@ scene_renderer_module::~scene_renderer_module() {
 
 auto scene_renderer_module::prepare() -> void {
   _work_packet = _build_packet();
+
+  const auto summarize = [](const std::vector<draw_command>& commands) -> draw_category_stats {
+    auto stats = draw_category_stats{};
+
+    stats.draw_calls = static_cast<std::uint32_t>(commands.size());
+
+    for (const auto& command : commands) {
+      stats.instance_count += command.instance_count;
+    }
+
+    return stats;
+  };
+
+  _last_draw_stats.opaque = summarize(_work_packet.opaque_commands);
+  _last_draw_stats.transparent = summarize(_work_packet.transparent_commands);
+  _last_draw_stats.shadow = summarize(_work_packet.shadow_caster_commands);
 }
 
 auto scene_renderer_module::set_viewport_extent(math::vector2u extent) -> void {
@@ -1212,7 +1232,11 @@ auto scene_renderer_module::record(graphics::command_buffer& command_buffer, mat
 
   const auto scene_extent = (_viewport_extent.x() > 0u && _viewport_extent.y() > 0u) ? _viewport_extent : extent;
 
-  assets_module.process_uploads(frame_context.frame_index());
+  {
+    SBX_STATS_SCOPE("AssetUpdate");
+    assets_module.process_uploads(frame_context.frame_index());
+  }
+
   upload_context.flush(command_buffer, frame_context.frame_index());
 
   auto irradiance_index = 0xFFFFFFFFu;

@@ -43,6 +43,8 @@ target_sources(
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/panels/shader_graph_preview_renderer.cpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/panels/shader_graph_node_preview_manager.cpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/panels/navigation_panel.cpp"
+    "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/panels/statistics_panel.cpp"
+    "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/panels/scene_renderer_panel.cpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/viewport_camera.cpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/viewport_transform_gizmo.cpp"
     "${PROJECT_SOURCE_DIR}/${PROJECT_NAME}/viewport_view_gizmo.cpp"

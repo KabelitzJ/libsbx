@@ -487,4 +487,20 @@ auto command_buffer::execute_commands(const std::vector<command_buffer>& command
   vkCmdExecuteCommands(_handle, static_cast<std::uint32_t>(handles.size()), handles.data());
 }
 
+auto command_buffer::reset_query_pool(VkQueryPool pool, std::uint32_t first_query, std::uint32_t query_count) -> void {
+  vkCmdResetQueryPool(_handle, pool, first_query, query_count);
+}
+
+auto command_buffer::write_timestamp(VkQueryPool pool, std::uint32_t query, VkPipelineStageFlagBits2 stage) -> void {
+  vkCmdWriteTimestamp2(_handle, stage, pool, query);
+}
+
+auto command_buffer::begin_query(VkQueryPool pool, std::uint32_t query) -> void {
+  vkCmdBeginQuery(_handle, pool, query, 0);
+}
+
+auto command_buffer::end_query(VkQueryPool pool, std::uint32_t query) -> void {
+  vkCmdEndQuery(_handle, pool, query);
+}
+
 } // namespace sbx::graphics

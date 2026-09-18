@@ -3,6 +3,7 @@
 #include <libsbx/render/passes/frustum_cull_pass.hpp>
 
 #include <libsbx/utility/profiler.hpp>
+#include <libsbx/utility/stats_registry.hpp>
 #include <libsbx/graphics/profiler.hpp>
 
 #include <vector>
@@ -61,6 +62,7 @@ auto frustum_cull_pass::declare(compute_pass_builder& builder, const graph_resou
 
 auto frustum_cull_pass::execute(render_context& context) -> void {
   SBX_PROFILE_SCOPE("frustum_cull_pass::execute");
+  SBX_STATS_SCOPE("frustum_cull_pass::execute");
   SBX_PROFILE_GPU_SCOPE((*context.command_buffer), "frustum_cull_pass::execute");
 
   if (!context.packet->camera.is_active) {

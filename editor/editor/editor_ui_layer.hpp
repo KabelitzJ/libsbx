@@ -21,6 +21,7 @@
 #include <editor/editor_state.hpp>
 #include <editor/panels/editor_panel.hpp>
 #include <editor/panels/navigation_panel.hpp>
+#include <editor/panels/scene_renderer_panel.hpp>
 
 namespace editor {
 
@@ -36,11 +37,10 @@ class editor_ui_layer final : public sbx::utility::noncopyable, public sbx::rend
 
 public:
 
-  // Not a separate editor_panel (see panels/), so these two windows' constants live here instead
-  // of on a panel class — same "single source of truth for ImGui::Begin()'s exact string" reasoning
-  // as hierarchy_panel::window_name and friends; referenced by both build() and _draw_dockspace().
+  // Not a separate editor_panel (see panels/), so this window's constant lives here instead of on
+  // a panel class — same "single source of truth for ImGui::Begin()'s exact string" reasoning as
+  // hierarchy_panel::window_name and friends; referenced by both build() and _draw_dockspace().
   inline static constexpr auto viewport_window_name = ICON_MDI_GAMEPAD_VARIANT " Viewport###viewport_panel";
-  inline static constexpr auto stats_window_name = ICON_MDI_CHART_BAR " Statistics###statistics_panel";
 
   editor_ui_layer();
 
@@ -121,6 +121,9 @@ private:
   // Non-owning -- _panels owns it. Kept separately so the View menu can toggle its is_open flag
   // without a dynamic_cast over every registered panel.
   navigation_panel* _navigation_panel{nullptr};
+
+  // Same reasoning as _navigation_panel above.
+  scene_renderer_panel* _scene_renderer_panel{nullptr};
 
   // Scene save/load path (relative to the assets directory) — empty until the first save, or
   // until application.cpp calls set_scene_path() after its own initial load.

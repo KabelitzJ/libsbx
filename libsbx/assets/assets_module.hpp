@@ -234,6 +234,11 @@ public:
 
   [[nodiscard]] auto is_resident(const font_handle& font) const -> bool;
 
+  /** @ref asset_residency::resident_asset_counts */
+  [[nodiscard]] auto resident_asset_counts() const -> assets::resident_asset_counts {
+    return _residency.resident_asset_counts();
+  }
+
   /** @ref asset_residency::image_view_of */
   [[nodiscard]] auto image_view_of(const texture_handle& texture) const -> VkImageView {
     return _residency.image_view_of(texture);

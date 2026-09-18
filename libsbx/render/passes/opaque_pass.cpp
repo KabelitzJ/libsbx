@@ -3,6 +3,7 @@
 #include <libsbx/render/passes/opaque_pass.hpp>
 
 #include <libsbx/utility/profiler.hpp>
+#include <libsbx/utility/stats_registry.hpp>
 #include <libsbx/graphics/profiler.hpp>
 
 #include <array>
@@ -104,6 +105,7 @@ auto opaque_pass::declare(graphics_pass_builder& builder, const graph_resources&
 
 auto opaque_pass::execute(render_context& context, std::uint32_t /*group*/) -> void {
   SBX_PROFILE_SCOPE("opaque_pass::execute");
+  SBX_STATS_SCOPE("opaque_pass::execute");
   SBX_PROFILE_GPU_SCOPE((*context.command_buffer), "opaque_pass::execute");
 
   if (!context.packet->camera.is_active) {

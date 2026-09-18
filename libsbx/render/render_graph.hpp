@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string_view>
 #include <type_traits>
 #include <utility>
@@ -24,10 +25,31 @@
 #include <libsbx/graphics/resources/image.hpp>
 #include <libsbx/graphics/resources/buffer.hpp>
 #include <libsbx/graphics/commands/command_buffer.hpp>
+#include <libsbx/graphics/devices/physical_device.hpp>
+#include <libsbx/graphics/devices/query_pool.hpp>
 
 #include <libsbx/render/render_pass.hpp>
 
 namespace sbx::render {
+
+/** @brief One pass's most recently read-back GPU time -- see render_graph::pass_timings(). */
+struct pass_gpu_timing {
+  std::string_view name;
+  std::float_t milliseconds{0.0f};
+}; // struct pass_gpu_timing
+
+/**
+ * @brief Whole-frame pipeline statistics (VK_QUERY_TYPE_PIPELINE_STATISTICS is naturally
+ * frame-scoped in this graph, not per-pass) -- see render_graph::pipeline_stats().
+ */
+struct pipeline_statistics {
+  std::uint64_t input_assembly_vertices{0u};
+  std::uint64_t input_assembly_primitives{0u};
+  std::uint64_t vertex_shader_invocations{0u};
+  std::uint64_t clipping_invocations{0u};
+  std::uint64_t clipping_primitives{0u};
+  std::uint64_t fragment_shader_invocations{0u};
+}; // struct pipeline_statistics
 
 struct graph_resources {
   math::vector2u extent{};
@@ -286,6 +308,32 @@ public:
   /** @brief Walks the compiled instruction list for one frame. */
   auto execute(render_context& context) -> void;
 
+  /**
+   * @brief Allocates the timestamp/pipeline-statistics query pools -- one timestamp pair per pass
+   * per frame-in-flight slot, one pipeline-statistics query per slot (see execute()'s own comment
+   * for why pipeline statistics are whole-frame, not per-pass). Call once, after every add_pass().
+   */
+  auto initialize_gpu_queries(const graphics::physical_device& physical_device, const graphics::logical_device& logical_device) -> void;
+
+  /** @brief Last read-back per-pass GPU time, in graph declaration order. Always max_frames_in_flight frames stale (see execute()) -- every entry is 0 until the query pools have cycled through at least once. */
+  [[nodiscard]] auto pass_timings() const noexcept -> std::span<const pass_gpu_timing> {
+    return _pass_timings;
+  }
+
+  [[nodiscard]] auto pipeline_stats() const noexcept -> const render::pipeline_statistics& {
+    return _pipeline_stats;
+  }
+
+  [[nodiscard]] auto total_gpu_time_ms() const noexcept -> std::float_t {
+    auto total = 0.0f;
+
+    for (const auto& timing : _pass_timings) {
+      total += timing.milliseconds;
+    }
+
+    return total;
+  }
+
 private:
 
   struct compiled_group {
@@ -310,6 +358,13 @@ private:
 
   std::vector<std::unique_ptr<graph_pass>> _passes{};
   std::vector<compiled_entry> _compiled{};
+
+  std::unique_ptr<graphics::query_pool> _timestamp_pool{};
+  std::unique_ptr<graphics::query_pool> _pipeline_stats_pool{};
+  std::float_t _timestamp_period_ns{1.0f};
+
+  std::vector<pass_gpu_timing> _pass_timings{};
+  render::pipeline_statistics _pipeline_stats{};
 
 }; // class render_graph
 

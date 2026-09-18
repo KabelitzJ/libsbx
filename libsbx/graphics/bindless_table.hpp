@@ -90,6 +90,30 @@ public:
    */
   auto flush_writes() -> void;
 
+  [[nodiscard]] auto sampled_image_count() const noexcept -> std::uint32_t {
+    return _sampled_images.next - static_cast<std::uint32_t>(_sampled_images.released.size());
+  }
+
+  [[nodiscard]] auto sampler_count() const noexcept -> std::uint32_t {
+    return _samplers.next - static_cast<std::uint32_t>(_samplers.released.size());
+  }
+
+  [[nodiscard]] auto storage_image_count() const noexcept -> std::uint32_t {
+    return _storage_images.next - static_cast<std::uint32_t>(_storage_images.released.size());
+  }
+
+  [[nodiscard]] auto sampled_cube_count() const noexcept -> std::uint32_t {
+    return _sampled_cubes.next - static_cast<std::uint32_t>(_sampled_cubes.released.size());
+  }
+
+  [[nodiscard]] auto storage_cube_count() const noexcept -> std::uint32_t {
+    return _storage_cubes.next - static_cast<std::uint32_t>(_storage_cubes.released.size());
+  }
+
+  [[nodiscard]] auto cached_sampler_count() const noexcept -> std::uint32_t {
+    return static_cast<std::uint32_t>(_sampler_cache.size());
+  }
+
 private:
 
   struct index_allocator {

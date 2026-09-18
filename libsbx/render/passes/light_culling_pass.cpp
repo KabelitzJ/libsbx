@@ -3,6 +3,7 @@
 #include <libsbx/render/passes/light_culling_pass.hpp>
 
 #include <libsbx/utility/profiler.hpp>
+#include <libsbx/utility/stats_registry.hpp>
 #include <libsbx/graphics/profiler.hpp>
 
 #include <array>
@@ -72,6 +73,7 @@ auto light_culling_pass::declare(compute_pass_builder& builder, const graph_reso
 
 auto light_culling_pass::execute(render_context& context) -> void {
   SBX_PROFILE_SCOPE("light_culling_pass::execute");
+  SBX_STATS_SCOPE("light_culling_pass::execute");
   SBX_PROFILE_GPU_SCOPE((*context.command_buffer), "light_culling_pass::execute");
 
   if (!context.packet->camera.is_active) {

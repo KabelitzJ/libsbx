@@ -3,6 +3,7 @@
 #include <libsbx/render/shadow/shadow_pass.hpp>
 
 #include <libsbx/utility/profiler.hpp>
+#include <libsbx/utility/stats_registry.hpp>
 #include <libsbx/graphics/profiler.hpp>
 
 #include <array>
@@ -98,6 +99,7 @@ auto shadow_pass::should_execute(const render_context& context, std::uint32_t /*
 
 auto shadow_pass::execute(render_context& context, std::uint32_t cascade) -> void {
   SBX_PROFILE_SCOPE("shadow_pass::execute");
+  SBX_STATS_SCOPE("shadow_pass::execute");
   SBX_PROFILE_GPU_SCOPE((*context.command_buffer), "shadow_pass::execute");
 
   const auto shadow_extent = math::vector2u{shadow_map_resolution, shadow_map_resolution};

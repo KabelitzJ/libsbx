@@ -39,6 +39,20 @@
 
 namespace sbx::assets {
 
+/** @brief Live counts of every asset type asset_residency caches -- see asset_residency::resident_asset_counts(). */
+struct resident_asset_counts {
+  std::size_t textures{0u};
+  std::size_t meshes{0u};
+  std::size_t fonts{0u};
+  std::size_t materials{0u};
+  std::size_t environment_maps{0u};
+  std::size_t particle_effects{0u};
+  std::size_t animation_graphs{0u};
+  std::size_t shader_graphs{0u};
+  std::size_t skeletons{0u};
+  std::size_t animation_clips{0u};
+}; // struct resident_asset_counts
+
 /**
  * @brief Turns cooked asset data into GPU-resident textures/meshes/materials/environment-maps:
  * upload queues, bindless registration, the material UBO, and the default fallback textures.
@@ -242,6 +256,9 @@ public:
   [[nodiscard]] auto is_resident(const environment_map_handle& environment) const -> bool;
 
   [[nodiscard]] auto is_resident(const font_handle& font) const -> bool;
+
+  /** @brief Live counts across every cache this class owns -- for the editor's Statistics panel. */
+  [[nodiscard]] auto resident_asset_counts() const -> assets::resident_asset_counts;
 
   /**
    * @brief The image view backing a resident texture's bindless slot, or VK_NULL_HANDLE if the

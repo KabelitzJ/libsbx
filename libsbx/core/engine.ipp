@@ -8,6 +8,7 @@
 
 #include <libsbx/utility/assert.hpp>
 #include <libsbx/utility/profiler.hpp>
+#include <libsbx/utility/stats_registry.hpp>
 #include <libsbx/utility/type_name.hpp>
 
 namespace sbx::core {
@@ -91,24 +92,30 @@ inline auto basic_engine<module_list<Modules...>>::_loop() -> void {
 
     fixed_accumulator += _delta_time;
 
+    utility::clear_scope_stats();
+
     {
       SBX_PROFILE_SCOPE("stage::pre_update");
+      SBX_STATS_SCOPE("stage::pre_update");
       _dispatch<stage::pre_update>();
     }
 
     {
       SBX_PROFILE_SCOPE("stage::update");
+      SBX_STATS_SCOPE("stage::update");
       _dispatch<stage::update>();
       _application->update();
     }
 
     {
       SBX_PROFILE_SCOPE("stage::post_update");
+      SBX_STATS_SCOPE("stage::post_update");
       _dispatch<stage::post_update>();
     }
 
     {
       SBX_PROFILE_SCOPE("stage::fixed_update");
+      SBX_STATS_SCOPE("stage::fixed_update");
 
       while (fixed_accumulator >= engine::fixed_delta_time()) {
         _dispatch<stage::fixed_update>();
@@ -119,11 +126,13 @@ inline auto basic_engine<module_list<Modules...>>::_loop() -> void {
 
     {
       SBX_PROFILE_SCOPE("stage::late_update");
+      SBX_STATS_SCOPE("stage::late_update");
       _dispatch<stage::late_update>();
     }
 
     {
       SBX_PROFILE_SCOPE("stage::render");
+      SBX_STATS_SCOPE("stage::render");
       _dispatch<stage::render>();
     }
 

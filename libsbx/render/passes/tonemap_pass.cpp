@@ -3,6 +3,7 @@
 #include <libsbx/render/passes/tonemap_pass.hpp>
 
 #include <libsbx/utility/profiler.hpp>
+#include <libsbx/utility/stats_registry.hpp>
 #include <libsbx/graphics/profiler.hpp>
 
 #include <array>
@@ -80,6 +81,7 @@ auto tonemap_pass::declare(graphics_pass_builder& builder, const graph_resources
 
 auto tonemap_pass::execute(render_context& context, std::uint32_t /*group*/) -> void {
   SBX_PROFILE_SCOPE("tonemap_pass::execute");
+  SBX_STATS_SCOPE("tonemap_pass::execute");
   SBX_PROFILE_GPU_SCOPE((*context.command_buffer), "tonemap_pass::execute");
 
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();

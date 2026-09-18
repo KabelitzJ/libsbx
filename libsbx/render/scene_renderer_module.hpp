@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <memory>
 #include <optional>
+#include <span>
 #include <utility>
 
 #include <libsbx/utility/noncopyable.hpp>
@@ -161,6 +162,35 @@ public:
    */
   auto reset_particles() -> void;
 
+  /** @brief Draw-call/instance counts per category, from the most recent prepare() call -- for the editor's Statistics panel. */
+  struct draw_category_stats {
+    std::uint32_t draw_calls{0u};
+    std::uint32_t instance_count{0u};
+  }; // struct draw_category_stats
+
+  struct draw_stats {
+    draw_category_stats opaque{};
+    draw_category_stats transparent{};
+    draw_category_stats shadow{};
+  }; // struct draw_stats
+
+  [[nodiscard]] auto last_draw_stats() const noexcept -> const draw_stats& {
+    return _last_draw_stats;
+  }
+
+  /** @ref render_graph::pass_timings -- always max_frames_in_flight frames stale. */
+  [[nodiscard]] auto pass_timings() const noexcept -> std::span<const pass_gpu_timing> {
+    return _graph.pass_timings();
+  }
+
+  [[nodiscard]] auto pipeline_stats() const noexcept -> const render::pipeline_statistics& {
+    return _graph.pipeline_stats();
+  }
+
+  [[nodiscard]] auto total_gpu_time_ms() const noexcept -> std::float_t {
+    return _graph.total_gpu_time_ms();
+  }
+
 private:
 
   inline static constexpr auto light_capacity = std::uint32_t{256u};
@@ -235,6 +265,8 @@ private:
   // Unique opaque mesh/submesh/material bucket count from the last _build_packet call, used to
   // reserve() the accumulation map up front instead of growing it one rehash at a time.
   std::size_t _last_opaque_bucket_count{128u};
+
+  draw_stats _last_draw_stats{};
 
   std::uint32_t _sampler_index{0u};
   std::uint32_t _clamp_sampler_index{0u};

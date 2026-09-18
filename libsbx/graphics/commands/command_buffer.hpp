@@ -187,6 +187,14 @@ public:
 
   auto execute_commands(const std::vector<command_buffer>& commands) -> void;
 
+  auto reset_query_pool(VkQueryPool pool, std::uint32_t first_query, std::uint32_t query_count) -> void;
+
+  auto write_timestamp(VkQueryPool pool, std::uint32_t query, VkPipelineStageFlagBits2 stage = VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT) -> void;
+
+  auto begin_query(VkQueryPool pool, std::uint32_t query) -> void;
+
+  auto end_query(VkQueryPool pool, std::uint32_t query) -> void;
+
 private:
 
   std::shared_ptr<command_pool> _command_pool;

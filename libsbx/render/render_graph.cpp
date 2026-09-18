@@ -9,8 +9,18 @@
 
 #include <libsbx/graphics/graphics_module.hpp>
 #include <libsbx/graphics/resources/resource_registry.hpp>
+#include <libsbx/graphics/devices/swapchain.hpp>
 
 namespace sbx::render {
+
+inline constexpr auto pipeline_statistics_flags = VkQueryPipelineStatisticFlags{
+  VK_QUERY_PIPELINE_STATISTIC_INPUT_ASSEMBLY_VERTICES_BIT |
+  VK_QUERY_PIPELINE_STATISTIC_INPUT_ASSEMBLY_PRIMITIVES_BIT |
+  VK_QUERY_PIPELINE_STATISTIC_VERTEX_SHADER_INVOCATIONS_BIT |
+  VK_QUERY_PIPELINE_STATISTIC_CLIPPING_INVOCATIONS_BIT |
+  VK_QUERY_PIPELINE_STATISTIC_CLIPPING_PRIMITIVES_BIT |
+  VK_QUERY_PIPELINE_STATISTIC_FRAGMENT_SHADER_INVOCATIONS_BIT
+};
 
 namespace detail {
 
@@ -361,11 +371,49 @@ auto render_graph::compile(const graph_resources& resources) -> void {
   }
 }
 
+auto render_graph::initialize_gpu_queries(const graphics::physical_device& physical_device, const graphics::logical_device& logical_device) -> void {
+  _timestamp_period_ns = physical_device.properties().limits.timestampPeriod;
+
+  const auto pass_count = static_cast<std::uint32_t>(_passes.size());
+  const auto timestamp_count = pass_count * 2u * graphics::swapchain::max_frames_in_flight;
+
+  _timestamp_pool = std::make_unique<graphics::query_pool>(logical_device, VK_QUERY_TYPE_TIMESTAMP, timestamp_count);
+  _pipeline_stats_pool = std::make_unique<graphics::query_pool>(logical_device, VK_QUERY_TYPE_PIPELINE_STATISTICS, graphics::swapchain::max_frames_in_flight, pipeline_statistics_flags);
+
+  _pass_timings.resize(pass_count);
+
+  for (auto index = std::size_t{0u}; index < _passes.size(); ++index) {
+    _pass_timings[index].name = _passes[index]->name();
+  }
+}
+
 auto render_graph::execute(render_context& context) -> void {
-  for (auto& entry : _compiled) {
+  const auto pass_count = static_cast<std::uint32_t>(_passes.size());
+  const auto has_gpu_queries = _timestamp_pool && _pipeline_stats_pool;
+
+  // (slot * pass_count + pass_index) * 2 + (is_end ? 1 : 0) -- see initialize_gpu_queries's own
+  // sizing comment for why this range never needs to grow after construction.
+  const auto timestamp_base = context.slot * pass_count * 2u;
+
+  if (has_gpu_queries) {
+    context.command_buffer->reset_query_pool(*_timestamp_pool, timestamp_base, pass_count * 2u);
+    context.command_buffer->reset_query_pool(*_pipeline_stats_pool, context.slot, 1u);
+    context.command_buffer->begin_query(*_pipeline_stats_pool, context.slot);
+  }
+
+  for (auto pass_index = std::size_t{0u}; pass_index < _compiled.size(); ++pass_index) {
+    auto& entry = _compiled[pass_index];
+
+    auto wrote_begin_timestamp = false;
+
     for (auto group_index = std::uint32_t{0u}; group_index < entry.groups.size(); ++group_index) {
       if (!entry.pass->is_group_enabled(context, group_index)) {
         continue;
+      }
+
+      if (has_gpu_queries && !wrote_begin_timestamp) {
+        context.command_buffer->write_timestamp(*_timestamp_pool, timestamp_base + static_cast<std::uint32_t>(pass_index) * 2u, VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT);
+        wrote_begin_timestamp = true;
       }
 
       const auto& group = entry.groups[group_index];
@@ -400,6 +448,53 @@ auto render_graph::execute(render_context& context) -> void {
         context.command_buffer->transition_image_layout(barrier);
       }
     }
+
+    if (has_gpu_queries && wrote_begin_timestamp) {
+      context.command_buffer->write_timestamp(*_timestamp_pool, timestamp_base + static_cast<std::uint32_t>(pass_index) * 2u + 1u, VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT);
+    }
+  }
+
+  if (!has_gpu_queries) {
+    return;
+  }
+
+  context.command_buffer->end_query(*_pipeline_stats_pool, context.slot);
+
+  // Read back this same slot's PREVIOUS occupant -- by the time context.slot cycles back around
+  // (max_frames_in_flight frames later), the timeline wait at the top of that frame (see
+  // frame_context::begin_frame) already guarantees the GPU is done with every query just written
+  // for it, so this never blocks and never reads a query from the frame still in flight.
+  //
+  // Read back one pass at a time rather than the whole range in one call: a pass with every group
+  // disabled this frame (no shadow casters, grid off, nothing to draw, ...) never got its
+  // begin/end timestamps written after reset_query_pool, so it stays "unavailable" -- a single
+  // batched read would then fail for every pass just because one of them was skipped. Per-pass
+  // reads let every still-enabled pass keep updating regardless; a skipped pass simply keeps
+  // showing its last known time.
+  auto raw_timestamps = std::vector<std::uint64_t>{};
+
+  for (auto pass_index = std::size_t{0u}; pass_index < _pass_timings.size(); ++pass_index) {
+    if (!_timestamp_pool->try_read_results(timestamp_base + static_cast<std::uint32_t>(pass_index) * 2u, 2u, raw_timestamps)) {
+      continue;
+    }
+
+    const auto begin_ticks = raw_timestamps[0];
+    const auto end_ticks = raw_timestamps[1];
+
+    const auto elapsed_ticks = end_ticks >= begin_ticks ? (end_ticks - begin_ticks) : std::uint64_t{0u};
+
+    _pass_timings[pass_index].milliseconds = static_cast<std::float_t>(elapsed_ticks) * _timestamp_period_ns / 1.0e6f;
+  }
+
+  auto raw_stats = std::vector<std::uint64_t>{};
+
+  if (_pipeline_stats_pool->try_read_results(context.slot, 1u, raw_stats) && raw_stats.size() >= 6u) {
+    _pipeline_stats.input_assembly_vertices = raw_stats[0];
+    _pipeline_stats.input_assembly_primitives = raw_stats[1];
+    _pipeline_stats.vertex_shader_invocations = raw_stats[2];
+    _pipeline_stats.clipping_invocations = raw_stats[3];
+    _pipeline_stats.clipping_primitives = raw_stats[4];
+    _pipeline_stats.fragment_shader_invocations = raw_stats[5];
   }
 }
 

@@ -3,6 +3,7 @@
 #include <libsbx/render/passes/bloom_pass.hpp>
 
 #include <libsbx/utility/profiler.hpp>
+#include <libsbx/utility/stats_registry.hpp>
 #include <libsbx/graphics/profiler.hpp>
 
 #include <algorithm>
@@ -205,6 +206,7 @@ struct upsample_push_data {
 
 auto bloom_pass::execute(render_context& context) -> void {
   SBX_PROFILE_SCOPE("bloom_pass::execute");
+  SBX_STATS_SCOPE("bloom_pass::execute");
   SBX_PROFILE_GPU_SCOPE((*context.command_buffer), "bloom_pass::execute");
 
   if (_mip_count == 0u) {

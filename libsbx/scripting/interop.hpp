@@ -332,6 +332,9 @@ struct interop {
   static auto ui_text_get_color(std::uint64_t uuid, math::color* out_value) -> void;
   static auto ui_text_set_color(std::uint64_t uuid, math::color* value) -> void;
 
+  /** @brief Project-relative path, same convention as particle_effect_load/ui_image_load_sprite. */
+  static auto ui_text_load_font(std::uint64_t uuid, managed::string path) -> void;
+
   static auto ui_button_get_interactable(std::uint64_t uuid) -> bool;
   static auto ui_button_set_interactable(std::uint64_t uuid, bool value) -> void;
   static auto ui_button_get_normal_color(std::uint64_t uuid, math::color* out_value) -> void;

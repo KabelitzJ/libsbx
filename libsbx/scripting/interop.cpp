@@ -2257,6 +2257,19 @@ auto interop::ui_text_set_font_size(std::uint64_t uuid, std::float_t value) -> v
   component->font_size = value;
 }
 
+auto interop::ui_text_load_font(std::uint64_t uuid, managed::string path) -> void {
+  auto node = resolve_node(uuid);
+  auto component = node.try_get_component<canvas::ui_text>();
+
+  if (!node.is_valid() || !component) {
+    return;
+  }
+
+  auto& assets_module = core::engine::get_module<assets::assets_module>();
+
+  component->font = assets_module.load_font(std::filesystem::path{std::string{path}});
+}
+
 auto interop::ui_text_get_color(std::uint64_t uuid, math::color* out_value) -> void {
   auto node = resolve_node(uuid);
   auto component = node.try_get_component<canvas::ui_text>();

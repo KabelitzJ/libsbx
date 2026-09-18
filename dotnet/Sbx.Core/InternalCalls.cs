@@ -167,6 +167,7 @@ namespace Sbx.Core
     internal static delegate* unmanaged<ulong, float, void> UIText_SetFontSize;
     internal static delegate* unmanaged<ulong, Color*, void> UIText_GetColor;
     internal static delegate* unmanaged<ulong, Color*, void> UIText_SetColor;
+    internal static delegate* unmanaged<ulong, NativeString, void> UIText_LoadFont;
 
     internal static delegate* unmanaged<ulong, bool> UIButton_GetInteractable;
     internal static delegate* unmanaged<ulong, bool, void> UIButton_SetInteractable;

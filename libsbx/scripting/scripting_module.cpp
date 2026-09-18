@@ -202,6 +202,7 @@ scripting_module::scripting_module() {
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "UIText_SetFontSize", reinterpret_cast<void*>(&interop::ui_text_set_font_size));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "UIText_GetColor", reinterpret_cast<void*>(&interop::ui_text_get_color));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "UIText_SetColor", reinterpret_cast<void*>(&interop::ui_text_set_color));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "UIText_LoadFont", reinterpret_cast<void*>(&interop::ui_text_load_font));
 
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "UIButton_GetInteractable", reinterpret_cast<void*>(&interop::ui_button_get_interactable));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "UIButton_SetInteractable", reinterpret_cast<void*>(&interop::ui_button_set_interactable));

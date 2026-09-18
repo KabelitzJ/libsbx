@@ -25,6 +25,12 @@ namespace Sbx.Core.UI
       set { unsafe { InternalCalls.UIText_SetColor(UUID, &value); } }
     }
 
+    /** Assigns (or reassigns) which font asset this text renders with. path is project-relative, e.g. "fonts/Roboto-Regular.ttf". */
+    public void LoadFont(string path)
+    {
+      unsafe { InternalCalls.UIText_LoadFont(UUID, path); }
+    }
+
   } // class UIText
 
 } // namespace Sbx.Core.UI

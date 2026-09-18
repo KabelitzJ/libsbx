@@ -57,6 +57,7 @@ private:
     sbx::assets::animation_graph_handle animation_graph{};
     sbx::assets::shader_graph_handle shader_graph{};
     sbx::assets::font_handle font{};
+    sbx::assets::scene_handle scene{};
   }; // struct asset_property_cache
 
   /**

@@ -60,6 +60,10 @@ namespace Sbx.Core
     internal static delegate* unmanaged<ulong, bool, void> Node_SetActive;
     internal static delegate* unmanaged<ulong, bool> Node_GetIsActive;
 
+    internal static delegate* unmanaged<NativeString, void> Scene_Load;
+    internal static delegate* unmanaged<NativeString, void> Scene_Save;
+    internal static delegate* unmanaged<void> Scene_New;
+
     internal static delegate* unmanaged<ulong, NativeString, void> ParticleEffect_Load;
     internal static delegate* unmanaged<ulong, void> ParticleEffect_Play;
     internal static delegate* unmanaged<ulong, void> ParticleEffect_Pause;

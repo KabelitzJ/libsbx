@@ -1376,7 +1376,7 @@ auto read_node_components(node& target_node, const YAML::Node& node_yaml, assets
   }
 }
 
-auto scene_serializer::_build(scene& target) -> YAML::Node {
+auto scene_serializer::build(scene& target) -> YAML::Node {
   auto& registry = target._registry;
   auto& assets_module = core::engine::get_module<assets::assets_module>();
 
@@ -1441,7 +1441,7 @@ auto scene_serializer::_build(scene& target) -> YAML::Node {
 
 auto scene_serializer::serialize(scene& target) -> std::string {
   auto stream = std::ostringstream{};
-  stream << _build(target);
+  stream << build(target);
   return stream.str();
 }
 
@@ -1478,6 +1478,12 @@ auto scene_serializer::load(scene& target, const std::filesystem::path& path) ->
 
   const auto root = YAML::LoadFile(resolved_path.string());
 
+  load(target, root);
+
+  utility::logger<"scenes">::info("Loaded scene '{}'", resolved_path.generic_string());
+}
+
+auto scene_serializer::load(scene& target, const YAML::Node& root) -> void {
   target._registry.clear(); // also destroys target._root — recreate it before anything else runs
   target._root = target._registry.create();
   target._registry.emplace<relationship>(target._root);
@@ -1523,8 +1529,6 @@ auto scene_serializer::load(scene& target, const std::filesystem::path& path) ->
       target.set_primary_light(target.find(primary_light.as<math::uuid>()));
     }
   }
-
-  utility::logger<"scenes">::info("Loaded scene '{}' ({} nodes)", path.generic_string(), nodes_node.size());
 
   // Any prefab_instance in this scene may have gone stale (its prefab edited) since the scene was
   // last saved -- resync once up front instead of leaving it stale until the next per-frame call.

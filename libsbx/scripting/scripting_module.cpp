@@ -97,6 +97,10 @@ scripting_module::scripting_module() {
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Node_SetActive", reinterpret_cast<void*>(&interop::node_set_active));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Node_GetIsActive", reinterpret_cast<void*>(&interop::node_get_is_active));
 
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Scene_Load", reinterpret_cast<void*>(&interop::scene_load));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Scene_Save", reinterpret_cast<void*>(&interop::scene_save));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Scene_New", reinterpret_cast<void*>(&interop::scene_new));
+
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "ParticleEffect_Load", reinterpret_cast<void*>(&interop::particle_effect_load));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "ParticleEffect_Play", reinterpret_cast<void*>(&interop::particle_effect_play));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "ParticleEffect_Pause", reinterpret_cast<void*>(&interop::particle_effect_pause));

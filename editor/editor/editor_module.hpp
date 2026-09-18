@@ -61,6 +61,16 @@ public:
     _ui_layer.request_quit();
   }
 
+  /** @see editor_ui_layer::new_scene */
+  auto new_scene() -> void {
+    _ui_layer.new_scene();
+  }
+
+  /** @see editor_ui_layer::open_scene */
+  auto open_scene(const std::filesystem::path& path) -> void {
+    _ui_layer.open_scene(path);
+  }
+
   /** @see play_mode_controller */
   [[nodiscard]] auto play_state() const noexcept -> editor::play_state {
     return _play_mode.state();

@@ -124,6 +124,13 @@ auto editor_ui_layer::_draw_dockspace() -> void {
   auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
   auto& editor_module = sbx::core::engine::get_module<editor::editor_module>();
 
+  if (_state.open_scene_request.has_value()) {
+    const auto request = *_state.open_scene_request;
+    _state.open_scene_request.reset();
+
+    open_scene(request.path);
+  }
+
   auto window_flags = ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus | ImGuiWindowFlags_MenuBar;
 
   auto* viewport = ImGui::GetMainViewport();
@@ -191,6 +198,20 @@ auto editor_ui_layer::_draw_dockspace() -> void {
 
   if (ImGui::BeginMenuBar()) {
     if (ImGui::BeginMenu("File")) {
+      ImGui::BeginDisabled(editor_module.play_state() != editor::play_state::edit);
+
+      if (ImGui::MenuItem(ICON_MDI_FILE_PLUS " New Scene")) {
+        new_scene();
+      }
+
+      if (ImGui::MenuItem(ICON_MDI_FOLDER_OPEN " Open Scene...")) {
+        _open_open_scene_dialog();
+      }
+
+      ImGui::EndDisabled();
+
+      ImGui::Separator();
+
       if (ImGui::MenuItem("Quit")) {
         request_quit();
       }
@@ -233,14 +254,14 @@ auto editor_ui_layer::_draw_dockspace() -> void {
 
       if (ImGui::MenuItem(ICON_MDI_CONTENT_SAVE " Save")) {
         if (_scene_path.empty()) {
-          _open_save_as_dialog(false);
+          _open_save_as_dialog();
         } else {
           _save_scene(_scene_path);
         }
       }
 
       if (ImGui::MenuItem(ICON_MDI_CONTENT_SAVE_EDIT " Save As...")) {
-        _open_save_as_dialog(false);
+        _open_save_as_dialog();
       }
 
       ImGui::EndDisabled();
@@ -299,6 +320,7 @@ auto editor_ui_layer::_draw_dockspace() -> void {
   }
 
   _draw_save_as_dialog();
+  _draw_open_scene_dialog();
   _draw_unsaved_changes_dialog();
   _draw_edit_layers_popup();
 

@@ -23,12 +23,18 @@ public:
 
   scene_serializer() = delete;
 
+  /** @brief Builds target's full YAML snapshot ({metadata, assets_module, nodes}), without touching disk -- what save()/serialize() write, and what assets_module::create_scene/save_scene need to hand a scene to the asset system. */
+  [[nodiscard]] static auto build(scene& target) -> YAML::Node;
+
   static auto save(scene& target, const std::filesystem::path& path) -> void;
 
   /** @brief Renders target to the same YAML save() would write, without touching disk. */
   [[nodiscard]] static auto serialize(scene& target) -> std::string;
 
   static auto load(scene& target, const std::filesystem::path& path) -> void;
+
+  /** @brief Applies snapshot directly to target -- same effect as load(target, path) minus the file read, for a snapshot already in memory (e.g. assets::scene_handle::snapshot()). */
+  static auto load(scene& target, const YAML::Node& snapshot) -> void;
 
   /** @brief Snapshots subtree_root and its whole descendant subtree — components, structure, ids — self-contained (own asset table), for undo/redo. */
   [[nodiscard]] static auto serialize_subtree(scene& target, node subtree_root) -> YAML::Node;
@@ -100,10 +106,6 @@ public:
    * through the normal sync_prefab_instances path. No-op if instance_root isn't a prefab instance.
    */
   static auto update_prefab_from_node(scene& source, node instance_root) -> void;
-
-private:
-
-  [[nodiscard]] static auto _build(scene& target) -> YAML::Node;
 
 }; // class scene_serializer
 

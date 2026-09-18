@@ -373,4 +373,100 @@ auto assets_module::save_prefab(prefab_handle& prefab, const std::filesystem::pa
   return id;
 }
 
+auto assets_module::create_scene(YAML::Node snapshot, std::string name) -> scene_handle {
+  auto record = std::make_shared<scene>();
+
+  record->_snapshot = std::move(snapshot);
+  record->_name = std::move(name);
+  record->_bump_generation();
+
+  return scene_handle{record};
+}
+
+auto assets_module::load_scene(const math::uuid& id) -> scene_handle {
+  _manifest.ensure_loaded();
+
+  if (const auto entry = _scenes.find(id); entry != _scenes.end()) {
+    return entry->second;
+  }
+
+  const auto source_path = _manifest.path_of(id);
+
+  if (source_path.empty() || source_path.extension() != ".scene") {
+    utility::logger<"assets">::warn("Unknown scene uuid {}", id);
+    return scene_handle{};
+  }
+
+  auto root = YAML::Node{};
+
+  try {
+    root = YAML::LoadFile(_manifest.absolute(source_path).string());
+  } catch (const YAML::Exception& exception) {
+    utility::logger<"assets">::warn("Failed to parse scene '{}': {}", source_path.generic_string(), exception.what());
+    return scene_handle{};
+  }
+
+  auto record = std::make_shared<scene>();
+
+  record->_id = id;
+  record->_name = (root["metadata"] && root["metadata"]["name"]) ? root["metadata"]["name"].as<std::string>() : source_path.stem().string();
+  record->_snapshot = root; // whole file is the snapshot -- no {name, snapshot} envelope (see save_scene)
+  record->_bump_generation();
+
+  auto handle = scene_handle{record};
+  _scenes.emplace(id, handle);
+
+  return handle;
+}
+
+auto assets_module::load_scene(const std::filesystem::path& path) -> scene_handle {
+  const auto& project = core::engine::project();
+
+  const auto assets_directory = project.assets_directory();
+
+  return load_scene(_manifest.import(assets_directory / path));
+}
+
+auto assets_module::update_scene(scene_handle& scene, YAML::Node snapshot) -> void {
+  if (!scene.is_valid()) {
+    return;
+  }
+
+  scene->_snapshot = std::move(snapshot);
+  scene->_bump_generation();
+}
+
+auto assets_module::save_scene(scene_handle& scene, const std::filesystem::path& path) -> math::uuid {
+  const auto& project = core::engine::project();
+
+  const auto assets_directory = project.assets_directory();
+
+  const auto resolved_path = assets_directory / path;
+
+  if (!scene.is_valid()) {
+    utility::logger<"assets">::warn("Cannot save an invalid scene to '{}'", resolved_path.generic_string());
+    return math::uuid::nil();
+  }
+
+  if (!resolved_path.parent_path().empty()) {
+    std::filesystem::create_directories(resolved_path.parent_path());
+  }
+
+  auto out = std::ofstream{resolved_path};
+  out << scene->snapshot(); // the snapshot IS the file root -- no envelope, unlike save_prefab
+
+  const auto id = _manifest.import(resolved_path); // register + create the .meta so it's a first-class asset
+
+  scene->_id = id;
+
+  // Without this, a later load_scene(id) (e.g. re-selecting the same scene tile) finds no cache
+  // entry and mints a second, independent handle whose generation never reflects edits applied
+  // through this one -- that second instance then silently stops resyncing forever.
+  _scenes[id] = scene;
+
+  utility::logger<"assets">::info("Saved scene '{}'", resolved_path.generic_string());
+
+  return id;
+}
+
 } // namespace sbx::assets

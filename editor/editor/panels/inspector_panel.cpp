@@ -236,8 +236,8 @@ auto inspector_panel::_draw_asset_properties(editor_state& state, const asset_se
       case asset_kind::animation_graph: _asset_cache.animation_graph = assets_module.load_animation_graph(asset.id); break;
       case asset_kind::shader_graph: _asset_cache.shader_graph = assets_module.load_shader_graph(asset.id); break;
       case asset_kind::font: _asset_cache.font = assets_module.load_font(asset.id); break;
+      case asset_kind::scene: _asset_cache.scene = assets_module.load_scene(asset.id); break;
       case asset_kind::prefab:
-      case asset_kind::scene:
       case asset_kind::script:
       case asset_kind::unknown:
         break;
@@ -423,7 +423,12 @@ auto inspector_panel::_draw_asset_properties(editor_state& state, const asset_se
       break;
     }
     case asset_kind::scene: {
-      ImGui::Text("Type: Scene (not imported)");
+      ImGui::Text("Type: Scene");
+
+      if (ImGui::Button(ICON_MDI_FOLDER_OPEN " Open")) {
+        state.request_open_scene(asset.path);
+      }
+
       break;
     }
     case asset_kind::script: {

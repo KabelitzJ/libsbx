@@ -47,7 +47,9 @@ application::application()
   auto& scene = scenes_module.active_scene();
 
   if (const auto& startup_scene = project.startup_scene()) {
-    sbx::scenes::scene_serializer::load(scene, *startup_scene);
+    if (auto handle = assets_module.load_scene(*startup_scene); handle.is_valid()) {
+      sbx::scenes::scene_serializer::load(scene, handle->snapshot());
+    }
 
     auto& scripting_module = sbx::core::engine::get_module<sbx::scripting::scripting_module>();
     scripting_module.instantiate_scene_scripts(scene);

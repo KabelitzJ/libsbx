@@ -137,6 +137,15 @@ struct interop {
 
   static auto node_get_is_active(std::uint64_t uuid) -> bool;
 
+  /** @brief Replaces the active scene's content with @p path (project-relative), same load-by-path convention as node_instantiate_prefab/particle_effect_load. No-op if @p path doesn't resolve to a valid scene. */
+  static auto scene_load(managed::string path) -> void;
+
+  /** @brief Saves the active scene's current content to @p path (project-relative), (re-)registering it as a first-class scene asset -- same round-trip editor::editor_ui_layer::_save_scene uses. */
+  static auto scene_save(managed::string path) -> void;
+
+  /** @brief Replaces the active scene with a fresh, empty one (a default camera only) -- no unsaved-changes guard, unlike the editor's New Scene; the caller is responsible for saving first if that matters. */
+  static auto scene_new() -> void;
+
   /** @brief Loads (or reassigns) which .particle_effect asset this node's ParticleEffect component plays -- @p path is project-relative, same convention as every other asset path taken from script/YAML. */
   static auto particle_effect_load(std::uint64_t uuid, managed::string path) -> void;
 

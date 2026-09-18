@@ -117,15 +117,13 @@ auto asset_browser_panel::_draw_asset_grid(editor_state& state) -> void {
               entry.id = assets_module.import(project.assets_directory() / entry.path);
               state.select_asset(entry.id, entry.path, entry.kind);
             }
-          } else if (entry.kind == asset_kind::prefab) {
+          } else if (entry.kind == asset_kind::prefab || entry.kind == asset_kind::scene) {
             // Not importable (no cook step), but still a real manifest-registered, uuid-bearing
-            // asset -- unlike scene/script below, it needs a resolved id both for the Inspector
-            // and for a drag started from this tile (asset_tile_desc::drag_id, set from entry.id
-            // right below where this tile is built) to carry a working uuid instead of nil.
+            // asset -- unlike script below, it needs a resolved id both for the Inspector and for
+            // a drag started from this tile (asset_tile_desc::drag_id, set from entry.id right
+            // below where this tile is built) to carry a working uuid instead of nil.
             entry.id = assets_module.import(project.assets_directory() / entry.path);
             state.select_asset(entry.id, entry.path, entry.kind);
-          } else if (entry.kind == asset_kind::scene) {
-            state.select_asset(sbx::math::uuid::nil(), entry.path, asset_kind::scene);
           } else if (entry.kind == asset_kind::script) {
             state.select_asset(sbx::math::uuid::nil(), entry.path, asset_kind::script);
           }
@@ -138,6 +136,10 @@ auto asset_browser_panel::_draw_asset_grid(editor_state& state) -> void {
 
           if (tile_result.double_clicked && entry.kind == asset_kind::shader_graph) {
             state.request_open_shader_graph_editor(entry.id, entry.path);
+          }
+
+          if (tile_result.double_clicked && entry.kind == asset_kind::scene) {
+            state.request_open_scene(entry.path);
           }
         }
 

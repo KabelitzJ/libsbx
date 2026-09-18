@@ -31,6 +31,7 @@
 #include <libsbx/assets/animation_graph.hpp>
 #include <libsbx/assets/shader_graph.hpp>
 #include <libsbx/assets/prefab.hpp>
+#include <libsbx/assets/scene.hpp>
 #include <libsbx/assets/asset_cooker.hpp>
 #include <libsbx/assets/asset_manifest.hpp>
 #include <libsbx/assets/asset_residency.hpp>
@@ -218,6 +219,31 @@ public:
   auto save_prefab(prefab_handle& prefab, const std::filesystem::path& path) -> math::uuid;
 
   /**
+   * @brief Wraps an already-built scene snapshot (see scenes::scene_serializer::build) as a new,
+   * unsaved scene asset. Scene-agnostic on purpose — same reasoning as create_prefab; the caller
+   * builds the YAML::Node via scene_serializer and still needs @ref save_scene to persist it.
+   */
+  auto create_scene(YAML::Node snapshot, std::string name) -> scene_handle;
+
+  auto load_scene(const math::uuid& id) -> scene_handle;
+
+  auto load_scene(const std::filesystem::path& path) -> scene_handle;
+
+  /**
+   * @brief Overwrites an existing scene's snapshot in place; every scene_handle already pointing
+   * at it observes the change immediately. Does not persist to disk or touch identity (id) —
+   * pair with @ref save_scene for that.
+   */
+  auto update_scene(scene_handle& scene, YAML::Node snapshot) -> void;
+
+  /**
+   * @brief Writes a scene to a `.scene` file and (re-)registers it as a first-class asset.
+   * @param path Destination path relative to the active project's assets directory.
+   * @return The scene's canonical uuid (also written back onto the scene record itself).
+   */
+  auto save_scene(scene_handle& scene, const std::filesystem::path& path) -> math::uuid;
+
+  /**
    * @brief Turns queued texture loads into GPU images and bindless writes.
    *
    * Runs on the render thread; copies are recorded by the caller's subsequent @ref upload_context::flush.
@@ -295,6 +321,9 @@ private:
   // for material/particle_effect/animation_graph -- prefab has no GPU state of its own (see
   // prefab.hpp), so it skips asset_residency/asset_loader entirely and lives directly here.
   std::unordered_map<math::uuid, prefab_handle> _prefabs{};
+
+  // Same role as _prefabs above, for scenes -- no GPU state of its own either.
+  std::unordered_map<math::uuid, scene_handle> _scenes{};
 
 }; // class assets_module
 

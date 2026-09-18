@@ -22,6 +22,9 @@
 #include <libsbx/assets/animation_graph.hpp>
 #include <libsbx/assets/shader_graph.hpp>
 
+#include <libsbx/scenes/components.hpp>
+#include <libsbx/scenes/scene_serializer.hpp>
+
 namespace editor {
 
 auto asset_browser_panel::_create_material(editor_state& state, const std::filesystem::path& target_directory) -> void {
@@ -117,6 +120,31 @@ auto asset_browser_panel::_create_shader_graph(editor_state& state, const std::f
   state.select_asset(id, relative_path, asset_kind::shader_graph);
 }
 
+auto asset_browser_panel::_create_scene(editor_state& state, const std::filesystem::path& target_directory) -> void {
+  auto& project = sbx::core::engine::project();
+  auto& assets_module = sbx::core::engine::get_module<sbx::assets::assets_module>();
+
+  const auto absolute_directory = project.assets_directory() / target_directory;
+  std::filesystem::create_directories(absolute_directory);
+
+  const auto relative_path = target_directory / unique_name(absolute_directory, "New Scene", ".scene");
+
+  // Same default content editor::application's startup fallback gives a fresh/startup-scene-less
+  // project -- a blank scene with no camera renders nothing and can't be entered in Play mode.
+  auto blank = sbx::scenes::scene{};
+  auto camera = blank.create_node("Camera");
+  camera.add_component<sbx::scenes::camera>();
+  blank.set_active_camera(camera);
+
+  auto handle = assets_module.create_scene(sbx::scenes::scene_serializer::build(blank), "Scene");
+  const auto id = assets_module.save_scene(handle, relative_path);
+
+  // Does not switch the live editor scene -- same as every other Create-menu entry, this only
+  // creates the asset file; double-clicking (or Inspector's Open) is how a scene gets opened.
+  _navigate_to(target_directory);
+  state.select_asset(id, relative_path, asset_kind::scene);
+}
+
 auto asset_browser_panel::_create_script(editor_state& state, const std::filesystem::path& target_directory) -> void {
   auto& project = sbx::core::engine::project();
 
@@ -185,6 +213,10 @@ auto asset_browser_panel::_draw_create_menu(editor_state& state, const std::file
     }
 
     ImGui::EndMenu();
+  }
+
+  if (ImGui::MenuItem(ICON_MDI_FILE_TREE " Scene")) {
+    _create_scene(state, target_directory);
   }
 
   if (ImGui::MenuItem(ICON_MDI_FILE_CODE_OUTLINE " C# Script")) {

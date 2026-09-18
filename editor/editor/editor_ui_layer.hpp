@@ -69,12 +69,20 @@ public:
    */
   auto request_quit() -> void;
 
+  /** @brief Same discard-guard as request_quit(), but replaces the active scene with a fresh blank one instead of quitting. */
+  auto new_scene() -> void;
+
+  /** @brief Same discard-guard as request_quit(), but loads path as the active scene instead of quitting. */
+  auto open_scene(const std::filesystem::path& path) -> void;
+
   /** @brief Drops the undo/redo history — call whenever previously-pushed commands can no longer be safely replayed (see editor_module::exit_play_mode()). */
   auto clear_command_stack() -> void {
     _state.clear_command_stack();
   }
 
 private:
+
+  enum class pending_scene_action { none, quit, new_scene, open_scene };
 
   auto _upload_fonts() -> void;
 
@@ -90,13 +98,27 @@ private:
   /** @brief Compares the scene's current serialize() output against what's on disk at _scene_path. */
   [[nodiscard]] auto _is_scene_dirty() -> bool;
 
-  /** @brief Opens _save_dialog seeded from the current _scene_path (or a fresh "new_scene.yaml" if none yet). @p quit_after is stashed into _quit_after_save_as for _draw_save_as_dialog() to act on once the dialog resolves. */
-  auto _open_save_as_dialog(bool quit_after) -> void;
+  /** @brief Opens _save_dialog seeded from the current _scene_path (or a fresh "new_scene.scene" if none yet). Whatever's pending in _pending_scene_action runs once the dialog resolves (see _run_pending_after_save_as). */
+  auto _open_save_as_dialog() -> void;
 
-  /** @brief Polls _save_dialog and, on a confirmed pick, saves there and resolves _quit_after_save_as (quitting, or just clearing it on a cancel). */
+  /** @brief Polls _save_dialog and, on a confirmed pick, saves there and — if _run_pending_after_save_as is set — runs the pending scene action. */
   auto _draw_save_as_dialog() -> void;
 
   auto _draw_unsaved_changes_dialog() -> void;
+
+  /** @brief Shared by request_quit()/new_scene()/open_scene(): runs action immediately if the scene has no unsaved changes, otherwise stashes it and shows the unsaved-changes dialog. */
+  auto _request_discard_confirmation(pending_scene_action action, std::filesystem::path path) -> void;
+
+  /** @brief Runs (and clears) whatever's in _pending_scene_action — quit, a fresh blank scene, or loading _pending_open_path. */
+  auto _run_pending_scene_action() -> void;
+
+  auto _new_scene() -> void;
+
+  auto _open_scene(const std::filesystem::path& path) -> void;
+
+  auto _open_open_scene_dialog() -> void;
+
+  auto _draw_open_scene_dialog() -> void;
 
   /** @brief Opens (from _state.open_edit_layers_popup_request) and draws the project-wide "Edit Layers..." popup: the 32 layer names plus the Layer Collision Matrix among the currently-named ones. Every edit calls project.save() immediately -- no dirty-tracking, no separate Apply. */
   auto _draw_edit_layers_popup() -> void;
@@ -131,12 +153,22 @@ private:
 
   sbx::render::file_dialog _save_dialog{};
 
+  // Separate instance from _save_dialog -- both can't be mid-flight at once in practice, but each
+  // owns its own imgui-file-dialog state and there's no reason to share it.
+  sbx::render::file_dialog _open_dialog{};
+
   bool _show_unsaved_changes_dialog{false};
 
+  // What request_quit()/new_scene()/open_scene() are guarding, and (for open_scene) the path to
+  // load -- set by _request_discard_confirmation(), consumed by _run_pending_scene_action() once
+  // either the scene turns out clean or the unsaved-changes dialog resolves.
+  pending_scene_action _pending_scene_action{pending_scene_action::none};
+  std::filesystem::path _pending_open_path{};
+
   // Set when the unsaved-changes dialog's "Save" has to detour through Save As (no _scene_path
-  // yet) — consulted by _draw_save_as_dialog() so that detour still quits once it completes,
-  // instead of silently dropping the original quit request.
-  bool _quit_after_save_as{false};
+  // yet) — consulted by _draw_save_as_dialog() so that detour still runs _pending_scene_action
+  // once it completes, instead of silently dropping it.
+  bool _run_pending_after_save_as{false};
 
 }; // class editor_ui_layer
 

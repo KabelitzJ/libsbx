@@ -7,6 +7,7 @@
 #include <iterator>
 #include <string>
 #include <system_error>
+#include <utility>
 
 #include <imgui.h>
 
@@ -15,23 +16,68 @@
 #include <libsbx/core/engine.hpp>
 #include <libsbx/core/project.hpp>
 
+#include <libsbx/assets/assets_module.hpp>
+
+#include <libsbx/scenes/components.hpp>
 #include <libsbx/scenes/scene_serializer.hpp>
 #include <libsbx/scenes/scenes_module.hpp>
 
 namespace editor {
 
 auto editor_ui_layer::request_quit() -> void {
+  _request_discard_confirmation(pending_scene_action::quit, {});
+}
+
+auto editor_ui_layer::new_scene() -> void {
+  _request_discard_confirmation(pending_scene_action::new_scene, {});
+}
+
+auto editor_ui_layer::open_scene(const std::filesystem::path& path) -> void {
+  _request_discard_confirmation(pending_scene_action::open_scene, path);
+}
+
+auto editor_ui_layer::_request_discard_confirmation(pending_scene_action action, std::filesystem::path path) -> void {
+  _pending_scene_action = action;
+  _pending_open_path = std::move(path);
+
   if (_is_scene_dirty()) {
     _show_unsaved_changes_dialog = true;
   } else {
-    sbx::core::engine::quit();
+    _run_pending_scene_action();
+  }
+}
+
+auto editor_ui_layer::_run_pending_scene_action() -> void {
+  const auto action = std::exchange(_pending_scene_action, pending_scene_action::none);
+  const auto path = std::exchange(_pending_open_path, std::filesystem::path{});
+
+  switch (action) {
+    case pending_scene_action::none: {
+      break;
+    }
+    case pending_scene_action::quit: {
+      sbx::core::engine::quit();
+      break;
+    }
+    case pending_scene_action::new_scene: {
+      _new_scene();
+      break;
+    }
+    case pending_scene_action::open_scene: {
+      _open_scene(path);
+      break;
+    }
   }
 }
 
 auto editor_ui_layer::_save_scene(const std::filesystem::path& path) -> void {
   auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
+  auto& assets_module = sbx::core::engine::get_module<sbx::assets::assets_module>();
 
-  sbx::scenes::scene_serializer::save(scenes_module.active_scene(), path);
+  auto& scene = scenes_module.active_scene();
+
+  auto handle = assets_module.create_scene(sbx::scenes::scene_serializer::build(scene), scene.name());
+  assets_module.save_scene(handle, path);
 
   _scene_path = path;
 }
@@ -55,19 +101,17 @@ auto editor_ui_layer::_is_scene_dirty() -> bool {
   return on_disk != sbx::scenes::scene_serializer::serialize(scenes_module.active_scene());
 }
 
-auto editor_ui_layer::_open_save_as_dialog(bool quit_after) -> void {
+auto editor_ui_layer::_open_save_as_dialog() -> void {
   auto& project = sbx::core::engine::project();
 
-  _quit_after_save_as = quit_after;
-
   const auto start_dir = _scene_path.empty() ? project.assets_directory() : (project.assets_directory() / _scene_path).parent_path();
-  const auto default_name = _scene_path.empty() ? std::string{"new_scene.yaml"} : _scene_path.filename().string();
+  const auto default_name = _scene_path.empty() ? std::string{"new_scene.scene"} : _scene_path.filename().string();
 
   _save_dialog.open({
     .title = "Save Scene As",
     .mode = sbx::render::file_dialog_mode::save_file,
     .start_dir = start_dir,
-    .extensions = {".yaml"},
+    .extensions = {".scene"},
     .shortcuts = {{.label = "Assets", .path = project.assets_directory()}},
     .default_file_name = default_name,
   });
@@ -83,9 +127,9 @@ auto editor_ui_layer::_draw_save_as_dialog() -> void {
   }
 
   if (picked->empty()) {
-    // Cancelled -- don't let a stale "quit once this save-as completes" leak into some unrelated
-    // later save (see _quit_after_save_as's doc comment).
-    _quit_after_save_as = false;
+    // Cancelled -- don't let a stale "run the pending action once this save-as completes" leak
+    // into some unrelated later save (see _run_pending_after_save_as's doc comment).
+    _run_pending_after_save_as = false;
     return;
   }
 
@@ -95,15 +139,15 @@ auto editor_ui_layer::_draw_save_as_dialog() -> void {
   const auto relative = std::filesystem::relative(picked->front(), project.assets_directory(), ec);
 
   // Kept relative to the assets directory (the convention _scene_path documents) whenever the
-  // picked location actually resolves under it; left absolute otherwise -- scene_serializer::save
-  // accepts either.
+  // picked location actually resolves under it; left absolute otherwise -- _save_scene accepts
+  // either (via assets_module::save_scene).
   const auto scene_path = (!ec && !relative.empty() && relative.begin()->string() != "..") ? relative : picked->front();
 
   _save_scene(scene_path);
 
-  if (_quit_after_save_as) {
-    _quit_after_save_as = false;
-    sbx::core::engine::quit();
+  if (_run_pending_after_save_as) {
+    _run_pending_after_save_as = false;
+    _run_pending_scene_action();
   }
 }
 
@@ -118,33 +162,104 @@ auto editor_ui_layer::_draw_unsaved_changes_dialog() -> void {
 
     if (ImGui::Button(ICON_MDI_CONTENT_SAVE " Save")) {
       if (_scene_path.empty()) {
-        _open_save_as_dialog(true);
+        _run_pending_after_save_as = true;
+        _open_save_as_dialog();
       } else {
         _save_scene(_scene_path);
-        sbx::core::engine::quit();
+        _run_pending_scene_action();
       }
 
-      _show_unsaved_changes_dialog = false;
       ImGui::CloseCurrentPopup();
     }
 
     ImGui::SameLine();
 
     if (ImGui::Button("Don't Save")) {
-      _show_unsaved_changes_dialog = false;
       ImGui::CloseCurrentPopup();
-      sbx::core::engine::quit();
+      _run_pending_scene_action();
     }
 
     ImGui::SameLine();
 
     if (ImGui::Button("Cancel")) {
-      _show_unsaved_changes_dialog = false;
       ImGui::CloseCurrentPopup();
+      _pending_scene_action = pending_scene_action::none; // don't act on a later, unrelated resolve
     }
 
     ImGui::EndPopup();
   }
+}
+
+auto editor_ui_layer::_new_scene() -> void {
+  auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
+  auto& assets_module = sbx::core::engine::get_module<sbx::assets::assets_module>();
+
+  scenes_module.active_scene() = sbx::scenes::scene{};
+
+  auto& scene = scenes_module.active_scene();
+
+  // Same default content application.cpp's startup fallback gives a fresh/startup-scene-less
+  // project -- see its doc comment for why (a play camera the scene itself owns, distinct from
+  // the editor's own free-fly editor_camera).
+  auto camera = scene.create_node("Camera");
+  camera.add_component<sbx::scenes::camera>();
+  scene.set_active_camera(camera);
+
+  auto& skybox = camera.add_component<sbx::scenes::skybox>();
+  skybox.environment = assets_module.load_environment_map("environments/sky.hdr");
+  skybox.intensity = 1.0f;
+
+  _scene_path.clear();
+  _state.clear_selection();
+  _state.clear_command_stack();
+}
+
+auto editor_ui_layer::_open_scene(const std::filesystem::path& path) -> void {
+  auto& assets_module = sbx::core::engine::get_module<sbx::assets::assets_module>();
+  auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
+
+  auto handle = assets_module.load_scene(path);
+
+  if (!handle.is_valid()) {
+    return;
+  }
+
+  sbx::scenes::scene_serializer::load(scenes_module.active_scene(), handle->snapshot());
+
+  _scene_path = path;
+  _state.clear_selection();
+  _state.clear_command_stack();
+}
+
+auto editor_ui_layer::_open_open_scene_dialog() -> void {
+  auto& project = sbx::core::engine::project();
+
+  _open_dialog.open({
+    .title = "Open Scene",
+    .mode = sbx::render::file_dialog_mode::open_file,
+    .start_dir = project.assets_directory(),
+    .extensions = {".scene"},
+    .shortcuts = {{.label = "Assets", .path = project.assets_directory()}},
+  });
+}
+
+auto editor_ui_layer::_draw_open_scene_dialog() -> void {
+  _open_dialog.draw();
+
+  auto picked = _open_dialog.result();
+
+  if (!picked || picked->empty()) {
+    return;
+  }
+
+  auto& project = sbx::core::engine::project();
+
+  auto ec = std::error_code{};
+  const auto relative = std::filesystem::relative(picked->front(), project.assets_directory(), ec);
+
+  const auto scene_path = (!ec && !relative.empty() && relative.begin()->string() != "..") ? relative : picked->front();
+
+  open_scene(scene_path); // re-enters the discard-guard in case the scene changed while the dialog was open
 }
 
 } // namespace editor

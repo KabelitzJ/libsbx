@@ -925,6 +925,44 @@ auto interop::node_get_is_active(std::uint64_t uuid) -> bool {
   return node.is_active();
 }
 
+auto interop::scene_load(managed::string path) -> void {
+  auto& assets_module = core::engine::get_module<assets::assets_module>();
+
+  auto handle = assets_module.load_scene(std::filesystem::path{std::string{path}});
+
+  if (!handle.is_valid()) {
+    utility::logger<"scripting">::error("SceneManager.Load('{}') resolved to an invalid scene", std::string{path});
+
+    return;
+  }
+
+  auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
+
+  scenes::scene_serializer::load(scenes_module.active_scene(), handle->snapshot());
+}
+
+auto interop::scene_save(managed::string path) -> void {
+  auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
+  auto& assets_module = core::engine::get_module<assets::assets_module>();
+
+  auto& scene = scenes_module.active_scene();
+
+  auto handle = assets_module.create_scene(scenes::scene_serializer::build(scene), scene.name());
+  assets_module.save_scene(handle, std::filesystem::path{std::string{path}});
+}
+
+auto interop::scene_new() -> void {
+  auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
+
+  scenes_module.active_scene() = scenes::scene{};
+
+  auto& scene = scenes_module.active_scene();
+
+  auto camera = scene.create_node("Camera");
+  camera.add_component<scenes::camera>();
+  scene.set_active_camera(camera);
+}
+
 auto interop::particle_effect_load(std::uint64_t uuid, managed::string path) -> void {
   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
 

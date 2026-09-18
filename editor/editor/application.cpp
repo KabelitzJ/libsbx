@@ -55,7 +55,10 @@ application::application()
   // A fresh/projectless-launcher-created project has no startup_scene — start from whatever
   // empty scene scenes_module already handed us instead of assuming one exists on disk.
   if (const auto& startup_scene = project.startup_scene()) {
-    sbx::scenes::scene_serializer::load(scene, *startup_scene);
+    if (auto handle = assets_module.load_scene(*startup_scene); handle.is_valid()) {
+      sbx::scenes::scene_serializer::load(scene, handle->snapshot());
+    }
+
     editor_module.set_scene_path(*startup_scene);
   }
 

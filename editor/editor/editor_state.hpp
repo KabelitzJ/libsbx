@@ -45,7 +45,7 @@ enum class asset_kind {
   shader_graph,
   font,
   prefab,
-  scene, // .yaml, reference-only: not routed through assets_module::import
+  scene, // .scene, no cook step but still manifest-registered — same treatment as prefab
   script, // .cs, reference-only: compiled by scripting::script_compiler, not assets_module::import
 }; // enum class asset_kind
 
@@ -68,7 +68,7 @@ struct node_selection {
 
 /** @brief An asset file is selected, from the Asset Browser. */
 struct asset_selection {
-  sbx::math::uuid id{sbx::math::uuid::nil()}; // nil for asset_kind::scene, which is never imported
+  sbx::math::uuid id{sbx::math::uuid::nil()};
   std::filesystem::path path{};               // project-relative to the active project's assets directory
   asset_kind kind{asset_kind::unknown};
 }; // struct asset_selection
@@ -171,6 +171,17 @@ struct editor_state {
   }
 
   std::optional<shader_graph_edit_request> open_shader_graph_request{};
+
+  /** @brief Same idea as animation_graph_edit_request, consumed by editor_ui_layer (routes into its own guarded open_scene(), see editor_ui_layer::open_scene's doc comment). */
+  struct scene_edit_request {
+    std::filesystem::path path{}; // project-relative
+  }; // struct scene_edit_request
+
+  auto request_open_scene(std::filesystem::path path) -> void {
+    open_scene_request = scene_edit_request{std::move(path)};
+  }
+
+  std::optional<scene_edit_request> open_scene_request{};
 
   /** @brief One-shot "open the Edit Layers... popup" request -- fired from the node Layer dropdown or a LayerMask field's popup, consumed by editor_ui_layer once it draws the popup. */
   auto request_open_edit_layers_popup() -> void {

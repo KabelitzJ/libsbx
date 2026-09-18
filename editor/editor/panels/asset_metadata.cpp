@@ -27,7 +27,7 @@ auto extension_table() -> const std::unordered_map<std::string, asset_kind>& {
     {".shadergraph", asset_kind::shader_graph},
     {".ttf", asset_kind::font},
     {".prefab", asset_kind::prefab},
-    {".yaml", asset_kind::scene},
+    {".scene", asset_kind::scene},
     {".cs", asset_kind::script},
   };
 

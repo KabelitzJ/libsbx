@@ -404,6 +404,7 @@ target_sources(
       "${CMAKE_SOURCE_DIR}/libsbx/assets/particle_effect.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/assets/prefab.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/assets/primitive_meshes.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/assets/scene.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/assets/skeleton.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/assets/texture.hpp"
 

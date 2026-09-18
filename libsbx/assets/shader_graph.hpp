@@ -105,6 +105,14 @@ enum class shader_node_type : std::uint8_t {
                           // Raw/Eye/Linear01 sampling mode is a per-node setting (node.value, a
                           // string -- see shader_node_scene_depth_mode), not a pin. Fragment-only:
                           // there's no meaningful screen position in the vertex stage.
+  screen_position,       // No inputs -> vector4 (matches Unity Shader Graph's own Screen Position
+                          // node, whose output is always Vector4 regardless of mode). Default/Raw
+                          // mode is a per-node setting (node.value, a string -- see
+                          // shader_node_screen_position_mode), not a pin. Fragment-only, same reason
+                          // as Scene Depth. Default = (xy normalized to [0,1], z, w) of this
+                          // fragment's own SV_Position; Raw = SV_Position unmodified (window-space
+                          // pixel xy, hardware depth z, 1/clip-w in w) -- Center/Tiled modes aren't
+                          // implemented yet.
   constant_float,
   constant_vector2,
   constant_vector3,
@@ -183,6 +191,7 @@ enum class shader_node_type : std::uint8_t {
     case shader_node_type::time: return "time";
     case shader_node_type::delta_time: return "delta_time";
     case shader_node_type::scene_depth: return "scene_depth";
+    case shader_node_type::screen_position: return "screen_position";
     case shader_node_type::constant_float: return "constant_float";
     case shader_node_type::constant_vector2: return "constant_vector2";
     case shader_node_type::constant_vector3: return "constant_vector3";
@@ -245,6 +254,7 @@ enum class shader_node_type : std::uint8_t {
   if (value == "time") return shader_node_type::time;
   if (value == "delta_time") return shader_node_type::delta_time;
   if (value == "scene_depth") return shader_node_type::scene_depth;
+  if (value == "screen_position") return shader_node_type::screen_position;
   if (value == "constant_float") return shader_node_type::constant_float;
   if (value == "constant_vector2") return shader_node_type::constant_vector2;
   if (value == "constant_vector3") return shader_node_type::constant_vector3;
@@ -309,6 +319,7 @@ enum class shader_node_type : std::uint8_t {
     case shader_node_type::time: return "Time";
     case shader_node_type::delta_time: return "Delta Time";
     case shader_node_type::scene_depth: return "Scene Depth";
+    case shader_node_type::screen_position: return "Screen Position";
     case shader_node_type::constant_float: return "Float";
     case shader_node_type::constant_vector2: return "Vector2";
     case shader_node_type::constant_vector3: return "Vector3";
@@ -392,6 +403,7 @@ enum class shader_node_category : std::uint8_t {
     case shader_node_type::time:
     case shader_node_type::delta_time:
     case shader_node_type::scene_depth:
+    case shader_node_type::screen_position:
       return shader_node_category::input;
     case shader_node_type::constant_float:
     case shader_node_type::constant_vector2:
@@ -531,6 +543,7 @@ enum class shader_node_category : std::uint8_t {
     case shader_node_type::main_light_color:
     case shader_node_type::time:
     case shader_node_type::delta_time:
+    case shader_node_type::screen_position:
     case shader_node_type::constant_float:
     case shader_node_type::constant_vector2:
     case shader_node_type::constant_vector3:
@@ -706,6 +719,14 @@ struct shader_graph_node {
   return (mode == "raw" || mode == "eye" || mode == "linear01") ? mode : std::string{"linear01"};
 }
 
+// A Screen Position node's stored mode ("default"/"raw") -- same fallback reasoning as
+// shader_node_scene_depth_mode above. "default" (normalized [0,1] xy, matching Unity Shader Graph's
+// own default) is the fallback.
+[[nodiscard]] inline auto shader_node_screen_position_mode(const shader_graph_node& node) -> std::string {
+  const auto mode = std::holds_alternative<std::string>(node.value) ? std::get<std::string>(node.value) : std::string{};
+  return (mode == "raw" || mode == "default") ? mode : std::string{"default"};
+}
+
 struct shader_graph_edge {
   std::uint32_t from_node{0u};
   std::uint32_t from_pin{0u}; // index into the source node type's output list -- 0 except Split's/Combine's several
@@ -748,6 +769,7 @@ struct shader_graph_edge {
       return shader_value_type::scalar;
     case shader_node_type::constant_vector4:
     case shader_node_type::constant_color:
+    case shader_node_type::screen_position: // always vector4, regardless of mode
       return shader_value_type::vector4;
     case shader_node_type::texture_sample: // pin 0 (RGBA) is vector4; R/G/B/A (pins 1-4) are each scalar
       return pin == 0u ? shader_value_type::vector4 : shader_value_type::scalar;

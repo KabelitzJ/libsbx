@@ -9,7 +9,9 @@
 #include <optional>
 #include <string>
 #include <unordered_set>
+#include <utility>
 #include <variant>
+#include <vector>
 
 #include <imgui_node_editor.h>
 
@@ -88,6 +90,13 @@ private:
   auto _draw_master_preview() -> void;
   auto _draw_selection_inspector(editor_state& state) -> void;
 
+  // A node's inline "pick one of a few string modes" trigger button (Scene Depth's Raw/Eye/
+  // Linear01, Screen Position's Default/Raw, ...) -- see _mode_popup_node_id's own doc comment for
+  // why this only records the request rather than opening the popup itself. `x` is this node's own
+  // content_start_x (_draw_canvas's own local); `popup_requested` is _draw_canvas's own local, set
+  // when this returns having recorded a click.
+  auto _draw_inline_mode_trigger(const sbx::assets::shader_graph_node& node, const std::string& current_mode, const std::vector<std::pair<std::string, std::string>>& options, float x, float width, bool& popup_requested) -> void;
+
   [[nodiscard]] auto _next_node_id() const -> std::uint32_t;
 
   // Pushes a new node into _edit.nodes and returns its id -- shared by _draw_add_node_menu's own
@@ -138,17 +147,23 @@ private:
   // one triggering frame). See the ShowNodeContextMenu call site in _draw_canvas.
   ax::NodeEditor::NodeId _context_node_id{};
 
-  // Which node's inline color swatch / Scene Depth mode combo a popup-based picker currently
-  // targets -- same "captured once, kept across however many frames the popup stays open" reasoning
-  // as _context_node_id above, and for the same underlying cause: imgui-node-editor applies its own
-  // pan/zoom coordinate transform inside BeginNode/EndNode, so a popup (Combo's dropdown, a color
-  // picker) opened directly from inside a node renders at the wrong screen position/doesn't receive
-  // input -- the library's own "widgets" example (relevant upstream bug: thedmd/imgui-node-editor#48)
-  // works around this by only recording that a popup was requested INSIDE the node, then actually
-  // calling OpenPopup/BeginPopup OUTSIDE BeginNode/EndNode entirely, wrapped in Suspend()/Resume()
-  // (see _draw_canvas's own Suspend/Resume block, shared with the node/background context menus).
+  // Which node's inline color swatch / string-mode picker (Scene Depth's Raw/Eye/Linear01, Screen
+  // Position's Default/Raw, ...) a popup-based picker currently targets -- same "captured once, kept
+  // across however many frames the popup stays open" reasoning as _context_node_id above, and for
+  // the same underlying cause: imgui-node-editor applies its own pan/zoom coordinate transform
+  // inside BeginNode/EndNode, so a popup (Combo's dropdown, a color picker) opened directly from
+  // inside a node renders at the wrong screen position/doesn't receive input -- the library's own
+  // "widgets" example (relevant upstream bug: thedmd/imgui-node-editor#48) works around this by only
+  // recording that a popup was requested INSIDE the node, then actually calling OpenPopup/BeginPopup
+  // OUTSIDE BeginNode/EndNode entirely, wrapped in Suspend()/Resume() (see _draw_canvas's own
+  // Suspend/Resume block, shared with the node/background context menus).
   std::optional<std::uint32_t> _color_popup_node_id{};
-  std::optional<std::uint32_t> _scene_depth_mode_popup_node_id{};
+
+  // One shared popup serves every string-mode node type (only one such popup can be open at a time
+  // anyway) -- _mode_popup_options is copied in as (label, value) pairs when the popup is requested,
+  // since the option list differs per node type.
+  std::optional<std::uint32_t> _mode_popup_node_id{};
+  std::vector<std::pair<std::string, std::string>> _mode_popup_options{};
 
   ax::NodeEditor::EditorContext* _context{nullptr};
 

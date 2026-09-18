@@ -37,9 +37,11 @@ static auto codegen_context_of(shader_node_type type) -> std::optional<codegen_c
     // locals (see _emit's fresnel_effect case) -- those only exist in fragment_main's scope, so the
     // whole node is fragment-only, same restriction as input_normal/input_view_dir themselves.
     case shader_node_type::fresnel_effect:
-    // Scene Depth's unconnected UV defaults to this fragment's own screen position -- there's no
-    // meaningful screen-space UV in the vertex stage.
+    // Scene Depth's unconnected UV defaults to this fragment's own screen position, and Screen
+    // Position IS that same screen position -- there's no meaningful screen-space UV in the vertex
+    // stage for either.
     case shader_node_type::scene_depth:
+    case shader_node_type::screen_position:
       return codegen_context::fragment;
     default:
       return std::nullopt; // valid in either context -- camera_position/main_light_direction/
@@ -47,6 +49,13 @@ static auto codegen_context_of(shader_node_type type) -> std::optional<codegen_c
                             // global `push` pointer, which every generated function has access to.
   }
 }
+
+// This fragment's own normalized [0,1] screen UV -- Scene Depth's own unconnected-UV default AND
+// Screen Position's "default" mode are the exact same value, so both _emit cases share this one
+// literal instead of two copies quietly drifting apart. Neither preview has a real frame_data to
+// compute this from -- guarded by each case's own _scene_depth_preview_value/no-preview-support
+// check before ever reaching this.
+static constexpr auto screen_uv_expression = "(input.sv_position.xy / push.frame_data->render_target_size)";
 
 static auto component_count(const std::string& slang_type) -> std::size_t {
   if (slang_type == "float2") return 2u;
@@ -169,79 +178,15 @@ static auto join_statements(const std::vector<std::string>& statements) -> std::
   return joined;
 }
 
-// Shared library functions Simple Noise/Voronoi both compile down to a call into -- spliced into a
-// generated file's preamble (see noise_helper_source_for) only when the graph actually has one of
-// those two node types, so a graph that doesn't use noise gets no unused-function bloat/warnings.
-// Ported from Unity Shader Graph's own Simple Noise/Voronoi nodes, with their dead code (an unused
-// `uv = abs(frac(uv) - 0.5)` in Value Noise, an unused third res component in Voronoi) dropped and
-// their hand-rolled lerp replaced with Slang's own builtin (same as every other node in this file
-// already uses). Voronoi's Cells output is NOT a true per-cell id -- it reads the winning cell's
-// random offset.x, matching a real quirk in Unity's own generated HLSL exactly.
-static constexpr auto noise_helper_source =
-  "float shader_graph_noise_random(float2 uv) {\n"
-  "  return frac(sin(dot(uv, float2(12.9898, 78.233))) * 43758.5453);\n"
-  "}\n"
-  "\n"
-  "float shader_graph_noise_value(float2 uv) {\n"
-  "  float2 i = floor(uv);\n"
-  "  float2 f = frac(uv);\n"
-  "  f = f * f * (3.0 - 2.0 * f);\n"
-  "\n"
-  "  float r0 = shader_graph_noise_random(i + float2(0.0, 0.0));\n"
-  "  float r1 = shader_graph_noise_random(i + float2(1.0, 0.0));\n"
-  "  float r2 = shader_graph_noise_random(i + float2(0.0, 1.0));\n"
-  "  float r3 = shader_graph_noise_random(i + float2(1.0, 1.0));\n"
-  "\n"
-  "  float bottom = lerp(r0, r1, f.x);\n"
-  "  float top = lerp(r2, r3, f.x);\n"
-  "  return lerp(bottom, top, f.y);\n"
-  "}\n"
-  "\n"
-  "float shader_graph_simple_noise(float2 uv, float scale) {\n"
-  "  float t = 0.0;\n"
-  "\n"
-  "  for (uint octave = 0u; octave < 3u; ++octave) {\n"
-  "    float freq = pow(2.0, float(octave));\n"
-  "    float amp = pow(0.5, float(3u - octave));\n"
-  "    t += shader_graph_noise_value(float2(uv.x * scale / freq, uv.y * scale / freq)) * amp;\n"
-  "  }\n"
-  "\n"
-  "  return t;\n"
-  "}\n"
-  "\n"
-  "float2 shader_graph_voronoi_random(float2 uv, float angle_offset) {\n"
-  "  float2x2 m = float2x2(15.27, 47.63, 99.41, 89.98);\n"
-  "  uv = frac(sin(mul(uv, m)) * 46839.32);\n"
-  "  return float2(sin(uv.y * angle_offset) * 0.5 + 0.5, cos(uv.x * angle_offset) * 0.5 + 0.5);\n"
-  "}\n"
-  "\n"
-  "float2 shader_graph_voronoi(float2 uv, float angle_offset, float cell_density) {\n"
-  "  float2 g = floor(uv * cell_density);\n"
-  "  float2 f = frac(uv * cell_density);\n"
-  "\n"
-  "  float2 closest = float2(8.0, 0.0); // x = nearest distance, y = that cell's offset.x (\"Cells\")\n"
-  "\n"
-  "  for (int y = -1; y <= 1; ++y) {\n"
-  "    for (int x = -1; x <= 1; ++x) {\n"
-  "      float2 lattice = float2(float(x), float(y));\n"
-  "      float2 offset = shader_graph_voronoi_random(lattice + g, angle_offset);\n"
-  "      float d = distance(lattice + offset, f);\n"
-  "\n"
-  "      if (d < closest.x) {\n"
-  "        closest = float2(d, offset.x);\n"
-  "      }\n"
-  "    }\n"
-  "  }\n"
-  "\n"
-  "  return closest;\n"
-  "}\n"
-  "\n";
-
+// A generated file only #include's shader_graph_noise.slang (shader_graph_noise_random/_value/
+// shader_graph_simple_noise/shader_graph_voronoi_random/shader_graph_voronoi -- the actual
+// implementations, in exactly one place) when the graph actually has one of those two node types, so
+// a graph that doesn't use noise gets no unused-function bloat/warnings and no unnecessary #include.
 static auto noise_helper_source_for(const shader_graph::create_info& graph) -> std::string {
   const auto uses_noise = std::ranges::any_of(graph.nodes, [](const shader_graph_node& node) {
     return node.type == shader_node_type::simple_noise || node.type == shader_node_type::voronoi;
   });
-  return uses_noise ? std::string{noise_helper_source} : std::string{};
+  return uses_noise ? std::string{"#include <shader_graph_noise.slang>\n"} : std::string{};
 }
 
 // Walks a graph backward from one socket's input pin, producing a single self-contained Slang
@@ -279,15 +224,16 @@ public:
   // 128-byte budget to spend a whole field on Delta Time (a fixed literal instead -- see
   // generate_shader_graph_preview_source's own doc comment for why that's an acceptable
   // simplification for a preview specifically) and packs Time into another otherwise-unused .w.
-  // `scene_depth_preview_value`, when non-empty, replaces Scene Depth's ENTIRE real sample+linearize
-  // computation with that literal expression -- neither preview kind has a real per-frame frame_data
-  // (the master preview's own push_data is a small standalone struct, not a frame_data*; the node
-  // preview has no frame_data at all), so there is no whole-scene depth to sample in the first
-  // place, not just a differently-named field. A fixed midpoint value is a reasonable placeholder,
-  // matching the same "no real surface" tradeoff generate_node_preview_source already makes for
-  // Normal/View Dir. Every other node type's emission is identical either way.
-  shader_graph_codegen_walker(const shader_graph::create_info& graph, codegen_context context, std::string sampler_index_expression = "push.sampler_index", std::string time_expression = "push.time", std::string delta_time_expression = "push.delta_time", std::string scene_depth_preview_value = "")
-  : _context{context}, _sampler_index_expression{std::move(sampler_index_expression)}, _time_expression{std::move(time_expression)}, _delta_time_expression{std::move(delta_time_expression)}, _scene_depth_preview_value{std::move(scene_depth_preview_value)} {
+  // `scene_depth_preview_value`/`screen_position_preview_value`, when non-empty, replace Scene
+  // Depth's/Screen Position's ENTIRE real computation with that literal expression -- neither
+  // preview kind has a real per-frame frame_data (the master preview's own push_data is a small
+  // standalone struct, not a frame_data*; the node preview has no frame_data at all), so there is no
+  // whole-scene depth or real render-target size to compute either node from in the first place, not
+  // just differently-named fields. Fixed placeholder values are reasonable stand-ins, matching the
+  // same "no real surface" tradeoff generate_node_preview_source already makes for Normal/View Dir.
+  // Every other node type's emission is identical either way.
+  shader_graph_codegen_walker(const shader_graph::create_info& graph, codegen_context context, std::string sampler_index_expression = "push.sampler_index", std::string time_expression = "push.time", std::string delta_time_expression = "push.delta_time", std::string scene_depth_preview_value = "", std::string screen_position_preview_value = "")
+  : _context{context}, _sampler_index_expression{std::move(sampler_index_expression)}, _time_expression{std::move(time_expression)}, _delta_time_expression{std::move(delta_time_expression)}, _scene_depth_preview_value{std::move(scene_depth_preview_value)}, _screen_position_preview_value{std::move(screen_position_preview_value)} {
     for (const auto& node : graph.nodes) {
       _nodes_by_id.emplace(node.id, &node);
     }
@@ -470,8 +416,7 @@ private:
           return {_scene_depth_preview_value, "float"};
         }
 
-        const auto default_uv = std::string{"(input.sv_position.xy / push.frame_data->render_target_size)"};
-        const auto& uv = inputs[0].expression.empty() ? default_uv : inputs[0].expression;
+        const auto& uv = inputs[0].expression.empty() ? std::string{screen_uv_expression} : inputs[0].expression;
         const auto raw = fmt::format("textures[push.frame_data->scene_depth_index].Sample(samplers[{}], {}).r", _sampler_index_expression, uv);
 
         const auto mode = shader_node_scene_depth_mode(node);
@@ -490,6 +435,21 @@ private:
         }
 
         return {fmt::format("(({}) / push.frame_data->far_plane)", eye), "float"}; // linear01
+      }
+
+      case shader_node_type::screen_position: {
+        // Same "no real frame_data in a preview" reasoning as scene_depth above.
+        if (!_screen_position_preview_value.empty()) {
+          return {_screen_position_preview_value, "float4"};
+        }
+
+        const auto mode = shader_node_screen_position_mode(node);
+
+        if (mode == "raw") {
+          return {"input.sv_position", "float4"}; // window-space xy, hardware depth z, 1/clip-w in w
+        }
+
+        return {fmt::format("float4({}, input.sv_position.z, input.sv_position.w)", screen_uv_expression), "float4"};
       }
 
       case shader_node_type::constant_float: {
@@ -730,6 +690,7 @@ private:
   std::string _time_expression;
   std::string _delta_time_expression;
   std::string _scene_depth_preview_value;
+  std::string _screen_position_preview_value;
   std::unordered_map<std::uint32_t, const shader_graph_node*> _nodes_by_id{};
   std::unordered_map<std::uint64_t, std::uint64_t> _incoming{}; // pin_key(to) -> pin_key(from)
   std::unordered_map<std::uint32_t, std::uint32_t> _float_slot_of{};
@@ -1133,7 +1094,7 @@ auto generate_shader_graph_preview_source(const std::string& graph_name, const s
   const auto vertex_tangent_fn = labeled(emit_vertex_component(vertex_node, 2u, vertex_tangent_walker, "graph_vertex_tangent", "v.tangent.xyz", preview_material_declaration), "Vertex Tangent");
   if (!vertex_tangent_fn) return std::unexpected{vertex_tangent_fn.error()};
 
-  auto fragment_walker = shader_graph_codegen_walker{graph, codegen_context::fragment, "uint(push.light_direction.w)", "push.camera_position.w", preview_delta_time_expression, "0.5"};
+  auto fragment_walker = shader_graph_codegen_walker{graph, codegen_context::fragment, "uint(push.light_direction.w)", "push.camera_position.w", preview_delta_time_expression, "0.5", "float4(0.5, 0.5, 0.0, 1.0)"};
   auto fragment_body = std::string{};
 
   if (has_lit) {
@@ -1265,7 +1226,7 @@ auto generate_node_preview_source(const std::string& graph_name, const shader_gr
     return std::unexpected{*error};
   }
 
-  auto walker = shader_graph_codegen_walker{graph, codegen_context::fragment, "uint(push.sampler_index)", "push.time", "push.delta_time", "0.5"};
+  auto walker = shader_graph_codegen_walker{graph, codegen_context::fragment, "uint(push.sampler_index)", "push.time", "push.delta_time", "0.5", "float4(0.5, 0.5, 0.0, 1.0)"};
 
   const auto value = walker.visit_pin(node_id, output_pin);
 

@@ -69,6 +69,9 @@ auto asset_cooker::parse_shader_graph_file(const std::filesystem::path& source) 
         case shader_node_type::scene_depth:
           node.value = node_yaml["mode"] ? node_yaml["mode"].as<std::string>() : std::string{"linear01"};
           break;
+        case shader_node_type::screen_position:
+          node.value = node_yaml["mode"] ? node_yaml["mode"].as<std::string>() : std::string{"default"};
+          break;
         default:
           break; // monostate -- math/input/output nodes carry no payload
       }

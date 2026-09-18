@@ -1146,7 +1146,7 @@ auto asset_residency::save_shader_graph(shader_graph_handle& graph, const std::f
         node_yaml["texture"] = *slot;
       }
     } else if (const auto* value = std::get_if<std::string>(&graph_node.value)) {
-      if (graph_node.type == shader_node_type::scene_depth) {
+      if (graph_node.type == shader_node_type::scene_depth || graph_node.type == shader_node_type::screen_position) {
         node_yaml["mode"] = *value;
       } else {
         node_yaml["pattern"] = *value; // Swizzle -- the other node type whose value is a plain string
@@ -1718,7 +1718,7 @@ auto asset_residency::_finalize_shader_graph(asset_loader::shader_graph_result& 
     node.exposed = node_description.exposed;
     node.preview = node_description.preview;
 
-    if (const auto* pattern = std::get_if<std::string>(&node_description.value); pattern && (node_description.type == shader_node_type::swizzle || node_description.type == shader_node_type::scene_depth)) {
+    if (const auto* pattern = std::get_if<std::string>(&node_description.value); pattern && (node_description.type == shader_node_type::swizzle || node_description.type == shader_node_type::scene_depth || node_description.type == shader_node_type::screen_position)) {
       node.value = *pattern;
     } else if (const auto* path = std::get_if<std::string>(&node_description.value)) {
       node.value = path->empty() ? texture_handle{} : load_texture(std::filesystem::path{*path}, graphics::format::r8g8b8a8_srgb);

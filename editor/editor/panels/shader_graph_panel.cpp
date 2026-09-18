@@ -105,9 +105,10 @@ constexpr auto pin_icon_diameter = 11.0f;
 // width alone.
 constexpr auto inline_field_width = 52.0f;
 
-// Width of Scene Depth's own inline Raw/Eye/Linear01 mode combo -- same "content_width needs to
-// know about it too" reasoning as inline_field_width above.
-constexpr auto scene_depth_combo_width = 110.0f;
+// Width of a node's inline string-mode trigger button (Scene Depth's Raw/Eye/Linear01, Screen
+// Position's Default/Raw, ...) -- same "content_width needs to know about it too" reasoning as
+// inline_field_width above.
+constexpr auto mode_trigger_width = 110.0f;
 
 // How wide a constant_*'s inline value editor needs, so the node-drawing loop's content_width
 // calculation can treat it as a third width candidate alongside the title row and the pin columns
@@ -121,7 +122,9 @@ constexpr auto scene_depth_combo_width = 110.0f;
     case sbx::assets::shader_node_type::constant_vector2: return inline_field_width * 2.0f + ImGui::GetStyle().ItemSpacing.x;
     case sbx::assets::shader_node_type::constant_vector3: return inline_field_width * 3.0f + ImGui::GetStyle().ItemSpacing.x * 2.0f;
     case sbx::assets::shader_node_type::constant_vector4: return inline_field_width * 4.0f + ImGui::GetStyle().ItemSpacing.x * 3.0f;
-    case sbx::assets::shader_node_type::scene_depth: return scene_depth_combo_width;
+    case sbx::assets::shader_node_type::scene_depth:
+    case sbx::assets::shader_node_type::screen_position:
+      return mode_trigger_width;
     default: return 0.0f;
   }
 }
@@ -226,7 +229,7 @@ static auto input_column_width(const sbx::assets::shader_graph_node& node, sbx::
 // Every shader_node_type, for the Add Node palette -- grouped by shader_node_category_of at draw
 // time rather than kept pre-sorted here, so adding a new enumerator to shader_graph.hpp only ever
 // needs updating in one place (this list) to appear in the palette too.
-constexpr auto all_node_types = std::array<sbx::assets::shader_node_type, 56u>{
+constexpr auto all_node_types = std::array<sbx::assets::shader_node_type, 57u>{
   sbx::assets::shader_node_type::input_uv,
   sbx::assets::shader_node_type::input_normal,
   sbx::assets::shader_node_type::input_view_dir,
@@ -239,6 +242,7 @@ constexpr auto all_node_types = std::array<sbx::assets::shader_node_type, 56u>{
   sbx::assets::shader_node_type::time,
   sbx::assets::shader_node_type::delta_time,
   sbx::assets::shader_node_type::scene_depth,
+  sbx::assets::shader_node_type::screen_position,
   sbx::assets::shader_node_type::constant_float,
   sbx::assets::shader_node_type::constant_vector2,
   sbx::assets::shader_node_type::constant_vector3,
@@ -337,6 +341,7 @@ static auto default_value_for(sbx::assets::shader_node_type type) -> sbx::assets
     case sbx::assets::shader_node_type::texture_sample: return sbx::assets::texture_handle{};
     case sbx::assets::shader_node_type::swizzle: return std::string{"rgba"}; // identity -- the user then edits it
     case sbx::assets::shader_node_type::scene_depth: return std::string{"linear01"}; // matches Unity Shader Graph's own default mode
+    case sbx::assets::shader_node_type::screen_position: return std::string{"default"}; // matches Unity Shader Graph's own default mode
     default: return std::monostate{};
   }
 }
@@ -625,6 +630,29 @@ auto shader_graph_panel::_draw_add_node_menu(sbx::math::vector2 spawn_position) 
   }
 }
 
+auto shader_graph_panel::_draw_inline_mode_trigger(const sbx::assets::shader_graph_node& node, const std::string& current_mode, const std::vector<std::pair<std::string, std::string>>& options, float x, float width, bool& popup_requested) -> void {
+  auto current_label = options.empty() ? "" : options.front().first.c_str();
+
+  for (const auto& [label, value] : options) {
+    if (current_mode == value) {
+      current_label = label.c_str();
+      break;
+    }
+  }
+
+  ImGui::SetCursorPosX(x);
+
+  // A plain Button, not Combo -- Combo opens its dropdown as a popup internally, which suffers the
+  // exact same "wrong screen position inside a zoomed/panned node" problem a bare Combo call had
+  // here before; see _mode_popup_node_id's own doc comment. The actual mode list is drawn once,
+  // after every node this frame is done, as a plain popup instead.
+  if (ImGui::Button(current_label, ImVec2{width, 0.0f})) {
+    _mode_popup_node_id = node.id;
+    _mode_popup_options = options;
+    popup_requested = true;
+  }
+}
+
 auto shader_graph_panel::_draw_canvas() -> void {
   ax::NodeEditor::SetCurrentEditor(_context);
   ax::NodeEditor::Begin("##shader_graph_node_canvas", ImVec2{0.0f, 0.0f});
@@ -643,12 +671,12 @@ auto shader_graph_panel::_draw_canvas() -> void {
 
   auto types = sbx::assets::shader_graph_type_resolver{_edit.nodes, _edit.edges};
 
-  // Set the one frame a color/Scene-Depth-mode popup trigger (below, inside the node loop) is
-  // clicked; consumed once, right after the loop, to call ImGui::OpenPopup exactly that one frame --
-  // see _color_popup_node_id's own doc comment for why the popups themselves can't just be opened
+  // Set the one frame a color/string-mode popup trigger (below, inside the node loop) is clicked;
+  // consumed once, right after the loop, to call ImGui::OpenPopup exactly that one frame -- see
+  // _color_popup_node_id's own doc comment for why the popups themselves can't just be opened
   // directly from inside the loop.
   auto color_popup_requested = false;
-  auto scene_depth_mode_popup_requested = false;
+  auto mode_popup_requested = false;
 
   for (auto& node : _edit.nodes) {
     const auto id = node_id_for(node.id);
@@ -885,20 +913,13 @@ auto shader_graph_panel::_draw_canvas() -> void {
         break;
       }
       case sbx::assets::shader_node_type::scene_depth: {
-        const auto current_mode = sbx::assets::shader_node_scene_depth_mode(node);
-        const auto current_label = current_mode == "raw" ? "Raw" : current_mode == "eye" ? "Eye" : "Linear01";
-
-        ImGui::SetCursorPosX(content_start_x);
-
-        // A plain Button, not Combo -- Combo opens its dropdown as a popup internally, which suffers
-        // the exact same "wrong screen position inside a zoomed/panned node" problem a bare Combo
-        // call had here before; see _scene_depth_mode_popup_node_id's own doc comment. The actual
-        // mode list is drawn once, after every node this frame is done, as a plain popup instead.
-        if (ImGui::Button(current_label, ImVec2{scene_depth_combo_width, 0.0f})) {
-          _scene_depth_mode_popup_node_id = node.id;
-          scene_depth_mode_popup_requested = true;
-        }
-
+        static const auto options = std::vector<std::pair<std::string, std::string>>{{"Raw", "raw"}, {"Eye", "eye"}, {"Linear01", "linear01"}};
+        _draw_inline_mode_trigger(node, sbx::assets::shader_node_scene_depth_mode(node), options, content_start_x, mode_trigger_width, mode_popup_requested);
+        break;
+      }
+      case sbx::assets::shader_node_type::screen_position: {
+        static const auto options = std::vector<std::pair<std::string, std::string>>{{"Default", "default"}, {"Raw", "raw"}};
+        _draw_inline_mode_trigger(node, sbx::assets::shader_node_screen_position_mode(node), options, content_start_x, mode_trigger_width, mode_popup_requested);
         break;
       }
       default:
@@ -1088,12 +1109,12 @@ auto shader_graph_panel::_draw_canvas() -> void {
     ImGui::EndPopup();
   }
 
-  // Deferred color-picker / Scene-Depth-mode popups -- see _color_popup_node_id's own doc comment
-  // for why these can't just be opened directly from inside the node loop above. OpenPopup is called
-  // only the one frame its swatch/button was actually clicked (color_popup_requested/
-  // scene_depth_mode_popup_requested are locals, reset every frame); BeginPopup is called every
-  // frame regardless so an already-open popup keeps rendering across however many frames the user
-  // spends picking a value, exactly like the node/background context menus above.
+  // Deferred color-picker / string-mode popups -- see _color_popup_node_id's own doc comment for why
+  // these can't just be opened directly from inside the node loop above. OpenPopup is called only
+  // the one frame its swatch/button was actually clicked (color_popup_requested/
+  // mode_popup_requested are locals, reset every frame); BeginPopup is called every frame regardless
+  // so an already-open popup keeps rendering across however many frames the user spends picking a
+  // value, exactly like the node/background context menus above.
   if (color_popup_requested) {
     ImGui::OpenPopup("##shader_graph_color_popup");
   }
@@ -1116,23 +1137,20 @@ auto shader_graph_panel::_draw_canvas() -> void {
     ImGui::EndPopup();
   }
 
-  if (scene_depth_mode_popup_requested) {
-    ImGui::OpenPopup("##shader_graph_scene_depth_popup");
+  if (mode_popup_requested) {
+    ImGui::OpenPopup("##shader_graph_mode_popup");
   }
 
-  if (ImGui::BeginPopup("##shader_graph_scene_depth_popup")) {
-    if (_scene_depth_mode_popup_node_id) {
-      const auto entry = std::ranges::find(_edit.nodes, *_scene_depth_mode_popup_node_id, &sbx::assets::shader_graph_node::id);
+  if (ImGui::BeginPopup("##shader_graph_mode_popup")) {
+    if (_mode_popup_node_id) {
+      const auto entry = std::ranges::find(_edit.nodes, *_mode_popup_node_id, &sbx::assets::shader_graph_node::id);
 
       if (entry != _edit.nodes.end()) {
-        static constexpr auto mode_labels = std::array<const char*, 3u>{"Raw", "Eye", "Linear01"};
-        static constexpr auto mode_values = std::array<const char*, 3u>{"raw", "eye", "linear01"};
+        const auto current_mode = std::holds_alternative<std::string>(entry->value) ? std::get<std::string>(entry->value) : std::string{};
 
-        const auto current_mode = sbx::assets::shader_node_scene_depth_mode(*entry);
-
-        for (auto i = std::size_t{0u}; i < mode_values.size(); ++i) {
-          if (ImGui::Selectable(mode_labels[i], current_mode == mode_values[i])) {
-            entry->value = std::string{mode_values[i]};
+        for (const auto& [label, value] : _mode_popup_options) {
+          if (ImGui::Selectable(label.c_str(), current_mode == value)) {
+            entry->value = value;
             _apply_live(); // the mode is baked as a literal into the generated Slang -- always a structural recompile
             ImGui::CloseCurrentPopup();
           }

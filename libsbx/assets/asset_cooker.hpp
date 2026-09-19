@@ -35,7 +35,7 @@ inline constexpr auto environment_cook_version = std::uint32_t{1u};
 inline constexpr auto material_cook_version = std::uint32_t{6u}; // v6: adds shading_model (pbr/unlit) to the binary header
 inline constexpr auto skeleton_cook_version = std::uint32_t{1u};
 inline constexpr auto animation_cook_version = std::uint32_t{1u};
-inline constexpr auto mesh_cook_version = std::uint32_t{9u}; // v9: mesh_import_options-driven primitive/animation-clip selection at cook time; cooked animation clips now keep their *original* source index (not a renumbered count) -- see _load_cooked_mesh's doc comment
+inline constexpr auto mesh_cook_version = std::uint32_t{10u}; // v10: vertex gains a per-vertex color field (adds 16 bytes/vertex) -- see assets::vertex
 
 // A mesh cook also emits its materials and, for a skinned mesh, its skeleton/animation clips -- so
 // a mesh blob's freshness depends on all four cookers. Exposed (not file-local, unlike the cooked

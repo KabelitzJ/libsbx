@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <memory>
+#include <span>
 #include <string>
 #include <unordered_map>
 
@@ -120,6 +121,12 @@ public:
 
   /** @ref asset_residency::create_mesh */
   auto create_mesh(std::vector<vertex> vertices, std::vector<std::uint32_t> indices, std::vector<mesh::submesh> submeshes, const math::volume& bounds) -> mesh_handle;
+
+  /** @ref asset_residency::create_dynamic_mesh */
+  auto create_dynamic_mesh(std::span<const vertex> vertices, std::span<const std::uint32_t> indices, std::vector<mesh::submesh> submeshes, const math::volume& bounds) -> mesh_handle;
+
+  /** @ref asset_residency::release_mesh */
+  auto release_mesh(const mesh_handle& mesh) -> void;
 
   /**
    * @brief Resolves a mesh's raw cooked vertex/index data (see @ref cooked_mesh_data), independent

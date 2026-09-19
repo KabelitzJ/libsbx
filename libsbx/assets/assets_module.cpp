@@ -128,6 +128,14 @@ auto assets_module::create_mesh(std::vector<vertex> vertices, std::vector<std::u
   return _residency.create_mesh(std::move(vertices), std::move(indices), std::move(submeshes), bounds);
 }
 
+auto assets_module::create_dynamic_mesh(std::span<const vertex> vertices, std::span<const std::uint32_t> indices, std::vector<mesh::submesh> submeshes, const math::volume& bounds) -> mesh_handle {
+  return _residency.create_dynamic_mesh(vertices, indices, std::move(submeshes), bounds);
+}
+
+auto assets_module::release_mesh(const mesh_handle& mesh) -> void {
+  _residency.release_mesh(mesh);
+}
+
 auto assets_module::resolve_mesh_collision_data(const math::uuid& id) -> std::optional<cooked_mesh_data> {
   const auto source = _manifest.path_of(id);
 

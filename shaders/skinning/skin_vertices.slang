@@ -46,6 +46,7 @@ void compute_main(compute_input input) {
   result.normal = normalize(mul(skin_matrix, float4(source.normal, 0.0)).xyz);
   result.tangent = float4(normalize(mul(skin_matrix, float4(source.tangent.xyz, 0.0)).xyz), source.tangent.w);
   result.uv = source.uv;
+  result.color = source.color;
 
   push.output_vertices[index] = result;
 }

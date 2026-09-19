@@ -315,6 +315,61 @@ auto asset_residency::create_mesh(std::vector<vertex> vertices, std::vector<std:
   return mesh_handle{record};
 }
 
+auto asset_residency::create_dynamic_mesh(std::span<const vertex> vertices, std::span<const std::uint32_t> indices, std::vector<mesh::submesh> submeshes, const math::volume& bounds) -> mesh_handle {
+  const auto vertex_count = static_cast<std::uint32_t>(vertices.size());
+
+  auto record = std::make_shared<mesh>(std::move(submeshes), bounds, vertex_count);
+  record->_id = math::uuid::create();
+
+  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
+  auto& registry = graphics_module.resource_registry();
+
+  const auto vertex_buffer = registry.emplace<graphics::buffer>(graphics::buffer::create_info{
+    .size = static_cast<graphics::buffer::size_type>(vertices.size_bytes()),
+    .usage = graphics::buffer_usage::device_address,
+    .memory = graphics::memory_usage::host_write,
+    .name = "Dynamic Mesh Vertices"
+  });
+
+  const auto index_buffer = registry.emplace<graphics::buffer>(graphics::buffer::create_info{
+    .size = static_cast<graphics::buffer::size_type>(indices.size_bytes()),
+    .usage = graphics::buffer_usage::index,
+    .memory = graphics::memory_usage::host_write,
+    .name = "Dynamic Mesh Indices"
+  });
+
+  registry.get<graphics::buffer>(vertex_buffer).write(vertices);
+  registry.get<graphics::buffer>(index_buffer).write(indices);
+
+  const auto vertex_address = registry.get<graphics::buffer>(vertex_buffer).address();
+
+  // 0, not frame_context.frame_index(): that stamp is what makes create_mesh's async path wait
+  // for the GPU to catch up to the frame the transfer was recorded on (is_resident checks
+  // timeline_value() >= resident_frame()). There's no transfer here to wait for -- the write above
+  // already landed in coherent host-visible memory -- so 0 makes is_resident() true immediately
+  // (timeline_value() is never negative), on the very next check, later this same frame.
+  record->_finalize(vertex_buffer, index_buffer, vertex_address, 0u);
+
+  return mesh_handle{record};
+}
+
+auto asset_residency::release_mesh(const mesh_handle& mesh) -> void {
+  if (!mesh.is_valid() || !mesh->is_uploaded()) {
+    return;
+  }
+
+  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
+  auto& registry = graphics_module.resource_registry();
+  const auto frame_index = graphics_module.frame_context().frame_index();
+
+  registry.retire(mesh->_vertex_buffer, frame_index);
+  registry.retire(mesh->_index_buffer, frame_index);
+
+  if (mesh->_skin_vertex_buffer.is_valid()) {
+    registry.retire(mesh->_skin_vertex_buffer, frame_index);
+  }
+}
+
 auto asset_residency::load_skeleton(const math::uuid& id) -> skeleton_handle {
   if (id == math::uuid::nil()) {
     return skeleton_handle{};

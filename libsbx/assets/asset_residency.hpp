@@ -9,6 +9,7 @@
 #include <filesystem>
 #include <memory>
 #include <mutex>
+#include <span>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -108,6 +109,32 @@ public:
    * in the uuid-keyed load_mesh cache -- each call always creates a new mesh record.
    */
   auto create_mesh(std::vector<vertex> vertices, std::vector<std::uint32_t> indices, std::vector<mesh::submesh> submeshes, const math::volume& bounds) -> mesh_handle;
+
+  /**
+   * @brief Builds a mesh for content that gets replaced often (a script re-triangulating a hex
+   * grid on every paint, a road network's ghost preview while dragging) -- unlike create_mesh,
+   * this skips the staged async upload entirely: buffers are allocated host_write and written to
+   * directly on the calling thread, so the mesh is resident (drawable) the instant this call
+   * returns instead of after a future process_uploads(). Safe only because the engine's stage
+   * loop is single-threaded and this always runs on it (core::engine's _loop -- see engine.ipp);
+   * it would need the same staging/queueing create_mesh uses on an engine with a separate render
+   * thread. Always creates a brand new mesh + buffers, same as create_mesh -- release_mesh the
+   * handle you're replacing before dropping it, or its buffers leak the same way.
+   */
+  auto create_dynamic_mesh(std::span<const vertex> vertices, std::span<const std::uint32_t> indices, std::vector<mesh::submesh> submeshes, const math::volume& bounds) -> mesh_handle;
+
+  /**
+   * @brief Retires a mesh's GPU buffers (vertex/index, and skin if present).
+   *
+   * @p mesh's own destruction never does this -- resource_pool's slots are only ever freed by an
+   * explicit retire/collect (see resource_pool's own doc comment), so a mesh_handle simply going
+   * out of scope leaks its buffers forever. Call this right before dropping the last reference to
+   * a mesh you created via @ref create_mesh or @ref create_dynamic_mesh and replacing it with a
+   * new one (e.g. mesh_renderer_set_geometry re-triangulating live-edited geometry) -- there is
+   * currently no automatic path for this, so every other caller that discards such a mesh_handle
+   * has the same leak until it also calls this. No-op if @p mesh is invalid or was never uploaded.
+   */
+  auto release_mesh(const mesh_handle& mesh) -> void;
 
   /** @brief Loads a skeleton cooked as a side effect of a mesh import; returns the existing handle if already loaded. Pure CPU data -- no GPU upload wait, but still resolved off the background thread like everything else. */
   auto load_skeleton(const math::uuid& id) -> skeleton_handle;

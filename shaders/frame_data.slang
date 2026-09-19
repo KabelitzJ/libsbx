@@ -17,6 +17,7 @@ struct vertex {
   float3 normal;
   float2 uv;
   float4 tangent;
+  float4 color;
 }; // struct vertex
 
 struct transform_data {

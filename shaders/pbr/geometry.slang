@@ -13,6 +13,7 @@ struct vertex_output {
   [[vk::location(1)]] float3 normal : NORMAL;
   [[vk::location(2)]] float2 uv : TEXCOORD;
   [[vk::location(3)]] float4 tangent : TANGENT;
+  [[vk::location(4)]] float4 color : COLOR;
   float4 sv_position : SV_Position;
 }; // struct vertex_output
 
@@ -21,6 +22,7 @@ struct fragment_input {
   [[vk::location(1)]] float3 normal : NORMAL;
   [[vk::location(2)]] float2 uv : TEXCOORD;
   [[vk::location(3)]] float4 tangent : TANGENT;
+  [[vk::location(4)]] float4 color : COLOR;
   float4 sv_position : SV_Position;
   bool is_front_face : SV_IsFrontFace;
 }; // struct fragment_input
@@ -63,6 +65,7 @@ vertex_output vertex_main(vertex_input input) {
   output.normal = normalize(mul(instance.normal, float4(v.normal, 0.0)).xyz);
   output.tangent = float4(normalize(mul(instance.normal, float4(v.tangent.xyz, 0.0)).xyz), v.tangent.w);
   output.uv = v.uv;
+  output.color = v.color;
   output.sv_position = mul(frame_data.projection, mul(frame_data.view, world_position));
 
   return output;
@@ -74,6 +77,7 @@ lighting_input build_lighting_input(fragment_input input) {
   result.normal = input.normal;
   result.uv = input.uv;
   result.tangent = input.tangent;
+  result.color = input.color;
   result.sv_position = input.sv_position;
   result.is_front_face = input.is_front_face;
   result.frame_data = *push.frame_data;

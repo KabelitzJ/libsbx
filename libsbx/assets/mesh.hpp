@@ -12,6 +12,7 @@
 #include <libsbx/math/vector3.hpp>
 #include <libsbx/math/vector4.hpp>
 #include <libsbx/math/volume.hpp>
+#include <libsbx/math/color.hpp>
 
 #include <libsbx/graphics/resources/buffer.hpp>
 
@@ -24,13 +25,16 @@
 namespace sbx::assets {
 
 /**
- * @brief Interleaved vertex, scalar-packed (32 bytes) to match the shader's scalar-layout buffer pointer.
+ * @brief Interleaved vertex, scalar-packed to match the shader's scalar-layout buffer pointer.
+ * `color` defaults to opaque white via `math::color`'s default constructor, so every existing
+ * 4-arg aggregate-init call site (position/normal/uv/tangent) keeps compiling unchanged.
  */
 struct alignas(std::float_t) vertex {
   math::vector3 position;
   math::vector3 normal;
   math::vector2 uv;
   math::vector4 tangent;
+  math::color color{};
 }; // struct vertex
 
 /**

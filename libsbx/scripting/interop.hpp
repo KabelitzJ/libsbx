@@ -300,8 +300,12 @@ struct interop {
    * one every time: a live-edited mesh (e.g. a road network's ghost preview while dragging) may
    * call this every frame, and asset_residency::create_material has a fixed material_capacity that
    * a fresh material per call would exhaust in short order.
+   *
+   * @p colors is optional (nullptr skips it, every vertex stays opaque white) -- per-vertex color,
+   * multiplied into the material's base color in both the unlit and PBR lighting paths (see
+   * lighting.slang), independent of @p tint which is a single whole-mesh material color.
    */
-  static auto mesh_renderer_set_geometry(std::uint64_t uuid, math::vector3* positions, math::vector3* normals, math::vector2* uvs, std::uint32_t vertex_count, std::uint32_t* indices, std::uint32_t index_count, math::color* tint) -> void;
+  static auto mesh_renderer_set_geometry(std::uint64_t uuid, math::vector3* positions, math::vector3* normals, math::vector2* uvs, math::color* colors, std::uint32_t vertex_count, std::uint32_t* indices, std::uint32_t index_count, math::color* tint) -> void;
 
   // Canvas: node uuid -> canvas::canvas/rect_transform/ui_image/ui_text/ui_button field access,
   // same uuid-resolve-then-get/set convention as Transform_*/Rigidbody_* above.

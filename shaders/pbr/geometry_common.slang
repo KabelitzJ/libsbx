@@ -89,6 +89,10 @@ lighting_input build_lighting_input(fragment_input input) {
   result.normal = input.normal;
   result.uv = input.uv;
   result.tangent = input.tangent;
+  // Shader-graph-generated materials don't carry vertex color through their own fragment_input
+  // yet (no "Input Vertex Color" graph node) -- default to white so evaluate_unlit's multiply is
+  // a no-op here instead of reading an uninitialized value.
+  result.color = float4(1.0, 1.0, 1.0, 1.0);
   result.sv_position = input.sv_position;
   result.is_front_face = input.is_front_face;
   result.frame_data = *push.frame_data;

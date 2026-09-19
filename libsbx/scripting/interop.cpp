@@ -1972,7 +1972,7 @@ auto interop::terrain_sample_normal(math::vector2* world_xz, math::vector3* out_
   *out_normal = terrain_module.sample_normal(*world_xz);
 }
 
-auto interop::mesh_renderer_set_geometry(std::uint64_t uuid, math::vector3* positions, math::vector3* normals, math::vector2* uvs, std::uint32_t vertex_count, std::uint32_t* indices, std::uint32_t index_count, math::color* tint) -> void {
+auto interop::mesh_renderer_set_geometry(std::uint64_t uuid, math::vector3* positions, math::vector3* normals, math::vector2* uvs, math::color* colors, std::uint32_t vertex_count, std::uint32_t* indices, std::uint32_t index_count, math::color* tint) -> void {
   if (!positions || !normals || !uvs || !indices || vertex_count == 0u || index_count == 0u) {
     utility::logger<"scripting">::error("Attempting to call mesh_renderer_set_geometry with invalid geometry");
 
@@ -1997,7 +1997,13 @@ auto interop::mesh_renderer_set_geometry(std::uint64_t uuid, math::vector3* posi
   auto bounds = math::volume{};
 
   for (auto index = std::uint32_t{0}; index < vertex_count; ++index) {
-    vertices.push_back(assets::vertex{positions[index], normals[index], uvs[index], math::vector4{1.0f, 0.0f, 0.0f, 1.0f}});
+    auto vertex = assets::vertex{positions[index], normals[index], uvs[index], math::vector4{1.0f, 0.0f, 0.0f, 1.0f}};
+
+    if (colors) {
+      vertex.color = colors[index];
+    }
+
+    vertices.push_back(vertex);
     bounds.include(positions[index]);
   }
 
@@ -2032,7 +2038,15 @@ auto interop::mesh_renderer_set_geometry(std::uint64_t uuid, math::vector3* posi
 
   auto submeshes = std::vector<assets::mesh::submesh>{assets::mesh::submesh{0u, index_count, bounds, material}};
 
-  renderer.mesh = assets_module.create_mesh(std::move(vertices), std::move(index_vector), std::move(submeshes), bounds);
+  // Unlike the material above, a mesh has no reuse-in-place path -- every call replaces the whole
+  // GPU buffer pair, so the one being replaced must be explicitly released or its buffers are
+  // never reclaimed (see asset_residency::release_mesh's own doc comment for why).
+  assets_module.release_mesh(renderer.mesh);
+
+  // create_dynamic_mesh (not create_mesh): this is script-driven, live-edited geometry -- a
+  // node's mesh here can be replaced every frame (a hex grid re-triangulated on every paint), so
+  // it needs to be resident the instant this call returns, not after a future process_uploads().
+  renderer.mesh = assets_module.create_dynamic_mesh(vertices, index_vector, std::move(submeshes), bounds);
   renderer.materials = std::vector<assets::material_handle>{material};
 }
 

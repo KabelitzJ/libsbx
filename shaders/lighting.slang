@@ -14,6 +14,7 @@ struct lighting_input {
   float3 normal;
   float2 uv;
   float4 tangent;
+  float4 color;
   float4 sv_position;
   bool is_front_face;
   frame_data frame_data;
@@ -250,7 +251,7 @@ lighting_output evaluate_lighting<let ReceivesShadows : bool>(lighting_input inp
   SamplerState sampler = samplers[input.sampler_index];
   float2 uv = apply_uv_transform(material, input.uv);
 
-  float4 base = material.base_color_factor * textures[material.albedo_index].Sample(sampler, uv);
+  float4 base = material.base_color_factor * input.color * textures[material.albedo_index].Sample(sampler, uv);
 
   apply_alpha_cutout(material, input.uv, input.sampler_index);
 
@@ -281,7 +282,7 @@ lighting_output evaluate_unlit(lighting_input input) {
   SamplerState sampler = samplers[input.sampler_index];
   float2 uv = apply_uv_transform(material, input.uv);
 
-  float4 base = material.base_color_factor * textures[material.albedo_index].Sample(sampler, uv);
+  float4 base = material.base_color_factor * input.color * textures[material.albedo_index].Sample(sampler, uv);
 
   apply_alpha_cutout(material, input.uv, input.sampler_index);
 

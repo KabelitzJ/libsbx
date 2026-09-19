@@ -82,10 +82,6 @@ float2 direction_to_equirect(float3 d) {
   return float2(atan2(d.z, d.x) / (2.0 * pi) + 0.5, acos(clamp(d.y, -1.0, 1.0)) / pi);
 }
 
-/**
- * @brief The direction for a given (uv, face) texel of a cube image, following the standard
- * Vulkan/D3D cube array-layer order: +X, -X, +Y, -Y, +Z, -Z.
- */
 float3 cube_direction(float2 uv, uint face) {
   float2 st = uv * 2.0 - 1.0;
 

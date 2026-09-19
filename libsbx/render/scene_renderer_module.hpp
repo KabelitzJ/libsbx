@@ -146,6 +146,15 @@ public:
   auto grid_enabled() const -> bool;
 
   /**
+   * @brief Draws opaque geometry as wireframe (see opaque_pass) instead of filled triangles. Off
+   * by default. Unlike grid_enabled, this is meant to be flipped at runtime for debugging (e.g. a
+   * script bound to a hotkey), not just by the editor.
+   */
+  auto set_wireframe_enabled(bool enabled) -> void;
+
+  auto wireframe_enabled() const -> bool;
+
+  /**
    * @brief The shared immediate-mode line accumulator -- physics colliders (see
    * physics::physics_module::late_update()) and, later, script-driven gizmos submit into this every
    * frame; debug_draw_pass uploads and draws whatever's accumulated, then clears it.
@@ -271,6 +280,7 @@ private:
   std::uint32_t _sampler_index{0u};
   std::uint32_t _clamp_sampler_index{0u};
   bool _grid_enabled{false};
+  bool _wireframe_enabled{false};
 
   graphics::image_handle _depth_image{};
   // _depth_image's own MSAA resolve target (depth_pre_pass.hpp's own doc comment) -- single-sample,

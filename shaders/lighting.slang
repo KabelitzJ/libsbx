@@ -37,29 +37,15 @@ struct surface {
   float metallic;
 }; // struct surface
 
-// A pre-computed set of PBR surface properties, already in the metallic-roughness workflow --
-// the shape a shader-graph "Fragment (Lit)" output produces, and what the built-in PBR material's
-// own texture-sampling prologue produces too. See evaluate_lit_surface below: both paths funnel
-// into the exact same lighting math from here on, so a graph-driven Lit material is lit exactly
-// like a normal PBR material, ambient/IBL included.
 struct lit_surface {
   float3 albedo;
-  float3 tangent_space_normal; // (0, 0, 1) = unperturbed
+  float3 tangent_space_normal;
   float metallic;
   float roughness;
   float3 emissive;
   float ao;
   float alpha;
-
-  // KHR_materials_ior: F0 = ((ior-1)/(ior+1))^2; the built-in PBR material derives this from its
-  // own per-material ior factor. A graph doesn't expose an IOR socket (for now), so codegen always
-  // sets this to the standard dielectric 0.04 (IOR 1.5).
   float dielectric_f0;
-
-  // The built-in PBR material gates cascaded-shadow receipt on a per-material flag
-  // (material_flags::receives_shadow); a shader graph has no such flag today, so codegen always
-  // sets this true. Kept as a field (not folded into the ReceivesShadows generic parameter) so
-  // evaluate_lighting can preserve that exact per-material behavior after this refactor.
   bool receives_shadow;
 }; // struct lit_surface
 
@@ -114,18 +100,9 @@ struct pbr_lighting_model : lighting_model {
   }
 }; // struct pbr_lighting_model
 
-// Shared by the built-in PBR material (evaluate_lighting below, which samples a lit_surface from
-// material textures) and every shader-graph "Fragment (Lit)" output (which computes one directly,
-// see shader_graph_codegen.cpp) -- Cook-Torrance direct lighting + ambient/IBL, always via
-// pbr_lighting_model since Lit is always metallic-roughness workflow (for now). This is exactly
-// the second half of the old evaluate_lighting, factored out so a graph-driven Lit material is lit
-// exactly like a normal PBR material -- same ambient, same light loops, no per-graph opt-out needed.
 lighting_output evaluate_lit_surface<let ReceivesShadows : bool>(lighting_input input, lit_surface s) {
   float3 n = normalize(input.normal);
 
-  // Double-sided materials disable backface culling (opaque_pass.cpp) but keep the same
-  // interpolated (front-facing) normal — flip it for the backface so it still points toward the
-  // viewer. Single-sided materials are backface-culled, so is_front_face is always true there.
   if (!input.is_front_face) {
     n = -n;
   }
@@ -257,7 +234,6 @@ lighting_output evaluate_lighting<let ReceivesShadows : bool>(lighting_input inp
 
   float4 mr = textures[material.metallic_roughness_index].Sample(sampler, uv);
 
-  // occlusionTexture.strength: lerp(1, sampled_ao, strength) so strength=0 leaves AO fully unapplied.
   float ao = lerp(1.0, textures[material.occlusion_index].Sample(sampler, uv).r, material.occlusion_strength);
 
   float3 tangent_normal = textures[material.normal_index].Sample(sampler, uv).rgb * 2.0 - 1.0;

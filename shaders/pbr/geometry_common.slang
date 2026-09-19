@@ -61,22 +61,7 @@ struct push_data {
   uint material_index;
   uint sampler_index;
   uint clamp_sampler_index;
-
-  // 0xFFFFFFFF outside shadow_pass (render_pass.hpp's push_constants::cascade_index default,
-  // matching shaders/passes/shadow.slang's own field) -- a generated file's depth_vertex_main
-  // reads this to pick between camera-space (depth_pre_pass) and this cascade's light-space
-  // (shadow_pass) transform, since both passes share that one entry point. vertex_main/
-  // fragment_main<Policy> never reference it (always camera-space, always this default) --
-  // shared here purely because it must occupy the same push-constant byte offset the engine's own
-  // push_constants struct (render_pass.hpp) always writes it at, regardless of which entry point
-  // in this file ends up bound.
   uint cascade_index;
-
-  // Backing shader_node_type::time/delta_time (render_pass.hpp's push_constants::time/delta_time,
-  // written every draw in render_pass.cpp) -- read directly as `push.time`/`push.delta_time` by
-  // codegen (shader_graph_codegen.cpp's _emit), not through this struct's own field access path
-  // used elsewhere in this file, since those two node types have no vertex/uv/normal prologue to
-  // piggyback on the way input_uv/input_normal do.
   float time;
   float delta_time;
 }; // struct push_data
@@ -89,9 +74,6 @@ lighting_input build_lighting_input(fragment_input input) {
   result.normal = input.normal;
   result.uv = input.uv;
   result.tangent = input.tangent;
-  // Shader-graph-generated materials don't carry vertex color through their own fragment_input
-  // yet (no "Input Vertex Color" graph node) -- default to white so evaluate_unlit's multiply is
-  // a no-op here instead of reading an uninitialized value.
   result.color = float4(1.0, 1.0, 1.0, 1.0);
   result.sv_position = input.sv_position;
   result.is_front_face = input.is_front_face;

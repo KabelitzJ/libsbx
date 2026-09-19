@@ -8,7 +8,6 @@
 
 static const uint shadow_cascade_count = 4;
 
-// Must match shader_graph_max_params/shader_graph_max_textures in libsbx/assets/shader_graph.hpp.
 static const uint shader_graph_max_params = 8;
 static const uint shader_graph_max_textures = 4;
 
@@ -49,20 +48,10 @@ struct material_data {
   float ior;
   float2 uv_tiling;
   float2 uv_offset;
-
-  // Shader-graph-exposed parameters -- unused (always zero) until material opt-in lands. One
-  // uniform float4 slot per param regardless of type (scalar/vector3/color use .x/.xyz/.rgba of
-  // their slot); see the matching C++ struct in asset_residency.cpp for the full reasoning.
   float4 generic_params[shader_graph_max_params];
   uint generic_textures[shader_graph_max_textures];
 }; // struct material_data
 
-/**
- * @brief Discards the current fragment when @p material is alpha-masked and its sampled albedo
- * alpha falls below the cutoff; a no-op multiply otherwise. Shared by every depth-only pass
- * (depth_pre_pass, shadow_pass) and the lit fragment shaders (lighting.slang) so the cutout test
- * can't drift between them.
- */
 float2 apply_uv_transform(material_data material, float2 uv) {
   return uv * material.uv_tiling + material.uv_offset;
 }
@@ -112,27 +101,11 @@ struct frame_data {
   float cluster_bias;
   float2 cluster_tile_size;
   float4 cascade_splits;
-
-  // NDC-depth-space equivalent of one shadow-map texel's world-space size in cascade N (cascade.cpp's
-  // own doc comment on cascade_info::depth_bias_per_texel has the full reasoning) -- csm.slang's
-  // shadow bias uses this to get correctly-scaled world-space slack regardless of scene scale or
-  // which cascade, rather than one flat NDC bias (tried, reverted -- see csm.slang's own comment).
   float4 cascade_depth_bias_per_texel;
-
   float4x4 light_view_projections[shadow_cascade_count];
   uint shadow_map_indices[shadow_cascade_count];
   uint shadow_enabled;
   float4 frustum_planes[6];
-
-  // Scene Depth shader graph node (shader_graph_codegen.cpp's scene_depth case) -- scene_depth_index
-  // points at depth_pre_pass's own MSAA resolve of the whole opaque silhouette's depth (a plain
-  // single-sample Texture2D, safe to sample from any later fragment shader, opaque or transparent --
-  // see depth_pre_pass.hpp's own doc comment for why this isn't just _depth_image, which stays 4x
-  // MSAA and attachment-only). near_plane/far_plane linearize Eye/Linear01 modes (this engine's
-  // perspective projection is a
-  // standard right-handed [0,1] depth range, NOT reversed-Z -- see math::matrix4x4::perspective's
-  // own comment); render_target_size turns SV_Position.xy into a screen UV for the node's own
-  // default (unconnected) UV input.
   uint scene_depth_index;
   float near_plane;
   float far_plane;

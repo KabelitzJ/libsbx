@@ -418,6 +418,14 @@ auto scene_renderer_module::grid_enabled() const -> bool {
   return _grid_enabled;
 }
 
+auto scene_renderer_module::set_wireframe_enabled(bool enabled) -> void {
+  _wireframe_enabled = enabled;
+}
+
+auto scene_renderer_module::wireframe_enabled() const -> bool {
+  return _wireframe_enabled;
+}
+
 auto scene_renderer_module::reset_particles() -> void {
   _particle_pool_additive->clear();
   _particle_pool_alpha_blend->clear();
@@ -1827,6 +1835,7 @@ auto scene_renderer_module::_prepare_frame(render_context& context) -> void {
   context.sampler_index = _sampler_index;
   context.clamp_sampler_index = _clamp_sampler_index;
   context.show_grid = _grid_enabled;
+  context.wireframe = _wireframe_enabled;
   context.inverse_view_projection = math::matrix4x4::inverted(projection * context.packet->camera.view);
 
   context.cluster_aabb_address = _cluster_aabb_addresses[context.slot];

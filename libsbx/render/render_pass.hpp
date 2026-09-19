@@ -131,6 +131,9 @@ struct render_context {
 
   bool show_grid{false};
 
+  /** @brief opaque_pass draws context.packet->opaque_commands with polygon_mode::line pipelines instead of fill when set. See scene_renderer_module::set_wireframe_enabled. */
+  bool wireframe{false};
+
   bool has_shadow_caster{false};
   std::array<graphics::image_handle, shadow_cascade_count> shadow_maps{};
   std::array<std::uint32_t, shadow_cascade_count> shadow_map_indices{};

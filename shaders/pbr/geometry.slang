@@ -113,3 +113,16 @@ Policy::Output fragment_main_unlit<Policy : shading_policy>(fragment_input input
 
   return Policy::shade(shading_input);
 }
+
+[shader("fragment")]
+Policy::Output fragment_main_wireframe<Policy : shading_policy>(fragment_input input) {
+  lighting_output lighting_output;
+  lighting_output.color = float3(0.0, 0.0, 0.0);
+  lighting_output.alpha = 1.0;
+
+  shading_input shading_input;
+  shading_input.lighting = lighting_output;
+  shading_input.depth = input.sv_position.z;
+
+  return Policy::shade(shading_input);
+}

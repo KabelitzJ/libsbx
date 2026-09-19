@@ -101,6 +101,8 @@ namespace Sbx.Core
 
     internal static delegate* unmanaged<Vector2*, void> Camera_GetViewport;
     internal static delegate* unmanaged<Vector2*, void> Camera_GetViewportOffset;
+    internal static delegate* unmanaged<bool, void> RenderSettings_SetWireframeEnabled;
+    internal static delegate* unmanaged<bool> RenderSettings_GetWireframeEnabled;
 
     internal static delegate* unmanaged<ulong, float*, void> Camera_GetFovDegrees;
     internal static delegate* unmanaged<ulong, float, void> Camera_SetFovDegrees;

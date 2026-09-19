@@ -1277,6 +1277,18 @@ auto interop::camera_get_viewport_offset(math::vector2* offset) -> void {
   *offset = scene_renderer_module.viewport_offset();
 }
 
+auto interop::render_settings_set_wireframe_enabled(bool enabled) -> void {
+  auto& scene_renderer_module = core::engine::get_module<render::scene_renderer_module>();
+
+  scene_renderer_module.set_wireframe_enabled(enabled);
+}
+
+auto interop::render_settings_get_wireframe_enabled() -> bool {
+  auto& scene_renderer_module = core::engine::get_module<render::scene_renderer_module>();
+
+  return scene_renderer_module.wireframe_enabled();
+}
+
 auto interop::camera_screen_point_to_ray(math::ray* ray, math::vector2* position) -> void {
   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
 

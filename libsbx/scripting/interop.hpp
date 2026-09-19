@@ -217,6 +217,11 @@ struct interop {
 
   static auto camera_get_viewport_offset(math::vector2* offset) -> void;
 
+  /** @brief See render::scene_renderer_module::set_wireframe_enabled. */
+  static auto render_settings_set_wireframe_enabled(bool enabled) -> void;
+
+  static auto render_settings_get_wireframe_enabled() -> bool;
+
   // Per-node scenes::camera field access, for a script sitting on a camera node itself (GetComponent<CameraSettings>()) -- distinct from the Main-prefixed functions above, which always target scene.active_camera() regardless of which node the calling script is on.
   static auto camera_get_fov_degrees(std::uint64_t uuid, std::float_t* fov_degrees) -> void;
 

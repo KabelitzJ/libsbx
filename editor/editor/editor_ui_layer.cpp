@@ -302,6 +302,12 @@ auto editor_ui_layer::_draw_dockspace() -> void {
 
       scene_renderer_module.set_grid_enabled(grid_enabled);
 
+      auto wireframe_enabled = scene_renderer_module.wireframe_enabled();
+
+      changed |= ImGui::MenuItem("Wireframe", nullptr, &wireframe_enabled);
+
+      scene_renderer_module.set_wireframe_enabled(wireframe_enabled);
+
       if (changed) {
         physics_module.set_debug_draw_flags(flags);
       }

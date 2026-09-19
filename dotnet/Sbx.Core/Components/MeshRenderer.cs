@@ -47,8 +47,8 @@ namespace Sbx.Core.Components
         fixed (Vector3* positionsPtr = positions)
         fixed (Vector3* normalsPtr = normals)
         fixed (Vector2* uvsPtr = uvs)
-        fixed (uint* indicesPtr = indices)
         fixed (Color* colorsPtr = colors)
+        fixed (uint* indicesPtr = indices)
         {
           if (tint.HasValue)
           {

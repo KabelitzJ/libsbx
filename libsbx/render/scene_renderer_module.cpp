@@ -92,24 +92,15 @@ struct frame_data {
   std::array<math::matrix4x4, shadow_cascade_count> light_view_projections;
   std::array<std::uint32_t, shadow_cascade_count> shadow_map_indices;
   std::uint32_t shadow_enabled;
-  // World-space camera frustum planes (left, right, bottom, top, near, far), extracted once here
-  // from view/projection above -- see math::extract_frustum_planes -- and read by
-  // frustum_cull_pass.slang for its per-instance AABB test.
+  
   std::array<math::vector4, 6u> frustum_planes;
 
-  // See shaders/frame_data.slang's own doc comment on this same trailing block.
   std::uint32_t scene_depth_index;
   std::float_t near_plane;
   std::float_t far_plane;
   math::vector2 render_target_size;
 }; // struct frame_data
 
-// frustum_cull_pass tests a skinned draw_command's rest-pose local_bounds, not its actual animated
-// pose -- padding by this fraction of the rest-pose bounds' own extent (in local space, so it scales
-// with the instance's own world-transform scale -- see math::volume::inflated's doc comment) trades
-// a little culling effectiveness for characters against not popping a wide swing/stretched limb out
-// of view early at the frustum edge. A rigid (non-skinned) mesh's bounds are already exact and are
-// left unpadded.
 inline constexpr auto skinned_bounds_padding_factor = 0.2f;
 
 struct cluster_aabb {
@@ -138,16 +129,55 @@ struct transparent_entry {
   transform_data transform{};
 }; // struct transparent_entry
 
-// bit 0: double-sided (cull_mode::none vs back). bit 1: unlit shading model. Every draw-emitting
-// pass's _pipelines array is laid out in this same order (see opaque_pass/transparent_accumulate_
-// pass's constructors) so draw_command::pipeline_id indexes it directly with no further lookup.
+struct billboard_key_hash {
+  auto operator()(const std::pair<std::uint32_t, assets::emitter_blend_mode>& key) const noexcept -> std::size_t {
+    auto seed = std::hash<std::uint32_t>{}(key.first);
+    utility::hash_combine(seed, key.second);
+    return seed;
+  }
+}; // struct billboard_key_hash
+
+struct particle_mesh_key {
+  mesh_key key;
+  assets::emitter_blend_mode blend_mode;
+
+  auto operator==(const particle_mesh_key& other) const -> bool {
+    return key == other.key && blend_mode == other.blend_mode;
+  }
+
+  auto operator<(const particle_mesh_key& other) const -> bool {
+    if (key < other.key) {
+      return true;
+    }
+
+    if (other.key < key) {
+      return false;
+    }
+
+    return blend_mode < other.blend_mode;
+  }
+}; // struct particle_mesh_key
+
+struct particle_mesh_key_hash {
+  auto operator()(const particle_mesh_key& value) const noexcept -> std::size_t {
+    auto seed = mesh_key_hash{}(value.key);
+    utility::hash_combine(seed, value.blend_mode);
+    return seed;
+  }
+}; // struct particle_mesh_key_hash
+
+struct particle_mesh_bucket {
+  assets::mesh_handle mesh;
+  std::uint32_t submesh_index{0u};
+  assets::material_handle material;
+  assets::emitter_blend_mode blend_mode{};
+  std::vector<particle_mesh_instance> instances;
+}; // struct particle_mesh_bucket
+
 auto compute_pipeline_id(const assets::material& material) -> std::uint32_t {
   return (material.is_double_sided() ? 1u : 0u) | (material.shading() == assets::shading_model::unlit ? 2u : 0u);
 }
 
-// Linear scan over a joint channel's keyframes -- clip sizes are small (tens of keys), so this
-// isn't worth a binary search. Returns the same index twice when time falls outside the track
-// (clamped to the first/last key) or the track has only one key.
 template<typename Key>
 auto bracket_keys(const std::vector<Key>& keys, std::float_t time) -> std::pair<std::size_t, std::size_t> {
   if (keys.size() == 1u || time <= keys.front().time) {
@@ -205,8 +235,6 @@ auto compose_trs(const math::vector3& translation, const math::quaternion& rotat
   return translation_matrix * math::matrix_cast<math::matrix4x4>(rotation) * scale_matrix;
 }
 
-// vector3 has no lerp of its own (math/vector3.hpp's is commented out) -- same per-component
-// math::mix pattern sample_vector3_track above already uses.
 auto mix_vector3(const math::vector3& start, const math::vector3& end, std::float_t t) -> math::vector3 {
   return math::vector3{
     math::mix(start.x(), end.x(), t),
@@ -215,9 +243,6 @@ auto mix_vector3(const math::vector3& start, const math::vector3& end, std::floa
   };
 }
 
-// Seeds every joint at bind pose, then overwrites the (sparse) joints @p clip actually animates --
-// same two-step shape scene_renderer_module::_evaluate_skeleton_pose used to do inline for its one
-// clip, factored out so it can be called once per side of a crossfade.
 auto sample_clip_trs(const assets::animation_clip& clip, std::float_t time, const std::vector<assets::skeleton::joint>& joints, std::vector<math::vector3>& translations, std::vector<math::quaternion>& rotations, std::vector<math::vector3>& scales) -> void {
   for (const auto& channel : clip.channels()) {
     if (channel.joint_index >= joints.size()) {
@@ -238,10 +263,6 @@ auto sample_clip_trs(const assets::animation_clip& clip, std::float_t time, cons
   }
 }
 
-// Advances a local clip time by delta_time*speed and wraps/clamps it against duration -- same
-// clamp-vs-loop logic the single-clip animator used to apply to its one time value, shared here
-// between the current state and (mid-transition) the transition target, each of which has its own
-// clip/speed/loop.
 auto advance_local_time(std::float_t time, std::float_t delta_time, std::float_t speed, std::float_t duration, bool loop) -> std::float_t {
   time += delta_time * speed;
 
@@ -268,10 +289,6 @@ auto advance_local_time(std::float_t time, std::float_t delta_time, std::float_t
   return (entry != states.end()) ? &*entry : nullptr;
 }
 
-// All of a transition's conditions are ANDed by the caller; this checks one. An unknown parameter
-// name or a condition authored against a different alternative than the parameter's current one
-// both fail closed (return false) rather than throwing -- a misauthored graph just never takes
-// that transition.
 [[nodiscard]] auto evaluate_animation_condition(const assets::animation_condition& condition, const std::vector<std::pair<std::string, assets::animation_parameter_value>>& parameters) -> bool {
   const auto entry = std::ranges::find(parameters, condition.parameter_name, [](const auto& pair) { return std::string_view{pair.first}; });
 
@@ -282,14 +299,14 @@ auto advance_local_time(std::float_t time, std::float_t delta_time, std::float_t
   const auto& value = entry->second;
 
   if (const auto* trigger = std::get_if<assets::animation_trigger>(&value)) {
-    return trigger->set; // comparator/expected are meaningless for a trigger -- its presence having fired is the whole condition
+    return trigger->set;
   }
 
   return std::visit([&condition](const auto& current) -> bool {
     using current_type = std::decay_t<decltype(current)>;
 
     if constexpr (std::is_same_v<current_type, assets::animation_trigger>) {
-      return false; // unreachable -- handled above
+      return false;
     } else {
       const auto* expected = std::get_if<current_type>(&condition.expected);
 
@@ -311,13 +328,6 @@ auto advance_local_time(std::float_t time, std::float_t delta_time, std::float_t
   }, value);
 }
 
-// Reconciles animator.parameters against graph.parameters() by name: adds any the graph defines
-// that the instance doesn't have yet (seeded from the graph's default), and drops any the instance
-// has that the graph no longer defines. Existing entries' current values are left untouched, so
-// this doesn't clobber a live/test value while the graph is being edited. Needed because
-// set_graph() only snapshots the parameter list once, at assignment time -- editing a graph's
-// parameter list afterwards (e.g. live in animation_graph_panel) would otherwise never reach
-// entities that already called set_graph() with it.
 auto reconcile_animator_parameters(const assets::animation_graph& graph, scenes::animator& animator) -> void {
   for (const auto& parameter : graph.parameters()) {
     const auto exists = std::ranges::any_of(animator.parameters, [&parameter](const auto& entry) { return entry.first == parameter.name; });
@@ -335,8 +345,6 @@ auto reconcile_animator_parameters(const assets::animation_graph& graph, scenes:
 scene_renderer_module::scene_renderer_module() {
   _ensure_resources();
 
-  // Sized well above particles_module's CPU-path defaults -- the GPU path exists specifically
-  // for emitters wanting far more live particles than a per-particle CPU loop can afford.
   _particle_pool_additive = std::make_unique<particle_pool>(particle_pool::create_info{
     .max_particles = 65536u,
     .max_emitter_instances = 64u,
@@ -433,9 +441,6 @@ auto scene_renderer_module::reset_particles() -> void {
 
 auto scene_renderer_module::_extract_gpu_particle_emitter(render_packet& packet, const assets::particle_emitter& config, scenes::particle_emitter& runtime, const scenes::particle_effect& instance, const math::matrix4x4& world, std::float_t delta_time) -> void {
   if (instance.playback != scenes::particle_playback_state::playing) {
-    // Not playing: leave any claimed slot alone so particle_pool::tick() drains it gracefully
-    // rather than an abrupt cut. Known v1 quirk: particle_simulate_pass has no pause concept, so a
-    // *paused* effect's GPU particles keep drifting and draining instead of truly freezing.
     return;
   }
 
@@ -446,7 +451,7 @@ auto scene_renderer_module::_extract_gpu_particle_emitter(render_packet& packet,
     const auto claimed = pool.claim_slot();
 
     if (!claimed) {
-      return; // Pool exhausted; claim_slot already logged this once.
+      return;
     }
 
     runtime.slot = *claimed;
@@ -518,9 +523,6 @@ auto scene_renderer_module::_advance_animator_state(const scenes::mesh_renderer&
 
   const auto* current_state = find_animation_state(graph, animator.current_state_id);
 
-  // Freshly assigned graph (set_graph can't resolve clips itself -- it has no mesh_renderer to
-  // resolve names against), or a clip that failed to resolve last time (mesh not loaded yet):
-  // keep retrying every frame until it sticks.
   if (!animator.current_clip.is_valid()) {
     animator.current_clip = _resolve_state_clip(renderer, current_state);
   }
@@ -531,8 +533,6 @@ auto scene_renderer_module::_advance_animator_state(const scenes::mesh_renderer&
       animator.current_time = advance_local_time(animator.current_time, delta_time, current_state->speed, duration, current_state->loop);
     }
 
-    // Transitions are checked in authoring order -- the first whose conditions all pass wins,
-    // same priority convention as Unity's Animator Controller.
     for (const auto& transition : graph.transitions()) {
       if (transition.from_state.has_value() && *transition.from_state != animator.current_state_id) {
         continue;
@@ -590,8 +590,6 @@ auto scene_renderer_module::_advance_animator_state(const scenes::mesh_renderer&
     }
   }
 
-  // Triggers are single-frame pulses -- consumed once this frame's transition checks have run,
-  // whether or not one of them actually fired because of it.
   for (auto& [name, value] : animator.parameters) {
     if (auto* trigger = std::get_if<assets::animation_trigger>(&value)) {
       trigger->set = false;
@@ -612,9 +610,6 @@ auto scene_renderer_module::_evaluate_skeleton_pose(const assets::skeleton& skel
     _advance_animator_state(renderer, *graph, *animator, delta_time);
   }
 
-  // Seed every joint at bind pose first -- a clip's channels are sparse, so joints it doesn't
-  // animate (and the whole skeleton, when there's no playing state at all) fall back to this.
-  // Reused scratch storage (see the members' doc comment) instead of a fresh heap allocation per call.
   auto& translations = _skeleton_scratch_translations;
   auto& rotations = _skeleton_scratch_rotations;
   auto& scales = _skeleton_scratch_scales;
@@ -636,8 +631,6 @@ auto scene_renderer_module::_evaluate_skeleton_pose(const assets::skeleton& skel
     sample_clip_trs(*clip, animator->current_time, joints, translations, rotations, scales);
   }
 
-  // Mid-transition: sample the incoming state into its own bind-pose-seeded buffers and crossfade
-  // per joint (lerp translation/scale, slerp rotation) by how far through the transition we are.
   if (graph != nullptr && animator->transition_target_state_id.has_value() && animator->transition_target_clip.is_valid()) {
     const auto alpha = (animator->transition_duration > 0.0f) ? std::clamp(animator->transition_time / animator->transition_duration, 0.0f, 1.0f) : 1.0f;
 
@@ -779,8 +772,6 @@ auto scene_renderer_module::_build_packet() -> render_packet {
 
       const auto pipeline_id = compute_pipeline_id(*material);
 
-      // Inverse-transpose, computed once here rather than re-derived per-vertex on the GPU, so
-      // normals stay correct under non-uniform scale/skew anywhere in the entity's ancestor chain.
       const auto instance = transform_data{world.matrix, math::matrix4x4::transposed(math::matrix4x4::inverted(world.matrix))};
 
       if (material->alpha() == assets::alpha_mode::blend) {
@@ -840,10 +831,6 @@ auto scene_renderer_module::_build_packet() -> render_packet {
     packet.transparent_commands.push_back(std::move(command));
   }
 
-  // Skinned meshes: each instance skins independently into its own scratch vertex range (no
-  // cross-instance coalescing, unlike the static bucket above), and its pose is sampled/evaluated
-  // here -- render cadence, feeding straight into this frame's packet -- rather than in a separate
-  // fixed-tick system (see scenes::skeleton_pose's doc comment).
   auto skin_scratch_cursor = std::uint32_t{0u};
   const auto animation_delta_time = scenes_module.simulation_delta_time().value();
 
@@ -916,8 +903,6 @@ auto scene_renderer_module::_build_packet() -> render_packet {
     }
   }
 
-  // Collected separately so the shadow-casting light can be swapped to lights[0] — shadow_pass and
-  // the lighting shaders assume the caster is always index 0 when has_shadow_caster is set.
   auto directional_lights = std::vector<light_data>{};
   auto shadow_caster_found = false;
   auto shadow_caster_index = std::size_t{0u};
@@ -975,63 +960,8 @@ auto scene_renderer_module::_build_packet() -> render_packet {
   packet.delta_time = delta_time;
   packet.time = time;
 
-  // No index buffer/adjacency concern for billboards (drawn from a plain instance buffer, not an
-  // indexed mesh) -- unlike mesh_buckets below, iteration order genuinely doesn't matter here, so
-  // this stays an unordered_map with no sort-back-to-order step needed.
-  struct billboard_key_hash {
-    auto operator()(const std::pair<std::uint32_t, assets::emitter_blend_mode>& key) const noexcept -> std::size_t {
-      auto seed = std::hash<std::uint32_t>{}(key.first);
-      utility::hash_combine(seed, key.second);
-      return seed;
-    }
-  };
-
   auto billboard_buckets = std::unordered_map<std::pair<std::uint32_t, assets::emitter_blend_mode>, std::vector<particle_billboard_instance>, billboard_key_hash>{};
 
-  // mesh_key doesn't carry a blend mode (ordinary meshes are either fully opaque or fully
-  // transparent, never author-chosen additive/alpha_blend) -- particles need one, so pair it here
-  // rather than extending the shared key type for a case only particles have.
-  struct particle_mesh_key {
-    mesh_key key;
-    assets::emitter_blend_mode blend_mode;
-
-    auto operator==(const particle_mesh_key& other) const -> bool {
-      return key == other.key && blend_mode == other.blend_mode;
-    }
-
-    auto operator<(const particle_mesh_key& other) const -> bool {
-      if (key < other.key) {
-        return true;
-      }
-
-      if (other.key < key) {
-        return false;
-      }
-
-      return blend_mode < other.blend_mode;
-    }
-  };
-
-  struct particle_mesh_key_hash {
-    auto operator()(const particle_mesh_key& value) const noexcept -> std::size_t {
-      auto seed = mesh_key_hash{}(value.key);
-      utility::hash_combine(seed, value.blend_mode);
-      return seed;
-    }
-  };
-
-  struct particle_mesh_bucket {
-    assets::mesh_handle mesh;
-    std::uint32_t submesh_index{0u};
-    assets::material_handle material;
-    assets::emitter_blend_mode blend_mode{};
-    std::vector<particle_mesh_instance> instances;
-  };
-
-  // Unlike billboard/trail buckets above/below, mesh_buckets is sorted back into mesh_key order
-  // once it's fully accumulated (same reasoning as the opaque bucket) -- particle_pass's mesh draw
-  // loop rebinds the index buffer on every mesh change, so keeping same-mesh submeshes adjacent
-  // still matters for draw-call efficiency even though correctness doesn't depend on it.
   auto mesh_buckets = std::unordered_map<particle_mesh_key, particle_mesh_bucket, particle_mesh_key_hash>{};
   auto trail_buckets = std::unordered_map<assets::emitter_blend_mode, std::vector<trail_vertex>>{};
 
@@ -1069,8 +999,6 @@ auto scene_renderer_module::_build_packet() -> render_packet {
           for (auto i = std::size_t{0u}; i < point_count; ++i) {
             const auto& point = trail.points[i];
 
-            // points.front() is the tail (oldest, ribbon_t = 1), points.back() the head (newest,
-            // ribbon_t = 0) -- see particles::trail's doc comment.
             const auto ribbon_t = 1.0f - static_cast<std::float_t>(i) / static_cast<std::float_t>(point_count - 1u);
 
             auto color = config.trail.color_over_trail.has_keys() ? config.trail.color_over_trail.evaluate(ribbon_t) : point.color;
@@ -1078,10 +1006,7 @@ auto scene_renderer_module::_build_packet() -> render_packet {
             const auto fade = config.trail.lifetime > 0.0f ? std::clamp(1.0f - point.age / config.trail.lifetime, 0.0f, 1.0f) : 1.0f;
             color.a() *= fade;
 
-            // Local tangent along the ribbon, always pointing tail -> head (increasing i).
-            const auto direction = (i + 1u < point_count)
-              ? math::vector3::normalized(trail.points[i + 1u].position - point.position)
-              : math::vector3::normalized(point.position - trail.points[i - 1u].position);
+            const auto direction = (i + 1u < point_count) ? math::vector3::normalized(trail.points[i + 1u].position - point.position) : math::vector3::normalized(point.position - trail.points[i - 1u].position);
 
             const auto view_direction = math::vector3::normalized(packet.camera.position - point.position);
 
@@ -1127,9 +1052,6 @@ auto scene_renderer_module::_build_packet() -> render_packet {
           bucket.blend_mode = config.blend_mode;
 
           for (const auto& particle : runtime.particles) {
-            // A single rotation float has no natural 3D axis of its own -- yaw around world/local Y
-            // is a simple, well-scoped default (matches how most simple mesh-particle setups look),
-            // not an attempt at Unity's full 3D particle rotation.
             const auto model =
               math::matrix4x4::translated(math::matrix4x4::identity, particle.position) *
               math::matrix4x4::rotated(math::matrix4x4::identity, math::vector3{0.0f, 1.0f, 0.0f}, math::radian{particle.rotation}) *
@@ -1142,9 +1064,6 @@ auto scene_renderer_module::_build_packet() -> render_packet {
         continue;
       }
 
-      // An assigned-but-not-yet-resident texture has nothing valid to sample -- skip until it loads.
-      // No texture at all is a real, supported choice: particle_billboard_instance::texture_index
-      // keeps its 0xFFFFFFFFu default, and the shader draws a procedural circular falloff instead.
       if (config.texture.is_valid() && !assets_module.is_resident(config.texture)) {
         continue;
       }
@@ -1166,10 +1085,6 @@ auto scene_renderer_module::_build_packet() -> render_packet {
   }
 
   for (auto& [key, instances] : billboard_buckets) {
-    // A texture+blend key can end up in the map with zero particles (operator[] default-constructs
-    // the bucket before anything is known to push into it) -- skip it, so particle_pass never sees a
-    // command with instance_count == 0 and mistakes an empty particle_billboard_instances for "no
-    // buffer needed yet".
     if (instances.empty()) {
       continue;
     }
@@ -1217,9 +1132,6 @@ auto scene_renderer_module::_build_packet() -> render_packet {
     packet.trail_vertices.insert(packet.trail_vertices.end(), vertices.begin(), vertices.end());
   }
 
-  // Once per frame, after every _extract_gpu_particle_emitter's keep_alive call above -- a slot
-  // that was claimed but not kept alive this frame (emitter stopped/paused, or its node removed)
-  // starts draining here instead of being recycled immediately. See particle_pool::tick's doc comment.
   _particle_pool_additive->tick(delta_time);
   _particle_pool_alpha_blend->tick(delta_time);
 
@@ -1306,8 +1218,6 @@ auto scene_renderer_module::record(graphics::command_buffer& command_buffer, mat
   _prepare_frame(context);
   _graph.execute(context);
 
-  // Transition final_image to shader_read_only_optimal here, once — tonemap_pass is always its
-  // last writer, and scene_blit_compositor/ui_system::texture_id both sample it afterward.
   auto& registry = graphics_module.resource_registry();
   auto& final_image = registry.get<graphics::image>(context.final_image);
 
@@ -1393,11 +1303,6 @@ auto scene_renderer_module::_ensure_resources() -> void {
     _transform_addresses[slot] = transform_base + slot * transform_capacity * sizeof(transform_data);
   }
 
-  // CPU writes indexCount/firstIndex/vertexOffset/firstInstance and resets instanceCount to 0 fresh
-  // every frame (_prepare_frame, alongside the transform/frame buffer writes below); that host write
-  // completes before the frame's command buffer is even submitted, so frustum_cull_pass's compute
-  // shader only ever atomically increments instanceCount on top of already-settled data -- no race
-  // with the CPU write, no separate device_local + copy step needed.
   _culled_indirect_args_buffer = registry.emplace<graphics::buffer>(graphics::buffer::create_info{
     .size = sizeof(VkDrawIndexedIndirectCommand) * max_opaque_draw_commands * graphics::swapchain::max_frames_in_flight,
     .usage = graphics::buffer_usage::device_address | graphics::buffer_usage::storage | graphics::buffer_usage::indirect,
@@ -1410,11 +1315,6 @@ auto scene_renderer_module::_ensure_resources() -> void {
   for (auto slot = std::size_t{0u}; slot < graphics::swapchain::max_frames_in_flight; ++slot) {
     _culled_indirect_args_addresses[slot] = culled_indirect_args_base + slot * max_opaque_draw_commands * sizeof(VkDrawIndexedIndirectCommand);
   }
-
-  // Same capacity/layout as _transform_buffer -- frustum_cull_pass compacts surviving instances into
-  // this buffer at the exact same transform_offset each draw_command already has in the ordinary
-  // transforms array (worst case every instance survives, needing that many contiguous slots either
-  // way), so no separate offset bookkeeping is needed between the two buffers.
   _culled_transform_buffer = registry.emplace<graphics::buffer>(graphics::buffer::create_info{
     .size = sizeof(transform_data) * transform_capacity * graphics::swapchain::max_frames_in_flight,
     .usage = graphics::buffer_usage::device_address | graphics::buffer_usage::storage,
@@ -1502,7 +1402,6 @@ auto scene_renderer_module::_ensure_resources() -> void {
     _cluster_counter_addresses[slot] = cluster_counter_base + slot * memory::stride_v<std::uint32_t>;
   }
 
-  // Fixed resolution independent of viewport size — created once here, not in _resize_targets (see shadow_pass).
   for (auto cascade = std::size_t{0u}; cascade < shadow_cascade_count; ++cascade) {
     _shadow_map_images[cascade] = registry.emplace<graphics::image>(graphics::image::create_info{
       .extent = math::vector3u{shadow_map_resolution, shadow_map_resolution, 1u},
@@ -1552,11 +1451,6 @@ auto scene_renderer_module::_resize_targets(const math::vector2u extent) -> void
     .name = "Depth"
   });
 
-  // depth_pre_pass's own _depth_image is 4x MSAA -- not directly sampleable as a plain Texture2D --
-  // so this single-sample image is depth_pre_pass's own MSAA resolve target (depth_attachment_slot's
-  // resolve_image/resolve_mode, set in depth_pre_pass::declare(), mirroring how color's own resolve
-  // already works), populated as a byproduct of that one draw rather than a second depth-only redraw
-  // of the opaque silhouette. See depth_pre_pass.hpp's own doc comment.
   _scene_depth_image = registry.emplace<graphics::image>(graphics::image::create_info{
     .extent = math::vector3u{extent, 1u},
     .format = graphics::format::d32_sfloat,
@@ -1658,8 +1552,6 @@ auto scene_renderer_module::_resize_targets(const math::vector2u extent) -> void
 
   _target_extent = extent;
 
-  // Extent-dependent images above just got new resource_handles; the graph's compiled barriers
-  // reference concrete handles, so it must recompile here (buffers/shadow maps never change handle).
   _graph.compile(_build_graph_resources());
 }
 
@@ -1713,11 +1605,6 @@ auto scene_renderer_module::_prepare_frame(render_context& context) -> void {
     transform_buffer.write(context.packet->transforms.data(), instance_count * sizeof(transform_data), context.slot * transform_capacity * sizeof(transform_data));
   }
 
-  // frustum_cull_pass's input for this frame's opaque_commands: indexCount/firstIndex (this
-  // command's submesh, unchanging whichever instances survive culling) known and written here;
-  // instanceCount starts at 0 and is only ever atomically incremented by the compute pass, never
-  // written by the CPU again after this -- see _culled_indirect_args_buffer's own doc comment on why
-  // that ordering is race-free.
   const auto opaque_command_count = std::min(static_cast<std::uint32_t>(context.packet->opaque_commands.size()), max_opaque_draw_commands);
 
   if (opaque_command_count > 0u) {
@@ -1767,12 +1654,10 @@ auto scene_renderer_module::_prepare_frame(render_context& context) -> void {
     static_cast<std::float_t>(context.extent.y()) / static_cast<std::float_t>(light_culling_pass::cluster_dimensions.y())
   };
 
-  // Reset before this frame's light_culling_pass dispatches its atomic-reserving cull_lights.slang.
   const auto counter_reset = std::uint32_t{0u};
   auto& cluster_counter_buffer = registry.get<graphics::buffer>(_cluster_counter_buffer);
   cluster_counter_buffer.write(&counter_reset, sizeof(counter_reset), context.slot * memory::stride_v<std::uint32_t>);
 
-  // shadow_pass and lighting.slang assume lights[0] is the caster when has_shadow_caster is set (see reordering in _build_packet).
   auto shadow_enabled = std::uint32_t{0u};
   auto cascade_splits = math::vector4{0.0f, 0.0f, 0.0f, 0.0f};
   auto cascade_depth_bias_per_texel = math::vector4{0.0f, 0.0f, 0.0f, 0.0f};
@@ -1845,15 +1730,9 @@ auto scene_renderer_module::_prepare_frame(render_context& context) -> void {
 
   context.culled_indirect_args_buffer = _culled_indirect_args_buffer;
   context.culled_indirect_args_address = _culled_indirect_args_addresses[context.slot];
-  // Element (command-count) units, not bytes -- command_buffer::draw_indexed_indirect takes its
-  // offset the same way draw_indexed_indirect_count does (see its own offset/count_buffer_offset),
-  // multiplying by sizeof(VkDrawIndexedIndirectCommand) internally.
   context.culled_indirect_args_slot_offset = context.slot * max_opaque_draw_commands;
   context.culled_transform_address = _culled_transform_addresses[context.slot];
 
-  // GPU-path particles: alive_list is ping-pong, keyed by frame_index % 2 (matching
-  // particle_simulate_pass's write_index this frame). draw_args is always valid once the pool is
-  // constructed; particle_pass checks its instance_count, not its existence, to know what to draw.
   const auto particle_write_index = static_cast<std::uint32_t>(context.frame_index % 2u);
 
   context.particle_additive_particles_address = _particle_pool_additive->particles_address();

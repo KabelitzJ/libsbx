@@ -78,6 +78,11 @@ float3 fresnel_schlick(float cos_theta, float3 f0) {
   return f0 + (1.0 - f0) * pow(clamp(1.0 - cos_theta, 0.0, 1.0), 5.0);
 }
 
+float3 fresnel_schlick_roughness(float cos_theta, float3 f0, float roughness) {
+  float3 f90 = max(float3(1.0 - roughness, 1.0 - roughness, 1.0 - roughness), f0);
+  return f0 + (f90 - f0) * pow(clamp(1.0 - cos_theta, 0.0, 1.0), 5.0);
+}
+
 float3 brdf(float3 n, float3 v, float3 l, float3 albedo, float3 f0, float roughness, float metallic) {
   float3 h = normalize(v + l);
   float ndf = distribution_ggx(n, h, roughness);
@@ -186,7 +191,7 @@ lighting_output evaluate_lit_surface<let ReceivesShadows : bool>(lighting_input 
   SamplerState sampler = samplers[input.sampler_index];
 
   float ndv = max(dot(n, v), 0.0);
-  float3 fr = fresnel_schlick(ndv, f0);
+  float3 fr = fresnel_schlick_roughness(ndv, f0, s.roughness);
   float3 kd = (1.0 - fr) * (1.0 - s.metallic);
 
   float3 irradiance = (input.frame_data.irradiance_index != 0xFFFFFFFF) ? cubes[input.frame_data.irradiance_index].Sample(sampler, n).rgb : float3(0.03);

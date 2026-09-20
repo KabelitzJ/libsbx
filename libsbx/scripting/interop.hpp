@@ -295,6 +295,12 @@ struct interop {
   /** @brief Surface normal sampling against the active scene's terrain_module heightmap -- +Y if no terrain has been generated yet (see terrain::heightmap::sample_normal's own empty-map fallback). */
   static auto terrain_sample_normal(math::vector2* world_xz, math::vector3* out_normal) -> void;
 
+  /** @brief See math::noise::simplex(x, y, z) -- pure function of its inputs, no scene/module state involved. Roughly in [-1, 1]. */
+  static auto math_noise_simplex(std::float_t x, std::float_t y, std::float_t z) -> std::float_t;
+
+  /** @brief See math::noise::fractal(x, y, z, octaves) -- multi-octave (fractal Brownian motion) simplex, smoother/larger-scale than a single simplex() call. Roughly in [-1, 1]. */
+  static auto math_noise_fractal(std::float_t x, std::float_t y, std::float_t z, std::uint32_t octaves) -> std::float_t;
+
   /**
    * @brief Builds a mesh from raw vertex/index data and assigns it to this node's mesh_renderer
    * component (creating the component, and a backing material, the first time this is called for a
@@ -311,6 +317,17 @@ struct interop {
    * lighting.slang), independent of @p tint which is a single whole-mesh material color.
    */
   static auto mesh_renderer_set_geometry(std::uint64_t uuid, math::vector3* positions, math::vector3* normals, math::vector2* uvs, math::color* colors, std::uint32_t vertex_count, std::uint32_t* indices, std::uint32_t index_count, math::color* tint) -> void;
+
+  /**
+   * @brief Assigns a material asset to one of this node's mesh_renderer submesh slots (creating the
+   * component, and growing materials to fit submesh_index, if needed). material_uuid of 0 clears
+   * the slot back to an invalid handle. Backs Sbx.Core.Material's INativeHandle-based script field
+   * support (see scenes::script_field_type::material) and MeshRenderer.SetMaterial.
+   */
+  static auto mesh_renderer_set_material(std::uint64_t uuid, std::uint32_t submesh_index, std::uint64_t material_uuid) -> void;
+
+  /** @brief Loads (or reuses, if already imported) a .material asset by project-relative path, returning its uuid -- 0 if the path doesn't resolve to a real material. Backs Sbx.Core.Material.Load. */
+  static auto material_load(managed::string path) -> std::uint64_t;
 
   // Canvas: node uuid -> canvas::canvas/rect_transform/ui_image/ui_text/ui_button field access,
   // same uuid-resolve-then-get/set convention as Transform_*/Rigidbody_* above.

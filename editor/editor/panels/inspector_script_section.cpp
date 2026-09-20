@@ -23,7 +23,11 @@
 #include <libsbx/scripting/managed/field_info.hpp>
 #include <libsbx/scripting/managed/attribute.hpp>
 
+#include <libsbx/assets/assets_module.hpp>
+
 #include <editor/commands/component_commands.hpp>
+
+#include <editor/panels/inspector_asset_pickers.hpp>
 
 #include <editor/widgets/vector_fields.hpp>
 #include <editor/widgets/layer_fields.hpp>
@@ -318,6 +322,40 @@ auto draw_script_field_inspector(editor_state& state, sbx::scenes::scene& target
           auto& slot = ensure_override_slot();
           slot.type = sbx::scenes::script_field_type::node;
           slot.node_value = sbx::math::uuid::from_value(*new_uuid);
+        }
+      }
+
+      commit_after();
+    } else if (field_type_name == "Sbx.Core.Material") {
+      // Same INativeHandle-via-raw-uuid convention as the Node branch above, backed by the richer
+      // asset_picker widget (thumbnail, searchable popup, drag-and-drop from the Asset Browser)
+      // rather than a plain drag target, since a .material asset already has that widget for
+      // mesh_renderer submesh slots (see inspector_component_sections.cpp) -- allow_none=true here
+      // since a script field, unlike a submesh slot, is meaningfully optional.
+      auto& assets_module = sbx::core::engine::get_module<sbx::assets::assets_module>();
+
+      const auto current_uuid = live_instance ? sbx::math::uuid::from_value(live_instance->get_field_value<std::uint64_t>(field_name))
+                                                : override_slot ? override_slot->material_value : sbx::math::uuid::nil();
+
+      auto slot = (current_uuid != sbx::math::uuid::nil()) ? assets_module.load_material(current_uuid) : sbx::assets::material_handle{};
+
+      ImGui::AlignTextToFramePadding();
+      ImGui::TextUnformatted(display_name.c_str());
+      ImGui::SameLine(140.0f);
+
+      const auto changed = draw_material_picker(state, "##material_field_picker", slot, assets_module, {}, true);
+
+      capture_before();
+
+      if (changed) {
+        const auto new_uuid = slot.is_valid() ? slot->id() : sbx::math::uuid::nil();
+
+        if (live_instance) {
+          live_instance->set_field_value(field_name, new_uuid.value());
+        } else {
+          auto& slot_override = ensure_override_slot();
+          slot_override.type = sbx::scenes::script_field_type::material;
+          slot_override.material_value = new_uuid;
         }
       }
 

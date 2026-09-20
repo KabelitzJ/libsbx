@@ -1,7 +1,7 @@
 namespace Sbx.Core
 {
 
-  public sealed class Node : Sbx.Managed.INativeHandle
+  public sealed class Node : Managed.INativeHandle
   {
     private static Dictionary<ulong, Node> _nodeCache = new Dictionary<ulong, Node>();
 
@@ -11,7 +11,7 @@ namespace Sbx.Core
 
     public ulong UUID => _uuid;
 
-    ulong Sbx.Managed.INativeHandle.Handle => _uuid;
+    ulong Managed.INativeHandle.Handle => _uuid;
 
     internal Node(ulong uuid)
     {

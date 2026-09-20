@@ -16,6 +16,7 @@
 
 #include <libsbx/graphics/devices/physical_device.hpp>
 #include <libsbx/graphics/devices/object_type.hpp>
+#include <libsbx/graphics/devices/features.hpp>
 
 namespace sbx::graphics {
 
@@ -100,7 +101,12 @@ public:
   auto queue(const queue::type type) const -> const graphics::queue& {
     return _queues.at(std::to_underlying(type));
   }
-  
+
+  /** @brief The features actually enabled at device creation (required ∪ (optional ∩ available)) -- see features::enabled. Callers that want to use an optional feature (e.g. pipeline statistics queries) must check here first; requesting it as required/optional alone doesn't guarantee it was granted. */
+  [[nodiscard]] auto enabled_features() const noexcept -> const features& {
+    return _enabled_features;
+  }
+
 private:
 
   template<queue::type Type>
@@ -117,6 +123,8 @@ private:
   handle_type _handle{};
 
   std::array<graphics::queue, 4u> _queues{};
+
+  graphics::features _enabled_features{};
 
 }; // class logical_device
 

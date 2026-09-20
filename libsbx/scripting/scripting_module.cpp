@@ -176,8 +176,13 @@ scripting_module::scripting_module() {
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Terrain_Generate", reinterpret_cast<void*>(&interop::terrain_generate));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Terrain_SampleHeight", reinterpret_cast<void*>(&interop::terrain_sample_height));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Terrain_SampleNormal", reinterpret_cast<void*>(&interop::terrain_sample_normal));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Math_NoiseSimplex", reinterpret_cast<void*>(&interop::math_noise_simplex));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Math_NoiseFractal", reinterpret_cast<void*>(&interop::math_noise_fractal));
 
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "MeshRenderer_SetGeometry", reinterpret_cast<void*>(&interop::mesh_renderer_set_geometry));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "MeshRenderer_SetMaterial", reinterpret_cast<void*>(&interop::mesh_renderer_set_material));
+
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Material_Load", reinterpret_cast<void*>(&interop::material_load));
 
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Canvas_GetSortOrder", reinterpret_cast<void*>(&interop::canvas_get_sort_order));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Canvas_SetSortOrder", reinterpret_cast<void*>(&interop::canvas_set_sort_order));
@@ -505,6 +510,7 @@ auto scripting_module::seed_missing_field_defaults(scenes::node& node, scenes::s
       case scenes::script_field_type::vector3: default_value.vector3_value = scratch.get_field_value<math::vector3>(field_name); break;
       case scenes::script_field_type::node:    default_value.node_value = math::uuid::from_value(scratch.get_field_value<std::uint64_t>(field_name)); break;
       case scenes::script_field_type::layer_mask: default_value.layer_mask_value = scratch.get_field_value<std::uint32_t>(field_name); break;
+      case scenes::script_field_type::material: default_value.material_value = math::uuid::from_value(scratch.get_field_value<std::uint64_t>(field_name)); break;
     }
 
     entry.field_overrides.push_back(std::move(default_value));
@@ -555,6 +561,8 @@ auto scripting_module::_apply_field_overrides(managed::object& instance, const s
       case scenes::script_field_type::node:    instance.set_field_value(field.name, field.node_value.value()); break;
       // A Sbx.Core.Physics.LayerMask field is a blittable struct (one uint) -- same direct path as vector3.
       case scenes::script_field_type::layer_mask: instance.set_field_value(field.name, field.layer_mask_value); break;
+      // A Sbx.Core.Material field is a managed reference, same INativeHandle uuid convention as node above.
+      case scenes::script_field_type::material: instance.set_field_value(field.name, field.material_value.value()); break;
     }
   }
 }

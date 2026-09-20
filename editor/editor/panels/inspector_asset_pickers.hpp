@@ -32,9 +32,11 @@ auto to_picker_item(const sbx::assets::assets_module& assets_module, const sbx::
  * @brief Thumbnail/icon button + searchable, thumbnail-rendered popup (sbx::render::asset_picker),
  * plus an optional "Reset to Mesh Default" (reseeds from the mesh's own submesh material). Also a
  * drag-and-drop target for a .material tile dragged straight from the Asset Browser. Second button
- * jumps Properties to that material's editable view.
+ * jumps Properties to that material's editable view. allow_none offers a "(None)" entry that clears
+ * the slot -- off by default, since a mesh_renderer submesh always wants some material assigned;
+ * a nullable script field (see inspector_script_section.cpp) passes true.
  */
-auto draw_material_picker(editor_state& state, const char* popup_id, sbx::assets::material_handle& slot, sbx::assets::assets_module& assets_module, const sbx::assets::material_handle& mesh_default = {}) -> bool;
+auto draw_material_picker(editor_state& state, const char* popup_id, sbx::assets::material_handle& slot, sbx::assets::assets_module& assets_module, const sbx::assets::material_handle& mesh_default = {}, bool allow_none = false) -> bool;
 
 /** @brief Forks a material into a new, independent .material asset next to the mesh, so editing the copy doesn't affect other nodes sharing the original. mesh_id may be nil (falls back to assets root). */
 auto extract_material_to_asset(sbx::assets::assets_module& assets_module, const sbx::assets::material_handle& source, const sbx::math::uuid& mesh_id) -> sbx::assets::material_handle;

@@ -145,6 +145,7 @@ auto features::optional() -> const features& {
   core.shaderStorageImageWriteWithoutFormat = true;
   core.shaderClipDistance = true;
   core.shaderCullDistance = true;
+  core.pipelineStatisticsQuery = true;
   core.geometryShader = true;
   core.tessellationShader = true;
   core.multiViewport = true;

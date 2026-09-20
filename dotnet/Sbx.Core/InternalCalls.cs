@@ -141,8 +141,12 @@ namespace Sbx.Core
     internal static delegate* unmanaged<uint, uint, float, float, float, uint, void> Terrain_Generate;
     internal static delegate* unmanaged<Vector2*, float*, void> Terrain_SampleHeight;
     internal static delegate* unmanaged<Vector2*, Vector3*, void> Terrain_SampleNormal;
+    internal static delegate* unmanaged<float, float, float, float> Math_NoiseSimplex;
+    internal static delegate* unmanaged<float, float, float, uint, float> Math_NoiseFractal;
 
     internal static delegate* unmanaged<ulong, Vector3*, Vector3*, Vector2*, Color*, uint, uint*, uint, Color*, void> MeshRenderer_SetGeometry;
+    internal static delegate* unmanaged<ulong, uint, ulong, void> MeshRenderer_SetMaterial;
+    internal static delegate* unmanaged<NativeString, ulong> Material_Load;
 
     internal static delegate* unmanaged<ulong, int*, void> Canvas_GetSortOrder;
     internal static delegate* unmanaged<ulong, int, void> Canvas_SetSortOrder;

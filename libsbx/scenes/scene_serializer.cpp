@@ -685,6 +685,7 @@ auto write_node(YAML::Node& node_yaml, ecs::registry& registry, ecs::entity enti
           case script_field_type::vector3: field_node["kind"] = "vector3"; field_node["value"] = field.vector3_value; break;
           case script_field_type::node:    field_node["kind"] = "node"; field_node["value"] = field.node_value.value(); break;
           case script_field_type::layer_mask: field_node["kind"] = "layer_mask"; field_node["value"] = field.layer_mask_value; break;
+          case script_field_type::material: field_node["kind"] = "material"; field_node["value"] = field.material_value.value(); break;
         }
 
         fields.push_back(field_node);
@@ -1259,6 +1260,9 @@ auto read_node_components(node& target_node, const YAML::Node& node_yaml, assets
           } else if (kind == "layer_mask") {
             field.type = script_field_type::layer_mask;
             field.layer_mask_value = field_yaml["value"].as<std::uint32_t>();
+          } else if (kind == "material") {
+            field.type = script_field_type::material;
+            field.material_value = field_yaml["value"].as<math::uuid>();
           }
 
           entry.field_overrides.push_back(std::move(field));

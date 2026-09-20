@@ -363,6 +363,10 @@ private:
   std::unique_ptr<graphics::query_pool> _pipeline_stats_pool{};
   std::float_t _timestamp_period_ns{1.0f};
 
+  // Counts execute() calls -- see execute()'s own comment on why readback stays gated off until
+  // every frame-in-flight slot has been through at least one reset+write cycle.
+  std::uint32_t _frames_executed{0u};
+
   std::vector<pass_gpu_timing> _pass_timings{};
   render::pipeline_statistics _pipeline_stats{};
 

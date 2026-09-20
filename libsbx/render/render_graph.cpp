@@ -268,7 +268,7 @@ auto render_graph::compile(const graph_resources& resources) -> void {
         info.clearValue.depthStencil = VkClearDepthStencilValue{op.clear_depth.depth, op.clear_depth.stencil};
 
         if (op.resolve_image.is_valid()) {
-          if (const auto resolve_barrier = touch_image(op.resolve_image, op.stage, op.access, op.layout)) {
+          if (const auto resolve_barrier = touch_image(op.resolve_image, graphics::pipeline_stage::color_attachment_output, graphics::access::color_attachment_write, graphics::image_layout::general)) {
             group.entry_image_barriers.push_back(*resolve_barrier);
           }
 
@@ -276,7 +276,7 @@ auto render_graph::compile(const graph_resources& resources) -> void {
 
           info.resolveMode = graphics::to_vk_enum<VkResolveModeFlagBits>(op.resolve_mode);
           info.resolveImageView = resolve_image.view();
-          info.resolveImageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
+          info.resolveImageLayout = VK_IMAGE_LAYOUT_GENERAL;
         }
 
         group.depth_attachment = info;
@@ -378,7 +378,10 @@ auto render_graph::initialize_gpu_queries(const graphics::physical_device& physi
   const auto timestamp_count = pass_count * 2u * graphics::swapchain::max_frames_in_flight;
 
   _timestamp_pool = std::make_unique<graphics::query_pool>(logical_device, VK_QUERY_TYPE_TIMESTAMP, timestamp_count);
-  _pipeline_stats_pool = std::make_unique<graphics::query_pool>(logical_device, VK_QUERY_TYPE_PIPELINE_STATISTICS, graphics::swapchain::max_frames_in_flight, pipeline_statistics_flags);
+
+  if (logical_device.enabled_features().core().pipelineStatisticsQuery) {
+    _pipeline_stats_pool = std::make_unique<graphics::query_pool>(logical_device, VK_QUERY_TYPE_PIPELINE_STATISTICS, graphics::swapchain::max_frames_in_flight, pipeline_statistics_flags);
+  }
 
   _pass_timings.resize(pass_count);
 
@@ -460,17 +463,12 @@ auto render_graph::execute(render_context& context) -> void {
 
   context.command_buffer->end_query(*_pipeline_stats_pool, context.slot);
 
-  // Read back this same slot's PREVIOUS occupant -- by the time context.slot cycles back around
-  // (max_frames_in_flight frames later), the timeline wait at the top of that frame (see
-  // frame_context::begin_frame) already guarantees the GPU is done with every query just written
-  // for it, so this never blocks and never reads a query from the frame still in flight.
-  //
-  // Read back one pass at a time rather than the whole range in one call: a pass with every group
-  // disabled this frame (no shadow casters, grid off, nothing to draw, ...) never got its
-  // begin/end timestamps written after reset_query_pool, so it stays "unavailable" -- a single
-  // batched read would then fail for every pass just because one of them was skipped. Per-pass
-  // reads let every still-enabled pass keep updating regardless; a skipped pass simply keeps
-  // showing its last known time.
+  ++_frames_executed;
+
+  if (_frames_executed <= graphics::swapchain::max_frames_in_flight) {
+    return;
+  }
+
   auto raw_timestamps = std::vector<std::uint64_t>{};
 
   for (auto pass_index = std::size_t{0u}; pass_index < _pass_timings.size(); ++pass_index) {

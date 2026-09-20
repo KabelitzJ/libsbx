@@ -63,6 +63,15 @@ namespace Sbx.Core.Components
       }
     }
 
+    /**
+     * Assigns a material asset to one of this mesh's submesh slots (0 by default), creating the
+     * underlying mesh_renderer component if needed. Pass null to clear the slot back to unassigned.
+     */
+    public void SetMaterial(Material? material, int submeshIndex = 0)
+    {
+      unsafe { InternalCalls.MeshRenderer_SetMaterial(UUID, (uint)submeshIndex, material?.UUID ?? 0); }
+    }
+
   } // class MeshRenderer
 
 } // namespace Sbx.Core.Components

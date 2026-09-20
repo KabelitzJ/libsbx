@@ -209,6 +209,8 @@ logical_device::logical_device(const physical_device& physical_device) {
 
   auto features = features::enabled(features::required(), features::optional(), available_features);
 
+  _enabled_features = features;
+
 	auto device_create_info = VkDeviceCreateInfo{};
 	device_create_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
   device_create_info.pNext = &features.chain();

@@ -93,11 +93,6 @@ opaque_pass::opaque_pass() {
   _pipelines[2] = _make_pipeline(unlit_shader, graphics::cull_mode::back, "Mesh Opaque Unlit");
   _pipelines[3] = _make_pipeline(unlit_shader, graphics::cull_mode::none, "Mesh Opaque Unlit Double-Sided");
 
-  // Same negative bias debug_draw_pass uses to keep collider outlines from z-fighting the mesh
-  // they trace -- this wireframe pass draws the exact same depth as the filled pass it overlays,
-  // so without it the two would flicker against each other. Uses fragment_main_wireframe's fixed
-  // debug color regardless of shading model, so back-cull/double-sided are the only two distinct
-  // pipelines needed -- indices 0/2 and 1/3 (matching _pipelines' pbr/unlit split) just share them.
   const auto wireframe_depth_bias = std::optional{graphics::depth_bias{.constant_factor = -2.0f, .slope_factor = -2.0f}};
 
   _wireframe_pipelines[0] = _make_pipeline(wireframe_shader, graphics::cull_mode::back, "Mesh Opaque Wireframe", graphics::polygon_mode::line, wireframe_depth_bias);

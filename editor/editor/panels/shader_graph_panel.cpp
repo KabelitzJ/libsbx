@@ -229,7 +229,7 @@ static auto input_column_width(const sbx::assets::shader_graph_node& node, sbx::
 // Every shader_node_type, for the Add Node palette -- grouped by shader_node_category_of at draw
 // time rather than kept pre-sorted here, so adding a new enumerator to shader_graph.hpp only ever
 // needs updating in one place (this list) to appear in the palette too.
-constexpr auto all_node_types = std::array<sbx::assets::shader_node_type, 57u>{
+constexpr auto all_node_types = std::array<sbx::assets::shader_node_type, 58u>{
   sbx::assets::shader_node_type::input_uv,
   sbx::assets::shader_node_type::input_normal,
   sbx::assets::shader_node_type::input_view_dir,
@@ -243,6 +243,7 @@ constexpr auto all_node_types = std::array<sbx::assets::shader_node_type, 57u>{
   sbx::assets::shader_node_type::delta_time,
   sbx::assets::shader_node_type::scene_depth,
   sbx::assets::shader_node_type::screen_position,
+  sbx::assets::shader_node_type::input_world_position,
   sbx::assets::shader_node_type::constant_float,
   sbx::assets::shader_node_type::constant_vector2,
   sbx::assets::shader_node_type::constant_vector3,

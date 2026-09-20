@@ -48,7 +48,14 @@ shadow_pass::shadow_pass() {
     });
   };
 
-  _pipelines[0] = make(graphics::cull_mode::front, "Shadow Cascade");
+  // cull_mode::back here (same winding culled as the color pass, not the reverse) -- a "cull
+  // front" peter-panning trick only helps closed, roughly-convex casters that have a front/back
+  // surface pair everywhere along their silhouette as seen from the light. Open meshes (terrain,
+  // ground planes) have a single layer of front-facing triangles; culling front faces for a
+  // caster like that discards almost the entire light-facing surface from the shadow map instead
+  // of just avoiding self-acne on it. Slope-scaled bias (csm.slang) carries the acne-avoidance
+  // burden instead, matching what the color pass already culls.
+  _pipelines[0] = make(graphics::cull_mode::back, "Shadow Cascade");
   _pipelines[1] = make(graphics::cull_mode::none, "Shadow Cascade Double-Sided");
   _pipelines[2] = _pipelines[0]; // shading model doesn't affect depth-only output
   _pipelines[3] = _pipelines[1];
@@ -63,7 +70,7 @@ auto shadow_pass::_resolve_graph_pipeline(const assets::shader_graph_handle& gra
   return resolve_graph_pipeline(graph, entry_points, graphics::graphics_pipeline::create_info{
     .color_formats = {},
     .depth_format = graphics::format::d32_sfloat,
-    .cull_mode = is_double_sided ? graphics::cull_mode::none : graphics::cull_mode::front,
+    .cull_mode = is_double_sided ? graphics::cull_mode::none : graphics::cull_mode::back,
     .front_face = graphics::front_face::counter_clockwise,
     .depth_test = true,
     .depth_write = true,

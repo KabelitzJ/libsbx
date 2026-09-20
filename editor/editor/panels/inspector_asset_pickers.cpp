@@ -29,20 +29,23 @@ auto to_picker_item(const sbx::assets::assets_module& assets_module, const sbx::
   return sbx::render::asset_picker_item{id, relative_asset_path(assets_module, id)};
 }
 
-auto draw_material_picker(editor_state& state, const char* popup_id, sbx::assets::material_handle& slot, sbx::assets::assets_module& assets_module, const sbx::assets::material_handle& mesh_default) -> bool {
+auto draw_material_picker(editor_state& state, const char* popup_id, sbx::assets::material_handle& slot, sbx::assets::assets_module& assets_module, const sbx::assets::material_handle& mesh_default, bool allow_none) -> bool {
   const auto current = slot.is_valid() ? to_picker_item(assets_module, slot->id()) : sbx::render::asset_picker_item{};
   const auto default_item = mesh_default.is_valid() ? to_picker_item(assets_module, mesh_default->id()) : sbx::render::asset_picker_item{};
 
   const auto options = sbx::render::asset_picker_options{
     .kind = sbx::render::asset_picker_kind::material,
     .extensions = {".material"},
+    .allow_none = allow_none,
     .show_edit_button = true,
     .show_reveal_button = true,
   };
 
   const auto result = sbx::render::draw_asset_picker(popup_id, current, default_item, options);
 
-  if (result.reset_to_default) {
+  if (result.cleared) {
+    slot = sbx::assets::material_handle{};
+  } else if (result.reset_to_default) {
     slot = mesh_default;
   } else if (result.changed) {
     // load_material(path) resolves relative against assets_directory() internally and reuses the

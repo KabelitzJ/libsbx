@@ -12,6 +12,7 @@
 #include <libsbx/math/angle.hpp>
 #include <libsbx/math/matrix4x4.hpp>
 #include <libsbx/math/vector4.hpp>
+#include <libsbx/math/noise.hpp>
 
 #include <libsbx/assets/animation_graph.hpp>
 #include <libsbx/assets/assets_module.hpp>
@@ -1984,6 +1985,14 @@ auto interop::terrain_sample_normal(math::vector2* world_xz, math::vector3* out_
   *out_normal = terrain_module.sample_normal(*world_xz);
 }
 
+auto interop::math_noise_simplex(std::float_t x, std::float_t y, std::float_t z) -> std::float_t {
+  return math::noise::simplex(x, y, z);
+}
+
+auto interop::math_noise_fractal(std::float_t x, std::float_t y, std::float_t z, std::uint32_t octaves) -> std::float_t {
+  return math::noise::fractal(x, y, z, octaves);
+}
+
 auto interop::mesh_renderer_set_geometry(std::uint64_t uuid, math::vector3* positions, math::vector3* normals, math::vector2* uvs, math::color* colors, std::uint32_t vertex_count, std::uint32_t* indices, std::uint32_t index_count, math::color* tint) -> void {
   if (!positions || !normals || !uvs || !indices || vertex_count == 0u || index_count == 0u) {
     utility::logger<"scripting">::error("Attempting to call mesh_renderer_set_geometry with invalid geometry");
@@ -2060,6 +2069,40 @@ auto interop::mesh_renderer_set_geometry(std::uint64_t uuid, math::vector3* posi
   // it needs to be resident the instant this call returns, not after a future process_uploads().
   renderer.mesh = assets_module.create_dynamic_mesh(vertices, index_vector, std::move(submeshes), bounds);
   renderer.materials = std::vector<assets::material_handle>{material};
+}
+
+auto interop::mesh_renderer_set_material(std::uint64_t uuid, std::uint32_t submesh_index, std::uint64_t material_uuid) -> void {
+  auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
+  auto& scene = scenes_module.active_scene();
+  auto node = scene.find(math::uuid::from_value(uuid));
+
+  if (!node.is_valid()) {
+    utility::logger<"scripting">::error("Attempting to call mesh_renderer_set_material on an invalid node");
+
+    return;
+  }
+
+  auto& renderer = node.get_or_add_component<scenes::mesh_renderer>();
+
+  if (renderer.materials.size() <= submesh_index) {
+    renderer.materials.resize(submesh_index + 1u);
+  }
+
+  if (material_uuid == 0u) {
+    renderer.materials[submesh_index] = assets::material_handle{};
+
+    return;
+  }
+
+  auto& assets_module = core::engine::get_module<assets::assets_module>();
+  renderer.materials[submesh_index] = assets_module.load_material(math::uuid::from_value(material_uuid));
+}
+
+auto interop::material_load(managed::string path) -> std::uint64_t {
+  auto& assets_module = core::engine::get_module<assets::assets_module>();
+  auto material = assets_module.load_material(std::filesystem::path{std::string{path}});
+
+  return material.is_valid() ? material->id().value() : 0u;
 }
 
 // Shared by every Canvas_*/RectTransform_*/UIImage_*/UIText_*/UIButton_* binding below -- the same

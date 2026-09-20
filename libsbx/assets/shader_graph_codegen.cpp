@@ -42,6 +42,10 @@ static auto codegen_context_of(shader_node_type type) -> std::optional<codegen_c
     // stage for either.
     case shader_node_type::scene_depth:
     case shader_node_type::screen_position:
+    // Backed by a local declared only in fragment_main's scope (see _emit's own case and the
+    // fragment_main/preview fragment_main templates' "world_position" declarations) -- the vertex
+    // stage has no model matrix available to compute a world position from in the first place.
+    case shader_node_type::input_world_position:
       return codegen_context::fragment;
     default:
       return std::nullopt; // valid in either context -- camera_position/main_light_direction/
@@ -386,6 +390,7 @@ private:
       case shader_node_type::input_uv: return {"uv", "float2"};
       case shader_node_type::input_normal: return {"n", "float3"};
       case shader_node_type::input_view_dir: return {"view_dir", "float3"};
+      case shader_node_type::input_world_position: return {"world_position", "float3"};
       case shader_node_type::input_vertex_position: return {"v.position", "float3"};
       case shader_node_type::input_vertex_normal: return {"v.normal", "float3"};
       case shader_node_type::input_vertex_tangent: return {"v.tangent.xyz", "float3"};
@@ -1021,6 +1026,7 @@ auto generate_shader_graph_source(const std::string& graph_name, const shader_gr
     "  float2 uv = apply_uv_transform(material, input.uv);\n"
     "  float3 n = float3(0.0, 0.0, 1.0);\n"
     "  float3 view_dir = float3(0.0, 0.0, 1.0);\n"
+    "  float3 world_position = float3(0.0, 0.0, 0.0);\n" // depth_fragment_input carries no real position -- same dummy-fallback reasoning as n/view_dir above
     "\n"
     "{6}"
     "  uint is_alpha_masked = (material.flags & material_flags::alpha_masked) != 0u;\n"
@@ -1035,6 +1041,7 @@ auto generate_shader_graph_source(const std::string& graph_name, const shader_gr
     "  float2 uv = apply_uv_transform(material, input.uv);\n"
     "  float3 n = normalize(lighting_input.normal);\n"
     "  float3 view_dir = normalize(lighting_input.frame_data.camera_position.xyz - lighting_input.position);\n"
+    "  float3 world_position = lighting_input.position;\n"
     "\n"
     "{4}"
     "\n"
@@ -1210,6 +1217,7 @@ auto generate_shader_graph_preview_source(const std::string& graph_name, const s
     "  float2 uv = apply_uv_transform(material, input.uv);\n"
     "  float3 n = normalize(input.normal);\n"
     "  float3 view_dir = normalize(push.camera_position.xyz - input.position);\n"
+    "  float3 world_position = input.position;\n" // preview mesh sits at the origin unscaled -- object position doubles as "world" position here
     "\n"
     "{4}"
     "\n"

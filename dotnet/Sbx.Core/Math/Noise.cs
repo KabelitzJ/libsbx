@@ -11,15 +11,15 @@ namespace Sbx.Core.Math
   {
 
     /** Single-octave simplex noise, roughly in [-1, 1]. */
-    public static float Sample(float x, float y, int seed = 0)
+    public static float Simplex(float x, float y, float z)
     {
-      unsafe { return InternalCalls.Math_NoiseSimplex(x, y, seed); }
+      unsafe { return InternalCalls.Math_NoiseSimplex(x, y, z); }
     }
 
-    /** Multi-octave (fractal Brownian motion) simplex noise -- smoother, larger-scale variation than Sample, e.g. for a heightmap. Roughly in [-1, 1]. */
-    public static float Fractal(float x, float y, int seed, uint octaves)
+    /** Multi-octave (fractal Brownian motion) simplex noise -- smoother, larger-scale variation than Simplex. */
+    public static float Fractal(float x, float y, float z, uint octaves, float lacunarity = 2.0f, float gain = 0.5f)
     {
-      unsafe { return InternalCalls.Math_NoiseFractal(x, y, seed, octaves); }
+      unsafe { return InternalCalls.Math_NoiseFractal(x, y, z, octaves, lacunarity, gain); }
     }
 
   } // class Noise

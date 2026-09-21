@@ -299,7 +299,7 @@ struct interop {
   static auto math_noise_simplex(std::float_t x, std::float_t y, std::float_t z) -> std::float_t;
 
   /** @brief See math::noise::fractal(x, y, z, octaves) -- multi-octave (fractal Brownian motion) simplex, smoother/larger-scale than a single simplex() call. Roughly in [-1, 1]. */
-  static auto math_noise_fractal(std::float_t x, std::float_t y, std::float_t z, std::uint32_t octaves) -> std::float_t;
+  static auto math_noise_fractal(std::float_t x, std::float_t y, std::float_t z, std::uint32_t octaves, std::float_t lacunarity, std::float_t gain) -> std::float_t;
 
   /**
    * @brief Builds a mesh from raw vertex/index data and assigns it to this node's mesh_renderer

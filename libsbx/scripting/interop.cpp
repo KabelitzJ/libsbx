@@ -1989,8 +1989,8 @@ auto interop::math_noise_simplex(std::float_t x, std::float_t y, std::float_t z)
   return math::noise::simplex(x, y, z);
 }
 
-auto interop::math_noise_fractal(std::float_t x, std::float_t y, std::float_t z, std::uint32_t octaves) -> std::float_t {
-  return math::noise::fractal(x, y, z, octaves);
+auto interop::math_noise_fractal(std::float_t x, std::float_t y, std::float_t z, std::uint32_t octaves, std::float_t lacunarity, std::float_t gain) -> std::float_t {
+  return math::noise::fractal(x, y, z, octaves, lacunarity, gain);
 }
 
 auto interop::mesh_renderer_set_geometry(std::uint64_t uuid, math::vector3* positions, math::vector3* normals, math::vector2* uvs, math::color* colors, std::uint32_t vertex_count, std::uint32_t* indices, std::uint32_t index_count, math::color* tint) -> void {

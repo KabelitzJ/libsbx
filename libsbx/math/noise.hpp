@@ -35,9 +35,9 @@ class noise {
 
 public:
 
-  static constexpr auto fractal(const std::float_t x, const std::float_t y, std::uint32_t octaves) -> std::float_t {
-    auto output = 0.f;
-    auto denom  = 0.f;
+  static constexpr auto fractal(std::float_t x, std::float_t y, std::uint32_t octaves, std::float_t lacunarity = 2.0f, std::float_t gain = 0.5f) -> std::float_t {
+    auto output = 0.0f;
+    auto denom  = 0.0f;
     auto frequency = 1.0f;
     auto amplitude = 1.0f;
 
@@ -45,18 +45,18 @@ public:
       output += (amplitude * simplex(x * frequency, y * frequency));
       denom += amplitude;
 
-      frequency *= 2.0f;
-      amplitude *= 0.5f;
+      frequency *= lacunarity;
+      amplitude *= gain;
     }
 
     return (output / denom);
   }
 
-  static constexpr auto fractal(const sbx::math::vector3& vector, std::uint32_t octaves) -> std::float_t {
-    return fractal(vector.x(), vector.y(), vector.z(), octaves);
+  static constexpr auto fractal(const sbx::math::vector3& vector, std::uint32_t octaves, std::float_t lacunarity = 2.0f, std::float_t gain = 0.5f) -> std::float_t {
+    return fractal(vector.x(), vector.y(), vector.z(), octaves, lacunarity, gain);
   }
 
-  static constexpr auto fractal(const std::float_t x, const std::float_t y, const std::float_t z, std::uint32_t octaves) -> std::float_t {
+  static constexpr auto fractal(const std::float_t x, const std::float_t y, const std::float_t z, std::uint32_t octaves, std::float_t lacunarity = 2.0f, std::float_t gain = 0.5f) -> std::float_t {
     auto output = 0.f;
     auto denom  = 0.f;
     auto frequency = 1.0f;
@@ -66,8 +66,8 @@ public:
       output += (amplitude * simplex(x * frequency, y * frequency, z * frequency));
       denom += amplitude;
 
-      frequency *= 2.0f;
-      amplitude *= 0.5f;
+      frequency *= lacunarity;
+      amplitude *= gain;
     }
 
     return (output / denom);
@@ -107,7 +107,7 @@ public:
     const auto y2 = y0 - 1.0f + 2.0f * G2;
 
     const auto gi0 = hash(i + hash(j));
-    const auto gi1 = hash(static_cast<std::float_t>(i) + i1 + hash(static_cast<std::float_t>(j) + j1));
+    const auto gi1 = hash(i + static_cast<std::int32_t>(i1) + hash(j + static_cast<std::int32_t>(j1)));
     const auto gi2 = hash(i + 1 + hash(j + 1));
 
     auto t0 = 0.5f - x0 * x0 - y0 * y0;
@@ -236,8 +236,8 @@ public:
 
     // Work out the hashed gradient indices of the four simplex corners
     auto gi0 = hash(i + hash(j + hash(k)));
-    auto gi1 = hash(static_cast<std::float_t>(i) + i1 + hash(static_cast<std::float_t>(j) + j1 + hash(static_cast<std::float_t>(k) + k1)));
-    auto gi2 = hash(static_cast<std::float_t>(i) + i2 + hash(static_cast<std::float_t>(j) + j2 + hash(static_cast<std::float_t>(k) + k2)));
+    auto gi1 = hash(i + static_cast<std::int32_t>(i1) + hash(j + static_cast<std::int32_t>(j1) + hash(k + static_cast<std::int32_t>(k1))));
+    auto gi2 = hash(i + static_cast<std::int32_t>(i2) + hash(j + static_cast<std::int32_t>(j2) + hash(k + static_cast<std::int32_t>(k2))));
     auto gi3 = hash(i + 1 + hash(j + 1 + hash(k + 1)));
 
     // Calculate the contribution from the four corners
@@ -289,7 +289,7 @@ private:
     return (fp < static_cast<std::float_t>(i)) ? (i - 1) : (i);
   }
 
-  template<typename Type>
+  template<sbx::math::integral Type>
   static constexpr auto hash(Type i) -> std::uint8_t {
     return permutation[static_cast<std::uint8_t>(i)];
   }

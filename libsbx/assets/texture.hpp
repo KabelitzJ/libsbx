@@ -43,9 +43,15 @@ public:
     return _id;
   }
 
+  /** @brief Bindless storage-image index, for a texture a compute shader can write into as a UAV (see asset_residency::create_storage_image). invalid_index for an ordinary loaded texture -- it was never registered as a storage image. */
+  [[nodiscard]] auto storage_index() const noexcept -> std::uint32_t {
+    return _storage_index;
+  }
+
 private:
 
   std::uint32_t _bindless_index{invalid_index};
+  std::uint32_t _storage_index{invalid_index};
   math::uuid _id{math::uuid::nil()};
 
 }; // class texture

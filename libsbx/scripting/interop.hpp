@@ -329,6 +329,166 @@ struct interop {
   /** @brief Loads (or reuses, if already imported) a .material asset by project-relative path, returning its uuid -- 0 if the path doesn't resolve to a real material. Backs Sbx.Core.Material.Load. */
   static auto material_load(managed::string path) -> std::uint64_t;
 
+  /**
+   * @brief Bilinearly samples an image file's raw pixels at normalized (u, v), decoding it via the
+   * same stb_image path asset_cooker_texture.cpp uses and caching the decoded buffer by
+   * project-relative path for reuse across repeated calls. Deliberately decoupled from the
+   * GPU-resident assets::texture/bindless pipeline (which keeps no CPU-side pixels once uploaded,
+   * see texture.hpp) -- this exists purely so script-side procedural generation can read source
+   * art (e.g. a terrain type's height/diffuse/mixer atlas cell) without a render round-trip.
+   * Returns false (out_color left untouched) if the file can't be found/decoded.
+   */
+  static auto texture_sample_bilinear(managed::string path, std::float_t u, std::float_t v, math::color* out_color) -> bool;
+
+  /** @brief Loads (or reuses) a GPU-resident texture asset by project-relative path, returning its uuid -- 0 if the path doesn't resolve. Backs Sbx.Core.Texture2D.Load. Unlike texture_sample_bilinear, this is the real bindless-resident asset a Material can reference. */
+  static auto texture_load(managed::string path) -> std::uint64_t;
+
+  /** @brief Allocates a new, empty, compute-writable storage image -- see assets::asset_residency::create_storage_image. format: 0 = RGBA8, 1 = R32 float, 2 = R8 unorm (matching Sbx.Core.TextureFormat's declaration order). Backs Sbx.Core.Texture2D.CreateStorageImage. */
+  static auto texture_create_storage_image(std::uint32_t width, std::uint32_t height, std::uint32_t format) -> std::uint64_t;
+
+  /**
+   * @brief Copies the texture's full width * height pixels from the GPU into out_pixels (already
+   * sized by the caller -- see MeshRenderer_SetGeometry's own caller-allocates convention), via a
+   * blocking image-to-buffer copy + host-visible staging buffer. format must match how the
+   * texture was created (0 = RGBA8, 1 = R32 float, 2 = R8 unorm); single-channel formats land in
+   * out_pixels[i].r only. No-op if texture_uuid or out_pixels is invalid. Backs
+   * Sbx.Core.Texture2D.ReadPixels.
+   */
+  static auto texture_read_pixels(std::uint64_t texture_uuid, std::uint32_t width, std::uint32_t height, std::uint32_t format, math::color* out_pixels) -> void;
+
+  /** @brief Frees a texture's bindless indices and underlying GPU image -- see assets::asset_residency::release_texture. Backs Sbx.Core.Texture2D.Dispose. No-op if texture_uuid doesn't resolve. */
+  static auto texture_release(std::uint64_t texture_uuid) -> void;
+
+  /**
+   * @brief Writes raw RGBA8 pixel data (row-major, no padding) straight to a PNG file on disk via
+   * stb_image_write -- a debugging aid for inspecting a compute-baked texture's actual content
+   * (e.g. Texture2D.ReadPixels' output, converted to bytes) as a real image file, rather than only
+   * ever reading it back into more script code. Creates the destination directory if it doesn't
+   * exist. path is used as-is (absolute, or relative to the engine process's own working
+   * directory) -- this is a raw filesystem write for local debugging, not an asset-pipeline path.
+   * Returns false (and logs) if rgba_pixels is null, width/height is zero, or the write itself
+   * fails. Backs Sbx.Core.DebugImage.SavePng.
+   */
+  static auto debug_write_png(managed::string path, std::uint32_t width, std::uint32_t height, const std::uint8_t* rgba_pixels) -> bool;
+
+  /** @brief Transitions a CreateStorageImage texture to a layout a material can actually sample -- see assets::asset_residency::prepare_texture_for_sampling. Backs Sbx.Core.Texture2D.PrepareForSampling. Call once after a texture is done being written by compute and before assigning it to a Material. */
+  static auto texture_prepare_for_sampling(std::uint64_t texture_uuid) -> void;
+
+  /**
+   * @brief Whether a Load()'d texture's pixel data has actually finished uploading to the GPU --
+   * see assets::asset_residency::is_resident. False for an unresolved uuid. Always true for a
+   * CreateStorageImage texture (it's synchronously GPU-resident the instant it's created). Backs
+   * Sbx.Core.Texture2D.IsResident -- check this on a Load()'d texture before a compute shader
+   * samples it (or before ComputeShader.Dispatch, if the script needs its own gate rather than a
+   * per-frame Update poll), since Load() itself returns a valid handle immediately but the real
+   * pixel data streams in on a background thread and per-frame upload budget.
+   */
+  static auto texture_is_resident(std::uint64_t texture_uuid) -> bool;
+
+  /** @brief Copies a material into a brand-new, independently-registered instance -- see assets::asset_residency::duplicate_material. Backs Sbx.Core.Material.CreateInstance. Returns 0 if source_uuid doesn't resolve. */
+  static auto material_create_instance(std::uint64_t source_uuid) -> std::uint64_t;
+
+  /**
+   * @brief Whether a Load()'d material's real file content (not just its handle) has been applied
+   * yet -- see assets::loadable::is_loaded. False for an unresolved uuid. Always true for a
+   * CreateInstance/duplicated material (its fields are copied synchronously at creation). Backs
+   * Sbx.Core.Material.IsLoaded -- check this before CreateInstance-ing a Load()'d template, or the
+   * duplicate copies whatever placeholder/default fields the template happened to have at that
+   * instant, permanently, since duplication is a one-time synchronous field copy, not a live
+   * reference to the template.
+   */
+  static auto material_is_loaded(std::uint64_t material_uuid) -> bool;
+
+  /** @brief Frees a material's slot for reuse -- see assets::asset_residency::release_material. Backs Sbx.Core.Material.Dispose. No-op if material_uuid doesn't resolve. Never call on a shared/loaded template material, only an instance from Material.CreateInstance. */
+  static auto material_release(std::uint64_t material_uuid) -> void;
+
+  /**
+   * @brief Overwrites one of a material's fixed texture slots in place (slot: 0 albedo, 1 normal,
+   * 2 metallic_roughness, 3 occlusion, 4 emissive -- matching Sbx.Core.MaterialTextureSlot's
+   * declaration order). Every material_handle already pointing at this material observes the
+   * change, same caveat as material::update_material itself -- call this on an instance from
+   * Material.CreateInstance, not a shared loaded asset, unless the change really should be global.
+   */
+  static auto material_set_texture(std::uint64_t material_uuid, std::uint32_t slot, std::uint64_t texture_uuid) -> void;
+
+  // ComputeBuffer: a GPU-resident structured buffer for a compute shader to read, referenced by
+  // its raw device address (VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT) rather than a bindless
+  // index -- the same convention geometry.slang's push_data already uses for vertex/transform
+  // buffers (see mesh_renderer_set_geometry). Tracked in a scripting-local registry (not the
+  // assets module) since these are transient, script-owned resources with no uuid/content-asset
+  // identity of their own -- see interop.cpp's compute_buffer_registry().
+
+  /** @brief Allocates count * stride bytes of GPU-resident storage, uninitialized. Backs Sbx.Core.ComputeBuffer's constructor. Returns an opaque id, 0 on failure. */
+  static auto compute_buffer_create(std::int32_t count, std::int32_t stride) -> std::uint64_t;
+
+  /** @brief Uploads byte_count bytes starting at data into the buffer. Backs Sbx.Core.ComputeBuffer.SetData. No-op (logs) if id doesn't resolve. */
+  static auto compute_buffer_set_data(std::uint64_t id, const void* data, std::int32_t byte_count) -> void;
+
+  /**
+   * @brief Releases the buffer: removes it from the scripting-local registry and retires its GPU
+   * memory. Safe to call unconditionally -- every ComputeBuffer use in this design (SetData,
+   * ComputeShader.SetBuffer + Dispatch) is fully blocking (see compute_shader_dispatch's own
+   * submit_idle()), so nothing can still be reading this buffer on the GPU by the time script code
+   * gets to call Dispose. Backs Sbx.Core.ComputeBuffer.Dispose. No-op if id doesn't resolve
+   * (already released, or never valid).
+   */
+  static auto compute_buffer_release(std::uint64_t id) -> void;
+
+  // ComputeShader: compiles an arbitrary project-relative .slang path at dispatch time (via the
+  // same graphics::shader_cache/compute_pipeline_cache engine-authored shaders use, see
+  // ibl_baker::bake_environment for the reference recipe this mirrors) with a `[shader("compute")]
+  // compute_main` entry point. Parameters are NOT resolved by name/reflection -- this engine's own
+  // compute dispatches (ibl_baker) all pack a plain POD push-constant struct instead, so
+  // Set*'s `name` stays script-side only (a readability label); the native side just appends each
+  // value, in call order, to an ordered byte buffer that becomes the dispatch's push constants.
+  // The one exception is SetBuffer: a device address is 8 bytes (vs. 4 for everything else), so to
+  // avoid replicating C-style struct alignment/padding rules here, it gets one dedicated 8-byte
+  // slot at the very front of the push-constant block rather than sharing the ordered byte buffer
+  // -- meaning a dispatch supports at most one ComputeBuffer. That matches every bake pass this was
+  // built for (one hex-data buffer, several textures/scalars); revisit if a real second-buffer need
+  // shows up. Right after that comes an ALWAYS-present bindless clamp-sampler index, resolved
+  // automatically by compute_shader_dispatch (every script compute shader samples something, so
+  // no Set call for it exists -- see its own comment). So the full push-constant layout, and the
+  // .slang file's own push_data struct field order it must match, is: uint64_t buffer_address;
+  // uint sampler_index; <then the ordered Set* scalars>. Registered in the same kind of
+  // scripting-local id map as ComputeBuffer, see interop.cpp's compute_shader_registry().
+
+  /** @brief Resolves a project-relative .slang path; compilation itself is deferred to the first Dispatch. Backs Sbx.Core.ComputeShader.Load. Returns an opaque id, 0 if the file doesn't exist. */
+  static auto compute_shader_load(managed::string path) -> std::uint64_t;
+
+  /** @brief Appends texture's bindless SAMPLED index (read access) to the shader's pending scalar parameters. Backs Sbx.Core.ComputeShader.SetTexture. */
+  static auto compute_shader_set_texture(std::uint64_t id, std::uint64_t texture_uuid) -> void;
+
+  /** @brief Appends texture's bindless STORAGE index (UAV write access, see texture::storage_index()) to the shader's pending scalar parameters -- texture must come from Texture2D.CreateStorageImage, not Load. Backs Sbx.Core.ComputeShader.SetOutputTexture. */
+  static auto compute_shader_set_output_texture(std::uint64_t id, std::uint64_t texture_uuid) -> void;
+
+  /** @brief Sets the shader's one buffer-address slot (see the ComputeShader section comment above). Backs Sbx.Core.ComputeShader.SetBuffer. Overwrites any previous SetBuffer call for this dispatch. */
+  static auto compute_shader_set_buffer(std::uint64_t id, std::uint64_t buffer_id) -> void;
+
+  /** @brief Appends a 4-byte float to the shader's pending scalar parameters. Backs Sbx.Core.ComputeShader.SetFloat. */
+  static auto compute_shader_set_float(std::uint64_t id, std::float_t value) -> void;
+
+  /** @brief Appends a 4-byte int to the shader's pending scalar parameters. Backs Sbx.Core.ComputeShader.SetInt. */
+  static auto compute_shader_set_int(std::uint64_t id, std::int32_t value) -> void;
+
+  /**
+   * @brief Compiles (or reuses the cached compilation of) the shader, binds the pending buffer
+   * address + ordered scalar parameters as push constants, dispatches, and blocks until the GPU
+   * finishes -- same synchronous, single-command-buffer pattern as ibl_baker::bake_environment.
+   * Clears the pending parameters afterward, ready for the next Set Dispatch cycle. Backs
+   * Sbx.Core.ComputeShader.Dispatch.
+   */
+  static auto compute_shader_dispatch(std::uint64_t id, std::uint32_t group_count_x, std::uint32_t group_count_y, std::uint32_t group_count_z) -> void;
+
+  /**
+   * @brief Removes the shader from the scripting-local registry. The underlying compiled shader/
+   * pipeline are NOT touched -- those live in graphics_module's own shader_cache/
+   * compute_pipeline_cache, keyed by path, shared across every ComputeShader instance (and
+   * anything else) that resolves to the same path, and are that cache's responsibility, not
+   * this one's. Backs Sbx.Core.ComputeShader.Dispose. No-op if id doesn't resolve.
+   */
+  static auto compute_shader_release(std::uint64_t id) -> void;
+
   // Canvas: node uuid -> canvas::canvas/rect_transform/ui_image/ui_text/ui_button field access,
   // same uuid-resolve-then-get/set convention as Transform_*/Rigidbody_* above.
   static auto canvas_get_sort_order(std::uint64_t uuid, std::int32_t* out_value) -> void;

@@ -147,6 +147,31 @@ namespace Sbx.Core
     internal static delegate* unmanaged<ulong, Vector3*, Vector3*, Vector2*, Color*, uint, uint*, uint, Color*, void> MeshRenderer_SetGeometry;
     internal static delegate* unmanaged<ulong, uint, ulong, void> MeshRenderer_SetMaterial;
     internal static delegate* unmanaged<NativeString, ulong> Material_Load;
+    internal static delegate* unmanaged<ulong, ulong> Material_CreateInstance;
+    internal static delegate* unmanaged<ulong, uint, ulong, void> Material_SetTexture;
+    internal static delegate* unmanaged<ulong, void> Material_Release;
+    internal static delegate* unmanaged<ulong, bool> Material_IsLoaded;
+    internal static delegate* unmanaged<NativeString, float, float, Color*, bool> Texture_SampleBilinear;
+    internal static delegate* unmanaged<NativeString, ulong> Texture_Load;
+    internal static delegate* unmanaged<uint, uint, uint, ulong> Texture_CreateStorageImage;
+    internal static delegate* unmanaged<ulong, uint, uint, uint, Color*, void> Texture_ReadPixels;
+    internal static delegate* unmanaged<ulong, void> Texture_Release;
+    internal static delegate* unmanaged<NativeString, uint, uint, byte*, bool> Debug_WritePng;
+    internal static delegate* unmanaged<ulong, void> Texture_PrepareForSampling;
+    internal static delegate* unmanaged<ulong, bool> Texture_IsResident;
+
+    internal static delegate* unmanaged<int, int, ulong> ComputeBuffer_Create;
+    internal static delegate* unmanaged<ulong, void*, int, void> ComputeBuffer_SetData;
+    internal static delegate* unmanaged<ulong, void> ComputeBuffer_Release;
+
+    internal static delegate* unmanaged<NativeString, ulong> ComputeShader_Load;
+    internal static delegate* unmanaged<ulong, ulong, void> ComputeShader_SetTexture;
+    internal static delegate* unmanaged<ulong, ulong, void> ComputeShader_SetOutputTexture;
+    internal static delegate* unmanaged<ulong, ulong, void> ComputeShader_SetBuffer;
+    internal static delegate* unmanaged<ulong, float, void> ComputeShader_SetFloat;
+    internal static delegate* unmanaged<ulong, int, void> ComputeShader_SetInt;
+    internal static delegate* unmanaged<ulong, uint, uint, uint, void> ComputeShader_Dispatch;
+    internal static delegate* unmanaged<ulong, void> ComputeShader_Release;
 
     internal static delegate* unmanaged<ulong, int*, void> Canvas_GetSortOrder;
     internal static delegate* unmanaged<ulong, int, void> Canvas_SetSortOrder;

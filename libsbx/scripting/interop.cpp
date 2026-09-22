@@ -3,7 +3,15 @@
 #include <libsbx/scripting/interop.hpp>
 
 #include <algorithm>
+#include <cstring>
 #include <filesystem>
+#include <unordered_map>
+#include <vector>
+
+#include <stb_image.h>
+
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include <stb_image_write.h>
 
 #include <libsbx/utility/logger.hpp>
 
@@ -16,6 +24,19 @@
 
 #include <libsbx/assets/animation_graph.hpp>
 #include <libsbx/assets/assets_module.hpp>
+
+#include <vulkan/vulkan.h>
+
+#include <libsbx/graphics/graphics_module.hpp>
+#include <libsbx/graphics/bindless_table.hpp>
+#include <libsbx/graphics/resources/buffer.hpp>
+#include <libsbx/graphics/resources/image.hpp>
+#include <libsbx/graphics/resources/sampler.hpp>
+#include <libsbx/graphics/commands/command_buffer.hpp>
+#include <libsbx/graphics/pipeline/shader_cache.hpp>
+#include <libsbx/graphics/pipeline/shader_compiler.hpp>
+#include <libsbx/graphics/pipeline/compute_pipeline.hpp>
+#include <libsbx/graphics/pipeline/compute_pipeline_cache.hpp>
 
 #include <libsbx/physics/rigidbody.hpp>
 #include <libsbx/physics/physics_module.hpp>
@@ -2103,6 +2124,638 @@ auto interop::material_load(managed::string path) -> std::uint64_t {
   auto material = assets_module.load_material(std::filesystem::path{std::string{path}});
 
   return material.is_valid() ? material->id().value() : 0u;
+}
+
+auto interop::texture_load(managed::string path) -> std::uint64_t {
+  auto& assets_module = core::engine::get_module<assets::assets_module>();
+  auto texture = assets_module.load_texture(std::filesystem::path{std::string{path}});
+
+  return texture.is_valid() ? texture->id().value() : 0u;
+}
+
+auto interop::texture_create_storage_image(std::uint32_t width, std::uint32_t height, std::uint32_t format) -> std::uint64_t {
+  const auto native_format = [format]() -> graphics::format {
+    switch (format) {
+      case 0u: return graphics::format::r8g8b8a8_unorm;
+      case 1u: return graphics::format::r32_sfloat;
+      case 2u: return graphics::format::r8_unorm;
+      default: {
+        utility::logger<"scripting">::error("texture_create_storage_image: invalid format {}", format);
+        return graphics::format::r8g8b8a8_unorm;
+      }
+    }
+  }();
+
+  auto& assets_module = core::engine::get_module<assets::assets_module>();
+  auto texture = assets_module.create_storage_image(width, height, native_format);
+
+  return texture.is_valid() ? texture->id().value() : 0u;
+}
+
+auto interop::texture_read_pixels(std::uint64_t texture_uuid, std::uint32_t width, std::uint32_t height, std::uint32_t format, math::color* out_pixels) -> void {
+  if (!out_pixels) {
+    return;
+  }
+
+  auto& assets_module = core::engine::get_module<assets::assets_module>();
+  auto texture = assets_module.find_texture(math::uuid::from_value(texture_uuid));
+
+  const auto source_image_handle = assets_module.image_handle_for(texture);
+
+  if (!source_image_handle.is_valid()) {
+    utility::logger<"scripting">::error("texture_read_pixels: no resident image for texture {}", texture_uuid);
+    return;
+  }
+
+  const auto bytes_per_pixel = [format]() -> std::size_t {
+    switch (format) {
+      case 2u: return 1u; // R8 unorm
+      case 1u: return 4u; // R32 float
+      default: return 4u; // RGBA8
+    }
+  }();
+
+  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
+  auto& registry = graphics_module.resource_registry();
+
+  auto& source_image = registry.get<graphics::image>(source_image_handle);
+
+  const auto byte_size = static_cast<graphics::buffer::size_type>(width) * static_cast<graphics::buffer::size_type>(height) * bytes_per_pixel;
+
+  const auto staging_handle = registry.emplace<graphics::buffer>(graphics::buffer::create_info{
+    .size = byte_size,
+    .usage = graphics::buffer_usage::transfer_destination,
+    .memory = graphics::memory_usage::host_read,
+    .name = "Texture Readback Staging"
+  });
+
+  auto& staging = registry.get<graphics::buffer>(staging_handle);
+
+  auto command_buffer = graphics::command_buffer{graphics::queue::type::compute, true};
+
+  auto region = VkBufferImageCopy{};
+  region.bufferOffset = 0u;
+  region.bufferRowLength = 0u;
+  region.bufferImageHeight = 0u;
+  region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+  region.imageSubresource.mipLevel = 0u;
+  region.imageSubresource.baseArrayLayer = 0u;
+  region.imageSubresource.layerCount = 1u;
+  region.imageOffset = VkOffset3D{0, 0, 0};
+  region.imageExtent = VkExtent3D{width, height, 1u};
+
+  vkCmdCopyImageToBuffer(command_buffer.handle(), source_image.handle(), VK_IMAGE_LAYOUT_GENERAL, staging.handle(), 1u, &region);
+
+  command_buffer.submit_idle();
+
+  const auto* source = static_cast<const std::byte*>(staging.mapped());
+
+  for (auto y = std::uint32_t{0u}; y < height; ++y) {
+    for (auto x = std::uint32_t{0u}; x < width; ++x) {
+      const auto pixel_index = static_cast<std::size_t>(y) * width + x;
+      const auto* pixel = source + pixel_index * bytes_per_pixel;
+
+      switch (format) {
+        case 2u: { // R8 unorm
+          const auto value = static_cast<std::float_t>(*reinterpret_cast<const std::uint8_t*>(pixel)) / 255.0f;
+          out_pixels[pixel_index] = math::color{value, 0.0f, 0.0f, 1.0f};
+          break;
+        }
+        case 1u: { // R32 float
+          auto value = std::float_t{};
+          std::memcpy(&value, pixel, sizeof(value));
+          out_pixels[pixel_index] = math::color{value, 0.0f, 0.0f, 1.0f};
+          break;
+        }
+        default: { // RGBA8 unorm
+          const auto* rgba = reinterpret_cast<const std::uint8_t*>(pixel);
+          out_pixels[pixel_index] = math::color{rgba[0] / 255.0f, rgba[1] / 255.0f, rgba[2] / 255.0f, rgba[3] / 255.0f};
+          break;
+        }
+      }
+    }
+  }
+
+  // submit_idle() above already blocked until the GPU finished this exact work, so the staging
+  // buffer is provably unused right now and safe to retire immediately. retire() enforces a
+  // pool-wide non-decreasing timeline_value invariant across every buffer/image any part of the
+  // engine retires, though (see resource_pool::retire's own assert), so despite "provably unused
+  // right now," the correct value here is still the real current frame index -- a hardcoded 0
+  // would violate that invariant (and trigger its own assert) the moment anything else in the
+  // pool had already retired something at a later frame first.
+  registry.retire(staging_handle, graphics_module.frame_context().frame_index());
+}
+
+auto interop::debug_write_png(managed::string path, std::uint32_t width, std::uint32_t height, const std::uint8_t* rgba_pixels) -> bool {
+  if (!rgba_pixels || width == 0u || height == 0u) {
+    return false;
+  }
+
+  const auto path_string = std::string{path};
+
+  if (const auto parent = std::filesystem::path{path_string}.parent_path(); !parent.empty()) {
+    std::filesystem::create_directories(parent);
+  }
+
+  const auto result = stbi_write_png(path_string.c_str(), static_cast<int>(width), static_cast<int>(height), 4, rgba_pixels, static_cast<int>(width) * 4);
+
+  if (result == 0) {
+    utility::logger<"scripting">::error("debug_write_png: failed to write '{}'", path_string);
+    return false;
+  }
+
+  return true;
+}
+
+auto interop::texture_release(std::uint64_t texture_uuid) -> void {
+  auto& assets_module = core::engine::get_module<assets::assets_module>();
+  auto texture = assets_module.find_texture(math::uuid::from_value(texture_uuid));
+
+  assets_module.release_texture(texture);
+}
+
+auto interop::texture_prepare_for_sampling(std::uint64_t texture_uuid) -> void {
+  auto& assets_module = core::engine::get_module<assets::assets_module>();
+  auto texture = assets_module.find_texture(math::uuid::from_value(texture_uuid));
+
+  assets_module.prepare_texture_for_sampling(texture);
+}
+
+auto interop::material_release(std::uint64_t material_uuid) -> void {
+  auto& assets_module = core::engine::get_module<assets::assets_module>();
+  auto material = assets_module.load_material(math::uuid::from_value(material_uuid));
+
+  assets_module.release_material(material);
+}
+
+auto interop::texture_is_resident(std::uint64_t texture_uuid) -> bool {
+  auto& assets_module = core::engine::get_module<assets::assets_module>();
+  auto texture = assets_module.find_texture(math::uuid::from_value(texture_uuid));
+
+  return assets_module.is_resident(texture);
+}
+
+auto interop::material_is_loaded(std::uint64_t material_uuid) -> bool {
+  auto& assets_module = core::engine::get_module<assets::assets_module>();
+  auto material = assets_module.load_material(math::uuid::from_value(material_uuid));
+
+  return material.is_loaded();
+}
+
+auto interop::material_create_instance(std::uint64_t source_uuid) -> std::uint64_t {
+  auto& assets_module = core::engine::get_module<assets::assets_module>();
+  auto source = assets_module.load_material(math::uuid::from_value(source_uuid));
+  auto duplicated = assets_module.duplicate_material(source);
+
+  return duplicated.is_valid() ? duplicated->id().value() : 0u;
+}
+
+auto interop::material_set_texture(std::uint64_t material_uuid, std::uint32_t slot, std::uint64_t texture_uuid) -> void {
+  auto& assets_module = core::engine::get_module<assets::assets_module>();
+  auto material = assets_module.load_material(math::uuid::from_value(material_uuid));
+
+  if (!material.is_valid()) {
+    return;
+  }
+
+  auto texture = assets_module.find_texture(math::uuid::from_value(texture_uuid));
+
+  auto create_info = assets::material::create_info{};
+  create_info.name = material->name();
+  create_info.base_color_factor = material->base_color_factor();
+  create_info.emissive_factor = material->emissive_factor();
+  create_info.metallic_factor = material->metallic_factor();
+  create_info.roughness_factor = material->roughness_factor();
+  create_info.alpha = material->alpha();
+  create_info.shading = material->shading();
+  create_info.alpha_cutoff = material->alpha_cutoff();
+  create_info.is_double_sided = material->is_double_sided();
+  create_info.casts_shadow = material->casts_shadow();
+  create_info.receives_shadow = material->receives_shadow();
+  create_info.normal_scale = material->normal_scale();
+  create_info.occlusion_strength = material->occlusion_strength();
+  create_info.emissive_strength = material->emissive_strength();
+  create_info.ior = material->ior();
+  create_info.uv_tiling = material->uv_tiling();
+  create_info.uv_offset = material->uv_offset();
+  create_info.albedo = material->albedo();
+  create_info.normal = material->normal();
+  create_info.metallic_roughness = material->metallic_roughness();
+  create_info.occlusion = material->occlusion();
+  create_info.emissive = material->emissive();
+  create_info.shader_graph = material->shader_graph();
+  create_info.generic_params = material->generic_params();
+  create_info.generic_textures = material->generic_textures();
+
+  switch (slot) {
+    case 0u: create_info.albedo = texture; break;
+    case 1u: create_info.normal = texture; break;
+    case 2u: create_info.metallic_roughness = texture; break;
+    case 3u: create_info.occlusion = texture; break;
+    case 4u: create_info.emissive = texture; break;
+    default: {
+      utility::logger<"scripting">::error("material_set_texture: invalid slot {}", slot);
+      return;
+    }
+  }
+
+  assets_module.update_material(material, create_info);
+}
+
+namespace {
+
+auto compute_buffer_registry() -> std::unordered_map<std::uint64_t, graphics::resource_handle<graphics::buffer>>& {
+  static auto registry = std::unordered_map<std::uint64_t, graphics::resource_handle<graphics::buffer>>{};
+
+  return registry;
+}
+
+} // namespace
+
+auto interop::compute_buffer_create(std::int32_t count, std::int32_t stride) -> std::uint64_t {
+  if (count <= 0 || stride <= 0) {
+    utility::logger<"scripting">::error("compute_buffer_create: count and stride must both be positive (count={}, stride={})", count, stride);
+    return 0u;
+  }
+
+  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
+  auto& registry = graphics_module.resource_registry();
+
+  const auto size = static_cast<graphics::buffer::size_type>(count) * static_cast<graphics::buffer::size_type>(stride);
+
+  // host_write (not device_local + upload_context staging) so SetData can memcpy straight into
+  // the buffer's own persistently-mapped pointer -- see compute_buffer_set_data. A staged upload
+  // via upload_context::stage_buffer only gets executed by the engine's own deferred flush() on
+  // a later real frame, which caused exactly the crash a host-mapped write avoids entirely: by
+  // the time that flush() ran, ComputeBuffer.Dispose (fully synchronous, same script call) had
+  // already retired the handle the stale staged upload still pointed at.
+  const auto handle = registry.emplace<graphics::buffer>(graphics::buffer::create_info{
+    .size = size,
+    .usage = graphics::buffer_usage::storage | graphics::buffer_usage::device_address,
+    .memory = graphics::memory_usage::host_write,
+    .name = "Compute Buffer"
+  });
+
+  const auto id = math::uuid::create().value();
+  compute_buffer_registry()[id] = handle;
+
+  return id;
+}
+
+auto interop::compute_buffer_set_data(std::uint64_t id, const void* data, std::int32_t byte_count) -> void {
+  auto& registry = compute_buffer_registry();
+  const auto entry = registry.find(id);
+
+  if (entry == registry.end()) {
+    utility::logger<"scripting">::error("compute_buffer_set_data: unknown buffer {}", id);
+    return;
+  }
+
+  if (!data || byte_count <= 0) {
+    return;
+  }
+
+  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
+  auto& resource_registry = graphics_module.resource_registry();
+
+  if (!resource_registry.is_valid(entry->second)) {
+    utility::logger<"scripting">::error("compute_buffer_set_data: buffer {} has a registry entry but its resource_handle is no longer valid", id);
+    return;
+  }
+
+  auto& buffer = resource_registry.get<graphics::buffer>(entry->second);
+
+  if (static_cast<std::size_t>(byte_count) > buffer.size()) {
+    utility::logger<"scripting">::error("compute_buffer_set_data: byte_count {} exceeds buffer {}'s own size {}", byte_count, id, buffer.size());
+    return;
+  }
+
+  std::memcpy(buffer.mapped(), data, static_cast<std::size_t>(byte_count));
+}
+
+auto interop::compute_buffer_release(std::uint64_t id) -> void {
+  auto& registry = compute_buffer_registry();
+  const auto entry = registry.find(id);
+
+  if (entry == registry.end()) {
+    return;
+  }
+
+  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
+  auto& resource_registry = graphics_module.resource_registry();
+
+  // Diagnostic guard, not a fix -- retire() itself would assert_that(is_valid(handle), ...) and
+  // abort with no context beyond "an invalid resource handle" if this ever fires. Checking first
+  // lets us log the buffer's script-side id instead, e.g. if Dispose somehow ran twice for the
+  // same id (the C# _disposed guard should prevent that, but this is cheap insurance against
+  // that guard itself having a hole).
+  if (!resource_registry.is_valid(entry->second)) {
+    utility::logger<"scripting">::error("compute_buffer_release: buffer {} already has an invalid resource_handle (double release?)", id);
+    registry.erase(entry);
+    return;
+  }
+
+  // Every ComputeBuffer use in this design is fully blocking (SetData/ComputeShader.Dispatch, see
+  // compute_shader_dispatch's own submit_idle()), so this buffer is provably unused right now.
+  // Still uses the real frame index rather than a hardcoded value, though -- retire() enforces a
+  // pool-wide non-decreasing timeline_value invariant shared with every other buffer/image the
+  // engine retires (see resource_pool::retire's own assert), which "provably unused right now"
+  // doesn't exempt this call from.
+  resource_registry.retire(entry->second, graphics_module.frame_context().frame_index());
+
+  registry.erase(entry);
+}
+
+namespace {
+
+struct compute_shader_state {
+  std::filesystem::path resolved_path;
+  std::uint64_t buffer_address{0u};
+  std::vector<std::byte> scalar_bytes{};
+};
+
+auto compute_shader_registry() -> std::unordered_map<std::uint64_t, compute_shader_state>& {
+  static auto registry = std::unordered_map<std::uint64_t, compute_shader_state>{};
+
+  return registry;
+}
+
+auto append_bytes(std::vector<std::byte>& out, const void* value, std::size_t size) -> void {
+  const auto offset = out.size();
+  out.resize(offset + size);
+  std::memcpy(out.data() + offset, value, size);
+}
+
+} // namespace
+
+auto interop::compute_shader_load(managed::string path) -> std::uint64_t {
+  const auto resolved = core::engine::project().assets_directory() / std::filesystem::path{std::string{path}};
+
+  if (!std::filesystem::exists(resolved)) {
+    utility::logger<"scripting">::error("compute_shader_load: '{}' does not exist", resolved.string());
+    return 0u;
+  }
+
+  const auto id = math::uuid::create().value();
+  compute_shader_registry().emplace(id, compute_shader_state{resolved, 0u, {}});
+
+  return id;
+}
+
+auto interop::compute_shader_set_texture(std::uint64_t id, std::uint64_t texture_uuid) -> void {
+  auto& registry = compute_shader_registry();
+  const auto entry = registry.find(id);
+
+  if (entry == registry.end()) {
+    utility::logger<"scripting">::error("compute_shader_set_texture: unknown shader {}", id);
+    return;
+  }
+
+  auto& assets_module = core::engine::get_module<assets::assets_module>();
+  auto texture = assets_module.find_texture(math::uuid::from_value(texture_uuid));
+
+  const auto index = texture.is_valid() ? texture->index() : assets::texture::invalid_index;
+
+  append_bytes(entry->second.scalar_bytes, &index, sizeof(index));
+}
+
+auto interop::compute_shader_set_output_texture(std::uint64_t id, std::uint64_t texture_uuid) -> void {
+  auto& registry = compute_shader_registry();
+  const auto entry = registry.find(id);
+
+  if (entry == registry.end()) {
+    utility::logger<"scripting">::error("compute_shader_set_output_texture: unknown shader {}", id);
+    return;
+  }
+
+  auto& assets_module = core::engine::get_module<assets::assets_module>();
+  auto texture = assets_module.find_texture(math::uuid::from_value(texture_uuid));
+
+  if (texture.is_valid() && texture->storage_index() == assets::texture::invalid_index) {
+    utility::logger<"scripting">::warn("compute_shader_set_output_texture: texture was not created via CreateStorageImage, has no storage index");
+  }
+
+  const auto index = texture.is_valid() ? texture->storage_index() : assets::texture::invalid_index;
+
+  append_bytes(entry->second.scalar_bytes, &index, sizeof(index));
+}
+
+auto interop::compute_shader_set_buffer(std::uint64_t id, std::uint64_t buffer_id) -> void {
+  auto& registry = compute_shader_registry();
+  const auto entry = registry.find(id);
+
+  if (entry == registry.end()) {
+    utility::logger<"scripting">::error("compute_shader_set_buffer: unknown shader {}", id);
+    return;
+  }
+
+  auto& buffers = compute_buffer_registry();
+  const auto buffer_entry = buffers.find(buffer_id);
+
+  if (buffer_entry == buffers.end()) {
+    utility::logger<"scripting">::error("compute_shader_set_buffer: unknown buffer {}", buffer_id);
+    return;
+  }
+
+  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
+  auto& resource_registry = graphics_module.resource_registry();
+
+  // Diagnostic guard, not a fix -- this handle came straight out of our own registry
+  // (compute_buffer_create/compute_buffer_release are the only two places that touch it), so
+  // structurally it should always be live here. If it isn't, that's the actual bug and worth
+  // surfacing with the buffer's script-side id rather than a bare native assert with no context.
+  if (!resource_registry.is_valid(buffer_entry->second)) {
+    utility::logger<"scripting">::error("compute_shader_set_buffer: buffer {} has a registry entry but its resource_handle is no longer valid (already retired?)", buffer_id);
+    return;
+  }
+
+  const auto& buffer = resource_registry.get<graphics::buffer>(buffer_entry->second);
+
+  entry->second.buffer_address = buffer.address();
+}
+
+auto interop::compute_shader_set_float(std::uint64_t id, std::float_t value) -> void {
+  auto& registry = compute_shader_registry();
+  const auto entry = registry.find(id);
+
+  if (entry == registry.end()) {
+    utility::logger<"scripting">::error("compute_shader_set_float: unknown shader {}", id);
+    return;
+  }
+
+  append_bytes(entry->second.scalar_bytes, &value, sizeof(value));
+}
+
+auto interop::compute_shader_set_int(std::uint64_t id, std::int32_t value) -> void {
+  auto& registry = compute_shader_registry();
+  const auto entry = registry.find(id);
+
+  if (entry == registry.end()) {
+    utility::logger<"scripting">::error("compute_shader_set_int: unknown shader {}", id);
+    return;
+  }
+
+  append_bytes(entry->second.scalar_bytes, &value, sizeof(value));
+}
+
+auto interop::compute_shader_dispatch(std::uint64_t id, std::uint32_t group_count_x, std::uint32_t group_count_y, std::uint32_t group_count_z) -> void {
+  auto& registry = compute_shader_registry();
+  const auto entry = registry.find(id);
+
+  if (entry == registry.end()) {
+    utility::logger<"scripting">::error("compute_shader_dispatch: unknown shader {}", id);
+    return;
+  }
+
+  auto& state = entry->second;
+
+  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
+  auto& bindless_table = graphics_module.bindless_table();
+  auto& shader_cache = graphics_module.shader_cache();
+  auto& compute_pipeline_cache = graphics_module.compute_pipeline_cache();
+
+  const auto entry_points = std::vector<graphics::shader_compiler::entry_point_request>{
+    {VK_SHADER_STAGE_COMPUTE_BIT, "compute_main"}
+  };
+
+  const auto shader = shader_cache.get({state.resolved_path, entry_points});
+
+  if (!shader) {
+    utility::logger<"scripting">::error("compute_shader_dispatch: failed to compile '{}'", state.resolved_path.string());
+    state.buffer_address = 0u;
+    state.scalar_bytes.clear();
+    return;
+  }
+
+  auto pipeline = compute_pipeline_cache.get(graphics::compute_pipeline::create_info{.shader = shader, .name = "Script Compute Shader"});
+
+  auto command_buffer = graphics::command_buffer{graphics::queue::type::compute, true};
+
+  const auto descriptor_set = bindless_table.descriptor_set();
+  vkCmdBindDescriptorSets(command_buffer.handle(), VK_PIPELINE_BIND_POINT_COMPUTE, bindless_table.pipeline_layout(), 0u, 1u, &descriptor_set, 0u, nullptr);
+
+  command_buffer.bind_pipeline(*pipeline);
+
+  // Every script compute shader samples bindless textures, so rather than making every .slang
+  // file's author (and every C# Dispatch call site) thread a sampler index through by hand, a
+  // single clamp-to-edge linear sampler is resolved once (bindless_table caches by create_info,
+  // so this is a lookup after the first call, not a new sampler per dispatch) and always placed
+  // right after the buffer address -- a .slang push_data's second field is always `uint
+  // sampler_index`, whether or not a given shader happens to sample anything.
+  const auto sampler_index = bindless_table.sampler_index(graphics::sampler::create_info{
+    .address_mode_u = graphics::address_mode::clamp_to_edge,
+    .address_mode_v = graphics::address_mode::clamp_to_edge,
+    .address_mode_w = graphics::address_mode::clamp_to_edge,
+    .name = "Script Compute Default Sampler"
+  });
+
+  auto push_bytes = std::vector<std::byte>(sizeof(std::uint64_t) + sizeof(std::uint32_t) + state.scalar_bytes.size());
+  std::memcpy(push_bytes.data(), &state.buffer_address, sizeof(std::uint64_t));
+  std::memcpy(push_bytes.data() + sizeof(std::uint64_t), &sampler_index, sizeof(std::uint32_t));
+
+  if (!state.scalar_bytes.empty()) {
+    std::memcpy(push_bytes.data() + sizeof(std::uint64_t) + sizeof(std::uint32_t), state.scalar_bytes.data(), state.scalar_bytes.size());
+  }
+
+  command_buffer.push_constants(bindless_table.pipeline_layout(), graphics::bindless_table::push_constant_stages, 0u, std::span<const std::byte>{push_bytes});
+
+  command_buffer.dispatch(group_count_x, group_count_y, group_count_z);
+
+  command_buffer.submit_idle();
+
+  state.buffer_address = 0u;
+  state.scalar_bytes.clear();
+}
+
+auto interop::compute_shader_release(std::uint64_t id) -> void {
+  compute_shader_registry().erase(id);
+}
+
+struct decoded_image {
+  std::vector<std::uint8_t> pixels; // RGBA8, row-major
+  std::int32_t width{};
+  std::int32_t height{};
+}; // struct decoded_image
+
+auto decoded_image_cache() -> std::unordered_map<std::string, decoded_image>& {
+  static auto cache = std::unordered_map<std::string, decoded_image>{};
+
+  return cache;
+}
+
+auto interop::texture_sample_bilinear(managed::string path, std::float_t u, std::float_t v, math::color* out_color) -> bool {
+  if (!out_color) {
+    return false;
+  }
+
+  const auto key = std::string{path};
+
+  auto& cache = decoded_image_cache();
+  auto entry = cache.find(key);
+
+  if (entry == cache.end()) {
+    const auto resolved = core::engine::project().assets_directory() / std::filesystem::path{key};
+
+    auto width = std::int32_t{};
+    auto height = std::int32_t{};
+    auto channels = std::int32_t{};
+
+    auto* data = stbi_load(resolved.string().c_str(), &width, &height, &channels, STBI_rgb_alpha);
+
+    if (data == nullptr) {
+      utility::logger<"scripting">::error("texture_sample_bilinear: failed to decode '{}'", resolved.string());
+
+      return false;
+    }
+
+    auto image = decoded_image{};
+    image.width = width;
+    image.height = height;
+    image.pixels.assign(data, data + (static_cast<std::size_t>(width) * static_cast<std::size_t>(height) * 4u));
+
+    stbi_image_free(data);
+
+    entry = cache.emplace(key, std::move(image)).first;
+  }
+
+  const auto& image = entry->second;
+
+  if (image.width <= 0 || image.height <= 0) {
+    return false;
+  }
+
+  const auto fx = std::clamp(u, 0.0f, 1.0f) * static_cast<std::float_t>(image.width - 1);
+  const auto fy = std::clamp(v, 0.0f, 1.0f) * static_cast<std::float_t>(image.height - 1);
+
+  const auto x0 = static_cast<std::int32_t>(fx);
+  const auto y0 = static_cast<std::int32_t>(fy);
+  const auto x1 = std::min(x0 + 1, image.width - 1);
+  const auto y1 = std::min(y0 + 1, image.height - 1);
+
+  const auto tx = fx - static_cast<std::float_t>(x0);
+  const auto ty = fy - static_cast<std::float_t>(y0);
+
+  const auto sample = [&](std::int32_t x, std::int32_t y, std::int32_t channel) -> std::float_t {
+    const auto index = (static_cast<std::size_t>(y) * static_cast<std::size_t>(image.width) + static_cast<std::size_t>(x)) * 4u + static_cast<std::size_t>(channel);
+
+    return static_cast<std::float_t>(image.pixels[index]) / 255.0f;
+  };
+
+  const auto lerp_channel = [&](std::int32_t channel) -> std::float_t {
+    const auto c00 = sample(x0, y0, channel);
+    const auto c10 = sample(x1, y0, channel);
+    const auto c01 = sample(x0, y1, channel);
+    const auto c11 = sample(x1, y1, channel);
+
+    const auto c0 = c00 + (c10 - c00) * tx;
+    const auto c1 = c01 + (c11 - c01) * tx;
+
+    return c0 + (c1 - c0) * ty;
+  };
+
+  *out_color = math::color{lerp_channel(0), lerp_channel(1), lerp_channel(2), lerp_channel(3)};
+
+  return true;
 }
 
 // Shared by every Canvas_*/RectTransform_*/UIImage_*/UIText_*/UIButton_* binding below -- the same

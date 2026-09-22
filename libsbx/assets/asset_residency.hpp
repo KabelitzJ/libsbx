@@ -84,6 +84,66 @@ public:
 
   auto load_texture(const std::filesystem::path& path, graphics::format format = graphics::format::r8g8b8a8_srgb) -> texture_handle;
 
+  /**
+   * @brief Allocates a brand-new, empty GPU texture with no source file -- registered as BOTH a
+   * bindless sampled image (so a Material can read it, same as any loaded texture) and a bindless
+   * storage image (so a compute shader can write it as a UAV, see texture::storage_index()).
+   * Cleared to zero and transitioned to `general` layout synchronously before returning, since a
+   * compute shader dispatched right after this call needs a defined layout to write into and
+   * there is no source pixel data to stage otherwise. Backs Sbx.Core.Texture2D.CreateStorageImage.
+   */
+  auto create_storage_image(std::uint32_t width, std::uint32_t height, graphics::format format) -> texture_handle;
+
+  /**
+   * @brief Finds an already-resident texture by uuid alone, regardless of what format it was
+   * loaded/created with -- unlike load_texture(uuid), whose cache key is (uuid, format) so it can
+   * only find a texture if the caller happens to pass the exact same format it was originally
+   * loaded with. That's the right behavior for a file texture (the same source path can
+   * legitimately be resident twice under two formats), but wrong for anything returned by
+   * create_storage_image: that texture has exactly one format for its entire life, and a caller
+   * resolving it later (Material_SetTexture, ComputeShader_Set(Output)Texture,
+   * Texture_ReadPixels) has no reason to know or repeat what format it was created with. Empty
+   * handle if no resident texture has this uuid under any format.
+   */
+  [[nodiscard]] auto find_texture(const math::uuid& id) const -> texture_handle;
+
+  /**
+   * @brief Frees a texture's bindless sampled/storage indices and retires its underlying GPU
+   * image (via the normal resource_pool retire/collect timeline), and drops it from the uuid
+   * cache. Call this right before dropping the last reference to a texture you created via
+   * create_storage_image and are done with -- same as release_mesh, nothing frees this on its
+   * own, so a texture_handle simply going out of scope leaks its bindless indices and image
+   * forever. Never call this on a texture still referenced elsewhere (e.g. one still bound to a
+   * live material) or still resident from load_texture's own file cache.
+   */
+  auto release_texture(const texture_handle& texture) -> void;
+
+  /**
+   * @brief Transitions a create_storage_image texture's image from `general` to
+   * `shader_read_only_optimal`, so it can actually be sampled correctly as a material texture.
+   *
+   * create_storage_image leaves its image in `general` permanently (needed for a compute shader
+   * to read/write it as a UAV and for ReadPixels' transfer copy), but the bindless *sampled*
+   * descriptor it also registers (write_sampled_image) unconditionally declares the image as
+   * `SHADER_READ_ONLY_OPTIMAL` regardless of its real layout -- sampling through that mismatch in
+   * a material's fragment shader is undefined (confirmed the hard way: the mesh rendered once a
+   * properly-transitioned file texture replaced it). ibl_baker.cpp's own baked images hit the same
+   * problem and fix it the same way, right after their last compute write. Always correct to call
+   * on a create_storage_image texture specifically: nothing ever transitions it away from
+   * `general` except this call, so `general` is provably its real current layout. No-op (and
+   * would be wrong) on a texture not made via create_storage_image, since some other layout is
+   * already the true current one there.
+   */
+  auto prepare_texture_for_sampling(const texture_handle& texture) -> void;
+
+  /**
+   * @brief The underlying GPU image a texture's sampled bindless index maps to -- an empty/default
+   * handle if texture is invalid or (defensively) not actually resident yet. For readback
+   * (Sbx.Core.Texture2D.ReadPixels) and anything else that needs the real image rather than just
+   * a bindless index.
+   */
+  [[nodiscard]] auto image_handle_for(const texture_handle& texture) const -> graphics::image_handle;
+
   /** @brief Loads a TTF -> SDF glyph atlas font from a UUID or project-relative path; returns the existing handle if already loaded. */
   auto load_font(const math::uuid& id) -> font_handle;
 
@@ -154,6 +214,30 @@ public:
    * underlying object. Does not touch identity (index/uuid) or persist to disk.
    */
   auto update_material(material_handle& material, const material::create_info& create_info) -> void;
+
+  /**
+   * @brief Copies every field of @p source into a brand-new material record with its own uuid,
+   * registered the same way load_material's own records are (so a later load_material(id) with
+   * that uuid, e.g. from a MeshRenderer_SetMaterial script call, finds it). Unlike update_material,
+   * the source is left untouched -- this is for script-driven per-instance materials (e.g. one
+   * baked terrain chunk texture per chunk) that must not affect any other user of the source
+   * material.
+   */
+  auto duplicate_material(const material_handle& source) -> material_handle;
+
+  /**
+   * @brief Frees a material's slot in the fixed-size material buffer (see material_capacity) for
+   * reuse by a later create_material/duplicate_material call, and drops it from the uuid-keyed
+   * cache so a later load_material(id) can't resolve a dangling record. Call this right before
+   * dropping the last reference to a script-created instance (e.g. duplicate_material's own
+   * per-chunk terrain material) you're done with -- like release_mesh, a material_handle simply
+   * going out of scope does not free its slot, and _register_material's slot counter never
+   * decrements on its own, so without this every such instance permanently consumes one of the
+   * material_capacity slots for the life of the process. Never call this on a material still
+   * referenced elsewhere (e.g. the template passed to duplicate_material) -- there is no
+   * reference count backing this, unlike a mesh/texture's underlying GPU resource_pool handle.
+   */
+  auto release_material(const material_handle& material) -> void;
 
   /**
    * @brief Writes a material to a `.material` file and (re-)registers it as a first-class asset.
@@ -401,6 +485,7 @@ private:
   graphics::buffer_handle _material_buffer{};
   graphics::buffer::address_type _material_address{0u};
   std::uint32_t _material_count{0u};
+  std::vector<std::uint32_t> _free_material_indices{};
   std::unordered_map<math::uuid, std::shared_ptr<material>> _material_files{};
 
   std::unordered_map<math::uuid, std::shared_ptr<environment_map>> _environment_maps{};

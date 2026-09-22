@@ -108,6 +108,26 @@ auto assets_module::load_texture(const std::filesystem::path& path, graphics::fo
   return _residency.load_texture(path, format);
 }
 
+auto assets_module::create_storage_image(std::uint32_t width, std::uint32_t height, graphics::format format) -> texture_handle {
+  return _residency.create_storage_image(width, height, format);
+}
+
+auto assets_module::image_handle_for(const texture_handle& texture) const -> graphics::image_handle {
+  return _residency.image_handle_for(texture);
+}
+
+auto assets_module::find_texture(const math::uuid& id) const -> texture_handle {
+  return _residency.find_texture(id);
+}
+
+auto assets_module::release_texture(const texture_handle& texture) -> void {
+  _residency.release_texture(texture);
+}
+
+auto assets_module::prepare_texture_for_sampling(const texture_handle& texture) -> void {
+  _residency.prepare_texture_for_sampling(texture);
+}
+
 auto assets_module::load_font(const math::uuid& id) -> font_handle {
   return _residency.load_font(id);
 }
@@ -170,6 +190,14 @@ auto assets_module::create_material(const material::create_info& create_info) ->
 
 auto assets_module::update_material(material_handle& material, const material::create_info& create_info) -> void {
   _residency.update_material(material, create_info);
+}
+
+auto assets_module::duplicate_material(const material_handle& source) -> material_handle {
+  return _residency.duplicate_material(source);
+}
+
+auto assets_module::release_material(const material_handle& material) -> void {
+  _residency.release_material(material);
 }
 
 auto assets_module::save_material(material_handle& material, const std::filesystem::path& path) -> math::uuid {

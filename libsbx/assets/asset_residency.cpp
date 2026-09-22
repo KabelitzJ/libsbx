@@ -25,6 +25,7 @@
 #include <libsbx/math/vector4.hpp>
 
 #include <libsbx/graphics/resources/buffer.hpp>
+#include <libsbx/graphics/commands/command_buffer.hpp>
 
 #include <libsbx/assets/primitive_meshes.hpp>
 
@@ -184,6 +185,203 @@ auto asset_residency::load_texture(const std::filesystem::path& path, graphics::
   const auto assets_directory = project.assets_directory();
 
   return load_texture(_manifest.import(assets_directory / path), format);
+}
+
+auto asset_residency::create_storage_image(std::uint32_t width, std::uint32_t height, graphics::format format) -> texture_handle {
+  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
+
+  auto& registry = graphics_module.resource_registry();
+  auto& bindless_table = graphics_module.bindless_table();
+
+  const auto sampled_index = bindless_table.reserve_sampled_image();
+
+  const auto handle = registry.emplace<graphics::image>(graphics::image::create_info{
+    .extent = math::vector3u{width, height, 1u},
+    .format = format,
+    .usage = graphics::image_usage::storage | graphics::image_usage::sampled | graphics::image_usage::transfer_destination | graphics::image_usage::transfer_source,
+    .mip_levels = 1u,
+    .name = "Storage Image"
+  });
+
+  auto& image = registry.get<graphics::image>(handle);
+
+  // A compute shader dispatched right after this call needs the image already in `general`
+  // layout to read/write it as a UAV. upload_context::stage_image (the path used for a real
+  // loaded texture) can't do this: it only queues the transition for the engine's own per-frame
+  // upload_context::flush, which never runs before a synchronous ComputeShader.Dispatch tries to
+  // use this image -- confirmed the hard way, as VK_IMAGE_LAYOUT_UNDEFINED at dispatch time.
+  // There's also no source pixel data to stage regardless, since every bake shader this backs
+  // writes every pixel unconditionally. So the transition happens immediately, via its own
+  // command buffer, the same way ibl_baker::_ensure_brdf_lut transitions its own output image.
+  auto command_buffer = graphics::command_buffer{graphics::queue::type::compute, true};
+
+  // Broad dst stage/access (rather than narrowing to e.g. just compute_shader + a storage-specific
+  // access bit, as ibl_baker's own one-off, single-purpose transition does) because this image's
+  // actual later uses span more than one stage/access kind across several fully-idle-separated
+  // submissions: written as a compute UAV, sampled by a later compute pass (a different access
+  // type again), transfer-read back by ReadPixels, and eventually fragment-sampled by the
+  // renderer. Real cross-submission visibility here comes from every dispatch's own submit_idle()
+  // (a full device idle, a far stronger guarantee than any specific barrier), so this transition
+  // only has to be broad enough that validation doesn't flag a narrower declared scope than what
+  // actually happens afterward. graphics::to_vk_enum (declared alongside pipeline_stage/access in
+  // types.hpp) converts these to the raw sync2 flags image_transition_data itself is typed in,
+  // without this file touching <vulkan/vulkan.h> directly -- that stays a graphics-module-only
+  // include.
+  auto to_general = graphics::command_buffer::image_transition_data{};
+  to_general.image = image.handle();
+  to_general.src_stage_mask = graphics::to_vk_enum<VkPipelineStageFlags2>(graphics::pipeline_stage::none);
+  to_general.src_access_mask = graphics::to_vk_enum<VkAccessFlags2>(graphics::access::none);
+  to_general.dst_stage_mask = graphics::to_vk_enum<VkPipelineStageFlags2>(graphics::pipeline_stage::all_commands);
+  to_general.dst_access_mask = graphics::to_vk_enum<VkAccessFlags2>(graphics::access::memory_read | graphics::access::memory_write);
+  to_general.old_layout = graphics::image_layout::undefined;
+  to_general.new_layout = graphics::image_layout::general;
+  to_general.aspect_mask = image.aspect();
+  command_buffer.transition_image_layout(to_general);
+
+  command_buffer.submit_idle();
+
+  bindless_table.write_sampled_image(sampled_index, image.view());
+
+  const auto storage_index = bindless_table.register_storage_image(image.view());
+
+  // register_storage_image/write_sampled_image only queue the descriptor write; frame_context
+  // normally applies it once per frame via its own flush_writes() call, but that's too late for
+  // a synchronous ComputeShader.Dispatch right after this returns (same class of bug as the
+  // layout transition above -- confirmed the hard way via degenerate/stale readback data).
+  // ibl_baker.cpp flushes explicitly for the same reason; do the same here.
+  bindless_table.flush_writes();
+
+  auto record = std::make_shared<texture>(texture{sampled_index});
+  record->_storage_index = storage_index;
+
+  const auto id = math::uuid::create();
+  record->_id = id;
+
+  const auto key = _texture_cache_key(id, format);
+
+  {
+    auto lock = std::lock_guard{_mutex};
+    _textures.emplace(key, record);
+    _images.emplace(sampled_index, handle);
+
+    // The regular load_texture path only marks a texture resident once its async upload actually
+    // lands (_finalize_texture's own pending_texture_upload handling, above) -- is_resident(this
+    // texture) would otherwise report false forever, since nothing else ever populates
+    // _resident_frame for a texture created this way. But this image is already fully written and
+    // transitioned by this point (no async upload pending at all), so it's resident immediately,
+    // same as create_dynamic_mesh's own "0, not frame_context.frame_index()" for the identical
+    // reason (see that call's own comment). Missing this made every material using a
+    // create_storage_image texture as its albedo permanently non-resident, which
+    // scene_renderer_module silently skips drawing entirely -- confirmed the hard way: a chunk
+    // mesh only rendered once its material's texture stopped being one of these.
+    _resident_frame.emplace(sampled_index, 0u);
+  }
+
+  return texture_handle{record};
+}
+
+auto asset_residency::release_texture(const texture_handle& texture) -> void {
+  if (!texture.is_valid()) {
+    return;
+  }
+
+  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
+  auto& bindless_table = graphics_module.bindless_table();
+  auto& registry = graphics_module.resource_registry();
+
+  auto lock = std::lock_guard{_mutex};
+
+  const auto image_entry = _images.find(texture->index());
+
+  if (image_entry != _images.end()) {
+    registry.retire(image_entry->second, graphics_module.frame_context().frame_index());
+    _images.erase(image_entry);
+  }
+
+  // Without this, a later texture that reuses this same sampled index (unregister below returns
+  // it to the bindless allocator's free list) would find this stale entry still here via emplace
+  // (which never overwrites) and report resident immediately, before its own real content -- if
+  // any -- actually arrives.
+  _resident_frame.erase(texture->index());
+
+  bindless_table.unregister_sampled_image(texture->index());
+
+  if (texture->storage_index() != texture::invalid_index) {
+    bindless_table.unregister_storage_image(texture->storage_index());
+  }
+
+  for (auto entry = _textures.begin(); entry != _textures.end(); ++entry) {
+    if (entry->second.get() == texture.get()) {
+      _textures.erase(entry);
+      break;
+    }
+  }
+}
+
+auto asset_residency::prepare_texture_for_sampling(const texture_handle& texture) -> void {
+  if (!texture.is_valid() || texture->storage_index() == texture::invalid_index) {
+    return;
+  }
+
+  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
+  auto& registry = graphics_module.resource_registry();
+
+  const auto image_handle = [&]() -> graphics::image_handle {
+    auto lock = std::lock_guard{_mutex};
+    const auto entry = _images.find(texture->index());
+    return entry != _images.end() ? entry->second : graphics::image_handle{};
+  }();
+
+  if (!image_handle.is_valid()) {
+    return;
+  }
+
+  auto& image = registry.get<graphics::image>(image_handle);
+
+  auto command_buffer = graphics::command_buffer{graphics::queue::type::compute, true};
+
+  // Precise src (compute UAV write) -> dst (sampled read) scope, matching ibl_baker's own
+  // general -> shader_read_only_optimal transition exactly, rather than the broad memory_read/
+  // memory_write masks create_storage_image's own transition uses (that one has to stay broad --
+  // this image's later uses span several different access kinds across fully-idle-separated
+  // submissions -- but this transition's only ever-observed access on either side is a compute
+  // store followed by a sampled read, so it can and should be exact instead of just "not wrong").
+  auto to_read = graphics::command_buffer::image_transition_data{};
+  to_read.image = image.handle();
+  to_read.src_stage_mask = graphics::to_vk_enum<VkPipelineStageFlags2>(graphics::pipeline_stage::compute_shader);
+  to_read.src_access_mask = graphics::to_vk_enum<VkAccessFlags2>(graphics::access::shader_write);
+  to_read.dst_stage_mask = graphics::to_vk_enum<VkPipelineStageFlags2>(graphics::pipeline_stage::fragment_shader | graphics::pipeline_stage::compute_shader);
+  to_read.dst_access_mask = graphics::to_vk_enum<VkAccessFlags2>(graphics::access::shader_read | graphics::access::shader_sampled_read);
+  to_read.old_layout = graphics::image_layout::general;
+  to_read.new_layout = graphics::image_layout::shader_read_only_optimal;
+  to_read.aspect_mask = image.aspect();
+  command_buffer.transition_image_layout(to_read);
+
+  command_buffer.submit_idle();
+}
+
+auto asset_residency::find_texture(const math::uuid& id) const -> texture_handle {
+  auto lock = std::lock_guard{_mutex};
+
+  for (const auto& [key, record] : _textures) {
+    if (record->id() == id) {
+      return texture_handle{record};
+    }
+  }
+
+  return texture_handle{};
+}
+
+auto asset_residency::image_handle_for(const texture_handle& texture) const -> graphics::image_handle {
+  if (!texture.is_valid()) {
+    return graphics::image_handle{};
+  }
+
+  auto lock = std::lock_guard{_mutex};
+
+  const auto entry = _images.find(texture->index());
+
+  return entry != _images.end() ? entry->second : graphics::image_handle{};
 }
 
 auto asset_residency::load_font(const math::uuid& id) -> font_handle {
@@ -507,6 +705,51 @@ auto asset_residency::update_material(material_handle& material, const material:
   if (material->index() < _materials.size()) {
     _pending_materials.push_back(pending_material_upload{_materials[material->index()]});
   }
+}
+
+auto asset_residency::duplicate_material(const material_handle& source) -> material_handle {
+  if (!source.is_valid()) {
+    return material_handle{};
+  }
+
+  auto create_info = material::create_info{};
+  create_info.name = source->name();
+  create_info.base_color_factor = source->base_color_factor();
+  create_info.emissive_factor = source->emissive_factor();
+  create_info.metallic_factor = source->metallic_factor();
+  create_info.roughness_factor = source->roughness_factor();
+  create_info.alpha = source->alpha();
+  create_info.shading = source->shading();
+  create_info.alpha_cutoff = source->alpha_cutoff();
+  create_info.is_double_sided = source->is_double_sided();
+  create_info.casts_shadow = source->casts_shadow();
+  create_info.receives_shadow = source->receives_shadow();
+  create_info.normal_scale = source->normal_scale();
+  create_info.occlusion_strength = source->occlusion_strength();
+  create_info.emissive_strength = source->emissive_strength();
+  create_info.ior = source->ior();
+  create_info.uv_tiling = source->uv_tiling();
+  create_info.uv_offset = source->uv_offset();
+  create_info.albedo = source->albedo();
+  create_info.normal = source->normal();
+  create_info.metallic_roughness = source->metallic_roughness();
+  create_info.occlusion = source->occlusion();
+  create_info.emissive = source->emissive();
+  create_info.shader_graph = source->shader_graph();
+  create_info.generic_params = source->generic_params();
+  create_info.generic_textures = source->generic_textures();
+
+  auto duplicated = _register_material(std::make_shared<material>(create_info));
+
+  const auto id = math::uuid::create();
+  duplicated->_id = id;
+
+  {
+    auto lock = std::lock_guard{_mutex};
+    _material_files[id] = duplicated.shared();
+  }
+
+  return duplicated;
 }
 
 auto asset_residency::save_material(material_handle& material, const std::filesystem::path& path) -> math::uuid {
@@ -2127,14 +2370,39 @@ auto asset_residency::_create_default_texture(std::array<std::uint8_t, 4u> color
 auto asset_residency::_register_material(std::shared_ptr<material> record) -> material_handle {
   auto lock = std::lock_guard{_mutex};
 
-  utility::assert_that(_material_count < material_capacity, "Exceeded material capacity");
+  if (!_free_material_indices.empty()) {
+    const auto index = _free_material_indices.back();
+    _free_material_indices.pop_back();
 
-  record->_index = _material_count++;
+    record->_index = index;
+    _materials[index] = record;
+  } else {
+    utility::assert_that(_material_count < material_capacity, "Exceeded material capacity");
 
-  _materials.push_back(record);
+    record->_index = _material_count++;
+    _materials.push_back(record);
+  }
+
   _pending_materials.push_back(pending_material_upload{record});
 
   return material_handle{record};
+}
+
+auto asset_residency::release_material(const material_handle& material) -> void {
+  if (!material.is_valid()) {
+    return;
+  }
+
+  auto lock = std::lock_guard{_mutex};
+
+  const auto index = material->index();
+
+  if (index < _materials.size() && _materials[index].get() == material.get()) {
+    _materials[index].reset();
+    _free_material_indices.push_back(index);
+  }
+
+  _material_files.erase(material->id());
 }
 
 auto asset_residency::_extract_gltf_material(const math::uuid& cooked_material_id, const std::filesystem::path& mesh_source) -> material_handle {

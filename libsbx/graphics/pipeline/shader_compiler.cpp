@@ -13,6 +13,8 @@
 #include <libsbx/utility/exception.hpp>
 #include <libsbx/utility/hash.hpp>
 
+#include <libsbx/filesystem/filesystem_module.hpp>
+
 namespace sbx::graphics {
 
 /**
@@ -117,6 +119,13 @@ auto shader_compiler::compile(const std::filesystem::path& path, std::span<const
   const auto parent = path.parent_path().string();
   const auto root = _shaders_root(path).string();
 
+  // _shaders_root only walks up from `path` itself, so a project-authored shader (e.g. under a
+  // game's assets/shaders/) never sees the engine's own shaders/ directory this way -- its
+  // nearest ancestor literally named "shaders" is its own tree, not the engine's. Since every
+  // shader, engine or project, needs `#include <descriptors.slang>` and friends, the engine's
+  // shaders root is always added too, regardless of where `path` lives.
+  const auto engine_root = (filesystem::engine_data_directory() / "shaders").string();
+
   auto target = slang::TargetDesc{};
   target.format = SLANG_SPIRV;
   target.profile = _global_session->findProfile("spirv_1_5");
@@ -127,7 +136,15 @@ auto shader_compiler::compile(const std::filesystem::path& path, std::span<const
     slang::CompilerOptionEntry{slang::CompilerOptionName::VulkanUseEntryPointName, {slang::CompilerOptionValueKind::Int, 1, 0, nullptr, nullptr}}
   };
 
-  const auto search_paths = (root == parent) ? std::vector<const char*>{parent.c_str()} : std::vector<const char*>{parent.c_str(), root.c_str()};
+  auto search_paths = std::vector<const char*>{parent.c_str()};
+
+  if (root != parent) {
+    search_paths.push_back(root.c_str());
+  }
+
+  if (engine_root != parent && engine_root != root) {
+    search_paths.push_back(engine_root.c_str());
+  }
 
   auto session_description = slang::SessionDesc{};
   session_description.targets = &target;

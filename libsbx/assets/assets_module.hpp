@@ -102,6 +102,21 @@ public:
 
   auto load_texture(const std::filesystem::path& path, graphics::format format = graphics::format::r8g8b8a8_srgb) -> texture_handle;
 
+  /** @brief Allocates a new, empty, compute-writable GPU texture -- see asset_residency::create_storage_image. */
+  auto create_storage_image(std::uint32_t width, std::uint32_t height, graphics::format format) -> texture_handle;
+
+  /** @brief The underlying GPU image behind a texture's sampled bindless index -- see asset_residency::image_handle_for. */
+  [[nodiscard]] auto image_handle_for(const texture_handle& texture) const -> graphics::image_handle;
+
+  /** @brief Format-agnostic texture lookup by uuid -- see asset_residency::find_texture. */
+  [[nodiscard]] auto find_texture(const math::uuid& id) const -> texture_handle;
+
+  /** @brief Frees a texture's bindless indices and underlying GPU image -- see asset_residency::release_texture. */
+  auto release_texture(const texture_handle& texture) -> void;
+
+  /** @brief Transitions a create_storage_image texture to a layout a material can actually sample -- see asset_residency::prepare_texture_for_sampling. */
+  auto prepare_texture_for_sampling(const texture_handle& texture) -> void;
+
   /** @brief Loads a TTF -> SDF glyph atlas font from a UUID or project-relative path; returns the existing handle if already loaded. */
   auto load_font(const math::uuid& id) -> font_handle;
 
@@ -149,6 +164,12 @@ public:
    * persist to disk — pair with @ref save_material for that.
    */
   auto update_material(material_handle& material, const material::create_info& create_info) -> void;
+
+  /** @brief Copies @p source into a brand-new, independently-registered material -- see asset_residency::duplicate_material. */
+  auto duplicate_material(const material_handle& source) -> material_handle;
+
+  /** @brief Frees a material's slot for reuse -- see asset_residency::release_material. */
+  auto release_material(const material_handle& material) -> void;
 
   /**
    * @brief Writes a material to a `.material` file and (re-)registers it as a first-class asset.

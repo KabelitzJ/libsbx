@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Jonas Kabelitz
-#if defined(SBX_ENABLE_PROFILING) || defined(SBX_TRACK_MEMORY)
-
 #include <cstdlib>
 #include <cstdint>
 #include <memory>
 #include <utility>
+
+#if defined(SBX_ENABLE_PROFILING) || defined(SBX_TRACK_MEMORY)
 
 #include <libsbx/utility/profiler.hpp>
 

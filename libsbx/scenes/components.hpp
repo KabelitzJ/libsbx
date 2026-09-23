@@ -388,7 +388,8 @@ enum class script_field_type : std::uint8_t {
   vector3,
   node, // a Sbx.Core.Node-typed field, stored as the referenced node's own scenes::id uuid (nil = unassigned)
   layer_mask, // a Sbx.Core.Physics.LayerMask-typed field -- blittable (one uint), so it round-trips through get/set_field_value directly, same as vector3
-  material // a Sbx.Core.Material-typed field, stored as the referenced material asset's own uuid (nil = unassigned), same INativeHandle convention as node
+  material, // a Sbx.Core.Material-typed field, stored as the referenced material asset's own uuid (nil = unassigned), same INativeHandle convention as node
+  color // a Sbx.Core.Math.Color-typed field -- blittable (four sequential floats), same direct get/set_field_value path as vector3
 }; // enum class script_field_type
 
 struct script_field_override {
@@ -402,6 +403,7 @@ struct script_field_override {
   math::uuid node_value{math::uuid::nil()};
   std::uint32_t layer_mask_value{0xFFFFFFFFu};
   math::uuid material_value{math::uuid::nil()};
+  math::color color_value{};
 }; // struct script_field_override
 
 /**

@@ -15,6 +15,7 @@
 
 #include <libsbx/core/engine.hpp>
 
+#include <libsbx/math/color.hpp>
 #include <libsbx/math/uuid.hpp>
 #include <libsbx/math/vector3.hpp>
 
@@ -151,8 +152,12 @@ auto draw_script_field_inspector(editor_state& state, sbx::scenes::scene& target
       auto value = live_instance ? live_instance->get_field_value<std::float_t>(field_name)
                                   : override_slot ? override_slot->float_value : 0.0f;
 
+      // Always a drag box (click-and-type or click-and-drag), never a slider -- a slider's fixed
+      // track width makes fine adjustment across a wide clamp range awkward, whereas a drag box
+      // stays precise regardless of range. ClampValue still constrains the result; it just bounds
+      // the drag instead of sizing a track.
       const auto changed = has_clamp
-        ? ImGui::SliderFloat(display_name.c_str(), &value, clamp_min, clamp_max)
+        ? ImGui::DragFloat(display_name.c_str(), &value, 0.05f, clamp_min, clamp_max)
         : ImGui::DragFloat(display_name.c_str(), &value, 0.05f);
 
       capture_before();
@@ -172,8 +177,9 @@ auto draw_script_field_inspector(editor_state& state, sbx::scenes::scene& target
       auto value = live_instance ? live_instance->get_field_value<std::int32_t>(field_name)
                                   : override_slot ? override_slot->int_value : 0;
 
+      // Same reasoning as the float branch above -- always a drag box, never a slider.
       const auto changed = has_clamp
-        ? ImGui::SliderInt(display_name.c_str(), &value, static_cast<std::int32_t>(clamp_min), static_cast<std::int32_t>(clamp_max))
+        ? ImGui::DragInt(display_name.c_str(), &value, 1.0f, static_cast<std::int32_t>(clamp_min), static_cast<std::int32_t>(clamp_max))
         : ImGui::DragInt(display_name.c_str(), &value);
 
       capture_before();
@@ -356,6 +362,32 @@ auto draw_script_field_inspector(editor_state& state, sbx::scenes::scene& target
           auto& slot_override = ensure_override_slot();
           slot_override.type = sbx::scenes::script_field_type::material;
           slot_override.material_value = new_uuid;
+        }
+      }
+
+      commit_after();
+    } else if (field_type_name == "Sbx.Core.Math.Color") {
+      // A blittable struct (four sequential floats) -- same direct get/set_field_value path as
+      // Vector3 above, no reference-type special-casing needed. draw_color_field is the same
+      // ColorEdit4-backed widget the gradient/curve editors already use.
+      auto value = live_instance ? live_instance->get_field_value<sbx::math::color>(field_name)
+                                  : override_slot ? override_slot->color_value : sbx::math::color{};
+
+      ImGui::AlignTextToFramePadding();
+      ImGui::TextUnformatted(display_name.c_str());
+      ImGui::SameLine(140.0f);
+
+      const auto changed = draw_color_field("##color_field", value);
+
+      capture_before();
+
+      if (changed) {
+        if (live_instance) {
+          live_instance->set_field_value(field_name, value);
+        } else {
+          auto& slot = ensure_override_slot();
+          slot.type = sbx::scenes::script_field_type::color;
+          slot.color_value = value;
         }
       }
 

@@ -536,6 +536,7 @@ auto scripting_module::seed_missing_field_defaults(scenes::node& node, scenes::s
       case scenes::script_field_type::node:    default_value.node_value = math::uuid::from_value(scratch.get_field_value<std::uint64_t>(field_name)); break;
       case scenes::script_field_type::layer_mask: default_value.layer_mask_value = scratch.get_field_value<std::uint32_t>(field_name); break;
       case scenes::script_field_type::material: default_value.material_value = math::uuid::from_value(scratch.get_field_value<std::uint64_t>(field_name)); break;
+      case scenes::script_field_type::color: default_value.color_value = scratch.get_field_value<math::color>(field_name); break;
     }
 
     entry.field_overrides.push_back(std::move(default_value));
@@ -588,6 +589,8 @@ auto scripting_module::_apply_field_overrides(managed::object& instance, const s
       case scenes::script_field_type::layer_mask: instance.set_field_value(field.name, field.layer_mask_value); break;
       // A Sbx.Core.Material field is a managed reference, same INativeHandle uuid convention as node above.
       case scenes::script_field_type::material: instance.set_field_value(field.name, field.material_value.value()); break;
+      // A Sbx.Core.Math.Color field is a blittable struct (four sequential floats), same direct path as vector3.
+      case scenes::script_field_type::color: instance.set_field_value(field.name, field.color_value); break;
     }
   }
 }

@@ -217,7 +217,7 @@ auto asset_cooker::gltf_external_file_references(const std::filesystem::path& so
 auto asset_cooker::_generate_normals(std::vector<vertex>& vertices, const std::vector<std::uint32_t>& indices, std::size_t vertex_start, std::size_t vertex_count, std::size_t index_start, std::size_t index_count) -> void {
   // Area-weighted face-normal accumulation: a cross product's length is proportional to twice its
   // triangle's area, so summing it directly (before normalizing) naturally weights larger
-  // triangles more, same idea as _generate_tangents' Lengyel accumulation below.
+  // triangles more, same idea as generate_tangents' Lengyel accumulation below.
   auto normal_sum = std::vector<math::vector3>(vertex_count, math::vector3::zero);
 
   for (auto i = std::size_t{0u}; i + 2u < index_count; i += 3u) {
@@ -251,7 +251,7 @@ auto asset_cooker::_generate_normals(std::vector<vertex>& vertices, const std::v
   }
 }
 
-auto asset_cooker::_generate_tangents(std::vector<vertex>& vertices, const std::vector<std::uint32_t>& indices, std::size_t vertex_start, std::size_t vertex_count, std::size_t index_start, std::size_t index_count) -> void {
+auto asset_cooker::generate_tangents(std::vector<vertex>& vertices, const std::vector<std::uint32_t>& indices, std::size_t vertex_start, std::size_t vertex_count, std::size_t index_start, std::size_t index_count) -> void {
   // Lengyel's method: accumulate tangent/bitangent per vertex from referencing triangles, then
   // orthogonalize against the normal and derive handedness from the bitangent sum.
   auto tangent_sum = std::vector<math::vector3>(vertex_count, math::vector3::zero);
@@ -752,7 +752,7 @@ auto asset_cooker::_cook_mesh(const std::filesystem::path& source, const math::u
       }
 
       if (!has_explicit_tangent) {
-        _generate_tangents(vertices, indices, vertex_start, position_accessor.count, index_start, index_accessor.count);
+        generate_tangents(vertices, indices, vertex_start, position_accessor.count, index_start, index_accessor.count);
       }
 
       auto lods = _optimize_and_generate_lods(vertices, indices, vertex_start, position_accessor.count, index_start, index_accessor.count, has_skin_data ? &skin_vertices : nullptr);

@@ -5,12 +5,19 @@ using Sbx.Core.Math;
 namespace Sbx.Core
 {
 
-  /** Pixel format for Texture2D.CreateStorageImage/ReadPixels -- declaration order matches interop::texture_create_storage_image's format argument exactly. */
+  /**
+   * Pixel format for Texture2D.Load/CreateStorageImage/ReadPixels -- declaration order matches
+   * interop::texture_load's and interop::texture_create_storage_image's own format arguments
+   * exactly. Rgba8Srgb is Load-only: a Vulkan storage image can't be created in an sRGB format,
+   * so CreateStorageImage rejects it (falls back to Rgba8, logging an error) the same way it
+   * already rejects any other out-of-range value.
+   */
   public enum TextureFormat
   {
-    Rgba8 = 0,
+    Rgba8Unorm = 0,
     R32Float = 1,
     R8 = 2,
+    Rgba8Srgb = 3,
   }
 
   /**
@@ -42,11 +49,18 @@ namespace Sbx.Core
 
     public static object? FromHandle(ulong handle) => handle != 0 ? new Texture2D(handle) : null;
 
-    public static Texture2D? Load(string path)
+    /**
+     * format defaults to Rgba8Srgb -- the engine's long-standing default for every loaded texture,
+     * correct for photographic/authored color meant for gamma-correct display. Pass Rgba8 for
+     * anything that isn't display color and must round-trip byte-for-byte instead -- a normal map
+     * (already linear direction data), or a data channel like a heightmap/blend-mask atlas where
+     * an sRGB decode would silently distort the actual numeric values, not just how it looks.
+     */
+    public static Texture2D? Load(string path, TextureFormat format = TextureFormat.Rgba8Srgb)
     {
       ulong uuid;
 
-      unsafe { uuid = InternalCalls.Texture_Load(path); }
+      unsafe { uuid = InternalCalls.Texture_Load(path, (uint)format); }
 
       return uuid != 0 ? new Texture2D(uuid) : null;
     }

@@ -340,8 +340,17 @@ struct interop {
    */
   static auto texture_sample_bilinear(managed::string path, std::float_t u, std::float_t v, math::color* out_color) -> bool;
 
-  /** @brief Loads (or reuses) a GPU-resident texture asset by project-relative path, returning its uuid -- 0 if the path doesn't resolve. Backs Sbx.Core.Texture2D.Load. Unlike texture_sample_bilinear, this is the real bindless-resident asset a Material can reference. */
-  static auto texture_load(managed::string path) -> std::uint64_t;
+  /**
+   * @brief Loads (or reuses) a GPU-resident texture asset by project-relative path, returning its
+   * uuid -- 0 if the path doesn't resolve. format: 0 = RGBA8 unorm, 1 = R32 float, 2 = R8 unorm,
+   * 3 = RGBA8 srgb (matching Sbx.Core.TextureFormat's declaration order -- same convention as
+   * texture_create_storage_image, plus the srgb variant only this call accepts). The cache key is
+   * (path, format), so loading the same file with two different formats produces two independent
+   * GPU-resident textures rather than one reused between them. Backs Sbx.Core.Texture2D.Load.
+   * Unlike texture_sample_bilinear, this is the real bindless-resident asset a Material can
+   * reference.
+   */
+  static auto texture_load(managed::string path, std::uint32_t format) -> std::uint64_t;
 
   /** @brief Allocates a new, empty, compute-writable storage image -- see assets::asset_residency::create_storage_image. format: 0 = RGBA8, 1 = R32 float, 2 = R8 unorm (matching Sbx.Core.TextureFormat's declaration order). Backs Sbx.Core.Texture2D.CreateStorageImage. */
   static auto texture_create_storage_image(std::uint32_t width, std::uint32_t height, std::uint32_t format) -> std::uint64_t;

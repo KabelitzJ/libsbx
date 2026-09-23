@@ -390,6 +390,18 @@ public:
    */
   [[nodiscard]] static auto cook_shader_graph(const math::uuid& id, std::uint64_t generation, const shader_graph::create_info& create_info) -> bool;
 
+  /**
+   * @brief Computes tangents from scratch for vertices[vertex_start, vertex_start + vertex_count)
+   * of a primitive lacking TANGENT (normals/UVs must already be populated); indices are that
+   * primitive's triangle indices, offset by vertex_start. Lengyel's method (accumulate per-vertex
+   * from referencing triangles, orthogonalize against the normal, derive handedness from the
+   * bitangent sum) -- exposed publicly (not just the mesh cooker's own internal use importing a
+   * glTF file missing its own TANGENT accessor) so any other caller building real vertex/index
+   * data at runtime, such as a script's own procedural mesh, can get a real per-vertex tangent
+   * basis instead of a fixed placeholder.
+   */
+  static auto generate_tangents(std::vector<vertex>& vertices, const std::vector<std::uint32_t>& indices, std::size_t vertex_start, std::size_t vertex_count, std::size_t index_start, std::size_t index_count) -> void;
+
 private:
 
   static auto _cook_texture(const std::filesystem::path& source, const std::filesystem::path& cooked) -> bool;
@@ -404,11 +416,8 @@ private:
 
   static auto _load_cooked_font(const std::filesystem::path& cooked, cooked_font_data& data) -> bool;
 
-  /** @brief Computes tangents from scratch for vertices[vertex_start, vertex_start + vertex_count) of a primitive lacking TANGENT (normals/UVs must already be populated); indices are that primitive's triangle indices, offset by vertex_start. */
   /** @brief Computes flat-shaded, area-weighted vertex normals from scratch for vertices[vertex_start, vertex_start + vertex_count) of a primitive lacking NORMAL (positions must already be populated); indices are that primitive's triangle indices, offset by vertex_start. */
   static auto _generate_normals(std::vector<vertex>& vertices, const std::vector<std::uint32_t>& indices, std::size_t vertex_start, std::size_t vertex_count, std::size_t index_start, std::size_t index_count) -> void;
-
-  static auto _generate_tangents(std::vector<vertex>& vertices, const std::vector<std::uint32_t>& indices, std::size_t vertex_start, std::size_t vertex_count, std::size_t index_start, std::size_t index_count) -> void;
 
   /** @brief Reorders a submesh's vertex/index slice in place for GPU cache efficiency (meshoptimizer's vertex-cache/overdraw/vertex-fetch trio), then derives a coarser LOD chain via meshopt_simplify, appending each level's indices to `indices`. */
   /** @brief @p skin_vertices, when non-null, is kept parallel to @p vertices through the same vertex-fetch reorder (see meshopt_optimizeVertexFetchRemap's "multiple vertex streams" note). */

@@ -23,6 +23,7 @@
 #include <libsbx/math/noise.hpp>
 
 #include <libsbx/assets/animation_graph.hpp>
+#include <libsbx/assets/asset_cooker.hpp>
 #include <libsbx/assets/assets_module.hpp>
 
 #include <vulkan/vulkan.h>
@@ -2051,6 +2052,13 @@ auto interop::mesh_renderer_set_geometry(std::uint64_t uuid, math::vector3* posi
 
   auto index_vector = std::vector<std::uint32_t>{indices, indices + index_count};
 
+  // The placeholder tangent set above is never actually correct except by accident (it doesn't
+  // rotate with the mesh's own UV layout or vary with a tilted normal) -- real per-vertex tangents
+  // are what any normal-mapped script-built mesh (e.g. hex terrain) actually needs. Same Lengyel
+  // generator the glTF mesh cooker uses for an imported primitive missing its own TANGENT accessor
+  // (asset_cooker_mesh.cpp) -- reused here rather than duplicated, now exposed publicly for it.
+  assets::asset_cooker::generate_tangents(vertices, index_vector, 0u, vertex_count, 0u, index_count);
+
   auto& renderer = node.get_or_add_component<scenes::mesh_renderer>();
 
   // Reused across calls rather than created fresh every time -- see this method's own doc comment
@@ -2126,9 +2134,22 @@ auto interop::material_load(managed::string path) -> std::uint64_t {
   return material.is_valid() ? material->id().value() : 0u;
 }
 
-auto interop::texture_load(managed::string path) -> std::uint64_t {
+auto interop::texture_load(managed::string path, std::uint32_t format) -> std::uint64_t {
+  const auto native_format = [format]() -> graphics::format {
+    switch (format) {
+      case 0u: return graphics::format::r8g8b8a8_unorm;
+      case 1u: return graphics::format::r32_sfloat;
+      case 2u: return graphics::format::r8_unorm;
+      case 3u: return graphics::format::r8g8b8a8_srgb;
+      default: {
+        utility::logger<"scripting">::error("texture_load: invalid format {}", format);
+        return graphics::format::r8g8b8a8_srgb;
+      }
+    }
+  }();
+
   auto& assets_module = core::engine::get_module<assets::assets_module>();
-  auto texture = assets_module.load_texture(std::filesystem::path{std::string{path}});
+  auto texture = assets_module.load_texture(std::filesystem::path{std::string{path}}, native_format);
 
   return texture.is_valid() ? texture->id().value() : 0u;
 }

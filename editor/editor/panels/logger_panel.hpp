@@ -17,8 +17,8 @@
 namespace editor {
 
 /**
- * @brief Draws the Console panel: a live view of the engine's in-memory log ring buffer
- * (sbx::utility::logged_lines()), with per-level toggles, a text filter, and auto-scroll.
+ * @brief Draws the Console panel: a live view of editor::console_sink_instance()'s in-memory
+ * log ring buffer, with per-level toggles, a text filter, and auto-scroll.
  */
 class logger_panel final : public editor_panel {
 

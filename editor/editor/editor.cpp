@@ -44,6 +44,7 @@
 #include <libsbx/ecs/registry.hpp>
 
 #include <editor/application.hpp>
+#include <editor/console_sink.hpp>
 #include <editor/editor_module.hpp>
 
 using module_list = sbx::core::module_list<
@@ -72,6 +73,8 @@ struct [[=sbx::cli::args]] cli_args {
 
 auto main(int argc, const char** argv) -> int {
   using namespace sbx::units::literals;
+
+  editor::install_console_sink();
 
   auto args = std::vector<std::string_view>{argv, argv + argc};
 

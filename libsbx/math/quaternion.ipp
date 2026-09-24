@@ -68,68 +68,8 @@ inline constexpr basic_quaternion<Type>::basic_quaternion(const vector_type_for<
 }
 
 template<floating_point Type>
-template<floating_point Other>
-inline constexpr basic_quaternion<Type>::basic_quaternion(const basic_matrix4x4<Other>& matrix) noexcept {
-  const auto four_x_squared_minus1 = matrix[0][0] - matrix[1][1] - matrix[2][2];
-  const auto four_y_squared_minus1 = matrix[1][1] - matrix[0][0] - matrix[2][2];
-  const auto four_z_squared_minus1 = matrix[2][2] - matrix[0][0] - matrix[1][1];
-  const auto four_w_squared_minus1 = matrix[0][0] + matrix[1][1] + matrix[2][2];
-
-  auto biggest_index = 0;
-  auto four_biggest_squared_minus1 = four_w_squared_minus1;
-
-  if (four_x_squared_minus1 > four_biggest_squared_minus1) {
-    four_biggest_squared_minus1 = four_x_squared_minus1;
-    biggest_index = 1;
-  }
-
-  if (four_y_squared_minus1 > four_biggest_squared_minus1) {
-    four_biggest_squared_minus1 = four_y_squared_minus1;
-    biggest_index = 2;
-  }
-
-  if(four_z_squared_minus1 > four_biggest_squared_minus1) {
-    four_biggest_squared_minus1 = four_z_squared_minus1;
-    biggest_index = 3;
-  }
-
-  const auto biggest_val = std::sqrt(four_biggest_squared_minus1 + static_cast<Type>(1)) * static_cast<Type>(0.5);
-  const auto mult = static_cast<Type>(0.25) / biggest_val;
-
-  switch (biggest_index) {
-    case 0: {
-      _complex = vector_type{(matrix[1][2] - matrix[2][1]) * mult, (matrix[2][0] - matrix[0][2]) * mult, (matrix[0][1] - matrix[1][0]) * mult};
-      _scalar = biggest_val;
-      break;
-    }
-    case 1: {
-      _complex = vector_type{biggest_val, (matrix[0][1] + matrix[1][0]) * mult, (matrix[2][0] + matrix[0][2]) * mult};
-      _scalar = (matrix[1][2] - matrix[2][1]) * mult;
-      break;
-    }
-    case 2: {
-      _complex = vector_type{(matrix[0][1] + matrix[1][0]) * mult, biggest_val, (matrix[1][2] + matrix[2][1]) * mult};
-      _scalar = (matrix[2][0] - matrix[0][2]) * mult;
-      break;
-    }
-    case 3: {
-      _complex = vector_type{(matrix[2][0] + matrix[0][2]) * mult, (matrix[1][2] + matrix[2][1]) * mult, biggest_val};
-      _scalar = (matrix[0][1] - matrix[1][0]) * mult;
-      break;
-    }
-    default: {
-      utility::assert_that(false, "Failed to create quaternion from matrix4x4");
-      *this = basic_quaternion<Type>::identity;
-      break;
-    }
-  }
-
-  normalize();
-}
-
-template<floating_point Type>
-template<floating_point Other>
-constexpr basic_quaternion<Type>::basic_quaternion(const basic_matrix3x3<Other>& matrix) noexcept {
+template<typename Matrix>
+inline constexpr auto basic_quaternion<Type>::_from_rotation_matrix(const Matrix& matrix) noexcept -> basic_quaternion {
   const auto four_x_squared_minus1 = matrix[0][0] - matrix[1][1] - matrix[2][2];
   const auto four_y_squared_minus1 = matrix[1][1] - matrix[0][0] - matrix[2][2];
   const auto four_z_squared_minus1 = matrix[2][2] - matrix[0][0] - matrix[1][1];
@@ -158,31 +98,35 @@ constexpr basic_quaternion<Type>::basic_quaternion(const basic_matrix3x3<Other>&
 
   switch (biggest_index) {
     case 0: {
-      _scalar = biggest_val;
-      _complex = vector_type{(matrix[1][2] - matrix[2][1]) * mult, (matrix[2][0] - matrix[0][2]) * mult, (matrix[0][1] - matrix[1][0]) * mult};
-      break;
+      return basic_quaternion{vector_type{(matrix[1][2] - matrix[2][1]) * mult, (matrix[2][0] - matrix[0][2]) * mult, (matrix[0][1] - matrix[1][0]) * mult}, biggest_val};
     }
     case 1: {
-      _scalar = (matrix[1][2] - matrix[2][1]) * mult;
-      _complex = vector_type{biggest_val, (matrix[0][1] + matrix[1][0]) * mult, (matrix[2][0] + matrix[0][2]) * mult};
-      break;
+      return basic_quaternion{vector_type{biggest_val, (matrix[0][1] + matrix[1][0]) * mult, (matrix[2][0] + matrix[0][2]) * mult}, (matrix[1][2] - matrix[2][1]) * mult};
     }
     case 2: {
-      _scalar = (matrix[2][0] - matrix[0][2]) * mult;
-      _complex = vector_type{(matrix[0][1] + matrix[1][0]) * mult, biggest_val, (matrix[1][2] + matrix[2][1]) * mult};
-      break;
+      return basic_quaternion{vector_type{(matrix[0][1] + matrix[1][0]) * mult, biggest_val, (matrix[1][2] + matrix[2][1]) * mult}, (matrix[2][0] - matrix[0][2]) * mult};
     }
     case 3: {
-      _scalar = (matrix[0][1] - matrix[1][0]) * mult;
-      _complex = vector_type{(matrix[2][0] + matrix[0][2]) * mult, (matrix[1][2] + matrix[2][1]) * mult, biggest_val};
-      break;
+      return basic_quaternion{vector_type{(matrix[2][0] + matrix[0][2]) * mult, (matrix[1][2] + matrix[2][1]) * mult, biggest_val}, (matrix[0][1] - matrix[1][0]) * mult};
     }
     default: {
-      *this = basic_quaternion<Type>::identity;
-      break;
+      utility::assert_that(false, "Failed to create quaternion from rotation matrix");
+      return basic_quaternion::identity;
     }
   }
 }
+
+template<floating_point Type>
+template<floating_point Other>
+inline constexpr basic_quaternion<Type>::basic_quaternion(const basic_matrix4x4<Other>& matrix) noexcept
+: basic_quaternion{_from_rotation_matrix(matrix)} {
+  normalize();
+}
+
+template<floating_point Type>
+template<floating_point Other>
+inline constexpr basic_quaternion<Type>::basic_quaternion(const basic_matrix3x3<Other>& matrix) noexcept
+: basic_quaternion{_from_rotation_matrix(matrix)} { }
 
 template<floating_point Type>
 template<floating_point Other>
@@ -306,7 +250,7 @@ template<floating_point Type>
 inline constexpr auto basic_quaternion<Type>::normalize() noexcept -> basic_quaternion& {
   const auto length_squared = this->length_squared();
 
-  if (!comparision_traits<length_type>::equal(length_squared, static_cast<length_type>(0))) {
+  if (!comparison_traits<length_type>::equal(length_squared, static_cast<length_type>(0))) {
     *this /= std::sqrt(length_squared);
   }
 
@@ -315,7 +259,7 @@ inline constexpr auto basic_quaternion<Type>::normalize() noexcept -> basic_quat
 
 template<floating_point Lhs, floating_point Rhs>
 inline constexpr auto operator==(const basic_quaternion<Lhs>& lhs, const basic_quaternion<Rhs>& rhs) noexcept -> bool {
-  return lhs.complex() == rhs.complex() && comparision_traits<Lhs>::equal(lhs.scalar(), rhs.scalar());
+  return lhs.complex() == rhs.complex() && comparison_traits<Lhs>::equal(lhs.scalar(), rhs.scalar());
 }
 
 template<floating_point Lhs, floating_point Rhs>
@@ -369,7 +313,7 @@ inline auto std::hash<sbx::math::basic_quaternion<Type>>::operator()(const sbx::
 
 template<sbx::math::floating_point Type>
 auto YAML::convert<sbx::math::basic_quaternion<Type>>::decode(const Node& node, sbx::math::basic_quaternion<Type>& quat) -> bool {
-  if (!node.IsMap()) {
+  if (!node.IsMap() || node.size() != 4) {
     return false;
   }
 

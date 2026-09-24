@@ -8,28 +8,36 @@
 
 namespace sbx::math {
 
+/**
+ * @brief Equality comparison for a scalar Type, specialized per Type's numeric category:
+ * exact for integral types, epsilon-tolerant for floating-point types.
+ *
+ * @tparam Type The scalar type to compare as.
+ */
 template<typename>
-struct comparision_traits;
+struct comparison_traits;
 
 template<integral Type>
-struct comparision_traits<Type> {
+struct comparison_traits<Type> {
 
+  /** @return Whether lhs equals rhs, exactly. */
   template<scalar Other>
   inline static constexpr auto equal(Type lhs, Other rhs) noexcept -> bool {
     return lhs == static_cast<Type>(rhs);
   }
 
-}; // template<integral Type>
+}; // struct comparison_traits<integral Type>
 
 template<floating_point Type>
-struct comparision_traits<Type> {
+struct comparison_traits<Type> {
 
+  /** @return Whether lhs and rhs differ by at most epsilon_v<Type>. */
   template<scalar Other>
   inline static constexpr auto equal(Type lhs, Other rhs) noexcept -> bool {
     return std::abs(lhs - static_cast<Type>(rhs)) <= epsilon_v<Type>;
   }
 
-}; // template<floating_point Type>
+}; // struct comparison_traits<floating_point Type>
 
 } // namespace sbx::math
 

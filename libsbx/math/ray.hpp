@@ -19,20 +19,13 @@ namespace sbx::math {
 /**
  * @brief 3D ray with normalized direction.
  *
- * @details
- * 
- * A ray is defined by an origin and a direction. The direction is normalized
- * upon construction to guarantee a unit-length direction vector.
+ * A ray is defined by an origin and a direction. The direction is normalized upon construction to guarantee a unit-length direction vector.
  */
 class ray {
 
 public:
 
-  /**
-   * @brief Constructs a default ray.
-   *
-   * @return Ray with origin at zero and direction pointing forward.
-   */
+  /** @brief Constructs a ray at the origin, pointing forward. */
   ray();
 
   /**
@@ -40,32 +33,15 @@ public:
    *
    * @param origin Ray origin.
    * @param direction Ray direction (normalized internally).
-   *
-   * @return Constructed ray.
    */
   ray(const vector3& origin, const vector3& direction);
 
-  /**
-   * @brief Returns the ray origin.
-   *
-   * @return Reference to the origin.
-   */
   auto origin() const -> const vector3&;
 
-  /**
-   * @brief Returns the ray direction.
-   *
-   * @return Reference to the normalized direction.
-   */
+  /** @return The ray's normalized direction. */
   auto direction() const -> const vector3&;
 
-  /**
-   * @brief Computes a point along the ray at parameter t.
-   *
-   * @param t Ray parameter.
-   *
-   * @return Point at origin + direction * t.
-   */
+  /** @return The point at origin() + direction() * t. */
   auto point_at(const std::float_t t) const -> vector3;
 
 private:

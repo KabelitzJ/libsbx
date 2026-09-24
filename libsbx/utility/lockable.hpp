@@ -7,6 +7,11 @@
 
 namespace sbx::utility {
 
+/**
+ * @brief A type usable with std::lock_guard/std::unique_lock: try_lock, lock and unlock.
+ *
+ * @tparam Type The type to check.
+ */
 template<typename Type>
 concept lockable = requires(Type& value) {
   { value.try_lock() } -> std::same_as<bool>;
@@ -14,6 +19,10 @@ concept lockable = requires(Type& value) {
   { value.unlock() } -> std::same_as<void>;
 }; // concept lockable
 
+/**
+ * @brief A no-op mutex satisfying lockable, for templates that need a lock type but are
+ * used in a single-threaded context.
+ */
 struct null_mutex {
   null_mutex() noexcept = default;
   null_mutex(const null_mutex& other) = delete;

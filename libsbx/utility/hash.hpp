@@ -16,7 +16,6 @@
 #include <string>
 #include <string_view>
 #include <span>
-#include <iostream>
 #include <concepts>
 #include <cinttypes>
 #include <filesystem>
@@ -39,10 +38,10 @@ inline constexpr auto hash_combine([[maybe_unused]] std::size_t& seed) -> void {
 
 /**
  * @brief Combines multiple hashes into a single hash.
- * 
+ *
  * @tparam Type The type of the first value to hash.
  * @tparam Rest The types of the remaining values to hash.
- * 
+ *
  * @param seed The seed to combine the hashes with.
  * @param value The first value to hash.
  * @param rest The remaining values to hash.
@@ -56,7 +55,7 @@ inline constexpr auto hash_combine(std::size_t& seed, const Type& value, Rest...
 
 /**
  * @brief A concept that represents a character type.
- * 
+ *
  * @tparam Type The type to check.
  */
 template<typename Type>
@@ -64,7 +63,7 @@ concept character = std::same_as<Type, char> || std::same_as<Type, wchar_t> || s
 
 /**
  * @brief Traits for the fnv1a hash function.
- * 
+ *
  * @tparam Type The type of the hash.
  */
 template<std::unsigned_integral Type>
@@ -72,7 +71,7 @@ struct fnv1a_traits;
 
 /**
  * @brief Traits for the fnv1a hash function specialized for 32-bit hashes.
- * 
+ *
  * @see https://en.wikipedia.org/wiki/Fowler%E2%80%93Noll%E2%80%93Vo_hash_function#FNV_hash_parameters
  */
 template<>
@@ -85,7 +84,7 @@ struct fnv1a_traits<std::uint32_t> {
 
 /**
  * @brief Traits for the fnv1a hash function specialized for 64-bit hashes.
- * 
+ *
  * @see https://en.wikipedia.org/wiki/Fowler%E2%80%93Noll%E2%80%93Vo_hash_function#FNV_hash_parameters
  */
 template<>
@@ -98,7 +97,7 @@ struct fnv1a_traits<std::uint64_t> {
 
 /**
  * @brief Functor that implements the fnv1a hash algorithm.
- * 
+ *
  * @tparam Char The character type of the string to hash.
  * @tparam Hash The type of the hash. Defaults to std::uint64_t.
  * @tparam HashTraits The traits of the hash. Defaults to fnv1a_traits<Hash>.
@@ -114,6 +113,13 @@ struct fnv1a_hash {
   inline static constexpr auto basis = hash_traits::basis;
   inline static constexpr auto prime = hash_traits::prime;
 
+  /**
+   * @brief Folds string into an in-progress hash. Call with basis as the initial hash to
+   * start a new one, or with a prior result to extend it over multiple strings.
+   *
+   * @param hash The hash to update in place.
+   * @param string The characters to fold in.
+   */
   inline constexpr auto operator()(hash_type& hash, std::basic_string_view<Char> string) const noexcept -> void {
     for (const auto& character : string) {
       hash ^= static_cast<hash_type>(character);
@@ -121,6 +127,13 @@ struct fnv1a_hash {
     }
   }
 
+  /**
+   * @brief Hashes a single string, starting from basis.
+   *
+   * @param string The characters to hash.
+   *
+   * @return The fnv1a hash of string.
+   */
   inline constexpr auto operator()(std::basic_string_view<Char> string) const noexcept -> hash_type {
     auto hash = basis;
 
@@ -136,6 +149,13 @@ struct djb2_hash {
 
   using hash_type = Hash;
 
+  /**
+   * @brief Hashes a byte buffer with djb2.
+   *
+   * @param buffer The bytes to hash.
+   *
+   * @return The djb2 hash of buffer.
+   */
   inline constexpr auto operator()(std::span<const std::uint8_t> buffer) const noexcept -> hash_type {
     // Implementation from https://theartincode.stanis.me/008-djb2/
     auto hash = hash_type{5381};
@@ -147,6 +167,15 @@ struct djb2_hash {
     return hash;
   }
 
+  /**
+   * @brief Hashes any trivially copyable value by its raw byte representation.
+   *
+   * @tparam Type The type of the value to hash; must be trivially copyable.
+   *
+   * @param value The value to hash.
+   *
+   * @return The djb2 hash of value's byte representation.
+   */
   template<typename Type>
   requires (std::is_trivially_copyable_v<Type>)
   inline constexpr auto operator()(const Type& value) const noexcept -> hash_type {
@@ -155,6 +184,14 @@ struct djb2_hash {
 
 }; // struct djb2_hash
 
+/**
+ * @brief Hashes a file's contents with fnv1a, reading it in chunks rather than loading it
+ * whole into memory.
+ *
+ * @param path The file to hash.
+ *
+ * @return The file's hash, or 0 if it could not be opened.
+ */
 auto hash_file(const std::filesystem::path& path) -> std::uint64_t;
 
 } // namespace sbx::utility

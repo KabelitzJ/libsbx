@@ -5,6 +5,7 @@
 
 #include <array>
 #include <cmath>
+#include <cstddef>
 
 #include <libsbx/math/constants.hpp>
 #include <libsbx/math/matrix4x4.hpp>
@@ -13,18 +14,9 @@
 namespace sbx::math {
 
 /**
- * @brief Extracts the 6 world-space frustum planes (left, right, bottom, top, near, far, in that
- * order) from a combined view-projection matrix -- the Gribb-Hartmann method: each plane falls
- * straight out of a row combination of @p view_projection, no matrix inverse needed, and because
- * @p view_projection maps world space directly to clip space in one step, the planes it yields are
- * already in world space (not clip space). Assumes column-major storage with a column-vector
- * convention (`clip = view_projection * point`, matching basic_matrix4x4::perspective/this engine's
- * shaders' `mul(matrix, vector)`) and a right-handed, zero-to-one clip-space depth range (matching
- * basic_matrix4x4::perspective's own convention).
+ * @brief Extracts the 6 world-space frustum planes (left, right, bottom, top, near, far, in that order) from a combined view-projection matrix — the Gribb-Hartmann method: each plane falls straight out of a row combination of @p view_projection, no matrix inverse needed, and because @p view_projection maps world space directly to clip space in one step, the planes it yields are already in world space (not clip space). Assumes column-major storage with a column-vector convention (`clip = view_projection * point`, matching basic_matrix4x4::perspective/this engine's shaders' `mul(matrix, vector)`) and a right-handed, zero-to-one clip-space depth range (matching basic_matrix4x4::perspective's own convention).
  *
- * Each returned plane is normalized: `.xyz()` is a unit outward... inward-facing normal (positive
- * on the inside of the frustum) and `.w()` is the plane's signed distance term, so a point/AABB test
- * can use `dot(normal, p) + distance >= 0` directly without any further scaling.
+ * Each returned plane is normalized: `.xyz()` is a unit inward-facing normal (positive on the inside of the frustum) and `.w()` is the plane's signed distance term, so a point/AABB test can use `dot(normal, p) + distance >= 0` directly without any further scaling.
  */
 [[nodiscard]] inline auto extract_frustum_planes(const matrix4x4& view_projection) noexcept -> std::array<vector4, 6u> {
   const auto& m = view_projection;

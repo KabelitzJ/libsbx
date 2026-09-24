@@ -76,3 +76,13 @@ TEST(volume_test, ray_pointing_away_from_a_box_does_not_intersect) {
 
   EXPECT_FALSE(box.intersects(ray).has_value());
 }
+
+TEST(volume_test, ray_starting_inside_a_box_reports_zero_not_the_exit_point) {
+  const auto box = volume{vector3{-1.0f, -1.0f, -1.0f}, vector3{1.0f, 1.0f, 1.0f}};
+  const auto ray = sbx::math::ray{vector3::zero, vector3::right};
+
+  const auto hit = box.intersects(ray);
+
+  ASSERT_TRUE(hit.has_value());
+  EXPECT_FLOAT_EQ(*hit, 0.0f); // Already inside — nearest intersection is the origin itself, not the far exit face.
+}

@@ -7,8 +7,6 @@
 #include <cmath>
 #include <cstdint>
 #include <concepts>
-#include <fstream>
-#include <ostream>
 #include <type_traits>
 
 #include <fmt/format.h>
@@ -49,14 +47,36 @@ public:
   template<scalar XOther, scalar YOther, scalar ZOther, scalar WOther>
   constexpr basic_vector4(XOther x, YOther y, ZOther z, WOther w) noexcept;
 
+  /**
+   * @brief Constructs from an xyz vector and a w component.
+   *
+   * @tparam Other The source vector's scalar type.
+   * @tparam ScalarW The w component's scalar type.
+   *
+   * @param vector The xyz components.
+   * @param w The w component. Defaults to 0.
+   */
   template<scalar Other, scalar ScalarW = Other>
   constexpr basic_vector4(const basic_vector3<Other>& vector, ScalarW w = ScalarW{0}) noexcept;
 
+  /**
+   * @brief Constructs from an xy vector and z/w components.
+   *
+   * @tparam Other The source vector's scalar type.
+   * @tparam ScalarZ The z component's scalar type.
+   * @tparam ScalarW The w component's scalar type.
+   *
+   * @param vector The xy components.
+   * @param z The z component. Defaults to 0.
+   * @param w The w component. Defaults to 0.
+   */
   template<scalar Other, scalar ScalarZ = Other, scalar ScalarW = Other>
   constexpr basic_vector4(const basic_vector2<Other>& vector, ScalarZ z = ScalarZ{0}, ScalarW w = ScalarW{0}) noexcept;
 
+  /** @return The dot product of lhs and rhs. */
   [[nodiscard]] static constexpr auto dot(const basic_vector4& lhs, const basic_vector4& rhs) noexcept -> length_type;
 
+  /** @return vector, scaled to unit length. Returns vector unchanged if its length is zero. */
   [[nodiscard]] static constexpr auto normalized(const basic_vector4& vector) noexcept -> basic_vector4;
 
   [[nodiscard]] constexpr operator basic_vector3<Type>() const noexcept;

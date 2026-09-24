@@ -23,10 +23,7 @@
 namespace sbx::math {
 
 /**
- * @brief Plane-based box represented by six clipping planes.
- *
- * The box stores a fixed set of six planes. The intersection test uses a
- * "positive vertex" strategy against an AABB-like volume type.
+ * @brief Plane-based box represented by six clipping planes, for frustum-style intersection tests against a basic_volume. The intersection test uses a "positive vertex" strategy: for each plane, only the volume's corner farthest along that plane's normal is tested, since if even that corner is outside, the whole volume is outside.
  *
  * @tparam Type Scalar value type.
  */
@@ -35,71 +32,29 @@ class basic_box {
 
 public:
 
-  /**
-   * @brief Underlying scalar value type.
-   */
   using value_type = Type;
-
-  /**
-   * @brief Plane type used by this box.
-   */
   using plane_type = basic_plane<value_type>;
-
-  /**
-   * @brief Volume type tested for intersection.
-   */
   using volume_type = basic_volume<value_type>;
-
-  /**
-   * @brief Index type for plane access.
-   */
   using size_type = std::size_t;
 
-  /**
-   * @brief Constructs an empty box.
-   */
   basic_box() noexcept = default;
 
   /**
-   * @brief Constructs a box from a plane array.
+   * @brief Constructs from six clipping planes.
    *
-   * @param planes Plane array describing the box.
+   * @param planes The box's planes.
    */
   basic_box(const std::array<plane_type, 6u>& planes) noexcept;
 
-  /**
-   * @brief Constructs a box by moving in a plane array.
-   *
-   * @param planes Plane array describing the box.
-   */
+  /** @copydoc basic_box(const std::array<plane_type, 6u>&) */
   basic_box(std::array<plane_type, 6u>&& planes) noexcept;
 
-  /**
-   * @brief Tests whether this box intersects a volume.
-   *
-   * The test evaluates the volume against each plane using the volume vertex
-   * most aligned with the plane normal.
-   *
-   * @param volume Volume to test for intersection.
-   *
-   * @return True if the volume intersects or is inside the box.
-   */
+  /** @return Whether volume intersects or lies inside this box. */
   auto intersects(const volume_type& volume) const -> bool;
 
-  /**
-   * @brief Returns the plane array backing this box.
-   *
-   * @return Reference to the plane array.
-   */
   auto planes() const noexcept -> const std::array<plane_type, 6u>&;
 
-  /**
-   * @brief Returns the plane at a given index.
-   *
-   * @param index Plane index.
-   *
-   * @return Reference to the plane at @p index.
-   */
+  /** @return The plane at index. */
   auto plane(const size_type index) const noexcept -> const plane_type&;
 
 private:
@@ -108,14 +63,8 @@ private:
 
 }; // class basic_box
 
-/**
- * @brief Box type using @ref std::float_t.
- */
 using boxf = basic_box<std::float_t>;
 
-/**
- * @brief Default box alias.
- */
 using box = boxf;
 
 } // namespace sbx::math

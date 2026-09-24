@@ -75,4 +75,4 @@ inline constexpr auto operator*(basic_matrix3x3<Lhs> lhs, const basic_matrix3x3<
   return result;
 }
 
-}; // namespace sbx::math
+} // namespace sbx::math

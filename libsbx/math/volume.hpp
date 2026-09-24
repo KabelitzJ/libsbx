@@ -5,6 +5,9 @@
 
 #include <algorithm>
 #include <cmath>
+#include <functional>
+#include <limits>
+#include <optional>
 #include <ranges>
 
 #include <libsbx/math/concepts.hpp>
@@ -14,6 +17,11 @@
 
 namespace sbx::math {
 
+/**
+ * @brief An axis-aligned bounding box (AABB).
+ *
+ * @tparam Type Scalar value type.
+ */
 template<scalar Type>
 class basic_volume {
 
@@ -22,14 +30,16 @@ public:
   using value_type = Type;
   using vector_type = basic_vector3<value_type>;
 
+  /** @brief Constructs an empty volume (min/max inverted, so the first include()/merge() replaces it entirely). */
   basic_volume() noexcept
   : _min{std::numeric_limits<value_type>::max()},
     _max{std::numeric_limits<value_type>::lowest()} { }
-  
+
   basic_volume(const vector_type& min, const vector_type& max) noexcept
-  : _min{min}, 
+  : _min{min},
     _max{max} { }
 
+  /** @return The smallest axis-aligned volume containing volume's 8 corners after transforming each by matrix. */
   static auto transformed(const basic_volume& volume, const math::matrix4x4& matrix) -> basic_volume {
     auto min = math::vector3{std::numeric_limits<std::float_t>::max()};
     auto max = math::vector3{std::numeric_limits<std::float_t>::lowest()};
@@ -52,9 +62,10 @@ public:
   }
 
   auto center() const noexcept -> vector_type {
-    return (_min + _max) / 2.0f;
+    return (_min + _max) / value_type{2};
   }
 
+  /** @return The volume's 8 corners, in a fixed order (all combinations of min/max per axis). */
   auto corners() const noexcept -> std::array<math::vector3, 8u> {
     return std::array<math::vector3, 8u>{
       math::vector3{_min.x(), _min.y(), _min.z()},
@@ -68,22 +79,27 @@ public:
     };
   }
 
+  /** @return Whether point lies within this volume, boundary inclusive. */
   auto contains(const vector_type& point) const noexcept -> bool {
     return point.x() >= _min.x() && point.x() <= _max.x() && point.y() >= _min.y() && point.y() <= _max.y() && point.z() >= _min.z() && point.z() <= _max.z();
   }
 
+  /** @return Whether other lies entirely within this volume, boundary inclusive. */
   auto contains(const basic_volume& other) const noexcept -> bool {
     return _min.x() <= other.min().x() && _min.y() <= other.min().y() && _min.z() <= other.min().z() && _max.x() >= other.max().x() && _max.y() >= other.max().y() && _max.z() >= other.max().z();
   }
 
+  /** @return Whether this volume and other overlap (touching counts as overlapping). */
   auto intersects(const basic_volume& other) const noexcept -> bool {
     return _min.x() <= other.max().x() && _max.x() >= other.min().x() && _min.y() <= other.max().y() && _max.y() >= other.min().y() && _min.z() <= other.max().z() && _max.z() >= other.min().z();
   }
 
   /**
    * @brief Ray-AABB intersection (slab method).
-   * 
-   * @return On a hit, returns the ray parameter of the nearest intersection point (point_at(t)), empty if the box lies entirely behind the ray origin.
+   *
+   * @param ray The ray to test.
+   *
+   * @return On a hit, the ray parameter of the nearest intersection point (point_at(t)); 0 if ray's origin is already inside this volume; empty if the volume lies entirely behind the ray origin or the ray misses it.
    */
   auto intersects(const math::ray& ray) const noexcept -> std::optional<value_type> {
     auto t_min = std::numeric_limits<value_type>::lowest();
@@ -126,7 +142,7 @@ public:
       return std::nullopt;
     }
 
-    return (t_min >= value_type{0}) ? t_min : t_max;
+    return (t_min >= value_type{0}) ? t_min : value_type{0};
   }
 
   auto extend() const noexcept -> math::vector3 {
@@ -134,11 +150,11 @@ public:
   }
 
   /**
-   * @brief Grows this volume by @p factor of its own extent (symmetric on every axis, half the
-   * growth on each side) -- e.g. a rest-pose mesh bounds padded before a skinned instance's animated
-   * pose can move vertices outside it. Padding done here (local space, before any world transform)
-   * scales along with whatever transform is later applied to the volume, unlike a fixed world-space
-   * margin -- a 2x-scaled instance gets 2x the padding for free.
+   * @brief Grows this volume by @p factor of its own extent (symmetric on every axis, half the growth on each side) — e.g. a rest-pose mesh bounds padded before a skinned instance's animated pose can move vertices outside it. Padding done here (local space, before any world transform) scales along with whatever transform is later applied to the volume, unlike a fixed world-space margin — a 2x-scaled instance gets 2x the padding for free.
+   *
+   * @param factor The fraction of the volume's own extent to grow by.
+   *
+   * @return The grown volume.
    */
   auto inflated(value_type factor) const noexcept -> basic_volume {
     const auto padding = extend() * (factor * value_type{0.5});
@@ -153,16 +169,19 @@ public:
     return _min.x() >= _max.x() || _min.y() >= _max.y() || _min.z() >= _max.z();
   }
 
+  /** @brief Grows this volume to also contain other. */
   auto include(const basic_volume& other) noexcept -> void {
     _min = vector_type::min(_min, other.min());
     _max = vector_type::max(_max, other.max());
   }
 
+  /** @brief Grows this volume to also contain point. */
   auto include(const vector_type& point) noexcept -> void {
     _min = vector_type::min(_min, point);
     _max = vector_type::max(_max, point);
   }
 
+  /** @return The smallest volume containing both a and b. */
   static auto merge(const basic_volume& a, const basic_volume& b) -> basic_volume {
     return basic_volume{
       vector_type::min(a.min(), b.min()),
@@ -170,10 +189,17 @@ public:
     };
   }
 
-  static auto are_overlapping(const basic_volume& a, const basic_volume& b) -> bool {
-    return (a.min().x() <= b.max().x() && a.max().x() >= b.min().x()) && (a.min().y() <= b.max().y() && a.max().y() >= b.min().y()) && (a.min().z() <= b.max().z() && a.max().z() >= b.min().z());
-  }
-
+  /**
+   * @brief Builds the smallest volume containing every point in range, via projection.
+   *
+   * @tparam Range An input range.
+   * @tparam Projection A callable mapping a range element to a vector_type. Defaults to the identity.
+   *
+   * @param range The elements to bound.
+   * @param projection Maps each element of range to the point to include.
+   *
+   * @return The smallest volume containing every projected point, or an empty volume if range is empty.
+   */
   template<std::ranges::input_range Range, typename Projection = std::identity>
   requires (std::convertible_to<std::invoke_result_t<Projection, std::ranges::range_reference_t<Range>>, vector_type>)
   static auto construct(Range&& range, Projection projection = {}) -> basic_volume {

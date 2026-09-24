@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Jonas Kabelitz
 #ifndef LIBSBX_UNITS_MASS_HPP_
 #define LIBSBX_UNITS_MASS_HPP_
 
@@ -7,6 +9,7 @@
 
 namespace sbx::units {
 
+/** @brief Mass quantities, in grams and kilograms (the SI base scale). */
 using grams = quantity<mass_dimension, std::float_t, std::milli>;
 using kilograms = quantity<mass_dimension, std::float_t>;
 
@@ -20,6 +23,7 @@ struct unit_formatter<mass_dimension, std::ratio<1>> {
   static constexpr auto symbol = "kg";
 }; // struct unit_formatter
 
+/** @brief Literal suffix for constructing mass quantities directly, e.g. `2.5_kg`. */
 namespace literals {
 
 constexpr auto operator""_kg(long double value) -> kilograms {

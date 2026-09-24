@@ -6,8 +6,6 @@
 #include <concepts>
 #include <cstddef>
 #include <cmath>
-#include <fstream>
-#include <ostream>
 #include <type_traits>
 
 #include <yaml-cpp/yaml.h>
@@ -53,23 +51,37 @@ public:
   template<scalar X, scalar Y, scalar Z>
   constexpr basic_vector3(X x, Y y, Z z) noexcept;
 
+  /**
+   * @brief Constructs from an xy vector and a z component.
+   *
+   * @tparam Other The source vector's scalar type.
+   * @tparam Scalar The z component's scalar type.
+   *
+   * @param vector The xy components.
+   * @param z The z component. Defaults to 0.
+   */
   template<scalar Other, scalar Scalar = Other>
   constexpr basic_vector3(const basic_vector2<Other>& vector, Scalar z = Scalar{0}) noexcept;
 
+  /** @return The cross product of lhs and rhs. */
   [[nodiscard]] static constexpr auto cross(const basic_vector3& lhs, const basic_vector3& rhs) noexcept -> basic_vector3;
 
+  /** @return The dot product of lhs and rhs. */
   [[nodiscard]] static constexpr auto dot(const basic_vector3& lhs, const basic_vector3& rhs) noexcept -> length_type;
 
+  /** @return vector, scaled to unit length. Returns vector unchanged if its length is zero. */
   [[nodiscard]] static constexpr auto normalized(const basic_vector3& vector) noexcept -> basic_vector3;
 
+  /** @return vector reflected across the plane with the given normal: `vector - 2 * dot(vector, normal) * normal`. */
   [[nodiscard]] static constexpr auto reflect(const basic_vector3& vector, const basic_vector3& normal) noexcept -> basic_vector3;
 
-  // [[nodiscard]] static constexpr auto abs(const basic_vector3& vector) noexcept -> basic_vector3;
-
+  /** @return The squared distance between lhs and rhs. */
   [[nodiscard]] static constexpr auto distance_squared(const basic_vector3& lhs, const basic_vector3& rhs) noexcept -> value_type;
 
+  /** @return The distance between lhs and rhs. */
   [[nodiscard]] static constexpr auto distance(const basic_vector3& lhs, const basic_vector3& rhs) noexcept -> value_type;
 
+  /** @return A unit vector perpendicular to vector. Falls back to the world X axis for a zero-length input. */
   [[nodiscard]] static constexpr auto orthogonal(const basic_vector3& vector) noexcept -> basic_vector3 {
     if (vector.length_squared() < 1e-12f) {
       return {1.0f, 0.0f, 0.0f};
@@ -93,31 +105,20 @@ public:
     return normalized(orthogonal);
   }
 
+  /** @return vector with every component set to vector.x(). */
   [[nodiscard]] static constexpr auto splat_x(const basic_vector3& vector) noexcept -> basic_vector3 {
     return base_type::template splat<x_axis>(vector);
   }
 
+  /** @copydoc splat_x */
   [[nodiscard]] static constexpr auto splat_y(const basic_vector3& vector) noexcept -> basic_vector3 {
     return base_type::template splat<y_axis>(vector);
   }
 
+  /** @copydoc splat_x */
   [[nodiscard]] static constexpr auto splat_z(const basic_vector3& vector) noexcept -> basic_vector3 {
     return base_type::template splat<z_axis>(vector);
   }
-
-  // /**
-  //  * @brief Linearly interpolates between two vectors.
-  //  * 
-  //  * @param start The starting vector.
-  //  * @param end The ending vector.
-  //  * @param t The interpolation factor [0.0f, 1.0f].
-  //  * 
-  //  * @return A new vector that is the result of the linear interpolation.
-  //  */
-  // [[nodiscard]] static constexpr auto lerp(const basic_vector3& start, const basic_vector3& end, const value_type t) noexcept -> basic_vector3 {
-  //   utility::assert_that(t >= 0.0f && t <= 1.0f, "Interpolation factor out of bounds in vector3 lerp");
-  //   return start * (1.0f - t) + end * t;
-  // }
 
   [[nodiscard]] constexpr operator basic_vector2<Type>() const noexcept;
 
@@ -135,7 +136,7 @@ public:
 
   constexpr auto normalize() noexcept -> basic_vector3&;
 
-}; // template<scalar Type>
+}; // class basic_vector3
 
 template<scalar Lhs, scalar Rhs>
 [[nodiscard]] constexpr auto operator+(basic_vector3<Lhs> lhs, const basic_vector3<Rhs>& rhs) noexcept -> basic_vector3<Lhs>;

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Jonas Kabelitz
 #ifndef LIBSBX_UNITS_VELOCITY_HPP_
 #define LIBSBX_UNITS_VELOCITY_HPP_
 
@@ -5,6 +7,7 @@
 
 namespace sbx::units {
 
+/** @brief Velocity quantities, in metres per second. Usually produced by dividing a length quantity by a time quantity rather than constructed directly, so unlike the other unit headers this one has no literal suffix. */
 using meters_per_second = quantity<velocity_dimension, std::float_t>;
 
 template<>

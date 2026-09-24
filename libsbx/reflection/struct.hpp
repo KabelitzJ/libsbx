@@ -27,9 +27,22 @@ consteval auto format_specifier_of(std::meta::info member) -> std::optional<std:
 
 } // namespace detail
 
+/** @brief A struct/class tagged `[[=reflection::named]]`, i.e. reflectable via to_string. */
 template<typename Type>
 concept named_struct = std::meta::is_class_type(^^Type) && has_annotation<Type, named>();
 
+/**
+ * @brief Formats a named_struct as `TypeName{ .member: value, ... }`, recursing into any
+ * member that is itself a named_struct or named_enum.
+ *
+ * @tparam Type A named_struct.
+ *
+ * @param value The value to format.
+ *
+ * @return The formatted string.
+ *
+ * @note Skips members tagged `[[=reflection::skip]]`. Respects `[[=reflection::rename(...)]]` (renames the field in the output) and `[[=reflection::format(...)]]` (overrides the fmt format spec used for that field's value) where present.
+ */
 template<named_struct Type>
 auto to_string(const Type& value) -> std::string {
   constexpr auto type_info = ^^Type;

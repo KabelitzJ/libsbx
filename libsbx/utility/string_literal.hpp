@@ -27,6 +27,14 @@ constexpr auto copy(InputIterator first, Sentinel last, OutputIterator result) -
 
 } // namespace detail
 
+/**
+ * @brief A fixed-size string usable as a non-type template parameter (e.g. `template<string_literal Tag> class logger`), built from a string literal at compile time.
+ *
+ * @tparam Character The character type.
+ * @tparam Size The literal's array size, i.e. its length plus the null terminator.
+ *
+ * @note _data is a public member, not an implementation detail — C++20 requires a class-type non-type template parameter to have structural equality, which requires all its members to be public.
+ */
 template<typename Character, std::size_t Size>
 class basic_string_literal {
 
@@ -40,6 +48,11 @@ public:
 
   static constexpr auto npos = std::numeric_limits<size_type>::max();
 
+  /**
+   * @brief Constructs from a string literal, at compile time.
+   *
+   * @param data The string literal to copy from.
+   */
   consteval basic_string_literal(const character_type (&data)[Size]) noexcept {
     detail::copy(data, data + Size - 1, _data.data());
   }
@@ -56,6 +69,7 @@ public:
     return _data.data();
   }
 
+  /** @brief The literal's length, excluding the null terminator. */
   constexpr auto size() const noexcept -> size_type {
     return Size - 1;
   }
@@ -72,6 +86,7 @@ public:
     return _data.at(index);
   }
 
+  /** @brief The literal's fnv1a hash. */
   constexpr auto hash() const noexcept -> std::size_t {
     return fnv1a_hash<character_type, std::size_t>{}({_data.data(), _data.size()});
   }
@@ -80,8 +95,7 @@ public:
     return string_view_type{_data.data(), size()};
   }
 
-  // _data holds Size - 1 characters (no null terminator) — conversions must
-  // use size(), not Size.
+  // _data holds Size - 1 characters (no null terminator) — conversions must use size(), not Size.
   constexpr operator string_view_type() const noexcept {
     return view();
   }
@@ -100,6 +114,13 @@ using string_literal = basic_string_literal<char, Size>;
 template<std::size_t Size>
 using wstring_literal = basic_string_literal<wchar_t, Size>;
 
+/**
+ * @brief Hashes a string_literal non-type template parameter into a std::size_t id.
+ *
+ * @tparam String The string literal to hash.
+ *
+ * @return String's fnv1a hash.
+ */
 template<string_literal String>
 constexpr auto string_id() noexcept -> std::size_t {
   return String.hash();
@@ -120,7 +141,7 @@ struct fmt::formatter<sbx::utility::string_literal<Size>> {
     return fmt::format_to(context.out(), "{}", std::string{value.data(), value.size()});
   }
 
-}; // struct fmt::formatter<sbx::utility::primitive<Type>>
+}; // struct fmt::formatter<sbx::utility::string_literal<Size>>
 
 template<typename Character, size_t Size>
 struct std::hash<sbx::utility::basic_string_literal<Character, Size>> {

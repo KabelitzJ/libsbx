@@ -6,10 +6,8 @@
 #include <array>
 #include <cstddef>
 #include <cmath>
-#include <cinttypes>
+#include <cstdint>
 #include <concepts>
-#include <fstream>
-#include <ostream>
 #include <type_traits>
 
 #include <fmt/format.h>
@@ -68,9 +66,11 @@ public:
     Other w0, Other w1, Other w2, Other w3
   ) noexcept;
 
+  /** @brief Constructs a diagonal matrix from explicit diagonal values, all other elements zero. */
   template<scalar Other>
   constexpr basic_matrix4x4(const Other v00, const Other v11, const Other v22, const Other v33) noexcept;
 
+  /** @brief Embeds a 3x3 rotation/scale matrix into the upper-left 3x3 block, with an identity translation/w row. */
   template<scalar Other>
   constexpr basic_matrix4x4(const basic_matrix3x3<Other>& other) noexcept
   : base_type{column_type{other[0], 0}, column_type{other[1], 0}, column_type{other[2], 0}, column_type{0, 0, 0, 1}} { }
@@ -83,28 +83,37 @@ public:
 
   constexpr auto operator=(basic_matrix4x4&& other) noexcept -> basic_matrix4x4& = default;
 
-  // -- Static member functions --
-
+  /** @return matrix, transposed. */
   [[nodiscard]] constexpr static auto transposed(const basic_matrix4x4& matrix) noexcept -> basic_matrix4x4;
 
+  /** @return matrix's inverse. Undefined if matrix is singular. */
   [[nodiscard]] constexpr static auto inverted(const basic_matrix4x4& matrix) -> basic_matrix4x4;
 
+  /** @return A right-handed view matrix looking from position toward target, with the given up direction. */
   [[nodiscard]] constexpr static auto look_at(const basic_vector3<value_type>& position, const basic_vector3<value_type>& target, const basic_vector3<value_type>& up) noexcept -> basic_matrix4x4;
 
+  /** @return A right-handed, zero-to-one depth range perspective projection matrix, matching Vulkan's clip space. */
   [[nodiscard]] constexpr static auto perspective(const basic_angle<value_type>& fov, const value_type aspect, const value_type near, const value_type far) noexcept -> basic_matrix4x4;
 
+  /** @return A right-handed orthographic projection matrix for the [-1, 1] depth range. */
   [[nodiscard]] constexpr static auto orthographic(const value_type left, const value_type right, const value_type bottom, const value_type top) noexcept -> basic_matrix4x4;
 
+  /** @return A right-handed, zero-to-one depth range orthographic projection matrix. */
   [[nodiscard]] constexpr static auto orthographic(const value_type left, const value_type right, const value_type bottom, const value_type top, const value_type near, const value_type far) noexcept -> basic_matrix4x4;
 
+  /** @return matrix, translated by vector (applied in world space, i.e. post-multiplied). */
   [[nodiscard]] constexpr static auto translated(const basic_matrix4x4& matrix, const basic_vector3<value_type>& vector) noexcept -> basic_matrix4x4;
 
+  /** @return matrix, scaled by vector's components along each axis. */
   [[nodiscard]] constexpr static auto scaled(const basic_matrix4x4& matrix, const basic_vector3<value_type>& vector) noexcept -> basic_matrix4x4;
 
+  /** @return matrix, rotated by angle around axis. */
   [[nodiscard]] constexpr static auto rotated(const basic_matrix4x4& matrix, const basic_vector3<value_type>& axis, const basic_angle<value_type>& angle) noexcept -> basic_matrix4x4;
 
+  /** @return A rotation matrix from Euler angles, in degrees, applied in roll (x), pitch (y), yaw (z) order. */
   [[nodiscard]] constexpr static auto rotation_from_euler_angles(const basic_vector3<value_type>& euler_angles) noexcept -> basic_matrix4x4;
 
+  /** @return matrix's upper-left 3x3 rotation basis, orthonormalized (see basic_matrix3x3::ortho_normal). */
   [[nodiscard]] constexpr static auto rotation_basis(const basic_matrix4x4& matrix) noexcept -> basic_matrix3x3<value_type> {
     auto x = basic_vector3<value_type>{matrix[x_axis]};
     auto y = basic_vector3<value_type>{matrix[y_axis]};
@@ -113,8 +122,12 @@ public:
     return basic_matrix3x3<value_type>::ortho_normal(basic_matrix3x3<value_type>{x, y, z});
   }
 
+  /**
+   * @warning Casts the base class's basic_vector<4,Type>& to column_type (basic_vector4<Type>&), even though the stored column was never actually constructed as a basic_vector4 — this relies entirely on basic_vector4 adding no data members or virtual functions over basic_vector<4,Type>, so the cast is a same-layout reinterpretation rather than a type-safe downcast. Deliberate, not an oversight, but technically UB per the standard; do not restructure without verifying every caller (including matrix_cast.ipp, which takes the base type by reference in one specialization).
+   */
   constexpr auto operator[](size_type index) const noexcept -> const column_type&;
 
+  /** @copydoc operator[] */
   constexpr auto operator[](size_type index) noexcept -> column_type&;
 
 }; // class basic_matrix4x4

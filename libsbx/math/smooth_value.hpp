@@ -3,6 +3,7 @@
 #ifndef LIBSBX_MATH_SMOOTH_VALUE_HPP_
 #define LIBSBX_MATH_SMOOTH_VALUE_HPP_
 
+#include <algorithm>
 #include <cmath>
 #include <concepts>
 #include <type_traits>
@@ -18,8 +19,11 @@
 
 namespace sbx::math {
 
+/** @brief How basic_smooth_value moves its current value toward its target on each update(). */
 enum class smoothing_mode : std::uint8_t {
+  /** @brief Moves at a constant rate (base_speed units per second), reaching the target in finite time. */
   linear,
+  /** @brief Moves at a rate proportional to the remaining distance, approaching the target asymptotically. */
   proportional
 }; // enum class smoothing_mode
 
@@ -32,9 +36,16 @@ inline constexpr auto is_smoothable_v = is_smoothable<Type>::value;
 template<floating_point Type>
 struct is_smoothable<Type> : std::true_type { };
 
+/** @brief A type basic_smooth_value can smooth — currently any floating-point type. */
 template<typename Type>
 concept smoothable = is_smoothable_v<Type>;
 
+/**
+ * @brief A value that, instead of jumping straight to a newly assigned target, moves toward it gradually over successive update() calls — e.g. for a camera field-of-view or a UI element animating toward a new value instead of snapping to it.
+ *
+ * @tparam Type The underlying value type; must satisfy smoothable.
+ * @tparam Mode How the value approaches its target; see smoothing_mode.
+ */
 template<smoothable Type, smoothing_mode Mode>
 class basic_smooth_value {
 
@@ -44,19 +55,33 @@ public:
 
   inline static constexpr auto mode = Mode;
 
+  /** @brief Constructs already at value, with no smoothing in progress (current == target). */
   basic_smooth_value(const value_type value)
   : _current{value},
     _target{value} { }
 
+  /** @brief Clamps value's target into [min, max], leaving its current (in-progress) value untouched. */
   static constexpr auto clamp(const basic_smooth_value& value, const value_type min, const value_type max) -> basic_smooth_value {
     return basic_smooth_value{value._current, std::clamp(value._target, min, max)};
   }
 
+  /**
+   * @brief Interpolates between two smooth values' targets, keeping x's current (in-progress) value.
+   *
+   * @tparam Ratio The interpolation factor's type.
+   *
+   * @param x The value whose current (in-progress) value carries over.
+   * @param y The value to interpolate toward.
+   * @param ratio The interpolation factor, in [0, 1].
+   *
+   * @return A basic_smooth_value with x's current value and a target interpolated between x's and y's targets.
+   */
   template<floating_point Ratio>
   static constexpr auto lerp(const basic_smooth_value& x, const basic_smooth_value& y, const Ratio ratio) -> basic_smooth_value {
     return basic_smooth_value{x._current, mix(x._target, y._target, ratio)};
   }
 
+  /** @brief Sets a new target to smooth toward. */
   constexpr auto operator=(const value_type value) -> basic_smooth_value& {
     _target = value;
 
@@ -87,30 +112,31 @@ public:
     return *this;
   }
 
-  constexpr auto operator+(const value_type value) -> basic_smooth_value {
+  constexpr auto operator+(const value_type value) const -> basic_smooth_value {
     auto copy = basic_smooth_value{*this};
     copy += value;
     return copy;
   }
 
-  constexpr auto operator-(const value_type value) -> basic_smooth_value {
+  constexpr auto operator-(const value_type value) const -> basic_smooth_value {
     auto copy = basic_smooth_value{*this};
     copy -= value;
     return copy;
   }
 
-  constexpr auto operator*(const value_type value) -> basic_smooth_value {
+  constexpr auto operator*(const value_type value) const -> basic_smooth_value {
     auto copy = basic_smooth_value{*this};
     copy *= value;
     return copy;
   }
 
-  constexpr auto operator/(const value_type value) -> basic_smooth_value {
+  constexpr auto operator/(const value_type value) const -> basic_smooth_value {
     auto copy = basic_smooth_value{*this};
     copy /= value;
     return copy;
   }
 
+  /** @return The current (in-progress) value — not the target. */
   constexpr auto value() const noexcept -> value_type {
     return _current;
   }
@@ -119,24 +145,28 @@ public:
     return value();
   }
 
+  /**
+   * @brief Advances the current value toward the target by one step, sized according to mode, base_speed and delta_time. Snaps exactly to the target instead of overshooting it once the remaining step would be at least as large as the remaining distance.
+   *
+   * @param delta_time The elapsed time since the last update() call.
+   * @param base_speed The smoothing rate; its meaning depends on mode (see smoothing_mode).
+   */
   constexpr void update(const units::seconds& delta_time, const value_type base_speed) {
     const auto difference = _target - _current;
 
-    if (comparision_traits<value_type>::equal(difference, static_cast<value_type>(0))) {
+    if (comparison_traits<value_type>::equal(difference, static_cast<value_type>(0))) {
       _current = _target;
       return;
     }
 
     const auto step = _compute_step(difference, base_speed, delta_time);
 
-    // Clamp step to not overshoot
     if (std::abs(step) >= std::abs(difference)) {
       _current = _target;
     } else {
       _current += step;
     }
   }
-
 
 private:
 

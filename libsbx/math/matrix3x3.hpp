@@ -6,10 +6,8 @@
 #include <array>
 #include <cstddef>
 #include <cmath>
-#include <cinttypes>
+#include <cstdint>
 #include <concepts>
-#include <fstream>
-#include <ostream>
 #include <type_traits>
 
 #include <fmt/format.h>
@@ -64,14 +62,23 @@ public:
     Other z0, Other z1, Other z2
   ) noexcept;
 
+  /**
+   * @brief Constructs a diagonal matrix from explicit diagonal values, all other elements zero.
+   *
+   * @tparam Other The diagonal values' scalar type.
+   *
+   * @param v00 The [0][0] element.
+   * @param v11 The [1][1] element.
+   * @param v22 The [2][2] element.
+   */
   template<scalar Other>
   constexpr basic_matrix3x3(const Other v00, const Other v11, const Other v22) noexcept;
 
+  /** @brief Constructs a diagonal matrix with diagonal repeated on all three diagonal elements. */
   template<scalar Other>
   constexpr basic_matrix3x3(const Other diagonal) noexcept;
 
-  // -- Static member functions --
-
+  /** @return matrix's inverse, or identity if matrix is singular (determinant is zero). */
   [[nodiscard]] constexpr static auto inverted(const basic_matrix3x3& matrix) -> basic_matrix3x3 {
     const auto m00 = matrix[0][0];
     const auto m01 = matrix[0][1];
@@ -87,7 +94,7 @@ public:
 
     const auto determinant = m00 * (m11 * m22 - m21 * m12) - m10 * (m01 * m22 - m21 * m02) + m20 * (m01 * m12 - m11 * m02);
 
-    if (comparision_traits<value_type>::equal(determinant, 0)) {
+    if (comparison_traits<value_type>::equal(determinant, 0)) {
       return identity;
     }
 
@@ -110,6 +117,7 @@ public:
     return result;
   }
 
+  /** @return matrix, transposed. */
   [[nodiscard]] constexpr static auto transposed(const basic_matrix3x3& matrix) noexcept -> basic_matrix3x3 {
     auto result = basic_matrix3x3<value_type>{};
 
@@ -128,6 +136,12 @@ public:
     return result;
   }
 
+  /**
+   * @brief Orthonormalizes matrix's columns via Gram-Schmidt, preserving handedness.
+   *
+   * @return matrix with its columns made orthogonal and unit-length, or identity if any column's
+   * length is below math::epsilon_v<value_type>.
+   */
   [[nodiscard]] constexpr static auto ortho_normal(const basic_matrix3x3& matrix) -> basic_matrix3x3 {
     auto x = basic_vector3<value_type>{matrix[x_axis]};
     auto y = basic_vector3<value_type>{matrix[y_axis]};
@@ -162,6 +176,7 @@ public:
     return basic_matrix3x3<value_type>{x, y, z};
   }
 
+  /** @return matrix with every element's absolute value. */
   [[nodiscard]] constexpr static auto abs(const basic_matrix3x3& matrix) noexcept -> basic_matrix3x3 {
     return basic_matrix3x3{
       column_type::abs(matrix[0]),
@@ -170,41 +185,21 @@ public:
     };
   }
 
-  // [[nodiscard]] constexpr static auto inverted(const basic_matrix3x3& matrix) -> basic_matrix3x3;
-
-  // [[nodiscard]] constexpr static auto perspective(const basic_angle<value_type>& fov, const value_type aspect, const value_type near, const value_type far) noexcept -> basic_matrix3x3;
-
-  // [[nodiscard]] constexpr static auto translated(const basic_matrix3x3& matrix, const basic_vector3<value_type>& vector) noexcept -> basic_matrix3x3;
-
-  // [[nodiscard]] constexpr static auto scaled(const basic_matrix3x3& matrix, const basic_vector3<value_type>& vector) noexcept -> basic_matrix3x3;
-
-  // [[nodiscard]] constexpr static auto rotated(const basic_matrix3x3& matrix, const basic_vector3<value_type>& axis, const basic_angle<value_type>& angle) noexcept -> basic_matrix3x3;
-
-  // [[nodiscard]] constexpr static auto rotation_from_euler_angles(const basic_vector3<value_type>& euler_angles) noexcept -> basic_matrix3x3;
-
+  /**
+   * @warning Casts the base class's basic_vector<3,Type>& to column_type (basic_vector3<Type>&), even though the stored column was never actually constructed as a basic_vector3 — this relies entirely on basic_vector3 adding no data members or virtual functions over basic_vector<3,Type>, so the cast is a same-layout reinterpretation rather than a type-safe downcast. Deliberate, not an oversight, but technically UB per the standard; do not restructure without verifying every caller (including matrix_cast.ipp, which takes the base type by reference in one specialization).
+   */
   constexpr auto operator[](size_type index) const noexcept -> const column_type&;
 
+  /** @copydoc operator[] */
   constexpr auto operator[](size_type index) noexcept -> column_type&;
 
 }; // class basic_matrix3x3
-
-// template<scalar Lhs, scalar Rhs>
-// [[nodiscard]] constexpr auto operator+(basic_matrix3x3<Lhs> lhs, const basic_matrix3x3<Rhs>& rhs) noexcept -> basic_matrix3x3<Lhs>;
-
-// template<scalar Lhs, scalar Rhs>
-// [[nodiscard]] constexpr auto operator-(basic_matrix3x3<Lhs> lhs, const basic_matrix3x3<Rhs>& rhs) noexcept -> basic_matrix3x3<Lhs>;
-
-// template<scalar Lhs, scalar Rhs>
-// [[nodiscard]] constexpr auto operator*(basic_matrix3x3<Lhs> lhs, Rhs scalar) noexcept -> basic_matrix3x3<Lhs>;
 
 template<scalar Lhs, scalar Rhs>
 [[nodiscard]] constexpr auto operator*(basic_matrix3x3<Lhs> lhs, const basic_vector3<Rhs>& rhs) noexcept -> basic_vector3<Lhs>;
 
 template<scalar Lhs, scalar Rhs>
 [[nodiscard]] constexpr auto operator*(basic_matrix3x3<Lhs> lhs, const basic_matrix3x3<Rhs>& rhs) noexcept -> basic_matrix3x3<Lhs>;
-
-// template<scalar Lhs, scalar Rhs>
-// [[nodiscard]] constexpr auto operator/(basic_matrix3x3<Lhs> lhs, Rhs scalar) noexcept -> basic_matrix3x3<Lhs>;
 
 using matrix3x3f = basic_matrix3x3<std::float_t>;
 

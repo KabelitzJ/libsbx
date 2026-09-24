@@ -36,7 +36,7 @@ concept dispatcher_for = requires() {
   { std::remove_cvref_t<Type>::invoke(std::declval<Args>()...) } -> std::same_as<Return>;
 };
 
-/*! @cond TURN_OFF_DOXYGEN */
+/** @cond TURN_OFF_DOXYGEN */
 namespace detail {
 
 /**
@@ -49,7 +49,7 @@ template<typename To, typename From>
 struct matrix_cast_impl;
 
 } // namespace detail
-/*! @endcond */
+/** @endcond */
 
 /**
  * @brief Casts between matrix-related types.
@@ -80,6 +80,10 @@ struct decompose_result {
  * @param matrix Input transformation matrix.
  *
  * @return Decomposed transformation components.
+ *
+ * @note An axis whose extracted scale is below math::epsilonf is treated as unscaled/unrotated (its rotation-matrix column falls back to the corresponding identity basis vector) rather than dividing by a near-zero value.
+ *
+ * @warning Doesn't handle mirrored (negative-determinant) scale: an odd number of negative scale components produces an extracted rotation matrix with determinant -1, which isn't a valid pure rotation, and the resulting quaternion is undefined for that case.
  */
 [[nodiscard]] auto decompose(const matrix4x4& matrix) noexcept -> decompose_result;
 

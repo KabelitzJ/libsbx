@@ -7,6 +7,12 @@
 
 namespace sbx::utility {
 
+/**
+ * @brief A four-character-code packed into a little-endian std::uint32_t, e.g. for file
+ * format magic numbers.
+ *
+ * @tparam Name The four-character string literal to pack; must be exactly 4 characters.
+ */
 template<utility::string_literal Name>
 requires (Name.size() == 4u)
 struct fourcc {
@@ -18,6 +24,7 @@ struct fourcc {
   };
 }; // struct fourcc
 
+/** @brief The value of fourcc<Name>. */
 template<utility::string_literal Name>
 requires (Name.size() == 4u)
 constexpr auto fourcc_v = fourcc<Name>::value;

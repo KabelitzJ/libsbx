@@ -4,11 +4,7 @@
 /**
  * @file libsbx/containers/dynamic_tree.hpp
  *
- * @brief A dynamic bounding-volume hierarchy (AABB tree) for moving objects — Box2D/Bullet-style:
- * a binary tree with fattened leaf AABBs, incremental insert/remove, refit-or-reinsert updates,
- * and stack-based AABB/ray queries. Unlike @ref octree (insert-only, unsuitable for moving
- * objects), this structure supports the full insert/remove/update lifecycle a physics broadphase
- * (or any other spatial index of moving objects — frustum culling, picking) needs.
+ * @brief A dynamic bounding-volume hierarchy (AABB tree) for moving objects — Box2D/Bullet-style: a binary tree with fattened leaf AABBs, incremental insert/remove, refit-or-reinsert updates, and stack-based AABB/ray queries. Unlike @ref octree (insert-only, unsuitable for moving objects), this structure supports the full insert/remove/update lifecycle a physics broadphase (or any other spatial index of moving objects — frustum culling, picking) needs.
  *
  * @ingroup libsbx-containers
  */
@@ -41,11 +37,7 @@ public:
   inline static constexpr auto null = static_cast<id>(-1);
 
   /**
-   * @brief One node's full internal state -- exposed read-only (see node_count()/node_at()) purely
-   * as bulk structural access, the same kind of thing for_each_leaf()/query() already are. This
-   * type has no notion of files or byte layout; a caller that wants to persist a tree (e.g. to skip
-   * rebuilding it from scratch) owns that serialization itself, entirely outside this class -- see
-   * rebuild() for the other half of that round trip.
+   * @brief One node's full internal state — exposed read-only (see node_count()/node_at()) purely as bulk structural access, the same kind of thing for_each_leaf()/query() already are. This type has no notion of files or byte layout; a caller that wants to persist a tree (e.g. to skip rebuilding it from scratch) owns that serialization itself, entirely outside this class — see rebuild() for the other half of that round trip.
    */
   struct node {
     math::volume aabb{};
@@ -153,9 +145,7 @@ public:
   }
 
   /**
-   * @brief Invokes callback(const Type&, std::float_t hit_t) for every leaf whose (fattened) AABB
-   * the ray intersects, in no particular order — callers wanting the nearest hit must reduce
-   * themselves.
+   * @brief Invokes callback(const Type&, std::float_t hit_t) for every leaf whose (fattened) AABB the ray intersects, in no particular order — callers wanting the nearest hit must reduce themselves.
    */
   template<typename Fn>
   auto query(const math::ray& ray, Fn&& callback) const -> void {
@@ -199,12 +189,12 @@ public:
     }
   }
 
-  /** @brief Number of node slots, including any currently on the free list -- node_at(i) is valid for every i < node_count(). */
+  /** @brief Number of node slots, including any currently on the free list — node_at(i) is valid for every i < node_count(). */
   [[nodiscard]] auto node_count() const noexcept -> std::size_t {
     return _nodes.size();
   }
 
-  /** @brief Read-only access to one node slot by its raw index (not necessarily a leaf, and not necessarily live -- height == -1 means it's on the free list). See node_count()/root_id() for bulk-exporting the whole tree. */
+  /** @brief Read-only access to one node slot by its raw index (not necessarily a leaf, and not necessarily live — height == -1 means it's on the free list). See node_count()/root_id() for bulk-exporting the whole tree. */
   [[nodiscard]] auto node_at(id index) const -> const node& {
     return _nodes[index];
   }
@@ -214,12 +204,7 @@ public:
   }
 
   /**
-   * @brief Replaces this tree's entire contents with a previously-exported node array (see
-   * node_count()/node_at()/root_id()) and its root, resetting the free list empty. For rebuilding a
-   * tree that was insert-only when exported (remove() never called on it) directly from stored
-   * data -- e.g. a disk-cached BVH -- skipping normal incremental insert()-based construction
-   * entirely. `nodes` must already be in this exact internal layout (parent/child links, heights,
-   * fattened AABBs and all) -- this does no validation or rebalancing of its own.
+   * @brief Replaces this tree's entire contents with a previously-exported node array (see node_count()/node_at()/root_id()) and its root, resetting the free list empty. For rebuilding a tree that was insert-only when exported (remove() never called on it) directly from stored data — e.g. a disk-cached BVH — skipping normal incremental insert()-based construction entirely. `nodes` must already be in this exact internal layout (parent/child links, heights, fattened AABBs and all) — this does no validation or rebalancing of its own.
    */
   auto rebuild(std::vector<node> nodes, id root) -> void {
     _nodes = std::move(nodes);
@@ -384,10 +369,7 @@ private:
   }
 
   /**
-   * @brief Classic AVL-style single/double rotation around @p node_id if its two subtrees'
-   * heights differ by more than one. Direct port of the well-known Box2D b2DynamicTree::Balance
-   * algorithm (two symmetric cases: the right subtree too tall, or the left). Returns the
-   * (possibly new) root of this subtree.
+   * @brief Classic AVL-style single/double rotation around @p node_id if its two subtrees' heights differ by more than one. Direct port of the well-known Box2D b2DynamicTree::Balance algorithm (two symmetric cases: the right subtree too tall, or the left). Returns the (possibly new) root of this subtree.
    */
   [[nodiscard]] auto _balance(id node_id) -> id {
     if (_nodes[node_id].is_leaf || _nodes[node_id].height < 2) {

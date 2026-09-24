@@ -16,18 +16,24 @@ inline constexpr auto abs(const Type value) -> Type {
 
 template<floating_point Type>
 inline constexpr auto sqrt(const Type value) -> Type {
-  if (std::signbit(value)) {
+  if (value < Type{0}) {
     return std::numeric_limits<Type>::quiet_NaN();
   }
 
-  if (value == std::numeric_limits<Type>::infinity()) {
-    return std::numeric_limits<Type>::quiet_NaN();
+  if (value == Type{0} || value == std::numeric_limits<Type>::infinity()) {
+    return value;
   }
 
-  auto result = Type{value};
+  auto result = value;
 
-  for (auto last = Type{0.0}; result != last; result = Type{0.5} * (result + value / result)) {
-    last = result;
+  for (auto iteration = 0; iteration < 64; ++iteration) {
+    const auto next = Type{0.5} * (result + value / result);
+
+    if (next == result) {
+      break;
+    }
+
+    result = next;
   }
 
   return result;

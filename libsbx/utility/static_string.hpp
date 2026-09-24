@@ -16,6 +16,13 @@
 
 namespace sbx::utility {
 
+/**
+ * @brief A fixed-capacity, null-terminated string on inline storage — no heap allocation.
+ *
+ * @tparam Character The character type.
+ * @tparam Size The maximum number of characters the string can hold, excluding the
+ * implicit null terminator.
+ */
 template<character Character, std::size_t Size>
 class basic_static_string {
 
@@ -39,14 +46,36 @@ public:
   constexpr basic_static_string() noexcept
   : _data{}, _size{0} { }
 
+  /**
+   * @brief Constructs from a string view.
+   *
+   * @param string The characters to copy in.
+   *
+   * @throws std::length_error If string.size() exceeds Size.
+   */
   constexpr basic_static_string(view_type string) {
     assign(string);
   }
 
+  /**
+   * @brief Constructs from a null-terminated string.
+   *
+   * @param string The characters to copy in.
+   *
+   * @throws std::length_error If the string's length exceeds Size.
+   */
   constexpr basic_static_string(const value_type* string) {
     assign(view_type{string});
   }
 
+  /**
+   * @brief Constructs a string of count repetitions of character.
+   *
+   * @param count The number of characters to fill.
+   * @param character The character to repeat.
+   *
+   * @throws std::length_error If count exceeds Size.
+   */
   constexpr basic_static_string(size_type count, value_type character) {
     if (count > Size) {
       throw std::length_error{"static_string overflow"};
@@ -58,19 +87,40 @@ public:
     _data[_size] = value_type{};
   }
 
+  /**
+   * @brief Builds a string from an fmt format string and arguments.
+   *
+   * @tparam Args The types of the format arguments.
+   *
+   * @param format The fmt format string.
+   * @param args The format arguments.
+   *
+   * @return The formatted string.
+   *
+   * @note Unlike assign()/append(), this does not throw on overflow — the formatted output is silently truncated to Size characters.
+   */
   template<typename... Args>
   requires (std::same_as<value_type, char>)
   static auto format(fmt::format_string<Args...> format, Args&&... args) -> basic_static_string {
     auto result = basic_static_string{};
- 
+
     auto format_result = fmt::format_to_n(result._data.data(), Size, format, std::forward<Args>(args)...);
- 
+
     result._size = std::min(static_cast<size_type>(format_result.size), Size);
     result._data[result._size] = value_type{};
- 
+
     return result;
   }
 
+  /**
+   * @brief Replaces the contents with string.
+   *
+   * @param string The characters to copy in.
+   *
+   * @return *this.
+   *
+   * @throws std::length_error If string.size() exceeds Size.
+   */
   constexpr auto assign(view_type string) -> basic_static_string& {
     if (string.size() > Size) {
       throw std::length_error{"static_string overflow"};
@@ -136,6 +186,15 @@ public:
     return view_type{_data.data(), _size};
   }
 
+  /**
+   * @brief Unchecked element access.
+   *
+   * @param index The index to access.
+   *
+   * @return A reference to the character at index.
+   *
+   * @warning No bounds checking — index >= size() is undefined behavior. Use at() for a checked lookup.
+   */
   constexpr auto operator[](size_type index) noexcept -> reference {
     return _data[index];
   }
@@ -144,6 +203,15 @@ public:
     return _data[index];
   }
 
+  /**
+   * @brief Bounds-checked element access.
+   *
+   * @param index The index to access.
+   *
+   * @return A reference to the character at index.
+   *
+   * @throws std::out_of_range If index >= size().
+   */
   constexpr auto at(size_type index) -> reference {
     if (index >= _size) {
       throw std::out_of_range{"static_string::at"};
@@ -204,6 +272,13 @@ public:
     _data[0] = value_type{};
   }
 
+  /**
+   * @brief Appends a single character.
+   *
+   * @param character The character to append.
+   *
+   * @throws std::length_error If the string is already at capacity().
+   */
   constexpr auto push_back(value_type character) -> void {
     if (_size >= Size) {
       throw std::length_error{"static_string overflow"};
@@ -220,6 +295,15 @@ public:
     }
   }
 
+  /**
+   * @brief Appends string to the end of the string.
+   *
+   * @param string The characters to append.
+   *
+   * @return *this.
+   *
+   * @throws std::length_error If the result would exceed Size.
+   */
   constexpr auto append(view_type string) -> basic_static_string& {
     if (_size + string.size() > Size) {
       throw std::length_error{"static_string overflow"};
@@ -241,6 +325,14 @@ public:
     return *this;
   }
 
+  /**
+   * @brief Grows or shrinks the string to size, padding new characters with character.
+   *
+   * @param size The new size.
+   * @param character The value used to fill any newly added characters.
+   *
+   * @throws std::length_error If size exceeds Size.
+   */
   constexpr auto resize(size_type size, value_type character = value_type{}) -> void {
     if (size > Size) {
       throw std::length_error{"static_string overflow"};
@@ -254,6 +346,16 @@ public:
     _data[_size] = value_type{};
   }
 
+  /**
+   * @brief Returns a view onto a subrange of the string.
+   *
+   * @param position The index to start the subrange at.
+   * @param count The number of characters to include; clamped to the remaining length.
+   *
+   * @return A view of [position, position + count).
+   *
+   * @throws std::out_of_range If position > size().
+   */
   constexpr auto substr(size_type position = 0, size_type count = nposition) const -> view_type {
     if (position > _size) {
       throw std::out_of_range{"static_string::substr"};

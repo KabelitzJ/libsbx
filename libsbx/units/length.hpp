@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Jonas Kabelitz
 #ifndef LIBSBX_UNITS_LENGTH_HPP_
 #define LIBSBX_UNITS_LENGTH_HPP_
 
@@ -7,6 +9,7 @@
 
 namespace sbx::units {
 
+/** @brief Length quantities, in millimetres, centimetres, metres (the SI base scale) and kilometres. */
 using millimeters = quantity<length_dimension, std::float_t, std::milli>;
 using centimeters = quantity<length_dimension, std::float_t, std::centi>;
 using meters = quantity<length_dimension, std::float_t>;
@@ -32,6 +35,7 @@ struct unit_formatter<length_dimension, std::kilo> {
   static constexpr auto symbol = "km";
 }; // struct unit_formatter
 
+/** @brief Literal suffixes for constructing length quantities directly, e.g. `5.0_m`, `12_km`. */
 namespace literals {
 
 constexpr auto operator""_m(long double value) -> meters {

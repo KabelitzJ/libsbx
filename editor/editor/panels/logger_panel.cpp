@@ -2,9 +2,9 @@
 // Copyright (c) 2026 Jonas Kabelitz
 #include <editor/panels/logger_panel.hpp>
 
-#include <libsbx/utility/logger.hpp>
-
 #include <libsbx/render/ui/fonts/material_design_icons.hpp>
+
+#include <editor/console_sink.hpp>
 
 namespace editor {
 
@@ -49,7 +49,7 @@ auto logger_panel::draw(editor_state&) -> void {
   ImGui::Begin(window_name);
 
   if (ImGui::Button(ICON_MDI_TRASH_CAN " Clear")) {
-    sbx::utility::clear_logged_lines();
+    console_sink_instance()->clear();
   }
 
   ImGui::SameLine();
@@ -74,7 +74,7 @@ auto logger_panel::draw(editor_state&) -> void {
 
   ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2{0.0f, 0.0f});
 
-  for (const auto& line : sbx::utility::logged_lines()) {
+  for (const auto& line : console_sink_instance()->lines()) {
     const auto level_index = static_cast<std::size_t>(line.level);
 
     if (level_index < level_count && !_level_enabled[level_index]) {

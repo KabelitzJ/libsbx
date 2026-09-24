@@ -26,10 +26,13 @@
 namespace sbx::containers {
 
 /**
- * @brief static_vector implementation inspired by https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2018/p0843r2.html
- * 
- * @tparam Type
- * @tparam Capacity
+ * @brief A fixed-capacity vector on inline storage, modeled on the standardization proposal at
+ * https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2018/p0843r2.html
+ *
+ * @tparam Type The element type.
+ * @tparam Capacity The maximum number of elements the vector can hold.
+ *
+ * @warning push_back/emplace_back silently do nothing once is_full() — unlike static_string's throw-on-overflow policy, overflow here is a deliberate, tested no-op (see tests/containers/static_vector_test.cpp), not an oversight. Check is_full() first if silent data loss on overflow would be a problem for your use.
  */
 template<typename Type, std::size_t Capacity>
 class static_vector {
@@ -62,6 +65,11 @@ public:
     }
   }
 
+  /**
+   * @brief Constructs from an initializer list.
+   *
+   * @param values The values to copy/move in; values.size() must not exceed Capacity.
+   */
   constexpr static_vector(std::initializer_list<value_type> values) noexcept
   : _size{0u} {
     utility::assert_that(values.size() <= Capacity, "initializer list size exceeds capacity");
@@ -83,7 +91,7 @@ public:
     if (this != &other) {
       other.swap(*this);
     }
-    
+
     return *this;
   }
 
@@ -91,7 +99,7 @@ public:
     return _size;
   }
 
-  auto capacity() const noexcept -> size_type {
+  constexpr auto capacity() const noexcept -> size_type {
     return Capacity;
   }
 
@@ -153,13 +161,13 @@ public:
 
   constexpr auto at(const size_type index) -> reference {
     utility::assert_that(index < _size, "index is out of range");
-    
+
     return *_ptr(index);
   }
 
   constexpr auto at(const size_type index) const -> const_reference {
     utility::assert_that(index < _size, "index is out of range");
-    
+
     return *_ptr(index);
   }
 
@@ -171,40 +179,51 @@ public:
     return _ptr(0u);
   }
 
+  /** @brief Appends value. Does nothing if is_full() — see the class-level @warning. */
   constexpr auto push_back(const value_type& value) noexcept -> void {
     if (is_full()) {
       return;
     }
-    
+
     std::construct_at(_ptr(_size), value);
     ++_size;
   }
 
+  /** @copydoc push_back */
   constexpr auto push_back(value_type&& value) noexcept -> void {
     if (is_full()) {
       return;
     }
-    
+
     std::construct_at(_ptr(_size), std::move(value));
     ++_size;
   }
 
+  /**
+   * @brief Constructs an element in place from args. Does nothing if is_full() — see the
+   * class-level @warning.
+   *
+   * @tparam Args The types of Type's constructor arguments.
+   *
+   * @param args Forwarded to Type's constructor.
+   */
   template<typename... Args>
   requires (std::is_constructible_v<Type, Args...>)
   constexpr auto emplace_back(Args&&... args) noexcept -> void {
     if (is_full()) {
       return;
     }
-    
+
     std::construct_at(_ptr(_size), std::forward<Args>(args)...);
     ++_size;
   }
 
+  /** @brief Removes the last element. Does nothing if is_empty(). */
   constexpr auto pop_back() noexcept -> void {
     if (is_empty()) {
       return;
     }
-    
+
     std::destroy_at(std::prev(end()));
     --_size;
   }
@@ -213,7 +232,7 @@ public:
     for (auto i : std::views::iota(0u, _size)) {
       std::destroy_at(_ptr(i));
     }
-    
+
     _size = 0u;
   }
 

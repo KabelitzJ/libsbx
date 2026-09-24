@@ -8,6 +8,12 @@
 
 namespace sbx::memory {
 
+/**
+ * @brief Wraps an iterator/sentinel pair as a range with begin()/end(), for adapting a pair of iterators (e.g. from a non-range-returning API) into something range-for and range algorithms can use directly.
+ *
+ * @tparam Iterator The begin iterator type.
+ * @tparam Sentinel The end sentinel type. Defaults to Iterator.
+ */
 template<std::forward_iterator Iterator, std::sentinel_for<Iterator> Sentinel = Iterator>
 class iterable_adaptor final {
 
@@ -46,8 +52,13 @@ private:
   iterator _first;
   sentinel _last;
 
-}; // struct iterable_adaptor
+}; // class iterable_adaptor
 
+/**
+ * @brief Wraps a prvalue so operator-> has something to return the address of — for an input iterator's operator-> when dereferencing doesn't produce a real reference into storage (e.g. a transforming/proxy iterator), where there is no lvalue to take the address of directly.
+ *
+ * @tparam Type The wrapped value type.
+ */
 template<typename Type>
 class input_iterator_pointer final {
 
@@ -72,7 +83,7 @@ private:
 
   value_type _value;
 
-}; // struct input_iterator_pointer
+}; // class input_iterator_pointer
 
 } // namespace sbx::memory
 

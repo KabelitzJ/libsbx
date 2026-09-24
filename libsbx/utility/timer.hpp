@@ -12,6 +12,7 @@
 
 namespace sbx::utility {
 
+/** @brief A delta timer: elapsed() returns the time since the previous call (or construction) and resets the clock. */
 class timer {
 
 public:
@@ -20,6 +21,7 @@ public:
 
   ~timer() = default;
 
+  /** @brief Time elapsed since the last call to elapsed() (or since construction, on the first call). */
   auto elapsed() noexcept -> units::seconds;
 
 private:
@@ -28,6 +30,14 @@ private:
 
 }; // class timer
 
+/**
+ * @brief RAII scope timer: measures the time until it goes out of scope and passes it
+ * to callable on destruction.
+ *
+ * @tparam Callable A callable invocable with a units::seconds.
+ *
+ * @param callable Invoked with the elapsed time when the scoped_timer is destroyed.
+ */
 class scoped_timer {
 
 public:
@@ -42,7 +52,7 @@ public:
     if (_on_destroy) {
       const auto now = std::chrono::high_resolution_clock::now();
       const auto elapsed = units::seconds{std::chrono::duration_cast<std::chrono::duration<std::float_t>>(now - _start).count()};
-      
+
       std::invoke(_on_destroy, elapsed);
     }
   }

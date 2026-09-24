@@ -11,10 +11,7 @@
 namespace sbx::memory {
 
 /**
- * @brief A read-only byte view over a single trivially copyable object -- e.g. for handing a push
- * constants struct to a graphics API call that wants `const void*` + size. Requires trivial
- * copyability (rather than accepting any @p Type) since the returned bytes are only ever meaningful
- * to reinterpret back into @p Type -- and only trivially copyable types allow that.
+ * @brief A read-only byte view over a single trivially copyable object — e.g. for handing a push constants struct to a graphics API call that wants `const void*` + size. Requires trivial copyability (rather than accepting any @p Type) since the returned bytes are only ever meaningful to reinterpret back into @p Type — and only trivially copyable types allow that.
  *
  * @tparam Type The type of the object to view.
  *

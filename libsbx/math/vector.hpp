@@ -21,7 +21,6 @@
 
 #include <libsbx/utility/make_array.hpp>
 #include <libsbx/utility/assert.hpp>
-#include <libsbx/utility/zip.hpp>
 #include <libsbx/utility/hash.hpp>
 
 #include <libsbx/math/concepts.hpp>

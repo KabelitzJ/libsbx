@@ -6,6 +6,5 @@
 #include <libsbx/ecs/entity.hpp>
 #include <libsbx/ecs/registry.hpp>
 #include <libsbx/ecs/range.hpp>
-#include <libsbx/ecs/zip.hpp>
 
 #endif // LIBSBX_ECS_HPP_

@@ -4,15 +4,13 @@
 
 #include <utility>
 
-#include <libsbx/reflection/enum.hpp>
-
 namespace sbx::math {
 
 static constexpr auto extract(std::uint32_t rgba, std::uint8_t shift) noexcept -> std::uint8_t {
   return static_cast<std::uint8_t>((rgba >> shift) & 0xFFu);
 }
 
-static constexpr  auto scale(std::uint8_t component) noexcept -> std::float_t {
+static constexpr auto scale(std::uint8_t component) noexcept -> std::float_t {
   return static_cast<std::float_t>(component) / 255.0f;
 }
 

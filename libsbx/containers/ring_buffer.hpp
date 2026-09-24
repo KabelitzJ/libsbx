@@ -24,9 +24,7 @@ namespace sbx::containers {
 /**
  * @brief A fixed-capacity fifo overwrite buffer on contiguous storage.
  *
- * The vector grows up to the capacity, then the oldest element is overwritten
- * in place. Indexing and iteration are in logical order: index 0 is the oldest
- * element, size() - 1 the newest.
+ * The vector grows up to the capacity, then the oldest element is overwritten in place. Indexing and iteration are in logical order: index 0 is the oldest element, size() - 1 the newest.
  */
 template<typename Type>
 class ring_buffer {

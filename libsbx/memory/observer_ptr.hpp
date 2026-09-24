@@ -3,6 +3,7 @@
 #ifndef LIBSBX_MEMORY_OBSERVER_PTR_HPP_
 #define LIBSBX_MEMORY_OBSERVER_PTR_HPP_
 
+#include <functional>
 #include <memory>
 #include <utility>
 
@@ -10,6 +11,7 @@
 
 namespace sbx::memory {
 
+/** @brief A smart pointer type whose element_type is Value, e.g. std::shared_ptr<Value>. */
 template<typename Type, typename Value>
 concept smart_pointer = requires(Type instance) {
   typename Type::element_type;
@@ -18,13 +20,13 @@ concept smart_pointer = requires(Type instance) {
 }; // concept smart_pointer
 
 /**
- * @brief A non-owning pointer that can be used to observe the value of a pointer.
- * 
- * @tparam Type The type of the pointer.
- * 
- * @since 1.0.0
- * 
- * @note This class adds null checks to the pointer dereference operators in debug builds. 
+ * @brief A non-owning pointer, distinguishing "I hold a pointer I don't own" call sites from raw
+ * pointer parameters/members that might mean ownership by convention elsewhere in the codebase.
+ *
+ * @tparam Type The pointee type.
+ *
+ * @note Adds a debug-only null check (via utility::assert_that) to the dereference operators;
+ * compiled out in release builds like every other utility::assert_that use.
  */
 template<typename Type>
 class observer_ptr {
@@ -43,14 +45,23 @@ public:
   constexpr observer_ptr(pointer value) noexcept
   : _value{value} { }
 
+  /** @brief Constructs from any smart pointer holding this same Type, observing (not sharing ownership of) its pointee. */
   template<smart_pointer<value_type> Pointer>
   constexpr observer_ptr(const Pointer& value) noexcept
   : _value{value.get()} { }
 
+  /**
+   * @brief Converting constructor from an observer_ptr<Other>, e.g. observer_ptr<Derived> to
+   * observer_ptr<Base>.
+   *
+   * @tparam Other The source observer_ptr's pointee type; must convert implicitly to Type*.
+   *
+   * @param other The observer_ptr to convert from.
+   */
   template<typename Other>
   requires (std::is_convertible_v<Other*, pointer>)
-  constexpr observer_ptr(observer_ptr<Other>& other) noexcept
-  : _value{reinterpret_cast<pointer>(other.get())} { }
+  constexpr observer_ptr(const observer_ptr<Other>& other) noexcept
+  : _value{other.get()} { }
 
   constexpr observer_ptr(const observer_ptr&) noexcept = default;
 
@@ -72,6 +83,7 @@ public:
     return *this;
   }
 
+  /** @return The observed pointer, resetting this observer_ptr to null. */
   constexpr auto release() noexcept -> pointer {
     auto value = _value;
     _value = nullptr;
@@ -94,21 +106,25 @@ public:
     return is_valid();
   }
 
+  /** @throws assertion_failure If null (debug builds only — see utility::assert_that). */
   constexpr auto operator->() const noexcept -> const_pointer {
     utility::assert_that(is_valid(), "Cannot dereference a null pointer.");
     return _value;
   }
 
+  /** @copydoc operator-> */
   constexpr auto operator->() noexcept -> pointer {
     utility::assert_that(is_valid(), "Cannot dereference a null pointer.");
     return _value;
   }
 
+  /** @copydoc operator-> */
   constexpr auto operator*() const noexcept(noexcept(*std::declval<pointer>())) -> std::add_const_t<std::add_lvalue_reference_t<value_type>> {
     utility::assert_that(is_valid(), "Cannot dereference a null pointer.");
     return *_value;
   }
 
+  /** @copydoc operator-> */
   constexpr auto operator*() noexcept(noexcept(*std::declval<pointer>())) -> std::add_lvalue_reference_t<value_type> {
     utility::assert_that(is_valid(), "Cannot dereference a null pointer.");
     return *_value;
@@ -128,16 +144,6 @@ private:
 
 }; // class observer_ptr
 
-/**
- * @brief Compares two observer pointers for equality.
- * 
- * @tparam Type The type of the pointer.
- * 
- * @param lhs The left hand side of the comparison.
- * @param rhs The right hand side of the comparison.
- * 
- * @return true if the pointers are equal, false otherwise.
- */
 template<typename Type>
 constexpr auto operator==(const observer_ptr<Type>& lhs, const observer_ptr<Type>& rhs) noexcept -> bool {
   return lhs.get() == rhs.get();
@@ -153,26 +159,19 @@ constexpr auto operator==(const observer_ptr<Type>& lhs, const Pointer& rhs) noe
   return lhs.get() == rhs.get();
 }
 
-
-/**
- * @brief Creates an observer pointer from a pointer.
- * 
- * @tparam Type The type of the pointer.
- * 
- * @param value The pointer to create the observer pointer from.
- * 
- * @return An observer pointer to the pointer. 
- */
+/** @return An observer_ptr observing value. */
 template<typename Type>
 constexpr auto make_observer(Type* value) noexcept -> observer_ptr<Type> {
   return observer_ptr<Type>{value};
 }
 
+/** @copydoc make_observer */
 template<typename Type>
 constexpr auto make_observer(Type& value) noexcept -> observer_ptr<Type> {
   return observer_ptr<Type>{std::addressof(value)};
 }
 
+/** @copydoc make_observer */
 template<typename Type, smart_pointer<Type> Pointer>
 constexpr auto make_observer(Pointer& value) noexcept -> observer_ptr<Type> {
   return observer_ptr<Type>{value.get()};

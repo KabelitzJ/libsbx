@@ -4,6 +4,7 @@
 #define LIBSBX_REFLECTION_ENUM_HPP_
 
 #include <array>
+#include <cstddef>
 #include <functional>
 #include <meta>
 #include <optional>
@@ -18,15 +19,18 @@
 
 namespace sbx::reflection {
 
+/** @brief An enum tagged `[[=reflection::named]]`, i.e. reflectable by name via to_string/from_string. */
 template<typename Enum>
 concept named_enum = std::meta::is_enum_type(^^Enum) && has_annotation<Enum, named>();
 
+/** @return Enum's enumerator count. */
 template<typename Enum>
 requires (std::is_enum_v<Enum>)
 consteval auto enum_count() -> std::size_t {
   return std::meta::enumerators_of(^^Enum).size();
 }
 
+/** @return Every value of Enum, in declaration order. */
 template<typename Enum>
 requires (std::is_enum_v<Enum>)
 consteval auto enum_values() -> std::array<Enum, enum_count<Enum>()> {
@@ -40,7 +44,14 @@ consteval auto enum_values() -> std::array<Enum, enum_count<Enum>()> {
   return result;
 }
 
-
+/**
+ * @brief Invokes callable with the name and value of every enumerator of Enum, in declaration order.
+ *
+ * @tparam Enum A named_enum.
+ * @tparam Callable A callable invocable with (std::string_view, Enum).
+ *
+ * @param callable Invoked once per enumerator.
+ */
 template<named_enum Enum, typename Callable>
 requires (std::is_invocable_v<Callable, std::string_view, Enum>)
 constexpr auto for_each(Callable&& callable) -> void {
@@ -49,6 +60,7 @@ constexpr auto for_each(Callable&& callable) -> void {
   }
 }
 
+/** @return value's enumerator name, or "<unknown>" if value doesn't match any enumerator. */
 template<named_enum Enum>
 constexpr auto to_string(const Enum value) -> std::string_view {
   auto result = std::string_view{"<unknown>"};
@@ -62,6 +74,7 @@ constexpr auto to_string(const Enum value) -> std::string_view {
   return result;
 }
 
+/** @return The enumerator named name, or std::nullopt if no enumerator has that name. */
 template<named_enum Enum>
 constexpr auto from_string(std::string_view name) -> std::optional<Enum> {
   auto result = std::optional<Enum>{};
@@ -75,6 +88,7 @@ constexpr auto from_string(std::string_view name) -> std::optional<Enum> {
   return result;
 }
 
+/** @return The enumerator named name, or default_value if no enumerator has that name. */
 template<named_enum Enum>
 constexpr auto from_string_or(std::string_view name, const Enum default_value) -> Enum {
   auto result = from_string<Enum>(name);
@@ -82,15 +96,17 @@ constexpr auto from_string_or(std::string_view name, const Enum default_value) -
   return result ? *result : default_value;
 }
 
+/** @return value reinterpreted as Enum. No validation that value matches a declared enumerator. */
 template<typename Enum>
 requires (std::is_enum_v<Enum>)
 constexpr auto from_underlying(const std::underlying_type_t<Enum> value) -> Enum {
   return static_cast<Enum>(value);
 }
 
+/** @brief Whether Enum is tagged `[[=reflection::bit_field]]`, enabling the bitwise operators below for it. */
 template<typename Enum>
 requires (std::is_enum_v<Enum>)
-inline constexpr auto is_bit_field_v = !std::meta::annotations_of_with_type(^^Enum, std::meta::remove_cv(^^decltype(bit_field))).empty();
+inline constexpr auto is_bit_field_v = has_annotation<Enum, bit_field>();
 
 } // namespace sbx::reflection
 

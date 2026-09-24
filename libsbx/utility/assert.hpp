@@ -9,6 +9,9 @@
 #include <iostream>
 #include <ranges>
 #include <functional>
+#include <stdexcept>
+#include <string>
+#include <utility>
 
 #include <fmt/format.h>
 
@@ -16,12 +19,29 @@
 
 namespace sbx::utility {
 
-struct assertion_failure : public std::exception {
-  
-  assertion_failure() = default;
+/**
+ * @brief Thrown by assert_that when its condition fails. Carries the fully formatted assertion message (source location, failing expression) already printed to stderr.
+ *
+ * @param message The formatted assertion message.
+ */
+struct assertion_failure : public std::runtime_error {
+
+  explicit assertion_failure(std::string message)
+  : std::runtime_error{std::move(message)} { }
 
 }; // struct assertion_failure
 
+/**
+ * @brief Asserts that an expression is true. Debug builds only — compiled out entirely in release builds.
+ *
+ * @tparam Expression The type of the expression to check.
+ *
+ * @param expression The expression to check.
+ * @param message Description of the invariant being checked, used in the failure message.
+ * @param source_location Where the assertion is written; defaults to the call site.
+ *
+ * @throws assertion_failure If expression is false.
+ */
 template<std::convertible_to<bool> Expression>
 inline auto assert_that(Expression&& expression, std::string_view message, const std::source_location& source_location = std::source_location::current()) -> void {
   if constexpr (is_build_type_debug_v) {
@@ -31,11 +51,24 @@ inline auto assert_that(Expression&& expression, std::string_view message, const
       std::cerr.write(error.data(), static_cast<std::streamsize>(error.size()));
       std::cerr.flush();
 
-      throw assertion_failure{};
+      throw assertion_failure{error};
     }
   }
 }
 
+/**
+ * @brief Asserts that a projection is true for every element of a range. Debug builds only — compiled out entirely in release builds.
+ *
+ * @tparam Range The type of the range to check.
+ * @tparam Project The type of the per-element predicate.
+ *
+ * @param range The range to check.
+ * @param project Predicate invoked with each element; must return a value convertible to bool.
+ * @param message Description of the invariant being checked, used in the failure message.
+ * @param source_location Where the assertion is written; defaults to the call site.
+ *
+ * @throws assertion_failure If project returns false for any element.
+ */
 template<std::ranges::range Range, typename Project>
 requires (std::is_invocable_r_v<bool, Project, std::ranges::range_const_reference_t<Range>>)
 inline auto assert_that(Range&& range, Project&& project, std::string_view message, const std::source_location& source_location = std::source_location::current()) -> void {
@@ -47,13 +80,22 @@ inline auto assert_that(Range&& range, Project&& project, std::string_view messa
         std::cerr.write(error.data(), static_cast<std::streamsize>(error.size()));
         std::cerr.flush();
 
-        throw assertion_failure{};
+        throw assertion_failure{error};
       }
     }
 
   }
 }
 
+/**
+ * @brief Warns if an expression is false, without throwing. Debug builds only — compiled out entirely in release builds.
+ *
+ * @tparam Expression The type of the expression to check.
+ *
+ * @param expression The expression to check.
+ * @param message Description of the invariant being checked, used in the warning message.
+ * @param source_location Where the expectation is written; defaults to the call site.
+ */
 template<std::convertible_to<bool> Expression>
 inline auto expect_that(Expression&& expression, std::string_view message, const std::source_location& source_location = std::source_location::current()) -> void {
   if constexpr (is_build_type_debug_v) {
@@ -66,6 +108,17 @@ inline auto expect_that(Expression&& expression, std::string_view message, const
   }
 }
 
+/**
+ * @brief Warns if a projection is false for any element of a range, without throwing. Debug builds only — compiled out entirely in release builds.
+ *
+ * @tparam Range The type of the range to check.
+ * @tparam Project The type of the per-element predicate.
+ *
+ * @param range The range to check.
+ * @param project Predicate invoked with each element; must return a value convertible to bool.
+ * @param message Description of the invariant being checked, used in the warning message.
+ * @param source_location Where the expectation is written; defaults to the call site.
+ */
 template<std::ranges::range Range, typename Project>
 requires (std::is_invocable_r_v<bool, Project, std::ranges::range_const_reference_t<Range>>)
 inline auto expect_that(Range&& range, Project&& project, std::string_view message, const std::source_location& source_location = std::source_location::current()) -> void {

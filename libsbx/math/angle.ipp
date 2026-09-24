@@ -130,7 +130,7 @@ constexpr auto clamp(const basic_degree<Type>& value, const basic_degree<Type>& 
 }
 
 template<floating_point Type>
-inline constexpr auto comparision_traits<basic_degree<Type>>::equal(const basic_degree<Type>& lhs, const basic_degree<Type>& rhs) noexcept -> bool {
+inline constexpr auto comparison_traits<basic_degree<Type>>::equal(const basic_degree<Type>& lhs, const basic_degree<Type>& rhs) noexcept -> bool {
   return base_trait::equal(lhs.value(), rhs.value());
 }
 
@@ -188,6 +188,15 @@ constexpr auto basic_radian<Type>::operator*=(const Other rhs) noexcept -> basic
 }
 
 template<floating_point Type>
+template<floating_point Other>
+requires (std::is_convertible_v<Other, Type>)
+constexpr auto basic_radian<Type>::operator/=(const Other rhs) noexcept -> basic_radian<Type>& {
+  _value /= static_cast<Type>(rhs);
+
+  return *this;
+}
+
+template<floating_point Type>
 constexpr auto basic_radian<Type>::value() const noexcept -> value_type {
   return _value;
 }
@@ -236,6 +245,14 @@ constexpr auto operator*(basic_radian<Type> lhs, const Other rhs) noexcept -> ba
   return lhs;
 }
 
+template<floating_point Type, std::convertible_to<Type> Other>
+requires (std::is_convertible_v<Other, Type>)
+constexpr auto operator/(basic_radian<Type> lhs, const Other rhs) noexcept -> basic_radian<Type> {
+  lhs /= static_cast<Type>(rhs);
+
+  return lhs;
+}
+
 template<floating_point Type>
 constexpr auto clamp(const basic_radian<Type>& value, const basic_radian<Type>& min, const basic_radian<Type>& max) -> const basic_radian<Type>& {
   if (value < min) {
@@ -247,6 +264,16 @@ constexpr auto clamp(const basic_radian<Type>& value, const basic_radian<Type>& 
   }
 
   return value;
+}
+
+template<floating_point Type>
+inline constexpr auto comparison_traits<basic_radian<Type>>::equal(const basic_radian<Type>& lhs, const basic_radian<Type>& rhs) noexcept -> bool {
+  return base_trait::equal(lhs.value(), rhs.value());
+}
+
+template<floating_point Type>
+inline constexpr auto mix(const basic_radian<Type> x, const basic_radian<Type> y, const Type a) -> basic_radian<Type> {
+  return basic_radian<Type>{x.value() * (static_cast<Type>(1) - a) + y.value() * a};
 }
 
 template<floating_point Type>
@@ -276,7 +303,6 @@ template<floating_point Type>
 template<floating_point Other>
 requires (std::is_convertible_v<Other, Type>)
 constexpr auto basic_angle<Type>::operator+=(const basic_degree<Other>& other) noexcept -> basic_angle<Type>& {
-
   return (*this += basic_angle<Other>{other});
 }
 
@@ -316,6 +342,15 @@ template<floating_point Other>
 requires (std::is_convertible_v<Other, Type>)
 constexpr auto basic_angle<Type>::operator*=(const Other other) noexcept -> basic_angle<Type>& {
   _radian = basic_radian<Type>{_radian.value() * static_cast<Type>(other)};
+
+  return *this;
+}
+
+template<floating_point Type>
+template<floating_point Other>
+requires (std::is_convertible_v<Other, Type>)
+constexpr auto basic_angle<Type>::operator/=(const Other other) noexcept -> basic_angle<Type>& {
+  _radian = basic_radian<Type>{_radian.value() / static_cast<Type>(other)};
 
   return *this;
 }
@@ -396,6 +431,14 @@ constexpr auto operator*(basic_angle<LhsType> lhs, const RhsType rhs) noexcept -
   return lhs;
 }
 
+template<floating_point LhsType, floating_point RhsType>
+requires (std::is_convertible_v<RhsType, LhsType>)
+constexpr auto operator/(basic_angle<LhsType> lhs, const RhsType rhs) noexcept -> basic_angle<LhsType> {
+  lhs /= rhs;
+
+  return lhs;
+}
+
 template<floating_point Type>
 constexpr auto clamp(const basic_angle<Type>& value, const basic_angle<Type>& min, const basic_angle<Type>& max) -> const basic_angle<Type>& {
   if (value < min) {
@@ -407,6 +450,16 @@ constexpr auto clamp(const basic_angle<Type>& value, const basic_angle<Type>& mi
   }
 
   return value;
+}
+
+template<floating_point Type>
+inline constexpr auto comparison_traits<basic_angle<Type>>::equal(const basic_angle<Type>& lhs, const basic_angle<Type>& rhs) noexcept -> bool {
+  return base_trait::equal(lhs.to_radians().value(), rhs.to_radians().value());
+}
+
+template<floating_point Type>
+inline constexpr auto mix(const basic_angle<Type> x, const basic_angle<Type> y, const Type a) -> basic_angle<Type> {
+  return basic_angle<Type>{basic_radian<Type>{x.to_radians().value() * (static_cast<Type>(1) - a) + y.to_radians().value() * a}};
 }
 
 template<floating_point Type>

@@ -13,6 +13,8 @@
 #define LIBSBX_MATH_COLOR_HPP_
 
 #include <cmath>
+#include <concepts>
+#include <cstdint>
 
 #include <yaml-cpp/yaml.h>
 
@@ -24,12 +26,9 @@ namespace sbx::math {
  * @brief RGBA color value type.
  *
  * @details
- * 
- * Represents a color using four floating-point components: red, green, blue,
- * and alpha. Each component is expected to be in the range [0, 1].
+ * Represents a color using four floating-point components: red, green, blue, and alpha. Each component is expected to be in the range [0, 1].
  *
- * The class is trivially copyable and designed for use in rendering pipelines,
- * configuration files, and hashing contexts.
+ * The class is trivially copyable and designed for use in rendering pipelines, configuration files, and hashing contexts.
  */
 class color {
 
@@ -47,6 +46,14 @@ public:
    */
   color(std::uint32_t rgba) noexcept;
 
+  /**
+   * @brief Constructs a color from individual 8-bit components, each scaled to [0, 1].
+   *
+   * @param red Red component.
+   * @param green Green component.
+   * @param blue Blue component.
+   * @param alpha Alpha component.
+   */
   color(std::uint8_t red, std::uint8_t green, std::uint8_t blue, std::uint8_t alpha = 255u) noexcept;
 
   /**
@@ -199,12 +206,14 @@ private:
 auto operator==(const color& lhs, const color& rhs) noexcept -> bool;
 
 /**
- * @brief Scales a color by a scalar factor.
+ * @brief Scales a color's r, g, b components by a scalar factor.
  *
  * @param lhs   Color to scale.
  * @param value Scale factor.
  *
  * @return Scaled color.
+ *
+ * @note Alpha is left unchanged; this scales brightness/tint, not transparency.
  */
 auto operator*(color lhs, const std::float_t value) -> color;
 

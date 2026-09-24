@@ -64,7 +64,7 @@ struct matrix_cast_impl<basic_matrix4x4<Type>, basic_quaternion<Type>> {
 template<scalar Type>
 struct matrix_cast_impl<basic_matrix3x3<Type>, basic_quaternion<Type>> {
   [[nodiscard]] static constexpr auto invoke(const basic_quaternion<Type>& quaternion) -> basic_matrix3x3<Type> {
-    return matrix_cast_impl<basic_matrix3x3<Type>,basic_matrix4x4<Type>>::invoke(matrix_cast_impl<basic_matrix4x4<Type>, basic_quaternion<Type> >::invoke(quaternion));
+    return matrix_cast_impl<basic_matrix3x3<Type>, basic_matrix4x4<Type>>::invoke(matrix_cast_impl<basic_matrix4x4<Type>, basic_quaternion<Type>>::invoke(quaternion));
   }
 
 }; // struct matrix_cast_impl

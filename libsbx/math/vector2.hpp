@@ -4,11 +4,9 @@
 #define LIBSBX_MATH_VECTOR2_HPP_
 
 #include <cstddef>
-#include <cinttypes>
+#include <cstdint>
 #include <cmath>
 #include <concepts>
-#include <fstream>
-#include <ostream>
 #include <type_traits>
 
 #include <yaml-cpp/yaml.h>
@@ -50,20 +48,40 @@ public:
 
   constexpr basic_vector2() noexcept;
 
+  /**
+   * @brief Constructs from explicit x/y components.
+   *
+   * @tparam Other Scalar type of x and y.
+   *
+   * @param x The x component.
+   * @param y The y component.
+   */
   template<scalar Other>
   constexpr basic_vector2(Other x, Other y) noexcept;
 
+  /**
+   * @brief Constructs with both components set to value.
+   *
+   * @tparam Other Scalar type of value.
+   *
+   * @param value The value to splat to both components.
+   */
   template<scalar Other>
   constexpr basic_vector2(Other value) noexcept;
 
+  /** @return The dot product of lhs and rhs. */
   [[nodiscard]] static constexpr auto dot(const basic_vector2& lhs, const basic_vector2& rhs) noexcept -> length_type;
 
+  /** @return vector, scaled to unit length. Returns vector unchanged if its length is zero. */
   [[nodiscard]] static constexpr auto normalized(const basic_vector2& vector) noexcept -> basic_vector2;
 
+  /** @return vector rotated 90 degrees counter-clockwise. */
   [[nodiscard]] static constexpr auto orthogonal(const basic_vector2& vector) noexcept -> basic_vector2;
 
+  /** @return The 2D cross product (determinant) of lhs and rhs: lhs.x() * rhs.y() - lhs.y() * rhs.x(). */
   [[nodiscard]] static constexpr auto determinant(const basic_vector2& lhs, const basic_vector2& rhs) noexcept -> value_type;
 
+  /** @return The distance between lhs and rhs. */
   [[nodiscard]] static constexpr auto distance(const basic_vector2& lhs, const basic_vector2& rhs) noexcept -> value_type;
 
   [[nodiscard]] constexpr auto x() noexcept -> reference;
@@ -105,7 +123,7 @@ using vector2u = basic_vector2<std::uint32_t>;
 
 using vector2 = vector2f;
 
-} // namespace ::math
+} // namespace sbx::math
 
 template<sbx::math::scalar Type>
 struct std::hash<sbx::math::basic_vector2<Type>> {

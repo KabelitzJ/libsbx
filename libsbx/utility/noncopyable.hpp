@@ -5,6 +5,7 @@
 
 namespace sbx::utility {
 
+/** @brief Mixin that deletes copy construction/assignment while keeping move. */
 class noncopyable {
 
 protected:

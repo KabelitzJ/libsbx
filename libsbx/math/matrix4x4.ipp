@@ -169,9 +169,6 @@ inline constexpr auto basic_matrix4x4<Type>::perspective(const basic_angle<value
   result[2][3] = -static_cast<value_type>(1);
   result[3][2] = (near * far) / (near - far);
 
-  //// [NOTE] KAJ 2023-10-11 : Flip the y-axis to match Vulkan's coordinate system.
-  // result[1][1] *= -1;
-
   return result;
 }
 
@@ -226,7 +223,7 @@ inline constexpr auto basic_matrix4x4<Type>::scaled(const basic_matrix4x4<Type>&
 }
 
 template<scalar Type>
-inline constexpr basic_matrix4x4<Type> basic_matrix4x4<Type>::rotated(const basic_matrix4x4<Type>& matrix, const basic_vector3<typename basic_matrix4x4<Type>::value_type>& axis, const basic_angle<typename basic_matrix4x4<Type>::value_type>& angle) noexcept {
+inline constexpr auto basic_matrix4x4<Type>::rotated(const basic_matrix4x4<Type>& matrix, const basic_vector3<typename basic_matrix4x4<Type>::value_type>& axis, const basic_angle<typename basic_matrix4x4<Type>::value_type>& angle) noexcept -> basic_matrix4x4<Type> {
   const auto radians = angle.to_radians();
 
   const auto cos = std::cos(radians.value());

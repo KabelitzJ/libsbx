@@ -12,6 +12,10 @@
 
 namespace sbx::math {
 
+/**
+ * @brief 2D/3D simplex noise (Stefan Gustavson's reference implementation) and multi-octave
+ * fractal Brownian motion built on top of it.
+ */
 class noise {
  
   inline static auto permutation = std::array<std::uint8_t, 256>{
@@ -35,6 +39,17 @@ class noise {
 
 public:
 
+  /**
+   * @brief Multi-octave (fractal Brownian motion) 2D simplex noise: sums octaves calls to simplex(), each at lacunarity times the previous octave's frequency and gain times its amplitude, then normalizes by the total amplitude summed.
+   *
+   * @param x The x coordinate to sample at.
+   * @param y The y coordinate to sample at.
+   * @param octaves The number of noise layers to sum.
+   * @param lacunarity The frequency multiplier applied per octave.
+   * @param gain The amplitude multiplier applied per octave.
+   *
+   * @return The noise value, roughly in [-1, 1].
+   */
   static constexpr auto fractal(std::float_t x, std::float_t y, std::uint32_t octaves, std::float_t lacunarity = 2.0f, std::float_t gain = 0.5f) -> std::float_t {
     auto output = 0.0f;
     auto denom  = 0.0f;
@@ -52,10 +67,23 @@ public:
     return (output / denom);
   }
 
+  /** @copydoc fractal(std::float_t,std::float_t,std::float_t,std::uint32_t,std::float_t,std::float_t) */
   static constexpr auto fractal(const sbx::math::vector3& vector, std::uint32_t octaves, std::float_t lacunarity = 2.0f, std::float_t gain = 0.5f) -> std::float_t {
     return fractal(vector.x(), vector.y(), vector.z(), octaves, lacunarity, gain);
   }
 
+  /**
+   * @brief Multi-octave (fractal Brownian motion) 3D simplex noise: sums octaves calls to simplex(), each at lacunarity times the previous octave's frequency and gain times its amplitude, then normalizes by the total amplitude summed.
+   *
+   * @param x The x coordinate to sample at.
+   * @param y The y coordinate to sample at.
+   * @param z The z coordinate to sample at.
+   * @param octaves The number of noise layers to sum.
+   * @param lacunarity The frequency multiplier applied per octave.
+   * @param gain The amplitude multiplier applied per octave.
+   *
+   * @return The noise value, roughly in [-1, 1].
+   */
   static constexpr auto fractal(const std::float_t x, const std::float_t y, const std::float_t z, std::uint32_t octaves, std::float_t lacunarity = 2.0f, std::float_t gain = 0.5f) -> std::float_t {
     auto output = 0.f;
     auto denom  = 0.f;
@@ -73,6 +101,14 @@ public:
     return (output / denom);
   }
 
+  /**
+   * @brief 2D simplex noise at a single point.
+   *
+   * @param x The x coordinate to sample at.
+   * @param y The y coordinate to sample at.
+   *
+   * @return The noise value, roughly in [-1, 1].
+   */
   static constexpr auto simplex(const std::float_t x, const std::float_t y) -> std::float_t {
     auto n0 = 0.0f;
     auto n1 = 0.0f; 
@@ -140,6 +176,15 @@ public:
     return 45.23065f * (n0 + n1 + n2);
   }
 
+  /**
+   * @brief 3D simplex noise at a single point.
+   *
+   * @param x The x coordinate to sample at.
+   * @param y The y coordinate to sample at.
+   * @param z The z coordinate to sample at.
+   *
+   * @return The noise value, roughly in [-1, 1].
+   */
   static constexpr auto simplex(const std::float_t x, const std::float_t y, const std::float_t z) -> std::float_t {
     auto n0 = 0.0f;
     auto n1 = 0.0f; 
@@ -295,7 +340,7 @@ private:
   }
 
   static constexpr auto grad(std::int32_t hash, std::float_t x, std::float_t y) -> std::float_t {
-    const auto h = hash & 0x3F;
+    const auto h = hash & 0x7;
     const auto u = h < 4 ? x : y;
     const auto v = h < 4 ? y : x;
 

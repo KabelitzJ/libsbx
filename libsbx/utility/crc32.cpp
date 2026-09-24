@@ -2,6 +2,8 @@
 // Copyright (c) 2026 Jonas Kabelitz
 #include <libsbx/utility/crc32.hpp>
 
+#include <array>
+
 namespace sbx::utility {
 
 static consteval auto make_crc32_table() -> std::array<std::uint32_t, 256> {

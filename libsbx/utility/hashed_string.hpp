@@ -14,6 +14,15 @@
 
 namespace sbx::utility {
 
+/**
+ * @brief A string that carries its own precomputed hash, for use as a fast map/set key.
+ *
+ * @tparam Char The character type.
+ * @tparam Hash The hash value type. Defaults to std::uint64_t.
+ * @tparam HashFunction The hash function type. Defaults to fnv1a_hash<Char, Hash>.
+ *
+ * @warning operator== compares only the hash, not the string content — a hash collision makes two different strings compare equal. Acceptable for the low-collision-probability, trusted-input keys this is used for (e.g. asset/component names), but not a substitute for a real string comparison where collisions matter.
+ */
 template<character Char, typename Hash = std::uint64_t, typename HashFunction = fnv1a_hash<Char, Hash>>
 class basic_hashed_string {
 
@@ -29,15 +38,33 @@ public:
   : _string{},
     _hash{} {}
 
+  /**
+   * @brief Constructs from a character buffer and explicit length.
+   *
+   * @param string The characters to copy in.
+   * @param length The number of characters to copy.
+   */
   constexpr basic_hashed_string(const char_type* string, const size_type length)
   : _string{string, length},
     _hash{HashFunction{}(string)} {}
 
+  /**
+   * @brief Constructs from a string literal.
+   *
+   * @tparam Size The literal's array size, i.e. its length plus the null terminator.
+   *
+   * @param string The string literal to copy from.
+   */
   template<std::size_t Size>
   constexpr basic_hashed_string(const char_type (&string)[Size])
   : _string{string, Size - 1},
     _hash{HashFunction{}(string)} {}
 
+  /**
+   * @brief Constructs from a std::basic_string.
+   *
+   * @param string The string to copy from.
+   */
   constexpr basic_hashed_string(const std::basic_string<char_type>& string)
   : _string{string},
     _hash{HashFunction{}(string)} {}
@@ -52,6 +79,17 @@ public:
 
   constexpr auto operator=(basic_hashed_string&& other) noexcept -> basic_hashed_string& = default;
 
+  /**
+   * @brief Builds a hashed_string from an fmt format string and arguments.
+   *
+   * @tparam Format The format string type.
+   * @tparam Args The types of the format arguments.
+   *
+   * @param format The fmt format string.
+   * @param args The format arguments.
+   *
+   * @return The formatted string, hashed.
+   */
   template<typename Format, typename... Args>
   static auto format(Format&& format, Args&&... args) -> basic_hashed_string {
     return basic_hashed_string{fmt::format(std::forward<Format>(format), std::forward<Args>(args)...)};
@@ -82,12 +120,6 @@ public:
   }
 
   constexpr auto str() const noexcept -> const std::basic_string<char_type>& {
-    // if constexpr (is_build_type_debug_v) {
-    //   return _string;
-    // } else {
-    //   return _string.str();
-    // }
-
     return _string;
   }
 
@@ -104,54 +136,6 @@ public:
   }
 
 private:
-
-  static constexpr auto _empty_cstr() noexcept -> const char_type* {
-    static constexpr auto null_char = char_type{0};
-    return &null_char;
-  }
-
-  struct empty_string {
-
-    template<typename... Args>
-    empty_string([[maybe_unused]] Args&&... args) {
-
-    }
-
-    constexpr auto data() const noexcept -> const char_type* {
-      return _empty_cstr();
-    }
-
-    constexpr auto size() const noexcept -> size_type {
-      return 0u;
-    }
-
-    constexpr auto c_str() const noexcept -> const char_type* {
-      return _empty_cstr();
-    }
-
-    constexpr auto empty() const noexcept -> bool {
-      return true;
-    }
-
-    constexpr auto str() const noexcept -> const std::basic_string<char_type>& {
-      static const auto empty = std::basic_string<char_type>{};
-
-      return empty;
-    }
-
-    constexpr auto rfind([[maybe_unused]] std::basic_string_view<char_type> string) const noexcept -> size_type {
-      return npos;
-    }
-
-
-    constexpr auto substr([[maybe_unused]] const size_type position, [[maybe_unused]] const size_type count) const -> std::basic_string<char_type> {
-      return {};
-    }
-
-  }; // struct empty_string
-
-  // using string_type = std::conditional_t<is_build_type_debug_v, std::basic_string<char_type>, empty_string>;
-  // [[no_unique_address]] string_type _string{};
 
   std::basic_string<char_type> _string{};
   hash_type _hash{};

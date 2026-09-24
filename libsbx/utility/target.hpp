@@ -63,12 +63,6 @@ inline constexpr auto compiler_v = compiler::msc;
 inline constexpr auto compiler_v = compiler::unknown;
 #endif
 
-#if defined(SBX_CONSTEXPR_ENABLED)
-#define SBX_CONSTEXPR constexpr
-#else
-#define SBX_CONSTEXPR
-#endif
-
 } // namespace sbx::utility
 
 #endif // LIBSBX_UTILITY_TARGET_HPP_

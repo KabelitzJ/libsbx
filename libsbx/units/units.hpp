@@ -1,5 +1,15 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Jonas Kabelitz
+
+/**
+ * @file libsbx/units/units.hpp
+ *
+ * @brief A compile-time SI dimensional-analysis library: dimension, quantity, and the concrete per-dimension unit aliases/literals.
+ *
+ * @defgroup libsbx-units Units
+ * @brief A compile-time SI dimensional-analysis library for libsbx.
+ */
+
 #ifndef LIBSBX_UNITS_HPP_
 #define LIBSBX_UNITS_HPP_
 

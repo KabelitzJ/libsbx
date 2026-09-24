@@ -36,7 +36,7 @@ template<scalar Type>
 inline constexpr auto basic_vector3<Type>::normalized(const basic_vector3& vector) noexcept -> basic_vector3 {
   const auto length_squared = vector.length_squared();
 
-  if (!comparision_traits<length_type>::equal(length_squared, static_cast<length_type>(0))) {
+  if (!comparison_traits<length_type>::equal(length_squared, static_cast<length_type>(0))) {
     const auto length = std::sqrt(length_squared);
 
     return vector / length;
@@ -49,11 +49,6 @@ template<scalar Type>
 inline constexpr auto basic_vector3<Type>::reflect(const basic_vector3& vector, const basic_vector3& normal) noexcept -> basic_vector3 {
   return vector - normal * (dot(vector, normal) * 2);
 }
-
-// template<scalar Type>
-// inline constexpr auto basic_vector3<Type>::abs(const basic_vector3& vector) noexcept -> basic_vector3 {
-//   return basic_vector3{std::abs(vector.x()), std::abs(vector.y()), std::abs(vector.z())};
-// }
 
 template<scalar Type>
 inline constexpr auto basic_vector3<Type>::distance_squared(const basic_vector3& lhs, const basic_vector3& rhs) noexcept -> value_type {
@@ -176,29 +171,3 @@ inline auto fmt::formatter<sbx::math::basic_vector3<Type>>::format(const sbx::ma
 
   return fmt::format_to(context.out(), format, vector.x(), vector.y(), vector.z());
 }
-
-// template<sbx::math::scalar Type>
-// inline auto YAML::convert<sbx::math::basic_vector3<Type>>::encode(const sbx::math::basic_vector3<Type>& rhs) -> YAML::Node {
-//   auto node = Node{};
-
-//   node.SetStyle(YAML::EmitterStyle::Flow);
-
-//   node["x"] = rhs.x();
-//   node["y"] = rhs.y();
-//   node["z"] = rhs.z();
-
-//   return node;
-// }
-
-// template<sbx::math::scalar Type>
-// inline auto YAML::convert<sbx::math::basic_vector3<Type>>::decode(const YAML::Node& node, sbx::math::basic_vector3<Type>& rhs) -> bool {
-//   if (!node.IsMap()) {
-//     return false;
-//   }
-
-//   rhs.x() = node["x"].as<Type>();
-//   rhs.y() = node["y"].as<Type>();
-//   rhs.z() = node["z"].as<Type>();
-
-//   return true;
-// }

@@ -4,9 +4,15 @@
 #define LIBSBX_UTILITY_TYPE_LIST_HPP_
 
 #include <cstddef>
+#include <type_traits>
 
 namespace sbx::utility {
 
+/**
+ * @brief A compile-time list of types.
+ *
+ * @tparam Type The types in the list.
+ */
 template<typename... Type>
 struct type_list {
   using type = type_list;
@@ -19,6 +25,7 @@ struct is_type_list : std::false_type { };
 template<typename... Types>
 struct is_type_list<type_list<Types...>> : std::true_type { };
 
+/** @brief Whether Type is a type_list<...>. */
 template<typename Type>
 inline constexpr auto is_type_list_v = is_type_list<Type>::value;
 
@@ -33,6 +40,12 @@ struct type_list_element<0u, type_list<First, Other...>> {
   using type = First;
 }; // struct type_list_element
 
+/**
+ * @brief The type at Index in List.
+ *
+ * @tparam Index The index to look up.
+ * @tparam List The type_list to index into.
+ */
 template<std::size_t Index, typename List>
 using type_list_element_t = typename type_list_element<Index, List>::type;
 
@@ -58,6 +71,12 @@ struct type_list_index<Type, type_list<>> {
   inline static constexpr auto value = 0u;
 }; // struct type_list_index
 
+/**
+ * @brief Type's index within List.
+ *
+ * @tparam Type The type to look up.
+ * @tparam List The type_list to search.
+ */
 template<typename Type, typename List>
 inline constexpr auto type_list_index_v = type_list_index<Type, List>::value;
 
@@ -79,6 +98,12 @@ struct type_list_contains<Type, type_list<Type, Other...>> {
   inline static constexpr auto value = true;
 }; // struct type_list_contains
 
+/**
+ * @brief Whether Type appears in List.
+ *
+ * @tparam Type The type to look up.
+ * @tparam List The type_list to search.
+ */
 template<typename Type, typename List>
 inline constexpr auto type_list_contains_v = type_list_contains<Type, List>::value;
 

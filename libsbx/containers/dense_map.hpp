@@ -16,6 +16,7 @@
 #include <vector>
 #include <cmath>
 #include <bit>
+#include <limits>
 
 #include <libsbx/utility/assert.hpp>
 
@@ -26,6 +27,7 @@
 
 namespace sbx::containers {
 
+/** @brief Implementation details of dense_map: its node/iterator types. Not part of the public API. */
 namespace detail {
 
 template<typename Key, typename Type>
@@ -238,6 +240,15 @@ template<typename Lhs, typename Rhs>
 
 } // namespace detail
 
+/**
+ * @brief A hash map storing its values contiguously (like std::vector) with a separate sparse index table mapping hash buckets to dense-array positions, instead of std::unordered_map's node-per-element layout. Iteration is cache-friendly and stable-ordered (insertion order, until an erase() moves the last element into the erased slot); lookup is still O(1) average.
+ *
+ * @tparam Key The key type.
+ * @tparam Type The mapped value type.
+ * @tparam Hash The hash function type. Defaults to std::hash<Key>.
+ * @tparam KeyEqual The key equality comparator type. Defaults to std::equal_to<Key>.
+ * @tparam Allocator The allocator type. Defaults to std::allocator<std::pair<Key, Type>>.
+ */
 template<typename Key, typename Type, typename Hash = std::hash<Key>, typename KeyEqual = std::equal_to<Key>, typename Allocator = std::allocator<std::pair<Key, Type>>>
 class dense_map {
 
@@ -358,20 +369,39 @@ public:
     rehash(0u);
   }
 
+  /**
+   * @brief Inserts value if key_type isn't already present. Does nothing if it is.
+   *
+   * @param value The key/value pair to insert.
+   *
+   * @return An iterator to the (new or pre-existing) element, and whether an insertion happened.
+   */
   auto insert(const value_type& value) -> std::pair<iterator, bool> {
     return _insert_or_do_nothing(value.first, value.second);
  }
 
+  /** @copydoc insert */
   auto insert(value_type&& value) -> std::pair<iterator, bool>  {
     return _insert_or_do_nothing(std::move(value.first), std::move(value.second));
   }
 
+  /** @copydoc insert */
   template<typename Arg>
   requires(std::is_constructible_v<value_type, Arg&&>)
   auto insert(Arg&& value) -> std::pair<iterator, bool> {
     return _insert_or_do_nothing(std::forward<Arg>(value).first, std::forward<Arg>(value).second);
   }
 
+  /**
+   * @brief Constructs an element in place from args, if key_type isn't already present. Does
+   * nothing if it is.
+   *
+   * @tparam Args No arguments default-constructs the key; a single argument with .first/.second members (e.g. a pair) is unpacked into key and value; two arguments are the key and value directly; more than two are forwarded to value_type's constructor.
+   *
+   * @param args See @ref Args.
+   *
+   * @return An iterator to the (new or pre-existing) element, and whether an insertion happened.
+   */
   template<typename... Args>
   auto emplace([[maybe_unused]] Args&&... args) -> std::pair<iterator, bool> {
     if constexpr (sizeof...(Args) == 0u) {
@@ -396,12 +426,27 @@ public:
     }
   }
 
+  /**
+   * @brief Erases the element at position.
+   *
+   * @param position The element to erase.
+   *
+   * @return An iterator to the element that now occupies position's old slot (see the class-level
+   * note on iteration order: the last element moves into the erased slot).
+   */
   auto erase(const_iterator position) -> iterator {
     const auto offset = position - cbegin();
     erase(position->first);
     return begin() + offset;
   }
 
+  /**
+   * @brief Erases the element with the given key, if present.
+   *
+   * @param key The key to erase.
+   *
+   * @return true if an element was erased, false if key wasn't present.
+   */
   auto erase(const key_type& key) -> bool {
     for (auto* current = &_sparse.first()[_key_to_bucket(key)]; *current != (std::numeric_limits<size_type>::max)(); current = &_dense.first()[*current].next) {
       if (_dense.second()(_dense.first()[*current].element.first, key)) {
@@ -416,6 +461,15 @@ public:
     return false;
   }
 
+  /**
+   * @brief Bounds-checked element access.
+   *
+   * @param key The key to look up.
+   *
+   * @return A reference to key's mapped value.
+   *
+   * @throws assertion_failure If key isn't present (debug builds only — see utility::assert_that).
+   */
   [[nodiscard]] auto at(const key_type& key) -> mapped_type& {
     auto entry = find(key);
     utility::assert_that(entry != end(), "Invalid key");
@@ -423,21 +477,24 @@ public:
     return entry->second;
   }
 
-  /*! @copydoc at */
+  /** @copydoc at */
   [[nodiscard]] auto at(const key_type &key) const -> const mapped_type& {
     auto entry = find(key);
     utility::assert_that(entry != cend(), "Invalid key");
     return entry->second;
   }
 
+  /** @brief Value-initializes and inserts key if not already present, then returns a reference to its mapped value. */
   [[nodiscard]] auto operator[](const key_type& key) -> mapped_type& {
     return _insert_or_do_nothing(key).first->second;
   }
 
+  /** @copydoc operator[] */
   [[nodiscard]] auto operator[](key_type&& key) -> mapped_type& {
     return _insert_or_do_nothing(std::move(key)).first->second;
   }
 
+  /** @return An iterator to key's element, or end() if key isn't present. */
   [[nodiscard]] auto find(const key_type& key) -> iterator {
     return _constrained_find(key, _key_to_bucket(key));
   }
@@ -478,6 +535,14 @@ public:
     return _threshold;
   }
 
+  /**
+   * @brief Sets the maximum size()/bucket_count() ratio before an insert triggers a rehash, and
+   * immediately rehashes to the new ratio.
+   *
+   * @param value The new max load factor; must be > 0.
+   *
+   * @throws assertion_failure If value <= 0 (debug builds only — see utility::assert_that).
+   */
   auto set_max_load_factor(const std::float_t value) -> void {
     utility::assert_that(value > 0.f, "Invalid load factor");
     _threshold = value;
@@ -488,6 +553,11 @@ public:
     return _sparse.first().size();
   }
 
+  /**
+   * @brief Grows the bucket table to at least count buckets (rounded up to the next power of two, and never below what max_load_factor() requires for the current size()), if it isn't already that large. Does nothing otherwise.
+   *
+   * @param count The minimum bucket count to grow to.
+   */
   void rehash(const size_type count) {
     auto value = count > minimum_capacity ? count : minimum_capacity;
     const auto capacity = static_cast<size_type>(static_cast<std::float_t>(size()) / max_load_factor());
@@ -507,6 +577,11 @@ public:
     }
   }
 
+  /**
+   * @brief Reserves dense storage for at least count elements and grows the bucket table to match.
+   *
+   * @param count The number of elements to reserve for.
+   */
   void reserve(const size_type count) {
     _dense.first().reserve(count);
     rehash(static_cast<size_type>(std::ceil(static_cast<std::float_t>(count) / max_load_factor())));
@@ -568,7 +643,7 @@ private:
 
   template<typename Other, typename Arg>
   [[nodiscard]] auto _insert_or_overwrite(Other&& key, Arg&& value) -> std::pair<iterator, bool> {
-    const auto index = key_to_bucket(key);
+    const auto index = _key_to_bucket(key);
 
     if (auto entry = _constrained_find(key, index); entry != end()) {
       entry->second = std::forward<Arg>(value);

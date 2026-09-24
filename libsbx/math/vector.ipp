@@ -177,7 +177,7 @@ template<std::size_t Size, scalar Type>
 requires (Size > 1u)
 template<scalar Other>
 constexpr auto basic_vector<Size, Type>::operator/=(Other scalar) noexcept -> basic_vector& {
-  utility::assert_that(!comparision_traits<Other>::equal(scalar, static_cast<Other>(0)), "Division by zero");
+  utility::assert_that(!comparison_traits<Other>::equal(scalar, static_cast<Other>(0)), "Division by zero");
 
   for (auto i : std::views::iota(0u, Size)) {
     _components[i] /= static_cast<value_type>(scalar);
@@ -209,7 +209,7 @@ requires (Size > 1u)
 constexpr auto basic_vector<Size, Type>::normalize() noexcept -> basic_vector& {
   const auto length_squared = this->length_squared();
 
-  if (!comparision_traits<length_type>::equal(length_squared, static_cast<length_type>(0))) {
+  if (!comparison_traits<length_type>::equal(length_squared, static_cast<length_type>(0))) {
     *this /= std::sqrt(length_squared);
   }
 
@@ -245,7 +245,7 @@ template<std::size_t Index, scalar Other>
 template<std::size_t Size, scalar Lhs, scalar Rhs>
 [[nodiscard]] constexpr auto operator==(const basic_vector<Size, Lhs>& lhs, const basic_vector<Size, Rhs>& rhs) noexcept -> bool {
   for (auto i : std::views::iota(0u, Size)) {
-    if (!comparision_traits<Lhs>::equal(lhs[i], rhs[i])) {
+    if (!comparison_traits<Lhs>::equal(lhs[i], rhs[i])) {
       return false;
     }
   }

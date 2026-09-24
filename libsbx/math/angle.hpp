@@ -24,8 +24,7 @@ namespace sbx::math {
 /**
  * @brief Strongly-typed degree value wrapper.
  *
- * This type represents an angle measured in degrees. It is a thin wrapper around a floating point
- * storage type, enabling explicit unit usage and overload selection.
+ * This type represents an angle measured in degrees. It is a thin wrapper around a floating point storage type, enabling explicit unit usage and overload selection.
  *
  * @tparam Type Floating-point storage type.
  */
@@ -300,9 +299,9 @@ struct is_smoothable<basic_degree<Type>> : std::true_type { };
  * @tparam Type Floating-point storage type.
  */
 template<floating_point Type>
-struct comparision_traits<basic_degree<Type>> {
+struct comparison_traits<basic_degree<Type>> {
 
-  using base_trait = comparision_traits<Type>;
+  using base_trait = comparison_traits<Type>;
 
   /**
    * @brief Compares two degree values for equality using the base trait.
@@ -314,7 +313,7 @@ struct comparision_traits<basic_degree<Type>> {
    */
   inline static constexpr auto equal(const basic_degree<Type>& lhs, const basic_degree<Type>& rhs) noexcept -> bool;
 
-}; // struct comparision_traits
+}; // struct comparison_traits
 
 /**
  * @brief Linearly interpolates between two degree values.
@@ -333,8 +332,7 @@ inline constexpr auto mix(const basic_degree<Type> x, const basic_degree<Type> y
 /**
  * @brief Strongly-typed radian value wrapper.
  *
- * This type represents an angle measured in radians. It is a thin wrapper around a floating point
- * storage type, enabling explicit unit usage and overload selection.
+ * This type represents an angle measured in radians. It is a thin wrapper around a floating point storage type, enabling explicit unit usage and overload selection.
  *
  * @tparam Type Floating-point storage type.
  */
@@ -447,6 +445,19 @@ public:
   constexpr auto operator*=(const Other rhs) noexcept -> basic_radian<Type>&;
 
   /**
+   * @brief Divides this radian value by a floating point factor.
+   *
+   * @tparam Other Floating-point type convertible to @ref value_type.
+   *
+   * @param rhs Divisor.
+   *
+   * @return Reference to this instance.
+   */
+  template<floating_point Other>
+  requires (std::is_convertible_v<Other, Type>)
+  constexpr auto operator/=(const Other rhs) noexcept -> basic_radian<Type>&;
+
+  /**
    * @brief Returns the stored radian value.
    *
    * @return Stored radian value.
@@ -549,6 +560,21 @@ requires (std::is_convertible_v<Other, Type>)
 constexpr auto operator*(basic_radian<Type> lhs, const Other rhs) noexcept -> basic_radian<Type>;
 
 /**
+ * @brief Divides a radian value by a scalar factor.
+ *
+ * @tparam Type Floating-point storage type.
+ * @tparam Other Scalar type convertible to @ref Type.
+ *
+ * @param lhs Radian value.
+ * @param rhs Divisor.
+ *
+ * @return Scaled radian value.
+ */
+template<floating_point Type, std::convertible_to<Type> Other>
+requires (std::is_convertible_v<Other, Type>)
+constexpr auto operator/(basic_radian<Type> lhs, const Other rhs) noexcept -> basic_radian<Type>;
+
+/**
  * @brief Clamps a radian value to a closed interval.
  *
  * @tparam Type Floating-point storage type.
@@ -568,10 +594,55 @@ constexpr auto clamp(const basic_radian<Type>& value, const basic_radian<Type>& 
 using radian = basic_radian<std::float_t>;
 
 /**
+ * @brief Marks radians as smoothable for smoothing/interpolation utilities.
+ *
+ * This integrates with the library's smooth-value infrastructure.
+ */
+template<floating_point Type>
+struct is_smoothable<basic_radian<Type>> : std::true_type { };
+
+/**
+ * @brief Comparison traits specialization for radian values.
+ *
+ * Delegates comparison semantics to the comparison traits of the underlying scalar type.
+ *
+ * @tparam Type Floating-point storage type.
+ */
+template<floating_point Type>
+struct comparison_traits<basic_radian<Type>> {
+
+  using base_trait = comparison_traits<Type>;
+
+  /**
+   * @brief Compares two radian values for equality using the base trait.
+   *
+   * @param lhs Left-hand side operand.
+   * @param rhs Right-hand side operand.
+   *
+   * @return True if the underlying values are considered equal by the base trait.
+   */
+  inline static constexpr auto equal(const basic_radian<Type>& lhs, const basic_radian<Type>& rhs) noexcept -> bool;
+
+}; // struct comparison_traits
+
+/**
+ * @brief Linearly interpolates between two radian values.
+ *
+ * @tparam Type Floating-point storage type.
+ *
+ * @param x Start value.
+ * @param y End value.
+ * @param a Interpolation factor in [0, 1] (not enforced).
+ *
+ * @return Interpolated radian value.
+ */
+template<floating_point Type>
+inline constexpr auto mix(const basic_radian<Type> x, const basic_radian<Type> y, const Type a) -> basic_radian<Type>;
+
+/**
  * @brief Unified angle type stored internally in radians.
  *
- * This type provides explicit construction from degrees or radians, supports arithmetic, and provides
- * unit conversion helpers.
+ * This type provides explicit construction from degrees or radians, supports arithmetic, and provides unit conversion helpers.
  *
  * @tparam Type Floating-point storage type.
  */
@@ -686,8 +757,8 @@ public:
    * @tparam Other Floating-point storage type of the operand.
    *
    * @param other Radian value to subtract.
-   * @return Reference to this instance.
    *
+   * @return Reference to this instance.
    */
   template<floating_point Other>
   requires (std::is_convertible_v<Other, Type>)
@@ -705,6 +776,19 @@ public:
   template<floating_point Other>
   requires (std::is_convertible_v<Other, Type>)
   constexpr auto operator*=(const Other other) noexcept -> basic_angle<Type>&;
+
+  /**
+   * @brief Divides this angle by a floating point factor.
+   *
+   * @tparam Other Floating-point type convertible to @ref value_type.
+   *
+   * @param other Divisor.
+   *
+   * @return Reference to this instance.
+   */
+  template<floating_point Other>
+  requires (std::is_convertible_v<Other, Type>)
+  constexpr auto operator/=(const Other other) noexcept -> basic_angle<Type>&;
 
   /**
    * @brief Converts this angle to degrees.
@@ -862,6 +946,21 @@ requires (std::is_convertible_v<RhsType, LhsType>)
 constexpr auto operator*(basic_angle<LhsType> lhs, const RhsType rhs) noexcept -> basic_angle<LhsType>;
 
 /**
+ * @brief Divides an angle by a scalar factor.
+ *
+ * @tparam LhsType Floating-point storage type of the angle.
+ * @tparam RhsType Floating-point type of the scalar factor.
+ *
+ * @param lhs Angle value.
+ * @param rhs Divisor.
+ *
+ * @return Scaled angle.
+ */
+template<floating_point LhsType, floating_point RhsType>
+requires (std::is_convertible_v<RhsType, LhsType>)
+constexpr auto operator/(basic_angle<LhsType> lhs, const RhsType rhs) noexcept -> basic_angle<LhsType>;
+
+/**
  * @brief Clamps an angle value to a closed interval.
  *
  * @tparam Type Floating-point storage type.
@@ -879,6 +978,52 @@ constexpr auto clamp(const basic_angle<Type>& value, const basic_angle<Type>& mi
  * @brief Default angle type using std::float_t.
  */
 using angle = basic_angle<std::float_t>;
+
+/**
+ * @brief Marks angles as smoothable for smoothing/interpolation utilities.
+ *
+ * This integrates with the library's smooth-value infrastructure.
+ */
+template<floating_point Type>
+struct is_smoothable<basic_angle<Type>> : std::true_type { };
+
+/**
+ * @brief Comparison traits specialization for angle values.
+ *
+ * Delegates comparison semantics to the comparison traits of the underlying scalar type.
+ *
+ * @tparam Type Floating-point storage type.
+ */
+template<floating_point Type>
+struct comparison_traits<basic_angle<Type>> {
+
+  using base_trait = comparison_traits<Type>;
+
+  /**
+   * @brief Compares two angle values for equality using the base trait.
+   *
+   * @param lhs Left-hand side operand.
+   * @param rhs Right-hand side operand.
+   *
+   * @return True if the underlying values are considered equal by the base trait.
+   */
+  inline static constexpr auto equal(const basic_angle<Type>& lhs, const basic_angle<Type>& rhs) noexcept -> bool;
+
+}; // struct comparison_traits
+
+/**
+ * @brief Linearly interpolates between two angle values.
+ *
+ * @tparam Type Floating-point storage type.
+ *
+ * @param x Start value.
+ * @param y End value.
+ * @param a Interpolation factor in [0, 1] (not enforced).
+ *
+ * @return Interpolated angle value.
+ */
+template<floating_point Type>
+inline constexpr auto mix(const basic_angle<Type> x, const basic_angle<Type> y, const Type a) -> basic_angle<Type>;
 
 /**
  * @brief Converts radians to degrees.

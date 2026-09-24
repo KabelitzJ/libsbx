@@ -1,8 +1,19 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Jonas Kabelitz
 #ifndef LIBSBX_MEMORY_BUFFER_CURSOR_HPP_
 #define LIBSBX_MEMORY_BUFFER_CURSOR_HPP_
 
+#include <cstddef>
+
 namespace sbx::memory {
 
+/**
+ * @brief A write cursor into a raw buffer: tracks a current position and advances by a count of
+ * Type elements, without owning or bounds-checking the buffer.
+ *
+ * @tparam Type The pointee type the cursor is positioned in terms of; advance()'s amount is a
+ * count of Type elements, not bytes (unless Type is std::byte).
+ */
 template<typename Type>
 class buffer_cursor {
 
@@ -24,6 +35,7 @@ public:
     return _current;
   }
 
+  /** @return The cursor's new position, after advancing by amount Type elements. */
   constexpr auto advance(const size_type amount) noexcept -> pointer {
     return _current += amount;
   }
@@ -42,7 +54,7 @@ private:
 
   pointer _current;
 
-}; // lass buffer_cursor
+}; // class buffer_cursor
 
 } // namespace sbx::memory
 

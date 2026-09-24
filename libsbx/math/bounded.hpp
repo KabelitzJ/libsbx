@@ -4,7 +4,6 @@
 #define LIBSBX_MATH_BOUNDED_HPP_
 
 #include <concepts>
-#include <limits>
 #include <type_traits>
 #include <compare>
 
@@ -15,6 +14,13 @@
 
 namespace sbx::math {
 
+/**
+ * @brief An arithmetic value constrained to [Min, Max], asserting on any out-of-range assignment.
+ *
+ * @tparam Type The underlying arithmetic type.
+ * @tparam Min The inclusive lower bound.
+ * @tparam Max The inclusive upper bound.
+ */
 template<typename Type, Type Min, Type Max>
 requires (std::is_arithmetic_v<Type> && Min <= Max)
 class bounded {
@@ -35,12 +41,19 @@ public:
   constexpr bounded() requires (max < value_type{0})
   : _value{max} { }
 
+  /**
+   * @brief Constructs from a value within [Min, Max].
+   *
+   * @param value The value to hold.
+   *
+   * @throws assertion_failure If value is outside [Min, Max] (debug builds only — see utility::assert_that).
+   */
   constexpr explicit bounded(const value_type value)
   : _value{value} {
     utility::assert_that(value >= min && value <= max, "Invalid value");
   }
 
-
+  /** @copydoc bounded(const value_type) */
   constexpr auto operator=(const value_type value) -> bounded& {
     utility::assert_that(value >= min && value <= max, "Invalid value");
 
@@ -80,7 +93,6 @@ public:
   friend constexpr bool operator==(const value_type lhs, const bounded& rhs) noexcept {
     return lhs == rhs._value;
   }
-
 
 private:
 

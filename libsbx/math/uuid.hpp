@@ -8,10 +8,17 @@
 
 #include <fmt/format.h>
 
+#include <yaml-cpp/yaml.h>
+
 #include <libsbx/math/random.hpp>
 
 namespace sbx::math {
 
+/**
+ * @brief A random, non-cryptographic unique identifier backed by a single unsigned integer.
+ *
+ * @tparam Type The unsigned integer type backing the id.
+ */
 template<std::unsigned_integral Type>
 class basic_uuid {
 
@@ -19,17 +26,21 @@ public:
 
   using value_type = Type;
 
+  /** @brief Constructs a fresh, randomly drawn id. Equivalent to create(). */
   basic_uuid()
   : _value{random::next<value_type>(1u)} { }
 
+  /** @brief The nil (all-zero) id, distinct from any id create()/the default constructor can produce. */
   static constexpr auto nil() -> basic_uuid {
     return basic_uuid{0u};
   }
 
+  /** @brief Wraps an already-known value as an id, e.g. when deserializing. */
   static constexpr auto from_value(const value_type value) -> basic_uuid {
     return basic_uuid{value};
   }
 
+  /** @brief Draws a fresh, randomly generated id. */
   static constexpr auto create() -> basic_uuid {
     return basic_uuid{random::next<value_type>(1u)};
   }
@@ -73,7 +84,6 @@ struct fmt::formatter<sbx::math::basic_uuid<Type>> {
       return fmt::format_to(context.out(), "[nil]");
     }
 
-    // return fmt::format_to(context.out(), "{:0{}x}", uuid.value(), width);
     return fmt::format_to(context.out(), "{}", uuid.value());
   }
 }; // struct fmt::formatter<sbx::math::uuid>
@@ -95,7 +105,7 @@ struct YAML::convert<sbx::math::basic_uuid<Type>> {
     return true;
   }
 
-}; // struct YAML::convert<sbx::math::basic_vector3<Type>>
+}; // struct YAML::convert<sbx::math::basic_uuid<Type>>
 
 template<std::unsigned_integral Type>
 auto operator<<(YAML::Emitter& out, const sbx::math::basic_uuid<Type>& vector) -> YAML::Emitter& {
@@ -110,4 +120,3 @@ struct std::hash<sbx::math::basic_uuid<Type>> {
 }; // struct std::hash<sbx::math::uuid>
 
 #endif // LIBSBX_MATH_UUID_HPP_
-

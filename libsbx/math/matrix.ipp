@@ -2,6 +2,8 @@
 // Copyright (c) 2026 Jonas Kabelitz
 #include <libsbx/math/matrix.hpp>
 
+#include <bit>
+
 #include <libsbx/utility/make_array.hpp>
 
 namespace sbx::math {
@@ -88,7 +90,7 @@ inline constexpr auto basic_matrix<Columns, Rows, Type>::row(const size_type row
     vector[i] = _columns[i][row];
   }
 
-  return vector;	
+  return vector;
 }
 
 template<std::size_t Columns, std::size_t Rows, scalar Type>
@@ -154,7 +156,13 @@ inline constexpr auto operator*(Lhs lhs, basic_matrix<Columns, Rows, Rhs> rhs) n
 
 template<typename Matrix>
 inline constexpr auto from_array(std::span<typename Matrix::value_type, Matrix::columns * Matrix::rows> array) -> Matrix {
-  return Matrix{*reinterpret_cast<Matrix*>(array.data())};
+  auto storage = std::array<typename Matrix::value_type, Matrix::columns * Matrix::rows>{};
+
+  for (auto i : std::views::iota(std::size_t{0}, array.size())) {
+    storage[i] = array[i];
+  }
+
+  return std::bit_cast<Matrix>(storage);
 }
 
 } // namespace sbx::math

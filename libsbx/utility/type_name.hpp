@@ -21,6 +21,16 @@ constexpr auto parse_type_name(std::string_view prefix, std::string_view suffix,
 
 } // namespace detail
 
+/**
+ * @brief A human-readable name for Type, extracted from the compiler's own
+ * function-signature macro (__PRETTY_FUNCTION__/__FUNCSIG__).
+ *
+ * @tparam Type The type to name.
+ *
+ * @return Type's name, as reported by the compiler.
+ *
+ * @note Not standardized: the exact spelling (e.g. namespace qualification, `struct`/`class` prefixes) depends on the compiler. Falls back to typeid(Type).name() (mangled, on most compilers) if the compiler isn't recognized.
+ */
 template<typename Type>
 constexpr auto type_name() -> std::string_view {
 #if defined(SBX_COMPILER_CLANG)
@@ -42,7 +52,7 @@ constexpr auto type_name() -> std::string_view {
 
   return detail::parse_type_name(prefix, suffix, function);
 #else
-  return typeid(Type).name(); 
+  return typeid(Type).name();
 #endif
 }
 

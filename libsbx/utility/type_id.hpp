@@ -4,7 +4,6 @@
 #define LIBSBX_UTILITY_TYPE_ID_HPP_
 
 #include <cstdint>
-#include <type_traits>
 
 namespace sbx::utility {
 

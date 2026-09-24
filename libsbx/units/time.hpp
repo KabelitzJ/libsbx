@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Jonas Kabelitz
 #ifndef LIBSBX_UNITS_TIME_HPP_
 #define LIBSBX_UNITS_TIME_HPP_
 
@@ -7,6 +9,7 @@
 
 namespace sbx::units {
 
+/** @brief Duration quantities, in milliseconds, seconds (the SI base scale), minutes and hours. */
 using milliseconds = quantity<time_dimension, std::float_t, std::milli>;
 using seconds = quantity<time_dimension, std::float_t>;
 using minutes = quantity<time_dimension, std::float_t, std::ratio<60>>;
@@ -32,6 +35,7 @@ struct unit_formatter<time_dimension, std::ratio<3600>> {
   static constexpr auto symbol = "h";
 }; // struct unit_formatter
 
+/** @brief Literal suffixes for constructing duration quantities directly, e.g. `250.0_ms`, `1.5_h`. */
 namespace literals {
 
 constexpr auto operator""_ms(long double value) -> milliseconds {

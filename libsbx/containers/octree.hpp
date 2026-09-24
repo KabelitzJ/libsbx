@@ -12,7 +12,15 @@
 #ifndef LIBSBX_CONTAINERS_OCTREE_HPP_
 #define LIBSBX_CONTAINERS_OCTREE_HPP_
 
-#include <range/v3/all.hpp>
+#include <array>
+#include <cstdint>
+#include <functional>
+#include <optional>
+#include <ranges>
+#include <stdexcept>
+#include <type_traits>
+#include <utility>
+#include <vector>
 
 #include <libsbx/utility/enum.hpp>
 #include <libsbx/utility/iterator.hpp>
@@ -29,6 +37,13 @@
 
 namespace sbx::containers {
 
+/**
+ * @brief Insert-only spatial partitioning tree: values are placed in the smallest node whose bounds fully contain them, splitting a leaf into 8 children once it holds more than Threshold values. See @ref dynamic_tree for a structure that also supports removal/update of moving values.
+ *
+ * @tparam Type The value type stored in the tree.
+ * @tparam Threshold The number of values a leaf node holds before it splits into 8 children.
+ * @tparam Depth The maximum split depth; a leaf beyond this depth keeps accepting values past Threshold.
+ */
 template<typename Type, std::size_t Threshold = 16u, std::size_t Depth = 8u>
 class octree {
 
@@ -60,11 +75,11 @@ class octree {
       return children[index];
     }
 
-    auto push_back(const value_type& value) noexcept -> void {
+    auto push_back(const value_type& value) -> void {
       values.push_back(value);
     }
 
-    auto push_back(value_type&& value) noexcept -> void {
+    auto push_back(value_type&& value) -> void {
       values.push_back(std::move(value));
     }
 
@@ -134,7 +149,7 @@ class octree {
 
     std::vector<value_type> values;
     std::array<id, children_count> children;
-  
+
   }; // struct node
 
 public:
@@ -153,21 +168,31 @@ public:
     const math::volume& bounds;
   }; // struct inside_result
 
-  octree(const math::volume& bounds, const std::size_t estimated_elements) noexcept
+  /**
+   * @brief Constructs an empty tree.
+   *
+   * @param bounds The tree's overall bounds; values inserted outside this volume are dropped (see insert()).
+   * @param estimated_elements A hint for the initial node-storage reservation; not a hard limit.
+   */
+  octree(const math::volume& bounds, const std::size_t estimated_elements)
   : _bounds{bounds},
     _root{0u} {
     _nodes.reserve(estimated_elements / 2);
     _nodes.push_back(node{});
   }
 
-  ~octree() {
-
-  }
-
-  auto insert(const value_type& value, const math::volume& bounds) noexcept -> void {
+  /**
+   * @brief Inserts value with the given bounds. Silently does nothing if bounds isn't fully
+   * contained within the tree's own bounds.
+   *
+   * @param value The value to insert.
+   * @param bounds The value's bounding volume.
+   */
+  auto insert(const value_type& value, const math::volume& bounds) -> void {
     _insert(_root, _bounds, value, bounds, 0u);
   }
 
+  /** @return Every pair of values whose bounds overlap. */
   auto intersections() -> std::vector<intersection> {
     auto intersections = utility::make_reserved_vector<intersection>(_nodes.size());
 
@@ -178,6 +203,7 @@ public:
     return intersections;
   }
 
+  /** @return Every value whose bounds intersect box. */
   auto inside(const math::box& box) -> std::vector<inside_result> {
     auto inside = std::vector<inside_result>{};
 
@@ -186,13 +212,21 @@ public:
     return inside;
   }
 
+  /** @brief Removes every value, resetting the tree back to a single empty root node. */
   auto clear() -> void {
-    _nodes.resize(1); 
+    _nodes.resize(1);
 
     _nodes[0].values.clear();
     _nodes[0].children.fill(node::null);
   }
 
+  /**
+   * @brief Invokes fn(const math::volume&) once per node in the tree, depth-first, with that node's own (not its values') bounds — for visualizing the tree's spatial subdivision.
+   *
+   * @tparam Fn A callable invocable with (const math::volume&).
+   *
+   * @param fn Invoked once per node.
+   */
   template<typename Fn>
   requires (std::is_invocable_v<Fn, const math::volume&>)
   auto for_each_volume(Fn&& fn) -> void {
@@ -201,7 +235,7 @@ public:
 
 private:
 
-  auto _insert(const node::id node_id, const math::volume& bounds, const value_type& value, const math::volume& value_bounds, const std::size_t current_depth) noexcept -> void {
+  auto _insert(const node::id node_id, const math::volume& bounds, const value_type& value, const math::volume& value_bounds, const std::size_t current_depth) -> void {
     if (!bounds.contains(value_bounds)) {
       return;
     }
@@ -226,7 +260,7 @@ private:
 
   auto _split(node::id node_id, const math::volume& bounds) -> void {
     const auto first_child_id = static_cast<node::id>(_nodes.size());
-    
+
     _nodes.resize(_nodes.size() + node::children_count);
 
     for (auto i = 0u; i < node::children_count; ++i) {
@@ -294,26 +328,23 @@ private:
       for (auto i = 0u; i < _nodes[node_id].children.size(); ++i) {
         const auto child_id = _nodes[node_id].child_at(i);
         const auto child_volume = node::child_bounds(bounds, i);
-        
+
         _for_each_volume(child_id, child_volume, std::forward<Fn>(fn));
       }
     }
   }
 
   auto _inside(node::id node_id, const math::volume& bounds, const math::box& box, std::vector<inside_result>& inside) -> void {
-    // Early-out if node's bounding volume doesn't intersect the box
     if (!box.intersects(bounds)) {
       return;
     }
 
-    // Check all values in this node
     for (const auto& [value, value_bounds] : _nodes[node_id].values) {
       if (box.intersects(value_bounds)) {
         inside.push_back({value, value_bounds});
       }
     }
 
-    // Recurse into children if not a leaf
     if (!_nodes[node_id].is_leaf()) {
       for (auto i : std::views::iota(0u, _nodes[node_id].children.size())) {
         auto child_id = _nodes[node_id].child_at(i);

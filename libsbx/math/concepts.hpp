@@ -23,7 +23,7 @@ namespace sbx::math {
  * @brief Concept for numeric types.
  *
  * @details
- * 
+ *
  * A numeric type is either:
  * - a non-boolean integral type, or
  * - a floating-point type.
@@ -109,7 +109,7 @@ concept unsigned_integral = is_unsigned_integral_v<Type>;
  * @brief Type trait identifying scalar types.
  *
  * @details
- * 
+ *
  * A scalar type is either:
  * - a floating-point type, or
  * - a non-boolean integral type.

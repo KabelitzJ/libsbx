@@ -28,6 +28,14 @@ inline constexpr bool is_ebco_eligible_v = is_ebco_eligible<Type>::value;
 template<typename Type>
 concept ebco_eligible = is_ebco_eligible_v<Type>;
 
+/**
+ * @brief Holds one element of a compressed_pair. Non-EBO-eligible primary template: stores
+ * Type as a plain member.
+ *
+ * @tparam Type The element type.
+ * @tparam (unnamed) Distinguishes the two elements of a pair of the same Type — see the
+ * compressed_pair_element<ebco_eligible Type, Tag> specialization for why this matters.
+ */
 template<typename Type, std::size_t>
 class compressed_pair_element {
 
@@ -63,6 +71,12 @@ private:
 
 }; // struct compressed_pair_element
 
+/**
+ * @brief Holds one element of a compressed_pair. EBO-eligible specialization: Type is empty (and non-final), so compressed_pair_element inherits from it instead of storing it as a member, letting the empty base optimization eliminate its storage entirely.
+ *
+ * @tparam Type The (empty) element type.
+ * @tparam Tag Distinguishes the two elements of a pair of the same Type; without it, compressed_pair could not privately inherit from Type twice (an unambiguous base requires a distinct type per base, and Tag makes this specialization's Type/Tag combination unique per pair slot).
+ */
 template<ebco_eligible Type, std::size_t Tag>
 class compressed_pair_element<Type, Tag> : public Type {
 
@@ -72,7 +86,7 @@ public:
   using reference = value_type&;
   using const_reference = const value_type&;
   using base_type = Type;
- 
+
   constexpr compressed_pair_element() noexcept(std::is_nothrow_default_constructible_v<base_type>) requires (std::is_default_constructible_v<base_type>)
   : base_type{} { }
 
@@ -88,23 +102,21 @@ public:
   [[nodiscard]] constexpr auto get() noexcept -> reference {
     return *this;
   }
- 
+
   [[nodiscard]] constexpr auto get() const noexcept -> const_reference {
     return *this;
   }
 
 }; // struct compressed_pair_element
 
-template<auto Value, decltype(Value) Min, decltype(Value) Max>
-struct is_in_range {
-  static constexpr auto value = Value <= Max && Value >= Min;
-}; // struct is_in_range
-
-template<auto Value, decltype(Value) Min, decltype(Value) Max>
-inline constexpr auto is_in_range_v = is_in_range<Value, Min, Max>::value;
-
 } // namespace detail
 
+/**
+ * @brief A pair of two values, like std::pair, except an empty (and non-final) First/Second is stored via the empty base optimization instead of taking up space, so e.g. a pair of a value and a stateless comparator/hasher costs nothing extra over the value alone.
+ *
+ * @tparam First The first element's type.
+ * @tparam Second The second element's type.
+ */
 template<typename First, typename Second>
 class compressed_pair final : detail::compressed_pair_element<First, 0u>, detail::compressed_pair_element<Second, 1u> {
 
@@ -124,11 +136,30 @@ public:
 
   constexpr compressed_pair(compressed_pair&& other) noexcept = default;
 
+  /**
+   * @brief Constructs first and second directly from arg/other.
+   *
+   * @tparam Arg The type to construct first from.
+   * @tparam Other The type to construct second from.
+   *
+   * @param arg The value to construct first from.
+   * @param other The value to construct second from.
+   */
   template<typename Arg, typename Other>
   constexpr compressed_pair(Arg&& arg, Other&& other) noexcept(std::is_nothrow_constructible_v<first_base, Arg> && std::is_nothrow_constructible_v<second_base, Other>)
   : first_base{std::forward<Arg>(arg)},
     second_base{std::forward<Other>(other)} { }
 
+  /**
+   * @brief Constructs first and second in place, each from its own argument tuple --
+   * for element types with no single-argument constructor, or to avoid an intermediate copy/move.
+   *
+   * @tparam Args The types of first's constructor arguments.
+   * @tparam Other The types of second's constructor arguments.
+   *
+   * @param args Forwarded to first_type's constructor.
+   * @param other Forwarded to second_type's constructor.
+   */
   template<typename... Args, typename... Other>
   constexpr compressed_pair(std::piecewise_construct_t, std::tuple<Args...> args, std::tuple<Other...> other) noexcept(std::is_nothrow_constructible_v<first_base, Args...> && std::is_nothrow_constructible_v<second_base, Other...>)
   : first_base{std::move(args), std::index_sequence_for<Args...>{}},
@@ -143,7 +174,7 @@ public:
   [[nodiscard]] constexpr auto first() noexcept -> first_type& {
     return static_cast<first_base&>(*this).get();
   }
- 
+
   [[nodiscard]] constexpr auto first() const noexcept -> const first_type& {
     return static_cast<const first_base&>(*this).get();
   }
@@ -162,6 +193,7 @@ public:
     swap(second(), other.second());
   }
 
+  /** @return first() if Index == 0, else second(). For structured bindings (`auto& [a, b] = pair;`). */
   template<std::size_t Index>
   requires (Index < 2u)
   [[nodiscard]] constexpr auto get() noexcept -> decltype(auto) {
@@ -172,7 +204,7 @@ public:
     }
   }
 
-  /*! @copydoc get */
+  /** @copydoc get */
   template<std::size_t Index>
   requires (Index < 2u)
   [[nodiscard]] constexpr auto get() const noexcept -> decltype(auto) {

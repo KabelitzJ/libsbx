@@ -6,7 +6,6 @@
 #include <concepts>
 #include <string_view>
 #include <source_location>
-#include <iostream>
 #include <exception>
 #include <stdexcept>
 
@@ -16,6 +15,15 @@
 
 namespace sbx::utility {
 
+/**
+ * @brief A std::runtime_error whose message is built with fmt::format instead of being
+ * passed as an already-assembled string.
+ *
+ * @tparam Args The types of the format arguments.
+ *
+ * @param fmt The fmt format string.
+ * @param args The format arguments.
+ */
 struct runtime_error : public std::runtime_error {
 
   template<typename... Args>

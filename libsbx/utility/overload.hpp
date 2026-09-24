@@ -41,6 +41,15 @@ struct overloader<Callable, Callables...> : Callable, overloader<Callables...> {
 
 } // namespace detail
 
+/**
+ * @brief Combines several callables (e.g. lambdas) into a single callable with all of their operator()s overloaded — typically used as a visitor for std::visit.
+ *
+ * @tparam Callables The types of the callables to combine.
+ *
+ * @param callables The callables to combine.
+ *
+ * @return A callable that overload-resolves between all of callables' operator()s.
+ */
 template<typename... Callables>
 [[nodiscard]] constexpr auto overload(Callables&&... callables) noexcept(noexcept(detail::overloader<std::decay_t<Callables>...>{std::forward<Callables>(callables)...})) {
   return detail::overloader<std::decay_t<Callables>...>{std::forward<Callables>(callables)...};

@@ -15,17 +15,29 @@ auto decompose(const matrix4x4& matrix) noexcept -> decompose_result {
 
   auto rotation_matrix = matrix4x4{matrix};
 
-  rotation_matrix[0][0] /= result.scale.x();
-  rotation_matrix[0][1] /= result.scale.x();
-  rotation_matrix[0][2] /= result.scale.x();
+  if (result.scale.x() < math::epsilonf) {
+    rotation_matrix[0] = matrix4x4::identity[0];
+  } else {
+    rotation_matrix[0][0] /= result.scale.x();
+    rotation_matrix[0][1] /= result.scale.x();
+    rotation_matrix[0][2] /= result.scale.x();
+  }
 
-  rotation_matrix[1][0] /= result.scale.y();
-  rotation_matrix[1][1] /= result.scale.y();
-  rotation_matrix[1][2] /= result.scale.y();
+  if (result.scale.y() < math::epsilonf) {
+    rotation_matrix[1] = matrix4x4::identity[1];
+  } else {
+    rotation_matrix[1][0] /= result.scale.y();
+    rotation_matrix[1][1] /= result.scale.y();
+    rotation_matrix[1][2] /= result.scale.y();
+  }
 
-  rotation_matrix[2][0] /= result.scale.z();
-  rotation_matrix[2][1] /= result.scale.z();
-  rotation_matrix[2][2] /= result.scale.z();
+  if (result.scale.z() < math::epsilonf) {
+    rotation_matrix[2] = matrix4x4::identity[2];
+  } else {
+    rotation_matrix[2][0] /= result.scale.z();
+    rotation_matrix[2][1] /= result.scale.z();
+    rotation_matrix[2][2] /= result.scale.z();
+  }
 
   result.rotation = quaternion{rotation_matrix};
 

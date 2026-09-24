@@ -188,6 +188,11 @@ struct material_description {
   std::string shader_graph{};
   std::array<math::vector4, shader_graph_max_params> generic_params{};
   std::array<std::string, shader_graph_max_textures> generic_texture_paths{};
+
+  // Per generic texture slot: load it as linear (r8g8b8a8_unorm) instead of sRGB. For data a graph
+  // reads verbatim -- a normal map, a mask, a height map -- which an sRGB decode on sample would
+  // silently distort. `generic_textures_linear` in a .material file; all false (sRGB) when absent.
+  std::array<bool, shader_graph_max_textures> generic_texture_linear{};
 }; // struct material_description
 
 /**

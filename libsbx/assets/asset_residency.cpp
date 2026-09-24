@@ -837,12 +837,32 @@ auto asset_residency::save_material(material_handle& material, const std::filesy
   node["generic_params"] = generic_params_node;
 
   auto generic_textures_node = YAML::Node{YAML::NodeType::Sequence};
+  auto generic_textures_linear_node = YAML::Node{YAML::NodeType::Sequence};
+  auto any_linear = false;
 
   for (const auto& texture : material->generic_textures()) {
     generic_textures_node.push_back(path_of(texture).value_or(std::string{}));
+
+    // The texture record doesn't carry its own format, but the cache does: a slot is linear iff its
+    // record is the one cached under the unorm key (see parse_material_file's generic_textures_linear).
+    auto linear = false;
+
+    if (texture.is_valid()) {
+      auto lock = std::lock_guard{_mutex};
+      const auto entry = _textures.find(_texture_cache_key(texture->id(), graphics::format::r8g8b8a8_unorm));
+      linear = entry != _textures.end() && entry->second.get() == texture.operator->();
+    }
+
+    generic_textures_linear_node.push_back(linear);
+    any_linear |= linear;
   }
 
   node["generic_textures"] = generic_textures_node;
+
+  // Only written when it matters, so every existing all-sRGB material file stays byte-identical on save.
+  if (any_linear) {
+    node["generic_textures_linear"] = generic_textures_linear_node;
+  }
 
   if (!resolved_path.parent_path().empty()) {
     std::filesystem::create_directories(resolved_path.parent_path());
@@ -1853,7 +1873,7 @@ auto asset_residency::_finalize_material(asset_loader::material_result& result) 
   info.generic_params = description.generic_params;
 
   for (auto i = std::size_t{0u}; i < description.generic_texture_paths.size(); ++i) {
-    info.generic_textures[i] = load_slot(description.generic_texture_paths[i], graphics::format::r8g8b8a8_srgb);
+    info.generic_textures[i] = load_slot(description.generic_texture_paths[i], description.generic_texture_linear[i] ? graphics::format::r8g8b8a8_unorm : graphics::format::r8g8b8a8_srgb);
   }
 
   auto handle = material_handle{};

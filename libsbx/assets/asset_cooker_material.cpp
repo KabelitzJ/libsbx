@@ -188,6 +188,12 @@ auto asset_cooker::parse_material_file(const std::filesystem::path& source) -> s
     }
   }
 
+  if (const auto generic_textures_linear = root["generic_textures_linear"]) {
+    for (auto i = std::size_t{0u}; i < generic_textures_linear.size() && i < description.generic_texture_linear.size(); ++i) {
+      description.generic_texture_linear[i] = generic_textures_linear[i].as<bool>();
+    }
+  }
+
   return description;
 }
 

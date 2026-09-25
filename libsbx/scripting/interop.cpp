@@ -5,6 +5,8 @@
 #include <algorithm>
 #include <cstring>
 #include <filesystem>
+#include <optional>
+#include <string_view>
 #include <unordered_map>
 #include <vector>
 
@@ -2295,13 +2297,6 @@ auto interop::texture_release(std::uint64_t texture_uuid) -> void {
   assets_module.release_texture(texture);
 }
 
-auto interop::texture_prepare_for_sampling(std::uint64_t texture_uuid) -> void {
-  auto& assets_module = core::engine::get_module<assets::assets_module>();
-  auto texture = assets_module.find_texture(math::uuid::from_value(texture_uuid));
-
-  assets_module.prepare_texture_for_sampling(texture);
-}
-
 auto interop::material_release(std::uint64_t material_uuid) -> void {
   auto& assets_module = core::engine::get_module<assets::assets_module>();
   auto material = assets_module.load_material(math::uuid::from_value(material_uuid));
@@ -2385,73 +2380,198 @@ auto interop::material_set_texture(std::uint64_t material_uuid, std::uint32_t sl
 
 namespace {
 
-auto compute_buffer_registry() -> std::unordered_map<std::uint64_t, graphics::resource_handle<graphics::buffer>>& {
-  static auto registry = std::unordered_map<std::uint64_t, graphics::resource_handle<graphics::buffer>>{};
+using push_constant_field = graphics::shader_compiler::push_constant_field;
+
+struct compute_buffer_state {
+  graphics::buffer_handle handle;
+  std::uint32_t stride;
+}; // struct compute_buffer_state
+
+struct compute_shader_state {
+  std::filesystem::path path;
+  memory::observer_ptr<graphics::compute_pipeline> pipeline;
+  graphics::shader_compiler::push_constant_layout layout;
+  std::vector<std::byte> params;
+  std::vector<bool> is_set;
+}; // struct compute_shader_state
+
+struct compute_commands_state {
+  graphics::command_buffer command_buffer;
+  std::uint32_t dispatch_count{0u};
+}; // struct compute_commands_state
+
+auto compute_buffer_registry() -> std::unordered_map<std::uint64_t, compute_buffer_state>& {
+  static auto registry = std::unordered_map<std::uint64_t, compute_buffer_state>{};
 
   return registry;
 }
 
+auto compute_shader_registry() -> std::unordered_map<std::uint64_t, compute_shader_state>& {
+  static auto registry = std::unordered_map<std::uint64_t, compute_shader_state>{};
+
+  return registry;
+}
+
+auto compute_commands_registry() -> std::unordered_map<std::uint64_t, compute_commands_state>& {
+  static auto registry = std::unordered_map<std::uint64_t, compute_commands_state>{};
+
+  return registry;
+}
+
+auto kind_name(push_constant_field::kind kind) -> std::string_view {
+  switch (kind) {
+    case push_constant_field::kind::f32: return "float";
+    case push_constant_field::kind::i32: return "int";
+    case push_constant_field::kind::u32: return "uint";
+    case push_constant_field::kind::f32x2: return "float2";
+    case push_constant_field::kind::f32x3: return "float3";
+    case push_constant_field::kind::f32x4: return "float4";
+    case push_constant_field::kind::sampled_texture: return "sampled_texture";
+    case push_constant_field::kind::storage_texture: return "storage_texture";
+    case push_constant_field::kind::sampler: return "sampler_handle";
+    case push_constant_field::kind::buffer: return "buffer pointer";
+  }
+
+  return "?";
+}
+
+auto find_buffer(std::uint64_t id, std::string_view caller) -> compute_buffer_state* {
+  auto& registry = compute_buffer_registry();
+
+  if (const auto entry = registry.find(id); entry != registry.end()) {
+    return &entry->second;
+  }
+
+  utility::logger<"scripting">::error("{}: unknown compute buffer {}", caller, id);
+
+  return nullptr;
+}
+
+auto find_shader(std::uint64_t id, std::string_view caller) -> compute_shader_state* {
+  auto& registry = compute_shader_registry();
+
+  if (const auto entry = registry.find(id); entry != registry.end()) {
+    return &entry->second;
+  }
+
+  utility::logger<"scripting">::error("{}: unknown compute shader {}", caller, id);
+
+  return nullptr;
+}
+
+// Finds the field and checks it has the kind the setter writes. Logs and returns nullopt on a
+// missing field or kind mismatch.
+auto find_field(compute_shader_state& state, const std::string& name, push_constant_field::kind expected) -> std::optional<std::size_t> {
+  const auto& fields = state.layout.fields;
+
+  const auto field = std::ranges::find(fields, name, &push_constant_field::name);
+
+  if (field == fields.end()) {
+    auto known = std::string{};
+
+    for (const auto& entry : fields) {
+      known += known.empty() ? entry.name : ", " + entry.name;
+    }
+
+    utility::logger<"scripting">::error("ComputeShader '{}': no push_data field named '{}' (fields: {})", state.path.filename().string(), name, known);
+
+    return std::nullopt;
+  }
+
+  if (field->type != expected) {
+    utility::logger<"scripting">::error("ComputeShader '{}': field '{}' is a {}, but was set as a {}", state.path.filename().string(), name, kind_name(field->type), kind_name(expected));
+
+    return std::nullopt;
+  }
+
+  return static_cast<std::size_t>(std::distance(fields.begin(), field));
+}
+
+auto write_field(compute_shader_state& state, std::size_t index, const void* value) -> void {
+  const auto& field = state.layout.fields[index];
+
+  std::memcpy(state.params.data() + field.offset, value, field.size);
+
+  state.is_set[index] = true;
+}
+
 } // namespace
 
-auto interop::compute_buffer_create(std::int32_t count, std::int32_t stride) -> std::uint64_t {
-  if (count <= 0 || stride <= 0) {
-    utility::logger<"scripting">::error("compute_buffer_create: count and stride must both be positive (count={}, stride={})", count, stride);
+auto interop::compute_buffer_create(std::int32_t count, std::int32_t stride, std::uint32_t access) -> std::uint64_t {
+  if (count < 0 || stride <= 0) {
+    utility::logger<"scripting">::error("compute_buffer_create: count must be >= 0 and stride > 0 (count={}, stride={})", count, stride);
     return 0u;
   }
 
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
   auto& registry = graphics_module.resource_registry();
 
-  const auto size = static_cast<graphics::buffer::size_type>(count) * static_cast<graphics::buffer::size_type>(stride);
+  // At least one element, so an empty buffer still has a valid device address to bind.
+  const auto size = static_cast<graphics::buffer::size_type>(std::max(count, 1)) * static_cast<graphics::buffer::size_type>(stride);
 
-  // host_write (not device_local + upload_context staging) so SetData can memcpy straight into
-  // the buffer's own persistently-mapped pointer -- see compute_buffer_set_data. A staged upload
-  // via upload_context::stage_buffer only gets executed by the engine's own deferred flush() on
-  // a later real frame, which caused exactly the crash a host-mapped write avoids entirely: by
-  // the time that flush() ran, ComputeBuffer.Dispose (fully synchronous, same script call) had
-  // already retired the handle the stale staged upload still pointed at.
+  // Host-visible either way: upload buffers are written straight through the persistent mapping
+  // (no upload_context staging, whose deferred per-frame flush would run after a same-call bake),
+  // readback buffers are read straight out of it.
+  // ponytail: GPU reads/writes host memory over the bus; add a device_local copy if a bake gets bandwidth-bound.
   const auto handle = registry.emplace<graphics::buffer>(graphics::buffer::create_info{
     .size = size,
     .usage = graphics::buffer_usage::storage | graphics::buffer_usage::device_address,
-    .memory = graphics::memory_usage::host_write,
-    .name = "Compute Buffer"
+    .memory = access == 1u ? graphics::memory_usage::host_read : graphics::memory_usage::host_write,
+    .name = "Script Compute Buffer"
   });
 
   const auto id = math::uuid::create().value();
-  compute_buffer_registry()[id] = handle;
+  compute_buffer_registry().emplace(id, compute_buffer_state{handle, static_cast<std::uint32_t>(stride)});
 
   return id;
 }
 
-auto interop::compute_buffer_set_data(std::uint64_t id, const void* data, std::int32_t byte_count) -> void {
-  auto& registry = compute_buffer_registry();
-  const auto entry = registry.find(id);
+auto interop::compute_buffer_set_data(std::uint64_t id, const void* data, std::int32_t byte_count) -> bool {
+  auto* state = find_buffer(id, "compute_buffer_set_data");
 
-  if (entry == registry.end()) {
-    utility::logger<"scripting">::error("compute_buffer_set_data: unknown buffer {}", id);
-    return;
+  if (!state) {
+    return false;
   }
 
   if (!data || byte_count <= 0) {
-    return;
+    return true;
   }
 
-  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
-  auto& resource_registry = graphics_module.resource_registry();
+  auto& buffer = core::engine::get_module<graphics::graphics_module>().resource_registry().get<graphics::buffer>(state->handle);
 
-  if (!resource_registry.is_valid(entry->second)) {
-    utility::logger<"scripting">::error("compute_buffer_set_data: buffer {} has a registry entry but its resource_handle is no longer valid", id);
-    return;
+  if (static_cast<graphics::buffer::size_type>(byte_count) > buffer.size()) {
+    utility::logger<"scripting">::error("compute_buffer_set_data: {} bytes exceed buffer {}'s size {}", byte_count, id, buffer.size());
+    return false;
   }
 
-  auto& buffer = resource_registry.get<graphics::buffer>(entry->second);
+  buffer.write(data, static_cast<graphics::buffer::size_type>(byte_count));
 
-  if (static_cast<std::size_t>(byte_count) > buffer.size()) {
-    utility::logger<"scripting">::error("compute_buffer_set_data: byte_count {} exceeds buffer {}'s own size {}", byte_count, id, buffer.size());
-    return;
+  return true;
+}
+
+auto interop::compute_buffer_get_data(std::uint64_t id, void* data, std::int32_t byte_count) -> bool {
+  auto* state = find_buffer(id, "compute_buffer_get_data");
+
+  if (!state) {
+    return false;
   }
 
-  std::memcpy(buffer.mapped(), data, static_cast<std::size_t>(byte_count));
+  if (!data || byte_count <= 0) {
+    return true;
+  }
+
+  auto& buffer = core::engine::get_module<graphics::graphics_module>().resource_registry().get<graphics::buffer>(state->handle);
+
+  if (static_cast<graphics::buffer::size_type>(byte_count) > buffer.size()) {
+    utility::logger<"scripting">::error("compute_buffer_get_data: {} bytes exceed buffer {}'s size {}", byte_count, id, buffer.size());
+    return false;
+  }
+
+  // Same direct mapped read as texture_read_pixels' staging buffer; host_read memory is coherent
+  // on every desktop driver this engine targets.
+  std::memcpy(data, buffer.mapped(), static_cast<std::size_t>(byte_count));
+
+  return true;
 }
 
 auto interop::compute_buffer_release(std::uint64_t id) -> void {
@@ -2463,51 +2583,13 @@ auto interop::compute_buffer_release(std::uint64_t id) -> void {
   }
 
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
-  auto& resource_registry = graphics_module.resource_registry();
 
-  // Diagnostic guard, not a fix -- retire() itself would assert_that(is_valid(handle), ...) and
-  // abort with no context beyond "an invalid resource handle" if this ever fires. Checking first
-  // lets us log the buffer's script-side id instead, e.g. if Dispose somehow ran twice for the
-  // same id (the C# _disposed guard should prevent that, but this is cheap insurance against
-  // that guard itself having a hole).
-  if (!resource_registry.is_valid(entry->second)) {
-    utility::logger<"scripting">::error("compute_buffer_release: buffer {} already has an invalid resource_handle (double release?)", id);
-    registry.erase(entry);
-    return;
-  }
-
-  // Every ComputeBuffer use in this design is fully blocking (SetData/ComputeShader.Dispatch, see
-  // compute_shader_dispatch's own submit_idle()), so this buffer is provably unused right now.
-  // Still uses the real frame index rather than a hardcoded value, though -- retire() enforces a
-  // pool-wide non-decreasing timeline_value invariant shared with every other buffer/image the
-  // engine retires (see resource_pool::retire's own assert), which "provably unused right now"
-  // doesn't exempt this call from.
-  resource_registry.retire(entry->second, graphics_module.frame_context().frame_index());
+  // Every submission that could use this buffer already finished (compute_commands_submit blocks).
+  // retire() still takes the real frame index: resource_pool asserts a non-decreasing timeline.
+  graphics_module.resource_registry().retire(entry->second.handle, graphics_module.frame_context().frame_index());
 
   registry.erase(entry);
 }
-
-namespace {
-
-struct compute_shader_state {
-  std::filesystem::path resolved_path;
-  std::uint64_t buffer_address{0u};
-  std::vector<std::byte> scalar_bytes{};
-};
-
-auto compute_shader_registry() -> std::unordered_map<std::uint64_t, compute_shader_state>& {
-  static auto registry = std::unordered_map<std::uint64_t, compute_shader_state>{};
-
-  return registry;
-}
-
-auto append_bytes(std::vector<std::byte>& out, const void* value, std::size_t size) -> void {
-  const auto offset = out.size();
-  out.resize(offset + size);
-  std::memcpy(out.data() + offset, value, size);
-}
-
-} // namespace
 
 auto interop::compute_shader_load(managed::string path) -> std::uint64_t {
   const auto resolved = core::engine::project().assets_directory() / std::filesystem::path{std::string{path}};
@@ -2517,179 +2599,258 @@ auto interop::compute_shader_load(managed::string path) -> std::uint64_t {
     return 0u;
   }
 
+  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
+
+  auto state = compute_shader_state{.path = resolved};
+
+  try {
+    const auto entry_points = std::vector<graphics::shader_compiler::entry_point_request>{
+      {VK_SHADER_STAGE_COMPUTE_BIT, "compute_main"}
+    };
+
+    const auto shader = graphics_module.shader_cache().get({resolved, entry_points});
+
+    state.pipeline = graphics_module.compute_pipeline_cache().get(graphics::compute_pipeline::create_info{.shader = shader, .name = "Script Compute Shader"});
+    state.layout = graphics_module.shader_compiler().reflect_push_constants(resolved, "compute_main");
+  } catch (const std::exception& exception) {
+    utility::logger<"scripting">::error("compute_shader_load: '{}': {}", resolved.string(), exception.what());
+    return 0u;
+  }
+
+  if (state.layout.size > graphics::bindless_table::push_constant_size) {
+    utility::logger<"scripting">::error("compute_shader_load: '{}' push_data is {} bytes, the push-constant range is {}", resolved.string(), state.layout.size, graphics::bindless_table::push_constant_size);
+    return 0u;
+  }
+
+  state.params.resize(state.layout.size);
+  state.is_set.resize(state.layout.fields.size(), false);
+
   const auto id = math::uuid::create().value();
-  compute_shader_registry().emplace(id, compute_shader_state{resolved, 0u, {}});
+  compute_shader_registry().emplace(id, std::move(state));
 
   return id;
 }
 
-auto interop::compute_shader_set_texture(std::uint64_t id, std::uint64_t texture_uuid) -> void {
-  auto& registry = compute_shader_registry();
-  const auto entry = registry.find(id);
+auto interop::compute_shader_set_value(std::uint64_t id, managed::string name, std::uint32_t kind, const void* data) -> bool {
+  auto* state = find_shader(id, "compute_shader_set_value");
 
-  if (entry == registry.end()) {
-    utility::logger<"scripting">::error("compute_shader_set_texture: unknown shader {}", id);
-    return;
+  if (!state || !data) {
+    return false;
+  }
+
+  const auto expected = static_cast<push_constant_field::kind>(kind);
+
+  if (expected > push_constant_field::kind::f32x4) {
+    utility::logger<"scripting">::error("compute_shader_set_value: kind {} is not a value kind", kind);
+    return false;
+  }
+
+  const auto index = find_field(*state, std::string{name}, expected);
+
+  if (!index) {
+    return false;
+  }
+
+  write_field(*state, *index, data);
+
+  return true;
+}
+
+auto interop::compute_shader_set_texture(std::uint64_t id, managed::string name, std::uint64_t texture_uuid, bool storage) -> bool {
+  auto* state = find_shader(id, "compute_shader_set_texture");
+
+  if (!state) {
+    return false;
+  }
+
+  const auto field_name = std::string{name};
+  const auto index = find_field(*state, field_name, storage ? push_constant_field::kind::storage_texture : push_constant_field::kind::sampled_texture);
+
+  if (!index) {
+    return false;
   }
 
   auto& assets_module = core::engine::get_module<assets::assets_module>();
   auto texture = assets_module.find_texture(math::uuid::from_value(texture_uuid));
 
-  const auto index = texture.is_valid() ? texture->index() : assets::texture::invalid_index;
+  if (!texture.is_valid()) {
+    utility::logger<"scripting">::error("ComputeShader '{}': texture {} for field '{}' does not resolve", state->path.filename().string(), texture_uuid, field_name);
+    return false;
+  }
 
-  append_bytes(entry->second.scalar_bytes, &index, sizeof(index));
+  const auto texture_index = storage ? texture->storage_index() : texture->index();
+
+  if (texture_index == assets::texture::invalid_index) {
+    utility::logger<"scripting">::error("ComputeShader '{}': texture for storage field '{}' was not created via CreateStorageImage", state->path.filename().string(), field_name);
+    return false;
+  }
+
+  if (!storage && !assets_module.is_resident(texture)) {
+    utility::logger<"scripting">::warn("ComputeShader '{}': texture for field '{}' is not resident yet, the dispatch will sample placeholder data (gate on Texture2D.IsResident)", state->path.filename().string(), field_name);
+  }
+
+  write_field(*state, *index, &texture_index);
+
+  return true;
 }
 
-auto interop::compute_shader_set_output_texture(std::uint64_t id, std::uint64_t texture_uuid) -> void {
-  auto& registry = compute_shader_registry();
-  const auto entry = registry.find(id);
+auto interop::compute_shader_set_buffer(std::uint64_t id, managed::string name, std::uint64_t buffer_id) -> bool {
+  auto* state = find_shader(id, "compute_shader_set_buffer");
+  auto* buffer_state = find_buffer(buffer_id, "compute_shader_set_buffer");
 
-  if (entry == registry.end()) {
-    utility::logger<"scripting">::error("compute_shader_set_output_texture: unknown shader {}", id);
-    return;
+  if (!state || !buffer_state) {
+    return false;
   }
 
-  auto& assets_module = core::engine::get_module<assets::assets_module>();
-  auto texture = assets_module.find_texture(math::uuid::from_value(texture_uuid));
+  const auto field_name = std::string{name};
+  const auto index = find_field(*state, field_name, push_constant_field::kind::buffer);
 
-  if (texture.is_valid() && texture->storage_index() == assets::texture::invalid_index) {
-    utility::logger<"scripting">::warn("compute_shader_set_output_texture: texture was not created via CreateStorageImage, has no storage index");
+  if (!index) {
+    return false;
   }
 
-  const auto index = texture.is_valid() ? texture->storage_index() : assets::texture::invalid_index;
+  const auto expected_stride = state->layout.fields[*index].element_stride;
 
-  append_bytes(entry->second.scalar_bytes, &index, sizeof(index));
-}
-
-auto interop::compute_shader_set_buffer(std::uint64_t id, std::uint64_t buffer_id) -> void {
-  auto& registry = compute_shader_registry();
-  const auto entry = registry.find(id);
-
-  if (entry == registry.end()) {
-    utility::logger<"scripting">::error("compute_shader_set_buffer: unknown shader {}", id);
-    return;
+  if (buffer_state->stride != expected_stride) {
+    utility::logger<"scripting">::error("ComputeShader '{}': field '{}' points at {}-byte elements, but the buffer's element is {} bytes", state->path.filename().string(), field_name, expected_stride, buffer_state->stride);
+    return false;
   }
 
-  auto& buffers = compute_buffer_registry();
-  const auto buffer_entry = buffers.find(buffer_id);
+  const auto& buffer = core::engine::get_module<graphics::graphics_module>().resource_registry().get<graphics::buffer>(buffer_state->handle);
+  const auto address = buffer.address();
 
-  if (buffer_entry == buffers.end()) {
-    utility::logger<"scripting">::error("compute_shader_set_buffer: unknown buffer {}", buffer_id);
-    return;
-  }
+  write_field(*state, *index, &address);
 
-  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
-  auto& resource_registry = graphics_module.resource_registry();
-
-  // Diagnostic guard, not a fix -- this handle came straight out of our own registry
-  // (compute_buffer_create/compute_buffer_release are the only two places that touch it), so
-  // structurally it should always be live here. If it isn't, that's the actual bug and worth
-  // surfacing with the buffer's script-side id rather than a bare native assert with no context.
-  if (!resource_registry.is_valid(buffer_entry->second)) {
-    utility::logger<"scripting">::error("compute_shader_set_buffer: buffer {} has a registry entry but its resource_handle is no longer valid (already retired?)", buffer_id);
-    return;
-  }
-
-  const auto& buffer = resource_registry.get<graphics::buffer>(buffer_entry->second);
-
-  entry->second.buffer_address = buffer.address();
-}
-
-auto interop::compute_shader_set_float(std::uint64_t id, std::float_t value) -> void {
-  auto& registry = compute_shader_registry();
-  const auto entry = registry.find(id);
-
-  if (entry == registry.end()) {
-    utility::logger<"scripting">::error("compute_shader_set_float: unknown shader {}", id);
-    return;
-  }
-
-  append_bytes(entry->second.scalar_bytes, &value, sizeof(value));
-}
-
-auto interop::compute_shader_set_int(std::uint64_t id, std::int32_t value) -> void {
-  auto& registry = compute_shader_registry();
-  const auto entry = registry.find(id);
-
-  if (entry == registry.end()) {
-    utility::logger<"scripting">::error("compute_shader_set_int: unknown shader {}", id);
-    return;
-  }
-
-  append_bytes(entry->second.scalar_bytes, &value, sizeof(value));
-}
-
-auto interop::compute_shader_dispatch(std::uint64_t id, std::uint32_t group_count_x, std::uint32_t group_count_y, std::uint32_t group_count_z) -> void {
-  auto& registry = compute_shader_registry();
-  const auto entry = registry.find(id);
-
-  if (entry == registry.end()) {
-    utility::logger<"scripting">::error("compute_shader_dispatch: unknown shader {}", id);
-    return;
-  }
-
-  auto& state = entry->second;
-
-  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
-  auto& bindless_table = graphics_module.bindless_table();
-  auto& shader_cache = graphics_module.shader_cache();
-  auto& compute_pipeline_cache = graphics_module.compute_pipeline_cache();
-
-  const auto entry_points = std::vector<graphics::shader_compiler::entry_point_request>{
-    {VK_SHADER_STAGE_COMPUTE_BIT, "compute_main"}
-  };
-
-  const auto shader = shader_cache.get({state.resolved_path, entry_points});
-
-  if (!shader) {
-    utility::logger<"scripting">::error("compute_shader_dispatch: failed to compile '{}'", state.resolved_path.string());
-    state.buffer_address = 0u;
-    state.scalar_bytes.clear();
-    return;
-  }
-
-  auto pipeline = compute_pipeline_cache.get(graphics::compute_pipeline::create_info{.shader = shader, .name = "Script Compute Shader"});
-
-  auto command_buffer = graphics::command_buffer{graphics::queue::type::compute, true};
-
-  const auto descriptor_set = bindless_table.descriptor_set();
-  vkCmdBindDescriptorSets(command_buffer.handle(), VK_PIPELINE_BIND_POINT_COMPUTE, bindless_table.pipeline_layout(), 0u, 1u, &descriptor_set, 0u, nullptr);
-
-  command_buffer.bind_pipeline(*pipeline);
-
-  // Every script compute shader samples bindless textures, so rather than making every .slang
-  // file's author (and every C# Dispatch call site) thread a sampler index through by hand, a
-  // single clamp-to-edge linear sampler is resolved once (bindless_table caches by create_info,
-  // so this is a lookup after the first call, not a new sampler per dispatch) and always placed
-  // right after the buffer address -- a .slang push_data's second field is always `uint
-  // sampler_index`, whether or not a given shader happens to sample anything.
-  const auto sampler_index = bindless_table.sampler_index(graphics::sampler::create_info{
-    .address_mode_u = graphics::address_mode::clamp_to_edge,
-    .address_mode_v = graphics::address_mode::clamp_to_edge,
-    .address_mode_w = graphics::address_mode::clamp_to_edge,
-    .name = "Script Compute Default Sampler"
-  });
-
-  auto push_bytes = std::vector<std::byte>(sizeof(std::uint64_t) + sizeof(std::uint32_t) + state.scalar_bytes.size());
-  std::memcpy(push_bytes.data(), &state.buffer_address, sizeof(std::uint64_t));
-  std::memcpy(push_bytes.data() + sizeof(std::uint64_t), &sampler_index, sizeof(std::uint32_t));
-
-  if (!state.scalar_bytes.empty()) {
-    std::memcpy(push_bytes.data() + sizeof(std::uint64_t) + sizeof(std::uint32_t), state.scalar_bytes.data(), state.scalar_bytes.size());
-  }
-
-  command_buffer.push_constants(bindless_table.pipeline_layout(), graphics::bindless_table::push_constant_stages, 0u, std::span<const std::byte>{push_bytes});
-
-  command_buffer.dispatch(group_count_x, group_count_y, group_count_z);
-
-  command_buffer.submit_idle();
-
-  state.buffer_address = 0u;
-  state.scalar_bytes.clear();
+  return true;
 }
 
 auto interop::compute_shader_release(std::uint64_t id) -> void {
   compute_shader_registry().erase(id);
+}
+
+auto interop::compute_commands_begin() -> std::uint64_t {
+  auto& bindless_table = core::engine::get_module<graphics::graphics_module>().bindless_table();
+
+  auto state = compute_commands_state{graphics::command_buffer{graphics::queue::type::compute, true}};
+
+  const auto descriptor_set = bindless_table.descriptor_set();
+  vkCmdBindDescriptorSets(state.command_buffer.handle(), VK_PIPELINE_BIND_POINT_COMPUTE, bindless_table.pipeline_layout(), 0u, 1u, &descriptor_set, 0u, nullptr);
+
+  const auto id = math::uuid::create().value();
+  compute_commands_registry().emplace(id, std::move(state));
+
+  return id;
+}
+
+auto interop::compute_commands_dispatch(std::uint64_t id, std::uint64_t shader_id, std::uint32_t group_count_x, std::uint32_t group_count_y, std::uint32_t group_count_z) -> bool {
+  auto& registry = compute_commands_registry();
+  const auto entry = registry.find(id);
+
+  if (entry == registry.end()) {
+    utility::logger<"scripting">::error("compute_commands_dispatch: unknown (or already submitted) command list {}", id);
+    return false;
+  }
+
+  auto* shader = find_shader(shader_id, "compute_commands_dispatch");
+
+  if (!shader) {
+    return false;
+  }
+
+  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
+  auto& bindless_table = graphics_module.bindless_table();
+
+  auto missing = std::string{};
+
+  for (auto index = std::size_t{0u}; index < shader->layout.fields.size(); ++index) {
+    const auto& field = shader->layout.fields[index];
+
+    if (shader->is_set[index]) {
+      continue;
+    }
+
+    if (field.type == push_constant_field::kind::sampler) {
+      const auto sampler_index = bindless_table.sampler_index(graphics::sampler::create_info{
+        .address_mode_u = graphics::address_mode::clamp_to_edge,
+        .address_mode_v = graphics::address_mode::clamp_to_edge,
+        .address_mode_w = graphics::address_mode::clamp_to_edge,
+        .name = "Script Compute Default Sampler"
+      });
+
+      std::memcpy(shader->params.data() + field.offset, &sampler_index, sizeof(sampler_index));
+
+      continue;
+    }
+
+    missing += missing.empty() ? field.name : ", " + field.name;
+  }
+
+  if (!missing.empty()) {
+    utility::logger<"scripting">::error("ComputeShader '{}': dispatch with unset fields: {}", shader->path.filename().string(), missing);
+    return false;
+  }
+
+  auto& state = entry->second;
+  auto& command_buffer = state.command_buffer;
+
+  // ponytail: full barrier between consecutive dispatches; track per-resource reads/writes (like
+  // render_graph's touch_image/touch_buffer) if independent dispatches ever need to overlap.
+  if (state.dispatch_count > 0u) {
+    auto barrier = VkMemoryBarrier2{};
+    barrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2;
+    barrier.srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+    barrier.srcAccessMask = VK_ACCESS_2_SHADER_WRITE_BIT;
+    barrier.dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+    barrier.dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT | VK_ACCESS_2_SHADER_WRITE_BIT;
+    command_buffer.memory_dependency(barrier);
+  }
+
+  command_buffer.bind_pipeline(*shader->pipeline);
+
+  if (!shader->params.empty()) {
+    command_buffer.push_constants(bindless_table.pipeline_layout(), graphics::bindless_table::push_constant_stages, 0u, std::span<const std::byte>{shader->params});
+  }
+
+  command_buffer.dispatch(group_count_x, group_count_y, group_count_z);
+
+  ++state.dispatch_count;
+
+  return true;
+}
+
+auto interop::compute_commands_submit(std::uint64_t id) -> bool {
+  auto& registry = compute_commands_registry();
+  const auto entry = registry.find(id);
+
+  if (entry == registry.end()) {
+    utility::logger<"scripting">::error("compute_commands_submit: unknown (or already submitted) command list {}", id);
+    return false;
+  }
+
+  auto& command_buffer = entry->second.command_buffer;
+
+  // Makes every dispatch's writes visible to what scripts do next on this queue: later compute
+  // sampling, ReadPixels (transfer) and ComputeBuffer.GetData (host, after the wait below). Later
+  // submissions on the same queue fall in the barrier's second scope. The graphics queue (a
+  // material sampling the result) relies on the fence wait, same as ibl_baker; fragment stages
+  // can't appear here since a dedicated compute family doesn't support them.
+  auto barrier = VkMemoryBarrier2{};
+  barrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2;
+  barrier.srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+  barrier.srcAccessMask = VK_ACCESS_2_SHADER_WRITE_BIT;
+  barrier.dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_2_TRANSFER_BIT | VK_PIPELINE_STAGE_2_HOST_BIT;
+  barrier.dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT | VK_ACCESS_2_TRANSFER_READ_BIT | VK_ACCESS_2_HOST_READ_BIT;
+  command_buffer.memory_dependency(barrier);
+
+  command_buffer.submit_idle();
+
+  registry.erase(entry);
+
+  return true;
+}
+
+auto interop::compute_commands_release(std::uint64_t id) -> void {
+  compute_commands_registry().erase(id);
 }
 
 struct decoded_image {

@@ -57,6 +57,14 @@ auto _read_file(const std::filesystem::path& path) -> std::string {
   return buffer;
 }
 
+auto _default_options() -> std::array<slang::CompilerOptionEntry, 3u> {
+  return std::array<slang::CompilerOptionEntry, 3u>{
+    slang::CompilerOptionEntry{slang::CompilerOptionName::MatrixLayoutColumn, {slang::CompilerOptionValueKind::Int, 1, 0, nullptr, nullptr}},
+    slang::CompilerOptionEntry{slang::CompilerOptionName::EmitSpirvDirectly, {slang::CompilerOptionValueKind::Int, 1, 0, nullptr, nullptr}},
+    slang::CompilerOptionEntry{slang::CompilerOptionName::VulkanUseEntryPointName, {slang::CompilerOptionValueKind::Int, 1, 0, nullptr, nullptr}}
+  };
+}
+
 shader_compiler::shader_compiler() {
   if (SLANG_FAILED(slang::createGlobalSession(_global_session.writeRef()))) {
     throw utility::runtime_error{"Failed to create slang global session"};
@@ -114,8 +122,7 @@ auto shader_compiler::_cache_key(std::span<const std::string> dependencies, std:
   return fmt::format("{:016x}", hash);
 }
 
-auto shader_compiler::compile(const std::filesystem::path& path, std::span<const entry_point_request> entry_points) -> std::vector<compiled_entry_point> {
-  const auto source = _read_file(path);
+auto shader_compiler::_create_session(const std::filesystem::path& path, std::span<const slang::CompilerOptionEntry> options) -> Slang::ComPtr<slang::ISession> {
   const auto parent = path.parent_path().string();
   const auto root = _shaders_root(path).string();
 
@@ -129,12 +136,6 @@ auto shader_compiler::compile(const std::filesystem::path& path, std::span<const
   auto target = slang::TargetDesc{};
   target.format = SLANG_SPIRV;
   target.profile = _global_session->findProfile("spirv_1_5");
-
-  const auto options = std::array<slang::CompilerOptionEntry, 3u>{
-    slang::CompilerOptionEntry{slang::CompilerOptionName::MatrixLayoutColumn, {slang::CompilerOptionValueKind::Int, 1, 0, nullptr, nullptr}},
-    slang::CompilerOptionEntry{slang::CompilerOptionName::EmitSpirvDirectly, {slang::CompilerOptionValueKind::Int, 1, 0, nullptr, nullptr}},
-    slang::CompilerOptionEntry{slang::CompilerOptionName::VulkanUseEntryPointName, {slang::CompilerOptionValueKind::Int, 1, 0, nullptr, nullptr}}
-  };
 
   auto search_paths = std::vector<const char*>{parent.c_str()};
 
@@ -160,9 +161,15 @@ auto shader_compiler::compile(const std::filesystem::path& path, std::span<const
     throw utility::runtime_error{"Failed to create slang session for '{}'", path.string()};
   }
 
+  return session;
+}
+
+auto shader_compiler::_load_module(slang::ISession& session, const std::filesystem::path& path) -> slang::IModule* {
+  const auto source = _read_file(path);
+
   auto diagnostics = Slang::ComPtr<ISlangBlob>{};
 
-  auto* module = session->loadModuleFromSourceString(path.stem().string().c_str(), path.string().c_str(), source.c_str(), diagnostics.writeRef());
+  auto* module = session.loadModuleFromSourceString(path.stem().string().c_str(), path.string().c_str(), source.c_str(), diagnostics.writeRef());
 
   if (diagnostics && diagnostics->getBufferSize() > 1u) {
     utility::logger<"graphics">::warn("Slang diagnostics for '{}':\n{}", path.string(), static_cast<const char*>(diagnostics->getBufferPointer()));
@@ -171,6 +178,134 @@ auto shader_compiler::compile(const std::filesystem::path& path, std::span<const
   if (module == nullptr) {
     throw utility::runtime_error{"Failed to load shader module '{}'", path.string()};
   }
+
+  return module;
+}
+
+auto shader_compiler::reflect_push_constants(const std::filesystem::path& path, const std::string& entry_point_name) -> push_constant_layout {
+  using kind = push_constant_field::kind;
+
+  auto session = _create_session(path, _default_options());
+  auto* module = _load_module(*session, path);
+
+  auto entry_point = Slang::ComPtr<slang::IEntryPoint>{};
+
+  if (SLANG_FAILED(module->findEntryPointByName(entry_point_name.c_str(), entry_point.writeRef())) || !entry_point) {
+    throw utility::runtime_error{"Entry point '{}' not found in '{}'", entry_point_name, path.string()};
+  }
+
+  const auto components = std::array<slang::IComponentType*, 2u>{module, entry_point.get()};
+
+  auto program = Slang::ComPtr<slang::IComponentType>{};
+
+  if (SLANG_FAILED(session->createCompositeComponentType(components.data(), static_cast<SlangInt>(components.size()), program.writeRef(), nullptr)) || !program) {
+    throw utility::runtime_error{"Failed to compose '{}' for reflection", path.string()};
+  }
+
+  auto* program_layout = program->getLayout();
+
+  if (program_layout == nullptr) {
+    throw utility::runtime_error{"No reflection layout for '{}'", path.string()};
+  }
+
+  auto result = push_constant_layout{};
+
+  for (auto index = 0u; index < program_layout->getParameterCount(); ++index) {
+    auto* parameter = program_layout->getParameterByIndex(index);
+
+    if (parameter->getCategory() != slang::ParameterCategory::PushConstantBuffer) {
+      continue;
+    }
+
+    auto* struct_layout = parameter->getTypeLayout()->getElementTypeLayout();
+
+    result.size = static_cast<std::uint32_t>(struct_layout->getSize());
+
+    for (auto field_index = 0u; field_index < struct_layout->getFieldCount(); ++field_index) {
+      auto* field = struct_layout->getFieldByIndex(field_index);
+      auto* field_layout = field->getTypeLayout();
+      auto* field_type = field_layout->getType();
+
+      const auto name = std::string{field->getName()};
+
+      const auto unsupported = [&]() {
+        return utility::runtime_error{"Push constant field '{}' in '{}' has unsupported type '{}'", name, path.string(), field_type->getName() ? field_type->getName() : "?"};
+      };
+
+      auto entry = push_constant_field{
+        .name = name,
+        .offset = static_cast<std::uint32_t>(field->getOffset()),
+        .size = static_cast<std::uint32_t>(field_layout->getSize()),
+        .type = kind::f32
+      };
+
+      switch (field_layout->getKind()) {
+        case slang::TypeReflection::Kind::Scalar: {
+          switch (field_type->getScalarType()) {
+            case slang::TypeReflection::Float32: entry.type = kind::f32; break;
+            case slang::TypeReflection::Int32: entry.type = kind::i32; break;
+            case slang::TypeReflection::UInt32: entry.type = kind::u32; break;
+            default: throw unsupported();
+          }
+          break;
+        }
+        case slang::TypeReflection::Kind::Vector: {
+          if (field_type->getElementType()->getScalarType() != slang::TypeReflection::Float32) {
+            throw unsupported();
+          }
+
+          switch (field_type->getElementCount()) {
+            case 2u: entry.type = kind::f32x2; break;
+            case 3u: entry.type = kind::f32x3; break;
+            case 4u: entry.type = kind::f32x4; break;
+            default: throw unsupported();
+          }
+          break;
+        }
+        case slang::TypeReflection::Kind::Pointer: {
+          auto* pointee_layout = field_layout->getElementTypeLayout();
+
+          if (pointee_layout == nullptr || pointee_layout->getStride() == 0u) {
+            throw utility::runtime_error{"Push constant field '{}' in '{}': no layout for the pointee type", name, path.string()};
+          }
+
+          entry.type = kind::buffer;
+          entry.element_stride = static_cast<std::uint32_t>(pointee_layout->getStride());
+          break;
+        }
+        case slang::TypeReflection::Kind::Struct: {
+          const auto type_name = std::string_view{field_type->getName()};
+
+          if (type_name == "sampled_texture") {
+            entry.type = kind::sampled_texture;
+          } else if (type_name == "storage_texture") {
+            entry.type = kind::storage_texture;
+          } else if (type_name == "sampler_handle") {
+            entry.type = kind::sampler;
+          } else {
+            throw unsupported();
+          }
+          break;
+        }
+        default: {
+          throw unsupported();
+        }
+      }
+
+      result.fields.push_back(std::move(entry));
+    }
+
+    break;
+  }
+
+  return result;
+}
+
+auto shader_compiler::compile(const std::filesystem::path& path, std::span<const entry_point_request> entry_points) -> std::vector<compiled_entry_point> {
+  const auto options = _default_options();
+
+  auto session = _create_session(path, options);
+  auto* module = _load_module(*session, path);
 
   // Every file the module actually parsed — the entry file itself plus every #include it
   // transitively pulled in — so the cache key below tracks the full dependency set, not just the

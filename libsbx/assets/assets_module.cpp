@@ -124,10 +124,6 @@ auto assets_module::release_texture(const texture_handle& texture) -> void {
   _residency.release_texture(texture);
 }
 
-auto assets_module::prepare_texture_for_sampling(const texture_handle& texture) -> void {
-  _residency.prepare_texture_for_sampling(texture);
-}
-
 auto assets_module::load_font(const math::uuid& id) -> font_handle {
   return _residency.load_font(id);
 }

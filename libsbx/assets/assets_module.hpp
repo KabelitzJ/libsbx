@@ -114,9 +114,6 @@ public:
   /** @brief Frees a texture's bindless indices and underlying GPU image -- see asset_residency::release_texture. */
   auto release_texture(const texture_handle& texture) -> void;
 
-  /** @brief Transitions a create_storage_image texture to a layout a material can actually sample -- see asset_residency::prepare_texture_for_sampling. */
-  auto prepare_texture_for_sampling(const texture_handle& texture) -> void;
-
   /** @brief Loads a TTF -> SDF glyph atlas font from a UUID or project-relative path; returns the existing handle if already loaded. */
   auto load_font(const math::uuid& id) -> font_handle;
 

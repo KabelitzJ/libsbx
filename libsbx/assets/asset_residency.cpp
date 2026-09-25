@@ -200,33 +200,20 @@ auto asset_residency::create_storage_image(std::uint32_t width, std::uint32_t he
     .format = format,
     .usage = graphics::image_usage::storage | graphics::image_usage::sampled | graphics::image_usage::transfer_destination | graphics::image_usage::transfer_source,
     .mip_levels = 1u,
+    .concurrent_sharing = true,
     .name = "Storage Image"
   });
 
   auto& image = registry.get<graphics::image>(handle);
 
-  // A compute shader dispatched right after this call needs the image already in `general`
-  // layout to read/write it as a UAV. upload_context::stage_image (the path used for a real
-  // loaded texture) can't do this: it only queues the transition for the engine's own per-frame
-  // upload_context::flush, which never runs before a synchronous ComputeShader.Dispatch tries to
-  // use this image -- confirmed the hard way, as VK_IMAGE_LAYOUT_UNDEFINED at dispatch time.
-  // There's also no source pixel data to stage regardless, since every bake shader this backs
-  // writes every pixel unconditionally. So the transition happens immediately, via its own
-  // command buffer, the same way ibl_baker::_ensure_brdf_lut transitions its own output image.
+  // The image lives in `general` for its whole life: written as a storage image, sampled (by later
+  // compute passes and by materials, see the sampled descriptor below), and copied by ReadPixels,
+  // with no layout transitions in between. Transitioned right here rather than via
+  // upload_context::stage_image, whose per-frame flush would run after a same-call bake. Compute
+  // queue like every script compute submission (the render thread owns the graphics queue);
+  // concurrent_sharing above lets the graphics queue sample it without an ownership transfer.
   auto command_buffer = graphics::command_buffer{graphics::queue::type::compute, true};
 
-  // Broad dst stage/access (rather than narrowing to e.g. just compute_shader + a storage-specific
-  // access bit, as ibl_baker's own one-off, single-purpose transition does) because this image's
-  // actual later uses span more than one stage/access kind across several fully-idle-separated
-  // submissions: written as a compute UAV, sampled by a later compute pass (a different access
-  // type again), transfer-read back by ReadPixels, and eventually fragment-sampled by the
-  // renderer. Real cross-submission visibility here comes from every dispatch's own submit_idle()
-  // (a full device idle, a far stronger guarantee than any specific barrier), so this transition
-  // only has to be broad enough that validation doesn't flag a narrower declared scope than what
-  // actually happens afterward. graphics::to_vk_enum (declared alongside pipeline_stage/access in
-  // types.hpp) converts these to the raw sync2 flags image_transition_data itself is typed in,
-  // without this file touching <vulkan/vulkan.h> directly -- that stays a graphics-module-only
-  // include.
   auto to_general = graphics::command_buffer::image_transition_data{};
   to_general.image = image.handle();
   to_general.src_stage_mask = graphics::to_vk_enum<VkPipelineStageFlags2>(graphics::pipeline_stage::none);
@@ -240,13 +227,13 @@ auto asset_residency::create_storage_image(std::uint32_t width, std::uint32_t he
 
   command_buffer.submit_idle();
 
-  bindless_table.write_sampled_image(sampled_index, image.view());
+  bindless_table.write_sampled_image(sampled_index, image.view(), VK_IMAGE_LAYOUT_GENERAL);
 
   const auto storage_index = bindless_table.register_storage_image(image.view());
 
   // register_storage_image/write_sampled_image only queue the descriptor write; frame_context
   // normally applies it once per frame via its own flush_writes() call, but that's too late for
-  // a synchronous ComputeShader.Dispatch right after this returns (same class of bug as the
+  // a synchronous ComputeCommands.Submit right after this returns (same class of bug as the
   // layout transition above -- confirmed the hard way via degenerate/stale readback data).
   // ibl_baker.cpp flushes explicitly for the same reason; do the same here.
   bindless_table.flush_writes();
@@ -316,48 +303,6 @@ auto asset_residency::release_texture(const texture_handle& texture) -> void {
       break;
     }
   }
-}
-
-auto asset_residency::prepare_texture_for_sampling(const texture_handle& texture) -> void {
-  if (!texture.is_valid() || texture->storage_index() == texture::invalid_index) {
-    return;
-  }
-
-  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
-  auto& registry = graphics_module.resource_registry();
-
-  const auto image_handle = [&]() -> graphics::image_handle {
-    auto lock = std::lock_guard{_mutex};
-    const auto entry = _images.find(texture->index());
-    return entry != _images.end() ? entry->second : graphics::image_handle{};
-  }();
-
-  if (!image_handle.is_valid()) {
-    return;
-  }
-
-  auto& image = registry.get<graphics::image>(image_handle);
-
-  auto command_buffer = graphics::command_buffer{graphics::queue::type::compute, true};
-
-  // Precise src (compute UAV write) -> dst (sampled read) scope, matching ibl_baker's own
-  // general -> shader_read_only_optimal transition exactly, rather than the broad memory_read/
-  // memory_write masks create_storage_image's own transition uses (that one has to stay broad --
-  // this image's later uses span several different access kinds across fully-idle-separated
-  // submissions -- but this transition's only ever-observed access on either side is a compute
-  // store followed by a sampled read, so it can and should be exact instead of just "not wrong").
-  auto to_read = graphics::command_buffer::image_transition_data{};
-  to_read.image = image.handle();
-  to_read.src_stage_mask = graphics::to_vk_enum<VkPipelineStageFlags2>(graphics::pipeline_stage::compute_shader);
-  to_read.src_access_mask = graphics::to_vk_enum<VkAccessFlags2>(graphics::access::shader_write);
-  to_read.dst_stage_mask = graphics::to_vk_enum<VkPipelineStageFlags2>(graphics::pipeline_stage::fragment_shader | graphics::pipeline_stage::compute_shader);
-  to_read.dst_access_mask = graphics::to_vk_enum<VkAccessFlags2>(graphics::access::shader_read | graphics::access::shader_sampled_read);
-  to_read.old_layout = graphics::image_layout::general;
-  to_read.new_layout = graphics::image_layout::shader_read_only_optimal;
-  to_read.aspect_mask = image.aspect();
-  command_buffer.transition_image_layout(to_read);
-
-  command_buffer.submit_idle();
 }
 
 auto asset_residency::find_texture(const math::uuid& id) const -> texture_handle {

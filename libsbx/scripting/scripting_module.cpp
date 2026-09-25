@@ -193,21 +193,23 @@ scripting_module::scripting_module() {
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Texture_ReadPixels", reinterpret_cast<void*>(&interop::texture_read_pixels));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Texture_Release", reinterpret_cast<void*>(&interop::texture_release));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Debug_WritePng", reinterpret_cast<void*>(&interop::debug_write_png));
-  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Texture_PrepareForSampling", reinterpret_cast<void*>(&interop::texture_prepare_for_sampling));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Texture_IsResident", reinterpret_cast<void*>(&interop::texture_is_resident));
 
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "ComputeBuffer_Create", reinterpret_cast<void*>(&interop::compute_buffer_create));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "ComputeBuffer_SetData", reinterpret_cast<void*>(&interop::compute_buffer_set_data));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "ComputeBuffer_GetData", reinterpret_cast<void*>(&interop::compute_buffer_get_data));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "ComputeBuffer_Release", reinterpret_cast<void*>(&interop::compute_buffer_release));
 
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "ComputeShader_Load", reinterpret_cast<void*>(&interop::compute_shader_load));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "ComputeShader_SetValue", reinterpret_cast<void*>(&interop::compute_shader_set_value));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "ComputeShader_SetTexture", reinterpret_cast<void*>(&interop::compute_shader_set_texture));
-  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "ComputeShader_SetOutputTexture", reinterpret_cast<void*>(&interop::compute_shader_set_output_texture));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "ComputeShader_SetBuffer", reinterpret_cast<void*>(&interop::compute_shader_set_buffer));
-  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "ComputeShader_SetFloat", reinterpret_cast<void*>(&interop::compute_shader_set_float));
-  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "ComputeShader_SetInt", reinterpret_cast<void*>(&interop::compute_shader_set_int));
-  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "ComputeShader_Dispatch", reinterpret_cast<void*>(&interop::compute_shader_dispatch));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "ComputeShader_Release", reinterpret_cast<void*>(&interop::compute_shader_release));
+
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "ComputeCommands_Begin", reinterpret_cast<void*>(&interop::compute_commands_begin));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "ComputeCommands_Dispatch", reinterpret_cast<void*>(&interop::compute_commands_dispatch));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "ComputeCommands_Submit", reinterpret_cast<void*>(&interop::compute_commands_submit));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "ComputeCommands_Release", reinterpret_cast<void*>(&interop::compute_commands_release));
 
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Canvas_GetSortOrder", reinterpret_cast<void*>(&interop::canvas_get_sort_order));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Canvas_SetSortOrder", reinterpret_cast<void*>(&interop::canvas_set_sort_order));

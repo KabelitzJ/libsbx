@@ -65,7 +65,7 @@ namespace Sbx.Core
       return uuid != 0 ? new Texture2D(uuid) : null;
     }
 
-    /** Allocates a new, empty texture registered both for sampling (a Material can read it) and as a compute UAV target -- zeroed and layout-ready to write into immediately. */
+    /** Allocates a new, empty texture usable as a ComputeShader storage texture, a sampled texture in a later dispatch, and a Material texture -- no layout transitions needed between those uses. */
     public static Texture2D? CreateStorageImage(int width, int height, TextureFormat format)
     {
       ulong uuid;
@@ -104,19 +104,6 @@ namespace Sbx.Core
     public bool IsResident
     {
       get { unsafe { return InternalCalls.Texture_IsResident(_uuid); } }
-    }
-
-    /**
-     * Transitions a CreateStorageImage texture so a Material can actually sample it correctly.
-     * The image stays in a compute-writable layout for the whole time a ComputeShader is
-     * writing to it (see CreateStorageImage's own doc comment) -- call this exactly once, after
-     * the last Dispatch that writes to it and before the first Material.SetTexture that reads it,
-     * or the material samples it through a mismatched layout (confirmed the hard way: the mesh
-     * didn't render until this was added). No-op on a Load()'d texture.
-     */
-    public void PrepareForSampling()
-    {
-      unsafe { InternalCalls.Texture_PrepareForSampling(_uuid); }
     }
 
     /** Frees this texture's bindless indices and GPU image. Only call on an instance from CreateStorageImage -- never on a shared Load()'d texture, see the class doc comment. */

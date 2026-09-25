@@ -60,7 +60,7 @@ public:
 
   auto reserve_sampled_image() -> std::uint32_t;
 
-  auto write_sampled_image(std::uint32_t index, VkImageView view) -> void;
+  auto write_sampled_image(std::uint32_t index, VkImageView view, VkImageLayout layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) -> void;
 
   auto register_storage_image(VkImageView view) -> std::uint32_t;
 

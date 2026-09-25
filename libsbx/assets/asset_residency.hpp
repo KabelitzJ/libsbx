@@ -119,24 +119,6 @@ public:
   auto release_texture(const texture_handle& texture) -> void;
 
   /**
-   * @brief Transitions a create_storage_image texture's image from `general` to
-   * `shader_read_only_optimal`, so it can actually be sampled correctly as a material texture.
-   *
-   * create_storage_image leaves its image in `general` permanently (needed for a compute shader
-   * to read/write it as a UAV and for ReadPixels' transfer copy), but the bindless *sampled*
-   * descriptor it also registers (write_sampled_image) unconditionally declares the image as
-   * `SHADER_READ_ONLY_OPTIMAL` regardless of its real layout -- sampling through that mismatch in
-   * a material's fragment shader is undefined (confirmed the hard way: the mesh rendered once a
-   * properly-transitioned file texture replaced it). ibl_baker.cpp's own baked images hit the same
-   * problem and fix it the same way, right after their last compute write. Always correct to call
-   * on a create_storage_image texture specifically: nothing ever transitions it away from
-   * `general` except this call, so `general` is provably its real current layout. No-op (and
-   * would be wrong) on a texture not made via create_storage_image, since some other layout is
-   * already the true current one there.
-   */
-  auto prepare_texture_for_sampling(const texture_handle& texture) -> void;
-
-  /**
    * @brief The underlying GPU image a texture's sampled bindless index maps to -- an empty/default
    * handle if texture is invalid or (defensively) not actually resident yet. For readback
    * (Sbx.Core.Texture2D.ReadPixels) and anything else that needs the real image rather than just

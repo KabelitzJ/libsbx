@@ -240,6 +240,8 @@ scripting_module::scripting_module() {
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "UIText_GetColor", reinterpret_cast<void*>(&interop::ui_text_get_color));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "UIText_SetColor", reinterpret_cast<void*>(&interop::ui_text_set_color));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "UIText_LoadFont", reinterpret_cast<void*>(&interop::ui_text_load_font));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "UIText_GetAlignment", reinterpret_cast<void*>(&interop::ui_text_get_alignment));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "UIText_SetAlignment", reinterpret_cast<void*>(&interop::ui_text_set_alignment));
 
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "UIButton_GetInteractable", reinterpret_cast<void*>(&interop::ui_button_get_interactable));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "UIButton_SetInteractable", reinterpret_cast<void*>(&interop::ui_button_set_interactable));
@@ -294,6 +296,12 @@ scripting_module::scripting_module() {
 
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "UIMask_GetShowMaskGraphic", reinterpret_cast<void*>(&interop::ui_mask_get_show_mask_graphic));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "UIMask_SetShowMaskGraphic", reinterpret_cast<void*>(&interop::ui_mask_set_show_mask_graphic));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "LayoutGroup_Get", reinterpret_cast<void*>(&interop::layout_group_get));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "LayoutGroup_Set", reinterpret_cast<void*>(&interop::layout_group_set));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "LayoutElement_Get", reinterpret_cast<void*>(&interop::layout_element_get));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "LayoutElement_Set", reinterpret_cast<void*>(&interop::layout_element_set));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "ContentSizeFitter_Get", reinterpret_cast<void*>(&interop::content_size_fitter_get));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "ContentSizeFitter_Set", reinterpret_cast<void*>(&interop::content_size_fitter_set));
 
   interop::register_managed_component<scenes::tag>("Sbx.Core.Components.Tag", _core_assembly);
   interop::register_managed_component<scenes::local_transform>("Sbx.Core.Components.Transform", _core_assembly);
@@ -314,6 +322,10 @@ scripting_module::scripting_module() {
   interop::register_managed_component<canvas::ui_scrollbar>("Sbx.Core.UI.UIScrollbar", _core_assembly);
   interop::register_managed_component<canvas::ui_scroll_rect>("Sbx.Core.UI.UIScrollRect", _core_assembly);
   interop::register_managed_component<canvas::ui_mask>("Sbx.Core.UI.UIMask", _core_assembly);
+  interop::register_managed_component<canvas::horizontal_layout_group>("Sbx.Core.UI.HorizontalLayoutGroup", _core_assembly);
+  interop::register_managed_component<canvas::vertical_layout_group>("Sbx.Core.UI.VerticalLayoutGroup", _core_assembly);
+  interop::register_managed_component<canvas::layout_element>("Sbx.Core.UI.LayoutElement", _core_assembly);
+  interop::register_managed_component<canvas::content_size_fitter>("Sbx.Core.UI.ContentSizeFitter", _core_assembly);
   // interop::register_managed_component<physics::character_controller>("Sbx.Core.Physics.CharacterController", _core_assembly);
 
   _core_assembly.upload_internal_calls();
@@ -326,6 +338,10 @@ scripting_module::scripting_module() {
   auto& canvas_module = core::engine::get_module<canvas::canvas_module>();
 
   canvas_module.on_button_clicked().connect([this](const scenes::node& node) { _dispatch_button_click(node); });
+
+  // SetGeometry only queues its new mesh; swapped in here, where the render thread can't be using
+  // the one it replaces (see interop::apply_pending_geometry).
+  core::engine::get_module<render::presentation_module>().on_render_idle().connect([]() { interop::apply_pending_geometry(); });
   canvas_module.on_value_changed().connect([this](const scenes::node& node) { _dispatch_value_changed(node); });
 
   _load_game_assembly();

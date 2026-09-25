@@ -82,9 +82,31 @@ fragment_output fragment_main_text(fragment_input input) {
     discard;
   }
 
-  float distance = textures[input.texture_index].Sample(samplers[push.sampler_index], input.uv).r;
-  float width = fwidth(distance);
-  float alpha = smoothstep(0.5 - width, 0.5 + width, distance);
+  // Always mip 0 (font atlases are uploaded without mips anyway -- asset_residency's
+  // pending_texture_upload::mipmapped): a distance field can't be averaged -- a thin stem's (l, i)
+  // peak distance, averaged with the background around it, drops under the 0.5 edge and the stroke
+  // vanishes.
+  //
+  // Instead, 2x2 samples across the pixel's footprint in the atlas, coverage averaged: small text
+  // shrinks the atlas several times over, so one sample per pixel either hits a thin stem or misses
+  // it depending on where the glyph falls -- strokes flickered in and out. Averaged, a stem thinner
+  // than a pixel still gives it partial coverage. Each sample covers half a pixel, so its edge
+  // softening is half the pixel's distance change.
+  float2 dx = ddx(input.uv) * 0.25;
+  float2 dy = ddy(input.uv) * 0.25;
+
+  float center = textures[input.texture_index].SampleLevel(samplers[push.sampler_index], input.uv, 0.0).r;
+  float width = fwidth(center) * 0.5;
+
+  float alpha = 0.0;
+
+  [unroll]
+  for (int i = 0; i < 4; ++i) {
+    float2 offset = ((i & 1) != 0 ? dx : -dx) + ((i & 2) != 0 ? dy : -dy);
+    float distance = textures[input.texture_index].SampleLevel(samplers[push.sampler_index], input.uv + offset, 0.0).r;
+
+    alpha += smoothstep(0.5 - width, 0.5 + width, distance) * 0.25;
+  }
 
   fragment_output output;
 

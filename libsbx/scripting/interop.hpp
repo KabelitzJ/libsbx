@@ -27,6 +27,33 @@
 
 namespace sbx::scripting {
 
+// Whole-component mirrors for the layout interop calls below -- one get/set pair per component
+// instead of one per field, the managed side editing a copy and writing it back. Flags are
+// uint32 (0/1) and enums their underlying value, so the managed structs lay out identically.
+
+struct layout_group_data {
+  std::float_t spacing;
+  std::float_t padding_left;
+  std::float_t padding_top;
+  std::float_t padding_right;
+  std::float_t padding_bottom;
+  std::uint32_t child_alignment;
+  std::uint32_t control_child_width;
+  std::uint32_t control_child_height;
+  std::uint32_t child_force_expand_width;
+  std::uint32_t child_force_expand_height;
+}; // struct layout_group_data
+
+struct layout_element_data {
+  std::float_t min_width;
+  std::float_t min_height;
+  std::float_t preferred_width;
+  std::float_t preferred_height;
+  std::float_t flexible_width;
+  std::float_t flexible_height;
+  std::uint32_t ignore_layout;
+}; // struct layout_element_data
+
 struct interop {
 
   enum class log_level : std::int32_t {
@@ -510,6 +537,18 @@ struct interop {
   static auto ui_text_get_color(std::uint64_t uuid, math::color* out_value) -> void;
   static auto ui_text_set_color(std::uint64_t uuid, math::color* value) -> void;
 
+  /**
+   * @brief Swaps every mesh_renderer_set_geometry call since the last one in: releases each node's
+   * old mesh and creates its new one. Runs on presentation_module::on_render_idle -- replacing a
+   * mesh straight away retires buffers the render thread may still be recording from (and writes
+   * the resource registry while it reads it), which asserts on an invalid handle.
+   */
+  static auto apply_pending_geometry() -> void;
+
+  static auto ui_text_get_alignment(std::uint64_t uuid, std::uint32_t* out_horizontal, std::uint32_t* out_vertical) -> void;
+
+  static auto ui_text_set_alignment(std::uint64_t uuid, std::uint32_t horizontal, std::uint32_t vertical) -> void;
+
   /** @brief Project-relative path, same convention as particle_effect_load/ui_image_load_sprite. */
   static auto ui_text_load_font(std::uint64_t uuid, managed::string path) -> void;
 
@@ -569,6 +608,19 @@ struct interop {
 
   static auto ui_mask_get_show_mask_graphic(std::uint64_t uuid) -> bool;
   static auto ui_mask_set_show_mask_graphic(std::uint64_t uuid, bool value) -> void;
+
+  // vertical picks canvas::vertical_layout_group over horizontal_layout_group (same fields).
+  static auto layout_group_get(std::uint64_t uuid, bool vertical, layout_group_data* out_value) -> void;
+
+  static auto layout_group_set(std::uint64_t uuid, bool vertical, const layout_group_data* value) -> void;
+
+  static auto layout_element_get(std::uint64_t uuid, layout_element_data* out_value) -> void;
+
+  static auto layout_element_set(std::uint64_t uuid, const layout_element_data* value) -> void;
+
+  static auto content_size_fitter_get(std::uint64_t uuid, std::uint32_t* out_horizontal, std::uint32_t* out_vertical) -> void;
+
+  static auto content_size_fitter_set(std::uint64_t uuid, std::uint32_t horizontal, std::uint32_t vertical) -> void;
 
   template<typename Type>
   static auto register_managed_component(std::string_view full_name, managed::assembly& core_assembly) -> void {

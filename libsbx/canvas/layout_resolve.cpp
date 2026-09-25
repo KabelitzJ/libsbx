@@ -9,11 +9,21 @@
 
 namespace sbx::canvas {
 
-auto layout_resolver::child_axis_size(scenes::node child, bool horizontal) -> axis_size {
+auto layout_resolver::child_axis_size(scenes::scene& scene, scenes::node child, bool horizontal) -> axis_size {
   const auto& rect = child.get_component<rect_transform>();
   const auto natural = horizontal ? rect.size_delta.x() : rect.size_delta.y();
 
   auto result = axis_size{0.0f, natural, 0.0f};
+
+  // A nested layout group wants the size of its content -- without this, a box stacking rows
+  // reports its (unsized) rect and the parent group squashes it to nothing.
+  if (child.has_component<horizontal_layout_group>() || child.has_component<vertical_layout_group>()) {
+    const auto preferred = compute_preferred_size(scene, child, false);
+    const auto minimum = compute_preferred_size(scene, child, true);
+
+    result.preferred = horizontal ? preferred.x() : preferred.y();
+    result.min = horizontal ? minimum.x() : minimum.y();
+  }
 
   if (child.has_component<layout_element>()) {
     const auto& element = child.get_component<layout_element>();
@@ -38,7 +48,8 @@ auto layout_resolver::child_axis_size(scenes::node child, bool horizontal) -> ax
 }
 
 auto is_layout_child(scenes::node child) -> bool {
-  if (!child.has_component<rect_transform>()) {
+  // An inactive child takes no space, same as it draws nothing (canvas_module::_visit).
+  if (!child.has_component<rect_transform>() || child.has_component<scenes::inactive>()) {
     return false;
   }
 
@@ -105,8 +116,8 @@ auto layout_resolver::compute_preferred_size(scenes::scene& scene, scenes::node 
 
     ++count;
 
-    const auto width = child_axis_size(child, true);
-    const auto height = child_axis_size(child, false);
+    const auto width = child_axis_size(scene, child, true);
+    const auto height = child_axis_size(scene, child, false);
 
     if (is_horizontal_group) {
       sum_main += use_min ? width.min : width.preferred;
@@ -171,8 +182,8 @@ auto layout_resolver::horizontal_children(scenes::scene& scene, scenes::node nod
   auto total_flexible = 0.0f;
 
   for (auto index = std::size_t{0u}; index < _children.size(); ++index) {
-    const auto width = child_axis_size(_children[index], true);
-    const auto height = child_axis_size(_children[index], false);
+    const auto width = child_axis_size(scene, _children[index], true);
+    const auto height = child_axis_size(scene, _children[index], false);
 
     _widths[index] = width.preferred;
     _heights[index] = height.preferred;
@@ -248,8 +259,8 @@ auto layout_resolver::vertical_children(scenes::scene& scene, scenes::node node,
   auto total_flexible = 0.0f;
 
   for (auto index = std::size_t{0u}; index < _children.size(); ++index) {
-    const auto width = child_axis_size(_children[index], true);
-    const auto height = child_axis_size(_children[index], false);
+    const auto width = child_axis_size(scene, _children[index], true);
+    const auto height = child_axis_size(scene, _children[index], false);
 
     _widths[index] = width.preferred;
     _heights[index] = height.preferred;

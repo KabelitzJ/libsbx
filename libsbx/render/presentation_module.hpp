@@ -11,6 +11,8 @@
 
 #include <libsbx/core/module.hpp>
 
+#include <libsbx/signals/signal.hpp>
+
 #include <libsbx/platform/platform_module.hpp>
 
 #include <libsbx/graphics/graphics_module.hpp>
@@ -52,6 +54,16 @@ public:
   /** @brief At most one. Unset clears the swapchain instead. */
   auto set_compositor(std::unique_ptr<compositor> compositor) -> void;
 
+  /**
+   * @brief Emitted on the main thread once per frame, right after the render thread finished the
+   * previous frame and before the next frame's packet is prepared -- the one point where nothing
+   * the render thread records can still reference a resource. For main-thread changes to what the
+   * renderer reads (replacing a mesh's buffers) that would otherwise race the render thread.
+   */
+  [[nodiscard]] auto on_render_idle() noexcept -> signals::signal<>& {
+    return _on_render_idle;
+  }
+
 private:
 
   /** @brief The kicked work — runs on the render thread, or inline, depending on threading_policy. */
@@ -66,6 +78,8 @@ private:
   // Built by ui_renderer::build_frame() (main thread, in render()), consumed by
   // ui_renderer::render() (kicked work, in _consume()).
   ui_draw_data _ui_data{};
+
+  signals::signal<> _on_render_idle{};
 
 }; // class presentation_module
 

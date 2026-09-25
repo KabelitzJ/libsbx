@@ -38,6 +38,8 @@ auto presentation_module::render() -> void {
   _render_thread->block_until_render_complete();
   _render_thread->next_frame();
 
+  _on_render_idle.emit();
+
   if (_ui_renderer) {
     _ui_data = _ui_renderer->build_frame();
   }

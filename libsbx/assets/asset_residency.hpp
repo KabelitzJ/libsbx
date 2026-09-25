@@ -396,6 +396,9 @@ private:
     std::uint32_t width;
     std::uint32_t height;
     graphics::format format;
+    // False for data a mip chain would corrupt rather than filter: a font's distance-field atlas,
+    // where averaging drops thin strokes under the edge threshold.
+    bool mipmapped{true};
   }; // struct pending_texture_upload
 
   struct pending_mesh_upload {

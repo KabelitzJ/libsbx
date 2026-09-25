@@ -26,7 +26,10 @@ class layout_resolver {
 
 public:
 
-  [[nodiscard]] static auto child_axis_size(scenes::node child, bool horizontal) -> axis_size;
+  // A child's size along one axis as its parent group sees it: its LayoutElement where set, else
+  // its content's size if it's a layout group itself (so nested groups size to what they hold),
+  // else its own rect.
+  [[nodiscard]] static auto child_axis_size(scenes::scene& scene, scenes::node child, bool horizontal) -> axis_size;
 
   [[nodiscard]] static auto compute_preferred_size(scenes::scene& scene, scenes::node node, bool use_min) -> math::vector2;
 

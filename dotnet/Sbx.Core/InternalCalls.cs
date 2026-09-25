@@ -259,6 +259,16 @@ namespace Sbx.Core
     internal static delegate* unmanaged<ulong, bool> UIMask_GetShowMaskGraphic;
     internal static delegate* unmanaged<ulong, bool, void> UIMask_SetShowMaskGraphic;
 
+    internal static delegate* unmanaged<ulong, uint*, uint*, void> UIText_GetAlignment;
+    internal static delegate* unmanaged<ulong, uint, uint, void> UIText_SetAlignment;
+
+    internal static delegate* unmanaged<ulong, bool, UI.LayoutGroupData*, void> LayoutGroup_Get;
+    internal static delegate* unmanaged<ulong, bool, UI.LayoutGroupData*, void> LayoutGroup_Set;
+    internal static delegate* unmanaged<ulong, UI.LayoutElementData*, void> LayoutElement_Get;
+    internal static delegate* unmanaged<ulong, UI.LayoutElementData*, void> LayoutElement_Set;
+    internal static delegate* unmanaged<ulong, uint*, uint*, void> ContentSizeFitter_Get;
+    internal static delegate* unmanaged<ulong, uint, uint, void> ContentSizeFitter_Set;
+
   } // class InternalCalls
 
 } // namespace Sbx.Core

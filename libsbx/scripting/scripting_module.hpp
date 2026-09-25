@@ -26,6 +26,8 @@
 
 #include <libsbx/canvas/canvas_module.hpp>
 
+#include <libsbx/render/presentation_module.hpp>
+
 #include <libsbx/filesystem/filesystem_module.hpp>
 
 #include <libsbx/scripting/managed/runtime.hpp>
@@ -77,7 +79,7 @@ class scripting_module final : public utility::noncopyable {
   
 public:
 
-  using dependencies = core::dependency_list<filesystem::filesystem_module, scenes::scenes_module, physics::physics_module, canvas::canvas_module>;
+  using dependencies = core::dependency_list<filesystem::filesystem_module, scenes::scenes_module, physics::physics_module, canvas::canvas_module, render::presentation_module>;
 
   scripting_module();
 

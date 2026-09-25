@@ -1750,7 +1750,7 @@ auto asset_residency::_finalize_font(asset_loader::font_result& result) -> void 
 
   record._finalize_content(std::move(data.glyphs), data.first_codepoint, data.line_height, data.ascent, data.descent);
 
-  _pending_textures.push_back(pending_texture_upload{record.atlas()->index(), std::move(data.atlas.pixels), data.atlas.width, data.atlas.height, graphics::format::r8_unorm});
+  _pending_textures.push_back(pending_texture_upload{record.atlas()->index(), std::move(data.atlas.pixels), data.atlas.width, data.atlas.height, graphics::format::r8_unorm, false});
 }
 
 auto asset_residency::_finalize_material(asset_loader::material_result& result) -> void {
@@ -2082,7 +2082,7 @@ auto asset_residency::process_uploads(std::uint64_t frame_index) -> void {
   auto& bindless_table = graphics_module.bindless_table();
 
   for (auto& request : pending_textures) {
-    const auto mip_levels = graphics::image::mip_levels_for(math::vector3u{request.width, request.height, 1u});
+    const auto mip_levels = request.mipmapped ? graphics::image::mip_levels_for(math::vector3u{request.width, request.height, 1u}) : 1u;
 
     const auto handle = registry.emplace<graphics::image>(graphics::image::create_info{
       .extent = math::vector3u{request.width, request.height, 1u},

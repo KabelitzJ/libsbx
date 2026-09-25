@@ -4,8 +4,33 @@ using Sbx.Core.Math;
 namespace Sbx.Core.UI
 {
 
+  /** Where a UIText's lines sit in its rect, per axis: Start is left/top. */
+  public enum TextAlign : uint
+  {
+    Start,
+    Center,
+    End,
+  }
+
   public class UIText : Component
   {
+
+    public TextAlign HorizontalAlign
+    {
+      get { unsafe { uint horizontal = 0, vertical = 0; InternalCalls.UIText_GetAlignment(UUID, &horizontal, &vertical); return (TextAlign)horizontal; } }
+      set => SetAlignment(value, VerticalAlign);
+    }
+
+    public TextAlign VerticalAlign
+    {
+      get { unsafe { uint horizontal = 0, vertical = 0; InternalCalls.UIText_GetAlignment(UUID, &horizontal, &vertical); return (TextAlign)vertical; } }
+      set => SetAlignment(HorizontalAlign, value);
+    }
+
+    public void SetAlignment(TextAlign horizontal, TextAlign vertical)
+    {
+      unsafe { InternalCalls.UIText_SetAlignment(UUID, (uint)horizontal, (uint)vertical); }
+    }
 
     public string? Text
     {

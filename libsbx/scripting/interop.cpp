@@ -2019,6 +2019,62 @@ auto interop::math_noise_fractal(std::float_t x, std::float_t y, std::float_t z,
   return math::noise::fractal(x, y, z, octaves, lacunarity, gain);
 }
 
+namespace {
+
+// A mesh_renderer_set_geometry call waiting for apply_pending_geometry, keyed by node: a later call
+// for the same node before then replaces it, so only the last geometry is ever built.
+struct pending_geometry {
+  std::vector<assets::vertex> vertices;
+  std::vector<std::uint32_t> indices;
+  std::vector<assets::mesh::submesh> submeshes;
+  math::volume bounds;
+}; // struct pending_geometry
+
+auto pending_geometries() -> std::unordered_map<std::uint64_t, pending_geometry>& {
+  static auto pending = std::unordered_map<std::uint64_t, pending_geometry>{};
+  return pending;
+}
+
+} // namespace
+
+auto interop::apply_pending_geometry() -> void {
+  auto& pending = pending_geometries();
+
+  if (pending.empty()) {
+    return;
+  }
+
+  auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
+  auto& assets_module = core::engine::get_module<assets::assets_module>();
+  auto& scene = scenes_module.active_scene();
+
+  for (auto& [uuid, geometry] : pending) {
+    auto node = scene.find(math::uuid::from_value(uuid));
+
+    // Destroyed (or its renderer removed) since the call: nothing to swap in.
+    if (!node.is_valid()) {
+      continue;
+    }
+
+    auto renderer = node.try_get_component<scenes::mesh_renderer>();
+
+    if (!renderer) {
+      continue;
+    }
+
+    // A mesh has no reuse-in-place path -- every call replaces the whole GPU buffer pair, so the
+    // one being replaced must be explicitly released or its buffers are never reclaimed (see
+    // asset_residency::release_mesh's own doc comment for why).
+    assets_module.release_mesh(renderer->mesh);
+
+    // create_dynamic_mesh (not create_mesh): resident right away, so the packet prepared next
+    // already draws it -- no frame without the mesh.
+    renderer->mesh = assets_module.create_dynamic_mesh(geometry.vertices, geometry.indices, std::move(geometry.submeshes), geometry.bounds);
+  }
+
+  pending.clear();
+}
+
 auto interop::mesh_renderer_set_geometry(std::uint64_t uuid, math::vector3* positions, math::vector3* normals, math::vector2* uvs, math::color* colors, std::uint32_t vertex_count, std::uint32_t* indices, std::uint32_t index_count, math::color* tint) -> void {
   if (!positions || !normals || !uvs || !indices || vertex_count == 0u || index_count == 0u) {
     utility::logger<"scripting">::error("Attempting to call mesh_renderer_set_geometry with invalid geometry");
@@ -2092,15 +2148,10 @@ auto interop::mesh_renderer_set_geometry(std::uint64_t uuid, math::vector3* posi
 
   auto submeshes = std::vector<assets::mesh::submesh>{assets::mesh::submesh{0u, index_count, bounds, material}};
 
-  // Unlike the material above, a mesh has no reuse-in-place path -- every call replaces the whole
-  // GPU buffer pair, so the one being replaced must be explicitly released or its buffers are
-  // never reclaimed (see asset_residency::release_mesh's own doc comment for why).
-  assets_module.release_mesh(renderer.mesh);
+  // The mesh itself is swapped in by apply_pending_geometry, once the render thread is done with
+  // the current one; the node keeps drawing its old mesh until then.
+  pending_geometries()[uuid] = pending_geometry{std::move(vertices), std::move(index_vector), std::move(submeshes), bounds};
 
-  // create_dynamic_mesh (not create_mesh): this is script-driven, live-edited geometry -- a
-  // node's mesh here can be replaced every frame (a hex grid re-triangulated on every paint), so
-  // it needs to be resident the instant this call returns, not after a future process_uploads().
-  renderer.mesh = assets_module.create_dynamic_mesh(vertices, index_vector, std::move(submeshes), bounds);
   renderer.materials = std::vector<assets::material_handle>{material};
 }
 
@@ -3707,6 +3758,30 @@ auto interop::ui_scroll_rect_set_vertical(std::uint64_t uuid, bool value) -> voi
   component->vertical = value;
 }
 
+auto interop::ui_text_get_alignment(std::uint64_t uuid, std::uint32_t* out_horizontal, std::uint32_t* out_vertical) -> void {
+  auto node = resolve_node(uuid);
+  auto component = node.try_get_component<canvas::ui_text>();
+
+  if (!out_horizontal || !out_vertical || !node.is_valid() || !component) {
+    return;
+  }
+
+  *out_horizontal = static_cast<std::uint32_t>(component->horizontal_align);
+  *out_vertical = static_cast<std::uint32_t>(component->vertical_align);
+}
+
+auto interop::ui_text_set_alignment(std::uint64_t uuid, std::uint32_t horizontal, std::uint32_t vertical) -> void {
+  auto node = resolve_node(uuid);
+  auto component = node.try_get_component<canvas::ui_text>();
+
+  if (!node.is_valid() || !component) {
+    return;
+  }
+
+  component->horizontal_align = static_cast<canvas::text_align>(horizontal);
+  component->vertical_align = static_cast<canvas::text_align>(vertical);
+}
+
 auto interop::ui_mask_get_show_mask_graphic(std::uint64_t uuid) -> bool {
   auto node = resolve_node(uuid);
   auto component = node.try_get_component<canvas::ui_mask>();
@@ -3723,6 +3798,130 @@ auto interop::ui_mask_set_show_mask_graphic(std::uint64_t uuid, bool value) -> v
   }
 
   component->show_mask_graphic = value;
+}
+
+namespace {
+
+// horizontal_layout_group and vertical_layout_group share every field.
+template<typename Group>
+auto read_layout_group(const Group& group) -> layout_group_data {
+  return layout_group_data{
+    .spacing = group.spacing,
+    .padding_left = group.padding.x(),
+    .padding_top = group.padding.y(),
+    .padding_right = group.padding.z(),
+    .padding_bottom = group.padding.w(),
+    .child_alignment = static_cast<std::uint32_t>(group.child_alignment),
+    .control_child_width = group.control_child_width ? 1u : 0u,
+    .control_child_height = group.control_child_height ? 1u : 0u,
+    .child_force_expand_width = group.child_force_expand_width ? 1u : 0u,
+    .child_force_expand_height = group.child_force_expand_height ? 1u : 0u
+  };
+}
+
+template<typename Group>
+auto write_layout_group(Group& group, const layout_group_data& value) -> void {
+  group.spacing = value.spacing;
+  group.padding = math::vector4{value.padding_left, value.padding_top, value.padding_right, value.padding_bottom};
+  group.child_alignment = static_cast<canvas::layout_alignment>(value.child_alignment);
+  group.control_child_width = value.control_child_width != 0u;
+  group.control_child_height = value.control_child_height != 0u;
+  group.child_force_expand_width = value.child_force_expand_width != 0u;
+  group.child_force_expand_height = value.child_force_expand_height != 0u;
+}
+
+} // namespace
+
+auto interop::layout_group_get(std::uint64_t uuid, bool vertical, layout_group_data* out_value) -> void {
+  auto node = resolve_node(uuid);
+
+  if (!out_value || !node.is_valid()) {
+    return;
+  }
+
+  if (vertical) {
+    if (auto component = node.try_get_component<canvas::vertical_layout_group>()) {
+      *out_value = read_layout_group(*component);
+    }
+  } else if (auto component = node.try_get_component<canvas::horizontal_layout_group>()) {
+    *out_value = read_layout_group(*component);
+  }
+}
+
+auto interop::layout_group_set(std::uint64_t uuid, bool vertical, const layout_group_data* value) -> void {
+  auto node = resolve_node(uuid);
+
+  if (!value || !node.is_valid()) {
+    return;
+  }
+
+  if (vertical) {
+    if (auto component = node.try_get_component<canvas::vertical_layout_group>()) {
+      write_layout_group(*component, *value);
+    }
+  } else if (auto component = node.try_get_component<canvas::horizontal_layout_group>()) {
+    write_layout_group(*component, *value);
+  }
+}
+
+auto interop::layout_element_get(std::uint64_t uuid, layout_element_data* out_value) -> void {
+  auto node = resolve_node(uuid);
+  auto component = node.try_get_component<canvas::layout_element>();
+
+  if (!out_value || !node.is_valid() || !component) {
+    return;
+  }
+
+  *out_value = layout_element_data{
+    .min_width = component->min_width,
+    .min_height = component->min_height,
+    .preferred_width = component->preferred_width,
+    .preferred_height = component->preferred_height,
+    .flexible_width = component->flexible_width,
+    .flexible_height = component->flexible_height,
+    .ignore_layout = component->ignore_layout ? 1u : 0u
+  };
+}
+
+auto interop::layout_element_set(std::uint64_t uuid, const layout_element_data* value) -> void {
+  auto node = resolve_node(uuid);
+  auto component = node.try_get_component<canvas::layout_element>();
+
+  if (!value || !node.is_valid() || !component) {
+    return;
+  }
+
+  component->min_width = value->min_width;
+  component->min_height = value->min_height;
+  component->preferred_width = value->preferred_width;
+  component->preferred_height = value->preferred_height;
+  component->flexible_width = value->flexible_width;
+  component->flexible_height = value->flexible_height;
+  component->ignore_layout = value->ignore_layout != 0u;
+}
+
+auto interop::content_size_fitter_get(std::uint64_t uuid, std::uint32_t* out_horizontal, std::uint32_t* out_vertical) -> void {
+  auto node = resolve_node(uuid);
+  auto component = node.try_get_component<canvas::content_size_fitter>();
+
+  if (!out_horizontal || !out_vertical || !node.is_valid() || !component) {
+    return;
+  }
+
+  *out_horizontal = static_cast<std::uint32_t>(component->horizontal_fit);
+  *out_vertical = static_cast<std::uint32_t>(component->vertical_fit);
+}
+
+auto interop::content_size_fitter_set(std::uint64_t uuid, std::uint32_t horizontal, std::uint32_t vertical) -> void {
+  auto node = resolve_node(uuid);
+  auto component = node.try_get_component<canvas::content_size_fitter>();
+
+  if (!node.is_valid() || !component) {
+    return;
+  }
+
+  component->horizontal_fit = static_cast<canvas::content_fit_mode>(horizontal);
+  component->vertical_fit = static_cast<canvas::content_fit_mode>(vertical);
 }
 
 } // namespace sbx::scripting

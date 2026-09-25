@@ -44,9 +44,9 @@ public:
 
 private:
 
-  // Same entry points as depth_pre_pass::_resolve_graph_pipeline, with the shadow cascade's own
-  // cull/sample state, delegated to render::resolve_graph_pipeline.
-  [[nodiscard]] auto _resolve_graph_pipeline(const assets::shader_graph_handle& graph, bool is_double_sided) -> memory::observer_ptr<graphics::graphics_pipeline>;
+  // Same entry points as depth_pre_pass::_resolve_custom_pipeline, with the shadow cascade's own
+  // cull/sample state, delegated to render::resolve_custom_pipeline.
+  [[nodiscard]] auto _resolve_custom_pipeline(const std::string& shader_path, bool is_double_sided) -> memory::observer_ptr<graphics::graphics_pipeline>;
 
   std::array<memory::observer_ptr<graphics::graphics_pipeline>, 4u> _pipelines{};
 

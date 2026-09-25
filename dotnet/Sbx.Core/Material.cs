@@ -87,6 +87,26 @@ namespace Sbx.Core
       unsafe { InternalCalls.Material_SetTexture(_uuid, (uint)slot, texture.UUID); }
     }
 
+    /**
+     * Overwrites one of this material's generic texture slots (0-3) in place -- what a shader
+     * graph's texture parameters or a shader_code material's `material.generic_textures[index]`
+     * read. Same sharing caveat as SetTexture.
+     */
+    public void SetGenericTexture(int index, Texture2D texture)
+    {
+      unsafe { InternalCalls.Material_SetGenericTexture(_uuid, (uint)index, texture.UUID); }
+    }
+
+    /**
+     * Overwrites one of this material's generic parameter slots (0-7) in place -- a shader graph's
+     * exposed parameter, or a shader_code material's `material.generic_params[index]`. Same sharing
+     * caveat as SetTexture.
+     */
+    public void SetGenericParam(int index, float x, float y = 0.0f, float z = 0.0f, float w = 0.0f)
+    {
+      unsafe { InternalCalls.Material_SetGenericParam(_uuid, (uint)index, x, y, z, w); }
+    }
+
     /** Frees this material's slot for reuse. Only call on an instance from CreateInstance -- never on a shared Load()'d template, see the class doc comment. */
     public void Dispose()
     {

@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <functional>
 #include <span>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -181,37 +182,44 @@ public:
 }; // class render_pass
 
 /**
- * @brief Resolves a graph-driven material's pipeline on demand -- given the pass already owns a
- * pass-specific graphics_pipeline::create_info template (formats, blend/depth state, shading_policy
- * specialization), this just swaps in that shader_graph's own compiled shader and cull mode. Every
- * lookup goes through shader_cache/pipeline_cache, both already content-keyed caches, so the
- * resolver itself needs no cache of its own. Returns a null observer_ptr if the graph has no usable
- * pipeline yet (still compiling, or codegen/compilation failed) -- the caller skips that draw rather
- * than crash or bind something wrong. Every depth-writing/color-writing pass supplies one
- * (opaque_pass, transparent_accumulate_pass, depth_pre_pass, shadow_pass) -- a graph's Vertex block
- * can displace the mesh, so depth_pre_pass/shadow_pass need their own graph-specific pipeline too
- * (requesting depth_vertex_main/depth_fragment_main instead of vertex_main/fragment_main<Policy>)
- * for their depth/shadow output to actually match the displaced color-pass geometry. Left empty
- * (the default) only where the parameter doesn't apply at all.
+ * @brief Resolves a custom-shader material's pipeline on demand -- a shader_graph's generated
+ * .slang or a shader_code material's own file (see custom_shader_path), both providing the same
+ * entry points. Given the pass already owns a pass-specific graphics_pipeline::create_info template
+ * (formats, blend/depth state, shading_policy specialization), this just swaps in that shader and
+ * cull mode. Every lookup goes through shader_cache/pipeline_cache, so the resolver itself needs no
+ * cache of its own. Returns a null observer_ptr if the shader has no usable pipeline yet (codegen
+ * or compilation failed) -- the caller skips that draw rather than crash or bind something wrong.
+ * Every depth-writing/color-writing pass supplies one (opaque_pass, transparent_accumulate_pass,
+ * depth_pre_pass, shadow_pass) -- a custom shader's vertex stage can displace the mesh, so
+ * depth_pre_pass/shadow_pass need their own pipeline too (requesting depth_vertex_main/
+ * depth_fragment_main instead of vertex_main/fragment_main<Policy>) for their depth/shadow output
+ * to actually match the displaced color-pass geometry. Left empty (the default) only where the
+ * parameter doesn't apply at all.
  */
-using graph_pipeline_resolver = std::function<memory::observer_ptr<graphics::graphics_pipeline>(const assets::shader_graph_handle&, bool is_double_sided)>;
+using custom_pipeline_resolver = std::function<memory::observer_ptr<graphics::graphics_pipeline>(const std::string& shader_path, bool is_double_sided)>;
 
 /**
- * @brief Shared body behind every pass's own _resolve_graph_pipeline (opaque_pass,
- * transparent_accumulate_pass, depth_pre_pass, shadow_pass): looks up (compiling on first use) @p
- * graph's own generated shader for @p entry_points, fills it and a @p pass_label-derived name into
+ * @brief The shader a shader_graph/shader_code material renders with, as a shader_cache path --
+ * empty for any other material, or one whose graph/file isn't assigned.
+ */
+[[nodiscard]] auto custom_shader_path(const assets::material& material) -> std::string;
+
+/**
+ * @brief Shared body behind every pass's own _resolve_custom_pipeline (opaque_pass,
+ * transparent_accumulate_pass, depth_pre_pass, shadow_pass): looks up (compiling on first use) the
+ * shader at @p shader_path for @p entry_points, fills it and a @p pass_label-derived name into
  * @p pipeline_template, and fetches or builds the pipeline via pipeline_cache. Every other field of
  * @p pipeline_template (formats, blend/depth state, cull mode, specialization) is the caller's own
  * pass-specific state, already set before calling this.
  *
- * Returns a null observer_ptr, after logging a @p pass_label-tagged warning, if @p graph is invalid
- * or its shader fails to compile -- see graph_pipeline_resolver's own doc comment for why a null
+ * Returns a null observer_ptr, after logging a @p pass_label-tagged warning, if @p shader_path is
+ * empty or its shader fails to compile -- see custom_pipeline_resolver's own doc comment for why a null
  * result (skip this draw) is the right outcome rather than letting the exception escape into the
  * frame.
  */
-[[nodiscard]] auto resolve_graph_pipeline(const assets::shader_graph_handle& graph, std::span<const graphics::shader_compiler::entry_point_request> entry_points, graphics::graphics_pipeline::create_info pipeline_template, std::string_view pass_label) -> memory::observer_ptr<graphics::graphics_pipeline>;
+[[nodiscard]] auto resolve_custom_pipeline(const std::string& shader_path, std::span<const graphics::shader_compiler::entry_point_request> entry_points, graphics::graphics_pipeline::create_info pipeline_template, std::string_view pass_label) -> memory::observer_ptr<graphics::graphics_pipeline>;
 
-auto submit_draw_commands(render_context& context, const std::vector<draw_command>& commands, const std::array<memory::observer_ptr<graphics::graphics_pipeline>, 4u>& pipelines, std::uint32_t cascade_index = 0xFFFFFFFFu, const graph_pipeline_resolver& resolve_graph_pipeline = {}) -> void;
+auto submit_draw_commands(render_context& context, const std::vector<draw_command>& commands, const std::array<memory::observer_ptr<graphics::graphics_pipeline>, 4u>& pipelines, std::uint32_t cascade_index = 0xFFFFFFFFu, const custom_pipeline_resolver& resolve_custom_pipeline = {}) -> void;
 
 /**
  * @brief Same as submit_draw_commands, but for a command list frustum_cull_pass has already culled
@@ -221,7 +229,7 @@ auto submit_draw_commands(render_context& context, const std::vector<draw_comman
  * at context.culled_transform_address (the GPU-compacted, visible-only transforms) instead of
  * context.transform_address.
  */
-auto submit_draw_commands_indirect(render_context& context, const std::vector<draw_command>& commands, const std::array<memory::observer_ptr<graphics::graphics_pipeline>, 4u>& pipelines, const graph_pipeline_resolver& resolve_graph_pipeline = {}) -> void;
+auto submit_draw_commands_indirect(render_context& context, const std::vector<draw_command>& commands, const std::array<memory::observer_ptr<graphics::graphics_pipeline>, 4u>& pipelines, const custom_pipeline_resolver& resolve_custom_pipeline = {}) -> void;
 
 auto bind_globals(render_context& context) -> void;
 

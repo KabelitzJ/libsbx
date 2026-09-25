@@ -69,13 +69,13 @@ auto transparent_accumulate_pass::_make_pipeline(memory::observer_ptr<const grap
   return pipeline_cache.get(info);
 }
 
-auto transparent_accumulate_pass::_resolve_graph_pipeline(const assets::shader_graph_handle& graph, bool is_double_sided) -> memory::observer_ptr<graphics::graphics_pipeline> {
+auto transparent_accumulate_pass::_resolve_custom_pipeline(const std::string& shader_path, bool is_double_sided) -> memory::observer_ptr<graphics::graphics_pipeline> {
   const auto entry_points = std::array<graphics::shader_compiler::entry_point_request, 2u>{
     graphics::shader_compiler::entry_point_request{VK_SHADER_STAGE_VERTEX_BIT, "vertex_main"},
     graphics::shader_compiler::entry_point_request{VK_SHADER_STAGE_FRAGMENT_BIT, "fragment_main", "alpha_blend_shading_policy"}
   };
 
-  return resolve_graph_pipeline(graph, entry_points, graphics::graphics_pipeline::create_info{
+  return resolve_custom_pipeline(shader_path, entry_points, graphics::graphics_pipeline::create_info{
     .color_formats = {render_pass::hdr_format, graphics::format::r16_sfloat},
     .depth_format = graphics::format::d32_sfloat,
     .cull_mode = is_double_sided ? graphics::cull_mode::none : graphics::cull_mode::back,
@@ -167,7 +167,7 @@ auto transparent_accumulate_pass::execute(render_context& context, std::uint32_t
   }
 
   bind_globals(context);
-  submit_draw_commands(context, context.packet->transparent_commands, _pipelines, 0xFFFFFFFFu, [this](const assets::shader_graph_handle& graph, bool is_double_sided) { return _resolve_graph_pipeline(graph, is_double_sided); });
+  submit_draw_commands(context, context.packet->transparent_commands, _pipelines, 0xFFFFFFFFu, [this](const std::string& shader_path, bool is_double_sided) { return _resolve_custom_pipeline(shader_path, is_double_sided); });
 }
 
 } // namespace sbx::render

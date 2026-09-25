@@ -45,8 +45,8 @@ private:
   // This pass's own entry points (depth_vertex_main/depth_fragment_main -- always present in a
   // generated graph file regardless of whether it has a Vertex block, see shader_graph_codegen.cpp,
   // so a vertex-displacing graph gets a depth pre-pass that actually matches its own color pass) and
-  // pipeline state for render::resolve_graph_pipeline.
-  [[nodiscard]] auto _resolve_graph_pipeline(const assets::shader_graph_handle& graph, bool is_double_sided) -> memory::observer_ptr<graphics::graphics_pipeline>;
+  // pipeline state for render::resolve_custom_pipeline.
+  [[nodiscard]] auto _resolve_custom_pipeline(const std::string& shader_path, bool is_double_sided) -> memory::observer_ptr<graphics::graphics_pipeline>;
 
   std::array<memory::observer_ptr<graphics::graphics_pipeline>, 4u> _pipelines{};
 

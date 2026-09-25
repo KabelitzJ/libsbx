@@ -637,6 +637,7 @@ auto asset_residency::update_material(material_handle& material, const material:
   material->_shader_graph = create_info.shader_graph;
   material->_generic_params = create_info.generic_params;
   material->_generic_textures = create_info.generic_textures;
+  material->_shader_code = create_info.shader_code;
   material->_name = create_info.name;
 
   // Covers both the async-finalize path (_finalize_material calling this) and a live editor edit
@@ -657,34 +658,7 @@ auto asset_residency::duplicate_material(const material_handle& source) -> mater
     return material_handle{};
   }
 
-  auto create_info = material::create_info{};
-  create_info.name = source->name();
-  create_info.base_color_factor = source->base_color_factor();
-  create_info.emissive_factor = source->emissive_factor();
-  create_info.metallic_factor = source->metallic_factor();
-  create_info.roughness_factor = source->roughness_factor();
-  create_info.alpha = source->alpha();
-  create_info.shading = source->shading();
-  create_info.alpha_cutoff = source->alpha_cutoff();
-  create_info.is_double_sided = source->is_double_sided();
-  create_info.casts_shadow = source->casts_shadow();
-  create_info.receives_shadow = source->receives_shadow();
-  create_info.normal_scale = source->normal_scale();
-  create_info.occlusion_strength = source->occlusion_strength();
-  create_info.emissive_strength = source->emissive_strength();
-  create_info.ior = source->ior();
-  create_info.uv_tiling = source->uv_tiling();
-  create_info.uv_offset = source->uv_offset();
-  create_info.albedo = source->albedo();
-  create_info.normal = source->normal();
-  create_info.metallic_roughness = source->metallic_roughness();
-  create_info.occlusion = source->occlusion();
-  create_info.emissive = source->emissive();
-  create_info.shader_graph = source->shader_graph();
-  create_info.generic_params = source->generic_params();
-  create_info.generic_textures = source->generic_textures();
-
-  auto duplicated = _register_material(std::make_shared<material>(create_info));
+  auto duplicated = _register_material(std::make_shared<material>(source->to_create_info()));
 
   const auto id = math::uuid::create();
   duplicated->_id = id;
@@ -733,7 +707,7 @@ auto asset_residency::save_material(material_handle& material, const std::filesy
   node["metallic_factor"] = material->metallic_factor();
   node["roughness_factor"] = material->roughness_factor();
   node["alpha_mode"] = (material->alpha() == alpha_mode::blend) ? "blend" : (material->alpha() == alpha_mode::mask) ? "mask" : "opaque";
-  node["shading_model"] = (material->shading() == shading_model::unlit) ? "unlit" : (material->shading() == shading_model::shader_graph) ? "shader_graph" : "pbr";
+  node["shading_model"] = (material->shading() == shading_model::unlit) ? "unlit" : (material->shading() == shading_model::shader_graph) ? "shader_graph" : (material->shading() == shading_model::shader_code) ? "shader_code" : "pbr";
   node["alpha_cutoff"] = material->alpha_cutoff();
   node["is_double_sided"] = material->is_double_sided();
   node["casts_shadow"] = material->casts_shadow();
@@ -771,6 +745,10 @@ auto asset_residency::save_material(material_handle& material, const std::filesy
     if (!absolute.empty()) {
       node["shader_graph"] = _manifest.relative(absolute).generic_string();
     }
+  }
+
+  if (!material->shader_code().empty()) {
+    node["shader_code"] = _manifest.relative(material->shader_code()).generic_string();
   }
 
   auto generic_params_node = YAML::Node{YAML::NodeType::Sequence};
@@ -1815,6 +1793,7 @@ auto asset_residency::_finalize_material(asset_loader::material_result& result) 
   info.emissive = load_slot(description.emissive, graphics::format::r8g8b8a8_srgb);
 
   info.shader_graph = description.shader_graph.empty() ? shader_graph_handle{} : load_shader_graph(std::filesystem::path{description.shader_graph});
+  info.shader_code = description.shader_code.empty() ? std::filesystem::path{} : core::engine::project().assets_directory() / description.shader_code;
   info.generic_params = description.generic_params;
 
   for (auto i = std::size_t{0u}; i < description.generic_texture_paths.size(); ++i) {

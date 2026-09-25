@@ -193,6 +193,10 @@ struct material_description {
   // reads verbatim -- a normal map, a mask, a height map -- which an sRGB decode on sample would
   // silently distort. `generic_textures_linear` in a .material file; all false (sRGB) when absent.
   std::array<bool, shader_graph_max_textures> generic_texture_linear{};
+
+  // Path to a hand-written `.slang` file (only read for shading_model::shader_code). Like
+  // shader_graph, not carried by the cooked binary format.
+  std::string shader_code{};
 }; // struct material_description
 
 /**

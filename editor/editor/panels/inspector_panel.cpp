@@ -250,35 +250,9 @@ auto inspector_panel::_draw_asset_properties(editor_state& state, const asset_se
       _particle_effect_edit.emitters = effect.emitters();
     }
 
-    if (asset.kind == asset_kind::material && _asset_cache.material.is_valid()) {
-      const auto& material = *_asset_cache.material;
-
-      _material_edit.name = material.name();
-      _material_edit.base_color_factor = material.base_color_factor();
-      _material_edit.emissive_factor = material.emissive_factor();
-      _material_edit.metallic_factor = material.metallic_factor();
-      _material_edit.roughness_factor = material.roughness_factor();
-      _material_edit.alpha = material.alpha();
-      _material_edit.shading = material.shading();
-      _material_edit.alpha_cutoff = material.alpha_cutoff();
-      _material_edit.is_double_sided = material.is_double_sided();
-      _material_edit.casts_shadow = material.casts_shadow();
-      _material_edit.receives_shadow = material.receives_shadow();
-      _material_edit.normal_scale = material.normal_scale();
-      _material_edit.occlusion_strength = material.occlusion_strength();
-      _material_edit.emissive_strength = material.emissive_strength();
-      _material_edit.ior = material.ior();
-      _material_edit.uv_tiling = material.uv_tiling();
-      _material_edit.uv_offset = material.uv_offset();
-      _material_edit.albedo = material.albedo();
-      _material_edit.normal = material.normal();
-      _material_edit.metallic_roughness = material.metallic_roughness();
-      _material_edit.occlusion = material.occlusion();
-      _material_edit.emissive = material.emissive();
-      _material_edit.shader_graph = material.shader_graph();
-      _material_edit.generic_params = material.generic_params();
-      _material_edit.generic_textures = material.generic_textures();
-    }
+    // Seeded by _draw_material_properties once the (asynchronous) load has landed -- copying now
+    // could capture the placeholder's defaults, which the next edit or Save would write back.
+    _material_edit_pending = asset.kind == asset_kind::material;
   }
 
   ImGui::Text("Path: %s", asset.path.string().c_str());

@@ -2,6 +2,7 @@
 // Copyright (c) 2026 Jonas Kabelitz
 #include <libsbx/render/render_pass.hpp>
 
+#include <filesystem>
 #include <vector>
 
 #include <fmt/format.h>
@@ -14,15 +15,27 @@
 
 namespace sbx::render {
 
-auto resolve_graph_pipeline(const assets::shader_graph_handle& graph, std::span<const graphics::shader_compiler::entry_point_request> entry_points, graphics::graphics_pipeline::create_info pipeline_template, std::string_view pass_label) -> memory::observer_ptr<graphics::graphics_pipeline> {
-  if (!graph.is_valid()) {
+auto custom_shader_path(const assets::material& material) -> std::string {
+  if (material.shading() == assets::shading_model::shader_graph && material.shader_graph().is_valid()) {
+    return assets::shader_graph_generated_path(material.shader_graph()->id(), material.shader_graph()->generation());
+  }
+
+  if (material.shading() == assets::shading_model::shader_code) {
+    return material.shader_code().generic_string();
+  }
+
+  return {};
+}
+
+auto resolve_custom_pipeline(const std::string& shader_path, std::span<const graphics::shader_compiler::entry_point_request> entry_points, graphics::graphics_pipeline::create_info pipeline_template, std::string_view pass_label) -> memory::observer_ptr<graphics::graphics_pipeline> {
+  if (shader_path.empty()) {
     return {};
   }
 
-  // A graph's generated .slang is only as good as whatever the user last wired up on the canvas --
-  // shader_compiler throws on a failed compile (missing/invalid entry point, Slang type error,
-  // etc.), and this runs mid-frame inside a pass's own graph_pipeline_resolver callback with nothing
-  // upstream catching it. A bad graph should skip that draw, not take the whole app down.
+  // A custom shader is only as good as whatever the user last wired up on the canvas or typed into
+  // the file -- shader_compiler throws on a failed compile (missing/invalid entry point, Slang type
+  // error, etc.), and this runs mid-frame inside a pass's own custom_pipeline_resolver callback with
+  // nothing upstream catching it. A bad shader should skip that draw, not take the whole app down.
   try {
     auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
     auto& shader_cache = graphics_module.shader_cache();
@@ -30,25 +43,25 @@ auto resolve_graph_pipeline(const assets::shader_graph_handle& graph, std::span<
 
     const auto requests = std::vector<graphics::shader_compiler::entry_point_request>{entry_points.begin(), entry_points.end()};
 
-    pipeline_template.shader = shader_cache.get({assets::shader_graph_generated_path(graph->id(), graph->generation()), requests});
-    pipeline_template.name = fmt::format("{} Graph {}", pass_label, assets::shader_graph_generated_name(graph->id(), graph->generation()));
+    pipeline_template.shader = shader_cache.get({shader_path, requests});
+    pipeline_template.name = fmt::format("{} Custom {}", pass_label, std::filesystem::path{shader_path}.stem().string());
 
     return pipeline_cache.get(pipeline_template);
   } catch (const std::exception& exception) {
-    utility::logger<"render">::warn("shader_graph {} failed to compile ({}) -- skipping {} for it until it's fixed", graph->id(), exception.what(), pass_label);
+    utility::logger<"render">::warn("'{}' failed to compile ({}) -- skipping {} for it until it's fixed", shader_path, exception.what(), pass_label);
     return {};
   }
 }
 
 // Shared per-command prologue for submit_draw_commands/_indirect: validity checks, the
-// shader-graph-vs-fixed-slot pipeline resolution (see graph_pipeline_resolver's own doc comment),
+// shader-graph-vs-fixed-slot pipeline resolution (see custom_pipeline_resolver's own doc comment),
 // pipeline/mesh bind-state tracking (bound/current_pipeline/current_mesh persist across calls for
 // the same command list, so a run of commands sharing a pipeline or mesh only rebinds once), and
 // every push_constants field except transform_address and cascade_index -- the two fields the
 // direct and indirect draw paths disagree on, left for the caller to fill in afterward. Returns
 // false (skip this command entirely) for an invalid command, an out-of-range instance range, or a
 // shader-graph material with no usable pipeline yet.
-static auto prepare_draw_command(graphics::resource_registry& registry, render_context& context, const draw_command& command, const std::array<memory::observer_ptr<graphics::graphics_pipeline>, 4u>& pipelines, const graph_pipeline_resolver& resolve_graph_pipeline, bool& bound, const graphics::graphics_pipeline*& current_pipeline, memory::observer_ptr<const assets::mesh>& current_mesh, push_constants& values) -> bool {
+static auto prepare_draw_command(graphics::resource_registry& registry, render_context& context, const draw_command& command, const std::array<memory::observer_ptr<graphics::graphics_pipeline>, 4u>& pipelines, const custom_pipeline_resolver& resolve_custom_pipeline, bool& bound, const graphics::graphics_pipeline*& current_pipeline, memory::observer_ptr<const assets::mesh>& current_mesh, push_constants& values) -> bool {
   if (!command.mesh.is_valid() || !command.material.is_valid() || !command.resident) {
     return false;
   }
@@ -59,15 +72,17 @@ static auto prepare_draw_command(graphics::resource_registry& registry, render_c
 
   auto pipeline = memory::observer_ptr<graphics::graphics_pipeline>{};
 
-  if (command.material->shading() == assets::shading_model::shader_graph) {
-    if (!command.material->shader_graph().is_valid() || !resolve_graph_pipeline) {
+  if (command.material->shading() == assets::shading_model::shader_graph || command.material->shading() == assets::shading_model::shader_code) {
+    const auto shader_path = custom_shader_path(*command.material);
+
+    if (shader_path.empty() || !resolve_custom_pipeline) {
       return false;
     }
 
-    pipeline = resolve_graph_pipeline(command.material->shader_graph(), command.material->is_double_sided());
+    pipeline = resolve_custom_pipeline(shader_path, command.material->is_double_sided());
 
     if (!pipeline) {
-      return false; // no usable pipeline yet for this graph -- skip the draw rather than misrender
+      return false; // no usable pipeline yet for this shader -- skip the draw rather than misrender
     }
   } else {
     pipeline = pipelines[command.pipeline_id];
@@ -99,7 +114,7 @@ static auto prepare_draw_command(graphics::resource_registry& registry, render_c
   return true;
 }
 
-auto submit_draw_commands(render_context& context, const std::vector<draw_command>& commands, const std::array<memory::observer_ptr<graphics::graphics_pipeline>, 4u>& pipelines, std::uint32_t cascade_index, const graph_pipeline_resolver& resolve_graph_pipeline) -> void {
+auto submit_draw_commands(render_context& context, const std::vector<draw_command>& commands, const std::array<memory::observer_ptr<graphics::graphics_pipeline>, 4u>& pipelines, std::uint32_t cascade_index, const custom_pipeline_resolver& resolve_custom_pipeline) -> void {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 
   auto& registry = graphics_module.resource_registry();
@@ -113,7 +128,7 @@ auto submit_draw_commands(render_context& context, const std::vector<draw_comman
     auto values = push_constants{};
     values.cascade_index = cascade_index;
 
-    if (!prepare_draw_command(registry, context, command, pipelines, resolve_graph_pipeline, bound, current_pipeline, current_mesh, values)) {
+    if (!prepare_draw_command(registry, context, command, pipelines, resolve_custom_pipeline, bound, current_pipeline, current_mesh, values)) {
       continue;
     }
 
@@ -126,7 +141,7 @@ auto submit_draw_commands(render_context& context, const std::vector<draw_comman
   }
 }
 
-auto submit_draw_commands_indirect(render_context& context, const std::vector<draw_command>& commands, const std::array<memory::observer_ptr<graphics::graphics_pipeline>, 4u>& pipelines, const graph_pipeline_resolver& resolve_graph_pipeline) -> void {
+auto submit_draw_commands_indirect(render_context& context, const std::vector<draw_command>& commands, const std::array<memory::observer_ptr<graphics::graphics_pipeline>, 4u>& pipelines, const custom_pipeline_resolver& resolve_custom_pipeline) -> void {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 
   auto& registry = graphics_module.resource_registry();
@@ -142,7 +157,7 @@ auto submit_draw_commands_indirect(render_context& context, const std::vector<dr
 
     auto values = push_constants{};
 
-    if (!prepare_draw_command(registry, context, command, pipelines, resolve_graph_pipeline, bound, current_pipeline, current_mesh, values)) {
+    if (!prepare_draw_command(registry, context, command, pipelines, resolve_custom_pipeline, bound, current_pipeline, current_mesh, values)) {
       continue;
     }
 

@@ -2338,32 +2338,7 @@ auto interop::material_set_texture(std::uint64_t material_uuid, std::uint32_t sl
 
   auto texture = assets_module.find_texture(math::uuid::from_value(texture_uuid));
 
-  auto create_info = assets::material::create_info{};
-  create_info.name = material->name();
-  create_info.base_color_factor = material->base_color_factor();
-  create_info.emissive_factor = material->emissive_factor();
-  create_info.metallic_factor = material->metallic_factor();
-  create_info.roughness_factor = material->roughness_factor();
-  create_info.alpha = material->alpha();
-  create_info.shading = material->shading();
-  create_info.alpha_cutoff = material->alpha_cutoff();
-  create_info.is_double_sided = material->is_double_sided();
-  create_info.casts_shadow = material->casts_shadow();
-  create_info.receives_shadow = material->receives_shadow();
-  create_info.normal_scale = material->normal_scale();
-  create_info.occlusion_strength = material->occlusion_strength();
-  create_info.emissive_strength = material->emissive_strength();
-  create_info.ior = material->ior();
-  create_info.uv_tiling = material->uv_tiling();
-  create_info.uv_offset = material->uv_offset();
-  create_info.albedo = material->albedo();
-  create_info.normal = material->normal();
-  create_info.metallic_roughness = material->metallic_roughness();
-  create_info.occlusion = material->occlusion();
-  create_info.emissive = material->emissive();
-  create_info.shader_graph = material->shader_graph();
-  create_info.generic_params = material->generic_params();
-  create_info.generic_textures = material->generic_textures();
+  auto create_info = material->to_create_info();
 
   switch (slot) {
     case 0u: create_info.albedo = texture; break;
@@ -2376,6 +2351,44 @@ auto interop::material_set_texture(std::uint64_t material_uuid, std::uint32_t sl
       return;
     }
   }
+
+  assets_module.update_material(material, create_info);
+}
+
+auto interop::material_set_generic_param(std::uint64_t material_uuid, std::uint32_t index, std::float_t x, std::float_t y, std::float_t z, std::float_t w) -> void {
+  auto& assets_module = core::engine::get_module<assets::assets_module>();
+  auto material = assets_module.load_material(math::uuid::from_value(material_uuid));
+
+  if (!material.is_valid()) {
+    return;
+  }
+
+  if (index >= assets::shader_graph_max_params) {
+    utility::logger<"scripting">::error("material_set_generic_param: index {} out of range (max {})", index, assets::shader_graph_max_params);
+    return;
+  }
+
+  auto create_info = material->to_create_info();
+  create_info.generic_params[index] = math::vector4{x, y, z, w};
+
+  assets_module.update_material(material, create_info);
+}
+
+auto interop::material_set_generic_texture(std::uint64_t material_uuid, std::uint32_t index, std::uint64_t texture_uuid) -> void {
+  auto& assets_module = core::engine::get_module<assets::assets_module>();
+  auto material = assets_module.load_material(math::uuid::from_value(material_uuid));
+
+  if (!material.is_valid()) {
+    return;
+  }
+
+  if (index >= assets::shader_graph_max_textures) {
+    utility::logger<"scripting">::error("material_set_generic_texture: index {} out of range (max {})", index, assets::shader_graph_max_textures);
+    return;
+  }
+
+  auto create_info = material->to_create_info();
+  create_info.generic_textures[index] = assets_module.find_texture(math::uuid::from_value(texture_uuid));
 
   assets_module.update_material(material, create_info);
 }

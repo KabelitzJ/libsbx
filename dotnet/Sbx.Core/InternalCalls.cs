@@ -149,6 +149,8 @@ namespace Sbx.Core
     internal static delegate* unmanaged<NativeString, ulong> Material_Load;
     internal static delegate* unmanaged<ulong, ulong> Material_CreateInstance;
     internal static delegate* unmanaged<ulong, uint, ulong, void> Material_SetTexture;
+    internal static delegate* unmanaged<ulong, uint, float, float, float, float, void> Material_SetGenericParam;
+    internal static delegate* unmanaged<ulong, uint, ulong, void> Material_SetGenericTexture;
     internal static delegate* unmanaged<ulong, void> Material_Release;
     internal static delegate* unmanaged<ulong, bool> Material_IsLoaded;
     internal static delegate* unmanaged<NativeString, float, float, Color*, bool> Texture_SampleBilinear;

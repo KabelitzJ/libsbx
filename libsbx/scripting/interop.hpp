@@ -417,6 +417,10 @@ struct interop {
    */
   static auto material_set_texture(std::uint64_t material_uuid, std::uint32_t slot, std::uint64_t texture_uuid) -> void;
 
+  static auto material_set_generic_param(std::uint64_t material_uuid, std::uint32_t index, std::float_t x, std::float_t y, std::float_t z, std::float_t w) -> void;
+
+  static auto material_set_generic_texture(std::uint64_t material_uuid, std::uint32_t index, std::uint64_t texture_uuid) -> void;
+
   // Script compute. Every object lives in a scripting-local id -> state registry (see interop.cpp);
   // ids are opaque to C#. Functions returning bool log the reason and return false on misuse, and
   // the C# wrappers turn that into an exception.

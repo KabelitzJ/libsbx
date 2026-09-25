@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <array>
 #include <cstdint>
+#include <filesystem>
 #include <optional>
 
 #include <fmt/format.h>
@@ -15,6 +16,9 @@
 
 #include <libsbx/math/vector2.hpp>
 #include <libsbx/math/vector3.hpp>
+#include <libsbx/math/vector4.hpp>
+
+#include <libsbx/core/engine.hpp>
 
 #include <libsbx/assets/particle_effect.hpp>
 #include <libsbx/assets/shader_graph.hpp>
@@ -32,18 +36,31 @@ auto inspector_panel::_draw_material_properties(editor_state& state, const asset
     return;
   }
 
+  if (_material_edit_pending) {
+    if (!_asset_cache.material->is_loaded()) {
+      ImGui::TextDisabled("Loading...");
+      return;
+    }
+
+    _material_edit = _asset_cache.material->to_create_info();
+    _material_edit_pending = false;
+  }
+
   auto changed = draw_text_field("Name", _material_edit.name);
 
   // One dropdown picks the material's actual type -- Unlit/PBR draw the built-in field set below;
   // Shader Graph shows only the picker + that graph's own exposed parameters (material.hpp's
   // shading_model doc comment: every built-in field is otherwise dead once a material is typed
-  // Shader Graph, and one with no graph assigned is invalid, not a silent fallback to PBR).
-  static constexpr auto material_type_names = std::array<const char*, 3u>{"Unlit", "PBR", "Shader Graph"};
+  // Shader Graph, and one with no graph assigned is invalid, not a silent fallback to PBR). Shader
+  // Code shows its file path plus the full built-in field set, since hand-written code may read any
+  // of them (material.albedo_index etc.).
+  static constexpr auto material_type_names = std::array<const char*, 4u>{"Unlit", "PBR", "Shader Graph", "Shader Code"};
 
   const auto material_type_index = [](sbx::assets::shading_model shading) -> std::int32_t {
     switch (shading) {
       case sbx::assets::shading_model::unlit: return 0;
       case sbx::assets::shading_model::shader_graph: return 2;
+      case sbx::assets::shading_model::shader_code: return 3;
       default: return 1; // pbr
     }
   };
@@ -51,6 +68,7 @@ auto inspector_panel::_draw_material_properties(editor_state& state, const asset
   const auto material_type_from_index = [](std::int32_t index) -> sbx::assets::shading_model {
     if (index == 0) return sbx::assets::shading_model::unlit;
     if (index == 2) return sbx::assets::shading_model::shader_graph;
+    if (index == 3) return sbx::assets::shading_model::shader_code;
     return sbx::assets::shading_model::pbr;
   };
 
@@ -66,7 +84,7 @@ auto inspector_panel::_draw_material_properties(editor_state& state, const asset
   // Alpha mode/cull/shadow/UV transform are all orthogonal to shading type -- a Shader Graph
   // material still goes through the same opaque-vs-blend pass routing, cull mode, shadow casting/
   // receiving, and apply_uv_transform as a built-in one (shader_graph_codegen.cpp's generated
-  // fragment_main applies uv_tiling/uv_offset itself, and every pass's graph_pipeline_resolver
+  // fragment_main applies uv_tiling/uv_offset itself, and every pass's custom_pipeline_resolver
   // reads is_double_sided the same way it reads it for a built-in material). These used to be
   // built-in-only fields here, which meant a Shader Graph material couldn't have "Casts Shadow"
   // (etc.) seen or changed in the inspector at all.
@@ -223,7 +241,59 @@ auto inspector_panel::_draw_material_properties(editor_state& state, const asset
       ImGui::TextDisabled("This graph exposes no parameters.");
     }
   } else {
-    const auto is_pbr = _material_edit.shading == sbx::assets::shading_model::pbr;
+    const auto is_shader_code = _material_edit.shading == sbx::assets::shading_model::shader_code;
+    const auto is_pbr = _material_edit.shading == sbx::assets::shading_model::pbr || is_shader_code;
+
+    if (is_shader_code) {
+      ImGui::SeparatorText("Shader Code");
+
+      // Edited assets-relative (as stored in the .material file), held absolute. Lexical both ways,
+      // so a half-typed path (a trailing '/') survives the round trip every frame.
+      const auto assets_directory = sbx::core::engine::project().assets_directory();
+      auto relative = _material_edit.shader_code.empty() ? std::string{} : _material_edit.shader_code.lexically_relative(assets_directory).generic_string();
+
+      if (draw_text_field("Shader", relative)) {
+        _material_edit.shader_code = relative.empty() ? std::filesystem::path{} : assets_directory / relative;
+        changed = true;
+      }
+
+      if (_material_edit.shader_code.empty()) {
+        ImGui::TextColored(ImVec4{1.0f, 0.6f, 0.2f, 1.0f}, ICON_MDI_ALERT " No shader assigned -- this material is invalid and won't render until one is.");
+      } else if (!std::filesystem::exists(_material_edit.shader_code)) {
+        ImGui::TextColored(ImVec4{1.0f, 0.6f, 0.2f, 1.0f}, ICON_MDI_ALERT " File not found.");
+      }
+
+      ImGui::TextDisabled("Compiled once per run: restart after editing the file.");
+
+      // The file declares nothing about its parameters (unlike a graph), so every slot is shown raw:
+      // material.generic_params[i] / material.generic_textures[i] in the shader.
+      ImGui::SeparatorText("Generic Parameters");
+
+      for (auto i = std::size_t{0u}; i < _material_edit.generic_params.size(); ++i) {
+        auto& value = _material_edit.generic_params[i];
+        auto components = std::array<std::float_t, 4u>{value.x(), value.y(), value.z(), value.w()};
+
+        ImGui::PushID(static_cast<std::int32_t>(i));
+
+        if (ImGui::DragFloat4(fmt::format("Param {}", i).c_str(), components.data(), 0.01f)) {
+          value = sbx::math::vector4{components[0], components[1], components[2], components[3]};
+          changed = true;
+        }
+
+        ImGui::PopID();
+      }
+
+      for (auto i = std::size_t{0u}; i < _material_edit.generic_textures.size(); ++i) {
+        ImGui::PushID(static_cast<std::int32_t>(100u + i));
+        ImGui::AlignTextToFramePadding();
+        ImGui::Text("Texture %zu", i);
+        ImGui::SameLine(150.0f);
+        changed |= draw_texture_picker(state, "##generic_texture_picker", _material_edit.generic_textures[i], assets_module, sbx::graphics::format::r8g8b8a8_srgb);
+        ImGui::PopID();
+      }
+
+      ImGui::SeparatorText("Built-in Fields");
+    }
 
     changed |= draw_color_field("Base Color", _material_edit.base_color_factor);
 

@@ -5,6 +5,7 @@
 
 #include <array>
 #include <cstdint>
+#include <filesystem>
 #include <limits>
 #include <string>
 
@@ -26,17 +27,20 @@ enum class alpha_mode : std::uint8_t {
   blend   // order-dependent transparency, transparent pass
 }; // enum class alpha_mode
 
-// A material's type -- exactly one of these three, exposed as one dropdown in the inspector
-// (Material Type: Unlit/PBR/Shader Graph) rather than the built-in pbr/unlit fields and the
+// A material's type -- exactly one of these, exposed as one dropdown in the inspector (Material
+// Type: Unlit/PBR/Shader Graph/Shader Code) rather than the built-in pbr/unlit fields and the
 // shader_graph handle being independently toggleable. `shader_graph` means the material's actual
-// look comes entirely from create_info::shader_graph below -- every other create_info field
-// (base_color_factor, metallic_factor, the built-in texture slots, ...) is then irrelevant, and a
-// material typed shader_graph with no graph assigned is invalid (see submit_draw_commands's own
-// skip check in render_pass.cpp) rather than silently falling back to looking like a pbr material.
+// look comes entirely from create_info::shader_graph below, `shader_code` the same for a
+// hand-written .slang file (create_info::shader_code) that provides the same entry points a
+// generated graph shader does (see engine://shaders/material/code_material.slang). For both, the
+// built-in fields are only whatever the shader itself chooses to read, and one with no graph/file
+// assigned is invalid (see prepare_draw_command's skip check in render_pass.cpp) rather than
+// silently falling back to looking like a pbr material.
 enum class shading_model : std::uint8_t {
   pbr,
   unlit,
-  shader_graph
+  shader_graph,
+  shader_code
 }; // enum class shading_model
 
 class material final : public loadable {
@@ -79,6 +83,10 @@ public:
     shader_graph_handle shader_graph{};
     std::array<math::vector4, shader_graph_max_params> generic_params{};
     std::array<texture_handle, shader_graph_max_textures> generic_textures{};
+
+    // Absolute path to the .slang file a shader_code material renders with (empty otherwise).
+    // Reads generic_params/generic_textures the same way a graph does.
+    std::filesystem::path shader_code{};
   }; // struct create_info
 
   material() = default;
@@ -108,6 +116,7 @@ public:
     _shader_graph{create_info.shader_graph},
     _generic_params{create_info.generic_params},
     _generic_textures{create_info.generic_textures},
+    _shader_code{create_info.shader_code},
     _name{create_info.name} { }
 
   [[nodiscard]] auto is_valid() const noexcept -> bool {
@@ -214,6 +223,42 @@ public:
     return _generic_textures;
   }
 
+  [[nodiscard]] auto shader_code() const noexcept -> const std::filesystem::path& {
+    return _shader_code;
+  }
+
+  /** @brief Every field as a create_info, for changing one or two of them via asset_residency::update_material. */
+  [[nodiscard]] auto to_create_info() const -> create_info {
+    auto result = create_info{};
+    result.name = _name;
+    result.base_color_factor = _base_color_factor;
+    result.emissive_factor = _emissive_factor;
+    result.metallic_factor = _metallic_factor;
+    result.roughness_factor = _roughness_factor;
+    result.alpha = _alpha;
+    result.shading = _shading;
+    result.alpha_cutoff = _alpha_cutoff;
+    result.is_double_sided = _is_double_sided;
+    result.casts_shadow = _casts_shadow;
+    result.receives_shadow = _receives_shadow;
+    result.normal_scale = _normal_scale;
+    result.occlusion_strength = _occlusion_strength;
+    result.emissive_strength = _emissive_strength;
+    result.ior = _ior;
+    result.uv_tiling = _uv_tiling;
+    result.uv_offset = _uv_offset;
+    result.albedo = _albedo;
+    result.normal = _normal;
+    result.metallic_roughness = _metallic_roughness;
+    result.occlusion = _occlusion;
+    result.emissive = _emissive;
+    result.shader_graph = _shader_graph;
+    result.generic_params = _generic_params;
+    result.generic_textures = _generic_textures;
+    result.shader_code = _shader_code;
+    return result;
+  }
+
   [[nodiscard]] auto id() const noexcept -> const math::uuid& {
     return _id;
   }
@@ -248,6 +293,7 @@ private:
   shader_graph_handle _shader_graph{};
   std::array<math::vector4, shader_graph_max_params> _generic_params{};
   std::array<texture_handle, shader_graph_max_textures> _generic_textures{};
+  std::filesystem::path _shader_code{};
   std::uint32_t _index{invalid_index};
   math::uuid _id{math::uuid::nil()};
   std::string _name{"material"};

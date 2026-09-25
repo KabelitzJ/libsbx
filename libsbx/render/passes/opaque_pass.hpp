@@ -43,8 +43,8 @@ private:
 
   auto _make_pipeline(memory::observer_ptr<const graphics::shader> shader, graphics::cull_mode cull, const std::string& name, graphics::polygon_mode polygon_mode = graphics::polygon_mode::fill, std::optional<graphics::depth_bias> depth_bias = std::nullopt) -> memory::observer_ptr<graphics::graphics_pipeline>;
 
-  /** @brief This pass's own entry points/pipeline state for render::resolve_graph_pipeline. Passed to submit_draw_commands_indirect as its graph_pipeline_resolver. */
-  auto _resolve_graph_pipeline(const assets::shader_graph_handle& graph, bool is_double_sided) -> memory::observer_ptr<graphics::graphics_pipeline>;
+  /** @brief This pass's own entry points/pipeline state for render::resolve_custom_pipeline. Passed to submit_draw_commands_indirect as its custom_pipeline_resolver. */
+  auto _resolve_custom_pipeline(const std::string& shader_path, bool is_double_sided) -> memory::observer_ptr<graphics::graphics_pipeline>;
 
   std::array<memory::observer_ptr<graphics::graphics_pipeline>, 4u> _pipelines{};
 
@@ -53,7 +53,7 @@ private:
    * depth bias instead of fill -- drawn as an additional pass in execute() on top of the normal
    * filled one when context.wireframe is set (see scene_renderer_module::set_wireframe_enabled),
    * an overlay rather than a replacement. Shader-graph materials don't get a wireframe variant
-   * (_resolve_graph_pipeline has no polygon_mode parameter) -- not needed by anything
+   * (_resolve_custom_pipeline has no polygon_mode parameter) -- not needed by anything
    * currently built with the graph editor, so left unbuilt rather than speculatively wired up.
    */
   std::array<memory::observer_ptr<graphics::graphics_pipeline>, 4u> _wireframe_pipelines{};

@@ -185,6 +185,8 @@ scripting_module::scripting_module() {
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Material_Load", reinterpret_cast<void*>(&interop::material_load));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Material_CreateInstance", reinterpret_cast<void*>(&interop::material_create_instance));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Material_SetTexture", reinterpret_cast<void*>(&interop::material_set_texture));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Material_SetGenericParam", reinterpret_cast<void*>(&interop::material_set_generic_param));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Material_SetGenericTexture", reinterpret_cast<void*>(&interop::material_set_generic_texture));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Material_Release", reinterpret_cast<void*>(&interop::material_release));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Material_IsLoaded", reinterpret_cast<void*>(&interop::material_is_loaded));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Texture_SampleBilinear", reinterpret_cast<void*>(&interop::texture_sample_bilinear));

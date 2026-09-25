@@ -228,14 +228,15 @@ lighting_output evaluate_lit_surface<let ReceivesShadows : bool>(lighting_input 
   return output;
 }
 
-lighting_output evaluate_lighting<let ReceivesShadows : bool>(lighting_input input) {
+// The built-in pbr material's surface, from its fixed texture slots and factors -- what
+// evaluate_lighting shades, and a starting point for a shader_code material to adjust
+// (material/code_material.slang).
+lit_surface builtin_lit_surface(lighting_input input) {
   material_data material = input.frame_data.materials[input.material_index];
   SamplerState sampler = samplers[input.sampler_index];
   float2 uv = apply_uv_transform(material, input.uv);
 
   float4 base = material.base_color_factor * input.color * textures[material.albedo_index].Sample(sampler, uv);
-
-  apply_alpha_cutout(material, input.uv, input.sampler_index);
 
   float4 mr = textures[material.metallic_roughness_index].Sample(sampler, uv);
 
@@ -255,7 +256,15 @@ lighting_output evaluate_lighting<let ReceivesShadows : bool>(lighting_input inp
   s.dielectric_f0 = pow((material.ior - 1.0) / max(material.ior + 1.0, 0.0001), 2.0);
   s.receives_shadow = (material.flags & material_flags::receives_shadow) != 0u;
 
-  return evaluate_lit_surface<ReceivesShadows>(input, s);
+  return s;
+}
+
+lighting_output evaluate_lighting<let ReceivesShadows : bool>(lighting_input input) {
+  material_data material = input.frame_data.materials[input.material_index];
+
+  apply_alpha_cutout(material, input.uv, input.sampler_index);
+
+  return evaluate_lit_surface<ReceivesShadows>(input, builtin_lit_surface(input));
 }
 
 lighting_output evaluate_unlit(lighting_input input) {

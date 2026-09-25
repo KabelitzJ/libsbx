@@ -121,6 +121,9 @@ private:
   // whenever _asset_cache.id changes; committed only by an explicit Save button.
   sbx::assets::material::create_info _material_edit{};
 
+  // True until _material_edit has been seeded from the selected material's loaded state.
+  bool _material_edit_pending{false};
+
   // Set when the Material Inspector's shader graph picker just (re)assigned a new graph -- that
   // graph loads asynchronously (see asset_residency::load_shader_graph), so its nodes/parameters()
   // are still empty on the very frame it's picked. Re-checked every frame afterward; once the graph

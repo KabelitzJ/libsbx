@@ -463,10 +463,18 @@ struct interop {
   /** @brief Records a dispatch with the shader's current parameters. False if any non-sampler field was never set. */
   static auto compute_commands_dispatch(std::uint64_t id, std::uint64_t shader_id, std::uint32_t group_count_x, std::uint32_t group_count_y, std::uint32_t group_count_z) -> bool;
 
-  /** @brief Submits the list and blocks until the GPU finishes. Results are then visible to later sampling, transfer (ReadPixels) and host (GetData) reads. Consumes the list. */
-  static auto compute_commands_submit(std::uint64_t id) -> bool;
+  /**
+   * @brief Submits the list. wait = true blocks until the GPU finishes and consumes the list.
+   * wait = false returns immediately; poll compute_commands_is_complete, and keep every resource
+   * the list uses alive until it reports true. Either way, results are then visible to later
+   * sampling, transfer (ReadPixels) and host (GetData) reads.
+   */
+  static auto compute_commands_submit(std::uint64_t id, bool wait) -> bool;
 
-  /** @brief Discards a list that was never submitted. No-op for an unknown (or already submitted) id. */
+  /** @brief True once a list submitted with wait = false has finished on the GPU (or the id is unknown). Never blocks. */
+  static auto compute_commands_is_complete(std::uint64_t id) -> bool;
+
+  /** @brief Frees the list: discards it if never submitted, waits for it first if still running. No-op for an unknown id. */
   static auto compute_commands_release(std::uint64_t id) -> void;
 
   // Canvas: node uuid -> canvas::canvas/rect_transform/ui_image/ui_text/ui_button field access,

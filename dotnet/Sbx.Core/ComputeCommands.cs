@@ -14,18 +14,43 @@ namespace Sbx.Core
    * Each Dispatch captures the shader's parameters at that moment, so the same shader can be
    * re-dispatched with different values. After Submit, results can be sampled, read with
    * Texture2D.ReadPixels or ComputeBuffer.GetData. Disposing without Submit discards the work.
+   *
+   * SubmitAsync doesn't block: poll IsComplete (e.g. once per Update) and only then read results.
+   * Every buffer and texture the dispatches use must stay undisposed until IsComplete is true.
+   * Disposing a still-running list waits for it.
    */
   public sealed class ComputeCommands : IDisposable
   {
     private ulong _id;
+
+    private bool _submitted;
 
     public ComputeCommands()
     {
       unsafe { _id = InternalCalls.ComputeCommands_Begin(); }
     }
 
+    /** True once a SubmitAsync'd list has finished on the GPU. Never blocks. */
+    public bool IsComplete
+    {
+      get
+      {
+        if (_id == 0)
+        {
+          return true;
+        }
+
+        unsafe { return _submitted && InternalCalls.ComputeCommands_IsComplete(_id); }
+      }
+    }
+
     public void Dispatch(ComputeShader shader, int groupsX, int groupsY, int groupsZ)
     {
+      if (_submitted)
+      {
+        throw new InvalidOperationException("ComputeCommands was already submitted");
+      }
+
       bool ok;
 
       unsafe { ok = InternalCalls.ComputeCommands_Dispatch(Id, shader.Id, (uint)groupsX, (uint)groupsY, (uint)groupsZ); }
@@ -39,11 +64,29 @@ namespace Sbx.Core
     /** Submits every recorded dispatch and blocks until the GPU finishes. The list can't be reused. */
     public void Submit()
     {
-      bool ok;
-
-      unsafe { ok = InternalCalls.ComputeCommands_Submit(Id); }
+      SubmitImpl(true);
 
       _id = 0;
+    }
+
+    /** Submits every recorded dispatch without waiting -- see the class comment. */
+    public void SubmitAsync()
+    {
+      SubmitImpl(false);
+    }
+
+    private void SubmitImpl(bool wait)
+    {
+      if (_submitted)
+      {
+        throw new InvalidOperationException("ComputeCommands was already submitted");
+      }
+
+      bool ok;
+
+      unsafe { ok = InternalCalls.ComputeCommands_Submit(Id, wait); }
+
+      _submitted = true;
 
       if (!ok)
       {

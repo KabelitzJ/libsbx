@@ -172,7 +172,8 @@ namespace Sbx.Core
 
     internal static delegate* unmanaged<ulong> ComputeCommands_Begin;
     internal static delegate* unmanaged<ulong, ulong, uint, uint, uint, bool> ComputeCommands_Dispatch;
-    internal static delegate* unmanaged<ulong, bool> ComputeCommands_Submit;
+    internal static delegate* unmanaged<ulong, bool, bool> ComputeCommands_Submit;
+    internal static delegate* unmanaged<ulong, bool> ComputeCommands_IsComplete;
     internal static delegate* unmanaged<ulong, void> ComputeCommands_Release;
 
     internal static delegate* unmanaged<ulong, int*, void> Canvas_GetSortOrder;

@@ -209,6 +209,7 @@ scripting_module::scripting_module() {
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "ComputeCommands_Begin", reinterpret_cast<void*>(&interop::compute_commands_begin));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "ComputeCommands_Dispatch", reinterpret_cast<void*>(&interop::compute_commands_dispatch));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "ComputeCommands_Submit", reinterpret_cast<void*>(&interop::compute_commands_submit));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "ComputeCommands_IsComplete", reinterpret_cast<void*>(&interop::compute_commands_is_complete));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "ComputeCommands_Release", reinterpret_cast<void*>(&interop::compute_commands_release));
 
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Canvas_GetSortOrder", reinterpret_cast<void*>(&interop::canvas_get_sort_order));

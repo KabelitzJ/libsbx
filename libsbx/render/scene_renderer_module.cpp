@@ -90,6 +90,8 @@ struct frame_data {
   math::vector2 cluster_tile_size;
   math::vector4 cascade_splits;
   math::vector4 cascade_depth_bias_per_texel;
+  math::vector4 cascade_texel_world_size;
+  std::array<math::vector4, shadow_cascade_count> cascade_spheres;
   std::array<math::matrix4x4, shadow_cascade_count> light_view_projections;
   std::array<std::uint32_t, shadow_cascade_count> shadow_map_indices;
   std::uint32_t shadow_enabled;
@@ -100,6 +102,12 @@ struct frame_data {
   std::float_t near_plane;
   std::float_t far_plane;
   math::vector2 render_target_size;
+  std::uint32_t shadow_sampler_index;
+  std::uint32_t shadow_cascade_debug;
+  std::float_t shadow_depth_bias;
+  std::float_t shadow_normal_bias;
+  std::float_t shadow_penumbra_scale;
+  std::float_t contact_shadow_length;
 }; // struct frame_data
 
 inline constexpr auto skinned_bounds_padding_factor = 0.2f;
@@ -401,6 +409,14 @@ scene_renderer_module::~scene_renderer_module() {
   auto& presentation_module = core::engine::get_module<render::presentation_module>();
 
   presentation_module.set_scene_renderer(nullptr);
+
+  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
+
+  for (const auto view : _shadow_map_preview_views) {
+    if (view != VK_NULL_HANDLE) {
+      vkDestroyImageView(graphics_module.logical_device(), view, nullptr);
+    }
+  }
 }
 
 auto scene_renderer_module::prepare() -> void {
@@ -447,6 +463,14 @@ auto scene_renderer_module::set_wireframe_enabled(bool enabled) -> void {
 
 auto scene_renderer_module::wireframe_enabled() const -> bool {
   return _wireframe_enabled;
+}
+
+auto scene_renderer_module::set_shadow_cascade_debug_enabled(bool enabled) -> void {
+  _shadow_cascade_debug_enabled = enabled;
+}
+
+auto scene_renderer_module::shadow_cascade_debug_enabled() const -> bool {
+  return _shadow_cascade_debug_enabled;
 }
 
 auto scene_renderer_module::reset_particles() -> void {
@@ -956,6 +980,10 @@ auto scene_renderer_module::_build_packet() -> render_packet {
       shadow_caster_index = directional_lights.size();
       packet.has_shadow_caster = true;
       packet.shadow_distance = light.shadow_distance;
+      packet.shadow_depth_bias = light.shadow_depth_bias;
+      packet.shadow_normal_bias = light.shadow_normal_bias;
+      packet.shadow_angular_diameter = light.shadow_angular_diameter;
+      packet.contact_shadow_length = light.contact_shadow_length;
     }
 
     directional_lights.push_back(data);
@@ -1210,6 +1238,7 @@ auto scene_renderer_module::record(graphics::command_buffer& command_buffer, mat
   _resize_targets(scene_extent);
 
   _has_rendered = packet.camera.is_active;
+  _has_rendered_shadows = false;
 
   if (!packet.camera.is_active) {
     return;
@@ -1288,6 +1317,16 @@ auto scene_renderer_module::_ensure_resources() -> void {
     .name = "Clamp Sampler"
   });
 
+  _shadow_sampler_index = bindless_table.sampler_index(graphics::sampler::create_info{
+    .mipmap_mode = graphics::mipmap_mode::nearest,
+    .address_mode_u = graphics::address_mode::clamp_to_edge,
+    .address_mode_v = graphics::address_mode::clamp_to_edge,
+    .address_mode_w = graphics::address_mode::clamp_to_edge,
+    .max_lod = 0.0f,
+    .compare = graphics::compare_operation::less_or_equal,
+    .name = "Shadow Comparison Sampler"
+  });
+
   _color_index = bindless_table.reserve_sampled_image();
 
   _final_image_index = bindless_table.reserve_sampled_image();
@@ -1340,7 +1379,7 @@ auto scene_renderer_module::_ensure_resources() -> void {
   }
 
   _culled_indirect_args_buffer = registry.emplace<graphics::buffer>(graphics::buffer::create_info{
-    .size = sizeof(VkDrawIndexedIndirectCommand) * max_opaque_draw_commands * graphics::swapchain::max_frames_in_flight,
+    .size = sizeof(VkDrawIndexedIndirectCommand) * max_opaque_draw_commands * cull_view_count * graphics::swapchain::max_frames_in_flight,
     .usage = graphics::buffer_usage::device_address | graphics::buffer_usage::storage | graphics::buffer_usage::indirect,
     .memory = graphics::memory_usage::host_write,
     .name = "Culled Draw Args"
@@ -1349,10 +1388,10 @@ auto scene_renderer_module::_ensure_resources() -> void {
   const auto culled_indirect_args_base = registry.get<graphics::buffer>(_culled_indirect_args_buffer).address();
 
   for (auto slot = std::size_t{0u}; slot < graphics::swapchain::max_frames_in_flight; ++slot) {
-    _culled_indirect_args_addresses[slot] = culled_indirect_args_base + slot * max_opaque_draw_commands * sizeof(VkDrawIndexedIndirectCommand);
+    _culled_indirect_args_addresses[slot] = culled_indirect_args_base + slot * cull_view_count * max_opaque_draw_commands * sizeof(VkDrawIndexedIndirectCommand);
   }
   _culled_transform_buffer = registry.emplace<graphics::buffer>(graphics::buffer::create_info{
-    .size = sizeof(transform_data) * transform_capacity * graphics::swapchain::max_frames_in_flight,
+    .size = sizeof(transform_data) * transform_capacity * cull_view_count * graphics::swapchain::max_frames_in_flight,
     .usage = graphics::buffer_usage::device_address | graphics::buffer_usage::storage,
     .memory = graphics::memory_usage::device_local,
     .name = "Culled Instance Transforms"
@@ -1361,7 +1400,7 @@ auto scene_renderer_module::_ensure_resources() -> void {
   const auto culled_transform_base = registry.get<graphics::buffer>(_culled_transform_buffer).address();
 
   for (auto slot = std::size_t{0u}; slot < graphics::swapchain::max_frames_in_flight; ++slot) {
-    _culled_transform_addresses[slot] = culled_transform_base + slot * transform_capacity * sizeof(transform_data);
+    _culled_transform_addresses[slot] = culled_transform_base + slot * cull_view_count * transform_capacity * sizeof(transform_data);
   }
 
   _joint_palette_buffer = registry.emplace<graphics::buffer>(graphics::buffer::create_info{
@@ -1453,6 +1492,9 @@ auto scene_renderer_module::_ensure_resources() -> void {
 
     _shadow_map_indices[cascade] = bindless_table.reserve_sampled_image();
     bindless_table.write_sampled_image(_shadow_map_indices[cascade], registry.get<graphics::image>(_shadow_map_images[cascade]).view());
+
+    const auto grayscale = VkComponentMapping{VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_ONE};
+    _shadow_map_preview_views[cascade] = registry.get<graphics::image>(_shadow_map_images[cascade]).create_view(graphics::image_view_type::two_dimensional, 0u, 1u, 0u, 1u, grayscale);
   }
 }
 
@@ -1657,14 +1699,20 @@ auto scene_renderer_module::_prepare_frame(render_context& context) -> void {
     transform_buffer.write(context.packet->transforms.data(), instance_count * sizeof(transform_data), context.slot * transform_capacity * sizeof(transform_data));
   }
 
-  const auto opaque_command_count = std::min(static_cast<std::uint32_t>(context.packet->opaque_commands.size()), max_opaque_draw_commands);
+  auto& culled_indirect_args_buffer = registry.get<graphics::buffer>(_culled_indirect_args_buffer);
 
-  if (opaque_command_count > 0u) {
+  const auto reset_culled_indirect_args = [&](const std::vector<draw_command>& commands, std::uint32_t view) {
+    const auto command_count = std::min(static_cast<std::uint32_t>(commands.size()), max_opaque_draw_commands);
+
+    if (command_count == 0u) {
+      return;
+    }
+
     auto indirect_commands = std::vector<VkDrawIndexedIndirectCommand>{};
-    indirect_commands.reserve(opaque_command_count);
+    indirect_commands.reserve(command_count);
 
-    for (auto index = std::uint32_t{0u}; index < opaque_command_count; ++index) {
-      const auto& command = context.packet->opaque_commands[index];
+    for (auto index = std::uint32_t{0u}; index < command_count; ++index) {
+      const auto& command = commands[index];
 
       auto indirect_command = VkDrawIndexedIndirectCommand{};
 
@@ -1681,9 +1729,17 @@ auto scene_renderer_module::_prepare_frame(render_context& context) -> void {
       indirect_commands.push_back(indirect_command);
     }
 
-    auto& culled_indirect_args_buffer = registry.get<graphics::buffer>(_culled_indirect_args_buffer);
+    const auto offset = (context.slot * cull_view_count + view) * max_opaque_draw_commands * sizeof(VkDrawIndexedIndirectCommand);
 
-    culled_indirect_args_buffer.write(indirect_commands.data(), opaque_command_count * sizeof(VkDrawIndexedIndirectCommand), context.slot * max_opaque_draw_commands * sizeof(VkDrawIndexedIndirectCommand));
+    culled_indirect_args_buffer.write(indirect_commands.data(), command_count * sizeof(VkDrawIndexedIndirectCommand), offset);
+  };
+
+  reset_culled_indirect_args(context.packet->opaque_commands, 0u);
+
+  if (context.packet->has_shadow_caster) {
+    for (auto cascade = std::uint32_t{0u}; cascade < shadow_cascade_count; ++cascade) {
+      reset_culled_indirect_args(context.packet->shadow_caster_commands, 1u + cascade);
+    }
   }
 
   const auto joint_count = std::min(static_cast<std::uint32_t>(context.packet->joint_matrices.size()), joint_palette_capacity);
@@ -1713,6 +1769,8 @@ auto scene_renderer_module::_prepare_frame(render_context& context) -> void {
   auto shadow_enabled = std::uint32_t{0u};
   auto cascade_splits = math::vector4{0.0f, 0.0f, 0.0f, 0.0f};
   auto cascade_depth_bias_per_texel = math::vector4{0.0f, 0.0f, 0.0f, 0.0f};
+  auto cascade_texel_world_size = math::vector4{0.0f, 0.0f, 0.0f, 0.0f};
+  auto cascade_spheres = std::array<math::vector4, shadow_cascade_count>{};
   auto light_view_projections = std::array<math::matrix4x4, shadow_cascade_count>{};
 
   if (context.packet->has_shadow_caster && directional_light_count > 0u) {
@@ -1721,14 +1779,17 @@ auto scene_renderer_module::_prepare_frame(render_context& context) -> void {
 
     for (auto i = std::size_t{0u}; i < shadow_cascade_count; ++i) {
       light_view_projections[i] = cascades[i].view_projection;
+      cascade_spheres[i] = cascades[i].bounding_sphere;
     }
 
     cascade_splits = math::vector4{cascades[0].split_distance, cascades[1].split_distance, cascades[2].split_distance, cascades[3].split_distance};
     cascade_depth_bias_per_texel = math::vector4{cascades[0].depth_bias_per_texel, cascades[1].depth_bias_per_texel, cascades[2].depth_bias_per_texel, cascades[3].depth_bias_per_texel};
+    cascade_texel_world_size = math::vector4{cascades[0].texel_world_size, cascades[1].texel_world_size, cascades[2].texel_world_size, cascades[3].texel_world_size};
     shadow_enabled = 1u;
   }
 
   context.has_shadow_caster = shadow_enabled != 0u;
+  _has_rendered_shadows = context.has_shadow_caster;
   context.shadow_maps = _shadow_map_images;
   context.shadow_map_indices = _shadow_map_indices;
 
@@ -1753,6 +1814,8 @@ auto scene_renderer_module::_prepare_frame(render_context& context) -> void {
   data.cluster_tile_size = cluster_tile_size;
   data.cascade_splits = cascade_splits;
   data.cascade_depth_bias_per_texel = cascade_depth_bias_per_texel;
+  data.cascade_texel_world_size = cascade_texel_world_size;
+  data.cascade_spheres = cascade_spheres;
   data.light_view_projections = light_view_projections;
   data.shadow_map_indices = _shadow_map_indices;
   data.shadow_enabled = shadow_enabled;
@@ -1761,6 +1824,12 @@ auto scene_renderer_module::_prepare_frame(render_context& context) -> void {
   data.near_plane = camera.near_plane;
   data.far_plane = camera.far_plane;
   data.render_target_size = math::vector2{static_cast<std::float_t>(context.extent.x()), static_cast<std::float_t>(context.extent.y())};
+  data.shadow_sampler_index = _shadow_sampler_index;
+  data.shadow_cascade_debug = _shadow_cascade_debug_enabled ? 1u : 0u;
+  data.shadow_depth_bias = context.packet->shadow_depth_bias;
+  data.shadow_normal_bias = context.packet->shadow_normal_bias;
+  data.shadow_penumbra_scale = std::tan(math::to_radians(math::degree{context.packet->shadow_angular_diameter}).value() * 0.5f);
+  data.contact_shadow_length = context.packet->contact_shadow_length;
 
   auto& frame_buffer = registry.get<graphics::buffer>(_frame_buffer);
   frame_buffer.write(&data, sizeof(frame_data), context.slot * memory::stride_v<frame_data>);
@@ -1782,8 +1851,10 @@ auto scene_renderer_module::_prepare_frame(render_context& context) -> void {
 
   context.culled_indirect_args_buffer = _culled_indirect_args_buffer;
   context.culled_indirect_args_address = _culled_indirect_args_addresses[context.slot];
-  context.culled_indirect_args_slot_offset = context.slot * max_opaque_draw_commands;
+  context.culled_indirect_args_slot_offset = context.slot * cull_view_count * max_opaque_draw_commands;
   context.culled_transform_address = _culled_transform_addresses[context.slot];
+  context.culled_indirect_args_view_stride = max_opaque_draw_commands;
+  context.culled_transform_view_stride = transform_capacity;
 
   const auto particle_write_index = static_cast<std::uint32_t>(context.frame_index % 2u);
 

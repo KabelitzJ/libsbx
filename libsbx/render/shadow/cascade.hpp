@@ -8,6 +8,7 @@
 
 #include <libsbx/math/matrix4x4.hpp>
 #include <libsbx/math/vector3.hpp>
+#include <libsbx/math/vector4.hpp>
 
 #include <libsbx/render/render_pass.hpp>
 #include <libsbx/render/render_packet.hpp>
@@ -18,16 +19,16 @@ struct cascade_info {
   math::matrix4x4 view_projection{math::matrix4x4::identity};
   std::float_t split_distance{0.0f}; // View-space (positive, camera-forward) far edge of this cascade's slice.
 
-  // NDC-depth-space equivalent of one shadow-map texel's world-space size in this cascade --
-  // (2*radius/shadow_map_resolution) / (this cascade's own near-far depth range, 2*radius +
-  // caster_padding). Every cascade shares one texture resolution but a very different world-space
-  // area AND a very different depth range (caster_padding=100 alone can dominate a near cascade's
-  // small radius), so a single flat NDC bias (tried, reverted -- e.g. Hazel's own 0.002) translates
-  // to wildly different world-space slack depending on which cascade and how the scene happens to be
-  // scaled: for a small near-cascade radius, 0.002 NDC came out to ~0.24 world units, a quarter of a
-  // 1-unit test cube. csm.slang's bias is this * however many texels of slack it wants, giving
-  // correctly-scaled world-space bias regardless of scene scale or which cascade.
+  // NDC-depth-space equivalent of one shadow-map texel's world-space size in this cascade:
+  // texel_world_size / (this cascade's near-far depth range). csm.slang's depth bias is this times
+  // however many texels of slack it wants, so the bias stays correctly scaled in world space
+  // regardless of scene scale or cascade.
   std::float_t depth_bias_per_texel{0.0f};
+  std::float_t texel_world_size{0.0f};
+
+  // World-space sphere (xyz center, w radius) the cascade was fit to; its shadow map covers all of it.
+  // csm.slang picks the first cascade whose sphere contains the shaded point.
+  math::vector4 bounding_sphere{};
 }; // struct cascade_info
 
 /**

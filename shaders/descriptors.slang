@@ -5,6 +5,8 @@
 
 [[vk::binding(0, 0)]] Texture2D textures[];
 [[vk::binding(1, 0)]] SamplerState samplers[];
+// Aliases binding 1: compare-enabled samplers from the same bindless sampler array.
+[[vk::binding(1, 0)]] SamplerComparisonState comparison_samplers[];
 [[vk::binding(2, 0)]] RWTexture2D<float4> storage_images[];
 [[vk::binding(3, 0)]] TextureCube cubes[];
 [[vk::binding(4, 0)]] RWTexture2DArray<float4> storage_cubes[];

@@ -99,8 +99,9 @@ public:
    * @brief Creates an additional, caller-owned view over a subrange of mips/layers.
    *
    * Not tracked by the image; unlike @ref view, the caller must `vkDestroyImageView` it.
+   * @p components remaps channels (identity by default), e.g. {R, R, R, ONE} to show a depth image as grayscale.
    */
-  [[nodiscard]] auto create_view(graphics::image_view_type type, std::uint32_t base_mip_level, std::uint32_t mip_levels, std::uint32_t base_array_layer, std::uint32_t array_layers) const -> view_type;
+  [[nodiscard]] auto create_view(graphics::image_view_type type, std::uint32_t base_mip_level, std::uint32_t mip_levels, std::uint32_t base_array_layer, std::uint32_t array_layers, const VkComponentMapping& components = VkComponentMapping{}) const -> view_type;
 
   /**
    * @brief The number of mip levels a full chain would have for @p extent.

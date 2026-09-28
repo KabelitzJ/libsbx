@@ -313,6 +313,10 @@ struct directional_light {
   std::float_t intensity{1.0f};
   bool casts_shadows{true};
   std::float_t shadow_distance{75.0f}; // How far from the camera cascaded shadow maps extend.
+  std::float_t shadow_depth_bias{1.0f}; // In shadow-map texels.
+  std::float_t shadow_normal_bias{1.0f}; // 1.0 = just enough receiver offset to cover the PCF footprint on a flat surface.
+  std::float_t shadow_angular_diameter{0.53f}; // Apparent size of the light in degrees (the real sun is ~0.53); drives PCSS penumbra width.
+  std::float_t contact_shadow_length{0.0f}; // Screen-space contact shadow ray length in world units; 0 disables them.
 }; // struct directional_light
 
 struct point_light {

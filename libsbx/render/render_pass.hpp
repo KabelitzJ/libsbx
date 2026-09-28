@@ -34,6 +34,9 @@ namespace sbx::render {
 inline constexpr auto shadow_cascade_count = std::uint32_t{4u};
 inline constexpr auto shadow_map_resolution = std::uint32_t{2048u};
 
+// frustum_cull_pass culls once per view: view 0 is the camera (opaque_commands), view 1 + c is shadow cascade c (shadow_caster_commands).
+inline constexpr auto cull_view_count = std::uint32_t{1u + shadow_cascade_count};
+
 // PCF quality for cascaded shadow sampling (shaders/shadows/csm.slang) — must match the
 // shadow_pcf_quality tiers declared there (0 = low/4 taps, 1 = medium/8 taps, 2 = high/16 taps).
 inline constexpr auto shadow_pcf_quality = std::uint32_t{2u};
@@ -107,6 +110,11 @@ struct render_context {
   // command_buffer::draw_indexed_indirect's own offset parameter is in the same element units.
   std::uint32_t culled_indirect_args_slot_offset{0u};
   graphics::buffer::address_type culled_transform_address{0u};
+  // Element strides between cull views inside this slot's region (see cull_view_count): view v's
+  // args start at culled_indirect_args_address + v * culled_indirect_args_view_stride commands,
+  // its transforms at culled_transform_address + v * culled_transform_view_stride transforms.
+  std::uint32_t culled_indirect_args_view_stride{0u};
+  std::uint32_t culled_transform_view_stride{0u};
 
   // This frame's slot in the joint-palette buffer (CPU-written every frame from
   // packet->joint_matrices, so it's frame-in-flight multiplexed like transform_address); read by
@@ -223,13 +231,14 @@ auto submit_draw_commands(render_context& context, const std::vector<draw_comman
 
 /**
  * @brief Same as submit_draw_commands, but for a command list frustum_cull_pass has already culled
- * (currently only context.packet->opaque_commands, from depth_pre_pass/opaque_pass): reads each
+ * (context.packet->opaque_commands for depth_pre_pass/opaque_pass, or shadow_caster_commands per
+ * @p cascade_index for shadow_pass, which selects that cascade's cull view): reads each
  * command's already-known index_count/index_offset from context.culled_indirect_args_buffer via
  * draw_indexed_indirect instead of drawing directly, and points the vertex shader's instance fetch
  * at context.culled_transform_address (the GPU-compacted, visible-only transforms) instead of
  * context.transform_address.
  */
-auto submit_draw_commands_indirect(render_context& context, const std::vector<draw_command>& commands, const std::array<memory::observer_ptr<graphics::graphics_pipeline>, 4u>& pipelines, const custom_pipeline_resolver& resolve_custom_pipeline = {}) -> void;
+auto submit_draw_commands_indirect(render_context& context, const std::vector<draw_command>& commands, const std::array<memory::observer_ptr<graphics::graphics_pipeline>, 4u>& pipelines, const custom_pipeline_resolver& resolve_custom_pipeline = {}, std::uint32_t cascade_index = 0xFFFFFFFFu) -> void;
 
 auto bind_globals(render_context& context) -> void;
 

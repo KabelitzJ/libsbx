@@ -297,6 +297,12 @@ auto write_node(YAML::Node& node_yaml, ecs::registry& registry, ecs::entity enti
     component["type"] = "directional_light";
     component["color"] = light.color;
     component["intensity"] = light.intensity;
+    component["casts_shadows"] = light.casts_shadows;
+    component["shadow_distance"] = light.shadow_distance;
+    component["shadow_depth_bias"] = light.shadow_depth_bias;
+    component["shadow_normal_bias"] = light.shadow_normal_bias;
+    component["shadow_angular_diameter"] = light.shadow_angular_diameter;
+    component["contact_shadow_length"] = light.contact_shadow_length;
 
     components.push_back(component);
   }
@@ -956,6 +962,30 @@ auto read_node_components(node& target_node, const YAML::Node& node_yaml, const 
       auto& light = target_node.get_or_add_component<directional_light>();
       light.color = component["color"].as<math::color>();
       light.intensity = component["intensity"].as<std::float_t>();
+
+      if (component["casts_shadows"]) {
+        light.casts_shadows = component["casts_shadows"].as<bool>();
+      }
+
+      if (component["shadow_distance"]) {
+        light.shadow_distance = component["shadow_distance"].as<std::float_t>();
+      }
+
+      if (component["shadow_depth_bias"]) {
+        light.shadow_depth_bias = component["shadow_depth_bias"].as<std::float_t>();
+      }
+
+      if (component["shadow_normal_bias"]) {
+        light.shadow_normal_bias = component["shadow_normal_bias"].as<std::float_t>();
+      }
+
+      if (component["shadow_angular_diameter"]) {
+        light.shadow_angular_diameter = component["shadow_angular_diameter"].as<std::float_t>();
+      }
+
+      if (component["contact_shadow_length"]) {
+        light.contact_shadow_length = component["contact_shadow_length"].as<std::float_t>();
+      }
     } else if (type == "point_light") {
       auto& light = target_node.get_or_add_component<point_light>();
       light.color = component["color"].as<math::color>();

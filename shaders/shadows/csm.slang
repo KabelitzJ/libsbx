@@ -47,17 +47,26 @@ static const float2 poisson_disk_high[16] = {
   float2( 0.14383161, -0.14100790)
 };
 
+// Cascades cross-fade over the outer 10% of each sphere's usable radius; shadows fade out over the
+// last 10% of the shadow distance.
 static const float cascade_blend_threshold = 0.9;
+
+// PCF radius bounds in texels: a far cascade can't resolve an edge sharper than about one texel,
+// and a near cascade's radius is capped so the fixed Poisson tap count doesn't spread into noise.
+static const float shadow_min_filter_texels = 1.0;
+static const float shadow_max_filter_texels = 5.0;
 
 struct cascade_select {
   uint cascade;
-  uint next_cascade;
-  float blend_factor;
-  bool fade_out;
+  float blend_factor; // Weight of cascade + 1; only non-zero where that cascade covers the point too.
+  bool valid;
 }; // struct cascade_select
 
-float shadow_hash21(float2 seed) {
-  return frac(sin(dot(seed, float2(12.9898, 78.233))) * 43758.5453);
+// Interleaved gradient noise (Jimenez 2014) from the pixel's screen position: every 3x3 pixel block
+// covers [0, 1) evenly, so the per-pixel PCF rotation and contact-shadow ray offset read as a fine,
+// uniform dither instead of white-noise clumps.
+float interleaved_gradient_noise(float2 pixel) {
+  return frac(52.9829189 * frac(dot(pixel, float2(0.06711056, 0.00583715))));
 }
 
 float2x2 shadow_rotation_2d(float angle) {
@@ -71,136 +80,221 @@ float2 shadow_ndc_to_uv(float2 ndc_xy) {
   return ndc_xy * 0.5 + 0.5;
 }
 
-cascade_select select_cascade(float view_depth, float4 splits) {
-  cascade_select result;
-  result.fade_out = false;
+// World-space distance a lookup can reach past the shaded point, at the largest possible PCSS
+// radius: the receiver normal offset (normal_bias * (1 + radius) texels), the PCF footprint
+// (radius + 1 bilinear texel), and one texel of texel-snapping shift of the map relative to the sphere.
+float cascade_usable_radius(frame_data frame, uint cascade) {
+  float margin_texels = 1.0 + (1.0 + shadow_max_filter_texels) * (1.0 + frame.shadow_normal_bias);
 
-  if (view_depth < splits.x) {
-    result.cascade = 0;
-    result.next_cascade = 1;
-    float blend_start = splits.x * cascade_blend_threshold;
-    result.blend_factor = saturate((view_depth - blend_start) / (splits.x - blend_start));
-  } else if (view_depth < splits.y) {
-    result.cascade = 1;
-    result.next_cascade = 2;
-    float blend_start = splits.y * cascade_blend_threshold;
-    result.blend_factor = saturate((view_depth - blend_start) / (splits.y - blend_start));
-  } else if (view_depth < splits.z) {
-    result.cascade = 2;
-    result.next_cascade = 3;
-    float blend_start = splits.z * cascade_blend_threshold;
-    result.blend_factor = saturate((view_depth - blend_start) / (splits.z - blend_start));
-  } else {
-    result.cascade = 3;
-    result.next_cascade = 3;
-    result.fade_out = true;
-    float fade_start = splits.w * cascade_blend_threshold;
-    result.blend_factor = saturate((view_depth - fade_start) / (splits.w - fade_start));
+  return frame.cascade_spheres[cascade].w - margin_texels * frame.cascade_texel_world_size[cascade];
+}
+
+float cascade_sphere_distance(frame_data frame, uint cascade, float3 world_position) {
+  return length(world_position - frame.cascade_spheres[cascade].xyz);
+}
+
+// Picks the finest cascade whose shadow map fully covers the lookup around world_position (sphere
+// test, as in Unity's split-sphere selection). Near that sphere's edge it blends into the next
+// cascade, but only if the next one covers the point as well -- otherwise it would read outside
+// that map and blend in a fully-lit value.
+cascade_select select_cascade(frame_data frame, float3 world_position) {
+  cascade_select result;
+  result.cascade = 0u;
+  result.blend_factor = 0.0;
+  result.valid = false;
+
+  for (uint cascade = 0u; cascade < shadow_cascade_count; ++cascade) {
+    float usable = cascade_usable_radius(frame, cascade);
+    float distance = cascade_sphere_distance(frame, cascade, world_position);
+
+    if (distance < usable) {
+      result.cascade = cascade;
+      result.valid = true;
+
+      if (cascade + 1u < shadow_cascade_count && cascade_sphere_distance(frame, cascade + 1u, world_position) < cascade_usable_radius(frame, cascade + 1u)) {
+        float blend_start = usable * cascade_blend_threshold;
+        result.blend_factor = saturate((distance - blend_start) / (usable - blend_start));
+      }
+
+      return result;
+    }
   }
 
   return result;
 }
 
-float sample_cascade_pcf(frame_data frame, uint cascade, float3 world_position, float3 world_normal, uint sampler_index) {
-  uint shadow_index = frame.shadow_map_indices[cascade];
+uint shadow_sample_count() {
+  return shadow_pcf_quality == 0 ? 4u : (shadow_pcf_quality == 1 ? 8u : 16u);
+}
+
+float2 shadow_poisson_sample(uint i) {
+  if (shadow_pcf_quality == 0) {
+    return poisson_disk_low[i];
+  }
+
+  if (shadow_pcf_quality == 1) {
+    return poisson_disk_medium[i];
+  }
+
+  return poisson_disk_high[i];
+}
+
+struct shadow_receiver {
+  float2 uv;
+  float depth;
+  bool valid;
+}; // struct shadow_receiver
+
+// Projects world_position into the cascade after the receiver normal offset for a filter of
+// radius_texels: a surface tilted by theta changes light-space depth by texel * tan(theta) per
+// texel, and the lookup reaches (1 + radius) texels from the center (radius for the Poisson taps,
+// 1 for SampleCmp's bilinear 2x2). Offsetting by d along the normal buys d / cos(theta) of depth
+// margin, so d = (1 + radius) * texel * sin(theta) covers any flat receiver exactly at normal_bias 1.
+shadow_receiver project_shadow_receiver(frame_data frame, uint cascade, float3 world_position, float3 world_normal, float sin_theta, float radius_texels) {
+  float normal_offset = frame.shadow_normal_bias * (1.0 + radius_texels) * frame.cascade_texel_world_size[cascade] * sin_theta;
+
+  float4 clip = mul(frame.light_view_projections[cascade], float4(world_position + world_normal * normal_offset, 1.0));
+  float3 ndc = clip.xyz / clip.w;
+
+  shadow_receiver result;
+  result.uv = shadow_ndc_to_uv(ndc.xy);
+  result.depth = ndc.z;
+  result.valid = all(result.uv >= 0.0) && all(result.uv <= 1.0) && result.depth >= 0.0 && result.depth <= 1.0;
+
+  return result;
+}
+
+// PCSS (Fernando 2005) for a directional light, whose angular size makes the penumbra grow with
+// the distance between receiver and blocker: radius = distance * tan(angular_diameter / 2).
+// 1. Blocker search: average the depth of everything closer to the light than the receiver, within
+//    the widest penumbra possible here (a blocker at the cascade's near plane).
+// 2. Penumbra estimate from the receiver-to-average-blocker distance. Cascade depth is linear
+//    (orthographic, 2 * sphere radius deep), so depth differences convert straight to world units.
+//    Depth-clamped casters sit at depth 0, so a blocker beyond the near plane reads as closer than
+//    it is and gets a slightly sharper penumbra than reality.
+// 3. PCF with that radius. Every radius is clamped to what the cascade can resolve (>= 1 texel) and
+//    what the fixed tap count covers without noise (<= shadow_max_filter_texels).
+float sample_cascade_pcf(frame_data frame, uint cascade, float3 world_position, float3 world_normal, float noise) {
+  // Neighboring pixels can land in different cascades, so the descriptor index isn't uniform.
+  Texture2D shadow_map = textures[NonUniformResourceIndex(frame.shadow_map_indices[cascade])];
 
   uint width, height;
-  textures[shadow_index].GetDimensions(width, height);
+  shadow_map.GetDimensions(width, height);
 
-  float2 texel_size = 1.0 / float2(width, height);
+  float2 map_size = float2(width, height);
+  float2 texel_size = 1.0 / map_size;
+  int2 max_texel = int2(width, height) - 1;
+
+  float texel_world = frame.cascade_texel_world_size[cascade];
+  float depth_range = 2.0 * frame.cascade_spheres[cascade].w;
+  float depth_bias = frame.cascade_depth_bias_per_texel[cascade] * frame.shadow_depth_bias;
 
   float3 light_direction = normalize(-frame.lights[0].direction.xyz);
   float ndl = dot(world_normal, light_direction);
+  float sin_theta = sqrt(saturate(1.0 - ndl * ndl));
 
-  float4 clip = mul(frame.light_view_projections[cascade], float4(world_position, 1.0));
-  float3 ndc = clip.xyz / clip.w;
-  float2 uv = shadow_ndc_to_uv(ndc.xy);
+  float2x2 rotation = shadow_rotation_2d(noise * two_pi);
+  uint sample_count = shadow_sample_count();
 
-  if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) {
+  shadow_receiver center = project_shadow_receiver(frame, cascade, world_position, world_normal, sin_theta, shadow_min_filter_texels);
+
+  if (!center.valid) {
     return 1.0;
   }
 
-  float depth = ndc.z;
+  float search_radius = clamp(center.depth * depth_range * frame.shadow_penumbra_scale / texel_world, shadow_min_filter_texels, shadow_max_filter_texels);
 
-  if (depth < 0.0 || depth > 1.0) {
+  shadow_receiver search = project_shadow_receiver(frame, cascade, world_position, world_normal, sin_theta, search_radius);
+
+  if (!search.valid) {
     return 1.0;
   }
 
-  // Depth-space bias, scaled per-cascade via cascade_depth_bias_per_texel so the world-space slack
-  // it represents stays correct regardless of scene scale or which cascade (its own doc comment has
-  // the full reasoning) -- a single flat NDC bias (Hazel's own GetDirShadowBias uses 0.002) was
-  // tried here and reverted: it's tuned for Hazel's own typical scene scale, and translated to a
-  // wildly different (much larger) world-space bias for a small nearby cascade here, causing a
-  // visible gap around small casters. 1 to 2.5 texels of slack, scaled up at grazing angles (low
-  // ndl) where a texel's footprint on the receiving surface is largest and acne is worst.
-  float bias = frame.cascade_depth_bias_per_texel[cascade] * (1.0 + 1.5 * saturate(1.0 - ndl));
+  float search_reference = search.depth - depth_bias;
+  float blocker_depth_sum = 0.0;
+  float blocker_count = 0.0;
 
-  float resolution_scale = float(width) / 2048.0;
-  float radius = (1.0 / resolution_scale) * (1.0 + float(cascade) * 0.3);
+  for (uint i = 0u; i < sample_count; ++i) {
+    float2 sample_uv = search.uv + mul(rotation, shadow_poisson_sample(i)) * texel_size * search_radius;
+    int2 texel = clamp(int2(sample_uv * map_size), int2(0, 0), max_texel);
+    float sample_depth = shadow_map.Load(int3(texel, 0)).r;
 
-  float angle = shadow_hash21(world_position.xz + world_position.y * 0.6180339887) * two_pi;
-  float2x2 rotation = shadow_rotation_2d(angle);
+    if (sample_depth < search_reference) {
+      blocker_depth_sum += sample_depth;
+      blocker_count += 1.0;
+    }
+  }
 
-  SamplerState shadow_sampler = samplers[sampler_index];
+  // The PCF radius below never exceeds search_radius, so its footprint lies inside the searched area.
+  if (blocker_count == 0.0) {
+    return 1.0;
+  }
+
+  float blocker_distance = (search.depth - blocker_depth_sum / blocker_count) * depth_range;
+  float radius = clamp(blocker_distance * frame.shadow_penumbra_scale / texel_world, shadow_min_filter_texels, search_radius);
+
+  shadow_receiver receiver = project_shadow_receiver(frame, cascade, world_position, world_normal, sin_theta, radius);
+
+  if (!receiver.valid) {
+    return 1.0;
+  }
+
+  float reference = receiver.depth - depth_bias;
+
+  SamplerComparisonState shadow_sampler = comparison_samplers[frame.shadow_sampler_index];
 
   float shadow = 0.0;
-  float sample_count;
 
-  if (shadow_pcf_quality == 0) {
-    sample_count = 4.0;
-
-    [unroll]
-    for (int i = 0; i < 4; ++i) {
-      float2 offset = mul(rotation, poisson_disk_low[i]);
-      float2 sample_uv = uv + offset * texel_size * radius;
-      float sample_depth = textures[shadow_index].Sample(shadow_sampler, sample_uv).r;
-
-      shadow += (depth - bias <= sample_depth) ? 1.0 : 0.0;
-    }
-  } else if (shadow_pcf_quality == 1) {
-    sample_count = 8.0;
-
-    [unroll]
-    for (int i = 0; i < 8; ++i) {
-      float2 offset = mul(rotation, poisson_disk_medium[i]);
-      float2 sample_uv = uv + offset * texel_size * radius;
-      float sample_depth = textures[shadow_index].Sample(shadow_sampler, sample_uv).r;
-
-      shadow += (depth - bias <= sample_depth) ? 1.0 : 0.0;
-    }
-  } else {
-    sample_count = 16.0;
-
-    [unroll]
-    for (int i = 0; i < 16; ++i) {
-      float2 offset = mul(rotation, poisson_disk_high[i]);
-      float2 sample_uv = uv + offset * texel_size * radius;
-      float sample_depth = textures[shadow_index].Sample(shadow_sampler, sample_uv).r;
-
-      shadow += (depth - bias <= sample_depth) ? 1.0 : 0.0;
-    }
+  for (uint i = 0u; i < sample_count; ++i) {
+    float2 offset = mul(rotation, shadow_poisson_sample(i));
+    shadow += shadow_map.SampleCmpLevelZero(shadow_sampler, receiver.uv + offset * texel_size * radius, reference);
   }
 
-  return shadow / sample_count;
+  return shadow / float(sample_count);
 }
 
-float calculate_shadow(frame_data frame, float3 world_position, float3 world_normal, uint sampler_index) {
+float shadow_distance_fade(frame_data frame, float3 world_position) {
   float view_depth = -mul(frame.view, float4(world_position, 1.0)).z;
-  cascade_select info = select_cascade(view_depth, frame.cascade_splits);
+  float fade_start = frame.cascade_splits.w * cascade_blend_threshold;
 
-  float current = sample_cascade_pcf(frame, info.cascade, world_position, world_normal, sampler_index);
+  return saturate((view_depth - fade_start) / (frame.cascade_splits.w - fade_start));
+}
 
-  if (info.fade_out) {
-    return lerp(current, 1.0, info.blend_factor);
+float calculate_shadow(frame_data frame, float3 world_position, float3 world_normal, float noise) {
+  cascade_select info = select_cascade(frame, world_position);
+
+  if (!info.valid) {
+    return 1.0;
   }
 
-  if (info.blend_factor > 0.0 && info.cascade < 3) {
-    float next = sample_cascade_pcf(frame, info.next_cascade, world_position, world_normal, sampler_index);
+  float shadow = sample_cascade_pcf(frame, info.cascade, world_position, world_normal, noise);
 
-    return lerp(current, next, info.blend_factor);
+  if (info.blend_factor > 0.0) {
+    float next = sample_cascade_pcf(frame, info.cascade + 1u, world_position, world_normal, noise);
+
+    shadow = lerp(shadow, next, info.blend_factor);
   }
 
-  return current;
+  return lerp(shadow, 1.0, shadow_distance_fade(frame, world_position));
+}
+
+float3 shadow_cascade_debug_tint(frame_data frame, float3 world_position) {
+  static const float3 cascade_colors[shadow_cascade_count] = {
+    float3(1.0, 0.25, 0.25),
+    float3(0.25, 1.0, 0.25),
+    float3(0.25, 0.25, 1.0),
+    float3(1.0, 1.0, 0.25)
+  };
+
+  cascade_select info = select_cascade(frame, world_position);
+
+  if (!info.valid) {
+    return float3(1.0, 1.0, 1.0);
+  }
+
+  float3 color = lerp(cascade_colors[info.cascade], cascade_colors[min(info.cascade + 1u, shadow_cascade_count - 1u)], info.blend_factor);
+
+  return lerp(color, float3(1.0, 1.0, 1.0), shadow_distance_fade(frame, world_position));
 }
 
 #endif // SHADOWS_CSM_SLANG_

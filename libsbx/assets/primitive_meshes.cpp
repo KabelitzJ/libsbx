@@ -349,7 +349,7 @@ auto ensure_primitive_mesh_cooked(primitive_mesh_kind kind) -> void {
   auto [vertices, indices] = [&]() -> std::pair<std::vector<vertex>, std::vector<std::uint32_t>> {
     switch (kind) {
       case primitive_mesh_kind::cube: return generate_cube();
-      case primitive_mesh_kind::sphere: return generate_uv_sphere(0.5f, 12, 16);
+      case primitive_mesh_kind::sphere: return generate_uv_sphere(0.5f, 24, 32);
       case primitive_mesh_kind::plane: return generate_plane();
       case primitive_mesh_kind::capsule: return generate_capsule(0.5f, 0.5f, 16, 6);
       case primitive_mesh_kind::cylinder: return generate_cylinder(0.5f, 0.5f, 16);

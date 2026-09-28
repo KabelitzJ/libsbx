@@ -2,6 +2,7 @@
 // Copyright (c) 2026 Jonas Kabelitz
 #include <libsbx/render/render_pass.hpp>
 
+#include <algorithm>
 #include <filesystem>
 #include <vector>
 
@@ -141,31 +142,37 @@ auto submit_draw_commands(render_context& context, const std::vector<draw_comman
   }
 }
 
-auto submit_draw_commands_indirect(render_context& context, const std::vector<draw_command>& commands, const std::array<memory::observer_ptr<graphics::graphics_pipeline>, 4u>& pipelines, const custom_pipeline_resolver& resolve_custom_pipeline) -> void {
+auto submit_draw_commands_indirect(render_context& context, const std::vector<draw_command>& commands, const std::array<memory::observer_ptr<graphics::graphics_pipeline>, 4u>& pipelines, const custom_pipeline_resolver& resolve_custom_pipeline, std::uint32_t cascade_index) -> void {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 
   auto& registry = graphics_module.resource_registry();
   auto& bindless_table = graphics_module.bindless_table();
   auto& indirect_args_buffer = registry.get<graphics::buffer>(context.culled_indirect_args_buffer);
 
+  const auto view = cascade_index == 0xFFFFFFFFu ? 0u : 1u + cascade_index;
+  const auto args_offset = context.culled_indirect_args_slot_offset + view * context.culled_indirect_args_view_stride;
+  const auto transform_address = context.culled_transform_address + view * context.culled_transform_view_stride * sizeof(transform_data);
+  const auto command_count = std::min(commands.size(), static_cast<std::size_t>(context.culled_indirect_args_view_stride));
+
   auto bound = false;
   auto current_pipeline = static_cast<const graphics::graphics_pipeline*>(nullptr);
   auto current_mesh = memory::make_observer<const assets::mesh>(nullptr);
 
-  for (auto index = std::size_t{0u}; index < commands.size(); ++index) {
+  for (auto index = std::size_t{0u}; index < command_count; ++index) {
     const auto& command = commands[index];
 
     auto values = push_constants{};
+    values.cascade_index = cascade_index;
 
     if (!prepare_draw_command(registry, context, command, pipelines, resolve_custom_pipeline, bound, current_pipeline, current_mesh, values)) {
       continue;
     }
 
-    values.transform_address = context.culled_transform_address;
+    values.transform_address = transform_address;
 
     context.command_buffer->push_constants(bindless_table.pipeline_layout(), graphics::bindless_table::push_constant_stages, 0u, memory::as_bytes(values));
 
-    const auto offset = context.culled_indirect_args_slot_offset + static_cast<std::uint32_t>(index);
+    const auto offset = args_offset + static_cast<std::uint32_t>(index);
     context.command_buffer->draw_indexed_indirect(indirect_args_buffer, offset, 1u);
   }
 }

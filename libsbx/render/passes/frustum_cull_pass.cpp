@@ -6,6 +6,7 @@
 #include <libsbx/utility/stats_registry.hpp>
 #include <libsbx/graphics/profiler.hpp>
 
+#include <algorithm>
 #include <vector>
 
 #include <vulkan/vulkan.h>
@@ -52,7 +53,7 @@ struct frustum_cull_push_data {
   std::uint32_t command_index;
   std::uint32_t transform_offset;
   std::uint32_t instance_count;
-  std::uint32_t padding{0u};
+  std::uint32_t cascade_index;
 }; // struct frustum_cull_push_data
 
 auto frustum_cull_pass::declare(compute_pass_builder& builder, const graph_resources& resources) -> void {
@@ -71,17 +72,26 @@ auto frustum_cull_pass::execute(render_context& context) -> void {
     return;
   }
 
-  const auto& commands = context.packet->opaque_commands;
-
-  if (commands.empty()) {
-    return;
-  }
-
   bind_compute_globals(context);
 
   context.command_buffer->bind_pipeline(*_pipeline);
 
-  for (auto index = std::uint32_t{0u}; index < static_cast<std::uint32_t>(commands.size()); ++index) {
+  _cull_view(context, context.packet->opaque_commands, 0xFFFFFFFFu);
+
+  if (context.has_shadow_caster) {
+    for (auto cascade = std::uint32_t{0u}; cascade < shadow_cascade_count; ++cascade) {
+      _cull_view(context, context.packet->shadow_caster_commands, cascade);
+    }
+  }
+}
+
+auto frustum_cull_pass::_cull_view(render_context& context, const std::vector<draw_command>& commands, std::uint32_t cascade_index) -> void {
+  const auto view = cascade_index == 0xFFFFFFFFu ? 0u : 1u + cascade_index;
+  const auto dest_transforms = context.culled_transform_address + view * context.culled_transform_view_stride * sizeof(transform_data);
+  const auto indirect_args = context.culled_indirect_args_address + view * context.culled_indirect_args_view_stride * sizeof(VkDrawIndexedIndirectCommand);
+  const auto command_count = std::min(static_cast<std::uint32_t>(commands.size()), context.culled_indirect_args_view_stride);
+
+  for (auto index = std::uint32_t{0u}; index < command_count; ++index) {
     const auto& command = commands[index];
 
     // Same skip condition submit_draw_commands_indirect itself uses -- no point culling instances
@@ -99,13 +109,14 @@ auto frustum_cull_pass::execute(render_context& context) -> void {
     const auto push = frustum_cull_push_data{
       context.frame_address,
       context.transform_address,
-      context.culled_transform_address,
-      context.culled_indirect_args_address,
+      dest_transforms,
+      indirect_args,
       math::vector4{bounds.min(), 0.0f},
       math::vector4{bounds.max(), 0.0f},
       index,
       command.transform_offset,
-      command.instance_count
+      command.instance_count,
+      cascade_index
     };
 
     write_push_constants(context, push);

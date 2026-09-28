@@ -36,7 +36,8 @@ sampler::sampler(const create_info& create_info) {
   sampler_create_info.minLod = create_info.min_lod;
   sampler_create_info.maxLod = create_info.max_lod;
   sampler_create_info.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK;
-  sampler_create_info.compareEnable = false;
+  sampler_create_info.compareEnable = create_info.compare.has_value();
+  sampler_create_info.compareOp = to_vk_enum<VkCompareOp>(create_info.compare.value_or(compare_operation::always));
   sampler_create_info.unnormalizedCoordinates = false;
 
   validate(vkCreateSampler(logical_device, &sampler_create_info, nullptr, &_handle), "vkCreateSampler");

@@ -257,6 +257,10 @@ struct render_packet {
   std::vector<skin_dispatch> skin_dispatches{};
   bool has_shadow_caster{false}; // When true, lights[0] is the cascaded-shadow-mapped sun.
   std::float_t shadow_distance{75.0f};
+  std::float_t shadow_depth_bias{1.0f};
+  std::float_t shadow_normal_bias{1.0f};
+  std::float_t shadow_angular_diameter{0.53f}; // degrees
+  std::float_t contact_shadow_length{0.0f};
   assets::environment_map_handle environment{};
   std::float_t environment_intensity{1.0f};
   std::float_t ambient_intensity{1.0f};

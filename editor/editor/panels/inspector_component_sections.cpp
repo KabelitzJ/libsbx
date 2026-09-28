@@ -317,6 +317,14 @@ auto draw_directional_light_section(editor_state& state, sbx::scenes::scene& tar
 
   ImGui::DragFloat("Shadow Distance", &light.shadow_distance, 0.5f, 1.0f, 1000.0f);
   bracket_edit(state, target, node, light, pending, "Edit Directional Light");
+  ImGui::DragFloat("Shadow Depth Bias", &light.shadow_depth_bias, 0.05f, 0.0f, 10.0f);
+  bracket_edit(state, target, node, light, pending, "Edit Directional Light");
+  ImGui::DragFloat("Shadow Normal Bias", &light.shadow_normal_bias, 0.05f, 0.0f, 3.0f);
+  bracket_edit(state, target, node, light, pending, "Edit Directional Light");
+  ImGui::DragFloat("Sun Angular Diameter", &light.shadow_angular_diameter, 0.01f, 0.0f, 10.0f, "%.2f deg");
+  bracket_edit(state, target, node, light, pending, "Edit Directional Light");
+  ImGui::DragFloat("Contact Shadow Length", &light.contact_shadow_length, 0.005f, 0.0f, 2.0f, "%.3f m");
+  bracket_edit(state, target, node, light, pending, "Edit Directional Light");
 }
 
 auto draw_point_light_section(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node) -> void {

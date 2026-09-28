@@ -40,6 +40,7 @@ struct pipeline_state {
   std::float_t depth_bias_constant{0.0f};
   std::float_t depth_bias_slope{0.0f};
   std::float_t depth_bias_clamp{0.0f};
+  bool depth_clamp{false};
   bool depth_test{false};
   bool depth_write{false};
   graphics::compare_operation depth_compare{compare_operation::less_or_equal};

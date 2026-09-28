@@ -154,7 +154,7 @@ auto image::subresource_range() const noexcept -> VkImageSubresourceRange {
   return range;
 }
 
-auto image::create_view(const graphics::image_view_type type, const std::uint32_t base_mip_level, const std::uint32_t mip_levels, const std::uint32_t base_array_layer, const std::uint32_t array_layers) const -> view_type {
+auto image::create_view(const graphics::image_view_type type, const std::uint32_t base_mip_level, const std::uint32_t mip_levels, const std::uint32_t base_array_layer, const std::uint32_t array_layers, const VkComponentMapping& components) const -> view_type {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 
   const auto& logical_device = graphics_module.logical_device();
@@ -171,6 +171,7 @@ auto image::create_view(const graphics::image_view_type type, const std::uint32_
   view_info.image = _handle;
   view_info.viewType = to_vk_enum<VkImageViewType>(type);
   view_info.format = to_vk_enum<VkFormat>(_format);
+  view_info.components = components;
   view_info.subresourceRange = range;
 
   auto result = view_type{};

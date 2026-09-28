@@ -23,7 +23,8 @@ auto _are_same_sampler(const sampler::create_info& lhs, const sampler::create_in
     && lhs.address_mode_w == rhs.address_mode_w
     && lhs.max_anisotropy == rhs.max_anisotropy
     && lhs.min_lod == rhs.min_lod
-    && lhs.max_lod == rhs.max_lod;
+    && lhs.max_lod == rhs.max_lod
+    && lhs.compare == rhs.compare;
 }
 
 auto bindless_table::index_allocator::allocate() -> std::uint32_t {

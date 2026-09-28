@@ -74,6 +74,7 @@ graphics_pipeline::graphics_pipeline(const create_info& create_info) {
   rasterization_state.polygonMode = to_vk_enum<VkPolygonMode>(create_info.polygon_mode);
   rasterization_state.cullMode = static_cast<VkCullModeFlags>(create_info.cull_mode);
   rasterization_state.frontFace = to_vk_enum<VkFrontFace>(create_info.front_face);
+  rasterization_state.depthClampEnable = create_info.depth_clamp ? VK_TRUE : VK_FALSE;
 
   const auto& line_width_range = physical_device.properties().limits.lineWidthRange;
   rasterization_state.lineWidth = std::clamp(create_info.line_width, line_width_range[0], line_width_range[1]);

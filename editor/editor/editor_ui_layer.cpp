@@ -308,6 +308,12 @@ auto editor_ui_layer::_draw_dockspace() -> void {
 
       scene_renderer_module.set_wireframe_enabled(wireframe_enabled);
 
+      auto shadow_cascade_debug_enabled = scene_renderer_module.shadow_cascade_debug_enabled();
+
+      changed |= ImGui::MenuItem("Shadow Cascades", nullptr, &shadow_cascade_debug_enabled);
+
+      scene_renderer_module.set_shadow_cascade_debug_enabled(shadow_cascade_debug_enabled);
+
       if (changed) {
         physics_module.set_debug_draw_flags(flags);
       }

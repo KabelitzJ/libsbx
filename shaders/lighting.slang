@@ -8,6 +8,7 @@
 
 #include <clusters/cluster_data.slang>
 #include <shadows/csm.slang>
+#include <shadows/contact.slang>
 
 struct lighting_input {
   float3 position;
@@ -112,6 +113,12 @@ lighting_output evaluate_lit_surface<let ReceivesShadows : bool>(lighting_input 
     n = -n;
   }
 
+  float3 vertex_normal = n;
+
+  // Taken here, in uniform control flow: the contact shadow call below sits behind per-pixel branches.
+  float view_z = mul(input.frame_data.view, float4(input.position, 1.0)).z;
+  float depth_slope = fwidth(view_z);
+
   float3 t = normalize(input.tangent.xyz);
 
   // Gram-Schmidt re-orthogonalize after interpolation
@@ -146,7 +153,13 @@ lighting_output evaluate_lit_surface<let ReceivesShadows : bool>(lighting_input 
     float3 radiance = light.color.rgb * light.color.a;
 
     if (ReceivesShadows && i == 0u && input.frame_data.shadow_enabled != 0u && s.receives_shadow) {
-      sun_shadow = calculate_shadow(input.frame_data, input.position, n, input.clamp_sampler_index);
+      float noise = interleaved_gradient_noise(input.sv_position.xy);
+
+      sun_shadow = calculate_shadow(input.frame_data, input.position, vertex_normal, noise);
+
+      if (input.frame_data.contact_shadow_length > 0.0 && sun_shadow > 0.0 && dot(vertex_normal, l) > 0.0) {
+        sun_shadow = min(sun_shadow, calculate_contact_shadow(input.frame_data, input.position, l, noise, depth_slope));
+      }
 
       radiance *= sun_shadow;
     }
@@ -154,7 +167,6 @@ lighting_output evaluate_lit_surface<let ReceivesShadows : bool>(lighting_input 
     lo += pbr_lighting_model::direct(surf, l, radiance);
   }
 
-  float view_z = mul(input.frame_data.view, float4(input.position, 1.0)).z;
   float depth_slice = log2(max(-view_z, 0.0001)) * input.frame_data.cluster_scale + input.frame_data.cluster_bias;
   uint slice = uint(clamp(depth_slice, 0.0, float(cluster_dimensions.z - 1u)));
 
@@ -214,11 +226,11 @@ lighting_output evaluate_lit_surface<let ReceivesShadows : bool>(lighting_input 
 
   float3 ambient = (kd * diffuse + specular) * s.ao * input.frame_data.ambient_intensity;
 
-  static const float ambient_shadow_floor = 0.6;
-
-  ambient *= lerp(ambient_shadow_floor, 1.0, sun_shadow);
-
   float3 color = ambient + lo + s.emissive;
+
+  if (input.frame_data.shadow_cascade_debug != 0u && input.frame_data.shadow_enabled != 0u) {
+    color *= shadow_cascade_debug_tint(input.frame_data, input.position);
+  }
 
   lighting_output output;
 

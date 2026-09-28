@@ -102,6 +102,8 @@ struct frame_data {
   float2 cluster_tile_size;
   float4 cascade_splits;
   float4 cascade_depth_bias_per_texel;
+  float4 cascade_texel_world_size;
+  float4 cascade_spheres[shadow_cascade_count]; // xyz = world center, w = radius
   float4x4 light_view_projections[shadow_cascade_count];
   uint shadow_map_indices[shadow_cascade_count];
   uint shadow_enabled;
@@ -110,6 +112,12 @@ struct frame_data {
   float near_plane;
   float far_plane;
   float2 render_target_size;
+  uint shadow_sampler_index;
+  uint shadow_cascade_debug;
+  float shadow_depth_bias;
+  float shadow_normal_bias;
+  float shadow_penumbra_scale; // tan(half the light's angular diameter): PCSS penumbra radius per unit of blocker distance
+  float contact_shadow_length;
 }; // struct frame_data
 
 #endif // FRAME_DATA_SLANG_

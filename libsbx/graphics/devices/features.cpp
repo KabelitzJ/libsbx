@@ -95,6 +95,7 @@ auto features::required() -> const features& {
   core.multiDrawIndirect = true;
   core.fillModeNonSolid = true;
   core.independentBlend = true;
+  core.depthClamp = true;
 
   // 1.1
   vulkan11.shaderDrawParameters = true;

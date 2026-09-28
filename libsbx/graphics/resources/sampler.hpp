@@ -4,6 +4,7 @@
 #define LIBSBX_GRAPHICS_RESOURCES_SAMPLER_HPP_
 
 #include <cmath>
+#include <optional>
 #include <string>
 
 #include <vulkan/vulkan.h>
@@ -36,6 +37,7 @@ public:
     std::float_t max_anisotropy{1.0f};
     std::float_t min_lod{0.0f};
     std::float_t max_lod{lod_clamp::none};
+    std::optional<graphics::compare_operation> compare{};
     std::string name{"Sampler"};
   }; // struct create_info
 

@@ -71,6 +71,7 @@ public:
     graphics::front_face front_face{front_face::counter_clockwise};
     std::float_t line_width{1.0f};
     std::optional<graphics::depth_bias> depth_bias{};
+    bool depth_clamp{false}; // Clamp fragment depth to [0, 1] instead of clipping at near/far.
     bool depth_test{false};
     bool depth_write{false};
     graphics::compare_operation depth_compare{compare_operation::less_or_equal};

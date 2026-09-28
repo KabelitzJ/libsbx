@@ -139,6 +139,19 @@ public:
   }
 
   /**
+   * @brief Whether the most recent record() drew the shadow cascades. Only then are they in
+   * shader_read_only_optimal and safe for the editor to sample through shadow_map_preview_view().
+   */
+  [[nodiscard]] auto has_rendered_shadows() const noexcept -> bool {
+    return _has_rendered_shadows;
+  }
+
+  /** @brief A {R, R, R, 1}-swizzled view of shadow cascade @p cascade's depth map, for showing it as grayscale in ImGui. */
+  [[nodiscard]] auto shadow_map_preview_view(std::uint32_t cascade) const noexcept -> VkImageView {
+    return _shadow_map_preview_views[cascade];
+  }
+
+  /**
    * @brief Shows/hides the world-space reference grid (see grid_pass). Off by default; runtime
    * never calls this, so the grid pass — always present in the fixed pass list — stays a no-op
    * there. editor_module calls this once to turn it on.
@@ -155,6 +168,13 @@ public:
   auto set_wireframe_enabled(bool enabled) -> void;
 
   auto wireframe_enabled() const -> bool;
+
+  /**
+   * @brief Tints lit surfaces by the shadow cascade they sample (red, green, blue, yellow; untinted beyond the shadow distance).
+   */
+  auto set_shadow_cascade_debug_enabled(bool enabled) -> void;
+
+  auto shadow_cascade_debug_enabled() const -> bool;
 
   /**
    * @brief The shared immediate-mode line accumulator -- physics colliders (see
@@ -208,7 +228,7 @@ private:
   inline static constexpr auto transform_capacity = std::uint32_t{16384u};
   inline static constexpr auto cluster_light_index_capacity = std::uint32_t{65536u};
 
-  // frustum_cull_pass: a fixed upper bound on opaque draw commands per frame (mirroring
+  // frustum_cull_pass: a fixed upper bound on draw commands per cull view per frame (mirroring
   // transform_capacity's "just skip the overflow" v1 policy above) and the compacted,
   // visibility-culled transform buffer it writes into -- same capacity as _transform_buffer, since
   // worst case every instance survives culling and needs its full original slot.
@@ -300,8 +320,12 @@ private:
 
   std::uint32_t _sampler_index{0u};
   std::uint32_t _clamp_sampler_index{0u};
+  std::uint32_t _shadow_sampler_index{0u};
   bool _grid_enabled{false};
   bool _wireframe_enabled{false};
+  bool _shadow_cascade_debug_enabled{false};
+  bool _has_rendered_shadows{false};
+  std::array<VkImageView, shadow_cascade_count> _shadow_map_preview_views{};
 
   graphics::image_handle _depth_image{};
   // _depth_image's own MSAA resolve target (depth_pre_pass.hpp's own doc comment) -- single-sample,

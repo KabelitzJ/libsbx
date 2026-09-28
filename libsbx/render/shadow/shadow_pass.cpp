@@ -40,6 +40,7 @@ shadow_pass::shadow_pass() {
       .depth_format = graphics::format::d32_sfloat,
       .cull_mode = cull,
       .front_face = graphics::front_face::counter_clockwise,
+      .depth_clamp = true,
       .depth_test = true,
       .depth_write = true,
       .depth_compare = graphics::compare_operation::less_or_equal,
@@ -53,8 +54,8 @@ shadow_pass::shadow_pass() {
   // surface pair everywhere along their silhouette as seen from the light. Open meshes (terrain,
   // ground planes) have a single layer of front-facing triangles; culling front faces for a
   // caster like that discards almost the entire light-facing surface from the shadow map instead
-  // of just avoiding self-acne on it. Slope-scaled bias (csm.slang) carries the acne-avoidance
-  // burden instead, matching what the color pass already culls.
+  // of just avoiding self-acne on it. The receiver normal offset + depth bias in csm.slang carry the
+  // acne-avoidance burden instead, matching what the color pass already culls.
   _pipelines[0] = make(graphics::cull_mode::back, "Shadow Cascade");
   _pipelines[1] = make(graphics::cull_mode::none, "Shadow Cascade Double-Sided");
   _pipelines[2] = _pipelines[0]; // shading model doesn't affect depth-only output
@@ -72,6 +73,7 @@ auto shadow_pass::_resolve_custom_pipeline(const std::string& shader_path, bool 
     .depth_format = graphics::format::d32_sfloat,
     .cull_mode = is_double_sided ? graphics::cull_mode::none : graphics::cull_mode::back,
     .front_face = graphics::front_face::counter_clockwise,
+    .depth_clamp = true,
     .depth_test = true,
     .depth_write = true,
     .depth_compare = graphics::compare_operation::less_or_equal,
@@ -80,6 +82,8 @@ auto shadow_pass::_resolve_custom_pipeline(const std::string& shader_path, bool 
 }
 
 auto shadow_pass::declare(graphics_pass_builder& builder, const graph_resources& resources) -> void {
+  builder.reads_buffer(resources.culled_indirect_args_buffer, graphics::pipeline_stage::draw_indirect, graphics::access::indirect_command_read);
+  builder.reads_buffer(resources.culled_transform_buffer, graphics::pipeline_stage::vertex_shader, graphics::access::shader_read);
   builder.reads_buffer(resources.skin_scratch_buffer, graphics::pipeline_stage::vertex_shader, graphics::access::shader_read);
 
   const auto shadow_extent = math::vector2u{shadow_map_resolution, shadow_map_resolution};
@@ -110,7 +114,7 @@ auto shadow_pass::execute(render_context& context, std::uint32_t cascade) -> voi
   const auto shadow_extent = math::vector2u{shadow_map_resolution, shadow_map_resolution};
 
   bind_globals(context, shadow_extent);
-  submit_draw_commands(context, context.packet->shadow_caster_commands, _pipelines, cascade, [this](const std::string& shader_path, bool is_double_sided) { return _resolve_custom_pipeline(shader_path, is_double_sided); });
+  submit_draw_commands_indirect(context, context.packet->shadow_caster_commands, _pipelines, [this](const std::string& shader_path, bool is_double_sided) { return _resolve_custom_pipeline(shader_path, is_double_sided); }, cascade);
 }
 
 } // namespace sbx::render

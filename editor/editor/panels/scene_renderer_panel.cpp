@@ -16,6 +16,7 @@
 #include <libsbx/graphics/devices/swapchain.hpp>
 
 #include <libsbx/render/scene_renderer_module.hpp>
+#include <libsbx/render/ui/ui_module.hpp>
 
 namespace editor {
 
@@ -123,6 +124,30 @@ auto scene_renderer_panel::draw(editor_state& state) -> void {
     _table_row({"Fragment shader invocations", fmt::format("{}", stats.fragment_shader_invocations)});
 
     ImGui::EndTable();
+  }
+
+  ImGui::SeparatorText("Shadow maps");
+
+  if (!scene_renderer_module.has_rendered_shadows()) {
+    ImGui::TextDisabled("No shadow-casting directional light rendered this frame.");
+  } else {
+    ImGui::TextDisabled("Light-space depth per cascade: dark = closer to the light.");
+
+    auto& ui_module = sbx::core::engine::get_module<sbx::render::ui_module>();
+
+    const auto spacing = ImGui::GetStyle().ItemSpacing.x;
+    const auto size = std::max((ImGui::GetContentRegionAvail().x - spacing) * 0.5f, 32.0f);
+
+    for (auto cascade = std::uint32_t{0u}; cascade < sbx::render::shadow_cascade_count; ++cascade) {
+      if (cascade % 2u != 0u) {
+        ImGui::SameLine();
+      }
+
+      ImGui::BeginGroup();
+      ImGui::Text("Cascade %u", cascade);
+      ImGui::Image(ui_module.texture_id(scene_renderer_module.shadow_map_preview_view(cascade), ui_module.thumbnail_sampler()), ImVec2{size, size});
+      ImGui::EndGroup();
+    }
   }
 
   ImGui::End();

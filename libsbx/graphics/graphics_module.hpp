@@ -142,9 +142,9 @@ private:
 
   graphics::instance _instance;
   graphics::physical_device _physical_device;
+  graphics::surface _surface;
   graphics::logical_device _logical_device;
   graphics::allocator _allocator;
-  graphics::surface _surface;
 
   std::mutex _command_pool_mutex{};
   std::unordered_map<command_pool_key, std::shared_ptr<graphics::command_pool>, command_pool_key_hash, command_pool_key_equality> _command_pools;

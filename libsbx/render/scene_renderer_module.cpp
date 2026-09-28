@@ -7,6 +7,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstring>
+#include <functional>
 #include <string>
 #include <type_traits>
 #include <unordered_map>
@@ -864,6 +865,11 @@ auto scene_renderer_module::_build_packet() -> render_packet {
   auto skin_scratch_cursor = std::uint32_t{0u};
   const auto animation_delta_time = scenes_module.simulation_delta_time().value();
 
+  // prepare() runs while the render thread is idle, before the begin_frame/record of the frame this
+  // packet is for, so frame_index() here is the one record() will see.
+  const auto& frame_context = core::engine::get_module<graphics::graphics_module>().frame_context();
+  const auto skin_scratch_address = _skin_scratch_addresses[utility::fast_mod(frame_context.frame_index(), graphics::swapchain::max_frames_in_flight)];
+
   for (const auto [entity, world, renderer, pose] : scene.query<scenes::world_transform, scenes::mesh_renderer, scenes::skeleton_pose>(ecs::exclude<scenes::inactive>).each()) {
     if (!renderer.mesh.is_valid() || !pose.skeleton.is_valid()) {
       continue;
@@ -883,7 +889,7 @@ auto scene_renderer_module::_build_packet() -> render_packet {
     const auto joint_offset = static_cast<std::uint32_t>(packet.joint_matrices.size());
     packet.joint_matrices.insert(packet.joint_matrices.end(), pose.skinning_matrices.begin(), pose.skinning_matrices.end());
 
-    const auto output_vertex_address = _skin_scratch_address + static_cast<graphics::buffer::address_type>(skin_scratch_cursor) * sizeof(assets::vertex);
+    const auto output_vertex_address = skin_scratch_address + static_cast<graphics::buffer::address_type>(skin_scratch_cursor) * sizeof(assets::vertex);
 
     packet.skin_dispatches.push_back(skin_dispatch{
       renderer.mesh->vertex_address(),
@@ -1372,13 +1378,17 @@ auto scene_renderer_module::_ensure_resources() -> void {
   }
 
   _skin_scratch_buffer = registry.emplace<graphics::buffer>(graphics::buffer::create_info{
-    .size = sizeof(assets::vertex) * skin_scratch_vertex_capacity,
+    .size = sizeof(assets::vertex) * skin_scratch_vertex_capacity * graphics::swapchain::max_frames_in_flight,
     .usage = graphics::buffer_usage::device_address | graphics::buffer_usage::storage,
     .memory = graphics::memory_usage::device_local,
     .name = "Skin Scratch Vertices"
   });
 
-  _skin_scratch_address = registry.get<graphics::buffer>(_skin_scratch_buffer).address();
+  const auto skin_scratch_base = registry.get<graphics::buffer>(_skin_scratch_buffer).address();
+
+  for (auto slot = std::size_t{0u}; slot < graphics::swapchain::max_frames_in_flight; ++slot) {
+    _skin_scratch_addresses[slot] = skin_scratch_base + slot * skin_scratch_vertex_capacity * sizeof(assets::vertex);
+  }
 
   _cluster_aabb_buffer = registry.emplace<graphics::buffer>(graphics::buffer::create_info{
     .size = memory::stride_v<cluster_aabb> * light_culling_pass::cluster_count * graphics::swapchain::max_frames_in_flight,
@@ -1471,6 +1481,13 @@ auto scene_renderer_module::_resize_targets(const math::vector2u extent) -> void
     registry.retire(_revealage_msaa_image, frame_index);
     registry.retire(_bloom_downsample_image, frame_index);
     registry.retire(_bloom_upsample_image, frame_index);
+
+    // Fresh indices instead of rewriting these in place: frames still in flight sample the old
+    // images through them (bindless_table::collect frees the old ones once those frames finish).
+    for (auto index : {std::ref(_scene_depth_index), std::ref(_color_index), std::ref(_accumulator_index), std::ref(_revealage_index), std::ref(_bloom_upsample_index), std::ref(_final_image_index)}) {
+      bindless_table.unregister_sampled_image(index.get());
+      index.get() = bindless_table.reserve_sampled_image();
+    }
   }
 
   _depth_image = registry.emplace<graphics::image>(graphics::image::create_info{
@@ -1582,6 +1599,10 @@ auto scene_renderer_module::_resize_targets(const math::vector2u extent) -> void
 
   _target_extent = extent;
 
+  // This frame's passes already sample the new indices, so their writes can't wait for the next
+  // begin_frame flush.
+  bindless_table.flush_writes();
+
   _graph.compile(_build_graph_resources());
 }
 
@@ -1606,7 +1627,8 @@ auto scene_renderer_module::_build_graph_resources() const -> graph_resources {
     .cluster_light_index_buffer = _cluster_light_index_buffer,
     .cluster_counter_buffer = _cluster_counter_buffer,
     .culled_indirect_args_buffer = _culled_indirect_args_buffer,
-    .culled_transform_buffer = _culled_transform_buffer
+    .culled_transform_buffer = _culled_transform_buffer,
+    .skin_scratch_buffer = _skin_scratch_buffer
   };
 }
 

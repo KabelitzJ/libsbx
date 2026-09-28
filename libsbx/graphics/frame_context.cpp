@@ -2,7 +2,7 @@
 // Copyright (c) 2026 Jonas Kabelitz
 #include <libsbx/graphics/frame_context.hpp>
 
-#include <limits>
+#include <array>
 #include <stdexcept>
 
 #include <libsbx/utility/assert.hpp>
@@ -19,50 +19,20 @@ namespace sbx::graphics {
 frame_context::~frame_context() {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 
-  const auto& logical_device = graphics_module.logical_device();
+  graphics_module.logical_device().wait_idle();
 
-  logical_device.wait_idle();
-
+  // Semaphores release themselves (RAII members) once the device is idle.
   _command_buffers.clear();
-
-  _destroy_per_image_semaphores();
-
-  for (auto& semaphore : _image_available) {
-    vkDestroySemaphore(logical_device, semaphore, nullptr);
-    semaphore = VK_NULL_HANDLE;
-  }
-
-  vkDestroySemaphore(logical_device, _timeline, nullptr);
-  _timeline = VK_NULL_HANDLE;
-
   _swapchain.reset();
 }
 
 auto frame_context::_initialize() -> void {
-  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
+  _timeline.emplace(semaphore::type::timeline, "Frame Timeline");
 
-  const auto& logical_device = graphics_module.logical_device();
-
-  auto type_create_info = VkSemaphoreTypeCreateInfo{};
-  type_create_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO;
-  type_create_info.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE;
-  type_create_info.initialValue = 0u;
-
-  auto timeline_create_info = VkSemaphoreCreateInfo{};
-  timeline_create_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-  timeline_create_info.pNext = &type_create_info;
-
-  validate(vkCreateSemaphore(logical_device, &timeline_create_info, nullptr, &_timeline), "vkCreateSemaphore");
-
-  logical_device.set_debug_name(_timeline, "Frame Timeline");
-
-  auto semaphore_create_info = VkSemaphoreCreateInfo{};
-  semaphore_create_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+  _image_available.reserve(swapchain::max_frames_in_flight);
 
   for (auto slot = std::uint32_t{0u}; slot < swapchain::max_frames_in_flight; ++slot) {
-    validate(vkCreateSemaphore(logical_device, &semaphore_create_info, nullptr, &_image_available[slot]), "vkCreateSemaphore");
-
-    logical_device.set_debug_name(_image_available[slot], fmt::format("Image Available {}", slot));
+    _image_available.emplace_back(semaphore::type::binary, fmt::format("Image Available {}", slot));
   }
 
   _command_buffers.reserve(swapchain::max_frames_in_flight);
@@ -72,6 +42,8 @@ auto frame_context::_initialize() -> void {
   }
 
   _recreate_swapchain();
+
+  _is_initialized.store(true, std::memory_order_release);
 }
 
 auto frame_context::begin_frame() -> memory::observer_ptr<command_buffer> {
@@ -87,20 +59,21 @@ auto frame_context::begin_frame() -> memory::observer_ptr<command_buffer> {
 
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 
-  const auto& logical_device = graphics_module.logical_device();
-
   // Never let the host run more than max_frames_in_flight ahead of the device.
-  if (_frame_index > swapchain::max_frames_in_flight) {
-    _wait_timeline(_frame_index - swapchain::max_frames_in_flight);
+  if (const auto index = frame_index(); index > swapchain::max_frames_in_flight) {
+    SBX_PROFILE_SCOPE("frame_context::wait_timeline");
+    _timeline->wait(index - swapchain::max_frames_in_flight);
   }
 
-  validate(vkGetSemaphoreCounterValue(logical_device, _timeline, &_timeline_value), "vkGetSemaphoreCounterValue");
+  const auto completed_value = _timeline->value();
+  _timeline_value.store(completed_value, std::memory_order_release);
 
   // Everything retired at or before this value is no longer referenced by the device.
   auto& resource_registry = graphics_module.resource_registry();
-  resource_registry.collect_all(_timeline_value);
+  resource_registry.collect_all(completed_value);
 
   auto& bindless_table = graphics_module.bindless_table();
+  bindless_table.collect(completed_value);
   bindless_table.flush_writes();
 
   const auto slot = _slot();
@@ -137,6 +110,7 @@ auto frame_context::end_frame() -> void {
   const auto& logical_device = graphics_module.logical_device();
 
   const auto slot = _slot();
+  const auto index = frame_index();
 
   auto& command_buffer = _command_buffers[slot];
 
@@ -144,28 +118,24 @@ auto frame_context::end_frame() -> void {
 
   const auto image_index = _swapchain->active_image_index();
 
-  // _image_available is binary, paired with dummy value 0 — valid per spec to mix binary and timeline semaphores in one wait array. Producers that queued add_wait() this frame are merged in below.
+  // _image_available is binary, paired with dummy value 0 — valid per spec to mix binary and timeline semaphores in one wait array.
   auto wait_semaphores = std::vector<VkSemaphore>{_image_available[slot]};
   auto wait_stages = std::vector<VkPipelineStageFlags>{VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
   auto wait_values = std::vector<std::uint64_t>{0u};
 
-  wait_semaphores.reserve(1u + _extra_waits.size());
-  wait_stages.reserve(1u + _extra_waits.size());
-  wait_values.reserve(1u + _extra_waits.size());
-
-  for (const auto& wait : _extra_waits) {
-    wait_semaphores.push_back(wait.semaphore);
-    wait_stages.push_back(wait.stage);
-    wait_values.push_back(wait.value);
+  // Waiting on an already-signaled value is free, so there's no need to track which frames have
+  // waited on what: every frame waits for all async work published so far.
+  if (const auto async_value = _async_published.load(std::memory_order_acquire); async_value != 0u) {
+    wait_semaphores.push_back(*_async_timeline);
+    wait_stages.push_back(VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
+    wait_values.push_back(async_value);
   }
-
-  _extra_waits.clear();
 
   const auto command_buffers = std::array<VkCommandBuffer, 1u>{command_buffer.handle()};
 
   // The value paired with the binary semaphore is ignored, but the arrays must stay parallel.
-  const auto signal_semaphores = std::array<VkSemaphore, 2u>{_render_finished[image_index], _timeline};
-  const auto signal_values = std::array<std::uint64_t, 2u>{0u, _frame_index};
+  const auto signal_semaphores = std::array<VkSemaphore, 2u>{_render_finished[image_index], *_timeline};
+  const auto signal_values = std::array<std::uint64_t, 2u>{0u, index};
 
   auto timeline_submit_info = VkTimelineSemaphoreSubmitInfo{};
   timeline_submit_info.sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO;
@@ -187,10 +157,13 @@ auto frame_context::end_frame() -> void {
 
   const auto& graphics_queue = logical_device.queue<queue::type::graphics>();
 
-  validate(vkQueueSubmit(graphics_queue, 1u, &submit_info, VK_NULL_HANDLE), "vkQueueSubmit");
+  {
+    const auto lock = graphics_queue.lock();
+    validate(vkQueueSubmit(graphics_queue, 1u, &submit_info, VK_NULL_HANDLE), "vkQueueSubmit");
+  }
 
   // The submit is in flight and will signal this value, so the frame is spent either way.
-  ++_frame_index;
+  _frame_index.fetch_add(1u, std::memory_order_release);
 
   const auto present_result = _swapchain->present(_render_finished[image_index]);
 
@@ -201,14 +174,27 @@ auto frame_context::end_frame() -> void {
   }
 }
 
+auto frame_context::submit_async(command_buffer& commands, const fence& fence) -> void {
+  auto lock = std::lock_guard{_async_mutex};
+
+  if (!_async_timeline) {
+    _async_timeline.emplace(semaphore::type::timeline, "Async Compute Timeline");
+  }
+
+  const auto value = _async_published.load(std::memory_order_relaxed) + 1u;
+
+  commands.submit({}, *_async_timeline, fence, value);
+
+  // Published only after the submit went through, so a frame never waits on a value nothing will signal.
+  _async_published.store(value, std::memory_order_release);
+}
+
 auto frame_context::_recreate_swapchain() -> void {
   SBX_PROFILE_SCOPE("frame_context::_recreate_swapchain");
 
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 
-  const auto& logical_device = graphics_module.logical_device();
-
-  logical_device.wait_idle();
+  graphics_module.logical_device().wait_idle();
 
   _swapchain = std::make_unique<graphics::swapchain>(_swapchain);
 
@@ -216,52 +202,14 @@ auto frame_context::_recreate_swapchain() -> void {
 }
 
 auto frame_context::_recreate_per_image_semaphores() -> void {
-  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
-
-  const auto& logical_device = graphics_module.logical_device();
-
-  _destroy_per_image_semaphores();
-
   const auto image_count = _swapchain->image_count();
 
-  _render_finished.resize(image_count);
-
-  auto semaphore_create_info = VkSemaphoreCreateInfo{};
-  semaphore_create_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+  _render_finished.clear();
+  _render_finished.reserve(image_count);
 
   for (auto index = std::uint32_t{0u}; index < image_count; ++index) {
-    validate(vkCreateSemaphore(logical_device, &semaphore_create_info, nullptr, &_render_finished[index]), "vkCreateSemaphore");
-
-    logical_device.set_debug_name(_render_finished[index], fmt::format("Render Finished {}", index));
+    _render_finished.emplace_back(semaphore::type::binary, fmt::format("Render Finished {}", index));
   }
-}
-
-auto frame_context::_destroy_per_image_semaphores() -> void {
-  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
-
-  const auto& logical_device = graphics_module.logical_device();
-
-  for (auto& semaphore : _render_finished) {
-    vkDestroySemaphore(logical_device, semaphore, nullptr);
-  }
-
-  _render_finished.clear();
-}
-
-auto frame_context::_wait_timeline(const std::uint64_t value) const -> void {
-  SBX_PROFILE_SCOPE("frame_context::_wait_timeline");
-
-  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
-
-  const auto& logical_device = graphics_module.logical_device();
-
-  auto wait_info = VkSemaphoreWaitInfo{};
-  wait_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO;
-  wait_info.semaphoreCount = 1u;
-  wait_info.pSemaphores = &_timeline;
-  wait_info.pValues = &value;
-
-  validate(vkWaitSemaphores(logical_device, &wait_info, std::numeric_limits<std::uint64_t>::max()), "vkWaitSemaphores");
 }
 
 } // namespace sbx::graphics

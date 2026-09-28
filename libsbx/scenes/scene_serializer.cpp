@@ -73,17 +73,17 @@ auto make_asset_key(asset_key_table& keys, const std::string& base) -> std::stri
 
 // A primitive mesh has no entry in the asset manifest -- path_of(id) comes back empty, so it needs
 // its own name (used for both the yaml key and the table entry's cosmetic "name" field).
-auto mesh_asset_name(assets::assets_module& assets_module, const math::uuid& id) -> std::string {
+auto mesh_asset_name(const math::uuid& id) -> std::string {
   if (const auto kind = assets::primitive_mesh_kind_of(id); kind.has_value()) {
     return std::string{assets::primitive_mesh_name(*kind)};
   }
 
-  return assets_module.path_of(id).stem().string();
+  return core::engine::get_module<assets::assets_module>().path_of(id).stem().string();
 }
 
 // Pre-pass: every mesh/material referenced by a mesh_renderer among entities gets a table entry
 // and a key, before any node is written (so a node can always look its references up by key).
-auto collect_mesh_material_keys(ecs::registry& registry, const std::vector<ecs::entity>& entities, assets::assets_module& assets_module, asset_key_table& keys) -> void {
+auto collect_mesh_material_keys(ecs::registry& registry, const std::vector<ecs::entity>& entities, asset_key_table& keys) -> void {
   for (const auto entity : entities) {
     if (!registry.all_of<mesh_renderer>(entity)) {
       continue;
@@ -93,7 +93,7 @@ auto collect_mesh_material_keys(ecs::registry& registry, const std::vector<ecs::
 
     if (renderer.mesh.is_valid() && !keys.mesh_keys.contains(renderer.mesh->id())) {
       const auto id = renderer.mesh->id();
-      const auto name = mesh_asset_name(assets_module, id);
+      const auto name = mesh_asset_name(id);
       const auto key = make_asset_key(keys, name);
 
       keys.mesh_keys.emplace(id, key);
@@ -144,7 +144,7 @@ auto collect_mesh_material_keys(ecs::registry& registry, const std::vector<ecs::
 
     if (collider.mesh.is_valid() && !keys.mesh_keys.contains(collider.mesh->id())) {
       const auto id = collider.mesh->id();
-      const auto name = assets_module.path_of(id).stem().string();
+      const auto name = core::engine::get_module<assets::assets_module>().path_of(id).stem().string();
       const auto key = make_asset_key(keys, name);
 
       keys.mesh_keys.emplace(id, key);
@@ -162,7 +162,7 @@ auto collect_mesh_material_keys(ecs::registry& registry, const std::vector<ecs::
 // Writes one node's full YAML entry (tag/id/parent/components). write_parent_key is false only
 // for a subtree snapshot's own root — its real parent (if any) isn't part of the snapshot, so it
 // must come back attached under scene::root() until the caller repositions it.
-auto write_node(YAML::Node& node_yaml, ecs::registry& registry, ecs::entity entity, assets::assets_module& assets_module, asset_key_table& keys, bool write_parent_key) -> void {
+auto write_node(YAML::Node& node_yaml, ecs::registry& registry, ecs::entity entity, asset_key_table& keys, bool write_parent_key) -> void {
   node_yaml["tag"] = registry.get<tag>(entity).str();
   node_yaml["id"] = registry.get<id>(entity).value();
 
@@ -250,7 +250,7 @@ auto write_node(YAML::Node& node_yaml, ecs::registry& registry, ecs::entity enti
         utility::logger<"scenes">::warn("Skipping a transient animation_graph override (no file asset — save it first)");
       } else {
         if (!keys.animation_graph_keys.contains(graph_id)) {
-          const auto name = assets_module.path_of(graph_id).stem().string();
+          const auto name = core::engine::get_module<assets::assets_module>().path_of(graph_id).stem().string();
           const auto key = make_asset_key(keys, name);
           keys.animation_graph_keys.emplace(graph_id, key);
 
@@ -334,7 +334,7 @@ auto write_node(YAML::Node& node_yaml, ecs::registry& registry, ecs::entity enti
       const auto id = sky.environment->id();
 
       if (!keys.environment_keys.contains(id)) {
-        const auto name = assets_module.path_of(id).stem().string();
+        const auto name = core::engine::get_module<assets::assets_module>().path_of(id).stem().string();
         const auto key = make_asset_key(keys, name);
         keys.environment_keys.emplace(id, key);
 
@@ -364,7 +364,7 @@ auto write_node(YAML::Node& node_yaml, ecs::registry& registry, ecs::entity enti
         utility::logger<"scenes">::warn("Skipping a transient particle_effect override (no file asset — save it first)");
       } else {
         if (!keys.particle_effect_keys.contains(effect_id)) {
-          const auto name = assets_module.path_of(effect_id).stem().string();
+          const auto name = core::engine::get_module<assets::assets_module>().path_of(effect_id).stem().string();
           const auto key = make_asset_key(keys, name);
           keys.particle_effect_keys.emplace(effect_id, key);
 
@@ -454,7 +454,7 @@ auto write_node(YAML::Node& node_yaml, ecs::registry& registry, ecs::entity enti
       const auto id = image.sprite->id();
 
       if (!keys.texture_keys.contains(id)) {
-        const auto name = assets_module.path_of(id).stem().string();
+        const auto name = core::engine::get_module<assets::assets_module>().path_of(id).stem().string();
         const auto key = make_asset_key(keys, name);
         keys.texture_keys.emplace(id, key);
 
@@ -488,7 +488,7 @@ auto write_node(YAML::Node& node_yaml, ecs::registry& registry, ecs::entity enti
       const auto id = text.font->id();
 
       if (!keys.font_keys.contains(id)) {
-        const auto name = assets_module.path_of(id).stem().string();
+        const auto name = core::engine::get_module<assets::assets_module>().path_of(id).stem().string();
         const auto key = make_asset_key(keys, name);
         keys.font_keys.emplace(id, key);
 
@@ -813,7 +813,7 @@ auto write_node(YAML::Node& node_yaml, ecs::registry& registry, ecs::entity enti
         utility::logger<"scenes">::warn("Skipping a transient prefab_instance override (no file asset — save it first)");
       } else {
         if (!keys.prefab_keys.contains(prefab_id)) {
-          const auto name = assets_module.path_of(prefab_id).stem().string();
+          const auto name = core::engine::get_module<assets::assets_module>().path_of(prefab_id).stem().string();
           const auto key = make_asset_key(keys, name);
           keys.prefab_keys.emplace(prefab_id, key);
 
@@ -852,8 +852,10 @@ auto write_node(YAML::Node& node_yaml, ecs::registry& registry, ecs::entity enti
   node_yaml["components"] = components;
 }
 
-// Reads a "assets_module" YAML node's 4 category tables into one key -> uuid lookup.
-auto register_asset_keys(const YAML::Node& assets_node) -> std::unordered_map<std::string, math::uuid> {
+// Reads a document's "assets" tables into one key -> uuid lookup.
+auto register_asset_keys(const YAML::Node& document) -> std::unordered_map<std::string, math::uuid> {
+  const auto assets_node = document["assets"];
+
   auto key_to_uuid = std::unordered_map<std::string, math::uuid>{};
 
   const auto register_category = [&](const char* category) {
@@ -877,7 +879,7 @@ auto register_asset_keys(const YAML::Node& assets_node) -> std::unordered_map<st
 }
 
 // Reads one node's "components" sequence and applies it to the already-created target_node.
-auto read_node_components(node& target_node, const YAML::Node& node_yaml, assets::assets_module& assets_module, const std::unordered_map<std::string, math::uuid>& key_to_uuid) -> void {
+auto read_node_components(node& target_node, const YAML::Node& node_yaml, const std::unordered_map<std::string, math::uuid>& key_to_uuid) -> void {
   for (const auto component : node_yaml["components"]) {
     const auto type = component["type"].as<std::string>();
 
@@ -896,7 +898,7 @@ auto read_node_components(node& target_node, const YAML::Node& node_yaml, assets
       target_node.set_active(false);
     } else if (type == "static_mesh") {
       auto& renderer = target_node.get_or_add_component<mesh_renderer>();
-      renderer.mesh = assets_module.load_mesh(key_to_uuid.at(component["mesh"].as<std::string>()));
+      renderer.mesh = core::engine::get_module<assets::assets_module>().load_mesh(key_to_uuid.at(component["mesh"].as<std::string>()));
 
       sync_materials_with_mesh(renderer);
 
@@ -914,14 +916,14 @@ auto read_node_components(node& target_node, const YAML::Node& node_yaml, assets
             renderer.materials.resize(index + 1u);
           }
 
-          renderer.materials[index] = assets_module.load_material(key_to_uuid.at(submesh["material"].as<std::string>()));
+          renderer.materials[index] = core::engine::get_module<assets::assets_module>().load_material(key_to_uuid.at(submesh["material"].as<std::string>()));
         }
       }
     } else if (type == "animator") {
       auto& anim = target_node.get_or_add_component<animator>();
 
       if (component["graph"]) {
-        anim.set_graph(assets_module.load_animation_graph(key_to_uuid.at(component["graph"].as<std::string>())));
+        anim.set_graph(core::engine::get_module<assets::assets_module>().load_animation_graph(key_to_uuid.at(component["graph"].as<std::string>())));
       }
 
       anim.playing = component["playing"] ? component["playing"].as<bool>() : true;
@@ -969,7 +971,7 @@ auto read_node_components(node& target_node, const YAML::Node& node_yaml, assets
     } else if (type == "skybox") {
       auto& sky = target_node.get_or_add_component<skybox>();
 
-      sky.environment = assets_module.load_environment_map(key_to_uuid.at(component["environment"].as<std::string>()));
+      sky.environment = core::engine::get_module<assets::assets_module>().load_environment_map(key_to_uuid.at(component["environment"].as<std::string>()));
 
       if (component["intensity"]) {
         sky.intensity = component["intensity"].as<std::float_t>();
@@ -982,7 +984,7 @@ auto read_node_components(node& target_node, const YAML::Node& node_yaml, assets
     } else if (type == "particle_effect") {
       auto& instance = target_node.get_or_add_component<particle_effect>();
 
-      instance.effect = assets_module.load_particle_effect(key_to_uuid.at(component["effect"].as<std::string>()));
+      instance.effect = core::engine::get_module<assets::assets_module>().load_particle_effect(key_to_uuid.at(component["effect"].as<std::string>()));
 
       if (component["loop"]) {
         instance.loop = component["loop"].as<bool>();
@@ -1067,7 +1069,7 @@ auto read_node_components(node& target_node, const YAML::Node& node_yaml, assets
       }
 
       if (component["sprite"]) {
-        image.sprite = assets_module.load_texture(key_to_uuid.at(component["sprite"].as<std::string>()));
+        image.sprite = core::engine::get_module<assets::assets_module>().load_texture(key_to_uuid.at(component["sprite"].as<std::string>()));
       }
     } else if (type == "ui_text") {
       auto& text = target_node.get_or_add_component<canvas::ui_text>();
@@ -1089,7 +1091,7 @@ auto read_node_components(node& target_node, const YAML::Node& node_yaml, assets
       }
 
       if (component["font"]) {
-        text.font = assets_module.load_font(key_to_uuid.at(component["font"].as<std::string>()));
+        text.font = core::engine::get_module<assets::assets_module>().load_font(key_to_uuid.at(component["font"].as<std::string>()));
       }
 
       if (component["raycast_target"]) {
@@ -1323,7 +1325,7 @@ auto read_node_components(node& target_node, const YAML::Node& node_yaml, assets
     } else if (type == "mesh_collider") {
       auto& collider = target_node.get_or_add_component<physics::mesh_collider>();
 
-      collider.mesh = assets_module.load_mesh(key_to_uuid.at(component["mesh"].as<std::string>()));
+      collider.mesh = core::engine::get_module<assets::assets_module>().load_mesh(key_to_uuid.at(component["mesh"].as<std::string>()));
       collider.offset = component["offset"].as<math::vector3>();
       collider.rotation = component["rotation"].as<math::quaternion>();
       collider.friction = component["friction"].as<std::float_t>();
@@ -1336,7 +1338,7 @@ auto read_node_components(node& target_node, const YAML::Node& node_yaml, assets
     } else if (type == "prefab_instance") {
       auto& instance = target_node.get_or_add_component<prefab_instance>();
 
-      instance.source = assets_module.load_prefab(key_to_uuid.at(component["prefab"].as<std::string>()));
+      instance.source = core::engine::get_module<assets::assets_module>().load_prefab(key_to_uuid.at(component["prefab"].as<std::string>()));
       instance.applied_generation = component["applied_generation"] ? component["applied_generation"].as<std::uint64_t>() : 0u;
       instance.overrides.clear();
 
@@ -1376,7 +1378,7 @@ auto read_node_components(node& target_node, const YAML::Node& node_yaml, assets
 
     if (collider.is_convex && collider.mesh.is_valid()) {
       auto hull_cache = physics::convex_hull_cache{};
-      const auto& hull_data = hull_cache.get_or_build(assets_module, collider.mesh->id());
+      const auto& hull_data = hull_cache.get_or_build(core::engine::get_module<assets::assets_module>(), collider.mesh->id());
 
       const auto mass = (body.inverse_mass > 0.0f) ? (1.0f / body.inverse_mass) : 0.0f;
       body.local_inverse_inertia = physics::local_inverse_inertia(physics::convex_shape{physics::convex_hull{hull_data.points, hull_data.faces}}, mass);
@@ -1386,8 +1388,6 @@ auto read_node_components(node& target_node, const YAML::Node& node_yaml, assets
 
 auto scene_serializer::build(scene& target) -> YAML::Node {
   auto& registry = target._registry;
-  auto& assets_module = core::engine::get_module<assets::assets_module>();
-
   // Registry/view iteration order is unspecified, so node-order-sensitive passes below walk this
   // depth-first traversal instead, rooted at target._root (relationship::children is where
   // top-level order is persisted).
@@ -1406,13 +1406,13 @@ auto scene_serializer::build(scene& target) -> YAML::Node {
   }
 
   auto keys = asset_key_table{};
-  collect_mesh_material_keys(registry, ordered_nodes, assets_module, keys);
+  collect_mesh_material_keys(registry, ordered_nodes, keys);
 
   auto nodes_node = YAML::Node{YAML::NodeType::Sequence};
 
   for (const auto entity : ordered_nodes) {
     auto node_yaml = YAML::Node{};
-    write_node(node_yaml, registry, entity, assets_module, keys, true);
+    write_node(node_yaml, registry, entity, keys, true);
     nodes_node.push_back(node_yaml);
   }
 
@@ -1441,7 +1441,7 @@ auto scene_serializer::build(scene& target) -> YAML::Node {
 
   auto root = YAML::Node{};
   root["metadata"] = metadata;
-  root["assets_module"] = assets_node;
+  root["assets"] = assets_node;
   root["nodes"] = nodes_node;
 
   return root;
@@ -1500,13 +1500,11 @@ auto scene_serializer::load(scene& target, const YAML::Node& root) -> void {
   target._active_camera = ecs::null_entity;
   target._primary_light = ecs::null_entity;
 
-  auto& assets_module = core::engine::get_module<assets::assets_module>();
-
   if (const auto metadata = root["metadata"]; metadata && metadata["name"]) {
     target.set_name(metadata["name"].as<std::string>());
   }
 
-  const auto key_to_uuid = register_asset_keys(root["assets_module"]);
+  const auto key_to_uuid = register_asset_keys(root);
 
   const auto nodes_node = root["nodes"];
 
@@ -1525,7 +1523,7 @@ auto scene_serializer::load(scene& target, const YAML::Node& root) -> void {
       node.set_parent(parent_node);
     }
 
-    read_node_components(node, node_yaml, assets_module, key_to_uuid);
+    read_node_components(node, node_yaml, key_to_uuid);
   }
 
   if (const auto metadata = root["metadata"]) {
@@ -1545,8 +1543,6 @@ auto scene_serializer::load(scene& target, const YAML::Node& root) -> void {
 
 auto scene_serializer::serialize_subtree(scene& target, node subtree_root) -> YAML::Node {
   auto& registry = target._registry;
-  auto& assets_module = core::engine::get_module<assets::assets_module>();
-
   auto ordered_nodes = std::vector<ecs::entity>{};
 
   const auto collect = [&](this const auto& self, ecs::entity entity) -> void {
@@ -1560,13 +1556,13 @@ auto scene_serializer::serialize_subtree(scene& target, node subtree_root) -> YA
   collect(subtree_root._entity);
 
   auto keys = asset_key_table{};
-  collect_mesh_material_keys(registry, ordered_nodes, assets_module, keys);
+  collect_mesh_material_keys(registry, ordered_nodes, keys);
 
   auto nodes_node = YAML::Node{YAML::NodeType::Sequence};
 
   for (const auto entity : ordered_nodes) {
     auto node_yaml = YAML::Node{};
-    write_node(node_yaml, registry, entity, assets_module, keys, entity != subtree_root._entity);
+    write_node(node_yaml, registry, entity, keys, entity != subtree_root._entity);
     nodes_node.push_back(node_yaml);
   }
 
@@ -1581,16 +1577,14 @@ auto scene_serializer::serialize_subtree(scene& target, node subtree_root) -> YA
   assets_node["prefabs"] = keys.prefabs_table;
 
   auto root = YAML::Node{};
-  root["assets_module"] = assets_node;
+  root["assets"] = assets_node;
   root["nodes"] = nodes_node;
 
   return root;
 }
 
 auto scene_serializer::deserialize_subtree(scene& target, const YAML::Node& snapshot) -> node {
-  auto& assets_module = core::engine::get_module<assets::assets_module>();
-
-  const auto key_to_uuid = register_asset_keys(snapshot["assets_module"]);
+  const auto key_to_uuid = register_asset_keys(snapshot);
   const auto nodes_node = snapshot["nodes"];
 
   // Pass 1: create every node with its id (so parent/reference ids resolve) — index 0 is always
@@ -1612,18 +1606,20 @@ auto scene_serializer::deserialize_subtree(scene& target, const YAML::Node& snap
       node.set_parent(parent_node);
     }
 
-    read_node_components(node, node_yaml, assets_module, key_to_uuid);
+    read_node_components(node, node_yaml, key_to_uuid);
   }
 
   return target.find(root_id);
 }
 
 // Reverse of register_asset_keys: seeds a fresh asset_key_table from an existing prefab's
-// "assets_module" tables (uuid -> key, plus the sequence nodes themselves, cloned so appends never
+// "assets" tables (uuid -> key, plus the sequence nodes themselves, cloned so appends never
 // mutate the prefab's own stored snapshot before update_prefab commits) so re-serializing one
 // component of an already-saved prefab reuses existing keys instead of minting duplicates, only
 // minting a fresh key for an asset the prefab didn't reference yet.
-auto load_asset_key_table(const YAML::Node& assets_node) -> asset_key_table {
+auto load_asset_key_table(const YAML::Node& document) -> asset_key_table {
+  const auto assets_node = document["assets"];
+
   auto keys = asset_key_table{};
 
   const auto load_category = [&](const char* category, std::unordered_map<math::uuid, std::string>& uuid_to_key, YAML::Node& table) {
@@ -1688,7 +1684,7 @@ auto replace_component_entries(YAML::Node target_components, const YAML::Node& s
 // so it's the one case that needs its whole script_component cleared first; every other type is a
 // single get_or_add-and-overwrite in read_node_components, already idempotent against a
 // pre-existing value of the same type.
-auto apply_component_key(node target_node, const YAML::Node& node_entry, const std::unordered_map<std::string, math::uuid>& key_to_uuid, assets::assets_module& assets_module, std::string_view component_key) -> void {
+auto apply_component_key(node target_node, const YAML::Node& node_entry, const std::unordered_map<std::string, math::uuid>& key_to_uuid, std::string_view component_key) -> void {
   if (component_key == "script") {
     target_node.remove_component<script_component>();
   }
@@ -1706,7 +1702,7 @@ auto apply_component_key(node target_node, const YAML::Node& node_entry, const s
   auto scratch = YAML::Node{};
   scratch["components"] = matches;
 
-  read_node_components(target_node, scratch, assets_module, key_to_uuid);
+  read_node_components(target_node, scratch, key_to_uuid);
 }
 
 // Walks up from a prefab_member node to the instance root carrying prefab_instance -- every node
@@ -1729,7 +1725,9 @@ auto find_prefab_instance_root(scene& target, node member_node) -> node {
 
 // Shared tail of apply_prefab_override and update_prefab_from_node: commit snapshot as prefab's
 // new content and persist it, if it's already a saved (not merely in-memory) asset.
-auto save_prefab_snapshot(assets::assets_module& assets_module, assets::prefab_handle& prefab, YAML::Node snapshot) -> void {
+auto save_prefab_snapshot(assets::prefab_handle& prefab, YAML::Node snapshot) -> void {
+  auto& assets_module = core::engine::get_module<assets::assets_module>();
+
   assets_module.update_prefab(prefab, std::move(snapshot));
 
   if (const auto path = assets_module.path_of(prefab->id()); !path.empty()) {
@@ -1738,11 +1736,9 @@ auto save_prefab_snapshot(assets::assets_module& assets_module, assets::prefab_h
 }
 
 auto scene_serializer::create_prefab_from_node(scene& source, node subtree_root, std::string name) -> assets::prefab_handle {
-  auto& assets_module = core::engine::get_module<assets::assets_module>();
-
   auto snapshot = serialize_subtree(source, subtree_root);
 
-  return assets_module.create_prefab(std::move(snapshot), std::move(name));
+  return core::engine::get_module<assets::assets_module>().create_prefab(std::move(snapshot), std::move(name));
 }
 
 auto scene_serializer::attach_prefab_instance(scene& target, node subtree_root, assets::prefab_handle prefab) -> void {
@@ -1765,10 +1761,8 @@ auto scene_serializer::instantiate_prefab(scene& target, const assets::prefab_ha
     return node{};
   }
 
-  auto& assets_module = core::engine::get_module<assets::assets_module>();
-
   const auto& snapshot = prefab->snapshot();
-  const auto key_to_uuid = register_asset_keys(snapshot["assets_module"]);
+  const auto key_to_uuid = register_asset_keys(snapshot);
   const auto nodes_node = snapshot["nodes"];
 
   // Fresh scenes::id per node -- two instances (or an instance and its own prefab) can't share
@@ -1803,7 +1797,7 @@ auto scene_serializer::instantiate_prefab(scene& target, const assets::prefab_ha
       instance_node.set_parent(parent_node);
     }
 
-    read_node_components(instance_node, node_yaml, assets_module, key_to_uuid);
+    read_node_components(instance_node, node_yaml, key_to_uuid);
   }
 
   const auto root_old_id = nodes_node[0]["id"].as<math::uuid>();
@@ -1815,8 +1809,6 @@ auto scene_serializer::instantiate_prefab(scene& target, const assets::prefab_ha
 }
 
 auto scene_serializer::sync_prefab_instances(scene& target) -> void {
-  auto& assets_module = core::engine::get_module<assets::assets_module>();
-
   auto stale_roots = std::vector<ecs::entity>{};
 
   for (auto&& [entity, instance] : target.query<prefab_instance>().each()) {
@@ -1834,7 +1826,7 @@ auto scene_serializer::sync_prefab_instances(scene& target) -> void {
 
     auto& instance = root.get_component<prefab_instance>();
     const auto& snapshot = instance.source->snapshot();
-    const auto key_to_uuid = register_asset_keys(snapshot["assets_module"]);
+    const auto key_to_uuid = register_asset_keys(snapshot);
     const auto nodes_node = snapshot["nodes"];
 
     // Index the instance's current subtree by its nodes' prefab-local (member) id.
@@ -1886,7 +1878,7 @@ auto scene_serializer::sync_prefab_instances(scene& target) -> void {
 
         auto fresh = target._create_node(node_yaml["tag"].as<std::string>(), local_transform{}, math::uuid::create());
         fresh.add_component<prefab_member>(member_id);
-        read_node_components(fresh, node_yaml, assets_module, key_to_uuid);
+        read_node_components(fresh, node_yaml, key_to_uuid);
 
         auto parent_node = target.node_of(parent_entity);
         fresh.set_parent(parent_node);
@@ -1915,7 +1907,7 @@ auto scene_serializer::sync_prefab_instances(scene& target) -> void {
             continue;
           }
 
-          apply_component_key(live_node, node_yaml, key_to_uuid, assets_module, key);
+          apply_component_key(live_node, node_yaml, key_to_uuid, key);
         }
       }
     }
@@ -1944,16 +1936,14 @@ auto scene_serializer::apply_prefab_override(scene& target, node source_node, st
     return;
   }
 
-  auto& assets_module = core::engine::get_module<assets::assets_module>();
-
   auto snapshot = YAML::Clone(instance.source->snapshot());
-  auto keys = load_asset_key_table(snapshot["assets_module"]);
+  auto keys = load_asset_key_table(snapshot);
 
   // Seeds keys.mesh_keys/material_keys for source_node's own mesh/material references, mirroring
   // serialize_subtree's prepass -- write_node's "static_mesh"/"mesh_collider" branches assume
   // their mesh is already keyed and would throw otherwise (collect_mesh_material_keys is the only
   // place that registers a mesh key; every other asset kind registers its own key inline).
-  collect_mesh_material_keys(target._registry, {source_node._entity}, assets_module, keys);
+  collect_mesh_material_keys(target._registry, {source_node._entity}, keys);
 
   const auto member_id = source_node.get_component<prefab_member>().member_id;
   auto node_entry = find_node_entry(snapshot["nodes"], member_id);
@@ -1963,20 +1953,20 @@ auto scene_serializer::apply_prefab_override(scene& target, node source_node, st
   }
 
   auto scratch = YAML::Node{};
-  write_node(scratch, target._registry, source_node._entity, assets_module, keys, false);
+  write_node(scratch, target._registry, source_node._entity, keys, false);
 
   replace_component_entries(node_entry["components"], scratch["components"], component_key);
 
-  snapshot["assets_module"]["static_meshes"] = keys.meshes_table;
-  snapshot["assets_module"]["materials"] = keys.materials_table;
-  snapshot["assets_module"]["environment_maps"] = keys.environments_table;
-  snapshot["assets_module"]["particle_effects"] = keys.particle_effects_table;
-  snapshot["assets_module"]["animation_graphs"] = keys.animation_graphs_table;
-  snapshot["assets_module"]["textures"] = keys.textures_table;
-  snapshot["assets_module"]["fonts"] = keys.fonts_table;
-  snapshot["assets_module"]["prefabs"] = keys.prefabs_table;
+  snapshot["assets"]["static_meshes"] = keys.meshes_table;
+  snapshot["assets"]["materials"] = keys.materials_table;
+  snapshot["assets"]["environment_maps"] = keys.environments_table;
+  snapshot["assets"]["particle_effects"] = keys.particle_effects_table;
+  snapshot["assets"]["animation_graphs"] = keys.animation_graphs_table;
+  snapshot["assets"]["textures"] = keys.textures_table;
+  snapshot["assets"]["fonts"] = keys.fonts_table;
+  snapshot["assets"]["prefabs"] = keys.prefabs_table;
 
-  save_prefab_snapshot(assets_module, instance.source, snapshot);
+  save_prefab_snapshot(instance.source, snapshot);
 
   std::erase_if(instance.overrides, [&](const prefab_override& override_entry) {
     return override_entry.member_id == member_id && override_entry.component_key == component_key;
@@ -2001,16 +1991,14 @@ auto scene_serializer::revert_prefab_override(scene& target, node target_node, s
     return;
   }
 
-  auto& assets_module = core::engine::get_module<assets::assets_module>();
-
   const auto& snapshot = instance.source->snapshot();
-  const auto key_to_uuid = register_asset_keys(snapshot["assets_module"]);
+  const auto key_to_uuid = register_asset_keys(snapshot);
 
   const auto member_id = target_node.get_component<prefab_member>().member_id;
   const auto node_entry = find_node_entry(snapshot["nodes"], member_id);
 
   if (node_entry) {
-    apply_component_key(target_node, node_entry, key_to_uuid, assets_module, component_key);
+    apply_component_key(target_node, node_entry, key_to_uuid, component_key);
   }
 
   std::erase_if(instance.overrides, [&](const prefab_override& override_entry) {
@@ -2076,9 +2064,7 @@ auto scene_serializer::update_prefab_from_node(scene& source, node instance_root
     return;
   }
 
-  auto& assets_module = core::engine::get_module<assets::assets_module>();
-
-  save_prefab_snapshot(assets_module, instance.source, serialize_subtree(source, instance_root));
+  save_prefab_snapshot(instance.source, serialize_subtree(source, instance_root));
 
   instance.overrides.clear();
   instance.applied_generation = instance.source.generation();

@@ -163,8 +163,9 @@ private:
   // buffer: write_emitter_instance is a direct CPU memcpy into host-visible memory, called every
   // frame during command-buffer recording, while the compute shaders reading this same data
   // (simulate.slang/emit.slang) may still be executing for a previous, still-in-flight frame at
-  // that point -- a plain GPU-side wait (frame_context::add_wait) only orders GPU-vs-GPU work, not
-  // this earlier CPU write, so a single buffer here would let frame N's write race frame N-1's read.
+  // that point -- a GPU-side barrier (particle_simulate_pass's previous-frame barrier) only orders
+  // GPU-vs-GPU work, not this earlier CPU write, so a single buffer here would let frame N's write
+  // race frame N-1's read.
   std::array<graphics::buffer_handle, graphics::swapchain::max_frames_in_flight> _emitter_instances{};
 
   graphics::buffer::address_type _particles_address{};

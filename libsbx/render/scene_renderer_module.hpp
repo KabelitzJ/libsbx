@@ -363,10 +363,10 @@ private:
   std::array<graphics::buffer::address_type, graphics::swapchain::max_frames_in_flight> _joint_palette_addresses{};
 
   // GPU-written (skin_pass) and GPU-read (depth_pre_pass/shadow_pass/opaque_pass) only, entirely
-  // within one frame's submission -- unlike the palette above, a single buffer (not per-frame-slot)
-  // is safe here, protected by skin_pass's own cross-frame wait (see skin_pass.cpp).
+  // within one frame's submission. Still one region per frame slot, like the palette above: the
+  // previous frame's draws may still be reading their region while this frame's skin_pass writes.
   graphics::buffer_handle _skin_scratch_buffer{};
-  graphics::buffer::address_type _skin_scratch_address{0u};
+  std::array<graphics::buffer::address_type, graphics::swapchain::max_frames_in_flight> _skin_scratch_addresses{};
 
   graphics::buffer_handle _cluster_aabb_buffer{};
   std::array<graphics::buffer::address_type, graphics::swapchain::max_frames_in_flight> _cluster_aabb_addresses{};

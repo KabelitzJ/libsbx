@@ -39,8 +39,18 @@ auto bindless_table::index_allocator::allocate() -> std::uint32_t {
   return next++;
 }
 
-auto bindless_table::index_allocator::release(std::uint32_t index) -> void {
-  released.push_back(index);
+auto bindless_table::index_allocator::release(std::uint32_t index, std::uint64_t timeline_value) -> void {
+  retired.push_back(retired_index{index, timeline_value});
+}
+
+auto bindless_table::index_allocator::collect(std::uint64_t completed_value) -> void {
+  const auto done = std::ranges::partition(retired, [completed_value](const retired_index& entry) { return entry.timeline_value > completed_value; });
+
+  for (const auto& entry : done) {
+    released.push_back(entry.index);
+  }
+
+  retired.erase(done.begin(), done.end());
 }
 
 bindless_table::bindless_table(const physical_device& physical_device, const logical_device& logical_device) {
@@ -67,7 +77,10 @@ bindless_table::bindless_table(const physical_device& physical_device, const log
     VkDescriptorSetLayoutBinding{storage_cube_binding, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, _storage_cubes.capacity, VK_SHADER_STAGE_ALL, nullptr}
   };
 
-  const auto binding_flag = VkDescriptorBindingFlags{VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT | VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT};
+  // UPDATE_UNUSED_WHILE_PENDING: flush_writes runs while the previous frame is still executing, so
+  // writing any slot that frame doesn't use has to be legal too (UPDATE_AFTER_BIND alone only covers
+  // updates between bind and submit).
+  const auto binding_flag = VkDescriptorBindingFlags{VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT | VK_DESCRIPTOR_BINDING_UPDATE_UNUSED_WHILE_PENDING_BIT | VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT};
   const auto binding_flags = std::array<VkDescriptorBindingFlags, 5u>{binding_flag, binding_flag, binding_flag, binding_flag, binding_flag};
 
   auto binding_flags_info = VkDescriptorSetLayoutBindingFlagsCreateInfo{};
@@ -184,13 +197,13 @@ auto bindless_table::register_storage_image(VkImageView view) -> std::uint32_t {
 auto bindless_table::unregister_sampled_image(std::uint32_t index) -> void {
   auto lock = std::lock_guard{_mutex};
 
-  _sampled_images.release(index);
+  _sampled_images.release(index, _retire_value());
 }
 
 auto bindless_table::unregister_storage_image(std::uint32_t index) -> void {
   auto lock = std::lock_guard{_mutex};
 
-  _storage_images.release(index);
+  _storage_images.release(index, _retire_value());
 }
 
 auto bindless_table::register_sampled_cube(VkImageView view) -> std::uint32_t {
@@ -226,7 +239,7 @@ auto bindless_table::write_sampled_cube(std::uint32_t index, VkImageView view) -
 auto bindless_table::unregister_sampled_cube(std::uint32_t index) -> void {
   auto lock = std::lock_guard{_mutex};
 
-  _sampled_cubes.release(index);
+  _sampled_cubes.release(index, _retire_value());
 }
 
 auto bindless_table::register_storage_cube(VkImageView view) -> std::uint32_t {
@@ -246,7 +259,7 @@ auto bindless_table::register_storage_cube(VkImageView view) -> std::uint32_t {
 auto bindless_table::unregister_storage_cube(std::uint32_t index) -> void {
   auto lock = std::lock_guard{_mutex};
 
-  _storage_cubes.release(index);
+  _storage_cubes.release(index, _retire_value());
 }
 
 auto bindless_table::sampler_index(const sampler::create_info& create_info) -> std::uint32_t {
@@ -270,6 +283,19 @@ auto bindless_table::sampler_index(const sampler::create_info& create_info) -> s
   _sampler_cache.push_back(sampler_entry{create_info, std::move(new_sampler), index});
 
   return index;
+}
+
+auto bindless_table::collect(std::uint64_t completed_value) -> void {
+  auto lock = std::lock_guard{_mutex};
+
+  _sampled_images.collect(completed_value);
+  _storage_images.collect(completed_value);
+  _sampled_cubes.collect(completed_value);
+  _storage_cubes.collect(completed_value);
+}
+
+auto bindless_table::_retire_value() const -> std::uint64_t {
+  return core::engine::get_module<graphics::graphics_module>().frame_context().frame_index();
 }
 
 auto bindless_table::flush_writes() -> void {

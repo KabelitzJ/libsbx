@@ -17,7 +17,10 @@ namespace Sbx.Core
    *
    * SubmitAsync doesn't block: poll IsComplete (e.g. once per Update) and only then read results.
    * Every buffer and texture the dispatches use must stay undisposed until IsComplete is true.
-   * Disposing a still-running list waits for it.
+   * Disposing a still-running list waits for it. Rendering is safe without polling: every frame
+   * rendered after SubmitAsync waits on the GPU for the list to finish before its shaders run, so a
+   * material sampling a texture the list writes never sees it half-written -- which also means a
+   * long async list delays those frames on the GPU (the CPU never blocks).
    */
   public sealed class ComputeCommands : IDisposable
   {

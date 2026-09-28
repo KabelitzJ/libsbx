@@ -2065,6 +2065,8 @@ auto asset_residency::process_uploads(std::uint64_t frame_index) -> void {
 
     bindless_table.write_sampled_image(request.index, registry.get<graphics::image>(handle).view());
 
+    // Main-thread readers (image_handle_for, is_resident, release_texture) look these up under _mutex.
+    auto lock = std::lock_guard{_mutex};
     _images.emplace(request.index, handle);
     _resident_frame.emplace(request.index, frame_index);
   }

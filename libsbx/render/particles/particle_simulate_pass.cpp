@@ -15,7 +15,6 @@
 #include <libsbx/core/engine.hpp>
 
 #include <libsbx/graphics/graphics_module.hpp>
-#include <libsbx/graphics/frame_context.hpp>
 #include <libsbx/graphics/commands/command_buffer.hpp>
 #include <libsbx/graphics/resources/buffer.hpp>
 #include <libsbx/graphics/pipeline/shader_compiler.hpp>
@@ -84,10 +83,17 @@ auto particle_simulate_pass::execute(render_context& context) -> void {
   SBX_STATS_SCOPE("particle_simulate_pass::execute");
   SBX_PROFILE_GPU_SCOPE((*context.command_buffer), "particle_simulate_pass::execute");
 
-  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
-  auto& frame_context = graphics_module.frame_context();
-
-  frame_context.add_wait(frame_context.timeline(), frame_context.previous_frame_value(), VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
+  // The pools are persistent simulation state, so this frame really does depend on the previous
+  // one: its simulate/emit writes (RAW) and its dispatch_indirect/draw reads (WAR). Both frames run
+  // on this queue, so a pipeline barrier (whose first scope includes the previous frame's
+  // submission) is enough -- no semaphore wait on the whole previous frame.
+  auto previous_frame = VkMemoryBarrier2{};
+  previous_frame.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2;
+  previous_frame.srcStageMask = graphics::to_vk_enum<VkPipelineStageFlags2>(graphics::pipeline_stage::compute_shader | graphics::pipeline_stage::draw_indirect | graphics::pipeline_stage::vertex_shader | graphics::pipeline_stage::fragment_shader);
+  previous_frame.srcAccessMask = graphics::to_vk_enum<VkAccessFlags2>(graphics::access::shader_write);
+  previous_frame.dstStageMask = graphics::to_vk_enum<VkPipelineStageFlags2>(graphics::pipeline_stage::compute_shader | graphics::pipeline_stage::draw_indirect);
+  previous_frame.dstAccessMask = graphics::to_vk_enum<VkAccessFlags2>(graphics::access::shader_read | graphics::access::shader_write | graphics::access::indirect_command_read);
+  context.command_buffer->memory_dependency(previous_frame);
 
   const auto delta_time = context.delta_time;
   const auto time = context.time;

@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Jonas Kabelitz
 #include <libsbx/graphics/commands/command_buffer.hpp>
+#include <libsbx/graphics/commands/fence.hpp>
 
-#include <limits>
 
 #include <libsbx/core/engine.hpp>
 
@@ -134,23 +134,18 @@ auto command_buffer::submit_idle() -> void {
 	submit_info.commandBufferCount = 1;
 	submit_info.pCommandBuffers = &_handle;
 
-	auto fence_create_info = VkFenceCreateInfo{};
-	fence_create_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+  // ponytail: one fence per call; keep a reusable per-thread fence if submit_idle ever shows up in a profile.
+  const auto done = fence{};
 
-	auto fence = VkFence{};
+  {
+    const auto lock = selected_queue.lock();
+    validate(vkQueueSubmit(selected_queue, 1, &submit_info, done), "vkQueueSubmit");
+  }
 
-	validate(vkCreateFence(logical_device, &fence_create_info, nullptr, &fence), "vkCreateFence");
-
-  validate(vkResetFences(logical_device, 1, &fence), "vkResetFences");
-
-	validate(vkQueueSubmit(selected_queue, 1, &submit_info, fence), "vkQueueSubmit");
-
-	validate(vkWaitForFences(logical_device, 1, &fence, true, std::numeric_limits<std::uint64_t>::max()), "vkWaitForFences");
-
-	vkDestroyFence(logical_device, fence, nullptr);
+  done.wait();
 }
 
-auto command_buffer::submit(const std::vector<wait_semaphore>& wait_semaphores, const VkSemaphore& signal_semaphore, const VkFence& fence) -> void {
+auto command_buffer::submit(const std::vector<wait_semaphore>& wait_semaphores, const VkSemaphore& signal_semaphore, const VkFence& fence, std::uint64_t signal_value) -> void {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 
   const auto& logical_device = graphics_module.logical_device();
@@ -187,9 +182,21 @@ auto command_buffer::submit(const std::vector<wait_semaphore>& wait_semaphores, 
 		submit_info.pSignalSemaphores = &signal_semaphore;
 	}
 
+  auto timeline_submit_info = VkTimelineSemaphoreSubmitInfo{};
+
+  if (signal_semaphore && signal_value != 0u) {
+    timeline_submit_info.sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO;
+    timeline_submit_info.signalSemaphoreValueCount = 1u;
+    timeline_submit_info.pSignalSemaphoreValues = &signal_value;
+
+    submit_info.pNext = &timeline_submit_info;
+  }
+
 	if (fence) {
 		validate(vkResetFences(logical_device, 1, &fence), "vkResetFences");
   }
+
+  const auto lock = selected_queue.lock();
 
 	validate(vkQueueSubmit(selected_queue, 1, &submit_info, fence), "vkQueueSubmit");
 }

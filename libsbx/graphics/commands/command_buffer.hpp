@@ -127,7 +127,8 @@ public:
 
   auto submit_idle() -> void;
 
-  auto submit(const std::vector<wait_semaphore>& wait_semaphores = {}, const VkSemaphore& signal_semaphore = nullptr, const VkFence& fence = nullptr) -> void;
+  /** @brief A nonzero @p signal_value makes @p signal_semaphore a timeline semaphore signaled to that value. */
+  auto submit(const std::vector<wait_semaphore>& wait_semaphores = {}, const VkSemaphore& signal_semaphore = nullptr, const VkFence& fence = nullptr, std::uint64_t signal_value = 0u) -> void;
 
   auto copy_buffer(const VkBuffer& source, const VkBuffer& destination, const VkBufferCopy& region) -> void;
 

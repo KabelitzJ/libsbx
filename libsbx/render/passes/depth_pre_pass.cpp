@@ -95,6 +95,10 @@ auto depth_pre_pass::_resolve_custom_pipeline(const std::string& shader_path, bo
 }
 
 auto depth_pre_pass::declare(graphics_pass_builder& builder, const graph_resources& resources) -> void {
+  builder.reads_buffer(resources.culled_indirect_args_buffer, graphics::pipeline_stage::draw_indirect, graphics::access::indirect_command_read);
+  builder.reads_buffer(resources.culled_transform_buffer, graphics::pipeline_stage::vertex_shader, graphics::access::shader_read);
+  builder.reads_buffer(resources.skin_scratch_buffer, graphics::pipeline_stage::vertex_shader, graphics::access::shader_read);
+
   auto group = render_attachment_group{.extent = resources.extent};
 
   group.depth = depth_attachment_slot{

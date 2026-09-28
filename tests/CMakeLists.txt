@@ -23,6 +23,8 @@ target_sources(
     "${PROJECT_SOURCE_DIR}/ecs/entity_test.cpp"
     "${PROJECT_SOURCE_DIR}/ecs/registry_test.cpp"
 
+    "${PROJECT_SOURCE_DIR}/scenes/scene_serializer_test.cpp"
+
     "${PROJECT_SOURCE_DIR}/utility/fast_mod_test.cpp"
     "${PROJECT_SOURCE_DIR}/utility/crc32_test.cpp"
     "${PROJECT_SOURCE_DIR}/utility/hashed_string_test.cpp"

@@ -3,7 +3,9 @@
 #ifndef LIBSBX_GRAPHICS_DEVICES_LOGICAL_DEVICE_HPP_
 #define LIBSBX_GRAPHICS_DEVICES_LOGICAL_DEVICE_HPP_
 
+#include <array>
 #include <cstdint>
+#include <mutex>
 #include <string>
 #include <utility>
 
@@ -14,9 +16,12 @@
 #include <libsbx/utility/noncopyable.hpp>
 #include <libsbx/utility/target.hpp>
 
+#include <libsbx/memory/observer_ptr.hpp>
+
 #include <libsbx/graphics/devices/physical_device.hpp>
 #include <libsbx/graphics/devices/object_type.hpp>
 #include <libsbx/graphics/devices/features.hpp>
+#include <libsbx/graphics/devices/surface.hpp>
 
 namespace sbx::graphics {
 
@@ -49,18 +54,30 @@ public:
 
   auto wait_idle() const -> void;
 
+  /**
+   * @brief Hold around every vkQueueSubmit/vkQueuePresentKHR on this queue: Vulkan requires external
+   * synchronization per VkQueue, and the render thread and the main thread (script compute, IBL
+   * bakes, storage images) both submit. Queue types that alias one VkQueue (e.g. compute on a device
+   * without a dedicated compute family) share one mutex.
+   */
+  [[nodiscard]] auto lock() const -> std::unique_lock<std::mutex>;
+
 private:
 
   queue()
   : _handle{VK_NULL_HANDLE},
     _family{0xFFFFFFFF} { }
 
-  queue(const VkQueue& handle, std::uint32_t family)
+  queue(const VkQueue& handle, std::uint32_t family, memory::observer_ptr<std::mutex> mutex)
   : _handle{handle},
-    _family{family} { }
+    _family{family},
+    _mutex{mutex} { }
 
   handle_type _handle{};
   std::uint32_t _family{};
+  // Owned by logical_device (shared by aliasing queue types); mutable because locking is logically
+  // const, same as a mutable mutex member, and observer_ptr propagates const to the pointee.
+  mutable memory::observer_ptr<std::mutex> _mutex{};
 
 }; // class queue
 
@@ -70,7 +87,7 @@ public:
 
   using handle_type = VkDevice;
 
-  explicit logical_device(const physical_device& physical_device);
+  logical_device(const physical_device& physical_device, const surface& surface);
 
   ~logical_device();
 
@@ -115,12 +132,25 @@ private:
 
     vkGetDeviceQueue(_handle, queue_family_index, index, &handle);
 
-    _queues.at(std::to_underlying(Type)) = graphics::queue{handle, queue_family_index};
+    auto mutex = memory::make_observer(_queue_mutexes.at(std::to_underlying(Type)));
+
+    for (const auto& existing : _queues) {
+      if (existing._handle == handle) {
+        mutex = existing._mutex;
+        break;
+      }
+    }
+
+    _queues.at(std::to_underlying(Type)) = graphics::queue{handle, queue_family_index, mutex};
   }
 
   auto _set_debug_name(VkObjectType object_type, std::uint64_t object_handle, const std::string& name) const -> void;
 
   handle_type _handle{};
+
+  // One per queue type; aliasing queue types point at the first one's (see _get_queue). Locked all
+  // together by wait_idle, since vkDeviceWaitIdle needs every queue externally synchronized.
+  mutable std::array<std::mutex, 4u> _queue_mutexes{};
 
   std::array<graphics::queue, 4u> _queues{};
 

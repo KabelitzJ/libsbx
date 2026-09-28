@@ -90,6 +90,14 @@ public:
    */
   auto flush_writes() -> void;
 
+  /**
+   * @brief Returns unregistered indices to their free lists once the frame timeline has reached
+   * the value they were retired at. unregister_* only parks an index: a frame still in flight may
+   * sample it, and handing it out again would rewrite a descriptor that frame is using. Called from
+   * frame_context::begin_frame, alongside resource_registry::collect_all.
+   */
+  auto collect(std::uint64_t completed_value) -> void;
+
   [[nodiscard]] auto sampled_image_count() const noexcept -> std::uint32_t {
     return _sampled_images.next - static_cast<std::uint32_t>(_sampled_images.released.size());
   }
@@ -118,15 +126,26 @@ private:
 
   struct index_allocator {
 
+    struct retired_index {
+      std::uint32_t index;
+      std::uint64_t timeline_value;
+    }; // struct retired_index
+
     std::uint32_t next{0u};
     std::uint32_t capacity{0u};
     std::vector<std::uint32_t> released{};
+    std::vector<retired_index> retired{};
 
     auto allocate() -> std::uint32_t;
 
-    auto release(std::uint32_t index) -> void;
+    auto release(std::uint32_t index, std::uint64_t timeline_value) -> void;
+
+    auto collect(std::uint64_t completed_value) -> void;
 
   }; // struct index_allocator
+
+  /** @brief The timeline value the frame currently being recorded will signal; see collect(). */
+  [[nodiscard]] auto _retire_value() const -> std::uint64_t;
 
   struct pending_write {
     std::uint32_t binding;

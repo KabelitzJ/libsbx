@@ -20,11 +20,15 @@ namespace sbx::render {
 /**
  * @brief Renders the sun's cascaded shadow maps: depth-only, alpha-cutout-aware (same
  * material-driven clip as depth_pre_pass), one cascade at a time into its own
- * shadow_map_resolution² target. A no-op when render_context::has_shadow_caster is false (no
- * shadow-casting directional light this frame — see scene_renderer_module::_build_packet).
+ * shadow_map_resolution² target. Draws nothing when render_context::has_shadow_caster is false (no
+ * shadow-casting directional light this frame — see scene_renderer_module::_build_packet), but its
+ * groups still clear the maps then, since opaque_pass declares a read of them (see
+ * render_graph's compiled_group::clear_on_skip).
  *
- * Runs after light_culling_pass and before opaque_pass/transparent_accumulate_pass, which sample
- * the resulting maps (see shaders/shadows/csm.slang) while shading the sun's contribution.
+ * Runs after light_culling_pass and before opaque_pass, which samples the resulting maps (see
+ * shaders/shadows/csm.slang) while shading the sun's contribution; opaque_pass's declared read is
+ * what transitions them to shader_read_only. transparent_accumulate_pass's alpha-blend shading
+ * policy doesn't receive shadows.
  */
 class shadow_pass final : public graphics_pass {
 

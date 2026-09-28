@@ -74,6 +74,7 @@ struct graph_resources {
   graphics::buffer_handle cluster_counter_buffer{};
   graphics::buffer_handle culled_indirect_args_buffer{};
   graphics::buffer_handle culled_transform_buffer{};
+  graphics::buffer_handle skin_scratch_buffer{};
 }; // struct graph_resources
 
 struct color_attachment_slot {
@@ -89,7 +90,10 @@ struct depth_attachment_slot {
   graphics::image_handle image{};
   graphics::pipeline_stage stage_mask{graphics::pipeline_stage::early_fragment_tests | graphics::pipeline_stage::late_fragment_tests};
   graphics::access access_mask{graphics::access::depth_stencil_attachment_read};
-  graphics::attachment_store_op store_op{graphics::attachment_store_op::dont_care};
+  // none, not dont_care: the default slot is read-only depth that later passes load again, and
+  // dont_care leaves it undefined afterwards (tile-based GPUs really discard it). A slot that writes
+  // depth sets store explicitly.
+  graphics::attachment_store_op store_op{graphics::attachment_store_op::none};
   graphics::depth_stencil_clear_value clear_value{1.0f, 0u};
   graphics::image_handle resolve_image{}; // invalid => no MSAA resolve -- see color_attachment_slot's own
   graphics::resolve_mode resolve_mode{graphics::resolve_mode::sample_zero}; // only consulted when resolve_image is valid
@@ -111,7 +115,6 @@ enum class operation_kind : std::uint8_t {
   read_buffer,
   write_buffer,
   declare_image_ready,
-  declare_buffer_ready,
   transition_after
 }; // enum class operation_kind
 
@@ -141,11 +144,17 @@ public:
 
   auto writes_image(graphics::image_handle image, graphics::pipeline_stage stage, graphics::access access, graphics::image_layout layout, std::uint32_t group_index = 0u) -> void;
 
+  /**
+   * @brief Declares a buffer access for the graph to synchronize against other passes' declared
+   * accesses within the frame. The buffer is assumed to have one region per frame-in-flight slot
+   * (render_context::slot), like every scene_renderer_module buffer: unlike images, its state is not
+   * carried into the next frame, so a buffer shared across slots needs its own cross-frame sync
+   * (see particle_simulate_pass's pools).
+   */
   auto reads_buffer(graphics::buffer_handle buffer, graphics::pipeline_stage stage, graphics::access access, std::uint32_t group_index = 0u) -> void;
 
+  /** @copydoc reads_buffer */
   auto writes_buffer(graphics::buffer_handle buffer, graphics::pipeline_stage stage, graphics::access access, std::uint32_t group_index = 0u) -> void;
-
-  auto declares_buffer_ready(graphics::buffer_handle buffer, graphics::pipeline_stage stage, graphics::access access) -> void;
 
   auto declares_image_ready(graphics::image_handle image, graphics::pipeline_stage stage, graphics::access access, graphics::image_layout layout, std::uint32_t group_index = 0u) -> void;
 
@@ -349,6 +358,12 @@ private:
     std::vector<graphics::command_buffer::image_transition_data> entry_image_barriers{};
     std::vector<VkMemoryBarrier2> entry_buffer_barriers{};
     std::vector<graphics::command_buffer::image_transition_data> exit_image_barriers{};
+
+    // This group is the first writer of an image a later group loads or reads -- by clearing it (an
+    // attachment's first use) or resolving into it -- so when it's disabled at runtime it still runs
+    // an empty rendering scope to perform that clear/resolve. Images only sampled through bindless
+    // without a declared read are invisible to this.
+    bool clear_on_skip{false};
   }; // struct compiled_group
 
   struct compiled_entry {

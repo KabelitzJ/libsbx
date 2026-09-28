@@ -231,6 +231,8 @@ auto swapchain::present(const VkSemaphore& wait_semaphore) -> VkResult {
 	present_info.pSwapchains = &_handle;
 	present_info.pImageIndices = &_active_image_index;
 
+  const auto lock = present_queue.lock();
+
 	return vkQueuePresentKHR(present_queue, &present_info);
 }
 

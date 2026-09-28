@@ -4,6 +4,7 @@
 #define LIBSBX_ASSETS_PREFAB_HPP_
 
 #include <string>
+#include <utility>
 
 #include <yaml-cpp/yaml.h>
 
@@ -29,6 +30,12 @@ class prefab final : public loadable {
 public:
 
   prefab() = default;
+
+  /** @brief A prefab built in memory, not loaded or registered through assets_module (e.g. in tests). */
+  prefab(YAML::Node snapshot, const math::uuid& id, std::string name)
+  : _snapshot{std::move(snapshot)},
+    _id{id},
+    _name{std::move(name)} { }
 
   [[nodiscard]] auto snapshot() const noexcept -> const YAML::Node& {
     return _snapshot;

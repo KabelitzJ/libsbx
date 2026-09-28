@@ -9,7 +9,6 @@
 
 #include <libsbx/graphics/devices/instance.hpp>
 #include <libsbx/graphics/devices/physical_device.hpp>
-#include <libsbx/graphics/devices/logical_device.hpp>
 
 namespace sbx::graphics {
 
@@ -19,7 +18,7 @@ public:
 
   using handle_type = VkSurfaceKHR;
 
-  surface(const instance& instance, const physical_device& physical_device, const logical_device& logical_device);
+  surface(const instance& instance, const physical_device& physical_device);
 
   ~surface();
 

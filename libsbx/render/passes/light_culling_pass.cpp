@@ -67,8 +67,13 @@ struct cull_lights_push_data {
 }; // struct cull_lights_push_data
 
 auto light_culling_pass::declare(compute_pass_builder& builder, const graph_resources& resources) -> void {
-  builder.declares_buffer_ready(resources.cluster_range_buffer, graphics::pipeline_stage::vertex_shader | graphics::pipeline_stage::fragment_shader, graphics::access::shader_read);
-  builder.declares_buffer_ready(resources.cluster_light_index_buffer, graphics::pipeline_stage::vertex_shader | graphics::pipeline_stage::fragment_shader, graphics::access::shader_read);
+  // build_clusters -> cull_lights inside this pass stays a hand-written barrier (aabb_ready in
+  // execute()); consumers of the light lists (opaque_pass/transparent_accumulate_pass) declare their
+  // reads, so the graph places the hand-off barrier.
+  builder.writes_buffer(resources.cluster_aabb_buffer, graphics::pipeline_stage::compute_shader, graphics::access::shader_read | graphics::access::shader_write);
+  builder.writes_buffer(resources.cluster_counter_buffer, graphics::pipeline_stage::compute_shader, graphics::access::shader_read | graphics::access::shader_write);
+  builder.writes_buffer(resources.cluster_range_buffer, graphics::pipeline_stage::compute_shader, graphics::access::shader_write);
+  builder.writes_buffer(resources.cluster_light_index_buffer, graphics::pipeline_stage::compute_shader, graphics::access::shader_write);
 }
 
 auto light_culling_pass::execute(render_context& context) -> void {
@@ -123,14 +128,6 @@ auto light_culling_pass::execute(render_context& context) -> void {
   write_push_constants(context, cull_lights_data);
 
   context.command_buffer->dispatch(groups_x, groups_y, cluster_dimensions.z());
-
-  auto lights_ready = VkMemoryBarrier2{};
-  lights_ready.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2;
-  lights_ready.srcStageMask = graphics::to_vk_enum<VkPipelineStageFlags2>(graphics::pipeline_stage::compute_shader);
-  lights_ready.srcAccessMask = graphics::to_vk_enum<VkAccessFlags2>(graphics::access::shader_write);
-  lights_ready.dstStageMask = graphics::to_vk_enum<VkPipelineStageFlags2>(graphics::pipeline_stage::vertex_shader | graphics::pipeline_stage::fragment_shader);
-  lights_ready.dstAccessMask = graphics::to_vk_enum<VkAccessFlags2>(graphics::access::shader_read);
-  context.command_buffer->memory_dependency(lights_ready);
 }
 
 } // namespace sbx::render

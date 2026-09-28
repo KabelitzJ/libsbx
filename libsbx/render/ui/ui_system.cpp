@@ -278,7 +278,11 @@ auto ui_system::render(graphics::command_buffer& command_buffer, math::vector2u 
   draw_data.OwnerViewport = ImGui::GetMainViewport();
   draw_data.Textures = data.textures();
 
-  ImGui_ImplVulkan_RenderDrawData(&draw_data, command_buffer);
+  {
+    // The backend submits texture uploads straight to the graphics queue from inside this call.
+    const auto lock = graphics_module.logical_device().queue<graphics::queue::type::graphics>().lock();
+    ImGui_ImplVulkan_RenderDrawData(&draw_data, command_buffer);
+  }
 
   draw_data.CmdLists.Data = nullptr;
   draw_data.CmdLists.Size = 0;

@@ -56,8 +56,10 @@ struct frustum_cull_push_data {
 }; // struct frustum_cull_push_data
 
 auto frustum_cull_pass::declare(compute_pass_builder& builder, const graph_resources& resources) -> void {
-  builder.declares_buffer_ready(resources.culled_indirect_args_buffer, graphics::pipeline_stage::draw_indirect, graphics::access::indirect_command_read);
-  builder.declares_buffer_ready(resources.culled_transform_buffer, graphics::pipeline_stage::vertex_shader, graphics::access::shader_read);
+  // instanceCount is bumped atomically, hence read|write on the indirect args. Consumers
+  // (depth_pre_pass/opaque_pass) declare their reads, so the graph places the hand-off barrier.
+  builder.writes_buffer(resources.culled_indirect_args_buffer, graphics::pipeline_stage::compute_shader, graphics::access::shader_read | graphics::access::shader_write);
+  builder.writes_buffer(resources.culled_transform_buffer, graphics::pipeline_stage::compute_shader, graphics::access::shader_write);
 }
 
 auto frustum_cull_pass::execute(render_context& context) -> void {
@@ -111,17 +113,6 @@ auto frustum_cull_pass::execute(render_context& context) -> void {
     const auto groups = (command.instance_count + threads_per_group - 1u) / threads_per_group;
     context.command_buffer->dispatch(groups, 1u, 1u);
   }
-
-  // Both culled buffers' writes above must land before depth_pre_pass/opaque_pass's indirect draws
-  // (indirect_args) and vertex shader (transforms) read them -- same shape as light_culling_pass's
-  // own compute-write-to-downstream-shader-read barrier.
-  auto culled_ready = VkMemoryBarrier2{};
-  culled_ready.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2;
-  culled_ready.srcStageMask = graphics::to_vk_enum<VkPipelineStageFlags2>(graphics::pipeline_stage::compute_shader);
-  culled_ready.srcAccessMask = graphics::to_vk_enum<VkAccessFlags2>(graphics::access::shader_write);
-  culled_ready.dstStageMask = graphics::to_vk_enum<VkPipelineStageFlags2>(graphics::pipeline_stage::draw_indirect | graphics::pipeline_stage::vertex_shader);
-  culled_ready.dstAccessMask = graphics::to_vk_enum<VkAccessFlags2>(graphics::access::indirect_command_read | graphics::access::shader_read);
-  context.command_buffer->memory_dependency(culled_ready);
 }
 
 } // namespace sbx::render

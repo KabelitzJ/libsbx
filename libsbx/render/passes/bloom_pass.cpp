@@ -222,9 +222,11 @@ auto bloom_pass::execute(render_context& context) -> void {
   auto& upsample_image = registry.get<graphics::image>(_cached_upsample);
 
   // Bloom fully regenerates its content every frame, so undefined -> general is always a valid
-  // starting point -- no first-frame special case needed.
+  // starting point -- no first-frame special case needed. Still waits on the previous frame's reads
+  // (its own compute passes, tonemap_pass's fragment sample of the upsample chain), which can still
+  // be executing with frames in flight.
   auto to_general = graphics::command_buffer::image_transition_data{};
-  to_general.src_stage_mask = VK_PIPELINE_STAGE_2_NONE;
+  to_general.src_stage_mask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
   to_general.src_access_mask = VK_ACCESS_2_NONE;
   to_general.dst_stage_mask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
   to_general.dst_access_mask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;

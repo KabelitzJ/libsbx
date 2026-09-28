@@ -14,9 +14,9 @@ namespace sbx::graphics {
 graphics_module::graphics_module()
 : _instance{},
   _physical_device{_instance},
-  _logical_device{_physical_device},
+  _surface{_instance, _physical_device},
+  _logical_device{_physical_device, _surface},
   _allocator{_instance, _physical_device, _logical_device},
-  _surface{_instance, _physical_device, _logical_device},
   _command_pools{},
   _resource_registry{},
   _bindless_table{_physical_device, _logical_device},
@@ -24,6 +24,8 @@ graphics_module::graphics_module()
   _upload_context{},
   _pipeline_binary_cache{_logical_device},
   _shader_compiler{} {
+  _logical_device.set_debug_name(_surface.handle(), "Surface");
+
   const auto& properties = _physical_device.properties();
 
   utility::logger<"graphics">::info("Device: {} ({})", std::string_view{properties.deviceName}, device_type_name(properties.deviceType));

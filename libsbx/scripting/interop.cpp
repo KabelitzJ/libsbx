@@ -38,6 +38,7 @@
 #include <libsbx/graphics/resources/image.hpp>
 #include <libsbx/graphics/resources/sampler.hpp>
 #include <libsbx/graphics/commands/command_buffer.hpp>
+#include <libsbx/graphics/commands/fence.hpp>
 #include <libsbx/graphics/pipeline/shader_cache.hpp>
 #include <libsbx/graphics/pipeline/shader_compiler.hpp>
 #include <libsbx/graphics/pipeline/compute_pipeline.hpp>
@@ -2483,7 +2484,7 @@ struct compute_shader_state {
 struct compute_commands_state {
   graphics::command_buffer command_buffer;
   std::uint32_t dispatch_count{0u};
-  VkFence fence{VK_NULL_HANDLE}; // set once submitted without waiting
+  std::optional<graphics::fence> fence{}; // set once submitted without waiting
 }; // struct compute_commands_state
 
 auto compute_buffer_registry() -> std::unordered_map<std::uint64_t, compute_buffer_state>& {
@@ -2837,7 +2838,7 @@ auto interop::compute_commands_dispatch(std::uint64_t id, std::uint64_t shader_i
     return false;
   }
 
-  if (entry->second.fence != VK_NULL_HANDLE) {
+  if (entry->second.fence) {
     utility::logger<"scripting">::error("compute_commands_dispatch: command list {} was already submitted", id);
     return false;
   }
@@ -2913,7 +2914,7 @@ auto interop::compute_commands_submit(std::uint64_t id, bool wait) -> bool {
   auto& registry = compute_commands_registry();
   const auto entry = registry.find(id);
 
-  if (entry == registry.end() || entry->second.fence != VK_NULL_HANDLE) {
+  if (entry == registry.end() || entry->second.fence) {
     utility::logger<"scripting">::error("compute_commands_submit: unknown (or already submitted) command list {}", id);
     return false;
   }
@@ -2923,9 +2924,9 @@ auto interop::compute_commands_submit(std::uint64_t id, bool wait) -> bool {
   // Makes every dispatch's writes visible to what scripts do next on this queue: later compute
   // sampling, ReadPixels (transfer) and ComputeBuffer.GetData (host, after the fence below). Later
   // submissions on the same queue fall in the barrier's second scope. The graphics queue (a
-  // material sampling the result) relies on the host having observed the fence, same as
-  // ibl_baker; fragment stages can't appear here since a dedicated compute family doesn't support
-  // them.
+  // material sampling the result) is covered separately: Submit() waits on the host, and an async
+  // submit goes through frame_context::submit_async, whose timeline every later frame waits on.
+  // Fragment stages can't appear here since a dedicated compute family doesn't support them.
   auto barrier = VkMemoryBarrier2{};
   barrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2;
   barrier.srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
@@ -2941,14 +2942,9 @@ auto interop::compute_commands_submit(std::uint64_t id, bool wait) -> bool {
     return true;
   }
 
-  const auto& logical_device = core::engine::get_module<graphics::graphics_module>().logical_device();
+  auto& fence = entry->second.fence.emplace();
 
-  auto fence_create_info = VkFenceCreateInfo{};
-  fence_create_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-
-  graphics::validate(vkCreateFence(logical_device, &fence_create_info, nullptr, &entry->second.fence), "vkCreateFence");
-
-  command_buffer.submit({}, nullptr, entry->second.fence);
+  core::engine::get_module<graphics::graphics_module>().frame_context().submit_async(command_buffer, fence);
 
   return true;
 }
@@ -2961,13 +2957,7 @@ auto interop::compute_commands_is_complete(std::uint64_t id) -> bool {
     return true;
   }
 
-  if (entry->second.fence == VK_NULL_HANDLE) {
-    return false;
-  }
-
-  const auto& logical_device = core::engine::get_module<graphics::graphics_module>().logical_device();
-
-  return vkGetFenceStatus(logical_device, entry->second.fence) == VK_SUCCESS;
+  return entry->second.fence && entry->second.fence->is_signaled();
 }
 
 auto interop::compute_commands_release(std::uint64_t id) -> void {
@@ -2978,12 +2968,9 @@ auto interop::compute_commands_release(std::uint64_t id) -> void {
     return;
   }
 
-  if (entry->second.fence != VK_NULL_HANDLE) {
-    const auto& logical_device = core::engine::get_module<graphics::graphics_module>().logical_device();
-
-    // The command buffer can't be freed while the GPU may still execute it.
-    graphics::validate(vkWaitForFences(logical_device, 1u, &entry->second.fence, VK_TRUE, std::numeric_limits<std::uint64_t>::max()), "vkWaitForFences");
-    vkDestroyFence(logical_device, entry->second.fence, nullptr);
+  // The command buffer can't be freed while the GPU may still execute it.
+  if (entry->second.fence) {
+    entry->second.fence->wait();
   }
 
   registry.erase(entry);

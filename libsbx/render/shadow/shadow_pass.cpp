@@ -80,6 +80,8 @@ auto shadow_pass::_resolve_custom_pipeline(const std::string& shader_path, bool 
 }
 
 auto shadow_pass::declare(graphics_pass_builder& builder, const graph_resources& resources) -> void {
+  builder.reads_buffer(resources.skin_scratch_buffer, graphics::pipeline_stage::vertex_shader, graphics::access::shader_read);
+
   const auto shadow_extent = math::vector2u{shadow_map_resolution, shadow_map_resolution};
 
   for (auto cascade = std::uint32_t{0u}; cascade < shadow_cascade_count; ++cascade) {
@@ -92,11 +94,7 @@ auto shadow_pass::declare(graphics_pass_builder& builder, const graph_resources&
       .clear_value = graphics::depth_stencil_clear_value{1.0f, 0u}
     };
 
-    const auto group_index = builder.add_group(group);
-
-    // No consumer declares a shadow-map read (bindless sample) — must self-transition after
-    // end_rendering() since Vulkan forbids transitioning an attachment inside its own render scope.
-    builder.transitions_after(group_index, resources.shadow_maps[cascade], graphics::pipeline_stage::fragment_shader, graphics::access::shader_read, graphics::image_layout::shader_read_only_optimal);
+    builder.add_group(group);
   }
 }
 

@@ -136,6 +136,10 @@ transparent_accumulate_pass::transparent_accumulate_pass() {
 }
 
 auto transparent_accumulate_pass::declare(graphics_pass_builder& builder, const graph_resources& resources) -> void {
+  builder.reads_buffer(resources.skin_scratch_buffer, graphics::pipeline_stage::vertex_shader, graphics::access::shader_read);
+  builder.reads_buffer(resources.cluster_range_buffer, graphics::pipeline_stage::fragment_shader, graphics::access::shader_read);
+  builder.reads_buffer(resources.cluster_light_index_buffer, graphics::pipeline_stage::fragment_shader, graphics::access::shader_read);
+
   auto group = render_attachment_group{.extent = resources.extent};
 
   group.colors.push_back(color_attachment_slot{

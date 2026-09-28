@@ -2,6 +2,7 @@
 // Copyright (c) 2026 Jonas Kabelitz
 #include <libsbx/graphics/devices/logical_device.hpp>
 
+#include <algorithm>
 #include <optional>
 #include <unordered_set>
 #include <vector>
@@ -66,6 +67,10 @@ auto queue::family() const noexcept -> std::uint32_t {
   return _family;
 }
 
+auto queue::lock() const -> std::unique_lock<std::mutex> {
+  return std::unique_lock{*_mutex};
+}
+
 struct queue_family_indices {
   std::optional<std::uint32_t> graphics{};
   std::optional<std::uint32_t> present{};
@@ -73,7 +78,7 @@ struct queue_family_indices {
   std::optional<std::uint32_t> transfer{};
 }; // struct queue_family_indices
 
-static auto _get_queue_family_indices(const physical_device& physical_device) -> queue_family_indices {
+static auto _get_queue_family_indices(const physical_device& physical_device, const surface& surface) -> queue_family_indices {
   auto result = queue_family_indices{};
 
   auto device_queue_family_property_count = std::uint32_t{0};
@@ -94,18 +99,6 @@ static auto _get_queue_family_indices(const physical_device& physical_device) ->
 
         if (std::popcount(device_queue_family_properties[i].queueFlags) < std::popcount(old_queue.queueFlags)) {
           result.graphics = i;
-        }
-      }
-
-      if (device_queue_family_properties[i].queueCount > 0u) {
-        if (!result.present) {
-          result.present = i;
-        } else {
-          const auto old_queue = device_queue_family_properties[*result.present];
-
-          if (std::popcount(device_queue_family_properties[i].queueFlags) < std::popcount(old_queue.queueFlags)) {
-            result.present = i;
-          } 
         }
       }
 		}
@@ -141,8 +134,28 @@ static auto _get_queue_family_indices(const physical_device& physical_device) ->
 
   utility::logger<"graphics">::debug("Selected graphics queue family: {}", *result.graphics);
 
-  if (!result.present) {
+  const auto supports_present = [&](const std::uint32_t family) -> bool {
+    auto supported = VkBool32{VK_FALSE};
+    validate(vkGetPhysicalDeviceSurfaceSupportKHR(physical_device, family, surface, &supported), "vkGetPhysicalDeviceSurfaceSupportKHR");
+
+    return supported == VK_TRUE;
+  };
+
+  // Prefer presenting from the graphics family itself, which avoids sharing swapchain images across
+  // families; otherwise any family the window surface actually supports.
+  if (supports_present(*result.graphics)) {
     result.present = result.graphics;
+  } else {
+    for (auto i = std::uint32_t{0}; i < device_queue_family_property_count; ++i) {
+      if (device_queue_family_properties[i].queueCount > 0u && supports_present(i)) {
+        result.present = i;
+        break;
+      }
+    }
+  }
+
+  if (!result.present) {
+    throw std::runtime_error("Failed to find a queue family that can present to the window surface");
   }
 
   utility::logger<"graphics">::debug("Selected present queue family: {}", *result.present);
@@ -162,44 +175,32 @@ static auto _get_queue_family_indices(const physical_device& physical_device) ->
   return result;
 }
 
-logical_device::logical_device(const physical_device& physical_device) {
-  const auto queue_family_indices = _get_queue_family_indices(physical_device);
+logical_device::logical_device(const physical_device& physical_device, const surface& surface) {
+  const auto queue_family_indices = _get_queue_family_indices(physical_device, surface);
 
   const auto graphics_queue_family_index = queue_family_indices.graphics.value();
   const auto present_queue_family_index = queue_family_indices.present.value();
   const auto compute_queue_family_index = queue_family_indices.compute.value();
   const auto transfer_queue_family_index = queue_family_indices.transfer.value();
 
+  // One queue (index 0) per distinct family; queue types that share a family share that queue and
+  // its lock (see _get_queue).
+  const auto queue_priority = std::float_t{0.0f};
+
   auto queue_create_infos = std::vector<VkDeviceQueueCreateInfo>{};
 
-	auto queue_priorities = std::array<std::float_t, 2u>{0.0f, 0.0f};
+  for (const auto family : {graphics_queue_family_index, present_queue_family_index, compute_queue_family_index, transfer_queue_family_index}) {
+    if (std::ranges::any_of(queue_create_infos, [family](const VkDeviceQueueCreateInfo& info) { return info.queueFamilyIndex == family; })) {
+      continue;
+    }
 
-  auto graphics_queue_create_info = VkDeviceQueueCreateInfo{};
-  graphics_queue_create_info.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-  graphics_queue_create_info.queueFamilyIndex = graphics_queue_family_index;
-  graphics_queue_create_info.queueCount = (present_queue_family_index != graphics_queue_family_index) ? 2u : 1u;
-  graphics_queue_create_info.pQueuePriorities = queue_priorities.data();
+    auto queue_create_info = VkDeviceQueueCreateInfo{};
+    queue_create_info.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+    queue_create_info.queueFamilyIndex = family;
+    queue_create_info.queueCount = 1u;
+    queue_create_info.pQueuePriorities = &queue_priority;
 
-  queue_create_infos.emplace_back(graphics_queue_create_info);
-
-  if (compute_queue_family_index != graphics_queue_family_index) {
-    auto compute_queue_create_info = VkDeviceQueueCreateInfo{};
-    compute_queue_create_info.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-    compute_queue_create_info.queueFamilyIndex = compute_queue_family_index;
-    compute_queue_create_info.queueCount = 1;
-    compute_queue_create_info.pQueuePriorities = queue_priorities.data();
-
-    queue_create_infos.emplace_back(compute_queue_create_info);
-  }
-
-  if (transfer_queue_family_index != graphics_queue_family_index && transfer_queue_family_index != compute_queue_family_index) {
-    auto transfer_queue_create_info = VkDeviceQueueCreateInfo{};
-    transfer_queue_create_info.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-    transfer_queue_create_info.queueFamilyIndex = transfer_queue_family_index;
-    transfer_queue_create_info.queueCount = 1;
-    transfer_queue_create_info.pQueuePriorities = queue_priorities.data();
-
-    queue_create_infos.emplace_back(transfer_queue_create_info);
+    queue_create_infos.push_back(queue_create_info);
   }
 
   const auto instance_validation_layers = layers::instance();
@@ -237,6 +238,8 @@ logical_device::~logical_device() {
 }
 
 auto logical_device::wait_idle() const -> void {
+  const auto lock = std::scoped_lock{_queue_mutexes[0], _queue_mutexes[1], _queue_mutexes[2], _queue_mutexes[3]};
+
   validate(vkDeviceWaitIdle(_handle), "vkDeviceWaitIdle");
 }
 

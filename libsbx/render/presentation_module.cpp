@@ -118,7 +118,7 @@ auto presentation_module::_consume() -> void {
     to_present.image = swapchain.active_image();
     to_present.src_stage_mask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
     to_present.src_access_mask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
-    to_present.dst_stage_mask = VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT;
+    to_present.dst_stage_mask = VK_PIPELINE_STAGE_2_NONE;
     to_present.dst_access_mask = VK_ACCESS_2_NONE;
     to_present.old_layout = graphics::image_layout::color_attachment_optimal;
     to_present.new_layout = graphics::image_layout::present_source;

@@ -102,6 +102,17 @@ opaque_pass::opaque_pass() {
 }
 
 auto opaque_pass::declare(graphics_pass_builder& builder, const graph_resources& resources) -> void {
+  builder.reads_buffer(resources.culled_indirect_args_buffer, graphics::pipeline_stage::draw_indirect, graphics::access::indirect_command_read);
+  builder.reads_buffer(resources.culled_transform_buffer, graphics::pipeline_stage::vertex_shader, graphics::access::shader_read);
+  builder.reads_buffer(resources.skin_scratch_buffer, graphics::pipeline_stage::vertex_shader, graphics::access::shader_read);
+  builder.reads_buffer(resources.cluster_range_buffer, graphics::pipeline_stage::fragment_shader, graphics::access::shader_read);
+  builder.reads_buffer(resources.cluster_light_index_buffer, graphics::pipeline_stage::fragment_shader, graphics::access::shader_read);
+
+  // Sampled through bindless by opaque_shading_policy's sun lighting (shaders/shadows/csm.slang).
+  for (const auto shadow_map : resources.shadow_maps) {
+    builder.reads_image(shadow_map, graphics::pipeline_stage::fragment_shader, graphics::access::shader_sampled_read, graphics::image_layout::shader_read_only_optimal);
+  }
+
   auto group = render_attachment_group{.extent = resources.extent};
 
   group.colors.push_back(color_attachment_slot{

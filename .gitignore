@@ -15,6 +15,7 @@ compile_commands.json
 .env*
 
 .claude
+graphify-out/
 
 *.profile
 *.prof

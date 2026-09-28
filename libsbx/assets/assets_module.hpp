@@ -269,7 +269,14 @@ public:
   auto save_scene(scene_handle& scene, const std::filesystem::path& path) -> math::uuid;
 
   /**
-   * @brief Turns queued texture loads into GPU images and bindless writes.
+   * @brief Finalizes assets the background loader has finished (budgeted) and queues their GPU uploads.
+   *
+   * Must run on the main thread while the render thread is idle -- see asset_residency::drain_loader_results.
+   */
+  auto drain_loader_results() -> void;
+
+  /**
+   * @brief Turns queued texture/mesh/material uploads into GPU images, buffers and bindless writes.
    *
    * Runs on the render thread; copies are recorded by the caller's subsequent @ref upload_context::flush.
    */

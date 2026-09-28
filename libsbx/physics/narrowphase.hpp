@@ -17,6 +17,7 @@
 #ifndef LIBSBX_PHYSICS_NARROWPHASE_HPP_
 #define LIBSBX_PHYSICS_NARROWPHASE_HPP_
 
+#include <memory_resource>
 #include <optional>
 #include <unordered_map>
 #include <vector>
@@ -92,9 +93,9 @@ struct body_shape {
  * every descendant's, recursing through the subtree but never past a descendant that has its own
  * rigidbody -- that one is an independent body instead, not part of this compound. A childless node
  * returns 0 or 1 entries with no recursion overhead, so an ordinary single-shape body costs exactly
- * what it always did.
+ * what it always did. @p resource lets per-pair narrowphase callers keep the list on a stack arena.
  */
-[[nodiscard]] auto resolve_body_shapes(scenes::scene& scene, const scenes::node& rigidbody_node, convex_hull_cache& hull_cache, assets::assets_module& assets_module, pose_cache& cache) -> std::vector<body_shape>;
+[[nodiscard]] auto resolve_body_shapes(scenes::scene& scene, const scenes::node& rigidbody_node, convex_hull_cache& hull_cache, assets::assets_module& assets_module, pose_cache& cache, std::pmr::memory_resource* resource = std::pmr::get_default_resource()) -> std::pmr::vector<body_shape>;
 
 /**
  * @brief Walks upward from @p node (inclusive) through relationship::parent until it finds an

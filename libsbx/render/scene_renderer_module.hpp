@@ -8,7 +8,9 @@
 #include <memory>
 #include <optional>
 #include <span>
+#include <unordered_map>
 #include <utility>
+#include <vector>
 
 #include <libsbx/utility/noncopyable.hpp>
 
@@ -255,6 +257,22 @@ private:
   /** @brief The clip named by @p state's clip_name, resolved against @p renderer's mesh->animation_clips(); an invalid handle if @p state is null, the mesh has no such clip, or the mesh itself isn't assigned. */
   [[nodiscard]] auto _resolve_state_clip(const scenes::mesh_renderer& renderer, const assets::animation_state* state) const -> assets::animation_clip_handle;
 
+  struct draw_bucket {
+    assets::mesh_handle mesh{};
+    std::uint32_t submesh_index{0u};
+    assets::material_handle material{};
+    std::uint32_t pipeline_id{0u};
+    std::vector<transform_data> transforms{};
+  }; // struct draw_bucket
+
+  struct transparent_entry {
+    assets::mesh_handle mesh{};
+    std::uint32_t submesh_index{0u};
+    assets::material_handle material{};
+    std::uint32_t pipeline_id{0u};
+    transform_data transform{};
+  }; // struct transparent_entry
+
   render_packet _work_packet{};
   bool _has_rendered{false};
   std::optional<camera_data> _camera_override{};
@@ -271,9 +289,12 @@ private:
   std::vector<math::vector3> _skeleton_scratch_target_scales{};
   std::vector<math::matrix4x4> _skeleton_scratch_locals{};
 
-  // Unique opaque mesh/submesh/material bucket count from the last _build_packet call, used to
-  // reserve() the accumulation map up front instead of growing it one rehash at a time.
-  std::size_t _last_opaque_bucket_count{128u};
+  // _build_packet's opaque/transparent accumulation, reused across frames like the skeleton scratch
+  // buffers above so a steady scene stops reallocating. A bucket that got no instances in the
+  // previous build is pruned at the start of the next one, so removed meshes/materials don't linger.
+  std::unordered_map<mesh_key, draw_bucket, mesh_key_hash> _opaque_buckets{};
+  std::vector<std::pair<mesh_key, const draw_bucket*>> _ordered_opaque_buckets{};
+  std::vector<transparent_entry> _transparent_entries{};
 
   draw_stats _last_draw_stats{};
 

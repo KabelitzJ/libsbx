@@ -54,7 +54,7 @@ auto draw_convex_shape(render::debug_draw& debug_draw, const convex_shape& shape
       // point keeps this consistent with every other shape above, whose matrix-based add_wire_*
       // helpers extract normalized (scale-blind) basis vectors from the matrix and would silently
       // ignore a baked-in scale.
-      if (shape.faces.is_empty()) {
+      if (shape.faces.empty()) {
         constexpr auto marker_size = 0.06f;
 
         for (const auto& point : shape.points) {

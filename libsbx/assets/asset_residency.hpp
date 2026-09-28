@@ -4,6 +4,7 @@
 #define LIBSBX_ASSETS_ASSET_RESIDENCY_HPP_
 
 #include <array>
+#include <cmath>
 #include <cstdint>
 #include <deque>
 #include <filesystem>
@@ -17,6 +18,8 @@
 #include <libsbx/utility/noncopyable.hpp>
 
 #include <libsbx/math/uuid.hpp>
+#include <libsbx/math/vector2.hpp>
+#include <libsbx/math/vector4.hpp>
 
 #include <libsbx/graphics/graphics_module.hpp>
 #include <libsbx/graphics/types.hpp>
@@ -66,7 +69,7 @@ struct resident_asset_counts {
  * one exists, no decoded/parsed content yet -- caches it immediately, and hands the actual disk
  * I/O/decode off to @ref asset_loader's background thread. The handle it returns is always valid
  * immediately; it simply doesn't finish (is_resident()/is_valid()-after-finalize, depending on the
- * type) until process_uploads' next call has drained the corresponding result and applied it. This
+ * type) until drain_loader_results' next call has finalized it and process_uploads has uploaded it. This
  * class alone interprets that raw data -- resolving nested asset references (paths -> uuids ->
  * handles), reserving GPU-adjacent identity, queuing the actual GPU upload -- the background thread
  * never does.
@@ -333,8 +336,19 @@ public:
   auto save_shader_graph(shader_graph_handle& graph, const std::filesystem::path& path) -> math::uuid;
 
   /**
-   * @brief Drains the background loader's per-type result queues (budgeted) and turns queued
-   * texture loads into GPU images and bindless writes (also budgeted).
+   * @brief Pops up to max_uploads_per_frame entries combined across every asset_loader result
+   * queue (roughly cost/frequency order: textures, meshes, fonts, materials, particle_effects,
+   * animation_graphs, shader_graphs, skeletons, animation_clips) and runs each one's _finalize_* -- the one place
+   * nested asset references (paths -> uuids -> handles) get resolved and GPU uploads get queued.
+   *
+   * Must run on the main thread while the render thread is idle: finalizing writes the same asset
+   * records game code and packet building read, and fires their on_loaded callbacks.
+   */
+  auto drain_loader_results() -> void;
+
+  /**
+   * @brief Turns queued texture/mesh/material uploads into GPU images, buffers, bindless writes
+   * and material UBO writes (budgeted).
    *
    * Runs on the render thread; copies are recorded by the caller's subsequent @ref upload_context::flush.
    */
@@ -385,8 +399,8 @@ private:
 
   inline static constexpr auto material_capacity = std::uint32_t{1024u};
 
-  // Combined, shared across every result/pending-upload category drained per process_uploads()
-  // call -- see the doc comments on _drain_loader_results and the pending-upload loop below.
+  // Combined, shared across every result/pending-upload category drained per drain_loader_results()
+  // or process_uploads() call -- see their doc comments.
   // Spreads a burst of loads/uploads across several frames instead of spiking one.
   inline static constexpr auto max_uploads_per_frame = std::size_t{32u};
 
@@ -408,13 +422,43 @@ private:
     std::vector<skin_vertex> skin_vertices{}; // empty when the mesh has no skin data
   }; // struct pending_mesh_upload
 
+  // Must stay byte-identical to material_data in frame_data.slang.
+  struct material_data {
+    math::vector4 base_color_factor;
+    math::vector4 emissive_factor;
+    std::uint32_t albedo_index;
+    std::uint32_t normal_index;
+    std::uint32_t metallic_roughness_index;
+    std::uint32_t occlusion_index;
+    std::uint32_t emissive_index;
+    std::float_t metallic_factor;
+    std::float_t roughness_factor;
+    std::float_t alpha_cutoff;
+    std::uint32_t flags;
+    std::float_t normal_scale;
+    std::float_t occlusion_strength;
+    std::float_t emissive_strength;
+    std::float_t ior;
+    math::vector2 uv_tiling;
+    math::vector2 uv_offset;
+    // One float4 slot per shader-graph-exposed param regardless of its actual type avoids
+    // sub-float packing/alignment footguns for a handful of extra bytes per material.
+    math::vector4 generic_params[shader_graph_max_params];
+    std::uint32_t generic_textures[shader_graph_max_textures];
+  }; // struct material_data
+
+  // A snapshot taken on the queuing (main) thread, so the render thread never reads a material
+  // record the main thread may be editing concurrently.
   struct pending_material_upload {
-    std::shared_ptr<material> record;
+    std::uint32_t index;
+    material_data data;
   }; // struct pending_material_upload
 
   auto _create_default_texture(std::array<std::uint8_t, 4u> color) -> texture_handle;
 
   auto _register_material(std::shared_ptr<material> record) -> material_handle;
+
+  [[nodiscard]] auto _material_data_of(const material& material) const -> material_data;
 
   /**
    * @brief Turns one already-cooked embedded glTF material (see cooked_submesh::material's doc
@@ -426,15 +470,6 @@ private:
   auto _extract_gltf_material(const math::uuid& cooked_material_id, const std::filesystem::path& mesh_source) -> material_handle;
 
   [[nodiscard]] auto _texture_cache_key(const math::uuid& id, graphics::format format) const -> std::string;
-
-  /**
-   * @brief Pops up to max_uploads_per_frame entries combined across every asset_loader result
-   * queue (roughly cost/frequency order: textures, meshes, fonts, materials, particle_effects,
-   * animation_graphs, shader_graphs, skeletons, animation_clips) and runs each one's _finalize_* -- the one place
-   * nested asset references (paths -> uuids -> handles) get resolved and GPU uploads get queued.
-   * Called first thing inside process_uploads.
-   */
-  auto _drain_loader_results() -> void;
 
   auto _finalize_texture(asset_loader::texture_result& result) -> void;
   auto _finalize_mesh(asset_loader::mesh_result& result) -> void;

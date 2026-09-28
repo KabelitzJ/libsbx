@@ -113,22 +113,6 @@ struct cluster_range {
   std::uint32_t count;
 }; // struct cluster_range
 
-struct draw_bucket {
-  assets::mesh_handle mesh{};
-  std::uint32_t submesh_index{0u};
-  assets::material_handle material{};
-  std::uint32_t pipeline_id{0u};
-  std::vector<transform_data> transforms{};
-}; // struct draw_bucket
-
-struct transparent_entry {
-  assets::mesh_handle mesh{};
-  std::uint32_t submesh_index{0u};
-  assets::material_handle material{};
-  std::uint32_t pipeline_id{0u};
-  transform_data transform{};
-}; // struct transparent_entry
-
 struct billboard_key_hash {
   auto operator()(const std::pair<std::uint32_t, assets::emitter_blend_mode>& key) const noexcept -> std::size_t {
     auto seed = std::hash<std::uint32_t>{}(key.first);
@@ -173,6 +157,34 @@ struct particle_mesh_bucket {
   assets::emitter_blend_mode blend_mode{};
   std::vector<particle_mesh_instance> instances;
 }; // struct particle_mesh_bucket
+
+// A fresh packet (scalars at their defaults) that takes over previous's vector storage, cleared, so
+// a steady scene stops reallocating it every frame. A vector missing here just reallocates again.
+auto recycle_packet_storage(render_packet& previous) -> render_packet {
+  auto packet = render_packet{};
+
+  const auto recycle = [](auto& target, auto& source) {
+    target = std::move(source);
+    target.clear();
+  };
+
+  recycle(packet.opaque_commands, previous.opaque_commands);
+  recycle(packet.transparent_commands, previous.transparent_commands);
+  recycle(packet.shadow_caster_commands, previous.shadow_caster_commands);
+  recycle(packet.transforms, previous.transforms);
+  recycle(packet.lights, previous.lights);
+  recycle(packet.particle_billboard_instances, previous.particle_billboard_instances);
+  recycle(packet.particle_billboard_commands, previous.particle_billboard_commands);
+  recycle(packet.particle_mesh_instances, previous.particle_mesh_instances);
+  recycle(packet.particle_mesh_commands, previous.particle_mesh_commands);
+  recycle(packet.trail_vertices, previous.trail_vertices);
+  recycle(packet.trail_commands, previous.trail_commands);
+  recycle(packet.particle_emitters, previous.particle_emitters);
+  recycle(packet.joint_matrices, previous.joint_matrices);
+  recycle(packet.skin_dispatches, previous.skin_dispatches);
+
+  return packet;
+}
 
 auto compute_pipeline_id(const assets::material& material) -> std::uint32_t {
   return (material.is_double_sided() ? 1u : 0u) | (material.shading() == assets::shading_model::unlit ? 2u : 0u);
@@ -391,6 +403,8 @@ scene_renderer_module::~scene_renderer_module() {
 }
 
 auto scene_renderer_module::prepare() -> void {
+  core::engine::get_module<assets::assets_module>().drain_loader_results();
+
   _work_packet = _build_packet();
 
   const auto summarize = [](const std::vector<draw_command>& commands) -> draw_category_stats {
@@ -713,7 +727,9 @@ auto scene_renderer_module::effective_camera() -> camera_data {
 auto scene_renderer_module::_build_packet() -> render_packet {
   SBX_PROFILE_SCOPE("scene_renderer_module::build_packet");
 
-  auto packet = render_packet{};
+  // Only ever called from prepare(), while the render thread is idle, so the previous packet's
+  // storage is free to take over.
+  auto packet = recycle_packet_storage(_work_packet);
 
   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
   auto& scene = scenes_module.active_scene();
@@ -742,10 +758,13 @@ auto scene_renderer_module::_build_packet() -> render_packet {
     }
   }
 
-  auto opaque = std::unordered_map<mesh_key, draw_bucket, mesh_key_hash>{};
-  opaque.reserve(_last_opaque_bucket_count);
+  std::erase_if(_opaque_buckets, [](const auto& entry) { return entry.second.transforms.empty(); });
 
-  auto transparent = std::vector<transparent_entry>{};
+  for (auto& [key, bucket] : _opaque_buckets) {
+    bucket.transforms.clear();
+  }
+
+  _transparent_entries.clear();
 
   for (const auto [entity, world, renderer] : scene.query<scenes::world_transform, scenes::mesh_renderer>(ecs::exclude<scenes::skeleton_pose, scenes::inactive>).each()) {
     if (!renderer.mesh.is_valid()) {
@@ -759,6 +778,8 @@ auto scene_renderer_module::_build_packet() -> render_packet {
 
     const auto& submeshes = renderer.mesh->submeshes();
 
+    const auto instance = transform_data{world.matrix, math::matrix4x4::transposed(math::matrix4x4::inverted(world.matrix))};
+
     for (auto index = std::uint32_t{0u}; index < submeshes.size(); ++index) {
       if (index >= renderer.materials.size()) {
         continue;
@@ -770,32 +791,41 @@ auto scene_renderer_module::_build_packet() -> render_packet {
         continue;
       }
 
-      const auto pipeline_id = compute_pipeline_id(*material);
-
-      const auto instance = transform_data{world.matrix, math::matrix4x4::transposed(math::matrix4x4::inverted(world.matrix))};
-
       if (material->alpha() == assets::alpha_mode::blend) {
-        transparent.push_back(transparent_entry{renderer.mesh, index, material, pipeline_id, instance});
+        _transparent_entries.push_back(transparent_entry{renderer.mesh, index, material, compute_pipeline_id(*material), instance});
       } else {
-        auto& bucket = opaque[mesh_key{renderer.mesh->id(), index, material->id()}];
-        bucket.mesh = renderer.mesh;
-        bucket.submesh_index = index;
-        bucket.material = material;
-        bucket.pipeline_id = pipeline_id;
+        auto& bucket = _opaque_buckets[mesh_key{renderer.mesh->id(), index, material->id()}];
+
+        // Refreshed once per bucket per frame rather than per instance: every instance in a bucket
+        // shares the same mesh/material, and a reused bucket may still hold last frame's handles.
+        if (bucket.transforms.empty()) {
+          bucket.mesh = renderer.mesh;
+          bucket.submesh_index = index;
+          bucket.material = material;
+          bucket.pipeline_id = compute_pipeline_id(*material);
+        }
+
         bucket.transforms.push_back(instance);
       }
     }
   }
 
-  packet.opaque_commands.reserve(opaque.size());
-  packet.shadow_caster_commands.reserve(opaque.size());
+  _ordered_opaque_buckets.clear();
 
-  _last_opaque_bucket_count = opaque.size();
+  for (const auto& [key, bucket] : _opaque_buckets) {
+    if (!bucket.transforms.empty()) {
+      _ordered_opaque_buckets.emplace_back(key, &bucket);
+    }
+  }
 
-  auto ordered_opaque = std::vector<std::pair<mesh_key, draw_bucket>>{std::make_move_iterator(opaque.begin()), std::make_move_iterator(opaque.end())};
-  std::ranges::sort(ordered_opaque, [](const mesh_key& lhs, const mesh_key& rhs) { return lhs < rhs; }, &std::pair<mesh_key, draw_bucket>::first);
+  std::ranges::sort(_ordered_opaque_buckets, [](const mesh_key& lhs, const mesh_key& rhs) { return lhs < rhs; }, &std::pair<mesh_key, const draw_bucket*>::first);
 
-  for (auto& [key, bucket] : ordered_opaque) {
+  packet.opaque_commands.reserve(_ordered_opaque_buckets.size());
+  packet.shadow_caster_commands.reserve(_ordered_opaque_buckets.size());
+
+  for (const auto& [key, bucket_pointer] : _ordered_opaque_buckets) {
+    const auto& bucket = *bucket_pointer;
+
     auto command = draw_command{};
     command.mesh = bucket.mesh;
     command.submesh_index = bucket.submesh_index;
@@ -815,9 +845,9 @@ auto scene_renderer_module::_build_packet() -> render_packet {
     packet.opaque_commands.push_back(std::move(command));
   }
 
-  packet.transparent_commands.reserve(transparent.size());
+  packet.transparent_commands.reserve(_transparent_entries.size());
 
-  for (const auto& entry : transparent) {
+  for (const auto& entry : _transparent_entries) {
     auto command = draw_command{};
     command.mesh = entry.mesh;
     command.submesh_index = entry.submesh_index;

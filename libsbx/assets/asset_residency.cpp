@@ -34,37 +34,6 @@ namespace sbx::assets {
 inline constexpr auto material_flag_masked = std::uint32_t{1u << 0u};
 inline constexpr auto material_flag_receives_shadow = std::uint32_t{1u << 1u};
 
-struct material_data {
-  math::vector4 base_color_factor;
-  math::vector4 emissive_factor;
-  std::uint32_t albedo_index;
-  std::uint32_t normal_index;
-  std::uint32_t metallic_roughness_index;
-  std::uint32_t occlusion_index;
-  std::uint32_t emissive_index;
-  std::float_t metallic_factor;
-  std::float_t roughness_factor;
-  std::float_t alpha_cutoff;
-  std::uint32_t flags;
-  std::float_t normal_scale;
-  std::float_t occlusion_strength;
-  std::float_t emissive_strength;
-  std::float_t ior;
-  math::vector2 uv_tiling;
-  math::vector2 uv_offset;
-
-  // Shader-graph-exposed parameters -- unused (always zero) until a material actually references a
-  // shader_graph (material opt-in, still future work; see the shader graph plan's "Material
-  // opt-in"/"GPU parameter storage" sections). Added now so a hand-authored graph using an exposed
-  // constant_* or texture_sample node compiles today, not only once that wiring lands -- codegen
-  // (shader_graph_codegen.cpp) already emits `material.generic_params[N]`/`generic_textures[N]`
-  // reads for those node types. One uniform float4 slot per param regardless of its actual type
-  // (scalar/vector3/color use .x/.xyz/.rgba of their slot) avoids sub-float packing/alignment
-  // footguns for a handful of extra bytes per material.
-  math::vector4 generic_params[shader_graph_max_params];
-  std::uint32_t generic_textures[shader_graph_max_textures];
-}; // struct material_data
-
 // Strips characters a filename can't contain, for turning a gltf material's (freeform) name into
 // a safe file name when extracting it.
 static auto sanitize_file_name(std::string name) -> std::string {
@@ -649,7 +618,7 @@ auto asset_residency::update_material(material_handle& material, const material:
   auto lock = std::lock_guard{_mutex};
 
   if (material->index() < _materials.size()) {
-    _pending_materials.push_back(pending_material_upload{_materials[material->index()]});
+    _pending_materials.push_back(pending_material_upload{material->index(), _material_data_of(*material)});
   }
 }
 
@@ -1506,7 +1475,7 @@ auto asset_residency::load_environment_map(const std::filesystem::path& path) ->
   return load_environment_map(_manifest.import(assets_directory / path));
 }
 
-auto asset_residency::_drain_loader_results() -> void {
+auto asset_residency::drain_loader_results() -> void {
   auto remaining = max_uploads_per_frame;
 
   auto textures = _loader.take_resolved_textures(remaining);
@@ -2041,8 +2010,6 @@ auto asset_residency::_finalize_animation_clip(asset_loader::animation_clip_resu
 auto asset_residency::process_uploads(std::uint64_t frame_index) -> void {
   SBX_PROFILE_SCOPE("asset_residency::process_uploads");
 
-  _drain_loader_results();
-
   auto pending_textures = std::vector<pending_texture_upload>{};
   auto pending_meshes = std::vector<pending_mesh_upload>{};
   auto pending_materials = std::vector<pending_material_upload>{};
@@ -2159,44 +2126,8 @@ auto asset_residency::process_uploads(std::uint64_t frame_index) -> void {
 
   auto& buffer = registry.get<graphics::buffer>(_material_buffer);
 
-  for (auto& request : pending_materials) {
-    const auto& material = *request.record;
-
-    const auto resolve = [this](const texture_handle& texture, const texture_handle& fallback) {
-      return texture.is_valid() ? texture->index() : fallback->index();
-    };
-
-    const auto& base_color_factor = material.base_color_factor();
-    const auto& emissive_factor = material.emissive_factor();
-
-    auto data = material_data{};
-    data.base_color_factor = math::vector4{base_color_factor.r(), base_color_factor.g(), base_color_factor.b(), base_color_factor.a()};
-    data.emissive_factor = math::vector4{emissive_factor.x(), emissive_factor.y(), emissive_factor.z(), 0.0f};
-    data.albedo_index = resolve(material.albedo(), _white);
-    data.normal_index = resolve(material.normal(), _normal);
-    data.metallic_roughness_index = resolve(material.metallic_roughness(), _white);
-    data.occlusion_index = resolve(material.occlusion(), _white);
-    data.emissive_index = resolve(material.emissive(), _white);
-    data.metallic_factor = material.metallic_factor();
-    data.roughness_factor = material.roughness_factor();
-    data.alpha_cutoff = material.alpha_cutoff();
-    data.flags = ((material.alpha() == alpha_mode::mask) ? material_flag_masked : 0u) | (material.receives_shadow() ? material_flag_receives_shadow : 0u);
-    data.normal_scale = material.normal_scale();
-    data.occlusion_strength = material.occlusion_strength();
-    data.emissive_strength = material.emissive_strength();
-    data.ior = material.ior();
-    data.uv_tiling = material.uv_tiling();
-    data.uv_offset = material.uv_offset();
-
-    const auto& generic_params = material.generic_params();
-    std::ranges::copy(generic_params, data.generic_params);
-
-    const auto& generic_textures = material.generic_textures();
-    for (auto i = std::size_t{0u}; i < generic_textures.size(); ++i) {
-      data.generic_textures[i] = resolve(generic_textures[i], _white);
-    }
-
-    buffer.write(&data, sizeof(material_data), material.index() * memory::stride_v<material_data>);
+  for (const auto& request : pending_materials) {
+    buffer.write(&request.data, sizeof(material_data), request.index * memory::stride_v<material_data>);
   }
 }
 
@@ -2311,6 +2242,44 @@ auto asset_residency::_create_default_texture(std::array<std::uint8_t, 4u> color
   return texture_handle{record};
 }
 
+auto asset_residency::_material_data_of(const material& material) const -> material_data {
+  const auto resolve = [](const texture_handle& texture, const texture_handle& fallback) {
+    return texture.is_valid() ? texture->index() : fallback->index();
+  };
+
+  const auto& base_color_factor = material.base_color_factor();
+  const auto& emissive_factor = material.emissive_factor();
+
+  auto data = material_data{};
+  data.base_color_factor = math::vector4{base_color_factor.r(), base_color_factor.g(), base_color_factor.b(), base_color_factor.a()};
+  data.emissive_factor = math::vector4{emissive_factor.x(), emissive_factor.y(), emissive_factor.z(), 0.0f};
+  data.albedo_index = resolve(material.albedo(), _white);
+  data.normal_index = resolve(material.normal(), _normal);
+  data.metallic_roughness_index = resolve(material.metallic_roughness(), _white);
+  data.occlusion_index = resolve(material.occlusion(), _white);
+  data.emissive_index = resolve(material.emissive(), _white);
+  data.metallic_factor = material.metallic_factor();
+  data.roughness_factor = material.roughness_factor();
+  data.alpha_cutoff = material.alpha_cutoff();
+  data.flags = ((material.alpha() == alpha_mode::mask) ? material_flag_masked : 0u) | (material.receives_shadow() ? material_flag_receives_shadow : 0u);
+  data.normal_scale = material.normal_scale();
+  data.occlusion_strength = material.occlusion_strength();
+  data.emissive_strength = material.emissive_strength();
+  data.ior = material.ior();
+  data.uv_tiling = material.uv_tiling();
+  data.uv_offset = material.uv_offset();
+
+  const auto& generic_params = material.generic_params();
+  std::ranges::copy(generic_params, data.generic_params);
+
+  const auto& generic_textures = material.generic_textures();
+  for (auto i = std::size_t{0u}; i < generic_textures.size(); ++i) {
+    data.generic_textures[i] = resolve(generic_textures[i], _white);
+  }
+
+  return data;
+}
+
 auto asset_residency::_register_material(std::shared_ptr<material> record) -> material_handle {
   auto lock = std::lock_guard{_mutex};
 
@@ -2327,7 +2296,7 @@ auto asset_residency::_register_material(std::shared_ptr<material> record) -> ma
     _materials.push_back(record);
   }
 
-  _pending_materials.push_back(pending_material_upload{record});
+  _pending_materials.push_back(pending_material_upload{record->index(), _material_data_of(*record)});
 
   return material_handle{record};
 }

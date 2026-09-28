@@ -387,7 +387,8 @@ struct interop {
    * sized by the caller -- see MeshRenderer_SetGeometry's own caller-allocates convention), via a
    * blocking image-to-buffer copy + host-visible staging buffer. format must match how the
    * texture was created (0 = RGBA8, 1 = R32 float, 2 = R8 unorm); single-channel formats land in
-   * out_pixels[i].r only. No-op if texture_uuid or out_pixels is invalid. Backs
+   * out_pixels[i].r only. Logs and no-ops if texture_uuid or out_pixels is invalid, the texture
+   * isn't a storage image, or width/height/format don't match the image. Backs
    * Sbx.Core.Texture2D.ReadPixels.
    */
   static auto texture_read_pixels(std::uint64_t texture_uuid, std::uint32_t width, std::uint32_t height, std::uint32_t format, math::color* out_pixels) -> void;

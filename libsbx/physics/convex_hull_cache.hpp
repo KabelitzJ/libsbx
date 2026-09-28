@@ -14,6 +14,8 @@
 #ifndef LIBSBX_PHYSICS_CONVEX_HULL_CACHE_HPP_
 #define LIBSBX_PHYSICS_CONVEX_HULL_CACHE_HPP_
 
+#include <memory>
+
 #include <libsbx/math/uuid.hpp>
 #include <libsbx/math/vector3.hpp>
 #include <libsbx/math/volume.hpp>
@@ -41,7 +43,8 @@ struct convex_hull_data {
 
 /**
  * @brief Lazily builds and caches one convex_hull_data per mesh asset uuid. Built once, never
- * rebuilt -- same convention as mesh_collision_cache.
+ * rebuilt -- same convention as mesh_collision_cache. Each entry stays at a fixed address until
+ * clear(), so the convex_hull views narrowphase builds from it survive later insertions.
  */
 class convex_hull_cache final : public utility::noncopyable {
 
@@ -55,7 +58,7 @@ private:
 
   [[nodiscard]] auto _build(assets::assets_module& assets_module, const math::uuid& mesh_id) -> convex_hull_data;
 
-  containers::dense_map<math::uuid, convex_hull_data> _cache{};
+  containers::dense_map<math::uuid, std::unique_ptr<const convex_hull_data>> _cache{};
 
 }; // class convex_hull_cache
 

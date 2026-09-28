@@ -5,8 +5,11 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
 #include <limits>
+#include <memory_resource>
+#include <span>
 #include <tuple>
 #include <utility>
 #include <variant>
@@ -164,8 +167,8 @@ auto resolve_convex(scenes::scene& scene, const scenes::node& node, convex_hull_
   return std::nullopt;
 }
 
-auto resolve_body_shapes(scenes::scene& scene, const scenes::node& rigidbody_node, convex_hull_cache& hull_cache, assets::assets_module& assets_module, pose_cache& cache) -> std::vector<body_shape> {
-  auto shapes = std::vector<body_shape>{};
+auto resolve_body_shapes(scenes::scene& scene, const scenes::node& rigidbody_node, convex_hull_cache& hull_cache, assets::assets_module& assets_module, pose_cache& cache, std::pmr::memory_resource* resource) -> std::pmr::vector<body_shape> {
+  auto shapes = std::pmr::vector<body_shape>{resource};
 
   const auto& relationship = rigidbody_node.get_component<scenes::relationship>();
 
@@ -759,6 +762,10 @@ struct clip_plane {
 // One shape-pair or shape-triangle touch, with the material this specific pairing combines to --
 // materials can vary per shape within a compound body, so this is tracked per touch rather than once
 // per body pair the way it was before compound colliders existed.
+// Stack backing for one pair's monotonic_buffer_resource (shape lists, touches, merge candidates).
+// A compound large enough to outgrow it just spills to the heap.
+using pair_scratch = std::array<std::byte, 2048u>;
+
 struct narrow_touch {
   narrow_result result;
   std::float_t combined_friction{0.0f};
@@ -770,7 +777,7 @@ struct narrow_touch {
 // kept globally deepest-first, with the deepest point's own normal/material representing the whole
 // manifold (exact when the deepest touch's surface is locally flat -- the common case; an
 // approximation otherwise, same "internal edge" v1 limitation mesh narrowphase always had).
-[[nodiscard]] auto combine_narrow_results(const std::vector<narrow_touch>& touches) -> std::optional<std::tuple<narrow_result, std::float_t, std::float_t>> {
+[[nodiscard]] auto combine_narrow_results(std::span<const narrow_touch> touches, std::pmr::memory_resource* resource) -> std::optional<std::tuple<narrow_result, std::float_t, std::float_t>> {
   struct candidate {
     math::vector3 normal;
     narrow_point point;
@@ -778,7 +785,7 @@ struct narrow_touch {
     std::float_t restitution;
   }; // struct candidate
 
-  auto candidates = std::vector<candidate>{};
+  auto candidates = std::pmr::vector<candidate>{resource};
 
   for (const auto& touch : touches) {
     for (const auto& point : touch.result.points) {
@@ -852,14 +859,17 @@ struct narrow_touch {
 // single-entry list for an ordinary non-compound body, several for a compound one), cross-tested
 // shape x shape via dispatch() and folded into one manifold for the pair via combine_narrow_results.
 [[nodiscard]] auto generate_convex_pair_contact(scenes::scene& scene, const scenes::node& node_a, const scenes::node& node_b, convex_hull_cache& hull_cache, assets::assets_module& assets_module, pose_cache& cache) -> std::optional<contact_manifold> {
-  const auto shapes_a = resolve_body_shapes(scene, node_a, hull_cache, assets_module, cache);
-  const auto shapes_b = resolve_body_shapes(scene, node_b, hull_cache, assets_module, cache);
+  pair_scratch scratch; // left uninitialized: zeroing it would cost more than the allocations it saves
+  auto arena = std::pmr::monotonic_buffer_resource{scratch.data(), scratch.size()};
+
+  const auto shapes_a = resolve_body_shapes(scene, node_a, hull_cache, assets_module, cache, &arena);
+  const auto shapes_b = resolve_body_shapes(scene, node_b, hull_cache, assets_module, cache, &arena);
 
   if (shapes_a.empty() || shapes_b.empty()) {
     return std::nullopt;
   }
 
-  auto touches = std::vector<narrow_touch>{};
+  auto touches = std::pmr::vector<narrow_touch>{&arena};
 
   for (const auto& shape_a : shapes_a) {
     for (const auto& shape_b : shapes_b) {
@@ -870,7 +880,7 @@ struct narrow_touch {
     }
   }
 
-  const auto combined = combine_narrow_results(touches);
+  const auto combined = combine_narrow_results(touches, &arena);
 
   if (!combined) {
     return std::nullopt;
@@ -886,7 +896,10 @@ struct narrow_touch {
 // non-convex mesh_collider, each of shape_node's shapes tested per-candidate-triangle against its
 // mesh_collision_cache BVH. Builds one combined manifold for the pair via combine_narrow_results.
 [[nodiscard]] auto generate_mesh_contact(scenes::scene& scene, const scenes::node& shape_node, const scenes::node& mesh_node, mesh_collision_cache& mesh_cache, convex_hull_cache& hull_cache, assets::assets_module& assets_module, pose_cache& cache) -> std::optional<contact_manifold> {
-  const auto shapes = resolve_body_shapes(scene, shape_node, hull_cache, assets_module, cache);
+  pair_scratch scratch; // left uninitialized: zeroing it would cost more than the allocations it saves
+  auto arena = std::pmr::monotonic_buffer_resource{scratch.data(), scratch.size()};
+
+  const auto shapes = resolve_body_shapes(scene, shape_node, hull_cache, assets_module, cache, &arena);
 
   if (shapes.empty()) {
     return std::nullopt;
@@ -912,7 +925,7 @@ struct narrow_touch {
     (mesh_pose.scale.z() > math::epsilonf) ? (1.0f / mesh_pose.scale.z()) : 0.0f
   };
 
-  auto touches = std::vector<narrow_touch>{};
+  auto touches = std::pmr::vector<narrow_touch>{&arena};
 
   for (const auto& shape : shapes) {
     // The shape's world AABB, transformed into the mesh's local (unscaled -- the BVH was built from
@@ -944,7 +957,7 @@ struct narrow_touch {
     });
   }
 
-  const auto combined = combine_narrow_results(touches);
+  const auto combined = combine_narrow_results(touches, &arena);
 
   if (!combined) {
     return std::nullopt;

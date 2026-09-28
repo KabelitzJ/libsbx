@@ -2209,21 +2209,27 @@ auto interop::texture_load(managed::string path, std::uint32_t format) -> std::u
   return texture.is_valid() ? texture->id().value() : 0u;
 }
 
+// Maps a script-side TextureFormat to the storage image format it creates; nullopt for anything a
+// storage image can't be (Rgba8Srgb, out-of-range values).
+auto storage_image_format(std::uint32_t format) -> std::optional<graphics::format> {
+  switch (format) {
+    case 0u: return graphics::format::r8g8b8a8_unorm;
+    case 1u: return graphics::format::r32_sfloat;
+    case 2u: return graphics::format::r8_unorm;
+    default: return std::nullopt;
+  }
+}
+
 auto interop::texture_create_storage_image(std::uint32_t width, std::uint32_t height, std::uint32_t format) -> std::uint64_t {
-  const auto native_format = [format]() -> graphics::format {
-    switch (format) {
-      case 0u: return graphics::format::r8g8b8a8_unorm;
-      case 1u: return graphics::format::r32_sfloat;
-      case 2u: return graphics::format::r8_unorm;
-      default: {
-        utility::logger<"scripting">::error("texture_create_storage_image: invalid format {}", format);
-        return graphics::format::r8g8b8a8_unorm;
-      }
-    }
-  }();
+  auto native_format = storage_image_format(format);
+
+  if (!native_format) {
+    utility::logger<"scripting">::error("texture_create_storage_image: invalid format {}", format);
+    native_format = graphics::format::r8g8b8a8_unorm;
+  }
 
   auto& assets_module = core::engine::get_module<assets::assets_module>();
-  auto texture = assets_module.create_storage_image(width, height, native_format);
+  auto texture = assets_module.create_storage_image(width, height, *native_format);
 
   return texture.is_valid() ? texture->id().value() : 0u;
 }
@@ -2243,18 +2249,31 @@ auto interop::texture_read_pixels(std::uint64_t texture_uuid, std::uint32_t widt
     return;
   }
 
-  const auto bytes_per_pixel = [format]() -> std::size_t {
-    switch (format) {
-      case 2u: return 1u; // R8 unorm
-      case 1u: return 4u; // R32 float
-      default: return 4u; // RGBA8
-    }
-  }();
-
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
   auto& registry = graphics_module.resource_registry();
 
   auto& source_image = registry.get<graphics::image>(source_image_handle);
+
+  // Only storage images live in `general` (see asset_residency::create_storage_image), the layout
+  // the copy below reads from; a loaded texture sits in shader_read_only_optimal.
+  if ((source_image.usage() & graphics::image_usage::storage) != graphics::image_usage::storage) {
+    utility::logger<"scripting">::error("texture_read_pixels: texture {} is not a storage image (only CreateStorageImage textures can be read back)", texture_uuid);
+    return;
+  }
+
+  const auto& extent = source_image.extent();
+
+  if (width != extent.x() || height != extent.y()) {
+    utility::logger<"scripting">::error("texture_read_pixels: requested {}x{} but texture {} is {}x{}", width, height, texture_uuid, extent.x(), extent.y());
+    return;
+  }
+
+  if (storage_image_format(format) != source_image.format()) {
+    utility::logger<"scripting">::error("texture_read_pixels: format {} does not match texture {}'s format", format, texture_uuid);
+    return;
+  }
+
+  const auto bytes_per_pixel = std::size_t{format == 2u ? 1u : 4u}; // R8 is 1 byte; RGBA8 and R32 float are 4
 
   const auto byte_size = static_cast<graphics::buffer::size_type>(width) * static_cast<graphics::buffer::size_type>(height) * bytes_per_pixel;
 

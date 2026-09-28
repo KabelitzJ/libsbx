@@ -8,6 +8,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <numbers>
+#include <span>
 #include <variant>
 
 #include <libsbx/math/constants.hpp>
@@ -93,12 +94,13 @@ struct convex_hull_face {
  * instead of just a point cloud, and may be empty for a degenerate source mesh (see
  * quickhull.hpp's compute_convex_hull) without affecting collision correctness at all.
  * Internal-only, like triangle: never authored directly on a shape_collider, only ever constructed
- * transiently by narrowphase for a mesh_collider with is_convex == true, from convex_hull_cache's
- * per-mesh cached data.
+ * transiently by narrowphase for a mesh_collider with is_convex == true, as a view of
+ * convex_hull_cache's per-mesh cached data -- which never moves once built, so the view stays valid
+ * for as long as the cache lives. A view rather than a copy keeps every convex_shape small.
  */
 struct convex_hull {
-  containers::static_vector<math::vector3, convex_hull_max_points> points;
-  containers::static_vector<convex_hull_face, convex_hull_max_faces> faces;
+  std::span<const math::vector3> points;
+  std::span<const convex_hull_face> faces;
 }; // struct convex_hull
 
 using convex_shape = std::variant<sphere, cylinder, capsule, box, triangle, convex_hull>;
@@ -153,7 +155,7 @@ using convex_shape = std::variant<sphere, cylinder, capsule, box, triangle, conv
       return (d1 >= d2) ? shape.v1 : shape.v2;
     },
     [&](const convex_hull& shape) -> math::vector3 {
-      if (shape.points.is_empty()) {
+      if (shape.points.empty()) {
         return math::vector3::zero;
       }
 
@@ -203,7 +205,7 @@ using convex_shape = std::variant<sphere, cylinder, capsule, box, triangle, conv
       return volume;
     },
     [](const convex_hull& shape) -> math::volume {
-      if (shape.points.is_empty()) {
+      if (shape.points.empty()) {
         return math::volume{};
       }
 
@@ -291,7 +293,7 @@ using convex_shape = std::variant<sphere, cylinder, capsule, box, triangle, conv
       // same box formula above, same as every other shape here assumes the collider's local origin
       // is roughly its center (shape_collider's authored primitives are all centered by
       // construction; a mesh-derived hull is only approximately so, a known v1 simplification).
-      if (shape.points.is_empty()) {
+      if (shape.points.empty()) {
         return math::vector3::zero;
       }
 

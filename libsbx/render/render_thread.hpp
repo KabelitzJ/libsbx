@@ -82,7 +82,7 @@ private:
   std::mutex _mutex{};
   std::condition_variable _condition{};
   state _state{state::idle};
-  bool _is_running{false};
+  std::atomic<bool> _is_running{false};
 
   std::atomic<std::uint32_t> _app_thread_frame{0u};
 

@@ -276,6 +276,10 @@ auto assets_module::save_shader_graph(shader_graph_handle& graph, const std::fil
   return _residency.save_shader_graph(graph, path);
 }
 
+auto assets_module::drain_loader_results() -> void {
+  _residency.drain_loader_results();
+}
+
 auto assets_module::process_uploads(std::uint64_t frame_index) -> void {
   _residency.process_uploads(frame_index);
 }

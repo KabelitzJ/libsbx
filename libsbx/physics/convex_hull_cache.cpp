@@ -188,11 +188,11 @@ auto write_disk_cache(const math::uuid& mesh_id, const convex_hull_data& data, s
 }
 
 auto convex_hull_cache::get_or_build(assets::assets_module& assets_module, const math::uuid& mesh_id) -> const convex_hull_data& {
-  if (!_cache.contains(mesh_id)) {
-    _cache.emplace(mesh_id, _build(assets_module, mesh_id));
+  if (const auto entry = _cache.find(mesh_id); entry != _cache.end()) {
+    return *entry->second;
   }
 
-  return _cache.at(mesh_id);
+  return *_cache.emplace(mesh_id, std::make_unique<const convex_hull_data>(_build(assets_module, mesh_id))).first->second;
 }
 
 auto convex_hull_cache::clear() -> void {

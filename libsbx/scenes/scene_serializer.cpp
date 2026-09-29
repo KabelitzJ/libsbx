@@ -688,11 +688,14 @@ auto write_node(YAML::Node& node_yaml, ecs::registry& registry, ecs::entity enti
           case script_field_type::int32:   field_node["kind"] = "int";   field_node["value"] = field.int_value; break;
           case script_field_type::boolean: field_node["kind"] = "bool";  field_node["value"] = field.bool_value; break;
           case script_field_type::string:  field_node["kind"] = "string"; field_node["value"] = field.string_value; break;
+          case script_field_type::vector2: field_node["kind"] = "vector2"; field_node["value"] = field.vector2_value; break;
           case script_field_type::vector3: field_node["kind"] = "vector3"; field_node["value"] = field.vector3_value; break;
           case script_field_type::node:    field_node["kind"] = "node"; field_node["value"] = field.node_value.value(); break;
           case script_field_type::layer_mask: field_node["kind"] = "layer_mask"; field_node["value"] = field.layer_mask_value; break;
           case script_field_type::material: field_node["kind"] = "material"; field_node["value"] = field.material_value.value(); break;
           case script_field_type::color: field_node["kind"] = "color"; field_node["value"] = field.color_value; break;
+          case script_field_type::enumeration: field_node["kind"] = "enum"; field_node["value"] = field.int_value; break;
+          case script_field_type::texture: field_node["kind"] = "texture"; field_node["value"] = field.texture_value.value(); break;
         }
 
         fields.push_back(field_node);
@@ -1284,6 +1287,9 @@ auto read_node_components(node& target_node, const YAML::Node& node_yaml, const 
           } else if (kind == "string") {
             field.type = script_field_type::string;
             field.string_value = field_yaml["value"].as<std::string>();
+          } else if (kind == "vector2") {
+            field.type = script_field_type::vector2;
+            field.vector2_value = field_yaml["value"].as<math::vector2>();
           } else if (kind == "vector3") {
             field.type = script_field_type::vector3;
             field.vector3_value = field_yaml["value"].as<math::vector3>();
@@ -1299,6 +1305,12 @@ auto read_node_components(node& target_node, const YAML::Node& node_yaml, const 
           } else if (kind == "color") {
             field.type = script_field_type::color;
             field.color_value = field_yaml["value"].as<math::color>();
+          } else if (kind == "enum") {
+            field.type = script_field_type::enumeration;
+            field.int_value = field_yaml["value"].as<std::int32_t>();
+          } else if (kind == "texture") {
+            field.type = script_field_type::texture;
+            field.texture_value = field_yaml["value"].as<math::uuid>();
           }
 
           entry.field_overrides.push_back(std::move(field));
@@ -1640,6 +1652,50 @@ auto scene_serializer::deserialize_subtree(scene& target, const YAML::Node& snap
   }
 
   return target.find(root_id);
+}
+
+auto scene_serializer::with_fresh_ids(const YAML::Node& snapshot) -> YAML::Node {
+  auto copy = YAML::Clone(snapshot);
+  auto id_remap = std::unordered_map<math::uuid, math::uuid>{};
+
+  for (const auto node_yaml : copy["nodes"]) {
+    id_remap.emplace(node_yaml["id"].as<math::uuid>(), math::uuid::create());
+  }
+
+  const auto remap = [&](YAML::Node value) {
+    if (!value) {
+      return;
+    }
+
+    if (const auto entry = id_remap.find(value.as<math::uuid>()); entry != id_remap.end()) {
+      value = entry->second;
+    }
+  };
+
+  for (auto node_yaml : copy["nodes"]) {
+    remap(node_yaml["id"]);
+    remap(node_yaml["parent"]);
+
+    for (auto component : node_yaml["components"]) {
+      const auto type = component["type"].as<std::string>();
+
+      if (type == "canvas") {
+        remap(component["camera"]);
+      } else if (type == "ui_toggle") {
+        remap(component["group"]);
+      } else if (type == "ui_scroll_rect") {
+        remap(component["content"]);
+      } else if (type == "script") {
+        for (auto field : component["fields"]) {
+          if (field["kind"].as<std::string>() == "node") {
+            remap(field["value"]);
+          }
+        }
+      }
+    }
+  }
+
+  return copy;
 }
 
 // Reverse of register_asset_keys: seeds a fresh asset_key_table from an existing prefab's

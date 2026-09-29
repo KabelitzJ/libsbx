@@ -108,22 +108,6 @@ public:
     _debug_draw_flags = flags;
   }
 
-  [[nodiscard]] auto gravity() const noexcept -> const math::vector3& {
-    return _gravity;
-  }
-
-  auto set_gravity(const math::vector3& gravity) noexcept -> void {
-    _gravity = gravity;
-  }
-
-  [[nodiscard]] auto velocity_iterations() const noexcept -> std::uint32_t {
-    return _velocity_iterations;
-  }
-
-  auto set_velocity_iterations(std::uint32_t iterations) noexcept -> void {
-    _velocity_iterations = iterations;
-  }
-
   [[nodiscard]] auto linear_sleep_threshold() const noexcept -> std::float_t {
     return _linear_sleep_threshold;
   }
@@ -262,8 +246,6 @@ private:
 
   physics::debug_draw_flags _debug_draw_flags{};
 
-  math::vector3 _gravity{0.0f, -9.81f, 0.0f};
-  std::uint32_t _velocity_iterations{8u};
 
   std::float_t _linear_sleep_threshold{0.02f};
   std::float_t _angular_sleep_threshold{0.05f};

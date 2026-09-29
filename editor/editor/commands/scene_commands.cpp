@@ -34,15 +34,16 @@ auto create_node_command::undo(sbx::scenes::scene& target) -> void {
   target.destroy_node(target.find(_id));
 }
 
-create_primitive_node_command::create_primitive_node_command(sbx::assets::primitive_mesh_kind kind, std::optional<sbx::math::uuid> parent_id)
-: _kind{kind}, _parent_id{parent_id} { }
+create_mesh_node_command::create_mesh_node_command(sbx::math::uuid mesh_id, std::string name, std::optional<sbx::math::uuid> parent_id, sbx::math::vector3 position)
+: _mesh_id{mesh_id}, _name{std::move(name)}, _parent_id{parent_id}, _position{position} { }
 
-auto create_primitive_node_command::execute(sbx::scenes::scene& target) -> void {
+auto create_mesh_node_command::execute(sbx::scenes::scene& target) -> void {
   if (_id == sbx::math::uuid::nil()) {
     _id = sbx::math::uuid::create();
   }
 
-  auto node = target.create_node(std::string{sbx::assets::primitive_mesh_name(_kind)}, {}, _id);
+  auto node = target.create_node(_name, {}, _id);
+  node.transform().position = _position;
 
   if (_parent_id) {
     if (auto parent = target.find(*_parent_id); parent.is_valid()) {
@@ -53,18 +54,18 @@ auto create_primitive_node_command::execute(sbx::scenes::scene& target) -> void 
   auto& assets_module = sbx::core::engine::get_module<sbx::assets::assets_module>();
 
   auto renderer = sbx::scenes::mesh_renderer{};
-  renderer.mesh = assets_module.load_mesh(sbx::assets::primitive_mesh_uuid(_kind));
+  renderer.mesh = assets_module.load_mesh(_mesh_id);
   sbx::scenes::sync_materials_with_mesh(renderer);
 
   node.add_component<sbx::scenes::mesh_renderer>(std::move(renderer));
 }
 
-auto create_primitive_node_command::undo(sbx::scenes::scene& target) -> void {
+auto create_mesh_node_command::undo(sbx::scenes::scene& target) -> void {
   target.destroy_node(target.find(_id));
 }
 
-instantiate_prefab_command::instantiate_prefab_command(sbx::assets::prefab_handle prefab, std::optional<sbx::math::uuid> parent_id)
-: _prefab{std::move(prefab)}, _parent_id{parent_id} { }
+instantiate_prefab_command::instantiate_prefab_command(sbx::assets::prefab_handle prefab, std::optional<sbx::math::uuid> parent_id, std::optional<sbx::math::vector3> position)
+: _prefab{std::move(prefab)}, _parent_id{parent_id}, _position{position} { }
 
 auto instantiate_prefab_command::execute(sbx::scenes::scene& target) -> void {
   auto instance = sbx::scenes::scene_serializer::instantiate_prefab(target, _prefab, (_id == sbx::math::uuid::nil()) ? std::nullopt : std::optional{_id});
@@ -75,6 +76,10 @@ auto instantiate_prefab_command::execute(sbx::scenes::scene& target) -> void {
 
   _id = instance.id();
 
+  if (_position) {
+    instance.transform().position = *_position;
+  }
+
   if (_parent_id) {
     if (auto parent = target.find(*_parent_id); parent.is_valid()) {
       instance.set_parent(parent);
@@ -84,6 +89,22 @@ auto instantiate_prefab_command::execute(sbx::scenes::scene& target) -> void {
 
 auto instantiate_prefab_command::undo(sbx::scenes::scene& target) -> void {
   target.destroy_node(target.find(_id));
+}
+
+insert_subtree_command::insert_subtree_command(YAML::Node snapshot, std::optional<sbx::math::uuid> parent_id, std::size_t index, std::string label)
+: _snapshot{std::move(snapshot)}, _parent_id{parent_id}, _index{index}, _label{std::move(label)} { }
+
+auto insert_subtree_command::execute(sbx::scenes::scene& target) -> void {
+  auto created = sbx::scenes::scene_serializer::deserialize_subtree(target, _snapshot);
+  auto parent_or_root = _parent_id ? target.find(*_parent_id) : target.root();
+
+  if (!_parent_id || parent_or_root.is_valid()) {
+    target.insert_child(parent_or_root, created, _index);
+  }
+}
+
+auto insert_subtree_command::undo(sbx::scenes::scene& target) -> void {
+  target.destroy_node(target.find(id()));
 }
 
 delete_node_command::delete_node_command(sbx::scenes::scene& scene, const sbx::scenes::node& target)

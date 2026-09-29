@@ -14,7 +14,7 @@ namespace editor {
 /**
  * @brief A node's single named layer (0-31), drawn as a dropdown over core::engine::project()'s
  * currently-named layers plus a trailing "Edit Layers..." row (fires
- * editor_state::request_open_edit_layers_popup). Returns true if @p layer_index changed.
+ * editor_state::request_open_layer_settings). Returns true if @p layer_index changed.
  */
 auto draw_layer_combo(editor_state& state, const char* label, std::uint8_t& layer_index) -> bool;
 

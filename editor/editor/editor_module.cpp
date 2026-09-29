@@ -12,7 +12,8 @@ namespace editor {
 
 editor_module::editor_module()
 : _ini_file{(sbx::core::engine::project().root() / ".sbx" / "editor" / "imgui.ini").string()},
-  _editor_camera{editor::editor_camera::load(_camera_state_path())} {
+  _editor_camera{editor::editor_camera::load(_camera_state_path())},
+  _preferences{editor_preferences::load(_preferences_path())} {
   std::filesystem::create_directories(std::filesystem::path{_ini_file}.parent_path());
 
   ImGui::GetIO().IniFilename = nullptr;
@@ -81,6 +82,10 @@ auto editor_module::viewport_camera(sbx::scenes::scene& scene) const -> std::opt
 
 auto editor_module::_camera_state_path() const -> std::filesystem::path {
   return sbx::core::engine::project().root() / ".sbx" / "editor" / "camera.yaml";
+}
+
+auto editor_module::_preferences_path() const -> std::filesystem::path {
+  return sbx::core::engine::project().root() / ".sbx" / "editor" / "preferences.yaml";
 }
 
 } // namespace editor

@@ -61,6 +61,20 @@ auto project::load(const std::filesystem::path& file) -> project {
     }
   }
 
+  if (const auto physics_node = node["physics"]) {
+    if (physics_node["gravity"]) {
+      result._gravity = physics_node["gravity"].as<math::vector3>();
+    }
+
+    if (physics_node["velocity_iterations"]) {
+      result._velocity_iterations = physics_node["velocity_iterations"].as<std::uint32_t>();
+    }
+  }
+
+  if (const auto time_node = node["time"]; time_node && time_node["fixed_timestep"]) {
+    result._fixed_timestep = time_node["fixed_timestep"].as<std::float_t>();
+  }
+
   return result;
 }
 
@@ -126,6 +140,15 @@ auto project::save(const std::filesystem::path& file) const -> void {
     emitter << row;
   }
   emitter << YAML::EndSeq;
+
+  emitter << YAML::Key << "physics" << YAML::Value << YAML::BeginMap;
+  emitter << YAML::Key << "gravity" << YAML::Value << YAML::Node{_gravity};
+  emitter << YAML::Key << "velocity_iterations" << YAML::Value << _velocity_iterations;
+  emitter << YAML::EndMap;
+
+  emitter << YAML::Key << "time" << YAML::Value << YAML::BeginMap;
+  emitter << YAML::Key << "fixed_timestep" << YAML::Value << _fixed_timestep;
+  emitter << YAML::EndMap;
 
   emitter << YAML::EndMap;
   emitter << YAML::EndMap;

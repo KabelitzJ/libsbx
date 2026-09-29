@@ -17,6 +17,7 @@
 #include <libsbx/math/matrix4x4.hpp>
 #include <libsbx/math/quaternion.hpp>
 #include <libsbx/math/uuid.hpp>
+#include <libsbx/math/vector2.hpp>
 #include <libsbx/math/vector3.hpp>
 #include <libsbx/math/vector4.hpp>
 
@@ -389,11 +390,14 @@ enum class script_field_type : std::uint8_t {
   int32,
   boolean,
   string,
+  vector2,
   vector3,
   node, // a Sbx.Core.Node-typed field, stored as the referenced node's own scenes::id uuid (nil = unassigned)
   layer_mask, // a Sbx.Core.Physics.LayerMask-typed field -- blittable (one uint), so it round-trips through get/set_field_value directly, same as vector3
   material, // a Sbx.Core.Material-typed field, stored as the referenced material asset's own uuid (nil = unassigned), same INativeHandle convention as node
-  color // a Sbx.Core.Math.Color-typed field -- blittable (four sequential floats), same direct get/set_field_value path as vector3
+  color, // a Sbx.Core.Math.Color-typed field -- blittable (four sequential floats), same direct get/set_field_value path as vector3
+  enumeration, // any C# enum field, stored as its integer value in int_value
+  texture // a Sbx.Core.Texture2D-typed field, stored as the texture asset's uuid (nil = unassigned), same INativeHandle convention as material
 }; // enum class script_field_type
 
 struct script_field_override {
@@ -403,10 +407,12 @@ struct script_field_override {
   std::int32_t int_value{0};
   bool bool_value{false};
   std::string string_value{};
+  math::vector2 vector2_value{0.0f, 0.0f};
   math::vector3 vector3_value{0.0f, 0.0f, 0.0f};
   math::uuid node_value{math::uuid::nil()};
   std::uint32_t layer_mask_value{0xFFFFFFFFu};
   math::uuid material_value{math::uuid::nil()};
+  math::uuid texture_value{math::uuid::nil()};
   math::color color_value{};
 }; // struct script_field_override
 

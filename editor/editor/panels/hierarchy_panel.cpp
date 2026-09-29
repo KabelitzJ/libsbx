@@ -3,11 +3,14 @@
 #include <editor/panels/hierarchy_panel.hpp>
 
 #include <algorithm>
+#include <cctype>
+#include <cfloat>
 #include <cstdint>
 #include <limits>
 #include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include <fmt/format.h>
@@ -32,6 +35,8 @@
 #include <editor/commands/component_commands.hpp>
 #include <editor/commands/composite_command.hpp>
 #include <editor/commands/scene_commands.hpp>
+
+#include <editor/node_actions.hpp>
 
 #include <editor/panels/hierarchy_prefab_menu.hpp>
 
@@ -77,17 +82,59 @@ auto draw_3d_object_submenu(editor_state& state, sbx::scenes::scene& scene, std:
 
   for (const auto kind : sbx::reflection::enum_values<sbx::assets::primitive_mesh_kind>()) {
     if (ImGui::MenuItem(std::string{sbx::reflection::to_string(kind)}.c_str())) {
-      create_and_select_node<create_primitive_node_command>(state, scene, kind, parent_id);
+      create_and_select_node<create_mesh_node_command>(state, scene, sbx::assets::primitive_mesh_uuid(kind), std::string{sbx::assets::primitive_mesh_name(kind)}, parent_id);
     }
   }
 
   ImGui::EndMenu();
 }
 
+auto contains_case_insensitive(std::string_view text, std::string_view query) -> bool {
+  const auto lower = [](unsigned char character) { return std::tolower(character); };
+
+  return !std::ranges::search(text, query, {}, lower, lower).empty();
+}
+
+auto hierarchy_panel::_update_search_matches(sbx::scenes::scene& scene) -> void {
+  _search_visible_ids.clear();
+
+  const auto query = std::string_view{_search_buffer.data()};
+
+  if (query.empty()) {
+    return;
+  }
+
+  // A node stays visible if it matches or any descendant does, so every match keeps its path to the root.
+  const auto visit = [&](this const auto& self, sbx::ecs::entity entity) -> bool {
+    auto node = scene.node_of(entity);
+    auto is_visible = contains_case_insensitive(node.name().c_str(), query);
+
+    for (const auto child : node.get_component<sbx::scenes::relationship>().children) {
+      is_visible |= self(child);
+    }
+
+    if (is_visible) {
+      _search_visible_ids.insert(node.id());
+    }
+
+    return is_visible;
+  };
+
+  for (const auto entity : scene.root().get_component<sbx::scenes::relationship>().children) {
+    visit(entity);
+  }
+}
+
 auto hierarchy_panel::_draw_node_row(editor_state& state, sbx::scenes::scene& scene, sbx::ecs::entity entity, std::optional<sbx::math::uuid> parent_id, std::size_t sibling_index) -> void {
   auto node = scene.node_of(entity);
 
   if (!node.is_valid()) {
+    return;
+  }
+
+  const auto is_searching = _search_buffer[0] != '\0';
+
+  if (is_searching && !_search_visible_ids.contains(node.id())) {
     return;
   }
 
@@ -109,12 +156,20 @@ auto hierarchy_panel::_draw_node_row(editor_state& state, sbx::scenes::scene& sc
 
   ImGui::PushID(static_cast<std::int32_t>(entity));
 
+  if (is_searching && !relationship.children.empty()) {
+    ImGui::SetNextItemOpen(true);
+  }
+
   const auto is_open = is_renaming ? ImGui::TreeNodeEx("##node_row", flags, "%s", icon_for(node)) : ImGui::TreeNodeEx("##node_row", flags, "%s %s", icon_for(node), tag.c_str());
 
   const auto row_min = ImGui::GetItemRectMin();
   const auto row_max = ImGui::GetItemRectMax();
 
   const auto row_deactivated = ImGui::IsItemDeactivated();
+
+  if (!is_renaming && ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
+    _pending_node_action = focus_selection;
+  }
 
   if (!is_renaming) {
     if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
@@ -230,7 +285,30 @@ auto hierarchy_panel::_draw_node_row(editor_state& state, sbx::scenes::scene& sc
 
     _draw_prefab_override_menu(scene, node);
 
-    if (ImGui::MenuItem(ICON_MDI_DELETE " Delete Node")) {
+    ImGui::Separator();
+
+    if (ImGui::MenuItem(ICON_MDI_CONTENT_COPY " Copy", "Ctrl+C")) {
+      if (!state.is_node_selected(node)) {
+        state.select_node(node);
+      }
+
+      copy_selection(state, scene);
+    }
+
+    if (ImGui::MenuItem(ICON_MDI_CONTENT_PASTE " Paste", "Ctrl+V", false, !state.node_clipboard.empty())) {
+      state.select_node(node);
+      _pending_node_action = paste_clipboard;
+    }
+
+    if (ImGui::MenuItem(ICON_MDI_CONTENT_DUPLICATE " Duplicate", "Ctrl+D")) {
+      if (!state.is_node_selected(node)) {
+        state.select_node(node);
+      }
+
+      _pending_node_action = duplicate_selection;
+    }
+
+    if (ImGui::MenuItem(ICON_MDI_DELETE " Delete Node", "Delete")) {
       _pending_delete_id = node.id();
     }
 
@@ -286,6 +364,11 @@ auto hierarchy_panel::draw(editor_state& state) -> void {
   auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
   auto& scene = scenes_module.active_scene();
 
+  ImGui::SetNextItemWidth(-FLT_MIN);
+  ImGui::InputTextWithHint("##hierarchy_search", ICON_MDI_MAGNIFY " Search...", _search_buffer.data(), _search_buffer.size());
+
+  _update_search_matches(scene);
+
   const auto& top_level = scene.root().get_component<sbx::scenes::relationship>().children;
 
   for (auto i = std::size_t{0u}; i < top_level.size(); ++i) {
@@ -294,6 +377,8 @@ auto hierarchy_panel::draw(editor_state& state) -> void {
 
   if (top_level.empty()) {
     ImGui::TextDisabled("No nodes in the active scene.");
+  } else if (_search_buffer[0] != '\0' && _search_visible_ids.empty()) {
+    ImGui::TextDisabled("No matching nodes.");
   }
 
   {
@@ -333,16 +418,6 @@ auto hierarchy_panel::draw(editor_state& state) -> void {
     ImGui::EndPopup();
   }
 
-  if (ImGui::IsWindowHovered() && ImGui::IsKeyPressed(ImGuiKey_Delete, false)) {
-    auto roots = _filter_to_selection_roots(scene, state.selected_node_ids());
-
-    if (roots.size() == 1u) {
-      _pending_delete_id = roots.front();
-    } else if (roots.size() > 1u) {
-      _pending_delete_ids = std::move(roots);
-    }
-  }
-
   if (ImGui::IsWindowHovered() && ImGui::IsKeyPressed(ImGuiKey_F2, false) && state.selected_node_count() == 1u) {
     if (auto selected = state.selected_node(scene); selected.is_valid()) {
       _begin_rename(selected);
@@ -350,6 +425,11 @@ auto hierarchy_panel::draw(editor_state& state) -> void {
   }
 
   _apply_pending_reparent(state, scene);
+
+  if (_pending_node_action != nullptr) {
+    _pending_node_action(state, scene);
+    _pending_node_action = nullptr;
+  }
 
   if (_pending_range_select) {
     const auto begin_entry = std::find(_visible_row_order.begin(), _visible_row_order.end(), _pending_range_select->anchor_id);
@@ -375,21 +455,7 @@ auto hierarchy_panel::draw(editor_state& state) -> void {
     _pending_delete_id = sbx::math::uuid::nil();
   }
 
-  if (!_pending_delete_ids.empty()) {
-    auto sub_commands = std::vector<std::unique_ptr<command>>{};
 
-    for (const auto id : _pending_delete_ids) {
-      if (auto target = scene.find(id); target.is_valid()) {
-        sub_commands.push_back(std::make_unique<delete_node_command>(scene, target));
-      }
-    }
-
-    if (!sub_commands.empty()) {
-      state.push_command(scene, std::make_unique<composite_command>(std::move(sub_commands), fmt::format("Delete {} Nodes", sub_commands.size())));
-    }
-
-    _pending_delete_ids.clear();
-  }
 
   if (_pending_add_child_parent_id != sbx::math::uuid::nil()) {
     if (auto parent = scene.find(_pending_add_child_parent_id); parent.is_valid()) {

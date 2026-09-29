@@ -13,6 +13,8 @@
 #include <editor/commands/composite_command.hpp>
 #include <editor/commands/scene_commands.hpp>
 
+#include <editor/node_actions.hpp>
+
 namespace editor {
 
 auto hierarchy_panel::_try_reparent(editor_state& state, sbx::scenes::scene& scene, sbx::math::uuid payload_id, std::optional<sbx::math::uuid> new_parent_id, std::size_t new_index) -> void {
@@ -63,26 +65,12 @@ auto hierarchy_panel::_current_parent_id(sbx::scenes::scene& scene, sbx::math::u
   return parent.id();
 }
 
-auto hierarchy_panel::_filter_to_selection_roots(sbx::scenes::scene& scene, const std::vector<sbx::math::uuid>& ids) const -> std::vector<sbx::math::uuid> {
-  auto roots = std::vector<sbx::math::uuid>{};
-
-  for (const auto id : ids) {
-    const auto parent_id = _current_parent_id(scene, id);
-
-    if (!parent_id || std::find(ids.begin(), ids.end(), *parent_id) == ids.end()) {
-      roots.push_back(id);
-    }
-  }
-
-  return roots;
-}
-
 auto hierarchy_panel::_apply_pending_reparent(editor_state& state, sbx::scenes::scene& scene) -> void {
   if (!_pending_reparent) {
     return;
   }
 
-  auto ordered = _filter_to_selection_roots(scene, _pending_reparent->dragged_ids);
+  auto ordered = selection_roots(scene, _pending_reparent->dragged_ids);
 
   std::stable_sort(ordered.begin(), ordered.end(), [this](sbx::math::uuid a, sbx::math::uuid b) {
     const auto index_of = [this](sbx::math::uuid id) {

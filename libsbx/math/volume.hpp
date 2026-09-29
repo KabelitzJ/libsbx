@@ -165,8 +165,9 @@ public:
     return extend().length();
   }
 
+  /** @brief True only for the default-constructed (inverted) volume -- a flat volume (a plane's bounds) or a single included point is not empty. */
   auto is_empty() const noexcept -> bool {
-    return _min.x() >= _max.x() || _min.y() >= _max.y() || _min.z() >= _max.z();
+    return _min.x() > _max.x() || _min.y() > _max.y() || _min.z() > _max.z();
   }
 
   /** @brief Grows this volume to also contain other. */

@@ -25,6 +25,8 @@ constexpr auto tracy_depth = 10;
 
 #include <atomic>
 
+#include <malloc.h>
+
 namespace editor::memory_stats::detail {
 
 std::atomic<std::size_t> total_allocated{0u};
@@ -34,40 +36,54 @@ std::atomic<std::size_t> peak_usage{0u};
 std::atomic<std::size_t> alloc_count{0u};
 std::atomic<std::size_t> dealloc_count{0u};
 
-inline auto on_alloc(std::size_t count) -> void {
-  total_allocated.fetch_add(count, std::memory_order_relaxed);
+// The malloc block's real size, asked of the allocator itself -- the same number at alloc and at free, so every delete
+// (sized or not, aligned or not, from our code or a prebuilt library) subtracts exactly what its new added.
+inline auto block_size(void* raw) -> std::size_t {
+#if defined(_WIN32)
+  return _msize(raw);
+#else
+  return malloc_usable_size(raw);
+#endif
+}
+
+inline auto on_alloc(void* raw) -> void {
+  if (raw == nullptr) {
+    return;
+  }
+
+  const auto size = block_size(raw);
+
+  total_allocated.fetch_add(size, std::memory_order_relaxed);
   alloc_count.fetch_add(1u, std::memory_order_relaxed);
 
-  const auto usage = current_usage.fetch_add(count, std::memory_order_relaxed) + count;
+  const auto usage = current_usage.fetch_add(size, std::memory_order_relaxed) + size;
 
   auto previous_peak = peak_usage.load(std::memory_order_relaxed);
 
   while (usage > previous_peak && !peak_usage.compare_exchange_weak(previous_peak, usage, std::memory_order_relaxed)) { }
 }
 
-// Only the sized operator delete overloads can adjust current_usage -- see memory_stats.hpp's own
-// doc comment on why the unsized ones are skipped rather than guessed at.
-inline auto on_dealloc_sized(std::size_t size) -> void {
+inline auto on_dealloc(void* raw) -> void {
+  if (raw == nullptr) {
+    return;
+  }
+
+  const auto size = block_size(raw);
+
   total_freed.fetch_add(size, std::memory_order_relaxed);
   dealloc_count.fetch_add(1u, std::memory_order_relaxed);
   current_usage.fetch_sub(size, std::memory_order_relaxed);
 }
 
-inline auto on_dealloc_unsized() -> void {
-  dealloc_count.fetch_add(1u, std::memory_order_relaxed);
-}
-
 } // namespace editor::memory_stats::detail
 
-#define SBX_MEMORY_STATS_ALLOC(count) ::editor::memory_stats::detail::on_alloc(count)
-#define SBX_MEMORY_STATS_DEALLOC_SIZED(size) ::editor::memory_stats::detail::on_dealloc_sized(size)
-#define SBX_MEMORY_STATS_DEALLOC_UNSIZED() ::editor::memory_stats::detail::on_dealloc_unsized()
+#define SBX_MEMORY_STATS_ALLOC(raw) ::editor::memory_stats::detail::on_alloc(raw)
+#define SBX_MEMORY_STATS_DEALLOC(raw) ::editor::memory_stats::detail::on_dealloc(raw)
 
 #else
 
-#define SBX_MEMORY_STATS_ALLOC(count) static_cast<void>(0)
-#define SBX_MEMORY_STATS_DEALLOC_SIZED(size) static_cast<void>(0)
-#define SBX_MEMORY_STATS_DEALLOC_UNSIZED() static_cast<void>(0)
+#define SBX_MEMORY_STATS_ALLOC(raw) static_cast<void>(0)
+#define SBX_MEMORY_STATS_DEALLOC(raw) static_cast<void>(0)
 
 #endif // SBX_TRACK_MEMORY
 
@@ -82,6 +98,8 @@ auto aligned_malloc(std::size_t size, std::size_t alignment) -> void* {
     return nullptr;
   }
 
+  SBX_MEMORY_STATS_ALLOC(raw);
+
   auto const raw_addr = reinterpret_cast<std::uintptr_t>(raw) + sizeof(void*);
   auto const aligned_addr = (raw_addr + alignment - 1) & ~(alignment - 1);
   auto const aligned = reinterpret_cast<void*>(aligned_addr);
@@ -93,29 +111,43 @@ auto aligned_malloc(std::size_t size, std::size_t alignment) -> void* {
 
 auto aligned_free(void* ptr) -> void {
   if (ptr != nullptr) {
-    std::free(reinterpret_cast<void**>(ptr)[-1]);
+    auto const raw = reinterpret_cast<void**>(ptr)[-1];
+
+    SBX_MEMORY_STATS_DEALLOC(raw);
+    std::free(raw);
   }
+}
+
+auto tracked_malloc(std::size_t count) -> void* {
+  auto const ptr = std::malloc(count);
+
+  SBX_MEMORY_STATS_ALLOC(ptr);
+
+  return ptr;
+}
+
+auto tracked_free(void* ptr) -> void {
+  SBX_MEMORY_STATS_DEALLOC(ptr);
+  std::free(ptr);
 }
 
 } // namespace detail
 
 auto operator new(std::size_t count) -> void* {
-  auto ptr = std::malloc(count);
+  auto ptr = detail::tracked_malloc(count);
   if (!ptr) {
     throw std::bad_alloc{};
   }
   SBX_MEMORY_TRACY_ALLOC(ptr, count);
-  SBX_MEMORY_STATS_ALLOC(count);
   return ptr;
 }
 
 auto operator new[](std::size_t count) -> void* {
-  auto ptr = std::malloc(count);
+  auto ptr = detail::tracked_malloc(count);
   if (!ptr) {
     throw std::bad_alloc{};
   }
   SBX_MEMORY_TRACY_ALLOC(ptr, count);
-  SBX_MEMORY_STATS_ALLOC(count);
   return ptr;
 }
 
@@ -125,7 +157,6 @@ auto operator new(std::size_t count, std::align_val_t alignment) -> void* {
     throw std::bad_alloc{};
   }
   SBX_MEMORY_TRACY_ALLOC(ptr, count);
-  SBX_MEMORY_STATS_ALLOC(count);
   return ptr;
 }
 
@@ -135,89 +166,76 @@ auto operator new[](std::size_t count, std::align_val_t alignment) -> void* {
     throw std::bad_alloc{};
   }
   SBX_MEMORY_TRACY_ALLOC(ptr, count);
-  SBX_MEMORY_STATS_ALLOC(count);
   return ptr;
 }
 
 // nothrow new
 
 auto operator new(std::size_t count, std::nothrow_t const&) noexcept -> void* {
-  auto ptr = std::malloc(count);
+  auto ptr = detail::tracked_malloc(count);
   SBX_MEMORY_TRACY_ALLOC(ptr, count);
-  SBX_MEMORY_STATS_ALLOC(count);
   return ptr;
 }
 
 auto operator new[](std::size_t count, std::nothrow_t const&) noexcept -> void* {
-  auto ptr = std::malloc(count);
+  auto ptr = detail::tracked_malloc(count);
   SBX_MEMORY_TRACY_ALLOC(ptr, count);
-  SBX_MEMORY_STATS_ALLOC(count);
   return ptr;
 }
 
 auto operator new(std::size_t count, std::align_val_t alignment, std::nothrow_t const&) noexcept -> void* {
   auto ptr = detail::aligned_malloc(count, static_cast<std::size_t>(alignment));
   SBX_MEMORY_TRACY_ALLOC(ptr, count);
-  SBX_MEMORY_STATS_ALLOC(count);
   return ptr;
 }
 
 auto operator new[](std::size_t count, std::align_val_t alignment, std::nothrow_t const&) noexcept -> void* {
   auto ptr = detail::aligned_malloc(count, static_cast<std::size_t>(alignment));
   SBX_MEMORY_TRACY_ALLOC(ptr, count);
-  SBX_MEMORY_STATS_ALLOC(count);
   return ptr;
 }
 
-// delete
+// delete -- the size hint of the sized overloads isn't needed: the tracker asks the allocator for the block's size.
 
 auto operator delete(void* ptr) noexcept -> void {
   SBX_MEMORY_TRACY_FREE(ptr);
-  SBX_MEMORY_STATS_DEALLOC_UNSIZED();
-  std::free(ptr);
+  detail::tracked_free(ptr);
 }
 
 auto operator delete[](void* ptr) noexcept -> void {
   SBX_MEMORY_TRACY_FREE(ptr);
-  SBX_MEMORY_STATS_DEALLOC_UNSIZED();
-  std::free(ptr);
+  detail::tracked_free(ptr);
 }
 
 auto operator delete(void* ptr, [[maybe_unused]] std::size_t size) noexcept -> void {
   SBX_MEMORY_TRACY_FREE(ptr);
-  SBX_MEMORY_STATS_DEALLOC_SIZED(size);
-  std::free(ptr);
+  detail::tracked_free(ptr);
 }
 
 auto operator delete[](void* ptr, [[maybe_unused]] std::size_t size) noexcept -> void {
   SBX_MEMORY_TRACY_FREE(ptr);
-  SBX_MEMORY_STATS_DEALLOC_SIZED(size);
-  std::free(ptr);
+  detail::tracked_free(ptr);
 }
 
 // aligned delete
 
 auto operator delete(void* ptr, [[maybe_unused]] std::align_val_t alignment) noexcept -> void {
   SBX_MEMORY_TRACY_FREE(ptr);
-  SBX_MEMORY_STATS_DEALLOC_UNSIZED();
   detail::aligned_free(ptr);
 }
 
 auto operator delete[](void* ptr, [[maybe_unused]] std::align_val_t alignment) noexcept -> void {
   SBX_MEMORY_TRACY_FREE(ptr);
-  SBX_MEMORY_STATS_DEALLOC_UNSIZED();
   detail::aligned_free(ptr);
 }
 
 auto operator delete(void* ptr, [[maybe_unused]] std::size_t size, [[maybe_unused]] std::align_val_t alignment) noexcept -> void {
   SBX_MEMORY_TRACY_FREE(ptr);
-  SBX_MEMORY_STATS_DEALLOC_SIZED(size);
   detail::aligned_free(ptr);
 }
 
 auto operator delete[](void* ptr, [[maybe_unused]] std::size_t size, [[maybe_unused]] std::align_val_t alignment) noexcept -> void {
   SBX_MEMORY_TRACY_FREE(ptr);
-  SBX_MEMORY_STATS_DEALLOC_SIZED(size);
   detail::aligned_free(ptr);
 }
 
@@ -225,25 +243,21 @@ auto operator delete[](void* ptr, [[maybe_unused]] std::size_t size, [[maybe_unu
 
 auto operator delete(void* ptr, std::nothrow_t const&) noexcept -> void {
   SBX_MEMORY_TRACY_FREE(ptr);
-  SBX_MEMORY_STATS_DEALLOC_UNSIZED();
-  std::free(ptr);
+  detail::tracked_free(ptr);
 }
 
 auto operator delete[](void* ptr, std::nothrow_t const&) noexcept -> void {
   SBX_MEMORY_TRACY_FREE(ptr);
-  SBX_MEMORY_STATS_DEALLOC_UNSIZED();
-  std::free(ptr);
+  detail::tracked_free(ptr);
 }
 
 auto operator delete(void* ptr, [[maybe_unused]] std::align_val_t alignment, std::nothrow_t const&) noexcept -> void {
   SBX_MEMORY_TRACY_FREE(ptr);
-  SBX_MEMORY_STATS_DEALLOC_UNSIZED();
   detail::aligned_free(ptr);
 }
 
 auto operator delete[](void* ptr, [[maybe_unused]] std::align_val_t alignment, std::nothrow_t const&) noexcept -> void {
   SBX_MEMORY_TRACY_FREE(ptr);
-  SBX_MEMORY_STATS_DEALLOC_UNSIZED();
   detail::aligned_free(ptr);
 }
 

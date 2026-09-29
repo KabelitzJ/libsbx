@@ -71,23 +71,19 @@ auto project_to_viewport_position(const sbx::math::matrix4x4& view_projection, c
   };
 }
 
-auto pick_node_at_viewport_position(editor_state& state, const sbx::math::vector2& position, const sbx::math::vector2u& viewport_size) -> void {
-  auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
-  auto& scene = scenes_module.active_scene();
-
-  auto& editor_module = sbx::core::engine::get_module<editor::editor_module>();
-
-  const auto pose = editor_module.viewport_camera(scene);
+auto viewport_ray(const sbx::math::vector2& position, const sbx::math::vector2u& viewport_size) -> std::optional<sbx::math::ray> {
+  auto& scene = sbx::core::engine::get_module<sbx::scenes::scenes_module>().active_scene();
+  const auto pose = sbx::core::engine::get_module<editor::editor_module>().viewport_camera(scene);
 
   if (!pose) {
-    if (!ImGui::GetIO().KeyCtrl && !ImGui::GetIO().KeyShift) {
-      state.clear_selection();
-    }
-
-    return;
+    return std::nullopt;
   }
 
-  const auto ray = ray_from_viewport_position(pose->world_matrix, pose->params, position, viewport_size);
+  return ray_from_viewport_position(pose->world_matrix, pose->params, position, viewport_size);
+}
+
+auto raycast_nodes(const sbx::math::ray& ray) -> std::optional<viewport_hit> {
+  auto& scene = sbx::core::engine::get_module<sbx::scenes::scenes_module>().active_scene();
 
   auto closest_node = sbx::scenes::node{};
   auto closest_t = std::numeric_limits<std::float_t>::max();
@@ -109,7 +105,41 @@ auto pick_node_at_viewport_position(editor_state& state, const sbx::math::vector
     }
   }
 
-  if (closest_node.is_valid()) {
+  if (!closest_node.is_valid()) {
+    return std::nullopt;
+  }
+
+  return viewport_hit{closest_node, ray.point_at(closest_t)};
+}
+
+auto viewport_drop_position(const sbx::math::vector2& position, const sbx::math::vector2u& viewport_size) -> sbx::math::vector3 {
+  const auto ray = viewport_ray(position, viewport_size);
+
+  if (!ray) {
+    return sbx::math::vector3{0.0f, 0.0f, 0.0f};
+  }
+
+  if (const auto hit = raycast_nodes(*ray)) {
+    return hit->position;
+  }
+
+  // The ground plane (y = 0) when the ray points down at it, otherwise a fixed distance in front of the camera.
+  const auto direction_y = ray->direction().y();
+
+  if (direction_y < -1e-4f) {
+    return ray->point_at(-ray->origin().y() / direction_y);
+  }
+
+  return ray->origin() + sbx::math::vector3::normalized(ray->direction()) * 10.0f;
+}
+
+auto pick_node_at_viewport_position(editor_state& state, const sbx::math::vector2& position, const sbx::math::vector2u& viewport_size) -> void {
+  const auto ray = viewport_ray(position, viewport_size);
+  const auto hit = ray ? raycast_nodes(*ray) : std::nullopt;
+
+  if (hit) {
+    const auto& closest_node = hit->node;
+
     if (ImGui::GetIO().KeyCtrl) {
       state.toggle_node_selection(closest_node);
     } else if (ImGui::GetIO().KeyShift) {

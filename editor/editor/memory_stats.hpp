@@ -11,12 +11,11 @@ namespace editor::memory_stats {
  * @brief Global allocation counters, updated from the operator new/delete overrides in
  * memory.cpp -- only when SBX_TRACK_MEMORY is defined (see the CMake option of the same name).
  *
- * current_usage only decrements precisely for the sized operator delete overloads -- the
- * compiler prefers those whenever the static type is complete at the delete expression (true for
- * most calls), but an unsized delete (both overloads exist in memory.cpp) can't know how much to
- * subtract and is skipped, so current_usage can drift slightly high over a long session. total_
- * allocated/alloc_count/dealloc_count are always exact, since every operator new overload
- * receives count.
+ * Byte counts are the allocator's real block sizes (malloc_usable_size / _msize), read at both
+ * new and delete, so current_usage is exact for every delete overload -- sized or not, aligned or
+ * not. They include the allocator's rounding and the aligned overloads' padding, so they run a
+ * little above the requested sizes. Only memory from operator new is counted: plain malloc (ImGui,
+ * the .NET runtime, Vulkan's allocator) isn't.
  */
 [[nodiscard]] auto is_tracking_enabled() noexcept -> bool;
 

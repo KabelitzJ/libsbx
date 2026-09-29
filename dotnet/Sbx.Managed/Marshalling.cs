@@ -242,6 +242,10 @@ namespace Sbx.Managed
       if (InType.IsSZArray)
         return MarshalArray(InValue, InType.GetElementType());
 
+      // PtrToStructure rejects enum types -- read the underlying integer and box it as the enum instead.
+      if (InType.IsEnum)
+        return Enum.ToObject(InType, MarshalPointer(InValue, Enum.GetUnderlyingType(InType))!);
+
       if (InType.IsGenericType)
       {
         if (InType == typeof(NativeArray<>).MakeGenericType(InType.GetGenericArguments().First()))

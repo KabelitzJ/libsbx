@@ -25,6 +25,7 @@
 
 #include <editor/panels/inspector_asset_pickers.hpp>
 
+#include <editor/widgets/property_row.hpp>
 #include <editor/widgets/text_field.hpp>
 #include <editor/widgets/vector_fields.hpp>
 
@@ -213,7 +214,7 @@ auto inspector_panel::_draw_material_properties(editor_state& state, const asset
           if (parameter.slot < _material_edit.generic_params.size()) {
             auto& value = _material_edit.generic_params[parameter.slot];
             auto components = std::array<std::float_t, 4u>{value.x(), value.y(), value.z(), value.w()};
-            if (ImGui::ColorEdit4(label.c_str(), components.data())) {
+            if (draw_color_edit(label.c_str(), components.data(), 4)) {
               value.x() = components[0];
               value.y() = components[1];
               value.z() = components[2];
@@ -225,10 +226,7 @@ auto inspector_panel::_draw_material_properties(editor_state& state, const asset
         }
         case sbx::assets::shader_graph_parameter_type::texture_value: {
           if (parameter.slot < _material_edit.generic_textures.size()) {
-            ImGui::AlignTextToFramePadding();
-            ImGui::TextUnformatted(label.c_str());
-            ImGui::SameLine(150.0f);
-            changed |= draw_texture_picker(state, "##generic_texture_picker", _material_edit.generic_textures[parameter.slot], assets_module, sbx::graphics::format::r8g8b8a8_srgb);
+            changed |= draw_property_row(label.c_str(), [&] { return draw_texture_picker(state, "##generic_texture_picker", _material_edit.generic_textures[parameter.slot], assets_module, sbx::graphics::format::r8g8b8a8_srgb); });
           }
           break;
         }
@@ -285,10 +283,8 @@ auto inspector_panel::_draw_material_properties(editor_state& state, const asset
 
       for (auto i = std::size_t{0u}; i < _material_edit.generic_textures.size(); ++i) {
         ImGui::PushID(static_cast<std::int32_t>(100u + i));
-        ImGui::AlignTextToFramePadding();
-        ImGui::Text("Texture %zu", i);
-        ImGui::SameLine(150.0f);
-        changed |= draw_texture_picker(state, "##generic_texture_picker", _material_edit.generic_textures[i], assets_module, sbx::graphics::format::r8g8b8a8_srgb);
+        const auto label = fmt::format("Texture {}", i);
+        changed |= draw_property_row(label.c_str(), [&] { return draw_texture_picker(state, "##generic_texture_picker", _material_edit.generic_textures[i], assets_module, sbx::graphics::format::r8g8b8a8_srgb); });
         ImGui::PopID();
       }
 
@@ -298,7 +294,7 @@ auto inspector_panel::_draw_material_properties(editor_state& state, const asset
     changed |= draw_color_field("Base Color", _material_edit.base_color_factor);
 
     auto emissive = std::array<std::float_t, 3u>{_material_edit.emissive_factor.x(), _material_edit.emissive_factor.y(), _material_edit.emissive_factor.z()};
-    if (ImGui::ColorEdit3("Emissive", emissive.data())) {
+    if (draw_color_edit("Emissive", emissive.data(), 3)) {
       _material_edit.emissive_factor = sbx::math::vector3{emissive[0], emissive[1], emissive[2]};
       changed = true;
     }
@@ -317,33 +313,19 @@ auto inspector_panel::_draw_material_properties(editor_state& state, const asset
 
     ImGui::SeparatorText("Textures");
 
-    // A fixed-width label column so every picker button lines up regardless of its label's length
-    // ("Metallic/Roughness" vs. "Normal") -- a plain Text+SameLine per row left them staggered.
-    if (ImGui::BeginTable("##material_texture_grid", 2, ImGuiTableFlags_SizingFixedFit)) {
-      ImGui::TableSetupColumn("##label", ImGuiTableColumnFlags_WidthFixed, 150.0f);
-      ImGui::TableSetupColumn("##picker", ImGuiTableColumnFlags_WidthStretch);
+    const auto texture_row = [&](const char* label, const char* popup_id, sbx::assets::texture_handle& slot, sbx::graphics::format format) {
+      changed |= draw_property_row(label, [&] { return draw_texture_picker(state, popup_id, slot, assets_module, format); });
+    };
 
-      const auto texture_row = [&](const char* label, const char* popup_id, sbx::assets::texture_handle& slot, sbx::graphics::format format) {
-        ImGui::TableNextRow();
-        ImGui::TableSetColumnIndex(0);
-        ImGui::AlignTextToFramePadding();
-        ImGui::TextUnformatted(label);
-        ImGui::TableSetColumnIndex(1);
-        changed |= draw_texture_picker(state, popup_id, slot, assets_module, format);
-      };
+    texture_row("Albedo", "##albedo_picker", _material_edit.albedo, sbx::graphics::format::r8g8b8a8_srgb);
 
-      texture_row("Albedo", "##albedo_picker", _material_edit.albedo, sbx::graphics::format::r8g8b8a8_srgb);
-
-      if (is_pbr) {
-        texture_row("Normal", "##normal_picker", _material_edit.normal, sbx::graphics::format::r8g8b8a8_unorm);
-        texture_row("Metallic/Roughness", "##metallic_roughness_picker", _material_edit.metallic_roughness, sbx::graphics::format::r8g8b8a8_unorm);
-        texture_row("Occlusion", "##occlusion_picker", _material_edit.occlusion, sbx::graphics::format::r8g8b8a8_unorm);
-      }
-
-      texture_row("Emissive", "##emissive_picker", _material_edit.emissive, sbx::graphics::format::r8g8b8a8_srgb);
-
-      ImGui::EndTable();
+    if (is_pbr) {
+      texture_row("Normal", "##normal_picker", _material_edit.normal, sbx::graphics::format::r8g8b8a8_unorm);
+      texture_row("Metallic/Roughness", "##metallic_roughness_picker", _material_edit.metallic_roughness, sbx::graphics::format::r8g8b8a8_unorm);
+      texture_row("Occlusion", "##occlusion_picker", _material_edit.occlusion, sbx::graphics::format::r8g8b8a8_unorm);
     }
+
+    texture_row("Emissive", "##emissive_picker", _material_edit.emissive, sbx::graphics::format::r8g8b8a8_srgb);
   }
 
   if (changed) {
@@ -526,20 +508,11 @@ auto inspector_panel::_draw_particle_effect_properties(editor_state& state, cons
       }
 
       if (emitter.render_mode == sbx::assets::particle_render_mode::billboard) {
-        ImGui::Text("Texture");
-        ImGui::SameLine();
-
-        changed |= draw_texture_picker(state, "##particle_texture_picker", emitter.texture, assets_module, sbx::graphics::format::r8g8b8a8_srgb);
+        changed |= draw_property_row("Texture", [&] { return draw_texture_picker(state, "##particle_texture_picker", emitter.texture, assets_module, sbx::graphics::format::r8g8b8a8_srgb); });
       } else {
-        ImGui::Text("Mesh");
-        ImGui::SameLine();
+        changed |= draw_property_row("Mesh", [&] { return draw_mesh_picker(state, "##particle_render_mesh_picker", emitter.render_mesh, assets_module); });
 
-        changed |= draw_mesh_picker(state, "##particle_render_mesh_picker", emitter.render_mesh, assets_module);
-
-        ImGui::Text("Material Override");
-        ImGui::SameLine();
-
-        changed |= draw_material_picker(state, "##particle_render_material_picker", emitter.render_material, assets_module);
+        changed |= draw_property_row("Material Override", [&] { return draw_material_picker(state, "##particle_render_material_picker", emitter.render_material, assets_module); });
 
         if (ImGui::IsItemHovered()) {
           ImGui::SetTooltip("Leave unset to use each submesh's own authored material.");
@@ -638,10 +611,7 @@ auto inspector_panel::_draw_particle_effect_properties(editor_state& state, cons
           changed = true;
         }
 
-        ImGui::Text("Effect");
-        ImGui::SameLine();
-
-        changed |= draw_particle_effect_picker(state, "##sub_emitter_effect_picker", binding.effect, assets_module);
+        changed |= draw_property_row("Effect", [&] { return draw_particle_effect_picker(state, "##sub_emitter_effect_picker", binding.effect, assets_module); });
 
         changed |= ImGui::SliderFloat("Probability", &binding.probability, 0.0f, 1.0f);
         changed |= ImGui::Checkbox("Inherit Velocity", &binding.inherit_velocity);

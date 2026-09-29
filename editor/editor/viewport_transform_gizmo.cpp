@@ -30,6 +30,7 @@
 #include <editor/commands/component_commands.hpp>
 #include <editor/commands/composite_command.hpp>
 
+#include <editor/editor_preferences.hpp>
 #include <editor/widgets/drag_session.hpp>
 
 namespace editor {
@@ -218,6 +219,14 @@ auto draw_viewport_gizmo(editor_state& state, const ImVec2& viewport_origin, con
     return false;
   }
 
+  auto& colors = ImGuizmo::GetStyle().Colors;
+
+  for (auto axis = std::size_t{0u}; axis < 3u; ++axis) {
+    const auto color = ImGui::ColorConvertU32ToFloat4(axis_colors()[axis]);
+    colors[ImGuizmo::DIRECTION_X + axis] = color;
+    colors[ImGuizmo::PLANE_X + axis] = ImVec4{color.x, color.y, color.z, 0.38f};
+  }
+
   ImGuizmo::SetDrawlist();
   ImGuizmo::SetRect(viewport_origin.x, viewport_origin.y, viewport_size.x, viewport_size.y);
 
@@ -230,11 +239,12 @@ auto draw_viewport_gizmo(editor_state& state, const ImVec2& viewport_origin, con
   const auto operation = to_imguizmo_operation(state.current_gizmo_operation);
   const auto mode = to_imguizmo_mode(state.current_gizmo_operation, state.current_gizmo_mode);
 
-  // Hold Ctrl to snap (Blender/Unity convention) instead of moving freely. ImGuizmo reads snap
+  // Hold Ctrl to snap (Blender/Unity convention) instead of moving freely, by the Edit > Preferences steps. ImGuizmo reads snap
   // as 3 per-axis values for translate/scale, or just snap[0] (degrees) for rotate.
-  static constexpr auto translate_snap = std::array<std::float_t, 3u>{1.0f, 1.0f, 1.0f};
-  static constexpr auto rotate_snap = std::array<std::float_t, 3u>{15.0f, 15.0f, 15.0f};
-  static constexpr auto scale_snap = std::array<std::float_t, 3u>{0.1f, 0.1f, 0.1f};
+  const auto& preferences = editor_module.preferences();
+  const auto translate_snap = std::array<std::float_t, 3u>{preferences.translate_snap, preferences.translate_snap, preferences.translate_snap};
+  const auto rotate_snap = std::array<std::float_t, 3u>{preferences.rotate_snap, preferences.rotate_snap, preferences.rotate_snap};
+  const auto scale_snap = std::array<std::float_t, 3u>{preferences.scale_snap, preferences.scale_snap, preferences.scale_snap};
 
   const std::float_t* snap = nullptr;
 

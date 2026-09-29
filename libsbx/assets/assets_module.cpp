@@ -335,7 +335,7 @@ auto assets_module::load_prefab(const math::uuid& id) -> prefab_handle {
   auto root = YAML::Node{};
 
   try {
-    root = YAML::LoadFile(_manifest.absolute(source_path).string());
+    root = YAML::LoadFile(source_path.string());
   } catch (const YAML::Exception& exception) {
     utility::logger<"assets">::warn("Failed to parse prefab '{}': {}", source_path.generic_string(), exception.what());
     return prefab_handle{};
@@ -436,7 +436,7 @@ auto assets_module::load_scene(const math::uuid& id) -> scene_handle {
   auto root = YAML::Node{};
 
   try {
-    root = YAML::LoadFile(_manifest.absolute(source_path).string());
+    root = YAML::LoadFile(source_path.string());
   } catch (const YAML::Exception& exception) {
     utility::logger<"assets">::warn("Failed to parse scene '{}': {}", source_path.generic_string(), exception.what());
     return scene_handle{};

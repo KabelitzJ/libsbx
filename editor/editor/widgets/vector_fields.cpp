@@ -2,125 +2,136 @@
 // Copyright (c) 2026 Jonas Kabelitz
 #include <editor/widgets/vector_fields.hpp>
 
+#include <algorithm>
+#include <cmath>
+#include <cstdint>
 #include <optional>
 
 #include <imgui.h>
+#include <imgui_internal.h>
 
 #include <libsbx/render/ui/fonts/material_design_icons.hpp>
 
+#include <editor/editor_preferences.hpp>
+
 namespace editor {
 
-auto draw_vector3_control(const char* label, std::array<std::float_t, 3u>& values, std::float_t reset_value, std::float_t speed) -> vector3_edit_result {
-  static constexpr auto axis_labels = std::array<const char*, 3u>{"X", "Y", "Z"};
-  static constexpr auto axis_ids = std::array<const char*, 3u>{"##X", "##Y", "##Z"};
-  static constexpr auto axis_colors = std::array<ImVec4, 3u>{
-    ImVec4{0.75f, 0.20f, 0.25f, 1.0f}, // X - red
-    ImVec4{0.30f, 0.65f, 0.30f, 1.0f}, // Y - green
-    ImVec4{0.20f, 0.45f, 0.80f, 1.0f}, // Z - blue
-  };
+auto draw_trailing_label(const char* label) -> void {
+  const auto* label_end = ImGui::FindRenderedTextEnd(label);
 
-  auto result = vector3_edit_result{};
+  if (label_end != label) {
+    ImGui::SameLine(0.0f, ImGui::GetStyle().ItemInnerSpacing.x);
+    ImGui::TextUnformatted(label, label_end);
+  }
+}
+
+template<std::size_t Size>
+auto draw_vector_control(const char* label, std::array<std::float_t, Size>& values, const std::array<std::float_t, Size>& reset_values, std::float_t speed, std::float_t min, std::float_t max) -> vector_edit_result {
+  auto result = vector_edit_result{};
+
+  ImGui::BeginGroup();
+  ImGui::PushID(label);
+  ImGui::PushMultiItemsWidths(static_cast<std::int32_t>(Size), ImGui::CalcItemWidth());
+
+  for (auto axis = std::size_t{0u}; axis < Size; ++axis) {
+    ImGui::PushID(static_cast<std::int32_t>(axis));
+
+    if (axis != 0u) {
+      ImGui::SameLine(0.0f, ImGui::GetStyle().ItemInnerSpacing.x);
+    }
+
+    ImGui::SetNextItemColorMarker(axis_colors()[axis]);
+    result.changed |= ImGui::DragFloat("", &values[axis], speed, min, max, "%.3f");
+
+    ImGui::PopID();
+    ImGui::PopItemWidth();
+  }
+
+  ImGui::PopID();
+  draw_trailing_label(label);
+  ImGui::EndGroup();
+
+  result.started = ImGui::IsItemActivated();
+  result.committed = ImGui::IsItemDeactivatedAfterEdit();
 
   ImGui::PushID(label);
 
-  ImGui::AlignTextToFramePadding();
-  ImGui::TextUnformatted(label);
-  ImGui::SameLine(90.0f);
-
-  const auto line_height = ImGui::GetFrameHeight();
-  const auto button_size = ImVec2{line_height, line_height};
-  const auto item_width = (ImGui::GetContentRegionAvail().x - 3.0f * button_size.x) / 3.0f - 2.0f * ImGui::GetStyle().ItemSpacing.x;
-
-  ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2{2.0f, 0.0f});
-
-  for (auto axis = std::size_t{0u}; axis < 3u; ++axis) {
-    if (axis != 0u) {
-      ImGui::SameLine();
-    }
-
-    ImGui::PushStyleColor(ImGuiCol_Button, axis_colors[axis]);
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, axis_colors[axis]);
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive, axis_colors[axis]);
-
-    if (ImGui::Button(axis_labels[axis], button_size)) {
-      values[axis] = reset_value;
+  if (ImGui::BeginPopupContextItem("##reset")) {
+    if (ImGui::MenuItem("Reset")) {
+      values = reset_values;
       result.changed = true;
       result.started = true;
       result.committed = true;
     }
 
-    ImGui::PopStyleColor(3);
-    ImGui::SameLine();
-
-    ImGui::SetNextItemWidth(item_width);
-    result.changed |= ImGui::DragFloat(axis_ids[axis], &values[axis], speed);
-    result.started |= ImGui::IsItemActivated();
-    result.committed |= ImGui::IsItemDeactivatedAfterEdit();
+    ImGui::EndPopup();
   }
 
-  ImGui::PopStyleVar();
   ImGui::PopID();
 
   return result;
 }
 
-auto draw_vector2_control(const char* label, std::array<std::float_t, 2u>& values, std::float_t reset_value, std::float_t speed) -> vector2_edit_result {
-  static constexpr auto axis_labels = std::array<const char*, 2u>{"X", "Y"};
-  static constexpr auto axis_ids = std::array<const char*, 2u>{"##X", "##Y"};
-  static constexpr auto axis_colors = std::array<ImVec4, 2u>{
-    ImVec4{0.75f, 0.20f, 0.25f, 1.0f}, // X - red
-    ImVec4{0.30f, 0.65f, 0.30f, 1.0f}, // Y - green
-  };
+auto draw_vector3_control(const char* label, std::array<std::float_t, 3u>& values, std::float_t reset_value, std::float_t speed, std::float_t min, std::float_t max) -> vector3_edit_result {
+  return draw_vector_control<3u>(label, values, {reset_value, reset_value, reset_value}, speed, min, max);
+}
 
-  auto result = vector2_edit_result{};
+auto draw_vector3_control(const char* label, std::array<std::float_t, 3u>& values, const std::array<std::float_t, 3u>& reset_values, std::float_t speed, std::float_t min, std::float_t max) -> vector3_edit_result {
+  return draw_vector_control<3u>(label, values, reset_values, speed, min, max);
+}
 
+auto draw_vector2_control(const char* label, std::array<std::float_t, 2u>& values, std::float_t reset_value, std::float_t speed, std::float_t min, std::float_t max) -> vector2_edit_result {
+  return draw_vector_control<2u>(label, values, {reset_value, reset_value}, speed, min, max);
+}
+
+auto draw_vector2_control(const char* label, std::array<std::float_t, 2u>& values, const std::array<std::float_t, 2u>& reset_values, std::float_t speed, std::float_t min, std::float_t max) -> vector2_edit_result {
+  return draw_vector_control<2u>(label, values, reset_values, speed, min, max);
+}
+
+auto draw_color_edit(const char* label, std::float_t* values, std::int32_t components) -> bool {
+  const auto& style = ImGui::GetStyle();
+  auto changed = false;
+
+  ImGui::BeginGroup();
   ImGui::PushID(label);
+  ImGui::PushMultiItemsWidths(components, ImGui::CalcItemWidth() - ImGui::GetFrameHeight() - style.ItemInnerSpacing.x);
 
-  ImGui::AlignTextToFramePadding();
-  ImGui::TextUnformatted(label);
-  ImGui::SameLine(90.0f);
+  for (auto channel = std::int32_t{0}; channel < components; ++channel) {
+    ImGui::PushID(channel);
 
-  const auto line_height = ImGui::GetFrameHeight();
-  const auto button_size = ImVec2{line_height, line_height};
-  const auto item_width = (ImGui::GetContentRegionAvail().x - 2.0f * button_size.x) / 2.0f - 1.0f * ImGui::GetStyle().ItemSpacing.x;
-
-  ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2{2.0f, 0.0f});
-
-  for (auto axis = std::size_t{0u}; axis < 2u; ++axis) {
-    if (axis != 0u) {
-      ImGui::SameLine();
+    if (channel != 0) {
+      ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
     }
 
-    ImGui::PushStyleColor(ImGuiCol_Button, axis_colors[axis]);
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, axis_colors[axis]);
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive, axis_colors[axis]);
+    auto value = static_cast<std::int32_t>(std::round(std::clamp(values[channel], 0.0f, 1.0f) * 255.0f));
 
-    if (ImGui::Button(axis_labels[axis], button_size)) {
-      values[axis] = reset_value;
-      result.changed = true;
-      result.started = true;
-      result.committed = true;
+    ImGui::SetNextItemColorMarker(axis_colors()[static_cast<std::size_t>(channel)]);
+
+    if (ImGui::DragInt("", &value, 1.0f, 0, 255)) {
+      values[channel] = static_cast<std::float_t>(value) / 255.0f;
+      changed = true;
     }
 
-    ImGui::PopStyleColor(3);
-    ImGui::SameLine();
-
-    ImGui::SetNextItemWidth(item_width);
-    result.changed |= ImGui::DragFloat(axis_ids[axis], &values[axis], speed);
-    result.started |= ImGui::IsItemActivated();
-    result.committed |= ImGui::IsItemDeactivatedAfterEdit();
+    ImGui::PopID();
+    ImGui::PopItemWidth();
   }
 
-  ImGui::PopStyleVar();
-  ImGui::PopID();
+  ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
 
-  return result;
+  const auto swatch_flags = ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel;
+  changed |= (components == 4) ? ImGui::ColorEdit4("##swatch", values, swatch_flags) : ImGui::ColorEdit3("##swatch", values, swatch_flags);
+
+  ImGui::PopID();
+  draw_trailing_label(label);
+  ImGui::EndGroup();
+
+  return changed;
 }
 
 auto draw_color_field(const char* label, sbx::math::color& color) -> bool {
   auto value = std::array<std::float_t, 4u>{color.r(), color.g(), color.b(), color.a()};
 
-  if (!ImGui::ColorEdit4(label, value.data())) {
+  if (!draw_color_edit(label, value.data(), 4)) {
     return false;
   }
 

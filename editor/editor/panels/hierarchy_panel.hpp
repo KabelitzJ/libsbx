@@ -5,6 +5,7 @@
 
 #include <array>
 #include <optional>
+#include <unordered_set>
 #include <vector>
 
 #include <libsbx/ecs/entity.hpp>
@@ -64,8 +65,8 @@ private:
   /** @brief id's current parent, or nullopt if id is invalid, top-level, or unresolvable (same "resolve via relationship::parent" pattern reparent_node_command's constructor uses). */
   [[nodiscard]] auto _current_parent_id(sbx::scenes::scene& scene, sbx::math::uuid id) const -> std::optional<sbx::math::uuid>;
 
-  /** @brief Keeps only the ids in @p ids whose parent isn't itself also in @p ids — moving/deleting an ancestor already carries its selected descendants along, so they'd otherwise be handled twice. */
-  [[nodiscard]] auto _filter_to_selection_roots(sbx::scenes::scene& scene, const std::vector<sbx::math::uuid>& ids) const -> std::vector<sbx::math::uuid>;
+  /** @brief Rebuilds _search_visible_ids from _search_buffer (empty buffer = not searching, nothing filtered). */
+  auto _update_search_matches(sbx::scenes::scene& scene) -> void;
 
   /** @brief Applies _pending_reparent (if any), as one reparent_node_command or, for a multi-drag, one composite_command batching a reparent_node_command per dragged root -- see _try_reparent's doc comment for why this can't happen mid-traversal. No-op if nothing is pending. */
   auto _apply_pending_reparent(editor_state& state, sbx::scenes::scene& scene) -> void;
@@ -81,7 +82,7 @@ private:
   auto _draw_empty_space_context_menu(editor_state& state, sbx::scenes::scene& scene) -> void;
 
   sbx::math::uuid _pending_delete_id{sbx::math::uuid::nil()};
-  std::vector<sbx::math::uuid> _pending_delete_ids{}; // multi-select delete; _pending_delete_id above still handles the single-node case unchanged
+  void (*_pending_node_action)(editor_state&, sbx::scenes::scene&){nullptr}; // Paste/Duplicate from the context menu and double-click focus, run after the tree walk like _pending_delete_id
   sbx::math::uuid _pending_add_child_parent_id{sbx::math::uuid::nil()};
 
   /** @brief One drag/drop reparent request, applied after the tree has fully drawn this frame (see _try_reparent). */
@@ -106,6 +107,8 @@ private:
 
   sbx::math::uuid _renaming_id{sbx::math::uuid::nil()};
   std::array<char, 256u> _rename_buffer{};
+  std::array<char, 128u> _search_buffer{};
+  std::unordered_set<sbx::math::uuid> _search_visible_ids{}; // matches plus their ancestors, rebuilt every frame while searching
   bool _rename_focus_pending{false};
 
   /**

@@ -2,6 +2,10 @@
 // Copyright (c) 2026 Jonas Kabelitz
 #include <libsbx/scripting/managed/type.hpp>
 
+#include <functional>
+#include <sstream>
+#include <string>
+
 #include <libsbx/scripting/managed/field_info.hpp>
 #include <libsbx/scripting/managed/detail/backend.hpp>
 #include <libsbx/scripting/managed/detail/type_cache.hpp>
@@ -10,6 +14,26 @@ namespace sbx::scripting::managed {
 
 auto type::get_full_name() const -> string {
   return std::invoke(detail::backend.get_full_type_name, _id);
+}
+
+auto type::get_enum_entries() const -> std::vector<std::pair<std::string, std::int64_t>> {
+  auto entries = std::vector<std::pair<std::string, std::int64_t>>{};
+  auto encoded = std::invoke(detail::backend.get_enum_entries, _id);
+
+  if (encoded.data() == nullptr) {
+    return entries;
+  }
+
+  auto lines = std::istringstream{std::string{encoded}};
+  string::destroy(encoded);
+
+  for (auto line = std::string{}; std::getline(lines, line);) {
+    if (const auto separator = line.rfind('='); separator != std::string::npos) {
+      entries.emplace_back(line.substr(0u, separator), std::stoll(line.substr(separator + 1u)));
+    }
+  }
+
+  return entries;
 }
 
 auto type::get_base_type() -> type& {

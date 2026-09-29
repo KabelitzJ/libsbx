@@ -27,13 +27,17 @@ auto attribute::_get_field_value_internal(std::string_view field_name, void* val
   string::destroy(name);
 }
 
+// The managed side hands over a CoTaskMem string we own -- copy it out, then free it (managed::string has no destructor).
 template<>
 auto attribute::get_field_value<std::string>(std::string_view field_name) -> std::string {
   auto result = string{};
 
   _get_field_value_internal(field_name, &result);
 
-  return std::string{result};
+  auto copy = std::string{result};
+  string::destroy(result);
+
+  return copy;
 }
 
 template<>
@@ -59,7 +63,10 @@ auto attribute::get_property_value<std::string>(std::string_view property_name) 
 
   _get_property_value_internal(property_name, &result);
 
-  return std::string{result};
+  auto copy = std::string{result};
+  string::destroy(result);
+
+  return copy;
 }
 
 template<>

@@ -3,6 +3,7 @@ using System;
 namespace Sbx.Core.Attributes
 {
 
+  [Obsolete("Use [Inspector] instead.")]
   [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
   public class ShowInEditorAttribute : Attribute
   {

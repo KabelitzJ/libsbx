@@ -8,6 +8,7 @@
 #include <cstring>
 #include <optional>
 #include <type_traits>
+#include <utility>
 #include <variant>
 
 #include <fmt/format.h>
@@ -37,22 +38,60 @@
 
 #include <editor/panels/inspector_asset_pickers.hpp>
 
+#include <editor/widgets/property_row.hpp>
 #include <editor/widgets/vector_fields.hpp>
 #include <editor/widgets/asset_path.hpp>
 
 namespace editor {
 
-auto draw_camera_section(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node) -> void {
+// Collapsing header with a close button and a right-click menu (Reset / Copy Values / Paste Values / Remove Component).
+// Returns whether the section's fields should be drawn: false when collapsed or when the component was just removed.
+// Copy Values goes into a per-type clipboard, so Paste Values is only ever offered on a component of the same type.
+template<typename Component>
+auto draw_component_header(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node, const char* icon, const char* name) -> bool {
+  static auto clipboard = std::optional<Component>{};
+
   auto is_open = true;
 
-  const auto is_expanded = ImGui::CollapsingHeader(ICON_MDI_CAMERA_OUTLINE " Camera", &is_open, ImGuiTreeNodeFlags_DefaultOpen);
+  const auto title = fmt::format("{} {}", icon, name);
+  const auto is_expanded = ImGui::CollapsingHeader(title.c_str(), &is_open, ImGuiTreeNodeFlags_DefaultOpen);
 
-  if (!is_open) {
-    state.push_command(target, std::make_unique<remove_component_command<sbx::scenes::camera>>(node.id(), node.get_component<sbx::scenes::camera>(), "Remove Camera"));
-    return;
+  if (ImGui::BeginPopupContextItem("##component_context")) {
+    const auto current = node.get_component<Component>();
+
+    if (ImGui::MenuItem(ICON_MDI_RESTORE " Reset")) {
+      state.push_command(target, std::make_unique<modify_component_command<Component>>(node.id(), current, Component{}, fmt::format("Reset {}", name)));
+    }
+
+    ImGui::Separator();
+
+    if (ImGui::MenuItem(ICON_MDI_CONTENT_COPY " Copy Values")) {
+      clipboard = current;
+    }
+
+    if (ImGui::MenuItem(ICON_MDI_CONTENT_PASTE " Paste Values", nullptr, false, clipboard.has_value())) {
+      state.push_command(target, std::make_unique<modify_component_command<Component>>(node.id(), current, *clipboard, fmt::format("Paste {}", name)));
+    }
+
+    ImGui::Separator();
+
+    if (ImGui::MenuItem(ICON_MDI_DELETE " Remove Component")) {
+      is_open = false;
+    }
+
+    ImGui::EndPopup();
   }
 
-  if (!is_expanded) {
+  if (!is_open) {
+    state.push_command(target, std::make_unique<remove_component_command<Component>>(node.id(), node.get_component<Component>(), fmt::format("Remove {}", name)));
+    return false;
+  }
+
+  return is_expanded;
+}
+
+auto draw_camera_section(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node) -> void {
+  if (!draw_component_header<sbx::scenes::camera>(state, target, node, ICON_MDI_CAMERA_OUTLINE, "Camera")) {
     return;
   }
 
@@ -91,16 +130,7 @@ auto draw_camera_section(editor_state& state, sbx::scenes::scene& target, sbx::s
 }
 
 auto draw_mesh_renderer_section(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node, sbx::assets::assets_module& assets_module) -> void {
-  auto is_open = true;
-
-  const auto is_expanded = ImGui::CollapsingHeader(ICON_MDI_CUBE_OUTLINE " Mesh Renderer", &is_open, ImGuiTreeNodeFlags_DefaultOpen);
-
-  if (!is_open) {
-    state.push_command(target, std::make_unique<remove_component_command<sbx::scenes::mesh_renderer>>(node.id(), node.get_component<sbx::scenes::mesh_renderer>(), "Remove Mesh Renderer"));
-    return;
-  }
-
-  if (!is_expanded) {
+  if (!draw_component_header<sbx::scenes::mesh_renderer>(state, target, node, ICON_MDI_CUBE_OUTLINE, "Mesh Renderer")) {
     return;
   }
 
@@ -113,9 +143,7 @@ auto draw_mesh_renderer_section(editor_state& state, sbx::scenes::scene& target,
 
   const auto previous_mesh_id = renderer.mesh.is_valid() ? renderer.mesh->id() : sbx::math::uuid::nil();
 
-  ImGui::Text("Mesh:");
-  ImGui::SameLine();
-  changed |= draw_mesh_picker(state, "##mesh_picker_popup", renderer.mesh, assets_module);
+  changed |= draw_property_row("Mesh", [&] { return draw_mesh_picker(state, "##mesh_picker_popup", renderer.mesh, assets_module); });
 
   const auto new_mesh_id = renderer.mesh.is_valid() ? renderer.mesh->id() : sbx::math::uuid::nil();
 
@@ -150,22 +178,26 @@ auto draw_mesh_renderer_section(editor_state& state, sbx::scenes::scene& target,
       ? renderer.mesh->submeshes()[index].material
       : sbx::assets::material_handle{};
 
-    ImGui::Text("Material %zu:", index);
-    ImGui::SameLine();
-    changed |= draw_material_picker(state, "##material_picker_popup", slot, assets_module, mesh_default);
+    const auto label = fmt::format("Material {}", index);
 
-    if (slot.is_valid()) {
-      ImGui::SameLine();
+    changed |= draw_property_row(label.c_str(), [&] {
+      auto slot_changed = draw_material_picker(state, "##material_picker_popup", slot, assets_module, mesh_default);
 
-      if (ImGui::Button(ICON_MDI_EXPORT_VARIANT " Duplicate")) {
-        slot = extract_material_to_asset(assets_module, slot, renderer.mesh.is_valid() ? renderer.mesh->id() : sbx::math::uuid::nil());
-        changed = true;
+      if (slot.is_valid()) {
+        ImGui::SameLine();
+
+        if (ImGui::Button(ICON_MDI_EXPORT_VARIANT)) {
+          slot = extract_material_to_asset(assets_module, slot, renderer.mesh.is_valid() ? renderer.mesh->id() : sbx::math::uuid::nil());
+          slot_changed = true;
+        }
+
+        if (ImGui::IsItemHovered()) {
+          ImGui::SetTooltip("Duplicate: fork this slot's material into an independent copy, so editing it only affects this node.");
+        }
       }
 
-      if (ImGui::IsItemHovered()) {
-        ImGui::SetTooltip("Fork this slot's material into an independent copy, so editing it only affects this node.");
-      }
-    }
+      return slot_changed;
+    });
 
     ImGui::PopID();
   }
@@ -176,16 +208,7 @@ auto draw_mesh_renderer_section(editor_state& state, sbx::scenes::scene& target,
 }
 
 auto draw_animator_section(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node) -> void {
-  auto is_open = true;
-
-  const auto is_expanded = ImGui::CollapsingHeader(ICON_MDI_ANIMATION_PLAY " Animator", &is_open, ImGuiTreeNodeFlags_DefaultOpen);
-
-  if (!is_open) {
-    state.push_command(target, std::make_unique<remove_component_command<sbx::scenes::animator>>(node.id(), node.get_component<sbx::scenes::animator>(), "Remove Animator"));
-    return;
-  }
-
-  if (!is_expanded) {
+  if (!draw_component_header<sbx::scenes::animator>(state, target, node, ICON_MDI_ANIMATION_PLAY, "Animator")) {
     return;
   }
 
@@ -201,12 +224,9 @@ auto draw_animator_section(editor_state& state, sbx::scenes::scene& target, sbx:
     return;
   }
 
-  ImGui::Text("Graph:");
-  ImGui::SameLine();
-
   auto graph_handle = anim.graph;
 
-  if (draw_animation_graph_picker(state, "##animation_graph_picker_popup", graph_handle, mesh->id())) {
+  if (draw_property_row("Graph", [&] { return draw_animation_graph_picker(state, "##animation_graph_picker_popup", graph_handle, mesh->id()); })) {
     const auto before = anim;
     anim.set_graph(graph_handle); // not a plain assignment -- reseeds parameters/current_state_id from the new graph's own defaults
     state.push_command(target, std::make_unique<modify_component_command<sbx::scenes::animator>>(node.id(), before, anim, "Edit Animator"));
@@ -287,16 +307,7 @@ auto draw_animator_section(editor_state& state, sbx::scenes::scene& target, sbx:
 }
 
 auto draw_directional_light_section(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node) -> void {
-  auto is_open = true;
-
-  const auto is_expanded = ImGui::CollapsingHeader(ICON_MDI_WHITE_BALANCE_SUNNY " Directional Light", &is_open, ImGuiTreeNodeFlags_DefaultOpen);
-
-  if (!is_open) {
-    state.push_command(target, std::make_unique<remove_component_command<sbx::scenes::directional_light>>(node.id(), node.get_component<sbx::scenes::directional_light>(), "Remove Directional Light"));
-    return;
-  }
-
-  if (!is_expanded) {
+  if (!draw_component_header<sbx::scenes::directional_light>(state, target, node, ICON_MDI_WHITE_BALANCE_SUNNY, "Directional Light")) {
     return;
   }
 
@@ -328,16 +339,7 @@ auto draw_directional_light_section(editor_state& state, sbx::scenes::scene& tar
 }
 
 auto draw_point_light_section(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node) -> void {
-  auto is_open = true;
-
-  const auto is_expanded = ImGui::CollapsingHeader(ICON_MDI_LIGHTBULB_OUTLINE " Point Light", &is_open, ImGuiTreeNodeFlags_DefaultOpen);
-
-  if (!is_open) {
-    state.push_command(target, std::make_unique<remove_component_command<sbx::scenes::point_light>>(node.id(), node.get_component<sbx::scenes::point_light>(), "Remove Point Light"));
-    return;
-  }
-
-  if (!is_expanded) {
+  if (!draw_component_header<sbx::scenes::point_light>(state, target, node, ICON_MDI_LIGHTBULB_OUTLINE, "Point Light")) {
     return;
   }
 
@@ -353,16 +355,7 @@ auto draw_point_light_section(editor_state& state, sbx::scenes::scene& target, s
 }
 
 auto draw_spot_light_section(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node) -> void {
-  auto is_open = true;
-
-  const auto is_expanded = ImGui::CollapsingHeader(ICON_MDI_FLASHLIGHT " Spot Light", &is_open, ImGuiTreeNodeFlags_DefaultOpen);
-
-  if (!is_open) {
-    state.push_command(target, std::make_unique<remove_component_command<sbx::scenes::spot_light>>(node.id(), node.get_component<sbx::scenes::spot_light>(), "Remove Spot Light"));
-    return;
-  }
-
-  if (!is_expanded) {
+  if (!draw_component_header<sbx::scenes::spot_light>(state, target, node, ICON_MDI_FLASHLIGHT, "Spot Light")) {
     return;
   }
 
@@ -385,16 +378,7 @@ auto draw_spot_light_section(editor_state& state, sbx::scenes::scene& target, sb
 }
 
 auto draw_skybox_section(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node, sbx::assets::assets_module& assets_module) -> void {
-  auto is_open = true;
-
-  const auto is_expanded = ImGui::CollapsingHeader(ICON_MDI_EARTH " Skybox", &is_open, ImGuiTreeNodeFlags_DefaultOpen);
-
-  if (!is_open) {
-    state.push_command(target, std::make_unique<remove_component_command<sbx::scenes::skybox>>(node.id(), node.get_component<sbx::scenes::skybox>(), "Remove Skybox"));
-    return;
-  }
-
-  if (!is_expanded) {
+  if (!draw_component_header<sbx::scenes::skybox>(state, target, node, ICON_MDI_EARTH, "Skybox")) {
     return;
   }
 
@@ -402,13 +386,17 @@ auto draw_skybox_section(editor_state& state, sbx::scenes::scene& target, sbx::s
   static auto pending = std::optional<sbx::scenes::skybox>{};
 
   if (sky.environment.is_valid()) {
-    ImGui::Text("Environment: %s", asset_path_text(assets_module, sky.environment->id()).c_str());
+    ImGui::LabelText("Environment", "%s", relative_asset_path(assets_module, sky.environment->id()).string().c_str());
+
+    if (ImGui::IsItemHovered()) {
+      ImGui::SetTooltip("%s", asset_path_text(assets_module, sky.environment->id()).c_str());
+    }
 
     const auto* environment = sky.environment.get();
     const auto is_baked = environment->radiance_index() != sbx::assets::environment_map::invalid_index && environment->irradiance_index() != sbx::assets::environment_map::invalid_index && environment->prefiltered_index() != sbx::assets::environment_map::invalid_index;
-    ImGui::Text("Baked: %s", is_baked ? "yes" : "no");
+    ImGui::LabelText("Baked", "%s", is_baked ? "Yes" : "No");
   } else {
-    ImGui::TextDisabled("Environment: (none)");
+    ImGui::LabelText("Environment", "(None)");
   }
 
   ImGui::DragFloat("Background Intensity", &sky.intensity, 0.05f, 0.0f, 100.0f);
@@ -418,28 +406,16 @@ auto draw_skybox_section(editor_state& state, sbx::scenes::scene& target, sbx::s
 }
 
 auto draw_particle_effect_instance_section(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node, sbx::assets::assets_module& assets_module) -> void {
-  auto is_open = true;
-
-  const auto is_expanded = ImGui::CollapsingHeader(ICON_MDI_FIREWORK " Particle Effect", &is_open, ImGuiTreeNodeFlags_DefaultOpen);
-
-  if (!is_open) {
-    state.push_command(target, std::make_unique<remove_component_command<sbx::scenes::particle_effect>>(node.id(), node.get_component<sbx::scenes::particle_effect>(), "Remove Particle Effect"));
-    return;
-  }
-
-  if (!is_expanded) {
+  if (!draw_component_header<sbx::scenes::particle_effect>(state, target, node, ICON_MDI_FIREWORK, "Particle Effect")) {
     return;
   }
 
   auto& instance = node.get_component<sbx::scenes::particle_effect>();
 
-  ImGui::Text("Effect:");
-  ImGui::SameLine();
-
   {
     const auto before = instance;
 
-    if (draw_particle_effect_picker(state, "##particle_effect_picker_popup", instance.effect, assets_module)) {
+    if (draw_property_row("Effect", [&] { return draw_particle_effect_picker(state, "##particle_effect_picker_popup", instance.effect, assets_module); })) {
       state.push_command(target, std::make_unique<modify_component_command<sbx::scenes::particle_effect>>(node.id(), before, instance, "Edit Particle Effect"));
     }
   }
@@ -504,16 +480,7 @@ auto draw_particle_effect_instance_section(editor_state& state, sbx::scenes::sce
 }
 
 auto draw_rigidbody_section(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node) -> void {
-  auto is_open = true;
-
-  const auto is_expanded = ImGui::CollapsingHeader(ICON_MDI_SOCCER " Rigidbody", &is_open, ImGuiTreeNodeFlags_DefaultOpen);
-
-  if (!is_open) {
-    state.push_command(target, std::make_unique<remove_component_command<sbx::physics::rigidbody>>(node.id(), node.get_component<sbx::physics::rigidbody>(), "Remove Rigidbody"));
-    return;
-  }
-
-  if (!is_expanded) {
+  if (!draw_component_header<sbx::physics::rigidbody>(state, target, node, ICON_MDI_SOCCER, "Rigidbody")) {
     return;
   }
 
@@ -560,7 +527,7 @@ auto draw_rigidbody_section(editor_state& state, sbx::scenes::scene& target, sbx
 
   auto linear_velocity = std::array<std::float_t, 3u>{body.linear_velocity.x(), body.linear_velocity.y(), body.linear_velocity.z()};
 
-  if (ImGui::DragFloat3("Linear Velocity", linear_velocity.data(), 0.05f)) {
+  if (draw_vector3_control("Linear Velocity", linear_velocity, 0.0f, 0.05f).changed) {
     body.linear_velocity = sbx::math::vector3{linear_velocity[0], linear_velocity[1], linear_velocity[2]};
   }
 
@@ -568,7 +535,7 @@ auto draw_rigidbody_section(editor_state& state, sbx::scenes::scene& target, sbx
 
   auto angular_velocity = std::array<std::float_t, 3u>{body.angular_velocity.x(), body.angular_velocity.y(), body.angular_velocity.z()};
 
-  if (ImGui::DragFloat3("Angular Velocity", angular_velocity.data(), 0.05f)) {
+  if (draw_vector3_control("Angular Velocity", angular_velocity, 0.0f, 0.05f).changed) {
     body.angular_velocity = sbx::math::vector3{angular_velocity[0], angular_velocity[1], angular_velocity[2]};
   }
 
@@ -576,16 +543,7 @@ auto draw_rigidbody_section(editor_state& state, sbx::scenes::scene& target, sbx
 }
 
 auto draw_nav_agent_section(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node) -> void {
-  auto is_open = true;
-
-  const auto is_expanded = ImGui::CollapsingHeader(ICON_MDI_WALK " Nav Agent", &is_open, ImGuiTreeNodeFlags_DefaultOpen);
-
-  if (!is_open) {
-    state.push_command(target, std::make_unique<remove_component_command<sbx::physics::nav_agent>>(node.id(), node.get_component<sbx::physics::nav_agent>(), "Remove Nav Agent"));
-    return;
-  }
-
-  if (!is_expanded) {
+  if (!draw_component_header<sbx::physics::nav_agent>(state, target, node, ICON_MDI_WALK, "Nav Agent")) {
     return;
   }
 
@@ -644,7 +602,7 @@ template<typename Collider>
 auto draw_collider_offset_rotation_friction(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node, Collider& collider, std::optional<Collider>& pending, const char* label) -> void {
   auto offset = std::array<std::float_t, 3u>{collider.offset.x(), collider.offset.y(), collider.offset.z()};
 
-  if (ImGui::DragFloat3("Offset", offset.data(), 0.05f)) {
+  if (draw_vector3_control("Offset", offset, 0.0f, 0.05f).changed) {
     collider.offset = sbx::math::vector3{offset[0], offset[1], offset[2]};
   }
 
@@ -653,7 +611,7 @@ auto draw_collider_offset_rotation_friction(editor_state& state, sbx::scenes::sc
   const auto euler = sbx::math::quaternion::euler_angles(collider.rotation);
   auto rotation_degrees = std::array<std::float_t, 3u>{euler.x(), euler.y(), euler.z()};
 
-  if (ImGui::DragFloat3("Rotation", rotation_degrees.data(), 0.5f)) {
+  if (draw_vector3_control("Rotation", rotation_degrees, 0.0f, 0.5f).changed) {
     collider.rotation = sbx::math::quaternion{sbx::math::vector3{rotation_degrees[0], rotation_degrees[1], rotation_degrees[2]}};
   }
 
@@ -678,16 +636,7 @@ auto draw_collider_offset_rotation_friction(editor_state& state, sbx::scenes::sc
 }
 
 auto draw_shape_collider_section(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node) -> void {
-  auto is_open = true;
-
-  const auto is_expanded = ImGui::CollapsingHeader(ICON_MDI_SHAPE_OUTLINE " Shape Collider", &is_open, ImGuiTreeNodeFlags_DefaultOpen);
-
-  if (!is_open) {
-    state.push_command(target, std::make_unique<remove_component_command<sbx::physics::shape_collider>>(node.id(), node.get_component<sbx::physics::shape_collider>(), "Remove Shape Collider"));
-    return;
-  }
-
-  if (!is_expanded) {
+  if (!draw_component_header<sbx::physics::shape_collider>(state, target, node, ICON_MDI_SHAPE_OUTLINE, "Shape Collider")) {
     return;
   }
 
@@ -745,7 +694,7 @@ auto draw_shape_collider_section(editor_state& state, sbx::scenes::scene& target
   } else if (auto* box = std::get_if<sbx::physics::box>(&collider.shape)) {
     auto half_extents = std::array<std::float_t, 3u>{box->half_extents.x(), box->half_extents.y(), box->half_extents.z()};
 
-    if (ImGui::DragFloat3("Half Extents", half_extents.data(), 0.05f, 0.001f, 1000.0f)) {
+    if (draw_vector3_control("Half Extents", half_extents, 0.5f, 0.05f, 0.001f, 1000.0f).changed) {
       box->half_extents = sbx::math::vector3{half_extents[0], half_extents[1], half_extents[2]};
     }
 
@@ -756,16 +705,7 @@ auto draw_shape_collider_section(editor_state& state, sbx::scenes::scene& target
 }
 
 auto draw_mesh_collider_section(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node, sbx::assets::assets_module& assets_module) -> void {
-  auto is_open = true;
-
-  const auto is_expanded = ImGui::CollapsingHeader(ICON_MDI_TERRAIN " Mesh Collider", &is_open, ImGuiTreeNodeFlags_DefaultOpen);
-
-  if (!is_open) {
-    state.push_command(target, std::make_unique<remove_component_command<sbx::physics::mesh_collider>>(node.id(), node.get_component<sbx::physics::mesh_collider>(), "Remove Mesh Collider"));
-    return;
-  }
-
-  if (!is_expanded) {
+  if (!draw_component_header<sbx::physics::mesh_collider>(state, target, node, ICON_MDI_TERRAIN, "Mesh Collider")) {
     return;
   }
 
@@ -781,10 +721,7 @@ auto draw_mesh_collider_section(editor_state& state, sbx::scenes::scene& target,
   {
     const auto before = collider;
 
-    ImGui::Text("Mesh:");
-    ImGui::SameLine();
-
-    if (draw_mesh_picker(state, "##mesh_collider_picker_popup", collider.mesh, assets_module)) {
+    if (draw_property_row("Mesh", [&] { return draw_mesh_picker(state, "##mesh_collider_picker_popup", collider.mesh, assets_module); })) {
       state.push_command(target, std::make_unique<modify_component_command<sbx::physics::mesh_collider>>(node.id(), before, collider, "Edit Mesh Collider"));
     }
   }
@@ -800,16 +737,7 @@ auto draw_mesh_collider_section(editor_state& state, sbx::scenes::scene& target,
 }
 
 auto draw_canvas_section(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node) -> void {
-  auto is_open = true;
-
-  const auto is_expanded = ImGui::CollapsingHeader(ICON_MDI_MONITOR " Canvas", &is_open, ImGuiTreeNodeFlags_DefaultOpen);
-
-  if (!is_open) {
-    state.push_command(target, std::make_unique<remove_component_command<sbx::canvas::canvas>>(node.id(), node.get_component<sbx::canvas::canvas>(), "Remove Canvas"));
-    return;
-  }
-
-  if (!is_expanded) {
+  if (!draw_component_header<sbx::canvas::canvas>(state, target, node, ICON_MDI_MONITOR, "Canvas")) {
     return;
   }
 
@@ -875,16 +803,7 @@ auto draw_canvas_section(editor_state& state, sbx::scenes::scene& target, sbx::s
 }
 
 auto draw_canvas_group_section(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node) -> void {
-  auto is_open = true;
-
-  const auto is_expanded = ImGui::CollapsingHeader(ICON_MDI_OPACITY " Canvas Group", &is_open, ImGuiTreeNodeFlags_DefaultOpen);
-
-  if (!is_open) {
-    state.push_command(target, std::make_unique<remove_component_command<sbx::canvas::canvas_group>>(node.id(), node.get_component<sbx::canvas::canvas_group>(), "Remove Canvas Group"));
-    return;
-  }
-
-  if (!is_expanded) {
+  if (!draw_component_header<sbx::canvas::canvas_group>(state, target, node, ICON_MDI_OPACITY, "Canvas Group")) {
     return;
   }
 
@@ -905,16 +824,7 @@ auto draw_canvas_group_section(editor_state& state, sbx::scenes::scene& target, 
 }
 
 auto draw_canvas_scaler_section(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node) -> void {
-  auto is_open = true;
-
-  const auto is_expanded = ImGui::CollapsingHeader(ICON_MDI_FIT_TO_SCREEN " Canvas Scaler", &is_open, ImGuiTreeNodeFlags_DefaultOpen);
-
-  if (!is_open) {
-    state.push_command(target, std::make_unique<remove_component_command<sbx::canvas::canvas_scaler>>(node.id(), node.get_component<sbx::canvas::canvas_scaler>(), "Remove Canvas Scaler"));
-    return;
-  }
-
-  if (!is_expanded) {
+  if (!draw_component_header<sbx::canvas::canvas_scaler>(state, target, node, ICON_MDI_FIT_TO_SCREEN, "Canvas Scaler")) {
     return;
   }
 
@@ -936,7 +846,7 @@ auto draw_canvas_scaler_section(editor_state& state, sbx::scenes::scene& target,
   if (scaler.mode == sbx::canvas::canvas_scale_mode::scale_with_screen_size) {
     auto reference_resolution = std::array<std::float_t, 2u>{scaler.reference_resolution.x(), scaler.reference_resolution.y()};
 
-    if (ImGui::DragFloat2("Reference Resolution", reference_resolution.data(), 1.0f, 1.0f, 16384.0f)) {
+    if (draw_vector2_control("Reference Resolution", reference_resolution, {1920.0f, 1080.0f}, 1.0f, 1.0f, 16384.0f).changed) {
       scaler.reference_resolution = sbx::math::vector2{reference_resolution[0], reference_resolution[1]};
     }
     bracket_edit(state, target, node, scaler, pending, "Edit Canvas Scaler");
@@ -947,16 +857,7 @@ auto draw_canvas_scaler_section(editor_state& state, sbx::scenes::scene& target,
 }
 
 auto draw_rect_transform_section(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node) -> void {
-  auto is_open = true;
-
-  const auto is_expanded = ImGui::CollapsingHeader(ICON_MDI_ASPECT_RATIO " Rect Transform", &is_open, ImGuiTreeNodeFlags_DefaultOpen);
-
-  if (!is_open) {
-    state.push_command(target, std::make_unique<remove_component_command<sbx::canvas::rect_transform>>(node.id(), node.get_component<sbx::canvas::rect_transform>(), "Remove Rect Transform"));
-    return;
-  }
-
-  if (!is_expanded) {
+  if (!draw_component_header<sbx::canvas::rect_transform>(state, target, node, ICON_MDI_ASPECT_RATIO, "Rect Transform")) {
     return;
   }
 
@@ -1020,29 +921,17 @@ auto draw_rect_transform_section(editor_state& state, sbx::scenes::scene& target
 auto draw_ui_image_section(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node) -> void {
   auto& assets_module = sbx::core::engine::get_module<sbx::assets::assets_module>();
 
-  auto is_open = true;
-
-  const auto is_expanded = ImGui::CollapsingHeader(ICON_MDI_IMAGE " UI Image", &is_open, ImGuiTreeNodeFlags_DefaultOpen);
-
-  if (!is_open) {
-    state.push_command(target, std::make_unique<remove_component_command<sbx::canvas::ui_image>>(node.id(), node.get_component<sbx::canvas::ui_image>(), "Remove UI Image"));
-    return;
-  }
-
-  if (!is_expanded) {
+  if (!draw_component_header<sbx::canvas::ui_image>(state, target, node, ICON_MDI_IMAGE, "UI Image")) {
     return;
   }
 
   auto& image = node.get_component<sbx::canvas::ui_image>();
   static auto pending = std::optional<sbx::canvas::ui_image>{};
 
-  ImGui::Text("Sprite:");
-  ImGui::SameLine();
-
   {
     const auto before = image;
 
-    if (draw_texture_picker(state, "##ui_image_sprite_picker_popup", image.sprite, assets_module, sbx::graphics::format::r8g8b8a8_srgb)) {
+    if (draw_property_row("Sprite", [&] { return draw_texture_picker(state, "##ui_image_sprite_picker_popup", image.sprite, assets_module, sbx::graphics::format::r8g8b8a8_srgb); })) {
       state.push_command(target, std::make_unique<modify_component_command<sbx::canvas::ui_image>>(node.id(), before, image, "Edit UI Image"));
     }
   }
@@ -1050,10 +939,17 @@ auto draw_ui_image_section(editor_state& state, sbx::scenes::scene& target, sbx:
   draw_color_field("Tint", image.tint);
   bracket_edit(state, target, node, image, pending, "Edit UI Image");
 
-  auto uv_rect = std::array<std::float_t, 4u>{image.uv_rect.x(), image.uv_rect.y(), image.uv_rect.z(), image.uv_rect.w()};
+  auto uv_min = std::array<std::float_t, 2u>{image.uv_rect.x(), image.uv_rect.y()};
 
-  if (ImGui::DragFloat4("UV Rect", uv_rect.data(), 0.01f)) {
-    image.uv_rect = sbx::math::vector4{uv_rect[0], uv_rect[1], uv_rect[2], uv_rect[3]};
+  if (draw_vector2_control("UV Min", uv_min, 0.0f, 0.01f).changed) {
+    image.uv_rect = sbx::math::vector4{uv_min[0], uv_min[1], image.uv_rect.z(), image.uv_rect.w()};
+  }
+  bracket_edit(state, target, node, image, pending, "Edit UI Image");
+
+  auto uv_max = std::array<std::float_t, 2u>{image.uv_rect.z(), image.uv_rect.w()};
+
+  if (draw_vector2_control("UV Max", uv_max, 1.0f, 0.01f).changed) {
+    image.uv_rect = sbx::math::vector4{image.uv_rect.x(), image.uv_rect.y(), uv_max[0], uv_max[1]};
   }
   bracket_edit(state, target, node, image, pending, "Edit UI Image");
 
@@ -1062,16 +958,7 @@ auto draw_ui_image_section(editor_state& state, sbx::scenes::scene& target, sbx:
 }
 
 auto draw_ui_text_section(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node) -> void {
-  auto is_open = true;
-
-  const auto is_expanded = ImGui::CollapsingHeader(ICON_MDI_FORMAT_TEXT " UI Text", &is_open, ImGuiTreeNodeFlags_DefaultOpen);
-
-  if (!is_open) {
-    state.push_command(target, std::make_unique<remove_component_command<sbx::canvas::ui_text>>(node.id(), node.get_component<sbx::canvas::ui_text>(), "Remove UI Text"));
-    return;
-  }
-
-  if (!is_expanded) {
+  if (!draw_component_header<sbx::canvas::ui_text>(state, target, node, ICON_MDI_FORMAT_TEXT, "UI Text")) {
     return;
   }
 
@@ -1087,13 +974,10 @@ auto draw_ui_text_section(editor_state& state, sbx::scenes::scene& target, sbx::
   }
   bracket_edit(state, target, node, text, pending, "Edit UI Text");
 
-  ImGui::Text("Font:");
-  ImGui::SameLine();
-
   {
     const auto before = text;
 
-    if (draw_font_picker(state, "##ui_text_font_picker_popup", text.font)) {
+    if (draw_property_row("Font", [&] { return draw_font_picker(state, "##ui_text_font_picker_popup", text.font); })) {
       state.push_command(target, std::make_unique<modify_component_command<sbx::canvas::ui_text>>(node.id(), before, text, "Edit UI Text"));
     }
   }
@@ -1126,16 +1010,7 @@ auto draw_ui_text_section(editor_state& state, sbx::scenes::scene& target, sbx::
 }
 
 auto draw_ui_button_section(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node) -> void {
-  auto is_open = true;
-
-  const auto is_expanded = ImGui::CollapsingHeader(ICON_MDI_GESTURE_TAP_BUTTON " UI Button", &is_open, ImGuiTreeNodeFlags_DefaultOpen);
-
-  if (!is_open) {
-    state.push_command(target, std::make_unique<remove_component_command<sbx::canvas::ui_button>>(node.id(), node.get_component<sbx::canvas::ui_button>(), "Remove UI Button"));
-    return;
-  }
-
-  if (!is_expanded) {
+  if (!draw_component_header<sbx::canvas::ui_button>(state, target, node, ICON_MDI_GESTURE_TAP_BUTTON, "UI Button")) {
     return;
   }
 
@@ -1156,16 +1031,7 @@ auto draw_ui_button_section(editor_state& state, sbx::scenes::scene& target, sbx
 }
 
 auto draw_layout_element_section(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node) -> void {
-  auto is_open = true;
-
-  const auto is_expanded = ImGui::CollapsingHeader(ICON_MDI_RULER " Layout Element", &is_open, ImGuiTreeNodeFlags_DefaultOpen);
-
-  if (!is_open) {
-    state.push_command(target, std::make_unique<remove_component_command<sbx::canvas::layout_element>>(node.id(), node.get_component<sbx::canvas::layout_element>(), "Remove Layout Element"));
-    return;
-  }
-
-  if (!is_expanded) {
+  if (!draw_component_header<sbx::canvas::layout_element>(state, target, node, ICON_MDI_RULER, "Layout Element")) {
     return;
   }
 
@@ -1192,16 +1058,7 @@ auto draw_layout_element_section(editor_state& state, sbx::scenes::scene& target
 }
 
 auto draw_content_size_fitter_section(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node) -> void {
-  auto is_open = true;
-
-  const auto is_expanded = ImGui::CollapsingHeader(ICON_MDI_ARROW_COLLAPSE_ALL " Content Size Fitter", &is_open, ImGuiTreeNodeFlags_DefaultOpen);
-
-  if (!is_open) {
-    state.push_command(target, std::make_unique<remove_component_command<sbx::canvas::content_size_fitter>>(node.id(), node.get_component<sbx::canvas::content_size_fitter>(), "Remove Content Size Fitter"));
-    return;
-  }
-
-  if (!is_expanded) {
+  if (!draw_component_header<sbx::canvas::content_size_fitter>(state, target, node, ICON_MDI_ARROW_COLLAPSE_ALL, "Content Size Fitter")) {
     return;
   }
 
@@ -1229,17 +1086,24 @@ static constexpr auto layout_alignment_labels = std::array<const char*, 9u>{
   "Lower Left", "Lower Center", "Lower Right",
 };
 
-auto draw_horizontal_layout_group_section(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node) -> void {
-  auto is_open = true;
+template<typename Group>
+auto draw_padding_fields(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node, Group& group, std::optional<Group>& pending, const char* label) -> void {
+  static constexpr auto sides = std::array<std::pair<const char*, std::size_t>, 4u>{{{"Left", 0u}, {"Right", 2u}, {"Top", 1u}, {"Bottom", 3u}}};
 
-  const auto is_expanded = ImGui::CollapsingHeader(ICON_MDI_VIEW_COLUMN " Horizontal Layout Group", &is_open, ImGuiTreeNodeFlags_DefaultOpen);
-
-  if (!is_open) {
-    state.push_command(target, std::make_unique<remove_component_command<sbx::canvas::horizontal_layout_group>>(node.id(), node.get_component<sbx::canvas::horizontal_layout_group>(), "Remove Horizontal Layout Group"));
+  if (!ImGui::TreeNodeEx("Padding", ImGuiTreeNodeFlags_DefaultOpen)) {
     return;
   }
 
-  if (!is_expanded) {
+  for (const auto& [name, index] : sides) {
+    ImGui::DragFloat(name, &group.padding[index], 0.5f, 0.0f, 1000.0f);
+    bracket_edit(state, target, node, group, pending, label);
+  }
+
+  ImGui::TreePop();
+}
+
+auto draw_horizontal_layout_group_section(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node) -> void {
+  if (!draw_component_header<sbx::canvas::horizontal_layout_group>(state, target, node, ICON_MDI_VIEW_COLUMN, "Horizontal Layout Group")) {
     return;
   }
 
@@ -1249,11 +1113,7 @@ auto draw_horizontal_layout_group_section(editor_state& state, sbx::scenes::scen
   ImGui::DragFloat("Spacing", &group.spacing, 0.5f, 0.0f, 1000.0f);
   bracket_edit(state, target, node, group, pending, "Edit Horizontal Layout Group");
 
-  auto padding = std::array<std::float_t, 4u>{group.padding.x(), group.padding.y(), group.padding.z(), group.padding.w()};
-  if (ImGui::DragFloat4("Padding (L,T,R,B)", padding.data(), 0.5f, 0.0f, 1000.0f)) {
-    group.padding = sbx::math::vector4{padding[0], padding[1], padding[2], padding[3]};
-  }
-  bracket_edit(state, target, node, group, pending, "Edit Horizontal Layout Group");
+  draw_padding_fields(state, target, node, group, pending, "Edit Horizontal Layout Group");
 
   auto alignment_index = static_cast<int>(group.child_alignment);
   if (ImGui::Combo("Child Alignment", &alignment_index, layout_alignment_labels.data(), static_cast<int>(layout_alignment_labels.size()))) {
@@ -1272,16 +1132,7 @@ auto draw_horizontal_layout_group_section(editor_state& state, sbx::scenes::scen
 }
 
 auto draw_vertical_layout_group_section(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node) -> void {
-  auto is_open = true;
-
-  const auto is_expanded = ImGui::CollapsingHeader(ICON_MDI_VIEW_STREAM " Vertical Layout Group", &is_open, ImGuiTreeNodeFlags_DefaultOpen);
-
-  if (!is_open) {
-    state.push_command(target, std::make_unique<remove_component_command<sbx::canvas::vertical_layout_group>>(node.id(), node.get_component<sbx::canvas::vertical_layout_group>(), "Remove Vertical Layout Group"));
-    return;
-  }
-
-  if (!is_expanded) {
+  if (!draw_component_header<sbx::canvas::vertical_layout_group>(state, target, node, ICON_MDI_VIEW_STREAM, "Vertical Layout Group")) {
     return;
   }
 
@@ -1291,11 +1142,7 @@ auto draw_vertical_layout_group_section(editor_state& state, sbx::scenes::scene&
   ImGui::DragFloat("Spacing", &group.spacing, 0.5f, 0.0f, 1000.0f);
   bracket_edit(state, target, node, group, pending, "Edit Vertical Layout Group");
 
-  auto padding = std::array<std::float_t, 4u>{group.padding.x(), group.padding.y(), group.padding.z(), group.padding.w()};
-  if (ImGui::DragFloat4("Padding (L,T,R,B)", padding.data(), 0.5f, 0.0f, 1000.0f)) {
-    group.padding = sbx::math::vector4{padding[0], padding[1], padding[2], padding[3]};
-  }
-  bracket_edit(state, target, node, group, pending, "Edit Vertical Layout Group");
+  draw_padding_fields(state, target, node, group, pending, "Edit Vertical Layout Group");
 
   auto alignment_index = static_cast<int>(group.child_alignment);
   if (ImGui::Combo("Child Alignment", &alignment_index, layout_alignment_labels.data(), static_cast<int>(layout_alignment_labels.size()))) {
@@ -1314,16 +1161,7 @@ auto draw_vertical_layout_group_section(editor_state& state, sbx::scenes::scene&
 }
 
 auto draw_grid_layout_group_section(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node) -> void {
-  auto is_open = true;
-
-  const auto is_expanded = ImGui::CollapsingHeader(ICON_MDI_VIEW_GRID " Grid Layout Group", &is_open, ImGuiTreeNodeFlags_DefaultOpen);
-
-  if (!is_open) {
-    state.push_command(target, std::make_unique<remove_component_command<sbx::canvas::grid_layout_group>>(node.id(), node.get_component<sbx::canvas::grid_layout_group>(), "Remove Grid Layout Group"));
-    return;
-  }
-
-  if (!is_expanded) {
+  if (!draw_component_header<sbx::canvas::grid_layout_group>(state, target, node, ICON_MDI_VIEW_GRID, "Grid Layout Group")) {
     return;
   }
 
@@ -1331,22 +1169,18 @@ auto draw_grid_layout_group_section(editor_state& state, sbx::scenes::scene& tar
   static auto pending = std::optional<sbx::canvas::grid_layout_group>{};
 
   auto cell_size = std::array<std::float_t, 2u>{group.cell_size.x(), group.cell_size.y()};
-  if (ImGui::DragFloat2("Cell Size", cell_size.data(), 0.5f, 1.0f, 10000.0f)) {
+  if (draw_vector2_control("Cell Size", cell_size, 100.0f, 0.5f, 1.0f, 10000.0f).changed) {
     group.cell_size = sbx::math::vector2{cell_size[0], cell_size[1]};
   }
   bracket_edit(state, target, node, group, pending, "Edit Grid Layout Group");
 
   auto spacing = std::array<std::float_t, 2u>{group.spacing.x(), group.spacing.y()};
-  if (ImGui::DragFloat2("Spacing", spacing.data(), 0.5f, 0.0f, 1000.0f)) {
+  if (draw_vector2_control("Spacing", spacing, 0.0f, 0.5f, 0.0f, 1000.0f).changed) {
     group.spacing = sbx::math::vector2{spacing[0], spacing[1]};
   }
   bracket_edit(state, target, node, group, pending, "Edit Grid Layout Group");
 
-  auto padding = std::array<std::float_t, 4u>{group.padding.x(), group.padding.y(), group.padding.z(), group.padding.w()};
-  if (ImGui::DragFloat4("Padding (L,T,R,B)", padding.data(), 0.5f, 0.0f, 1000.0f)) {
-    group.padding = sbx::math::vector4{padding[0], padding[1], padding[2], padding[3]};
-  }
-  bracket_edit(state, target, node, group, pending, "Edit Grid Layout Group");
+  draw_padding_fields(state, target, node, group, pending, "Edit Grid Layout Group");
 
   auto alignment_index = static_cast<int>(group.child_alignment);
   if (ImGui::Combo("Child Alignment", &alignment_index, layout_alignment_labels.data(), static_cast<int>(layout_alignment_labels.size()))) {
@@ -1382,16 +1216,7 @@ auto draw_grid_layout_group_section(editor_state& state, sbx::scenes::scene& tar
 }
 
 auto draw_ui_mask_section(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node) -> void {
-  auto is_open = true;
-
-  const auto is_expanded = ImGui::CollapsingHeader(ICON_MDI_CROP " UI Mask", &is_open, ImGuiTreeNodeFlags_DefaultOpen);
-
-  if (!is_open) {
-    state.push_command(target, std::make_unique<remove_component_command<sbx::canvas::ui_mask>>(node.id(), node.get_component<sbx::canvas::ui_mask>(), "Remove UI Mask"));
-    return;
-  }
-
-  if (!is_expanded) {
+  if (!draw_component_header<sbx::canvas::ui_mask>(state, target, node, ICON_MDI_CROP, "UI Mask")) {
     return;
   }
 
@@ -1403,16 +1228,7 @@ auto draw_ui_mask_section(editor_state& state, sbx::scenes::scene& target, sbx::
 }
 
 auto draw_ui_toggle_section(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node) -> void {
-  auto is_open = true;
-
-  const auto is_expanded = ImGui::CollapsingHeader(ICON_MDI_TOGGLE_SWITCH " UI Toggle", &is_open, ImGuiTreeNodeFlags_DefaultOpen);
-
-  if (!is_open) {
-    state.push_command(target, std::make_unique<remove_component_command<sbx::canvas::ui_toggle>>(node.id(), node.get_component<sbx::canvas::ui_toggle>(), "Remove UI Toggle"));
-    return;
-  }
-
-  if (!is_expanded) {
+  if (!draw_component_header<sbx::canvas::ui_toggle>(state, target, node, ICON_MDI_TOGGLE_SWITCH, "UI Toggle")) {
     return;
   }
 
@@ -1452,16 +1268,7 @@ auto draw_ui_toggle_section(editor_state& state, sbx::scenes::scene& target, sbx
 static constexpr auto slider_direction_labels = std::array<const char*, 2u>{"Horizontal", "Vertical"};
 
 auto draw_ui_slider_section(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node) -> void {
-  auto is_open = true;
-
-  const auto is_expanded = ImGui::CollapsingHeader(ICON_MDI_TUNE " UI Slider", &is_open, ImGuiTreeNodeFlags_DefaultOpen);
-
-  if (!is_open) {
-    state.push_command(target, std::make_unique<remove_component_command<sbx::canvas::ui_slider>>(node.id(), node.get_component<sbx::canvas::ui_slider>(), "Remove UI Slider"));
-    return;
-  }
-
-  if (!is_expanded) {
+  if (!draw_component_header<sbx::canvas::ui_slider>(state, target, node, ICON_MDI_TUNE, "UI Slider")) {
     return;
   }
 
@@ -1497,16 +1304,7 @@ auto draw_ui_slider_section(editor_state& state, sbx::scenes::scene& target, sbx
 }
 
 auto draw_ui_scrollbar_section(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node) -> void {
-  auto is_open = true;
-
-  const auto is_expanded = ImGui::CollapsingHeader(ICON_MDI_DRAG_HORIZONTAL " UI Scrollbar", &is_open, ImGuiTreeNodeFlags_DefaultOpen);
-
-  if (!is_open) {
-    state.push_command(target, std::make_unique<remove_component_command<sbx::canvas::ui_scrollbar>>(node.id(), node.get_component<sbx::canvas::ui_scrollbar>(), "Remove UI Scrollbar"));
-    return;
-  }
-
-  if (!is_expanded) {
+  if (!draw_component_header<sbx::canvas::ui_scrollbar>(state, target, node, ICON_MDI_DRAG_HORIZONTAL, "UI Scrollbar")) {
     return;
   }
 
@@ -1536,16 +1334,7 @@ auto draw_ui_scrollbar_section(editor_state& state, sbx::scenes::scene& target, 
 }
 
 auto draw_ui_scroll_rect_section(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node) -> void {
-  auto is_open = true;
-
-  const auto is_expanded = ImGui::CollapsingHeader(ICON_MDI_ARROW_ALL " UI Scroll Rect", &is_open, ImGuiTreeNodeFlags_DefaultOpen);
-
-  if (!is_open) {
-    state.push_command(target, std::make_unique<remove_component_command<sbx::canvas::ui_scroll_rect>>(node.id(), node.get_component<sbx::canvas::ui_scroll_rect>(), "Remove UI Scroll Rect"));
-    return;
-  }
-
-  if (!is_expanded) {
+  if (!draw_component_header<sbx::canvas::ui_scroll_rect>(state, target, node, ICON_MDI_ARROW_ALL, "UI Scroll Rect")) {
     return;
   }
 
@@ -1600,7 +1389,7 @@ auto draw_ui_scroll_rect_section(editor_state& state, sbx::scenes::scene& target
   bracket_edit(state, target, node, scroll, pending, "Edit UI Scroll Rect");
 
   auto normalized_position = std::array<std::float_t, 2u>{scroll.normalized_position.x(), scroll.normalized_position.y()};
-  if (ImGui::DragFloat2("Normalized Position", normalized_position.data(), 0.01f, 0.0f, 1.0f)) {
+  if (draw_vector2_control("Normalized Position", normalized_position, 0.0f, 0.01f, 0.0f, 1.0f).changed) {
     scroll.normalized_position = sbx::math::vector2{normalized_position[0], normalized_position[1]};
   }
   bracket_edit(state, target, node, scroll, pending, "Edit UI Scroll Rect");

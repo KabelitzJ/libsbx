@@ -16,7 +16,7 @@ namespace Sbx.Core
   /**
    * A reference to a .material asset, carried across the native boundary as a raw uuid handle via
    * INativeHandle -- same convention as Node, since Sbx.Managed can't reference either type
-   * directly (see Sbx.Managed.INativeHandle's own doc comment). Used as a [ShowInEditor] script
+   * directly (see Sbx.Managed.INativeHandle's own doc comment). Used as an [Inspector] script
    * field type (drag-and-drop/asset-picker assignable, see inspector_script_section.cpp) and with
    * Components.MeshRenderer.SetMaterial to assign it to runtime-built geometry.
    *

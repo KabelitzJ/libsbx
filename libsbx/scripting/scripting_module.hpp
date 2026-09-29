@@ -62,16 +62,22 @@ struct script_runtime_error : public std::runtime_error {
  * Sbx.Managed's Object.SetFieldValue / Marshalling.MarshalReturnValue, and Node's own
  * INativeHandle implementation).
  */
-[[nodiscard]] inline auto script_field_type_of(std::string_view managed_type_full_name) -> std::optional<scenes::script_field_type> {
+[[nodiscard]] inline auto script_field_type_of(const managed::type& managed_type) -> std::optional<scenes::script_field_type> {
+  const auto full_name = std::string{managed_type.get_full_name()};
+  const auto managed_type_full_name = std::string_view{full_name};
+
   if (managed_type_full_name == "System.Single") { return scenes::script_field_type::float32; }
   if (managed_type_full_name == "System.Int32") { return scenes::script_field_type::int32; }
   if (managed_type_full_name == "System.Boolean") { return scenes::script_field_type::boolean; }
   if (managed_type_full_name == "System.String") { return scenes::script_field_type::string; }
+  if (managed_type_full_name == "Sbx.Core.Math.Vector2") { return scenes::script_field_type::vector2; }
   if (managed_type_full_name == "Sbx.Core.Math.Vector3") { return scenes::script_field_type::vector3; }
   if (managed_type_full_name == "Sbx.Core.Node") { return scenes::script_field_type::node; }
   if (managed_type_full_name == "Sbx.Core.Physics.LayerMask") { return scenes::script_field_type::layer_mask; }
   if (managed_type_full_name == "Sbx.Core.Material") { return scenes::script_field_type::material; }
   if (managed_type_full_name == "Sbx.Core.Math.Color") { return scenes::script_field_type::color; }
+  if (managed_type_full_name == "Sbx.Core.Texture2D") { return scenes::script_field_type::texture; }
+  if (!managed_type.get_enum_entries().empty()) { return scenes::script_field_type::enumeration; }
   return std::nullopt;
 }
 

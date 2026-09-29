@@ -11,6 +11,8 @@
 #include <string_view>
 #include <utility>
 
+#include <libsbx/math/vector3.hpp>
+
 namespace sbx::core {
 
 /** @brief How many named layers a project has (0-31) — the same 32-bit budget a @ref sbx::scenes::layer_mask spends one bit per layer on. */
@@ -34,7 +36,7 @@ public:
   inline static constexpr auto file_name = std::string_view{"project.sbxproj"};
 
   /** @brief Bumped whenever the on-disk format changes; written by @ref save, checked by @ref load. */
-  inline static constexpr auto current_format_version = std::uint32_t{2u}; // v2: added layers/layer_collision_matrix
+  inline static constexpr auto current_format_version = std::uint32_t{3u}; // v2: added layers/layer_collision_matrix, v3: added physics/time
 
   project() {
     _layers[0] = "Default";
@@ -148,6 +150,32 @@ public:
     set_bit(_layer_collision_matrix.at(b), a);
   }
 
+  [[nodiscard]] auto gravity() const noexcept -> const math::vector3& {
+    return _gravity;
+  }
+
+  auto set_gravity(const math::vector3& gravity) noexcept -> void {
+    _gravity = gravity;
+  }
+
+  /** @brief Contact solver iterations per physics step -- more is stiffer stacking, at more CPU cost. */
+  [[nodiscard]] auto velocity_iterations() const noexcept -> std::uint32_t {
+    return _velocity_iterations;
+  }
+
+  auto set_velocity_iterations(std::uint32_t iterations) noexcept -> void {
+    _velocity_iterations = iterations;
+  }
+
+  /** @brief Seconds per fixed_update tick (physics, script FixedUpdate) -- see engine::fixed_delta_time. */
+  [[nodiscard]] auto fixed_timestep() const noexcept -> std::float_t {
+    return _fixed_timestep;
+  }
+
+  auto set_fixed_timestep(std::float_t seconds) noexcept -> void {
+    _fixed_timestep = seconds;
+  }
+
 private:
 
   std::filesystem::path _root{};
@@ -159,6 +187,10 @@ private:
 
   std::array<std::string, layer_count> _layers{};
   std::array<std::uint32_t, layer_count> _layer_collision_matrix{};
+
+  math::vector3 _gravity{0.0f, -9.81f, 0.0f};
+  std::uint32_t _velocity_iterations{8u};
+  std::float_t _fixed_timestep{1.0f / 60.0f};
 
 }; // class project
 

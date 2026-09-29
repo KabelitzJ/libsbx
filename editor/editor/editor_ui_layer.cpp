@@ -27,12 +27,15 @@
 #include <editor/panels/navigation_panel.hpp>
 #include <editor/panels/statistics_panel.hpp>
 #include <editor/panels/scene_renderer_panel.hpp>
+#include <editor/panels/project_settings_panel.hpp>
+#include <editor/panels/preferences_panel.hpp>
 
 #include <editor/widgets/layer_fields.hpp>
 
 #include <editor/viewport_window.hpp>
 
 #include <editor/editor_module.hpp>
+#include <editor/node_actions.hpp>
 
 #include <editor/commands/scene_commands.hpp>
 
@@ -73,18 +76,53 @@ editor_ui_layer::editor_ui_layer()
   _create_panels();
 }
 
+auto editor_ui_layer::_handle_shortcuts() -> void {
+  if (ImGui::GetIO().WantTextInput) {
+    return;
+  }
+
+  auto& scene = sbx::core::engine::get_module<sbx::scenes::scenes_module>().active_scene();
+  const auto is_editing = sbx::core::engine::get_module<editor::editor_module>().play_state() == editor::play_state::edit;
+
+  if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_Z)) {
+    _state.undo(scene);
+  } else if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_Y) || ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiMod_Shift | ImGuiKey_Z)) {
+    _state.redo(scene);
+  } else if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_C)) {
+    copy_selection(_state, scene);
+  } else if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_V)) {
+    paste_clipboard(_state, scene);
+  } else if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_D)) {
+    duplicate_selection(_state, scene);
+  } else if (ImGui::IsKeyChordPressed(ImGuiKey_Delete)) {
+    delete_selection(_state, scene);
+  } else if (ImGui::IsKeyChordPressed(ImGuiKey_Escape) && !ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId)) {
+    _state.clear_selection();
+  } else if (is_editing && ImGui::IsKeyChordPressed(ImGuiKey_F)) {
+    focus_selection(_state, scene);
+  } else if (is_editing && ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_S)) {
+    _save();
+  } else if (is_editing && ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiMod_Shift | ImGuiKey_S)) {
+    _open_save_as_dialog();
+  } else if (is_editing && ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_N)) {
+    new_scene();
+  } else if (is_editing && ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_O)) {
+    _open_open_scene_dialog();
+  }
+}
+
+auto editor_ui_layer::_save() -> void {
+  if (_scene_path.empty()) {
+    _open_save_as_dialog();
+  } else {
+    _save_scene(_scene_path);
+  }
+}
+
 auto editor_ui_layer::build() -> void {
   ImGuizmo::BeginFrame();
 
-  if (!ImGui::GetIO().WantTextInput && ImGui::GetIO().KeyCtrl) {
-    auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
-
-    if (ImGui::IsKeyPressed(ImGuiKey_Z, false)) {
-      _state.undo(scenes_module.active_scene());
-    } else if (ImGui::IsKeyPressed(ImGuiKey_Y, false)) {
-      _state.redo(scenes_module.active_scene());
-    }
-  }
+  _handle_shortcuts();
 
   _draw_dockspace();
 
@@ -110,6 +148,14 @@ auto editor_ui_layer::_create_panels() -> void {
   _panels.push_back(std::make_unique<animation_graph_panel>()); // on-demand, not part of the default dock layout -- see its own doc comment
   _panels.push_back(std::make_unique<shader_graph_panel>()); // on-demand, same reasoning as animation_graph_panel above
   _panels.push_back(std::make_unique<statistics_panel>()); // always-open, replaces the old inline FPS-only Stats window
+
+  auto project_settings = std::make_unique<project_settings_panel>();
+  _project_settings_panel = project_settings.get();
+  _panels.push_back(std::move(project_settings)); // on-demand, same reasoning as animation_graph_panel above
+
+  auto preferences = std::make_unique<preferences_panel>();
+  _preferences_panel = preferences.get();
+  _panels.push_back(std::move(preferences)); // on-demand, same reasoning as animation_graph_panel above
 
   auto navigation = std::make_unique<navigation_panel>();
   _navigation_panel = navigation.get();
@@ -200,11 +246,11 @@ auto editor_ui_layer::_draw_dockspace() -> void {
     if (ImGui::BeginMenu("File")) {
       ImGui::BeginDisabled(editor_module.play_state() != editor::play_state::edit);
 
-      if (ImGui::MenuItem(ICON_MDI_FILE_PLUS " New Scene")) {
+      if (ImGui::MenuItem(ICON_MDI_FILE_PLUS " New Scene", "Ctrl+N")) {
         new_scene();
       }
 
-      if (ImGui::MenuItem(ICON_MDI_FOLDER_OPEN " Open Scene...")) {
+      if (ImGui::MenuItem(ICON_MDI_FOLDER_OPEN " Open Scene...", "Ctrl+O")) {
         _open_open_scene_dialog();
       }
 
@@ -236,6 +282,42 @@ auto editor_ui_layer::_draw_dockspace() -> void {
 
       ImGui::EndDisabled();
 
+      ImGui::Separator();
+
+      const auto has_node_selection = _state.selected_node_count() > 0u;
+
+      if (ImGui::MenuItem(ICON_MDI_CONTENT_COPY " Copy", "Ctrl+C", false, has_node_selection)) {
+        copy_selection(_state, scenes_module.active_scene());
+      }
+
+      if (ImGui::MenuItem(ICON_MDI_CONTENT_PASTE " Paste", "Ctrl+V", false, !_state.node_clipboard.empty())) {
+        paste_clipboard(_state, scenes_module.active_scene());
+      }
+
+      if (ImGui::MenuItem(ICON_MDI_CONTENT_DUPLICATE " Duplicate", "Ctrl+D", false, has_node_selection)) {
+        duplicate_selection(_state, scenes_module.active_scene());
+      }
+
+      if (ImGui::MenuItem(ICON_MDI_DELETE " Delete", "Delete", false, has_node_selection)) {
+        delete_selection(_state, scenes_module.active_scene());
+      }
+
+      ImGui::Separator();
+
+      if (ImGui::MenuItem(ICON_MDI_CROSSHAIRS_GPS " Focus Selection", "F", false, has_node_selection && editor_module.play_state() == editor::play_state::edit)) {
+        focus_selection(_state, scenes_module.active_scene());
+      }
+
+      ImGui::Separator();
+
+      if (ImGui::MenuItem(project_settings_panel::window_name)) {
+        _project_settings_panel->is_open = true;
+      }
+
+      if (ImGui::MenuItem(preferences_panel::window_name)) {
+        _preferences_panel->is_open = true;
+      }
+
       ImGui::EndMenu();
     }
 
@@ -252,15 +334,11 @@ auto editor_ui_layer::_draw_dockspace() -> void {
 
       ImGui::BeginDisabled(editor_module.play_state() != editor::play_state::edit);
 
-      if (ImGui::MenuItem(ICON_MDI_CONTENT_SAVE " Save")) {
-        if (_scene_path.empty()) {
-          _open_save_as_dialog();
-        } else {
-          _save_scene(_scene_path);
-        }
+      if (ImGui::MenuItem(ICON_MDI_CONTENT_SAVE " Save", "Ctrl+S")) {
+        _save();
       }
 
-      if (ImGui::MenuItem(ICON_MDI_CONTENT_SAVE_EDIT " Save As...")) {
+      if (ImGui::MenuItem(ICON_MDI_CONTENT_SAVE_EDIT " Save As...", "Ctrl+Shift+S")) {
         _open_save_as_dialog();
       }
 
@@ -334,7 +412,6 @@ auto editor_ui_layer::_draw_dockspace() -> void {
   _draw_save_as_dialog();
   _draw_open_scene_dialog();
   _draw_unsaved_changes_dialog();
-  _draw_edit_layers_popup();
 
   ImGui::End();
 }
@@ -442,169 +519,6 @@ auto editor_ui_layer::_draw_toolbar() -> void {
   ImGui::EndChild();
 
   ImGui::PopStyleVar(2);
-}
-
-auto editor_ui_layer::_draw_edit_layers_popup() -> void {
-  if (_state.open_edit_layers_popup_request) {
-    ImGui::OpenPopup("Edit Layers");
-    _state.open_edit_layers_popup_request = false;
-  }
-
-  // Fixed size (still resizable, just not AlwaysAutoResize) -- a scrollable list on the left and a
-  // matrix that can grow wide on the right both want a stable frame to scroll inside of, not a
-  // window that keeps refitting itself to whatever's currently visible.
-  ImGui::SetNextWindowSize(ImVec2{760.0f, 520.0f}, ImGuiCond_Appearing);
-
-  if (!ImGui::BeginPopupModal("Edit Layers", nullptr, ImGuiWindowFlags_NoSavedSettings)) {
-    return;
-  }
-
-  auto& project = sbx::core::engine::project();
-
-  if (ImGui::IsWindowAppearing()) {
-    // Resync display order from whatever's actually named right now -- see _edit_layer_rows'
-    // doc comment for why this only happens on open, never per-frame.
-    _edit_layer_rows.clear();
-
-    for (auto index = std::size_t{0u}; index < sbx::core::layer_count; ++index) {
-      if (!project.layers()[index].empty()) {
-        _edit_layer_rows.push_back(static_cast<std::uint8_t>(index));
-      }
-    }
-  }
-
-  const auto content_region = ImGui::GetContentRegionAvail();
-  const auto list_width = content_region.x * 0.25f;
-  const auto body_height = content_region.y - ImGui::GetFrameHeightWithSpacing();
-
-  if (ImGui::BeginChild("##layer_list", ImVec2{list_width, body_height}, true)) {
-    ImGui::TextUnformatted("Layers");
-    ImGui::Separator();
-
-    auto pending_remove = std::optional<std::uint8_t>{};
-
-    for (const auto index : _edit_layer_rows) {
-      ImGui::PushID(static_cast<int>(index));
-
-      auto buffer = std::array<char, 64u>{};
-      const auto& name = project.layers()[index];
-      std::strncpy(buffer.data(), name.c_str(), buffer.size() - 1u);
-      buffer[buffer.size() - 1u] = '\0';
-
-      ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - ImGui::GetFrameHeight() - ImGui::GetStyle().ItemSpacing.x);
-
-      // Deliberately not gated on non-empty: an in-progress rename (select-all, retype) passes
-      // through an empty string, and that must not delete the row out from under the user -- only
-      // the "x" button (below) does that.
-      if (ImGui::InputText("##name", buffer.data(), buffer.size())) {
-        project.set_layer_name(static_cast<std::uint8_t>(index), std::string{buffer.data()});
-        project.save();
-      }
-
-      ImGui::SameLine();
-
-      if (ImGui::Button(ICON_MDI_CLOSE)) {
-        pending_remove = static_cast<std::uint8_t>(index);
-      }
-
-      ImGui::PopID();
-    }
-
-    if (pending_remove) {
-      project.set_layer_name(*pending_remove, std::string{});
-      project.save();
-      std::erase(_edit_layer_rows, *pending_remove);
-    }
-
-    ImGui::Spacing();
-
-    const auto has_free_slot = _edit_layer_rows.size() < sbx::core::layer_count;
-
-    ImGui::BeginDisabled(!has_free_slot);
-
-    if (ImGui::Button(ICON_MDI_PLUS " Add Layer", ImVec2{-1.0f, 0.0f})) {
-      for (auto index = std::size_t{0u}; index < sbx::core::layer_count; ++index) {
-        if (project.layers()[index].empty()) {
-          project.set_layer_name(static_cast<std::uint8_t>(index), "New Layer");
-          project.save();
-          _edit_layer_rows.push_back(static_cast<std::uint8_t>(index)); // always appended -- always the bottom row, regardless of which numeric slot it reused
-          break;
-        }
-      }
-    }
-
-    ImGui::EndDisabled();
-  }
-
-  ImGui::EndChild();
-
-  ImGui::SameLine();
-
-  if (ImGui::BeginChild("##layer_matrix_pane", ImVec2{0.0f, body_height}, true)) {
-    ImGui::TextUnformatted("Layer Collision Matrix");
-    ImGui::TextDisabled("Unchecking a cell stops those two layers from physically colliding.");
-    ImGui::Separator();
-
-    auto named_indices = std::vector<std::uint8_t>{};
-
-    for (auto index = std::size_t{0u}; index < sbx::core::layer_count; ++index) {
-      if (!project.layers()[index].empty()) {
-        named_indices.push_back(static_cast<std::uint8_t>(index));
-      }
-    }
-
-    if (named_indices.empty()) {
-      ImGui::TextDisabled("No named layers yet -- add one on the left.");
-    } else {
-      const auto column_count = static_cast<int>(named_indices.size()) + 1;
-      const auto table_flags = ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollX | ImGuiTableFlags_ScrollY;
-
-      if (ImGui::BeginTable("##layer_matrix", column_count, table_flags, ImGui::GetContentRegionAvail())) {
-        ImGui::TableSetupScrollFreeze(1, 1);
-        ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthFixed, 110.0f);
-
-        for (const auto column_layer : named_indices) {
-          ImGui::TableSetupColumn(project.layer_name(column_layer).c_str(), ImGuiTableColumnFlags_WidthFixed, 70.0f);
-        }
-
-        ImGui::TableHeadersRow();
-
-        for (const auto row_layer : named_indices) {
-          ImGui::TableNextRow();
-          ImGui::TableSetColumnIndex(0);
-          ImGui::TextUnformatted(project.layer_name(row_layer).c_str());
-
-          auto column_slot = 1;
-
-          for (const auto column_layer : named_indices) {
-            ImGui::TableSetColumnIndex(column_slot);
-            ++column_slot;
-
-            ImGui::PushID(static_cast<int>(row_layer) * static_cast<int>(sbx::core::layer_count) + static_cast<int>(column_layer));
-
-            auto collide = project.layers_collide(row_layer, column_layer);
-
-            if (ImGui::Checkbox("##cell", &collide)) {
-              project.set_layers_collide(row_layer, column_layer, collide);
-              project.save();
-            }
-
-            ImGui::PopID();
-          }
-        }
-
-        ImGui::EndTable();
-      }
-    }
-  }
-
-  ImGui::EndChild();
-
-  if (ImGui::Button("Close")) {
-    ImGui::CloseCurrentPopup();
-  }
-
-  ImGui::EndPopup();
 }
 
 } // namespace editor

@@ -23,6 +23,7 @@ struct backend_functions {
   using get_assembly_types_fn = void(*)(std::int32_t, type_id*, std::int32_t*);
 	using get_type_id_fn = void(*)(string, type_id*);
 	using get_full_type_name_fn = string(*)(type_id);
+	using get_enum_entries_fn = string(*)(type_id);
 	using get_assembly_qualified_name_fn = string(*)(type_id);
 	using get_base_type_fn = void(*)(type_id, type_id*);
 	using get_type_size_fn = std::int32_t(*)(type_id);
@@ -89,6 +90,7 @@ struct backend_functions {
   get_assembly_types_fn get_assembly_types{nullptr};
   get_type_id_fn get_type_id{nullptr};
   get_full_type_name_fn get_full_type_name{nullptr};
+  get_enum_entries_fn get_enum_entries{nullptr};
   get_assembly_qualified_name_fn get_assembly_qualified_name{nullptr};
   get_base_type_fn get_base_type{nullptr};
   get_type_size_fn get_type_size{nullptr};

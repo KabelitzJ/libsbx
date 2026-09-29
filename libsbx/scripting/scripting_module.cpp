@@ -510,7 +510,7 @@ auto scripting_module::seed_missing_field_defaults(scenes::node& node, scenes::s
   // every Inspector draw of a script section (see draw_script_field_inspector), not just attach.
   const auto has_missing = std::ranges::any_of(type.get_fields(), [&](auto& field) {
     return field.get_accessibility() == managed::type_accessibility::public_access
-        && script_field_type_of(std::string{field.get_type().get_full_name()})
+        && script_field_type_of(field.get_type())
         && !already_seeded(std::string{field.get_name()});
   });
 
@@ -534,7 +534,7 @@ auto scripting_module::seed_missing_field_defaults(scenes::node& node, scenes::s
       continue;
     }
 
-    const auto field_type = script_field_type_of(std::string{field.get_type().get_full_name()});
+    const auto field_type = script_field_type_of(field.get_type());
 
     if (!field_type) {
       continue;
@@ -553,11 +553,14 @@ auto scripting_module::seed_missing_field_defaults(scenes::node& node, scenes::s
       case scenes::script_field_type::int32:   default_value.int_value = scratch.get_field_value<std::int32_t>(field_name); break;
       case scenes::script_field_type::boolean: default_value.bool_value = scratch.get_field_value<bool>(field_name); break;
       case scenes::script_field_type::string:  default_value.string_value = scratch.get_field_value<std::string>(field_name); break;
+      case scenes::script_field_type::vector2: default_value.vector2_value = scratch.get_field_value<math::vector2>(field_name); break;
       case scenes::script_field_type::vector3: default_value.vector3_value = scratch.get_field_value<math::vector3>(field_name); break;
       case scenes::script_field_type::node:    default_value.node_value = math::uuid::from_value(scratch.get_field_value<std::uint64_t>(field_name)); break;
       case scenes::script_field_type::layer_mask: default_value.layer_mask_value = scratch.get_field_value<std::uint32_t>(field_name); break;
       case scenes::script_field_type::material: default_value.material_value = math::uuid::from_value(scratch.get_field_value<std::uint64_t>(field_name)); break;
       case scenes::script_field_type::color: default_value.color_value = scratch.get_field_value<math::color>(field_name); break;
+      case scenes::script_field_type::enumeration: default_value.int_value = scratch.get_field_value<std::int32_t>(field_name); break;
+      case scenes::script_field_type::texture: default_value.texture_value = math::uuid::from_value(scratch.get_field_value<std::uint64_t>(field_name)); break;
     }
 
     entry.field_overrides.push_back(std::move(default_value));
@@ -601,6 +604,7 @@ auto scripting_module::_apply_field_overrides(managed::object& instance, const s
       case scenes::script_field_type::int32:   instance.set_field_value(field.name, field.int_value); break;
       case scenes::script_field_type::boolean: instance.set_field_value(field.name, field.bool_value); break;
       case scenes::script_field_type::string:  instance.set_field_value(field.name, field.string_value); break;
+      case scenes::script_field_type::vector2: instance.set_field_value(field.name, field.vector2_value); break;
       case scenes::script_field_type::vector3: instance.set_field_value(field.name, field.vector3_value); break;
       // A Sbx.Core.Node-typed field isn't a blittable value the generic marshaling path can copy
       // (it's a managed reference) -- both directions cross as a raw uuid instead, via Node's own
@@ -612,6 +616,9 @@ auto scripting_module::_apply_field_overrides(managed::object& instance, const s
       case scenes::script_field_type::material: instance.set_field_value(field.name, field.material_value.value()); break;
       // A Sbx.Core.Math.Color field is a blittable struct (four sequential floats), same direct path as vector3.
       case scenes::script_field_type::color: instance.set_field_value(field.name, field.color_value); break;
+      // ponytail: enums cross as int32 -- a long-backed enum would read past it on the C# side; widen if one ever shows up.
+      case scenes::script_field_type::enumeration: instance.set_field_value(field.name, field.int_value); break;
+      case scenes::script_field_type::texture: instance.set_field_value(field.name, field.texture_value.value()); break;
     }
   }
 }

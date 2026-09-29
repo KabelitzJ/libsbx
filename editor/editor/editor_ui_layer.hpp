@@ -20,7 +20,11 @@
 
 #include <editor/editor_state.hpp>
 #include <editor/panels/editor_panel.hpp>
+#include <libsbx/memory/observer_ptr.hpp>
+
 #include <editor/panels/navigation_panel.hpp>
+#include <editor/panels/preferences_panel.hpp>
+#include <editor/panels/project_settings_panel.hpp>
 #include <editor/panels/scene_renderer_panel.hpp>
 
 namespace editor {
@@ -88,6 +92,12 @@ private:
 
   auto _draw_dockspace() -> void;
 
+  /** @brief Editor-wide keyboard shortcuts (Ctrl+Z/Y/C/V/D/S/N/O, Delete, Escape, F); skipped while a text field has focus. */
+  auto _handle_shortcuts() -> void;
+
+  /** @brief Save to the current scene path, or Save As if the scene has never been saved. */
+  auto _save() -> void;
+
   /** @brief The centered Play/Pause/Stop toolbar strip drawn directly under the main menu bar. */
   auto _draw_toolbar() -> void;
 
@@ -120,9 +130,6 @@ private:
 
   auto _draw_open_scene_dialog() -> void;
 
-  /** @brief Opens (from _state.open_edit_layers_popup_request) and draws the project-wide "Edit Layers..." popup: the 32 layer names plus the Layer Collision Matrix among the currently-named ones. Every edit calls project.save() immediately -- no dirty-tracking, no separate Apply. */
-  auto _draw_edit_layers_popup() -> void;
-
   // Viewport panel's sampler for ImGui::Image()-sampling final_image — see
   // ui_module::texture_id(). Not a backend concern (that lives in ui_system), just how this one
   // image should be filtered.
@@ -133,19 +140,16 @@ private:
   editor_state _state{};
   std::vector<std::unique_ptr<editor_panel>> _panels{};
 
-  // Which layer indices _draw_edit_layers_popup shows a row for, in display order -- resynced from
-  // core::project::layers() whenever the popup (re)opens, then mutated only by that popup's own Add
-  // (appended -- always at the bottom) and the row's own "x" (erased). Deliberately NOT recomputed
-  // from project state every frame: renaming a layer to a transient empty string while retyping
-  // must not make its own row disappear mid-edit.
-  std::vector<std::uint8_t> _edit_layer_rows{};
-
   // Non-owning -- _panels owns it. Kept separately so the View menu can toggle its is_open flag
   // without a dynamic_cast over every registered panel.
   navigation_panel* _navigation_panel{nullptr};
 
   // Same reasoning as _navigation_panel above.
   scene_renderer_panel* _scene_renderer_panel{nullptr};
+
+  // Same reasoning as _navigation_panel above -- the Edit menu opens these.
+  sbx::memory::observer_ptr<project_settings_panel> _project_settings_panel{};
+  sbx::memory::observer_ptr<preferences_panel> _preferences_panel{};
 
   // Scene save/load path (relative to the assets directory) — empty until the first save, or
   // until application.cpp calls set_scene_path() after its own initial load.

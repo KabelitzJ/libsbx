@@ -100,8 +100,50 @@ auto inspector_panel::_draw_transform_section(editor_state& state, sbx::scenes::
 
   auto& transform = node.transform();
 
+  static auto clipboard = std::optional<sbx::scenes::local_transform>{};
+
+  if (ImGui::BeginPopupContextItem("##transform_context")) {
+    const auto push_transform = [&](const sbx::scenes::local_transform& after, const char* label) {
+      state.push_command(target, std::make_unique<modify_component_command<sbx::scenes::local_transform>>(node.id(), transform, after, label));
+    };
+
+    if (ImGui::MenuItem(ICON_MDI_RESTORE " Reset")) {
+      push_transform(sbx::scenes::local_transform{}, "Reset Transform");
+    }
+
+    if (ImGui::MenuItem("Reset Position")) {
+      auto after = transform;
+      after.position = sbx::math::vector3{0.0f, 0.0f, 0.0f};
+      push_transform(after, "Reset Position");
+    }
+
+    if (ImGui::MenuItem("Reset Rotation")) {
+      auto after = transform;
+      after.rotation = sbx::math::quaternion::identity;
+      push_transform(after, "Reset Rotation");
+    }
+
+    if (ImGui::MenuItem("Reset Scale")) {
+      auto after = transform;
+      after.scale = sbx::math::vector3{1.0f, 1.0f, 1.0f};
+      push_transform(after, "Reset Scale");
+    }
+
+    ImGui::Separator();
+
+    if (ImGui::MenuItem(ICON_MDI_CONTENT_COPY " Copy Values")) {
+      clipboard = transform;
+    }
+
+    if (ImGui::MenuItem(ICON_MDI_CONTENT_PASTE " Paste Values", nullptr, false, clipboard.has_value())) {
+      push_transform(*clipboard, "Paste Transform");
+    }
+
+    ImGui::EndPopup();
+  }
+
   // started captures the pre-mutation snapshot (must run before this frame's change, if any, is
-  // applied below — the same frame can both start and finish a drag, via the reset button).
+  // applied below — the same frame can both start and finish a drag, via the Reset context-menu item).
   // committed pushes it once the drag (or reset click) is done.
   const auto capture_before = [&](const vector3_edit_result& result) {
     if (result.started && !_pending_transform_before) {
@@ -189,7 +231,9 @@ auto inspector_panel::_draw_node_properties(editor_state& state, sbx::scenes::sc
   for (const auto& entry : component_entries()) {
     if (entry.has(node)) {
       section_gap();
+      ImGui::PushID(entry.name);
       entry.draw(state, target, node, assets_module);
+      ImGui::PopID();
     }
   }
 
@@ -428,6 +472,10 @@ auto inspector_panel::draw(editor_state& state) -> void {
   ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2{6.0f, 4.0f});
   ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2{8.0f, 6.0f});
 
+  // Fields fill up to a shared label column (40% of the panel) instead of ImGui's default 65% item
+  // width, so long labels ("Occlusion Strength", "Background Intensity") don't clip at the edge.
+  ImGui::PushItemWidth(-ImGui::GetContentRegionAvail().x * 0.4f);
+
   auto& assets_module = sbx::core::engine::get_module<sbx::assets::assets_module>();
 
   if (std::holds_alternative<node_selection>(state.current_selection)) {
@@ -454,6 +502,7 @@ auto inspector_panel::draw(editor_state& state) -> void {
     ImGui::TextDisabled("Nothing selected.");
   }
 
+  ImGui::PopItemWidth();
   ImGui::PopStyleVar(2); // FramePadding, ItemSpacing
 
   ImGui::End();

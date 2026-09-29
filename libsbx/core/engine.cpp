@@ -35,7 +35,7 @@ auto engine::delta_time() -> units::seconds {
 }
 
 auto engine::fixed_delta_time() -> units::seconds {
-  return units::seconds{1.0f / 60.0f};
+  return units::seconds{project().fixed_timestep()};
 }
 
 auto engine::time() -> units::seconds {

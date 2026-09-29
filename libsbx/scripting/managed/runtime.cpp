@@ -389,6 +389,7 @@ auto runtime::load_functions() -> void {
   detail::backend.get_assembly_types = load_managed_function_ptr<detail::backend_functions::get_assembly_types_fn>(SBX_SCRIPTING_STR("Sbx.Managed.TypeInterface, Sbx.Managed"), SBX_SCRIPTING_STR("GetAssemblyTypes"));
   detail::backend.get_type_id = load_managed_function_ptr<detail::backend_functions::get_type_id_fn>(SBX_SCRIPTING_STR("Sbx.Managed.TypeInterface, Sbx.Managed"), SBX_SCRIPTING_STR("GetTypeId"));
   detail::backend.get_full_type_name = load_managed_function_ptr<detail::backend_functions::get_full_type_name_fn>(SBX_SCRIPTING_STR("Sbx.Managed.TypeInterface, Sbx.Managed"), SBX_SCRIPTING_STR("GetFullTypeName"));
+  detail::backend.get_enum_entries = load_managed_function_ptr<detail::backend_functions::get_enum_entries_fn>(SBX_SCRIPTING_STR("Sbx.Managed.TypeInterface, Sbx.Managed"), SBX_SCRIPTING_STR("GetEnumEntries"));
   detail::backend.get_assembly_qualified_name = load_managed_function_ptr<detail::backend_functions::get_assembly_qualified_name_fn>(SBX_SCRIPTING_STR("Sbx.Managed.TypeInterface, Sbx.Managed"), SBX_SCRIPTING_STR("GetAssemblyQualifiedName"));
   detail::backend.get_base_type = load_managed_function_ptr<detail::backend_functions::get_base_type_fn>(SBX_SCRIPTING_STR("Sbx.Managed.TypeInterface, Sbx.Managed"), SBX_SCRIPTING_STR("GetBaseType"));
   detail::backend.get_type_size = load_managed_function_ptr<detail::backend_functions::get_type_size_fn>(SBX_SCRIPTING_STR("Sbx.Managed.TypeInterface, Sbx.Managed"), SBX_SCRIPTING_STR("GetTypeSize"));

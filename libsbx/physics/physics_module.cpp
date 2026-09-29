@@ -474,7 +474,9 @@ auto physics_module::fixed_update() -> void {
   _narrowphase(scene);
   _warm_start_manifolds();
 
-  integrate_forces(scene, _gravity, dt);
+  const auto& project = core::engine::project();
+
+  integrate_forces(scene, project.gravity(), dt);
 
   // Triggers are pushed to the back (stable, so solid-vs-solid relative order is otherwise
   // untouched) and excluded from both solver calls below via the span -- they still sit in
@@ -485,7 +487,7 @@ auto physics_module::fixed_update() -> void {
   const auto solid_manifolds = std::span<contact_manifold>{_manifolds.data(), solid_count};
 
   auto constraints = prepare_velocity_constraints(solid_manifolds);
-  solve_velocity_constraints(constraints, _velocity_iterations);
+  solve_velocity_constraints(constraints, project.velocity_iterations());
   store_impulses(constraints);
 
   integrate_velocities(scene, dt);

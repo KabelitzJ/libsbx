@@ -13,6 +13,8 @@
 #include <memory>
 #include <string>
 
+#include <yaml-cpp/yaml.h>
+
 #include <libsbx/math/uuid.hpp>
 
 #include <libsbx/scenes/node.hpp>
@@ -96,6 +98,10 @@ enum class gizmo_mode {
 struct editor_state {
 
   selection current_selection{empty_selection{}};
+
+  // Ctrl+C'd subtrees (serialize_subtree snapshots, original ids) -- see node_actions.hpp.
+  std::vector<YAML::Node> node_clipboard{};
+
   gizmo_operation current_gizmo_operation{gizmo_operation::translate};
   gizmo_mode current_gizmo_mode{gizmo_mode::world};
 
@@ -183,12 +189,12 @@ struct editor_state {
 
   std::optional<scene_edit_request> open_scene_request{};
 
-  /** @brief One-shot "open the Edit Layers... popup" request -- fired from the node Layer dropdown or a LayerMask field's popup, consumed by editor_ui_layer once it draws the popup. */
-  auto request_open_edit_layers_popup() -> void {
-    open_edit_layers_popup_request = true;
+  /** @brief One-shot "open Project Settings on its Layers tab" request -- fired from the node Layer dropdown's or a LayerMask field's "Edit Layers...", consumed by project_settings_panel. */
+  auto request_open_layer_settings() -> void {
+    open_layer_settings_request = true;
   }
 
-  bool open_edit_layers_popup_request{false};
+  bool open_layer_settings_request{false};
 
   // The scene-graph undo/redo history, shared across panels like current_selection. Prefer the
   // pass-throughs below over reaching into this directly.

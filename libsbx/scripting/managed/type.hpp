@@ -7,6 +7,7 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include <libsbx/scripting/managed/core.hpp>
@@ -48,6 +49,9 @@ class type {
 public:
 
   auto get_full_name() const -> string;
+
+  /** @brief Every enumerator's name and value, in declaration order -- empty if this isn't an enum type. */
+  auto get_enum_entries() const -> std::vector<std::pair<std::string, std::int64_t>>;
   
   auto get_base_type() -> type&;
 

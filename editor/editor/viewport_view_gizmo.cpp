@@ -21,6 +21,8 @@
 #include <editor/editor_module.hpp>
 #include <editor/viewport_camera.hpp>
 
+#include <editor/editor_preferences.hpp>
+
 namespace editor {
 
 struct axis_gizmo_handle {
@@ -108,10 +110,10 @@ auto draw_view_gizmo(const ImVec2& viewport_origin, const ImVec2& viewport_size)
     const char* label;
   }; // struct axis_definition
 
-  static constexpr auto axes = std::array<axis_definition, 3u>{
-    axis_definition{sbx::math::vector3{1.0f, 0.0f, 0.0f}, IM_COL32(219, 61, 61, 255), "X"},
-    axis_definition{sbx::math::vector3{0.0f, 1.0f, 0.0f}, IM_COL32(90, 191, 90, 255), "Y"},
-    axis_definition{sbx::math::vector3{0.0f, 0.0f, 1.0f}, IM_COL32(64, 120, 219, 255), "Z"}
+  const auto axes = std::array<axis_definition, 3u>{
+    axis_definition{sbx::math::vector3{1.0f, 0.0f, 0.0f}, axis_colors()[0u], "X"},
+    axis_definition{sbx::math::vector3{0.0f, 1.0f, 0.0f}, axis_colors()[1u], "Y"},
+    axis_definition{sbx::math::vector3{0.0f, 0.0f, 1.0f}, axis_colors()[2u], "Z"}
   };
 
   auto handles = std::array<axis_gizmo_handle, 6u>{};
@@ -178,7 +180,7 @@ auto draw_view_gizmo(const ImVec2& viewport_origin, const ImVec2& viewport_size)
       draw_list->AddCircleFilled(handle.position, handle_size, fill_color);
 
       const auto text_size = font->CalcTextSizeA(label_size, FLT_MAX, 0.0f, handle.label);
-      draw_list->AddText(font, label_size, ImVec2{handle.position.x - text_size.x * 0.5f, handle.position.y - text_size.y * 0.5f}, IM_COL32(20, 20, 20, 255), handle.label);
+      draw_list->AddText(font, label_size, ImVec2{handle.position.x - text_size.x * 0.5f, handle.position.y - text_size.y * 0.5f}, hovered ? IM_COL32(20, 20, 20, 255) : IM_COL32(255, 255, 255, 255), handle.label);
     } else {
       draw_list->AddCircle(handle.position, handle_size, fill_color, 0, 1.5f);
     }

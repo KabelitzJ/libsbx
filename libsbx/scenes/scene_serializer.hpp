@@ -42,6 +42,13 @@ public:
   /** @brief Recreates a serialize_subtree() snapshot under target._root; caller repositions it (see scene::insert_child). Returns the recreated root. */
   static auto deserialize_subtree(scene& target, const YAML::Node& snapshot) -> node;
 
+  /**
+   * @brief Deep copy of a serialize_subtree() snapshot with a fresh id for every node, and every reference between nodes
+   * inside it (parent, canvas camera, toggle group, scroll rect content, script Node fields) remapped to match. References to
+   * nodes outside the subtree and prefab member ids are left as-is. Backs the editor's duplicate and paste.
+   */
+  [[nodiscard]] static auto with_fresh_ids(const YAML::Node& snapshot) -> YAML::Node;
+
   /** @brief serialize_subtree(source, subtree_root) wrapped straight into a new, unsaved prefab asset. The editor's "Create Prefab..." entry point (the caller still needs assets_module::save_prefab to persist it). */
   [[nodiscard]] static auto create_prefab_from_node(scene& source, node subtree_root, std::string name) -> assets::prefab_handle;
 

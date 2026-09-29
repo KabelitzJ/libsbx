@@ -23,6 +23,7 @@
 #include <libsbx/render/ui/ui_module.hpp>
 
 #include <editor/editor_camera.hpp>
+#include <editor/editor_preferences.hpp>
 #include <editor/editor_ui_layer.hpp>
 #include <editor/play_mode_controller.hpp>
 #include <editor/viewport_camera.hpp>
@@ -98,6 +99,15 @@ public:
     return _editor_camera;
   }
 
+  [[nodiscard]] auto preferences() noexcept -> editor_preferences& {
+    return _preferences;
+  }
+
+  /** @brief Writes preferences() to disk -- Edit > Preferences calls it after every change. */
+  auto save_preferences() const -> void {
+    _preferences.save(_preferences_path());
+  }
+
   /**
    * @brief The world matrix + camera params the viewport should currently render/pick/gizmo
    * through: the editor camera while play_state()==edit, otherwise the scene's active camera.
@@ -111,8 +121,11 @@ private:
 
   [[nodiscard]] auto _camera_state_path() const -> std::filesystem::path;
 
+  [[nodiscard]] auto _preferences_path() const -> std::filesystem::path;
+
   std::string _ini_file;
   editor::editor_camera _editor_camera;
+  editor_preferences _preferences;
   editor_ui_layer _ui_layer{};
   play_mode_controller _play_mode{};
 

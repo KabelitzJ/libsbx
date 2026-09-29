@@ -188,6 +188,30 @@ namespace Sbx.Managed
       }
     }
 
+    // One "Name=Value" line per enumerator (value as its underlying integer), or null if InType isn't an enum -- lets the
+    // editor draw an enum script field as a dropdown without a native-side array marshaling path.
+    [UnmanagedCallersOnly]
+    internal static unsafe NativeString GetEnumEntries(int InType)
+    {
+      try
+      {
+        if (!_cachedTypes.TryGetValue(InType, out var type) || !type.IsEnum)
+          return NativeString.Null();
+
+        var entries = new List<string>();
+
+        foreach (var value in Enum.GetValues(type))
+          entries.Add($"{Enum.GetName(type, value)}={Convert.ToInt64(value)}");
+
+        return string.Join("\n", entries);
+      }
+      catch (Exception e)
+      {
+        HandleException(e);
+        return NativeString.Null();
+      }
+    }
+
     [UnmanagedCallersOnly]
     internal static unsafe NativeString GetAssemblyQualifiedName(int InType)
     {

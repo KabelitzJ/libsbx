@@ -80,6 +80,8 @@ public:
 
 private:
 
+  auto _sync_angles_from_rotation() -> void;
+
   sbx::scenes::local_transform _transform{};
   sbx::scenes::camera _params{};
 

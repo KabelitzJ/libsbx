@@ -8,6 +8,7 @@
 #include <string>
 
 #include <libsbx/math/uuid.hpp>
+#include <libsbx/math/vector3.hpp>
 
 #include <libsbx/scenes/scene.hpp>
 
@@ -28,7 +29,7 @@ auto unique_prefab_relative_path(const std::string& tag) -> std::filesystem::pat
  * already-open ImGui::BeginDragDropTarget()/EndDragDropTarget() block, same convention as the plain
  * AcceptDragDropPayload(node_drag_drop_payload_type, ...) calls right next to each call site.
  */
-auto try_instantiate_prefab_drop(editor_state& state, sbx::scenes::scene& scene, std::optional<sbx::math::uuid> parent_id) -> void;
+auto try_instantiate_prefab_drop(editor_state& state, sbx::scenes::scene& scene, std::optional<sbx::math::uuid> parent_id, std::optional<sbx::math::vector3> position = std::nullopt) -> void;
 
 } // namespace editor
 

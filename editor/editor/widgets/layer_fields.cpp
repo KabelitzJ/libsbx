@@ -3,6 +3,7 @@
 #include <editor/widgets/layer_fields.hpp>
 
 #include <cstddef>
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -12,6 +13,8 @@
 
 #include <libsbx/core/engine.hpp>
 #include <libsbx/core/project.hpp>
+
+#include <editor/widgets/property_row.hpp>
 
 namespace editor {
 
@@ -46,7 +49,7 @@ auto draw_layer_combo(editor_state& state, const char* label, std::uint8_t& laye
     ImGui::Separator();
 
     if (ImGui::Selectable("Edit Layers...")) {
-      state.request_open_edit_layers_popup();
+      state.request_open_layer_settings();
     }
 
     ImGui::EndCombo();
@@ -97,12 +100,10 @@ auto draw_layer_mask_field(editor_state& state, const char* label, sbx::scenes::
   }();
 
   ImGui::PushID(label);
-  ImGui::AlignTextToFramePadding();
-  ImGui::TextUnformatted(label);
-  ImGui::SameLine(140.0f);
-  ImGui::Button(preview.c_str(), ImVec2{-1.0f, 0.0f});
 
-  if (ImGui::IsItemClicked()) {
+  const auto clicked = draw_property_row(label, [&] { return ImGui::Button(preview.c_str(), ImVec2{ImGui::CalcItemWidth(), 0.0f}); });
+
+  if (clicked) {
     ImGui::OpenPopup("##layer_mask_popup");
   }
 
@@ -128,6 +129,8 @@ auto draw_layer_mask_field(editor_state& state, const char* label, sbx::scenes::
 
       auto is_set = mask.test(static_cast<std::uint8_t>(index));
 
+      ImGui::PushID(static_cast<std::int32_t>(index));
+
       if (ImGui::Checkbox(name.c_str(), &is_set)) {
         if (is_set) {
           mask.set(static_cast<std::uint8_t>(index));
@@ -137,12 +140,14 @@ auto draw_layer_mask_field(editor_state& state, const char* label, sbx::scenes::
 
         changed = true;
       }
+
+      ImGui::PopID();
     }
 
     ImGui::Separator();
 
     if (ImGui::Selectable("Edit Layers...")) {
-      state.request_open_edit_layers_popup();
+      state.request_open_layer_settings();
     }
 
     ImGui::EndPopup();

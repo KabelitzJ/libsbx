@@ -5,6 +5,7 @@
 
 #include <array>
 #include <cstddef>
+#include <cstdint>
 #include <memory>
 #include <optional>
 
@@ -40,26 +41,32 @@ auto bracket_edit(editor_state& state, sbx::scenes::scene& target, const sbx::sc
   }
 }
 
-// changed: any axis changed this frame. started/committed: whether a drag (or a same-frame reset
-// button click, which is its own complete started+committed gesture) began/finished this frame --
+// changed: any axis changed this frame. started/committed: whether a drag (or a same-frame "Reset"
+// context-menu click, which is its own complete started+committed gesture) began/finished this frame --
 // callers use these to bracket the whole row into one undo entry instead of one per frame.
-struct vector3_edit_result {
+struct vector_edit_result {
   bool changed{false};
   bool started{false};
   bool committed{false};
-}; // struct vector3_edit_result
+}; // struct vector_edit_result
 
-/** @brief Color-coded X/Y/Z row: click an axis button to reset it to reset_value, followed by its drag field. */
-auto draw_vector3_control(const char* label, std::array<std::float_t, 3u>& values, std::float_t reset_value, std::float_t speed) -> vector3_edit_result;
+using vector3_edit_result = vector_edit_result;
+using vector2_edit_result = vector_edit_result;
 
-struct vector2_edit_result {
-  bool changed{false};
-  bool started{false};
-  bool committed{false};
-}; // struct vector2_edit_result
+/** @brief X/Y/Z drag row with axis_colors markers (same as draw_color_edit); right-click resets every axis to reset_value. min >= max means unclamped. */
+auto draw_vector3_control(const char* label, std::array<std::float_t, 3u>& values, std::float_t reset_value, std::float_t speed, std::float_t min = 0.0f, std::float_t max = 0.0f) -> vector3_edit_result;
 
-/** @brief Same shape as draw_vector3_control, trimmed to a color-coded X/Y row. */
-auto draw_vector2_control(const char* label, std::array<std::float_t, 2u>& values, std::float_t reset_value, std::float_t speed) -> vector2_edit_result;
+/** @brief Per-axis reset values, for defaults that differ by axis (e.g. gravity's 0, -9.81, 0). */
+auto draw_vector3_control(const char* label, std::array<std::float_t, 3u>& values, const std::array<std::float_t, 3u>& reset_values, std::float_t speed, std::float_t min = 0.0f, std::float_t max = 0.0f) -> vector3_edit_result;
+
+/** @brief Same as draw_vector3_control, trimmed to an X/Y row. */
+auto draw_vector2_control(const char* label, std::array<std::float_t, 2u>& values, std::float_t reset_value, std::float_t speed, std::float_t min = 0.0f, std::float_t max = 0.0f) -> vector2_edit_result;
+
+/** @brief Per-axis reset values, for defaults that differ by axis (e.g. a 1920x1080 reference resolution). */
+auto draw_vector2_control(const char* label, std::array<std::float_t, 2u>& values, const std::array<std::float_t, 2u>& reset_values, std::float_t speed, std::float_t min = 0.0f, std::float_t max = 0.0f) -> vector2_edit_result;
+
+/** @brief R/G/B(/A) 0-255 drags with axis_colors markers plus a swatch that opens the picker; components is 3 or 4. */
+auto draw_color_edit(const char* label, std::float_t* values, std::int32_t components) -> bool;
 
 auto draw_color_field(const char* label, sbx::math::color& color) -> bool;
 

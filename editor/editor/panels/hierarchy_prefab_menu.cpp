@@ -42,7 +42,7 @@ auto unique_prefab_relative_path(const std::string& tag) -> std::filesystem::pat
   return std::filesystem::path{"prefabs"} / (candidate + ".prefab");
 }
 
-auto try_instantiate_prefab_drop(editor_state& state, sbx::scenes::scene& scene, std::optional<sbx::math::uuid> parent_id) -> void {
+auto try_instantiate_prefab_drop(editor_state& state, sbx::scenes::scene& scene, std::optional<sbx::math::uuid> parent_id, std::optional<sbx::math::vector3> position) -> void {
   const auto* payload = ImGui::AcceptDragDropPayload(sbx::render::drag_drop_payload_prefab, ImGuiDragDropFlags_AcceptNoDrawDefaultRect);
 
   if (!payload) {
@@ -58,7 +58,7 @@ auto try_instantiate_prefab_drop(editor_state& state, sbx::scenes::scene& scene,
     return;
   }
 
-  auto command = std::make_unique<instantiate_prefab_command>(prefab, parent_id);
+  auto command = std::make_unique<instantiate_prefab_command>(prefab, parent_id, position);
   auto* created = command.get();
 
   state.push_command(scene, std::move(command));

@@ -18,7 +18,19 @@
 
 namespace editor {
 
+// update() rebuilds rotation from _yaw/_pitch, so they're re-derived from the current rotation first -- anything else that
+// sets the rotation directly (a loaded camera.yaml, the view gizmo's axis snap) would otherwise be undone on the next look.
+// Inverts update()'s forward = Ry(yaw) * Rx(pitch) * (0,0,-1); keep in sync with that composition.
+auto editor_camera::_sync_angles_from_rotation() -> void {
+  const auto forward = _transform.rotation * sbx::math::vector3{0.0f, 0.0f, -1.0f};
+
+  _pitch = std::asin(std::clamp(forward.y(), -1.0f, 1.0f));
+  _yaw = std::atan2(-forward.x(), -forward.z());
+}
+
 auto editor_camera::update() -> void {
+  _sync_angles_from_rotation();
+
   const auto delta_time = sbx::core::engine::delta_time();
 
   const auto mouse = sbx::platform::input::mouse_position();
@@ -131,14 +143,6 @@ auto editor_camera::load(const std::filesystem::path& path) -> editor_camera {
   if (root["look_sensitivity"]) {
     result._look_sensitivity = root["look_sensitivity"].as<std::float_t>();
   }
-
-  // update() rebuilds rotation from _yaw/_pitch every call, so they must be re-derived from the
-  // loaded rotation here or the first update() snaps back to yaw=pitch=0. Inverts update()'s
-  // forward = Ry(yaw) * Rx(pitch) * (0,0,-1); keep in sync with that composition.
-  const auto forward = result._transform.rotation * sbx::math::vector3{0.0f, 0.0f, -1.0f};
-
-  result._pitch = std::asin(std::clamp(forward.y(), -1.0f, 1.0f));
-  result._yaw = std::atan2(-forward.x(), -forward.z());
 
   return result;
 }

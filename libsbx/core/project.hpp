@@ -35,6 +35,8 @@ public:
   /** @brief The fixed on-disk filename every project is identified by — see @ref project_file. */
   inline static constexpr auto file_name = std::string_view{"project.sbxproj"};
 
+  inline static constexpr auto default_fixed_timestep = std::float_t{1.0f / 60.0f};
+
   /** @brief Bumped whenever the on-disk format changes; written by @ref save, checked by @ref load. */
   inline static constexpr auto current_format_version = std::uint32_t{3u}; // v2: added layers/layer_collision_matrix, v3: added physics/time
 
@@ -190,7 +192,7 @@ private:
 
   math::vector3 _gravity{0.0f, -9.81f, 0.0f};
   std::uint32_t _velocity_iterations{8u};
-  std::float_t _fixed_timestep{1.0f / 60.0f};
+  std::float_t _fixed_timestep{default_fixed_timestep};
 
 }; // class project
 

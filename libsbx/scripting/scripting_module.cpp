@@ -190,6 +190,7 @@ scripting_module::scripting_module() {
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Material_Release", reinterpret_cast<void*>(&interop::material_release));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Material_IsLoaded", reinterpret_cast<void*>(&interop::material_is_loaded));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Texture_SampleBilinear", reinterpret_cast<void*>(&interop::texture_sample_bilinear));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Project_GetAssetsDirectory", reinterpret_cast<void*>(&interop::project_get_assets_directory));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Texture_Load", reinterpret_cast<void*>(&interop::texture_load));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Texture_CreateStorageImage", reinterpret_cast<void*>(&interop::texture_create_storage_image));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Texture_ReadPixels", reinterpret_cast<void*>(&interop::texture_read_pixels));

@@ -2988,6 +2988,10 @@ auto decoded_image_cache() -> std::unordered_map<std::string, decoded_image>& {
   return cache;
 }
 
+auto interop::project_get_assets_directory() -> managed::string {
+  return managed::string::create(core::engine::project().assets_directory().string().c_str());
+}
+
 auto interop::texture_sample_bilinear(managed::string path, std::float_t u, std::float_t v, math::color* out_color) -> bool {
   if (!out_color) {
     return false;

@@ -35,7 +35,8 @@ auto engine::delta_time() -> units::seconds {
 }
 
 auto engine::fixed_delta_time() -> units::seconds {
-  return units::seconds{project().fixed_timestep()};
+  // No project in the launcher, which still runs the fixed_update loop.
+  return units::seconds{has_project() ? project().fixed_timestep() : core::project::default_fixed_timestep};
 }
 
 auto engine::time() -> units::seconds {

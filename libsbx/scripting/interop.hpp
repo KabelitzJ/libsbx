@@ -367,6 +367,9 @@ struct interop {
    */
   static auto texture_sample_bilinear(managed::string path, std::float_t u, std::float_t v, math::color* out_color) -> bool;
 
+  /** @brief Absolute path of the active project's assets directory, for scripts reading their own data files. */
+  static auto project_get_assets_directory() -> managed::string;
+
   /**
    * @brief Loads (or reuses) a GPU-resident texture asset by project-relative path, returning its
    * uuid -- 0 if the path doesn't resolve. format: 0 = RGBA8 unorm, 1 = R32 float, 2 = R8 unorm,

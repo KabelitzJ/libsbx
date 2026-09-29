@@ -7,8 +7,8 @@
 
 namespace sbx::scripting::managed {
 
-auto property_info::get_name() const -> string {
-  return std::invoke(detail::backend.get_property_info_name, _handle);
+auto property_info::get_name() const -> std::string {
+  return string::take(std::invoke(detail::backend.get_property_info_name, _handle));
 }
 
 auto property_info::get_type() -> type& {

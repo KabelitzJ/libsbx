@@ -1,17 +1,28 @@
 using System;
-using System.Collections.Concurrent;
-using System.Runtime.CompilerServices;
+using System.Collections.Generic;
 
 namespace Sbx.Managed
 {
 
-  public class UniqueIdList<T>
+  /// <summary>
+  /// Hands native code a stable int id per object. Ids come from a counter, not the object's hash code (identity hashes aren't
+  /// unique, so two live objects could collide and native code would read the wrong one); adding an object that's already here
+  /// returns its existing id. The counter survives Clear(), so an id handed out before a script reload never resolves to a
+  /// different object afterwards.
+  /// </summary>
+  public class UniqueIdList<T> where T : class
   {
-    private readonly ConcurrentDictionary<int, T> _objects = new();
+    private readonly Dictionary<int, T> _objects = new();
+    private readonly Dictionary<T, int> _ids = new(ReferenceEqualityComparer.Instance);
+    private readonly object _lock = new();
+    private int _nextId = 1;
 
     public bool Contains(int id)
     {
-      return _objects.ContainsKey(id);
+      lock (_lock)
+      {
+        return _objects.ContainsKey(id);
+      }
     }
 
     public int Add(T? obj)
@@ -21,19 +32,37 @@ namespace Sbx.Managed
         throw new ArgumentNullException(nameof(obj));
       }
 
-      int hashCode = RuntimeHelpers.GetHashCode(obj);
-      _ = _objects.TryAdd(hashCode, obj);
-      return hashCode;
+      lock (_lock)
+      {
+        if (_ids.TryGetValue(obj, out var existing))
+        {
+          return existing;
+        }
+
+        var id = _nextId++;
+
+        _objects.Add(id, obj);
+        _ids.Add(obj, id);
+
+        return id;
+      }
     }
 
     public bool TryGetValue(int id, out T? obj)
     {
-      return _objects.TryGetValue(id, out obj);
+      lock (_lock)
+      {
+        return _objects.TryGetValue(id, out obj);
+      }
     }
 
     public void Clear()
     {
-      _objects.Clear();
+      lock (_lock)
+      {
+        _objects.Clear();
+        _ids.Clear();
+      }
     }
   }
 

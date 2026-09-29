@@ -38,6 +38,9 @@
 
 #include <editor/panels/inspector_asset_pickers.hpp>
 
+#include <editor/commands/prefab_override.hpp>
+
+#include <editor/widgets/prefab_override_menu.hpp>
 #include <editor/widgets/property_row.hpp>
 #include <editor/widgets/vector_fields.hpp>
 #include <editor/widgets/asset_path.hpp>
@@ -55,6 +58,9 @@ auto draw_component_header(editor_state& state, sbx::scenes::scene& target, sbx:
 
   const auto title = fmt::format("{} {}", icon, name);
   const auto is_expanded = ImGui::CollapsingHeader(title.c_str(), &is_open, ImGuiTreeNodeFlags_DefaultOpen);
+
+  const auto override_entry = find_value_override(target, node, component_key<Component>());
+  draw_override_header_marker(override_entry);
 
   if (ImGui::BeginPopupContextItem("##component_context")) {
     const auto current = node.get_component<Component>();
@@ -78,6 +84,8 @@ auto draw_component_header(editor_state& state, sbx::scenes::scene& target, sbx:
     if (ImGui::MenuItem(ICON_MDI_DELETE " Remove Component")) {
       is_open = false;
     }
+
+    draw_override_menu_items(target, node, component_key<Component>(), override_entry);
 
     ImGui::EndPopup();
   }

@@ -33,6 +33,14 @@ auto draw_property_row(const char* label, Draw&& draw) -> std::invoke_result_t<D
   return result;
 }
 
+/** @brief Unity-style blue bar in the left margin beside the last drawn item -- marks a value overridden on a prefab instance. */
+inline auto draw_override_marker() -> void {
+  const auto min = ImGui::GetItemRectMin();
+  const auto max = ImGui::GetItemRectMax();
+
+  ImGui::GetWindowDrawList()->AddRectFilled(ImVec2{min.x - 5.0f, min.y}, ImVec2{min.x - 2.0f, max.y}, IM_COL32(52, 152, 219, 255));
+}
+
 } // namespace editor
 
 #endif // EDITOR_WIDGETS_PROPERTY_ROW_HPP_

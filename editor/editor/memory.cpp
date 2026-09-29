@@ -2,8 +2,18 @@
 // Copyright (c) 2026 Jonas Kabelitz
 #include <cstdlib>
 #include <cstdint>
+#include <fstream>
 #include <memory>
 #include <utility>
+
+#include <libsbx/utility/target.hpp>
+
+#if defined(SBX_PLATFORM_WIN32)
+#include <windows.h>
+#include <psapi.h>
+#elif defined(SBX_PLATFORM_LINUX)
+#include <unistd.h>
+#endif
 
 #if defined(SBX_ENABLE_PROFILING) || defined(SBX_TRACK_MEMORY)
 
@@ -318,6 +328,29 @@ auto alloc_count() noexcept -> std::size_t {
 auto dealloc_count() noexcept -> std::size_t {
 #if defined(SBX_TRACK_MEMORY)
   return detail::dealloc_count.load(std::memory_order_relaxed);
+#else
+  return 0u;
+#endif
+}
+
+auto process_memory_usage() -> std::size_t {
+#if defined(SBX_PLATFORM_WIN32)
+  auto counters = PROCESS_MEMORY_COUNTERS_EX{};
+
+  if (K32GetProcessMemoryInfo(GetCurrentProcess(), reinterpret_cast<PROCESS_MEMORY_COUNTERS*>(&counters), sizeof(counters))) {
+    return counters.PrivateUsage;
+  }
+
+  return 0u;
+#elif defined(SBX_PLATFORM_LINUX)
+  // statm: total program size, then resident set size -- both in pages.
+  auto statm = std::ifstream{"/proc/self/statm"};
+  auto total_pages = std::size_t{0u};
+  auto resident_pages = std::size_t{0u};
+
+  statm >> total_pages >> resident_pages;
+
+  return resident_pages * static_cast<std::size_t>(sysconf(_SC_PAGESIZE));
 #else
   return 0u;
 #endif

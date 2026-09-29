@@ -31,6 +31,13 @@ namespace editor::memory_stats {
 
 [[nodiscard]] auto dealloc_count() noexcept -> std::size_t;
 
+/**
+ * @brief The whole process's memory as the OS sees it -- resident set size on Linux, private bytes on Windows (what Visual
+ * Studio's "Process Memory" graph shows), 0 elsewhere. Independent of SBX_TRACK_MEMORY, and unlike the counters above it
+ * also includes plain malloc (ImGui, the .NET runtime, driver allocations).
+ */
+[[nodiscard]] auto process_memory_usage() -> std::size_t;
+
 } // namespace editor::memory_stats
 
 #endif // EDITOR_MEMORY_STATS_HPP_

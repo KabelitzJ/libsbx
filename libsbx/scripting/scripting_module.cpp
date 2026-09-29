@@ -303,30 +303,7 @@ scripting_module::scripting_module() {
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "ContentSizeFitter_Get", reinterpret_cast<void*>(&interop::content_size_fitter_get));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "ContentSizeFitter_Set", reinterpret_cast<void*>(&interop::content_size_fitter_set));
 
-  interop::register_managed_component<scenes::tag>("Sbx.Core.Components.Tag", _core_assembly);
-  interop::register_managed_component<scenes::local_transform>("Sbx.Core.Components.Transform", _core_assembly);
-  interop::register_managed_component<scenes::animator>("Sbx.Core.Components.Animator", _core_assembly);
-  interop::register_managed_component<scenes::particle_effect>("Sbx.Core.Components.ParticleEffect", _core_assembly);
-  interop::register_managed_component<scenes::camera>("Sbx.Core.Components.CameraSettings", _core_assembly);
-  interop::register_managed_component<physics::rigidbody>("Sbx.Core.Physics.Rigidbody", _core_assembly);
-  interop::register_managed_component<physics::nav_agent>("Sbx.Core.Physics.NavAgent", _core_assembly);
-  interop::register_managed_component<scenes::mesh_renderer>("Sbx.Core.Components.MeshRenderer", _core_assembly);
-  interop::register_managed_component<canvas::canvas>("Sbx.Core.UI.Canvas", _core_assembly);
-  interop::register_managed_component<canvas::rect_transform>("Sbx.Core.UI.RectTransform", _core_assembly);
-  interop::register_managed_component<canvas::ui_image>("Sbx.Core.UI.UIImage", _core_assembly);
-  interop::register_managed_component<canvas::ui_text>("Sbx.Core.UI.UIText", _core_assembly);
-  interop::register_managed_component<canvas::ui_button>("Sbx.Core.UI.UIButton", _core_assembly);
-  interop::register_managed_component<canvas::canvas_group>("Sbx.Core.UI.CanvasGroup", _core_assembly);
-  interop::register_managed_component<canvas::ui_toggle>("Sbx.Core.UI.UIToggle", _core_assembly);
-  interop::register_managed_component<canvas::ui_slider>("Sbx.Core.UI.UISlider", _core_assembly);
-  interop::register_managed_component<canvas::ui_scrollbar>("Sbx.Core.UI.UIScrollbar", _core_assembly);
-  interop::register_managed_component<canvas::ui_scroll_rect>("Sbx.Core.UI.UIScrollRect", _core_assembly);
-  interop::register_managed_component<canvas::ui_mask>("Sbx.Core.UI.UIMask", _core_assembly);
-  interop::register_managed_component<canvas::horizontal_layout_group>("Sbx.Core.UI.HorizontalLayoutGroup", _core_assembly);
-  interop::register_managed_component<canvas::vertical_layout_group>("Sbx.Core.UI.VerticalLayoutGroup", _core_assembly);
-  interop::register_managed_component<canvas::layout_element>("Sbx.Core.UI.LayoutElement", _core_assembly);
-  interop::register_managed_component<canvas::content_size_fitter>("Sbx.Core.UI.ContentSizeFitter", _core_assembly);
-  // interop::register_managed_component<physics::character_controller>("Sbx.Core.Physics.CharacterController", _core_assembly);
+  _register_managed_components();
 
   _core_assembly.upload_internal_calls();
 
@@ -725,6 +702,10 @@ auto scripting_module::_load_game_assembly() -> void {
     _has_game_assembly = false;
 
     _core_assembly.reload_types();
+
+    // reload_types hands every Sbx.Core type a fresh id, so the component lookup tables keyed by the
+    // old ones would miss -- GetComponent<Transform>() etc. returning null after every hot reload.
+    _register_managed_components();
   }
 
   _game_context = _runtime.create_assembly_load_context("GameScripts");
@@ -735,6 +716,33 @@ auto scripting_module::_load_game_assembly() -> void {
     _game_assembly = _game_context.load_assembly(output_path.string());
     _has_game_assembly = true;
   }
+}
+
+auto scripting_module::_register_managed_components() -> void {
+  interop::register_managed_component<scenes::tag>("Sbx.Core.Components.Tag", _core_assembly);
+  interop::register_managed_component<scenes::local_transform>("Sbx.Core.Components.Transform", _core_assembly);
+  interop::register_managed_component<scenes::animator>("Sbx.Core.Components.Animator", _core_assembly);
+  interop::register_managed_component<scenes::particle_effect>("Sbx.Core.Components.ParticleEffect", _core_assembly);
+  interop::register_managed_component<scenes::camera>("Sbx.Core.Components.CameraSettings", _core_assembly);
+  interop::register_managed_component<physics::rigidbody>("Sbx.Core.Physics.Rigidbody", _core_assembly);
+  interop::register_managed_component<physics::nav_agent>("Sbx.Core.Physics.NavAgent", _core_assembly);
+  interop::register_managed_component<scenes::mesh_renderer>("Sbx.Core.Components.MeshRenderer", _core_assembly);
+  interop::register_managed_component<canvas::canvas>("Sbx.Core.UI.Canvas", _core_assembly);
+  interop::register_managed_component<canvas::rect_transform>("Sbx.Core.UI.RectTransform", _core_assembly);
+  interop::register_managed_component<canvas::ui_image>("Sbx.Core.UI.UIImage", _core_assembly);
+  interop::register_managed_component<canvas::ui_text>("Sbx.Core.UI.UIText", _core_assembly);
+  interop::register_managed_component<canvas::ui_button>("Sbx.Core.UI.UIButton", _core_assembly);
+  interop::register_managed_component<canvas::canvas_group>("Sbx.Core.UI.CanvasGroup", _core_assembly);
+  interop::register_managed_component<canvas::ui_toggle>("Sbx.Core.UI.UIToggle", _core_assembly);
+  interop::register_managed_component<canvas::ui_slider>("Sbx.Core.UI.UISlider", _core_assembly);
+  interop::register_managed_component<canvas::ui_scrollbar>("Sbx.Core.UI.UIScrollbar", _core_assembly);
+  interop::register_managed_component<canvas::ui_scroll_rect>("Sbx.Core.UI.UIScrollRect", _core_assembly);
+  interop::register_managed_component<canvas::ui_mask>("Sbx.Core.UI.UIMask", _core_assembly);
+  interop::register_managed_component<canvas::horizontal_layout_group>("Sbx.Core.UI.HorizontalLayoutGroup", _core_assembly);
+  interop::register_managed_component<canvas::vertical_layout_group>("Sbx.Core.UI.VerticalLayoutGroup", _core_assembly);
+  interop::register_managed_component<canvas::layout_element>("Sbx.Core.UI.LayoutElement", _core_assembly);
+  interop::register_managed_component<canvas::content_size_fitter>("Sbx.Core.UI.ContentSizeFitter", _core_assembly);
+  // interop::register_managed_component<physics::character_controller>("Sbx.Core.Physics.CharacterController", _core_assembly);
 }
 
 auto scripting_module::_exception_callback(std::string_view message) -> void {

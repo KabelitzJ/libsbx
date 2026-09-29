@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Diagnostics;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Threading;
 
@@ -22,6 +23,14 @@ namespace Sbx.Managed
     internal readonly static UniqueIdList<FieldInfo> _cachedFields = new();
     internal readonly static UniqueIdList<PropertyInfo> _cachedProperties = new();
     internal readonly static UniqueIdList<Attribute> _cachedAttributes = new();
+
+    // GetCustomAttributes() builds brand-new attribute instances on every call, and _cachedAttributes keys by object identity
+    // and never removes anything -- so every call (the Inspector asks for each script field's attributes every frame) used
+    // to root a fresh set forever. Built once per member instead, so repeated calls hand back the same instances and ids.
+    // Weakly keyed, so a member of an unloaded script assembly doesn't stay alive through this table.
+    private static readonly ConditionalWeakTable<MemberInfo, Attribute[]> _memberAttributes = new();
+
+    private static Attribute[] AttributesOf(MemberInfo member) => _memberAttributes.GetValue(member, static key => Attribute.GetCustomAttributes(key));
 
     internal static Type? FindType(string? InTypeName)
     {
@@ -483,7 +492,7 @@ namespace Sbx.Managed
         if (!_cachedTypes.TryGetValue(InType, out var type))
           return;
 
-        var attributes = type.GetCustomAttributes().ToImmutableArray();
+        var attributes = AttributesOf(type);
 
         if (attributes.Length == 0)
         {
@@ -602,7 +611,7 @@ namespace Sbx.Managed
         if (!_cachedMethods.TryGetValue(InMethodInfo, out var methodInfo))
           return;
 
-        var attributes = methodInfo.GetCustomAttributes().ToImmutableArray();
+        var attributes = AttributesOf(methodInfo);
 
         if (attributes.Length == 0)
         {
@@ -733,7 +742,7 @@ namespace Sbx.Managed
         if (!_cachedFields.TryGetValue(InFieldInfo, out var fieldInfo))
           return;
 
-        var attributes = fieldInfo.GetCustomAttributes().ToImmutableArray();
+        var attributes = AttributesOf(fieldInfo);
 
         if (attributes.Length == 0)
         {
@@ -798,7 +807,7 @@ namespace Sbx.Managed
         if (!_cachedProperties.TryGetValue(InPropertyInfo, out var propertyInfo))
           return;
 
-        var attributes = propertyInfo.GetCustomAttributes().ToImmutableArray();
+        var attributes = AttributesOf(propertyInfo);
 
         if (attributes.Length == 0)
         {

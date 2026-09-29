@@ -93,6 +93,9 @@ public:
    */
   static auto revert_prefab_override(scene& target, node target_node, std::string_view component_key) -> void;
 
+  /** @brief Like revert_prefab_override, for one field of a per-field override (prefab_override::fields) -- the rest of the component keeps its overridden values. Drops the override once no field is left. */
+  static auto revert_prefab_override_field(scene& target, node target_node, std::string_view component_key, std::string_view field) -> void;
+
   /** @brief member_node's own component_value/component_removed overrides (never node_removed, which has no meaningful component_key) — the Hierarchy/Inspector's "Apply to Prefab"/"Revert to Prefab" menus list these. Empty if member_node isn't part of a prefab instance. */
   [[nodiscard]] static auto prefab_overrides_of(scene& target, node member_node) -> std::vector<prefab_override>;
 

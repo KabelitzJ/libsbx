@@ -12,20 +12,13 @@
 
 namespace sbx::scripting::managed {
 
-auto type::get_full_name() const -> string {
-  return std::invoke(detail::backend.get_full_type_name, _id);
+auto type::get_full_name() const -> std::string {
+  return string::take(std::invoke(detail::backend.get_full_type_name, _id));
 }
 
 auto type::get_enum_entries() const -> std::vector<std::pair<std::string, std::int64_t>> {
   auto entries = std::vector<std::pair<std::string, std::int64_t>>{};
-  auto encoded = std::invoke(detail::backend.get_enum_entries, _id);
-
-  if (encoded.data() == nullptr) {
-    return entries;
-  }
-
-  auto lines = std::istringstream{std::string{encoded}};
-  string::destroy(encoded);
+  auto lines = std::istringstream{string::take(std::invoke(detail::backend.get_enum_entries, _id))};
 
   for (auto line = std::string{}; std::getline(lines, line);) {
     if (const auto separator = line.rfind('='); separator != std::string::npos) {

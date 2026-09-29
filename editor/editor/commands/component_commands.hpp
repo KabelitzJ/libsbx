@@ -13,6 +13,7 @@
 #include <libsbx/scenes/scene.hpp>
 
 #include <editor/commands/command.hpp>
+#include <editor/commands/field_diff.hpp>
 #include <editor/commands/prefab_override.hpp>
 
 namespace editor {
@@ -119,6 +120,29 @@ public:
 
   [[nodiscard]] auto label() const -> std::string override {
     return _label;
+  }
+
+  // Each other node that has a Component gets exactly the fields this edit changed (apply_changed_fields), on top of its own
+  // current value.
+  [[nodiscard]] auto broadcast(sbx::scenes::scene& target, std::span<const sbx::math::uuid> nodes) const -> std::vector<std::unique_ptr<command>> override {
+    auto commands = std::vector<std::unique_ptr<command>>{};
+
+    for (const auto id : nodes) {
+      auto node = target.find(id);
+
+      if (id == _node_id || !node.is_valid() || !node.has_component<Component>()) {
+        continue;
+      }
+
+      const auto& before = node.get_component<Component>();
+      auto after = before;
+
+      apply_changed_fields(_before, _after, after);
+
+      commands.push_back(std::make_unique<modify_component_command>(id, before, std::move(after), _label));
+    }
+
+    return commands;
   }
 
 private:

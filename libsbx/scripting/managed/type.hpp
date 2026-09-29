@@ -48,7 +48,7 @@ class type {
 
 public:
 
-  auto get_full_name() const -> string;
+  auto get_full_name() const -> std::string;
 
   /** @brief Every enumerator's name and value, in declaration order -- empty if this isn't an enum type. */
   auto get_enum_entries() const -> std::vector<std::pair<std::string, std::int64_t>>;

@@ -847,6 +847,10 @@ auto write_node(YAML::Node& node_yaml, ecs::registry& registry, ecs::entity enti
             override_yaml["component_key"] = override_entry.component_key;
             override_yaml["kind"] = (override_entry.kind == prefab_override_kind::component_removed) ? "component_removed" : (override_entry.kind == prefab_override_kind::node_removed) ? "node_removed" : "component_value";
 
+            if (!override_entry.fields.empty()) {
+              override_yaml["fields"] = override_entry.fields;
+            }
+
             overrides.push_back(override_yaml);
           }
 
@@ -1393,6 +1397,10 @@ auto read_node_components(node& target_node, const YAML::Node& node_yaml, const 
           const auto kind = override_yaml["kind"].as<std::string>();
           override_entry.kind = (kind == "component_removed") ? prefab_override_kind::component_removed : (kind == "node_removed") ? prefab_override_kind::node_removed : prefab_override_kind::component_value;
 
+          if (const auto fields = override_yaml["fields"]) {
+            override_entry.fields = fields.as<std::vector<std::string>>();
+          }
+
           instance.overrides.push_back(std::move(override_entry));
         }
       }
@@ -1791,6 +1799,82 @@ auto apply_component_key(node target_node, const YAML::Node& node_entry, const s
   read_node_components(target_node, scratch, key_to_uuid);
 }
 
+auto find_component_entry(const YAML::Node& node_entry, std::string_view component_key) -> YAML::Node {
+  if (const auto components = node_entry["components"]) {
+    for (const auto entry : components) {
+      if (entry["type"].as<std::string>() == component_key) {
+        return entry;
+      }
+    }
+  }
+
+  return YAML::Node{};
+}
+
+// entity's own component_key entry as write_node emits it, keyed against keys -- seed keys from the prefab's snapshot
+// (load_asset_key_table) so asset references come out under the same key names as the prefab's own entry.
+auto live_component_entry(ecs::registry& registry, ecs::entity entity, asset_key_table& keys, std::string_view component_key) -> YAML::Node {
+  collect_mesh_material_keys(registry, {entity}, keys);
+
+  auto scratch = YAML::Node{};
+  write_node(scratch, registry, entity, keys, false);
+
+  return find_component_entry(scratch, component_key);
+}
+
+// Keys of live whose value differs from prefab's ("type" excluded), compared as emitted YAML -- both entries must be keyed
+// against the same asset table (see live_component_entry).
+auto differing_fields(const YAML::Node& live, const YAML::Node& prefab) -> std::vector<std::string> {
+  auto fields = std::vector<std::string>{};
+
+  for (const auto entry : live) {
+    const auto field = entry.first.as<std::string>();
+
+    if (field == "type") {
+      continue;
+    }
+
+    if (!prefab[field] || YAML::Dump(prefab[field]) != YAML::Dump(entry.second)) {
+      fields.push_back(field);
+    }
+  }
+
+  return fields;
+}
+
+// base with fields replaced by from's values (a field from lacks is dropped).
+auto with_fields_from(const YAML::Node& base, const YAML::Node& from, const std::vector<std::string>& fields) -> YAML::Node {
+  auto merged = YAML::Clone(base);
+
+  for (const auto& field : fields) {
+    if (from[field]) {
+      merged[field] = YAML::Clone(from[field]);
+    } else {
+      merged.remove(field);
+    }
+  }
+
+  return merged;
+}
+
+// Applies one already-built component entry (keyed against keys) onto target_node.
+auto apply_component_entry(node target_node, const YAML::Node& entry, const asset_key_table& keys, std::string_view component_key) -> void {
+  auto assets_document = YAML::Node{};
+  assets_document["assets"]["static_meshes"] = keys.meshes_table;
+  assets_document["assets"]["materials"] = keys.materials_table;
+  assets_document["assets"]["environment_maps"] = keys.environments_table;
+  assets_document["assets"]["particle_effects"] = keys.particle_effects_table;
+  assets_document["assets"]["animation_graphs"] = keys.animation_graphs_table;
+  assets_document["assets"]["textures"] = keys.textures_table;
+  assets_document["assets"]["fonts"] = keys.fonts_table;
+  assets_document["assets"]["prefabs"] = keys.prefabs_table;
+
+  auto node_entry = YAML::Node{};
+  node_entry["components"].push_back(entry);
+
+  apply_component_key(target_node, node_entry, register_asset_keys(assets_document), component_key);
+}
+
 // Walks up from a prefab_member node to the instance root carrying prefab_instance -- every node
 // under a prefab instance has prefab_member, but only the root also has prefab_instance. Returns an
 // invalid node if member_node isn't part of any prefab instance.
@@ -1932,10 +2016,12 @@ auto scene_serializer::sync_prefab_instances(scene& target) -> void {
 
     collect(root_entity);
 
-    const auto is_overridden = [&](const math::uuid& member_id, std::string_view key) {
-      return std::ranges::any_of(instance.overrides, [&](const prefab_override& override_entry) {
+    const auto find_override = [&](const math::uuid& member_id, std::string_view key) -> const prefab_override* {
+      const auto entry = std::ranges::find_if(instance.overrides, [&](const prefab_override& override_entry) {
         return override_entry.member_id == member_id && override_entry.component_key == key;
       });
+
+      return (entry != instance.overrides.end()) ? &*entry : nullptr;
     };
 
     const auto is_node_removed = [&](const math::uuid& member_id) {
@@ -1982,7 +2068,7 @@ auto scene_serializer::sync_prefab_instances(scene& target) -> void {
         for (const auto component : components) {
           const auto key = component["type"].as<std::string>();
 
-          if (!seen_keys.insert(key).second || is_overridden(member_id, key)) {
+          if (!seen_keys.insert(key).second) {
             continue; // "script" can list several entries of the same type in one node -- apply_component_key already replays every match in a single call
           }
 
@@ -1990,6 +2076,21 @@ auto scene_serializer::sync_prefab_instances(scene& target) -> void {
           // override was ever recorded for it -- see scene_serializer.hpp's prefab_override doc
           // comment. Every other node's transform is ordinary trackable/syncable content.
           if (key == "transform" && existing->second == root_entity) {
+            continue;
+          }
+
+          if (const auto* override_entry = find_override(member_id, key)) {
+            // A whole-component override (or a removal) keeps the instance's own value outright.
+            if (override_entry->kind != prefab_override_kind::component_value || override_entry->fields.empty()) {
+              continue;
+            }
+
+            // Per-field: the prefab's new entry, with just the overridden fields kept at the instance's values.
+            auto keys = load_asset_key_table(snapshot);
+            const auto live = live_component_entry(target._registry, existing->second, keys, key);
+
+            apply_component_entry(live_node, with_fields_from(component, live, override_entry->fields), keys, key);
+
             continue;
           }
 
@@ -2108,14 +2209,66 @@ auto scene_serializer::mark_prefab_override(scene& target, node member_node, std
   auto& instance = root.get_component<prefab_instance>();
   const auto member_id = member_node.get_component<prefab_member>().member_id;
 
-  for (auto& existing : instance.overrides) {
-    if (existing.member_id == member_id && existing.component_key == component_key) {
-      existing.kind = kind;
-      return;
+  const auto matches = [&](const prefab_override& override_entry) {
+    return override_entry.member_id == member_id && override_entry.component_key == component_key;
+  };
+
+  // A value edit records exactly which fields now differ from the prefab -- and none differing (edited back, or undone) means
+  // there's nothing left to override. Scripts and components the prefab doesn't have stay whole-component (fields empty).
+  auto fields = std::vector<std::string>{};
+
+  if (kind == prefab_override_kind::component_value && component_key != "script" && instance.source.is_valid()) {
+    const auto& snapshot = instance.source->snapshot();
+
+    if (const auto prefab_entry = find_component_entry(find_node_entry(snapshot["nodes"], member_id), component_key)) {
+      auto keys = load_asset_key_table(snapshot);
+      fields = differing_fields(live_component_entry(target._registry, member_node._entity, keys, component_key), prefab_entry);
+
+      if (fields.empty()) {
+        std::erase_if(instance.overrides, matches);
+        return;
+      }
     }
   }
 
-  instance.overrides.push_back(prefab_override{member_id, std::string{component_key}, kind});
+  if (const auto existing = std::ranges::find_if(instance.overrides, matches); existing != instance.overrides.end()) {
+    existing->kind = kind;
+    existing->fields = std::move(fields);
+    return;
+  }
+
+  instance.overrides.push_back(prefab_override{member_id, std::string{component_key}, kind, std::move(fields)});
+}
+
+auto scene_serializer::revert_prefab_override_field(scene& target, node target_node, std::string_view component_key, std::string_view field) -> void {
+  auto root = find_prefab_instance_root(target, target_node);
+
+  if (!root.is_valid()) {
+    return;
+  }
+
+  auto& instance = root.get_component<prefab_instance>();
+
+  if (!instance.source.is_valid()) {
+    return;
+  }
+
+  const auto member_id = target_node.get_component<prefab_member>().member_id;
+  const auto& snapshot = instance.source->snapshot();
+  const auto prefab_entry = find_component_entry(find_node_entry(snapshot["nodes"], member_id), component_key);
+
+  if (!prefab_entry) {
+    return;
+  }
+
+  auto keys = load_asset_key_table(snapshot);
+  const auto live = live_component_entry(target._registry, target_node._entity, keys, component_key);
+
+  apply_component_entry(target_node, with_fields_from(live, prefab_entry, {std::string{field}}), keys, component_key);
+
+  // Re-diffs against the prefab: drops the field (and the override once nothing differs), and turns a whole-component
+  // override from before per-field tracking into a per-field one.
+  mark_prefab_override(target, target_node, component_key, prefab_override_kind::component_value);
 }
 
 auto scene_serializer::prefab_overrides_of(scene& target, node member_node) -> std::vector<prefab_override> {

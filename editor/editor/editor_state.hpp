@@ -22,6 +22,7 @@
 
 #include <editor/commands/command.hpp>
 #include <editor/commands/command_stack.hpp>
+#include <editor/commands/composite_command.hpp>
 
 namespace editor {
 
@@ -200,7 +201,20 @@ struct editor_state {
   // pass-throughs below over reaching into this directly.
   command_stack commands{};
 
+  // The other selected nodes while the Inspector is drawing a multi-selection -- set only for the span of its draw, so an edit
+  // made there reaches every selected node (see command::broadcast) while pushes from anywhere else stay single-node.
+  std::vector<sbx::math::uuid> broadcast_targets{};
+
   auto push_command(sbx::scenes::scene& target, std::unique_ptr<command> cmd) -> void {
+    if (!broadcast_targets.empty()) {
+      if (auto others = cmd->broadcast(target, broadcast_targets); !others.empty()) {
+        auto label = cmd->label();
+
+        others.insert(others.begin(), std::move(cmd));
+        cmd = std::make_unique<composite_command>(std::move(others), std::move(label));
+      }
+    }
+
     commands.push(target, std::move(cmd));
   }
 

@@ -18,7 +18,7 @@ class method_info {
 
 public:
 
-  auto get_name() const -> string;
+  auto get_name() const -> std::string;
 
   auto get_return_type() -> type&;
 

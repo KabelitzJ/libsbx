@@ -195,6 +195,8 @@ private:
 
   auto _load_game_assembly() -> void;
 
+  auto _register_managed_components() -> void;
+
   auto _apply_field_overrides(managed::object& instance, const scenes::script_entry& entry) -> void;
 
   /**

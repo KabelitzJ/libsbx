@@ -46,6 +46,14 @@ auto string::destroy(string& str) -> void {
   }
 }
 
+auto string::take(string str) -> std::string {
+  auto copy = str._string != nullptr ? static_cast<std::string>(str) : std::string{};
+
+  destroy(str);
+
+  return copy;
+}
+
 auto string::assign(std::string_view str) -> void {
   if (_string != nullptr) {
     memory::free_co_task_memory(_string);

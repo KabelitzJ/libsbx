@@ -5,6 +5,8 @@
 #include <algorithm>
 #include <cmath>
 
+#include <implot.h>
+
 #include <libsbx/render/ui/backends/v1.92.9-docking/imgui_impl_glfw.h>
 #include <libsbx/render/ui/backends/v1.92.9-docking/imgui_impl_vulkan.h>
 
@@ -32,6 +34,7 @@ ui_system::ui_system() {
 
   IMGUI_CHECKVERSION();
   ImGui::CreateContext();
+  ImPlot::CreateContext();
 
   auto& io = ImGui::GetIO();
   io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
@@ -88,6 +91,7 @@ ui_system::~ui_system() {
 
   ImGui_ImplVulkan_Shutdown();
   ImGui_ImplGlfw_Shutdown();
+  ImPlot::DestroyContext();
   ImGui::DestroyContext();
 }
 

@@ -162,6 +162,7 @@ find_package(glfw3 CONFIG REQUIRED)
 find_package(imgui CONFIG REQUIRED)
 find_package(imgui-node-editor CONFIG REQUIRED)
 find_package(imguizmo CONFIG REQUIRED)
+find_package(implot CONFIG REQUIRED)
 find_package(lz4 CONFIG REQUIRED)
 find_package(meshoptimizer CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
@@ -755,6 +756,7 @@ target_link_libraries(
     imgui-node-editor::imgui-node-editor
     imgui::imgui
     imguizmo::imguizmo
+    implot::implot
     lz4::lz4
     meshoptimizer::meshoptimizer
     Nethost::nethost

@@ -7,8 +7,8 @@
 
 namespace sbx::scripting::managed {
 
-auto field_info::get_name() const -> string {
-  return std::invoke(detail::backend.get_field_info_name, _handle);
+auto field_info::get_name() const -> std::string {
+  return string::take(std::invoke(detail::backend.get_field_info_name, _handle));
 }
 
 auto field_info::get_type() -> type& {

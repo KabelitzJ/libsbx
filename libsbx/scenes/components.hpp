@@ -457,6 +457,10 @@ struct prefab_override {
   math::uuid member_id{math::uuid::nil()};
   std::string component_key{}; // empty for node_removed
   prefab_override_kind kind{prefab_override_kind::component_value};
+  // component_value only: which keys of the component's serialized entry differ from the prefab ("fov_degrees", "position",
+  // ...) -- a prefab edit still flows into every other key. Empty means the whole component (scripts, a component the prefab
+  // doesn't have, and overrides saved before per-field tracking).
+  std::vector<std::string> fields{};
 }; // struct prefab_override
 
 /**

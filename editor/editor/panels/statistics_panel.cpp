@@ -11,6 +11,7 @@
 #include <fmt/format.h>
 
 #include <imgui.h>
+#include <implot.h>
 
 #include <vk_mem_alloc.h>
 
@@ -82,6 +83,8 @@ static auto _setup_label_value_columns() -> void {
 
 auto statistics_panel::draw(editor_state& state) -> void {
   static_cast<void>(state);
+
+  _sample_memory();
 
   ImGui::Begin(window_name);
 
@@ -302,9 +305,88 @@ auto statistics_panel::_draw_performance_tab() -> void {
   }
 }
 
+auto statistics_panel::_sample_memory() -> void {
+  const auto now = static_cast<float>(ImGui::GetTime());
+
+  if (!_memory_times.empty() && now - _memory_times.back() < memory_sample_interval) {
+    return;
+  }
+
+  constexpr auto bytes_per_mb = 1024.0f * 1024.0f;
+
+  _memory_times.push_back(now);
+  _process_memory_mb.push_back(static_cast<float>(memory_stats::process_memory_usage()) / bytes_per_mb);
+  _tracked_memory_mb.push_back(static_cast<float>(memory_stats::current_usage()) / bytes_per_mb);
+
+  // ponytail: front erase is O(n) on ~600 floats ten times a second -- a ring buffer only if the window grows a lot.
+  const auto expired = std::ranges::find_if(_memory_times, [&](const auto time) { return time >= now - memory_history_seconds; }) - _memory_times.begin();
+
+  _memory_times.erase(_memory_times.begin(), _memory_times.begin() + expired);
+  _process_memory_mb.erase(_process_memory_mb.begin(), _process_memory_mb.begin() + expired);
+  _tracked_memory_mb.erase(_tracked_memory_mb.begin(), _tracked_memory_mb.begin() + expired);
+}
+
+auto statistics_panel::_draw_memory_graph() -> void {
+  if (_memory_times.empty()) {
+    return;
+  }
+
+  const auto is_tracking = memory_stats::is_tracking_enabled();
+  const auto now = _memory_times.back();
+  const auto count = static_cast<int>(_memory_times.size());
+
+  // Seconds before now, so the x axis reads -60 s ... 0 s like Visual Studio's Process Memory graph.
+  auto seconds_ago = std::vector<float>(_memory_times.size());
+  std::ranges::transform(_memory_times, seconds_ago.begin(), [&](const auto time) { return time - now; });
+
+  const auto span = now - _memory_times.front();
+  const auto growth = (span > 0.0f) ? (_process_memory_mb.back() - _process_memory_mb.front()) / span : 0.0f;
+
+  ImGui::Text("Process: %.1f MB", _process_memory_mb.back());
+
+  if (is_tracking) {
+    ImGui::SameLine(0.0f, 24.0f);
+    ImGui::Text("Tracked: %.1f MB", _tracked_memory_mb.back());
+  }
+
+  ImGui::SameLine(0.0f, 24.0f);
+  ImGui::TextDisabled("%+.3f MB/s over the last %.0f s", growth, span);
+
+  if (!ImPlot::BeginPlot("##memory_history", ImVec2{-1.0f, 180.0f}, ImPlotFlags_NoMenus | ImPlotFlags_NoBoxSelect)) {
+    return;
+  }
+
+  // 0 up to the highest sample plus 15% headroom, so the curve never touches the top edge.
+  auto peak = std::ranges::max(_process_memory_mb);
+
+  if (is_tracking) {
+    peak = std::max(peak, std::ranges::max(_tracked_memory_mb));
+  }
+
+  ImPlot::SetupAxes(nullptr, "MB");
+  ImPlot::SetupAxisLimits(ImAxis_X1, -memory_history_seconds, 0.0, ImPlotCond_Always);
+  ImPlot::SetupAxisLimits(ImAxis_Y1, 0.0, std::max(peak, 1.0f) * 1.15, ImPlotCond_Always);
+  ImPlot::SetupAxisFormat(ImAxis_X1, "%.0f s");
+  ImPlot::SetupLegend(ImPlotLocation_NorthWest);
+
+  ImPlot::SetNextFillStyle(IMPLOT_AUTO_COL, 0.25f);
+  ImPlot::PlotShaded("Process", seconds_ago.data(), _process_memory_mb.data(), count);
+  ImPlot::PlotLine("Process", seconds_ago.data(), _process_memory_mb.data(), count);
+
+  if (is_tracking) {
+    ImPlot::SetNextFillStyle(IMPLOT_AUTO_COL, 0.25f);
+    ImPlot::PlotShaded("Tracked (operator new)", seconds_ago.data(), _tracked_memory_mb.data(), count);
+    ImPlot::PlotLine("Tracked (operator new)", seconds_ago.data(), _tracked_memory_mb.data(), count);
+  }
+
+  ImPlot::EndPlot();
+}
+
 auto statistics_panel::_draw_memory_tab() -> void {
+  _draw_memory_graph();
+
   if (!memory_stats::is_tracking_enabled()) {
-    ImGui::TextDisabled("Rebuild with -DSBX_TRACK_MEMORY=ON to see allocation stats.");
+    ImGui::TextDisabled("Rebuild with -DSBX_TRACK_MEMORY=ON to also see operator new allocation stats.");
     return;
   }
 

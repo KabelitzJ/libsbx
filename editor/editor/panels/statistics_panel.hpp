@@ -4,6 +4,7 @@
 #define EDITOR_PANELS_STATISTICS_PANEL_HPP_
 
 #include <cstddef>
+#include <vector>
 
 #include <libsbx/math/smooth_value.hpp>
 
@@ -37,6 +38,14 @@ private:
 
   auto _draw_memory_tab() -> void;
 
+  /** @brief Appends a memory sample every memory_sample_interval seconds and drops those older than memory_history_seconds -- called every draw(), whichever tab is open, so the graph has no gaps. */
+  auto _sample_memory() -> void;
+
+  auto _draw_memory_graph() -> void;
+
+  inline static constexpr auto memory_sample_interval = 0.1f; // seconds
+  inline static constexpr auto memory_history_seconds = 60.0f;
+
   sbx::math::proportional_smooth_value _smoothed_frame_time_ms{0.0f};
 
   // Previous draw() call's snapshot -- _draw_memory_tab() shows the delta since then (this
@@ -46,6 +55,11 @@ private:
   std::size_t _prev_total_freed{0u};
   std::size_t _prev_alloc_count{0u};
   std::size_t _prev_dealloc_count{0u};
+
+  // Parallel arrays (ImPlot takes plain float pointers): sample time (ImGui::GetTime) and usage in MB.
+  std::vector<float> _memory_times{};
+  std::vector<float> _process_memory_mb{};
+  std::vector<float> _tracked_memory_mb{};
 
 }; // class statistics_panel
 

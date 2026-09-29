@@ -1,0 +1,123 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Jonas Kabelitz
+#ifndef EDITOR_WIDGETS_PREFAB_OVERRIDE_MENU_HPP_
+#define EDITOR_WIDGETS_PREFAB_OVERRIDE_MENU_HPP_
+
+#include <algorithm>
+#include <cctype>
+#include <optional>
+#include <string>
+#include <string_view>
+
+#include <imgui.h>
+
+#include <libsbx/render/ui/fonts/material_design_icons.hpp>
+
+#include <libsbx/scenes/components.hpp>
+#include <libsbx/scenes/node.hpp>
+#include <libsbx/scenes/scene.hpp>
+#include <libsbx/scenes/scene_serializer.hpp>
+
+#include <editor/widgets/property_row.hpp>
+
+namespace editor {
+
+/** @brief node's value override on component_key (a prefab instance member diverging from its prefab), if any. */
+inline auto find_value_override(sbx::scenes::scene& target, const sbx::scenes::node& node, std::string_view component_key) -> std::optional<sbx::scenes::prefab_override> {
+  if (component_key.empty()) {
+    return std::nullopt;
+  }
+
+  for (auto& override_entry : sbx::scenes::scene_serializer::prefab_overrides_of(target, node)) {
+    if (override_entry.component_key == component_key && override_entry.kind == sbx::scenes::prefab_override_kind::component_value) {
+      return override_entry;
+    }
+  }
+
+  return std::nullopt;
+}
+
+/** @brief "fov_degrees" -> "Fov Degrees" -- serialized field keys as menu labels. */
+inline auto pretty_field_name(std::string_view field) -> std::string {
+  auto result = std::string{field};
+  auto at_word_start = true;
+
+  for (auto& character : result) {
+    if (character == '_') {
+      character = ' ';
+      at_word_start = true;
+    } else if (at_word_start) {
+      character = static_cast<char>(std::toupper(static_cast<unsigned char>(character)));
+      at_word_start = false;
+    }
+  }
+
+  return result;
+}
+
+/** @brief Whether override (from find_value_override) covers field -- an override without a field list covers the whole component. */
+inline auto overrides_field(const std::optional<sbx::scenes::prefab_override>& override_entry, std::string_view field) -> bool {
+  return override_entry && (override_entry->fields.empty() || std::ranges::find(override_entry->fields, field) != override_entry->fields.end());
+}
+
+/**
+ * @brief Marks the last drawn item (a component header) as overridden, with a tooltip naming the overridden fields, and -- inside
+ * an already-open context menu -- appends "Revert to Prefab" (per field, or all) and "Apply to Prefab". No-op without an override.
+ * Prefab apply/revert aren't scene commands (they also rewrite the prefab asset), so they aren't undoable -- same as the
+ * Hierarchy's own Apply/Revert menu.
+ */
+inline auto draw_override_header_marker(const std::optional<sbx::scenes::prefab_override>& override_entry) -> void {
+  if (!override_entry) {
+    return;
+  }
+
+  draw_override_marker();
+
+  if (ImGui::IsItemHovered()) {
+    auto text = std::string{"Overrides the prefab"};
+
+    if (!override_entry->fields.empty()) {
+      text += ":";
+
+      for (const auto& field : override_entry->fields) {
+        text += "\n  " + pretty_field_name(field);
+      }
+    }
+
+    ImGui::SetTooltip("%s", text.c_str());
+  }
+}
+
+inline auto draw_override_menu_items(sbx::scenes::scene& target, sbx::scenes::node& node, std::string_view component_key, const std::optional<sbx::scenes::prefab_override>& override_entry) -> void {
+  if (!override_entry) {
+    return;
+  }
+
+  ImGui::Separator();
+
+  if (ImGui::BeginMenu(ICON_MDI_UNDO " Revert to Prefab")) {
+    for (const auto& field : override_entry->fields) {
+      if (ImGui::MenuItem(pretty_field_name(field).c_str())) {
+        sbx::scenes::scene_serializer::revert_prefab_override_field(target, node, component_key, field);
+      }
+    }
+
+    if (!override_entry->fields.empty()) {
+      ImGui::Separator();
+    }
+
+    if (ImGui::MenuItem("All")) {
+      sbx::scenes::scene_serializer::revert_prefab_override(target, node, component_key);
+    }
+
+    ImGui::EndMenu();
+  }
+
+  if (ImGui::MenuItem(ICON_MDI_SOURCE_MERGE " Apply to Prefab")) {
+    sbx::scenes::scene_serializer::apply_prefab_override(target, node, component_key);
+  }
+}
+
+} // namespace editor
+
+#endif // EDITOR_WIDGETS_PREFAB_OVERRIDE_MENU_HPP_

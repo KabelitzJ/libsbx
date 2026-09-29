@@ -7,8 +7,10 @@
 #include <cstdint>
 #include <cstring>
 #include <optional>
+#include <span>
 #include <type_traits>
 #include <variant>
+#include <vector>
 
 #include <imgui.h>
 
@@ -29,11 +31,13 @@
 #include <libsbx/scripting/scripting_module.hpp>
 
 #include <editor/commands/component_commands.hpp>
+#include <editor/commands/prefab_override.hpp>
 #include <editor/commands/script_commands.hpp>
 
 #include <editor/panels/inspector_component_registry.hpp>
 #include <editor/panels/inspector_script_section.hpp>
 
+#include <editor/widgets/prefab_override_menu.hpp>
 #include <editor/widgets/vector_fields.hpp>
 #include <editor/widgets/layer_fields.hpp>
 
@@ -98,6 +102,9 @@ auto inspector_panel::_draw_layer_field(editor_state& state, sbx::scenes::scene&
 auto inspector_panel::_draw_transform_section(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node) -> void {
   ImGui::SeparatorText("Transform");
 
+  const auto transform_override = find_value_override(target, node, component_key<sbx::scenes::local_transform>());
+  draw_override_header_marker(transform_override);
+
   auto& transform = node.transform();
 
   static auto clipboard = std::optional<sbx::scenes::local_transform>{};
@@ -139,6 +146,8 @@ auto inspector_panel::_draw_transform_section(editor_state& state, sbx::scenes::
       push_transform(*clipboard, "Paste Transform");
     }
 
+    draw_override_menu_items(target, node, component_key<sbx::scenes::local_transform>(), transform_override);
+
     ImGui::EndPopup();
   }
 
@@ -161,6 +170,10 @@ auto inspector_panel::_draw_transform_section(editor_state& state, sbx::scenes::
   auto position = std::array<std::float_t, 3u>{transform.position.x(), transform.position.y(), transform.position.z()};
   const auto position_result = draw_vector3_control("Position", position, 0.0f, 0.05f);
 
+  if (overrides_field(transform_override, "position")) {
+    draw_override_marker();
+  }
+
   capture_before(position_result);
 
   if (position_result.changed) {
@@ -180,6 +193,10 @@ auto inspector_panel::_draw_transform_section(editor_state& state, sbx::scenes::
 
   const auto rotation_result = draw_vector3_control("Rotation", _rotation, 0.0f, 0.5f);
 
+  if (overrides_field(transform_override, "rotation")) {
+    draw_override_marker();
+  }
+
   capture_before(rotation_result);
 
   if (rotation_result.changed) {
@@ -192,6 +209,10 @@ auto inspector_panel::_draw_transform_section(editor_state& state, sbx::scenes::
   auto scale = std::array<std::float_t, 3u>{transform.scale.x(), transform.scale.y(), transform.scale.z()};
   const auto scale_result = draw_vector3_control("Scale", scale, 1.0f, 0.05f);
 
+  if (overrides_field(transform_override, "scale")) {
+    draw_override_marker();
+  }
+
   capture_before(scale_result);
 
   if (scale_result.changed) {
@@ -201,22 +222,28 @@ auto inspector_panel::_draw_transform_section(editor_state& state, sbx::scenes::
   commit_after(scale_result);
 }
 
-auto inspector_panel::_draw_node_properties(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node, sbx::assets::assets_module& assets_module, bool draw_identity) -> void {
+auto inspector_panel::_draw_node_properties(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node, sbx::assets::assets_module& assets_module, bool draw_identity, std::span<const sbx::math::uuid> multi_selection) -> void {
   auto& scripting_module = sbx::core::engine::get_module<sbx::scripting::scripting_module>();
+
+  const auto is_multi = !multi_selection.empty();
 
   // A little vertical breathing room between each section, on top of the frame/item padding
   // pushed in draw() — keeps a node with several components/scripts from reading as one dense
   // unbroken block of controls.
   const auto section_gap = [] { ImGui::Dummy(ImVec2{0.0f, 6.0f}); };
 
-  if (draw_identity) {
+  if (is_multi) {
+    ImGui::TextDisabled("%zu objects selected -- showing %s's values", multi_selection.size(), node.name().c_str());
+    _draw_layer_field(state, target, node);
+    section_gap();
+  } else if (draw_identity) {
     _draw_active_checkbox(state, target, node);
     _draw_name_field(state, target, node);
     _draw_layer_field(state, target, node);
     section_gap();
   }
 
-  if (node.has_component<sbx::scenes::prefab_instance>()) {
+  if (!is_multi && node.has_component<sbx::scenes::prefab_instance>()) {
     _draw_prefab_instance_header(target, node);
     section_gap();
   }
@@ -225,16 +252,29 @@ auto inspector_panel::_draw_node_properties(editor_state& state, sbx::scenes::sc
     _draw_transform_section(state, target, node);
   }
 
+  const auto all_selected_have = [&](const component_entry& entry) {
+    return std::ranges::all_of(multi_selection, [&](const auto id) {
+      const auto selected = target.find(id);
+      return selected.is_valid() && entry.has(selected);
+    });
+  };
+
   // Driven by component_entries() (see inspector_component_registry.hpp) rather than one
   // hand-written has_component<T>() check per type -- the same table also drives
   // draw_add_component_menu below, so a component type is registered in exactly one place.
   for (const auto& entry : component_entries()) {
-    if (entry.has(node)) {
+    if (entry.has(node) && all_selected_have(entry)) {
       section_gap();
       ImGui::PushID(entry.name);
       entry.draw(state, target, node, assets_module);
       ImGui::PopID();
     }
+  }
+
+  if (is_multi) {
+    section_gap();
+    ImGui::TextDisabled("Scripts and Add Component need a single selection.");
+    return;
   }
 
   if (node.has_component<sbx::scenes::script_component>()) {
@@ -479,12 +519,17 @@ auto inspector_panel::draw(editor_state& state) -> void {
   auto& assets_module = sbx::core::engine::get_module<sbx::assets::assets_module>();
 
   if (std::holds_alternative<node_selection>(state.current_selection)) {
-    if (state.selected_node_count() > 1u) {
-      ImGui::TextDisabled("%zu objects selected", state.selected_node_count());
-    } else {
-      auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
+    auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
 
-      if (auto node = state.selected_node(scenes_module.active_scene()); node.is_valid()) {
+    if (auto node = state.selected_node(scenes_module.active_scene()); node.is_valid() && state.selected_node_count() > 1u) {
+      // Copied: the selection itself may change mid-draw (a click in a section), the broadcast list mustn't.
+      const auto selection = std::vector<sbx::math::uuid>{state.selected_node_ids().begin(), state.selected_node_ids().end()};
+
+      state.broadcast_targets = selection;
+      _draw_node_properties(state, scenes_module.active_scene(), node, assets_module, true, selection);
+      state.broadcast_targets.clear();
+    } else {
+      if (node.is_valid()) {
         _draw_node_properties(state, scenes_module.active_scene(), node, assets_module);
       } else {
         // The selected node no longer exists (e.g. deleted); fall back to the empty state.

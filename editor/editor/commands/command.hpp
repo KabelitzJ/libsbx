@@ -3,7 +3,12 @@
 #ifndef EDITOR_COMMANDS_COMMAND_HPP_
 #define EDITOR_COMMANDS_COMMAND_HPP_
 
+#include <memory>
+#include <span>
 #include <string>
+#include <vector>
+
+#include <libsbx/math/uuid.hpp>
 
 #include <libsbx/scenes/scene.hpp>
 
@@ -41,6 +46,15 @@ public:
 
   /** @brief Short description for the Edit menu, e.g. "Create Node" -> "Undo Create Node". */
   [[nodiscard]] virtual auto label() const -> std::string = 0;
+
+  /**
+   * @brief Commands that repeat this edit on each of nodes -- editor_state::push_command asks while several nodes are selected
+   * in the Inspector (see editor_state::broadcast_targets) and pushes them together with this one as a single undo step. Called
+   * before execute(). Default: none, the edit only ever affects its own node.
+   */
+  [[nodiscard]] virtual auto broadcast([[maybe_unused]] sbx::scenes::scene& target, [[maybe_unused]] std::span<const sbx::math::uuid> nodes) const -> std::vector<std::unique_ptr<command>> {
+    return {};
+  }
 
 }; // class command
 

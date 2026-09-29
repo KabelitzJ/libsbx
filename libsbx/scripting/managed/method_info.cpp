@@ -7,8 +7,8 @@
 
 namespace sbx::scripting::managed {
 
-auto method_info::get_name() const -> string {
-  return std::invoke(detail::backend.get_method_info_name, _handle);
+auto method_info::get_name() const -> std::string {
+  return string::take(std::invoke(detail::backend.get_method_info_name, _handle));
 }
 
 auto method_info::get_return_type() -> type& {

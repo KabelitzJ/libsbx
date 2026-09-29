@@ -6,6 +6,7 @@
 #include <array>
 #include <cstddef>
 #include <optional>
+#include <span>
 
 #include <libsbx/math/quaternion.hpp>
 #include <libsbx/math/uuid.hpp>
@@ -64,8 +65,12 @@ private:
    * @brief draw_identity gates the name field + transform section — false for a prefab's own edit
    * view (_draw_prefab_edit below), since placement and Hierarchy label are per-instance concepts,
    * never prefab-shared content. Every other call site leaves it at the default.
+   *
+   * multi_selection (every selected node's id, node being the primary) is non-empty for a multi-selection: only the layer, the
+   * transform and the components every selected node has are shown, with edits reaching all of them through
+   * editor_state::broadcast_targets; scripts, the prefab header and Add Component stay single-selection.
    */
-  auto _draw_node_properties(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node, sbx::assets::assets_module& assets_module, bool draw_identity = true) -> void;
+  auto _draw_node_properties(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node, sbx::assets::assets_module& assets_module, bool draw_identity = true, std::span<const sbx::math::uuid> multi_selection = {}) -> void;
   auto _draw_active_checkbox(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node) -> void;
   auto _draw_name_field(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node) -> void;
   auto _draw_layer_field(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node) -> void;

@@ -37,6 +37,7 @@
 
 #include <editor/panels/inspector_asset_pickers.hpp>
 
+#include <editor/widgets/prefab_override_menu.hpp>
 #include <editor/widgets/property_row.hpp>
 #include <editor/widgets/vector_fields.hpp>
 #include <editor/widgets/layer_fields.hpp>
@@ -520,6 +521,9 @@ auto draw_script_section(editor_state& state, sbx::scenes::scene& target, sbx::s
 
   const auto is_expanded = ImGui::CollapsingHeader(title.c_str(), &is_open, ImGuiTreeNodeFlags_DefaultOpen);
 
+  const auto override_entry = find_value_override(target, node, "script");
+  draw_override_header_marker(override_entry);
+
   // Values are the script's saved field overrides -- a running instance's live values aren't tracked, so Reset/Paste are Edit-mode only.
   static auto clipboard = std::optional<sbx::scenes::script_entry>{};
 
@@ -554,6 +558,8 @@ auto draw_script_section(editor_state& state, sbx::scenes::scene& target, sbx::s
     if (ImGui::MenuItem(ICON_MDI_DELETE " Remove Script")) {
       is_open = false;
     }
+
+    draw_override_menu_items(target, node, "script", override_entry);
 
     ImGui::EndPopup();
   }

@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <fstream>
 #include <sstream>
+#include <type_traits>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -73,6 +74,161 @@ auto make_asset_key(asset_key_table& keys, const std::string& base) -> std::stri
 
 // A primitive mesh has no entry in the asset manifest -- path_of(id) comes back empty, so it needs
 // its own name (used for both the yaml key and the table entry's cosmetic "name" field).
+// The scene-local key for a texture, registering it in the scene's textures table on first use.
+auto texture_asset_key(asset_key_table& keys, const math::uuid& id) -> std::string {
+  if (!keys.texture_keys.contains(id)) {
+    const auto name = core::engine::get_module<assets::assets_module>().path_of(id).stem().string();
+    const auto key = make_asset_key(keys, name);
+    keys.texture_keys.emplace(id, key);
+
+    auto entry = YAML::Node{};
+    entry["key"] = key;
+    entry["name"] = name;
+    entry["uuid"] = id.value();
+    keys.textures_table.push_back(entry);
+  }
+
+  return keys.texture_keys.at(id);
+}
+
+// A camera's post_process block: exposure, then one map per effect.
+auto serialize_post_process(const post_process_settings& settings, asset_key_table& keys) -> YAML::Node {
+  auto node = YAML::Node{};
+  node["exposure"] = settings.exposure;
+
+  auto bloom = YAML::Node{};
+  bloom["enabled"] = settings.bloom.enabled;
+  bloom["intensity"] = settings.bloom.intensity;
+  bloom["threshold"] = settings.bloom.threshold;
+  bloom["knee"] = settings.bloom.knee;
+  node["bloom"] = bloom;
+
+  const auto& ao = settings.ambient_occlusion;
+  auto ambient_occlusion = YAML::Node{};
+  ambient_occlusion["enabled"] = ao.enabled;
+  ambient_occlusion["radius"] = ao.radius;
+  ambient_occlusion["intensity"] = ao.intensity;
+  ambient_occlusion["samples"] = ao.samples;
+  node["ambient_occlusion"] = ambient_occlusion;
+
+  const auto& fog = settings.fog;
+  auto fog_node = YAML::Node{};
+  fog_node["enabled"] = fog.enabled;
+  fog_node["color"] = fog.color;
+  fog_node["density"] = fog.density;
+  fog_node["start"] = fog.start;
+  fog_node["height_falloff"] = fog.height_falloff;
+  fog_node["base_height"] = fog.base_height;
+  fog_node["max_opacity"] = fog.max_opacity;
+  fog_node["affects_sky"] = fog.affects_sky;
+  node["fog"] = fog_node;
+
+  const auto& dof = settings.depth_of_field;
+  auto depth_of_field = YAML::Node{};
+  depth_of_field["enabled"] = dof.enabled;
+  depth_of_field["mode"] = dof.mode == post_process_settings::depth_of_field_settings::focus_mode::screen_band ? "screen_band" : "distance";
+  depth_of_field["focus_distance"] = dof.focus_distance;
+  depth_of_field["focus_range"] = dof.focus_range;
+  depth_of_field["band_center"] = dof.band_center;
+  depth_of_field["band_height"] = dof.band_height;
+  depth_of_field["max_blur"] = dof.max_blur;
+  depth_of_field["samples"] = dof.samples;
+  node["depth_of_field"] = depth_of_field;
+
+  const auto& grading = settings.color_grading;
+  auto color_grading = YAML::Node{};
+
+  if (grading.lut.is_valid() && grading.lut->id() != math::uuid::nil()) {
+    color_grading["lut"] = texture_asset_key(keys, grading.lut->id());
+  }
+
+  color_grading["lut_contribution"] = grading.lut_contribution;
+  color_grading["contrast"] = grading.contrast;
+  color_grading["saturation"] = grading.saturation;
+  node["color_grading"] = color_grading;
+
+  return node;
+}
+
+// Reads a post_process block, or -- for scenes saved before it existed -- the old flat camera keys
+// (exposure, bloom_enabled, bloom_intensity, ...). Anything missing keeps its default.
+auto deserialize_post_process(const YAML::Node& node, const std::unordered_map<std::string, math::uuid>& key_to_uuid) -> post_process_settings {
+  auto settings = post_process_settings{};
+
+  const auto read = [](const YAML::Node& map, const char* key, auto& value) {
+    if (map && map[key]) {
+      value = map[key].as<std::remove_reference_t<decltype(value)>>();
+    }
+  };
+
+  read(node, "exposure", settings.exposure);
+
+  if (const auto bloom = node["bloom"]) {
+    read(bloom, "enabled", settings.bloom.enabled);
+    read(bloom, "intensity", settings.bloom.intensity);
+    read(bloom, "threshold", settings.bloom.threshold);
+    read(bloom, "knee", settings.bloom.knee);
+  } else {
+    read(node, "bloom_enabled", settings.bloom.enabled);
+    read(node, "bloom_intensity", settings.bloom.intensity);
+    read(node, "bloom_threshold", settings.bloom.threshold);
+    read(node, "bloom_knee", settings.bloom.knee);
+  }
+
+  if (const auto ao = node["ambient_occlusion"]) {
+    auto& target = settings.ambient_occlusion;
+    read(ao, "enabled", target.enabled);
+    read(ao, "radius", target.radius);
+    read(ao, "intensity", target.intensity);
+    read(ao, "samples", target.samples);
+  }
+
+  if (const auto fog = node["fog"]) {
+    auto& target = settings.fog;
+    read(fog, "enabled", target.enabled);
+    read(fog, "color", target.color);
+    read(fog, "density", target.density);
+    read(fog, "start", target.start);
+    read(fog, "height_falloff", target.height_falloff);
+    read(fog, "base_height", target.base_height);
+    read(fog, "max_opacity", target.max_opacity);
+    read(fog, "affects_sky", target.affects_sky);
+  }
+
+  if (const auto dof = node["depth_of_field"]) {
+    auto& target = settings.depth_of_field;
+    read(dof, "enabled", target.enabled);
+
+    if (dof["mode"]) {
+      target.mode = dof["mode"].as<std::string>() == "screen_band"
+        ? post_process_settings::depth_of_field_settings::focus_mode::screen_band
+        : post_process_settings::depth_of_field_settings::focus_mode::distance;
+    }
+
+    read(dof, "focus_distance", target.focus_distance);
+    read(dof, "focus_range", target.focus_range);
+    read(dof, "band_center", target.band_center);
+    read(dof, "band_height", target.band_height);
+    read(dof, "max_blur", target.max_blur);
+    read(dof, "samples", target.samples);
+  }
+
+  if (const auto grading = node["color_grading"]) {
+    auto& target = settings.color_grading;
+
+    if (grading["lut"] && key_to_uuid.contains(grading["lut"].as<std::string>())) {
+      // A lookup table is data, not colour: unorm, never sRGB-decoded.
+      target.lut = core::engine::get_module<assets::assets_module>().load_texture(key_to_uuid.at(grading["lut"].as<std::string>()), graphics::format::r8g8b8a8_unorm);
+    }
+
+    read(grading, "lut_contribution", target.lut_contribution);
+    read(grading, "contrast", target.contrast);
+    read(grading, "saturation", target.saturation);
+  }
+
+  return settings;
+}
+
 auto mesh_asset_name(const math::uuid& id) -> std::string {
   if (const auto kind = assets::primitive_mesh_kind_of(id); kind.has_value()) {
     return std::string{assets::primitive_mesh_name(*kind)};
@@ -281,11 +437,7 @@ auto write_node(YAML::Node& node_yaml, ecs::registry& registry, ecs::entity enti
     component["fov_degrees"] = c.fov_degrees;
     component["near_plane"] = c.near_plane;
     component["far_plane"] = c.far_plane;
-    component["exposure"] = c.exposure;
-    component["bloom_enabled"] = c.bloom_enabled;
-    component["bloom_intensity"] = c.bloom_intensity;
-    component["bloom_threshold"] = c.bloom_threshold;
-    component["bloom_knee"] = c.bloom_knee;
+    component["post_process"] = serialize_post_process(c.post_process, keys);
 
     components.push_back(component);
   }
@@ -459,19 +611,7 @@ auto write_node(YAML::Node& node_yaml, ecs::registry& registry, ecs::entity enti
     if (image.sprite.is_valid() && image.sprite->id() != math::uuid::nil()) {
       const auto id = image.sprite->id();
 
-      if (!keys.texture_keys.contains(id)) {
-        const auto name = core::engine::get_module<assets::assets_module>().path_of(id).stem().string();
-        const auto key = make_asset_key(keys, name);
-        keys.texture_keys.emplace(id, key);
-
-        auto entry = YAML::Node{};
-        entry["key"] = key;
-        entry["name"] = name;
-        entry["uuid"] = id.value();
-        keys.textures_table.push_back(entry);
-      }
-
-      component["sprite"] = keys.texture_keys.at(id);
+      component["sprite"] = texture_asset_key(keys, id);
     }
 
     components.push_back(component);
@@ -946,25 +1086,8 @@ auto read_node_components(node& target_node, const YAML::Node& node_yaml, const 
       c.near_plane = component["near_plane"].as<std::float_t>();
       c.far_plane = component["far_plane"].as<std::float_t>();
 
-      if (component["exposure"]) {
-        c.exposure = component["exposure"].as<std::float_t>();
-      }
-
-      if (component["bloom_enabled"]) {
-        c.bloom_enabled = component["bloom_enabled"].as<bool>();
-      }
-
-      if (component["bloom_intensity"]) {
-        c.bloom_intensity = component["bloom_intensity"].as<std::float_t>();
-      }
-
-      if (component["bloom_threshold"]) {
-        c.bloom_threshold = component["bloom_threshold"].as<std::float_t>();
-      }
-
-      if (component["bloom_knee"]) {
-        c.bloom_knee = component["bloom_knee"].as<std::float_t>();
-      }
+      // Scenes saved before post_process existed keep exposure/bloom flat on the component.
+      c.post_process = deserialize_post_process(component["post_process"] ? component["post_process"] : component, key_to_uuid);
     } else if (type == "directional_light") {
       auto& light = target_node.get_or_add_component<directional_light>();
       light.color = component["color"].as<math::color>();

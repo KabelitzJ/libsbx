@@ -147,6 +147,8 @@ scripting_module::scripting_module() {
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Camera_SetFarPlane", reinterpret_cast<void*>(&interop::camera_set_far_plane));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Camera_GetExposure", reinterpret_cast<void*>(&interop::camera_get_exposure));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Camera_SetExposure", reinterpret_cast<void*>(&interop::camera_set_exposure));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Camera_GetPostProcess", reinterpret_cast<void*>(&interop::camera_get_post_process));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Camera_SetPostProcess", reinterpret_cast<void*>(&interop::camera_set_post_process));
 
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Time_DeltaTime", reinterpret_cast<void*>(&interop::time_delta_time));
 

@@ -41,7 +41,7 @@ namespace sbx::render {
  *
  * Never skips its own execution via should_execute(): the chain images would otherwise never leave
  * VK_IMAGE_LAYOUT_UNDEFINED while tonemap_pass's declared read assumes shader_read_only_optimal.
- * When bloom_enabled is off, execute() still performs the layout dance (cheap, no dispatches) so
+ * When post_process.bloom.enabled is off, execute() still performs the layout dance (cheap, no dispatches) so
  * that promise keeps holding; tonemap_pass zeroes the contribution instead (see its push constant).
  *
  * Runs after transparent_resolve_pass/particle_pass (so it sees the fully composited HDR scene) and

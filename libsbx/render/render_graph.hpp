@@ -56,6 +56,8 @@ struct graph_resources {
 
   graphics::image_handle depth{};
   graphics::image_handle scene_depth{};
+  graphics::image_handle ambient_occlusion_raw{};
+  graphics::image_handle ambient_occlusion{};
   graphics::image_handle color{};
   graphics::image_handle color_msaa{};
   graphics::image_handle final_image{};

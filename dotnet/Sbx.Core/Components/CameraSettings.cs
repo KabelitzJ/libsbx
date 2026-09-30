@@ -68,6 +68,21 @@ namespace Sbx.Core.Components
       }
     }
 
+    /** The whole post processing, as a copy: read, change, assign back. */
+    public PostProcessSettings PostProcess
+    {
+      get
+      {
+        PostProcessSettings value;
+        unsafe { InternalCalls.Camera_GetPostProcess(UUID, &value); }
+        return value;
+      }
+      set
+      {
+        unsafe { InternalCalls.Camera_SetPostProcess(UUID, &value); }
+      }
+    }
+
   } // class CameraSettings
 
 } // namespace Sbx.Core.Components

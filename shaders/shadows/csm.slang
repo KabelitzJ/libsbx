@@ -8,7 +8,7 @@
 #include <math.slang>
 
 [[vk::constant_id(0)]]
-const uint shadow_pcf_quality = 2u;
+const uint shadow_pcf_quality = 0u;
 
 static const float2 poisson_disk_low[4] = {
   float2( 0.97484398,  0.75648379),

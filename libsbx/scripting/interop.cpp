@@ -1643,7 +1643,7 @@ auto interop::camera_get_exposure(std::uint64_t uuid, std::float_t* exposure) ->
     return;
   }
 
-  *exposure = node.get_component<scenes::camera>().exposure;
+  *exposure = node.get_component<scenes::camera>().post_process.exposure;
 }
 
 auto interop::camera_set_exposure(std::uint64_t uuid, std::float_t exposure) -> void {
@@ -1659,7 +1659,118 @@ auto interop::camera_set_exposure(std::uint64_t uuid, std::float_t exposure) -> 
     return;
   }
 
-  node.get_component<scenes::camera>().exposure = exposure;
+  node.get_component<scenes::camera>().post_process.exposure = exposure;
+}
+
+auto interop::camera_get_post_process(std::uint64_t uuid, post_process_data* out_value) -> void {
+  auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
+
+  auto& scene = scenes_module.active_scene();
+
+  auto node = scene.find(math::uuid::from_value(uuid));
+
+  if (!node.is_valid() || !out_value || !node.has_component<scenes::camera>()) {
+    utility::logger<"scripting">::error("Attempting to get post processing of invalid camera node");
+
+    return;
+  }
+
+  const auto& post = node.get_component<scenes::camera>().post_process;
+
+  const auto& dof = post.depth_of_field;
+  const auto& grading = post.color_grading;
+
+  *out_value = post_process_data{
+    .exposure = post.exposure,
+    .bloom_enabled = post.bloom.enabled ? 1u : 0u,
+    .bloom_intensity = post.bloom.intensity,
+    .bloom_threshold = post.bloom.threshold,
+    .bloom_knee = post.bloom.knee,
+    .dof_enabled = dof.enabled ? 1u : 0u,
+    .dof_mode = static_cast<std::uint32_t>(dof.mode),
+    .dof_focus_distance = dof.focus_distance,
+    .dof_focus_range = dof.focus_range,
+    .dof_band_center = dof.band_center,
+    .dof_band_height = dof.band_height,
+    .dof_max_blur = dof.max_blur,
+    .dof_samples = dof.samples,
+    .lut = grading.lut.is_valid() ? grading.lut->id().value() : 0u,
+    .lut_contribution = grading.lut_contribution,
+    .contrast = grading.contrast,
+    .saturation = grading.saturation,
+    .fog_enabled = post.fog.enabled ? 1u : 0u,
+    .fog_color = post.fog.color,
+    .fog_density = post.fog.density,
+    .fog_start = post.fog.start,
+    .fog_height_falloff = post.fog.height_falloff,
+    .fog_base_height = post.fog.base_height,
+    .fog_max_opacity = post.fog.max_opacity,
+    .fog_affects_sky = post.fog.affects_sky ? 1u : 0u,
+    .ao_enabled = post.ambient_occlusion.enabled ? 1u : 0u,
+    .ao_radius = post.ambient_occlusion.radius,
+    .ao_intensity = post.ambient_occlusion.intensity,
+    .ao_samples = post.ambient_occlusion.samples
+  };
+}
+
+auto interop::camera_set_post_process(std::uint64_t uuid, const post_process_data* value) -> void {
+  auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
+
+  auto& scene = scenes_module.active_scene();
+
+  auto node = scene.find(math::uuid::from_value(uuid));
+
+  if (!node.is_valid() || !value || !node.has_component<scenes::camera>()) {
+    utility::logger<"scripting">::error("Attempting to set post processing of invalid camera node");
+
+    return;
+  }
+
+  auto& post = node.get_component<scenes::camera>().post_process;
+
+  post.exposure = value->exposure;
+  post.bloom.enabled = value->bloom_enabled != 0u;
+  post.bloom.intensity = value->bloom_intensity;
+  post.bloom.threshold = value->bloom_threshold;
+  post.bloom.knee = value->bloom_knee;
+
+  auto& dof = post.depth_of_field;
+  dof.enabled = value->dof_enabled != 0u;
+  dof.mode = value->dof_mode == 1u ? scenes::post_process_settings::depth_of_field_settings::focus_mode::screen_band : scenes::post_process_settings::depth_of_field_settings::focus_mode::distance;
+  dof.focus_distance = value->dof_focus_distance;
+  dof.focus_range = value->dof_focus_range;
+  dof.band_center = value->dof_band_center;
+  dof.band_height = value->dof_band_height;
+  dof.max_blur = value->dof_max_blur;
+  dof.samples = value->dof_samples;
+
+  auto& grading = post.color_grading;
+  const auto current = grading.lut.is_valid() ? grading.lut->id().value() : 0u;
+
+  // Only reload on change: scripts write the whole struct back every time they edit a field.
+  if (value->lut != current) {
+    grading.lut = value->lut != 0u ? core::engine::get_module<assets::assets_module>().load_texture(math::uuid::from_value(value->lut), graphics::format::r8g8b8a8_unorm) : assets::texture_handle{};
+  }
+
+  grading.lut_contribution = value->lut_contribution;
+  grading.contrast = value->contrast;
+  grading.saturation = value->saturation;
+
+  auto& fog = post.fog;
+  fog.enabled = value->fog_enabled != 0u;
+  fog.color = value->fog_color;
+  fog.density = value->fog_density;
+  fog.start = value->fog_start;
+  fog.height_falloff = value->fog_height_falloff;
+  fog.base_height = value->fog_base_height;
+  fog.max_opacity = value->fog_max_opacity;
+  fog.affects_sky = value->fog_affects_sky != 0u;
+
+  auto& ao = post.ambient_occlusion;
+  ao.enabled = value->ao_enabled != 0u;
+  ao.radius = value->ao_radius;
+  ao.intensity = value->ao_intensity;
+  ao.samples = value->ao_samples;
 }
 
 auto interop::time_delta_time(std::float_t* delta_time) -> void {

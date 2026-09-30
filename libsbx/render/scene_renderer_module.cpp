@@ -13,6 +13,7 @@
 #include <unordered_map>
 #include <utility>
 #include <variant>
+#include <tuple>
 #include <vector>
 
 #include <libsbx/memory/alignment.hpp>
@@ -45,6 +46,7 @@
 #include <libsbx/scenes/scene.hpp>
 #include <libsbx/scenes/components.hpp>
 
+#include <libsbx/render/passes/ambient_occlusion_pass.hpp>
 #include <libsbx/render/passes/bloom_pass.hpp>
 #include <libsbx/render/passes/frustum_cull_pass.hpp>
 #include <libsbx/render/passes/depth_pre_pass.hpp>
@@ -108,6 +110,7 @@ struct frame_data {
   std::float_t shadow_normal_bias;
   std::float_t shadow_penumbra_scale;
   std::float_t contact_shadow_length;
+  std::uint32_t ambient_occlusion_index;  // 0xFFFFFFFF: off
 }; // struct frame_data
 
 inline constexpr auto skinned_bounds_padding_factor = 0.2f;
@@ -381,6 +384,7 @@ scene_renderer_module::scene_renderer_module() {
   _graph.add_pass<skin_pass>();
   _graph.add_pass<frustum_cull_pass>();
   _graph.add_pass<depth_pre_pass>();
+  _graph.add_pass<ambient_occlusion_pass>();
   _graph.add_pass<light_culling_pass>();
   _graph.add_pass<shadow_pass>();
   _graph.add_pass<opaque_pass>();
@@ -734,11 +738,7 @@ auto scene_renderer_module::_resolve_camera_data() -> camera_data {
     data.fov_degrees = camera.fov_degrees;
     data.near_plane = camera.near_plane;
     data.far_plane = camera.far_plane;
-    data.exposure = camera.exposure;
-    data.bloom_enabled = camera.bloom_enabled;
-    data.bloom_intensity = camera.bloom_intensity;
-    data.bloom_threshold = camera.bloom_threshold;
-    data.bloom_knee = camera.bloom_knee;
+    data.post_process = camera.post_process;
     data.is_active = true;
   }
 
@@ -773,13 +773,10 @@ auto scene_renderer_module::_build_packet() -> render_packet {
       packet.ambient_intensity = sky.ambient_intensity;
     }
 
+    // The editor's own camera still shows the scene camera's post processing, so the viewport
+    // looks like the game.
     if (_camera_override) {
-      const auto& camera = camera_node.get_component<scenes::camera>();
-
-      packet.camera.bloom_enabled = camera.bloom_enabled;
-      packet.camera.bloom_intensity = camera.bloom_intensity;
-      packet.camera.bloom_threshold = camera.bloom_threshold;
-      packet.camera.bloom_knee = camera.bloom_knee;
+      packet.camera.post_process = camera_node.get_component<scenes::camera>().post_process;
     }
   }
 
@@ -1265,6 +1262,13 @@ auto scene_renderer_module::record(graphics::command_buffer& command_buffer, mat
     .prefiltered_index = prefiltered_index,
     .prefiltered_mip_count = prefiltered_mip_count,
     .depth = _depth_image,
+    .scene_depth_index = _scene_depth_index,
+    .ambient_occlusion_raw = _ambient_occlusion_raw_image,
+    .ambient_occlusion = _ambient_occlusion_image,
+    .ambient_occlusion_raw_index = _ambient_occlusion_raw_index,
+    .ambient_occlusion_index = _ambient_occlusion_index,
+    .ambient_occlusion_raw_storage_index = _ambient_occlusion_raw_storage_index,
+    .ambient_occlusion_storage_index = _ambient_occlusion_storage_index,
     .color = _color_image,
     .color_msaa = _color_msaa_image,
     .color_index = _color_index,
@@ -1338,6 +1342,10 @@ auto scene_renderer_module::_ensure_resources() -> void {
   _bloom_upsample_index = bindless_table.reserve_sampled_image();
 
   _scene_depth_index = bindless_table.reserve_sampled_image();
+
+  _ambient_occlusion_raw_index = bindless_table.reserve_sampled_image();
+
+  _ambient_occlusion_index = bindless_table.reserve_sampled_image();
 
   _frame_buffer = registry.emplace<graphics::buffer>(graphics::buffer::create_info{
     .size = memory::stride_v<frame_data> * graphics::swapchain::max_frames_in_flight,
@@ -1523,12 +1531,20 @@ auto scene_renderer_module::_resize_targets(const math::vector2u extent) -> void
     registry.retire(_revealage_msaa_image, frame_index);
     registry.retire(_bloom_downsample_image, frame_index);
     registry.retire(_bloom_upsample_image, frame_index);
+    registry.retire(_ambient_occlusion_raw_image, frame_index);
+    registry.retire(_ambient_occlusion_image, frame_index);
 
     // Fresh indices instead of rewriting these in place: frames still in flight sample the old
     // images through them (bindless_table::collect frees the old ones once those frames finish).
-    for (auto index : {std::ref(_scene_depth_index), std::ref(_color_index), std::ref(_accumulator_index), std::ref(_revealage_index), std::ref(_bloom_upsample_index), std::ref(_final_image_index)}) {
+    for (auto index : {std::ref(_scene_depth_index), std::ref(_color_index), std::ref(_accumulator_index), std::ref(_revealage_index), std::ref(_bloom_upsample_index), std::ref(_final_image_index), std::ref(_ambient_occlusion_raw_index), std::ref(_ambient_occlusion_index)}) {
       bindless_table.unregister_sampled_image(index.get());
       index.get() = bindless_table.reserve_sampled_image();
+    }
+
+    for (auto index : {_ambient_occlusion_raw_storage_index, _ambient_occlusion_storage_index}) {
+      if (index != 0xFFFFFFFFu) {
+        bindless_table.unregister_storage_image(index);
+      }
     }
   }
 
@@ -1549,6 +1565,27 @@ auto scene_renderer_module::_resize_targets(const math::vector2u extent) -> void
   });
 
   bindless_table.write_sampled_image(_scene_depth_index, registry.get<graphics::image>(_scene_depth_image).view());
+
+  // Ambient occlusion: half resolution, RGBA8 (r used) -- the format the bindless float4 storage
+  // images are known to write -- as storage for ambient_occlusion_pass and sampled for lighting.
+  const auto ambient_occlusion_extent = math::vector2u{std::max(extent.x() / 2u, 1u), std::max(extent.y() / 2u, 1u)};
+
+  for (auto [image, index, storage_index, name] : {
+    std::tuple{&_ambient_occlusion_raw_image, &_ambient_occlusion_raw_index, &_ambient_occlusion_raw_storage_index, "Ambient Occlusion Raw"},
+    std::tuple{&_ambient_occlusion_image, &_ambient_occlusion_index, &_ambient_occlusion_storage_index, "Ambient Occlusion"}
+  }) {
+    *image = registry.emplace<graphics::image>(graphics::image::create_info{
+      .extent = math::vector3u{ambient_occlusion_extent, 1u},
+      .format = graphics::format::r8g8b8a8_unorm,
+      .usage = graphics::image_usage::storage | graphics::image_usage::sampled,
+      .samples = graphics::samples::count_1,
+      .name = name
+    });
+
+    const auto view = registry.get<graphics::image>(*image).view();
+    bindless_table.write_sampled_image(*index, view);
+    *storage_index = bindless_table.register_storage_image(view);
+  }
 
   _color_msaa_image = registry.emplace<graphics::image>(graphics::image::create_info{
     .extent = math::vector3u{extent, 1u},
@@ -1653,6 +1690,8 @@ auto scene_renderer_module::_build_graph_resources() const -> graph_resources {
     .extent = _target_extent,
     .depth = _depth_image,
     .scene_depth = _scene_depth_image,
+    .ambient_occlusion_raw = _ambient_occlusion_raw_image,
+    .ambient_occlusion = _ambient_occlusion_image,
     .color = _color_image,
     .color_msaa = _color_msaa_image,
     .final_image = _final_image,
@@ -1830,6 +1869,7 @@ auto scene_renderer_module::_prepare_frame(render_context& context) -> void {
   data.shadow_normal_bias = context.packet->shadow_normal_bias;
   data.shadow_penumbra_scale = std::tan(math::to_radians(math::degree{context.packet->shadow_angular_diameter}).value() * 0.5f);
   data.contact_shadow_length = context.packet->contact_shadow_length;
+  data.ambient_occlusion_index = context.packet->camera.post_process.ambient_occlusion.enabled ? _ambient_occlusion_index : 0xFFFFFFFFu;
 
   auto& frame_buffer = registry.get<graphics::buffer>(_frame_buffer);
   frame_buffer.write(&data, sizeof(frame_data), context.slot * memory::stride_v<frame_data>);

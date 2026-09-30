@@ -40,6 +40,44 @@ struct font_glyph_data {
   std::float_t advance;
 }; // struct font_glyph_data
 
+/** @brief A camera's post processing, for Sbx.Core.PostProcessSettings -- scenes::post_process_settings field for field, bools and enums as uint32 and the lookup table as a texture uuid (0 = none), so the managed struct lays out identically. Grows with post_process_settings. */
+struct post_process_data {
+  std::float_t exposure;
+
+  std::uint32_t bloom_enabled;
+  std::float_t bloom_intensity;
+  std::float_t bloom_threshold;
+  std::float_t bloom_knee;
+
+  std::uint32_t dof_enabled;
+  std::uint32_t dof_mode;  // 0 distance, 1 screen band
+  std::float_t dof_focus_distance;
+  std::float_t dof_focus_range;
+  std::float_t dof_band_center;
+  std::float_t dof_band_height;
+  std::float_t dof_max_blur;
+  std::uint32_t dof_samples;
+
+  std::uint64_t lut;       // texture uuid, 0 = none
+  std::float_t lut_contribution;
+  std::float_t contrast;
+  std::float_t saturation;
+
+  std::uint32_t fog_enabled;
+  math::color fog_color;
+  std::float_t fog_density;
+  std::float_t fog_start;
+  std::float_t fog_height_falloff;
+  std::float_t fog_base_height;
+  std::float_t fog_max_opacity;
+  std::uint32_t fog_affects_sky;
+
+  std::uint32_t ao_enabled;
+  std::float_t ao_radius;
+  std::float_t ao_intensity;
+  std::uint32_t ao_samples;
+}; // struct post_process_data
+
 // Whole-component mirrors for the layout interop calls below -- one get/set pair per component
 // instead of one per field, the managed side editing a copy and writing it back. Flags are
 // uint32 (0/1) and enums their underlying value, so the managed structs lay out identically.
@@ -278,6 +316,11 @@ struct interop {
   static auto camera_get_exposure(std::uint64_t uuid, std::float_t* exposure) -> void;
 
   static auto camera_set_exposure(std::uint64_t uuid, std::float_t exposure) -> void;
+
+  /** @brief The camera's whole post processing: one get/set pair for every effect, the managed side editing a copy and writing it back. */
+  static auto camera_get_post_process(std::uint64_t uuid, post_process_data* out_value) -> void;
+
+  static auto camera_set_post_process(std::uint64_t uuid, const post_process_data* value) -> void;
 
   static auto time_delta_time(std::float_t* delta_time) -> void;
 

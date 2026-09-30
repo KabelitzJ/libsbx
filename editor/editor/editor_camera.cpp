@@ -93,11 +93,7 @@ auto editor_camera::to_camera_data() const -> sbx::render::camera_data {
   data.fov_degrees = _params.fov_degrees;
   data.near_plane = _params.near_plane;
   data.far_plane = _params.far_plane;
-  data.exposure = _params.exposure;
-  data.bloom_enabled = _params.bloom_enabled;
-  data.bloom_intensity = _params.bloom_intensity;
-  data.bloom_threshold = _params.bloom_threshold;
-  data.bloom_knee = _params.bloom_knee;
+  data.post_process = _params.post_process;
   data.is_active = true;
 
   return data;
@@ -133,7 +129,7 @@ auto editor_camera::load(const std::filesystem::path& path) -> editor_camera {
   }
 
   if (root["exposure"]) {
-    result._params.exposure = root["exposure"].as<std::float_t>();
+    result._params.post_process.exposure = root["exposure"].as<std::float_t>();
   }
 
   if (root["move_speed"]) {
@@ -155,7 +151,7 @@ auto editor_camera::save(const std::filesystem::path& path) const -> void {
   root["fov_degrees"] = _params.fov_degrees;
   root["near_plane"] = _params.near_plane;
   root["far_plane"] = _params.far_plane;
-  root["exposure"] = _params.exposure;
+  root["exposure"] = _params.post_process.exposure;
   root["move_speed"] = _move_speed;
   root["look_sensitivity"] = _look_sensitivity;
 

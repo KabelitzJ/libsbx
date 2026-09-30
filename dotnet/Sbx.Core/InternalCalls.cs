@@ -112,6 +112,8 @@ namespace Sbx.Core
     internal static delegate* unmanaged<ulong, float, void> Camera_SetFarPlane;
     internal static delegate* unmanaged<ulong, float*, void> Camera_GetExposure;
     internal static delegate* unmanaged<ulong, float, void> Camera_SetExposure;
+    internal static delegate* unmanaged<ulong, PostProcessSettings*, void> Camera_GetPostProcess;
+    internal static delegate* unmanaged<ulong, PostProcessSettings*, void> Camera_SetPostProcess;
 
     internal static delegate* unmanaged<float*, void> Time_DeltaTime;
 

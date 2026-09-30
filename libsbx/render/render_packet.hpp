@@ -15,6 +15,8 @@
 
 #include <libsbx/assets/material.hpp>
 #include <libsbx/assets/mesh.hpp>
+
+#include <libsbx/scenes/post_process.hpp>
 #include <libsbx/assets/texture.hpp>
 #include <libsbx/assets/environment_map.hpp>
 #include <libsbx/assets/particle_effect.hpp>
@@ -138,11 +140,7 @@ struct camera_data {
   std::float_t fov_degrees{60.0f};
   std::float_t near_plane{0.1f};
   std::float_t far_plane{1000.0f};
-  std::float_t exposure{0.0f};
-  bool bloom_enabled{true};
-  std::float_t bloom_intensity{0.04f};
-  std::float_t bloom_threshold{1.0f};
-  std::float_t bloom_knee{0.1f};
+  scenes::post_process_settings post_process{};
   bool is_active{false};
 }; // struct camera_data
 

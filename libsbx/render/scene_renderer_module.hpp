@@ -332,6 +332,13 @@ private:
   // bindless-sampleable, read by the shader graph Scene Depth node via _scene_depth_index below.
   graphics::image_handle _scene_depth_image{};
   std::uint32_t _scene_depth_index{0u};
+  // ambient_occlusion_pass's half-resolution targets: raw, then blurred (the one lighting reads).
+  graphics::image_handle _ambient_occlusion_raw_image{};
+  graphics::image_handle _ambient_occlusion_image{};
+  std::uint32_t _ambient_occlusion_raw_index{0u};
+  std::uint32_t _ambient_occlusion_index{0u};
+  std::uint32_t _ambient_occlusion_raw_storage_index{0xFFFFFFFFu};
+  std::uint32_t _ambient_occlusion_storage_index{0xFFFFFFFFu};
   graphics::image_handle _color_image{};
   graphics::image_handle _color_msaa_image{};
   std::uint32_t _color_index{0u};

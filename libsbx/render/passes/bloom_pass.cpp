@@ -242,9 +242,9 @@ auto bloom_pass::execute(render_context& context) -> void {
   to_general.mip_levels = _mip_count - 1u;
   command_buffer.transition_image_layout(to_general);
 
-  const auto& camera = context.packet->camera;
+  const auto& bloom = context.packet->camera.post_process.bloom;
 
-  if (!camera.bloom_enabled) {
+  if (!bloom.enabled) {
     // Never ran a dispatch, so every mip is still "general" with stale/garbage contents -- flip
     // the whole chain to the state tonemap_pass's declared read expects in one shot. tonemap_pass
     // itself zeroes the actual contribution, so the garbage never shows.
@@ -298,7 +298,7 @@ auto bloom_pass::execute(render_context& context) -> void {
 
     command_buffer.bind_pipeline(*_prefilter_pipeline);
 
-    const auto data = prefilter_push_data{context.color_index, context.clamp_sampler_index, _downsample_mips[0].storage_index, camera.bloom_threshold, camera.bloom_knee};
+    const auto data = prefilter_push_data{context.color_index, context.clamp_sampler_index, _downsample_mips[0].storage_index, bloom.threshold, bloom.knee};
 
     write_push_constants(context, data);
 

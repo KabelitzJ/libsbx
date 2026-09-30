@@ -39,7 +39,7 @@ inline constexpr auto cull_view_count = std::uint32_t{1u + shadow_cascade_count}
 
 // PCF quality for cascaded shadow sampling (shaders/shadows/csm.slang) — must match the
 // shadow_pcf_quality tiers declared there (0 = low/4 taps, 1 = medium/8 taps, 2 = high/16 taps).
-inline constexpr auto shadow_pcf_quality = std::uint32_t{2u};
+inline constexpr auto shadow_pcf_quality = std::uint32_t{0u};
 
 /**
  * @brief Per-frame state handed to every pass. The module fills the scene bindings (addresses,
@@ -69,6 +69,16 @@ struct render_context {
   math::matrix4x4 inverse_view_projection{math::matrix4x4::identity};
 
   graphics::image_handle depth{};
+  // Single-sample depth (depth_pre_pass's resolve), shader_read_only_optimal after that pass.
+  std::uint32_t scene_depth_index{0u};
+
+  // ambient_occlusion_pass's half-resolution targets (raw -> blurred): sampled and storage indices.
+  graphics::image_handle ambient_occlusion_raw{};
+  graphics::image_handle ambient_occlusion{};
+  std::uint32_t ambient_occlusion_raw_index{0u};
+  std::uint32_t ambient_occlusion_index{0u};
+  std::uint32_t ambient_occlusion_raw_storage_index{0u};
+  std::uint32_t ambient_occlusion_storage_index{0u};
   graphics::image_handle color{};
   graphics::image_handle color_msaa{};
   std::uint32_t color_index{0u};
@@ -86,7 +96,7 @@ struct render_context {
   std::uint32_t revealage_index{0u};
 
   // Half-resolution, fully-blurred bloom result (bloom_pass). Always shader_read_only_optimal by
-  // the time tonemap_pass runs, even if bloom_enabled is off this frame -- see bloom_pass::execute.
+  // the time tonemap_pass runs, even if bloom is off this frame -- see bloom_pass::execute.
   graphics::image_handle bloom_upsample{};
   std::uint32_t bloom_upsample_index{0u};
 

@@ -118,6 +118,7 @@ struct frame_data {
   float shadow_normal_bias;
   float shadow_penumbra_scale; // tan(half the light's angular diameter): PCSS penumbra radius per unit of blocker distance
   float contact_shadow_length;
+  uint ambient_occlusion_index;  // ambient_occlusion_pass's result, 0xFFFFFFFF: off
 }; // struct frame_data
 
 #endif // FRAME_DATA_SLANG_

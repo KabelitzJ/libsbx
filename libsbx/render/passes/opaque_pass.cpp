@@ -108,6 +108,9 @@ auto opaque_pass::declare(graphics_pass_builder& builder, const graph_resources&
   builder.reads_buffer(resources.cluster_range_buffer, graphics::pipeline_stage::fragment_shader, graphics::access::shader_read);
   builder.reads_buffer(resources.cluster_light_index_buffer, graphics::pipeline_stage::fragment_shader, graphics::access::shader_read);
 
+  // Sampled through bindless by lighting.slang's ambient term (ambient_occlusion_pass's result).
+  builder.reads_image(resources.ambient_occlusion, graphics::pipeline_stage::fragment_shader, graphics::access::shader_sampled_read, graphics::image_layout::shader_read_only_optimal);
+
   // Sampled through bindless by opaque_shading_policy's sun lighting (shaders/shadows/csm.slang).
   for (const auto shadow_map : resources.shadow_maps) {
     builder.reads_image(shadow_map, graphics::pipeline_stage::fragment_shader, graphics::access::shader_sampled_read, graphics::image_layout::shader_read_only_optimal);

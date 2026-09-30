@@ -318,6 +318,7 @@ target_sources(
 
     "${CMAKE_SOURCE_DIR}/libsbx/render/skinning/skin_pass.cpp"
 
+    "${CMAKE_SOURCE_DIR}/libsbx/render/passes/ambient_occlusion_pass.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/render/passes/bloom_pass.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/render/passes/canvas_pass.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/render/passes/canvas_world_pass.cpp"
@@ -616,6 +617,7 @@ target_sources(
 
       "${CMAKE_SOURCE_DIR}/libsbx/render/skinning/skin_pass.hpp"
 
+      "${CMAKE_SOURCE_DIR}/libsbx/render/passes/ambient_occlusion_pass.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/render/passes/bloom_pass.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/render/passes/canvas_pass.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/render/passes/canvas_world_pass.hpp"
@@ -650,6 +652,7 @@ target_sources(
       "${CMAKE_SOURCE_DIR}/libsbx/render/ui/widgets/animation_parameter_widgets.hpp"
 
       "${CMAKE_SOURCE_DIR}/libsbx/scenes/components.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/scenes/post_process.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/scenes/scene_serializer.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/scenes/scene.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/scenes/scenes_module.hpp"

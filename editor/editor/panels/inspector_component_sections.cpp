@@ -112,15 +112,123 @@ auto draw_camera_section(editor_state& state, sbx::scenes::scene& target, sbx::s
   bracket_edit(state, target, node, camera, pending, "Edit Camera");
   ImGui::DragFloat("Far Plane", &camera.far_plane, 1.0f, camera.near_plane, 100000.0f);
   bracket_edit(state, target, node, camera, pending, "Edit Camera");
-  ImGui::DragFloat("Exposure", &camera.exposure, 0.05f, -8.0f, 8.0f);
+  // One group per post-processing effect, in the order the renderer applies them.
+  auto& post = camera.post_process;
+
+  ImGui::SeparatorText("Post Processing");
+  ImGui::DragFloat("Exposure", &post.exposure, 0.05f, -8.0f, 8.0f);
   bracket_edit(state, target, node, camera, pending, "Edit Camera");
-  ImGui::Checkbox("Bloom", &camera.bloom_enabled);
+  ImGui::Checkbox("Bloom", &post.bloom.enabled);
   bracket_edit(state, target, node, camera, pending, "Edit Camera");
-  ImGui::DragFloat("Bloom Intensity", &camera.bloom_intensity, 0.005f, 0.0f, 2.0f);
+
+  ImGui::BeginDisabled(!post.bloom.enabled);
+  ImGui::DragFloat("Bloom Intensity", &post.bloom.intensity, 0.005f, 0.0f, 2.0f);
   bracket_edit(state, target, node, camera, pending, "Edit Camera");
-  ImGui::DragFloat("Bloom Threshold", &camera.bloom_threshold, 0.02f, 0.0f, 10.0f);
+  ImGui::DragFloat("Bloom Threshold", &post.bloom.threshold, 0.02f, 0.0f, 10.0f);
   bracket_edit(state, target, node, camera, pending, "Edit Camera");
-  ImGui::DragFloat("Bloom Knee", &camera.bloom_knee, 0.01f, 0.0f, 2.0f);
+  ImGui::DragFloat("Bloom Knee", &post.bloom.knee, 0.01f, 0.0f, 2.0f);
+  bracket_edit(state, target, node, camera, pending, "Edit Camera");
+  ImGui::EndDisabled();
+
+  auto& ao = post.ambient_occlusion;
+
+  ImGui::Checkbox("Ambient Occlusion", &ao.enabled);
+  bracket_edit(state, target, node, camera, pending, "Edit Camera");
+
+  ImGui::BeginDisabled(!ao.enabled);
+  ImGui::DragFloat("AO Radius", &ao.radius, 0.01f, 0.01f, 100.0f);
+  bracket_edit(state, target, node, camera, pending, "Edit Camera");
+  ImGui::DragFloat("AO Intensity", &ao.intensity, 0.01f, 0.0f, 4.0f);
+  bracket_edit(state, target, node, camera, pending, "Edit Camera");
+
+  auto ao_samples = static_cast<int>(ao.samples);
+
+  if (ImGui::SliderInt("AO Samples", &ao_samples, 1, 32)) {
+    ao.samples = static_cast<std::uint32_t>(ao_samples);
+  }
+  bracket_edit(state, target, node, camera, pending, "Edit Camera");
+  ImGui::EndDisabled();
+
+  auto& fog = post.fog;
+
+  ImGui::Checkbox("Fog", &fog.enabled);
+  bracket_edit(state, target, node, camera, pending, "Edit Camera");
+
+  ImGui::BeginDisabled(!fog.enabled);
+  draw_color_field("Fog Color", fog.color);
+  bracket_edit(state, target, node, camera, pending, "Edit Camera");
+  ImGui::DragFloat("Fog Density", &fog.density, 0.0005f, 0.0f, 1.0f, "%.4f");
+  bracket_edit(state, target, node, camera, pending, "Edit Camera");
+  ImGui::DragFloat("Fog Start", &fog.start, 0.1f, 0.0f, 100000.0f);
+  bracket_edit(state, target, node, camera, pending, "Edit Camera");
+  ImGui::DragFloat("Fog Height Falloff", &fog.height_falloff, 0.001f, 0.0f, 10.0f, "%.3f");
+  bracket_edit(state, target, node, camera, pending, "Edit Camera");
+  ImGui::DragFloat("Fog Base Height", &fog.base_height, 0.1f, -100000.0f, 100000.0f);
+  bracket_edit(state, target, node, camera, pending, "Edit Camera");
+  ImGui::DragFloat("Fog Max Opacity", &fog.max_opacity, 0.01f, 0.0f, 1.0f);
+  bracket_edit(state, target, node, camera, pending, "Edit Camera");
+  ImGui::Checkbox("Fog Affects Sky", &fog.affects_sky);
+  bracket_edit(state, target, node, camera, pending, "Edit Camera");
+  ImGui::EndDisabled();
+
+  using focus_mode = sbx::scenes::post_process_settings::depth_of_field_settings::focus_mode;
+  auto& dof = post.depth_of_field;
+
+  ImGui::Checkbox("Depth of Field", &dof.enabled);
+  bracket_edit(state, target, node, camera, pending, "Edit Camera");
+
+  ImGui::BeginDisabled(!dof.enabled);
+  static constexpr auto focus_mode_labels = std::array<const char*, 2u>{"Distance", "Screen Band (Tilt-Shift)"};
+  auto mode_index = static_cast<int>(dof.mode);
+
+  if (ImGui::Combo("Focus Mode", &mode_index, focus_mode_labels.data(), static_cast<int>(focus_mode_labels.size()))) {
+    dof.mode = static_cast<focus_mode>(mode_index);
+  }
+  bracket_edit(state, target, node, camera, pending, "Edit Camera");
+
+  if (dof.mode == focus_mode::distance) {
+    ImGui::DragFloat("Focus Distance", &dof.focus_distance, 0.1f, 0.0f, 100000.0f);
+    bracket_edit(state, target, node, camera, pending, "Edit Camera");
+    ImGui::DragFloat("Focus Range", &dof.focus_range, 0.1f, 0.001f, 100000.0f);
+    bracket_edit(state, target, node, camera, pending, "Edit Camera");
+  } else {
+    ImGui::DragFloat("Band Center", &dof.band_center, 0.005f, 0.0f, 1.0f);
+    bracket_edit(state, target, node, camera, pending, "Edit Camera");
+    ImGui::DragFloat("Band Height", &dof.band_height, 0.005f, 0.001f, 1.0f);
+    bracket_edit(state, target, node, camera, pending, "Edit Camera");
+  }
+
+  ImGui::DragFloat("Max Blur", &dof.max_blur, 0.0005f, 0.0f, 0.05f, "%.4f");
+  bracket_edit(state, target, node, camera, pending, "Edit Camera");
+
+  auto samples = static_cast<int>(dof.samples);
+
+  if (ImGui::SliderInt("Blur Samples", &samples, 1, 64)) {
+    dof.samples = static_cast<std::uint32_t>(samples);
+  }
+  bracket_edit(state, target, node, camera, pending, "Edit Camera");
+  ImGui::EndDisabled();
+
+  auto& grading = post.color_grading;
+  ImGui::SeparatorText("Color Grading");
+
+  {
+    const auto before = camera;
+    auto& assets_module = sbx::core::engine::get_module<sbx::assets::assets_module>();
+
+    // A lookup table is data, not colour: loaded unorm.
+    if (draw_property_row("Lookup Table", [&] { return draw_texture_picker(state, "##camera_lut_picker_popup", grading.lut, assets_module, sbx::graphics::format::r8g8b8a8_unorm); })) {
+      state.push_command(target, std::make_unique<modify_component_command<sbx::scenes::camera>>(node.id(), before, camera, "Edit Camera"));
+    }
+  }
+
+  ImGui::BeginDisabled(!grading.lut.is_valid());
+  ImGui::DragFloat("Lookup Contribution", &grading.lut_contribution, 0.01f, 0.0f, 1.0f);
+  bracket_edit(state, target, node, camera, pending, "Edit Camera");
+  ImGui::EndDisabled();
+  ImGui::DragFloat("Contrast", &grading.contrast, 0.01f, 0.0f, 3.0f);
+  bracket_edit(state, target, node, camera, pending, "Edit Camera");
+  ImGui::DragFloat("Saturation", &grading.saturation, 0.01f, 0.0f, 3.0f);
   bracket_edit(state, target, node, camera, pending, "Edit Camera");
 
   auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();

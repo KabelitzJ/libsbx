@@ -226,6 +226,13 @@ lighting_output evaluate_lit_surface<let ReceivesShadows : bool>(lighting_input 
 
   float3 ambient = (kd * diffuse + specular) * s.ao * input.frame_data.ambient_intensity;
 
+  // Screen-space ambient occlusion (ambient_occlusion_pass): this pixel's, from the half-resolution
+  // result. Ambient and environment light only -- direct light has its own shadows.
+  if (input.frame_data.ambient_occlusion_index != 0xFFFFFFFFu) {
+    float2 screen_uv = input.sv_position.xy / input.frame_data.render_target_size;
+    ambient *= textures[input.frame_data.ambient_occlusion_index].SampleLevel(samplers[input.clamp_sampler_index], screen_uv, 0.0).r;
+  }
+
   float3 color = ambient + lo + s.emissive;
 
   if (input.frame_data.shadow_cascade_debug != 0u && input.frame_data.shadow_enabled != 0u) {

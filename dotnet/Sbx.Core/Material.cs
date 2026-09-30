@@ -88,7 +88,7 @@ namespace Sbx.Core
     }
 
     /**
-     * Overwrites one of this material's generic texture slots (0-3) in place -- what a shader
+     * Overwrites one of this material's generic texture slots (0-7) in place -- what a shader
      * graph's texture parameters or a shader_code material's `material.generic_textures[index]`
      * read. Same sharing caveat as SetTexture.
      */
@@ -107,7 +107,7 @@ namespace Sbx.Core
       unsafe { InternalCalls.Material_SetGenericParam(_uuid, (uint)index, x, y, z, w); }
     }
 
-    /** Puts a font's SDF atlas (single channel, 0.5 = glyph edge) into a generic texture slot (0-3) -- for text a shader draws itself. Same sharing caveat as SetTexture. */
+    /** Puts a font's SDF atlas (single channel, 0.5 = glyph edge) into a generic texture slot (0-7) -- for text a shader draws itself. Same sharing caveat as SetTexture. */
     public void SetGenericTexture(int index, Font font)
     {
       unsafe { InternalCalls.Material_SetGenericTextureFont(_uuid, (uint)index, font.UUID); }

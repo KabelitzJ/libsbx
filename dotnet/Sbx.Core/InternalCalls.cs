@@ -161,6 +161,11 @@ namespace Sbx.Core
     internal static delegate* unmanaged<ulong, void> Texture_Release;
     internal static delegate* unmanaged<NativeString, uint, uint, byte*, bool> Debug_WritePng;
     internal static delegate* unmanaged<ulong, bool> Texture_IsResident;
+    internal static delegate* unmanaged<NativeString, ulong> Font_Load;
+    internal static delegate* unmanaged<ulong, bool> Font_IsResident;
+    internal static delegate* unmanaged<ulong, uint, FontGlyph*, bool> Font_GetGlyph;
+    internal static delegate* unmanaged<ulong, Vector3*, void> Font_GetMetrics;
+    internal static delegate* unmanaged<ulong, uint, ulong, void> Material_SetGenericTextureFont;
 
     internal static delegate* unmanaged<int, int, uint, ulong> ComputeBuffer_Create;
     internal static delegate* unmanaged<ulong, void*, int, bool> ComputeBuffer_SetData;

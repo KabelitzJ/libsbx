@@ -27,6 +27,19 @@
 
 namespace sbx::scripting {
 
+/** @brief One glyph of a font, for Sbx.Core.FontGlyph -- same fields and units as assets::font::glyph (per 1 unit of font size, y down: the quad's top is baseline + bearing_y). */
+struct font_glyph_data {
+  std::float_t uv_x0;
+  std::float_t uv_y0;
+  std::float_t uv_x1;
+  std::float_t uv_y1;
+  std::float_t width;
+  std::float_t height;
+  std::float_t bearing_x;
+  std::float_t bearing_y;
+  std::float_t advance;
+}; // struct font_glyph_data
+
 // Whole-component mirrors for the layout interop calls below -- one get/set pair per component
 // instead of one per field, the managed side editing a copy and writing it back. Flags are
 // uint32 (0/1) and enums their underlying value, so the managed structs lay out identically.
@@ -421,6 +434,20 @@ struct interop {
    * pixel data streams in on a background thread and per-frame upload budget.
    */
   static auto texture_is_resident(std::uint64_t texture_uuid) -> bool;
+
+  /** @brief Loads (or finds) a TTF -> SDF atlas font by project-relative path; its uuid, 0 on failure. Glyph data arrives asynchronously -- see font_is_resident. */
+  static auto font_load(managed::string path) -> std::uint64_t;
+
+  static auto font_is_resident(std::uint64_t font_uuid) -> bool;
+
+  /** @brief False (out untouched) for a codepoint outside the font, or before it's resident. */
+  static auto font_get_glyph(std::uint64_t font_uuid, std::uint32_t codepoint, font_glyph_data* out) -> bool;
+
+  /** @brief x = line height, y = ascent, z = descent, per 1 unit of font size. */
+  static auto font_get_metrics(std::uint64_t font_uuid, math::vector3* out) -> void;
+
+  /** @brief Puts a font's SDF atlas (single channel, 0.5 = glyph edge) into a material's generic texture slot. Font atlases aren't in the texture registry, so material_set_generic_texture can't find them by uuid. */
+  static auto material_set_generic_texture_font(std::uint64_t material_uuid, std::uint32_t index, std::uint64_t font_uuid) -> void;
 
   /** @brief Copies a material into a brand-new, independently-registered instance -- see assets::asset_residency::duplicate_material. Backs Sbx.Core.Material.CreateInstance. Returns 0 if source_uuid doesn't resolve. */
   static auto material_create_instance(std::uint64_t source_uuid) -> std::uint64_t;

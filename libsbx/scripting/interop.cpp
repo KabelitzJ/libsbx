@@ -2384,6 +2384,77 @@ auto interop::texture_is_resident(std::uint64_t texture_uuid) -> bool {
   return assets_module.is_resident(texture);
 }
 
+auto interop::font_load(managed::string path) -> std::uint64_t {
+  auto& assets_module = core::engine::get_module<assets::assets_module>();
+  auto font = assets_module.load_font(std::filesystem::path{std::string{path}});
+
+  return font.is_valid() ? font->id().value() : 0u;
+}
+
+auto interop::font_is_resident(std::uint64_t font_uuid) -> bool {
+  auto& assets_module = core::engine::get_module<assets::assets_module>();
+  auto font = assets_module.load_font(math::uuid::from_value(font_uuid));
+
+  return font.is_valid() && assets_module.is_resident(font);
+}
+
+auto interop::font_get_glyph(std::uint64_t font_uuid, std::uint32_t codepoint, font_glyph_data* out) -> bool {
+  if (!out) {
+    return false;
+  }
+
+  auto& assets_module = core::engine::get_module<assets::assets_module>();
+  auto font = assets_module.load_font(math::uuid::from_value(font_uuid));
+
+  if (!font.is_valid()) {
+    return false;
+  }
+
+  const auto glyph = font->glyph_for(codepoint);
+
+  if (!glyph) {
+    return false;
+  }
+
+  *out = font_glyph_data{
+    glyph->uv_rect.x(), glyph->uv_rect.y(), glyph->uv_rect.z(), glyph->uv_rect.w(),
+    glyph->width, glyph->height, glyph->bearing_x, glyph->bearing_y, glyph->advance
+  };
+
+  return true;
+}
+
+auto interop::font_get_metrics(std::uint64_t font_uuid, math::vector3* out) -> void {
+  if (!out) {
+    return;
+  }
+
+  auto& assets_module = core::engine::get_module<assets::assets_module>();
+  auto font = assets_module.load_font(math::uuid::from_value(font_uuid));
+
+  *out = font.is_valid() ? math::vector3{font->line_height(), font->ascent(), font->descent()} : math::vector3{0.0f, 0.0f, 0.0f};
+}
+
+auto interop::material_set_generic_texture_font(std::uint64_t material_uuid, std::uint32_t index, std::uint64_t font_uuid) -> void {
+  auto& assets_module = core::engine::get_module<assets::assets_module>();
+  auto material = assets_module.load_material(math::uuid::from_value(material_uuid));
+  auto font = assets_module.load_font(math::uuid::from_value(font_uuid));
+
+  if (!material.is_valid() || !font.is_valid()) {
+    return;
+  }
+
+  if (index >= assets::shader_graph_max_textures) {
+    utility::logger<"scripting">::error("material_set_generic_texture_font: index {} out of range (max {})", index, assets::shader_graph_max_textures);
+    return;
+  }
+
+  auto create_info = material->to_create_info();
+  create_info.generic_textures[index] = font->atlas();
+
+  assets_module.update_material(material, create_info);
+}
+
 auto interop::material_is_loaded(std::uint64_t material_uuid) -> bool {
   auto& assets_module = core::engine::get_module<assets::assets_module>();
   auto material = assets_module.load_material(math::uuid::from_value(material_uuid));

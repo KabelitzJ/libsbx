@@ -107,6 +107,12 @@ namespace Sbx.Core
       unsafe { InternalCalls.Material_SetGenericParam(_uuid, (uint)index, x, y, z, w); }
     }
 
+    /** Puts a font's SDF atlas (single channel, 0.5 = glyph edge) into a generic texture slot (0-3) -- for text a shader draws itself. Same sharing caveat as SetTexture. */
+    public void SetGenericTexture(int index, Font font)
+    {
+      unsafe { InternalCalls.Material_SetGenericTextureFont(_uuid, (uint)index, font.UUID); }
+    }
+
     /** Frees this material's slot for reuse. Only call on an instance from CreateInstance -- never on a shared Load()'d template, see the class doc comment. */
     public void Dispose()
     {

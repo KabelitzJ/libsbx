@@ -197,6 +197,11 @@ scripting_module::scripting_module() {
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Texture_Release", reinterpret_cast<void*>(&interop::texture_release));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Debug_WritePng", reinterpret_cast<void*>(&interop::debug_write_png));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Texture_IsResident", reinterpret_cast<void*>(&interop::texture_is_resident));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Font_Load", reinterpret_cast<void*>(&interop::font_load));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Font_IsResident", reinterpret_cast<void*>(&interop::font_is_resident));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Font_GetGlyph", reinterpret_cast<void*>(&interop::font_get_glyph));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Font_GetMetrics", reinterpret_cast<void*>(&interop::font_get_metrics));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Material_SetGenericTextureFont", reinterpret_cast<void*>(&interop::material_set_generic_texture_font));
 
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "ComputeBuffer_Create", reinterpret_cast<void*>(&interop::compute_buffer_create));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "ComputeBuffer_SetData", reinterpret_cast<void*>(&interop::compute_buffer_set_data));

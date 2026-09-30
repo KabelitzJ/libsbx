@@ -2,9 +2,40 @@
 // Copyright (c) 2026 Jonas Kabelitz
 #include <libsbx/canvas/text_layout.hpp>
 
+#include <cstdint>
+#include <string>
 #include <utility>
 
 namespace sbx::canvas {
+
+auto next_codepoint(const std::string& text, std::size_t& i) -> std::uint32_t {
+  const auto lead = static_cast<std::uint8_t>(text[i++]);
+
+  if (lead < 0x80u) {
+    return lead;
+  }
+
+  const auto length = lead >= 0xf0u ? 3u : lead >= 0xe0u ? 2u : lead >= 0xc0u ? 1u : 0u;
+
+  if (length == 0u || i + length > text.size()) {
+    return 0xfffdu;
+  }
+
+  auto codepoint = static_cast<std::uint32_t>(lead & (0x3fu >> length));
+
+  for (auto k = 0u; k < length; ++k) {
+    const auto byte = static_cast<std::uint8_t>(text[i + k]);
+
+    if ((byte & 0xc0u) != 0x80u) {
+      return 0xfffdu;
+    }
+
+    codepoint = (codepoint << 6u) | (byte & 0x3fu);
+  }
+
+  i += length;
+  return codepoint;
+}
 
 auto shape_text(const ui_text& text, const resolved_rect& rect) -> std::vector<text_glyph> {
   auto glyphs = std::vector<text_glyph>{};
@@ -34,8 +65,8 @@ auto shape_text(const ui_text& text, const resolved_rect& rect) -> std::vector<t
   for (auto line_index = std::size_t{0u}; line_index < lines.size(); ++line_index) {
     auto width = 0.0f;
 
-    for (auto i = lines[line_index].first; i < lines[line_index].second; ++i) {
-      const auto codepoint = static_cast<std::uint32_t>(static_cast<std::uint8_t>(text.text[i]));
+    for (auto i = lines[line_index].first; i < lines[line_index].second;) {
+      const auto codepoint = next_codepoint(text.text, i);
 
       if (const auto glyph = font.glyph_for(codepoint)) {
         width += glyph->advance * scale;
@@ -66,8 +97,8 @@ auto shape_text(const ui_text& text, const resolved_rect& rect) -> std::vector<t
 
     const auto baseline_y = block_origin_y + static_cast<std::float_t>(line_index) * line_height + font.ascent() * scale;
 
-    for (auto i = lines[line_index].first; i < lines[line_index].second; ++i) {
-      const auto codepoint = static_cast<std::uint32_t>(static_cast<std::uint8_t>(text.text[i]));
+    for (auto i = lines[line_index].first; i < lines[line_index].second;) {
+      const auto codepoint = next_codepoint(text.text, i);
       const auto glyph = font.glyph_for(codepoint);
 
       if (!glyph) {

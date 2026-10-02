@@ -26,7 +26,8 @@
 #include <libsbx/graphics/resources/image.hpp>
 
 #include <libsbx/assets/asset_handle.hpp>
-#include <libsbx/assets/texture.hpp>
+#include <libsbx/assets/texture2d.hpp>
+#include <libsbx/assets/texture2d_array.hpp>
 #include <libsbx/assets/font.hpp>
 #include <libsbx/assets/mesh.hpp>
 #include <libsbx/assets/skeleton.hpp>
@@ -83,19 +84,19 @@ public:
   ~asset_residency();
 
   /** @brief Loads a texture from a UUID or project-relative path; returns the existing handle if already loaded. */
-  auto load_texture(const math::uuid& id, graphics::format format = graphics::format::r8g8b8a8_srgb) -> texture_handle;
+  auto load_texture(const math::uuid& id, graphics::format format = graphics::format::r8g8b8a8_srgb) -> texture2d_handle;
 
-  auto load_texture(const std::filesystem::path& path, graphics::format format = graphics::format::r8g8b8a8_srgb) -> texture_handle;
+  auto load_texture(const std::filesystem::path& path, graphics::format format = graphics::format::r8g8b8a8_srgb) -> texture2d_handle;
 
   /**
    * @brief Allocates a brand-new, empty GPU texture with no source file -- registered as BOTH a
    * bindless sampled image (so a Material can read it, same as any loaded texture) and a bindless
-   * storage image (so a compute shader can write it as a UAV, see texture::storage_index()).
+   * storage image (so a compute shader can write it as a UAV, see texture2d::storage_index()).
    * Cleared to zero and transitioned to `general` layout synchronously before returning, since a
    * compute shader dispatched right after this call needs a defined layout to write into and
    * there is no source pixel data to stage otherwise. Backs Sbx.Core.Texture2D.CreateStorageImage.
    */
-  auto create_storage_image(std::uint32_t width, std::uint32_t height, graphics::format format) -> texture_handle;
+  auto create_storage_image(std::uint32_t width, std::uint32_t height, graphics::format format) -> texture2d_handle;
 
   /**
    * @brief Finds an already-resident texture by uuid alone, regardless of what format it was
@@ -108,18 +109,33 @@ public:
    * Texture_ReadPixels) has no reason to know or repeat what format it was created with. Empty
    * handle if no resident texture has this uuid under any format.
    */
-  [[nodiscard]] auto find_texture(const math::uuid& id) const -> texture_handle;
+  [[nodiscard]] auto find_texture(const math::uuid& id) const -> texture2d_handle;
+
+  /**
+   * @brief A 2D texture array built from @p layers, layer i = layers[i] (Godot's
+   * Texture2DArray::create_from_images). Every layer must be valid, resident, exactly @p size and
+   * share the first layer's format and mip count; anything else logs which layer is wrong and
+   * returns an invalid handle -- nothing is created. The layers are copied on the GPU (with their
+   * mips) at the next upload flush: keep them alive until the array is_resident(), after that they
+   * can be released. Free the array with release_texture2d_array.
+   */
+  auto create_texture2d_array(std::span<const texture2d_handle> layers, const math::vector2u& size) -> texture2d_array_handle;
+
+  [[nodiscard]] auto find_texture2d_array(const math::uuid& id) const -> texture2d_array_handle;
+
+  /** @brief Frees the array's image and bindless slot (not its layers). */
+  auto release_texture2d_array(const texture2d_array_handle& array) -> void;
 
   /**
    * @brief Frees a texture's bindless sampled/storage indices and retires its underlying GPU
    * image (via the normal resource_pool retire/collect timeline), and drops it from the uuid
    * cache. Call this right before dropping the last reference to a texture you created via
    * create_storage_image and are done with -- same as release_mesh, nothing frees this on its
-   * own, so a texture_handle simply going out of scope leaks its bindless indices and image
+   * own, so a texture2d_handle simply going out of scope leaks its bindless indices and image
    * forever. Never call this on a texture still referenced elsewhere (e.g. one still bound to a
    * live material) or still resident from load_texture's own file cache.
    */
-  auto release_texture(const texture_handle& texture) -> void;
+  auto release_texture(const texture2d_handle& texture) -> void;
 
   /**
    * @brief The underlying GPU image a texture's sampled bindless index maps to -- an empty/default
@@ -127,7 +143,7 @@ public:
    * (Sbx.Core.Texture2D.ReadPixels) and anything else that needs the real image rather than just
    * a bindless index.
    */
-  [[nodiscard]] auto image_handle_for(const texture_handle& texture) const -> graphics::image_handle;
+  [[nodiscard]] auto image_handle_for(const texture2d_handle& texture) const -> graphics::image_handle;
 
   /** @brief Loads a TTF -> SDF glyph atlas font from a UUID or project-relative path; returns the existing handle if already loaded. */
   auto load_font(const math::uuid& id) -> font_handle;
@@ -354,7 +370,7 @@ public:
    */
   auto process_uploads(std::uint64_t frame_index) -> void;
 
-  [[nodiscard]] auto is_resident(const texture_handle& texture) const -> bool;
+  [[nodiscard]] auto is_resident(const texture2d_handle& texture) const -> bool;
 
   [[nodiscard]] auto is_resident(const mesh_handle& mesh) const -> bool;
 
@@ -363,6 +379,8 @@ public:
   [[nodiscard]] auto is_resident(const environment_map_handle& environment) const -> bool;
 
   [[nodiscard]] auto is_resident(const font_handle& font) const -> bool;
+
+  [[nodiscard]] auto is_resident(const texture2d_array_handle& array) const -> bool;
 
   /** @brief Live counts across every cache this class owns -- for the editor's Statistics panel. */
   [[nodiscard]] auto resident_asset_counts() const -> assets::resident_asset_counts;
@@ -373,21 +391,21 @@ public:
    * editor/UI layer to blit a real preview into ImGui (see ui_module::texture_id), the same way
    * the viewport blits the scene's final image.
    */
-  [[nodiscard]] auto image_view_of(const texture_handle& texture) const -> VkImageView;
+  [[nodiscard]] auto image_view_of(const texture2d_handle& texture) const -> VkImageView;
 
-  [[nodiscard]] auto white_texture() const noexcept -> texture_handle {
+  [[nodiscard]] auto white_texture() const noexcept -> texture2d_handle {
     return _white;
   }
 
-  [[nodiscard]] auto normal_texture() const noexcept -> texture_handle {
+  [[nodiscard]] auto normal_texture() const noexcept -> texture2d_handle {
     return _normal;
   }
 
-  [[nodiscard]] auto black_texture() const noexcept -> texture_handle {
+  [[nodiscard]] auto black_texture() const noexcept -> texture2d_handle {
     return _black;
   }
 
-  [[nodiscard]] auto magenta_texture() const noexcept -> texture_handle {
+  [[nodiscard]] auto magenta_texture() const noexcept -> texture2d_handle {
     return _magenta;
   }
 
@@ -414,6 +432,12 @@ private:
     // where averaging drops thin strokes under the edge threshold.
     bool mipmapped{true};
   }; // struct pending_texture_upload
+
+  struct pending_array_upload {
+    std::shared_ptr<texture2d_array> record;
+    graphics::image_handle image;
+    std::vector<graphics::image_handle> layers;
+  }; // struct pending_array_upload
 
   struct pending_mesh_upload {
     std::shared_ptr<mesh> record;
@@ -454,7 +478,7 @@ private:
     material_data data;
   }; // struct pending_material_upload
 
-  auto _create_default_texture(std::array<std::uint8_t, 4u> color) -> texture_handle;
+  auto _create_default_texture(std::array<std::uint8_t, 4u> color) -> texture2d_handle;
 
   auto _register_material(std::shared_ptr<material> record) -> material_handle;
 
@@ -486,10 +510,17 @@ private:
 
   mutable std::mutex _mutex{};
 
-  std::unordered_map<std::string, std::shared_ptr<texture>> _textures{};
+  std::unordered_map<std::string, std::shared_ptr<texture2d>> _textures{};
   std::deque<pending_texture_upload> _pending_textures{};
   std::unordered_map<std::uint32_t, graphics::image_handle> _images{};
   std::unordered_map<std::uint32_t, std::uint64_t> _resident_frame{};
+
+  // Texture arrays by id; images and resident frames by index in the 2D-array binding (an index
+  // space of its own, separate from _images / _resident_frame above).
+  std::unordered_map<math::uuid, std::shared_ptr<texture2d_array>> _texture_arrays{};
+  std::deque<pending_array_upload> _pending_arrays{};
+  std::unordered_map<std::uint32_t, graphics::image_handle> _array_images{};
+  std::unordered_map<std::uint32_t, std::uint64_t> _array_resident_frame{};
 
   std::unordered_map<math::uuid, std::shared_ptr<font>> _fonts{};
 
@@ -515,10 +546,10 @@ private:
   std::unordered_map<math::uuid, std::shared_ptr<animation_graph>> _animation_graph_files{};
   std::unordered_map<math::uuid, std::shared_ptr<shader_graph>> _shader_graph_files{};
 
-  texture_handle _white{};
-  texture_handle _normal{};
-  texture_handle _black{};
-  texture_handle _magenta{};
+  texture2d_handle _white{};
+  texture2d_handle _normal{};
+  texture2d_handle _black{};
+  texture2d_handle _magenta{};
 
   // Declared LAST -- destroyed (aborted + joined) before any cache/pending-upload queue above that
   // its background thread might still be about to feed.

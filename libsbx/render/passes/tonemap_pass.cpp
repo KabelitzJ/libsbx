@@ -50,7 +50,7 @@ struct tonemap_push {
   std::float_t far_plane;
   std::float_t aspect;         // width / height
 
-  // Colour grading: lut_index = texture::invalid_index for none.
+  // Colour grading: lut_index = texture2d::invalid_index for none.
   std::uint32_t lut_index;
   std::float_t lut_contribution;
   std::float_t contrast;
@@ -157,7 +157,7 @@ auto tonemap_pass::execute(render_context& context, std::uint32_t /*group*/) -> 
     .near_plane = camera.near_plane,
     .far_plane = camera.far_plane,
     .aspect = static_cast<std::float_t>(context.extent.x()) / static_cast<std::float_t>(std::max(context.extent.y(), 1u)),
-    .lut_index = grading.lut.is_valid() ? grading.lut->index() : assets::texture::invalid_index,
+    .lut_index = grading.lut.is_valid() ? grading.lut->index() : assets::texture2d::invalid_index,
     .lut_contribution = grading.lut_contribution,
     .contrast = grading.contrast,
     .saturation = grading.saturation,

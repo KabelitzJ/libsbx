@@ -410,7 +410,8 @@ target_sources(
       "${CMAKE_SOURCE_DIR}/libsbx/assets/primitive_meshes.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/assets/scene.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/assets/skeleton.hpp"
-      "${CMAKE_SOURCE_DIR}/libsbx/assets/texture.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/assets/texture2d.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/assets/texture2d_array.hpp"
 
       "${CMAKE_SOURCE_DIR}/libsbx/canvas/canvas_draw_list.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/canvas/canvas_module.hpp"

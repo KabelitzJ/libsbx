@@ -2,6 +2,8 @@
 // Copyright (c) 2026 Jonas Kabelitz
 #include <libsbx/graphics/upload_context.hpp>
 
+#include <algorithm>
+
 #include <libsbx/core/engine.hpp>
 
 #include <libsbx/graphics/graphics_module.hpp>
@@ -59,8 +61,16 @@ auto upload_context::stage_buffer(buffer_handle destination, std::span<const std
   });
 }
 
+auto upload_context::stage_layer_copies(image_handle destination, std::vector<image_handle> layers, image_layout final_layout) -> void {
+  _pending_layer_copies.push_back(pending_layer_copy{
+    .destination = destination,
+    .layers = std::move(layers),
+    .final_layout = final_layout
+  });
+}
+
 auto upload_context::flush(command_buffer& commands, std::uint64_t frame_index) -> void {
-  if (_pending_images.empty() && _pending_buffers.empty()) {
+  if (_pending_images.empty() && _pending_buffers.empty() && _pending_layer_copies.empty()) {
     return;
   }
 
@@ -157,8 +167,85 @@ auto upload_context::flush(command_buffer& commands, std::uint64_t frame_index) 
     registry.retire(pending.staging, frame_index);
   }
 
+  // After the image uploads above: a layer uploaded in this same flush is already in
+  // shader_read_only_optimal by the time its copy below transitions it.
+  for (const auto& pending : _pending_layer_copies) {
+    auto& destination_image = registry.get<image>(pending.destination);
+    const auto mip_levels = destination_image.mip_levels();
+    const auto aspect = destination_image.aspect();
+
+    auto to_transfer = command_buffer::image_transition_data{};
+    to_transfer.image = destination_image.handle();
+    to_transfer.src_stage_mask = VK_PIPELINE_STAGE_2_NONE;
+    to_transfer.src_access_mask = VK_ACCESS_2_NONE;
+    to_transfer.dst_stage_mask = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
+    to_transfer.dst_access_mask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
+    to_transfer.old_layout = image_layout::undefined;
+    to_transfer.new_layout = image_layout::transfer_destination_optimal;
+    to_transfer.aspect_mask = aspect;
+    to_transfer.mip_levels = mip_levels;
+    to_transfer.layer_count = destination_image.array_layers();
+
+    commands.transition_image_layout(to_transfer);
+
+    for (auto layer = std::uint32_t{0u}; layer < pending.layers.size(); ++layer) {
+      auto& source_image = registry.get<image>(pending.layers[layer]);
+
+      auto to_source = command_buffer::image_transition_data{};
+      to_source.image = source_image.handle();
+      to_source.src_stage_mask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
+      to_source.src_access_mask = VK_ACCESS_2_MEMORY_READ_BIT | VK_ACCESS_2_MEMORY_WRITE_BIT;
+      to_source.dst_stage_mask = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
+      to_source.dst_access_mask = VK_ACCESS_2_TRANSFER_READ_BIT;
+      to_source.old_layout = image_layout::shader_read_only_optimal;
+      to_source.new_layout = image_layout::transfer_source_optimal;
+      to_source.aspect_mask = aspect;
+      to_source.mip_levels = mip_levels;
+
+      commands.transition_image_layout(to_source);
+
+      auto regions = std::vector<VkImageCopy>{};
+      regions.reserve(mip_levels);
+
+      for (auto mip = std::uint32_t{0u}; mip < mip_levels; ++mip) {
+        const auto extent = source_image.extent();
+
+        auto region = VkImageCopy{};
+        region.srcSubresource = VkImageSubresourceLayers{aspect, mip, 0u, 1u};
+        region.dstSubresource = VkImageSubresourceLayers{aspect, mip, layer, 1u};
+        region.extent = VkExtent3D{std::max(extent.x() >> mip, 1u), std::max(extent.y() >> mip, 1u), 1u};
+        regions.push_back(region);
+      }
+
+      vkCmdCopyImage(commands.handle(), source_image.handle(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, destination_image.handle(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, static_cast<std::uint32_t>(regions.size()), regions.data());
+
+      auto back = to_source;
+      back.src_stage_mask = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
+      back.src_access_mask = VK_ACCESS_2_TRANSFER_READ_BIT;
+      back.dst_stage_mask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
+      back.dst_access_mask = VK_ACCESS_2_SHADER_READ_BIT;
+      back.old_layout = image_layout::transfer_source_optimal;
+      back.new_layout = image_layout::shader_read_only_optimal;
+
+      commands.transition_image_layout(back);
+    }
+
+    const auto final_scope = scope_for_layout(pending.final_layout);
+
+    auto to_final = to_transfer;
+    to_final.src_stage_mask = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
+    to_final.src_access_mask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
+    to_final.dst_stage_mask = final_scope.stage;
+    to_final.dst_access_mask = final_scope.access;
+    to_final.old_layout = image_layout::transfer_destination_optimal;
+    to_final.new_layout = pending.final_layout;
+
+    commands.transition_image_layout(to_final);
+  }
+
   _pending_images.clear();
   _pending_buffers.clear();
+  _pending_layer_copies.clear();
 }
 
 } // namespace sbx::graphics

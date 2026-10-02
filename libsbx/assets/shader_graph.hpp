@@ -26,7 +26,7 @@
 
 #include <libsbx/assets/asset_handle.hpp>
 #include <libsbx/assets/loadable.hpp>
-#include <libsbx/assets/texture.hpp>
+#include <libsbx/assets/texture2d.hpp>
 
 namespace sbx::assets {
 
@@ -637,7 +637,7 @@ enum class shader_node_category : std::uint8_t {
   }
 }
 
-using shader_graph_node_value = std::variant<std::monostate, std::float_t, math::vector2, math::vector3, math::vector4, math::color, texture_handle, std::string>;
+using shader_graph_node_value = std::variant<std::monostate, std::float_t, math::vector2, math::vector3, math::vector4, math::color, texture2d_handle, std::string>;
 
 struct shader_graph_node {
   std::uint32_t id{0u};
@@ -1075,8 +1075,8 @@ using shader_graph_handle = asset_handle<shader_graph>;
   return result;
 }
 
-[[nodiscard]] inline auto shader_graph_default_generic_textures(const shader_graph& graph) -> std::array<texture_handle, shader_graph_max_textures> {
-  auto result = std::array<texture_handle, shader_graph_max_textures>{};
+[[nodiscard]] inline auto shader_graph_default_generic_textures(const shader_graph& graph) -> std::array<texture2d_handle, shader_graph_max_textures> {
+  auto result = std::array<texture2d_handle, shader_graph_max_textures>{};
 
   for (const auto& parameter : graph.parameters()) {
     if (parameter.type != shader_graph_parameter_type::texture_value || parameter.slot >= result.size()) {
@@ -1085,11 +1085,11 @@ using shader_graph_handle = asset_handle<shader_graph>;
 
     const auto node = std::ranges::find(graph.nodes(), parameter.node_id, &shader_graph_node::id);
 
-    if (node == graph.nodes().end() || !std::holds_alternative<texture_handle>(node->value)) {
+    if (node == graph.nodes().end() || !std::holds_alternative<texture2d_handle>(node->value)) {
       continue;
     }
 
-    result[parameter.slot] = std::get<texture_handle>(node->value);
+    result[parameter.slot] = std::get<texture2d_handle>(node->value);
   }
 
   return result;

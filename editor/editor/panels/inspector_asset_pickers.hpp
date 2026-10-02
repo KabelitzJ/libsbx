@@ -46,7 +46,7 @@ auto extract_material_to_asset(sbx::assets::assets_module& assets_module, const 
  * closed button and the popup list (see asset_tile.hpp). format follows load_material's per-slot
  * convention (srgb for albedo/emissive, unorm for normal/metallic_roughness/occlusion).
  */
-auto draw_texture_picker(editor_state& state, const char* popup_id, sbx::assets::texture_handle& slot, sbx::assets::assets_module& assets_module, sbx::graphics::format format) -> bool;
+auto draw_texture_picker(editor_state& state, const char* popup_id, sbx::assets::texture2d_handle& slot, sbx::assets::assets_module& assets_module, sbx::graphics::format format) -> bool;
 
 /** @brief Same idea as draw_texture_picker, for a font asset slot (ui_text::font). */
 auto draw_font_picker(editor_state& state, const char* popup_id, sbx::assets::font_handle& slot) -> bool;

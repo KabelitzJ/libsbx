@@ -16,7 +16,8 @@
 
 #include <libsbx/assets/asset_handle.hpp>
 #include <libsbx/assets/loadable.hpp>
-#include <libsbx/assets/texture.hpp>
+#include <libsbx/assets/texture2d.hpp>
+#include <libsbx/assets/texture2d_array.hpp>
 #include <libsbx/assets/shader_graph.hpp>
 
 namespace sbx::assets {
@@ -69,11 +70,11 @@ public:
     std::float_t ior{1.5f}; // KHR_materials_ior default; F0 = ((ior-1)/(ior+1))^2 = 0.04
     math::vector2 uv_tiling{1.0f, 1.0f};
     math::vector2 uv_offset{0.0f, 0.0f};
-    texture_handle albedo{};
-    texture_handle normal{};
-    texture_handle metallic_roughness{};
-    texture_handle occlusion{};
-    texture_handle emissive{};
+    texture2d_handle albedo{};
+    texture2d_handle normal{};
+    texture2d_handle metallic_roughness{};
+    texture2d_handle occlusion{};
+    texture2d_handle emissive{};
 
     // Non-nil routes rendering to this graph's own generated shader instead of the built-in
     // pbr/unlit path (`shading` above becomes irrelevant once this is set). generic_params/
@@ -82,7 +83,11 @@ public:
     // arrays are indexed by (slot 0 first, etc.).
     shader_graph_handle shader_graph{};
     std::array<math::vector4, shader_graph_max_params> generic_params{};
-    std::array<texture_handle, shader_graph_max_textures> generic_textures{};
+    std::array<texture2d_handle, shader_graph_max_textures> generic_textures{};
+    // A texture array in generic slot i instead (wins over generic_textures[i]): the shader reads
+    // texture_arrays[generic_textures[i]] rather than textures[...]. Set at runtime only, never
+    // saved to a .material file.
+    std::array<texture2d_array_handle, shader_graph_max_textures> generic_texture_arrays{};
 
     // Absolute path to the .slang file a shader_code material renders with (empty otherwise).
     // Reads generic_params/generic_textures the same way a graph does.
@@ -116,6 +121,7 @@ public:
     _shader_graph{create_info.shader_graph},
     _generic_params{create_info.generic_params},
     _generic_textures{create_info.generic_textures},
+    _generic_texture_arrays{create_info.generic_texture_arrays},
     _shader_code{create_info.shader_code},
     _name{create_info.name} { }
 
@@ -191,23 +197,23 @@ public:
     return _uv_offset;
   }
 
-  [[nodiscard]] auto albedo() const noexcept -> const texture_handle& {
+  [[nodiscard]] auto albedo() const noexcept -> const texture2d_handle& {
     return _albedo;
   }
 
-  [[nodiscard]] auto normal() const noexcept -> const texture_handle& {
+  [[nodiscard]] auto normal() const noexcept -> const texture2d_handle& {
     return _normal;
   }
 
-  [[nodiscard]] auto metallic_roughness() const noexcept -> const texture_handle& {
+  [[nodiscard]] auto metallic_roughness() const noexcept -> const texture2d_handle& {
     return _metallic_roughness;
   }
 
-  [[nodiscard]] auto occlusion() const noexcept -> const texture_handle& {
+  [[nodiscard]] auto occlusion() const noexcept -> const texture2d_handle& {
     return _occlusion;
   }
 
-  [[nodiscard]] auto emissive() const noexcept -> const texture_handle& {
+  [[nodiscard]] auto emissive() const noexcept -> const texture2d_handle& {
     return _emissive;
   }
 
@@ -219,8 +225,12 @@ public:
     return _generic_params;
   }
 
-  [[nodiscard]] auto generic_textures() const noexcept -> const std::array<texture_handle, shader_graph_max_textures>& {
+  [[nodiscard]] auto generic_textures() const noexcept -> const std::array<texture2d_handle, shader_graph_max_textures>& {
     return _generic_textures;
+  }
+
+  [[nodiscard]] auto generic_texture_arrays() const noexcept -> const std::array<texture2d_array_handle, shader_graph_max_textures>& {
+    return _generic_texture_arrays;
   }
 
   [[nodiscard]] auto shader_code() const noexcept -> const std::filesystem::path& {
@@ -255,6 +265,7 @@ public:
     result.shader_graph = _shader_graph;
     result.generic_params = _generic_params;
     result.generic_textures = _generic_textures;
+    result.generic_texture_arrays = _generic_texture_arrays;
     result.shader_code = _shader_code;
     return result;
   }
@@ -285,14 +296,15 @@ private:
   std::float_t _ior{1.5f};
   math::vector2 _uv_tiling{1.0f, 1.0f};
   math::vector2 _uv_offset{0.0f, 0.0f};
-  texture_handle _albedo{};
-  texture_handle _normal{};
-  texture_handle _metallic_roughness{};
-  texture_handle _occlusion{};
-  texture_handle _emissive{};
+  texture2d_handle _albedo{};
+  texture2d_handle _normal{};
+  texture2d_handle _metallic_roughness{};
+  texture2d_handle _occlusion{};
+  texture2d_handle _emissive{};
   shader_graph_handle _shader_graph{};
   std::array<math::vector4, shader_graph_max_params> _generic_params{};
-  std::array<texture_handle, shader_graph_max_textures> _generic_textures{};
+  std::array<texture2d_handle, shader_graph_max_textures> _generic_textures{};
+  std::array<texture2d_array_handle, shader_graph_max_textures> _generic_texture_arrays{};
   std::filesystem::path _shader_code{};
   std::uint32_t _index{invalid_index};
   math::uuid _id{math::uuid::nil()};

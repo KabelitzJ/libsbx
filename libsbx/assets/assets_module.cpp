@@ -100,27 +100,27 @@ auto assets_module::_fixup_material_texture_references(const std::filesystem::pa
   }
 }
 
-auto assets_module::load_texture(const math::uuid& id, graphics::format format) -> texture_handle {
+auto assets_module::load_texture(const math::uuid& id, graphics::format format) -> texture2d_handle {
   return _residency.load_texture(id, format);
 }
 
-auto assets_module::load_texture(const std::filesystem::path& path, graphics::format format) -> texture_handle {
+auto assets_module::load_texture(const std::filesystem::path& path, graphics::format format) -> texture2d_handle {
   return _residency.load_texture(path, format);
 }
 
-auto assets_module::create_storage_image(std::uint32_t width, std::uint32_t height, graphics::format format) -> texture_handle {
+auto assets_module::create_storage_image(std::uint32_t width, std::uint32_t height, graphics::format format) -> texture2d_handle {
   return _residency.create_storage_image(width, height, format);
 }
 
-auto assets_module::image_handle_for(const texture_handle& texture) const -> graphics::image_handle {
+auto assets_module::image_handle_for(const texture2d_handle& texture) const -> graphics::image_handle {
   return _residency.image_handle_for(texture);
 }
 
-auto assets_module::find_texture(const math::uuid& id) const -> texture_handle {
+auto assets_module::find_texture(const math::uuid& id) const -> texture2d_handle {
   return _residency.find_texture(id);
 }
 
-auto assets_module::release_texture(const texture_handle& texture) -> void {
+auto assets_module::release_texture(const texture2d_handle& texture) -> void {
   _residency.release_texture(texture);
 }
 
@@ -284,7 +284,7 @@ auto assets_module::process_uploads(std::uint64_t frame_index) -> void {
   _residency.process_uploads(frame_index);
 }
 
-auto assets_module::is_resident(const texture_handle& texture) const -> bool {
+auto assets_module::is_resident(const texture2d_handle& texture) const -> bool {
   return _residency.is_resident(texture);
 }
 
@@ -302,6 +302,22 @@ auto assets_module::is_resident(const environment_map_handle& environment) const
 
 auto assets_module::is_resident(const font_handle& font) const -> bool {
   return _residency.is_resident(font);
+}
+
+auto assets_module::is_resident(const texture2d_array_handle& array) const -> bool {
+  return _residency.is_resident(array);
+}
+
+auto assets_module::create_texture2d_array(std::span<const texture2d_handle> layers, const math::vector2u& size) -> texture2d_array_handle {
+  return _residency.create_texture2d_array(layers, size);
+}
+
+auto assets_module::find_texture2d_array(const math::uuid& id) const -> texture2d_array_handle {
+  return _residency.find_texture2d_array(id);
+}
+
+auto assets_module::release_texture2d_array(const texture2d_array_handle& array) -> void {
+  _residency.release_texture2d_array(array);
 }
 
 auto assets_module::path_of(const math::uuid& id) const -> std::filesystem::path {

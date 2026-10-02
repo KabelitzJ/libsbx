@@ -11,7 +11,7 @@
 #include <libsbx/math/color.hpp>
 #include <libsbx/math/uuid.hpp>
 
-#include <libsbx/assets/texture.hpp>
+#include <libsbx/assets/texture2d.hpp>
 #include <libsbx/assets/font.hpp>
 
 #include <libsbx/reflection/annotations.hpp>
@@ -67,7 +67,7 @@ struct canvas_group {
 }; // struct canvas_group
 
 struct ui_image {
-  assets::texture_handle sprite{};
+  assets::texture2d_handle sprite{};
   math::color tint{1.0f, 1.0f, 1.0f, 1.0f};
   math::vector4 uv_rect{0.0f, 0.0f, 1.0f, 1.0f};
   bool raycast_target{true};

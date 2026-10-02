@@ -140,7 +140,7 @@ auto shader_graph_preview_renderer::_refresh_material(const sbx::assets::shader_
         break;
       }
       case sbx::assets::shader_graph_parameter_type::texture_value: {
-        const auto handle = std::holds_alternative<sbx::assets::texture_handle>(entry->value) ? std::get<sbx::assets::texture_handle>(entry->value) : sbx::assets::texture_handle{};
+        const auto handle = std::holds_alternative<sbx::assets::texture2d_handle>(entry->value) ? std::get<sbx::assets::texture2d_handle>(entry->value) : sbx::assets::texture2d_handle{};
         data.generic_textures[parameter.slot] = handle.is_valid() ? handle->index() : (white.is_valid() ? white->index() : 0u);
         break;
       }

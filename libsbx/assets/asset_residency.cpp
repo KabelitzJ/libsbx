@@ -108,14 +108,14 @@ auto asset_residency::_texture_cache_key(const math::uuid& id, graphics::format 
   return fmt::format("{}:{}", id.value(), (is_srgb ? "#srgb" : "#linear"));
 }
 
-auto asset_residency::load_texture(const math::uuid& id, graphics::format format) -> texture_handle {
+auto asset_residency::load_texture(const math::uuid& id, graphics::format format) -> texture2d_handle {
   const auto key = _texture_cache_key(id, format);
 
   {
     auto lock = std::lock_guard{_mutex};
 
     if (const auto entry = _textures.find(key); entry != _textures.end()) {
-      return texture_handle{entry->second};
+      return texture2d_handle{entry->second};
     }
   }
 
@@ -123,7 +123,7 @@ auto asset_residency::load_texture(const math::uuid& id, graphics::format format
 
   if (source.empty()) {
     utility::logger<"assets">::warn("Unknown texture uuid {}", id);
-    return texture_handle{};
+    return texture2d_handle{};
   }
 
   const auto cooked = _manifest.cooked_path(id, ".sbxtex");
@@ -135,7 +135,7 @@ auto asset_residency::load_texture(const math::uuid& id, graphics::format format
 
   const auto index = bindless_table.reserve_sampled_image();
 
-  auto record = std::make_shared<texture>(texture{index});
+  auto record = std::make_shared<texture2d>(texture2d{index});
   record->_id = id;
 
   {
@@ -145,10 +145,10 @@ auto asset_residency::load_texture(const math::uuid& id, graphics::format format
 
   _loader.submit(asset_loader::texture_request{id, format, source, cooked, needs_cook});
 
-  return texture_handle{record};
+  return texture2d_handle{record};
 }
 
-auto asset_residency::load_texture(const std::filesystem::path& path, graphics::format format) -> texture_handle {
+auto asset_residency::load_texture(const std::filesystem::path& path, graphics::format format) -> texture2d_handle {
   const auto& project = core::engine::project();
 
   const auto assets_directory = project.assets_directory();
@@ -156,7 +156,7 @@ auto asset_residency::load_texture(const std::filesystem::path& path, graphics::
   return load_texture(_manifest.import(assets_directory / path), format);
 }
 
-auto asset_residency::create_storage_image(std::uint32_t width, std::uint32_t height, graphics::format format) -> texture_handle {
+auto asset_residency::create_storage_image(std::uint32_t width, std::uint32_t height, graphics::format format) -> texture2d_handle {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 
   auto& registry = graphics_module.resource_registry();
@@ -207,7 +207,7 @@ auto asset_residency::create_storage_image(std::uint32_t width, std::uint32_t he
   // ibl_baker.cpp flushes explicitly for the same reason; do the same here.
   bindless_table.flush_writes();
 
-  auto record = std::make_shared<texture>(texture{sampled_index});
+  auto record = std::make_shared<texture2d>(texture2d{sampled_index});
   record->_storage_index = storage_index;
 
   const auto id = math::uuid::create();
@@ -233,10 +233,10 @@ auto asset_residency::create_storage_image(std::uint32_t width, std::uint32_t he
     _resident_frame.emplace(sampled_index, 0u);
   }
 
-  return texture_handle{record};
+  return texture2d_handle{record};
 }
 
-auto asset_residency::release_texture(const texture_handle& texture) -> void {
+auto asset_residency::release_texture(const texture2d_handle& texture) -> void {
   if (!texture.is_valid()) {
     return;
   }
@@ -262,7 +262,7 @@ auto asset_residency::release_texture(const texture_handle& texture) -> void {
 
   bindless_table.unregister_sampled_image(texture->index());
 
-  if (texture->storage_index() != texture::invalid_index) {
+  if (texture->storage_index() != texture2d::invalid_index) {
     bindless_table.unregister_storage_image(texture->storage_index());
   }
 
@@ -274,19 +274,135 @@ auto asset_residency::release_texture(const texture_handle& texture) -> void {
   }
 }
 
-auto asset_residency::find_texture(const math::uuid& id) const -> texture_handle {
+auto asset_residency::find_texture(const math::uuid& id) const -> texture2d_handle {
   auto lock = std::lock_guard{_mutex};
 
   for (const auto& [key, record] : _textures) {
     if (record->id() == id) {
-      return texture_handle{record};
+      return texture2d_handle{record};
     }
   }
 
-  return texture_handle{};
+  return texture2d_handle{};
 }
 
-auto asset_residency::image_handle_for(const texture_handle& texture) const -> graphics::image_handle {
+auto asset_residency::create_texture2d_array(std::span<const texture2d_handle> layers, const math::vector2u& size) -> texture2d_array_handle {
+  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
+  auto& registry = graphics_module.resource_registry();
+  auto& bindless_table = graphics_module.bindless_table();
+
+  if (layers.empty()) {
+    utility::logger<"assets">::error("create_texture2d_array: no layers");
+    return texture2d_array_handle{};
+  }
+
+  auto images = std::vector<graphics::image_handle>{};
+  images.reserve(layers.size());
+
+  auto format = graphics::format::undefined;
+  auto mip_levels = 0u;
+
+  for (auto i = std::size_t{0u}; i < layers.size(); ++i) {
+    const auto& layer = layers[i];
+
+    if (!layer.is_valid()) {
+      utility::logger<"assets">::error("create_texture2d_array: layer {} is not a valid texture", i);
+      return texture2d_array_handle{};
+    }
+
+    if (!is_resident(layer)) {
+      utility::logger<"assets">::error("create_texture2d_array: layer {} is not resident yet", i);
+      return texture2d_array_handle{};
+    }
+
+    const auto handle = image_handle_for(layer);
+
+    if (!handle.is_valid()) {
+      utility::logger<"assets">::error("create_texture2d_array: layer {} has no image", i);
+      return texture2d_array_handle{};
+    }
+
+    const auto& image = registry.get<graphics::image>(handle);
+
+    if (image.extent().x() != size.x() || image.extent().y() != size.y()) {
+      utility::logger<"assets">::error("create_texture2d_array: layer {} is {}x{}, the array {}x{}", i, image.extent().x(), image.extent().y(), size.x(), size.y());
+      return texture2d_array_handle{};
+    }
+
+    if (i == 0u) {
+      format = image.format();
+      mip_levels = image.mip_levels();
+    } else if (image.format() != format || image.mip_levels() != mip_levels) {
+      utility::logger<"assets">::error("create_texture2d_array: layer {} differs from layer 0 in format or mip count (load every layer with the same format)", i);
+      return texture2d_array_handle{};
+    }
+
+    images.push_back(handle);
+  }
+
+  const auto image = registry.emplace<graphics::image>(graphics::image::create_info{
+    .extent = math::vector3u{size.x(), size.y(), 1u},
+    .format = format,
+    .usage = graphics::image_usage::transfer_destination | graphics::image_usage::sampled,
+    .mip_levels = mip_levels,
+    .array_layers = static_cast<std::uint32_t>(layers.size()),
+    .view_type = graphics::image_view_type::two_dimensional_array,
+    .name = "Texture Array"
+  });
+
+  auto record = std::make_shared<texture2d_array>();
+  record->_bindless_index = bindless_table.reserve_sampled_array();
+  record->_layer_count = static_cast<std::uint32_t>(layers.size());
+  record->_size = size;
+  record->_id = math::uuid::create();
+
+  auto lock = std::lock_guard{_mutex};
+
+  _texture_arrays.emplace(record->_id, record);
+  _pending_arrays.push_back(pending_array_upload{record, image, std::move(images)});
+
+  return texture2d_array_handle{record};
+}
+
+auto asset_residency::find_texture2d_array(const math::uuid& id) const -> texture2d_array_handle {
+  auto lock = std::lock_guard{_mutex};
+
+  const auto entry = _texture_arrays.find(id);
+
+  return entry != _texture_arrays.end() ? texture2d_array_handle{entry->second} : texture2d_array_handle{};
+}
+
+auto asset_residency::release_texture2d_array(const texture2d_array_handle& array) -> void {
+  if (!array.is_valid()) {
+    return;
+  }
+
+  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
+  auto& registry = graphics_module.resource_registry();
+  const auto frame_index = graphics_module.frame_context().frame_index();
+
+  auto lock = std::lock_guard{_mutex};
+
+  if (const auto entry = _array_images.find(array->index()); entry != _array_images.end()) {
+    registry.retire(entry->second, frame_index);
+    _array_images.erase(entry);
+  }
+
+  // Not uploaded yet: drop the queued copy, and its image with it.
+  for (auto pending = _pending_arrays.begin(); pending != _pending_arrays.end(); ++pending) {
+    if (pending->record.get() == array.get()) {
+      registry.retire(pending->image, frame_index);
+      _pending_arrays.erase(pending);
+      break;
+    }
+  }
+
+  _array_resident_frame.erase(array->index());
+  graphics_module.bindless_table().unregister_sampled_array(array->index());
+  _texture_arrays.erase(array->id());
+}
+
+auto asset_residency::image_handle_for(const texture2d_handle& texture) const -> graphics::image_handle {
   if (!texture.is_valid()) {
     return graphics::image_handle{};
   }
@@ -324,7 +440,7 @@ auto asset_residency::load_font(const math::uuid& id) -> font_handle {
   const auto index = bindless_table.reserve_sampled_image();
 
   auto record = std::make_shared<font>();
-  record->_atlas = texture_handle{std::make_shared<texture>(texture{index})};
+  record->_atlas = texture2d_handle{std::make_shared<texture2d>(texture2d{index})};
   record->_id = id;
 
   {
@@ -606,6 +722,7 @@ auto asset_residency::update_material(material_handle& material, const material:
   material->_shader_graph = create_info.shader_graph;
   material->_generic_params = create_info.generic_params;
   material->_generic_textures = create_info.generic_textures;
+  material->_generic_texture_arrays = create_info.generic_texture_arrays;
   material->_shader_code = create_info.shader_code;
   material->_name = create_info.name;
 
@@ -652,7 +769,7 @@ auto asset_residency::save_material(material_handle& material, const std::filesy
     return math::uuid::nil();
   }
 
-  const auto path_of = [this](const texture_handle& texture) -> std::optional<std::string> {
+  const auto path_of = [this](const texture2d_handle& texture) -> std::optional<std::string> {
     if (!texture.is_valid()) {
       return std::nullopt;
     }
@@ -854,7 +971,7 @@ auto asset_residency::save_particle_effect(particle_effect_handle& effect, const
 
   // Same idea as save_material's path_of lambda: re-relativize the import()-ed path for
   // load_texture(path, ...); nil-uuid (no texture assigned) omits the key entirely.
-  const auto texture_path_of = [this](const texture_handle& texture) -> std::optional<std::string> {
+  const auto texture_path_of = [this](const texture2d_handle& texture) -> std::optional<std::string> {
     if (!texture.is_valid()) {
       return std::nullopt;
     }
@@ -1311,7 +1428,7 @@ auto asset_residency::save_shader_graph(shader_graph_handle& graph, const std::f
     return math::uuid::nil();
   }
 
-  const auto path_of = [this](const texture_handle& texture) -> std::optional<std::string> {
+  const auto path_of = [this](const texture2d_handle& texture) -> std::optional<std::string> {
     if (!texture.is_valid()) {
       return std::nullopt;
     }
@@ -1351,7 +1468,7 @@ auto asset_residency::save_shader_graph(shader_graph_handle& graph, const std::f
       node_yaml["value"] = *value;
     } else if (const auto* value = std::get_if<math::color>(&graph_node.value)) {
       node_yaml["value"] = *value;
-    } else if (const auto* value = std::get_if<texture_handle>(&graph_node.value)) {
+    } else if (const auto* value = std::get_if<texture2d_handle>(&graph_node.value)) {
       if (const auto slot = path_of(*value)) {
         node_yaml["texture"] = *slot;
       }
@@ -1751,8 +1868,8 @@ auto asset_residency::_finalize_material(asset_loader::material_result& result) 
   info.uv_tiling = description.uv_tiling;
   info.uv_offset = description.uv_offset;
 
-  const auto load_slot = [this](const std::string& path, graphics::format format) -> texture_handle {
-    return path.empty() ? texture_handle{} : load_texture(std::filesystem::path{path}, format);
+  const auto load_slot = [this](const std::string& path, graphics::format format) -> texture2d_handle {
+    return path.empty() ? texture2d_handle{} : load_texture(std::filesystem::path{path}, format);
   };
 
   info.albedo = load_slot(description.albedo, graphics::format::r8g8b8a8_srgb);
@@ -1932,7 +2049,7 @@ auto asset_residency::_finalize_shader_graph(asset_loader::shader_graph_result& 
     if (const auto* pattern = std::get_if<std::string>(&node_description.value); pattern && (node_description.type == shader_node_type::swizzle || node_description.type == shader_node_type::scene_depth || node_description.type == shader_node_type::screen_position)) {
       node.value = *pattern;
     } else if (const auto* path = std::get_if<std::string>(&node_description.value)) {
-      node.value = path->empty() ? texture_handle{} : load_texture(std::filesystem::path{*path}, graphics::format::r8g8b8a8_srgb);
+      node.value = path->empty() ? texture2d_handle{} : load_texture(std::filesystem::path{*path}, graphics::format::r8g8b8a8_srgb);
     } else if (const auto* value = std::get_if<std::float_t>(&node_description.value)) {
       node.value = *value;
     } else if (const auto* value = std::get_if<math::vector2>(&node_description.value)) {
@@ -2013,11 +2130,18 @@ auto asset_residency::process_uploads(std::uint64_t frame_index) -> void {
   auto pending_textures = std::vector<pending_texture_upload>{};
   auto pending_meshes = std::vector<pending_mesh_upload>{};
   auto pending_materials = std::vector<pending_material_upload>{};
+  auto pending_arrays = std::vector<pending_array_upload>{};
 
   {
     auto lock = std::lock_guard{_mutex};
 
     auto budget = max_uploads_per_frame;
+
+    while (budget > 0u && !_pending_arrays.empty()) {
+      pending_arrays.push_back(std::move(_pending_arrays.front()));
+      _pending_arrays.pop_front();
+      --budget;
+    }
 
     while (budget > 0u && !_pending_textures.empty()) {
       pending_textures.push_back(std::move(_pending_textures.front()));
@@ -2038,7 +2162,7 @@ auto asset_residency::process_uploads(std::uint64_t frame_index) -> void {
     }
   }
 
-  if (pending_textures.empty() && pending_meshes.empty() && pending_materials.empty()) {
+  if (pending_textures.empty() && pending_meshes.empty() && pending_materials.empty() && pending_arrays.empty()) {
     return;
   }
 
@@ -2069,6 +2193,17 @@ auto asset_residency::process_uploads(std::uint64_t frame_index) -> void {
     auto lock = std::lock_guard{_mutex};
     _images.emplace(request.index, handle);
     _resident_frame.emplace(request.index, frame_index);
+  }
+
+  for (auto& request : pending_arrays) {
+    const auto index = request.record->index();
+
+    upload_context.stage_layer_copies(request.image, std::move(request.layers));
+    bindless_table.write_sampled_array(index, registry.get<graphics::image>(request.image).view());
+
+    auto lock = std::lock_guard{_mutex};
+    _array_images.emplace(index, request.image);
+    _array_resident_frame.emplace(index, frame_index);
   }
 
   for (auto& request : pending_meshes) {
@@ -2133,7 +2268,7 @@ auto asset_residency::process_uploads(std::uint64_t frame_index) -> void {
   }
 }
 
-auto asset_residency::is_resident(const texture_handle& texture) const -> bool {
+auto asset_residency::is_resident(const texture2d_handle& texture) const -> bool {
   if (!texture.is_valid()) {
     return false;
   }
@@ -2168,11 +2303,25 @@ auto asset_residency::is_resident(const material_handle& material) const -> bool
     return false;
   }
 
-  const auto is_ready = [this](const texture_handle& texture) -> bool {
+  const auto is_ready = [this](const texture2d_handle& texture) -> bool {
     return !texture.is_valid() || is_resident(texture);
   };
 
   return is_ready(material->albedo()) && is_ready(material->normal()) && is_ready(material->metallic_roughness()) && is_ready(material->occlusion()) && is_ready(material->emissive());
+}
+
+auto asset_residency::is_resident(const texture2d_array_handle& array) const -> bool {
+  if (!array.is_valid()) {
+    return false;
+  }
+
+  const auto completed_value = core::engine::get_module<graphics::graphics_module>().frame_context().timeline_value();
+
+  auto lock = std::lock_guard{_mutex};
+
+  const auto entry = _array_resident_frame.find(array->index());
+
+  return entry != _array_resident_frame.end() && completed_value >= entry->second;
 }
 
 auto asset_residency::is_resident(const environment_map_handle& environment) const -> bool {
@@ -2204,7 +2353,7 @@ auto asset_residency::resident_asset_counts() const -> assets::resident_asset_co
   return counts;
 }
 
-auto asset_residency::image_view_of(const texture_handle& texture) const -> VkImageView {
+auto asset_residency::image_view_of(const texture2d_handle& texture) const -> VkImageView {
   if (!texture.is_valid()) {
     return VK_NULL_HANDLE;
   }
@@ -2223,14 +2372,14 @@ auto asset_residency::image_view_of(const texture_handle& texture) const -> VkIm
   return registry.get<graphics::image>(entry->second).view();
 }
 
-auto asset_residency::_create_default_texture(std::array<std::uint8_t, 4u> color) -> texture_handle {
+auto asset_residency::_create_default_texture(std::array<std::uint8_t, 4u> color) -> texture2d_handle {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 
   auto& bindless_table = graphics_module.bindless_table();
 
   const auto index = bindless_table.reserve_sampled_image();
 
-  auto record = std::make_shared<texture>(texture{index});
+  auto record = std::make_shared<texture2d>(texture2d{index});
 
   auto pixels = std::vector<std::byte>{
     std::byte{color[0]}, std::byte{color[1]}, std::byte{color[2]}, std::byte{color[3]}
@@ -2241,11 +2390,11 @@ auto asset_residency::_create_default_texture(std::array<std::uint8_t, 4u> color
     _pending_textures.push_back(pending_texture_upload{index, std::move(pixels), 1u, 1u, graphics::format::r8g8b8a8_unorm});
   }
 
-  return texture_handle{record};
+  return texture2d_handle{record};
 }
 
 auto asset_residency::_material_data_of(const material& material) const -> material_data {
-  const auto resolve = [](const texture_handle& texture, const texture_handle& fallback) {
+  const auto resolve = [](const texture2d_handle& texture, const texture2d_handle& fallback) {
     return texture.is_valid() ? texture->index() : fallback->index();
   };
 
@@ -2275,8 +2424,9 @@ auto asset_residency::_material_data_of(const material& material) const -> mater
   std::ranges::copy(generic_params, data.generic_params);
 
   const auto& generic_textures = material.generic_textures();
+  const auto& generic_texture_arrays = material.generic_texture_arrays();
   for (auto i = std::size_t{0u}; i < generic_textures.size(); ++i) {
-    data.generic_textures[i] = resolve(generic_textures[i], _white);
+    data.generic_textures[i] = generic_texture_arrays[i].is_valid() ? generic_texture_arrays[i]->index() : resolve(generic_textures[i], _white);
   }
 
   return data;
@@ -2354,8 +2504,8 @@ auto asset_residency::_extract_gltf_material(const math::uuid& cooked_material_i
   info.casts_shadow = description->casts_shadow;
   info.receives_shadow = description->receives_shadow;
 
-  const auto load_slot = [this](const std::string& path, graphics::format format) -> texture_handle {
-    return path.empty() ? texture_handle{} : load_texture(std::filesystem::path{path}, format);
+  const auto load_slot = [this](const std::string& path, graphics::format format) -> texture2d_handle {
+    return path.empty() ? texture2d_handle{} : load_texture(std::filesystem::path{path}, format);
   };
 
   info.albedo = load_slot(description->albedo, graphics::format::r8g8b8a8_srgb);

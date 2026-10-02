@@ -17,7 +17,7 @@
 #include <libsbx/assets/mesh.hpp>
 
 #include <libsbx/scenes/post_process.hpp>
-#include <libsbx/assets/texture.hpp>
+#include <libsbx/assets/texture2d.hpp>
 #include <libsbx/assets/environment_map.hpp>
 #include <libsbx/assets/particle_effect.hpp>
 

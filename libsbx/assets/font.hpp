@@ -13,7 +13,7 @@
 
 #include <libsbx/assets/asset_handle.hpp>
 #include <libsbx/assets/loadable.hpp>
-#include <libsbx/assets/texture.hpp>
+#include <libsbx/assets/texture2d.hpp>
 
 namespace sbx::assets {
 
@@ -38,7 +38,7 @@ public:
     return _atlas.is_valid() && _atlas->is_valid();
   }
 
-  [[nodiscard]] auto atlas() const noexcept -> const texture_handle& {
+  [[nodiscard]] auto atlas() const noexcept -> const texture2d_handle& {
     return _atlas;
   }
 
@@ -88,7 +88,7 @@ private:
     _bump_generation();
   }
 
-  texture_handle _atlas{};
+  texture2d_handle _atlas{};
   std::vector<glyph> _glyphs{};
   std::uint32_t _first_codepoint{0u};
   std::float_t _line_height{0.0f};

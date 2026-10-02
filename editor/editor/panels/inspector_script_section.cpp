@@ -449,7 +449,7 @@ auto draw_script_field_inspector(editor_state& state, sbx::scenes::scene& target
       const auto current_uuid = live_instance ? sbx::math::uuid::from_value(live_instance->get_field_value<std::uint64_t>(field_name))
                                                 : override_slot ? override_slot->texture_value : sbx::math::uuid::nil();
 
-      auto slot = (current_uuid != sbx::math::uuid::nil()) ? assets_module.load_texture(current_uuid, sbx::graphics::format::r8g8b8a8_srgb) : sbx::assets::texture_handle{};
+      auto slot = (current_uuid != sbx::math::uuid::nil()) ? assets_module.load_texture(current_uuid, sbx::graphics::format::r8g8b8a8_srgb) : sbx::assets::texture2d_handle{};
 
       const auto changed = draw_property_row(display_name.c_str(), [&] { return draw_texture_picker(state, "##texture_field_picker", slot, assets_module, sbx::graphics::format::r8g8b8a8_srgb); });
 

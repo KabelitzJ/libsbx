@@ -191,7 +191,6 @@ scripting_module::scripting_module() {
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Material_SetGenericTexture", reinterpret_cast<void*>(&interop::material_set_generic_texture));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Material_Release", reinterpret_cast<void*>(&interop::material_release));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Material_IsLoaded", reinterpret_cast<void*>(&interop::material_is_loaded));
-  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Texture_SampleBilinear", reinterpret_cast<void*>(&interop::texture_sample_bilinear));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Project_GetAssetsDirectory", reinterpret_cast<void*>(&interop::project_get_assets_directory));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Texture_Load", reinterpret_cast<void*>(&interop::texture_load));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Texture_CreateStorageImage", reinterpret_cast<void*>(&interop::texture_create_storage_image));
@@ -199,6 +198,10 @@ scripting_module::scripting_module() {
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Texture_Release", reinterpret_cast<void*>(&interop::texture_release));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Debug_WritePng", reinterpret_cast<void*>(&interop::debug_write_png));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Texture_IsResident", reinterpret_cast<void*>(&interop::texture_is_resident));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Texture2DArray_Create", reinterpret_cast<void*>(&interop::texture2d_array_create));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Texture2DArray_IsResident", reinterpret_cast<void*>(&interop::texture2d_array_is_resident));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Texture2DArray_Release", reinterpret_cast<void*>(&interop::texture2d_array_release));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Material_SetGenericTextureArray", reinterpret_cast<void*>(&interop::material_set_generic_texture_array));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Font_Load", reinterpret_cast<void*>(&interop::font_load));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Font_IsResident", reinterpret_cast<void*>(&interop::font_is_resident));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Font_GetGlyph", reinterpret_cast<void*>(&interop::font_get_glyph));

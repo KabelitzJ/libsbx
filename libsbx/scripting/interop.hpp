@@ -412,30 +412,9 @@ struct interop {
   /** @brief Loads (or reuses, if already imported) a .material asset by project-relative path, returning its uuid -- 0 if the path doesn't resolve to a real material. Backs Sbx.Core.Material.Load. */
   static auto material_load(managed::string path) -> std::uint64_t;
 
-  /**
-   * @brief Bilinearly samples an image file's raw pixels at normalized (u, v), decoding it via the
-   * same stb_image path asset_cooker_texture.cpp uses and caching the decoded buffer by
-   * project-relative path for reuse across repeated calls. Deliberately decoupled from the
-   * GPU-resident assets::texture/bindless pipeline (which keeps no CPU-side pixels once uploaded,
-   * see texture.hpp) -- this exists purely so script-side procedural generation can read source
-   * art (e.g. a terrain type's height/diffuse/mixer atlas cell) without a render round-trip.
-   * Returns false (out_color left untouched) if the file can't be found/decoded.
-   */
-  static auto texture_sample_bilinear(managed::string path, std::float_t u, std::float_t v, math::color* out_color) -> bool;
-
   /** @brief Absolute path of the active project's assets directory, for scripts reading their own data files. */
   static auto project_get_assets_directory() -> managed::string;
 
-  /**
-   * @brief Loads (or reuses) a GPU-resident texture asset by project-relative path, returning its
-   * uuid -- 0 if the path doesn't resolve. format: 0 = RGBA8 unorm, 1 = R32 float, 2 = R8 unorm,
-   * 3 = RGBA8 srgb (matching Sbx.Core.TextureFormat's declaration order -- same convention as
-   * texture_create_storage_image, plus the srgb variant only this call accepts). The cache key is
-   * (path, format), so loading the same file with two different formats produces two independent
-   * GPU-resident textures rather than one reused between them. Backs Sbx.Core.Texture2D.Load.
-   * Unlike texture_sample_bilinear, this is the real bindless-resident asset a Material can
-   * reference.
-   */
   static auto texture_load(managed::string path, std::uint32_t format) -> std::uint64_t;
 
   /** @brief Allocates a new, empty, compute-writable storage image -- see assets::asset_residency::create_storage_image. format: 0 = RGBA8, 1 = R32 float, 2 = R8 unorm (matching Sbx.Core.TextureFormat's declaration order). Backs Sbx.Core.Texture2D.CreateStorageImage. */
@@ -454,6 +433,16 @@ struct interop {
 
   /** @brief Frees a texture's bindless indices and underlying GPU image -- see assets::asset_residency::release_texture. Backs Sbx.Core.Texture2D.Dispose. No-op if texture_uuid doesn't resolve. */
   static auto texture_release(std::uint64_t texture_uuid) -> void;
+
+  /** @brief A 2D texture array of the layer_count textures in layer_uuids, each exactly width x height -- see assets::asset_residency::create_texture2d_array. 0 (and a logged reason) if any layer doesn't fit. Backs Sbx.Core.Texture2DArray.Create. */
+  static auto texture2d_array_create(std::uint64_t* layer_uuids, std::uint32_t layer_count, std::uint32_t width, std::uint32_t height) -> std::uint64_t;
+
+  static auto texture2d_array_is_resident(std::uint64_t array_uuid) -> bool;
+
+  static auto texture2d_array_release(std::uint64_t array_uuid) -> void;
+
+  /** @brief Puts a texture array into a material's generic slot (the shader reads texture_arrays[generic_textures[index]]). */
+  static auto material_set_generic_texture_array(std::uint64_t material_uuid, std::uint32_t index, std::uint64_t array_uuid) -> void;
 
   /**
    * @brief Writes raw RGBA8 pixel data (row-major, no padding) straight to a PNG file on disk via

@@ -313,7 +313,7 @@ auto inspector_panel::_draw_material_properties(editor_state& state, const asset
 
     ImGui::SeparatorText("Textures");
 
-    const auto texture_row = [&](const char* label, const char* popup_id, sbx::assets::texture_handle& slot, sbx::graphics::format format) {
+    const auto texture_row = [&](const char* label, const char* popup_id, sbx::assets::texture2d_handle& slot, sbx::graphics::format format) {
       changed |= draw_property_row(label, [&] { return draw_texture_picker(state, popup_id, slot, assets_module, format); });
     };
 

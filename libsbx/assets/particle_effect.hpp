@@ -18,7 +18,7 @@
 #include <libsbx/assets/loadable.hpp>
 #include <libsbx/assets/material.hpp>
 #include <libsbx/assets/mesh.hpp>
-#include <libsbx/assets/texture.hpp>
+#include <libsbx/assets/texture2d.hpp>
 
 namespace sbx::assets {
 
@@ -223,7 +223,7 @@ struct particle_emitter {
   math::vector3 force_over_lifetime_max{0.0f, 0.0f, 0.0f};
   std::float_t gravity{0.0f};
   std::float_t drag{0.0f};
-  texture_handle texture{};
+  texture2d_handle texture{};
   particle_render_mode render_mode{particle_render_mode::billboard};
   mesh_handle render_mesh{};
   material_handle render_material{};

@@ -104,7 +104,7 @@ auto extract_material_to_asset(sbx::assets::assets_module& assets_module, const 
   return handle;
 }
 
-auto draw_texture_picker(editor_state& state, const char* popup_id, sbx::assets::texture_handle& slot, sbx::assets::assets_module& assets_module, sbx::graphics::format format) -> bool {
+auto draw_texture_picker(editor_state& state, const char* popup_id, sbx::assets::texture2d_handle& slot, sbx::assets::assets_module& assets_module, sbx::graphics::format format) -> bool {
   const auto current = slot.is_valid() ? to_picker_item(assets_module, slot->id()) : sbx::render::asset_picker_item{};
 
   const auto options = sbx::render::asset_picker_options{
@@ -118,7 +118,7 @@ auto draw_texture_picker(editor_state& state, const char* popup_id, sbx::assets:
   const auto result = sbx::render::draw_asset_picker(popup_id, current, {}, options);
 
   if (result.cleared) {
-    slot = sbx::assets::texture_handle{};
+    slot = sbx::assets::texture2d_handle{};
   } else if (result.changed) {
     slot = assets_module.load_texture(result.picked.path, format);
   }

@@ -8,7 +8,7 @@
 
 #include <libsbx/math/color.hpp>
 
-#include <libsbx/assets/texture.hpp>
+#include <libsbx/assets/texture2d.hpp>
 
 namespace sbx::scenes {
 
@@ -58,7 +58,7 @@ struct post_process_settings {
    * No lookup table (and 1 / 1) = unchanged.
    */
   struct color_grading_settings {
-    assets::texture_handle lut{};
+    assets::texture2d_handle lut{};
     std::float_t lut_contribution{1.0f};
     std::float_t contrast{1.0f};
     std::float_t saturation{1.0f};

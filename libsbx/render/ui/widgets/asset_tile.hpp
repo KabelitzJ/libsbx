@@ -13,7 +13,7 @@
 #include <libsbx/math/uuid.hpp>
 
 #include <libsbx/assets/asset_handle.hpp>
-#include <libsbx/assets/texture.hpp>
+#include <libsbx/assets/texture2d.hpp>
 
 namespace sbx::render {
 
@@ -58,7 +58,7 @@ struct asset_tile_desc {
   // falling back to icon_glyph/icon_tint above if it isn't resident yet (still uploading) or is
   // an empty handle.
   bool is_texture_thumbnail{false};
-  sbx::assets::texture_handle texture{};
+  sbx::assets::texture2d_handle texture{};
 
   bool is_directory{false};
   std::string display_name{}; // drag-preview text only; see doc comment above

@@ -13,6 +13,7 @@
 #include <libsbx/utility/noncopyable.hpp>
 
 #include <libsbx/math/uuid.hpp>
+#include <libsbx/math/vector2.hpp>
 
 #include <libsbx/core/module.hpp>
 
@@ -23,7 +24,8 @@
 #include <libsbx/graphics/resources/buffer.hpp>
 
 #include <libsbx/assets/asset_handle.hpp>
-#include <libsbx/assets/texture.hpp>
+#include <libsbx/assets/texture2d.hpp>
+#include <libsbx/assets/texture2d_array.hpp>
 #include <libsbx/assets/font.hpp>
 #include <libsbx/assets/mesh.hpp>
 #include <libsbx/assets/material.hpp>
@@ -98,21 +100,28 @@ public:
    *
    * @return Handle to the loaded texture.
    */
-  auto load_texture(const math::uuid& id, graphics::format format = graphics::format::r8g8b8a8_srgb) -> texture_handle;
+  auto load_texture(const math::uuid& id, graphics::format format = graphics::format::r8g8b8a8_srgb) -> texture2d_handle;
 
-  auto load_texture(const std::filesystem::path& path, graphics::format format = graphics::format::r8g8b8a8_srgb) -> texture_handle;
+  auto load_texture(const std::filesystem::path& path, graphics::format format = graphics::format::r8g8b8a8_srgb) -> texture2d_handle;
 
   /** @brief Allocates a new, empty, compute-writable GPU texture -- see asset_residency::create_storage_image. */
-  auto create_storage_image(std::uint32_t width, std::uint32_t height, graphics::format format) -> texture_handle;
+  auto create_storage_image(std::uint32_t width, std::uint32_t height, graphics::format format) -> texture2d_handle;
 
   /** @brief The underlying GPU image behind a texture's sampled bindless index -- see asset_residency::image_handle_for. */
-  [[nodiscard]] auto image_handle_for(const texture_handle& texture) const -> graphics::image_handle;
+  [[nodiscard]] auto image_handle_for(const texture2d_handle& texture) const -> graphics::image_handle;
 
   /** @brief Format-agnostic texture lookup by uuid -- see asset_residency::find_texture. */
-  [[nodiscard]] auto find_texture(const math::uuid& id) const -> texture_handle;
+  [[nodiscard]] auto find_texture(const math::uuid& id) const -> texture2d_handle;
 
   /** @brief Frees a texture's bindless indices and underlying GPU image -- see asset_residency::release_texture. */
-  auto release_texture(const texture_handle& texture) -> void;
+  auto release_texture(const texture2d_handle& texture) -> void;
+
+  /** @brief A 2D texture array from resident layers of exactly @p size -- see asset_residency::create_texture2d_array. */
+  auto create_texture2d_array(std::span<const texture2d_handle> layers, const math::vector2u& size) -> texture2d_array_handle;
+
+  [[nodiscard]] auto find_texture2d_array(const math::uuid& id) const -> texture2d_array_handle;
+
+  auto release_texture2d_array(const texture2d_array_handle& array) -> void;
 
   /** @brief Loads a TTF -> SDF glyph atlas font from a UUID or project-relative path; returns the existing handle if already loaded. */
   auto load_font(const math::uuid& id) -> font_handle;
@@ -282,7 +291,7 @@ public:
    */
   auto process_uploads(std::uint64_t frame_index) -> void;
 
-  [[nodiscard]] auto is_resident(const texture_handle& texture) const -> bool;
+  [[nodiscard]] auto is_resident(const texture2d_handle& texture) const -> bool;
 
   [[nodiscard]] auto is_resident(const mesh_handle& mesh) const -> bool;
 
@@ -292,29 +301,31 @@ public:
 
   [[nodiscard]] auto is_resident(const font_handle& font) const -> bool;
 
+  [[nodiscard]] auto is_resident(const texture2d_array_handle& array) const -> bool;
+
   /** @ref asset_residency::resident_asset_counts */
   [[nodiscard]] auto resident_asset_counts() const -> assets::resident_asset_counts {
     return _residency.resident_asset_counts();
   }
 
   /** @ref asset_residency::image_view_of */
-  [[nodiscard]] auto image_view_of(const texture_handle& texture) const -> VkImageView {
+  [[nodiscard]] auto image_view_of(const texture2d_handle& texture) const -> VkImageView {
     return _residency.image_view_of(texture);
   }
 
-  [[nodiscard]] auto white_texture() const noexcept -> texture_handle {
+  [[nodiscard]] auto white_texture() const noexcept -> texture2d_handle {
     return _residency.white_texture();
   }
 
-  [[nodiscard]] auto normal_texture() const noexcept -> texture_handle {
+  [[nodiscard]] auto normal_texture() const noexcept -> texture2d_handle {
     return _residency.normal_texture();
   }
 
-  [[nodiscard]] auto black_texture() const noexcept -> texture_handle {
+  [[nodiscard]] auto black_texture() const noexcept -> texture2d_handle {
     return _residency.black_texture();
   }
 
-  [[nodiscard]] auto magenta_texture() const noexcept -> texture_handle {
+  [[nodiscard]] auto magenta_texture() const noexcept -> texture2d_handle {
     return _residency.magenta_texture();
   }
 

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Jonas Kabelitz
-#ifndef LIBSBX_ASSETS_TEXTURE_HPP_
-#define LIBSBX_ASSETS_TEXTURE_HPP_
+#ifndef LIBSBX_ASSETS_TEXTURE2D_HPP_
+#define LIBSBX_ASSETS_TEXTURE2D_HPP_
 
 #include <cstdint>
 #include <limits>
@@ -14,10 +14,10 @@
 namespace sbx::assets {
 
 /**
- * @brief A loaded texture, identified by its bindless index. Valid to hold from load_texture().
+ * @brief A loaded 2D texture, identified by its bindless index (textures[] in descriptors.slang). Valid to hold from load_texture().
  * Can be sampled only once resident.
  */
-class texture final : public loadable {
+class texture2d final : public loadable {
 
   friend class asset_residency;
 
@@ -25,10 +25,10 @@ public:
 
   inline static constexpr auto invalid_index = std::numeric_limits<std::uint32_t>::max();
 
-  texture()
+  texture2d()
   : _bindless_index{invalid_index} { }
 
-  texture(std::uint32_t bindless_index)
+  texture2d(std::uint32_t bindless_index)
   : _bindless_index{bindless_index} { }
 
   [[nodiscard]] auto is_valid() const noexcept -> bool {
@@ -54,10 +54,10 @@ private:
   std::uint32_t _storage_index{invalid_index};
   math::uuid _id{math::uuid::nil()};
 
-}; // class texture
+}; // class texture2d
 
-using texture_handle = asset_handle<texture>;
+using texture2d_handle = asset_handle<texture2d>;
 
 } // namespace sbx::assets
 
-#endif // LIBSBX_ASSETS_TEXTURE_HPP_
+#endif // LIBSBX_ASSETS_TEXTURE2D_HPP_

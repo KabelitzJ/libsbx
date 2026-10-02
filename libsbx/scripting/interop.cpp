@@ -1749,7 +1749,7 @@ auto interop::camera_set_post_process(std::uint64_t uuid, const post_process_dat
 
   // Only reload on change: scripts write the whole struct back every time they edit a field.
   if (value->lut != current) {
-    grading.lut = value->lut != 0u ? core::engine::get_module<assets::assets_module>().load_texture(math::uuid::from_value(value->lut), graphics::format::r8g8b8a8_unorm) : assets::texture_handle{};
+    grading.lut = value->lut != 0u ? core::engine::get_module<assets::assets_module>().load_texture(math::uuid::from_value(value->lut), graphics::format::r8g8b8a8_unorm) : assets::texture2d_handle{};
   }
 
   grading.lut_contribution = value->lut_contribution;
@@ -2481,6 +2481,36 @@ auto interop::texture_release(std::uint64_t texture_uuid) -> void {
   assets_module.release_texture(texture);
 }
 
+auto interop::texture2d_array_create(std::uint64_t* layer_uuids, std::uint32_t layer_count, std::uint32_t width, std::uint32_t height) -> std::uint64_t {
+  if (!layer_uuids) {
+    return 0u;
+  }
+
+  auto& assets_module = core::engine::get_module<assets::assets_module>();
+  auto layers = std::vector<assets::texture2d_handle>{};
+  layers.reserve(layer_count);
+
+  for (auto i = std::uint32_t{0u}; i < layer_count; ++i) {
+    layers.push_back(assets_module.find_texture(math::uuid::from_value(layer_uuids[i])));
+  }
+
+  auto array = assets_module.create_texture2d_array(layers, math::vector2u{width, height});
+
+  return array.is_valid() ? array->id().value() : 0u;
+}
+
+auto interop::texture2d_array_is_resident(std::uint64_t array_uuid) -> bool {
+  auto& assets_module = core::engine::get_module<assets::assets_module>();
+
+  return assets_module.is_resident(assets_module.find_texture2d_array(math::uuid::from_value(array_uuid)));
+}
+
+auto interop::texture2d_array_release(std::uint64_t array_uuid) -> void {
+  auto& assets_module = core::engine::get_module<assets::assets_module>();
+
+  assets_module.release_texture2d_array(assets_module.find_texture2d_array(math::uuid::from_value(array_uuid)));
+}
+
 auto interop::material_release(std::uint64_t material_uuid) -> void {
   auto& assets_module = core::engine::get_module<assets::assets_module>();
   auto material = assets_module.load_material(math::uuid::from_value(material_uuid));
@@ -2627,6 +2657,25 @@ auto interop::material_set_generic_param(std::uint64_t material_uuid, std::uint3
   assets_module.update_material(material, create_info);
 }
 
+auto interop::material_set_generic_texture_array(std::uint64_t material_uuid, std::uint32_t index, std::uint64_t array_uuid) -> void {
+  auto& assets_module = core::engine::get_module<assets::assets_module>();
+  auto material = assets_module.load_material(math::uuid::from_value(material_uuid));
+
+  if (!material.is_valid()) {
+    return;
+  }
+
+  if (index >= assets::shader_graph_max_textures) {
+    utility::logger<"scripting">::error("material_set_generic_texture_array: index {} out of range (max {})", index, assets::shader_graph_max_textures);
+    return;
+  }
+
+  auto create_info = material->to_create_info();
+  create_info.generic_texture_arrays[index] = assets_module.find_texture2d_array(math::uuid::from_value(array_uuid));
+
+  assets_module.update_material(material, create_info);
+}
+
 auto interop::material_set_generic_texture(std::uint64_t material_uuid, std::uint32_t index, std::uint64_t texture_uuid) -> void {
   auto& assets_module = core::engine::get_module<assets::assets_module>();
   auto material = assets_module.load_material(math::uuid::from_value(material_uuid));
@@ -2642,6 +2691,7 @@ auto interop::material_set_generic_texture(std::uint64_t material_uuid, std::uin
 
   auto create_info = material->to_create_info();
   create_info.generic_textures[index] = assets_module.find_texture(math::uuid::from_value(texture_uuid));
+  create_info.generic_texture_arrays[index] = assets::texture2d_array_handle{};
 
   assets_module.update_material(material, create_info);
 }
@@ -2949,7 +2999,7 @@ auto interop::compute_shader_set_texture(std::uint64_t id, managed::string name,
 
   const auto texture_index = storage ? texture->storage_index() : texture->index();
 
-  if (texture_index == assets::texture::invalid_index) {
+  if (texture_index == assets::texture2d::invalid_index) {
     utility::logger<"scripting">::error("ComputeShader '{}': texture for storage field '{}' was not created via CreateStorageImage", state->path.filename().string(), field_name);
     return false;
   }
@@ -3158,100 +3208,10 @@ auto interop::compute_commands_release(std::uint64_t id) -> void {
   registry.erase(entry);
 }
 
-struct decoded_image {
-  std::vector<std::uint8_t> pixels; // RGBA8, row-major
-  std::int32_t width{};
-  std::int32_t height{};
-}; // struct decoded_image
-
-auto decoded_image_cache() -> std::unordered_map<std::string, decoded_image>& {
-  static auto cache = std::unordered_map<std::string, decoded_image>{};
-
-  return cache;
-}
-
 auto interop::project_get_assets_directory() -> managed::string {
   return managed::string::create(core::engine::project().assets_directory().string().c_str());
 }
 
-auto interop::texture_sample_bilinear(managed::string path, std::float_t u, std::float_t v, math::color* out_color) -> bool {
-  if (!out_color) {
-    return false;
-  }
-
-  const auto key = std::string{path};
-
-  auto& cache = decoded_image_cache();
-  auto entry = cache.find(key);
-
-  if (entry == cache.end()) {
-    const auto resolved = core::engine::project().assets_directory() / std::filesystem::path{key};
-
-    auto width = std::int32_t{};
-    auto height = std::int32_t{};
-    auto channels = std::int32_t{};
-
-    auto* data = stbi_load(resolved.string().c_str(), &width, &height, &channels, STBI_rgb_alpha);
-
-    if (data == nullptr) {
-      utility::logger<"scripting">::error("texture_sample_bilinear: failed to decode '{}'", resolved.string());
-
-      return false;
-    }
-
-    auto image = decoded_image{};
-    image.width = width;
-    image.height = height;
-    image.pixels.assign(data, data + (static_cast<std::size_t>(width) * static_cast<std::size_t>(height) * 4u));
-
-    stbi_image_free(data);
-
-    entry = cache.emplace(key, std::move(image)).first;
-  }
-
-  const auto& image = entry->second;
-
-  if (image.width <= 0 || image.height <= 0) {
-    return false;
-  }
-
-  const auto fx = std::clamp(u, 0.0f, 1.0f) * static_cast<std::float_t>(image.width - 1);
-  const auto fy = std::clamp(v, 0.0f, 1.0f) * static_cast<std::float_t>(image.height - 1);
-
-  const auto x0 = static_cast<std::int32_t>(fx);
-  const auto y0 = static_cast<std::int32_t>(fy);
-  const auto x1 = std::min(x0 + 1, image.width - 1);
-  const auto y1 = std::min(y0 + 1, image.height - 1);
-
-  const auto tx = fx - static_cast<std::float_t>(x0);
-  const auto ty = fy - static_cast<std::float_t>(y0);
-
-  const auto sample = [&](std::int32_t x, std::int32_t y, std::int32_t channel) -> std::float_t {
-    const auto index = (static_cast<std::size_t>(y) * static_cast<std::size_t>(image.width) + static_cast<std::size_t>(x)) * 4u + static_cast<std::size_t>(channel);
-
-    return static_cast<std::float_t>(image.pixels[index]) / 255.0f;
-  };
-
-  const auto lerp_channel = [&](std::int32_t channel) -> std::float_t {
-    const auto c00 = sample(x0, y0, channel);
-    const auto c10 = sample(x1, y0, channel);
-    const auto c01 = sample(x0, y1, channel);
-    const auto c11 = sample(x1, y1, channel);
-
-    const auto c0 = c00 + (c10 - c00) * tx;
-    const auto c1 = c01 + (c11 - c01) * tx;
-
-    return c0 + (c1 - c0) * ty;
-  };
-
-  *out_color = math::color{lerp_channel(0), lerp_channel(1), lerp_channel(2), lerp_channel(3)};
-
-  return true;
-}
-
-// Shared by every Canvas_*/RectTransform_*/UIImage_*/UIText_*/UIButton_* binding below -- the same
-// uuid-resolve step Transform_*/Rigidbody_* already do inline, factored out here since there are
-// enough of these bindings that repeating it each time would dwarf the actual field access.
 auto resolve_node(std::uint64_t uuid) -> scenes::node {
   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
   auto& scene = scenes_module.active_scene();

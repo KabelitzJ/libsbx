@@ -69,20 +69,22 @@ bindless_table::bindless_table(const physical_device& physical_device, const log
   _storage_images.capacity = std::min(std::uint32_t{8192u}, indexing_properties.maxDescriptorSetUpdateAfterBindStorageImages);
   _sampled_cubes.capacity = std::min(std::uint32_t{1024u}, indexing_properties.maxDescriptorSetUpdateAfterBindSampledImages);
   _storage_cubes.capacity = std::min(std::uint32_t{512u}, indexing_properties.maxDescriptorSetUpdateAfterBindStorageImages);
+  _sampled_arrays.capacity = std::min(std::uint32_t{256u}, indexing_properties.maxDescriptorSetUpdateAfterBindSampledImages);
 
-  const auto bindings = std::array<VkDescriptorSetLayoutBinding, 5u>{
+  const auto bindings = std::array<VkDescriptorSetLayoutBinding, 6u>{
     VkDescriptorSetLayoutBinding{sampled_image_binding, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, _sampled_images.capacity, VK_SHADER_STAGE_ALL, nullptr},
     VkDescriptorSetLayoutBinding{sampler_binding, VK_DESCRIPTOR_TYPE_SAMPLER, _samplers.capacity, VK_SHADER_STAGE_ALL, nullptr},
     VkDescriptorSetLayoutBinding{storage_image_binding, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, _storage_images.capacity, VK_SHADER_STAGE_ALL, nullptr},
     VkDescriptorSetLayoutBinding{sampled_cube_binding, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, _sampled_cubes.capacity, VK_SHADER_STAGE_ALL, nullptr},
-    VkDescriptorSetLayoutBinding{storage_cube_binding, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, _storage_cubes.capacity, VK_SHADER_STAGE_ALL, nullptr}
+    VkDescriptorSetLayoutBinding{storage_cube_binding, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, _storage_cubes.capacity, VK_SHADER_STAGE_ALL, nullptr},
+    VkDescriptorSetLayoutBinding{sampled_array_binding, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, _sampled_arrays.capacity, VK_SHADER_STAGE_ALL, nullptr}
   };
 
   // UPDATE_UNUSED_WHILE_PENDING: flush_writes runs while the previous frame is still executing, so
   // writing any slot that frame doesn't use has to be legal too (UPDATE_AFTER_BIND alone only covers
   // updates between bind and submit).
   const auto binding_flag = VkDescriptorBindingFlags{VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT | VK_DESCRIPTOR_BINDING_UPDATE_UNUSED_WHILE_PENDING_BIT | VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT};
-  const auto binding_flags = std::array<VkDescriptorBindingFlags, 5u>{binding_flag, binding_flag, binding_flag, binding_flag, binding_flag};
+  const auto binding_flags = std::array<VkDescriptorBindingFlags, 6u>{binding_flag, binding_flag, binding_flag, binding_flag, binding_flag, binding_flag};
 
   auto binding_flags_info = VkDescriptorSetLayoutBindingFlagsCreateInfo{};
   binding_flags_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO;
@@ -99,7 +101,7 @@ bindless_table::bindless_table(const physical_device& physical_device, const log
   validate(vkCreateDescriptorSetLayout(logical_device, &layout_create_info, nullptr, &_descriptor_set_layout), "vkCreateDescriptorSetLayout");
 
   const auto pool_sizes = std::array<VkDescriptorPoolSize, 3u>{
-    VkDescriptorPoolSize{VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, _sampled_images.capacity + _sampled_cubes.capacity},
+    VkDescriptorPoolSize{VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, _sampled_images.capacity + _sampled_cubes.capacity + _sampled_arrays.capacity},
     VkDescriptorPoolSize{VK_DESCRIPTOR_TYPE_SAMPLER, _samplers.capacity},
     VkDescriptorPoolSize{VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, _storage_images.capacity + _storage_cubes.capacity}
   };
@@ -263,6 +265,28 @@ auto bindless_table::unregister_storage_cube(std::uint32_t index) -> void {
   _storage_cubes.release(index, _retire_value());
 }
 
+auto bindless_table::reserve_sampled_array() -> std::uint32_t {
+  auto lock = std::lock_guard{_mutex};
+
+  return _sampled_arrays.allocate();
+}
+
+auto bindless_table::write_sampled_array(std::uint32_t index, VkImageView view) -> void {
+  auto lock = std::lock_guard{_mutex};
+
+  auto image_info = VkDescriptorImageInfo{};
+  image_info.imageView = view;
+  image_info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+  _pending_writes.push_back(pending_write{sampled_array_binding, index, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, image_info});
+}
+
+auto bindless_table::unregister_sampled_array(std::uint32_t index) -> void {
+  auto lock = std::lock_guard{_mutex};
+
+  _sampled_arrays.release(index, _retire_value());
+}
+
 auto bindless_table::sampler_index(const sampler::create_info& create_info) -> std::uint32_t {
   auto lock = std::lock_guard{_mutex};
 
@@ -293,6 +317,7 @@ auto bindless_table::collect(std::uint64_t completed_value) -> void {
   _storage_images.collect(completed_value);
   _sampled_cubes.collect(completed_value);
   _storage_cubes.collect(completed_value);
+  _sampled_arrays.collect(completed_value);
 }
 
 auto bindless_table::_retire_value() const -> std::uint64_t {

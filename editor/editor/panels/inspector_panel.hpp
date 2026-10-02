@@ -50,7 +50,7 @@ private:
   // selection, not every frame — without this a failed load retries the full cook pipeline forever.
   struct asset_property_cache {
     sbx::math::uuid id{sbx::math::uuid::nil()};
-    sbx::assets::texture_handle texture{};
+    sbx::assets::texture2d_handle texture{};
     sbx::assets::mesh_handle mesh{};
     sbx::assets::material_handle material{};
     sbx::assets::environment_map_handle environment_map{};

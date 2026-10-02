@@ -339,7 +339,7 @@ static auto default_value_for(sbx::assets::shader_node_type type) -> sbx::assets
     case sbx::assets::shader_node_type::constant_vector3: return sbx::math::vector3{0.0f, 0.0f, 0.0f};
     case sbx::assets::shader_node_type::constant_vector4: return sbx::math::vector4{0.0f, 0.0f, 0.0f, 0.0f};
     case sbx::assets::shader_node_type::constant_color: return sbx::math::color{1.0f, 1.0f, 1.0f, 1.0f};
-    case sbx::assets::shader_node_type::texture_sample: return sbx::assets::texture_handle{};
+    case sbx::assets::shader_node_type::texture_sample: return sbx::assets::texture2d_handle{};
     case sbx::assets::shader_node_type::swizzle: return std::string{"rgba"}; // identity -- the user then edits it
     case sbx::assets::shader_node_type::scene_depth: return std::string{"linear01"}; // matches Unity Shader Graph's own default mode
     case sbx::assets::shader_node_type::screen_position: return std::string{"default"}; // matches Unity Shader Graph's own default mode
@@ -1311,7 +1311,7 @@ auto shader_graph_panel::_draw_selection_inspector(editor_state& state) -> void 
         // zero until a material explicitly overrides them, see the Material Inspector's Shader
         // Graph section), so this is also the ONLY texture the graph's own preview has any value
         // to sample -- there's no "the" material to read from while just editing the graph.
-        auto value = std::holds_alternative<sbx::assets::texture_handle>(node.value) ? std::get<sbx::assets::texture_handle>(node.value) : sbx::assets::texture_handle{};
+        auto value = std::holds_alternative<sbx::assets::texture2d_handle>(node.value) ? std::get<sbx::assets::texture2d_handle>(node.value) : sbx::assets::texture2d_handle{};
 
         ImGui::AlignTextToFramePadding();
         ImGui::TextUnformatted("Default Texture");

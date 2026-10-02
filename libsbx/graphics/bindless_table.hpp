@@ -36,6 +36,7 @@ public:
   inline static constexpr auto storage_image_binding = std::uint32_t{2u};
   inline static constexpr auto sampled_cube_binding = std::uint32_t{3u};
   inline static constexpr auto storage_cube_binding = std::uint32_t{4u};
+  inline static constexpr auto sampled_array_binding = std::uint32_t{5u};
   
   inline static constexpr auto push_constant_size = std::uint32_t{128u};
   inline static constexpr auto push_constant_stages = VkShaderStageFlags{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT};
@@ -80,6 +81,13 @@ public:
 
   auto unregister_storage_cube(std::uint32_t index) -> void;
 
+  /** @brief A slot in the sampled 2D-array binding (Texture2DArray texture_arrays[]), written later via write_sampled_array. */
+  auto reserve_sampled_array() -> std::uint32_t;
+
+  auto write_sampled_array(std::uint32_t index, VkImageView view) -> void;
+
+  auto unregister_sampled_array(std::uint32_t index) -> void;
+
   /**
    * @brief Returns the bindless index of a sampler matching @p create_info, creating and caching it on first request.
    */
@@ -116,6 +124,10 @@ public:
 
   [[nodiscard]] auto storage_cube_count() const noexcept -> std::uint32_t {
     return _storage_cubes.next - static_cast<std::uint32_t>(_storage_cubes.released.size());
+  }
+
+  [[nodiscard]] auto sampled_array_count() const noexcept -> std::uint32_t {
+    return _sampled_arrays.next - static_cast<std::uint32_t>(_sampled_arrays.released.size());
   }
 
   [[nodiscard]] auto cached_sampler_count() const noexcept -> std::uint32_t {
@@ -172,6 +184,7 @@ private:
   index_allocator _storage_images{};
   index_allocator _sampled_cubes{};
   index_allocator _storage_cubes{};
+  index_allocator _sampled_arrays{};
 
   std::vector<pending_write> _pending_writes{};
   std::vector<sampler_entry> _sampler_cache{};

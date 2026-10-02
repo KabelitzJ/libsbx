@@ -155,7 +155,6 @@ namespace Sbx.Core
     internal static delegate* unmanaged<ulong, uint, ulong, void> Material_SetGenericTexture;
     internal static delegate* unmanaged<ulong, void> Material_Release;
     internal static delegate* unmanaged<ulong, bool> Material_IsLoaded;
-    internal static delegate* unmanaged<NativeString, float, float, Color*, bool> Texture_SampleBilinear;
     internal static delegate* unmanaged<NativeString> Project_GetAssetsDirectory;
     internal static delegate* unmanaged<NativeString, uint, ulong> Texture_Load;
     internal static delegate* unmanaged<uint, uint, uint, ulong> Texture_CreateStorageImage;
@@ -163,6 +162,10 @@ namespace Sbx.Core
     internal static delegate* unmanaged<ulong, void> Texture_Release;
     internal static delegate* unmanaged<NativeString, uint, uint, byte*, bool> Debug_WritePng;
     internal static delegate* unmanaged<ulong, bool> Texture_IsResident;
+    internal static delegate* unmanaged<ulong*, uint, uint, uint, ulong> Texture2DArray_Create;
+    internal static delegate* unmanaged<ulong, bool> Texture2DArray_IsResident;
+    internal static delegate* unmanaged<ulong, void> Texture2DArray_Release;
+    internal static delegate* unmanaged<ulong, uint, ulong, void> Material_SetGenericTextureArray;
     internal static delegate* unmanaged<NativeString, ulong> Font_Load;
     internal static delegate* unmanaged<ulong, bool> Font_IsResident;
     internal static delegate* unmanaged<ulong, uint, FontGlyph*, bool> Font_GetGlyph;

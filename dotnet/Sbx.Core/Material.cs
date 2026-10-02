@@ -108,6 +108,12 @@ namespace Sbx.Core
     }
 
     /** Puts a font's SDF atlas (single channel, 0.5 = glyph edge) into a generic texture slot (0-7) -- for text a shader draws itself. Same sharing caveat as SetTexture. */
+    /** A texture array in a generic slot: the shader reads it as texture_arrays[generic_textures[index]] (descriptors.slang), not textures[]. Set it once the array IsResident. */
+    public void SetGenericTexture(int index, Texture2DArray array)
+    {
+      unsafe { InternalCalls.Material_SetGenericTextureArray(_uuid, (uint)index, array.UUID); }
+    }
+
     public void SetGenericTexture(int index, Font font)
     {
       unsafe { InternalCalls.Material_SetGenericTextureFont(_uuid, (uint)index, font.UUID); }

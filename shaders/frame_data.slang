@@ -19,9 +19,13 @@ struct vertex {
   float4 color;
 }; // struct vertex
 
+// Mirrors render_packet.hpp's transform_data. color multiplies the vertex colour in the engine's
+// shaders (white unless instanced); custom_data is a material's own per-instance data.
 struct transform_data {
   float4x4 model;
   float4x4 normal;
+  float4 color;
+  float4 custom_data;
 }; // struct transform_data
 
 enum class material_flags : uint {

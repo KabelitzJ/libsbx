@@ -2140,6 +2140,7 @@ struct pending_geometry {
   std::vector<std::uint32_t> indices;
   std::vector<assets::mesh::submesh> submeshes;
   math::volume bounds;
+  bool instanced{false};  // for the node's instanced_mesh_renderer, not its mesh_renderer
 }; // struct pending_geometry
 
 auto pending_geometries() -> std::unordered_map<std::uint64_t, pending_geometry>& {
@@ -2147,9 +2148,56 @@ auto pending_geometries() -> std::unordered_map<std::uint64_t, pending_geometry>
   return pending;
 }
 
+// An instanced_mesh_renderer_set_instances call waiting for apply_pending_geometry (its buffer is
+// created there, while the render thread is idle), keyed by node; a later call replaces it.
+auto pending_instances() -> std::unordered_map<std::uint64_t, std::vector<scenes::instance_data>>& {
+  static auto pending = std::unordered_map<std::uint64_t, std::vector<scenes::instance_data>>{};
+  return pending;
+}
+
+// Builds a script mesh's vertices (tangents generated), its bounds and its indices.
+auto build_script_mesh(math::vector3* positions, math::vector3* normals, math::vector2* uvs, math::color* colors, std::uint32_t vertex_count, std::uint32_t* indices, std::uint32_t index_count) -> pending_geometry {
+  auto geometry = pending_geometry{};
+  geometry.vertices.reserve(vertex_count);
+
+  for (auto index = std::uint32_t{0}; index < vertex_count; ++index) {
+    auto vertex = assets::vertex{positions[index], normals[index], uvs[index], math::vector4{1.0f, 0.0f, 0.0f, 1.0f}};
+
+    if (colors) {
+      vertex.color = colors[index];
+    }
+
+    geometry.vertices.push_back(vertex);
+    geometry.bounds.include(positions[index]);
+  }
+
+  geometry.indices = std::vector<std::uint32_t>{indices, indices + index_count};
+  assets::asset_cooker::generate_tangents(geometry.vertices, geometry.indices, 0u, vertex_count, 0u, index_count);
+
+  return geometry;
+}
+
 } // namespace
 
 auto interop::apply_pending_geometry() -> void {
+  // Instance buffers: new ones created, and every one released since last time retired -- both
+  // write the resource registry, so only here, while the render thread is idle.
+  if (auto& instances = pending_instances(); !instances.empty()) {
+    auto& scene = core::engine::get_module<scenes::scenes_module>().active_scene();
+
+    for (auto& [uuid, data] : instances) {
+      auto node = scene.find(math::uuid::from_value(uuid));
+
+      if (auto renderer = node.is_valid() ? node.try_get_component<scenes::instanced_mesh_renderer>() : nullptr) {
+        renderer->instances = data.empty() ? nullptr : std::make_shared<const scenes::instance_buffer>(data);
+      }
+    }
+
+    instances.clear();
+  }
+
+  scenes::instance_buffer::collect_released();
+
   auto& pending = pending_geometries();
 
   if (pending.empty()) {
@@ -2165,6 +2213,15 @@ auto interop::apply_pending_geometry() -> void {
 
     // Destroyed (or its renderer removed) since the call: nothing to swap in.
     if (!node.is_valid()) {
+      continue;
+    }
+
+    if (geometry.instanced) {
+      if (auto instanced = node.try_get_component<scenes::instanced_mesh_renderer>()) {
+        assets_module.release_mesh(instanced->mesh);
+        instanced->mesh = assets_module.create_dynamic_mesh(geometry.vertices, geometry.indices, std::move(geometry.submeshes), geometry.bounds);
+      }
+
       continue;
     }
 
@@ -2206,30 +2263,9 @@ auto interop::mesh_renderer_set_geometry(std::uint64_t uuid, math::vector3* posi
 
   auto& assets_module = core::engine::get_module<assets::assets_module>();
 
-  auto vertices = std::vector<assets::vertex>{};
-  vertices.reserve(vertex_count);
-
-  auto bounds = math::volume{};
-
-  for (auto index = std::uint32_t{0}; index < vertex_count; ++index) {
-    auto vertex = assets::vertex{positions[index], normals[index], uvs[index], math::vector4{1.0f, 0.0f, 0.0f, 1.0f}};
-
-    if (colors) {
-      vertex.color = colors[index];
-    }
-
-    vertices.push_back(vertex);
-    bounds.include(positions[index]);
-  }
-
-  auto index_vector = std::vector<std::uint32_t>{indices, indices + index_count};
-
-  // The placeholder tangent set above is never actually correct except by accident (it doesn't
-  // rotate with the mesh's own UV layout or vary with a tilted normal) -- real per-vertex tangents
-  // are what any normal-mapped script-built mesh (e.g. hex terrain) actually needs. Same Lengyel
-  // generator the glTF mesh cooker uses for an imported primitive missing its own TANGENT accessor
-  // (asset_cooker_mesh.cpp) -- reused here rather than duplicated, now exposed publicly for it.
-  assets::asset_cooker::generate_tangents(vertices, index_vector, 0u, vertex_count, 0u, index_count);
+  // Real per-vertex tangents (build_script_mesh: the glTF cooker's Lengyel generator) -- what any
+  // normal-mapped script-built mesh (e.g. hex terrain) actually needs.
+  auto geometry = build_script_mesh(positions, normals, uvs, colors, vertex_count, indices, index_count);
 
   auto& renderer = node.get_or_add_component<scenes::mesh_renderer>();
 
@@ -2258,13 +2294,65 @@ auto interop::mesh_renderer_set_geometry(std::uint64_t uuid, math::vector3* posi
     });
   }
 
-  auto submeshes = std::vector<assets::mesh::submesh>{assets::mesh::submesh{0u, index_count, bounds, material}};
+  geometry.submeshes = std::vector<assets::mesh::submesh>{assets::mesh::submesh{0u, index_count, geometry.bounds, material}};
 
   // The mesh itself is swapped in by apply_pending_geometry, once the render thread is done with
   // the current one; the node keeps drawing its old mesh until then.
-  pending_geometries()[uuid] = pending_geometry{std::move(vertices), std::move(index_vector), std::move(submeshes), bounds};
+  pending_geometries()[uuid] = std::move(geometry);
 
   renderer.materials = std::vector<assets::material_handle>{material};
+}
+
+auto interop::instanced_mesh_renderer_set_geometry(std::uint64_t uuid, math::vector3* positions, math::vector3* normals, math::vector2* uvs, math::color* colors, std::uint32_t vertex_count, std::uint32_t* indices, std::uint32_t index_count) -> void {
+  if (!positions || !normals || !uvs || !indices || vertex_count == 0u || index_count == 0u) {
+    utility::logger<"scripting">::error("instanced_mesh_renderer_set_geometry: invalid geometry");
+    return;
+  }
+
+  auto node = core::engine::get_module<scenes::scenes_module>().active_scene().find(math::uuid::from_value(uuid));
+
+  if (!node.is_valid()) {
+    utility::logger<"scripting">::error("instanced_mesh_renderer_set_geometry: invalid node");
+    return;
+  }
+
+  auto& renderer = node.get_or_add_component<scenes::instanced_mesh_renderer>();
+
+  if (!renderer.material.is_valid()) {
+    renderer.material = core::engine::get_module<assets::assets_module>().create_material(assets::material::create_info{
+      .name = "Script Instanced Mesh",
+      .metallic_factor = 0.0f,
+      .roughness_factor = 0.8f
+    });
+  }
+
+  auto geometry = build_script_mesh(positions, normals, uvs, colors, vertex_count, indices, index_count);
+  geometry.submeshes = std::vector<assets::mesh::submesh>{assets::mesh::submesh{0u, index_count, geometry.bounds, renderer.material}};
+  geometry.instanced = true;
+  pending_geometries()[uuid] = std::move(geometry);
+}
+
+auto interop::instanced_mesh_renderer_set_material(std::uint64_t uuid, std::uint64_t material_uuid) -> void {
+  auto node = core::engine::get_module<scenes::scenes_module>().active_scene().find(math::uuid::from_value(uuid));
+
+  if (!node.is_valid()) {
+    utility::logger<"scripting">::error("instanced_mesh_renderer_set_material: invalid node");
+    return;
+  }
+
+  node.get_or_add_component<scenes::instanced_mesh_renderer>().material = core::engine::get_module<assets::assets_module>().load_material(math::uuid::from_value(material_uuid));
+}
+
+auto interop::instanced_mesh_renderer_set_instances(std::uint64_t uuid, scenes::instance_data* instances, std::uint32_t count) -> void {
+  auto node = core::engine::get_module<scenes::scenes_module>().active_scene().find(math::uuid::from_value(uuid));
+
+  if (!node.is_valid() || (!instances && count > 0u)) {
+    utility::logger<"scripting">::error("instanced_mesh_renderer_set_instances: invalid node or data");
+    return;
+  }
+
+  node.get_or_add_component<scenes::instanced_mesh_renderer>();
+  pending_instances()[uuid] = std::vector<scenes::instance_data>{instances, instances + count};
 }
 
 auto interop::mesh_renderer_set_material(std::uint64_t uuid, std::uint32_t submesh_index, std::uint64_t material_uuid) -> void {

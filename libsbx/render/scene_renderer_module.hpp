@@ -234,6 +234,11 @@ private:
   // worst case every instance survives culling and needs its full original slot.
   inline static constexpr auto max_opaque_draw_commands = std::uint32_t{8192u};
 
+  // Visible instances of every instanced_mesh_renderer, per frame slot, summed over each one's
+  // cull views (camera, plus every shadow cascade if its material casts shadows). Past this,
+  // further renderers are skipped for the frame (logged once).
+  inline static constexpr auto instanced_culled_capacity = std::uint32_t{262144u};
+
   // Skinning: joint_palette_capacity is a total across every skinned instance drawn this frame
   // (packet.joint_matrices), not per-instance; skin_scratch_vertex_capacity likewise sums every
   // skinned instance's vertex_count. Both are fixed upper bounds for v1 -- a frame exceeding either
@@ -385,6 +390,8 @@ private:
 
   graphics::buffer_handle _culled_transform_buffer{};
   std::array<graphics::buffer::address_type, graphics::swapchain::max_frames_in_flight> _culled_transform_addresses{};
+  graphics::buffer_handle _instanced_culled_buffer{};
+  std::array<graphics::buffer::address_type, graphics::swapchain::max_frames_in_flight> _instanced_culled_addresses{};
 
   // CPU-written every frame from packet.joint_matrices (skeleton_pose evaluation happens in
   // _build_packet, on the main thread) -- frame-in-flight multiplexed exactly like _transform_buffer,

@@ -183,6 +183,9 @@ scripting_module::scripting_module() {
 
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "MeshRenderer_SetGeometry", reinterpret_cast<void*>(&interop::mesh_renderer_set_geometry));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "MeshRenderer_SetMaterial", reinterpret_cast<void*>(&interop::mesh_renderer_set_material));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "InstancedMeshRenderer_SetGeometry", reinterpret_cast<void*>(&interop::instanced_mesh_renderer_set_geometry));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "InstancedMeshRenderer_SetMaterial", reinterpret_cast<void*>(&interop::instanced_mesh_renderer_set_material));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "InstancedMeshRenderer_SetInstances", reinterpret_cast<void*>(&interop::instanced_mesh_renderer_set_instances));
 
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Material_Load", reinterpret_cast<void*>(&interop::material_load));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Material_CreateInstance", reinterpret_cast<void*>(&interop::material_create_instance));
@@ -738,6 +741,7 @@ auto scripting_module::_register_managed_components() -> void {
   interop::register_managed_component<physics::rigidbody>("Sbx.Core.Physics.Rigidbody", _core_assembly);
   interop::register_managed_component<physics::nav_agent>("Sbx.Core.Physics.NavAgent", _core_assembly);
   interop::register_managed_component<scenes::mesh_renderer>("Sbx.Core.Components.MeshRenderer", _core_assembly);
+  interop::register_managed_component<scenes::instanced_mesh_renderer>("Sbx.Core.Components.InstancedMeshRenderer", _core_assembly);
   interop::register_managed_component<canvas::canvas>("Sbx.Core.UI.Canvas", _core_assembly);
   interop::register_managed_component<canvas::rect_transform>("Sbx.Core.UI.RectTransform", _core_assembly);
   interop::register_managed_component<canvas::ui_image>("Sbx.Core.UI.UIImage", _core_assembly);

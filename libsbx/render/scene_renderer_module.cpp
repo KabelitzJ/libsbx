@@ -12,6 +12,8 @@
 #include <type_traits>
 #include <unordered_map>
 #include <utility>
+
+#include <libsbx/utility/logger.hpp>
 #include <variant>
 #include <tuple>
 #include <vector>
@@ -867,6 +869,68 @@ auto scene_renderer_module::_build_packet() -> render_packet {
     packet.opaque_commands.push_back(std::move(command));
   }
 
+  // Instanced renderers: one command per submesh, instances straight from their own buffer. Each
+  // reserves its share of the instanced culled pool per cull view it's drawn in.
+  auto instanced_culled = std::uint32_t{0u};
+
+  for (const auto [entity, world, renderer] : scene.query<scenes::world_transform, scenes::instanced_mesh_renderer>(ecs::exclude<scenes::inactive>).each()) {
+    if (!renderer.mesh.is_valid() || !renderer.material.is_valid() || !renderer.instances || renderer.instances->count() == 0u) {
+      continue;
+    }
+
+    if (renderer.material->alpha() == assets::alpha_mode::blend) {
+      static auto warned = false;
+
+      if (!std::exchange(warned, true)) {
+        utility::logger<"render">::warn("instanced_mesh_renderer: blended materials aren't supported, skipping");
+      }
+
+      continue;
+    }
+
+    const auto count = renderer.instances->count();
+    const auto casts_shadow = renderer.material->casts_shadow();
+    const auto views = casts_shadow ? cull_view_count : 1u;
+    const auto& submeshes = renderer.mesh->submeshes();
+
+    if (instanced_culled + count * views * static_cast<std::uint32_t>(submeshes.size()) > instanced_culled_capacity) {
+      static auto warned = false;
+
+      if (!std::exchange(warned, true)) {
+        utility::logger<"render">::warn("instanced_mesh_renderer: over {} visible-instance slots this frame, skipping the rest", instanced_culled_capacity);
+      }
+
+      continue;
+    }
+
+    const auto node_index = static_cast<std::uint32_t>(packet.transforms.size());
+    packet.transforms.push_back(transform_data{world.matrix, math::matrix4x4::transposed(math::matrix4x4::inverted(world.matrix))});
+
+    const auto resident = assets_module.is_resident(renderer.mesh) && assets_module.is_resident(renderer.material);
+
+    for (auto index = std::uint32_t{0u}; index < submeshes.size(); ++index) {
+      auto command = draw_command{};
+      command.mesh = renderer.mesh;
+      command.submesh_index = index;
+      command.material = renderer.material;
+      command.instance_count = count;
+      command.transform_offset = node_index;
+      command.pipeline_id = compute_pipeline_id(*renderer.material);
+      command.resident = resident;
+      command.local_bounds = submeshes[index].bounds;
+      command.instances = renderer.instances;
+      command.culled_offset = instanced_culled;
+
+      instanced_culled += count * views;
+
+      if (casts_shadow) {
+        packet.shadow_caster_commands.push_back(command);
+      }
+
+      packet.opaque_commands.push_back(std::move(command));
+    }
+  }
+
   packet.transparent_commands.reserve(_transparent_entries.size());
 
   for (const auto& entry : _transparent_entries) {
@@ -1411,6 +1475,19 @@ auto scene_renderer_module::_ensure_resources() -> void {
     _culled_transform_addresses[slot] = culled_transform_base + slot * cull_view_count * transform_capacity * sizeof(transform_data);
   }
 
+  _instanced_culled_buffer = registry.emplace<graphics::buffer>(graphics::buffer::create_info{
+    .size = sizeof(transform_data) * instanced_culled_capacity * graphics::swapchain::max_frames_in_flight,
+    .usage = graphics::buffer_usage::device_address | graphics::buffer_usage::storage,
+    .memory = graphics::memory_usage::device_local,
+    .name = "Culled Instanced Transforms"
+  });
+
+  const auto instanced_culled_base = registry.get<graphics::buffer>(_instanced_culled_buffer).address();
+
+  for (auto slot = std::size_t{0u}; slot < graphics::swapchain::max_frames_in_flight; ++slot) {
+    _instanced_culled_addresses[slot] = instanced_culled_base + slot * instanced_culled_capacity * sizeof(transform_data);
+  }
+
   _joint_palette_buffer = registry.emplace<graphics::buffer>(graphics::buffer::create_info{
     .size = sizeof(math::matrix4x4) * joint_palette_capacity * graphics::swapchain::max_frames_in_flight,
     .usage = graphics::buffer_usage::device_address | graphics::buffer_usage::storage,
@@ -1709,6 +1786,7 @@ auto scene_renderer_module::_build_graph_resources() const -> graph_resources {
     .cluster_counter_buffer = _cluster_counter_buffer,
     .culled_indirect_args_buffer = _culled_indirect_args_buffer,
     .culled_transform_buffer = _culled_transform_buffer,
+    .instanced_culled_buffer = _instanced_culled_buffer,
     .skin_scratch_buffer = _skin_scratch_buffer
   };
 }
@@ -1895,6 +1973,7 @@ auto scene_renderer_module::_prepare_frame(render_context& context) -> void {
   context.culled_transform_address = _culled_transform_addresses[context.slot];
   context.culled_indirect_args_view_stride = max_opaque_draw_commands;
   context.culled_transform_view_stride = transform_capacity;
+  context.instanced_culled_address = _instanced_culled_addresses[context.slot];
 
   const auto particle_write_index = static_cast<std::uint32_t>(context.frame_index % 2u);
 

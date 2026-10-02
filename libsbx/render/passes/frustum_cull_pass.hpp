@@ -46,6 +46,7 @@ private:
   auto _cull_view(render_context& context, const std::vector<draw_command>& commands, std::uint32_t cascade_index) -> void;
 
   memory::observer_ptr<graphics::compute_pipeline> _pipeline{};
+  memory::observer_ptr<graphics::compute_pipeline> _instanced_pipeline{};
 
 }; // class frustum_cull_pass
 

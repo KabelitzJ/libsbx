@@ -193,8 +193,9 @@ auto upload_context::flush(command_buffer& commands, std::uint64_t frame_index) 
 
       auto to_source = command_buffer::image_transition_data{};
       to_source.image = source_image.handle();
+      // Only reads came before (it's shader_read_only): an execution dependency, nothing to flush.
       to_source.src_stage_mask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
-      to_source.src_access_mask = VK_ACCESS_2_MEMORY_READ_BIT | VK_ACCESS_2_MEMORY_WRITE_BIT;
+      to_source.src_access_mask = VK_ACCESS_2_NONE;
       to_source.dst_stage_mask = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
       to_source.dst_access_mask = VK_ACCESS_2_TRANSFER_READ_BIT;
       to_source.old_layout = image_layout::shader_read_only_optimal;

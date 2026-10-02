@@ -148,6 +148,9 @@ namespace Sbx.Core
 
     internal static delegate* unmanaged<ulong, Vector3*, Vector3*, Vector2*, Color*, uint, uint*, uint, Color*, void> MeshRenderer_SetGeometry;
     internal static delegate* unmanaged<ulong, uint, ulong, void> MeshRenderer_SetMaterial;
+    internal static delegate* unmanaged<ulong, Vector3*, Vector3*, Vector2*, Color*, uint, uint*, uint, void> InstancedMeshRenderer_SetGeometry;
+    internal static delegate* unmanaged<ulong, ulong, void> InstancedMeshRenderer_SetMaterial;
+    internal static delegate* unmanaged<ulong, InstanceData*, uint, void> InstancedMeshRenderer_SetInstances;
     internal static delegate* unmanaged<NativeString, ulong> Material_Load;
     internal static delegate* unmanaged<ulong, ulong> Material_CreateInstance;
     internal static delegate* unmanaged<ulong, uint, ulong, void> Material_SetTexture;

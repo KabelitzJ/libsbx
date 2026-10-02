@@ -64,7 +64,7 @@ code_vertex_output vertex_main(vertex_input input) {
   output.normal = normalize(mul(instance.normal, float4(v.normal, 0.0)).xyz);
   output.tangent = float4(normalize(mul(instance.normal, float4(v.tangent.xyz, 0.0)).xyz), v.tangent.w);
   output.uv = v.uv;
-  output.color = v.color;
+  output.color = v.color * instance.color;
   output.sv_position = mul(frame_data.projection, mul(frame_data.view, world_position));
 
   return output;

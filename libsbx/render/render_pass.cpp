@@ -54,6 +54,12 @@ auto resolve_custom_pipeline(const std::string& shader_path, std::span<const gra
   }
 }
 
+auto instanced_transform_address(const render_context& context, const draw_command& command, std::uint32_t cascade_index) -> graphics::buffer::address_type {
+  const auto view = cascade_index == 0xFFFFFFFFu ? 0u : 1u + cascade_index;
+
+  return context.instanced_culled_address + (static_cast<graphics::buffer::address_type>(command.culled_offset) + view * command.instance_count) * sizeof(transform_data);
+}
+
 // Shared per-command prologue for submit_draw_commands/_indirect: validity checks, the
 // shader-graph-vs-fixed-slot pipeline resolution (see custom_pipeline_resolver's own doc comment),
 // pipeline/mesh bind-state tracking (bound/current_pipeline/current_mesh persist across calls for
@@ -67,7 +73,7 @@ static auto prepare_draw_command(graphics::resource_registry& registry, render_c
     return false;
   }
 
-  if (command.transform_offset + command.instance_count > context.instance_count) {
+  if (!command.instances && command.transform_offset + command.instance_count > context.instance_count) {
     return false;
   }
 
@@ -129,7 +135,8 @@ auto submit_draw_commands(render_context& context, const std::vector<draw_comman
     auto values = push_constants{};
     values.cascade_index = cascade_index;
 
-    if (!prepare_draw_command(registry, context, command, pipelines, resolve_custom_pipeline, bound, current_pipeline, current_mesh, values)) {
+    // Instanced draws only exist culled: there's no per-instance transform here to draw from.
+    if (command.instances || !prepare_draw_command(registry, context, command, pipelines, resolve_custom_pipeline, bound, current_pipeline, current_mesh, values)) {
       continue;
     }
 
@@ -169,6 +176,12 @@ auto submit_draw_commands_indirect(render_context& context, const std::vector<dr
     }
 
     values.transform_address = transform_address;
+
+    // An instanced draw's visible transforms are its own block of the instanced pool, from 0.
+    if (command.instances) {
+      values.transform_address = instanced_transform_address(context, command, cascade_index);
+      values.transform_offset = 0u;
+    }
 
     context.command_buffer->push_constants(bindless_table.pipeline_layout(), graphics::bindless_table::push_constant_stages, 0u, memory::as_bytes(values));
 

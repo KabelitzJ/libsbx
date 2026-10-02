@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <limits>
+#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -30,6 +31,7 @@
 #include <libsbx/assets/material.hpp>
 
 #include <libsbx/scenes/post_process.hpp>
+#include <libsbx/scenes/instance_buffer.hpp>
 #include <libsbx/assets/mesh.hpp>
 #include <libsbx/assets/texture2d.hpp>
 #include <libsbx/assets/environment_map.hpp>
@@ -173,6 +175,20 @@ struct mesh_renderer {
   assets::mesh_handle mesh{};
   std::vector<assets::material_handle> materials{};
 }; // struct mesh_renderer
+
+/**
+ * @brief One mesh drawn many times in one instanced draw (Godot's MultiMesh): every submesh of
+ * mesh with material, once per entry of instances, each placed relative to this node. Unlike a
+ * mesh_renderer per object, there's no node per instance and nothing re-uploaded per frame: the
+ * instances sit in their own GPU buffer, and frustum_cull_pass culls them one by one on the GPU
+ * (expanding only the visible ones to full transforms). Opaque and alpha-masked materials only.
+ * Runtime-only: not saved with the scene.
+ */
+struct instanced_mesh_renderer {
+  assets::mesh_handle mesh{};
+  assets::material_handle material{};
+  std::shared_ptr<const instance_buffer> instances{};
+}; // struct instanced_mesh_renderer
 
 /**
  * @brief Fills unset material slots from the mesh's per-submesh materials.

@@ -5,6 +5,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <vector>
 
 #include <libsbx/math/matrix4x4.hpp>
@@ -17,6 +18,7 @@
 #include <libsbx/assets/mesh.hpp>
 
 #include <libsbx/scenes/post_process.hpp>
+#include <libsbx/scenes/instance_buffer.hpp>
 #include <libsbx/assets/texture2d.hpp>
 #include <libsbx/assets/environment_map.hpp>
 #include <libsbx/assets/particle_effect.hpp>
@@ -98,6 +100,13 @@ struct draw_command {
   // rigid mesh's bounds are already exact and padding them would only weaken culling for no benefit.
   math::volume local_bounds{};
 
+  // Non-null: an instanced_mesh_renderer's draw. Its instances come from this buffer (not
+  // render_packet::transforms -- there transform_offset is the renderer's node transform, which
+  // frustum_cull_pass multiplies in), and its visible ones land in the instanced culled pool at
+  // culled_offset (one instance_count-sized block per cull view it's drawn in).
+  std::shared_ptr<const scenes::instance_buffer> instances{};
+  std::uint32_t culled_offset{0u};
+
   // assets_module.is_resident(mesh) && is_resident(material), resolved once when this command is
   // built rather than per pass -- the same command list is submitted by several passes in the same
   // frame (depth pre-pass, opaque, shadow x cascade), and residency can't change mid-frame.
@@ -105,14 +114,18 @@ struct draw_command {
 }; // struct draw_command
 
 /**
- * @brief Per-instance world matrix and its inverse-transpose normal matrix.
+ * @brief Per-instance world matrix and its inverse-transpose normal matrix, plus the instance's
+ * color and custom_data (scenes::instance_data; white and zero for anything not instanced).
  *
- * Computed once on the CPU so normals stay correct under non-uniform scale/skew; the two
- * float4x4s pack with no padding.
+ * Computed once on the CPU so normals stay correct under non-uniform scale/skew (for an
+ * instanced_mesh_renderer, by frustum_cull_instanced.slang on the GPU); everything packs with no
+ * padding. Mirrors frame_data.slang's transform_data.
  */
 struct transform_data {
   math::matrix4x4 model{math::matrix4x4::identity};
   math::matrix4x4 normal{math::matrix4x4::identity};
+  math::color color{math::color::white()};
+  math::vector4 custom_data{0.0f, 0.0f, 0.0f, 0.0f};
 }; // struct transform_data
 
 /**

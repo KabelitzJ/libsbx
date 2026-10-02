@@ -84,6 +84,7 @@ auto shadow_pass::_resolve_custom_pipeline(const std::string& shader_path, bool 
 auto shadow_pass::declare(graphics_pass_builder& builder, const graph_resources& resources) -> void {
   builder.reads_buffer(resources.culled_indirect_args_buffer, graphics::pipeline_stage::draw_indirect, graphics::access::indirect_command_read);
   builder.reads_buffer(resources.culled_transform_buffer, graphics::pipeline_stage::vertex_shader, graphics::access::shader_read);
+  builder.reads_buffer(resources.instanced_culled_buffer, graphics::pipeline_stage::vertex_shader, graphics::access::shader_read);
   builder.reads_buffer(resources.skin_scratch_buffer, graphics::pipeline_stage::vertex_shader, graphics::access::shader_read);
 
   const auto shadow_extent = math::vector2u{shadow_map_resolution, shadow_map_resolution};

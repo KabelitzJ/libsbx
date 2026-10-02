@@ -20,6 +20,7 @@
 
 #include <libsbx/scenes/scenes_module.hpp>
 #include <libsbx/scenes/scene.hpp>
+#include <libsbx/scenes/instance_buffer.hpp>
 
 #include <libsbx/scripting/managed/string.hpp>
 #include <libsbx/scripting/managed/type.hpp>
@@ -409,6 +410,14 @@ struct interop {
    */
   static auto mesh_renderer_set_material(std::uint64_t uuid, std::uint32_t submesh_index, std::uint64_t material_uuid) -> void;
 
+  /** @brief The mesh every instance draws, from raw data like mesh_renderer_set_geometry (creating the node's instanced_mesh_renderer, and a default material, if needed). Swapped in by apply_pending_geometry. Backs Sbx.Core.Components.InstancedMeshRenderer.SetGeometry. */
+  static auto instanced_mesh_renderer_set_geometry(std::uint64_t uuid, math::vector3* positions, math::vector3* normals, math::vector2* uvs, math::color* colors, std::uint32_t vertex_count, std::uint32_t* indices, std::uint32_t index_count) -> void;
+
+  static auto instanced_mesh_renderer_set_material(std::uint64_t uuid, std::uint64_t material_uuid) -> void;
+
+  /** @brief Replaces every instance (count 0: none). The GPU buffer is created by apply_pending_geometry, on render idle. */
+  static auto instanced_mesh_renderer_set_instances(std::uint64_t uuid, scenes::instance_data* instances, std::uint32_t count) -> void;
+
   /** @brief Loads (or reuses, if already imported) a .material asset by project-relative path, returning its uuid -- 0 if the path doesn't resolve to a real material. Backs Sbx.Core.Material.Load. */
   static auto material_load(managed::string path) -> std::uint64_t;
 
@@ -601,8 +610,9 @@ struct interop {
   static auto ui_text_set_color(std::uint64_t uuid, math::color* value) -> void;
 
   /**
-   * @brief Swaps every mesh_renderer_set_geometry call since the last one in: releases each node's
-   * old mesh and creates its new one. Runs on presentation_module::on_render_idle -- replacing a
+   * @brief Swaps every mesh_renderer_set_geometry / instanced_mesh_renderer_set_geometry /
+   * _set_instances call since the last one in (each node's old mesh released, new mesh and instance
+   * buffers created), and retires released instance buffers. Runs on presentation_module::on_render_idle -- replacing a
    * mesh straight away retires buffers the render thread may still be recording from (and writes
    * the resource registry while it reads it), which asserts on an invalid handle.
    */

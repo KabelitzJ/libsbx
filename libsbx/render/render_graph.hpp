@@ -76,6 +76,7 @@ struct graph_resources {
   graphics::buffer_handle cluster_counter_buffer{};
   graphics::buffer_handle culled_indirect_args_buffer{};
   graphics::buffer_handle culled_transform_buffer{};
+  graphics::buffer_handle instanced_culled_buffer{};
   graphics::buffer_handle skin_scratch_buffer{};
 }; // struct graph_resources
 

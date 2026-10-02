@@ -41,6 +41,11 @@ frustum_cull_pass::frustum_cull_pass() {
     .shader = shader,
     .name = "Frustum Cull"
   });
+
+  _instanced_pipeline = compute_pipeline_cache.get(graphics::compute_pipeline::create_info{
+    .shader = shader_cache.get({"engine://shaders/passes/frustum_cull_instanced.slang", entry_points}),
+    .name = "Frustum Cull Instanced"
+  });
 }
 
 struct frustum_cull_push_data {
@@ -56,11 +61,29 @@ struct frustum_cull_push_data {
   std::uint32_t cascade_index;
 }; // struct frustum_cull_push_data
 
+// Mirrors frustum_cull_instanced.slang's push_data. The padding keeps the float4s at offset 48 on
+// both sides: the shader aligns float4 to 16 bytes, math::vector4 only to 4.
+struct frustum_cull_instanced_push_data {
+  graphics::buffer::address_type frame_address;
+  graphics::buffer::address_type node_transforms;
+  graphics::buffer::address_type instances;
+  graphics::buffer::address_type dest_transforms;
+  graphics::buffer::address_type indirect_args;
+  std::uint64_t padding{0u};
+  math::vector4 local_bounds_min; // .w unused
+  math::vector4 local_bounds_max; // .w unused
+  std::uint32_t command_index;
+  std::uint32_t node_index;
+  std::uint32_t instance_count;
+  std::uint32_t cascade_index;
+}; // struct frustum_cull_instanced_push_data
+
 auto frustum_cull_pass::declare(compute_pass_builder& builder, const graph_resources& resources) -> void {
   // instanceCount is bumped atomically, hence read|write on the indirect args. Consumers
   // (depth_pre_pass/opaque_pass) declare their reads, so the graph places the hand-off barrier.
   builder.writes_buffer(resources.culled_indirect_args_buffer, graphics::pipeline_stage::compute_shader, graphics::access::shader_read | graphics::access::shader_write);
   builder.writes_buffer(resources.culled_transform_buffer, graphics::pipeline_stage::compute_shader, graphics::access::shader_write);
+  builder.writes_buffer(resources.instanced_culled_buffer, graphics::pipeline_stage::compute_shader, graphics::access::shader_write);
 }
 
 auto frustum_cull_pass::execute(render_context& context) -> void {
@@ -73,8 +96,6 @@ auto frustum_cull_pass::execute(render_context& context) -> void {
   }
 
   bind_compute_globals(context);
-
-  context.command_buffer->bind_pipeline(*_pipeline);
 
   _cull_view(context, context.packet->opaque_commands, 0xFFFFFFFFu);
 
@@ -91,6 +112,9 @@ auto frustum_cull_pass::_cull_view(render_context& context, const std::vector<dr
   const auto indirect_args = context.culled_indirect_args_address + view * context.culled_indirect_args_view_stride * sizeof(VkDrawIndexedIndirectCommand);
   const auto command_count = std::min(static_cast<std::uint32_t>(commands.size()), context.culled_indirect_args_view_stride);
 
+  // The pipeline bound last: commands of both kinds interleave, so switch only when it changes.
+  auto bound = memory::observer_ptr<graphics::compute_pipeline>{};
+
   for (auto index = std::uint32_t{0u}; index < command_count; ++index) {
     const auto& command = commands[index];
 
@@ -100,11 +124,43 @@ auto frustum_cull_pass::_cull_view(render_context& context, const std::vector<dr
       continue;
     }
 
+    const auto& bounds = command.local_bounds;
+    const auto groups = (command.instance_count + threads_per_group - 1u) / threads_per_group;
+
+    if (command.instances) {
+      if (bound != _instanced_pipeline) {
+        context.command_buffer->bind_pipeline(*_instanced_pipeline);
+        bound = _instanced_pipeline;
+      }
+
+      const auto push = frustum_cull_instanced_push_data{
+        context.frame_address,
+        context.transform_address,
+        core::engine::get_module<graphics::graphics_module>().resource_registry().get<graphics::buffer>(command.instances->buffer()).address(),
+        instanced_transform_address(context, command, cascade_index),
+        indirect_args,
+        0u,
+        math::vector4{bounds.min(), 0.0f},
+        math::vector4{bounds.max(), 0.0f},
+        index,
+        command.transform_offset,
+        command.instance_count,
+        cascade_index
+      };
+
+      write_push_constants(context, push);
+      context.command_buffer->dispatch(groups, 1u, 1u);
+      continue;
+    }
+
     if (command.transform_offset + command.instance_count > context.instance_count) {
       continue;
     }
 
-    const auto& bounds = command.local_bounds;
+    if (bound != _pipeline) {
+      context.command_buffer->bind_pipeline(*_pipeline);
+      bound = _pipeline;
+    }
 
     const auto push = frustum_cull_push_data{
       context.frame_address,
@@ -120,8 +176,6 @@ auto frustum_cull_pass::_cull_view(render_context& context, const std::vector<dr
     };
 
     write_push_constants(context, push);
-
-    const auto groups = (command.instance_count + threads_per_group - 1u) / threads_per_group;
     context.command_buffer->dispatch(groups, 1u, 1u);
   }
 }

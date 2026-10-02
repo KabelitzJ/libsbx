@@ -125,6 +125,10 @@ struct render_context {
   // its transforms at culled_transform_address + v * culled_transform_view_stride transforms.
   std::uint32_t culled_indirect_args_view_stride{0u};
   std::uint32_t culled_transform_view_stride{0u};
+  // This slot's region of the instanced culled pool: an instanced draw_command's visible instances
+  // for cull view v start at instanced_culled_address + (culled_offset + v * instance_count)
+  // transforms (see instanced_transform_address).
+  graphics::buffer::address_type instanced_culled_address{0u};
 
   // This frame's slot in the joint-palette buffer (CPU-written every frame from
   // packet->joint_matrices, so it's frame-in-flight multiplexed like transform_address); read by
@@ -157,6 +161,13 @@ struct render_context {
   std::array<graphics::image_handle, shadow_cascade_count> shadow_maps{};
   std::array<std::uint32_t, shadow_cascade_count> shadow_map_indices{};
 }; // struct render_context
+
+/**
+ * @brief Where an instanced draw_command's visible transforms for @p cascade_index's cull view
+ * are (0xFFFFFFFF = the camera view): its block of the instanced culled pool -- frustum_cull_pass
+ * writes there, the draw reads from there.
+ */
+auto instanced_transform_address(const render_context& context, const draw_command& command, std::uint32_t cascade_index) -> graphics::buffer::address_type;
 
 struct push_constants {
   graphics::buffer::address_type frame_address;

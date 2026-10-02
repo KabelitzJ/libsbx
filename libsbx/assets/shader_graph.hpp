@@ -31,7 +31,7 @@
 namespace sbx::assets {
 
 inline constexpr auto shader_graph_max_params = std::uint32_t{8u};
-inline constexpr auto shader_graph_max_textures = std::uint32_t{8u};
+inline constexpr auto shader_graph_max_textures = std::uint32_t{16u};
 
 enum class shader_value_type : std::uint8_t {
   scalar,

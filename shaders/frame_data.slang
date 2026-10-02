@@ -9,7 +9,7 @@
 static const uint shadow_cascade_count = 4;
 
 static const uint shader_graph_max_params = 8;
-static const uint shader_graph_max_textures = 8;
+static const uint shader_graph_max_textures = 16;
 
 struct vertex {
   float3 position;

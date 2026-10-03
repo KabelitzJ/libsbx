@@ -68,7 +68,7 @@ auto inspector_panel::_draw_name_field(editor_state& state, sbx::scenes::scene& 
   }
 
   if (ImGui::InputText("Name", _name_buffer.data(), _name_buffer.size())) {
-    // Live-edited into the buffer; committed below once editing finishes.
+    // Committed below once editing finishes.
   }
 
   if (ImGui::IsItemActivated() && !_pending_name_before) {
@@ -76,14 +76,16 @@ auto inspector_panel::_draw_name_field(editor_state& state, sbx::scenes::scene& 
   }
 
   if (ImGui::IsItemDeactivatedAfterEdit()) {
-    // scene::find(name) can go stale after this (scene::_entities_by_name is populated at creation
-    // only) — fine, selection/hierarchy key on entity/id, never name.
+    // scene::find(name) may go stale after a rename; selection and hierarchy key on ids, not names.
     node.name() = sbx::scenes::tag{std::string{_name_buffer.data()}};
 
     if (_pending_name_before) {
       state.push_command(target, std::make_unique<modify_component_command<sbx::scenes::tag>>(id, *_pending_name_before, node.name(), "Rename Node"));
-      _pending_name_before.reset();
     }
+  }
+
+  if (ImGui::IsItemDeactivated()) {
+    _pending_name_before.reset();
   }
 
   ImGui::Text("UUID: %llu", static_cast<unsigned long long>(id.value()));
@@ -151,9 +153,7 @@ auto inspector_panel::_draw_transform_section(editor_state& state, sbx::scenes::
     ImGui::EndPopup();
   }
 
-  // started captures the pre-mutation snapshot (must run before this frame's change, if any, is
-  // applied below — the same frame can both start and finish a drag, via the Reset context-menu item).
-  // committed pushes it once the drag (or reset click) is done.
+  // started snapshots before this frame's change is applied (Reset can start and finish in one frame); committed pushes the command.
   const auto capture_before = [&](const vector3_edit_result& result) {
     if (result.started && !_pending_transform_before) {
       _pending_transform_before = transform;
@@ -163,6 +163,9 @@ auto inspector_panel::_draw_transform_section(editor_state& state, sbx::scenes::
   const auto commit_after = [&](const vector3_edit_result& result) {
     if (result.committed && _pending_transform_before) {
       state.push_command(target, std::make_unique<modify_component_command<sbx::scenes::local_transform>>(node.id(), *_pending_transform_before, transform, "Edit Transform"));
+    }
+
+    if (result.ended) {
       _pending_transform_before.reset();
     }
   };
@@ -182,8 +185,7 @@ auto inspector_panel::_draw_transform_section(editor_state& state, sbx::scenes::
 
   commit_after(position_result);
 
-  // See _rotation_node_id/_rotation_cache/_rotation's declarations for why this is cached rather
-  // than re-derived from the quaternion every frame.
+  // Euler angles are cached; see _rotation_node_id.
   if (node.id().value() != _rotation_node_id.value() || !(transform.rotation == _rotation_cache)) {
     const auto euler = sbx::math::quaternion::euler_angles(transform.rotation);
     _rotation = {euler.x(), euler.y(), euler.z()};
@@ -227,9 +229,7 @@ auto inspector_panel::_draw_node_properties(editor_state& state, sbx::scenes::sc
 
   const auto is_multi = !multi_selection.empty();
 
-  // A little vertical breathing room between each section, on top of the frame/item padding
-  // pushed in draw() — keeps a node with several components/scripts from reading as one dense
-  // unbroken block of controls.
+  // Breathing room between sections.
   const auto section_gap = [] { ImGui::Dummy(ImVec2{0.0f, 6.0f}); };
 
   if (is_multi) {
@@ -259,9 +259,7 @@ auto inspector_panel::_draw_node_properties(editor_state& state, sbx::scenes::sc
     });
   };
 
-  // Driven by component_entries() (see inspector_component_registry.hpp) rather than one
-  // hand-written has_component<T>() check per type -- the same table also drives
-  // draw_add_component_menu below, so a component type is registered in exactly one place.
+  // Driven by component_entries(), which also drives Add Component, so each type is registered once.
   for (const auto& entry : component_entries()) {
     if (entry.has(node) && all_selected_have(entry)) {
       section_gap();
@@ -309,7 +307,7 @@ auto inspector_panel::_draw_asset_properties(editor_state& state, const asset_se
   if (_asset_cache.id.value() != asset.id.value()) {
     _asset_cache = asset_property_cache{};
     _asset_cache.id = asset.id;
-    _shader_graph_seed_pending = false; // this material's own generic_params, loaded below, are already meaningful
+    _shader_graph_seed_pending = false; // the material's own generic_params are already meaningful
 
     switch (asset.kind) {
       case asset_kind::texture: _asset_cache.texture = assets_module.load_texture(asset.id); break;
@@ -334,8 +332,7 @@ auto inspector_panel::_draw_asset_properties(editor_state& state, const asset_se
       _particle_effect_edit.emitters = effect.emitters();
     }
 
-    // Seeded by _draw_material_properties once the (asynchronous) load has landed -- copying now
-    // could capture the placeholder's defaults, which the next edit or Save would write back.
+    // Seeded once the asynchronous load lands; copying now could capture placeholder defaults that a Save would write back.
     _material_edit_pending = asset.kind == asset_kind::material;
   }
 
@@ -394,8 +391,7 @@ auto inspector_panel::_draw_asset_properties(editor_state& state, const asset_se
         state.request_open_animation_graph_editor(asset.id, asset.path);
       }
 
-      // The rest of this section is read-only -- states/transitions are edited in the graph
-      // editor opened above, this is just a quick-glance summary.
+      // A read-only summary; states and transitions are edited in the graph editor.
       const auto& handle = _asset_cache.animation_graph;
 
       if (handle.is_valid()) {
@@ -436,7 +432,7 @@ auto inspector_panel::_draw_asset_properties(editor_state& state, const asset_se
         state.request_open_shader_graph_editor(asset.id, asset.path);
       }
 
-      // Read-only summary -- nodes/edges are edited in the graph editor opened above.
+      // A read-only summary; nodes and edges are edited in the graph editor.
       const auto& handle = _asset_cache.shader_graph;
 
       if (handle.is_valid()) {
@@ -476,8 +472,7 @@ auto inspector_panel::_draw_asset_properties(editor_state& state, const asset_se
       break;
     }
     case asset_kind::prefab: {
-      // Unreachable in practice -- draw() routes a selected prefab asset to _draw_prefab_edit
-      // before this function is ever called for one. Kept only so this switch stays exhaustive.
+      // Unreachable: draw() routes prefabs to _draw_prefab_edit. Kept so the switch stays exhaustive.
       break;
     }
     case asset_kind::scene: {
@@ -503,8 +498,7 @@ auto inspector_panel::_draw_asset_properties(editor_state& state, const asset_se
 }
 
 auto inspector_panel::draw(editor_state& state) -> void {
-  // A bit more breathing room than ImGui's tight defaults. WindowPadding must be pushed before
-  // Begin() -- it's read while laying out the window itself.
+  // WindowPadding must be pushed before Begin().
   ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{10.0f, 10.0f});
 
   ImGui::Begin(window_name);
@@ -512,8 +506,7 @@ auto inspector_panel::draw(editor_state& state) -> void {
   ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2{6.0f, 4.0f});
   ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2{8.0f, 6.0f});
 
-  // Fields fill up to a shared label column (40% of the panel) instead of ImGui's default 65% item
-  // width, so long labels ("Occlusion Strength", "Background Intensity") don't clip at the edge.
+  // Fields fill to a 40% label column instead of ImGui's 65%, so long labels don't clip.
   ImGui::PushItemWidth(-ImGui::GetContentRegionAvail().x * 0.4f);
 
   auto& assets_module = sbx::core::engine::get_module<sbx::assets::assets_module>();
@@ -522,7 +515,7 @@ auto inspector_panel::draw(editor_state& state) -> void {
     auto& scenes_module = sbx::core::engine::get_module<sbx::scenes::scenes_module>();
 
     if (auto node = state.selected_node(scenes_module.active_scene()); node.is_valid() && state.selected_node_count() > 1u) {
-      // Copied: the selection itself may change mid-draw (a click in a section), the broadcast list mustn't.
+      // Copied: the selection may change mid-draw, the broadcast list mustn't.
       const auto selection = std::vector<sbx::math::uuid>{state.selected_node_ids().begin(), state.selected_node_ids().end()};
 
       state.broadcast_targets = selection;
@@ -532,7 +525,7 @@ auto inspector_panel::draw(editor_state& state) -> void {
       if (node.is_valid()) {
         _draw_node_properties(state, scenes_module.active_scene(), node, assets_module);
       } else {
-        // The selected node no longer exists (e.g. deleted); fall back to the empty state.
+        // The selected node no longer exists.
         state.clear_selection();
         ImGui::TextDisabled("Nothing selected.");
       }

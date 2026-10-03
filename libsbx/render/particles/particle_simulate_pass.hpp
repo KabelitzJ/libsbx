@@ -20,12 +20,9 @@
 namespace sbx::render {
 
 /**
- * @brief Drives the 4-stage GPU particle compute chain (build_dispatch_args -> simulate -> emit ->
- * prepare_indirect_draw) for both pools once per frame, immediately before particle_draw_pass.
+ * @brief Runs the 4-stage GPU particle chain (build_dispatch_args, simulate, emit, prepare_indirect_draw) for both pools, right before particle_pass.
  *
- * Pool buffers are read-modify-written across frames, so execute() waits on frame_context's timeline
- * at `frame_index - 1` (COMPUTE_SHADER scope) before touching them. Hand-off to particle_draw_pass
- * needs only a trailing VkMemoryBarrier2, same pattern as light_culling_pass.
+ * The pools persist across frames, so execute() starts with a barrier on the previous frame's accesses and ends with a memory barrier for particle_pass.
  */
 class particle_simulate_pass final : public compute_pass {
 
@@ -43,9 +40,7 @@ public:
 
 private:
 
-  // One emit.slang dispatch's work: emitter_index + spawn count. particles_to_emit is duplicated
-  // here (also written into the pool's emitter_instances buffer) only so the dispatch can be sized
-  // without reading it back.
+  // One emit dispatch: emitter index and spawn count, duplicated here so the dispatch can be sized without a readback.
   struct emit_request {
     std::uint32_t emitter_index{0u};
     std::uint32_t particles_to_emit{0u};

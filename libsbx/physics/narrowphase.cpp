@@ -28,27 +28,14 @@
 
 namespace sbx::physics {
 
-// True when every axis of `scale` agrees (within tolerance) -- the dividing line between a
-// primitive that can still be represented exactly by its own convex_shape alternative after baking
-// (a uniformly-scaled sphere is still a sphere) and one that can't (a non-uniformly-scaled sphere is
-// really an ellipsoid, a non-uniformly-scaled capsule a stretched one -- shapes this variant has no
-// alternative for).
+// Uniform scale keeps a sphere/capsule/cylinder representable by its own shape; non-uniform would make it an ellipsoid.
 [[nodiscard]] auto is_uniform_scale(const math::vector3& scale) -> bool {
   constexpr auto tolerance = 1e-4f;
   return std::abs(scale.x() - scale.y()) <= tolerance && std::abs(scale.y() - scale.z()) <= tolerance;
 }
 
-// Bakes as much of `scale` as possible directly into a primitive's own dimensions -- radius,
-// half_extents, half_height -- so dispatch()'s closed-form pairs (sphere_sphere, box_box, ...) can
-// keep reading a shape's fields directly instead of going through support_world's general (but
-// costlier, single-point-manifold) GJK/EPA path. A box always bakes fully and exactly, uniform or
-// not -- its own local axes *are* the scale's axes, so per-axis half_extents scaling is exact
-// regardless. A sphere/cylinder/capsule only bakes when scale is uniform (see is_uniform_scale); a
-// non-uniform one is left unscaled here, with the real scale returned instead of transform::one, so
-// the caller can carry it in the shape's pose for support_world (gjk.cpp) to apply exactly instead --
-// dispatch() checks for exactly this to skip its closed forms for such a shape. triangle/convex_hull
-// (never authored on a shape_collider, resolve_convex's only caller for this) always pass through
-// unbaked either way, for the same reason.
+// Bakes scale into a shape's dimensions so the closed-form pairs keep working. Boxes always bake exactly; spheres, cylinders and capsules only for uniform scale.
+// Otherwise the residual scale is returned for the pose, and dispatch() falls back to GJK/EPA, whose support_world applies it exactly.
 [[nodiscard]] auto bake_scale(const convex_shape& shape, const math::vector3& scale) -> std::pair<convex_shape, math::vector3> {
   return std::visit(utility::overload(
     [&](const sphere& s) -> std::pair<convex_shape, math::vector3> {
@@ -72,8 +59,7 @@ namespace sbx::physics {
   ), shape);
 }
 
-// One narrowphase point before it's turned into a full contact_point (anchors/feature id are
-// filled in by build_manifold, which is the only place that knows about the owning nodes).
+// One narrowphase point; build_manifold fills in anchors and feature ids.
 struct narrow_point {
   math::vector3 point{math::vector3::zero};
   std::float_t depth{0.0f};
@@ -89,11 +75,7 @@ auto compose_world_pose(scenes::scene& scene, const scenes::node& node, pose_cac
     return entry->second;
   }
 
-  // Collect node's own chain of ancestors first (cheapest to walk upward, parent pointers only),
-  // then compose top-down -- root's local_transform folds in first, node's own last -- since a
-  // parent's position/rotation/scale all need to already be known before its child's local offset
-  // can be projected through them. Stops early at the first ancestor whose pose is already cached
-  // (not just at the scene root), seeding `pose` from that cached entry instead of identity.
+  // Collect the ancestor chain upward, then compose top-down, starting from the first cached ancestor instead of identity when there is one.
   auto chain = std::vector<scenes::node>{};
   auto current = node;
   const auto root = scene.root();
@@ -138,9 +120,7 @@ auto resolve_convex(scenes::scene& scene, const scenes::node& node, convex_hull_
     const auto world_pose = compose_world_pose(scene, node, cache);
     const auto pose = compose_pose(world_pose, collider.offset, collider.rotation);
 
-    // Scale is baked as far as it can be straight into the shape's own dimensions here (see
-    // bake_scale) -- whatever's left over (only ever non-1 for a non-uniformly-scaled
-    // sphere/cylinder/capsule) stays in the returned pose for support_world to apply instead.
+    // Scale is baked into the shape where possible; any residual stays in the pose for support_world.
     auto [baked_shape, residual_scale] = bake_scale(collider.shape, pose.scale);
 
     return body_shape{std::move(baked_shape), transform{pose.position, pose.rotation, residual_scale}, collider.friction, collider.restitution};
@@ -172,8 +152,7 @@ auto resolve_body_shapes(scenes::scene& scene, const scenes::node& rigidbody_nod
 
   const auto& relationship = rigidbody_node.get_component<scenes::relationship>();
 
-  // Fast path: no children at all -- this can only ever be an ordinary single-shape body (or a bare
-  // rigidbody with no collider), so skip the recursive walk entirely.
+  // No children: a single-shape body, so skip the recursive walk.
   if (relationship.children.empty()) {
     if (auto resolved = resolve_convex(scene, rigidbody_node, hull_cache, assets_module, cache)) {
       shapes.push_back(std::move(*resolved));
@@ -191,7 +170,7 @@ auto resolve_body_shapes(scenes::scene& scene, const scenes::node& rigidbody_nod
       const auto child = scene.node_of(child_entity);
 
       if (child.has_component<rigidbody>()) {
-        continue; // independent body -- not part of this compound
+        continue; // an independent body, not part of this compound
       }
 
       self(child);
@@ -287,8 +266,6 @@ auto closest_points_segment_segment(const math::vector3& p1, const math::vector3
   return result;
 }
 
-// -- Closed forms -----------------------------------------------------------------------------
-
 [[nodiscard]] auto sphere_sphere(const math::vector3& center_a, std::float_t radius_a, const math::vector3& center_b, std::float_t radius_b) -> std::optional<narrow_result> {
   const auto delta = center_b - center_a;
   const auto radius_sum = radius_a + radius_b;
@@ -364,8 +341,7 @@ auto closest_points_segment_segment(const math::vector3& p1, const math::vector3
 
   const auto closest = closest_point_on_segment(sphere_center, p0, p1);
 
-  // sphere_sphere(a, b) points a -> b, so (capsule-skeleton -> sphere) is exactly the convention
-  // this function promises its caller.
+  // sphere_sphere points a -> b, which is capsule -> sphere here.
   return sphere_sphere(closest, capsule_radius, sphere_center, sphere_radius);
 }
 
@@ -375,9 +351,7 @@ auto closest_points_segment_segment(const math::vector3& p1, const math::vector3
   const auto p0 = capsule_center - axis * capsule_half_height;
   const auto p1 = capsule_center + axis * capsule_half_height;
 
-  // Closest point on the capsule's core segment to the box: alternate "clamp into the box" and
-  // "closest point on the segment to that clamped point" -- both steps are projections onto a
-  // convex set, so this converges to the true closest pair after a handful of iterations.
+  // Alternating projections (clamp into the box, closest point on the segment) converge to the closest pair in a few iterations.
   auto closest = capsule_center;
 
   for (auto i = 0; i < 4; ++i) {
@@ -406,8 +380,6 @@ auto closest_points_segment_segment(const math::vector3& p1, const math::vector3
 
   return sphere_sphere(closest_a, radius_a, closest_b, radius_b);
 }
-
-// -- Box-box: SAT + face clipping --------------------------------------------------------------
 
 struct clip_plane {
   math::vector3 normal;
@@ -479,7 +451,7 @@ struct clip_plane {
     const auto length_squared = axis.length_squared();
 
     if (length_squared <= 1e-8f) {
-      return true; // near-parallel edges -- not a useful separating axis, skip without rejecting
+      return true; // near-parallel edges: not a useful axis
     }
 
     axis = axis * (1.0f / std::sqrt(length_squared));
@@ -496,7 +468,7 @@ struct clip_plane {
     const auto overlap = radius_a + radius_b - std::abs(distance);
 
     if (overlap < 0.0f) {
-      return false; // separating axis found -- boxes don't overlap
+      return false; // separating axis: no overlap
     }
 
     if (overlap < best_overlap) {
@@ -573,8 +545,7 @@ struct clip_plane {
   const auto& incident_axes = reference_is_a ? axes_b : axes_a;
   const auto& incident_half_extents = reference_is_a ? half_extents_b : half_extents_a;
 
-  // best_normal points A -> B; the reference face's own outward normal points away from the
-  // reference box, which is the same direction only when the reference box is A.
+  // best_normal points A -> B, which matches the reference face's outward normal only when the reference box is A.
   const auto ref_outward = reference_is_a ? best_normal : -best_normal;
   const auto ref_sign = (math::vector3::dot(ref_outward, ref_axes[ref_axis_index]) >= 0.0f) ? 1.0f : -1.0f;
 
@@ -630,8 +601,7 @@ struct clip_plane {
   }
 
   if (candidates.empty()) {
-    // Numerical edge case: clipping (or the depth filter) discarded everything. Fall back to the
-    // single deepest pre-clip incident vertex so a confirmed SAT overlap never yields zero points.
+    // Clipping discarded everything numerically; fall back to the deepest incident vertex so an SAT overlap always yields a point.
     auto deepest = incident_corners[0];
     auto deepest_depth = math::vector3::dot(ref_outward, ref_face_center - deepest);
 
@@ -664,8 +634,6 @@ struct clip_plane {
   return result;
 }
 
-// -- Generic fallback: GJK + EPA -----------------------------------------------------------------
-
 [[nodiscard]] auto generic_gjk_epa(const convex_shape& shape_a, const transform& pose_a, const convex_shape& shape_b, const transform& pose_b) -> std::optional<narrow_result> {
   const auto gjk = gjk_intersect(shape_a, pose_a, shape_b, pose_b);
 
@@ -684,8 +652,6 @@ struct clip_plane {
   return single_point(epa.normal, point, epa.penetration_depth);
 }
 
-// -- Dispatch -------------------------------------------------------------------------------------
-
 [[nodiscard]] auto dispatch(const convex_shape& shape_a, const transform& pose_a, const convex_shape& shape_b, const transform& pose_b) -> std::optional<narrow_result> {
   const auto index_a = shape_a.index();
   const auto index_b = shape_b.index();
@@ -694,14 +660,7 @@ struct clip_plane {
   constexpr auto capsule_index = std::size_t{2};
   constexpr auto box_index = std::size_t{3};
 
-  // Every closed form below reads a shape's fields (radius, half_extents, ...) directly rather than
-  // going through support_world, so it needs that shape already unscaled -- true for a resolved
-  // shape_collider's shape unless it's a non-uniformly-scaled sphere/cylinder/capsule, which
-  // bake_scale (narrowphase.cpp's resolve_convex) leaves unbaked, with the real scale left in its
-  // pose specifically so it lands here instead: closed_form_safe is false and every branch below is
-  // skipped in favor of generic_gjk_epa, whose support_world (gjk.cpp) applies that scale exactly.
-  // A box's own scale is always already fully baked (uniform or not -- see bake_scale), so this never
-  // spuriously disables box_box; it only ever matters for the sphere/capsule branches.
+  // The closed forms read shape dimensions directly, so they need unscaled shapes. A non-uniformly scaled sphere/capsule/cylinder keeps its scale in the pose and goes through GJK/EPA instead; boxes are always fully baked.
   const auto closed_form_safe = pose_a.scale == math::vector3::one && pose_b.scale == math::vector3::one;
 
   if (closed_form_safe) {
@@ -759,11 +718,8 @@ struct clip_plane {
   return generic_gjk_epa(shape_a, pose_a, shape_b, pose_b);
 }
 
-// One shape-pair or shape-triangle touch, with the material this specific pairing combines to --
-// materials can vary per shape within a compound body, so this is tracked per touch rather than once
-// per body pair the way it was before compound colliders existed.
-// Stack backing for one pair's monotonic_buffer_resource (shape lists, touches, merge candidates).
-// A compound large enough to outgrow it just spills to the heap.
+// One shape-pair or shape-triangle touch, with its combined material, since materials can differ per shape in a compound.
+// Stack backing for one pair's scratch allocations; larger compounds spill to the heap.
 using pair_scratch = std::array<std::byte, 2048u>;
 
 struct narrow_touch {
@@ -772,11 +728,7 @@ struct narrow_touch {
   std::float_t combined_restitution{0.0f};
 }; // struct narrow_touch
 
-// Combines every touch between two bodies' full shape lists into a single narrow_result plus the
-// material of whichever touch produced the single deepest point: up to max_manifold_points points,
-// kept globally deepest-first, with the deepest point's own normal/material representing the whole
-// manifold (exact when the deepest touch's surface is locally flat -- the common case; an
-// approximation otherwise, same "internal edge" v1 limitation mesh narrowphase always had).
+// Combines every touch into one result of up to max_manifold_points deepest points; the deepest touch's normal and material stand for the manifold (exact for locally flat surfaces).
 [[nodiscard]] auto combine_narrow_results(std::span<const narrow_touch> touches, std::pmr::memory_resource* resource) -> std::optional<std::tuple<narrow_result, std::float_t, std::float_t>> {
   struct candidate {
     math::vector3 normal;
@@ -814,10 +766,7 @@ struct narrow_touch {
   return std::tuple{combined, candidates.front().friction, candidates.front().restitution};
 }
 
-// Shared by every generate_*_contact below: turns a combined narrow_result into the contact_manifold
-// the solver expects, deriving each point's torque anchors from node_a/node_b's own world position
-// (compose_world_pose -- not just local_transform::position, since either side may itself be nested
-// under an organizational parent, e.g. an implicit-static collider under a scaled group node).
+// Turns a combined result into a contact_manifold, deriving torque anchors from each node's composed world position.
 [[nodiscard]] auto build_manifold(scenes::scene& scene, const scenes::node& node_a, const scenes::node& node_b, std::float_t friction, std::float_t restitution, const narrow_result& raw, pose_cache& cache) -> std::optional<contact_manifold> {
   auto manifold = contact_manifold{};
   manifold.node_a = node_a;
@@ -855,11 +804,9 @@ struct narrow_touch {
   return {std::sqrt(std::max(a.friction, 0.0f) * std::max(b.friction, 0.0f)), std::max(a.restitution, b.restitution)};
 }
 
-// Both sides resolve to a list of one or more ordinary convex_shapes (resolve_body_shapes -- a
-// single-entry list for an ordinary non-compound body, several for a compound one), cross-tested
-// shape x shape via dispatch() and folded into one manifold for the pair via combine_narrow_results.
+// Both sides resolve to convex shape lists, cross-tested via dispatch() and combined into one manifold.
 [[nodiscard]] auto generate_convex_pair_contact(scenes::scene& scene, const scenes::node& node_a, const scenes::node& node_b, convex_hull_cache& hull_cache, assets::assets_module& assets_module, pose_cache& cache) -> std::optional<contact_manifold> {
-  pair_scratch scratch; // left uninitialized: zeroing it would cost more than the allocations it saves
+  pair_scratch scratch; // uninitialized: zeroing would cost more than the allocations it saves
   auto arena = std::pmr::monotonic_buffer_resource{scratch.data(), scratch.size()};
 
   const auto shapes_a = resolve_body_shapes(scene, node_a, hull_cache, assets_module, cache, &arena);
@@ -891,12 +838,9 @@ struct narrow_touch {
   return build_manifold(scene, node_a, node_b, friction, restitution, raw, cache);
 }
 
-// shape_node resolves as one or more ordinary convex_shapes (resolve_body_shapes -- so this also
-// covers a compound body and a convex mesh_collider landing on a non-convex one); mesh_node is a
-// non-convex mesh_collider, each of shape_node's shapes tested per-candidate-triangle against its
-// mesh_collision_cache BVH. Builds one combined manifold for the pair via combine_narrow_results.
+// shape_node's convex shapes against mesh_node's non-convex mesh BVH, triangle by triangle, combined into one manifold.
 [[nodiscard]] auto generate_mesh_contact(scenes::scene& scene, const scenes::node& shape_node, const scenes::node& mesh_node, mesh_collision_cache& mesh_cache, convex_hull_cache& hull_cache, assets::assets_module& assets_module, pose_cache& cache) -> std::optional<contact_manifold> {
-  pair_scratch scratch; // left uninitialized: zeroing it would cost more than the allocations it saves
+  pair_scratch scratch; // uninitialized: zeroing would cost more than the allocations it saves
   auto arena = std::pmr::monotonic_buffer_resource{scratch.data(), scratch.size()};
 
   const auto shapes = resolve_body_shapes(scene, shape_node, hull_cache, assets_module, cache, &arena);
@@ -928,8 +872,7 @@ struct narrow_touch {
   auto touches = std::pmr::vector<narrow_touch>{&arena};
 
   for (const auto& shape : shapes) {
-    // The shape's world AABB, transformed into the mesh's local (unscaled -- the BVH was built from
-    // mesh_data's own raw local vertices) space to query the triangle BVH.
+    // The shape's world AABB in the mesh's unscaled local space, to query the BVH.
     auto shape_world_aabb = math::volume{};
 
     for (const auto& corner : local_aabb(shape.shape).corners()) {
@@ -985,7 +928,7 @@ auto generate_pair_contact(scenes::scene& scene, const sbx::scenes::node& node_a
   const auto b_is_raw_mesh = node_b.has_component<mesh_collider>() && !node_b.get_component<mesh_collider>().is_convex;
 
   if (a_is_raw_mesh && b_is_raw_mesh) {
-    return std::nullopt; // two non-convex mesh colliders never collide, matching Unity
+    return std::nullopt; // two non-convex mesh colliders never collide, like Unity
   }
 
   if (a_is_raw_mesh) {

@@ -269,6 +269,7 @@ namespace Sbx.Core
     internal static delegate* unmanaged<ulong, bool, void> UIScrollRect_SetHorizontal;
     internal static delegate* unmanaged<ulong, bool> UIScrollRect_GetVertical;
     internal static delegate* unmanaged<ulong, bool, void> UIScrollRect_SetVertical;
+    internal static delegate* unmanaged<ulong, ulong, void> UIScrollRect_SetContent;
 
     internal static delegate* unmanaged<ulong, bool> UIMask_GetShowMaskGraphic;
     internal static delegate* unmanaged<ulong, bool, void> UIMask_SetShowMaskGraphic;

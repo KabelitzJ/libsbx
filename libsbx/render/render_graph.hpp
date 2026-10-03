@@ -32,16 +32,13 @@
 
 namespace sbx::render {
 
-/** @brief One pass's most recently read-back GPU time -- see render_graph::pass_timings(). */
+/** @brief One pass's most recently read-back GPU time. */
 struct pass_gpu_timing {
   std::string_view name;
   std::float_t milliseconds{0.0f};
 }; // struct pass_gpu_timing
 
-/**
- * @brief Whole-frame pipeline statistics (VK_QUERY_TYPE_PIPELINE_STATISTICS is naturally
- * frame-scoped in this graph, not per-pass) -- see render_graph::pipeline_stats().
- */
+/** @brief Whole-frame pipeline statistics; the query is frame-scoped, not per pass. */
 struct pipeline_statistics {
   std::uint64_t input_assembly_vertices{0u};
   std::uint64_t input_assembly_primitives{0u};
@@ -93,13 +90,11 @@ struct depth_attachment_slot {
   graphics::image_handle image{};
   graphics::pipeline_stage stage_mask{graphics::pipeline_stage::early_fragment_tests | graphics::pipeline_stage::late_fragment_tests};
   graphics::access access_mask{graphics::access::depth_stencil_attachment_read};
-  // none, not dont_care: the default slot is read-only depth that later passes load again, and
-  // dont_care leaves it undefined afterwards (tile-based GPUs really discard it). A slot that writes
-  // depth sets store explicitly.
+  // none, not dont_care: the default slot is read-only depth that later passes load, and dont_care would leave it undefined.
   graphics::attachment_store_op store_op{graphics::attachment_store_op::none};
   graphics::depth_stencil_clear_value clear_value{1.0f, 0u};
-  graphics::image_handle resolve_image{}; // invalid => no MSAA resolve -- see color_attachment_slot's own
-  graphics::resolve_mode resolve_mode{graphics::resolve_mode::sample_zero}; // only consulted when resolve_image is valid
+  graphics::image_handle resolve_image{}; // invalid => no MSAA resolve
+  graphics::resolve_mode resolve_mode{graphics::resolve_mode::sample_zero}; // only used with a valid resolve_image
 }; // struct depth_attachment_slot
 
 struct render_attachment_group {
@@ -127,7 +122,7 @@ struct recorded_operation {
 
   graphics::image_handle image{};
   graphics::image_handle resolve_image{};
-  graphics::resolve_mode resolve_mode{graphics::resolve_mode::sample_zero}; // color always resolves average (see apply_op); only depth_attachment reads this
+  graphics::resolve_mode resolve_mode{graphics::resolve_mode::sample_zero}; // depth only; color always resolves average
   graphics::buffer_handle buffer{};
 
   graphics::pipeline_stage stage{graphics::pipeline_stage::none};
@@ -148,11 +143,14 @@ public:
   auto writes_image(graphics::image_handle image, graphics::pipeline_stage stage, graphics::access access, graphics::image_layout layout, std::uint32_t group_index = 0u) -> void;
 
   /**
-   * @brief Declares a buffer access for the graph to synchronize against other passes' declared
-   * accesses within the frame. The buffer is assumed to have one region per frame-in-flight slot
-   * (render_context::slot), like every scene_renderer_module buffer: unlike images, its state is not
-   * carried into the next frame, so a buffer shared across slots needs its own cross-frame sync
-   * (see particle_simulate_pass's pools).
+   * @brief Declares a buffer access to synchronize against other passes this frame.
+   *
+   * Buffers are assumed to have one region per frame slot, so their state isn't carried across frames; a buffer shared across slots needs its own sync.
+   *
+   * @param buffer The buffer.
+   * @param stage The accessing pipeline stage.
+   * @param access The access type.
+   * @param group_index The pass group performing the access.
    */
   auto reads_buffer(graphics::buffer_handle buffer, graphics::pipeline_stage stage, graphics::access access, std::uint32_t group_index = 0u) -> void;
 
@@ -317,17 +315,21 @@ public:
 
   auto compile(const graph_resources& resources) -> void;
 
-  /** @brief Walks the compiled instruction list for one frame. */
   auto execute(render_context& context) -> void;
 
   /**
-   * @brief Allocates the timestamp/pipeline-statistics query pools -- one timestamp pair per pass
-   * per frame-in-flight slot, one pipeline-statistics query per slot (see execute()'s own comment
-   * for why pipeline statistics are whole-frame, not per-pass). Call once, after every add_pass().
+   * @brief Allocates the timestamp (one pair per pass per frame slot) and pipeline statistics (one per slot) query pools. Call once after every add_pass().
+   *
+   * @param physical_device The physical device.
+   * @param logical_device The logical device.
    */
   auto initialize_gpu_queries(const graphics::physical_device& physical_device, const graphics::logical_device& logical_device) -> void;
 
-  /** @brief Last read-back per-pass GPU time, in graph declaration order. Always max_frames_in_flight frames stale (see execute()) -- every entry is 0 until the query pools have cycled through at least once. */
+  /**
+   * @brief The last read-back GPU time per pass, in declaration order. max_frames_in_flight frames stale, and 0 until the pools have cycled once.
+   *
+   * @return The timings.
+   */
   [[nodiscard]] auto pass_timings() const noexcept -> std::span<const pass_gpu_timing> {
     return _pass_timings;
   }
@@ -362,10 +364,8 @@ private:
     std::vector<VkMemoryBarrier2> entry_buffer_barriers{};
     std::vector<graphics::command_buffer::image_transition_data> exit_image_barriers{};
 
-    // This group is the first writer of an image a later group loads or reads -- by clearing it (an
-    // attachment's first use) or resolving into it -- so when it's disabled at runtime it still runs
-    // an empty rendering scope to perform that clear/resolve. Images only sampled through bindless
-    // without a declared read are invisible to this.
+    // This group first writes (clears or resolves into) an image a later group uses, so it still runs an empty rendering scope when disabled.
+    // Images only sampled through bindless without a declared read are invisible to this.
     bool clear_on_skip{false};
   }; // struct compiled_group
 
@@ -381,8 +381,7 @@ private:
   std::unique_ptr<graphics::query_pool> _pipeline_stats_pool{};
   std::float_t _timestamp_period_ns{1.0f};
 
-  // Counts execute() calls -- see execute()'s own comment on why readback stays gated off until
-  // every frame-in-flight slot has been through at least one reset+write cycle.
+  // Readback stays off until every frame slot has been through one reset and write.
   std::uint32_t _frames_executed{0u};
 
   std::vector<pass_gpu_timing> _pass_timings{};

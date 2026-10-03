@@ -359,6 +359,12 @@ target_sources(
     "${CMAKE_SOURCE_DIR}/libsbx/scenes/scenes_module.cpp"
 
     "${CMAKE_SOURCE_DIR}/libsbx/scripting/interop.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/scripting/interop_canvas.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/scripting/interop_compute.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/scripting/interop_input_camera.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/scripting/interop_rendering.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/scripting/interop_world.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/scripting/script_resources.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/scripting/scripting.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/scripting/scripting_module.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/scripting/script_compiler.cpp"

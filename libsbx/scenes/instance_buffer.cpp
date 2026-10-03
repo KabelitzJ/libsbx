@@ -2,28 +2,13 @@
 // Copyright (c) 2026 Jonas Kabelitz
 #include <libsbx/scenes/instance_buffer.hpp>
 
-#include <mutex>
-#include <vector>
-
 #include <libsbx/core/engine.hpp>
 
 #include <libsbx/graphics/graphics_module.hpp>
 
+#include <libsbx/scenes/scenes_module.hpp>
+
 namespace sbx::scenes {
-
-namespace {
-
-struct released_buffers {
-  std::mutex mutex{};
-  std::vector<graphics::buffer_handle> handles{};
-}; // struct released_buffers
-
-auto released() -> released_buffers& {
-  static auto buffers = released_buffers{};
-  return buffers;
-}
-
-} // namespace
 
 instance_buffer::instance_buffer(std::span<const instance_data> instances)
 : _count{static_cast<std::uint32_t>(instances.size())} {
@@ -50,28 +35,7 @@ instance_buffer::~instance_buffer() {
     return;
   }
 
-  auto& queue = released();
-  auto lock = std::lock_guard{queue.mutex};
-  queue.handles.push_back(_buffer);
-}
-
-auto instance_buffer::collect_released() -> void {
-  auto& queue = released();
-  auto lock = std::lock_guard{queue.mutex};
-
-  if (queue.handles.empty()) {
-    return;
-  }
-
-  auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
-  auto& registry = graphics_module.resource_registry();
-  const auto frame_index = graphics_module.frame_context().frame_index();
-
-  for (const auto handle : queue.handles) {
-    registry.retire(handle, frame_index);
-  }
-
-  queue.handles.clear();
+  core::engine::get_module<scenes_module>().release_instance_buffer(_buffer);
 }
 
 } // namespace sbx::scenes

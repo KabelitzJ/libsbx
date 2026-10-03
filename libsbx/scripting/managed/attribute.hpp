@@ -29,8 +29,7 @@ public:
     return result;
   }
 
-  // Attribute members declared as `{ get; set; }` auto-properties (as opposed to plain fields)
-  // have no field named e.g. "DisplayName" to look up via get_field_value — use this instead.
+  // For `{ get; set; }` auto-property members, which have no backing field get_field_value could find.
   template<typename Return>
   auto get_property_value(std::string_view property_name) -> Return {
     auto result = Return{};

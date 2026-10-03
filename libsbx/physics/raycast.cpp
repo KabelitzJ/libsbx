@@ -20,20 +20,13 @@ namespace sbx::physics {
   return math::vector3{lhs.x() / rhs.x(), lhs.y() / rhs.y(), lhs.z() / rhs.z()};
 }
 
-/**
- * @brief One candidate ray hit in local space: parameter @p t (same units as the world ray's,
- * since local_ray below preserves the world parametrization -- see world_ray_to_local's doc
- * comment) and the local-space outward normal at that point.
- */
+/** @brief One local-space hit candidate: the parameter @p t (same scale as the world ray's) and the local outward normal. */
 struct local_hit {
   std::float_t t;
   math::vector3 normal;
 }; // struct local_hit
 
-/**
- * @brief Ray-vs-sphere, centered at the local origin. Handles the ray starting inside the sphere
- * (returns the exit point, t2) as well as outside (t1).
- */
+/** @brief Ray vs sphere at the local origin; a ray starting inside returns the exit point. */
 [[nodiscard]] auto raycast_sphere_local(const math::vector3& origin, const math::vector3& dir, std::float_t radius) -> std::optional<local_hit> {
   const auto a = math::vector3::dot(dir, dir);
   const auto b = 2.0f * math::vector3::dot(origin, dir);
@@ -60,12 +53,7 @@ struct local_hit {
   return local_hit{t, math::vector3::normalized(point)};
 }
 
-/**
- * @brief Ray-vs-axis-aligned-box, centered at the local origin -- the standard slab method. If the
- * ray starts inside the box, returns a hit at t == 0 with an arbitrary (+Y) normal -- an accepted
- * simplification, since a placement/picking ray starting inside solid geometry isn't a case this
- * system needs to resolve precisely.
- */
+/** @brief Ray vs local AABB via the slab method; a ray starting inside hits at t = 0 with a +Y normal (picking rays don't need better). */
 [[nodiscard]] auto raycast_box_local(const math::vector3& origin, const math::vector3& dir, const math::vector3& half_extents) -> std::optional<local_hit> {
   auto t_min = -std::numeric_limits<std::float_t>::max();
   auto t_max = std::numeric_limits<std::float_t>::max();
@@ -78,7 +66,7 @@ struct local_hit {
 
     if (std::abs(dir_axis) <= math::epsilonf) {
       if (origin_axis < -extent_axis || origin_axis > extent_axis) {
-        return std::nullopt; // parallel to this slab and outside it -- never enters the box
+        return std::nullopt; // parallel to this slab and outside it
       }
       continue;
     }
@@ -111,16 +99,12 @@ struct local_hit {
   return local_hit{std::max(t_min, 0.0f), hit_normal};
 }
 
-/**
- * @brief Ray-vs-infinite-cylinder (axis Y) lateral wall only, restricted to |y| <= half_height --
- * shared by both raycast_cylinder_local and the capsule's central segment (raycast_capsule_local),
- * which is exactly the same wall.
- */
+/** @brief The lateral wall of a Y-axis cylinder within |y| <= half_height, shared by cylinders and capsules. */
 [[nodiscard]] auto raycast_cylinder_wall_local(const math::vector3& origin, const math::vector3& dir, std::float_t radius, std::float_t half_height) -> std::optional<local_hit> {
   const auto a = dir.x() * dir.x() + dir.z() * dir.z();
 
   if (a <= math::epsilonf) {
-    return std::nullopt; // parallel to the axis -- never crosses the lateral wall (see shapes.hpp's cylinder doc comment for the axis convention)
+    return std::nullopt; // parallel to the axis
   }
 
   const auto b = 2.0f * (origin.x() * dir.x() + origin.z() * dir.z());
@@ -179,14 +163,7 @@ struct local_hit {
   return best;
 }
 
-/**
- * @brief Ray-vs-capsule (axis Y, hemispherical caps beyond +-half_height) as the union of the
- * shared cylindrical wall (raycast_cylinder_wall_local) and two full spheres centered at the cap
- * centers, each accepted only where its hit point actually lies on the hemisphere (|y| beyond
- * half_height) rather than the part of the sphere that would poke into the cylindrical section --
- * correct because the capsule's true boundary is exactly the wall for |y| <= half_height joined
- * with the hemispheres beyond it.
- */
+/** @brief Ray vs Y-axis capsule: the cylinder wall plus the two cap spheres, accepting sphere hits only beyond half_height. */
 [[nodiscard]] auto raycast_capsule_local(const math::vector3& origin, const math::vector3& dir, std::float_t radius, std::float_t half_height) -> std::optional<local_hit> {
   auto best = raycast_cylinder_wall_local(origin, dir, radius, half_height);
 
@@ -216,9 +193,7 @@ struct local_hit {
 }
 
 auto raycast_convex_shape(const convex_shape& shape, const transform& pose, const math::ray& world_ray, std::float_t max_distance) -> std::optional<shape_raycast_hit> {
-  // See raycast.hpp's doc comment: this preserves the world ray's own t-parametrization, so a hit
-  // found in local space at parameter t is already the correct world-space distance -- no rescale
-  // needed even under a non-uniform pose.scale.
+  // The local ray keeps the world ray's parametrization, so local t is already the world distance, even under non-uniform scale.
   const auto inverse_rotation = math::quaternion::conjugate(pose.rotation);
   const auto local_origin = divide_componentwise(inverse_rotation * (world_ray.origin() - pose.position), pose.scale);
   const auto local_dir = divide_componentwise(inverse_rotation * world_ray.direction(), pose.scale);
@@ -264,8 +239,7 @@ auto raycast_heightfield(const terrain::heightmap& map, const math::ray& world_r
       auto hi = t;
       auto lo_diff = previous_diff;
 
-      // Bisection refinement -- 24 iterations comfortably exceeds float32 precision over any
-      // reasonable max_distance, so this always converges well past visual/gameplay tolerance.
+      // 24 bisection steps exceed float precision for any reasonable distance.
       for (auto iteration = 0u; iteration < 24u; ++iteration) {
         const auto mid = (lo + hi) * 0.5f;
         const auto mid_diff = height_above_terrain(mid);

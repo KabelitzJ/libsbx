@@ -3,6 +3,8 @@
 #ifndef LIBSBX_MATH_TRAITS_HPP_
 #define LIBSBX_MATH_TRAITS_HPP_
 
+#include <limits>
+
 #include <libsbx/math/constants.hpp>
 #include <libsbx/math/concepts.hpp>
 
@@ -38,6 +40,34 @@ struct comparison_traits<Type> {
   }
 
 }; // struct comparison_traits<floating_point Type>
+
+/**
+ * @brief The representable range of a numeric Type, with min() as the true lowest value for floating-point types too.
+ *
+ * @tparam Type The numeric type.
+ */
+template<numeric Type>
+struct limit_traits {
+
+  /**
+   * @brief The lowest finite value; unlike std::numeric_limits<Type>::min(), this is the most negative value for floating-point types.
+   *
+   * @return The lowest value.
+   */
+  [[nodiscard]] static constexpr auto min() noexcept -> Type {
+    return std::numeric_limits<Type>::lowest();
+  }
+
+  /**
+   * @brief The highest finite value.
+   *
+   * @return The highest value.
+   */
+  [[nodiscard]] static constexpr auto max() noexcept -> Type {
+    return std::numeric_limits<Type>::max();
+  }
+
+}; // struct limit_traits
 
 } // namespace sbx::math
 

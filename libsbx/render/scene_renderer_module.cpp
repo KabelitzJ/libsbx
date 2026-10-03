@@ -172,8 +172,7 @@ struct particle_mesh_bucket {
   std::vector<particle_mesh_instance> instances;
 }; // struct particle_mesh_bucket
 
-// A fresh packet (scalars at their defaults) that takes over previous's vector storage, cleared, so
-// a steady scene stops reallocating it every frame. A vector missing here just reallocates again.
+// A fresh packet that takes over the previous one's cleared vector storage, so a steady scene stops reallocating.
 auto recycle_packet_storage(render_packet& previous) -> render_packet {
   auto packet = render_packet{};
 
@@ -541,7 +540,7 @@ auto scene_renderer_module::_extract_gpu_particle_emitter(render_packet& packet,
   data.drag = config.drag;
   data.active = 1u;
   data.particles_to_emit = particles_to_emit;
-  data.seed = runtime.slot * 2654435761u; // combined with push.time in emit.slang -- doesn't need to change frame to frame.
+  data.seed = runtime.slot * 2654435761u; // combined with push.time in emit.slang
   data.shape = static_cast<std::uint32_t>(config.shape);
   data.shape_extents = config.shape_extents;
   data.texture_index = texture_index;
@@ -754,8 +753,7 @@ auto scene_renderer_module::effective_camera() -> camera_data {
 auto scene_renderer_module::_build_packet() -> render_packet {
   SBX_PROFILE_SCOPE("scene_renderer_module::build_packet");
 
-  // Only ever called from prepare(), while the render thread is idle, so the previous packet's
-  // storage is free to take over.
+  // prepare() runs while the render thread is idle, so the previous packet's storage is free.
   auto packet = recycle_packet_storage(_work_packet);
 
   auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
@@ -775,8 +773,7 @@ auto scene_renderer_module::_build_packet() -> render_packet {
       packet.ambient_intensity = sky.ambient_intensity;
     }
 
-    // The editor's own camera still shows the scene camera's post processing, so the viewport
-    // looks like the game.
+    // The editor camera still uses the scene camera's post processing, so the viewport looks like the game.
     if (_camera_override) {
       packet.camera.post_process = camera_node.get_component<scenes::camera>().post_process;
     }
@@ -820,8 +817,7 @@ auto scene_renderer_module::_build_packet() -> render_packet {
       } else {
         auto& bucket = _opaque_buckets[mesh_key{renderer.mesh->id(), index, material->id()}];
 
-        // Refreshed once per bucket per frame rather than per instance: every instance in a bucket
-        // shares the same mesh/material, and a reused bucket may still hold last frame's handles.
+        // Refreshed once per bucket: its instances share mesh and material, and a reused bucket may hold last frame's handles.
         if (bucket.transforms.empty()) {
           bucket.mesh = renderer.mesh;
           bucket.submesh_index = index;
@@ -869,8 +865,7 @@ auto scene_renderer_module::_build_packet() -> render_packet {
     packet.opaque_commands.push_back(std::move(command));
   }
 
-  // Instanced renderers: one command per submesh, instances straight from their own buffer. Each
-  // reserves its share of the instanced culled pool per cull view it's drawn in.
+  // Instanced renderers: one command per submesh, reserving culled pool space per cull view.
   auto instanced_culled = std::uint32_t{0u};
 
   for (const auto [entity, world, renderer] : scene.query<scenes::world_transform, scenes::instanced_mesh_renderer>(ecs::exclude<scenes::inactive>).each()) {
@@ -950,8 +945,7 @@ auto scene_renderer_module::_build_packet() -> render_packet {
   auto skin_scratch_cursor = std::uint32_t{0u};
   const auto animation_delta_time = scenes_module.simulation_delta_time().value();
 
-  // prepare() runs while the render thread is idle, before the begin_frame/record of the frame this
-  // packet is for, so frame_index() here is the one record() will see.
+  // prepare() runs before this packet's frame begins, so this is the frame_index record() will see.
   const auto& frame_context = core::engine::get_module<graphics::graphics_module>().frame_context();
   const auto skin_scratch_address = _skin_scratch_addresses[utility::fast_mod(frame_context.frame_index(), graphics::swapchain::max_frames_in_flight)];
 
@@ -968,7 +962,7 @@ auto scene_renderer_module::_build_packet() -> render_packet {
     const auto instance_vertex_count = renderer.mesh->vertex_count();
 
     if (instance_vertex_count == 0u || !renderer.mesh->has_skin_data() || (skin_scratch_cursor + instance_vertex_count) > skin_scratch_vertex_capacity) {
-      continue; // no skin data cooked, or this frame's scratch buffer is already full -- skip rather than overrun
+      continue; // no skin data, or this frame's scratch buffer is full
     }
 
     const auto joint_offset = static_cast<std::uint32_t>(packet.joint_matrices.size());
@@ -1611,8 +1605,7 @@ auto scene_renderer_module::_resize_targets(const math::vector2u extent) -> void
     registry.retire(_ambient_occlusion_raw_image, frame_index);
     registry.retire(_ambient_occlusion_image, frame_index);
 
-    // Fresh indices instead of rewriting these in place: frames still in flight sample the old
-    // images through them (bindless_table::collect frees the old ones once those frames finish).
+    // Fresh indices: in-flight frames still sample the old images through the old ones.
     for (auto index : {std::ref(_scene_depth_index), std::ref(_color_index), std::ref(_accumulator_index), std::ref(_revealage_index), std::ref(_bloom_upsample_index), std::ref(_final_image_index), std::ref(_ambient_occlusion_raw_index), std::ref(_ambient_occlusion_index)}) {
       bindless_table.unregister_sampled_image(index.get());
       index.get() = bindless_table.reserve_sampled_image();
@@ -1643,8 +1636,7 @@ auto scene_renderer_module::_resize_targets(const math::vector2u extent) -> void
 
   bindless_table.write_sampled_image(_scene_depth_index, registry.get<graphics::image>(_scene_depth_image).view());
 
-  // Ambient occlusion: half resolution, RGBA8 (r used) -- the format the bindless float4 storage
-  // images are known to write -- as storage for ambient_occlusion_pass and sampled for lighting.
+  // Ambient occlusion: half resolution RGBA8 (r used), the format bindless float4 storage images write.
   const auto ambient_occlusion_extent = math::vector2u{std::max(extent.x() / 2u, 1u), std::max(extent.y() / 2u, 1u)};
 
   for (auto [image, index, storage_index, name] : {
@@ -1755,8 +1747,7 @@ auto scene_renderer_module::_resize_targets(const math::vector2u extent) -> void
 
   _target_extent = extent;
 
-  // This frame's passes already sample the new indices, so their writes can't wait for the next
-  // begin_frame flush.
+  // This frame's passes already use the new indices, so flush now instead of at the next begin_frame.
   bindless_table.flush_writes();
 
   _graph.compile(_build_graph_resources());

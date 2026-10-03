@@ -19,29 +19,14 @@ auto inspector_panel::_draw_prefab_instance_header(sbx::scenes::scene& target, s
 
   ImGui::SameLine();
 
-  // "##instance" -- distinct from _draw_prefab_edit's own "Update Prefab" button below: if this
-  // instance's own prefab asset is itself a nested instance of another prefab, _draw_prefab_edit
-  // draws _draw_node_properties (and thus this header) for its root too, and two same-labeled
-  // buttons with no ID suffix would otherwise collide in the same ID scope.
+  // "##instance" keeps this distinct from _draw_prefab_edit's own Update Prefab button when a prefab nests another.
   if (ImGui::SmallButton(ICON_MDI_CONTENT_SAVE " Update Prefab##instance")) {
     sbx::scenes::scene_serializer::update_prefab_from_node(target, node);
   }
 }
 
-/**
- * @brief Selecting a `.prefab` asset draws straight into it, same pattern _asset_cache already
- * uses for every other kind: re-populate the scratch scene whenever the selected id changes, not
- * an explicitly opened/closed mode. Switching to a different prefab (or away entirely) simply
- * stops drawing the old one; any edits since the last "Update Prefab" click are just not persisted
- * — same expectation as any other unsaved-edit-in-a-staged-buffer view in this panel
- * (_material_edit/_particle_effect_edit work the same way).
- *
- * _draw_node_properties is called completely unmodified here (identity fields off — see its doc
- * comment), against the session's own scratch scene instead of the real active scene — see
- * command.hpp's doc comment on why every command class takes its target scene explicitly rather
- * than resolving one internally, which is what makes this reuse possible with no duplicated UI
- * code and no global state.
- */
+// Selecting a .prefab edits it in a scratch scene repopulated whenever the selected id changes; unsaved edits are dropped when switching away, like the other staged editors.
+// _draw_node_properties is reused unmodified, since commands take their target scene explicitly.
 auto inspector_panel::_draw_prefab_edit(editor_state& state, const asset_selection& asset, sbx::assets::assets_module& assets_module) -> void {
   if (!_prefab_edit_session || _prefab_edit_session->prefab->id() != asset.id) {
     auto prefab = assets_module.load_prefab(asset.id);

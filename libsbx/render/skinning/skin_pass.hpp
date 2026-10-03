@@ -12,13 +12,7 @@
 
 namespace sbx::render {
 
-/**
- * @brief Skins every visible skinned-mesh instance once per frame into scene_renderer_module's
- * shared scratch vertex buffer, before depth_pre_pass/shadow_pass/opaque_pass read it via the
- * ordinary vertex_address mechanism (draw_command::vertex_address_override) -- so a skinned
- * character is skinned exactly once per frame regardless of how many passes/cascades later draw
- * it, instead of re-skinning per pass.
- */
+/** @brief Skins every visible skinned instance once per frame into the shared scratch buffer, which every later pass draws from. */
 class skin_pass final : public compute_pass {
 
 public:

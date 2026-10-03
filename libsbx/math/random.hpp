@@ -3,19 +3,21 @@
 #ifndef LIBSBX_MATH_RANDOM_HPP_
 #define LIBSBX_MATH_RANDOM_HPP_
 
+#include <cmath>
 #include <random>
 #include <ranges>
 #include <concepts>
 #include <limits>
 
 #include <libsbx/math/concepts.hpp>
+#include <libsbx/math/traits.hpp>
 #include <libsbx/math/vector2.hpp>
 #include <libsbx/math/vector3.hpp>
 #include <libsbx/math/color.hpp>
 
 namespace sbx::math {
 
-/** @brief A global Mersenne Twister random number generator, seeded from std::random_device by default. */
+/** @brief A per-thread Mersenne Twister random number generator, each seeded from std::random_device by default. */
 class random {
 
 public:
@@ -29,19 +31,26 @@ public:
    *
    * @tparam Type A numeric (non-bool integral or floating-point) type.
    *
-   * @param min The lower bound.
-   * @param max The upper bound. Defaults to Type's maximum representable value.
+   * @param min The lower bound. Defaults to Type's lowest value.
+   * @param max The upper bound. Defaults to Type's highest value.
    *
    * @return The drawn value.
-   *
-   * @note min has no default (unlike max) because std::numeric_limits<Type>::min() is the smallest *positive* value for a floating-point Type, not the most negative one — a default here would silently produce a heavily biased near-max-value distribution for float/double.
    */
   template<numeric Type>
-  static auto next(Type min, Type max = std::numeric_limits<Type>::max()) -> Type {
+  static auto next(Type min = limit_traits<Type>::min(), Type max = limit_traits<Type>::max()) -> Type {
     using distribution_type = std::conditional_t<std::floating_point<Type>, std::uniform_real_distribution<Type>, std::uniform_int_distribution<Type>>;
 
     if (min > max) {
       std::swap(min, max);
+    }
+
+    // uniform_real_distribution requires max - min to be finite; for wider ranges draw over the halved range and double the result.
+    if constexpr (std::floating_point<Type>) {
+      if (!std::isfinite(max - min)) {
+        auto distribution = distribution_type{min / Type{2}, max / Type{2}};
+
+        return Type{2} * distribution(_generator());
+      }
     }
 
     auto distribution = distribution_type{min, max};
@@ -49,7 +58,7 @@ public:
     return distribution(_generator());
   }
 
-  /** @brief Reseeds the generator. */
+  /** @brief Reseeds the calling thread's generator. */
   template<integral Seed>
   static auto seed(const Seed seed) -> void {
     _generator().seed(static_cast<generator_type::result_type>(seed));
@@ -58,8 +67,7 @@ public:
 private:
 
   static auto _generator() -> generator_type& {
-    static auto device = std::random_device{};
-    static auto generator = generator_type{device()};
+    thread_local auto generator = generator_type{std::random_device{}()};
 
     return generator;
   }

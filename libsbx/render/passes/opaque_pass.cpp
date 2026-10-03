@@ -109,10 +109,10 @@ auto opaque_pass::declare(graphics_pass_builder& builder, const graph_resources&
   builder.reads_buffer(resources.cluster_range_buffer, graphics::pipeline_stage::fragment_shader, graphics::access::shader_read);
   builder.reads_buffer(resources.cluster_light_index_buffer, graphics::pipeline_stage::fragment_shader, graphics::access::shader_read);
 
-  // Sampled through bindless by lighting.slang's ambient term (ambient_occlusion_pass's result).
+  // Sampled through bindless by the ambient term.
   builder.reads_image(resources.ambient_occlusion, graphics::pipeline_stage::fragment_shader, graphics::access::shader_sampled_read, graphics::image_layout::shader_read_only_optimal);
 
-  // Sampled through bindless by opaque_shading_policy's sun lighting (shaders/shadows/csm.slang).
+  // Sampled through bindless by the sun's lighting (csm.slang).
   for (const auto shadow_map : resources.shadow_maps) {
     builder.reads_image(shadow_map, graphics::pipeline_stage::fragment_shader, graphics::access::shader_sampled_read, graphics::image_layout::shader_read_only_optimal);
   }
@@ -126,8 +126,7 @@ auto opaque_pass::declare(graphics_pass_builder& builder, const graph_resources&
     .resolve_image = resources.color
   });
 
-  // Owns the depth "first reader" barrier: depth_pre_pass wrote it (last_was_write), so the
-  // compiler emits a WAR barrier here automatically even though this slot only ever reads it.
+  // depth_pre_pass wrote it, so the compiler emits the barrier here even though this slot only reads.
   group.depth = depth_attachment_slot{.image = resources.depth};
 
   builder.add_group(group);
@@ -148,9 +147,7 @@ auto opaque_pass::execute(render_context& context, std::uint32_t /*group*/) -> v
 
   submit_draw_commands_indirect(context, context.packet->opaque_commands, _pipelines, resolve_custom_pipeline);
 
-  // Overlay, not a replacement: the shaded fill draw above always happens, this just additionally
-  // retraces every triangle's edges on top of it (depth-biased so the lines actually win instead
-  // of z-fighting the surface they're tracing).
+  // Overlay: retraces edges on top of the fill, depth-biased to avoid z-fighting.
   if (context.wireframe) {
     submit_draw_commands_indirect(context, context.packet->opaque_commands, _wireframe_pipelines, resolve_custom_pipeline);
   }

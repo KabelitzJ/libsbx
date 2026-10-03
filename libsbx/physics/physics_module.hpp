@@ -44,38 +44,27 @@
 
 namespace sbx::physics {
 
-/**
- * @brief One collider found overlapping a query_sphere_contacts() sphere.
- */
+/** @brief One collider overlapping a query_sphere_contacts() sphere. */
 struct sphere_query_hit {
   scenes::node node{};
-  math::vector3 point{};             // world-space contact point, on the collider's surface
-  math::vector3 normal{};            // world space, points from the collider's surface toward the sphere's center
+  math::vector3 point{};             // world space, on the collider's surface
+  math::vector3 normal{};            // world space, from the collider's surface toward the sphere's center
   std::float_t penetration_depth{0.0f};
 }; // struct sphere_query_hit
 
 /** @brief The nearest collider a physics_module::raycast() ray hit. */
 struct raycast_hit {
   scenes::node node{};
-  math::vector3 point{};   // world-space
+  math::vector3 point{};   // world space
   math::vector3 normal{};  // world space, outward from the collider's surface
   std::float_t distance{0.0f};
 }; // struct raycast_hit
 
 /**
- * @brief Owns the world broadphase and the fixed-step integrate/broadphase/narrowphase/solve
- * pipeline for every rigidbody+shape_collider in the active scene. Mirrors scenes::scenes_module's
- * shape: a fixed_update() method, picked up automatically as the core::stage::fixed_update hook.
+ * @brief Owns the broadphase and the fixed-step integrate, broadphase, narrowphase and solve pipeline for the active scene.
  *
- * Supports both shape_collider (convex primitives) and mesh_collider (triangle mesh, or -- with
- * mesh_collider::convex -- a cached point-set hull approximation usable by dynamic bodies too; see
- * collider.hpp's doc comment for the Unity-MeshCollider-parity rules on which body types each mode
- * allows), a rigidbody's colliders spread across its subtree (compound colliders -- see
- * narrowphase.hpp's resolve_body_shapes) at any (uniform) local_transform::scale, and a bare
- * shape_collider/mesh_collider with no rigidbody at all as its own implicit-static body (matching
- * Unity: a Collider alone is a static one). A rigidbody itself, though, must still be a root-level
- * (unparented) node: physics reads/writes its scenes::local_transform directly as if it were already
- * world space, rather than the once-per-frame-stale world_transform or a live composed one.
+ * Supports shape colliders, mesh colliders (triangle mesh, or a convex hull usable by dynamic bodies; see collider.hpp), compound colliders across a rigidbody's subtree at uniform scale, and bare colliders as implicit static bodies, like Unity.
+ * A rigidbody must be a root node: its local_transform is read and written as world space.
  */
 class physics_module final : public utility::noncopyable {
 
@@ -91,13 +80,7 @@ public:
 
   auto fixed_update() -> void;
 
-  /**
-   * @brief Submits this frame's enabled debug-draw layers (see debug_draw_flags()) into
-   * render::scene_renderer_module::debug_draw() -- picked up automatically as the
-   * core::stage::late_update hook, which runs after every fixed_update() step this frame and right
-   * before core::stage::render, so submissions reflect this frame's final transforms exactly once,
-   * never a stale previous-frame pose and never duplicated across sub-stepping.
-   */
+  /** @brief Submits the enabled debug-draw layers once per frame, after every fixed step, so they show this frame's final transforms. */
   auto late_update() -> void;
 
   [[nodiscard]] auto debug_draw_flags() const noexcept -> const sbx::physics::debug_draw_flags& {
@@ -133,41 +116,42 @@ public:
   }
 
   /**
-   * @brief Every collider (static or dynamic) whose surface currently overlaps a sphere of @p radius
-   * centered at @p center, appended to @p out_hits (cleared first). Treats the sphere as an ad-hoc
-   * convex_shape and reuses gjk_intersect + epa_penetration -- the same machinery
-   * generate_pair_contact already runs for ordinary body pairs -- so this adds no new collision math,
-   * only a new entry point into it. A non-convex mesh_collider candidate (resolve_convex returns
-   * nullopt for one) is silently skipped -- particles don't yet collide against raw triangle meshes,
-   * only convex shape_colliders and mesh_colliders authored with is_convex == true.
+   * @brief Every collider overlapping a sphere, using the same GJK/EPA path as body pairs. Non-convex mesh colliders are skipped.
    *
-   * @p mask filters candidates by their own node's scenes::layer -- a candidate whose layer isn't
-   * in @p mask is skipped before any shape math runs, same "everything" default as raycast().
+   * @param scene The scene.
+   * @param center The sphere's center.
+   * @param radius The sphere's radius.
+   * @param out_hits Cleared, then receives the hits.
+   * @param mask Only colliders on these layers are tested.
    */
   auto query_sphere_contacts(scenes::scene& scene, const math::vector3& center, std::float_t radius, std::vector<sphere_query_hit>& out_hits, const scenes::layer_mask& mask = scenes::layer_mask::everything()) -> void;
 
   /**
-   * @brief The nearest collider (static or dynamic) @p ray hits within @p max_distance, or
-   * nullopt. Broadphase candidates come from both trees' ray queries (containers::dynamic_tree
-   * already supports this -- see dynamic_tree.hpp); each candidate resolves to either a
-   * heightfield_collider (raycast_heightfield) or an ordinary convex primitive (resolve_convex +
-   * raycast_convex_shape) -- see raycast.hpp. A non-convex mesh_collider candidate is silently
-   * skipped, same accepted v1 gap query_sphere_contacts already has (no triangle-BVH raycast yet).
+   * @brief The nearest collider @p ray hits within @p max_distance: heightfields and convex primitives. Non-convex mesh colliders are skipped.
    *
-   * @p mask filters candidates by their own node's scenes::layer, same as query_sphere_contacts.
+   * @param scene The scene.
+   * @param ray The world-space ray.
+   * @param max_distance The maximum distance.
+   * @param mask Only colliders on these layers are tested.
+   *
+   * @return The hit, or nullopt.
    */
   [[nodiscard]] auto raycast(scenes::scene& scene, const math::ray& ray, std::float_t max_distance, const scenes::layer_mask& mask = scenes::layer_mask::everything()) -> std::optional<raycast_hit>;
 
   /**
-   * @brief Fires once per pair on the fixed_update() step a (solid) contact or (is_trigger)
-   * overlap first appears -- see collision_event's doc comment. scripting_module connects here to
-   * deliver OnCollisionEnter/OnTriggerEnter to any script on either side.
+   * @brief Fires once per pair on the fixed step a contact or trigger overlap begins; scripting_module delivers OnCollisionEnter/OnTriggerEnter from it.
+   *
+   * @return The signal.
    */
   auto on_contact_began() -> signals::signal<const collision_event&>& {
     return _on_contact_began;
   }
 
-  /** @brief Fires once per pair on the step it stops touching -- see collision_event's doc comment. */
+  /**
+   * @brief Fires once per pair on the step it stops touching.
+   *
+   * @return The signal.
+   */
   auto on_contact_ended() -> signals::signal<const collision_event&>& {
     return _on_contact_ended;
   }
@@ -177,11 +161,12 @@ public:
   }
 
   /**
-   * @brief Bakes the navmesh from the active static geometry right now (Edit mode included --
-   * unlike the automatic Play-start bake below, this doesn't wait for is_simulating()), and
-   * remembers @p settings so the next Play-start edge rebakes with the same settings. Returns
-   * whether the bake produced any usable polygons; has_navmesh()/navmesh() reflect the result
-   * either way (a failed bake clears any previous navmesh).
+   * @brief Bakes the navmesh from the active static geometry now (Edit mode included) and keeps @p settings for the next Play-start rebake. A failed bake clears the previous navmesh.
+   *
+   * @param scene The scene.
+   * @param settings The bake settings.
+   *
+   * @return Whether any usable polygons were produced.
    */
   auto bake_navmesh(scenes::scene& scene, const physics::nav_settings& settings) -> bool;
 
@@ -194,10 +179,12 @@ public:
   }
 
   /**
-   * @brief Requests @p agent_node's nav_agent walk to @p target -- finds a path over the baked
-   * navmesh right now and hands it to the crowd; the actual per-step movement (direct
-   * scenes::local_transform writes) happens in fixed_update(). No-op (returns false) if there's no
-   * navmesh yet or @p agent_node has no nav_agent component.
+   * @brief Paths @p agent_node's nav_agent to @p target over the navmesh; movement happens in fixed_update().
+   *
+   * @param agent_node The agent's node.
+   * @param target The destination.
+   *
+   * @return False if there's no navmesh or no nav_agent.
    */
   auto request_agent_move(scenes::node agent_node, const math::vector3& target) -> bool;
 
@@ -217,29 +204,19 @@ private:
 
   auto _narrowphase(scenes::scene& scene) -> void;
 
-  // Seeds each of this step's fresh (cold) manifold points from the nearest same-pair point in
-  // _manifold_cache (last step's manifolds, after solving), so prepare_velocity_constraints has a
-  // real impulse to warm-start from instead of always starting at zero.
+  // Seeds this step's new manifold points from the nearest cached point of the same pair, so the solver warm-starts.
   auto _warm_start_manifolds() -> void;
 
-  // Rebuilds _manifold_cache from this step's _manifolds (whose impulse fields store_impulses has
-  // by now filled in with the final solved values) -- naturally drops any pair no longer in contact.
+  // Rebuilds the cache from this step's solved manifolds, dropping pairs no longer in contact.
   auto _update_manifold_cache() -> void;
 
-  // Diffs this step's _manifolds against _manifold_cache (the previous step's, not yet overwritten
-  // -- must run before _update_manifold_cache) and fires on_contact_began/on_contact_ended for
-  // every pair that started or stopped touching this step.
+  // Diffs this step's manifolds against the cache to fire began/ended events; must run before _update_manifold_cache.
   auto _dispatch_contact_events() -> void;
 
-  // Drops every broadphase leaf/pair/manifold. Play mode's "stop" reloads the scene in place from
-  // a snapshot (scene_serializer::load over the same registry), which destroys and recreates every
-  // entity -- any scenes::node this module is still holding onto from before that becomes a stale
-  // handle. Called once on the false -> true edge of is_simulating() so a fresh play session always
-  // starts from an empty broadphase instead of dereferencing those stale nodes.
+  // Drops every leaf, pair and manifold when simulation starts: Stop reloads the scene in place, so held nodes are stale.
   auto _reset(scenes::scene& scene) -> void;
 
-  // Reads current collider transforms plus whatever _dynamic_tree/_static_tree/_manifolds the last
-  // fixed_update() step left cached; see physics_debug.hpp for the actual wireframe generation.
+  // Debug wireframes for the current colliders and the last step's trees and manifolds.
   auto _submit_debug_draw(scenes::scene& scene) -> void;
 
   bool _was_simulating{false};
@@ -254,15 +231,13 @@ private:
   std::float_t _position_correction_percent{0.2f};
   std::float_t _position_correction_slop{0.005f};
 
-  // Dynamic (dynamic + kinematic) bodies are refit every step; static bodies are inserted once and
-  // never refit -- the standard Box2D/Bullet broadphase split.
+  // Dynamic and kinematic bodies are refit every step; static ones are inserted once.
   broadphase_tree_type _dynamic_tree{};
   broadphase_tree_type _static_tree{};
   containers::dense_map<scenes::node, broadphase_tree_type::id> _dynamic_leaves{};
   containers::dense_map<scenes::node, broadphase_tree_type::id> _static_leaves{};
 
-  // heightfield_collider nodes -- kept out of _static_tree entirely; see the doc comment where
-  // this is populated in _sync_broadphase.
+  // Heightfields stay out of _static_tree; see _sync_broadphase.
   std::vector<scenes::node> _heightfield_nodes{};
 
   std::vector<std::pair<scenes::node, scenes::node>> _candidate_pairs{};
@@ -278,9 +253,7 @@ private:
   std::optional<physics::navmesh> _navmesh{};
   physics::crowd _crowd{};
 
-  // compose_world_pose() memoization for the current fixed_update() step -- cleared at the top of
-  // each step, shared by _sync_broadphase and _narrowphase so a node touched by both (or by
-  // several candidate pairs in the same step) only ever has its world pose actually composed once.
+  // Composed world poses for this step, shared by broadphase and narrowphase.
   pose_cache _pose_cache{};
 
   signals::signal<const collision_event&> _on_contact_began{};

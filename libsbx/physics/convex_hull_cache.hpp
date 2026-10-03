@@ -4,9 +4,7 @@
 /**
  * @file libsbx/physics/convex_hull_cache.hpp
  *
- * @brief Lazily builds and caches a mesh's convex hull (vertices + triangle faces, via
- * quickhull.hpp), keyed by mesh uuid -- mirrors mesh_collision_cache.hpp's shape and lifecycle
- * exactly, but for mesh_collider::is_convex == true instead of the raw-triangle case.
+ * @brief Lazily built convex hulls per mesh uuid for convex mesh colliders, like mesh_collision_cache.
  *
  * @ingroup libsbx-physics
  */
@@ -31,21 +29,14 @@
 
 namespace sbx::physics {
 
-/**
- * @brief A mesh's convex hull, capped at convex_hull_max_points vertices / convex_hull_max_faces
- * faces, in the mesh's own local space (see convex_hull_cache::_build for how the cap is reached).
- */
+/** @brief A mesh's convex hull in mesh space, capped at convex_hull_max_points vertices and convex_hull_max_faces faces. */
 struct convex_hull_data {
   containers::static_vector<math::vector3, convex_hull_max_points> points;
   containers::static_vector<convex_hull_face, convex_hull_max_faces> faces;
   math::volume local_bounds;
 }; // struct convex_hull_data
 
-/**
- * @brief Lazily builds and caches one convex_hull_data per mesh asset uuid. Built once, never
- * rebuilt -- same convention as mesh_collision_cache. Each entry stays at a fixed address until
- * clear(), so the convex_hull views narrowphase builds from it survive later insertions.
- */
+/** @brief Builds one hull per mesh uuid on first use and never rebuilds; entries never move until clear(), so narrowphase's views stay valid. */
 class convex_hull_cache final : public utility::noncopyable {
 
 public:

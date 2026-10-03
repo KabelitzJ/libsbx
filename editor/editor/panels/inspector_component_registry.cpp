@@ -32,7 +32,6 @@
 
 namespace editor {
 
-// Case-insensitive substring test, for the Add Component filter box and script-name matching below.
 auto contains_ignore_case(std::string_view haystack, std::string_view needle) -> bool {
   const auto to_lower = [](std::string_view text) -> std::string {
     auto result = std::string{text};
@@ -43,15 +42,13 @@ auto contains_ignore_case(std::string_view haystack, std::string_view needle) ->
   return to_lower(haystack).find(to_lower(needle)) != std::string::npos;
 }
 
-// Every script class name matching `filter` (case-insensitive substring) -- used only to decide
-// whether the Script submenu below has anything to show for the active filter, so it can hide
-// itself along with every other entry instead of opening onto an empty list.
+// Whether any script class matches `filter`, so the Script submenu hides itself when empty.
 auto any_script_matches(sbx::scripting::scripting_module& scripting_module, std::string_view filter) -> bool {
   auto& behavior_type = scripting_module.game_assembly().get_type("Sbx.Core.Behavior");
 
   for (auto* candidate : scripting_module.game_assembly().get_types()) {
     if (*candidate == behavior_type || !candidate->is_subclass_of(behavior_type)) {
-      continue; // skip the base class itself and anything that isn't a Behavior
+      continue; // the Behavior base class itself, or not a Behavior
     }
 
     if (contains_ignore_case(std::string{candidate->get_full_name()}, filter)) {
@@ -74,9 +71,7 @@ auto make_entry(const char* icon, const char* name, const char* category, int ex
   };
 }
 
-// Collider kinds and layout-group kinds are each mutually exclusive -- narrowphase only ever
-// resolves one collider per node (see narrowphase.cpp's resolve_convex), and a node with more than
-// one layout group has no well-defined layout order.
+// Colliders and layout groups are each mutually exclusive: only one collider per node is used, and multiple layout groups have no defined order.
 constexpr auto collider_group = 1;
 constexpr auto layout_group_group = 2;
 
@@ -88,8 +83,7 @@ auto component_entries() -> const std::vector<component_entry>& {
     make_entry<sbx::scenes::mesh_renderer>(ICON_MDI_CUBE_OUTLINE, "Mesh Renderer", "3D", 0,
       [](editor_state& s, sbx::scenes::scene& t, sbx::scenes::node& n, sbx::assets::assets_module& a) { draw_mesh_renderer_section(s, t, n, a); }),
 
-    // skeleton_pose isn't listed here -- it's fully auto-managed by draw_mesh_renderer_section
-    // (see scenes::skeleton_pose's doc comment).
+    // skeleton_pose is managed automatically by draw_mesh_renderer_section.
     make_entry<sbx::scenes::animator>(ICON_MDI_ANIMATION_PLAY, "Animator", "3D", 0,
       [](editor_state& s, sbx::scenes::scene& t, sbx::scenes::node& n, sbx::assets::assets_module&) { draw_animator_section(s, t, n); }),
 
@@ -178,7 +172,6 @@ auto component_entries() -> const std::vector<component_entry>& {
 auto draw_add_component_menu(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node, sbx::scripting::scripting_module& scripting_module) -> void {
   static constexpr auto label = ICON_MDI_PLUS " Add Component";
 
-  // Centered horizontally in the panel, rather than left-aligned like a regular control.
   const auto button_width = ImGui::CalcTextSize(label).x + ImGui::GetStyle().FramePadding.x * 2.0f;
   const auto available_width = ImGui::GetContentRegionAvail().x;
 
@@ -188,17 +181,13 @@ auto draw_add_component_menu(editor_state& state, sbx::scenes::scene& target, sb
     ImGui::OpenPopup("##add_component_popup");
   }
 
-  // Anchored under the button (centered, not wherever the mouse clicked) with a fixed width so it
-  // doesn't jump or resize as the filter text changes. Must be set every frame the popup could
-  // open -- ImGui only applies a pending SetNextWindowPos/Size to the very next Begin call.
+  // Anchored under the button with a fixed width so it doesn't jump with the filter text; set every frame, since ImGui applies it only to the next Begin.
   constexpr auto popup_width = 260.0f;
   const auto button_min = ImGui::GetItemRectMin();
   const auto button_max = ImGui::GetItemRectMax();
   const auto button_center_x = (button_min.x + button_max.x) * 0.5f;
 
-  // Opens upward instead whenever there isn't roughly enough room below in the viewport's work
-  // area, so a tall Inspector doesn't push the popup off the bottom of the window. The estimate
-  // only has to pick the right side -- the upward case's pivot anchors to the popup's real height.
+  // Opens upward when there's roughly not enough room below; the estimate only picks the side.
   constexpr auto estimated_popup_height = 320.0f;
 
   const auto work_min = ImGui::GetMainViewport()->WorkPos;
@@ -208,8 +197,7 @@ auto draw_add_component_menu(editor_state& state, sbx::scenes::scene& target, sb
   const auto popup_x = std::clamp(button_center_x - popup_width * 0.5f, work_min.x, std::max(work_min.x, work_max.x - popup_width));
 
   if (opens_upward) {
-    // pivot {0, 1}: the given pos is the window's bottom-left corner instead of its top-left, so it
-    // grows upward from the button using its own true content height, not the estimate above.
+    // Bottom-left pivot, so it grows upward by its real height.
     ImGui::SetNextWindowPos(ImVec2{popup_x, button_min.y}, ImGuiCond_Always, ImVec2{0.0f, 1.0f});
   } else {
     ImGui::SetNextWindowPos(ImVec2{popup_x, button_max.y}, ImGuiCond_Always);
@@ -218,8 +206,7 @@ auto draw_add_component_menu(editor_state& state, sbx::scenes::scene& target, sb
   ImGui::SetNextWindowSize(ImVec2{popup_width, 0.0f}, ImGuiCond_Always);
 
   if (ImGui::BeginPopup("##add_component_popup")) {
-    // A single always-the-same popup id, so IsWindowAppearing() alone tells us this is a fresh
-    // open -- reset the filter and refocus it each time.
+    // One fixed popup id, so IsWindowAppearing() marks a fresh open: reset the filter and refocus.
     static auto filter_buffer = std::array<char, 128u>{};
 
     if (ImGui::IsWindowAppearing()) {
@@ -248,9 +235,7 @@ auto draw_add_component_menu(editor_state& state, sbx::scenes::scene& target, sb
       });
     };
 
-    // Grouped into Common/3D/2D so the popup stays scannable as the component list grows -- a
-    // category header only appears at all when something inside it would pass the current filter,
-    // same "hide empty groups" reasoning the Script section below already uses.
+    // Grouped into Common/3D/2D; a header only shows when something in it passes the filter.
     static constexpr auto categories = std::array<std::pair<const char*, const char*>, 3u>{{
       {ICON_MDI_PUZZLE_OUTLINE " Common", "Common"},
       {ICON_MDI_AXIS_ARROW " 3D", "3D"},
@@ -287,8 +272,7 @@ auto draw_add_component_menu(editor_state& state, sbx::scenes::scene& target, sb
       }
     }
 
-    // Open-ended category, not a fixed name -- passes when "Script" matches or any script inside
-    // it would, so a search for a script's own name doesn't hide the one submenu that satisfies it.
+    // Shown when "Script" matches or any script name does.
     if (passes("Script") || (filter_buffer[0] != '\0' && any_script_matches(scripting_module, filter_buffer.data()))) {
       if (ImGui::BeginMenu(ICON_MDI_FILE_CODE_OUTLINE " Script")) {
         auto& behavior_type = scripting_module.game_assembly().get_type("Sbx.Core.Behavior");
@@ -296,7 +280,7 @@ auto draw_add_component_menu(editor_state& state, sbx::scenes::scene& target, sb
 
         for (auto* candidate : scripting_module.game_assembly().get_types()) {
           if (*candidate == behavior_type || !candidate->is_subclass_of(behavior_type)) {
-            continue; // skip the base class itself and anything that isn't a Behavior
+            continue; // the Behavior base class itself, or not a Behavior
           }
 
           const auto full_name = std::string{candidate->get_full_name()};

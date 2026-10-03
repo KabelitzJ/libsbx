@@ -18,9 +18,7 @@
 
 namespace editor {
 
-// update() rebuilds rotation from _yaw/_pitch, so they're re-derived from the current rotation first -- anything else that
-// sets the rotation directly (a loaded camera.yaml, the view gizmo's axis snap) would otherwise be undone on the next look.
-// Inverts update()'s forward = Ry(yaw) * Rx(pitch) * (0,0,-1); keep in sync with that composition.
+// update() rebuilds the rotation from _yaw/_pitch, so re-derive them after anything sets the rotation directly (loading, the view gizmo). Inverts forward = Ry(yaw) * Rx(pitch) * (0,0,-1).
 auto editor_camera::_sync_angles_from_rotation() -> void {
   const auto forward = _transform.rotation * sbx::math::vector3{0.0f, 0.0f, -1.0f};
 
@@ -37,7 +35,7 @@ auto editor_camera::update() -> void {
 
   if (sbx::platform::input::is_mouse_button_pressed(sbx::platform::mouse_button::right)) {
     _is_looking = true;
-    _last_mouse = mouse; // reset so the first look frame has no delta
+    _last_mouse = mouse; // no delta on the first look frame
   }
 
   if (sbx::platform::input::is_mouse_button_released(sbx::platform::mouse_button::right)) {

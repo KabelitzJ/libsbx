@@ -78,8 +78,7 @@ auto draw_node_icons(editor_state& state, const ImVec2& viewport_origin, const I
     const auto node = scene.node_of(entity);
     auto hovered = false;
 
-    // Skip hit-testing (glyph still draws) when the gizmo already has the cursor — see
-    // gizmo_capturing_input's doc comment in viewport_overlays.hpp.
+    // The glyph still draws, but the gizmo keeps input priority.
     if (!gizmo_capturing_input) {
       ImGui::InvisibleButton("##node_icon", text_size);
 
@@ -117,9 +116,7 @@ auto draw_node_icons(editor_state& state, const ImVec2& viewport_origin, const I
     draw_icon(entity, sbx::math::vector3{transform.matrix[3]}, ICON_MDI_WHITE_BALANCE_SUNNY);
   }
 
-  // Excluded from its own icon only while actually being viewed through (Play/Paused) — there it
-  // sits at the eye position, a degenerate projection (clip.w near zero) that flickered on and
-  // off every other frame. In edit mode the viewport looks through the editor camera instead.
+  // Hidden while viewing through it in Play mode: at the eye position the projection degenerates and flickers.
   const auto is_viewing_through_active_camera = editor_module.play_state() != editor::play_state::edit;
   const auto active_camera_id = (is_viewing_through_active_camera && scene.has_active_camera()) ? static_cast<sbx::math::uuid>(scene.active_camera().id()) : sbx::math::uuid::nil();
 
@@ -158,7 +155,7 @@ auto draw_camera_frustum_gizmo(editor_state& state, const ImVec2& viewport_size)
   const auto half_height_far = camera.far_plane * std::tan(half_fov);
   const auto half_width_far = half_height_far * aspect;
 
-  // Camera-local space, forward along -Z (matches the engine's convention elsewhere, e.g. lighting/view matrices).
+  // Camera-local, forward along -Z.
   const auto near_corners = std::array<sbx::math::vector3, 4u>{
     sbx::math::vector3{-half_width_near,  half_height_near, -camera.near_plane},
     sbx::math::vector3{ half_width_near,  half_height_near, -camera.near_plane},

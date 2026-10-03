@@ -19,12 +19,9 @@
 namespace sbx::render {
 
 /**
- * @brief One shared GPU particle pool for the whole scene, serving every emitter of one blend mode.
+ * @brief One scene-wide GPU particle pool serving every emitter of one blend mode.
  *
- * `particles`/`alive_list` are device_local. `dead_list`/`counters`/`emitter_instances` are host_write
- * (persistently mapped) to avoid the upload_context staging path, which would race the first
- * @ref particle_simulate_pass submission. `dispatch_args`/`draw_args` are device_local, rewritten
- * every frame by build_dispatch_args.slang/prepare_indirect_draw.slang.
+ * Host-written buffers are persistently mapped instead of going through upload_context, whose staging would race the first simulate submission.
  */
 class particle_pool : public utility::noncopyable {
 
@@ -98,54 +95,54 @@ public:
     return _draw_args_address;
   }
 
-  /** @brief frame_slot is the current frame-in-flight index (render_context::slot) -- see the per-frame-slot buffering note on _emitter_instances below. */
+  /**
+   * @brief The emitter instance buffer for a frame slot.
+   *
+   * @param frame_slot The current frame-in-flight index.
+   *
+   * @return The buffer's address.
+   */
   [[nodiscard]] auto emitter_instances_address(std::uint32_t frame_slot) const noexcept -> graphics::buffer::address_type {
     return _emitter_instances_addresses[frame_slot];
   }
 
   /**
-   * @brief Overwrites one emitter instance slot with a full record; call every frame while the slot
-   * is active. frame_slot (render_context::slot) selects which of the per-frame-in-flight buffers
-   * this write targets -- see _emitter_instances' doc comment for why a single shared buffer isn't
-   * safe here.
+   * @brief Overwrites one emitter instance record; call every frame while the slot is active.
+   *
+   * @param frame_slot The current frame-in-flight index.
+   * @param slot The emitter instance slot.
+   * @param data The record.
    */
   auto write_emitter_instance(std::uint32_t frame_slot, std::uint32_t slot, const emitter_instance& data) -> void;
 
   /**
-   * @brief Claims a free emitter_instances slot, or std::nullopt if the pool is exhausted.
+   * @brief Claims a free emitter instance slot; call once on an instance's first active frame, then keep_alive it.
    *
-   * Call once per instance on its first active frame; reuse the slot via @ref keep_alive afterward
-   * instead of claiming again. Exhaustion is logged once, not every frame.
+   * @return The slot, or nullopt if the pool is exhausted (logged once).
    */
   [[nodiscard]] auto claim_slot() -> std::optional<std::uint32_t>;
 
   /**
-   * @brief Marks `slot` as in use this frame and refreshes the lifetime @ref tick drains it over once released.
+   * @brief Marks @p slot in use this frame and refreshes how long it drains after release. Call every frame while spawning.
    *
-   * Call once per frame for every slot still actively spawning.
+   * @param slot The slot.
+   * @param lifetime_max The longest particle lifetime the slot can have in flight.
    */
   auto keep_alive(std::uint32_t slot, std::float_t lifetime_max) -> void;
 
   /**
-   * @brief Recycles emitter-instance slots that stopped being claimed this frame.
+   * @brief Recycles slots not kept alive this frame, after a drain of lifetime_max, so in-flight particles never read a new owner's emitter data.
    *
-   * Call after every @ref keep_alive each frame. An unclaimed slot drains for its lifetime_max
-   * seconds before reuse — recycling sooner would let simulate.slang/draw.slang read a new owner's
-   * `emitters[emitter_slot]` for still in-flight old particles, corrupting them.
+   * @param delta_time The time step.
    */
   auto tick(std::float_t delta_time) -> void;
 
-  /**
-   * @brief Immediately discards every live particle and emitter-instance slot, resetting the pool to its just-constructed state.
-   *
-   * Used by the editor's Stop button; unlike @ref tick, this is an instant reset with no drain.
-   */
+  /** @brief Discards every live particle and slot immediately, e.g. when play mode stops. */
   auto clear() -> void;
 
 private:
 
-  // Writes dead_list = 0..max_particles-1 and counters = {dead_count: max_particles, alive_count:
-  // {0, 0}} — the pool's "nothing alive yet" state, shared by the constructor and clear().
+  // The empty state: every particle dead, nothing alive. Shared by the constructor and clear().
   auto _write_initial_state() -> void;
 
   std::uint32_t _max_particles;
@@ -159,13 +156,7 @@ private:
   graphics::buffer_handle _dispatch_args{};
   graphics::buffer_handle _draw_args{};
 
-  // One buffer per frame-in-flight slot (indexed by render_context::slot), not a single shared
-  // buffer: write_emitter_instance is a direct CPU memcpy into host-visible memory, called every
-  // frame during command-buffer recording, while the compute shaders reading this same data
-  // (simulate.slang/emit.slang) may still be executing for a previous, still-in-flight frame at
-  // that point -- a GPU-side barrier (particle_simulate_pass's previous-frame barrier) only orders
-  // GPU-vs-GPU work, not this earlier CPU write, so a single buffer here would let frame N's write
-  // race frame N-1's read.
+  // One buffer per frame in flight: CPU writes here while an earlier frame's compute may still read it, and GPU barriers don't order host writes.
   std::array<graphics::buffer_handle, graphics::swapchain::max_frames_in_flight> _emitter_instances{};
 
   graphics::buffer::address_type _particles_address{};
@@ -176,8 +167,6 @@ private:
   graphics::buffer::address_type _draw_args_address{};
   std::array<graphics::buffer::address_type, graphics::swapchain::max_frames_in_flight> _emitter_instances_addresses{};
 
-  // Emitter-instance slot allocator — see claim_slot/keep_alive/tick. Sized to
-  // _max_emitter_instances at construction.
   std::vector<std::uint32_t> _free_list{};
   std::vector<std::float_t> _drain_timer{};
   std::vector<std::float_t> _lifetime_max{};

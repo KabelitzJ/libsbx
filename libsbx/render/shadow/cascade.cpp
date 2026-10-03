@@ -65,9 +65,7 @@ auto compute_cascades(const camera_data& camera, std::float_t aspect, const math
 
     const auto center_world = camera.position + camera_forward * ((slice_near + slice_far) * 0.5f);
 
-    // Depth range fits the cascade's bounding sphere exactly. Casters in front of it (toward the
-    // light) are not clipped: shadow_pass enables depth clamp, which flattens them onto the near
-    // plane at depth 0 -- still in front of every receiver, which is all a shadow test needs.
+    // Depth fits the bounding sphere; casters in front of it are flattened onto the near plane by depth clamp, which is still in front of every receiver.
     const auto light_position = center_world - light_dir * radius;
     const auto light_view = math::matrix4x4::look_at(light_position, center_world, up);
 
@@ -87,7 +85,7 @@ auto compute_cascades(const camera_data& camera, std::float_t aspect, const math
     shadow_matrix[3].x() += offset_x;
     shadow_matrix[3].y() += offset_y;
 
-    const auto depth_range = 2.0f * radius; // matches the orthographic() near/far span above
+    const auto depth_range = 2.0f * radius; // the orthographic() near/far span above
     const auto texel_world_size = (2.0f * radius) / resolution;
 
     result[i].view_projection = shadow_matrix;

@@ -20,16 +20,9 @@
 namespace editor {
 
 /**
- * @brief The visual state-graph editor: states as draggable nodes, transitions as links between
- * them, built on imgui-node-editor. On-demand rather than a fixed dockspace fixture (unlike
- * hierarchy/inspector/asset_browser/logger) — draws nothing until opened for a specific
- * .animation_graph asset via editor_state::request_open_animation_graph_editor, since a node
- * canvas needs real screen space the Inspector's narrow dock doesn't have.
+ * @brief The visual animation state graph editor on imgui-node-editor, opened per `.animation_graph` asset via editor_state::request_open_animation_graph_editor.
  *
- * Edits the same way _draw_particle_effect_properties edits a particle_effect: a staged
- * create_info (_edit) applied live via assets_module::update_animation_graph on every change, with
- * an explicit Save button for disk persistence -- no undo/redo (asset edits never go through
- * editor_state's command_stack, only scene-node component edits do).
+ * Edits a staged create_info applied live through update_animation_graph, with an explicit Save and no undo.
  */
 class animation_graph_panel final : public editor_panel {
 
@@ -45,8 +38,7 @@ public:
 
 private:
 
-  // monostate: nothing selected. std::uint32_t: an animation_state::id. std::size_t: an index into
-  // _edit.transitions.
+  // monostate: nothing; std::uint32_t: a state id; std::size_t: an index into _edit.transitions.
   using selection = std::variant<std::monostate, std::uint32_t, std::size_t>;
 
   auto _open(sbx::assets::animation_graph_handle graph, std::filesystem::path path, sbx::assets::mesh_handle preview_mesh = {}) -> void;
@@ -65,19 +57,13 @@ private:
   sbx::assets::animation_graph::create_info _edit{};
   selection _selection{};
 
-  // Which mesh's animation_clips() to list a state's Clip Name from -- editor-only, never
-  // persisted into the asset (the same graph can in principle drive different meshes, as long as
-  // their clip names agree). Seeded from whatever mesh was in scope when the editor was opened
-  // (an Animator's own mesh_renderer), overridable below the toolbar's Save button.
+  // The mesh whose clips Clip Name lists; editor-only, seeded from the opening context and overridable.
   sbx::assets::mesh_handle _preview_mesh{};
 
-  // Which state ids have already had ax::NodeEditor::SetNodePosition seeded from animation_state::editor_position
-  // since the last _open() -- imgui-node-editor remembers a node's position itself once set, so this
-  // is only needed once per state per editor context, not every frame.
+  // States whose editor position was seeded since the last _open(); the node editor remembers positions after that.
   std::unordered_set<std::uint32_t> _seeded_positions{};
 
-  // "Any State" pseudo-node's canvas position -- not part of the asset (from_state == nullopt has
-  // no animation_state to carry a position), so it's editor-context-local only.
+  // The Any State pseudo-node isn't in the asset, so its position is editor-local.
   bool _any_state_seeded{false};
 
   ax::NodeEditor::EditorContext* _context{nullptr};

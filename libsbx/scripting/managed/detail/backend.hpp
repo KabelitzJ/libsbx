@@ -61,10 +61,7 @@ struct backend_functions {
 	using create_object_fn = void*(*)(type_id, bool32, const void**, const managed_type*, std::int32_t);
 	using invoke_method_fn = void(*)(void*, string, const void**, const managed_type*, std::int32_t);
 	using invoke_method_return_fn = void(*)(void*, string, const void**, const managed_type*, std::int32_t, void*);
-	// get_method_handle resolves (and caches, C# side -- see TypeInterface._cachedMethods) name +
-	// signature to a stable int handle once; invoke_method_handle(_return) then dispatches straight
-	// off that handle -- no per-call string marshal, no per-call overload re-resolution. See
-	// object::_invoke_method_internal's doc comment for the full picture.
+	// get_method_handle resolves name + signature to a stable handle once (cached C# side); invoke_method_handle then dispatches without per-call marshaling or overload resolution.
 	using get_method_handle_fn = std::int32_t(*)(void*, string, const managed_type*, std::int32_t);
 	using invoke_method_handle_fn = void(*)(void*, std::int32_t, const void**, std::int32_t);
 	using invoke_method_handle_return_fn = void(*)(void*, std::int32_t, const void**, std::int32_t, void*);

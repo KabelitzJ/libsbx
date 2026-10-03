@@ -33,10 +33,7 @@ auto resolve_custom_pipeline(const std::string& shader_path, std::span<const gra
     return {};
   }
 
-  // A custom shader is only as good as whatever the user last wired up on the canvas or typed into
-  // the file -- shader_compiler throws on a failed compile (missing/invalid entry point, Slang type
-  // error, etc.), and this runs mid-frame inside a pass's own custom_pipeline_resolver callback with
-  // nothing upstream catching it. A bad shader should skip that draw, not take the whole app down.
+  // shader_compiler throws on a bad user shader and nothing upstream catches it mid-frame; skip the draw instead.
   try {
     auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
     auto& shader_cache = graphics_module.shader_cache();
@@ -60,14 +57,8 @@ auto instanced_transform_address(const render_context& context, const draw_comma
   return context.instanced_culled_address + (static_cast<graphics::buffer::address_type>(command.culled_offset) + view * command.instance_count) * sizeof(transform_data);
 }
 
-// Shared per-command prologue for submit_draw_commands/_indirect: validity checks, the
-// shader-graph-vs-fixed-slot pipeline resolution (see custom_pipeline_resolver's own doc comment),
-// pipeline/mesh bind-state tracking (bound/current_pipeline/current_mesh persist across calls for
-// the same command list, so a run of commands sharing a pipeline or mesh only rebinds once), and
-// every push_constants field except transform_address and cascade_index -- the two fields the
-// direct and indirect draw paths disagree on, left for the caller to fill in afterward. Returns
-// false (skip this command entirely) for an invalid command, an out-of-range instance range, or a
-// shader-graph material with no usable pipeline yet.
+// Shared prologue of submit_draw_commands/_indirect: validity checks, pipeline resolution, bind-state tracking across the command list, and every push constant except transform_address and cascade_index.
+// Returns false to skip the command: invalid, out-of-range instances, or a custom shader without a usable pipeline.
 static auto prepare_draw_command(graphics::resource_registry& registry, render_context& context, const draw_command& command, const std::array<memory::observer_ptr<graphics::graphics_pipeline>, 4u>& pipelines, const custom_pipeline_resolver& resolve_custom_pipeline, bool& bound, const graphics::graphics_pipeline*& current_pipeline, memory::observer_ptr<const assets::mesh>& current_mesh, push_constants& values) -> bool {
   if (!command.mesh.is_valid() || !command.material.is_valid() || !command.resident) {
     return false;
@@ -89,7 +80,7 @@ static auto prepare_draw_command(graphics::resource_registry& registry, render_c
     pipeline = resolve_custom_pipeline(shader_path, command.material->is_double_sided());
 
     if (!pipeline) {
-      return false; // no usable pipeline yet for this shader -- skip the draw rather than misrender
+      return false; // no usable pipeline for this shader yet
     }
   } else {
     pipeline = pipelines[command.pipeline_id];
@@ -135,7 +126,7 @@ auto submit_draw_commands(render_context& context, const std::vector<draw_comman
     auto values = push_constants{};
     values.cascade_index = cascade_index;
 
-    // Instanced draws only exist culled: there's no per-instance transform here to draw from.
+    // Instanced draws only exist culled.
     if (command.instances || !prepare_draw_command(registry, context, command, pipelines, resolve_custom_pipeline, bound, current_pipeline, current_mesh, values)) {
       continue;
     }

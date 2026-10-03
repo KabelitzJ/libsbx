@@ -14,22 +14,18 @@
 
 namespace sbx::render {
 
-/**
- * @brief Main-thread-owned deep copy of one frame's ImGui draw output.
- *
- * ImGui::GetDrawData() returns pointers into buffers the next ImGui::NewFrame() reuses -- possibly
- * while @ref ui_system::render still reads the previous frame's data on the render thread. Built via
- * ImDrawList::CloneOutput() in @ref ui_system::build_frame.
- *
- * Move-only: owns the cloned ImDrawList objects outright.
- */
+/** @brief A deep copy of one frame's ImGui draw output: the next NewFrame() reuses ImGui's buffers while the render thread may still read them. Move-only. */
 class ui_draw_data final : public utility::noncopyable {
 
 public:
 
   ui_draw_data() = default;
 
-  /** @brief Deep-copies @p source. Leaves *this invalid (is_valid() == false) if @p source is null, !Valid, or empty. */
+  /**
+   * @brief Deep-copies @p source.
+   *
+   * @param source The frame's draw data; null, invalid or empty leaves this invalid.
+   */
   explicit ui_draw_data(const ImDrawData* source);
 
   ui_draw_data(ui_draw_data&& other) noexcept;
@@ -42,7 +38,11 @@ public:
     return _is_valid;
   }
 
-  /** @brief Owning clones, one per source ImDrawList — see ImDrawList::CloneOutput(). */
+  /**
+   * @brief Owning clones, one per source draw list.
+   *
+   * @return The draw lists.
+   */
   [[nodiscard]] auto draw_lists() const noexcept -> const std::vector<ImDrawList*>& {
     return _draw_lists;
   }
@@ -59,7 +59,11 @@ public:
     return _framebuffer_scale;
   }
 
-  /** @brief Sum of every list's VtxBuffer/IdxBuffer size — ImGui_ImplVulkan_RenderDrawData needs these to size its own upload buffers, it doesn't recompute them from the lists. */
+  /**
+   * @brief Total vertex count across every list, which the Vulkan backend needs to size its upload buffers.
+   *
+   * @return The vertex count.
+   */
   [[nodiscard]] auto total_vertex_count() const noexcept -> std::int32_t {
     return _total_vertex_count;
   }
@@ -69,9 +73,9 @@ public:
   }
 
   /**
-   * @brief Texture update-request list ImGui_ImplVulkan_RenderDrawData needs for the font atlas's
-   * create/update requests. Shared across every frame (ImGui::GetPlatformIO().Textures, owned by
-   * the context) so it's forwarded here, never deep-copied.
+   * @brief The context's shared texture update list (font atlas requests), forwarded rather than copied.
+   *
+   * @return The texture list.
    */
   [[nodiscard]] auto textures() const noexcept -> ImVector<ImTextureData*>* {
     return _textures;

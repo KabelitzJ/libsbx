@@ -23,20 +23,12 @@
 namespace sbx::assets {
 
 enum class alpha_mode : std::uint8_t {
-  opaque, // fully opaque
-  mask,   // alpha-tested against alpha_cutoff (discard), still opaque pass
+  opaque,
+  mask,   // alpha-tested against alpha_cutoff, still drawn in the opaque pass
   blend   // order-dependent transparency, transparent pass
 }; // enum class alpha_mode
 
-// A material's type -- exactly one of these, exposed as one dropdown in the inspector (Material
-// Type: Unlit/PBR/Shader Graph/Shader Code) rather than the built-in pbr/unlit fields and the
-// shader_graph handle being independently toggleable. `shader_graph` means the material's actual
-// look comes entirely from create_info::shader_graph below, `shader_code` the same for a
-// hand-written .slang file (create_info::shader_code) that provides the same entry points a
-// generated graph shader does (see engine://shaders/material/code_material.slang). For both, the
-// built-in fields are only whatever the shader itself chooses to read, and one with no graph/file
-// assigned is invalid (see prepare_draw_command's skip check in render_pass.cpp) rather than
-// silently falling back to looking like a pbr material.
+// A material's type. For shader_graph and shader_code the shader provides the look and reads only the fields it wants; without a graph or file assigned the material is invalid and skipped.
 enum class shading_model : std::uint8_t {
   pbr,
   unlit,
@@ -67,7 +59,7 @@ public:
     std::float_t normal_scale{1.0f};
     std::float_t occlusion_strength{1.0f};
     std::float_t emissive_strength{1.0f};
-    std::float_t ior{1.5f}; // KHR_materials_ior default; F0 = ((ior-1)/(ior+1))^2 = 0.04
+    std::float_t ior{1.5f}; // KHR_materials_ior default, F0 = 0.04
     math::vector2 uv_tiling{1.0f, 1.0f};
     math::vector2 uv_offset{0.0f, 0.0f};
     texture2d_handle albedo{};
@@ -76,21 +68,14 @@ public:
     texture2d_handle occlusion{};
     texture2d_handle emissive{};
 
-    // Non-nil routes rendering to this graph's own generated shader instead of the built-in
-    // pbr/unlit path (`shading` above becomes irrelevant once this is set). generic_params/
-    // generic_textures hold this material's own values for that graph's exposed parameters --
-    // see shader_graph::parameters() for their declared name/type/slot, in the same order these
-    // arrays are indexed by (slot 0 first, etc.).
+    // Non-nil renders with this graph's generated shader; generic_params/generic_textures hold values for its exposed parameters in slot order.
     shader_graph_handle shader_graph{};
     std::array<math::vector4, shader_graph_max_params> generic_params{};
     std::array<texture2d_handle, shader_graph_max_textures> generic_textures{};
-    // A texture array in generic slot i instead (wins over generic_textures[i]): the shader reads
-    // texture_arrays[generic_textures[i]] rather than textures[...]. Set at runtime only, never
-    // saved to a .material file.
+    // A texture array in generic slot i, overriding generic_textures[i]. Runtime only, never saved.
     std::array<texture2d_array_handle, shader_graph_max_textures> generic_texture_arrays{};
 
-    // Absolute path to the .slang file a shader_code material renders with (empty otherwise).
-    // Reads generic_params/generic_textures the same way a graph does.
+    // Absolute path of the .slang file a shader_code material renders with.
     std::filesystem::path shader_code{};
   }; // struct create_info
 
@@ -237,7 +222,11 @@ public:
     return _shader_code;
   }
 
-  /** @brief Every field as a create_info, for changing one or two of them via asset_residency::update_material. */
+  /**
+   * @brief Every field as a create_info, for changing a few of them via update_material.
+   *
+   * @return The material's fields.
+   */
   [[nodiscard]] auto to_create_info() const -> create_info {
     auto result = create_info{};
     result.name = _name;

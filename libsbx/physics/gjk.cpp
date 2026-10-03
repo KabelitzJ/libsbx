@@ -9,14 +9,7 @@
 namespace sbx::physics {
 
 auto support_world(const convex_shape& shape, const transform& pose, const math::vector3& world_direction) -> math::vector3 {
-  // Exact for any diagonal (per-axis) scale S, not just a uniform one -- not an approximation. For a
-  // local point set K, world shape = position + rotation * (S * K), so
-  //   support_{S*K}(d) = max_{p in K} dot(d, rotation * S * p)
-  //                    = max_p dot(Sᵀ * rotation⁻¹ * d, p)     [dot(d, M*p) == dot(Mᵀ*d, p)]
-  //                    = max_p dot(S ⊙ local_direction, p)      [S diagonal: Sᵀ == S == componentwise]
-  // so the *search direction* needs the same componentwise scale the *found point* does (S is its
-  // own transpose) -- one extra multiply, no per-shape special-casing, and it degenerates to the old
-  // uniform-only formula exactly when scale.x() == scale.y() == scale.z().
+  // Exact for any diagonal scale S: support_{S*K}(d) = max_p dot(S ⊙ (rotation⁻¹ * d), p), so the search direction is scaled componentwise like the point.
   const auto local_direction = math::quaternion::conjugate(pose.rotation) * world_direction;
   const auto local_point = find_furthest_point(shape, local_direction * pose.scale);
 
@@ -115,15 +108,11 @@ auto do_tetrahedron(simplex_type& simplex, math::vector3& direction) -> bool {
     return do_triangle(simplex, direction);
   }
 
-  // Origin is on the inside of all three side faces (and abc/acd/adb all point toward it) -- it's
-  // enclosed by the tetrahedron.
+  // Inside all three side faces: the tetrahedron encloses the origin.
   return true;
 }
 
-// Dispatches on the simplex's current point count to the Voronoi-region test for that dimension.
-// Each case may shrink the simplex to a lower-dimensional feature (discarding the point(s) not on
-// the closest feature to the origin) and always leaves `direction` pointing from that feature
-// toward the origin. Returns true only once a tetrahedron is found to enclose the origin.
+// The Voronoi-region test for the simplex's current size: shrinks it to the feature closest to the origin and points `direction` from it toward the origin. True once a tetrahedron encloses the origin.
 auto do_simplex(simplex_type& simplex, math::vector3& direction) -> bool {
   switch (simplex.size()) {
     case 2: return do_line(simplex, direction);

@@ -79,8 +79,7 @@ ui_system::~ui_system() {
 
   graphics_module.logical_device().wait_idle();
 
-  // The device is fully idle here, so every pending free below is safe to flush unconditionally
-  // rather than waiting on its retirement frame.
+  // The device is idle, so every pending free can be flushed now.
   for (auto& [descriptor_set, frame_index] : _pending_texture_frees) {
     ImGui_ImplVulkan_RemoveTexture(descriptor_set);
   }
@@ -111,8 +110,7 @@ auto ui_system::apply_default_style() -> void {
   auto& style = ImGui::GetStyle();
   auto* colors = style.Colors;
 
-  // Catppuccin Mocha Palette
-  // --------------------------------------------------------
+  // Catppuccin Mocha palette
   const auto base       = ImVec4(0.117f, 0.117f, 0.172f, 1.0f); // #1e1e2e
   const auto mantle     = ImVec4(0.109f, 0.109f, 0.156f, 1.0f); // #181825
   const auto surface0   = ImVec4(0.200f, 0.207f, 0.286f, 1.0f); // #313244
@@ -213,7 +211,7 @@ auto ui_system::apply_default_style() -> void {
   style.FrameBorderSize   = 0.0f;
   style.TabBorderSize     = 0.0f;
 
-  // Convert sRGB colours to linear (approximate) since ImGui expects linear.
+  // ImGui expects linear colors; approximate sRGB to linear.
   for (auto i = 0; i < ImGuiCol_COUNT; ++i) {
     auto& color = style.Colors[i];
     color.x = color.x <= 0.04045f ? color.x / 12.92f : std::pow((color.x + 0.055f) / 1.055f, 2.4f);
@@ -266,8 +264,7 @@ auto ui_system::render(graphics::command_buffer& command_buffer, math::vector2u 
 
   command_buffer.begin_rendering(rendering_info);
 
-  // Reconstruct ImDrawData over the deep copy without copying CmdLists — safe only because
-  // Data/Size/Capacity are detached again below, before IM_FREE() would run on memory this local never allocated.
+  // Reconstructs ImDrawData over the deep copy; Data/Size/Capacity are detached below before IM_FREE() could free memory it doesn't own.
   auto draw_data = ImDrawData{};
   draw_data.Valid = true;
   draw_data.CmdListsCount = static_cast<std::int32_t>(data.draw_lists().size());
@@ -317,8 +314,7 @@ auto ui_system::texture_id(VkImageView view, VkSampler sampler) -> ImTextureID {
 auto ui_system::_retire_texture(VkDescriptorSet descriptor_set) -> void {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
 
-  // Frames up to and including the one currently being recorded may still reference the old
-  // descriptor set through in-flight ImGui draw data; only free entry once the GPU has caught up.
+  // In-flight frames may still use the old descriptor set; free it once the GPU has caught up.
   const auto frame_index = graphics_module.frame_context().frame_index();
 
   _pending_texture_frees.emplace_back(descriptor_set, frame_index);

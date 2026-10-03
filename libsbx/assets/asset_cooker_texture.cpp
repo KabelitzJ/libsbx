@@ -13,15 +13,15 @@
 
 namespace sbx::assets {
 
-inline constexpr auto texture_magic = utility::fourcc_v<"SBTX">;  // 'SBTX'
-inline constexpr auto environment_magic = utility::fourcc_v<"SBEN">; // 'SBEN'
+inline constexpr auto texture_magic = utility::fourcc_v<"SBTX">;
+inline constexpr auto environment_magic = utility::fourcc_v<"SBEN">;
 
 struct texture_header {
   std::uint32_t magic;
   std::uint32_t version;
   std::uint32_t width;
   std::uint32_t height;
-  std::uint32_t channels;   // always 4 (RGBA) for now
+  std::uint32_t channels;   // always 4 (RGBA)
   std::uint32_t data_size;  // bytes of pixel data following the header
 }; // struct texture_header
 
@@ -38,7 +38,7 @@ auto asset_cooker::resolve_texture(const std::filesystem::path& source, const st
 
   auto data = pixel_data{};
 
-  // If the blob is unreadable/out-of-date (e.g. cooker version bumped), recook once.
+  // Unreadable or outdated blob: recook once.
   if (!_load_cooked_texture(cooked, data.pixels, data.width, data.height)) {
     if (!_cook_texture(source, cooked) || !_load_cooked_texture(cooked, data.pixels, data.width, data.height)) {
       utility::logger<"assets">::warn("Could not load cooked texture '{}'", cooked.generic_string());
@@ -129,7 +129,7 @@ auto asset_cooker::_load_cooked_texture(const std::filesystem::path& cooked, std
   in.read(reinterpret_cast<char*>(&header), sizeof(header));
 
   if (!in || header.magic != texture_magic || header.version != texture_cook_version) {
-    return false; // missing / corrupt / stale format -> caller recooks
+    return false; // missing, corrupt or stale: the caller recooks
   }
 
   pixels.resize(header.data_size);
@@ -150,7 +150,6 @@ auto asset_cooker::_cook_environment_map(const std::filesystem::path& source, co
   auto height = std::int32_t{0};
   auto channels = std::int32_t{0};
 
-  // source is already fully resolved -- same as _cook_texture's source.string() above.
   auto* data = stbi_loadf(source.string().c_str(), &width, &height, &channels, 4);
 
   if (data == nullptr) {

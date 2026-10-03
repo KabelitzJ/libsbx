@@ -15,14 +15,7 @@
 
 namespace sbx::assets {
 
-/**
- * @brief A saved node subtree template ("blueprint") — the same YAML shape
- * scenes::scene_serializer::serialize_subtree produces, opaque to this module: assets deliberately
- * knows nothing about scenes/nodes/components (scenes depends on assets, never the other way), so
- * every scene-aware piece (turning a subtree into this, instantiating it back, per-component
- * merging) lives in scenes::scene_serializer instead. This class and assets_module just keep the
- * payload alive, versioned (loadable::generation()), and persisted.
- */
+/** @brief A saved node subtree template in scene_serializer's YAML shape. Opaque here, since assets never depends on scenes; scene_serializer does the scene-aware work. */
 class prefab final : public loadable {
 
   friend class assets_module;
@@ -31,7 +24,13 @@ public:
 
   prefab() = default;
 
-  /** @brief A prefab built in memory, not loaded or registered through assets_module (e.g. in tests). */
+  /**
+   * @brief A prefab built in memory without assets_module, e.g. in tests.
+   *
+   * @param snapshot The subtree snapshot.
+   * @param id The prefab's uuid.
+   * @param name The prefab's name.
+   */
   prefab(YAML::Node snapshot, const math::uuid& id, std::string name)
   : _snapshot{std::move(snapshot)},
     _id{id},

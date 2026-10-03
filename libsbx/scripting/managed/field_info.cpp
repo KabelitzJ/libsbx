@@ -47,4 +47,4 @@ auto field_info::get_attributes() const -> std::vector<attribute> {
   return result;
 }
 
-} // sbx
+} // namespace sbx::scripting::managed

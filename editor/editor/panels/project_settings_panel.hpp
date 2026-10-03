@@ -12,11 +12,7 @@
 
 namespace editor {
 
-/**
- * @brief Edit > Project Settings: the project-wide settings stored in project.sbxproj (General, Physics, Layers). Every edit
- * saves the project file right away -- no Apply step, no undo (project settings aren't part of the scene's command history).
- * The Layers tab also opens on its own from any layer dropdown's "Edit Layers..." (editor_state::request_open_layer_settings).
- */
+/** @brief Edit > Project Settings (General, Physics, Layers) from project.sbxproj; every edit saves immediately, with no undo. Layer fields' "Edit Layers..." opens the Layers tab. */
 class project_settings_panel final : public editor_panel {
 
 public:
@@ -35,9 +31,7 @@ private:
 
   auto _draw_layers_tab() -> void;
 
-  // Which layer indices the Layers tab shows a row for, in display order -- resynced from core::project::layers() whenever
-  // the tab (re)appears, then changed only by its own Add (appended at the bottom) and each row's "x" (erased). Deliberately
-  // not recomputed every frame: renaming a layer through a transient empty string while retyping must not make its row vanish.
+  // The layer rows in display order, resynced when the tab appears and changed only by Add and each row's remove, so a layer being retyped through an empty name doesn't vanish.
   std::vector<std::uint8_t> _layer_rows{};
   bool _layers_tab_was_visible{false};
 

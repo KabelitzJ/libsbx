@@ -48,16 +48,14 @@ static auto _format_bytes(std::uint64_t bytes) -> std::string {
   return fmt::format("{:.2f} {}", value, units[unit_index]);
 }
 
-// Signed variant for deltas -- a negative delta (freed more than allocated this frame) is common
-// and useful to see, not an error case to clamp away.
+// Signed, since freeing more than was allocated in a frame is common and worth seeing.
 static auto _format_bytes_delta(std::int64_t bytes) -> std::string {
   const auto sign = bytes < 0 ? "-" : "+";
 
   return fmt::format("{}{}", sign, _format_bytes(static_cast<std::uint64_t>(bytes < 0 ? -bytes : bytes)));
 }
 
-// A row of already-formatted cells in whatever table is currently open -- every _draw_*_tab table
-// below is a plain label/value (or label/value/value) grid, so one helper covers all of them.
+// One row of formatted cells in the open table.
 static auto _table_row(std::initializer_list<std::string> columns) -> void {
   ImGui::TableNextRow();
 
@@ -72,10 +70,7 @@ static auto _table_row(std::initializer_list<std::string> columns) -> void {
 
 inline constexpr auto table_flags = ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_SizingStretchProp;
 
-// A plain label/value table has no header row, but still needs its label column pinned to a
-// readable width -- otherwise SizingStretchProp splits label/value 50/50, which looks odd once
-// values get longer than labels (see inspector_asset_editors.cpp's own fixed-label-column table
-// for the same reasoning).
+// Pins the label column to a readable width; SizingStretchProp would split 50/50.
 static auto _setup_label_value_columns() -> void {
   ImGui::TableSetupColumn("##label", ImGuiTableColumnFlags_WidthFixed, 160.0f);
   ImGui::TableSetupColumn("##value", ImGuiTableColumnFlags_WidthStretch);
@@ -335,7 +330,7 @@ auto statistics_panel::_draw_memory_graph() -> void {
   const auto now = _memory_times.back();
   const auto count = static_cast<int>(_memory_times.size());
 
-  // Seconds before now, so the x axis reads -60 s ... 0 s like Visual Studio's Process Memory graph.
+  // Seconds before now, so the axis reads -60 s to 0 s.
   auto seconds_ago = std::vector<float>(_memory_times.size());
   std::ranges::transform(_memory_times, seconds_ago.begin(), [&](const auto time) { return time - now; });
 
@@ -356,7 +351,7 @@ auto statistics_panel::_draw_memory_graph() -> void {
     return;
   }
 
-  // 0 up to the highest sample plus 15% headroom, so the curve never touches the top edge.
+  // 15% headroom above the peak.
   auto peak = std::ranges::max(_process_memory_mb);
 
   if (is_tracking) {

@@ -18,12 +18,9 @@
 namespace sbx::assets {
 
 /**
- * @brief A joint hierarchy cooked from a glTF skin: parent indices, inverse bind matrices, and
- * bind-pose local TRS.
+ * @brief A joint hierarchy cooked from a glTF skin: parent indices, inverse bind matrices and bind-pose local TRS. CPU data only.
  *
- * Joints are stored topologically sorted -- a joint's parent_index is always less than its own
- * index -- so evaluating world matrices at runtime is a single forward pass, no recursion needed.
- * Pure CPU data; unlike @ref mesh/@ref texture there's no GPU residency of its own.
+ * Joints are topologically sorted (a parent's index is always lower), so world matrices take a single forward pass.
  */
 class skeleton final : public loadable {
 
@@ -59,9 +56,7 @@ public:
 
 private:
 
-  // Fills in a placeholder skeleton() (default-constructed, empty joints) once its cooked content
-  // has come back from the background asset loader -- called once, on the main thread, from
-  // asset_residency's skeleton finalize step.
+  // Fills a placeholder skeleton once its cooked content arrives; called once on the main thread.
   auto _finalize_content(std::vector<joint> joints) -> void {
     _joints = std::move(joints);
     _bump_generation();

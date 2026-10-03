@@ -16,13 +16,9 @@
 namespace editor {
 
 /**
- * @brief The editor's own free-fly viewport camera.
+ * @brief The editor's free-fly viewport camera: not a scene node, so never saved into scenes or the play snapshot. Persisted per project in `.sbx/editor/camera.yaml`.
  *
- * Not a scenes::node/ECS entity — never written into a scene file and never swept up in
- * play_mode_controller's snapshot/restore. Persists per-project at
- * `<project_root>/.sbx/editor/camera.yaml` (see load()/save()). Reuses scenes::local_transform
- * and scenes::camera as plain data, with no ECS association. Owns its own free-fly input (WASD
- * move, Q/E down/up, hold right mouse to look, shift to sprint).
+ * WASD moves, Q/E go down/up, right mouse looks, Shift sprints.
  */
 class editor_camera {
 
@@ -30,7 +26,7 @@ public:
 
   editor_camera() = default;
 
-  /** @brief Drives movement/look from input. Caller decides when to call this — see application::update()'s right-mouse-engage gating. */
+  /** @brief Applies movement and look from input; the caller decides when (right mouse engaged). */
   auto update() -> void;
 
   [[nodiscard]] auto transform() noexcept -> sbx::scenes::local_transform& {
@@ -49,12 +45,20 @@ public:
     return _params;
   }
 
-  /** @brief No parent to fold in — this camera is never part of the scene hierarchy, so local == world. */
+  /**
+   * @brief The camera's world matrix; it has no parent, so local is world.
+   *
+   * @return The world matrix.
+   */
   [[nodiscard]] auto world_matrix() const -> sbx::math::matrix4x4 {
     return _transform.matrix();
   }
 
-  /** @brief This camera's pose/params in the shape scene_renderer_module renders from — see scene_renderer_module::set_camera_override. */
+  /**
+   * @brief The camera as scene_renderer_module renders it.
+   *
+   * @return The camera data.
+   */
   [[nodiscard]] auto to_camera_data() const -> sbx::render::camera_data;
 
   auto set_move_speed(std::float_t speed) -> void {
@@ -73,7 +77,13 @@ public:
     return _look_sensitivity;
   }
 
-  /** @brief Loads from path, defaulting any/all fields not present. A missing file just means all defaults — expected on a project's first launch, not an error. */
+  /**
+   * @brief Loads the camera, defaulting missing fields; a missing file means all defaults.
+   *
+   * @param path The camera file.
+   *
+   * @return The camera.
+   */
   [[nodiscard]] static auto load(const std::filesystem::path& path) -> editor_camera;
 
   auto save(const std::filesystem::path& path) const -> void;

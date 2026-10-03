@@ -95,19 +95,17 @@ tonemap_pass::tonemap_pass() {
 }
 
 auto tonemap_pass::declare(graphics_pass_builder& builder, const graph_resources& resources) -> void {
-  // HDR target: geometry's writes -> this pass's sampled reads.
   builder.reads_image(resources.color, graphics::pipeline_stage::fragment_shader, graphics::access::shader_sampled_read, graphics::image_layout::shader_read_only_optimal);
 
-  // Depth of field's distance mode reads it; declared always so the barrier is there when it's on.
+  // Declared always so the barrier exists when distance-mode depth of field is on.
   builder.reads_image(resources.scene_depth, graphics::pipeline_stage::fragment_shader, graphics::access::shader_sampled_read, graphics::image_layout::shader_read_only_optimal);
 
-  // bloom_pass declares this ready every frame, bloom enabled or not -- see its doc comment.
+  // bloom_pass declares this ready every frame, even with bloom off.
   builder.reads_image(resources.bloom_upsample, graphics::pipeline_stage::fragment_shader, graphics::access::shader_sampled_read, graphics::image_layout::shader_read_only_optimal);
 
   auto group = render_attachment_group{.extent = resources.extent};
 
-  // final_image's first (and only, this compile) touch, so the compiler clears it — a fullscreen
-  // triangle overwrites every pixel regardless, so the clear's contents never actually show.
+  // First touch, so the compiler clears it; the fullscreen triangle overwrites every pixel anyway.
   group.colors.push_back(color_attachment_slot{
     .image = resources.final_image,
     .store_op = graphics::attachment_store_op::store

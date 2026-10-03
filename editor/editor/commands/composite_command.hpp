@@ -14,15 +14,9 @@
 namespace editor {
 
 /**
- * @brief Wraps several commands into one undo/redo step.
+ * @brief Several commands as one undo step: execute() runs them in order, undo() in reverse. Sub-commands must be fully constructed first.
  *
- * execute() runs every sub-command forward, in order; undo() runs them in reverse. Every
- * sub-command must already be fully constructed (its own "before" state captured) before this is
- * built, since command_stack::push() calls execute() exactly once, on the composite as a whole.
- *
- * Used wherever a single user gesture affects several nodes at once (multi-select drag/reparent,
- * multi-select delete, group-gizmo transform) — a lone sub-command is never wrapped here, callers
- * push it directly instead, to keep single-target Undo labels/shape unchanged.
+ * Used for gestures affecting several nodes; a single command is pushed directly to keep its label.
  */
 class composite_command final : public command {
 

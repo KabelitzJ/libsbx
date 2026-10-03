@@ -109,14 +109,6 @@ scripting_module::scripting_module() {
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "ParticleEffect_SetLoop", reinterpret_cast<void*>(&interop::particle_effect_set_loop));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "ParticleEffect_GetIsPlaying", reinterpret_cast<void*>(&interop::particle_effect_get_is_playing));
 
-  // _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "CharacterController_GetHeight", reinterpret_cast<void*>(&interop::character_controller_get_height));
-  // _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "CharacterController_GetRadius", reinterpret_cast<void*>(&interop::character_controller_get_radius));
-  // _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "CharacterController_GetSlopeLimit", reinterpret_cast<void*>(&interop::character_controller_get_slope_limit));
-  // _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "CharacterController_GetStepOffset", reinterpret_cast<void*>(&interop::character_controller_get_step_offset));
-  // _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "CharacterController_GetIsGrounded", reinterpret_cast<void*>(&interop::character_controller_get_is_grounded));
-  // _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "CharacterController_GetFlags", reinterpret_cast<void*>(&interop::character_controller_get_flags));
-  // _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "CharacterController_Move", reinterpret_cast<void*>(&interop::character_controller_move));
-
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Input_IsKeyPressed", reinterpret_cast<void*>(&interop::input_is_key_pressed));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Input_IsKeyDown", reinterpret_cast<void*>(&interop::input_is_key_down));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Input_IsKeyReleased", reinterpret_cast<void*>(&interop::input_is_key_released));
@@ -307,6 +299,7 @@ scripting_module::scripting_module() {
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "UIScrollRect_SetHorizontal", reinterpret_cast<void*>(&interop::ui_scroll_rect_set_horizontal));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "UIScrollRect_GetVertical", reinterpret_cast<void*>(&interop::ui_scroll_rect_get_vertical));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "UIScrollRect_SetVertical", reinterpret_cast<void*>(&interop::ui_scroll_rect_set_vertical));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "UIScrollRect_SetContent", reinterpret_cast<void*>(&interop::ui_scroll_rect_set_content));
 
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "UIMask_GetShowMaskGraphic", reinterpret_cast<void*>(&interop::ui_mask_get_show_mask_graphic));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "UIMask_SetShowMaskGraphic", reinterpret_cast<void*>(&interop::ui_mask_set_show_mask_graphic));
@@ -330,8 +323,7 @@ scripting_module::scripting_module() {
 
   canvas_module.on_button_clicked().connect([this](const scenes::node& node) { _dispatch_button_click(node); });
 
-  // SetGeometry only queues its new mesh; swapped in here, where the render thread can't be using
-  // the one it replaces (see interop::apply_pending_geometry).
+  // Queued geometry is swapped in here, where the render thread can't be using the mesh it replaces.
   core::engine::get_module<render::presentation_module>().on_render_idle().connect([]() { interop::apply_pending_geometry(); });
   canvas_module.on_value_changed().connect([this](const scenes::node& node) { _dispatch_value_changed(node); });
 
@@ -353,8 +345,7 @@ auto scripting_module::update() -> void {
 
   auto& scene = scenes_module.active_scene();
 
-  // Mirrors Unity: a disabled node's scripts stop receiving OnUpdate (OnCreate/OnDestroy still
-  // fire regardless -- see instantiate_scene_scripts/node_destroy, which never check active state).
+  // Like Unity, inactive nodes don't receive OnUpdate; OnCreate/OnDestroy still fire.
   auto scripts_query = scene.query<scripting::scripts>(ecs::exclude<scenes::inactive>);
 
   for (auto&& [node, scripts] : scripts_query.each()) {
@@ -409,7 +400,7 @@ auto scripting_module::instantiate(scenes::node& node, std::string_view class_na
 }
 
 auto scripting_module::instantiate_scene_scripts(scenes::scene& target) -> void {
-  // Phase 1: Create and register all script instances across all nodes first
+  // Create every instance before any OnCreate runs, so GetComponent in OnCreate can find siblings' scripts.
   for (auto&& [entity, list] : target.query<scenes::script_component>().each()) {
     auto node = target.node_of(entity);
 
@@ -418,7 +409,6 @@ auto scripting_module::instantiate_scene_scripts(scenes::scene& target) -> void 
     }
   }
 
-  // Phase 2: Invoke OnCreate for all initialized instances safely
   for (auto&& [entity, scripts] : target.query<scripting::scripts>().each()) {
     for (auto& instance : scripts.instances) {
       instance.invoke("OnCreate");
@@ -433,9 +423,7 @@ auto scripting_module::instantiate_subtree_scripts(scenes::scene& target, scenes
     return;
   }
 
-  // Phase 1: create and register every script instance across the whole subtree first (same
-  // ordering rationale as instantiate_scene_scripts — a sibling's OnCreate might look this node's
-  // component up via GetComponent before every instance in the subtree exists otherwise).
+  // Create every instance before any OnCreate runs, so GetComponent in OnCreate can find siblings' scripts.
   auto created = std::vector<managed::object>{};
 
   const auto collect = [&](this const auto& self, scenes::node current) -> void {
@@ -452,7 +440,6 @@ auto scripting_module::instantiate_subtree_scripts(scenes::scene& target, scenes
 
   collect(subtree_root);
 
-  // Phase 2: invoke OnCreate for all initialized instances safely.
   for (auto& instance : created) {
     instance.invoke("OnCreate");
   }
@@ -496,9 +483,7 @@ auto scripting_module::seed_missing_field_defaults(scenes::node& node, scenes::s
     return std::ranges::any_of(entry.field_overrides, [&](const auto& existing) { return existing.name == field_name; });
   };
 
-  // Cheap up-front check so a script with nothing missing (the overwhelmingly common case once
-  // this has run once) never pays for constructing a scratch instance at all -- this runs on
-  // every Inspector draw of a script section (see draw_script_field_inspector), not just attach.
+  // Runs on every Inspector draw, so skip constructing a scratch instance when nothing is missing.
   const auto has_missing = std::ranges::any_of(type.get_fields(), [&](auto& field) {
     return field.get_accessibility() == managed::type_accessibility::public_access
         && script_field_type_of(field.get_type())
@@ -509,10 +494,7 @@ auto scripting_module::seed_missing_field_defaults(scenes::node& node, scenes::s
     return;
   }
 
-  // Construct one just long enough to read its real field defaults, straight into
-  // field_overrides, then throw it away -- never registered into `scripts`, no OnCreate. Assumes a
-  // script's real setup happens in OnCreate, not its constructor (same convention Unity's
-  // MonoBehaviour uses); a constructor with actual side effects would run them here too.
+  // A throwaway instance just to read field defaults; assumes real setup happens in OnCreate, not the constructor.
   auto scratch = type.create_instance(node.get_component<scenes::id>().value());
 
   if (!scratch.is_valid()) {
@@ -597,15 +579,10 @@ auto scripting_module::_apply_field_overrides(managed::object& instance, const s
       case scenes::script_field_type::string:  instance.set_field_value(field.name, field.string_value); break;
       case scenes::script_field_type::vector2: instance.set_field_value(field.name, field.vector2_value); break;
       case scenes::script_field_type::vector3: instance.set_field_value(field.name, field.vector3_value); break;
-      // A Sbx.Core.Node-typed field isn't a blittable value the generic marshaling path can copy
-      // (it's a managed reference) -- both directions cross as a raw uuid instead, via Node's own
-      // INativeHandle implementation (see Sbx.Managed's SetFieldValue).
+      // Managed references cross as a raw uuid via INativeHandle.
       case scenes::script_field_type::node:    instance.set_field_value(field.name, field.node_value.value()); break;
-      // A Sbx.Core.Physics.LayerMask field is a blittable struct (one uint) -- same direct path as vector3.
       case scenes::script_field_type::layer_mask: instance.set_field_value(field.name, field.layer_mask_value); break;
-      // A Sbx.Core.Material field is a managed reference, same INativeHandle uuid convention as node above.
       case scenes::script_field_type::material: instance.set_field_value(field.name, field.material_value.value()); break;
-      // A Sbx.Core.Math.Color field is a blittable struct (four sequential floats), same direct path as vector3.
       case scenes::script_field_type::color: instance.set_field_value(field.name, field.color_value); break;
       // ponytail: enums cross as int32 -- a long-backed enum would read past it on the C# side; widen if one ever shows up.
       case scenes::script_field_type::enumeration: instance.set_field_value(field.name, field.int_value); break;
@@ -627,7 +604,6 @@ auto scripting_module::_invoke_collision_handler(scenes::node& self, const scene
 
   const auto other_uuid = other.is_valid() ? other.get_component<scenes::id>().value() : std::uint64_t{0u};
 
-  // Indexed by (is_trigger << 1) | began -- avoids branching on two independent bools to pick one of four fixed strings.
   static constexpr auto dispatch_method_names = std::array<const char*, 4u>{
     "DispatchCollisionExit",
     "DispatchCollisionEnter",
@@ -691,6 +667,8 @@ auto scripting_module::run_on_destroy(scenes::scene& target) -> void {
       instance.destroy();
     }
   }
+
+  _resources.clear();
 }
 
 auto scripting_module::recompile_scripts() -> void {
@@ -712,13 +690,13 @@ auto scripting_module::_load_game_assembly() -> void {
   }
 
   if (_has_game_assembly) {
+    _resources.clear();
     _runtime.unload_assembly_load_context(_game_context);
     _has_game_assembly = false;
 
     _core_assembly.reload_types();
 
-    // reload_types hands every Sbx.Core type a fresh id, so the component lookup tables keyed by the
-    // old ones would miss -- GetComponent<Transform>() etc. returning null after every hot reload.
+    // reload_types gives every Sbx.Core type a fresh id, so the component lookup tables must be rebuilt.
     _register_managed_components();
   }
 
@@ -757,15 +735,10 @@ auto scripting_module::_register_managed_components() -> void {
   interop::register_managed_component<canvas::vertical_layout_group>("Sbx.Core.UI.VerticalLayoutGroup", _core_assembly);
   interop::register_managed_component<canvas::layout_element>("Sbx.Core.UI.LayoutElement", _core_assembly);
   interop::register_managed_component<canvas::content_size_fitter>("Sbx.Core.UI.ContentSizeFitter", _core_assembly);
-  // interop::register_managed_component<physics::character_controller>("Sbx.Core.Physics.CharacterController", _core_assembly);
 }
 
 auto scripting_module::_exception_callback(std::string_view message) -> void {
-  // Never throw here: this runs synchronously inside a native function pointer that managed code
-  // (Sbx.Managed's Host.HandleException, itself inside a C# catch block) calls directly -- a C++
-  // exception would have to unwind back out through that CLR-JIT-compiled frame, which the .NET
-  // native hosting interop does not support and will crash the process instead of surfacing the
-  // error. Log and return; a script fault is reported this way, not by throwing.
+  // Never throw: this is called from managed code, and a C++ exception can't unwind through the CLR frame.
   utility::logger<"scripting">::error("Script runtime error: {}", message);
 }
 

@@ -44,7 +44,7 @@
 
 namespace sbx::assets {
 
-/** @brief Live counts of every asset type asset_residency caches -- see asset_residency::resident_asset_counts(). */
+/** @brief Live counts of every asset type asset_residency caches. */
 struct resident_asset_counts {
   std::size_t textures{0u};
   std::size_t meshes{0u};
@@ -59,21 +59,10 @@ struct resident_asset_counts {
 }; // struct resident_asset_counts
 
 /**
- * @brief Turns cooked asset data into GPU-resident textures/meshes/materials/environment-maps:
- * upload queues, bindless registration, the material UBO, and the default fallback textures.
- * Depends on @ref asset_manifest for path/uuid/staleness bookkeeping and @ref ibl_baker for
- * environment baking -- both held by reference, owned by whoever constructs this (see @ref
- * assets_module).
+ * @brief Turns cooked asset data into GPU-resident assets: upload queues, bindless registration, the material buffer and the default fallback textures.
  *
- * Every `load_*(uuid)` (bar @ref load_environment_map, see its own doc comment) creates a
- * placeholder record synchronously here on the calling thread -- reserving a bindless index where
- * one exists, no decoded/parsed content yet -- caches it immediately, and hands the actual disk
- * I/O/decode off to @ref asset_loader's background thread. The handle it returns is always valid
- * immediately; it simply doesn't finish (is_resident()/is_valid()-after-finalize, depending on the
- * type) until drain_loader_results' next call has finalized it and process_uploads has uploaded it. This
- * class alone interprets that raw data -- resolving nested asset references (paths -> uuids ->
- * handles), reserving GPU-adjacent identity, queuing the actual GPU upload -- the background thread
- * never does.
+ * Every `load_*` except load_environment_map creates and caches a placeholder record synchronously and hands disk I/O and decoding to asset_loader's thread.
+ * The returned handle is valid immediately; drain_loader_results finalizes it (resolving nested references) and process_uploads uploads it.
  */
 class asset_residency final : public utility::noncopyable {
 
@@ -83,124 +72,157 @@ public:
 
   ~asset_residency();
 
-  /** @brief Loads a texture from a UUID or project-relative path; returns the existing handle if already loaded. */
+  /**
+   * @brief Loads a texture by uuid or project-relative path, or returns the existing handle if already loaded in @p format.
+   *
+   * @param id The texture's uuid.
+   * @param format The format to load it as.
+   *
+   * @return The texture handle, valid immediately.
+   */
   auto load_texture(const math::uuid& id, graphics::format format = graphics::format::r8g8b8a8_srgb) -> texture2d_handle;
 
   auto load_texture(const std::filesystem::path& path, graphics::format format = graphics::format::r8g8b8a8_srgb) -> texture2d_handle;
 
   /**
-   * @brief Allocates a brand-new, empty GPU texture with no source file -- registered as BOTH a
-   * bindless sampled image (so a Material can read it, same as any loaded texture) and a bindless
-   * storage image (so a compute shader can write it as a UAV, see texture2d::storage_index()).
-   * Cleared to zero and transitioned to `general` layout synchronously before returning, since a
-   * compute shader dispatched right after this call needs a defined layout to write into and
-   * there is no source pixel data to stage otherwise. Backs Sbx.Core.Texture2D.CreateStorageImage.
+   * @brief Allocates an empty texture registered as both a bindless sampled and storage image, cleared and transitioned to `general` before returning.
+   *
+   * @param width The width in pixels.
+   * @param height The height in pixels.
+   * @param format The image format.
+   *
+   * @return The texture handle.
    */
   auto create_storage_image(std::uint32_t width, std::uint32_t height, graphics::format format) -> texture2d_handle;
 
   /**
-   * @brief Finds an already-resident texture by uuid alone, regardless of what format it was
-   * loaded/created with -- unlike load_texture(uuid), whose cache key is (uuid, format) so it can
-   * only find a texture if the caller happens to pass the exact same format it was originally
-   * loaded with. That's the right behavior for a file texture (the same source path can
-   * legitimately be resident twice under two formats), but wrong for anything returned by
-   * create_storage_image: that texture has exactly one format for its entire life, and a caller
-   * resolving it later (Material_SetTexture, ComputeShader_Set(Output)Texture,
-   * Texture_ReadPixels) has no reason to know or repeat what format it was created with. Empty
-   * handle if no resident texture has this uuid under any format.
+   * @brief Finds a resident texture by uuid under any format, unlike load_texture which keys on (uuid, format).
+   *
+   * @p id may also be a record's own texture2d::handle(), matched first and exactly, since that's what scripts hold.
+   *
+   * @param id The asset uuid or record handle.
+   *
+   * @return The texture, or an empty handle if none is resident.
    */
   [[nodiscard]] auto find_texture(const math::uuid& id) const -> texture2d_handle;
 
   /**
-   * @brief A 2D texture array built from @p layers, layer i = layers[i] (Godot's
-   * Texture2DArray::create_from_images). Every layer must be valid, resident, exactly @p size and
-   * share the first layer's format and mip count; anything else logs which layer is wrong and
-   * returns an invalid handle -- nothing is created. The layers are copied on the GPU (with their
-   * mips) at the next upload flush: keep them alive until the array is_resident(), after that they
-   * can be released. Free the array with release_texture2d_array.
+   * @brief A 2D texture array where layer i is layers[i].
+   *
+   * Every layer must be valid, resident, exactly @p size and share the first layer's format and mip count; otherwise this logs the offending layer and creates nothing.
+   * Layers are copied on the GPU at the next upload flush, so keep them alive until the array is resident. Free it with release_texture2d_array.
+   *
+   * @param layers The source textures.
+   * @param size The size every layer must have.
+   *
+   * @return The array, or an invalid handle on failure.
    */
   auto create_texture2d_array(std::span<const texture2d_handle> layers, const math::vector2u& size) -> texture2d_array_handle;
 
   [[nodiscard]] auto find_texture2d_array(const math::uuid& id) const -> texture2d_array_handle;
 
-  /** @brief Frees the array's image and bindless slot (not its layers). */
+  /**
+   * @brief Frees the array's image and bindless slot, not its layers.
+   *
+   * @param array The array to free.
+   */
   auto release_texture2d_array(const texture2d_array_handle& array) -> void;
 
   /**
-   * @brief Frees a texture's bindless sampled/storage indices and retires its underlying GPU
-   * image (via the normal resource_pool retire/collect timeline), and drops it from the uuid
-   * cache. Call this right before dropping the last reference to a texture you created via
-   * create_storage_image and are done with -- same as release_mesh, nothing frees this on its
-   * own, so a texture2d_handle simply going out of scope leaks its bindless indices and image
-   * forever. Never call this on a texture still referenced elsewhere (e.g. one still bound to a
-   * live material) or still resident from load_texture's own file cache.
+   * @brief Frees a texture's bindless indices, retires its image and drops it from the cache.
+   *
+   * Nothing frees created textures automatically. Never call this on a texture still referenced elsewhere or loaded through load_texture's cache.
+   *
+   * @param texture The texture to free.
    */
   auto release_texture(const texture2d_handle& texture) -> void;
 
   /**
-   * @brief The underlying GPU image a texture's sampled bindless index maps to -- an empty/default
-   * handle if texture is invalid or (defensively) not actually resident yet. For readback
-   * (Sbx.Core.Texture2D.ReadPixels) and anything else that needs the real image rather than just
-   * a bindless index.
+   * @brief The GPU image behind a texture's sampled bindless index, e.g. for readback.
+   *
+   * @param texture The texture.
+   *
+   * @return The image, or an empty handle if the texture is invalid or not resident yet.
    */
   [[nodiscard]] auto image_handle_for(const texture2d_handle& texture) const -> graphics::image_handle;
 
-  /** @brief Loads a TTF -> SDF glyph atlas font from a UUID or project-relative path; returns the existing handle if already loaded. */
+  /**
+   * @brief Loads a TTF as an SDF glyph atlas font by uuid or project-relative path, or returns the existing handle.
+   *
+   * @param id The font's uuid.
+   *
+   * @return The font handle, valid immediately.
+   */
   auto load_font(const math::uuid& id) -> font_handle;
 
   auto load_font(const std::filesystem::path& path) -> font_handle;
 
   /**
-   * @brief Loads a mesh from a UUID or project-relative path; returns the existing handle if
-   * already loaded, unless @p force_recook -- used only by the editor's mesh import-settings
-   * dialog, since primitive/animation-clip selection changes what's actually *in* the cooked blob
-   * (unlike extract_materials, which only affects finalize-time behavior on an already-cooked,
-   * always-complete blob and is fine to stay ephemeral). @p force_recook against an
-   * already-resident mesh re-cooks and re-finalizes it in place -- the existing handle stays
-   * valid, its content just changes once the reload completes.
+   * @brief Loads a mesh by uuid or project-relative path, or returns the existing handle if already loaded.
+   *
+   * @p force_recook re-cooks an already-resident mesh in place (the handle stays valid); the editor's import settings use it because primitive and clip selection change the cooked blob.
+   *
+   * @param id The mesh's uuid.
+   * @param options Import options used when cooking.
+   * @param force_recook Whether to re-cook even if already loaded.
+   *
+   * @return The mesh handle, valid immediately.
    */
   auto load_mesh(const math::uuid& id, const mesh_import_options& options = {}, bool force_recook = false) -> mesh_handle;
 
   auto load_mesh(const std::filesystem::path& path, const mesh_import_options& options = {}, bool force_recook = false) -> mesh_handle;
 
   /**
-   * @brief Builds a mesh directly from in-memory vertex/index data instead of a glTF import --
-   * for procedurally generated geometry (terrain chunks, a runtime-authored road network mesh).
-   * Uploaded the same way as a cooked mesh, via the next process_uploads() call. Not registered
-   * in the uuid-keyed load_mesh cache -- each call always creates a new mesh record.
+   * @brief Builds a mesh from in-memory data, uploaded through the next process_uploads(). Every call creates a new, uncached record.
+   *
+   * @param vertices The vertices.
+   * @param indices The indices.
+   * @param submeshes The submesh ranges and materials.
+   * @param bounds The mesh bounds.
+   *
+   * @return The new mesh.
    */
   auto create_mesh(std::vector<vertex> vertices, std::vector<std::uint32_t> indices, std::vector<mesh::submesh> submeshes, const math::volume& bounds) -> mesh_handle;
 
   /**
-   * @brief Builds a mesh for content that gets replaced often (a script re-triangulating a hex
-   * grid on every paint, a road network's ghost preview while dragging) -- unlike create_mesh,
-   * this skips the staged async upload entirely: buffers are allocated host_write and written to
-   * directly on the calling thread, so the mesh is resident (drawable) the instant this call
-   * returns instead of after a future process_uploads(). Safe only because the engine's stage
-   * loop is single-threaded and this always runs on it (core::engine's _loop -- see engine.ipp);
-   * it would need the same staging/queueing create_mesh uses on an engine with a separate render
-   * thread. Always creates a brand new mesh + buffers, same as create_mesh -- release_mesh the
-   * handle you're replacing before dropping it, or its buffers leak the same way.
+   * @brief Builds a mesh for frequently replaced content, writing host-visible buffers directly so it is resident when this returns.
+   *
+   * Call only while the render thread is idle. Every call creates new buffers; release_mesh the mesh being replaced or its buffers leak.
+   *
+   * @param vertices The vertices.
+   * @param indices The indices.
+   * @param submeshes The submesh ranges and materials.
+   * @param bounds The mesh bounds.
+   *
+   * @return The new mesh.
    */
   auto create_dynamic_mesh(std::span<const vertex> vertices, std::span<const std::uint32_t> indices, std::vector<mesh::submesh> submeshes, const math::volume& bounds) -> mesh_handle;
 
   /**
-   * @brief Retires a mesh's GPU buffers (vertex/index, and skin if present).
+   * @brief Retires a mesh's GPU buffers (vertex, index and skin).
    *
-   * @p mesh's own destruction never does this -- resource_pool's slots are only ever freed by an
-   * explicit retire/collect (see resource_pool's own doc comment), so a mesh_handle simply going
-   * out of scope leaks its buffers forever. Call this right before dropping the last reference to
-   * a mesh you created via @ref create_mesh or @ref create_dynamic_mesh and replacing it with a
-   * new one (e.g. mesh_renderer_set_geometry re-triangulating live-edited geometry) -- there is
-   * currently no automatic path for this, so every other caller that discards such a mesh_handle
-   * has the same leak until it also calls this. No-op if @p mesh is invalid or was never uploaded.
+   * A mesh_handle going out of scope never frees them, so call this before dropping a mesh from create_mesh or create_dynamic_mesh. No-op if the mesh is invalid or was never uploaded.
+   *
+   * @param mesh The mesh to release.
    */
   auto release_mesh(const mesh_handle& mesh) -> void;
 
-  /** @brief Loads a skeleton cooked as a side effect of a mesh import; returns the existing handle if already loaded. Pure CPU data -- no GPU upload wait, but still resolved off the background thread like everything else. */
+  /**
+   * @brief Loads a skeleton cooked from a mesh import, or returns the existing handle. CPU data only.
+   *
+   * @param id The skeleton's uuid.
+   *
+   * @return The skeleton handle, valid immediately.
+   */
   auto load_skeleton(const math::uuid& id) -> skeleton_handle;
 
-  /** @brief Loads an animation clip cooked as a side effect of a mesh import; returns the existing handle if already loaded. Pure CPU data -- no GPU upload wait, but still resolved off the background thread like everything else. */
+  /**
+   * @brief Loads an animation clip cooked from a mesh import, or returns the existing handle. CPU data only.
+   *
+   * @param id The clip's uuid.
+   *
+   * @return The clip handle, valid immediately.
+   */
   auto load_animation_clip(const math::uuid& id) -> animation_clip_handle;
 
   auto load_material(const math::uuid& id) -> material_handle;
@@ -210,49 +232,48 @@ public:
   auto create_material(const material::create_info& create_info) -> material_handle;
 
   /**
-   * @brief Overwrites an existing material's fields in place. Every material_handle already
-   * pointing at this record observes the change immediately, since they all share the same
-   * underlying object. Does not touch identity (index/uuid) or persist to disk.
+   * @brief Overwrites a material's fields in place; every handle to it sees the change. Doesn't change its identity or save it.
+   *
+   * @param material The material to update.
+   * @param create_info The new fields.
    */
   auto update_material(material_handle& material, const material::create_info& create_info) -> void;
 
   /**
-   * @brief Copies every field of @p source into a brand-new material record with its own uuid,
-   * registered the same way load_material's own records are (so a later load_material(id) with
-   * that uuid, e.g. from a MeshRenderer_SetMaterial script call, finds it). Unlike update_material,
-   * the source is left untouched -- this is for script-driven per-instance materials (e.g. one
-   * baked terrain chunk texture per chunk) that must not affect any other user of the source
-   * material.
+   * @brief Copies @p source into a new, registered material with its own uuid, for per-instance materials that must not affect the source.
+   *
+   * @param source The material to copy.
+   *
+   * @return The new material.
    */
   auto duplicate_material(const material_handle& source) -> material_handle;
 
   /**
-   * @brief Frees a material's slot in the fixed-size material buffer (see material_capacity) for
-   * reuse by a later create_material/duplicate_material call, and drops it from the uuid-keyed
-   * cache so a later load_material(id) can't resolve a dangling record. Call this right before
-   * dropping the last reference to a script-created instance (e.g. duplicate_material's own
-   * per-chunk terrain material) you're done with -- like release_mesh, a material_handle simply
-   * going out of scope does not free its slot, and _register_material's slot counter never
-   * decrements on its own, so without this every such instance permanently consumes one of the
-   * material_capacity slots for the life of the process. Never call this on a material still
-   * referenced elsewhere (e.g. the template passed to duplicate_material) -- there is no
-   * reference count backing this, unlike a mesh/texture's underlying GPU resource_pool handle.
+   * @brief Frees a material's slot in the fixed-size material buffer and drops it from the cache.
+   *
+   * Handles going out of scope never free slots, so release instances you're done with or they consume material_capacity for good.
+   * There is no reference count: never release a material still in use, such as a duplicate_material template.
+   *
+   * @param material The material to release.
    */
   auto release_material(const material_handle& material) -> void;
 
   /**
-   * @brief Writes a material to a `.material` file and (re-)registers it as a first-class asset.
+   * @brief Writes a material to a `.material` file and registers it as an asset.
+   *
+   * @param material The material to save; receives the canonical uuid.
    * @param path Destination path relative to the active project's assets directory.
-   * @return The material's canonical uuid (also written back onto the material record itself).
+   *
+   * @return The material's canonical uuid.
    */
   auto save_material(material_handle& material, const std::filesystem::path& path) -> math::uuid;
 
   /**
-   * @brief Loads and bakes an environment map -- the one asset kind that stays entirely
-   * synchronous/main-thread, never touching the background loader. ibl_baker::bake_environment
-   * does a real, blocking GPU compute dispatch (radiance upload + irradiance/prefiltered cubemap
-   * bake); submitting that from a non-render thread is a fundamentally different, riskier problem
-   * than disk I/O offload and is out of scope here.
+   * @brief Loads and bakes an environment map synchronously on the main thread; the IBL bake is a blocking GPU dispatch.
+   *
+   * @param id The environment map's uuid.
+   *
+   * @return The environment map handle, fully baked.
    */
   auto load_environment_map(const math::uuid& id) -> environment_map_handle;
 
@@ -265,16 +286,20 @@ public:
   auto create_particle_effect(const particle_effect::create_info& create_info) -> particle_effect_handle;
 
   /**
-   * @brief Overwrites an existing particle_effect's emitters in place. Every particle_effect_handle
-   * already pointing at this record observes the change immediately. Does not touch identity
-   * (uuid) or persist to disk.
+   * @brief Overwrites a particle effect's emitters in place; every handle to it sees the change. Doesn't change its identity or save it.
+   *
+   * @param effect The effect to update.
+   * @param create_info The new emitters.
    */
   auto update_particle_effect(particle_effect_handle& effect, const particle_effect::create_info& create_info) -> void;
 
   /**
-   * @brief Writes a particle_effect to a `.particle_effect` file and (re-)registers it as a first-class asset.
+   * @brief Writes a particle effect to a `.particle_effect` file and registers it as an asset.
+   *
+   * @param effect The effect to save; receives the canonical uuid.
    * @param path Destination path relative to the active project's assets directory.
-   * @return The effect's canonical uuid (also written back onto the record itself).
+   *
+   * @return The effect's canonical uuid.
    */
   auto save_particle_effect(particle_effect_handle& effect, const std::filesystem::path& path) -> math::uuid;
 
@@ -285,17 +310,20 @@ public:
   auto create_animation_graph(const animation_graph::create_info& create_info) -> animation_graph_handle;
 
   /**
-   * @brief Overwrites an existing animation_graph's states/transitions/parameters in place. Every
-   * animation_graph_handle already pointing at this record observes the change immediately. Does
-   * not touch identity (uuid) or persist to disk.
+   * @brief Overwrites an animation graph's states, transitions and parameters in place; every handle to it sees the change. Doesn't change its identity or save it.
+   *
+   * @param graph The graph to update.
+   * @param create_info The new contents.
    */
   auto update_animation_graph(animation_graph_handle& graph, const animation_graph::create_info& create_info) -> void;
 
   /**
-   * @brief Writes an animation_graph to a `.animation_graph` file and (re-)registers it as a
-   * first-class asset.
+   * @brief Writes an animation graph to a `.animation_graph` file and registers it as an asset.
+   *
+   * @param graph The graph to save; receives the canonical uuid.
    * @param path Destination path relative to the active project's assets directory.
-   * @return The graph's canonical uuid (also written back onto the record itself).
+   *
+   * @return The graph's canonical uuid.
    */
   auto save_animation_graph(animation_graph_handle& graph, const std::filesystem::path& path) -> math::uuid;
 
@@ -306,67 +334,53 @@ public:
   auto create_shader_graph(const shader_graph::create_info& create_info) -> shader_graph_handle;
 
   /**
-   * @brief Overwrites an existing shader_graph's nodes/edges in place, bumps its generation, and
-   * re-cooks it (so the render passes pick up the change -- see shader_graph_generated_path's doc
-   * comment for why the generation bump is what makes that actually happen). Every
-   * shader_graph_handle already pointing at this record observes the change immediately. Does not
-   * touch identity (uuid) or persist to disk.
+   * @brief Overwrites a shader graph in place, bumps its generation and re-cooks it so the render passes pick up the change.
    *
-   * Only called from @ref save_shader_graph and the initial async-load finalize path -- a live edit
-   * in the graph editor no longer routes through here (see shader_graph_panel's own doc comment for
-   * why: a re-cook on every edit meant every node/edge change forced a synchronous Slang recompile
-   * on the render thread, freezing the editor for however long that took). Live edits call @ref
-   * update_shader_graph_data instead, which this itself calls before bumping/cooking.
+   * Only used on save and on async-load finalize; live editor edits use update_shader_graph_data, since re-cooking on every edit stalls on a Slang compile.
+   *
+   * @param graph The graph to update.
+   * @param create_info The new nodes and edges.
    */
   auto update_shader_graph(shader_graph_handle& graph, const shader_graph::create_info& create_info) -> void;
 
   /**
-   * @brief Overwrites an existing shader_graph's nodes/edges in place -- the cheap, no-recompile
-   * half of @ref update_shader_graph (no generation bump, no re-cook), safe to call on every editor
-   * keystroke/node-add/edge-connect. Keeps the resident graph in sync with the editor's staged edits
-   * so @ref update_shader_graph_node_position can still find a freshly-added node, and so @ref
-   * save_shader_graph (which reads the resident graph's own nodes/edges, not a separate parameter)
-   * persists and cooks the latest edit rather than whatever was last saved.
+   * @brief Overwrites a shader graph's nodes and edges in place without bumping its generation or re-cooking; cheap enough for every editor edit.
+   *
+   * @param graph The graph to update.
+   * @param create_info The new nodes and edges.
    */
   auto update_shader_graph_data(shader_graph_handle& graph, const shader_graph::create_info& create_info) -> void;
 
   /**
-   * @brief Moves one node within an already-open shader_graph, without the generation bump/re-cook
-   * update_shader_graph does -- editor_position never affects the generated Slang (codegen never
-   * reads it), so a node drag (which calls this every frame the position differs, same as any
-   * dragged ImGui widget) would otherwise force a full re-cook + shader recompile + new pipeline on
-   * every single frame of the drag for no visible effect. A no-op if @p node_id doesn't exist.
+   * @brief Moves one node without re-cooking, since editor positions never affect codegen. No-op if @p node_id doesn't exist.
+   *
+   * @param graph The graph containing the node.
+   * @param node_id The node to move.
+   * @param position The new editor position.
    */
   auto update_shader_graph_node_position(shader_graph_handle& graph, std::uint32_t node_id, math::vector2 position) -> void;
 
   /**
-   * @brief Writes a shader_graph to a `.shadergraph` file, (re-)registers it as a first-class
-   * asset, and -- via @ref update_shader_graph -- bumps its generation and re-cooks it (runs
-   * codegen, writes the generated `.slang` -- see asset_cooker::cook_shader_graph's doc comment for
-   * why that lands inside the engine's shaders tree rather than the usual per-project cooked-cache
-   * directory). This is the one point an editor session's edits actually take effect in the
-   * render passes -- see update_shader_graph's own doc comment.
+   * @brief Writes a shader graph to a `.shadergraph` file, registers it as an asset and re-cooks it; this is where editor changes take effect.
+   *
+   * @param graph The graph to save; receives the canonical uuid.
    * @param path Destination path relative to the active project's assets directory.
-   * @return The graph's canonical uuid (also written back onto the record itself).
+   *
+   * @return The graph's canonical uuid.
    */
   auto save_shader_graph(shader_graph_handle& graph, const std::filesystem::path& path) -> math::uuid;
 
   /**
-   * @brief Pops up to max_uploads_per_frame entries combined across every asset_loader result
-   * queue (roughly cost/frequency order: textures, meshes, fonts, materials, particle_effects,
-   * animation_graphs, shader_graphs, skeletons, animation_clips) and runs each one's _finalize_* -- the one place
-   * nested asset references (paths -> uuids -> handles) get resolved and GPU uploads get queued.
+   * @brief Finalizes up to max_uploads_per_frame loader results: resolves nested asset references and queues GPU uploads.
    *
-   * Must run on the main thread while the render thread is idle: finalizing writes the same asset
-   * records game code and packet building read, and fires their on_loaded callbacks.
+   * Main thread only, while the render thread is idle: finalizing writes records that packet building reads and fires on_loaded callbacks.
    */
   auto drain_loader_results() -> void;
 
   /**
-   * @brief Turns queued texture/mesh/material uploads into GPU images, buffers, bindless writes
-   * and material UBO writes (budgeted).
+   * @brief Turns queued texture, mesh and material uploads into GPU resources and bindless writes, within the per-frame budget. Render thread.
    *
-   * Runs on the render thread; copies are recorded by the caller's subsequent @ref upload_context::flush.
+   * @param frame_index The frame the copies are recorded for; the caller's upload_context::flush records them.
    */
   auto process_uploads(std::uint64_t frame_index) -> void;
 
@@ -382,14 +396,19 @@ public:
 
   [[nodiscard]] auto is_resident(const texture2d_array_handle& array) const -> bool;
 
-  /** @brief Live counts across every cache this class owns -- for the editor's Statistics panel. */
+  /**
+   * @brief Live counts across every cache, for the editor's Statistics panel.
+   *
+   * @return The counts.
+   */
   [[nodiscard]] auto resident_asset_counts() const -> assets::resident_asset_counts;
 
   /**
-   * @brief The image view backing a resident texture's bindless slot, or VK_NULL_HANDLE if the
-   * texture isn't valid or its upload hasn't been processed yet (see is_resident). Used by the
-   * editor/UI layer to blit a real preview into ImGui (see ui_module::texture_id), the same way
-   * the viewport blits the scene's final image.
+   * @brief The image view behind a resident texture's bindless slot, for ImGui previews.
+   *
+   * @param texture The texture.
+   *
+   * @return The image view, or VK_NULL_HANDLE if the texture is invalid or not uploaded yet.
    */
   [[nodiscard]] auto image_view_of(const texture2d_handle& texture) const -> VkImageView;
 
@@ -417,9 +436,7 @@ private:
 
   inline static constexpr auto material_capacity = std::uint32_t{1024u};
 
-  // Combined, shared across every result/pending-upload category drained per drain_loader_results()
-  // or process_uploads() call -- see their doc comments.
-  // Spreads a burst of loads/uploads across several frames instead of spiking one.
+  // Shared budget across every category drained per frame, spreading load bursts over several frames.
   inline static constexpr auto max_uploads_per_frame = std::size_t{32u};
 
   struct pending_texture_upload {
@@ -428,8 +445,7 @@ private:
     std::uint32_t width;
     std::uint32_t height;
     graphics::format format;
-    // False for data a mip chain would corrupt rather than filter: a font's distance-field atlas,
-    // where averaging drops thin strokes under the edge threshold.
+    // False for data mips would corrupt, like SDF font atlases where averaging drops thin strokes.
     bool mipmapped{true};
   }; // struct pending_texture_upload
 
@@ -443,7 +459,7 @@ private:
     std::shared_ptr<mesh> record;
     std::vector<vertex> vertices;
     std::vector<std::uint32_t> indices;
-    std::vector<skin_vertex> skin_vertices{}; // empty when the mesh has no skin data
+    std::vector<skin_vertex> skin_vertices{}; // empty without skin data
   }; // struct pending_mesh_upload
 
   // Must stay byte-identical to material_data in frame_data.slang.
@@ -465,14 +481,12 @@ private:
     std::float_t ior;
     math::vector2 uv_tiling;
     math::vector2 uv_offset;
-    // One float4 slot per shader-graph-exposed param regardless of its actual type avoids
-    // sub-float packing/alignment footguns for a handful of extra bytes per material.
+    // One float4 per exposed param regardless of type, avoiding packing and alignment pitfalls.
     math::vector4 generic_params[shader_graph_max_params];
     std::uint32_t generic_textures[shader_graph_max_textures];
   }; // struct material_data
 
-  // A snapshot taken on the queuing (main) thread, so the render thread never reads a material
-  // record the main thread may be editing concurrently.
+  // Snapshotted on the main thread so the render thread never reads a record being edited.
   struct pending_material_upload {
     std::uint32_t index;
     material_data data;
@@ -485,11 +499,12 @@ private:
   [[nodiscard]] auto _material_data_of(const material& material) const -> material_data;
 
   /**
-   * @brief Turns one already-cooked embedded glTF material (see cooked_submesh::material's doc
-   * comment in asset_cooker.hpp) into a real, standalone `.material` asset next to the mesh
-   * (models/<name>/materials/<material name>.material), reusing one already there instead of
-   * overwriting it -- what mesh_import_options::extract_materials means. Runs on the main thread,
-   * during _finalize_mesh, once per submesh that needs it.
+   * @brief Extracts an embedded glTF material into a standalone `.material` next to the mesh, reusing an existing one. Main thread, during _finalize_mesh.
+   *
+   * @param cooked_material_id The cooked embedded material.
+   * @param mesh_source The mesh's source path.
+   *
+   * @return The extracted material.
    */
   auto _extract_gltf_material(const math::uuid& cooked_material_id, const std::filesystem::path& mesh_source) -> material_handle;
 
@@ -515,8 +530,7 @@ private:
   std::unordered_map<std::uint32_t, graphics::image_handle> _images{};
   std::unordered_map<std::uint32_t, std::uint64_t> _resident_frame{};
 
-  // Texture arrays by id; images and resident frames by index in the 2D-array binding (an index
-  // space of its own, separate from _images / _resident_frame above).
+  // Texture arrays by id; images and resident frames by index in the 2D-array binding, a separate index space from _images.
   std::unordered_map<math::uuid, std::shared_ptr<texture2d_array>> _texture_arrays{};
   std::deque<pending_array_upload> _pending_arrays{};
   std::unordered_map<std::uint32_t, graphics::image_handle> _array_images{};
@@ -527,7 +541,6 @@ private:
   std::unordered_map<math::uuid, std::shared_ptr<mesh>> _meshes{};
   std::deque<pending_mesh_upload> _pending_meshes{};
 
-  // Pure CPU data -- no GPU buffer/index, unlike _meshes above.
   std::unordered_map<math::uuid, std::shared_ptr<skeleton>> _skeletons{};
   std::unordered_map<math::uuid, std::shared_ptr<animation_clip>> _animation_clips{};
 
@@ -541,7 +554,6 @@ private:
 
   std::unordered_map<math::uuid, std::shared_ptr<environment_map>> _environment_maps{};
 
-  // Pure CPU data — no GPU buffer/index, unlike _materials above.
   std::unordered_map<math::uuid, std::shared_ptr<particle_effect>> _particle_effect_files{};
   std::unordered_map<math::uuid, std::shared_ptr<animation_graph>> _animation_graph_files{};
   std::unordered_map<math::uuid, std::shared_ptr<shader_graph>> _shader_graph_files{};
@@ -551,8 +563,7 @@ private:
   texture2d_handle _black{};
   texture2d_handle _magenta{};
 
-  // Declared LAST -- destroyed (aborted + joined) before any cache/pending-upload queue above that
-  // its background thread might still be about to feed.
+  // Declared last, so its thread is joined before the caches and queues it feeds are destroyed.
   asset_loader _loader{};
 
 }; // class asset_residency

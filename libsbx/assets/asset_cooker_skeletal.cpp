@@ -10,8 +10,8 @@
 
 namespace sbx::assets {
 
-inline constexpr auto skeleton_magic = utility::fourcc_v<"SBSK">; // 'SBSK'
-inline constexpr auto animation_magic = utility::fourcc_v<"SBAN">; // 'SBAN'
+inline constexpr auto skeleton_magic = utility::fourcc_v<"SBSK">;
+inline constexpr auto animation_magic = utility::fourcc_v<"SBAN">;
 
 struct skeleton_file_header {
   std::uint32_t magic;
@@ -34,7 +34,7 @@ struct animation_clip_file_header {
   std::uint32_t version;
   std::float_t duration;
   std::uint32_t channel_count;
-  std::uint32_t name_length; // name bytes immediately follow this header
+  std::uint32_t name_length; // name bytes follow this header
 }; // struct animation_clip_file_header
 
 // Immediately followed by translation_key_count vector3_key_records, then rotation_key_count
@@ -60,8 +60,7 @@ struct quaternion_key_record {
 }; // struct quaternion_key_record
 
 auto asset_cooker::derive_skeleton_uuid(const math::uuid& mesh) -> math::uuid {
-  // Same splitmix64 shape as derive_material_uuid, salted differently so a mesh's skeleton uuid
-  // never collides with one of its material uuids.
+  // splitmix64 like derive_material_uuid, salted differently so skeleton and material uuids never collide.
   auto x = mesh.value() ^ 0xff51afd7ed558ccdull;
   x ^= x >> 30; x *= 0xbf58476d1ce4e5b9ull;
   x ^= x >> 27; x *= 0x94d049bb133111ebull;

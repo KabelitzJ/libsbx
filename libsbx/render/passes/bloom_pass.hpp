@@ -23,29 +23,11 @@
 namespace sbx::render {
 
 /**
- * @brief Mip-chain bloom (Call of Duty/Sledgehammer SIGGRAPH 2014 style): threshold-prefilter the
- * HDR scene color into a half-resolution mip0, box-downsample into a mip chain, tent-upsample back
- * with additive combine, and hand the half-resolution result to tonemap_pass to fold in before ACES.
+ * @brief Mip-chain bloom (Sledgehammer, SIGGRAPH 2014): threshold into a half-resolution mip 0, box downsample, tent upsample additively, and hand the result to tonemap_pass.
  *
- * Owns two private mip-chain images (graph_resources::bloom_downsample/bloom_upsample) that no
- * other pass touches. Two subtleties fall out of that:
- *
- *  - The render graph's automatic barrier tracking only understands single-mip images (see
- *    render_graph.hpp's operation model); a multi-mip chain must be transitioned by hand inside
- *    execute(), with only the final promised state told to the compiler via declares_image_ready.
- *
- *  - bindless_table's sampled-image slots are permanently declared at VK_IMAGE_LAYOUT_SHADER_
- *    READ_ONLY_OPTIMAL, so a mip that is written as a storage image and later read as a sampled
- *    texture needs its own layout flip (general -> read-only) right after it's produced, not one
- *    transition at the end -- see the per-mip transitions in execute().
- *
- * Never skips its own execution via should_execute(): the chain images would otherwise never leave
- * VK_IMAGE_LAYOUT_UNDEFINED while tonemap_pass's declared read assumes shader_read_only_optimal.
- * When post_process.bloom.enabled is off, execute() still performs the layout dance (cheap, no dispatches) so
- * that promise keeps holding; tonemap_pass zeroes the contribution instead (see its push constant).
- *
- * Runs after transparent_resolve_pass/particle_pass (so it sees the fully composited HDR scene) and
- * before tonemap_pass.
+ * The render graph only tracks single-mip images, so the chain is transitioned by hand and only the final state is declared ready.
+ * Bindless sampled slots are always read-only optimal, so each mip flips from general to read-only right after it is written.
+ * It never skips execution, since tonemap_pass's read assumes read-only layouts; with bloom off it only transitions and tonemap_pass zeroes the contribution.
  */
 class bloom_pass final : public compute_pass {
 
@@ -53,10 +35,22 @@ public:
 
   inline static constexpr auto max_mip_count = std::uint32_t{6u};
 
-  /** @brief mip0's resolution for a given color target extent -- half res, floored at 1x1. */
+  /**
+   * @brief Mip 0's resolution: half the color extent, at least 1x1.
+   *
+   * @param color_extent The color target extent.
+   *
+   * @return The extent.
+   */
   [[nodiscard]] static auto extent_for(const math::vector2u& color_extent) noexcept -> math::vector2u;
 
-  /** @brief The mip count both chain images should be created with for a given color target extent. */
+  /**
+   * @brief The mip count both chain images use.
+   *
+   * @param color_extent The color target extent.
+   *
+   * @return The mip count.
+   */
   [[nodiscard]] static auto mip_count_for(const math::vector2u& color_extent) noexcept -> std::uint32_t;
 
   bloom_pass();
@@ -80,9 +74,7 @@ private:
     std::uint32_t storage_index{0xFFFFFFFFu};
   }; // struct mip_view
 
-  // A previous chain's views, kept alive until frame_index has caught up to a value the GPU has
-  // certainly finished by -- same contract resource_pool::retire/collect uses, hand-rolled here
-  // because per-mip VkImageViews/bindless indices aren't buffers or images resource_registry pools.
+  // A previous chain's views, kept until the GPU has finished with them; per-mip views and bindless indices aren't pooled by resource_registry.
   struct retired_chain {
     std::uint64_t frame_index;
     std::vector<mip_view> views;

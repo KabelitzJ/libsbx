@@ -15,7 +15,7 @@
 
 namespace editor {
 
-/** @brief Attaches a fresh, override-less script_entry for class_name. In Edit mode (the realistic invocation surface) this is a pure data mutation — no managed-runtime side effects. */
+/** @brief Attaches a new script entry without overrides; in Edit mode a pure data change. */
 class attach_script_command final : public command {
 
 public:
@@ -38,10 +38,7 @@ private:
 
 }; // class attach_script_command
 
-/**
- * @brief Detaches a script. Construct this with the entry's current value (class name + field
- * overrides) BEFORE detaching — undo restores that exact entry, not a fresh override-less one.
- */
+/** @brief Detaches a script; construct it with the entry's current value first, so undo restores its overrides. */
 class detach_script_command final : public command {
 
 public:

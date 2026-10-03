@@ -48,9 +48,7 @@ auto draw_material_picker(editor_state& state, const char* popup_id, sbx::assets
   } else if (result.reset_to_default) {
     slot = mesh_default;
   } else if (result.changed) {
-    // load_material(path) resolves relative against assets_directory() internally and reuses the
-    // file's real uuid if it's already imported — calling import(relative) directly here would
-    // mint a second, broken uuid keyed on an unresolved path.
+    // load_material resolves the path and reuses the existing uuid; import(relative) would mint a broken second one.
     slot = assets_module.load_material(result.picked.path);
   }
 
@@ -241,8 +239,7 @@ auto draw_animation_graph_picker(editor_state& state, const char* popup_id, sbx:
   }
 
   if (result.edit_requested && slot.is_valid()) {
-    // Jumps straight into the visual graph editor rather than just selecting it (select_asset's
-    // read-only Inspector summary) -- the common case here is "assigned a graph, now go build it".
+    // Opens the graph editor directly, since assigning a graph usually means building it next.
     state.request_open_animation_graph_editor(slot->id(), relative_asset_path(assets_module, slot->id()), preview_mesh_id);
   }
 

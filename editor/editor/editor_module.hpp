@@ -30,13 +30,7 @@
 
 namespace editor {
 
-/**
- * @brief The editor's core::module — lifecycle only.
- *
- * Owns @ref editor_ui_layer (dockspace, panels, viewport, save/quit dialogs) and registers it
- * with ui_module. Everything else here is one-time engine-level setup (IniFilename,
- * grid_enabled) rather than per-frame UI.
- */
+/** @brief The editor's module: owns editor_ui_layer, registers it with ui_module, and does one-time engine setup. */
 class editor_module final : public sbx::utility::noncopyable {
 
 public:
@@ -47,54 +41,55 @@ public:
 
   ~editor_module();
 
-  /** @see editor_ui_layer::is_viewport_hovered */
+  /** @copydoc editor_ui_layer::is_viewport_hovered */
   [[nodiscard]] auto is_viewport_hovered() const noexcept -> bool {
     return _ui_layer.is_viewport_hovered();
   }
 
-  /** @brief Called once by application.cpp right after its own initial scene load. */
+  /** @copydoc editor_ui_layer::set_scene_path */
   auto set_scene_path(std::filesystem::path path) -> void {
     _ui_layer.set_scene_path(std::move(path));
   }
 
-  /** @see editor_ui_layer::request_quit */
+  /** @copydoc editor_ui_layer::request_quit */
   auto request_quit() -> void {
     _ui_layer.request_quit();
   }
 
-  /** @see editor_ui_layer::new_scene */
+  /** @copydoc editor_ui_layer::new_scene */
   auto new_scene() -> void {
     _ui_layer.new_scene();
   }
 
-  /** @see editor_ui_layer::open_scene */
+  /** @copydoc editor_ui_layer::open_scene */
   auto open_scene(const std::filesystem::path& path) -> void {
     _ui_layer.open_scene(path);
   }
 
-  /** @see play_mode_controller */
+  /**
+   * @brief The current play state.
+   *
+   * @return Edit, playing or paused.
+   */
   [[nodiscard]] auto play_state() const noexcept -> editor::play_state {
     return _play_mode.state();
   }
 
-  /**
-   * @brief Enters Play mode and immediately hands the viewport over to the scene's own play
-   * camera — pushes the render override itself rather than waiting for application::update()'s
-   * next per-frame poll, so there's no stale editor-camera frame while Play spins up.
-   */
+  /** @brief Enters Play mode and switches the viewport to the play camera immediately, so no stale editor-camera frame shows. */
   auto enter_play_mode() -> void;
 
-  /**
-   * @brief Exits Play mode and immediately switches the viewport back to the editor camera — see
-   * enter_play_mode()'s doc comment on why this pushes the override itself instead of waiting.
-   */
+  /** @brief Exits Play mode and switches the viewport back to the editor camera immediately. */
   auto exit_play_mode() -> void;
 
   auto toggle_pause() -> void {
     _play_mode.toggle_pause();
   }
 
-  /** @brief The editor's own free-fly viewport camera — see editor_camera's doc comment. Mutable so application::update() can drive it from input. */
+  /**
+   * @brief The editor's free-fly viewport camera, driven by application::update().
+   *
+   * @return The camera.
+   */
   [[nodiscard]] auto editor_camera() noexcept -> editor::editor_camera& {
     return _editor_camera;
   }
@@ -103,17 +98,17 @@ public:
     return _preferences;
   }
 
-  /** @brief Writes preferences() to disk -- Edit > Preferences calls it after every change. */
+  /** @brief Writes preferences() to disk; Edit > Preferences calls it after every change. */
   auto save_preferences() const -> void {
     _preferences.save(_preferences_path());
   }
 
   /**
-   * @brief The world matrix + camera params the viewport should currently render/pick/gizmo
-   * through: the editor camera while play_state()==edit, otherwise the scene's active camera.
+   * @brief The camera the viewport renders, picks and draws gizmos through: the editor camera in Edit mode, otherwise the scene's active camera.
    *
-   * Shared by scene_renderer_module's per-frame override, viewport picking, and the gizmo so
-   * all three agree on what's on screen.
+   * @param scene The active scene.
+   *
+   * @return The camera pose, or nullopt without a camera.
    */
   [[nodiscard]] auto viewport_camera(sbx::scenes::scene& scene) const -> std::optional<editor::viewport_camera_pose>;
 

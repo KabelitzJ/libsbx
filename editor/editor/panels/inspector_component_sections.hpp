@@ -12,12 +12,7 @@
 
 namespace editor {
 
-/**
- * @brief One draw_*_section per ECS component type the Inspector edits: draws a CollapsingHeader
- * (unchecking it removes the component), and while expanded, that component's fields. Driven by
- * inspector_panel::_draw_node_properties via component_entries() (see
- * inspector_component_registry.hpp) rather than called directly, except by that dispatch loop.
- */
+// One draw_*_section per component type: a collapsing header whose close button removes the component, then its fields. Called through component_entries().
 auto draw_camera_section(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node) -> void;
 auto draw_mesh_renderer_section(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node, sbx::assets::assets_module& assets_module) -> void;
 auto draw_animator_section(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node) -> void;

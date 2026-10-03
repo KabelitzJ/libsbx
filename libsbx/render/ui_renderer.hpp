@@ -12,13 +12,9 @@
 namespace sbx::render {
 
 /**
- * @brief UI half of presentation_module's renderer interfaces; at most one registered at a time
- * (presentation_module::set_ui_renderer).
+ * @brief The UI half of presentation_module's renderer interfaces; at most one is registered.
  *
- * build_frame() (main thread) deep-copies ImGui's draw data into a ui_draw_data so the render
- * thread can safely consume it later. render() submits that data with VK_ATTACHMENT_LOAD_OP_LOAD,
- * so whatever ran the compositor step must already have given the swapchain image a defined
- * background.
+ * build_frame() deep-copies ImGui's draw data on the main thread; render() draws it with a load op, so the compositor must already have filled the swapchain image.
  */
 class ui_renderer {
 
@@ -26,10 +22,20 @@ public:
 
   virtual ~ui_renderer() = default;
 
-  /** @brief Main thread, once per frame. */
+  /**
+   * @brief Builds the frame's UI on the main thread.
+   *
+   * @return The frame's draw data.
+   */
   virtual auto build_frame() -> ui_draw_data = 0;
 
-  /** @brief Render thread (or same thread, depending on threading_policy). Draws @p data into @p command_buffer. */
+  /**
+   * @brief Draws @p data on the render thread.
+   *
+   * @param command_buffer The command buffer to record into.
+   * @param extent The swapchain extent.
+   * @param data The draw data from build_frame().
+   */
   virtual auto render(graphics::command_buffer& command_buffer, math::vector2u extent, const ui_draw_data& data) -> void = 0;
 
 }; // class ui_renderer

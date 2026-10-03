@@ -53,7 +53,7 @@ auto shader_graph_node_preview_manager::clear() -> void {
 }
 
 auto shader_graph_node_preview_manager::request_recompile(const sbx::assets::shader_graph::create_info& graph, std::uint32_t node_id) -> void {
-  auto& state = _entries[node_id]; // creates tracking state if this node wasn't already previewed
+  auto& state = _entries[node_id];
 
   const auto source = sbx::assets::generate_node_preview_source(fmt::format("shader_graph_node_preview_{}", node_id), graph, node_id, 0u);
 
@@ -170,8 +170,7 @@ auto shader_graph_node_preview_manager::_render(entry& state, sbx::graphics::buf
 
   command_buffer.push_constants(bindless_table.pipeline_layout(), sbx::graphics::bindless_table::push_constant_stages, 0u, sbx::memory::as_bytes(push));
 
-  // Fullscreen triangle -- no vertex/index buffer at all, see generate_node_preview_source's own
-  // doc comment for the SV_VertexID trick this pairs with.
+  // Fullscreen triangle from SV_VertexID.
   command_buffer.draw(3u, 1u, 0u, 0u);
 
   command_buffer.end_rendering();
@@ -197,9 +196,7 @@ auto shader_graph_node_preview_manager::update(sbx::graphics::buffer::address_ty
   for (auto& result : _compiler.take_results(8u)) {
     const auto node_id = static_cast<std::uint32_t>(result.key);
 
-    // Not operator[] -- a result landing after forget() erased this node's entry means nobody
-    // will ever call texture_id(node_id) again; discard rather than resurrect a tracking entry
-    // for it (same reasoning as asset_loader's own "discard if nobody will ever drain it").
+    // A result for a forgotten node is discarded rather than resurrecting its entry.
     const auto entry = _entries.find(node_id);
 
     if (entry == _entries.end()) {

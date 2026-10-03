@@ -4,9 +4,7 @@
 /**
  * @file libsbx/physics/epa.hpp
  *
- * @brief The Expanding Polytope Algorithm: given a GJK terminal simplex (a tetrahedron enclosing
- * the origin in the Minkowski difference A - B), expands it toward the origin's nearest boundary
- * to recover the actual penetration depth, normal, and world-space contact points.
+ * @brief The Expanding Polytope Algorithm: expands GJK's terminal simplex to the nearest boundary of A - B for penetration depth, normal and contact points.
  *
  * @ingroup libsbx-physics
  */
@@ -32,8 +30,15 @@ struct epa_result {
 }; // struct epa_result
 
 /**
- * @brief Recovers penetration depth/normal/witness points for two overlapping shapes, seeded from
- * @p gjk_simplex (the terminal tetrahedron @reference gjk_intersect produced for the same pair/pose).
+ * @brief Penetration depth, normal and witness points for two overlapping shapes.
+ *
+ * @param a The first shape.
+ * @param pose_a The first shape's pose.
+ * @param b The second shape.
+ * @param pose_b The second shape's pose.
+ * @param gjk_simplex The terminal tetrahedron @ref gjk_intersect produced for this pair.
+ *
+ * @return The penetration result.
  */
 [[nodiscard]] auto epa_penetration(
   const convex_shape& a, const transform& pose_a,

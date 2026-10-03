@@ -84,14 +84,14 @@ auto editor_ui_layer::_save_scene(const std::filesystem::path& path) -> void {
 
 auto editor_ui_layer::_is_scene_dirty() -> bool {
   if (_scene_path.empty()) {
-    return true; // never saved — anything at all counts as unsaved
+    return true; // never saved
   }
 
   auto& project = sbx::core::engine::project();
   auto file = std::ifstream{project.assets_directory() / _scene_path, std::ios::binary};
 
   if (!file) {
-    return true; // no file at that path (yet)
+    return true; // no file there yet
   }
 
   const auto on_disk = std::string{std::istreambuf_iterator<char>{file}, std::istreambuf_iterator<char>{}};
@@ -127,8 +127,7 @@ auto editor_ui_layer::_draw_save_as_dialog() -> void {
   }
 
   if (picked->empty()) {
-    // Cancelled -- don't let a stale "run the pending action once this save-as completes" leak
-    // into some unrelated later save (see _run_pending_after_save_as's doc comment).
+    // Cancelled: don't run the pending action on some unrelated later save.
     _run_pending_after_save_as = false;
     return;
   }
@@ -138,9 +137,7 @@ auto editor_ui_layer::_draw_save_as_dialog() -> void {
   auto ec = std::error_code{};
   const auto relative = std::filesystem::relative(picked->front(), project.assets_directory(), ec);
 
-  // Kept relative to the assets directory (the convention _scene_path documents) whenever the
-  // picked location actually resolves under it; left absolute otherwise -- _save_scene accepts
-  // either (via assets_module::save_scene).
+  // Relative to the assets directory when the pick is inside it, otherwise absolute; save_scene accepts both.
   const auto scene_path = (!ec && !relative.empty() && relative.begin()->string() != "..") ? relative : picked->front();
 
   _save_scene(scene_path);
@@ -183,7 +180,7 @@ auto editor_ui_layer::_draw_unsaved_changes_dialog() -> void {
 
     if (ImGui::Button("Cancel")) {
       ImGui::CloseCurrentPopup();
-      _pending_scene_action = pending_scene_action::none; // don't act on a later, unrelated resolve
+      _pending_scene_action = pending_scene_action::none;
     }
 
     ImGui::EndPopup();
@@ -198,9 +195,7 @@ auto editor_ui_layer::_new_scene() -> void {
 
   auto& scene = scenes_module.active_scene();
 
-  // Same default content application.cpp's startup fallback gives a fresh/startup-scene-less
-  // project -- see its doc comment for why (a play camera the scene itself owns, distinct from
-  // the editor's own free-fly editor_camera).
+  // The same default content as application.cpp's startup fallback: a play camera owned by the scene.
   auto camera = scene.create_node("Camera");
   camera.add_component<sbx::scenes::camera>();
   scene.set_active_camera(camera);
@@ -259,7 +254,7 @@ auto editor_ui_layer::_draw_open_scene_dialog() -> void {
 
   const auto scene_path = (!ec && !relative.empty() && relative.begin()->string() != "..") ? relative : picked->front();
 
-  open_scene(scene_path); // re-enters the discard-guard in case the scene changed while the dialog was open
+  open_scene(scene_path); // re-enters the unsaved-changes guard in case the scene changed meanwhile
 }
 
 } // namespace editor

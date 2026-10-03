@@ -26,21 +26,30 @@ enum class [[=reflection::named]] primitive_mesh_kind : std::uint8_t {
 
 [[nodiscard]] auto primitive_mesh_name(const primitive_mesh_kind kind) -> std::string_view;
 
-/** @brief The primitive kind @p id refers to, or nullopt if it isn't one of ours. */
+/**
+ * @brief The primitive kind @p id refers to.
+ *
+ * @param id The mesh uuid.
+ *
+ * @return The kind, or nullopt if @p id isn't a built-in primitive.
+ */
 [[nodiscard]] auto primitive_mesh_kind_of(const math::uuid& id) -> std::optional<primitive_mesh_kind>;
 
-/** @brief Generates and writes this primitive's cooked mesh cache blob if it isn't already on disk. Cheap and safe to call every time a primitive is requested -- a no-op once it's been baked once. Also ensures @ref default_material_uuid is cooked -- every primitive's single submesh references it. */
+/**
+ * @brief Writes the primitive's cooked mesh and the default material if they aren't on disk yet; cheap to call every time.
+ *
+ * @param kind The primitive to cook.
+ */
 auto ensure_primitive_mesh_cooked(const primitive_mesh_kind kind) -> void;
 
 /**
- * @brief The plain grey, untextured material every built-in primitive's submesh is cooked with --
- * a real, resolvable uuid (unlike a transient create_material()'d handle, this one survives scene
- * serialization; see asset_cooker::write_cooked_material) so a Cube dropped in the Hierarchy
- * renders with something reasonable instead of the mesh-import fallback's error magenta.
+ * @brief The plain grey material built-in primitives are cooked with; a real uuid, so it survives scene serialization.
+ *
+ * @return The material's uuid.
  */
 [[nodiscard]] auto default_material_uuid() -> math::uuid;
 
-/** @brief Generates and writes the default material's cooked cache blob if it isn't already on disk. Cheap and safe to call every time it's needed -- a no-op once it's been baked once. */
+/** @brief Writes the default material's cooked blob if it isn't on disk yet; cheap to call every time. */
 auto ensure_default_material_cooked() -> void;
 
 } // namespace sbx::assets

@@ -75,7 +75,7 @@ auto assembly::_populate_types() -> void {
 
 auto assembly::reload_types() -> void {
   if (_assembly_id == -1) {
-    return; // never successfully loaded — nothing to refresh
+    return;
   }
 
   _populate_types();

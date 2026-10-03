@@ -46,8 +46,7 @@ std::atomic<std::size_t> peak_usage{0u};
 std::atomic<std::size_t> alloc_count{0u};
 std::atomic<std::size_t> dealloc_count{0u};
 
-// The malloc block's real size, asked of the allocator itself -- the same number at alloc and at free, so every delete
-// (sized or not, aligned or not, from our code or a prebuilt library) subtracts exactly what its new added.
+// The allocator's real block size, identical at allocation and free, so every delete subtracts exactly what its new added.
 inline auto block_size(void* raw) -> std::size_t {
 #if defined(_WIN32)
   return _msize(raw);
@@ -205,7 +204,7 @@ auto operator new[](std::size_t count, std::align_val_t alignment, std::nothrow_
   return ptr;
 }
 
-// delete -- the size hint of the sized overloads isn't needed: the tracker asks the allocator for the block's size.
+// The sized overloads' hint isn't needed: the tracker asks the allocator.
 
 auto operator delete(void* ptr) noexcept -> void {
   SBX_MEMORY_TRACY_FREE(ptr);
@@ -249,7 +248,7 @@ auto operator delete[](void* ptr, [[maybe_unused]] std::size_t size, [[maybe_unu
   detail::aligned_free(ptr);
 }
 
-// nothrow delete (called only if the matching nothrow new's ctor throws)
+// nothrow delete, called only if the constructor after a nothrow new throws
 
 auto operator delete(void* ptr, std::nothrow_t const&) noexcept -> void {
   SBX_MEMORY_TRACY_FREE(ptr);
@@ -273,8 +272,7 @@ auto operator delete[](void* ptr, [[maybe_unused]] std::align_val_t alignment, s
 
 #endif // SBX_ENABLE_PROFILING || SBX_TRACK_MEMORY
 
-// Always defined, regardless of either flag, so callers (e.g. statistics_panel.cpp) can link
-// unconditionally -- each simply reports zero/disabled when SBX_TRACK_MEMORY is off.
+// Always defined, reporting zero when SBX_TRACK_MEMORY is off, so callers link unconditionally.
 namespace editor::memory_stats {
 
 auto is_tracking_enabled() noexcept -> bool {
@@ -343,7 +341,7 @@ auto process_memory_usage() -> std::size_t {
 
   return 0u;
 #elif defined(SBX_PLATFORM_LINUX)
-  // statm: total program size, then resident set size -- both in pages.
+  // statm: total program size, then resident set size, both in pages.
   auto statm = std::ifstream{"/proc/self/statm"};
   auto total_pages = std::size_t{0u};
   auto resident_pages = std::size_t{0u};

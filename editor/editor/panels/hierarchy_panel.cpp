@@ -44,9 +44,6 @@
 
 namespace editor {
 
-// node_drag_drop_payload_type lives in editor_state.hpp now -- shared with the Inspector's
-// Node-typed script field slot.
-
 enum class drop_zone {
   before,
   into,
@@ -63,9 +60,7 @@ auto icon_for(const sbx::scenes::node& node) -> const char* {
   return ICON_MDI_AXIS_ARROW;
 }
 
-// Shared by every "create a node and make it the selection" call site (Add Node, Add Child, each
-// 3D Object primitive) -- Command is whichever create_*_command type, constructed from args,
-// pushed, and its freshly-created node selected.
+// Pushes a create command built from args and selects the new node.
 template<typename Command, typename... Args>
 auto create_and_select_node(editor_state& state, sbx::scenes::scene& scene, Args&&... args) -> void {
   auto command = std::make_unique<Command>(std::forward<Args>(args)...);
@@ -178,12 +173,7 @@ auto hierarchy_panel::_draw_node_row(editor_state& state, sbx::scenes::scene& sc
       } else if (ImGui::GetIO().KeyCtrl) {
         state.toggle_node_selection(node);
       } else {
-        // Deferred until release (see row_deactivated below), never selected immediately here --
-        // IsItemClicked fires on press, before BeginDragDropSource below ever gets a chance to see
-        // the drag. Selecting eagerly on press would flip whatever's driven by the current
-        // selection (the Inspector, most prominently) over to this node the instant a drag starts
-        // from this row, yanking it out from under a drop target the user is dragging *onto*
-        // elsewhere (e.g. a Node-typed script field slot in the Inspector).
+        // Selected on release, not here: IsItemClicked fires on press, and selecting then would switch the Inspector away from a drop target the user is dragging onto.
         _deferred_click_id = node.id();
         _deferred_click_became_drag = false;
       }
@@ -224,9 +214,7 @@ auto hierarchy_panel::_draw_node_row(editor_state& state, sbx::scenes::scene& sc
         }
       }
 
-      // "before"/"after" land as a sibling of node (same parent); "into" as node's own child --
-      // unlike reparenting an existing node, a fresh instantiation doesn't need exact sibling-index
-      // placement.
+      // before/after become a sibling, into a child; a new instance doesn't need an exact sibling index.
       try_instantiate_prefab_drop(state, scene, (zone == drop_zone::into) ? std::optional<sbx::math::uuid>{node.id()} : parent_id);
 
       if (const auto* preview = ImGui::GetDragDropPayload(); preview != nullptr && preview->IsDataType(node_drag_drop_payload_type)) {
@@ -278,8 +266,7 @@ auto hierarchy_panel::_draw_node_row(editor_state& state, sbx::scenes::scene& sc
       assets_module.save_prefab(prefab, relative_path);
       sbx::scenes::scene_serializer::attach_prefab_instance(scene, node, prefab);
 
-      // The new .prefab file exists on disk now, but the Asset Browser caches its own folder
-      // listing and only rescans on this signal -- without it, nothing renders to drag/select.
+      // The Asset Browser only rescans its cached listing on this request, so the new .prefab shows up.
       state.request_reveal_in_browser(relative_path);
     }
 

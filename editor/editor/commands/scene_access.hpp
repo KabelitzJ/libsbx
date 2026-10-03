@@ -11,8 +11,9 @@
 namespace editor {
 
 /**
- * @brief The active scene, re-fetched on demand — commands never hold a scene& of their own (see
- * command.hpp's doc comment on why), they call this every time execute()/undo() runs instead.
+ * @brief The active scene, fetched fresh each time, since commands never hold a scene reference.
+ *
+ * @return The active scene.
  */
 [[nodiscard]] inline auto active_scene() -> sbx::scenes::scene& {
   return sbx::core::engine::get_module<sbx::scenes::scenes_module>().active_scene();

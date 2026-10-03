@@ -11,12 +11,7 @@
 
 namespace editor {
 
-/**
- * @brief On-demand window for authoring physics::nav_settings and baking the navmesh in Edit mode
- * (physics_module::bake_navmesh), rather than only ever seeing it appear on entering Play --
- * see hierarchy_panel::window_name for the on-demand-vs-default-dock distinction. Opened from the
- * View menu, like the physics debug-draw toggles.
- */
+/** @brief Edits physics::nav_settings and bakes the navmesh in Edit mode. Opened from the View menu. */
 class navigation_panel final : public editor_panel {
 
 public:

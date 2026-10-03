@@ -96,7 +96,6 @@ auto presentation_module::_consume() -> void {
       _scene_renderer->record(*command_buffer, swapchain_extent);
     }
 
-    // Always runs, scene or not — presenting something to the swapchain is never optional.
     if (_compositor) {
       auto context = compositor_context{
         .command_buffer = command_buffer,
@@ -109,7 +108,7 @@ auto presentation_module::_consume() -> void {
       clear_swapchain(*command_buffer, swapchain.active_image_view(), swapchain_extent);
     }
 
-    // Always drawn on top of whatever the compositor wrote.
+  // Always drawn on top of the compositor's output.
     if (_ui_renderer) {
       _ui_renderer->render(*command_buffer, swapchain_extent, _ui_data);
     }

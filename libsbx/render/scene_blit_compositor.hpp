@@ -12,13 +12,7 @@
 
 namespace sbx::render {
 
-/**
- * @brief Default compositor: blits scene_renderer_module::final_image() to the swapchain.
- *
- * Clears the swapchain instead if nothing was rendered this frame (@ref
- * scene_renderer_module::has_rendered). Registered automatically by scene_renderer_module's
- * constructor, so apps need no code of their own to present the scene.
- */
+/** @brief Default compositor: blits final_image() to the swapchain, or clears it when nothing rendered. Registered by scene_renderer_module. */
 class scene_blit_compositor final : public compositor {
 
 public:

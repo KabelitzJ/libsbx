@@ -151,9 +151,7 @@ inline constexpr auto write_access_mask =
   return (access & write_access_mask) != graphics::access::none;
 }
 
-// The source scope the barrier in front of this access needs, or nullopt when an earlier barrier
-// already covers it (a read in a stage/access that has already waited on the last write). Advances
-// state past the access. is_transition marks a layout change, which counts as a write.
+// The source scope the barrier before this access needs, or nullopt when an earlier barrier already covers it. Advances state; a layout transition counts as a write.
 [[nodiscard]] auto advance_sync(sync_state& state, graphics::pipeline_stage stage, graphics::access access, bool is_transition) -> std::optional<sync_scope> {
   const auto writes = is_write_access(access);
   const auto is_write = writes || is_transition;
@@ -169,8 +167,7 @@ inline constexpr auto write_access_mask =
   }
 
   if (is_write || !state.touched) {
-    // A pure read that transitioned (or first-touched) the resource: the barrier just emitted is
-    // the new point later accesses chain from, and this read already waited on it.
+    // A read that transitioned or first-touched the resource: later accesses chain from this barrier.
     state.write_stage = stage;
     state.write_access = writes ? access : graphics::access::none;
     state.read_stages = writes ? graphics::pipeline_stage::none : stage;
@@ -222,12 +219,8 @@ auto render_graph::compile(const graph_resources& resources) -> void {
     }
   }
 
-  // The declared operations are walked twice. Round 0 only finds the state every resource is left
-  // in at the end of a frame; round 1 compiles for real, with each resource's first barrier waiting
-  // on that end state -- the previous frame's last accesses, which can still be executing with
-  // frames in flight (every render target is shared across them). Buffers aren't carried: every
-  // graph-tracked buffer has one region per frame slot (see resource_builder::reads_buffer), so the
-  // previous frame never touches what this frame does.
+  // Walked twice: round 0 finds each resource's end-of-frame state, round 1 compiles with each first barrier waiting on it, since the previous frame may still be running.
+  // Buffers aren't carried: graph-tracked buffers have one region per frame slot.
   auto carried_images = std::unordered_map<graphics::image_handle, sync_scope>{};
 
   for (auto round = 0u; round < 2u; ++round) {
@@ -240,8 +233,7 @@ auto render_graph::compile(const graph_resources& resources) -> void {
       image_states[image].carried = scope;
     }
 
-    // Image -> (entry index, group index) of the group whose first use cleared it. An entry index of
-    // _compiled.size() means the entry still being built (not yet pushed).
+    // Image -> (entry, group) whose first use cleared it; an entry index of _compiled.size() is the entry being built.
     auto cleared_by = std::unordered_map<graphics::image_handle, std::pair<std::size_t, std::uint32_t>>{};
 
     const auto record_clear = [&](graphics::image_handle image, std::uint32_t group_index) -> void {
@@ -256,8 +248,7 @@ auto render_graph::compile(const graph_resources& resources) -> void {
       }
     };
 
-    // Read-after-read in an already-covered stage stays barrier-free (e.g. transparent_accumulate_pass's
-    // depth read) -- see advance_sync().
+  // A read in an already-covered stage needs no barrier.
     const auto touch_image = [&](graphics::image_handle image, graphics::pipeline_stage stage, graphics::access access, graphics::image_layout layout) -> std::optional<graphics::command_buffer::image_transition_data> {
       auto& state = image_states[image];
 
@@ -311,8 +302,7 @@ auto render_graph::compile(const graph_resources& resources) -> void {
           auto& group = entry.groups[op.group_index];
           group.has_rendering = true;
 
-          // First touch this compile clears (to op.clear_color); later touches load. Peeked before
-          // touch_image, which is what actually marks it touched.
+          // The first touch this compile clears; later touches load. Checked before touch_image marks it.
           const auto is_first_use = !image_states[op.image].touched;
 
           if (is_first_use) {
@@ -497,8 +487,7 @@ auto render_graph::execute(render_context& context) -> void {
   const auto pass_count = static_cast<std::uint32_t>(_passes.size());
   const auto has_gpu_queries = _timestamp_pool && _pipeline_stats_pool;
 
-  // (slot * pass_count + pass_index) * 2 + (is_end ? 1 : 0) -- see initialize_gpu_queries's own
-  // sizing comment for why this range never needs to grow after construction.
+  // (slot * pass_count + pass_index) * 2 + is_end; the query pool is sized for this up front.
   const auto timestamp_base = context.slot * pass_count * 2u;
 
   if (has_gpu_queries) {
@@ -515,10 +504,7 @@ auto render_graph::execute(render_context& context) -> void {
     for (auto group_index = std::uint32_t{0u}; group_index < entry.groups.size(); ++group_index) {
       const auto& group = entry.groups[group_index];
 
-      // A disabled group still issues its barriers: compile() tracked every later barrier's
-      // old_layout/src scope assuming these ran, so skipping them would desync the real layouts.
-      // It also still runs its rendering scope (with nothing drawn) when a later group depends on a
-      // clear it performs -- see compiled_group::clear_on_skip.
+      // A disabled group still issues its barriers, since compile() assumed they ran, and still renders (drawing nothing) when a later group depends on its clear.
       const auto is_enabled = entry.pass->is_group_enabled(context, group_index);
       const auto runs_rendering = group.has_rendering && (is_enabled || group.clear_on_skip);
 

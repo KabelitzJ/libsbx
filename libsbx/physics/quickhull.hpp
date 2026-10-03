@@ -4,10 +4,7 @@
 /**
  * @file libsbx/physics/quickhull.hpp
  *
- * @brief Incremental 3-D convex hull construction (Barber/Dobkin/Huhdanpaa's "Quickhull" family):
- * given an arbitrary point cloud, returns the exact convex hull as a triangulated vertex/face list.
- * General-purpose and unbounded -- convex_hull_cache.hpp is the mesh-specific, capped/cached
- * consumer of this.
+ * @brief Exact 3D convex hull (Quickhull) of a point cloud as a triangulated vertex/face list; convex_hull_cache is its capped, cached consumer.
  *
  * @ingroup libsbx-physics
  */
@@ -25,7 +22,7 @@
 namespace sbx::physics {
 
 struct hull_face {
-  std::array<std::uint32_t, 3> indices; // into hull_result::vertices, wound so the face's outward normal follows the right-hand rule
+  std::array<std::uint32_t, 3> indices; // into hull_result::vertices, wound counter-clockwise around the outward normal
 }; // struct hull_face
 
 struct hull_result {
@@ -34,11 +31,11 @@ struct hull_result {
 }; // struct hull_result
 
 /**
- * @brief Computes the exact convex hull of @p points. Degenerates gracefully for inputs with fewer
- * than 4 points, or fewer than 4 affinely-independent ones (all coincident/collinear/coplanar):
- * returns whatever points survive as vertices and no faces, rather than failing -- callers that only
- * need a support function (GJK/EPA) still work correctly on a point-only result, they just don't get
- * a wireframe to draw.
+ * @brief The exact convex hull of @p points. Degenerate input (under 4 independent points) returns the points with no faces; the support function still works on those.
+ *
+ * @param points The point cloud.
+ *
+ * @return The hull.
  */
 [[nodiscard]] auto compute_convex_hull(std::span<const math::vector3> points) -> hull_result;
 

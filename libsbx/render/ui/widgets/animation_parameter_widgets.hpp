@@ -8,18 +8,21 @@
 namespace sbx::render {
 
 /**
- * @brief Draws the right control for @p value's current alternative -- a DragFloat, a Checkbox, a
- * DragInt, or a disabled "(Trigger)" label -- without switching on any type enum (see
- * assets::animation_parameter_value's doc comment). Shared by animation_graph_panel's Parameters
- * section and its transition condition editor's expected-value field.
- * @return true if @p value changed this frame.
+ * @brief Draws the control matching @p value's alternative: DragFloat, Checkbox, DragInt or a disabled "(Trigger)" label.
+ *
+ * @param label The widget label.
+ * @param value The value to edit.
+ *
+ * @return True if @p value changed this frame.
  */
 [[nodiscard]] auto draw_animation_parameter_value(const char* label, sbx::assets::animation_parameter_value& value) -> bool;
 
 /**
- * @brief A same-alternative, zero/false-initialized value -- for when a condition's target
- * parameter (and so its expected type) changes, so evaluate_animation_condition's
- * std::get_if<current_type> never silently fails against a stale alternative.
+ * @brief A zero-initialized value of the same alternative, for resetting a condition when its parameter's type changes.
+ *
+ * @param like The value whose alternative to match.
+ *
+ * @return The default value.
  */
 [[nodiscard]] auto default_for_same_alternative(const sbx::assets::animation_parameter_value& like) -> sbx::assets::animation_parameter_value;
 

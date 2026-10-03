@@ -47,9 +47,8 @@
 
 namespace editor {
 
-// Collapsing header with a close button and a right-click menu (Reset / Copy Values / Paste Values / Remove Component).
-// Returns whether the section's fields should be drawn: false when collapsed or when the component was just removed.
-// Copy Values goes into a per-type clipboard, so Paste Values is only ever offered on a component of the same type.
+// A collapsing header with a close button and a Reset / Copy / Paste / Remove menu; the clipboard is per component type.
+// Returns whether to draw the fields: false when collapsed or just removed.
 template<typename Component>
 auto draw_component_header(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node, const char* icon, const char* name) -> bool {
   static auto clipboard = std::optional<Component>{};
@@ -112,7 +111,7 @@ auto draw_camera_section(editor_state& state, sbx::scenes::scene& target, sbx::s
   bracket_edit(state, target, node, camera, pending, "Edit Camera");
   ImGui::DragFloat("Far Plane", &camera.far_plane, 1.0f, camera.near_plane, 100000.0f);
   bracket_edit(state, target, node, camera, pending, "Edit Camera");
-  // One group per post-processing effect, in the order the renderer applies them.
+  // One group per effect, in the order the renderer applies them.
   auto& post = camera.post_process;
 
   ImGui::SeparatorText("Post Processing");
@@ -216,7 +215,7 @@ auto draw_camera_section(editor_state& state, sbx::scenes::scene& target, sbx::s
     const auto before = camera;
     auto& assets_module = sbx::core::engine::get_module<sbx::assets::assets_module>();
 
-    // A lookup table is data, not colour: loaded unorm.
+    // A lookup table is data, so it's loaded unorm.
     if (draw_property_row("Lookup Table", [&] { return draw_texture_picker(state, "##camera_lut_picker_popup", grading.lut, assets_module, sbx::graphics::format::r8g8b8a8_unorm); })) {
       state.push_command(target, std::make_unique<modify_component_command<sbx::scenes::camera>>(node.id(), before, camera, "Edit Camera"));
     }
@@ -252,8 +251,7 @@ auto draw_mesh_renderer_section(editor_state& state, sbx::scenes::scene& target,
 
   auto& renderer = node.get_component<sbx::scenes::mesh_renderer>();
 
-  // Resolved within this single frame (popup-based pickers, not a multi-frame drag) — snapshot
-  // once up front and push at most one command at the end if anything below actually changed.
+  // Pickers resolve within one frame, so snapshot once and push at most one command.
   const auto before = renderer;
   auto changed = false;
 
@@ -264,16 +262,13 @@ auto draw_mesh_renderer_section(editor_state& state, sbx::scenes::scene& target,
   const auto new_mesh_id = renderer.mesh.is_valid() ? renderer.mesh->id() : sbx::math::uuid::nil();
 
   if (new_mesh_id != previous_mesh_id) {
-    // A different mesh was just picked — its own submeshes' materials should take over cleanly,
-    // not share slots (by index) with whatever the previous mesh happened to have.
+    // A new mesh's own submesh materials take over instead of sharing slots by index.
     renderer.materials.clear();
   }
 
   sbx::scenes::sync_materials_with_mesh(renderer);
 
-  // skeleton_pose is fully auto-managed, not user-addable/removable (see scenes::skeleton_pose's
-  // doc comment) -- its presence tracks whether the assigned mesh actually has a skeleton, exactly
-  // like sync_materials_with_mesh backfilling material slots above.
+  // skeleton_pose is managed automatically: present exactly when the mesh has a skeleton.
   if (renderer.mesh.is_valid() && renderer.mesh->skeleton().is_valid()) {
     node.get_or_add_component<sbx::scenes::skeleton_pose>().skeleton = renderer.mesh->skeleton();
   } else if (node.has_component<sbx::scenes::skeleton_pose>()) {
@@ -344,7 +339,7 @@ auto draw_animator_section(editor_state& state, sbx::scenes::scene& target, sbx:
 
   if (draw_property_row("Graph", [&] { return draw_animation_graph_picker(state, "##animation_graph_picker_popup", graph_handle, mesh->id()); })) {
     const auto before = anim;
-    anim.set_graph(graph_handle); // not a plain assignment -- reseeds parameters/current_state_id from the new graph's own defaults
+    anim.set_graph(graph_handle); // reseeds parameters and the current state from the new graph
     state.push_command(target, std::make_unique<modify_component_command<sbx::scenes::animator>>(node.id(), before, anim, "Edit Animator"));
   }
 
@@ -366,8 +361,7 @@ auto draw_animator_section(editor_state& state, sbx::scenes::scene& target, sbx:
   const auto current_state_it = std::ranges::find(states, anim.current_state_id, &sbx::assets::animation_state::id);
   ImGui::Text("Current State: %s", current_state_it != states.end() ? current_state_it->name.c_str() : "(none)");
 
-  // Always drawn (a progress bar rather than text that only appears mid-transition) so this row's
-  // height never changes as transitions start/stop -- nothing below it should ever jump.
+  // Always drawn so the row height doesn't change as transitions start and stop.
   const auto is_transitioning = anim.transition_target_state_id.has_value();
   auto overlay = std::string{"Not transitioning"};
   auto alpha = 0.0f;
@@ -380,9 +374,7 @@ auto draw_animator_section(editor_state& state, sbx::scenes::scene& target, sbx:
 
   ImGui::ProgressBar(alpha, ImVec2{-1.0f, 0.0f}, overlay.c_str());
 
-  // States/transitions themselves are hand-authored in the .animation_graph file until the visual
-  // graph editor lands (see plan) -- this section is only for testing them: assigning parameter
-  // values live, the same way gameplay code would via animator::set_float/set_bool/set_trigger.
+  // For testing: set parameter values live, like gameplay code would. States and transitions are edited in the graph editor.
   if (!anim.parameters.empty() && ImGui::TreeNodeEx("Parameters", ImGuiTreeNodeFlags_DefaultOpen)) {
     for (auto& [name, value] : anim.parameters) {
       ImGui::PushID(name.c_str());
@@ -485,8 +477,7 @@ auto draw_spot_light_section(editor_state& state, sbx::scenes::scene& target, sb
   ImGui::DragFloat("Range", &light.range, 0.05f, 0.0f, 10000.0f);
   bracket_edit(state, target, node, light, pending, "Edit Spot Light");
 
-  // inner_angle/outer_angle are stored in radians; SliderAngle operates on a radians pointer
-  // while displaying/editing in degrees, so these bind directly — no manual conversion.
+  // Angles are stored in radians; SliderAngle edits a radians value in degrees.
   ImGui::SliderAngle("Inner Angle", &light.inner_angle, 0.0f, 90.0f);
   bracket_edit(state, target, node, light, pending, "Edit Spot Light");
   ImGui::SliderAngle("Outer Angle", &light.outer_angle, 0.0f, 90.0f);
@@ -560,8 +551,7 @@ auto draw_particle_effect_instance_section(editor_state& state, sbx::scenes::sce
 
   ImGui::SeparatorText("Playback");
 
-  // Play/Pause/Stop below are transport controls, not authored data — deliberately excluded from
-  // undo/redo (only Loop above is tracked).
+  // Transport controls aren't authored data, so only Loop is undoable.
 
   const auto is_playing = instance.playback == sbx::scenes::particle_playback_state::playing;
   const auto is_stopped = instance.playback == sbx::scenes::particle_playback_state::stopped;
@@ -583,8 +573,7 @@ auto draw_particle_effect_instance_section(editor_state& state, sbx::scenes::sce
   ImGui::BeginDisabled(is_stopped);
 
   if (ImGui::Button(ICON_MDI_STOP " Stop")) {
-    // Only flips playback -- particles_module::fixed_update() notices next frame and clears every
-    // emitter's particle array on its own.
+    // particles_module clears the emitters next frame.
     instance.playback = sbx::scenes::particle_playback_state::stopped;
     instance.elapsed = 0.0f;
   }
@@ -624,8 +613,7 @@ auto draw_rigidbody_section(editor_state& state, sbx::scenes::scene& target, sbx
     ImGui::EndCombo();
   }
 
-  // inverse_mass is the stored source of truth (see rigidbody's doc comment) — the field here
-  // just presents/edits its reciprocal.
+  // inverse_mass is the stored value; this edits its reciprocal.
   auto mass = (body.inverse_mass > 0.0f) ? (1.0f / body.inverse_mass) : 0.0f;
 
   if (ImGui::DragFloat("Mass (kg)", &mass, 0.05f, 0.0f, 100000.0f)) {
@@ -713,7 +701,7 @@ auto draw_nav_agent_section(editor_state& state, sbx::scenes::scene& target, sbx
   ImGui::TextDisabled("Target: %.2f, %.2f, %.2f", agent.target.x(), agent.target.y(), agent.target.z());
 }
 
-// offset/rotation are shared by shape_collider and mesh_collider — same fields, same widgets.
+// Shared offset/rotation fields of shape_collider and mesh_collider.
 template<typename Collider>
 auto draw_collider_offset_rotation_friction(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node, Collider& collider, std::optional<Collider>& pending, const char* label) -> void {
   auto offset = std::array<std::float_t, 3u>{collider.offset.x(), collider.offset.y(), collider.offset.z()};
@@ -760,13 +748,12 @@ auto draw_shape_collider_section(editor_state& state, sbx::scenes::scene& target
   static auto pending = std::optional<sbx::physics::shape_collider>{};
 
   if (node.has_component<sbx::physics::mesh_collider>()) {
-    // Narrowphase only resolves one collider per node (shape_collider wins; see
-    // narrowphase.cpp's resolve_convex) — Add Component already blocks creating both.
+    // Only one collider per node is used, and shape_collider wins.
     ImGui::TextColored(ImVec4{1.0f, 0.7f, 0.2f, 1.0f}, ICON_MDI_ALERT_OUTLINE " Also has a Mesh Collider -- it will be ignored.");
   }
 
   static constexpr auto shape_names = std::array<const char*, 4u>{"Sphere", "Cylinder", "Capsule", "Box"};
-  const auto current_index = std::min(collider.shape.index(), std::size_t{3u}); // clamp: index 4 (triangle) never legitimately appears here
+  const auto current_index = std::min(collider.shape.index(), std::size_t{3u}); // triangles never appear here
 
   if (ImGui::BeginCombo("Shape", shape_names[current_index])) {
     for (auto index = std::size_t{0u}; index < shape_names.size(); ++index) {
@@ -829,8 +816,7 @@ auto draw_mesh_collider_section(editor_state& state, sbx::scenes::scene& target,
   static auto pending = std::optional<sbx::physics::mesh_collider>{};
 
   if (node.has_component<sbx::physics::shape_collider>()) {
-    // Narrowphase only resolves one collider per node (shape_collider wins; see
-    // narrowphase.cpp's resolve_convex) — Add Component already blocks creating both.
+    // Only one collider per node is used, and shape_collider wins.
     ImGui::TextColored(ImVec4{1.0f, 0.7f, 0.2f, 1.0f}, ICON_MDI_ALERT_OUTLINE " Also has a Shape Collider -- this one will be ignored.");
   }
 
@@ -989,6 +975,9 @@ auto draw_rect_transform_section(editor_state& state, sbx::scenes::scene& target
   const auto commit_after = [&](const vector2_edit_result& result) {
     if (result.committed && pending_before) {
       state.push_command(target, std::make_unique<modify_component_command<sbx::canvas::rect_transform>>(node.id(), *pending_before, rect, "Edit Rect Transform"));
+    }
+
+    if (result.ended) {
       pending_before.reset();
     }
   };

@@ -17,9 +17,7 @@
 
 namespace editor {
 
-// Builds the sparse "explicitly included" index list from a parallel checkbox vector -- empty
-// when every box is checked, mirroring this codebase's "empty means include everything" convention
-// (see mesh_import_options' fields).
+// The indices of checked boxes, or empty when all are checked ("empty means everything").
 auto all_checked_indices(const std::vector<bool>& checks) -> std::vector<std::size_t> {
   if (std::ranges::all_of(checks, [](bool checked) { return checked; })) {
     return {};
@@ -36,8 +34,7 @@ auto all_checked_indices(const std::vector<bool>& checks) -> std::vector<std::si
   return indices;
 }
 
-// Drains _import_dialog's result (if any) into _pending_asset_imports, then works through that
-// queue until it's empty or a name clash needs a decision.
+// Drains the import dialog's result into the queue, then works through it until done or a name clash needs a decision.
 auto asset_browser_panel::_process_pending_asset_imports(editor_state& state) -> void {
   auto& project = sbx::core::engine::project();
 
@@ -60,25 +57,19 @@ auto asset_browser_panel::_process_pending_asset_imports(editor_state& state) ->
   }
 }
 
-// Copies @p source to @p destination (already resolved, clash already handled by the caller) and
-// imports/cooks it — the "Import from Disk..." counterpart to the per-entry Import path in
-// asset_browser_grid_view.cpp.
+// Copies @p source to the already resolved @p destination and imports it.
 auto asset_browser_panel::_import_asset_file(editor_state& state, const std::filesystem::path& source, const std::filesystem::path& destination) -> void {
   auto& project = sbx::core::engine::project();
   auto& assets_module = sbx::core::engine::get_module<sbx::assets::assets_module>();
 
   std::filesystem::create_directories(destination.parent_path());
 
-  // copy_file throws if source and destination are the same file (e.g. picking a file already
-  // inside the current folder via the dialog) — nothing to copy in that case, just (re-)import it.
+  // copy_file throws when source and destination are the same file; then just re-import.
   auto ec = std::error_code{};
   if (!std::filesystem::equivalent(source, destination, ec)) {
     std::filesystem::copy_file(source, destination, std::filesystem::copy_options::overwrite_existing);
 
-    // A loose (non-binary) .gltf references its .bin buffer and its image textures by relative
-    // path -- copying only the picked file leaves those missing at the new location, and both
-    // inspect_mesh_source and the actual cook fail outright without them (fastgltf can't resolve
-    // the reference). Bring every referenced sibling file along too.
+    // A loose .gltf needs its referenced .bin and images next to it, or inspecting and cooking fail.
     if (destination.extension() == ".gltf") {
       for (const auto& reference : sbx::assets::asset_cooker::gltf_external_file_references(source)) {
         const auto reference_source = source.parent_path() / reference;
@@ -103,11 +94,7 @@ auto asset_browser_panel::_import_asset_file(editor_state& state, const std::fil
   _needs_refresh = true;
 }
 
-// Queues @p relative_path for the mesh import-settings dialog if it has no `.meta` yet (arming the
-// dialog immediately if the queue was empty), returning true if it was queued. Returns false --
-// caller should import it immediately instead -- if it's already known. The single place both the
-// grid's tile click and "Import from Disk..." register a not-yet-imported mesh, so a multi-file
-// pick queues one dialog per file instead of only the last one winning.
+// Queues a mesh without a `.meta` for the import settings dialog and returns true; returns false for known meshes, which the caller imports directly.
 auto asset_browser_panel::_defer_mesh_import_if_unseen(const std::filesystem::path& relative_path) -> bool {
   auto& project = sbx::core::engine::project();
 
@@ -127,9 +114,7 @@ auto asset_browser_panel::_defer_mesh_import_if_unseen(const std::filesystem::pa
   return true;
 }
 
-// Runs asset_cooker::inspect_mesh_source on _pending_mesh_imports.front(), resets
-// _mesh_import_options to defaults, sizes both check-vectors to all-true, and arms
-// _show_import_mesh_dialog. No-op if the queue is empty.
+// Inspects the next queued mesh, resets the options and checkboxes, and shows the dialog. No-op if the queue is empty.
 auto asset_browser_panel::_begin_mesh_import_dialog() -> void {
   if (_pending_mesh_imports.empty()) {
     return;
@@ -144,9 +129,7 @@ auto asset_browser_panel::_begin_mesh_import_dialog() -> void {
   _show_import_mesh_dialog = true;
 }
 
-// The import-mesh, import-conflict, and delete-confirmation modals -- each opens itself from its
-// own _show_*_dialog flag, set elsewhere (the per-entry click path, _process_pending_asset_imports,
-// and _request_delete respectively).
+// The import-mesh, import-conflict and delete-confirmation modals, each opened by its _show_*_dialog flag.
 auto asset_browser_panel::_draw_import_and_delete_dialogs(editor_state& state) -> void {
   auto& project = sbx::core::engine::project();
   auto& assets_module = sbx::core::engine::get_module<sbx::assets::assets_module>();
@@ -158,7 +141,7 @@ auto asset_browser_panel::_draw_import_and_delete_dialogs(editor_state& state) -
 
   if (ImGui::BeginPopupModal("Import Mesh", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
     if (_pending_mesh_imports.empty()) {
-      // Closed via Escape/the OS close gesture rather than Import/Skip -- nothing left to show.
+      // Closed with Escape or the window's close button.
       ImGui::CloseCurrentPopup();
     } else {
       const auto& pending_path = _pending_mesh_imports.front();
@@ -232,7 +215,7 @@ auto asset_browser_panel::_draw_import_and_delete_dialogs(editor_state& state) -
         const auto id = assets_module.import(project.assets_directory() / pending_path);
         assets_module.load_mesh(id, options, /*force_recook=*/true);
         state.select_asset(id, pending_path, asset_kind::mesh);
-        _needs_refresh = true; // newly extracted .material files may now be visible in this folder
+        _needs_refresh = true; // extracted .material files may now be in this folder
 
         _pending_mesh_imports.erase(_pending_mesh_imports.begin());
         ImGui::CloseCurrentPopup();

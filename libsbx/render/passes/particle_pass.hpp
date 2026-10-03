@@ -21,22 +21,11 @@
 namespace sbx::render {
 
 /**
- * @brief Draws particle billboards, meshes, trails, and GPU-path particles, bucketed into two
- * attachment groups by blend mode.
+ * @brief Draws particle billboards, meshes, trails and GPU-path particles in two groups by blend mode.
  *
- * Group 0 (alpha_blend) writes into the weighted-OIT accumulator/revealage pair so
- * transparent_resolve_pass composites it with ordinary transparent meshes. Group 1 (additive)
- * blends (one, one) directly onto resources.color_msaa, since weighted-OIT averages overlapping
- * colors instead of summing them -- backwards for additive glow.
- *
- * Runs between transparent_accumulate_pass and transparent_resolve_pass: alpha_blend output must
- * land in the accumulator before it resolves, and additive output must already be in
- * resources.color before transparent_resolve_pass composites over it.
- *
- * Mesh particles (instanced, unlit) and trail particles (non-instanced, vertex-pulled, width baked
- * into vertex position) share the same two groups, as do GPU-path particles
- * (assets::particle_simulation_mode::gpu), drawn via draw_indirect sized by
- * particle_simulate_pass's prepare_indirect_draw stage.
+ * Group 0 (alpha_blend) writes the weighted-OIT accumulator so transparent_resolve_pass composites it with transparent meshes.
+ * Group 1 (additive) blends (one, one) straight onto color_msaa, since weighted OIT averages overlapping colors instead of summing them.
+ * Runs between transparent_accumulate_pass and transparent_resolve_pass.
  */
 class particle_pass final : public graphics_pass {
 
@@ -56,19 +45,15 @@ public:
 
 private:
 
-  // [0] = alpha_blend (OIT accumulator/revealage, group 0), [1] = additive (direct color, group 1).
+  // [0] = alpha_blend (group 0), [1] = additive (group 1).
   std::array<memory::observer_ptr<graphics::graphics_pipeline>, 2u> _billboard_pipelines{};
   std::array<memory::observer_ptr<graphics::graphics_pipeline>, 2u> _mesh_pipelines{};
   std::array<memory::observer_ptr<graphics::graphics_pipeline>, 2u> _trail_pipelines{};
 
-  // GPU-path particles (shaders/particles/draw.slang), same two groups as the arrays above --
-  // draws context.particle_{additive,alpha}_draw_args via draw_indirect instead of a CPU-known
-  // instance count. See libsbx/render/particles/particle_simulate_pass.hpp for what fills these in.
+  // GPU-path particles, same groups, drawn indirectly from particle_simulate_pass's draw args.
   std::array<memory::observer_ptr<graphics::graphics_pipeline>, 2u> _gpu_particle_pipelines{};
 
-  // One buffer per frame-in-flight slot, grown geometrically as the live particle count grows --
-  // same reasoning as debug_draw_pass's buffers (the instance count varies frame to frame). Shared
-  // by both groups; uploaded at most once per frame regardless of which group's execute() runs first.
+  // One buffer per frame slot, grown geometrically; shared by both groups and uploaded at most once per frame.
   std::array<graphics::buffer_handle, graphics::swapchain::max_frames_in_flight> _billboard_buffers{};
   std::array<std::size_t, graphics::swapchain::max_frames_in_flight> _billboard_capacities{};
   std::array<graphics::buffer_handle, graphics::swapchain::max_frames_in_flight> _mesh_buffers{};

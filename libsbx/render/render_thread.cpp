@@ -8,9 +8,7 @@
 
 namespace sbx::render {
 
-
-auto _render_thread_id = std::atomic<std::thread::id>{};
-
+std::atomic<std::thread::id> render_thread::_render_thread_id{};
 
 render_thread::render_thread(const core::threading_policy policy, core::delegate<void()> work)
 : _policy{policy},

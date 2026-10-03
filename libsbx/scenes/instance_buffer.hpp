@@ -36,8 +36,8 @@ static_assert(sizeof(instance_data) == 80u, "instance_data must match frustum_cu
  * whole instance_buffer to change the instances.
  *
  * Create only while the render thread is idle (presentation_module::on_render_idle): creating
- * writes the resource registry. Destruction is safe anywhere: it only queues the buffer, which
- * collect_released (on render idle) retires once no frame in flight can still read it.
+ * writes the resource registry. Destruction is safe anywhere: it only queues the buffer with
+ * scenes_module, whose collect_released_instance_buffers (on render idle) retires it.
  */
 class instance_buffer : public utility::noncopyable {
 
@@ -55,9 +55,6 @@ public:
   [[nodiscard]] auto count() const noexcept -> std::uint32_t {
     return _count;
   }
-
-  /** @brief Retires every buffer whose instance_buffer was destroyed since the last call. Render idle only. */
-  static auto collect_released() -> void;
 
 private:
 

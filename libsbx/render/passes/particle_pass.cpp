@@ -27,7 +27,7 @@
 
 namespace sbx::render {
 
-// New buffers are sized at this multiple of what's actually needed, same reasoning as debug_draw_pass.
+// New buffers are oversized by this factor to grow geometrically.
 constexpr auto growth_factor = 1.5f;
 
 inline constexpr auto alpha_blend_group = std::uint32_t{0u};
@@ -38,9 +38,7 @@ struct particle_billboard_push {
   graphics::buffer::address_type instance_address;
   std::uint32_t instance_offset;
   std::uint32_t sampler_index;
-  // Explicit padding rather than relying on an implicit rule -- both this struct and the shader's
-  // matching push_data lay every field out by hand so a float4's usual 16-byte hardware alignment
-  // can never silently disagree between the two sides.
+  // Explicit padding, mirrored by the shader's push_data, so float4 alignment can't silently differ.
   std::uint32_t _padding0;
   std::uint32_t _padding1;
   math::vector4 camera_right;
@@ -71,9 +69,7 @@ struct particle_gpu_push {
   std::uint32_t sampler_index;
 }; // struct particle_gpu_push
 
-// Shared by both the billboard and mesh pipelines: group 0's weighted-OIT pair for alpha_blend, and
-// group 1's single-attachment true-additive blend (see particle_pass's doc comment for why additive
-// bypasses OIT). Only the shader differs between billboard and mesh variants.
+// Group 0 uses the weighted-OIT pair, group 1 true additive; billboard and mesh variants differ only in the shader.
 auto make_alpha_blend_blend_attachments() -> std::vector<graphics::blend_attachment> {
   return {
     graphics::blend_attachment{
@@ -147,8 +143,7 @@ particle_pass::particle_pass() {
   const auto& gpu_alpha_blend_shader = shader_cache.get({"engine://shaders/particles/draw.slang", gpu_alpha_blend_entry_points});
   const auto& gpu_additive_shader = shader_cache.get({"engine://shaders/particles/draw.slang", gpu_additive_entry_points});
 
-  // Group 0 pipeline: two color attachments (accumulator + revealage), the weighted-OIT pair,
-  // identical to transparent_accumulate_pass's blend state.
+  // Group 0: accumulator + revealage, the same blend state as transparent_accumulate_pass.
   auto billboard_alpha_blend_info = graphics::graphics_pipeline::create_info{
     .shader = billboard_alpha_blend_shader,
     .color_formats = {render_pass::hdr_format, graphics::format::r16_sfloat},
@@ -162,9 +157,7 @@ particle_pass::particle_pass() {
     .name = "Particles Billboard Alpha Blend"
   };
 
-  // Group 1 pipeline: one color attachment (the real scene color target), a plain (one, one, add)
-  // additive blend -- true additive, not routed through the OIT weighting at all (see this class's
-  // doc comment for why that would be wrong).
+  // Group 1: the scene color target with plain (one, one, add) blending.
   auto billboard_additive_info = graphics::graphics_pipeline::create_info{
     .shader = billboard_additive_shader,
     .color_formats = {render_pass::hdr_format},
@@ -178,9 +171,7 @@ particle_pass::particle_pass() {
     .name = "Particles Billboard Additive"
   };
 
-  // Mesh particle pipelines mirror the billboard ones exactly (same two groups, same blend states) --
-  // cull_mode::none since mesh particles rarely benefit from backface culling (small, fast-moving,
-  // often not authored with outward-facing normals in mind).
+  // Mesh particles mirror the billboard pipelines, with culling off since they're rarely authored with outward normals.
   auto mesh_alpha_blend_info = billboard_alpha_blend_info;
   mesh_alpha_blend_info.shader = mesh_alpha_blend_shader;
   mesh_alpha_blend_info.name = "Particles Mesh Alpha Blend";
@@ -189,8 +180,7 @@ particle_pass::particle_pass() {
   mesh_additive_info.shader = mesh_additive_shader;
   mesh_additive_info.name = "Particles Mesh Additive";
 
-  // Trail pipelines mirror the billboard ones too, but as a triangle_list (the ribbon is already
-  // triangulated CPU-side at extraction) instead of the billboard's baked-quad vertex-pulling.
+  // Trails mirror the billboard pipelines as a triangle list, already triangulated at extraction.
   auto trail_alpha_blend_info = billboard_alpha_blend_info;
   trail_alpha_blend_info.shader = trail_alpha_blend_shader;
   trail_alpha_blend_info.topology = graphics::primitive_topology::triangle_list;
@@ -201,9 +191,7 @@ particle_pass::particle_pass() {
   trail_additive_info.topology = graphics::primitive_topology::triangle_list;
   trail_additive_info.name = "Particles Trail Additive";
 
-  // GPU-path pipelines mirror the billboard ones exactly (same two groups, same blend states,
-  // same billboard quad vertex-pulling) -- only the shader (and its instance source: the GPU pool's
-  // particles/alive_list/emitters buffers instead of a CPU-uploaded instance buffer) differs.
+  // GPU-path pipelines mirror the billboard ones; only the shader and its instance source differ.
   auto gpu_alpha_blend_info = billboard_alpha_blend_info;
   gpu_alpha_blend_info.shader = gpu_alpha_blend_shader;
   gpu_alpha_blend_info.name = "Particles GPU Alpha Blend";
@@ -364,9 +352,7 @@ auto particle_pass::_draw_billboards(render_context& context, std::uint32_t grou
 
   const auto& buffer = registry.get<graphics::buffer>(_billboard_buffers[context.slot]);
 
-  // The camera's world-space right/up axes, for orienting each billboard toward it -- derived from
-  // the camera's own world matrix (the inverse of the view matrix already in the packet) rather than
-  // reading rows out of the view matrix directly, to sidestep any row/column convention ambiguity.
+  // Camera right/up axes from the inverted view matrix, avoiding row/column convention ambiguity.
   const auto camera_world = math::matrix4x4::inverted(context.packet->camera.view);
   const auto camera_right = math::vector3{camera_world[0]};
   const auto camera_up = math::vector3{camera_world[1]};

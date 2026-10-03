@@ -49,12 +49,7 @@ auto inspector_panel::_draw_material_properties(editor_state& state, const asset
 
   auto changed = draw_text_field("Name", _material_edit.name);
 
-  // One dropdown picks the material's actual type -- Unlit/PBR draw the built-in field set below;
-  // Shader Graph shows only the picker + that graph's own exposed parameters (material.hpp's
-  // shading_model doc comment: every built-in field is otherwise dead once a material is typed
-  // Shader Graph, and one with no graph assigned is invalid, not a silent fallback to PBR). Shader
-  // Code shows its file path plus the full built-in field set, since hand-written code may read any
-  // of them (material.albedo_index etc.).
+  // The material type: Unlit/PBR show the built-in fields, Shader Graph only the graph's exposed parameters, Shader Code the file plus every built-in field.
   static constexpr auto material_type_names = std::array<const char*, 4u>{"Unlit", "PBR", "Shader Graph", "Shader Code"};
 
   const auto material_type_index = [](sbx::assets::shading_model shading) -> std::int32_t {
@@ -62,7 +57,7 @@ auto inspector_panel::_draw_material_properties(editor_state& state, const asset
       case sbx::assets::shading_model::unlit: return 0;
       case sbx::assets::shading_model::shader_graph: return 2;
       case sbx::assets::shading_model::shader_code: return 3;
-      default: return 1; // pbr
+      default: return 1;
     }
   };
 
@@ -82,13 +77,7 @@ auto inspector_panel::_draw_material_properties(editor_state& state, const asset
 
   const auto is_shader_graph = _material_edit.shading == sbx::assets::shading_model::shader_graph;
 
-  // Alpha mode/cull/shadow/UV transform are all orthogonal to shading type -- a Shader Graph
-  // material still goes through the same opaque-vs-blend pass routing, cull mode, shadow casting/
-  // receiving, and apply_uv_transform as a built-in one (shader_graph_codegen.cpp's generated
-  // fragment_main applies uv_tiling/uv_offset itself, and every pass's custom_pipeline_resolver
-  // reads is_double_sided the same way it reads it for a built-in material). These used to be
-  // built-in-only fields here, which meant a Shader Graph material couldn't have "Casts Shadow"
-  // (etc.) seen or changed in the inspector at all.
+  // Alpha mode, culling, shadows and UV transform apply to every material type.
   static constexpr auto alpha_mode_names = std::array<const char*, 3u>{"Opaque", "Mask", "Blend"};
   auto alpha_index = static_cast<std::int32_t>(_material_edit.alpha);
 
@@ -125,13 +114,7 @@ auto inspector_panel::_draw_material_properties(editor_state& state, const asset
       _shader_graph_seed_pending = _material_edit.shader_graph.is_valid();
     }
 
-    // The graph a picker pick just assigned loads asynchronously, so its nodes/parameters() are
-    // still empty on the very frame it's picked -- deferred until it's actually resident (see
-    // _shader_graph_seed_pending's own doc comment). A freshly (re)assigned graph's exposed
-    // parameters start at each node's own authored default (see
-    // shader_graph_default_generic_params) instead of silently zero -- picking a new graph is
-    // exactly the moment those old slot values stop meaning anything anyway (a different graph's
-    // own slots), so overwriting here doesn't clobber anything the user meant to keep.
+    // A newly assigned graph loads asynchronously; once it's resident, its parameters start at the nodes' authored defaults.
     if (_shader_graph_seed_pending && _material_edit.shader_graph.is_valid() && !_material_edit.shader_graph->nodes().empty()) {
       _material_edit.generic_params = sbx::assets::shader_graph_default_generic_params(*_material_edit.shader_graph);
       _material_edit.generic_textures = sbx::assets::shader_graph_default_generic_textures(*_material_edit.shader_graph);
@@ -184,10 +167,7 @@ auto inspector_panel::_draw_material_properties(editor_state& state, const asset
           break;
         }
         case sbx::assets::shader_graph_parameter_type::vector4_value: {
-          // See shader_graph_panel.cpp's own constant_vector4 case -- no draw_vector4_control
-          // widget exists, so a plain labeled X/Y/Z/W row of DragFloats here too. The enclosing
-          // loop's own PushID(parameter.type/slot) above already scopes "X"/"Y"/"Z"/"W" against
-          // any other exposed parameter's own same-named rows.
+          // No four-component vector widget exists, so a row of DragFloats; the loop's PushID keeps the labels unique.
           if (parameter.slot < _material_edit.generic_params.size()) {
             auto& value = _material_edit.generic_params[parameter.slot];
             auto components = std::array<std::float_t, 4u>{value.x(), value.y(), value.z(), value.w()};
@@ -245,8 +225,7 @@ auto inspector_panel::_draw_material_properties(editor_state& state, const asset
     if (is_shader_code) {
       ImGui::SeparatorText("Shader Code");
 
-      // Edited assets-relative (as stored in the .material file), held absolute. Lexical both ways,
-      // so a half-typed path (a trailing '/') survives the round trip every frame.
+      // Edited assets-relative, stored absolute; lexical conversion so a half-typed path survives each frame.
       const auto assets_directory = sbx::core::engine::project().assets_directory();
       auto relative = _material_edit.shader_code.empty() ? std::string{} : _material_edit.shader_code.lexically_relative(assets_directory).generic_string();
 
@@ -263,8 +242,7 @@ auto inspector_panel::_draw_material_properties(editor_state& state, const asset
 
       ImGui::TextDisabled("Compiled once per run: restart after editing the file.");
 
-      // The file declares nothing about its parameters (unlike a graph), so every slot is shown raw:
-      // material.generic_params[i] / material.generic_textures[i] in the shader.
+      // A shader file declares no parameters, so every generic slot is shown raw.
       ImGui::SeparatorText("Generic Parameters");
 
       for (auto i = std::size_t{0u}; i < _material_edit.generic_params.size(); ++i) {
@@ -299,8 +277,7 @@ auto inspector_panel::_draw_material_properties(editor_state& state, const asset
       changed = true;
     }
 
-    // Multiplies emissive_factor unbounded (shaders/lighting.slang) -- the usual way to push a
-    // material's own output past bloom_pass's threshold without touching any light in the scene.
+    // Unbounded multiplier on emissive_factor, to push a material past the bloom threshold.
     changed |= ImGui::DragFloat("Emissive Strength", &_material_edit.emissive_strength, 0.05f, 0.0f, 100.0f);
 
     if (is_pbr) {
@@ -329,8 +306,7 @@ auto inspector_panel::_draw_material_properties(editor_state& state, const asset
   }
 
   if (changed) {
-    // Live preview: mutates in place so every material_handle pointing at it reflects the edit
-    // next frame. Disk persistence stays an explicit Save (below).
+    // Live preview: every handle sees the edit next frame; Save persists it.
     assets_module.update_material(_asset_cache.material, _material_edit);
   }
 
@@ -396,8 +372,7 @@ auto inspector_panel::_draw_particle_effect_properties(editor_state& state, cons
         changed = true;
       }
 
-      // GPU silently ignores unsupported emitter configs (billboard-only, no
-      // collision/sub-emitters/trails/cone) rather than rejecting them; warn inline.
+      // The GPU path silently ignores unsupported features, so warn here.
       if (emitter.simulation_mode == sbx::assets::particle_simulation_mode::gpu && !emitter.supports_gpu_simulation()) {
         ImGui::TextColored(ImVec4{1.0f, 0.7f, 0.2f, 1.0f}, ICON_MDI_ALERT " GPU doesn't support this emitter's current config");
 
@@ -666,8 +641,7 @@ auto inspector_panel::_draw_particle_effect_properties(editor_state& state, cons
   }
 
   if (changed) {
-    // Live preview, same as _draw_material_properties — mutates in place; disk persistence stays
-    // an explicit Save (below).
+    // Live preview; Save persists it.
     assets_module.update_particle_effect(_asset_cache.particle_effect, _particle_effect_edit);
   }
 

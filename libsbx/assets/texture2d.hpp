@@ -13,10 +13,7 @@
 
 namespace sbx::assets {
 
-/**
- * @brief A loaded 2D texture, identified by its bindless index (textures[] in descriptors.slang). Valid to hold from load_texture().
- * Can be sampled only once resident.
- */
+/** @brief A loaded 2D texture, identified by its bindless index (textures[] in descriptors.slang). Sampleable once resident. */
 class texture2d final : public loadable {
 
   friend class asset_residency;
@@ -39,11 +36,29 @@ public:
     return _bindless_index;
   }
 
+  /**
+   * @brief The asset's id, shared by every record of the same file (one per format).
+   *
+   * @return The asset id.
+   */
   [[nodiscard]] auto id() const noexcept -> const math::uuid& {
     return _id;
   }
 
-  /** @brief Bindless storage-image index, for a texture a compute shader can write into as a UAV (see asset_residency::create_storage_image). invalid_index for an ordinary loaded texture -- it was never registered as a storage image. */
+  /**
+   * @brief This record's own id, unique even when one file is loaded in several formats. Scripts hold this one.
+   *
+   * @return The record id.
+   */
+  [[nodiscard]] auto handle() const noexcept -> const math::uuid& {
+    return _handle;
+  }
+
+  /**
+   * @brief The bindless storage-image index, for textures from create_storage_image.
+   *
+   * @return The index, or invalid_index for ordinary loaded textures.
+   */
   [[nodiscard]] auto storage_index() const noexcept -> std::uint32_t {
     return _storage_index;
   }
@@ -53,6 +68,7 @@ private:
   std::uint32_t _bindless_index{invalid_index};
   std::uint32_t _storage_index{invalid_index};
   math::uuid _id{math::uuid::nil()};
+  math::uuid _handle{math::uuid::create()};
 
 }; // class texture2d
 

@@ -32,7 +32,7 @@ namespace sbx::render {
   return std::filesystem::current_path();
 }
 
-// Case-insensitive alphabetical order, dirs-first sort key.
+// Directories first, then case-insensitive alphabetical.
 [[nodiscard]] auto filename_less(const std::filesystem::path& lhs, const std::filesystem::path& rhs) -> bool {
   const auto to_lower = [](const std::filesystem::path& path) {
     auto name = path.filename().string();
@@ -43,14 +43,13 @@ namespace sbx::render {
   return to_lower(lhs) < to_lower(rhs);
 }
 
-// Dotfiles/dotfolders never show up in the listing -- same convention as the editor's Asset
-// Browser, and what every native file manager does by default.
+// Dotfiles are hidden, like the Asset Browser and native file managers.
 [[nodiscard]] auto is_hidden_entry(const std::filesystem::path& name) -> bool {
   const auto name_string = name.string();
   return !name_string.empty() && name_string.front() == '.';
 }
 
-// Case-insensitive substring test for the search box -- an empty filter matches everything.
+// Case-insensitive substring match; an empty filter matches everything.
 [[nodiscard]] auto filter_matches(std::string_view name, std::string_view filter) -> bool {
   if (filter.empty()) {
     return true;
@@ -127,7 +126,7 @@ auto file_dialog::_refresh_entries() -> void {
 
     if (!is_directory) {
       if (_options.mode == file_dialog_mode::select_folder) {
-        continue; // folder mode only ever lists directories — nothing else could ever be picked.
+        continue; // folder mode only lists directories
       }
 
       if (!_options.extensions.empty() && std::ranges::find(_options.extensions, dir_entry.path().extension().string()) == _options.extensions.end()) {
@@ -266,8 +265,7 @@ auto file_dialog::_draw_breadcrumbs() -> void {
 
   ImGui::SameLine();
 
-  // Root segment (drive root on Windows, "/" elsewhere), then one clickable button per path
-  // component after it — clicking any segment jumps straight there.
+  // The root, then one button per path component that jumps there.
   auto accumulated = _current_directory.root_path();
 
   ImGui::PushID("##file_dialog_breadcrumb_root");
@@ -298,8 +296,7 @@ auto file_dialog::_draw_breadcrumbs() -> void {
     ImGui::PopID();
   }
 
-  // New Folder, right-aligned on this same row -- available in every mode, same as a native
-  // dialog's own toolbar.
+  // New Folder, right-aligned on the same row.
   const auto new_folder_label = std::string{ICON_MDI_FOLDER_PLUS} + " New Folder";
   const auto button_width = ImGui::CalcTextSize(new_folder_label.c_str()).x + ImGui::GetStyle().FramePadding.x * 2.0f;
   const auto avail = ImGui::GetContentRegionAvail().x;
@@ -336,7 +333,7 @@ auto file_dialog::_draw_shortcuts_sidebar() -> void {
 }
 
 auto file_dialog::_handle_keyboard_navigation(const std::vector<std::size_t>& visible) -> void {
-  // Never fights the search box or filename field's own text editing/cursor movement.
+  // Don't steal arrow keys from text fields.
   if (visible.empty() || ImGui::GetIO().WantTextInput) {
     return;
   }
@@ -385,7 +382,7 @@ auto file_dialog::_handle_keyboard_navigation(const std::vector<std::size_t>& vi
       break;
     }
     case file_dialog_mode::select_folder: {
-      break; // no file rows exist in this mode
+      break;
     }
   }
 }
@@ -546,7 +543,7 @@ auto file_dialog::draw() -> void {
   auto still_open = true;
 
   if (!ImGui::BeginPopupModal(_popup_id.c_str(), &still_open, ImGuiWindowFlags_NoSavedSettings)) {
-    return; // OpenPopup was only just requested this frame — nothing to draw yet.
+    return; // OpenPopup was only requested this frame
   }
 
   if (_needs_refresh) {
@@ -562,7 +559,7 @@ auto file_dialog::draw() -> void {
   ImGui::SetNextItemWidth(-1.0f);
   ImGui::InputTextWithHint("##file_dialog_filter", ICON_MDI_MAGNIFY " Search...", _filter_buffer.data(), _filter_buffer.size());
 
-  // Leaves room below for the filename field (save_file mode only) and the confirm/cancel row.
+  // Room for the file name field (save_file only) and the confirm/cancel row.
   const auto bottom_rows = (_options.mode == file_dialog_mode::save_file) ? 2.0f : 1.0f;
   const auto body_height = ImGui::GetContentRegionAvail().y - ImGui::GetFrameHeightWithSpacing() * bottom_rows;
 

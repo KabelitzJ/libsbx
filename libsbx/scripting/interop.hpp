@@ -28,7 +28,7 @@
 
 namespace sbx::scripting {
 
-/** @brief One glyph of a font, for Sbx.Core.FontGlyph -- same fields and units as assets::font::glyph (per 1 unit of font size, y down: the quad's top is baseline + bearing_y). */
+/** @brief Mirrors Sbx.Core.FontGlyph: same fields and units as assets::font::glyph, per unit of font size, y down. */
 struct font_glyph_data {
   std::float_t uv_x0;
   std::float_t uv_y0;
@@ -41,7 +41,7 @@ struct font_glyph_data {
   std::float_t advance;
 }; // struct font_glyph_data
 
-/** @brief A camera's post processing, for Sbx.Core.PostProcessSettings -- scenes::post_process_settings field for field, bools and enums as uint32 and the lookup table as a texture uuid (0 = none), so the managed struct lays out identically. Grows with post_process_settings. */
+/** @brief Mirrors Sbx.Core.PostProcessSettings: scenes::post_process_settings with bools and enums as uint32 and the lookup table as a texture uuid (0 = none). */
 struct post_process_data {
   std::float_t exposure;
 
@@ -79,9 +79,7 @@ struct post_process_data {
   std::uint32_t ao_samples;
 }; // struct post_process_data
 
-// Whole-component mirrors for the layout interop calls below -- one get/set pair per component
-// instead of one per field, the managed side editing a copy and writing it back. Flags are
-// uint32 (0/1) and enums their underlying value, so the managed structs lay out identically.
+// Whole-component mirrors for the layout calls: flags are uint32 (0/1) and enums their underlying value, so the managed structs lay out identically.
 
 struct layout_group_data {
   std::float_t spacing;
@@ -123,8 +121,8 @@ struct interop {
   static auto scripting_get_instance(std::uint64_t uuid, managed::string class_name) -> managed::object;
 
   static auto behavior_add_component(std::uint64_t uuid, managed::reflection_type component_type) -> void;
-  static auto behavior_has_component(std::uint64_t uuid, managed::reflection_type component_type) -> bool;
-  static auto behavior_remove_component(std::uint64_t uuid, managed::reflection_type component_type) -> bool;
+  static auto behavior_has_component(std::uint64_t uuid, managed::reflection_type component_type) -> managed::bool32;
+  static auto behavior_remove_component(std::uint64_t uuid, managed::reflection_type component_type) -> managed::bool32;
 
   static auto tag_get_tag(std::uint64_t uuid) -> managed::string;
 
@@ -152,7 +150,7 @@ struct interop {
 
   static auto transform_look_at(std::uint64_t uuid, math::vector3* target) -> void;
 
-  static auto animator_get_playing(std::uint64_t uuid) -> bool;
+  static auto animator_get_playing(std::uint64_t uuid) -> managed::bool32;
 
   static auto animator_set_playing(std::uint64_t uuid, bool value) -> void;
 
@@ -168,7 +166,7 @@ struct interop {
 
   static auto animator_get_float(std::uint64_t uuid, managed::string name) -> std::float_t;
 
-  static auto animator_get_bool(std::uint64_t uuid, managed::string name) -> bool;
+  static auto animator_get_bool(std::uint64_t uuid, managed::string name) -> managed::bool32;
 
   static auto animator_get_int(std::uint64_t uuid, managed::string name) -> std::int32_t;
 
@@ -197,14 +195,12 @@ struct interop {
   static auto node_create(managed::string name) -> std::uint64_t;
 
   /**
-   * @brief Instantiates the prefab at @p path (project-relative, same convention as every other
-   * asset path taken from script/YAML) as a new node subtree, parented under @p parent_uuid
-   * (0 = top-level, same "no real node has uuid 0" convention as node_set_parent's parent_uuid).
-   * Any scripts baked into the prefab's nodes are brought to life immediately (instantiate +
-   * OnCreate) if the scene is currently simulating — see scripting_module::instantiate_subtree_scripts.
-   * Returns 0 if @p path doesn't resolve to a valid prefab. An invalid @p parent_uuid doesn't fail
-   * the call — the instance is still created and returned, just left at the top level, same
-   * recovery as node_set_parent's own invalid-parent handling.
+   * @brief Instantiates the prefab at @p path (project-relative) as a new subtree under @p parent_uuid (0 = top level).
+   *
+   * Scripts in the prefab are instantiated immediately if the scene is simulating.
+   * An invalid @p parent_uuid leaves the instance at the top level.
+   *
+   * @return The new root's uuid, or 0 if @p path isn't a valid prefab.
    */
   static auto node_instantiate_prefab(managed::string path, std::uint64_t parent_uuid) -> std::uint64_t;
 
@@ -214,18 +210,18 @@ struct interop {
 
   static auto node_set_active(std::uint64_t uuid, bool active) -> void;
 
-  static auto node_get_is_active(std::uint64_t uuid) -> bool;
+  static auto node_get_is_active(std::uint64_t uuid) -> managed::bool32;
 
-  /** @brief Replaces the active scene's content with @p path (project-relative), same load-by-path convention as node_instantiate_prefab/particle_effect_load. No-op if @p path doesn't resolve to a valid scene. */
+  /** @brief Replaces the active scene with the scene at @p path (project-relative). No-op if @p path isn't a valid scene. */
   static auto scene_load(managed::string path) -> void;
 
-  /** @brief Saves the active scene's current content to @p path (project-relative), (re-)registering it as a first-class scene asset -- same round-trip editor::editor_ui_layer::_save_scene uses. */
+  /** @brief Saves the active scene to @p path (project-relative) and registers it as a scene asset. */
   static auto scene_save(managed::string path) -> void;
 
-  /** @brief Replaces the active scene with a fresh, empty one (a default camera only) -- no unsaved-changes guard, unlike the editor's New Scene; the caller is responsible for saving first if that matters. */
+  /** @brief Replaces the active scene with an empty one containing a default camera. Unsaved changes are discarded. */
   static auto scene_new() -> void;
 
-  /** @brief Loads (or reassigns) which .particle_effect asset this node's ParticleEffect component plays -- @p path is project-relative, same convention as every other asset path taken from script/YAML. */
+  /** @brief Sets which .particle_effect asset (project-relative @p path) the node's ParticleEffect plays. */
   static auto particle_effect_load(std::uint64_t uuid, managed::string path) -> void;
 
   static auto particle_effect_play(std::uint64_t uuid) -> void;
@@ -234,25 +230,11 @@ struct interop {
 
   static auto particle_effect_stop(std::uint64_t uuid) -> void;
 
-  static auto particle_effect_get_loop(std::uint64_t uuid) -> bool;
+  static auto particle_effect_get_loop(std::uint64_t uuid) -> managed::bool32;
 
   static auto particle_effect_set_loop(std::uint64_t uuid, bool value) -> void;
 
-  static auto particle_effect_get_is_playing(std::uint64_t uuid) -> bool;
-
-  // static auto character_controller_get_height(std::uint64_t uuid, std::float_t* height) -> void;
-
-  // static auto character_controller_get_radius(std::uint64_t uuid, std::float_t* radius) -> void;
-
-  // static auto character_controller_get_slope_limit(std::uint64_t uuid, std::float_t* slope_limit) -> void;
-
-  // static auto character_controller_get_step_offset(std::uint64_t uuid, std::float_t* step_offset) -> void;
-
-  // static auto character_controller_get_is_grounded(std::uint64_t uuid) -> managed::bool32;
-
-  // static auto character_controller_get_flags(std::uint64_t uuid, std::uint8_t* flags) -> void;
-
-  // static auto character_controller_move(std::uint64_t uuid, math::vector3* displacement) -> void;
+  static auto particle_effect_get_is_playing(std::uint64_t uuid) -> managed::bool32;
 
   static auto input_is_key_pressed(platform::key key) -> managed::bool32;
 
@@ -270,13 +252,11 @@ struct interop {
 
   static auto input_scroll_delta(math::vector2* scroll_delta) -> void;
 
-  // Main*: derived from scenes::scene::active_camera()'s own world_transform -- same source
-  // Transform's getters use for an arbitrary node, just always resolved against whichever node is
-  // the active camera instead of the calling script's own uuid.
+  // Main*: always resolved against the scene's active camera, not the calling script's node.
   static auto camera_screen_point_to_ray(math::ray* ray, math::vector2* position) -> void;
 
-  /** @brief Inverse of camera_screen_point_to_ray -- returns false (out_position left untouched) if world_position projects behind the camera (clip.w <= 0). */
-  static auto camera_world_to_screen_point(math::vector3* world_position, math::vector2* out_position) -> bool;
+  /** @brief Inverse of camera_screen_point_to_ray. False, leaving out_position untouched, if world_position is behind the camera. */
+  static auto camera_world_to_screen_point(math::vector3* world_position, math::vector2* out_position) -> managed::bool32;
 
   static auto camera_main_get_position(math::vector3* position) -> void;
 
@@ -296,12 +276,11 @@ struct interop {
 
   static auto camera_get_viewport_offset(math::vector2* offset) -> void;
 
-  /** @brief See render::scene_renderer_module::set_wireframe_enabled. */
   static auto render_settings_set_wireframe_enabled(bool enabled) -> void;
 
-  static auto render_settings_get_wireframe_enabled() -> bool;
+  static auto render_settings_get_wireframe_enabled() -> managed::bool32;
 
-  // Per-node scenes::camera field access, for a script sitting on a camera node itself (GetComponent<CameraSettings>()) -- distinct from the Main-prefixed functions above, which always target scene.active_camera() regardless of which node the calling script is on.
+  // Per-node scenes::camera access (GetComponent<CameraSettings>()), unlike the Main* functions above.
   static auto camera_get_fov_degrees(std::uint64_t uuid, std::float_t* fov_degrees) -> void;
 
   static auto camera_set_fov_degrees(std::uint64_t uuid, std::float_t fov_degrees) -> void;
@@ -318,7 +297,7 @@ struct interop {
 
   static auto camera_set_exposure(std::uint64_t uuid, std::float_t exposure) -> void;
 
-  /** @brief The camera's whole post processing: one get/set pair for every effect, the managed side editing a copy and writing it back. */
+  /** @brief The camera's whole post processing; the managed side edits a copy and writes it back. */
   static auto camera_get_post_process(std::uint64_t uuid, post_process_data* out_value) -> void;
 
   static auto camera_set_post_process(std::uint64_t uuid, const post_process_data* value) -> void;
@@ -326,41 +305,40 @@ struct interop {
   static auto time_delta_time(std::float_t* delta_time) -> void;
 
   /**
-   * @brief Raycasts against the active scene's broadphase -- shape_collider/convex mesh_collider
-   * primitives and heightfield_collider terrain (see physics::physics_module::raycast). @p
-   * layer_mask is the raw bits of a Sbx.Core.Physics.LayerMask (0xFFFFFFFF = every layer).
-   * Returns false, leaving every out parameter untouched, when nothing was hit within max_distance.
+   * @brief Raycasts against the active scene's colliders and terrain.
+   *
+   * @p layer_mask is the raw bits of a Sbx.Core.Physics.LayerMask (0xFFFFFFFF = every layer).
+   *
+   * @return False, leaving every out parameter untouched, when nothing was hit within max_distance.
    */
-  static auto physics_raycast(math::ray* ray, std::float_t max_distance, std::uint32_t layer_mask, std::uint64_t* out_node_uuid, math::vector3* out_point, math::vector3* out_normal, std::float_t* out_distance) -> bool;
+  static auto physics_raycast(math::ray* ray, std::float_t max_distance, std::uint32_t layer_mask, std::uint64_t* out_node_uuid, math::vector3* out_point, math::vector3* out_normal, std::float_t* out_distance) -> managed::bool32;
 
-  /** @brief Bakes the navmesh from the active scene's static geometry right now (physics::physics_module::bake_navmesh). Returns whether the bake produced any usable polygons. */
-  static auto nav_bake(std::float_t agent_radius, std::float_t agent_height, std::float_t agent_max_slope, std::float_t agent_max_climb, std::float_t cell_size, std::float_t cell_height, std::float_t region_min_size, std::float_t region_merge_size, std::float_t edge_max_length, std::float_t edge_max_error, std::int32_t verts_per_poly) -> bool;
+  /** @brief Bakes the navmesh from the active scene's static geometry. Returns whether any usable polygons were produced. */
+  static auto nav_bake(std::float_t agent_radius, std::float_t agent_height, std::float_t agent_max_slope, std::float_t agent_max_climb, std::float_t cell_size, std::float_t cell_height, std::float_t region_min_size, std::float_t region_merge_size, std::float_t edge_max_length, std::float_t edge_max_error, std::int32_t verts_per_poly) -> managed::bool32;
 
-  /** @brief Whether physics_module currently holds a baked navmesh. */
-  static auto nav_has_navmesh() -> bool;
+  static auto nav_has_navmesh() -> managed::bool32;
 
-  /** @brief The closest point on the navmesh to @p point (nearest polygon, then clamped to it). Returns false, leaving out_result untouched, if there's no navmesh yet. */
-  static auto nav_sample_position(math::vector3* point, math::vector3* out_result) -> bool;
+  /** @brief The closest point on the navmesh to @p point. False, leaving out_result untouched, if there's no navmesh. */
+  static auto nav_sample_position(math::vector3* point, math::vector3* out_result) -> managed::bool32;
 
-  /** @brief Requests the node's nav_agent walk to @p target (physics::physics_module::request_agent_move). Returns false if there's no navmesh, the node has no nav_agent, or no path was found. */
-  static auto nav_agent_set_destination(std::uint64_t uuid, math::vector3* target) -> bool;
+  /** @brief Requests a path to @p target. False if there's no navmesh, the node has no nav_agent, or no path was found. */
+  static auto nav_agent_set_destination(std::uint64_t uuid, math::vector3* target) -> managed::bool32;
 
-  /** @brief nav_agent_state (0 = Idle, 1 = Moving, 2 = TargetUnreachable) as a plain byte for the C# enum. */
+  /** @brief nav_agent_state as a byte: 0 = Idle, 1 = Moving, 2 = TargetUnreachable. */
   static auto nav_agent_get_state(std::uint64_t uuid) -> std::uint8_t;
 
   static auto nav_agent_get_velocity(std::uint64_t uuid, math::vector3* out_velocity) -> void;
 
-  /** @brief Straight-line distance from the agent's current corridor position to its current target. */
   static auto nav_agent_get_remaining_distance(std::uint64_t uuid, std::float_t* out_distance) -> void;
 
   static auto nav_agent_get_radius(std::uint64_t uuid, std::float_t* out_radius) -> void;
   static auto nav_agent_set_radius(std::uint64_t uuid, std::float_t radius) -> void;
 
-  /** @brief Used to vertically cull crowd neighbors -- two agents whose height gap exceeds half the sum of their heights are never treated as colliding, even if close in X/Z (e.g. one on a ramp above the other). */
+  /** @brief Agents whose height gap exceeds half the sum of their heights never collide, even when close in X/Z. */
   static auto nav_agent_get_height(std::uint64_t uuid, std::float_t* out_height) -> void;
   static auto nav_agent_set_height(std::uint64_t uuid, std::float_t height) -> void;
 
-  /** @brief How far above the sampled navmesh surface height the node's own pivot should sit (e.g. half the height for a capsule centered on its own origin, 0 for a foot-pivoted model). */
+  /** @brief Height of the node's pivot above the navmesh surface (half the height for a centered capsule, 0 for a foot pivot). */
   static auto nav_agent_get_base_offset(std::uint64_t uuid, std::float_t* out_base_offset) -> void;
   static auto nav_agent_set_base_offset(std::uint64_t uuid, std::float_t base_offset) -> void;
 
@@ -370,55 +348,42 @@ struct interop {
   static auto nav_agent_get_acceleration(std::uint64_t uuid, std::float_t* out_acceleration) -> void;
   static auto nav_agent_set_acceleration(std::uint64_t uuid, std::float_t acceleration) -> void;
 
-  /** @brief (Re)generates the active scene's terrain -- see terrain::terrain_module::generate. Replaces any terrain a previous call generated. */
+  /** @brief Regenerates the active scene's terrain, replacing any previous one. */
   static auto terrain_generate(std::uint32_t width, std::uint32_t depth, std::float_t cell_size, std::float_t frequency, std::float_t amplitude, std::uint32_t octaves) -> void;
 
-  /** @brief Elevation sampling against the active scene's terrain_module heightmap -- 0 if no terrain has been generated yet (see terrain::heightmap::sample_bilinear's own empty-map fallback). */
+  /** @brief Terrain height at @p world_xz, 0 if no terrain exists. */
   static auto terrain_sample_height(math::vector2* world_xz, std::float_t* out_height) -> void;
 
-  /** @brief Surface normal sampling against the active scene's terrain_module heightmap -- +Y if no terrain has been generated yet (see terrain::heightmap::sample_normal's own empty-map fallback). */
+  /** @brief Terrain normal at @p world_xz, +Y if no terrain exists. */
   static auto terrain_sample_normal(math::vector2* world_xz, math::vector3* out_normal) -> void;
 
-  /** @brief See math::noise::simplex(x, y, z) -- pure function of its inputs, no scene/module state involved. Roughly in [-1, 1]. */
+  /** @brief math::noise::simplex, roughly in [-1, 1]. */
   static auto math_noise_simplex(std::float_t x, std::float_t y, std::float_t z) -> std::float_t;
 
-  /** @brief See math::noise::fractal(x, y, z, octaves) -- multi-octave (fractal Brownian motion) simplex, smoother/larger-scale than a single simplex() call. Roughly in [-1, 1]. */
+  /** @brief math::noise::fractal (multi-octave simplex), roughly in [-1, 1]. */
   static auto math_noise_fractal(std::float_t x, std::float_t y, std::float_t z, std::uint32_t octaves, std::float_t lacunarity, std::float_t gain) -> std::float_t;
 
   /**
-   * @brief Builds a mesh from raw vertex/index data and assigns it to this node's mesh_renderer
-   * component (creating the component, and a backing material, the first time this is called for a
-   * given node). See assets::asset_residency::create_mesh -- the mesh renders through the ordinary
-   * mesh_renderer/opaque_pass path, no bespoke rendering system involved.
+   * @brief Builds a mesh from raw vertex/index data for the node's mesh_renderer, creating the component and a material on first use.
    *
-   * Reuses the node's already-assigned material across repeated calls instead of creating a new
-   * one every time: a live-edited mesh (e.g. a road network's ghost preview while dragging) may
-   * call this every frame, and asset_residency::create_material has a fixed material_capacity that
-   * a fresh material per call would exhaust in short order.
-   *
-   * @p colors is optional (nullptr skips it, every vertex stays opaque white) -- per-vertex color,
-   * multiplied into the material's base color in both the unlit and PBR lighting paths (see
-   * lighting.slang), independent of @p tint which is a single whole-mesh material color.
+   * The node's material is reused across calls: create_material has a fixed capacity that per-frame calls would exhaust.
+   * @p colors is optional (nullptr = opaque white) and multiplies the material's base color; @p tint is a single whole-mesh color.
+   * The mesh is swapped in by apply_pending_geometry.
    */
   static auto mesh_renderer_set_geometry(std::uint64_t uuid, math::vector3* positions, math::vector3* normals, math::vector2* uvs, math::color* colors, std::uint32_t vertex_count, std::uint32_t* indices, std::uint32_t index_count, math::color* tint) -> void;
 
-  /**
-   * @brief Assigns a material asset to one of this node's mesh_renderer submesh slots (creating the
-   * component, and growing materials to fit submesh_index, if needed). material_uuid of 0 clears
-   * the slot back to an invalid handle. Backs Sbx.Core.Material's INativeHandle-based script field
-   * support (see scenes::script_field_type::material) and MeshRenderer.SetMaterial.
-   */
+  /** @brief Assigns a material to one submesh slot, creating the component and growing the slots as needed. material_uuid 0 clears the slot. */
   static auto mesh_renderer_set_material(std::uint64_t uuid, std::uint32_t submesh_index, std::uint64_t material_uuid) -> void;
 
-  /** @brief The mesh every instance draws, from raw data like mesh_renderer_set_geometry (creating the node's instanced_mesh_renderer, and a default material, if needed). Swapped in by apply_pending_geometry. Backs Sbx.Core.Components.InstancedMeshRenderer.SetGeometry. */
+  /** @brief The mesh every instance draws, creating the instanced_mesh_renderer and a default material as needed. Swapped in by apply_pending_geometry. */
   static auto instanced_mesh_renderer_set_geometry(std::uint64_t uuid, math::vector3* positions, math::vector3* normals, math::vector2* uvs, math::color* colors, std::uint32_t vertex_count, std::uint32_t* indices, std::uint32_t index_count) -> void;
 
   static auto instanced_mesh_renderer_set_material(std::uint64_t uuid, std::uint64_t material_uuid) -> void;
 
-  /** @brief Replaces every instance (count 0: none). The GPU buffer is created by apply_pending_geometry, on render idle. */
+  /** @brief Replaces every instance (count 0 = none). The GPU buffer is created by apply_pending_geometry. */
   static auto instanced_mesh_renderer_set_instances(std::uint64_t uuid, scenes::instance_data* instances, std::uint32_t count) -> void;
 
-  /** @brief Loads (or reuses, if already imported) a .material asset by project-relative path, returning its uuid -- 0 if the path doesn't resolve to a real material. Backs Sbx.Core.Material.Load. */
+  /** @brief Loads a .material by project-relative path. Returns its uuid, or 0 if the path isn't a material. */
   static auto material_load(managed::string path) -> std::uint64_t;
 
   /** @brief Absolute path of the active project's assets directory, for scripts reading their own data files. */
@@ -426,27 +391,24 @@ struct interop {
 
   static auto texture_load(managed::string path, std::uint32_t format) -> std::uint64_t;
 
-  /** @brief Allocates a new, empty, compute-writable storage image -- see assets::asset_residency::create_storage_image. format: 0 = RGBA8, 1 = R32 float, 2 = R8 unorm (matching Sbx.Core.TextureFormat's declaration order). Backs Sbx.Core.Texture2D.CreateStorageImage. */
+  /** @brief Allocates an empty compute-writable storage image. format: 0 = RGBA8, 1 = R32 float, 2 = R8 unorm (Sbx.Core.TextureFormat order). */
   static auto texture_create_storage_image(std::uint32_t width, std::uint32_t height, std::uint32_t format) -> std::uint64_t;
 
   /**
-   * @brief Copies the texture's full width * height pixels from the GPU into out_pixels (already
-   * sized by the caller -- see MeshRenderer_SetGeometry's own caller-allocates convention), via a
-   * blocking image-to-buffer copy + host-visible staging buffer. format must match how the
-   * texture was created (0 = RGBA8, 1 = R32 float, 2 = R8 unorm); single-channel formats land in
-   * out_pixels[i].r only. Logs and no-ops if texture_uuid or out_pixels is invalid, the texture
-   * isn't a storage image, or width/height/format don't match the image. Backs
-   * Sbx.Core.Texture2D.ReadPixels.
+   * @brief Copies a storage image's pixels into caller-sized @p out_pixels with a blocking GPU readback.
+   *
+   * format must match the image (0 = RGBA8, 1 = R32 float, 2 = R8 unorm); single-channel formats land in .r only.
+   * Logs and does nothing on an invalid texture, a non-storage image, or mismatched size/format.
    */
   static auto texture_read_pixels(std::uint64_t texture_uuid, std::uint32_t width, std::uint32_t height, std::uint32_t format, math::color* out_pixels) -> void;
 
-  /** @brief Frees a texture's bindless indices and underlying GPU image -- see assets::asset_residency::release_texture. Backs Sbx.Core.Texture2D.Dispose. No-op if texture_uuid doesn't resolve. */
+  /** @brief Frees the texture's bindless indices and GPU image. No-op if texture_uuid doesn't resolve. */
   static auto texture_release(std::uint64_t texture_uuid) -> void;
 
-  /** @brief A 2D texture array of the layer_count textures in layer_uuids, each exactly width x height -- see assets::asset_residency::create_texture2d_array. 0 (and a logged reason) if any layer doesn't fit. Backs Sbx.Core.Texture2DArray.Create. */
+  /** @brief A 2D texture array of the given layers, each exactly width x height. Returns 0 (and logs why) if any layer doesn't fit. */
   static auto texture2d_array_create(std::uint64_t* layer_uuids, std::uint32_t layer_count, std::uint32_t width, std::uint32_t height) -> std::uint64_t;
 
-  static auto texture2d_array_is_resident(std::uint64_t array_uuid) -> bool;
+  static auto texture2d_array_is_resident(std::uint64_t array_uuid) -> managed::bool32;
 
   static auto texture2d_array_release(std::uint64_t array_uuid) -> void;
 
@@ -454,65 +416,52 @@ struct interop {
   static auto material_set_generic_texture_array(std::uint64_t material_uuid, std::uint32_t index, std::uint64_t array_uuid) -> void;
 
   /**
-   * @brief Writes raw RGBA8 pixel data (row-major, no padding) straight to a PNG file on disk via
-   * stb_image_write -- a debugging aid for inspecting a compute-baked texture's actual content
-   * (e.g. Texture2D.ReadPixels' output, converted to bytes) as a real image file, rather than only
-   * ever reading it back into more script code. Creates the destination directory if it doesn't
-   * exist. path is used as-is (absolute, or relative to the engine process's own working
-   * directory) -- this is a raw filesystem write for local debugging, not an asset-pipeline path.
-   * Returns false (and logs) if rgba_pixels is null, width/height is zero, or the write itself
-   * fails. Backs Sbx.Core.DebugImage.SavePng.
+   * @brief Writes raw RGBA8 pixels (row-major, no padding) to a PNG on disk, for debugging compute output.
+   *
+   * @p path is a plain filesystem path, not an asset path; missing directories are created.
+   *
+   * @return False (and logs) on null pixels, zero size, or a failed write.
    */
-  static auto debug_write_png(managed::string path, std::uint32_t width, std::uint32_t height, const std::uint8_t* rgba_pixels) -> bool;
+  static auto debug_write_png(managed::string path, std::uint32_t width, std::uint32_t height, const std::uint8_t* rgba_pixels) -> managed::bool32;
 
   /**
-   * @brief Whether a Load()'d texture's pixel data has actually finished uploading to the GPU --
-   * see assets::asset_residency::is_resident. False for an unresolved uuid. Always true for a
-   * CreateStorageImage texture (it's synchronously GPU-resident the instant it's created). Backs
-   * Sbx.Core.Texture2D.IsResident -- check this on a Load()'d texture before a compute shader
-   * samples it (or before ComputeCommands.Dispatch, if the script needs its own gate rather than a
-   * per-frame Update poll), since Load() itself returns a valid handle immediately but the real
-   * pixel data streams in on a background thread and per-frame upload budget.
+   * @brief Whether a loaded texture's pixels have finished uploading. False for an unknown uuid, always true for storage images.
+   *
+   * Load() returns a valid handle immediately while the data streams in, so check this before sampling it in a compute shader.
    */
-  static auto texture_is_resident(std::uint64_t texture_uuid) -> bool;
+  static auto texture_is_resident(std::uint64_t texture_uuid) -> managed::bool32;
 
-  /** @brief Loads (or finds) a TTF -> SDF atlas font by project-relative path; its uuid, 0 on failure. Glyph data arrives asynchronously -- see font_is_resident. */
+  /** @brief Loads a TTF as an SDF atlas font by project-relative path. Returns its uuid, or 0 on failure; glyphs arrive asynchronously (see font_is_resident). */
   static auto font_load(managed::string path) -> std::uint64_t;
 
-  static auto font_is_resident(std::uint64_t font_uuid) -> bool;
+  static auto font_is_resident(std::uint64_t font_uuid) -> managed::bool32;
 
   /** @brief False (out untouched) for a codepoint outside the font, or before it's resident. */
-  static auto font_get_glyph(std::uint64_t font_uuid, std::uint32_t codepoint, font_glyph_data* out) -> bool;
+  static auto font_get_glyph(std::uint64_t font_uuid, std::uint32_t codepoint, font_glyph_data* out) -> managed::bool32;
 
   /** @brief x = line height, y = ascent, z = descent, per 1 unit of font size. */
   static auto font_get_metrics(std::uint64_t font_uuid, math::vector3* out) -> void;
 
-  /** @brief Puts a font's SDF atlas (single channel, 0.5 = glyph edge) into a material's generic texture slot. Font atlases aren't in the texture registry, so material_set_generic_texture can't find them by uuid. */
+  /** @brief Puts a font's SDF atlas (single channel, 0.5 = glyph edge) into a material's generic texture slot. */
   static auto material_set_generic_texture_font(std::uint64_t material_uuid, std::uint32_t index, std::uint64_t font_uuid) -> void;
 
-  /** @brief Copies a material into a brand-new, independently-registered instance -- see assets::asset_residency::duplicate_material. Backs Sbx.Core.Material.CreateInstance. Returns 0 if source_uuid doesn't resolve. */
+  /** @brief Copies a material into a new, independently registered instance. Returns 0 if source_uuid doesn't resolve. */
   static auto material_create_instance(std::uint64_t source_uuid) -> std::uint64_t;
 
   /**
-   * @brief Whether a Load()'d material's real file content (not just its handle) has been applied
-   * yet -- see assets::loadable::is_loaded. False for an unresolved uuid. Always true for a
-   * CreateInstance/duplicated material (its fields are copied synchronously at creation). Backs
-   * Sbx.Core.Material.IsLoaded -- check this before CreateInstance-ing a Load()'d template, or the
-   * duplicate copies whatever placeholder/default fields the template happened to have at that
-   * instant, permanently, since duplication is a one-time synchronous field copy, not a live
-   * reference to the template.
+   * @brief Whether a loaded material's file content has been applied. False for an unknown uuid, always true for instances.
+   *
+   * Check this before CreateInstance on a loaded template: the copy is a one-time snapshot of whatever fields it has at that moment.
    */
-  static auto material_is_loaded(std::uint64_t material_uuid) -> bool;
+  static auto material_is_loaded(std::uint64_t material_uuid) -> managed::bool32;
 
-  /** @brief Frees a material's slot for reuse -- see assets::asset_residency::release_material. Backs Sbx.Core.Material.Dispose. No-op if material_uuid doesn't resolve. Never call on a shared/loaded template material, only an instance from Material.CreateInstance. */
+  /** @brief Frees a material instance's slot. No-op if material_uuid doesn't resolve; never call on a shared loaded material. */
   static auto material_release(std::uint64_t material_uuid) -> void;
 
   /**
-   * @brief Overwrites one of a material's fixed texture slots in place (slot: 0 albedo, 1 normal,
-   * 2 metallic_roughness, 3 occlusion, 4 emissive -- matching Sbx.Core.MaterialTextureSlot's
-   * declaration order). Every material_handle already pointing at this material observes the
-   * change, same caveat as material::update_material itself -- call this on an instance from
-   * Material.CreateInstance, not a shared loaded asset, unless the change really should be global.
+   * @brief Overwrites one of a material's texture slots in place (0 albedo, 1 normal, 2 metallic_roughness, 3 occlusion, 4 emissive).
+   *
+   * Every handle to this material sees the change, so use an instance unless the change should be global.
    */
   static auto material_set_texture(std::uint64_t material_uuid, std::uint32_t slot, std::uint64_t texture_uuid) -> void;
 
@@ -520,27 +469,19 @@ struct interop {
 
   static auto material_set_generic_texture(std::uint64_t material_uuid, std::uint32_t index, std::uint64_t texture_uuid) -> void;
 
-  // Script compute. Every object lives in a scripting-local id -> state registry (see interop.cpp);
-  // ids are opaque to C#. Functions returning bool log the reason and return false on misuse, and
-  // the C# wrappers turn that into an exception.
-  //
-  // Shaders bind parameters by push_data field name, found through Slang reflection
-  // (graphics::shader_compiler::reflect_push_constants), with the field's type checked against the
-  // setter. kind values follow graphics::shader_compiler::push_constant_field::kind and
-  // Sbx.Core.ComputeParameterKind.
-  //
-  // Everything runs on the compute queue from the script thread (the render thread owns the
-  // graphics queue). Dispatches are recorded into a compute_commands list and submitted together
-  // with one wait.
+  // Script compute: every object is an opaque id into scripting_module::resources().
+  // Functions returning bool log the reason and return false on misuse; the C# wrappers turn that into an exception.
+  // Shader parameters bind by push_data field name via Slang reflection, type-checked against the setter.
+  // Everything runs on the compute queue; dispatches are recorded into a command list and submitted together.
 
   /** @brief Allocates a host-visible storage buffer of max(count, 1) * stride bytes. access: 0 = upload (host writes, GPU reads), 1 = readback (GPU writes, host reads). Returns 0 on failure. */
   static auto compute_buffer_create(std::int32_t count, std::int32_t stride, std::uint32_t access) -> std::uint64_t;
 
   /** @brief Copies byte_count bytes into the buffer. False if the id is unknown or byte_count exceeds the buffer. */
-  static auto compute_buffer_set_data(std::uint64_t id, const void* data, std::int32_t byte_count) -> bool;
+  static auto compute_buffer_set_data(std::uint64_t id, const void* data, std::int32_t byte_count) -> managed::bool32;
 
   /** @brief Copies byte_count bytes out of a readback buffer. Only meaningful after the compute_commands that wrote it was submitted. */
-  static auto compute_buffer_get_data(std::uint64_t id, void* data, std::int32_t byte_count) -> bool;
+  static auto compute_buffer_get_data(std::uint64_t id, void* data, std::int32_t byte_count) -> managed::bool32;
 
   /** @brief Retires the buffer. No-op for an unknown id. */
   static auto compute_buffer_release(std::uint64_t id) -> void;
@@ -549,13 +490,13 @@ struct interop {
   static auto compute_shader_load(managed::string path) -> std::uint64_t;
 
   /** @brief Sets a scalar/vector field. kind must match the field's reflected kind; data points at exactly that field's size in bytes. */
-  static auto compute_shader_set_value(std::uint64_t id, managed::string name, std::uint32_t kind, const void* data) -> bool;
+  static auto compute_shader_set_value(std::uint64_t id, managed::string name, std::uint32_t kind, const void* data) -> managed::bool32;
 
   /** @brief Sets a sampled_texture (storage = false) or storage_texture (storage = true) field. */
-  static auto compute_shader_set_texture(std::uint64_t id, managed::string name, std::uint64_t texture_uuid, bool storage) -> bool;
+  static auto compute_shader_set_texture(std::uint64_t id, managed::string name, std::uint64_t texture_uuid, bool storage) -> managed::bool32;
 
   /** @brief Sets a pointer field to the buffer's device address. The buffer's stride must equal the pointee's reflected stride. */
-  static auto compute_shader_set_buffer(std::uint64_t id, managed::string name, std::uint64_t buffer_id) -> bool;
+  static auto compute_shader_set_buffer(std::uint64_t id, managed::string name, std::uint64_t buffer_id) -> managed::bool32;
 
   /** @brief Drops the shader's parameter state. The compiled shader/pipeline stay cached engine-side by path. */
   static auto compute_shader_release(std::uint64_t id) -> void;
@@ -564,7 +505,7 @@ struct interop {
   static auto compute_commands_begin() -> std::uint64_t;
 
   /** @brief Records a dispatch with the shader's current parameters. False if any non-sampler field was never set. */
-  static auto compute_commands_dispatch(std::uint64_t id, std::uint64_t shader_id, std::uint32_t group_count_x, std::uint32_t group_count_y, std::uint32_t group_count_z) -> bool;
+  static auto compute_commands_dispatch(std::uint64_t id, std::uint64_t shader_id, std::uint32_t group_count_x, std::uint32_t group_count_y, std::uint32_t group_count_z) -> managed::bool32;
 
   /**
    * @brief Submits the list. wait = true blocks until the GPU finishes and consumes the list.
@@ -572,16 +513,14 @@ struct interop {
    * the list uses alive until it reports true. Either way, results are then visible to later
    * sampling, transfer (ReadPixels) and host (GetData) reads.
    */
-  static auto compute_commands_submit(std::uint64_t id, bool wait) -> bool;
+  static auto compute_commands_submit(std::uint64_t id, bool wait) -> managed::bool32;
 
   /** @brief True once a list submitted with wait = false has finished on the GPU (or the id is unknown). Never blocks. */
-  static auto compute_commands_is_complete(std::uint64_t id) -> bool;
+  static auto compute_commands_is_complete(std::uint64_t id) -> managed::bool32;
 
   /** @brief Frees the list: discards it if never submitted, waits for it first if still running. No-op for an unknown id. */
   static auto compute_commands_release(std::uint64_t id) -> void;
 
-  // Canvas: node uuid -> canvas::canvas/rect_transform/ui_image/ui_text/ui_button field access,
-  // same uuid-resolve-then-get/set convention as Transform_*/Rigidbody_* above.
   static auto canvas_get_sort_order(std::uint64_t uuid, std::int32_t* out_value) -> void;
   static auto canvas_set_sort_order(std::uint64_t uuid, std::int32_t value) -> void;
 
@@ -599,7 +538,7 @@ struct interop {
   static auto ui_image_get_tint(std::uint64_t uuid, math::color* out_value) -> void;
   static auto ui_image_set_tint(std::uint64_t uuid, math::color* value) -> void;
 
-  /** @brief Project-relative path, same convention as particle_effect_load/node_instantiate_prefab. */
+  /** @brief Loads the sprite at a project-relative @p path. */
   static auto ui_image_load_sprite(std::uint64_t uuid, managed::string path) -> void;
 
   static auto ui_text_get_text(std::uint64_t uuid) -> managed::string;
@@ -610,11 +549,9 @@ struct interop {
   static auto ui_text_set_color(std::uint64_t uuid, math::color* value) -> void;
 
   /**
-   * @brief Swaps every mesh_renderer_set_geometry / instanced_mesh_renderer_set_geometry /
-   * _set_instances call since the last one in (each node's old mesh released, new mesh and instance
-   * buffers created), and retires released instance buffers. Runs on presentation_module::on_render_idle -- replacing a
-   * mesh straight away retires buffers the render thread may still be recording from (and writes
-   * the resource registry while it reads it), which asserts on an invalid handle.
+   * @brief Applies every queued set_geometry/set_instances call and retires released instance buffers.
+   *
+   * Runs on render idle: replacing a mesh while the render thread records would retire buffers it still uses.
    */
   static auto apply_pending_geometry() -> void;
 
@@ -622,10 +559,10 @@ struct interop {
 
   static auto ui_text_set_alignment(std::uint64_t uuid, std::uint32_t horizontal, std::uint32_t vertical) -> void;
 
-  /** @brief Project-relative path, same convention as particle_effect_load/ui_image_load_sprite. */
+  /** @brief Loads the font at a project-relative @p path. */
   static auto ui_text_load_font(std::uint64_t uuid, managed::string path) -> void;
 
-  static auto ui_button_get_interactable(std::uint64_t uuid) -> bool;
+  static auto ui_button_get_interactable(std::uint64_t uuid) -> managed::bool32;
   static auto ui_button_set_interactable(std::uint64_t uuid, bool value) -> void;
   static auto ui_button_get_normal_color(std::uint64_t uuid, math::color* out_value) -> void;
   static auto ui_button_set_normal_color(std::uint64_t uuid, math::color* value) -> void;
@@ -633,25 +570,25 @@ struct interop {
   static auto ui_button_set_hovered_color(std::uint64_t uuid, math::color* value) -> void;
   static auto ui_button_get_pressed_color(std::uint64_t uuid, math::color* out_value) -> void;
   static auto ui_button_set_pressed_color(std::uint64_t uuid, math::color* value) -> void;
-  static auto ui_button_get_is_hovered(std::uint64_t uuid) -> bool;
-  static auto ui_button_get_is_pressed(std::uint64_t uuid) -> bool;
-  static auto ui_button_get_was_clicked(std::uint64_t uuid) -> bool;
+  static auto ui_button_get_is_hovered(std::uint64_t uuid) -> managed::bool32;
+  static auto ui_button_get_is_pressed(std::uint64_t uuid) -> managed::bool32;
+  static auto ui_button_get_was_clicked(std::uint64_t uuid) -> managed::bool32;
 
   static auto canvas_group_get_alpha(std::uint64_t uuid, std::float_t* out_value) -> void;
   static auto canvas_group_set_alpha(std::uint64_t uuid, std::float_t value) -> void;
-  static auto canvas_group_get_interactable(std::uint64_t uuid) -> bool;
+  static auto canvas_group_get_interactable(std::uint64_t uuid) -> managed::bool32;
   static auto canvas_group_set_interactable(std::uint64_t uuid, bool value) -> void;
-  static auto canvas_group_get_blocks_raycasts(std::uint64_t uuid) -> bool;
+  static auto canvas_group_get_blocks_raycasts(std::uint64_t uuid) -> managed::bool32;
   static auto canvas_group_set_blocks_raycasts(std::uint64_t uuid, bool value) -> void;
-  static auto canvas_group_get_ignore_parent_groups(std::uint64_t uuid) -> bool;
+  static auto canvas_group_get_ignore_parent_groups(std::uint64_t uuid) -> managed::bool32;
   static auto canvas_group_set_ignore_parent_groups(std::uint64_t uuid, bool value) -> void;
 
-  /** @brief Whether the cursor is currently over any interactable UI element -- see canvas::canvas_module's own doc comment. Any world-picking code (a road tool) should check this before casting its own ray. */
-  static auto canvas_wants_pointer_capture() -> bool;
+  /** @brief Whether the cursor is over an interactable UI element; world picking should check this first. */
+  static auto canvas_wants_pointer_capture() -> managed::bool32;
 
-  static auto ui_toggle_get_is_on(std::uint64_t uuid) -> bool;
+  static auto ui_toggle_get_is_on(std::uint64_t uuid) -> managed::bool32;
   static auto ui_toggle_set_is_on(std::uint64_t uuid, bool value) -> void;
-  static auto ui_toggle_get_interactable(std::uint64_t uuid) -> bool;
+  static auto ui_toggle_get_interactable(std::uint64_t uuid) -> managed::bool32;
   static auto ui_toggle_set_interactable(std::uint64_t uuid, bool value) -> void;
 
   static auto ui_slider_get_value(std::uint64_t uuid, std::float_t* out_value) -> void;
@@ -660,29 +597,29 @@ struct interop {
   static auto ui_slider_set_min_value(std::uint64_t uuid, std::float_t value) -> void;
   static auto ui_slider_get_max_value(std::uint64_t uuid, std::float_t* out_value) -> void;
   static auto ui_slider_set_max_value(std::uint64_t uuid, std::float_t value) -> void;
-  static auto ui_slider_get_whole_numbers(std::uint64_t uuid) -> bool;
+  static auto ui_slider_get_whole_numbers(std::uint64_t uuid) -> managed::bool32;
   static auto ui_slider_set_whole_numbers(std::uint64_t uuid, bool value) -> void;
-  static auto ui_slider_get_interactable(std::uint64_t uuid) -> bool;
+  static auto ui_slider_get_interactable(std::uint64_t uuid) -> managed::bool32;
   static auto ui_slider_set_interactable(std::uint64_t uuid, bool value) -> void;
 
   static auto ui_scrollbar_get_value(std::uint64_t uuid, std::float_t* out_value) -> void;
   static auto ui_scrollbar_set_value(std::uint64_t uuid, std::float_t value) -> void;
   static auto ui_scrollbar_get_size(std::uint64_t uuid, std::float_t* out_value) -> void;
   static auto ui_scrollbar_set_size(std::uint64_t uuid, std::float_t value) -> void;
-  static auto ui_scrollbar_get_interactable(std::uint64_t uuid) -> bool;
+  static auto ui_scrollbar_get_interactable(std::uint64_t uuid) -> managed::bool32;
   static auto ui_scrollbar_set_interactable(std::uint64_t uuid, bool value) -> void;
 
   static auto ui_scroll_rect_get_normalized_position(std::uint64_t uuid, math::vector2* out_value) -> void;
   static auto ui_scroll_rect_set_normalized_position(std::uint64_t uuid, math::vector2* value) -> void;
-  static auto ui_scroll_rect_get_horizontal(std::uint64_t uuid) -> bool;
+  static auto ui_scroll_rect_get_horizontal(std::uint64_t uuid) -> managed::bool32;
   static auto ui_scroll_rect_set_horizontal(std::uint64_t uuid, bool value) -> void;
-  static auto ui_scroll_rect_get_vertical(std::uint64_t uuid) -> bool;
+  static auto ui_scroll_rect_get_vertical(std::uint64_t uuid) -> managed::bool32;
   static auto ui_scroll_rect_set_vertical(std::uint64_t uuid, bool value) -> void;
+  static auto ui_scroll_rect_set_content(std::uint64_t uuid, std::uint64_t content) -> void;
 
-  static auto ui_mask_get_show_mask_graphic(std::uint64_t uuid) -> bool;
+  static auto ui_mask_get_show_mask_graphic(std::uint64_t uuid) -> managed::bool32;
   static auto ui_mask_set_show_mask_graphic(std::uint64_t uuid, bool value) -> void;
 
-  // vertical picks canvas::vertical_layout_group over horizontal_layout_group (same fields).
   static auto layout_group_get(std::uint64_t uuid, bool vertical, layout_group_data* out_value) -> void;
 
   static auto layout_group_set(std::uint64_t uuid, bool vertical, const layout_group_data* value) -> void;

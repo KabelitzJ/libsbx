@@ -17,22 +17,9 @@
 namespace sbx::assets {
 
 /**
- * @brief The asset database: uuid <-> source path, and the manifest of what's been cooked (content
- * hash + cooker version at last cook, for staleness checks).
+ * @brief The asset database: uuid <-> source path, plus what was cooked (content hash and cooker version) for staleness checks.
  *
- * Split out of what used to be asset_cooker so the racy part stays racy-proof by construction: this
- * class holds **no mutex** and must only ever be touched from the main thread. It used to share a
- * mutex-guarded instance with asset_cooker, but that mutex only protected individual map accesses --
- * import()'s check-cache/create-if-missing/insert sequence spanned two lock acquisitions with an
- * unlocked `.meta` file read/write in between, and ensure_loaded() marked the manifest loaded before
- * _load_manifest() actually finished populating it. Both are real, exploitable races the instant a
- * second thread calls in -- which asset_loader's background thread would have been the first thing
- * to actually do. The fix is to never let a second thread touch this state at all: asset_loader owns
- * its own, separate, stateless asset_cooker instance and never sees an asset_manifest reference.
- *
- * asset_residency (and, for the same reason, assets_module::resolve_mesh_collision_data) holds this
- * by reference, resolves whatever a background load needs (source/cooked path, staleness) up front on
- * the main thread, and hands the *result* to asset_loader -- never this object itself.
+ * Main thread only and deliberately lock-free: asset_residency resolves paths and staleness up front and hands only the results to asset_loader's thread.
  */
 class asset_manifest final : public utility::noncopyable {
 
@@ -43,72 +30,85 @@ public:
   ~asset_manifest();
 
   /**
-   * @brief Registers an asset by its path and returns its stable UUID.
-   * @param path Must be resolvable from the current working directory — not merely relative to
-   * the assets directory.
+   * @brief Registers an asset by path.
+   *
+   * @param path A cwd-resolvable path, not assets-relative.
+   *
+   * @return The asset's stable uuid.
    */
   auto import(const std::filesystem::path& path) -> math::uuid;
 
   /**
-   * @brief Imports every supported asset under a subdirectory.
-   * @param root Must be resolvable from the current working directory. Empty (default) is *not*
-   * "the whole assets tree" here — pass `project.assets_directory()` explicitly for that.
+   * @brief Imports every supported asset under a directory.
+   *
+   * @param root A cwd-resolvable directory. Empty does not mean the whole assets tree; pass `project.assets_directory()` for that.
    */
   auto import_directory(const std::filesystem::path& root = {}) -> void;
 
-  /** @brief The project-relative path an asset was imported from, or empty if unknown. */
+  /**
+   * @brief The project-relative path an asset was imported from.
+   *
+   * @param id The asset's uuid.
+   *
+   * @return The path, or empty if unknown.
+   */
   [[nodiscard]] auto path_of(const math::uuid& id) const -> std::filesystem::path;
 
-  /** @brief Loads the manifest from disk on first call; a no-op after that. Idempotent. */
+  /** @brief Loads the manifest from disk on the first call; a no-op afterwards. */
   auto ensure_loaded() -> void;
 
   [[nodiscard]] static auto absolute(const std::filesystem::path& relative) -> std::filesystem::path;
 
   [[nodiscard]] static auto relative(const std::filesystem::path& absolute) -> std::filesystem::path;
 
-  /** @brief Where a given asset's cooked cache blob lives, regardless of whether it exists yet. */
+  /**
+   * @brief Where an asset's cooked blob lives, whether or not it exists yet.
+   *
+   * @param id The asset's uuid.
+   * @param extension The cooked file extension.
+   *
+   * @return The cooked path.
+   */
   [[nodiscard]] auto cooked_path(const math::uuid& id, std::string_view extension) const -> std::filesystem::path;
 
-  /** @brief Whether `cooked` needs to be (re)produced from `source` — missing, cooker version bumped, or source content changed since the last recorded cook. */
+  /** @brief Whether `cooked` must be (re)produced: it's missing, the cooker version changed, or the source changed since the last cook. */
   [[nodiscard]] auto is_cooked_stale(const math::uuid& id, const std::filesystem::path& source, const std::filesystem::path& cooked, std::uint32_t cooker_version) -> bool;
 
-  /** @brief Records that `id` was just (re)cooked at `cooker_version`, against `source`'s current content — persisted immediately. */
+  /**
+   * @brief Records and persists that `id` was just cooked at `cooker_version` from `source`'s current content.
+   *
+   * @param id The asset's uuid.
+   * @param cooker_version The cooker version used.
+   * @param source The source file.
+   */
   auto record_cook(const math::uuid& id, std::uint32_t cooker_version, const std::filesystem::path& source) -> void;
 
   /**
-   * @brief Moves/renames a manifested file or directory on disk and keeps the manifest in sync.
-   * @param old_path @param new_path Both must be resolvable from the current working directory,
-   * same requirement as @ref import.
+   * @brief Moves a manifested file or directory on disk, keeping uuids by moving `.meta` sidecars along.
    *
-   * A file's `.meta` sidecar (if any) moves with it, which is what preserves its uuid — the
-   * `_uuids`/`_paths`/manifest-entry indices are then remapped to the new path, not regenerated.
-   * A directory move remaps every manifested asset found under it the same way. @p moved_assets
-   * receives an (old, new) pair — both project-relative to the assets directory — for every
-   * manifested file whose path changed (one for a file move, one per manifested descendant for a
-   * directory move); @ref assets_module filters this for texture extensions to fix up any
-   * `.material` file that referenced one of them by path.
+   * @param old_path The cwd-resolvable source path.
+   * @param new_path The cwd-resolvable destination path.
+   * @param moved_assets Receives an assets-relative (old, new) pair for every manifested file that moved.
    *
-   * @return false (nothing moved, nothing touched) if the filesystem rename itself failed, e.g.
-   * because `new_path` already exists.
+   * @return False, with nothing touched, if the filesystem rename failed.
    */
   auto move(const std::filesystem::path& old_path, const std::filesystem::path& new_path, std::vector<std::pair<std::filesystem::path, std::filesystem::path>>& moved_assets) -> bool;
 
   /**
-   * @brief Deletes a manifested file or directory from disk (source + `.meta`), removing its
-   * manifest entries. Recurses for a directory. Cooked cache blobs under the library directory
-   * are left as harmless orphans, same as an asset deleted outside the editor already leaves them.
+   * @brief Deletes a manifested file or directory with its `.meta` and drops its entries. Cooked blobs are left as orphans.
+   *
+   * @param path The cwd-resolvable path to delete.
    */
   auto remove(const std::filesystem::path& path) -> void;
 
 private:
 
-  // One row of the asset manifest: the durable uuid -> source path index plus the staleness data
-  // (content hash + cooker version) recorded at the last cook.
+  // Durable uuid -> source path index plus the staleness data recorded at the last cook.
   struct manifest_entry {
     std::filesystem::path path{};      // project source path (same form as _paths)
-    std::uint32_t cooker_version{0u};  // cooker that produced the current cooked output (0 = never)
+    std::uint32_t cooker_version{0u};  // cooker that produced the cooked output (0 = never)
     std::uint64_t source_hash{0u};     // source content hash at last cook
-    std::int64_t source_mtime{0};      // source mtime at last cook (fast-path skip)
+    std::int64_t source_mtime{0};      // source mtime at last cook, for the fast path
   }; // struct manifest_entry
 
   auto _read_or_create_meta(const std::filesystem::path& path) -> math::uuid;
@@ -120,7 +120,7 @@ private:
   auto _save_manifest() -> void;
 
   std::unordered_map<std::string, math::uuid> _uuids{};
-  std::unordered_map<math::uuid, std::filesystem::path> _paths{}; // project-relative (to assets directory)
+  std::unordered_map<math::uuid, std::filesystem::path> _paths{}; // relative to the assets directory
 
   std::unordered_map<math::uuid, manifest_entry> _manifest{};
   bool _manifest_loaded{false};

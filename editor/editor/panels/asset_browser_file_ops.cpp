@@ -68,9 +68,7 @@ auto asset_browser_panel::_create_animation_graph(editor_state& state, const std
 
   const auto relative_path = target_directory / unique_name(absolute_directory, "New Animation Graph", ".animation_graph");
 
-  // A single entry state so the graph is already is_valid() -- states/transitions beyond this
-  // are hand-authored in the saved .animation_graph file until the visual graph editor lands
-  // (see the animator's Inspector section, which only edits parameters, not graph structure).
+  // One entry state so the graph is valid immediately; the rest is built in the graph editor.
   auto create_info = sbx::assets::animation_graph::create_info{.name = "New Animation Graph"};
   create_info.states.push_back(sbx::assets::animation_state{.id = 0u, .name = "Idle"});
   create_info.entry_state_id = 0u;
@@ -92,9 +90,7 @@ auto asset_browser_panel::_create_shader_graph(editor_state& state, const std::f
   const auto name = is_lit ? "New Lit Shader Graph" : "New Unlit Shader Graph";
   const auto relative_path = target_directory / unique_name(absolute_directory, name, ".shadergraph");
 
-  // A flat mid-gray feeding the Fragment output's Albedo/Color -- degenerate but cook-clean and
-  // is_valid() immediately, same reasoning _create_animation_graph's single Idle state gives a
-  // fresh animation graph. Real content is the point of the graph editor this creates, not this seed.
+  // A flat mid-gray into the Fragment output, so the graph cooks and is valid immediately.
   auto create_info = sbx::assets::shader_graph::create_info{.name = name};
 
   auto color_node = sbx::assets::shader_graph_node{};
@@ -109,8 +105,7 @@ auto asset_browser_panel::_create_shader_graph(editor_state& state, const std::f
   output_node.editor_position = sbx::math::vector2{300.0f, 0.0f};
 
   create_info.nodes = {color_node, output_node};
-  // Constant Color (float4) -> Albedo/Color (float3) -- the one implicit narrowing shader graphs
-  // still allow (dropping alpha), so this seed is valid without an extra Split/Combine node.
+  // Constant Color (float4) -> Albedo (float3): the one implicit narrowing allowed, dropping alpha.
   create_info.edges = {sbx::assets::shader_graph_edge{.from_node = 0u, .from_pin = 0u, .to_node = 1u, .to_pin = 0u}};
 
   auto handle = assets_module.create_shader_graph(create_info);
@@ -129,8 +124,7 @@ auto asset_browser_panel::_create_scene(editor_state& state, const std::filesyst
 
   const auto relative_path = target_directory / unique_name(absolute_directory, "New Scene", ".scene");
 
-  // Same default content editor::application's startup fallback gives a fresh/startup-scene-less
-  // project -- a blank scene with no camera renders nothing and can't be entered in Play mode.
+  // The same default content as the editor's startup fallback; a scene without a camera can't be played.
   auto blank = sbx::scenes::scene{};
   auto camera = blank.create_node("Camera");
   camera.add_component<sbx::scenes::camera>();
@@ -139,8 +133,7 @@ auto asset_browser_panel::_create_scene(editor_state& state, const std::filesyst
   auto handle = assets_module.create_scene(sbx::scenes::scene_serializer::build(blank), "Scene");
   const auto id = assets_module.save_scene(handle, relative_path);
 
-  // Does not switch the live editor scene -- same as every other Create-menu entry, this only
-  // creates the asset file; double-clicking (or Inspector's Open) is how a scene gets opened.
+  // Only creates the file; opening the scene is a separate action.
   _navigate_to(target_directory);
   state.select_asset(id, relative_path, asset_kind::scene);
 }
@@ -187,7 +180,7 @@ auto asset_browser_panel::_create_folder(const std::filesystem::path& target_dir
   std::filesystem::create_directory(project.assets_directory() / relative_path);
 
   _navigate_to(target_directory);
-  _begin_rename(relative_path, true); // Explorer/Unity both drop straight into rename on create
+  _begin_rename(relative_path, true); // start renaming right away, like Explorer and Unity
 }
 
 auto asset_browser_panel::_draw_create_menu(editor_state& state, const std::filesystem::path& target_directory) -> void {
@@ -248,8 +241,7 @@ auto asset_browser_panel::_draw_create_menu(editor_state& state, const std::file
     auto& project = sbx::core::engine::project();
     auto& assets_module = sbx::core::engine::get_module<sbx::assets::assets_module>();
 
-    // import_directory (like import()) needs a path resolvable from cwd, not one merely
-    // relative to assets_directory() — see assets_module.hpp's doc comment.
+    // import_directory needs a cwd-resolvable path.
     assets_module.import_directory(project.assets_directory() / target_directory);
     _needs_refresh = true;
   }
@@ -270,8 +262,7 @@ auto asset_browser_panel::_duplicate(editor_state& state, const std::filesystem:
   auto ec = std::error_code{};
 
   if (is_directory) {
-    // .meta files inside are intentionally copied too and then stripped below, so the duplicate's
-    // assets mint fresh uuids on next import instead of sharing identity with the originals.
+    // .meta files are copied, then stripped below, so the duplicates get fresh uuids.
     std::filesystem::copy(source_absolute, destination_absolute, std::filesystem::copy_options::recursive, ec);
 
     if (!ec) {
@@ -309,11 +300,10 @@ auto asset_browser_panel::_request_delete(const std::filesystem::path& relative_
 
 auto asset_browser_panel::_try_move(editor_state& state, const std::filesystem::path& source_relative, const std::filesystem::path& destination_directory_relative) -> void {
   if (source_relative.empty() || source_relative.parent_path() == destination_directory_relative) {
-    return; // already there
+    return;
   }
 
-  // Refuses moving a folder onto itself or into one of its own descendants (is_ancestor_or_self
-  // with candidate=source catches both: destination == source, and destination under source/).
+  // Catches both moving a folder onto itself and into its own subtree.
   if (is_ancestor_or_self(source_relative, destination_directory_relative)) {
     return;
   }
@@ -326,7 +316,7 @@ auto asset_browser_panel::_try_move(editor_state& state, const std::filesystem::
   const auto destination_absolute = project.assets_directory() / new_relative;
 
   if (std::filesystem::exists(destination_absolute)) {
-    return; // name clash in the target folder -- silently refuse, same spirit as rename
+    return; // name clash: refuse, like rename
   }
 
   if (!assets_module.move_asset(source_absolute, destination_absolute)) {

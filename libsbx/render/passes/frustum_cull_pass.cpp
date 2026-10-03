@@ -61,8 +61,7 @@ struct frustum_cull_push_data {
   std::uint32_t cascade_index;
 }; // struct frustum_cull_push_data
 
-// Mirrors frustum_cull_instanced.slang's push_data. The padding keeps the float4s at offset 48 on
-// both sides: the shader aligns float4 to 16 bytes, math::vector4 only to 4.
+// Mirrors frustum_cull_instanced.slang's push_data; the padding puts the float4s at offset 48, since math::vector4 is only 4-byte aligned.
 struct frustum_cull_instanced_push_data {
   graphics::buffer::address_type frame_address;
   graphics::buffer::address_type node_transforms;
@@ -79,8 +78,7 @@ struct frustum_cull_instanced_push_data {
 }; // struct frustum_cull_instanced_push_data
 
 auto frustum_cull_pass::declare(compute_pass_builder& builder, const graph_resources& resources) -> void {
-  // instanceCount is bumped atomically, hence read|write on the indirect args. Consumers
-  // (depth_pre_pass/opaque_pass) declare their reads, so the graph places the hand-off barrier.
+  // instanceCount is bumped atomically, hence read|write; the consumers' declared reads place the barrier.
   builder.writes_buffer(resources.culled_indirect_args_buffer, graphics::pipeline_stage::compute_shader, graphics::access::shader_read | graphics::access::shader_write);
   builder.writes_buffer(resources.culled_transform_buffer, graphics::pipeline_stage::compute_shader, graphics::access::shader_write);
   builder.writes_buffer(resources.instanced_culled_buffer, graphics::pipeline_stage::compute_shader, graphics::access::shader_write);
@@ -112,14 +110,13 @@ auto frustum_cull_pass::_cull_view(render_context& context, const std::vector<dr
   const auto indirect_args = context.culled_indirect_args_address + view * context.culled_indirect_args_view_stride * sizeof(VkDrawIndexedIndirectCommand);
   const auto command_count = std::min(static_cast<std::uint32_t>(commands.size()), context.culled_indirect_args_view_stride);
 
-  // The pipeline bound last: commands of both kinds interleave, so switch only when it changes.
+  // Commands of both kinds interleave, so only rebind on change.
   auto bound = memory::observer_ptr<graphics::compute_pipeline>{};
 
   for (auto index = std::uint32_t{0u}; index < command_count; ++index) {
     const auto& command = commands[index];
 
-    // Same skip condition submit_draw_commands_indirect itself uses -- no point culling instances
-    // for a command that won't be drawn either way.
+  // Same skip condition as submit_draw_commands_indirect.
     if (!command.mesh.is_valid() || !command.material.is_valid() || !command.resident || command.instance_count == 0u) {
       continue;
     }

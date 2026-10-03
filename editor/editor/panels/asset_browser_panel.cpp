@@ -94,21 +94,19 @@ auto asset_browser_panel::_commit_rename(editor_state& state) -> void {
     return;
   }
 
-  // A file keeps its own extension -- a .material can't become something else by rename -- only
-  // the stem the user actually edited (see _begin_rename) is replaced. A folder's name is edited
-  // in full, there being no extension concept for it.
+  // Files keep their extension and only the stem is renamed; folders are renamed in full.
   const auto new_name = _renaming_is_directory ? typed : typed + _renaming_path.extension().string();
   const auto new_relative = _renaming_path.parent_path() / new_name;
 
   if (new_relative == _renaming_path) {
-    return; // unchanged
+    return;
   }
 
   const auto old_absolute = project.assets_directory() / _renaming_path;
   const auto new_absolute = project.assets_directory() / new_relative;
 
   if (std::filesystem::exists(new_absolute)) {
-    return; // name clash in this folder -- silently discard, same as an ordinary click-away cancel
+    return; // name clash: discarded like a click-away cancel
   }
 
   if (!assets_module.move_asset(old_absolute, new_absolute)) {
@@ -135,9 +133,7 @@ auto asset_browser_panel::_draw_move_drop_target(editor_state& state, const std:
 auto asset_browser_panel::_draw_entry_context_menu(editor_state& state, const asset_browser_entry& entry) -> void {
   const auto target_directory = entry.is_directory ? entry.path : entry.path.parent_path();
 
-  // A plain click-driven alternative to dragging the tile into the Hierarchy — same
-  // instantiate_prefab_command the drag path pushes, just triggered from a menu item instead of a
-  // drag gesture, so it doesn't depend on drag-and-drop working at all.
+  // A menu alternative to dragging a prefab into the Hierarchy.
   if (!entry.is_directory && entry.kind == asset_kind::prefab && ImGui::MenuItem(ICON_MDI_CUBE_SCAN " Instantiate in Scene")) {
     auto& assets_module = sbx::core::engine::get_module<sbx::assets::assets_module>();
 
@@ -174,14 +170,12 @@ auto asset_browser_panel::_draw_entry_context_menu(editor_state& state, const as
 }
 
 auto asset_browser_panel::draw(editor_state& state) -> void {
-  // The two panes below scroll on their own (see panes_height) — the panel itself never needs to.
+  // The panes scroll on their own; the panel never needs to.
   ImGui::Begin(window_name, nullptr, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
   auto& project = sbx::core::engine::project();
 
-  // "Show in Browser" (Inspector's picker slots / asset properties view) -- one-shot, unlike
-  // editor_state::current_selection, so it never fights the user for navigating this panel on
-  // their own afterward.
+  // One-shot reveal requests, so the user can navigate freely afterwards.
   if (state.reveal_in_browser_request) {
     _navigate_to(state.reveal_in_browser_request->parent_path());
     state.reveal_in_browser_request.reset();
@@ -204,11 +198,7 @@ auto asset_browser_panel::draw(editor_state& state) -> void {
 
   ImGui::Separator();
 
-  // Breadcrumb bar: "assets" root button, then one clickable button per path segment. Iterates a
-  // snapshot of the path rather than _current_directory itself, since a segment's own click below
-  // reassigns _current_directory mid-loop (via _navigate_to), which would otherwise invalidate
-  // this loop's iterators. Each button also doubles as a move drop target, so dragging a tile onto
-  // an ancestor breadcrumb moves it there.
+  // Breadcrumbs: the root, then one button per segment, each also a move drop target. Iterates a copy, since clicking reassigns _current_directory mid-loop.
   if (ImGui::Button(ICON_MDI_FOLDER_OPEN " assets")) {
     _navigate_to(std::filesystem::path{});
   }
@@ -248,12 +238,10 @@ auto asset_browser_panel::draw(editor_state& state) -> void {
     _refresh_entries();
   }
 
-  // Space left below the toolbar, minus the table's own per-cell padding (added around each
-  // child below on top of whatever height we give it) — both panes get exactly this height, so
-  // the table's one row never grows past what's actually left and the panel never overflows.
+  // Both panes get the remaining height minus the table's cell padding, so the panel never overflows.
   const auto panes_height = ImGui::GetContentRegionAvail().y - ImGui::GetStyle().CellPadding.y * 2.0f;
 
-  // Folder tree gets a narrow fixed-width column (user-resizable); contents gets the rest.
+  // A narrow, resizable folder tree column; the contents take the rest.
   if (ImGui::BeginTable("asset_browser_columns", 2, ImGuiTableFlags_Resizable | ImGuiTableFlags_BordersInnerV)) {
     ImGui::TableSetupColumn("Folders", ImGuiTableColumnFlags_WidthFixed, 180.0f);
     ImGui::TableSetupColumn("Contents", ImGuiTableColumnFlags_WidthStretch);
@@ -272,7 +260,6 @@ auto asset_browser_panel::draw(editor_state& state) -> void {
       root_flags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
     }
 
-    // Any reveal target lives somewhere under the root by definition.
     if (_pending_reveal) {
       ImGui::SetNextItemOpen(true);
     }
@@ -303,8 +290,7 @@ auto asset_browser_panel::draw(editor_state& state) -> void {
       ImGui::TreePop();
     }
 
-    // Consumed for exactly the one frame the reveal target's chain needed forcing open -- lets
-    // the tree be collapsed by hand afterward instead of snapping back open every frame.
+    // Only forced open for one frame, so the tree can be collapsed by hand afterwards.
     _pending_reveal.reset();
 
     ImGui::EndChild();

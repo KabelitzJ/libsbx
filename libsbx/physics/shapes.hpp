@@ -21,42 +21,29 @@
 
 namespace sbx::physics {
 
-/**
- * @brief A sphere centered on its collider's local origin.
- */
+/** @brief A sphere centered on its collider's origin. */
 struct sphere {
   std::float_t radius{0.5f};
 }; // struct sphere
 
-/**
- * @brief A capped cylinder, axis along local +Y, centered on its collider's local origin.
- */
+/** @brief A capped cylinder along local +Y, centered on its collider's origin. */
 struct cylinder {
   std::float_t radius{0.5f};
   std::float_t half_height{0.5f};
 }; // struct cylinder
 
-/**
- * @brief A capsule (cylinder with hemispherical end caps), axis along local +Y, centered on its
- * collider's local origin. half_height measures the cylindrical segment only, not including caps.
- */
+/** @brief A capsule along local +Y, centered on its collider's origin; half_height covers the cylinder only, not the caps. */
 struct capsule {
   std::float_t radius{0.5f};
   std::float_t half_height{0.5f};
 }; // struct capsule
 
-/**
- * @brief An axis-aligned (in local space) box, centered on its collider's local origin.
- */
+/** @brief A local-space axis-aligned box centered on its collider's origin. */
 struct box {
   math::vector3 half_extents{0.5f, 0.5f, 0.5f};
 }; // struct box
 
-/**
- * @brief A single triangle. Internal-only: appears as a convex_shape alternative purely so
- * narrowphase code stays uniform for mesh_collider candidates — never authored directly on a
- * shape_collider, never offered in the editor's "add collider" menu.
- */
+/** @brief A single triangle, internal only: lets narrowphase treat mesh collider candidates uniformly. Never authored on a shape_collider. */
 struct triangle {
   math::vector3 v0;
   math::vector3 v1;
@@ -64,39 +51,23 @@ struct triangle {
 }; // struct triangle
 
 /**
- * @brief Maximum vertex count for @reference convex_hull. A budget, not a precise limit tied to any one
- * mesh's geometry: convex_hull_cache (libsbx/physics/convex_hull_cache.hpp) computes the *exact*
- * convex hull of the source mesh via quickhull.hpp, and only falls back to coarsening it (resampling
- * the true hull's own vertices down to this count, then re-hulling that) on the rare mesh whose
- * exact hull already exceeds the budget -- most reasonably-modeled convex-ish props never hit that
- * fallback at all. Also the largest convex_shape alternative by far, so it dominates every
- * convex_shape's size (including ordinary shape_collider primitives, which never use this
- * alternative) -- a deliberate size/accuracy trade-off, not an oversight.
+ * @brief The vertex budget for convex_hull. Hulls are exact unless a mesh's exact hull exceeds it, in which case it is coarsened.
+ *
+ * Also the largest convex_shape alternative, so it sets every convex_shape's size; a deliberate size/accuracy trade-off.
  */
 inline constexpr auto convex_hull_max_points = std::size_t{64};
 
-/**
- * @brief Euler's formula bound (F = 2V - 4) for a fully-triangulated convex polyhedron with up to
- * convex_hull_max_points vertices -- quickhull.hpp always produces a fully triangulated hull (no
- * coplanar face merging), so this is an exact cap given that vertex budget, not a heuristic.
- */
+/** @brief Euler's bound (F = 2V - 4) for a fully triangulated hull, exact since quickhull never merges coplanar faces. */
 inline constexpr auto convex_hull_max_faces = 2u * convex_hull_max_points - 4u;
 
 struct convex_hull_face {
-  std::array<std::uint16_t, 3> indices; // into convex_hull::points; uint16_t comfortably covers convex_hull_max_points
+  std::array<std::uint16_t, 3> indices; // into convex_hull::points
 }; // struct convex_hull_face
 
 /**
- * @brief A convex hull, approximated within the budgets above. `points` is all find_furthest_point
- * (the GJK support function) ever needs -- the furthest point of a convex hull along any direction
- * is always one of its own vertices, so a hull and its vertex set share exactly the same support
- * function; `faces` exists purely so there's a real wireframe to debug-draw (see physics_debug.cpp)
- * instead of just a point cloud, and may be empty for a degenerate source mesh (see
- * quickhull.hpp's compute_convex_hull) without affecting collision correctness at all.
- * Internal-only, like triangle: never authored directly on a shape_collider, only ever constructed
- * transiently by narrowphase for a mesh_collider with is_convex == true, as a view of
- * convex_hull_cache's per-mesh cached data -- which never moves once built, so the view stays valid
- * for as long as the cache lives. A view rather than a copy keeps every convex_shape small.
+ * @brief A view of a convex_hull_cache entry, which never moves once built. Internal only, for convex mesh colliders.
+ *
+ * `points` is all the support function needs, since a hull's furthest point is always a vertex; `faces` is only for debug drawing and may be empty for degenerate meshes.
  */
 struct convex_hull {
   std::span<const math::vector3> points;
@@ -106,7 +77,12 @@ struct convex_hull {
 using convex_shape = std::variant<sphere, cylinder, capsule, box, triangle, convex_hull>;
 
 /**
- * @brief The GJK support-mapping function: the point on @p shape (in its own local space) furthest along @p local_direction.
+ * @brief The GJK support function: the point on @p shape furthest along @p local_direction, in local space.
+ *
+ * @param shape The shape.
+ * @param local_direction The search direction.
+ *
+ * @return The support point.
  */
 [[nodiscard]] inline auto find_furthest_point(const convex_shape& shape, const math::vector3& local_direction) -> math::vector3 {
   return std::visit(utility::overload(
@@ -177,7 +153,11 @@ using convex_shape = std::variant<sphere, cylinder, capsule, box, triangle, conv
 }
 
 /**
- * @brief The shape's tight axis-aligned bounding box in its own unrotated local frame.
+ * @brief The shape's tight AABB in its own unrotated local frame.
+ *
+ * @param shape The shape.
+ *
+ * @return The bounds.
  */
 [[nodiscard]] inline auto local_aabb(const convex_shape& shape) -> math::volume {
   return std::visit(utility::overload(
@@ -215,10 +195,12 @@ using convex_shape = std::variant<sphere, cylinder, capsule, box, triangle, conv
 }
 
 /**
- * @brief Diagonal (principal-axis) inverse inertia tensor for @p shape with the given @p mass, in
- * the shape's own local frame. Standard closed-form solid-shape formulas; the capsule uses a
- * mass-weighted cylinder + two-hemisphere composite. Never called for triangle (mesh-collider
- * candidates never carry a rigidbody), which returns zero.
+ * @brief The diagonal inverse inertia tensor in the shape's local frame, from standard solid-shape formulas; the capsule is a cylinder plus two hemispheres. Zero for triangles.
+ *
+ * @param shape The shape.
+ * @param mass The mass.
+ *
+ * @return The diagonal inverse inertia.
  */
 [[nodiscard]] inline auto local_inverse_inertia(const convex_shape& shape, std::float_t mass) -> math::vector3 {
   if (mass <= 0.0f) {
@@ -259,15 +241,13 @@ using convex_shape = std::variant<sphere, cylinder, capsule, box, triangle, conv
         return math::vector3::zero;
       }
 
-      // Mass-weighted composite: the cylindrical segment plus the two hemispherical caps (whose
-      // combined mass/volume is exactly that of one full sphere).
+      // Cylinder plus two hemispheres, which together form one full sphere.
       const auto cylinder_mass = mass * cylinder_volume / total_volume;
       const auto caps_mass = mass * sphere_volume / total_volume;
 
       const auto i_y = 0.5f * cylinder_mass * radius_squared + 0.4f * caps_mass * radius_squared;
 
-      // Distance from the capsule's center to each hemisphere's own centroid (3r/8 from its flat
-      // face, which itself sits half_height from the center), used for the parallel-axis term.
+      // Each hemisphere's centroid sits 3r/8 from its flat face, for the parallel-axis term.
       const auto centroid_distance = shape.half_height + (3.0f / 8.0f) * shape.radius;
 
       const auto i_x =
@@ -289,10 +269,7 @@ using convex_shape = std::variant<sphere, cylinder, capsule, box, triangle, conv
       return math::vector3::zero;
     },
     [&](const convex_hull& shape) -> math::vector3 {
-      // No hull mass-property integration -- approximated from the point set's own AABB via the
-      // same box formula above, same as every other shape here assumes the collider's local origin
-      // is roughly its center (shape_collider's authored primitives are all centered by
-      // construction; a mesh-derived hull is only approximately so, a known v1 simplification).
+      // Approximated from the points' AABB with the box formula, assuming the hull is roughly centered (a v1 simplification).
       if (shape.points.empty()) {
         return math::vector3::zero;
       }

@@ -18,12 +18,7 @@
 
 namespace editor {
 
-/**
- * @brief Adds a default-constructed Component to a node.
- *
- * execute()/undo() are safe when already in the target state — get_or_add_component and
- * removing an absent component are both no-ops.
- */
+/** @brief Adds a default-constructed Component; execute() and undo() are no-ops when already in the target state. */
 template<typename Component>
 class add_component_command final : public command {
 
@@ -56,12 +51,7 @@ private:
 
 }; // class add_component_command
 
-/**
- * @brief Removes a Component from a node.
- *
- * Construct before removing anything — pass the component's current value as @p before;
- * execute() performs the actual removal.
- */
+/** @brief Removes a Component; construct it before removing, passing the current value as @p before. */
 template<typename Component>
 class remove_component_command final : public command {
 
@@ -95,13 +85,7 @@ private:
 
 }; // class remove_component_command
 
-/**
- * @brief Overwrites a node's Component with @p after, restorable back to @p before.
- *
- * The general-purpose property-edit command for any "edit in place" widget (transform, camera,
- * lights, skybox, particle-effect instance, script fields, node rename), snapshotting the whole
- * component rather than one field.
- */
+/** @brief Overwrites a node's Component with @p after, restorable to @p before; the general property-edit command, snapshotting the whole component. */
 template<typename Component>
 class modify_component_command final : public command {
 
@@ -122,8 +106,7 @@ public:
     return _label;
   }
 
-  // Each other node that has a Component gets exactly the fields this edit changed (apply_changed_fields), on top of its own
-  // current value.
+  // Each other node with the Component gets only the fields this edit changed, on top of its own value.
   [[nodiscard]] auto broadcast(sbx::scenes::scene& target, std::span<const sbx::math::uuid> nodes) const -> std::vector<std::unique_ptr<command>> override {
     auto commands = std::vector<std::unique_ptr<command>>{};
 

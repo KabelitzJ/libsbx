@@ -27,8 +27,7 @@ auto debug_color_for(body_type type, bool is_sleeping) -> math::color {
 auto draw_convex_shape(render::debug_draw& debug_draw, const convex_shape& shape, const math::matrix4x4& matrix, const math::vector3& scale, const math::color& color) -> void {
   std::visit(utility::overload(
     [&](const sphere& shape) {
-      // See this function's doc comment: a non-uniform scale still collides exactly (GJK), but its
-      // wireframe here is only ever a sphere -- scale.x() is the best single-scalar approximation.
+      // Non-uniform scale draws with scale.x as the radius; collision is still exact.
       debug_draw.add_wire_sphere(matrix, shape.radius * scale.x(), color);
     },
     [&](const cylinder& shape) {
@@ -41,19 +40,10 @@ auto draw_convex_shape(render::debug_draw& debug_draw, const convex_shape& shape
       debug_draw.add_wire_box(matrix, shape.half_extents * scale, color);
     },
     [&]([[maybe_unused]] const triangle& shape) {
-      // Mesh-collider narrowphase candidate only -- never authored on a shape_collider, so never
-      // reached here in practice.
+      // Mesh collider candidates only; never reached.
     },
     [&](const convex_hull& shape) {
-      // Never authored on a shape_collider either; physics_module's mesh_collider debug-draw loop
-      // is the real caller. Draws the actual hull faces when quickhull.hpp produced any; falls back
-      // to the bare point set (a degenerate source mesh -- see compute_convex_hull) as small crosses.
-      // Points are scaled before the (rotation+translation-only) matrix transform, same as
-      // support_world does for collision -- add_wire_box does a full per-corner matrix multiply too,
-      // so baking scale into the matrix instead would have worked here specifically, but scaling the
-      // point keeps this consistent with every other shape above, whose matrix-based add_wire_*
-      // helpers extract normalized (scale-blind) basis vectors from the matrix and would silently
-      // ignore a baked-in scale.
+      // Draws the hull faces, or crosses at the points for a degenerate hull. Points are scaled before the matrix, consistent with the other shapes.
       if (shape.faces.empty()) {
         constexpr auto marker_size = 0.06f;
 

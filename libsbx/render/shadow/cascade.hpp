@@ -17,29 +17,25 @@ namespace sbx::render {
 
 struct cascade_info {
   math::matrix4x4 view_projection{math::matrix4x4::identity};
-  std::float_t split_distance{0.0f}; // View-space (positive, camera-forward) far edge of this cascade's slice.
+  std::float_t split_distance{0.0f}; // view-space far edge of this cascade's slice
 
-  // NDC-depth-space equivalent of one shadow-map texel's world-space size in this cascade:
-  // texel_world_size / (this cascade's near-far depth range). csm.slang's depth bias is this times
-  // however many texels of slack it wants, so the bias stays correctly scaled in world space
-  // regardless of scene scale or cascade.
+  // One shadow-map texel's world size in NDC depth units; csm.slang scales its bias by this so it stays correct at any scene scale.
   std::float_t depth_bias_per_texel{0.0f};
   std::float_t texel_world_size{0.0f};
 
-  // World-space sphere (xyz center, w radius) the cascade was fit to; its shadow map covers all of it.
-  // csm.slang picks the first cascade whose sphere contains the shaded point.
+  // World-space sphere (xyz center, w radius) the cascade covers; csm.slang picks the first one containing the point.
   math::vector4 bounding_sphere{};
 }; // struct cascade_info
 
 /**
- * @brief Splits [camera.near_plane, min(camera.far_plane, shadow_distance)] into shadow_cascade_count
- * slices (a log/uniform blended "practical split" scheme) and builds a texel-snapped light
- * view-projection matrix for each, tightly bounding that slice of the camera frustum.
+ * @brief Splits the camera range up to the shadow distance into shadow_cascade_count slices (practical split scheme) and builds a texel-snapped light view-projection for each.
  *
- * @param camera The active camera this frame.
- * @param aspect The camera's aspect ratio (context.extent.x / context.extent.y).
- * @param light_direction The direction the (sun) light travels, i.e. surface-to-light is -light_direction.
- * @param shadow_distance How far from the camera the cascades should reach; the light's shadow_distance component field.
+ * @param camera The active camera.
+ * @param aspect The camera's aspect ratio.
+ * @param light_direction The direction the sun's light travels.
+ * @param shadow_distance How far from the camera the cascades reach.
+ *
+ * @return The cascades.
  */
 [[nodiscard]] auto compute_cascades(const camera_data& camera, std::float_t aspect, const math::vector3& light_direction, std::float_t shadow_distance) -> std::array<cascade_info, shadow_cascade_count>;
 

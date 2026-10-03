@@ -92,8 +92,7 @@ auto asset_manifest::absolute(const std::filesystem::path& relative) -> std::fil
   return project.assets_directory() / relative;
 }
 
-// Inverse of absolute(): converts a resolved path back to one relative to assets_directory(),
-// for storing assets-relative paths (e.g. in a .material file's texture slots).
+// Inverse of absolute(): a path relative to assets_directory(), as stored in e.g. .material texture slots.
 auto asset_manifest::relative(const std::filesystem::path& absolute) -> std::filesystem::path {
   const auto& project = core::engine::project();
 
@@ -130,7 +129,7 @@ auto asset_manifest::is_cooked_stale(const math::uuid& id, const std::filesystem
     return false; // fast path: unchanged since last cook
   }
 
-  // mtime moved — confirm with a content hash before recooking.
+  // mtime changed: confirm with a content hash before recooking.
   if (entry->second.source_hash == utility::hash_file(source)) {
     entry->second.source_mtime = mtime_count; // touched, not changed
     _manifest_dirty = true;
@@ -241,14 +240,12 @@ auto asset_manifest::move(const std::filesystem::path& old_path, const std::file
     return false;
   }
 
-  // Remaps one manifested file's index entry from `from` to `to` -- its .meta (identity) has
-  // already physically moved to sit next to `to` by this point, either by the single-file
-  // rename below or, for a directory, as part of the whole-subtree rename above.
+  // The .meta has already moved next to `to` with the rename.
   const auto remap_one = [this, &moved_assets](const std::filesystem::path& from, const std::filesystem::path& to) {
     const auto entry = _uuids.find(from.generic_string());
 
     if (entry == _uuids.end()) {
-      return; // never imported -- nothing indexed to remap
+      return; // never imported
     }
 
     const auto uuid = entry->second;
@@ -281,9 +278,7 @@ auto asset_manifest::move(const std::filesystem::path& old_path, const std::file
 
     remap_one(old_path, new_path);
   } else {
-    // Every manifested file's index key starting with old_path/ moved along with the directory
-    // rename above -- collect them first (mutating _uuids mid-iteration below would invalidate
-    // this loop), then remap each in a second pass.
+    // Collect first: remapping _uuids while iterating it would invalidate the loop.
     const auto old_prefix = old_path.generic_string() + "/";
 
     auto affected = std::vector<std::pair<std::filesystem::path, std::filesystem::path>>{};

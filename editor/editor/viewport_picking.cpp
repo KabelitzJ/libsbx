@@ -24,9 +24,7 @@
 
 namespace editor {
 
-// Unprojects a viewport-relative pixel position into a world-space ray through the camera at
-// camera_world_matrix. perspective() already bakes in Vulkan's y-flip, so pixel (0,0) top-left
-// maps to NDC (-1,-1) with no extra flip needed here.
+// Unprojects a viewport pixel into a world-space ray; perspective() already includes Vulkan's y-flip.
 auto ray_from_viewport_position(const sbx::math::matrix4x4& camera_world_matrix, const sbx::scenes::camera& camera, const sbx::math::vector2& position, const sbx::math::vector2u& viewport_size) -> sbx::math::ray {
   const auto aspect = viewport_size.y() > 0u ? static_cast<std::float_t>(viewport_size.x()) / static_cast<std::float_t>(viewport_size.y()) : 1.0f;
 
@@ -123,7 +121,7 @@ auto viewport_drop_position(const sbx::math::vector2& position, const sbx::math:
     return hit->position;
   }
 
-  // The ground plane (y = 0) when the ray points down at it, otherwise a fixed distance in front of the camera.
+  // The y = 0 plane when the ray points down, otherwise a fixed distance ahead.
   const auto direction_y = ray->direction().y();
 
   if (direction_y < -1e-4f) {

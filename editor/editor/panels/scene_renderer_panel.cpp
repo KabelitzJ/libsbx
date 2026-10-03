@@ -20,8 +20,7 @@
 
 namespace editor {
 
-// Same helpers as statistics_panel.cpp -- kept local rather than shared since there are only two
-// consumers so far; extract a common widget if a third panel ends up needing the same row shape.
+// Duplicated from statistics_panel.cpp; extract a shared widget if a third panel needs it.
 static auto _table_row(std::initializer_list<std::string> columns) -> void {
   ImGui::TableNextRow();
 
@@ -80,9 +79,7 @@ auto scene_renderer_panel::draw(editor_state& state) -> void {
   ImGui::SeparatorText("Per-pass GPU time");
   ImGui::TextDisabled("Always max_frames_in_flight frames stale (query-pool readback).");
 
-  // Copied rather than sorted in place -- pass_timings() is render_graph's own live buffer, read
-  // fresh every draw() call, and reordering it would desync it from the graph's declaration order
-  // every other reader (and the next frame's readback-by-index) relies on.
+  // Copied before sorting: the live buffer must keep declaration order for the readback.
   const auto pass_timings_span = scene_renderer_module.pass_timings();
   auto timings = std::vector<sbx::render::pass_gpu_timing>{pass_timings_span.begin(), pass_timings_span.end()};
 

@@ -23,11 +23,7 @@ struct log_line {
   spdlog::level::level_enum level;
 }; // struct log_line
 
-/**
- * @brief Keeps the last lines in memory for the editor's Console panel. Editor-only:
- * nothing in the engine itself needs a queryable log history, so this doesn't live in
- * libsbx::utility.
- */
+/** @brief Keeps recent log lines for the editor's Console panel. */
 class console_sink final : public spdlog::sinks::base_sink<std::mutex> {
 
 public:
@@ -65,18 +61,18 @@ private:
 
 }; // class console_sink
 
-/** @brief The editor's single console sink instance. */
+/**
+ * @brief The editor's console sink.
+ *
+ * @return The sink.
+ */
 [[nodiscard]] inline auto console_sink_instance() -> const std::shared_ptr<console_sink>& {
   static auto instance = std::make_shared<console_sink>();
 
   return instance;
 }
 
-/**
- * @brief Registers the console sink so it starts receiving log messages. Must be called
- * before the first log call of the process — see sbx::utility::add_sink. Call this first
- * thing in main(), before the engine (and its modules) are constructed.
- */
+/** @brief Registers the console sink; call first thing in main(), before the engine and the first log call. */
 inline auto install_console_sink() -> void {
   sbx::utility::add_sink(console_sink_instance());
 }

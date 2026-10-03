@@ -13,10 +13,14 @@
 namespace editor {
 
 /**
- * @brief Bounces @p value through a bounded scratch buffer for ImGui::InputText (which needs a raw
- * char* it can write into), truncating a currently-too-long value rather than growing the buffer.
- * Re-synced from @p value every call, so it's for a field bound to live data (edited every frame),
- * not a one-shot rename/entry session -- see inline_rename.hpp for that.
+ * @brief InputText for a live std::string through a bounded buffer, truncating values that are too long. Re-synced every call; use inline_rename.hpp for rename sessions.
+ *
+ * @tparam N The buffer size.
+ *
+ * @param label The widget label.
+ * @param value The string to edit.
+ *
+ * @return True if @p value changed.
  */
 template<std::size_t N = 128u>
 auto draw_text_field(const char* label, std::string& value) -> bool {
@@ -33,8 +37,15 @@ auto draw_text_field(const char* label, std::string& value) -> bool {
 }
 
 /**
- * @brief Same as draw_text_field, but shows @p hint (greyed placeholder text) while @p value is
- * empty instead of a visible label -- for a search/filter box, not a named field.
+ * @brief draw_text_field with a placeholder @p hint while empty, for search boxes.
+ *
+ * @tparam N The buffer size.
+ *
+ * @param label The widget label.
+ * @param hint The placeholder text.
+ * @param value The string to edit.
+ *
+ * @return True if @p value changed.
  */
 template<std::size_t N = 128u>
 auto draw_text_field_with_hint(const char* label, const char* hint, std::string& value) -> bool {

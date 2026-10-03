@@ -66,12 +66,7 @@ struct mesh_key {
 
 }; // struct mesh_key
 
-/**
- * @brief Hashes a mesh_key for unordered accumulation during packet build -- see _build_packet's
- * doc comment on why the buckets are accumulated into an unordered_map and then sorted once
- * (by mesh_key::operator<, restoring the same mesh -> submesh -> material adjacency) rather than
- * inserted directly into a std::map.
- */
+/** @brief Hashes a mesh_key; buckets are accumulated unordered, then sorted once by mesh_key. */
 struct mesh_key_hash {
   auto operator()(const mesh_key& key) const noexcept -> std::size_t {
     auto seed = std::hash<math::uuid>{}(key.mesh);
@@ -88,38 +83,24 @@ struct draw_command {
   std::uint32_t transform_offset{0u};
   std::uint32_t pipeline_id{0u};
 
-  // 0 = read the mesh's own static vertex_address() (every non-skinned draw). Otherwise the BDA of
-  // a skinned instance's already-skinned scratch buffer, resolved once in
-  // scene_renderer_module::_build_packet (see skin_dispatch::output_vertex_address, which this is
-  // always a copy of) -- submit_draw_commands needs no other change to draw from it.
+  // 0 reads the mesh's static vertex_address(); otherwise the skinned instance's scratch buffer.
   graphics::buffer::address_type vertex_address_override{0u};
 
-  // Local-space bounds frustum_cull_pass tests each instance against (transformed by that
-  // instance's own world matrix first) -- copied from the mesh's own submesh.bounds at
-  // _build_packet time, inflated for skinned instances only (see its own doc comment there) since a
-  // rigid mesh's bounds are already exact and padding them would only weaken culling for no benefit.
+  // Local bounds tested by frustum_cull_pass; inflated only for skinned instances.
   math::volume local_bounds{};
 
-  // Non-null: an instanced_mesh_renderer's draw. Its instances come from this buffer (not
-  // render_packet::transforms -- there transform_offset is the renderer's node transform, which
-  // frustum_cull_pass multiplies in), and its visible ones land in the instanced culled pool at
-  // culled_offset (one instance_count-sized block per cull view it's drawn in).
+  // Non-null for instanced draws: instances come from this buffer, and transform_offset is the renderer's node transform. Visible instances land in the culled pool at culled_offset.
   std::shared_ptr<const scenes::instance_buffer> instances{};
   std::uint32_t culled_offset{0u};
 
-  // assets_module.is_resident(mesh) && is_resident(material), resolved once when this command is
-  // built rather than per pass -- the same command list is submitted by several passes in the same
-  // frame (depth pre-pass, opaque, shadow x cascade), and residency can't change mid-frame.
+  // Resolved once, since several passes submit the same command list and residency can't change mid-frame.
   bool resident{false};
 }; // struct draw_command
 
 /**
- * @brief Per-instance world matrix and its inverse-transpose normal matrix, plus the instance's
- * color and custom_data (scenes::instance_data; white and zero for anything not instanced).
+ * @brief Per-instance world matrix, inverse-transpose normal matrix, color and custom_data. Mirrors frame_data.slang's transform_data.
  *
- * Computed once on the CPU so normals stay correct under non-uniform scale/skew (for an
- * instanced_mesh_renderer, by frustum_cull_instanced.slang on the GPU); everything packs with no
- * padding. Mirrors frame_data.slang's transform_data.
+ * The normal matrix is computed once (on the CPU, or on the GPU for instanced draws) so normals survive non-uniform scale.
  */
 struct transform_data {
   math::matrix4x4 model{math::matrix4x4::identity};
@@ -129,15 +110,9 @@ struct transform_data {
 }; // struct transform_data
 
 /**
- * @brief One skinned-mesh instance's compute dispatch (skin_pass, shaders/skinning/skin_vertices.slang).
+ * @brief One skinned instance's skin_pass dispatch, skinning its whole vertex range once for every submesh draw.
  *
- * Skins the instance's *whole* vertex range once -- submeshes are index ranges into one shared
- * vertex buffer already, so one dispatch and one output_vertex_address cover every submesh draw
- * command belonging to this instance. joint_offset indexes into this frame's joint palette
- * (render_context::joint_palette_address), which is frame-in-flight multiplexed like
- * transform_address since it's written fresh from the CPU every frame; output_vertex_address is
- * not (see scene_renderer_module's skin scratch buffer doc comment) so it's resolved to a final
- * BDA directly here, copied verbatim into the matching draw_command::vertex_address_override.
+ * joint_offset indexes this frame's joint palette; output_vertex_address is a final address copied into the matching draw_command::vertex_address_override.
  */
 struct skin_dispatch {
   graphics::buffer::address_type source_vertex_address{0u};
@@ -173,9 +148,7 @@ struct light_data {
   std::uint32_t padding{0u};
 }; // struct light_data
 
-/**
- * @brief One camera-facing quad, vertex-pulled by particle_pass (see shaders/particles/particle_billboard.slang).
- */
+/** @brief One camera-facing quad, vertex-pulled by particle_pass. */
 struct particle_billboard_instance {
   math::vector3 position{0.0f, 0.0f, 0.0f};
   std::float_t size{0.0f};
@@ -185,29 +158,20 @@ struct particle_billboard_instance {
   math::vector2 padding{0.0f, 0.0f};
 }; // struct particle_billboard_instance
 
-/**
- * @brief One coalesced instanced draw of particle_billboard_instances sharing a texture and blend mode.
- */
+/** @brief One instanced draw of billboards sharing a texture and blend mode. */
 struct particle_billboard_command {
   assets::emitter_blend_mode blend_mode{assets::emitter_blend_mode::additive};
   std::uint32_t instance_count{0u};
   std::uint32_t instance_offset{0u};
 }; // struct particle_billboard_command
 
-/**
- * @brief One particle rendered as an instanced mesh instead of a billboard; unlit (texture * color).
- *
- * Vertex-pulled like a transform_data instance, but carries a per-particle color instead of a
- * normal matrix since there's no lighting to correct normals for.
- */
+/** @brief One particle drawn as an unlit mesh instance, carrying a color instead of a normal matrix. */
 struct particle_mesh_instance {
   math::matrix4x4 model{math::matrix4x4::identity};
   math::color color{1.0f, 1.0f, 1.0f, 1.0f};
 }; // struct particle_mesh_instance
 
-/**
- * @brief One coalesced instanced draw of particle_mesh_instances sharing a mesh, submesh, material and blend mode.
- */
+/** @brief One instanced draw of mesh particles sharing a mesh, submesh, material and blend mode. */
 struct particle_mesh_command {
   assets::emitter_blend_mode blend_mode{assets::emitter_blend_mode::additive};
   assets::mesh_handle mesh{};
@@ -217,32 +181,20 @@ struct particle_mesh_command {
   std::uint32_t instance_offset{0u};
 }; // struct particle_mesh_command
 
-/**
- * @brief One vertex of a CPU-expanded trail ribbon (shaders/particles/trail.slang).
- *
- * Width extrusion and camera-facing orientation are baked in at extraction time
- * (scene_renderer_module.cpp); the shader only transforms position to clip space.
- */
+/** @brief One vertex of a trail ribbon, with width and camera facing baked in at extraction. */
 struct trail_vertex {
   math::vector3 position{0.0f, 0.0f, 0.0f};
   math::color color{1.0f, 1.0f, 1.0f, 1.0f};
 }; // struct trail_vertex
 
-/**
- * @brief One coalesced non-indexed triangle-list draw of trail_vertices sharing the owning emitter's blend mode.
- */
+/** @brief One triangle-list draw of trail vertices sharing a blend mode. */
 struct particle_trail_command {
   assets::emitter_blend_mode blend_mode{assets::emitter_blend_mode::additive};
   std::uint32_t vertex_count{0u};
   std::uint32_t vertex_offset{0u};
 }; // struct particle_trail_command
 
-/**
- * @brief One GPU-path emitter's per-frame data, extracted for particle_simulate_pass.
- *
- * pool_index selects which render::particle_pool (additive/alpha_blend) owns `slot`; the pass
- * writes this wholesale into that pool's emitter_instances buffer every frame.
- */
+/** @brief One GPU-path emitter's per-frame data for particle_simulate_pass; pool_index selects the pool owning `slot`. */
 struct particle_emitter_snapshot {
   std::uint32_t pool_index{0u};
   std::uint32_t slot{0u};
@@ -263,10 +215,10 @@ struct render_packet {
   std::vector<particle_mesh_command> particle_mesh_commands{};
   std::vector<trail_vertex> trail_vertices{};
   std::vector<particle_trail_command> trail_commands{};
-  std::vector<particle_emitter_snapshot> particle_emitters{}; // GPU-path emitters only.
-  std::vector<math::matrix4x4> joint_matrices{}; // flat, all skinned instances' skinning matrices this frame, concatenated (mirrors transforms)
+  std::vector<particle_emitter_snapshot> particle_emitters{}; // GPU-path emitters only
+  std::vector<math::matrix4x4> joint_matrices{}; // every skinned instance's skinning matrices, concatenated
   std::vector<skin_dispatch> skin_dispatches{};
-  bool has_shadow_caster{false}; // When true, lights[0] is the cascaded-shadow-mapped sun.
+  bool has_shadow_caster{false}; // lights[0] is the cascaded-shadow-mapped sun
   std::float_t shadow_distance{75.0f};
   std::float_t shadow_depth_bias{1.0f};
   std::float_t shadow_normal_bias{1.0f};

@@ -15,17 +15,9 @@
 namespace sbx::render {
 
 /**
- * @brief Clustered Forward+ light culling: partitions the view frustum into a fixed 16x9x24 grid
- * of view-space clusters (shaders/clusters/cluster_data.slang) and assigns every point/spot light to
- * each cluster its bounding sphere overlaps, via two compute dispatches (build_clusters.slang,
- * cull_lights.slang). opaque_pass and transparent_accumulate_pass look up only their own fragment's
- * cluster instead of looping every light in the scene.
+ * @brief Clustered forward+ light culling: assigns every point and spot light to the 16x9x24 view-space clusters its bounding sphere overlaps, so shading only loops its fragment's cluster.
  *
- * Directional lights aren't clustered -- they stay in the small, always-evaluated prefix of the
- * light array (render_packet::directional_light_count).
- *
- * Runs right after depth_pre_pass and before opaque_pass: cluster assignment needs only the camera
- * and light list, both already known by then.
+ * Directional lights aren't clustered; they stay in the always-evaluated prefix of the light array. Runs after depth_pre_pass, before opaque_pass.
  */
 class light_culling_pass final : public compute_pass {
 

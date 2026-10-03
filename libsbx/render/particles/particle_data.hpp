@@ -16,12 +16,7 @@ namespace sbx::render {
 inline static constexpr auto particle_pool_additive = std::uint32_t{0u};
 inline static constexpr auto particle_pool_alpha_blend = std::uint32_t{1u};
 
-/**
- * @brief One GPU-resident particle, byte-mirrored field-for-field with shaders/particles/particle_data.slang.
- *
- * Color is not stored here — derived per-frame from age/lifetime and the owning emitter's start/end color.
- * `reserved` pads the struct to 64 bytes for a future per-particle payload.
- */
+/** @brief One GPU particle, mirrored with particle_data.slang. Color is derived from age; `reserved` pads to 64 bytes. */
 struct particle {
   math::vector3 position{math::vector3::zero};
   std::float_t age{0.0f};
@@ -38,11 +33,7 @@ static_assert(sizeof(particle) == 64u, "particle must stay byte-mirrored with sh
 
 inline static constexpr auto particle_texture_index_none = std::uint32_t{0xFFFFFFFFu};
 
-/**
- * @brief Per-emitter-instance data, rewritten wholesale from the CPU every frame, byte-mirrored with shaders/particles/particle_data.slang.
- *
- * One pool-local array per particle_pool; blend mode is fixed by which pool's array an instance lives in, so no blend-mode field here.
- */
+/** @brief Per-emitter-instance data, rewritten from the CPU every frame and mirrored with particle_data.slang. The owning pool decides the blend mode. */
 struct emitter_instance {
   math::vector3 position{math::vector3::zero};
   std::float_t emission_rate{0.0f};
@@ -66,12 +57,7 @@ struct emitter_instance {
 
 static_assert(sizeof(emitter_instance) == 128u, "emitter_instance must stay byte-mirrored with shaders/particles/particle_data.slang's emitter_instance struct");
 
-/**
- * @brief Pool bookkeeping for the free stack and alive lists.
- *
- * Entirely GPU read-modify-write except the one-time init in @ref particle_pool's constructor.
- * `alive_count[2]` is indexed by read/write parity that flips every frame.
- */
+/** @brief GPU-maintained free stack and alive list counters; `alive_count[2]` is indexed by a parity that flips every frame. */
 struct particle_counters {
   std::uint32_t dead_count{0u};
   std::array<std::uint32_t, 2u> alive_count{0u, 0u};

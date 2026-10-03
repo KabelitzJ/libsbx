@@ -20,11 +20,7 @@ auto draw_animation_parameter_value(const char* label, sbx::assets::animation_pa
     if constexpr (std::is_same_v<value_type, std::float_t>) {
       changed = ImGui::DragFloat(label, &current, 0.05f);
     } else if constexpr (std::is_same_v<value_type, bool>) {
-      // A dropdown rather than a checkbox here -- this draws a graph's authored default/condition
-      // value (animation_graph_panel), where "True"/"False" as an explicit menu choice reads more
-      // clearly next to the Float/Int/Trigger widgets beside it than a lone checkbox would. The
-      // Inspector's live parameter *testing* UI (a running instance's current value) keeps its own
-      // plain ImGui::Checkbox instead -- a toggle switch, not an authored setting.
+      // A True/False dropdown reads better next to the other authored-value widgets; the Inspector's live testing UI uses a checkbox.
       static constexpr auto bool_names = std::array<const char*, 2u>{"False", "True"};
       auto index = current ? 1 : 0;
 

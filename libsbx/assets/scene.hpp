@@ -14,13 +14,7 @@
 
 namespace sbx::assets {
 
-/**
- * @brief A saved scene ("level") — the same YAML shape scenes::scene_serializer::build produces,
- * opaque to this module: assets deliberately knows nothing about scenes/nodes/components (scenes
- * depends on assets, never the other way), so every scene-aware piece (building this from a live
- * scenes::scene, applying it back) lives in scenes::scene_serializer instead. This class and
- * assets_module just keep the payload alive, versioned (loadable::generation()), and persisted.
- */
+/** @brief A saved scene in scene_serializer's YAML shape. Opaque here, since assets never depends on scenes; scene_serializer does the scene-aware work. */
 class scene final : public loadable {
 
   friend class assets_module;

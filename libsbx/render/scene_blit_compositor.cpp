@@ -63,8 +63,7 @@ auto scene_blit_compositor::execute(compositor_context& context) -> void {
   SBX_PROFILE_GPU_SCOPE((*context.command_buffer), "scene_blit_compositor::execute");
 
   if (!_owner.has_rendered()) {
-    // Nothing rendered this frame (final_image may be stale or never written) — clear and
-    // present the swapchain as-is rather than leaving it undefined.
+    // Nothing rendered this frame: clear rather than present an undefined image.
     clear_swapchain(*context.command_buffer, context.swapchain_view, context.swapchain_extent);
     return;
   }
@@ -72,14 +71,13 @@ auto scene_blit_compositor::execute(compositor_context& context) -> void {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
   auto& bindless_table = graphics_module.bindless_table();
 
-  // final_image is already shader_read_only_optimal by the time any compositor runs — see
-  // scene_renderer_module::record.
+  // final_image is already read-only by the time any compositor runs.
 
   auto color_attachment = VkRenderingAttachmentInfo{};
   color_attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
   color_attachment.imageView = context.swapchain_view;
   color_attachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-  color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE; // fullscreen triangle overwrites everything
+  color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE; // the fullscreen triangle overwrites everything
   color_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
 
   auto rendering_info = VkRenderingInfo{};

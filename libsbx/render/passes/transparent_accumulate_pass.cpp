@@ -42,8 +42,7 @@ auto transparent_accumulate_pass::_make_pipeline(memory::observer_ptr<const grap
   };
 
   info.color_blend_attachments = {
-    // Accumulator: additive — sum of weight * premultiplied(color, alpha) across every
-    // fragment that lands here, order-independent.
+    // Accumulator: additive sum of weight * premultiplied color.
     graphics::blend_attachment{
       .enable = true,
       .source_color = graphics::blend_factor::one,
@@ -53,8 +52,7 @@ auto transparent_accumulate_pass::_make_pipeline(memory::observer_ptr<const grap
       .destination_alpha = graphics::blend_factor::one,
       .alpha_operation = graphics::blend_operation::add
     },
-    // Revealage: multiplicative — dst *= (1 - alpha), the classic
-    // glBlendFunc(GL_ZERO, GL_ONE_MINUS_SRC_COLOR) McGuire/Bavoil recipe.
+    // Revealage: multiplicative, dst *= (1 - alpha).
     graphics::blend_attachment{
       .enable = true,
       .source_color = graphics::blend_factor::zero,
@@ -85,8 +83,7 @@ auto transparent_accumulate_pass::_resolve_custom_pipeline(const std::string& sh
     .depth_compare = graphics::compare_operation::less_or_equal,
     .samples = render_pass::sample_count,
     .color_blend_attachments = {
-      // Accumulator: additive — sum of weight * premultiplied(color, alpha) across every
-      // fragment that lands here, order-independent.
+      // Accumulator: additive sum of weight * premultiplied color.
       graphics::blend_attachment{
         .enable = true,
         .source_color = graphics::blend_factor::one,
@@ -96,8 +93,7 @@ auto transparent_accumulate_pass::_resolve_custom_pipeline(const std::string& sh
         .destination_alpha = graphics::blend_factor::one,
         .alpha_operation = graphics::blend_operation::add
       },
-      // Revealage: multiplicative — dst *= (1 - alpha), the classic
-      // glBlendFunc(GL_ZERO, GL_ONE_MINUS_SRC_COLOR) McGuire/Bavoil recipe.
+      // Revealage: multiplicative, dst *= (1 - alpha).
       graphics::blend_attachment{
         .enable = true,
         .source_color = graphics::blend_factor::zero,

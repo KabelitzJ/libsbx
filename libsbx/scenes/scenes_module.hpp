@@ -3,12 +3,17 @@
 #ifndef LIBSBX_SCENES_SCENES_MODULE_HPP_
 #define LIBSBX_SCENES_SCENES_MODULE_HPP_
 
+#include <mutex>
+#include <vector>
+
 #include <libsbx/utility/noncopyable.hpp>
 
 #include <libsbx/core/module.hpp>
 #include <libsbx/core/engine.hpp>
 
 #include <libsbx/units/time.hpp>
+
+#include <libsbx/graphics/resources/buffer.hpp>
 
 #include <libsbx/assets/assets_module.hpp>
 
@@ -65,7 +70,17 @@ public:
     return _simulation_time;
   }
 
+  /** @brief Queues a destroyed instance_buffer's GPU buffer for retirement. Safe from any thread. */
+  auto release_instance_buffer(graphics::buffer_handle handle) -> void;
+
+  /** @brief Retires every buffer queued by release_instance_buffer since the last call. Render idle only. */
+  auto collect_released_instance_buffers() -> void;
+
 private:
+
+  // Declared before _scene: the scene's instance_buffers still queue here while it is destroyed.
+  std::mutex _released_instance_buffers_mutex{};
+  std::vector<graphics::buffer_handle> _released_instance_buffers{};
 
   scene _scene{};
   bool _is_simulating{true};

@@ -16,22 +16,19 @@
 
 namespace editor {
 
-/**
- * @brief Draws the Console panel: a live view of editor::console_sink_instance()'s in-memory
- * log ring buffer, with per-level toggles, a text filter, and auto-scroll.
- */
+/** @brief The Console: the console sink's recent lines with per-level toggles, a text filter and auto-scroll. */
 class logger_panel final : public editor_panel {
 
 public:
 
-  /** @see hierarchy_panel::window_name */
+  // The panel's ImGui::Begin() string.
   inline static constexpr auto window_name = ICON_MDI_CONSOLE " Console###logger_panel";
 
   auto draw(editor_state& state) -> void override;
 
 private:
 
-  // One toggle per real level (trace..critical); "off" is never emitted, so it's excluded.
+  // One toggle per emitted level; "off" is never emitted.
   static constexpr auto level_count = static_cast<std::size_t>(spdlog::level::n_levels) - 1u;
 
   ImGuiTextFilter _text_filter{};

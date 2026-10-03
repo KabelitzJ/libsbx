@@ -134,7 +134,6 @@ auto editor_ui_layer::build() -> void {
 }
 
 auto editor_ui_layer::_upload_fonts() -> void {
-  // Roboto Regular + Material Design Icons, embedded in the engine — see ui_system::add_default_fonts.
   auto& ui_module = sbx::core::engine::get_module<sbx::render::ui_module>();
 
   ui_module.add_default_fonts(16.0f);
@@ -145,25 +144,25 @@ auto editor_ui_layer::_create_panels() -> void {
   _panels.push_back(std::make_unique<inspector_panel>());
   _panels.push_back(std::make_unique<asset_browser_panel>());
   _panels.push_back(std::make_unique<logger_panel>());
-  _panels.push_back(std::make_unique<animation_graph_panel>()); // on-demand, not part of the default dock layout -- see its own doc comment
-  _panels.push_back(std::make_unique<shader_graph_panel>()); // on-demand, same reasoning as animation_graph_panel above
-  _panels.push_back(std::make_unique<statistics_panel>()); // always-open, replaces the old inline FPS-only Stats window
+  _panels.push_back(std::make_unique<animation_graph_panel>()); // on-demand panels below aren't in the default dock layout
+  _panels.push_back(std::make_unique<shader_graph_panel>());
+  _panels.push_back(std::make_unique<statistics_panel>());
 
   auto project_settings = std::make_unique<project_settings_panel>();
   _project_settings_panel = project_settings.get();
-  _panels.push_back(std::move(project_settings)); // on-demand, same reasoning as animation_graph_panel above
+  _panels.push_back(std::move(project_settings));
 
   auto preferences = std::make_unique<preferences_panel>();
   _preferences_panel = preferences.get();
-  _panels.push_back(std::move(preferences)); // on-demand, same reasoning as animation_graph_panel above
+  _panels.push_back(std::move(preferences));
 
   auto navigation = std::make_unique<navigation_panel>();
   _navigation_panel = navigation.get();
-  _panels.push_back(std::move(navigation)); // on-demand, same reasoning as animation_graph_panel above
+  _panels.push_back(std::move(navigation));
 
   auto scene_renderer = std::make_unique<scene_renderer_panel>();
   _scene_renderer_panel = scene_renderer.get();
-  _panels.push_back(std::move(scene_renderer)); // on-demand, same reasoning as animation_graph_panel above
+  _panels.push_back(std::move(scene_renderer));
 }
 
 auto editor_ui_layer::_draw_dockspace() -> void {
@@ -194,14 +193,12 @@ auto editor_ui_layer::_draw_dockspace() -> void {
   const auto dockspace_id = ImGui::GetID("editor_dockspace");
 
   if (ImGui::DockBuilderGetNode(dockspace_id) == nullptr) {
-    // No saved layout for this dockspace yet — lay out a sane default. Runs once per node id;
-    // once it exists (here or from a loaded layout on disk), this is skipped every frame after.
+    // No saved layout for this dockspace yet: build the default once.
     ImGui::DockBuilderRemoveNode(dockspace_id);
     ImGui::DockBuilderAddNode(dockspace_id, ImGuiDockNodeFlags_DockSpace);
     ImGui::DockBuilderSetNodeSize(dockspace_id, viewport->WorkSize);
 
-    // Right column (Properties + Stats) split off first, full height; remainder splits into a
-    // bottom strip (Asset Browser + Console) and a top strip (Hierarchy left, Viewport center).
+    // The right column splits off first at full height; the rest splits into a bottom strip (Asset Browser, Console) and a top strip (Hierarchy, Viewport).
     auto remaining = dockspace_id;
     auto right = ImGuiID{};
     auto bottom = ImGuiID{};
@@ -212,7 +209,7 @@ auto editor_ui_layer::_draw_dockspace() -> void {
     ImGui::DockBuilderSplitNode(remaining, ImGuiDir_Down, 0.25f, &bottom, &remaining);
     ImGui::DockBuilderSplitNode(remaining, ImGuiDir_Left, 0.25f, &left, &center);
 
-    // Side by side, not tabbed: Asset Browser left (45%), Console right (55%).
+    // Side by side: Asset Browser 45%, Console 55%.
     auto bottom_left = ImGuiID{};
     auto bottom_right = ImGuiID{};
 
@@ -222,9 +219,7 @@ auto editor_ui_layer::_draw_dockspace() -> void {
       center_node->SetLocalFlags(center_node->LocalFlags | ImGuiDockNodeFlags_CentralNode);
     }
 
-    // Each name here is the same window_name constant its own panel's ImGui::Begin() uses (see
-    // hierarchy_panel::window_name and friends) — never a re-typed literal, so a renamed panel
-    // can't silently desync from this layout.
+    // Each panel's own window_name constant, so renames can't desync the layout.
     ImGui::DockBuilderDockWindow(hierarchy_panel::window_name, left);
     ImGui::DockBuilderDockWindow(viewport_window_name, center);
     ImGui::DockBuilderDockWindow(asset_browser_panel::window_name, bottom_left);
@@ -235,9 +230,7 @@ auto editor_ui_layer::_draw_dockspace() -> void {
     ImGui::DockBuilderFinish(dockspace_id);
   }
 
-  // Reserves its own strip of vertical space before DockSpace() below claims whatever's left via
-  // its ImVec2{0,0} "fill remaining" size, the same way the menu bar's height is excluded via
-  // ImGuiWindowFlags_MenuBar on this window.
+  // Reserves its strip before DockSpace() fills the rest.
   _draw_toolbar();
 
   ImGui::DockSpace(dockspace_id, ImVec2{0.0f, 0.0f});
@@ -427,8 +420,7 @@ auto editor_ui_layer::_draw_toolbar() -> void {
   const auto spacing = ImGui::GetStyle().ItemSpacing.x;
   const auto group_width = button_count * button_size.x + (button_count - 1) * spacing;
 
-  // Flat strip flush with the menu bar above it — no rounded box outline, no scrollbar (the group
-  // is sized to fit exactly, but a stray sub-pixel overflow shouldn't ever spawn one).
+  // A flat strip under the menu bar, with no rounding or scrollbar.
   ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 0.0f);
   ImGui::PushStyleVar(ImGuiStyleVar_ChildBorderSize, 0.0f);
 
@@ -441,8 +433,7 @@ auto editor_ui_layer::_draw_toolbar() -> void {
 
   ImGui::BeginGroup();
 
-  // Play: starts a fresh session from edit, or resumes one that's paused. Disabled while already
-  // playing; tinted while it's the state that's currently active (playing).
+  // Play starts a session from Edit or resumes a paused one; tinted while playing.
   {
     const auto can_play = state != editor::play_state::playing;
 
@@ -474,7 +465,7 @@ auto editor_ui_layer::_draw_toolbar() -> void {
 
   ImGui::SameLine();
 
-  // Pause: only meaningful while actively playing. Tinted while it's the current state (paused).
+  // Pause: only while playing; tinted while paused.
   {
     if (is_paused) {
       ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyle().Colors[ImGuiCol_ButtonActive]);
@@ -499,7 +490,7 @@ auto editor_ui_layer::_draw_toolbar() -> void {
 
   ImGui::SameLine();
 
-  // Stop: only meaningful once a play session (playing or paused) exists.
+  // Stop: only while a session exists.
   {
     ImGui::BeginDisabled(state == editor::play_state::edit);
 

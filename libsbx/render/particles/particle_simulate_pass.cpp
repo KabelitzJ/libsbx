@@ -73,9 +73,7 @@ particle_simulate_pass::particle_simulate_pass(particle_pool& additive_pool, par
 }
 
 auto particle_simulate_pass::declare(compute_pass_builder&, const graph_resources&) -> void {
-  // No cross-pass declaration needed — hand-off to particle_draw_pass is a plain VkMemoryBarrier2
-  // at the end of execute() (like light_culling_pass's); alive_list ping-pongs by frame_index % 2,
-  // so there's no single buffer_handle a compile-time declaration could even name.
+  // No graph declaration: alive_list ping-pongs by frame parity, so the hand-off to particle_pass is a plain memory barrier at the end of execute().
 }
 
 auto particle_simulate_pass::execute(render_context& context) -> void {
@@ -83,10 +81,7 @@ auto particle_simulate_pass::execute(render_context& context) -> void {
   SBX_STATS_SCOPE("particle_simulate_pass::execute");
   SBX_PROFILE_GPU_SCOPE((*context.command_buffer), "particle_simulate_pass::execute");
 
-  // The pools are persistent simulation state, so this frame really does depend on the previous
-  // one: its simulate/emit writes (RAW) and its dispatch_indirect/draw reads (WAR). Both frames run
-  // on this queue, so a pipeline barrier (whose first scope includes the previous frame's
-  // submission) is enough -- no semaphore wait on the whole previous frame.
+  // The pools persist across frames: wait on the previous frame's writes and draw reads. Both run on this queue, so a pipeline barrier is enough.
   auto previous_frame = VkMemoryBarrier2{};
   previous_frame.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2;
   previous_frame.srcStageMask = graphics::to_vk_enum<VkPipelineStageFlags2>(graphics::pipeline_stage::compute_shader | graphics::pipeline_stage::draw_indirect | graphics::pipeline_stage::vertex_shader | graphics::pipeline_stage::fragment_shader);
@@ -170,7 +165,7 @@ auto particle_simulate_pass::_record_pool(render_context& context, particle_pool
 
   auto& command_buffer = *context.command_buffer;
 
-  // Stage 1: build_dispatch_args — sizes stage 2's indirect dispatch to *last frame's* alive count (not max_particles) and clears this frame's write-side alive counter.
+  // Stage 1: build_dispatch_args sizes stage 2 to last frame's alive count and clears this frame's alive counter.
   command_buffer.bind_pipeline(*_build_dispatch_args_pipeline);
 
   const auto build_dispatch_args_data = build_dispatch_args_push_data{
@@ -187,7 +182,7 @@ auto particle_simulate_pass::_record_pool(render_context& context, particle_pool
   auto barrier_to_simulate = compute_to_compute_barrier(graphics::pipeline_stage::draw_indirect, graphics::access::indirect_command_read);
   command_buffer.memory_dependency(barrier_to_simulate);
 
-  // Stage 2: simulate — indirect dispatch over last frame's alive list. Ages particles out (push to dead_list), integrates survivors, appends them to this frame's alive list.
+  // Stage 2: simulate last frame's alive list, retiring dead particles and appending survivors to this frame's list.
   command_buffer.bind_pipeline(*_simulate_pipeline);
 
   const auto simulate_data = simulate_push_data{
@@ -212,8 +207,7 @@ auto particle_simulate_pass::_record_pool(render_context& context, particle_pool
   auto barrier_to_emit = compute_to_compute_barrier();
   command_buffer.memory_dependency(barrier_to_emit);
 
-  // Stage 3: emit — one small dispatch per active emitter instance that has particles to spawn this frame. Every thread claims its own free slot via a single 
-  // atomic decrement of dead_count, so concurrent spawns from different emitters can never collide on a slot (the old system's bug).
+  // Stage 3: one emit dispatch per spawning emitter instance; each thread claims a slot with an atomic decrement, so spawns never collide.
   if (!emits.empty()) {
     static const auto threads_per_group = std::uint32_t{64u};
 
@@ -247,7 +241,7 @@ auto particle_simulate_pass::_record_pool(render_context& context, particle_pool
   auto barrier_to_prepare = compute_to_compute_barrier();
   command_buffer.memory_dependency(barrier_to_prepare);
 
-  // Stage 4: prepare_indirect_draw — sizes this frame's draw_indirect (particle_draw_pass) to the alive list stages 2/3 just finished building.
+  // Stage 4: prepare_indirect_draw sizes particle_pass's indirect draw to the new alive list.
   command_buffer.bind_pipeline(*_prepare_indirect_draw_pipeline);
 
   const auto prepare_indirect_draw_data = prepare_indirect_draw_push_data{

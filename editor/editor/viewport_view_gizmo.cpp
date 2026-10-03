@@ -29,12 +29,11 @@ struct axis_gizmo_handle {
   ImVec2 position;
   std::float_t depth;
   ImU32 color;
-  const char* label; // nullptr for the negative end (drawn as a hollow ring, no letter)
+  const char* label; // nullptr for the negative end, drawn as a hollow ring
   sbx::math::vector3 look_from_direction;
 }; // struct axis_gizmo_handle
 
-// In-flight camera-snap transition. File-local rather than in editor_state — purely an
-// implementation detail of draw_view_gizmo's corner widget, not a cross-panel concern.
+// The in-flight camera snap.
 struct camera_snap_animation {
   bool active{false};
   sbx::math::vector3 start_position{};
@@ -46,9 +45,7 @@ struct camera_snap_animation {
 
 constexpr auto camera_snap_duration = 0.25f; // seconds
 
-// Computes the world position/rotation for the editor camera looking at the world origin from
-// `direction * length` — the interpolation target for camera_snap_animation. Plain world space,
-// no parent-relative conversion needed: the editor camera isn't a scene node, so it never has one.
+// The editor camera's pose looking at the origin from `direction * length`; it has no parent, so this is world space.
 auto compute_camera_snap_target(const sbx::math::vector3& direction, std::float_t length) -> std::pair<sbx::math::vector3, sbx::math::quaternion> {
   const auto up = std::fabs(direction.y()) > 0.99f ? sbx::math::vector3{0.0f, 0.0f, 1.0f} : sbx::math::vector3{0.0f, 1.0f, 0.0f};
 
@@ -76,8 +73,7 @@ auto draw_view_gizmo(const ImVec2& viewport_origin, const ImVec2& viewport_size)
 
   auto& editor_module = sbx::core::engine::get_module<editor::editor_module>();
 
-  // Edit-time navigation aid only — during Play this would be fighting whatever's actually
-  // driving the scene's own play camera (scripts, physics, ...).
+  // Edit mode only; in Play it would fight whatever drives the play camera.
   if (editor_module.play_state() != editor::play_state::edit) {
     return false;
   }
@@ -87,8 +83,7 @@ auto draw_view_gizmo(const ImVec2& viewport_origin, const ImVec2& viewport_size)
   const auto aspect = viewport_size.x / viewport_size.y;
   const auto matrices = compute_viewport_camera_matrices(camera.world_matrix(), camera.params(), aspect);
 
-  // No orbit-pivot concept on this fly camera, so distance-from-origin is the closest stand-in
-  // for how far out to place the camera when snapping to a clicked axis.
+  // The fly camera has no orbit pivot, so its distance from the origin sets the snap distance.
   const auto camera_position = camera.transform().position;
   const auto length = std::max(camera_position.length(), 1.0f);
 
@@ -140,7 +135,7 @@ auto draw_view_gizmo(const ImVec2& viewport_origin, const ImVec2& viewport_size)
     };
   }
 
-  // Back-to-front so nearer handles draw, and hit-test, on top of farther ones.
+  // Back to front, so nearer handles draw and hit-test on top.
   auto order = std::array<std::size_t, 6u>{0u, 1u, 2u, 3u, 4u, 5u};
   std::sort(order.begin(), order.end(), [&](std::size_t a, std::size_t b) { return handles[a].depth < handles[b].depth; });
 

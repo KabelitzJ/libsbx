@@ -31,6 +31,6 @@ private:
 
 }; // class property_info
 
-} // sbx
+} // namespace sbx::scripting::managed
 
 #endif // LIBSBX_SCRIPTING_MANAGED_PROPERTY_INFO_HPP_

@@ -64,8 +64,7 @@ skybox_pass::skybox_pass() {
 auto skybox_pass::declare(graphics_pass_builder& builder, const graph_resources& resources) -> void {
   auto group = render_attachment_group{.extent = resources.extent};
 
-  // Continuation write, not a fresh transition — opaque_pass already wrote color_msaa/color this
-  // frame.
+  // A continuation write: opaque_pass already wrote color this frame.
   group.colors.push_back(color_attachment_slot{
     .image = resources.color_msaa,
     .access_mask = graphics::access::color_attachment_write | graphics::access::color_attachment_read,
@@ -73,8 +72,7 @@ auto skybox_pass::declare(graphics_pass_builder& builder, const graph_resources&
     .resolve_image = resources.color
   });
 
-  // No depth barrier needed: depth has stayed in depth_attachment_optimal since opaque_pass, and
-  // this is a read-only use — the compiler elides it automatically (read-after-read).
+  // Depth stays in attachment layout since opaque_pass; read-after-read needs no barrier.
   group.depth = depth_attachment_slot{.image = resources.depth};
 
   builder.add_group(group);

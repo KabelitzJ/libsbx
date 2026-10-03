@@ -186,7 +186,7 @@ auto asset_loader::_resolve(const texture_request& request) -> void {
   auto data = asset_cooker::resolve_texture(request.source, request.cooked, request.needs_cook, did_cook);
 
   if (_aborted.load(std::memory_order_relaxed)) {
-    return; // shutting down -- nothing will ever drain this, discard rather than push it
+    return; // shutting down: nothing will drain it
   }
 
   auto lock = std::lock_guard{_result_mutex};

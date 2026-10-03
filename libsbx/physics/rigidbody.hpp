@@ -23,12 +23,7 @@ enum class [[=reflection::named]] body_type : std::uint8_t {
   static_body
 }; // enum class body_type
 
-/**
- * @brief A rigid body: mass, velocities and the accumulators/derived state the solver needs.
- * Attach alongside a shape_collider or mesh_collider for the body to actually collide with
- * anything — a rigidbody with neither still falls (or holds still, if static/kinematic) but never
- * generates contacts.
- */
+/** @brief A rigid body: mass, velocities and the solver's accumulators and derived state. It only collides together with a shape_collider or mesh_collider. */
 struct rigidbody {
   body_type type{body_type::dynamic_body};
 
@@ -52,23 +47,14 @@ struct rigidbody {
 }; // struct rigidbody
 
 /**
- * @brief A node's rigidbody if it has one, or @p fallback otherwise -- for the handful of places
- * (narrowphase pair processing, the solver) that need *some* rigidbody& to read/write regardless of
- * whether this specific node was ever given one. A `shape_collider`/`mesh_collider` node with no
- * rigidbody anywhere in its ancestor chain is an implicit static collider (matching Unity: a
- * Collider alone, no Rigidbody, is a static one) -- nothing ever adds a real component for it, so
- * every unconditional get_component<rigidbody>() in physics goes through this instead. Safe to
- * write through the returned reference even when it's `fallback`: every write any caller makes is
- * scaled by effective_inverse_mass/effective_inverse_inertia (solver.cpp), which are already forced
- * to zero for anything but dynamic_body, so a write to a fallback body is a mathematical no-op and
- * is never read back afterward either way.
+ * @brief The node's rigidbody, or @p fallback for implicit static colliders, which never get a real component.
  *
- * @p node is taken by value (a node handle is just a registry pointer + entity id, cheap to copy) so
- * get_component() below resolves to its non-const overload -- matching the same
- * copy-for-mutable-access idiom solver.cpp's apply_positional_correction already uses.
+ * Writing through a fallback is safe: every write is scaled by effective inverse mass/inertia, which are zero for non-dynamic bodies, and fallbacks are never read back.
  *
- * Resolves through try_get_component() -- a single pool lookup -- rather than the
- * has_component()+get_component() pair this used to do (two lookups for the same entity).
+ * @param node The node.
+ * @param fallback The stand-in for nodes without a rigidbody.
+ *
+ * @return The rigidbody to use.
  */
 [[nodiscard]] inline auto effective_rigidbody(scenes::node& node, rigidbody& fallback) -> rigidbody& {
   auto component = node.try_get_component<rigidbody>();
@@ -76,12 +62,11 @@ struct rigidbody {
 }
 
 /**
- * @brief Pointer form of effective_rigidbody(), for callers that resolve once and hold onto the
- * result across several uses (e.g. across the solver's velocity-iteration loop) instead of
- * re-resolving per use. Backed by a single shared thread_local fallback rather than a
- * caller-supplied one: safe because, per the doc comment above, every write to a fallback body is a
- * mathematical no-op and nothing ever reads one back, so sharing one fallback instance across
- * unrelated constraints within the same thread is harmless.
+ * @brief Pointer form of effective_rigidbody() for callers that hold the result, backed by one thread_local fallback (safe for the same reason).
+ *
+ * @param node The node.
+ *
+ * @return The rigidbody to use.
  */
 [[nodiscard]] inline auto effective_rigidbody_ptr(scenes::node& node) -> memory::observer_ptr<rigidbody> {
   static thread_local auto shared_fallback = rigidbody{body_type::static_body};

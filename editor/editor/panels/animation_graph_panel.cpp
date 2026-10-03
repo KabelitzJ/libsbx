@@ -26,13 +26,7 @@
 
 namespace editor {
 
-// NodeId/PinId/LinkId are distinct C++ types, but imgui-node-editor's own hit-testing collapses
-// them back to a bare pointer value (EditorContext::UpdateState's checkInteractionsInArea does
-// snprintf("%p", id.AsPointer()) and hands that string straight to an ImGui invisible button, with
-// no per-kind ID scoping) -- so a node and one of its own pins sharing a raw numeric value *does*
-// collide, as a real ImGui ID conflict ("2 visible items with conflicting id"). Every id below
-// therefore lives in its own disjoint numeric band, wide enough that no realistic graph (or the
-// Any State pseudo-node/its pin, each given a whole band of their own) ever crosses into the next.
+// imgui-node-editor's hit-testing reduces node, pin and link ids to bare pointer values, so a node and its pin with the same number collide as ImGui ids. Each kind gets its own disjoint band.
 constexpr auto node_band = std::uintptr_t{0};
 constexpr auto input_pin_band = std::uintptr_t{1'000'000};
 constexpr auto output_pin_band = std::uintptr_t{2'000'000};
@@ -47,12 +41,12 @@ static auto any_state_output_pin() -> ax::NodeEditor::PinId {
   return ax::NodeEditor::PinId{any_state_band + 2u};
 }
 
-// +1 on every band keeps every real id >= 1 (0 is imgui-node-editor's "invalid" sentinel).
+// +1 keeps every id >= 1; 0 is imgui-node-editor's invalid sentinel.
 static auto node_id_for_state(std::uint32_t state_id) -> ax::NodeEditor::NodeId {
   return ax::NodeEditor::NodeId{node_band + static_cast<std::uintptr_t>(state_id) + 1u};
 }
 
-// nullopt = the Any State pseudo-node (or an invalid/stale id).
+// nullopt for the Any State pseudo-node or a stale id.
 static auto state_id_from_node(ax::NodeEditor::NodeId id) -> std::optional<std::uint32_t> {
   const auto raw = id.Get();
 
@@ -92,10 +86,10 @@ static auto resolve_pin(ax::NodeEditor::PinId pin) -> resolved_pin {
     return resolved_pin{.is_any_state = false, .is_output = false, .state_id = static_cast<std::uint32_t>(raw - input_pin_band - 1u)};
   }
 
-  return resolved_pin{.is_any_state = true, .is_output = true, .state_id = 0u}; // invalid/stale id -- treat as harmless no-op
+  return resolved_pin{.is_any_state = true, .is_output = true, .state_id = 0u}; // stale id: a harmless no-op
 }
 
-// transition index -> LinkId and back; +1 keeps every link id >= 1 (0 is "invalid").
+// Transition index <-> LinkId; +1 keeps ids >= 1.
 static auto link_id_for_transition(std::size_t index) -> ax::NodeEditor::LinkId {
   return ax::NodeEditor::LinkId{link_band + index + 1u};
 }
@@ -112,7 +106,7 @@ static auto transition_index_from_link(ax::NodeEditor::LinkId id) -> std::option
 
 animation_graph_panel::animation_graph_panel() {
   auto config = ax::NodeEditor::Config{};
-  config.SettingsFile = nullptr; // node positions round-trip through animation_state::editor_position instead
+  config.SettingsFile = nullptr; // node positions are stored in animation_state::editor_position
 
   _context = ax::NodeEditor::CreateEditor(&config);
 }
@@ -224,8 +218,7 @@ auto animation_graph_panel::_draw_toolbar() -> void {
   ImGui::TextUnformatted("Preview Mesh:");
   ImGui::SameLine();
 
-  // Editor-only, not part of the asset -- lets Clip Name (below) list real clip names instead of
-  // being free text. Seeded from whatever mesh was in scope when this editor was opened.
+  // Editor-only: lets Clip Name list the preview mesh's real clips instead of free text.
   const auto current = _preview_mesh.is_valid() ? sbx::render::asset_picker_item{_preview_mesh->id(), relative_asset_path(assets_module, _preview_mesh->id())} : sbx::render::asset_picker_item{};
 
   const auto options = sbx::render::asset_picker_options{
@@ -298,9 +291,7 @@ auto animation_graph_panel::_draw_parameters() -> void {
     const auto removed_name = _edit.parameters[*removed_index].name;
     _edit.parameters.erase(_edit.parameters.begin() + static_cast<std::ptrdiff_t>(*removed_index));
 
-    // A condition referencing a deleted parameter would otherwise just never match
-    // (evaluate_animation_condition's "unknown parameter" fallback) -- drop those too rather than
-    // leave dead references around.
+    // Drop conditions on the deleted parameter rather than leave them never matching.
     for (auto& transition : _edit.transitions) {
       std::erase_if(transition.conditions, [&removed_name](const auto& condition) { return condition.parameter_name == removed_name; });
     }
@@ -324,14 +315,11 @@ auto animation_graph_panel::_draw_parameters() -> void {
 constexpr auto input_pin_color = IM_COL32(94, 174, 255, 255);
 constexpr auto output_pin_color = IM_COL32(255, 176, 79, 255);
 
-// Unreal-Blueprint-style pin: a small circle, filled once at least one transition is attached to
-// it and hollow (outline only) otherwise -- replaces the plain arrow glyph the pins used to be.
+// A pin circle, filled when a transition is attached and hollow otherwise.
 static auto draw_pin_icon(bool connected, ImU32 color) -> void {
   constexpr auto diameter = 11.0f;
 
-  // Reserved box is diameter wide but text-line-height tall, and the circle is centered within
-  // that height -- lines it up with the label text's SameLine row instead of its own (shorter)
-  // diameter, which used to sit a few pixels above the label's vertical center.
+  // The reserved box is a text line tall, centering the circle on the label's row.
   const auto line_height = ImGui::GetTextLineHeight();
 
   auto* draw_list = ImGui::GetWindowDrawList();
@@ -357,8 +345,6 @@ auto animation_graph_panel::_draw_canvas() -> void {
     _any_state_seeded = true;
   }
 
-  // Which pins currently have at least one transition attached -- drives the filled-vs-hollow
-  // look of draw_pin_icon below.
   auto connected_inputs = std::unordered_set<std::uint32_t>{};
   auto connected_outputs = std::unordered_set<std::uint32_t>{};
   auto any_state_connected = false;
@@ -435,7 +421,7 @@ auto animation_graph_panel::_draw_canvas() -> void {
       const auto start = resolve_pin(start_pin);
       const auto end = resolve_pin(end_pin);
 
-      // A drag can go in either direction -- normalize by pin kind rather than start/end order.
+      // A drag can go either way; normalize by pin kind.
       const auto* source = start.is_output ? &start : (end.is_output ? &end : nullptr);
       const auto* target = start.is_output ? &end : (end.is_output ? &start : nullptr);
 
@@ -476,8 +462,7 @@ auto animation_graph_panel::_draw_canvas() -> void {
     while (ax::NodeEditor::QueryDeletedNode(&node_id)) {
       const auto deleted_state_id = state_id_from_node(node_id);
 
-      // The Any State pseudo-node isn't part of the asset -- leave it undeleted by simply never
-      // accepting its deletion query.
+      // The Any State pseudo-node isn't part of the asset, so its deletion is never accepted.
       if (deleted_state_id.has_value() && ax::NodeEditor::AcceptDeletedItem()) {
         std::erase_if(_edit.states, [&deleted_state_id](const auto& s) { return s.id == *deleted_state_id; });
         std::erase_if(_edit.transitions, [&deleted_state_id](const auto& t) { return t.to_state == *deleted_state_id || t.from_state == *deleted_state_id; });
@@ -495,7 +480,7 @@ auto animation_graph_panel::_draw_canvas() -> void {
 
   ax::NodeEditor::EndDelete();
 
-  const auto spawn_position = ImGui::GetMousePos(); // captured before Suspend, screen-space -- same convention imgui-node-editor's own blueprints example uses for a new node's initial position
+  const auto spawn_position = ImGui::GetMousePos(); // captured before Suspend, in screen space
 
   auto context_node_id = ax::NodeEditor::NodeId{};
 
@@ -593,9 +578,7 @@ auto animation_graph_panel::_draw_selection_inspector() -> void {
     const auto* preview_clips = (_preview_mesh.is_valid() && !_preview_mesh->animation_clips().empty()) ? &_preview_mesh->animation_clips() : nullptr;
 
     if (preview_clips != nullptr) {
-      // Picked from the preview mesh's real clip list rather than free text -- clip_name still
-      // resolves by name at runtime (see assets::animation_state's doc comment), this just removes
-      // the typo risk of hand-typing it.
+      // Picked from the preview mesh's clips to avoid typos; clips still resolve by name at runtime.
       if (ImGui::BeginCombo("Clip Name", selected_state.clip_name.empty() ? "(none)" : selected_state.clip_name.c_str())) {
         for (const auto& clip : *preview_clips) {
           if (!clip.is_valid()) {
@@ -717,7 +700,7 @@ auto animation_graph_panel::_draw_selection_inspector() -> void {
 
       if (!is_trigger) {
         if (is_bool) {
-          // Ordering/Greater-Less don't mean anything for a bool -- only equality does.
+          // Only equality is meaningful for a bool.
           static constexpr auto bool_comparator_names = std::array<const char*, 2u>{"Equals", "Not Equals"};
           auto comparator_index = (condition.comparator == sbx::assets::animation_condition_comparator::not_equals) ? 1 : 0;
 

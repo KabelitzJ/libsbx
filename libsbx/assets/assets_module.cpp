@@ -17,9 +17,7 @@
 
 namespace sbx::assets {
 
-// Matches editor::extension_table's texture set (editor/panels/asset_browser_panel.cpp) --
-// materials are the only asset kind referencing another asset by path rather than uuid, and
-// only ever a texture, so this is the one extension set move_asset needs to recognize.
+// Materials reference only textures by path, so these are the only extensions move_asset must recognize.
 auto is_texture_extension(const std::filesystem::path& extension) -> bool {
   const auto ext = extension.string();
   return ext == ".png" || ext == ".jpg" || ext == ".jpeg";
@@ -79,7 +77,7 @@ auto assets_module::_fixup_material_texture_references(const std::filesystem::pa
     try {
       node = YAML::LoadFile(entry.path().string());
     } catch (const std::exception&) {
-      continue; // unreadable -- leave it alone rather than clobber it
+      continue; // unreadable: leave it alone
     }
 
     auto changed = false;
@@ -411,13 +409,11 @@ auto assets_module::save_prefab(prefab_handle& prefab, const std::filesystem::pa
   auto out = std::ofstream{resolved_path};
   out << node;
 
-  const auto id = _manifest.import(resolved_path); // register + create the .meta so it's a first-class asset
+  const auto id = _manifest.import(resolved_path);
 
   prefab->_id = id;
 
-  // Without this, a later load_prefab(id) (e.g. dragging the same prefab tile again) finds no
-  // cache entry and mints a second, independent handle whose generation never reflects edits
-  // applied through this one -- that second instance then silently stops resyncing forever.
+  // Cache it, or a later load_prefab(id) creates a second handle that never sees this one's edits.
   _prefabs[id] = prefab;
 
   utility::logger<"assets">::info("Saved prefab '{}'", resolved_path.generic_string());
@@ -462,7 +458,7 @@ auto assets_module::load_scene(const math::uuid& id) -> scene_handle {
 
   record->_id = id;
   record->_name = (root["metadata"] && root["metadata"]["name"]) ? root["metadata"]["name"].as<std::string>() : source_path.stem().string();
-  record->_snapshot = root; // whole file is the snapshot -- no {name, snapshot} envelope (see save_scene)
+  record->_snapshot = root; // the whole file is the snapshot
   record->_bump_generation();
 
   auto handle = scene_handle{record};
@@ -505,15 +501,13 @@ auto assets_module::save_scene(scene_handle& scene, const std::filesystem::path&
   }
 
   auto out = std::ofstream{resolved_path};
-  out << scene->snapshot(); // the snapshot IS the file root -- no envelope, unlike save_prefab
+  out << scene->snapshot(); // the snapshot is the file root, unlike save_prefab's envelope
 
-  const auto id = _manifest.import(resolved_path); // register + create the .meta so it's a first-class asset
+  const auto id = _manifest.import(resolved_path);
 
   scene->_id = id;
 
-  // Without this, a later load_scene(id) (e.g. re-selecting the same scene tile) finds no cache
-  // entry and mints a second, independent handle whose generation never reflects edits applied
-  // through this one -- that second instance then silently stops resyncing forever.
+  // Cache it, or a later load_scene(id) creates a second handle that never sees this one's edits.
   _scenes[id] = scene;
 
   utility::logger<"assets">::info("Saved scene '{}'", resolved_path.generic_string());

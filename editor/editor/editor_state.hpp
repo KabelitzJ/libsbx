@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <filesystem>
 #include <optional>
+#include <unordered_map>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -15,7 +16,10 @@
 
 #include <yaml-cpp/yaml.h>
 
+#include <libsbx/math/matrix4x4.hpp>
 #include <libsbx/math/uuid.hpp>
+
+#include <libsbx/scenes/components.hpp>
 
 #include <libsbx/scenes/node.hpp>
 #include <libsbx/scenes/scene.hpp>
@@ -24,19 +28,14 @@
 #include <editor/commands/command_stack.hpp>
 #include <editor/commands/composite_command.hpp>
 
+#include <editor/widgets/drag_session.hpp>
+
 namespace editor {
 
-/**
- * @brief Drag payload type for a Hierarchy row (a scene node). Shared here rather than kept local
- * to hierarchy_panel.cpp — reordering/reparenting inside the Hierarchy panel is the drag *source*,
- * but a "drop a node here to assign it" *target* is now also useful elsewhere (a Node-typed script
- * field slot in the Inspector).
- */
+/** @brief Drag payload type for a Hierarchy row, also accepted by Node-typed script fields in the Inspector. */
 inline constexpr auto node_drag_drop_payload_type = "HIERARCHY_NODE";
 
-/**
- * @brief What kind of asset a file in the project's assets directory is, inferred from extension.
- */
+/** @brief An asset file's kind, inferred from its extension. */
 enum class asset_kind {
   unknown,
   texture,
@@ -48,21 +47,17 @@ enum class asset_kind {
   shader_graph,
   font,
   prefab,
-  scene, // .scene, no cook step but still manifest-registered — same treatment as prefab
-  script, // .cs, reference-only: compiled by scripting::script_compiler, not assets_module::import
+  scene, // no cook step, but manifest-registered like prefab
+  script, // reference-only, compiled by scripting::script_compiler
 }; // enum class asset_kind
 
 /** @brief Nothing is selected. */
 struct empty_selection { };
 
 /**
- * @brief One or more scene nodes are selected, identified by uuid.
+ * @brief One or more selected scene nodes, in selection order; ids.back() is the primary node.
  *
- * ids is in selection order — ids.back() is the "primary" node (most recently added), used
- * wherever exactly one node is still needed (Inspector single-selection view, F2 rename target,
- * the gizmo's Local-mode orientation). range_anchor is the pivot the Hierarchy panel's next
- * Shift+click range-select measures from; it isn't necessarily a member of ids any more (e.g.
- * after Ctrl+click removes it), it's just the last row that was explicitly clicked/toggled.
+ * range_anchor is the last explicitly clicked row that Shift+click ranges from; it may no longer be selected.
  */
 struct node_selection {
   std::vector<sbx::math::uuid> ids{};
@@ -72,7 +67,7 @@ struct node_selection {
 /** @brief An asset file is selected, from the Asset Browser. */
 struct asset_selection {
   sbx::math::uuid id{sbx::math::uuid::nil()};
-  std::filesystem::path path{};               // project-relative to the active project's assets directory
+  std::filesystem::path path{};               // relative to the assets directory
   asset_kind kind{asset_kind::unknown};
 }; // struct asset_selection
 
@@ -91,51 +86,99 @@ enum class gizmo_mode {
   world,
 }; // enum class gizmo_mode
 
-/**
- * @brief State shared across editor panels: what's currently selected (a node or an asset), plus
- * the viewport gizmo's operation/mode. Anything private to a single panel lives on that panel
- * instead (see editor_panel) — this only holds what genuinely crosses panel boundaries.
- */
+struct gizmo_node_drag_before {
+  sbx::math::uuid node_id{sbx::math::uuid::nil()};
+  sbx::scenes::local_transform transform{};
+}; // struct gizmo_node_drag_before
+
+// Every selected node's pre-drag world and local transform, keyed by uuid.
+struct gizmo_group_drag_state {
+  bool active{false};
+  sbx::math::matrix4x4 pivot_before{sbx::math::matrix4x4::identity};
+  std::unordered_map<sbx::math::uuid, sbx::math::matrix4x4> world_before{};
+  std::unordered_map<sbx::math::uuid, sbx::scenes::local_transform> local_before{};
+}; // struct gizmo_group_drag_state
+
+/** @brief State shared across editor panels: selection, gizmo settings, requests between panels and the undo history. Panel-private state lives on the panel. */
 struct editor_state {
 
   selection current_selection{empty_selection{}};
 
-  // Ctrl+C'd subtrees (serialize_subtree snapshots, original ids) -- see node_actions.hpp.
+  // Ctrl+C'd subtrees (serialize_subtree snapshots with original ids).
   std::vector<YAML::Node> node_clipboard{};
 
   gizmo_operation current_gizmo_operation{gizmo_operation::translate};
   gizmo_mode current_gizmo_mode{gizmo_mode::world};
 
+  // Cross-frame viewport gizmo drags, each bracketed into one undo entry (see viewport_transform_gizmo.cpp).
+  drag_session<gizmo_node_drag_before> gizmo_node_drag{};
+  gizmo_group_drag_state gizmo_group_drag{};
+
   /**
-   * @brief Re-resolves the primary selected node (node_selection::ids.back(), i.e. the most
-   * recently added), if any, against @p scene, via its uuid. Returns an invalid node if nothing is
-   * selected, the selection isn't a node, or no node with that uuid exists any more (e.g. it was
-   * deleted). Identical to a single-node selection's only node when exactly one is selected.
+   * @brief The primary selected node, re-resolved by uuid.
+   *
+   * @param scene The scene to resolve against.
+   *
+   * @return The node, or an invalid node if no node is selected or it no longer exists.
    */
   [[nodiscard]] auto selected_node(sbx::scenes::scene& scene) const -> sbx::scenes::node;
 
-  /** @brief Whether @p node is anywhere in the current node selection (membership test, not "is the primary"). */
+  /**
+   * @brief Whether @p node is anywhere in the selection.
+   *
+   * @param node The node to test.
+   *
+   * @return True if selected.
+   */
   [[nodiscard]] auto is_node_selected(const sbx::scenes::node& node) const noexcept -> bool;
 
-  /** @brief Replaces the selection with just @p node, and makes it the new range-select anchor. */
+  /**
+   * @brief Selects only @p node and makes it the range anchor.
+   *
+   * @param node The node to select.
+   */
   auto select_node(const sbx::scenes::node& node) -> void;
 
-  /** @brief Ctrl+click: adds @p node to the selection if absent, removes it if present. Always updates the range-select anchor. */
+  /**
+   * @brief Ctrl+click: toggles @p node's membership and makes it the range anchor.
+   *
+   * @param node The node to toggle.
+   */
   auto toggle_node_selection(const sbx::scenes::node& node) -> void;
 
-  /** @brief Shift+click in the viewport (no list order to range over there): adds @p node to the selection if absent, never removes. Always updates the range-select anchor. */
+  /**
+   * @brief Shift+click in the viewport: adds @p node if absent, never removes. Makes it the range anchor.
+   *
+   * @param node The node to add.
+   */
   auto add_node_to_selection(const sbx::scenes::node& node) -> void;
 
-  /** @brief Replaces the selection with exactly @p ids, in that order, without touching the range-select anchor. Empty @p ids clears the selection. Used by the Hierarchy panel's Shift range-select. */
+  /**
+   * @brief Replaces the selection with @p ids in order, keeping the range anchor; used by the Hierarchy's range select.
+   *
+   * @param ids The new selection; empty clears it.
+   */
   auto set_node_selection(std::vector<sbx::math::uuid> ids) -> void;
 
-  /** @brief The current node selection's ids, in selection order; empty if nothing/an asset is selected. */
+  /**
+   * @brief The selected node ids in selection order.
+   *
+   * @return The ids, empty when no node is selected.
+   */
   [[nodiscard]] auto selected_node_ids() const -> const std::vector<sbx::math::uuid>&;
 
-  /** @brief The Hierarchy panel's next Shift+click range-select pivot; nil if no node selection is active. */
+  /**
+   * @brief The Hierarchy's Shift+click range anchor.
+   *
+   * @return The anchor, or nil without a node selection.
+   */
   [[nodiscard]] auto node_selection_anchor() const -> sbx::math::uuid;
 
-  /** @brief Number of currently selected nodes (0 if nothing/an asset is selected). */
+  /**
+   * @brief The number of selected nodes.
+   *
+   * @return The count, 0 when no node is selected.
+   */
   [[nodiscard]] auto selected_node_count() const -> std::size_t;
 
   auto select_asset(sbx::math::uuid id, std::filesystem::path path, asset_kind kind) -> void;
@@ -143,10 +186,9 @@ struct editor_state {
   auto clear_selection() -> void;
 
   /**
-   * @brief One-shot "show in Asset Browser" request: asks the Asset Browser to navigate to and
-   * expand the folder containing @p path (project-relative), without changing what's currently
-   * selected/shown in the Inspector. Consumed (reset to nullopt) once asset_browser_panel acts on
-   * it, so it fires exactly once per request rather than pinning the browser to that folder.
+   * @brief Asks the Asset Browser once to reveal the folder containing @p path, without changing the selection.
+   *
+   * @param path The project-relative path to reveal.
    */
   auto request_reveal_in_browser(std::filesystem::path path) -> void {
     reveal_in_browser_request = std::move(path);
@@ -154,11 +196,11 @@ struct editor_state {
 
   std::optional<std::filesystem::path> reveal_in_browser_request{};
 
-  /** @brief One-shot "open the visual graph editor" request, same shape as reveal_in_browser_request — consumed by animation_graph_panel once it acts on it. */
+  /** @brief One-shot request to open the animation graph editor, consumed by animation_graph_panel. */
   struct animation_graph_edit_request {
     sbx::math::uuid id{sbx::math::uuid::nil()};
     std::filesystem::path path{}; // project-relative
-    sbx::math::uuid preview_mesh_id{sbx::math::uuid::nil()}; // nil = unknown -- caller had no mesh in context (opened from the Asset Browser rather than a node's Animator component)
+    sbx::math::uuid preview_mesh_id{sbx::math::uuid::nil()}; // nil when opened without a mesh in context
   }; // struct animation_graph_edit_request
 
   auto request_open_animation_graph_editor(sbx::math::uuid id, std::filesystem::path path, sbx::math::uuid preview_mesh_id = sbx::math::uuid::nil()) -> void {
@@ -167,7 +209,7 @@ struct editor_state {
 
   std::optional<animation_graph_edit_request> open_animation_graph_request{};
 
-  /** @brief Same idea as animation_graph_edit_request, consumed by shader_graph_panel. */
+  /** @brief One-shot request to open the shader graph editor, consumed by shader_graph_panel. */
   struct shader_graph_edit_request {
     sbx::math::uuid id{sbx::math::uuid::nil()};
     std::filesystem::path path{}; // project-relative
@@ -179,7 +221,7 @@ struct editor_state {
 
   std::optional<shader_graph_edit_request> open_shader_graph_request{};
 
-  /** @brief Same idea as animation_graph_edit_request, consumed by editor_ui_layer (routes into its own guarded open_scene(), see editor_ui_layer::open_scene's doc comment). */
+  /** @brief One-shot request to open a scene, consumed by editor_ui_layer's guarded open_scene(). */
   struct scene_edit_request {
     std::filesystem::path path{}; // project-relative
   }; // struct scene_edit_request
@@ -190,19 +232,17 @@ struct editor_state {
 
   std::optional<scene_edit_request> open_scene_request{};
 
-  /** @brief One-shot "open Project Settings on its Layers tab" request -- fired from the node Layer dropdown's or a LayerMask field's "Edit Layers...", consumed by project_settings_panel. */
+  /** @brief One-shot request to open Project Settings on its Layers tab. */
   auto request_open_layer_settings() -> void {
     open_layer_settings_request = true;
   }
 
   bool open_layer_settings_request{false};
 
-  // The scene-graph undo/redo history, shared across panels like current_selection. Prefer the
-  // pass-throughs below over reaching into this directly.
+  // The scene undo/redo history; prefer the pass-throughs below.
   command_stack commands{};
 
-  // The other selected nodes while the Inspector is drawing a multi-selection -- set only for the span of its draw, so an edit
-  // made there reaches every selected node (see command::broadcast) while pushes from anywhere else stay single-node.
+  // The other selected nodes while the Inspector draws a multi-selection, so its edits reach every selected node (command::broadcast).
   std::vector<sbx::math::uuid> broadcast_targets{};
 
   auto push_command(sbx::scenes::scene& target, std::unique_ptr<command> cmd) -> void {
@@ -242,8 +282,11 @@ struct editor_state {
     return commands.redo_label();
   }
 
+  /** @brief Drops the undo history and any in-flight gizmo drag -- both refer to the scene being replaced. */
   auto clear_command_stack() -> void {
     commands.clear();
+    gizmo_node_drag = {};
+    gizmo_group_drag = {};
   }
 
 }; // struct editor_state

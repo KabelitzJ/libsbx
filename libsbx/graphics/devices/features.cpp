@@ -83,91 +83,99 @@ auto features::operator=(const features& other) -> features& {
 }
 
 auto features::required() -> const features& {
-  static auto features = graphics::features{};
+  static const auto features = [] {
+    auto features = graphics::features{};
 
-  auto& core = features.core();
-  auto& vulkan11 = features.vulkan11();
-  auto& vulkan12 = features.vulkan12();
-  auto& vulkan13 = features.vulkan13();
+    auto& core = features.core();
+    auto& vulkan11 = features.vulkan11();
+    auto& vulkan12 = features.vulkan12();
+    auto& vulkan13 = features.vulkan13();
 
-  // Core
-  core.samplerAnisotropy = true;
-  core.multiDrawIndirect = true;
-  core.fillModeNonSolid = true;
-  core.independentBlend = true;
-  core.depthClamp = true;
+    // Core
+    core.samplerAnisotropy = true;
+    core.multiDrawIndirect = true;
+    core.fillModeNonSolid = true;
+    core.independentBlend = true;
+    core.depthClamp = true;
 
-  // 1.1
-  vulkan11.shaderDrawParameters = true;
+    // 1.1
+    vulkan11.shaderDrawParameters = true;
 
-  // 1.2 — bindless (descriptor indexing), BDA, indirect count, timeline
-  vulkan12.bufferDeviceAddress = true;
-  vulkan12.timelineSemaphore = true;
-  vulkan12.descriptorIndexing = true;
-  vulkan12.runtimeDescriptorArray = true;
-  vulkan12.shaderSampledImageArrayNonUniformIndexing = true;
-  vulkan12.shaderStorageBufferArrayNonUniformIndexing = true;
-  vulkan12.descriptorBindingSampledImageUpdateAfterBind = true;
-  vulkan12.descriptorBindingStorageImageUpdateAfterBind = true;
-  vulkan12.descriptorBindingStorageBufferUpdateAfterBind = true;
-  vulkan12.descriptorBindingUpdateUnusedWhilePending = true;
-  vulkan12.descriptorBindingPartiallyBound = true;
-  vulkan12.descriptorBindingVariableDescriptorCount = true;
-  vulkan12.drawIndirectCount = true;
-  vulkan12.scalarBlockLayout = true;
-  vulkan12.hostQueryReset = true;
+    // 1.2 — bindless (descriptor indexing), BDA, indirect count, timeline
+    vulkan12.bufferDeviceAddress = true;
+    vulkan12.timelineSemaphore = true;
+    vulkan12.descriptorIndexing = true;
+    vulkan12.runtimeDescriptorArray = true;
+    vulkan12.shaderSampledImageArrayNonUniformIndexing = true;
+    vulkan12.shaderStorageBufferArrayNonUniformIndexing = true;
+    vulkan12.descriptorBindingSampledImageUpdateAfterBind = true;
+    vulkan12.descriptorBindingStorageImageUpdateAfterBind = true;
+    vulkan12.descriptorBindingStorageBufferUpdateAfterBind = true;
+    vulkan12.descriptorBindingUpdateUnusedWhilePending = true;
+    vulkan12.descriptorBindingPartiallyBound = true;
+    vulkan12.descriptorBindingVariableDescriptorCount = true;
+    vulkan12.drawIndirectCount = true;
+    vulkan12.scalarBlockLayout = true;
+    vulkan12.hostQueryReset = true;
 
-  // 1.3 — dynamic rendering, sync2
-  vulkan13.dynamicRendering = true;
-  vulkan13.synchronization2 = true;
-  vulkan13.maintenance4 = true;
+    // 1.3 — dynamic rendering, sync2
+    vulkan13.dynamicRendering = true;
+    vulkan13.synchronization2 = true;
+    vulkan13.maintenance4 = true;
+
+    return features;
+  }();
 
   return features;
 }
 
 auto features::optional() -> const features& {
-  static auto features = graphics::features{};
+  static const auto features = [] {
+    auto features = graphics::features{};
 
-  auto& core = features.core();
-  auto& vulkan11 = features.vulkan11();
-  auto& vulkan12 = features.vulkan12();
-  auto& vulkan13 = features.vulkan13();
-  auto& compute_shader_derivatives = features.compute_shader_derivatives();
+    auto& core = features.core();
+    auto& vulkan11 = features.vulkan11();
+    auto& vulkan12 = features.vulkan12();
+    auto& vulkan13 = features.vulkan13();
+    auto& compute_shader_derivatives = features.compute_shader_derivatives();
 
-  // Core
-  core.sampleRateShading = true;
-  core.wideLines = true;
-  core.textureCompressionBC = true;
-  core.textureCompressionASTC_LDR = true;
-  core.textureCompressionETC2 = true;
-  core.vertexPipelineStoresAndAtomics = true;
-  core.fragmentStoresAndAtomics = true;
-  core.shaderStorageImageExtendedFormats = true;
-  core.shaderStorageImageWriteWithoutFormat = true;
-  core.shaderClipDistance = true;
-  core.shaderCullDistance = true;
-  core.pipelineStatisticsQuery = true;
-  core.geometryShader = true;
-  core.tessellationShader = true;
-  core.multiViewport = true;
-  core.drawIndirectFirstInstance = true;
-  core.shaderInt16 = true;
+    // Core
+    core.sampleRateShading = true;
+    core.wideLines = true;
+    core.textureCompressionBC = true;
+    core.textureCompressionASTC_LDR = true;
+    core.textureCompressionETC2 = true;
+    core.vertexPipelineStoresAndAtomics = true;
+    core.fragmentStoresAndAtomics = true;
+    core.shaderStorageImageExtendedFormats = true;
+    core.shaderStorageImageWriteWithoutFormat = true;
+    core.shaderClipDistance = true;
+    core.shaderCullDistance = true;
+    core.pipelineStatisticsQuery = true;
+    core.geometryShader = true;
+    core.tessellationShader = true;
+    core.multiViewport = true;
+    core.drawIndirectFirstInstance = true;
+    core.shaderInt16 = true;
 
-  // 1.1
-  vulkan11.multiview = true;
+    // 1.1
+    vulkan11.multiview = true;
 
-  // 1.2
-  vulkan12.shaderInt8 = true;
-  vulkan12.storagePushConstant8 = true;
-  vulkan12.storageBuffer8BitAccess = true;
-  vulkan12.shaderFloat16 = true;
+    // 1.2
+    vulkan12.shaderInt8 = true;
+    vulkan12.storagePushConstant8 = true;
+    vulkan12.storageBuffer8BitAccess = true;
+    vulkan12.shaderFloat16 = true;
 
-  // 1.3
-  vulkan13.shaderDemoteToHelperInvocation = true;
+    // 1.3
+    vulkan13.shaderDemoteToHelperInvocation = true;
 
-  // Extensions
-  compute_shader_derivatives.computeDerivativeGroupQuads = true;
-  compute_shader_derivatives.computeDerivativeGroupLinear = true;
+    // Extensions
+    compute_shader_derivatives.computeDerivativeGroupQuads = true;
+    compute_shader_derivatives.computeDerivativeGroupLinear = true;
+
+    return features;
+  }();
 
   return features;
 }

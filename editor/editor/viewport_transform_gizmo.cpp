@@ -4,7 +4,6 @@
 
 #include <array>
 #include <memory>
-#include <unordered_map>
 #include <vector>
 
 #include <fmt/format.h>
@@ -31,7 +30,6 @@
 #include <editor/commands/composite_command.hpp>
 
 #include <editor/editor_preferences.hpp>
-#include <editor/widgets/drag_session.hpp>
 
 namespace editor {
 
@@ -67,9 +65,7 @@ auto handle_operation_shortcuts(editor_state& state) -> void {
   }
 }
 
-// Shared by both the single-node and group-pivot gizmo paths: converts a just-manipulated world
-// matrix back to node's parent-relative local transform and writes it (the "live preview" applied
-// every frame while dragging, before any undo command exists for the gesture).
+// Writes a manipulated world matrix back as the node's parent-relative local transform; the live preview during a drag.
 auto apply_manipulated_world_matrix(sbx::scenes::scene& scene, sbx::scenes::node& node, const sbx::math::matrix4x4& new_world_matrix) -> void {
   const auto& relationship = node.get_component<sbx::scenes::relationship>();
 
@@ -93,18 +89,9 @@ auto apply_manipulated_world_matrix(sbx::scenes::scene& scene, sbx::scenes::node
   transform.scale = sbx::math::vector3{scale[0], scale[1], scale[2]};
 }
 
-// 2+ selected nodes: manipulates a virtual pivot (average position; identity rotation in World
-// mode, the primary node's rotation in Local mode — including Scale, which to_imguizmo_mode always
-// forces to LOCAL regardless of the toolbar's gizmo_mode; keying off the resolved `mode` rather
-// than state.current_gizmo_mode directly is what keeps that Scale quirk intact for groups too) and
-// applies the resulting rigid delta transform to every selected node, one undo entry per drag.
-//
-// Its own hand-rolled cross-frame statics (rather than drag_session, unlike the
-// single-node path below) -- it reads its "before" snapshot every frame while still dragging (to
-// compute the running delta from the pivot's pre-drag pose), not just once at the end, and its
-// IsUsing() checks are deliberately split across two different points in the frame (once before
-// this frame's Manipulate() call, once after) — a shape drag_session's single tick() can't
-// reproduce without changing that timing.
+// 2+ nodes: manipulates a virtual pivot and applies its rigid delta to every node, one undo entry per drag.
+// Uses the resolved `mode`, so Scale (always LOCAL) orients to the primary node for groups too.
+// Not a drag_session: the before-snapshot is read every frame for the running delta, and IsUsing() is checked both before and after Manipulate().
 auto draw_group_pivot_gizmo(editor_state& state, sbx::scenes::scene& scene, const viewport_camera_matrices& matrices, const sbx::math::matrix4x4& gizmo_projection, ImGuizmo::OPERATION operation, ImGuizmo::MODE mode, const std::float_t* snap) -> bool {
   const auto& selected_ids = state.selected_node_ids();
 
@@ -141,24 +128,18 @@ auto draw_group_pivot_gizmo(editor_state& state, sbx::scenes::scene& scene, cons
   auto pivot_matrix = sbx::math::matrix4x4::identity;
   ImGuizmo::RecomposeMatrixFromComponents(pivot_translation.data(), pivot_rotation_degrees.data(), pivot_scale.data(), pivot_matrix.data());
 
-  // Cross-frame group-drag state, separate from the single-node path's statics above — a 2+
-  // selection drag snapshots every selected node's own pre-drag world/local transform, keyed by
-  // uuid, rather than one shared before-value.
-  static auto group_drag_active = false;
-  static auto group_drag_pivot_before = sbx::math::matrix4x4::identity;
-  static auto group_drag_world_before = std::unordered_map<sbx::math::uuid, sbx::math::matrix4x4>{};
-  static auto group_drag_local_before = std::unordered_map<sbx::math::uuid, sbx::scenes::local_transform>{};
+  auto& drag = state.gizmo_group_drag;
 
-  if (ImGuizmo::IsUsing() && !group_drag_active) {
-    group_drag_active = true;
-    group_drag_pivot_before = pivot_matrix;
-    group_drag_world_before.clear();
-    group_drag_local_before.clear();
+  if (ImGuizmo::IsUsing() && !drag.active) {
+    drag.active = true;
+    drag.pivot_before = pivot_matrix;
+    drag.world_before.clear();
+    drag.local_before.clear();
 
     for (const auto id : selected_ids) {
       if (auto node = scene.find(id); node.is_valid()) {
-        group_drag_world_before[id] = node.world_matrix();
-        group_drag_local_before[id] = node.transform();
+        drag.world_before[id] = node.world_matrix();
+        drag.local_before[id] = node.transform();
       }
     }
   }
@@ -166,21 +147,21 @@ auto draw_group_pivot_gizmo(editor_state& state, sbx::scenes::scene& scene, cons
   const auto changed = ImGuizmo::Manipulate(matrices.view.data(), gizmo_projection.data(), operation, mode, pivot_matrix.data(), nullptr, snap);
 
   if (changed) {
-    const auto delta = pivot_matrix * sbx::math::matrix4x4::inverted(group_drag_pivot_before);
+    const auto delta = pivot_matrix * sbx::math::matrix4x4::inverted(drag.pivot_before);
 
-    for (const auto& [id, world_before] : group_drag_world_before) {
+    for (const auto& [id, world_before] : drag.world_before) {
       if (auto node = scene.find(id); node.is_valid()) {
         apply_manipulated_world_matrix(scene, node, delta * world_before);
       }
     }
   }
 
-  if (!ImGuizmo::IsUsing() && group_drag_active) {
-    group_drag_active = false;
+  if (!ImGuizmo::IsUsing() && drag.active) {
+    drag.active = false;
 
     auto sub_commands = std::vector<std::unique_ptr<command>>{};
 
-    for (const auto& [id, local_before] : group_drag_local_before) {
+    for (const auto& [id, local_before] : drag.local_before) {
       if (auto node = scene.find(id); node.is_valid()) {
         sub_commands.push_back(std::make_unique<modify_component_command<sbx::scenes::local_transform>>(id, local_before, node.transform(), "Edit Transform"));
       }
@@ -190,8 +171,8 @@ auto draw_group_pivot_gizmo(editor_state& state, sbx::scenes::scene& scene, cons
       state.push_command(scene, std::make_unique<composite_command>(std::move(sub_commands), fmt::format("Edit Transform ({} objects)", sub_commands.size())));
     }
 
-    group_drag_world_before.clear();
-    group_drag_local_before.clear();
+    drag.world_before.clear();
+    drag.local_before.clear();
   }
 
   return ImGuizmo::IsOver() || ImGuizmo::IsUsing();
@@ -239,8 +220,7 @@ auto draw_viewport_gizmo(editor_state& state, const ImVec2& viewport_origin, con
   const auto operation = to_imguizmo_operation(state.current_gizmo_operation);
   const auto mode = to_imguizmo_mode(state.current_gizmo_operation, state.current_gizmo_mode);
 
-  // Hold Ctrl to snap (Blender/Unity convention) instead of moving freely, by the Edit > Preferences steps. ImGuizmo reads snap
-  // as 3 per-axis values for translate/scale, or just snap[0] (degrees) for rotate.
+  // Ctrl snaps by the Preferences steps; ImGuizmo reads three per-axis values, or snap[0] in degrees for rotation.
   const auto& preferences = editor_module.preferences();
   const auto translate_snap = std::array<std::float_t, 3u>{preferences.translate_snap, preferences.translate_snap, preferences.translate_snap};
   const auto rotate_snap = std::array<std::float_t, 3u>{preferences.rotate_snap, preferences.rotate_snap, preferences.rotate_snap};
@@ -268,8 +248,7 @@ auto draw_viewport_gizmo(editor_state& state, const ImVec2& viewport_origin, con
 
   auto world_matrix = node.world_matrix();
 
-  // Captured before Manipulate() runs this frame, so it's the true pre-drag value even on the
-  // exact frame IsUsing() first flips true.
+  // Captured before Manipulate(), so it's the pre-drag value even on the frame the drag starts.
   const auto pre_manipulate = node.transform();
 
   const auto changed = ImGuizmo::Manipulate(matrices.view.data(), gizmo_projection.data(), operation, mode, world_matrix.data(), nullptr, snap);
@@ -278,17 +257,8 @@ auto draw_viewport_gizmo(editor_state& state, const ImVec2& viewport_origin, con
     apply_manipulated_world_matrix(scene, node, world_matrix);
   }
 
-  // Cross-frame gizmo-drag state — one shared instance is enough since only one node can have an
-  // active single-node gizmo drag at a time (a 2+ selection instead uses draw_group_pivot_gizmo's
-  // own statics). Brackets the per-frame write above into one undo entry per drag.
-  struct node_drag_before {
-    sbx::math::uuid node_id;
-    sbx::scenes::local_transform transform;
-  };
-
-  static auto drag = drag_session<node_drag_before>{};
-
-  if (const auto ended = drag.tick(ImGuizmo::IsUsing(), [&] { return node_drag_before{node.id(), pre_manipulate}; })) {
+  // One undo entry per drag.
+  if (const auto ended = state.gizmo_node_drag.tick(ImGuizmo::IsUsing(), [&] { return gizmo_node_drag_before{node.id(), pre_manipulate}; })) {
     if (auto dragged_node = scene.find(ended->node_id); dragged_node.is_valid()) {
       state.push_command(scene, std::make_unique<modify_component_command<sbx::scenes::local_transform>>(ended->node_id, ended->transform, dragged_node.transform(), "Edit Transform"));
     }

@@ -16,37 +16,38 @@
 namespace sbx::scripting {
 
 /**
- * @brief Compiles every `*.cs` file under the project's assets directory into one assembly
- * (compile_if_stale), caching the result under `.sbx/library/scripts/` — mirrors
- * asset_cooker::_is_cooked_stale's mtime-fast-path/hash-fallback manifest pattern
- * (libsbx/assets/asset_cooker.cpp), just as one N:1 (sources -> assembly) manifest instead of
- * per-asset 1:1 entries. Owned by scripting_module, which loads output_path() into its game
- * assembly_load_context once compilation succeeds.
+ * @brief Compiles every `*.cs` file under the project's assets directory into one cached assembly under `.sbx/library/scripts/`.
  *
- * A failed compile never touches the previously-built output_path() — see compile_if_stale's
- * doc comment — so the engine keeps running on the last-known-good assembly, matching Unity's
- * "compile errors don't wipe out what was working" behavior.
+ * A failed compile never replaces the previous output, so the engine keeps running on the last good assembly.
  */
 class script_compiler final : public utility::noncopyable {
 
 public:
 
   /**
-   * @brief Recompiles if any `*.cs` source or @p core_assembly_path (Sbx.Core.dll, the compile
-   * reference — its own changes force a recompile too, since the interop ABI it exposes may have
-   * moved) changed since the last successful compile, or output_path() doesn't exist yet.
-   * No-op (keeps the existing output_path()) if nothing changed. Compiles to a scratch file and
-   * only replaces output_path() on success — a compile error leaves the last-good assembly in
-   * place; see last_compile_succeeded().
+   * @brief Recompiles if any source, @p core_assembly_path, or the output changed since the last successful compile.
+   *
+   * A compile error leaves the last good assembly in place; see last_compile_succeeded().
+   *
+   * @param runtime The managed runtime that runs the compiler.
+   * @param core_assembly_path Sbx.Core.dll, the compile reference.
    */
   auto compile_if_stale(managed::runtime& runtime, const std::filesystem::path& core_assembly_path) -> void;
 
-  /** @brief Whether the most recent compile_if_stale() call (or the absence of any *.cs files) left a usable assembly at output_path(). */
+  /**
+   * @brief Whether the last compile_if_stale() call (or having no scripts) left a usable assembly.
+   *
+   * @return True if output_path() is usable.
+   */
   [[nodiscard]] auto last_compile_succeeded() const noexcept -> bool {
     return _last_compile_succeeded;
   }
 
-  /** @brief `.sbx/library/scripts/Game.dll` — where the compiled game assembly lives once compile_if_stale() has succeeded at least once. */
+  /**
+   * @brief Where the compiled game assembly lives.
+   *
+   * @return `.sbx/library/scripts/Game.dll`.
+   */
   [[nodiscard]] auto output_path() const -> std::filesystem::path;
 
 private:
@@ -57,16 +58,13 @@ private:
   }; // struct source_entry
 
   /**
-   * @brief (Re)writes assets_directory/Game.csproj — an SDK-style project referencing
-   * core_assembly_path (Sbx.Core.dll) purely so an IDE (VS Code/OmniSharp, Rider, Visual Studio)
-   * resolves the Sbx.Core namespace for autocomplete. Never built by the engine — it globs the
-   * same *.cs sources compile_if_stale() itself walks and compiles in-process via Roslyn. Skips
-   * the write if the file's content wouldn't change, so an IDE watching its mtime isn't nudged
-   * into reloading the project on every engine start.
+   * @brief Writes assets_directory/Game.csproj so IDEs resolve Sbx.Core for autocomplete; the engine never builds it.
    *
-   * Points the project's BaseOutputPath/BaseIntermediateOutputPath at @p ide_output_directory
-   * (outside assets_directory, under .sbx/) so an IDE's own restore/build for IntelliSense
-   * doesn't litter bin/ and obj/ back into the Asset Browser's tree.
+   * Skips the write when the content is unchanged so IDEs don't reload. Build output goes to @p ide_output_directory to keep bin/obj out of the Asset Browser.
+   *
+   * @param assets_directory The project's assets directory.
+   * @param ide_output_directory Where the IDE's own build output goes.
+   * @param core_assembly_path Sbx.Core.dll, referenced by the project.
    */
   auto _write_ide_project(const std::filesystem::path& assets_directory, const std::filesystem::path& ide_output_directory, const std::filesystem::path& core_assembly_path) -> void;
 
@@ -79,9 +77,9 @@ private:
   bool _manifest_loaded{false};
   std::uint32_t _manifest_compiler_version{0u};
   std::uint64_t _manifest_core_assembly_hash{0u};
-  std::unordered_map<std::string, source_entry> _manifest_sources; // keyed by path relative to assets_directory()
+  std::unordered_map<std::string, source_entry> _manifest_sources; // keyed by path relative to the assets directory
 
-  bool _last_compile_succeeded{true}; // no sources yet -> trivially "succeeded", doesn't block Play
+  bool _last_compile_succeeded{true}; // no sources counts as success, so Play isn't blocked
 
 }; // class script_compiler
 

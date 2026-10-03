@@ -29,25 +29,19 @@
 
 namespace editor {
 
-/**
- * @brief The "Inspector" panel: an inspector for whatever editor_state's current selection is —
- * a scene node's name/transform/components (with add/remove-component controls), a material
- * asset's editable fields, other asset kinds' read-only summaries, or an empty-state message if
- * nothing is selected.
- */
+/** @brief The Inspector: edits whatever is selected, from a node's transform and components to a material's fields, or shows an empty state. */
 class inspector_panel final : public editor_panel {
 
 public:
 
-  /** @see hierarchy_panel::window_name */
+  // The panel's ImGui::Begin() string.
   inline static constexpr auto window_name = ICON_MDI_INFORMATION " Inspector###inspector_panel";
 
   auto draw(editor_state& state) -> void override;
 
 private:
 
-  // Caches the handle for the most recently selected asset so load_*() is only attempted once per
-  // selection, not every frame — without this a failed load retries the full cook pipeline forever.
+  // The selected asset's handle, so a failed load isn't retried every frame.
   struct asset_property_cache {
     sbx::math::uuid id{sbx::math::uuid::nil()};
     sbx::assets::texture2d_handle texture{};
@@ -62,13 +56,16 @@ private:
   }; // struct asset_property_cache
 
   /**
-   * @brief draw_identity gates the name field + transform section — false for a prefab's own edit
-   * view (_draw_prefab_edit below), since placement and Hierarchy label are per-instance concepts,
-   * never prefab-shared content. Every other call site leaves it at the default.
+   * @brief Draws a node's properties.
    *
-   * multi_selection (every selected node's id, node being the primary) is non-empty for a multi-selection: only the layer, the
-   * transform and the components every selected node has are shown, with edits reaching all of them through
-   * editor_state::broadcast_targets; scripts, the prefab header and Add Component stay single-selection.
+   * A non-empty @p multi_selection shows only the layer, transform and shared components, with edits reaching every selected node; scripts, the prefab header and Add Component stay single-selection.
+   *
+   * @param state The editor state.
+   * @param target The scene containing the node.
+   * @param node The primary node.
+   * @param assets_module The assets module.
+   * @param draw_identity Whether to show the name and transform; false for prefab editing.
+   * @param multi_selection Every selected node's id, or empty for a single selection.
    */
   auto _draw_node_properties(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node, sbx::assets::assets_module& assets_module, bool draw_identity = true, std::span<const sbx::math::uuid> multi_selection = {}) -> void;
   auto _draw_active_checkbox(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node) -> void;
@@ -79,17 +76,7 @@ private:
   auto _draw_material_properties(editor_state& state, const asset_selection& asset, sbx::assets::assets_module& assets_module) -> void;
   auto _draw_particle_effect_properties(editor_state& state, const asset_selection& asset, sbx::assets::assets_module& assets_module) -> void;
 
-  /**
-   * @brief Lets a prefab asset be edited directly, with no instance anywhere in the real scene:
-   * deserializes the prefab's snapshot into a private scratch scene the Inspector owns, then draws
-   * it through the exact same _draw_node_properties every real node uses (identity fields off —
-   * see its doc comment) — reusing every per-component-type section and the add/remove-component
-   * menu unmodified, since they already take their target scene as an explicit parameter (see
-   * command.hpp's doc comment) rather than resolving one internally. No global state.
-   *
-   * Selection-driven, same pattern as _asset_cache: re-populated whenever the selected prefab's id
-   * changes, not an explicitly opened/closed mode — selecting a `.prefab` tile goes straight here.
-   */
+  // Edits a prefab directly: its snapshot is deserialized into a private scratch scene and drawn like any node. Repopulated whenever the selected prefab changes.
   struct prefab_edit_session {
     sbx::scenes::scene scene{"Prefab Edit"};
     sbx::assets::prefab_handle prefab{};
@@ -98,45 +85,34 @@ private:
 
   auto _draw_prefab_edit(editor_state& state, const asset_selection& asset, sbx::assets::assets_module& assets_module) -> void;
 
-  /** @brief When node is a prefab instance, a small header above its usual component list: source prefab's name plus an "Update Prefab" button pushing this node's entire current subtree back to it. */
+  /** @brief For a prefab instance: the source prefab's name and an "Update Prefab" button that pushes this subtree back to it. */
   auto _draw_prefab_instance_header(sbx::scenes::scene& target, sbx::scenes::node& node) -> void;
 
   std::optional<prefab_edit_session> _prefab_edit_session{};
 
-  // Editable name field: staged into a buffer, only re-synced from the node when the selection
-  // changes (so mid-edit keystrokes aren't clobbered by re-reading the committed name).
+  // Staged name, re-synced only when the selection changes so typing isn't clobbered.
   std::array<char, 128u> _name_buffer{};
   sbx::math::uuid _name_buffer_id{sbx::math::uuid::nil()};
   std::optional<sbx::scenes::tag> _pending_name_before{};
 
-  // Rotation is a quaternion edited as Euler degrees; re-deriving Euler every frame is unstable
-  // near gimbal lock, so the triplet is cached and only re-synced when something else (reselect,
-  // the gizmo) changed the quaternion.
+  // Euler degrees cached per node: re-deriving from the quaternion every frame is unstable near gimbal lock.
   sbx::math::uuid _rotation_node_id{sbx::math::uuid::nil()};
   sbx::math::quaternion _rotation_cache{sbx::math::quaternion::identity};
   std::array<std::float_t, 3u> _rotation{0.0f, 0.0f, 0.0f};
 
-  // Captured when a Position/Rotation/Scale drag starts, pushed as one modify_component_command
-  // when it ends — one shared field covers all three since only one can be mid-drag at a time.
+  // The transform before a drag, pushed as one command when it ends; only one field can be mid-drag.
   std::optional<sbx::scenes::local_transform> _pending_transform_before{};
 
   asset_property_cache _asset_cache{};
 
-  // Staged edits for the selected material (asset_kind::material). Seeded from the loaded material
-  // whenever _asset_cache.id changes; committed only by an explicit Save button.
+  // Staged material edits, seeded when the selected asset changes and committed by Save.
   sbx::assets::material::create_info _material_edit{};
 
-  // True until _material_edit has been seeded from the selected material's loaded state.
   bool _material_edit_pending{false};
 
-  // Set when the Material Inspector's shader graph picker just (re)assigned a new graph -- that
-  // graph loads asynchronously (see asset_residency::load_shader_graph), so its nodes/parameters()
-  // are still empty on the very frame it's picked. Re-checked every frame afterward; once the graph
-  // has actually finished loading, _material_edit's generic_params/generic_textures get seeded from
-  // its own node defaults exactly once, then this clears (see _draw_material_properties).
+  // Set when a shader graph is assigned: it loads asynchronously, so its defaults are seeded into _material_edit once it's loaded.
   bool _shader_graph_seed_pending{false};
 
-  // Same idea as _material_edit, for asset_kind::particle_effect.
   sbx::assets::particle_effect::create_info _particle_effect_edit{};
 
 }; // class inspector_panel

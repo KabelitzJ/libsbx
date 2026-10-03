@@ -54,9 +54,7 @@ auto draw_script_field_inspector(editor_state& state, sbx::scenes::scene& target
     return;
   }
 
-  // A live instance exists exactly while playing or paused: instantiate() creates it on Play,
-  // run_on_destroy() tears it down on Stop. Must key off instance existence, not
-  // scenes_module.is_simulating() (false while paused), or paused edits would target the wrong side.
+  // A live instance exists exactly while playing or paused; keying off is_simulating() (false while paused) would edit the wrong side.
   auto live_instance = sbx::memory::make_observer<sbx::scripting::managed::object>(nullptr);
 
   if (node.has_component<sbx::scripting::scripts>()) {
@@ -68,18 +66,12 @@ auto draw_script_field_inspector(editor_state& state, sbx::scenes::scene& target
     }
   }
 
-  // Backfills a real default for any field that doesn't have a field_overrides entry yet (a script
-  // attached before this existed, or recompiled with a new field since — attach_script's own call
-  // to this only covers a fresh attach) — see seed_missing_field_defaults' doc comment. A no-op
-  // once nothing's missing, and only reachable at all while no live instance exists (a live one
-  // already shows its own true values directly via get_field_value below).
+  // Fills defaults for fields added since the script was attached; a no-op once none are missing. Live instances show their real values instead.
   if (!live_instance) {
     scripting_module.seed_missing_field_defaults(node, entry);
   }
 
-  // Shared across every field below — snapshots the whole script_component so undo/redo restores
-  // it via modify_component_command<script_component>. Untouched while live_instance is set, since
-  // those edits target the live object directly and are never tracked (see the comment above).
+  // One snapshot of the whole script_component shared by every field, for undo. Unused while a live instance exists, since live edits aren't tracked.
   static auto pending = std::optional<sbx::scenes::script_component>{};
 
   const auto capture_before = [&] {
@@ -88,8 +80,7 @@ auto draw_script_field_inspector(editor_state& state, sbx::scenes::scene& target
     }
   };
 
-  // One undo step per completed edit: held while any widget is still active (a drag, text being typed), then pushed only if
-  // some field actually changed since the snapshot -- an untouched frame just drops it.
+  // Held while any widget is active, then pushed only if a field actually changed.
   static auto pending_changed = false;
 
   const auto commit_after = [&](bool changed) {
@@ -127,14 +118,11 @@ auto draw_script_field_inspector(editor_state& state, sbx::scenes::scene& target
     for (auto& field_attribute : field.get_attributes()) {
       const auto attribute_type_name = std::string{field_attribute.get_type().get_full_name()};
 
-      // ShowInEditor/HideFromEditor are the deprecated names of Inspector/HideInInspector -- still honored so old scripts keep working.
+      // ShowInEditor/HideFromEditor are the deprecated names, still honored.
       if (attribute_type_name == "Sbx.Core.Attributes.HideInInspectorAttribute" || attribute_type_name == "Sbx.Core.Attributes.HideFromEditorAttribute") {
         hidden = true;
       } else if (attribute_type_name == "Sbx.Core.Attributes.InspectorAttribute" || attribute_type_name == "Sbx.Core.Attributes.ShowInEditorAttribute") {
-        // Both expose DisplayName/IsReadOnly as auto-properties, not plain
-        // fields — read via get_property_value, not get_field_value. An empty DisplayName means
-        // the attribute was used without an override (e.g. plain [Inspector]) -- keep the
-        // field-name default from above rather than clobbering it with "".
+        // DisplayName/IsReadOnly are auto-properties; an empty DisplayName keeps the field name.
         if (const auto name = field_attribute.get_property_value<std::string>("DisplayName"); !name.empty()) {
           display_name = name;
         }
@@ -189,8 +177,7 @@ auto draw_script_field_inspector(editor_state& state, sbx::scenes::scene& target
       auto value = live_instance ? live_instance->get_field_value<std::float_t>(field_name)
                                   : override_slot ? override_slot->float_value : 0.0f;
 
-      // A drag box unless the script asks for [Range] -- a slider's fixed track width makes fine adjustment across a wide
-      // range awkward, so ClampValue only bounds the drag instead of sizing a track.
+      // A drag box unless the script asks for [Range]; ClampValue only bounds the drag.
       const auto changed = has_range ? ImGui::SliderFloat(display_name.c_str(), &value, clamp_min, clamp_max)
         : has_clamp ? ImGui::DragFloat(display_name.c_str(), &value, 0.05f, clamp_min, clamp_max)
         : ImGui::DragFloat(display_name.c_str(), &value, 0.05f);
@@ -212,7 +199,6 @@ auto draw_script_field_inspector(editor_state& state, sbx::scenes::scene& target
       auto value = live_instance ? live_instance->get_field_value<std::int32_t>(field_name)
                                   : override_slot ? override_slot->int_value : 0;
 
-      // Same as the float branch above.
       const auto changed = has_range ? ImGui::SliderInt(display_name.c_str(), &value, static_cast<std::int32_t>(clamp_min), static_cast<std::int32_t>(clamp_max))
         : has_clamp ? ImGui::DragInt(display_name.c_str(), &value, 1.0f, static_cast<std::int32_t>(clamp_min), static_cast<std::int32_t>(clamp_max))
         : ImGui::DragInt(display_name.c_str(), &value);
@@ -321,8 +307,7 @@ auto draw_script_field_inspector(editor_state& state, sbx::scenes::scene& target
 
       commit_after(changed);
     } else if (field_type_name == "Sbx.Core.Physics.LayerMask") {
-      // A blittable struct (one uint) -- same direct get/set_field_value path as Vector3 above,
-      // no reference-type special-casing needed (see components.hpp's script_field_type::layer_mask).
+      // A blittable struct, read and written directly like Vector3.
       auto mask = sbx::scenes::layer_mask{live_instance ? live_instance->get_field_value<std::uint32_t>(field_name)
                                                          : override_slot ? override_slot->layer_mask_value : 0xFFFFFFFFu};
 
@@ -342,10 +327,7 @@ auto draw_script_field_inspector(editor_state& state, sbx::scenes::scene& target
 
       commit_after(changed);
     } else if (field_type_name == "Sbx.Core.Node") {
-      // A Sbx.Core.Node-typed field is a managed reference, not a value the generic get/set_field_value
-      // marshaling can copy -- both directions go through a raw uuid instead, via Node's own
-      // INativeHandle implementation (see scripting_module.cpp's _apply_field_overrides and
-      // Sbx.Managed's Object.SetFieldValue/Marshalling.MarshalReturnValue).
+      // Node fields are managed references and cross as a raw uuid via INativeHandle.
       const auto current_uuid = live_instance ? live_instance->get_field_value<std::uint64_t>(field_name)
                                                 : override_slot ? override_slot->node_value.value() : std::uint64_t{0u};
 
@@ -358,8 +340,7 @@ auto draw_script_field_inspector(editor_state& state, sbx::scenes::scene& target
         const auto slot_width = ImGui::CalcItemWidth() - ImGui::GetFrameHeight() - ImGui::GetStyle().ItemSpacing.x;
         ImGui::Button(slot_label.c_str(), ImVec2{slot_width, 0.0f});
 
-        // Reuses the Hierarchy panel's own node drag payload -- drag a row out of the Hierarchy and
-        // drop it here to assign it, same source as reordering nodes there.
+        // Accepts Hierarchy rows dropped onto the field.
         if (ImGui::BeginDragDropTarget()) {
           if (const auto* payload = ImGui::AcceptDragDropPayload(node_drag_drop_payload_type)) {
             picked = *static_cast<const std::uint64_t*>(payload->Data);
@@ -391,11 +372,7 @@ auto draw_script_field_inspector(editor_state& state, sbx::scenes::scene& target
 
       commit_after(new_uuid.has_value());
     } else if (field_type_name == "Sbx.Core.Material") {
-      // Same INativeHandle-via-raw-uuid convention as the Node branch above, backed by the richer
-      // asset_picker widget (thumbnail, searchable popup, drag-and-drop from the Asset Browser)
-      // rather than a plain drag target, since a .material asset already has that widget for
-      // mesh_renderer submesh slots (see inspector_component_sections.cpp) -- allow_none=true here
-      // since a script field, unlike a submesh slot, is meaningfully optional.
+      // Raw uuid via INativeHandle like Node, using the asset picker; None is allowed since script fields are optional.
       auto& assets_module = sbx::core::engine::get_module<sbx::assets::assets_module>();
 
       const auto current_uuid = live_instance ? sbx::math::uuid::from_value(live_instance->get_field_value<std::uint64_t>(field_name))
@@ -421,9 +398,7 @@ auto draw_script_field_inspector(editor_state& state, sbx::scenes::scene& target
 
       commit_after(changed);
     } else if (field_type_name == "Sbx.Core.Math.Color") {
-      // A blittable struct (four sequential floats) -- same direct get/set_field_value path as
-      // Vector3 above, no reference-type special-casing needed. draw_color_field is the same
-      // widget the gradient/curve editors already use.
+      // A blittable struct, read and written directly like Vector3.
       auto value = live_instance ? live_instance->get_field_value<sbx::math::color>(field_name)
                                   : override_slot ? override_slot->color_value : sbx::math::color{};
 
@@ -443,7 +418,7 @@ auto draw_script_field_inspector(editor_state& state, sbx::scenes::scene& target
 
       commit_after(changed);
     } else if (field_type_name == "Sbx.Core.Texture2D") {
-      // Same INativeHandle-via-raw-uuid convention as the Material branch above.
+      // Raw uuid via INativeHandle like Material.
       auto& assets_module = sbx::core::engine::get_module<sbx::assets::assets_module>();
 
       const auto current_uuid = live_instance ? sbx::math::uuid::from_value(live_instance->get_field_value<std::uint64_t>(field_name))
@@ -524,7 +499,7 @@ auto draw_script_section(editor_state& state, sbx::scenes::scene& target, sbx::s
   const auto override_entry = find_value_override(target, node, "script");
   draw_override_header_marker(override_entry);
 
-  // Values are the script's saved field overrides -- a running instance's live values aren't tracked, so Reset/Paste are Edit-mode only.
+  // Holds saved field overrides; live values aren't tracked, so Reset and Paste are Edit-mode only.
   static auto clipboard = std::optional<sbx::scenes::script_entry>{};
 
   if (ImGui::BeginPopupContextItem("##script_context")) {
@@ -536,7 +511,7 @@ auto draw_script_section(editor_state& state, sbx::scenes::scene& target, sbx::s
       state.push_command(target, std::make_unique<modify_component_command<sbx::scenes::script_component>>(node.id(), before, node.get_component<sbx::scenes::script_component>(), label));
     };
 
-    // Cleared overrides are re-seeded from the script's own C# defaults on the next draw (seed_missing_field_defaults).
+    // Cleared overrides are re-seeded from the C# defaults on the next draw.
     if (ImGui::MenuItem(ICON_MDI_RESTORE " Reset", nullptr, false, !is_simulating)) {
       push_fields({}, "Reset Script");
     }
@@ -565,7 +540,7 @@ auto draw_script_section(editor_state& state, sbx::scenes::scene& target, sbx::s
   }
 
   if (!is_open) {
-    pending_removal = entry.class_name; // defer to after the caller's loop — script_component.scripts must not shrink mid-iteration
+    pending_removal = entry.class_name; // deferred: the caller is iterating script_component.scripts
     return;
   }
 

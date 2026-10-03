@@ -53,6 +53,7 @@ auto draw_vector_control(const char* label, std::array<std::float_t, Size>& valu
 
   result.started = ImGui::IsItemActivated();
   result.committed = ImGui::IsItemDeactivatedAfterEdit();
+  result.ended = ImGui::IsItemDeactivated();
 
   ImGui::PushID(label);
 
@@ -62,6 +63,7 @@ auto draw_vector_control(const char* label, std::array<std::float_t, Size>& valu
       result.changed = true;
       result.started = true;
       result.committed = true;
+      result.ended = true;
     }
 
     ImGui::EndPopup();

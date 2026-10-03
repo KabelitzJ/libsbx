@@ -52,8 +52,7 @@ application::application()
 
   auto& editor_module = sbx::core::engine::get_module<editor::editor_module>();
 
-  // A fresh/projectless-launcher-created project has no startup_scene — start from whatever
-  // empty scene scenes_module already handed us instead of assuming one exists on disk.
+  // A new project may have no startup scene; keep scenes_module's empty scene then.
   if (const auto& startup_scene = project.startup_scene()) {
     if (auto handle = assets_module.load_scene(*startup_scene); handle.is_valid()) {
       sbx::scenes::scene_serializer::load(scene, handle->snapshot());
@@ -62,9 +61,7 @@ application::application()
     editor_module.set_scene_path(*startup_scene);
   }
 
-  // scene_serializer::load only sets an active camera if the loaded scene had one, so a fresh
-  // project needs a default. This is the scene's play camera; the editor itself renders through
-  // its own editor_camera instead (see viewport_camera).
+  // A default play camera for scenes without one; the editor itself renders through editor_camera.
   auto play_camera = scene.active_camera();
 
   if (!play_camera.is_valid()) {
@@ -103,9 +100,7 @@ auto application::update() -> void {
     editor_module.editor_camera().update();
   }
 
-  // Render/pick/gizmo through the editor camera while editing, and through the scene's own play
-  // camera otherwise (scene_renderer_module's normal scene.active_camera() fallback) — see
-  // scene_renderer_module::set_camera_override's doc comment.
+  // The editor camera while editing, otherwise the scene's own camera.
   auto& scene_renderer_module = sbx::core::engine::get_module<sbx::render::scene_renderer_module>();
 
   if (editor_module.play_state() == editor::play_state::edit) {

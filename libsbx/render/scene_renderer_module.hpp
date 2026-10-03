@@ -41,13 +41,9 @@
 namespace sbx::render {
 
 /**
- * @brief Renders the active scene's 3D content into an offscreen final_image every frame.
+ * @brief Renders the active scene into an offscreen final_image every frame; knows nothing about the swapchain or ImGui.
  *
- * Knows nothing about the swapchain or ImGui; registers itself as presentation_module's
- * scene_renderer and, via scene_blit_compositor, as its default compositor.
- *
- * prepare() (main thread) extracts the active scene into a render_packet; record() — which may
- * run on a dedicated render thread — never touches the ECS.
+ * prepare() (main thread) extracts the scene into a render_packet; record(), possibly on the render thread, never touches the ECS.
  */
 class scene_renderer_module final : public utility::noncopyable, public scene_renderer {
 
@@ -64,17 +60,16 @@ public:
   auto record(graphics::command_buffer& command_buffer, math::vector2u extent) -> void override;
 
   /**
-   * @brief The extent the scene/offscreen render targets (and the projection's aspect ratio) should
-   * use, overriding the default of the swapchain's extent — e.g. the editor's Viewport panel size,
-   * which can differ from the OS window. Pass {0, 0} (the default) to fall back to the swapchain
-   * extent; runtime never calls this, so it always renders at window resolution as before.
+   * @brief Overrides the render extent, e.g. with the editor's Viewport panel size.
+   *
+   * @param extent The extent, or {0, 0} for the swapchain extent.
    */
   auto set_viewport_extent(math::vector2u extent) -> void;
 
   /**
-   * @brief The extent actually being rendered at this frame -- set_viewport_extent()'s override
-   * when one is active, otherwise the swapchain's own extent. What Sbx.Core.Camera.Viewport/
-   * ScreenPointToRay derive their aspect ratio from (see interop::camera_get_viewport).
+   * @brief The extent rendered at this frame: the override if set, otherwise the swapchain extent.
+   *
+   * @return The render extent.
    */
   [[nodiscard]] auto target_extent() const noexcept -> math::vector2u {
     return _target_extent;
@@ -87,83 +82,90 @@ public:
   }
 
   /**
-   * @brief Overrides the camera_data _build_packet() would otherwise derive from the scene's
-   * active camera — e.g. the editor's own fly-camera while its play_state is "edit". Pass
-   * std::nullopt (the default) to fall back to the scene's active camera; runtime never calls
-   * this, so it always renders through the scene's own camera exactly as before. Environment/
-   * skybox is unaffected by this either way — it's always read from the scene's active camera
-   * (if any) regardless of which camera_data is actually rendered with.
+   * @brief Overrides the camera rendered with, e.g. the editor's fly camera. The environment and skybox still come from the scene's active camera.
+   *
+   * @param override The camera, or nullopt for the scene's active camera.
    */
   auto set_camera_override(std::optional<camera_data> override) -> void {
     _camera_override = override;
   }
 
   /**
-   * @brief The camera_data this frame is actually (or would actually) be rendered with -- the
-   * override if one is set, otherwise derived fresh from the scene's active camera, exactly the
-   * same resolution _build_packet() itself uses. canvas_module calls this for world_space canvases
-   * specifically so they track whatever camera the viewport is really looking through (the editor's
-   * own fly-camera while play_state is "edit", the scene's own camera otherwise) instead of always
-   * assuming scene.active_camera() is the one actually rendering -- see canvas_module::update()'s
-   * doc comment on why screen_space_camera canvases deliberately don't use this (they're pinned to
-   * an explicit camera reference instead, the same way Unity's Canvas.worldCamera field is).
+   * @brief The camera this frame renders with: the override if set, otherwise the scene's active camera. World-space canvases follow it.
+   *
+   * @return The effective camera.
    */
   [[nodiscard]] auto effective_camera() -> camera_data;
 
   /**
-   * @brief The final viewport image — the fully tonemapped, presentable color result (see
-   * render_context::final_image). Valid from the first frame onward; the editor samples this to
-   * display the scene inside its Viewport panel instead of presenting it directly.
+   * @brief The final tonemapped image; the editor samples it for its Viewport panel.
+   *
+   * @return The image.
    */
   [[nodiscard]] auto final_image() const noexcept -> graphics::image_handle {
     return _final_image;
   }
 
-  /** @brief final_image's bindless sampled-image index — for a compositor sampling it directly (see scene_blit_compositor). */
+  /**
+   * @brief final_image's bindless sampled-image index.
+   *
+   * @return The index.
+   */
   [[nodiscard]] auto final_image_index() const noexcept -> std::uint32_t {
     return _final_image_index;
   }
 
-  /** @brief The general-purpose material sampler's bindless index — same one final_image itself should be sampled with. */
+  /**
+   * @brief The general-purpose material sampler's bindless index, also used for final_image.
+   *
+   * @return The index.
+   */
   [[nodiscard]] auto sampler_index() const noexcept -> std::uint32_t {
     return _sampler_index;
   }
 
   /**
-   * @brief Whether the most recent record() actually rendered something (an active camera was
-   * present) — final_image may be stale or never written otherwise. scene_blit_compositor checks
-   * this instead of sampling final_image unconditionally.
+   * @brief Whether the last record() rendered anything; final_image is stale or unwritten otherwise.
+   *
+   * @return True if a camera was present.
    */
   [[nodiscard]] auto has_rendered() const noexcept -> bool {
     return _has_rendered;
   }
 
   /**
-   * @brief Whether the most recent record() drew the shadow cascades. Only then are they in
-   * shader_read_only_optimal and safe for the editor to sample through shadow_map_preview_view().
+   * @brief Whether the last record() drew the shadow cascades, the only time shadow_map_preview_view() is safe to sample.
+   *
+   * @return True if shadows were rendered.
    */
   [[nodiscard]] auto has_rendered_shadows() const noexcept -> bool {
     return _has_rendered_shadows;
   }
 
-  /** @brief A {R, R, R, 1}-swizzled view of shadow cascade @p cascade's depth map, for showing it as grayscale in ImGui. */
+  /**
+   * @brief A grayscale-swizzled view of a cascade's depth map, for ImGui.
+   *
+   * @param cascade The cascade index.
+   *
+   * @return The image view.
+   */
   [[nodiscard]] auto shadow_map_preview_view(std::uint32_t cascade) const noexcept -> VkImageView {
     return _shadow_map_preview_views[cascade];
   }
 
   /**
-   * @brief Shows/hides the world-space reference grid (see grid_pass). Off by default; runtime
-   * never calls this, so the grid pass — always present in the fixed pass list — stays a no-op
-   * there. editor_module calls this once to turn it on.
+   * @brief Shows or hides the world-space reference grid. Off by default; the editor turns it on.
+   *
+   * @param enabled Whether to draw the grid.
    */
   auto set_grid_enabled(bool enabled) -> void;
 
   auto grid_enabled() const -> bool;
 
   /**
-   * @brief Draws opaque geometry as wireframe (see opaque_pass) instead of filled triangles. Off
-   * by default. Unlike grid_enabled, this is meant to be flipped at runtime for debugging (e.g. a
-   * script bound to a hotkey), not just by the editor.
+   * @brief Draws opaque geometry as wireframe, for runtime debugging. Off by default.
+   *
+   * @param enabled Whether to draw wireframe.
    */
   auto set_wireframe_enabled(bool enabled) -> void;
 
@@ -171,29 +173,26 @@ public:
 
   /**
    * @brief Tints lit surfaces by the shadow cascade they sample (red, green, blue, yellow; untinted beyond the shadow distance).
+   *
+   * @param enabled Whether to tint.
    */
   auto set_shadow_cascade_debug_enabled(bool enabled) -> void;
 
   auto shadow_cascade_debug_enabled() const -> bool;
 
   /**
-   * @brief The shared immediate-mode line accumulator -- physics colliders (see
-   * physics::physics_module::late_update()) and, later, script-driven gizmos submit into this every
-   * frame; debug_draw_pass uploads and draws whatever's accumulated, then clears it.
+   * @brief The shared immediate-mode line accumulator; debug_draw_pass draws and clears it every frame.
+   *
+   * @return The accumulator.
    */
   [[nodiscard]] auto debug_draw() noexcept -> render::debug_draw& {
     return _debug_draw;
   }
 
-  /**
-   * @brief Immediately discards every live GPU-path particle (assets::particle_simulation_mode
-   * ::gpu) in both pools -- a hard reset, unlike particle_pool::tick()'s normal lifetime-based
-   * drain. editor_module's play_mode_controller calls this on Stop so GPU particles don't linger
-   * after CPU-mode ones are cleared by particles_module's own stopped-cleanup in the same frame.
-   */
+  /** @brief Discards every live GPU-path particle immediately, e.g. when play mode stops. */
   auto reset_particles() -> void;
 
-  /** @brief Draw-call/instance counts per category, from the most recent prepare() call -- for the editor's Statistics panel. */
+  /** @brief Draw-call and instance counts per category from the last prepare(), for the Statistics panel. */
   struct draw_category_stats {
     std::uint32_t draw_calls{0u};
     std::uint32_t instance_count{0u};
@@ -209,7 +208,11 @@ public:
     return _last_draw_stats;
   }
 
-  /** @ref render_graph::pass_timings -- always max_frames_in_flight frames stale. */
+  /**
+   * @brief Per-pass GPU timings, always max_frames_in_flight frames stale.
+   *
+   * @return The timings.
+   */
   [[nodiscard]] auto pass_timings() const noexcept -> std::span<const pass_gpu_timing> {
     return _graph.pass_timings();
   }
@@ -228,21 +231,13 @@ private:
   inline static constexpr auto transform_capacity = std::uint32_t{16384u};
   inline static constexpr auto cluster_light_index_capacity = std::uint32_t{65536u};
 
-  // frustum_cull_pass: a fixed upper bound on draw commands per cull view per frame (mirroring
-  // transform_capacity's "just skip the overflow" v1 policy above) and the compacted,
-  // visibility-culled transform buffer it writes into -- same capacity as _transform_buffer, since
-  // worst case every instance survives culling and needs its full original slot.
+  // Upper bound on draw commands per cull view per frame; overflow is skipped.
   inline static constexpr auto max_opaque_draw_commands = std::uint32_t{8192u};
 
-  // Visible instances of every instanced_mesh_renderer, per frame slot, summed over each one's
-  // cull views (camera, plus every shadow cascade if its material casts shadows). Past this,
-  // further renderers are skipped for the frame (logged once).
+  // Visible instanced instances per frame across all cull views; further renderers are skipped for the frame (logged once).
   inline static constexpr auto instanced_culled_capacity = std::uint32_t{262144u};
 
-  // Skinning: joint_palette_capacity is a total across every skinned instance drawn this frame
-  // (packet.joint_matrices), not per-instance; skin_scratch_vertex_capacity likewise sums every
-  // skinned instance's vertex_count. Both are fixed upper bounds for v1 -- a frame exceeding either
-  // just skips drawing the overflow (see _build_packet), no dynamic regrow.
+  // Totals across every skinned instance per frame; overflow isn't drawn.
   inline static constexpr auto joint_palette_capacity = std::uint32_t{4096u};
   inline static constexpr auto skin_scratch_vertex_capacity = std::uint32_t{65536u};
 
@@ -256,30 +251,45 @@ private:
 
   [[nodiscard]] auto _build_packet() -> render_packet;
 
-  /** @brief Shared by _build_packet() and the public effective_camera() -- the override if set, else derived from scene.active_camera(). Bloom/exposure come along with it; environment/skybox stay separately scene-authored (see _build_packet's own comment on that). */
+  /**
+   * @brief The override camera if set, otherwise derived from the scene's active camera.
+   *
+   * @return The camera.
+   */
   [[nodiscard]] auto _resolve_camera_data() -> camera_data;
 
-  // GPU-path only (assets::particle_simulation_mode::gpu) -- claims/keeps-alive this
-  // emitter's particle_pool slot and appends a particle_emitter_snapshot to packet.particle_emitters
-  // if it's currently playing. See scenes::particle_emitter::slot's doc comment for why this
-  // bookkeeping lives here (render cadence) rather than particles_module (fixed-step cadence).
+  // GPU-path emitters: claims or keeps alive the emitter's pool slot and appends a snapshot if it is playing. Runs at render cadence.
   auto _extract_gpu_particle_emitter(render_packet& packet, const assets::particle_emitter& config, scenes::particle_emitter& runtime, const scenes::particle_effect& instance, const math::matrix4x4& world, std::float_t delta_time) -> void;
 
   /**
-   * @brief Advances @p animator's graph state machine (if not null) and samples the resulting
-   * pose -- crossfading between the outgoing/incoming clip when mid-transition -- into @p pose's
-   * joint_world_matrices/skinning_matrices. Called once per skinned instance from _build_packet,
-   * at render cadence -- see scenes::skeleton_pose's doc comment for why this isn't a fixed_update.
-   * A null @p animator (or one with no graph assigned) evaluates the skeleton's bind pose.
-   * @p renderer is the same instance's mesh_renderer -- needed to resolve an
-   * assets::animation_state::clip_name against its mesh's clip list.
+   * @brief Advances the animator's state machine and samples the (possibly crossfading) pose into @p pose. Runs once per skinned instance at render cadence.
+   *
+   * @param skeleton The skeleton being posed.
+   * @param renderer The instance's mesh_renderer, for resolving clip names.
+   * @param animator The animator, or null for the bind pose.
+   * @param pose Receives joint world and skinning matrices.
+   * @param delta_time The time step.
    */
   auto _evaluate_skeleton_pose(const assets::skeleton& skeleton, const scenes::mesh_renderer& renderer, scenes::animator* animator, scenes::skeleton_pose& pose, std::float_t delta_time) -> void;
 
-  /** @brief Pure state-machine bookkeeping (current/transition-target state, local clip time, transition progress) -- no joint/vertex math. Resolves current_clip/transition_target_clip against @p renderer's mesh by name as states are (re-)entered. */
+  /**
+   * @brief State machine bookkeeping only: current and target state, clip time and transition progress.
+   *
+   * @param renderer The instance's mesh_renderer, for resolving clip names.
+   * @param graph The animation graph.
+   * @param animator The animator to advance.
+   * @param delta_time The time step.
+   */
   auto _advance_animator_state(const scenes::mesh_renderer& renderer, const assets::animation_graph& graph, scenes::animator& animator, std::float_t delta_time) -> void;
 
-  /** @brief The clip named by @p state's clip_name, resolved against @p renderer's mesh->animation_clips(); an invalid handle if @p state is null, the mesh has no such clip, or the mesh itself isn't assigned. */
+  /**
+   * @brief The clip named by @p state, resolved against the renderer's mesh.
+   *
+   * @param renderer The mesh_renderer whose mesh provides the clips.
+   * @param state The animation state.
+   *
+   * @return The clip, or an invalid handle if @p state is null or the clip or mesh is missing.
+   */
   [[nodiscard]] auto _resolve_state_clip(const scenes::mesh_renderer& renderer, const assets::animation_state* state) const -> assets::animation_clip_handle;
 
   struct draw_bucket {
@@ -302,10 +312,7 @@ private:
   bool _has_rendered{false};
   std::optional<camera_data> _camera_override{};
 
-  // Scratch buffers for _evaluate_skeleton_pose, reused across every skinned instance/frame instead
-  // of freshly heap-allocated per call -- safe because _build_packet's skinned-mesh loop is strictly
-  // serial (no threading/job-system involved), so no two calls to _evaluate_skeleton_pose are ever
-  // in flight at once.
+  // Scratch buffers reused across instances and frames; _build_packet's skinned loop is serial.
   std::vector<math::vector3> _skeleton_scratch_translations{};
   std::vector<math::quaternion> _skeleton_scratch_rotations{};
   std::vector<math::vector3> _skeleton_scratch_scales{};
@@ -314,9 +321,7 @@ private:
   std::vector<math::vector3> _skeleton_scratch_target_scales{};
   std::vector<math::matrix4x4> _skeleton_scratch_locals{};
 
-  // _build_packet's opaque/transparent accumulation, reused across frames like the skeleton scratch
-  // buffers above so a steady scene stops reallocating. A bucket that got no instances in the
-  // previous build is pruned at the start of the next one, so removed meshes/materials don't linger.
+  // Reused across frames to avoid reallocating; buckets left empty by the previous build are pruned.
   std::unordered_map<mesh_key, draw_bucket, mesh_key_hash> _opaque_buckets{};
   std::vector<std::pair<mesh_key, const draw_bucket*>> _ordered_opaque_buckets{};
   std::vector<transparent_entry> _transparent_entries{};
@@ -333,11 +338,10 @@ private:
   std::array<VkImageView, shadow_cascade_count> _shadow_map_preview_views{};
 
   graphics::image_handle _depth_image{};
-  // _depth_image's own MSAA resolve target (depth_pre_pass.hpp's own doc comment) -- single-sample,
-  // bindless-sampleable, read by the shader graph Scene Depth node via _scene_depth_index below.
+  // Single-sample resolve of _depth_image, sampled by the shader graph Scene Depth node.
   graphics::image_handle _scene_depth_image{};
   std::uint32_t _scene_depth_index{0u};
-  // ambient_occlusion_pass's half-resolution targets: raw, then blurred (the one lighting reads).
+  // Half-resolution ambient occlusion targets: raw, then blurred (the one lighting reads).
   graphics::image_handle _ambient_occlusion_raw_image{};
   graphics::image_handle _ambient_occlusion_image{};
   std::uint32_t _ambient_occlusion_raw_index{0u};
@@ -355,11 +359,7 @@ private:
   graphics::image_handle _revealage_msaa_image{};
   std::uint32_t _revealage_index{0u};
 
-  // Private mip chains bloom_pass reads/writes -- see bloom_pass.hpp. _bloom_upsample_index is the
-  // one slot the rest of the module (tonemap_pass) needs, written against the image's own default
-  // (whole-chain) view like _color_index is; tonemap.slang locks its bloom sample to mip 0 via
-  // SampleLevel rather than needing a dedicated single-mip view. The internal per-mip views/indices
-  // bloom_pass uses to build the chain are entirely private to bloom_pass itself.
+  // bloom_pass's private mip chains; tonemap_pass only needs _bloom_upsample_index.
   graphics::image_handle _bloom_downsample_image{};
   graphics::image_handle _bloom_upsample_image{};
   std::uint32_t _bloom_upsample_index{0u};
@@ -382,9 +382,7 @@ private:
   graphics::buffer_handle _transform_buffer{};
   std::array<graphics::buffer::address_type, graphics::swapchain::max_frames_in_flight> _transform_addresses{};
 
-  // frustum_cull_pass's output for this frame's opaque_commands -- see render_context's own doc
-  // comment on culled_indirect_args_buffer/culled_transform_address for how depth_pre_pass/
-  // opaque_pass consume these instead of _transform_buffer.
+  // frustum_cull_pass output, consumed by depth_pre_pass and opaque_pass instead of _transform_buffer.
   graphics::buffer_handle _culled_indirect_args_buffer{};
   std::array<graphics::buffer::address_type, graphics::swapchain::max_frames_in_flight> _culled_indirect_args_addresses{};
 
@@ -393,16 +391,11 @@ private:
   graphics::buffer_handle _instanced_culled_buffer{};
   std::array<graphics::buffer::address_type, graphics::swapchain::max_frames_in_flight> _instanced_culled_addresses{};
 
-  // CPU-written every frame from packet.joint_matrices (skeleton_pose evaluation happens in
-  // _build_packet, on the main thread) -- frame-in-flight multiplexed exactly like _transform_buffer,
-  // for the same reason (a single-buffered host-visible buffer would race a still-in-flight
-  // previous frame's GPU read).
+  // Written by the CPU every frame; one region per frame in flight so the previous frame's GPU read doesn't race.
   graphics::buffer_handle _joint_palette_buffer{};
   std::array<graphics::buffer::address_type, graphics::swapchain::max_frames_in_flight> _joint_palette_addresses{};
 
-  // GPU-written (skin_pass) and GPU-read (depth_pre_pass/shadow_pass/opaque_pass) only, entirely
-  // within one frame's submission. Still one region per frame slot, like the palette above: the
-  // previous frame's draws may still be reading their region while this frame's skin_pass writes.
+  // Written by skin_pass and read by the geometry passes; one region per frame slot, as the previous frame may still read its region.
   graphics::buffer_handle _skin_scratch_buffer{};
   std::array<graphics::buffer::address_type, graphics::swapchain::max_frames_in_flight> _skin_scratch_addresses{};
 
@@ -423,11 +416,7 @@ private:
 
   render::debug_draw _debug_draw{};
 
-  // GPU-path particles (see libsbx/render/particles/particle_pool.hpp) -- one pool per blend
-  // mode, shared by every assets::particle_simulation_mode::gpu emitter in the scene.
-  // unique_ptr rather than a by-value member: particle_pool is noncopyable and constructed after
-  // _ensure_resources() so particle_simulate_pass can take stable references to both in the pass
-  // list built by this constructor.
+  // GPU-path particle pools, one per blend mode. unique_ptr because they are built after _ensure_resources() and passes keep references to them.
   std::unique_ptr<particle_pool> _particle_pool_additive{};
   std::unique_ptr<particle_pool> _particle_pool_alpha_blend{};
 

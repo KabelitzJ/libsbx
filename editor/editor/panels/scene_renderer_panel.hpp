@@ -9,14 +9,7 @@
 
 namespace editor {
 
-/**
- * @brief Per-pass GPU time and whole-frame pipeline statistics for the active scene's
- * render_graph -- see render_graph::pass_timings()/pipeline_stats(). On-demand (Window menu),
- * same pattern as navigation_panel -- see its own doc comment on why.
- *
- * Every number here is read back from a VkQueryPool and is therefore always
- * swapchain::max_frames_in_flight frames stale, same as Tracy's own GPU zones would be.
- */
+/** @brief Per-pass GPU times and whole-frame pipeline statistics of the render graph, max_frames_in_flight frames stale. Opened from the Window menu. */
 class scene_renderer_panel final : public editor_panel {
 
 public:

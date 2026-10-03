@@ -24,18 +24,10 @@
 namespace editor {
 
 /**
- * @brief Renders the small per-node 2D preview swatches (shader_graph_node::preview) shown inline
- * on opted-in nodes -- one flat, lighting-free quad per previewed node, evaluating just that
- * node's own output pin (generate_node_preview_source). Owns its own async_shader_compiler,
- * separate from shader_graph_preview_renderer's (the master 3D preview) -- both classes' own
- * update() drains whatever compiler it owns via take_results(), so sharing one between two
- * independent consumers would mean either one could silently steal the other's result off the
- * queue; two small idle-most-of-the-time worker threads is a simpler, safer trade than teaching
- * async_shader_compiler to filter per-consumer.
+ * @brief Renders the per-node 2D preview swatches, each evaluating one node's output pin.
  *
- * Reads the master preview's own material buffer address/sampler index (passed into update() each
- * call, not owned here) rather than maintaining a second copy -- an exposed constant/texture_sample
- * node previews the same live graph state the master preview already keeps that buffer in sync with.
+ * Has its own async_shader_compiler: both previews drain their compiler's results, so sharing one would let either steal the other's results.
+ * Reads the master preview's live material buffer instead of keeping a copy.
  */
 class shader_graph_node_preview_manager final : public sbx::utility::noncopyable {
 
@@ -45,19 +37,30 @@ public:
 
   ~shader_graph_node_preview_manager();
 
-  /** @brief Call once when a node's preview is freshly toggled on, and once per structural edit for every currently-previewed node (a structural change anywhere could affect any previewed node's own subgraph). Coalesced per node_id, like shader_graph_preview_renderer's own request_recompile. */
+  /**
+   * @brief Queues a node preview recompile, on toggling it on and on every structural edit. Coalesced per node.
+   *
+   * @param graph The graph's current contents.
+   * @param node_id The previewed node.
+   */
   auto request_recompile(const sbx::assets::shader_graph::create_info& graph, std::uint32_t node_id) -> void;
 
-  /** @brief Releases @p node_id's preview resources -- call when its preview is toggled off or the node itself is deleted. A no-op if it was never previewed. */
+  /**
+   * @brief Releases a node's preview when it's toggled off or deleted; no-op if it was never previewed.
+   *
+   * @param node_id The node.
+   */
   auto forget(std::uint32_t node_id) -> void;
 
-  /** @brief Releases every tracked node's preview resources -- call when switching to a different shader graph (node ids are graph-local, so a stale entry from the previous graph would otherwise just sit there orphaned, never forgotten by that graph's own deletions). */
+  /** @brief Releases every preview, e.g. when switching graphs, since node ids are graph-local. */
   auto clear() -> void;
 
   /**
-   * @brief Drains ready compiles and redraws whichever tracked nodes actually changed (a new
-   * pipeline just became ready, or @p material_changed) -- see shader_graph_preview_renderer's own
-   * update() doc comment for why a redraw-only-when-changed policy matters here too.
+   * @brief Picks up finished compiles and redraws only previews that changed.
+   *
+   * @param material_address The master preview's material buffer.
+   * @param sampler_index The sampler's bindless index.
+   * @param material_changed Whether the material values changed this frame.
    */
   auto update(sbx::graphics::buffer::address_type material_address, std::uint32_t sampler_index, bool material_changed) -> void;
 

@@ -17,7 +17,6 @@
 
 #include <libsbx/core/module.hpp>
 
-// #include <libsbx/scenes/node.hpp>
 #include <libsbx/scenes/components.hpp>
 #include <libsbx/scenes/scenes_module.hpp>
 
@@ -32,6 +31,7 @@
 
 #include <libsbx/scripting/managed/runtime.hpp>
 #include <libsbx/scripting/script_compiler.hpp>
+#include <libsbx/scripting/script_resources.hpp>
 
 namespace sbx::scripting {
 
@@ -50,17 +50,14 @@ struct script_runtime_error : public std::runtime_error {
 }; // struct script_runtime_error
 
 /**
- * @brief Maps a managed field's full type name (System.Type.FullName) to the script_field_type it
- * should be tracked/edited as, or nullopt if unsupported. The single source of truth both
- * scripting_module::seed_missing_field_defaults and the editor Inspector's per-field widget
- * dispatch use, so the two can never drift apart on which C# types are supported.
+ * @brief Maps a managed field's full type name to the script_field_type it is edited as.
  *
- * A Sbx.Core.Node field is tracked/stored as the referenced node's own scenes::id uuid, same as
- * every other field type here -- Node is a reference type Sbx.Managed can't reference at compile
- * time (Sbx.Managed sits below Sbx.Core in the dependency graph), so both directions cross as a
- * raw uuid via Sbx.Managed's INativeHandle interface instead of a real `typeof(Node)` (see
- * Sbx.Managed's Object.SetFieldValue / Marshalling.MarshalReturnValue, and Node's own
- * INativeHandle implementation).
+ * Shared by seed_missing_field_defaults and the Inspector so both agree on which C# types are supported.
+ * Sbx.Core.Node fields cross as the referenced node's uuid via INativeHandle, since Sbx.Managed can't reference Sbx.Core.
+ *
+ * @param managed_type The field's managed type.
+ *
+ * @return The matching script_field_type, or nullopt if the type isn't supported.
  */
 [[nodiscard]] inline auto script_field_type_of(const managed::type& managed_type) -> std::optional<scenes::script_field_type> {
   const auto full_name = std::string{managed_type.get_full_name()};
@@ -96,65 +93,57 @@ public:
   auto load_assembly(const std::filesystem::path& assembly_path, std::initializer_list<internal_call> bindings = {}) -> void;
 
   /**
-   * @brief Creates one managed instance for @p class_name on @p node — a fresh CLR allocation
-   * every call, applies any persisted field overrides for this node+class (see scenes::script_entry),
-   * invokes "OnCreate", and appends the instance to node's runtime scripting::scripts component.
+   * @brief Creates a managed instance of @p class_name on @p node, applies its persisted field overrides, invokes OnCreate and appends it to the node's scripting::scripts.
    *
-   * INVARIANT: one create_instance() call per (node, class_name) pair — never cache/reuse a
-   * managed::object across nodes. Two nodes referencing the same script class must always end up
-   * with two independent instances; only the resolved managed::type (not an instance) is safe to
-   * cache/share. A future "avoid repeated get_type lookups" optimization is fine; memoizing
-   * instances by class name is not.
+   * @warning Never reuse an instance across nodes: two nodes with the same class need two instances. Caching the resolved managed::type is fine.
+   *
+   * @param node The node the script belongs to.
+   * @param class_name The script's full class name.
+   *
+   * @return The new instance.
    */
   auto instantiate(scenes::node& node, std::string_view class_name) -> managed::object;
 
   /**
-   * @brief Instantiates every script in @p target's persisted scenes::script_component entries —
-   * one instantiate() call per entry (see instantiate()'s invariant). Called once when a scene
-   * starts playing: play_mode_controller::enter_play_mode() (editor) and
-   * runtime::application::application() (standalone — the scene is simulating from frame 0 there).
-   * Editor startup deliberately never calls this.
+   * @brief Instantiates every persisted script in @p target. Called once when a scene starts playing.
+   *
+   * @param target The scene to instantiate scripts in.
    */
   auto instantiate_scene_scripts(scenes::scene& target) -> void;
 
   /**
-   * @brief Same 2-phase create-then-OnCreate bootstrap as instantiate_scene_scripts, scoped to just
-   * @p subtree_root and its descendants — for a subtree that appears after Play has already
-   * started (a prefab instantiated from a running script, via Node.Instantiate). No-op if the
-   * scene isn't currently simulating (self-guarded, same defensive convention as attach_script,
-   * since unlike instantiate_scene_scripts this has a reachable non-simulating caller in principle).
-   * Never call instantiate_scene_scripts itself again mid-Play — it would create duplicate
-   * instances for every already-running node in the whole scene, not just the new subtree.
+   * @brief Instantiates the scripts of a subtree that appeared after play started, such as a prefab instantiated from a script. No-op unless simulating.
+   *
+   * Never call instantiate_scene_scripts mid-play instead: it would duplicate every running instance.
+   *
+   * @param target The scene containing the subtree.
+   * @param subtree_root The subtree's root node.
    */
   auto instantiate_subtree_scripts(scenes::scene& target, scenes::node subtree_root) -> void;
 
   /**
-   * @brief Attaches @p class_name to @p node's persisted scenes::script_component (creating it if
-   * needed; no-ops if that exact class is already attached — at most one instance of a given class
-   * per node). If the scene is already simulating, also instantiate()s this one entry immediately
-   * so OnCreate fires right away instead of waiting for the next play-mode entry. The single entry
-   * point the editor's "Add Script" action should go through.
+   * @brief Attaches @p class_name to @p node (at most one per class), instantiating it immediately if the scene is simulating.
+   *
+   * @param node The node to attach to.
+   * @param class_name The script's full class name.
    */
   auto attach_script(scenes::node& node, std::string_view class_name) -> void;
 
   /**
-   * @brief Backfills a real default (read from a throwaway instance's post-constructor field
-   * values, then discarded) into @p entry.field_overrides for every public, tracked-type field of
-   * @p entry's script that doesn't already have an entry — without this, the Inspector's
-   * live_instance-vs-override_slot display falls back to a hardcoded 0/false/""/(none) instead of
-   * whatever the C# field initializer actually set. Cheap to call repeatedly — does nothing once
-   * every field already has one, so the Inspector calls this on every draw of a script section,
-   * not just attach_script (which also calls it once, right after attaching): that's what actually
-   * covers a script attached before this existed, or recompiled with a field added since, not just
-   * a fresh attach. No live managed::type for @p entry.class_name (e.g. no compiled game assembly
-   * yet) is a silent no-op.
+   * @brief Fills @p entry's missing field overrides with the defaults of a throwaway instance, so the Inspector shows the C# initializers.
+   *
+   * Cheap once every field has an entry, so the Inspector calls it on every draw; a no-op without a compiled game assembly.
+   *
+   * @param node The node the script is attached to.
+   * @param entry The script entry to fill.
    */
   auto seed_missing_field_defaults(scenes::node& node, scenes::script_entry& entry) -> void;
 
   /**
-   * @brief Removes @p class_name from @p node's persisted scenes::script_component. If the scene
-   * is simulating and a live instance exists, invokes OnDestroy on it first and erases it from the
-   * runtime scripting::scripts component before erasing the persisted entry.
+   * @brief Removes @p class_name from @p node, invoking OnDestroy on its live instance first if the scene is simulating.
+   *
+   * @param node The node to detach from.
+   * @param class_name The script's full class name.
    */
   auto detach_script(scenes::node& node, std::string_view class_name) -> void;
 
@@ -163,28 +152,33 @@ public:
   }
 
   /**
-   * @brief Invokes "OnDestroy" on every script instance in @p target, the mirror of
-   * instantiate()'s "OnCreate" call. Scene reloads (scene_serializer::load()) clear the ECS
-   * registry with no lifecycle callback of their own, which would otherwise silently drop any
-   * script instances created during a session (e.g. the editor's play-mode snapshot restore on
-   * Stop) without ever notifying them — call this first whenever a scene's registry is about to
-   * be wiped out from under live script instances.
+   * @brief Invokes OnDestroy on every script instance in @p target and clears resources().
+   *
+   * Call before a scene's registry is wiped (e.g. restoring the play-mode snapshot), since scene_serializer::load() has no lifecycle callbacks.
+   *
+   * @param target The scene whose instances are destroyed.
    */
   auto run_on_destroy(scenes::scene& target) -> void;
 
-  /**
-   * @brief (Re)compiles the project's *.cs scripts (see script_compiler) and, on success,
-   * reloads the game assembly_load_context from the result — discarding whatever was previously
-   * loaded there first. Safe to call whenever nothing is currently instantiate()'d from the game
-   * assembly (the editor only exposes this from its Recompile Scripts menu item, gated to Edit
-   * mode — see play_mode_controller); unlike compile_if_stale() alone, this always reloads even
-   * if nothing was stale, since an explicit "recompile" action implies "reload" too.
-   */
+  /** @brief Recompiles the project's scripts and, on success, reloads the game assembly. Only call while no game script is instantiated. */
   auto recompile_scripts() -> void;
 
-  /** @see script_compiler::last_compile_succeeded */
+  /**
+   * @brief Whether the last script compile left a usable assembly.
+   *
+   * @return True if the game assembly is usable.
+   */
   [[nodiscard]] auto last_compile_succeeded() const noexcept -> bool {
     return _script_compiler.last_compile_succeeded();
+  }
+
+  /**
+   * @brief GPU resources and deferred geometry created by scripts; cleared by run_on_destroy and on script reload.
+   *
+   * @return The script resources.
+   */
+  [[nodiscard]] auto resources() noexcept -> script_resources& {
+    return _resources;
   }
 
 private:
@@ -199,21 +193,13 @@ private:
 
   auto _apply_field_overrides(managed::object& instance, const scenes::script_entry& entry) -> void;
 
-  /**
-   * @brief physics::physics_module::on_contact_began/on_contact_ended handler -- delivers
-   * OnCollisionEnter/OnCollisionExit (or OnTriggerEnter/OnTriggerExit, per event.is_trigger) to
-   * every script instance on both event.node_a and event.node_b, in both directions (each side
-   * gets the *other* side as its "otherUuid" argument).
-   */
+  /** @brief Delivers OnCollisionEnter/Exit (or OnTriggerEnter/Exit) to the scripts on both nodes of a contact, each receiving the other node. */
   auto _dispatch_collision_event(const physics::collision_event& event, bool began) -> void;
 
-  /** @brief One direction of _dispatch_collision_event -- invokes on self's own script instances (if any), passing other's uuid. */
   auto _invoke_collision_handler(scenes::node& self, const scenes::node& other, const physics::collision_event& event, bool began) -> void;
 
-  /** @brief canvas::canvas_module::on_button_clicked handler -- invokes OnClick on the clicked node's own script instances (if any). */
   auto _dispatch_button_click(const scenes::node& node) -> void;
 
-  /** @brief canvas::canvas_module::on_value_changed handler -- invokes OnValueChanged on the changed node's own script instances (if any). */
   auto _dispatch_value_changed(const scenes::node& node) -> void;
 
   std::filesystem::path _assembly_path;
@@ -222,14 +208,14 @@ private:
   scripting::managed::assembly_load_context _context;
   scripting::managed::assembly _core_assembly;
 
-  // Separate from _context/_core_assembly (Sbx.Core/Sbx.Managed, loaded once for the process
-  // lifetime) so recompiling the project's scripts never disturbs the engine's own hosting
-  // assemblies — see runtime::create_assembly_load_context's doc comment.
+  // Separate from _context so recompiling scripts never disturbs the engine's own hosting assemblies.
   scripting::managed::assembly_load_context _game_context;
   scripting::managed::assembly _game_assembly;
   bool _has_game_assembly{false};
 
   script_compiler _script_compiler;
+
+  script_resources _resources;
 
 }; // class scripting_module
 

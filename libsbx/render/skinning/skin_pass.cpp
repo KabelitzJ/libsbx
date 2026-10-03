@@ -38,8 +38,7 @@ skin_pass::skin_pass() {
 }
 
 auto skin_pass::declare(compute_pass_builder& builder, const graph_resources& resources) -> void {
-  // Consumers (depth_pre_pass/shadow_pass/opaque_pass/transparent_accumulate_pass) declare their
-  // vertex-shader read, so the graph places the hand-off barrier.
+  // The consumers declare their vertex-shader reads, so the graph places the barrier.
   builder.writes_buffer(resources.skin_scratch_buffer, graphics::pipeline_stage::compute_shader, graphics::access::shader_write);
 }
 
@@ -61,9 +60,7 @@ auto skin_pass::execute(render_context& context) -> void {
     return;
   }
 
-  // No cross-frame wait: each frame slot writes its own region of the scratch buffer (see
-  // scene_renderer_module::_skin_scratch_addresses), so the previous frame's draws never read what
-  // this dispatch writes.
+  // No cross-frame wait: each frame slot writes its own scratch region.
   bind_compute_globals(context);
 
   auto& command_buffer = *context.command_buffer;

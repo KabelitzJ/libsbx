@@ -17,7 +17,7 @@ template<module Module>
 inline auto engine::get_module() -> Module& {
   auto* instance = detail::module_instance<Module>::pointer;
 
-  utility::assert_that(instance != nullptr, fmt::format("Module '{}' is not part of the running engine's module composition", utility::type_name<Module>()));
+  utility::assert_that(instance != nullptr, "Module '{}' is not part of the running engine's module composition", utility::type_name<Module>());
 
   return *instance;
 }

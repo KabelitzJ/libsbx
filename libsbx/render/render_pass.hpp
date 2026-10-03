@@ -37,14 +37,10 @@ inline constexpr auto shadow_map_resolution = std::uint32_t{2048u};
 // frustum_cull_pass culls once per view: view 0 is the camera (opaque_commands), view 1 + c is shadow cascade c (shadow_caster_commands).
 inline constexpr auto cull_view_count = std::uint32_t{1u + shadow_cascade_count};
 
-// PCF quality for cascaded shadow sampling (shaders/shadows/csm.slang) — must match the
-// shadow_pcf_quality tiers declared there (0 = low/4 taps, 1 = medium/8 taps, 2 = high/16 taps).
+// PCF quality tier for cascaded shadows; must match shaders/shadows/csm.slang (0 = 4 taps, 1 = 8, 2 = 16).
 inline constexpr auto shadow_pcf_quality = std::uint32_t{0u};
 
-/**
- * @brief Per-frame state handed to every pass. The module fills the scene bindings (addresses,
- * counts, targets) once in its prepare step before running the pass list.
- */
+/** @brief Per-frame state handed to every pass, filled once by the module before the pass list runs. */
 struct render_context {
   memory::observer_ptr<graphics::command_buffer> command_buffer;
   memory::observer_ptr<const render_packet> packet;
@@ -83,8 +79,7 @@ struct render_context {
   graphics::image_handle color_msaa{};
   std::uint32_t color_index{0u};
 
-  // Fully tonemapped, presentable result (tonemap_pass output), already shader_read_only_optimal
-  // by the time any compositor runs. Valid from frame 1, but only fresh when a camera was active.
+  // The tonemapped, presentable result, shader-readable before any compositor runs. Only fresh when a camera was active.
   graphics::image_handle final_image{};
   std::uint32_t final_image_index{0u};
 
@@ -95,8 +90,7 @@ struct render_context {
   graphics::image_handle revealage_msaa{};
   std::uint32_t revealage_index{0u};
 
-  // Half-resolution, fully-blurred bloom result (bloom_pass). Always shader_read_only_optimal by
-  // the time tonemap_pass runs, even if bloom is off this frame -- see bloom_pass::execute.
+  // Half-resolution blurred bloom, shader-readable by the time tonemap_pass runs even if bloom is off.
   graphics::image_handle bloom_upsample{};
   std::uint32_t bloom_upsample_index{0u};
 
@@ -106,33 +100,19 @@ struct render_context {
   std::uint32_t sampler_index{0u};
   std::uint32_t clamp_sampler_index{0u};
 
-  // frustum_cull_pass's output for this frame's opaque_commands: one VkDrawIndexedIndirectCommand
-  // per command (culled_indirect_args_buffer, indexed by that command's position in
-  // packet->opaque_commands) and the compacted, visibility-culled transforms
-  // (culled_transform_address) submit_draw_commands_indirect points the vertex shader's instance
-  // fetch at instead of transform_address. Only ever valid for depth_pre_pass/opaque_pass; every
-  // other pass keeps reading transform_address as before.
+  // frustum_cull_pass output for opaque_commands: one indirect draw per command and the compacted visible transforms. Only depth_pre_pass and opaque_pass use these.
   graphics::buffer_handle culled_indirect_args_buffer{};
   graphics::buffer::address_type culled_indirect_args_address{0u};
-  // culled_indirect_args_buffer is one shared ring buffer across every frame-in-flight slot; this
-  // is this frame's slot's element (VkDrawIndexedIndirectCommand-count, not byte) offset into it,
-  // so submit_draw_commands_indirect's draw_indexed_indirect calls land in the right slot --
-  // command_buffer::draw_indexed_indirect's own offset parameter is in the same element units.
+  // This frame's slot in the shared indirect args ring buffer, in commands, not bytes.
   std::uint32_t culled_indirect_args_slot_offset{0u};
   graphics::buffer::address_type culled_transform_address{0u};
-  // Element strides between cull views inside this slot's region (see cull_view_count): view v's
-  // args start at culled_indirect_args_address + v * culled_indirect_args_view_stride commands,
-  // its transforms at culled_transform_address + v * culled_transform_view_stride transforms.
+  // Per cull view strides: view v's args start v * culled_indirect_args_view_stride commands in, its transforms v * culled_transform_view_stride transforms in.
   std::uint32_t culled_indirect_args_view_stride{0u};
   std::uint32_t culled_transform_view_stride{0u};
-  // This slot's region of the instanced culled pool: an instanced draw_command's visible instances
-  // for cull view v start at instanced_culled_address + (culled_offset + v * instance_count)
-  // transforms (see instanced_transform_address).
+  // This slot's region of the instanced culled pool; see instanced_transform_address.
   graphics::buffer::address_type instanced_culled_address{0u};
 
-  // This frame's slot in the joint-palette buffer (CPU-written every frame from
-  // packet->joint_matrices, so it's frame-in-flight multiplexed like transform_address); read by
-  // skin_pass, combined with each skin_dispatch::joint_offset.
+  // This frame's region of the joint palette, written by the CPU every frame and read by skin_pass.
   graphics::buffer::address_type joint_palette_address{0u};
 
   graphics::buffer::address_type cluster_aabb_address{0u};
@@ -140,9 +120,7 @@ struct render_context {
   graphics::buffer::address_type cluster_light_index_address{0u};
   graphics::buffer::address_type cluster_counter_address{0u};
 
-  // GPU-path particles (libsbx/render/particles/particle_pool.hpp), keyed off frame_index % 2 for
-  // the ping-pong alive_list. draw_args is only valid once particle_simulate_pass has run this
-  // frame; particle_pass checks .is_valid() rather than assuming it's ready.
+  // GPU-path particle pools, ping-ponged by frame_index % 2. draw_args is only valid after particle_simulate_pass has run.
   graphics::buffer::address_type particle_additive_particles_address{0u};
   graphics::buffer::address_type particle_additive_alive_list_address{0u};
   graphics::buffer::address_type particle_additive_emitters_address{0u};
@@ -154,8 +132,7 @@ struct render_context {
 
   bool show_grid{false};
 
-  /** @brief opaque_pass draws context.packet->opaque_commands with polygon_mode::line pipelines instead of fill when set. See scene_renderer_module::set_wireframe_enabled. */
-  bool wireframe{false};
+  bool wireframe{false}; // opaque_pass draws with line pipelines
 
   bool has_shadow_caster{false};
   std::array<graphics::image_handle, shadow_cascade_count> shadow_maps{};
@@ -163,9 +140,13 @@ struct render_context {
 }; // struct render_context
 
 /**
- * @brief Where an instanced draw_command's visible transforms for @p cascade_index's cull view
- * are (0xFFFFFFFF = the camera view): its block of the instanced culled pool -- frustum_cull_pass
- * writes there, the draw reads from there.
+ * @brief Where an instanced draw's visible transforms for a cull view live in the instanced culled pool; frustum_cull_pass writes them there.
+ *
+ * @param context The frame's render context.
+ * @param command The instanced draw command.
+ * @param cascade_index The shadow cascade, or 0xFFFFFFFF for the camera view.
+ *
+ * @return The address of the visible transforms.
  */
 auto instanced_transform_address(const render_context& context, const draw_command& command, std::uint32_t cascade_index) -> graphics::buffer::address_type;
 
@@ -177,24 +158,16 @@ struct push_constants {
   std::uint32_t material_index;
   std::uint32_t sampler_index;
   std::uint32_t clamp_sampler_index;
-  std::uint32_t cascade_index{0xFFFFFFFFu}; // shadow_pass overrides this per cascade; ignored otherwise.
+  std::uint32_t cascade_index{0xFFFFFFFFu}; // set per cascade by shadow_pass
 
-  // Shader-graph Time/Delta Time nodes only (shaders/pbr/geometry_common.slang's push_data) -- the
-  // built-in PBR/Unlit shader and the depth-only passes don't declare these trailing fields at all,
-  // which is fine: a shader's own push_data struct only needs to be a prefix of this one (see
-  // shaders/passes/depth_pre.slang, which already stops short of clamp_sampler_index/cascade_index).
+  // Only for shader graph Time/Delta Time nodes; other shaders declare a prefix of this struct.
   std::float_t time{0.0f};
   std::float_t delta_time{0.0f};
 }; // struct push_constants
 
 static_assert(sizeof(push_constants) <= 128u, "Push constants must not exceed 128 bytes.");
 
-/**
- * @brief A logical render stage using dynamic rendering (not a VkRenderPass).
- *
- * Owns its own pipelines, targets, and resource barriers; the module owns only the swapchain
- * transitions.
- */
+/** @brief A render stage using dynamic rendering. Owns its pipelines, targets and barriers; the module owns only the swapchain transitions. */
 class render_pass : public utility::noncopyable {
 
 public:
@@ -211,53 +184,44 @@ public:
 }; // class render_pass
 
 /**
- * @brief Resolves a custom-shader material's pipeline on demand -- a shader_graph's generated
- * .slang or a shader_code material's own file (see custom_shader_path), both providing the same
- * entry points. Given the pass already owns a pass-specific graphics_pipeline::create_info template
- * (formats, blend/depth state, shading_policy specialization), this just swaps in that shader and
- * cull mode. Every lookup goes through shader_cache/pipeline_cache, so the resolver itself needs no
- * cache of its own. Returns a null observer_ptr if the shader has no usable pipeline yet (codegen
- * or compilation failed) -- the caller skips that draw rather than crash or bind something wrong.
- * Every depth-writing/color-writing pass supplies one (opaque_pass, transparent_accumulate_pass,
- * depth_pre_pass, shadow_pass) -- a custom shader's vertex stage can displace the mesh, so
- * depth_pre_pass/shadow_pass need their own pipeline too (requesting depth_vertex_main/
- * depth_fragment_main instead of vertex_main/fragment_main<Policy>) for their depth/shadow output
- * to actually match the displaced color-pass geometry. Left empty (the default) only where the
- * parameter doesn't apply at all.
+ * @brief Resolves a shader graph or shader_code material's pipeline on demand, swapping its shader and cull mode into the pass's own pipeline template.
+ *
+ * Returns null when the shader has no usable pipeline (codegen or compilation failed); the caller skips the draw.
+ * Every depth or color writing pass supplies one, since a custom vertex stage can displace the mesh.
  */
 using custom_pipeline_resolver = std::function<memory::observer_ptr<graphics::graphics_pipeline>(const std::string& shader_path, bool is_double_sided)>;
 
 /**
- * @brief The shader a shader_graph/shader_code material renders with, as a shader_cache path --
- * empty for any other material, or one whose graph/file isn't assigned.
+ * @brief The shader_cache path a shader graph or shader_code material renders with.
+ *
+ * @param material The material.
+ *
+ * @return The path, or empty for other materials or when nothing is assigned.
  */
 [[nodiscard]] auto custom_shader_path(const assets::material& material) -> std::string;
 
 /**
- * @brief Shared body behind every pass's own _resolve_custom_pipeline (opaque_pass,
- * transparent_accumulate_pass, depth_pre_pass, shadow_pass): looks up (compiling on first use) the
- * shader at @p shader_path for @p entry_points, fills it and a @p pass_label-derived name into
- * @p pipeline_template, and fetches or builds the pipeline via pipeline_cache. Every other field of
- * @p pipeline_template (formats, blend/depth state, cull mode, specialization) is the caller's own
- * pass-specific state, already set before calling this.
+ * @brief Shared body of every pass's custom pipeline resolver: compiles the shader on first use, fills it into @p pipeline_template and fetches the pipeline from pipeline_cache.
  *
- * Returns a null observer_ptr, after logging a @p pass_label-tagged warning, if @p shader_path is
- * empty or its shader fails to compile -- see custom_pipeline_resolver's own doc comment for why a null
- * result (skip this draw) is the right outcome rather than letting the exception escape into the
- * frame.
+ * @param shader_path The shader to use.
+ * @param entry_points The entry points to request.
+ * @param pipeline_template The pass's pipeline state, already set up.
+ * @param pass_label Used for the pipeline name and warnings.
+ *
+ * @return The pipeline, or null (after a warning) if @p shader_path is empty or fails to compile.
  */
 [[nodiscard]] auto resolve_custom_pipeline(const std::string& shader_path, std::span<const graphics::shader_compiler::entry_point_request> entry_points, graphics::graphics_pipeline::create_info pipeline_template, std::string_view pass_label) -> memory::observer_ptr<graphics::graphics_pipeline>;
 
 auto submit_draw_commands(render_context& context, const std::vector<draw_command>& commands, const std::array<memory::observer_ptr<graphics::graphics_pipeline>, 4u>& pipelines, std::uint32_t cascade_index = 0xFFFFFFFFu, const custom_pipeline_resolver& resolve_custom_pipeline = {}) -> void;
 
 /**
- * @brief Same as submit_draw_commands, but for a command list frustum_cull_pass has already culled
- * (context.packet->opaque_commands for depth_pre_pass/opaque_pass, or shadow_caster_commands per
- * @p cascade_index for shadow_pass, which selects that cascade's cull view): reads each
- * command's already-known index_count/index_offset from context.culled_indirect_args_buffer via
- * draw_indexed_indirect instead of drawing directly, and points the vertex shader's instance fetch
- * at context.culled_transform_address (the GPU-compacted, visible-only transforms) instead of
- * context.transform_address.
+ * @brief Like submit_draw_commands, but for commands frustum_cull_pass already culled: draws indirectly from the culled args and fetches instances from the compacted transforms.
+ *
+ * @param context The frame's render context.
+ * @param commands The culled command list (opaque_commands, or shadow_caster_commands per cascade).
+ * @param pipelines The pass's pipelines, indexed by draw_command::pipeline_id (bit 0 double-sided, bit 1 unlit).
+ * @param resolve_custom_pipeline Resolver for custom-shader materials.
+ * @param cascade_index The shadow cascade whose cull view to use, or 0xFFFFFFFF for the camera.
  */
 auto submit_draw_commands_indirect(render_context& context, const std::vector<draw_command>& commands, const std::array<memory::observer_ptr<graphics::graphics_pipeline>, 4u>& pipelines, const custom_pipeline_resolver& resolve_custom_pipeline = {}, std::uint32_t cascade_index = 0xFFFFFFFFu) -> void;
 

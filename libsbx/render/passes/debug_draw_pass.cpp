@@ -30,8 +30,7 @@
 
 namespace sbx::render {
 
-// New buffers are sized at this multiple of what's actually needed, so a slot that grows once
-// tends not to grow again next frame.
+// New buffers are oversized by this factor so a growing slot doesn't grow again next frame.
 constexpr auto growth_factor = 1.5f;
 
 struct debug_draw_push {
@@ -59,9 +58,7 @@ debug_draw_pass::debug_draw_pass() {
     .topology = graphics::primitive_topology::line_list,
     .cull_mode = graphics::cull_mode::none,
     .line_width = 3.0f,
-    // Debug wireframes (e.g. a mesh collider's) are often coincident with the render mesh they
-    // correspond to and would otherwise z-fight it. A small negative bias pushes debug fragments
-    // slightly toward the camera (smaller = nearer) so ties resolve in the overlay's favor.
+    // Debug wireframes often coincide with their render mesh; a negative bias wins the depth ties.
     .depth_bias = graphics::depth_bias{.constant_factor = -2.0f, .slope_factor = -2.0f},
     .depth_test = true,
     .depth_write = false,

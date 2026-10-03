@@ -48,9 +48,7 @@ auto prune_stale_leaves(containers::dynamic_tree<scenes::node>& tree, containers
   return math::matrix4x4::translated(math::matrix4x4::identity, position) * math::matrix_cast<math::matrix4x4>(rotation);
 }
 
-// A pose's local_aabb-derived bounding volume, scaled then transformed into world space -- shared by
-// every AABB physics_module ever hands the broadphase, whether the shape came from a body_shape
-// (resolve_body_shapes/resolve_convex) or a mesh/hull's own cached local_bounds.
+// A pose's local bounds, scaled and transformed into a world AABB for the broadphase.
 [[nodiscard]] auto world_bounds_aabb(const transform& pose, const math::volume& local_bounds) -> math::volume {
   const auto scaled = math::volume{local_bounds.min() * pose.scale, local_bounds.max() * pose.scale};
   return math::volume::transformed(scaled, world_pose_matrix(pose.position, pose.rotation));
@@ -60,9 +58,7 @@ auto prune_stale_leaves(containers::dynamic_tree<scenes::node>& tree, containers
   return world_bounds_aabb(shape.pose, local_aabb(shape.shape));
 }
 
-// Whether generate_pair_contact should be treated as a trigger overlap for @p node -- checks only
-// node's own collider, not a compound rigidbody's full subtree (see contact_manifold::is_trigger's
-// doc comment for why that's an accepted v1 simplification).
+// Checks only the node's own collider, not a compound body's subtree (a v1 simplification).
 [[nodiscard]] auto node_has_trigger_collider(const scenes::node& node) -> bool {
   if (auto shape = node.try_get_component<shape_collider>()) {
     return shape->is_trigger;
@@ -85,8 +81,7 @@ auto physics_module::_sync_broadphase(scenes::scene& scene) -> void {
   auto touched_dynamic = containers::dense_map<scenes::node, bool>{};
   auto touched_static = containers::dense_map<scenes::node, bool>{};
 
-  // Shared by every route below: static bodies go into _static_tree once and are never refit;
-  // everything else (dynamic, kinematic) is refit every step in _dynamic_tree.
+  // Static bodies go into _static_tree once; dynamic and kinematic ones are refit in _dynamic_tree every step.
   const auto route = [&](const scenes::node& node, body_type type, const math::volume& world_box) {
     if (type == body_type::static_body) {
       touched_static.emplace(node, true);
@@ -105,12 +100,7 @@ auto physics_module::_sync_broadphase(scenes::scene& scene) -> void {
     }
   };
 
-  // Rigidbody-driven: every shape a rigidbody owns anywhere in its subtree (compound colliders),
-  // unioned into one broadphase leaf keyed by the rigidbody's own node. Excludes a rigidbody that
-  // carries a mesh_collider directly on itself -- that's handled by the dedicated mesh_collider pass
-  // below unchanged (mixing a mesh_collider with shape_collider compound children on the same body
-  // is out of scope for v1). A bare rigidbody with no collider anywhere in its subtree resolves to
-  // an empty shape list and is skipped, same as always.
+  // Rigidbodies: every shape in the subtree, unioned into one leaf. Bodies with their own mesh_collider are handled below; a body without colliders is skipped.
   for (auto&& [entity, body] : scene.query<rigidbody>(ecs::exclude<mesh_collider, scenes::inactive>).each()) {
     auto node = scene.node_of(entity);
 
@@ -129,10 +119,7 @@ auto physics_module::_sync_broadphase(scenes::scene& scene) -> void {
     route(node, body.type, world_box);
   }
 
-  // mesh_collider: a non-convex one can only ever be the non-simulated side of a contact (no
-  // support mapping for a concave shape), so a dynamic_body carrying one is silently excluded from
-  // the broadphase entirely -- see collider.hpp's doc comment. A convex one is an ordinary
-  // convex_shape as far as narrowphase is concerned and gets no such restriction.
+  // A non-convex mesh_collider has no support mapping, so dynamic bodies carrying one are excluded; convex ones are ordinary shapes.
   for (auto&& [entity, body, collider] : scene.query<rigidbody, mesh_collider>(ecs::exclude<scenes::inactive>).each()) {
     if (!collider.mesh.is_valid()) {
       continue;
@@ -153,10 +140,7 @@ auto physics_module::_sync_broadphase(scenes::scene& scene) -> void {
     route(node, body.type, world_bounds_aabb(pose, local_bounds));
   }
 
-  // Implicit-static: a shape_collider/mesh_collider with no rigidbody anywhere in its own ancestor
-  // chain is its own independent static body (matching Unity: a Collider alone, no Rigidbody, is a
-  // static one) -- unless it's really a compound child of some ancestor's rigidbody, already
-  // collected by the rigidbody-driven pass above, in which case it's skipped here.
+  // A collider without a rigidbody ancestor is its own static body, like Unity; compound children of an ancestor's body were collected above.
   for (auto&& [entity, collider] : scene.query<shape_collider>(ecs::exclude<rigidbody, scenes::inactive>).each()) {
     auto node = scene.node_of(entity);
 
@@ -189,11 +173,7 @@ auto physics_module::_sync_broadphase(scenes::scene& scene) -> void {
     route(node, body_type::static_body, world_bounds_aabb(pose, local_bounds));
   }
 
-  // heightfield_collider: kept in its own small list, not routed through _static_tree/route() --
-  // raycast() is the only consumer (see the component's own v1-scope doc comment), and a heightfield's
-  // necessarily-huge AABB would otherwise match nearly every dynamic body's fat AABB in
-  // _generate_candidate_pairs, spending narrowphase time on pairs that always resolve to zero shapes
-  // on the heightfield side. Rebuilt fresh every sync -- typically 0 or 1 entries, so this is cheap.
+  // Heightfields get their own list: only raycast() uses them, and their huge AABB would match nearly every body as a candidate pair.
   _heightfield_nodes.clear();
 
   for (auto&& [entity, collider] : scene.query<heightfield_collider>(ecs::exclude<scenes::inactive>).each()) {
@@ -209,10 +189,7 @@ auto physics_module::_sync_broadphase(scenes::scene& scene) -> void {
 auto physics_module::_generate_candidate_pairs() -> void {
   _candidate_pairs.clear();
 
-  // The Layer Collision Matrix: a pair whose layers aren't marked as colliding (core::project,
-  // configured via the editor's "Edit Layers..." popup) never becomes a candidate, so it never
-  // reaches narrowphase/the solver -- the cheapest possible place to gate it, since every
-  // simulated pair already funnels through here.
+  // The layer collision matrix: non-colliding pairs never become candidates.
   auto& project = core::engine::project();
 
   const auto layers_collide = [&project](const scenes::node& a, const scenes::node& b) {
@@ -247,8 +224,7 @@ auto physics_module::_generate_candidate_pairs() -> void {
 }
 
 auto physics_module::_warm_start_manifolds() -> void {
-  // Points closer together than this, between this step's fresh geometry and the previous step's
-  // cached manifold for the same pair, are considered "the same contact" for impulse carry-over.
+  // Points this close to last step's point of the same pair count as the same contact for impulse carry-over.
   constexpr auto match_distance_squared = 0.05f * 0.05f;
 
   for (auto& manifold : _manifolds) {
@@ -274,7 +250,7 @@ auto physics_module::_warm_start_manifolds() -> void {
       }
 
       if (!best_index) {
-        continue; // no match within range -- this point starts cold, same as before
+        continue; // no match in range: starts cold
       }
 
       const auto& matched = cached_points[*best_index];
@@ -293,7 +269,7 @@ auto physics_module::_dispatch_contact_events() -> void {
     seen_this_step.insert(key);
 
     if (_manifold_cache.contains(key)) {
-      continue; // already touching as of last step -- not a "began" transition
+      continue; // already touching last step
     }
 
     const auto event = collision_event{
@@ -312,8 +288,7 @@ auto physics_module::_dispatch_contact_events() -> void {
       continue; // still touching this step
     }
 
-    // Same staleness guard as _submit_debug_draw's contacts layer -- a node either side of a
-    // cached pair could have been destroyed (by a script, e.g.) since last step.
+    // Either node may have been destroyed since last step.
     if (!cached_manifold.node_a.is_valid() || !cached_manifold.node_b.is_valid()) {
       continue;
     }
@@ -382,35 +357,19 @@ auto physics_module::request_agent_move(scenes::node agent_node, const math::vec
 auto physics_module::_narrowphase(scenes::scene& scene) -> void {
   auto& assets_module = core::engine::get_module<assets::assets_module>();
 
-  // A body permanently "at rest" for this pair's purposes: static bodies (never sleep, never move,
-  // including a fallback body standing in for an implicit-static collider node -- see
-  // effective_rigidbody) and sleeping dynamic bodies. Skip the pair entirely when both sides are --
-  // there's nothing that could ever wake either one from this contact alone, so it's not just an
-  // optimization: it's what guarantees that once we do reach the wake checks below, the *other*
-  // body is an awake mover.
+  // Static and sleeping bodies; pairs where both are at rest are skipped, so the wake checks below always see an awake mover.
   const auto is_at_rest = [](const rigidbody& body) {
     return body.type == body_type::static_body || (body.type == body_type::dynamic_body && body.is_sleeping);
   };
 
-  // "Genuinely moving", by the same thresholds update_sleep_timers uses to decide something is slow
-  // enough to sleep. This -- not merely "not marked sleeping yet" -- is what's allowed to wake a
-  // sleeping neighbor: two bodies resting against each other (e.g. a stack of boxes) almost never
-  // cross their own individual sleep_timer threshold on the exact same step, so if "any awake
-  // neighbor" were enough to wake a sleeper, whichever one falls asleep first would immediately get
-  // rewoken by the other one still finishing its own countdown -- and then they'd swap roles and do
-  // it again, forever. Gating on real motion instead means a neighbor that's merely idling through
-  // the last fraction of a second before its own timer completes never wakes anything; effective_
-  // inverse_mass/_inertia (solver.cpp) treating a sleeping body as immovable is what makes this safe
-  // -- it still solves correctly as an anchor for whatever rests on it either way.
+  // Only real motion (the sleep thresholds) wakes a sleeper: otherwise two resting bodies whose timers expire on different steps would keep waking each other forever.
   const auto is_moving = [this](const rigidbody& body) {
     return body.linear_velocity.length_squared() >= _linear_sleep_threshold * _linear_sleep_threshold
       || body.angular_velocity.length_squared() >= _angular_sleep_threshold * _angular_sleep_threshold;
   };
 
   for (auto [node_a, node_b] : _candidate_pairs) {
-    // Fresh per pair, not shared/static: harmless even so (every write to a fallback is a
-    // mathematical no-op, see rigidbody.hpp's effective_rigidbody doc comment), but this avoids any
-    // aliasing question between two different implicit-static pairs entirely.
+    // Fresh per pair to avoid any aliasing between implicit-static pairs.
     auto fallback_a = rigidbody{body_type::static_body};
     auto fallback_b = rigidbody{body_type::static_body};
 
@@ -463,8 +422,7 @@ auto physics_module::fixed_update() -> void {
 
   const auto dt = core::engine::fixed_delta_time().value();
 
-  // Every node's world pose is composed at most once this step, no matter how many times
-  // _sync_broadphase/_narrowphase ask for it -- see pose_cache's doc comment in narrowphase.hpp.
+  // Each node's world pose is composed at most once this step.
   _pose_cache.clear();
 
   _sync_broadphase(scene);
@@ -478,10 +436,7 @@ auto physics_module::fixed_update() -> void {
 
   integrate_forces(scene, project.gravity(), dt);
 
-  // Triggers are pushed to the back (stable, so solid-vs-solid relative order is otherwise
-  // untouched) and excluded from both solver calls below via the span -- they still sit in
-  // _manifolds for _dispatch_contact_events/_update_manifold_cache right after, just never get an
-  // impulse response. See contact_manifold::is_trigger's doc comment.
+  // Triggers are moved to the back (stable) and excluded from the solver; they stay in _manifolds for events and caching.
   const auto trigger_begin = std::ranges::stable_partition(_manifolds, [](const auto& manifold) { return !manifold.is_trigger; }).begin();
   const auto solid_count = static_cast<std::size_t>(trigger_begin - _manifolds.begin());
   const auto solid_manifolds = std::span<contact_manifold>{_manifolds.data(), solid_count};
@@ -513,8 +468,7 @@ auto physics_module::query_sphere_contacts(scenes::scene& scene, const math::vec
   const auto extent = math::vector3{radius, radius, radius};
   const auto query_aabb = math::volume{center - extent, center + extent};
 
-  // Local to this call, not _pose_cache -- a query can run off the fixed_update() cadence (e.g. once
-  // per particle per tick), so it must never read a pose left over from a different moment in time.
+  // A local cache: queries run off the fixed cadence and must not read stale poses.
   auto cache = pose_cache{};
 
   const auto visit = [&](const scenes::node& candidate) {
@@ -540,9 +494,7 @@ auto physics_module::query_sphere_contacts(scenes::scene& scene, const math::vec
       return;
     }
 
-    // epa_penetration's normal points from the sphere (a, the first shape passed above) into the
-    // candidate (b) -- flip it so callers get "away from the surface", the direction they actually
-    // want to push a particle or reflect its velocity along.
+    // EPA's normal points from the sphere into the candidate; flip it to point away from the surface.
     out_hits.push_back(sphere_query_hit{candidate, epa.point_on_b, -epa.normal, epa.penetration_depth});
   };
 
@@ -561,8 +513,7 @@ auto physics_module::raycast(scenes::scene& scene, const math::ray& ray, std::fl
     }
   };
 
-  // Not routed through _static_tree -- see the doc comment on _heightfield_nodes' population in
-  // _sync_broadphase for why. Typically 0 or 1 entries, so a linear scan costs nothing here.
+  // Heightfields aren't in _static_tree; there are usually 0 or 1.
   for (const auto& node : _heightfield_nodes) {
     if (!mask.test(node.get_component<scenes::layer>().index)) {
       continue;
@@ -575,8 +526,7 @@ auto physics_module::raycast(scenes::scene& scene, const math::ray& ray, std::fl
     }
   }
 
-  // Local to this call, not _pose_cache -- a raycast can run off the fixed_update() cadence, so it
-  // must never read a pose left over from a different moment in time.
+  // A local cache: raycasts run off the fixed cadence and must not read stale poses.
   auto cache = pose_cache{};
 
   const auto visit = [&](const scenes::node& candidate, [[maybe_unused]] std::float_t entry_t) {
@@ -587,7 +537,7 @@ auto physics_module::raycast(scenes::scene& scene, const math::ray& ray, std::fl
     const auto resolved = resolve_convex(scene, candidate, _hull_cache, assets_module, cache);
 
     if (!resolved) {
-      return; // no collider, or a non-convex mesh_collider -- see this method's own doc comment
+      return; // no collider, or a non-convex mesh_collider
     }
 
     if (const auto hit = raycast_convex_shape(resolved->shape, resolved->pose, ray, max_distance)) {
@@ -620,13 +570,10 @@ auto physics_module::_submit_debug_draw(scenes::scene& scene) -> void {
   if (_debug_draw_flags.colliders) {
     auto& assets_module = core::engine::get_module<assets::assets_module>();
 
-    // Local to this call, not _pose_cache -- debug draw runs on the render frame cadence, not
-    // fixed_update()'s, so it must never read a pose left over from a different moment in time.
+    // A local cache: debug draw runs at render cadence.
     auto cache = pose_cache{};
 
-    // Rigidbody-driven: every shape owned anywhere in a rigidbody's subtree (compound colliders),
-    // same split _sync_broadphase uses -- a rigidbody with a mesh_collider on its own node is drawn
-    // by the mesh_collider loop below instead.
+    // Rigidbodies: every shape in the subtree; bodies with their own mesh_collider are drawn below.
     for (auto&& [entity, body] : scene.query<rigidbody>(ecs::exclude<mesh_collider>).each()) {
       auto node = scene.node_of(entity);
       const auto color = debug_color_for(body.type, body.is_sleeping);
@@ -636,7 +583,6 @@ auto physics_module::_submit_debug_draw(scenes::scene& scene) -> void {
       }
     }
 
-    // Shared by the rigidbody-owned and implicit-static mesh_collider loops below.
     const auto draw_mesh_collider = [&](const scenes::node& node, const mesh_collider& collider, const math::color& color) {
       if (!collider.mesh.is_valid()) {
         return;
@@ -673,8 +619,7 @@ auto physics_module::_submit_debug_draw(scenes::scene& scene) -> void {
       draw_mesh_collider(scene.node_of(entity), collider, debug_color_for(body.type, body.is_sleeping));
     }
 
-    // Implicit-static: same "skip if a compound child of some ancestor's rigidbody" rule
-    // _sync_broadphase uses, so debug draw shows exactly what's actually simulated.
+    // Same compound-child rule as _sync_broadphase, so debug draw matches the simulation.
     const auto implicit_static_color = debug_color_for(body_type::static_body, false);
 
     for (auto&& [entity, collider] : scene.query<shape_collider>(ecs::exclude<rigidbody>).each()) {
@@ -704,14 +649,7 @@ auto physics_module::_submit_debug_draw(scenes::scene& scene) -> void {
     const auto dynamic_color = math::color{1.0f, 1.0f, 0.0f, 1.0f};
     const auto static_color = math::color{0.6f, 0.6f, 0.0f, 1.0f};
 
-    // _dynamic_tree/_static_tree are only ever touched inside fixed_update(), which only ever runs
-    // while simulating (Play) -- Stop reloads the scene in place (see physics_module.hpp's _reset()
-    // doc comment), destroying and recreating every entity, so every leaf still sitting here from
-    // before that is now keyed by a stale node. Rather than needing to know Stop happened at all
-    // (physics_module deliberately has no notion of the editor's play/pause/stop states -- see
-    // scenes_module's own doc comment), just skip drawing anything whose node isn't valid any more:
-    // exactly nothing while stopped (every leaf is stale by then), everything while playing or
-    // paused (the registry is untouched either way, so every leaf stays genuinely valid).
+    // The trees only change during Play, and Stop recreates every entity; skipping invalid nodes draws nothing after Stop and everything while playing or paused.
     _dynamic_tree.for_each_leaf([&](broadphase_tree_type::id, const scenes::node& node, const math::volume& fat_aabb) {
       if (node.is_valid()) {
         debug_draw.add_wire_aabb(fat_aabb, dynamic_color);
@@ -730,8 +668,7 @@ auto physics_module::_submit_debug_draw(scenes::scene& scene) -> void {
     constexpr auto normal_length = 0.3f;
     constexpr auto cross_size = 0.1f;
 
-    // Same staleness guard as the broadphase layer above -- _manifolds is likewise only ever
-    // refreshed inside fixed_update().
+    // Same staleness guard: _manifolds only changes during fixed_update().
     for (const auto& manifold : _manifolds) {
       if (!manifold.node_a.is_valid() || !manifold.node_b.is_valid()) {
         continue;

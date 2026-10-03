@@ -7,20 +7,18 @@
 
 namespace editor {
 
-/**
- * @brief Base for a top-level editor window.
- *
- * Each concrete panel is instantiated once by editor_module and owns its per-panel state
- * (filters, edit caches, ...) as ordinary members. Panels never reference each other directly —
- * the only shared state is editor_state, for cross-panel concerns like selection.
- */
+/** @brief Base for a top-level editor window; panels own their state and share only editor_state. */
 class editor_panel {
 
 public:
 
   virtual ~editor_panel() = default;
 
-  /** @brief Draws this panel's ImGui::Begin/End window for the current frame. */
+  /**
+   * @brief Draws the panel's window for this frame.
+   *
+   * @param state The editor state.
+   */
   virtual auto draw(editor_state& state) -> void = 0;
 
 }; // class editor_panel

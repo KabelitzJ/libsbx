@@ -13,13 +13,7 @@
 
 namespace sbx::assets {
 
-/**
- * @brief HDR image-based-lighting source: an equirect radiance map plus irradiance/prefiltered
- * cubemaps baked via compute at load time (see ibl_baker::bake_environment). Already fully
- * resident by the time load_environment_map returns — no async bake step to wait on, so its
- * loadable::generation() is bumped once, immediately, right before the handle is returned (see
- * asset_residency::load_environment_map).
- */
+/** @brief HDR image-based lighting: an equirect radiance map plus irradiance and prefiltered cubemaps, fully baked by the time load_environment_map returns. */
 class environment_map final : public loadable {
 
   friend class asset_residency;

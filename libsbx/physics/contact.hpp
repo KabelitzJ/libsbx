@@ -4,8 +4,7 @@
 /**
  * @file libsbx/physics/contact.hpp
  *
- * @brief The output of narrowphase and the input to the solver: one or more contact points between
- * a pair of bodies, sharing a single collision normal and combined material properties.
+ * @brief Narrowphase output and solver input: contact points between a body pair sharing one normal and combined material.
  *
  * @ingroup libsbx-physics
  */
@@ -27,11 +26,7 @@ namespace sbx::physics {
 
 inline constexpr auto max_manifold_points = std::size_t{4};
 
-/**
- * @brief One contact point. The impulse accumulator fields are seeded from the previous step's
- * matching point (see physics_module::_warm_start_manifolds) and read/written by the solver each
- * step; a point with no previous-step match starts cold at zero.
- */
+/** @brief One contact point; its impulse accumulators are warm-started from the previous step's matching point, or start at zero. */
 struct contact_point {
   math::vector3 point{math::vector3::zero};        // world space
   std::float_t penetration_depth{0.0f};
@@ -43,10 +38,7 @@ struct contact_point {
   std::uint32_t feature_id{0u};
 }; // struct contact_point
 
-/**
- * @brief A narrowphase result for one colliding body pair: a shared world-space normal (pointing
- * from A into B) and up to @reference max_manifold_points contact points.
- */
+/** @brief One colliding pair's narrowphase result: a world normal from A into B and up to @ref max_manifold_points points. */
 struct contact_manifold {
   scenes::node node_a;
   scenes::node node_b;
@@ -55,22 +47,11 @@ struct contact_manifold {
   std::float_t combined_restitution{0.0f};
   containers::static_vector<contact_point, max_manifold_points> points{};
 
-  // True when either side's collider is a trigger (shape_collider::is_trigger/mesh_collider::
-  // is_trigger) -- set by physics_module::_narrowphase right after generate_pair_contact returns,
-  // not by narrowphase itself (checking only each node's own top-level collider, not a compound
-  // rigidbody's full subtree -- a known v1 simplification). physics_module::fixed_update excludes
-  // every manifold with this set from the velocity solver/positional correction entirely, so a
-  // trigger pair is detected (and still fires on_contact_began/on_contact_ended) but never
-  // physically pushes anything apart.
+  // Set when either node's own collider is a trigger (compound subtrees aren't checked, a v1 simplification). Triggers fire contact events but are excluded from the solver.
   bool is_trigger{false};
 }; // struct contact_manifold
 
-/**
- * @brief Payload for physics_module::on_contact_began/on_contact_ended -- one begin/end
- * transition of a colliding (or overlapping, if is_trigger) pair. normal/point are only meaningful
- * on a "began" event (copied from the manifold's first point); an "ended" event's pair is no
- * longer touching, so there's no contact geometry left to report.
- */
+/** @brief Payload of on_contact_began/on_contact_ended. normal and point are only meaningful for began events, taken from the manifold's first point. */
 struct collision_event {
   scenes::node node_a;
   scenes::node node_b;
@@ -79,12 +60,7 @@ struct collision_event {
   bool is_trigger{false};
 }; // struct collision_event
 
-/**
- * @brief Identifies a colliding pair for the warm-start manifold cache, independent of which side
- * narrowphase happened to call "A" and which "B" this step. Only ever construct through
- * @reference make_manifold_key -- its equality/hash are order-sensitive, and that's the function that
- * puts the two nodes into a canonical order.
- */
+/** @brief Identifies a pair for the warm-start cache regardless of A/B order; only construct it with @ref make_manifold_key, which canonicalizes the order. */
 struct manifold_key {
   scenes::node node_a;
   scenes::node node_b;

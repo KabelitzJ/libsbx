@@ -22,7 +22,15 @@
 
 namespace editor {
 
-/** @brief node's value override on component_key (a prefab instance member diverging from its prefab), if any. */
+/**
+ * @brief The node's value override on a component, if its prefab instance diverges there.
+ *
+ * @param target The scene.
+ * @param node The node.
+ * @param component_key The component's serialized type key.
+ *
+ * @return The override, if any.
+ */
 inline auto find_value_override(sbx::scenes::scene& target, const sbx::scenes::node& node, std::string_view component_key) -> std::optional<sbx::scenes::prefab_override> {
   if (component_key.empty()) {
     return std::nullopt;
@@ -37,7 +45,13 @@ inline auto find_value_override(sbx::scenes::scene& target, const sbx::scenes::n
   return std::nullopt;
 }
 
-/** @brief "fov_degrees" -> "Fov Degrees" -- serialized field keys as menu labels. */
+/**
+ * @brief Turns a serialized key into a menu label, e.g. "fov_degrees" -> "Fov Degrees".
+ *
+ * @param field The field key.
+ *
+ * @return The label.
+ */
 inline auto pretty_field_name(std::string_view field) -> std::string {
   auto result = std::string{field};
   auto at_word_start = true;
@@ -55,16 +69,22 @@ inline auto pretty_field_name(std::string_view field) -> std::string {
   return result;
 }
 
-/** @brief Whether override (from find_value_override) covers field -- an override without a field list covers the whole component. */
+/**
+ * @brief Whether an override covers @p field; one without a field list covers the whole component.
+ *
+ * @param override_entry The override.
+ * @param field The field key.
+ *
+ * @return True if covered.
+ */
 inline auto overrides_field(const std::optional<sbx::scenes::prefab_override>& override_entry, std::string_view field) -> bool {
   return override_entry && (override_entry->fields.empty() || std::ranges::find(override_entry->fields, field) != override_entry->fields.end());
 }
 
 /**
- * @brief Marks the last drawn item (a component header) as overridden, with a tooltip naming the overridden fields, and -- inside
- * an already-open context menu -- appends "Revert to Prefab" (per field, or all) and "Apply to Prefab". No-op without an override.
- * Prefab apply/revert aren't scene commands (they also rewrite the prefab asset), so they aren't undoable -- same as the
- * Hierarchy's own Apply/Revert menu.
+ * @brief Marks the last drawn component header as overridden, with a tooltip naming the fields. Not undoable, since apply/revert also rewrite the prefab asset.
+ *
+ * @param override_entry The override, if any; no-op without one.
  */
 inline auto draw_override_header_marker(const std::optional<sbx::scenes::prefab_override>& override_entry) -> void {
   if (!override_entry) {

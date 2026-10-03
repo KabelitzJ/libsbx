@@ -21,7 +21,7 @@
 
 namespace editor {
 
-/** @brief Creates one new node (no children), optionally parented under parent_id. */
+/** @brief Creates one node, optionally under parent_id. */
 class create_node_command final : public command {
 
 public:
@@ -36,7 +36,11 @@ public:
     return "Create Node";
   }
 
-  /** @brief The created node's id — valid to read right after command_stack::push() returns. */
+  /**
+   * @brief The created node's id, valid once command_stack::push() returns.
+   *
+   * @return The id.
+   */
   [[nodiscard]] auto id() const noexcept -> sbx::math::uuid {
     return _id;
   }
@@ -49,7 +53,7 @@ private:
 
 }; // class create_node_command
 
-/** @brief Creates one new node named name, at local position, with a mesh_renderer pointed at mesh_id — the Hierarchy panel's "Create > 3D Object" menu (built-in primitives) and mesh assets dropped into the viewport. */
+/** @brief Creates a node with a mesh_renderer for mesh_id at a local position, for Create > 3D Object and mesh drops into the viewport. */
 class create_mesh_node_command final : public command {
 
 public:
@@ -64,7 +68,11 @@ public:
     return "Create " + _name;
   }
 
-  /** @brief The created node's id — valid to read right after command_stack::push() returns. */
+  /**
+   * @brief The created node's id, valid once command_stack::push() returns.
+   *
+   * @return The id.
+   */
   [[nodiscard]] auto id() const noexcept -> sbx::math::uuid {
     return _id;
   }
@@ -79,7 +87,7 @@ private:
 
 }; // class create_mesh_node_command
 
-/** @brief Instantiates prefab as a new subtree, optionally parented under parent_id and moved to local position — the Hierarchy panel's and the viewport's prefab drag-drop. */
+/** @brief Instantiates a prefab as a new subtree, optionally under parent_id and at a local position. */
 class instantiate_prefab_command final : public command {
 
 public:
@@ -94,7 +102,11 @@ public:
     return "Instantiate " + (_prefab.is_valid() ? _prefab->name() : std::string{"Prefab"});
   }
 
-  /** @brief The created instance's root id — valid to read right after command_stack::push() returns. */
+  /**
+   * @brief The instance root's id, valid once command_stack::push() returns.
+   *
+   * @return The id.
+   */
   [[nodiscard]] auto id() const noexcept -> sbx::math::uuid {
     return _id;
   }
@@ -108,11 +120,7 @@ private:
 
 }; // class instantiate_prefab_command
 
-/**
- * @brief Recreates a serialize_subtree() snapshot at index among parent_id's children (nullopt = top-level). The snapshot's ids
- * are used as-is, so redo recreates the exact same nodes -- callers pass it through scene_serializer::with_fresh_ids first.
- * Backs Duplicate and Paste.
- */
+/** @brief Recreates a serialize_subtree() snapshot at an index among parent_id's children, reusing its ids so redo recreates the same nodes. Callers pass it through with_fresh_ids first. Backs Duplicate and Paste. */
 class insert_subtree_command final : public command {
 
 public:
@@ -140,11 +148,7 @@ private:
 
 }; // class insert_subtree_command
 
-/**
- * @brief Deletes target and its whole subtree. Snapshots everything undo needs to restore it —
- * components, structure, ids, sibling position, and any active-camera/primary-light binding — at
- * construction time, before anything is actually deleted.
- */
+/** @brief Deletes a node and its subtree, snapshotting everything undo needs (components, structure, ids, position and camera/light bindings) at construction. */
 class delete_node_command final : public command {
 
 public:
@@ -162,7 +166,7 @@ public:
 private:
 
   sbx::math::uuid _id;
-  std::optional<sbx::math::uuid> _parent_id{}; // nullopt = was top-level
+  std::optional<sbx::math::uuid> _parent_id{}; // nullopt = top-level
   std::size_t _index{0u};
   YAML::Node _snapshot;
   std::optional<sbx::math::uuid> _was_active_camera{};
@@ -171,13 +175,9 @@ private:
 }; // class delete_node_command
 
 /**
- * @brief Moves target to a new parent (nullopt = top-level) at new_index among that parent's
- * children, restoring its original parent/index on undo. Backs the Hierarchy panel's drag/drop
- * reparent and reorder.
+ * @brief Moves a node under a new parent (nullopt = top-level) at new_index, restoring the old position on undo.
  *
- * new_index is relative to the destination list *before* target is removed from wherever it
- * currently sits — execute() corrects for the shift itself when target is moving within the same
- * parent, so callers just pass the raw drop-target position.
+ * new_index is the raw drop position before the node is removed; execute() corrects for moves within the same parent.
  */
 class reparent_node_command final : public command {
 
@@ -196,14 +196,14 @@ public:
 private:
 
   sbx::math::uuid _id;
-  std::optional<sbx::math::uuid> _old_parent_id{}; // nullopt = was top-level
+  std::optional<sbx::math::uuid> _old_parent_id{}; // nullopt = top-level
   std::size_t _old_index{0u};
   std::optional<sbx::math::uuid> _new_parent_id;
   std::size_t _new_index;
 
 }; // class reparent_node_command
 
-/** @brief Sets the scene's active (play) camera to target, restoring whatever it was before on undo. */
+/** @brief Sets the scene's active camera, restoring the previous one on undo. */
 class set_active_camera_command final : public command {
 
 public:
@@ -221,7 +221,7 @@ public:
 private:
 
   sbx::math::uuid _id;
-  std::optional<sbx::math::uuid> _previous_id{}; // nullopt = there was no active camera before
+  std::optional<sbx::math::uuid> _previous_id{}; // nullopt = no active camera before
 
 }; // class set_active_camera_command
 

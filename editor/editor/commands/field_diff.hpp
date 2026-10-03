@@ -18,7 +18,7 @@ namespace editor {
 
 namespace detail {
 
-// Declaration only -- deduces a basic_vector base's size in unevaluated contexts.
+// Declaration only: deduces a basic_vector base's size in unevaluated contexts.
 template<std::size_t Size, typename Type>
 auto math_vector_size(const sbx::math::basic_vector<Size, Type>&) -> std::integral_constant<std::size_t, Size>;
 
@@ -31,9 +31,7 @@ inline constexpr auto is_variant_v = false;
 template<typename... Types>
 inline constexpr auto is_variant_v<std::variant<Types...>> = true;
 
-// std::equality_comparable alone isn't enough: libstdc++'s == for vector/pair/optional/variant is unconstrained on the element
-// type, so the concept says yes and the comparison only fails once instantiated (animator's parameter list holds an
-// animation_trigger, which has no ==). Look inside those wrappers before trusting ==.
+// std::equality_comparable isn't enough: libstdc++'s == for vector/pair/optional/variant is unconstrained and only fails on instantiation (e.g. animation_trigger has no ==), so look inside those.
 template<typename Type>
 consteval auto is_deeply_equality_comparable() -> bool;
 
@@ -65,8 +63,7 @@ consteval auto is_deeply_equality_comparable() -> bool {
   } else if constexpr (is_variant_v<Type>) {
     return all_deeply_equality_comparable(static_cast<Type*>(nullptr));
   } else if constexpr (std::ranges::range<Type>) {
-    // Nested, not &&: range_value_t can't even be named for a non-range. std::filesystem::path is a range of paths, which
-    // would recurse forever.
+    // Nested rather than &&, since range_value_t can't be named for a non-range; std::filesystem::path is a range of paths and would recurse forever.
     if constexpr (std::same_as<std::ranges::range_value_t<Type>, Type>) {
       return true;
     } else {
@@ -80,13 +77,10 @@ consteval auto is_deeply_equality_comparable() -> bool {
 } // namespace detail
 
 /**
- * @brief Copies into target only what changed between before and after -- how one edit on the Inspector's primary node reaches
- * every other selected node without overwriting the values that edit didn't touch.
+ * @brief Copies into target only what changed between before and after, so one Inspector edit reaches every selected node without overwriting untouched values.
  *
- * Recurses through plain structs (members and bases, via reflection), arrays, the held alternative of a variant, and into math
- * vectors per component, so dragging just Y of a position moves every node's Y and leaves their X/Z alone. Anything else (asset
- * handles, containers, strings, quaternions) is compared whole with == and copied whole if it changed. A type that can't be compared is skipped: there's no
- * telling whether it changed, and copying it blindly would overwrite the other nodes' own values.
+ * Recurses through structs (via reflection), arrays, a variant's held alternative and vector components, so dragging Y moves every node's Y only.
+ * Anything else is compared and copied whole; types that can't be compared are skipped, since copying them blindly would clobber the other nodes' values.
  */
 template<typename Type>
 auto apply_changed_fields(const Type& before, const Type& after, Type& target) -> void {
@@ -103,8 +97,7 @@ auto apply_changed_fields(const Type& before, const Type& after, Type& target) -
       apply_changed_fields(before[index], after[index], target[index]);
     }
   } else if constexpr (detail::is_variant_v<Type>) {
-    // Switching alternatives (e.g. a collider's Box -> Sphere) replaces the whole value; otherwise recurse into the held
-    // alternative -- unless target holds a different one, which this edit then doesn't apply to.
+    // Switching alternatives replaces the whole value; otherwise recurse, unless target holds a different alternative.
     if (before.index() != after.index()) {
       target = after;
     } else if (target.index() == after.index()) {

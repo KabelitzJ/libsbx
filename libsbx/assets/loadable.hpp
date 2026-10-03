@@ -10,15 +10,9 @@
 namespace sbx::assets {
 
 /**
- * @brief Every asset type's content-readiness state, reachable straight off an asset_handle<T> the
- * same way is_valid() already is (see asset_handle.hpp's is_loaded()/generation()).
+ * @brief Content readiness shared by every asset type, on the asset object so all handle copies see the same state.
  *
- * `generation()` starts at 0 (never loaded) and is bumped once each time real content replaces a
- * placeholder -- or, for material/particle_effect/animation_graph, each time an update_* call
- * applies a live edit, since that's a real content change too. `is_loaded()` is just `generation()
- * > 0`. Lives on the asset object itself (the thing an asset_handle<T> actually points at), not on
- * the handle -- multiple handle copies share one object and need to see the same state, which a
- * counter on the handle wrapper itself couldn't give them.
+ * `generation()` starts at 0 and is bumped whenever real content replaces a placeholder or an update_* call applies an edit; `is_loaded()` is `generation() > 0`.
  */
 class loadable {
 

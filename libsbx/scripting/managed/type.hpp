@@ -19,9 +19,7 @@ namespace sbx::scripting::managed {
 
 namespace detail {
 
-// Lets _method_handles (below) be looked up by std::string_view without constructing a temporary
-// std::string on every lookup -- the whole point of caching a method handle is to keep the hot
-// (cache-hit) path allocation-free.
+// Heterogeneous lookup, so the method-handle cache hit path doesn't allocate a std::string.
 struct transparent_string_hash {
 
   using is_transparent = void;
@@ -50,7 +48,11 @@ public:
 
   auto get_full_name() const -> std::string;
 
-  /** @brief Every enumerator's name and value, in declaration order -- empty if this isn't an enum type. */
+  /**
+   * @brief Every enumerator's name and value, in declaration order.
+   *
+   * @return The entries, or empty if this isn't an enum type.
+   */
   auto get_enum_entries() const -> std::vector<std::pair<std::string, std::int64_t>>;
   
   auto get_base_type() -> type&;
@@ -95,12 +97,7 @@ private:
   type* _base_type = nullptr;
   type* _element_type = nullptr;
 
-  // object::invoke()'s method-handle cache -- see its doc comment. Keyed by method name only, not
-  // full signature: fine for this engine's own dispatch surface (each dispatched name -- OnUpdate,
-  // OnClick, DispatchCollisionEnter, ... -- is always called with one fixed signature), but a user
-  // script overloading a method under the same name it also invokes via object::invoke() with
-  // different signatures would collide on this cache. Not a concern for anything the engine itself
-  // dispatches; flagged here in case a future caller needs the fuller (name, signature) key instead.
+  // object::invoke()'s method-handle cache, keyed by name only: overloads invoked under one name would collide, which the engine's fixed dispatch names never do.
   mutable std::unordered_map<std::string, std::int32_t, detail::transparent_string_hash, std::equal_to<>> _method_handles{};
 
 }; // class type

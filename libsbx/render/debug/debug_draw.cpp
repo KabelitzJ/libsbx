@@ -126,10 +126,7 @@ auto debug_draw::add_wire_capsule(const math::matrix4x4& matrix, std::float_t ra
     add_line(top + offset, bottom + offset, color);
   }
 
-  // Hemisphere caps -- two half-circle silhouettes per cap, in the axis_x/axis_y and axis_z/axis_y
-  // planes, each running from the ring's equator point, through the pole, to the diametrically
-  // opposite equator point (matches the ring + verticals + cap-arcs gizmo most physics
-  // debug-drawers use for capsules).
+  // Hemisphere caps: two half-circles per cap through the pole, in the x/y and z/y planes.
   const auto cap_segments = std::max(segments / 2u, 4u);
 
   _add_arc(top, axis_x, axis_y, radius, 0.0f, pi, color, cap_segments);

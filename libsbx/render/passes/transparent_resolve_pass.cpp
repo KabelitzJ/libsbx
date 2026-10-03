@@ -46,8 +46,7 @@ transparent_resolve_pass::transparent_resolve_pass() {
 
   const auto& shader = shader_cache.get({"engine://shaders/pbr/transparent_resolve.slang", entry_points});
 
-  // Draws straight into the single-sample HDR color target — no `.samples` override here (default
-  // count_1), unlike transparent_accumulate_pass which targets the MSAA pair.
+  // Single-sample HDR target, unlike the accumulation pass's MSAA pair.
   _pipeline = pipeline_cache.get(graphics::graphics_pipeline::create_info{
     .shader = shader,
     .color_formats = {render_pass::hdr_format},
@@ -68,14 +67,12 @@ transparent_resolve_pass::transparent_resolve_pass() {
 }
 
 auto transparent_resolve_pass::declare(graphics_pass_builder& builder, const graph_resources& resources) -> void {
-  // accumulator/revealage: transparent_accumulate_pass's writes -> this pass's sampled reads.
   builder.reads_image(resources.accumulator, graphics::pipeline_stage::fragment_shader, graphics::access::shader_sampled_read, graphics::image_layout::shader_read_only_optimal);
   builder.reads_image(resources.revealage, graphics::pipeline_stage::fragment_shader, graphics::access::shader_sampled_read, graphics::image_layout::shader_read_only_optimal);
 
   auto group = render_attachment_group{.extent = resources.extent};
 
-  // Continuation write, not a fresh transition — color is already color_attachment_optimal
-  // (grid_pass wrote it this frame); this pass both blend-reads and writes it.
+  // A continuation write: grid_pass already wrote color this frame, and this pass blends onto it.
   group.colors.push_back(color_attachment_slot{
     .image = resources.color,
     .access_mask = graphics::access::color_attachment_write | graphics::access::color_attachment_read,

@@ -19,9 +19,7 @@
 
 namespace sbx::scripting {
 
-// Compiled format of script_compiler's own manifest schema — bumped whenever that schema (or
-// what a recompile should be sensitive to) changes, forcing a one-time recompile on upgrade.
-// Mirrors asset_cooker's per-cooker cooker_version, see this class's doc comment.
+// Bump whenever the manifest schema changes, forcing a one-time recompile.
 inline constexpr auto compiler_version = std::uint32_t{1u};
 
 auto script_compiler::_write_ide_project(const std::filesystem::path& assets_directory, const std::filesystem::path& ide_output_directory, const std::filesystem::path& core_assembly_path) -> void {
@@ -212,8 +210,7 @@ auto script_compiler::_record_manifest(const std::vector<std::filesystem::path>&
 auto script_compiler::compile_if_stale(managed::runtime& runtime, const std::filesystem::path& core_assembly_path) -> void {
   auto& project = core::engine::project();
 
-  // Independent of staleness below — an IDE needs this the moment a project has any scripts (or
-  // even before), and regenerating it doesn't touch the compiled Game.dll/manifest at all.
+  // Independent of staleness: the IDE project is needed as soon as scripts exist.
   _write_ide_project(project.assets_directory(), project.library_directory() / "scripts" / "ide", core_assembly_path);
 
   auto sources = std::vector<std::filesystem::path>{};
@@ -239,7 +236,7 @@ auto script_compiler::compile_if_stale(managed::runtime& runtime, const std::fil
   const auto core_assembly_hash = utility::hash_file(core_assembly_path);
 
   if (!_is_stale(sources, core_assembly_hash)) {
-    _last_compile_succeeded = true; // manifest only ever records a successful compile
+    _last_compile_succeeded = true; // the manifest only records successful compiles
     return;
   }
 
@@ -270,8 +267,7 @@ auto script_compiler::compile_if_stale(managed::runtime& runtime, const std::fil
   }
 
   if (result.success) {
-    // Atomic-ish replace: only ever overwrite the last-good assembly once a new one has fully
-    // compiled — a failure below never touches final_path.
+    // Only replace the last good assembly once the new one fully compiled.
     std::filesystem::rename(scratch_path, final_path);
 
     _record_manifest(sources, core_assembly_hash);

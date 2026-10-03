@@ -10,12 +10,9 @@
 namespace sbx::render {
 
 /**
- * @brief 3D-scene half of presentation_module's renderer interfaces; at most one registered at a
- * time (presentation_module::set_scene_renderer).
+ * @brief The 3D half of presentation_module's renderer interfaces; at most one is registered.
  *
- * Two phases: prepare() is the only place touching the ECS is safe (main thread, before the frame
- * is kicked); record() does the actual pass-list work and may run on a separate render thread, so
- * it must only use what prepare() already extracted and stashed.
+ * prepare() is the only safe place to touch the ECS; record() may run on the render thread and uses only what prepare() extracted.
  */
 class scene_renderer {
 
@@ -23,10 +20,15 @@ public:
 
   virtual ~scene_renderer() = default;
 
-  /** @brief Main thread, once per frame, before the frame is kicked off. */
+  /** @brief Extracts the frame on the main thread, before it is kicked. */
   virtual auto prepare() -> void = 0;
 
-  /** @brief Render thread (or same thread, depending on threading_policy). Records into @p command_buffer. */
+  /**
+   * @brief Records the frame, possibly on the render thread.
+   *
+   * @param command_buffer The command buffer to record into.
+   * @param extent The swapchain extent.
+   */
   virtual auto record(graphics::command_buffer& command_buffer, math::vector2u extent) -> void = 0;
 
 }; // class scene_renderer

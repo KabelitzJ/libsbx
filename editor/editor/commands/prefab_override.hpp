@@ -18,11 +18,7 @@
 
 namespace editor {
 
-// Component -> scene_serializer's own "type" string for it (see scene_serializer.cpp's write_node/
-// read_node_components) -- the single source of truth those already use, just made reachable by
-// C++ type from here too. A component with no entry (the "" fallback) simply isn't tracked by the
-// prefab override system: editing it is never recorded as an override, so a prefab_instance's copy
-// always just follows the prefab for that component.
+// Component -> scene_serializer's "type" string. Components without one aren't tracked, so instances always follow the prefab for them.
 template<typename Component>
 constexpr auto component_key() -> std::string_view {
   if constexpr (std::same_as<Component, sbx::scenes::local_transform>) { return "transform"; }
@@ -62,10 +58,13 @@ constexpr auto component_key() -> std::string_view {
 }
 
 /**
- * @brief The override-recording hook every property-edit command (component_commands.hpp) calls
- * into. No-op if Component isn't a tracked type (component_key<Component>() is empty) or
- * member_node isn't part of a prefab instance. scene is whatever the calling command's own
- * execute()/undo() was given — never resolved internally (see command.hpp's doc comment).
+ * @brief Records a prefab override for a property edit. No-op for untracked components or nodes outside a prefab instance.
+ *
+ * @tparam Component The edited component.
+ *
+ * @param scene The scene passed to the calling command.
+ * @param member_node The edited node.
+ * @param kind The override kind.
  */
 template<typename Component>
 auto mark_prefab_override(sbx::scenes::scene& scene, const sbx::scenes::node& member_node, sbx::scenes::prefab_override_kind kind) -> void {

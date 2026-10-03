@@ -13,18 +13,9 @@
 namespace sbx::assets {
 
 /**
- * @brief A ref-counted handle to a loaded asset.
+ * @brief A ref-counted handle to a loaded asset; holding one keeps the asset alive.
  *
- * Holding one keeps the asset alive.
- *
- * is_loaded()/generation() are constrained per-method (`requires std::derived_from<value_type,
- * loadable>`), not on the class template itself, even though every current asset type is loadable:
- * a class-level constraint needs Type complete wherever asset_handle<Type> is first named, and
- * particle_effect.hpp's sub_emitter_binding names asset_handle<particle_effect> while
- * particle_effect is still an incomplete forward declaration (a particle_effect's own sub-emitters
- * can reference another particle_effect) -- a class-level `derived_from` check fails right there
- * with "invalid use of incomplete type". A per-method constraint is only evaluated when is_loaded()/
- * generation() are actually called, by which point every real caller has a complete type.
+ * is_loaded()/generation() are constrained per method because particle_effect names asset_handle<particle_effect> while still incomplete.
  */
 template<typename Type>
 class asset_handle {
@@ -50,12 +41,20 @@ public:
     return is_valid();
   }
 
-  /** @brief Whether the asset's content (not just this handle) has arrived -- see loadable's doc comment. False for an invalid handle. */
+  /**
+   * @brief Whether the asset's content has arrived, not just the handle.
+   *
+   * @return False for an invalid handle.
+   */
   [[nodiscard]] auto is_loaded() const noexcept -> bool requires (std::derived_from<value_type, loadable>) {
     return is_valid() && _record->is_loaded();
   }
 
-  /** @brief See loadable's doc comment. 0 for an invalid handle. */
+  /**
+   * @brief The asset's content generation, bumped on every content change.
+   *
+   * @return The generation, or 0 for an invalid handle.
+   */
   [[nodiscard]] auto generation() const noexcept -> std::uint64_t requires (std::derived_from<value_type, loadable>) {
     return is_valid() ? _record->generation() : 0u;
   }
@@ -89,7 +88,11 @@ public:
     return _record.get();
   }
 
-  /** @brief The underlying shared_ptr itself, e.g. to re-insert this handle's record into a uuid-keyed cache map that stores shared_ptr<Type> directly rather than a handle. */
+  /**
+   * @brief The underlying shared_ptr, e.g. to re-insert the record into a cache.
+   *
+   * @return The shared_ptr.
+   */
   [[nodiscard]] auto shared() const noexcept -> std::shared_ptr<value_type> {
     return _record;
   }

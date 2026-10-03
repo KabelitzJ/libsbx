@@ -129,11 +129,7 @@ delete_node_command::delete_node_command(sbx::scenes::scene& scene, const sbx::s
 
   _snapshot = sbx::scenes::scene_serializer::serialize_subtree(scene, target);
 
-  // A descendant, not just target itself, can hold either binding — scene::destroy_node clears
-  // both wherever they occur in the subtree, so undo needs to know which node(s) to restore them to.
-  // Same walk also marks every prefab_member in the subtree as node_removed on its owning
-  // instance — not just target itself — so sync_prefab_instances never resurrects a descendant
-  // whose parent (target, or one of target's own descendants) got deleted along with it.
+  // destroy_node clears camera/light bindings anywhere in the subtree, so undo records which nodes held them. The walk also marks every prefab member in the subtree removed, so sync_prefab_instances doesn't resurrect them.
   const auto check = [&](this const auto& self, const sbx::scenes::node& current) -> void {
     if (auto camera = scene.active_camera(); camera.is_valid() && camera.id() == current.id()) {
       _was_active_camera = current.id();
@@ -210,9 +206,7 @@ auto reparent_node_command::execute(sbx::scenes::scene& target) -> void {
 
   auto index = _new_index;
 
-  // Dropping further down within the same list: the raw target position was counted against the
-  // list still containing target at _old_index, so once target is lifted out everything after it
-  // shifts back by one.
+  // Moving down within the same list: the raw index counted the node itself, so everything after it shifts back by one.
   if (_old_parent_id == _new_parent_id && _old_index < index) {
     index -= 1u;
   }

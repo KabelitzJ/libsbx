@@ -65,9 +65,7 @@ auto location_of(sbx::scenes::scene& scene, const sbx::scenes::node& node) -> no
   return location;
 }
 
-// A node that belongs to a prefab instance whose root isn't part of the copy would come out as a
-// second member with the same member_id -- keep prefab membership only where the copy contains the
-// instance root itself.
+// Keeps prefab membership only where the copy contains the instance root, or the copy becomes a second member with the same member_id.
 auto strip_partial_prefab_membership(YAML::Node& snapshot) -> void {
   auto covered = std::unordered_set<sbx::math::uuid>{};
 
@@ -193,7 +191,7 @@ auto duplicate_selection(editor_state& state, sbx::scenes::scene& scene) -> void
     originals.emplace_back(id, location_of(scene, scene.find(id)));
   }
 
-  // Highest index first, so an insert never shifts the position of a sibling that's still waiting to be duplicated.
+  // Highest index first, so inserts don't shift siblings still waiting to be duplicated.
   std::ranges::sort(originals, std::greater{}, [](const auto& entry) { return entry.second.index; });
 
   auto commands = std::vector<std::unique_ptr<command>>{};

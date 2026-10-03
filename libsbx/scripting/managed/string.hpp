@@ -19,7 +19,13 @@ public:
   static auto create(std::string_view str) -> string;
   static auto destroy(string& str) -> void;
 
-  /** @brief Copies a string the managed side handed over (CoTaskMem, ours to free) into a std::string and frees it -- this type has no destructor, so every such string must go through here or destroy(). */
+  /**
+   * @brief Copies a string handed over by the managed side into a std::string and frees it. This type has no destructor, so every such string must go through here or destroy().
+   *
+   * @param str The managed string, freed by this call.
+   *
+   * @return The copied string.
+   */
   [[nodiscard]] static auto take(string str) -> std::string;
 
   auto assign(std::string_view str) -> void;

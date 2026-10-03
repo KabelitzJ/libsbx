@@ -17,12 +17,7 @@
 
 namespace sbx::render {
 
-/**
- * @brief Drives scene_renderer_module's frame handoff via an explicit idle/busy/kick state machine.
- *
- * `work` (given at construction) is whatever the owner wants run each kick; the threading policy
- * decides whether `kick()` wakes a background worker or runs it inline on the calling thread.
- */
+/** @brief Runs the owner's per-frame `work` through an idle/busy/kick state machine; the threading policy decides whether kick() wakes a worker or runs inline. */
 class render_thread final : public utility::noncopyable {
 
 public:
@@ -44,7 +39,7 @@ public:
     return _is_running;
   }
 
-  /** @brief Stops accepting/producing frames and joins the worker thread, if any. Idempotent. */
+  /** @brief Stops the worker and joins it, if any. Idempotent. */
   auto terminate() -> void;
 
   auto wait(state wait_for) -> void;
@@ -58,14 +53,10 @@ public:
   /** @brief Waits for the previously kicked frame to fully finish. */
   auto block_until_render_complete() -> void;
 
-  /**
-   * @brief multi_threaded: wakes the worker to run `work`. Anything else: runs `work()`
-   * immediately, inline, on the calling thread, then returns — already idle, nothing async ever
-   * happens.
-   */
+  /** @brief Multi-threaded: wakes the worker to run `work`. Otherwise runs `work()` inline. */
   auto kick() -> void;
 
-  /** @brief Convenience: block_until_render_complete() + next_frame() + kick(). */
+  /** @brief block_until_render_complete(), next_frame(), then kick(). */
   auto pump() -> void;
 
   [[nodiscard]] static auto is_current_thread_render_thread() noexcept -> bool;
@@ -76,6 +67,9 @@ private:
 
   core::threading_policy _policy;
   core::delegate<void()> _work;
+
+  // Static to back is_current_thread_render_thread; only one render_thread runs at a time.
+  static std::atomic<std::thread::id> _render_thread_id;
 
   std::thread _thread{};
 

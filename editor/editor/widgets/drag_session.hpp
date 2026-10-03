@@ -9,15 +9,10 @@
 namespace editor {
 
 /**
- * @brief Cross-frame "capture before, apply live, commit as one undo entry" bookkeeping shared by
- * every viewport gizmo drag (single-node transform, group-pivot transform, ...): call tick() once
- * per frame with whatever library call reports "is a drag in progress" (e.g. ImGuizmo::IsUsing())
- * and a callable producing the pre-drag snapshot to capture -- only invoked on the false->true
- * edge, so it's safe for the snapshot to be expensive to build (a whole selection's worth of
- * transforms, say).
+ * @brief "Snapshot before, apply live, commit one undo entry" bookkeeping for viewport gizmo drags.
  *
- * A caller instance must be function-local static (or otherwise live across frames) — one call
- * site of ImGuizmo::IsUsing() at a time is enough since only one gizmo can be mid-drag.
+ * Call tick() every frame with the drag state (e.g. ImGuizmo::IsUsing()); the snapshot callable only runs when a drag starts, so it may be expensive.
+ * The instance must live across frames.
  */
 template<typename Value>
 class drag_session {
@@ -25,9 +20,12 @@ class drag_session {
 public:
 
   /**
-   * @return The captured pre-drag value the instant the drag ends (the true->false edge on this
-   * call); nullopt every other frame, including every frame while the drag is still in progress —
-   * apply the live value directly from the caller's own per-frame result, this only brackets undo.
+   * @brief Advances the drag state.
+   *
+   * @param is_using Whether a drag is in progress this frame.
+   * @param before_fn Produces the pre-drag snapshot; called only when a drag starts.
+   *
+   * @return The snapshot on the frame the drag ends, otherwise nullopt. Only brackets undo; apply live values yourself.
    */
   template<typename BeforeFn>
   auto tick(bool is_using, BeforeFn&& before_fn) -> std::optional<Value> {

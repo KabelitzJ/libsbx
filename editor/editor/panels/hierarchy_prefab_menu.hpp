@@ -17,17 +17,21 @@
 namespace editor {
 
 /**
- * @brief A dedicated Prefabs/ folder next to the rest of the assets directory, auto-named from the
- * source node's own tag with a numeric suffix on collision -- "Create Prefab..." has no target
- * directory of its own to work from (unlike the Asset Browser's own Create menu), so this picks
- * one instead of prompting for a save location every time.
+ * @brief A path in the Prefabs/ folder named after @p tag, with a numeric suffix on collision, so Create Prefab needs no save dialog.
+ *
+ * @param tag The source node's name.
+ *
+ * @return The assets-relative path.
  */
 auto unique_prefab_relative_path(const std::string& tag) -> std::filesystem::path;
 
 /**
- * @brief Shared by every prefab drop target in the Hierarchy -- must be called from inside an
- * already-open ImGui::BeginDragDropTarget()/EndDragDropTarget() block, same convention as the plain
- * AcceptDragDropPayload(node_drag_drop_payload_type, ...) calls right next to each call site.
+ * @brief Instantiates a dropped prefab; call inside an open BeginDragDropTarget() block.
+ *
+ * @param state The editor state.
+ * @param scene The scene.
+ * @param parent_id The parent for the instance, or nullopt for the top level.
+ * @param position The instance's local position, if any.
  */
 auto try_instantiate_prefab_drop(editor_state& state, sbx::scenes::scene& scene, std::optional<sbx::math::uuid> parent_id, std::optional<sbx::math::vector3> position = std::nullopt) -> void;
 

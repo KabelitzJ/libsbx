@@ -55,13 +55,10 @@ depth_pre_pass::depth_pre_pass() {
 
   _pipelines[0] = make(graphics::cull_mode::back, "Depth Pre");
   _pipelines[1] = make(graphics::cull_mode::none, "Depth Pre Double-Sided");
-  _pipelines[2] = _pipelines[0]; // shading model doesn't affect depth-only output
+  _pipelines[2] = _pipelines[0]; // shading model doesn't affect depth
   _pipelines[3] = _pipelines[1];
 
-  // Queried once here rather than every declare() -- a device's supported resolve modes are fixed
-  // for its lifetime. Only sample_zero is Vulkan-spec-guaranteed for a depth resolve; min/max/average
-  // are all equally hardware-optional (VkPhysicalDeviceDepthStencilResolveProperties), so min is
-  // used only when this specific device actually reports it.
+  // Only sample_zero is guaranteed for depth resolves; use min when this device supports it.
   auto resolve_properties = VkPhysicalDeviceDepthStencilResolveProperties{};
   resolve_properties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DEPTH_STENCIL_RESOLVE_PROPERTIES;
 
@@ -113,9 +110,7 @@ auto depth_pre_pass::declare(graphics_pass_builder& builder, const graph_resourc
 
   const auto group_index = builder.add_group(group);
 
-  // No consumer declares a scene-depth read (bindless sample, by whichever arbitrary shader-graph
-  // material's Scene Depth node happens to use it) -- must self-transition after end_rendering(),
-  // same reasoning shadow_pass's own identical comment on its own private attachment has.
+  // No pass declares a read of scene_depth (it's sampled through bindless), so transition it here.
   builder.transitions_after(group_index, resources.scene_depth, graphics::pipeline_stage::fragment_shader, graphics::access::shader_read, graphics::image_layout::shader_read_only_optimal);
 }
 

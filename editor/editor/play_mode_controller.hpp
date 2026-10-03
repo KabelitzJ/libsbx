@@ -9,7 +9,7 @@
 
 namespace editor {
 
-/** @brief Where the editor's play/pause/stop workflow currently is. */
+/** @brief Where the Play/Pause/Stop workflow is. */
 enum class play_state {
   edit,
   playing,
@@ -17,13 +17,9 @@ enum class play_state {
 }; // enum class play_state
 
 /**
- * @brief Drives the editor's Play/Pause/Stop workflow.
+ * @brief Drives Play/Pause/Stop: Play snapshots the scene to a scratch file under `.sbx/` and starts simulating; Stop destroys script instances, stops simulating and reloads the snapshot in place.
  *
- * On Play, snapshots the active scene to a scratch file under `.sbx/` and turns simulation on;
- * on Stop, tears down live script instances, turns simulation off, and reloads the snapshot over
- * the same scene in place — restoring pre-play state without holding a second copy in memory.
- * Owns "play state" itself since scenes::scenes_module (linked into runtime/launcher too) only
- * exposes a generic is_simulating()/set_simulating() gate.
+ * Owns the play state, since scenes_module only exposes a generic simulating flag.
  */
 class play_mode_controller final : public sbx::utility::noncopyable {
 
@@ -35,13 +31,17 @@ public:
     return _state;
   }
 
-  /** @brief No-op unless currently play_state::edit. */
+  /** @brief Enters play mode; no-op unless in Edit mode. */
   auto enter_play_mode() -> void;
 
-  /** @brief No-op unless currently playing or paused. */
+  /** @brief Returns to Edit mode; no-op unless playing or paused. */
   auto exit_play_mode() -> void;
 
-  /** @brief No-op unless currently playing or paused. */
+  /**
+   * @brief Pauses or resumes; no-op unless playing or paused.
+   *
+   * @param value Whether to pause.
+   */
   auto set_paused(bool value) -> void;
 
   auto toggle_pause() -> void;

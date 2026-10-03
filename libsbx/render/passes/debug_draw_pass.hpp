@@ -18,13 +18,7 @@
 
 namespace sbx::render {
 
-/**
- * @brief Draws whatever @ref scene_renderer_module::debug_draw has accumulated this frame as one
- * line_list draw, then clears it.
- *
- * Runs after grid_pass for the same reason: needs the finished opaque depth buffer to occlude
- * correctly, and must be part of what transparent_resolve_pass composites against.
- */
+/** @brief Draws the debug_draw accumulator as one line list and clears it. Runs after grid_pass, so it's occluded by opaque depth and composited under transparents. */
 class debug_draw_pass final : public graphics_pass {
 
 public:
@@ -45,9 +39,7 @@ private:
 
   memory::observer_ptr<graphics::graphics_pipeline> _pipeline{nullptr};
 
-  // One buffer per frame-in-flight slot, since the vertex count varies frame to frame (unlike the
-  // fixed-stride frame_data ring) -- indexed by render_context::slot, grown geometrically (never
-  // shrunk) as debug_draw's vertex count grows.
+  // One buffer per frame slot, grown geometrically, since the vertex count varies per frame.
   std::array<graphics::buffer_handle, graphics::swapchain::max_frames_in_flight> _buffers{};
   std::array<std::size_t, graphics::swapchain::max_frames_in_flight> _capacities{};
 

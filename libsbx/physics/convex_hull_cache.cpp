@@ -18,13 +18,11 @@
 
 namespace sbx::physics {
 
-constexpr auto cache_magic = utility::fourcc_v<"SBCH">; // 'SBCH' -- SBx Collision Hull
+constexpr auto cache_magic = utility::fourcc_v<"SBCH">;
 constexpr auto cache_format_version = std::uint32_t{1};
 constexpr auto cache_extension = std::string_view{".sbxhull"};
 
-// Unlike mesh_collision_cache's BVH, points/faces here *are* the expensive-to-derive result (the
-// whole reason this cache exists) -- there's no cheap source to reconstruct them from, so both get
-// persisted, not just geometry built on top of them.
+// The hull itself is the expensive result, so points and faces are both persisted.
 [[nodiscard]] auto compute_source_hash(const std::vector<math::vector3>& positions) -> std::uint64_t {
   auto bytes = std::vector<std::uint8_t>{};
   bytes.resize(positions.size() * sizeof(math::vector3));
@@ -110,11 +108,7 @@ auto write_disk_cache(const math::uuid& mesh_id, const convex_hull_data& data, s
   stream->write(reinterpret_cast<const char*>(&bounds_max), sizeof(bounds_max));
 }
 
-// Picks up to max_count well-spread points from `points`: seeded with the 6 axis-extremal points,
-// then greedily adding whichever remaining point maximizes its minimum distance to everything
-// already picked (farthest-point sampling), until reaching the cap or running out of input.
-// Only ever used as the rare-mesh fallback in _build below, over the true hull's own vertices --
-// not over the raw mesh cloud.
+// Farthest-point sampling: start from the 6 axis extremes, then repeatedly add the point farthest from those picked. Only the fallback for hulls over the cap.
 [[nodiscard]] auto farthest_point_sample(const std::vector<math::vector3>& points, std::size_t max_count) -> std::vector<math::vector3> {
   if (points.size() <= max_count) {
     return points;

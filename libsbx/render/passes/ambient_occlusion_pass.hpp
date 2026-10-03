@@ -15,18 +15,10 @@
 namespace sbx::render {
 
 /**
- * @brief Screen-space ambient occlusion (post_process_settings::ambient_occlusion), at half
- * resolution from depth_pre_pass's resolved depth: view-space position and normal rebuilt from
- * depth, a per-pixel-rotated hemisphere of samples tested against the depth buffer (with a range
- * check, so far-away geometry doesn't darken), then a depth-aware blur. lighting.slang multiplies
- * the ambient term by the result (frame_data::ambient_occlusion_index).
+ * @brief Half-resolution screen-space ambient occlusion from the resolved scene depth: a rotated, range-checked hemisphere of samples, then a depth-aware blur. Lighting multiplies the ambient term by it.
  *
- * The two half-resolution targets are scene_renderer_module's (created/retired with the other
- * targets, indices in render_context). Like bloom_pass it never skips execute(): when AO is off it
- * still moves both targets to shader_read_only_optimal, which opaque_pass's declared read expects;
- * frame_data's index is 0xFFFFFFFF then, so nothing samples the stale contents.
- *
- * Runs right after depth_pre_pass, before opaque_pass.
+ * Like bloom_pass it never skips: with AO off it still transitions both targets to read-only for opaque_pass's declared read, and the frame's AO index is 0xFFFFFFFF.
+ * Runs after depth_pre_pass, before opaque_pass.
  */
 class ambient_occlusion_pass final : public compute_pass {
 

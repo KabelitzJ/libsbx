@@ -73,7 +73,7 @@ auto asset_cooker::parse_shader_graph_file(const std::filesystem::path& source) 
           node.value = node_yaml["mode"] ? node_yaml["mode"].as<std::string>() : std::string{"default"};
           break;
         default:
-          break; // monostate -- math/input/output nodes carry no payload
+          break; // monostate nodes carry no payload
       }
 
       description.nodes.push_back(node);
@@ -107,26 +107,14 @@ auto asset_cooker::cook_shader_graph(const math::uuid& id, std::uint64_t generat
     return false;
   }
 
-  // Lives inside the engine's own shaders tree, not the usual cooked_path()/library-directory
-  // convention every other cooker uses -- shader_compiler resolves a compiled file's #includes
-  // relative to the nearest "shaders" ancestor directory (see shader_compiler.cpp's _shaders_root),
-  // so the generated file has to actually sit inside that tree (alongside geometry_common.slang
-  // etc.) for its own #include <geometry_common.slang> to resolve at all.
-  //
-  // Named after graph_name (not a bare uuid) since shader_compiler loads a module using the file's
-  // stem as its Slang module name (path.stem() in shader_compiler.cpp) -- a purely-numeric stem
-  // risks not being a valid module identifier, so this matches the generated struct's own name.
+  // Inside the engine's shaders tree so its #includes resolve. Named after graph_name, since a numeric file stem may not be a valid Slang module name.
   const auto directory = filesystem::engine_data_directory() / "shaders" / "generated";
   const auto path = directory / fmt::format("{}.slang", graph_name);
 
   auto error = std::error_code{};
   std::filesystem::create_directories(directory, error);
 
-  // Every earlier generation's file for this same graph is unreachable the moment this one's
-  // written (shader_graph_generated_path always asks for the CURRENT generation) -- clean it up so
-  // a long editing session doesn't leave one stale .slang file behind per edit. Only the file on
-  // disk; the shader_cache/pipeline_cache entries that earlier generation already compiled into
-  // still exist in memory (see shader_graph_generated_name's doc comment for why that's left alone).
+  // Older generations are unreachable once this one is written, so delete their files.
   const auto stale_prefix = fmt::format("shader_graph_{}_", id.value());
 
   if (std::filesystem::exists(directory, error) && !error) {

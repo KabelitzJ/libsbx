@@ -49,7 +49,6 @@ namespace sbx::render {
   return ICON_MDI_CUBE_OUTLINE;
 }
 
-// Case-insensitive substring test for the filter box below.
 [[nodiscard]] auto contains_ignore_case(std::string_view haystack, std::string_view needle) -> bool {
   const auto to_lower = [](std::string_view text) {
     auto result = std::string{text};
@@ -114,8 +113,7 @@ auto draw_asset_picker(const char* popup_id, const asset_picker_item& current, c
 
   const auto button_tile_result = draw_asset_tile("##button_tile", button_tile);
 
-  // The closed button is a drop target too -- dragging a matching asset from the Asset Browser
-  // straight onto the field works without ever opening the popup.
+  // The closed button accepts drops too, without opening the popup.
   if (ImGui::BeginDragDropTarget()) {
     if (const auto* payload = ImGui::AcceptDragDropPayload(drag_payload_type_for(options.kind))) {
       auto dropped = asset_drag_payload{};
@@ -136,10 +134,7 @@ auto draw_asset_picker(const char* popup_id, const asset_picker_item& current, c
 
   const auto label = has_current ? current.path.filename().string() : std::string{"(None)"};
 
-  // A plain Button (auto-sized to its text) rather than a width-stretching Selectable -- a
-  // Selectable with size.x == 0 fills the *entire* remaining window width, which would swallow
-  // the edit button right after it (and anything the caller places after the whole picker, like
-  // mesh_renderer's "Duplicate" button) into its own click area.
+  // A Button, not a Selectable: a zero-width Selectable fills the rest of the row and swallows whatever follows.
   if (ImGui::Button(label.c_str())) {
     ImGui::OpenPopup(popup_id);
   }
@@ -174,12 +169,11 @@ auto draw_asset_picker(const char* popup_id, const asset_picker_item& current, c
 
   ImGui::EndGroup();
 
-  // Fixed width so the popup doesn't reflow (and the filter box along with it) as filtering
-  // changes which entries -- and therefore how wide the widest visible one is -- are shown.
+  // Fixed width so the popup doesn't reflow while filtering.
   ImGui::SetNextWindowSize(ImVec2{340.0f, 0.0f}, ImGuiCond_Always);
 
   if (ImGui::BeginPopup(popup_id)) {
-    // Reset whenever a *different* picker's popup opens, so leftover text doesn't carry over.
+    // Cleared when a different picker's popup opens.
     static auto filter_buffer = std::array<char, 128u>{};
     static auto last_popup_id = std::string{};
 
@@ -239,8 +233,7 @@ auto draw_asset_picker(const char* popup_id, const asset_picker_item& current, c
     const auto row_height = std::max(row_size.y, ImGui::GetTextLineHeight()) + ImGui::GetStyle().ItemSpacing.y;
 
     if (ImGui::BeginChild("##asset_picker_list", ImVec2{0.0f, 260.0f})) {
-      // Clipped so a large project only ever loads/thumbnails the rows actually on screen -- see
-      // the "unbounded texture loads" risk this addresses in the implementation plan.
+      // Clipped so only on-screen rows load thumbnails.
       auto clipper = ImGuiListClipper{};
       clipper.Begin(static_cast<std::int32_t>(visible.size()), row_height);
 

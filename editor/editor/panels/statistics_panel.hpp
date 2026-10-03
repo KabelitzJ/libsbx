@@ -14,14 +14,7 @@
 
 namespace editor {
 
-/**
- * @brief Tracy-independent rendering/performance/memory stats -- Renderer/Performance/Memory
- * tabs. Always docked (see editor_ui_layer's default layout), same as the inline FPS-only window
- * this replaces.
- *
- * Everything shown is read fresh every draw() call from whichever module already owns it (pull,
- * not push) -- see scene_renderer_panel for the render-graph's own GPU timing/pipeline stats.
- */
+/** @brief Renderer, Performance and Memory stats, independent of Tracy and read fresh each draw from their owning modules. */
 class statistics_panel final : public editor_panel {
 
 public:
@@ -38,7 +31,7 @@ private:
 
   auto _draw_memory_tab() -> void;
 
-  /** @brief Appends a memory sample every memory_sample_interval seconds and drops those older than memory_history_seconds -- called every draw(), whichever tab is open, so the graph has no gaps. */
+  /** @brief Samples memory every memory_sample_interval and drops samples older than memory_history_seconds; runs every draw so the graph has no gaps. */
   auto _sample_memory() -> void;
 
   auto _draw_memory_graph() -> void;
@@ -48,15 +41,13 @@ private:
 
   sbx::math::proportional_smooth_value _smoothed_frame_time_ms{0.0f};
 
-  // Previous draw() call's snapshot -- _draw_memory_tab() shows the delta since then (this
-  // frame's allocation activity) rather than the ever-growing lifetime totals, which said
-  // nothing at a glance beyond "this number only goes up".
+  // The previous draw's totals, so the Memory tab shows this frame's activity instead of ever-growing lifetime totals.
   std::size_t _prev_total_allocated{0u};
   std::size_t _prev_total_freed{0u};
   std::size_t _prev_alloc_count{0u};
   std::size_t _prev_dealloc_count{0u};
 
-  // Parallel arrays (ImPlot takes plain float pointers): sample time (ImGui::GetTime) and usage in MB.
+  // Parallel arrays for ImPlot: sample time and usage in MB.
   std::vector<float> _memory_times{};
   std::vector<float> _process_memory_mb{};
   std::vector<float> _tracked_memory_mb{};

@@ -16,13 +16,11 @@ namespace sbx::physics {
 
 using tree_type = containers::dynamic_tree<std::uint32_t>;
 
-constexpr auto cache_magic = utility::fourcc_v<"SBCM">; // 'SBCM' -- SBx Collision Mesh
+constexpr auto cache_magic = utility::fourcc_v<"SBCM">;
 constexpr auto cache_format_version = std::uint32_t{1};
 constexpr auto cache_extension = std::string_view{".sbxcol"};
 
-// What the cached BVH actually depends on: the mesh's vertex positions and its (LOD0, all
-// submeshes concatenated) index list -- triangle connectivity affects the tree, so both matter,
-// unlike convex_hull_cache which only ever looks at positions.
+// The BVH depends on positions and connectivity (LOD0 indices of all submeshes).
 [[nodiscard]] auto compute_source_hash(const std::vector<math::vector3>& vertices, const std::vector<std::uint32_t>& indices) -> std::uint64_t {
   auto bytes = std::vector<std::uint8_t>{};
   bytes.resize(vertices.size() * sizeof(math::vector3) + indices.size() * sizeof(std::uint32_t));
@@ -33,9 +31,7 @@ constexpr auto cache_extension = std::string_view{".sbxcol"};
   return utility::djb2_hash<std::uint64_t>{}(bytes);
 }
 
-// vertices/indices are never stored in the cache file: _build already has them for free every call
-// (resolve_mesh_collision_data is itself disk-cached and cheap -- see collision_cache_io.hpp's file
-// doc comment), so only the genuinely expensive-to-derive part -- the built BVH -- is persisted.
+// Only the BVH is persisted; the vertices and indices come cheaply from the cooked mesh every time.
 [[nodiscard]] auto try_read_disk_cache(const math::uuid& mesh_id, std::uint64_t source_hash, mesh_collision_data& data) -> bool {
   auto stream = open_collision_cache_for_read(collision_cache_path(cache_extension, mesh_id), cache_magic, cache_format_version, source_hash);
 
@@ -124,8 +120,7 @@ auto mesh_collision_cache::_build(assets::assets_module& assets_module, const ma
     data.vertices.push_back(vertex.position);
   }
 
-  // Concatenate every submesh's LOD0 index range — full precision for collision, LOD chains
-  // (mesh_lod) are a render-only concept and are ignored here.
+  // LOD0 of every submesh; LODs are render-only.
   for (const auto& submesh : cooked->submeshes) {
     const auto begin = submesh.index_offset;
     const auto end = submesh.index_offset + submesh.index_count;

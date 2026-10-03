@@ -27,23 +27,30 @@ inline constexpr auto axis_palette_muted = axis_palette{IM_COL32(219, 61, 61, 25
 // ImGui's own built-in marker colors (GDefaultRgbaColorMarkers).
 inline constexpr auto axis_palette_vivid = axis_palette{IM_COL32(240, 20, 20, 255), IM_COL32(20, 240, 20, 255), IM_COL32(20, 20, 240, 255), IM_COL32(140, 140, 140, 255)};
 
-/**
- * @brief Per-user editor settings (Edit > Preferences), persisted at `<project_root>/.sbx/editor/preferences.yaml` next to
- * camera.yaml. The editor camera's own speed/sensitivity/FOV stay in editor_camera (camera.yaml) -- Preferences just edits them.
- */
+/** @brief Per-user editor settings (Edit > Preferences) in `.sbx/editor/preferences.yaml`; camera speed and FOV stay in camera.yaml. */
 struct editor_preferences {
   axis_color_scheme axis_colors{axis_color_scheme::muted};
   std::float_t translate_snap{1.0f};
   std::float_t rotate_snap{15.0f}; // degrees
   std::float_t scale_snap{0.1f};
 
-  /** @brief A missing file (first launch) or missing keys just mean defaults. */
+  /**
+   * @brief Loads the preferences; a missing file or keys mean defaults.
+   *
+   * @param path The preferences file.
+   *
+   * @return The preferences.
+   */
   [[nodiscard]] static auto load(const std::filesystem::path& path) -> editor_preferences;
 
   auto save(const std::filesystem::path& path) const -> void;
 }; // struct editor_preferences
 
-/** @brief The palette the current preferences select. */
+/**
+ * @brief The axis palette the current preferences select.
+ *
+ * @return The palette.
+ */
 [[nodiscard]] auto axis_colors() -> const axis_palette&;
 
 } // namespace editor

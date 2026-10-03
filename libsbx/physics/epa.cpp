@@ -19,14 +19,13 @@ struct epa_face {
   std::float_t distance{0.0f}; // signed distance from the origin to this face's plane, along normal
 }; // struct epa_face
 
-// Builds one polytope face from three existing vertex indices, orienting its normal away from the
-// origin (which the caller guarantees lies inside the polytope) so `distance` comes out >= 0.
+// Adds a face, orienting its normal away from the origin (inside the polytope) so `distance` is >= 0.
 auto add_face(const std::vector<support_point>& vertices, std::vector<epa_face>& faces, std::uint32_t i0, std::uint32_t i1, std::uint32_t i2) -> void {
   auto normal = math::vector3::cross(vertices[i1].point - vertices[i0].point, vertices[i2].point - vertices[i0].point);
   const auto length = normal.length();
 
   if (length <= math::epsilonf) {
-    return; // degenerate (collinear) face -- skip, the polytope stays valid without it
+    return; // degenerate (collinear) face; the polytope stays valid without it
   }
 
   normal = normal * (1.0f / length);
@@ -42,9 +41,7 @@ auto add_face(const std::vector<support_point>& vertices, std::vector<epa_face>&
   faces.push_back(epa_face{{i0, i1, i2}, normal, distance});
 }
 
-// Reconstructs world-space witness points on A/B for the origin's projection onto `face`, by
-// barycentric-blending the face's three vertices' own witness points (Ericson, "Real-Time
-// Collision Detection" 3.4).
+// Witness points on A and B for the origin's projection onto `face`, blending the vertices' witnesses barycentrically (Ericson, RTCD 3.4).
 auto reconstruct_result(const std::vector<support_point>& vertices, const epa_face& face) -> epa_result {
   const auto& v0 = vertices[face.indices[0]];
   const auto& v1 = vertices[face.indices[1]];
@@ -129,8 +126,7 @@ auto epa_penetration(
     const auto new_index = static_cast<std::uint32_t>(vertices.size());
     vertices.push_back(support);
 
-    // Remove every face visible from the new point, recording the horizon: edges owned by exactly
-    // one removed face (an edge shared by two removed faces cancels out).
+    // Remove every face visible from the new point; the horizon is the edges owned by exactly one removed face.
     auto horizon = std::vector<std::pair<std::uint32_t, std::uint32_t>>{};
 
     const auto toggle_edge = [&horizon](std::uint32_t i0, std::uint32_t i1) {
@@ -160,8 +156,7 @@ auto epa_penetration(
     }
   }
 
-  // Iteration budget exhausted without tight convergence -- return the best (closest) face found,
-  // an acceptable approximation since GJK already confirmed true overlap.
+  // Out of iterations: the closest face found is a fine approximation, since GJK confirmed the overlap.
   if (faces.empty()) {
     return epa_result{};
   }

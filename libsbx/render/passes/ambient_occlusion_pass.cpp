@@ -20,15 +20,13 @@
 
 namespace sbx::render {
 
-namespace {
-
 inline constexpr auto threads_per_group = std::uint32_t{8u};
 
 // Mirrors shaders/passes/ambient_occlusion.slang's push_data (one layout for both entry points).
 struct ambient_occlusion_push {
   graphics::buffer::address_type frame_address;
   std::uint32_t depth_index;
-  std::uint32_t input_index;   // blur: the raw result (sampled index)
+  std::uint32_t input_index;   // blur: the raw result
   std::uint32_t output_index;  // storage index
   std::float_t radius;
   std::float_t intensity;
@@ -48,8 +46,6 @@ auto transition(graphics::command_buffer& command_buffer, graphics::image& image
   data.mip_levels = 1u;
   command_buffer.transition_image_layout(data);
 }
-
-} // namespace
 
 ambient_occlusion_pass::ambient_occlusion_pass() {
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
@@ -75,8 +71,7 @@ ambient_occlusion_pass::ambient_occlusion_pass() {
 auto ambient_occlusion_pass::declare(compute_pass_builder& builder, const graph_resources& resources) -> void {
   builder.reads_image(resources.scene_depth, graphics::pipeline_stage::compute_shader, graphics::access::shader_sampled_read, graphics::image_layout::shader_read_only_optimal);
 
-  // Both targets are transitioned by hand in execute(); only the blurred result's final state is
-  // promised to the graph, for opaque_pass's read.
+  // Both targets are transitioned by hand; only the blurred result's final state is declared, for opaque_pass.
   builder.declares_image_ready(resources.ambient_occlusion, graphics::pipeline_stage::fragment_shader, graphics::access::shader_sampled_read, graphics::image_layout::shader_read_only_optimal);
 }
 
@@ -96,8 +91,7 @@ auto ambient_occlusion_pass::execute(render_context& context) -> void {
   auto& raw = registry.get<graphics::image>(context.ambient_occlusion_raw);
   auto& blurred = registry.get<graphics::image>(context.ambient_occlusion);
 
-  // Regenerated every frame, so undefined -> general is always a valid start; waits on the
-  // previous frame's reads (this pass's blur, opaque_pass's lighting).
+  // Regenerated every frame, so undefined -> general is valid; still waits on the previous frame's reads.
   for (auto* image : {&raw, &blurred}) {
     transition(command_buffer, *image, graphics::image_layout::undefined, graphics::image_layout::general,
       VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_NONE,
@@ -107,8 +101,7 @@ auto ambient_occlusion_pass::execute(render_context& context) -> void {
   const auto& settings = context.packet->camera.post_process.ambient_occlusion;
 
   if (!settings.enabled || !context.packet->camera.is_active) {
-    // Nothing samples them this frame (frame_data's index is 0xFFFFFFFF), but opaque_pass's
-    // declared read expects shader_read_only_optimal.
+    // Nothing samples them this frame, but opaque_pass's declared read expects read-only layouts.
     for (auto* image : {&raw, &blurred}) {
       transition(command_buffer, *image, graphics::image_layout::general, graphics::image_layout::shader_read_only_optimal,
         VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,

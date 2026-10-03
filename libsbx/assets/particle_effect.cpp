@@ -9,9 +9,9 @@
 namespace sbx::assets {
 
 /**
- * @brief Finds the pair of keys (by index into @p keys) bracketing @p t: the closest key at or
- * before it, and the closest at or after. Independent of authoring order; nullopt on either side
- * when @p t falls entirely before/after every key.
+ * @brief Finds the keys bracketing @p t: the closest at or before it and the closest at or after, in any authoring order.
+ *
+ * @return Indices into @p keys; nullopt on a side where @p t is beyond every key.
  */
 template<typename Key, typename TimeOf>
 [[nodiscard]] auto find_bracket(const Key* keys, std::size_t count, std::float_t t, TimeOf time_of) -> std::pair<std::optional<std::size_t>, std::optional<std::size_t>> {

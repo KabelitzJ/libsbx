@@ -157,9 +157,7 @@ static auto add_quad(std::vector<vertex>& vertices, std::vector<std::uint32_t>& 
   return {std::move(vertices), std::move(indices)};
 }
 
-// Appends a cylindrical band (no caps) of `segments` quads between y = bottom_y and y = top_y,
-// vertex_v0/vertex_v1 giving the V-coordinate each ring's row of vertices should carry (so a
-// capsule can chain this between its two hemisphere caps with a continuous V range).
+// A capless cylinder band; vertex_v0/vertex_v1 let a capsule chain it between its hemispheres with continuous V.
 static auto add_cylinder_band(std::vector<vertex>& vertices, std::vector<std::uint32_t>& indices, std::float_t radius, std::float_t bottom_y, std::float_t top_y, std::float_t v0, std::float_t v1, std::int32_t segments) -> void {
   const auto stride = segments + 1;
   const auto base = static_cast<std::uint32_t>(vertices.size());
@@ -187,9 +185,7 @@ static auto add_cylinder_band(std::vector<vertex>& vertices, std::vector<std::ui
     const auto i2 = base + static_cast<std::uint32_t>(stride + seg + 1);
     const auto i3 = base + static_cast<std::uint32_t>(stride + seg);
 
-    // Unlike generate_uv_sphere's rings (where ring+1 sits at a *lower* y), row 1 here sits at a
-    // *higher* y than row 0 -- the vertical edge's sign flips, so the same (i0,i1,i2)/(i0,i2,i3)
-    // order that's outward-facing there is inward-facing here. Reversed to compensate.
+    // Rows go upward here, unlike the sphere's rings, so the winding is reversed to face outward.
     indices.push_back(i0);
     indices.push_back(i2);
     indices.push_back(i1);
@@ -221,9 +217,7 @@ static auto add_disc_cap(std::vector<vertex>& vertices, std::vector<std::uint32_
     const auto a = rim_base + static_cast<std::uint32_t>(seg);
     const auto b = rim_base + static_cast<std::uint32_t>(seg + 1);
 
-    // theta increases from seg to seg+1 the same way generate_uv_sphere's does, so the correct
-    // (center, a, b) vs (center, b, a) order per facing is the sphere's convention flipped, not
-    // matched -- a flat disc has no ring-to-ring y change to flip the sign back the other way.
+    // A flat disc has no ring-to-ring y change, so the winding is the sphere's flipped.
     if (facing_up) {
       indices.push_back(center_index);
       indices.push_back(b);
@@ -253,8 +247,7 @@ static auto add_disc_cap(std::vector<vertex>& vertices, std::vector<std::uint32_
 
   const auto stride = segments + 1;
 
-  // Top hemisphere: rings from the pole (ring 0) down to the equator (ring hemisphere_rings),
-  // offset up by cylinder_half_height so it caps the cylindrical body.
+  // Top hemisphere, pole to equator, raised by cylinder_half_height.
   const auto top_base = static_cast<std::uint32_t>(vertices.size());
 
   for (auto ring = 0; ring <= hemisphere_rings; ++ring) {
@@ -292,11 +285,9 @@ static auto add_disc_cap(std::vector<vertex>& vertices, std::vector<std::uint32_
     }
   }
 
-  // Cylindrical body between the two hemispheres' equators.
   add_cylinder_band(vertices, indices, radius, -cylinder_half_height, cylinder_half_height, 0.375f, 0.625f, segments);
 
-  // Bottom hemisphere: mirror of the top, rings from the equator (ring 0) down to the pole
-  // (ring hemisphere_rings), offset down by cylinder_half_height.
+  // Bottom hemisphere, equator to pole, lowered by cylinder_half_height.
   const auto bottom_base = static_cast<std::uint32_t>(vertices.size());
 
   for (auto ring = 0; ring <= hemisphere_rings; ++ring) {

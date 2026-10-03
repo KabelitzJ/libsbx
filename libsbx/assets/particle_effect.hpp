@@ -90,11 +90,9 @@ struct curve_key {
 }; // struct curve_key
 
 /**
- * @brief A small fixed-capacity keyframed curve over normalized particle lifetime, linearly
- * interpolated between the two keys bracketing a given `t` (clamped at the ends). Keys don't need to
- * be authored in time order -- evaluate() finds the bracketing pair by scanning all of them, cheap
- * given the tiny capacity. An empty curve means "no curve authored"; every over-lifetime field this
- * type is used for defines its own fallback for that case (see particle_emitter's fields below).
+ * @brief A small fixed-capacity curve over normalized lifetime, linearly interpolated and clamped at the ends.
+ *
+ * Keys may be in any order. An empty curve means none was authored; each field using it defines its own fallback.
  */
 struct curve {
   containers::static_vector<curve_key, curve_max_keys> keys{};
@@ -106,7 +104,7 @@ struct curve {
   }
 }; // struct curve
 
-/** @brief Three independent curve channels, one per axis -- for velocity/force-over-lifetime. */
+/** @brief One curve per axis, for velocity and force over lifetime. */
 struct vector3_curve {
   curve x{};
   curve y{};
@@ -132,10 +130,9 @@ struct gradient_alpha_key {
 }; // struct gradient_alpha_key
 
 /**
- * @brief A Unity-Gradient-style color ramp over normalized lifetime: color and alpha are keyed and
- * interpolated independently, then recombined by evaluate(). Empty (no color_keys) means "no gradient
- * authored" -- particle_emitter::color_over_lifetime falls back to the plain start_color/end_color
- * lerp in that case, so every existing .particle_effect file keeps its old look.
+ * @brief A Unity-style gradient over normalized lifetime with independently keyed color and alpha.
+ *
+ * Empty means none was authored, and color_over_lifetime falls back to lerping start_color to end_color.
  */
 struct gradient {
   containers::static_vector<gradient_color_key, gradient_max_keys> color_keys{};
@@ -161,12 +158,7 @@ enum class sub_emitter_event : std::uint8_t {
 
 class particle_effect;
 
-/**
- * @brief Spawns a child particle_effect instance (non-looping, one-shot) whenever a particle from
- * this emitter fires @p event. Child instances are pooled per emitter (see
- * scenes::particle_emitter::sub_emitter_pool) rather than spawning a fresh scene node every time, so
- * a high-frequency event (birth at a fast emission rate, or collision) doesn't churn nodes unbounded.
- */
+/** @brief Spawns a pooled, one-shot child particle_effect whenever a particle fires @p event, so frequent events don't churn scene nodes. */
 struct sub_emitter_binding {
   sub_emitter_event event{sub_emitter_event::birth};
   asset_handle<particle_effect> effect{};
@@ -176,12 +168,7 @@ struct sub_emitter_binding {
 
 inline constexpr auto trail_max_points = std::size_t{20};
 
-/**
- * @brief A ribbon trail following each particle, camera-facing like the billboards (see
- * shaders/particles/trail.slang). `color_over_trail` is evaluated per point by its position along the
- * ribbon (0 = head/newest, 1 = tail/oldest) at render-extraction time, not baked in when the point was
- * recorded, so it always reflects the ribbon's current length as points age out.
- */
+/** @brief A camera-facing ribbon trail per particle; `color_over_trail` is evaluated along the ribbon (0 = head, 1 = tail) at extraction time. */
 struct trail_config {
   bool enabled{false};
   std::float_t min_vertex_distance{0.1f};
@@ -232,9 +219,9 @@ struct particle_emitter {
   trail_config trail{};
 
   /**
-   * @brief Whether this emitter's current config can run on the GPU path (simulation_mode
-   * == gpu). That path is billboard-only, has no collision, no sub-emitters/trails, and no
-   * cone shape support -- see libsbx/render/particles/particle_data.hpp's emission_shape enum.
+   * @brief Whether this emitter can run on the GPU path, which is billboard-only with no collision, sub-emitters, trails or cone shapes.
+   *
+   * @return True if GPU simulation is supported.
    */
   [[nodiscard]] auto supports_gpu_simulation() const -> bool {
     return shape != emitter_shape::cone

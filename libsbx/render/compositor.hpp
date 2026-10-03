@@ -14,21 +14,14 @@
 
 namespace sbx::render {
 
-/**
- * @brief Minimal per-frame context a compositor needs: command buffer plus swapchain view/extent.
- */
+/** @brief Per-frame compositor input: command buffer plus swapchain view and extent. */
 struct compositor_context {
   memory::observer_ptr<graphics::command_buffer> command_buffer;
   VkImageView swapchain_view;
   math::vector2u swapchain_extent;
 }; // struct compositor_context
 
-/**
- * @brief The final step deciding what ends up in the swapchain image.
- *
- * Registered via presentation_module::set_compositor (at most one); presentation_module clears
- * the swapchain instead if nothing is registered.
- */
+/** @brief The final step deciding what ends up in the swapchain image. At most one; without one, presentation_module clears the swapchain. */
 class compositor : public utility::noncopyable {
 
 public:
@@ -40,10 +33,11 @@ public:
 }; // class compositor
 
 /**
- * @brief Clears @p swapchain_view to a plain dark color.
+ * @brief Clears the swapchain view to a plain dark color; the fallback without a compositor or camera.
  *
- * Used as presentation_module's fallback when no compositor is registered, and by
- * scene_blit_compositor when nothing was rendered this frame (no active camera).
+ * @param command_buffer The command buffer to record into.
+ * @param swapchain_view The swapchain image view.
+ * @param extent The swapchain extent.
  */
 auto clear_swapchain(graphics::command_buffer& command_buffer, VkImageView swapchain_view, math::vector2u extent) -> void;
 

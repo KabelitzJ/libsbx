@@ -13,9 +13,14 @@
 namespace editor {
 
 /**
- * @brief Lays out a widget that takes no label of its own (asset picker, button, ...) in the same
- * columns ImGui's labeled widgets use: draw() goes in the field column, label in the right-hand label
- * column, so it lines up with every DragFloat/Combo/Checkbox around it.
+ * @brief Lays out an unlabeled widget (asset picker, button) in the field column with @p label in the label column, aligned with ImGui's labeled widgets.
+ *
+ * @tparam Draw The widget-drawing callable.
+ *
+ * @param label The row label.
+ * @param draw Draws the widget.
+ *
+ * @return Whatever @p draw returns.
  */
 template<typename Draw>
 auto draw_property_row(const char* label, Draw&& draw) -> std::invoke_result_t<Draw> {
@@ -33,7 +38,7 @@ auto draw_property_row(const char* label, Draw&& draw) -> std::invoke_result_t<D
   return result;
 }
 
-/** @brief Unity-style blue bar in the left margin beside the last drawn item -- marks a value overridden on a prefab instance. */
+/** @brief A Unity-style bar in the left margin beside the last item, marking a prefab instance override. */
 inline auto draw_override_marker() -> void {
   const auto min = ImGui::GetItemRectMin();
   const auto max = ImGui::GetItemRectMax();

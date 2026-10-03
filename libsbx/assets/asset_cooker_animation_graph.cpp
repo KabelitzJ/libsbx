@@ -8,11 +8,7 @@
 
 namespace sbx::assets {
 
-// "type"+"value" tag pair -- animation_parameter_value's alternative *is* its type, so this is
-// purely a persistence detail (the runtime API never switches on a type enum, see
-// animation_graph.hpp's doc comment). Mirrored by save_animation_parameter_value in
-// asset_residency.cpp (save_animation_graph is a synchronous, editor-only write path -- not part
-// of this refactor).
+// Reads the "type"+"value" pair written by save_animation_parameter_value in asset_residency.cpp.
 static auto load_animation_parameter_value(const YAML::Node& node) -> animation_parameter_value {
   const auto type = node["type"] ? node["type"].as<std::string>() : std::string{"float"};
 

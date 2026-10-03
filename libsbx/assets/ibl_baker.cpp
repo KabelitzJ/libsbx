@@ -61,8 +61,7 @@ auto ibl_baker::_ensure_brdf_lut(graphics::command_buffer& command_buffer) -> vo
   to_general.aspect_mask = brdf_lut.aspect();
   command_buffer.transition_image_layout(to_general);
 
-  // Leaked forever, on purpose: runs once per program lifetime, so recovering this bindless slot
-  // isn't worth the bookkeeping (unlike bake_environment, which runs per load and does clean up).
+  // Never freed: baked once per process.
   const auto output_index = bindless_table.register_storage_image(brdf_lut.view());
 
   bindless_table.flush_writes();
@@ -113,9 +112,7 @@ auto ibl_baker::_ensure_brdf_lut(graphics::command_buffer& command_buffer) -> vo
 auto ibl_baker::bake_environment(environment_map& record, const std::vector<std::byte>& pixels, std::uint32_t width, std::uint32_t height) -> void {
   constexpr auto threads_per_group = std::uint32_t{8u};
 
-  // Bindless indices that must stay untouched until this command buffer finishes on the GPU:
-  // vkUpdateDescriptorSets applies immediately on the host, so reusing a slot before submit_idle()
-  // returns could make an earlier dispatch in this buffer see a later write.
+  // vkUpdateDescriptorSets applies immediately, so these slots can't be reused until the command buffer finishes.
   struct transient_storage {
     std::uint32_t index;
     VkImageView view;
@@ -142,8 +139,7 @@ auto ibl_baker::bake_environment(environment_map& record, const std::vector<std:
   const auto descriptor_set = bindless_table.descriptor_set();
   vkCmdBindDescriptorSets(command_buffer.handle(), VK_PIPELINE_BIND_POINT_COMPUTE, bindless_table.pipeline_layout(), 0u, 1u, &descriptor_set, 0u, nullptr);
 
-  // --- Radiance: upload the equirectangular source. Persistent — the skybox pass samples this
-  // same index directly, so it isn't scratch data like the cube derived from it below. ---
+  // Radiance: persistent, since the skybox samples it directly.
 
   const auto radiance_handle = registry.emplace<graphics::image>(graphics::image::create_info{
     .extent = math::vector3u{width, height, 1u},
@@ -196,9 +192,7 @@ auto ibl_baker::bake_environment(environment_map& record, const std::vector<std:
 
   const auto radiance_index = bindless_table.register_sampled_image(radiance.view());
 
-  // --- Equirect -> cubemap: transient single-mip scratch input for the convolutions below; never
-  // touched by the graphics queue, so exclusive sharing (default) is fine. Both convolution shaders
-  // always sample mip 0, so a mip chain here would be wasted work. ---
+  // Equirect -> cubemap: transient single-mip input for the convolutions, which only sample mip 0.
 
   auto radiance_cube = graphics::image{graphics::image::create_info{
     .extent = math::vector3u{radiance_cube_size, radiance_cube_size, 1u},
@@ -265,7 +259,7 @@ auto ibl_baker::bake_environment(environment_map& record, const std::vector<std:
 
   bindless_table.flush_writes();
 
-  // --- Irradiance: single-mip cube, cosine-weighted hemisphere convolution ---
+  // Irradiance: single-mip cube, cosine-weighted hemisphere convolution.
 
   const auto irradiance_handle = registry.emplace<graphics::image>(graphics::image::create_info{
     .extent = math::vector3u{irradiance_cube_size, irradiance_cube_size, 1u},
@@ -318,8 +312,7 @@ auto ibl_baker::bake_environment(environment_map& record, const std::vector<std:
 
   const auto irradiance_index = bindless_table.register_sampled_cube(irradiance.view());
 
-  // --- Prefiltered specular: a real mip chain now, one dispatch per mip with a roughness push
-  // constant, rather than N unrelated discrete images blended in the shader. ---
+  // Prefiltered specular: one dispatch per mip with a roughness push constant.
 
   const auto prefiltered_handle = registry.emplace<graphics::image>(graphics::image::create_info{
     .extent = math::vector3u{prefiltered_cube_size, prefiltered_cube_size, 1u},
@@ -382,11 +375,11 @@ auto ibl_baker::bake_environment(environment_map& record, const std::vector<std:
 
   const auto prefiltered_index = bindless_table.register_sampled_cube(prefiltered.view());
 
-  // --- BRDF LUT: environment-independent, baked once and shared by everything ---
+  // BRDF LUT: environment-independent, baked once.
 
   _ensure_brdf_lut(command_buffer);
 
-  // --- Every persistent output goes shader-readable, then one blocking submit ---
+  // Every persistent output goes shader-readable, then one blocking submit.
 
   {
     auto to_read = graphics::command_buffer::image_transition_data{};
@@ -419,8 +412,7 @@ auto ibl_baker::bake_environment(environment_map& record, const std::vector<std:
 
   command_buffer.submit_idle();
 
-  // Only now that the GPU has actually finished is it safe to recycle these slots (see the
-  // comment on transient_storage above) and destroy their transient views.
+  // The GPU has finished, so the transient slots can be recycled.
   for (const auto& entry : pending_storage) {
     bindless_table.unregister_storage_cube(entry.index);
     vkDestroyImageView(graphics_module.logical_device(), entry.view, nullptr);

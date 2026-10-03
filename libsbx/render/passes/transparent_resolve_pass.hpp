@@ -15,13 +15,7 @@
 
 namespace sbx::render {
 
-/**
- * @brief Weighted Blended OIT composite: a fullscreen triangle that resolves
- * transparent_accumulate_pass's accumulator/revealage buffers (average = accumulator.rgb /
- * max(accumulator.a, epsilon), alpha = 1 - revealage) and blends the result "over" the HDR color
- * target already holding opaque_pass/skybox_pass/grid_pass's output. Runs before tonemap_pass,
- * which needs no changes since it already reads the HDR color target afterward.
- */
+/** @brief Weighted blended OIT composite: resolves the accumulator/revealage pair (rgb / max(a, epsilon), alpha 1 - revealage) over the HDR color target, before tonemap_pass. */
 class transparent_resolve_pass final : public graphics_pass {
 
 public:

@@ -29,21 +29,12 @@
 
 namespace editor {
 
-/**
- * @brief The editor's contribution to the engine's ImGui frame: dockspace, menu bar, the
- * Viewport panel (embeds scene_renderer_module::final_image via ImGui::Image()), the Stats
- * window, every registered editor_panel, and the scene save/quit dialogs.
- *
- * Registered with ui_module by editor_module, which owns this and stays a thin lifecycle
- * shell (see editor_module.hpp).
- */
+/** @brief The editor's ImGui layer: dockspace, menu bar, Viewport, every editor_panel and the scene save/quit dialogs. Owned and registered by editor_module. */
 class editor_ui_layer final : public sbx::utility::noncopyable, public sbx::render::ui_layer {
 
 public:
 
-  // Not a separate editor_panel (see panels/), so this window's constant lives here instead of on
-  // a panel class — same "single source of truth for ImGui::Begin()'s exact string" reasoning as
-  // hierarchy_panel::window_name and friends; referenced by both build() and _draw_dockspace().
+  // The Viewport window's ImGui::Begin() string, shared by build() and the dock layout.
   inline static constexpr auto viewport_window_name = ICON_MDI_GAMEPAD_VARIANT " Viewport###viewport_panel";
 
   editor_ui_layer();
@@ -54,32 +45,38 @@ public:
 
   auto build() -> void override;
 
-  /** @brief Whether the mouse was over the Viewport panel as of the last frame's UI pass. */
+  /**
+   * @brief Whether the mouse was over the Viewport as of the last UI pass.
+   *
+   * @return True if hovered.
+   */
   [[nodiscard]] auto is_viewport_hovered() const noexcept -> bool {
     return _viewport_is_hovered;
   }
 
-  /** @brief Called once by application.cpp right after its own initial scene load. */
+  /**
+   * @brief Sets the current scene's path after application.cpp's initial load.
+   *
+   * @param path The scene path, relative to the assets directory.
+   */
   auto set_scene_path(std::filesystem::path path) -> void {
     _scene_path = std::move(path);
   }
 
-  /**
-   * @brief Quits immediately if the scene has no unsaved changes; otherwise shows a
-   * confirmation dialog (Save / Don't Save / Cancel).
-   *
-   * Use instead of sbx::core::engine::quit() directly for anything that can originate outside
-   * an explicit in-editor "discard everything" action (window close, File > Quit).
-   */
+  /** @brief Quits, asking Save / Don't Save / Cancel first if the scene has unsaved changes. Use instead of engine::quit() for window close and File > Quit. */
   auto request_quit() -> void;
 
-  /** @brief Same discard-guard as request_quit(), but replaces the active scene with a fresh blank one instead of quitting. */
+  /** @brief Replaces the scene with a blank one, with the same unsaved-changes guard as request_quit(). */
   auto new_scene() -> void;
 
-  /** @brief Same discard-guard as request_quit(), but loads path as the active scene instead of quitting. */
+  /**
+   * @brief Loads @p path as the active scene, with the same unsaved-changes guard as request_quit().
+   *
+   * @param path The scene to open.
+   */
   auto open_scene(const std::filesystem::path& path) -> void;
 
-  /** @brief Drops the undo/redo history — call whenever previously-pushed commands can no longer be safely replayed (see editor_module::exit_play_mode()). */
+  /** @brief Drops the undo history, whenever pushed commands can no longer be replayed (e.g. leaving play mode). */
   auto clear_command_stack() -> void {
     _state.clear_command_stack();
   }
@@ -92,34 +89,43 @@ private:
 
   auto _draw_dockspace() -> void;
 
-  /** @brief Editor-wide keyboard shortcuts (Ctrl+Z/Y/C/V/D/S/N/O, Delete, Escape, F); skipped while a text field has focus. */
+  /** @brief Editor-wide shortcuts (Ctrl+Z/Y/C/V/D/S/N/O, Delete, Escape, F), skipped while a text field has focus. */
   auto _handle_shortcuts() -> void;
 
-  /** @brief Save to the current scene path, or Save As if the scene has never been saved. */
+  /** @brief Saves to the current scene path, or Save As if the scene was never saved. */
   auto _save() -> void;
 
-  /** @brief The centered Play/Pause/Stop toolbar strip drawn directly under the main menu bar. */
+  /** @brief The Play/Pause/Stop strip under the menu bar. */
   auto _draw_toolbar() -> void;
 
   auto _create_panels() -> void;
 
   auto _save_scene(const std::filesystem::path& path) -> void;
 
-  /** @brief Compares the scene's current serialize() output against what's on disk at _scene_path. */
+  /**
+   * @brief Compares the scene's serialized form with the file at _scene_path.
+   *
+   * @return True if there are unsaved changes.
+   */
   [[nodiscard]] auto _is_scene_dirty() -> bool;
 
-  /** @brief Opens _save_dialog seeded from the current _scene_path (or a fresh "new_scene.scene" if none yet). Whatever's pending in _pending_scene_action runs once the dialog resolves (see _run_pending_after_save_as). */
+  /** @brief Opens the Save As dialog; any pending scene action runs once it resolves. */
   auto _open_save_as_dialog() -> void;
 
-  /** @brief Polls _save_dialog and, on a confirmed pick, saves there and — if _run_pending_after_save_as is set — runs the pending scene action. */
+  /** @brief Polls the Save As dialog, saving on confirm and running a pending scene action if one was deferred. */
   auto _draw_save_as_dialog() -> void;
 
   auto _draw_unsaved_changes_dialog() -> void;
 
-  /** @brief Shared by request_quit()/new_scene()/open_scene(): runs action immediately if the scene has no unsaved changes, otherwise stashes it and shows the unsaved-changes dialog. */
+  /**
+   * @brief Runs @p action now if the scene is clean, otherwise stashes it behind the unsaved-changes dialog.
+   *
+   * @param action The guarded action.
+   * @param path The scene to open, for open actions.
+   */
   auto _request_discard_confirmation(pending_scene_action action, std::filesystem::path path) -> void;
 
-  /** @brief Runs (and clears) whatever's in _pending_scene_action — quit, a fresh blank scene, or loading _pending_open_path. */
+  /** @brief Runs and clears the pending scene action: quit, new scene or open _pending_open_path. */
   auto _run_pending_scene_action() -> void;
 
   auto _new_scene() -> void;
@@ -130,9 +136,7 @@ private:
 
   auto _draw_open_scene_dialog() -> void;
 
-  // Viewport panel's sampler for ImGui::Image()-sampling final_image — see
-  // ui_module::texture_id(). Not a backend concern (that lives in ui_system), just how this one
-  // image should be filtered.
+  // How the Viewport samples final_image.
   sbx::graphics::sampler _sampler;
 
   bool _viewport_is_hovered{false};
@@ -140,38 +144,28 @@ private:
   editor_state _state{};
   std::vector<std::unique_ptr<editor_panel>> _panels{};
 
-  // Non-owning -- _panels owns it. Kept separately so the View menu can toggle its is_open flag
-  // without a dynamic_cast over every registered panel.
+  // Owned by _panels; kept so the View menu can toggle it without a dynamic_cast.
   navigation_panel* _navigation_panel{nullptr};
 
-  // Same reasoning as _navigation_panel above.
   scene_renderer_panel* _scene_renderer_panel{nullptr};
 
-  // Same reasoning as _navigation_panel above -- the Edit menu opens these.
   sbx::memory::observer_ptr<project_settings_panel> _project_settings_panel{};
   sbx::memory::observer_ptr<preferences_panel> _preferences_panel{};
 
-  // Scene save/load path (relative to the assets directory) — empty until the first save, or
-  // until application.cpp calls set_scene_path() after its own initial load.
+  // Relative to the assets directory; empty until the first save or set_scene_path().
   std::filesystem::path _scene_path{};
 
   sbx::render::file_dialog _save_dialog{};
 
-  // Separate instance from _save_dialog -- both can't be mid-flight at once in practice, but each
-  // owns its own imgui-file-dialog state and there's no reason to share it.
   sbx::render::file_dialog _open_dialog{};
 
   bool _show_unsaved_changes_dialog{false};
 
-  // What request_quit()/new_scene()/open_scene() are guarding, and (for open_scene) the path to
-  // load -- set by _request_discard_confirmation(), consumed by _run_pending_scene_action() once
-  // either the scene turns out clean or the unsaved-changes dialog resolves.
+  // The action the unsaved-changes guard is holding, run by _run_pending_scene_action().
   pending_scene_action _pending_scene_action{pending_scene_action::none};
   std::filesystem::path _pending_open_path{};
 
-  // Set when the unsaved-changes dialog's "Save" has to detour through Save As (no _scene_path
-  // yet) — consulted by _draw_save_as_dialog() so that detour still runs _pending_scene_action
-  // once it completes, instead of silently dropping it.
+  // Set when the dialog's Save must detour through Save As, so the pending action still runs afterwards.
   bool _run_pending_after_save_as{false};
 
 }; // class editor_ui_layer

@@ -14,12 +14,7 @@
 
 namespace sbx::assets {
 
-/**
- * @brief A 2D texture array: one GPU image with a layer per source texture2d, every layer the same
- * size, format and mip count (Godot's Texture2DArray). Identified by its index in the sampled
- * 2D-array binding -- `texture_arrays[index]` in descriptors.slang, sampled with float3(uv, layer).
- * Created by asset_residency::create_texture2d_array; sampled only once resident.
- */
+/** @brief One GPU image with a layer per source texture, all the same size, format and mip count. Sampled via `texture_arrays[index]` with float3(uv, layer) once resident. */
 class texture2d_array final : public loadable {
 
   friend class asset_residency;

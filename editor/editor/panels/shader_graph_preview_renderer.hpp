@@ -26,17 +26,10 @@
 namespace editor {
 
 /**
- * @brief Renders the shader graph editor's always-visible master preview: one sphere, one fixed
- * directional light, shaded by the graph's own current Fragment output via
- * generate_shader_graph_preview_source (shader_graph_codegen.hpp). Owns its own
- * async_shader_compiler (see its own doc comment for why previews can't share the render thread's
- * shader_cache) -- structural edits enqueue a recompile there; value-only edits (dragging an
- * exposed constant, picking a texture) just rewrite this preview's own one-entry material buffer
- * and redraw, no recompile needed.
+ * @brief Renders the shader graph editor's master preview: one sphere under one fixed light, shaded by the graph's Fragment output.
  *
- * Renders via a blocking one-off command buffer (graphics::command_buffer::submit_idle()) rather
- * than participating in the main frame's pipelining -- fine since it only actually redraws when
- * something changed (see update()'s own doc comment), not every frame.
+ * Compiles on its own async_shader_compiler; structural edits recompile, value edits only rewrite its material buffer.
+ * Draws with a blocking one-off command buffer, which is fine because it only redraws when something changed.
  */
 class shader_graph_preview_renderer final : public sbx::utility::noncopyable {
 
@@ -47,26 +40,26 @@ public:
   ~shader_graph_preview_renderer();
 
   /**
-   * @brief Call on every structural edit (see shader_graph_panel's own doc comment for the
-   * structural-vs-value distinction) -- generates and asynchronously submits a recompile for @p
-   * graph's current shape. Coalesced by async_shader_compiler: a call before the previous one
-   * finishes compiling simply replaces it, so a burst of edits only ever compiles the latest one.
+   * @brief Queues a recompile for a structural edit; a newer request replaces one still compiling.
+   *
+   * @param graph The graph's current contents.
    */
   auto request_recompile(const sbx::assets::shader_graph::create_info& graph) -> void;
 
   /**
-   * @brief Refreshes the preview's live material values from @p graph (cheap; no recompile),
-   * drains any background compile result that's ready, and redraws only when something actually
-   * changed (a new pipeline just became ready, or a material value did) -- a continuous per-frame
-   * redraw would mean a blocking GPU round-trip every single frame the panel is open, for a
-   * preview that has no reason to change most of those frames.
+   * @brief Refreshes the material values, picks up a finished compile, and redraws only when either changed.
    *
-   * @return This frame's preview image as an ImGui texture id, or nullopt if nothing has compiled
-   * successfully yet (graph doesn't compile, or hasn't finished its first compile).
+   * @param graph The graph's current contents.
+   *
+   * @return The preview as an ImGui texture, or nullopt until a compile succeeded.
    */
   [[nodiscard]] auto update(const sbx::assets::shader_graph::create_info& graph) -> std::optional<ImTextureID>;
 
-  /** @brief Whether the material values this update() call refreshed actually differed from last call's -- shader_graph_node_preview_manager's own update() uses this to know when it needs to redraw too, since its previewed nodes read the same buffer. */
+  /**
+   * @brief Whether the last update() changed the material values; node previews read the same buffer and redraw too.
+   *
+   * @return True if the values changed.
+   */
   [[nodiscard]] auto material_changed_last_update() const noexcept -> bool {
     return _material_changed_last_update;
   }
@@ -75,10 +68,7 @@ public:
     return _error;
   }
 
-  // Both let shader_graph_node_preview_manager's own per-node previews read the exact same live
-  // material values/sampler this preview already keeps refreshed, rather than maintaining a
-  // second copy -- see that class's own doc comment. Zero/default until _ensure_resources has run
-  // at least once (i.e. before this renderer's own first update() call).
+  // Shared with the node previews so they read the same live material values. Zero until the first update().
   [[nodiscard]] auto material_address() const noexcept -> sbx::graphics::buffer::address_type {
     return _material_address;
   }
@@ -112,7 +102,7 @@ private:
   std::unique_ptr<sbx::graphics::graphics_pipeline> _pipeline{};
 
   shader_graph_preview_material_data _last_material{};
-  bool _has_material{false}; // false until _refresh_material's first call -- forces the first redraw's material write
+  bool _has_material{false}; // forces the first redraw to write the material
 
   std::string _error{};
   bool _has_rendered_once{false};

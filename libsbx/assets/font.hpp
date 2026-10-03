@@ -74,11 +74,7 @@ public:
 
 private:
 
-  // Fills in a placeholder font() (default-constructed atlas/glyphs) once its cooked content has
-  // come back from the background asset loader -- called once, on the main thread, from
-  // asset_residency's font finalize step. Bumps loadable's generation() -- see its own doc comment
-  // for why anything memoizing on a font by identity/pointer alone (canvas's text_shape_cache_key)
-  // needs this to notice the moment real glyph data replaces the empty placeholder.
+  // Fills a placeholder font once its cooked content arrives (main thread). Bumps generation() so caches keyed on the font notice the real glyphs.
   auto _finalize_content(std::vector<glyph> glyphs, std::uint32_t first_codepoint, std::float_t line_height, std::float_t ascent, std::float_t descent) -> void {
     _glyphs = std::move(glyphs);
     _first_codepoint = first_codepoint;

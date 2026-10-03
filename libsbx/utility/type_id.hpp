@@ -3,6 +3,7 @@
 #ifndef LIBSBX_UTILITY_TYPE_ID_HPP_
 #define LIBSBX_UTILITY_TYPE_ID_HPP_
 
+#include <atomic>
 #include <cstdint>
 
 namespace sbx::utility {
@@ -12,8 +13,9 @@ namespace detail {
 template<typename Scope>
 struct id_generator final {
   [[nodiscard]] static auto next() noexcept -> std::uint32_t {
-    static auto id = std::uint32_t{};
-    return id++;
+    // Atomic: a type's id may first be requested from any thread.
+    static auto id = std::atomic<std::uint32_t>{0u};
+    return id.fetch_add(1u, std::memory_order_relaxed);
   }
 }; // struct id_generator
 

@@ -8,14 +8,11 @@
 namespace editor::memory_stats {
 
 /**
- * @brief Global allocation counters, updated from the operator new/delete overrides in
- * memory.cpp -- only when SBX_TRACK_MEMORY is defined (see the CMake option of the same name).
+ * @brief Whether the operator new/delete counters are compiled in (SBX_TRACK_MEMORY).
  *
- * Byte counts are the allocator's real block sizes (malloc_usable_size / _msize), read at both
- * new and delete, so current_usage is exact for every delete overload -- sized or not, aligned or
- * not. They include the allocator's rounding and the aligned overloads' padding, so they run a
- * little above the requested sizes. Only memory from operator new is counted: plain malloc (ImGui,
- * the .NET runtime, Vulkan's allocator) isn't.
+ * The counters use the allocator's real block sizes, so current usage is exact but slightly above requested sizes. Plain malloc (ImGui, .NET, Vulkan) isn't counted.
+ *
+ * @return True if tracking is enabled.
  */
 [[nodiscard]] auto is_tracking_enabled() noexcept -> bool;
 
@@ -32,9 +29,9 @@ namespace editor::memory_stats {
 [[nodiscard]] auto dealloc_count() noexcept -> std::size_t;
 
 /**
- * @brief The whole process's memory as the OS sees it -- resident set size on Linux, private bytes on Windows (what Visual
- * Studio's "Process Memory" graph shows), 0 elsewhere. Independent of SBX_TRACK_MEMORY, and unlike the counters above it
- * also includes plain malloc (ImGui, the .NET runtime, driver allocations).
+ * @brief The process's memory as the OS sees it: resident set size on Linux, private bytes on Windows, 0 elsewhere. Includes plain malloc, unlike the counters.
+ *
+ * @return The usage in bytes.
  */
 [[nodiscard]] auto process_memory_usage() -> std::size_t;
 

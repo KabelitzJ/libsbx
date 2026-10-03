@@ -24,11 +24,7 @@
 
 namespace sbx::assets {
 
-/**
- * @brief Interleaved vertex, scalar-packed to match the shader's scalar-layout buffer pointer.
- * `color` defaults to opaque white via `math::color`'s default constructor, so every existing
- * 4-arg aggregate-init call site (position/normal/uv/tangent) keeps compiling unchanged.
- */
+/** @brief Interleaved vertex, scalar-packed to match the shader's scalar-layout buffer pointer. `color` defaults to opaque white. */
 struct alignas(std::float_t) vertex {
   math::vector3 position;
   math::vector3 normal;
@@ -38,36 +34,27 @@ struct alignas(std::float_t) vertex {
 }; // struct vertex
 
 /**
- * @brief Per-vertex skin data for a skinned mesh -- a separate array indexed 1:1 with @ref vertex,
- * not merged into it (keeps static meshes at 32 bytes/vertex, and the skin data unencoded --
- * meshopt's vertex codec targets quantizable floats, not packed joint indices).
+ * @brief Per-vertex skin data in a separate array parallel to @ref vertex, keeping static meshes small and the skin data out of meshopt's float codec.
  *
- * joint_indices holds up to 4 joint influences (glTF's JOINTS_0/WEIGHTS_0 convention), widened to
- * 32 bits -- the device doesn't enable VK_KHR_16bit_storage, only shaderInt16 (arithmetic, not
- * buffer layout), so a packed 16-bit index here wouldn't be safely readable via BDA. Weights are
- * renormalized to sum to 1.0 at cook time.
+ * Up to 4 joint influences widened to 32 bits: only shaderInt16 is enabled, not 16-bit storage, so 16-bit indices aren't readable via BDA. Weights sum to 1.
  */
 struct alignas(std::float_t) skin_vertex {
   std::array<std::uint32_t, 4u> joint_indices;
   math::vector4 weights;
 }; // struct skin_vertex
 
-/**
- * @brief A loaded mesh: one device-local vertex + index buffer, drawn as one or more submeshes
- * (one per glTF primitive). The GPU buffers are filled on the render thread; the mesh is drawable
- * once resident. The vertex buffer is read in the shader via its device address (BDA).
- */
+/** @brief A loaded mesh: one vertex and index buffer drawn as one or more submeshes, filled on the render thread and read in shaders via BDA. */
 class mesh final : public loadable {
 
   friend class asset_residency;
 
 public:
 
-  /** @brief One coarser level in a submesh's LOD chain — an index range into the same vertex buffer as its LOD0. */
+  /** @brief One coarser LOD level: an index range into the same vertex buffer as LOD0. */
   struct lod_level {
     std::uint32_t index_offset;
     std::uint32_t index_count;
-    std::float_t error; // meshopt_simplify's relative error metric for this level
+    std::float_t error; // meshopt_simplify's relative error
   }; // struct lod_level
 
   struct submesh {
@@ -75,7 +62,7 @@ public:
     std::uint32_t index_count;
     math::volume bounds;
     material_handle material;
-    std::vector<lod_level> lods{}; // progressively coarser levels beyond index_offset/index_count (LOD0); may be empty. Not yet consumed by the renderer — always drawn at LOD0.
+    std::vector<lod_level> lods{}; // coarser levels beyond LOD0; may be empty. Not used by the renderer yet.
   }; // struct submesh
 
   mesh() = default;
@@ -99,7 +86,11 @@ public:
     return _vertex_address;
   }
 
-  /** @brief Total vertex count across every submesh's shared vertex buffer (LOD0). Needed to size a skin dispatch over the whole instance. */
+  /**
+   * @brief Vertex count of the shared vertex buffer (LOD0), for sizing a skin dispatch.
+   *
+   * @return The vertex count.
+   */
   [[nodiscard]] auto vertex_count() const noexcept -> std::uint32_t {
     return _vertex_count;
   }
@@ -108,22 +99,38 @@ public:
     return _index_buffer;
   }
 
-  /** @brief Whether this mesh has per-vertex joint indices/weights (cooked from a glTF primitive with JOINTS_0/WEIGHTS_0). */
+  /**
+   * @brief Whether the mesh has per-vertex joint indices and weights.
+   *
+   * @return True for skinned meshes.
+   */
   [[nodiscard]] auto has_skin_data() const noexcept -> bool {
     return _skin_vertex_address != 0u;
   }
 
-  /** @brief BDA of the parallel skin_vertex array, indexed 1:1 with vertex_address(); 0 if @ref has_skin_data is false. */
+  /**
+   * @brief Device address of the skin_vertex array, parallel to vertex_address().
+   *
+   * @return The address, or 0 without skin data.
+   */
   [[nodiscard]] auto skin_vertex_address() const noexcept -> graphics::buffer::address_type {
     return _skin_vertex_address;
   }
 
-  /** @brief Auto-populated by asset_residency::load_mesh when the cooked mesh carries skin data; invalid otherwise. */
+  /**
+   * @brief The skeleton cooked with this mesh.
+   *
+   * @return The skeleton, invalid without skin data.
+   */
   [[nodiscard]] auto skeleton() const noexcept -> const skeleton_handle& {
     return _skeleton;
   }
 
-  /** @brief Clips cooked from the same glTF file's animations, resolved against @ref skeleton's joints. Empty if unskinned. */
+  /**
+   * @brief Clips cooked from the same glTF file, resolved against skeleton()'s joints.
+   *
+   * @return The clips, empty if unskinned.
+   */
   [[nodiscard]] auto animation_clips() const noexcept -> const std::vector<animation_clip_handle>& {
     return _animation_clips;
   }
@@ -142,8 +149,7 @@ public:
 
 private:
 
-  // Called once by asset_residency on the render thread, after the GPU buffers exist. skin_vertex_buffer/
-  // skin_vertex_address stay default (invalid) for a mesh with no skin data.
+  // Called once on the render thread after the GPU buffers exist; skin buffers stay invalid without skin data.
   auto _finalize(graphics::buffer_handle vertex_buffer, graphics::buffer_handle index_buffer, graphics::buffer::address_type vertex_address, std::uint64_t resident_frame, graphics::buffer_handle skin_vertex_buffer = {}, graphics::buffer::address_type skin_vertex_address = 0u) -> void {
     _vertex_buffer = vertex_buffer;
     _index_buffer = index_buffer;
@@ -154,16 +160,13 @@ private:
     _uploaded = true;
   }
 
-  // Pure CPU data (no GPU upload wait involved), so asset_residency::load_mesh sets these directly,
-  // before this mesh is even resident.
+  // CPU data only, so set directly before the mesh is resident.
   auto _set_skeletal_data(skeleton_handle skeleton, std::vector<animation_clip_handle> animation_clips) -> void {
     _skeleton = std::move(skeleton);
     _animation_clips = std::move(animation_clips);
   }
 
-  // Fills in a placeholder mesh() (default-constructed, empty submeshes) once its cooked content
-  // has come back from the background asset loader -- called once, on the main thread, from
-  // asset_residency's mesh finalize step. Mirrors the constructor's own field set.
+  // Fills a placeholder mesh once its cooked content arrives; called once on the main thread.
   auto _finalize_content(std::vector<submesh> submeshes, const math::volume& bounds, std::uint32_t vertex_count) -> void {
     _submeshes = std::move(submeshes);
     _bounds = bounds;

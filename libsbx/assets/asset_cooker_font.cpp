@@ -15,10 +15,9 @@
 
 namespace sbx::assets {
 
-inline constexpr auto font_magic = utility::fourcc_v<"SBFN">; // 'SBFN'
+inline constexpr auto font_magic = utility::fourcc_v<"SBFN">;
 
-// The pixel height a font's atlas is rasterized at; every glyph metric is stored normalized by
-// this (i.e. per one unit of ui_text::font_size), so one atlas serves any font_size at runtime.
+// The atlas's raster height; glyph metrics are stored per unit of font size, so one atlas serves every size.
 inline constexpr auto font_reference_size = 48.0f;
 inline constexpr auto font_sdf_padding = 4;
 inline constexpr auto font_sdf_onedge_value = 128u;
@@ -239,7 +238,7 @@ auto asset_cooker::_load_cooked_font(const std::filesystem::path& cooked, cooked
   in.read(reinterpret_cast<char*>(&header), sizeof(header));
 
   if (!in || header.magic != font_magic || header.version != font_cook_version) {
-    return false; // missing / corrupt / stale format -> caller recooks
+    return false; // missing, corrupt or stale: the caller recooks
   }
 
   auto records = std::vector<font_glyph_record>(header.glyph_count);

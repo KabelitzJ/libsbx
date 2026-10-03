@@ -25,6 +25,12 @@ namespace Sbx.Core.UI
       set { unsafe { InternalCalls.UIScrollRect_SetVertical(UUID, value); } }
     }
 
+    /** The child that scrolls: laid out at its natural size, moved by NormalizedPosition. */
+    public void SetContent(Node content)
+    {
+      unsafe { InternalCalls.UIScrollRect_SetContent(UUID, content.UUID); }
+    }
+
   } // class UIScrollRect
 
 } // namespace Sbx.Core.UI

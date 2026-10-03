@@ -67,9 +67,7 @@ struct cull_lights_push_data {
 }; // struct cull_lights_push_data
 
 auto light_culling_pass::declare(compute_pass_builder& builder, const graph_resources& resources) -> void {
-  // build_clusters -> cull_lights inside this pass stays a hand-written barrier (aabb_ready in
-  // execute()); consumers of the light lists (opaque_pass/transparent_accumulate_pass) declare their
-  // reads, so the graph places the hand-off barrier.
+  // The build_clusters -> cull_lights barrier is hand-written in execute(); consumers declare their reads, so the graph places the hand-off.
   builder.writes_buffer(resources.cluster_aabb_buffer, graphics::pipeline_stage::compute_shader, graphics::access::shader_read | graphics::access::shader_write);
   builder.writes_buffer(resources.cluster_counter_buffer, graphics::pipeline_stage::compute_shader, graphics::access::shader_read | graphics::access::shader_write);
   builder.writes_buffer(resources.cluster_range_buffer, graphics::pipeline_stage::compute_shader, graphics::access::shader_write);
@@ -108,7 +106,6 @@ auto light_culling_pass::execute(render_context& context) -> void {
   
   context.command_buffer->dispatch(groups_x, groups_y, cluster_dimensions.z());
 
-  // build_clusters' writes to the AABB buffer must land before cull_lights reads them.
   auto aabb_ready = VkMemoryBarrier2{};
   aabb_ready.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2;
   aabb_ready.srcStageMask = graphics::to_vk_enum<VkPipelineStageFlags2>(graphics::pipeline_stage::compute_shader);

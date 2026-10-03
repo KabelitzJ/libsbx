@@ -977,7 +977,7 @@ struct shader_graph_parameter {
         result.push_back(shader_graph_parameter{node.id, node.name, shader_graph_parameter_type::color_value, float_slot++});
         break;
       default:
-        break; // exposed is only meaningful on constant_* -- ignored elsewhere
+        break; // exposed only applies to constant_* nodes
     }
   }
 

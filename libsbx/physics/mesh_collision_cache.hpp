@@ -19,11 +19,7 @@
 
 namespace sbx::physics {
 
-/**
- * @brief A static mesh's collision data: triangle positions in the mesh's own local space plus a
- * BVH over them (leaf payload = triangle index i, triangle = {vertices[indices[3i]],
- * vertices[indices[3i+1]], vertices[indices[3i+2]]}).
- */
+/** @brief A static mesh's triangle positions in mesh space plus a BVH whose leaf payload i is the triangle indices[3i..3i+2]. */
 struct mesh_collision_data {
   std::vector<math::vector3> vertices;
   std::vector<std::uint32_t> indices;
@@ -31,12 +27,7 @@ struct mesh_collision_data {
   math::volume local_bounds;
 }; // struct mesh_collision_data
 
-/**
- * @brief Lazily builds and caches one mesh_collision_data per mesh asset uuid, from
- * assets_module::resolve_mesh_collision_data — independent of the mesh's GPU-residency lifecycle
- * (assets::mesh itself drops its CPU vertex/index data after upload). Built once, never rebuilt:
- * static mesh colliders only, matching mesh_collider's own restriction.
- */
+/** @brief Builds one mesh_collision_data per mesh uuid on first use from cooked data, independent of GPU residency, and never rebuilds. */
 class mesh_collision_cache final : public utility::noncopyable {
 
 public:

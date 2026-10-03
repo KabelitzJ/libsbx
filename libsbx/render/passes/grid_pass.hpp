@@ -14,15 +14,7 @@
 
 namespace sbx::render {
 
-/**
- * @brief World-space reference grid (Blender/Godot-style), editor-only; toggled via
- * @ref scene_renderer_module::set_grid_enabled. A no-op when render_context::show_grid is false, so
- * it stays in the pass list unconditionally.
- *
- * Runs between skybox_pass and transparent_accumulate_pass: needs the finished opaque depth buffer
- * to be occluded by real geometry, and must be part of what transparent_resolve_pass composites
- * against.
- */
+/** @brief Editor world-space reference grid, a no-op unless enabled. Runs between skybox_pass and transparent_accumulate_pass so geometry occludes it. */
 class grid_pass final : public graphics_pass {
 
 public:

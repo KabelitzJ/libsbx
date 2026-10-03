@@ -275,6 +275,25 @@ auto canvas_module::_emit_glyph_quad(const math::vector2& position, const math::
   }
 }
 
+// rt with node's content_size_fitter applied (the size it lays out at).
+static auto fitted_rect_transform(scenes::scene& scene, scenes::node node, rect_transform rt) -> rect_transform {
+  if (auto fitter = node.try_get_component<content_size_fitter>()) {
+    if (fitter->horizontal_fit == content_fit_mode::preferred_size) {
+      rt.size_delta.x() = layout_resolver::compute_preferred_size(scene, node, false).x();
+    } else if (fitter->horizontal_fit == content_fit_mode::min_size) {
+      rt.size_delta.x() = layout_resolver::compute_preferred_size(scene, node, true).x();
+    }
+
+    if (fitter->vertical_fit == content_fit_mode::preferred_size) {
+      rt.size_delta.y() = layout_resolver::compute_preferred_size(scene, node, false).y();
+    } else if (fitter->vertical_fit == content_fit_mode::min_size) {
+      rt.size_delta.y() = layout_resolver::compute_preferred_size(scene, node, true).y();
+    }
+  }
+
+  return rt;
+}
+
 auto canvas_module::_visit(scenes::scene& scene, scenes::node node, const resolved_rect& parent_rect, const canvas_inherited_state& inherited, const math::vector2& screen_size, const math::vector2& mouse_position, std::uint32_t white_texture_index, std::float_t scale_factor, const resolved_rect* rect_override, const math::matrix4x4* world_mvp, bool mask_clip_supported) -> void {
   auto rect_transform_component = node.try_get_component<rect_transform>();
 
@@ -304,25 +323,7 @@ auto canvas_module::_visit(scenes::scene& scene, scenes::node node, const resolv
   if (rect_override != nullptr) {
     rect = *rect_override;
   } else {
-    auto rt = *rect_transform_component;
-
-    if (auto fitter = node.try_get_component<content_size_fitter>()) {
-      if (fitter->horizontal_fit != content_fit_mode::unconstrained || fitter->vertical_fit != content_fit_mode::unconstrained) {
-        if (fitter->horizontal_fit == content_fit_mode::preferred_size) {
-          rt.size_delta.x() = layout_resolver::compute_preferred_size(scene, node, false).x();
-        } else if (fitter->horizontal_fit == content_fit_mode::min_size) {
-          rt.size_delta.x() = layout_resolver::compute_preferred_size(scene, node, true).x();
-        }
-
-        if (fitter->vertical_fit == content_fit_mode::preferred_size) {
-          rt.size_delta.y() = layout_resolver::compute_preferred_size(scene, node, false).y();
-        } else if (fitter->vertical_fit == content_fit_mode::min_size) {
-          rt.size_delta.y() = layout_resolver::compute_preferred_size(scene, node, true).y();
-        }
-      }
-    }
-
-    rect = resolve_rect(rt, parent_rect);
+    rect = resolve_rect(fitted_rect_transform(scene, node, *rect_transform_component), parent_rect);
   }
 
   const auto screen_rect = resolved_rect{rect.position * scale_factor, rect.size * scale_factor};
@@ -602,7 +603,7 @@ auto canvas_module::_visit(scenes::scene& scene, scenes::node node, const resolv
           continue;
         }
 
-        const auto natural = resolve_rect(*child_rect_transform, rect);
+        const auto natural = resolve_rect(fitted_rect_transform(scene, child, *child_rect_transform), rect);
 
         const auto max_scroll_x = std::max(0.0f, natural.size.x() - rect.size.x());
         const auto max_scroll_y = std::max(0.0f, natural.size.y() - rect.size.y());

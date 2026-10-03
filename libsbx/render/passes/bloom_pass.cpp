@@ -116,8 +116,7 @@ auto bloom_pass::_rebuild_views(const graph_resources& resources) -> void {
   _drain_retired();
 
   if (!_downsample_mips.empty() || !_upsample_mips.empty()) {
-    // Frames still in flight from before this resize may still reference the old views/indices
-    // (their command buffers were already recorded against them) -- retire instead of destroying.
+    // In-flight frames still reference the old views and indices, so retire them instead of destroying.
     auto chain = retired_chain{frame_context.frame_index(), {}};
     chain.views.reserve(_downsample_mips.size() + _upsample_mips.size());
 
@@ -221,10 +220,7 @@ auto bloom_pass::execute(render_context& context) -> void {
   auto& downsample_image = registry.get<graphics::image>(_cached_downsample);
   auto& upsample_image = registry.get<graphics::image>(_cached_upsample);
 
-  // Bloom fully regenerates its content every frame, so undefined -> general is always a valid
-  // starting point -- no first-frame special case needed. Still waits on the previous frame's reads
-  // (its own compute passes, tonemap_pass's fragment sample of the upsample chain), which can still
-  // be executing with frames in flight.
+  // Content is regenerated every frame, so undefined -> general is always valid; it still waits on the previous frame's reads.
   auto to_general = graphics::command_buffer::image_transition_data{};
   to_general.src_stage_mask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
   to_general.src_access_mask = VK_ACCESS_2_NONE;
@@ -245,9 +241,7 @@ auto bloom_pass::execute(render_context& context) -> void {
   const auto& bloom = context.packet->camera.post_process.bloom;
 
   if (!bloom.enabled) {
-    // Never ran a dispatch, so every mip is still "general" with stale/garbage contents -- flip
-    // the whole chain to the state tonemap_pass's declared read expects in one shot. tonemap_pass
-    // itself zeroes the actual contribution, so the garbage never shows.
+    // Nothing dispatched: flip the whole chain to the read layout tonemap_pass expects; it zeroes the contribution.
     auto to_read = graphics::command_buffer::image_transition_data{};
     to_read.src_stage_mask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
     to_read.src_access_mask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;
@@ -272,10 +266,7 @@ auto bloom_pass::execute(render_context& context) -> void {
 
   const auto base_extent = extent_for(context.extent);
 
-  // bindless_table's sampled-image slots are permanently declared at shader_read_only_optimal, so
-  // each mip flips general -> read-only right after the dispatch that produced it, individually --
-  // one whole-chain transition at the end would leave earlier mips in the wrong layout for the
-  // later dispatches that sample them.
+  // Each mip flips to read-only right after it's written, since bindless sampled slots are always read-only and later dispatches sample it.
   auto mip_to_read = [&](graphics::image& image, std::uint32_t mip) -> void {
     auto transition = graphics::command_buffer::image_transition_data{};
     transition.image = image.handle();
@@ -291,7 +282,7 @@ auto bloom_pass::execute(render_context& context) -> void {
     command_buffer.transition_image_layout(transition);
   };
 
-  // Stage 1: prefilter -- threshold the full-res HDR scene color straight into downsample mip0.
+  // Prefilter: threshold the HDR scene color into downsample mip 0.
   {
     const auto groups_x = (base_extent.x() + threads_per_group - 1u) / threads_per_group;
     const auto groups_y = (base_extent.y() + threads_per_group - 1u) / threads_per_group;
@@ -307,7 +298,7 @@ auto bloom_pass::execute(render_context& context) -> void {
 
   mip_to_read(downsample_image, 0u);
 
-  // Stage 2: downsample chain -- each mip reads the previous one, already flipped read-only.
+  // Downsample: each mip reads the previous one.
   command_buffer.bind_pipeline(*_downsample_pipeline);
 
   for (auto mip = std::uint32_t{1u}; mip < _mip_count; ++mip) {
@@ -324,8 +315,7 @@ auto bloom_pass::execute(render_context& context) -> void {
     mip_to_read(downsample_image, mip);
   }
 
-  // Stage 3: upsample chain -- tent-filters the smaller mip and additively combines with the
-  // same-size downsample mip, walking back up to mip0 (bloom_upsample's coarsest level).
+  // Upsample: tent-filter the smaller mip and add the same-size downsample mip, back up to mip 0.
   command_buffer.bind_pipeline(*_upsample_pipeline);
 
   for (auto step = std::uint32_t{0u}; step < _mip_count - 1u; ++step) {

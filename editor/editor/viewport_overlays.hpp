@@ -10,27 +10,21 @@
 namespace editor {
 
 /**
- * @brief Draws a clickable icon at the projected screen position of every light and camera node; clicking one selects it (Ctrl toggles, Shift adds), same modifier behavior as viewport ray-pick.
+ * @brief Draws a clickable, always-on-top icon over every light and camera; clicking selects like viewport picking (Ctrl toggles, Shift adds).
  *
- * Always drawn on top, not depth-tested against the scene.
- *
+ * @param state The editor state.
  * @param viewport_origin Screen-space top-left of the viewport image.
  * @param viewport_size Screen-space size of the viewport image.
- * @param gizmo_capturing_input Pass draw_viewport_gizmo's return value for this frame. A
- * selected light/camera's icon can project onto the gizmo's own center move-handle; when true,
- * icon hit-testing is skipped so the gizmo keeps input priority (the glyph itself still draws).
+ * @param gizmo_capturing_input draw_viewport_gizmo's result this frame; when true, icons still draw but skip hit-testing so the gizmo keeps priority.
  *
- * @return True if the cursor is over any icon — callers should skip viewport click-to-pick
- * this frame when true.
+ * @return True if the cursor is over an icon, so viewport picking should be skipped.
  */
 auto draw_node_icons(editor_state& state, const ImVec2& viewport_origin, const ImVec2& viewport_size, bool gizmo_capturing_input) -> bool;
 
 /**
- * @brief Draws the selected node's camera view frustum as wireframe lines, when it has a camera component.
+ * @brief Draws the selected camera's view frustum through the debug_draw accumulator; no widgets, no input.
  *
- * Submitted into scene_renderer_module's debug_draw accumulator, not ImGui — draws no widgets
- * and captures no input.
- *
+ * @param state The editor state.
  * @param viewport_size Screen-space size of the viewport image; its aspect ratio shapes the frustum.
  */
 auto draw_camera_frustum_gizmo(editor_state& state, const ImVec2& viewport_size) -> void;

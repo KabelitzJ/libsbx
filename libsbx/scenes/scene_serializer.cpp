@@ -36,9 +36,7 @@
 
 namespace sbx::scenes {
 
-// Assigns each referenced mesh/material/environment-map/particle-effect a short, unique, stable
-// (within one serialize) name, so nodes referencing the same asset just repeat its key instead of
-// its full uuid — shared by both the whole-scene build and a single-subtree snapshot.
+// Short keys unique within one serialize, so nodes sharing an asset repeat the key instead of the uuid.
 struct asset_key_table {
   std::unordered_map<math::uuid, std::string> mesh_keys{};
   std::unordered_map<math::uuid, std::string> material_keys{};
@@ -72,9 +70,7 @@ auto make_asset_key(asset_key_table& keys, const std::string& base) -> std::stri
   return key;
 }
 
-// A primitive mesh has no entry in the asset manifest -- path_of(id) comes back empty, so it needs
-// its own name (used for both the yaml key and the table entry's cosmetic "name" field).
-// The scene-local key for a texture, registering it in the scene's textures table on first use.
+// The scene-local key for a texture, registered in the textures table on first use.
 auto texture_asset_key(asset_key_table& keys, const math::uuid& id) -> std::string {
   if (!keys.texture_keys.contains(id)) {
     const auto name = core::engine::get_module<assets::assets_module>().path_of(id).stem().string();
@@ -91,7 +87,6 @@ auto texture_asset_key(asset_key_table& keys, const math::uuid& id) -> std::stri
   return keys.texture_keys.at(id);
 }
 
-// A camera's post_process block: exposure, then one map per effect.
 auto serialize_post_process(const post_process_settings& settings, asset_key_table& keys) -> YAML::Node {
   auto node = YAML::Node{};
   node["exposure"] = settings.exposure;
@@ -150,8 +145,7 @@ auto serialize_post_process(const post_process_settings& settings, asset_key_tab
   return node;
 }
 
-// Reads a post_process block, or -- for scenes saved before it existed -- the old flat camera keys
-// (exposure, bloom_enabled, bloom_intensity, ...). Anything missing keeps its default.
+// Reads a post_process block, or the flat camera keys of older scenes; anything missing keeps its default.
 auto deserialize_post_process(const YAML::Node& node, const std::unordered_map<std::string, math::uuid>& key_to_uuid) -> post_process_settings {
   auto settings = post_process_settings{};
 
@@ -217,7 +211,7 @@ auto deserialize_post_process(const YAML::Node& node, const std::unordered_map<s
     auto& target = settings.color_grading;
 
     if (grading["lut"] && key_to_uuid.contains(grading["lut"].as<std::string>())) {
-      // A lookup table is data, not colour: unorm, never sRGB-decoded.
+      // A lookup table is data: unorm, never sRGB-decoded.
       target.lut = core::engine::get_module<assets::assets_module>().load_texture(key_to_uuid.at(grading["lut"].as<std::string>()), graphics::format::r8g8b8a8_unorm);
     }
 
@@ -237,8 +231,7 @@ auto mesh_asset_name(const math::uuid& id) -> std::string {
   return core::engine::get_module<assets::assets_module>().path_of(id).stem().string();
 }
 
-// Pre-pass: every mesh/material referenced by a mesh_renderer among entities gets a table entry
-// and a key, before any node is written (so a node can always look its references up by key).
+// Keys every mesh and material a mesh_renderer references before any node is written.
 auto collect_mesh_material_keys(ecs::registry& registry, const std::vector<ecs::entity>& entities, asset_key_table& keys) -> void {
   for (const auto entity : entities) {
     if (!registry.all_of<mesh_renderer>(entity)) {
@@ -289,8 +282,7 @@ auto collect_mesh_material_keys(ecs::registry& registry, const std::vector<ecs::
     }
   }
 
-  // A mesh_collider references the same kind of asset a mesh_renderer does — share one table
-  // entry/key if a node (or another node) already registered the same mesh via either component.
+  // mesh_colliders share mesh keys with mesh_renderers.
   for (const auto entity : entities) {
     if (!registry.all_of<physics::mesh_collider>(entity)) {
       continue;
@@ -315,17 +307,14 @@ auto collect_mesh_material_keys(ecs::registry& registry, const std::vector<ecs::
   }
 }
 
-// Writes one node's full YAML entry (tag/id/parent/components). write_parent_key is false only
-// for a subtree snapshot's own root — its real parent (if any) isn't part of the snapshot, so it
-// must come back attached under scene::root() until the caller repositions it.
+// Writes one node's tag, id, parent and components. A subtree snapshot's root omits its parent, so it loads under scene::root() for the caller to reposition.
 auto write_node(YAML::Node& node_yaml, ecs::registry& registry, ecs::entity entity, asset_key_table& keys, bool write_parent_key) -> void {
   node_yaml["tag"] = registry.get<tag>(entity).str();
   node_yaml["id"] = registry.get<id>(entity).value();
 
   const auto& relationship_component = registry.get<relationship>(entity);
 
-  // parent is target._root for a top-level node — that's the sentinel, not a real node, so it
-  // has no id to write (and no "parent" key means "top-level" on load).
+  // Top-level nodes have the root sentinel as parent and write no parent key.
   if (write_parent_key && relationship_component.parent != ecs::null_entity && registry.all_of<id>(relationship_component.parent)) {
     node_yaml["parent"] = registry.get<id>(relationship_component.parent).value();
   }
@@ -345,10 +334,7 @@ auto write_node(YAML::Node& node_yaml, ecs::registry& registry, ecs::entity enti
   }
 
   {
-    // A real trackable component (not a bare top-level key like tag/id/parent) so a prefab's
-    // layer propagates to its instances -- and can be per-instance overridden/reverted -- through
-    // the exact same mark_prefab_override/apply_component_key machinery every other component
-    // uses (see prefab_override.hpp's component_key<layer>).
+    // A real component, so prefab layer propagation and per-instance overrides use the usual machinery.
     auto component = YAML::Node{};
     component["type"] = "layer";
     component["index"] = static_cast<std::uint32_t>(registry.get<layer>(entity).index);
@@ -393,9 +379,7 @@ auto write_node(YAML::Node& node_yaml, ecs::registry& registry, ecs::entity enti
     }
   }
 
-  // skeleton_pose isn't written -- it's fully auto-derived from mesh_renderer.mesh->skeleton() on
-  // load (see read_node_components' "static_mesh" branch) and holds nothing but per-frame scratch
-  // state otherwise.
+  // skeleton_pose isn't written: it's derived from the mesh's skeleton on load.
   if (registry.all_of<animator>(entity)) {
     const auto& anim = registry.get<animator>(entity);
 
@@ -422,8 +406,7 @@ auto write_node(YAML::Node& node_yaml, ecs::registry& registry, ecs::entity enti
         component["graph"] = keys.animation_graph_keys.at(graph_id);
         component["playing"] = anim.playing;
 
-        // Parameter values aren't persisted per-instance -- every scene load starts from the
-        // graph's own defaults (see animator::set_graph).
+        // Parameter values aren't persisted; loads start from the graph's defaults.
         components.push_back(component);
       }
     }
@@ -912,12 +895,10 @@ auto write_node(YAML::Node& node_yaml, ecs::registry& registry, ecs::entity enti
         component["half_extents"] = shape.half_extents;
       },
       [&]([[maybe_unused]] const physics::triangle& shape) {
-        // Never authored directly on a shape_collider — only appears internally as a
-        // mesh_collider narrowphase candidate — so there's nothing meaningful to write.
+        // Internal mesh collider candidate only; nothing to write.
       },
       [&]([[maybe_unused]] const physics::convex_hull& shape) {
-        // Never authored directly on a shape_collider either — only ever constructed transiently
-        // by narrowphase for a mesh_collider with convex == true — nothing meaningful to write.
+        // Internal convex mesh collider shape only; nothing to write.
       }
     ), collider.shape);
 
@@ -1005,7 +986,6 @@ auto write_node(YAML::Node& node_yaml, ecs::registry& registry, ecs::entity enti
   node_yaml["components"] = components;
 }
 
-// Reads a document's "assets" tables into one key -> uuid lookup.
 auto register_asset_keys(const YAML::Node& document) -> std::unordered_map<std::string, math::uuid> {
   const auto assets_node = document["assets"];
 
@@ -1031,14 +1011,12 @@ auto register_asset_keys(const YAML::Node& document) -> std::unordered_map<std::
   return key_to_uuid;
 }
 
-// Reads one node's "components" sequence and applies it to the already-created target_node.
 auto read_node_components(node& target_node, const YAML::Node& node_yaml, const std::unordered_map<std::string, math::uuid>& key_to_uuid) -> void {
   for (const auto component : node_yaml["components"]) {
     const auto type = component["type"].as<std::string>();
 
     if (type == "layer") {
-      // Older scene/prefab files have no "layer" entry -- the node keeps the default layer 0
-      // ("Default") scene::_create_node already gave it.
+      // Older files have no layer entry and keep layer 0.
       target_node.get_component<scenes::layer>().index = static_cast<std::uint8_t>(component["index"].as<std::uint32_t>());
     } else if (type == "transform") {
       auto& transform = target_node.transform();
@@ -1046,8 +1024,7 @@ auto read_node_components(node& target_node, const YAML::Node& node_yaml, const 
       transform.rotation = component["rotation"].as<math::quaternion>();
       transform.scale = component["scale"].as<math::vector3>();
     } else if (type == "inactive") {
-      // Absence means active -- scene::_create_node's freshly-created node already starts active,
-      // so there's nothing to do for a node without this entry.
+      // Absence means active, the default for new nodes.
       target_node.set_active(false);
     } else if (type == "static_mesh") {
       auto& renderer = target_node.get_or_add_component<mesh_renderer>();
@@ -1055,8 +1032,7 @@ auto read_node_components(node& target_node, const YAML::Node& node_yaml, const 
 
       sync_materials_with_mesh(renderer);
 
-      // Auto-derived, not read from the file -- see the writer's comment above "animator" for why
-      // skeleton_pose itself is never serialized.
+      // Derived from the mesh, never read from the file.
       if (renderer.mesh.is_valid() && renderer.mesh->skeleton().is_valid()) {
         target_node.get_or_add_component<skeleton_pose>().skeleton = renderer.mesh->skeleton();
       }
@@ -1086,7 +1062,7 @@ auto read_node_components(node& target_node, const YAML::Node& node_yaml, const 
       c.near_plane = component["near_plane"].as<std::float_t>();
       c.far_plane = component["far_plane"].as<std::float_t>();
 
-      // Scenes saved before post_process existed keep exposure/bloom flat on the component.
+      // Older scenes keep exposure and bloom flat on the component.
       c.post_process = deserialize_post_process(component["post_process"] ? component["post_process"] : component, key_to_uuid);
     } else if (type == "directional_light") {
       auto& light = target_node.get_or_add_component<directional_light>();
@@ -1137,9 +1113,7 @@ auto read_node_components(node& target_node, const YAML::Node& node_yaml, const 
         sky.intensity = component["intensity"].as<std::float_t>();
       }
 
-      // Older scene files predate the ambient/background split and only wrote "intensity",
-      // which used to drive both — fall back to that value so those scenes keep rendering the
-      // same instead of silently losing ambient brightness to the 1.0f struct default.
+    // Older scenes only wrote "intensity", which drove both ambient and background; fall back to it.
       sky.ambient_intensity = component["ambient_intensity"] ? component["ambient_intensity"].as<std::float_t>() : sky.intensity;
     } else if (type == "particle_effect") {
       auto& instance = target_node.get_or_add_component<particle_effect>();
@@ -1490,7 +1464,7 @@ auto read_node_components(node& target_node, const YAML::Node& node_yaml, const 
       collider.rotation = component["rotation"].as<math::quaternion>();
       collider.friction = component["friction"].as<std::float_t>();
       collider.restitution = component["restitution"].as<std::float_t>();
-      collider.is_trigger = component["is_trigger"].as<bool>(false); // absent in scenes saved before triggers existed
+      collider.is_trigger = component["is_trigger"].as<bool>(false);
     } else if (type == "mesh_collider") {
       auto& collider = target_node.get_or_add_component<physics::mesh_collider>();
 
@@ -1499,8 +1473,8 @@ auto read_node_components(node& target_node, const YAML::Node& node_yaml, const 
       collider.rotation = component["rotation"].as<math::quaternion>();
       collider.friction = component["friction"].as<std::float_t>();
       collider.restitution = component["restitution"].as<std::float_t>();
-      collider.is_convex = component["convex"].as<bool>(false); // absent in scenes saved before convex mesh colliders existed
-      collider.is_trigger = component["is_trigger"].as<bool>(false); // absent in scenes saved before triggers existed
+      collider.is_convex = component["convex"].as<bool>(false);
+      collider.is_trigger = component["is_trigger"].as<bool>(false);
     } else if (type == "prefab_member") {
       auto& member = target_node.get_or_add_component<prefab_member>();
       member.member_id = component["member_id"].as<math::uuid>();
@@ -1532,9 +1506,7 @@ auto read_node_components(node& target_node, const YAML::Node& node_yaml, const 
     }
   }
 
-  // local_inverse_inertia is transient (not serialized — see write_node) and depends on both the
-  // body's mass and its collider's shape, so it's only computable once every component on this
-  // node has been read, regardless of which order they appeared in the YAML.
+  // local_inverse_inertia isn't serialized and needs both mass and shape, so compute it after every component is read.
   if (target_node.has_component<physics::rigidbody>() && target_node.has_component<physics::shape_collider>()) {
     auto& body = target_node.get_component<physics::rigidbody>();
     const auto& collider = target_node.get_component<physics::shape_collider>();
@@ -1543,8 +1515,7 @@ auto read_node_components(node& target_node, const YAML::Node& node_yaml, const 
     body.local_inverse_inertia = physics::local_inverse_inertia(collider.shape, mass);
   }
 
-  // Mirrors the shape_collider case above; only a convex mesh_collider can be dynamic (see
-  // collider.hpp).
+  // Same for convex mesh colliders, the only kind a dynamic body can carry.
   if (target_node.has_component<physics::rigidbody>() && target_node.has_component<physics::mesh_collider>()) {
     auto& body = target_node.get_component<physics::rigidbody>();
     const auto& collider = target_node.get_component<physics::mesh_collider>();
@@ -1561,9 +1532,7 @@ auto read_node_components(node& target_node, const YAML::Node& node_yaml, const 
 
 auto scene_serializer::build(scene& target) -> YAML::Node {
   auto& registry = target._registry;
-  // Registry/view iteration order is unspecified, so node-order-sensitive passes below walk this
-  // depth-first traversal instead, rooted at target._root (relationship::children is where
-  // top-level order is persisted).
+  // Registry order is unspecified, so order-sensitive passes walk the hierarchy depth-first from the root.
   auto ordered_nodes = std::vector<ecs::entity>{};
 
   const auto collect = [&](this const auto& self, ecs::entity entity) -> void {
@@ -1589,7 +1558,6 @@ auto scene_serializer::build(scene& target) -> YAML::Node {
     nodes_node.push_back(node_yaml);
   }
 
-  // Metadata
   auto metadata = YAML::Node{};
 
   metadata["name"] = target.name();
@@ -1629,8 +1597,7 @@ auto scene_serializer::serialize(scene& target) -> std::string {
 auto scene_serializer::save(scene& target, const std::filesystem::path& path) -> void {
   auto& project = core::engine::project();
 
-  // An absolute path (e.g. the editor's play-mode snapshot, living under .sbx/ rather than
-  // assets/) is already fully resolved — only prefix relative, asset-directory-relative paths.
+  // Absolute paths (e.g. the play-mode snapshot under .sbx/) are already resolved.
   const auto resolved_path = path.is_absolute() ? path : project.assets_directory() / path;
   const auto content = serialize(target);
 
@@ -1649,7 +1616,7 @@ auto scene_serializer::load(scene& target, const std::filesystem::path& path) ->
 
   const auto assets_directory = project.assets_directory();
 
-  // See the matching comment in save() — an absolute path is already fully resolved.
+  // Absolute paths are already resolved.
   const auto resolved_path = path.is_absolute() ? path : assets_directory / path;
 
   if (!std::filesystem::exists(resolved_path)) {
@@ -1665,7 +1632,7 @@ auto scene_serializer::load(scene& target, const std::filesystem::path& path) ->
 }
 
 auto scene_serializer::load(scene& target, const YAML::Node& root) -> void {
-  target._registry.clear(); // also destroys target._root — recreate it before anything else runs
+  target._registry.clear(); // also destroys target._root, recreated next
   target._root = target._registry.create();
   target._registry.emplace<relationship>(target._root);
   target._entities_by_id.clear();
@@ -1681,12 +1648,12 @@ auto scene_serializer::load(scene& target, const YAML::Node& root) -> void {
 
   const auto nodes_node = root["nodes"];
 
-  // Pass 1: create every node with its id (so parent/reference ids resolve).
+  // Pass 1: create every node with its id, so references resolve.
   for (const auto node_yaml : nodes_node) {
     target._create_node(node_yaml["tag"].as<std::string>(), local_transform{}, node_yaml["id"].as<math::uuid>());
   }
 
-  // Pass 2: tag, parent, components.
+  // Pass 2: tag, parent and components.
   for (const auto node_yaml : nodes_node) {
     auto node = target.find(node_yaml["id"].as<math::uuid>());
 
@@ -1709,8 +1676,7 @@ auto scene_serializer::load(scene& target, const YAML::Node& root) -> void {
     }
   }
 
-  // Any prefab_instance in this scene may have gone stale (its prefab edited) since the scene was
-  // last saved -- resync once up front instead of leaving it stale until the next per-frame call.
+  // Prefabs may have changed since the scene was saved; resync now.
   sync_prefab_instances(target);
 }
 
@@ -1760,16 +1726,14 @@ auto scene_serializer::deserialize_subtree(scene& target, const YAML::Node& snap
   const auto key_to_uuid = register_asset_keys(snapshot);
   const auto nodes_node = snapshot["nodes"];
 
-  // Pass 1: create every node with its id (so parent/reference ids resolve) — index 0 is always
-  // the subtree root (see serialize_subtree's DFS, which visits it before any descendant).
+  // Pass 1: create every node with its id; index 0 is always the subtree root.
   for (const auto node_yaml : nodes_node) {
     target._create_node(node_yaml["tag"].as<std::string>(), local_transform{}, node_yaml["id"].as<math::uuid>());
   }
 
   const auto root_id = nodes_node[0]["id"].as<math::uuid>();
 
-  // Pass 2: tag, parent, components. The root's entry never has a "parent" key (see
-  // serialize_subtree), so it's left attached under target._root — the caller repositions it.
+  // Pass 2: tag, parent and components; the root has no parent key and stays under the scene root for the caller to reposition.
   for (const auto node_yaml : nodes_node) {
     auto node = target.find(node_yaml["id"].as<math::uuid>());
 
@@ -1829,11 +1793,7 @@ auto scene_serializer::with_fresh_ids(const YAML::Node& snapshot) -> YAML::Node 
   return copy;
 }
 
-// Reverse of register_asset_keys: seeds a fresh asset_key_table from an existing prefab's
-// "assets" tables (uuid -> key, plus the sequence nodes themselves, cloned so appends never
-// mutate the prefab's own stored snapshot before update_prefab commits) so re-serializing one
-// component of an already-saved prefab reuses existing keys instead of minting duplicates, only
-// minting a fresh key for an asset the prefab didn't reference yet.
+// Seeds a key table from a prefab's assets tables (cloned, so appends don't touch the stored snapshot), so re-serializing reuses existing keys.
 auto load_asset_key_table(const YAML::Node& document) -> asset_key_table {
   const auto assets_node = document["assets"];
 
@@ -1874,9 +1834,7 @@ auto find_node_entry(const YAML::Node& nodes_sequence, const math::uuid& member_
   return YAML::Node{};
 }
 
-// Replaces every "components" entry of type component_key in target_components with whatever
-// entries of that same type source_components holds (0, 1, or -- "script" only -- several). Both
-// are "components" sequences in the write_node/serialize_subtree shape.
+// Replaces every component_key entry in target_components with source_components' entries of that type (0, 1, or several for "script").
 auto replace_component_entries(YAML::Node target_components, const YAML::Node& source_components, std::string_view component_key) -> void {
   for (auto index = target_components.size(); index-- > 0u;) {
     if (target_components[index]["type"].as<std::string>() == component_key) {
@@ -1895,12 +1853,7 @@ auto replace_component_entries(YAML::Node target_components, const YAML::Node& s
   }
 }
 
-// Applies just node_entry's component_key component(s) onto target_node, leaving every other
-// component untouched -- the per-key merge primitive behind sync_prefab_instances and
-// revert_prefab_override. "script" is the one type that can repeat (several Behaviors on one node),
-// so it's the one case that needs its whole script_component cleared first; every other type is a
-// single get_or_add-and-overwrite in read_node_components, already idempotent against a
-// pre-existing value of the same type.
+// Applies only node_entry's component_key components onto target_node; the merge step behind prefab sync and revert. Scripts can repeat, so their component is cleared first.
 auto apply_component_key(node target_node, const YAML::Node& node_entry, const std::unordered_map<std::string, math::uuid>& key_to_uuid, std::string_view component_key) -> void {
   if (component_key == "script") {
     target_node.remove_component<script_component>();
@@ -1934,8 +1887,7 @@ auto find_component_entry(const YAML::Node& node_entry, std::string_view compone
   return YAML::Node{};
 }
 
-// entity's own component_key entry as write_node emits it, keyed against keys -- seed keys from the prefab's snapshot
-// (load_asset_key_table) so asset references come out under the same key names as the prefab's own entry.
+// The entity's component_key entry as write_node emits it; seed keys from the prefab's snapshot so asset keys match.
 auto live_component_entry(ecs::registry& registry, ecs::entity entity, asset_key_table& keys, std::string_view component_key) -> YAML::Node {
   collect_mesh_material_keys(registry, {entity}, keys);
 
@@ -1945,8 +1897,7 @@ auto live_component_entry(ecs::registry& registry, ecs::entity entity, asset_key
   return find_component_entry(scratch, component_key);
 }
 
-// Keys of live whose value differs from prefab's ("type" excluded), compared as emitted YAML -- both entries must be keyed
-// against the same asset table (see live_component_entry).
+// The fields of live that differ from prefab ("type" excluded); both must be keyed against the same table.
 auto differing_fields(const YAML::Node& live, const YAML::Node& prefab) -> std::vector<std::string> {
   auto fields = std::vector<std::string>{};
 
@@ -1965,7 +1916,7 @@ auto differing_fields(const YAML::Node& live, const YAML::Node& prefab) -> std::
   return fields;
 }
 
-// base with fields replaced by from's values (a field from lacks is dropped).
+// base with `fields` taken from `from` (fields `from` lacks are dropped).
 auto with_fields_from(const YAML::Node& base, const YAML::Node& from, const std::vector<std::string>& fields) -> YAML::Node {
   auto merged = YAML::Clone(base);
 
@@ -1980,7 +1931,6 @@ auto with_fields_from(const YAML::Node& base, const YAML::Node& from, const std:
   return merged;
 }
 
-// Applies one already-built component entry (keyed against keys) onto target_node.
 auto apply_component_entry(node target_node, const YAML::Node& entry, const asset_key_table& keys, std::string_view component_key) -> void {
   auto assets_document = YAML::Node{};
   assets_document["assets"]["static_meshes"] = keys.meshes_table;
@@ -1998,9 +1948,7 @@ auto apply_component_entry(node target_node, const YAML::Node& entry, const asse
   apply_component_key(target_node, node_entry, register_asset_keys(assets_document), component_key);
 }
 
-// Walks up from a prefab_member node to the instance root carrying prefab_instance -- every node
-// under a prefab instance has prefab_member, but only the root also has prefab_instance. Returns an
-// invalid node if member_node isn't part of any prefab instance.
+// The prefab instance root above a member node; only the root carries prefab_instance. Invalid if the node isn't in an instance.
 auto find_prefab_instance_root(scene& target, node member_node) -> node {
   if (!member_node.has_component<prefab_member>()) {
     return node{};
@@ -2016,8 +1964,7 @@ auto find_prefab_instance_root(scene& target, node member_node) -> node {
   return (current.is_valid() && current.has_component<prefab_instance>()) ? current : node{};
 }
 
-// Shared tail of apply_prefab_override and update_prefab_from_node: commit snapshot as prefab's
-// new content and persist it, if it's already a saved (not merely in-memory) asset.
+// Commits a snapshot as the prefab's content and saves it if the prefab is a saved asset.
 auto save_prefab_snapshot(assets::prefab_handle& prefab, YAML::Node snapshot) -> void {
   auto& assets_module = core::engine::get_module<assets::assets_module>();
 
@@ -2058,8 +2005,7 @@ auto scene_serializer::instantiate_prefab(scene& target, const assets::prefab_ha
   const auto key_to_uuid = register_asset_keys(snapshot);
   const auto nodes_node = snapshot["nodes"];
 
-  // Fresh scenes::id per node -- two instances (or an instance and its own prefab) can't share
-  // ids -- except the root, which keeps root_id when given (see this method's doc comment).
+  // Fresh ids per node, since instances can't share ids, except the root when root_id is given.
   auto id_remap = std::unordered_map<math::uuid, math::uuid>{};
   auto is_first = true;
 
@@ -2079,7 +2025,7 @@ auto scene_serializer::instantiate_prefab(scene& target, const assets::prefab_ha
     fresh.add_component<prefab_member>(old_id);
   }
 
-  // Pass 2: parent + components, same two-pass shape as deserialize_subtree.
+  // Pass 2: parent and components.
   for (const auto node_yaml : nodes_node) {
     const auto old_id = node_yaml["id"].as<math::uuid>();
     auto instance_node = target.find(id_remap.at(old_id));
@@ -2122,7 +2068,7 @@ auto scene_serializer::sync_prefab_instances(scene& target) -> void {
     const auto key_to_uuid = register_asset_keys(snapshot);
     const auto nodes_node = snapshot["nodes"];
 
-    // Index the instance's current subtree by its nodes' prefab-local (member) id.
+  // The instance's nodes by member id.
     auto by_member = std::unordered_map<math::uuid, ecs::entity>{};
 
     const auto collect = [&](this const auto& self, ecs::entity current) -> void {
@@ -2159,15 +2105,11 @@ auto scene_serializer::sync_prefab_instances(scene& target) -> void {
 
       if (existing == by_member.end()) {
         if (is_node_removed(member_id)) {
-          // This instance deliberately deleted this member (see delete_node_command's
-          // node_removed hook, which marks every prefab_member in a deleted subtree, not just
-          // its root) -- stays gone across resyncs instead of being resurrected.
+          // Deleted from this instance on purpose; stays gone across resyncs.
           continue;
         }
 
-        // The prefab gained a node since this instance's last sync -- instantiate just this one
-        // under its already-resolved instance parent (parents always precede children in this
-        // sequence, see serialize_subtree's DFS, so a multi-level addition resolves in one pass).
+        // A node added to the prefab since the last sync; parents precede children, so nested additions resolve in one pass.
         const auto parent_member = node_yaml["parent"] ? node_yaml["parent"].as<math::uuid>() : math::uuid::nil();
         const auto parent_entity = by_member.contains(parent_member) ? by_member.at(parent_member) : root_entity;
 
@@ -2192,23 +2134,21 @@ auto scene_serializer::sync_prefab_instances(scene& target) -> void {
           const auto key = component["type"].as<std::string>();
 
           if (!seen_keys.insert(key).second) {
-            continue; // "script" can list several entries of the same type in one node -- apply_component_key already replays every match in a single call
+            continue; // apply_component_key already applied every "script" entry
           }
 
-          // The instance root's own placement is never prefab content, regardless of whether an
-          // override was ever recorded for it -- see scene_serializer.hpp's prefab_override doc
-          // comment. Every other node's transform is ordinary trackable/syncable content.
+          // The instance root's own placement is never prefab content.
           if (key == "transform" && existing->second == root_entity) {
             continue;
           }
 
           if (const auto* override_entry = find_override(member_id, key)) {
-            // A whole-component override (or a removal) keeps the instance's own value outright.
+            // Whole-component overrides and removals keep the instance's value.
             if (override_entry->kind != prefab_override_kind::component_value || override_entry->fields.empty()) {
               continue;
             }
 
-            // Per-field: the prefab's new entry, with just the overridden fields kept at the instance's values.
+            // Per-field: the prefab's new entry with the overridden fields kept.
             auto keys = load_asset_key_table(snapshot);
             const auto live = live_component_entry(target._registry, existing->second, keys, key);
 
@@ -2233,9 +2173,7 @@ auto scene_serializer::apply_prefab_override(scene& target, node source_node, st
     return;
   }
 
-  // Defensive: mark_prefab_override already refuses to ever record a "transform" override for
-  // the root, so prefab_overrides_of (and thus the Hierarchy/Inspector menus) never offer this in
-  // the first place -- this just guards any other future caller.
+  // mark_prefab_override never records a root transform override; this guards other callers.
   if (component_key == "transform" && source_node == root) {
     return;
   }
@@ -2249,17 +2187,14 @@ auto scene_serializer::apply_prefab_override(scene& target, node source_node, st
   auto snapshot = YAML::Clone(instance.source->snapshot());
   auto keys = load_asset_key_table(snapshot);
 
-  // Seeds keys.mesh_keys/material_keys for source_node's own mesh/material references, mirroring
-  // serialize_subtree's prepass -- write_node's "static_mesh"/"mesh_collider" branches assume
-  // their mesh is already keyed and would throw otherwise (collect_mesh_material_keys is the only
-  // place that registers a mesh key; every other asset kind registers its own key inline).
+  // write_node expects mesh keys to be registered already, as in serialize_subtree.
   collect_mesh_material_keys(target._registry, {source_node._entity}, keys);
 
   const auto member_id = source_node.get_component<prefab_member>().member_id;
   auto node_entry = find_node_entry(snapshot["nodes"], member_id);
 
   if (!node_entry) {
-    return; // shouldn't happen -- member_id came from this same instance's own prefab_member
+    return; // member_id came from this instance, so this shouldn't happen
   }
 
   auto scratch = YAML::Node{};
@@ -2290,7 +2225,7 @@ auto scene_serializer::revert_prefab_override(scene& target, node target_node, s
     return;
   }
 
-  // See the matching guard in apply_prefab_override.
+  // Same guard as apply_prefab_override.
   if (component_key == "transform" && target_node == root) {
     return;
   }
@@ -2323,8 +2258,7 @@ auto scene_serializer::mark_prefab_override(scene& target, node member_node, std
     return;
   }
 
-  // The instance root's own placement is never prefab content -- see prefab_override's doc
-  // comment and sync_prefab_instances' matching skip. A descendant's transform is unaffected.
+  // The instance root's placement is never prefab content.
   if (component_key == "transform" && member_node == root) {
     return;
   }
@@ -2336,8 +2270,7 @@ auto scene_serializer::mark_prefab_override(scene& target, node member_node, std
     return override_entry.member_id == member_id && override_entry.component_key == component_key;
   };
 
-  // A value edit records exactly which fields now differ from the prefab -- and none differing (edited back, or undone) means
-  // there's nothing left to override. Scripts and components the prefab doesn't have stay whole-component (fields empty).
+  // Records exactly the fields that differ from the prefab, and none means no override. Scripts and components the prefab lacks stay whole-component.
   auto fields = std::vector<std::string>{};
 
   if (kind == prefab_override_kind::component_value && component_key != "script" && instance.source.is_valid()) {
@@ -2389,8 +2322,7 @@ auto scene_serializer::revert_prefab_override_field(scene& target, node target_n
 
   apply_component_entry(target_node, with_fields_from(live, prefab_entry, {std::string{field}}), keys, component_key);
 
-  // Re-diffs against the prefab: drops the field (and the override once nothing differs), and turns a whole-component
-  // override from before per-field tracking into a per-field one.
+  // Re-diffs against the prefab, dropping resolved fields and converting legacy whole-component overrides to per-field.
   mark_prefab_override(target, target_node, component_key, prefab_override_kind::component_value);
 }
 

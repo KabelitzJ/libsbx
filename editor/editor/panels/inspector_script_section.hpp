@@ -15,10 +15,13 @@
 namespace editor {
 
 /**
- * @brief One standalone collapsible per attached script, same shape as the component sections in
- * inspector_component_sections.hpp, but called once per script_component entry rather than guarded
- * by has_component<T>() -- see inspector_panel::_draw_node_properties. Title assumes the
- * "<ClassName>.cs" file-name convention "New Script" generates.
+ * @brief One collapsible section per attached script; the title assumes the "<ClassName>.cs" naming that New Script generates.
+ *
+ * @param state The editor state.
+ * @param target The scene.
+ * @param node The node.
+ * @param entry The script entry.
+ * @param pending_removal Receives the class name to detach after the caller's loop.
  */
 auto draw_script_section(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node, sbx::scenes::script_entry& entry, std::optional<std::string>& pending_removal) -> void;
 

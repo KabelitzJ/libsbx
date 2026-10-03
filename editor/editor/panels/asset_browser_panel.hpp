@@ -21,21 +21,12 @@
 
 namespace editor {
 
-/**
- * @brief Draws the "Asset Browser" panel: a two-pane, file-explorer-style view of the active
- * project's assets directory (folder tree left, current folder's contents right).
- *
- * Creating assets, importing external files, and making folders all go through a right-click
- * (or the toolbar's "Create" dropdown) rather than dedicated buttons. Entries can be renamed in
- * place (F2 or the context menu), deleted (with confirmation), duplicated, and dragged into a
- * folder to move them; a plain click on an importable file registers it with assets_module and
- * selects it in editor_state, and a folder click navigates into it.
- */
+/** @brief The Asset Browser: a folder tree and the current folder's contents, with create, import, rename, duplicate, delete and drag-to-move. */
 class asset_browser_panel final : public editor_panel {
 
 public:
 
-  /** @see hierarchy_panel::window_name */
+  // The panel's ImGui::Begin() string.
   inline static constexpr auto window_name = ICON_MDI_FOLDER_MULTIPLE_IMAGE " Asset Browser###asset_browser_panel";
 
   auto draw(editor_state& state) -> void override;
@@ -45,20 +36,35 @@ private:
   auto _refresh_entries() -> void;
   auto _draw_directory_tree(editor_state& state, const std::filesystem::path& absolute_assets_root, const std::filesystem::path& relative_directory) -> void;
 
-  /** @brief Switches the browsed folder to @p directory (project-relative) and has the tree expand to reveal it -- the single place every navigation (breadcrumb, tree click, grid folder tile) should go through, so the tree never falls out of sync with what's being browsed. */
+  /**
+   * @brief Browses @p directory and expands the tree to it; every navigation goes through here so the tree stays in sync.
+   *
+   * @param directory The project-relative folder.
+   */
   auto _navigate_to(std::filesystem::path directory) -> void {
     _current_directory = directory;
     _needs_refresh = true;
     _pending_reveal = std::move(directory);
   }
 
-  /** @brief Drains _import_dialog's result (if any) into _pending_asset_imports, then works through that queue until it's empty or a name clash needs a decision. */
+  /** @brief Drains the import dialog into the queue and works through it until done or a name clash needs a decision. */
   auto _process_pending_asset_imports(editor_state& state) -> void;
 
-  /** @brief Copies @p source to @p destination (already resolved, clash already handled by the caller) and imports/cooks it — the "Import from Disk..." counterpart to the per-entry Import path in draw(). */
+  /**
+   * @brief Copies @p source to the already resolved @p destination and imports it.
+   *
+   * @param state The editor state.
+   * @param source The external file.
+   * @param destination The destination inside the assets directory.
+   */
   auto _import_asset_file(editor_state& state, const std::filesystem::path& source, const std::filesystem::path& destination) -> void;
 
-  /** @brief Draws the shared "Create" menu items (New Material/Particle Effect/Animation Graph/Script/Folder, Import from Disk..., Reimport All in This Folder) against @p target_directory (project-relative) — shared by the toolbar dropdown, the empty-space context menu, and every per-entry "Create" submenu, so there's exactly one place that knows how to create each asset kind. */
+  /**
+   * @brief The shared Create menu items for @p target_directory, used by the toolbar, empty space and entry context menus.
+   *
+   * @param state The editor state.
+   * @param target_directory The project-relative folder to create in.
+   */
   auto _draw_create_menu(editor_state& state, const std::filesystem::path& target_directory) -> void;
 
   auto _create_material(editor_state& state, const std::filesystem::path& target_directory) -> void;
@@ -71,36 +77,74 @@ private:
 
   auto _begin_rename(const std::filesystem::path& relative_path, bool is_directory) -> void;
 
-  /** @brief Draws the in-place rename InputText (replacing a tile's label or a tree row's text) and commits/cancels it -- shared by the grid and the tree, mirroring hierarchy_panel's node rename. */
+  /**
+   * @brief The in-place rename field, shared by the grid and the tree.
+   *
+   * @param state The editor state.
+   * @param width The field width.
+   */
   auto _draw_rename_field(editor_state& state, std::float_t width) -> void;
 
   auto _commit_rename(editor_state& state) -> void;
 
-  /** @brief Copies a file or (recursively) a directory under a unique name in the same folder; the copy's `.meta` sidecar(s) are stripped so it mints a fresh uuid on next import rather than sharing identity with the original. */
+  /**
+   * @brief Copies a file or directory under a unique name in the same folder, stripping `.meta` files so the copy gets fresh uuids.
+   *
+   * @param state The editor state.
+   * @param relative_path The entry to copy.
+   * @param is_directory Whether the entry is a directory.
+   */
   auto _duplicate(editor_state& state, const std::filesystem::path& relative_path, bool is_directory) -> void;
 
-  /** @brief Opens the delete-confirmation modal for @p relative_path; the actual assets_module.delete_asset() call happens once the user confirms, in draw(). */
+  /**
+   * @brief Opens the delete confirmation; deletion happens once the user confirms.
+   *
+   * @param relative_path The entry to delete.
+   * @param is_directory Whether the entry is a directory.
+   */
   auto _request_delete(const std::filesystem::path& relative_path, bool is_directory) -> void;
 
-  /** @brief Validates and performs a drag-and-drop (or drop-target) move of @p source_relative into @p destination_directory_relative -- refuses a no-op move, a name clash at the destination, and dropping a folder onto itself or one of its own descendants. */
+  /**
+   * @brief Moves an entry into a folder, refusing no-op moves, name clashes and moving a folder into its own subtree.
+   *
+   * @param state The editor state.
+   * @param source_relative The entry to move.
+   * @param destination_directory_relative The destination folder.
+   */
   auto _try_move(editor_state& state, const std::filesystem::path& source_relative, const std::filesystem::path& destination_directory_relative) -> void;
 
-  /** @brief The tile grid pane: search-filtered, clipped by row, drawn into whatever child window the caller already opened. */
+  /** @brief The search-filtered, row-clipped tile grid, drawn into the caller's child window. */
   auto _draw_asset_grid(editor_state& state) -> void;
 
-  /** @brief Wraps the BeginDragDropTarget/AcceptDragDropPayload(asset_move_drag_payload_type)/EndDragDropTarget boilerplate shared by every move-drop target (breadcrumbs, tree nodes, grid folder tiles) -- must be called right after the widget that should act as the target. */
+  /**
+   * @brief Makes the previous widget a move drop target; call right after it.
+   *
+   * @param state The editor state.
+   * @param destination_directory_relative The folder dropped entries move into.
+   */
   auto _draw_move_drop_target(editor_state& state, const std::filesystem::path& destination_directory_relative) -> void;
 
-  /** @brief The Create/Rename/Duplicate/Delete context menu shared by a tree node and a grid tile -- an "Instantiate in Scene" item is prepended for a prefab entry. Must be called from inside an already-open ImGui::BeginPopupContextItem() block. */
+  /**
+   * @brief The entry context menu (Create/Rename/Duplicate/Delete, plus Instantiate for prefabs). Call inside an open BeginPopupContextItem().
+   *
+   * @param state The editor state.
+   * @param entry The entry.
+   */
   auto _draw_entry_context_menu(editor_state& state, const asset_browser_entry& entry) -> void;
 
-  /** @brief The import-mesh, import-conflict, and delete-confirmation modals -- each opens itself from its own _show_*_dialog flag, set elsewhere. */
+  /** @brief The import-mesh, import-conflict and delete-confirmation modals. */
   auto _draw_import_and_delete_dialogs(editor_state& state) -> void;
 
-  /** @brief Queues @p relative_path for the mesh import-settings dialog if it has no `.meta` yet (arming the dialog immediately if the queue was empty), returning true if it was queued. Returns false -- caller should import it immediately instead -- if it's already known. The single place both the grid's tile click and "Import from Disk..." register a not-yet-imported mesh, so a multi-file pick queues one dialog per file instead of only the last one winning. */
+  /**
+   * @brief Queues a mesh without a `.meta` for the import settings dialog.
+   *
+   * @param relative_path The mesh file.
+   *
+   * @return True if queued; false for known meshes, which the caller imports directly.
+   */
   auto _defer_mesh_import_if_unseen(const std::filesystem::path& relative_path) -> bool;
 
-  /** @brief Runs asset_cooker::inspect_mesh_source on _pending_mesh_imports.front(), resets _mesh_import_options to defaults, sizes both check-vectors to all-true, and arms _show_import_mesh_dialog. No-op if the queue is empty. */
+  /** @brief Inspects the next queued mesh, resets the options and checkboxes, and shows the dialog. No-op if the queue is empty. */
   auto _begin_mesh_import_dialog() -> void;
 
   std::filesystem::path _current_directory{};

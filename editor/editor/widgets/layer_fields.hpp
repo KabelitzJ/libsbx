@@ -12,17 +12,24 @@
 namespace editor {
 
 /**
- * @brief A node's single named layer (0-31), drawn as a dropdown over core::engine::project()'s
- * currently-named layers plus a trailing "Edit Layers..." row (fires
- * editor_state::request_open_layer_settings). Returns true if @p layer_index changed.
+ * @brief A node's layer (0-31) as a dropdown of the project's named layers plus "Edit Layers...".
+ *
+ * @param state The editor state.
+ * @param label The widget label.
+ * @param layer_index The layer to edit.
+ *
+ * @return True if @p layer_index changed.
  */
 auto draw_layer_combo(editor_state& state, const char* label, std::uint8_t& layer_index) -> bool;
 
 /**
- * @brief A 32-bit sbx::scenes::layer_mask, drawn as a button (showing "Everything"/"Nothing"/the
- * named layers it includes) that opens a checklist popup -- one checkbox per named layer, plus
- * "Nothing"/"Everything" quick-set rows and a trailing "Edit Layers..." row. Returns true if
- * @p mask changed.
+ * @brief A layer mask as a button summarizing it that opens a checklist of named layers with Nothing/Everything and "Edit Layers...".
+ *
+ * @param state The editor state.
+ * @param label The widget label.
+ * @param mask The mask to edit.
+ *
+ * @return True if @p mask changed.
  */
 auto draw_layer_mask_field(editor_state& state, const char* label, sbx::scenes::layer_mask& mask) -> bool;
 

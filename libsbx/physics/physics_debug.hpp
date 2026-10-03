@@ -4,10 +4,7 @@
 /**
  * @file libsbx/physics/physics_debug.hpp
  *
- * @brief Turns physics state into calls against the generic render::debug_draw accumulator (see
- * libsbx/render/debug/debug_draw.hpp). physics_module::late_update() is the only caller -- it owns
- * the broadphase-tree/manifold iteration (private state), and defers to draw_convex_shape()/
- * debug_color_for() here for the parts that don't need that access.
+ * @brief Physics debug wireframes submitted to render::debug_draw; physics_module::late_update() is the only caller.
  *
  * @ingroup libsbx-physics
  */
@@ -31,11 +28,7 @@
 
 namespace sbx::physics {
 
-/**
- * @brief Which debug layers physics_module::late_update() submits into render::debug_draw. All default
- * off except colliders, matching grid_pass's "off unless an app opts in" convention -- see
- * physics_module::debug_draw_flags()/set_debug_draw_flags().
- */
+/** @brief Which debug layers physics_module submits; only colliders are on by default. */
 struct debug_draw_flags {
   bool colliders{false};
   bool broadphase{false};
@@ -45,35 +38,36 @@ struct debug_draw_flags {
 }; // struct debug_draw_flags
 
 /**
- * @brief Box2D/Bullet-style convention: green = awake dynamic, blue = kinematic, grey = static,
- * darker when asleep.
+ * @brief Box2D/Bullet-style colors: green dynamic, blue kinematic, grey static, darker when asleep.
+ *
+ * @param type The body type.
+ * @param is_sleeping Whether the body is asleep.
+ *
+ * @return The color.
  */
 [[nodiscard]] auto debug_color_for(body_type type, bool is_sleeping) -> math::color;
 
 /**
- * @brief Dispatches on @p shape's active alternative and appends its wireframe into @p debug_draw.
- * @p matrix is the collider's full world pose, rotation+translation only (the body's transform
- * composed with the collider's own local offset/rotation) -- see shape_collider::offset/rotation;
- * @p scale is that same pose's per-axis scale (physics::transform::scale), applied to the shape's
- * own dimensions rather than baked into @p matrix -- matrix-based drawing here extracts normalized
- * basis vectors for spheres/cylinders/capsules (render::debug_draw::add_wire_sphere and friends),
- * which would silently discard a scale baked into the matrix instead. `box` scales exactly
- * (componentwise half_extents, its own local axes being exactly the scale's axes); a non-uniformly
- * scaled sphere/cylinder/capsule -- collision-correct regardless, via GJK -- draws its wireframe
- * using @p scale's x component as a representative radius/half_height rather than the true ellipsoid
- * silhouette, a cosmetic-only approximation add_wire_sphere/cylinder/capsule's single-scalar-radius
- * API doesn't support drawing exactly. No-op for `triangle` (a mesh_collider narrowphase candidate,
- * never itself drawn); `convex_hull` draws its actual hull faces as a wireframe (scaled exactly,
- * componentwise per point), falling back to its bare point set as small crosses if it has none (a
- * degenerate source mesh -- see quickhull.hpp's compute_convex_hull).
+ * @brief Appends @p shape's wireframe to @p debug_draw.
+ *
+ * Scale is applied to the shape's dimensions rather than baked into @p matrix, since the sphere/cylinder/capsule helpers normalize the matrix axes.
+ * Non-uniformly scaled spheres, cylinders and capsules draw with scale.x as a representative (cosmetic only). Triangles draw nothing; hulls draw their faces, or crosses at their points when they have none.
+ *
+ * @param debug_draw The accumulator.
+ * @param shape The shape.
+ * @param matrix The collider's world rotation and translation.
+ * @param scale The pose's per-axis scale.
+ * @param color The line color.
  */
 auto draw_convex_shape(render::debug_draw& debug_draw, const convex_shape& shape, const math::matrix4x4& matrix, const math::vector3& scale, const math::color& color) -> void;
 
 /**
- * @brief Draws every polygon edge in @p color, except an edge with no neighbor (poly.neighbors[i]
- * == null_poly_reference) — a real boundary/wall, or a break in connectivity the bake pipeline
- * failed to link — which draws in @p boundary_color instead, so a seam that looks like solid,
- * continuous mesh (e.g. a flat-to-ramp transition) but isn't actually pathable stands out visually.
+ * @brief Draws every polygon edge, with unlinked edges (walls or failed links) in @p boundary_color so seams that look continuous but aren't pathable stand out.
+ *
+ * @param debug_draw The accumulator.
+ * @param mesh The navmesh.
+ * @param color The edge color.
+ * @param boundary_color The unlinked edge color.
  */
 auto draw_navmesh(render::debug_draw& debug_draw, const navmesh& mesh, const math::color& color, const math::color& boundary_color) -> void;
 

@@ -11,6 +11,7 @@
 #include <functional>
 #include <stdexcept>
 #include <string>
+#include <type_traits>
 #include <utility>
 
 #include <fmt/format.h>
@@ -31,6 +32,48 @@ struct assertion_failure : public std::runtime_error {
 
 }; // struct assertion_failure
 
+namespace detail {
+
+[[noreturn]] inline auto fail_assertion(std::string_view message, const std::source_location& source_location) -> void {
+  const auto error = fmt::format("Assertion '{}' at {}:{} in '{}' failed. Terminating.\n", message, source_location.file_name(), source_location.line(), source_location.function_name());
+
+  std::cerr.write(error.data(), static_cast<std::streamsize>(error.size()));
+  std::cerr.flush();
+
+  throw assertion_failure{error};
+}
+
+inline auto warn_expectation(std::string_view message, const std::source_location& source_location) -> void {
+  const auto warning = fmt::format("Expectation '{}' at {}:{} in '{}' failed.\n", message, source_location.file_name(), source_location.line(), source_location.function_name());
+
+  std::cerr.write(warning.data(), static_cast<std::streamsize>(warning.size()));
+  std::cerr.flush();
+}
+
+} // namespace detail
+
+/**
+ * @brief A compile-time checked format string plus the source location it was written at.
+ *
+ * Converting the format string into this captures the caller's location, which a defaulted
+ * std::source_location parameter can't do once it would have to follow a parameter pack.
+ *
+ * @tparam Args The format arguments the string is checked against.
+ */
+template<typename... Args>
+struct format_with_location {
+
+  template<typename String>
+  requires (std::convertible_to<const String&, fmt::format_string<Args...>>)
+  consteval format_with_location(const String& format, const std::source_location& location = std::source_location::current())
+  : format{format},
+    location{location} { }
+
+  fmt::format_string<Args...> format;
+  std::source_location location;
+
+}; // struct format_with_location
+
 /**
  * @brief Asserts that an expression is true. Debug builds only — compiled out entirely in release builds.
  *
@@ -46,12 +89,29 @@ template<std::convertible_to<bool> Expression>
 inline auto assert_that(Expression&& expression, std::string_view message, const std::source_location& source_location = std::source_location::current()) -> void {
   if constexpr (is_build_type_debug_v) {
     if (!static_cast<bool>(std::forward<Expression>(expression))) {
-      const auto error = fmt::format("Assertion '{}' at {}:{} in '{}' failed. Terminating.\n", message, source_location.file_name(), source_location.line(), source_location.function_name());
+      detail::fail_assertion(message, source_location);
+    }
+  }
+}
 
-      std::cerr.write(error.data(), static_cast<std::streamsize>(error.size()));
-      std::cerr.flush();
-
-      throw assertion_failure{error};
+/**
+ * @brief Asserts that an expression is true, formatting the message only when it fails. Debug builds only — compiled out entirely in release builds.
+ *
+ * @tparam Expression The type of the expression to check.
+ * @tparam Args The format arguments.
+ *
+ * @param expression The expression to check.
+ * @param message Format string describing the invariant; captures the call site.
+ * @param args Arguments for the format string. Still evaluated at the call site, only formatted on failure.
+ *
+ * @throws assertion_failure If expression is false.
+ */
+template<std::convertible_to<bool> Expression, typename... Args>
+requires (sizeof...(Args) > 0u)
+inline auto assert_that(Expression&& expression, format_with_location<std::type_identity_t<Args>...> message, Args&&... args) -> void {
+  if constexpr (is_build_type_debug_v) {
+    if (!static_cast<bool>(std::forward<Expression>(expression))) {
+      detail::fail_assertion(fmt::format(message.format, std::forward<Args>(args)...), message.location);
     }
   }
 }
@@ -100,10 +160,27 @@ template<std::convertible_to<bool> Expression>
 inline auto expect_that(Expression&& expression, std::string_view message, const std::source_location& source_location = std::source_location::current()) -> void {
   if constexpr (is_build_type_debug_v) {
     if (!static_cast<bool>(expression)) {
-      const auto warning = fmt::format("Expectation '{}' at {}:{} in '{}' failed.\n", message, source_location.file_name(), source_location.line(), source_location.function_name());
+      detail::warn_expectation(message, source_location);
+    }
+  }
+}
 
-      std::cerr.write(warning.data(), static_cast<std::streamsize>(warning.size()));
-      std::cerr.flush();
+/**
+ * @brief Warns if an expression is false, formatting the message only when it is. Debug builds only — compiled out entirely in release builds.
+ *
+ * @tparam Expression The type of the expression to check.
+ * @tparam Args The format arguments.
+ *
+ * @param expression The expression to check.
+ * @param message Format string describing the expectation; captures the call site.
+ * @param args Arguments for the format string. Still evaluated at the call site, only formatted on failure.
+ */
+template<std::convertible_to<bool> Expression, typename... Args>
+requires (sizeof...(Args) > 0u)
+inline auto expect_that(Expression&& expression, format_with_location<std::type_identity_t<Args>...> message, Args&&... args) -> void {
+  if constexpr (is_build_type_debug_v) {
+    if (!static_cast<bool>(expression)) {
+      detail::warn_expectation(fmt::format(message.format, std::forward<Args>(args)...), message.location);
     }
   }
 }

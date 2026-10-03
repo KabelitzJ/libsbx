@@ -12,12 +12,9 @@
 
 namespace sbx::assets {
 
-inline constexpr auto material_magic = utility::fourcc_v<"SBMT">; // 'SBMT'
+inline constexpr auto material_magic = utility::fourcc_v<"SBMT">;
 
-// Texture slots are variable-length path strings (assets-directory-relative, empty = none), not
-// fixed uuid64s -- see material_description's doc comment for why. name and the five slot strings
-// follow this header back to back, each preceded by nothing (lengths are all up front here) in
-// the fixed order: name, albedo, normal, metallic_roughness, occlusion, emissive.
+// Followed back to back by the name and the five texture slot paths (assets-relative, empty = none): name, albedo, normal, metallic_roughness, occlusion, emissive.
 struct material_file_header {
   std::uint32_t magic;
   std::uint32_t version;
@@ -116,7 +113,7 @@ auto asset_cooker::resolve_cooked_material(const math::uuid& id) -> std::optiona
 }
 
 auto asset_cooker::derive_material_uuid(const math::uuid& mesh, std::size_t index) -> math::uuid {
-  // splitmix64 over (mesh uuid, index) — deterministic so re-cooking is stable.
+  // splitmix64 over (mesh uuid, index), so re-cooking is stable.
   auto x = mesh.value() ^ (0x9e3779b97f4a7c15ull * (static_cast<std::uint64_t>(index) + 1ull));
   x ^= x >> 30; x *= 0xbf58476d1ce4e5b9ull;
   x ^= x >> 27; x *= 0x94d049bb133111ebull;

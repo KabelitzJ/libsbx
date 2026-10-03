@@ -34,8 +34,6 @@ namespace sbx::assets {
 inline constexpr auto material_flag_masked = std::uint32_t{1u << 0u};
 inline constexpr auto material_flag_receives_shadow = std::uint32_t{1u << 1u};
 
-// Strips characters a filename can't contain, for turning a gltf material's (freeform) name into
-// a safe file name when extracting it.
 static auto sanitize_file_name(std::string name) -> std::string {
   for (auto& character : name) {
     if (character == '/' || character == '\\' || character == ':' || character == '*' || character == '?' || character == '"' || character == '<' || character == '>' || character == '|') {
@@ -46,11 +44,7 @@ static auto sanitize_file_name(std::string name) -> std::string {
   return name;
 }
 
-// "type"+"value" tag pair -- animation_parameter_value's alternative *is* its type, so this is
-// purely a persistence detail (the runtime API never switches on a type enum, see
-// animation_graph.hpp's doc comment). Mirrored by load_animation_parameter_value in
-// asset_cooker_animation_graph.cpp -- parsing moved there with the rest of that asset kind's cooking;
-// saving stays here since it's a synchronous, editor-only write path.
+// Persists the alternative as a "type"+"value" pair; parsed back by load_animation_parameter_value in asset_cooker_animation_graph.cpp.
 static auto save_animation_parameter_value(const animation_parameter_value& value) -> YAML::Node {
   auto node = YAML::Node{};
 
@@ -68,7 +62,7 @@ static auto save_animation_parameter_value(const animation_parameter_value& valu
       node["value"] = alternative;
     } else {
       static_assert(std::is_same_v<alternative_type, animation_trigger>);
-      node["type"] = "trigger"; // no value -- a trigger only ever carries a live "fired" flag, which isn't authored
+      node["type"] = "trigger"; // triggers only carry a runtime "fired" flag, nothing authored
     }
   }, value);
 
@@ -96,9 +90,7 @@ asset_residency::asset_residency(asset_manifest& manifest, ibl_baker& baker)
 }
 
 asset_residency::~asset_residency() {
-  // Stop the background thread *before* any of the caches/pending-upload queues above it are torn
-  // down -- see the member declaration's own doc comment. The member's own destructor would call
-  // abort() anyway; this makes the shutdown-ordering intent explicit at this level too.
+  // Stop the loader thread before the caches and queues it writes are destroyed.
   _loader.abort();
 }
 
@@ -175,12 +167,8 @@ auto asset_residency::create_storage_image(std::uint32_t width, std::uint32_t he
 
   auto& image = registry.get<graphics::image>(handle);
 
-  // The image lives in `general` for its whole life: written as a storage image, sampled (by later
-  // compute passes and by materials, see the sampled descriptor below), and copied by ReadPixels,
-  // with no layout transitions in between. Transitioned right here rather than via
-  // upload_context::stage_image, whose per-frame flush would run after a same-call bake. Compute
-  // queue like every script compute submission (the render thread owns the graphics queue);
-  // concurrent_sharing above lets the graphics queue sample it without an ownership transfer.
+  // The image stays in `general` for its whole life (storage writes, sampling, ReadPixels copies), transitioned here because upload_context's per-frame flush would land after a same-call bake.
+  // Compute queue like every script submission; concurrent sharing lets the graphics queue sample it without an ownership transfer.
   auto command_buffer = graphics::command_buffer{graphics::queue::type::compute, true};
 
   auto to_general = graphics::command_buffer::image_transition_data{};
@@ -200,11 +188,7 @@ auto asset_residency::create_storage_image(std::uint32_t width, std::uint32_t he
 
   const auto storage_index = bindless_table.register_storage_image(image.view());
 
-  // register_storage_image/write_sampled_image only queue the descriptor write; frame_context
-  // normally applies it once per frame via its own flush_writes() call, but that's too late for
-  // a synchronous ComputeCommands.Submit right after this returns (same class of bug as the
-  // layout transition above -- confirmed the hard way via degenerate/stale readback data).
-  // ibl_baker.cpp flushes explicitly for the same reason; do the same here.
+  // Descriptor writes are normally flushed once per frame, too late for a ComputeCommands.Submit right after this returns.
   bindless_table.flush_writes();
 
   auto record = std::make_shared<texture2d>(texture2d{sampled_index});
@@ -220,16 +204,7 @@ auto asset_residency::create_storage_image(std::uint32_t width, std::uint32_t he
     _textures.emplace(key, record);
     _images.emplace(sampled_index, handle);
 
-    // The regular load_texture path only marks a texture resident once its async upload actually
-    // lands (_finalize_texture's own pending_texture_upload handling, above) -- is_resident(this
-    // texture) would otherwise report false forever, since nothing else ever populates
-    // _resident_frame for a texture created this way. But this image is already fully written and
-    // transitioned by this point (no async upload pending at all), so it's resident immediately,
-    // same as create_dynamic_mesh's own "0, not frame_context.frame_index()" for the identical
-    // reason (see that call's own comment). Missing this made every material using a
-    // create_storage_image texture as its albedo permanently non-resident, which
-    // scene_renderer_module silently skips drawing entirely -- confirmed the hard way: a chunk
-    // mesh only rendered once its material's texture stopped being one of these.
+    // Fully written already, so resident immediately; otherwise materials using it are never drawn.
     _resident_frame.emplace(sampled_index, 0u);
   }
 
@@ -254,10 +229,7 @@ auto asset_residency::release_texture(const texture2d_handle& texture) -> void {
     _images.erase(image_entry);
   }
 
-  // Without this, a later texture that reuses this same sampled index (unregister below returns
-  // it to the bindless allocator's free list) would find this stale entry still here via emplace
-  // (which never overwrites) and report resident immediately, before its own real content -- if
-  // any -- actually arrives.
+  // The sampled index is recycled, and emplace never overwrites, so a stale entry would mark the next texture resident too early.
   _resident_frame.erase(texture->index());
 
   bindless_table.unregister_sampled_image(texture->index());
@@ -276,6 +248,13 @@ auto asset_residency::release_texture(const texture2d_handle& texture) -> void {
 
 auto asset_residency::find_texture(const math::uuid& id) const -> texture2d_handle {
   auto lock = std::lock_guard{_mutex};
+
+  // The record's own handle first (what scripts hold), then any record of that asset.
+  for (const auto& [key, record] : _textures) {
+    if (record->handle() == id) {
+      return texture2d_handle{record};
+    }
+  }
 
   for (const auto& [key, record] : _textures) {
     if (record->id() == id) {
@@ -498,10 +477,7 @@ auto asset_residency::load_mesh(const math::uuid& id, const mesh_import_options&
   const auto cooked = _manifest.cooked_path(id, ".sbxmsh");
   const auto needs_cook = force_recook || _manifest.is_cooked_stale(id, source, cooked, mesh_cooker_version);
 
-  // Reuses the already-resident record on a force_recook (emplace() below would otherwise be a
-  // no-op against an existing key, silently stranding this freshly-made-but-never-submitted record
-  // while _finalize_mesh keeps repopulating the *old* one by id) -- otherwise, same as always, a
-  // fresh placeholder record for a mesh not yet seen this session.
+  // On force_recook, reuse the existing record: emplace below would keep the old one and strand the new record.
   auto record = std::shared_ptr<mesh>{};
 
   {
@@ -571,11 +547,7 @@ auto asset_residency::create_dynamic_mesh(std::span<const vertex> vertices, std:
 
   const auto vertex_address = registry.get<graphics::buffer>(vertex_buffer).address();
 
-  // 0, not frame_context.frame_index(): that stamp is what makes create_mesh's async path wait
-  // for the GPU to catch up to the frame the transfer was recorded on (is_resident checks
-  // timeline_value() >= resident_frame()). There's no transfer here to wait for -- the write above
-  // already landed in coherent host-visible memory -- so 0 makes is_resident() true immediately
-  // (timeline_value() is never negative), on the very next check, later this same frame.
+  // 0 instead of the frame index: there is no transfer to wait for, so the mesh is resident immediately.
   record->_finalize(vertex_buffer, index_buffer, vertex_address, 0u);
 
   return mesh_handle{record};
@@ -660,16 +632,13 @@ auto asset_residency::load_material(const math::uuid& id) -> material_handle {
     }
   }
 
-  // A hand-authored `.material` file has a real, `.material`-suffixed path; a material cooked as a
-  // side effect of a mesh import (a derived uuid, never separately import()-ed) has none -- the
-  // background resolve (asset_loader::_resolve(material_request)) picks the same branch this would
-  // have picked synchronously, given the same source path.
+  // Only hand-authored materials have a `.material` path; materials cooked from a mesh import have none.
   const auto source_path = _manifest.path_of(id);
 
   auto record = std::make_shared<material>(material::create_info{});
   record->_id = id;
 
-  auto handle = _register_material(record); // reserves the UBO index, queues an initial (empty) upload
+  auto handle = _register_material(record); // reserves the buffer index and queues an initial upload
 
   {
     auto lock = std::lock_guard{_mutex};
@@ -726,12 +695,9 @@ auto asset_residency::update_material(material_handle& material, const material:
   material->_shader_code = create_info.shader_code;
   material->_name = create_info.name;
 
-  // Covers both the async-finalize path (_finalize_material calling this) and a live editor edit
-  // -- both are real content changes anything checking is_loaded()/generation() should see.
   material->_bump_generation();
 
-  // Re-queue the upload: _register_material only queues one at creation time, so without this an
-  // in-place edit updates the CPU object but the renderer keeps reading the stale uploaded data.
+  // _register_material only uploads at creation, so in-place edits must re-queue the upload.
   auto lock = std::lock_guard{_mutex};
 
   if (material->index() < _materials.size()) {
@@ -777,11 +743,10 @@ auto asset_residency::save_material(material_handle& material, const std::filesy
     const auto absolute = _manifest.path_of(texture->id());
 
     if (absolute.empty()) {
-      return std::nullopt; // default/procedural texture (nil uuid) — omit the slot
+      return std::nullopt; // default/procedural texture (nil uuid): omit the slot
     }
 
-    // absolute is stored fully resolved; the slot needs to hold the assets-relative form (that's
-    // what load_material's own reader passes straight into load_texture(path, ...)).
+    // Slots store the assets-relative path load_material passes to load_texture.
     return _manifest.relative(absolute).generic_string();
   };
 
@@ -852,8 +817,7 @@ auto asset_residency::save_material(material_handle& material, const std::filesy
   for (const auto& texture : material->generic_textures()) {
     generic_textures_node.push_back(path_of(texture).value_or(std::string{}));
 
-    // The texture record doesn't carry its own format, but the cache does: a slot is linear iff its
-    // record is the one cached under the unorm key (see parse_material_file's generic_textures_linear).
+    // A slot is linear iff its record is the one cached under the unorm key.
     auto linear = false;
 
     if (texture.is_valid()) {
@@ -868,7 +832,7 @@ auto asset_residency::save_material(material_handle& material, const std::filesy
 
   node["generic_textures"] = generic_textures_node;
 
-  // Only written when it matters, so every existing all-sRGB material file stays byte-identical on save.
+  // Only written when needed, so all-sRGB material files stay byte-identical on save.
   if (any_linear) {
     node["generic_textures_linear"] = generic_textures_linear_node;
   }
@@ -880,16 +844,13 @@ auto asset_residency::save_material(material_handle& material, const std::filesy
   auto out = std::ofstream{resolved_path};
   out << node;
 
-  const auto id = _manifest.import(resolved_path); // register + create the .meta so it's a first-class asset
+  const auto id = _manifest.import(resolved_path); // registers the file and creates its .meta
 
-  // import() is idempotent (returns the existing uuid from .meta on a re-save), so this always
-  // stamps the right id — including a create_material()'d material's first save (nil id otherwise).
+  // import() is idempotent, so this stamps the right id, including a created material's first save.
   material->_id = id;
 
   {
-    // Without this, a later load_material(id) (e.g. dragging the same material tile again) finds
-    // no cache entry and mints a second, independent record for the same uuid — a duplicate GPU
-    // material-buffer slot that never reflects edits made through this handle.
+    // Cache it, or a later load_material(id) creates a second record for the same uuid that never sees edits made through this handle.
     auto lock = std::lock_guard{_mutex};
     _material_files[id] = material.shared();
   }
@@ -969,8 +930,7 @@ auto asset_residency::save_particle_effect(particle_effect_handle& effect, const
 
   auto emitters_node = YAML::Node{YAML::NodeType::Sequence};
 
-  // Same idea as save_material's path_of lambda: re-relativize the import()-ed path for
-  // load_texture(path, ...); nil-uuid (no texture assigned) omits the key entirely.
+  // nil uuid (no texture) omits the key.
   const auto texture_path_of = [this](const texture2d_handle& texture) -> std::optional<std::string> {
     if (!texture.is_valid()) {
       return std::nullopt;
@@ -985,8 +945,6 @@ auto asset_residency::save_particle_effect(particle_effect_handle& effect, const
     return _manifest.relative(absolute).generic_string();
   };
 
-  // Same idea as texture_path_of, generalized -- mesh_handle/material_handle share the same
-  // is_valid()/->id() shape.
   const auto asset_path_of = [this](const auto& handle) -> std::optional<std::string> {
     if (!handle.is_valid()) {
       return std::nullopt;
@@ -1162,8 +1120,7 @@ auto asset_residency::save_particle_effect(particle_effect_handle& effect, const
   effect->_id = id;
 
   {
-    // See save_material's identical fix -- without this a later load_particle_effect(id) mints a
-    // second, independent in-memory record for the same uuid instead of finding this one.
+    // Cache it, or a later load_particle_effect(id) creates a second record for the same uuid.
     auto lock = std::lock_guard{_mutex};
     _particle_effect_files[id] = effect.shared();
   }
@@ -1318,8 +1275,7 @@ auto asset_residency::save_animation_graph(animation_graph_handle& graph, const 
   graph->_id = id;
 
   {
-    // See save_material's identical fix -- without this a later load_animation_graph(id) mints a
-    // second, independent in-memory record for the same uuid instead of finding this one.
+    // Cache it, or a later load_animation_graph(id) creates a second record for the same uuid.
     auto lock = std::lock_guard{_mutex};
     _animation_graph_files[id] = graph.shared();
   }
@@ -1389,9 +1345,7 @@ auto asset_residency::update_shader_graph(shader_graph_handle& graph, const shad
   update_shader_graph_data(graph, create_info);
   graph->_bump_generation();
 
-  // shader_cache/pipeline_cache have no invalidation of their own -- the generation-suffixed path
-  // from shader_graph_generated_path is what makes a re-cook actually take effect (see its own doc
-  // comment), so the bump above has to happen before this cook, not after.
+  // The caches never invalidate; the generation-suffixed output path is what makes a re-cook take effect, so bump before cooking.
   auto info = shader_graph::create_info{};
   info.name = graph->name();
   info.nodes = graph->nodes();
@@ -1476,7 +1430,7 @@ auto asset_residency::save_shader_graph(shader_graph_handle& graph, const std::f
       if (graph_node.type == shader_node_type::scene_depth || graph_node.type == shader_node_type::screen_position) {
         node_yaml["mode"] = *value;
       } else {
-        node_yaml["pattern"] = *value; // Swizzle -- the other node type whose value is a plain string
+        node_yaml["pattern"] = *value; // Swizzle's pattern is also a plain string
       }
     }
 
@@ -1521,9 +1475,7 @@ auto asset_residency::save_shader_graph(shader_graph_handle& graph, const std::f
   info.nodes = graph->nodes();
   info.edges = graph->edges();
 
-  // Bumps the generation and re-cooks -- live editing no longer does either (see
-  // update_shader_graph's own doc comment), so this is the one point a saved edit's shading result
-  // actually starts taking effect.
+  // Live edits don't re-cook, so saving is where the change starts taking effect.
   update_shader_graph(graph, info);
 
   utility::logger<"assets">::info("Saved shader_graph '{}'", resolved_path.generic_string());
@@ -1567,13 +1519,9 @@ auto asset_residency::load_environment_map(const math::uuid& id) -> environment_
   auto record = std::make_shared<environment_map>();
   record->_id = id;
 
-  // Bakes irradiance + prefiltered via compute and blocks until the GPU finishes, so the
-  // environment is fully usable the moment this call returns (load-time bake, not lazy first-frame).
-  // Deliberately synchronous/main-thread only -- see this method's doc comment in the header.
+  // Blocks until the bake finishes, so the environment is usable when this returns. Main thread only.
   _ibl.bake_environment(*record, data->pixels, data->width, data->height);
 
-  // Never a placeholder -- always fully baked by this point -- so this just makes it consistently
-  // report is_loaded() == true immediately, same as everything else.
   record->_bump_generation();
 
   {
@@ -1709,14 +1657,12 @@ auto asset_residency::_finalize_texture(asset_loader::texture_result& result) ->
   const auto entry = _textures.find(key);
 
   if (entry == _textures.end()) {
-    return; // defensive -- load_texture always inserts the placeholder before submitting
+    return;
   }
 
   _pending_textures.push_back(pending_texture_upload{entry->second->index(), std::move(result.data->pixels), result.data->width, result.data->height, request.format});
 
-  // Distinct from is_resident(): this means "decoded and queued," not "the GPU upload actually
-  // landed" -- same relationship a font's is_loaded() (via its glyph table) has to its atlas
-  // texture's separate is_resident().
+  // Means decoded and queued, not uploaded; that's is_resident().
   entry->second->_bump_generation();
 }
 
@@ -1776,7 +1722,7 @@ auto asset_residency::_finalize_mesh(asset_loader::mesh_result& result) -> void 
     auto lock = std::lock_guard{_mutex};
     const auto entry = _meshes.find(request.id);
     if (entry == _meshes.end()) {
-      return; // defensive -- load_mesh always inserts the placeholder before submitting
+      return;
     }
     record = entry->second;
   }
@@ -1796,10 +1742,7 @@ auto asset_residency::_finalize_mesh(asset_loader::mesh_result& result) -> void 
     record->_set_skeletal_data(std::move(skeleton_handle_value), std::move(animation_clip_handles));
   }
 
-  // Bumped here, once, after *both* _finalize_content and (for a skinned mesh) _set_skeletal_data
-  // have run -- so is_loaded() only ever reports true once skeleton/animation clips are set too,
-  // not partway through. mesh doesn't bump this itself inside _finalize_content, unlike the other
-  // placeholder-content types, for exactly this reason.
+  // Bumped once both content and skeletal data are set, so is_loaded() never reports a half-loaded skinned mesh.
   record->_bump_generation();
 
   {
@@ -1829,7 +1772,7 @@ auto asset_residency::_finalize_font(asset_loader::font_result& result) -> void 
   const auto entry = _fonts.find(request.id);
 
   if (entry == _fonts.end()) {
-    return; // defensive -- load_font always inserts the placeholder before submitting
+    return;
   }
 
   auto& record = *entry->second;
@@ -1892,7 +1835,7 @@ auto asset_residency::_finalize_material(asset_loader::material_result& result) 
     auto lock = std::lock_guard{_mutex};
     const auto entry = _material_files.find(request.id);
     if (entry == _material_files.end()) {
-      return; // defensive -- load_material always inserts the placeholder before submitting
+      return;
     }
     handle = material_handle{entry->second};
   }
@@ -1987,7 +1930,7 @@ auto asset_residency::_finalize_particle_effect(asset_loader::particle_effect_re
     auto lock = std::lock_guard{_mutex};
     const auto entry = _particle_effect_files.find(request.id);
     if (entry == _particle_effect_files.end()) {
-      return; // defensive -- load_particle_effect always inserts the placeholder before submitting
+      return;
     }
     handle = particle_effect_handle{entry->second};
   }
@@ -2011,7 +1954,7 @@ auto asset_residency::_finalize_animation_graph(asset_loader::animation_graph_re
     auto lock = std::lock_guard{_mutex};
     const auto entry = _animation_graph_files.find(request.id);
     if (entry == _animation_graph_files.end()) {
-      return; // defensive -- load_animation_graph always inserts the placeholder before submitting
+      return;
     }
     handle = animation_graph_handle{entry->second};
   }
@@ -2061,7 +2004,6 @@ auto asset_residency::_finalize_shader_graph(asset_loader::shader_graph_result& 
     } else if (const auto* value = std::get_if<math::color>(&node_description.value)) {
       node.value = *value;
     }
-    // monostate (math/input/output nodes) -- default-constructed monostate, nothing to resolve
 
     info.nodes.push_back(node);
   }
@@ -2072,13 +2014,11 @@ auto asset_residency::_finalize_shader_graph(asset_loader::shader_graph_result& 
     auto lock = std::lock_guard{_mutex};
     const auto entry = _shader_graph_files.find(request.id);
     if (entry == _shader_graph_files.end()) {
-      return; // defensive -- load_shader_graph always inserts the placeholder before submitting
+      return;
     }
     handle = shader_graph_handle{entry->second};
   }
 
-  // update_shader_graph itself cooks now (see its own doc comment) -- no separate cook_shader_graph
-  // call needed here anymore.
   update_shader_graph(handle, info);
 
   utility::logger<"assets">::info("Loaded shader_graph '{}'", request.source.generic_string());
@@ -2097,7 +2037,7 @@ auto asset_residency::_finalize_skeleton(asset_loader::skeleton_result& result) 
   const auto entry = _skeletons.find(request.id);
 
   if (entry == _skeletons.end()) {
-    return; // defensive -- load_skeleton always inserts the placeholder before submitting
+    return;
   }
 
   entry->second->_finalize_content(std::move(*result.data));
@@ -2118,7 +2058,7 @@ auto asset_residency::_finalize_animation_clip(asset_loader::animation_clip_resu
   const auto entry = _animation_clips.find(request.id);
 
   if (entry == _animation_clips.end()) {
-    return; // defensive -- load_animation_clip always inserts the placeholder before submitting
+    return;
   }
 
   entry->second->_finalize_content(std::move(data.name), data.duration, std::move(data.channels));
@@ -2189,7 +2129,7 @@ auto asset_residency::process_uploads(std::uint64_t frame_index) -> void {
 
     bindless_table.write_sampled_image(request.index, registry.get<graphics::image>(handle).view());
 
-    // Main-thread readers (image_handle_for, is_resident, release_texture) look these up under _mutex.
+    // Main-thread readers look these up under _mutex.
     auto lock = std::lock_guard{_mutex};
     _images.emplace(request.index, handle);
     _resident_frame.emplace(request.index, frame_index);
@@ -2249,7 +2189,6 @@ auto asset_residency::process_uploads(std::uint64_t frame_index) -> void {
     }
   }
 
-  // Create the material buffer once, sized for the whole capacity.
   if (!_material_buffer.is_valid()) {
     _material_buffer = registry.emplace<graphics::buffer>(graphics::buffer::create_info{
       .size = material_capacity * memory::stride_v<material_data>,
@@ -2325,8 +2264,7 @@ auto asset_residency::is_resident(const texture2d_array_handle& array) const -> 
 }
 
 auto asset_residency::is_resident(const environment_map_handle& environment) const -> bool {
-  // bake_environment blocks until the GPU finishes, so a valid handle is always fully resident —
-  // no timeline wait needed here, unlike textures/meshes/materials' deferred per-frame upload.
+  // bake_environment blocks until done, so a valid handle is always resident.
   return environment.is_valid();
 }
 
@@ -2477,15 +2415,13 @@ auto asset_residency::_extract_gltf_material(const math::uuid& cooked_material_i
     return material_handle{};
   }
 
-  // mesh_source is fully resolved; save_material/load_material(path) expect an assets-relative
-  // input, so re-relativize it here (same as the editor's extract_material_to_asset).
+  // save_material/load_material expect an assets-relative path.
   const auto source_relative = _manifest.relative(mesh_source);
 
-  const auto directory = source_relative.parent_path() / "materials"; // mirrors textures already landing in models/<name>/textures/
+  const auto directory = source_relative.parent_path() / "materials";
   const auto relative_path = directory / (sanitize_file_name(description->name.empty() ? "material" : description->name) + ".material");
 
-  // Already extracted (possibly hand-edited since a previous cook, or since the last time this
-  // mesh was loaded) — reuse it as-is, never overwrite.
+  // Already extracted (possibly hand-edited since): reuse it, never overwrite.
   if (std::filesystem::exists(_manifest.absolute(relative_path))) {
     if (auto existing = load_material(relative_path); existing.is_valid()) {
       return existing;

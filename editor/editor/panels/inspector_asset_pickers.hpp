@@ -20,63 +20,31 @@
 
 namespace editor {
 
-/**
- * @brief Bridges a handle's uuid to the generic asset_picker widget's item type (uuid +
- * project-relative path). A built-in primitive mesh has no manifest entry --
- * relative_asset_path would come back empty and the picker button would show "(None)"
- * for an assigned primitive -- so its display "path" is just its name instead.
- */
+/** @brief Converts a uuid to an asset picker item; built-in primitives have no manifest path, so they show their name. */
 auto to_picker_item(const sbx::assets::assets_module& assets_module, const sbx::math::uuid& id) -> sbx::render::asset_picker_item;
 
-/**
- * @brief Thumbnail/icon button + searchable, thumbnail-rendered popup (sbx::render::asset_picker),
- * plus an optional "Reset to Mesh Default" (reseeds from the mesh's own submesh material). Also a
- * drag-and-drop target for a .material tile dragged straight from the Asset Browser. Second button
- * jumps Properties to that material's editable view. allow_none offers a "(None)" entry that clears
- * the slot -- off by default, since a mesh_renderer submesh always wants some material assigned;
- * a nullable script field (see inspector_script_section.cpp) passes true.
- */
+/** @brief A material picker with an optional "Reset to Mesh Default" and a button to edit the material. allow_none offers "(None)", for optional script fields. */
 auto draw_material_picker(editor_state& state, const char* popup_id, sbx::assets::material_handle& slot, sbx::assets::assets_module& assets_module, const sbx::assets::material_handle& mesh_default = {}, bool allow_none = false) -> bool;
 
-/** @brief Forks a material into a new, independent .material asset next to the mesh, so editing the copy doesn't affect other nodes sharing the original. mesh_id may be nil (falls back to assets root). */
+/** @brief Forks a material into a new .material next to the mesh (or the assets root for a nil mesh_id), so edits don't affect other users of the original. */
 auto extract_material_to_asset(sbx::assets::assets_module& assets_module, const sbx::assets::material_handle& source, const sbx::math::uuid& mesh_id) -> sbx::assets::material_handle;
 
-/**
- * @brief Same idea as draw_material_picker, for texture slots -- real GPU thumbnails in both the
- * closed button and the popup list (see asset_tile.hpp). format follows load_material's per-slot
- * convention (srgb for albedo/emissive, unorm for normal/metallic_roughness/occlusion).
- */
+/** @brief A texture picker with real thumbnails; format follows load_material's per-slot convention (sRGB for albedo/emissive, unorm otherwise). */
 auto draw_texture_picker(editor_state& state, const char* popup_id, sbx::assets::texture2d_handle& slot, sbx::assets::assets_module& assets_module, sbx::graphics::format format) -> bool;
 
-/** @brief Same idea as draw_texture_picker, for a font asset slot (ui_text::font). */
+/** @brief A font picker for ui_text::font. */
 auto draw_font_picker(editor_state& state, const char* popup_id, sbx::assets::font_handle& slot) -> bool;
 
-/**
- * @brief Same idea as draw_material_picker, for mesh_renderer.mesh. Doesn't touch renderer.materials
- * itself -- the caller detects the change and clears it so sync_materials_with_mesh reseeds cleanly
- * from the new mesh's submeshes.
- */
+/** @brief A mesh picker for mesh_renderer.mesh. The caller clears the materials on change so they reseed from the new mesh. */
 auto draw_mesh_picker(editor_state& state, const char* popup_id, sbx::assets::mesh_handle& slot, sbx::assets::assets_module& assets_module) -> bool;
 
-/**
- * @brief Same idea as draw_mesh_picker, for particle_effect.effect -- same jump-to-edit button,
- * since particle_effect assets are edited in place (see inspector_panel::_draw_particle_effect_properties)
- * like materials.
- */
+/** @brief A particle effect picker with a button to edit the effect. */
 auto draw_particle_effect_picker(editor_state& state, const char* popup_id, sbx::assets::particle_effect_handle& slot, sbx::assets::assets_module& assets_module) -> bool;
 
-/**
- * @brief Same idea as draw_particle_effect_picker, for animator.graph. preview_mesh_id (nil if
- * unknown) is forwarded to the graph editor so it can list the mesh's real clip names instead of
- * leaving animation_state::clip_name a free-text field -- see animation_graph_panel's doc comment.
- */
+/** @brief An animation graph picker; preview_mesh_id (nil if unknown) lets the graph editor list the mesh's real clip names. */
 auto draw_animation_graph_picker(editor_state& state, const char* popup_id, sbx::assets::animation_graph_handle& slot, sbx::math::uuid preview_mesh_id) -> bool;
 
-/**
- * @brief Same idea as draw_animation_graph_picker, for material::shader_graph -- jumps into
- * shader_graph_panel instead. No preview_mesh_id equivalent (a shader graph carries no mesh-shaped
- * reference the way a state's clip_name does).
- */
+/** @brief A shader graph picker with a button to open the graph editor. */
 auto draw_shader_graph_picker(editor_state& state, const char* popup_id, sbx::assets::shader_graph_handle& slot) -> bool;
 
 } // namespace editor

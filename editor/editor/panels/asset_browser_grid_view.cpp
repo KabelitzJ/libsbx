@@ -19,14 +19,11 @@
 
 namespace editor {
 
-// The tile grid pane: search-filtered, clipped by row, drawn into whatever child window the
-// caller already opened.
 auto asset_browser_panel::_draw_asset_grid(editor_state& state) -> void {
   auto& project = sbx::core::engine::project();
   auto& assets_module = sbx::core::engine::get_module<sbx::assets::assets_module>();
 
-  // Entries matching the search box, keeping _cached_entries' existing order (directories
-  // first, then case-insensitive alphabetical).
+  // Search matches, in _cached_entries' order.
   auto visible = std::vector<std::size_t>{};
 
   for (auto index = std::size_t{0u}; index < _cached_entries.size(); ++index) {
@@ -46,8 +43,7 @@ auto asset_browser_panel::_draw_asset_grid(editor_state& state) -> void {
   const auto row_height = _tile_size + ImGui::GetTextLineHeight() + ImGui::GetStyle().ItemSpacing.y;
   const auto row_count = (static_cast<std::int32_t>(visible.size()) + columns - 1) / columns;
 
-  // Clipped by grid row so a folder full of textures only ever loads/thumbnails the tiles
-  // actually on screen, instead of every texture in it every frame the panel is open.
+  // Clipped by row so only on-screen tiles load thumbnails.
   auto clipper = ImGuiListClipper{};
   clipper.Begin(row_count, row_height);
 
@@ -70,14 +66,7 @@ auto asset_browser_panel::_draw_asset_grid(editor_state& state) -> void {
         ImGui::PushID(entry.path.string().c_str());
         ImGui::BeginGroup();
 
-        // Every other kind resolves entry.id lazily, on click (see asset_browser_entry's doc
-        // comment) — deliberately, since an importable kind may need a dialog first (mesh's
-        // "extract materials?" choice). prefab has no such dialog, so resolve it here instead:
-        // a drag started on a tile that's never been clicked ends on release, over a *different*
-        // widget (the drop target) — draw_asset_tile's own click detection (InvisibleButton's
-        // release-based "pressed") never fires on this tile during that gesture, so a
-        // click-resolved id would still be nil for the entire drag, and the payload it carries
-        // would be too.
+        // Other kinds resolve their id on click, since some need an import dialog first. A drag never registers as a click on its tile, so prefabs resolve here for the drag payload.
         if (entry.kind == asset_kind::prefab && entry.id == sbx::math::uuid::nil()) {
           entry.id = assets_module.import(project.assets_directory() / entry.path);
         }
@@ -113,23 +102,19 @@ auto asset_browser_panel::_draw_asset_grid(editor_state& state) -> void {
             _navigate_to(entry.path);
           } else if (entry.is_importable) {
             if (entry.kind != asset_kind::mesh || !_defer_mesh_import_if_unseen(entry.path)) {
-              // Same resolution requirement as above — entry.path is relative to assets_directory().
+              // entry.path is relative to assets_directory().
               entry.id = assets_module.import(project.assets_directory() / entry.path);
               state.select_asset(entry.id, entry.path, entry.kind);
             }
           } else if (entry.kind == asset_kind::prefab || entry.kind == asset_kind::scene) {
-            // Not importable (no cook step), but still a real manifest-registered, uuid-bearing
-            // asset -- unlike script below, it needs a resolved id both for the Inspector and for
-            // a drag started from this tile (asset_tile_desc::drag_id, set from entry.id right
-            // below where this tile is built) to carry a working uuid instead of nil.
+            // No cook step, but manifest-registered: needs an id for the Inspector and for drags.
             entry.id = assets_module.import(project.assets_directory() / entry.path);
             state.select_asset(entry.id, entry.path, entry.kind);
           } else if (entry.kind == asset_kind::script) {
             state.select_asset(sbx::math::uuid::nil(), entry.path, asset_kind::script);
           }
 
-          // A regular click already ran above (double_clicked implies clicked -- see
-          // asset_tile.cpp), so entry.id is already resolved by the importable-kind branch.
+          // The click branch above already resolved entry.id.
           if (tile_result.double_clicked && entry.kind == asset_kind::animation_graph) {
             state.request_open_animation_graph_editor(entry.id, entry.path);
           }
@@ -168,7 +153,7 @@ auto asset_browser_panel::_draw_asset_grid(editor_state& state) -> void {
     }
   }
 
-  // Right-click the empty area of the contents pane (not an entry — see NoOpenOverItems).
+  // Right-clicking the contents pane's empty area.
   if (ImGui::BeginPopupContextWindow("##asset_browser_context", ImGuiPopupFlags_MouseButtonRight | ImGuiPopupFlags_NoOpenOverItems)) {
     _draw_create_menu(state, _current_directory);
     ImGui::EndPopup();

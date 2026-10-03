@@ -25,21 +25,21 @@
 
 namespace sbx::assets {
 
-inline constexpr auto mesh_magic = utility::fourcc_v<"SBSH">;   // 'SBSH'
+inline constexpr auto mesh_magic = utility::fourcc_v<"SBSH">;
 
 struct mesh_file_header {
   std::uint32_t magic;
   std::uint32_t version;
   std::uint32_t vertex_count;      // logical count after decoding vertex_data
-  std::uint32_t index_count;       // logical count after decoding index_data (spans every submesh's LOD chain, not just LOD0)
+  std::uint32_t index_count;       // logical count after decoding index_data, across every submesh's LOD chain
   std::uint32_t submesh_count;
   std::float_t bounds_min[3];
   std::float_t bounds_max[3];
   std::uint32_t vertex_data_size;  // bytes of meshopt-encoded vertex buffer following the header
   std::uint32_t index_data_size;   // bytes of meshopt-encoded index buffer following the vertex data
   std::uint32_t flags;             // bit 0 = has_skin_data
-  std::uint32_t skin_vertex_data_size; // bytes of *raw* (unencoded) skin_vertex array following the index data; 0 when unskinned
-  std::uint32_t animation_clip_count;  // how many uint32 original-gltf-animation-index entries immediately follow the submesh records -- each resolvable via derive_animation_clip_uuid(id, that_index)
+  std::uint32_t skin_vertex_data_size; // bytes of raw skin_vertex data after the index data; 0 when unskinned
+  std::uint32_t animation_clip_count;  // uint32 original glTF animation indices following the submesh records
 }; // struct mesh_file_header
 
 inline constexpr auto mesh_flag_has_skin_data = std::uint32_t{1u << 0u};
@@ -108,10 +108,7 @@ auto asset_cooker::inspect_mesh_source(const std::filesystem::path& source) -> s
 
   auto parser = fastgltf::Parser{fastgltf::Extensions::KHR_materials_emissive_strength | fastgltf::Extensions::KHR_materials_ior};
 
-  // Same Options _cook_mesh uses -- a different flag set could change what's visible in
-  // gltf.scenes/gltf.meshes/gltf.animations, and the two must stay in lockstep for
-  // mesh_import_options::included_primitives/included_animations' indices to mean the same thing
-  // here as they do at cook time.
+  // Must match _cook_mesh's options, or included_primitives/included_animations indices would mean something else here.
   auto loaded = parser.loadGltf(data.get(), source.parent_path(), fastgltf::Options::LoadExternalBuffers | fastgltf::Options::GenerateMeshIndices);
 
   if (loaded.error() != fastgltf::Error::None) {
@@ -131,9 +128,7 @@ auto asset_cooker::inspect_mesh_source(const std::filesystem::path& source) -> s
     }
   };
 
-  // Same traversal shape as _cook_mesh's append() call sites -- an instanced mesh (referenced by
-  // more than one node) is listed once per node, matching that cooking will also produce separate
-  // submeshes for each instance (see mesh_source_summary's doc comment).
+  // Same traversal as _cook_mesh: an instanced mesh is listed once per node, as cooking produces a submesh per instance.
   if (!gltf.scenes.empty()) {
     const auto scene_index = gltf.defaultScene.value_or(std::size_t{0});
 
@@ -150,8 +145,7 @@ auto asset_cooker::inspect_mesh_source(const std::filesystem::path& source) -> s
     }
   }
 
-  // Same "first skin referenced wins" detection _cook_mesh uses -- on/off is all this reports,
-  // since this cooker never supports more than one skeleton per mesh either way.
+  // Same "first skin wins" detection as _cook_mesh.
   if (!gltf.scenes.empty()) {
     const auto scene_index = gltf.defaultScene.value_or(std::size_t{0});
 
@@ -175,7 +169,7 @@ auto asset_cooker::gltf_external_file_references(const std::filesystem::path& so
   auto references = std::vector<std::filesystem::path>{};
 
   if (source.extension() != ".gltf") {
-    return references; // .glb is one self-contained binary blob -- nothing external to find
+    return references; // .glb is self-contained
   }
 
   auto data = fastgltf::GltfDataBuffer::FromPath(source);
@@ -186,9 +180,7 @@ auto asset_cooker::gltf_external_file_references(const std::filesystem::path& so
 
   auto parser = fastgltf::Parser{fastgltf::Extensions::KHR_materials_emissive_strength | fastgltf::Extensions::KHR_materials_ior};
 
-  // Options::None -- unlike inspect_mesh_source/_cook_mesh, this only ever wants the raw uri
-  // strings, never the referenced bytes, so there's nothing to gain from (and no reason to require
-  // the files already existing for) an eager load.
+  // Only the uri strings are needed, so don't load the referenced files.
   auto loaded = parser.loadGltf(data.get(), source.parent_path(), fastgltf::Options::None);
 
   if (loaded.error() != fastgltf::Error::None) {
@@ -215,9 +207,7 @@ auto asset_cooker::gltf_external_file_references(const std::filesystem::path& so
 }
 
 auto asset_cooker::_generate_normals(std::vector<vertex>& vertices, const std::vector<std::uint32_t>& indices, std::size_t vertex_start, std::size_t vertex_count, std::size_t index_start, std::size_t index_count) -> void {
-  // Area-weighted face-normal accumulation: a cross product's length is proportional to twice its
-  // triangle's area, so summing it directly (before normalizing) naturally weights larger
-  // triangles more, same idea as generate_tangents' Lengyel accumulation below.
+  // Unnormalized cross products are proportional to triangle area, so larger triangles weigh more.
   auto normal_sum = std::vector<math::vector3>(vertex_count, math::vector3::zero);
 
   for (auto i = std::size_t{0u}; i + 2u < index_count; i += 3u) {
@@ -240,9 +230,7 @@ auto asset_cooker::_generate_normals(std::vector<vertex>& vertices, const std::v
   for (auto local = std::size_t{0u}; local < vertex_count; ++local) {
     auto& current = vertices[vertex_start + local];
 
-    // Degenerate (isolated point / zero-area triangles only) falls back to a fixed up vector
-    // rather than a zero normal -- NaN-ing every downstream lighting calculation is worse than a
-    // wrong-but-finite normal on the handful of vertices this could ever affect.
+    // Degenerate geometry gets a fixed up vector; a zero normal would NaN the lighting.
     const auto normal = (normal_sum[local].length_squared() > 1e-12f) ? math::vector3::normalized(normal_sum[local]) : math::vector3{0.0f, 1.0f, 0.0f};
 
     current.normal[0] = normal.x();
@@ -309,22 +297,17 @@ auto asset_cooker::_optimize_and_generate_lods(std::vector<vertex>& vertices, st
     return lods;
   }
 
-  // meshopt works in a 0-based local index space, not indices' mesh-global one — translate this
-  // submesh's slice down to local, optimize, then translate back before writing to the shared arrays.
+  // meshopt works on 0-based local indices: translate down, optimize, translate back.
   auto local = std::vector<std::uint32_t>(index_count);
 
   for (auto i = std::size_t{0u}; i < index_count; ++i) {
     local[i] = indices[index_start + i] - static_cast<std::uint32_t>(vertex_start);
   }
 
-  // Standard GPU-friendly ordering trio: vertex cache (post-transform reuse), overdraw (front-to-back
-  // triangle order), vertex fetch (pre-transform cache locality — reorders the vertex buffer itself).
   meshopt_optimizeVertexCache(local.data(), local.data(), index_count, vertex_count);
   meshopt_optimizeOverdraw(local.data(), local.data(), index_count, &vertices[vertex_start].position.x(), vertex_count, sizeof(vertex), 1.05f);
 
-  // Computed as an explicit remap (rather than calling meshopt_optimizeVertexFetch directly) so the
-  // same permutation can also be applied to skin_vertices -- a second, parallel vertex stream that
-  // function has no way to know about (see its own doc comment on multiple vertex streams).
+  // An explicit remap so the same permutation also applies to skin_vertices, a parallel stream meshopt doesn't know about.
   auto remap = std::vector<unsigned int>(vertex_count);
   meshopt_optimizeVertexFetchRemap(remap.data(), local.data(), index_count, vertex_count);
 
@@ -343,8 +326,7 @@ auto asset_cooker::_optimize_and_generate_lods(std::vector<vertex>& vertices, st
     indices[index_start + i] = local[i] + static_cast<std::uint32_t>(vertex_start);
   }
 
-  // Coarser LOD chain, each level targeting half the previous one's triangle budget; stops once
-  // meshopt_simplify stalls (topology-locked) or the mesh is already too small to bother.
+  // Each LOD targets half the previous triangle count, until meshopt_simplify stalls or the mesh is too small.
   auto previous = local;
   constexpr auto max_levels = std::size_t{4u};
   constexpr auto min_triangle_count = std::size_t{8u};
@@ -365,7 +347,7 @@ auto asset_cooker::_optimize_and_generate_lods(std::vector<vertex>& vertices, st
       target_index_count, 1e-2f, 0u, &result_error
     );
 
-    // Less than ~10% reduction means the chain has bottomed out (topology constraints, etc).
+    // Under ~10% reduction means the chain has bottomed out.
     if (simplified_count == 0u || simplified_count >= (previous.size() * 9u) / 10u) {
       break;
     }
@@ -407,11 +389,7 @@ auto asset_cooker::_cook_mesh(const std::filesystem::path& source, const math::u
 
   auto& gltf = loaded.get();
 
-  // Referenced glTF images become a material_description texture-slot *path* (assets-directory-
-  // relative), not a uuid -- resolving a path to a stable uuid is asset_manifest::import's job, and
-  // asset_manifest is main-thread-only (see its own doc comment for why). asset_residency's mesh
-  // finalize step turns this path into a handle via load_texture(path, ...) exactly the same way it
-  // already does for a hand-authored `.material` file's texture slots.
+  // Textures become assets-relative paths, not uuids: asset_manifest is main-thread only, so asset_residency resolves them when finalizing.
   const auto& project = core::engine::project();
 
   const auto texture_path = [&](std::size_t texture_index) -> std::string {
@@ -458,11 +436,7 @@ auto asset_cooker::_cook_mesh(const std::filesystem::path& source, const math::u
     if (gltf_material.occlusionTexture.has_value()) description.occlusion        = texture_path(gltf_material.occlusionTexture->textureIndex);
     if (gltf_material.emissiveTexture.has_value()) description.emissive          = texture_path(gltf_material.emissiveTexture->textureIndex);
 
-    // Every embedded material is cooked as a self-contained, resolvable side-effect blob here --
-    // same idea as a skinned mesh's skeleton/animation clips below. Whether this ends up being what
-    // the submesh actually uses, or gets superseded by a hand-editable extracted `.material` file,
-    // is decided later by asset_residency's main-thread mesh finalize step (mesh_import_options::
-    // extract_materials) -- see cooked_submesh::material's doc comment.
+    // Every embedded material is cooked; asset_residency decides at finalize whether an extracted `.material` supersedes it.
     const auto material_uuid = derive_material_uuid(id, material_uuids.size());
 
     if (!_cook_material(material_uuid, description)) {
@@ -486,15 +460,12 @@ auto asset_cooker::_cook_mesh(const std::filesystem::path& source, const math::u
   auto submeshes = std::vector<cooked_submesh>{};
   auto mesh_volume = math::volume{};
 
-  // Skinning: one skeleton per cooked mesh -- the first skinned node's skin wins; any other skin
-  // encountered later only warns. A node's world transform is *not* baked into a skinned
-  // primitive's vertices (see the traversal below) -- glTF skinning requires vertices to stay in
-  // the space the skin's inverse-bind matrices were authored against, with placement coming
-  // entirely from the joint hierarchy instead.
+  // One skeleton per mesh: the first skinned node's skin wins, later skins only warn.
+  // Skinned vertices stay in the inverse-bind space; placement comes from the joint hierarchy, so node transforms aren't baked in.
   auto joints = std::vector<skeleton::joint>{};
-  auto joint_remap = std::vector<std::uint32_t>{}; // skin-local (JOINTS_0) index -> joints' topologically-sorted index
+  auto joint_remap = std::vector<std::uint32_t>{}; // skin-local (JOINTS_0) index -> topologically sorted index
   auto primary_skin_index = std::optional<std::size_t>{};
-  auto node_to_joint = std::unordered_map<std::size_t, std::size_t>{}; // glTF node index -> joints index, for animation cooking below
+  auto node_to_joint = std::unordered_map<std::size_t, std::size_t>{}; // glTF node index -> joints index
 
   if (!gltf.scenes.empty()) {
     const auto scene_index = gltf.defaultScene.value_or(std::size_t{0});
@@ -531,8 +502,7 @@ auto asset_cooker::_cook_mesh(const std::filesystem::path& source, const math::u
       }
     }
 
-    // Parent, in the *original* skin.joints order (still to be topo-sorted below); -1 if the
-    // parent node isn't itself a joint of this skin (i.e. this is the skin's effective root).
+    // Parent in the original skin.joints order; -1 if the parent isn't a joint of this skin.
     auto skin_local_parent = std::vector<std::int32_t>(joint_count, -1);
 
     for (auto index = std::size_t{0u}; index < joint_count; ++index) {
@@ -543,8 +513,7 @@ auto asset_cooker::_cook_mesh(const std::filesystem::path& source, const math::u
       }
     }
 
-    // Topological sort by depth from root -- a joint's parent always has a strictly smaller
-    // depth, so a stable sort on depth alone guarantees parent-before-child.
+    // Parents always have a smaller depth, so a stable sort on depth puts parents before children.
     auto depth = std::vector<std::uint32_t>(joint_count, 0u);
 
     for (auto index = std::size_t{0u}; index < joint_count; ++index) {
@@ -618,11 +587,7 @@ auto asset_cooker::_cook_mesh(const std::filesystem::path& source, const math::u
 
   const auto has_skin_data = options.import_skeleton && !joints.empty();
 
-  // Shared across every append() call below (once per scene node, or once per gltf.meshes entry
-  // for a scene-less file) -- the Nth primitive encountered overall is what
-  // mesh_import_options::included_primitives/mesh_source_summary::primitives index by, so this
-  // must increment exactly once per primitive regardless of which mesh/node it belongs to, matching
-  // inspect_mesh_source's own traversal below.
+  // The Nth primitive overall is what included_primitives indexes, so this increments once per primitive, matching inspect_mesh_source.
   auto global_primitive_index = std::size_t{0u};
 
   const auto append = [&](const fastgltf::Mesh& gltf_mesh, const fastgltf::math::fmat4x4& world, bool is_skinned) {
@@ -644,9 +609,7 @@ auto asset_cooker::_cook_mesh(const std::filesystem::path& source, const math::u
       const auto& position_accessor = gltf.accessors[position->accessorIndex];
       vertices.resize(vertex_start + position_accessor.count);
 
-      // A mixed skinned/static file still keeps skin_vertices parallel to vertices for every
-      // primitive -- entries a primitive doesn't overwrite below default to a rigid bind to
-      // joints[0], a safe fallback for e.g. static decoration meshes sharing a skinned character file.
+      // skin_vertices stays parallel to vertices; static primitives in a skinned file bind rigidly to joints[0].
       if (has_skin_data) {
         skin_vertices.resize(vertex_start + position_accessor.count, skin_vertex{{0u, 0u, 0u, 0u}, math::vector4{1.0f, 0.0f, 0.0f, 0.0f}});
       }
@@ -745,8 +708,7 @@ auto asset_cooker::_cook_mesh(const std::filesystem::path& source, const math::u
         indices.push_back(static_cast<std::uint32_t>(vertex_start) + index);
       });
 
-      // Positions are already in world space by this point (baked above, like the explicit-NORMAL
-      // path already accounts for), so the generated face normals need no further transform.
+      // Positions are already in world space, so generated normals need no transform.
       if (!has_explicit_normal) {
         _generate_normals(vertices, indices, vertex_start, position_accessor.count, index_start, index_accessor.count);
       }
@@ -777,8 +739,6 @@ auto asset_cooker::_cook_mesh(const std::filesystem::path& source, const math::u
 
       const auto is_skinned = has_skin_data && node.skinIndex.has_value() && node.skinIndex.value() == *primary_skin_index;
 
-      // Skinned vertices stay in bind-pose space -- see the comment above joints' construction --
-      // so a skinned node's world transform is never baked in, unlike every other node's.
       append(gltf.meshes[node.meshIndex.value()], is_skinned ? fastgltf::math::fmat4x4{} : world, is_skinned);
     });
   } else {
@@ -800,10 +760,7 @@ auto asset_cooker::_cook_mesh(const std::filesystem::path& source, const math::u
     }
 
     for (auto gltf_animation_index = std::size_t{0u}; gltf_animation_index < gltf.animations.size(); ++gltf_animation_index) {
-      // included_animations (when non-empty) selects by *original* gltf.animations position, not
-      // a renumbered "Nth cooked" count -- derive_animation_clip_uuid below depends on that same
-      // original index staying stable across two different future selections of this file (see its
-      // doc comment).
+      // included_animations selects by original glTF index, which derive_animation_clip_uuid relies on staying stable.
       if (!options.included_animations.empty() && std::ranges::find(options.included_animations, gltf_animation_index) == options.included_animations.end()) {
         continue;
       }
@@ -832,7 +789,7 @@ auto asset_cooker::_cook_mesh(const std::filesystem::path& source, const math::u
         const auto joint_entry = node_to_joint.find(gltf_channel.nodeIndex.value());
 
         if (joint_entry == node_to_joint.end()) {
-          continue; // targets a node that isn't one of this skin's joints -- not skinning-relevant
+          continue; // not one of this skin's joints
         }
 
         const auto& sampler = gltf_animation.samplers[gltf_channel.samplerIndex];
@@ -888,12 +845,12 @@ auto asset_cooker::_cook_mesh(const std::filesystem::path& source, const math::u
             break;
           }
           default:
-            break; // Weights (morph targets) -- not applicable to skeletal skinning
+            break; // morph target weights don't apply to skeletal skinning
         }
       }
 
       if (channels.empty()) {
-        continue; // e.g. an animation that only targets morph-target weights
+        continue; // e.g. only morph target weights
       }
 
       auto duration = 0.0f;
@@ -927,8 +884,7 @@ auto asset_cooker::_cook_mesh(const std::filesystem::path& source, const math::u
     return false;
   }
 
-  // meshopt-compress both buffers for the on-disk cache (smaller files, less I/O); decoded back to
-  // flat vertex/index vectors on read, transparent to everything downstream of _load_cooked_mesh.
+  // meshopt-compressed on disk; decoded transparently by _load_cooked_mesh.
   auto encoded_vertices = std::vector<unsigned char>(meshopt_encodeVertexBufferBound(vertices.size(), sizeof(vertex)));
   const auto vertex_data_size = meshopt_encodeVertexBuffer(encoded_vertices.data(), encoded_vertices.size(), vertices.data(), vertices.size(), sizeof(vertex));
   encoded_vertices.resize(vertex_data_size);
@@ -959,7 +915,7 @@ auto asset_cooker::_cook_mesh(const std::filesystem::path& source, const math::u
   out.write(reinterpret_cast<const char*>(encoded_vertices.data()), static_cast<std::streamsize>(vertex_data_size));
   out.write(reinterpret_cast<const char*>(encoded_indices.data()), static_cast<std::streamsize>(index_data_size));
 
-  // Raw (unencoded) -- meshopt's vertex codec targets quantizable floats, not packed joint indices.
+  // Raw: meshopt's vertex codec targets quantizable floats, not packed joint indices.
   if (has_skin_data) {
     out.write(reinterpret_cast<const char*>(skin_vertices.data()), static_cast<std::streamsize>(header.skin_vertex_data_size));
   }
@@ -985,10 +941,7 @@ auto asset_cooker::_cook_mesh(const std::filesystem::path& source, const math::u
     }
   }
 
-  // One uint32 per cooked clip, its *original* gltf.animations index -- see this file's own doc
-  // comment on _load_cooked_mesh for why a bare count isn't enough once clips can be selectively
-  // cooked (derive_animation_clip_uuid needs the original index back on every subsequent load, not
-  // a renumbered 0..count).
+  // The original glTF index of each clip; derive_animation_clip_uuid needs it on every load.
   if (!animation_clip_original_indices.empty()) {
     out.write(reinterpret_cast<const char*>(animation_clip_original_indices.data()), static_cast<std::streamsize>(animation_clip_original_indices.size() * sizeof(std::uint32_t)));
   }
@@ -1013,7 +966,7 @@ auto asset_cooker::_load_cooked_mesh(const std::filesystem::path& cooked, std::v
   in.read(reinterpret_cast<char*>(&header), sizeof(header));
 
   if (!in || header.magic != mesh_magic || header.version != mesh_cook_version) {
-    return false; // missing / corrupt / stale format -> caller recooks
+    return false; // missing, corrupt or stale: the caller recooks
   }
 
   auto encoded_vertices = std::vector<unsigned char>(header.vertex_data_size);
@@ -1022,7 +975,7 @@ auto asset_cooker::_load_cooked_mesh(const std::filesystem::path& cooked, std::v
   vertices.resize(header.vertex_count);
 
   if (!in || meshopt_decodeVertexBuffer(vertices.data(), header.vertex_count, sizeof(vertex), encoded_vertices.data(), encoded_vertices.size()) != 0) {
-    return false; // corrupt / truncated -> caller recooks
+    return false; // corrupt or truncated: the caller recooks
   }
 
   auto encoded_indices = std::vector<unsigned char>(header.index_data_size);
@@ -1034,8 +987,7 @@ auto asset_cooker::_load_cooked_mesh(const std::filesystem::path& cooked, std::v
     return false;
   }
 
-  // Raw (unencoded), immediately after the index data -- matches _cook_mesh's write order exactly;
-  // must be read before the submesh records below, not after.
+  // Raw, right after the index data, in _cook_mesh's write order.
   skin_vertices.clear();
 
   if ((header.flags & mesh_flag_has_skin_data) != 0u) {
@@ -1087,7 +1039,6 @@ auto asset_cooker::_load_cooked_mesh(const std::filesystem::path& cooked, std::v
 
   bounds = math::volume{math::vector3{header.bounds_min[0], header.bounds_min[1], header.bounds_min[2]}, math::vector3{header.bounds_max[0], header.bounds_max[1], header.bounds_max[2]}};
 
-  // One uint32 per cooked clip, its original gltf.animations index -- see _cook_mesh's write side.
   animation_clip_original_indices.clear();
   animation_clip_original_indices.resize(header.animation_clip_count);
 

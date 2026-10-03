@@ -4,12 +4,7 @@
 /**
  * @file libsbx/physics/narrowphase.hpp
  *
- * @brief Per-pair narrowphase dispatch: closed forms for the cheap/common pairs (sphere-*,
- * capsule-capsule), SAT with face clipping for box-box (the primary stacking/resting case), and
- * generic GJK/EPA for everything else -- plus the pose-composition and shape-resolution machinery
- * that lets a rigidbody's colliders live anywhere in its subtree (compound colliders), a collider
- * live with no rigidbody at all (implicit-static), and either be authored under a non-1
- * local_transform::scale -- uniform or not.
+ * @brief Per-pair narrowphase: closed forms for sphere and capsule pairs, SAT with face clipping for box-box, and GJK/EPA for everything else, plus pose composition and compound collider resolution.
  *
  * @ingroup libsbx-physics
  */
@@ -36,23 +31,10 @@
 
 namespace sbx::physics {
 
-/**
- * @brief Per-physics-step memoization of compose_world_pose() results, keyed by the node's stable
- * scenes::id (a math::uuid) rather than ecs::entity -- physics works through scenes::node, and
- * node deliberately has no entity() accessor to hand out (see its own doc comment), so this is
- * scenes::id-value-per-lookup rather than a free re-read of an already-known raw index. Cleared
- * once at the top of each physics step (physics_module owns the instance) -- within a step, a
- * node's world pose is composed at most once no matter how many times broadphase sync/narrowphase
- * ask for it, and composing an uncached node also seeds every ancestor it climbed through along the
- * way, so sibling nodes under the same parent chain hit cache too.
- */
+// Per-step memo of compose_world_pose(), keyed by scenes::id. Cleared at the top of each step; composing a node also caches every ancestor it walked through.
 using pose_cache = std::unordered_map<math::uuid, transform>;
 
-/**
- * @brief One convex primitive resolved for narrowphase: its shape, full world pose (every
- * ancestor's local_transform composed together, see compose_world_pose, plus the collider's own
- * offset/rotation), and material.
- */
+/** @brief One convex primitive for narrowphase: its shape, full world pose (ancestors plus the collider's offset) and material. */
 struct body_shape {
   convex_shape shape;
   transform pose;
@@ -61,59 +43,44 @@ struct body_shape {
 }; // struct body_shape
 
 /**
- * @brief The live equivalent of what world_transform would give @p node if it weren't only
- * recomputed once per frame (see physics_module's class doc comment for why physics can't use that
- * cached copy). Walks node's parent chain up to the scene's true root, composing
- * local_transform::position/rotation/scale (a full per-axis scale -- see the doc comment on
- * physics::transform::scale) at each level on the way back down. Degenerates to node's own
- * local_transform, verbatim, for an ordinary unparented node -- the common case pays only the cost
- * of one parent-pointer comparison.
+ * @brief The node's live world pose, composing every ancestor's local_transform (with per-axis scale); world_transform is only refreshed once per frame. An unparented node costs one comparison.
+ *
+ * @param scene The scene.
+ * @param node The node.
+ * @param cache The step's pose cache.
+ *
+ * @return The world pose.
  */
 [[nodiscard]] auto compose_world_pose(scenes::scene& scene, const scenes::node& node, pose_cache& cache) -> transform;
 
 /**
- * @brief Folds a collider's own offset/rotation (authored relative to @p world_pose, e.g.
- * shape_collider::offset) into @p world_pose -- the two are combined the same way any child
- * local_transform folds into its parent's world pose.
+ * @brief Folds a collider's own offset and rotation into its node's world pose, like a child transform.
+ *
+ * @param world_pose The node's world pose.
+ * @param offset The collider's offset.
+ * @param rotation The collider's rotation.
+ *
+ * @return The collider's world pose.
  */
 [[nodiscard]] auto compose_pose(const transform& world_pose, const math::vector3& offset, const math::quaternion& rotation) -> transform;
 
-/**
- * @brief Resolves @p node's own collider -- a shape_collider, or a mesh_collider with is_convex ==
- * true (via its cached hull point set; from here on indistinguishable to dispatch()/GJK/EPA from an
- * ordinary shape_collider) -- into a single body_shape, world-posed via compose_world_pose. Returns
- * nullopt if @p node carries neither, or a non-convex mesh_collider (it can never stand in as a
- * single convex_shape -- see generate_mesh_contact), or an unresolvable one (no mesh assigned, or an
- * empty cached hull).
- */
+/** @brief The node's own collider as one world-posed body_shape: a shape_collider or a convex mesh_collider's hull. nullopt for neither, a non-convex mesh collider, or an unresolvable one. */
 [[nodiscard]] auto resolve_convex(scenes::scene& scene, const scenes::node& node, convex_hull_cache& hull_cache, assets::assets_module& assets_module, pose_cache& cache) -> std::optional<body_shape>;
 
-/**
- * @brief Resolves every convex primitive owned by @p rigidbody_node: itself (resolve_convex) plus
- * every descendant's, recursing through the subtree but never past a descendant that has its own
- * rigidbody -- that one is an independent body instead, not part of this compound. A childless node
- * returns 0 or 1 entries with no recursion overhead, so an ordinary single-shape body costs exactly
- * what it always did. @p resource lets per-pair narrowphase callers keep the list on a stack arena.
- */
+/** @brief Every convex shape of a rigidbody: its own plus its descendants', stopping at descendants with their own rigidbody. @p resource lets callers keep the list on a stack arena. */
 [[nodiscard]] auto resolve_body_shapes(scenes::scene& scene, const scenes::node& rigidbody_node, convex_hull_cache& hull_cache, assets::assets_module& assets_module, pose_cache& cache, std::pmr::memory_resource* resource = std::pmr::get_default_resource()) -> std::pmr::vector<body_shape>;
 
 /**
- * @brief Walks upward from @p node (inclusive) through relationship::parent until it finds an
- * ancestor with a rigidbody, or reaches the scene root without finding one. Used to tell a bare
- * shape_collider/mesh_collider node apart from one that's really a compound child of some ancestor's
- * rigidbody -- the latter must not also be treated as its own independent implicit-static body.
+ * @brief The nearest ancestor (inclusive) with a rigidbody, telling compound children apart from implicit-static colliders.
+ *
+ * @param scene The scene.
+ * @param node The node to start from.
+ *
+ * @return The owning rigidbody's node, or nullopt.
  */
 [[nodiscard]] auto find_owning_rigidbody(scenes::scene& scene, const scenes::node& node) -> std::optional<scenes::node>;
 
-/**
- * @brief Runs narrowphase for a broadphase-candidate pair of bodies -- each side a rigidbody
- * (possibly compound, resolve_body_shapes) or a bare implicit-static collider node. Cross-tests
- * every shape on one side against every shape (or, when the other side is a non-convex
- * mesh_collider, every candidate BVH triangle) on the other, combining every touch into a single
- * contact_manifold for the pair. Returns nullopt for a pair of two non-convex mesh_colliders (never
- * a supported pairing, matching Unity) or if nothing on either side actually overlaps. The returned
- * manifold's node_a/node_b always match the order @p node_a/@p node_b were passed in.
- */
+/** @brief Narrowphase for a candidate pair of bodies (compound rigidbodies or bare colliders), combining every shape-vs-shape (or shape-vs-triangle) touch into one manifold in the given node order. nullopt for two non-convex mesh colliders (like Unity) or no overlap. */
 [[nodiscard]] auto generate_pair_contact(scenes::scene& scene, const sbx::scenes::node& node_a, const sbx::scenes::node& node_b, mesh_collision_cache& mesh_cache, convex_hull_cache& hull_cache, assets::assets_module& assets_module, pose_cache& cache) -> std::optional<contact_manifold>;
 
 } // namespace sbx::physics

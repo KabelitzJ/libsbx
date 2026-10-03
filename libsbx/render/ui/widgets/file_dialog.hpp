@@ -17,11 +17,11 @@ namespace sbx::render {
 enum class file_dialog_mode : std::uint8_t {
   open_file,     // single file, extension-filtered
   open_files,    // multi-select files, extension-filtered
-  select_folder, // pick a directory; no file selection required to confirm
+  select_folder, // no file selection needed to confirm
   save_file      // type/pick a filename; confirms through an overwrite prompt if it already exists
 }; // enum class file_dialog_mode
 
-/** @brief A named shortcut in the dialog's quick-access sidebar (alongside an always-present "Home"). */
+/** @brief A named shortcut in the dialog's sidebar, next to the built-in "Home". */
 struct file_dialog_shortcut {
   std::string label{};
   std::filesystem::path path{};
@@ -31,34 +31,25 @@ struct file_dialog_options {
   std::string title{};
   file_dialog_mode mode{file_dialog_mode::open_file};
 
-  // Falls back to the user's home directory if empty or not an existing directory.
+  // Falls back to the home directory if empty or missing.
   std::filesystem::path start_dir{};
 
-  // Filters the listing in every mode but select_folder (which only ever lists directories).
-  // Each entry includes its leading dot (e.g. ".gltf"), matched exactly against path::extension().
-  // Empty means no filtering. save_file mode also uses extensions.front() to auto-append a missing
-  // extension onto whatever the user types.
+  // Exact extensions with the leading dot (".gltf"); empty means no filter. Ignored by select_folder. save_file appends extensions.front() when missing.
   std::vector<std::string> extensions{};
 
   std::vector<file_dialog_shortcut> shortcuts{};
 
-  // save_file mode only -- seeds the filename field.
+  // save_file only: seeds the file name field.
   std::string default_file_name{};
 
-  // Overrides the confirm button's label (default: "Open"/"Select"/"Save", by mode) -- e.g. the
-  // Asset Browser's "Import from Disk..." picker uses "Import" so the button reads right for
-  // what it actually does, without a caller having to double-click just to proceed.
+  // Overrides the confirm button's label (default "Open", "Select" or "Save" by mode).
   std::string confirm_label{};
 }; // struct file_dialog_options
 
 /**
- * @brief A Blender-style, ImGui-only file/folder picker — no native OS dialog, no third-party
- * dependency. Lives here (not in `editor/`) because it's shared between
- * `editor::asset_browser_panel`, `editor::editor_ui_layer` (Save Scene As), and the launcher's
- * project picker.
+ * @brief An ImGui-only file and folder picker, shared by the editor and the launcher.
  *
- * Not a `ui_layer` — a plain widget any layer's `build()` calls into. Usage: `open(...)` to
- * trigger it, `draw()` once per frame while `is_open()`, poll `result()`.
+ * Not a ui_layer: call open(), then draw() every frame while is_open(), and poll result().
  */
 class file_dialog final : public utility::noncopyable {
 
@@ -68,7 +59,6 @@ public:
 
   auto open(file_dialog_options options) -> void;
 
-  /** @brief Draws the dialog. Call once per frame while is_open() is true. */
   auto draw() -> void;
 
   [[nodiscard]] auto is_open() const noexcept -> bool {
@@ -76,10 +66,9 @@ public:
   }
 
   /**
-   * @brief Non-nullopt exactly once, the frame the user confirms or cancels — an empty vector
-   * means cancelled (or confirmed with nothing selected, which the confirm button already
-   * disallows in open_file/open_files/save_file mode). Consuming: returns nullopt again afterward,
-   * until the dialog produces another result.
+   * @brief The dialog's outcome, returned once on the frame the user confirms or cancels.
+   *
+   * @return The chosen paths (empty when cancelled), or nullopt on every other frame.
    */
   [[nodiscard]] auto result() -> std::optional<std::vector<std::filesystem::path>>;
 
@@ -122,8 +111,8 @@ private:
 
   std::vector<entry> _cached_entries{};
   std::vector<bool> _entry_selected{}; // parallel to _cached_entries; files only.
-  std::optional<std::size_t> _selection_anchor{}; // last plain-clicked index, into _cached_entries -- Shift range-select's anchor
-  std::optional<std::size_t> _focused_index{}; // keyboard-navigable cursor row, into _cached_entries
+  std::optional<std::size_t> _selection_anchor{}; // Shift range-select anchor, into _cached_entries
+  std::optional<std::size_t> _focused_index{}; // keyboard cursor row, into _cached_entries
   bool _needs_refresh{true};
 
   std::array<char, 256u> _filter_buffer{};

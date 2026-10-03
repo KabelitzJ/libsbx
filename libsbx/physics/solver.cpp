@@ -17,11 +17,7 @@
 
 namespace sbx::physics {
 
-// A sleeping dynamic body is treated exactly like a static one here -- infinite mass, immovable --
-// so anything resting on it solves correctly without ever perturbing its (frozen, exactly-zero)
-// velocity. That in turn is what lets physics_module::_narrowphase() wake a sleeping body only on a
-// genuinely moving contact instead of any contact at all: a still-sleeping neighbor just acts as
-// solid ground for whatever's touching it, the same as the static floor would.
+// Sleeping bodies are immovable here, so resting contacts treat them as ground; that's what lets only real motion wake them.
 [[nodiscard]] auto effective_inverse_mass(const rigidbody& body) -> std::float_t {
   return (body.type == body_type::dynamic_body && !body.is_sleeping) ? body.inverse_mass : 0.0f;
 }
@@ -34,8 +30,7 @@ namespace sbx::physics {
   return body.linear_velocity + math::vector3::cross(body.angular_velocity, anchor);
 }
 
-// Below this closing speed, restitution is treated as zero -- kills the endless micro-bounce a
-// resting body would otherwise pick up from float noise in the normal impulse.
+// Below this closing speed restitution is zero, killing micro-bounces from float noise.
 inline constexpr auto restitution_velocity_threshold = std::float_t{1.0f};
 
 auto integrate_forces(scenes::scene& scene, const math::vector3& gravity, std::float_t dt) -> void {
@@ -69,10 +64,7 @@ auto prepare_velocity_constraints(std::span<contact_manifold> manifolds) -> std:
   constraints.reserve(manifolds.size());
 
   for (auto& manifold : manifolds) {
-    // Resolved once per manifold and cached on the constraint (constraint.body_a/body_b) so
-    // solve_velocity_constraints' iteration loop never has to re-resolve them -- see
-    // effective_rigidbody_ptr's doc comment in rigidbody.hpp for why sharing one fallback instance
-    // across manifolds is safe.
+    // Resolved once per manifold; sharing the fallback is safe (see effective_rigidbody_ptr).
     auto body_a = effective_rigidbody_ptr(manifold.node_a);
     auto body_b = effective_rigidbody_ptr(manifold.node_b);
 
@@ -80,7 +72,7 @@ auto prepare_velocity_constraints(std::span<contact_manifold> manifolds) -> std:
     const auto inv_mass_b = effective_inverse_mass(*body_b);
 
     if (inv_mass_a <= 0.0f && inv_mass_b <= 0.0f) {
-      continue; // both immovable -- nothing for the solver to do
+      continue; // both immovable
     }
 
     const auto inv_inertia_a = effective_inverse_inertia(*body_a);
@@ -130,12 +122,7 @@ auto prepare_velocity_constraints(std::span<contact_manifold> manifolds) -> std:
 
       constraint_point.velocity_bias = (closing_speed < -restitution_velocity_threshold) ? (-constraint.restitution * closing_speed) : 0.0f;
 
-      // Warm start: point.{normal,tangent_1,tangent_2}_impulse is either still zero (a point with
-      // no match in the previous step's cached manifold) or was just seeded by
-      // physics_module::_warm_start_manifolds from the matching point last step. Either way, carry
-      // it into the constraint and apply it once now, before the caller's iterative solve even
-      // starts -- that's what lets a resting stack's supporting impulse persist instead of being
-      // rebuilt from zero every step.
+      // Warm start: carry last step's impulse (or zero) into the constraint and apply it once, so a resting stack's support persists.
       constraint_point.normal_impulse = point.normal_impulse;
       constraint_point.tangent_impulse_1 = point.tangent_impulse_1;
       constraint_point.tangent_impulse_2 = point.tangent_impulse_2;
@@ -158,9 +145,6 @@ auto prepare_velocity_constraints(std::span<contact_manifold> manifolds) -> std:
 auto solve_velocity_constraints(std::vector<velocity_constraint>& constraints, std::uint32_t iterations) -> void {
   for (auto iteration = std::uint32_t{0}; iteration < iterations; ++iteration) {
     for (auto& constraint : constraints) {
-      // body_a/body_b were resolved once, in prepare_velocity_constraints -- dereferencing them
-      // here costs nothing beyond a pointer read, versus the has_component+get_component pair this
-      // used to re-run through the ECS on every one of `iterations` passes.
       auto& body_a = *constraint.body_a;
       auto& body_b = *constraint.body_b;
 
@@ -177,7 +161,7 @@ auto solve_velocity_constraints(std::vector<velocity_constraint>& constraints, s
       };
 
       for (auto& point : constraint.points) {
-        // Normal impulse, clamped non-negative (a contact can only push, never pull).
+        // Normal impulse, clamped non-negative: contacts only push.
         {
           const auto relative_velocity = point_velocity(body_b, point.anchor_b) - point_velocity(body_a, point.anchor_a);
           const auto vn = math::vector3::dot(relative_velocity, constraint.normal);
@@ -189,7 +173,7 @@ auto solve_velocity_constraints(std::vector<velocity_constraint>& constraints, s
           apply_impulse(constraint.normal * delta, point.anchor_a, point.anchor_b);
         }
 
-        // Friction: two tangent impulses, each Coulomb-clamped to the current normal impulse.
+        // Friction: two tangent impulses, Coulomb-clamped to the normal impulse.
         const auto friction_limit = constraint.friction * point.normal_impulse;
 
         {
@@ -257,8 +241,7 @@ auto apply_positional_correction(std::span<contact_manifold> manifolds, std::flo
       continue;
     }
 
-    // Copy the node handles so get_component() resolves to its non-const overload -- manifold
-    // itself is only ever read here, but the node handles it carries must stay mutable.
+    // Copies, so get_component() resolves to its non-const overload.
     auto node_a = manifold.node_a;
     auto node_b = manifold.node_b;
 

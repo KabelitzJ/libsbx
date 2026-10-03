@@ -49,16 +49,10 @@ shadow_pass::shadow_pass() {
     });
   };
 
-  // cull_mode::back here (same winding culled as the color pass, not the reverse) -- a "cull
-  // front" peter-panning trick only helps closed, roughly-convex casters that have a front/back
-  // surface pair everywhere along their silhouette as seen from the light. Open meshes (terrain,
-  // ground planes) have a single layer of front-facing triangles; culling front faces for a
-  // caster like that discards almost the entire light-facing surface from the shadow map instead
-  // of just avoiding self-acne on it. The receiver normal offset + depth bias in csm.slang carry the
-  // acne-avoidance burden instead, matching what the color pass already culls.
+  // Back-face culling like the color pass: culling front faces would drop open meshes' entire light-facing surface. csm.slang's normal offset and bias handle acne.
   _pipelines[0] = make(graphics::cull_mode::back, "Shadow Cascade");
   _pipelines[1] = make(graphics::cull_mode::none, "Shadow Cascade Double-Sided");
-  _pipelines[2] = _pipelines[0]; // shading model doesn't affect depth-only output
+  _pipelines[2] = _pipelines[0]; // shading model doesn't affect depth
   _pipelines[3] = _pipelines[1];
 }
 

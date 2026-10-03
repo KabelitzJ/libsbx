@@ -25,12 +25,10 @@
 namespace sbx::scripting::managed {
 
 enum status_code : std::uint32_t {
-  // Success
   success = 0,
   success_host_already_initialized = 0x00000001,
   success_different_runtime_properties = 0x00000002,
 
-  // failure
   invalid_arg_failure = 0x80008081,
   core_host_lib_load_failure = 0x80008082,
   core_host_lib_missing_failure = 0x80008083,
@@ -163,14 +161,11 @@ auto runtime::unload_assembly_load_context(assembly_load_context& load_context) 
   load_context._context_id = -1;
   load_context._loaded_assemblies.clear();
 
-  // type_cache is a single process-wide singleton (not partitioned per context), so this also
-  // drops Sbx.Core/Sbx.Managed's cached types — harmless, they're lazily re-cached on next
-  // lookup. Without this, a type* from the unloaded context's assemblies would dangle.
+  // type_cache is process-wide, so this also drops Sbx.Core's cached types (re-cached lazily); otherwise types from the unloaded context would dangle.
   detail::type_cache::get().clear();
 }
 
-// [UnmanagedCallersOnly] callbacks can't capture C++ state, so compile_scripts() points this at
-// its local diagnostics vector for the duration of one (synchronous) compile call.
+// [UnmanagedCallersOnly] callbacks can't capture state, so compile_scripts() points this at its diagnostics for the duration of one synchronous compile.
 thread_local std::vector<compiler_diagnostic>* compile_diagnostic_sink = nullptr;
 
 auto compile_diagnostic_thunk(bool32 is_error, string file, std::int32_t line, std::int32_t column, string message) -> void {
@@ -304,7 +299,6 @@ auto runtime::load_host_fxr() const -> bool {
     return false;
   }
 
-  // Load the CoreCLR library
   auto library_handle = static_cast<void*>(nullptr);
 
 #ifdef SBX_PLATFORM_WIN32
@@ -321,7 +315,6 @@ auto runtime::load_host_fxr() const -> bool {
     return false;
   }
 
-  // load core_clr functions
   core_clr.set_host_fxr_error_writer = load_function_ptr<hostfxr_set_error_writer_fn>(library_handle, "hostfxr_set_error_writer");
   core_clr.init_host_fxr_for_runtime_config = load_function_ptr<hostfxr_initialize_for_runtime_config_fn>(library_handle, "hostfxr_initialize_for_runtime_config");
   core_clr.get_runtime_delegate = load_function_ptr<hostfxr_get_runtime_delegate_fn>(library_handle, "hostfxr_get_runtime_delegate");
@@ -331,7 +324,6 @@ auto runtime::load_host_fxr() const -> bool {
 }
 
 auto runtime::initialize_managed() -> bool {
-  // Fetch load_assembly_and_get_function_pointer_fn from CoreCLR
   {
     auto runtime_config_path = std::filesystem::path(_settings.backend_path) / "Sbx.Managed.runtimeconfig.json";
 

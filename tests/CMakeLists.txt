@@ -13,6 +13,7 @@ target_sources(
     "${PROJECT_SOURCE_DIR}/math/angle_test.cpp"
     "${PROJECT_SOURCE_DIR}/math/volume_test.cpp"
     "${PROJECT_SOURCE_DIR}/math/ray_test.cpp"
+    "${PROJECT_SOURCE_DIR}/math/random_test.cpp"
 
     "${PROJECT_SOURCE_DIR}/containers/static_vector_test.cpp"
     "${PROJECT_SOURCE_DIR}/containers/ring_buffer_test.cpp"

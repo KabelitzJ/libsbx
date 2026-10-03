@@ -10,16 +10,12 @@
 namespace editor {
 
 /**
- * @brief Draws the Viewport window: embeds scene_renderer_module::final_image via ImGui::Image(),
- * then (edit mode only) the transform gizmo, its toolbar, the view-orientation cube, and node-icon
- * overlays over it, and dispatches a click that lands on none of those to viewport ray-picking.
+ * @brief Draws the Viewport: final_image plus, in Edit mode, the gizmos and node icons; clicks that hit none of them go to viewport picking.
  *
- * @param sampler The Viewport image's own filtering sampler (see editor_ui_layer::_sampler's doc
- * comment) -- not a backend concern, just how this one image should be sampled.
+ * @param state The editor state.
+ * @param sampler The sampler for the viewport image.
  *
- * @return True if the mouse was over the window this frame -- callers should surface this via
- * their own is_viewport_hovered()-style accessor, since other systems (camera controllers, play
- * mode input) query it without depending on where the window itself gets drawn.
+ * @return True if the mouse was over the window, for is_viewport_hovered().
  */
 auto draw_viewport_window(editor_state& state, const sbx::graphics::sampler& sampler) -> bool;
 

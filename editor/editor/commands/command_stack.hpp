@@ -13,24 +13,31 @@
 
 namespace editor {
 
-/**
- * @brief Standard undo/redo stack of editor commands. Pushing a new command always clears the
- * redo stack (the usual convention: once you do something new, the branch of history you undid
- * away from is gone).
- *
- * target is passed in fresh on every call rather than stored — see command.hpp's doc comment.
- */
+/** @brief The undo/redo stack; pushing clears the redo branch. The target scene is passed on every call, never stored. */
 class command_stack final {
 
 public:
 
-  /** @brief No-op if cmd is null; otherwise runs cmd->execute(target), clears the redo stack, and pushes cmd onto the undo stack (dropping the oldest entry past max_history). */
+  /**
+   * @brief Executes @p cmd, clears the redo stack and pushes it, dropping the oldest entry past max_history. No-op for null.
+   *
+   * @param target The scene.
+   * @param cmd The command.
+   */
   auto push(sbx::scenes::scene& target, std::unique_ptr<command> cmd) -> void;
 
-  /** @brief No-op if there's nothing to undo. */
+  /**
+   * @brief Undoes the last command, if any.
+   *
+   * @param target The scene.
+   */
   auto undo(sbx::scenes::scene& target) -> void;
 
-  /** @brief No-op if there's nothing to redo. */
+  /**
+   * @brief Redoes the last undone command, if any.
+   *
+   * @param target The scene.
+   */
   auto redo(sbx::scenes::scene& target) -> void;
 
   [[nodiscard]] auto can_undo() const noexcept -> bool {
@@ -41,13 +48,21 @@ public:
     return !_redo_stack.empty();
   }
 
-  /** @brief The top-of-undo-stack command's label(), or "" if can_undo() is false. */
+  /**
+   * @brief The label of the command undo() would revert.
+   *
+   * @return The label, or empty if there is nothing to undo.
+   */
   [[nodiscard]] auto undo_label() const -> std::string;
 
-  /** @brief The top-of-redo-stack command's label(), or "" if can_redo() is false. */
+  /**
+   * @brief The label of the command redo() would reapply.
+   *
+   * @return The label, or empty if there is nothing to redo.
+   */
   [[nodiscard]] auto redo_label() const -> std::string;
 
-  /** @brief Drops all history — call whenever previously-pushed commands can no longer be safely replayed (see editor_module::exit_play_mode()). */
+  /** @brief Drops all history, whenever commands can no longer be replayed (e.g. leaving play mode). */
   auto clear() -> void;
 
 private:

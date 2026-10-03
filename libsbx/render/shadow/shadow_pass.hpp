@@ -18,17 +18,9 @@
 namespace sbx::render {
 
 /**
- * @brief Renders the sun's cascaded shadow maps: depth-only, alpha-cutout-aware (same
- * material-driven clip as depth_pre_pass), one cascade at a time into its own
- * shadow_map_resolution² target. Draws nothing when render_context::has_shadow_caster is false (no
- * shadow-casting directional light this frame — see scene_renderer_module::_build_packet), but its
- * groups still clear the maps then, since opaque_pass declares a read of them (see
- * render_graph's compiled_group::clear_on_skip).
+ * @brief Renders the sun's cascaded shadow maps depth-only, one cascade at a time, with the same alpha cutout as depth_pre_pass.
  *
- * Runs after light_culling_pass and before opaque_pass, which samples the resulting maps (see
- * shaders/shadows/csm.slang) while shading the sun's contribution; opaque_pass's declared read is
- * what transitions them to shader_read_only. transparent_accumulate_pass's alpha-blend shading
- * policy doesn't receive shadows.
+ * Draws nothing without a shadow-casting light but still clears the maps, since opaque_pass declares a read of them. Runs after light_culling_pass and before opaque_pass.
  */
 class shadow_pass final : public graphics_pass {
 
@@ -48,8 +40,7 @@ public:
 
 private:
 
-  // Same entry points as depth_pre_pass::_resolve_custom_pipeline, with the shadow cascade's own
-  // cull/sample state, delegated to render::resolve_custom_pipeline.
+  // Same entry points as depth_pre_pass, with the cascade's cull and sample state.
   [[nodiscard]] auto _resolve_custom_pipeline(const std::string& shader_path, bool is_double_sided) -> memory::observer_ptr<graphics::graphics_pipeline>;
 
   std::array<memory::observer_ptr<graphics::graphics_pipeline>, 4u> _pipelines{};

@@ -131,6 +131,16 @@ auto editor_ui_layer::build() -> void {
   for (auto& panel : _panels) {
     panel->draw(_state);
   }
+
+  // build() runs before the scene renderer's prepare(), so the outline follows the selection the same frame. Like Hazel, only while editing.
+  auto& scene_renderer_module = sbx::core::engine::get_module<sbx::render::scene_renderer_module>();
+  const auto is_editing = sbx::core::engine::get_module<editor::editor_module>().play_state() == editor::play_state::edit;
+
+  if (const auto* selection = std::get_if<node_selection>(&_state.current_selection); selection != nullptr && is_editing) {
+    scene_renderer_module.set_selected_nodes(selection->ids);
+  } else {
+    scene_renderer_module.set_selected_nodes({});
+  }
 }
 
 auto editor_ui_layer::_upload_fonts() -> void {

@@ -65,6 +65,9 @@ struct graph_resources {
   graphics::image_handle bloom_downsample{};
   graphics::image_handle bloom_upsample{};
   std::array<graphics::image_handle, shadow_cascade_count> shadow_maps{};
+  graphics::image_handle selection_mask{};
+  graphics::image_handle selection_depth{};
+  std::array<graphics::image_handle, 2u> jump_flood{};
 
   graphics::buffer_handle frame_buffer{};
   graphics::buffer_handle cluster_aabb_buffer{};

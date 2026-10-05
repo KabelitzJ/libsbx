@@ -9,6 +9,7 @@
 #include <optional>
 #include <span>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -172,6 +173,13 @@ public:
   auto wireframe_enabled() const -> bool;
 
   /**
+   * @brief Outlines these nodes' meshes, and their descendants', on top of the scene. Empty by default; the editor sets its selection while editing.
+   *
+   * @param ids The selected nodes.
+   */
+  auto set_selected_nodes(std::span<const math::uuid> ids) -> void;
+
+  /**
    * @brief Tints lit surfaces by the shadow cascade they sample (red, green, blue, yellow; untinted beyond the shadow distance).
    *
    * @param enabled Whether to tint.
@@ -325,6 +333,9 @@ private:
   std::unordered_map<mesh_key, draw_bucket, mesh_key_hash> _opaque_buckets{};
   std::vector<std::pair<mesh_key, const draw_bucket*>> _ordered_opaque_buckets{};
   std::vector<transparent_entry> _transparent_entries{};
+  std::vector<transparent_entry> _selected_entries{};
+
+  std::unordered_set<math::uuid> _selected_nodes{};
 
   draw_stats _last_draw_stats{};
 
@@ -363,6 +374,13 @@ private:
   graphics::image_handle _bloom_downsample_image{};
   graphics::image_handle _bloom_upsample_image{};
   std::uint32_t _bloom_upsample_index{0u};
+
+  // selection_outline_pass: selected geometry (with its own depth) and the jump flood ping-pong pair.
+  graphics::image_handle _selection_mask_image{};
+  graphics::image_handle _selection_depth_image{};
+  std::uint32_t _selection_mask_index{0u};
+  std::array<graphics::image_handle, 2u> _jump_flood_images{};
+  std::array<std::uint32_t, 2u> _jump_flood_indices{};
 
   math::vector2u _target_extent{};
   math::vector2u _viewport_extent{0u, 0u};

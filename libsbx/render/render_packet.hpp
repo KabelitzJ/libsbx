@@ -206,6 +206,7 @@ struct render_packet {
   std::vector<draw_command> opaque_commands{};
   std::vector<draw_command> transparent_commands{};
   std::vector<draw_command> shadow_caster_commands{};
+  std::vector<draw_command> selected_commands{}; // editor selection outline: one single-instance draw per selected submesh, opaque or not
   std::vector<transform_data> transforms{};
   std::vector<light_data> lights{};
   std::uint32_t directional_light_count{0u};

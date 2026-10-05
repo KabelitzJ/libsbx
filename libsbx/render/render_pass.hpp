@@ -94,6 +94,10 @@ struct render_context {
   graphics::image_handle bloom_upsample{};
   std::uint32_t bloom_upsample_index{0u};
 
+  // selection_outline_pass: the selected-geometry mask and the jump flood ping-pong targets.
+  std::uint32_t selection_mask_index{0u};
+  std::array<std::uint32_t, 2u> jump_flood_indices{};
+
   graphics::buffer::address_type frame_address{0u};
   graphics::buffer::address_type transform_address{0u};
   std::uint32_t instance_count{0u};

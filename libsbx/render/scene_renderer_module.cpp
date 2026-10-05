@@ -58,6 +58,7 @@
 #include <libsbx/render/passes/grid_pass.hpp>
 #include <libsbx/render/passes/debug_draw_pass.hpp>
 #include <libsbx/render/passes/tonemap_pass.hpp>
+#include <libsbx/render/passes/selection_outline_pass.hpp>
 #include <libsbx/render/passes/canvas_pass.hpp>
 #include <libsbx/render/passes/canvas_world_pass.hpp>
 #include <libsbx/render/passes/transparent_accumulate_pass.hpp>
@@ -184,6 +185,7 @@ auto recycle_packet_storage(render_packet& previous) -> render_packet {
   recycle(packet.opaque_commands, previous.opaque_commands);
   recycle(packet.transparent_commands, previous.transparent_commands);
   recycle(packet.shadow_caster_commands, previous.shadow_caster_commands);
+  recycle(packet.selected_commands, previous.selected_commands);
   recycle(packet.transforms, previous.transforms);
   recycle(packet.lights, previous.lights);
   recycle(packet.particle_billboard_instances, previous.particle_billboard_instances);
@@ -399,6 +401,7 @@ scene_renderer_module::scene_renderer_module() {
   _graph.add_pass<canvas_world_pass>();
   _graph.add_pass<bloom_pass>();
   _graph.add_pass<tonemap_pass>();
+  _graph.add_pass<selection_outline_pass>();
   _graph.add_pass<canvas_pass>();
 
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
@@ -468,6 +471,11 @@ auto scene_renderer_module::set_wireframe_enabled(bool enabled) -> void {
 
 auto scene_renderer_module::wireframe_enabled() const -> bool {
   return _wireframe_enabled;
+}
+
+auto scene_renderer_module::set_selected_nodes(std::span<const math::uuid> ids) -> void {
+  _selected_nodes.clear();
+  _selected_nodes.insert(ids.begin(), ids.end());
 }
 
 auto scene_renderer_module::set_shadow_cascade_debug_enabled(bool enabled) -> void {
@@ -786,6 +794,33 @@ auto scene_renderer_module::_build_packet() -> render_packet {
   }
 
   _transparent_entries.clear();
+  _selected_entries.clear();
+
+  // A node is outlined when it or any ancestor is selected, so selecting a parent outlines its whole subtree.
+  const auto is_selected = [&](ecs::entity entity) -> bool {
+    if (_selected_nodes.empty()) {
+      return false;
+    }
+
+    for (auto current = entity; current != ecs::null_entity;) {
+      auto node = scene.node_of(current);
+
+      // The scene root has a relationship but no id.
+      const auto id = node.try_get_component<scenes::id>();
+
+      if (!id) {
+        return false;
+      }
+
+      if (_selected_nodes.contains(*id)) {
+        return true;
+      }
+
+      current = node.get_component<scenes::relationship>().parent;
+    }
+
+    return false;
+  };
 
   for (const auto [entity, world, renderer] : scene.query<scenes::world_transform, scenes::mesh_renderer>(ecs::exclude<scenes::skeleton_pose, scenes::inactive>).each()) {
     if (!renderer.mesh.is_valid()) {
@@ -800,6 +835,7 @@ auto scene_renderer_module::_build_packet() -> render_packet {
     const auto& submeshes = renderer.mesh->submeshes();
 
     const auto instance = transform_data{world.matrix, math::matrix4x4::transposed(math::matrix4x4::inverted(world.matrix))};
+    const auto selected = is_selected(entity);
 
     for (auto index = std::uint32_t{0u}; index < submeshes.size(); ++index) {
       if (index >= renderer.materials.size()) {
@@ -810,6 +846,10 @@ auto scene_renderer_module::_build_packet() -> render_packet {
 
       if (!material.is_valid()) {
         continue;
+      }
+
+      if (selected) {
+        _selected_entries.push_back(transparent_entry{renderer.mesh, index, material, compute_pipeline_id(*material), instance});
       }
 
       if (material->alpha() == assets::alpha_mode::blend) {
@@ -942,6 +982,23 @@ auto scene_renderer_module::_build_packet() -> render_packet {
     packet.transparent_commands.push_back(std::move(command));
   }
 
+  // Unbatched: opaque buckets merge selected and unselected instances, so selected ones get their own draws.
+  packet.selected_commands.reserve(_selected_entries.size());
+
+  for (const auto& entry : _selected_entries) {
+    auto command = draw_command{};
+    command.mesh = entry.mesh;
+    command.submesh_index = entry.submesh_index;
+    command.material = entry.material;
+    command.instance_count = 1u;
+    command.transform_offset = static_cast<std::uint32_t>(packet.transforms.size());
+    command.pipeline_id = entry.pipeline_id;
+    command.resident = assets_module.is_resident(entry.mesh) && assets_module.is_resident(entry.material);
+
+    packet.transforms.push_back(entry.transform);
+    packet.selected_commands.push_back(std::move(command));
+  }
+
   auto skin_scratch_cursor = std::uint32_t{0u};
   const auto animation_delta_time = scenes_module.simulation_delta_time().value();
 
@@ -981,6 +1038,7 @@ auto scene_renderer_module::_build_packet() -> render_packet {
     skin_scratch_cursor += instance_vertex_count;
 
     const auto& submeshes = renderer.mesh->submeshes();
+    const auto selected = is_selected(entity);
 
     for (auto index = std::uint32_t{0u}; index < submeshes.size(); ++index) {
       if (index >= renderer.materials.size()) {
@@ -1005,6 +1063,11 @@ auto scene_renderer_module::_build_packet() -> render_packet {
       command.local_bounds = submeshes[index].bounds.inflated(skinned_bounds_padding_factor);
 
       packet.transforms.push_back(transform_data{world.matrix, math::matrix4x4::transposed(math::matrix4x4::inverted(world.matrix))});
+
+      // Already single-instance with its own transform, so the outline can share it.
+      if (selected) {
+        packet.selected_commands.push_back(command);
+      }
 
       if (material->alpha() == assets::alpha_mode::blend) {
         packet.transparent_commands.push_back(command);
@@ -1339,7 +1402,9 @@ auto scene_renderer_module::record(graphics::command_buffer& command_buffer, mat
     .revealage_msaa = _revealage_msaa_image,
     .revealage_index = _revealage_index,
     .bloom_upsample = _bloom_upsample_image,
-    .bloom_upsample_index = _bloom_upsample_index
+    .bloom_upsample_index = _bloom_upsample_index,
+    .selection_mask_index = _selection_mask_index,
+    .jump_flood_indices = _jump_flood_indices
   };
 
   _prepare_frame(context);
@@ -1405,7 +1470,13 @@ auto scene_renderer_module::_ensure_resources() -> void {
 
   _ambient_occlusion_index = bindless_table.reserve_sampled_image();
 
-  _frame_buffer = registry.emplace<graphics::buffer>(graphics::buffer::create_info{
+  _selection_mask_index = bindless_table.reserve_sampled_image();
+
+  for (auto& index : _jump_flood_indices) {
+    index = bindless_table.reserve_sampled_image();
+  }
+
+  _frame_buffer =registry.emplace<graphics::buffer>(graphics::buffer::create_info{
     .size = memory::stride_v<frame_data> * graphics::swapchain::max_frames_in_flight,
     .usage = graphics::buffer_usage::device_address | graphics::buffer_usage::storage,
     .memory = graphics::memory_usage::host_write,
@@ -1604,9 +1675,15 @@ auto scene_renderer_module::_resize_targets(const math::vector2u extent) -> void
     registry.retire(_bloom_upsample_image, frame_index);
     registry.retire(_ambient_occlusion_raw_image, frame_index);
     registry.retire(_ambient_occlusion_image, frame_index);
+    registry.retire(_selection_mask_image, frame_index);
+    registry.retire(_selection_depth_image, frame_index);
+
+    for (auto image : _jump_flood_images) {
+      registry.retire(image, frame_index);
+    }
 
     // Fresh indices: in-flight frames still sample the old images through the old ones.
-    for (auto index : {std::ref(_scene_depth_index), std::ref(_color_index), std::ref(_accumulator_index), std::ref(_revealage_index), std::ref(_bloom_upsample_index), std::ref(_final_image_index), std::ref(_ambient_occlusion_raw_index), std::ref(_ambient_occlusion_index)}) {
+    for (auto index : {std::ref(_scene_depth_index), std::ref(_color_index), std::ref(_accumulator_index), std::ref(_revealage_index), std::ref(_bloom_upsample_index), std::ref(_final_image_index), std::ref(_ambient_occlusion_raw_index), std::ref(_ambient_occlusion_index), std::ref(_selection_mask_index), std::ref(_jump_flood_indices[0]), std::ref(_jump_flood_indices[1])}) {
       bindless_table.unregister_sampled_image(index.get());
       index.get() = bindless_table.reserve_sampled_image();
     }
@@ -1745,6 +1822,37 @@ auto scene_renderer_module::_resize_targets(const math::vector2u extent) -> void
 
   bindless_table.write_sampled_image(_final_image_index, registry.get<graphics::image>(_final_image).view());
 
+  // Selection outline: only alpha > 0.5 of the mask matters; the jump flood targets hold (offset.xy, distance², side), so full float.
+  _selection_mask_image = registry.emplace<graphics::image>(graphics::image::create_info{
+    .extent = math::vector3u{extent, 1u},
+    .format = graphics::format::r8g8b8a8_unorm,
+    .usage = graphics::image_usage::color_attachment | graphics::image_usage::sampled,
+    .samples = graphics::samples::count_1,
+    .name = "Selection Mask"
+  });
+
+  bindless_table.write_sampled_image(_selection_mask_index, registry.get<graphics::image>(_selection_mask_image).view());
+
+  _selection_depth_image = registry.emplace<graphics::image>(graphics::image::create_info{
+    .extent = math::vector3u{extent, 1u},
+    .format = graphics::format::d32_sfloat,
+    .usage = graphics::image_usage::depth_stencil_attachment,
+    .samples = graphics::samples::count_1,
+    .name = "Selection Depth"
+  });
+
+  for (auto i = std::size_t{0u}; i < _jump_flood_images.size(); ++i) {
+    _jump_flood_images[i] = registry.emplace<graphics::image>(graphics::image::create_info{
+      .extent = math::vector3u{extent, 1u},
+      .format = graphics::format::r32g32b32a32_sfloat,
+      .usage = graphics::image_usage::color_attachment | graphics::image_usage::sampled,
+      .samples = graphics::samples::count_1,
+      .name = "Jump Flood " + std::to_string(i)
+    });
+
+    bindless_table.write_sampled_image(_jump_flood_indices[i], registry.get<graphics::image>(_jump_flood_images[i]).view());
+  }
+
   _target_extent = extent;
 
   // This frame's passes already use the new indices, so flush now instead of at the next begin_frame.
@@ -1770,6 +1878,9 @@ auto scene_renderer_module::_build_graph_resources() const -> graph_resources {
     .bloom_downsample = _bloom_downsample_image,
     .bloom_upsample = _bloom_upsample_image,
     .shadow_maps = _shadow_map_images,
+    .selection_mask = _selection_mask_image,
+    .selection_depth = _selection_depth_image,
+    .jump_flood = _jump_flood_images,
     .frame_buffer = _frame_buffer,
     .cluster_aabb_buffer = _cluster_aabb_buffer,
     .cluster_range_buffer = _cluster_range_buffer,

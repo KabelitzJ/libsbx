@@ -24,6 +24,7 @@
 #include <libsbx/assets/mesh.hpp>
 #include <libsbx/assets/material.hpp>
 #include <libsbx/assets/font.hpp>
+#include <libsbx/assets/audio_clip.hpp>
 #include <libsbx/assets/animation_graph.hpp>
 #include <libsbx/assets/particle_effect.hpp>
 #include <libsbx/assets/shader_graph.hpp>
@@ -32,6 +33,7 @@ namespace sbx::assets {
 
 inline constexpr auto texture_cook_version = std::uint32_t{1u};
 inline constexpr auto font_cook_version = std::uint32_t{1u};
+inline constexpr auto audio_clip_cook_version = std::uint32_t{1u};
 inline constexpr auto environment_cook_version = std::uint32_t{1u};
 inline constexpr auto material_cook_version = std::uint32_t{6u};
 inline constexpr auto skeleton_cook_version = std::uint32_t{1u};
@@ -70,6 +72,16 @@ struct cooked_font_data {
   std::float_t ascent{0.0f};
   std::float_t descent{0.0f};
 }; // struct cooked_font_data
+
+/** @brief A cooked audio clip; `samples` is filled for pcm_s16, `encoded` for vorbis. */
+struct cooked_audio_clip_data {
+  std::uint32_t sample_rate{0u};
+  std::uint32_t channels{0u};
+  std::uint64_t frame_count{0u};
+  audio_clip_encoding encoding{audio_clip_encoding::pcm_s16};
+  std::vector<std::int16_t> samples{};
+  std::vector<std::byte> encoded{};
+}; // struct cooked_audio_clip_data
 
 /** @brief One coarser LOD level: an index range into the same vertex buffer as LOD0. */
 struct mesh_lod {
@@ -292,6 +304,9 @@ public:
   /** @brief Same as resolve_texture, for a TTF glyph atlas. */
   [[nodiscard]] static auto resolve_font(const std::filesystem::path& source, const std::filesystem::path& cooked, const font_import_settings& settings, bool needs_cook, bool& did_cook) -> std::optional<cooked_font_data>;
 
+  /** @brief Same as resolve_texture, for a WAV/MP3/FLAC/OGG audio clip. */
+  [[nodiscard]] static auto resolve_audio_clip(const std::filesystem::path& source, const std::filesystem::path& cooked, const audio_clip_import_settings& settings, bool needs_cook, bool& did_cook) -> std::optional<cooked_audio_clip_data>;
+
   /**
    * @brief Same as resolve_texture, for a glTF mesh; embedded materials, skeleton and clips are cooked alongside under uuids derived from `id`.
    *
@@ -399,6 +414,10 @@ private:
   static auto _cook_font(const std::filesystem::path& source, const std::filesystem::path& cooked, const font_import_settings& settings) -> bool;
 
   static auto _load_cooked_font(const std::filesystem::path& cooked, cooked_font_data& data) -> bool;
+
+  static auto _cook_audio_clip(const std::filesystem::path& source, const std::filesystem::path& cooked, const audio_clip_import_settings& settings) -> bool;
+
+  static auto _load_cooked_audio_clip(const std::filesystem::path& cooked, cooked_audio_clip_data& data) -> bool;
 
   /** @brief Computes area-weighted vertex normals for vertices[vertex_start, vertex_start + vertex_count); positions must already be set. */
   static auto _generate_normals(std::vector<vertex>& vertices, const std::vector<std::uint32_t>& indices, std::size_t vertex_start, std::size_t vertex_count, std::size_t index_start, std::size_t index_count) -> void;

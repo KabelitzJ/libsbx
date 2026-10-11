@@ -26,7 +26,8 @@ class create_node_command final : public command {
 
 public:
 
-  explicit create_node_command(std::optional<sbx::math::uuid> parent_id = std::nullopt, std::string name = "Node");
+  /** @param id Preset so a composite can address the node before it exists; nil mints one on first execute. */
+  explicit create_node_command(std::optional<sbx::math::uuid> parent_id = std::nullopt, std::string name = "Node", sbx::math::uuid id = sbx::math::uuid::nil());
 
   auto execute(sbx::scenes::scene& target) -> void override;
 

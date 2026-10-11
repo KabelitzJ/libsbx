@@ -448,6 +448,46 @@ auto asset_residency::load_font(const std::filesystem::path& path) -> font_handl
   return load_font(_manifest.import(assets_directory / path));
 }
 
+auto asset_residency::load_audio_clip(const math::uuid& id) -> audio_clip_handle {
+  {
+    auto lock = std::lock_guard{_mutex};
+
+    if (const auto entry = _audio_clips.find(id); entry != _audio_clips.end()) {
+      return audio_clip_handle{entry->second};
+    }
+  }
+
+  const auto source = _manifest.path_of(id);
+
+  if (source.empty()) {
+    utility::logger<"assets">::warn("Unknown audio clip uuid {}", id);
+    return audio_clip_handle{};
+  }
+
+  const auto cooked = _manifest.cooked_path(id, ".sbxaud");
+  const auto needs_cook = _manifest.is_cooked_stale(id, source, cooked, audio_clip_cook_version);
+
+  auto record = std::make_shared<audio_clip>();
+  record->_id = id;
+
+  {
+    auto lock = std::lock_guard{_mutex};
+    _audio_clips.emplace(id, record);
+  }
+
+  _loader.submit(asset_loader::audio_clip_request{id, typed_import_settings<audio_clip_import_settings>(_manifest, id), source, cooked, needs_cook});
+
+  return audio_clip_handle{record};
+}
+
+auto asset_residency::load_audio_clip(const std::filesystem::path& path) -> audio_clip_handle {
+  const auto& project = core::engine::project();
+
+  const auto assets_directory = project.assets_directory();
+
+  return load_audio_clip(_manifest.import(assets_directory / path));
+}
+
 auto asset_residency::load_mesh(const math::uuid& id) -> mesh_handle {
   return _submit_mesh(id, false);
 }
@@ -645,6 +685,20 @@ auto asset_residency::reimport(const math::uuid& id) -> void {
 
       if (is_loaded) {
         _loader.submit(asset_loader::font_request{id, typed_import_settings<font_import_settings>(_manifest, id), source, _manifest.cooked_path(id, ".sbxfnt"), true});
+      }
+
+      break;
+    }
+    case asset_type::audio_clip: {
+      auto is_loaded = false;
+
+      {
+        auto lock = std::lock_guard{_mutex};
+        is_loaded = _audio_clips.contains(id);
+      }
+
+      if (is_loaded) {
+        _loader.submit(asset_loader::audio_clip_request{id, typed_import_settings<audio_clip_import_settings>(_manifest, id), source, _manifest.cooked_path(id, ".sbxaud"), true});
       }
 
       break;
@@ -1697,6 +1751,17 @@ auto asset_residency::drain_loader_results() -> void {
     return;
   }
 
+  auto audio_clips = _loader.take_resolved_audio_clips(remaining);
+  remaining -= audio_clips.size();
+
+  for (auto& result : audio_clips) {
+    _finalize_audio_clip(result);
+  }
+
+  if (remaining == 0u) {
+    return;
+  }
+
   auto materials = _loader.take_resolved_materials(remaining);
   remaining -= materials.size();
 
@@ -1916,6 +1981,31 @@ auto asset_residency::_finalize_font(asset_loader::font_result& result) -> void 
   record._finalize_content(std::move(data.glyphs), data.first_codepoint, data.line_height, data.ascent, data.descent);
 
   _pending_textures.push_back(pending_texture_upload{record.atlas()->index(), std::move(data.atlas.pixels), data.atlas.width, data.atlas.height, graphics::format::r8_unorm, false});
+}
+
+auto asset_residency::_finalize_audio_clip(asset_loader::audio_clip_result& result) -> void {
+  const auto& request = result.request;
+
+  if (result.did_cook) {
+    _manifest.record_cook(request.id, audio_clip_cook_version, request.source);
+  }
+
+  if (!result.data) {
+    utility::logger<"assets">::warn("Could not load cooked audio clip '{}'", request.cooked.generic_string());
+    return;
+  }
+
+  auto& data = *result.data;
+
+  auto lock = std::lock_guard{_mutex};
+
+  const auto entry = _audio_clips.find(request.id);
+
+  if (entry == _audio_clips.end()) {
+    return;
+  }
+
+  entry->second->_finalize_content(data.sample_rate, data.channels, data.frame_count, data.encoding, std::move(data.samples), std::move(data.encoded));
 }
 
 auto asset_residency::_finalize_material(asset_loader::material_result& result) -> void {
@@ -2435,6 +2525,7 @@ auto asset_residency::resident_asset_counts() const -> assets::resident_asset_co
   counts.textures = _textures.size();
   counts.meshes = _meshes.size();
   counts.fonts = _fonts.size();
+  counts.audio_clips = _audio_clips.size();
   counts.materials = _materials.size();
   counts.environment_maps = _environment_maps.size();
   counts.particle_effects = _particle_effect_files.size();

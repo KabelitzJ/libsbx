@@ -25,6 +25,7 @@ auto drag_payload_type_for(assets::asset_type type) -> const char* {
     case assets::asset_type::animation_graph: return drag_drop_payload_animation_graph;
     case assets::asset_type::shader_graph: return drag_drop_payload_shader_graph;
     case assets::asset_type::font: return drag_drop_payload_font;
+    case assets::asset_type::audio_clip: return drag_drop_payload_audio_clip;
     case assets::asset_type::prefab: return drag_drop_payload_prefab;
     default: return nullptr;
   }
@@ -40,6 +41,7 @@ auto icon_for(assets::asset_type type) -> const char* {
     case assets::asset_type::animation_graph: return ICON_MDI_STATE_MACHINE;
     case assets::asset_type::shader_graph: return ICON_MDI_VECTOR_POLYLINE;
     case assets::asset_type::font: return ICON_MDI_FORMAT_FONT;
+    case assets::asset_type::audio_clip: return ICON_MDI_MUSIC_NOTE;
     case assets::asset_type::prefab: return ICON_MDI_CUBE_SCAN;
     case assets::asset_type::scene: return ICON_MDI_FILE_TREE;
     case assets::asset_type::script: return ICON_MDI_FILE_CODE_OUTLINE;

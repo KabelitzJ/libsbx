@@ -24,6 +24,8 @@
 
 #include <libsbx/assets/assets_module.hpp>
 
+#include <libsbx/audio/audio_module.hpp>
+
 #include <libsbx/render/ui/ui_module.hpp>
 
 #include <libsbx/scenes/components.hpp>
@@ -362,6 +364,7 @@ auto inspector_panel::_draw_asset_properties(editor_state& state, const asset_se
       case sbx::assets::asset_type::animation_graph: _asset_cache.animation_graph = assets_module.load_animation_graph(asset.id); break;
       case sbx::assets::asset_type::shader_graph: _asset_cache.shader_graph = assets_module.load_shader_graph(asset.id); break;
       case sbx::assets::asset_type::font: _asset_cache.font = assets_module.load_font(asset.id); break;
+      case sbx::assets::asset_type::audio_clip: _asset_cache.audio_clip = assets_module.load_audio_clip(asset.id); break;
       case sbx::assets::asset_type::scene: _asset_cache.scene = assets_module.load_scene(asset.id); break;
       case sbx::assets::asset_type::prefab:
       case sbx::assets::asset_type::script:
@@ -523,6 +526,29 @@ auto inspector_panel::_draw_asset_properties(editor_state& state, const asset_se
       if (handle.is_valid()) {
         ImGui::Text("Bindless Index: %u", handle->atlas()->index());
         ImGui::Text("Resident: %s", assets_module.is_resident(handle) ? "yes" : "no");
+      }
+      break;
+    }
+    case sbx::assets::asset_type::audio_clip: {
+      ImGui::Text("Type: Audio Clip");
+      const auto& handle = _asset_cache.audio_clip;
+      if (handle.is_loaded()) {
+        ImGui::Text("Encoding: %s", handle->encoding() == sbx::assets::audio_clip_encoding::vorbis ? "Ogg Vorbis (compressed in memory)" : "PCM 16-bit");
+        ImGui::Text("Sample Rate: %u Hz", handle->sample_rate());
+        ImGui::Text("Channels: %u", handle->channels());
+        ImGui::Text("Duration: %.2f s", handle->duration());
+
+        auto& audio_module = sbx::core::engine::get_module<sbx::audio::audio_module>();
+
+        if (audio_module.is_previewing()) {
+          if (ImGui::Button(ICON_MDI_STOP " Stop")) {
+            audio_module.stop_preview();
+          }
+        } else if (ImGui::Button(ICON_MDI_PLAY " Play")) {
+          audio_module.preview(handle);
+        }
+      } else if (handle.is_valid()) {
+        ImGui::TextDisabled("Loading...");
       }
       break;
     }

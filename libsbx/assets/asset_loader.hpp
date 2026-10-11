@@ -53,6 +53,14 @@ public:
     bool needs_cook{false}; 
   }; // struct font_request
 
+  struct audio_clip_request {
+    math::uuid id;
+    audio_clip_import_settings settings;
+    std::filesystem::path source;
+    std::filesystem::path cooked;
+    bool needs_cook{false};
+  }; // struct audio_clip_request
+
   struct material_request { 
     math::uuid id; 
     std::filesystem::path source; 
@@ -99,6 +107,12 @@ public:
     bool did_cook{false};
   }; // struct font_result
 
+  struct audio_clip_result {
+    audio_clip_request request;
+    std::optional<cooked_audio_clip_data> data;
+    bool did_cook{false};
+  }; // struct audio_clip_result
+
   struct material_result {
     material_request request;
     std::optional<material_description> data;
@@ -139,6 +153,8 @@ public:
 
   auto submit(font_request request) -> void;
 
+  auto submit(audio_clip_request request) -> void;
+
   auto submit(material_request request) -> void;
 
   auto submit(particle_effect_request request) -> void;
@@ -159,6 +175,8 @@ public:
 
   [[nodiscard]] auto take_resolved_fonts(std::size_t max_count) -> std::vector<font_result>;
 
+  [[nodiscard]] auto take_resolved_audio_clips(std::size_t max_count) -> std::vector<audio_clip_result>;
+
   [[nodiscard]] auto take_resolved_materials(std::size_t max_count) -> std::vector<material_result>;
 
   [[nodiscard]] auto take_resolved_particle_effects(std::size_t max_count) -> std::vector<particle_effect_result>;
@@ -173,7 +191,7 @@ public:
 
 private:
 
-  using request = std::variant<texture_request, mesh_request, font_request, material_request, particle_effect_request, animation_graph_request, shader_graph_request, skeleton_request, animation_clip_request>;
+  using request = std::variant<texture_request, mesh_request, font_request, audio_clip_request, material_request, particle_effect_request, animation_graph_request, shader_graph_request, skeleton_request, animation_clip_request>;
 
   auto _worker_loop() -> void;
 
@@ -182,6 +200,8 @@ private:
   auto _resolve(const mesh_request& request) -> void;
 
   auto _resolve(const font_request& request) -> void;
+
+  auto _resolve(const audio_clip_request& request) -> void;
 
   auto _resolve(const material_request& request) -> void;
 
@@ -205,6 +225,7 @@ private:
   std::deque<texture_result> _resolved_textures{};
   std::deque<mesh_result> _resolved_meshes{};
   std::deque<font_result> _resolved_fonts{};
+  std::deque<audio_clip_result> _resolved_audio_clips{};
   std::deque<material_result> _resolved_materials{};
   std::deque<particle_effect_result> _resolved_particle_effects{};
   std::deque<animation_graph_result> _resolved_animation_graphs{};

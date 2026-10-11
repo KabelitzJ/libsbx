@@ -102,6 +102,12 @@ auto component_entries() -> const std::vector<component_entry>& {
     make_entry<sbx::scenes::particle_effect>(ICON_MDI_FIREWORK, "Particle Effect", "3D", 0,
       [](editor_state& s, sbx::scenes::scene& t, sbx::scenes::node& n, sbx::assets::assets_module& a) { draw_particle_effect_instance_section(s, t, n, a); }),
 
+    make_entry<sbx::scenes::audio_source>(ICON_MDI_VOLUME_HIGH, "Audio Source", "Audio", 0,
+      [](editor_state& s, sbx::scenes::scene& t, sbx::scenes::node& n, sbx::assets::assets_module&) { draw_audio_source_section(s, t, n); }),
+
+    make_entry<sbx::scenes::audio_listener>(ICON_MDI_EAR_HEARING, "Audio Listener", "Audio", 0,
+      [](editor_state& s, sbx::scenes::scene& t, sbx::scenes::node& n, sbx::assets::assets_module&) { draw_audio_listener_section(s, t, n); }),
+
     make_entry<sbx::physics::rigidbody>(ICON_MDI_SOCCER, "Rigidbody", "3D", 0,
       [](editor_state& s, sbx::scenes::scene& t, sbx::scenes::node& n, sbx::assets::assets_module&) { draw_rigidbody_section(s, t, n); }),
 
@@ -235,10 +241,11 @@ auto draw_add_component_menu(editor_state& state, sbx::scenes::scene& target, sb
       });
     };
 
-    // Grouped into Common/3D/2D; a header only shows when something in it passes the filter.
-    static constexpr auto categories = std::array<std::pair<const char*, const char*>, 3u>{{
+    // Grouped into Common/3D/Audio/2D; a header only shows when something in it passes the filter.
+    static constexpr auto categories = std::array<std::pair<const char*, const char*>, 4u>{{
       {ICON_MDI_PUZZLE_OUTLINE " Common", "Common"},
       {ICON_MDI_AXIS_ARROW " 3D", "3D"},
+      {ICON_MDI_VOLUME_HIGH " Audio", "Audio"},
       {ICON_MDI_VECTOR_SQUARE " 2D", "2D"},
     }};
 

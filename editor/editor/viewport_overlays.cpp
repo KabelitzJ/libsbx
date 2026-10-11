@@ -116,6 +116,10 @@ auto draw_node_icons(editor_state& state, const ImVec2& viewport_origin, const I
     draw_icon(entity, sbx::math::vector3{transform.matrix[3]}, ICON_MDI_WHITE_BALANCE_SUNNY);
   }
 
+  for (auto&& [entity, transform, source] : scene.query<sbx::scenes::world_transform, sbx::scenes::audio_source>(sbx::ecs::exclude<sbx::scenes::mesh_renderer, sbx::scenes::inactive>).each()) {
+    draw_icon(entity, sbx::math::vector3{transform.matrix[3]}, ICON_MDI_VOLUME_HIGH);
+  }
+
   // Hidden while viewing through it in Play mode: at the eye position the projection degenerates and flickers.
   const auto is_viewing_through_active_camera = editor_module.play_state() != editor::play_state::edit;
   const auto active_camera_id = (is_viewing_through_active_camera && scene.has_active_camera()) ? static_cast<sbx::math::uuid>(scene.active_camera().id()) : sbx::math::uuid::nil();
@@ -185,6 +189,29 @@ auto draw_camera_frustum_gizmo(editor_state& state, const ImVec2& viewport_size)
     debug_draw.add_line(to_world(far_corners[i]), to_world(far_corners[next]), color);
     debug_draw.add_line(to_world(near_corners[i]), to_world(far_corners[i]), color);
   }
+}
+
+auto draw_audio_source_gizmo(editor_state& state) -> void {
+  auto& scene = sbx::core::engine::get_module<sbx::scenes::scenes_module>().active_scene();
+
+  auto node = state.selected_node(scene);
+
+  if (!node.is_valid() || !node.has_component<sbx::scenes::audio_source>()) {
+    return;
+  }
+
+  const auto& source = node.get_component<sbx::scenes::audio_source>();
+
+  if (!source.spatial) {
+    return;
+  }
+
+  const auto center = sbx::math::vector3{node.world_matrix()[3]};
+
+  auto& debug_draw = sbx::core::engine::get_module<sbx::render::scene_renderer_module>().debug_draw();
+
+  debug_draw.add_wire_sphere(center, source.min_distance, sbx::math::color::cyan(), 32u);
+  debug_draw.add_wire_sphere(center, source.max_distance, sbx::math::color::blue(), 48u);
 }
 
 } // namespace editor

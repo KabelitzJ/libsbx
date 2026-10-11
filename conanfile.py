@@ -54,6 +54,7 @@ class LibsbxConan(ConanFile):
         self.folders.generators = os.path.join(self.folders.build, "dependencies")
 
     def requirements(self):
+        self.requires("dr_libs/cci.20230529")
         self.requires("fastgltf/0.9.0")
         self.requires("fmt/12.1.0", transitive_headers=True)
         self.requires("glfw/3.3.8", transitive_headers=True)
@@ -65,6 +66,7 @@ class LibsbxConan(ConanFile):
         self.requires("lz4/1.10.0")
         self.requires("meshoptimizer/1.0")
         self.requires("nlohmann_json/3.11.3", transitive_headers=True)
+        self.requires("openal-soft/1.24.3")
         self.requires("spdlog/1.17.0", transitive_headers=True)
         self.requires("stb/cci.20240531")
         self.requires("tracy/0.14.1", transitive_headers=True)

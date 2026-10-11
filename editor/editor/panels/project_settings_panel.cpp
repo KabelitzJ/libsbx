@@ -2,18 +2,25 @@
 // Copyright (c) 2026 Jonas Kabelitz
 #include <editor/panels/project_settings_panel.hpp>
 
+#include <algorithm>
 #include <array>
+#include <cfloat>
 #include <cstring>
 #include <filesystem>
 #include <optional>
 #include <string>
+#include <utility>
+#include <vector>
 
 #include <imgui.h>
 
 #include <libsbx/core/engine.hpp>
 #include <libsbx/core/project.hpp>
 
+#include <libsbx/math/uuid.hpp>
 #include <libsbx/math/vector3.hpp>
+
+#include <libsbx/render/ui/fonts/material_design_icons.hpp>
 
 #include <editor/widgets/vector_fields.hpp>
 
@@ -54,6 +61,11 @@ auto project_settings_panel::draw(editor_state& state) -> void {
     }
 
     _layers_tab_was_visible = layers_visible;
+
+    if (ImGui::BeginTabItem("Audio")) {
+      _draw_audio_tab();
+      ImGui::EndTabItem();
+    }
 
     ImGui::EndTabBar();
   } else {
@@ -144,6 +156,187 @@ auto project_settings_panel::_draw_physics_tab() -> void {
   }
 
   ImGui::TextDisabled("%.1f physics/FixedUpdate steps per second.", 1.0f / project.fixed_timestep());
+}
+
+// Whether @p ancestor is @p candidate or one of its parents, so a drop can't create a cycle.
+auto is_mixer_group_within(const std::vector<sbx::core::mixer_group>& groups, sbx::math::uuid candidate, const sbx::math::uuid& ancestor) -> bool {
+  for (auto steps = std::size_t{0u}; steps <= groups.size() && candidate != sbx::math::uuid::nil(); ++steps) {
+    if (candidate == ancestor) {
+      return true;
+    }
+
+    const auto entry = std::ranges::find(groups, candidate, &sbx::core::mixer_group::id);
+    candidate = entry != groups.end() ? entry->parent : sbx::math::uuid::nil();
+  }
+
+  return false;
+}
+
+auto project_settings_panel::_draw_audio_tab() -> void {
+  static constexpr auto drag_drop_payload_mixer_group = "SBX_MIXER_GROUP";
+
+  auto& project = sbx::core::engine::project();
+
+  auto max_voices = static_cast<std::int32_t>(project.max_voices());
+
+  if (ImGui::DragInt("Max Voices", &max_voices, 0.25f, 1, 255)) {
+    project.set_max_voices(static_cast<std::uint32_t>(std::clamp(max_voices, 1, 255)));
+  }
+
+  if (ImGui::IsItemDeactivatedAfterEdit()) {
+    project.save();
+  }
+
+  ImGui::TextDisabled("How many sounds can be audible at once. Takes effect on the next start.");
+
+  ImGui::SeparatorText("Mixer Groups");
+  ImGui::TextDisabled("A sound's volume is multiplied by every group above it. Drag a group onto another to move it.");
+
+  // Edited as a copy; structural changes are deferred until the table is drawn.
+  auto groups = project.mixer_groups();
+
+  auto changed = false;
+  auto commit = false;
+  auto add_child_of = std::optional<sbx::math::uuid>{};
+  auto remove_group = std::optional<sbx::math::uuid>{};
+  auto reparent = std::optional<std::pair<sbx::math::uuid, sbx::math::uuid>>{}; // (group, new parent)
+
+  const auto draw_row = [&](this auto&& self, std::size_t index) -> void {
+    auto& group = groups[index];
+    const auto id = group.id;
+    const auto is_master = index == 0u;
+    const auto has_children = std::ranges::any_of(groups, [&](const sbx::core::mixer_group& other) { return other.parent == id; });
+
+    ImGui::TableNextRow();
+    ImGui::TableNextColumn();
+    ImGui::PushID(static_cast<int>(id.value() ^ (id.value() >> 32u)));
+
+    const auto flags = ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_AllowOverlap | (has_children ? ImGuiTreeNodeFlags_None : ImGuiTreeNodeFlags_Leaf);
+    const auto is_open = ImGui::TreeNodeEx("##group", flags);
+
+    if (!is_master && ImGui::BeginDragDropSource()) {
+      ImGui::SetDragDropPayload(drag_drop_payload_mixer_group, &id, sizeof(id));
+      ImGui::TextUnformatted(group.name.c_str());
+      ImGui::EndDragDropSource();
+    }
+
+    if (ImGui::BeginDragDropTarget()) {
+      if (const auto* payload = ImGui::AcceptDragDropPayload(drag_drop_payload_mixer_group)) {
+        const auto dragged = *static_cast<const sbx::math::uuid*>(payload->Data);
+
+        if (!is_mixer_group_within(groups, id, dragged)) {
+          reparent = std::pair{dragged, id};
+        }
+      }
+
+      ImGui::EndDragDropTarget();
+    }
+
+    ImGui::SameLine();
+
+    auto name = std::array<char, 64u>{};
+    std::strncpy(name.data(), group.name.c_str(), name.size() - 1u);
+
+    ImGui::SetNextItemWidth(-FLT_MIN);
+
+    if (ImGui::InputText("##name", name.data(), name.size())) {
+      group.name = name.data();
+      changed = true;
+    }
+
+    commit |= ImGui::IsItemDeactivatedAfterEdit();
+
+    ImGui::TableNextColumn();
+    ImGui::SetNextItemWidth(-FLT_MIN);
+
+    changed |= ImGui::SliderFloat("##volume", &group.volume, 0.0f, 1.0f);
+    commit |= ImGui::IsItemDeactivatedAfterEdit();
+
+    ImGui::TableNextColumn();
+
+    if (ImGui::Checkbox("##mute", &group.muted)) {
+      changed = true;
+      commit = true;
+    }
+
+    ImGui::TableNextColumn();
+
+    if (ImGui::SmallButton(ICON_MDI_PLUS)) {
+      add_child_of = id;
+    }
+
+    if (ImGui::IsItemHovered()) {
+      ImGui::SetTooltip("Add a child group");
+    }
+
+    if (!is_master) {
+      ImGui::SameLine();
+
+      if (ImGui::SmallButton(ICON_MDI_DELETE)) {
+        remove_group = id;
+      }
+
+      if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("Delete; its children move up a level");
+      }
+    }
+
+    if (is_open) {
+      for (auto child = std::size_t{0u}; child < groups.size(); ++child) {
+        if (groups[child].parent == id) {
+          self(child);
+        }
+      }
+
+      ImGui::TreePop();
+    }
+
+    ImGui::PopID();
+  };
+
+  if (ImGui::BeginTable("##mixer_groups", 4, ImGuiTableFlags_BordersInnerH | ImGuiTableFlags_RowBg)) {
+    ImGui::TableSetupColumn("Group", ImGuiTableColumnFlags_WidthStretch, 2.0f);
+    ImGui::TableSetupColumn("Volume", ImGuiTableColumnFlags_WidthStretch, 1.5f);
+    ImGui::TableSetupColumn("Mute", ImGuiTableColumnFlags_WidthFixed);
+    ImGui::TableSetupColumn("##actions", ImGuiTableColumnFlags_WidthFixed);
+    ImGui::TableHeadersRow();
+
+    draw_row(0u);
+
+    ImGui::EndTable();
+  }
+
+  if (add_child_of) {
+    groups.push_back(sbx::core::mixer_group{sbx::math::uuid::create(), "New Group", *add_child_of});
+    changed = commit = true;
+  }
+
+  if (remove_group) {
+    const auto removed = std::ranges::find(groups, *remove_group, &sbx::core::mixer_group::id);
+    const auto new_parent = removed->parent;
+
+    for (auto& group : groups) {
+      if (group.parent == *remove_group) {
+        group.parent = new_parent;
+      }
+    }
+
+    groups.erase(removed);
+    changed = commit = true;
+  }
+
+  if (reparent) {
+    std::ranges::find(groups, reparent->first, &sbx::core::mixer_group::id)->parent = reparent->second;
+    changed = commit = true;
+  }
+
+  if (changed) {
+    project.set_mixer_groups(std::move(groups));
+  }
+
+  if (commit) {
+    project.save();
+  }
 }
 
 auto project_settings_panel::_draw_layers_tab() -> void {

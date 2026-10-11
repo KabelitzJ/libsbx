@@ -6,10 +6,13 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <string>
 #include <variant>
 #include <vector>
 
 #include <yaml-cpp/yaml.h>
+
+#include <libsbx/reflection/enum.hpp>
 
 #include <libsbx/assets/asset_type.hpp>
 
@@ -64,8 +67,23 @@ struct font_import_settings {
   auto operator==(const font_import_settings&) const -> bool = default;
 }; // struct font_import_settings
 
+enum class [[=reflection::named]] audio_load_type : std::uint8_t {
+  decompress_on_load, // decoded to PCM at cook; one shared buffer per clip, best for short sounds
+  compressed_in_memory // Ogg Vorbis sources only: kept encoded and decoded while playing, best for music
+}; // enum class audio_load_type
+
+struct audio_clip_import_settings {
+  /** @brief Ignored for non-Vorbis sources, which always decompress. */
+  audio_load_type load_type{audio_load_type::decompress_on_load};
+
+  /** @brief Downmixes to one channel; OpenAL only spatializes mono clips. */
+  bool force_mono{false};
+
+  auto operator==(const audio_clip_import_settings&) const -> bool = default;
+}; // struct audio_clip_import_settings
+
 /** @brief The `importer:` block of a `.meta`; monostate for types without settings. */
-using import_settings = std::variant<std::monostate, texture_import_settings, mesh_import_options, font_import_settings>;
+using import_settings = std::variant<std::monostate, texture_import_settings, mesh_import_options, font_import_settings, audio_clip_import_settings>;
 
 [[nodiscard]] auto default_import_settings(asset_type type) -> import_settings;
 

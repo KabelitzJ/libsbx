@@ -24,6 +24,8 @@ target_sources(
     "${PROJECT_SOURCE_DIR}/ecs/entity_test.cpp"
     "${PROJECT_SOURCE_DIR}/ecs/registry_test.cpp"
 
+    "${PROJECT_SOURCE_DIR}/assets/audio_cooker_test.cpp"
+
     "${PROJECT_SOURCE_DIR}/scenes/scene_serializer_test.cpp"
 
     "${PROJECT_SOURCE_DIR}/utility/fast_mod_test.cpp"

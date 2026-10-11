@@ -36,6 +36,7 @@
 #include <libsbx/assets/texture2d.hpp>
 #include <libsbx/assets/environment_map.hpp>
 #include <libsbx/assets/particle_effect.hpp>
+#include <libsbx/assets/audio_clip.hpp>
 #include <libsbx/assets/skeleton.hpp>
 #include <libsbx/assets/animation_clip.hpp>
 #include <libsbx/assets/animation_graph.hpp>
@@ -399,6 +400,53 @@ struct particle_effect {
   math::vector3 inherited_velocity{0.0f, 0.0f, 0.0f};
 }; // struct particle_effect
 
+enum class [[=reflection::named]] audio_playback_state : std::uint8_t {
+  stopped,
+  playing,
+  paused
+}; // enum class audio_playback_state
+
+/** @brief How a spatial source fades between min_distance and max_distance. */
+enum class [[=reflection::named]] audio_rolloff : std::uint8_t {
+  inverse, // natural falloff, never quite silent; constant past max_distance
+  linear   // reaches silence at max_distance
+}; // enum class audio_rolloff
+
+/** @brief An audio_module voice a source currently owns; stale once that voice's generation moves on (stolen or released). */
+struct audio_voice_ref {
+  inline static constexpr auto invalid_index = std::numeric_limits<std::uint32_t>::max();
+
+  std::uint32_t index{invalid_index};
+  std::uint32_t generation{0u};
+}; // struct audio_voice_ref
+
+struct audio_source {
+  assets::audio_clip_handle clip{};
+  math::uuid mixer_group{math::uuid::nil()}; // nil or unknown routes to Master
+  std::float_t volume{1.0f};
+  std::float_t pitch{1.0f};
+  bool loop{false};
+  bool play_on_awake{true};
+  bool spatial{true};
+  std::float_t min_distance{1.0f};
+  std::float_t max_distance{50.0f};
+  audio_rolloff rolloff{audio_rolloff::inverse};
+  std::float_t doppler_level{1.0f};
+  std::uint8_t priority{128u}; // 0 is most important; a full voice pool takes voices from the highest values first
+  // Runtime-only, not persisted.
+  audio_playback_state playback{audio_playback_state::stopped};
+  bool restart{false}; // set by a play request so an already-playing source starts over
+  bool seek{false}; // set alongside a new time so the playing voice jumps there
+  bool awoken{false}; // play_on_awake has been evaluated
+  std::float_t time{0.0f}; // playback position in seconds; keeps advancing while the source has no voice
+  audio_voice_ref voice{};
+}; // struct audio_source
+
+/** @brief Where the scene is heard from. Without one, the active camera listens. */
+struct audio_listener {
+  std::float_t volume{1.0f};
+}; // struct audio_listener
+
 enum class script_field_type : std::uint8_t {
   float32,
   int32,
@@ -411,7 +459,8 @@ enum class script_field_type : std::uint8_t {
   material, // a Sbx.Core.Material-typed field, stored as the referenced material asset's own uuid (nil = unassigned), same INativeHandle convention as node
   color, // a Sbx.Core.Math.Color-typed field -- blittable (four sequential floats), same direct get/set_field_value path as vector3
   enumeration, // any C# enum field, stored as its integer value in int_value
-  texture // a Sbx.Core.Texture2D-typed field, stored as the texture asset's uuid (nil = unassigned), same INativeHandle convention as material
+  texture, // a Sbx.Core.Texture2D-typed field, stored as the texture asset's uuid (nil = unassigned), same INativeHandle convention as material
+  audio_clip // a Sbx.Core.AudioClip-typed field, stored as the clip asset's uuid (nil = unassigned)
 }; // enum class script_field_type
 
 struct script_field_override {
@@ -427,6 +476,7 @@ struct script_field_override {
   std::uint32_t layer_mask_value{0xFFFFFFFFu};
   math::uuid material_value{math::uuid::nil()};
   math::uuid texture_value{math::uuid::nil()};
+  math::uuid audio_clip_value{math::uuid::nil()};
   math::color color_value{};
 }; // struct script_field_override
 

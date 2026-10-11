@@ -180,6 +180,14 @@ auto assets_module::load_font(const std::filesystem::path& path) -> font_handle 
   return _residency.load_font(path);
 }
 
+auto assets_module::load_audio_clip(const math::uuid& id) -> audio_clip_handle {
+  return _residency.load_audio_clip(id);
+}
+
+auto assets_module::load_audio_clip(const std::filesystem::path& path) -> audio_clip_handle {
+  return _residency.load_audio_clip(path);
+}
+
 auto assets_module::load_mesh(const math::uuid& id) -> mesh_handle {
   return _residency.load_mesh(id);
 }

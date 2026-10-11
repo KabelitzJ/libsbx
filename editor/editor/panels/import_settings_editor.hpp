@@ -77,6 +77,8 @@ private:
   auto _draw_mesh(sbx::assets::mesh_import_options& settings) -> bool;
   auto _draw_font(sbx::assets::font_import_settings& settings) -> bool;
 
+  auto _draw_audio_clip(sbx::assets::audio_clip_import_settings& settings) -> bool;
+
   auto _sync_checks_from_settings() -> void;
 
   std::filesystem::path _relative_path{};

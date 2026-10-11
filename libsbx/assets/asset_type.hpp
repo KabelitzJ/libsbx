@@ -24,6 +24,7 @@ enum class [[=reflection::named]] asset_type : std::uint8_t {
   animation_graph,
   shader_graph,
   font,
+  audio_clip,
   prefab,
   scene, // no cook step, but manifest-registered like prefab
   script // reference-only, compiled by scripting::script_compiler

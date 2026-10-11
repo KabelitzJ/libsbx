@@ -104,6 +104,20 @@ struct layout_element_data {
   std::uint32_t ignore_layout;
 }; // struct layout_element_data
 
+// Mirrors Sbx.Core.Components.AudioSourceSettings: the authored audio_source fields, flags as uint32 and the rolloff enum as its value.
+struct audio_source_data {
+  std::float_t volume;
+  std::float_t pitch;
+  std::float_t min_distance;
+  std::float_t max_distance;
+  std::float_t doppler_level;
+  std::uint32_t priority;
+  std::uint32_t rolloff;
+  std::uint32_t loop;
+  std::uint32_t play_on_awake;
+  std::uint32_t spatial;
+}; // struct audio_source_data
+
 struct interop {
 
   enum class log_level : std::int32_t {
@@ -241,6 +255,67 @@ struct interop {
   static auto particle_effect_set_loop(std::uint64_t uuid, bool value) -> void;
 
   static auto particle_effect_get_is_playing(std::uint64_t uuid) -> managed::bool32;
+
+  /** @brief Loads a project-relative audio clip; 0 when it can't be resolved. */
+  static auto audio_clip_load(managed::string path) -> std::uint64_t;
+
+  static auto audio_clip_is_loaded(std::uint64_t clip_uuid) -> managed::bool32;
+
+  /** @brief Seconds; 0 until loaded. */
+  static auto audio_clip_get_length(std::uint64_t clip_uuid) -> std::float_t;
+
+  static auto audio_clip_get_channels(std::uint64_t clip_uuid) -> std::uint32_t;
+
+  static auto audio_clip_get_frequency(std::uint64_t clip_uuid) -> std::uint32_t;
+
+  static auto audio_source_get_settings(std::uint64_t uuid, audio_source_data* out_value) -> void;
+
+  static auto audio_source_set_settings(std::uint64_t uuid, const audio_source_data* value) -> void;
+
+  /** @brief The assigned clip's uuid, or 0. */
+  static auto audio_source_get_clip(std::uint64_t uuid) -> std::uint64_t;
+
+  /** @brief 0 clears the clip. */
+  static auto audio_source_set_clip(std::uint64_t uuid, std::uint64_t clip_uuid) -> void;
+
+  /** @brief The output mixer group's name; "Master" when unset or unknown. */
+  static auto audio_source_get_output_group(std::uint64_t uuid) -> managed::string;
+
+  /** @brief Routes to the first mixer group named @p name; false (and unchanged) if there is none. */
+  static auto audio_source_set_output_group(std::uint64_t uuid, managed::string name) -> managed::bool32;
+
+  /** @brief Restarts from the beginning, like Unity's AudioSource.Play. */
+  static auto audio_source_play(std::uint64_t uuid) -> void;
+
+  static auto audio_source_pause(std::uint64_t uuid) -> void;
+
+  /** @brief Resumes a paused source where it left off; no-op otherwise. */
+  static auto audio_source_unpause(std::uint64_t uuid) -> void;
+
+  static auto audio_source_stop(std::uint64_t uuid) -> void;
+
+  static auto audio_source_get_is_playing(std::uint64_t uuid) -> managed::bool32;
+
+  static auto audio_source_get_time(std::uint64_t uuid) -> std::float_t;
+
+  static auto audio_source_set_time(std::uint64_t uuid, std::float_t seconds) -> void;
+
+  /** @brief Plays @p clip_uuid once from the source's position, output group and spatial setting, without interrupting its own clip. */
+  static auto audio_source_play_one_shot(std::uint64_t uuid, std::uint64_t clip_uuid, std::float_t volume_scale) -> void;
+
+  static auto audio_listener_get_volume(std::uint64_t uuid) -> std::float_t;
+
+  static auto audio_listener_set_volume(std::uint64_t uuid, std::float_t volume) -> void;
+
+  static auto audio_play_clip_at_point(std::uint64_t clip_uuid, math::vector3* position, std::float_t volume) -> void;
+
+  /** @brief Overrides the first mixer group named @p name for this session; false if there is none. */
+  static auto audio_set_mixer_group_volume(managed::string name, std::float_t volume) -> managed::bool32;
+
+  /** @brief The group's own volume including any session override; 1 for an unknown group. */
+  static auto audio_get_mixer_group_volume(managed::string name) -> std::float_t;
+
+  static auto audio_reset_mixer_group_volume(managed::string name) -> void;
 
   static auto input_is_key_pressed(platform::key key) -> managed::bool32;
 

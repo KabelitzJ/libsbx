@@ -2,7 +2,9 @@
 // Copyright (c) 2026 Jonas Kabelitz
 #include <libsbx/core/project.hpp>
 
+#include <algorithm>
 #include <fstream>
+#include <ranges>
 #include <stdexcept>
 
 #include <fmt/format.h>
@@ -75,7 +77,55 @@ auto project::load(const std::filesystem::path& file) -> project {
     result._fixed_timestep = time_node["fixed_timestep"].as<std::float_t>();
   }
 
+  if (const auto audio_node = node["audio"]) {
+    result._max_voices = audio_node["max_voices"].as<std::uint32_t>(result._max_voices);
+
+    if (const auto groups_node = audio_node["mixer_groups"]) {
+      auto groups = std::vector<mixer_group>{};
+
+      for (const auto& group_node : groups_node) {
+        groups.push_back(mixer_group{
+          group_node["id"].as<math::uuid>(),
+          group_node["name"].as<std::string>(""),
+          group_node["parent"].as<math::uuid>(math::uuid::nil()),
+          group_node["volume"].as<std::float_t>(1.0f),
+          group_node["muted"].as<bool>(false)
+        });
+      }
+
+      result.set_mixer_groups(std::move(groups));
+    }
+  }
+
   return result;
+}
+
+auto project::set_mixer_groups(std::vector<mixer_group> groups) -> void {
+  const auto is_master = [](const mixer_group& group) { return group.id == master_mixer_group_id; };
+
+  if (const auto master = std::ranges::find_if(groups, is_master); master == groups.end()) {
+    groups.insert(groups.begin(), mixer_group{master_mixer_group_id, "Master"});
+  } else if (master != groups.begin()) {
+    std::rotate(groups.begin(), master, master + 1);
+  }
+
+  groups.front().parent = math::uuid::nil();
+
+  // Reparents any group whose chain doesn't reach Master within groups.size() steps: a missing parent or a cycle.
+  for (auto& group : groups | std::views::drop(1u)) {
+    auto current = group.parent;
+
+    for (auto steps = std::size_t{0u}; steps < groups.size() && current != master_mixer_group_id; ++steps) {
+      const auto parent = std::ranges::find_if(groups, [&](const mixer_group& other) { return other.id == current; });
+      current = parent != groups.end() ? parent->parent : math::uuid::nil();
+    }
+
+    if (current != master_mixer_group_id) {
+      group.parent = master_mixer_group_id;
+    }
+  }
+
+  _mixer_groups = std::move(groups);
 }
 
 auto project::open_or_create(const std::filesystem::path& root, std::string name) -> project {
@@ -148,6 +198,21 @@ auto project::save(const std::filesystem::path& file) const -> void {
 
   emitter << YAML::Key << "time" << YAML::Value << YAML::BeginMap;
   emitter << YAML::Key << "fixed_timestep" << YAML::Value << _fixed_timestep;
+  emitter << YAML::EndMap;
+
+  emitter << YAML::Key << "audio" << YAML::Value << YAML::BeginMap;
+  emitter << YAML::Key << "max_voices" << YAML::Value << _max_voices;
+  emitter << YAML::Key << "mixer_groups" << YAML::Value << YAML::BeginSeq;
+  for (const auto& group : _mixer_groups) {
+    emitter << YAML::BeginMap;
+    emitter << YAML::Key << "id" << YAML::Value << YAML::Node{group.id};
+    emitter << YAML::Key << "name" << YAML::Value << group.name;
+    emitter << YAML::Key << "parent" << YAML::Value << YAML::Node{group.parent};
+    emitter << YAML::Key << "volume" << YAML::Value << group.volume;
+    emitter << YAML::Key << "muted" << YAML::Value << group.muted;
+    emitter << YAML::EndMap;
+  }
+  emitter << YAML::EndSeq;
   emitter << YAML::EndMap;
 
   emitter << YAML::EndMap;

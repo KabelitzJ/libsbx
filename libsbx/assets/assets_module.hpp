@@ -29,6 +29,7 @@
 #include <libsbx/assets/texture2d.hpp>
 #include <libsbx/assets/texture2d_array.hpp>
 #include <libsbx/assets/font.hpp>
+#include <libsbx/assets/audio_clip.hpp>
 #include <libsbx/assets/mesh.hpp>
 #include <libsbx/assets/material.hpp>
 #include <libsbx/assets/environment_map.hpp>
@@ -216,6 +217,17 @@ public:
   auto load_font(const math::uuid& id) -> font_handle;
 
   auto load_font(const std::filesystem::path& path) -> font_handle;
+
+  /**
+   * @brief Loads a WAV/MP3/FLAC/OGG clip by uuid or project-relative path, or returns the existing handle.
+   *
+   * @param id The clip's uuid.
+   *
+   * @return The clip handle; is_loaded() once decoded.
+   */
+  auto load_audio_clip(const math::uuid& id) -> audio_clip_handle;
+
+  auto load_audio_clip(const std::filesystem::path& path) -> audio_clip_handle;
 
   /**
    * @brief Loads a mesh by uuid or project-relative path, or returns the existing handle. Cooks with the import settings in its `.meta`.

@@ -10,13 +10,27 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
+#include <libsbx/math/uuid.hpp>
 #include <libsbx/math/vector3.hpp>
 
 namespace sbx::core {
 
 /** @brief How many named layers a project has (0-31) — the same 32-bit budget a @ref sbx::scenes::layer_mask spends one bit per layer on. */
 inline constexpr auto layer_count = std::size_t{32u};
+
+/** @brief The root of the mixer group tree. A fixed id so scenes can reference it before the project is ever saved. */
+inline constexpr auto master_mixer_group_id = math::uuid::from_value(1u);
+
+/** @brief One node of the project's audio mixer tree; a source's gain is multiplied by every group up to Master. */
+struct mixer_group {
+  math::uuid id{math::uuid::nil()};
+  std::string name{};
+  math::uuid parent{math::uuid::nil()}; // nil only for Master
+  std::float_t volume{1.0f};
+  bool muted{false};
+}; // struct mixer_group
 
 /**
  * @brief A project defines where content and the cooked-asset cache live, plus project-wide
@@ -37,8 +51,10 @@ public:
 
   inline static constexpr auto default_fixed_timestep = std::float_t{1.0f / 60.0f};
 
+  inline static constexpr auto default_max_voices = std::uint32_t{64u};
+
   /** @brief Bumped whenever the on-disk format changes; written by @ref save, checked by @ref load. */
-  inline static constexpr auto current_format_version = std::uint32_t{3u}; // v2: added layers/layer_collision_matrix, v3: added physics/time
+  inline static constexpr auto current_format_version = std::uint32_t{4u}; // v2: added layers/layer_collision_matrix, v3: added physics/time, v4: added audio
 
   project() {
     _layers[0] = "Default";
@@ -178,6 +194,23 @@ public:
     _fixed_timestep = seconds;
   }
 
+  /** @brief The mixer tree, Master first. Always contains Master, and every other group's parent exists. */
+  [[nodiscard]] auto mixer_groups() const noexcept -> const std::vector<mixer_group>& {
+    return _mixer_groups;
+  }
+
+  /** @brief Replaces the mixer tree, repairing it: Master is restored if missing and orphans are reparented to it. */
+  auto set_mixer_groups(std::vector<mixer_group> groups) -> void;
+
+  /** @brief How many sounds can be audible at once; beyond it, the least important are virtualized. */
+  [[nodiscard]] auto max_voices() const noexcept -> std::uint32_t {
+    return _max_voices;
+  }
+
+  auto set_max_voices(std::uint32_t count) noexcept -> void {
+    _max_voices = count;
+  }
+
 private:
 
   std::filesystem::path _root{};
@@ -193,6 +226,15 @@ private:
   math::vector3 _gravity{0.0f, -9.81f, 0.0f};
   std::uint32_t _velocity_iterations{8u};
   std::float_t _fixed_timestep{default_fixed_timestep};
+
+  std::vector<mixer_group> _mixer_groups{
+    mixer_group{master_mixer_group_id, "Master"},
+    mixer_group{math::uuid::from_value(2u), "Music", master_mixer_group_id},
+    mixer_group{math::uuid::from_value(3u), "SFX", master_mixer_group_id},
+    mixer_group{math::uuid::from_value(4u), "UI", master_mixer_group_id},
+    mixer_group{math::uuid::from_value(5u), "Voice", master_mixer_group_id}
+  };
+  std::uint32_t _max_voices{default_max_voices};
 
 }; // class project
 

@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cctype>
 #include <cstdint>
 #include <string>
 
@@ -105,6 +106,10 @@ auto import_settings_editor::draw() -> bool {
 
   if (auto* font = std::get_if<sbx::assets::font_import_settings>(&_settings)) {
     return _draw_font(*font);
+  }
+
+  if (auto* audio = std::get_if<sbx::assets::audio_clip_import_settings>(&_settings)) {
+    return _draw_audio_clip(*audio);
   }
 
   ImGui::TextDisabled("This asset type has no import settings.");
@@ -259,6 +264,38 @@ auto import_settings_editor::_draw_font(sbx::assets::font_import_settings& setti
   }
 
   ImGui::TextDisabled("U+%04X to U+%04X", settings.first_codepoint, settings.first_codepoint + settings.codepoint_count - 1u);
+
+  return changed;
+}
+
+auto import_settings_editor::_draw_audio_clip(sbx::assets::audio_clip_import_settings& settings) -> bool {
+  auto changed = false;
+
+  auto extension = _relative_path.extension().string();
+  std::ranges::transform(extension, extension.begin(), [](unsigned char character) { return static_cast<char>(std::tolower(character)); });
+
+  const auto is_vorbis = extension == ".ogg";
+
+  ImGui::BeginDisabled(!is_vorbis);
+
+  auto compressed = settings.load_type == sbx::assets::audio_load_type::compressed_in_memory;
+
+  if (ImGui::Checkbox("Compressed In Memory", &compressed)) {
+    settings.load_type = compressed ? sbx::assets::audio_load_type::compressed_in_memory : sbx::assets::audio_load_type::decompress_on_load;
+    changed = true;
+  }
+
+  ImGui::EndDisabled();
+
+  if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
+    ImGui::SetTooltip(is_vorbis ? "Keeps the Ogg Vorbis data and decodes it while playing. Use for music and long ambience." : "Only Ogg Vorbis clips can stay compressed; other formats always decompress on load.");
+  }
+
+  changed |= ImGui::Checkbox("Force To Mono", &settings.force_mono);
+
+  if (ImGui::IsItemHovered()) {
+    ImGui::SetTooltip("Downmixes to one channel. Needed for 3D (spatial) playback of stereo files.");
+  }
 
   return changed;
 }

@@ -111,6 +111,32 @@ scripting_module::scripting_module() {
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "ParticleEffect_SetLoop", reinterpret_cast<void*>(&interop::particle_effect_set_loop));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "ParticleEffect_GetIsPlaying", reinterpret_cast<void*>(&interop::particle_effect_get_is_playing));
 
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "AudioClip_Load", reinterpret_cast<void*>(&interop::audio_clip_load));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "AudioClip_IsLoaded", reinterpret_cast<void*>(&interop::audio_clip_is_loaded));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "AudioClip_GetLength", reinterpret_cast<void*>(&interop::audio_clip_get_length));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "AudioClip_GetChannels", reinterpret_cast<void*>(&interop::audio_clip_get_channels));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "AudioClip_GetFrequency", reinterpret_cast<void*>(&interop::audio_clip_get_frequency));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "AudioSource_GetSettings", reinterpret_cast<void*>(&interop::audio_source_get_settings));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "AudioSource_SetSettings", reinterpret_cast<void*>(&interop::audio_source_set_settings));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "AudioSource_GetClip", reinterpret_cast<void*>(&interop::audio_source_get_clip));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "AudioSource_SetClip", reinterpret_cast<void*>(&interop::audio_source_set_clip));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "AudioSource_GetOutputGroup", reinterpret_cast<void*>(&interop::audio_source_get_output_group));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "AudioSource_SetOutputGroup", reinterpret_cast<void*>(&interop::audio_source_set_output_group));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "AudioSource_Play", reinterpret_cast<void*>(&interop::audio_source_play));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "AudioSource_Pause", reinterpret_cast<void*>(&interop::audio_source_pause));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "AudioSource_UnPause", reinterpret_cast<void*>(&interop::audio_source_unpause));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "AudioSource_Stop", reinterpret_cast<void*>(&interop::audio_source_stop));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "AudioSource_GetIsPlaying", reinterpret_cast<void*>(&interop::audio_source_get_is_playing));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "AudioSource_GetTime", reinterpret_cast<void*>(&interop::audio_source_get_time));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "AudioSource_SetTime", reinterpret_cast<void*>(&interop::audio_source_set_time));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "AudioSource_PlayOneShot", reinterpret_cast<void*>(&interop::audio_source_play_one_shot));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "AudioListener_GetVolume", reinterpret_cast<void*>(&interop::audio_listener_get_volume));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "AudioListener_SetVolume", reinterpret_cast<void*>(&interop::audio_listener_set_volume));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Audio_PlayClipAtPoint", reinterpret_cast<void*>(&interop::audio_play_clip_at_point));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Audio_SetMixerGroupVolume", reinterpret_cast<void*>(&interop::audio_set_mixer_group_volume));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Audio_GetMixerGroupVolume", reinterpret_cast<void*>(&interop::audio_get_mixer_group_volume));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Audio_ResetMixerGroupVolume", reinterpret_cast<void*>(&interop::audio_reset_mixer_group_volume));
+
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Input_IsKeyPressed", reinterpret_cast<void*>(&interop::input_is_key_pressed));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Input_IsKeyDown", reinterpret_cast<void*>(&interop::input_is_key_down));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Input_IsKeyReleased", reinterpret_cast<void*>(&interop::input_is_key_released));
@@ -543,6 +569,7 @@ auto scripting_module::seed_missing_field_defaults(scenes::node& node, scenes::s
       case scenes::script_field_type::color: default_value.color_value = scratch.get_field_value<math::color>(field_name); break;
       case scenes::script_field_type::enumeration: default_value.int_value = scratch.get_field_value<std::int32_t>(field_name); break;
       case scenes::script_field_type::texture: default_value.texture_value = math::uuid::from_value(scratch.get_field_value<std::uint64_t>(field_name)); break;
+      case scenes::script_field_type::audio_clip: default_value.audio_clip_value = math::uuid::from_value(scratch.get_field_value<std::uint64_t>(field_name)); break;
     }
 
     entry.field_overrides.push_back(std::move(default_value));
@@ -596,6 +623,7 @@ auto scripting_module::_apply_field_overrides(managed::object& instance, const s
       // ponytail: enums cross as int32 -- a long-backed enum would read past it on the C# side; widen if one ever shows up.
       case scenes::script_field_type::enumeration: instance.set_field_value(field.name, field.int_value); break;
       case scenes::script_field_type::texture: instance.set_field_value(field.name, field.texture_value.value()); break;
+      case scenes::script_field_type::audio_clip: instance.set_field_value(field.name, field.audio_clip_value.value()); break;
     }
   }
 }
@@ -724,6 +752,8 @@ auto scripting_module::_register_managed_components() -> void {
   interop::register_managed_component<scenes::local_transform>("Sbx.Core.Components.Transform", _core_assembly);
   interop::register_managed_component<scenes::animator>("Sbx.Core.Components.Animator", _core_assembly);
   interop::register_managed_component<scenes::particle_effect>("Sbx.Core.Components.ParticleEffect", _core_assembly);
+  interop::register_managed_component<scenes::audio_source>("Sbx.Core.Components.AudioSource", _core_assembly);
+  interop::register_managed_component<scenes::audio_listener>("Sbx.Core.Components.AudioListener", _core_assembly);
   interop::register_managed_component<scenes::camera>("Sbx.Core.Components.CameraSettings", _core_assembly);
   interop::register_managed_component<physics::rigidbody>("Sbx.Core.Physics.Rigidbody", _core_assembly);
   interop::register_managed_component<physics::nav_agent>("Sbx.Core.Physics.NavAgent", _core_assembly);

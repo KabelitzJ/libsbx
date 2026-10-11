@@ -31,6 +31,8 @@ private:
 
   auto _draw_layers_tab() -> void;
 
+  auto _draw_audio_tab() -> void;
+
   // The layer rows in display order, resynced when the tab appears and changed only by Add and each row's remove, so a layer being retyped through an empty name doesn't vanish.
   std::vector<std::uint8_t> _layer_rows{};
   bool _layers_tab_was_visible{false};

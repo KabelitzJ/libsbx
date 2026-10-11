@@ -156,6 +156,7 @@ find_package(slang REQUIRED MODULE)
 find_package(Vulkan REQUIRED)
 
 # Conan packages
+find_package(dr_libs CONFIG REQUIRED)
 find_package(fastgltf CONFIG REQUIRED)
 find_package(fmt CONFIG REQUIRED)
 find_package(glfw3 CONFIG REQUIRED)
@@ -166,6 +167,7 @@ find_package(implot CONFIG REQUIRED)
 find_package(lz4 CONFIG REQUIRED)
 find_package(meshoptimizer CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
+find_package(OpenAL CONFIG REQUIRED)
 find_package(spdlog CONFIG REQUIRED)
 find_package(stb CONFIG REQUIRED)
 find_package(Tracy CONFIG REQUIRED)
@@ -196,9 +198,12 @@ find_package(Python3 REQUIRED COMPONENTS Interpreter)
 target_sources(
   libsbx
   PRIVATE
+    "${CMAKE_SOURCE_DIR}/libsbx/audio/audio_module.cpp"
+
     "${CMAKE_SOURCE_DIR}/libsbx/assets/asset_cooker.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/assets/asset_cooker_texture.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/assets/asset_cooker_font.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/assets/asset_cooker_audio.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/assets/asset_cooker_mesh.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/assets/asset_cooker_material.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/assets/asset_cooker_skeletal.cpp"
@@ -362,6 +367,7 @@ target_sources(
     "${CMAKE_SOURCE_DIR}/libsbx/scenes/scenes_module.cpp"
 
     "${CMAKE_SOURCE_DIR}/libsbx/scripting/interop.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/scripting/interop_audio.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/scripting/interop_canvas.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/scripting/interop_compute.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/scripting/interop_input_camera.cpp"
@@ -399,6 +405,8 @@ target_sources(
     FILE_SET headers TYPE HEADERS
     BASE_DIRS "${CMAKE_SOURCE_DIR}"
     FILES
+      "${CMAKE_SOURCE_DIR}/libsbx/audio/audio_module.hpp"
+
       "${CMAKE_SOURCE_DIR}/libsbx/assets/asset_cooker.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/assets/asset_handle.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/assets/asset_loader.hpp"
@@ -407,6 +415,7 @@ target_sources(
       "${CMAKE_SOURCE_DIR}/libsbx/assets/assets_module.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/assets/environment_map.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/assets/font.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/assets/audio_clip.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/assets/ibl_baker.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/assets/animation_clip.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/assets/animation_graph.hpp"
@@ -764,6 +773,7 @@ target_include_directories(
 target_link_libraries(
   libsbx
   PUBLIC
+    dr_libs::dr_libs
     fastgltf::fastgltf
     fmt::fmt
     glfw
@@ -775,6 +785,7 @@ target_link_libraries(
     lz4::lz4
     meshoptimizer::meshoptimizer
     Nethost::nethost
+    OpenAL::OpenAL
     slang::slang
     spdlog::spdlog
     stb::stb

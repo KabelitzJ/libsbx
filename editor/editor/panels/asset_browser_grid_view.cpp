@@ -15,6 +15,8 @@
 
 #include <libsbx/assets/assets_module.hpp>
 
+#include <libsbx/audio/audio_module.hpp>
+
 #include <libsbx/render/ui/widgets/asset_tile.hpp>
 
 namespace editor {
@@ -119,6 +121,10 @@ auto asset_browser_panel::_draw_asset_grid(editor_state& state) -> void {
 
           if (tile_result.double_clicked && entry.kind == sbx::assets::asset_type::scene) {
             state.request_open_scene(entry.path);
+          }
+
+          if (tile_result.double_clicked && entry.kind == sbx::assets::asset_type::audio_clip && entry.id != sbx::math::uuid::nil()) {
+            sbx::core::engine::get_module<sbx::audio::audio_module>().preview(assets_module.load_audio_clip(entry.id));
           }
         }
 

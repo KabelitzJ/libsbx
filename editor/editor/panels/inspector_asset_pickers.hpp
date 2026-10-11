@@ -42,6 +42,9 @@ auto draw_texture_picker(editor_state& state, const char* popup_id, sbx::assets:
 /** @brief A font picker for ui_text::font. */
 auto draw_font_picker(editor_state& state, const char* popup_id, sbx::assets::font_handle& slot) -> bool;
 
+/** @brief An audio clip picker with a button that auditions the clip through audio_module::preview. */
+auto draw_audio_clip_picker(editor_state& state, const char* popup_id, sbx::assets::audio_clip_handle& slot) -> bool;
+
 /** @brief A mesh picker for mesh_renderer.mesh. The caller clears the materials on change so they reseed from the new mesh. */
 auto draw_mesh_picker(editor_state& state, const char* popup_id, sbx::assets::mesh_handle& slot, sbx::assets::assets_module& assets_module, std::float_t preview_size = 0.0f) -> bool;
 

@@ -13,6 +13,10 @@
 
 #include <libsbx/assets/primitive_meshes.hpp>
 
+#include <libsbx/audio/audio_module.hpp>
+
+#include <libsbx/render/ui/fonts/material_design_icons.hpp>
+
 #include <editor/widgets/asset_path.hpp>
 
 namespace editor {
@@ -157,6 +161,47 @@ auto draw_font_picker(editor_state& state, const char* popup_id, sbx::assets::fo
     slot = sbx::assets::font_handle{};
   } else if (result.changed) {
     slot = assets_module.load_font(result.picked.path);
+  }
+
+  if (result.reveal_requested && slot.is_valid()) {
+    state.request_reveal_in_browser(relative_asset_path(assets_module, slot->id()));
+  }
+
+  return result.changed;
+}
+
+auto draw_audio_clip_picker(editor_state& state, const char* popup_id, sbx::assets::audio_clip_handle& slot) -> bool {
+  auto& assets_module = sbx::core::engine::get_module<sbx::assets::assets_module>();
+  auto& audio_module = sbx::core::engine::get_module<sbx::audio::audio_module>();
+
+  const auto current = slot.is_valid() ? to_picker_item(assets_module, slot->id()) : sbx::render::asset_picker_item{};
+
+  const auto options = sbx::render::asset_picker_options{
+    .kind = sbx::assets::asset_type::audio_clip,
+    .allow_none = true,
+    .show_reveal_button = true,
+    .width = ImGui::CalcItemWidth(),
+    .extra_buttons = [&] {
+      ImGui::BeginDisabled(!slot.is_valid());
+
+      if (audio_module.is_previewing()) {
+        if (ImGui::Button(ICON_MDI_STOP)) {
+          audio_module.stop_preview();
+        }
+      } else if (ImGui::Button(ICON_MDI_PLAY)) {
+        audio_module.preview(slot);
+      }
+
+      ImGui::EndDisabled();
+    },
+  };
+
+  const auto result = sbx::render::draw_asset_picker(popup_id, current, {}, options);
+
+  if (result.cleared) {
+    slot = sbx::assets::audio_clip_handle{};
+  } else if (result.changed) {
+    slot = assets_module.load_audio_clip(result.picked.path);
   }
 
   if (result.reveal_requested && slot.is_valid()) {

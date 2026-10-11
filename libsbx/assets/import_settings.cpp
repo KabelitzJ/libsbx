@@ -2,6 +2,7 @@
 // Copyright (c) 2026 Jonas Kabelitz
 #include <libsbx/assets/import_settings.hpp>
 
+#include <string>
 #include <string_view>
 
 #include <libsbx/utility/hash.hpp>
@@ -13,6 +14,7 @@ auto default_import_settings(asset_type type) -> import_settings {
     case asset_type::texture: return texture_import_settings{};
     case asset_type::mesh: return mesh_import_options{};
     case asset_type::font: return font_import_settings{};
+    case asset_type::audio_clip: return audio_clip_import_settings{};
     default: return std::monostate{};
   }
 }
@@ -39,6 +41,9 @@ auto decode_import_settings(asset_type type, const YAML::Node& node) -> import_s
     font->reference_size = node["reference_size"].as<std::float_t>(font->reference_size);
     font->first_codepoint = node["first_codepoint"].as<std::uint32_t>(font->first_codepoint);
     font->codepoint_count = node["codepoint_count"].as<std::uint32_t>(font->codepoint_count);
+  } else if (auto* audio = std::get_if<audio_clip_import_settings>(&settings)) {
+    audio->load_type = reflection::from_string<audio_load_type>(node["load_type"].as<std::string>("")).value_or(audio->load_type);
+    audio->force_mono = node["force_mono"].as<bool>(audio->force_mono);
   }
 
   return settings;
@@ -62,6 +67,9 @@ auto encode_import_settings(const import_settings& settings) -> YAML::Node {
     node["reference_size"] = font->reference_size;
     node["first_codepoint"] = font->first_codepoint;
     node["codepoint_count"] = font->codepoint_count;
+  } else if (const auto* audio = std::get_if<audio_clip_import_settings>(&settings)) {
+    node["load_type"] = std::string{reflection::to_string(audio->load_type)};
+    node["force_mono"] = audio->force_mono;
   }
 
   return node;

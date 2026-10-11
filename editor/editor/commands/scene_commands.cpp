@@ -13,8 +13,8 @@
 
 namespace editor {
 
-create_node_command::create_node_command(std::optional<sbx::math::uuid> parent_id, std::string name)
-: _parent_id{parent_id}, _name{std::move(name)} { }
+create_node_command::create_node_command(std::optional<sbx::math::uuid> parent_id, std::string name, sbx::math::uuid id)
+: _parent_id{parent_id}, _name{std::move(name)}, _id{id} { }
 
 auto create_node_command::execute(sbx::scenes::scene& target) -> void {
   if (_id == sbx::math::uuid::nil()) {

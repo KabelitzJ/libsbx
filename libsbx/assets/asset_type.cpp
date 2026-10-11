@@ -9,7 +9,7 @@
 
 namespace sbx::assets {
 
-static constexpr auto extension_table = std::array<std::pair<std::string_view, asset_type>, 14u>{{
+static constexpr auto extension_table = std::array<std::pair<std::string_view, asset_type>, 18u>{{
   {".png", asset_type::texture},
   {".jpg", asset_type::texture},
   {".jpeg", asset_type::texture},
@@ -21,6 +21,10 @@ static constexpr auto extension_table = std::array<std::pair<std::string_view, a
   {".animation_graph", asset_type::animation_graph},
   {".shadergraph", asset_type::shader_graph},
   {".ttf", asset_type::font},
+  {".wav", asset_type::audio_clip},
+  {".ogg", asset_type::audio_clip},
+  {".mp3", asset_type::audio_clip},
+  {".flac", asset_type::audio_clip},
   {".prefab", asset_type::prefab},
   {".scene", asset_type::scene},
   {".cs", asset_type::script},
@@ -45,7 +49,7 @@ auto is_manifested(asset_type type) -> bool {
 }
 
 auto has_import_settings(asset_type type) -> bool {
-  return type == asset_type::texture || type == asset_type::mesh || type == asset_type::font;
+  return type == asset_type::texture || type == asset_type::mesh || type == asset_type::font || type == asset_type::audio_clip;
 }
 
 auto display_name(asset_type type) -> std::string_view {
@@ -58,6 +62,7 @@ auto display_name(asset_type type) -> std::string_view {
     case asset_type::animation_graph: return "Animation Graph";
     case asset_type::shader_graph: return "Shader Graph";
     case asset_type::font: return "Font";
+    case asset_type::audio_clip: return "Audio Clip";
     case asset_type::prefab: return "Prefab";
     case asset_type::scene: return "Scene";
     case asset_type::script: return "Script";

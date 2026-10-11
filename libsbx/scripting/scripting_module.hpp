@@ -74,6 +74,7 @@ struct script_runtime_error : public std::runtime_error {
   if (managed_type_full_name == "Sbx.Core.Material") { return scenes::script_field_type::material; }
   if (managed_type_full_name == "Sbx.Core.Math.Color") { return scenes::script_field_type::color; }
   if (managed_type_full_name == "Sbx.Core.Texture2D") { return scenes::script_field_type::texture; }
+  if (managed_type_full_name == "Sbx.Core.AudioClip") { return scenes::script_field_type::audio_clip; }
   if (!managed_type.get_enum_entries().empty()) { return scenes::script_field_type::enumeration; }
   return std::nullopt;
 }

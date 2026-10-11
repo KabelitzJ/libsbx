@@ -53,6 +53,7 @@ private:
     sbx::assets::animation_graph_handle animation_graph{};
     sbx::assets::shader_graph_handle shader_graph{};
     sbx::assets::font_handle font{};
+    sbx::assets::audio_clip_handle audio_clip{};
     sbx::assets::scene_handle scene{};
     std::optional<import_settings_editor> import_settings{};
   }; // struct asset_property_cache

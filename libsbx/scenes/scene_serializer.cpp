@@ -46,6 +46,7 @@ struct asset_key_table {
   std::unordered_map<math::uuid, std::string> animation_graph_keys{};
   std::unordered_map<math::uuid, std::string> texture_keys{};
   std::unordered_map<math::uuid, std::string> font_keys{};
+  std::unordered_map<math::uuid, std::string> audio_clip_keys{};
   std::unordered_map<math::uuid, std::string> prefab_keys{};
   YAML::Node meshes_table{YAML::NodeType::Sequence};
   YAML::Node materials_table{YAML::NodeType::Sequence};
@@ -54,6 +55,7 @@ struct asset_key_table {
   YAML::Node animation_graphs_table{YAML::NodeType::Sequence};
   YAML::Node textures_table{YAML::NodeType::Sequence};
   YAML::Node fonts_table{YAML::NodeType::Sequence};
+  YAML::Node audio_clips_table{YAML::NodeType::Sequence};
   YAML::Node prefabs_table{YAML::NodeType::Sequence};
 }; // struct asset_key_table
 
@@ -495,6 +497,53 @@ auto write_node(YAML::Node& node_yaml, ecs::registry& registry, ecs::entity enti
     }
   }
 
+  if (registry.all_of<audio_source>(entity)) {
+    const auto& source = registry.get<audio_source>(entity);
+
+    auto component = YAML::Node{};
+    component["type"] = "audio_source";
+
+    if (source.clip.is_valid() && source.clip->id() != math::uuid::nil()) {
+      const auto id = source.clip->id();
+
+      if (!keys.audio_clip_keys.contains(id)) {
+        const auto name = core::engine::get_module<assets::assets_module>().path_of(id).stem().string();
+        const auto key = make_asset_key(keys, name);
+        keys.audio_clip_keys.emplace(id, key);
+
+        auto entry = YAML::Node{};
+        entry["key"] = key;
+        entry["name"] = name;
+        entry["uuid"] = id.value();
+        keys.audio_clips_table.push_back(entry);
+      }
+
+      component["clip"] = keys.audio_clip_keys.at(id);
+    }
+
+    component["mixer_group"] = source.mixer_group.value();
+    component["volume"] = source.volume;
+    component["pitch"] = source.pitch;
+    component["loop"] = source.loop;
+    component["play_on_awake"] = source.play_on_awake;
+    component["spatial"] = source.spatial;
+    component["min_distance"] = source.min_distance;
+    component["max_distance"] = source.max_distance;
+    component["rolloff"] = std::string{reflection::to_string(source.rolloff)};
+    component["doppler_level"] = source.doppler_level;
+    component["priority"] = static_cast<std::uint32_t>(source.priority); // a raw uint8_t would emit as a character
+
+    components.push_back(component);
+  }
+
+  if (registry.all_of<audio_listener>(entity)) {
+    auto component = YAML::Node{};
+    component["type"] = "audio_listener";
+    component["volume"] = registry.get<audio_listener>(entity).volume;
+
+    components.push_back(component);
+  }
+
   if (registry.all_of<particle_effect>(entity)) {
     const auto& instance = registry.get<particle_effect>(entity);
 
@@ -819,6 +868,7 @@ auto write_node(YAML::Node& node_yaml, ecs::registry& registry, ecs::entity enti
           case script_field_type::color: field_node["kind"] = "color"; field_node["value"] = field.color_value; break;
           case script_field_type::enumeration: field_node["kind"] = "enum"; field_node["value"] = field.int_value; break;
           case script_field_type::texture: field_node["kind"] = "texture"; field_node["value"] = field.texture_value.value(); break;
+          case script_field_type::audio_clip: field_node["kind"] = "audio_clip"; field_node["value"] = field.audio_clip_value.value(); break;
         }
 
         fields.push_back(field_node);
@@ -1006,6 +1056,7 @@ auto register_asset_keys(const YAML::Node& document) -> std::unordered_map<std::
   register_category("animation_graphs");
   register_category("textures");
   register_category("fonts");
+  register_category("audio_clips");
   register_category("prefabs");
 
   return key_to_uuid;
@@ -1115,6 +1166,23 @@ auto read_node_components(node& target_node, const YAML::Node& node_yaml, const 
 
     // Older scenes only wrote "intensity", which drove both ambient and background; fall back to it.
       sky.ambient_intensity = component["ambient_intensity"] ? component["ambient_intensity"].as<std::float_t>() : sky.intensity;
+    } else if (type == "audio_source") {
+      auto& source = target_node.get_or_add_component<audio_source>();
+
+      source.clip = component["clip"] ? core::engine::get_module<assets::assets_module>().load_audio_clip(key_to_uuid.at(component["clip"].as<std::string>())) : assets::audio_clip_handle{};
+      source.mixer_group = component["mixer_group"].as<math::uuid>(math::uuid::nil());
+      source.volume = component["volume"].as<std::float_t>(source.volume);
+      source.pitch = component["pitch"].as<std::float_t>(source.pitch);
+      source.loop = component["loop"].as<bool>(source.loop);
+      source.play_on_awake = component["play_on_awake"].as<bool>(source.play_on_awake);
+      source.spatial = component["spatial"].as<bool>(source.spatial);
+      source.min_distance = component["min_distance"].as<std::float_t>(source.min_distance);
+      source.max_distance = component["max_distance"].as<std::float_t>(source.max_distance);
+      source.rolloff = reflection::from_string_or<audio_rolloff>(component["rolloff"].as<std::string>(""), audio_rolloff::inverse);
+      source.doppler_level = component["doppler_level"].as<std::float_t>(source.doppler_level);
+      source.priority = static_cast<std::uint8_t>(std::min(component["priority"].as<std::uint32_t>(source.priority), 255u));
+    } else if (type == "audio_listener") {
+      target_node.get_or_add_component<audio_listener>().volume = component["volume"].as<std::float_t>(1.0f);
     } else if (type == "particle_effect") {
       auto& instance = target_node.get_or_add_component<particle_effect>();
 
@@ -1412,6 +1480,9 @@ auto read_node_components(node& target_node, const YAML::Node& node_yaml, const 
           } else if (kind == "texture") {
             field.type = script_field_type::texture;
             field.texture_value = field_yaml["value"].as<math::uuid>();
+          } else if (kind == "audio_clip") {
+            field.type = script_field_type::audio_clip;
+            field.audio_clip_value = field_yaml["value"].as<math::uuid>();
           }
 
           entry.field_overrides.push_back(std::move(field));
@@ -1578,6 +1649,7 @@ auto scene_serializer::build(scene& target) -> YAML::Node {
   assets_node["animation_graphs"] = keys.animation_graphs_table;
   assets_node["textures"] = keys.textures_table;
   assets_node["fonts"] = keys.fonts_table;
+  assets_node["audio_clips"] = keys.audio_clips_table;
   assets_node["prefabs"] = keys.prefabs_table;
 
   auto root = YAML::Node{};
@@ -1713,6 +1785,7 @@ auto scene_serializer::serialize_subtree(scene& target, node subtree_root) -> YA
   assets_node["animation_graphs"] = keys.animation_graphs_table;
   assets_node["textures"] = keys.textures_table;
   assets_node["fonts"] = keys.fonts_table;
+  assets_node["audio_clips"] = keys.audio_clips_table;
   assets_node["prefabs"] = keys.prefabs_table;
 
   auto root = YAML::Node{};
@@ -1819,6 +1892,7 @@ auto load_asset_key_table(const YAML::Node& document) -> asset_key_table {
   load_category("animation_graphs", keys.animation_graph_keys, keys.animation_graphs_table);
   load_category("textures", keys.texture_keys, keys.textures_table);
   load_category("fonts", keys.font_keys, keys.fonts_table);
+  load_category("audio_clips", keys.audio_clip_keys, keys.audio_clips_table);
   load_category("prefabs", keys.prefab_keys, keys.prefabs_table);
 
   return keys;
@@ -1940,6 +2014,7 @@ auto apply_component_entry(node target_node, const YAML::Node& entry, const asse
   assets_document["assets"]["animation_graphs"] = keys.animation_graphs_table;
   assets_document["assets"]["textures"] = keys.textures_table;
   assets_document["assets"]["fonts"] = keys.fonts_table;
+  assets_document["assets"]["audio_clips"] = keys.audio_clips_table;
   assets_document["assets"]["prefabs"] = keys.prefabs_table;
 
   auto node_entry = YAML::Node{};
@@ -2209,6 +2284,7 @@ auto scene_serializer::apply_prefab_override(scene& target, node source_node, st
   snapshot["assets"]["animation_graphs"] = keys.animation_graphs_table;
   snapshot["assets"]["textures"] = keys.textures_table;
   snapshot["assets"]["fonts"] = keys.fonts_table;
+  snapshot["assets"]["audio_clips"] = keys.audio_clips_table;
   snapshot["assets"]["prefabs"] = keys.prefabs_table;
 
   save_prefab_snapshot(instance.source, snapshot);

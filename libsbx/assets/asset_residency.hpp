@@ -29,6 +29,7 @@
 #include <libsbx/assets/texture2d.hpp>
 #include <libsbx/assets/texture2d_array.hpp>
 #include <libsbx/assets/font.hpp>
+#include <libsbx/assets/audio_clip.hpp>
 #include <libsbx/assets/mesh.hpp>
 #include <libsbx/assets/skeleton.hpp>
 #include <libsbx/assets/animation_clip.hpp>
@@ -49,6 +50,7 @@ struct resident_asset_counts {
   std::size_t textures{0u};
   std::size_t meshes{0u};
   std::size_t fonts{0u};
+  std::size_t audio_clips{0u};
   std::size_t materials{0u};
   std::size_t environment_maps{0u};
   std::size_t particle_effects{0u};
@@ -156,6 +158,17 @@ public:
   auto load_font(const math::uuid& id) -> font_handle;
 
   auto load_font(const std::filesystem::path& path) -> font_handle;
+
+  /**
+   * @brief Loads a WAV/MP3/FLAC/OGG clip by uuid or project-relative path, or returns the existing handle. CPU-only; the audio module uploads it.
+   *
+   * @param id The clip's uuid.
+   *
+   * @return The clip handle, valid immediately; is_loaded() once decoded.
+   */
+  auto load_audio_clip(const math::uuid& id) -> audio_clip_handle;
+
+  auto load_audio_clip(const std::filesystem::path& path) -> audio_clip_handle;
 
   /**
    * @brief Loads a mesh by uuid or project-relative path, or returns the existing handle if already loaded. Cooks with the import settings in its `.meta`.
@@ -516,6 +529,7 @@ private:
   auto _finalize_texture(asset_loader::texture_result& result) -> void;
   auto _finalize_mesh(asset_loader::mesh_result& result) -> void;
   auto _finalize_font(asset_loader::font_result& result) -> void;
+  auto _finalize_audio_clip(asset_loader::audio_clip_result& result) -> void;
   auto _finalize_material(asset_loader::material_result& result) -> void;
   auto _finalize_particle_effect(asset_loader::particle_effect_result& result) -> void;
   auto _finalize_animation_graph(asset_loader::animation_graph_result& result) -> void;
@@ -544,6 +558,8 @@ private:
   std::unordered_map<std::uint32_t, std::uint64_t> _array_resident_frame{};
 
   std::unordered_map<math::uuid, std::shared_ptr<font>> _fonts{};
+
+  std::unordered_map<math::uuid, std::shared_ptr<audio_clip>> _audio_clips{};
 
   std::unordered_map<math::uuid, std::shared_ptr<mesh>> _meshes{};
   std::deque<pending_mesh_upload> _pending_meshes{};

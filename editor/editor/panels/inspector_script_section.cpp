@@ -443,6 +443,32 @@ auto draw_script_field_inspector(editor_state& state, sbx::scenes::scene& target
       }
 
       commit_after(changed);
+    } else if (field_type_name == "Sbx.Core.AudioClip") {
+      // Raw uuid via INativeHandle like Texture2D.
+      auto& assets_module = sbx::core::engine::get_module<sbx::assets::assets_module>();
+
+      const auto current_uuid = live_instance ? sbx::math::uuid::from_value(live_instance->get_field_value<std::uint64_t>(field_name))
+                                                : override_slot ? override_slot->audio_clip_value : sbx::math::uuid::nil();
+
+      auto slot = (current_uuid != sbx::math::uuid::nil()) ? assets_module.load_audio_clip(current_uuid) : sbx::assets::audio_clip_handle{};
+
+      const auto changed = draw_property_row(display_name.c_str(), [&] { return draw_audio_clip_picker(state, "##audio_clip_field_picker", slot); });
+
+      capture_before();
+
+      if (changed) {
+        const auto new_uuid = slot.is_valid() ? slot->id() : sbx::math::uuid::nil();
+
+        if (live_instance) {
+          live_instance->set_field_value(field_name, new_uuid.value());
+        } else {
+          auto& slot_override = ensure_override_slot();
+          slot_override.type = sbx::scenes::script_field_type::audio_clip;
+          slot_override.audio_clip_value = new_uuid;
+        }
+      }
+
+      commit_after(changed);
     } else if (const auto entries = field.get_type().get_enum_entries(); !entries.empty()) {
       auto value = live_instance ? live_instance->get_field_value<std::int32_t>(field_name)
                                   : override_slot ? override_slot->int_value : 0;

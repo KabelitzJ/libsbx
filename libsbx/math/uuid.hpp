@@ -59,7 +59,7 @@ public:
 
 private:
 
-  basic_uuid(const value_type value)
+  constexpr basic_uuid(const value_type value)
   : _value{value} { }
 
   value_type _value;

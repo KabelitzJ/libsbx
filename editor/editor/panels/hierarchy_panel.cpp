@@ -56,6 +56,7 @@ auto icon_for(const sbx::scenes::node& node) -> const char* {
   if (node.has_component<sbx::scenes::point_light>()) return ICON_MDI_LIGHTBULB_OUTLINE;
   if (node.has_component<sbx::scenes::spot_light>()) return ICON_MDI_FLASHLIGHT;
   if (node.has_component<sbx::scenes::skybox>()) return ICON_MDI_EARTH;
+  if (node.has_component<sbx::scenes::audio_source>()) return ICON_MDI_VOLUME_HIGH;
   if (node.has_component<sbx::scenes::mesh_renderer>()) return ICON_MDI_CUBE_OUTLINE;
   return ICON_MDI_AXIS_ARROW;
 }
@@ -79,6 +80,25 @@ auto draw_3d_object_submenu(editor_state& state, sbx::scenes::scene& scene, std:
     if (ImGui::MenuItem(std::string{sbx::reflection::to_string(kind)}.c_str())) {
       create_and_select_node<create_mesh_node_command>(state, scene, sbx::assets::primitive_mesh_uuid(kind), std::string{sbx::assets::primitive_mesh_name(kind)}, parent_id);
     }
+  }
+
+  ImGui::EndMenu();
+}
+
+auto draw_audio_submenu(editor_state& state, sbx::scenes::scene& scene, std::optional<sbx::math::uuid> parent_id) -> void {
+  if (!ImGui::BeginMenu(ICON_MDI_VOLUME_HIGH " Audio")) {
+    return;
+  }
+
+  if (ImGui::MenuItem("Audio Source")) {
+    const auto id = sbx::math::uuid::create();
+
+    auto commands = std::vector<std::unique_ptr<command>>{};
+    commands.push_back(std::make_unique<create_node_command>(parent_id, "Audio Source", id));
+    commands.push_back(std::make_unique<add_component_command<sbx::scenes::audio_source>>(id, "Add Audio Source"));
+
+    state.push_command(scene, std::make_unique<composite_command>(std::move(commands), "Create Audio Source"));
+    state.select_node(scene.find(id));
   }
 
   ImGui::EndMenu();
@@ -252,6 +272,7 @@ auto hierarchy_panel::_draw_node_row(editor_state& state, sbx::scenes::scene& sc
     }
 
     draw_3d_object_submenu(state, scene, node.id());
+    draw_audio_submenu(state, scene, node.id());
 
     if (state.selected_node_count() <= 1u && ImGui::MenuItem(ICON_MDI_PENCIL " Rename")) {
       _begin_rename(node);
@@ -341,6 +362,7 @@ auto hierarchy_panel::_draw_empty_space_context_menu(editor_state& state, sbx::s
   }
 
   draw_3d_object_submenu(state, scene, std::nullopt);
+  draw_audio_submenu(state, scene, std::nullopt);
 }
 
 auto hierarchy_panel::draw(editor_state& state) -> void {

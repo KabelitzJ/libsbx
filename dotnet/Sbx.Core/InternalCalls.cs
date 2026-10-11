@@ -74,6 +74,35 @@ namespace Sbx.Core
     internal static delegate* unmanaged<ulong, bool, void> ParticleEffect_SetLoop;
     internal static delegate* unmanaged<ulong, bool> ParticleEffect_GetIsPlaying;
 
+    internal static delegate* unmanaged<NativeString, ulong> AudioClip_Load;
+    internal static delegate* unmanaged<ulong, bool> AudioClip_IsLoaded;
+    internal static delegate* unmanaged<ulong, float> AudioClip_GetLength;
+    internal static delegate* unmanaged<ulong, uint> AudioClip_GetChannels;
+    internal static delegate* unmanaged<ulong, uint> AudioClip_GetFrequency;
+
+    internal static delegate* unmanaged<ulong, Components.AudioSourceSettings*, void> AudioSource_GetSettings;
+    internal static delegate* unmanaged<ulong, Components.AudioSourceSettings*, void> AudioSource_SetSettings;
+    internal static delegate* unmanaged<ulong, ulong> AudioSource_GetClip;
+    internal static delegate* unmanaged<ulong, ulong, void> AudioSource_SetClip;
+    internal static delegate* unmanaged<ulong, NativeString> AudioSource_GetOutputGroup;
+    internal static delegate* unmanaged<ulong, NativeString, bool> AudioSource_SetOutputGroup;
+    internal static delegate* unmanaged<ulong, void> AudioSource_Play;
+    internal static delegate* unmanaged<ulong, void> AudioSource_Pause;
+    internal static delegate* unmanaged<ulong, void> AudioSource_UnPause;
+    internal static delegate* unmanaged<ulong, void> AudioSource_Stop;
+    internal static delegate* unmanaged<ulong, bool> AudioSource_GetIsPlaying;
+    internal static delegate* unmanaged<ulong, float> AudioSource_GetTime;
+    internal static delegate* unmanaged<ulong, float, void> AudioSource_SetTime;
+    internal static delegate* unmanaged<ulong, ulong, float, void> AudioSource_PlayOneShot;
+
+    internal static delegate* unmanaged<ulong, float> AudioListener_GetVolume;
+    internal static delegate* unmanaged<ulong, float, void> AudioListener_SetVolume;
+
+    internal static delegate* unmanaged<ulong, Vector3*, float, void> Audio_PlayClipAtPoint;
+    internal static delegate* unmanaged<NativeString, float, bool> Audio_SetMixerGroupVolume;
+    internal static delegate* unmanaged<NativeString, float> Audio_GetMixerGroupVolume;
+    internal static delegate* unmanaged<NativeString, void> Audio_ResetMixerGroupVolume;
+
     internal static delegate* unmanaged<ulong, float*, void> CharacterController_GetHeight;
     internal static delegate* unmanaged<ulong, float*, void> CharacterController_GetRadius;
     internal static delegate* unmanaged<ulong, float*, void> CharacterController_GetSlopeLimit;

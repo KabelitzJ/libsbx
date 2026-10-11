@@ -7,9 +7,11 @@
 #include <cstdint>
 #include <cstring>
 #include <optional>
+#include <string>
 #include <type_traits>
 #include <utility>
 #include <variant>
+#include <vector>
 
 #include <fmt/format.h>
 
@@ -18,6 +20,7 @@
 #include <libsbx/render/ui/fonts/material_design_icons.hpp>
 
 #include <libsbx/core/engine.hpp>
+#include <libsbx/core/project.hpp>
 
 #include <libsbx/math/quaternion.hpp>
 #include <libsbx/math/vector2.hpp>
@@ -486,6 +489,175 @@ auto draw_spot_light_section(editor_state& state, sbx::scenes::scene& target, sb
   bracket_edit(state, target, node, light, pending, "Edit Spot Light");
   ImGui::SliderAngle("Outer Angle", &light.outer_angle, 0.0f, 90.0f);
   bracket_edit(state, target, node, light, pending, "Edit Spot Light");
+}
+
+// "Master/SFX/Weapons"; an unknown or nil id is Master, matching how audio_module routes it.
+auto mixer_group_path(const std::vector<sbx::core::mixer_group>& groups, const sbx::math::uuid& id) -> std::string {
+  auto path = std::string{};
+  auto current = std::ranges::find(groups, id, &sbx::core::mixer_group::id);
+
+  if (current == groups.end()) {
+    current = groups.begin();
+  }
+
+  for (auto steps = std::size_t{0u}; steps <= groups.size() && current != groups.end(); ++steps) {
+    path = path.empty() ? current->name : fmt::format("{}/{}", current->name, path);
+    current = std::ranges::find(groups, current->parent, &sbx::core::mixer_group::id);
+  }
+
+  return path;
+}
+
+auto draw_audio_source_section(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node) -> void {
+  if (!draw_component_header<sbx::scenes::audio_source>(state, target, node, ICON_MDI_VOLUME_HIGH, "Audio Source")) {
+    return;
+  }
+
+  auto& source = node.get_component<sbx::scenes::audio_source>();
+  static auto pending = std::optional<sbx::scenes::audio_source>{};
+
+  const auto push_edit = [&](const sbx::scenes::audio_source& before) {
+    state.push_command(target, std::make_unique<modify_component_command<sbx::scenes::audio_source>>(node.id(), before, source, "Edit Audio Source"));
+  };
+
+  {
+    const auto before = source;
+
+    if (draw_property_row("Clip", [&] { return draw_audio_clip_picker(state, "##audio_source_clip_picker_popup", source.clip); })) {
+      push_edit(before);
+    }
+  }
+
+  if (source.clip.is_loaded()) {
+    ImGui::TextDisabled("%.2f s, %u Hz, %s", source.clip->duration(), source.clip->sample_rate(), source.clip->channels() == 1u ? "mono" : "stereo");
+  }
+
+  {
+    const auto before = source;
+    const auto& groups = sbx::core::engine::project().mixer_groups();
+
+    if (ImGui::BeginCombo("Output", mixer_group_path(groups, source.mixer_group).c_str())) {
+      for (const auto& group : groups) {
+        const auto is_selected = group.id == source.mixer_group || (group.id == sbx::core::master_mixer_group_id && source.mixer_group == sbx::math::uuid::nil());
+
+        if (ImGui::Selectable(mixer_group_path(groups, group.id).c_str(), is_selected) && !is_selected) {
+          source.mixer_group = group.id;
+          push_edit(before);
+        }
+      }
+
+      ImGui::EndCombo();
+    }
+  }
+
+  ImGui::SliderFloat("Volume", &source.volume, 0.0f, 1.0f);
+  bracket_edit(state, target, node, source, pending, "Edit Audio Source");
+  ImGui::DragFloat("Pitch", &source.pitch, 0.01f, 0.01f, 3.0f);
+  bracket_edit(state, target, node, source, pending, "Edit Audio Source");
+
+  {
+    const auto before = source;
+
+    auto toggled = ImGui::Checkbox("Loop", &source.loop);
+    toggled |= ImGui::Checkbox("Play On Awake", &source.play_on_awake);
+    toggled |= ImGui::Checkbox("Spatial", &source.spatial);
+
+    if (toggled) {
+      push_edit(before);
+    }
+  }
+
+  auto priority = static_cast<int>(source.priority);
+
+  if (ImGui::SliderInt("Priority", &priority, 0, 255)) {
+    source.priority = static_cast<std::uint8_t>(priority);
+  }
+
+  bracket_edit(state, target, node, source, pending, "Edit Audio Source");
+
+  if (ImGui::IsItemHovered()) {
+    ImGui::SetTooltip("0 is most important. When too many sounds play at once, the highest values go silent first.");
+  }
+
+  ImGui::BeginDisabled(!source.spatial);
+  ImGui::SeparatorText("3D Sound");
+
+  ImGui::DragFloat("Min Distance", &source.min_distance, 0.1f, 0.01f, source.max_distance);
+  bracket_edit(state, target, node, source, pending, "Edit Audio Source");
+  ImGui::DragFloat("Max Distance", &source.max_distance, 0.1f, source.min_distance, 100000.0f);
+  bracket_edit(state, target, node, source, pending, "Edit Audio Source");
+
+  {
+    const auto before = source;
+    static constexpr auto rolloff_labels = std::array<const char*, 2u>{"Inverse", "Linear"};
+    auto rolloff_index = static_cast<int>(source.rolloff);
+
+    if (ImGui::Combo("Rolloff", &rolloff_index, rolloff_labels.data(), static_cast<int>(rolloff_labels.size()))) {
+      source.rolloff = static_cast<sbx::scenes::audio_rolloff>(rolloff_index);
+      push_edit(before);
+    }
+  }
+
+  ImGui::DragFloat("Doppler Level", &source.doppler_level, 0.01f, 0.0f, 5.0f);
+  bracket_edit(state, target, node, source, pending, "Edit Audio Source");
+
+  ImGui::EndDisabled();
+
+  // Transport controls drive runtime state only, like Particle Effect's, so they aren't undoable.
+  if (!sbx::core::engine::get_module<sbx::scenes::scenes_module>().is_simulating()) {
+    return;
+  }
+
+  ImGui::SeparatorText("Playback");
+
+  const auto is_playing = source.playback == sbx::scenes::audio_playback_state::playing;
+
+  ImGui::BeginDisabled(!source.clip.is_valid());
+
+  if (is_playing) {
+    if (ImGui::Button(ICON_MDI_PAUSE " Pause")) {
+      source.playback = sbx::scenes::audio_playback_state::paused;
+    }
+  } else if (ImGui::Button(ICON_MDI_PLAY " Play")) {
+    source.restart = source.playback == sbx::scenes::audio_playback_state::stopped;
+    source.playback = sbx::scenes::audio_playback_state::playing;
+  }
+
+  ImGui::EndDisabled();
+  ImGui::SameLine();
+  ImGui::BeginDisabled(source.playback == sbx::scenes::audio_playback_state::stopped);
+
+  if (ImGui::Button(ICON_MDI_STOP " Stop")) {
+    source.playback = sbx::scenes::audio_playback_state::stopped;
+  }
+
+  ImGui::EndDisabled();
+
+  const auto duration = source.clip.is_loaded() ? source.clip->duration() : 0.0f;
+
+  ImGui::ProgressBar(duration > 0.0f ? source.time / duration : 0.0f, ImVec2{-1.0f, 0.0f}, fmt::format("{:.2f} / {:.2f} s", source.time, duration).c_str());
+}
+
+auto draw_audio_listener_section(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node) -> void {
+  if (!draw_component_header<sbx::scenes::audio_listener>(state, target, node, ICON_MDI_EAR_HEARING, "Audio Listener")) {
+    return;
+  }
+
+  auto& listener = node.get_component<sbx::scenes::audio_listener>();
+  static auto pending = std::optional<sbx::scenes::audio_listener>{};
+
+  ImGui::SliderFloat("Volume", &listener.volume, 0.0f, 1.0f);
+  bracket_edit(state, target, node, listener, pending, "Edit Audio Listener");
+
+  auto active_listeners = std::size_t{0u};
+
+  for ([[maybe_unused]] const auto entity : target.query<sbx::scenes::audio_listener>(sbx::ecs::exclude<sbx::scenes::inactive>)) {
+    ++active_listeners;
+  }
+
+  if (active_listeners > 1u) {
+    ImGui::TextColored(ImVec4{1.0f, 0.75f, 0.2f, 1.0f}, ICON_MDI_ALERT " More than one active listener; only one is used.");
+  }
 }
 
 auto draw_skybox_section(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node, sbx::assets::assets_module& assets_module) -> void {

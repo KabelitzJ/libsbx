@@ -55,6 +55,19 @@ auto asset_loader::submit(font_request request) -> void {
   _request_condition.notify_one();
 }
 
+auto asset_loader::submit(audio_clip_request request) -> void {
+  if (_aborted.load(std::memory_order_relaxed)) {
+    return;
+  }
+
+  {
+    auto lock = std::lock_guard{_request_mutex};
+    _requests.push_back(std::move(request));
+  }
+
+  _request_condition.notify_one();
+}
+
 auto asset_loader::submit(material_request request) -> void {
   if (_aborted.load(std::memory_order_relaxed)) {
     return;
@@ -221,6 +234,20 @@ auto asset_loader::_resolve(const font_request& request) -> void {
   _resolved_fonts.push_back(font_result{request, std::move(data), did_cook});
 }
 
+auto asset_loader::_resolve(const audio_clip_request& request) -> void {
+  SBX_PROFILE_SCOPE("asset_loader::_resolve audio_clip");
+
+  auto did_cook = false;
+  auto data = asset_cooker::resolve_audio_clip(request.source, request.cooked, request.settings, request.needs_cook, did_cook);
+
+  if (_aborted.load(std::memory_order_relaxed)) {
+    return;
+  }
+
+  auto lock = std::lock_guard{_result_mutex};
+  _resolved_audio_clips.push_back(audio_clip_result{request, std::move(data), did_cook});
+}
+
 auto asset_loader::_resolve(const material_request& request) -> void {
   SBX_PROFILE_SCOPE("asset_loader::_resolve material");
 
@@ -341,6 +368,22 @@ auto asset_loader::take_resolved_fonts(std::size_t max_count) -> std::vector<fon
   while (max_count > 0u && !_resolved_fonts.empty()) {
     result.push_back(std::move(_resolved_fonts.front()));
     _resolved_fonts.pop_front();
+    --max_count;
+  }
+
+  return result;
+}
+
+auto asset_loader::take_resolved_audio_clips(std::size_t max_count) -> std::vector<audio_clip_result> {
+  SBX_PROFILE_SCOPE("asset_loader::take_resolved_audio_clips");
+
+  auto result = std::vector<audio_clip_result>{};
+
+  auto lock = std::lock_guard{_result_mutex};
+
+  while (max_count > 0u && !_resolved_audio_clips.empty()) {
+    result.push_back(std::move(_resolved_audio_clips.front()));
+    _resolved_audio_clips.pop_front();
     --max_count;
   }
 

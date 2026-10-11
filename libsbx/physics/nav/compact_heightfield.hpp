@@ -40,6 +40,15 @@ auto erode_walkable_area(std::int32_t erosion_radius, compact_heightfield& chf, 
 
 [[nodiscard]] auto build_regions_monotone(compact_heightfield& chf, std::int32_t border_size, std::int32_t min_region_area, std::int32_t merge_region_area, bake_arena& arena) -> bool;
 
+/**
+ * @brief Recast-style watershed partitioning: regions grow outward from the most open spans of a distance field, so they come out compact and the polygons well shaped.
+ *
+ * Slower than build_regions_monotone, which sweeps rows and leaves long, thin regions (and sliver polygons) around obstacles.
+ *
+ * @return False if the region ids ran out.
+ */
+[[nodiscard]] auto build_regions_watershed(compact_heightfield& chf, std::int32_t min_region_area, std::int32_t merge_region_area, bake_arena& arena) -> bool;
+
 } // namespace sbx::physics
 
 #endif // LIBSBX_PHYSICS_NAV_COMPACT_HEIGHTFIELD_HPP_

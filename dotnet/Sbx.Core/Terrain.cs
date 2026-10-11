@@ -13,6 +13,12 @@ namespace Sbx.Core
       unsafe { InternalCalls.Terrain_Generate(width, depth, cellSize, frequency, amplitude, octaves); }
     }
 
+    /** (Re)builds the scene's terrain from a grayscale heightmap image (8- or 16-bit, one sample per pixel), path relative to the assets directory. heightScale is the height of a white pixel. False if the image can't be read. */
+    public static bool Load(string path, float cellSize = 1.0f, float heightScale = 20.0f)
+    {
+      unsafe { return InternalCalls.Terrain_Load(path, cellSize, heightScale); }
+    }
+
     /** 0 if no terrain has been generated yet. */
     public static float SampleHeight(Vector2 worldXZ)
     {

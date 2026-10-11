@@ -49,6 +49,24 @@ namespace Sbx.Core
       }
     }
 
+    /** Index (0-31) into the project's named layers; see LayerMask.FromLayer. */
+    public int Layer
+    {
+      get
+      {
+        unsafe { return InternalCalls.Node_GetLayer(_uuid); }
+      }
+      set
+      {
+        if (value < 0 || value > 31)
+        {
+          throw new ArgumentOutOfRangeException(nameof(value), value, "Layer must be in 0-31");
+        }
+
+        unsafe { InternalCalls.Node_SetLayer(_uuid, (byte)value); }
+      }
+    }
+
     public T? GetComponent<T>() where T : Component, new()
     {
       var componentType = typeof(T);

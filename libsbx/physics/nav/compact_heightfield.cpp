@@ -3,8 +3,10 @@
 #include <libsbx/physics/nav/compact_heightfield.hpp>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <limits>
+#include <span>
 
 namespace sbx::physics {
 
@@ -318,6 +320,12 @@ auto merge_and_filter_regions(compact_heightfield& chf, std::int32_t min_region_
     }
   }
 
+  auto remap = std::pmr::vector<std::uint16_t>(static_cast<std::size_t>(region_count), arena.temp());
+
+  for (auto id = std::uint16_t{0}; id < region_count; ++id) {
+    remap[id] = id;
+  }
+
   auto merged_any = true;
 
   while (merged_any) {
@@ -354,13 +362,19 @@ auto merge_and_filter_regions(compact_heightfield& chf, std::int32_t min_region_
         }
       }
 
-      for (auto& value : src_regions) {
-        if (value == id) {
-          value = best_neighbor;
+      for (auto& target : remap) {
+        if (target == id) {
+          target = best_neighbor;
         }
       }
 
       merged_any = true;
+    }
+  }
+
+  for (auto& value : src_regions) {
+    if (value != 0 && (value & border_region) == 0) {
+      value = remap[value];
     }
   }
 }
@@ -472,6 +486,419 @@ auto merge_and_filter_regions(compact_heightfield& chf, std::int32_t min_region_
   merge_and_filter_regions(chf, min_region_area, merge_region_area, src_regions, region_id, arena);
 
   for (auto i = std::size_t{0}; i < chf.spans.size(); ++i) {
+    chf.spans[i].region_id = src_regions[i];
+  }
+
+  return true;
+}
+
+struct level_entry {
+  std::int32_t x;
+  std::int32_t z;
+  std::int32_t index;
+}; // struct level_entry
+
+using level_stack = std::pmr::vector<level_entry>;
+
+[[nodiscard]] auto neighbor_span_index(const compact_heightfield& chf, std::int32_t x, std::int32_t z, const compact_span& span, std::int32_t direction) -> std::int32_t {
+  const auto neighbor_x = x + direction_offset_x(direction);
+  const auto neighbor_z = z + direction_offset_z(direction);
+
+  return static_cast<std::int32_t>(chf.cells[static_cast<std::size_t>(neighbor_x + neighbor_z * chf.width)].index) + get_connection(span, direction);
+}
+
+/** Chamfer distance (2 straight, 3 diagonal) from every span to the nearest unwalkable or area boundary. Returns the maximum. */
+[[nodiscard]] auto calculate_distance_field(const compact_heightfield& chf, std::pmr::vector<std::uint16_t>& distance) -> std::uint16_t {
+  const auto width = chf.width;
+  const auto height = chf.height;
+
+  std::fill(distance.begin(), distance.end(), std::uint16_t{0xffff});
+
+  for (auto z = std::int32_t{0}; z < height; ++z) {
+    for (auto x = std::int32_t{0}; x < width; ++x) {
+      const auto& cell = chf.cells[static_cast<std::size_t>(x + z * width)];
+
+      for (auto i = static_cast<std::int32_t>(cell.index), ni = static_cast<std::int32_t>(cell.index + cell.count); i < ni; ++i) {
+        const auto& span = chf.spans[static_cast<std::size_t>(i)];
+        const auto area = chf.areas[static_cast<std::size_t>(i)];
+
+        auto neighbor_count = std::int32_t{0};
+
+        for (auto direction = std::int32_t{0}; direction < 4; ++direction) {
+          if (get_connection(span, direction) != static_cast<std::int32_t>(not_connected) && chf.areas[static_cast<std::size_t>(neighbor_span_index(chf, x, z, span, direction))] == area) {
+            ++neighbor_count;
+          }
+        }
+
+        if (neighbor_count != 4) {
+          distance[static_cast<std::size_t>(i)] = 0;
+        }
+      }
+    }
+  }
+
+  const auto step = [&](std::int32_t i, const compact_span& span, std::int32_t x, std::int32_t z, std::int32_t primary_direction, std::int32_t secondary_direction) -> void {
+    if (get_connection(span, primary_direction) == static_cast<std::int32_t>(not_connected)) {
+      return;
+    }
+
+    const auto a_index = neighbor_span_index(chf, x, z, span, primary_direction);
+    const auto& a_span = chf.spans[static_cast<std::size_t>(a_index)];
+
+    distance[static_cast<std::size_t>(i)] = std::min(distance[static_cast<std::size_t>(i)], static_cast<std::uint16_t>(std::min(distance[static_cast<std::size_t>(a_index)] + 2, 0xffff)));
+
+    if (get_connection(a_span, secondary_direction) == static_cast<std::int32_t>(not_connected)) {
+      return;
+    }
+
+    const auto b_index = neighbor_span_index(chf, x + direction_offset_x(primary_direction), z + direction_offset_z(primary_direction), a_span, secondary_direction);
+
+    distance[static_cast<std::size_t>(i)] = std::min(distance[static_cast<std::size_t>(i)], static_cast<std::uint16_t>(std::min(distance[static_cast<std::size_t>(b_index)] + 3, 0xffff)));
+  };
+
+  for (auto z = std::int32_t{0}; z < height; ++z) {
+    for (auto x = std::int32_t{0}; x < width; ++x) {
+      const auto& cell = chf.cells[static_cast<std::size_t>(x + z * width)];
+
+      for (auto i = static_cast<std::int32_t>(cell.index), ni = static_cast<std::int32_t>(cell.index + cell.count); i < ni; ++i) {
+        step(i, chf.spans[static_cast<std::size_t>(i)], x, z, 0, 3);
+        step(i, chf.spans[static_cast<std::size_t>(i)], x, z, 3, 2);
+      }
+    }
+  }
+
+  for (auto z = height - 1; z >= 0; --z) {
+    for (auto x = width - 1; x >= 0; --x) {
+      const auto& cell = chf.cells[static_cast<std::size_t>(x + z * width)];
+
+      for (auto i = static_cast<std::int32_t>(cell.index), ni = static_cast<std::int32_t>(cell.index + cell.count); i < ni; ++i) {
+        step(i, chf.spans[static_cast<std::size_t>(i)], x, z, 2, 1);
+        step(i, chf.spans[static_cast<std::size_t>(i)], x, z, 1, 0);
+      }
+    }
+  }
+
+  return distance.empty() ? std::uint16_t{0} : *std::max_element(distance.begin(), distance.end());
+}
+
+/** 3x3 box blur of the distance field, skipping spans within @p threshold of a boundary so thin corridors keep their shape. */
+auto blur_distance_field(const compact_heightfield& chf, std::int32_t threshold, const std::pmr::vector<std::uint16_t>& source, std::pmr::vector<std::uint16_t>& destination) -> void {
+  threshold *= 2;
+
+  for (auto z = std::int32_t{0}; z < chf.height; ++z) {
+    for (auto x = std::int32_t{0}; x < chf.width; ++x) {
+      const auto& cell = chf.cells[static_cast<std::size_t>(x + z * chf.width)];
+
+      for (auto i = static_cast<std::int32_t>(cell.index), ni = static_cast<std::int32_t>(cell.index + cell.count); i < ni; ++i) {
+        const auto& span = chf.spans[static_cast<std::size_t>(i)];
+        const auto own = static_cast<std::int32_t>(source[static_cast<std::size_t>(i)]);
+
+        if (own <= threshold) {
+          destination[static_cast<std::size_t>(i)] = static_cast<std::uint16_t>(own);
+          continue;
+        }
+
+        auto sum = own;
+
+        for (auto direction = std::int32_t{0}; direction < 4; ++direction) {
+          if (get_connection(span, direction) == static_cast<std::int32_t>(not_connected)) {
+            sum += own * 2;
+            continue;
+          }
+
+          const auto a_index = neighbor_span_index(chf, x, z, span, direction);
+          const auto& a_span = chf.spans[static_cast<std::size_t>(a_index)];
+          const auto next_direction = (direction + 1) & 0x3;
+
+          sum += source[static_cast<std::size_t>(a_index)];
+
+          if (get_connection(a_span, next_direction) != static_cast<std::int32_t>(not_connected)) {
+            sum += source[static_cast<std::size_t>(neighbor_span_index(chf, x + direction_offset_x(direction), z + direction_offset_z(direction), a_span, next_direction))];
+          } else {
+            sum += own;
+          }
+        }
+
+        destination[static_cast<std::size_t>(i)] = static_cast<std::uint16_t>((sum + 5) / 9);
+      }
+    }
+  }
+}
+
+/** Grows a new region from one seed span over spans at least two levels below @p level, stopping where it would touch another region. */
+[[nodiscard]] auto flood_region(std::int32_t x, std::int32_t z, std::int32_t i, std::uint16_t level, std::uint16_t region, const compact_heightfield& chf, const std::pmr::vector<std::uint16_t>& distance, std::pmr::vector<std::uint16_t>& src_regions, std::pmr::vector<std::uint16_t>& src_distance, level_stack& stack) -> bool {
+  const auto area = chf.areas[static_cast<std::size_t>(i)];
+  const auto lowest = static_cast<std::uint16_t>(level >= 2 ? level - 2 : 0);
+
+  stack.clear();
+  stack.push_back(level_entry{x, z, i});
+  src_regions[static_cast<std::size_t>(i)] = region;
+  src_distance[static_cast<std::size_t>(i)] = 0;
+
+  auto count = std::int32_t{0};
+
+  while (!stack.empty()) {
+    const auto current = stack.back();
+    stack.pop_back();
+
+    const auto& span = chf.spans[static_cast<std::size_t>(current.index)];
+
+    // A span next to a different region stays unassigned, so neighboring floods don't merge.
+    auto touches_other = false;
+
+    for (auto direction = std::int32_t{0}; direction < 4 && !touches_other; ++direction) {
+      if (get_connection(span, direction) == static_cast<std::int32_t>(not_connected)) {
+        continue;
+      }
+
+      const auto a_index = neighbor_span_index(chf, current.x, current.z, span, direction);
+
+      if (chf.areas[static_cast<std::size_t>(a_index)] != area) {
+        continue;
+      }
+
+      const auto a_region = src_regions[static_cast<std::size_t>(a_index)];
+
+      if (a_region & border_region) {
+        continue;
+      }
+
+      if (a_region != 0 && a_region != region) {
+        touches_other = true;
+        break;
+      }
+
+      const auto& a_span = chf.spans[static_cast<std::size_t>(a_index)];
+      const auto next_direction = (direction + 1) & 0x3;
+
+      if (get_connection(a_span, next_direction) == static_cast<std::int32_t>(not_connected)) {
+        continue;
+      }
+
+      const auto b_index = neighbor_span_index(chf, current.x + direction_offset_x(direction), current.z + direction_offset_z(direction), a_span, next_direction);
+
+      if (chf.areas[static_cast<std::size_t>(b_index)] != area) {
+        continue;
+      }
+
+      const auto b_region = src_regions[static_cast<std::size_t>(b_index)];
+
+      if (b_region != 0 && b_region != region) {
+        touches_other = true;
+      }
+    }
+
+    if (touches_other) {
+      src_regions[static_cast<std::size_t>(current.index)] = 0;
+      continue;
+    }
+
+    ++count;
+
+    for (auto direction = std::int32_t{0}; direction < 4; ++direction) {
+      if (get_connection(span, direction) == static_cast<std::int32_t>(not_connected)) {
+        continue;
+      }
+
+      const auto a_index = neighbor_span_index(chf, current.x, current.z, span, direction);
+
+      if (chf.areas[static_cast<std::size_t>(a_index)] != area) {
+        continue;
+      }
+
+      if (distance[static_cast<std::size_t>(a_index)] >= lowest && src_regions[static_cast<std::size_t>(a_index)] == 0) {
+        src_regions[static_cast<std::size_t>(a_index)] = region;
+        src_distance[static_cast<std::size_t>(a_index)] = 0;
+        stack.push_back(level_entry{current.x + direction_offset_x(direction), current.z + direction_offset_z(direction), a_index});
+      }
+    }
+  }
+
+  return count > 0;
+}
+
+/** Grows existing regions into the unassigned spans of @p stack (or of every span at or above @p level when @p fill_stack), nearest region first. */
+auto expand_regions(std::int32_t max_iterations, std::uint16_t level, const compact_heightfield& chf, const std::pmr::vector<std::uint16_t>& distance, std::pmr::vector<std::uint16_t>& src_regions, std::pmr::vector<std::uint16_t>& src_distance, level_stack& stack, bool fill_stack, bake_arena& arena) -> void {
+  if (fill_stack) {
+    stack.clear();
+
+    for (auto z = std::int32_t{0}; z < chf.height; ++z) {
+      for (auto x = std::int32_t{0}; x < chf.width; ++x) {
+        const auto& cell = chf.cells[static_cast<std::size_t>(x + z * chf.width)];
+
+        for (auto i = static_cast<std::int32_t>(cell.index), ni = static_cast<std::int32_t>(cell.index + cell.count); i < ni; ++i) {
+          if (distance[static_cast<std::size_t>(i)] >= level && src_regions[static_cast<std::size_t>(i)] == 0 && chf.areas[static_cast<std::size_t>(i)] != null_area) {
+            stack.push_back(level_entry{x, z, i});
+          }
+        }
+      }
+    }
+  } else {
+    for (auto& entry : stack) {
+      if (src_regions[static_cast<std::size_t>(entry.index)] != 0) {
+        entry.index = -1;
+      }
+    }
+  }
+
+  struct dirty_entry {
+    std::int32_t index;
+    std::uint16_t region;
+    std::uint16_t distance;
+  }; // struct dirty_entry
+
+  auto dirty = std::pmr::vector<dirty_entry>{arena.temp()};
+  auto iteration = std::int32_t{0};
+
+  while (!stack.empty()) {
+    auto failed = std::size_t{0};
+    dirty.clear();
+
+    for (auto& entry : stack) {
+      if (entry.index < 0) {
+        ++failed;
+        continue;
+      }
+
+      const auto& span = chf.spans[static_cast<std::size_t>(entry.index)];
+      const auto area = chf.areas[static_cast<std::size_t>(entry.index)];
+
+      auto region = src_regions[static_cast<std::size_t>(entry.index)];
+      auto best_distance = std::uint16_t{0xffff};
+
+      for (auto direction = std::int32_t{0}; direction < 4; ++direction) {
+        if (get_connection(span, direction) == static_cast<std::int32_t>(not_connected)) {
+          continue;
+        }
+
+        const auto a_index = neighbor_span_index(chf, entry.x, entry.z, span, direction);
+        const auto a_region = src_regions[static_cast<std::size_t>(a_index)];
+
+        if (chf.areas[static_cast<std::size_t>(a_index)] != area || a_region == 0 || (a_region & border_region)) {
+          continue;
+        }
+
+        if (src_distance[static_cast<std::size_t>(a_index)] + 2 < best_distance) {
+          region = a_region;
+          best_distance = static_cast<std::uint16_t>(src_distance[static_cast<std::size_t>(a_index)] + 2);
+        }
+      }
+
+      if (region) {
+        dirty.push_back(dirty_entry{entry.index, region, best_distance});
+        entry.index = -1;
+      } else {
+        ++failed;
+      }
+    }
+
+    for (const auto& entry : dirty) {
+      src_regions[static_cast<std::size_t>(entry.index)] = entry.region;
+      src_distance[static_cast<std::size_t>(entry.index)] = entry.distance;
+    }
+
+    if (failed == stack.size()) {
+      break;
+    }
+
+    if (level > 0 && ++iteration >= max_iterations) {
+      break;
+    }
+  }
+}
+
+/** Buckets unassigned spans by distance level, two levels per stack, starting at @p start_level. */
+auto sort_cells_by_level(std::uint16_t start_level, const compact_heightfield& chf, const std::pmr::vector<std::uint16_t>& distance, const std::pmr::vector<std::uint16_t>& src_regions, std::span<level_stack> stacks) -> void {
+  constexpr auto log_levels_per_stack = 1;
+
+  const auto start = static_cast<std::int32_t>(start_level) >> log_levels_per_stack;
+
+  for (auto& stack : stacks) {
+    stack.clear();
+  }
+
+  for (auto z = std::int32_t{0}; z < chf.height; ++z) {
+    for (auto x = std::int32_t{0}; x < chf.width; ++x) {
+      const auto& cell = chf.cells[static_cast<std::size_t>(x + z * chf.width)];
+
+      for (auto i = static_cast<std::int32_t>(cell.index), ni = static_cast<std::int32_t>(cell.index + cell.count); i < ni; ++i) {
+        if (chf.areas[static_cast<std::size_t>(i)] == null_area || src_regions[static_cast<std::size_t>(i)] != 0) {
+          continue;
+        }
+
+        const auto stack_index = std::max(start - (static_cast<std::int32_t>(distance[static_cast<std::size_t>(i)]) >> log_levels_per_stack), 0);
+
+        if (stack_index < static_cast<std::int32_t>(stacks.size())) {
+          stacks[static_cast<std::size_t>(stack_index)].push_back(level_entry{x, z, i});
+        }
+      }
+    }
+  }
+}
+
+[[nodiscard]] auto build_regions_watershed(compact_heightfield& chf, std::int32_t min_region_area, std::int32_t merge_region_area, bake_arena& arena) -> bool {
+  constexpr auto stack_count = std::size_t{8u};
+  constexpr auto expand_iterations = std::int32_t{8};
+  constexpr auto max_region_id = std::uint16_t{border_region - 1u};
+
+  const auto span_count = chf.spans.size();
+
+  auto raw_distance = std::pmr::vector<std::uint16_t>(span_count, arena.temp());
+  auto distance = std::pmr::vector<std::uint16_t>(span_count, arena.temp());
+  const auto max_distance = calculate_distance_field(chf, raw_distance);
+  blur_distance_field(chf, 1, raw_distance, distance);
+
+  auto src_regions = std::pmr::vector<std::uint16_t>(span_count, std::uint16_t{0}, arena.temp());
+  auto src_distance = std::pmr::vector<std::uint16_t>(span_count, std::uint16_t{0}, arena.temp());
+
+  auto stacks = std::array<level_stack, stack_count>{level_stack{arena.temp()}, level_stack{arena.temp()}, level_stack{arena.temp()}, level_stack{arena.temp()}, level_stack{arena.temp()}, level_stack{arena.temp()}, level_stack{arena.temp()}, level_stack{arena.temp()}};
+  auto flood_stack = level_stack{arena.temp()};
+
+  auto region_id = std::uint16_t{1};
+  auto level = static_cast<std::uint16_t>((max_distance + 1) & ~1);
+  auto stack_index = std::size_t{stack_count - 1u};
+
+  chf.border_size = 0;
+
+  // Flood from the deepest (most open) spans downwards, two distance levels at a time, so regions start at the centres of open areas.
+  while (level > 0) {
+    level = static_cast<std::uint16_t>(level >= 2 ? level - 2 : 0);
+    stack_index = (stack_index + 1u) % stack_count;
+
+    if (stack_index == 0u) {
+      sort_cells_by_level(level, chf, distance, src_regions, stacks);
+    } else {
+      for (const auto& entry : stacks[stack_index - 1u]) {
+        if (entry.index >= 0 && src_regions[static_cast<std::size_t>(entry.index)] == 0) {
+          stacks[stack_index].push_back(entry);
+        }
+      }
+    }
+
+    expand_regions(expand_iterations, level, chf, distance, src_regions, src_distance, stacks[stack_index], false, arena);
+
+    for (const auto& entry : stacks[stack_index]) {
+      if (entry.index < 0 || src_regions[static_cast<std::size_t>(entry.index)] != 0) {
+        continue;
+      }
+
+      if (flood_region(entry.x, entry.z, entry.index, level, region_id, chf, distance, src_regions, src_distance, flood_stack)) {
+        if (region_id == max_region_id) {
+          return false;
+        }
+
+        ++region_id;
+      }
+    }
+  }
+
+  expand_regions(expand_iterations * 8, 0, chf, distance, src_regions, src_distance, flood_stack, true, arena);
+
+  chf.max_regions = region_id;
+
+  merge_and_filter_regions(chf, min_region_area, merge_region_area, src_regions, region_id, arena);
+
+  for (auto i = std::size_t{0}; i < span_count; ++i) {
     chf.spans[i].region_id = src_regions[i];
   }
 

@@ -2,6 +2,10 @@
 // Copyright (c) 2026 Jonas Kabelitz
 #include <libsbx/scripting/interop.hpp>
 
+#include <algorithm>
+#include <filesystem>
+#include <vector>
+
 #include <libsbx/utility/logger.hpp>
 
 #include <libsbx/core/engine.hpp>
@@ -54,6 +58,32 @@ auto interop::physics_raycast(math::ray* ray, std::float_t max_distance, std::ui
   }
 
   return true;
+}
+
+auto interop::physics_overlap_sphere(math::vector3* center, std::float_t radius, std::uint32_t layer_mask, std::uint64_t* out_node_uuids, std::uint32_t capacity) -> std::uint32_t {
+  if (!center) {
+    utility::logger<"scripting">::error("Attempting to call physics_overlap_sphere with a null center");
+
+    return 0u;
+  }
+
+  auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
+  auto& scene = scenes_module.active_scene();
+  auto& physics_module = core::engine::get_module<physics::physics_module>();
+
+  auto hits = std::vector<physics::sphere_query_hit>{};
+
+  physics_module.query_sphere_contacts(scene, *center, radius, hits, scenes::layer_mask{layer_mask});
+
+  if (out_node_uuids) {
+    const auto written = std::min(static_cast<std::size_t>(capacity), hits.size());
+
+    for (auto i = std::size_t{0u}; i < written; ++i) {
+      out_node_uuids[i] = hits[i].node.id().value();
+    }
+  }
+
+  return static_cast<std::uint32_t>(hits.size());
 }
 
 auto interop::nav_bake(std::float_t agent_radius, std::float_t agent_height, std::float_t agent_max_slope, std::float_t agent_max_climb, std::float_t cell_size, std::float_t cell_height, std::float_t region_min_size, std::float_t region_merge_size, std::float_t edge_max_length, std::float_t edge_max_error, std::int32_t verts_per_poly) -> managed::bool32 {
@@ -334,6 +364,12 @@ auto interop::terrain_generate(std::uint32_t width, std::uint32_t depth, std::fl
   auto& terrain_module = core::engine::get_module<terrain::terrain_module>();
 
   terrain_module.generate(terrain::heightmap_generator_settings{width, depth, cell_size, frequency, amplitude, octaves});
+}
+
+auto interop::terrain_load(managed::string path, std::float_t cell_size, std::float_t height_scale) -> managed::bool32 {
+  auto& terrain_module = core::engine::get_module<terrain::terrain_module>();
+
+  return terrain_module.load(std::filesystem::path{std::string{path}}, cell_size, height_scale);
 }
 
 auto interop::terrain_sample_height(math::vector2* world_xz, std::float_t* out_height) -> void {

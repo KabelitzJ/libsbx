@@ -16,13 +16,12 @@
 namespace sbx::platform {
 
 struct key_state {
-  // action is glfw's raw last-reported level (press or release; a key/button never actually gets
-  // written to repeat here -- see window.cpp's callbacks). last_action is that same value as of the
-  // start of the previous frame (see input::_snapshot_key_states/_snapshot_mouse_button_states),
-  // letting is_key_pressed/is_key_released edge-detect by comparing the two instead of needing a
-  // decaying state machine of their own.
+  // action is glfw's last-reported level (press or release; repeats never reach it, see window.cpp).
+  // pressed/released record edges as the events arrive and are cleared once per frame, so a tap that
+  // presses and releases within one frame still reports both instead of vanishing.
   input_action action{input_action::release};
-  input_action last_action{input_action::release};
+  bool pressed{false};
+  bool released{false};
 }; // struct key_state
 
 class input {
@@ -51,6 +50,8 @@ private:
   static auto _snapshot_key_states() -> void;
   static auto _snapshot_mouse_button_states() -> void;
   static auto _transition_scroll_delta() -> void;
+
+  static auto _apply(key_state& state, input_action action) -> void;
 
   static auto _update_key_state(key key, input_action action) -> void;
   static auto _update_mouse_button_state(mouse_button button, input_action action) -> void;

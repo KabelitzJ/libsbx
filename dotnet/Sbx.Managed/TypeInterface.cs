@@ -411,7 +411,7 @@ namespace Sbx.Managed
         if (!_cachedTypes.TryGetValue(InType, out var type))
           return;
 
-        ReadOnlySpan<FieldInfo> fields = type.GetFields(BindingFlags.Instance | BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public);
+        ReadOnlySpan<FieldInfo> fields = type.GetFields(BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
 
         if (fields == null || fields.Length == 0)
         {

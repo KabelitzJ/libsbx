@@ -143,4 +143,15 @@ auto debug_draw::add_cross(const math::vector3& point, std::float_t size, const 
   add_line(point - math::vector3::forward * half, point + math::vector3::forward * half, color);
 }
 
+auto debug_draw::add_wire_circle(const math::vector3& center, const math::vector3& normal, std::float_t radius, const math::color& color, std::uint32_t segments) -> void {
+  constexpr auto tau = 2.0f * std::numbers::pi_v<std::float_t>;
+
+  const auto axis_n = math::vector3::normalized(normal);
+  const auto helper = std::abs(axis_n.y()) < 0.99f ? math::vector3::up : math::vector3::right;
+  const auto axis_a = math::vector3::normalized(math::vector3::cross(axis_n, helper));
+  const auto axis_b = math::vector3::cross(axis_n, axis_a);
+
+  _add_arc(center, axis_a, axis_b, radius, 0.0f, tau, color, segments);
+}
+
 } // namespace sbx::render

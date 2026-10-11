@@ -9,6 +9,7 @@
 #include <libsbx/utility/logger.hpp>
 
 #include <libsbx/core/engine.hpp>
+#include <libsbx/core/project.hpp>
 
 #include <libsbx/assets/animation_graph.hpp>
 #include <libsbx/assets/assets_module.hpp>
@@ -219,6 +220,44 @@ auto interop::tag_set_tag(std::uint64_t uuid, managed::string tag) -> void {
   }
 
   node.name() = scenes::tag{std::string{tag}};
+}
+
+auto interop::node_get_layer(std::uint64_t uuid) -> std::uint8_t {
+  auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
+
+  auto& scene = scenes_module.active_scene();
+
+  auto node = scene.find(math::uuid::from_value(uuid));
+
+  if (!node.is_valid()) {
+    utility::logger<"scripting">::error("Attempting to get layer of invalid node");
+
+    return 0u;
+  }
+
+  return node.layer().index;
+}
+
+auto interop::node_set_layer(std::uint64_t uuid, std::uint8_t layer) -> void {
+  if (layer >= core::layer_count) {
+    utility::logger<"scripting">::error("Attempting to set layer {} (valid: 0-{})", layer, core::layer_count - 1u);
+
+    return;
+  }
+
+  auto& scenes_module = core::engine::get_module<scenes::scenes_module>();
+
+  auto& scene = scenes_module.active_scene();
+
+  auto node = scene.find(math::uuid::from_value(uuid));
+
+  if (!node.is_valid()) {
+    utility::logger<"scripting">::error("Attempting to set layer of invalid node");
+
+    return;
+  }
+
+  node.layer().index = layer;
 }
 
 auto interop::transform_get_position(std::uint64_t uuid, math::vector3* position) -> void {

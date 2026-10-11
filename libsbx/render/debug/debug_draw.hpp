@@ -88,6 +88,17 @@ public:
    */
   auto add_cross(const math::vector3& point, std::float_t size, const math::color& color) -> void;
 
+  /**
+   * @brief A ring in the plane perpendicular to @p normal, e.g. a selection circle on the ground.
+   *
+   * @param center The circle's center.
+   * @param normal The plane's normal; need not be normalized.
+   * @param radius The circle's radius.
+   * @param color The line color.
+   * @param segments Line segments around the ring.
+   */
+  auto add_wire_circle(const math::vector3& center, const math::vector3& normal, std::float_t radius, const math::color& color, std::uint32_t segments = 32u) -> void;
+
   [[nodiscard]] auto vertices() const noexcept -> const std::vector<debug_vertex>& {
     return _vertices;
   }

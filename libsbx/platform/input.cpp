@@ -10,9 +10,7 @@ math::vector2 input::_mouse_position;
 math::vector2 input::_scroll_delta;
 
 auto input::is_key_pressed(key key) -> bool {
-  const auto& state = _key_states[_key_index(key)];
-
-  return _is_down(state.action) && !_is_down(state.last_action);
+  return _key_states[_key_index(key)].pressed;
 }
 
 auto input::is_key_down(key key) -> bool {
@@ -20,15 +18,11 @@ auto input::is_key_down(key key) -> bool {
 }
 
 auto input::is_key_released(key key) -> bool {
-  const auto& state = _key_states[_key_index(key)];
-
-  return !_is_down(state.action) && _is_down(state.last_action);
+  return _key_states[_key_index(key)].released;
 }
 
 auto input::is_mouse_button_pressed(mouse_button button) -> bool {
-  const auto& state = _mouse_button_states[_mouse_button_index(button)];
-
-  return _is_down(state.action) && !_is_down(state.last_action);
+  return _mouse_button_states[_mouse_button_index(button)].pressed;
 }
 
 auto input::is_mouse_button_down(mouse_button button) -> bool {
@@ -36,9 +30,7 @@ auto input::is_mouse_button_down(mouse_button button) -> bool {
 }
 
 auto input::is_mouse_button_released(mouse_button button) -> bool {
-  const auto& state = _mouse_button_states[_mouse_button_index(button)];
-
-  return !_is_down(state.action) && _is_down(state.last_action);
+  return _mouse_button_states[_mouse_button_index(button)].released;
 }
 
 auto input::mouse_position() -> math::vector2 {
@@ -51,14 +43,26 @@ auto input::scroll_delta() -> math::vector2 {
 
 auto input::_snapshot_key_states() -> void {
   for (auto& state : _key_states) {
-    state.last_action = state.action;
+    state.pressed = false;
+    state.released = false;
   }
 }
 
 auto input::_snapshot_mouse_button_states() -> void {
   for (auto& state : _mouse_button_states) {
-    state.last_action = state.action;
+    state.pressed = false;
+    state.released = false;
   }
+}
+
+auto input::_apply(key_state& state, input_action action) -> void {
+  if (_is_down(action) && !_is_down(state.action)) {
+    state.pressed = true;
+  } else if (!_is_down(action) && _is_down(state.action)) {
+    state.released = true;
+  }
+
+  state.action = action;
 }
 
 auto input::_transition_scroll_delta() -> void {
@@ -66,11 +70,11 @@ auto input::_transition_scroll_delta() -> void {
 }
 
 auto input::_update_key_state(key key, input_action action) -> void {
-  _key_states[_key_index(key)].action = action;
+  _apply(_key_states[_key_index(key)], action);
 }
 
 auto input::_update_mouse_button_state(mouse_button button, input_action action) -> void {
-  _mouse_button_states[_mouse_button_index(button)].action = action;
+  _apply(_mouse_button_states[_mouse_button_index(button)], action);
 }
 
 auto input::_update_mouse_position(const math::vector2& position) -> void {

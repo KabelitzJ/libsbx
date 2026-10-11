@@ -128,6 +128,12 @@ struct interop {
 
   static auto tag_set_tag(std::uint64_t uuid, managed::string tag) -> void;
 
+  /** @brief The node's layer index (0-31); 0 for an invalid node. */
+  static auto node_get_layer(std::uint64_t uuid) -> std::uint8_t;
+
+  /** @brief Values above 31 are rejected, leaving the layer unchanged. */
+  static auto node_set_layer(std::uint64_t uuid, std::uint8_t layer) -> void;
+
   static auto transform_get_position(std::uint64_t uuid, math::vector3* position) -> void;
 
   static auto transform_set_position(std::uint64_t uuid, math::vector3* position) -> void;
@@ -313,6 +319,23 @@ struct interop {
    */
   static auto physics_raycast(math::ray* ray, std::float_t max_distance, std::uint32_t layer_mask, std::uint64_t* out_node_uuid, math::vector3* out_point, math::vector3* out_normal, std::float_t* out_distance) -> managed::bool32;
 
+  /**
+   * @brief Every node whose collider overlaps the sphere (see physics_module::query_sphere_contacts).
+   *
+   * Writes at most @p capacity uuids to @p out_node_uuids.
+   *
+   * @return The total number of overlapping nodes, which may exceed @p capacity.
+   */
+  static auto physics_overlap_sphere(math::vector3* center, std::float_t radius, std::uint32_t layer_mask, std::uint64_t* out_node_uuids, std::uint32_t capacity) -> std::uint32_t;
+
+  static auto debug_draw_line(math::vector3* start, math::vector3* end, math::color* color) -> void;
+
+  static auto debug_draw_wire_sphere(math::vector3* center, std::float_t radius, math::color* color) -> void;
+
+  static auto debug_draw_wire_box(math::vector3* center, math::quaternion* rotation, math::vector3* half_extents, math::color* color) -> void;
+
+  static auto debug_draw_wire_circle(math::vector3* center, math::vector3* normal, std::float_t radius, math::color* color) -> void;
+
   /** @brief Bakes the navmesh from the active scene's static geometry. Returns whether any usable polygons were produced. */
   static auto nav_bake(std::float_t agent_radius, std::float_t agent_height, std::float_t agent_max_slope, std::float_t agent_max_climb, std::float_t cell_size, std::float_t cell_height, std::float_t region_min_size, std::float_t region_merge_size, std::float_t edge_max_length, std::float_t edge_max_error, std::int32_t verts_per_poly) -> managed::bool32;
 
@@ -350,6 +373,9 @@ struct interop {
 
   /** @brief Regenerates the active scene's terrain, replacing any previous one. */
   static auto terrain_generate(std::uint32_t width, std::uint32_t depth, std::float_t cell_size, std::float_t frequency, std::float_t amplitude, std::uint32_t octaves) -> void;
+
+  /** @brief See terrain_module::load; @p path is relative to the assets directory. */
+  static auto terrain_load(managed::string path, std::float_t cell_size, std::float_t height_scale) -> managed::bool32;
 
   /** @brief Terrain height at @p world_xz, 0 if no terrain exists. */
   static auto terrain_sample_height(math::vector2* world_xz, std::float_t* out_height) -> void;

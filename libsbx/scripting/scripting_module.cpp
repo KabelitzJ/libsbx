@@ -54,6 +54,8 @@ scripting_module::scripting_module() {
 
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Tag_GetTag", reinterpret_cast<void*>(&interop::tag_get_tag));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Tag_SetTag", reinterpret_cast<void*>(&interop::tag_set_tag));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Node_GetLayer", reinterpret_cast<void*>(&interop::node_get_layer));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Node_SetLayer", reinterpret_cast<void*>(&interop::node_set_layer));
 
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Transform_GetPosition", reinterpret_cast<void*>(&interop::transform_get_position));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Transform_SetPosition", reinterpret_cast<void*>(&interop::transform_set_position));
@@ -145,6 +147,12 @@ scripting_module::scripting_module() {
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Time_DeltaTime", reinterpret_cast<void*>(&interop::time_delta_time));
 
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Physics_Raycast", reinterpret_cast<void*>(&interop::physics_raycast));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Physics_OverlapSphere", reinterpret_cast<void*>(&interop::physics_overlap_sphere));
+
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "DebugDraw_Line", reinterpret_cast<void*>(&interop::debug_draw_line));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "DebugDraw_WireSphere", reinterpret_cast<void*>(&interop::debug_draw_wire_sphere));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "DebugDraw_WireBox", reinterpret_cast<void*>(&interop::debug_draw_wire_box));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "DebugDraw_WireCircle", reinterpret_cast<void*>(&interop::debug_draw_wire_circle));
 
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Nav_Bake", reinterpret_cast<void*>(&interop::nav_bake));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Nav_HasNavMesh", reinterpret_cast<void*>(&interop::nav_has_navmesh));
@@ -168,6 +176,7 @@ scripting_module::scripting_module() {
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "NavAgent_SetAcceleration", reinterpret_cast<void*>(&interop::nav_agent_set_acceleration));
 
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Terrain_Generate", reinterpret_cast<void*>(&interop::terrain_generate));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Terrain_Load", reinterpret_cast<void*>(&interop::terrain_load));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Terrain_SampleHeight", reinterpret_cast<void*>(&interop::terrain_sample_height));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Terrain_SampleNormal", reinterpret_cast<void*>(&interop::terrain_sample_normal));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Math_NoiseSimplex", reinterpret_cast<void*>(&interop::math_noise_simplex));

@@ -17,6 +17,8 @@ namespace Sbx.Core
 
     internal static delegate* unmanaged<ulong, NativeString> Tag_GetTag;
     internal static delegate* unmanaged<ulong, NativeString, void> Tag_SetTag;
+    internal static delegate* unmanaged<ulong, byte> Node_GetLayer;
+    internal static delegate* unmanaged<ulong, byte, void> Node_SetLayer;
 
     internal static delegate* unmanaged<ulong, Vector3*, void> Transform_GetPosition;
     internal static delegate* unmanaged<ulong, Vector3*, void> Transform_SetPosition;
@@ -118,6 +120,12 @@ namespace Sbx.Core
     internal static delegate* unmanaged<float*, void> Time_DeltaTime;
 
     internal static delegate* unmanaged<Ray*, float, uint, ulong*, Vector3*, Vector3*, float*, bool> Physics_Raycast;
+    internal static delegate* unmanaged<Vector3*, float, uint, ulong*, uint, uint> Physics_OverlapSphere;
+
+    internal static delegate* unmanaged<Vector3*, Vector3*, Color*, void> DebugDraw_Line;
+    internal static delegate* unmanaged<Vector3*, float, Color*, void> DebugDraw_WireSphere;
+    internal static delegate* unmanaged<Vector3*, Quaternion*, Vector3*, Color*, void> DebugDraw_WireBox;
+    internal static delegate* unmanaged<Vector3*, Vector3*, float, Color*, void> DebugDraw_WireCircle;
 
     internal static delegate* unmanaged<float, float, float, float, float, float, float, float, float, float, int, bool> Nav_Bake;
     internal static delegate* unmanaged<bool> Nav_HasNavMesh;
@@ -141,6 +149,7 @@ namespace Sbx.Core
     internal static delegate* unmanaged<ulong, float, void> NavAgent_SetAcceleration;
 
     internal static delegate* unmanaged<uint, uint, float, float, float, uint, void> Terrain_Generate;
+    internal static delegate* unmanaged<NativeString, float, float, bool> Terrain_Load;
     internal static delegate* unmanaged<Vector2*, float*, void> Terrain_SampleHeight;
     internal static delegate* unmanaged<Vector2*, Vector3*, void> Terrain_SampleNormal;
     internal static delegate* unmanaged<float, float, float, float> Math_NoiseSimplex;

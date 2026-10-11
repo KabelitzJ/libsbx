@@ -231,7 +231,45 @@ auto gather_convex_shape(const convex_shape& shape, const transform& pose, std::
   ), shape);
 }
 
+auto triangulate_heightfield(const terrain::heightmap& map, std::pmr::vector<math::vector3>& vertices, std::pmr::vector<std::uint32_t>& indices) -> void {
+  const auto width = map.width();
+  const auto depth = map.depth();
+
+  if (width < 2u || depth < 2u) {
+    return;
+  }
+
+  const auto extent = map.half_extent();
+  const auto cell_size = map.cell_size();
+  const auto base = static_cast<std::uint32_t>(vertices.size());
+
+  for (auto z = std::uint32_t{0u}; z < depth; ++z) {
+    for (auto x = std::uint32_t{0u}; x < width; ++x) {
+      vertices.push_back(math::vector3{static_cast<std::float_t>(x) * cell_size - extent.x(), map.height_at(x, z), static_cast<std::float_t>(z) * cell_size - extent.y()});
+    }
+  }
+
+  // Same winding as terrain::build_terrain_mesh, so is_walkable_triangle sees +Y normals.
+  for (auto z = std::uint32_t{0u}; z < depth - 1u; ++z) {
+    for (auto x = std::uint32_t{0u}; x < width - 1u; ++x) {
+      const auto i00 = base + z * width + x;
+      const auto i10 = i00 + 1u;
+      const auto i01 = i00 + width;
+      const auto i11 = i01 + 1u;
+
+      indices.insert(indices.end(), {i00, i01, i10, i10, i01, i11});
+    }
+  }
+}
+
 auto gather_walkable_triangles(scenes::scene& scene, mesh_collision_cache& mesh_cache, convex_hull_cache& hull_cache, assets::assets_module& assets_module, pose_cache& cache, std::pmr::vector<math::vector3>& vertices, std::pmr::vector<std::uint32_t>& indices) -> void {
+  // Heightfields are world space and ignore the node's transform, matching physics_module::raycast.
+  for (auto&& [entity, collider] : scene.query<heightfield_collider>(ecs::exclude<scenes::inactive>).each()) {
+    if (collider.data) {
+      triangulate_heightfield(*collider.data, vertices, indices);
+    }
+  }
+
   for (auto&& [entity, collider] : scene.query<mesh_collider>(ecs::exclude<rigidbody, scenes::inactive>).each()) {
     auto node = scene.node_of(entity);
 
@@ -327,7 +365,7 @@ auto gather_walkable_triangles(scenes::scene& scene, mesh_collision_cache& mesh_
 
   arena.reset_temp();
 
-  if (!build_regions_monotone(chf, 0, cfg.min_region_area, cfg.merge_region_area, arena)) {
+  if (!build_regions_watershed(chf, cfg.min_region_area, cfg.merge_region_area, arena)) {
     return navmesh_build_result{};
   }
 

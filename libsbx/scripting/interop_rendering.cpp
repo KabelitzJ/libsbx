@@ -17,6 +17,8 @@
 #include <libsbx/core/engine.hpp>
 
 #include <libsbx/math/vector4.hpp>
+#include <libsbx/math/matrix4x4.hpp>
+#include <libsbx/math/matrix_cast.hpp>
 
 #include <libsbx/assets/asset_cooker.hpp>
 #include <libsbx/assets/assets_module.hpp>
@@ -27,6 +29,8 @@
 #include <libsbx/graphics/resources/buffer.hpp>
 #include <libsbx/graphics/resources/image.hpp>
 #include <libsbx/graphics/commands/command_buffer.hpp>
+
+#include <libsbx/render/scene_renderer_module.hpp>
 
 #include <libsbx/scenes/components.hpp>
 
@@ -639,6 +643,40 @@ auto interop::material_set_generic_texture(std::uint64_t material_uuid, std::uin
   create_info.generic_texture_arrays[index] = assets::texture2d_array_handle{};
 
   assets_module.update_material(material, create_info);
+}
+
+auto interop::debug_draw_line(math::vector3* start, math::vector3* end, math::color* color) -> void {
+  if (!start || !end || !color) {
+    return;
+  }
+
+  core::engine::get_module<render::scene_renderer_module>().debug_draw().add_line(*start, *end, *color);
+}
+
+auto interop::debug_draw_wire_sphere(math::vector3* center, std::float_t radius, math::color* color) -> void {
+  if (!center || !color) {
+    return;
+  }
+
+  core::engine::get_module<render::scene_renderer_module>().debug_draw().add_wire_sphere(*center, radius, *color);
+}
+
+auto interop::debug_draw_wire_box(math::vector3* center, math::quaternion* rotation, math::vector3* half_extents, math::color* color) -> void {
+  if (!center || !rotation || !half_extents || !color) {
+    return;
+  }
+
+  const auto matrix = math::matrix4x4::translated(math::matrix4x4::identity, *center) * math::matrix_cast<math::matrix4x4>(*rotation);
+
+  core::engine::get_module<render::scene_renderer_module>().debug_draw().add_wire_box(matrix, *half_extents, *color);
+}
+
+auto interop::debug_draw_wire_circle(math::vector3* center, math::vector3* normal, std::float_t radius, math::color* color) -> void {
+  if (!center || !normal || !color) {
+    return;
+  }
+
+  core::engine::get_module<render::scene_renderer_module>().debug_draw().add_wire_circle(*center, *normal, radius, *color);
 }
 
 } // namespace sbx::scripting

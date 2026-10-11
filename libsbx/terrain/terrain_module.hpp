@@ -3,6 +3,7 @@
 #ifndef LIBSBX_TERRAIN_TERRAIN_MODULE_HPP_
 #define LIBSBX_TERRAIN_TERRAIN_MODULE_HPP_
 
+#include <filesystem>
 #include <memory>
 
 #include <libsbx/utility/noncopyable.hpp>
@@ -53,6 +54,17 @@ public:
    */
   auto generate(const heightmap_generator_settings& settings = {}) -> void;
 
+  /**
+   * @brief (Re)builds the active scene's terrain from a grayscale heightmap image (8- or 16-bit), one sample per pixel. Replaces any previous terrain, like generate().
+   *
+   * @param path Image path, relative to the project's assets directory.
+   * @param cell_size World-space distance between samples.
+   * @param height_scale World-space height of a full-white pixel; black is 0.
+   *
+   * @return False, leaving the current terrain untouched, if the image can't be read.
+   */
+  auto load(const std::filesystem::path& path, std::float_t cell_size, std::float_t height_scale) -> bool;
+
   [[nodiscard]] auto has_terrain() const noexcept -> bool {
     return _heightmap != nullptr;
   }
@@ -68,6 +80,8 @@ public:
   [[nodiscard]] auto sample_normal(const math::vector2& world_xz) const -> math::vector3;
 
 private:
+
+  auto _rebuild(std::shared_ptr<terrain::heightmap> map) -> void;
 
   std::shared_ptr<terrain::heightmap> _heightmap{};
   scenes::node _terrain_node{};

@@ -24,6 +24,8 @@
 
 #include <libsbx/assets/assets_module.hpp>
 
+#include <libsbx/render/ui/ui_module.hpp>
+
 #include <libsbx/scenes/components.hpp>
 #include <libsbx/scenes/scene.hpp>
 #include <libsbx/scenes/scenes_module.hpp>
@@ -303,6 +305,48 @@ auto inspector_panel::_draw_node_properties(editor_state& state, sbx::scenes::sc
   draw_add_component_menu(state, target, node, scripting_module);
 }
 
+auto inspector_panel::_draw_import_settings_section(const asset_selection& asset) -> void {
+  if (!_asset_cache.import_settings.has_value()) {
+    _asset_cache.import_settings.emplace(asset.path);
+  }
+
+  if (!ImGui::CollapsingHeader(ICON_MDI_FILE_COG_OUTLINE " Import Settings", ImGuiTreeNodeFlags_DefaultOpen)) {
+    return;
+  }
+
+  auto& editor = *_asset_cache.import_settings;
+
+  editor.draw();
+
+  ImGui::Spacing();
+
+  ImGui::BeginDisabled(!editor.is_dirty());
+
+  if (ImGui::Button("Revert")) {
+    editor.revert();
+  }
+
+  ImGui::SameLine();
+
+  if (ImGui::Button(ICON_MDI_CHECK " Apply")) {
+    editor.apply();
+  }
+
+  ImGui::EndDisabled();
+
+  ImGui::SameLine();
+
+  if (ImGui::Button(ICON_MDI_REFRESH " Reimport")) {
+    sbx::core::engine::get_module<sbx::assets::assets_module>().reimport(asset.id);
+  }
+
+  if (editor.is_dirty()) {
+    ImGui::TextColored(ImVec4{1.0f, 0.75f, 0.3f, 1.0f}, "Unapplied import settings");
+  }
+
+  ImGui::Separator();
+}
+
 auto inspector_panel::_draw_asset_properties(editor_state& state, const asset_selection& asset, sbx::assets::assets_module& assets_module) -> void {
   if (_asset_cache.id.value() != asset.id.value()) {
     _asset_cache = asset_property_cache{};
@@ -310,22 +354,22 @@ auto inspector_panel::_draw_asset_properties(editor_state& state, const asset_se
     _shader_graph_seed_pending = false; // the material's own generic_params are already meaningful
 
     switch (asset.kind) {
-      case asset_kind::texture: _asset_cache.texture = assets_module.load_texture(asset.id); break;
-      case asset_kind::mesh: _asset_cache.mesh = assets_module.load_mesh(asset.id); break;
-      case asset_kind::material: _asset_cache.material = assets_module.load_material(asset.id); break;
-      case asset_kind::environment_map: _asset_cache.environment_map = assets_module.load_environment_map(asset.id); break;
-      case asset_kind::particle_effect: _asset_cache.particle_effect = assets_module.load_particle_effect(asset.id); break;
-      case asset_kind::animation_graph: _asset_cache.animation_graph = assets_module.load_animation_graph(asset.id); break;
-      case asset_kind::shader_graph: _asset_cache.shader_graph = assets_module.load_shader_graph(asset.id); break;
-      case asset_kind::font: _asset_cache.font = assets_module.load_font(asset.id); break;
-      case asset_kind::scene: _asset_cache.scene = assets_module.load_scene(asset.id); break;
-      case asset_kind::prefab:
-      case asset_kind::script:
-      case asset_kind::unknown:
+      case sbx::assets::asset_type::texture: _asset_cache.texture = assets_module.load_texture(asset.id); break;
+      case sbx::assets::asset_type::mesh: _asset_cache.mesh = assets_module.load_mesh(asset.id); break;
+      case sbx::assets::asset_type::material: _asset_cache.material = assets_module.load_material(asset.id); break;
+      case sbx::assets::asset_type::environment_map: _asset_cache.environment_map = assets_module.load_environment_map(asset.id); break;
+      case sbx::assets::asset_type::particle_effect: _asset_cache.particle_effect = assets_module.load_particle_effect(asset.id); break;
+      case sbx::assets::asset_type::animation_graph: _asset_cache.animation_graph = assets_module.load_animation_graph(asset.id); break;
+      case sbx::assets::asset_type::shader_graph: _asset_cache.shader_graph = assets_module.load_shader_graph(asset.id); break;
+      case sbx::assets::asset_type::font: _asset_cache.font = assets_module.load_font(asset.id); break;
+      case sbx::assets::asset_type::scene: _asset_cache.scene = assets_module.load_scene(asset.id); break;
+      case sbx::assets::asset_type::prefab:
+      case sbx::assets::asset_type::script:
+      case sbx::assets::asset_type::unknown:
         break;
     }
 
-    if (asset.kind == asset_kind::particle_effect && _asset_cache.particle_effect.is_valid()) {
+    if (asset.kind == sbx::assets::asset_type::particle_effect && _asset_cache.particle_effect.is_valid()) {
       const auto& effect = *_asset_cache.particle_effect;
 
       _particle_effect_edit.name = effect.name();
@@ -333,7 +377,7 @@ auto inspector_panel::_draw_asset_properties(editor_state& state, const asset_se
     }
 
     // Seeded once the asynchronous load lands; copying now could capture placeholder defaults that a Save would write back.
-    _material_edit_pending = asset.kind == asset_kind::material;
+    _material_edit_pending = asset.kind == sbx::assets::asset_type::material;
   }
 
   ImGui::Text("Path: %s", asset.path.string().c_str());
@@ -343,17 +387,28 @@ auto inspector_panel::_draw_asset_properties(editor_state& state, const asset_se
     state.request_reveal_in_browser(asset.path);
   }
 
+  if (sbx::assets::has_import_settings(asset.kind)) {
+    _draw_import_settings_section(asset);
+  }
+
   switch (asset.kind) {
-    case asset_kind::texture: {
+    case sbx::assets::asset_type::texture: {
       ImGui::Text("Type: Texture");
       const auto& handle = _asset_cache.texture;
       if (handle.is_valid()) {
         ImGui::Text("Bindless Index: %u", handle->index());
         ImGui::Text("Resident: %s", assets_module.is_resident(handle) ? "yes" : "no");
+
+        if (const auto view = assets_module.is_resident(handle) ? assets_module.image_view_of(handle) : VK_NULL_HANDLE; view != VK_NULL_HANDLE) {
+          auto& ui_module = sbx::core::engine::get_module<sbx::render::ui_module>();
+          const auto preview_size = std::min(ImGui::GetContentRegionAvail().x, 256.0f);
+
+          ImGui::Image(ui_module.texture_id(view, ui_module.thumbnail_sampler()), ImVec2{preview_size, preview_size});
+        }
       }
       break;
     }
-    case asset_kind::mesh: {
+    case sbx::assets::asset_type::mesh: {
       ImGui::Text("Type: Mesh");
       const auto& handle = _asset_cache.mesh;
       if (handle.is_valid()) {
@@ -362,12 +417,12 @@ auto inspector_panel::_draw_asset_properties(editor_state& state, const asset_se
       }
       break;
     }
-    case asset_kind::material: {
+    case sbx::assets::asset_type::material: {
       ImGui::Text("Type: Material");
       _draw_material_properties(state, asset, assets_module);
       break;
     }
-    case asset_kind::environment_map: {
+    case sbx::assets::asset_type::environment_map: {
       ImGui::Text("Type: Environment Map");
       const auto& handle = _asset_cache.environment_map;
       if (handle.is_valid()) {
@@ -379,12 +434,12 @@ auto inspector_panel::_draw_asset_properties(editor_state& state, const asset_se
       }
       break;
     }
-    case asset_kind::particle_effect: {
+    case sbx::assets::asset_type::particle_effect: {
       ImGui::Text("Type: Particle Effect");
       _draw_particle_effect_properties(state, asset, assets_module);
       break;
     }
-    case asset_kind::animation_graph: {
+    case sbx::assets::asset_type::animation_graph: {
       ImGui::Text("Type: Animation Graph");
 
       if (ImGui::Button(ICON_MDI_STATE_MACHINE " Open Graph Editor")) {
@@ -425,7 +480,7 @@ auto inspector_panel::_draw_asset_properties(editor_state& state, const asset_se
 
       break;
     }
-    case asset_kind::shader_graph: {
+    case sbx::assets::asset_type::shader_graph: {
       ImGui::Text("Type: Shader Graph");
 
       if (ImGui::Button(ICON_MDI_VECTOR_POLYLINE " Open Graph Editor")) {
@@ -462,7 +517,7 @@ auto inspector_panel::_draw_asset_properties(editor_state& state, const asset_se
 
       break;
     }
-    case asset_kind::font: {
+    case sbx::assets::asset_type::font: {
       ImGui::Text("Type: Font");
       const auto& handle = _asset_cache.font;
       if (handle.is_valid()) {
@@ -471,11 +526,11 @@ auto inspector_panel::_draw_asset_properties(editor_state& state, const asset_se
       }
       break;
     }
-    case asset_kind::prefab: {
+    case sbx::assets::asset_type::prefab: {
       // Unreachable: draw() routes prefabs to _draw_prefab_edit. Kept so the switch stays exhaustive.
       break;
     }
-    case asset_kind::scene: {
+    case sbx::assets::asset_type::scene: {
       ImGui::Text("Type: Scene");
 
       if (ImGui::Button(ICON_MDI_FOLDER_OPEN " Open")) {
@@ -484,13 +539,13 @@ auto inspector_panel::_draw_asset_properties(editor_state& state, const asset_se
 
       break;
     }
-    case asset_kind::script: {
+    case sbx::assets::asset_type::script: {
       ImGui::Text("Type: Script");
       ImGui::Text("Class: %s", asset.path.stem().string().c_str());
       ImGui::TextDisabled("Attach to a node via its \"Add Component > Script\" menu.");
       break;
     }
-    case asset_kind::unknown: {
+    case sbx::assets::asset_type::unknown: {
       ImGui::Text("Type: Unknown");
       break;
     }
@@ -531,7 +586,7 @@ auto inspector_panel::draw(editor_state& state) -> void {
       }
     }
   } else if (const auto* asset = std::get_if<asset_selection>(&state.current_selection); asset != nullptr) {
-    if (asset->kind == asset_kind::prefab) {
+    if (asset->kind == sbx::assets::asset_type::prefab) {
       _draw_prefab_edit(state, *asset, assets_module);
     } else {
       _draw_asset_properties(state, *asset, assets_module);

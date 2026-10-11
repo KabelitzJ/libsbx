@@ -62,7 +62,8 @@ ui_system::ui_system() {
   init_info.Queue = graphics_queue;
   init_info.MinImageCount = graphics::swapchain::max_frames_in_flight;
   init_info.ImageCount = image_count;
-  init_info.DescriptorPoolSize = 64u;
+  // One set per distinct view shown in ImGui; the editor shows a texture or rendered thumbnail per Asset Browser tile and picker row.
+  init_info.DescriptorPoolSize = 4096u;
   init_info.UseDynamicRendering = true;
   init_info.MinAllocationSize = 1024 * 1024;
   init_info.PipelineInfoMain.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
@@ -309,6 +310,13 @@ auto ui_system::texture_id(VkImageView view, VkSampler sampler) -> ImTextureID {
   _textures.emplace(view, texture_entry{descriptor_set, sampler});
 
   return reinterpret_cast<ImTextureID>(descriptor_set);
+}
+
+auto ui_system::release_texture_id(VkImageView view) -> void {
+  if (const auto entry = _textures.find(view); entry != _textures.end()) {
+    _retire_texture(entry->second.descriptor_set);
+    _textures.erase(entry);
+  }
 }
 
 auto ui_system::_retire_texture(VkDescriptorSet descriptor_set) -> void {

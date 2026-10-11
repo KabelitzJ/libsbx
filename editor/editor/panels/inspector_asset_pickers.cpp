@@ -29,16 +29,27 @@ auto to_picker_item(const sbx::assets::assets_module& assets_module, const sbx::
   return sbx::render::asset_picker_item{id, relative_asset_path(assets_module, id)};
 }
 
-auto draw_material_picker(editor_state& state, const char* popup_id, sbx::assets::material_handle& slot, sbx::assets::assets_module& assets_module, const sbx::assets::material_handle& mesh_default, bool allow_none) -> bool {
+auto thumbnail_provider(editor_state& state, sbx::assets::asset_type type) -> std::function<std::optional<ImTextureID>(const sbx::math::uuid&)> {
+  if (state.thumbnails == nullptr) {
+    return {};
+  }
+
+  return [thumbnails = state.thumbnails, type](const sbx::math::uuid& id) mutable { return thumbnails->get(id, type); };
+}
+
+auto draw_material_picker(editor_state& state, const char* popup_id, sbx::assets::material_handle& slot, sbx::assets::assets_module& assets_module, const sbx::assets::material_handle& mesh_default, bool allow_none, std::float_t preview_size, std::function<void()> extra_buttons) -> bool {
   const auto current = slot.is_valid() ? to_picker_item(assets_module, slot->id()) : sbx::render::asset_picker_item{};
   const auto default_item = mesh_default.is_valid() ? to_picker_item(assets_module, mesh_default->id()) : sbx::render::asset_picker_item{};
 
   const auto options = sbx::render::asset_picker_options{
-    .kind = sbx::render::asset_picker_kind::material,
-    .extensions = {".material"},
+    .kind = sbx::assets::asset_type::material,
     .allow_none = allow_none,
     .show_edit_button = true,
     .show_reveal_button = true,
+    .thumbnail = thumbnail_provider(state, sbx::assets::asset_type::material),
+    .preview_size = preview_size,
+    .width = ImGui::CalcItemWidth(),
+    .extra_buttons = extra_buttons,
   };
 
   const auto result = sbx::render::draw_asset_picker(popup_id, current, default_item, options);
@@ -53,7 +64,7 @@ auto draw_material_picker(editor_state& state, const char* popup_id, sbx::assets
   }
 
   if (result.edit_requested && slot.is_valid()) {
-    state.select_asset(slot->id(), relative_asset_path(assets_module, slot->id()), asset_kind::material);
+    state.select_asset(slot->id(), relative_asset_path(assets_module, slot->id()), sbx::assets::asset_type::material);
   }
 
   if (result.reveal_requested && slot.is_valid()) {
@@ -106,11 +117,11 @@ auto draw_texture_picker(editor_state& state, const char* popup_id, sbx::assets:
   const auto current = slot.is_valid() ? to_picker_item(assets_module, slot->id()) : sbx::render::asset_picker_item{};
 
   const auto options = sbx::render::asset_picker_options{
-    .kind = sbx::render::asset_picker_kind::texture,
-    .extensions = {".png", ".jpg", ".jpeg"},
+    .kind = sbx::assets::asset_type::texture,
     .allow_none = true,
     .show_reveal_button = true,
     .load_format = format,
+    .width = ImGui::CalcItemWidth(),
   };
 
   const auto result = sbx::render::draw_asset_picker(popup_id, current, {}, options);
@@ -134,10 +145,10 @@ auto draw_font_picker(editor_state& state, const char* popup_id, sbx::assets::fo
   const auto current = slot.is_valid() ? to_picker_item(assets_module, slot->id()) : sbx::render::asset_picker_item{};
 
   const auto options = sbx::render::asset_picker_options{
-    .kind = sbx::render::asset_picker_kind::font,
-    .extensions = {".ttf"},
+    .kind = sbx::assets::asset_type::font,
     .allow_none = true,
     .show_reveal_button = true,
+    .width = ImGui::CalcItemWidth(),
   };
 
   const auto result = sbx::render::draw_asset_picker(popup_id, current, {}, options);
@@ -155,29 +166,27 @@ auto draw_font_picker(editor_state& state, const char* popup_id, sbx::assets::fo
   return result.changed;
 }
 
-auto draw_mesh_picker(editor_state& state, const char* popup_id, sbx::assets::mesh_handle& slot, sbx::assets::assets_module& assets_module) -> bool {
+auto draw_mesh_picker(editor_state& state, const char* popup_id, sbx::assets::mesh_handle& slot, sbx::assets::assets_module& assets_module, std::float_t preview_size) -> bool {
   const auto current = slot.is_valid() ? to_picker_item(assets_module, slot->id()) : sbx::render::asset_picker_item{};
 
   const auto options = sbx::render::asset_picker_options{
-    .kind = sbx::render::asset_picker_kind::mesh,
-    .extensions = {".gltf", ".glb"},
+    .kind = sbx::assets::asset_type::mesh,
     .show_edit_button = true,
     .show_reveal_button = true,
     .show_builtin_primitives = true,
+    .thumbnail = thumbnail_provider(state, sbx::assets::asset_type::mesh),
+    .preview_size = preview_size,
+    .width = ImGui::CalcItemWidth(),
   };
 
   const auto result = sbx::render::draw_asset_picker(popup_id, current, {}, options);
 
   if (result.changed) {
-    if (const auto kind = sbx::assets::primitive_mesh_kind_of(result.picked.id); kind.has_value()) {
-      slot = assets_module.load_mesh(result.picked.id);
-    } else {
-      slot = assets_module.load_mesh(result.picked.path);
-    }
+    slot = result.picked.id != sbx::math::uuid::nil() ? assets_module.load_mesh(result.picked.id) : assets_module.load_mesh(result.picked.path);
   }
 
   if (result.edit_requested && slot.is_valid() && !sbx::assets::primitive_mesh_kind_of(slot->id()).has_value()) {
-    state.select_asset(slot->id(), relative_asset_path(assets_module, slot->id()), asset_kind::mesh);
+    state.select_asset(slot->id(), relative_asset_path(assets_module, slot->id()), sbx::assets::asset_type::mesh);
   }
 
   if (result.reveal_requested && slot.is_valid() && !sbx::assets::primitive_mesh_kind_of(slot->id()).has_value()) {
@@ -191,11 +200,11 @@ auto draw_particle_effect_picker(editor_state& state, const char* popup_id, sbx:
   const auto current = slot.is_valid() ? to_picker_item(assets_module, slot->id()) : sbx::render::asset_picker_item{};
 
   const auto options = sbx::render::asset_picker_options{
-    .kind = sbx::render::asset_picker_kind::particle_effect,
-    .extensions = {".particle_effect"},
+    .kind = sbx::assets::asset_type::particle_effect,
     .allow_none = true,
     .show_edit_button = true,
     .show_reveal_button = true,
+    .width = ImGui::CalcItemWidth(),
   };
 
   const auto result = sbx::render::draw_asset_picker(popup_id, current, {}, options);
@@ -207,7 +216,7 @@ auto draw_particle_effect_picker(editor_state& state, const char* popup_id, sbx:
   }
 
   if (result.edit_requested && slot.is_valid()) {
-    state.select_asset(slot->id(), relative_asset_path(assets_module, slot->id()), asset_kind::particle_effect);
+    state.select_asset(slot->id(), relative_asset_path(assets_module, slot->id()), sbx::assets::asset_type::particle_effect);
   }
 
   if (result.reveal_requested && slot.is_valid()) {
@@ -223,11 +232,11 @@ auto draw_animation_graph_picker(editor_state& state, const char* popup_id, sbx:
   const auto current = slot.is_valid() ? to_picker_item(assets_module, slot->id()) : sbx::render::asset_picker_item{};
 
   const auto options = sbx::render::asset_picker_options{
-    .kind = sbx::render::asset_picker_kind::animation_graph,
-    .extensions = {".animation_graph"},
+    .kind = sbx::assets::asset_type::animation_graph,
     .allow_none = true,
     .show_edit_button = true,
     .show_reveal_button = true,
+    .width = ImGui::CalcItemWidth(),
   };
 
   const auto result = sbx::render::draw_asset_picker(popup_id, current, {}, options);
@@ -256,11 +265,11 @@ auto draw_shader_graph_picker(editor_state& state, const char* popup_id, sbx::as
   const auto current = slot.is_valid() ? to_picker_item(assets_module, slot->id()) : sbx::render::asset_picker_item{};
 
   const auto options = sbx::render::asset_picker_options{
-    .kind = sbx::render::asset_picker_kind::shader_graph,
-    .extensions = {".shadergraph"},
+    .kind = sbx::assets::asset_type::shader_graph,
     .allow_none = true,
     .show_edit_button = true,
     .show_reveal_button = true,
+    .width = ImGui::CalcItemWidth(),
   };
 
   const auto result = sbx::render::draw_asset_picker(popup_id, current, {}, options);

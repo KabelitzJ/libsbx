@@ -244,6 +244,9 @@ auto draw_camera_section(editor_state& state, sbx::scenes::scene& target, sbx::s
   }
 }
 
+// Large enough to tell meshes and materials apart at a glance, like Unity's object field previews.
+inline constexpr auto mesh_renderer_preview_size = 64.0f;
+
 auto draw_mesh_renderer_section(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node, sbx::assets::assets_module& assets_module) -> void {
   if (!draw_component_header<sbx::scenes::mesh_renderer>(state, target, node, ICON_MDI_CUBE_OUTLINE, "Mesh Renderer")) {
     return;
@@ -257,7 +260,7 @@ auto draw_mesh_renderer_section(editor_state& state, sbx::scenes::scene& target,
 
   const auto previous_mesh_id = renderer.mesh.is_valid() ? renderer.mesh->id() : sbx::math::uuid::nil();
 
-  changed |= draw_property_row("Mesh", [&] { return draw_mesh_picker(state, "##mesh_picker_popup", renderer.mesh, assets_module); });
+  changed |= draw_property_row("Mesh", [&] { return draw_mesh_picker(state, "##mesh_picker_popup", renderer.mesh, assets_module, mesh_renderer_preview_size); });
 
   const auto new_mesh_id = renderer.mesh.is_valid() ? renderer.mesh->id() : sbx::math::uuid::nil();
 
@@ -275,10 +278,10 @@ auto draw_mesh_renderer_section(editor_state& state, sbx::scenes::scene& target,
     node.remove_component<sbx::scenes::skeleton_pose>();
   }
 
-  if (renderer.mesh.is_valid()) {
-    ImGui::Text("Submeshes: %zu", renderer.mesh->submeshes().size());
-  } else {
+  if (!renderer.mesh.is_valid()) {
     ImGui::TextDisabled("No mesh assigned.");
+  } else if (!renderer.materials.empty()) {
+    ImGui::SeparatorText(fmt::format("Materials ({})", renderer.materials.size()).c_str());
   }
 
   for (auto index = std::size_t{0u}; index < renderer.materials.size(); ++index) {
@@ -291,24 +294,25 @@ auto draw_mesh_renderer_section(editor_state& state, sbx::scenes::scene& target,
 
     const auto label = fmt::format("Material {}", index);
 
-    changed |= draw_property_row(label.c_str(), [&] {
-      auto slot_changed = draw_material_picker(state, "##material_picker_popup", slot, assets_module, mesh_default);
+    auto extracted = false;
 
-      if (slot.is_valid()) {
-        ImGui::SameLine();
-
-        if (ImGui::Button(ICON_MDI_EXPORT_VARIANT)) {
-          slot = extract_material_to_asset(assets_module, slot, renderer.mesh.is_valid() ? renderer.mesh->id() : sbx::math::uuid::nil());
-          slot_changed = true;
-        }
-
-        if (ImGui::IsItemHovered()) {
-          ImGui::SetTooltip("Duplicate: fork this slot's material into an independent copy, so editing it only affects this node.");
-        }
+    // Duplicate sits in the picker's own button row, so every slot keeps the same width and the labels stay aligned.
+    const auto extract_button = [&] {
+      if (ImGui::Button(ICON_MDI_EXPORT_VARIANT)) {
+        slot = extract_material_to_asset(assets_module, slot, renderer.mesh.is_valid() ? renderer.mesh->id() : sbx::math::uuid::nil());
+        extracted = true;
       }
 
-      return slot_changed;
+      if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("Duplicate: fork this slot's material into an independent copy, so editing it only affects this node.");
+      }
+    };
+
+    changed |= draw_property_row(label.c_str(), [&] {
+      return draw_material_picker(state, "##material_picker_popup", slot, assets_module, mesh_default, false, mesh_renderer_preview_size, slot.is_valid() ? std::function<void()>{extract_button} : std::function<void()>{});
     });
+
+    changed |= extracted;
 
     ImGui::PopID();
   }

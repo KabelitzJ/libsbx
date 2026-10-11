@@ -3,8 +3,8 @@
 #include <libsbx/assets/asset_manifest.hpp>
 
 #include <algorithm>
-#include <cctype>
 #include <fstream>
+#include <limits>
 
 #include <yaml-cpp/yaml.h>
 
@@ -14,6 +14,8 @@
 #include <libsbx/core/engine.hpp>
 
 namespace sbx::assets {
+
+static constexpr auto unknown_settings_hash = std::numeric_limits<std::uint64_t>::max();
 
 asset_manifest::~asset_manifest() {
   _save_manifest();
@@ -56,15 +58,97 @@ auto asset_manifest::import_directory(const std::filesystem::path& root) -> void
       continue;
     }
 
-    const auto& path = entry.path();
-
-    auto extension = path.extension().string();
-
-    std::ranges::transform(extension, extension.begin(), [](unsigned char character) { return static_cast<char>(std::tolower(character)); });
-
-    if (extension == ".png" || extension == ".jpg" || extension == ".jpeg" || extension == ".gltf" || extension == ".glb" || extension == ".material" || extension == ".hdr" || extension == ".particle_effect" || extension == ".animation_graph" || extension == ".shadergraph") {
+    if (is_manifested(asset_type_of(entry.path()))) {
       import(entry.path());
     }
+  }
+}
+
+auto asset_manifest::entries_of(asset_type type) const -> std::vector<std::pair<math::uuid, std::filesystem::path>> {
+  auto entries = std::vector<std::pair<math::uuid, std::filesystem::path>>{};
+
+  for (const auto& [id, path] : _paths) {
+    auto error = std::error_code{};
+
+    if (asset_type_of(path) == type && std::filesystem::exists(path, error)) {
+      entries.emplace_back(id, relative(path));
+    }
+  }
+
+  return entries;
+}
+
+auto asset_manifest::import_settings_of(const math::uuid& id) -> import_settings {
+  if (const auto cached = _settings.find(id); cached != _settings.end()) {
+    return cached->second;
+  }
+
+  const auto path = path_of(id);
+
+  if (path.empty()) {
+    return std::monostate{};
+  }
+
+  const auto type = asset_type_of(path);
+  auto settings = default_import_settings(type);
+
+  if (has_import_settings(type)) {
+    try {
+      settings = decode_import_settings(type, YAML::LoadFile(_meta_path(path).string())["importer"]);
+    } catch (const std::exception& exception) {
+      utility::logger<"assets">::warn("Could not read import settings from '{}' ({}); using defaults", _meta_path(path).generic_string(), exception.what());
+    }
+  }
+
+  _settings.emplace(id, settings);
+
+  return settings;
+}
+
+auto asset_manifest::set_import_settings(const math::uuid& id, const import_settings& settings) -> void {
+  const auto path = path_of(id);
+
+  if (path.empty()) {
+    utility::logger<"assets">::warn("set_import_settings: unknown uuid {}", id);
+    return;
+  }
+
+  const auto meta_path = _meta_path(path);
+
+  auto node = YAML::Node{};
+
+  try {
+    node = YAML::LoadFile(meta_path.string());
+  } catch (const std::exception&) {
+    node = YAML::Node{};
+  }
+
+  node["uuid"] = id;
+  node["importer"] = encode_import_settings(settings);
+
+  auto out = std::ofstream{meta_path};
+  out << node;
+
+  _settings[id] = settings;
+}
+
+auto asset_manifest::find(const std::filesystem::path& path) const -> math::uuid {
+  const auto entry = _uuids.find(path.generic_string());
+
+  return entry != _uuids.end() ? entry->second : math::uuid::nil();
+}
+
+auto asset_manifest::forget(const math::uuid& id) -> void {
+  if (const auto path = _paths.find(id); path != _paths.end()) {
+    _uuids.erase(path->second.generic_string());
+    _paths.erase(path);
+  }
+
+  _settings.erase(id);
+
+  if (_manifest.erase(id) > 0u) {
+    _manifest_dirty = true;
+    _save_manifest();
   }
 }
 
@@ -116,6 +200,16 @@ auto asset_manifest::is_cooked_stale(const math::uuid& id, const std::filesystem
     return true;
   }
 
+  const auto settings_hash = import_settings_hash(import_settings_of(id));
+
+  // unknown_settings_hash: cooked before settings were tracked; trust that cook rather than recooking every asset once.
+  if (entry->second.settings_hash == unknown_settings_hash) {
+    entry->second.settings_hash = settings_hash;
+    _manifest_dirty = true;
+  } else if (entry->second.settings_hash != settings_hash) {
+    return true;
+  }
+
   auto error = std::error_code{};
   const auto mtime = std::filesystem::last_write_time(source, error);
 
@@ -149,6 +243,7 @@ auto asset_manifest::record_cook(const math::uuid& id, std::uint32_t cooker_vers
   entry.cooker_version = cooker_version;
   entry.source_hash = hash;
   entry.source_mtime = mtime_count;
+  entry.settings_hash = import_settings_hash(import_settings_of(id));
   _manifest_dirty = true;
 
   _save_manifest();
@@ -188,6 +283,7 @@ auto asset_manifest::_load_manifest() -> void {
     entry.cooker_version = node["cooker_version"].as<std::uint32_t>();
     entry.source_hash = node["source_hash"].as<std::uint64_t>();
     entry.source_mtime = node["source_mtime"].as<std::int64_t>();
+    entry.settings_hash = node["settings_hash"].as<std::uint64_t>(unknown_settings_hash);
 
     _uuids.emplace(entry.path.generic_string(), uuid);
     _paths.emplace(uuid, entry.path);
@@ -215,6 +311,7 @@ auto asset_manifest::_save_manifest() -> void {
     emitter << YAML::Key << "cooker_version" << YAML::Value << entry.cooker_version;
     emitter << YAML::Key << "source_hash" << YAML::Value << entry.source_hash;
     emitter << YAML::Key << "source_mtime" << YAML::Value << entry.source_mtime;
+    emitter << YAML::Key << "settings_hash" << YAML::Value << entry.settings_hash;
     emitter << YAML::EndMap;
   }
 
@@ -312,6 +409,7 @@ auto asset_manifest::remove(const std::filesystem::path& path) -> void {
     for (const auto& [key, uuid] : _uuids) {
       if (key.starts_with(prefix)) {
         _paths.erase(uuid);
+        _settings.erase(uuid);
         _manifest.erase(uuid);
         _manifest_dirty = true;
       }
@@ -327,6 +425,7 @@ auto asset_manifest::remove(const std::filesystem::path& path) -> void {
       const auto uuid = entry->second;
       _uuids.erase(entry);
       _paths.erase(uuid);
+      _settings.erase(uuid);
       _manifest.erase(uuid);
       _manifest_dirty = true;
     }
@@ -341,9 +440,15 @@ auto asset_manifest::remove(const std::filesystem::path& path) -> void {
   _save_manifest();
 }
 
-auto asset_manifest::_read_or_create_meta(const std::filesystem::path& path) -> math::uuid {
+auto asset_manifest::_meta_path(const std::filesystem::path& path) -> std::filesystem::path {
   auto meta_path = path;
   meta_path += ".meta";
+
+  return meta_path;
+}
+
+auto asset_manifest::_read_or_create_meta(const std::filesystem::path& path) -> math::uuid {
+  const auto meta_path = _meta_path(path);
 
   if (std::filesystem::exists(meta_path)) {
     try {
@@ -358,6 +463,11 @@ auto asset_manifest::_read_or_create_meta(const std::filesystem::path& path) -> 
 
   auto node = YAML::Node{};
   node["uuid"] = uuid;
+
+  // Written out so the settings are visible and diffable next to the asset, like Unity's importer blocks.
+  if (const auto type = asset_type_of(path); has_import_settings(type)) {
+    node["importer"] = encode_import_settings(default_import_settings(type));
+  }
 
   auto out = std::ofstream{meta_path};
   out << node;

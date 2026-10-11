@@ -26,6 +26,7 @@
 #include <libsbx/render/ui/fonts/material_design_icons.hpp>
 
 #include <editor/panels/editor_panel.hpp>
+#include <editor/panels/import_settings_editor.hpp>
 
 namespace editor {
 
@@ -53,6 +54,7 @@ private:
     sbx::assets::shader_graph_handle shader_graph{};
     sbx::assets::font_handle font{};
     sbx::assets::scene_handle scene{};
+    std::optional<import_settings_editor> import_settings{};
   }; // struct asset_property_cache
 
   /**
@@ -74,6 +76,9 @@ private:
   auto _draw_transform_section(editor_state& state, sbx::scenes::scene& target, sbx::scenes::node& node) -> void;
   auto _draw_asset_properties(editor_state& state, const asset_selection& asset, sbx::assets::assets_module& assets_module) -> void;
   auto _draw_material_properties(editor_state& state, const asset_selection& asset, sbx::assets::assets_module& assets_module) -> void;
+
+  /** @brief The Unity-style Import Settings section: a working copy with Revert/Apply, plus Reimport. */
+  auto _draw_import_settings_section(const asset_selection& asset) -> void;
   auto _draw_particle_effect_properties(editor_state& state, const asset_selection& asset, sbx::assets::assets_module& assets_module) -> void;
 
   // Edits a prefab directly: its snapshot is deserialized into a private scratch scene and drawn like any node. Repopulated whenever the selected prefab changes.

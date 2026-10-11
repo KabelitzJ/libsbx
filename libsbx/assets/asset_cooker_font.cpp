@@ -17,13 +17,9 @@ namespace sbx::assets {
 
 inline constexpr auto font_magic = utility::fourcc_v<"SBFN">;
 
-// The atlas's raster height; glyph metrics are stored per unit of font size, so one atlas serves every size.
-inline constexpr auto font_reference_size = 48.0f;
 inline constexpr auto font_sdf_padding = 4;
 inline constexpr auto font_sdf_onedge_value = 128u;
 inline constexpr auto font_sdf_pixel_dist_scale = 32.0f; // onedge_value / padding
-inline constexpr auto font_first_codepoint = std::uint32_t{32u};
-inline constexpr auto font_codepoint_count = std::uint32_t{224u}; // 32..255: printable ASCII + Latin-1
 struct font_header {
   std::uint32_t magic;
   std::uint32_t version;
@@ -49,11 +45,11 @@ struct font_glyph_record {
   std::float_t advance;
 }; // struct font_glyph_record
 
-auto asset_cooker::resolve_font(const std::filesystem::path& source, const std::filesystem::path& cooked, bool needs_cook, bool& did_cook) -> std::optional<cooked_font_data> {
+auto asset_cooker::resolve_font(const std::filesystem::path& source, const std::filesystem::path& cooked, const font_import_settings& settings, bool needs_cook, bool& did_cook) -> std::optional<cooked_font_data> {
   did_cook = false;
 
   if (needs_cook) {
-    if (!_cook_font(source, cooked)) {
+    if (!_cook_font(source, cooked, settings)) {
       utility::logger<"assets">::warn("Could not cook font '{}'", source.generic_string());
       return std::nullopt;
     }
@@ -63,7 +59,7 @@ auto asset_cooker::resolve_font(const std::filesystem::path& source, const std::
   auto data = cooked_font_data{};
 
   if (!_load_cooked_font(cooked, data)) {
-    if (!_cook_font(source, cooked) || !_load_cooked_font(cooked, data)) {
+    if (!_cook_font(source, cooked, settings) || !_load_cooked_font(cooked, data)) {
       utility::logger<"assets">::warn("Could not load cooked font '{}'", cooked.generic_string());
       return std::nullopt;
     }
@@ -73,7 +69,12 @@ auto asset_cooker::resolve_font(const std::filesystem::path& source, const std::
   return data;
 }
 
-auto asset_cooker::_cook_font(const std::filesystem::path& source, const std::filesystem::path& cooked) -> bool {
+auto asset_cooker::_cook_font(const std::filesystem::path& source, const std::filesystem::path& cooked, const font_import_settings& settings) -> bool {
+  // The atlas's raster height; glyph metrics are stored per unit of font size, so one atlas serves every size.
+  const auto font_reference_size = std::max(settings.reference_size, 1.0f);
+  const auto font_first_codepoint = settings.first_codepoint;
+  const auto font_codepoint_count = std::max(settings.codepoint_count, 1u);
+
   auto in = std::ifstream{source, std::ios::binary};
 
   if (!in) {

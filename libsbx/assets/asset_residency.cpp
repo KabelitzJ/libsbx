@@ -31,6 +31,14 @@
 
 namespace sbx::assets {
 
+template<typename Settings>
+static auto typed_import_settings(asset_manifest& manifest, const math::uuid& id) -> Settings {
+  const auto settings = manifest.import_settings_of(id);
+  const auto* typed = std::get_if<Settings>(&settings);
+
+  return typed != nullptr ? *typed : Settings{};
+}
+
 inline constexpr auto material_flag_masked = std::uint32_t{1u << 0u};
 inline constexpr auto material_flag_receives_shadow = std::uint32_t{1u << 1u};
 
@@ -135,7 +143,7 @@ auto asset_residency::load_texture(const math::uuid& id, graphics::format format
     _textures.emplace(key, record);
   }
 
-  _loader.submit(asset_loader::texture_request{id, format, source, cooked, needs_cook});
+  _loader.submit(asset_loader::texture_request{id, format, typed_import_settings<texture_import_settings>(_manifest, id), source, cooked, needs_cook});
 
   return texture2d_handle{record};
 }
@@ -427,7 +435,7 @@ auto asset_residency::load_font(const math::uuid& id) -> font_handle {
     _fonts.emplace(id, record);
   }
 
-  _loader.submit(asset_loader::font_request{id, source, cooked, needs_cook});
+  _loader.submit(asset_loader::font_request{id, typed_import_settings<font_import_settings>(_manifest, id), source, cooked, needs_cook});
 
   return font_handle{record};
 }
@@ -440,7 +448,11 @@ auto asset_residency::load_font(const std::filesystem::path& path) -> font_handl
   return load_font(_manifest.import(assets_directory / path));
 }
 
-auto asset_residency::load_mesh(const math::uuid& id, const mesh_import_options& options, bool force_recook) -> mesh_handle {
+auto asset_residency::load_mesh(const math::uuid& id) -> mesh_handle {
+  return _submit_mesh(id, false);
+}
+
+auto asset_residency::_submit_mesh(const math::uuid& id, bool force_recook) -> mesh_handle {
   if (!force_recook) {
     auto lock = std::lock_guard{_mutex};
 
@@ -462,7 +474,7 @@ auto asset_residency::load_mesh(const math::uuid& id, const mesh_import_options&
       _meshes.emplace(id, record);
     }
 
-    _loader.submit(asset_loader::mesh_request{id, options, std::filesystem::path{}, cooked, false});
+    _loader.submit(asset_loader::mesh_request{id, mesh_import_options{}, std::filesystem::path{}, cooked, false});
 
     return mesh_handle{record};
   }
@@ -492,17 +504,17 @@ auto asset_residency::load_mesh(const math::uuid& id, const mesh_import_options&
     }
   }
 
-  _loader.submit(asset_loader::mesh_request{id, options, source, cooked, needs_cook});
+  _loader.submit(asset_loader::mesh_request{id, typed_import_settings<mesh_import_options>(_manifest, id), source, cooked, needs_cook});
 
   return mesh_handle{record};
 }
 
-auto asset_residency::load_mesh(const std::filesystem::path& path, const mesh_import_options& options, bool force_recook) -> mesh_handle {
+auto asset_residency::load_mesh(const std::filesystem::path& path) -> mesh_handle {
   const auto& project = core::engine::project();
 
   const auto assets_directory = project.assets_directory();
 
-  return load_mesh(_manifest.import(assets_directory / path), options, force_recook);
+  return load_mesh(_manifest.import(assets_directory / path));
 }
 
 auto asset_residency::create_mesh(std::vector<vertex> vertices, std::vector<std::uint32_t> indices, std::vector<mesh::submesh> submeshes, const math::volume& bounds) -> mesh_handle {
@@ -554,19 +566,128 @@ auto asset_residency::create_dynamic_mesh(std::span<const vertex> vertices, std:
 }
 
 auto asset_residency::release_mesh(const mesh_handle& mesh) -> void {
-  if (!mesh.is_valid() || !mesh->is_uploaded()) {
+  if (!mesh.is_valid()) {
     return;
   }
 
   auto& graphics_module = core::engine::get_module<graphics::graphics_module>();
-  auto& registry = graphics_module.resource_registry();
-  const auto frame_index = graphics_module.frame_context().frame_index();
 
-  registry.retire(mesh->_vertex_buffer, frame_index);
-  registry.retire(mesh->_index_buffer, frame_index);
+  _retire_mesh_buffers(*mesh, graphics_module.frame_context().frame_index());
+}
 
-  if (mesh->_skin_vertex_buffer.is_valid()) {
-    registry.retire(mesh->_skin_vertex_buffer, frame_index);
+auto asset_residency::_retire_mesh_buffers(const mesh& record, std::uint64_t frame_index) -> void {
+  if (!record.is_uploaded()) {
+    return;
+  }
+
+  auto& registry = core::engine::get_module<graphics::graphics_module>().resource_registry();
+
+  registry.retire(record._vertex_buffer, frame_index);
+  registry.retire(record._index_buffer, frame_index);
+
+  if (record._skin_vertex_buffer.is_valid()) {
+    registry.retire(record._skin_vertex_buffer, frame_index);
+  }
+}
+
+auto asset_residency::reimport(const math::uuid& id) -> void {
+  const auto source = _manifest.path_of(id);
+
+  if (source.empty()) {
+    return;
+  }
+
+  // Every branch resubmits into the existing record, whose finalize updates it in place and bumps its generation.
+  switch (asset_type_of(source)) {
+    case asset_type::texture: {
+      const auto prefix = fmt::format("{}:", id.value());
+      auto formats = std::vector<graphics::format>{};
+
+      {
+        auto lock = std::lock_guard{_mutex};
+
+        for (const auto& [key, record] : _textures) {
+          if (key.starts_with(prefix)) {
+            formats.push_back(key.ends_with("#srgb") ? graphics::format::r8g8b8a8_srgb : graphics::format::r8g8b8a8_unorm);
+          }
+        }
+      }
+
+      const auto cooked = _manifest.cooked_path(id, ".sbxtex");
+
+      for (const auto format : formats) {
+        _loader.submit(asset_loader::texture_request{id, format, typed_import_settings<texture_import_settings>(_manifest, id), source, cooked, true});
+      }
+
+      break;
+    }
+    case asset_type::mesh: {
+      auto is_loaded = false;
+
+      {
+        auto lock = std::lock_guard{_mutex};
+        is_loaded = _meshes.contains(id);
+      }
+
+      if (is_loaded) {
+        _submit_mesh(id, true);
+      }
+
+      break;
+    }
+    case asset_type::font: {
+      auto is_loaded = false;
+
+      {
+        auto lock = std::lock_guard{_mutex};
+        is_loaded = _fonts.contains(id);
+      }
+
+      if (is_loaded) {
+        _loader.submit(asset_loader::font_request{id, typed_import_settings<font_import_settings>(_manifest, id), source, _manifest.cooked_path(id, ".sbxfnt"), true});
+      }
+
+      break;
+    }
+    case asset_type::material: {
+      auto lock = std::lock_guard{_mutex};
+
+      if (_material_files.contains(id)) {
+        _loader.submit(asset_loader::material_request{id, source});
+      }
+
+      break;
+    }
+    case asset_type::particle_effect: {
+      auto lock = std::lock_guard{_mutex};
+
+      if (_particle_effect_files.contains(id)) {
+        _loader.submit(asset_loader::particle_effect_request{id, source});
+      }
+
+      break;
+    }
+    case asset_type::animation_graph: {
+      auto lock = std::lock_guard{_mutex};
+
+      if (_animation_graph_files.contains(id)) {
+        _loader.submit(asset_loader::animation_graph_request{id, source});
+      }
+
+      break;
+    }
+    case asset_type::shader_graph: {
+      auto lock = std::lock_guard{_mutex};
+
+      if (_shader_graph_files.contains(id)) {
+        _loader.submit(asset_loader::shader_graph_request{id, source});
+      }
+
+      break;
+    }
+    default: {
+      break;
+    }
   }
 }
 
@@ -1660,7 +1781,7 @@ auto asset_residency::_finalize_texture(asset_loader::texture_result& result) ->
     return;
   }
 
-  _pending_textures.push_back(pending_texture_upload{entry->second->index(), std::move(result.data->pixels), result.data->width, result.data->height, request.format});
+  _pending_textures.push_back(pending_texture_upload{entry->second->index(), std::move(result.data->pixels), result.data->width, result.data->height, request.format, request.settings.generate_mipmaps});
 
   // Means decoded and queued, not uploaded; that's is_resident().
   entry->second->_bump_generation();
@@ -1730,6 +1851,21 @@ auto asset_residency::_finalize_mesh(asset_loader::mesh_result& result) -> void 
   record->_finalize_content(std::move(submeshes), data.bounds, static_cast<std::uint32_t>(vertex_count));
 
   if (has_skin_data) {
+    // A recook rewrote the derived skeleton and clip blobs; records loaded before it must re-read them, or a reimport (e.g. a new scale) never reaches live animators.
+    if (result.did_cook) {
+      auto lock = std::lock_guard{_mutex};
+
+      if (_skeletons.contains(data.skeleton)) {
+        _loader.submit(asset_loader::skeleton_request{data.skeleton});
+      }
+
+      for (const auto& clip_id : data.animation_clips) {
+        if (_animation_clips.contains(clip_id)) {
+          _loader.submit(asset_loader::animation_clip_request{clip_id});
+        }
+      }
+    }
+
     auto skeleton_handle_value = load_skeleton(data.skeleton);
 
     auto animation_clip_handles = std::vector<animation_clip_handle>{};
@@ -2112,6 +2248,16 @@ auto asset_residency::process_uploads(std::uint64_t frame_index) -> void {
   auto& upload_context = graphics_module.upload_context();
   auto& bindless_table = graphics_module.bindless_table();
 
+  // A reimport re-uploads into a bindless index frames in flight may still sample; descriptors can't change under them.
+  // ponytail: full device wait per batch with a replacement, fine for editor reimports; double-buffer the index if runtime hot reload ever needs it.
+  {
+    auto lock = std::lock_guard{_mutex};
+
+    if (std::ranges::any_of(pending_textures, [this](const auto& request) { return _images.contains(request.index); })) {
+      graphics_module.logical_device().wait_idle();
+    }
+  }
+
   for (auto& request : pending_textures) {
     const auto mip_levels = request.mipmapped ? graphics::image::mip_levels_for(math::vector3u{request.width, request.height, 1u}) : 1u;
 
@@ -2131,7 +2277,12 @@ auto asset_residency::process_uploads(std::uint64_t frame_index) -> void {
 
     // Main-thread readers look these up under _mutex.
     auto lock = std::lock_guard{_mutex};
-    _images.emplace(request.index, handle);
+
+    if (const auto previous = _images.find(request.index); previous != _images.end()) {
+      registry.retire(previous->second, frame_index);
+    }
+
+    _images.insert_or_assign(request.index, handle);
     _resident_frame.emplace(request.index, frame_index);
   }
 
@@ -2183,8 +2334,12 @@ auto asset_residency::process_uploads(std::uint64_t frame_index) -> void {
 
       const auto skin_vertex_address = registry.get<graphics::buffer>(skin_vertex_buffer).address();
 
+      _retire_mesh_buffers(*request.record, frame_index);
+
       request.record->_finalize(vertex_buffer, index_buffer, vertex_address, frame_index, skin_vertex_buffer, skin_vertex_address);
     } else {
+      _retire_mesh_buffers(*request.record, frame_index);
+
       request.record->_finalize(vertex_buffer, index_buffer, vertex_address, frame_index);
     }
   }

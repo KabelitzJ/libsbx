@@ -49,9 +49,10 @@ auto accept_viewport_asset_drop(editor_state& state, const sbx::math::vector2& p
     return *static_cast<const sbx::render::asset_drag_payload*>(payload->Data);
   };
 
-  if (const auto* payload = ImGui::AcceptDragDropPayload(sbx::render::drag_drop_payload_mesh)) {
+  // A nil id means the file was never imported (it's still waiting in the import window); nothing to place yet.
+  if (const auto* payload = ImGui::AcceptDragDropPayload(sbx::render::drag_drop_payload_mesh); payload != nullptr && sbx::render::resolve_drag_id(drag_of(payload)) != sbx::math::uuid::nil()) {
     const auto& drag = drag_of(payload);
-    auto command = std::make_unique<create_mesh_node_command>(drag.id, std::filesystem::path{drag.path}.stem().string(), std::nullopt, viewport_drop_position(position, viewport_size));
+    auto command = std::make_unique<create_mesh_node_command>(sbx::render::resolve_drag_id(drag), std::filesystem::path{drag.path}.stem().string(), std::nullopt, viewport_drop_position(position, viewport_size));
     auto* created = command.get();
 
     state.push_command(scene, std::move(command));
@@ -62,7 +63,7 @@ auto accept_viewport_asset_drop(editor_state& state, const sbx::math::vector2& p
     try_instantiate_prefab_drop(state, scene, std::nullopt, viewport_drop_position(position, viewport_size));
   }
 
-  if (const auto* payload = ImGui::AcceptDragDropPayload(sbx::render::drag_drop_payload_material)) {
+  if (const auto* payload = ImGui::AcceptDragDropPayload(sbx::render::drag_drop_payload_material); payload != nullptr && sbx::render::resolve_drag_id(drag_of(payload)) != sbx::math::uuid::nil()) {
     const auto ray = viewport_ray(position, viewport_size);
     const auto hit = ray ? raycast_nodes(*ray) : std::nullopt;
 
@@ -74,7 +75,7 @@ auto accept_viewport_asset_drop(editor_state& state, const sbx::math::vector2& p
     auto& renderer = node.get_component<sbx::scenes::mesh_renderer>();
     const auto before = renderer;
 
-    const auto material = assets_module.load_material(drag_of(payload).id);
+    const auto material = assets_module.load_material(sbx::render::resolve_drag_id(drag_of(payload)));
     std::ranges::fill(renderer.materials, material);
 
     state.push_command(scene, std::make_unique<modify_component_command<sbx::scenes::mesh_renderer>>(node.id(), before, renderer, "Assign Material"));

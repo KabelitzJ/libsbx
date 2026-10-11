@@ -12,7 +12,6 @@
 
 #include <libsbx/math/uuid.hpp>
 
-#include <libsbx/assets/asset_cooker.hpp>
 #include <libsbx/render/ui/widgets/file_dialog.hpp>
 #include <libsbx/render/ui/fonts/material_design_icons.hpp>
 
@@ -105,6 +104,13 @@ private:
   auto _request_delete(const std::filesystem::path& relative_path, bool is_directory) -> void;
 
   /**
+   * @brief Re-cooks a file, or every file under a folder, from source and its current import settings; loaded handles update in place.
+   *
+   * @param relative_path The file or folder.
+   */
+  auto _reimport(const std::filesystem::path& relative_path) -> void;
+
+  /**
    * @brief Moves an entry into a folder, refusing no-op moves, name clashes and moving a folder into its own subtree.
    *
    * @param state The editor state.
@@ -132,20 +138,18 @@ private:
    */
   auto _draw_entry_context_menu(editor_state& state, const asset_browser_entry& entry) -> void;
 
-  /** @brief The import-mesh, import-conflict and delete-confirmation modals. */
+  /** @brief The import-conflict and delete-confirmation modals. */
   auto _draw_import_and_delete_dialogs(editor_state& state) -> void;
 
   /**
-   * @brief Queues a mesh without a `.meta` for the import settings dialog.
+   * @brief Queues a file whose type has an importer but no `.meta` yet for the import window.
    *
-   * @param relative_path The mesh file.
+   * @param state The editor state.
+   * @param relative_path The file.
    *
-   * @return True if queued; false for known meshes, which the caller imports directly.
+   * @return True if queued; false means the caller imports it directly.
    */
-  auto _defer_mesh_import_if_unseen(const std::filesystem::path& relative_path) -> bool;
-
-  /** @brief Inspects the next queued mesh, resets the options and checkboxes, and shows the dialog. No-op if the queue is empty. */
-  auto _begin_mesh_import_dialog() -> void;
+  auto _defer_import_if_unseen(editor_state& state, const std::filesystem::path& relative_path) -> bool;
 
   std::filesystem::path _current_directory{};
   std::vector<asset_browser_entry> _cached_entries{};
@@ -155,13 +159,6 @@ private:
   std::array<char, 128u> _search_filter{};
 
   std::optional<std::filesystem::path> _pending_reveal{};
-
-  std::vector<std::filesystem::path> _pending_mesh_imports{};
-  bool _show_import_mesh_dialog{false};
-  std::optional<sbx::assets::mesh_source_summary> _mesh_import_summary{};
-  sbx::assets::mesh_import_options _mesh_import_options{};
-  std::vector<bool> _mesh_import_primitive_checks{};
-  std::vector<bool> _mesh_import_animation_checks{};
 
   sbx::render::file_dialog _import_dialog{};
   std::filesystem::path _import_destination_directory{};

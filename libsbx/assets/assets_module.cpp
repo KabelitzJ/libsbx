@@ -6,6 +6,7 @@
 #include <fstream>
 #include <string>
 #include <utility>
+#include <variant>
 #include <vector>
 
 #include <yaml-cpp/yaml.h>
@@ -16,12 +17,6 @@
 #include <libsbx/core/project.hpp>
 
 namespace sbx::assets {
-
-// Materials reference only textures by path, so these are the only extensions move_asset must recognize.
-auto is_texture_extension(const std::filesystem::path& extension) -> bool {
-  const auto ext = extension.string();
-  return ext == ".png" || ext == ".jpg" || ext == ".jpeg";
-}
 
 assets_module::assets_module()
 : _residency{_manifest, _ibl} { }
@@ -34,6 +29,60 @@ auto assets_module::import_directory(const std::filesystem::path& root) -> void 
   _manifest.import_directory(root);
 }
 
+auto assets_module::assets_of(asset_type type) const -> std::vector<std::pair<math::uuid, std::filesystem::path>> {
+  return _manifest.entries_of(type);
+}
+
+auto assets_module::import_settings_of(const math::uuid& id) -> import_settings {
+  return _manifest.import_settings_of(id);
+}
+
+auto assets_module::set_import_settings(const math::uuid& id, const import_settings& settings) -> void {
+  _manifest.set_import_settings(id, settings);
+}
+
+auto assets_module::reimport(const math::uuid& id) -> void {
+  const auto source = _manifest.path_of(id);
+
+  switch (asset_type_of(source)) {
+    case asset_type::prefab: {
+      if (auto entry = _prefabs.find(id); entry != _prefabs.end()) {
+        try {
+          const auto root = YAML::LoadFile(source.string());
+          update_prefab(entry->second, root["snapshot"]);
+        } catch (const YAML::Exception& exception) {
+          utility::logger<"assets">::warn("Failed to reimport prefab '{}': {}", source.generic_string(), exception.what());
+        }
+      }
+
+      break;
+    }
+    case asset_type::scene: {
+      if (auto entry = _scenes.find(id); entry != _scenes.end()) {
+        try {
+          update_scene(entry->second, YAML::LoadFile(source.string()));
+        } catch (const YAML::Exception& exception) {
+          utility::logger<"assets">::warn("Failed to reimport scene '{}': {}", source.generic_string(), exception.what());
+        }
+      }
+
+      break;
+    }
+    default: {
+      _residency.reimport(id);
+      break;
+    }
+  }
+}
+
+auto assets_module::find(const std::filesystem::path& path) const -> math::uuid {
+  return _manifest.find(path);
+}
+
+auto assets_module::forget(const math::uuid& id) -> void {
+  _manifest.forget(id);
+}
+
 auto assets_module::move_asset(const std::filesystem::path& old_path, const std::filesystem::path& new_path) -> bool {
   auto moved = std::vector<std::pair<std::filesystem::path, std::filesystem::path>>{};
 
@@ -42,7 +91,8 @@ auto assets_module::move_asset(const std::filesystem::path& old_path, const std:
   }
 
   for (const auto& [old_relative, new_relative] : moved) {
-    if (is_texture_extension(old_relative.extension())) {
+    // Materials reference only textures by path.
+    if (asset_type_of(old_relative) == asset_type::texture) {
       _fixup_material_texture_references(old_relative, new_relative);
     }
   }
@@ -130,12 +180,12 @@ auto assets_module::load_font(const std::filesystem::path& path) -> font_handle 
   return _residency.load_font(path);
 }
 
-auto assets_module::load_mesh(const math::uuid& id, const mesh_import_options& options, bool force_recook) -> mesh_handle {
-  return _residency.load_mesh(id, options, force_recook);
+auto assets_module::load_mesh(const math::uuid& id) -> mesh_handle {
+  return _residency.load_mesh(id);
 }
 
-auto assets_module::load_mesh(const std::filesystem::path& path, const mesh_import_options& options, bool force_recook) -> mesh_handle {
-  return _residency.load_mesh(path, options, force_recook);
+auto assets_module::load_mesh(const std::filesystem::path& path) -> mesh_handle {
+  return _residency.load_mesh(path);
 }
 
 auto assets_module::create_mesh(std::vector<vertex> vertices, std::vector<std::uint32_t> indices, std::vector<mesh::submesh> submeshes, const math::volume& bounds) -> mesh_handle {
@@ -161,7 +211,11 @@ auto assets_module::resolve_mesh_collision_data(const math::uuid& id) -> std::op
   const auto needs_cook = _manifest.is_cooked_stale(id, source, cooked, mesh_cooker_version);
 
   auto did_cook = false;
-  auto data = asset_cooker::resolve_mesh(source, id, cooked, mesh_import_options{}, needs_cook, did_cook);
+  // The .meta's settings, not defaults: a cook here overwrites the same blob the renderer loads.
+  const auto settings = _manifest.import_settings_of(id);
+  const auto* options = std::get_if<mesh_import_options>(&settings);
+
+  auto data = asset_cooker::resolve_mesh(source, id, cooked, options != nullptr ? *options : mesh_import_options{}, needs_cook, did_cook);
 
   if (did_cook) {
     _manifest.record_cook(id, mesh_cooker_version, source);

@@ -122,6 +122,13 @@ public:
    */
   [[nodiscard]] auto texture_id(VkImageView view, VkSampler sampler) -> ImTextureID;
 
+  /**
+   * @brief Drops a view's registration before the view is destroyed; a later view can reuse the same handle value and would otherwise get the stale set.
+   *
+   * @param view The image view about to be destroyed.
+   */
+  auto release_texture_id(VkImageView view) -> void;
+
 private:
 
   struct texture_entry {

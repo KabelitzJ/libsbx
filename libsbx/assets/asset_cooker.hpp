@@ -20,6 +20,7 @@
 #include <libsbx/math/vector4.hpp>
 #include <libsbx/math/volume.hpp>
 
+#include <libsbx/assets/import_settings.hpp>
 #include <libsbx/assets/mesh.hpp>
 #include <libsbx/assets/material.hpp>
 #include <libsbx/assets/font.hpp>
@@ -39,25 +40,6 @@ inline constexpr auto mesh_cook_version = std::uint32_t{10u};
 
 // A mesh cook also emits its materials, skeleton and animation clips, so its freshness depends on all four cookers.
 inline constexpr auto mesh_cooker_version = mesh_cook_version * 1000000u + material_cook_version * 10000u + skeleton_cook_version * 100u + animation_cook_version;
-
-/**
- * @brief Editor import choices for a mesh.
- *
- * `extract_materials` only affects asset_residency's finalize step; the other fields change the cooked blob itself, so changing them requires a forced re-cook.
- */
-struct mesh_import_options {
-  /** @brief Extracts embedded materials into editable `.material` assets, reusing existing ones. */
-  bool extract_materials{true};
-
-  /** @brief Cooks the skin data, skeleton and animation clips; off loads the mesh as unskinned. */
-  bool import_skeleton{true};
-
-  /** @brief Which primitives, in mesh_source_summary::primitives order, become submeshes. Empty means all. */
-  std::vector<std::size_t> included_primitives{};
-
-  /** @brief Which animation clips to cook, by original index in the source's animation list. Empty means all. */
-  std::vector<std::size_t> included_animations{};
-}; // struct mesh_import_options
 
 /** @brief One selectable primitive found by asset_cooker::inspect_mesh_source. */
 struct mesh_source_primitive_summary {
@@ -302,13 +284,13 @@ public:
    *
    * @param did_cook Set when a cook happened; the caller should then asset_manifest::record_cook.
    */
-  [[nodiscard]] static auto resolve_texture(const std::filesystem::path& source, const std::filesystem::path& cooked, bool needs_cook, bool& did_cook) -> std::optional<pixel_data>;
+  [[nodiscard]] static auto resolve_texture(const std::filesystem::path& source, const std::filesystem::path& cooked, const texture_import_settings& settings, bool needs_cook, bool& did_cook) -> std::optional<pixel_data>;
 
   /** @brief Same as resolve_texture, for an equirectangular HDR environment map. */
   [[nodiscard]] static auto resolve_environment(const std::filesystem::path& source, const std::filesystem::path& cooked, bool needs_cook, bool& did_cook) -> std::optional<pixel_data>;
 
   /** @brief Same as resolve_texture, for a TTF glyph atlas. */
-  [[nodiscard]] static auto resolve_font(const std::filesystem::path& source, const std::filesystem::path& cooked, bool needs_cook, bool& did_cook) -> std::optional<cooked_font_data>;
+  [[nodiscard]] static auto resolve_font(const std::filesystem::path& source, const std::filesystem::path& cooked, const font_import_settings& settings, bool needs_cook, bool& did_cook) -> std::optional<cooked_font_data>;
 
   /**
    * @brief Same as resolve_texture, for a glTF mesh; embedded materials, skeleton and clips are cooked alongside under uuids derived from `id`.
@@ -406,7 +388,7 @@ public:
 
 private:
 
-  static auto _cook_texture(const std::filesystem::path& source, const std::filesystem::path& cooked) -> bool;
+  static auto _cook_texture(const std::filesystem::path& source, const std::filesystem::path& cooked, const texture_import_settings& settings) -> bool;
 
   static auto _load_cooked_texture(const std::filesystem::path& cooked, std::vector<std::byte>& pixels, std::uint32_t& width, std::uint32_t& height) -> bool;
 
@@ -414,7 +396,7 @@ private:
 
   static auto _load_cooked_environment_map(const std::filesystem::path& cooked, std::vector<std::byte>& pixels, std::uint32_t& width, std::uint32_t& height) -> bool;
 
-  static auto _cook_font(const std::filesystem::path& source, const std::filesystem::path& cooked) -> bool;
+  static auto _cook_font(const std::filesystem::path& source, const std::filesystem::path& cooked, const font_import_settings& settings) -> bool;
 
   static auto _load_cooked_font(const std::filesystem::path& cooked, cooked_font_data& data) -> bool;
 
@@ -422,7 +404,7 @@ private:
   static auto _generate_normals(std::vector<vertex>& vertices, const std::vector<std::uint32_t>& indices, std::size_t vertex_start, std::size_t vertex_count, std::size_t index_start, std::size_t index_count) -> void;
 
   /** @brief Optimizes a submesh's slice for GPU caches and appends a coarser LOD chain to `indices`. @p skin_vertices, when non-null, is kept parallel to @p vertices. */
-  static auto _optimize_and_generate_lods(std::vector<vertex>& vertices, std::vector<std::uint32_t>& indices, std::size_t vertex_start, std::size_t vertex_count, std::size_t index_start, std::size_t index_count, std::vector<skin_vertex>* skin_vertices = nullptr) -> std::vector<mesh_lod>;
+  static auto _optimize_and_generate_lods(std::vector<vertex>& vertices, std::vector<std::uint32_t>& indices, std::size_t vertex_start, std::size_t vertex_count, std::size_t index_start, std::size_t index_count, bool generate_lods, std::vector<skin_vertex>* skin_vertices = nullptr) -> std::vector<mesh_lod>;
 
   static auto _cook_mesh(const std::filesystem::path& source, const math::uuid& id, const std::filesystem::path& cooked, const mesh_import_options& options) -> bool;
 

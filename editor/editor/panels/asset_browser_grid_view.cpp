@@ -66,18 +66,13 @@ auto asset_browser_panel::_draw_asset_grid(editor_state& state) -> void {
         ImGui::PushID(entry.path.string().c_str());
         ImGui::BeginGroup();
 
-        // Other kinds resolve their id on click, since some need an import dialog first. A drag never registers as a click on its tile, so prefabs resolve here for the drag payload.
-        if (entry.kind == asset_kind::prefab && entry.id == sbx::math::uuid::nil()) {
-          entry.id = assets_module.import(project.assets_directory() / entry.path);
-        }
-
         auto tile_desc = sbx::render::asset_tile_desc{};
         tile_desc.icon_glyph = icon_for(entry);
         tile_desc.is_directory = entry.is_directory;
         tile_desc.is_selected = is_entry_selected(state, entry.path);
         tile_desc.size = ImVec2{_tile_size, _tile_size};
         tile_desc.display_name = entry.path.filename().string();
-        tile_desc.drag_payload_type = drag_payload_type_for(entry.kind);
+        tile_desc.drag_payload_type = sbx::render::drag_payload_type_for(entry.kind);
         tile_desc.drag_id = entry.id;
         tile_desc.drag_path = entry.path;
 
@@ -86,9 +81,12 @@ auto asset_browser_panel::_draw_asset_grid(editor_state& state) -> void {
         tile_desc.secondary_drag_payload_data = &move_payload;
         tile_desc.secondary_drag_payload_size = sizeof(move_payload);
 
-        if (entry.kind == asset_kind::texture) {
+        // By uuid only: loading by path would import a new file with default settings before the import window shows.
+        if (entry.kind == sbx::assets::asset_type::texture && entry.id != sbx::math::uuid::nil()) {
           tile_desc.is_texture_thumbnail = true;
-          tile_desc.texture = assets_module.load_texture(entry.path);
+          tile_desc.texture = assets_module.load_texture(entry.id);
+        } else if (state.thumbnails != nullptr) {
+          tile_desc.thumbnail = state.thumbnails->get(entry.id, entry.kind);
         }
 
         const auto tile_result = sbx::render::draw_asset_tile("##tile", tile_desc);
@@ -100,30 +98,26 @@ auto asset_browser_panel::_draw_asset_grid(editor_state& state) -> void {
         if (!is_renaming_this && tile_result.clicked) {
           if (entry.is_directory) {
             _navigate_to(entry.path);
-          } else if (entry.is_importable) {
-            if (entry.kind != asset_kind::mesh || !_defer_mesh_import_if_unseen(entry.path)) {
+          } else if (sbx::assets::is_manifested(entry.kind)) {
+            if (!_defer_import_if_unseen(state, entry.path)) {
               // entry.path is relative to assets_directory().
               entry.id = assets_module.import(project.assets_directory() / entry.path);
               state.select_asset(entry.id, entry.path, entry.kind);
             }
-          } else if (entry.kind == asset_kind::prefab || entry.kind == asset_kind::scene) {
-            // No cook step, but manifest-registered: needs an id for the Inspector and for drags.
-            entry.id = assets_module.import(project.assets_directory() / entry.path);
-            state.select_asset(entry.id, entry.path, entry.kind);
-          } else if (entry.kind == asset_kind::script) {
-            state.select_asset(sbx::math::uuid::nil(), entry.path, asset_kind::script);
+          } else if (entry.kind == sbx::assets::asset_type::script) {
+            state.select_asset(sbx::math::uuid::nil(), entry.path, sbx::assets::asset_type::script);
           }
 
           // The click branch above already resolved entry.id.
-          if (tile_result.double_clicked && entry.kind == asset_kind::animation_graph) {
+          if (tile_result.double_clicked && entry.kind == sbx::assets::asset_type::animation_graph) {
             state.request_open_animation_graph_editor(entry.id, entry.path);
           }
 
-          if (tile_result.double_clicked && entry.kind == asset_kind::shader_graph) {
+          if (tile_result.double_clicked && entry.kind == sbx::assets::asset_type::shader_graph) {
             state.request_open_shader_graph_editor(entry.id, entry.path);
           }
 
-          if (tile_result.double_clicked && entry.kind == asset_kind::scene) {
+          if (tile_result.double_clicked && entry.kind == sbx::assets::asset_type::scene) {
             state.request_open_scene(entry.path);
           }
         }

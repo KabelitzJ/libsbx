@@ -7,12 +7,57 @@
 #include <cstring>
 
 #include <libsbx/core/engine.hpp>
+#include <libsbx/core/project.hpp>
 
 #include <libsbx/assets/assets_module.hpp>
 
 #include <libsbx/render/ui/ui_module.hpp>
+#include <libsbx/render/ui/fonts/material_design_icons.hpp>
 
 namespace sbx::render {
+
+auto drag_payload_type_for(assets::asset_type type) -> const char* {
+  switch (type) {
+    case assets::asset_type::texture: return drag_drop_payload_texture;
+    case assets::asset_type::mesh: return drag_drop_payload_mesh;
+    case assets::asset_type::material: return drag_drop_payload_material;
+    case assets::asset_type::particle_effect: return drag_drop_payload_particle_effect;
+    case assets::asset_type::animation_graph: return drag_drop_payload_animation_graph;
+    case assets::asset_type::shader_graph: return drag_drop_payload_shader_graph;
+    case assets::asset_type::font: return drag_drop_payload_font;
+    case assets::asset_type::prefab: return drag_drop_payload_prefab;
+    default: return nullptr;
+  }
+}
+
+auto icon_for(assets::asset_type type) -> const char* {
+  switch (type) {
+    case assets::asset_type::texture: return ICON_MDI_IMAGE;
+    case assets::asset_type::mesh: return ICON_MDI_CUBE_OUTLINE;
+    case assets::asset_type::material: return ICON_MDI_PALETTE_SWATCH;
+    case assets::asset_type::environment_map: return ICON_MDI_EARTH;
+    case assets::asset_type::particle_effect: return ICON_MDI_FIREWORK;
+    case assets::asset_type::animation_graph: return ICON_MDI_STATE_MACHINE;
+    case assets::asset_type::shader_graph: return ICON_MDI_VECTOR_POLYLINE;
+    case assets::asset_type::font: return ICON_MDI_FORMAT_FONT;
+    case assets::asset_type::prefab: return ICON_MDI_CUBE_SCAN;
+    case assets::asset_type::scene: return ICON_MDI_FILE_TREE;
+    case assets::asset_type::script: return ICON_MDI_FILE_CODE_OUTLINE;
+    case assets::asset_type::unknown: return ICON_MDI_FILE_OUTLINE;
+  }
+
+  return ICON_MDI_FILE_OUTLINE;
+}
+
+auto resolve_drag_id(const asset_drag_payload& payload) -> math::uuid {
+  if (payload.id != math::uuid::nil() || payload.path[0] == '\0') {
+    return payload.id;
+  }
+
+  const auto& project = core::engine::project();
+
+  return core::engine::get_module<assets::assets_module>().find(project.assets_directory() / payload.path);
+}
 
 auto draw_asset_tile(const char* id, const asset_tile_desc& desc) -> asset_tile_result {
   auto result = asset_tile_result{};
@@ -44,7 +89,12 @@ auto draw_asset_tile(const char* id, const asset_tile_desc& desc) -> asset_tile_
 
   auto drew_thumbnail = false;
 
-  if (desc.is_texture_thumbnail && desc.texture.is_valid()) {
+  if (desc.thumbnail.has_value()) {
+    const auto padding = desc.size.x * 0.06f;
+    draw_list->AddImage(*desc.thumbnail, ImVec2{tile_min.x + padding, tile_min.y + padding}, ImVec2{tile_max.x - padding, tile_max.y - padding});
+
+    drew_thumbnail = true;
+  } else if (desc.is_texture_thumbnail && desc.texture.is_valid()) {
     auto& assets_module = core::engine::get_module<assets::assets_module>();
 
     if (assets_module.is_resident(desc.texture)) {

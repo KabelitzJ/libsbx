@@ -40,7 +40,7 @@ auto asset_browser_panel::_create_material(editor_state& state, const std::files
   const auto id = assets_module.save_material(handle, relative_path);
 
   _navigate_to(target_directory);
-  state.select_asset(id, relative_path, asset_kind::material);
+  state.select_asset(id, relative_path, sbx::assets::asset_type::material);
 }
 
 auto asset_browser_panel::_create_particle_effect(editor_state& state, const std::filesystem::path& target_directory) -> void {
@@ -56,7 +56,7 @@ auto asset_browser_panel::_create_particle_effect(editor_state& state, const std
   const auto id = assets_module.save_particle_effect(handle, relative_path);
 
   _navigate_to(target_directory);
-  state.select_asset(id, relative_path, asset_kind::particle_effect);
+  state.select_asset(id, relative_path, sbx::assets::asset_type::particle_effect);
 }
 
 auto asset_browser_panel::_create_animation_graph(editor_state& state, const std::filesystem::path& target_directory) -> void {
@@ -77,7 +77,7 @@ auto asset_browser_panel::_create_animation_graph(editor_state& state, const std
   const auto id = assets_module.save_animation_graph(handle, relative_path);
 
   _navigate_to(target_directory);
-  state.select_asset(id, relative_path, asset_kind::animation_graph);
+  state.select_asset(id, relative_path, sbx::assets::asset_type::animation_graph);
 }
 
 auto asset_browser_panel::_create_shader_graph(editor_state& state, const std::filesystem::path& target_directory, bool is_lit) -> void {
@@ -112,7 +112,7 @@ auto asset_browser_panel::_create_shader_graph(editor_state& state, const std::f
   const auto id = assets_module.save_shader_graph(handle, relative_path);
 
   _navigate_to(target_directory);
-  state.select_asset(id, relative_path, asset_kind::shader_graph);
+  state.select_asset(id, relative_path, sbx::assets::asset_type::shader_graph);
 }
 
 auto asset_browser_panel::_create_scene(editor_state& state, const std::filesystem::path& target_directory) -> void {
@@ -135,7 +135,7 @@ auto asset_browser_panel::_create_scene(editor_state& state, const std::filesyst
 
   // Only creates the file; opening the scene is a separate action.
   _navigate_to(target_directory);
-  state.select_asset(id, relative_path, asset_kind::scene);
+  state.select_asset(id, relative_path, sbx::assets::asset_type::scene);
 }
 
 auto asset_browser_panel::_create_script(editor_state& state, const std::filesystem::path& target_directory) -> void {
@@ -167,7 +167,7 @@ auto asset_browser_panel::_create_script(editor_state& state, const std::filesys
   );
 
   _navigate_to(target_directory);
-  state.select_asset(sbx::math::uuid::nil(), relative_path, asset_kind::script);
+  state.select_asset(sbx::math::uuid::nil(), relative_path, sbx::assets::asset_type::script);
 }
 
 auto asset_browser_panel::_create_folder(const std::filesystem::path& target_directory) -> void {
@@ -238,13 +238,33 @@ auto asset_browser_panel::_draw_create_menu(editor_state& state, const std::file
   }
 
   if (ImGui::MenuItem(ICON_MDI_REFRESH " Reimport All in This Folder")) {
-    auto& project = sbx::core::engine::project();
-    auto& assets_module = sbx::core::engine::get_module<sbx::assets::assets_module>();
-
-    // import_directory needs a cwd-resolvable path.
-    assets_module.import_directory(project.assets_directory() / target_directory);
-    _needs_refresh = true;
+    _reimport(target_directory);
   }
+}
+
+auto asset_browser_panel::_reimport(const std::filesystem::path& relative_path) -> void {
+  auto& project = sbx::core::engine::project();
+  auto& assets_module = sbx::core::engine::get_module<sbx::assets::assets_module>();
+
+  const auto absolute_path = project.assets_directory() / relative_path;
+
+  const auto reimport_file = [&](const std::filesystem::path& file) {
+    if (sbx::assets::is_manifested(sbx::assets::asset_type_of(file))) {
+      assets_module.reimport(assets_module.import(file));
+    }
+  };
+
+  if (std::filesystem::is_directory(absolute_path)) {
+    for (const auto& entry : std::filesystem::recursive_directory_iterator{absolute_path}) {
+      if (entry.is_regular_file()) {
+        reimport_file(entry.path());
+      }
+    }
+  } else {
+    reimport_file(absolute_path);
+  }
+
+  _needs_refresh = true;
 }
 
 auto asset_browser_panel::_duplicate(editor_state& state, const std::filesystem::path& relative_path, bool is_directory) -> void {
@@ -285,7 +305,7 @@ auto asset_browser_panel::_duplicate(editor_state& state, const std::filesystem:
   const auto new_relative = relative_path.parent_path() / new_name;
 
   if (!is_directory) {
-    if (const auto kind = classify_extension(destination_absolute.extension()); is_importable_kind(kind)) {
+    if (const auto kind = sbx::assets::asset_type_of(destination_absolute); sbx::assets::is_manifested(kind)) {
       const auto id = assets_module.import(destination_absolute);
       state.select_asset(id, new_relative, kind);
     }

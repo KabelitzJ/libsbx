@@ -92,6 +92,8 @@ public:
 
   auto on_mouse_scrolled() -> signals::signal<const mouse_scrolled_event&>&;
 
+  auto on_files_dropped() -> signals::signal<const files_dropped_event&>&;
+
 private:
 
   auto _set_callbacks() -> void;
@@ -114,6 +116,7 @@ private:
   signals::signal<const mouse_button_pressed_event&> _on_mouse_button_pressed;
   signals::signal<const mouse_button_released_event&> _on_mouse_button_released;
   signals::signal<const mouse_scrolled_event&> _on_mouse_scrolled;
+  signals::signal<const files_dropped_event&> _on_files_dropped;
 
 }; // class window
 

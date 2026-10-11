@@ -222,8 +222,7 @@ auto animation_graph_panel::_draw_toolbar() -> void {
   const auto current = _preview_mesh.is_valid() ? sbx::render::asset_picker_item{_preview_mesh->id(), relative_asset_path(assets_module, _preview_mesh->id())} : sbx::render::asset_picker_item{};
 
   const auto options = sbx::render::asset_picker_options{
-    .kind = sbx::render::asset_picker_kind::mesh,
-    .extensions = {".gltf", ".glb"},
+    .kind = sbx::assets::asset_type::mesh,
     .allow_none = true,
   };
 

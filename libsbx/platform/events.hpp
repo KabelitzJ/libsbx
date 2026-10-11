@@ -5,6 +5,8 @@
 
 #include <cinttypes>
 #include <cmath>
+#include <filesystem>
+#include <vector>
 
 #include <libsbx/platform/key.hpp>
 #include <libsbx/platform/mouse_button.hpp>
@@ -62,6 +64,11 @@ struct mouse_scrolled_event {
   std::float_t x;
   std::float_t y;
 }; // struct mouse_scrolled_event
+
+/** @brief Files or folders dragged from the OS and dropped onto the window. */
+struct files_dropped_event {
+  std::vector<std::filesystem::path> paths;
+}; // struct files_dropped_event
 
 } // namespace sbx::platform
 

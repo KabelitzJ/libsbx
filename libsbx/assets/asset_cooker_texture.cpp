@@ -2,11 +2,16 @@
 // Copyright (c) 2026 Jonas Kabelitz
 #include <libsbx/assets/asset_cooker.hpp>
 
+#include <algorithm>
+#include <cmath>
 #include <fstream>
 #include <system_error>
 
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
+
+#define STB_IMAGE_RESIZE_IMPLEMENTATION
+#include <stb_image_resize2.h>
 
 #include <libsbx/utility/fourcc.hpp>
 #include <libsbx/utility/logger.hpp>
@@ -25,11 +30,11 @@ struct texture_header {
   std::uint32_t data_size;  // bytes of pixel data following the header
 }; // struct texture_header
 
-auto asset_cooker::resolve_texture(const std::filesystem::path& source, const std::filesystem::path& cooked, bool needs_cook, bool& did_cook) -> std::optional<pixel_data> {
+auto asset_cooker::resolve_texture(const std::filesystem::path& source, const std::filesystem::path& cooked, const texture_import_settings& settings, bool needs_cook, bool& did_cook) -> std::optional<pixel_data> {
   did_cook = false;
 
   if (needs_cook) {
-    if (!_cook_texture(source, cooked)) {
+    if (!_cook_texture(source, cooked, settings)) {
       utility::logger<"assets">::warn("Could not cook texture '{}'", source.generic_string());
       return std::nullopt;
     }
@@ -40,7 +45,7 @@ auto asset_cooker::resolve_texture(const std::filesystem::path& source, const st
 
   // Unreadable or outdated blob: recook once.
   if (!_load_cooked_texture(cooked, data.pixels, data.width, data.height)) {
-    if (!_cook_texture(source, cooked) || !_load_cooked_texture(cooked, data.pixels, data.width, data.height)) {
+    if (!_cook_texture(source, cooked, settings) || !_load_cooked_texture(cooked, data.pixels, data.width, data.height)) {
       utility::logger<"assets">::warn("Could not load cooked texture '{}'", cooked.generic_string());
       return std::nullopt;
     }
@@ -74,16 +79,41 @@ auto asset_cooker::resolve_environment(const std::filesystem::path& source, cons
   return data;
 }
 
-auto asset_cooker::_cook_texture(const std::filesystem::path& source, const std::filesystem::path& cooked) -> bool {
+auto asset_cooker::_cook_texture(const std::filesystem::path& source, const std::filesystem::path& cooked, const texture_import_settings& settings) -> bool {
   auto width = std::int32_t{0};
   auto height = std::int32_t{0};
   auto channels = std::int32_t{0};
 
+  stbi_set_flip_vertically_on_load_thread(settings.flip_y ? 1 : 0);
+
   auto* data = stbi_load(source.string().c_str(), &width, &height, &channels, STBI_rgb_alpha);
+
+  stbi_set_flip_vertically_on_load_thread(0);
 
   if (data == nullptr) {
     utility::logger<"assets">::warn("Cook: could not decode '{}'", source.generic_string());
     return false;
+  }
+
+  const auto longest_side = static_cast<std::uint32_t>(std::max(width, height));
+
+  if (settings.max_size != 0u && longest_side > settings.max_size) {
+    const auto ratio = static_cast<std::float_t>(settings.max_size) / static_cast<std::float_t>(longest_side);
+    const auto resized_width = std::max(1, static_cast<std::int32_t>(static_cast<std::float_t>(width) * ratio));
+    const auto resized_height = std::max(1, static_cast<std::int32_t>(static_cast<std::float_t>(height) * ratio));
+
+    // Filtered in stored space: whether the texture is sRGB is only known at load time (the caller's format).
+    auto* resized = static_cast<stbi_uc*>(STBI_MALLOC(static_cast<std::size_t>(resized_width) * static_cast<std::size_t>(resized_height) * 4u));
+
+    if (resized != nullptr && stbir_resize_uint8_linear(data, width, height, 0, resized, resized_width, resized_height, 0, STBIR_RGBA) != nullptr) {
+      stbi_image_free(data);
+      data = resized;
+      width = resized_width;
+      height = resized_height;
+    } else {
+      STBI_FREE(resized);
+      utility::logger<"assets">::warn("Cook: could not downscale '{}'; keeping the source size", source.generic_string());
+    }
   }
 
   const auto data_size = static_cast<std::uint32_t>(width) * static_cast<std::uint32_t>(height) * 4u;

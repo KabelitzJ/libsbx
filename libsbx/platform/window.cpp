@@ -187,6 +187,10 @@ auto window::on_mouse_scrolled() -> signals::signal<const mouse_scrolled_event&>
   return _on_mouse_scrolled;
 }
 
+auto window::on_files_dropped() -> signals::signal<const files_dropped_event&>& {
+  return _on_files_dropped;
+}
+
 auto window::_set_callbacks() -> void {
   glfwSetWindowUserPointer(_handle, this);
 
@@ -263,6 +267,19 @@ auto window::_set_callbacks() -> void {
     self._on_mouse_scrolled(mouse_scrolled_event{static_cast<std::float_t>(x), static_cast<std::float_t>(y)});
 
     input::_update_scroll_delta(math::vector2{static_cast<std::float_t>(x), static_cast<std::float_t>(y)});
+  });
+
+  glfwSetDropCallback(_handle, [](GLFWwindow* window, std::int32_t count, const char** paths){
+    auto& self = *static_cast<platform::window*>(glfwGetWindowUserPointer(window));
+
+    auto event = files_dropped_event{};
+    event.paths.reserve(static_cast<std::size_t>(count));
+
+    for (auto index = std::int32_t{0}; index < count; ++index) {
+      event.paths.emplace_back(paths[index]);
+    }
+
+    self._on_files_dropped(event);
   });
 }
 

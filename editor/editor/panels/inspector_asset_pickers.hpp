@@ -3,6 +3,9 @@
 #ifndef EDITOR_PANELS_INSPECTOR_ASSET_PICKERS_HPP_
 #define EDITOR_PANELS_INSPECTOR_ASSET_PICKERS_HPP_
 
+#include <cmath>
+#include <functional>
+
 #include <libsbx/math/uuid.hpp>
 
 #include <libsbx/graphics/types.hpp>
@@ -23,8 +26,12 @@ namespace editor {
 /** @brief Converts a uuid to an asset picker item; built-in primitives have no manifest path, so they show their name. */
 auto to_picker_item(const sbx::assets::assets_module& assets_module, const sbx::math::uuid& id) -> sbx::render::asset_picker_item;
 
-/** @brief A material picker with an optional "Reset to Mesh Default" and a button to edit the material. allow_none offers "(None)", for optional script fields. */
-auto draw_material_picker(editor_state& state, const char* popup_id, sbx::assets::material_handle& slot, sbx::assets::assets_module& assets_module, const sbx::assets::material_handle& mesh_default = {}, bool allow_none = false) -> bool;
+/**
+ * @brief A material picker with an optional "Reset to Mesh Default" and a button to edit the material. allow_none offers "(None)", for optional script fields.
+ *
+ * A preview_size of two rows or more switches to the large layout; extra_buttons are drawn in the picker's button row.
+ */
+auto draw_material_picker(editor_state& state, const char* popup_id, sbx::assets::material_handle& slot, sbx::assets::assets_module& assets_module, const sbx::assets::material_handle& mesh_default = {}, bool allow_none = false, std::float_t preview_size = 0.0f, std::function<void()> extra_buttons = {}) -> bool;
 
 /** @brief Forks a material into a new .material next to the mesh (or the assets root for a nil mesh_id), so edits don't affect other users of the original. */
 auto extract_material_to_asset(sbx::assets::assets_module& assets_module, const sbx::assets::material_handle& source, const sbx::math::uuid& mesh_id) -> sbx::assets::material_handle;
@@ -36,7 +43,7 @@ auto draw_texture_picker(editor_state& state, const char* popup_id, sbx::assets:
 auto draw_font_picker(editor_state& state, const char* popup_id, sbx::assets::font_handle& slot) -> bool;
 
 /** @brief A mesh picker for mesh_renderer.mesh. The caller clears the materials on change so they reseed from the new mesh. */
-auto draw_mesh_picker(editor_state& state, const char* popup_id, sbx::assets::mesh_handle& slot, sbx::assets::assets_module& assets_module) -> bool;
+auto draw_mesh_picker(editor_state& state, const char* popup_id, sbx::assets::mesh_handle& slot, sbx::assets::assets_module& assets_module, std::float_t preview_size = 0.0f) -> bool;
 
 /** @brief A particle effect picker with a button to edit the effect. */
 auto draw_particle_effect_picker(editor_state& state, const char* popup_id, sbx::assets::particle_effect_handle& slot, sbx::assets::assets_module& assets_module) -> bool;

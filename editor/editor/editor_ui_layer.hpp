@@ -18,7 +18,10 @@
 #include <libsbx/render/ui/fonts/material_design_icons.hpp>
 #include <libsbx/render/ui/widgets/file_dialog.hpp>
 
+#include <libsbx/signals/connection.hpp>
+
 #include <editor/editor_state.hpp>
+#include <editor/asset_watcher.hpp>
 #include <editor/panels/editor_panel.hpp>
 #include <libsbx/memory/observer_ptr.hpp>
 
@@ -142,6 +145,13 @@ private:
   bool _viewport_is_hovered{false};
 
   editor_state _state{};
+
+  asset_watcher _asset_watcher{};
+
+  thumbnail_cache _thumbnails{};
+
+  // Declared after _state, which the slot writes into, so it disconnects first.
+  sbx::signals::scoped_connection _files_dropped{};
   std::vector<std::unique_ptr<editor_panel>> _panels{};
 
   // Owned by _panels; kept so the View menu can toggle it without a dynamic_cast.

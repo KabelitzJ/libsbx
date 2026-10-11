@@ -22,24 +22,12 @@ namespace editor {
 struct asset_browser_entry {
   std::filesystem::path path{}; // project-relative
   bool is_directory{false};
-  asset_kind kind{asset_kind::unknown};
-  bool is_importable{false};
-  sbx::math::uuid id{sbx::math::uuid::nil()}; // resolved lazily on click
+  sbx::assets::asset_type kind{sbx::assets::asset_type::unknown};
+  sbx::math::uuid id{sbx::math::uuid::nil()}; // nil until the file has a .meta
 }; // struct asset_browser_entry
 
 /**
- * @brief Extension -> asset kind; the single source for classification and the import dialog's filter.
- *
- * @return The table.
- */
-auto extension_table() -> const std::unordered_map<std::string, asset_kind>&;
-
-[[nodiscard]] auto is_importable_kind(asset_kind kind) -> bool;
-
-auto classify_extension(const std::filesystem::path& extension) -> asset_kind;
-
-/**
- * @brief Every extension "Import from Disk..." offers: each kind assets_module::import accepts.
+ * @brief Every extension "Import from Disk..." offers: each type the manifest tracks.
  *
  * @return The extensions.
  */
@@ -48,15 +36,6 @@ auto importable_extensions() -> std::vector<std::string>;
 auto icon_for(const asset_browser_entry& entry) -> const char*;
 
 auto is_entry_selected(const editor_state& state, const std::filesystem::path& path) -> bool;
-
-/**
- * @brief The picker drag payload a tile of @p kind carries.
- *
- * @param kind The asset kind.
- *
- * @return The payload type, or nullptr for kinds no picker accepts.
- */
-auto drag_payload_type_for(asset_kind kind) -> const char*;
 
 // The Asset Browser's own move payload, offered by files and folders and accepted only within the browser.
 inline constexpr auto asset_move_drag_payload_type = "SBX_ASSET_BROWSER_MOVE";

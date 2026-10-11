@@ -3,35 +3,23 @@
 #ifndef LIBSBX_RENDER_UI_WIDGETS_ASSET_PICKER_HPP_
 #define LIBSBX_RENDER_UI_WIDGETS_ASSET_PICKER_HPP_
 
+#include <cmath>
 #include <cstdint>
 #include <filesystem>
+#include <functional>
+#include <optional>
 #include <string>
 #include <vector>
+
+#include <imgui.h>
 
 #include <libsbx/math/uuid.hpp>
 
 #include <libsbx/graphics/types.hpp>
 
+#include <libsbx/assets/asset_type.hpp>
+
 namespace sbx::render {
-
-enum class asset_picker_kind : std::uint8_t {
-  texture,
-  mesh,
-  material,
-  particle_effect,
-  animation_graph,
-  shader_graph,
-  font,
-}; // enum class asset_picker_kind
-
-/**
- * @brief The drag payload type a tile must carry to be dropped onto a picker of @p kind.
- *
- * @param kind The picker kind.
- *
- * @return The payload type string.
- */
-[[nodiscard]] auto drag_payload_type_for(asset_picker_kind kind) -> const char*;
 
 struct asset_picker_item {
   sbx::math::uuid id{sbx::math::uuid::nil()};
@@ -39,13 +27,16 @@ struct asset_picker_item {
 }; // struct asset_picker_item
 
 struct asset_picker_options {
-  asset_picker_kind kind{asset_picker_kind::texture};
-  std::vector<std::string> extensions{}; // e.g. {".png", ".jpg", ".jpeg"}; matched against path::extension()
+  assets::asset_type kind{assets::asset_type::texture};
   bool allow_none{false};         // offers a "(None)" entry that clears the slot
   bool show_edit_button{false};   // a second button next to the picker that sets edit_requested
   bool show_reveal_button{false}; // a button that sets reveal_requested ("show in Asset Browser")
   bool show_builtin_primitives{false}; // mesh kind only: lists the built-in primitives above the files
   sbx::graphics::format load_format{sbx::graphics::format::r8g8b8a8_srgb}; // texture kind only
+  std::function<std::optional<ImTextureID>(const math::uuid&)> thumbnail{}; // prerendered previews for non-texture kinds; empty shows the icon
+  std::float_t preview_size{0.0f}; // the preview tile's side; at least one row tall, and from two rows up the name and buttons stack beside it
+  std::float_t width{0.0f};        // the whole field's width, so the label column lines up with ImGui's labeled widgets; 0 fits the content
+  std::function<void()> extra_buttons{}; // caller-drawn buttons appended to the button row
 }; // struct asset_picker_options
 
 struct asset_picker_result {

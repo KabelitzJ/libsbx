@@ -46,8 +46,12 @@ auto asset_browser_panel::_refresh_entries() -> void {
     entry.is_directory = dir_entry.is_directory();
 
     if (!entry.is_directory) {
-      entry.kind = classify_extension(dir_entry.path().extension());
-      entry.is_importable = is_importable_kind(entry.kind);
+      entry.kind = sbx::assets::asset_type_of(dir_entry.path());
+
+      // Every imported file gets its id up front, so dragging a tile that was never clicked carries a real uuid. Files without a .meta wait for the import window.
+      if (auto meta_path = dir_entry.path(); sbx::assets::is_manifested(entry.kind) && std::filesystem::exists(meta_path += ".meta")) {
+        entry.id = sbx::core::engine::get_module<sbx::assets::assets_module>().import(dir_entry.path());
+      }
     }
 
     _cached_entries.push_back(std::move(entry));
@@ -134,7 +138,7 @@ auto asset_browser_panel::_draw_entry_context_menu(editor_state& state, const as
   const auto target_directory = entry.is_directory ? entry.path : entry.path.parent_path();
 
   // A menu alternative to dragging a prefab into the Hierarchy.
-  if (!entry.is_directory && entry.kind == asset_kind::prefab && ImGui::MenuItem(ICON_MDI_CUBE_SCAN " Instantiate in Scene")) {
+  if (!entry.is_directory && entry.kind == sbx::assets::asset_type::prefab && ImGui::MenuItem(ICON_MDI_CUBE_SCAN " Instantiate in Scene")) {
     auto& assets_module = sbx::core::engine::get_module<sbx::assets::assets_module>();
 
     if (auto prefab = assets_module.load_prefab(entry.id); prefab.is_valid()) {
@@ -164,6 +168,10 @@ auto asset_browser_panel::_draw_entry_context_menu(editor_state& state, const as
     _duplicate(state, entry.path, entry.is_directory);
   }
 
+  if ((entry.is_directory || sbx::assets::is_manifested(entry.kind)) && ImGui::MenuItem(ICON_MDI_REFRESH " Reimport")) {
+    _reimport(entry.path);
+  }
+
   if (ImGui::MenuItem(ICON_MDI_DELETE " Delete")) {
     _request_delete(entry.path, entry.is_directory);
   }
@@ -183,6 +191,25 @@ auto asset_browser_panel::draw(editor_state& state) -> void {
 
   if (auto picked = _import_dialog.result()) {
     _pending_asset_imports.insert(_pending_asset_imports.end(), picked->begin(), picked->end());
+  }
+
+  // OS drops land in the folder being browsed; waits while an earlier batch still needs its own destination.
+  // ponytail: dropped folders are skipped; copy them recursively if people drop whole asset packs.
+  if (!state.dropped_files.empty() && _pending_asset_imports.empty() && !_import_conflict_unresolved) {
+    _import_destination_directory = _current_directory;
+
+    for (auto& path : state.dropped_files) {
+      if (std::filesystem::is_regular_file(path) && sbx::assets::is_manifested(sbx::assets::asset_type_of(path))) {
+        _pending_asset_imports.push_back(std::move(path));
+      }
+    }
+
+    state.dropped_files.clear();
+  }
+
+  if (state.asset_browser_refresh_request) {
+    _needs_refresh = true;
+    state.asset_browser_refresh_request = false;
   }
 
   _process_pending_asset_imports(state);

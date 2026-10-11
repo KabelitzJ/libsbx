@@ -3,6 +3,7 @@
 #ifndef EDITOR_EDITOR_STATE_HPP_
 #define EDITOR_EDITOR_STATE_HPP_
 
+#include <algorithm>
 #include <cstddef>
 #include <filesystem>
 #include <optional>
@@ -19,6 +20,10 @@
 #include <libsbx/math/matrix4x4.hpp>
 #include <libsbx/math/uuid.hpp>
 
+#include <libsbx/memory/observer_ptr.hpp>
+
+#include <libsbx/assets/asset_type.hpp>
+
 #include <libsbx/scenes/components.hpp>
 
 #include <libsbx/scenes/node.hpp>
@@ -30,26 +35,12 @@
 
 #include <editor/widgets/drag_session.hpp>
 
+#include <editor/thumbnail_cache.hpp>
+
 namespace editor {
 
 /** @brief Drag payload type for a Hierarchy row, also accepted by Node-typed script fields in the Inspector. */
 inline constexpr auto node_drag_drop_payload_type = "HIERARCHY_NODE";
-
-/** @brief An asset file's kind, inferred from its extension. */
-enum class asset_kind {
-  unknown,
-  texture,
-  mesh,
-  material,
-  environment_map,
-  particle_effect,
-  animation_graph,
-  shader_graph,
-  font,
-  prefab,
-  scene, // no cook step, but manifest-registered like prefab
-  script, // reference-only, compiled by scripting::script_compiler
-}; // enum class asset_kind
 
 /** @brief Nothing is selected. */
 struct empty_selection { };
@@ -68,7 +59,7 @@ struct node_selection {
 struct asset_selection {
   sbx::math::uuid id{sbx::math::uuid::nil()};
   std::filesystem::path path{};               // relative to the assets directory
-  asset_kind kind{asset_kind::unknown};
+  sbx::assets::asset_type kind{sbx::assets::asset_type::unknown};
 }; // struct asset_selection
 
 using selection = std::variant<empty_selection, node_selection, asset_selection>;
@@ -181,7 +172,7 @@ struct editor_state {
    */
   [[nodiscard]] auto selected_node_count() const -> std::size_t;
 
-  auto select_asset(sbx::math::uuid id, std::filesystem::path path, asset_kind kind) -> void;
+  auto select_asset(sbx::math::uuid id, std::filesystem::path path, sbx::assets::asset_type kind) -> void;
 
   auto clear_selection() -> void;
 
@@ -195,6 +186,29 @@ struct editor_state {
   }
 
   std::optional<std::filesystem::path> reveal_in_browser_request{};
+
+  /**
+   * @brief Queues a not-yet-imported file for the import window; duplicates are ignored.
+   *
+   * @param path The project-relative file.
+   */
+  auto request_import(std::filesystem::path path) -> void {
+    if (std::ranges::find(import_requests, path) == import_requests.end()) {
+      import_requests.push_back(std::move(path));
+    }
+  }
+
+  // Consumed in order by import_window.
+  std::vector<std::filesystem::path> import_requests{};
+
+  // Absolute paths dropped onto the window from the OS; the Asset Browser copies them into its current folder.
+  std::vector<std::filesystem::path> dropped_files{};
+
+  // Set when files changed on disk; the Asset Browser rescans its folder and clears it.
+  bool asset_browser_refresh_request{false};
+
+  // Rendered mesh/material/prefab previews, owned by editor_ui_layer; for tiles and pickers.
+  sbx::memory::observer_ptr<thumbnail_cache> thumbnails{};
 
   /** @brief One-shot request to open the animation graph editor, consumed by animation_graph_panel. */
   struct animation_graph_edit_request {

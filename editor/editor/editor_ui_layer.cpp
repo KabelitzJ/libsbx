@@ -26,6 +26,7 @@
 #include <editor/panels/shader_graph_panel.hpp>
 #include <editor/panels/navigation_panel.hpp>
 #include <editor/panels/statistics_panel.hpp>
+#include <editor/panels/import_window.hpp>
 #include <editor/panels/scene_renderer_panel.hpp>
 #include <editor/panels/project_settings_panel.hpp>
 #include <editor/panels/preferences_panel.hpp>
@@ -40,6 +41,8 @@
 #include <editor/commands/scene_commands.hpp>
 
 #include <libsbx/core/engine.hpp>
+
+#include <libsbx/platform/platform_module.hpp>
 
 #include <libsbx/scenes/scene.hpp>
 #include <libsbx/scenes/scenes_module.hpp>
@@ -73,7 +76,15 @@ editor_ui_layer::editor_ui_layer()
 
   sbx::core::engine::get_module<sbx::render::ui_module>().apply_default_style();
 
+  _state.thumbnails = sbx::memory::make_observer(&_thumbnails);
+
   _create_panels();
+
+  auto& window = sbx::core::engine::get_module<sbx::platform::platform_module>().window();
+
+  _files_dropped = window.on_files_dropped().connect_scoped([this](const sbx::platform::files_dropped_event& event) {
+    _state.dropped_files.insert(_state.dropped_files.end(), event.paths.begin(), event.paths.end());
+  });
 }
 
 auto editor_ui_layer::_handle_shortcuts() -> void {
@@ -126,6 +137,9 @@ auto editor_ui_layer::build() -> void {
 
   _draw_dockspace();
 
+  _asset_watcher.update(_state);
+  _thumbnails.update();
+
   _viewport_is_hovered = draw_viewport_window(_state, _sampler);
 
   for (auto& panel : _panels) {
@@ -157,6 +171,7 @@ auto editor_ui_layer::_create_panels() -> void {
   _panels.push_back(std::make_unique<animation_graph_panel>()); // on-demand panels below aren't in the default dock layout
   _panels.push_back(std::make_unique<shader_graph_panel>());
   _panels.push_back(std::make_unique<statistics_panel>());
+  _panels.push_back(std::make_unique<import_window>());
 
   auto project_settings = std::make_unique<project_settings_panel>();
   _project_settings_panel = project_settings.get();

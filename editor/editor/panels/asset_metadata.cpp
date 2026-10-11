@@ -13,34 +13,6 @@
 
 namespace editor {
 
-auto extension_table() -> const std::unordered_map<std::string, asset_kind>& {
-  static const auto table = std::unordered_map<std::string, asset_kind>{
-    {".png", asset_kind::texture},
-    {".jpg", asset_kind::texture},
-    {".jpeg", asset_kind::texture},
-    {".gltf", asset_kind::mesh},
-    {".glb", asset_kind::mesh},
-    {".material", asset_kind::material},
-    {".hdr", asset_kind::environment_map},
-    {".particle_effect", asset_kind::particle_effect},
-    {".animation_graph", asset_kind::animation_graph},
-    {".shadergraph", asset_kind::shader_graph},
-    {".ttf", asset_kind::font},
-    {".prefab", asset_kind::prefab},
-    {".scene", asset_kind::scene},
-    {".cs", asset_kind::script},
-  };
-
-  return table;
-}
-
-auto is_importable_kind(asset_kind kind) -> bool {
-  return kind == asset_kind::texture || kind == asset_kind::mesh ||
-         kind == asset_kind::material || kind == asset_kind::environment_map ||
-         kind == asset_kind::particle_effect || kind == asset_kind::animation_graph ||
-         kind == asset_kind::shader_graph || kind == asset_kind::font;
-}
-
 auto filename_less(const std::filesystem::path& lhs, const std::filesystem::path& rhs) -> bool {
   const auto to_lower = [](const std::filesystem::path& path) {
     auto name = path.filename().string();
@@ -51,19 +23,12 @@ auto filename_less(const std::filesystem::path& lhs, const std::filesystem::path
   return to_lower(lhs) < to_lower(rhs);
 }
 
-auto classify_extension(const std::filesystem::path& extension) -> asset_kind {
-  const auto& table = extension_table();
-  const auto entry = table.find(extension.string());
-
-  return entry != table.end() ? entry->second : asset_kind::unknown;
-}
-
 auto importable_extensions() -> std::vector<std::string> {
   auto extensions = std::vector<std::string>{};
 
-  for (const auto& [extension, kind] : extension_table()) {
-    if (is_importable_kind(kind)) {
-      extensions.push_back(extension);
+  for (const auto& [extension, type] : sbx::assets::known_extensions()) {
+    if (sbx::assets::is_manifested(type)) {
+      extensions.emplace_back(extension);
     }
   }
 
@@ -71,45 +36,12 @@ auto importable_extensions() -> std::vector<std::string> {
 }
 
 auto icon_for(const asset_browser_entry& entry) -> const char* {
-  if (entry.is_directory) {
-    return ICON_MDI_FOLDER;
-  }
-
-  switch (entry.kind) {
-    case asset_kind::texture: return ICON_MDI_IMAGE;
-    case asset_kind::mesh: return ICON_MDI_CUBE_OUTLINE;
-    case asset_kind::material: return ICON_MDI_PALETTE_SWATCH;
-    case asset_kind::environment_map: return ICON_MDI_EARTH;
-    case asset_kind::particle_effect: return ICON_MDI_FIREWORK;
-    case asset_kind::animation_graph: return ICON_MDI_STATE_MACHINE;
-    case asset_kind::shader_graph: return ICON_MDI_VECTOR_POLYLINE;
-    case asset_kind::font: return ICON_MDI_FORMAT_FONT;
-    case asset_kind::prefab: return ICON_MDI_CUBE_SCAN;
-    case asset_kind::scene: return ICON_MDI_FILE_TREE;
-    case asset_kind::script: return ICON_MDI_FILE_CODE_OUTLINE;
-    case asset_kind::unknown: return ICON_MDI_FILE_OUTLINE;
-  }
-
-  return ICON_MDI_FILE_OUTLINE;
+  return entry.is_directory ? ICON_MDI_FOLDER : sbx::render::icon_for(entry.kind);
 }
 
 auto is_entry_selected(const editor_state& state, const std::filesystem::path& path) -> bool {
   const auto* selected = std::get_if<asset_selection>(&state.current_selection);
   return selected != nullptr && selected->path == path;
-}
-
-auto drag_payload_type_for(asset_kind kind) -> const char* {
-  switch (kind) {
-    case asset_kind::texture: return sbx::render::drag_drop_payload_texture;
-    case asset_kind::mesh: return sbx::render::drag_drop_payload_mesh;
-    case asset_kind::material: return sbx::render::drag_drop_payload_material;
-    case asset_kind::particle_effect: return sbx::render::drag_drop_payload_particle_effect;
-    case asset_kind::animation_graph: return sbx::render::drag_drop_payload_animation_graph;
-    case asset_kind::shader_graph: return sbx::render::drag_drop_payload_shader_graph;
-    case asset_kind::font: return sbx::render::drag_drop_payload_font;
-    case asset_kind::prefab: return sbx::render::drag_drop_payload_prefab;
-    default: return nullptr;
-  }
 }
 
 auto make_move_drag_payload(const std::filesystem::path& relative_path) -> asset_move_drag_payload {

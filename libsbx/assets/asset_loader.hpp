@@ -31,6 +31,7 @@ public:
   struct texture_request { 
     math::uuid id; 
     graphics::format format; 
+    texture_import_settings settings; 
     std::filesystem::path source; 
     std::filesystem::path cooked; 
     bool needs_cook{false}; 
@@ -46,6 +47,7 @@ public:
 
   struct font_request { 
     math::uuid id; 
+    font_import_settings settings; 
     std::filesystem::path source; 
     std::filesystem::path cooked; 
     bool needs_cook{false}; 

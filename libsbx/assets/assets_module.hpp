@@ -9,6 +9,8 @@
 #include <span>
 #include <string>
 #include <unordered_map>
+#include <utility>
+#include <vector>
 
 #include <libsbx/utility/noncopyable.hpp>
 
@@ -37,6 +39,8 @@
 #include <libsbx/assets/scene.hpp>
 #include <libsbx/assets/asset_cooker.hpp>
 #include <libsbx/assets/asset_manifest.hpp>
+#include <libsbx/assets/asset_type.hpp>
+#include <libsbx/assets/import_settings.hpp>
 #include <libsbx/assets/asset_residency.hpp>
 #include <libsbx/assets/ibl_baker.hpp>
 
@@ -73,6 +77,55 @@ public:
    * @param root A cwd-resolvable directory. Empty does not mean the whole assets tree; pass `project.assets_directory()` for that.
    */
   auto import_directory(const std::filesystem::path& root = {}) -> void;
+
+  /**
+   * @brief Every known asset of a type whose source still exists, as (uuid, assets-relative path); for pickers.
+   *
+   * @param type The asset type.
+   *
+   * @return The entries, unsorted.
+   */
+  [[nodiscard]] auto assets_of(asset_type type) const -> std::vector<std::pair<math::uuid, std::filesystem::path>>;
+
+  /**
+   * @brief The importer settings stored in the asset's `.meta`, or the type's defaults.
+   *
+   * @param id The asset's uuid.
+   *
+   * @return The settings; monostate for types without an importer.
+   */
+  [[nodiscard]] auto import_settings_of(const math::uuid& id) -> import_settings;
+
+  /**
+   * @brief Writes new importer settings into the asset's `.meta`; call reimport() to apply them to loaded handles.
+   *
+   * @param id The asset's uuid.
+   * @param settings The new settings.
+   */
+  auto set_import_settings(const math::uuid& id, const import_settings& settings) -> void;
+
+  /**
+   * @brief Re-cooks or re-parses an asset from its source and current import settings, updating loaded records in place so every live handle sees the new data.
+   *
+   * @param id The asset's uuid. No-op if nothing of it is loaded.
+   */
+  auto reimport(const math::uuid& id) -> void;
+
+  /**
+   * @brief The uuid already registered for a path, without importing it.
+   *
+   * @param path A cwd-resolvable path.
+   *
+   * @return The uuid, or nil if never imported.
+   */
+  [[nodiscard]] auto find(const std::filesystem::path& path) const -> math::uuid;
+
+  /**
+   * @brief Drops an asset whose source was already deleted outside the editor.
+   *
+   * @param id The asset's uuid.
+   */
+  auto forget(const math::uuid& id) -> void;
 
   /**
    * @brief Moves or renames a file or directory, keeping its uuid (the `.meta` moves along) and rewriting `.material` files that referenced a moved texture.
@@ -165,17 +218,15 @@ public:
   auto load_font(const std::filesystem::path& path) -> font_handle;
 
   /**
-   * @brief Loads a mesh by uuid or project-relative path, or returns the existing handle.
+   * @brief Loads a mesh by uuid or project-relative path, or returns the existing handle. Cooks with the import settings in its `.meta`.
    *
    * @param id The mesh's uuid.
-   * @param options Only used when the mesh is actually cooked; ignored on a cache hit.
-   * @param force_recook Whether to re-cook even if already loaded.
    *
    * @return The mesh handle.
    */
-  auto load_mesh(const math::uuid& id, const mesh_import_options& options = {}, bool force_recook = false) -> mesh_handle;
+  auto load_mesh(const math::uuid& id) -> mesh_handle;
 
-  auto load_mesh(const std::filesystem::path& path, const mesh_import_options& options = {}, bool force_recook = false) -> mesh_handle;
+  auto load_mesh(const std::filesystem::path& path) -> mesh_handle;
 
   /**
    * @brief Builds a mesh from in-memory data, uploaded through the next process_uploads().

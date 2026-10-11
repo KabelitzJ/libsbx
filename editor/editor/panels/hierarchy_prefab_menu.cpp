@@ -52,7 +52,7 @@ auto try_instantiate_prefab_drop(editor_state& state, sbx::scenes::scene& scene,
   const auto& drag = *static_cast<const sbx::render::asset_drag_payload*>(payload->Data);
   auto& assets_module = sbx::core::engine::get_module<sbx::assets::assets_module>();
 
-  auto prefab = assets_module.load_prefab(drag.id);
+  auto prefab = assets_module.load_prefab(sbx::render::resolve_drag_id(drag));
 
   if (!prefab.is_valid()) {
     return;

@@ -208,6 +208,8 @@ target_sources(
     "${CMAKE_SOURCE_DIR}/libsbx/assets/shader_graph_codegen.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/assets/asset_loader.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/assets/asset_manifest.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/assets/asset_type.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/assets/import_settings.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/assets/asset_residency.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/assets/assets_module.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/assets/ibl_baker.cpp"

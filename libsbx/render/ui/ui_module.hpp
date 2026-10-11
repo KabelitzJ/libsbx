@@ -81,6 +81,11 @@ public:
     return _system.texture_id(view, sampler);
   }
 
+  /** @copydoc ui_system::release_texture_id */
+  auto release_texture_id(VkImageView view) -> void {
+    _system.release_texture_id(view);
+  }
+
   // Owned here so it's destroyed while graphics_module still exists, not at static teardown.
   [[nodiscard]] auto thumbnail_sampler() const noexcept -> VkSampler {
     return _thumbnail_sampler.handle();

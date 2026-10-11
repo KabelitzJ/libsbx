@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <cstring>
 #include <filesystem>
+#include <optional>
 #include <string>
 
 #include <imgui.h>
@@ -13,6 +14,7 @@
 #include <libsbx/math/uuid.hpp>
 
 #include <libsbx/assets/asset_handle.hpp>
+#include <libsbx/assets/asset_type.hpp>
 #include <libsbx/assets/texture2d.hpp>
 
 namespace sbx::render {
@@ -27,11 +29,20 @@ inline constexpr auto drag_drop_payload_shader_graph = "SBX_ASSET_SHADER_GRAPH";
 inline constexpr auto drag_drop_payload_font = "SBX_ASSET_FONT";
 inline constexpr auto drag_drop_payload_prefab = "SBX_ASSET_PREFAB";
 
+/** @brief The payload type a tile of @p type carries, or nullptr for types no picker or drop target accepts. */
+[[nodiscard]] auto drag_payload_type_for(assets::asset_type type) -> const char*;
+
+/** @brief The Material Design Icons glyph for @p type. */
+[[nodiscard]] auto icon_for(assets::asset_type type) -> const char*;
+
 /** @brief A tile's drag payload; trivially copyable because ImGui memcpys payloads. */
 struct asset_drag_payload {
   sbx::math::uuid id{sbx::math::uuid::nil()};
   char path[256]{}; // project-relative, null-terminated
 }; // struct asset_drag_payload
+
+/** @brief The payload's uuid, falling back to its path's registered uuid for tiles dragged before their id was known; nil if neither resolves. */
+[[nodiscard]] auto resolve_drag_id(const asset_drag_payload& payload) -> math::uuid;
 
 /**
  * @brief One asset tile: a texture preview or a tinted icon glyph, plus selection and drag source wiring.
@@ -46,6 +57,9 @@ struct asset_tile_desc {
   // Texture mode: previews `texture`, falling back to the icon while it isn't resident.
   bool is_texture_thumbnail{false};
   sbx::assets::texture2d_handle texture{};
+
+  // Prerendered mode (mesh/material previews): drawn as-is, ahead of texture mode.
+  std::optional<ImTextureID> thumbnail{};
 
   bool is_directory{false};
   std::string display_name{}; // drag-preview text only

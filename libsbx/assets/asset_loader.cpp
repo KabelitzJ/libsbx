@@ -183,7 +183,7 @@ auto asset_loader::_resolve(const texture_request& request) -> void {
   SBX_PROFILE_SCOPE("asset_loader::_resolve texture");
 
   auto did_cook = false;
-  auto data = asset_cooker::resolve_texture(request.source, request.cooked, request.needs_cook, did_cook);
+  auto data = asset_cooker::resolve_texture(request.source, request.cooked, request.settings, request.needs_cook, did_cook);
 
   if (_aborted.load(std::memory_order_relaxed)) {
     return; // shutting down: nothing will drain it
@@ -211,7 +211,7 @@ auto asset_loader::_resolve(const font_request& request) -> void {
   SBX_PROFILE_SCOPE("asset_loader::_resolve font");
 
   auto did_cook = false;
-  auto data = asset_cooker::resolve_font(request.source, request.cooked, request.needs_cook, did_cook);
+  auto data = asset_cooker::resolve_font(request.source, request.cooked, request.settings, request.needs_cook, did_cook);
 
   if (_aborted.load(std::memory_order_relaxed)) {
     return;

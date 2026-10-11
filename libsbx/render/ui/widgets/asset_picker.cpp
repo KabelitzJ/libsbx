@@ -13,7 +13,6 @@
 #include <imgui.h>
 
 #include <libsbx/core/engine.hpp>
-#include <libsbx/core/project.hpp>
 
 #include <libsbx/assets/assets_module.hpp>
 #include <libsbx/assets/primitive_meshes.hpp>
@@ -22,20 +21,6 @@
 #include <libsbx/render/ui/widgets/asset_tile.hpp>
 
 namespace sbx::render {
-
-[[nodiscard]] auto icon_for(asset_picker_kind kind) -> const char* {
-  switch (kind) {
-    case asset_picker_kind::texture: return ICON_MDI_IMAGE;
-    case asset_picker_kind::mesh: return ICON_MDI_CUBE_OUTLINE;
-    case asset_picker_kind::material: return ICON_MDI_PALETTE_SWATCH;
-    case asset_picker_kind::particle_effect: return ICON_MDI_FIREWORK;
-    case asset_picker_kind::animation_graph: return ICON_MDI_STATE_MACHINE;
-    case asset_picker_kind::shader_graph: return ICON_MDI_VECTOR_POLYLINE;
-    case asset_picker_kind::font: return ICON_MDI_FORMAT_FONT;
-  }
-
-  return ICON_MDI_FILE_OUTLINE;
-}
 
 [[nodiscard]] auto icon_for(assets::primitive_mesh_kind kind) -> const char* {
   switch (kind) {
@@ -59,72 +44,38 @@ namespace sbx::render {
   return to_lower(haystack).find(to_lower(needle)) != std::string::npos;
 }
 
-[[nodiscard]] auto collect_matching_files(const std::filesystem::path& root, const std::vector<std::string>& extensions) -> std::vector<std::filesystem::path> {
-  auto files = std::vector<std::filesystem::path>{};
-
-  if (!std::filesystem::exists(root)) {
-    return files;
-  }
-
-  for (const auto& entry : std::filesystem::recursive_directory_iterator{root}) {
-    if (!entry.is_directory() && std::ranges::find(extensions, entry.path().extension().string()) != extensions.end()) {
-      files.push_back(entry.path());
-    }
-  }
-
-  return files;
-}
-
-auto drag_payload_type_for(asset_picker_kind kind) -> const char* {
-  switch (kind) {
-    case asset_picker_kind::texture: return drag_drop_payload_texture;
-    case asset_picker_kind::mesh: return drag_drop_payload_mesh;
-    case asset_picker_kind::material: return drag_drop_payload_material;
-    case asset_picker_kind::particle_effect: return drag_drop_payload_particle_effect;
-    case asset_picker_kind::animation_graph: return drag_drop_payload_animation_graph;
-    case asset_picker_kind::shader_graph: return drag_drop_payload_shader_graph;
-    case asset_picker_kind::font: return drag_drop_payload_font;
-  }
-
-  return drag_drop_payload_texture;
-}
-
 auto draw_asset_picker(const char* popup_id, const asset_picker_item& current, const asset_picker_item& default_item, const asset_picker_options& options) -> asset_picker_result {
   auto result = asset_picker_result{};
 
   auto& assets_module = core::engine::get_module<assets::assets_module>();
-  auto& project = core::engine::project();
 
   const auto has_current = !current.path.empty();
 
   ImGui::PushID(popup_id);
   ImGui::BeginGroup();
 
-  constexpr auto button_size = ImVec2{28.0f, 28.0f};
+  const auto& style = ImGui::GetStyle();
+  const auto field_left = ImGui::GetCursorScreenPos().x;
+  const auto frame_height = ImGui::GetFrameHeight();
+  const auto preview_size = std::max(options.preview_size, frame_height);
+
+  // A preview taller than two rows stacks the name and buttons beside it, like Unity's large object fields.
+  const auto is_large = preview_size >= frame_height * 2.0f + style.ItemSpacing.y;
 
   auto button_tile = asset_tile_desc{};
   button_tile.icon_glyph = icon_for(options.kind);
-  button_tile.size = button_size;
+  button_tile.size = ImVec2{preview_size, preview_size};
 
-  if (options.kind == asset_picker_kind::texture && has_current) {
+  if (options.kind == assets::asset_type::texture && has_current) {
     button_tile.is_texture_thumbnail = true;
     button_tile.texture = assets_module.load_texture(current.path, options.load_format);
   }
 
-  const auto button_tile_result = draw_asset_tile("##button_tile", button_tile);
-
-  // The closed button accepts drops too, without opening the popup.
-  if (ImGui::BeginDragDropTarget()) {
-    if (const auto* payload = ImGui::AcceptDragDropPayload(drag_payload_type_for(options.kind))) {
-      auto dropped = asset_drag_payload{};
-      std::memcpy(&dropped, payload->Data, sizeof(dropped));
-
-      result.changed = true;
-      result.picked = asset_picker_item{dropped.id, std::filesystem::path{dropped.path}};
-    }
-
-    ImGui::EndDragDropTarget();
+  if (options.thumbnail && current.id != math::uuid::nil()) {
+    button_tile.thumbnail = options.thumbnail(current.id);
   }
+
+  const auto button_tile_result = draw_asset_tile("##button_tile", button_tile);
 
   if (button_tile_result.clicked) {
     ImGui::OpenPopup(popup_id);
@@ -132,19 +83,55 @@ auto draw_asset_picker(const char* popup_id, const asset_picker_item& current, c
 
   ImGui::SameLine();
 
+  const auto show_edit = options.show_edit_button && has_current;
+  const auto show_reveal = options.show_reveal_button && has_current;
+
+  const auto icon_button_width = [&](const char* icon) {
+    return ImGui::CalcTextSize(icon).x + style.FramePadding.x * 2.0f + style.ItemSpacing.x;
+  };
+
+  // In the compact layout the buttons share the name's row, so the name gives up their width to keep the field's right edge fixed.
+  auto inline_buttons_width = 0.0f;
+
+  if (!is_large) {
+    inline_buttons_width += show_edit ? icon_button_width(ICON_MDI_FILE_EDIT_OUTLINE) : 0.0f;
+    inline_buttons_width += show_reveal ? icon_button_width(ICON_MDI_FOLDER_SEARCH_OUTLINE) : 0.0f;
+  }
+
+  const auto name_width = options.width > 0.0f ? std::max(field_left + options.width - ImGui::GetCursorScreenPos().x - inline_buttons_width, frame_height) : 0.0f;
+
+  if (is_large) {
+    ImGui::BeginGroup();
+  }
+
   const auto label = has_current ? current.path.filename().string() : std::string{"(None)"};
 
   // A Button, not a Selectable: a zero-width Selectable fills the rest of the row and swallows whatever follows.
-  if (ImGui::Button(label.c_str())) {
+  ImGui::PushStyleVar(ImGuiStyleVar_ButtonTextAlign, ImVec2{0.0f, 0.5f});
+
+  if (ImGui::Button(label.c_str(), ImVec2{name_width, 0.0f})) {
     ImGui::OpenPopup(popup_id);
   }
+
+  ImGui::PopStyleVar();
 
   if (has_current && ImGui::IsItemHovered()) {
     ImGui::SetTooltip("%s", current.path.string().c_str());
   }
 
-  if (options.show_edit_button && has_current) {
-    ImGui::SameLine();
+  // The large layout starts its button row on a new line under the name.
+  auto is_first_button = is_large;
+
+  const auto next_button = [&]() {
+    if (!is_first_button) {
+      ImGui::SameLine();
+    }
+
+    is_first_button = false;
+  };
+
+  if (show_edit) {
+    next_button();
 
     if (ImGui::Button(ICON_MDI_FILE_EDIT_OUTLINE)) {
       result.edit_requested = true;
@@ -155,8 +142,8 @@ auto draw_asset_picker(const char* popup_id, const asset_picker_item& current, c
     }
   }
 
-  if (options.show_reveal_button && has_current) {
-    ImGui::SameLine();
+  if (show_reveal) {
+    next_button();
 
     if (ImGui::Button(ICON_MDI_FOLDER_SEARCH_OUTLINE)) {
       result.reveal_requested = true;
@@ -167,19 +154,50 @@ auto draw_asset_picker(const char* popup_id, const asset_picker_item& current, c
     }
   }
 
+  if (options.extra_buttons) {
+    next_button();
+    options.extra_buttons();
+  }
+
+  if (is_large) {
+    ImGui::EndGroup();
+  }
+
   ImGui::EndGroup();
+
+  // The whole closed field accepts drops, like Unity's object fields. A null type would make ImGui accept any payload.
+  if (const auto* payload_type = drag_payload_type_for(options.kind); payload_type != nullptr && ImGui::BeginDragDropTarget()) {
+    if (const auto* payload = ImGui::AcceptDragDropPayload(payload_type)) {
+      auto dropped = asset_drag_payload{};
+      std::memcpy(&dropped, payload->Data, sizeof(dropped));
+
+      result.changed = true;
+      result.picked = asset_picker_item{resolve_drag_id(dropped), std::filesystem::path{dropped.path}};
+    }
+
+    ImGui::EndDragDropTarget();
+  }
 
   // Fixed width so the popup doesn't reflow while filtering.
   ImGui::SetNextWindowSize(ImVec2{340.0f, 0.0f}, ImGuiCond_Always);
 
   if (ImGui::BeginPopup(popup_id)) {
-    // Cleared when a different picker's popup opens.
+    // Cleared when a different picker's popup opens. The candidates are snapshotted on open, not re-queried every frame.
     static auto filter_buffer = std::array<char, 128u>{};
     static auto last_popup_id = std::string{};
+    static auto candidates = std::vector<asset_picker_item>{};
 
-    if (last_popup_id != popup_id) {
+    if (ImGui::IsWindowAppearing() || last_popup_id != popup_id) {
       filter_buffer[0] = '\0';
       last_popup_id = popup_id;
+
+      candidates.clear();
+
+      for (auto& [id, path] : assets_module.assets_of(options.kind)) {
+        candidates.push_back(asset_picker_item{id, std::move(path)});
+      }
+
+      std::ranges::sort(candidates, {}, &asset_picker_item::path);
     }
 
     ImGui::SetNextItemWidth(-1.0f);
@@ -196,7 +214,7 @@ auto draw_asset_picker(const char* popup_id, const asset_picker_item& current, c
       result.picked = default_item;
     }
 
-    if (options.kind == asset_picker_kind::mesh && options.show_builtin_primitives) {
+    if (options.kind == assets::asset_type::mesh && options.show_builtin_primitives) {
       ImGui::TextDisabled("Built-in");
 
       for (const auto primitive_kind : reflection::enum_values<assets::primitive_mesh_kind>()) {
@@ -217,17 +235,13 @@ auto draw_asset_picker(const char* popup_id, const asset_picker_item& current, c
       ImGui::Separator();
     }
 
-    auto visible = std::vector<std::filesystem::path>{};
+    auto visible = std::vector<const asset_picker_item*>{};
 
-    for (const auto& file : collect_matching_files(project.assets_directory(), options.extensions)) {
-      auto relative = std::filesystem::relative(file, project.assets_directory());
-
-      if (filter_buffer[0] == '\0' || contains_ignore_case(relative.string(), filter_buffer.data())) {
-        visible.push_back(std::move(relative));
+    for (const auto& candidate : candidates) {
+      if (filter_buffer[0] == '\0' || contains_ignore_case(candidate.path.string(), filter_buffer.data())) {
+        visible.push_back(&candidate);
       }
     }
-
-    std::ranges::sort(visible);
 
     constexpr auto row_size = ImVec2{24.0f, 24.0f};
     const auto row_height = std::max(row_size.y, ImGui::GetTextLineHeight()) + ImGui::GetStyle().ItemSpacing.y;
@@ -239,8 +253,8 @@ auto draw_asset_picker(const char* popup_id, const asset_picker_item& current, c
 
       while (clipper.Step()) {
         for (auto index = clipper.DisplayStart; index < clipper.DisplayEnd; ++index) {
-          const auto& relative = visible[static_cast<std::size_t>(index)];
-          const auto relative_string = relative.string();
+          const auto& candidate = *visible[static_cast<std::size_t>(index)];
+          const auto relative_string = candidate.path.string();
 
           ImGui::PushID(index);
 
@@ -248,9 +262,13 @@ auto draw_asset_picker(const char* popup_id, const asset_picker_item& current, c
           row_tile.icon_glyph = icon_for(options.kind);
           row_tile.size = row_size;
 
-          if (options.kind == asset_picker_kind::texture) {
+          if (options.kind == assets::asset_type::texture) {
             row_tile.is_texture_thumbnail = true;
-            row_tile.texture = assets_module.load_texture(relative, options.load_format);
+            row_tile.texture = assets_module.load_texture(candidate.id, options.load_format);
+          }
+
+          if (options.thumbnail) {
+            row_tile.thumbnail = options.thumbnail(candidate.id);
           }
 
           const auto row_tile_result = draw_asset_tile("##row_tile", row_tile);
@@ -261,7 +279,7 @@ auto draw_asset_picker(const char* popup_id, const asset_picker_item& current, c
 
           if (row_clicked || row_tile_result.clicked) {
             result.changed = true;
-            result.picked = asset_picker_item{sbx::math::uuid::nil(), relative};
+            result.picked = candidate;
             ImGui::CloseCurrentPopup();
           }
 

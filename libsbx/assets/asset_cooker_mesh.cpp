@@ -290,7 +290,7 @@ auto asset_cooker::generate_tangents(std::vector<vertex>& vertices, const std::v
   }
 }
 
-auto asset_cooker::_optimize_and_generate_lods(std::vector<vertex>& vertices, std::vector<std::uint32_t>& indices, std::size_t vertex_start, std::size_t vertex_count, std::size_t index_start, std::size_t index_count, std::vector<skin_vertex>* skin_vertices) -> std::vector<mesh_lod> {
+auto asset_cooker::_optimize_and_generate_lods(std::vector<vertex>& vertices, std::vector<std::uint32_t>& indices, std::size_t vertex_start, std::size_t vertex_count, std::size_t index_start, std::size_t index_count, bool generate_lods, std::vector<skin_vertex>* skin_vertices) -> std::vector<mesh_lod> {
   auto lods = std::vector<mesh_lod>{};
 
   if (index_count == 0u || vertex_count == 0u) {
@@ -328,7 +328,7 @@ auto asset_cooker::_optimize_and_generate_lods(std::vector<vertex>& vertices, st
 
   // Each LOD targets half the previous triangle count, until meshopt_simplify stalls or the mesh is too small.
   auto previous = local;
-  constexpr auto max_levels = std::size_t{4u};
+  const auto max_levels = generate_lods ? std::size_t{4u} : std::size_t{0u};
   constexpr auto min_triangle_count = std::size_t{8u};
 
   for (auto level = std::size_t{0u}; level < max_levels; ++level) {
@@ -582,6 +582,13 @@ auto asset_cooker::_cook_mesh(const std::filesystem::path& source, const math::u
           joint.inverse_bind_matrix[column][row] = inverse_bind[column][row];
         }
       }
+
+      // A uniform scale conjugates every joint transform, which scales only the translations.
+      joint.bind_local_translation = joint.bind_local_translation * options.scale_factor;
+
+      for (auto row = std::size_t{0u}; row < 3u; ++row) {
+        joint.inverse_bind_matrix[3u][row] *= options.scale_factor;
+      }
     }
   }
 
@@ -618,7 +625,7 @@ auto asset_cooker::_cook_mesh(const std::filesystem::path& source, const math::u
 
       fastgltf::iterateAccessorWithIndex<fastgltf::math::fvec3>(gltf, position_accessor, [&](fastgltf::math::fvec3 value, std::size_t index) {
         const auto world_position = world * fastgltf::math::fvec4{value[0], value[1], value[2], 1.0f};
-        const auto point = math::vector3{world_position[0], world_position[1], world_position[2]};
+        const auto point = math::vector3{world_position[0], world_position[1], world_position[2]} * options.scale_factor;
 
         auto& current = vertices[vertex_start + index];
         current.position[0] = point.x();
@@ -717,7 +724,7 @@ auto asset_cooker::_cook_mesh(const std::filesystem::path& source, const math::u
         generate_tangents(vertices, indices, vertex_start, position_accessor.count, index_start, index_accessor.count);
       }
 
-      auto lods = _optimize_and_generate_lods(vertices, indices, vertex_start, position_accessor.count, index_start, index_accessor.count, has_skin_data ? &skin_vertices : nullptr);
+      auto lods = _optimize_and_generate_lods(vertices, indices, vertex_start, position_accessor.count, index_start, index_accessor.count, options.generate_lods, has_skin_data ? &skin_vertices : nullptr);
 
       submeshes.push_back(cooked_submesh{
         static_cast<std::uint32_t>(index_start),
@@ -816,7 +823,7 @@ auto asset_cooker::_cook_mesh(const std::filesystem::path& source, const math::u
             auto index = std::size_t{0u};
             fastgltf::iterateAccessor<fastgltf::math::fvec3>(gltf, gltf.accessors[sampler.outputAccessor], [&](fastgltf::math::fvec3 value) {
               if (index < times.size()) {
-                channel.translation_keys.push_back({times[index], math::vector3{value[0], value[1], value[2]}});
+                channel.translation_keys.push_back({times[index], math::vector3{value[0], value[1], value[2]} * options.scale_factor});
               }
               ++index;
             });

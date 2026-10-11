@@ -158,19 +158,22 @@ public:
   auto load_font(const std::filesystem::path& path) -> font_handle;
 
   /**
-   * @brief Loads a mesh by uuid or project-relative path, or returns the existing handle if already loaded.
-   *
-   * @p force_recook re-cooks an already-resident mesh in place (the handle stays valid); the editor's import settings use it because primitive and clip selection change the cooked blob.
+   * @brief Loads a mesh by uuid or project-relative path, or returns the existing handle if already loaded. Cooks with the import settings in its `.meta`.
    *
    * @param id The mesh's uuid.
-   * @param options Import options used when cooking.
-   * @param force_recook Whether to re-cook even if already loaded.
    *
    * @return The mesh handle, valid immediately.
    */
-  auto load_mesh(const math::uuid& id, const mesh_import_options& options = {}, bool force_recook = false) -> mesh_handle;
+  auto load_mesh(const math::uuid& id) -> mesh_handle;
 
-  auto load_mesh(const std::filesystem::path& path, const mesh_import_options& options = {}, bool force_recook = false) -> mesh_handle;
+  auto load_mesh(const std::filesystem::path& path) -> mesh_handle;
+
+  /**
+   * @brief Re-cooks or re-parses an already-loaded asset from its source and current import settings, updating its records in place so live handles see the new data. No-op if nothing of that uuid is loaded.
+   *
+   * @param id The asset's uuid.
+   */
+  auto reimport(const math::uuid& id) -> void;
 
   /**
    * @brief Builds a mesh from in-memory data, uploaded through the next process_uploads(). Every call creates a new, uncached record.
@@ -517,6 +520,10 @@ private:
   auto _finalize_particle_effect(asset_loader::particle_effect_result& result) -> void;
   auto _finalize_animation_graph(asset_loader::animation_graph_result& result) -> void;
   auto _finalize_shader_graph(asset_loader::shader_graph_result& result) -> void;
+  auto _submit_mesh(const math::uuid& id, bool force_recook) -> mesh_handle;
+
+  auto _retire_mesh_buffers(const mesh& record, std::uint64_t frame_index) -> void;
+
   auto _finalize_skeleton(asset_loader::skeleton_result& result) -> void;
   auto _finalize_animation_clip(asset_loader::animation_clip_result& result) -> void;
 

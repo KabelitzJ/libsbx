@@ -94,7 +94,7 @@ auto editor_state::selected_node_count() const -> std::size_t {
   return selected_node_ids().size();
 }
 
-auto editor_state::select_asset(sbx::math::uuid id, std::filesystem::path path, asset_kind kind) -> void {
+auto editor_state::select_asset(sbx::math::uuid id, std::filesystem::path path, sbx::assets::asset_type kind) -> void {
   current_selection = asset_selection{id, std::move(path), kind};
 }
 

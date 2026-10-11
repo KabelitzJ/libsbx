@@ -150,6 +150,8 @@ namespace Sbx.Core
 
     internal static delegate* unmanaged<Ray*, float, uint, ulong*, Vector3*, Vector3*, float*, bool> Physics_Raycast;
     internal static delegate* unmanaged<Vector3*, float, uint, ulong*, uint, uint> Physics_OverlapSphere;
+    internal static delegate* unmanaged<Physics.PhysicsShape*, Vector3*, float, uint, ulong*, Vector3*, Vector3*, float*, bool> Physics_ShapeCast;
+    internal static delegate* unmanaged<Physics.PhysicsShape*, uint, ulong*, uint, uint> Physics_OverlapShape;
 
     internal static delegate* unmanaged<Vector3*, Vector3*, Color*, void> DebugDraw_Line;
     internal static delegate* unmanaged<Vector3*, float, Color*, void> DebugDraw_WireSphere;

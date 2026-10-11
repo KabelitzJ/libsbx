@@ -23,6 +23,7 @@
 #include <libsbx/physics/mesh_collision_cache.hpp>
 #include <libsbx/physics/convex_hull_cache.hpp>
 #include <libsbx/physics/rigidbody.hpp>
+#include <libsbx/physics/shape_cast.hpp>
 
 #include <libsbx/utility/overload.hpp>
 
@@ -909,6 +910,41 @@ struct narrow_touch {
   const auto& [raw, friction, restitution] = *combined;
 
   return build_manifold(scene, shape_node, mesh_node, friction, restitution, raw, cache);
+}
+
+auto generate_heightfield_contact(scenes::scene& scene, const scenes::node& shape_node, const scenes::node& heightfield_node, convex_hull_cache& hull_cache, assets::assets_module& assets_module, pose_cache& cache) -> std::optional<contact_manifold> {
+  const auto& collider = heightfield_node.get_component<heightfield_collider>();
+
+  if (!collider.data) {
+    return std::nullopt;
+  }
+
+  pair_scratch scratch; // uninitialized: zeroing would cost more than the allocations it saves
+  auto arena = std::pmr::monotonic_buffer_resource{scratch.data(), scratch.size()};
+
+  const auto shapes = resolve_body_shapes(scene, shape_node, hull_cache, assets_module, cache, &arena);
+
+  auto touches = std::pmr::vector<narrow_touch>{&arena};
+
+  for (const auto& shape : shapes) {
+    for_each_heightfield_triangle(*collider.data, world_aabb(shape.shape, shape.pose), [&](const triangle& candidate) {
+      if (auto raw = dispatch(shape.shape, shape.pose, convex_shape{candidate}, transform{})) {
+        const auto friction = std::sqrt(std::max(shape.friction, 0.0f) * std::max(collider.friction, 0.0f));
+        const auto restitution = std::max(shape.restitution, collider.restitution);
+        touches.push_back(narrow_touch{std::move(*raw), friction, restitution});
+      }
+    });
+  }
+
+  const auto combined = combine_narrow_results(touches, &arena);
+
+  if (!combined) {
+    return std::nullopt;
+  }
+
+  const auto& [raw, friction, restitution] = *combined;
+
+  return build_manifold(scene, shape_node, heightfield_node, friction, restitution, raw, cache);
 }
 
 [[nodiscard]] auto flip_manifold(contact_manifold manifold, const scenes::node& node_a, const scenes::node& node_b) -> contact_manifold {

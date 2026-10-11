@@ -81,6 +81,9 @@ struct body_shape {
 [[nodiscard]] auto find_owning_rigidbody(scenes::scene& scene, const scenes::node& node) -> std::optional<scenes::node>;
 
 /** @brief Narrowphase for a candidate pair of bodies (compound rigidbodies or bare colliders), combining every shape-vs-shape (or shape-vs-triangle) touch into one manifold in the given node order. nullopt for two non-convex mesh colliders (like Unity) or no overlap. */
+/** @brief shape_node's convex shapes against the terrain triangles under them, combined into one manifold with the heightfield node as B. */
+[[nodiscard]] auto generate_heightfield_contact(scenes::scene& scene, const scenes::node& shape_node, const scenes::node& heightfield_node, convex_hull_cache& hull_cache, assets::assets_module& assets_module, pose_cache& cache) -> std::optional<contact_manifold>;
+
 [[nodiscard]] auto generate_pair_contact(scenes::scene& scene, const sbx::scenes::node& node_a, const sbx::scenes::node& node_b, mesh_collision_cache& mesh_cache, convex_hull_cache& hull_cache, assets::assets_module& assets_module, pose_cache& cache) -> std::optional<contact_manifold>;
 
 } // namespace sbx::physics

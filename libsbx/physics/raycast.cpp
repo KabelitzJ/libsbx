@@ -216,6 +216,76 @@ auto raycast_convex_shape(const convex_shape& shape, const transform& pose, cons
   return shape_raycast_hit{local_result->t, world_ray.point_at(local_result->t), math::vector3::normalized(world_normal_direction)};
 }
 
+// Möller–Trumbore, two-sided; t in the ray's own parametrization.
+[[nodiscard]] auto raycast_triangle_local(const math::vector3& origin, const math::vector3& dir, const math::vector3& v0, const math::vector3& v1, const math::vector3& v2) -> std::optional<local_hit> {
+  const auto edge1 = v1 - v0;
+  const auto edge2 = v2 - v0;
+  const auto p = math::vector3::cross(dir, edge2);
+  const auto determinant = math::vector3::dot(edge1, p);
+
+  if (std::abs(determinant) <= math::epsilonf) {
+    return std::nullopt;
+  }
+
+  const auto inverse_determinant = 1.0f / determinant;
+  const auto s = origin - v0;
+  const auto u = math::vector3::dot(s, p) * inverse_determinant;
+
+  if (u < 0.0f || u > 1.0f) {
+    return std::nullopt;
+  }
+
+  const auto q = math::vector3::cross(s, edge1);
+  const auto v = math::vector3::dot(dir, q) * inverse_determinant;
+
+  if (v < 0.0f || u + v > 1.0f) {
+    return std::nullopt;
+  }
+
+  const auto t = math::vector3::dot(edge2, q) * inverse_determinant;
+
+  if (t < 0.0f) {
+    return std::nullopt;
+  }
+
+  const auto normal = math::vector3::cross(edge1, edge2);
+
+  return local_hit{t, math::vector3::dot(normal, dir) > 0.0f ? -normal : normal};
+}
+
+auto raycast_triangle_mesh(const mesh_collision_data& mesh, const transform& mesh_pose, const math::ray& world_ray, std::float_t max_distance) -> std::optional<shape_raycast_hit> {
+  if (mesh.indices.empty()) {
+    return std::nullopt;
+  }
+
+  // Same local mapping as raycast_convex_shape: t stays the world distance.
+  const auto inverse_rotation = math::quaternion::conjugate(mesh_pose.rotation);
+  const auto local_origin = divide_componentwise(inverse_rotation * (world_ray.origin() - mesh_pose.position), mesh_pose.scale);
+  const auto local_dir = divide_componentwise(inverse_rotation * world_ray.direction(), mesh_pose.scale);
+
+  auto best = std::optional<local_hit>{};
+
+  mesh.triangle_bvh.query(math::ray{local_origin, local_dir}, [&](std::uint32_t triangle_index, [[maybe_unused]] std::float_t entry_t) {
+    const auto i0 = mesh.indices[triangle_index * 3u + 0u];
+    const auto i1 = mesh.indices[triangle_index * 3u + 1u];
+    const auto i2 = mesh.indices[triangle_index * 3u + 2u];
+
+    const auto hit = raycast_triangle_local(local_origin, local_dir, mesh.vertices[i0], mesh.vertices[i1], mesh.vertices[i2]);
+
+    if (hit && hit->t <= max_distance && (!best || hit->t < best->t)) {
+      best = hit;
+    }
+  });
+
+  if (!best) {
+    return std::nullopt;
+  }
+
+  const auto world_normal_direction = mesh_pose.rotation * divide_componentwise(best->normal, mesh_pose.scale);
+
+  return shape_raycast_hit{best->t, world_ray.point_at(best->t), math::vector3::normalized(world_normal_direction)};
+}
+
 auto raycast_heightfield(const terrain::heightmap& map, const math::ray& world_ray, std::float_t max_distance) -> std::optional<shape_raycast_hit> {
   if (map.cell_size() <= math::epsilonf) {
     return std::nullopt;

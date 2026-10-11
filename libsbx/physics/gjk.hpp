@@ -84,6 +84,21 @@ struct gjk_result {
  */
 [[nodiscard]] auto gjk_intersect(const convex_shape& a, const transform& pose_a, const convex_shape& b, const transform& pose_b) -> gjk_result;
 
+struct gjk_distance_result {
+  bool intersecting{false}; // the remaining fields are only meaningful when false
+  std::float_t distance{0.0f};
+  math::vector3 point_on_a{math::vector3::zero}; // world space, closest point on A
+  math::vector3 point_on_b{math::vector3::zero}; // world space, closest point on B
+  math::vector3 normal{math::vector3::up};       // world space, unit, from B toward A
+}; // struct gjk_distance_result
+
+/**
+ * @brief The separation between two convex shapes and their closest points, by GJK with a closest-point sub-simplex solve.
+ *
+ * Overlapping (or touching within float tolerance) shapes report intersecting; use gjk_intersect + epa_penetration for the depth.
+ */
+[[nodiscard]] auto gjk_distance(const convex_shape& a, const transform& pose_a, const convex_shape& b, const transform& pose_b) -> gjk_distance_result;
+
 } // namespace sbx::physics
 
 #endif // LIBSBX_PHYSICS_GJK_HPP_

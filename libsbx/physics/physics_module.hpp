@@ -37,6 +37,7 @@
 #include <libsbx/physics/mesh_collision_cache.hpp>
 #include <libsbx/physics/convex_hull_cache.hpp>
 #include <libsbx/physics/narrowphase.hpp>
+#include <libsbx/physics/shape_cast.hpp>
 #include <libsbx/physics/nav/crowd.hpp>
 #include <libsbx/physics/nav/nav_agent.hpp>
 #include <libsbx/physics/nav/navmesh.hpp>
@@ -44,7 +45,7 @@
 
 namespace sbx::physics {
 
-/** @brief One collider overlapping a query_sphere_contacts() sphere. */
+/** @brief One collider overlapping a query_sphere_contacts() or overlap_shape() query shape. */
 struct sphere_query_hit {
   scenes::node node{};
   math::vector3 point{};             // world space, on the collider's surface
@@ -66,6 +67,14 @@ struct raycast_hit {
  * Supports shape colliders, mesh colliders (triangle mesh, or a convex hull usable by dynamic bodies; see collider.hpp), compound colliders across a rigidbody's subtree at uniform scale, and bare colliders as implicit static bodies, like Unity.
  * A rigidbody must be a root node: its local_transform is read and written as world space.
  */
+struct sweep_hit {
+  scenes::node node{};
+  math::vector3 point{};   // world space, on the hit collider
+  math::vector3 normal{};  // world space, the collider's surface normal, toward the cast shape
+  std::float_t distance{0.0f}; // along the cast direction
+  bool initially_overlapping{false}; // the shape started inside this collider; normal is then the push-out direction
+}; // struct sweep_hit
+
 class physics_module final : public utility::noncopyable {
 
   using broadphase_tree_type = containers::dynamic_tree<scenes::node>;
@@ -116,7 +125,7 @@ public:
   }
 
   /**
-   * @brief Every collider overlapping a sphere, using the same GJK/EPA path as body pairs. Non-convex mesh colliders are skipped.
+   * @brief Every collider overlapping a sphere; overlap_shape() with a sphere, triggers included.
    *
    * @param scene The scene.
    * @param center The sphere's center.
@@ -127,7 +136,7 @@ public:
   auto query_sphere_contacts(scenes::scene& scene, const math::vector3& center, std::float_t radius, std::vector<sphere_query_hit>& out_hits, const scenes::layer_mask& mask = scenes::layer_mask::everything()) -> void;
 
   /**
-   * @brief The nearest collider @p ray hits within @p max_distance: heightfields and convex primitives. Non-convex mesh colliders are skipped.
+   * @brief The nearest collider @p ray hits within @p max_distance: heightfields, convex shapes and non-convex meshes.
    *
    * @param scene The scene.
    * @param ray The world-space ray.
@@ -137,6 +146,24 @@ public:
    * @return The hit, or nullopt.
    */
   [[nodiscard]] auto raycast(scenes::scene& scene, const math::ray& ray, std::float_t max_distance, const scenes::layer_mask& mask = scenes::layer_mask::everything()) -> std::optional<raycast_hit>;
+
+  /**
+   * @brief The first collider @p shape hits when swept from @p pose along @p direction, rotation held fixed. Only valid while simulating, like raycast().
+   *
+   * @param direction Need not be normalized.
+   * @param ignore A node to skip, typically the caster itself.
+   * @param include_triggers Whether trigger colliders count as hits.
+   *
+   * @return The nearest hit, or nullopt.
+   */
+  [[nodiscard]] auto shape_cast(scenes::scene& scene, const convex_shape& shape, const transform& pose, const math::vector3& direction, std::float_t max_distance, const scenes::layer_mask& mask = scenes::layer_mask::everything(), const scenes::node& ignore = scenes::node{}, bool include_triggers = true) -> std::optional<sweep_hit>;
+
+  /**
+   * @brief Every collider overlapping @p shape at @p pose, with a push-out normal and depth per hit. A non-convex mesh or terrain yields one hit per overlapping triangle.
+   *
+   * @param out_hits Cleared, then receives the hits.
+   */
+  auto overlap_shape(scenes::scene& scene, const convex_shape& shape, const transform& pose, std::vector<sphere_query_hit>& out_hits, const scenes::layer_mask& mask = scenes::layer_mask::everything(), const scenes::node& ignore = scenes::node{}, bool include_triggers = true) -> void;
 
   /**
    * @brief Fires once per pair on the fixed step a contact or trigger overlap begins; scripting_module delivers OnCollisionEnter/OnTriggerEnter from it.

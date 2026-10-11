@@ -118,6 +118,16 @@ struct audio_source_data {
   std::uint32_t spatial;
 }; // struct audio_source_data
 
+// Mirrors Sbx.Core.Physics.PhysicsShape: a query shape and its world pose. kind: 0 sphere, 1 box, 2 capsule (Y-up).
+struct physics_shape_data {
+  std::uint32_t kind;
+  std::float_t radius;
+  std::float_t half_height; // capsule: half the straight section, excluding the caps
+  math::vector3 half_extents;
+  math::vector3 position;
+  math::quaternion rotation;
+}; // struct physics_shape_data
+
 struct interop {
 
   enum class log_level : std::int32_t {
@@ -402,6 +412,12 @@ struct interop {
    * @return The total number of overlapping nodes, which may exceed @p capacity.
    */
   static auto physics_overlap_sphere(math::vector3* center, std::float_t radius, std::uint32_t layer_mask, std::uint64_t* out_node_uuids, std::uint32_t capacity) -> std::uint32_t;
+
+  /** @brief Sweeps @p shape along @p direction (see physics_module::shape_cast); triggers included. */
+  static auto physics_shape_cast(const physics_shape_data* shape, math::vector3* direction, std::float_t max_distance, std::uint32_t layer_mask, std::uint64_t* out_node_uuid, math::vector3* out_point, math::vector3* out_normal, std::float_t* out_distance) -> managed::bool32;
+
+  /** @brief Every distinct node overlapping @p shape; writes up to @p capacity and returns the total. */
+  static auto physics_overlap_shape(const physics_shape_data* shape, std::uint32_t layer_mask, std::uint64_t* out_node_uuids, std::uint32_t capacity) -> std::uint32_t;
 
   static auto debug_draw_line(math::vector3* start, math::vector3* end, math::color* color) -> void;
 

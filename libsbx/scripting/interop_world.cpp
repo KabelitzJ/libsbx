@@ -4,6 +4,9 @@
 
 #include <algorithm>
 #include <filesystem>
+#include <optional>
+#include <ranges>
+#include <utility>
 #include <vector>
 
 #include <libsbx/utility/logger.hpp>
@@ -84,6 +87,83 @@ auto interop::physics_overlap_sphere(math::vector3* center, std::float_t radius,
   }
 
   return static_cast<std::uint32_t>(hits.size());
+}
+
+// nullopt for an unknown kind.
+static auto query_shape_of(const physics_shape_data& data) -> std::optional<std::pair<physics::convex_shape, physics::transform>> {
+  const auto pose = physics::transform{data.position, data.rotation, math::vector3::one};
+
+  switch (data.kind) {
+    case 0u: return std::pair{physics::convex_shape{physics::sphere{data.radius}}, pose};
+    case 1u: return std::pair{physics::convex_shape{physics::box{data.half_extents}}, pose};
+    case 2u: return std::pair{physics::convex_shape{physics::capsule{data.radius, data.half_height}}, pose};
+    default: return std::nullopt;
+  }
+}
+
+auto interop::physics_shape_cast(const physics_shape_data* shape, math::vector3* direction, std::float_t max_distance, std::uint32_t layer_mask, std::uint64_t* out_node_uuid, math::vector3* out_point, math::vector3* out_normal, std::float_t* out_distance) -> managed::bool32 {
+  const auto query = (shape && direction) ? query_shape_of(*shape) : std::nullopt;
+
+  if (!query) {
+    utility::logger<"scripting">::error("physics_shape_cast: null arguments or unknown shape kind");
+    return false;
+  }
+
+  auto& scene = core::engine::get_module<scenes::scenes_module>().active_scene();
+
+  const auto hit = core::engine::get_module<physics::physics_module>().shape_cast(scene, query->first, query->second, *direction, max_distance, scenes::layer_mask{layer_mask});
+
+  if (!hit) {
+    return false;
+  }
+
+  if (out_node_uuid) {
+    *out_node_uuid = hit->node.id().value();
+  }
+
+  if (out_point) {
+    *out_point = hit->point;
+  }
+
+  if (out_normal) {
+    *out_normal = hit->normal;
+  }
+
+  if (out_distance) {
+    *out_distance = hit->distance;
+  }
+
+  return true;
+}
+
+auto interop::physics_overlap_shape(const physics_shape_data* shape, std::uint32_t layer_mask, std::uint64_t* out_node_uuids, std::uint32_t capacity) -> std::uint32_t {
+  const auto query = shape ? query_shape_of(*shape) : std::nullopt;
+
+  if (!query) {
+    utility::logger<"scripting">::error("physics_overlap_shape: null shape or unknown shape kind");
+    return 0u;
+  }
+
+  auto& scene = core::engine::get_module<scenes::scenes_module>().active_scene();
+
+  auto hits = std::vector<physics::sphere_query_hit>{};
+
+  core::engine::get_module<physics::physics_module>().overlap_shape(scene, query->first, query->second, hits, scenes::layer_mask{layer_mask});
+
+  // A compound body, mesh or terrain yields several hits; scripts get each node once.
+  auto nodes = std::vector<std::uint64_t>{};
+
+  for (const auto& hit : hits) {
+    if (const auto id = hit.node.id().value(); std::ranges::find(nodes, id) == nodes.end()) {
+      nodes.push_back(id);
+    }
+  }
+
+  if (out_node_uuids) {
+    std::ranges::copy(nodes | std::views::take(capacity), out_node_uuids);
+  }
+
+  return static_cast<std::uint32_t>(nodes.size());
 }
 
 auto interop::nav_bake(std::float_t agent_radius, std::float_t agent_height, std::float_t agent_max_slope, std::float_t agent_max_climb, std::float_t cell_size, std::float_t cell_height, std::float_t region_min_size, std::float_t region_merge_size, std::float_t edge_max_length, std::float_t edge_max_error, std::int32_t verts_per_poly) -> managed::bool32 {

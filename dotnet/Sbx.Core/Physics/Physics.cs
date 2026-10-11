@@ -81,6 +81,111 @@ namespace Sbx.Core.Physics
       return written;
     }
 
+    /** Sweeps a sphere from origin along direction; hit.Distance is how far it travels before touching. */
+    public static bool SphereCast(Vector3 origin, float radius, Vector3 direction, float maxDistance, out RaycastHit hit)
+    {
+      return ShapeCast(PhysicsShape.Sphere(origin, radius), direction, maxDistance, LayerMask.Everything, out hit);
+    }
+
+    public static bool SphereCast(Vector3 origin, float radius, Vector3 direction, float maxDistance, out RaycastHit hit, LayerMask layerMask)
+    {
+      return ShapeCast(PhysicsShape.Sphere(origin, radius), direction, maxDistance, layerMask, out hit);
+    }
+
+    /** Sweeps a box (orientation held fixed) from center along direction. */
+    public static bool BoxCast(Vector3 center, Vector3 halfExtents, Quaternion orientation, Vector3 direction, float maxDistance, out RaycastHit hit)
+    {
+      return ShapeCast(PhysicsShape.Box(center, halfExtents, orientation), direction, maxDistance, LayerMask.Everything, out hit);
+    }
+
+    public static bool BoxCast(Vector3 center, Vector3 halfExtents, Quaternion orientation, Vector3 direction, float maxDistance, out RaycastHit hit, LayerMask layerMask)
+    {
+      return ShapeCast(PhysicsShape.Box(center, halfExtents, orientation), direction, maxDistance, layerMask, out hit);
+    }
+
+    /** Sweeps a capsule (local Y axis, height including caps) from center along direction. */
+    public static bool CapsuleCast(Vector3 center, float radius, float height, Quaternion orientation, Vector3 direction, float maxDistance, out RaycastHit hit)
+    {
+      return ShapeCast(PhysicsShape.Capsule(center, radius, height, orientation), direction, maxDistance, LayerMask.Everything, out hit);
+    }
+
+    public static bool CapsuleCast(Vector3 center, float radius, float height, Quaternion orientation, Vector3 direction, float maxDistance, out RaycastHit hit, LayerMask layerMask)
+    {
+      return ShapeCast(PhysicsShape.Capsule(center, radius, height, orientation), direction, maxDistance, layerMask, out hit);
+    }
+
+    /** Every node whose collider overlaps the box. Allocates. */
+    public static Node[] OverlapBox(Vector3 center, Vector3 halfExtents, Quaternion orientation, LayerMask layerMask)
+    {
+      return OverlapShape(PhysicsShape.Box(center, halfExtents, orientation), layerMask);
+    }
+
+    public static Node[] OverlapBox(Vector3 center, Vector3 halfExtents, Quaternion orientation)
+    {
+      return OverlapBox(center, halfExtents, orientation, LayerMask.Everything);
+    }
+
+    /** Every node whose collider overlaps the capsule (local Y axis, height including caps). Allocates. */
+    public static Node[] OverlapCapsule(Vector3 center, float radius, float height, Quaternion orientation, LayerMask layerMask)
+    {
+      return OverlapShape(PhysicsShape.Capsule(center, radius, height, orientation), layerMask);
+    }
+
+    public static Node[] OverlapCapsule(Vector3 center, float radius, float height, Quaternion orientation)
+    {
+      return OverlapCapsule(center, radius, height, orientation, LayerMask.Everything);
+    }
+
+    private static bool ShapeCast(PhysicsShape shape, Vector3 direction, float maxDistance, LayerMask layerMask, out RaycastHit hit)
+    {
+      unsafe
+      {
+        ulong nodeUuid;
+        Vector3 point;
+        Vector3 normal;
+        float distance;
+
+        var didHit = InternalCalls.Physics_ShapeCast(&shape, &direction, maxDistance, layerMask.Value, &nodeUuid, &point, &normal, &distance);
+
+        hit = didHit ? new RaycastHit(Node.Get(nodeUuid)!, point, normal, distance) : default;
+
+        return didHit;
+      }
+    }
+
+    private static Node[] OverlapShape(PhysicsShape shape, LayerMask layerMask)
+    {
+      Span<ulong> uuids = stackalloc ulong[64];
+
+      var total = QueryOverlapShape(shape, layerMask, uuids);
+
+      if (total > uuids.Length)
+      {
+        uuids = new ulong[total];
+        total = System.Math.Min(QueryOverlapShape(shape, layerMask, uuids), uuids.Length);
+      }
+
+      var results = new Node[total];
+
+      for (var i = 0; i < total; ++i)
+      {
+        results[i] = Node.Get(uuids[i])!;
+      }
+
+      return results;
+    }
+
+    private static int QueryOverlapShape(PhysicsShape shape, LayerMask layerMask, Span<ulong> uuids)
+    {
+      unsafe
+      {
+        fixed (ulong* uuidsPtr = uuids)
+        {
+          return (int)InternalCalls.Physics_OverlapShape(&shape, layerMask.Value, uuidsPtr, (uint)uuids.Length);
+        }
+      }
+    }
+
     /** Writes up to uuids.Length hits and returns the total overlap count, which may be larger. */
     private static int QueryOverlapSphere(Vector3 center, float radius, LayerMask layerMask, Span<ulong> uuids)
     {

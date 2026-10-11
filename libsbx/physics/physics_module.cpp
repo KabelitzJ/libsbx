@@ -26,6 +26,7 @@
 #include <libsbx/physics/solver.hpp>
 #include <libsbx/physics/physics_debug.hpp>
 #include <libsbx/physics/raycast.hpp>
+#include <libsbx/physics/shape_cast.hpp>
 
 namespace sbx::physics {
 
@@ -69,6 +70,17 @@ auto prune_stale_leaves(containers::dynamic_tree<scenes::node>& tree, containers
   }
 
   return false;
+}
+
+// A non-convex mesh collider the node carries itself, which queries handle triangle by triangle.
+[[nodiscard]] auto raw_mesh_collider_of(const scenes::node& node) -> memory::observer_ptr<const mesh_collider> {
+  const auto collider = node.try_get_component<mesh_collider>();
+
+  if (!collider || collider->is_convex || !collider->mesh.is_valid()) {
+    return nullptr;
+  }
+
+  return collider;
 }
 
 physics_module::physics_module() { }
@@ -173,7 +185,7 @@ auto physics_module::_sync_broadphase(scenes::scene& scene) -> void {
     route(node, body_type::static_body, world_bounds_aabb(pose, local_bounds));
   }
 
-  // Heightfields get their own list: only raycast() uses them, and their huge AABB would match nearly every body as a candidate pair.
+  // Heightfields get their own list: their huge AABB would match nearly every body as a candidate pair, so _narrowphase and the queries test them directly.
   _heightfield_nodes.clear();
 
   for (auto&& [entity, collider] : scene.query<heightfield_collider>(ecs::exclude<scenes::inactive>).each()) {
@@ -400,6 +412,33 @@ auto physics_module::_narrowphase(scenes::scene& scene) -> void {
 
     _manifolds.push_back(std::move(*manifold));
   }
+
+  // Heightfields aren't in the broadphase (see _sync_broadphase), so each awake dynamic body is tested against them directly.
+  auto& project = core::engine::project();
+
+  for (const auto& heightfield_node : _heightfield_nodes) {
+    for (const auto& [body_node, leaf] : _dynamic_leaves) {
+      const auto body = body_node.try_get_component<rigidbody>();
+
+      if (!body || body->type != body_type::dynamic_body || body->is_sleeping) {
+        continue;
+      }
+
+      if (!project.layers_collide(body_node.get_component<scenes::layer>().index, heightfield_node.get_component<scenes::layer>().index)) {
+        continue;
+      }
+
+      auto manifold = generate_heightfield_contact(scene, body_node, heightfield_node, _hull_cache, assets_module, _pose_cache);
+
+      if (!manifold) {
+        continue;
+      }
+
+      manifold->is_trigger = node_has_trigger_collider(body_node);
+
+      _manifolds.push_back(std::move(*manifold));
+    }
+  }
 }
 
 auto physics_module::fixed_update() -> void {
@@ -458,48 +497,148 @@ auto physics_module::fixed_update() -> void {
 }
 
 auto physics_module::query_sphere_contacts(scenes::scene& scene, const math::vector3& center, std::float_t radius, std::vector<sphere_query_hit>& out_hits, const scenes::layer_mask& mask) -> void {
+  overlap_shape(scene, convex_shape{physics::sphere{radius}}, transform{center, math::quaternion::identity, math::vector3::one}, out_hits, mask);
+}
+
+// The convex shapes a broadphase leaf stands for: a rigidbody's whole compound subtree, or a lone collider's own shape.
+[[nodiscard]] auto leaf_shapes(scenes::scene& scene, const scenes::node& node, convex_hull_cache& hull_cache, assets::assets_module& assets_module, pose_cache& cache) -> std::pmr::vector<body_shape> {
+  if (node.has_component<rigidbody>()) {
+    return resolve_body_shapes(scene, node, hull_cache, assets_module, cache);
+  }
+
+  auto shapes = std::pmr::vector<body_shape>{};
+
+  if (auto resolved = resolve_convex(scene, node, hull_cache, assets_module, cache)) {
+    shapes.push_back(std::move(*resolved));
+  }
+
+  return shapes;
+}
+
+auto physics_module::overlap_shape(scenes::scene& scene, const convex_shape& shape, const transform& pose, std::vector<sphere_query_hit>& out_hits, const scenes::layer_mask& mask, const scenes::node& ignore, bool include_triggers) -> void {
   out_hits.clear();
 
   auto& assets_module = core::engine::get_module<assets::assets_module>();
 
-  const auto sphere_shape = convex_shape{physics::sphere{radius}};
-  const auto sphere_pose = transform{center, math::quaternion::identity, math::vector3::one};
-
-  const auto extent = math::vector3{radius, radius, radius};
-  const auto query_aabb = math::volume{center - extent, center + extent};
+  const auto bounds = world_aabb(shape, pose);
 
   // A local cache: queries run off the fixed cadence and must not read stale poses.
   auto cache = pose_cache{};
 
-  const auto visit = [&](const scenes::node& candidate) {
-    if (!mask.test(candidate.get_component<scenes::layer>().index)) {
-      return;
-    }
+  const auto passes_filter = [&](const scenes::node& candidate) {
+    return candidate != ignore && mask.test(candidate.get_component<scenes::layer>().index) && (include_triggers || !node_has_trigger_collider(candidate));
+  };
 
-    const auto resolved = resolve_convex(scene, candidate, _hull_cache, assets_module, cache);
-
-    if (!resolved) {
-      return;
-    }
-
-    const auto gjk = gjk_intersect(sphere_shape, sphere_pose, resolved->shape, resolved->pose);
+  const auto test = [&](const scenes::node& candidate, const convex_shape& target, const transform& target_pose) {
+    const auto gjk = gjk_intersect(shape, pose, target, target_pose);
 
     if (!gjk.intersecting) {
       return;
     }
 
-    const auto epa = epa_penetration(sphere_shape, sphere_pose, resolved->shape, resolved->pose, gjk.simplex);
+    const auto epa = epa_penetration(shape, pose, target, target_pose, gjk.simplex);
 
     if (!epa.valid) {
       return;
     }
 
-    // EPA's normal points from the sphere into the candidate; flip it to point away from the surface.
+    // EPA's normal points from the query shape into the candidate; flip it to point away from the surface.
     out_hits.push_back(sphere_query_hit{candidate, epa.point_on_b, -epa.normal, epa.penetration_depth});
   };
 
-  _static_tree.query(query_aabb, visit);
-  _dynamic_tree.query(query_aabb, visit);
+  const auto visit = [&](const scenes::node& candidate) {
+    if (!passes_filter(candidate)) {
+      return;
+    }
+
+    if (const auto mesh = raw_mesh_collider_of(candidate)) {
+      const auto mesh_pose = compose_pose(compose_world_pose(scene, candidate, cache), mesh->offset, mesh->rotation);
+
+      for_each_mesh_triangle(_mesh_cache.get_or_build(assets_module, mesh->mesh->id()), mesh_pose, bounds, [&](const triangle& candidate_triangle, const transform& triangle_pose) {
+        test(candidate, convex_shape{candidate_triangle}, triangle_pose);
+      });
+
+      return;
+    }
+
+    for (const auto& target : leaf_shapes(scene, candidate, _hull_cache, assets_module, cache)) {
+      test(candidate, target.shape, target.pose);
+    }
+  };
+
+  _static_tree.query(bounds, visit);
+  _dynamic_tree.query(bounds, visit);
+
+  for (const auto& node : _heightfield_nodes) {
+    if (!passes_filter(node)) {
+      continue;
+    }
+
+    if (const auto& collider = node.get_component<heightfield_collider>(); collider.data) {
+      for_each_heightfield_triangle(*collider.data, bounds, [&](const triangle& candidate_triangle) {
+        test(node, convex_shape{candidate_triangle}, transform{});
+      });
+    }
+  }
+}
+
+auto physics_module::shape_cast(scenes::scene& scene, const convex_shape& shape, const transform& pose, const math::vector3& direction, std::float_t max_distance, const scenes::layer_mask& mask, const scenes::node& ignore, bool include_triggers) -> std::optional<sweep_hit> {
+  if (direction.length_squared() <= math::epsilonf || max_distance <= 0.0f) {
+    return std::nullopt;
+  }
+
+  auto& assets_module = core::engine::get_module<assets::assets_module>();
+
+  const auto unit_direction = math::vector3::normalized(direction);
+  const auto bounds = swept_aabb(shape, pose, unit_direction * max_distance);
+
+  // A local cache: queries run off the fixed cadence and must not read stale poses.
+  auto cache = pose_cache{};
+
+  auto nearest = std::optional<sweep_hit>{};
+
+  const auto consider = [&](const scenes::node& candidate, const std::optional<shape_cast_hit>& hit) {
+    if (hit && (!nearest || hit->distance < nearest->distance)) {
+      nearest = sweep_hit{candidate, hit->point, hit->normal, hit->distance, hit->initially_overlapping};
+    }
+  };
+
+  const auto passes_filter = [&](const scenes::node& candidate) {
+    return candidate != ignore && mask.test(candidate.get_component<scenes::layer>().index) && (include_triggers || !node_has_trigger_collider(candidate));
+  };
+
+  const auto visit = [&](const scenes::node& candidate) {
+    if (!passes_filter(candidate)) {
+      return;
+    }
+
+    if (const auto mesh = raw_mesh_collider_of(candidate)) {
+      const auto mesh_pose = compose_pose(compose_world_pose(scene, candidate, cache), mesh->offset, mesh->rotation);
+
+      consider(candidate, cast_against_triangle_mesh(shape, pose, unit_direction, max_distance, _mesh_cache.get_or_build(assets_module, mesh->mesh->id()), mesh_pose));
+
+      return;
+    }
+
+    for (const auto& target : leaf_shapes(scene, candidate, _hull_cache, assets_module, cache)) {
+      consider(candidate, cast_convex(shape, pose, unit_direction, max_distance, target.shape, target.pose));
+    }
+  };
+
+  _static_tree.query(bounds, visit);
+  _dynamic_tree.query(bounds, visit);
+
+  for (const auto& node : _heightfield_nodes) {
+    if (!passes_filter(node)) {
+      continue;
+    }
+
+    if (const auto& collider = node.get_component<heightfield_collider>(); collider.data) {
+      consider(node, cast_against_heightfield(shape, pose, unit_direction, max_distance, *collider.data));
+    }
+  }
+
+  return nearest;
 }
 
 auto physics_module::raycast(scenes::scene& scene, const math::ray& ray, std::float_t max_distance, const scenes::layer_mask& mask) -> std::optional<raycast_hit> {
@@ -534,14 +673,20 @@ auto physics_module::raycast(scenes::scene& scene, const math::ray& ray, std::fl
       return;
     }
 
-    const auto resolved = resolve_convex(scene, candidate, _hull_cache, assets_module, cache);
+    if (const auto mesh = raw_mesh_collider_of(candidate)) {
+      const auto mesh_pose = compose_pose(compose_world_pose(scene, candidate, cache), mesh->offset, mesh->rotation);
 
-    if (!resolved) {
-      return; // no collider, or a non-convex mesh_collider
+      if (const auto hit = raycast_triangle_mesh(_mesh_cache.get_or_build(assets_module, mesh->mesh->id()), mesh_pose, ray, max_distance)) {
+        consider(candidate, *hit);
+      }
+
+      return;
     }
 
-    if (const auto hit = raycast_convex_shape(resolved->shape, resolved->pose, ray, max_distance)) {
-      consider(candidate, *hit);
+    for (const auto& target : leaf_shapes(scene, candidate, _hull_cache, assets_module, cache)) {
+      if (const auto hit = raycast_convex_shape(target.shape, target.pose, ray, max_distance)) {
+        consider(candidate, *hit);
+      }
     }
   };
 

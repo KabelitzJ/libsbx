@@ -309,6 +309,7 @@ target_sources(
     "${CMAKE_SOURCE_DIR}/libsbx/physics/physics_module.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/physics/quickhull.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/physics/raycast.cpp"
+    "${CMAKE_SOURCE_DIR}/libsbx/physics/shape_cast.cpp"
     "${CMAKE_SOURCE_DIR}/libsbx/physics/solver.cpp"
 
     "${CMAKE_SOURCE_DIR}/libsbx/platform/input.cpp"
@@ -614,6 +615,7 @@ target_sources(
       "${CMAKE_SOURCE_DIR}/libsbx/physics/raycast.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/physics/rigidbody.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/physics/shapes.hpp"
+      "${CMAKE_SOURCE_DIR}/libsbx/physics/shape_cast.hpp"
       "${CMAKE_SOURCE_DIR}/libsbx/physics/solver.hpp"
 
       "${CMAKE_SOURCE_DIR}/libsbx/platform/events.hpp"

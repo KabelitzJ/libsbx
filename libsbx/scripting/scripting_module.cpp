@@ -174,6 +174,8 @@ scripting_module::scripting_module() {
 
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Physics_Raycast", reinterpret_cast<void*>(&interop::physics_raycast));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Physics_OverlapSphere", reinterpret_cast<void*>(&interop::physics_overlap_sphere));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Physics_ShapeCast", reinterpret_cast<void*>(&interop::physics_shape_cast));
+  _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "Physics_OverlapShape", reinterpret_cast<void*>(&interop::physics_overlap_shape));
 
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "DebugDraw_Line", reinterpret_cast<void*>(&interop::debug_draw_line));
   _core_assembly.add_internal_call("Sbx.Core.InternalCalls", "DebugDraw_WireSphere", reinterpret_cast<void*>(&interop::debug_draw_wire_sphere));

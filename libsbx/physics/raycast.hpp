@@ -21,6 +21,7 @@
 
 #include <libsbx/physics/shapes.hpp>
 #include <libsbx/physics/gjk.hpp>
+#include <libsbx/physics/mesh_collision_cache.hpp>
 
 namespace sbx::physics {
 
@@ -52,6 +53,9 @@ struct shape_raycast_hit {
  *
  * @return The hit, or nullopt.
  */
+/** @brief Nearest hit against a non-convex mesh's triangles, two-sided; the normal faces the ray's origin. */
+[[nodiscard]] auto raycast_triangle_mesh(const mesh_collision_data& mesh, const transform& mesh_pose, const math::ray& world_ray, std::float_t max_distance) -> std::optional<shape_raycast_hit>;
+
 [[nodiscard]] auto raycast_heightfield(const terrain::heightmap& map, const math::ray& world_ray, std::float_t max_distance) -> std::optional<shape_raycast_hit>;
 
 } // namespace sbx::physics
